@@ -923,7 +923,7 @@ TREND_MOVE = 0.15  # how far a site's week has to move before it is news
 PROMOTION_CAP = 100  # promotion and marketing both stop counting here
 PROMOTION_GAP = 10  # a shortfall smaller than this is an opportunity, not a warning
 
-# --- marketing campaigns (docs/marketing-write-scope.md) --------------------
+# --- marketing campaigns (docs/dashboard-reference.md, "Promotion") ---------
 # The six campaign types, indexed by the game's enum id (Entities.MarketingTypeName):
 # (name, $ a day, reach in m²). Hard-coded in MarketingTypeSettings..cctor in
 # BigAmbitions.dll, build 3680; no bundle carries them.
@@ -1058,8 +1058,8 @@ def weekday(day: int) -> str:
 # Recipe identity only; rates and ingredients still come from _recipes(names).
 # Source (MIT stated in README; no upstream LICENSE file), pinned for review:
 # https://github.com/tiagovitorin/BigAmbitionsCompanion/blob/5db2e6a07145db9b19239efddc63c101be7346d6/data/normalized/recipes.json
-# Extraction build is unknown. In-game mapping verification is pending; see
-# docs/issue-2-recipe-identity-scope.md before releasing this change.
+# Extraction build is unknown. Four ids are still unverified in game:
+# docs/dashboard-reference.md, "Which recipe a machine runs".
 RECIPE_ITEMS = {
     'Vqbpzomo9k67pEjqY+aXag==': 'ba:itemname_apple',
     'AKSV3auI1UySifPRajzUhQ==': 'ba:itemname_banana',
@@ -1531,6 +1531,15 @@ def _in_order(keys) -> list:
     """Keys in one order on every run: set order follows the per-process hash
     seed. Saves hold some items with no name, so None sorts last, not first."""
     return sorted(keys, key=lambda k: (k is None, str(k)))
+
+
+def _frozen(table):
+    """`table` as plain dicts all the way down. A defaultdict built in a loop
+    and read by key after it is frozen with this, so a read of a key it does
+    not hold adds nothing, and cannot change its size while a walk iterates it."""
+    if isinstance(table, dict):
+        return {key: _frozen(value) for key, value in table.items()}
+    return table
 
 
 # ------------------------------------------------------------------ premises
@@ -4133,6 +4142,9 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
         for dest, item, target in legs:
             if dest in index and dest != source:
                 senders[(dest, item)].append((source, target or 0))
+    # Frozen once built, as every table below that the closures read by key:
+    # a read of a missing key adds nothing while another walk iterates it.
+    senders = dict(senders)
     nodes = set(leaves) | set(eats) | set(steady) | set(drops) | set(senders)
     nodes |= {(s, item) for (_d, item), legs in senders.items() for s, _t in legs}
 
@@ -4162,10 +4174,10 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
         weight = collections.defaultdict(float)
         for s, t in able:
             weight[s] += t / total if total else 1 / len(able)
-        return weight
+        return dict(weight)
 
-    need_memo, asked = {}, collections.defaultdict(dict)  # asked[sender node][dest] = (use, need)
-    asked_raw = collections.defaultdict(dict)  # the same before the route's target caps it
+    need_memo, asked = {}, {}  # asked[sender node][dest] = (use, need)
+    asked_raw = {}  # the same before the route's target caps it
     route_cap = {}
     for source, legs in edges.items():
         for dest, item, target in legs:
@@ -4187,7 +4199,7 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
         caps = {s: scale[(s, d[1])] * need * w for s, w in weights.items()
                 if (s, d[1]) in scale}
         if need <= 0:
-            return dict(weights)
+            return weights
         parts = _share_with_room(need, weights, caps, own(d))
         return {s: part / need for s, part in parts.items()}
 
@@ -4214,7 +4226,7 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
                 residual_at[d] = dneed
                 portions[d] = portion(d, dneed)
             f = portions[d].get(key, 0.0)
-            asked_raw[n][dest] = dneed * f
+            asked_raw.setdefault(n, {})[dest] = dneed * f
             # A round a day brings no more than the route's target. Where the
             # site has a supply of its own, what it needs beyond the target is
             # that supply's to bring, and is not asked of this one as well
@@ -4224,7 +4236,7 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
             cap = route_cap.get((key, dest, item), 0)
             if dneed * f > cap > 0 and supplied(dest, item):
                 f *= cap / (dneed * f)
-            asked[n][dest] = ((dlu + dsu) * f, dneed * f)
+            asked.setdefault(n, {})[dest] = ((dlu + dsu) * f, dneed * f)
             lu, ln, su, sn = lu + dlu * f, ln + dln * f, su + dsu * f, sn + dsn * f
         need_memo[n] = (lu, ln, su, sn)
         return need_memo[n]
@@ -4510,6 +4522,7 @@ def _supply(
                 item, amount = target["itemName"], target["targetAmount"]
                 edges[source].append((dest_key, item, amount))
                 target_at.setdefault((dest_key, item), []).append((amount, source))
+    edges = dict(edges)  # read by key from here on; its values are lists, so one level is all
     # Where several plans top one line up, the one that counts is the highest
     # target of a site that has the item to send (it holds some, imports it,
     # is routed it, or is a factory that may make it); failing any, the
@@ -4686,6 +4699,10 @@ def _supply(
                     in_by_day[key][entry["itemName"]][when] += amount
                     inbound_days[key].add(when)
                 by_day[key][entry["itemName"]][when] += amount
+    # Read by key from here on, by _factories() too (_frozen()).
+    shipped, received, by_day = _frozen(shipped), _frozen(received), _frozen(by_day)
+    out_by_day, in_by_day = _frozen(out_by_day), _frozen(in_by_day)
+    round_days, inbound_days = _frozen(round_days), _frozen(inbound_days)
 
     def first_fill(dest: str, item: str) -> tuple:
         """A site's first fill of `item` inside the window, as (day, one-off
@@ -4700,7 +4717,7 @@ def _supply(
             return None, 0.0
         if dest in log_full and first_logged.get(dest, first) >= first:
             return None, 0.0
-        arrived = in_by_day[dest][item]
+        arrived = in_by_day.get(dest, {}).get(item, {})
         later = max((units for d, units in arrived.items() if d > first), default=0.0)
         return first, max(0.0, arrived.get(first, 0.0) - later)
 
@@ -4712,11 +4729,11 @@ def _supply(
         days = round_days.get(key, ())
         if len(days) < SHIPPED_MIN_DAYS:
             return None
-        total = shipped[key].get(item, 0.0)
+        total = shipped.get(key, {}).get(item, 0.0)
         for dest in {d for d, i, _a in edges.get(key, []) if i == item and d != key}:
             when, units = first_fill(dest, item)
             if when is not None:
-                total -= min(units, out_by_day[key][item].get(when, 0.0))
+                total -= min(units, out_by_day.get(key, {}).get(item, {}).get(when, 0.0))
         return max(0.0, total) / len(days)
 
     def received_per_day(key: str, item: str) -> float | None:
@@ -4724,13 +4741,13 @@ def _supply(
         days = inbound_days.get(key, ())
         if len(days) < SHIPPED_MIN_DAYS:
             return None
-        return received[key].get(item, 0.0) / len(days)
+        return received.get(key, {}).get(item, 0.0) / len(days)
 
     def forwarded_per_day(key: str, item: str) -> float:
         """What a site sent on of an item, over the same days as its inflow:
         a factory passing an import to a depot target did not eat it."""
         days = inbound_days.get(key, ())
-        return shipped[key].get(item, 0.0) / len(days) if days else 0.0
+        return shipped.get(key, {}).get(item, 0.0) / len(days) if days else 0.0
 
     # --- imports: what lands weekly, and when
     # A contract is plain or Smart Delivery (isTarget; the save leaves out a
@@ -5300,7 +5317,7 @@ def _supply(
             # One cut of the plans' loops for everything: the one Demand
             # sizing made (dem_graph), so the two modes never disagree on it.
             walked[mode] = _supply_walk(index, dem_graph.get("edges", edges), leaves, eats.get(mode, {}),
-                                        grown, drops, unknown)
+                                        dict(grown), drops, unknown)
         import_rows[:] = depot_rows("cap")
         import_rows_dem[:] = depot_rows("dem")
         routed_in, route_only = {}, {}
@@ -5384,7 +5401,9 @@ def _supply(
             whole = sum(t for _s, t in able)
             for s, t in able:
                 share[line][s] += t / whole if whole else 1 / len(able)
-        dem_graph["share"] = share
+        # Frozen: demand() and dem_levels() read it by key while dem_levels()
+        # walks it, and a plan to an address not the company's has no entry.
+        dem_graph["share"] = _frozen(share)
         # What a sender can bring of it a day: what a factory can make, or
         # what an import or a wholesale delivery brings a site (the walk's
         # has() in 24/7). A sender whose shares would pass it hands the rest
@@ -5572,8 +5591,7 @@ def _supply(
         if eats is not None and not measured:
             total += eats(key, item)
         for dest_key in _in_order({d for d, i, _a in dem_graph["edges"].get(key, []) if i == item and d != key}):
-            # .get(): a plan to an address not the company's has no share, and
-            # reading the defaultdict would add one while dem_levels() walks it.
+            # .get(): a plan to an address not the company's has no share.
             weights = dem_graph["share"].get((dest_key, item)) or {}
             if not weights.get(key):
                 continue
@@ -5625,9 +5643,9 @@ def _supply(
         "shipped": shipped_per_day,
         "received": received_per_day,
         "forwarded": forwarded_per_day,
-        "byDay": lambda key, item: by_day[key][item],
-        "outByDay": lambda key, item: out_by_day[key][item],
-        "inByDay": lambda key, item: in_by_day[key][item],
+        "byDay": lambda key, item: by_day.get(key, {}).get(item, {}),
+        "outByDay": lambda key, item: out_by_day.get(key, {}).get(item, {}),
+        "inByDay": lambda key, item: in_by_day.get(key, {}).get(item, {}),
         # A site's first fill of an item in the window (first_fill()).
         "firstFill": first_fill,
         # A shop listing the item sells it, and so does any site whose line
@@ -8625,7 +8643,8 @@ def _need_curve(
 
 # ------------------------------------------------------------ roster building
 # The rules any suggested roster has to obey, read from BigAmbitions.dll at
-# VERIFIED_BUILD. docs/staffing-assistant-scope.md section 2 quotes each source.
+# VERIFIED_BUILD. docs/dashboard-reference.md, "The rules every planned week
+# keeps", lists each source.
 # The longest shift, and the most hours the plan gives anybody in one day: the
 # game's own auto-filler stops at 12 a day too, short of the 14 that raise
 # sickness (ScheduleHelper.GetOverworkedDays).
@@ -12864,7 +12883,8 @@ def _plan_site(
 
     The demand plan is cut from the measured hours. The full-cover plan, which
     staffs every station every hour as a two-week demand test for a shop with
-    nothing measured yet (docs/mod-write-back-scope.md, section 5), is placed
+    nothing measured yet (docs/dashboard-reference.md, "The week the board would
+    copy into BizMan"), is placed
     later by _staffing(), once every site's demand plan has taken its people
     off the bench; _finish_site() then builds the row from both.
     """
@@ -13063,7 +13083,7 @@ def _finish_site(site, full, names, people, opened=None) -> dict:
     }
 
 
-# --- hiring: the Staff page (issue #89, docs/staff-hire-plan.md section 2)
+# --- hiring: the Staff page (issue #89; docs/architecture.md, the payload contract)
 #
 # The skills a business accepts when the player assigns somebody to it, as the
 # game's own check has them (AssignToBusinessAndHireMassAction and
@@ -13112,7 +13132,7 @@ ASSIGN_SKILLS = {
 }
 FACTORY_TYPES = COST_CENTRE_TYPES - OVERHEAD_TYPES
 
-# Peter's office default (25 Sep 2026, docs/mod-write-back-scope.md): "computers
+# Peter's office default (25 Sep 2026; docs/dashboard-reference.md): "computers
 # staffed 24/7 = 3 in a 50-capacity building, proportionally fewer in smaller
 # ones (at least 1); every computer 8 to 22 on weekdays; half the computers 8 to
 # 22 on weekends." For every office: round(3 x door / 50) computers, at least 1
@@ -13566,7 +13586,7 @@ def _company_facts(save: Save) -> dict:
 
 def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict,
             office_staffing: list) -> dict:
-    """The Staff page's payload key `hiring` (docs/staff-hire-plan.md, 2.3).
+    """The Staff page's payload key `hiring` (docs/architecture.md, the payload contract).
 
     Takes each plan row's `_hire` off it. One site per business the player runs,
     in the `businesses` order; `people` describes everybody a site's `spare` or

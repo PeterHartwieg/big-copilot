@@ -4,7 +4,7 @@ Canvas: https://claude.ai/artifact/XjoW7vDDP15Kzm8bBCFUkD (Design type). Generat
 `build_write_canvas.py`; never hand-edit `project/`. `--preview` writes plain HTML to
 `_preview/` (both themes) for Playwright screenshots; do not commit `_preview/`.
 
-What the dialogs do is `docs/mod-write-back-scope.md` (sections 2 to 5 and 9) and
+What the dialogs do is `docs/archive/mod-write-back-scope.md` (sections 2 to 5 and 9) and
 `docs/game-link-api.md` ("Writes"). The code they replace is the `gw*` block of the board
 script in `ba_dashboard.py`.
 

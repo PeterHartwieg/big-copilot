@@ -37,3 +37,9 @@ docs/location-selector-scope.md
 mod/**/*.dll
 mod/**/Library/
 mod/**/obj/
+
+# Design canvases the mockup/*/build_*.py generators write, top level and project/
+# folders alike: rerun the generator to see them.
+mockup/**/*.dc.html
+mockup/**/canvas.json
+mockup/*/project/

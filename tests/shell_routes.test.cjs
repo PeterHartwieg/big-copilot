@@ -1,4 +1,4 @@
-// The redesign's shell (docs/ui-route-migration.md): canonical routes, where a
+// The redesign's shell (docs/architecture.md, Routes): canonical routes, where a
 // finding or a task lands and stays, the Overview's order and state on the way
 // back, the keyboard, and the counts the shell shows on every page. The board
 // is the CLI page rendered from the synthetic day-47 payload snapshot

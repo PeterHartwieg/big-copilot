@@ -4,7 +4,7 @@ closes and closes before the sheet ends, and no conflict marker is left in it.
 A comment whose opener has gone (a merge that took the line for a conflict
 marker, say) does not fail loudly: the browser reads the comment's prose as the
 selector of the next rule and drops that rule. The shell's dark-theme variables
-were lost that way once (docs/ui-chunk-1-handoff.md), and a count of openers
+were lost that way once (docs/archive/ui-chunk-1-handoff.md), and a count of openers
 against closers does not see it, since the stray opener left elsewhere
 balances the orphan closer. So each sheet is walked in order.
 """

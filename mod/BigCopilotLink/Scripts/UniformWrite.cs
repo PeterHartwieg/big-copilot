@@ -5,7 +5,7 @@ namespace BigCopilotLink
 {
     /// <summary>
     /// POST /write/uniforms: a preset on every skill of a site's Uniforms window that has
-    /// none yet (docs/mod-write-back-scope.md section 3). The game's own path is
+    /// none yet (docs/game-link-api.md, POST /write/uniforms). The game's own path is
     /// SetUpUniformsWindow.OnUniformDropdownOptionSelected (build 3680 IL):
     /// uniformsBySkill[skill] = preset.id, CustomerDemandHelper.ReloadCachedFulfilled,
     /// BuildingManager.onUniformChanged.Invoke(skill, id), GameEvent

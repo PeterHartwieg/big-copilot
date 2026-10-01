@@ -2,7 +2,7 @@
 
 The dialogs through which the board changes the running game over the Big Copilot Link
 mod: uniforms, imports, the schedule, the approve-in-game permission, and the states every
-write shares. What they do is docs/mod-write-back-scope.md (sections 2 to 5 and 9) and
+write shares. What they do is docs/archive/mod-write-back-scope.md (sections 2 to 5 and 9) and
 docs/game-link-api.md ("Writes"); the code they replace is the gw* block of the board script
 in ba_dashboard.py. Design decisions and the porting note are NOTES.md beside this file.
 

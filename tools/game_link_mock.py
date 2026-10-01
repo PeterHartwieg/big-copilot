@@ -85,6 +85,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import ba_save  # noqa: E402
+import ba_dashboard  # noqa: E402
 from ba_dashboard import ASSIGN_SKILLS, STATION_SKILLS, _uniform_gaps, money, schedule_entries, shift_print  # noqa: E402
 
 SCHEMA_VERSION = 1
@@ -120,13 +121,10 @@ FEATURES = ("hire.reschedule", "hire.undo")
 HQ_TYPE = "ba:businesstype_headquarters"
 CLEANING_STATION = "ba:itemname_cleaningstation"
 LOCKER = "ba:itemname_uniformlocker"
-# The city's marketing agencies, as the game finds them walking its buildings
-# (MarketingAgencySettings.marketingTypesAvailable): the map is fixed, so every
-# save has these two. The types are Entities.MarketingTypeName ids.
-MARKETING_AGENCIES = (
-    (("ba:street_thirdavenue", 17), "McCain's eMarketing", (0, 1, 2)),
-    (("ba:street_secondavenue", 5), "CityAds", (3, 4, 5)),
-)
+# The city's marketing agencies, as the game finds them walking its buildings:
+# the board's table, as (address, name, types) in its order.
+MARKETING_AGENCIES = tuple((where, name, kinds)
+                           for where, (name, kinds) in ba_dashboard.MARKETING_AGENCIES.items())
 
 
 def allowed_origin(origin: str | None) -> bool:

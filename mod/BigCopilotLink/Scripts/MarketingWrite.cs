@@ -6,7 +6,7 @@ namespace BigCopilotLink
     /// <summary>
     /// POST /write/marketing (from 0.4.0): the marketing campaigns each site runs, and
     /// the set-up that makes BizMan's Marketing page show every switch for it
-    /// (docs/marketing-write-scope.md). The game's own paths, from build 3680 IL:
+    /// (docs/game-link-api.md, POST /write/marketing). The game's own paths, from build 3680 IL:
     /// BizManMarketing.UpdateCampaignEnabled toggles `enabled` on the site's campaign
     /// for (agency, type), adding it when missing, then BusinessHelper.UpdatePromotion;
     /// MarketingAgencyDialog.OnMarketingSettingsSet does the same in person, fires

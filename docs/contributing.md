@@ -9,9 +9,9 @@ For setup, see the [README](../README.md). File paths below are relative to the 
 | `ba_save.py` | Reads the `.hsg` format, being gzip around an Easy Save 3 binary stream. The format notes are in the module docstring. |
 | `ba_dashboard.py` | Pulls the numbers out of a parsed save and renders the HTML from `template/board.html` and `template/board.js`. |
 | `template/board.html` | The board's markup and CSS, with the placeholders `render()` fills in. |
-| `template/board.js` | The board script, spliced into the last `<script>` block of `board.html` (`/*__BOARD_SCRIPT__*/`). A branch from before the split conflicts in `board.html`; resolve it with `python tools/split_board_script.py --resolve`. |
+| `template/board.js` | The board script, spliced into the last `<script>` block of `board.html` (`/*__BOARD_SCRIPT__*/`). A branch from before the split: [Template placeholders](architecture.md#template-placeholders). |
 | `build_web.py` | Assembles `web/` from the same template the local server uses. Run `python build_web.py` after changing either Python file or either template file. |
-| `web/` | The static site. `index.html` is generated; `app.js` and `worker.js` are kept by hand; `py/` holds the copies of the two Python files the worker fetches. |
+| `web/` | The static site. `index.html` is generated; `app.js` and `worker.js` are kept by hand; `py/` holds the copies of the Python files and data the worker fetches ([The static site](architecture.md#pyodide)). |
 | `web/map.js`, `web/map.css` | Shared map/overlay code, embedded by `render()` into browser and local output. |
 | `web/maps/locations.json`, `web/maps/map-background.svg` | Generated address hit geometry and zoomable background. The approved poster exports remain unchanged. |
 | `export_map.py` | Builds runtime assets from approved canonical geometry, its recipe and the poster SVG. Extraction snapshots are retained privately. |
@@ -48,7 +48,7 @@ run `python build_web.py` so the browser copies match.
 the installed game; `tests/test_web_fresh.py` runs the same check.
 
 Run `python -m unittest discover -s tests` for the portable planner regressions.
-These require Node.js for the embedded JavaScript checks and do not need a save file.
+They need no save file; `tests/test_plan_orders.py` runs the board script under Node.js.
 
 The UI regressions also run in a real browser. Install the development dependencies
 with `npm ci` and
@@ -73,14 +73,9 @@ why both the shared layout and the displayed content need regression coverage.
 
 ## Adding text to the page
 
-Every word Big Copilot writes itself goes through a key, so it can be translated
-([UI text](architecture.md#ui-text)) once its area is converted: in a script
-`tt("area.thing", "English")`, in markup `data-tt="area.thing"` around the English, and in
-Python `msg("area.thing", "English {n:,}", n=...)`. The English stays where it is; the key's
-area is the page's prefix (`today`, `sp`, `sb`, …). Write one key per sentence, with its
-numbers and game names as params: a sentence glued together from pieces cannot be
-translated, because word order belongs to the language. Never put an article in front of a
-`{name}`. After adding or changing such text, run
+Every word Big Copilot writes itself goes through a key, so it can be translated: the
+call forms, keys, placeholders and the one-key-per-sentence rule are in
+[UI text](architecture.md#ui-text). After adding or changing such text, run
 `python -m unittest discover -s tests -p "test_i18n*.py"`, `node --test tests/i18n_*.test.cjs`
 and `python build_web.py`. The German for a new key comes later, from a translation pass;
 until then the page shows the English.

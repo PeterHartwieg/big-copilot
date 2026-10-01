@@ -195,8 +195,9 @@ and a fourth undoes the last write of a kind. Mod 0.3.0 adds `hire`, which hires
 moves staff between sites and writes their weeks in one call. Mod 0.4.0 lets that call carry
 the weeks of sites no hire or move reaches, and undoes it in one step (`features`
 `hire.reschedule` and `hire.undo`); before 0.4.0 a hire has no undo. Mod 0.4.0 also adds `marketing`, which sets the marketing
-campaigns each site runs. The scope and the game rules behind each are
-`docs/mod-write-back-scope.md` (`docs/marketing-write-scope.md` for `marketing`); this
+campaigns each site runs. The game members each write calls are in
+`mod/BigCopilotLink/README.md` ("The game members it uses"), and what the board proposes is in
+`docs/dashboard-reference.md`; the scopes they were built from are in `docs/archive/`. This
 section is only the wire.
 
 **Every write** is `POST /write/<kind>` with a JSON body (`Content-Type: application/json`,
@@ -460,8 +461,8 @@ call may also write the weeks of sites nobody is hired into or moved to or from
 (`hire.reschedule`), so the board's whole staffing action is one call, and it has an undo
 (`hire.undo`, under "Undoing a hire" below). Everything in "Every
 write" above holds, except that a mod before 0.4.0 has no undo for it and a candidate who has left the game's list
-is skipped rather than refused (below). The game rules behind it are
-`docs/mod-write-back-scope.md` section 11.
+is skipped rather than refused (below). The game paths it follows are under "What the mod
+does" below; the IL notes are `docs/archive/mod-write-back-scope.md` section 11.
 
 Why the one action extends this call rather than adding a `/write/staff`: the body, the
 checks, the answer and the apply order are this call's already; the change is one parse rule
@@ -686,8 +687,9 @@ already undone). A dry run answers the verdict with `200`, `ok` false and the ro
 #### `POST /write/marketing`
 
 Mod 0.4.0 and later. Sets which marketing campaigns each site runs, and sets the site up so
-BizMan's Marketing page shows every switch for it. The scope and the game rules behind it are
-`docs/marketing-write-scope.md`.
+BizMan's Marketing page shows every switch for it. The board's plan is
+`docs/dashboard-reference.md` (Promotion); the IL notes are
+`docs/archive/marketing-write-scope.md`.
 
 ```json
 {"dryRun": true,

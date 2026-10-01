@@ -97,7 +97,7 @@ Four PRs.
 
 ### PR 4 — roster
 
-15. Blocked on `docs/staffing-assistant-scope.md` PR 3 and its `staffing` key.
+15. Blocked on `docs/archive/staffing-assistant-scope.md` PR 3 and its `staffing` key.
     `roster_block()` maps one to one: `need` + `basis` → the strip (`censored` hatched,
     `scaled` outlined), `shifts` → bars by `kind`, `employee: null` → dashed hire,
     `fromBench` → the bench mark and the MyEmployees step, `placed` → the pin, `headcount`

@@ -1,13 +1,13 @@
 # Wiki data pipeline
 
 How the game's own help text becomes the catalogue of documented facts the
-Companion's wiki pages will read, and what those facts are and are not.
+board's Wiki reads, and what those facts are and are not.
 
 Status: first increment. The extractor runs and its output is verified, and
 `tools/build_wiki_data.py` builds the public payload the wiki tab ships (see
-[The public payload](#the-public-payload)). Content design lives in
-[wiki-content-design.md](wiki-content-design.md); this document is about the
-data and its provenance.
+[The public payload](#the-public-payload)). This document is about the data
+and its provenance; the original content design is
+[archive/wiki-content-design.md](archive/wiki-content-design.md).
 
 ## What it reads
 
@@ -161,8 +161,8 @@ The contract (`schemaVersion: 1`):
   section with no paragraphs, and a table row that does not fit its columns;
   nothing here is derived, filled in or dropped. `provenance.counts.topics`
   counts them, and the wiki renders them under the Big Copilot badge. Nothing
-  rebuilds an article when the game patches, so each is reviewed by hand — see
-  [wiki-content-design.md](wiki-content-design.md#hand-authored-topics).
+  rebuilds an article when the game patches, so each is reviewed by hand
+  ([Hand-written topics](#hand-written-topics)).
 - `sample` — the Gift Shop compatibility entry. Older payloads containing only
   this entry still work with the reader.
 
@@ -246,6 +246,24 @@ A bad required source — locale or helpstructure — exits with code 2, prints
 `error: …` on stderr, and leaves the previous payload standing. The optional
 sources (`ba_buildings.json`, shipped layouts, the Steam manifest) are recorded
 as absent instead.
+
+### Hand-written topics
+
+A topic is an article about something the game's help never states, such as how
+rent is computed. One object per article in `tools/wiki_topics.json`.
+
+- Paragraphs take the help's own `**bold**` and `[label](target)` markdown and
+  are drawn by the same reader, in the guides' vocabulary, under the
+  **Big Copilot** badge; the provenance line closes the page.
+- State the date and game build the numbers were checked against, in the text
+  and again in `provenance`, so a patch dates the article rather than silently
+  contradicting it.
+- It is routed as `#wiki/topic%2F<slug>`, found by the wiki's search, listed
+  under "Big Copilot topics", and gets `/wiki/topic/<slug>/` from
+  `tools/wiki_pages.py`. A new one is marked New by listing its slug in
+  `WIKI_NEW.topics` in `web/wiki.js`.
+- Nothing rebuilds a topic: review each one on every game update
+  (`docs/game-update.md`).
 
 ## Static pages for search engines
 

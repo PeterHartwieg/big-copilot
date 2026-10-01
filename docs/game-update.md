@@ -288,12 +288,13 @@ game, so a patch can change either group without anything failing.
 - Under the "roster building" banner, re-check `SHIFT_CAP` against `BigAmbitions.dll`
   (`ScheduleHelper.ShiftLengthCap`, `ScheduleAutoFiller.MaxEmployeeHoursPerDay`), `FULL_TIME`
   against the fulltime demand in `JOB_DEMANDS`, and `WEEKEND_WEEKDAYS` against the game's day
-  numbering and its freeweekends demand. Section 2 of `docs/staffing-assistant-scope.md`
-  quotes the game's rules, and "Reading the game's code" below says how to read the IL.
+  numbering and its freeweekends demand. `docs/dashboard-reference.md`, "The rules every
+  planned week keeps", lists each rule with its source, and "Reading the game's code" below
+  says how to read the IL.
   `SLACK_SHARE`, `MIN_SPLIT` and `COVER_STATIONS` are the board's own planning choices, not
   the game's: `COVER_STATIONS` gives the cleaning and security stations one person for every
-  open hour because the game stores no need for them (the same document, "Cleaning and
-  security: full opening-hour cover"). The banner says these rules were read "at
+  open hour because the game stores no need for them (`docs/dashboard-reference.md`, "The
+  week the board would copy into BizMan"). The banner says these rules were read "at
   VERIFIED_BUILD", so re-check them before bumping it in "5. Bump the build" below.
 
 ### Values measured from saves
@@ -367,6 +368,9 @@ states under its rent estimate. `leases` is how many current leases the formula 
 compared with and `worst` the largest relative miss (0.0097 is 0.97%). At build 3682 it
 was under 1% off on every current lease, and under 2% on the deposits. A jump to several
 percent means the patch rebalanced rents: refit `RENT_RATES` against current leases.
+A refit also updates the "How rent works" wiki topic (`how-rent-works` in
+`tools/wiki_topics.json`): its rates, and the date and build in its text and provenance.
+Read every other topic in that file against the patch notes too; nothing rebuilds them.
 
 Then the office post rate, if the company runs an office: open the office's own page on
 the board. Hovering an hour reads "N of M workstations staffed", where N is the

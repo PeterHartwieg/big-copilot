@@ -1,4 +1,4 @@
-// Company > Staff: hiring for every site (docs/staff-hire-plan.md; the page is
+// Company > Staff: hiring for every site (docs/dashboard-reference.md; the page is
 // the second design, mockup/staff-hire-v2/NOTES.md). The board is the real
 // page from render(), its payload the real extract() of the synthetic company
 // in tests/es3_fixture.py with a hand-made hiring overlay in the shape of the
@@ -201,7 +201,7 @@ async function board(t, {link = {writes: ['uniforms', 'imports', 'schedule', 'hi
   await page.goto('https://hire.test/', {waitUntil: 'load'});
   await page.evaluate(() => { document.body.classList.add('has-board'); });
   await page.evaluate(p => window.calmWatch.changed(JSON.parse(p)), data);
-  // Staff is Staffing › Staff needs in the redesign (docs/ui-route-migration.md).
+  // Staff is Staffing › Staff needs in the redesign (docs/architecture.md, Pages).
   if (open) await page.evaluate(() => { showPage('staffing'); showSub('staffing', 'needs'); });
   return page;
 }
@@ -1255,7 +1255,7 @@ test('a live refresh leaves Staff alone while it is hidden, and draws it on the 
 
 /* The redesign keeps Payroll as a Staffing view of its own beside Staff needs,
    which draws no second Payroll (declutter T8): an old Payroll link opens
-   Payroll, an old Staff link opens Staff needs (docs/ui-route-migration.md). */
+   Payroll, an old Staff link opens Staff needs (docs/architecture.md, Routes). */
 test('old Payroll links land on Payroll; old Staff links on Staff needs, which draws no second Payroll', async (t) => {
   const page = await board(t, {open: false});
   await page.evaluate(() => openHash('staff'));

@@ -2978,9 +2978,8 @@ const kindLabel = id => ((typeof ALERT_GROUPS !== "undefined" && ALERT_GROUPS.fi
 const kindOff = a => alertGroupPrefs[a.group] === false;
 /* --- where each kind of finding is fixed ------------------------------------
    The route a finding's action names, and the words on its button. The route
-   is the finding's final home in the redesign (docs/ui-structure-proposal.md,
-   section 7); where that home is still an existing view, ALERT_LINKS above is
-   the landing inside it, and docs/ui-route-migration.md names each one. `pick`
+   is where the finding is fixed; ALERT_LINKS above is the landing inside it
+   (docs/architecture.md, Registries, "A finding kind"). `pick`
    decides between two homes by the finding's own site or sentence. */
 /* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
    needs: its group, emitted by note() in _alerts() or _finding() in a helper
@@ -5033,7 +5032,8 @@ function spStandards(b){
   /* In linked mode, the write that dresses them. */
   const writes = roles.length && !b.missingUniformLocker && (b.uniformGapSkills || []).length ? gwUniformButtons(b, false) : "";
   /* A uniform write made here or on Standards: its progress, beside the
-     write (docs/ui-progress-postconditions.md), as Standards shows it. */
+     write (docs/architecture.md, "Progress: marked, applied, confirmed"), as
+     Standards shows it. */
   const u = typeof pgUniformState === "function" ? pgUniformState(b.key) : null;
   const pill = u ? `<span class="sp-unipg">${pgPill(u.state, u.rec)}</span>` : "";
   return `${eq}
@@ -7211,7 +7211,7 @@ function drawSite(){
 /* A shop's or an office's week, summarised on its own page: the plan's
    state and its progress. The header's Schedule button is the way to the one
    planner, on Staffing › Schedules with this business picked; the planner is
-   not drawn twice (docs/ui-structure-proposal.md, Business pages). */
+   not drawn twice (docs/architecture.md, Pages). */
 function spSchedSummary(b){
   const pg = typeof schedProgress === "function" ? schedProgress(b) : null;
   const state = typeof schedStatus === "function" ? schedStatus(b) : "";
@@ -7767,7 +7767,8 @@ function planImportsState(rows, marks, nameOf, gaps = {}){
 
 const orderMarkCache = new Map();
 /* --- progress: marked by you, applied, confirmed ---------------------------
-   Three meanings of done (docs/ui-progress-postconditions.md). A local mark
+   Three meanings of done (docs/architecture.md, "Progress: marked, applied,
+   confirmed"). A local mark
    is the player's own note (the order marks, ba_order_marks_v1, and the
    roster's ticks): reversible, never the game's word. "Applied · awaiting
    refresh" is written here only from a supported write's successful answer
@@ -8115,7 +8116,7 @@ function pgStateAt(siteKey, slug){
 }
 
 /* --- Supply's task views ------------------------------------------------------
-   Five views, each a route (docs/ui-route-migration.md): Changes (the change
+   Five views, each a route (docs/architecture.md, Pages): Changes (the change
    checklist over everything), Imports, Deliveries, Production and Goods flow.
    Shops, warehouses and factories are the scope a view is read on, not views
    of their own. Every figure is a fact's (supplyFact) and every change a row
@@ -14026,7 +14027,7 @@ function drawProducts(){
   if(toggle) toggle.onclick = () => { showAllProducts = !showAllProducts; drawProducts(); };
 }
 
-/* --- Company > Staff: hiring for every site (docs/staff-hire-plan.md) -----
+/* --- Company > Staff: hiring for every site (docs/dashboard-reference.md) --
    What every planned site still needs, per role, filled first by the people
    the plans already count on (the unassigned bench), then by moving spare
    people between sites, then from the headhunters' candidates; one review and
@@ -16453,7 +16454,7 @@ function nxSchedStale(){
   const row = PAGE_DRAWS.find(r => r[2] === "schedules");
   if(row && hasData()) pageStale.add(row);
 }
-/* Staffing › Payroll (docs/ui-route-migration.md): the Payroll view main folded
+/* Staffing › Payroll (docs/architecture.md, Pages): the Payroll view main folded
    into Company › Staff (issue #89) stays a view of its own in the redesign, beside
    Staff needs.
    Payroll is the headcount by role against the biggest role, and whatever needs
@@ -16836,7 +16837,7 @@ function drawOptimizeStaffing(){
 
 /* --- the redesign's adapters: counts, Standards, prices, Staffing ------------
    The views the new routes open while the redesign brings their final
-   presentation (docs/ui-route-migration.md): each lists what the board already
+   presentation (docs/architecture.md, Pages): each lists what the board already
    knows and opens the existing evidence -- a business's page, a Supply tab --
    with the right business or block in view. Nothing here computes a figure of
    its own. */
@@ -17195,7 +17196,7 @@ function drawSchedules(){
    demands the findings name, company-wide ones included, each opening the
    crew that shows it), and the last hire made from here with its state; then
    whom to hire and move, main's Staff page (drawStaff(),
-   docs/staff-hire-plan.md) under its own heading, with Payroll a link away. */
+   docs/dashboard-reference.md) under its own heading, with Payroll a link away. */
 function drawNeeds(){
   const host = $("secNeeds");
   if(!host || !hasData()) return;
@@ -17484,7 +17485,7 @@ function renderCalm(lazy = true){
    Staffing, Expansion -- each with its own views, and the City map and the
    Game guide beside them. A route names the host page and view that shows it
    today; the redesign's later chunks change what a route shows, never its id
-   (docs/ui-route-migration.md). Which page and which view are remembered on
+   (docs/architecture.md, Routes). Which page and which view are remembered on
    this device and mirrored in the hash. */
 /* Registry: "A view or a page" (only if: see the checklist). */
 const PAGES = [
@@ -17581,8 +17582,8 @@ Object.entries(SUBS).forEach(([id, sv]) => {
    the address bar. A route is "area/view" (or "overview", "map", "wiki"); its
    `host` is the page and view that shows it while the redesign moves its
    presentation there, and `scopes`, on Supply, are the tabs the route may be
-   read on. docs/ui-route-migration.md is this table in words, with the old
-   hashes that still land on each route. */
+   read on. docs/architecture.md, Routes, says how an address resolves; the old
+   hashes are ROUTE_ALIASES, PAGE_ALIASES, SEC_PAGE and SEC_MOVED. */
 /* Registry: "A view or a page" (for a route: see the checklist). */
 const AREAS = [
   {id:"overview", icon:"today", get label(){ return tt("nav.area.overview", "Overview"); }},
@@ -18091,7 +18092,7 @@ function refsHtml(){
     r.newFeature ? `<span class="feature-new" data-new-feature="${r.newFeature}" hidden>${tt("nav.new", "New")}</span>` : ""}</a>`).join("");
 }
 /* The foot's two buttons: ··· (the utilities; a host page's own ··· takes them
-   in and this one steps aside, docs/ui-declutter.md "Sidebar") and the
+   in and this one steps aside, docs/architecture.md "The sidebar") and the
    sidebar's own fold. */
 function sdFootPaint(){
   const more = $("navMore"), tog = $("sdToggle");
@@ -19575,7 +19576,7 @@ const ssLands = qn => typeof qn.lands === "function" ? qn.lands() : qn.lands;
 
 /* Ask the board used to be a row under Next moves as well, folded into a
    button once used. The Overview's All tools replaced both (the redesign's
-   task directory, docs/ui-structure-proposal.md, E15); the questions remain
+   task directory); the questions remain
    the palette's empty state. */
 function ssAskUsed(){
   let used = false;
@@ -22217,8 +22218,9 @@ function gwUniforms(keys){
       gwSvg("skip")}${tt("sp.gw.uni.leave", "Leave it out")}</button>` : ""}</div>` : ""}</div>`;
   };
   const outRow = b => `<div class="gw-shop out"><div class="nm">${hoodHtml(b)}<span>${spEsc(shortName(b))}</span></div><span class="gw-minis"></span><span class="c">${tt("sp.gw.uni.out", "out")}</span></div>`;
-  /* The records this write made (docs/ui-progress-postconditions.md): Applied
-     from its answer, Confirmed by a later board; its undo takes them back. */
+  /* The records this write made (docs/architecture.md, "Progress: marked,
+     applied, confirmed"): Applied from its answer, Confirmed by a later board;
+     its undo takes them back. */
   let written = [];
   gwConfirm({
     kind: "uniforms", icon: "shirt", againLabel: tt("sp.gw.uni.again", "Set again"),
@@ -22297,7 +22299,7 @@ function gwUniforms(keys){
   });
 }
 
-/* Marketing: the cheapest campaign mix (docs/marketing-write-scope.md). Each
+/* Marketing: the cheapest campaign mix (docs/dashboard-reference.md, Promotion). Each
    shop's and office's marketingPlan comes from Python: `on`, the mix to run,
    and `was`, what runs now, both as the game's enum names. A write sends both,
    and also adds whatever BizMan needs to show every switch (`needsSetup`).
@@ -23891,7 +23893,8 @@ function gwImports(depotKey, only = null){
     applying: tt("sb.gw.applying", "Changing the imports in the game…"),
     changed: answer => (answer.rows || []).some(r => r.reactivated || (r.products || []).some(p => p.before !== p.amount)),
     /* Applied: each line written is Applied until a later read shows its
-       contracts holding what was written (docs/ui-progress-postconditions.md). */
+       contracts holding what was written (docs/architecture.md, "Progress:
+       marked, applied, confirmed"). */
     onDone: answer => { pgImportsDone(shown, answer); written = pgImportIds(shown); },
     onUndo: () => { pgDrop(written); written = []; },
     done: answer => {
