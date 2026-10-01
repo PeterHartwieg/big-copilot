@@ -2,28 +2,22 @@
 // only demotes. Issue #51 — the switch under the list did nothing at all to a
 // finding the gate had already set aside, because the smaller list was built
 // from the raw minor rows.
+// The board script runs whole, through loadBoard() (tests/_board.cjs): the
+// finding tables (ALERT_GROUPS, ALERT_LINKS, ALERT_EVIDENCE, ...) are read as
+// the values the board builds, never as source text, so they may be written
+// any way that builds the same values.
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {en, enRe} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
+const {spawnSync} = require('node:child_process');
+const {loadBoard, recordingDocument} = require('./_board.cjs');
 
-const source = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.js'), 'utf8');
-const python = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
-const {between} = require('./_slice.cjs');
-/* The board's words go through tt() (web/i18n.js), which every slice that
-   writes them needs beside it. */
-const I18N = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
-/* The comment above the function is the slice's opening anchor: rewording it is
-   a change to this test as well. */
-const START = '/* Where a finding shows is decided twice over';
-const PARTITION = between(source, START, 'function drawAlerts()');
-const DRAW = between(source, 'function drawAlerts()', '/* A round step for the y axis');
-
-const context = vm.createContext({});
-vm.runInContext(I18N, context);
-vm.runInContext(PARTITION, context);
+const context = loadBoard();
+/* A value of the board, through JSON, so its objects compare as plain ones. */
+const run = expr => JSON.parse(vm.runInContext(`JSON.stringify(${expr})`, context));
 const split = (alerts, minorRows, prefs) =>
   vm.runInContext('partitionFindings', context)(alerts, minorRows, prefs);
 
@@ -115,25 +109,38 @@ test('the switched-off line lists its kinds in the tune panel order', () => {
     [en("today.minor.offKind.worth", {kind: "atcap", n: 1, worth: "$900"}), en("today.minor.offKind.worth", {kind: "idlestaff", n: 1, worth: "$300"}), en("today.minor.offKind", {kind: "dead", n: 1}), en("today.minor.offKind", {kind: "mystery", n: 1})].join(", "));
 });
 
-test('the count lines say which is which', () => {
-  assert.match(DRAW, /partitionFindings\(/);
-  assert.match(DRAW, /tt\("today\.minor\.below(?:\.worth)?"/);
-  // Overstaffed hours is off by default, so the line cannot say "you".
-  assert.match(DRAW, /tt\("today\.minor\.off"/);
-  // Pins the wording: default-off kinds must not be attributed to the player.
-  assert.doesNotMatch(DRAW, /you switched off/);
-  assert.match(DRAW, /switchedOffKinds\(switchedOff, kindLabel, compact, ALERT_GROUPS\.map\(g => g\.id\)\)/);
-});
+/* drawAlerts() on a board of its own, with the page's elements recorded: the
+   ids the list shows, and the two count lines under it. */
+function drawn(data, choices = {}, sizing = 'cap'){
+  const {document, element} = recordingDocument();
+  const board = loadBoard({document, __data: data, __choices: choices});
+  vm.runInContext(`D = __data; sizing = ${JSON.stringify(sizing)};
+    alertGroupPrefs = kindPrefs(__choices); drawAlerts();`, board);
+  const ids = html => [...String(html).matchAll(/<div class="find [^"]*" data-id="([^"]+)"/g)].map(m => m[1]);
+  return {list: ids(element('alerts').innerHTML), minor: String(element('alertMinor').innerHTML)};
+}
+const finding = (id, group, worth, level = 'warn') => ({id, group, level, site: 'X', text: `Finding ${id}`, worth});
 
-/* The kinds, their defaults and what a device already stores. The slice runs
-   from the list to the comment that follows the storage helpers. */
-const KINDS = between(source, 'const ALERT_GROUPS = [', '/* The control that opens the panel');
-const kinds = vm.createContext({});
-/* web/i18n.js runs ahead of the board script on the page: the kinds' labels
-   are read through its tt(). */
-vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8'), kinds);
-vm.runInContext(KINDS, kinds);
-const run = expr => JSON.parse(vm.runInContext(`JSON.stringify(${expr})`, kinds));
+test('the count lines say which is which', () => {
+  const data = {meta: {}, businesses: [],
+    alerts: [finding('a', 'atcap', 9000), finding('b', 'jobdemand', 8000)],
+    minor: {gate: 500, rows: [finding('c', 'idlestaff', 400, 'info'), finding('d', 'hype', 30, 'info'),
+      finding('e', 'loss', 20, 'info')]}};
+  // Overstaffed hours and Demand wave ending are off by default; At capacity is switched off here.
+  const {list, minor} = drawn(data, {atcap: false});
+  assert.deepEqual(list, ['b'], 'the list keeps what partitionFindings() keeps');
+  const [below, off] = minor.split('</p>');
+  assert.match(below, enRe('today.minor.below', {n: 1, gate: 500}));
+  // The switched-off kinds in the tune panel's order (ALERT_GROUPS), not in
+  // the order their rows reach the line.
+  const order = run('ALERT_GROUPS.map(g => g.id)').filter(id => ['atcap', 'idlestaff', 'hype'].includes(id));
+  assert.notDeepEqual(order, ['idlestaff', 'hype', 'atcap'], 'the rows reach the line in another order than the panel');
+  const worth = {atcap: '$9k', idlestaff: '$400', hype: '$30'};
+  assert.match(off, enRe('today.minor.off', {n: 3, kinds: order.map(id =>
+    en('today.minor.offKind.worth', {kind: en(`nav.kind.${id}.label`), n: 1, worth: worth[id]})).join(', ')}));
+  // Pins the wording: default-off kinds must not be attributed to the player.
+  assert.doesNotMatch(minor, /you switched off/i);
+});
 
 test('At capacity is on by default; Overstaffed hours and Demand wave ending are off', () => {
   const on = Object.fromEntries(run('ALERT_GROUPS').map(g => [g.id, g.on]));
@@ -184,10 +191,7 @@ test('a switch set back to its default stops being a stored choice', () => {
 
 /* R2: a headline cut at a bracket used to drop the item's variant, so
    "Fabric (Expensive)" and "Fabric (Cheap)" both read "Fabric". */
-const SPLIT = between(source, '/* A finding is a short verb phrase', '/* The figure on the right');
-const splitting = vm.createContext({});
-vm.runInContext(SPLIT, splitting);
-const headline = a => vm.runInContext('splitFinding', splitting)(a).what;
+const headline = a => vm.runInContext('splitFinding', context)(a).what;
 
 test('a finding keeps the variant in its headline', () => {
   const site = 'Factory Clothing';
@@ -205,13 +209,13 @@ test('a bracket of words is still a place to cut a long headline', () => {
   const t = 'Revenue down 20% week on week with a very long explanation (mostly the weekend) after that';
   assert.equal(headline({site: 'X', text: t}), 'Revenue down 20% week on week with a very long explanation');
   // Cut at the bracket, the detail loses the bracket's own ")" and nothing else.
-  assert.equal(vm.runInContext('splitFinding', splitting)({site: 'X', text: t}).more,
+  assert.equal(vm.runInContext('splitFinding', context)({site: 'X', text: t}).more,
     'mostly the weekend after that');
 });
 
 test('a cut at a comma leaves the variant bracket whole in the detail', () => {
   const t = 'Shelves run dry at 3 shops, Clothing (Classic Cheap Female) sells out first every Saturday';
-  const {what, more} = vm.runInContext('splitFinding', splitting)({site: 'X', text: t});
+  const {what, more} = vm.runInContext('splitFinding', context)({site: 'X', text: t});
   assert.equal(what, 'Shelves run dry at 3 shops');
   assert.equal(more, 'Clothing (Classic Cheap Female) sells out first every Saturday');
 });
@@ -219,10 +223,14 @@ test('a cut at a comma leaves the variant bracket whole in the detail', () => {
 /* The renames of R12 change what a kind is called, never its id: the id is
    what a stored switch is keyed by, so a player's choices carry over. */
 test('idle stock has one name, and a renamed kind keeps its id', () => {
-  // The label's English, beside its key: get label(){ return tt("nav.kind.dead.label", "Idle stock"); }
-  const kind = id => (source.match(new RegExp(`\\{id:"${id}",\\s*get label\\(\\)\\{ return tt\\("[^"]+", "([^"]+)"`)) || [])[1];
-  // A depot's idle group on Supply (R13) and the finding kind share one name.
-  const group = (source.match(/slug: null, item: tt\("[^"]+", "([^"]+)"\), fact: kids\[0\]\.fact/) || [])[1];
+  const kind = id => run('ALERT_GROUPS').find(g => g.id === id).label;
+  // A depot's idle group on Supply (R13) and the finding kind share one name:
+  // two idle lines fold into a group row named for the kind.
+  vm.runInContext('D = {meta: {}, businesses: [{key: "k", name: "Depot"}], supply: {}}', context);
+  const idle = slug => ({s: 0, slug, item: slug, fact: {st: 'idle', why: 'notMoving'}, chk: [], stock: 5, week: 1, draw: null, busy: null});
+  const table = vm.runInContext('sbDepotTable', context)({}, {}, [idle('a'), idle('b')]);
+  const group = (table.match(/<tr class="sb-gr[^"]*"[^>]*><td class="sb-tk"><\/td><td class="l nm">([^<]+)</) || [])[1];
+  vm.runInContext('D = null', context);
   assert.equal(kind('dead'), en("nav.kind.dead.label"));
   assert.equal(group, kind('dead'), 'the idle group and the finding kind share one name');
   assert.equal(kind('staff'), en("nav.kind.staff.label"));
@@ -234,11 +242,9 @@ test('idle stock has one name, and a renamed kind keeps its id', () => {
 test('Not routed is a kind, on by default, linked to Supply › Deliveries and the depot\'s Stock', () => {
   const g = run('ALERT_GROUPS').find(x => x.id === 'notrouted');
   assert.deepEqual([g.label, g.on], [en("nav.kind.notrouted.label"), true]);
-  const links = between(source, 'const ALERT_LINKS = {', 'const SEC_PAGE =');
-  assert.match(links, /notrouted: \{sec:"secDeliveries", view:"deliveries"\}/);
-  const evidence = between(source, 'const ALERT_EVIDENCE = {', 'const SEV_KIND =');
-  assert.match(evidence, /notrouted: \{block: "stock"\}/);
-  assert.match(source, /depot: \{[^}]*notrouted: "stock"/);
+  assert.deepEqual(run('ALERT_LINKS.notrouted'), {sec: "secDeliveries", view: "deliveries"});
+  assert.deepEqual(run('ALERT_EVIDENCE.notrouted'), {block: "stock"});
+  assert.equal(run('SP_EVIDENCE_KIND.depot.notrouted'), "stock");
 });
 
 /* A depot only a route from the company's own site feeds, whose busiest day
@@ -247,11 +253,9 @@ test('Not routed is a kind, on by default, linked to Supply › Deliveries and t
 test("Depot top-up too low is a kind, on by default, landing on Deliveries, the depot's own Stock its evidence", () => {
   const g = run('ALERT_GROUPS').find(x => x.id === 'topup');
   assert.deepEqual([g.label, g.on], [en("nav.kind.topup.label"), true]);
-  const links = between(source, 'const ALERT_LINKS = {', 'const SEC_PAGE =');
-  assert.match(links, /topup: \{sec:"secDeliveries", view:"deliveries"\}/);
-  const evidence = between(source, 'const ALERT_EVIDENCE = {', 'const SEV_KIND =');
-  assert.match(evidence, /topup: \{block: "stock"\}/);
-  assert.match(source, /depot: \{[^}]*topup: "stock"/);
+  assert.deepEqual(run('ALERT_LINKS.topup'), {sec: "secDeliveries", view: "deliveries"});
+  assert.deepEqual(run('ALERT_EVIDENCE.topup'), {block: "stock"});
+  assert.equal(run('SP_EVIDENCE_KIND.depot.topup'), "stock");
 });
 
 /* A wholesale store's weekly delivery that falls short, to a shop or a
@@ -262,23 +266,17 @@ test('Wholesale delivery too low is a kind of its own, landing on Deliveries, th
   assert.deepEqual([g.label, g.on], [en("nav.kind.wholesale.label"), true]);
   assert.match(g.note, enRe("nav.kind.wholesale.note"));
   assert.match(run('ALERT_GROUPS').find(x => x.id === 'topup').note, enRe("nav.kind.topup.note"));
-  const links = between(source, 'const ALERT_LINKS = {', 'const SEC_PAGE =');
-  assert.match(links, /wholesale: \{sec:"secDeliveries", view:"deliveries"\}/);
-  const evidence = between(source, 'const ALERT_EVIDENCE = {', 'const SEV_KIND =');
-  assert.match(evidence, /wholesale: \{block: "shelves"\}/);
-  assert.match(source, /depot: \{[^}]*wholesale: "stock"/);
-  assert.match(source, /wholesale: \["wholesale", "contract", "delivery"\]/);
+  assert.deepEqual(run('ALERT_LINKS.wholesale'), {sec: "secDeliveries", view: "deliveries"});
+  assert.deepEqual(run('ALERT_EVIDENCE.wholesale'), {block: "shelves"});
+  assert.equal(run('SP_EVIDENCE_KIND.depot.wholesale'), "stock");
+  assert.deepEqual(run('SS_KIND_SYN.wholesale'), ["wholesale", "contract", "delivery"]);
 });
 
 /* A finding with no money shows the figure Python sends beside it (`amt`,
    _amt() in ba_dashboard.py), never one read back out of its sentence: a
    reworded or translated sentence keeps its amount. */
 test("the amount column shows a finding's amt, whatever its sentence says", () => {
-  const ctx = vm.createContext({money: String, fmt: n => `$${Number(n).toLocaleString('en-US')}`,
-    num: n => Number(n).toLocaleString('en-US')});
-  vm.runInContext(I18N, ctx);
-  vm.runInContext(between(source, '/* The figure on the right', '/* A finding whose kind is switched off'), ctx);
-  const amount = a => vm.runInContext('findingAmount', ctx)(a);
+  const amount = a => vm.runInContext('findingAmount', context)(a);
   const said = 'Words with 999 units and $5/day in them';
   const u = key => `<small>${en(key)}</small>`;
   assert.equal(amount({group: 'wholesale', text: said, amt: {n: 1680, unit: '/week used'}}), '1,680' + u('today.amt.weekUsed'));
@@ -296,8 +294,8 @@ test("the amount column shows a finding's amt, whatever its sentence says", () =
 /* Today reads the findings of the sizing on screen: Python runs the list
    twice, and Demand has its own (alertsDemand). */
 test('Today, the kinds popover and the map read the list of the sizing on screen', () => {
-  const ctx = vm.createContext({});
-  vm.runInContext('let sizing = "cap"; let D = null;\n' + between(source, 'const alertLines =', '/* The sizing switch.'), ctx);
+  const ctx = loadBoard();
+  vm.runInContext('sizing = "cap"', ctx);
   const lines = ctx => JSON.parse(vm.runInContext('JSON.stringify(alertLines().map(a => a.id))', ctx));
   vm.runInContext(`D = {alerts: [{id: 'feed'}, {id: 'paused'}], minor: {rows: [{id: 'm'}]},
     alertsDemand: {lines: [{id: 'paused'}], minor: {rows: []}}}`, ctx);
@@ -309,7 +307,14 @@ test('Today, the kinds popover and the map read the list of the sizing on screen
   // A payload from before the second pass keeps the 24/7 list under Demand.
   vm.runInContext('delete D.alertsDemand', ctx);
   assert.deepEqual(lines(ctx), ['feed', 'paused']);
-  assert.match(DRAW, /alertLines\(\), alertMinor\(\)\.rows/);
+  // Today draws the list and the smaller findings of the sizing on screen.
+  const data = {meta: {}, businesses: [], alerts: [finding('feed', 'feed', 9000)],
+    minor: {gate: 500, rows: [finding('m', 'loss', 20, 'info')]},
+    alertsDemand: {lines: [finding('paused', 'paused', 8000)], minor: {gate: 500, rows: []}}};
+  assert.deepEqual(drawn(data).list, ['feed']);
+  assert.match(drawn(data).minor, enRe('today.minor.below', {n: 1, gate: 500}));
+  assert.deepEqual(drawn(data, {}, 'dem').list, ['paused']);
+  assert.equal(drawn(data, {}, 'dem').minor, '');
   const map = fs.readFileSync(path.join(__dirname, '..', 'web', 'map.js'), 'utf8');
   assert.match(map, /\.\.\.alertLines\(\), \.\.\.\(alertMinor\(\)\.rows/);
 });
@@ -318,10 +323,7 @@ test('Today, the kinds popover and the map read the list of the sizing on screen
    "site" the tab of the site's own kind (a shop's Shops, a factory's
    Factories, every other site's Warehouses). */
 test('the supply kinds land on the Supply view of their route', () => {
-  const ctx = vm.createContext({});
-  vm.runInContext(between(source, 'const ALERT_LINKS = {', '/* Put something at the top of the window') +
-    '; this.out = JSON.stringify({ALERT_LINKS, SEC_PAGE, SEC_MOVED});', ctx);
-  const got = JSON.parse(ctx.out), links = got.ALERT_LINKS;
+  const got = run('{ALERT_LINKS, SEC_PAGE, SEC_MOVED}'), links = got.ALERT_LINKS;
   const views = Object.fromEntries(Object.entries(links).filter(([, l]) => l.view).map(([id, l]) => [id, l.view]));
   assert.deepEqual(views, {shortfall: 'route', order: 'imports', paused: 'imports',
     outruns: 'deliveries', unplanned: 'deliveries', unsourced: 'route', dead: 'deliveries', target: 'deliveries', notrouted: 'deliveries',
@@ -343,12 +345,8 @@ test('the supply kinds land on the Supply view of their route', () => {
    (docs/architecture.md, Registries, "A finding kind"). Every ALERT_GROUPS id
    needs a row in each, and no table keeps a row for a kind that is gone. */
 const GROUP_IDS = run('ALERT_GROUPS').map(g => g.id);
-/* The keys of a board-script table, run from its declaration to `end`. */
-const tableKeys = (name, end) => {
-  const ctx = vm.createContext({});
-  vm.runInContext(between(source, `const ${name} = {`, end) + `;this.out = JSON.stringify(Object.keys(${name}));`, ctx);
-  return JSON.parse(ctx.out);
-};
+/* The keys of a board-script table. */
+const tableKeys = name => run(`Object.keys(${name})`);
 /* The kinds a table may lack on purpose, each with its reason. */
 const NO_EVIDENCE = {
   // A vacant lease has no business, so there is no site panel to light.
@@ -371,21 +369,24 @@ const registryGaps = (name, keys, exempt = []) => {
 };
 
 test('every finding kind has an ALERT_LINKS entry, so a click lands somewhere', () => {
-  const keys = tableKeys('ALERT_LINKS', 'const SEC_PAGE =');
+  const keys = tableKeys('ALERT_LINKS');
   registryGaps('ALERT_LINKS', keys);
 });
 
 test('every finding kind with a site panel has an ALERT_EVIDENCE entry', () => {
-  const keys = tableKeys('ALERT_EVIDENCE', 'const SEV_KIND =');
+  const keys = tableKeys('ALERT_EVIDENCE');
   registryGaps('ALERT_EVIDENCE', keys, Object.keys(NO_EVIDENCE));
   for (const id of Object.keys(NO_EVIDENCE))
     assert.ok(!keys.includes(id), `${id} has an ALERT_EVIDENCE entry now: take it off NO_EVIDENCE`);
 });
 
 test('every finding kind has an ALERT_UNITS unit or is listed as carrying no money', () => {
-  // The Python dict, from its opening line to its closing brace at column 0.
-  const table = between(python, 'ALERT_UNITS = {', '\n}');
-  const keys = [...table.matchAll(/^\s+"(\w+)":/gm)].map(m => m[1]);
+  // The Python dict's keys, read by importing ba_dashboard.py.
+  const out = spawnSync(process.env.PYTHON || 'python', ['-c',
+    'import json, ba_dashboard; print(json.dumps(list(ba_dashboard.ALERT_UNITS)))'],
+  {cwd: path.join(__dirname, '..'), encoding: 'utf8'});
+  assert.equal(out.status, 0, out.stderr);
+  const keys = JSON.parse(out.stdout);
   assert.ok(keys.length, 'no keys read out of ALERT_UNITS');
   registryGaps('ALERT_UNITS', keys, NOT_MONEY);
   const both = NOT_MONEY.filter(id => keys.includes(id));

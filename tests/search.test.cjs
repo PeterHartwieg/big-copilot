@@ -497,18 +497,16 @@ test('the sphere rests on the sidebar head, clear of the name, and folds to one 
 test('a live refresh while the palette is open re-reads the board, and keeps the lit row', async () => {
   const page = await board();
   try {
-    // renderAll() is where a refresh, or another save, arrives.
-    const source = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.js'), 'utf8');
-    const body = require('./_slice.cjs').between(source, 'function renderAll(){', '/* --- pages ---');
-    assert.match(body, /ssDataChanged\(\);\s*ssCheckLanding\(\);/);
     await page.keyboard.press('/');
     await typed(page, 'test');
     await page.keyboard.press('ArrowDown');
     assert.equal(await lit(page), 'Test Fitness');
     await page.evaluate(() => {
-      D = {...D, businesses: [...D.businesses.slice(1), {key: 'ba:street_broadway#9', name: 'Test Florist', code: 'MT',
+      // meta.save is the masthead's title, which renderAll() draws as well.
+      D = {...D, meta: {...D.meta, save: D.meta.save || 'Search fixture'}, businesses: [...D.businesses.slice(1), {key: 'ba:street_broadway#9', name: 'Test Florist', code: 'MT',
         status: 'retail', type: 'Florist', typeSlug: 'ba:businesstype_florist', address: '9 Broadway', neighbourhood: 'ba:neighborhood_midtown'}]};
-      ssDataChanged();
+      // renderAll() is where a refresh, or another save, arrives.
+      renderAll();
     });
     const titles = await page.$$eval("#ssRes .ss-grp[aria-label=\"" + en("nav.search.group.sites") + "\"] .t", ts => ts.map(t => t.textContent));
     assert.ok(titles.includes('Test Florist'), titles.join('|'));

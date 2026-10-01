@@ -5,29 +5,17 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {en, enRe} = require('./_i18n.cjs');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
-const source = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.js'), 'utf8');
-const slice = (from, to) => require('./_slice.cjs').between(source, from, to);
+const {loadBoard, recordingDocument} = require('./_board.cjs');
 
+/* The whole board script (tests/_board.cjs), its elements recorded, with
+   the goals in D. */
 const board = (goals = {typesRun: 1, typesTotal: 3}) => {
-  const section = {innerHTML: ''};
-  const context = vm.createContext({
-    $: id => (assert.equal(id, 'secGoals'), section),
-    sechead: (title, o = {}) => `<head why="${o.why ?? ''}">${title}${o.quiet ? ` · ${o.quiet}` : ''}</head>`,
-    icon: () => '',
-    compact: n => String(n),
-    D: {goals, meta: {}},
-  });
-  /* web/i18n.js runs ahead of the board script on the page: the difficulty's
-     words are read through its tt(). */
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8'), context);
-  vm.runInContext(slice('const fmt =', 'const compact =') + slice('const attr =', '/* Tooltips are plain text')
-    + slice('\nconst plural =', '/* A rival per dot')
-    + slice('function drawGoals(){', '/* Next moves: the Plan imports card'), context);
-  require('./_payload_contract.cjs').assertPayloadShape(context.D, 'milestones');
-  return {context, section};
+  const {document, element} = recordingDocument();
+  const context = loadBoard({document, __D: {goals, meta: {}}});
+  vm.runInContext('D = __D', context);
+  require('./_payload_contract.cjs').assertPayloadShape(vm.runInContext('D', context), 'milestones');
+  return {context, section: element('secGoals')};
 };
 const draw = goals => { const b = board(goals); b.context.drawGoals(); return b.section.innerHTML; };
 const chip = (h, place = 'mast') => board().context.fvDiffChip(h, place);
@@ -39,14 +27,14 @@ test('Milestones is the career goals and the totals, with the buildings a total,
   const html = draw({typesRun: 5, typesTotal: 24, buildingsOwned: 0, buildingsTotal: 885, rivalsDefeated: 0,
     rivalsTotal: 4, goalsDone: 44, diplomas: 5, diplomasTotal: 5, goodsProduced: 321, taxesPaid: 0});
   // The heading alone: no line under it saying what the goals are.
-  assert.match(html, new RegExp("<head why=\"\">" + enRe('co.goals.title2').source + "<\\/head>"));
+  assert.match(html, new RegExp("^<div class=\"sechead\"><h2>" + enRe('co.goals.title2').source + "<\\/h2><\\/div>"));
   assert.doesNotMatch(html, new RegExp(enRe('co.goals.tax.lab').source + "<\\/span><span class=\"v\">\\$0<\\/span><span class=\"sub\">"));
   // Pins the wording: the obsolete building-ownership goal must stay absent.
   assert.doesNotMatch(html, /Every building owned|885/);
   // Each goal with a total has its bar; the complete one is ticked; personal
   // goals have no total and no bar.
   assert.match(html, new RegExp(enRe('co.goals.types').source + "<\\/span><span class=\"bz-mbar\" role=\"img\" aria-label=\"" + enRe('co.goals.of', {n: 5, total: 24}).source + "\"><i style=\"--v:20\\.8%\"><\\/i><\\/span><span class=\"c\">5 \\/ 24<\\/span>"));
-  assert.match(html, new RegExp("class=\"mile bz-mile done\"><span class=\"box\"><\\/span><span class=\"bz-ml\">" + enRe('co.goals.diplomas').source));
+  assert.match(html, new RegExp("class=\"mile bz-mile done\"><span class=\"box\">(?:<svg[^]*?<\\/svg>)?<\\/span><span class=\"bz-ml\">" + enRe('co.goals.diplomas').source));
   assert.match(html, new RegExp(enRe('co.goals.personal').source + "<\\/span><span class=\"bz-mbar none\"><\\/span><span class=\"c\">" + enRe('co.goals.done', {n: 44}).source));
   // The running totals, as tiles.
   assert.match(html, new RegExp(enRe('co.goals.goods.lab').source + "<\\/span><span class=\"v\">321<\\/span>"));

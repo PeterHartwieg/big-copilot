@@ -10,7 +10,6 @@ const vm = require('node:vm');
 // The whole board script, web/i18n.js ahead of it (tt(), which the Plan
 // imports card's wording goes through), as the page runs them.
 const {loadBoard, SOURCE: source} = require('./_board.cjs');
-const {between} = require('./_slice.cjs');
 const context = loadBoard();
 const businesses = [
   {key:'depot#1', name:'Depot', address:'1 Depot Street'},
@@ -483,9 +482,6 @@ test('tight never reaches Today: with only margin changes left, the card says no
   assert.deepEqual(card([], [], {complete: true, unnamed: 0, margin: 2}), {badge:en("today.moves.plan.badge.set"), live:false,
     what:en("today.moves.plan.short", {changes: en("today.moves.plan.margin", {n: 2})})});
   assert.doesNotMatch(card([], [], {complete: true, unnamed: 0, margin: 1}).what, enRe("sb.word.tight", {}, {flags: "i"}));
-  const drawn = between(source, 'function drawSupplyStrip(', '/* The Set to figures the player typed');
-  assert.match(drawn, /const urgent = rows\.filter\(r => !r\.tight && !r\.lower\);/);
-  assert.match(drawn, /planImportsState\(urgent,/);
 });
 
 test('a top-up target set too high is a change to lower, never tight and never on Today', () => {

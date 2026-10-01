@@ -7,8 +7,10 @@ without its row in the doc (see the Registries section of docs/architecture.md).
 from __future__ import annotations
 
 import ast
+import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -46,6 +48,7 @@ DASHBOARD = read("ba_dashboard.py")
 PAGE = read("template/board.html")
 BOARD = read("template/board.js")
 TOKEN = re.compile(r"__[A-Z_]+__")
+LOADER = os.path.join(HERE, "_board.cjs")
 
 
 def diff_message(what: str, doc: set, code: set, doc_side: str = "in the doc",
@@ -184,8 +187,13 @@ class FindingGroupTests(unittest.TestCase):
 
     @staticmethod
     def board_kinds() -> set:
-        table = between(BOARD, "const ALERT_GROUPS = [", "\n];", "ALERT_GROUPS")
-        return set(re.findall(r'\{id:"(\w+)"', table))
+        # The ids as the board builds them: the whole board script run under
+        # Node (tests/_board.cjs), never the table's source text.
+        script = ("const vm = require('node:vm');\n"
+                  "const board = require(" + json.dumps(str(LOADER)) + ").loadBoard();\n"
+                  "console.log(JSON.stringify(vm.runInContext('ALERT_GROUPS.map(g => g.id)', board)));")
+        out = subprocess.run(["node", "-e", script], check=True, text=True, capture_output=True)
+        return set(json.loads(out.stdout))
 
     def test_every_alert_group_is_a_group_the_findings_emit(self):
         board, python = self.board_kinds(), _produced_groups()

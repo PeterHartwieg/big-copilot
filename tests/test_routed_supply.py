@@ -8,6 +8,8 @@ the draw. A factory that only holds the item makes no route count: stock runs
 out, a standing order does not. A depot fed by imports alone reads exactly as
 before. None of it reads the delivery log: every save here has an empty one.
 """
+import json
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -308,10 +310,17 @@ class RoutedSupplyTests(MsgAsserts, unittest.TestCase):
         self.assertMsg(SUMMARIES["shortfall"](3, "Coffee"), "f.sum.shortfall", n=3, subject="Coffee")
         # Pins the wording: the condensed line must not blame an import alone.
         self.assertNotIn("import", plain(SUMMARIES["shortfall"](3, "Coffee")))
-        board = Path(__file__).resolve().parent.parent / "template" / "board.js"
-        [kind] = [line for line in board.read_text(encoding="utf-8").splitlines() if 'id:"shortfall"' in line]
+        # The kind's note as the board builds it: the whole board script run
+        # under Node (tests/_board.cjs), so the table is read as a value.
+        loader = Path(__file__).resolve().parent / "_board.cjs"
+        script = ("const vm = require('node:vm');\n"
+                  "const board = require(" + json.dumps(str(loader)) + ").loadBoard();\n"
+                  "console.log(JSON.stringify(vm.runInContext("
+                  "'ALERT_GROUPS.find(g => g.id === \"shortfall\").note', board)));")
+        note = json.loads(subprocess.run(["node", "-e", script], check=True, text=True,
+                                         capture_output=True).stdout)
         # Pins the wording: the kind description must name route rounds as well as imports.
-        self.assertIn("import or route round", kind)
+        self.assertIn("import or route round", note)
 
     def test_a_paused_backup_beside_a_covering_route_is_judged_over_a_week(self):
         """The same Saturday with the backup paused: there is no drop to reach,

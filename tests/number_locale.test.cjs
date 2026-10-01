@@ -12,7 +12,9 @@ const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const vm = require('node:vm');
 const {chromium} = require('playwright');
+const {loadBoard} = require('./_board.cjs');
 
 const root = path.join(__dirname, '..');
 const PYTHON = process.env.PYTHON || 'python';
@@ -20,19 +22,23 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
 // The board script is template/board.js; map.js and wiki.js run inside it, and
 // template/board.html holds the page's smaller scripts.
-const template = read('template/board.js');
-const SOURCES = [['template/board.js', template, 1], ['template/board.html', read('template/board.html'), 1],
+const SOURCES = [['template/board.js', read('template/board.js'), 1], ['template/board.html', read('template/board.html'), 1],
   ['web/map.js', read('web/map.js'), 1],
   ['web/wiki.js', read('web/wiki.js'), 1], ['web/i18n.js', read('web/i18n.js'), 1]];
-const NUM = 'const num = (n, opts) => Number(n).toLocaleString(NUM_LOCALE, opts);';
+// The one call that names the locale: num()'s own.
+const IN_LOCALE = /\.toLocaleString\(NUM_LOCALE\b/;
 
 test('no bare toLocaleString() in the board script, map.js, wiki.js or i18n.js: numbers go through num()', () => {
-  assert.equal(template.split(NUM).length, 2, 'num() is defined once, in the board script');
-  for (const [file, src, first] of SOURCES) {
-    const bare = src.split('\n').map((line, i) => `${file}:${first + i}: ${line.trim()}`)
-      .filter(line => !line.endsWith(NUM) && /\.toLocaleString\(/.test(line));
-    assert.deepEqual(bare, [], 'format through num(), not toLocaleString()');
-  }
+  const lines = SOURCES.flatMap(([file, src, first]) =>
+    src.split('\n').map((line, i) => `${file}:${first + i}: ${line.trim()}`));
+  assert.equal(lines.filter(line => IN_LOCALE.test(line)).length, 1, 'one call formats in NUM_LOCALE: num()');
+  const bare = lines.filter(line => !IN_LOCALE.test(line) && /\.toLocaleString\(/.test(line));
+  assert.deepEqual(bare, [], 'format through num(), not toLocaleString()');
+  // num() is that call: it formats in the UI's number locale, whatever the browser's.
+  const board = loadBoard();
+  assert.equal(vm.runInContext('num(1234.5)', board), '1,234.5');
+  vm.runInContext('NUM_LOCALE = "de-DE"', board);
+  assert.equal(vm.runInContext('num(1234.5)', board), '1.234,5');
 });
 
 let browser, html;
