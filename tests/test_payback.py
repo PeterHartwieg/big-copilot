@@ -61,6 +61,17 @@ def bill(text, amount, day):
             "transactionData": coll([{"$k": "address", "$v": text}])}
 
 
+TRUCK, CAR = "ba:vehicletype_freighttruckt1", "ba:vehicletype_bima320"
+VEHICLE_PRICES = {TRUCK: 98000, CAR: 48000}
+
+
+def bought(kind, amount, day):
+    """A vehicle purchase as the transaction log keeps it: its type, never
+    which vehicle or where it went."""
+    return {"transactionType": "ba:transaction_vehiclebought", "amount": -amount, "address": None,
+            "timestamp": {"Day": day}, "transactionData": coll([{"$k": "vehicleName", "$v": kind}])}
+
+
 def business(addr, opened, cost_centre=False, status="retail"):
     return {"key": ba_dashboard.site_key(addr), "status": status, "costCentre": cost_centre, "opened": opened}
 
@@ -74,6 +85,11 @@ def statements(rows):
 class PricesTestCase(unittest.TestCase):
     def setUp(self):
         patcher = mock.patch.object(ba_dashboard, "_item_prices", PRICES)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        rules = {part: {} for part in ba_dashboard.STORE_RULE_PARTS}
+        rules["vehicles"] = VEHICLE_PRICES
+        patcher = mock.patch.object(ba_dashboard, "_store_rules", rules)
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -98,6 +114,13 @@ class SetupCostTest(PricesTestCase):
         cost = setup_cost([("ba:itemname_unknown", 0)], ["NOTaMATERIAL"], 54, 1020)
         self.assertEqual((cost["furniture"], cost["materials"]), (0, 0))
         self.assertEqual(cost["firm"], 586 * 54 + 1020)
+
+    def test_vehicles_count_in_both_modes(self):
+        cost = setup_cost([("ba:itemname_cashregister", 900)], [], 225, 5880, vehicles=103000)
+        self.assertEqual(cost["vehicles"], 103000)
+        self.assertEqual(cost["firm"], 900 + 586 * 225 + 5880 + 103000)
+        self.assertEqual(cost["self"], 900 + 5880 + 103000)
+        self.assertEqual(setup_cost([], [], 0, 0)["vehicles"], 0)
 
     def test_a_real_bill_is_the_estimate_less_the_trade_in(self):
         # The Costy Co liquor store on 4 3rd Avenue: 1000 m², items at 372,479
@@ -178,11 +201,17 @@ class AddressWordsTest(unittest.TestCase):
 class PaybackTest(PricesTestCase):
     """A liquor store fed by a brewery: one chain, the brewery a cost centre."""
 
-    def company(self, transactions=(), shop_items=None, opened=30, day=None):
+    def company(self, transactions=(), shop_items=None, opened=30, day=None, vehicles=(), brewery_slots=(),
+                shop_slots=()):
         shop = registration(SHOP, shop_items or [("ba:itemname_cashregister", 900), ("ba:itemname_storageshelf", 0)],
                             [["FLOORpaid", "WALLpaid"]], 5880)
         brewery = registration(BREWERY, [("ba:itemname_bottlingmachine", 50000)], [["FLOORpaid"]], 20000)
-        save = Save({"Transactions": coll(transactions), "Day": day}, {}, "synthetic")
+        # A warehouse's parking: one slot per vehicle it may hold, empty or not.
+        brewery["vehicleSlots"] = coll({"vehicleInstanceId": vid, "employeeDriverId": None} for vid in brewery_slots)
+        shop["vehicleSlots"] = coll({"vehicleInstanceId": vid, "employeeDriverId": None} for vid in shop_slots)
+        save = Save({"Transactions": coll(transactions), "Day": day,
+                     "VehicleInstances": coll({"id": vid, "vehicleTypeName": kind} for vid, kind in vehicles)},
+                    {}, "synthetic")
         businesses = [business(SHOP, opened), business(BREWERY, 30, cost_centre=True, status="support")]
         chains = [{"name": "Liquor Stores", "sites": [KEY_SHOP, KEY_BREWERY]}]
         return save, [shop, brewery], businesses, chains
@@ -219,6 +248,58 @@ class PaybackTest(PricesTestCase):
         self.assertEqual(chain["profit"], 10 * 6000)
         self.assertEqual(chain["rate"], 6000)
         self.assertEqual(chain["sites"], [KEY_SHOP, KEY_BREWERY])
+
+    def test_a_depot_s_own_truck_counts_in_its_chain_and_the_player_s_car_nowhere(self):
+        rows = [(d, {SHOP: (10000, 12000), BREWERY: (-4000, 0)}) for d in range(30, 40)]
+        out, _ = self.run_payback(rows, vehicles=[("TRUCK", TRUCK), ("CAR", CAR), ("CART", "ba:vehicletype_handtruck")],
+                                  brewery_slots=["TRUCK", None, "CART"])
+        brewery, shop = out["sites"][KEY_BREWERY]["cost"], out["sites"][KEY_SHOP]["cost"]
+        # The truck at its price; a hand truck has none; the car is in no slot.
+        self.assertEqual(brewery["vehicles"], 98000)
+        self.assertEqual(brewery["firm"], 50000 + 586 * 1292 + 20000 + 98000)
+        self.assertEqual(brewery["self"], 50000 + 20 + 20000 + 98000)
+        self.assertEqual(shop["vehicles"], 0)
+        chain = out["chains"][KEY_SHOP]["cost"]
+        self.assertEqual(chain["vehicles"], 98000)
+        self.assertEqual(chain["firm"], shop["firm"] + brewery["firm"])
+
+    def test_a_truck_s_delivery_counts_and_is_remembered(self):
+        rows = [(d, {SHOP: (10000, 12000), BREWERY: (-4000, 0)}) for d in range(30, 40)]
+        fleet = dict(vehicles=[("OLD", TRUCK), ("NEW", TRUCK), ("CAR", CAR)], brewery_slots=["OLD", "NEW"])
+        # Delivered: 103,000 against the truck's 98,000, and the newest truck
+        # of its type is the one bought. The car was collected at its price.
+        out, history = self.run_payback(rows, transactions=[bought(TRUCK, 103000, 35), bought(CAR, 48000, 36)], **fleet)
+        self.assertEqual(out["sites"][KEY_BREWERY]["cost"]["vehicles"], 2 * 98000 + 5000)
+        # The log forgets the purchase a week on; the delivery stays counted.
+        later, _ = self.run_payback(rows + [(40, {SHOP: (10000, 12000), BREWERY: (-4000, 0)})], history, **fleet)
+        self.assertEqual(later["sites"][KEY_BREWERY]["cost"]["vehicles"], 2 * 98000 + 5000)
+        # Sold since: the delivery goes with the truck.
+        self.assertEqual(history.payback("CHAR")["vehicleFees"], {"NEW": 5000})
+        sold = rows + [(d, {SHOP: (10000, 12000), BREWERY: (-4000, 0)}) for d in (40, 41)]
+        gone, _ = self.run_payback(sold, history, vehicles=[("OLD", TRUCK)], brewery_slots=["OLD"])
+        self.assertEqual(gone["sites"][KEY_BREWERY]["cost"]["vehicles"], 98000)
+        self.assertEqual(history.payback("CHAR")["vehicleFees"], {})
+        # A truck collected at the dealer cost its price alone.
+        out, _ = self.run_payback(rows, transactions=[bought(TRUCK, 98000, 35)], **fleet)
+        self.assertEqual(out["sites"][KEY_BREWERY]["cost"]["vehicles"], 2 * 98000)
+
+    def test_a_truck_s_delivery_follows_it_to_another_site(self):
+        rows = [(d, {SHOP: (10000, 12000), BREWERY: (-4000, 0)}) for d in range(30, 40)]
+        vehicles = [("OLD", TRUCK), ("NEW", TRUCK)]
+        out, history = self.run_payback(rows, transactions=[bought(TRUCK, 103000, 35)],
+                                        vehicles=vehicles, brewery_slots=["OLD", "NEW"])
+        self.assertEqual(out["sites"][KEY_BREWERY]["cost"]["vehicles"], 2 * 98000 + 5000)
+        # A week on the log has forgotten the purchase, and the delivered
+        # truck now stands in the other site's slot: its delivery goes along.
+        later = rows + [(40, {SHOP: (10000, 12000), BREWERY: (-4000, 0)})]
+        moved, history = self.run_payback(later, history, vehicles=vehicles, brewery_slots=["OLD"], shop_slots=["NEW"])
+        self.assertEqual(moved["sites"][KEY_BREWERY]["cost"]["vehicles"], 98000)
+        self.assertEqual(moved["sites"][KEY_SHOP]["cost"]["vehicles"], 98000 + 5000)
+        # Out of every slot and back again: still delivered.
+        out, history = self.run_payback(later, history, vehicles=vehicles, brewery_slots=["OLD"])
+        self.assertEqual(out["sites"][KEY_BREWERY]["cost"]["vehicles"], 98000)
+        back, _ = self.run_payback(later, history, vehicles=vehicles, brewery_slots=["OLD", "NEW"])
+        self.assertEqual(back["sites"][KEY_BREWERY]["cost"]["vehicles"], 2 * 98000 + 5000)
 
     def test_a_chain_of_cost_centres_alone_has_no_row(self):
         save, regs, businesses, _ = self.company()
