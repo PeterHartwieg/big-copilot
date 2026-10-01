@@ -224,6 +224,10 @@ and never attach one to an issue.
   order of anything that reaches the payload, iterate it through `_in_order()`, which sorts
   `None` last because real saves hold items with no name. When a set decides a winner
   (`most_common()`, first-wins), break the tie explicitly, as `_chains()` does.
+- A `defaultdict[key]` read inserts the key. If another loop is iterating that dict at the
+  time, Python raises "dictionary changed size during iteration" (PR #210). Once other
+  functions read a built defaultdict by key, freeze it with `_frozen()` and read it with
+  `.get()`.
 - The Pyodide worker fetches seven files from `web/py/` — `ba_save.py`, `ba_dashboard.py`,
   `gametext.json`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json`,
   `ba_store_rules.json` — and at runtime writes
