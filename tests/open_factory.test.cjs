@@ -408,3 +408,55 @@ test('a factory that never exported shows 0 to the piers on the days its sales c
   }, [BREWERY, BEER]);
   assert.equal(cell, '0');
 });
+
+/* --- QA on real saves (#172) ----------------------------------------------- */
+
+test('Running\'s output table scrolls inside its card', async t => {
+  const page = await board(t);
+  await page.evaluate(() => ofGo('running'));
+  assert.equal(await page.locator('#ofBody .ff-outc .scrollx > table.ff-out').count(), 1);
+});
+
+test('another character on the same page starts the flow afresh', async t => {
+  const page = await board(t);
+  const r = await page.evaluate(b => {
+    const seed = machinesOn(b);
+    planCounts[b] = seed + 3; drawPlan();
+    D.meta.character = 'someone else'; drawPlan();
+    return {seed, after: machinesOn(b), stored: localStorage.getItem('ba_open_factory_v1:someone else')};
+  }, BEER);
+  assert.equal(r.after, r.seed, 'the last character\'s machine count does not carry over');
+  assert.equal(r.stored, null, 'and nothing is saved under the new one');
+});
+
+test('an addition to a factory you run asks for workers only, in the singular for one', async t => {
+  const page = await board(t);
+  await page.locator(`#planBody tr.line[data-slug="${BEER}"] .step a[data-d="1"]`).click();
+  const rows = await page.evaluate(() => ofUntilRows(ofEnsure()).flatMap(g => g[1]).map(r => r.title + ' :: ' + r.sub + ' :: ' + r.act).join('\n'));
+  assert.doesNotMatch(rows, /Delivery Driver/, 'the brewery keeps its truck and driver');
+  assert.match(rows, /1 new workstation,/);
+  assert.doesNotMatch(rows, /1 new workstations/);
+});
+
+test('with no depot, headquarters asks for as many Logistics Managers as the plan costs', async t => {
+  const page = await board(t);
+  await depotPlan(page);
+  const r = await page.evaluate(() => {
+    D.openFactory.hq = {agents: 0, contracts: 0, managers: 0, managed: 0};
+    const plan = ofPlan(), hq = ofHq(plan);
+    const row = ofUntilRows(plan).flatMap(g => g[1]).find(x => x.title === en_hq());
+    return {managers: hq.managers, text: row.sub + ' ' + row.act};
+    function en_hq(){ return 'Headquarters'; }
+  });
+  assert.equal(r.managers, 2, 'the factory and its depot');
+  assert.match(r.text, /2 Logistics Managers/);
+});
+
+test('Supply › Production opens Plan a factory on each factory it lists', async t => {
+  const page = await board(t, '#supply/production');
+  await page.waitForFunction(() => sub.supply === 'production');
+  const link = page.locator(`a.sb-plan[data-of-goto="${BREWERY}"]`);
+  await link.first().click();
+  await page.waitForFunction(() => route === 'expansion/factory');
+  assert.equal(await page.evaluate(() => planTarget), BREWERY);
+});

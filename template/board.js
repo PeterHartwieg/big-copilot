@@ -9631,7 +9631,9 @@ function sbFactoryPart(d, claimed, ctx, view, o){
     const firsts = sbList(to.slice(0, 3).map(x => spEsc(shortText(x, 40))));
     const how = [from.length ? `<span>${spI("truck")}<em>${tt("sb.how.morning", "each morning from {from}", {from: sbAnd(from.map(x => `<b>${spEsc(x)}</b>`))})}</em></span>` : "",
       to.length ? `<span>${spI("right")}<em>${tt("sb.fac.shipsTo", "ships to {who}", {who: to.length > 3
-        ? tt("sb.list.more", "{list} and {n} more", {list: firsts, n: to.length - 3}) : firsts})}</em></span>` : ""].join("");
+        ? tt("sb.list.more", "{list} and {n} more", {list: firsts, n: to.length - 3}) : firsts})}</em></span>` : "",
+      /* Production: Plan a factory for this factory (For = it). */
+      view === "production" && b && D.meta.locale !== false ? `<a class="sb-plan" href="#expansion/factory" data-of-goto="${attr(b.key)}">${spI("gear")}<em>${tt("sb.prod.planThis", "Plan more for it")}</em></a>` : ""].join("");
     const placed = site.machines, running = (sent.find(x => x.s === s) || {}).running;
     const staffed = Math.round(site.lines.reduce((t, l) => t + (l.hoursWeek || 0), 0) / 7);
     const stats = sbStat(tt("sb.col.machines", "Machines"), placed, Number.isFinite(running) && running < placed ? tt("sb.fac.running", "{n} running", {n: running}) : "",
@@ -12803,7 +12805,11 @@ const ofIcon = name => OS_ICON[name] ? osIcon(name) : SP_ICON[name] ? spIcon(nam
 function ofLoad(){
   const who = ofStore();
   if(ofPlansFor === who) return;
-  ofPlansFor = who; ofPlans = []; ofCur = null; ofStep = "what"; ofSizeMode = "auto";
+  /* Another character: nothing of the last one's flow carries over, its
+     machine counts and target included. */
+  const switched = ofPlansFor !== null;
+  ofPlansFor = who; ofPlans = []; ofCur = null; ofStep = "what"; ofSizeMode = "auto"; ofModeNow = "self";
+  if(switched){ planCounts = {}; planTarget = null; }
   try{
     const raw = JSON.parse(localStorage.getItem(who));
     if(raw && Array.isArray(raw.plans)){
@@ -13444,7 +13450,7 @@ function ofAct(kind, label, ico, ingame, data = ""){
 function ofCkStaff(key, machines, total, owned){
   const title = owned ? tt("gr.of.ck.staff.new", "Staff for the new machines") : tt("gr.of.ck.staff", "Staff for the machines");
   const hours = machines * 168, workers = Math.ceil(hours / OF_WORKER_HOURS);
-  const needSub = owned ? tt("gr.of.ck.staff.more", "{h:,} machine-hours a week more · {n} Factory Workers", {h: hours, n: workers})
+  const needSub = owned ? tt("gr.of.ck.staff.more", {one: "{h:,} machine-hours a week more · {n} Factory Worker", other: "{h:,} machine-hours a week more · {n} Factory Workers"}, {h: hours, n: workers})
     : tt("gr.of.ck.staff.need", "{h:,} h a week, {m} machines around the clock · {n} Factory Workers · 1 Delivery Driver at 95% skill or more", {h: hours, m: machines, n: workers});
   const fac = ofFactoryAt(key);
   if(!fac) return osCk("people", "todo", title, `${needSub} · ${tt("gr.of.ck.staff.later", "hired once the factory is rented")}`);
@@ -13453,8 +13459,11 @@ function ofCkStaff(key, machines, total, owned){
   const site = ofSite(key), full = total * 168, mine = new Set(ofLines().map(l => l.slug));
   const staffed = site ? site.lines.filter(l => mine.has(l.slug)).reduce((s, l) => s + (l.hoursWeek || 0), 0) : 0;
   if(full && staffed >= full) return osCk("people", "done", title, tt("gr.of.ck.staff.done", "<span class=\"ok\">{h:,} of {of:,} machine-hours a week staffed</span>", {h: Math.round(staffed), of: full}));
-  const ingame = tt("gr.of.ck.staff.ingame", "<b>MyEmployees</b> on your phone: hire {n} Factory Workers and a Delivery Driver for {address}, then their week in <b>BizMan › Schedule</b>.",
-    {n: workers, address: spEsc(fac.address || key)});
+  const ingame = owned
+    ? tt("gr.of.ck.staff.ingameMore", {one: "<b>MyEmployees</b> on your phone: hire {n} Factory Worker for {address}, then their week in <b>BizMan › Schedule</b>.",
+      other: "<b>MyEmployees</b> on your phone: hire {n} Factory Workers for {address}, then their week in <b>BizMan › Schedule</b>."}, {n: workers, address: spEsc(fac.address || key)})
+    : tt("gr.of.ck.staff.ingame", "<b>MyEmployees</b> on your phone: hire {n} Factory Workers and a Delivery Driver for {address}, then their week in <b>BizMan › Schedule</b>.",
+      {n: workers, address: spEsc(fac.address || key)});
   const act = hrCanHire() && osStaffWork(key) ? ofAct("hire", tt("gr.of.ck.staff.go", "Staff this factory"), "hire", ingame, `data-of-key="${attr(key)}"`) : osIngame(ingame);
   return osCk("people", staffed ? "part" : "todo", title, `${tt("gr.of.ck.staff.have", "{h:,} of {of:,} machine-hours a week staffed", {h: Math.round(staffed), of: full})} · ${needSub}`, act,
     full ? Math.round(100 * Math.min(staffed, full) / full) : 0);
@@ -13486,8 +13495,10 @@ function ofUntilRows(plan){
   const placed = site ? site.lines.filter(l => lines.some(x => x.slug === l.slug)).reduce((n, l) => n + (l.machines || 0), 0)
     + (site.unnamed || []).reduce((n, u) => n + (u.machines || 0), 0) : 0;
   const shelves = inv ? inv.shelves : 0;
-  const mSub = owned ? tt("gr.of.ck.machines.new", "{n} new workstations, {s} pallet shelves · room on the floor: check in the game", {n: machines, s: shelves})
-    : tt("gr.of.ck.machines.sub", "{n} workstations, {s} pallet shelves", {n: planned, s: shelves});
+  const shelvesSaid = tt("gr.of.ck.shelves", {one: "{n} pallet shelf", other: "{n} pallet shelves"}, {n: shelves});
+  const mSub = owned ? tt("gr.of.ck.machines.new2", {one: "{n} new workstation, {shelves} · room on the floor: check in the game",
+      other: "{n} new workstations, {shelves} · room on the floor: check in the game"}, {n: machines, shelves: shelvesSaid})
+    : tt("gr.of.ck.machines.sub2", {one: "{n} workstation, {shelves}", other: "{n} workstations, {shelves}"}, {n: planned, shelves: shelvesSaid});
   const mDone = !!site && placed >= planned;
   site_.push(osCk("gear", mDone ? "done" : placed ? "part" : "todo", `${tt("gr.of.ck.machines", "Machines")} ${ofHand()}`,
     mDone ? tt("gr.of.ck.machines.done", "<span class=\"ok\">{n} workstations placed</span>", {n: placed})
@@ -13518,12 +13529,15 @@ function ofUntilRows(plan){
   people.push(ofCkStaff(key, machines, planned, owned));
   if(!owned){
     const hq = ofHq(plan), H = F.hq || {};
-    const parts = [hq.managers ? `<span class="w">${tt("gr.of.ck.hq.manager", "no Logistics Manager free for the factory")}</span>` : tt("gr.of.ck.hq.managerOk", "a Logistics Manager is free"),
+    const parts = [hq.managers ? `<span class="w">${ofWantsDepot(plan) ? tt("gr.of.ck.hq.managerN", {one: "{n} Logistics Manager short for the factory and its depot", other: "{n} Logistics Managers short for the factory and its depot"}, {n: hq.managers})
+      : tt("gr.of.ck.hq.manager", "no Logistics Manager free for the factory")}</span>` : tt("gr.of.ck.hq.managerOk", "a Logistics Manager is free"),
       hq.agents ? `<span class="w">${tt("gr.of.ck.hq.agent", "no Purchasing Agent free for a new contract")}</span>` : tt("gr.of.ck.hq.agentOk", "a Purchasing Agent is free or not needed")];
     const roles = [hq.managers, hq.agents].filter(Boolean);
     const ingame = !roles.length ? "" : osIngame(hq.managers && hq.agents
-      ? tt("gr.of.ck.hq.ingame.both", "<b>MyEmployees</b>: hire a Logistics Manager and a Purchasing Agent for headquarters and give each a computer workstation.")
-      : hq.managers ? tt("gr.of.ck.hq.ingame.manager", "<b>MyEmployees</b>: hire a Logistics Manager for headquarters and give them a computer workstation.")
+      ? tt("gr.of.ck.hq.ingame.both", {one: "<b>MyEmployees</b>: hire {n} Logistics Manager and a Purchasing Agent for headquarters and give each a computer workstation.",
+        other: "<b>MyEmployees</b>: hire {n} Logistics Managers and a Purchasing Agent for headquarters and give each a computer workstation."}, {n: hq.managers})
+      : hq.managers ? tt("gr.of.ck.hq.ingame.manager", {one: "<b>MyEmployees</b>: hire {n} Logistics Manager for headquarters and give them a computer workstation.",
+        other: "<b>MyEmployees</b>: hire {n} Logistics Managers for headquarters and give each a computer workstation."}, {n: hq.managers})
       : tt("gr.of.ck.hq.ingame.agent", "<b>MyEmployees</b>: hire a Purchasing Agent for headquarters and give them a computer workstation."));
     const quick = roles.length && gwLink() && (gwLink().writes || []).includes("hire")
       ? `<button type="button" class="os-btn" data-of-route="staffing/needs" data-of-into="#hsQuick">${osIcon("hire")}${tt("gr.of.ck.hq.quick", "Quick hire")}</button>` : "";
@@ -13702,8 +13716,8 @@ function ofRunHtml(plan){
       <td class="os-dim">${num(Math.round(staffed[l.slug] || 0))}</td>
       <td class="${low ? "w" : ""}">${left == null ? "–" : `${num(Math.round(left))} <small class="os-dim">${p}%</small><span class="ff-meter${low ? " w" : ""}" style="--w:${Math.min(100, p)}%"><i></i></span>`}</td>
       <td>${a && a.sold != null ? num(Math.round(a.sold)) : "–"}</td></tr>`; }).join("");
-  const table = `<table class="ff-out"><thead><tr><th class="l">${tt("gr.of.run.col.line", "Line")}</th><th>${tt("gr.of.run.col.plan", "Plan")}</th><th data-tip="${
-    attr(tt("gr.of.run.col.staffed.tip", "An estimate: the line's rate over the hours its machines are staffed"))}">${tt("gr.of.run.col.staffed", "Staffed hours allow")}</th><th>${tt("gr.of.run.col.left", "Left")}</th><th>${tt("gr.of.run.col.pier", "To the piers")}</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const table = `<div class="scrollx"><table class="ff-out"><thead><tr><th class="l">${tt("gr.of.run.col.line", "Line")}</th><th>${tt("gr.of.run.col.plan", "Plan")}</th><th data-tip="${
+    attr(tt("gr.of.run.col.staffed.tip", "An estimate: the line's rate over the hours its machines are staffed"))}">${tt("gr.of.run.col.staffed", "Staffed hours allow")}</th><th>${tt("gr.of.run.col.left", "Left")}</th><th>${tt("gr.of.run.col.pier", "To the piers")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   /* What the board can name, each one row over the plan's own lines and what
      they eat: machine-hours nobody staffs, a line waiting on an input, raw
      material arriving short. Always said, whatever the output reads. */
@@ -13866,6 +13880,12 @@ function ofPreset(o = {}){
   const plan = ofPlan();
   if(o.type && o.type !== planType){ planType = o.type; planCounts = {}; ofSizeMode = "auto"; }
   if(o.target && o.target !== planTarget){ planTarget = o.target; planCounts = {}; ofSizeMode = "auto"; }
+  /* A factory named with no type opens on what it makes most, unless it makes the type on screen. */
+  if(o.target && o.target !== "new" && !o.type && D.plan){
+    const now = ofNow(o.target), made = (((D.plan.catalogue || {})[planType] || {}).products || []).some(p => now[p]);
+    const best = made ? null : ofBestType(o.target);
+    if(best){ planType = best; planCounts = {}; }
+  }
   if(plan && (plan.type !== planType || (plan.site || "new") !== (planTarget || "new"))){ ofCur = null; ofStep = "what"; planCounts = {}; ofSave(); }
   /* The view may stand drawn from an earlier visit: it follows the preset now. */
   if(hasData() && D.plan && $("ofCtl")) drawPlan();
