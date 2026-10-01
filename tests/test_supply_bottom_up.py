@@ -15,7 +15,7 @@ C. a Smart Delivery import beside a factory route that covers the week.
 import itertools
 import unittest
 
-from ba_dashboard import plain, Names, RECIPE_ITEMS, WEEKDAYS, _idle_notes, _import_notes, _order_says, _shelf_notes, _supply, _supply_fact
+from ba_dashboard import plain, Names, RECIPE_ITEMS, WEEKDAYS, _deepest_use, _idle_notes, _import_notes, _order_says, _shelf_notes, _supply, _supply_fact
 from test_supply_facts import BEER, RECIPES, WATER, Company
 
 WH, BREWERY, SHOP, CAFE = ("wh_road", 1), ("brew_lane", 2), ("main_street", 3), ("bean_street", 4)
@@ -680,6 +680,71 @@ class FactoryOwnImportTests(unittest.TestCase):
         # Day 20 is a Saturday: a busy one, then a quiet Sunday.
         profile = [50, 100, 100, 100, 100, 100, 200]
         self.assert_split_walk(self.mixed(profile=profile), round_today=True)
+
+    def catch_ups(self, c):
+        """{mode: (catchUp, eats, onward)} of the brewery's water row."""
+        found = {}
+        for mode in ("cap", "dem"):
+            rows = c.supply["imports"] if mode == "cap" else c.supply["importsDem"]
+            row = next(r for r in rows if r["s"] == c.index(BREWERY) and r["slug"] == WATER)
+            found[mode] = (row["catchUp"], row["eats"], row["perDay"] - row["eats"])
+        return found
+
+    def test_morning_fills_to_a_depot_with_its_own_import_starve_the_machines(self):
+        """The brewery sends its water on to a hub with an empty shelf, a 400
+        target and its own import landing in two days (plenty for the bar's
+        100 a day behind it). Each morning's round tops the hub up to 400
+        until that import lands (400, 100, 100), and the brewery's own
+        lines starve for it: those fills are charged, not only the hub's
+        draw, and the machines eat until the brewery's drop in four days."""
+        c = Chain()
+        c.factory(BREWERY, "Brewery", machines=1)
+        c.hold(BREWERY, WATER, 0)
+        c.contract(BREWERY, WATER, 3000, due=c.day + 4)
+        c.site(WH, "Hub")
+        c.hold(WH, WATER, 0)
+        c.contract(WH, WATER, 1400, due=c.day + 2, pier=2)
+        c.plan(BREWERY, WH, WATER, 400)
+        c.plan(WH, SHOP, WATER, 400)
+        c.plan(BREWERY, SHOP, BEER, 1000)
+        c.shop(SHOP, "Bar")
+        c.hold(SHOP, WATER, 400, 100)
+        c.hold(SHOP, BEER, 1000, 300)
+        c.run()
+        for mode, (catch_up, eats, _onward) in self.catch_ups(c).items():
+            with self.subTest(mode=mode):
+                self.assertGreater(eats, 0)
+                self.assertAlmostEqual(catch_up, 600 + eats * 3.5, delta=2)
+
+    def test_two_drops_ahead_are_walked_round_by_round(self):
+        """A small plain drop in two days and the week's in five: the rounds
+        leave before each drop lands, the machines eat after it, and the
+        deepest point is the last morning's round. With the first drop a
+        Smart Delivery level instead, stock brought in now only shrinks it."""
+        for smart in (False, True):
+            c = Chain()
+            c.factory(BREWERY, "Brewery", machines=1)
+            c.hold(BREWERY, WATER, 0)
+            c.contract(BREWERY, WATER, 100, due=c.day + 2, smart=smart)
+            c.contract(BREWERY, WATER, 3000, due=c.day + 5, pier=2)
+            c.plan(BREWERY, SHOP, WATER, 400)
+            c.plan(BREWERY, SHOP, BEER, 1000)
+            c.shop(SHOP, "Bar")
+            c.hold(SHOP, WATER, 400, 100)
+            c.hold(SHOP, BEER, 1000, 300)
+            c.run()
+            for mode, (catch_up, eats, onward) in self.catch_ups(c).items():
+                with self.subTest(smart=smart, mode=mode):
+                    # Six rounds (today's included) and four and a half days of
+                    # the machines, less the small drop where it is plain.
+                    self.assertAlmostEqual(catch_up, onward * 6 + eats * 4.5 - (0 if smart else 100), delta=2)
+
+    def test_with_no_drop_the_machines_eat_every_day_of_the_week(self):
+        """A paused line walked a week of rounds has no drop at its end: the
+        machines eat on its last day too."""
+        flat = {wd: 1.0 for wd in range(7)}
+        self.assertEqual(_deepest_use(100, flat, 20, 26, 1.0, True, None, (240, 0.5)), 700 + 240 * 5.5)
+        self.assertEqual(_deepest_use(100, flat, 20, 26, 1.0, True, None, (240, 0.5), False), 700 + 240 * 6.5)
 
     def test_stock_that_reaches_the_drop_is_no_finding(self):
         c = self.brewery(1200)
