@@ -25,14 +25,16 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const SOURCES = [['template/board.js', read('template/board.js'), 1], ['template/board.html', read('template/board.html'), 1],
   ['web/map.js', read('web/map.js'), 1],
   ['web/wiki.js', read('web/wiki.js'), 1], ['web/i18n.js', read('web/i18n.js'), 1]];
-// The one call that names the locale: num()'s own.
-const IN_LOCALE = /\.toLocaleString\(NUM_LOCALE\b/;
+// The one call that names the locale is num()'s own; every other call is bare.
+const IN_LOCALE = /\.toLocaleString\(NUM_LOCALE\b/g;
+const BARE = /\.toLocaleString\((?!NUM_LOCALE\b)/;
 
 test('no bare toLocaleString() in the board script, map.js, wiki.js or i18n.js: numbers go through num()', () => {
   const lines = SOURCES.flatMap(([file, src, first]) =>
     src.split('\n').map((line, i) => `${file}:${first + i}: ${line.trim()}`));
-  assert.equal(lines.filter(line => IN_LOCALE.test(line)).length, 1, 'one call formats in NUM_LOCALE: num()');
-  const bare = lines.filter(line => !IN_LOCALE.test(line) && /\.toLocaleString\(/.test(line));
+  assert.equal(lines.reduce((n, line) => n + (line.match(IN_LOCALE) || []).length, 0), 1,
+    'one call formats in NUM_LOCALE: num()');
+  const bare = lines.filter(line => BARE.test(line));
   assert.deepEqual(bare, [], 'format through num(), not toLocaleString()');
   // num() is that call: it formats in the UI's number locale, whatever the browser's.
   const board = loadBoard();

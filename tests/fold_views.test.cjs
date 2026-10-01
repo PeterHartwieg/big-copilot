@@ -488,7 +488,7 @@ test('renderAll() hands focus back to the chip it replaced', async () => {
     assert.deepEqual(await page.evaluate(() => [document.activeElement.dataset.fvAt, document.activeElement.dataset.old,
       document.activeElement.isConnected]), ['mast', undefined, true]);
     const s = await state(page);
-    assert.deepEqual([s.open, s.expanded], [true, ['true', 'false']]);
+    assert.deepEqual([s.open, s.expanded, s.tip], [true, ['true', 'false'], false]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

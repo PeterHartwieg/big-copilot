@@ -226,11 +226,11 @@ test('idle stock has one name, and a renamed kind keeps its id', () => {
   const kind = id => run('ALERT_GROUPS').find(g => g.id === id).label;
   // A depot's idle group on Supply (R13) and the finding kind share one name:
   // two idle lines fold into a group row named for the kind.
-  vm.runInContext('D = {meta: {}, businesses: [{key: "k", name: "Depot"}], supply: {}}', context);
+  const board = loadBoard();
+  vm.runInContext('D = {meta: {}, businesses: [{key: "k", name: "Depot"}], supply: {}}', board);
   const idle = slug => ({s: 0, slug, item: slug, fact: {st: 'idle', why: 'notMoving'}, chk: [], stock: 5, week: 1, draw: null, busy: null});
-  const table = vm.runInContext('sbDepotTable', context)({}, {}, [idle('a'), idle('b')]);
+  const table = vm.runInContext('sbDepotTable', board)({}, {}, [idle('a'), idle('b')]);
   const group = (table.match(/<tr class="sb-gr[^"]*"[^>]*><td class="sb-tk"><\/td><td class="l nm">([^<]+)</) || [])[1];
-  vm.runInContext('D = null', context);
   assert.equal(kind('dead'), en("nav.kind.dead.label"));
   assert.equal(group, kind('dead'), 'the idle group and the finding kind share one name');
   assert.equal(kind('staff'), en("nav.kind.staff.label"));

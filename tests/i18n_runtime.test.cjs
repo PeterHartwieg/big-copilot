@@ -331,17 +331,15 @@ test('a language switch tells the board, which redraws', async () => {
   assert.deepEqual(seen, ['de', 'en']);
   // The board listens: its numbers follow the language, then it redraws.
   const board = loadBoard();
-  let redrawn = 0;
-  board.gnRedraw = () => { redrawn++; };
   const num = () => vm.runInContext('num(1234.5)', board);
+  // What a redraw would write: the numbers have followed before it runs.
+  const redraws = [];
+  board.gnRedraw = () => { redraws.push(num()); };
   assert.equal(num(), '1,234.5');
   board.__t = {'nav.today': 'Heute'};
   vm.runInContext('ttSetTable("de", __t)', board);
-  assert.equal(vm.runInContext('NUM_LOCALE', board), vm.runInContext('ttNumLocale()', board));
-  assert.notEqual(num(), '1,234.5', 'German numbers are not grouped as English ones');
-  assert.equal(num(), (1234.5).toLocaleString(vm.runInContext('ttNumLocale()', board)));
-  assert.equal(redrawn, 1, 'the board redraws once the numbers follow');
+  const german = (1234.5).toLocaleString(vm.runInContext('ttNumLocale()', board));
+  assert.notEqual(german, '1,234.5', 'German numbers are not grouped as English ones');
   vm.runInContext('ttSetTable("en", null)', board);
-  assert.equal(num(), '1,234.5');
-  assert.equal(redrawn, 2);
+  assert.deepEqual(redraws, [german, '1,234.5']);
 });
