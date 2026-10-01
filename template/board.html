@@ -11831,6 +11831,15 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     const bring = !catchUp ? "" : r.runsOut
       ? tt("sb.ck.bring.day", {one: "Bring in {n:,} extra unit before {day}.", other: "Bring in {n:,} extra units before {day}."}, {n: catchUp, day: sbDay(r.runsOut)})
       : tt("sb.ck.bring", {one: "Bring in {n:,} extra unit.", other: "Bring in {n:,} extra units."}, {n: catchUp});
+    /* The one-offs from the import lines come first by site, not by line:
+       the rows are grouped by kind and site below, so moving this one ahead
+       of the site's first Weekly imports row puts the site's "Before the
+       next delivery" group, its other one-offs with it, ahead of its order
+       changes (a paused import to resume among them). */
+    const first = () => {
+      const at = rows.findIndex(x => x.kind === "Weekly imports" && x.site === r.s);
+      if(at >= 0) rows.splice(at, 0, rows.pop());
+    };
     if(f.st === "paused" && !rows.some(x => x.kind === "Weekly imports" && x.site === r.s && x.slug === r.slug)) add("Weekly imports", r.s, r, null, null,
       r.from ? tt("sb.ck.review.from", "Review the paused import from {from}; resume it in-game if still needed.", {from: r.from})
         : tt("sb.ck.review", "Review the paused import from the supplier; resume it in-game if still needed.")).lead = r.from
@@ -11847,6 +11856,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
         ? tt("sb.ck.lead.round", "a route brings the week's draw, but a busy day may empty the shelf before its next round")
         : r.from ? tt("sb.ck.lead.round.paused.from", "a route brings the week's draw, but a busy day may empty the shelf before its next round, and the backup import from {from} is paused", {from: r.from})
         : tt("sb.ck.lead.round.paused", "a route brings the week's draw, but a busy day may empty the shelf before its next round, and the backup import from the supplier is paused");
+      first();
     }
     /* An order short of its week whose stock also runs out before the next
        drop: the finding names the order, but raising it does not bridge the
@@ -11858,12 +11868,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
         tt("sb.ck.oneOff", "Arrange a one-off supply; a weekly order change alone will not bridge this gap.")]));
       if(!catchUp) row.lead = tt("sb.ck.lead.runOut",
         {one: "stock may run out {n} day before a scheduled delivery", other: "stock may run out {n} days before a scheduled delivery"}, {n: r.shortBy});
-      /* The one-offs come first by site, not by line: the rows are grouped
-         by kind and site below, so this site's "Before the next delivery"
-         group goes ahead of its Weekly imports group, its other one-offs
-         with it. */
-      const order = rows.findIndex(x => x.kind === "Weekly imports" && x.site === r.s);
-      if(order >= 0) rows.splice(order, 0, rows.pop());
+      first();
     }
   });
   sites.forEach(s => s.rows.forEach(r => {

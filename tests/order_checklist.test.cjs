@@ -273,6 +273,16 @@ test('the one-offs come first by site, ahead of all its order changes, in the co
   assert.ok(at('Flour: ') < at('Salt: add 90 units once'), text);
 });
 
+test('a depot a route feeds, its backup import paused, lists the one-off before resuming the import', () => {
+  const f = fact('short', {why:'shortfall', lvl:'critical'});
+  const rows = build({imports:[{s:0, rows:[order({item:'Water', fit:'paused', paused:true, pausedWeekly:1000, current:0,
+    inGame:1000, setTo:1500, value:1500, need:1500, fact:f})]}],
+    checks:[{s:0, item:'Water', covered:true, paused:true, from:'Importer', shortBy:1, catchUp:300, runsOut:'Sunday', fact:f}]});
+  assert.deepEqual(rows.map(r => [r.kind, r.item]), [['Before the next delivery', 'Water'], ['Weekly imports', 'Water']]);
+  assert.match(rows[0].reason, /^Bring in 300 extra units before Sunday\./);
+  assert.match(rows[1].reason, /^Resume the paused import contract\./);
+});
+
 test('a factory topped up each morning whose own import is short and runs dry gets both, the one-off first', () => {
   const imp = fact('short', {why:'order', lvl:'critical', role:'input', cad:'weekly', setTo:1500});
   const outer = fact('covered', {role:'input', cad:'daily', import:imp, imp:true});
