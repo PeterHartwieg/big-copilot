@@ -1293,13 +1293,13 @@ class PayloadTest(unittest.TestCase):
 
 
 class MultiRoleTest(unittest.TestCase):
-    """A theatre passes every customer through every role, so each is sized alone."""
+    """A site whose every customer passes through every role sizes each alone."""
 
     def test_each_role_packs_its_own_stations(self):
         items = [(1, BOOTH), (2, REGISTER), (3, REGISTER), (4, BOARD), (5, BOARD)]
         people = [employee(f"p{i}", [SERVICE, TRAINER]) for i in range(12)]
         row = plan(items, people, {h: 30 for h in range(24)})
-        # 30 an hour: one 50-an-hour booth, but two 20-an-hour registers, and
+        # 30 an hour: one 50-an-hour coat check, but two 20-an-hour registers, and
         # the site's throughput is the slowest role either way.
         self.assertEqual(row["need"][SERVICE][1][12], 1)
         self.assertEqual(row["need"][TRAINER][1][12], 2)
