@@ -147,7 +147,9 @@ onmessage = (e) => {
     } catch (err) {
       // Pyodide hands back a whole traceback; the last line is the sentence
       // that matters, minus the exception class in front of it.
-      const lines = String(err && err.message || err).trim().split(String.fromCharCode(10));
+      const whole = String(err && err.message || err).trim();
+      console.error(whole);  // the whole traceback, for a report from the console
+      const lines = whole.split(String.fromCharCode(10));
       const last = lines[lines.length - 1].replace(/^[\w.]+(Error|Exception): /, "");
       postMessage({kind: "failed", id: msg.id, error: last});
     }
