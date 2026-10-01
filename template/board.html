@@ -1674,7 +1674,7 @@ tbody tr.pc-addrow:hover{background:none}
 .pc-add:hover,.pc-add[aria-expanded="true"]{border-color:var(--accent);border-style:solid;color:var(--ink);background:var(--accent-soft)}
 .pc-add svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
 .pc-add small{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3);margin-left:2px}
-.pc-pop{position:fixed;z-index:60;width:380px;max-width:calc(100vw - 24px);max-height:min(460px,calc(100vh - 24px));overflow:auto;padding:6px;border-radius:12px;background:var(--raised);border:1px solid var(--rule);box-shadow:0 18px 48px #0006}
+.pc-pop{position:fixed;z-index:60;width:380px;max-width:calc(100vw - 24px);max-height:min(460px,calc(100vh - 24px));overflow:auto;overscroll-behavior:contain;padding:6px;border-radius:12px;background:var(--raised);border:1px solid var(--rule);box-shadow:0 18px 48px #0006}
 :root[data-theme="light"] .pc-pop{box-shadow:0 24px 60px -24px #1a1f1c77}
 .pc-pop[hidden]{display:none}
 .pc-pop-h{display:flex;align-items:baseline;justify-content:space-between;padding:8px 10px}

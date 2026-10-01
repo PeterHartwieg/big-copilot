@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "fa20c7d7c7";</script>
-<link rel="stylesheet" href="community.css?v=fa20c7d7c7">
+<script>window.LEDGER_BUILD = "b77da3a7dd";</script>
+<link rel="stylesheet" href="community.css?v=b77da3a7dd">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=fa20c7d7c7">
+<link rel="stylesheet" href="fonts/fonts.css?v=b77da3a7dd">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -2412,7 +2412,7 @@ tbody tr.pc-addrow:hover{background:none}
 .pc-add:hover,.pc-add[aria-expanded="true"]{border-color:var(--accent);border-style:solid;color:var(--ink);background:var(--accent-soft)}
 .pc-add svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
 .pc-add small{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3);margin-left:2px}
-.pc-pop{position:fixed;z-index:60;width:380px;max-width:calc(100vw - 24px);max-height:min(460px,calc(100vh - 24px));overflow:auto;padding:6px;border-radius:12px;background:var(--raised);border:1px solid var(--rule);box-shadow:0 18px 48px #0006}
+.pc-pop{position:fixed;z-index:60;width:380px;max-width:calc(100vw - 24px);max-height:min(460px,calc(100vh - 24px));overflow:auto;overscroll-behavior:contain;padding:6px;border-radius:12px;background:var(--raised);border:1px solid var(--rule);box-shadow:0 18px 48px #0006}
 :root[data-theme="light"] .pc-pop{box-shadow:0 24px 60px -24px #1a1f1c77}
 .pc-pop[hidden]{display:none}
 .pc-pop-h{display:flex;align-items:baseline;justify-content:space-between;padding:8px 10px}
@@ -5933,7 +5933,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"fa20c7d7c7","latest":{"pr":207,"date":"2026-10-01","title":"Plan a factory: add the products a type can also sell","summary":"Expansion › Plan a factory now has Add product under the range. It lists what the business type can also stock beyond its main products, such as umbrellas or soda at a Florist, each with the game's own weight for that type. An added product gets its own line, with machines, output, raw material and the weekly ingredient order like the main products, and × takes it out again. If your shops of the type already sell it, the line uses what they sell; otherwise you type an estimate a shop sells a day, which starts from your main products' rate times the weight. Your additions are kept per type."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"b77da3a7dd","latest":{"pr":207,"date":"2026-10-01","title":"Plan a factory: add the products a type can also sell","summary":"Expansion › Plan a factory now has Add product under the range. It lists what the business type can also stock beyond its main products, such as umbrellas or soda at a Florist, each with the game's own weight for that type. An added product gets its own line, with machines, output, raw material and the weekly ingredient order like the main products, and × takes it out again. If your shops of the type already sell it, the line uses what they sell; otherwise you type an estimate a shop sells a day, which starts from your main products' rate times the weight. Your additions are kept per type."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -6021,8 +6021,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=fa20c7d7c7"></script>
-<script src="community.js?v=fa20c7d7c7"></script>
+<script src="app.js?v=b77da3a7dd"></script>
+<script src="community.js?v=b77da3a7dd"></script>
 
 <script>
 
@@ -30960,7 +30960,11 @@ function pcPopOpen(btn){
     });
     document.addEventListener("keydown", e => { if(e.key === "Escape" && !pcPop.hidden){ e.preventDefault(); pcPopClose(true); } });
     window.addEventListener("resize", () => pcPopClose(false));
-    document.addEventListener("scroll", () => { if(!pcPop.hidden) pcPopPlace(); }, true);
+    /* The page scrolling moves it along; its own list scrolling does not. */
+    document.addEventListener("scroll", e => {
+      if(pcPop.hidden || (e.target && e.target.nodeType === 1 && pcPop.contains(e.target))) return;
+      pcPopPlace();
+    }, true);
   }
   if(pcPopFor && pcPopFor !== btn) pcPopFor.setAttribute("aria-expanded", "false");
   pcPopFor = btn;
@@ -30977,6 +30981,7 @@ function pcPopOpen(btn){
       `<span class="pc-w" aria-hidden="true"><i style="--w:${pct}%"></i></span><em>${pct}%</em></button>`;
   }).join("");
   pcPop.hidden = false;
+  pcPop.scrollTop = 0;
   btn.setAttribute("aria-expanded", "true");
   if(typeof hideTip === "function") hideTip();
   pcPopPlace();
@@ -30992,6 +30997,7 @@ function pcPopPlace(){
   /* Under the button, its left edge on the button's; above it when only
      there is room. In a window too short for either, it takes the larger
      space and its list scrolls; it never leaves the window. */
+  const keep = pcPop.scrollTop;
   pcPop.style.maxHeight = "";
   const full = pcPop.offsetHeight;
   const below = vh - 12 - (r.bottom + 8), above = r.top - 8 - 12;
@@ -31001,6 +31007,7 @@ function pcPopPlace(){
   const y = Math.max(12, Math.min(down ? r.bottom + 8 : r.top - 8 - h, vh - h - 12));
   pcPop.style.left = `${Math.max(12, Math.min(r.left, vw - w - 12))}px`;
   pcPop.style.top = `${y}px`;
+  pcPop.scrollTop = keep;
 }
 /* `restore` hands focus back to the button (Escape, or the button again). */
 function pcPopClose(restore){

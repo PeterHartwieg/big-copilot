@@ -223,8 +223,20 @@ test('in a short window the picker stays inside it and its list scrolls', async 
       window.scrollBy(0, b.getBoundingClientRect().top - 194);
     });
     await page.click('.pc-add');
+    const scrolled = await page.evaluate(() => window.scrollY);
     const box = await page.locator('#pcPop').boundingBox();
     assert.ok(box.y >= 12 && box.y + box.height <= 420 - 12 + 1, JSON.stringify(box));
     assert.ok(await page.evaluate(() => { const p = document.getElementById('pcPop'); return p.scrollHeight > p.clientHeight; }));
+    // Its own list scrolls with the wheel and stays scrolled (QA, 1 Oct 2026: it snapped back).
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    for(let i = 0; i < 4; i++) await page.mouse.wheel(0, 200);
+    await page.waitForTimeout(200);
+    assert.ok(await page.evaluate(() => document.getElementById('pcPop').scrollTop > 0), 'the list stayed scrolled');
+    assert.equal(await page.evaluate(() => window.scrollY), scrolled, 'the page under it did not scroll');
+    const last = page.locator('#pcPop .pc-opt').last();
+    const lb = await last.boundingBox();
+    assert.ok(lb.y + lb.height <= box.y + box.height + 1, JSON.stringify({lb, box}));
+    await last.click();
+    assert.equal(await line(page, ITEM + 'expensivegift').count(), 1);
   } finally { await page.close(); }
 });

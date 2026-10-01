@@ -20512,7 +20512,11 @@ function pcPopOpen(btn){
     });
     document.addEventListener("keydown", e => { if(e.key === "Escape" && !pcPop.hidden){ e.preventDefault(); pcPopClose(true); } });
     window.addEventListener("resize", () => pcPopClose(false));
-    document.addEventListener("scroll", () => { if(!pcPop.hidden) pcPopPlace(); }, true);
+    /* The page scrolling moves it along; its own list scrolling does not. */
+    document.addEventListener("scroll", e => {
+      if(pcPop.hidden || (e.target && e.target.nodeType === 1 && pcPop.contains(e.target))) return;
+      pcPopPlace();
+    }, true);
   }
   if(pcPopFor && pcPopFor !== btn) pcPopFor.setAttribute("aria-expanded", "false");
   pcPopFor = btn;
@@ -20529,6 +20533,7 @@ function pcPopOpen(btn){
       `<span class="pc-w" aria-hidden="true"><i style="--w:${pct}%"></i></span><em>${pct}%</em></button>`;
   }).join("");
   pcPop.hidden = false;
+  pcPop.scrollTop = 0;
   btn.setAttribute("aria-expanded", "true");
   if(typeof hideTip === "function") hideTip();
   pcPopPlace();
@@ -20544,6 +20549,7 @@ function pcPopPlace(){
   /* Under the button, its left edge on the button's; above it when only
      there is room. In a window too short for either, it takes the larger
      space and its list scrolls; it never leaves the window. */
+  const keep = pcPop.scrollTop;
   pcPop.style.maxHeight = "";
   const full = pcPop.offsetHeight;
   const below = vh - 12 - (r.bottom + 8), above = r.top - 8 - 12;
@@ -20553,6 +20559,7 @@ function pcPopPlace(){
   const y = Math.max(12, Math.min(down ? r.bottom + 8 : r.top - 8 - h, vh - h - 12));
   pcPop.style.left = `${Math.max(12, Math.min(r.left, vw - w - 12))}px`;
   pcPop.style.top = `${y}px`;
+  pcPop.scrollTop = keep;
 }
 /* `restore` hands focus back to the button (Escape, or the button again). */
 function pcPopClose(restore){
