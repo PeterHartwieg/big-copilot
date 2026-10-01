@@ -359,12 +359,16 @@ test('deliveries to the shops tick only from the depot, and only for what a shop
     const shop = D.businesses.find(x => x.typeSlug === 'ba:businesstype_liquorstore');
     const wholesale = row();
     /* A second liquor store that sells no beer cannot hold the row back. */
-    D.businesses.push({...shop, key: 'ba:street_ninthstreet#1', address: '1 Ninth Street'});
+    D.businesses.push({...shop, key: 'ba:street_ninthstreet#1', address: '1 Ninth Street', lines: []});
     D.supply.graph.links.push({from: plan.depotKey, to: shop.key, slugs: [b], cadence: 'daily'});
-    return {wholesale, depot: row()};
+    const depot = row();
+    /* A third one holding a little beer and no route at all (no node in the goods graph) does. */
+    D.businesses.push({...shop, key: 'ba:street_ninthstreet#2', address: '2 Ninth Street', lines: [{slug: b, units: 50}]});
+    return {wholesale, depot, unrouted: row()};
   }, BEER);
   assert.equal(r.wholesale, 'todo', 'a wholesale contract is no delivery from the depot');
   assert.equal(r.depot, 'done', 'the depot delivers every shop that stocks beer');
+  assert.equal(r.unrouted, 'todo', 'a shop stocking beer with no route keeps the row open');
 });
 
 test('the depot is picked again when the factory moves onto it, or a rival takes it', async t => {
@@ -384,6 +388,15 @@ test('the depot is picked again when the factory moves onto it, or a rival takes
   assert.notEqual(r.after.depot, r.after.factory, 'never the factory\'s own building');
   assert.ok(r.rival && r.rival !== r.after.depot, 'a building a rival rents is picked again');
   assert.equal(r.depotKey, r.rival);
+  /* Rented but not set up yet (the business still vacant, premises "mine"):
+     picking the factory again keeps it. */
+  const kept = await page.evaluate(() => {
+    const key = ofPlan().depotKey;
+    premises().buildings.find(b => b.key === key).status = 'mine';
+    ofPick(ofPlan().key);
+    return [key, ofPlan().depotKey];
+  });
+  assert.equal(kept[1], kept[0]);
 });
 
 test('a factory that never exported shows 0 to the piers on the days its sales cover', async t => {

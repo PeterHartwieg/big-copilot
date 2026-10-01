@@ -13286,8 +13286,9 @@ function ofWhereHtml(){
 function ofPick(key){
   const plan = ofEnsure();
   plan.key = key;
-  /* A depot not rented yet is picked again beside the new building. */
-  if(plan.depotKey && !(D.businesses || []).some(x => x.key === plan.depotKey && x.status !== "vacant")) plan.depotKey = null;
+  /* A depot not rented yet is picked again beside the new building; one the
+     player rents (premises "mine", set up or not) stays. */
+  if(plan.depotKey && (ofBuilding(plan.depotKey) || {}).status !== "mine") plan.depotKey = null;
   ofStep = "investment";
   ofSave();
   drawPlan();
@@ -13587,10 +13588,11 @@ function ofUntilRows(plan){
        no delivery from it). */
     const graph = (D.supply || {}).graph || {}, from = new Set(depots.map(x => x.key));
     const delivered = new Set((graph.links || []).filter(k => from.has(k.from)).flatMap(k => (k.slugs || []).map(sl => `${k.to}|${sl}`)));
-    const stocks = key => new Set((((graph.nodes || []).find(n => n.id === key) || {}).items || []).map(i => i.slug));
+    /* What each shop stocks is its own product lines (the goods graph leaves
+       out a shop with no route and little stock). */
     const made = lines.map(l => l.slug);
     const need = (D.businesses || []).filter(x => x.typeSlug === planType && x.status !== "vacant")
-      .flatMap(x => made.filter(sl => stocks(x.key).has(sl)).map(sl => `${x.key}|${sl}`));
+      .flatMap(x => { const has = new Set((x.lines || []).map(l => l.slug)); return made.filter(sl => has.has(sl)).map(sl => `${x.key}|${sl}`); });
     const served = there && need.length > 0 && need.every(k => delivered.has(k));
     goods.push(osCk("route", served ? "done" : "todo", `${tt("gr.of.ck.depotRoute", "Deliveries to the shops")} ${ofHand()}`,
       served ? tt("gr.of.ck.depotRoute.done", "<span class=\"ok\">Every shop gets every product the factory makes</span>")
