@@ -765,7 +765,7 @@ def assemble(root: str = HERE) -> None:
         )
     try:
         spliced = splice_wiki_topics(root)
-    except (OSError, ValueError, KeyError, TypeError, SourceError) as exc:
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, SourceError) as exc:
         raise SystemExit(f"web/wiki-data.json: cannot carry tools/wiki_topics.json into it: {exc}") from None
     if spliced:
         print("web/wiki-data.json: hand-written articles updated from tools/wiki_topics.json")
