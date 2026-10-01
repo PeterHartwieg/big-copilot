@@ -18,7 +18,7 @@ from ba_dashboard import (
     _alerts, IDLE_PARTS, PHRASE_SHAPES, STAFF_HOURS, WEEKDAYS, Msg, _cap_first, _hour_phrase, _idle_parts,
     _off_hours, _role_words, _sp_counters, _staff_notes, _wire_msgs, msg, plain, tok,
 )
-from tests import theatre_fixture
+from tests import cinema_fixture
 from tests.test_site_panel_fields import stub
 
 
@@ -255,8 +255,8 @@ class LimitsAndCapitals(unittest.TestCase):
         self.assertEqual(_cap_first("projection booths"), "Projection booths")
         self.assertEqual(_cap_first(""), "")
 
-    def test_the_theatre_findings_read_as_before_and_carry_their_messages(self):
-        rows = theatre_fixture.rows()
+    def test_the_cinema_findings_read_as_before_and_carry_their_messages(self):
+        rows = cinema_fixture.rows()
         caps = [f for f in rows["findings"] if f["kind"] == "cap"]
         self.assertEqual(sorted((plain(f["limit"]), plain(f["fix"]), f["when"]) for f in caps), sorted([
             ("staffing and projection booths", "more service staff on those hours and another projection booth",
@@ -273,8 +273,8 @@ class LimitsAndCapitals(unittest.TestCase):
         # "staffing and projection booths" / "... and another projection booth":
         # the station's part of the limit and of the fix each carry the token a
         # German template writes instead of the English plural.
-        booth = tok("ba:itemname_projectionbooth", "Projection Booth")
-        payload = json.loads(json.dumps(_wire_msgs({"hourFindings": theatre_fixture.rows()["findings"]})))
+        booth = tok("ba:itemname_boothprojection", "Projection Booth")
+        payload = json.loads(json.dumps(_wire_msgs({"hourFindings": cinema_fixture.rows()["findings"]})))
         [tie] = [f for f in payload["hourFindings"] if f["kind"] == "cap" and f["limits"] == 2]
         limit, fix = tie["i18n"]["limit"], tie["i18n"]["fix"]
         self.assertEqual(limit[0], "sp.py.list.and")

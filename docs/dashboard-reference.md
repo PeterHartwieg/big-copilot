@@ -451,8 +451,8 @@ grid and three lines meet.
   manned in that hour, not the number of staff times a guess. Two people scheduled on one
   station count that station once.
 - **The building capacity** is the building's own `customerCapacity`: 30 for the small
-  supermarkets, 75 for the big ones and the electronics stores, 100 for the cinema. It is
-  a per-hour limit, not a daily total.
+  supermarkets, 75 for the big ones and the electronics stores, 100 to 150 for a cinema
+  depending on its layout. It is a per-hour limit, not a daily total.
 
 Effective capacity is the smallest of these, and the useful finding is *which* one binds.
 Every hour at 95% or more of it is an hour at the ceiling; the grid outlines those in red (in a neutral grey where the building's own capacity held the hour),
@@ -474,11 +474,18 @@ nobody and a cleaner placed at a computer serves nobody. That is also why a gym 
 invisible here until the station table saw its boards — a site with no Customer Service
 station at all had no capacity to read.
 
-**Roles.** A shop asks for one skill and its capacity is the registers manned. A theatre
-asks for four, and a customer has to pass through all of them, so the site is only as fast
-as its slowest role: the grid shows the minimum across roles, the sum only within one, and
-each role's own staffing is judged separately in the findings. Two projection booths with one
-projectionist hold the whole theatre back to 25 an hour however many stage crew are on.
+**Roles.** A shop asks for one skill and its capacity is the registers manned. A cinema
+asks for two: Projectionist at the projection booths and Customer Service at the
+concessions stand registers. The board does not count its ticket kiosk, which no employee
+works. A theatre asks for three: Customer Service at the ticket booths and the concessions
+stand registers, Stage Crew at the costume, lighting and sound booths, and Actor in the
+dressing rooms. A theatre has no projection booth and employs no projectionist. The board
+pools a theatre's ticket booths and registers into one Customer Service role; whether the
+game lets customers in through the ticket booths alone is not known. A customer has to pass
+through all of the roles, so the site is only as fast as
+its slowest role: the grid shows the minimum across roles, the sum only within one, and each
+role's own staffing is judged separately in the findings. Two projection booths with one
+projectionist hold the whole cinema back to 25 an hour however many concessions staff are on.
 
 Only stations the business type can staff count. The game lets any item be placed in any
 business but assigns a person only in a skill the type takes (`ASSIGN_SKILLS`), so a leftover
@@ -542,7 +549,7 @@ shop's "staffing" and "registers" and an office's "workstations" keep the ids th
 always had and the player's silences survive. A shop's counters and
 an office's workstations keep the words they have always had — a register asks for another
 counter, a computer for another workstation — while a gym is told another fitness planning
-board or another Gym Trainer, and a theatre another projection booth. A site that runs one
+board or another Gym Trainer, and a cinema another projection booth. A site that runs one
 person at night and a full floor by day can be short of staff at night and at the door by
 day, and then it gets one line for each, rather than a verdict for the whole week that is
 wrong about one of them. Where the hours on one line ran at different ceilings, the line
@@ -2011,12 +2018,16 @@ and 0 for a character who has paid none.
 `customerCapacity` is also stored only for an occupied building. The cap a size buys
 comes instead from the game's own help page `help_building_types_content`, which lists a
 customer capacity per layout code. A code is a letter and a digit — C1 and C2 are both
-225 m² retail floors — and the building table records only the letter, so the codes
-collapse to their letter. The same letter is a different floor in a different kind of
-building: a C is 30 customers as a shop and 8 as an office. Where a letter's layouts
-genuinely differ the cap is a `[min, max]` range, which today is only the cinema (S, 100
-to 150) and the theater (R, 150 to 200). Warehouses have a vehicle capacity, not a door
-cap, and carry none; neither do residential or special buildings.
+225 m² retail floors — and the codes collapse to their letter. The same letter is a
+different floor in a different kind of building: a C is 30 customers as a shop and 8 as an
+office. Where a letter's layouts genuinely differ, the cinema and the theater, the letter
+carries a `[min, max]` range. A cinema's layouts are also kept by code, and a cinema
+building reads its own: the building table records each building's layout version (`v`),
+and every cinema the player runs in the saves on hand reads `customerCapacity` exactly its
+layout's number (4 Broadway S1 150, 5 Sixth Street S2 125, 15 Third Avenue S3 100), with
+no rival's above it (`LAYOUT_CAP_CATEGORIES`). A theater keeps the range, R 150 to 200.
+Warehouses have a vehicle capacity, not a building capacity, and carry none; neither do
+residential or special buildings.
 
 The help page travels with the game text the web build ships, and a player's own `en.json`
 wins over it. The table is also hardcoded as it stands on builds 3675 and 3680, and it
@@ -2028,7 +2039,7 @@ only when there is no game text at all:
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Retail | 15 | 30 | 40 | | | 75 | | |
 | Office | 4 | 8 | 10 | 10 | 50 | | | |
-| Cinema | | | | | | | 100–150 | |
+| Cinema | | | | | | | 100–150 (S1 150, S2 125, S3 100) | |
 | Theater | | | | | | | | 150–200 |
 
 One discrepancy is known and left alone: the page says an office K seats 50, while the

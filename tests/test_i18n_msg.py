@@ -7,7 +7,7 @@ by a byte, so every reader and test that compares, slices or plain()s a
 sentence sees what it saw before. docs/architecture.md, "UI text".
 
 Synthetic data only: tests/es3_fixture.py's company, the stub businesses of
-tests/test_site_panel_fields.py, and the theatre and roster fixtures.
+tests/test_site_panel_fields.py, and the cinema and roster fixtures.
 """
 import copy
 import json
@@ -19,7 +19,7 @@ import unittest
 import ba_dashboard
 from ba_dashboard import Msg, _alerts, _wire_msgs, msg, plain, tok
 from test_site_panel_fields import stub
-from tests import roster_fixture, theatre_fixture
+from tests import roster_fixture, cinema_fixture
 from tests.game_names_fixture import fixture as game_names_fixture
 from tests.es3_fixture import link_payload, write_link_save
 from tests import save_fixtures
@@ -77,8 +77,8 @@ CONVERTED = {
     # The hour grid's words (_hour_findings(), _hour_phrase(), _idle_week()).
     # A cap's noun, and the limit of a role short of posts, is the station's
     # own plural: the game's name in English, not a sentence, so not here.
-    "sp.py": [("theatre", "hourFindings", field) for field in ("limit", "fix", "when")]
-    + [("theatre", "hourFindings.week.parts", "when")]
+    "sp.py": [("cinema", "hourFindings", field) for field in ("limit", "fix", "when")]
+    + [("cinema", "hourFindings.week.parts", "when")]
     # A factory machine short of staff (_staff_notes()), and the hours nobody is on it.
     + [("data", "alerts", "text", lambda row, field: row.get("group") == "staff" and "detail" not in row),
        ("data", "supply.factories.sites.lines.gaps", "off")],
@@ -133,10 +133,10 @@ def fixtures():
         save_fixtures.write_data_save(path, save_fixtures.DAY)
         data = ba_dashboard.extract(load_save(path), Names(dict(save_fixtures.data_names())),
                                     os.path.join(tmp, "history.json"))
-    theatre = theatre_fixture.rows()
+    cinema = cinema_fixture.rows()
     return {
         "es3": es3,
-        "theatre": _wire_msgs({"hourFindings": theatre["findings"], "hours": [theatre["grid"]]}),
+        "cinema": _wire_msgs({"hourFindings": cinema["findings"], "hours": [cinema["grid"]]}),
         "roster": _wire_msgs({"staffing": list(roster_fixture.rows().values())}),
         "game_names": _wire_msgs(game_names_fixture()["payload"]),
         "data": data,
