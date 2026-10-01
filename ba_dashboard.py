@@ -33680,7 +33680,9 @@ function osLoad(){
             amount: p.finance.amount == null || !Number.isFinite(+p.finance.amount) ? null : Math.max(0, +p.finance.amount),
             bank: typeof p.finance.bank === "string" ? p.finance.bank : null} : {on: false, amount: null, bank: null},
           step: OS_STEPS.includes(p.step) ? p.step : "what", made: +p.made || null, snap: osSnapClean(p.snap),
-          opened: Number.isFinite(p.opened) ? p.opened : null, paid: !!p.paid, sold: !!p.sold}));
+          opened: Number.isFinite(p.opened) ? p.opened : null, paid: !!p.paid,
+          /* A plan kept before `sold` was: one whose store opened is taken as a record. */
+          sold: "sold" in p ? !!p.sold : Number.isFinite(p.opened)}));
       /* The stores that opened since the last visit are history before the caps count. */
       dirty = osReconcile();
       const before = osPlans.length;
