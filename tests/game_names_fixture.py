@@ -36,7 +36,7 @@ sys.path.insert(0, ROOT)
 
 import ba_dashboard  # noqa: E402
 from ba_save import Names, load_save  # noqa: E402
-from tests import theatre_fixture  # noqa: E402
+from tests import cinema_fixture  # noqa: E402
 from tests.es3_fixture import write_link_save  # noqa: E402
 
 LONG_HOOD = "ba:neighborhood_garmentdistrict"
@@ -70,14 +70,14 @@ def german(text: dict) -> dict:
 
 def more_findings(payload: dict, text: dict) -> None:
     """Findings the synthetic company is too quiet to raise, from the builders
-    that raise them in extract(): a theatre's hour grid (a role's name inside
+    that raise them in extract(): a cinema's hour grid (a role's name inside
     the limit and the fix), a hype wave (a neighbourhood's), and three items
     running dry at one depot (an item's, and a summary line naming the worst).
     They join the payload's own findings, and the page is handed all of it."""
     gift = payload["businesses"][0]
-    theatre = theatre_fixture.rows()
-    grid = dict(theatre["grid"], key=gift["key"], name=gift["name"])
-    findings = [dict(f, key=gift["key"], site=gift["name"]) for f in theatre["findings"]]
+    cinema = cinema_fixture.rows()
+    grid = dict(cinema["grid"], key=gift["key"], name=gift["name"])
+    findings = [dict(f, key=gift["key"], site=gift["name"]) for f in cinema["findings"]]
     wave = {"hood": LONG_HOOD, "daysLeft": 3, "count": 2, "startDay": 20, "baseline": None,
             "top": gift["key"], "sites": [{"key": gift["key"], "name": gift["name"], "revenue": 900.0}]}
     raised = ba_dashboard._alerts(payload["businesses"], payload["supply"], payload["chains"], [], [wave],

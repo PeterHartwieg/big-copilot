@@ -145,8 +145,8 @@ staffing branch a clean base to start from.
 - Multi-role types resolve as a **minimum across roles**.
 
 That last point is where the model has to be careful. A clothing store has one
-role and its capacity is the sum of its manned registers. A theatre has four
-(ticket booth, projection, stage crew, dressing room) and a customer passes
+role and its capacity is the sum of its manned registers. A theatre has three
+(ticket booth, stage crew, dressing room; projection is a cinema's) and a customer passes
 through all of them, so the site's throughput is the minimum across roles, and
 the sum only within a role. It degrades to today's behaviour for every
 single-role type, which is most of them.
