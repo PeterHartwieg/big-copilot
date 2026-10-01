@@ -8,8 +8,17 @@
 // game link's health and writes as each test says. Never a real save.
 // Install Playwright and its Chromium browser to run; NODE_PATH may point at
 // an existing Playwright installation.
+//
+// Assertions on catalogue text name its key (tests/_i18n.cjs). Much of this
+// page's text is still written in English by the board itself, outside the
+// catalogue (Change picks, the reassign lines, candidate facts, the filters,
+// the eligibility and why text), and those assertions keep the English until
+// that text moves to tt().
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe, enText: textEn, textRe} = require('./_i18n.cjs');
+// "Add N people to fill this plan", with or without the people from other sites.
+const addRe = n => new RegExp(['sp.gw.add', 'sp.gw.add.from'].map(k => textRe(k, {n}).source).join('|'));
 const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -278,13 +287,13 @@ test('netting: the bench a plan counts on, then spare people, then hires, best f
   assert.match(await page.locator('#hsOpen .hs-facts2').textContent(), /^15 candidates · 2 expire within 24 h$/);
   // The order panel: what the button does.
   const order = page.locator('#hsOrder');
-  assert.deepEqual(await order.locator('.hs-ol li > span').allTextContents(), ['Reassign', 'Hire', 'Weeks']);
+  assert.deepEqual(await order.locator('.hs-ol li > span').allTextContents(), [en("co.hire.tile.move"), en('co.hire.tile.hire'), en("co.hire.tile.weeks")]);
   // The weeks: the four sites the hires and reassigns reach.
-  assert.match(await order.locator('.hs-ol').textContent(), /Reassign2.*Hire7.*Weeks4/);
-  assert.match(await order.locator('.hs-sum').textContent(), /^Added wages\+\$[\d,]+\/day$/);
-  assert.equal((await page.locator(REVIEW).textContent()).trim(), 'Staff all sites');
-  assert.equal(await order.locator('.hs-note').textContent(), 'Picked for you. You confirm next.');
-  assert.equal(await page.locator('#secStaff .hs-head h2').textContent(), 'Whom to hire');
+  assert.match(await order.locator('.hs-ol').textContent(), new RegExp(enRe("co.hire.tile.move").source + '2.*' + enRe('co.hire.tile.hire').source + '7.*' + enRe('co.hire.tile.weeks').source + '4'));
+  assert.match(await order.locator('.hs-sum').textContent(), new RegExp("^" + enRe("co.hire.tile.wages").source + "\\+\\$[\\d,]+\\/day$"));
+  assert.equal((await page.locator(REVIEW).textContent()).trim(), en("co.hire.title.all"));
+  assert.equal(await order.locator('.hs-note').textContent(), en("co.hire.order.picked"));
+  assert.equal(await page.locator('#secStaff .hs-head h2').textContent(), en("co.needs.hire.title"));
   // Linked is the normal state: nothing says so (declutter T4).
   assert.equal(await page.locator('#secStaff .hs-link').count(), 0);
 
@@ -299,10 +308,10 @@ test('netting: the bench a plan counts on, then spare people, then hires, best f
     [B, 'open', ['hire:c3', 'hire:c4', 'hire:k1']],
   ]);
   assert.equal(await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).isChecked(), false);
-  assert.equal((await page.locator(REVIEW).textContent()).trim(), 'Staff all sites');
+  assert.equal((await page.locator(REVIEW).textContent()).trim(), en("co.hire.title.all"));
   // Sam stays at Corner, spare: the plan has no hours for him there, so his
   // Tuesday goes and Corner's week is one to write as well.
-  assert.match(await order.locator('.hs-ol').textContent(), /Hire8.*Weeks5/);
+  assert.match(await order.locator('.hs-ol').textContent(), new RegExp(enRe('co.hire.tile.hire').source + '8.*' + enRe('co.hire.tile.weeks').source + '5'));
 });
 
 test('ties past the wage go to the id, and the sizing on Supply picks the factory plan', async (t) => {
@@ -390,7 +399,7 @@ test('a demand the site does not meet warns and still picks', async (t) => {
   // Greta asks for no nights and Bare's week left runs 0 to 12: no week fits
   // her, so she is not picked (Hollis is) and Change picks says why.
   assert.deepEqual(m.weeks[2], [B, 'open', ['hire:c6', 'hire:c8', 'hire:k1']]);
-  assert.equal(await page.locator('#hsSheet [data-hr-cand="c7"] td.to').textContent(), 'no open week meets their schedule demands');
+  assert.equal(await page.locator('#hsSheet [data-hr-cand="c7"] td.to').textContent(), en("co.hire.nofit"));
   assert.equal(await page.locator('#hsSheet [data-hr-cand="c7"] input').isChecked(), false);
   assert.deepEqual((await page.locator('#hsSheet [data-hr-cand="c4"] td').allTextContents()).map(x => x.trim()),
     ['', 'Dario EngstromCoffee Machine (none at HART. Gifts)', '80%', '$22', 'HART. Gifts', 'Coffee Machine (none at HART. Gifts)', '4 days']);
@@ -409,7 +418,7 @@ test('open places, and ticking one more over the plan', async (t) => {
   assert.deepEqual([cs.picked, cs.short], [['c2', 'c1'], 1]);
   const short = page.locator('#hsOrder .hs-ol li.short');
   // Its number; the roles are the table's rows (declutter T5).
-  assert.match(await short.textContent(), /^Stays open3$/);
+  assert.match(await short.textContent(), new RegExp("^" + enRe("co.hire.order.short").source + "3$"));
   await page.locator('#hsOpen .hs-fbar[data-hr-filters=""] [data-hr-min]').selectOption('0');
   assert.equal(await short.count(), 0);
   // Unticking Bram lets the next best in; ticking Greta, who nobody needs, is
@@ -607,7 +616,7 @@ test('a role with no candidates says so instead of Change picks', async (t) => {
   const law = page.locator(`#hsOpen tr[data-hr-role="${LAW}"]`);
   assert.equal(await law.locator('[data-hr-open]').count(), 0);
   assert.equal(await law.locator('td.act').textContent(), 'No candidates');
-  assert.match(await page.locator('#hsOrder .hs-ol li.short').textContent(), /^Stays open1$/);
+  assert.match(await page.locator('#hsOrder .hs-ol li.short').textContent(), new RegExp("^" + enRe("co.hire.order.short").source + "1$"));
 });
 
 test('a body over what the game link takes is named before anything is sent', async (t) => {
@@ -619,8 +628,8 @@ test('a body over what the game link takes is named before anything is sent', as
   await page.locator(REVIEW).click();
   await phase(page, 'nothing');
   const dlg = page.locator('dialog.gw-dlg');
-  assert.match(await dlg.textContent(), /Too much for one go/);
-  assert.match(await dlg.textContent(), /the link takes 2 MB/);
+  assert.match(await dlg.textContent(), enRe("co.hire.toomuch"));
+  assert.match(await dlg.textContent(), enRe("co.hire.toolarge"));
   assert.deepEqual(await page.evaluate(() => window.hrWrites.length), 0);
 });
 
@@ -650,30 +659,30 @@ test('Review: the dry run, who goes where, one confirm with no undo, and a parti
   await review.click();
   const dlg = page.locator('dialog.gw-dlg.hr-wide');
   await phase(page, 'ready');
-  assert.equal(await dlg.locator('h2').textContent(), 'Staff all sites');
-  assert.match(await dlg.locator('.gw-where').textContent(), /^4 sites$/);
-  assert.match(await dlg.locator('.gw-verdict').textContent(), /The game can take all of it/);
+  assert.equal(await dlg.locator('h2').textContent(), en("co.hire.title.all"));
+  assert.match(await dlg.locator('.gw-where').textContent(), enRe('co.hire.where.all', {n:4}, {anchor:'full'}));
+  assert.match(await dlg.locator('.gw-verdict').textContent(), enRe("co.hire.v.all"));
   // What it does, picked at the top: hire and schedule, the first.
-  assert.deepEqual(await dlg.locator('[data-hr-mode]').allTextContents(), ['Hire and schedule', 'Hire only', 'Schedule only']);
-  assert.equal(await dlg.locator('[data-hr-mode][aria-pressed="true"]').textContent(), 'Hire and schedule');
-  assert.deepEqual(await dlg.locator('.gw-tile .gw-lab').allTextContents(), ['Hire', 'Reassign', 'Weeks', 'Added wages']);
-  assert.match(await dlg.locator('.gw-body').textContent(), /Who goes where\. Open a site to see each person and the days they work\./);
+  assert.deepEqual(await dlg.locator('[data-hr-mode]').allTextContents(), [en("co.hire.mode.both"), en("co.hire.mode.hire"), en("co.hire.mode.week")]);
+  assert.equal(await dlg.locator('[data-hr-mode][aria-pressed="true"]').textContent(), en("co.hire.mode.both"));
+  assert.deepEqual(await dlg.locator('.gw-tile .gw-lab').allTextContents(), [en('co.hire.tile.hire'), en("co.hire.tile.move"), en("co.hire.tile.weeks"), en("co.hire.tile.wages")]);
+  assert.match(await dlg.locator('.gw-body').textContent(), enRe("co.hire.lead"));
   // One row a site touched, in list order.
   assert.deepEqual(await dlg.locator('.hr-dhead .s').allTextContents(), ['HART. Gifts', 'HART. Bare', 'HART. Works', 'HART. Law']);
   // This mod writes it all in the hire call, and has no undo for it.
-  assert.match(await dlg.locator('.gw-foot').textContent(), /This mod cannot undo a hire/);
+  assert.match(await dlg.locator('.gw-foot').textContent(), enRe("co.hire.hint.noundo"));
   // Somebody the plan's week gives fewer hours than now is named before the confirm.
-  assert.match(await dlg.locator('.gw-body').textContent(), /Fewer hours than now in the week sent: Lena Voss \(HART\. Law, 48 → 40 h\)\./);
+  assert.match(await dlg.locator('.gw-body').textContent(), textRe("co.hire.fewer", {who:en("co.hire.fewer.one", {name:"Lena Voss", site:"HART. Law", now:48, h:40})}));
   const bare = dlg.locator('.hr-dsite', {has: page.locator(`[data-hr-site="${B}"]`)});
-  assert.match(await bare.locator('.c').textContent(), /^3 new\+1 reassigned/);
+  assert.match(await bare.locator('.c').textContent(), new RegExp('^' + enRe('co.hire.c.new', {n:3}).source + enRe('co.hire.c.moved', {n:1}).source));
   // A site opens for its people and their days.
   await dlg.locator(`[data-hr-site="${G}"]`).click();
   const people = dlg.locator('.hr-dsite.open .hr-dp:not(.hd)');
   assert.deepEqual(await people.locator('.who b').allTextContents(), ['Bram Castell', 'Sam Spare']);
-  assert.deepEqual(await people.locator('.who small').allTextContents(), ['new hire', 'reassigned from HART. Corner']);
+  assert.deepEqual(await people.locator('.who small').allTextContents(), [en("co.hire.p.new"), en("co.hire.p.from", {"site":"HART. Corner"})]);
   assert.equal(await people.first().locator('.hr-wk i.on').count(), 3);
   const apply = dlg.locator('.gw-foot [data-gw-b="apply"]');
-  assert.equal(await apply.textContent(), 'Staff 4 sites');
+  assert.equal(await apply.textContent(), en("co.hire.go.all", {"n":4}));
   await apply.click();
   await phase(page, 'done');
   const writes = await page.evaluate(() => window.hrWrites.map(w => [w.kind, w.dryRun]));
@@ -686,23 +695,23 @@ test('Review: the dry run, who goes where, one confirm with no undo, and a parti
   // before the game reached her.
   assert.equal(await dlg.locator('[data-gw-b="undo"]').count(), 0);
   const text = await dlg.locator('.gw-body').textContent();
-  assert.match(text, /No undo with this mod\. To let someone go, fire them in MyEmployees in the game\./);
+  assert.match(text, enRe("co.hire.noundo.done"));
   // Each site says it is done.
   assert.equal(await dlg.locator('.hr-st.ok').count(), 4);
-  assert.match(text, /1 application expired before the game reached it: Ada Brandt\./);
+  assert.match(text, new RegExp(textRe('co.hire.gone', {n:1}).source + ' Ada Brandt\\.'));
   assert.equal(await dlg.locator('.gw-body .hr-struck', {hasText: 'Ada Brandt'}).count() > 0, true);
   const more = dlg.locator('[data-hr-more]');
-  assert.equal(await more.textContent(), 'Pick 1 more');
+  assert.equal(await more.textContent(), en("co.hire.more.button", {"n":1}));
   assert.equal(await more.isDisabled(), true, 'waits for the board to read the game');
   assert.equal(await page.locator('#gwToast').count(), 0, 'no undo strip');
   // Bare's row counts who the game hired: Dario and Ines, Ada's place open,
   // and the wage bill without her.
-  assert.match(await bare.locator('.c').textContent(), /^2 hired\+1 reassigned1 still open/);
+  assert.match(await bare.locator('.c').textContent(), new RegExp('^' + enRe('co.hire.c.hired', {n:2}).source + enRe('co.hire.c.moved', {n:1}).source + enRe('co.hire.c.open', {n:1}).source));
   assert.equal(await bare.locator('.hr-dots i.gap').count(), 1);
   assert.equal(await bare.locator('.hr-dots i.done').count(), 3);
   assert.equal(await bare.locator('.cst').textContent(), await page.evaluate(() => `+${fmt((22 * 36 + 16 * 36) / 7)}`));
   await bare.locator(`[data-hr-site="${B}"]`).click();
-  assert.match(await dlg.locator('.hr-dsite.open').textContent(), /Ada Brandt.*application expired/);
+  assert.match(await dlg.locator('.hr-dsite.open').textContent(), new RegExp("Ada Brandt.*" + enRe("co.hire.p.expired").source));
   // The board reads the game again: Ada is gone from the candidates, and
   // "Pick 1 more" opens the review for Bare's week alone.
   await page.evaluate(p => {
@@ -736,7 +745,7 @@ test('the review names the hours a reassign leaves empty where the week is not r
   assert.ok(!body.sites.some(s => s.address.number === 2), 'Corner is not rewritten');
   await page.locator(REVIEW).click();
   await phase(page, 'ready');
-  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /Hours left empty.*Sam Spare \(2 stretches of hours at HART\. Corner\)/);
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), textRe('co.hire.emptied', {who:en('co.hire.emptied.one', {name:'Sam Spare', n:2, site:'HART. Corner'})}));
 });
 
 test('refusals: a row the game refuses, and MyEmployees open', async (t) => {
@@ -748,7 +757,7 @@ test('refusals: a row the game refuses, and MyEmployees open', async (t) => {
   await page.locator(REVIEW).click();
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
-  assert.match(await dlg.locator('.gw-no').first().textContent(), /In training/);
+  assert.match(await dlg.locator('.gw-no').first().textContent(), enRe("sp.gw.hire.refuse.training.rule"));
   assert.match(await dlg.locator('.gw-no .gw-chip').first().textContent(), /Sam Spare/);
   assert.equal(await dlg.locator('[data-gw-b="apply"]').isDisabled(), true);
   await dlg.locator('[data-gw-close]').click();
@@ -759,9 +768,9 @@ test('refusals: a row the game refuses, and MyEmployees open', async (t) => {
   });
   await page.locator(REVIEW).click();
   await phase(page, 'ready');
-  assert.match(await dlg.locator('.gw-verdict').textContent(), /Close MyEmployees in the game/);
-  assert.match(await dlg.textContent(), /Close the MyEmployees app on your in-game phone, then try again\./);
-  assert.equal(await dlg.locator('[data-gw-b="retry"]').count(), 1, 'try again once it is closed');
+  assert.match(await dlg.locator('.gw-verdict').textContent(), enRe("co.hire.v.myemployees"));
+  assert.match(await dlg.textContent(), enRe("co.hire.myemployees.fix"));
+  assert.equal(await dlg.getByRole('button', {name: en('nav.dlg.tryagain')}).count(), 1, 'try again once it is closed');
 
   // The same, refused on the confirm (409 cannot_write).
   await dlg.locator('[data-gw-close]').click();
@@ -774,7 +783,7 @@ test('refusals: a row the game refuses, and MyEmployees open', async (t) => {
   await phase(page, 'ready');
   await dlg.locator('[data-gw-b="apply"]').click();
   await phase(page, 'failed');
-  assert.match(await dlg.textContent(), /MyEmployees is open in the game/);
+  assert.match(await dlg.textContent(), enRe("nav.dlg.cannot.myemployees.text"));
 });
 
 test('not linked: everything works from the save, the button is off with how to link', async (t) => {
@@ -783,10 +792,10 @@ test('not linked: everything works from the save, the button is off with how to 
   assert.equal(await page.locator('#secStaff .hs-head .hs-link').count(), 0);
   const review = page.locator(REVIEW);
   assert.equal(await review.getAttribute('aria-disabled'), 'true');
-  assert.equal((await review.textContent()).trim(), 'Staff all sites');
+  assert.equal((await review.textContent()).trim(), en("co.hire.title.all"));
   assert.equal(await page.locator('[data-gw]').count(), 0, 'no write button while reading a save');
   const gate = page.locator('#hsOrder .hs-gate');
-  assert.match(await gate.locator('b').textContent(), /^Link the game to hire$/);
+  assert.match(await gate.locator('b').textContent(), enRe("co.hire.gate.link", {} , {"anchor":"full"}));
   assert.equal(await gate.locator('li').count(), 3);
   assert.equal(await page.locator('#hsOrder .hs-note').count(), 0);
   assert.match(await page.locator('#hsOpen .hs-facts2').textContent(), /^15 candidates · 2 expire within 24 h \(as of the save\)$/);
@@ -797,7 +806,7 @@ test('not linked: everything works from the save, the button is off with how to 
   assert.equal((await model(page)).moves[1].off, true);
   await page.locator('#hsQuick [data-hq-role]').selectOption(HRM);
   await page.locator('#hsQuick [data-hq-site]').selectOption(Q);
-  assert.match(await page.locator('#hsQuick [data-hq-list] summary').textContent(), /1 match · picked/);
+  assert.match(await page.locator('#hsQuick [data-hq-list] summary').textContent(), textRe("co.hire.quick.all", {"n":1}));
   assert.equal(await page.locator('#hsQuick [data-hq-go]').getAttribute('aria-disabled'), 'true');
 });
 
@@ -809,8 +818,8 @@ test('the button waits for a mod that can hire', async (t) => {
   const review = page.locator(REVIEW);
   assert.equal(await review.getAttribute('aria-disabled'), 'true');
   const gate = page.locator('#hsOrder .hs-gate.warn');
-  assert.match(await gate.textContent(), /Update Big Copilot Link to 0\.3\.0/);
-  assert.match(await gate.textContent(), /Restart the game, then link again\./);
+  assert.match(await gate.textContent(), enRe("co.hire.gate.old"));
+  assert.match(await gate.textContent(), enRe("co.hire.gate.restart"));
   await review.dispatchEvent('click');
   assert.equal(await page.locator('dialog.gw-dlg').count(), 0);
   await page.locator('#hsQuick [data-hq-role]').selectOption(HRM);
@@ -824,7 +833,7 @@ test('the button waits for a mod that can hire', async (t) => {
 test('a mod that says its version is named in the head and under the button', async (t) => {
   const page = await board(t, {link: {writes: ['uniforms', 'imports', 'schedule'], mod: '0.2.0', day: 34, hour: 14}});
   assert.equal(await page.locator('#secStaff .hs-head .hs-link.old').textContent(), 'Mod 0.2.0 · too old to hire');
-  assert.match(await page.locator('#hsOrder .hs-gate.warn').textContent(), /You have 0\.2\.0\. Restart the game, then link again\./);
+  assert.match(await page.locator('#hsOrder .hs-gate.warn').textContent(), new RegExp(enRe('co.hire.gate.have', {v:'0.2.0'}).source + ' ' + enRe('co.hire.gate.restart').source));
 });
 
 test('Quick hire: the best matches for one role at the headquarters, with no hours', async (t) => {
@@ -851,9 +860,9 @@ test('Quick hire: the best matches for one role at the headquarters, with no hou
   assert.deepEqual(await quick(page), {ready: true, ex: [], matches: ['h2', 'h3', 'h1', 'h4', 'h5'],
     picks: [['h2', null], ['h3', null], ['h1', null]], short: 0});
   const list = box.locator('details[data-hq-list]');
-  assert.match(await list.locator('summary').textContent(), /^5 match · the best 3 are picked/);
+  assert.match(await list.locator('summary').textContent(), textRe("co.hire.quick.best", {"m":5,"n":3}, {"anchor":"start"}));
   assert.deepEqual(await list.locator('li > span:first-child').allTextContents(), ['Pim Rask', 'Quin Sato', 'Mara Nyberg']);
-  assert.equal(await box.locator('[data-hq-go]').textContent(), 'Hire 3');
+  assert.equal(await box.locator('[data-hq-go]').textContent(), en('co.hire.go.hire', {n:3}));
   assert.equal(await box.locator('[data-hq-go]').getAttribute('aria-disabled'), null);
   // The request: hired, assigned only.
   assert.deepEqual(await quickRequest(page), {
@@ -864,11 +873,11 @@ test('Quick hire: the best matches for one role at the headquarters, with no hou
     moves: []});
   // Fewer match than asked: the button drops to the matches.
   await page.locator('#hsOpen [data-hr-min]').selectOption('90');
-  assert.match(await list.locator('summary').textContent(), /^1 match · only 1 candidate matches/);
-  assert.equal(await list.locator('summary .warn').textContent(), 'only 1 candidate matches');
-  assert.equal(await box.locator('[data-hq-go]').textContent(), 'Hire 1');
+  assert.match(await list.locator('summary').textContent(), textRe("co.hire.quick.short", {"n":1}, {"anchor":"start"}));
+  assert.equal(await list.locator('summary .warn').textContent(), en('co.hire.quick.short', {n:1}).match(/<span class=['"]warn['"]>(.*?)<\/span>/)[1]);
+  assert.equal(await box.locator('[data-hq-go]').textContent(), en('co.hire.go.hire', {n:1}));
   await page.locator('#hsOpen [data-hr-min]').selectOption('100');
-  assert.equal(await box.locator('.hs-match.none').textContent(), 'Nobody matches.');
+  assert.equal(await box.locator('.hs-match.none').textContent(), en("co.hire.quick.none"));
   assert.equal(await box.locator('[data-hq-go]').getAttribute('aria-disabled'), 'true');
   await page.locator('#hsOpen [data-hr-min]').selectOption('0');
 
@@ -877,27 +886,27 @@ test('Quick hire: the best matches for one role at the headquarters, with no hou
   await box.locator('[data-hq-go]').click();
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
-  assert.equal(await dlg.locator('h2').textContent(), 'Quick hire: HR Manager');
-  assert.match(await dlg.locator('.gw-verdict').textContent(), /The game can take all of it/);
+  assert.equal(await dlg.locator('h2').textContent(), en("co.hire.title.quick", {"role":"HR Manager"}));
+  assert.match(await dlg.locator('.gw-verdict').textContent(), enRe("co.hire.v.all"));
   // A headquarters has no plan: hire only, the one thing it can do, so no pick.
   assert.equal(await dlg.locator('[data-hr-mode]').count(), 0);
   const body = await dlg.locator('.gw-body').textContent();
-  assert.match(body, /HART\. HQ.*no hours: assigned only/);
-  assert.match(await dlg.locator('.gw-foot').textContent(), /This mod cannot undo a hire/);
+  assert.match(body, new RegExp("HART\\. HQ.*" + enRe("co.hire.plan.none").source));
+  assert.match(await dlg.locator('.gw-foot').textContent(), enRe("co.hire.hint.noundo"));
   await dlg.locator(`[data-hr-site="${Q}"]`).click();
   assert.match(await dlg.locator('.gw-body').textContent(), /Pim Rask[\s\S]*Quin Sato[\s\S]*Mara Nyberg/);
   const apply = dlg.locator('.gw-foot [data-gw-b="apply"]');
-  assert.equal(await apply.textContent(), 'Hire 3');
+  assert.equal(await apply.textContent(), en('co.hire.go.hire', {n:3}));
   await apply.click();
   await phase(page, 'done');
   assert.deepEqual(await page.evaluate(() => window.hrWrites.map(w => [w.kind, w.dryRun])), [['hire', true], ['hire', false]]);
   const done = await dlg.textContent();
-  assert.match(done, /3 hired/);
-  assert.match(done, /HART\. HQ.*assigned/);
+  assert.match(done, enRe('co.hire.c.hired', {n:3}));
+  assert.match(done, new RegExp("HART\\. HQ.*" + enRe("co.hire.st.assigned").source));
   assert.equal(await dlg.locator('[data-gw-b="undo"]').count(), 0);
   const again = dlg.locator('.gw-foot [data-gw-b="more"]');
-  assert.equal(await again.textContent(), 'Hire more');
-  assert.match(await dlg.locator('.gw-foot').textContent(), /Close/);
+  assert.equal(await again.textContent(), en("co.hire.quick.again"));
+  assert.match(await dlg.locator('.gw-foot').textContent(), enRe('nav.dlg.close'));
   await again.click();
   assert.equal(await page.evaluate(() => !!document.querySelector('dialog.gw-dlg[open]')), false);
   assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.hasAttribute('data-hq-role')), true);
@@ -913,7 +922,7 @@ test('Quick hire: the best matches for one role at the headquarters, with no hou
   await box.locator('[data-hq-role]').selectOption(HRM);
   await box.locator('[data-hq-site]').selectOption(Q);
   assert.deepEqual((await quick(page)).matches, ['h4', 'h5']);
-  assert.match(await box.locator('[data-hq-list] summary').textContent(), /^2 match/);
+  assert.match(await box.locator('[data-hq-list] summary').textContent(), new RegExp('^' + textRe('co.hire.quick.all', {n:2}).source.split(' \u00b7 ')[0]));
   await page.evaluate(p => window.calmWatch.changed(JSON.parse(p)), data);
   assert.deepEqual((await quick(page)).matches, ['h2', 'h3', 'h1', 'h4', 'h5']);
 });
@@ -991,15 +1000,15 @@ test('Quick hire at a shop holds its plan week while its confirm is open, and no
   assert.deepEqual(m.roles[0].picked, ['c1', 'c4']);
   assert.equal(await page.evaluate(() => hrModel().roles[0].at.get('c2').elsewhere.key), G);
   assert.equal(await page.locator(`#hsOpen tr[data-hr-role="${CS}"] td:nth-child(2)`).textContent(), '3');
-  assert.equal(await page.locator('#hsOrder p.hs-held').textContent(), '1 week held for Quick hire (Customer Service at HART. Gifts)');
+  assert.equal(await page.locator('#hsOrder p.hs-held').textContent(), en("co.hire.order.held", {"n":1,"role":"Customer Service","site":"HART. Gifts"}));
   assert.deepEqual(await page.evaluate(() => window.hrWrites.at(-1).body), body);
-  assert.equal(await dlg.locator('h2').textContent(), 'Quick hire: Customer Service');
+  assert.equal(await dlg.locator('h2').textContent(), en("co.hire.title.quick", {"role":"Customer Service"}));
   // Hire and schedule, or hire only; the week is the site's plan.
-  assert.deepEqual(await dlg.locator('[data-hr-mode]').allTextContents(), ['Hire and schedule', 'Hire only']);
-  assert.equal(await dlg.locator('.gw-foot [data-gw-b="apply"]').textContent(), 'Hire and schedule');
-  assert.match(await dlg.locator('.gw-body').textContent(), /HART\. Gifts.*hours from the board's plan/);
+  assert.deepEqual(await dlg.locator('[data-hr-mode]').allTextContents(), [en("co.hire.mode.both"), en("co.hire.mode.hire")]);
+  assert.equal(await dlg.locator('.gw-foot [data-gw-b="apply"]').textContent(), en("co.hire.mode.both"));
+  assert.match(await dlg.locator('.gw-body').textContent(), new RegExp("HART\\. Gifts.*" + enRe("co.hire.plan.board").source));
   await dlg.locator(`[data-hr-site="${G}"]`).click();
-  assert.match(await dlg.locator('.gw-body').textContent(), /Bram Castellnew hire[\s\S]*90%\$25[\s\S]*36 h/);
+  assert.match(await dlg.locator('.gw-body').textContent(), new RegExp('Bram Castell' + enRe('co.hire.p.new').source + '[\\s\\S]*90%\\$25[\\s\\S]*36 h'));
   // Closed: the hold is released.
   await quickClose(page);
   assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['move:SPARE1', 'hire:c2']]);
@@ -1018,12 +1027,12 @@ test('Quick hire at a shop holds its plan week while its confirm is open, and no
   assert.ok(!two.sites[0].days.some(x => x.shifts.some(e => e.employeeId === 'c1')), 'Ada has no week');
   await quickConfirm(page);
   // Not silent: she joins with no hours, and hire only is the way to mean it.
-  assert.match(await dlg.locator('.gw-body').textContent(), /1 hire joins with no hours\. Choose Hire only.*Ada Brandt: the plan has no open week left for them/);
+  assert.match(await dlg.locator('.gw-body').textContent(), new RegExp(textRe('co.hire.zero.head', {n:1}).source + ' ' + enRe('co.hire.zero.fix').source + '.*' + textRe('co.hire.zero.one', {name:'Ada Brandt', why:en('co.hire.zero.noweek')}).source));
   await dlg.locator('[data-hr-mode="hire"]').click();
   await page.waitForFunction(() => document.querySelector('dialog.gw-dlg').dataset.phase === 'ready'
     && window.hrWrites.at(-1).body.sites.every(x => x.days === null));
-  assert.equal(await dlg.locator('.gw-foot [data-gw-b="apply"]').textContent(), 'Hire 2');
-  assert.doesNotMatch(await dlg.locator('.gw-body').textContent(), /joins with no hours/);
+  assert.equal(await dlg.locator('.gw-foot [data-gw-b="apply"]').textContent(), en('co.hire.go.hire', {n:2}));
+  assert.doesNotMatch(await dlg.locator('.gw-body').textContent(), textRe("co.hire.zero.head"));
 });
 
 test('Quick hire never opens a shop: a full-cover shop keeps its hours', async (t) => {
@@ -1074,8 +1083,8 @@ test('Quick hire takes a role Open places had filled while its confirm is open, 
   assert.deepEqual(m.roles.map(r => r.skill), [CS, FW, CLEAN]);
   assert.deepEqual(m.weeks[4], [O, 'office', ['quick:l1']]);
   assert.equal(await page.locator(`#hsOpen tr[data-hr-role="${LAW}"]`).count(), 0);
-  assert.match(await page.locator('#hsOrder .hs-ol').textContent(), /Hire6/);
-  assert.equal(await page.locator('#hsOrder p.hs-held').textContent(), '1 week held for Quick hire (Lawyer at HART. Law)');
+  assert.match(await page.locator('#hsOrder .hs-ol').textContent(), new RegExp(enRe('co.hire.tile.hire').source + '6'));
+  assert.equal(await page.locator('#hsOrder p.hs-held').textContent(), en("co.hire.order.held", {"n":1,"role":"Lawyer","site":"HART. Law"}));
   // The main order no longer hires Lior.
   assert.ok(!(await request(page)).hires.some(h => h.candidateId === 'l1'));
   // Closed: the row is back.
@@ -1104,10 +1113,10 @@ test('Quick hire where the plan has no open week: no hours, and says so', async 
   assert.deepEqual((await model(page)).weeks[0], [G, 'demand', ['move:SPARE1', 'hire:c1']]);
   assert.equal(await page.locator('#hsOrder .hs-held').count(), 0);
   // Each with their own reason, beside the name in the form and in the confirm (PR #184).
-  assert.match(await page.locator('#hsQuick .hs-match').textContent(), /Bram Castellno open hours left in the plan/);
+  assert.match(await page.locator('#hsQuick .hs-match').textContent(), new RegExp('Bram Castell' + enRe('co.hire.quick.noweek').source));
   const text = await dlg.locator('.gw-body').textContent();
-  assert.match(text, /1 hire joins with no hours\. Choose Hire only/);
-  assert.match(text, /Bram Castell: the plan has no open week left for them/);
+  assert.match(text, new RegExp(textRe('co.hire.zero.head', {n:1}).source + ' ' + enRe('co.hire.zero.fix').source));
+  assert.match(text, new RegExp("Bram Castell: " + enRe("co.hire.zero.noweek").source));
 });
 
 test('Part-time is left out per destination: a shop week, not an office week of the same role', async (t) => {
@@ -1256,7 +1265,7 @@ test('old Payroll links land on Payroll; old Staff links on Staff needs, which d
     await page.evaluate(go);
     assert.equal(await page.evaluate(() => `${page}/${sub.staffing} ${route}`), 'staffing/payroll staffing/payroll');
     assert.equal(await page.locator('[data-view-ctl="staffing/payroll"] h2').textContent(), 'Payroll');
-    assert.match(await page.locator('#secPayroll').textContent(), /People\d+/);
+    assert.match(await page.locator('#secPayroll').textContent(), new RegExp(enRe("co.pay.tile.people").source + "\\d+"));
   }
 });
 
@@ -1331,7 +1340,7 @@ test('while a closed Quick hire confirm still applies, the button waits and no s
   // The write fails: nobody hired, the form as it was, the button back.
   await page.evaluate(() => window.release(false));
   await page.waitForFunction(() => !hrUi.quickHold && !hrUi.quickPending);
-  assert.equal((await go.textContent()).trim(), 'Hire 1');
+  assert.equal((await go.textContent()).trim(), en('co.hire.go.hire', {n:1}));
   assert.equal(await go.getAttribute('aria-disabled'), null);
 });
 
@@ -1355,7 +1364,7 @@ test('an answer that lands before the close event leaves nothing pending', async
   await page.evaluate(() => new Promise(r => setTimeout(r, 50)));
   assert.deepEqual(await page.evaluate(() => [hrUi.quickHold, !!hrUi.quickPending]), [false, false]);
   const go = page.locator('#hsQuick [data-hq-go]');
-  assert.equal((await go.textContent()).trim(), 'Hire 1');
+  assert.equal((await go.textContent()).trim(), en('co.hire.go.hire', {n:1}));
   assert.equal(await go.getAttribute('aria-disabled'), null);
 });
 
@@ -1479,7 +1488,7 @@ test('the Staff page opens a shop only on the full cover picked there, and a sho
   // Full cover picked: the full plan where the payload has one, the open
   // hours where it does not (a board read before 29 September 2026).
   assert.deepEqual(out, {picked: 'open', noOpen: 'full', measured: 'demand',
-    note: 'HART. Gifts opens no hour in the game: set its opening hours first.'});
+    note: en("co.hire.nohours.shut", {"names":"HART. Gifts","n":1})});
   // Every site of a hire request keeps its opening hours.
   const body = await request(page);
   assert.ok(body.sites.length > 0);
@@ -1666,9 +1675,9 @@ test('an office week is written from Staffing › Schedules: the office default 
       button: !!(block && block.querySelector('[data-gw-sites]'))};
   }, [O, LAW]);
   assert.equal(out.plan, true);
-  assert.match(out.block, /Staffing/);
-  assert.match(out.block, /Waiting on a hire\s*14 h/);
-  assert.match(out.block, /Hours \/ week\s*0 → 24/);
+  assert.match(out.block, enRe("sp.roster.title"));
+  assert.match(out.block, new RegExp(enRe("sp.off.open").source + "\\s*14 h"));
+  assert.match(out.block, new RegExp(enRe("sp.gw.tile.hours").source + "\\s*0 → 24"));
   assert.equal(out.button, true);
   await page.locator('#schDetail #sp-roster [data-gw-sites]').first().click();
   await phase(page, 'ready');
@@ -1676,7 +1685,7 @@ test('an office week is written from Staffing › Schedules: the office default 
   assert.deepEqual(w.body, {address: addr(O), expect: '0ff1ce00', openAllHours: false, days: [
     {d: 1, shifts: [{f: 8, t: 20, employeeId: 'LAWYER1', itemInstanceId: 'DESK-1'}]},
     {d: 2, shifts: [{f: 8, t: 20, employeeId: 'LAWYER1', itemInstanceId: 'DESK-1'}]}]});
-  assert.match(await page.locator('dialog.gw-dlg').textContent(), /Office default/);
+  assert.match(await page.locator('dialog.gw-dlg').textContent(), enRe("sp.gw.plan.office"));
 });
 
 test('an office write only adds: the week as it stands plus the planned entries whose computer and person are free', async (t) => {
@@ -1714,9 +1723,9 @@ test('an office write only adds: the week as it stands plus the planned entries 
   await page.locator('#schDetail #sp-roster [data-gw-sites]').first().click();
   await phase(page, 'ready');
   const text = await page.locator('dialog.gw-dlg').textContent();
-  assert.match(text, /Adds 12 h for Lena Voss; nobody's current hours change\./);
-  assert.doesNotMatch(text, /Fewer hours than now|stay as they stand|replaces the whole week/);
-  assert.match(text, /Office default\s*adds to the week/);
+  assert.match(text, textRe("sp.gw.sch.adds", {"h":12,"who":"Lena Voss"}));
+  assert.doesNotMatch(text, new RegExp(textRe('co.hire.fewer').source + '|' + enRe('sp.gw.sch.kept').source + '|' + enRe('sp.gw.plan.whole').source));
+  assert.match(text, new RegExp(enRe("sp.gw.plan.office").source + "\\s*" + enRe("sp.gw.plan.adds").source));
 });
 
 test('an office entry this board cannot read stops the office write, and still keeps its hours from additions', async (t) => {
@@ -1740,7 +1749,7 @@ test('an office entry this board cannot read stops the office write, and still k
   assert.deepEqual(out.days, [2]);
   assert.equal(out.unreadable, 1);
   assert.equal(out.off, true);
-  assert.match(out.why, /can't be read; change it in the game first/);
+  assert.match(out.why, enRe("sp.gw.sch.office.unreadable"));
 });
 
 test('an office write is refused while a shift cannot be carried, and nothing to add says so', async (t) => {
@@ -1880,8 +1889,8 @@ test('every week a write sends is checked per person: hours, days, 12 hours, ove
     ['b', ['demand:freeweekends', 'demand:nocleaning', 'demand:nomornings']],
   ]);
   // One sentence a break.
-  assert.deepEqual(out.text.slice(0, 6), ['Ana: 36 h a week, asks for 10 to 30', 'Ana: 3 days a week, asks for 5',
-    'Xan: 58 h a week, more than 50', 'Xan: an entry of 14 h on Monday', 'Xan: 16 h on Tuesday', 'Xan: two entries at once on Tuesday']);
+  assert.deepEqual(out.text.slice(0, 6), [textEn("sp.gw.chk.hours", {"who":"Ana","n":36,"lo":10,"hi":30}), textEn("sp.gw.chk.days", {"who":"Ana","n":3,"want":5}),
+    textEn("sp.gw.chk.most", {"who":"Xan","n":58,"hi":50}), textEn("sp.gw.chk.entry", {"who":"Xan","n":14,"day":"Monday"}), textEn('sp.gw.chk.day', {who:'Xan', n:16, day:'Tuesday'}), textEn("sp.gw.chk.twice", {"who":"Xan","day":"Tuesday"})]);
   assert.ok(!out.text.some(x => x.startsWith('Zia')));
 });
 
@@ -1914,7 +1923,7 @@ test('an office write adds no entry that takes someone past their hours: the 60-
   await page.locator('#schDetail #sp-roster [data-gw-sites]').first().click();
   await phase(page, 'ready');
   assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(),
-    /Lena Voss: 12 h of the office default left out, more than their week can take/);
+    textRe("sp.gw.sch.office.left", {"name":"Lena Voss","h":12}));
 });
 
 test('an office whose office default is all past its staff hours does not call itself written', async (t) => {
@@ -1932,8 +1941,8 @@ test('an office whose office default is all past its staff hours does not call i
     const b = document.querySelector('#schDetail #sp-roster [data-gw-sites]');
     return b && (b.getAttribute('aria-label') || b.title || b.textContent);
   }, [O]);
-  assert.match(why, /Nothing more fits: the rest of the office default is more than its staff's weeks can take/);
-  assert.doesNotMatch(why, /Every entry the office default can add is in the game/);
+  assert.match(why, enRe("sp.gw.sch.office.full"));
+  assert.doesNotMatch(why, enRe("sp.gw.sch.office.written"));
 });
 
 test('a shop write names who its week leaves breaking a demand, before the confirm', async (t) => {
@@ -1962,7 +1971,7 @@ test('Staff needs names who a hire write leaves breaking a demand, per site', as
   await page.locator(REVIEW).click();
   await phase(page, 'ready');
   // The office default's 8 to 22 is one 14-hour entry a day for the lawyer.
-  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /Lior Marlow at HART\. Law: an entry of 14 h on Monday/);
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), textRe("sp.gw.chk.entry", {"who":"Lior Marlow at HART. Law","n":14,"day":"Monday"}));
 });
 
 test('a candidate no week at the first site fits takes a week at a later site that does', async (t) => {
@@ -1992,10 +2001,10 @@ test('Quick hire writes its pick\'s plan week whole: hours set there give way, a
   await box.locator('[data-hq-site]').selectOption(G);
   const days = (await quickRequest(page)).sites[0].days;
   assert.deepEqual(days.filter(x => [5, 6, 0].includes(x.d)).map(x => x.shifts.map(e => e.employeeId)), [['c2'], ['c2'], ['c2']]);
-  assert.doesNotMatch(await box.locator('.hs-match').textContent(), /hours break|meet hours already set/);
+  assert.doesNotMatch(await box.locator('.hs-match').textContent(), new RegExp(enRe('co.hire.p.newbreak').source + '|meet hours already set'));
   const dlg = await quickConfirm(page);
   const text = await dlg.locator('.gw-body').textContent();
-  assert.doesNotMatch(text, /Bram Castell: the week breaks|joins with no hours/);
+  assert.doesNotMatch(text, new RegExp(textRe('sp.gw.chk.demand', {who:'Bram Castell'}).source + '|' + textRe('co.hire.zero.head', {n:1}).source + '|' + textRe('co.hire.zero.head', {n:2}).source));
 });
 
 test('Quick hire: a better match no plan week fits still joins, with no hours, past the fitting ones', async (t) => {
@@ -2030,12 +2039,12 @@ test('Quick hire says why a match held back from the plan weeks joins with no ho
   await box.locator('[data-hq-role]').selectOption(CS);
   await box.locator('[data-hq-site]').selectOption(G);
   // Gifts had an open week, Friday to Sunday: Bram fits none of it.
-  assert.match(await box.locator('.hs-match').textContent(), /Bram Castellno open week fits Free weekends/);
+  assert.match(await box.locator('.hs-match').textContent(), new RegExp('Bram Castell' + enRe('co.hire.quick.nofit', {demands:'Free weekends'}).source));
   const dlg = await quickConfirm(page);
   const text = await dlg.locator('.gw-body').textContent();
-  assert.match(text, /1 hire joins with no hours\./);
-  assert.match(text, /Bram Castell: no open week fits Free weekends/);
-  assert.doesNotMatch(text, /the plan has no open week left/);
+  assert.match(text, textRe("co.hire.zero.head", {"n":1}));
+  assert.match(text, textRe('co.hire.zero.one', {name:'Bram Castell', why:en('co.hire.quick.nofit', {demands:'Free weekends'})}));
+  assert.doesNotMatch(text, enRe("co.hire.zero.noweek"));
 });
 
 test('Quick hire says there are no open hours only where the plan has none', async (t) => {
@@ -2047,12 +2056,12 @@ test('Quick hire says there are no open hours only where the plan has none', asy
   await box.locator('[data-hq-role]').selectOption(CS);
   await box.locator('[data-hq-site]').selectOption(G);
   assert.deepEqual((await quick(page)).picks, [['c2', null]]);
-  assert.match(await box.locator('.hs-match').textContent(), /Bram Castellno open hours left in the plan/);
+  assert.match(await box.locator('.hs-match').textContent(), new RegExp('Bram Castell' + enRe('co.hire.quick.noweek').source));
   const dlg = await quickConfirm(page);
   const text = await dlg.locator('.gw-body').textContent();
-  assert.match(text, /Bram Castell: the plan has no open week left for them/);
-  assert.match(text, /1 hire joins with no hours\./);
-  assert.doesNotMatch(text, /no open week fits/);
+  assert.match(text, new RegExp("Bram Castell: " + enRe("co.hire.zero.noweek").source));
+  assert.match(text, textRe("co.hire.zero.head", {"n":1}));
+  assert.doesNotMatch(text, enRe("co.hire.quick.nofit"));
 });
 
 test('Quick hire with several picks gives each their own reason: only the one no week fits joins with no hours', async (t) => {
@@ -2072,8 +2081,8 @@ test('Quick hire with several picks gives each their own reason: only the one no
   assert.deepEqual((await quick(page)).picks, [['c2', null], ['c1', 36]]);
   const dlg = await quickConfirm(page);
   const text = await dlg.locator('.gw-body').textContent();
-  assert.match(text, /Bram Castell: no open week fits Free weekends/);
-  assert.match(text, /1 hire joins with no hours\./);
+  assert.match(text, textRe('co.hire.zero.one', {name:'Bram Castell', why:en('co.hire.quick.nofit', {demands:'Free weekends'})}));
+  assert.match(text, textRe("co.hire.zero.head", {"n":1}));
   assert.doesNotMatch(text, /Ada Brandt: |meet hours already set there/);
 });
 
@@ -2101,27 +2110,27 @@ test('with mod 0.4.0 Staff all sites is one call, the weeks no hire reaches with
   await page.locator(REVIEW).click();
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
-  assert.match(await dlg.locator('.gw-where').textContent(), /^5 sites$/);
-  assert.match(await dlg.locator('.gw-foot').textContent(), /Undo takes every hire, reassign and week of this back in one step\./);
+  assert.match(await dlg.locator('.gw-where').textContent(), enRe('co.hire.where.all', {n:5}, {anchor:'full'}));
+  assert.match(await dlg.locator('.gw-foot').textContent(), enRe("co.hire.hint.undo"));
   assert.doesNotMatch(await dlg.locator('.gw-body').textContent(), /only after the hire/);
   const corner = dlg.locator('.hr-dsite', {has: page.locator(`[data-hr-site="${C}"]`)});
-  assert.match(await corner.textContent(), /week only/);
+  assert.match(await corner.textContent(), enRe("co.hire.c.week"));
   await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
   await phase(page, 'done');
   assert.deepEqual(await page.evaluate(() => window.hrWrites.map(w => [w.kind, w.dryRun])), [['hire', true], ['hire', false]]);
   // Each site says it is done; nothing says there is no undo.
   assert.equal(await dlg.locator('.hr-st.ok').count(), 5);
-  assert.doesNotMatch(await dlg.locator('.gw-body').textContent(), /No undo/);
+  assert.doesNotMatch(await dlg.locator('.gw-body').textContent(), enRe('co.hire.noundo.done'));
   assert.equal(await page.evaluate(() => pgOfFamily('hire').length), 1);
   assert.equal(await page.evaluate(() => hrUi.hired.ids.has('c2')), true);
   // One Undo takes all of it back.
   const undo = dlg.locator('.gw-foot [data-gw-b="undo"]');
   assert.equal(await undo.count(), 1);
-  assert.match(await dlg.locator('.gw-foot').textContent(), /Undo takes it all back, until the game's next day\./);
+  assert.match(await dlg.locator('.gw-foot').textContent(), enRe("co.hire.undohint"));
   await undo.click();
   await phase(page, 'undone');
   assert.deepEqual(await page.evaluate(() => window.hrWrites.at(-1)), {kind: 'undo', body: {kind: 'hire'}, dryRun: false});
-  assert.match(await dlg.textContent(), /Undone: every hire, reassign and week of that step is back as it was\./);
+  assert.match(await dlg.textContent(), enRe("co.hire.undone"));
   // Whoever it hired is a candidate again, and its progress record goes.
   assert.equal(await page.evaluate(() => hrUi.hired.ids.has('c2')), false);
   assert.equal(await page.evaluate(() => pgOfFamily('hire').length), 0);
@@ -2140,13 +2149,13 @@ test('the company\'s first hire: the hint says it cannot be undone, and the done
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
   const foot = await dlg.locator('.gw-foot').textContent();
-  assert.match(foot, /Your company's first hire cannot be undone: the game gives its one-time first-employee bonus with it\./);
-  assert.doesNotMatch(foot, /Undo takes every hire/);
+  assert.match(foot, enRe("co.hire.hint.first"));
+  assert.doesNotMatch(foot, enRe("co.hire.hint.undo"));
   await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
   await phase(page, 'done');
   assert.equal(await dlg.locator('.gw-foot [data-gw-b="undo"]').count(), 0);
   assert.match(await dlg.locator('.gw-body').textContent(),
-    /No Undo: this was your company's first hire, and the game's one-time first-employee bonus cannot be taken back\./);
+    enRe("co.hire.done.first"));
 });
 
 test('with staff already employed, the hint promises the one-step Undo', async (t) => {
@@ -2157,7 +2166,7 @@ test('with staff already employed, the hint promises the one-step Undo', async (
     window.hrAnswer = async (kind, body, o) => ({status: 200, error: null, body: window.answerFor(body, {dryRun: !!o.dryRun})}); }, `(${answerFor.toString()})`);
   await page.locator(REVIEW).click();
   await phase(page, 'ready');
-  assert.match(await page.locator('dialog.gw-dlg .gw-foot').textContent(), /Undo takes every hire, reassign and week of this back in one step\./);
+  assert.match(await page.locator('dialog.gw-dlg .gw-foot').textContent(), enRe("co.hire.hint.undo"));
 });
 
 test('an older mod: the weeks no hire reaches are written one by one after the hire, and each site says how it went', async (t) => {
@@ -2179,14 +2188,14 @@ test('an older mod: the weeks no hire reaches are written one by one after the h
   await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
   await phase(page, 'done');
   // Done is said once the week after the call is answered, with what came of it.
-  assert.match(await dlg.textContent(), /4 weeks written\. 1 week not written\./);
+  assert.match(await dlg.textContent(), new RegExp(enRe('co.hire.done.weeks', {n:4}).source + ' ' + enRe('co.hire.done.failed', {n:1}).source));
   assert.doesNotMatch(await dlg.textContent(), /being written/);
   assert.equal(await dlg.locator('.hr-st.wait').count(), 0);
   const sched = await page.evaluate(() => window.hrWrites.filter(w => w.kind === 'schedule'));
   assert.deepEqual(sched.map(w => [w.body.address, w.body.openAllHours, w.dryRun]), [[addr(C), false, false]]);
   // Corner's week, refused because the game moved on, says so; the rest are done.
   const corner = dlg.locator('.hr-dsite', {has: page.locator(`[data-hr-site="${C}"]`)});
-  assert.match(await corner.locator('.hr-st').textContent(), /changed in the game: not written/);
+  assert.match(await corner.locator('.hr-st').textContent(), enRe("co.hire.st.changed"));
   assert.equal(await dlg.locator('.hr-st.ok').count(), 4);
   assert.equal(await dlg.locator('.gw-foot [data-gw-b="undo"]').count(), 0);
   // The chained write replaced the game's schedule undo: the board's goes too.
@@ -2202,9 +2211,9 @@ test('an older mod: two weeks after the hire are named as two, and a write with 
     hrLast = {req: r, one: false};
     return [r.rest.length, hrChainSay({error: 'uncertain'})];
   });
-  assert.deepEqual(out, [2, 'no answer came: check this week in the game']);
+  assert.deepEqual(out, [2, en("co.hire.st.uncertain")]);
   const text = await page.evaluate(() => { const el = document.createElement('div'); el.innerHTML = hrChainNote(2); return el.textContent; });
-  assert.match(text, /This mod writes the other 2 weeks after the hire, one at a time, and cannot undo any of it\./);
+  assert.match(text, enRe("co.hire.chain.later", {"n":2}));
 });
 
 test('an older mod, schedule only: no empty hire call, and every week it writes is counted', async (t) => {
@@ -2221,18 +2230,18 @@ test('an older mod, schedule only: no empty hire call, and every week it writes 
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
   await dlg.locator('[data-hr-mode="week"]').click();
-  await page.waitForFunction(() => document.querySelector('dialog.gw-dlg').dataset.phase === 'ready'
-    && /Write/.test(document.querySelector('dialog.gw-dlg .gw-foot [data-gw-b="apply"]').textContent));
+  await page.waitForFunction(expected => document.querySelector('dialog.gw-dlg').dataset.phase === 'ready'
+    && new RegExp(expected).test(document.querySelector('dialog.gw-dlg .gw-foot [data-gw-b="apply"]').textContent), enRe('co.hire.go.week').source);
   await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
   await phase(page, 'done');
   await page.waitForFunction(() => window.hrWrites.filter(w => w.kind === 'schedule').length === 2);
   // The hire call would have carried nothing: it is never sent.
   assert.deepEqual(await page.evaluate(() => window.hrWrites.filter(w => w.kind === 'hire').map(w => w.dryRun)), [true], 'only the dry run of the first choice');
-  assert.doesNotMatch(await dlg.textContent(), /Nothing changed in the game/);
-  assert.match(await dlg.textContent(), /2 weeks written\./);
+  assert.doesNotMatch(await dlg.textContent(), enRe("co.hire.done.none"));
+  assert.match(await dlg.textContent(), enRe("co.hire.done.weeks", {"n":2}));
   assert.equal(await dlg.locator('.hr-st.wait').count(), 0);
   assert.equal(await dlg.locator('.hr-st.ok').count(), 2);
-  assert.equal((await dlg.locator('.gw-tile', {hasText: 'Weeks'}).locator('.v').textContent()).trim(), '2');
+  assert.equal((await dlg.locator('.gw-tile', {hasText: en("co.hire.tile.weeks")}).locator('.v').textContent()).trim(), '2');
 });
 
 test('with mod 0.4.0 the one call drops the board\'s schedule Undo for a site it writes, and an Undo the mod did not keep is not offered', async (t) => {
@@ -2359,7 +2368,7 @@ test('the Undo strip takes back the call it was made for, whatever review opened
 test('the hire undo refused for the day says the undo only works on the day of the write', async (t) => {
   const page = await board(t, {link: ONE});
   const p = await page.evaluate(() => gwProblem({status: 409, error: 'changed', body: {error: 'changed', rows: [{scope: 'day', error: 'changed'}]}}));
-  assert.match(p.text, /Undo only works on the game day of the write\./);
+  assert.match(p.text, enRe("nav.dlg.undo.day"));
   assert.ok(!p.refresh, 'reading the game again would not help');
 });
 
@@ -2389,7 +2398,7 @@ test('shops that open no hour are named in one sentence, in the plural where the
     D.hiring.sites.filter(s => s.key === G || s.key === C).forEach(s => { s.noHours = true; });
     const el = document.createElement('div'); el.innerHTML = hrNoHoursHtml(); return el.textContent;
   }, [G, C]);
-  assert.equal(text, 'HART. Gifts, HART. Corner open no hour in the game: set their opening hours first.');
+  assert.equal(text, en("co.hire.nohours.shut", {names:"HART. Gifts, HART. Corner", n:2}));
   const src = await page.evaluate(() => hrNoHoursHtml.toString());
   assert.match(src, /tt\("co\.hire\.nohours\.shut"/);
 });
@@ -2402,22 +2411,22 @@ test('hire only and schedule only: the pick changes what is sent and the verb of
   const dlg = page.locator('dialog.gw-dlg');
   const last = () => page.evaluate(() => window.hrWrites.at(-1).body);
   const apply = dlg.locator('.gw-foot [data-gw-b="apply"]');
-  assert.equal(await apply.textContent(), 'Staff 4 sites');
+  assert.equal(await apply.textContent(), en("co.hire.go.all", {"n":4}));
   await dlg.locator('[data-hr-mode="hire"]').click();
   await page.waitForFunction(() => document.querySelector('dialog.gw-dlg').dataset.phase === 'ready'
     && window.hrWrites.at(-1).body.sites.every(s => s.days === null));
   let body = await last();
   assert.deepEqual([body.hires.length, body.moves.length], [7, 2]);
-  assert.equal(await apply.textContent(), 'Hire 7, reassign 2');
-  assert.equal(await dlg.locator('[data-hr-mode][aria-pressed="true"]').textContent(), 'Hire only');
-  assert.deepEqual(await dlg.locator('.gw-tile .gw-lab').allTextContents(), ['Hire', 'Reassign', 'Added wages']);
+  assert.equal(await apply.textContent(), en("co.hire.go.hiremove", {"h":7,"m":2}));
+  assert.equal(await dlg.locator('[data-hr-mode][aria-pressed="true"]').textContent(), en("co.hire.mode.hire"));
+  assert.deepEqual(await dlg.locator('.gw-tile .gw-lab').allTextContents(), [en('co.hire.tile.hire'), en("co.hire.tile.move"), en("co.hire.tile.wages")]);
   await dlg.locator('[data-hr-mode="week"]').click();
   await page.waitForFunction(() => document.querySelector('dialog.gw-dlg').dataset.phase === 'ready' && !window.hrWrites.at(-1).body.hires.length);
   body = await last();
   // The weeks alone: Corner (Sam's Tuesday is not in its plan) and Works.
   assert.deepEqual(body.moves, []);
   assert.deepEqual(body.sites.map(s => s.address.number), [2, 3]);
-  assert.equal(await apply.textContent(), 'Write 2 weeks');
+  assert.equal(await apply.textContent(), en("co.hire.go.week", {"n":2}));
 });
 
 test('Staff this site on a shop\'s Staffing: its hires and reassigns and its week, in place of the MyEmployees step', async (t) => {
@@ -2431,18 +2440,18 @@ test('Staff this site on a shop\'s Staffing: its hires and reassigns and its wee
   const block = page.locator('#schDetail #sp-roster');
   const staff = block.locator('[data-gw="hire"][data-hr-staff]');
   assert.equal(await staff.count(), 1);
-  assert.match(await staff.textContent(), /Staff this site\s*2/);
+  assert.match(await staff.textContent(), new RegExp(enRe("sp.gw.staff").source + "\\s*2"));
   // The step that sent the player to MyEmployees is gone while the button does it.
   assert.equal(await block.locator('.sp-add').count(), 0);
   await staff.click();
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
-  assert.equal(await dlg.locator('h2').textContent(), 'Staff HART. Gifts');
+  assert.equal(await dlg.locator('h2').textContent(), en("co.hire.title.site", {"site":"HART. Gifts"}));
   const body = await page.evaluate(() => window.hrWrites.at(-1).body);
   assert.deepEqual(body.moves, [{employeeId: 'SPARE1', from: addr(C), to: addr(G)}]);
   assert.deepEqual(body.hires.map(h => h.candidateId), ['c2']);
   assert.deepEqual(body.sites.map(s => s.address.number), [10]);
-  assert.equal(await dlg.locator('.gw-foot [data-gw-b="apply"]').textContent(), 'Hire and schedule');
+  assert.equal(await dlg.locator('.gw-foot [data-gw-b="apply"]').textContent(), en("co.hire.mode.both"));
   // Not linked, the step stays: nothing on the board writes.
   const off = await board(t, {link: null, data});
   await off.evaluate(([G]) => openRoute('staffing/schedules', {pick: G}), [G]);
@@ -2512,7 +2521,7 @@ test('Staff this site reassigns its own spare to the week that fits them elsewhe
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
   await dlg.locator(`[data-hr-site="${G}"]`).click();
-  assert.match(await dlg.locator('.hr-dsite.open').textContent(), /its week as it is, with the reassigned hours added[\s\S]*Sam Spare[\s\S]*reassigned from HART\. Corner/);
+  assert.match(await dlg.locator('.hr-dsite.open').textContent(), new RegExp(enRe("co.hire.plan.add").source + '[\\s\\S]*Sam Spare[\\s\\S]*' + enRe('co.hire.p.from', {site:'HART. Corner'}).source));
 });
 
 // Corner's game week with Cy on Wednesday and Sam on Monday `samF` to `samT`;
@@ -2538,7 +2547,7 @@ test('a spare changes nobody\'s planned hours: the plan keeps its week, and the 
   await page.locator(REVIEW).click();
   await phase(page, 'ready');
   const text = await page.locator('dialog.gw-dlg .gw-body').textContent();
-  assert.match(text, /No hours here after this[\s\S]*Sam Spare/);
+  assert.match(text, new RegExp(textRe("sp.gw.left.head").source + "[\\s\\S]*Sam Spare"));
   assert.doesNotMatch(text, /Cy Moss \(HART\. Corner/, 'Cy keeps the plan\'s hours');
 });
 
@@ -2559,7 +2568,7 @@ test('a spare left with no hours is named with the reason and what to do, never 
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
   let text = await dlg.locator('.gw-body').textContent();
-  assert.match(text, /No hours here after this[\s\S]*Sam Spare/);
+  assert.match(text, new RegExp(textRe("sp.gw.left.head").source + "[\\s\\S]*Sam Spare"));
   // The mod's own list of those left with no hours does not name him again,
   // by id: another Sam Spare stays on it.
   // One plain note lists them: this Sam once (the week's and the game's
@@ -2568,7 +2577,7 @@ test('a spare left with no hours is named with the reason and what to do, never 
   assert.equal(await pills.count(), 2);
   assert.deepEqual(await pills.allTextContents(), ['SSSam Spare', 'SSSam Spare']);
   assert.doesNotMatch(text, /Sam Spare: 0 h a week/);
-  assert.equal(await dlg.locator('.gw-box').filter({hasText: 'No hours here after this'}).count(), 1);
+  assert.equal(await dlg.locator('.gw-box').filter({hasText: textEn("sp.gw.left.head")}).count(), 1);
   // Schedule only, the reassign ticked: it is not part of this, and Hire only
   // is not the way.
   const week = await board(t, {link: ONE, data: JSON.stringify(cornerMonday(8, 20))});
@@ -2577,10 +2586,10 @@ test('a spare left with no hours is named with the reason and what to do, never 
   await phase(week, 'ready');
   const wdlg = week.locator('dialog.gw-dlg');
   await wdlg.locator('[data-hr-mode="week"]').click();
-  await week.waitForFunction(() => document.querySelector('dialog.gw-dlg').dataset.phase === 'ready'
-    && /Write/.test(document.querySelector('dialog.gw-dlg .gw-foot [data-gw-b="apply"]').textContent));
+  await week.waitForFunction(expected => document.querySelector('dialog.gw-dlg').dataset.phase === 'ready'
+    && new RegExp(expected).test(document.querySelector('dialog.gw-dlg .gw-foot [data-gw-b="apply"]').textContent), enRe('co.hire.go.week').source);
   text = await wdlg.locator('.gw-body').textContent();
-  assert.match(text, /No hours here after this[\s\S]*Sam Spare/);
+  assert.match(text, new RegExp(textRe("sp.gw.left.head").source + "[\\s\\S]*Sam Spare"));
   assert.doesNotMatch(text, /Hire only leaves/);
 });
 
@@ -2592,7 +2601,7 @@ test('a spare no open week fits, left with no hours, is named as such', async (t
   await answering(page, []);
   await page.locator(REVIEW).click();
   await phase(page, 'ready');
-  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /No hours here after this[\s\S]*Sam Spare/);
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), new RegExp(textRe("sp.gw.left.head").source + "[\\s\\S]*Sam Spare"));
 });
 
 test('an arriving bench member\'s hours are never cut for someone who works there now', async (t) => {
@@ -2633,7 +2642,7 @@ test('a spare reassigned out of Staff this site: never opens the other shop 24/7
   await answering(page, []);
   await page.evaluate(k => hrReview({scope: 'site', site: k}), C);
   await phase(page, 'ready');
-  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /No hours here after this[\s\S]*Sam Spare/);
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), new RegExp(textRe("sp.gw.left.head").source + "[\\s\\S]*Sam Spare"));
   const week = await page.evaluate(k => { const m = hrModel(), r = hrRequest(m, {site: k, mode: 'week', one: true});
     return (r.touched.get(k) || {}).stranded; }, C);
   assert.deepEqual(week, ['SPARE1']);
@@ -2657,8 +2666,8 @@ test('a spare no open week fits ends at 0 h and is named with why: Staff this si
   await page.evaluate(k => hrReview({scope: 'site', site: k}), C);
   await phase(page, 'ready');
   const text = await page.locator('dialog.gw-dlg .gw-body').textContent();
-  assert.match(text, /No hours here after this[\s\S]*Sam Spare/);
-  assert.match(text, /Fewer hours than now.*Cy Moss \(HART\. Corner, 24 → 12 h\)/);
+  assert.match(text, new RegExp(textRe("sp.gw.left.head").source + "[\\s\\S]*Sam Spare"));
+  assert.match(text, textRe('co.hire.fewer', {who:en('co.hire.fewer.one', {name:'Cy Moss', site:'HART. Corner', now:24, h:12})}));
 });
 
 test('Quick hire at a site with a spare: Staff all sites is what reassigns them', async (t) => {
@@ -2667,7 +2676,7 @@ test('Quick hire at a site with a spare: Staff all sites is what reassigns them'
   await box.locator('[data-hq-role]').selectOption(CS);
   await box.locator('[data-hq-site]').selectOption(C);
   const dlg = await quickConfirm(page);
-  assert.match(await dlg.locator('.gw-body').textContent(), /No hours here after this[\s\S]*Sam Spare/);
+  assert.match(await dlg.locator('.gw-body').textContent(), new RegExp(textRe("sp.gw.left.head").source + "[\\s\\S]*Sam Spare"));
 });
 
 test('Quick hire whose only pick has left the candidates: nobody to hire, and Apply stays off', async (t) => {
@@ -2682,7 +2691,7 @@ test('Quick hire whose only pick has left the candidates: nobody to hire, and Ap
   await page.locator('#hsQuick [data-hq-go]').click();
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
-  assert.match(await dlg.locator('.gw-verdict').textContent(), /Nobody to hire: the application ran out since the board read the game\. Refresh the board to pick again\./);
+  assert.match(await dlg.locator('.gw-verdict').textContent(), enRe("co.hire.idle.gone", {"n":1}));
   assert.equal(await dlg.locator('.gw-foot [data-gw-b="apply"]').isDisabled(), true);
   assert.deepEqual(await page.evaluate(() => window.hrWrites.map(w => w.dryRun)), [true], 'nothing applied');
 });
@@ -2705,11 +2714,11 @@ test('an older mod: the dialog stays applying while the weeks after the hire are
   await page.waitForFunction(() => typeof window.release === 'function');
   // The hire call is answered, the week after it is not: still applying.
   assert.equal(await dlg.getAttribute('data-phase'), 'applying');
-  assert.match(await dlg.locator('.gw-verdict').textContent(), /Writing the other weeks: 0 of 1…/);
+  assert.match(await dlg.locator('.gw-verdict').textContent(), enRe("co.hire.chain.writing", {"k":0,"n":1}));
   assert.equal(await dlg.locator('.gw-foot [data-gw-b="undo"]').count(), 0);
   await page.evaluate(() => window.release());
   await phase(page, 'done');
-  assert.match(await dlg.textContent(), /5 weeks written\./);
+  assert.match(await dlg.textContent(), enRe("co.hire.done.weeks", {"n":5}));
   assert.equal(await dlg.locator('.hr-st.wait').count(), 0);
 });
 
@@ -2746,7 +2755,7 @@ test('no week the action can write: no move, the other site\'s week untouched, a
   await page.evaluate(k => hrReview({scope: 'site', site: k}), C);
   await phase(page, 'ready');
   const text = await page.locator('dialog.gw-dlg .gw-body').textContent();
-  assert.match(text, /No hours here after this[\s\S]*Sam Spare/);
+  assert.match(text, new RegExp(textRe("sp.gw.left.head").source + "[\\s\\S]*Sam Spare"));
   assert.doesNotMatch(text, /tick their reassign/);
 });
 
@@ -2759,14 +2768,14 @@ test('the cause says every step: closed hours in Schedule only, an unticked reas
   await page.evaluate(k => hrReview({scope: 'site', site: k, mode: 'week'}), C);
   await phase(page, 'ready');
   let text = await page.locator('dialog.gw-dlg .gw-body').textContent();
-  assert.match(text, /No hours here after this[\s\S]*Sam Spare/);
+  assert.match(text, new RegExp(textRe("sp.gw.left.head").source + "[\\s\\S]*Sam Spare"));
   // Unticked, and ticking it would not help: still the closed hours.
   await page.locator('dialog.gw-dlg [data-gw-close]').click();
   await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
   await page.evaluate(k => hrReview({scope: 'site', site: k}), C);
   await phase(page, 'ready');
   text = await page.locator('dialog.gw-dlg .gw-body').textContent();
-  assert.match(text, /No hours here after this[\s\S]*Sam Spare/);
+  assert.match(text, new RegExp(textRe("sp.gw.left.head").source + "[\\s\\S]*Sam Spare"));
   assert.doesNotMatch(text, /tick their reassign/);
   // Staff all sites, Schedule only, the reassign unticked: both steps.
   page = await board(t, {link: ONE, data: JSON.stringify(giftsOpen())});
@@ -2782,7 +2791,7 @@ test('the cause says every step: closed hours in Schedule only, an unticked reas
   await box.locator('[data-hq-role]').selectOption(CS);
   await box.locator('[data-hq-site]').selectOption(C);
   const dlg = await quickConfirm(page);
-  assert.match(await dlg.locator('.gw-body').textContent(), /No hours here after this[\s\S]*Sam Spare/);
+  assert.match(await dlg.locator('.gw-body').textContent(), new RegExp(textRe("sp.gw.left.head").source + "[\\s\\S]*Sam Spare"));
 });
 
 // --- review round 8, 29 September 2026 ------------------------------------------------
@@ -2845,8 +2854,8 @@ test('the advice names the reassign line to tick and where this action really se
     /No hours here after this[\s\S]*Sam Spare/);
   // Schedule only: the mode to choose as well.
   await dlg.locator('[data-hr-mode="week"]').click();
-  await page.waitForFunction(() => document.querySelector('dialog.gw-dlg').dataset.phase === 'ready'
-    && /Write/.test(document.querySelector('dialog.gw-dlg .gw-foot [data-gw-b="apply"]').textContent));
+  await page.waitForFunction(expected => document.querySelector('dialog.gw-dlg').dataset.phase === 'ready'
+    && new RegExp(expected).test(document.querySelector('dialog.gw-dlg .gw-foot [data-gw-b="apply"]').textContent), enRe('co.hire.go.week').source);
   assert.match(await dlg.locator('.gw-body').textContent(),
     /No hours here after this[\s\S]*Sam Spare/);
 });
@@ -2872,13 +2881,13 @@ test('a spare the model did not move: Schedule only names Hire and schedule, Qui
   await answering(page, []);
   await page.evaluate(k => hrReview({scope: 'site', site: k, mode: 'week'}), C);
   await phase(page, 'ready');
-  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /No hours here after this[\s\S]*Sam Spare/);
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), new RegExp(textRe("sp.gw.left.head").source + "[\\s\\S]*Sam Spare"));
   await page.locator('dialog.gw-dlg [data-gw-close]').click();
   const box = page.locator('#hsQuick');
   await box.locator('[data-hq-role]').selectOption(CS);
   await box.locator('[data-hq-site]').selectOption(C);
   const dlg = await quickConfirm(page);
-  assert.match(await dlg.locator('.gw-body').textContent(), /No hours here after this[\s\S]*Sam Spare/);
+  assert.match(await dlg.locator('.gw-body').textContent(), new RegExp(textRe("sp.gw.left.head").source + "[\\s\\S]*Sam Spare"));
 });
 
 test('a spare in training is never sent, and says so', async (t) => {
@@ -2891,7 +2900,7 @@ test('a spare in training is never sent, and says so', async (t) => {
   await answering(page, []);
   await page.evaluate(k => hrReview({scope: 'site', site: k, mode: 'week'}), C);
   await phase(page, 'ready');
-  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /No hours here after this[\s\S]*Sam Spare/);
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), new RegExp(textRe("sp.gw.left.head").source + "[\\s\\S]*Sam Spare"));
 });
 
 test('an unticked spare whose own week is free is told to tick it, even when another spare\'s search may take it', async (t) => {
@@ -2908,7 +2917,7 @@ test('an unticked spare whose own week is free is told to tick it, even when ano
   await answering(page, []);
   await page.evaluate(k => hrReview({scope: 'site', site: k}), C);
   await phase(page, 'ready');
-  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /No hours here after this[\s\S]*Sid Spare/);
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), new RegExp(textRe("sp.gw.left.head").source + "[\\s\\S]*Sid Spare"));
 });
 
 // --- PR #187's week bands, 29 September 2026 ------------------------------------------
@@ -2942,8 +2951,8 @@ test('a week too short for any contract is never given to a hire, and the review
   await page.evaluate(k => hrReview({scope: 'site', site: k}), G);
   await phase(page, 'ready');
   const text = await page.locator('dialog.gw-dlg .gw-body').textContent();
-  assert.match(text, /HART\. Gifts: 6 h a week of Customer Service too few for a hire, left open\./);
-  assert.doesNotMatch(text, /keeps 1 Customer Service place open/);
+  assert.match(text, textRe("co.hire.gap.short", {"site":"HART. Gifts","h":6,"role":"Customer Service"}));
+  assert.doesNotMatch(text, textRe('co.hire.gap', {n:1, role:'Customer Service'}));
 });
 
 // --- review round 10: bands on the page ------------------------------------------------
@@ -2971,7 +2980,7 @@ test('a short week is no open place: the role table says its hours quietly, with
   await page.locator(`[data-hr-move="${C}|${G}|${CS}"]`).uncheck();
   const cell = page.locator(`#hsOpen tr[data-hr-role="${CS}"] td[data-l="Stays open"]`);
   assert.equal(await cell.getAttribute('class'), 'dim');
-  assert.match(await cell.textContent(), /^–6 h a week too few for a hire$/);
+  assert.match(await cell.textContent(), enRe("co.hire.role.toofew", {h:"\u20136"}, {anchor:"full"}));
   assert.equal(await page.locator('#hsOpen .hs-find li', {hasText: 'Customer Service'}).count(), 0);
   // The site's row in the review says why nobody takes it.
   await answering(page, []);
@@ -2979,7 +2988,7 @@ test('a short week is no open place: the role table says its hours quietly, with
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
   await dlg.locator(`[data-hr-site="${G}"]`).click();
-  assert.match(await dlg.locator('.hr-dsite.open').textContent(), /Nobody[\s\S]*too few hours for a hire/);
+  assert.match(await dlg.locator('.hr-dsite.open').textContent(), new RegExp(enRe("co.hire.p.nobody").source + "[\\s\\S]*" + enRe("co.hire.p.short").source));
 });
 
 test('Quick hire skips a short week, and says so when only short weeks are left', async (t) => {
@@ -2993,7 +3002,7 @@ test('Quick hire skips a short week, and says so when only short weeks are left'
   await box.locator('[data-hq-role]').selectOption(CS);
   await box.locator('[data-hq-site]').selectOption(G);
   assert.deepEqual((await quick(page)).picks.map(p => p[1]), [null]);
-  assert.match(await box.locator('.hs-match').textContent(), /too few hours for a hire/);
+  assert.match(await box.locator('.hs-match').textContent(), enRe("co.hire.p.short"));
 });
 
 test('a part-timer may take a full-time week of exactly 30 h, as the game\'s rule has it: no orange, no break', async (t) => {
@@ -3165,7 +3174,7 @@ test('Quick hire counts as matches only those it can pick: a part-timer left out
   await page.locator('#hsOpen [data-hr-min]').selectOption('90');
   const box = await quickAtGifts(page, 1);
   assert.deepEqual((await quick(page)).picks, [['c2', 20]]);
-  assert.match(await box.locator('.hs-match summary').textContent(), /^1 match · only 1 candidate matches/);
+  assert.match(await box.locator('.hs-match summary').textContent(), textRe("co.hire.quick.short", {"n":1}, {"anchor":"start"}));
 });
 
 test('Quick hire: a part-timer held back by a demand gets no place with no hours once the part week is gone', async (t) => {
@@ -3235,7 +3244,7 @@ test('a site block offers Staff all sites, not a run of every planned site', asy
   await answering(page, []);
   await block.locator('[data-hr-all]').click();
   await phase(page, 'ready');
-  assert.equal(await page.locator('dialog.gw-dlg h2').textContent(), 'Staff all sites');
+  assert.equal(await page.locator('dialog.gw-dlg h2').textContent(), en("co.hire.title.all"));
 });
 
 test('Staff this site is offered where the only work is the site\'s own spare moving out', async (t) => {
@@ -3260,11 +3269,11 @@ test('before "hire N", the people elsewhere who fit come first, in every hiring 
   const page = await board(t, {link: ONE, data: giftsHiring()});
   const block = await siteBlock(page, G);
   const text = await block.textContent();
-  assert.match(text, /1 person can come from another site: Staff this site reassigns them\./);
+  assert.match(text, textRe("co.hire.elsewhere", {"n":1}));
   // The hours tile, and the headcount line's read-out, count the one hire left.
-  assert.match(text, /\+1 to hire/);
-  assert.doesNotMatch(text, /2 to hire|Add 2 people/);
-  assert.match(await block.evaluate(el => [...el.querySelectorAll('[data-read]')].map(x => x.dataset.read).join(' ')), /1 here, 1 to hire/);
+  assert.match(text, enRe('sp.ba.tohire', {n:1}));
+  assert.doesNotMatch(text, new RegExp(enRe('sp.ba.tohire', {n:2}).source + '|' + addRe(2).source));
+  assert.match(await block.evaluate(el => [...el.querySelectorAll('[data-read]')].map(x => x.dataset.read).join(' ')), enRe('sp.hc.here.hire', {n:1, hire:1}));
   assert.equal(await block.locator('.hr-from').count(), 1);
   assert.equal(await block.locator('.sp-step .hr-from, .hr-from.sp-step').count(), 0, 'a note, not a step');
   // The schedule dialog says the same, and its add box counts the rest.
@@ -3275,22 +3284,22 @@ test('before "hire N", the people elsewhere who fit come first, in every hiring 
   await block.locator('[data-gw="schedule"]').first().click();
   await phase(page, 'ready');
   const dlg = await page.locator('dialog.gw-dlg').textContent();
-  assert.match(dlg, /1 person can come from another site/);
-  assert.match(dlg, /Add 1 person to fill this plan: hire 1 Customer Service; 60 h a week stay empty until then and until the people from other sites come\./);
+  assert.match(dlg, textRe('co.hire.elsewhere', {n:1}));
+  assert.match(dlg, textRe("sp.gw.add.from", {n:1, who:en("sp.add.hire", {hire:en("sp.add.hireone", {n:1, role:"Customer Service"})}), h:60}));
   // Through Apply: the hours wait on both, named together.
   await page.locator('dialog.gw-dlg .gw-foot [data-gw-b="apply"]').click();
   await phase(page, 'done');
   const done = await page.locator('dialog.gw-dlg').textContent();
-  assert.match(done, /60 h a week stay empty until 1 person comes from another site and you add 1 more: Staff this site does both\./);
-  assert.doesNotMatch(done, /until you add 1 person/);
+  assert.match(done, textRe("sp.gw.sch.bothwait", {"h":60,"n":1,"m":1}));
+  assert.doesNotMatch(done, textRe("sp.gw.sch.doneempty", {n:1}));
 });
 
 test('without a mod that hires, the full count stands and the note points at MyEmployees', async (t) => {
   const page = await board(t, {link: {writes: ['uniforms', 'imports', 'schedule'], day: 34, hour: 14}, data: giftsHiring()});
   const text = await (await siteBlock(page, G)).textContent();
-  assert.match(text, /\+2 to hire/);
-  assert.match(text, /1 person at another site fits these hours: reassign them in MyEmployees, then hire only the rest./);
-  assert.doesNotMatch(text, /Staff this site reassigns/);
+  assert.match(text, enRe('sp.ba.tohire', {n:2}));
+  assert.match(text, textRe('co.hire.elsewhere.hand', {n:1}));
+  assert.doesNotMatch(text, textRe("co.hire.elsewhere"));
 });
 
 test('an outgoing-only site with nothing of its own to schedule still offers Staff this site', async (t) => {
@@ -3298,7 +3307,7 @@ test('an outgoing-only site with nothing of its own to schedule still offers Sta
   Object.assign(d.staffing.find(r => r.key === C), {shifts: []});
   const page = await board(t, {link: ONE, data: JSON.stringify(d)});
   const block = await siteBlock(page, C);
-  assert.match(await block.textContent(), /Nothing to schedule/);
+  assert.match(await block.textContent(), enRe("sp.roster.none"));
   assert.equal(await block.locator('[data-gw="hire"][data-hr-staff]').count(), 1);
 });
 
@@ -3315,7 +3324,7 @@ test('an open week says why nobody free takes it: a spare elsewhere and the cand
   await answering(page, []);
   await page.evaluate(() => hrReview({scope: 'all'}));
   await phase(page, 'ready');
-  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /HART\. Gifts: the free Customer Service people ask for [^.]+\./);
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), textRe('co.hire.gap.askfor.site', {site:'HART. Gifts', role:'Customer Service'}));
 });
 
 
@@ -3331,12 +3340,12 @@ test('an open week an unticked reassign would take says so, and Quick hire count
   await page.evaluate(() => hrReview({scope: 'all'}));
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
-  assert.match(await dlg.locator('.gw-body').textContent(), /HART\. Gifts keeps 1 Customer Service place open[\s\S]*HART\. Gifts: a reassign that would take this week is unticked\./);
+  assert.match(await dlg.locator('.gw-body').textContent(), new RegExp(textRe('co.hire.gap', {site:'HART. Gifts', n:1, role:'Customer Service'}).source + '[\\s\\S]*' + textRe('co.hire.gap.off', {site:'HART. Gifts'}).source));
   await dlg.locator('[data-gw-close]').click();
   const box = page.locator('#hsQuick');
   await box.locator('[data-hq-role]').selectOption(CS);
   await box.locator('[data-hq-site]').selectOption(G);
-  assert.match(await box.locator('.hs-match summary').textContent(), /^0 fit an open week · 1 would join with no hours/);
+  assert.match(await box.locator('.hs-match summary').textContent(), textRe("co.hire.quick.fit", {"n":0,"k":1}, {"anchor":"start"}));
 });
 
 test('on a phone, the schedule dialog keeps the from-other-sites note in the fixed strip with the add box', async (t) => {
@@ -3350,8 +3359,8 @@ test('on a phone, the schedule dialog keeps the from-other-sites note in the fix
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
   const fixed = dlg.locator('.gw-fix');
-  assert.match(await fixed.textContent(), /1 person can come from another site/);
-  assert.match(await fixed.locator('.gw-box.gw-warn').textContent(), /Add 1 person to fill this plan/);
+  assert.match(await fixed.textContent(), textRe('co.hire.elsewhere', {n:1}));
+  assert.match(await fixed.locator('.gw-box.gw-warn').textContent(), addRe(1));
   assert.equal(await dlg.locator('.gw-week').count(), 1);
   assert.equal(await dlg.locator('.gw-body .gw-week').count(), 1);
   const foot = await dlg.locator('.gw-foot, .gw-foot button').evaluateAll(els => els.map(el => {
@@ -3393,7 +3402,7 @@ test('on a phone, Staff all sites keeps its foot on screen and scrolls its rows'
   });
   assert.ok(failedFoot.bottom <= failedFoot.height, 'the failed foot ends on screen');
   assert.ok(failedFoot.top >= 0, 'the failed foot starts on screen');
-  assert.equal(await dlg.locator('.gw-foot').getByRole('button', {name: 'Try again', exact: true}).count(), 1);
+  assert.equal(await dlg.locator('.gw-foot').getByRole('button', {name: en('nav.dlg.tryagain')}).count(), 1);
 });
 
 test('a schedule-only write says the hours wait on the people from other sites, even with nobody to hire', async (t) => {
@@ -3410,11 +3419,11 @@ test('a schedule-only write says the hours wait on the people from other sites, 
   await block.locator('[data-gw="schedule"]').first().click();
   await phase(page, 'ready');
   const dlg = page.locator('dialog.gw-dlg');
-  assert.doesNotMatch(await dlg.textContent(), /Add 1 person to fill this plan/);
-  assert.match(await dlg.textContent(), /1 person can come from another site/);
+  assert.doesNotMatch(await dlg.textContent(), addRe(1));
+  assert.match(await dlg.textContent(), textRe('co.hire.elsewhere', {n:1}));
   await dlg.locator('.gw-foot [data-gw-b="apply"]').click();
   await phase(page, 'done');
-  assert.match(await dlg.textContent(), /24 h a week stay empty until 1 person comes from another site: Staff this site moves them\./);
+  assert.match(await dlg.textContent(), textRe("sp.gw.sch.fromwait", {"h":24,"n":1}));
 });
 
 test('the new wages of a hire leave out the weeks a person from another site takes', async (t) => {
@@ -3440,7 +3449,7 @@ test("an open week's reason leaves out a spare in training", async (t) => {
   await answering(page, []);
   await page.evaluate(() => hrReview({scope: 'all'}));
   await phase(page, 'ready');
-  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /HART\. Gifts: the free Customer Service people ask for [^.]+\./);
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), textRe('co.hire.gap.askfor.site', {site:'HART. Gifts', role:'Customer Service'}));
 });
 
 test('a refused hire names its site and role, and its hours are not a second refusal', async (t) => {
@@ -3471,12 +3480,12 @@ test('a refused hire names its site and role, and its hours are not a second ref
   const cards = page.locator('dialog.gw-dlg .gw-no');
   const texts = await cards.allTextContents();
   assert.equal(texts.length, 2, texts.join(' | '));
-  const hire = texts.find(x => /Has none of the skills this business takes/.test(x));
-  assert.match(hire, /Ada Brandt as Customer Service at (HART. )?Bare/);
+  const hire = texts.find(x => enRe('sp.gw.hire.refuse.skill.rule').test(x));
+  assert.match(hire, new RegExp(enRe('co.hire.refuse.chip', {name:'Ada Brandt', role:'Customer Service', site:'Bare'}).source.replace('Bare', '(HART\\. )?Bare')));
   // Refreshing would plan the same hire again: the fix is to leave it out.
-  assert.match(hire, /Untick them in Change picks\./);
-  assert.doesNotMatch(hire, /Refresh the board/);
-  const left = texts.find(x => /not assigned to this business/.test(x));
+  assert.match(hire, enRe('sp.gw.hire.refuse.skill.fix'));
+  assert.doesNotMatch(hire, enRe("nav.dlg.refresh"));
+  const left = texts.find(x => enRe('nav.dlg.refuse.notassigned.rule').test(x));
   assert.ok(left, 'the unrelated not_assigned row is still said');
   assert.equal((left.match(/Bare: /g) || []).length, 1, 'only the unrelated entry is left under it');
 });

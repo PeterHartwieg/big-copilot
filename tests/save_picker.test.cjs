@@ -1,5 +1,6 @@
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require('playwright');
@@ -57,7 +58,7 @@ async function loadFiles(page, count = 12) {
     Object.defineProperty(input, 'files', {value:files, configurable:true});
     input.dispatchEvent(new Event('change'));
   }, count);
-  await page.waitForFunction(() => document.body.classList.contains('has-board') && document.getElementById('srcStatus').textContent === 'Up to date');
+  await page.waitForFunction(() => document.body.classList.contains('has-board') && document.getElementById('srcStrip').classList.contains('calm'));
 }
 
 test('save picker supports keyboard selection, dismissal and the saved preference', async () => {
@@ -66,7 +67,7 @@ test('save picker supports keyboard selection, dismissal and the saved preferenc
     const trigger = page.locator('.save-trigger');
     await trigger.focus();
     await page.keyboard.press('ArrowDown');
-    assert.equal(await page.locator('[role="option"][aria-selected="true"]').textContent(), 'Newest save anywhereFollow the latest across all characters');
+    assert.equal(await page.locator('[role="option"][aria-selected="true"]').textContent(), en('app.pick.any') + en('app.pick.any.detail'));
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
     assert.equal(await trigger.getAttribute('aria-expanded'), 'false');
@@ -104,7 +105,7 @@ test('save refresh retains open-list focus and falls back when a character disap
     await page.locator('.save-trigger').click();
     await loadFiles(page);
     assert.equal(await page.locator('.save-trigger').getAttribute('aria-expanded'), 'true');
-    assert.match(await page.evaluate(() => document.activeElement.textContent), /^Autosave 11/);
+    assert.match(await page.evaluate(() => document.activeElement.textContent), enRe("app.pick.autosave", {"n":11}, {"anchor":"start"}));
     await loadFiles(page, 3);
     assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('ledger_pick'))), {dir:'', name:''});
     assert.equal(await page.locator('[aria-selected="true"]').count(), 1);

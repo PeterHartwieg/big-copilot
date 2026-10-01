@@ -9,6 +9,7 @@
 // an existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -346,7 +347,7 @@ test('a draw that throws on the way in leaves the view out of date, not the read
   assert.ok(messages.some(m => /payroll broke/.test(m)), messages.join('\n'));
   assert.equal(await old(), 1, 'the page still shows the save before');
   // The view shows the save before; the Live dot says so.
-  assert.deepEqual(await liveDot(page), {stale: true, says: 'Stale', why: 'payroll broke'});
+  assert.deepEqual(await liveDot(page), {stale: true, says: en("nav.stale.word"), why: 'payroll broke'});
 
   await page.evaluate(() => { window.drawStaff = window.calmDraw; });
   await page.click('#nav a[data-id="overview"]');
@@ -380,7 +381,7 @@ test('one row that throws on a view does not keep the others from drawing, and i
   });
   assert.equal(await page.evaluate(() => calmPicked), 1, 'the site picker, due on the same view, is drawn');
   assert.deepEqual(await due(), ['drawPortfolio']);
-  assert.deepEqual(await liveDot(page), {stale: true, says: 'Stale', why: 'portfolio broke'});
+  assert.deepEqual(await liveDot(page), {stale: true, says: en("nav.stale.word"), why: 'portfolio broke'});
 
   // A rebuild that fails meanwhile holds the dot on its own: the row drawing
   // at last does not clear it, the source's next good read does.
@@ -391,7 +392,7 @@ test('one row that throws on a view does not keep the others from drawing, and i
     showSub('company', 'results');
   });
   assert.deepEqual(await due(), []);
-  assert.deepEqual(await liveDot(page), {stale: true, says: 'Stale', why: 'rebuild broke'});
+  assert.deepEqual(await liveDot(page), {stale: true, says: en("nav.stale.word"), why: 'rebuild broke'});
   await page.evaluate(() => window.calmWatch.stale(''));
   assert.deepEqual(await liveDot(page), {stale: false, says: '', why: ''});
 
@@ -428,7 +429,7 @@ test('a row that throws while the board is drawn leaves the rest drawn, wired an
   assert.equal(await page.evaluate(() => [...pageStale].some(row => /drawAlerts/.test(String(row[1])))), true,
     'the row that threw stays out of date');
   assert.ok(messages.some(m => /alerts broke/.test(m)), messages.join('\n'));
-  assert.deepEqual(await liveDot(page), {stale: true, says: 'Stale', why: 'alerts broke'});
+  assert.deepEqual(await liveDot(page), {stale: true, says: en("nav.stale.word"), why: 'alerts broke'});
   assert.match(await page.locator('footer').first().textContent(), /\S/, 'the footer is drawn');
 
   // Once it draws again, the next board clears the mark.
@@ -447,7 +448,7 @@ test('a row drawn on every page that threw is tried again on the next page opene
     window.drawFindLocation = () => { throw new Error('finder line broke'); };
   });
   await deliver(page, later);
-  assert.deepEqual(await liveDot(page), {stale: true, says: 'Stale', why: 'finder line broke'});
+  assert.deepEqual(await liveDot(page), {stale: true, says: en("nav.stale.word"), why: 'finder line broke'});
   await page.evaluate(() => { window.drawFindLocation = window.calmDraw; });
   await page.click('#nav a[data-id="businesses"]');
   assert.deepEqual(await liveDot(page), {stale: false, says: '', why: ''});
@@ -525,8 +526,9 @@ test('a Set to figure put back by a refresh and edited again is committed once',
 test('a render keeps a Stale mark on the fresh dot, and a lost source replaces it', async t => {
   const page = await board(t);
   await page.evaluate(() => { window.calmWatch.stale('rebuild broke'); renderCalm(); });
-  assert.deepEqual(await liveDot(page), {stale: true, says: 'Stale', why: 'rebuild broke'});
+  assert.deepEqual(await liveDot(page), {stale: true, says: en("nav.stale.word"), why: 'rebuild broke'});
   await page.evaluate(() => window.calmWatch.lost());
+  // Not in the catalogue: the lost live dot writes this English itself.
   assert.deepEqual(await liveDot(page), {stale: false, says: 'Not live', why: ''});
 });
 

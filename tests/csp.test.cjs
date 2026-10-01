@@ -124,7 +124,7 @@ test('the game link reads the mod on loopback under the CSP', async (t) => {
   await page.goto(`${base}/#link=${mockUrl}`);
   await page.locator('#linkBtn').click();
   await until(page, found, () => document.body.classList.contains('has-board')
-    && document.getElementById('srcStatus').textContent === 'Up to date');
+    && document.getElementById('srcStrip').classList.contains('calm'));
   assert.deepEqual(found, {violations: [], console: [], errors: []});
 });
 

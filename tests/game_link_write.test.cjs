@@ -6,6 +6,7 @@
 // point at an existing Playwright installation.
 const {test, before, beforeEach, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe, enText: textEn, textRe} = require('./_i18n.cjs');
 const {spawn, spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -138,12 +139,12 @@ async function linked(t, {writes = ['uniforms', 'imports', 'schedule'], approved
   if (link) {
     await page.locator('#linkBtn').click();
     await page.waitForFunction(() => document.body.classList.contains('has-board')
-      && document.getElementById('srcStatus').textContent === 'Up to date');
+      && document.getElementById('srcStrip').classList.contains('calm'));
   }
   return page;
 }
 
-const button = (page, key, label = 'Set Default uniforms') =>
+const button = (page, key, label = en('sp.gw.uni.button')) =>
   page.locator(`#alerts [data-gw="uniforms"][data-gw-sites*='${JSON.stringify(key).slice(1, -1)}']`, {hasText: label}).first();
 // A held answer let go once its page is gone (the scenario ended first, and
 // its context closed) has nowhere to go; that is no failure of the next one.
@@ -179,11 +180,10 @@ async function holdRefresh(page) {
 const dialog = (page) => page.locator('dialog.gw-dlg');
 // The game's approval is asked inside the write's own dialog, while it waits.
 const pair = (page) => page.locator('dialog.gw-dlg[data-phase="approval"]');
-const WAITING = 'Waiting for you in the game';
+const WAITING = en('nav.dlg.say.waiting');
 // The game's answer to the dry run, drawn: the dialog offers Apply.
 const ready = (page, timeout) => page.locator('dialog.gw-dlg[data-phase="ready"]').waitFor(timeout ? {timeout} : undefined);
 // Apply names what it does and counts it.
-const SET = /^Set( \d+)? uniforms?$/;
 // The approval kept for the mock's address: one entry per mod address.
 const kept = (page) => page.evaluate(({key, link}) => (JSON.parse(localStorage.getItem(key) || '{}') || {})[link] || null,
   {key: APPROVAL, link: mockUrl});
@@ -211,6 +211,7 @@ test('a dry run, the game\'s approval, an apply that rebuilds the board, and und
   await gifts.click();
   // No approval yet: the write asks the game first, and waits for the player there.
   const request = await asked;
+  // Not in the catalogue: linkClientName() writes this English itself.
   assert.match(JSON.parse(request.postData()).name, /^(Chrome|Edge|Firefox|Safari|Opera|A browser)( on \w+)?$/);
   await pair(page).getByText(WAITING).waitFor();
   await ready(page);
@@ -221,14 +222,14 @@ test('a dry run, the game\'s approval, an apply that rebuilds the board, and und
   assert.match(await dialog(page).locator('.gw-where').innerText(), /HART\. Gifts/);
   const dress = dialog(page).locator('.gw-role.to');
   assert.equal(await dress.count(), 1);
-  assert.match(await dress.textContent(), /^Customerservicenone.*Default$/);
-  assert.match(await dialog(page).locator('.gw-role.kept').textContent(), /^Cleaninghas one · kept$/,
+  assert.match(await dress.textContent(), new RegExp('^Customerservice' + enRe('sp.gw.role.none').source + '.*' + enRe("sp.gw.uni.default").source + "$"));
+  assert.match(await dialog(page).locator('.gw-role.kept').textContent(), new RegExp('^Cleaning' + enRe('sp.gw.role.kept').source + '$'),
     'a role already dressed is shown and left alone');
-  assert.equal(await dialog(page).getByRole('button', {name: SET}).textContent(), 'Set 1 uniform');
+  assert.equal(await dialog(page).locator('[data-gw-b="apply"]').textContent(), en("sp.gw.uni.apply", {"n":1}));
   assert.equal((await applied()).length, 0, 'the dry run wrote nothing');
   const builds = await page.evaluate(() => window.builds);
-  await dialog(page).getByRole('button', {name: SET}).click();
-  await dialog(page).getByText('Default is on 1 role at HART. Gifts.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sp.gw.uni.done.one", {preset:"Default", n:1, shop:"HART. Gifts"})).waitFor();
   const writes = await applied();
   assert.equal(writes.length, 1);
   // skills null: every skill the shop's Uniforms window offers.
@@ -238,23 +239,23 @@ test('a dry run, the game\'s approval, an apply that rebuilds the board, and und
   // The stamp moved; the board reads the game again, the dialog stays.
   await page.waitForFunction((n) => window.builds > n, builds);
   assert.equal(await dialog(page).isVisible(), true);
-  await dialog(page).getByRole('button', {name: 'Undo'}).click();
+  await dialog(page).locator('[data-gw-b="undo"]').click();
   // Undone: said, and the write offered again once the board has read the game after it.
-  await dialog(page).getByText('Undone: 1 role back to no uniform.').waitFor();
-  await dialog(page).getByRole('button', {name: 'Set again'}).click();
+  await dialog(page).getByText(en("sp.gw.uni.undone", {"n":1})).waitFor();
+  await dialog(page).locator('[data-gw-b="again"]').click();
   await ready(page);
   assert.equal(await dialog(page).locator('.gw-role.to').count(), 1, 'the role is to dress again');
   assert.deepEqual((await applied()).map((w) => w.kind), ['uniforms', 'undo']);
   // And it can be applied again.
-  await dialog(page).getByRole('button', {name: SET}).click();
-  await dialog(page).getByText('Default is on 1 role at HART. Gifts.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sp.gw.uni.done.one", {preset:"Default", n:1, shop:"HART. Gifts"})).waitFor();
   assert.deepEqual((await applied()).map((w) => w.kind), ['uniforms', 'undo', 'uniforms']);
-  await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Close'}).click();
+  await dialog(page).locator('.gw-foot').getByRole('button', {name: en("nav.dlg.close")}).click();
   // The strip names the second write, and undoes it.
   const strip = page.locator('#gwToast');
-  await strip.getByText('Default is on 1 role at HART. Gifts.').waitFor();
-  await strip.getByRole('button', {name: 'Undo'}).click();
-  await dialog(page).getByText('Undone: 1 role back to no uniform.').waitFor();
+  await strip.getByText(en("sp.gw.uni.done.one", {preset:"Default", n:1, shop:"HART. Gifts"})).waitFor();
+  await strip.locator('[data-gw-undo]').click();
+  await dialog(page).getByText(en("sp.gw.uni.undone", {"n":1})).waitFor();
   assert.deepEqual((await applied()).map((w) => w.kind), ['uniforms', 'undo', 'uniforms', 'undo']);
 });
 
@@ -266,7 +267,7 @@ test('the page behind an open write dialog holds still, and scrolls again once i
   await ready(page);
   assert.equal(await overflow(), 'hidden');
   assert.equal(await dialog(page).locator('.gw-body').evaluate((b) => getComputedStyle(b).overscrollBehaviorY), 'contain');
-  await dialog(page).getByRole('button', {name: 'Cancel'}).click();
+  await dialog(page).getByRole('button', {name: en("nav.dlg.cancel")}).click();
   await page.waitForFunction(() => getComputedStyle(document.documentElement).overflowY === 'visible');
 });
 
@@ -278,10 +279,10 @@ test('an approval survives a reload, and goes only to the linked mod on this com
   page.on('request', (req) => { if (req.url().endsWith('/pair/request')) asks++; });
   await button(page, GIFTS).click();
   await ready(page);
-  await dialog(page).getByRole('button', {name: 'Cancel'}).click();
+  await dialog(page).getByRole('button', {name: en("nav.dlg.cancel")}).click();
   await page.reload();  // the page opens the remembered link by itself
   await page.waitForFunction(() => document.body.classList.contains('has-board')
-    && document.getElementById('srcStatus').textContent === 'Up to date');
+    && document.getElementById('srcStrip').classList.contains('calm'));
   await button(page, GIFTS).click();
   await ready(page);
   assert.equal(asks, 1, 'asked once, not again after the reload');
@@ -302,18 +303,18 @@ test('an approval kept for another mod address is not sent to this one', async (
 });
 test('set for all shops, and undo from the strip once the dialog is closed', async (t) => {
   const page = await linked(t, {approved: true});
-  const all = button(page, GIFTS, 'Set for all 2 shops');
+  const all = button(page, GIFTS, en('sp.gw.uni.all', {n:2}));
   await all.click();
   assert.equal(await pair(page).count(), 0, 'the kept code is used, no prompt');
   await ready(page);
   // A row a shop, a small shirt a role.
   assert.deepEqual(await dialog(page).locator('.gw-shop .nm > span:last-child').allInnerTexts(), ['HART. Gifts', 'HART. Corner']);
-  assert.match(await dialog(page).locator('.gw-verdict').innerText(), /The game will dress 2 roles/);
-  await dialog(page).getByRole('button', {name: SET}).click();
-  await dialog(page).getByText('Default is on 2 roles at 2 shops.').waitFor();
-  await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Close'}).click();
+  assert.match(await dialog(page).locator('.gw-verdict').innerText(), enRe("sp.gw.uni.dress", {"n":2}));
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sp.gw.uni.done.many", {"preset":"Default","n":2,"shops":2})).waitFor();
+  await dialog(page).locator('.gw-foot').getByRole('button', {name: en("nav.dlg.close")}).click();
   const strip = page.locator('#gwToast');
-  await strip.getByText('Default is on 2 roles at 2 shops.').waitFor();
+  await strip.getByText(en("sp.gw.uni.done.many", {"preset":"Default","n":2,"shops":2})).waitFor();
   // A redraw keeps the same strip, so a keyboard user on Undo stays there (#107).
   assert.equal(await page.evaluate(() => {
     const undo = document.querySelector('#gwToast [data-gw-undo]');
@@ -321,8 +322,8 @@ test('set for all shops, and undo from the strip once the dialog is closed', asy
     wireAll();
     return document.activeElement === undo && document.querySelector('#gwToast [data-gw-undo]') === undo;
   }), true);
-  await strip.getByRole('button', {name: 'Undo'}).click();
-  await dialog(page).getByText('Undone: 2 roles back to no uniform.').waitFor();
+  await strip.locator('[data-gw-undo]').click();
+  await dialog(page).getByText(en("sp.gw.uni.undone", {"n":2})).waitFor();
   assert.deepEqual((await applied()).map((w) => w.kind), ['uniforms', 'undo']);
 });
 
@@ -335,16 +336,16 @@ test('uniforms at several shops: a refused shop is left out, and the rest are se
   await page.evaluate((keys) => gwUniforms(keys), [GIFTS, BARE]);
   await ready(page);
   // The refusal is said in the shop's own row, with the way out.
-  const leave = dialog(page).getByRole('button', {name: 'Leave it out: HART. Bare'});
+  const leave = dialog(page).locator('[data-gw-leave="' + BARE + '"]');
   await leave.waitFor();
-  assert.match(await dialog(page).locator('.gw-shop.bad').textContent(), /No uniform locker/);
-  assert.equal(await dialog(page).getByRole('button', {name: SET}).isDisabled(), true);
+  assert.match(await dialog(page).locator('.gw-shop.bad').textContent(), enRe("nav.dlg.refuse.nolocker.rule"));
+  assert.equal(await dialog(page).locator('[data-gw-b="apply"]').isDisabled(), true);
   await leave.click();
   await ready(page);
   assert.equal(await dialog(page).locator('.gw-shop.out').count(), 1);
-  assert.match(await dialog(page).locator('.gw-where').textContent(), /HART\. Bare left out/);
-  await dialog(page).getByRole('button', {name: SET}).click();
-  await dialog(page).getByText('Default is on 1 role at HART. Gifts.').waitFor();
+  assert.match(await dialog(page).locator('.gw-where').textContent(), enRe("sp.gw.uni.leftout", {"names":"HART. Bare"}));
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sp.gw.uni.done.one", {preset:"Default", n:1, shop:"HART. Gifts"})).waitFor();
   const gifts = [{street: 'ba:street_secondavenue', number: 10}];
   assert.deepEqual(sent[1].sites.map((x) => x.address), gifts, 'asked again without it');
   assert.deepEqual((await applied())[0].body.sites.map((x) => x.address), gifts);
@@ -373,7 +374,7 @@ test('a uniform picked from the pills asks the game again with it, and the keybo
   assert.equal(await dialog(page).locator('.gw-role').count(), 2);
   assert.equal(await dialog(page).locator('.gw-w.ask').count(), 1);
   assert.match(await dialog(page).getByRole('button', {name: 'Summer'}).getAttribute('class'), /gw-busy/);
-  assert.equal(await dialog(page).getByRole('button', {name: SET}).isDisabled(), true);
+  assert.equal(await dialog(page).locator('[data-gw-b="apply"]').isDisabled(), true);
   await ready(page);
   assert.equal(await dialog(page).getByRole('button', {name: 'Summer'}).getAttribute('aria-pressed'), 'true');
   assert.equal(await page.evaluate(() => document.activeElement.dataset.gwPreset), 'P2');
@@ -392,16 +393,16 @@ test('a neighbourhood badge is the player\'s prefix as text, never markup', asyn
 
 test('an apply that changes nothing says so and offers no undo', async (t) => {
   const page = await linked(t, {approved: true});
-  for (const expected of ['Default is on 1 role at HART. Gifts.', 'Nothing to set: every role already has a uniform.']) {
+  for (const expected of [en('sp.gw.uni.done.one', {preset:'Default', n:1, shop:'HART. Gifts'}), en('sp.gw.uni.none')]) {
     await button(page, GIFTS).click();
-    await dialog(page).getByRole('button', {name: SET}).click();
+    await dialog(page).locator('[data-gw-b="apply"]').click();
     await dialog(page).getByText(expected).waitFor();
-    if (expected.startsWith('Nothing')) break;
-    await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Close'}).click();
+    if (expected === en('sp.gw.uni.none')) break;
+    await dialog(page).locator('.gw-foot').getByRole('button', {name: en("nav.dlg.close")}).click();
     await dialog(page).waitFor({state: 'detached'});
   }
-  assert.equal(await dialog(page).getByRole('button', {name: 'Undo'}).count(), 0);
-  await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Close'}).click();
+  assert.equal(await dialog(page).locator('[data-gw-b="undo"]').count(), 0);
+  await dialog(page).locator('.gw-foot').getByRole('button', {name: en("nav.dlg.close")}).click();
   await dialog(page).waitFor({state: 'detached'});
   assert.equal(await page.locator('#gwToast').count(), 0, 'the kind has nothing left to undo');
 });
@@ -422,7 +423,7 @@ test('the uniform buttons sit inside their finding row, clear of its text, at 14
   for (const width of [1440, 390]) {
     const page = await linked(t, {approved: true, viewport: {width, height: 900}});
     await page.evaluate(() => showPage('today'));
-    await button(page, GIFTS, 'Set for all 2 shops').waitFor();
+    await button(page, GIFTS, en('sp.gw.uni.all', {n:2})).waitFor();
     const measure = () => page.evaluate(() => {
       const box = (el) => el.getBoundingClientRect();
       const meets = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
@@ -463,7 +464,7 @@ test('a mod that does not take the kind leaves the button disabled, with the rea
     const page = await linked(t, {writes, approved: true});
     const gifts = button(page, GIFTS);
     assert.equal(await gifts.getAttribute('aria-disabled'), 'true', JSON.stringify(writes));
-    assert.equal(await gifts.getAttribute('data-tip'), 'Update the Big Copilot Link mod to set uniforms from here');
+    assert.equal(await gifts.getAttribute('data-tip'), en("nav.dlg.mod.uniforms"));
     await gifts.click({force: true});
     assert.equal(await dialog(page).count(), 0, 'no dialog from a disabled button');
   }
@@ -479,8 +480,8 @@ test('an approval the game no longer knows is dropped and asked for again', asyn
   assert.notEqual(approval, 'forgottenByTheGame');
 });
 
-for (const [outcome, said] of [['deny', 'Not allowed'], ['expire', 'No answer in the game'],
-                                ['popup_open', 'Close the open question in the game first.']]) {
+for (const [outcome, said] of [['deny', en('nav.dlg.say.notallowed')], ['expire', en('nav.dlg.say.noanswergame')],
+                                ['popup_open', en('nav.dlg.pair.popup')]]) {
   test(`the game\'s approval: ${outcome}`, async (t) => {
     const page = await linked(t);
     await configure({pair: outcome});
@@ -490,7 +491,7 @@ for (const [outcome, said] of [['deny', 'Not allowed'], ['expire', 'No answer in
     assert.equal(await kept(page), null);
     // Ask again asks the game once more.
     await configure({pair: 'approve'});
-    await dialog(page).getByRole('button', {name: 'Ask again'}).click();
+    await dialog(page).locator('[data-gw-again]').click();
     await ready(page);
   });
 }
@@ -501,13 +502,13 @@ test('the game\'s approval: the wait after repeated denials is said, and Ask aga
   const asks = [];
   page.on('request', (req) => { if (req.url().endsWith('/pair/request')) asks.push(Date.now()); });
   await button(page, GIFTS).click();
-  await dialog(page).getByText('Not allowed', {exact: true}).waitFor();
-  await dialog(page).getByRole('button', {name: 'Ask again'}).click();
-  await dialog(page).getByText('Not allowed', {exact: true}).waitFor();
-  await dialog(page).getByRole('button', {name: 'Ask again'}).click();
+  await dialog(page).getByText(en("nav.dlg.say.notallowed"), {exact: true}).waitFor();
+  await dialog(page).locator('[data-gw-again]').click();
+  await dialog(page).getByText(en("nav.dlg.say.notallowed"), {exact: true}).waitFor();
+  await dialog(page).locator('[data-gw-again]').click();
   // A wait after a denial is never waited out on its own, however short.
-  await dialog(page).getByText('The game asked you a moment ago. Ask again in 3 s.').waitFor();
-  const again = dialog(page).getByRole('button', {name: 'Ask again'});
+  await dialog(page).getByText(en("nav.dlg.throttled.text", {"n":3})).waitFor();
+  const again = dialog(page).locator('[data-gw-again]');
   assert.equal(await again.isDisabled(), true);
   const sent = asks.length;
   // Ask again comes back once the wait has run out.
@@ -526,14 +527,14 @@ test('the game\'s approval: a long wait on a request still open is said, not wai
   await page.route(`${mockUrl}/pair/request`, (route) => route.fulfill({status: 429,
     json: {error: 'throttled', retryAfter: 50}, headers: {'Access-Control-Allow-Origin': ORIGIN}}));
   await button(page, GIFTS).click();
-  await dialog(page).getByText('The game asked you a moment ago. Ask again in 50 s.').waitFor();
-  assert.equal(await dialog(page).getByRole('button', {name: 'Ask again'}).isDisabled(), true);
+  await dialog(page).getByText(en("nav.dlg.throttled.text", {"n":50})).waitFor();
+  assert.equal(await dialog(page).locator('[data-gw-again]').isDisabled(), true);
 });
 test('the game\'s approval: a game that does not take the request', async (t) => {
   const page = await linked(t);
   await configure({pair: 'busy'});
   await button(page, GIFTS).click();
-  await dialog(page).getByText('The game did not take the request. Nothing was sent.').waitFor();
+  await dialog(page).getByText(en("nav.dlg.nottaken.text")).waitFor();
   assert.equal(await kept(page), null);
 });
 
@@ -542,13 +543,13 @@ test('the game\'s approval: a site the mod does not take, and a request the game
   await page.route(`${mockUrl}/pair/request`, (route) => route.fulfill({status: 403,
     json: {error: 'origin_not_allowed'}, headers: {'Access-Control-Allow-Origin': ORIGIN}}));
   await button(page, GIFTS).click();
-  await dialog(page).getByText('The mod does not take changes from this site. Nothing was sent.').waitFor();
-  await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Close'}).click();
+  await dialog(page).getByText(en("nav.dlg.origin.text")).waitFor();
+  await dialog(page).locator('.gw-foot').getByRole('button', {name: en("nav.dlg.close")}).click();
   await page.unroute(`${mockUrl}/pair/request`);
   await page.route(`${mockUrl}/pair/status**`, (route) => route.fulfill({status: 404,
     json: {error: 'not_found'}, headers: {'Access-Control-Allow-Origin': ORIGIN}}));
   await button(page, GIFTS).click();
-  await dialog(page).getByText('No answer in the game', {exact: true}).waitFor();
+  await dialog(page).getByText(en("nav.dlg.say.noanswergame"), {exact: true}).waitFor();
 });
 
 test('the game\'s approval: approved, but the one answer with the token was lost', async (t) => {
@@ -556,7 +557,7 @@ test('the game\'s approval: approved, but the one answer with the token was lost
   await page.route(`${mockUrl}/pair/status**`, (route) => route.fulfill({status: 200,
     json: {state: 'approved'}, headers: {'Access-Control-Allow-Origin': ORIGIN}}));
   await button(page, GIFTS).click();
-  await dialog(page).getByText("Approved, but the game's answer was lost: click again.").waitFor();
+  await dialog(page).getByText(en("nav.dlg.lost.text")).waitFor();
   assert.equal(await kept(page), null);
 });
 test('cancelling the wait sends nothing more, and the next ask picks the open question up', async (t) => {
@@ -566,16 +567,16 @@ test('cancelling the wait sends nothing more, and the next ask picks the open qu
   page.on('request', (req) => sent.push(new URL(req.url()).pathname));
   await button(page, GIFTS).click();
   await pair(page).getByText(WAITING).waitFor();
-  await pair(page).getByRole('button', {name: 'Cancel'}).click();
-  await dialog(page).getByText('Not approved', {exact: true}).waitFor();
+  await pair(page).getByRole('button', {name: en("nav.dlg.cancel")}).click();
+  await dialog(page).getByText(en("nav.dlg.say.notapproved"), {exact: true}).waitFor();
   const at = sent.length;
   await page.waitForTimeout(2500);
   assert.deepEqual(sent.slice(at).filter((p) => p.startsWith('/write/') || p.startsWith('/pair/')), [],
     'no write and no further look at the request');
   assert.equal((await applied()).length, 0);
   // The game's question is still open: asking again waits on it, not a second one.
-  await dialog(page).getByRole('button', {name: 'Ask again'}).click();
-  await pair(page).getByText('The question is still open in the game.').waitFor();
+  await dialog(page).locator('[data-gw-again]').click();
+  await pair(page).getByText(en("nav.dlg.waiting.open")).waitFor();
   await configure({pairDelay: 0});
   await ready(page);
   assert.equal(sent.filter((p) => p === '/pair/request').length, 1);
@@ -594,13 +595,13 @@ test('a Cancel before the game has answered the request still leaves the questio
   const asks = [];
   page.on('request', (req) => { if (req.url().endsWith('/pair/request')) asks.push(1); });
   await button(page, GIFTS).click();
-  await pair(page).getByText('Asking the game…').waitFor();
-  await pair(page).getByRole('button', {name: 'Cancel'}).click();
-  await dialog(page).getByText('Not approved', {exact: true}).waitFor();
+  await pair(page).getByText(en("nav.dlg.say.asking")).waitFor();
+  await pair(page).getByRole('button', {name: en("nav.dlg.cancel")}).click();
+  await dialog(page).getByText(en("nav.dlg.say.notapproved"), {exact: true}).waitFor();
   release();
   await page.waitForTimeout(300);
-  await dialog(page).getByRole('button', {name: 'Ask again'}).click();
-  await pair(page).getByText('The question is still open in the game.').waitFor();
+  await dialog(page).locator('[data-gw-again]').click();
+  await pair(page).getByText(en("nav.dlg.waiting.open")).waitFor();
   assert.equal(asks.length, 1);
   await configure({pairDelay: 0});
   await ready(page);
@@ -622,7 +623,7 @@ test('a new source ends an approval still waiting, and its write', async (t) => 
     input.dispatchEvent(new Event('change'));
   });
   await pair(page).waitFor({state: 'detached', timeout: 5000});
-  await dialog(page).getByText('The board is no longer linked to the same game. Nothing was sent.').waitFor();
+  await dialog(page).getByText(en("nav.dlg.notlinked.text")).waitFor();
   assert.deepEqual(writes, []);
 });
 
@@ -634,7 +635,7 @@ test('an approval the storage will not keep is kept for the page', async (t) => 
   for (let i = 0; i < 2; i++) {
     await button(page, GIFTS).click();
     await ready(page);
-    await dialog(page).getByRole('button', {name: 'Cancel'}).click();
+    await dialog(page).getByRole('button', {name: en("nav.dlg.cancel")}).click();
     await dialog(page).waitFor({state: 'detached'});
   }
   assert.equal(asks.length, 1, 'asked once, not once per write');
@@ -647,7 +648,7 @@ test('a short wait on the game is waited out once, a second is said', async (t) 
     ? route.fulfill({status: 429, json: {error: 'throttled', retryAfter: 1}, headers: {'Access-Control-Allow-Origin': ORIGIN}})
     : route.continue()));
   await button(page, GIFTS).click();
-  await pair(page).getByText('Asking again in 1 s').waitFor();
+  await pair(page).getByText(enRe('nav.dlg.retry.text', {n:1})).waitFor();
   await ready(page);
   // Refused twice in one ask, on a page with no approval: the second wait is the player's.
   const other = await linked(t);
@@ -656,7 +657,7 @@ test('a short wait on the game is waited out once, a second is said', async (t) 
   let asks = 0;
   other.on('request', (req) => { if (req.url().endsWith('/pair/request')) asks++; });
   await button(other, GIFTS).click();
-  await dialog(other).getByText('The game asked you a moment ago. Ask again in 1 s.').waitFor();
+  await dialog(other).getByText(en("nav.dlg.throttled.text", {"n":1})).waitFor();
   assert.equal(asks, 2);
 });
 
@@ -668,7 +669,7 @@ test('a question the game never answers ends with its own deadline', async (t) =
     json: {state: 'pending'}, headers: {'Access-Control-Allow-Origin': ORIGIN}}));
   await button(page, GIFTS).click();
   await pair(page).getByText(WAITING).waitFor();
-  await dialog(page).getByText('No answer in the game', {exact: true}).waitFor({timeout: 12000});
+  await dialog(page).getByText(en("nav.dlg.say.noanswergame"), {exact: true}).waitFor({timeout: 12000});
 });
 
 test('a 401 drops only the approval that was sent, and another tab\'s newer one is tried before the game is asked', async (t) => {
@@ -700,8 +701,8 @@ test('one Apply click asks the game once: the dry run after it uses the approval
   await configure({rejectTokens: true});
   let asks = 0;
   page.on('request', (req) => { if (req.url().endsWith('/pair/request')) asks++; });
-  await dialog(page).getByRole('button', {name: SET}).click();
-  await dialog(page).getByText("The game no longer knows this browser's approval. Nothing was changed.").waitFor({timeout: 15000});
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("nav.dlg.notpaired.text")).waitFor({timeout: 15000});
   assert.equal(asks, 1);
   assert.equal((await applied()).length, 0);
 });
@@ -711,12 +712,12 @@ test('the game\'s approval: after 30 s the dialog asks whether the game can be s
   await configure({pairDelay: 60});
   await button(page, GIFTS).click();
   await pair(page).getByText(WAITING).waitFor();
-  const cancel = pair(page).locator('.gw-foot').getByRole('button', {name: 'Cancel'});
+  const cancel = pair(page).locator('.gw-foot').getByRole('button', {name: en("nav.dlg.cancel")});
   await cancel.focus();
-  await pair(page).getByText('Still waiting').waitFor({timeout: 40000});
-  await pair(page).getByText('No answer from the game yet.').waitFor();
+  await pair(page).getByText(en("nav.dlg.say.still")).waitFor({timeout: 40000});
+  await pair(page).getByText(en("nav.dlg.quiet.lead")).waitFor();
   // The keyboard stays on Cancel through the repaint.
-  assert.equal(await page.evaluate(() => document.activeElement.dataset.gwB), 'Cancel');
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.gwB), en('nav.dlg.cancel'));
   const meta = pair(page).locator('.gw-meta');
   const before = await meta.textContent();
   // The clock keeps going: the line changes from what it said.
@@ -734,7 +735,7 @@ test('an approval the game keeps turning down is asked for once per click', asyn
   const asks = [];
   page.on('request', (req) => { if (req.url().endsWith('/pair/request')) asks.push(req.url()); });
   await button(page, GIFTS).click();
-  await dialog(page).getByText("The game no longer knows this browser's approval. Nothing was changed.").waitFor();
+  await dialog(page).getByText(en("nav.dlg.notpaired.text")).waitFor();
   assert.equal(asks.length, 1, 'one re-ask, then it ends');
 });
 
@@ -751,7 +752,7 @@ test('a 401, the game\'s approval, a busy game and a 401 again ask the game once
   let asks = 0;
   page.on('request', (req) => { if (req.url().endsWith('/pair/request')) asks++; });
   await button(page, GIFTS).click();
-  await dialog(page).getByText("The game no longer knows this browser's approval. Nothing was changed.").waitFor({timeout: 15000});
+  await dialog(page).getByText(en("nav.dlg.notpaired.text")).waitFor({timeout: 15000});
   assert.equal(answers.length, 0);
   assert.equal(asks, 1, 'one question for the one click');
 });
@@ -766,7 +767,7 @@ test('an approval gone between the dry run and Apply: nothing is applied, the ga
   await button(page, GIFTS).click();
   await ready(page);
   await page.evaluate((key) => localStorage.removeItem(key), APPROVAL);
-  await dialog(page).getByRole('button', {name: SET}).click();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
   await pair(page).getByText(WAITING).waitFor();
   // Approved: the player reviews the game's answer afresh before anything is applied.
   await ready(page);
@@ -793,7 +794,7 @@ test('a source changed between the game\'s approval and the write sends nothing'
     await route.fulfill({response: res, json: body});
   });
   await button(page, GIFTS).click();
-  await dialog(page).getByText('The board is no longer linked to the same game. Nothing was sent.').waitFor();
+  await dialog(page).getByText(en("nav.dlg.notlinked.text")).waitFor();
   assert.deepEqual(writes, []);
   assert.equal(typeof await kept(page), 'string', 'the player\'s answer is kept');
 });
@@ -817,7 +818,7 @@ test('another company in the same game ends an approval still waiting, and its w
     return route.continue({headers});
   });
   await page.evaluate(() => { LEDGER_SOURCE.refresh(); });
-  await dialog(page).getByText('The board is no longer linked to the same game. Nothing was sent.').waitFor({timeout: 15000});
+  await dialog(page).getByText(en("nav.dlg.notlinked.text")).waitFor({timeout: 15000});
   assert.deepEqual(writes, []);
 });
 
@@ -832,25 +833,25 @@ test('a 401 during Apply asks for approval, then shows the game\'s answer again:
   await configure({refuseWrite: 'not_paired'});
   const dryRuns = page.waitForRequest((req) => req.url().endsWith('/write/uniforms')
     && JSON.parse(req.postData() || '{}').dryRun && applies === 1);
-  await dialog(page).getByRole('button', {name: SET}).click();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
   await pair(page).getByText(WAITING).waitFor();
   await dryRuns;  // asked afresh, for the player to review
   await ready(page);
   assert.equal(applies, 1);
   assert.equal((await applied()).length, 0);
   await configure({refuseWrite: null});
-  await dialog(page).getByRole('button', {name: SET}).click();
-  await dialog(page).getByText('Default is on 1 role at HART. Gifts.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sp.gw.uni.done.one", {preset:"Default", n:1, shop:"HART. Gifts"})).waitFor();
   assert.equal(applies, 2);
 });
 test('a game that moved on answers 409 changed, and the dialog offers a refresh', async (t) => {
   const page = await linked(t, {approved: true});
   await configure({refuseWrite: 'changed'});
   await button(page, GIFTS).click();
-  await dialog(page).getByRole('button', {name: SET}).click();
-  await dialog(page).getByText('The game moved on', {exact: true}).waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("nav.dlg.say.moved"), {exact: true}).waitFor();
   const refresh = page.waitForRequest((req) => req.url().endsWith('/refresh') && req.method() === 'POST');
-  await dialog(page).getByRole('button', {name: 'Refresh the board'}).click();
+  await dialog(page).getByRole('button', {name: en('nav.dlg.refresh')}).click();
   await refresh;  // Update asked the game for its current state
   await dialog(page).waitFor({state: 'detached'});
   assert.equal((await applied()).length, 0);
@@ -866,8 +867,8 @@ test('uniforms name the save they were planned from; another one loaded since an
   await ready(page);
   // The game loads another of the character's saves; the board has not read it yet.
   await configure({company: 'Other Co'});
-  await dialog(page).getByRole('button', {name: SET}).click();
-  await dialog(page).getByText('The game moved on', {exact: true}).waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("nav.dlg.say.moved"), {exact: true}).waitFor();
   assert.deepEqual(sent.map((body) => [body.dryRun, body.expect]),
     [[true, {character: 'default', company: 'Link Co'}], [false, {character: 'default', company: 'Link Co'}]]);
   assert.equal((await applied()).length, 0);
@@ -879,13 +880,13 @@ test('a refusal names the rule, the shop and the fix, and Apply stays off', asyn
   await page.evaluate((key) => gwUniforms([key]), BARE);
   // One red card a rule: the rule, the shop as a chip, the fix on its own line.
   const refusal = dialog(page).locator('.gw-no');
-  await refusal.getByText('No uniform locker: the game sets uniforms only where one stands.').waitFor();
+  await refusal.getByText(en('nav.dlg.refuse.nolocker.rule') + '.').waitFor();
   assert.equal(await refusal.count(), 1);
   assert.deepEqual(await refusal.locator('.gw-chip').allInnerTexts(), ['HART. Bare']);
-  assert.equal(await refusal.locator('.fix').innerText(), 'Place a uniform locker in the shop, then try again.');
-  assert.match(await dialog(page).locator('.gw-verdict').innerText(), /The game refuses this/);
-  assert.equal(await dialog(page).getByRole('button', {name: SET}).isDisabled(), true);
-  await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Close'}).click();
+  assert.equal(await refusal.locator('.fix').innerText(), en("nav.dlg.refuse.nolocker.fix"));
+  assert.match(await dialog(page).locator('.gw-verdict').innerText(), enRe("nav.dlg.say.refuses"));
+  assert.equal(await dialog(page).locator('[data-gw-b="apply"]').isDisabled(), true);
+  await dialog(page).locator('.gw-foot').getByRole('button', {name: en("nav.dlg.close")}).click();
   // A schedule answer's own refusal is read from siteError, and a 409's leading row is not said twice.
   const said = await page.evaluate(() => [
     gwRefusals({kind: 'schedule', object: () => 'HART. Gifts'}, {siteError: 'headquarters', rows: []}),
@@ -893,15 +894,15 @@ test('a refusal names the rule, the shop and the fix, and Apply stays off', asyn
   ]);
   for (const html of said) {
     assert.equal((html.match(/class="gw-no"/g) || []).length, 1);
-    assert.match(html, /A headquarters' schedule is not written from here/);
+    assert.match(html, enRe("nav.dlg.refuse.hq.rule"));
   }
   // And an apply the game refuses after a clean dry run.
   await configure({refuseWrite: 'cannot_write:placement'});
   await button(page, GIFTS).click();
-  await dialog(page).getByRole('button', {name: SET}).click();
-  await dialog(page).getByText('The game takes no changes while you are placing items. Nothing was changed.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en('nav.dlg.cannot.placement.text') + '. ' + en('nav.dlg.unchanged')).waitFor();
   await configure({refuseWrite: null});
-  await dialog(page).getByRole('button', {name: 'Try again'}).click();
+  await dialog(page).getByRole('button', {name: en('nav.dlg.tryagain')}).click();
   await ready(page);
   assert.equal((await applied()).length, 0);
 });
@@ -911,13 +912,13 @@ test('a busy game is retried a second apart, three times, then named', async (t)
   await configure({busyWrites: 2});
   await button(page, GIFTS).click();
   await ready(page, 10000);
-  await dialog(page).getByRole('button', {name: 'Cancel'}).click();
+  await dialog(page).getByRole('button', {name: en("nav.dlg.cancel")}).click();
   await configure({busyWrites: 5});
   await button(page, GIFTS).click();
-  await dialog(page).getByText('The game is busy', {exact: true}).waitFor({timeout: 10000});
+  await dialog(page).getByText(en("nav.dlg.say.busy"), {exact: true}).waitFor({timeout: 10000});
   // One try and three retries spent four of the five busy answers.
   assert.equal((await configure({})).busyWrites, 1);
-  await dialog(page).getByRole('button', {name: 'Try again'}).click();
+  await dialog(page).getByRole('button', {name: en('nav.dlg.tryagain')}).click();
   await ready(page, 10000);
 });
 
@@ -933,12 +934,12 @@ test('an apply that gets no answer is not sent again: the board reads the game, 
   const refresh = page.waitForRequest((req) => req.url().endsWith('/refresh') && req.method() === 'POST');
   const release = await holdRefresh(page);
   await button(page, GIFTS).click();
-  await dialog(page).getByRole('button', {name: SET}).click();
-  await dialog(page).getByText('The game did not answer, so this may or may not have been applied.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("nav.dlg.uncertain.text")).waitFor();
   await release();
   await refresh;  // the board asks the game for its state first
   await ready(page, 20000);
-  assert.equal(await dialog(page).getByRole('button', {name: SET}).isEnabled(), true);
+  assert.equal(await dialog(page).locator('[data-gw-b="apply"]').isEnabled(), true);
   assert.equal(applies, 1, 'never sent twice on its own');
   assert.equal((await applied()).length, 0);
   assert.equal(await page.locator('#gwToast').count(), 0);
@@ -955,8 +956,8 @@ test('an apply whose answer cannot be read is uncertain too', async (t) => {
   });
   const release = await holdRefresh(page);
   await button(page, GIFTS).click();
-  await dialog(page).getByRole('button', {name: SET}).click();
-  await dialog(page).getByText('The game did not answer, so this may or may not have been applied.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("nav.dlg.uncertain.text")).waitFor();
   await release();
   await ready(page, 20000);
   assert.equal(applies, 1);
@@ -978,15 +979,15 @@ test('an undo right after an apply is read once the read under way is done', asy
     await passOn(route, res);
   });
   await button(page, GIFTS).click();
-  await dialog(page).getByRole('button', {name: SET}).click();
-  await dialog(page).getByText('Default is on 1 role at HART. Gifts.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sp.gw.uni.done.one", {preset:"Default", n:1, shop:"HART. Gifts"})).waitFor();
   const until = async (test, ms) => {
     const end = Date.now() + ms;
     while (!test() && Date.now() < end) await new Promise((resolve) => setTimeout(resolve, 50));
   };
   await until(() => saves >= 1, 8000);
-  await dialog(page).getByRole('button', {name: 'Undo'}).click();
-  await dialog(page).getByText('Undone: 1 role back to no uniform.').waitFor();
+  await dialog(page).locator('[data-gw-b="undo"]').click();
+  await dialog(page).getByText(en("sp.gw.uni.undone", {"n":1})).waitFor();
   assert.equal(saves, 1, 'the first read still holds');
   release();
   await until(() => saves >= 2, 8000);
@@ -998,9 +999,9 @@ const until = async (test, ms) => {
   const end = Date.now() + ms;
   while (!(await test()) && Date.now() < end) await new Promise((resolve) => setTimeout(resolve, 50));
 };
-const setAgain = (page) => dialog(page).getByRole('button', {name: 'Set again'});
+const setAgain = (page) => dialog(page).locator('[data-gw-b="again"]');
 const setAgainOn = (page, timeout) => page.waitForFunction(() => {
-  const b = [...document.querySelectorAll('dialog.gw-dlg .gw-foot button')].find((x) => x.textContent === 'Set again');
+  const b = document.querySelector('dialog.gw-dlg .gw-foot [data-gw-b="again"]');
   return b && !b.disabled;
 }, null, timeout ? {timeout} : undefined);
 // The watcher's check, now rather than in thirty seconds.
@@ -1026,38 +1027,38 @@ async function otherCompany(page) {
   await page.route(`${mockUrl}/save`, save);
   return async () => { await page.unroute(`${mockUrl}/health`, health); await page.unroute(`${mockUrl}/save`, save); };
 }
-const NOT_LINKED = 'The board is no longer linked to the game this was undone in.';
+const NOT_LINKED = en('nav.dlg.undone.unlinked');
 // Apply the uniform, undo it, and wait for Set again.
 async function undoneAndOpen(page) {
   await button(page, GIFTS).click();
-  await dialog(page).getByRole('button', {name: SET}).click();
-  await dialog(page).getByText('Default is on 1 role at HART. Gifts.').waitFor();
-  await dialog(page).getByRole('button', {name: 'Undo'}).click();
-  await dialog(page).getByText('Undone: 1 role back to no uniform.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sp.gw.uni.done.one", {preset:"Default", n:1, shop:"HART. Gifts"})).waitFor();
+  await dialog(page).locator('[data-gw-b="undo"]').click();
+  await dialog(page).getByText(en("sp.gw.uni.undone", {"n":1})).waitFor();
   await setAgainOn(page, 20000);
 }
 
 test('undo gate: Set again waits for a board built after the undo, then opens', async (t) => {
   const page = await linked(t, {approved: true});
   await button(page, GIFTS).click();
-  await dialog(page).getByRole('button', {name: SET}).click();
-  await dialog(page).getByText('Default is on 1 role at HART. Gifts.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sp.gw.uni.done.one", {preset:"Default", n:1, shop:"HART. Gifts"})).waitFor();
   await until(async () => (await page.evaluate(() => LEDGER_SOURCE.link().stamp)) === await mockStamp(), 20000);
   const release = await holdSave(page);
-  await dialog(page).getByRole('button', {name: 'Undo'}).click();
-  await dialog(page).getByText('Undone: 1 role back to no uniform.').waitFor();
+  await dialog(page).locator('[data-gw-b="undo"]').click();
+  await dialog(page).getByText(en("sp.gw.uni.undone", {"n":1})).waitFor();
   assert.equal(await setAgain(page).isDisabled(), true);
-  await dialog(page).getByText('Reading the game again').waitFor();
+  await dialog(page).getByText(en("nav.dlg.reread.now")).waitFor();
   release();
   await setAgainOn(page, 20000);
-  await dialog(page).getByText('The board shows the game as it now stands').waitFor();
+  await dialog(page).getByText(en("nav.dlg.reread.done")).waitFor();
 });
 
 test('undo gate: a board built from the undo\'s state before its answer is handled opens it', async (t) => {
   const page = await linked(t, {approved: true});
   await button(page, GIFTS).click();
-  await dialog(page).getByRole('button', {name: SET}).click();
-  await dialog(page).getByText('Default is on 1 role at HART. Gifts.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sp.gw.uni.done.one", {preset:"Default", n:1, shop:"HART. Gifts"})).waitFor();
   await until(async () => (await page.evaluate(() => LEDGER_SOURCE.link().stamp)) === await mockStamp(), 20000);
   // The undo's answer is held; the game has refreshed already, and the
   // watcher builds its bytes before the answer comes in.
@@ -1069,13 +1070,13 @@ test('undo gate: a board built from the undo\'s state before its answer is handl
     await passOn(route, res);
   });
   const builds = await page.evaluate(() => window.builds);
-  await dialog(page).getByRole('button', {name: 'Undo'}).click();
+  await dialog(page).locator('[data-gw-b="undo"]').click();
   await until(async () => (await applied()).length === 2, 8000);
   await watchNow(page);
   await page.waitForFunction((n) => window.builds > n, builds);
   const built = await page.evaluate(() => window.builds);
   release();
-  await dialog(page).getByText('Undone: 1 role back to no uniform.').waitFor();
+  await dialog(page).getByText(en("sp.gw.uni.undone", {"n":1})).waitFor();
   // The follow finds the board already current: no build, and the gate opens.
   await setAgainOn(page, 20000);
   assert.equal(await page.evaluate(() => window.builds), built, 'no second build of the same bytes');
@@ -1116,7 +1117,7 @@ test('undo gate: open, then a board of another company closes it again', async (
   await watchNow(page);
   await dialog(page).getByText(NOT_LINKED).waitFor({timeout: 20000});
   assert.equal(await setAgain(page).isDisabled(), true);
-  assert.equal(await setAgain(page).getAttribute('title'), 'The board is no longer linked to this game');
+  assert.equal(await setAgain(page).getAttribute('title'), en("nav.dlg.unlinked"));
   assert.deepEqual((await applied()).map((w) => w.kind), ['uniforms', 'undo'], 'nothing asked of the game');
 });
 
@@ -1147,13 +1148,13 @@ test('a board that fails to take a build keeps the stamp behind it, and the next
     window.renderAll = function () { if (once) { once = false; throw new Error('the board broke once'); } return real.apply(this, arguments); };
   });
   await button(page, GIFTS).click();
-  await dialog(page).getByRole('button', {name: SET}).click();
-  await dialog(page).getByText('Default is on 1 role at HART. Gifts.').waitFor();
-  await page.waitForFunction(() => document.getElementById('srcStatus').textContent.startsWith('Could not read the save'), null, {timeout: 20000});
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sp.gw.uni.done.one", {preset:"Default", n:1, shop:"HART. Gifts"})).waitFor();
+  await page.waitForFunction(expected => document.getElementById('srcStatus').textContent.startsWith(expected), en('app.build.failed'), {timeout: 20000});
   assert.equal(await page.evaluate(() => LEDGER_SOURCE.link().stamp), before, 'not the stamp of bytes the board did not take');
   assert.notEqual(await mockStamp(), before);
   await watchNow(page);
-  await page.waitForFunction(() => document.getElementById('srcStatus').textContent === 'Up to date', null, {timeout: 20000});
+  await page.waitForFunction(() => document.getElementById('srcStrip').classList.contains('calm'), null, {timeout: 20000});
   assert.equal(await page.evaluate(() => LEDGER_SOURCE.link().stamp), await mockStamp());
 });
 test('an apply answering ok false, or for another kind, is uncertain and sent once each', async (t) => {
@@ -1169,10 +1170,10 @@ test('an apply answering ok false, or for another kind, is uncertain and sent on
     answer = {...wrong, dryRun: false, stamp: 'x', rows: []};
     const sent = applies;
     const release = await holdRefresh(page);
-    await dialog(page).getByRole('button', {name: SET}).click();
-    await dialog(page).getByText('The game did not answer, so this may or may not have been applied.').waitFor();
+    await dialog(page).locator('[data-gw-b="apply"]').click();
+    await dialog(page).getByText(en("nav.dlg.uncertain.text")).waitFor();
     await release();
-    await dialog(page).getByRole('button', {name: SET}).waitFor({timeout: 30000});
+    await dialog(page).locator('[data-gw-b="apply"]').waitFor({timeout: 30000});
     assert.equal(applies, sent + 1, JSON.stringify(wrong));
   }
 });
@@ -1182,8 +1183,8 @@ test('a dry run answering for another kind cannot be read', async (t) => {
   await page.route(`${mockUrl}/write/uniforms`, (route) => route.fulfill({status: 200,
     json: {ok: true, kind: 'schedule', dryRun: true, rows: []}, headers: {'Access-Control-Allow-Origin': ORIGIN}}));
   await button(page, GIFTS).click();
-  await dialog(page).getByText("The game's answer could not be read.").waitFor();
-  assert.equal(await dialog(page).getByRole('button', {name: 'Try again'}).count(), 1);
+  await dialog(page).getByText(en('app.link.write.unread')).waitFor();
+  assert.equal(await dialog(page).getByRole('button', {name: en('nav.dlg.tryagain')}).count(), 1);
 });
 
 test('Apply clicked twice sends one write', async (t) => {
@@ -1191,10 +1192,10 @@ test('Apply clicked twice sends one write', async (t) => {
   await button(page, GIFTS).click();
   await ready(page);
   await page.evaluate(() => {
-    const btn = [...document.querySelectorAll('dialog.gw-dlg .gw-foot button')].find((b) => b.textContent === 'Set 1 uniform');
+    const btn = document.querySelector('dialog.gw-dlg .gw-foot [data-gw-b="apply"]');
     btn.click(); btn.click();
   });
-  await dialog(page).getByText('Default is on 1 role at HART. Gifts.').waitFor();
+  await dialog(page).getByText(en("sp.gw.uni.done.one", {preset:"Default", n:1, shop:"HART. Gifts"})).waitFor();
   assert.equal((await applied()).length, 1);
 });
 
@@ -1214,9 +1215,9 @@ test('names from the game are shown as text, never as markup', async (t) => {
   assert.equal(await dialog(page).locator('.gw-preset', {hasText: hostile}).count(), 1);
   assert.equal(await dialog(page).locator('.gw-role.to em').textContent(), hostile);
   await dialog(page).locator('.gw-role.to').hover();
-  assert.match(await dialog(page).locator('.gw-read').textContent(), /no uniform now, <img src=x onerror="window\.pwned=1"> after/);
+  assert.match(await dialog(page).locator('.gw-read').textContent(), textRe('sp.gw.role.to.read', {preset:hostile}));
   assert.equal(await dialog(page).locator('img').count(), 0);
-  await dialog(page).getByRole('button', {name: SET}).click();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
   await dialog(page).getByText(`${hostile} is on 1 role at HART. Gifts.`).waitFor();
   assert.equal(await dialog(page).locator('img').count(), 0);
   assert.equal(await page.evaluate(() => window.pwned), undefined);
@@ -1246,7 +1247,7 @@ test('imports: the Set to figure is written, and undone', async (t) => {
   assert.equal(await plan.locator('[data-gw="imports"]').count(), 0, 'nothing to apply yet');
   await setTo(page, 'Paperbag', 4200);
   // The button wears the count; its name says it whole.
-  assert.equal(await applyImports(page).getAttribute('aria-label'), 'Apply changes in game, 1 change');
+  assert.equal(await applyImports(page).getAttribute('aria-label'), en('sb.apply.name', {label:en('sb.apply.all'), n:1}));
   assert.equal(await applyImports(page).locator('.n').textContent(), '1');
   await applyImports(page).click();
   await ready(page);
@@ -1256,9 +1257,9 @@ test('imports: the Set to figure is written, and undone', async (t) => {
   assert.match(await dialog(page).locator('.gw-depot').textContent(), /HART\. Depot/);
   const line = dialog(page).locator('.gw-line', {hasText: 'Paperbag'});
   assert.equal(await line.count(), 1);
-  assert.match(await line.locator('.gw-num').textContent(), /^from 3,800 to 4,200in stock$/);
-  assert.deepEqual(await line.locator('.gw-imp').allTextContents(), ['1. 11 Pier', '2. 2 Pierstoppedno agent']);
-  assert.match(await dialog(page).locator('.gw-verdict').textContent(), /The game takes the change/);
+  assert.match(await line.locator('.gw-num').textContent(), new RegExp('^' + enRe('sp.gw.tile.from').source + ' 3,800 ' + enRe('sp.gw.tile.to').source + ' 4,200' + enRe('sb.unit.stock').source + '$'));
+  assert.deepEqual(await line.locator('.gw-imp').allTextContents(), ['1. 11 Pier', '2. 2 Pier' + en('sb.gw.stopped') + en('sb.gw.noAgent')]);
+  assert.match(await dialog(page).locator('.gw-verdict').textContent(), enRe("sb.gw.takes.one"));
   // The board the link reads after the write holds what it wrote.
   await page.evaluate(() => {
     const d = JSON.parse(window.baseData);
@@ -1266,8 +1267,8 @@ test('imports: the Set to figure is written, and undone', async (t) => {
       .forEach((c) => { if (c.id === 'CONTRACTone') c.amount = 4200; }));
     window.buildData = JSON.stringify(d);
   });
-  await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
-  await dialog(page).getByText('1 amount set in the game.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}).replace(/^./, c => c.toUpperCase())})).waitFor();
   const writes = await applied();
   assert.deepEqual(writes[0].body, {dryRun: false, contracts: [{id: 'CONTRACTone', activate: false,
     products: [{itemName: 'ba:itemname_paperbag', warehouse: DEPOT_ADDRESS, amount: 4200, expect: 3800}]}]});
@@ -1276,8 +1277,8 @@ test('imports: the Set to figure is written, and undone', async (t) => {
   assert.deepEqual(await page.evaluate(() => pgOfFamily('imports').map((r) => [r.expect.contracts, r.expect.value, r.rowKeys.length])),
     [[[{id: 'CONTRACTone', amount: 4200, activate: false}], 4200, 1]]);
   await page.waitForFunction(() => (pgOfFamily('imports')[0] || {}).state === 'confirmed');
-  await dialog(page).getByRole('button', {name: 'Undo'}).click();
-  await dialog(page).getByText('Undone: the imports are back as they were.').waitFor();
+  await dialog(page).locator('[data-gw-b="undo"]').click();
+  await dialog(page).getByText(en("sb.gw.undone")).waitFor();
   assert.deepEqual((await applied()).map((w) => w.kind), ['imports', 'undo']);
   // The undo takes the record back.
   assert.equal(await page.evaluate(() => pgOfFamily('imports').length), 0);
@@ -1297,7 +1298,7 @@ test('imports: the preview names each line\'s planning basis, under both bases',
     const line = dialog(page).locator('.gw-line', {hasText: 'Paperbag'});
     await line.waitFor();
     const said = await line.locator('.gw-basis').count() ? await line.locator('.gw-basis').textContent() : null;
-    await dialog(page).getByRole('button', {name: 'Cancel'}).click();
+    await dialog(page).getByRole('button', {name: en("nav.dlg.cancel")}).click();
     await page.waitForFunction(() => !document.querySelector('dialog.gw-dlg[open]'));
     return said;
   };
@@ -1312,7 +1313,7 @@ test('imports: the preview names each line\'s planning basis, under both bases',
   await setTo(page, 'Paperbag', 4200);
   assert.equal(await basisOf(), null);
   await basis('cap');
-  assert.equal(await basisOf(), 'Your figure, planned for shop demand');
+  assert.equal(await basisOf(), en("sb.gw.basis.own", {basis:en("sb.basis.dem.low")}));
 });
 
 test("imports: the figure written is the fact's, with no figure typed", async (t) => {
@@ -1327,9 +1328,9 @@ test("imports: the figure written is the fact's, with no figure typed", async (t
   await applyImports(page).click();
   await ready(page);
   assert.match(await dialog(page).locator('.gw-line', {hasText: 'Paperbag'}).locator('.gw-num').textContent(),
-    /^from 3,800 to 4,370in stock$/);
-  await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
-  await dialog(page).getByText('1 amount set in the game.').waitFor();
+    new RegExp('^' + enRe('sp.gw.tile.from').source + ' 3,800 ' + enRe('sp.gw.tile.to').source + ' 4,370' + enRe('sb.unit.stock').source + '$'));
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}).replace(/^./, c => c.toUpperCase())})).waitFor();
   assert.equal((await applied())[0].body.contracts[0].products[0].amount, 4370);
 });
 
@@ -1372,8 +1373,8 @@ test('imports: the figure written is the one extraction worked out, the margin a
   assert.equal(await importRow(page, 'Paperbag').locator('input[data-imp]').inputValue(), String(fact.setTo));
   await applyImports(page).click();
   await ready(page);
-  await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
-  await dialog(page).getByText('1 amount set in the game.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}).replace(/^./, c => c.toUpperCase())})).waitFor();
   assert.equal((await applied())[0].body.contracts[0].products[0].amount, fact.setTo);
 });
 
@@ -1428,22 +1429,22 @@ test('imports: after an undo, Apply again asks from the board read after it', as
   await setTo(page, 'Paperbag', 4200);
   await applyImports(page).click();
   await ready(page);
-  await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
-  await dialog(page).getByText('1 amount set in the game.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}).replace(/^./, c => c.toUpperCase())})).waitFor();
   // The board reads the write: the contract holds 4,200.
   await page.waitForFunction(() => gwImportRows.some((r) => r.contracts.some((c) => c.id === 'CONTRACTone' && c.amount === 4200)));
   const release = await holdSave(page);
-  await dialog(page).getByRole('button', {name: 'Undo'}).click();
-  await dialog(page).getByText('Undone: the imports are back as they were.').waitFor();
-  assert.equal(await dialog(page).getByRole('button', {name: 'Apply again'}).isDisabled(), true);
+  await dialog(page).locator('[data-gw-b="undo"]').click();
+  await dialog(page).getByText(en("sb.gw.undone")).waitFor();
+  assert.equal(await dialog(page).locator('[data-gw-b="again"]').isDisabled(), true);
   release();
   await page.waitForFunction(() => gwImportRows.some((r) => r.contracts.some((c) => c.id === 'CONTRACTone' && c.amount === 3800)));
   const reask = dryRunOf(page, 'imports');
-  await dialog(page).getByRole('button', {name: 'Apply again'}).click();
+  await dialog(page).locator('[data-gw-b="again"]').click();
   const products = JSON.parse((await reask).postData()).contracts[0].products;
   assert.deepEqual(products.map((x) => [x.itemName, x.amount, x.expect]), [['ba:itemname_paperbag', 4200, 3800]]);
   await ready(page);
-  assert.equal(await dialog(page).getByRole('button', {name: 'Apply 1 change'}).isEnabled(), true);
+  assert.equal(await dialog(page).locator('[data-gw-b="apply"]').isEnabled(), true);
 });
 
 test('imports: inside the lock window the dry run refuses, in the game\'s words', async (t) => {
@@ -1454,31 +1455,31 @@ test('imports: inside the lock window the dry run refuses, in the game\'s words'
   await applyImports(page).click();
   const refusal = dialog(page).locator('.gw-no');
   await refusal.waitFor();
-  assert.equal(await refusal.locator('.rule').textContent(), "Orders for Monday's delivery closed Sunday 20:00; they reopen Monday 08:00.");
+  assert.equal(await refusal.locator('.rule').textContent(), en('nav.dlg.refuse.locked.rule') + '.');
   assert.deepEqual(await refusal.locator('.gw-chip').allTextContents(), ['1 Pier · Paperbag']);
-  assert.equal(await refusal.locator('.fix').textContent(), 'That is day 36, 08:00 game time: try again then.');
+  assert.equal(await refusal.locator('.fix').textContent(), en("nav.dlg.refuse.locked.day", {"day":36}));
   assert.equal(await refusal.locator('.gw-lock .cells i.x').count(), 12, 'the window drawn, Sunday 20:00 to Monday 08:00');
   assert.equal(await dialog(page).locator('.gw-line.dim').count(), 1, 'the line waits with it');
-  assert.equal(await dialog(page).getByRole('button', {name: 'Apply 1 change'}).isDisabled(), true);
+  assert.equal(await dialog(page).locator('[data-gw-b="apply"]').isDisabled(), true);
   // Asked again from here, once the game takes it.
   await configure({day: 36, hour: 9});
-  await dialog(page).getByRole('button', {name: 'Try again'}).click();
+  await dialog(page).getByRole('button', {name: en('nav.dlg.tryagain')}).click();
   await ready(page);
-  assert.equal(await dialog(page).getByRole('button', {name: 'Apply 1 change'}).isEnabled(), true);
+  assert.equal(await dialog(page).locator('[data-gw-b="apply"]').isEnabled(), true);
 });
 
 /* --- a write or an undo the game could not take now: Try again ------------ */
 test('an undo the game cannot take now is offered again, and goes through', async (t) => {
   const page = await linked(t, {approved: true});
   await button(page, GIFTS).click();
-  await dialog(page).getByRole('button', {name: SET}).click();
-  await dialog(page).getByText('Default is on 1 role at HART. Gifts.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sp.gw.uni.done.one", {preset:"Default", n:1, shop:"HART. Gifts"})).waitFor();
   await configure({refuseWrite: 'cannot_write:other'});
-  await dialog(page).getByRole('button', {name: 'Undo'}).click();
-  await dialog(page).getByText('The game takes no changes right now.', {exact: false}).waitFor();
+  await dialog(page).locator('[data-gw-b="undo"]').click();
+  await dialog(page).getByText(en('nav.dlg.cannot.other.text') + '.', {exact: false}).waitFor();
   await configure({refuseWrite: null});
-  await dialog(page).getByRole('button', {name: 'Try again'}).click();
-  await dialog(page).getByText('Undone: 1 role back to no uniform.').waitFor();
+  await dialog(page).getByRole('button', {name: en('nav.dlg.tryagain')}).click();
+  await dialog(page).getByText(en("sp.gw.uni.undone", {"n":1})).waitFor();
   assert.deepEqual((await applied()).map((w) => w.kind), ['uniforms', 'undo']);
 });
 
@@ -1488,15 +1489,15 @@ test('imports: an undo refused while a BizMan screen is open is offered again, a
   await setTo(page, 'Paperbag', 4200);
   await applyImports(page).click();
   await ready(page);
-  await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
-  await dialog(page).getByText('1 amount set in the game.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}).replace(/^./, c => c.toUpperCase())})).waitFor();
   await configure({refuseWrite: 'refused:screen_open'});
-  await dialog(page).getByRole('button', {name: 'Undo'}).click();
+  await dialog(page).locator('[data-gw-b="undo"]').click();
   await page.locator('dialog.gw-dlg[data-phase="failed"]').waitFor();
-  assert.match(await dialog(page).locator('.gw-verdict').textContent(), /The game refuses this/);
+  assert.match(await dialog(page).locator('.gw-verdict').textContent(), enRe("nav.dlg.say.refuses"));
   await configure({refuseWrite: null});
-  await dialog(page).getByRole('button', {name: 'Try again'}).click();
-  await dialog(page).getByText('Undone: the imports are back as they were.').waitFor();
+  await dialog(page).getByRole('button', {name: en('nav.dlg.tryagain')}).click();
+  await dialog(page).getByText(en("sb.gw.undone")).waitFor();
   assert.deepEqual((await applied()).map((w) => w.kind), ['imports', 'undo']);
 });
 
@@ -1507,13 +1508,13 @@ test('imports: an apply refused while a BizMan screen is open, and a refused dry
   await applyImports(page).click();
   await ready(page);
   await configure({refuseWrite: 'refused:screen_open'});
-  await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
-  await dialog(page).getByText('Close that BizMan screen in the game, then try again.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("nav.dlg.refuse.screen.fix")).waitFor();
   await configure({refuseWrite: null});
-  await dialog(page).getByRole('button', {name: 'Try again'}).click();
+  await dialog(page).getByRole('button', {name: en('nav.dlg.tryagain')}).click();
   await ready(page);
-  await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
-  await dialog(page).getByText('1 amount set in the game.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}).replace(/^./, c => c.toUpperCase())})).waitFor();
   assert.deepEqual((await applied()).map((w) => w.kind), ['imports']);
 });
 
@@ -1531,19 +1532,19 @@ for (const viewport of [{width: 390, height: 500}, {width: 740, height: 360}]) {
     await configure({pairDelay: 0.25, tokens: {[TOKEN]: ORIGIN}});
     await page.evaluate(({link, token}) => localStorage.setItem('ledger_link_approval', JSON.stringify({[link]: token})), {link: mockUrl, token: TOKEN});
     const block = await roster(page, GIFTS);
-    await block.getByRole('button', {name: 'Write this schedule to the game'}).click();
+    await block.locator('[data-gw="schedule"]').click();
     await ready(page);
     await configure({refuseWrite: 'refused:screen_open'});
-    await dialog(page).getByRole('button', {name: 'Write the week'}).click();
+    await dialog(page).locator('[data-gw-b="apply"]').click();
     await page.locator('dialog.gw-dlg[data-phase="failed"]').waitFor();
     assert.equal(await footOnScreen(page), true, 'refused');
     await configure({refuseWrite: null});
-    await dialog(page).getByRole('button', {name: 'Try again'}).click();
+    await dialog(page).getByRole('button', {name: en('nav.dlg.tryagain')}).click();
     await ready(page);
-    await dialog(page).getByRole('button', {name: 'Write the week'}).click();
-    await dialog(page).getByText(/^HART\. Gifts: 1 entry set in place of 2\./).waitFor();
-    await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Undo'}).click();
-    await dialog(page).getByText('Undone: the schedule at HART. Gifts is back as it was.').waitFor();
+    await dialog(page).locator('[data-gw-b="apply"]').click();
+    await dialog(page).getByText(enRe("sp.gw.sch.said", {"shop":"HART. Gifts","n":1,"was":2}, {"anchor":"start"})).waitFor();
+    await dialog(page).locator('.gw-foot [data-gw-b="undo"]').click();
+    await dialog(page).getByText(en("sp.gw.sch.undone", {"shop":"HART. Gifts"})).waitFor();
     assert.equal(await footOnScreen(page), true, 'undone');
   });
 }
@@ -1551,23 +1552,23 @@ for (const viewport of [{width: 390, height: 500}, {width: 740, height: 360}]) {
 test('the fixed strip: the read-again line turns done there', async (t) => {
   const page = await linked(t, {approved: true, data: withRosters()});
   const block = await roster(page, GIFTS);
-  await block.getByRole('button', {name: 'Write this schedule to the game'}).click();
+  await block.locator('[data-gw="schedule"]').click();
   await ready(page);
-  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
-  await dialog(page).getByText(/^HART\. Gifts: 1 entry set in place of 2\./).waitFor();
-  await dialog(page).locator('.gw-fix .gw-reread.done', {hasText: 'The board shows the game as it now stands'}).waitFor({timeout: 20000});
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(enRe("sp.gw.sch.said", {"shop":"HART. Gifts","n":1,"was":2}, {"anchor":"start"})).waitFor();
+  await dialog(page).locator('.gw-fix .gw-reread.done', {hasText: en("nav.dlg.reread.done")}).waitFor({timeout: 20000});
 });
 
 test('schedule: on a phone, what decides the next step stays in view; only the rows scroll', async (t) => {
   const page = await linked(t, {approved: true, data: withRosters(), viewport: {width: 390, height: 700}});
   const block = await roster(page, GIFTS);
-  await block.getByRole('button', {name: 'Write this schedule to the game'}).click();
+  await block.locator('[data-gw="schedule"]').click();
   await ready(page);
   // The add-people note sits in the fixed strip, the week in the body.
-  await dialog(page).locator('.gw-fix .gw-box.gw-warn', {hasText: 'Add 2 people to fill this plan'}).waitFor();
+  await dialog(page).locator('.gw-fix .gw-box.gw-warn', {hasText: textEn('sp.gw.add', {n:2}).split(':')[0]}).waitFor();
   assert.equal(await dialog(page).locator('.gw-body .gw-week').count(), 1);
   await configure({refuseWrite: 'refused:screen_open'});
-  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
   await page.locator('dialog.gw-dlg[data-phase="failed"]').waitFor();
   await configure({refuseWrite: null});
   // The refusal alone is fixed; the add-people note opens the scrolling body; the way on is in the foot.
@@ -1575,7 +1576,7 @@ test('schedule: on a phone, what decides the next step stays in view; only the r
   assert.equal(await dialog(page).locator('.gw-fix > :not(.gw-no)').count(), 0, 'only the refusal is fixed');
   assert.equal(await dialog(page).locator('.gw-body > :first-child').evaluate((e) => e.matches('.gw-box.gw-warn')), true);
   assert.equal(await dialog(page).locator('.gw-body .gw-no, .gw-body .gw-b').count(), 0, 'no refusal or button in the rows');
-  assert.equal(await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Try again'}).count(), 1);
+  assert.equal(await dialog(page).locator('.gw-foot').getByRole('button', {name: en('nav.dlg.tryagain')}).count(), 1);
   const m = await dialog(page).evaluate((d) => {
     const box = (s) => d.querySelector(s).getBoundingClientRect();
     const b = d.querySelector('.gw-body');
@@ -1597,27 +1598,27 @@ test('Try again only when every error the game names can be fixed in the game', 
     gwFixable({rows: []}),
   ]), [true, false, true, false, false, false]);
   const block = await roster(page, GIFTS);
-  await block.getByRole('button', {name: 'Write this schedule to the game'}).click();
+  await block.locator('[data-gw="schedule"]').click();
   await ready(page);
   await page.route(`${mockUrl}/write/schedule`, (route) => (JSON.parse(route.request().postData() || '{}').dryRun ? route.continue()
     : route.fulfill({status: 409, headers: {'Access-Control-Allow-Origin': ORIGIN},
       json: {error: 'refused', rows: [{d: 1, i: 0, error: 'not_assigned'}, {d: 1, i: 1, error: 'bad_hours'}]}})));
-  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
   await page.locator('dialog.gw-dlg[data-phase="failed"]').waitFor();
-  assert.equal(await dialog(page).getByRole('button', {name: 'Try again'}).count(), 0);
+  assert.equal(await dialog(page).getByRole('button', {name: en('nav.dlg.tryagain')}).count(), 0);
 });
 
 test('schedule: a refusal the game cannot be talked out of (bad_hours) offers no Try again', async (t) => {
   const page = await linked(t, {approved: true, data: withRosters()});
   const block = await roster(page, GIFTS);
-  await block.getByRole('button', {name: 'Write this schedule to the game'}).click();
+  await block.locator('[data-gw="schedule"]').click();
   await ready(page);
   await configure({refuseWrite: 'refused:bad_hours'});
-  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
   await page.locator('dialog.gw-dlg[data-phase="failed"]').waitFor();
-  await dialog(page).getByText("Someone's hours are not whole hours, at most 12, within the day").waitFor();
-  assert.equal(await dialog(page).getByRole('button', {name: 'Try again'}).count(), 0);
-  assert.equal(await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Close'}).count(), 1);
+  await dialog(page).getByText(en("nav.dlg.refuse.badhours.rule")).waitFor();
+  assert.equal(await dialog(page).getByRole('button', {name: en('nav.dlg.tryagain')}).count(), 0);
+  assert.equal(await dialog(page).locator('.gw-foot').getByRole('button', {name: en("nav.dlg.close")}).count(), 1);
   assert.deepEqual(await applied(), []);
 });
 
@@ -1628,17 +1629,17 @@ test('imports: the ranked list is the game\'s order, read only, and a write send
   // textContent: a section off screen skips its rendering, and innerText with it.
   assert.match(await list.textContent(),
     /1\. 1 Pier · keeps 3,800 in stock.*2\. 2 Pier · 0 a week · paused/);
-  assert.match(await list.getAttribute('data-tip'), /In delivery order, set at the headquarters in game/);
+  assert.match(await list.getAttribute('data-tip'), enRe("sb.imp.order"));
   // The contract whose level the box sets stands out.
-  assert.equal(await list.locator('.imp-lvl').textContent(), '1. 1 Pier · keeps 3,800 in stock');
+  assert.equal(await list.locator('.imp-lvl').textContent(), '1. 1 Pier \u00b7 ' + en('sb.imp.keeps', {n:3800}));
   assert.equal(await list.locator('button').count(), 0);
   await setTo(page, 'Paperbag', 4200);
   await applyImports(page).click();
   // A Smart Delivery write sets the level alone; it says the plain contract stays.
   await dialog(page).locator('.gw-line', {hasText: 'Paperbag'})
-    .getByText('The plain contract (2 Pier) is left as it is: the level counts what it brings.').waitFor();
-  await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
-  await dialog(page).getByText('1 amount set in the game.').waitFor();
+    .getByText(en("sb.gw.plain", {"list":"2 Pier","n":1})).waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}).replace(/^./, c => c.toUpperCase())})).waitFor();
   assert.equal('order' in (await applied())[0].body, false);
 });
 
@@ -1654,11 +1655,11 @@ test('imports: Apply sends only what the dry run judged', async (t) => {
     impSetKeep(r.impId, {value: 4300, inGame: 3800, basis: 'cap'});
     drawSupplyStrip(); drawImportsView();
   });
-  await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
   await dialog(page).locator('.gw-line .gw-num', {hasText: '4,300'}).waitFor();
   assert.equal((await applied()).length, 0, 'asked again, not applied');
-  await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
-  await dialog(page).getByText('1 amount set in the game.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}).replace(/^./, c => c.toUpperCase())})).waitFor();
   assert.equal((await applied())[0].body.contracts[0].products[0].amount, 4300);
 });
 test('imports: a stopped contract is started, with its next delivery against cash; what the cap leaves is said', async (t) => {
@@ -1669,11 +1670,11 @@ test('imports: a stopped contract is started, with its next delivery against cas
   await applyImports(page).click();
   // The first dry run names the cap; the write is made again within it, and the rest is said.
   const candle = dialog(page).locator('.gw-line', {hasText: 'Candle'});
-  await candle.locator('.gw-call.gw-neg', {hasText: "200 a week not covered: the importers' caps are reached."}).waitFor();
-  assert.match(await candle.locator('.gw-num').textContent(), /to 400a week$/);
-  assert.equal(await candle.locator('.gw-lvl u.cap').textContent(), 'cap 400');
-  assert.equal(await dialog(page).getByRole('button', {name: 'Apply 1 change'}).isEnabled(), true);
-  await dialog(page).getByRole('button', {name: 'Cancel'}).click();
+  await candle.locator('.gw-call.gw-neg', {hasText: textEn("sb.gw.unc.bold", {n:200, why:en("sb.gw.unc.caps")})}).waitFor();
+  assert.match(await candle.locator('.gw-num').textContent(), new RegExp(enRe('sp.gw.tile.to').source + ' 400' + enRe('sb.unit.week').source + '$'));
+  assert.equal(await candle.locator('.gw-lvl u.cap').textContent(), en('sb.gw.cap', {n:400}));
+  assert.equal(await dialog(page).locator('[data-gw-b="apply"]').isEnabled(), true);
+  await dialog(page).getByRole('button', {name: en("nav.dlg.cancel")}).click();
   // The capped dialog is gone before the next one opens: its own "3 Pier is
   // stopped." line (at 400, $1,000) must not pass for the new one's.
   await dialog(page).waitFor({state: 'detached'});
@@ -1681,12 +1682,12 @@ test('imports: a stopped contract is started, with its next delivery against cas
   await applyImports(page).click();
   const restart = dialog(page).locator('.gw-line', {hasText: 'Candle'}).locator('.gw-call', {hasText: '3 Pier is stopped.'});
   // The game's answer to the full 600: its bill, not a stale capped one.
-  await restart.filter({hasText: /next delivery, day 36: \$1,500/}).waitFor();
-  assert.match(await restart.textContent(), /This starts it again, with Repeating on\..*next delivery, day 36: \$1,500 of \$10,000/);
-  assert.equal(await dialog(page).getByText(/not covered/).count(), 0);
+  await restart.filter({hasText: textRe("sb.gw.bill", {next:en("sb.gw.next.day", {day:36}), total:1500})}).waitFor();
+  assert.match(await restart.textContent(), new RegExp(textRe('sb.gw.stoppedRow').source + '.*' + textRe('sb.gw.bill.of', {next:en('sb.gw.next.day', {day:36}), total:1500, cash:10000}).source));
+  assert.equal(await dialog(page).getByText(textRe("sb.gw.unc.bold")).count(), 0);
   assert.equal(await dialog(page).locator('.gw-imp.stopped', {hasText: '3 Pier'}).count(), 1);
-  await dialog(page).getByRole('button', {name: 'Apply 1 change'}).click();
-  await dialog(page).getByText('1 amount set, 1 contract started in the game.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}).replace(/^./, c => c.toUpperCase()) + ", " + en("sb.gw.done.started", {n:1})})).waitFor();
   assert.deepEqual((await applied())[0].body.contracts, [{id: 'CONTRACTthree', activate: true,
     products: [{itemName: 'ba:itemname_candle', warehouse: DEPOT_ADDRESS, amount: 600, expect: 500}]}]);
 });
@@ -1739,7 +1740,7 @@ test('imports: plain amounts take one cap budget per importer, in the game\'s de
                                 {at: got.gifts, set: [['B', 200]], uncovered: 400, ahead: []}]);
   assert.deepEqual(got.twice, [{at: got.depot, set: [['E', 400]], uncovered: 0, ahead: []},
                                {at: got.gifts, set: [['E', 100]], uncovered: 300, ahead: []}]);
-  assert.ok(got.keptWords.some((w) => w.includes("keeps its 300 a week: its importer's cap leaves it nothing this week")),
+  assert.ok(got.keptWords.some((w) => textRe('sb.gw.kept', {n:300, reason:en('sb.gw.kept.cap')}).test(w)),
     JSON.stringify(got.keptWords));
   assert.deepEqual(got.kept, [{at: got.depot, set: [['A', 500]], uncovered: 0, ahead: []},
                               {at: got.gifts, set: [], uncovered: 200, ahead: []}]);
@@ -1785,12 +1786,12 @@ test('imports: Smart Delivery contracts the write starts, and the lines it leave
   assert.deepEqual(got.smart, [[['S', 500], ['T', 500]], [['S', 0]]]);
   // S is named once per item for B and C, at its standing Z level; T's 0 is not named.
   assert.deepEqual(got.ahead, [[['S', 300]], [['S', 300]]]);
-  assert.equal((got.lead.match(/orders first/g) || []).length, 1);
-  assert.match(got.lead, /P's Smart Delivery contract for Z at HART\. Bare orders first and can use up to 300 of the cap\./);
+  assert.equal((got.lead.match(enRe("sb.gw.ahead", {} , {"flags":"g"})) || []).length, 1);
+  assert.match(got.lead, enRe("sb.gw.ahead", {"who":"P","item":"Z","depot":"HART. Bare","n":300}));
   assert.deepEqual(got.words, [[true, 'caps'], [true, 'smartAgent']]);
-  assert.match(got.lead2, /<b>Q<\/b>.*<b>P<\/b> keeps its 300 a week: a write never stops a contract; stop it in BizMan\./);
-  assert.match(got.lead2, /<b>W<\/b>.*<b>No Smart Delivery contract here has a purchasing agent<\/b>\./);
-  assert.doesNotMatch(got.lead2, /not covered/);
+  assert.match(got.lead2, new RegExp('<b>Q<\\/b>.*' + enRe('sb.gw.kept', {who:'P', n:300, reason:en('sb.gw.kept.never')}).source));
+  assert.match(got.lead2, new RegExp('<b>W<\\/b>.*' + enRe('sb.gw.unc.smartAgent').source.replace(/^n/, 'N')));
+  assert.doesNotMatch(got.lead2, textRe("sb.gw.unc.bold"));
 });
 
 test('imports: a week the caps leave short with nothing to write is said, and not counted', async (t) => {
@@ -1799,13 +1800,13 @@ test('imports: a week the caps leave short with nothing to write is said, and no
   await supply(page);
   await setTo(page, 'Candle', 600);
   await applyImports(page).click();
-  await dialog(page).getByText('Nothing to write. 600 a week of Candle at HART. Depot not covered: the importers\' caps are reached.').waitFor();
-  await dialog(page).getByRole('button', {name: 'Close'}).last().click();
+  await dialog(page).getByText(en("sb.gw.nothing.why", {why:textEn("sb.gw.unc.at", {n:600, item:"Candle", depot:"HART. Depot", why:en("sb.gw.unc.caps")})})).waitFor();
+  await dialog(page).getByRole('button', {name: en("nav.dlg.close")}).last().click();
   await page.evaluate(() => { drawSupplyStrip(); drawImportsView(); wireAll(); });
   assert.equal(await applyImports(page).count(), 0);
   // The row keeps the reason once the cap is known.
   assert.equal(await importRow(page, 'Candle').locator('.gw-short').textContent(),
-    "600 a week not covered: the importers' caps are reached.");
+    textEn("sb.gw.unc.bold", {n:600, why:en("sb.gw.unc.caps")}));
   assert.equal((await applied()).length, 0);
 });
 /* --- the schedule --------------------------------------------------------- */
@@ -1876,25 +1877,25 @@ async function roster(page, key, plan = 'demand') {
 test('schedule: the roster is written with only the people working here, and undone', async (t) => {
   const page = await linked(t, {approved: true, data: withRosters()});
   const block = await roster(page, GIFTS);
-  await block.getByText('24 h a week stay empty until 2 people are added').waitFor();
-  await block.getByRole('button', {name: 'Write this schedule to the game'}).click();
+  await block.getByText(en("sp.gw.sch.empty", {"h":24,"n":2})).waitFor();
+  await block.locator('[data-gw="schedule"]').click();
   await ready(page);
-  await dialog(page).locator('.gw-plan', {hasText: 'Demand plan'}).waitFor();
+  await dialog(page).locator('.gw-plan', {hasText: en('sp.pick.demand')}).waitFor();
   // Three figures now → after, the week as a pair of bars a day, the people as pills.
   assert.deepEqual(await dialog(page).locator('.gw-tile .v').allTextContents(),
     ['from 2 to 1', 'from 24 to 12', '1']);
-  await dialog(page).getByText('Add 2 people to fill this plan: assign Dee Lund (unassigned) and hire 1 Cleaning; 24 h a week stay empty until then.').waitFor();
-  assert.deepEqual(await dialog(page).locator('.gw-box.gw-warn .person').allTextContents(), ['DLDee Lundunassigned', '1 × Cleaningto hire']);
-  const left = dialog(page).locator('.gw-box', {hasText: 'No hours here after this'});
+  await dialog(page).getByText(textEn('sp.gw.add', {n:2, who:en('sp.add.both', {assign:'Dee Lund', hire:en('sp.add.hireone', {n:1, role:'Cleaning'})}), h:24})).waitFor();
+  assert.deepEqual(await dialog(page).locator('.gw-box.gw-warn .person').allTextContents(), ['DLDee Lund' + en('sp.gw.add.unassigned'), '1 \u00d7 Cleaning' + en('sp.gw.add.tohire')]);
+  const left = dialog(page).locator('.gw-box', {hasText: textEn("sp.gw.left.head")});
   assert.deepEqual(await left.locator('.person').allTextContents(), ['ASAna SilvaCleaning']);
   const days = await dialog(page).locator('.gw-wd .gw-sr').allTextContents();
-  assert.deepEqual(days.filter((d) => /^(Monday|Tuesday|Sunday)/.test(d)),
-    ['Monday: 1 entry, 12 h → 1 entry, 12 h', 'Tuesday: 0 entries, 0 h → 0 entries, 0 h', 'Sunday: 1 entry, 12 h → 0 entries, 0 h']);
+  assert.deepEqual(days.filter((d) => new RegExp('^(?:' + [1,2,0].map(d => enRe('sp.gw.week.said', {d}).source).join('|') + ')').test(d)),
+    [[1,1,12,1,12], [2,0,0,0,0], [0,1,12,0,0]].map(([d, was, wasH, now, nowH]) => en('sp.gw.week.said', {d, was:en('sp.n.entries', {n:was}), wasH, now:en('sp.n.entries', {n:now}), nowH})));
   await followPrints(page, GIFTS);
   const builds = await page.evaluate(() => window.builds);
-  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
-  await dialog(page).getByText('HART. Gifts: 1 entry set in place of 2.').waitFor();
-  await dialog(page).getByText('24 h a week stay empty').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sp.gw.sch.said", {"shop":"HART. Gifts","n":1,"was":2})).waitFor();
+  await dialog(page).getByText(new RegExp(['sp.gw.sch.stillempty', 'sp.gw.sch.doneempty'].map(k => textRe(k, {h:24, n:2}).source).join('|'))).first().waitFor();
   // The board has read the write: its print is the game's new one.
   await page.waitForFunction(({n, key}) => window.builds > n && D.businesses.find((b) => b.key === key).shiftPrint !== '9c98d93a',
     {n: builds, key: GIFTS});
@@ -1909,23 +1910,23 @@ test('schedule: the roster is written with only the people working here, and und
   // Undone: Write again waits while the board shows the write's bytes (or older),
   // and asks the game from the board read after the undo. That read is held here.
   const release = await holdSave(page);
-  await dialog(page).getByRole('button', {name: 'Undo'}).click();
-  await dialog(page).getByText('Undone: the schedule at HART. Gifts is back as it was.').waitFor();
-  const again = dialog(page).getByRole('button', {name: 'Write again'});
+  await dialog(page).locator('[data-gw-b="undo"]').click();
+  await dialog(page).getByText(en("sp.gw.sch.undone", {"shop":"HART. Gifts"})).waitFor();
+  const again = dialog(page).locator('[data-gw-b="again"]');
   assert.equal(await again.isDisabled(), true);
-  assert.equal(await again.getAttribute('title'), 'Reading the game again…');
+  assert.equal(await again.getAttribute('title'), en("nav.dlg.rereading"));
   assert.deepEqual((await applied()).map((w) => w.kind), ['schedule', 'undo']);
   // The undo takes the write's record back.
   assert.equal(await page.evaluate(() => pgOfFamily('schedule').length), 0);
   release();
-  await page.waitForFunction(() => { const b = [...document.querySelectorAll('dialog.gw-dlg .gw-foot button')].find((x) => x.textContent === 'Write again'); return b && !b.disabled; });
+  await page.waitForFunction(() => { const b = document.querySelector('dialog.gw-dlg .gw-foot [data-gw-b="again"]'); return b && !b.disabled; });
   assert.equal(await page.evaluate((key) => D.businesses.find((b) => b.key === key).shiftPrint, GIFTS), '9c98d93a');
   const reask = dryRunOf(page, 'schedule');
   await again.click();
   assert.equal(JSON.parse((await reask).postData()).expect, '9c98d93a', 'the print of the board read after the undo');
   await ready(page);
-  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
-  await dialog(page).getByText('HART. Gifts: 1 entry set in place of 2.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sp.gw.sch.said", {"shop":"HART. Gifts","n":1,"was":2})).waitFor();
   assert.deepEqual((await applied()).map((w) => w.kind), ['schedule', 'undo', 'schedule']);
 });
 
@@ -1933,31 +1934,31 @@ test('schedule: a board read that fails after an undo offers a refresh, and the 
   const page = await linked(t, {approved: true, data: withRosters()});
   await followPrints(page, GIFTS);
   const block = await roster(page, GIFTS);
-  await block.getByRole('button', {name: 'Write this schedule to the game'}).click();
+  await block.locator('[data-gw="schedule"]').click();
   await ready(page);
-  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
-  await dialog(page).getByText('HART. Gifts: 1 entry set in place of 2.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sp.gw.sch.said", {"shop":"HART. Gifts","n":1,"was":2})).waitFor();
   await page.waitForFunction((key) => D.businesses.find((b) => b.key === key).shiftPrint !== '9c98d93a', GIFTS);
   // The save is not served after the undo: the board's follow read gives up.
   await page.route(`${mockUrl}/save`, (route) => route.fulfill({status: 500, json: {error: 'broken'},
     headers: {'Access-Control-Allow-Origin': ORIGIN}}));
-  await dialog(page).getByRole('button', {name: 'Undo'}).click();
-  await dialog(page).getByText('Undone: the schedule at HART. Gifts is back as it was.').waitFor();
-  await dialog(page).getByRole('button', {name: 'Refresh the board'}).waitFor({timeout: 20000});
-  assert.equal(await dialog(page).getByRole('button', {name: 'Write again'}).isDisabled(), true, 'never on stale bytes');
+  await dialog(page).locator('[data-gw-b="undo"]').click();
+  await dialog(page).getByText(en("sp.gw.sch.undone", {"shop":"HART. Gifts"})).waitFor();
+  await dialog(page).getByRole('button', {name: en('nav.dlg.refresh')}).waitFor({timeout: 20000});
+  assert.equal(await dialog(page).locator('[data-gw-b="again"]').isDisabled(), true, 'never on stale bytes');
   // Served again, a refresh brings the board up to date and the re-do on.
   await page.unroute(`${mockUrl}/save`);
-  await dialog(page).getByRole('button', {name: 'Refresh the board'}).click();
-  await page.waitForFunction(() => { const b = [...document.querySelectorAll('dialog.gw-dlg .gw-foot button')].find((x) => x.textContent === 'Write again'); return b && !b.disabled; }, null, {timeout: 20000});
-  assert.equal(await dialog(page).getByRole('button', {name: 'Refresh the board'}).count(), 0);
+  await dialog(page).getByRole('button', {name: en('nav.dlg.refresh')}).click();
+  await page.waitForFunction(() => { const b = document.querySelector('dialog.gw-dlg .gw-foot [data-gw-b="again"]'); return b && !b.disabled; }, null, {timeout: 20000});
+  assert.equal(await dialog(page).getByRole('button', {name: en('nav.dlg.refresh')}).count(), 0);
   // The game changes between the undo and the re-do: the dry run says so, and the way on is a refresh.
   await page.route(`${mockUrl}/write/schedule`, (route) => route.fulfill({status: 200, headers: {'Access-Control-Allow-Origin': ORIGIN},
     json: {ok: false, kind: 'schedule', dryRun: true, business: 'HART. Gifts', siteError: 'changed', rows: [],
            before: {shifts: 2, print: 'x'}, after: {shifts: 1, print: 'y'}, removed: 2, added: 1, leftWithout: [], warnings: []}}));
-  await dialog(page).getByRole('button', {name: 'Write again'}).click();
+  await dialog(page).locator('[data-gw-b="again"]').click();
   await ready(page);
-  await dialog(page).getByRole('button', {name: 'Refresh the board'}).waitFor();
-  assert.equal(await dialog(page).getByRole('button', {name: 'Write the week'}).count(), 0);
+  await dialog(page).getByRole('button', {name: en('nav.dlg.refresh')}).waitFor();
+  assert.equal(await dialog(page).locator('[data-gw-b="apply"]').count(), 0);
 });
 
 test('schedule: Write again from a board that has not caught up with the undo: the game answers changed, nothing is written', async (t) => {
@@ -1966,25 +1967,25 @@ test('schedule: Write again from a board that has not caught up with the undo: t
   // the undo still shows the write's print.
   await followPrints(page, GIFTS, {undo: false});
   const block = await roster(page, GIFTS);
-  await block.getByRole('button', {name: 'Write this schedule to the game'}).click();
+  await block.locator('[data-gw="schedule"]').click();
   await ready(page);
-  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
-  await dialog(page).getByText('HART. Gifts: 1 entry set in place of 2.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sp.gw.sch.said", {"shop":"HART. Gifts","n":1,"was":2})).waitFor();
   await page.waitForFunction((key) => D.businesses.find((b) => b.key === key).shiftPrint !== '9c98d93a', GIFTS);
-  await dialog(page).getByRole('button', {name: 'Undo'}).click();
-  await dialog(page).getByText('Undone: the schedule at HART. Gifts is back as it was.').waitFor();
-  await page.waitForFunction(() => { const b = [...document.querySelectorAll('dialog.gw-dlg .gw-foot button')].find((x) => x.textContent === 'Write again'); return b && !b.disabled; }, null, {timeout: 20000});
+  await dialog(page).locator('[data-gw-b="undo"]').click();
+  await dialog(page).getByText(en("sp.gw.sch.undone", {"shop":"HART. Gifts"})).waitFor();
+  await page.waitForFunction(() => { const b = document.querySelector('dialog.gw-dlg .gw-foot [data-gw-b="again"]'); return b && !b.disabled; }, null, {timeout: 20000});
   const stale = await page.evaluate((key) => D.businesses.find((b) => b.key === key).shiftPrint, GIFTS);
   assert.notEqual(stale, '9c98d93a', 'the board still shows the write');
   const reask = dryRunOf(page, 'schedule');
-  await dialog(page).getByRole('button', {name: 'Write again'}).click();
+  await dialog(page).locator('[data-gw-b="again"]').click();
   assert.equal(JSON.parse((await reask).postData()).expect, stale);
   // The game holds the undone week: the dry run answers changed, and the way on is a refresh.
   await ready(page);
-  await dialog(page).getByRole('button', {name: 'Refresh the board'}).waitFor();
-  assert.equal(await dialog(page).getByRole('button', {name: 'Write the week'}).count(), 0);
+  await dialog(page).getByRole('button', {name: en('nav.dlg.refresh')}).waitFor();
+  assert.equal(await dialog(page).locator('[data-gw-b="apply"]').count(), 0);
   const refresh = page.waitForRequest((req) => req.url().endsWith('/refresh') && req.method() === 'POST');
-  await dialog(page).getByRole('button', {name: 'Refresh the board'}).click();
+  await dialog(page).getByRole('button', {name: en('nav.dlg.refresh')}).click();
   await refresh;
   assert.deepEqual((await applied()).map((w) => w.kind), ['schedule', 'undo'], 'nothing written from the stale board');
 });
@@ -1993,17 +1994,17 @@ test('schedule: a full-cover week undone and written again opens the hours again
   const page = await linked(t, {approved: true, data: withRosters()});
   await followPrints(page, GIFTS);
   const block = await roster(page, GIFTS, 'full');
-  await block.getByRole('button', {name: 'Write this schedule to the game'}).click();
+  await block.locator('[data-gw="schedule"]').click();
   await ready(page);
-  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
-  await dialog(page).getByText(/^HART\. Gifts: 2 entries set in place of 2, open 0 to 24 every day\.$/).waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(enRe("sp.gw.sch.said.open", {"shop":"HART. Gifts","n":2,"was":2}, {"anchor":"full"})).waitFor();
   assert.equal((await applied())[0].body.openAllHours, true);
   // The board reads the write: the shop is open around the clock now.
   await page.waitForFunction((key) => D.staffing.find((r) => r.key === key).fullCover.openNow === true, GIFTS);
-  await dialog(page).getByRole('button', {name: 'Undo'}).click();
-  await dialog(page).getByRole('button', {name: 'Write again'}).waitFor();
+  await dialog(page).locator('[data-gw-b="undo"]').click();
+  await dialog(page).locator('[data-gw-b="again"]').waitFor();
   const reask = dryRunOf(page, 'schedule');
-  await dialog(page).getByRole('button', {name: 'Write again'}).click();
+  await dialog(page).locator('[data-gw-b="again"]').click();
   assert.equal(JSON.parse((await reask).postData()).openAllHours, true, 'the board read after the undo: shut again');
   await ready(page);
 });
@@ -2011,11 +2012,11 @@ test('schedule: a full-cover week undone and written again opens the hours again
 test('schedule: full cover opens every day 0 to 24, unless the player opts out', async (t) => {
   const page = await linked(t, {approved: true, data: withRosters()});
   const block = await roster(page, GIFTS, 'full');
-  await block.getByRole('button', {name: 'Write this schedule to the game'}).click();
-  const open = dialog(page).getByRole('switch', {name: 'Also open every day 0 to 24'});
+  await block.locator('[data-gw="schedule"]').click();
+  const open = dialog(page).locator('[data-gw-open]');
   await open.waitFor();
   assert.equal(await open.getAttribute('aria-checked'), 'true');
-  await dialog(page).locator('.gw-plan', {hasText: 'Full cover 24/7'}).waitFor();
+  await dialog(page).locator('.gw-plan', {hasText: en('sp.pick.full')}).waitFor();
   // The click flips the switch once: the Filter kinds switches' handler leaves
   // it alone, so it shows and says what will be sent (#107).
   assert.deepEqual(await open.evaluate((el) => {
@@ -2024,8 +2025,8 @@ test('schedule: full cover opens every day 0 to 24, unless the player opts out',
   }), [false, 'false']);
   // The game is asked again, without the opening hours.
   await page.locator('dialog.gw-dlg[data-phase="ready"] [role="switch"][aria-checked="false"]').waitFor();
-  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
-  await dialog(page).getByText(/^HART\. Gifts: 2 entries set in place of 2\.$/).waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(enRe("sp.gw.sch.said", {"shop":"HART. Gifts","n":2,"was":2}, {"anchor":"full"})).waitFor();
   const body = (await applied())[0].body;
   assert.equal(body.openAllHours, false);
   assert.deepEqual(body.days, [{d: 1, shifts: [{f: 0, t: 12, employeeId: ANA, itemInstanceId: REGISTER},
@@ -2044,10 +2045,10 @@ test('schedule: a game that moved on answers 409 changed', async (t) => {
   const page = await linked(t, {approved: true, data: withRosters()});
   await configure({refuseWrite: 'changed'});
   const block = await roster(page, GIFTS);
-  await block.getByRole('button', {name: 'Write this schedule to the game'}).click();
-  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
-  await dialog(page).getByText('The game moved on', {exact: true}).waitFor();
-  assert.equal(await dialog(page).getByRole('button', {name: 'Refresh the board'}).count(), 1);
+  await block.locator('[data-gw="schedule"]').click();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("nav.dlg.say.moved"), {exact: true}).waitFor();
+  assert.equal(await dialog(page).getByRole('button', {name: en('nav.dlg.refresh')}).count(), 1);
   assert.equal((await applied()).length, 0);
 });
 
@@ -2058,13 +2059,13 @@ test('schedule: a cover-only plan keeps the serving entries in the game', async 
   Object.assign(gifts, {bench: [], addPeople: {assign: [], hire: [], people: 0, hoursUncovered: 0}});
   const page = await linked(t, {approved: true, data: JSON.stringify(data)});
   const block = await roster(page, GIFTS);
-  await block.getByRole('button', {name: 'Write this schedule to the game'}).click();
-  await dialog(page).locator('.gw-plan', {hasText: 'Cleaning and security'}).waitFor();
-  await dialog(page).getByText('The 1 serving entry in the game stays as it stands: this plan covers cleaning and security only.').waitFor();
+  await block.locator('[data-gw="schedule"]').click();
+  await dialog(page).locator('.gw-plan', {hasText: en("sp.gw.plan.cover")}).waitFor();
+  await dialog(page).getByText(en("sp.gw.sch.kept", {"n":1})).waitFor();
   // Entries: the one written and the one kept, against the two now.
   assert.equal(await dialog(page).locator('.gw-tile .v').first().textContent(), '2');
-  await dialog(page).getByRole('button', {name: 'Write the week'}).click();
-  await dialog(page).getByText(/^HART\. Gifts: 2 entries set in place of 2\./).waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(enRe("sp.gw.sch.said", {"shop":"HART. Gifts","n":2,"was":2}, {"anchor":"start"})).waitFor();
   assert.deepEqual((await applied())[0].body.days, [
     {d: 1, shifts: [{f: 8, t: 20, employeeId: ANA, itemInstanceId: REGISTER}]},
     {d: 3, shifts: [{f: 0, t: 12, employeeId: ANA, itemInstanceId: CLEAN}]}]);
@@ -2191,18 +2192,18 @@ test('uniforms from a business page: the progress stands beside the write, there
   }, GIFTS);
   await page.locator('#sp-standards [data-gw="uniforms"]').first().click();
   await ready(page);
-  await dialog(page).getByRole('button', {name: SET}).click();
-  await dialog(page).getByText('Default is on 1 role at HART. Gifts.').waitFor();
+  await dialog(page).locator('[data-gw-b="apply"]').click();
+  await dialog(page).getByText(en("sp.gw.uni.done.one", {preset:"Default", n:1, shop:"HART. Gifts"})).waitFor();
   assert.notEqual(await page.evaluate((k) => pgUniformState(k), GIFTS), null, 'recorded from the answer');
-  await dialog(page).locator('.gw-foot').getByRole('button', {name: 'Close'}).click();
+  await dialog(page).locator('.gw-foot').getByRole('button', {name: en("nav.dlg.close")}).click();
   await page.waitForFunction((k) => (pgUniformState(k) || {}).state === 'confirmed', GIFTS);
-  await page.locator('#sp-standards .sp-unipg').getByText(/Confirmed · day \d+/).waitFor();
+  await page.locator('#sp-standards .sp-unipg').getByText(new RegExp(enRe('sb.st.confirmed.day').source.replace('.+?', '\\d+'))).waitFor();
   await page.evaluate(() => openRoute('businesses/standards'));
   // Standards was only just shown: wait for its row to be laid out and read.
-  await page.locator(`#secStandards tr[data-std-row="${GIFTS}"] .nx-st`).getByText(/Confirmed/).waitFor();
+  await page.locator(`#secStandards tr[data-std-row="${GIFTS}"] .nx-st`).getByText(new RegExp(enRe('sb.st.confirmed.day').source.replace('.+?', '\\d+'))).waitFor();
   // Undo, from the strip: the record goes.
-  await page.locator('#gwToast').getByRole('button', {name: 'Undo'}).click();
-  await dialog(page).getByText('Undone: 1 role back to no uniform.').waitFor();
+  await page.locator('#gwToast').locator('[data-gw-undo]').click();
+  await dialog(page).getByText(en("sp.gw.uni.undone", {"n":1})).waitFor();
   assert.equal(await page.evaluate((k) => pgUniformState(k), GIFTS), null);
 });
 

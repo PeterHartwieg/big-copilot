@@ -1,5 +1,6 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
@@ -139,7 +140,7 @@ test('linkFetch tries loopback, then local, then no annotation, and remembers', 
 test('a link that answers nothing reads as the game not running', async () => {
   const h = harness();
   const err = await h.run('linkFetch("/health").then(() => null, (e) => e)');
-  assert.equal(err.message, 'The game is not running, or the Big Copilot Link mod is not installed.');
+  assert.equal(err.message, en("app.link.down"));
   assert.equal(h.seen.calls.length, 3, 'every spelling was tried before giving up');
 });
 
@@ -162,7 +163,7 @@ test('an open permission prompt gets a long wait and a strip that says so', asyn
   await h.run('linkFetch("/health")');
   assert.deepEqual(delays, [90000], 'the fetch waits for the player, not five seconds');
   assert.deepEqual(h.seen.states.at(-1),
-    ['busy', 'Allow Big Copilot to reach the game', 'your browser is asking, at the top of the window']);
+    ['busy', en("app.link.allow"), en("app.link.allow.where")]);
 });
 
 test('a granted permission, or a browser that knows none, keeps the five-second timeout', async () => {
@@ -197,9 +198,9 @@ test('a blocked site is named as blocked, not as a closed game', async () => {
   h.run('linkUrl = "http://127.0.0.1:8322"');
   await h.run('loadFromLink("Linking to the game")');
   assert.equal(h.seen.calls.length, 0, 'no fetch the browser will refuse anyway');
-  assert.deepEqual(h.seen.states.at(-1), ['bad', 'Could not reach the game', 'http://127.0.0.1:8322']);
-  assert.equal(h.seen.notes.at(-1)[1], 'Your browser is blocking this site from reaching the game.');
-  assert.match(h.seen.notes.at(-1)[2], /site settings/);
+  assert.deepEqual(h.seen.states.at(-1), ['bad', en("app.link.unreached"), 'http://127.0.0.1:8322']);
+  assert.equal(h.seen.notes.at(-1)[1], en("app.link.blocked"));
+  assert.match(h.seen.notes.at(-1)[2], enRe("app.link.blocked.fix"));
 });
 
 test('a Block answered under the prompt reads as blocked once the fetch fails', async () => {
@@ -210,16 +211,16 @@ test('a Block answered under the prompt reads as blocked once the fetch fails', 
   h.context.fetch = async () => { states['loopback-network'] = 'denied'; throw new TypeError('Failed to fetch'); };
   h.run('linkUrl = "http://127.0.0.1:8322"');
   const err = await h.run('linkFetch("/health").then(() => null, (e) => e)');
-  assert.equal(err.message, 'Your browser is blocking this site from reaching the game.');
+  assert.equal(err.message, en("app.link.blocked"));
 });
 
 test('an unreachable game leaves the bad state, the install note and the link', async () => {
   const h = harness();
   h.run('linkUrl = "http://127.0.0.1:8322"');
   await h.run('loadFromLink("Linking to the game")');
-  assert.deepEqual(h.seen.states.at(-1), ['bad', 'Could not reach the game', 'http://127.0.0.1:8322']);
-  assert.match(h.seen.notes.at(-1)[1], /The game is not running/);
-  assert.match(h.seen.notes.at(-1)[2], /Start the game with the mod enabled and load a save, then click Update\./);
+  assert.deepEqual(h.seen.states.at(-1), ['bad', en("app.link.unreached"), 'http://127.0.0.1:8322']);
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.down"));
+  assert.match(h.seen.notes.at(-1)[2], enRe("app.link.start"));
   assert.equal(h.run('linkUrl'), 'http://127.0.0.1:8322', 'Update has to be able to retry');
   assert.equal(h.seen.builds.length, 0);
 });
@@ -227,8 +228,8 @@ test('an unreachable game leaves the bad state, the install note and the link', 
 test('a mod speaking another schema version is refused, naming version 1', async () => {
   const h = harness({routes: {health: {...HEALTH, schemaVersion: 2, stamp: 's2'}}});
   await h.run('loadFromLink("Linking to the game")');
-  assert.equal(h.seen.states.at(-1)[1], 'The Big Copilot Link mod and this page do not match');
-  assert.match(h.seen.notes.at(-1)[1], /The mod speaks version 2; this page needs version 1\./);
+  assert.equal(h.seen.states.at(-1)[1], en("app.link.mismatch"));
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:2, need:1}));
   assert.equal(h.seen.builds.length, 0);
 });
 
@@ -237,7 +238,7 @@ test('an unchanged stamp with a board on screen builds nothing', async () => {
   h.run(`lastLinkStamp = ${JSON.stringify(HEALTH.stamp)}`);
   await h.run('loadFromLink("Reading the game")');
   assert.deepEqual(h.seen.states.at(-1),
-    ['ok', 'No newer state from the game', 'Costy Co · day 34, 14:12 · game link']);
+    ['ok', en("app.link.same"), 'Costy Co \u00b7 ' + en('app.link.when', {day:34, at:'14:12'}) + ' \u00b7 ' + en('app.link.source')]);
   assert.equal(h.seen.calls.filter(([url]) => url.endsWith('/save')).length, 0);
   assert.equal(h.seen.builds.length, 0);
 });
@@ -281,7 +282,7 @@ test('a game that never serializes says so after thirty seconds', async () => {
   await h.run('loadFromLink("Reading the game")');
   // Thirty seconds of the clock, however often it looks.
   assert.deepEqual(h.waits, Array(120).fill(250));
-  assert.equal(h.seen.states.at(-1)[1], 'The game has not produced a save yet');
+  assert.equal(h.seen.states.at(-1)[1], en("app.link.nosave"));
   assert.equal(h.seen.builds.length, 0);
 });
 
@@ -319,18 +320,18 @@ test('a throttled refresh waits out retryAfter, capped, then polls', async () =>
 
 test('a refusal keeps the board and names what the game is doing', async () => {
   for (const [reason, expected] of [
-    ['saving', 'The game is saving right now'],
-    ['placement', 'The game cannot save while you are placing items'],
-    ['interior', 'The game cannot save while the interior designer is open'],
-    ['casino', 'The game cannot save on the casino boat'],
-    [undefined, 'The game cannot save right now'],
+    ['saving', 'app.link.refuse.saving'],
+    ['placement', 'app.link.refuse.placement'],
+    ['interior', 'app.link.refuse.interior'],
+    ['casino', 'app.link.refuse.casino'],
+    [undefined, 'app.link.refuse.other'],
   ]) {
     const h = harness({routes: {refresh: reply(409, {error: 'cannot_save', reason})}});
     h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"');
     await h.run('update()');
     assert.equal(h.seen.builds.length, 0, reason);
-    assert.match(h.seen.notes.at(-1)[1], new RegExp(expected));
-    assert.match(h.seen.notes.at(-1)[1], /Try Update again in a moment\.$/);
+    assert.match(h.seen.notes.at(-1)[1], enRe(expected));
+    assert.match(h.seen.notes.at(-1)[1], new RegExp(enRe(expected).source + '$'));
   }
 });
 
@@ -409,7 +410,7 @@ test('a refusal before any link build leaves the idle state, not a spinner', asy
   h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = ""');
   await h.run('update()');
   assert.deepEqual(h.seen.states.at(-1), ['idle']);
-  assert.match(h.seen.notes.at(-1)[1], /interior designer/);
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.refuse.interior"));
 });
 
 test('a throttle followed by a refusal reports the refusal', async () => {
@@ -425,7 +426,7 @@ test('a throttle followed by a refusal reports the refusal', async () => {
   h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"');
   await h.run('update()');
   assert.equal(asked, 2);
-  assert.match(h.seen.notes.at(-1)[1], /placing items/);
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.refuse.placement"));
   assert.equal(h.seen.builds.length, 0);
 });
 
@@ -444,7 +445,7 @@ test('the wait for a moving stamp after Update polls every quarter second, for 4
   const h = harness({routes: {refresh: reply(202, {accepted: true, stamp: 's1'}), health: HEALTH}});
   h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"');
   await h.run('update()');
-  assert.equal(h.seen.states.at(-1)[1], 'The game did not finish serializing');
+  assert.equal(h.seen.states.at(-1)[1], en("app.link.unfinished"));
   assert.ok(h.waits.every((ms) => ms === 250), 'every poll a quarter second');
   assert.equal(h.waits.reduce((a, b) => a + b, 0), 45000, 'the deadline is time, not a count of polls');
   assert.equal(h.run('attempt'), null);
@@ -483,10 +484,10 @@ test('Update inside the quiet window builds the newer bytes the mod holds, then 
   assert.deepEqual(h.seen.builds.map((f) => f.linkStamp), ['s2', 's3'], 'the newest bytes at once, then the refresh after the click');
   assert.equal(asked, 2, 'the refresh is asked for again once the window lifts');
   assert.equal(h.waits[0], 2500, 'only what is left of the window after the build');
-  const said = h.seen.states.find((st) => st[1] === 'The game refreshed moments ago');
+  const said = h.seen.states.find((st) => st[1] === en("app.link.recent"));
   assert.ok(said, 'the quiet window is named as such');
-  assert.equal(said[2], 'http://127.0.0.1:8322 · asking again in 3 s');
-  assert.ok(!h.seen.states.some((st) => st[1] === 'The game is already serializing'), 'nothing was serializing');
+  assert.equal(said[2], 'http://127.0.0.1:8322 \u00b7 ' + en('app.link.askagain', {s:3}));
+  assert.ok(!h.seen.states.some((st) => st[1] === en("app.link.already")), 'nothing was serializing');
   assert.equal(h.run('lastLinkStamp'), 's3');
   assert.equal(h.seen.states.at(-1)[0], 'ok');
   // The throttle's read and s2's; the poll and s3's; one look, after Update's
@@ -510,7 +511,7 @@ test('Update inside the quiet window with nothing newer waits it out and asks ag
   await h.run('lookRun');
   assert.deepEqual(h.seen.builds.map((f) => f.linkStamp), ['s2']);
   assert.equal(h.waits[0], 6000);
-  assert.ok(h.seen.states.some((st) => st[1] === 'The game refreshed moments ago' && /asking again in 6 s$/.test(st[2])));
+  assert.ok(h.seen.states.some((st) => st[1] === en("app.link.recent") && new RegExp(enRe('app.link.askagain', {s:6}).source + '$').test(st[2])));
   assert.equal(h.run('attempt'), null);
 });
 
@@ -528,8 +529,8 @@ test('a throttle while the game is serializing says so, and builds nothing early
   h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"');
   await h.run('update()');
   await h.run('lookRun');
-  assert.deepEqual(h.seen.states.find((st) => /serializing$|moments ago/.test(st[1])),
-    ['busy', 'The game is already serializing', 'http://127.0.0.1:8322 · waiting 4 s']);
+  assert.deepEqual(h.seen.states.find((st) => [en('app.link.already'), en('app.link.recent')].includes(st[1])),
+    ['busy', en("app.link.already"), 'http://127.0.0.1:8322 \u00b7 ' + en('app.link.waiting', {s:4})]);
   assert.deepEqual(h.seen.builds.map((f) => f.linkStamp), ['s3'], 'only the finished refresh is built');
   assert.equal(h.run('attempt'), null);
 });
@@ -554,8 +555,8 @@ test('a throttle whose health cannot be judged is not called serializing', async
     h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"');
     await h.run('update()');
     await h.run('lookRun');
-    assert.deepEqual(h.seen.states.find((st) => /serializing$|moments ago/.test(st[1])),
-      ['busy', 'The game refreshed moments ago', 'http://127.0.0.1:8322 · asking again in 4 s'], String(unread && unread.status));
+    assert.deepEqual(h.seen.states.find((st) => [en('app.link.already'), en('app.link.recent')].includes(st[1])),
+      ['busy', en("app.link.recent"), 'http://127.0.0.1:8322 \u00b7 ' + en('app.link.askagain', {s:4})], String(unread && unread.status));
     assert.deepEqual(h.seen.builds.map((f) => f.linkStamp), ['s2']);
     assert.equal(h.run('attempt'), null);
   }
@@ -675,7 +676,7 @@ test("a write's follow reports on its own build, not on the look after it", asyn
   assert.deepEqual(told, ['done'], 'told as soon as its own build is on the board');
   await h.run('lookRun');
   assert.deepEqual(told, ['done'], "the look's failure is not the follow's");
-  assert.equal(h.seen.states.at(-1)[1], 'Could not read the game', 'the look said its own trouble');
+  assert.equal(h.seen.states.at(-1)[1], en("app.link.unread"), 'the look said its own trouble');
   assert.equal(h.run('attempt'), null);
 });
 
@@ -684,15 +685,15 @@ test('a mod that did not take the refresh is not reported as absent', async () =
   h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"');
   await h.run('update()');
   assert.equal(h.seen.states.at(-1)[0], 'ok');
-  assert.match(h.seen.notes.at(-1)[1], /did not take the refresh \(answered 503\)/);
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.refresh.refused", {status:503}));
 });
 
 test('a save answered with an error names the error, not a parse failure', async () => {
   const h = harness({routes: {health: {...HEALTH, stamp: 's9'}, save: reply(503, {error: 'no_save_yet'})}});
   h.run('linkUrl = "http://127.0.0.1:8322"');
   await h.run('loadFromLink("Reading the game")');
-  assert.deepEqual(h.seen.states.at(-1), ['bad', 'Could not read the game', 'http://127.0.0.1:8322']);
-  assert.match(h.seen.notes.at(-1)[1], /503 \(no_save_yet\)/);
+  assert.deepEqual(h.seen.states.at(-1), ['bad', en("app.link.unread"), 'http://127.0.0.1:8322']);
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.save.error", {status:503, error:"no_save_yet"}));
   assert.equal(h.seen.builds.length, 0);
 });
 
@@ -704,7 +705,7 @@ test('the linked watcher says once when the game goes away, and clears it when i
   await h.run('checkFolder()');
   const warns = h.seen.notes.filter((n) => n[0] === 'warn');
   assert.equal(warns.length, 1, 'said once');
-  assert.match(warns[0][1], /not reachable/);
+  assert.match(warns[0][1], enRe("app.link.gone"));
   up = true;
   await h.run('checkFolder()');
   assert.deepEqual(h.seen.notes.at(-1), [''], 'cleared when the game answers again');
@@ -717,7 +718,7 @@ test('any answer from the mod ends the gone note, a refusal included', async () 
   assert.equal(h.run('linkGone'), false, 'a 409 is still an answer');
   h.run('linkGone = true; lastLinkStamp = "s1"');
   await h.run('loadFromLink("Reading the game")');
-  assert.equal(h.seen.states.at(-1)[1], 'No newer state from the game');
+  assert.equal(h.seen.states.at(-1)[1], en("app.link.same"));
   assert.equal(h.run('linkGone'), false, 'so is "no newer state"');
 });
 
@@ -734,7 +735,7 @@ test('a /health that is not 200 is waited out, never read as a version mismatch'
   h.run('linkUrl = "http://127.0.0.1:8322"');
   await h.run('loadFromLink("Reading the game")');
   assert.equal(h.seen.builds.length, 1, 'built once the mod answered with health');
-  assert.ok(!h.seen.states.some((s) => /do not match/.test(s[1])), 'no version refusal');
+  assert.ok(!h.seen.states.some((s) => enRe("app.link.mismatch").test(s[1])), 'no version refusal');
 });
 
 test('an incompatible mod that is busy is refused at once, not after the wait', async () => {
@@ -742,15 +743,15 @@ test('an incompatible mod that is busy is refused at once, not after the wait', 
   h.run('linkUrl = "http://127.0.0.1:8322"');
   await h.run('loadFromLink("Reading the game")');
   assert.equal(h.waits.length, 0, 'no waiting');
-  assert.match(h.seen.notes.at(-1)[1], /version 2/);
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:2, need:1}));
 });
 
 test('a port that never answers as the mod is named after the wait, not blamed on a missing save', async () => {
   const h = harness({routes: {health: reply(503, {error: 'x'})}});
   h.run('linkUrl = "http://127.0.0.1:8322"');
   await h.run('loadFromLink("Reading the game")');
-  assert.equal(h.seen.states.at(-1)[1], 'That address does not answer as the Big Copilot Link mod');
-  assert.match(h.seen.notes.at(-1)[1], /another program on that port/);
+  assert.equal(h.seen.states.at(-1)[1], en("app.link.notmod"));
+  assert.match(h.seen.notes.at(-1)[1], enRe('app.link.notmod.never'));
 });
 
 test('a port that answered as the mod once is not blamed when it stops answering as it', async () => {
@@ -758,14 +759,14 @@ test('a port that answered as the mod once is not blamed when it stops answering
   const h = harness({routes: {health: () => (asked++ === 0 ? {...HEALTH, stamp: '', busy: true} : reply(503, {error: 'x'}))}});
   h.run('linkUrl = "http://127.0.0.1:8322"');
   await h.run('loadFromLink("Reading the game")');
-  assert.equal(h.seen.states.at(-1)[1], 'The game has not produced a save yet');
+  assert.equal(h.seen.states.at(-1)[1], en("app.link.nosave"));
 });
 
 test('a foreign 200 that copies the not-ready shape is still judged', async () => {
   const h = harness({routes: {health: {stamp: '', busy: true, notReady: true}}});
   h.run('linkUrl = "http://127.0.0.1:8322"');
   await h.run('loadFromLink("Reading the game")');
-  assert.equal(h.seen.states.at(-1)[1], 'That address does not answer as the Big Copilot Link mod');
+  assert.equal(h.seen.states.at(-1)[1], en("app.link.notmod"));
   assert.equal(h.waits.length, 0, 'judged at once, not waited out as not ready');
 });
 
@@ -774,8 +775,8 @@ test('a 200 /health with no object in it is not ready, and names the port after 
     const h = harness({routes: {health: reply(200, body)}});
     h.run('linkUrl = "http://127.0.0.1:8322"');
     await h.run('loadFromLink("Reading the game")');
-    assert.equal(h.seen.states.at(-1)[1], 'That address does not answer as the Big Copilot Link mod', JSON.stringify(body));
-    assert.ok(!h.seen.states.some((s) => /do not match/.test(s[1])), 'never a version refusal');
+    assert.equal(h.seen.states.at(-1)[1], en("app.link.notmod"), JSON.stringify(body));
+    assert.ok(!h.seen.states.some((s) => enRe("app.link.mismatch").test(s[1])), 'never a version refusal');
     assert.ok(h.waits.length > 0, 'waited out like busy, not refused on the first answer');
   }
 });
@@ -784,7 +785,7 @@ test('an Update accepted by something that never answers as the mod names the po
   const h = harness({routes: {refresh: reply(202, {accepted: true, stamp: 's1'}), health: reply(503, {error: 'x'})}});
   h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"');
   await h.run('update()');
-  assert.equal(h.seen.states.at(-1)[1], 'That address does not answer as the Big Copilot Link mod');
+  assert.equal(h.seen.states.at(-1)[1], en("app.link.notmod"));
   const waited = h.waits.reduce((a, b) => a + b, 0);
   assert.ok(waited <= 30000, `waited ${waited} ms; the bound for never-health is thirty seconds`);
 });
@@ -793,7 +794,7 @@ test('an incompatible mod answering an Update is refused inside the poll, not af
   const h = harness({routes: {refresh: reply(202, {accepted: true, stamp: 's1'}), health: {...HEALTH, schemaVersion: 3}}});
   h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"');
   await h.run('update()');
-  assert.match(h.seen.notes.at(-1)[1], /version 3/);
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:3, need:1}));
   assert.equal(h.waits.length, 0);
 });
 
@@ -803,8 +804,8 @@ test('a health object with no version is the port, not "version undefined"', asy
     const h = harness({routes: {health: body}});
     h.run('linkUrl = "http://127.0.0.1:8322"');
     await h.run('loadFromLink("Reading the game")');
-    assert.equal(h.seen.states.at(-1)[1], 'That address does not answer as the Big Copilot Link mod', JSON.stringify(body));
-    assert.match(h.seen.notes.at(-1)[1], /not with the mod's health/);
+    assert.equal(h.seen.states.at(-1)[1], en("app.link.notmod"), JSON.stringify(body));
+    assert.match(h.seen.notes.at(-1)[1], enRe("app.link.notmod.why"));
     assert.ok(!/undefined|null/.test(h.seen.notes.at(-1)[1]));
   }
 });
@@ -816,7 +817,7 @@ test('the watcher names a port taken over after ten checks, once, and counts fro
   for (let i = 0; i < 12; i++) await h.run('checkFolder()');
   const warns = h.seen.notes.filter((n) => n[0] === 'warn');
   assert.equal(warns.length, 1);
-  assert.match(warns[0][1], /no longer answers as the Big Copilot Link mod/);
+  assert.match(warns[0][1], enRe("app.link.port.gone"));
   healthy = true;
   await h.run('checkFolder()');
   assert.equal(h.run('linkNotReady'), 0);
@@ -842,13 +843,13 @@ test('the takeover count does not leak into a relink, and a disconnect does not 
   assert.equal(h.seen.notes.filter((n) => n[0] === 'warn').length, 0, 'one check on the new port says nothing');
   // Ten more say it once; a disconnect and a return say it again.
   for (let i = 0; i < 10; i++) await h.run('checkFolder()');
-  let warns = h.seen.notes.filter((n) => /no longer answers/.test(n[1]));
+  let warns = h.seen.notes.filter((n) => enRe("app.link.port.gone").test(n[1]));
   assert.equal(warns.length, 1);
   mode = 'down';
   await h.run('checkFolder()');
   mode = 'notready';
   await h.run('checkFolder()');
-  warns = h.seen.notes.filter((n) => /no longer answers/.test(n[1]));
+  warns = h.seen.notes.filter((n) => enRe("app.link.port.gone").test(n[1]));
   assert.equal(warns.length, 2, 'said again after the game came back and the port was still not the mod');
 });
 
@@ -857,7 +858,7 @@ test('the takeover note is withdrawn when the port answers as the mod again, sta
   const h = harness({routes: {health: () => (mode === 'health' ? {...HEALTH, stamp: 's1'} : reply(503, {error: 'x'}))}});
   h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"; strip.tone = "ok"');
   for (let i = 0; i < 10; i++) await h.run('checkFolder()');
-  assert.match(h.seen.notes.at(-1)[1], /no longer answers/);
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.port.gone"));
   mode = 'health';
   await h.run('checkFolder()');
   assert.deepEqual(h.seen.notes.at(-1), [''], 'withdrawn although the stamp did not move');
@@ -872,13 +873,13 @@ test('the watcher says once when a foreign object or another version answers, an
   await h.run('checkFolder()');
   let warns = h.seen.notes.filter((n) => n[0] === 'warn');
   assert.equal(warns.length, 1);
-  assert.match(warns[0][1], /no longer answers as the Big Copilot Link mod/);
+  assert.match(warns[0][1], enRe("app.link.port.gone"));
   body = {...HEALTH, stamp: 's1'};
   await h.run('checkFolder()');
   assert.deepEqual(h.seen.notes.at(-1), ['']);
   body = {...HEALTH, schemaVersion: 2, stamp: 's1'};
   await h.run('checkFolder()');
-  assert.match(h.seen.notes.at(-1)[1], /version 2/);
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.port.version", {v:2, need:1}));
 });
 
 test('an Update that reads health of this version re-arms the port note of the watcher', async () => {
@@ -890,14 +891,14 @@ test('an Update that reads health of this version re-arms the port note of the w
   }});
   h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"; strip.tone = "ok"');
   for (let i = 0; i < 10; i++) await h.run('checkFolder()');
-  assert.match(h.context.noted.text, /no longer answers/);
+  assert.match(h.context.noted.text, enRe("app.link.port.gone"));
   mode = 'health';
   await h.run('update()');
-  assert.ok(!/no longer answers/.test(h.context.noted.text), 'the build replaced the note');
+  assert.ok(!enRe("app.link.port.gone").test(h.context.noted.text), 'the build replaced the note');
   mode = 'notready';
   h.run('strip.tone = "ok"');
   for (let i = 0; i < 10; i++) await h.run('checkFolder()');
-  assert.equal(h.seen.notes.filter((n) => /no longer answers/.test(n[1])).length, 2, 'said again');
+  assert.equal(h.seen.notes.filter((n) => enRe("app.link.port.gone").test(n[1])).length, 2, 'said again');
 });
 
 test('a note the player earned another way does not silence the watcher, and the note stands while the condition holds', async () => {
@@ -905,20 +906,20 @@ test('a note the player earned another way does not silence the watcher, and the
   const h = harness({routes: {health: () => body, refresh: reply(404, {error: 'not_found'})}});
   h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"; strip.tone = "ok"');
   await h.run('checkFolder()');
-  assert.match(h.context.noted.text, /no longer answers/);
+  assert.match(h.context.noted.text, enRe("app.link.port.gone"));
   await h.run('checkFolder()');
-  assert.match(h.context.noted.text, /no longer answers/, 'still up, not withdrawn while the condition holds');
-  assert.equal(h.seen.notes.filter((n) => /no longer answers/.test(n[1])).length, 1, 'and not said twice');
+  assert.match(h.context.noted.text, enRe("app.link.port.gone"), 'still up, not withdrawn while the condition holds');
+  assert.equal(h.seen.notes.filter((n) => enRe("app.link.port.gone").test(n[1])).length, 1, 'and not said twice');
   // The player follows the advice; Update's refusal replaces the note.
   await h.run('update()');
-  assert.match(h.context.noted.text, /did not take the refresh/);
+  assert.match(h.context.noted.text, enRe("app.link.refresh.refused"));
   h.run('strip.tone = "ok"');
   await h.run('checkFolder()');
-  assert.match(h.context.noted.text, /no longer answers/, 'said again once the other note is gone');
+  assert.match(h.context.noted.text, enRe("app.link.port.gone"), 'said again once the other note is gone');
   // A version-2 mod on the port replaces the wording.
   body = {...HEALTH, schemaVersion: 2, stamp: 's1'};
   await h.run('checkFolder()');
-  assert.match(h.context.noted.text, /version 2/);
+  assert.match(h.context.noted.text, enRe("app.link.port.version", {v:2, need:1}));
 });
 
 test('#link= only moves the port on this machine', () => {
@@ -950,8 +951,8 @@ test('a game that quits mid-download reads as unreachable, with nothing built', 
   h.run('lastLinkStamp = "s1"');
   await h.run('loadFromLink("Reading the game")');
   assert.equal(h.seen.builds.length, 0);
-  assert.deepEqual(h.seen.states.at(-1), ['bad', 'Could not reach the game', 'http://127.0.0.1:8322']);
-  assert.match(h.seen.notes.at(-1)[1], /The game is not running/);
+  assert.deepEqual(h.seen.states.at(-1), ['bad', en("app.link.unreached"), 'http://127.0.0.1:8322']);
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.down"));
   assert.equal(finished, 1, 'the attempt is over, so Update works again');
   assert.equal(h.run('lastLinkStamp'), 's1', 'the next check reads the save again');
 });
@@ -991,7 +992,7 @@ test('a mod that now speaks another version takes no writes until it speaks this
 
   body = {...HEALTH, schemaVersion: 2, writes: ['uniforms', 'imports'], stamp: 's1'};
   await h.run('checkFolder()');
-  assert.match(h.context.noted.text, /version 2/);
+  assert.match(h.context.noted.text, enRe("app.link.port.version", {v:2, need:1}));
   assert.deepEqual(plain(h.run('linkWrites()')), [], 'the board draws its write buttons off');
   assert.equal(moved, 1, 'an open write dialog hears of it');
   const refused = await h.run('gameWrite("uniforms", {sites: []}, {dryRun: true})');
@@ -1083,7 +1084,7 @@ test('marketing and uniforms name the save they were planned from; the other kin
 test('the refusal on Update is still the full one, and names the version this page needs', async () => {
   const h = harness({routes: {health: {...HEALTH, schemaVersion: 2}}});
   await h.run('loadFromLink("Linking to the game")');
-  assert.deepEqual(h.seen.states.at(-1), ['bad', 'The Big Copilot Link mod and this page do not match', 'http://127.0.0.1:8322']);
-  assert.match(h.seen.notes.at(-1)[1], /speaks version 2; this page needs version 1/);
+  assert.deepEqual(h.seen.states.at(-1), ['bad', en("app.link.mismatch"), 'http://127.0.0.1:8322']);
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:2, need:1}));
   assert.deepEqual(plain(h.run('linkWrites()')), []);
 });

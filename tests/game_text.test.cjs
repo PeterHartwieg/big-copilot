@@ -4,6 +4,7 @@
 // tests/test_english_text.py pins the same key and word on the Python side.
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
@@ -54,14 +55,14 @@ test('a German file is refused with a note and never stored', async () => {
   const {api, storage, notes} = setup();
   await api.takeLocale(file('de.json', GERMAN));
   assert.equal(storage.ledger_locale, '');
-  assert.deepEqual(notes.at(-1).slice(0, 2), ['warn', "That is the game's German text."]);
-  assert.match(notes.at(-1)[2], /Choose en\.json/);
+  assert.deepEqual(notes.at(-1).slice(0, 2), ['warn', en("app.locale.language", {"language":"German"})]);
+  assert.match(notes.at(-1)[2], enRe("app.locale.english"));
 });
 
 test('a renamed foreign file still says it is not English', async () => {
   const {api, notes} = setup();
   await api.takeLocale(file('en (1).json', GERMAN));
-  assert.equal(notes.at(-1)[1], "That is not the game's English text.");
+  assert.equal(notes.at(-1)[1], en("app.locale.notenglish"));
 });
 
 test('the English file is stored as before', async () => {
