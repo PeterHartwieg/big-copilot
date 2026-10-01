@@ -274,6 +274,10 @@ def data_company(day: int = DAY) -> dict:
         "itemInstances": [_shelf("PALLEThub", {WATER: 1500})],
         "scheduleDays": [], "orderHistory": [], "retailPrices": [],
         "deliveryTransactions": hub_log,
+        # Its parking: a Freight Truck T1 in one slot (a VehicleInstances id),
+        # the other free.
+        "vehicleSlots": [{"vehicleInstanceId": "TRUCKhub", "employeeDriverId": None},
+                         {"vehicleInstanceId": None, "employeeDriverId": None}],
     }
     brewery = {
         "StreetName": BREWERY[0], "StreetNumber": BREWERY[1], "RentedByPlayer": True,
@@ -345,6 +349,9 @@ def data_company(day: int = DAY) -> dict:
                           "rivalsDifficultyMultiplier": 1.0, "taxPercentage": 5.0,
                           "baseCustomerPromotionMultiplier": 0.55},
         "BuildingRegistrations": [liquor, gifts, hub, brewery, home, rival],
+        # The hub's truck, and the player's own car, which no business holds.
+        "VehicleInstances": [{"id": "TRUCKhub", "vehicleTypeName": "ba:vehicletype_freighttruckt1"},
+                             {"id": "CARplayer", "vehicleTypeName": "ba:vehicletype_vordtiaravic"}],
         "EmployeeInstances": employees,
         "employeePresets": [{"id": PRESET, "name": "Black"}],
         "financialSummaries": [_summary(d) for d in past],
