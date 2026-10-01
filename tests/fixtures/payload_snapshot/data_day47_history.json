@@ -8007,6 +8007,28 @@
    },
    "ba:street_eighthavenue#8": {
     "days": {
+     "covered": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
      "first": 27,
      "out": {
       "ba:itemname_beer": [

@@ -16725,7 +16725,7 @@ def _factory_days(save: Save, reg: dict) -> dict:
     alike -- and its sales (orderHistory's itemSales, amountSold), which are
     the exports alone and count the same units again. So `out` is the log's
     goods leaving, and `sold` (None on a day the sales history no longer
-    holds) the part of it sold to the piers. A full log has lost part of its
+    holds; `covered` says which days it holds) the part of it sold to the piers. A full log has lost part of its
     oldest day, so that day is left out; today is still running and is left
     out too. What is made and still held is in neither. {} with no log.
     """
@@ -16754,6 +16754,8 @@ def _factory_days(save: Save, reg: dict) -> dict:
         return {}
     return {
         "first": first,
+        # Which days the sales history holds: a day it holds with no exports is a 0.
+        "covered": [int(d in covered) for d in days],
         "out": {item: [int(out[item][d]) for d in days] for item in _in_order(out)},
         "sold": {item: [int(sold[item].get(d, 0)) if d in covered else None for d in days] for item in _in_order(sold)},
     }

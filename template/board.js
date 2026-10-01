@@ -13031,7 +13031,10 @@ function ofInvestment(plan){
   const deposit = owned ? 0 : b.deposit || 0;
   let depot = null;
   if(ofWantsDepot(plan)){
-    const at = (plan && plan.depotKey && ofBuilding(plan.depotKey)) || ofDepotPick(b), van = ((F.vehicles || {}).van || {}).p || 0;
+    /* The remembered depot, while it is not the factory's own building and
+       still free to rent or the player's own; else one picked afresh. */
+    const kept = plan && plan.depotKey && plan.depotKey !== b.key ? ofBuilding(plan.depotKey) : null;
+    const at = (kept && (kept.status === "vacant" || kept.status === "mine") ? kept : null) || ofDepotPick(b), van = ((F.vehicles || {}).van || {}).p || 0;
     if(plan && at && plan.depotKey !== at.key){ plan.depotKey = at.key; ofSave(); }
     if(at){
       const racks = OF_DEPOT_SHELVES * (shelf.p || 0);
@@ -13283,6 +13286,8 @@ function ofWhereHtml(){
 function ofPick(key){
   const plan = ofEnsure();
   plan.key = key;
+  /* A depot not rented yet is picked again beside the new building. */
+  if(plan.depotKey && !(D.businesses || []).some(x => x.key === plan.depotKey && x.status !== "vacant")) plan.depotKey = null;
   ofStep = "investment";
   ofSave();
   drawPlan();
@@ -13576,12 +13581,17 @@ function ofUntilRows(plan){
       dv.some(v => v[1]) ? tt("gr.of.ck.depotVan.done", "<span class=\"ok\">A driven vehicle is parked at the depot</span>")
         : tt("gr.of.ck.depotVan.todo", "A {van} and a Delivery Driver at 75% skill or more", {van}),
       dv.some(v => v[1]) ? "" : osIngame(tt("gr.of.ck.depotVan.ingame", "Buy a {van} at General US Trucks, park it at the depot, hire a Delivery Driver and assign them to it.", {van}))));
-    /* Done once every shop of the type has a delivery route for every
-       product the factory makes (supply.routed, as Open a store reads it). */
-    const routed = new Set(((D.supply || {}).routed || []).map(r => `${r[0]}|${r[1]}`));
-    const shopIdx = (D.businesses || []).map((x, i) => x.typeSlug === planType && x.status !== "vacant" ? i : -1).filter(i => i >= 0);
+    /* Done once the depot itself delivers each shop of the type every
+       product the factory makes that the shop stocks: the goods graph's
+       logistics links out of the depot (a shop's own wholesale contract is
+       no delivery from it). */
+    const graph = (D.supply || {}).graph || {}, from = new Set(depots.map(x => x.key));
+    const delivered = new Set((graph.links || []).filter(k => from.has(k.from)).flatMap(k => (k.slugs || []).map(sl => `${k.to}|${sl}`)));
+    const stocks = key => new Set((((graph.nodes || []).find(n => n.id === key) || {}).items || []).map(i => i.slug));
     const made = lines.map(l => l.slug);
-    const served = there && shopIdx.length && made.length && shopIdx.every(i => made.every(sl => routed.has(`${i}|${sl}`)));
+    const need = (D.businesses || []).filter(x => x.typeSlug === planType && x.status !== "vacant")
+      .flatMap(x => made.filter(sl => stocks(x.key).has(sl)).map(sl => `${x.key}|${sl}`));
+    const served = there && need.length > 0 && need.every(k => delivered.has(k));
     goods.push(osCk("route", served ? "done" : "todo", `${tt("gr.of.ck.depotRoute", "Deliveries to the shops")} ${ofHand()}`,
       served ? tt("gr.of.ck.depotRoute.done", "<span class=\"ok\">Every shop gets every product the factory makes</span>")
         : tt("gr.of.ck.depotRoute.todo", "The depot's delivery plan to your {type} shops", {type: spEsc(osTypeName(planType))}),
@@ -13620,7 +13630,7 @@ function ofObserved(key, slugs){
   const out = d.out || {}, sold = d.sold || {}, mine = [...slugs];
   const n = Math.max(0, ...Object.values(out).map(a => a.length), ...Object.values(sold).map(a => a.length));
   if(!n) return null;
-  const covered = i => Object.values(sold).some(a => a[i] != null);
+  const covered = i => Array.isArray(d.covered) ? !!d.covered[i] : Object.values(sold).some(a => a[i] != null);
   const days = [];
   for(let i = 0; i < n; i++) days.push([d.first + i, mine.reduce((t, sl) => t + ((out[sl] || [])[i] || 0), 0),
     covered(i) ? mine.reduce((t, sl) => t + ((sold[sl] || [])[i] || 0), 0) : null]);

@@ -331,3 +331,67 @@ test('the depot a new factory\'s plan costed stays the plan\'s through its setup
   assert.equal(r.van, 'done');
   assert.ok(['done', 'todo'].includes(r.route), 'its deliveries have their own condition');
 });
+
+/* --- review round 3 (#172) ------------------------------------------------- */
+
+/* A company with no depot, a new factory planned with one beside it. */
+async function depotPlan(page){
+  await page.locator('#planFor [data-of-for="new"]').click();
+  return page.evaluate(() => {
+    const wh = D.businesses.find(b => b.typeSlug === 'ba:businesstype_warehouse');
+    wh.status = 'vacant';
+    const free = premises().buildings.filter(b => b.type === 'warehouse' && b.status === 'vacant');
+    premises().buildings.push({...free[0], key: 'ba:street_twentyfourthstreet#6', address: '6 24th Street', rent: 300, deposit: 28000});
+    ofGo('where'); ofPick(free[0].key);
+    return {factory: free[0].key, depot: ofPlan().depotKey};
+  });
+}
+
+test('deliveries to the shops tick only from the depot, and only for what a shop stocks', async t => {
+  const page = await board(t);
+  await depotPlan(page);
+  const r = await page.evaluate(b => {
+    const plan = ofPlan(), wh = D.businesses.find(x => x.typeSlug === 'ba:businesstype_warehouse');
+    wh.status = 'overhead'; wh.key = plan.depotKey; wh.opened = D.meta.day;
+    const row = () => ofUntilRows(plan).flatMap(g => g[1]).find(x => /Deliveries to the shops/.test(x.title)).state;
+    /* The shop's own wholesale contract brings beer: no delivery from the depot. */
+    D.supply.routed = [[0, b]];
+    const shop = D.businesses.find(x => x.typeSlug === 'ba:businesstype_liquorstore');
+    const wholesale = row();
+    /* A second liquor store that sells no beer cannot hold the row back. */
+    D.businesses.push({...shop, key: 'ba:street_ninthstreet#1', address: '1 Ninth Street'});
+    D.supply.graph.links.push({from: plan.depotKey, to: shop.key, slugs: [b], cadence: 'daily'});
+    return {wholesale, depot: row()};
+  }, BEER);
+  assert.equal(r.wholesale, 'todo', 'a wholesale contract is no delivery from the depot');
+  assert.equal(r.depot, 'done', 'the depot delivers every shop that stocks beer');
+});
+
+test('the depot is picked again when the factory moves onto it, or a rival takes it', async t => {
+  const page = await board(t);
+  const first = await depotPlan(page);
+  const r = await page.evaluate(({factory, depot}) => {
+    /* Back to Where: the factory goes into the building costed as the depot. */
+    ofPick(depot);
+    const moved = ofInvestment(ofPlan());
+    const after = {factory: ofPlan().key, depot: moved.depot && moved.depot.b.key};
+    /* A rival rents the remembered depot before the player does; a third warehouse is free. */
+    premises().buildings.push({...premises().buildings.find(b => b.key === depot), key: 'ba:street_twentyfifthstreet#8', address: '8 25th Street', status: 'vacant', rent: 500});
+    premises().buildings.find(b => b.key === ofPlan().depotKey).status = 'rival';
+    const taken = ofInvestment(ofPlan());
+    return {after, rival: taken.depot && taken.depot.b.key, depotKey: ofPlan().depotKey};
+  }, first);
+  assert.notEqual(r.after.depot, r.after.factory, 'never the factory\'s own building');
+  assert.ok(r.rival && r.rival !== r.after.depot, 'a building a rival rents is picked again');
+  assert.equal(r.depotKey, r.rival);
+});
+
+test('a factory that never exported shows 0 to the piers on the days its sales cover', async t => {
+  const page = await board(t);
+  const cell = await page.evaluate(([k, b]) => {
+    D.openFactory.sites[k].days = {first: 40, covered: [1, 1], out: {[b]: [1200, 1200]}, sold: {}};
+    ofGo('running');
+    return document.querySelector('#ofBody .ff-out tbody tr td:last-child').textContent;
+  }, [BREWERY, BEER]);
+  assert.equal(cell, '0');
+});

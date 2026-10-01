@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "f38a95cbff";</script>
-<link rel="stylesheet" href="community.css?v=f38a95cbff">
+<script>window.LEDGER_BUILD = "a6e9934487";</script>
+<link rel="stylesheet" href="community.css?v=a6e9934487">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=f38a95cbff">
+<link rel="stylesheet" href="fonts/fonts.css?v=a6e9934487">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -6049,7 +6049,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"f38a95cbff","latest":{"pr":213,"date":"2026-10-01","title":"Plan a factory: from what to make to production, step by step","summary":"Expansion › Plan a factory now walks a factory plan through five steps: What, Where, Investment, Until production and Running. Pick the shops it supplies and, in For, a new factory or one you already run. What is the planner you know, with each product's machines sized to your shops' peak day, a warning when a line stays short of what they take, and the surplus valued as an export at the game's own export price. Where lists every warehouse building to rent, cheapest first, with its parking for trucks and its deposit. Investment is the one-off cost: the machines and pallet shelves at list price, the installation firm or a delivery, the deposit and a Freight Truck T1, with an optional bank loan; raw material, wages and rent a week are shown beside it as running costs. Until production is a checklist ticked from your save, with buttons for hiring and weekly import amounts when the game is linked. Running compares output with the plan once the factory works. For a factory you run, the steps cover only what the change adds. Businesses › Results now also counts a depot's and a factory's own vehicles in what was invested."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"a6e9934487","latest":{"pr":213,"date":"2026-10-01","title":"Plan a factory: from what to make to production, step by step","summary":"Expansion › Plan a factory now walks a factory plan through five steps: What, Where, Investment, Until production and Running. Pick the shops it supplies and, in For, a new factory or one you already run. What is the planner you know, with each product's machines sized to your shops' peak day, a warning when a line stays short of what they take, and the surplus valued as an export at the game's own export price. Where lists every warehouse building to rent, cheapest first, with its parking for trucks and its deposit. Investment is the one-off cost: the machines and pallet shelves at list price, the installation firm or a delivery, the deposit and a Freight Truck T1, with an optional bank loan; raw material, wages and rent a week are shown beside it as running costs. Until production is a checklist ticked from your save, with buttons for hiring and weekly import amounts when the game is linked. Running compares output with the plan once the factory works. For a factory you run, the steps cover only what the change adds. Businesses › Results now also counts a depot's and a factory's own vehicles in what was invested."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -6137,8 +6137,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=f38a95cbff"></script>
-<script src="community.js?v=f38a95cbff"></script>
+<script src="app.js?v=a6e9934487"></script>
+<script src="community.js?v=a6e9934487"></script>
 
 <script>
 
@@ -19174,7 +19174,10 @@ function ofInvestment(plan){
   const deposit = owned ? 0 : b.deposit || 0;
   let depot = null;
   if(ofWantsDepot(plan)){
-    const at = (plan && plan.depotKey && ofBuilding(plan.depotKey)) || ofDepotPick(b), van = ((F.vehicles || {}).van || {}).p || 0;
+    /* The remembered depot, while it is not the factory's own building and
+       still free to rent or the player's own; else one picked afresh. */
+    const kept = plan && plan.depotKey && plan.depotKey !== b.key ? ofBuilding(plan.depotKey) : null;
+    const at = (kept && (kept.status === "vacant" || kept.status === "mine") ? kept : null) || ofDepotPick(b), van = ((F.vehicles || {}).van || {}).p || 0;
     if(plan && at && plan.depotKey !== at.key){ plan.depotKey = at.key; ofSave(); }
     if(at){
       const racks = OF_DEPOT_SHELVES * (shelf.p || 0);
@@ -19426,6 +19429,8 @@ function ofWhereHtml(){
 function ofPick(key){
   const plan = ofEnsure();
   plan.key = key;
+  /* A depot not rented yet is picked again beside the new building. */
+  if(plan.depotKey && !(D.businesses || []).some(x => x.key === plan.depotKey && x.status !== "vacant")) plan.depotKey = null;
   ofStep = "investment";
   ofSave();
   drawPlan();
@@ -19719,12 +19724,17 @@ function ofUntilRows(plan){
       dv.some(v => v[1]) ? tt("gr.of.ck.depotVan.done", "<span class=\"ok\">A driven vehicle is parked at the depot</span>")
         : tt("gr.of.ck.depotVan.todo", "A {van} and a Delivery Driver at 75% skill or more", {van}),
       dv.some(v => v[1]) ? "" : osIngame(tt("gr.of.ck.depotVan.ingame", "Buy a {van} at General US Trucks, park it at the depot, hire a Delivery Driver and assign them to it.", {van}))));
-    /* Done once every shop of the type has a delivery route for every
-       product the factory makes (supply.routed, as Open a store reads it). */
-    const routed = new Set(((D.supply || {}).routed || []).map(r => `${r[0]}|${r[1]}`));
-    const shopIdx = (D.businesses || []).map((x, i) => x.typeSlug === planType && x.status !== "vacant" ? i : -1).filter(i => i >= 0);
+    /* Done once the depot itself delivers each shop of the type every
+       product the factory makes that the shop stocks: the goods graph's
+       logistics links out of the depot (a shop's own wholesale contract is
+       no delivery from it). */
+    const graph = (D.supply || {}).graph || {}, from = new Set(depots.map(x => x.key));
+    const delivered = new Set((graph.links || []).filter(k => from.has(k.from)).flatMap(k => (k.slugs || []).map(sl => `${k.to}|${sl}`)));
+    const stocks = key => new Set((((graph.nodes || []).find(n => n.id === key) || {}).items || []).map(i => i.slug));
     const made = lines.map(l => l.slug);
-    const served = there && shopIdx.length && made.length && shopIdx.every(i => made.every(sl => routed.has(`${i}|${sl}`)));
+    const need = (D.businesses || []).filter(x => x.typeSlug === planType && x.status !== "vacant")
+      .flatMap(x => made.filter(sl => stocks(x.key).has(sl)).map(sl => `${x.key}|${sl}`));
+    const served = there && need.length > 0 && need.every(k => delivered.has(k));
     goods.push(osCk("route", served ? "done" : "todo", `${tt("gr.of.ck.depotRoute", "Deliveries to the shops")} ${ofHand()}`,
       served ? tt("gr.of.ck.depotRoute.done", "<span class=\"ok\">Every shop gets every product the factory makes</span>")
         : tt("gr.of.ck.depotRoute.todo", "The depot's delivery plan to your {type} shops", {type: spEsc(osTypeName(planType))}),
@@ -19763,7 +19773,7 @@ function ofObserved(key, slugs){
   const out = d.out || {}, sold = d.sold || {}, mine = [...slugs];
   const n = Math.max(0, ...Object.values(out).map(a => a.length), ...Object.values(sold).map(a => a.length));
   if(!n) return null;
-  const covered = i => Object.values(sold).some(a => a[i] != null);
+  const covered = i => Array.isArray(d.covered) ? !!d.covered[i] : Object.values(sold).some(a => a[i] != null);
   const days = [];
   for(let i = 0; i < n; i++) days.push([d.first + i, mine.reduce((t, sl) => t + ((out[sl] || [])[i] || 0), 0),
     covered(i) ? mine.reduce((t, sl) => t + ((sold[sl] || [])[i] || 0), 0) : null]);

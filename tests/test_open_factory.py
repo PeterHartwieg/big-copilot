@@ -70,17 +70,23 @@ class FactoryDaysTests(unittest.TestCase):
                                 {"dayNumber": 11, "itemSales": [{"itemName": BEER, "amountSold": 0}]}]}
         # Arrivals (positive) are not output; day 12 is today and still running.
         self.assertEqual(ba_dashboard._factory_days(StubSave(12), reg),
-                         {"first": 10, "out": {BEER: [1000, 900]}, "sold": {BEER: [200, 0]}})
+                         {"first": 10, "covered": [1, 1], "out": {BEER: [1000, 900]}, "sold": {BEER: [200, 0]}})
 
     def test_a_full_log_drops_its_oldest_day_and_a_quiet_day_is_a_zero(self):
         log = [pickup(5, -10)] + [pickup(7, -1)] * (ba_dashboard.DELIVERY_LOG_SIZE - 1)
         days = ba_dashboard._factory_days(StubSave(8), {"deliveryTransactions": log, "orderHistory": []})
-        self.assertEqual(days, {"first": 6, "out": {BEER: [0, ba_dashboard.DELIVERY_LOG_SIZE - 1]}, "sold": {}})
+        self.assertEqual(days, {"first": 6, "covered": [0, 0], "out": {BEER: [0, ba_dashboard.DELIVERY_LOG_SIZE - 1]}, "sold": {}})
 
     def test_a_day_the_sales_history_no_longer_holds_is_unknown_not_zero(self):
         reg = {"deliveryTransactions": [pickup(3, -10), pickup(4, -10)],
                "orderHistory": [{"dayNumber": 4, "itemSales": [{"itemName": BEER, "amountSold": 4}]}]}
         self.assertEqual(ba_dashboard._factory_days(StubSave(5), reg)["sold"], {BEER: [None, 4]})
+
+    def test_a_factory_that_never_exported_still_says_which_days_its_sales_cover(self):
+        reg = {"deliveryTransactions": [pickup(3, -10), pickup(4, -10)],
+               "orderHistory": [{"dayNumber": 3, "itemSales": []}, {"dayNumber": 4, "itemSales": []}]}
+        days = ba_dashboard._factory_days(StubSave(5), reg)
+        self.assertEqual((days["covered"], days["sold"]), ([1, 1], {}))
 
     def test_no_log_is_no_days(self):
         self.assertEqual(ba_dashboard._factory_days(StubSave(9), {}), {})
