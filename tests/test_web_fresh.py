@@ -29,7 +29,7 @@ CHECK_INPUTS = tuple(dict.fromkeys(
 # modules build_web imports, and the web/ assets render() embeds in the page.
 CLI_INPUTS = tuple(dict.fromkeys(
     CHECK_INPUTS
-    + ("ba_save.py", "ba_dashboard.py", "template/board.html", "web/changelog.json", "web/map.js", "web/map.css",
+    + ("ba_save.py", "ba_dashboard.py", "template/board.html", "template/board.js", "web/changelog.json", "web/map.js", "web/map.css",
        "web/wiki.js", "web/wiki.css", "web/wiki-data.json", "web/sitemap.xml", "web/robots.txt")
 ))
 # The translations under i18n/ are the source of web/i18n/, which --check rebuilds.
@@ -132,16 +132,17 @@ class WebFresh(unittest.TestCase):
             self.assertIn("stale: web/py/ba_dashboard.py", stale.stdout)
 
     def test_command_line_reports_an_edited_template(self):
-        # render() reads the board from template/board.html, so an edit there
-        # changes the page and, through STAMP_INPUTS, the stamp.
-        with tempfile.TemporaryDirectory() as tmp:
-            standalone(tmp)
-            board = Path(tmp, "template/board.html")
-            board.write_bytes(board.read_bytes().replace(b"<title>", b"<title>x", 1))
-            stale = run_check(tmp)
-            self.assertEqual(stale.returncode, 1, stale.stdout + stale.stderr)
-            self.assertIn("stale: web/version.json", stale.stdout)
-            self.assertIn("stale: web/index.html", stale.stdout)
+        # render() reads the board from template/board.html and board.js, so an
+        # edit to either changes the page and, through STAMP_INPUTS, the stamp.
+        for name, before in (("board.html", b"<title>"), ("board.js", b"let D = ")):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
+                standalone(tmp)
+                board = Path(tmp, "template", name)
+                board.write_bytes(board.read_bytes().replace(before, before + b"x", 1))
+                stale = run_check(tmp)
+                self.assertEqual(stale.returncode, 1, stale.stdout + stale.stderr)
+                self.assertIn("stale: web/version.json", stale.stdout)
+                self.assertIn("stale: web/index.html", stale.stdout)
 
 
 if __name__ == "__main__":

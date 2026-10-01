@@ -7,15 +7,17 @@ Cloudflare Worker API adds the community features.
 
 ## Where changes go
 
-The board is two files: `ba_dashboard.py` (the Python) and `template/board.html` (the page
-`render()` fills in). Find each part by its anchor, never by line number — both files are
-long and the numbers drift.
+The board is three files: `ba_dashboard.py` (the Python), `template/board.html` (the page
+`render()` fills in: markup, CSS and the small head scripts) and `template/board.js` (the
+board script). Find each part by its anchor, never by line number — the files are long and
+the numbers drift.
 
 | Part | Anchor |
 | --- | --- |
 | Extraction (save → numbers) | `def extract(` and the `_` helpers before `def render(`, in `ba_dashboard.py` |
-| The board's HTML, CSS and JS | `template/board.html`, read on the first `render()` by `load_template()`; the board script is its last `<script>` block |
-| Where `web/map.js` and `web/wiki.js` are spliced in | `/*__MAP_SCRIPT__*/`, `/*__WIKI_SCRIPT__*/` in `template/board.html` |
+| The board's HTML and CSS | `template/board.html`, read on the first `render()` by `load_template()` |
+| The board script | `template/board.js`, which `load_template()` splices into `/*__BOARD_SCRIPT__*/`, the body of the page's last `<script>` block, before any other placeholder is filled. A branch from before the split conflicts in `board.html`: resolve it with `python tools/split_board_script.py --resolve`, never by taking one side and re-splitting |
+| Where `web/map.js` and `web/wiki.js` are spliced in | `/*__MAP_SCRIPT__*/`, `/*__WIKI_SCRIPT__*/` in `template/board.js` |
 | CLI, save catalogue and watch server | `def main(` and the functions around it, in `ba_dashboard.py` |
 
 Everything else:
@@ -30,8 +32,8 @@ Everything else:
 - Pyodide worker: `web/worker.js`
 - update banner: `web/update.js`
 - map: `web/map.js`, `web/map.css`, with assets from `export_map.py`
-- wiki pipeline: the `.py` files directly in `tools/` (not `tools/game_update/` or
-  `tools/game_link_mock.py`), with the authored wording in `tools/wiki_sample.json` and the
+- wiki pipeline: the `.py` files directly in `tools/` (not `tools/game_update/`,
+  `tools/game_link_mock.py` or `tools/split_board_script.py`), with the authored wording in `tools/wiki_sample.json` and the
   hand-written articles in `tools/wiki_topics.json`. `tools/` also holds the GLM launcher,
   `tools/Invoke-ZaiClaude.ps1`, which is nothing to do with the wiki
 - static wiki pages for search engines (`/wiki/...`, the sitemap, robots.txt):
@@ -65,9 +67,9 @@ Searching:
 
 - A root `.ignore` hides the generated copies (`web/py/`, `web/index.html`, `web/wiki/`,
   `web/wiki-data.json`) and the design canvases from `rg`. `rg -uu` searches them too.
-- `rg -n "^# ---|^/\* (---|=====)|^</?style>" ba_dashboard.py template/board.html` lists
-  both files' section banners and sub-banners, a table of contents: the Python, then the
-  board's CSS between `<style>` and `</style>` and the board script after it.
+- `rg -n --sort path "^# ---|^/\* (---|=====)|^</?style>" ba_dashboard.py template/` lists
+  the section banners and sub-banners, a table of contents: the Python, then the board's
+  CSS between `<style>` and `</style>`, then the board script.
 
 ## Names on screen and in code
 
@@ -131,13 +133,13 @@ long as main has not moved (`docs/contributing.md`, "Merging a green pull reques
 | You changed | Run |
 | --- | --- |
 | `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`, then `python build_web.py`. Premises extraction is `tests/test_premises.py`. `tests/test_payload_snapshot.py` compares whole `extract()` payloads with `tests/fixtures/payload_snapshot/`; after an intended change regenerate them with `python tests/test_payload_snapshot.py --update` and review the diff |
-| `template/board.html` (the board's markup, CSS or script) | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs`, then `python build_web.py` |
+| `template/board.html` or `template/board.js` (the board's markup, CSS or script) | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs`, then `python build_web.py` |
 | `web/app.js`, `web/worker.js`, `web/update.js` | `node --test tests/*.test.cjs`, then `python build_web.py` |
 | `build_web.py` `BANNER` or `BEFORE_SCRIPT` (landing screen, news strip) | `python build_web.py` first, since the Node tests and `tests.test_privacy_promises` read the built page; then `node --test tests/news.test.cjs tests/release.test.cjs tests/update.test.cjs` and `python -m unittest tests.test_privacy_promises tests.test_footer` |
 | `web/changelog.json` | `python -m unittest tests.test_release_latest`, then `python build_web.py`: the file is a build stamp input |
 | A new finding kind, view, payload key, finder filter, footer link or news item | the matching checklist in the Registries section of `docs/architecture.md`, and the tests it names. `python -m unittest tests.test_doc_registries` holds the doc's payload table and private build tokens, and the finding groups, to the code; `node --test tests/alert_kinds.test.cjs tests/navigation.test.cjs` holds the finding-kind and view tables to each other |
-| `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs tests/finder_plan.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`, then `python build_web.py`. The finder lives in `web/map.js`; `tests/finder.test.cjs` also covers `drawFindLocation` in `template/board.html`, and `finderPreset`, through a Growth › Demand cell opening the finder |
-| `tools/*.py` (the wiki pipeline, not `tools/game_update/` or `tools/game_link_mock.py`), `tools/wiki_sample.json`, `tools/wiki_topics.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` (the hand-written articles are `tests/test_wiki_build.py`) and `node --test tests/wiki*.test.cjs`, then `python build_web.py` |
+| `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs tests/finder_plan.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`, then `python build_web.py`. The finder lives in `web/map.js`; `tests/finder.test.cjs` also covers `drawFindLocation` in `template/board.js`, and `finderPreset`, through a Growth › Demand cell opening the finder |
+| `tools/*.py` (the wiki pipeline, not `tools/game_update/`, `tools/game_link_mock.py` or `tools/split_board_script.py`), `tools/wiki_sample.json`, `tools/wiki_topics.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` (the hand-written articles are `tests/test_wiki_build.py`) and `node --test tests/wiki*.test.cjs`, then `python build_web.py` |
 | `server/`, `migrations/` | `npm run test:community` and `npm run check:worker` |
 | `web/community.js`, `web/community.css` | those two npm commands, then `python build_web.py` — both files are cache-busted by the build stamp |
 | `make_buildings.py`, `make_floor_plans.py` or what they write | `python -m unittest tests.test_floor_plans tests.test_premises`, then `python build_web.py` |
@@ -145,6 +147,7 @@ long as main has not moved (`docs/contributing.md`, "Merging a green pull reques
 | `make_item_prices.py`, `ba_item_prices.json`, or the payback figures (`_payback()`, the Payback column, `spPayback()`) | `python -m unittest tests.test_payback` and `node --test tests/payback.test.cjs`, then `python build_web.py` |
 | Added or changed UI text (`tt()`, `data-tt*`, `msg()`), `web/i18n.js`, `tools/i18n.py`, `i18n/` | `python -m unittest discover -s tests -p "test_i18n*.py"` and `node --test tests/i18n_*.test.cjs`, then `python build_web.py`, plus the rows for the files the text is in |
 | `tools/Invoke-ZaiClaude.ps1` | `python -m unittest tests.test_agent_cli` |
+| `tools/split_board_script.py`, or the splice in `load_template()` | `python -m unittest tests.test_split_board_script` |
 | `tools/game_update/` | no tests: run the script you changed against the installed game (`docs/game-update.md`) |
 | `tools/game_link_mock.py`, `docs/game-link-api.md` | `python -m unittest tests.test_game_link_mock tests.test_watch_game` and `node --test tests/game_link.test.cjs`; a contract change bumps `schemaVersion` in the doc, the mock, the mod and both clients in one commit |
 | `mod/BigCopilotLink/` | nothing runs here: Peter builds it in the SDK's Unity project on the Mac (its README) and checks `curl http://127.0.0.1:8322/health` |
@@ -175,8 +178,8 @@ and never attach one to an issue.
 
 - CSS classes are global across every page of the board, so give a new class a feature
   prefix or scope it under its page's root class. `.site` and `.chip` have collided before.
-- `web/map.js` and `web/wiki.js` are spliced into the board script and run in its global
-  scope, reusing its helpers (`attr`, `icon`, `wireTips`, `ICON`, `shortName`). A new top-level
+- `web/map.js` and `web/wiki.js` are spliced into the board script (`template/board.js`) and
+  run in its global scope, reusing its helpers (`attr`, `icon`, `wireTips`, `ICON`, `shortName`). A new top-level
   name must be unique across all three files, and `web/i18n.js`, which runs in the same
   global scope from the head (its names start `tt`/`TT_`).
 - `section{content-visibility:auto}` clips absolutely positioned children, so a popover
@@ -186,10 +189,11 @@ and never attach one to an issue.
   which add `measured` to measure a section that is off screen; it is not the fix.
 - Several Node tests find code by slicing the source between comment or declaration
   strings, so when you change a comment or declaration near such an anchor, update the test
-  to match. In `template/board.html`: `tests/alert_kinds.test.cjs`, `tests/fold_views.test.cjs`,
-  `tests/milestones.test.cjs`, `tests/navigation.test.cjs`,
-  `tests/order_checklist.test.cjs`, `tests/search.test.cjs`, `tests/open_store_model.test.cjs`
-  (and `check_profit_model.py`, which runs the same section). In `web/app.js`:
+  to match. In `template/board.js`: `tests/alert_kinds.test.cjs`, `tests/fold_views.test.cjs`,
+  `tests/milestones.test.cjs`, `tests/navigation.test.cjs` (which also slices the markup and
+  `featureDiscovery` out of `template/board.html`), `tests/search.test.cjs`,
+  `tests/open_store_model.test.cjs` (and `check_profit_model.py`, which runs the same
+  section). In `web/app.js`:
   `tests/game_link.test.cjs`, `tests/game_text.test.cjs`, `tests/performance.test.cjs`,
   `tests/resume.test.cjs`, `tests/save_location.test.cjs`. `tests/alert_kinds.test.cjs` also
   matches a fragment of the findings loop in `mapFindings()` in `web/map.js` with a regex,
@@ -199,14 +203,18 @@ and never attach one to an issue.
   missing after it, so a reworded anchor fails loudly rather than slicing the wrong span.
   End anchors are not checked for uniqueness: the first one after the start wins.
   `tests/game_names.test.cjs` and `tests/i18n_runtime.test.cjs` also slice
-  `template/board.html`, still with a bare `indexOf`, and `tests/number_locale.test.cjs`
-  scans it line by line. Four Python tests read the template as text:
-  `tests/test_plan_orders.py` cuts `function planOrder(` out of it,
-  `tests/test_routed_supply.py` checks the line with `id:"shortfall"`,
-  `tests/test_css_integrity.py` checks its `<style>` blocks, and
-  `tests/test_doc_registries.py` reads its `ALERT_GROUPS` ids and its tokens, finds the
-  `Registry:` comments in it and in `ba_dashboard.py`, and parses `_alerts()` and the
-  `_*_notes` helpers in `ba_dashboard.py` for the finding groups they emit.
+  `template/board.js`, still with a bare `indexOf`, and `tests/number_locale.test.cjs`
+  scans it and `template/board.html` line by line.
+  `tests/order_checklist.test.cjs` and `tests/test_plan_orders.py` instead load the whole
+  board script into a VM through `loadBoard()` in `tests/_board.cjs`, which stubs the DOM
+  with one inert object (the checklist test still slices `drawSupplyStrip()` to read its
+  text); use it for a pure function whose test needs no stubbed helper. Three more Python tests read the template as text:
+  `tests/test_routed_supply.py` checks the line with `id:"shortfall"` in `board.js`,
+  `tests/test_css_integrity.py` checks the `<style>` blocks of `board.html`, and
+  `tests/test_doc_registries.py` reads the `ALERT_GROUPS` ids in `board.js` and the tokens of
+  both files, finds the `Registry:` comments in them and in `ba_dashboard.py`, and parses
+  `_alerts()` and the `_*_notes` helpers in `ba_dashboard.py` for the finding groups they
+  emit.
 - Text on the page is `tt("area.thing", "English")`, `data-tt="area.thing"` or
   `msg("area.thing", "English", ...)` once its area is converted, one key per sentence,
   never a sentence built from pieces (docs/architecture.md, "UI text"). A `Msg` that is
@@ -223,7 +231,8 @@ and never attach one to an issue.
   the Python side. Nothing else is on the virtual filesystem when `ba_dashboard` is imported,
   so it must not open any other file at import time. Read it lazily, inside a function, as
   `load_buildings()`, `load_demand_curves()` and `load_template()` (through `render()`) do.
-  `template/board.html` is not among the fetched files: the worker never renders.
+  `template/board.html` and `template/board.js` are not among the fetched files: the worker
+  never renders.
 
 ## Where to read more
 
