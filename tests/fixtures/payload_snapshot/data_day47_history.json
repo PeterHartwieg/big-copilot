@@ -8124,12 +8124,6 @@
      "ba:street_eleventhstreet#16"
     ]
    },
-   "ba:itemname_concessionsstandregister": {
-    "p": 1250.0,
-    "v": [
-     "ba:street_broadwaystreet#6"
-    ]
-   },
    "ba:itemname_counter1": {
     "p": 470.0,
     "v": [
@@ -10844,19 +10838,13 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 10470.0,
+      "furniture": 11050.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -10906,19 +10894,13 @@
      "C2": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 10470.0,
+      "furniture": 11050.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -10968,10 +10950,10 @@
      "M1": {
       "fee": 586000.0,
       "from": null,
-      "furniture": 16790.0,
+      "furniture": 18830.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_cashregister",
         1,
         "req",
         "pointofsales"
@@ -10983,14 +10965,14 @@
         "mount"
        ],
        [
-        "ba:itemname_concessionsstandregister",
-        1,
+        "ba:itemname_cashregister",
+        3,
         "cap",
         "pointofsales"
        ],
        [
         "ba:itemname_counter1",
-        1,
+        3,
         "cap",
         "mount"
        ],
@@ -11167,19 +11149,13 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 20030.0,
+      "furniture": 20610.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -11243,19 +11219,13 @@
      "C2": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 20030.0,
+      "furniture": 20610.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -11319,10 +11289,10 @@
      "M1": {
       "fee": 586000.0,
       "from": null,
-      "furniture": 43750.0,
+      "furniture": 45790.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_cashregister",
         1,
         "req",
         "pointofsales"
@@ -11334,14 +11304,14 @@
         "mount"
        ],
        [
-        "ba:itemname_concessionsstandregister",
-        1,
+        "ba:itemname_cashregister",
+        3,
         "cap",
         "pointofsales"
        ],
        [
         "ba:itemname_counter1",
-        1,
+        3,
         "cap",
         "mount"
        ],
@@ -12737,19 +12707,13 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 7990.0,
+      "furniture": 8570.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -12789,19 +12753,13 @@
      "C2": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 7990.0,
+      "furniture": 8570.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -12841,10 +12799,10 @@
      "M1": {
       "fee": 586000.0,
       "from": null,
-      "furniture": 12810.0,
+      "furniture": 14850.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_cashregister",
         1,
         "req",
         "pointofsales"
@@ -12856,14 +12814,14 @@
         "mount"
        ],
        [
-        "ba:itemname_concessionsstandregister",
-        1,
+        "ba:itemname_cashregister",
+        3,
         "cap",
         "pointofsales"
        ],
        [
         "ba:itemname_counter1",
-        1,
+        3,
         "cap",
         "mount"
        ],
@@ -13018,19 +12976,13 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 14100.0,
+      "furniture": 14750.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_flatwoodendisplaystand",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -13110,19 +13062,13 @@
      "C2": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 14100.0,
+      "furniture": 14750.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_flatwoodendisplaystand",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -13202,10 +13148,10 @@
      "M1": {
       "fee": 586000.0,
       "from": null,
-      "furniture": 25900.0,
+      "furniture": 27800.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_cashregister",
         1,
         "req",
         "pointofsales"
@@ -13217,14 +13163,14 @@
         "mount"
        ],
        [
-        "ba:itemname_concessionsstandregister",
-        1,
+        "ba:itemname_cashregister",
+        3,
         "cap",
         "pointofsales"
        ],
        [
         "ba:itemname_flatwoodendisplaystand",
-        1,
+        3,
         "cap",
         "mount"
        ],
@@ -13413,19 +13359,13 @@
      "C1": {
       "fee": 131850.0,
       "from": "ba:street_broadwaystreet#19",
-      "furniture": 16970.0,
+      "furniture": 17550.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -13497,19 +13437,13 @@
      "C2": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 16970.0,
+      "furniture": 17550.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -13581,10 +13515,10 @@
      "M1": {
       "fee": 586000.0,
       "from": null,
-      "furniture": 33890.0,
+      "furniture": 35930.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_cashregister",
         1,
         "req",
         "pointofsales"
@@ -13596,14 +13530,14 @@
         "mount"
        ],
        [
-        "ba:itemname_concessionsstandregister",
-        1,
+        "ba:itemname_cashregister",
+        3,
         "cap",
         "pointofsales"
        ],
        [
         "ba:itemname_counter1",
-        1,
+        3,
         "cap",
         "mount"
        ],
@@ -14551,19 +14485,13 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 41870.0,
+      "furniture": 42450.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -14609,19 +14537,13 @@
      "C2": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 41870.0,
+      "furniture": 42450.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -14667,10 +14589,10 @@
      "M1": {
       "fee": 586000.0,
       "from": null,
-      "furniture": 97390.0,
+      "furniture": 99430.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_cashregister",
         1,
         "req",
         "pointofsales"
@@ -14682,14 +14604,14 @@
         "mount"
        ],
        [
-        "ba:itemname_concessionsstandregister",
-        1,
+        "ba:itemname_cashregister",
+        3,
         "cap",
         "pointofsales"
        ],
        [
         "ba:itemname_counter1",
-        1,
+        3,
         "cap",
         "mount"
        ],
@@ -14838,19 +14760,13 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 24970.0,
+      "furniture": 25550.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -14915,19 +14831,13 @@
      "C2": {
       "fee": 131850.0,
       "from": "ba:street_eighthstreet#5",
-      "furniture": 24970.0,
+      "furniture": 25550.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -14992,10 +14902,10 @@
      "M1": {
       "fee": 586000.0,
       "from": null,
-      "furniture": 59100.0,
+      "furniture": 61140.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_cashregister",
         1,
         "req",
         "pointofsales"
@@ -15007,14 +14917,14 @@
         "mount"
        ],
        [
-        "ba:itemname_concessionsstandregister",
-        1,
+        "ba:itemname_cashregister",
+        3,
         "cap",
         "pointofsales"
        ],
        [
         "ba:itemname_counter1",
-        1,
+        3,
         "cap",
         "mount"
        ],
@@ -15512,19 +15422,13 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 33170.0,
+      "furniture": 33750.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -15600,19 +15504,13 @@
      "C2": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 33170.0,
+      "furniture": 33750.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -15688,10 +15586,10 @@
      "M1": {
       "fee": 586000.0,
       "from": null,
-      "furniture": 70990.0,
+      "furniture": 73030.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_cashregister",
         1,
         "req",
         "pointofsales"
@@ -15703,14 +15601,14 @@
         "mount"
        ],
        [
-        "ba:itemname_concessionsstandregister",
-        1,
+        "ba:itemname_cashregister",
+        3,
         "cap",
         "pointofsales"
        ],
        [
         "ba:itemname_counter1",
-        1,
+        3,
         "cap",
         "mount"
        ],
@@ -15860,11 +15758,6 @@
    }
   },
   "vendors": {
-   "ba:street_broadwaystreet#6": {
-    "a": "6 Broadway Street",
-    "h": "ba:neighborhood_midtown",
-    "n": "Red Carpet Decor"
-   },
    "ba:street_eleventhstreet#16": {
     "a": "16 Eleventh Street",
     "h": "ba:neighborhood_lowermanhattan",

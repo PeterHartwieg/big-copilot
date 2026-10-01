@@ -8037,6 +8037,10 @@ def _hourly(
             [round(sum(h) / len(h), 1) if h else None for h in row] for row in seen
         ]
 
+        # A station the game does not let work in this type (a concession
+        # stand register in a shop) serves nobody there and holds no post.
+        furniture = load_store_rules().get("furniture") or {}
+        kind = (business.get("typeSlug") or "").removeprefix("ba:businesstype_")
         # A station whose skill this business type takes nobody for is left
         # out: nobody can be assigned here to work it, so it serves nobody and
         # gates nothing. The game lets any item be placed in any business, so a
@@ -8046,7 +8050,7 @@ def _hourly(
         here, labels, slugs, keys = {}, {}, {}, {}
         for holder in save.items(b["itemInstances"]):
             item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
-            if item and item.get("itemName") in posts:
+            if item and item.get("itemName") in posts and works_in(furniture.get(item["itemName"]) or {}, kind):
                 if accepts is not None and posts[item["itemName"]][0] not in accepts:
                     stray[item["itemName"]] += 1
                     continue
@@ -15655,6 +15659,20 @@ def decor_route(elements: int, floor_slots: int, wall_slots: int, materials: dic
             "cost": money(spend), "score": score}
 
 
+def works_in(facts: dict, kind: str) -> bool:
+    """Whether the game lets a piece of furniture work in a business type
+    (`kind`, no prefix): its "Can only be used in ..." requirement, "o" the
+    only types, "no" the types it does not work in. A piece whose requirement
+    is unmet stands in the shop but the game leaves it out of the business
+    (ItemHelper.HasAnyMissingRequirements): a concession stand register in a
+    clothing store is no point of sale, though the opening check counts it.
+    A business of no known type is not judged."""
+    if not kind:
+        return True
+    only = facts.get("o")
+    return (not only or kind in only) and kind not in (facts.get("no") or ())
+
+
 def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=None) -> list:
     """What a 100% outfitted store of a type holds, as shopping-list lines.
 
@@ -15701,9 +15719,11 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
         (the designer's categories): a liquor store gets no cinema register.
         Those tags only sort the catalogue (FurnitureTagMatcher), never where
         a piece may stand, so an item that answers a customer demand (a
-        speaker, a sink) is any the stores sell: `typed` False."""
+        speaker, a sink) is any the stores sell: `typed` False. Where the game
+        itself limits a piece to some types, it is that (works_in())."""
         fits = facts(name).get("bt")
-        return price(name) > 0 and bool(facts(name).get("v")) and (not typed or not fits or kind in fits)
+        return (price(name) > 0 and bool(facts(name).get("v")) and works_in(facts(name), kind)
+                and (not typed or not fits or kind in fits))
 
     def mounts(name):
         """What a station has to be attached to: the cheapest sold piece of
@@ -15985,6 +16005,7 @@ def required_placed(placed: collections.Counter, type_slug: str, rules: dict, pr
     table = prices.get("items") or {}
     sells = {p for p, _impact in t.get("i") or ()}
     offered = set(available or ())
+    kind = type_slug.removeprefix("ba:businesstype_")
 
     def holding(products) -> int:
         return sum(n for name, n in placed.items() if products & set((furniture.get(name) or {}).get("h") or ()))
@@ -16019,7 +16040,9 @@ def required_placed(placed: collections.Counter, type_slug: str, rules: dict, pr
             need = max(1, math.ceil(float(sqm) / req["sq"])) if sqm else 1
             if req.get("mx"):
                 need = min(need, req["mx"])
-        out.append([req.get("n") or "", need, sum(placed[n] for n in names if n in placed)])
+        # A piece the type cannot use is no help, though the game's own opening
+        # check counts it (works_in()).
+        out.append([req.get("n") or "", need, sum(placed[n] for n in names if n in placed and works_in(furniture.get(n) or {}, kind))])
     return out
 
 

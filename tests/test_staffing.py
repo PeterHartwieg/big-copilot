@@ -410,7 +410,9 @@ NUMBER = 12
 KEY = site_key((STREET, NUMBER))
 REGISTER = "ba:itemname_cashregister"
 BOARD = "ba:itemname_fitnessplanningboard"
-BOOTH = "ba:itemname_boothticket"
+# A 50-an-hour Customer Service station with no business-type limit (a ticket
+# booth works in theaters only, so a shop would not count it: works_in()).
+BOOTH = "ba:itemname_coatcheckleft"
 CLEAN_STATION = "ba:itemname_cleaningstation"
 LOCKER = "ba:itemname_securityguardlocker"
 LIGHTS = "ba:itemname_boothlighting"
@@ -425,7 +427,7 @@ LABELS = Names(
         STAGECREW: "Stage Crew",
         REGISTER: "Cash register",
         BOARD: "Fitness planning board",
-        BOOTH: "Ticket booth",
+        BOOTH: "Coat check",
         CLEAN_STATION: "Cleaning station",
         LOCKER: "Security guard locker",
         LIGHTS: "Lighting booth",
@@ -1302,14 +1304,15 @@ class PayloadTest(unittest.TestCase):
 
 
 class MultiRoleTest(unittest.TestCase):
-    """A theatre passes every customer through every role, so each is sized alone."""
+    """A site whose every customer passes through every role sizes each alone."""
 
     def test_each_role_packs_its_own_stations(self):
         items = [(1, BOOTH), (2, REGISTER), (3, REGISTER), (4, LIGHTS), (5, LIGHTS)]
         people = [employee(f"p{i}", [SERVICE, STAGECREW]) for i in range(12)]
         row = plan(items, people, {h: 30 for h in range(24)}, type_slug=THEATER)
-        # 30 an hour: one 50-an-hour booth, but two 20-an-hour lighting booths,
-        # and the site's throughput is the slowest role either way.
+        # 30 an hour: one 50-an-hour station, but two 20-an-hour lighting
+        # booths, and the site's throughput is the slowest role either way. (A
+        # cash register works in no theater, so the registers add nothing.)
         self.assertEqual(row["need"][SERVICE][1][12], 1)
         self.assertEqual(row["need"][STAGECREW][1][12], 2)
 

@@ -2239,12 +2239,6 @@
      "ba:street_fourthstreet#50"
     ]
    },
-   "ba:itemname_concessionsstandregister": {
-    "p": 1250.0,
-    "v": [
-     "ba:street_broadwaystreet#6"
-    ]
-   },
    "ba:itemname_counter1": {
     "p": 470.0,
     "v": [
@@ -3235,19 +3229,13 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 10470.0,
+      "furniture": 11050.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -3414,19 +3402,13 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 20030.0,
+      "furniture": 20610.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -4346,19 +4328,13 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 7990.0,
+      "furniture": 8570.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -4503,19 +4479,13 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 14100.0,
+      "furniture": 14750.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_flatwoodendisplaystand",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -4700,19 +4670,13 @@
      "C1": {
       "fee": 131850.0,
       "from": "ba:street_fifthavenue#4",
-      "furniture": 16970.0,
+      "furniture": 17550.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -5388,19 +5352,13 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 41870.0,
+      "furniture": 42450.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -5651,19 +5609,13 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 24970.0,
+      "furniture": 25550.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -6015,19 +5967,13 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 33170.0,
+      "furniture": 33750.0,
       "lines": [
        [
-        "ba:itemname_concessionsstandregister",
+        "ba:itemname_checkoutcounterleft",
         1,
         "req",
         "pointofsales"
-       ],
-       [
-        "ba:itemname_counter1",
-        1,
-        "req",
-        "mount"
        ],
        [
         "ba:itemname_stackofshoppingbaskets",
@@ -6393,11 +6339,6 @@
    }
   },
   "vendors": {
-   "ba:street_broadwaystreet#6": {
-    "a": "6 Broadway Street",
-    "h": "ba:neighborhood_midtown",
-    "n": "Red Carpet Decor"
-   },
    "ba:street_eleventhstreet#16": {
     "a": "16 Eleventh Street",
     "h": "ba:neighborhood_lowermanhattan",
