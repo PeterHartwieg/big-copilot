@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "470c4e1c25";</script>
-<link rel="stylesheet" href="community.css?v=470c4e1c25">
+<script>window.LEDGER_BUILD = "2c9e0fcc71";</script>
+<link rel="stylesheet" href="community.css?v=2c9e0fcc71">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=470c4e1c25">
+<link rel="stylesheet" href="fonts/fonts.css?v=2c9e0fcc71">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5895,7 +5895,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"470c4e1c25","latest":{"pr":175,"date":"2026-09-29","title":"Open a new store: plan it, open it, and watch it earn the investment back","summary":"Expansion has a new view, Open a store. Pick a type from the neighbourhoods with the most demand, from any type, or from a Demand cell's new Open a store here, then pick the building in Find a location, fixed to that type. The board lists everything a fully outfitted store of that type needs in that building: what the type requires to open, an item for each customer demand, enough tills for the building's capacity and shelving copied from your own store of the same layout, with the installation firm's price or, for self-installation, a shopping list by furniture store on the map, and the deposit. It then estimates the profit a day from the game's own rules for customers, prices, demand and wages, with the best marketing mix, and shows how many days it takes to earn the investment back, as a range, after tax, against what your own stores of that type earn, and with an optional bank loan. Offices are estimated too; cinemas and theatres show the investment only. A checklist then follows the store until it opens, ticking itself from the save: the lease, furniture, staff for the opening hours, uniforms, customer demands, marketing and logistics, with buttons to staff the store, assign uniforms and set the cheapest marketing mix through the game link. Once the store trades, the plan compares itself with it: the investment, the profit a day and the first days against the plan, the share paid back, the day it breaks even, and any loan it was planned with. Your plans are kept per character, opened stores included. Businesses › Results also has a Payback column: for each shop, office and chain, the day its setup was earned back or how many days are still to go, with the same line on a business's own page."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"2c9e0fcc71","latest":{"pr":175,"date":"2026-09-29","title":"Open a new store: plan it, open it, and watch it earn the investment back","summary":"Expansion has a new view, Open a store. Pick a type from the neighbourhoods with the most demand, from any type, or from a Demand cell's new Open a store here, then pick the building in Find a location, fixed to that type. The board lists everything a fully outfitted store of that type needs in that building: what the type requires to open, an item for each customer demand, enough tills for the building's capacity and shelving copied from your own store of the same layout, with the installation firm's price or, for self-installation, a shopping list by furniture store on the map, and the deposit. It then estimates the profit a day from the game's own rules for customers, prices, demand and wages, with the best marketing mix, and shows how many days it takes to earn the investment back, as a range, after tax, against what your own stores of that type earn, and with an optional bank loan. Offices are estimated too; cinemas and theatres show the investment only. A checklist then follows the store until it opens, ticking itself from the save: the lease, furniture, staff for the opening hours, uniforms, customer demands, marketing and logistics, with buttons to staff the store, assign uniforms and set the cheapest marketing mix through the game link. Once the store trades, the plan compares itself with it: the investment, the profit a day and the first days against the plan, the share paid back, the day it breaks even, and any loan it was planned with. Your plans are kept per character, opened stores included. Businesses › Results also has a Payback column: for each shop, office and chain, the day its setup was earned back or how many days are still to go, with the same line on a business's own page."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5983,8 +5983,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=470c4e1c25"></script>
-<script src="community.js?v=470c4e1c25"></script>
+<script src="app.js?v=2c9e0fcc71"></script>
+<script src="community.js?v=2c9e0fcc71"></script>
 
 <script>
 
@@ -16676,7 +16676,9 @@ function osLoad(){
             amount: p.finance.amount == null || !Number.isFinite(+p.finance.amount) ? null : Math.max(0, +p.finance.amount),
             bank: typeof p.finance.bank === "string" ? p.finance.bank : null} : {on: false, amount: null, bank: null},
           step: OS_STEPS.includes(p.step) ? p.step : "what", made: +p.made || null, snap: osSnapClean(p.snap),
-          opened: Number.isFinite(p.opened) ? p.opened : null, paid: !!p.paid}));
+          opened: Number.isFinite(p.opened) ? p.opened : null, paid: !!p.paid,
+          /* A plan kept before `sold` was: one whose store opened is taken as a record. */
+          sold: "sold" in p ? !!p.sold : Number.isFinite(p.opened)}));
       /* The stores that opened since the last visit are history before the caps count. */
       dirty = osReconcile();
       const before = osPlans.length;
@@ -16825,14 +16827,16 @@ function osPrice(item, hood){
   const ref = row[2] ? Math.min(m.p, row[2]) : m.p;
   return {price: ref * (h.idx + (mono ? 0.3 : 0)), mono};
 }
-/* A new shop counts itself among the sellers; an existing one already is. */
+/* A new shop counts itself among the sellers; an existing one already is.
+   `existing` may also say so item by item (osModel()). */
 function osDemand(item, hood, existing){
   const m = (osFacts().market || {})[item];
   if(!m) return 0;
   if(!m.d) return 100;
   if(m.only && !m.only.includes(hood)) return 0;
   const row = (m.hoods || {})[hood] || [0];
-  return osDemandWith((row[0] || 0) + (existing ? 0 : 1), m.p);
+  const counted = typeof existing === "function" ? existing(item) : existing;
+  return osDemandWith((row[0] || 0) + (counted ? 0 : 1), m.p);
 }
 /* The satisfaction the plan settles at: the player's own shops of the type,
    their median, else a well-run shop's. */
@@ -16856,9 +16860,18 @@ function osInitial(t, b, o){
    neighbourhood's marketing strength, never above 100. */
 const osPromo = (b, h, o) => o.promoTotal ?? Math.min(100, Math.round((b.traffic || 0)
   + Math.round(Math.min((o.reach || 0) / (b.m2 || 1), 1) * 100) * h.strength));
+/* A store of the type already at the building (premises set up before the
+   plan picked them) is a seller already of what it offers for sale, as the
+   game counts providers (cachedAvailableProducts): which items, or null. */
+function osProvides(slug, b){
+  const here = b && (D.businesses || []).some(x => x.key === b.key && x.typeSlug === slug);
+  const sells = here && ((osFacts().built || {})[b.key] || {}).sells;
+  return Array.isArray(sells) && sells.length ? p => sells.includes(p) : null;
+}
 function osModel(slug, b, o = {}){
   const F = osFacts(), t = osType(slug), g = F.game || {}, h = (F.hoods || {})[b.hood];
   if(!t || !h) return null;
+  if(o.existing === undefined){ const provides = osProvides(slug, b); if(provides) o = {...o, existing: provides}; }
   if(t.model === "office") return osOfficeModel(slug, t, b, h, o);
   if(t.model !== "retail") return null;
   const cap = osCap(b);
@@ -16992,15 +17005,16 @@ function osOwnRatio(slug){
 }
 /* What the player's own shops in the neighbourhood lose: a new seller moves
    the demand for every product it sells one step down there, for them too,
-   whatever the product's weight for either type. */
-function osCannibal(slug, hood){
+   whatever the product's weight for either type. A product the store at the
+   address sells already (`provides`, osProvides()) moves nothing more. */
+function osCannibal(slug, hood, provides){
   const t = osType(slug), sales = ((osFacts().sales || {})[hood]) || {};
   const shops = new Set(), items = [];
   let loss = 0;
   (t ? t.products : []).forEach(([p]) => {
     const rows = sales[p];
     const m = (osFacts().market || {})[p];
-    if(!rows || !m || !m.d) return;
+    if(!rows || !m || !m.d || (provides && provides(p))) return;
     const n = ((m.hoods || {})[hood] || [0])[0] || 0;
     const now = osDemandWith(n, m.p), after = osDemandWith(n + 1, m.p);
     if(now <= 0 || after >= now) return;
@@ -17257,10 +17271,30 @@ function osShowFinder(plan){
   } else osFinder.planFor(preset);
 }
 function osPick(key){
-  const plan = osPlan();
+  let plan = osPlan();
   if(!plan) return;
+  if(plan.key !== key){
+    /* A plan whose store has sold (osReconcile() marks it, and it stays
+       marked once the store closes) is that store's record: another place is
+       a new plan of the type there. Any other plan starts over at the new
+       place, since what it kept for the last one is not this one's. */
+    if(plan.opened != null && plan.sold){
+      plan = osNew(plan.type, null);
+      if(!plan){
+        osCur = null; osStep = "what";
+        osNotice = tt("gr.os.plans.full", "All twelve plans have a building. Delete one to start another.");
+        drawOpenStore();
+        return;
+      }
+    } else { plan.snap = null; plan.opened = null; plan.paid = false; plan.sold = false; }
+  }
   plan.key = key;
   if(!plan.hood){ const b = osBuilding(key); if(b) plan.hood = b.hood; }
+  /* Premises rented and set up as the planned type before the plan picked
+     them: their store has never sold, so its figures are kept now, as an
+     empty address's are on the next draw (osSnapTake()). */
+  const at = osOpenedAt(plan), b = osBuilding(key);
+  if(!plan.snap && at && !at.hasTraded && b) plan.snap = osSnapOf(plan, b);
   osStep = "investment";
   osSave();
   drawOpenStore();
@@ -17402,7 +17436,7 @@ function osBreakHtml(plan){
   const big = (key, alt) => `<div${alt ? ` class="alt"` : ""}><span class="os-lab">${key === "firm" ? tt("gr.os.inv.firm", "Installation firm") : tt("gr.os.inv.self", "Self-installation")}</span><b>${
     p > 0 ? osRange(est.days[key]) : tt("gr.os.be.never", "not at this profit")}</b></div>`;
   const tax = (osFacts().game || {}).tax || 0;
-  const t = osType(plan.type), own = osOwnRatio(plan.type), cann = osCannibal(plan.type, b.hood);
+  const t = osType(plan.type), own = osOwnRatio(plan.type), cann = osCannibal(plan.type, b.hood, osProvides(plan.type, b));
   const row = (label, value, cls = "") => `<div class="os-site${cls}"><span><b>${label}</b></span><span class="v">${value}</span></div>`;
   const mix = (m.mix || []).length ? m.mix.map(osCampaignName).join(", ") : tt("gr.os.be.mix.none", "none");
   const detail = [
@@ -17941,6 +17975,7 @@ function osReconcile(){
   osPlans.forEach(p => {
     const b = osAttached(p);
     if(b && p.opened == null){ p.opened = b.opened; changed = true; }
+    if(b && !p.sold && b.hasTraded){ p.sold = true; changed = true; }
     if(b && !p.paid && osPaidBack(osNowOf(paybackSite(p.key)))){ p.paid = true; changed = true; }
   });
   return changed;
@@ -23644,11 +23679,15 @@ class CityMapView {
     if(card.classList.contains('in')) this.placeCard();
   }
   /* The plan's button, on a building the plan could open in: premises of its
-     kind to rent. The label is the plan's own, read afresh in the UI language. */
+     kind to rent, or premises of its kind you already rent, as when the lease
+     was signed before the plan picked the place: empty, or a store of the
+     plan's type that has never sold. One that trades is past planning. The
+     label is the plan's own, read afresh in the UI language. */
   paintPlanGo(key){
     const go = this.card.querySelector('.fplan-go'); if(!go) return;
-    const b = this.planning && key ? this.sites?.get(key) : null;
-    go.hidden = !(b && b.type === this.fs.cat && this.candidate(b));
+    const b = this.planning && key ? this.sites?.get(key) : null, store = b && this.businesses?.get(key);
+    const yours = b && b.status === 'mine' && (!b.occupant || (b.occupant.typeSlug === this.fs.type && store && !store.hasTraded));
+    go.hidden = !(b && b.type === this.fs.cat && (this.candidate(b) || yours));
     if(go.hidden) return;
     go.textContent = this.planning.label?.() || tt("map.fplan.go", "Plan here");
   }
