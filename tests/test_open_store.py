@@ -527,6 +527,32 @@ class FactoryRulesTests(unittest.TestCase):
         self.assertNotIn("bx", fee)
         self.assertNotIn("mo", fee)
 
+    def test_every_recipe_output_and_ingredient_has_a_box_size_and_importer_cap(self):
+        # The recipes and the label match the board's resolve() uses for an
+        # ingredient the help links under another slug (rawtomato is tomato).
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "web", "py", "gametext.json"), encoding="utf-8") as fh:
+            locale = json.load(fh)
+        recipes = ba_dashboard._recipes(ba_dashboard.Names(locale))
+        self.assertTrue(recipes)
+        products = self.rules["products"]
+        by_label = collections.defaultdict(list)
+        for slug, label in locale.items():
+            if slug in products:
+                by_label[label].append(slug)
+
+        def resolve(slug, label):
+            return slug if slug in products else next(iter(by_label.get(label, [])), slug)
+
+        goods = {resolve(product, r["item"]) for product, r in recipes.items()}
+        goods |= {resolve(i["slug"], i["item"]) for r in recipes.values() for i in r["ingredients"]}
+        self.assertIn("ba:itemname_paperbag", goods)
+        self.assertIn("ba:itemname_tomato", goods)
+        for slug in sorted(goods):
+            row = products.get(slug) or {}
+            self.assertGreater(row.get("bx", 0), 0, slug)
+            self.assertGreater(row.get("mo", 0), 0, slug)
+
     def test_storage_shelves_carry_their_box_capacity(self):
         furniture = self.rules["furniture"]
         self.assertEqual(furniture["ba:itemname_palletshelf"].get("cc"), 60)

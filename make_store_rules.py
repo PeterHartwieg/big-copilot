@@ -95,8 +95,11 @@ where noted):
      "skills": {"<skill>": baseHourlyWage}}
 
 `products` holds every item a business type sells (the gifts and flowers are
-furniture too, and sit in both tables), every entrance fee, and every other
-non-furniture item with a sales ratio; `furniture` every item with isFurniture.
+furniture too, and sit in both tables), every entrance fee, every other
+non-furniture item with a sales ratio, and every factory recipe's output and
+ingredients (the recipe pages in the built web/py/gametext.json, so this runs
+after build_web.py; the Paper Bag is furniture no type sells, yet a factory
+makes it); `furniture` every item with isFurniture.
 Furniture prices and type flags stay in ba_item_prices.json.
 """
 
@@ -246,8 +249,41 @@ def _furniture(items: dict, placement: dict, by_type: dict, type_slugs: set) -> 
     return out
 
 
-def _products(items: dict, types: list) -> dict:
-    wanted = set()
+def _recipe_goods(items: dict) -> set:
+    """Every factory recipe's output and ingredients, as the items bundle names
+    them: the recipes come from the help text (ba_dashboard._recipes over the
+    built web/py/gametext.json), and an ingredient the help links under a name
+    the bundle does not hold ("Bag of Tomatoes" is rawtomato on the page,
+    tomato in the game) is matched by its label, as the board's resolve() does."""
+    from ba_dashboard import Names, _recipes
+
+    with open(os.path.join(HERE, "web", "py", "gametext.json"), encoding="utf-8") as fh:
+        locale = json.load(fh)
+    by_label = {}
+    for slug, label in locale.items():
+        if slug in items:
+            by_label.setdefault(label, []).append(slug)
+    recipes = _recipes(Names(locale))
+    if not recipes:
+        raise SystemExit("web/py/gametext.json holds no recipes; run python build_web.py first")
+    out = set()
+    for product, recipe in recipes.items():
+        for slug, label in [(product, recipe["item"])] + [(i["slug"], i["item"]) for i in recipe["ingredients"]]:
+            if slug in items:
+                out.add(slug)
+                continue
+            match = by_label.get(label) or []
+            if len(match) != 1:
+                raise SystemExit(f"recipe item {slug} ({label}) matches {match} in the items bundle")
+            out.add(match[0])
+    return out
+
+
+def _products(items: dict, types: list, goods: set = frozenset()) -> dict:
+    # A recipe's goods (`goods`) are kept for their box size and importer cap,
+    # even one no type sells (the Paper Bag): the store planner looks a
+    # product up by name and never lists this table.
+    wanted = set(goods)
     for tree in types:
         wanted.update(row.get("itemName") for row in tree.get("businessProducts") or [])
         if tree.get("hasEntranceFee"):
@@ -510,7 +546,7 @@ def main() -> None:
             furniture[item]["st"] = seats
     vendors = _vendors(furniture)
     out = {
-        "products": _products(items, types),
+        "products": _products(items, types, _recipe_goods(items)),
         "furniture": furniture,
         "types": _types(types, requirements),
         "hoods": _hoods(root),
