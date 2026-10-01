@@ -158,8 +158,11 @@ long as main has not moved (`docs/contributing.md`, "Merging a green pull reques
 
 `python build_web.py --check` verifies that `web/` matches the sources without needing the
 installed game. `python build_web.py --assemble` writes everything `--check` compares, also
-without the game; only a change to the game text, the game names or the wiki's game data
-needs the full `python build_web.py`.
+without the game. It keeps `web/py/gametext.json`, `web/names/` and the game's part of
+`web/wiki-data.json` as committed, so a change to what shapes those — the wiki generator
+(`tools/build_wiki_data.py`, `tools/wiki_data.py`, `tools/extract_wiki.py`,
+`tools/wiki_sample.json`), `ships()` in `build_web.py`, or the name-table code in
+`ba_dashboard.py` — still needs the full `python build_web.py` with the game.
 
 Changelog: only a new feature or a new user-facing capability gets an entry in
 `web/changelog.json`; the rule and the format are in `docs/contributing.md`, "Changelog".

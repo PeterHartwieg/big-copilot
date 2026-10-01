@@ -38,6 +38,7 @@ from tools.build_wiki_data import (
 )
 from tools import i18n as ui_text
 from tools import wiki_pages
+from tools.wiki_data import SourceError
 from tools.extract_wiki import game_data_dir
 
 # The game text shipped with the page: the display names of items, business
@@ -762,7 +763,11 @@ def assemble(root: str = HERE) -> None:
             "missing game name tables (" + ", ".join(missing)
             + "); run python build_web.py with the installed game"
         )
-    if splice_wiki_topics(root):
+    try:
+        spliced = splice_wiki_topics(root)
+    except (OSError, ValueError, KeyError, TypeError, SourceError) as exc:
+        raise SystemExit(f"web/wiki-data.json: cannot carry tools/wiki_topics.json into it: {exc}") from None
+    if spliced:
         print("web/wiki-data.json: hand-written articles updated from tools/wiki_topics.json")
     # The static wiki pages, sitemap.xml and robots.txt follow the payload.
     pages = wiki_pages.write(web)
@@ -777,7 +782,7 @@ def assemble(root: str = HERE) -> None:
         shutil.copyfile(os.path.join(root, name), os.path.join(web, "py", name))
     # Big Copilot's own text in other languages, from i18n/ (tools/i18n.py).
     ui_text.ship(root=root)
-    print(f"web/i18n/: {', '.join(ui_text.languages()) or 'no'} UI tables")
+    print(f"web/i18n/: {', '.join(ui_text.languages(root)) or 'no'} UI tables")
     # Everything the stamp reads is now in place, so the page and version.json
     # describe the folder as it stands.
     release = release_info(root)
@@ -864,6 +869,9 @@ if __name__ == "__main__":
                 fix = "make_floor_plans.py"
             elif path.startswith(NAMES_DIR + "/"):
                 fix = "python build_web.py, with the installed game"
+            elif path in ("web/index.html", "web/version.json"):
+                fix = ("python build_web.py --assemble; the full python build_web.py when the "
+                       "wiki generator, the shipped game text or the game names changed")
             else:
                 fix = "python build_web.py --assemble"
             print(f"stale: {path} (run {fix})")

@@ -145,7 +145,6 @@ class WebFresh(unittest.TestCase):
                 self.assertIn("stale: web/version.json", stale.stdout)
                 self.assertIn("stale: web/index.html", stale.stdout)
 
-
     def test_assemble_rebuilds_what_check_compares_without_the_game(self):
         # Every file --check compares is written from the committed sources;
         # any route to the installed game fails the test.
