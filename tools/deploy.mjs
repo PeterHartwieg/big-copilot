@@ -13,6 +13,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -20,7 +21,8 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 function run(cmd, args, options = {}) {
   const shown = [cmd, ...args].join(' ');
   console.log(`> ${shown}`);
-  const result = spawnSync(cmd, args, { cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32', ...options });
+  // No shell, on Windows too, so a path or an argument with spaces stays one argument.
+  const result = spawnSync(cmd, args, { cwd: ROOT, stdio: 'inherit', ...options });
   if (result.error) stop(`${shown}: ${result.error.message}`);
   return result.status;
 }
@@ -71,5 +73,8 @@ if (changed.length) {
 }
 if (run(py, ['build_web.py', '--check']) !== 0) stop('python build_web.py --check reports stale files');
 
-const status = run('wrangler', ['deploy', '--config', 'wrangler.jsonc', ...process.argv.slice(2)]);
+// wrangler's own entry point, run by this Node: no .cmd shim, so no shell on Windows.
+const wrangler = path.join(ROOT, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
+if (!existsSync(wrangler)) stop('node_modules/wrangler is missing; run npm ci');
+const status = run(process.execPath, [wrangler, 'deploy', '--config', 'wrangler.jsonc', ...process.argv.slice(2)]);
 process.exit(status ?? 1);

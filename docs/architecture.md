@@ -440,7 +440,8 @@ source notes are not labels and stay English.
   `document.documentElement.lang` follows the UI language.
 - The CLI's `--lang de` carries `web/i18n/de.json` in the page (`cli_ui_table()`, filling
   `/*__UI_TABLE__*/null` inside `web/i18n.js`) when that table is not empty, as it carries
-  the names.
+  the names. `web/i18n/` is assembled, not committed, so in a checkout that has not run
+  `python build_web.py --assemble` the page's own words stay English.
 - `ttSetTable(lang, table)` puts a table in force, refills the markup (`tApply()`, which
   keeps the English it replaced) and calls every `ttOnChange()` listener. The board's
   listener sets `NUM_LOCALE = ttNumLocale()` (en-US for English, de-DE for German), so
@@ -564,7 +565,7 @@ without its `.git`) or inside any other git work tree.
 4. Add the area to `CONVERTED` in `tests/test_i18n_msg.py` (Python fields) and in
    `tests/i18n_layout.test.cjs` (its selector), so English that bypasses `tt()` fails from
    then on.
-5. Run the i18n tests and `python build_web.py`. `python tools/i18n.py status de` lists the
+5. Run `python build_web.py --assemble` and the i18n tests. `python tools/i18n.py status de` lists the
    new keys as missing, which is expected until the German is drafted.
 
 ## Template placeholders

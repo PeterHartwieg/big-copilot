@@ -24,10 +24,12 @@ use **Update** to pick them again. Dropping a single file does not watch its fol
 
 ### Host the site yourself
 
-`web/` is the whole site: static files, no build step, so any web server will do.
-From a clone of this repository:
+`web/` is the whole site once it is assembled: static files, so any web server will do.
+The page itself is not committed. From a clone of this repository, write it with Python
+(no game needed) and serve the folder:
 
 ```sh
+python3 build_web.py --assemble
 cd web && python3 -m http.server 8010 --bind 0.0.0.0
 ```
 
@@ -52,7 +54,7 @@ unavailable** and the feature list will not load. The update banner is the
 opposite: it compares against your own `version.json`, so it appears after you
 pull.
 
-To update: `git pull`, then hard-refresh the page. `web/_headers` is read only by
+To update: `git pull`, then `python3 build_web.py --assemble`, then hard-refresh the page. `web/_headers` is read only by
 Cloudflare, so your server caches `index.html` however it sees fit.
 
 This is for your own use. Questions about the board are welcome as issues; setting
