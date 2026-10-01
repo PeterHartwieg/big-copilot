@@ -13712,7 +13712,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
     """The two things an hourly grid can tell you that a daily total cannot.
 
     Each role is judged on the roster that was on for it, so a gym short of
-    trainers and a theatre short of projectionists get the line that fits them,
+    trainers and a cinema short of projectionists get the line that fits them,
     while a shop's counters and an office's workstations keep the words they
     have always had. Wages arrive per role, as ``{site key: {skill: wage}}``.
     """

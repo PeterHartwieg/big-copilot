@@ -451,8 +451,8 @@ grid and three lines meet.
   manned in that hour, not the number of staff times a guess. Two people scheduled on one
   station count that station once.
 - **The building capacity** is the building's own `customerCapacity`: 30 for the small
-  supermarkets, 75 for the big ones and the electronics stores, 100 for the cinema. It is
-  a per-hour limit, not a daily total.
+  supermarkets, 75 for the big ones and the electronics stores, 100 to 150 for a cinema
+  depending on its layout. It is a per-hour limit, not a daily total.
 
 Effective capacity is the smallest of these, and the useful finding is *which* one binds.
 Every hour at 95% or more of it is an hour at the ceiling; the grid outlines those in red (in a neutral grey where the building's own capacity held the hour),
@@ -474,11 +474,15 @@ nobody and a cleaner placed at a computer serves nobody. That is also why a gym 
 invisible here until the station table saw its boards — a site with no Customer Service
 station at all had no capacity to read.
 
-**Roles.** A shop asks for one skill and its capacity is the registers manned. A theatre
-asks for four, and a customer has to pass through all of them, so the site is only as fast
-as its slowest role: the grid shows the minimum across roles, the sum only within one, and
-each role's own staffing is judged separately in the findings. Two projection booths with one
-projectionist hold the whole theatre back to 25 an hour however many stage crew are on.
+**Roles.** A shop asks for one skill and its capacity is the registers manned. A cinema
+asks for two (Projectionist at the projection booths, Customer Service at the concessions
+stand registers; its ticket kiosk is self-service and no station) and a theatre for three
+(Customer Service at the ticket booths, Stage Crew at the costume, lighting and sound booths,
+Actor in the dressing rooms; a theatre has no projection booth and employs no
+projectionist). A customer has to pass through all of them, so the site is only as fast as
+its slowest role: the grid shows the minimum across roles, the sum only within one, and each
+role's own staffing is judged separately in the findings. Two projection booths with one
+projectionist hold the whole cinema back to 25 an hour however many concessions staff are on.
 
 Only stations the business type can staff count. The game lets any item be placed in any
 business but assigns a person only in a skill the type takes (`ASSIGN_SKILLS`), so a leftover
@@ -542,7 +546,7 @@ shop's "staffing" and "registers" and an office's "workstations" keep the ids th
 always had and the player's silences survive. A shop's counters and
 an office's workstations keep the words they have always had — a register asks for another
 counter, a computer for another workstation — while a gym is told another fitness planning
-board or another Gym Trainer, and a theatre another projection booth. A site that runs one
+board or another Gym Trainer, and a cinema another projection booth. A site that runs one
 person at night and a full floor by day can be short of staff at night and at the door by
 day, and then it gets one line for each, rather than a verdict for the whole week that is
 wrong about one of them. Where the hours on one line ran at different ceilings, the line
