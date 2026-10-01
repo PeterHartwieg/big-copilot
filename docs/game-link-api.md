@@ -606,7 +606,12 @@ The skills a site takes a person for are the game's assign check: the business t
 `employeePrimarySkills`, plus cleaning where the building `NeedsCleaning`, security guard
 where the business type has the `allowtheft` tag, and delivery driver where the building
 type's `requiredBuildingSkills` names it. The payload's `hiring.sites[].accepts` is the same
-list, so the board never proposes a `no_skill` row.
+list. The game places any item in any business, so a site can hold a station whose skill it
+does not take (a security guard locker in a theatre, a leftover fitness planning board in a
+liquor store); the plans leave such a station out and the Staffing block names it
+(`unstaffable`), so every hire week is in a role in `accepts`, and the board moves people and
+hires candidates only into those. A `no_skill` row then means the board's figures are out of
+date.
 
 An apply with any row answers `409` with the rows: `changed` when any row's error is
 `changed` (the page refreshes and re-plans), else `refused`. Nothing is written.

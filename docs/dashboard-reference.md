@@ -480,6 +480,12 @@ as its slowest role: the grid shows the minimum across roles, the sum only withi
 each role's own staffing is judged separately in the findings. Two projection booths with one
 projectionist hold the whole theatre back to 25 an hour however many stage crew are on.
 
+Only stations the business type can staff count. The game lets any item be placed in any
+business but assigns a person only in a skill the type takes (`ASSIGN_SKILLS`), so a leftover
+fitness planning board in a liquor store, or a security guard locker in a theatre, is no role
+here, nobody's hours in a plan and no hire on the Staff page. The Staffing block names each
+one it leaves out.
+
 A skill whose stations do different work is split into one role per kind of work, read from
 the fees each station's help page lists. Today that is the hairdresser alone: the chair
 cuts, styles and colours, the head wash only shampoos, and neither can do the other's job,

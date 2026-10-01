@@ -1037,6 +1037,72 @@ class HiringFromPlansTest(unittest.TestCase):
         json.dumps(hiring)
 
 
+class StrayStationTest(unittest.TestCase):
+    """A station whose skill the business type takes nobody for (1 October
+    2026): a theatre with a security guard locker, a liquor store with a
+    leftover fitness planning board. The game places any item anywhere, but
+    the mod refuses a hire there (`no_skill`), so no plan may hire for it."""
+
+    LIQUOR = "ba:businesstype_liquorstore"
+
+    def plan(self, items, type_slug):
+        save, names, sites, grids, staff = ts.plan_inputs(
+            [dict(items=items, hourly=ts.FLAT, type_slug=type_slug)],
+            [ts.employee("p1", [SERVICE])])
+        [row] = _staffing(save, names, sites, grids, staff, 0.55)
+        [site] = _hiring(save, sites, [row], {}, [])["sites"]
+        return row, site
+
+    def assert_hires_are_accepted(self, site):
+        self.assertTrue(site["plans"])
+        for mode, plan in site["plans"].items():
+            for week in plan["hireWeeks"]:
+                self.assertIn(week["skill"], site["accepts"], mode)
+
+    def test_a_liquor_store_hires_no_gym_trainer(self):
+        items = [(1, ts.REGISTER), (2, ts.BOARD), (3, ts.BOARD), (8, ts.CLEAN_STATION)]
+        row, site = self.plan(items, self.LIQUOR)
+        self.assert_hires_are_accepted(site)
+        self.assertNotIn(ts.TRAINER, row["headcount"])
+        self.assertNotIn(2, {s["id"] for s in row["stations"]})
+        self.assertNotIn(3, {s["id"] for s in row["stations"]})
+        self.assertEqual(row["unstaffable"], [{
+            "slug": ts.BOARD, "station": "Fitness planning board", "skill": ts.TRAINER,
+            "role": "Gym Trainer", "n": 2}])
+
+    def test_a_stray_station_does_not_pin_capacity_at_zero(self):
+        """The site is as fast as its slowest role; a board nobody can work
+        was a role never staffed, so the liquor store read 0 an hour."""
+        on = [{"wd": 1, "type": ba_dashboard.STATION_SHIFT, "itemInstanceId": 1,
+               "employeeId": "p1", "startingHour": 8, "endingHour": 20}]
+        reg = ts.registration([(1, ts.REGISTER), (2, ts.BOARD)], ts.FLAT, shifts=on)
+        reg["businessTypeName"] = self.LIQUOR
+        save = Save({"EmployeeInstances": {"$items": [ts.employee("p1", [SERVICE])]},
+                     "BuildingRegistrations": {"$items": [dict(reg, RentedByPlayer=True)]}},
+                    {}, "t.hsg")
+        business = dict(ts.business(), typeSlug=self.LIQUOR)
+        [grid] = _hourly(save, [reg], [business], ts.STATIONS, set(), {"p1": SERVICE}, ts.LABELS)
+        self.assertEqual([r["skill"] for r in grid["roles"]], [SERVICE])
+        self.assertEqual(grid["counters"], 20)
+        self.assertEqual(grid["staffed"][1][12], 20)
+        self.assertEqual([u["n"] for u in grid["unstaffable"]], [1])
+
+    def test_a_theatre_hires_no_security_guard(self):
+        items = [(1, ts.BOOTH), (8, ts.CLEAN_STATION), (9, ts.LOCKER)]
+        row, site = self.plan(items, ts.THEATER)
+        self.assert_hires_are_accepted(site)
+        self.assertNotIn(GUARD, row["headcount"])
+        self.assertFalse([s for s in row["shifts"] if row["stations"][s["s"]]["id"] == 9])
+        self.assertEqual([u["slug"] for u in row["unstaffable"]], [ts.LOCKER])
+
+    def test_a_shop_that_takes_every_station_says_nothing(self):
+        items = [(1, ts.REGISTER), (8, ts.CLEAN_STATION), (9, ts.LOCKER)]
+        row, site = self.plan(items, ts.SHOP)
+        self.assert_hires_are_accepted(site)
+        self.assertIn(GUARD, row["headcount"])
+        self.assertNotIn("unstaffable", row)
+
+
 class HashSeedTest(unittest.TestCase):
     SCRIPT = """
 import json, sys
