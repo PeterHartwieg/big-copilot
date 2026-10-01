@@ -14,7 +14,7 @@ const vm = require('node:vm');
 
 const ROOT = path.join(__dirname, '..');
 const SOURCE = fs.readFileSync(path.join(ROOT, 'web', 'i18n.js'), 'utf8');
-const BOARD = fs.readFileSync(path.join(ROOT, 'template', 'board.html'), 'utf8').replace(/\r\n/g, '\n');
+const BOARD = fs.readFileSync(path.join(ROOT, 'template', 'board.js'), 'utf8').replace(/\r\n/g, '\n');
 const COFFEE = '⟦ba:itemname_coffee|Coffee⟧';
 
 /* A minimal element: attributes, text, element children, matches(). */

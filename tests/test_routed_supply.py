@@ -9,10 +9,12 @@ out, a standing order does not. A depot fed by imports alone reads exactly as
 before. None of it reads the delivery log: every save here has an empty one.
 """
 import unittest
+from pathlib import Path
+
 from tests.i18n_check import MsgAsserts
 
 from ba_dashboard import (plain, RECIPE_ITEMS, SUMMARIES, WEEKDAYS, History, Names, _alerts,
-                          _factories, _import_notes, _supply, _supply_facts, load_template, site_key)
+                          _factories, _import_notes, _supply, _supply_facts, site_key)
 from test_recipe_identity import BEER, RID, WATER
 from test_recipe_identity import SaveStub as FactoryStub
 
@@ -306,7 +308,8 @@ class RoutedSupplyTests(MsgAsserts, unittest.TestCase):
         self.assertMsg(SUMMARIES["shortfall"](3, "Coffee"), "f.sum.shortfall", n=3, subject="Coffee")
         # Pins the wording: the condensed line must not blame an import alone.
         self.assertNotIn("import", plain(SUMMARIES["shortfall"](3, "Coffee")))
-        [kind] = [line for line in load_template().splitlines() if 'id:"shortfall"' in line]
+        board = Path(__file__).resolve().parent.parent / "template" / "board.js"
+        [kind] = [line for line in board.read_text(encoding="utf-8").splitlines() if 'id:"shortfall"' in line]
         # Pins the wording: the kind description must name route rounds as well as imports.
         self.assertIn("import or route round", kind)
 

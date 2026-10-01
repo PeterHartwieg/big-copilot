@@ -42,7 +42,9 @@ def between(text: str, start: str, end: str, what: str) -> str:
 
 ARCH = read("docs/architecture.md")
 DASHBOARD = read("ba_dashboard.py")
-BOARD = read("template/board.html")
+# The board's markup and its script (the last <script> block's body).
+PAGE = read("template/board.html")
+BOARD = read("template/board.js")
 TOKEN = re.compile(r"__[A-Z_]+__")
 
 
@@ -93,8 +95,8 @@ class BuildTokenTests(unittest.TestCase):
     def code_tokens() -> set:
         # BANNER carries the template's own <!--__FOOTER__-->, which the
         # "Template placeholders" table documents; only the tokens
-        # template/board.html does not carry are build_web.py's private set.
-        return set(TOKEN.findall(read("build_web.py"))) - set(TOKEN.findall(BOARD))
+        # template/board.html and board.js do not carry are build_web.py's private set.
+        return set(TOKEN.findall(read("build_web.py"))) - set(TOKEN.findall(PAGE + BOARD))
 
     def test_the_private_token_list_matches_build_web(self):
         doc, code = self.doc_tokens(), self.code_tokens()
@@ -196,7 +198,7 @@ class FindingGroupTests(unittest.TestCase):
 class RegistryPointerTests(unittest.TestCase):
     """(d) Each table a checklist under Registries names by its declaration
     carries a `Registry: "<heading>"` comment just above it, in ba_dashboard.py
-    or template/board.html, so a reader who lands on the table finds the checklist. Only the comment
+    or template/board.js, so a reader who lands on the table finds the checklist. Only the comment
     directly above the declaration counts, not a neighbour's."""
 
     HEADINGS = ("A finding kind", "A view or a page")
@@ -230,7 +232,7 @@ class RegistryPointerTests(unittest.TestCase):
         return "\n".join(found)
 
     def test_every_declared_table_points_at_its_checklist(self):
-        sources = [DASHBOARD.split("\n"), BOARD.split("\n")]
+        sources = [DASHBOARD.split("\n"), BOARD.split("\n"), PAGE.split("\n")]
         for heading in self.HEADINGS:
             tag = 'Registry: "%s"' % heading
             missing = []

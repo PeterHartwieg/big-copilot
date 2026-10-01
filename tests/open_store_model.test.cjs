@@ -3,7 +3,7 @@
 // of its limits binding, the day the owner's cash is back with a loan, what a
 // new seller takes from the player's own shops, and how plans are started.
 // The board's own code runs in a VM: the "Expansion › Open a store" section of
-// the board script in template/board.html, sliced out between its banner and the
+// the board script, template/board.js, sliced out between its banner and the
 // next one (the anchors are `/* --- Expansion › Open a store` and
 // `/* --- plan a chain`), with the few board helpers it reaches stubbed.
 const {test} = require('node:test');
@@ -14,7 +14,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const {between} = require('./_slice.cjs');
 
-const SRC = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.html'), 'utf8');
+const SRC = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.js'), 'utf8');
 const CODE = between(SRC, '/* --- Expansion › Open a store', '/* --- plan a chain');
 
 function model(facts, extra = {}){

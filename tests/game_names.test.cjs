@@ -17,7 +17,7 @@ const vm = require('node:vm');
 
 const ROOT = path.join(__dirname, '..');
 const WEB = path.join(ROOT, 'web');
-const SOURCE = fs.readFileSync(path.join(ROOT, 'template', 'board.html'), 'utf8').replace(/\r\n/g, '\n');
+const SOURCE = fs.readFileSync(path.join(ROOT, 'template', 'board.js'), 'utf8').replace(/\r\n/g, '\n');
 
 let FIX;
 before(() => {

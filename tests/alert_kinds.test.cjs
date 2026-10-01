@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 
-const source = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.html'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.js'), 'utf8');
 const python = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
 const {between} = require('./_slice.cjs');
 /* The board's words go through tt() (web/i18n.js), which every slice that

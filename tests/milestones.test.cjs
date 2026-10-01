@@ -8,7 +8,7 @@ const {en, enRe} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const source = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.html'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.js'), 'utf8');
 const slice = (from, to) => require('./_slice.cjs').between(source, from, to);
 
 const board = (goals = {typesRun: 1, typesTotal: 3}) => {
