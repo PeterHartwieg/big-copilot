@@ -8,6 +8,7 @@ repository, over a doctored copy of it, and once through the command line
 itself, and assembles a copy with every route to the game shut.
 """
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -21,10 +22,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # The stamped assets, plus the copies and generated files check() compares.
 CHECK_INPUTS = tuple(dict.fromkeys(
     build_web.STAMP_INPUTS
-    + ("ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json", "ba_store_rules.json",
-       "web/py/ba_save.py", "web/py/ba_dashboard.py",
-       "web/py/ba_buildings.json", "web/py/ba_demand_curves.json",
-       "web/version.json", "web/index.html", "web/update.js")
+    + build_web.PY_COPIED + tuple(f"web/py/{name}" for name in build_web.PY_COPIED)
+    + ("web/version.json", "web/index.html", "web/update.js")
 ))
 
 # What a standalone `python build_web.py --check` reads on top of those: the
@@ -121,6 +120,22 @@ class WebFresh(unittest.TestCase):
             self.assertEqual(build_web.stamp(lf), build_web.stamp(crlf))
             self.assertNotEqual(build_web.stamp(lf), build_web.stamp(svg_crlf))
 
+    def test_worker_fetches_the_py_files_and_each_is_stamped(self):
+        # web/worker.js names the files itself; it has to name these, in this
+        # order. web/_headers caches /py/* for a year, so each is a stamp input
+        # (the code through its source, which check() holds the copy to).
+        worker = (ROOT / "web/worker.js").read_text(encoding="utf-8")
+        code = re.search(r"for \(const file of \[([^\]]*)\]\)", worker)
+        self.assertIsNotNone(code, "web/worker.js no longer loops over the code files")
+        self.assertEqual(tuple(re.findall(r'"([^"]+)"', code.group(1))), build_web.PY_CODE)
+        # Every other py/ fetch is a data file, and carries the stamp.
+        self.assertEqual(tuple(re.findall(r"fetch\(`py/([^?`$]+)", worker)), build_web.PY_DATA)
+        self.assertEqual(len(re.findall(r"fetch\(`py/[^?`$]+\?v=\$\{stamp\}`", worker)), len(build_web.PY_DATA))
+        for name in build_web.PY_CODE:
+            self.assertIn(name, build_web.STAMP_INPUTS)
+        for name in build_web.PY_DATA:
+            self.assertIn(f"web/py/{name}", build_web.STAMP_INPUTS)
+
     def test_command_line_reports_a_stale_copy(self):
         with tempfile.TemporaryDirectory() as tmp:
             standalone(tmp)
@@ -153,9 +168,7 @@ class WebFresh(unittest.TestCase):
             raise AssertionError("assemble() looked for the installed game")
 
         assembled = ("web/index.html", "web/version.json", "web/sitemap.xml", "web/robots.txt",
-                     "web/py/ba_save.py", "web/py/ba_dashboard.py", "web/py/ba_buildings.json",
-                     "web/py/ba_demand_curves.json", "web/py/ba_item_prices.json",
-                     "web/py/ba_store_rules.json")
+                     *(f"web/py/{name}" for name in build_web.PY_COPIED))
         with tempfile.TemporaryDirectory() as tmp, \
                 mock.patch("ba_save.load_game_locale", no_game), \
                 mock.patch("ba_save.find_game_locale", no_game), \
