@@ -1,25 +1,36 @@
 """Move the board script out of template/board.html into template/board.js.
 
-    python tools/split_board_script.py          # split; a no-op when already split
-    python tools/split_board_script.py --join   # the reverse: put board.js back inline
+    python tools/split_board_script.py --resolve  # a merge or rebase stopped on template/board.html
+    python tools/split_board_script.py            # split; a no-op when already split
+    python tools/split_board_script.py --join     # the reverse: put board.js back inline
 
 The board script is the body of the last <script> block of template/board.html.
 Splitting writes that body, unchanged, to template/board.js and leaves the line
 /*__BOARD_SCRIPT__*/ in its place; ba_dashboard.load_template() splices it back
 before render() fills any other placeholder, so the page is the same string.
 
-What it is for: a branch that edited the script while it was still inline in
-board.html. Merging main into such a branch conflicts in board.html. When main
-has not changed board.js since the split, take the branch's board.html (the
-inline one, with its edits) and run this script: it rewrites both files. When
-both sides changed the script, join main's two files with --join, merge the
-inline pages with `git merge-file`, and split the result.
+A branch that edited board.html while the script was still inline conflicts
+with main in template/board.html when the two meet, by merge or by rebase
+either way round. Resolve it with --resolve, and only with it: it takes the
+three versions of board.html git staged (base, ours, theirs), splits each one
+that still holds the script inline, takes board.js for a side that is already
+split from that side's commit, and merges board.html and board.js three ways
+with `git merge-file`. Both sides' edits survive, the markup and CSS as well as
+the script. A clean result is staged; otherwise both files keep git's conflict
+markers for a human, and nothing is staged. Then continue the merge or rebase
+as usual.
+
+Splitting and joining by hand are for files without conflict markers: both
+refuse a file that carries them.
 
 Line endings are kept as they are on disk; git normalises them on commit.
 """
 import argparse
 import os
+import re
+import subprocess
 import sys
+import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
@@ -27,10 +38,11 @@ if ROOT not in sys.path:
 
 from ba_dashboard import BOARD_SCRIPT_SLOT, splice_board_script  # noqa: E402
 
-FOLDER = os.path.join(ROOT, "template")
-PAGE = os.path.join(FOLDER, "board.html")
-SCRIPT = os.path.join(FOLDER, "board.js")
+PAGE_PATH, SCRIPT_PATH = "template/board.html", "template/board.js"
 OPEN, CLOSE = "<script>", "</script>"
+# Only the board script's block holds this line; another block taken for it is refused.
+SIGNATURE = "let D = /*__DATA__*/"
+CONFLICT = re.compile(r"^(<{7}|>{7})( |$)", re.M)
 
 
 def read(path: str) -> str:
@@ -43,50 +55,156 @@ def write(path: str, text: str) -> None:
         fh.write(text)
 
 
+def refuse_conflicts(text: str, what: str) -> None:
+    if CONFLICT.search(text):
+        raise SystemExit(f"{what} carries conflict markers: run --resolve, or resolve by hand")
+
+
 def split(page: str) -> tuple[str, str] | None:
     """(board.html with the slot, board.js), or None when it is already split."""
+    refuse_conflicts(page, PAGE_PATH)
     nl = "\r\n" if "\r\n" in page else "\n"
     slot = BOARD_SCRIPT_SLOT.replace("\n", nl)
     start = page.rindex(OPEN) + len(OPEN)
     end = page.index(CLOSE, start)
     if not page.startswith(nl, start):
-        raise SystemExit("template/board.html: the last <script> tag is not on a line of its own")
+        raise SystemExit(f"{PAGE_PATH}: the last <script> tag is not on a line of its own")
     body = page[start + len(nl):end]
     slots = page.count(BOARD_SCRIPT_SLOT.strip())
     if body == slot:
         if slots > 1:
-            raise SystemExit("template/board.html carries %s more than once: resolve by hand" % BOARD_SCRIPT_SLOT.strip())
+            raise SystemExit(f"{PAGE_PATH} carries {BOARD_SCRIPT_SLOT.strip()} more than once: resolve by hand")
         return None
     if slots:
-        raise SystemExit("template/board.html carries the slot and an inline script: resolve by hand")
+        raise SystemExit(f"{PAGE_PATH} carries the slot and an inline script: resolve by hand")
+    if SIGNATURE not in body:
+        raise SystemExit(f"{PAGE_PATH}: the last <script> block is not the board script ({SIGNATURE!r} missing)")
     if not body.endswith(nl):
-        raise SystemExit("template/board.html: </script> of the board script is not on a line of its own")
+        raise SystemExit(f"{PAGE_PATH}: </script> of the board script is not on a line of its own")
     new_page = page[:start + len(nl)] + slot + page[end:]
-    # The splice gives back the page this started from, byte for byte.
-    assert splice_board_script(new_page.replace("\r\n", "\n"), body.replace("\r\n", "\n")) == page.replace("\r\n", "\n")
+    lf = lambda s: s.replace("\r\n", "\n")  # noqa: E731
+    if splice_board_script(lf(new_page), lf(body)) != lf(page):
+        raise SystemExit(f"{PAGE_PATH}: the split does not splice back to the page; nothing written")
     return new_page, body
+
+
+def join(page: str, script: str) -> str:
+    """board.html with board.js back inline, in the page's line endings."""
+    refuse_conflicts(page, PAGE_PATH)
+    refuse_conflicts(script, SCRIPT_PATH)
+    nl = "\r\n" if "\r\n" in page else "\n"
+    try:
+        joined = splice_board_script(page.replace("\r\n", "\n"), script.replace("\r\n", "\n"))
+    except ValueError as err:
+        raise SystemExit(str(err))
+    return joined.replace("\n", nl)
+
+
+# ------------------------------------------------------------------ --resolve
+def git(root: str, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True,
+                          encoding="utf-8", check=check)
+
+
+def show(root: str, spec: str) -> str | None:
+    out = git(root, "show", spec, check=False)
+    return out.stdout if out.returncode == 0 else None
+
+
+def _commit(root: str, ref: str) -> str | None:
+    out = git(root, "rev-parse", "-q", "--verify", ref + "^{commit}", check=False)
+    return out.stdout.strip() if out.returncode == 0 else None
+
+
+def side_commits(root: str) -> dict:
+    """The commit each index stage of a stopped merge, rebase or cherry-pick
+    comes from. Stage 2 is always HEAD: during a rebase HEAD is the branch
+    being rebuilt on (main, say), and stage 3 the commit being replayed."""
+    head = _commit(root, "HEAD")
+    merge = _commit(root, "MERGE_HEAD")
+    if merge:
+        base = git(root, "merge-base", head, merge).stdout.split()[0]
+        return {1: base, 2: head, 3: merge}
+    for ref in ("REBASE_HEAD", "CHERRY_PICK_HEAD"):
+        other = _commit(root, ref)
+        if other:
+            return {1: _commit(root, other + "^"), 2: head, 3: other}
+    raise SystemExit("--resolve: no merge, rebase or cherry-pick is in progress")
+
+
+def side_files(root: str, stage: int, commit: str) -> tuple[str, str]:
+    """(board.html, board.js) of one side, split if it still holds the script inline."""
+    page = show(root, f":{stage}:{PAGE_PATH}")
+    if page is None:
+        page = show(root, f"{commit}:{PAGE_PATH}")
+    if page is None:
+        raise SystemExit(f"--resolve: {PAGE_PATH} is missing from stage {stage}; resolve by hand")
+    parts = split(page)
+    if parts is not None:
+        return parts
+    script = show(root, f"{commit}:{SCRIPT_PATH}")
+    if script is None:
+        raise SystemExit(f"--resolve: {commit[:10]} has a split {PAGE_PATH} but no {SCRIPT_PATH}")
+    return page, script
+
+
+def merge3(ours: str, base: str, theirs: str, name: str) -> tuple[str, int]:
+    """git merge-file of three texts: (result, conflicts)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        paths = []
+        for label, text in (("ours", ours), ("base", base), ("theirs", theirs)):
+            path = os.path.join(tmp, label)
+            write(path, text)
+            paths.append(path)
+        out = subprocess.run(["git", "merge-file", "-p", "-L", f"{name} (ours)", "-L", f"{name} (base)",
+                              "-L", f"{name} (theirs)", *paths], capture_output=True)
+    if out.returncode < 0 or out.returncode > 127:
+        raise SystemExit(f"git merge-file failed on {name}: {out.stderr.decode(errors='replace')}")
+    return out.stdout.decode("utf-8"), out.returncode
+
+
+def resolve(root: str = ROOT) -> int:
+    """Merge board.html and board.js three ways; the number of files left in conflict."""
+    commits = side_commits(root)
+    base, ours, theirs = (side_files(root, stage, commits[stage]) for stage in (1, 2, 3))
+    left = []
+    for i, path in enumerate((PAGE_PATH, SCRIPT_PATH)):
+        text, conflicts = merge3(ours[i], base[i], theirs[i], path)
+        write(os.path.join(root, path), text)
+        if conflicts:
+            left.append(path)
+    if left:
+        print("conflicts left in " + " and ".join(left) + ": resolve them, then git add both files")
+        return len(left)
+    git(root, "add", PAGE_PATH, SCRIPT_PATH)
+    print(f"resolved and staged {PAGE_PATH} and {SCRIPT_PATH}")
+    return 0
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--join", action="store_true", help="put template/board.js back inline")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--resolve", action="store_true", help="merge both files of a merge or rebase stopped on board.html")
+    mode.add_argument("--join", action="store_true", help="put template/board.js back inline")
     args = ap.parse_args()
-    page = read(PAGE)
+    if args.resolve:
+        return 1 if resolve() else 0
+    page_file, script_file = os.path.join(ROOT, PAGE_PATH), os.path.join(ROOT, SCRIPT_PATH)
+    page = read(page_file)
     if args.join:
-        nl = "\r\n" if "\r\n" in page else "\n"
-        joined = splice_board_script(page.replace(nl, "\n"), read(SCRIPT).replace("\r\n", "\n"))
-        write(PAGE, joined.replace("\n", nl))
-        os.remove(SCRIPT)
-        print("joined template/board.js into template/board.html")
+        joined = join(page, read(script_file))
+        write(page_file, joined)
+        os.remove(script_file)
+        print(f"joined {SCRIPT_PATH} into {PAGE_PATH}")
         return 0
     result = split(page)
     if result is None:
-        print("template/board.html is already split; nothing to do")
+        print(f"{PAGE_PATH} is already split; nothing to do")
         return 0
     new_page, script = result
-    write(SCRIPT, script)
-    write(PAGE, new_page)
-    print("split: template/board.js written, template/board.html carries %s" % BOARD_SCRIPT_SLOT.strip())
+    write(script_file, script)
+    write(page_file, new_page)
+    print(f"split: {SCRIPT_PATH} written, {PAGE_PATH} carries {BOARD_SCRIPT_SLOT.strip()}")
     return 0
 
 

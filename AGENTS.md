@@ -16,7 +16,7 @@ the numbers drift.
 | --- | --- |
 | Extraction (save → numbers) | `def extract(` and the `_` helpers before `def render(`, in `ba_dashboard.py` |
 | The board's HTML and CSS | `template/board.html`, read on the first `render()` by `load_template()` |
-| The board script | `template/board.js`, which `load_template()` splices into `/*__BOARD_SCRIPT__*/`, the body of the page's last `<script>` block, before any other placeholder is filled. `tools/split_board_script.py` moves a script edited inline in `board.html` (an older branch's) back out |
+| The board script | `template/board.js`, which `load_template()` splices into `/*__BOARD_SCRIPT__*/`, the body of the page's last `<script>` block, before any other placeholder is filled. A branch from before the split conflicts in `board.html`: resolve it with `python tools/split_board_script.py --resolve`, never by taking one side and re-splitting |
 | Where `web/map.js` and `web/wiki.js` are spliced in | `/*__MAP_SCRIPT__*/`, `/*__WIKI_SCRIPT__*/` in `template/board.js` |
 | CLI, save catalogue and watch server | `def main(` and the functions around it, in `ba_dashboard.py` |
 

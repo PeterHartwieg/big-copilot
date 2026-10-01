@@ -570,9 +570,14 @@ its script is `template/board.js` beside it. `render()` reads both through
 both files in the same order as when they were one. Both files are in
 `build_web.STAMP_INPUTS`, so an edit to either changes the build stamp.
 
-`tools/split_board_script.py` made the split and does it again: run on a `board.html` whose
-last `<script>` block still holds the script inline (a branch that edited the script before
-the split, say), it moves the body to `board.js` and leaves the slot; `--join` puts it back.
+`tools/split_board_script.py` made the split. A branch from before it, with the script
+still inline, conflicts in `board.html` when it meets main, by merge or rebase. The one way
+to resolve that is `python tools/split_board_script.py --resolve`: it splits each of the
+three staged versions of `board.html` that is still inline, takes `board.js` from the
+commit of each side that is already split, and merges both files three ways with
+`git merge-file`, so both sides' markup, CSS and script edits survive. A clean result is
+staged; otherwise the conflict markers are left for a human. Taking either side's
+`board.html` and splitting it again loses the other side's edits.
 
 The template carries seventeen tokens besides the slot, some in `board.html` and some in
 `board.js`. All seventeen are substituted by `render()`, but the text for three of them is

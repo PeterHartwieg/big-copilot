@@ -9,7 +9,7 @@ For setup, see the [README](../README.md). File paths below are relative to the 
 | `ba_save.py` | Reads the `.hsg` format, being gzip around an Easy Save 3 binary stream. The format notes are in the module docstring. |
 | `ba_dashboard.py` | Pulls the numbers out of a parsed save and renders the HTML from `template/board.html` and `template/board.js`. |
 | `template/board.html` | The board's markup and CSS, with the placeholders `render()` fills in. |
-| `template/board.js` | The board script, spliced into the last `<script>` block of `board.html` (`/*__BOARD_SCRIPT__*/`). `tools/split_board_script.py` moves a script edited inline in `board.html` back out. |
+| `template/board.js` | The board script, spliced into the last `<script>` block of `board.html` (`/*__BOARD_SCRIPT__*/`). A branch from before the split conflicts in `board.html`; resolve it with `python tools/split_board_script.py --resolve`. |
 | `build_web.py` | Assembles `web/` from the same template the local server uses. Run `python build_web.py` after changing either Python file or either template file. |
 | `web/` | The static site. `index.html` is generated; `app.js` and `worker.js` are kept by hand; `py/` holds the copies of the two Python files the worker fetches. |
 | `web/map.js`, `web/map.css` | Shared map/overlay code, embedded by `render()` into browser and local output. |

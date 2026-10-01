@@ -4,6 +4,11 @@
 // stub that answers every property and call with itself, so the boot code runs
 // and does nothing. A test that needs a real helper or real DOM still slices
 // (tests/_slice.cjs) and stubs what that piece reaches.
+// What it does not provide: render() fills no placeholder, so there is no
+// map.js or wiki.js, and D, GN_EMBED and HOOD_NAMES keep their defaults (null,
+// null, {}): set them with vm.runInContext. The stub answers `then` with itself,
+// so awaiting anything that reaches it never settles, and `instanceof` against
+// it (Symbol.hasInstance, also the stub) is always true.
 // Not a test file itself: the leading underscore keeps it out of the
 // tests/*.test.cjs glob.
 'use strict';
