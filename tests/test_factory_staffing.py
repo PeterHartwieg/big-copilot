@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 import unittest
+from tests.i18n_check import MsgAsserts
 import unittest.mock
 
 import ba_dashboard
@@ -303,7 +304,7 @@ class LineHoursTests(unittest.TestCase):
         self.assertEqual((line["machines"], line["running"]), (2, 1))
 
 
-class UnnamedAndSharedLineTests(unittest.TestCase):
+class UnnamedAndSharedLineTests(MsgAsserts, unittest.TestCase):
     def test_machines_on_a_recipe_the_board_cannot_name_are_rostered_too(self):
         # Two beer machines and two on a recipe no table names, all 24 h, and
         # 14 workers: 672 machine-hours need all 14, none spare.
@@ -315,7 +316,7 @@ class UnnamedAndSharedLineTests(unittest.TestCase):
         self.assertEqual((cap["headcount"]["needed"], cap["headcount"]["spare"], cap["unnamedMachines"]), (672, 0, 2))
         [unnamed] = [l for l in cap["lines"] if l.get("unnamed")]
         self.assertEqual((unnamed["hours"], unnamed["slug"], unnamed["machines"]), (24, None, 2))
-        self.assertIn("recipe not named", unnamed["item"])
+        self.assertMsg(unnamed["item"], "sp.py.factory.unnamed")
         # Under Demand its use is unknown: it keeps the hours it has now.
         [unnamed] = [l for l in dem["lines"] if l.get("unnamed")]
         self.assertEqual(unnamed["hours"], 24)
@@ -355,7 +356,7 @@ class UnnamedAndSharedLineTests(unittest.TestCase):
                                     "stations", "people", "shifts", "current", "addPeople", "_hire"})
 
 
-class StaffFindingTests(unittest.TestCase):
+class StaffFindingTests(MsgAsserts, unittest.TestCase):
     def staff(self, c, mode):
         return [f for f in c.findings(mode) if f["group"] == "staff"]
 
@@ -369,7 +370,7 @@ class StaffFindingTests(unittest.TestCase):
         [cap] = self.staff(c, "cap")
         [dem] = self.staff(c, "dem")
         self.assertEqual(cap["id"], dem["id"])
-        self.assertIn("35 of 56 hours needed", dem["text"])
+        self.assertMsg(dem["text"], "sp.py.staff.needed.lost", hours=35, week=56)
 
 
 class BenchTest(unittest.TestCase):

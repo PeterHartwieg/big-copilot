@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import unittest
+from tests.i18n_check import MsgAsserts, msg_param
 
 from ba_dashboard import Names, _plan, _recipes, _type_catalogue_from_help
 
@@ -32,7 +33,7 @@ def contract(amount, active=True, warehouse=("Depot", 1), smart=False, importer=
     }
 
 
-class PlannerRegressions(unittest.TestCase):
+class PlannerRegressions(MsgAsserts, unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.names = Names(json.loads((ROOT / "web/py/gametext.json").read_text(encoding="utf-8")))
@@ -103,7 +104,9 @@ class PlannerRegressions(unittest.TestCase):
         source = self.water([contract(0), contract(500, smart=True), contract(600, smart=True),
                              contract(300, importer=("Other", 3))])
         [depot] = source["depots"]
-        self.assertEqual((depot["level"], depot["name"]), (600, "2 Importer, its 3rd of 3 contracts here"))
+        self.assertEqual(depot["level"], 600)
+        self.assertMsg(depot["name"], "sb.py.levelName", importer="2 Importer", n=3,
+                       nth=msg_param("sb.py.ord.rd", n=3))
 
     def test_a_paused_level_is_kept_apart_and_named_as_one(self):
         source = self.water([contract(3000, active=False, smart=True)])
@@ -137,6 +140,39 @@ class PlannerRegressions(unittest.TestCase):
             self.assertIn(ITEM + ticket, entry["services"])
             # Its concessions keep the type in the planner.
             self.assertIn(ITEM + "popcorn", entry["products"])
+
+    def test_extra_is_what_a_type_can_additionally_sell(self):
+        # Issue #162: the game's own list for the type, weight under 1, heaviest first,
+        # equal weights in the game's order.
+        florist = self.plan()["catalogue"]["ba:businesstype_florist"]
+        self.assertEqual(florist["extra"], [
+            [ITEM + "sodacan", 0.8], [ITEM + "energydrink", 0.8], [ITEM + "umbrella", 0.75],
+            [ITEM + "cheapgift", 0.6], [ITEM + "expensivegift", 0.6]])
+
+    def test_extra_never_repeats_a_main_product_or_a_service(self):
+        catalogue = self.plan()["catalogue"]
+        for kind, entry in catalogue.items():
+            for slug, weight in entry["extra"]:
+                self.assertTrue(0 < weight < 1, (kind, slug))
+                self.assertNotIn(slug, entry["products"], kind)
+                self.assertNotIn(slug, entry["services"], kind)
+        # A cinema's concessions are its range already, weights under 1 or not.
+        self.assertEqual(catalogue["ba:businesstype_cinema"]["extra"], [])
+        self.assertEqual(catalogue["ba:businesstype_lawfirm"]["extra"], [])
+
+    def test_an_extra_the_shops_sell_is_measured(self):
+        business = {"status": "retail", "revenue": 1000, "typeSlug": "ba:businesstype_florist",
+                    "lines": [{"slug": ITEM + "cheapflower", "price": 25, "rate": 150},
+                              {"slug": ITEM + "umbrella", "price": 24, "rate": 40},
+                              {"slug": ITEM + "novel", "price": 20, "rate": 9}]}
+        result = self.plan(businesses=[business])
+        # Measured beats typed: the umbrella's rate is the shop's; a product the
+        # type cannot sell at all stays out.
+        self.assertEqual(result["own"]["ba:businesstype_florist"]["perDay"],
+                         {ITEM + "cheapflower": 150, ITEM + "umbrella": 40})
+        # Only the extras carry a seller count: the page spreads them over every shop.
+        self.assertEqual(result["own"]["ba:businesstype_florist"]["sellers"], {ITEM + "umbrella": 1})
+        self.assertIn(ITEM + "umbrella", result["items"])
 
     def test_service_revenue_catalogue_is_preserved(self):
         self.plan()

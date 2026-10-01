@@ -1,6 +1,7 @@
 // Exercise the actual generated page, or RELEASE_URL after deployment.
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
+const {en} = require('./_i18n.cjs');
 const path = require('node:path');
 const {chromium} = require('playwright');
 
@@ -62,7 +63,7 @@ test('release preserves the redesigned map, interactive ball and dismissible bad
     await page.locator('#cityMapPage .layer .ball').click();
     await page.waitForFunction(() => document.querySelectorAll('body > .coin').length > 0);
     await page.locator('#navRefs a[data-id="wiki"]').click();
-    await page.getByRole('searchbox', {name:'Search the wiki'}).waitFor();
+    await page.getByRole('searchbox', {name: en('wiki.search.aria')}).waitFor();
     assert.equal(await page.locator('[data-new-feature="wiki"]:not([hidden])').count(),0);
     await page.evaluate(() => {
       D.businesses = [{name:'Release Gifts',typeSlug:'ba:businesstype_giftshop',status:'retail',
@@ -70,7 +71,7 @@ test('release preserves the redesigned map, interactive ball and dismissible bad
       D.market = {rows:[{slug:'ba:itemname_cheapgift',cells:[{hood:'ba:neighborhood_midtown',marketPrice:25.63}]}]};
       window.BigCopilotWiki.route('wiki/businesstypes-giftshop');
     });
-    await page.getByRole('heading', {name:'Prices in your save',exact:true}).waitFor();
+    await page.getByRole('heading', {name:en("wiki.prices.title"),exact:true}).waitFor();
     const prices = await page.locator('.wk-prices').first().textContent();
     assert.match(prices, /Release Gifts: \$30\.27/);
     assert.match(prices, /\$25\.63/);

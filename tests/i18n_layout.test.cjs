@@ -16,6 +16,7 @@
 // NODE_PATH may point at an existing installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -185,8 +186,8 @@ test('?ui=de reaches the board: Python\'s messages in the table, and their Engli
     const row = D.alerts.find(a => a.group === 'staff');
     return [row.text, enOf(row, 'text'), dataEn().alerts.find(a => a.group === 'staff').text];
   });
-  assert.deepEqual(staff, [TABLE['f.staff.none'], 'No staff assigned', 'No staff assigned']);
-  assert.ok((await page.locator('#alertSection').innerText()).includes('[Nó štáff áššígñéd'));
+  assert.deepEqual(staff, [TABLE['f.staff.none'], PAYLOAD.alerts.find(a => a.group === 'staff').text, PAYLOAD.alerts.find(a => a.group === 'staff').text]);
+  assert.ok((await page.locator('#alertSection').innerText()).includes(TABLE['f.staff.none']));
   // A translated row keeps its amount and its cap chip: both are data beside
   // the words (amt, heldBy), never read out of them.
   const read = await page.evaluate(() => {
@@ -200,6 +201,7 @@ test('?ui=de reaches the board: Python\'s messages in the table, and their Engli
   // Numbers follow the UI language, on the board and in tt(); back in English, en-US again.
   assert.deepEqual(await page.evaluate(() => [NUM_LOCALE, fmt(1234.4), tt('f.x', '{n:,}', {n: 1234})]),
     ['de-DE', '$1.234', '1.234']);
+  // Pins the wording: switching back restores the fixture's English fallback.
   assert.deepEqual(await page.evaluate(() => { ttSetTable('en', null);
     return [NUM_LOCALE, fmt(1234.4), document.documentElement.lang, D.alerts.find(a => a.group === 'staff').text]; }),
     ['en-US', '$1,234', 'en', 'No staff assigned']);
@@ -234,9 +236,9 @@ test('with no ?ui the page asks for no table and shows the English', async t => 
   const {page, errors, fetched} = await site(t);
   assert.deepEqual(fetched, []);
   assert.equal(await page.evaluate(() => document.documentElement.lang), 'en');
-  assert.equal(await page.evaluate(() => D.alerts.find(a => a.group === 'staff').text), 'No staff assigned');
+  assert.equal(await page.evaluate(() => D.alerts.find(a => a.group === 'staff').text), PAYLOAD.alerts.find(a => a.group === 'staff').text);
   assert.equal(await page.evaluate(() => NUM_LOCALE), 'en-US');
-  assert.match(await page.locator('#alertSection').innerText(), /No staff assigned/);
+  assert.match(await page.locator('#alertSection').innerText(), new RegExp(PAYLOAD.alerts.find(a => a.group === 'staff').text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.deepEqual(errors, []);
 });
 
@@ -466,10 +468,10 @@ test('a change of language rewrites the save menu that was built before it, and 
     trigger: document.querySelector('.save-trigger').getAttribute('aria-label'),
   }));
   const english = await menu();
-  assert.deepEqual(english.titles.slice(0, 2), ['Newest save anywhere', 'Newest for this character']);
-  assert.ok(english.titles.includes('Autosave 4'), english.titles.join(' | '));
-  assert.ok(english.days.includes('Day 4'), english.days.join(' | '));
-  assert.match(english.trigger, /^Which save to read: /);
+  assert.deepEqual(english.titles.slice(0, 2), [en("app.pick.any"), en("app.pick.character")]);
+  assert.ok(english.titles.includes(en("app.pick.autosave", {"n":4})), english.titles.join(' | '));
+  assert.ok(english.days.includes(en('app.pick.day.head', {day:4})), english.days.join(' | '));
+  assert.match(english.trigger, enRe("app.pick.label.current", {} , {"anchor":"start"}));
   await page.evaluate(table => ttSetTable('de', table), TABLE);
   const pseudo = await menu();
   assert.equal(pseudo.titles.length, english.titles.length);
@@ -486,7 +488,7 @@ test('a change of language says the strip\'s headline and note again, and a para
   await page.evaluate(() => document.getElementById('forgetHistory').click());
   const strip = () => page.evaluate(() => [document.getElementById('srcStatus').textContent, document.getElementById('srcNote').textContent]);
   const english = await strip();
-  assert.deepEqual(english, ['Up to date', 'History forgotten. The next save starts a fresh record.']);
+  assert.deepEqual(english, [en("app.state.current"), en("app.history.forgotten")]);
   // The build number reaches a sentence with markup as a param.
   await page.evaluate(() => { document.getElementById('lgHelpAutosave').dataset.build = '<b>x</b><a>y</a><img src=x>&amp;'; });
   await page.evaluate(table => ttSetTable('de', table), TABLE);
@@ -508,9 +510,10 @@ test('a change of language writes the strip\'s file line again, for a save and f
   const meta = () => page.locator('#srcMeta').textContent();
   const folder = await meta();
   // Watching is the menu's Watch button's to say, not the strip's (declutter S1).
-  assert.match(folder, / · autosave from .* · built in \d+\.\d s$/);
+  assert.match(folder, new RegExp(' \u00b7 ' + enRe('app.file.autosave').source + ' \u00b7 ' + enRe('app.build.took').source.replace('.+?', '\\d+\\.\\d') + '$'));
   await page.evaluate(table => ttSetTable('de', table), TABLE);
   const pseudo = await meta();
+  // Pins the wording: pseudo-localization accents prose while preserving the time spec.
   assert.match(pseudo, /\[áútóšávé fróm .*\] · \[búílt íñ \d+,\d š·+\]$/, pseudo);
   await page.evaluate(() => ttSetTable('en', null));
   assert.equal(await meta(), folder);
@@ -521,10 +524,11 @@ test('a change of language writes the strip\'s file line again, for a save and f
     const m = window.reader.messages.at(-1);
     window.reader.onmessage({data: {kind: 'built', id: m.id, history: '', data: JSON.stringify(raw)}});
   }, PAYLOAD);
-  await page.waitForFunction(() => / · game link · /.test(document.getElementById('srcMeta').textContent));
+  await page.waitForFunction(expected => document.getElementById('srcMeta').textContent.includes(' \u00b7 ' + expected + ' \u00b7 '), en('app.link.source'));
   const linked = await meta();
-  assert.match(linked, /^Costy Co · day 12, 09:05 · game link · built in /);
+  assert.match(linked, new RegExp('^Costy Co \u00b7 ' + enRe('app.link.when', {day:12, at:'09:05'}).source + ' \u00b7 ' + enRe('app.link.source').source + ' \u00b7 ' + enRe('app.build.took').source));
   await page.evaluate(table => ttSetTable('de', table), TABLE);
+  // Pins the wording: pseudo-localization preserves link data while expanding its labels.
   assert.match(await meta(), /^Costy Co · \[dáý 12, 09:05·+\] · \[gámé líñk·+\] · \[búílt íñ /);
   await page.evaluate(() => ttSetTable('en', null));
   assert.equal(await meta(), linked);
@@ -559,7 +563,7 @@ test('a save the game rewrote mid-read says so, and the build asked for meanwhil
   await page.evaluate(() => window.readSave(true));
   // The failed read never reached the reader; the one asked for meanwhile does.
   await page.waitForFunction(() => window.reader.messages.length === 1);
-  assert.ok((await heard(page)).includes('Could not read the save: the game has rewritten this file since it was chosen'),
+  assert.ok((await heard(page)).includes(en('app.build.failed') + ': ' + en('app.build.rewritten')),
     (await heard(page)).join(' | '));
   assert.deepEqual(errors, []);
 });
@@ -572,12 +576,13 @@ test('a reader that answers nonsense says so, and the build asked for meanwhile 
   await listen(page);
   await page.evaluate(() => { const m = window.reader.messages[0]; window.reader.onmessage({data: {kind: 'nonsense', id: m.id}}); });
   await page.waitForFunction(() => window.reader.messages.length === 2);
-  assert.ok((await heard(page)).includes('Could not read the save: Invalid reader response'), (await heard(page)).join(' | '));
+  assert.ok((await heard(page)).includes(en('app.build.failed') + ': ' + en('app.reader.invalid.bare')), (await heard(page)).join(' | '));
   // The queued build fails the same way, and stays on screen: in a new
   // language it is said again from the error's own words.
   await page.evaluate(() => { const m = window.reader.messages[1]; window.reader.onmessage({data: {kind: 'nonsense', id: m.id}}); });
-  await page.waitForFunction(() => document.getElementById('srcStatus').textContent === 'Could not read the save: Invalid reader response');
+  await page.waitForFunction(expected => document.getElementById('srcStatus').textContent === expected, en('app.build.failed') + ': ' + en('app.reader.invalid.bare'));
   await page.evaluate(table => ttSetTable('de', table), TABLE);
+  // Pins the wording: the failure reason is retranslated on a language change.
   assert.match((await stripText(page))[0], /^\[.*\]: \[Íñválíd réádér réšpóñšé·+\]$/);
   assert.deepEqual(errors, []);
 });
@@ -588,7 +593,7 @@ test('a folder named like a word of the page keeps its name in every language', 
   const {page, errors} = await shell(t, {remembered: true, permission: 'prompt'});
   const strip = () => page.evaluate(() => [document.getElementById('srcStatus').textContent, document.getElementById('srcMeta').textContent]);
   await page.waitForFunction(() => document.getElementById('srcMeta').textContent === 'Saves');
-  assert.deepEqual(await strip(), ['Folder remembered', 'Saves']);
+  assert.deepEqual(await strip(), [en("app.state.remembered"), 'Saves']);
   await page.evaluate(table => ttSetTable('de', table), TABLE);
   const [head, folder] = await strip();
   assert.match(head, /^\[.*\]$/);

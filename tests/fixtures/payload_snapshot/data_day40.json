@@ -16125,6 +16125,40 @@
  "plan": {
   "catalogue": {
    "ba:businesstype_giftshop": {
+    "extra": [
+     [
+      "ba:itemname_sodacan",
+      0.9
+     ],
+     [
+      "ba:itemname_energydrink",
+      0.9
+     ],
+     [
+      "ba:itemname_cheapflower",
+      0.6
+     ],
+     [
+      "ba:itemname_expensiveflower",
+      0.6
+     ],
+     [
+      "ba:itemname_smartwatch1",
+      0.2
+     ],
+     [
+      "ba:itemname_smartwatch2",
+      0.2
+     ],
+     [
+      "ba:itemname_headphones01",
+      0.2
+     ],
+     [
+      "ba:itemname_earbuds01",
+      0.2
+     ]
+    ],
     "products": [
      "ba:itemname_cheapgift",
      "ba:itemname_umbrella"
@@ -16133,6 +16167,20 @@
     "type": "Gift Shop"
    },
    "ba:businesstype_liquorstore": {
+    "extra": [
+     [
+      "ba:itemname_energydrink",
+      0.85
+     ],
+     [
+      "ba:itemname_margarita",
+      0.7
+     ],
+     [
+      "ba:itemname_martini",
+      0.7
+     ]
+    ],
     "products": [
      "ba:itemname_beer",
      "ba:itemname_sodacan"
@@ -16143,7 +16191,16 @@
   },
   "items": {
    "ba:itemname_beer": "Beer",
+   "ba:itemname_cheapflower": "Cheapflower",
    "ba:itemname_cheapgift": "Gift (Cheap)",
+   "ba:itemname_earbuds01": "Earbuds 01",
+   "ba:itemname_energydrink": "Energydrink",
+   "ba:itemname_expensiveflower": "Expensiveflower",
+   "ba:itemname_headphones01": "Headphones 01",
+   "ba:itemname_margarita": "Margarita",
+   "ba:itemname_martini": "Martini",
+   "ba:itemname_smartwatch1": "Smartwatch 1",
+   "ba:itemname_smartwatch2": "Smartwatch 2",
    "ba:itemname_sodacan": "Soda Can",
    "ba:itemname_umbrella": "Umbrella",
    "ba:itemname_water": "Water"
@@ -16154,6 +16211,7 @@
      "ba:itemname_cheapgift": 85.7,
      "ba:itemname_umbrella": 21.4
     },
+    "sellers": {},
     "shops": 1,
     "sites": 1
    },
@@ -16161,6 +16219,7 @@
     "perDay": {
      "ba:itemname_beer": 302.9
     },
+    "sellers": {},
     "shops": 1,
     "sites": 1
    }

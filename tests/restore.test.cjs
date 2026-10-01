@@ -1,6 +1,7 @@
 // Real landing, app.js, and board navigation; controlled browser IO makes races deterministic.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe, textRe} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require('playwright');
@@ -130,7 +131,7 @@ const settle = page => page.evaluate(() => new Promise(resolve => setTimeout(res
 test('loading is prominent until data arrives, including runtime ready; remembered page and controls survive', async t => {
   const page = await setup(t, {width:390});
   await messages(page);
-  assert.equal(await text(page), 'Loading your previous save…');
+  assert.equal(await text(page), en("app.strip.restoring"));
   assert.equal(await page.locator('#drop').isVisible(), false);
   assert.equal(await page.locator('#folderBtn').isEnabled(), true);
   assert.equal(await page.locator('#srcProg').getAttribute('role'), 'progressbar');
@@ -141,7 +142,7 @@ test('loading is prominent until data arrives, including runtime ready; remember
   assert.ok(helpBox.y >= box.y + box.height, 'folder help follows the restore message');
   if (process.env.RESTORE_SCREENSHOT) await page.screenshot({path:process.env.RESTORE_SCREENSHOT});
   await page.evaluate(() => fixture.worker.emit({kind:'progress', stage:'ready'}));
-  assert.equal(await text(page), 'Loading your previous save…');
+  assert.equal(await text(page), en("app.strip.restoring"));
   assert.equal(await hasBoard(page), false);
   assert.equal(await page.evaluate(() => fixture.worker.messages[0].name), 'chosen.hsg');
   const historyLength = await page.evaluate(() => history.length);
@@ -189,7 +190,7 @@ test('the Impressum and privacy notice stay reachable once the board replaces th
   // They used to be carried into the More menu and copied into a link strip.
   // The board has its own footer now and holds them itself; the landing's copy
   // goes with the landing, so exactly one of each is left.
-  for (const [href, label] of [['impressum.html', 'Impressum'], ['privacy.html', 'Privacy']]) {
+  for (const [href, label] of [['impressum.html', en('foot.impressum')], ['privacy.html', en('foot.privacy')]]) {
     assert.equal(await page.locator(`a[href="${href}"]`).count(), 1);
     assert.equal(await page.locator(`.sitefoot a[href="${href}"]`).innerText(), label);
   }
@@ -206,8 +207,8 @@ test('the board footer offers the game, the channel and the Discord, and stays v
   // Two invites, not one: the Follow column's server invite, and the support
   // channel's own, which is where "Bugs and feedback" goes instead of GitHub.
   assert.equal(await foot.locator('a[href*="discord.gg/"]').count(), 2);
-  assert.equal(await foot.locator('a[href*="discord.gg/"]', {hasText:'Bugs and feedback'}).count(), 1);
-  assert.match(await foot.locator('.sf-said').innerText(), /Not affiliated with/);
+  assert.equal(await foot.locator('a[href*="discord.gg/"]', {hasText:en("foot.feedback.text")}).count(), 1);
+  assert.match(await foot.locator('.sf-said').innerText(), enRe("foot.fanmade"));
   // This fixture serves no community.js, which is also what the CLI's
   // dashboard.html is: nothing reveals the card, so it must ship hidden. The
   // other direction, a copy whose API fails, is driven in community-browser.
@@ -316,7 +317,7 @@ test('old scan errors cannot replace a newer source', async t => {
   await messages(page);
   await page.evaluate(() => fixture.release('scan'));
   await settle(page);
-  assert.doesNotMatch(await text(page), /Could not read/);
+  assert.doesNotMatch(await text(page), enRe("app.build.failed"));
   await page.evaluate(() => fixture.complete());
   assert.equal(await hasBoard(page), true);
 });
@@ -374,7 +375,7 @@ test('keyboard access to one file opens the picker during restore', async t => {
 test('permission denial after a click keeps recovery available', async t => {
   const page = await setup(t, {permission:'prompt', request:'denied'});
   await page.locator('#updateBtn').click();
-  assert.match(await text(page), /access was not granted/);
+  assert.match(await text(page), enRe("app.folder.denied"));
   assert.equal(await page.locator('#srcProg').isVisible(), false);
   assert.equal(await page.locator('#recoverBtn').isVisible(), true);
 });
@@ -438,19 +439,19 @@ test('corrupt save can be retried; a failed live refresh retains the board', asy
   await page.evaluate(() => fixture.worker.emit({kind:'failed', id:fixture.worker.messages[0].id, error:'Corrupt save'}));
   assert.equal(await page.locator('#srcProg').isVisible(), false);
   assert.equal(await page.locator('#recoverBtn').isVisible(), true);
-  assert.match(await page.locator('#srcMeta').textContent(), /Automatic updates are paused\. Click Update to retry\./);
+  assert.match(await page.locator('#srcMeta').textContent(), enRe("app.build.paused"));
   await page.locator('#updateBtn').click();
   await messages(page, 2);
   await page.evaluate(() => fixture.complete(1));
-  assert.doesNotMatch(await page.locator('#srcMeta').textContent(), /Automatic updates are paused/);
+  assert.doesNotMatch(await page.locator('#srcMeta').textContent(), enRe("app.build.paused"));
   await page.locator('#menuBtn').click();
   await page.locator('.save-trigger').click();
   await page.locator('[role="option"][data-value="bob|newer.hsg"]').click();
   await messages(page, 3);
   await page.evaluate(() => fixture.worker.emit({kind:'failed', id:fixture.worker.messages[2].id, error:'Corrupt save'}));
   assert.equal(await hasBoard(page), true);
-  assert.match(await text(page), /Could not read/);
-  assert.match(await page.locator('#srcMeta').textContent(), /Last good board kept.*Automatic updates are paused/);
+  assert.match(await text(page), enRe("app.build.failed"));
+  assert.match(await page.locator('#srcMeta').textContent(), new RegExp(enRe('app.build.kept').source + '.*' + enRe('app.build.paused').source));
 });
 
 for (const [pick, expected] of [[{dir:'alice', name:''}, 'newer.hsg'], [{dir:'', name:''}, 'newer.hsg'], [{dir:'alice', name:'missing.hsg'}, 'newer.hsg'], [{dir:'missing', name:'chosen.hsg'}, 'newer.hsg']]) {
@@ -461,7 +462,8 @@ for (const [pick, expected] of [[{dir:'alice', name:''}, 'newer.hsg'], [{dir:'',
     assert.equal(msg.name, expected);
     assert.equal(msg.mtime, pick.dir === 'alice' ? 2 : 3);
     await page.evaluate(() => fixture.complete());
-    if (pick.name) assert.match(await page.locator('#srcNote').innerText(), /Could not find/);
+    if (pick.name) assert.match(await page.locator('#srcNote').innerText(), new RegExp(['app.pick.gone.save', 'app.pick.gone.folder',
+      'app.pick.moved.any', 'app.pick.moved.character', 'app.pick.moved.folder'].map(k => enRe(k).source).join('|')));
   });
 }
 
@@ -472,7 +474,7 @@ test('storage that refuses the history says so under every board, and the visit 
   await messages(page);
   await page.evaluate(() => fixture.complete(0, 'fresh-history'));
   assert.equal(await hasBoard(page), true);
-  const said = /Could not remember history\. Browser storage is full or blocked\./;
+  const said = new RegExp(enRe('app.store.history').source + ' ' + enRe('app.store.full').source);
   assert.match(await page.locator('#srcNote').innerText(), said);
   await page.locator('#savePick').setInputFiles({name:'manual.hsg', mimeType:'application/octet-stream', buffer:Buffer.from('save')});
   await messages(page, 2);
@@ -507,21 +509,21 @@ test('one file: Update says a changed file is chosen again, and a reload asks fo
   await messages(page);
   await page.evaluate(() => fixture.complete());
   assert.equal(await hasBoard(page), true);
-  assert.match(await page.locator('#updateBtn').getAttribute('title'), /choose the file again/);
+  assert.match(await page.locator('#updateBtn').getAttribute('title'), enRe('app.update.file.title'));
   const chooser = page.waitForEvent('filechooser');
   await page.locator('#updateBtn').click();
   await chooser;
-  assert.match(await page.locator('#srcNote').innerText(), /To read a newer save, choose the file again\./);
+  assert.match(await page.locator('#srcNote').innerText(), enRe("app.update.file.note"));
 
   await page.evaluate(() => { location.hash = '#company'; });
   await page.reload();
   await page.evaluate(() => { renderAll = () => {}; });
-  await page.waitForFunction(() => document.getElementById('srcStatus').textContent === 'Choose the save file again');
+  await page.waitForFunction(expected => document.getElementById('srcStatus').textContent === expected, en('app.reopen.file'));
   assert.equal(await hasBoard(page), false);
   assert.match(await page.locator('#srcMeta').innerText(), /manual\.hsg/i);
-  assert.match(await page.locator('#srcNote').innerText(), /after a reload.*where you left it/s);
+  assert.match(await page.locator('#srcNote').innerText(), new RegExp(enRe('app.reopen.why').source + '.*' + enRe('app.reopen.where').source, 's'));
   assert.equal(await page.locator('#recoverBtn').isVisible(), true);
-  assert.equal(await page.locator('#recoverBtn').innerText(), 'Choose the file again');
+  assert.equal(await page.locator('#recoverBtn').innerText(), en("app.recover.file"));
   const again = page.waitForEvent('filechooser');
   await page.locator('#recoverBtn').click();
   await (await again).setFiles({name:'manual.hsg', mimeType:'application/octet-stream', buffer:Buffer.from('save')});
@@ -538,7 +540,7 @@ test('a remembered folder is never offered as a file to choose again', async t =
   await page.reload();
   await page.evaluate(() => { renderAll = () => {}; });
   await messages(page);
-  assert.notEqual(await text(page), 'Choose the save file again');
+  assert.notEqual(await text(page), en("app.reopen.file"));
   assert.equal(await page.evaluate(() => sessionStorage.getItem('ledger_reopen')), null);
 });
 
@@ -550,7 +552,7 @@ test('the landing save-folder box has More help, which opens the save help under
   await more.click();
   assert.equal(await page.locator('#help').evaluate(d => d.open), true);
   assert.equal(await more.getAttribute('aria-expanded'), 'true');
-  assert.match(await page.locator('#help').innerText(), /Browse savegame folder/);
+  assert.match(await page.locator('#help').innerText(), textRe("land.help.find"));
   await more.click();
   assert.equal(await page.locator('#help').evaluate(d => d.open), false);
   assert.equal(await more.getAttribute('aria-expanded'), 'false');

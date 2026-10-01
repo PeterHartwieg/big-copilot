@@ -4,6 +4,7 @@
 // NODE_PATH may point at an existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -108,29 +109,30 @@ test('the table reads a Smart Delivery level apart from a weekly order', async (
   const page = await board();
   try{
     const heads = await page.$$eval('#secImports thead th', th => th.slice(1).map(x => x.textContent.trim()));
-    assert.deepEqual(heads, ['Product', 'On hand', 'Draw / day', 'Busiest', 'Cover', 'Order / top-up', 'Uses / week', 'Status']);
+    assert.deepEqual(heads, [en("sb.col.product"), en("sb.col.onHand"), en("sb.col.draw"), en("sb.col.busiest"), en("sb.col.cover"), en("sb.col.order"), en("sb.col.uses"), en("sb.col.status")]);
     const rows = Object.fromEntries((await cells(page)).map(r => [r.item, r]));
     // The figure in game, the arrow, the box: a level is kept in stock, an order is a week's.
-    assert.match(rows.Sugar.inGame, /^900 in stock$/);
+    assert.match(rows.Sugar.inGame, new RegExp("^900 " + enRe("sb.unit.stock").source + "$"));
     // Nothing to change: the box alone holds the figure in game.
-    assert.match(rows.Salt.inGame, /^a week$/);
+    assert.match(rows.Salt.inGame, enRe("sb.unit.week", {}, {anchor: "full"}));
     assert.equal(rows.Salt.box, '700');
     // Sugar's level is short of its week: the box holds the suggestion.
     assert.equal(rows.Sugar.box, '1400');
     assert.equal(rows.Sugar.changed, true);
     // Short: the status says so; the arrow to the box says raise (declutter U12).
-    assert.match(rows.Sugar.verdict, /short/);
+    assert.match(rows.Sugar.verdict, enRe("sb.word.short"));
+    // Pins the wording: the old raise label stays absent beside the Set to box.
     assert.doesNotMatch(rows.Sugar.verdict, /raise/);
     // A high level only holds stock: covered, never "could lower".
     assert.equal(rows.Flour.box, '5000');
     assert.equal(rows.Flour.changed, false);
-    assert.match(rows.Flour.verdict, /covered/);
-    assert.doesNotMatch(await page.locator('#secImports').textContent(), /could lower/);
+    assert.match(rows.Flour.verdict, enRe("sb.word.covered"));
+    assert.doesNotMatch(await page.locator('#secImports').textContent(), enRe("sb.imp.couldLower"));
     // Two contracts on one line are listed in plan order under the material.
     const sugar = await page.locator('#secImports tr[data-slug]', {hasText: 'Sugar'}).locator('.imp-contracts').textContent();
-    assert.match(sugar, /1\. Pier 1 · keeps 900 in stock\s*2\. Pier 2 · 500 a week · paused/);
+    assert.match(sugar, new RegExp("1\\. Pier 1 · " + enRe("sb.imp.keeps", {n: 900}).source + "\\s*2\\. Pier 2 · " + enRe("sb.imp.perWeek", {n: 500}).source + " · " + enRe("sb.imp.paused").source));
     assert.deepEqual(await actions(page), [['Sugar', 900, 1400, 'smart']]);
-    assert.match(await page.evaluate(() => orderChecklistText(sbData().rows, 'Fixture')), /Smart Delivery stock 900 -> 1400 units/);
+    assert.match(await page.evaluate(() => orderChecklistText(sbData().rows, 'Fixture')), enRe("sb.ck.copy.smart", {from: 900, n: 1400}));
   } finally { await page.close(); }
 });
 
@@ -139,7 +141,7 @@ for(const storage of [true, false]){
     const page = await board({view: 'changes', storage});
     try{
       assert.deepEqual((await cells(page)).map(r => r.item), ['Sugar']);
-      await page.locator('#secImports .sbv-mode').getByText('Everything').click();
+      await page.locator('#secImports .sbv-mode').locator('[data-sb-mode="all"]').click();
       await box(page, 'Flour').fill('6000');
       await box(page, 'Flour').press('Enter');
       await page.waitForFunction(() => document.querySelector('#secImports .imp-reset'));
@@ -147,7 +149,7 @@ for(const storage of [true, false]){
       assert.deepEqual([flour.box, flour.changed], ['6000', true]);
       assert.deepEqual(await actions(page), [['Sugar', 900, 1400, 'smart'], ['Flour', 5000, 6000, 'smart']]);
       // The edited row stays in the "Needs a change" view.
-      await page.locator('#secImports .sbv-mode').getByText('Needs a change').click();
+      await page.locator('#secImports .sbv-mode').locator('[data-sb-mode="changes"]').click();
       assert.deepEqual((await cells(page)).map(r => r.item), ['Sugar', 'Flour']);
       if(storage){
         const saved = await page.evaluate(() => localStorage.getItem('ba_import_set_v3:set-fixture'));
@@ -208,12 +210,13 @@ for(const smart of [true, false]){
       }, plan);
       if(smart){
         // Said at its depot, never summed across depots into a level none has.
-        assert.match(water.tip, /^Smart Delivery keeps 3,000 in stock at 1 Depot, from /);
-        assert.doesNotMatch(water.tip, /a week on order/);
+        assert.match(water.tip, enRe("gr.src.smartFrom", {depots: en("gr.src.keeps", {n: 3000, depot: "1 Depot"})}, {anchor: "start"}));
+        assert.doesNotMatch(water.tip, enRe("gr.src.active"));
         // "A week at most" is the column header's tip; the row keeps a short mark (declutter E9).
-        assert.match(water.cell, /^3,000 Smart/);
+        assert.match(water.cell, new RegExp("^3,000 " + enRe("gr.ing.smart.short").source));
       } else {
-        assert.match(water.tip, /^3,000 a week on order now from /);
+        assert.match(water.tip, enRe("gr.src.active", {n: 3000}, {anchor: "start"}));
+        // Pins the wording: the plain-order row must not name the game’s Smart Delivery feature.
         assert.doesNotMatch(water.cell, /Smart Delivery/);
       }
     } finally { await page.close(); }
@@ -267,26 +270,26 @@ test('a mixed line shows its level, and only a plain amount after it comes on to
     const rows = Object.fromEntries((await cells(page)).map(r => [r.item, r]));
     // Plain amounts are placed before or after the level as the game
     // delivers them; the contract holding it stands out in the list.
-    assert.match(rows.Hops.inGame, /^1,000 in stock\s*plus 400 a week$/);
-    assert.match(rows.Malt.inGame, /^1,000 in stock\s*400 a week delivered first counts toward it$/);
-    assert.match(await page.locator('#secImports tr[data-slug]', {hasText: 'Hops'}).locator('.imp-lvl').textContent(), /^1\. Pier 1 · keeps 1,000 in stock$/);
+    assert.match(rows.Hops.inGame, new RegExp("^1,000 " + enRe("sb.unit.stock").source + "\\s*" + enRe("sb.imp.after", {n: 400}).source + "$"));
+    assert.match(rows.Malt.inGame, new RegExp("^1,000 " + enRe("sb.unit.stock").source + "\\s*" + enRe("sb.imp.before.counts", {n: 400}).source + "$"));
+    assert.match(await page.locator('#secImports tr[data-slug]', {hasText: 'Hops'}).locator('.imp-lvl').textContent(), new RegExp("^1\\. Pier 1 · " + enRe("sb.imp.keeps", {n: 1000}).source + "$"));
     // Delivered first and already above the level: the level brings nothing.
-    assert.match(rows.Rye.inGame, /1,400 a week delivered first already passes it$/);
-    assert.doesNotMatch(rows.Rye.inGame, /plus/);
+    assert.match(rows.Rye.inGame, new RegExp(enRe("sb.imp.before.passes", {n: 1400}).source + "$"));
+    assert.doesNotMatch(rows.Rye.inGame, enRe("sb.imp.after"));
     // Exactly equal: it reaches the level rather than passing it.
-    assert.match(rows.Oats.inGame, /1,000 a week delivered first already reaches it$/);
+    assert.match(rows.Oats.inGame, new RegExp(enRe("sb.imp.before.reaches", {n: 1000}).source + "$"));
     // The level a week needs is the fact's: Python replays the pass.
     assert.equal(rows.Hops.box, '1400');
     assert.equal(rows.Malt.box, '1800');
     assert.equal(rows.Rye.box, '2000');
     // A contract set up at zero is a contract, at zero.
-    assert.match(rows.Yeast.inGame, /^0 a week$/);
+    assert.match(rows.Yeast.inGame, enRe("sb.imp.perWeek", {n: 0}, {anchor: "full"}));
     assert.equal(rows.Yeast.box, '300');
     const hops = (await actions(page)).find(a => a[0] === 'Hops');
     assert.deepEqual(hops, ['Hops', 1000, 1400, 'smart']);
     const reason = await page.evaluate(() => sbData().rows.find(a => a.item === 'Hops').reason);
-    assert.match(reason, /^Set Smart Delivery stock at Pier 1 to 1,?400\./);
-    assert.match(await box(page, 'Rye').getAttribute('data-tip'), /The board suggests 2,?000: the level at Pier 1/);
+    assert.match(reason, enRe("sb.ck.set.smartAt", {at: "Pier 1", n: 1400}, {anchor: "start"}));
+    assert.match(await box(page, 'Rye').getAttribute('data-tip'), enRe("sb.imp.box.suggests", {n: 2000, says: en("sb.imp.says.levelAt.cap", {name: "Pier 1"})}));
   } finally { await page.close(); }
 });
 
@@ -298,7 +301,7 @@ for(const value of [900, 2000]){
     try{
       const sugar = (await cells(page)).find(r => r.item === 'Sugar');
       assert.deepEqual([sugar.box, sugar.changed], ['1400', true]);
-      assert.match(sugar.verdict, /short/);
+      assert.match(sugar.verdict, enRe("sb.word.short"));
       assert.equal(await page.evaluate(key => localStorage.getItem(key), KEY), '{}');
     } finally { await page.close(); }
   });
@@ -317,7 +320,7 @@ test('a figure typed on a line a route has since covered is forgotten, and the t
     const pepper = (await cells(page)).find(r => r.item === 'Pepper');
     assert.ok(pepper, 'the covered line is listed');
     assert.equal(pepper.box, null, 'no box: nothing to set');
-    assert.match(pepper.verdict, /covered by route/);
+    assert.match(pepper.verdict, enRe("sb.imp.byRoute"));
     assert.equal(await page.locator('#secImports tr[data-slug] .imp-reset').count(), 0);
     assert.equal(await page.evaluate(key => localStorage.getItem(key), KEY), '{}');
     // Drawn again, Today's card and the tabs still stand.
@@ -357,8 +360,8 @@ test('a paused row says it is paused, not that nothing asks for a change', async
   const page = await board({data});
   try{
     const tip = await box(page, 'Salt').getAttribute('data-tip');
-    assert.match(tip, /paused contract: resume it in game/);
-    assert.doesNotMatch(tip, /nothing here asks/);
+    assert.match(tip, enRe("sb.imp.box.paused"));
+    assert.doesNotMatch(tip, enRe("sb.imp.box.none"));
   } finally { await page.close(); }
 });
 
@@ -366,20 +369,20 @@ test('the box and its reset say what they hold in each state', async () => {
   const page = await board();
   try{
     const tip = item => box(page, item).getAttribute('data-tip');
-    assert.match(await tip('Sugar'), /^The board suggests 1,?400: the level at which the week's deliveries/);
-    assert.match(await tip('Flour'), /^The figure in game/);
+    assert.match(await tip('Sugar'), enRe("sb.imp.box.suggests", {n: 1400, says: en("sb.imp.says.level.cap")}, {anchor: "start"}));
+    assert.match(await tip('Flour'), enRe("sb.imp.box.none", {}, {anchor: "start"}));
     await box(page, 'Flour').fill('6000');
     await box(page, 'Flour').press('Enter');
     await page.waitForFunction(() => document.querySelector('#secImports .imp-reset'));
-    assert.match(await tip('Flour'), /^Your own figure\. The game holds 5,?000/);
+    assert.match(await tip('Flour'), enRe("sb.imp.box.ownHolds", {n: 5000}, {anchor: "start"}));
     const reset = page.locator('#secImports .imp-reset');
-    assert.match(await reset.getAttribute('aria-label'), /^Back to the figure in game, 5,?000, for Flour$/);
+    assert.match(await reset.getAttribute('aria-label'), enRe("sb.imp.reset.game.for", {n: 5000, item: "Flour"}, {anchor: "full"}));
     await box(page, 'Sugar').fill('2000');
     await box(page, 'Sugar').press('Enter');
     await page.waitForFunction(() => document.querySelectorAll('#secImports .imp-reset').length === 2);
     const sugarReset = page.locator('#secImports tr[data-slug]', {hasText: 'Sugar'}).locator('.imp-reset');
-    assert.match(await sugarReset.getAttribute('aria-label'), /^Back to the board's suggestion, 1,?400, for Sugar$/);
-    assert.match(await page.locator('#secImports thead th', {hasText: 'Order / top-up'}).first().getAttribute('data-tip'), /the figure to type/);
+    assert.match(await sugarReset.getAttribute('aria-label'), enRe("sb.imp.reset.suggestion.for", {n: 1400, item: "Sugar"}, {anchor: "full"}));
+    assert.match(await page.locator('#secImports thead th', {hasText: en("sb.col.order")}).first().getAttribute('data-tip'), enRe("sb.col.order.tip"));
   } finally { await page.close(); }
 });
 
@@ -400,23 +403,23 @@ test('the Plan imports card counts what the checklist has to do', async () => {
       document.querySelector('#planImportsCard .soon').textContent,
       document.querySelector('#planImportsCard .soon').className,
       document.querySelector('#planImportsCard .what').textContent,
-      document.querySelector('#sbcTop .sb-road').getAttribute('aria-label').replace(' changes ', ' ')]);
+      document.querySelector('#sbcTop .sb-road').getAttribute('aria-label')]);
     const [badge, cls, what, todo] = await card();
-    assert.deepEqual([badge, cls, todo], ['1 TO CHANGE', 'soon live', '0 of 1 recorded or applied']);
-    assert.match(what, /^Sugar at North Depot: Smart Delivery stock 900 → 1,400\.$/);
+    assert.deepEqual([badge, cls, todo], [en("today.moves.plan.badge.one"), 'soon live', en("sb.cw.road", {done: 0, n: 1})]);
+    assert.match(what, enRe("today.moves.plan.one.at", {item: "Sugar", site: "North Depot", change: en("today.moves.plan.smart", {from: "900", to: "1,400"})}, {anchor: "full"}));
     await box(page, 'Flour').fill('6000');
     await box(page, 'Flour').press('Enter');
     await page.waitForFunction(() => document.querySelector('#secImports .imp-reset'));
-    assert.deepEqual((await card()).filter((_, i) => i !== 1), ['2 TO CHANGE', '2 changes at North Depot, starting with Sugar.', '0 of 2 recorded or applied']);
+    assert.deepEqual((await card()).filter((_, i) => i !== 1), [en("today.moves.plan.badge.many", {n: 2}), en("today.moves.plan.many.at", {changes: en("today.moves.plan.changes", {n: 2}), site: "North Depot", item: "Sugar"}), en("sb.cw.road", {done: 0, n: 2})]);
     const tick = item => page.locator('#secImports tr[data-slug]', {hasText: item}).locator('.sb-tick').click();
     await tick('Sugar');
     const one = await card();
-    assert.deepEqual([one[0], one[3]], ['1 TO CHANGE', '1 of 2 recorded or applied']);
-    assert.match(one[2], /^Flour at North Depot: Smart Delivery stock 5,000 → 6,000\.$/);
+    assert.deepEqual([one[0], one[3]], [en("today.moves.plan.badge.one"), en("sb.cw.road", {done: 1, n: 2})]);
+    assert.match(one[2], enRe("today.moves.plan.one.at", {item: "Flour", site: "North Depot", change: en("today.moves.plan.smart", {from: "5,000", to: "6,000"})}, {anchor: "full"}));
     await tick('Flour');
     const [done, quiet, doneWhat, doneTodo] = await card();
-    assert.deepEqual([done, quiet, doneTodo], ['ALL TICKED', 'soon', '2 of 2 recorded or applied']);
-    assert.match(doneWhat, /^You ticked all 2\./);
+    assert.deepEqual([done, quiet, doneTodo], [en("today.moves.plan.badge.ticked"), 'soon', en("sb.cw.road", {done: 2, n: 2})]);
+    assert.match(doneWhat, enRe("today.moves.plan.ticked", {n: 2}, {anchor: "start"}));
   } finally { await page.close(); }
 });
 
@@ -435,9 +438,9 @@ test('a German browser still reads Supply figures with a comma', async () => {
     assert.equal(await page.evaluate(() => (8000).toLocaleString()), '8.000');
     const flour = await page.locator('#secImports tr[data-slug]', {hasText: 'Flour'}).innerText();
     assert.match(flour, /\b2,000\b/);
-    assert.match(flour, /1,200 arrived last week/);
+    assert.match(flour, enRe("sb.wh.arrived", {n: 1200}));
     assert.doesNotMatch(flour, /\d\.\d{3}\b/);
     const what = await page.evaluate(() => document.querySelector('#planImportsCard .what').textContent);
-    assert.equal(what, 'Sugar at North Depot: Smart Delivery stock 900 → 1,400.');
+    assert.equal(what, en("today.moves.plan.one.at", {item: "Sugar", site: "North Depot", change: en("today.moves.plan.smart", {from: "900", to: "1,400"})}));
   } finally { await context.close(); }
 });

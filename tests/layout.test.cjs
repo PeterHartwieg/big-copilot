@@ -2,6 +2,7 @@
 // NODE_PATH may point at an existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -66,7 +67,8 @@ test('table lines show their source and unresolved recipes offer a picker', asyn
     });
     assert.equal(await page.locator('.linepick').count(), 1);
     assert.equal(await page.locator('.linepick').getAttribute('data-rid'), 'future-id');
-    assert.match(await page.locator('#secProduction').innerText(), /Recipe table/);
+    assert.match(await page.locator('#secProduction').innerText(), enRe('sb.line.table'));
+    // Pins the wording: obsolete recipe inference terminology must stay absent.
     assert.doesNotMatch(await page.locator('#secProduction').innerText(), /paired|earlier build|named from what they eat/);
     assert.equal(await page.locator('.unname').count(), 0);
   } finally {
@@ -160,13 +162,13 @@ test('each machine says its rostered hours and the hours nobody is on it, escape
     await factory(page);
     const reads = await page.$$eval(`${LINES} .sp-m`, ms => ms.map(m => m.dataset.read));
     assert.equal(reads.length, 4);
-    assert.match(reads[0], /^Machine 7 · <b>84 of 168 h<\/b> staffed: nobody on it Mon 12-24/);
+    assert.match(reads[0], enRe('sp.mach.read.off2', {slot: 7, hours: 84, of: 168, off: 'Mon 12-24'}, {anchor: 'start'}));
     await page.evaluate(() => {
       D.supply.factories.sites[0].lines[0].gaps[0].off = '<img src=x onerror="alert(1)">';
       sbStamp++; drawSupplyStrip(); drawProductionView();
     });
     const read = await page.$eval(`${LINES} .sp-m`, m => m.dataset.read);
-    assert.match(read, /nobody on it &lt;img/);
+    assert.match(read, /&lt;img src=x/);
     assert.doesNotMatch(read, /<img/);
     const fits = await page.evaluate(sel => {
       const table = document.querySelector(sel);

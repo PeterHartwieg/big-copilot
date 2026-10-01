@@ -1,5 +1,6 @@
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
@@ -165,7 +166,7 @@ test('refresh changes the card, missing addresses stay escaped, and a character 
     });
     assert.doesNotMatch(await page.locator('#cityMapPage .site').innerText(),/Check staffing/);
     await pickRow(page,'modded#99');
-    assert.match(await page.locator('#cityMapPage .site').innerText(),/no map position/);
+    assert.match(await page.locator('#cityMapPage .site').innerText(),enRe('map.card.nopos'));
     assert.equal(await page.locator('#cityMapPage .site img').count(),0);
     await page.evaluate(()=>{D={...D,meta:{character:'map-b',day:1},businesses:[]};refreshCityMaps();});
     assert.equal(await page.locator('#cityMapPage .location.fp.sel').count(),0);
@@ -186,7 +187,7 @@ test('failed map load offers a working retry',async()=>{
   try{
     await page.route('**/maps/locations.json?*',r=>{if(!failed){failed=true;return r.fulfill({status:503,body:'Unavailable'});}return r.continue();});
     await page.evaluate(()=>showPage('map'));
-    await page.getByRole('button',{name:'Retry map'}).click();await ready(page);
+    await page.locator('#cityMapPage [data-mw="retry"]').click();await ready(page);
     assert.equal(await page.locator('#cityMapPage .location.fp').count(),883);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
@@ -227,9 +228,9 @@ test('the map head keeps five layer chips, a why mark, search with a count, and 
     assert.equal(await page.locator('#cityMapPage .map-head .lay').count(),5);
     // Each layer names itself beside its count, rather than behind the ?.
     assert.deepEqual(await page.$$eval('#cityMapPage .map-head .lay',ls=>ls.map(l=>l.innerText.replace(/\s+/g,' ').trim())),
-      ['Mine 2','Owned 0','Homes 0','Findings 1','All 883']);
+      [en('map.layer.mine')+' 2',en('map.layer.own')+' 0',en('map.layer.home')+' 0',en('map.layer.fnd')+' 1',en('map.layer.all')+' 883']);
     // What a chip is called out loud starts with the word printed on it.
-    for(const name of ['Mine 2','Owned 0','Homes 0','Findings 1','All 883'])
+    for(const name of [en('map.layer.mine')+' 2',en('map.layer.own')+' 0',en('map.layer.home')+' 0',en('map.layer.fnd')+' 1',en('map.layer.all')+' 883'])
       assert.equal(await page.locator('#cityMapPage .map-head').getByRole('button',{name,exact:true}).count(),1,name);
     assert.equal(await page.locator('#cityMapPage .map-head .why').count(),1);
     assert.equal(await page.locator('#cityMapPage .srch input[data-control="search"]').count(),1);
@@ -704,7 +705,7 @@ test('owned vacant property is carded under its address rather than Vacant lease
     assert.equal((await matchKeys(page)).includes(property.key),true);
     await pickRow(page,property.key);
     assert.equal(await page.locator('#cityMapPage .site h3').innerText(),property.address);
-    assert.match(await page.locator('#cityMapPage .site .sub').innerText(),/Owned building · bought day 156/);
+    assert.match(await page.locator('#cityMapPage .site .sub').innerText(),enRe('map.card.owned.day', {d: 156}));
     assert.equal(await page.locator('#cityMapPage .site .go2').evaluate(g=>g.hidden),true);
     assert.match(await page.locator('#cityMapPage .site .nums').innerText(),/\$18\.3M/);
     // A vacant business you own keeps its address too, never the lease name.
@@ -727,7 +728,7 @@ test('a rented home is its own layer: white footprint, counted, and a card with 
     await pickRow(page,home.key);
     const card=page.locator('#cityMapPage .site');
     assert.equal(await card.locator('h3').innerText(),home.address);
-    assert.match(await card.locator('.sub').innerText(),/Home/);
+    assert.match(await card.locator('.sub').innerText(),enRe('map.card.home'));
     assert.equal(await card.locator('.nums .num').count(),1);
     assert.match(await card.locator('.nums').innerText(),/\$34/);
     // "its page" is the only way into a flat's panel besides its name: it is

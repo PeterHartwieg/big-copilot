@@ -16,6 +16,7 @@ import unittest
 
 from ba_dashboard import COST_KEYS, _chains
 from ba_save import Save
+from tests.i18n_check import MsgAsserts
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -161,7 +162,7 @@ class ChainTieTests(unittest.TestCase):
                          {"Clothing Stores|Clothing Stores|Clothing Stores"})
 
 
-class SharedDepotTests(unittest.TestCase):
+class SharedDepotTests(MsgAsserts, unittest.TestCase):
     """A factory follows its own goods, not everything its depot happens to carry.
 
     Everything the factory ships goes through the depot, so these cases cannot
@@ -218,8 +219,7 @@ class SharedDepotTests(unittest.TestCase):
             plan("store", [destination("annexe", ["crate"]),
                            destination("burgers", FOOD_RANGE)]),
         ]
-        self.assertEqual(chains_of(businesses, plans)["works#1"],
-                         "Head office and support")
+        self.assertMsg(chains_of(businesses, plans)["works#1"], "co.chain.name.support")
 
     def test_a_depot_holding_a_product_it_never_ships_on_speaks_for_nobody(self):
         # The crates sit in a depot that has never had a plan for them. That
@@ -243,8 +243,7 @@ class SharedDepotTests(unittest.TestCase):
             plan("works", [destination("store", ["crate"])]),
             plan("store", [destination("burgers", FOOD_RANGE)]),
         ]
-        self.assertEqual(chains_of(businesses, plans)["works#1"],
-                         "Head office and support")
+        self.assertMsg(chains_of(businesses, plans)["works#1"], "co.chain.name.support")
 
     def test_a_product_is_traced_through_more_than_one_depot(self):
         # Three hops of one product, with the plans stored upstream first so
@@ -365,7 +364,7 @@ class CrossFedDepotTests(unittest.TestCase):
         self.assertEqual(answers, {"Clothing Stores"})
 
 
-class TransformingFactoryTests(unittest.TestCase):
+class TransformingFactoryTests(MsgAsserts, unittest.TestCase):
     """A product that stops at a factory still reaches the shops it becomes."""
 
     def test_a_raw_supplier_joins_the_chain_its_buyer_serves(self):
@@ -494,7 +493,7 @@ class TransformingFactoryTests(unittest.TestCase):
 
     def test_a_site_that_feeds_nothing_is_support(self):
         businesses = [depot("spare"), shop("burgers", FAST_FOOD)]
-        self.assertEqual(chains_of(businesses, [])["spare#1"], "Head office and support")
+        self.assertMsg(chains_of(businesses, [])["spare#1"], "co.chain.name.support")
 
 
 class BackHaulTests(unittest.TestCase):
@@ -670,7 +669,7 @@ class FactoryLoopTests(unittest.TestCase):
         self.assertEqual(answers, {"Bookstores"})
 
 
-class MakerTests(unittest.TestCase):
+class MakerTests(MsgAsserts, unittest.TestCase):
     """What a factory makes counts even when it also moves goods along."""
 
     def test_a_factory_that_relays_a_product_is_read_by_where_it_relays_it(self):
@@ -768,7 +767,7 @@ class MakerTests(unittest.TestCase):
                              destination("gadgets", ["phone"])]),
         ]
         chains = chains_of(businesses, plans)
-        self.assertEqual(chains["mill#1"], "Head office and support")
+        self.assertMsg(chains["mill#1"], "co.chain.name.support")
         self.assertEqual(chains["works#1"], "Electronics Stores")
 
     def test_two_factories_restocking_each_other_do_not_answer_to_plan_order(self):
@@ -829,7 +828,7 @@ class MakerTests(unittest.TestCase):
             plan("kitchen", [destination("gadgets", ["phone"])]),
         ]
         chains = chains_of(businesses, plans)
-        self.assertEqual(chains["mill#1"], "Head office and support")
+        self.assertMsg(chains["mill#1"], "co.chain.name.support")
         self.assertEqual(chains["works#1"], "Electronics Stores")
 
     def test_a_factory_sent_its_own_output_back_is_read_as_making_nothing(self):
@@ -848,7 +847,7 @@ class MakerTests(unittest.TestCase):
             plan("central", [destination("kitchen", ["bread", "cake"])]),
         ]
         chains = chains_of(businesses, plans)
-        self.assertEqual(chains["larder#1"], "Head office and support")
+        self.assertMsg(chains["larder#1"], "co.chain.name.support")
         # The kitchen itself is still placed by the shop it serves.
         self.assertEqual(chains["kitchen#1"], "Fast Food Restaurants")
 
@@ -865,8 +864,7 @@ class MakerTests(unittest.TestCase):
                              destination("store", ["phone"])]),
             plan("store", [destination("kitchen", ["phone"])]),
         ]
-        self.assertEqual(chains_of(businesses, plans)["mill#1"],
-                         "Head office and support")
+        self.assertMsg(chains_of(businesses, plans)["mill#1"], "co.chain.name.support")
 
     def test_what_a_factory_hands_to_another_factory_is_not_what_it_makes(self):
         # The kitchen hands somebody else's phones to an assembly plant, which
@@ -957,8 +955,7 @@ class MakerTests(unittest.TestCase):
             plan("larder", [destination("store", ["tomato"])]),
             plan("store", [destination("burgers", ["burger", "pizza"])]),
         ]
-        self.assertEqual(chains_of(businesses, plans)["larder#1"],
-                         "Head office and support")
+        self.assertMsg(chains_of(businesses, plans)["larder#1"], "co.chain.name.support")
 
 
 class SuppliedByTests(unittest.TestCase):

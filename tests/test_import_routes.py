@@ -1,5 +1,6 @@
 """Supply regressions for GitHub #17 and #18, using portable save fixtures."""
 import unittest
+from tests.i18n_check import MsgAsserts
 from unittest.mock import patch
 
 from ba_dashboard import Names, _import_notes, _scheduled_import_gap, _supply, site_key
@@ -14,7 +15,7 @@ def contract(amount, *, last=0, active=True, destination=("depot", 1), pier=1):
     }
 
 
-class ImportRoutesTests(unittest.TestCase):
+class ImportRoutesTests(MsgAsserts, unittest.TestCase):
     def test_staggered_schedule_with_sufficient_early_supply_has_no_gap(self):
         result = _scheduled_import_gap(240, 240, [1] * 7, 10,
                                        [{"day": 11, "amount": 1300}, {"day": 16, "amount": 700}], .5)
@@ -387,9 +388,10 @@ class ImportRoutesTests(unittest.TestCase):
         data = self.build([contract(700, destination=("factory", 0))])
         notes = _import_notes(data["businesses"], data["supply"], set())
         self.assertEqual(len(notes), 1)
-        self.assertIn("Factory", str(notes))
-        self.assertIn("factory#0", str(notes))
-        self.assertNotIn("no depot tops it up", str(notes))
+        self.assertEqual(notes[0]["site"], "Factory")
+        self.assertEqual(notes[0]["siteKey"], "factory#0")
+        self.assertNoMsg(notes[0]["text"], "f.feed.noplan")
+        self.assertNoMsg(notes[0]["text"], "f.feed.noplan.resume")
 
     def test_paused_direct_import_does_not_count_as_supply(self):
         need = self.need(self.build([contract(2000, last=2000, active=False,

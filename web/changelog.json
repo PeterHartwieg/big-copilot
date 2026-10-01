@@ -1,5 +1,11 @@
 [
   {
+    "pr": 207,
+    "date": "2026-10-01",
+    "title": "Plan a factory: add the products a type can also sell",
+    "summary": "Expansion › Plan a factory now has Add product under the range. It lists what the business type can also stock beyond its main products, such as umbrellas or soda at a Florist, each with the game's own weight for that type. An added product gets its own line, with machines, output, raw material and the weekly ingredient order like the main products, and × takes it out again. If every shop of the type already sells it, the line uses what they sell; otherwise you type an estimate a shop sells a day, which starts from what your shops sell of it or, if none do, from your main products' rate times the weight. Your additions are kept per type."
+  },
+  {
     "pr": 205,
     "date": "2026-10-01",
     "title": "Factories: what your shops sell against what each line makes",

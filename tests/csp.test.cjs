@@ -7,6 +7,7 @@
 // NODE_PATH may point at an existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en} = require('./_i18n.cjs');
 const {spawn, spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const http = require('node:http');
@@ -123,17 +124,17 @@ test('the game link reads the mod on loopback under the CSP', async (t) => {
   const {page, found} = await watched(t);
   await page.goto(`${base}/#link=${mockUrl}`);
   await page.locator('#linkBtn').click();
-  await until(page, found, () => document.body.classList.contains('has-board')
-    && document.getElementById('srcStatus').textContent === 'Up to date');
+  await until(page, found, current => document.body.classList.contains('has-board')
+    && document.getElementById('srcStatus').textContent === current, en('app.state.current'));
   assert.deepEqual(found, {violations: [], console: [], errors: []});
 });
 
 // Waits for the page to reach `ready`, but a refusal ends the wait at once: a
 // blocked worker import or wasm compile would otherwise only show as a board
 // that never appears.
-async function until(page, found, ready) {
+async function until(page, found, ready, arg) {
   const clean = () => !found.violations.length && !found.console.length && !found.errors.length;
-  for (let waited = 0; clean() && !(await page.evaluate(ready)); waited += 250) {
+  for (let waited = 0; clean() && !(await page.evaluate(ready, arg)); waited += 250) {
     assert.ok(waited < 120000, 'the page never got there');
     await new Promise((resolve) => setTimeout(resolve, 250));
   }

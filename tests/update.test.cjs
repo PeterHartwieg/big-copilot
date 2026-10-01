@@ -68,7 +68,7 @@ test('same build stays quiet; a later build includes expandable release notes', 
 for (const blockStorage of [false, true]) test(`dismissal suppresses only that version (storage blocked: ${blockStorage})`, async t => {
   const {page, check} = await setup(t, {initial:next, blockStorage});
   assert.equal(await page.locator('#releaseBanner').isVisible(), true, 'first check compares against the embedded build');
-  await page.getByRole('button', {name:'Dismiss this update'}).click();
+  await page.locator('#releaseDismiss').click();
   await check(next);
   assert.equal(await page.locator('#releaseBanner').isVisible(), false);
   if (!blockStorage) {

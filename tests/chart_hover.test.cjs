@@ -6,6 +6,7 @@
 // NODE_PATH may point at an existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -71,14 +72,14 @@ const missed = page => page.locator('#dailyBox .chartbox').evaluate(el => el.cla
 
 async function hoverDay(page, at, day) {
   await page.mouse.move(at.x, at.y);
-  assert.match(await read(page), new RegExp(`^Day ${day} `), `the pointer over day ${day} reads it`);
+  assert.match(await read(page), enRe('co.daily.readout', {day: day}, {anchor: 'start'}), `the pointer over day ${day} reads it`);
   assert.equal(await missed(page), false, 'the crosshair shows');
 }
 
 async function hoverMiss(page, x, y, last) {
   await page.mouse.move(x, y);
   assert.equal(await missed(page), true, `no crosshair at x=${x}`);
-  assert.match(await read(page), new RegExp(`^Day ${last} `), 'the read-out goes back to the last day');
+  assert.match(await read(page), enRe('co.daily.readout', {day: last}, {anchor: 'start'}), 'the read-out goes back to the last day');
 }
 
 test('a wide chart reads the bar under the pointer and nothing in its margins', async t => {
@@ -103,7 +104,7 @@ test('a wide chart reads the bar under the pointer and nothing in its margins', 
   await hoverDay(page, g.bars[7], 47);
   // Leaving the chart ends on the last day, as leaving through a margin does.
   await page.mouse.move(g.bars[7].x, g.top - 300);
-  assert.match(await read(page), /^Day 69 /);
+  assert.match(await read(page), enRe('co.daily.readout', {day: 69}, {anchor: 'start'}));
 });
 
 test('a narrow chart reads the bar under the pointer as before', async t => {

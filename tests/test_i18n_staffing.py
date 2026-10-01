@@ -14,6 +14,8 @@ import json
 import random
 import unittest
 
+from tests.i18n_check import MsgAsserts, msg_param
+
 from ba_dashboard import (
     _alerts, IDLE_PARTS, PHRASE_SHAPES, STAFF_HOURS, WEEKDAYS, Msg, _cap_first, _hour_phrase, _idle_parts,
     _off_hours, _role_words, _sp_counters, _staff_notes, _wire_msgs, msg, plain, tok,
@@ -135,7 +137,7 @@ def keys_in(m):
     return {m.key} | set().union(*(keys_in(v) for v in m.p.values()))
 
 
-class PhrasesAreTheOldEnglish(unittest.TestCase):
+class PhrasesAreTheOldEnglish(MsgAsserts, unittest.TestCase):
     def test_hour_phrase(self):
         rng = random.Random(7)
         fixed = [{}, {1: set(range(8, 12))}, {wd: set(range(24)) for wd in range(7)},
@@ -145,6 +147,7 @@ class PhrasesAreTheOldEnglish(unittest.TestCase):
             for sep in ("; ", " and "):
                 with self.subTest(case=case, sep=sep):
                     got = _hour_phrase(case, sep=sep)
+                    # Pins the wording: translation migration preserves the hour-phrase rendering.
                     self.assertEqual(got, old_hour_phrase(case, sep=sep))
                     if got:
                         self.assertIsInstance(got, Msg)
@@ -158,6 +161,7 @@ class PhrasesAreTheOldEnglish(unittest.TestCase):
         for covered in cases:
             with self.subTest(covered=sorted(covered)[:5]):
                 got = _off_hours(covered)
+                # Pins the wording: translation migration preserves the uncovered-hour rendering.
                 self.assertEqual(got, old_off_hours(covered))
                 if got:
                     self.assertIsInstance(got, Msg)
@@ -172,9 +176,11 @@ class PhrasesAreTheOldEnglish(unittest.TestCase):
                          for _ in range(count)]
                 for office in (False, True):
                     got = _idle_parts(parts, _sp_counters(office))
+                    # Pins the wording: translation migration preserves the idle-parts rendering.
                     self.assertEqual(got, old_idle_parts(parts, "workstations" if office else "counters"))
                     self.assertIsInstance(got, Msg)
                     # The plain default the Today line passes today reads the same.
+                    # Pins the wording: a plain-str default preserves the legacy idle-parts fallback rendering.
                     self.assertEqual(_idle_parts(parts, "counters"), old_idle_parts(parts, "counters"))
 
     def test_staff_notes(self):
@@ -195,29 +201,36 @@ class PhrasesAreTheOldEnglish(unittest.TestCase):
                 [row] = notes
                 lost = round((week - hours) / 7 * lost_rate)
                 with self.subTest(mode=mode, week=week, hours=hours, lost=lost):
+                    # Pins the wording: translation migration preserves the factory staffing sentence.
                     self.assertEqual(row["text"], old_staff_text(tea, 3, hours, week, line["gaps"][0]["off"], lost))
                     self.assertTrue(row["text"].key.startswith("sp.py.staff"))
-                    self.assertEqual(row["named"], f"{tea} at position 3")
+                    self.assertMsg(row["named"], "sp.py.staff.named", item="Tea", slot=3)
+                    # Not a Msg: subject is a plain str used to hash the finding id.
                     self.assertEqual(row["subject"], "Tea at position 3")
                     _wire_msgs(row)
                     self.assertEqual(row["i18n"]["text"][0], row["text"].key)
 
 
-class LimitsAndCapitals(unittest.TestCase):
+class LimitsAndCapitals(MsgAsserts, unittest.TestCase):
     def test_role_words_are_the_old_words(self):
         service = _role_words({"skill": "ba:skill_customerservice"}, False)
-        self.assertEqual((service["staffing"], service["posts"]),
-                         (("staffing", "more service staff on those hours"), ("registers", "another counter")))
+        self.assertMsg(service["staffing"][0], "sp.py.limit.staffing")
+        self.assertMsg(service["staffing"][1], "sp.py.fix.service.staff")
+        self.assertMsg(service["posts"][0], "sp.py.limit.registers")
+        self.assertMsg(service["posts"][1], "sp.py.fix.service.post")
         office = _role_words({"skill": None}, True)
-        self.assertEqual((office["staffing"], office["posts"]),
-                         (("staffing", "more staff at the computers on those hours"),
-                          ("workstations", "another computer workstation")))
+        self.assertMsg(office["staffing"][0], "sp.py.limit.staffing")
+        self.assertMsg(office["staffing"][1], "sp.py.fix.office.staff")
+        self.assertMsg(office["posts"][0], "sp.py.workstations")
+        self.assertMsg(office["posts"][1], "sp.py.fix.office.post")
         trainer = tok("ba:skill_gymtrainer", "Gym Trainer")
         gym = _role_words({"skill": "ba:skill_gymtrainer", "label": "Gym Trainer",
                            "station": "Fitness Planning Board",
                            "stationKey": "ba:itemname_fitnessplanningboard"}, False)
-        self.assertEqual(gym["staffing"], (f"{trainer} staffing", f"another {trainer} on those hours"))
-        self.assertEqual(gym["posts"], ("fitness planning boards", "another fitness planning board"))
+        self.assertMsg(gym["staffing"][0], "sp.py.limit.role", role=trainer)
+        self.assertMsg(gym["staffing"][1], "sp.py.fix.role.staff", role=trainer)
+        self.assertMsg(gym["posts"][0], "sp.py.limit.station", stations="fitness planning boards")
+        self.assertMsg(gym["posts"][1], "sp.py.fix.role.post", station="fitness planning board")
         # The station's words stay the English plural; the grid's noun, which
         # the page compares against a limit's English, stays a plain str. The
         # messages made of them carry the name as a token beside them.
@@ -243,26 +256,38 @@ class LimitsAndCapitals(unittest.TestCase):
         for limit, key in cases:
             with self.subTest(limit=limit):
                 got = _cap_first(limit)
+                # Pins the wording: sentence-initial capitalisation changes only the first character.
                 self.assertEqual(got, limit[:1].upper() + limit[1:])
                 self.assertIsInstance(got, Msg)
                 self.assertEqual(got.key, key)
-        self.assertEqual(_cap_first(joined).wire()[1]["a"], {"m": ["sp.py.limit.staffing.first", {}, "Staffing"]})
+        self.assertMsg(_cap_first(joined).p["a"], "sp.py.limit.staffing.first")
+        # On the wire the nested message travels as {"m": [key, params, english]}.
+        wired = _cap_first(joined).wire()[1]["a"]["m"]
+        self.assertEqual(wired[:2], ["sp.py.limit.staffing.first", {}])
+        self.assertEqual(wired[2], str(_cap_first(joined).p["a"]))
         # A station's own plural keeps its name's token.
         booth = tok("ba:itemname_projectionbooth", "Projection Booth")
         station = _cap_first(msg("sp.py.limit.station", "{stations}", stations="projection booths", station_name=booth))
-        self.assertEqual((station, station.key, station.p["station_name"]),
-                         ("Projection booths", "sp.py.limit.station.first", booth))
+        self.assertMsg(station, "sp.py.limit.station.first", stations="Projection booths", station_name=booth)
+        # Pins the wording: the plain-str fallback capitalises the first character.
         self.assertEqual(_cap_first("projection booths"), "Projection booths")
         self.assertEqual(_cap_first(""), "")
 
     def test_the_cinema_findings_read_as_before_and_carry_their_messages(self):
         rows = cinema_fixture.rows()
         caps = [f for f in rows["findings"] if f["kind"] == "cap"]
-        self.assertEqual(sorted((plain(f["limit"]), plain(f["fix"]), f["when"]) for f in caps), sorted([
-            ("staffing and projection booths", "more service staff on those hours and another projection booth",
-             "Mon 10"),
-            ("Projectionist staffing", "another Projectionist on those hours", "Mon 12"),
-        ]))
+        self.assertEqual(len(caps), 2)
+        tied = next(f for f in caps if f["limits"] == 2)
+        role = next(f for f in caps if f["limits"] == 1)
+        self.assertMsg(tied["limit"], "sp.py.list.and", a=msg_param("sp.py.limit.staffing"),
+                       b=msg_param("sp.py.limit.station", stations="projection booths"))
+        self.assertMsg(tied["fix"], "sp.py.list.and", a=msg_param("sp.py.fix.service.staff"),
+                       b=msg_param("sp.py.fix.role.post", station="projection booth"))
+        self.assertMsg(role["limit"], "sp.py.limit.role", role="Projectionist")
+        self.assertMsg(role["fix"], "sp.py.fix.role.staff", role="Projectionist")
+        for finding, hour in ((tied, 10), (role, 12)):
+            self.assertMsg(finding["when"], "sp.py.when.part", days=msg_param("sp.py.wd.1"),
+                           hours=msg_param("sp.py.when.hour", h=hour))
         payload = json.loads(json.dumps(_wire_msgs({"hourFindings": rows["findings"]})))
         for f in payload["hourFindings"]:
             if f["kind"] == "cap":
@@ -285,7 +310,7 @@ class LimitsAndCapitals(unittest.TestCase):
         self.assertEqual(tie["i18n"]["noun"][1]["b"]["m"][1]["station_name"], booth)
 
 
-class TheTodayLinesKeepTheirWords(unittest.TestCase):
+class TheTodayLinesKeepTheirWords(MsgAsserts, unittest.TestCase):
     """The at-capacity and overstaffed lines _alerts() writes carry this area's
     words as nested messages: the limit opening a sentence through
     _cap_first() and the posts' noun through _sp_counters()."""
@@ -309,7 +334,7 @@ class TheTodayLinesKeepTheirWords(unittest.TestCase):
                    "hours": 2, "throughput": 50.0}
             with self.subTest(office=office):
                 row = self.rows([cap], office)["atcap"]
-                self.assertIn(limit.capitalize() + " is the limit", row["text"])
+                self.assertMsg(row["text"], "f.atcap", limit=msg_param(first))
                 self.assertLessEqual({noun, first, "sp.py.fix.office.post" if office else "sp.py.fix.service.post"},
                                      keys_in(row["text"]))
 
@@ -319,7 +344,10 @@ class TheTodayLinesKeepTheirWords(unittest.TestCase):
                     "from": 8, "to": 12, "staff": 3, "seen": 2, "spare": 6, "worth": 20.0}
             with self.subTest(office=office):
                 row = self.rows([idle], office)["idlestaff"]
-                self.assertIn(("3 workstations" if office else "3 counters") + " Mon 8-12", row["text"])
+                self.assertMsg(row["text"], "f.idlestaff",
+                               runs=msg_param("sp.py.idle.part", n=3, noun=msg_param(noun),
+                                              when=msg_param("sp.py.when.part", days=msg_param("sp.py.wd.1"),
+                                                             hours=msg_param("sp.py.when.hours", a=8, b=12))))
                 self.assertIn(noun, keys_in(row["text"]))
                 self.assertIn("sp.py.idle.part", keys_in(row["text"]))
 

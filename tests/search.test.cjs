@@ -6,6 +6,7 @@
 // Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -134,9 +135,9 @@ test('a kind switched off colours no site and is not counted as read out', async
         id: 'hype-1', text: 'Lower Manhattan hype on 2 lines ends tomorrow', worth: 5000, unit: '/day revenue'}];
       Object.assign(alertGroupPrefs, {hype: false});
     }, SHOP);
-    assert.deepEqual(await read(), {dot: '', tag: '1 today'});
+    assert.deepEqual(await read(), {dot: '', tag: en("nav.search.today", {n: 1})});
     await page.evaluate(() => Object.assign(alertGroupPrefs, {hype: true}));
-    assert.deepEqual(await read(), {dot: 'crit', tag: '2 today'});
+    assert.deepEqual(await read(), {dot: 'crit', tag: en("nav.search.today", {n: 2})});
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
@@ -150,37 +151,37 @@ test('the index holds every group, read from the page, with the words players us
     // Pages and views, synonyms included.
     assert.ok(by('view:staffing').syn.includes('hire'));
     assert.ok(by('view:cash').syn.includes('debt'));
-    assert.equal(by('view:cash').p, 'Overview · $250k owed on loans');
+    assert.equal(by('view:cash').p, en("nav.search.cash.owed", {w: "$250k"}));
     // The game's settings are the difficulty chip now (R15), not Milestones.
     assert.ok(by('view:difficulty').syn.includes('house rules'));
-    assert.equal(by('view:difficulty').p, 'Custom · every setting against Normal');
+    assert.equal(by('view:difficulty').p, en("nav.search.difficulty.named", {name: en("nav.diff.custom")}));
     assert.ok(!by('view:milestones').syn.includes('settings'));
     // Weekly rhythm is By weekday in the Daily result chart.
-    assert.equal(by('view:rhythm').t, 'By weekday');
+    assert.equal(by('view:rhythm').t, en("nav.search.rhythm.title"));
     assert.ok(by('view:rhythm').syn.includes('weekly rhythm'));
     assert.ok(by('view:portfolio').syn.includes('break even'));
     // The factory inputs are named as the Factories tab names them.
-    assert.equal(by('view:feed').t, 'Factory inputs');
+    assert.equal(by('view:feed').t, en("nav.search.feed.title"));
     assert.equal(by('view:feed').dot, 'watch');
     // Sites: the short name, the neighbourhood tag, a map key and the worst finding.
     assert.equal(by(`site:${SHOP}`).t, 'Test Clothing');
     assert.equal(by(`site:${SHOP}`).hood, 'LM');
     assert.equal(by(`site:${SHOP}`).map, SHOP);
     assert.equal(by(`site:${FACTORY}`).dot, 'watch');
-    assert.match(by(`site:${FACTORY}`).p, /eats Fabric \(Expensive\)$/);
+    assert.match(by(`site:${FACTORY}`).p, enRe("nav.search.site.eats", {inputs: "Fabric (Expensive)"}));
     // Products: an input first, what sells, what a line makes, what sits idle.
-    assert.equal(by('product:ba:itemname_fabricexpensive').p, 'Input · Test Factory eats 1,000/day · 600 arrive');
+    assert.equal(by('product:ba:itemname_fabricexpensive').p, en("nav.search.item.input", {site: "Test Factory", a: "1,000", b: "600"}));
     assert.equal(by('product:ba:itemname_fabricexpensive').t, 'Fabric (Expensive)');
     assert.equal(by('product:ba:itemname_fabricexpensive').dot, 'watch');
-    assert.equal(by('product:ba:itemname_gymcovercharge').p, 'Sold in 1 store · 300 a day · $3k');
-    assert.equal(by('product:ba:itemname_clothingclassicexpensivefemale').p, 'Made in Test Factory');
-    assert.equal(by('product:ba:itemname_energydrink').p, '4,000 idle at Test Depot');
+    assert.equal(by('product:ba:itemname_gymcovercharge').p, en("nav.search.item.sold", {n: 1, u: "300", w: "$3k"}));
+    assert.equal(by('product:ba:itemname_clothingclassicexpensivefemale').p, en("nav.search.item.made", {site: "Test Factory"}));
+    assert.equal(by('product:ba:itemname_energydrink').p, en("nav.search.item.idle", {s: "4,000", site: "Test Depot"}));
     // Finding kinds carry their live count, and say when they are switched off.
-    assert.equal(by('kind:feed').tag, '1 today');
-    assert.equal(by('kind:idlestaff').tag, 'switched off · 1');
+    assert.equal(by('kind:feed').tag, en("nav.search.today", {n: 1}));
+    assert.equal(by('kind:idlestaff').tag, en("nav.search.kind.offn", {n: 1}));
     assert.equal(by('kind:idlestaff').dot, 'off');
     // Needs attention reads out one finding, and says so.
-    assert.equal(by('view:alerts').tag, '1 today');
+    assert.equal(by('view:alerts').tag, en("nav.search.today", {n: 1}));
     assert.ok(by('kind:jobdemand').syn.includes('hire'));
     // The board's old names for renamed things still find them (R12).
     assert.ok(by('kind:dead').syn.includes('stock not moving'));
@@ -190,9 +191,9 @@ test('the index holds every group, read from the page, with the words players us
     assert.ok(by('view:ops').syn.includes('standards'));
     assert.ok(by('view:ops').syn.includes('pull'));
     // Find-a-location presets: the neighbourhood that wants the type most.
-    assert.equal(by('finder:ba:businesstype_gym').t, 'Open a Gym');
-    assert.equal(by('finder:ba:businesstype_gym').p, "best fit: Hell's Kitchen · demand 80");
-    assert.equal(by('finder:ba:businesstype_lawfirm').t, 'Open a Law Firm');
+    assert.equal(by('finder:ba:businesstype_gym').t, en("nav.search.finder.a", {type: "Gym"}));
+    assert.equal(by('finder:ba:businesstype_gym').p, en("nav.search.finder.fit", {hood: "Hell's Kitchen", n: 80}));
+    assert.equal(by('finder:ba:businesstype_lawfirm').t, en("nav.search.finder.a", {type: "Law Firm"}));
     assert.ok(by('finder:warehouse'));
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
@@ -203,10 +204,10 @@ test('the wiki joins the index once its file is in, with its synonyms', async ()
   try {
     await page.keyboard.press('/');
     await typed(page, 'headhunter');
-    await page.waitForSelector('#ssRes .ss-grp[aria-label="Wiki"]');
+    await page.waitForSelector("#ssRes .ss-grp[aria-label=\"" + en("nav.search.group.wiki2") + "\"]");
     await typed(page, 'hire');
-    await page.waitForSelector('#ssRes .ss-grp[aria-label="Wiki"] .ss-syn');
-    const wiki = await page.$$eval('#ssRes .ss-grp[aria-label="Wiki"] .t', ts => ts.map(t => t.textContent));
+    await page.waitForSelector("#ssRes .ss-grp[aria-label=\"" + en("nav.search.group.wiki2") + "\"] .ss-syn");
+    const wiki = await page.$$eval("#ssRes .ss-grp[aria-label=\"" + en("nav.search.group.wiki2") + "\"] .t", ts => ts.map(t => t.textContent));
     assert.ok(wiki.some(t => /^Headhunter/.test(t)), wiki.join(' | '));
     assert.ok((await page.evaluate(() => ssIndex.filter(e => e.g === 'wiki').length)) > 800);
     assert.deepEqual(page.errors, []);
@@ -247,11 +248,11 @@ test('a synonym says so beside the real name, and "break even" leads to the Payb
     await typed(page, 'hire');
     const first = await page.$eval('#ssRes .ss-row.on', el => [el.querySelector('.t').textContent, el.querySelector('.ss-syn').textContent]);
     // Hiring is where "hire" leads (issue #89): Staffing › Staff needs.
-    assert.equal(first[0], 'Hiring≈ hire');
-    assert.equal((await groups(page))[0], 'Pages & views');
+    assert.equal(first[0], en("nav.search.staff.title") + "≈ hire");
+    assert.equal((await groups(page))[0], en("nav.search.group.views"));
     await typed(page, 'break even');
-    const row = page.locator('#ssRes .ss-row', {hasText: 'Portfolio'}).first();
-    assert.match(await row.locator('.p').innerText(), /^the Payback column · Businesses › Results/);
+    const row = page.locator('#ssRes .ss-row', {hasText: en("nav.search.portfolio.title")}).first();
+    assert.match(await row.locator('.p').innerText(), enRe("nav.search.portfolio.payback", {}, {anchor: "start"}));
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
@@ -278,7 +279,7 @@ test('/ and Ctrl+K open the palette, / never while typing, and the arrows, Enter
     await page.keyboard.press('/');
     assert.equal(await page.locator('#ssPal').isVisible(), true);
     assert.equal(await page.locator('#ssRes .ss-q2').count(), 7);
-    assert.equal(await lit(page), 'Why did profit move?');
+    assert.equal(await lit(page), en("nav.ask.profit.q"));
     // Typing lights the best row; the arrows move it and the input names it.
     await page.keyboard.type('test');
     const first = await lit(page);
@@ -301,7 +302,7 @@ test('/ and Ctrl+K open the palette, / never while typing, and the arrows, Enter
     assert.equal(await page.locator('#ssPal').isHidden(), true);
     assert.deepEqual(await page.evaluate(() => [page, siteOpen, siteKey]), ['company', true, GYM]);
     await page.keyboard.press('/');
-    const recent = page.locator('#ssRes .ss-grp[aria-label="Where you were"] .t');
+    const recent = page.locator("#ssRes .ss-grp[aria-label=\"" + en("nav.search.recent.head") + "\"] .t");
     assert.deepEqual(await recent.allInnerTexts(), ['Test Fitness']);
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
@@ -312,13 +313,13 @@ test('"n more" opens the rest of a group and lights the first row it had kept ba
   try {
     await page.keyboard.press('/');
     await typed(page, 'gym');
-    await page.waitForSelector('#ssRes .ss-grp[aria-label="Wiki"] .ss-more');
-    const before = await page.locator('#ssRes .ss-grp[aria-label="Wiki"] .ss-row').count();
+    await page.waitForSelector("#ssRes .ss-grp[aria-label=\"" + en("nav.search.group.wiki2") + "\"] .ss-more");
+    const before = await page.locator("#ssRes .ss-grp[aria-label=\"" + en("nav.search.group.wiki2") + "\"] .ss-row").count();
     assert.equal(before, 4);
-    await page.click('#ssRes .ss-grp[aria-label="Wiki"] .ss-more');
-    const after = await page.locator('#ssRes .ss-grp[aria-label="Wiki"] .ss-row').count();
+    await page.click("#ssRes .ss-grp[aria-label=\"" + en("nav.search.group.wiki2") + "\"] .ss-more");
+    const after = await page.locator("#ssRes .ss-grp[aria-label=\"" + en("nav.search.group.wiki2") + "\"] .ss-row").count();
     assert.ok(after > before);
-    assert.equal(await page.locator('#ssRes .ss-grp[aria-label="Wiki"] .ss-row').nth(4).evaluate(el => el.classList.contains('on')), true);
+    assert.equal(await page.locator("#ssRes .ss-grp[aria-label=\"" + en("nav.search.group.wiki2") + "\"] .ss-row").nth(4).evaluate(el => el.classList.contains('on')), true);
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
@@ -331,8 +332,8 @@ test('nothing found: the sphere looks, a near word is offered, and the questions
     await page.keyboard.press('/');
     await typed(page, 'zeppelin');
     assert.equal(await page.locator('#ssRes .ss-none').isVisible(), true);
-    assert.equal(await page.locator('#ssCount').innerText(), '0 found');
-    assert.match(await page.locator('#ssRes .ss-none p').innerText(), /Nothing on the board or in the wiki is called zeppelin/);
+    assert.equal(await page.locator('#ssCount').innerText(), en("nav.search.found", {n: 0}));
+    assert.match(await page.locator('#ssRes .ss-none p').innerText(), enRe("nav.search.none", {q: "zeppelin"}));
     assert.equal(await page.locator('#ssRes .ss-q2').count(), 7);
     assert.equal(await page.locator('#ssRes .on').count(), 0);
     // Enter with nothing lit does nothing.
@@ -362,8 +363,8 @@ test('on a phone search is in the drawer, and the palette is the whole screen, t
     assert.deepEqual([box.x, box.y, box.width, box.height], [0, 0, page_w, 844]);
     assert.equal(await page.locator('#ssPal .ss-cancel').isVisible(), true);
     await typed(page, 'gym');
-    await page.waitForSelector('#ssRes .ss-grp[aria-label="Wiki"]');
-    assert.equal(await page.locator('#ssRes .ss-grp[aria-label="Wiki"] .ss-row').count(), 3);
+    await page.waitForSelector("#ssRes .ss-grp[aria-label=\"" + en("nav.search.group.wiki2") + "\"]");
+    assert.equal(await page.locator("#ssRes .ss-grp[aria-label=\"" + en("nav.search.group.wiki2") + "\"] .ss-row").count(), 3);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.getBoundingClientRect().width), 'nothing scrolls sideways');
     await page.click('#ssPal .ss-cancel');
     assert.equal(await page.locator('#ssPal').isHidden(), true);
@@ -383,8 +384,8 @@ test('a question lands on its answer, lit, and the questions are the palette\'s 
     await page.evaluate(() => ssAsk('hire'));
     assert.deepEqual(await page.evaluate(() => [page, route]), ['staffing', 'staffing/needs']);
     const strip = page.locator('#pageStaffing .ss-asked');
-    assert.match(await strip.innerText(), /Whom should I hire\?/);
-    assert.match(await strip.innerText(), /Back to Overview/, 'it goes back to where it was asked');
+    assert.match(await strip.innerText(), enRe("nav.ask.hire.q", {}));
+    assert.match(await strip.innerText(), enRe("nav.ask.back", {page: en("nav.area.overview")}), 'it goes back to where it was asked');
     assert.equal(await page.locator('#secStaff').evaluate(el => el.classList.contains('ss-lit')), true);
     assert.equal(await page.locator('#secNeeds').evaluate(el => el.classList.contains('ss-dim')), true);
     // Back to the Overview: the strip and the lighting go.
@@ -398,10 +399,10 @@ test('a question lands on its answer, lit, and the questions are the palette\'s 
     // Asked from the palette, the next navigation clears the landing.
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
-    assert.equal(await lit(page), 'Is my factory fed?');
+    assert.equal(await lit(page), en("nav.ask.fed.q"));
     await page.keyboard.press('Escape');
     await page.evaluate(() => ssOpen());
-    await page.click('#ssRes .ss-q2 >> text=What should I import this week?');
+    await page.locator("#ssRes .ss-q2").getByText(en("nav.ask.import.q")).click();
     assert.equal(await page.evaluate(() => [page, route].join()), 'supply,supply/changes');
     assert.equal(await page.locator('#sbcTop').evaluate(el => el.classList.contains('ss-lit')), true);
     await page.click('#nav a[data-id="expansion"]');
@@ -509,7 +510,7 @@ test('a live refresh while the palette is open re-reads the board, and keeps the
         status: 'retail', type: 'Florist', typeSlug: 'ba:businesstype_florist', address: '9 Broadway', neighbourhood: 'ba:neighborhood_midtown'}]};
       ssDataChanged();
     });
-    const titles = await page.$$eval('#ssRes .ss-grp[aria-label="Sites"] .t', ts => ts.map(t => t.textContent));
+    const titles = await page.$$eval("#ssRes .ss-grp[aria-label=\"" + en("nav.search.group.sites") + "\"] .t", ts => ts.map(t => t.textContent));
     assert.ok(titles.includes('Test Florist'), titles.join('|'));
     assert.ok(!titles.includes('Test Clothing'), titles.join('|'));
     assert.equal(await lit(page), 'Test Fitness');
@@ -549,12 +550,12 @@ test('"Are my prices right?" answers for each kind of shop the company runs', as
     await page.waitForFunction(() => /businesstypes-gym\/prices$/.test(location.hash) && document.querySelector('.ss-asked .ss-askpick a.on')?.textContent === 'Gym');
     assert.equal(await page.locator('.ss-asked').count(), 1);
     // The way back is still the page the question was asked on.
-    assert.match(await page.locator('.ss-asked [data-ss="back"]').innerText(), /Overview/);
+    assert.match(await page.locator('.ss-asked [data-ss="back"]').innerText(), enRe("nav.area.overview", {}));
     // The palette offers each type's guide; the question remembers the pick.
     const index = await page.evaluate(() => ssBuild().filter(e => e.id.startsWith('view:prices')).map(e => [e.id, e.p]));
-    assert.deepEqual(index, [['view:prices:ba:businesstype_clothingstore', 'Wiki › Clothing Store'],
-      ['view:prices:ba:businesstype_gym', 'Wiki › Gym']]);
-    assert.equal(await page.evaluate(() => ssLands(SS_QUESTIONS.find(x => x.id === 'prices'))), 'Wiki › Gym › Prices in your save');
+    assert.deepEqual(index, [['view:prices:ba:businesstype_clothingstore', en("nav.search.prices.guide2", {type: "Clothing Store"})],
+      ['view:prices:ba:businesstype_gym', en("nav.search.prices.guide2", {type: "Gym"})]]);
+    assert.equal(await page.evaluate(() => ssLands(SS_QUESTIONS.find(x => x.id === 'prices'))), en("nav.ask.prices.lands.type2", {type: "Gym"}));
     // The other answer took the first one's place: one visit, so Back is the Overview.
     assert.equal(await page.evaluate(() => history.length), asked[1] + 1, 'a re-pick adds no visit');
     await page.click('.ss-asked [data-ss="back"]');
@@ -596,7 +597,7 @@ test('"Why did profit move?" and "Whom should I hire?" light a block whose tag i
   const page = await board();
   try {
     await page.evaluate(() => ssAsk('profit'));
-    assert.equal(await page.evaluate(() => [page, view, VIEWS.pnl.cols[sortKey][0], sortDir].join()), 'company,pnl,Wk / wk,-1');
+    assert.equal(await page.evaluate(() => [page, view, VIEWS.pnl.cols[sortKey][0], sortDir].join()), 'company,pnl,' + en("co.col.wow") + ',-1');
     const port = page.locator('#secPortfolio');
     assert.equal(await port.evaluate(el => el.classList.contains('ss-lit')), true);
     // Nothing between the tag and the page scrolls or clips.
@@ -606,7 +607,7 @@ test('"Why did profit move?" and "Whom should I hire?" light a block whose tag i
     assert.equal(await page.locator('#pageCompany .ss-asked + #secPortfolio').count(), 1);
     await page.click('#nav a[data-id="overview"]');
     await page.evaluate(() => ssOpen());
-    await page.click('#ssRes .ss-q2 >> text=Whom should I hire?');
+    await page.locator("#ssRes .ss-q2").getByText(en("nav.ask.hire.q")).click();
     // Hiring's home is Staffing › Staff needs (main's Staff page), not one shop's page.
     assert.deepEqual(await page.evaluate(() => [page, sub.staffing, route, siteOpen]), ['staffing', 'needs', 'staffing/needs', false]);
     const staff = page.locator('#secStaff');
@@ -615,7 +616,7 @@ test('"Why did profit move?" and "Whom should I hire?" light a block whose tag i
     assert.equal(await staff.evaluate(el => getComputedStyle(el).contentVisibility), 'visible');
     assert.equal(await page.locator('#secNeeds').evaluate(el => el.classList.contains('ss-dim')), true);
     assert.equal(await page.locator('#pageStaffing .ss-asked + #secStaff').count(), 1);
-    assert.match(await page.locator('.ss-asked').innerText(), /Staffing › Staff needs · open places and candidates/);
+    assert.match(await page.locator('.ss-asked').innerText(), enRe("nav.ask.hire.lands.needs", {}));
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
@@ -689,7 +690,7 @@ test('neighbourhoods match by word, and the line shows the neighbourhood that ma
   try {
     await page.keyboard.press('/');
     await typed(page, 'kitchen');
-    const row = page.locator('#ssRes .ss-grp[aria-label="Sites"] .ss-row').first();
+    const row = page.locator("#ssRes .ss-grp[aria-label=\"" + en("nav.search.group.sites") + "\"] .ss-row").first();
     assert.equal(await row.locator('.t').innerText(), 'Test Fitness');
     assert.equal(await row.locator('.p').innerText(), "Gym · 2 Second Avenue · Hell's Kitchen");
     assert.equal(await row.locator('.p mark').innerText(), 'Kitchen');
@@ -791,17 +792,17 @@ test('a redraw keeps a lit question or "n more" row lit, so Enter does what it s
     await page.keyboard.press('/');
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
-    assert.equal(await lit(page), 'Is my factory fed?');
+    assert.equal(await lit(page), en("nav.ask.fed.q"));
     await page.evaluate(() => ssDataChanged());
-    assert.equal(await lit(page), 'Is my factory fed?');
+    assert.equal(await lit(page), en("nav.ask.fed.q"));
     // The wiki finishing its load redraws the same way.
     await page.evaluate(() => { ssIndex = ssBuild(); ssRender(true); });
-    assert.equal(await lit(page), 'Is my factory fed?');
+    assert.equal(await lit(page), en("nav.ask.fed.q"));
     await typed(page, 'gym');
-    await page.waitForSelector('#ssRes .ss-grp[aria-label="Wiki"] .ss-more');
-    await page.evaluate(() => ssPick(+document.querySelector('#ssRes .ss-grp[aria-label="Wiki"] .ss-more').dataset.k));
+    await page.waitForSelector("#ssRes .ss-grp[aria-label=\"" + en("nav.search.group.wiki2") + "\"] .ss-more");
+    await page.evaluate(label => ssPick(+document.querySelector('#ssRes .ss-grp[aria-label="' + label + '"] .ss-more').dataset.k), en("nav.search.group.wiki2"));
     await page.evaluate(() => ssDataChanged());
-    assert.equal(await page.locator('#ssRes .ss-grp[aria-label="Wiki"] .ss-more').evaluate(el => el.classList.contains('on')), true);
+    assert.equal(await page.locator("#ssRes .ss-grp[aria-label=\"" + en("nav.search.group.wiki2") + "\"] .ss-more").evaluate(el => el.classList.contains('on')), true);
     await typed(page, '');
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
@@ -826,7 +827,7 @@ test('the answer\'s own controls leave the landing up, and a redrawn answer is l
     assert.equal(await page.locator('#secPortfolio.ss-lit').count(), 1);
     // The hire landing: the hiring page's own filters are the answer being read.
     await page.click('.ss-asked [data-ss="another"]');
-    await page.click('#ssRes .ss-q2 >> text=Whom should I hire?');
+    await page.locator("#ssRes .ss-q2").getByText(en("nav.ask.hire.q")).click();
     await page.evaluate(() => { $('secStaff').innerHTML = '<span class="seg"><a href="#" id="probeFilter">Part-time</a></span>'; });
     await page.click('#probeFilter');
     await page.waitForTimeout(50);
@@ -1037,7 +1038,7 @@ test('"What am I playing on?" opens the difficulty chip\'s settings where the re
     // The palette finds it under the words players use, and opens the same popover.
     await page.keyboard.press('/');
     await typed(page, 'house rules');
-    assert.equal(await lit(page), 'Difficulty≈ house rules');
+    assert.equal(await lit(page), en("nav.search.difficulty.title") + "≈ house rules");
     await page.keyboard.press('Enter');
     assert.equal(await page.locator('#fvDiffPop').evaluate(el => el.classList.contains('on')), true);
     assert.deepEqual(page.errors, []);
@@ -1087,8 +1088,8 @@ test('a site found in the palette is a link to its address, and opens its page w
     await link.click();
     assert.equal(await page.locator('#ssPal').isHidden(), true);
     assert.deepEqual(await page.evaluate(() => [location.hash, siteOpen, siteKey, siteFrom && siteFrom.label]),
-      ['#site/secondavenue-2', true, GYM, 'Needs attention']);
-    assert.deepEqual(await page.evaluate(() => ({...history.state.ssFrom})), {label: 'Needs attention', hash: '#overview'});
+      ['#site/secondavenue-2', true, GYM, en("nav.from.overview")]);
+    assert.deepEqual(await page.evaluate(() => ({...history.state.ssFrom})), {label: en("nav.from.overview"), hash: '#overview'});
     assert.deepEqual(await page.evaluate(() => ssRecent().map(r => r.id)), [`site:${GYM}`]);
     // Back is Today again.
     await page.goBack();
@@ -1102,15 +1103,15 @@ test('a question names where it was asked from: a page, or a site\'s own page', 
   try {
     const back = () => page.locator('.ss-asked [data-ss="back"]').innerText();
     await page.evaluate(() => ssAsk('hire'));
-    assert.match(await back(), /Back to Overview/);
+    assert.match(await back(), enRe("nav.ask.back", {page: en("nav.area.overview")}));
     // Asked from another page, the strip names that page.
     await page.evaluate(() => { ssClearAsked(); showSub('supply', 'deliveries'); showPage('supply'); });
     await page.evaluate(() => ssAsk('hire'));
-    assert.match(await back(), /Back to Supply/);
+    assert.match(await back(), enRe("nav.ask.back", {page: en("nav.area.supply")}));
     // Asked on a site's page, it names the site.
     await page.evaluate(key => { ssClearAsked(); openSite(key); }, SHOP);
     await page.evaluate(() => ssAsk('hire'));
-    assert.match(await back(), /Back to .*Test Clothing/);
+    assert.match(await back(), enRe("nav.ask.back", {page: "Test Clothing"}));
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
@@ -1125,7 +1126,7 @@ test('By weekday is found by the old section\'s name and opens the chart on it',
     });
     await page.keyboard.press('/');
     await typed(page, 'weekly rhythm');
-    assert.equal(await lit(page), 'By weekday≈ weekly rhythm');
+    assert.equal(await lit(page), en("nav.search.rhythm.title") + "≈ weekly rhythm");
     await page.keyboard.press('Enter');
     assert.deepEqual(await page.evaluate(() => [page, sub.company, chartWindow]), ['company', 'results', 'wd']);
     assert.deepEqual(page.errors, []);
@@ -1138,9 +1139,9 @@ test('Hiring is found by its name and by "staff", and opens Staffing on Staff ne
     await page.keyboard.press('/');
     // Main's Company › Staff page is Staffing › Staff needs (the redesign's one hiring home).
     await typed(page, 'staff');
-    assert.ok(await page.locator('#ssRes .ss-row .t', {hasText: /^Hiring/}).count(), 'the hiring view answers "staff"');
+    assert.ok(await page.locator('#ssRes .ss-row .t', {hasText: enRe("nav.search.staff.title", {}, {anchor: "start"})}).count(), 'the hiring view answers "staff"');
     await typed(page, 'hiring');
-    assert.equal(await lit(page), 'Hiring');
+    assert.equal(await lit(page), en("nav.search.staff.title"));
     await page.keyboard.press('Enter');
     assert.deepEqual(await page.evaluate(() => [page, sub.staffing, route, $('secStaff').hidden]), ['staffing', 'needs', 'staffing/needs', false]);
     assert.deepEqual(page.errors, []);
@@ -1166,10 +1167,10 @@ test("a site's page opened from the map over the palette takes the palette down,
     assert.equal(await page.locator('#ssPal').isHidden(), true);
     assert.equal(await page.locator('#locationMapDialog').evaluate(d => d.open), false);
     assert.deepEqual(await page.evaluate(() => [location.hash, siteOpen, siteKey, siteFrom && siteFrom.label]),
-      ['#site/secondavenue-2', true, GYM, 'Needs attention']);
+      ['#site/secondavenue-2', true, GYM, en("nav.from.overview")]);
     // Without a palette, a name on the map says where it was clicked, as any name does.
     await page.evaluate(() => { siteShut(); showPage('today'); siteOpenOver(D.businesses[0].key); });
-    assert.deepEqual(await page.evaluate(() => [siteKey, siteFrom && siteFrom.label]), [SHOP, 'Needs attention']);
+    assert.deepEqual(await page.evaluate(() => [siteKey, siteFrom && siteFrom.label]), [SHOP, en("nav.from.overview")]);
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
@@ -1294,7 +1295,7 @@ test("a question's way back is the browser's Back, to the view and scope it was 
     // Asked from Supply's Shops, where the Ask row is the palette's.
     await page.evaluate(() => ssAsk('hire'));
     const strip = page.locator('.ss-asked');
-    assert.match(await strip.innerText(), /Back to Supply/);
+    assert.match(await strip.innerText(), enRe("nav.ask.back", {page: en("nav.area.supply")}));
     await strip.locator('[data-ss="back"]').click();
     await page.waitForFunction(() => page === 'supply');
     assert.deepEqual(await page.evaluate(() => [location.hash, sub.supply]), ['#supply/deliveries', 'deliveries']);
@@ -1304,7 +1305,7 @@ test("a question's way back is the browser's Back, to the view and scope it was 
     await page.waitForFunction(() => route === 'staffing/needs');
     // A landing with no site keeps its page's own way back.
     await page.evaluate(() => { showPage('today'); ssAsk('import'); });
-    assert.match(await page.locator('.ss-asked').innerText(), /Back to Overview/);
+    assert.match(await page.locator('.ss-asked').innerText(), enRe("nav.ask.back", {page: en("nav.area.overview")}));
     await page.locator('.ss-asked [data-ss="back"]').click();
     assert.equal(await page.evaluate(() => page), 'today');
     assert.deepEqual(page.errors, []);
@@ -1341,7 +1342,7 @@ test("asked on a site's page and answered elsewhere, the strip goes back to that
     await page.evaluate(key => openSite(key), SHOP);
     await page.evaluate(() => ssAsk('hire'));
     const strip = page.locator('.ss-asked');
-    assert.match(await strip.innerText(), /Back to .*Test Clothing/);
+    assert.match(await strip.innerText(), enRe("nav.ask.back", {page: "Test Clothing"}));
     await strip.locator('[data-ss="back"]').click();
     await page.waitForFunction(() => page === 'company' && siteOpen);
     assert.deepEqual(await page.evaluate(() => [siteOpen, siteKey, page]), [true, SHOP, 'company']);
@@ -1391,7 +1392,7 @@ test('× puts an answer strip away and leaves the reader on the answer\'s page',
     await page.evaluate(() => ssAsk('hire'));
     const strip = page.locator('#pageStaffing .ss-asked');
     const x = strip.locator('[data-ss="close"]');
-    assert.equal(await x.getAttribute('aria-label'), 'Dismiss');
+    assert.equal(await x.getAttribute('aria-label'), en("nav.ask.close"));
     await x.click();
     assert.equal(await page.locator('.ss-asked').count(), 0);
     assert.equal(await page.locator('.ss-lit, .ss-dim').count(), 0);

@@ -5,6 +5,7 @@
 // installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -71,7 +72,7 @@ test('the profit tile opens Company > Results and keeps its spark', async () => 
   try {
     const tile = page.locator('#kpis a.kpi');
     assert.equal(await tile.count(), 1);
-    assert.match(await tile.innerText(), /Profit yesterday/i);
+    assert.match(await tile.innerText(), enRe('today.kpi.profit', {}, {flags: 'i'}));
     assert.equal(await tile.locator('.spark').count(), 1);
     assert.equal(await tile.getAttribute('href'), '#secDaily');
     await page.evaluate(() => { reveal = id => { window.went = id; }; });
@@ -86,16 +87,16 @@ test('debt joins the cash tile only once it outweighs a week of profit', async (
   try {
     const cash = page.locator('#kpis .kpi').nth(2);
     // The period the chip is measured over stays; the debt joins it.
-    assert.match(await cash.innerText(), /no cash history · \$1\.89M owed on loans/);
+    assert.match(await cash.innerText(), new RegExp(enRe('today.kpi.cash.none').source + ' · ' + enRe('today.kpi.cash.debt', {debt: 1890000}).source));
   } finally { await page.close(); }
   page = await today(390, {debt: 1890000, profitSum7: 70000});
   try {
-    assert.match(await page.locator('#kpis .kpi').nth(2).innerText(), /no cash history · \$1\.89M owed/);
+    assert.match(await page.locator('#kpis .kpi').nth(2).innerText(), new RegExp(enRe('today.kpi.cash.none').source + ' · ' + enRe('today.kpi.cash.debt', {debt: 1890000}).source));
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.getBoundingClientRect().width), true);
   } finally { await page.close(); }
   page = await today(1440, {debt: 50000, profitSum7: 70000});
   try {
-    assert.doesNotMatch(await page.locator('#kpis .kpi').nth(2).innerText(), /owed/);
+    assert.doesNotMatch(await page.locator('#kpis .kpi').nth(2).innerText(), enRe('today.kpi.cash.debt'));
   } finally { await page.close(); }
 });
 
@@ -104,8 +105,8 @@ test('below the gate and switched off are two lines, each with its own show', as
   try {
     const lines = await page.locator('#alertMinor .td-count').allInnerTexts();
     assert.equal(lines.length, 2);
-    assert.match(lines[0], /^1 below the \$500\/day line/);
-    assert.match(lines[1], /^2 in kinds switched off: Overstaffed hours \(2, \$400\/day\)/);
+    assert.match(lines[0], enRe('today.minor.below', {n: 1, gate: 500}, {anchor: 'start'}));
+    assert.match(lines[1], enRe('today.minor.off', {n: 2, kinds: en('today.minor.offKind.worth', {kind: en('nav.kind.idlestaff.label'), n: 2, worth: '$400'})}, {anchor: 'start'}));
     await page.click('[data-td-toggle="off"]');
     assert.equal(await page.locator('[data-td-rows="off"] .find').count(), 2);
     assert.equal(await page.locator('[data-td-rows="below"] .find').count(), 0);
@@ -130,10 +131,10 @@ test('Payroll says what was booked yesterday, $0 included, once a day has finish
       return out;
     });
     assert.deepEqual(facts, [
-      "People2 · At today's rates$8,800 · Booked yesterday$9,000",
-      "People2 · At today's rates$8,800 · Booked yesterday$0",
+      en('co.pay.tile.people') + '2 · ' + en('co.pay.tile.rate') + '$8,800 · ' + en('co.pay.tile.booked') + '$9,000',
+      en('co.pay.tile.people') + '2 · ' + en('co.pay.tile.rate') + '$8,800 · ' + en('co.pay.tile.booked') + '$0',
       // No finished day: there is no yesterday to have booked anything.
-      "People2 · At today's rates$8,800 · Booked yesterday—no statement yet",
+      en('co.pay.tile.people') + '2 · ' + en('co.pay.tile.rate') + '$8,800 · ' + en('co.pay.tile.booked') + '—' + en('co.pay.tile.booked.none'),
     ]);
   } finally { await page.close(); }
 });
@@ -147,13 +148,13 @@ test('the Portfolio total meets Today\'s profit through the company costs', asyn
       return [...t.querySelectorAll('tr')].map(tr => [...tr.cells].map(c => c.textContent.trim()).join('|'));
     });
     // The last cell is the Payback column's, blank on the company rows.
-    assert.deepEqual(rows, ['Company costs outside sites|-$1,500||', 'Company profit|$10,000||']);
+    assert.deepEqual(rows, [en('co.outside.costs') + '|-$1,500||', en('co.outside.profit') + '|$10,000||']);
     const tip = await page.evaluate(() => {
       const t = document.createElement('table');
       t.innerHTML = `<tfoot>${outsideRows(10)}</tfoot>`;
       return t.querySelector('[data-tip]').dataset.tip;
     });
-    assert.match(tip, /loans \$900, health insurance \$450, homes \$100, parking \$50/);
+    assert.match(tip, new RegExp(['co.outside.loans', 'co.outside.insurance', 'co.outside.homes', 'co.outside.parking'].map((key, i) => enRe(key, {w: [900, 450, 100, 50][i]}).source).join(', ')));
   } finally { await page.close(); }
 });
 
@@ -166,7 +167,7 @@ test('at 390 px the Overview folds its figures into one line, pairs them when op
       line: getComputedStyle(document.getElementById('ovCtx')).display !== 'none' && document.getElementById('ovCtx').textContent,
       tiles: getComputedStyle(document.getElementById('kpis')).display,
     }));
-    assert.match(folded.line, /Profit.*Cash.*All figures/s);  // the day is the masthead's clock, right above
+    assert.match(folded.line, new RegExp(enRe('today.ctx.profit').source + '.*' + enRe('today.ctx.cash').source + '.*' + enRe('today.ctx.all').source, 's'));  // the day is the masthead's clock, right above
     assert.equal(folded.tiles, 'none', 'the tiles wait for All figures');
     await page.evaluate(() => wireCards()); // the board wires it in renderAll(); this harness draws alone
     await page.click('#ovCtx .ov-kmore');
@@ -303,6 +304,7 @@ test('at 390 px the count lines, the tool panels and a live import task share th
     assert.ok(m.scroll <= m.width, 'no sideways scroll');
     assert.equal(m.lines, 2);
     assert.ok(m.askGone, 'the Ask the board row is folded into All tools; its questions stay in the search palette');
+    // Not a Msg: m.cardText is a plain string supplied by this layout fixture.
     assert.match(m.cardText, /^12 import settings/);
     assert.ok(m.cardInside);
   } finally { await page.close(); }

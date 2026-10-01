@@ -10,6 +10,7 @@ import glob
 import os
 import sys
 import unittest
+from tests.i18n_check import MsgAsserts, list_items
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -291,13 +292,13 @@ def _promotion(businesses):
     return [r for r in out["lines"] + out["minor"]["rows"] if r["group"] == "promotion"]
 
 
-class Finding(unittest.TestCase):
+class Finding(MsgAsserts, unittest.TestCase):
     """The promotion finding: every shop and office whose plan differs."""
 
     def test_a_short_site_the_plan_fixes_is_a_warning(self):
         rows = _promotion([_site("a", "HART. Books", _mk(["SmallBillboard"], [], 77, 100, 0, 500))])
-        self.assertEqual([(r["level"], r["text"]) for r in rows],
-                         [("warn", "HART. Books can reach 100% promotion for $500/day more")])
+        self.assertEqual([r["level"] for r in rows], ["warn"])
+        self.assertMsg(rows[0]["text"], "f.promotion.reach.more.one", site="HART. Books", p=100, w=500)
 
     def test_several_sites_lead_with_the_gain(self):
         rows = _promotion([
@@ -305,19 +306,26 @@ class Finding(unittest.TestCase):
             _site("c", "C", _mk(["SmallBillboard", "SmallInternet"], ["SmallBillboard"], 90, 100, 500, 600)),
             _site("b", "B", _mk(["MediumInternet"], ["SmallBillboard"], 100, 100, 500, 250), status="office")])
         # The sites the plan raises, and apart from them the ones it only saves at.
-        self.assertEqual([(r["level"], r["site"], r["text"]) for r in rows], [
-            ("warn", "2 sites", "2 sites can reach 100% promotion for less: A 82% → 100%, C 90% → 100%"),
-            ("info", "B", "B can save $250/day at the same promotion")])
-        self.assertEqual(rows[0]["text"].key, "f.promotion.reach.less.many")
+        self.assertEqual([r["level"] for r in rows], ["warn", "info"])
+        self.assertMsg(rows[0]["site"], "f.site.sites", n=2)
+        self.assertEqual(rows[1]["site"], "B")
+        text = self.assertMsg(rows[0]["text"], "f.promotion.reach.less.many", n=2)
+        first, second = list_items(text.p["sites"])
+        self.assertMsg(first, "f.promotion.item.gain", site="A", a=82, b=100)
+        self.assertMsg(second, "f.promotion.item.gain", site="C", a=90, b=100)
+        self.assertMsg(rows[1]["text"], "f.promotion.save.one", site="B", w=250)
 
     def test_a_site_that_cannot_reach_100_is_never_counted_as_reaching_it(self):
         rows = _promotion([
             _site("a", "A", _mk(["SmallBillboard"], [], 70, 90, 0, 500)),
             _site("b", "B", _mk(["SmallInternet"], [], 80, 100, 0, 100)),
             _site("c", "C", _mk(["MediumInternet"], ["SmallBillboard"], 100, 100, 500, 250))])
-        self.assertEqual([r["text"] for r in rows], [
-            "2 sites can gain promotion for $600/day more: A 70% → 90%, B 80% → 100%",
-            "C can save $250/day at the same promotion"])
+        self.assertEqual(len(rows), 2)
+        text = self.assertMsg(rows[0]["text"], "f.promotion.gain.more.many", n=2, w=600)
+        first, second = list_items(text.p["sites"])
+        self.assertMsg(first, "f.promotion.item.gain", site="A", a=70, b=90)
+        self.assertMsg(second, "f.promotion.item.gain", site="B", a=80, b=100)
+        self.assertMsg(rows[1]["text"], "f.promotion.save.one", site="C", w=250)
 
     def test_each_line_has_its_own_id(self):
         rows = _promotion([
@@ -327,12 +335,15 @@ class Finding(unittest.TestCase):
             _site("d", "D", _mk(None, [], 70, None, visit=[BILLBOARDS])),
             _site("e", "E", _mk(["SmallInternet"], ["SmallInternet"], 80, 90, 100, 100, visit=[BILLBOARDS])),
             _site("f", "F", _mk(["SmallInternet"], ["SmallInternet"], 80, 90, 100, 100, visit=[BILLBOARDS]))])
-        self.assertEqual([r["site"] for r in rows], ["2 sites"] * 3)
+        self.assertEqual(len(rows), 3)
+        for row in rows:
+            self.assertMsg(row["site"], "f.site.sites", n=2)
         self.assertEqual(len({r["id"] for r in rows}), 3)
 
     def test_overspend_and_a_small_gap_are_opportunities(self):
         rows = _promotion([_site("a", "Gym", _mk(["SmallBillboard"], ["SmallBillboard", "MediumInternet"], 100, 100, 750, 500))])
-        self.assertEqual([(r["level"], r["text"]) for r in rows], [("info", "Gym can save $250/day at the same promotion")])
+        self.assertEqual([r["level"] for r in rows], ["info"])
+        self.assertMsg(rows[0]["text"], "f.promotion.save.one", site="Gym", w=250)
         rows = _promotion([_site("a", "Shop", _mk(["SmallInternet"], [], 99, 100, 0, 100))])
         self.assertEqual(rows[0]["level"], "info")
 
@@ -341,14 +352,15 @@ class Finding(unittest.TestCase):
 
     def test_no_agency_known_is_its_own_line(self):
         rows = _promotion([_site("a", "A", _mk(None, [], 70, None, visit=[BILLBOARDS]))])
-        self.assertEqual([(r["level"], r["text"]) for r in rows],
-                         [("info", "Visit CityAds once: no campaign can be set at A before that")])
+        self.assertEqual([r["level"] for r in rows], ["info"])
+        self.assertMsg(rows[0]["text"], "f.promotion.visit", agencies="CityAds", sites="A")
         # At the cap already: nothing to visit for.
         self.assertEqual(_promotion([_site("a", "A", _mk(None, [], 100, None, visit=[BILLBOARDS]))]), [])
 
     def test_on_its_best_known_mix_but_a_visit_would_raise_it(self):
         rows = _promotion([_site("a", "A", _mk(["SmallInternet"], ["SmallInternet"], 80, 90, 100, 100, visit=[BILLBOARDS]))])
-        self.assertEqual([(r["level"], r["text"]) for r in rows], [("info", "Visit CityAds once to raise promotion at A")])
+        self.assertEqual([r["level"] for r in rows], ["info"])
+        self.assertMsg(rows[0]["text"], "f.promotion.visit.more", agencies="CityAds", sites="A")
         # A visit that would only make the same promotion cheaper: the site
         # panel's hint, no overview line.
         self.assertEqual(_promotion([_site("a", "A", _mk(["SmallInternet"], ["SmallInternet"], 80, 90, 100, 100,

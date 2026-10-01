@@ -9,6 +9,11 @@ const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require('playwright');
+const {en, enRe} = require('./_i18n.cjs');
+// The column heads and status words, from the catalogue (tests/_i18n.cjs).
+const SOLD = en('sb.col.sold'), MAKES = en('sb.col.makes'), SHIPS = en('sb.col.ships');
+const MORE1 = en('sb.word.short.machines', {n: 1});
+const ORDER = en('sb.word.short.order'), HOURS = en('sb.word.short.hours');
 const root = path.join(__dirname, '..');
 const FIXTURE = path.join(root, 'tests', 'fixtures', 'r8_supply.json');
 const fixture = () => JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
@@ -66,12 +71,12 @@ test('Sold / day sits beside Makes and Ships, from soldDay, on both pages', asyn
   const page = await board(fixture());
   try {
     const cols = await heads(page);
-    const at = cols.indexOf('Sold / day');
-    assert.ok(at > cols.indexOf('Makes / day') && at < cols.indexOf('Ships / day'), cols.join(' | '));
-    assert.equal((await line(page, 'cake')).cells['Sold / day'], '170');
-    assert.equal((await line(page, 'bread')).cells['Sold / day'], '826');
+    const at = cols.indexOf(SOLD);
+    assert.ok(at > cols.indexOf(MAKES) && at < cols.indexOf(SHIPS), cols.join(' | '));
+    assert.equal((await line(page, 'cake')).cells[SOLD], '170');
+    assert.equal((await line(page, 'bread')).cells[SOLD], '826');
     assert.match(await page.$eval(`${LINES} thead th:nth-child(${at + 1})`, th => th.dataset.tip || th.title || th.innerHTML),
-      /what the shops this line supplies sell a day, without the margin/);
+      enRe('sb.col.sold.tip'));
     // The factory page draws the same column.
     const panel = await page.evaluate(() => {
       const el = document.createElement('div');
@@ -80,8 +85,8 @@ test('Sold / day sits beside Makes and Ships, from soldDay, on both pages', asyn
       const rows = [...el.querySelectorAll('.sp-line:not(.sp-head)')].map(r => [...r.children].map(c => c.textContent.trim()));
       return {head, rows};
     });
-    const sold = panel.head.indexOf('Sold / day');
-    assert.ok(sold > panel.head.indexOf('Makes / day'), panel.head.join(' | '));
+    const sold = panel.head.indexOf(en('sp.lines.col.sold'));
+    assert.ok(sold > panel.head.indexOf(en('sp.lines.col.makes')), panel.head.join(' | '));
     assert.equal(panel.rows[0][sold], '170');
   } finally { await page.close(); }
 });
@@ -91,26 +96,26 @@ test('a line short of production reads short with the machine count, and is coun
     const page = await board(shortOfMachines(fixture()), {which});
     try {
       const bread = await line(page, 'bread');
-      const prod = bread.chips.find(c => /more machine/.test(c.word));
+      const prod = bread.chips.find(c => enRe('sb.word.short.machines').test(c.word));
       assert.ok(prod, JSON.stringify(bread.chips));
-      assert.equal(prod.word, 'short: needs 1 more machine');
+      assert.equal(prod.word, MORE1);
       assert.match(prod.cls, /\bbad\b/);
-      assert.match(prod.tip, /1 more machine makes 1,440 a day against 1,150 needed/);
-      assert.match(bread.cells['Sold / day'], /^1,000 ?needs 1,150 with the margin$/);
+      assert.match(prod.tip, enRe('sb.line.machines.tip', {n: 1, makes: 1440, need: 1150}));
+      assert.match(bread.cells[SOLD], new RegExp('^1,000 ?' + enRe('sb.line.needDay', {n: 1150}).source + '$'));
       // Its hours are covered, but a covered chip beside short reads as a
       // contradiction: the production chip stands alone.
-      assert.ok(!bread.chips.some(c => c.word === 'covered'), JSON.stringify(bread.chips));
+      assert.ok(!bread.chips.some(c => c.word === en('sb.word.covered')), JSON.stringify(bread.chips));
       // No chip on a factory row reads a bare "short".
-      assert.ok(!bread.chips.some(c => c.word === 'short'), JSON.stringify(bread.chips));
+      assert.ok(!bread.chips.some(c => c.word === en('sb.word.short')), JSON.stringify(bread.chips));
       // The view's verdict (its tab's tip) counts the line.
       assert.match(await page.evaluate(() => viewTips['supply/production'] || ''),
-        /1 line makes less than its shops need, even round the clock/);
+        enRe('sb.fac.machines', {n: 1}));
     } finally { await page.close(); }
   }
   // Both sizings read it: what is sold does not depend on the basis.
   const dem = await board(shortOfMachines(fixture()), {mode: 'dem'});
   try {
-    assert.ok((await line(dem, 'bread')).chips.some(c => c.word === 'short: needs 1 more machine'));
+    assert.ok((await line(dem, 'bread')).chips.some(c => c.word === MORE1));
   } finally { await dem.close(); }
   // An hours problem that is short still shows beside it.
   const data = shortOfMachines(fixture());
@@ -118,7 +123,7 @@ test('a line short of production reads short with the machine count, and is coun
   const both = await board(data);
   try {
     const words = (await line(both, 'bread')).chips.map(c => c.word);
-    assert.ok(words.includes('hours short') && words.includes('short: needs 1 more machine'), words.join(' | '));
+    assert.ok(words.includes(HOURS) && words.includes(MORE1), words.join(' | '));
   } finally { await both.close(); }
 });
 
@@ -138,10 +143,10 @@ test('a factory with a line critically short of machines opens, and its head say
     const obj = await page.$eval('#secProduction details.sb-obj', d => ({
       open: d.open, head: d.querySelector('summary').textContent.replace(/\s+/g, ' ')}));
     assert.ok(obj.open, JSON.stringify(obj));
-    assert.match(obj.head, /1 line short of machines/);
+    assert.match(obj.head, enRe('sb.fac.machines.chip', {n: 1}));
     // The head's chip has a tip of its own, counting the lines.
     assert.match(await page.$eval('#secProduction details.sb-obj summary .sb-v', v => v.dataset.tip),
-      /^1 line here makes less round the clock than it needs with the margin/);
+      enRe('sb.fac.machines.chip.tip', {n: 1}, {anchor: 'start'}));
   } finally { await page.close(); }
 });
 
@@ -157,20 +162,20 @@ test('the factory page and the head name the line furthest short of machines: cr
   Object.assign(data.supply.facts['1'].flour, {st: 'short', why: 'order', lvl: 'critical', cad: 'weekly'});
   const page = await board(data);
   try {
-    const got = await page.evaluate(() => {
+    const got = await page.evaluate(orderShort => {
       const site = D.supply.factories.sites[0];
       const el = document.createElement('div');
       el.innerHTML = spLines(site);
       const row = [...el.querySelectorAll('.sp-line:not(.sp-head)')].find(r => r.textContent.includes('Bread'));
-      const order = [...row.querySelectorAll('.chip')].find(c => c.textContent.trim() === 'order short');
+      const order = [...row.querySelectorAll('.chip')].find(c => c.textContent.trim() === orderShort);
       return {read: spLinesRead(site), tip: order.dataset.tip,
         head: sbProdWorst(sbData().f.sites[0].lines.map(l => ({...l, prod: sbProdFact(l)}))).item};
-    });
-    assert.match(got.read, /<b>Bread<\/b> needs 1 more machine to cover the 1,150 a day it needs with the margin/);
+    }, ORDER);
+    assert.match(got.read, enRe('sp.lines.machines', {item: 'Bread', n: 1, need: '1,150'}));
     assert.equal(got.head, 'Bread');
     // The head's chip takes the critical line's colour.
     assert.match(await page.$eval('#secProduction details.sb-obj summary .sb-v', v => v.className), /\bbad\b/);
-    assert.equal(got.tip, 'Short of Flour & Salt');
+    assert.equal(got.tip, en('sb.line.inputs.tip', {items: 'Flour & Salt'}));
   } finally { await page.close(); }
 });
 
@@ -184,13 +189,13 @@ test('an order short and a production short on one line are two separate statuse
   try {
     const bread = await line(page, 'bread');
     const words = bread.chips.map(c => c.word);
-    assert.ok(words.includes('short: needs 1 more machine'), words.join(' | '));
-    assert.ok(words.includes('order short'), words.join(' | '));
-    const order = bread.chips.find(c => c.word === 'order short');
-    assert.match(order.tip, /Short of Flour/);
+    assert.ok(words.includes(MORE1), words.join(' | '));
+    assert.ok(words.includes(ORDER), words.join(' | '));
+    const order = bread.chips.find(c => c.word === ORDER);
+    assert.match(order.tip, enRe('sb.line.inputs.tip', {items: 'Flour'}));
     // The input's own row names its subject too.
     const flour = await page.$eval('#secProduction [data-sb-table="factory-inputs"] tr[data-slug="flour"] td.st .sb-v', v => v.textContent.trim());
-    assert.equal(flour, 'order short');
+    assert.equal(flour, ORDER);
     // The factory page shows the same two chips on the line.
     const chips = await page.evaluate(() => {
       const el = document.createElement('div');
@@ -198,6 +203,6 @@ test('an order short and a production short on one line are two separate statuse
       const row = [...el.querySelectorAll('.sp-line:not(.sp-head)')].find(r => r.textContent.includes('Bread'));
       return [...row.querySelectorAll('.chip')].map(c => c.textContent.trim());
     });
-    assert.deepEqual(chips, ['short: needs 1 more machine', 'order short']);
+    assert.deepEqual(chips, [MORE1, ORDER]);
   } finally { await page.close(); }
 });

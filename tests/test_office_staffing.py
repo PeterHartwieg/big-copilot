@@ -3,6 +3,8 @@ import os
 import sys
 import unittest
 
+from tests.i18n_check import MsgAsserts, find_msg, list_items, msg_param
+
 from ba_dashboard import (
     OFFICE_POST_RATE,
     _alerts,
@@ -93,7 +95,7 @@ class OfficePostTests(unittest.TestCase):
         self.assertTrue(ships("help_ba:itemname_computergroup_content", COMPUTER_GROUP))
 
 
-class OfficeGridTests(unittest.TestCase):
+class OfficeGridTests(MsgAsserts, unittest.TestCase):
     """Four computers, a door cap of 3, lawyers by day and one or two at night."""
 
     CREW = {"a": LAWYER, "b": LAWYER, "c": LAWYER, "d": LAWYER, "e": LAWYER,
@@ -127,13 +129,16 @@ class OfficeGridTests(unittest.TestCase):
     def test_each_capped_hour_is_held_by_its_own_limit(self):
         grid = self.grid()
         self.assertEqual(grid["capHours"], 17)
-        by_limit = {f["limit"]: f for f in _hour_findings([grid], [site("office")], {})}
-        self.assertEqual(set(by_limit), {"the building", "staffing"})
-        door, staff = by_limit["the building"], by_limit["staffing"]
+        by_limit = {f["limit"].key: f for f in _hour_findings([grid], [site("office")], {})}
+        self.assertEqual(set(by_limit), {"sp.py.limit.building", "sp.py.limit.staffing"})
+        door, staff = by_limit["sp.py.limit.building"], by_limit["sp.py.limit.staffing"]
         self.assertEqual((door["hours"], door["cap"], door["capTop"]), (8, 3, 3))
         self.assertEqual((staff["hours"], staff["cap"], staff["capTop"]), (9, 1, 2))
-        self.assertEqual((door["when"], staff["when"]), ("Mon 9-17", "Mon 0-9"))
-        self.assertIn("computers", staff["fix"])
+        self.assertMsg(door["when"], "sp.py.when.part", days=msg_param("sp.py.wd.1"),
+                       hours=msg_param("sp.py.when.hours", a=9, b=17))
+        self.assertMsg(staff["when"], "sp.py.when.part", days=msg_param("sp.py.wd.1"),
+                       hours=msg_param("sp.py.when.hours", a=0, b=9))
+        self.assertMsg(staff["fix"], "sp.py.fix.office.staff")
         # The building's own capacity comes with no advice.
         self.assertEqual(door["fix"], "")
         # Throughput adds up the customers of each capped hour, not the thinnest
@@ -149,8 +154,8 @@ class OfficeGridTests(unittest.TestCase):
         b = building(LAW, items, shifts, hourly, door=50)
         [grid] = _hourly(Save({}, {}, ""), [b], [site("office")], {}, {COMPUTER}, self.CREW)
         [finding] = _hour_findings([grid], [site("office")], {})
-        self.assertEqual((finding["limit"], finding["fix"]),
-                         ("workstations", "another computer workstation"))
+        self.assertMsg(finding["limit"], "sp.py.workstations")
+        self.assertMsg(finding["fix"], "sp.py.fix.office.post")
 
     def test_idle_professionals_are_overstaffing(self):
         items = [(i, COMPUTER) for i in range(1, 7)]
@@ -171,7 +176,7 @@ class OfficeGridTests(unittest.TestCase):
         self.assertTrue(idle["office"])
 
 
-class ShopGridTests(unittest.TestCase):
+class ShopGridTests(MsgAsserts, unittest.TestCase):
     def test_a_shop_still_counts_only_service_staff_at_registers(self):
         crew = {"s": SERVICE, "l": LAWYER}
         items = [(1, REGISTER), (2, COMPUTER)]
@@ -184,8 +189,9 @@ class ShopGridTests(unittest.TestCase):
         self.assertFalse(grid["office"])
         self.assertEqual((grid["counters"], grid["staffed"][MONDAY][10]), (20, 20))
         [finding] = _hour_findings([grid], [shop], {})
-        self.assertEqual((finding["limit"], finding["fix"], finding["hours"]),
-                         ("registers", "another counter", 8))
+        self.assertMsg(finding["limit"], "sp.py.limit.registers")
+        self.assertMsg(finding["fix"], "sp.py.fix.service.post")
+        self.assertEqual(finding["hours"], 8)
         # With the customers at the ceiling every hour, the sum is the old figure.
         self.assertEqual(finding["throughput"], money(8 * 20 * 12.0 / 7))
 
@@ -214,7 +220,7 @@ def alerts(businesses, hours=(), day=3):
     return result["lines"] + result["minor"]["rows"]
 
 
-class OfficeBusinessTests(unittest.TestCase):
+class OfficeBusinessTests(MsgAsserts, unittest.TestCase):
     def test_an_agency_is_an_office_with_satisfaction_and_no_shop_floor(self):
         b = business(staff=[LAWYER_PERSON])
         self.assertEqual(b["status"], "office")
@@ -233,23 +239,26 @@ class OfficeBusinessTests(unittest.TestCase):
         # Offices run campaigns too (docs/marketing-write-scope.md): with no
         # switch and no agency known, the line names the agencies by name.
         rows = [a for a in alerts([business()]) if a["group"] == "promotion"]
-        self.assertEqual([(a["level"], a["text"]) for a in rows], [
-            ("info", "Visit CityAds, McCain's eMarketing once: no campaign can be set at HART. &Partners before that")])
+        self.assertEqual([a["level"] for a in rows], ["info"])
+        self.assertMsg(rows[0]["text"], "f.promotion.visit", sites="HART. &Partners")
+        self.assertEqual(list_items(rows[0]["text"].p["agencies"]), ["CityAds", "McCain's eMarketing"])
 
     def test_a_new_office_is_not_short_of_stock_or_deliveries(self):
         [line] = [a for a in alerts([business(revenue=0)]) if a["group"] == "notrading"]
-        self.assertIn("not trading yet: no staff,", line["text"])
-        self.assertNotIn("stock", line["text"])
-        self.assertNotIn("delivery", line["text"])
+        self.assertMsg(line["text"], "f.notrading")
+        self.assertMsg(list_items(line["text"].p["reasons"])[0], "f.notrading.staff")
+        self.assertNoMsg(line["text"], "f.notrading.stock")
+        self.assertNoMsg(line["text"], "f.notrading.shelves")
+        self.assertNoMsg(line["text"], "f.notrading.plan")
         staffed = business(revenue=0, staff=[LAWYER_PERSON])
         [line] = [a for a in alerts([staffed]) if a["group"] == "notrading"]
-        self.assertIn("staffed and priced, no trading day booked yet", line["text"])
+        self.assertHasMsg(line["text"], "f.notrading.ready.office")
 
     def test_a_new_shop_with_no_prices_says_so(self):
         shop = business(btype=SHOP, revenue=0, staff=[LAWYER_PERSON], name="Mart")
         shop["lines"] = [dict(line, price=0) for line in shop["lines"]]
         [line] = [a for a in alerts([shop]) if a["group"] == "notrading"]
-        self.assertIn("no prices set", line["text"])
+        self.assertHasMsg(line["text"], "f.notrading.prices")
 
     def test_offices_chain_by_type_and_their_fees_are_trading(self):
         firms = [business(number=10, staff=[LAWYER_PERSON]),
@@ -268,7 +277,7 @@ class OfficeBusinessTests(unittest.TestCase):
                          ["Gift Shops", "Gyms", "Jewelry Stores", "Glass"])
 
 
-class OfficeAlertTextTests(unittest.TestCase):
+class OfficeAlertTextTests(MsgAsserts, unittest.TestCase):
     def cap(self, key, name, office, limit="staffing", cap=1, top=2):
         return {"kind": "cap", "key": key, "site": name, "office": office, "hours": 9,
                 "when": "Mon 0-9", "limit": limit,
@@ -284,10 +293,12 @@ class OfficeAlertTextTests(unittest.TestCase):
                  self.cap(shop["key"], "Mart", False)]
         lines = [a for a in alerts(firms + [shop], hours) if a["group"] == "atcap"]
         self.assertEqual(len(lines), 2)
-        offices = next(a for a in lines if a["site"] == "2 offices")
-        self.assertIn("fill the workstations Mon 0-9, 9 hours a week at 1-2/h", offices["text"])
+        offices = next(a for a in lines if find_msg(a["text"], "f.site.offices"))
+        self.assertMsg(offices["text"], "f.atcap.sites", where=msg_param("f.site.offices", n=2),
+                       noun=msg_param("sp.py.workstations"), when="Mon 0-9", n=9,
+                       rate=msg_param("f.atcap.range", low=1, high=2))
         mart = next(a for a in lines if a["site"] == "Mart")
-        self.assertIn("fills the counters", mart["text"])
+        self.assertMsg(mart["text"], "f.atcap", noun=msg_param("sp.py.counters"))
 
     def test_the_building_capacity_raises_no_line(self):
         # Sitting at the building's capacity is normal for a good site and
@@ -301,8 +312,9 @@ class OfficeAlertTextTests(unittest.TestCase):
         rows = [a for a in alerts([firm, shop], hours) if a["group"] == "atcap"]
         [staff] = rows
         self.assertEqual(staff["site"], firm["name"])
-        self.assertIn("the fix is more staff at the computers", staff["text"])
-        self.assertFalse(any("building capacity" in a["text"] for a in rows))
+        self.assertMsg(staff["text"], "f.atcap", fix="more staff at the computers on those hours")
+        for row in rows:
+            self.assertNoMsg(row["text"], "sp.py.limit.building")
 
     def test_idle_office_staff_are_workstations(self):
         firm = business(staff=[LAWYER_PERSON])
@@ -311,8 +323,10 @@ class OfficeAlertTextTests(unittest.TestCase):
                 "worth": 332.57}
         [line] = [a for a in alerts([firm], [idle]) if a["group"] == "idlestaff"]
         # A finding with no week of runs is read as a week of one.
-        self.assertIn("16 staffed hours a week more than its customers need: 6 workstations Mon 9-13",
-                      line["text"])
+        self.assertMsg(line["text"], "f.idlestaff", n=16,
+                       runs=msg_param("sp.py.idle.part", n=6, noun=msg_param("sp.py.workstations"),
+                                      when=msg_param("sp.py.when.part", days=msg_param("sp.py.wd.1"),
+                                                     hours=msg_param("sp.py.when.hours", a=9, b=13))))
 
 
 if __name__ == "__main__":

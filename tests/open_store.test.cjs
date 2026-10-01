@@ -8,6 +8,7 @@
 // Chromium browser to run; NODE_PATH may point at an existing installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe, enText: textEn, textRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const {chromium} = require('playwright');
@@ -93,14 +94,14 @@ test('a Demand cell\'s Open a store here starts a plan for its type and neighbou
   await page.waitForFunction(() => route === 'expansion/open' && osStep === 'where');
   assert.equal(await pop.isVisible(), false);
   const s = await strip(page);
-  assert.match(s[0], /Liquor Store Demand in Midtown 68/);
-  assert.match(s[1], /Not picked yet/);
+  assert.match(s[0], new RegExp('Liquor Store ' + textRe('gr.os.strip.demand', {hood: 'Midtown', n: 68}).source));
+  assert.match(s[1], textRe('gr.os.strip.nowhere', {}, {}));
   // The finder is fixed to the plan's type, Midtown only, and lists the building.
   await page.locator('#osFinderMap .place.fr').first().waitFor();
   assert.equal(await page.locator('#osFinderMap .fplan-type').textContent(), 'Liquor Store');
   assert.deepEqual(await page.$$eval('#osFinderMap .place.fr', r => r.map(x => x.dataset.pick)), [SITE]);
   // The way back is Demand.
-  assert.match(await page.locator('#arrive').innerText(), /Demand for Liquor Store in Midtown/);
+  assert.match(await page.locator('#arrive').innerText(), textRe('gr.arrive.cell', {type: 'Liquor Store', hood: 'Midtown'}, {}));
 });
 
 test('Plan here opens the investment: one table by reason for the firm, a list by store for self-installation', async t => {
@@ -112,11 +113,11 @@ test('Plan here opens the investment: one table by reason for the firm, a list b
   assert.equal(inv.fee, 586 * b.m2);
   assert.equal(inv.firm, inv.furniture + inv.fee + b.deposit);
   const groups = await page.$$eval('#osBody .os-inv tr.grp td', tds => tds.map(td => td.firstChild.textContent.trim()));
-  assert.deepEqual(groups.filter(g => g !== 'Customer demands' && g !== 'Building capacity'),
-    ['Installation firm', 'Required to open', 'Shelves and displays', 'Deposit']);
-  assert.ok(groups.includes('Customer demands'), 'a liquor store asks for music, uniforms and a toilet');
+  assert.deepEqual(groups.filter(g => g !== en('gr.os.grp.dem') && g !== en('gr.os.grp.cap')),
+    [en('gr.os.inv.firm'), en('gr.os.grp.req'), en('gr.os.grp.shelf'), en('gr.os.inv.deposit')]);
+  assert.ok(groups.includes(en('gr.os.grp.dem')), 'a liquor store asks for music, uniforms and a toilet');
   // Midtown asks for an interior score: the firm lays the walls and floors free.
-  assert.match(await page.locator('#osBody .os-inv td.free').locator('xpath=..').innerText(), /Midtown asks for an interior score of 50/);
+  assert.match(await page.locator('#osBody .os-inv td.free').locator('xpath=..').innerText(), textRe('gr.os.inv.walls.met', {hood: 'Midtown', n: 50}, {}));
   assert.equal(money(await page.locator('#osBody .os-inv tfoot td').last().textContent()), Math.round(inv.firm));
   assert.equal(money((await strip(page))[2]), Math.round(inv.firm));
   assert.deepEqual((await steps(page)).map(s => s[1]), ['done', 'done', 'on', '', '', '']);
@@ -124,10 +125,10 @@ test('Plan here opens the investment: one table by reason for the firm, a list b
   await page.locator('#osBody [data-os-mode="self"]').click();
   const cards = page.locator('#osBody .os-store');
   assert.ok(await cards.count() >= 3);
-  assert.match(await page.locator('#osBody .os-store', {hasText: 'Walls and floors'}).innerText(), /Interior Designer · Midtown asks for a score of 50/);
+  assert.match(await page.locator('#osBody .os-store', {hasText: en('gr.os.inv.walls')}).innerText(), textRe('gr.os.self.walls.sub', {hood: 'Midtown', n: 50}, {}));
   assert.equal(money(await page.locator('#osBody .os-total b').textContent()), Math.round(inv.self));
   assert.equal(inv.self, inv.furniture + inv.delivery + inv.decor + b.deposit);
-  assert.match((await strip(page))[2], /Self-installation · deposit included/);
+  assert.match((await strip(page))[2], textRe('gr.os.strip.self', {}, {}));
   // The choice is the plan's, and the portfolio's too (paybackMode()).
   assert.equal(await page.evaluate(() => [osPlan().mode, paybackMode()].join()), 'self,self');
 });
@@ -142,24 +143,24 @@ test('Break even shows both install modes from the game\'s rules, a range, tax, 
   assert.ok(est.profit > 0, 'the rules give the Midtown liquor store a profit');
   assert.ok(est.firm.low <= est.firm.high && est.self.high <= est.firm.high);
   const big = await page.$$eval('#osBody .os-big > div', ds => ds.map(d => d.textContent.replace(/\s+/g, ' ')));
-  assert.match(big[0], /INSTALLATION FIRM/i);
-  assert.match(big[1], /SELF-INSTALLATION/i);
+  assert.match(big[0], textRe('gr.os.inv.firm', {}, {flags: 'i'}));
+  assert.match(big[1], textRe('gr.os.inv.self', {}, {flags: 'i'}));
   assert.equal(await page.locator('#osBody svg.os-chart').count(), 1);
   const notes = await page.locator('#osBody .os-note').allInnerTexts();
-  assert.match(notes[0], /^About \$[\d,]+ a day if it is priced, stocked and staffed as planned\.$/);
+  assert.match(notes[0], textRe('gr.os.be.mid', {}, {anchor: 'full'}));
   // The range behind the single figure is on hover.
   assert.match(await page.locator('#osBody .os-note .os-rng').first().getAttribute('data-tip'), /^\$[\d,]+–\$[\d,]+$/);
-  assert.match(notes[1], /^After 5% tax: \$[\d,]+ a day\.$/);
+  assert.match(notes[1], textRe('gr.os.be.tax', {n: 5}, {anchor: 'full'}));
   // After tax is the shown figure (the range's middle) less the tax, not the top of the range.
   const taxed = await page.evaluate(() => { const plan = osPlan(), est = osEstimate(plan, osBuilding(plan.key));
     return fmt(est.profit * OS_MID * (1 - osFacts().game.tax / 100)); });
-  assert.equal(notes[1], `After 5% tax: ${taxed} a day.`);
-  assert.equal(await page.locator('#osBody .os-ownc h3').innerText(), 'Your shop of this type, by the same rules');
+  assert.equal(notes[1], textEn('gr.os.be.tax', {n: 5, w: taxed}));
+  assert.equal(await page.locator('#osBody .os-ownc h3').innerText(), en('gr.os.own.title', {n: 1}));
   // The player's own liquor store against the same rules, as a line and its own card.
-  assert.ok(notes.some(n => /Your shop of this type earns \d+% of its estimate\./.test(n)), notes.join('\n'));
+  assert.ok(notes.some(n => textRe('gr.os.be.own', {n: 1}, {}).test(n)), notes.join('\n'));
   assert.equal(await page.locator('#osBody .os-ownc .os-site').count(), 1);
   // Financing: off until asked for; then the amount moves only the figures.
-  assert.match(await page.locator('#osFin').innerText(), /The game books the loan to the company, not to the store\./);
+  assert.match(await page.locator('#osFin').innerText(), textRe('gr.os.fin.off', {}, {}));
   await page.locator('#osFin [data-os-fin-on]').check();
   const facts = page.locator('#osFinFacts > div');
   assert.equal(await facts.count(), 4);
@@ -169,8 +170,8 @@ test('Break even shows both install modes from the game\'s rules, a range, tax, 
     return osLoan(20000, bank); });
   // Flat interest, floor(20,000 x 12% x 0.7 / 100 / 60) = 28 a day; 83 repaid over 241 days.
   assert.deepEqual([loan.interest, loan.repay, loan.days], [28, 83, 241]);
-  assert.match(await facts.nth(1).innerText(), /\$111[\s\S]*\$83 repaid \+ \$28 interest/);
-  assert.match(await facts.nth(2).innerText(), new RegExp(`over 241 days`));
+  assert.match(await facts.nth(1).innerText(), new RegExp("\\$111[\\s\\S]*" + textRe('gr.os.fin.daily.sub', {r: '$83', i: '$28'}).source));
+  assert.match(await facts.nth(2).innerText(), new RegExp([textRe('gr.os.fin.interest.early', {n: 241}).source, textRe('gr.os.fin.interest.term', {n: 241}).source].join('|')));
 });
 
 test('plans are kept per character: a reload opens the plan where it was left, and a plan can be deleted', async t => {
@@ -228,7 +229,7 @@ test('the loan amount: past the limit the field snaps to it, and 0 stays 0 acros
     Math.floor(osInvestment(osPlan(), osBuilding(osPlan().key)).firm)));
   await field.fill('9999999');
   assert.equal(+(await field.inputValue()), limit, 'the field says the loan the figures use');
-  assert.ok((await page.locator('#osFinFacts').innerText()).includes('$' + limit.toLocaleString('en-US') + ' borrowed'));
+  assert.ok((await page.locator('#osFinFacts').innerText()).includes(en('gr.os.fin.upfront.sub', {w: '$' + limit.toLocaleString('en-US')})));
   await field.fill('0');
   assert.equal(await page.evaluate(() => osPlan().finance.amount), 0);
   await page.locator('#osCtl [data-os-step="investment"]').click();
@@ -322,18 +323,18 @@ test('the Until opening step opens with a plan\'s building; Open stays for payba
   await page.locator('#osCtl [data-os-step="opening"]').click();
   await page.waitForFunction(() => osStep === 'opening');
   assert.equal(await page.locator('#osCtl [data-os-step="open"]').isDisabled(), true);
-  assert.match(await page.locator('#osCtl [data-os-step="open"]').getAttribute('data-tip'), /ayback/);
-  assert.equal(await page.locator('#osBody .os-prog h2').textContent(), 'Until opening');
+  assert.match(await page.locator('#osCtl [data-os-step="open"]').getAttribute('data-tip'), textRe('gr.os.step.payback', {}, {}));
+  assert.equal(await page.locator('#osBody .os-prog h2').textContent(), en('gr.os.ck.title'));
 });
 
 test('before the business exists every row is a to-do, and only logistics has a button', async t => {
   const page = await board(t);
   await until(page);
   const r = await rows(page);
-  assert.deepEqual(r.map(x => [x.title, x.state]), [['Lease', 'todo'], ['Furniture', 'todo'], ['Staff for the opening hours', 'todo'],
-    ['Uniforms', 'todo'], ['Customer demands', 'todo'], ['Marketing', 'todo'], ['Logistics', 'todo']]);
-  assert.deepEqual(r.map(x => x.act), ['', '', '', '', '', '', 'Plan a factory']);
-  assert.match(await page.locator('#osBody .os-prog').innerText(), /0 of 7/);
+  assert.deepEqual(r.map(x => [x.title, x.state]), [[en('gr.os.ck.lease'), 'todo'], [en('gr.os.ck.furn'), 'todo'], [en('gr.os.ck.staff'), 'todo'],
+    [en('gr.os.ck.uni'), 'todo'], [en('gr.os.ck.dem'), 'todo'], [en('gr.os.ck.mk'), 'todo'], [en('gr.os.ck.log'), 'todo']]);
+  assert.deepEqual(r.map(x => x.act), ['', '', '', '', '', '', en('gr.os.ck.log.go')]);
+  assert.match(await page.locator('#osBody .os-prog').innerText(), textRe('gr.os.ck.count', {n: 0, of: 7}, {}));
   await page.locator('#osBody [data-route="expansion/factory"], #osBody [data-os-route="expansion/factory"]').first().click();
   await page.waitForFunction(() => route === 'expansion/factory');
 });
@@ -358,7 +359,7 @@ test('the rows tick themselves from the save once a business stands at the addre
   await routed(page, await wanted(page));
   const r = await rows(page);
   assert.deepEqual(r.map(x => x.state), ['done', 'done', 'done', 'done', 'done', 'done', 'done']);
-  assert.match(await page.locator('#osBody .os-prog').innerText(), /7 of 7/);
+  assert.match(await page.locator('#osBody .os-prog').innerText(), textRe('gr.os.ck.count', {n: 7, of: 7}, {}));
 });
 
 test('a half-done store shows what is missing', async t => {
@@ -375,7 +376,7 @@ test('a half-done store shows what is missing', async t => {
   assert.equal(r[3].state, 'todo');
   assert.equal(r[4].state, 'part');
   assert.equal(r[6].state, 'part');
-  assert.match(r[6].sub, /No delivery route or import for/);
+  assert.match(r[6].sub, textRe('gr.os.ck.log.part', {}, {}));
 });
 
 test('staff never ticks without opening hours or verified cover', async t => {
@@ -386,13 +387,13 @@ test('staff never ticks without opening hours or verified cover', async t => {
   await hiring(page, {planned: true, variant: null, site: {noHours: true}, weeks: []});
   let r = await rows(page);
   assert.equal(r[2].state, 'todo');
-  assert.match(r[2].sub, /No opening hours set yet/);
+  assert.match(r[2].sub, textRe('gr.os.ck.staff.nohours', {}, {}));
   /* a shop that has never traded, on a demand plan with no hire weeks */
   await page.evaluate(() => { const b = D.businesses.find(x => x.key === osPlan().key); b.revenue = 0; b.customers = 0; b.hasTraded = false; });
   await hiring(page, {planned: true, variant: 'demand', weeks: []});
   r = await rows(page);
   assert.equal(r[2].state, 'todo');
-  assert.match(r[2].sub, /sizes the staff once the shop has sales/);
+  assert.match(r[2].sub, textRe('gr.os.ck.staff.unsized', {}, {}));
   /* nobody hired and nothing to hire */
   await page.evaluate(() => { D.businesses.find(x => x.key === osPlan().key).staff = 0; });
   await hiring(page, {...HIRES, weeks: []});
@@ -410,7 +411,7 @@ test('staff needs hours on the schedule and nobody left without them, and "has t
   await hiring(page, {...HIRES, weeks: []});
   let r = (await rows(page))[2];
   assert.equal(r.state, 'todo');
-  assert.match(r.sub, /4 people on staff · no hours scheduled yet/);
+  assert.match(r.sub, textRe('gr.os.ck.staff.idle', {n: 4}, {}));
   await page.evaluate(() => { D.businesses.find(x => x.key === osPlan().key).stationShifts = 6; });
   await hiring(page, {...HIRES, weeks: []});
   assert.equal((await rows(page))[2].state, 'done');
@@ -419,15 +420,15 @@ test('staff needs hours on the schedule and nobody left without them, and "has t
   await hiring(page, {...HIRES, weeks: [], site: {kind: 'shop', unstaffed: {demand: gap}}});
   r = (await rows(page))[2];
   assert.equal(r.state, 'todo');
-  assert.match(r.sub, /4 on staff · 1 person has no hours/);
-  assert.doesNotMatch(r.sub, /scheduled yet/);
+  assert.match(r.sub, textRe('gr.os.ck.staff.nohours2', {have: 4, n: 1}, {}));
+  assert.doesNotMatch(r.sub, textRe('gr.os.ck.staff.idle', {}, {}));
   await hiring(page, {...HIRES, weeks: [], site: {kind: 'shop', unstaffed: {demand: {hours: 3, roles: [{skill: 'ba:skill_cleaning', idle: 2}, {skill: 'ba:skill_securityguard', idle: 1}]}}}});
-  assert.match((await rows(page))[2].sub, /3 people have no hours/);
+  assert.match((await rows(page))[2].sub, textRe('gr.os.ck.staff.nohours2', {n: 3}, {}));
   /* a gap in the plan mode the site does not use blocks nothing: the shop is on the demand plan, the gap is the full one */
   await hiring(page, {...HIRES, weeks: [], site: {kind: 'shop', unstaffed: {full: gap}}});
   assert.equal((await rows(page))[2].state, 'done');
   await hiring(page, {...HIRES, weeks: [], site: {kind: 'office', unstaffed: {office: gap}}});
-  assert.match((await rows(page))[2].sub, /1 person has no hours/);
+  assert.match((await rows(page))[2].sub, textRe('gr.os.ck.staff.nohours2', {n: 1}, {}));
   await hiring(page, {...HIRES, weeks: [], site: {kind: 'office', unstaffed: {demand: gap}}});
   assert.equal((await rows(page))[2].state, 'done');
   /* a night-time shop whose last statement is empty has still traded */
@@ -442,13 +443,13 @@ test('through the real hiring model: no hours stays a to-do, and hires are count
   await opened(page, {staff: 0, stationShifts: 0}, FULL);
   await realHiring(page, {noHours: true});
   assert.equal((await rows(page))[2].state, 'todo');
-  assert.match((await rows(page))[2].sub, /No opening hours set yet/);
+  assert.match((await rows(page))[2].sub, textRe('gr.os.ck.staff.nohours', {}, {}));
   await page.evaluate(() => { D.hiring.sites = D.hiring.sites.filter(s => s.key !== osPlan().key); });
   const weeks = await realHiring(page);
   await linked(page);
   const staff = (await rows(page))[2];
   assert.equal(staff.state, 'todo');
-  assert.match(staff.act, /Staff this site/);
+  assert.match(staff.act, enRe('sp.gw.staff'));
   /* The button is the site panel's Staff this site: the same count of people it hires here. */
   assert.equal(await page.evaluate(k => hrSitePeople(k), SITE), weeks);
 });
@@ -470,7 +471,7 @@ test('Staff this site opens the Staff page\'s review for this site only, through
   assert.equal(sent.body.hires.length, weeks);
   assert.deepEqual([...new Set(sent.body.hires.map(h => h.address.street + '#' + h.address.number))], ['ba:street_broadwaystreet#9']);
   assert.deepEqual(sent.body.sites.map(s => s.address), [{street: 'ba:street_broadwaystreet', number: 9}]);
-  assert.match(await dlg.locator('h2').innerText(), /^Staff /);
+  assert.match(await dlg.locator('h2').innerText(), textRe('co.hire.title.site', {}, {anchor: 'start'}));
   assert.deepEqual(await page.evaluate(() => hrLast.o), {scope: 'site', site: SITE});
   assert.equal(await dlg.locator('.hr-dsite').count(), 1);
 });
@@ -495,9 +496,10 @@ test('weeks filled by moving people offer the full staff review, or a way to do 
   await opened(page, {staff: 1, stationShifts: 2}, FULL);
   const moveHires = {planned: true, variant: 'open', weeks: [['ba:skill_cleaning', 'move'], ['ba:skill_customerservice', 'hire']]};
   await hiring(page, moveHires);
-  assert.match((await rows(page))[2].act, /move the hiring here|Move .* in the game|move 1 Cleaning/i);
+  assert.match((await rows(page))[2].act, new RegExp([textRe('gr.os.ck.staff.ingame.move', {moves: '1 Cleaning'}).source,
+    textRe('gr.os.ck.staff.ingame.mixed', {moves: '1 Cleaning'}).source].join('|'), 'i'));
   await linked(page);
-  assert.equal((await page.locator('#osBody [data-os-write="hire"]').innerText()).trim(), 'Staff this site');
+  assert.equal((await page.locator('#osBody [data-os-write="hire"]').innerText()).trim(), en('sp.gw.staff'));
   await page.evaluate(() => { window.__calls = []; window.hrReview = o => window.__calls.push(o); });
   await page.locator('#osBody [data-os-write="hire"]').click();
   assert.deepEqual(await page.evaluate(() => window.__calls), [{scope: 'site', site: SITE}]);
@@ -511,31 +513,31 @@ test('a week too short for a hire is hours left open, not a place: no "1 more", 
   await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_customerservice', null, SHORT6]]});
   let r = (await rows(page))[2];
   assert.equal(r.state, 'todo');
-  assert.match(r.sub, /2 people on staff · 6 h a week too few for a hire/);
-  assert.doesNotMatch(r.sub, /more:|without a candidate/);
-  assert.doesNotMatch(r.act, /headhunter/);
+  assert.match(r.sub, new RegExp(textRe('gr.os.ck.staff.count', {n: 2}).source + ' \u00b7 ' + textRe('co.hire.role.toofew', {h: 6}).source));
+  assert.doesNotMatch(r.sub, new RegExp([textRe('gr.os.ck.staff.need', {}).source, textRe('gr.os.ck.staff.nocand', {}).source].join('|')));
+  assert.doesNotMatch(r.act, textRe('gr.os.ck.staff.headhunter', {}, {}));
   /* beside a real place, the short hours are said apart and not counted */
   await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_cleaning', 'hire'], ['ba:skill_customerservice', null, SHORT6]]});
   r = (await rows(page))[2];
-  assert.match(r.sub, /2 of 3 people · 1 more: 1 Cleaning[^·]*· 6 h a week too few for a hire/);
-  assert.doesNotMatch(r.sub, /without a candidate/);
+  assert.match(r.sub, new RegExp(textRe('gr.os.ck.staff.need', {have: 2, total: 3, need: 1, roles: '1 Cleaning'}).source + '[^\u00b7]*\u00b7 ' + textRe('co.hire.role.toofew', {h: 6}).source));
+  assert.doesNotMatch(r.sub, textRe('gr.os.ck.staff.nocand', {}, {}));
   /* a planned reassign onto the short week is not the hours worked: pending, with Staff this site */
   await linked(page);
   await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_customerservice', 'move', SHORT6]]});
   r = (await rows(page))[2];
   assert.equal(r.state, 'todo');
-  assert.doesNotMatch(r.sub, /too few for a hire/);
-  assert.equal((await page.locator('#osBody [data-os-write="hire"]').innerText()).trim(), 'Staff this site');
+  assert.doesNotMatch(r.sub, textRe('co.hire.role.toofew', {}, {}));
+  assert.equal((await page.locator('#osBody [data-os-write="hire"]').innerText()).trim(), en('sp.gw.staff'));
   /* without the link, the step that clears it is the move, not the schedule */
   await linked(page, null);
   r = (await rows(page))[2];
-  assert.match(r.act, /move 1 Customer Service to/);
-  assert.doesNotMatch(r.act, /Schedule/);
+  assert.match(r.act, textRe('gr.os.ck.staff.ingame.move', {moves: '1 Customer Service'}, {}));
+  assert.doesNotMatch(r.act, textRe('gr.os.ck.staff.ingame.week', {}, {}));
   /* beside a regular hire, the step names both the hire and the short week's move */
   await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_cleaning', 'hire'], ['ba:skill_customerservice', 'move', SHORT6]]});
   r = (await rows(page))[2];
-  assert.match(r.act, /hire 1 Cleaning[^.]*and move 1 Customer Service/);
-  assert.match(r.sub, /1 more: 1 Cleaning/);
+  assert.match(r.act, textRe('gr.os.ck.staff.ingame.mixed', {roles: '1 Cleaning', moves: '1 Customer Service'}, {}));
+  assert.match(r.sub, textRe('gr.os.ck.staff.need', {need: 1, roles: '1 Cleaning'}, {}));
   assert.doesNotMatch(r.sub, /Customer Service/);
   /* a padded week with no hours is no short week */
   await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_customerservice', null, {band: 'short', hours: 0, days: 0, slots: []}]]});
@@ -551,17 +553,17 @@ test('every pending path names the short week\'s planned hire or move in the gam
   await opened(page, {staff: 0, stationShifts: 0}, FULL);
   const GAP = {kind: 'shop', unstaffed: {demand: {hours: 12, roles: [{skill: 'ba:skill_cleaning', idle: 1}]}}};
   const cases = [
-    {name: 'need > 0', biz: {staff: 1, stationShifts: 2}, weeks: [['ba:skill_cleaning', 'hire']], text: /1 of 2 people/, schedule: false},
-    {name: 'nobody hired', biz: {staff: 0, stationShifts: 0}, weeks: [], text: /Nobody is hired yet/, schedule: false},
-    {name: 'nobody hired, bench', biz: {staff: 0, stationShifts: 0}, weeks: [], bench: 2, text: /^2 people hired, on the bench · assign them here$/, schedule: false},
-    {name: 'need > 0, bench', biz: {staff: 1, stationShifts: 2}, weeks: [['ba:skill_cleaning', 'hire']], bench: 1, text: /^1 of 3 people .* · 1 from the bench to assign/, p: '33%', schedule: false},
-    {name: 'covered, bench', biz: {staff: 2, stationShifts: 3}, weeks: [], bench: 1, text: /^2 people on staff · 1 from the bench to assign$/, schedule: false},
+    {name: 'need > 0', biz: {staff: 1, stationShifts: 2}, weeks: [['ba:skill_cleaning', 'hire']], text: textRe('gr.os.ck.staff.need', {have: 1, total: 2}, {}), schedule: false},
+    {name: 'nobody hired', biz: {staff: 0, stationShifts: 0}, weeks: [], text: textRe('gr.os.ck.staff.nobody', {}, {}), schedule: false},
+    {name: 'nobody hired, bench', biz: {staff: 0, stationShifts: 0}, weeks: [], bench: 2, text: textRe('gr.os.ck.staff.benchonly', {n: 2}, {anchor: 'full'}), schedule: false},
+    {name: 'need > 0, bench', biz: {staff: 1, stationShifts: 2}, weeks: [['ba:skill_cleaning', 'hire']], bench: 1, text: new RegExp('^' + textRe('gr.os.ck.staff.need', {have: 1, total: 3}).source + '.* \u00b7 ' + textRe('gr.os.ck.staff.bench', {n: 1}).source), p: '33%', schedule: false},
+    {name: 'covered, bench', biz: {staff: 2, stationShifts: 3}, weeks: [], bench: 1, text: new RegExp('^' + textRe('gr.os.ck.staff.count', {n: 2}).source + ' \u00b7 ' + textRe('gr.os.ck.staff.bench', {n: 1}).source + '$'), schedule: false},
     /* the schedule step is for the people the plan uses: a spare alone gets none */
-    {name: 'no hours, only a spare', biz: {staff: 1, stationShifts: 0, staffIdle: ['sp1']}, weeks: [], text: /^1 person on staff$/, schedule: false},
-    {name: 'no hours, one used and a spare', biz: {staff: 2, stationShifts: 0, staffIdle: ['sp1']}, weeks: [], text: /no hours scheduled yet/, schedule: true},
-    {name: 'no hours scheduled', biz: {staff: 2, stationShifts: 0, staffIdle: []}, weeks: [], text: /no hours scheduled yet/, schedule: true},
-    {name: 'has no hours', biz: {staff: 2, stationShifts: 3}, weeks: [], site: GAP, text: /1 person has no hours/, schedule: true},
-    {name: 'covered, short only', biz: {staff: 2, stationShifts: 3, staffIdle: []}, weeks: [], text: /^2 people on staff$/, schedule: false},
+    {name: 'no hours, only a spare', biz: {staff: 1, stationShifts: 0, staffIdle: ['sp1']}, weeks: [], text: textRe('gr.os.ck.staff.count', {n: 1}, {anchor: 'full'}), schedule: false},
+    {name: 'no hours, one used and a spare', biz: {staff: 2, stationShifts: 0, staffIdle: ['sp1']}, weeks: [], text: textRe('gr.os.ck.staff.idle', {}, {}), schedule: true},
+    {name: 'no hours scheduled', biz: {staff: 2, stationShifts: 0, staffIdle: []}, weeks: [], text: textRe('gr.os.ck.staff.idle', {}, {}), schedule: true},
+    {name: 'has no hours', biz: {staff: 2, stationShifts: 3}, weeks: [], site: GAP, text: textRe('gr.os.ck.staff.nohours2', {n: 1}, {}), schedule: true},
+    {name: 'covered, short only', biz: {staff: 2, stationShifts: 3, staffIdle: []}, weeks: [], text: textRe('gr.os.ck.staff.count', {n: 2}, {anchor: 'full'}), schedule: false},
   ];
   for (const who of ['hire', 'move']) {
     for (const c of cases) {
@@ -572,10 +574,10 @@ test('every pending path names the short week\'s planned hire or move in the gam
       assert.equal(r.state, c.name.startsWith('need > 0') ? 'part' : 'todo', label);
       assert.match(r.sub, c.text, label);
       if(c.p) assert.equal(r.p, c.p, label);
-      assert.match(r.act, who === 'hire' ? /hire (1 Cleaning, )?1 Customer Service from/ : /move 1 Customer Service to|and move 1 Customer Service,/, label);
-      if(c.bench) assert.match(r.act, new RegExp(`assign ${c.bench} ${c.bench === 1 ? 'person' : 'people'} from the bench to`), label);
-      else assert.doesNotMatch(r.act, /from the bench/, label);
-      assert[c.schedule ? 'match' : 'doesNotMatch'](r.act, /BizMan › Schedule/, label);
+      assert.match(r.act, who === 'hire' ? textRe('gr.os.ck.staff.ingame', {roles: c.weeks.length ? '1 Cleaning, 1 Customer Service' : '1 Customer Service'}) : new RegExp([textRe('gr.os.ck.staff.ingame.move', {moves: '1 Customer Service'}).source, textRe('gr.os.ck.staff.ingame.mixed', {moves: '1 Customer Service'}).source].join('|')), label);
+      if(c.bench) assert.match(r.act, textRe('gr.os.ck.staff.ingame.bench', {n: c.bench}), label);
+      else assert.doesNotMatch(r.act, textRe('gr.os.ck.staff.ingame.bench', {}, {}), label);
+      assert[c.schedule ? 'match' : 'doesNotMatch'](r.act, textRe('gr.os.ck.staff.ingame.week', {}, {}), label);
     }
   }
 });
@@ -587,11 +589,11 @@ test('a bench person the plan counts on keeps a covered shop pending, with no sh
   await hiring(page, {planned: true, variant: 'open', weeks: [], bench: 1});
   const r = (await rows(page))[2];
   assert.equal(r.state, 'todo');
-  assert.match(r.sub, /^2 people on staff · 1 from the bench to assign$/);
+  assert.match(r.sub, new RegExp('^' + textRe('gr.os.ck.staff.count', {n: 2}).source + ' \u00b7 ' + textRe('gr.os.ck.staff.bench', {n: 1}).source + '$'));
   await hiring(page, {planned: true, variant: 'open', weeks: [], bench: 0});
   const done = (await rows(page))[2];
   assert.equal(done.state, 'done');
-  assert.match(done.sub, /the opening hours are covered/);
+  assert.match(done.sub, textRe('gr.os.ck.staff.done', {}, {}));
 });
 
 test('a demand plan before any sales: somebody hired early is not "on staff" and done, but waits for the sizing', async t => {
@@ -601,7 +603,7 @@ test('a demand plan before any sales: somebody hired early is not "on staff" and
   await hiring(page, {planned: true, variant: 'demand', weeks: []});
   const r = (await rows(page))[2];
   assert.equal(r.state, 'todo');
-  assert.match(r.sub, /^1 person on staff · the board sizes the staff once the shop has sales$/);
+  assert.match(r.sub, textRe('gr.os.ck.staff.unsized', {n: 1}, {anchor: 'full'}));
 });
 
 test('linked, with nothing for Staff this site to do, the row still says the step in the game', async t => {
@@ -613,7 +615,7 @@ test('linked, with nothing for Staff this site to do, the row still says the ste
   const r = (await rows(page))[2];
   assert.equal(r.state, 'todo');
   assert.equal(await page.locator('#osBody [data-os-write="hire"]').count(), 0);
-  assert.match(r.act, /BizMan › Schedule/);
+  assert.match(r.act, textRe('gr.os.ck.staff.ingame.week', {}, {}));
 });
 
 test('scheduling only: staff without hours get Staff this site linked, and the BizMan › Schedule step without the link', async t => {
@@ -622,18 +624,18 @@ test('scheduling only: staff without hours get Staff this site linked, and the B
   await opened(page, {staff: 3, stationShifts: 0}, FULL);
   await hiring(page, {...HIRES, weeks: [], work: 1});
   let r = (await rows(page))[2];
-  assert.match(r.sub, /no hours scheduled yet/);
-  assert.match(r.act, /BizMan › Schedule: give your staff at .* their hours\./);
+  assert.match(r.sub, textRe('gr.os.ck.staff.idle', {}, {}));
+  assert.match(r.act, textRe('gr.os.ck.staff.ingame.week', {}, {}));
   await linked(page);
   await page.evaluate(() => { window.__calls = []; window.hrReview = o => window.__calls.push(o); });
-  assert.equal((await page.locator('#osBody [data-os-write="hire"]').innerText()).trim(), 'Staff this site');
+  assert.equal((await page.locator('#osBody [data-os-write="hire"]').innerText()).trim(), en('sp.gw.staff'));
   await page.locator('#osBody [data-os-write="hire"]').click();
   assert.deepEqual(await page.evaluate(() => window.__calls), [{scope: 'site', site: SITE}]);
   /* the plan's own people with no hours in the week: the same */
   await page.evaluate(() => { D.businesses.find(x => x.key === osPlan().key).stationShifts = 4; });
   await hiring(page, {...HIRES, weeks: [], work: 1, site: {kind: 'shop', unstaffed: {demand: {hours: 12, roles: [{skill: 'ba:skill_cleaning', idle: 1}]}}}});
   r = (await rows(page))[2];
-  assert.match(r.sub, /1 person has no hours/);
+  assert.match(r.sub, textRe('gr.os.ck.staff.nohours2', {n: 1}, {}));
   assert.equal(await page.locator('#osBody [data-os-write="hire"]').count(), 1);
   /* nothing for the action to do: no button */
   await hiring(page, {...HIRES, weeks: [], work: 0, site: {kind: 'shop', unstaffed: {demand: {hours: 12, roles: [{skill: 'ba:skill_cleaning', idle: 1}]}}}});
@@ -648,8 +650,8 @@ test('nobody hired yet but the plan assigns bench people: Staff this site is off
   await hiring(page, {planned: true, variant: 'demand', weeks: [], work: 2});
   const r = (await rows(page))[2];
   assert.equal(r.state, 'todo');
-  assert.match(r.sub, /Nobody is hired yet/);
-  assert.equal((await page.locator('#osBody [data-os-write="hire"]').innerText()).trim(), 'Staff this site');
+  assert.match(r.sub, enRe('gr.os.ck.staff.nobody'));
+  assert.equal((await page.locator('#osBody [data-os-write="hire"]').innerText()).trim(), en('sp.gw.staff'));
 });
 
 test('an open place beside a hire: the hire is the step, and the headhunter hint stays with the button', async t => {
@@ -658,20 +660,20 @@ test('an open place beside a hire: the hire is the step, and the headhunter hint
   await opened(page, {staff: 1, stationShifts: 2}, FULL);
   await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_cleaning', null], ['ba:skill_customerservice', 'hire']]});
   let r = (await rows(page))[2];
-  assert.match(r.sub, /1 without a candidate/);
-  assert.doesNotMatch(r.act, /move/i);
-  assert.match(r.act, /hire 1 Customer Service/);
+  assert.match(r.sub, textRe('gr.os.ck.staff.nocand', {n: 1}, {}));
+  assert.doesNotMatch(r.act, new RegExp([textRe('gr.os.ck.staff.ingame.move', {}).source, textRe('gr.os.ck.staff.ingame.mixed', {}).source].join('|'), 'i'));
+  assert.match(r.act, textRe('gr.os.ck.staff.ingame', {roles: '1 Customer Service'}, {}));
   await linked(page);
   r = (await rows(page))[2];
-  assert.match(r.act, /Staff this site/);
-  assert.match(r.act, /ask a headhunter for 1 Cleaning,/);
+  assert.match(r.act, enRe('sp.gw.staff'));
+  assert.match(r.act, textRe('gr.os.ck.staff.headhunter', {roles: '1 Cleaning'}, {}));
   /* with no link, both steps: the hire and the headhunter for the open place only */
   await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_cleaning', null], ['ba:skill_customerservice', 'hire'], ['ba:skill_customerservice', 'hire']]});
   await linked(page, null);
   r = (await rows(page))[2];
-  assert.match(r.act, /hire 2 Customer Service/);
-  assert.match(r.act, /ask a headhunter for 1 Cleaning,/);
-  assert.doesNotMatch(r.act, /headhunter for [^.]*Customer Service/);
+  assert.match(r.act, textRe('gr.os.ck.staff.ingame', {roles: '2 Customer Service'}, {}));
+  assert.match(r.act, textRe('gr.os.ck.staff.headhunter', {roles: '1 Cleaning'}, {}));
+  assert.doesNotMatch(r.act, textRe('gr.os.ck.staff.headhunter', {roles: '1 Customer Service'}, {}));
 });
 
 test('spare people the plan gives no week are left out of "n of m" and the progress bar', async t => {
@@ -680,9 +682,9 @@ test('spare people the plan gives no week are left out of "n of m" and the progr
   await opened(page, {staff: 3, stationShifts: 2, staffIdle: ['spare1', 'spare2']}, FULL);
   await hiring(page);
   const r = (await rows(page))[2];
-  assert.match(r.sub, /^1 of 5 people · 4 more/);
+  assert.match(r.sub, textRe('gr.os.ck.staff.need', {have: 1, total: 5, need: 4}, {anchor: 'start'}));
   assert.equal(r.p, '20%');
-  assert.doesNotMatch(r.sub, /spare|no hours/i);
+  assert.doesNotMatch(r.sub, new RegExp([textRe('gr.os.ck.staff.nohours2', {}).source, textRe('gr.os.ck.staff.idle', {}).source, 'spare'].join('|'), 'i'));
 });
 
 test('the real staff gate offers Staff this site for a bench move with no hires', async t => {
@@ -706,8 +708,8 @@ test('the real staff gate offers Staff this site for a bench move with no hires'
   assert.ok(await page.evaluate(site => osStaffWork(site) > 0, SITE));
   const staff = (await rows(page))[2];
   assert.equal(staff.state, 'todo');
-  assert.match(staff.sub, /^1 person hired, on the bench · assign them here$/);
-  assert.equal(staff.act, 'Staff this site');
+  assert.match(staff.sub, textRe('gr.os.ck.staff.benchonly', {n: 1}, {anchor: 'full'}));
+  assert.equal(staff.act, en('sp.gw.staff'));
   await page.evaluate(() => { window.__calls = []; window.hrReview = o => window.__calls.push(o); });
   await page.locator('#osBody .os-ck').nth(2).locator('[data-os-write="hire"]').click();
   assert.deepEqual(await page.evaluate(() => window.__calls), [{scope: 'site', site: SITE}]);
@@ -720,7 +722,7 @@ test('nobody to hire says to ask a headhunter', async t => {
   await hiring(page, {planned: true, variant: 'open', weeks: [['ba:skill_cleaning', null], ['ba:skill_customerservice', null]]});
   await linked(page);
   const staff = (await rows(page))[2];
-  assert.match(staff.act, /headhunter/);
+  assert.match(staff.act, textRe('gr.os.ck.staff.headhunter', {}, {}));
   assert.equal(await page.locator('#osBody [data-os-write="hire"]').count(), 0);
 });
 
@@ -730,8 +732,8 @@ test('without the game link every write is an instruction in the game, under a l
   await opened(page, {staff: 1, stationShifts: 2, uniformGaps: ['Customer Service']}, FULL);
   await hiring(page);
   assert.equal(await page.locator('#osBody [data-os-write]').count(), 0);
-  assert.equal(await page.locator('#osBody .os-ck .os-ingame', {hasNotText: /ask a headhunter/}).count(), 3);
-  assert.match(await page.locator('#osBody .os-gate').innerText(), /Link the game and these become buttons\./);
+  assert.equal(await page.locator('#osBody .os-ck .os-ingame', {hasNotText: textRe('gr.os.ck.staff.headhunter', {}, {})}).count(), 3);
+  assert.match(await page.locator('#osBody .os-gate').innerText(), textRe('gr.os.ck.gate', {}, {}));
   assert.equal(await page.locator('#osBody [data-os-howlink]').count(), 1);
 });
 
@@ -741,7 +743,7 @@ test('How to link opens the game link\'s page, and says where to look when the f
   await opened(page, {staff: 1}, FULL);
   await page.evaluate(() => { const a = document.querySelector('a[data-visit-feature="game-link"]'); if(a) a.remove(); });
   await page.locator('#osBody [data-os-howlink]').click();
-  assert.match(await page.locator('#osBody .os-gate').innerText(), /Steam Workshop/);
+  assert.match(await page.locator('#osBody .os-gate').innerText(), textRe('gr.os.ck.gate.hint', {}, {}));
 });
 
 test('with the game link the same rows carry buttons', async t => {
@@ -750,10 +752,10 @@ test('with the game link the same rows carry buttons', async t => {
   await opened(page, {staff: 1, stationShifts: 2, uniformGaps: ['Customer Service']}, FULL);
   await hiring(page);
   await linked(page);
-  assert.equal(await page.locator('#osBody .os-ck .os-ingame', {hasNotText: /ask a headhunter/}).count(), 0);
+  assert.equal(await page.locator('#osBody .os-ck .os-ingame', {hasNotText: textRe('gr.os.ck.staff.headhunter', {}, {})}).count(), 0);
   assert.equal(await page.locator('#osBody .os-gate').count(), 0);
   assert.deepEqual(await page.$$eval('#osBody [data-os-write]', bs => bs.map(b => [b.dataset.osWrite, b.innerText.trim()])),
-    [['hire', 'Staff this site'], ['uniforms', 'Assign uniforms'], ['marketing', 'Set the cheapest mix']]);
+    [['hire', en('sp.gw.staff')], ['uniforms', en('gr.os.ck.uni.assign')], ['marketing', en('sp.gw.mk.title')]]);
 });
 
 test('a write the mod lacks turns only its own button into the instruction', async t => {
@@ -763,7 +765,7 @@ test('a write the mod lacks turns only its own button into the instruction', asy
   await hiring(page);
   await linked(page, {...LINK, writes: ['hire', 'uniforms']});
   assert.deepEqual(await page.$$eval('#osBody [data-os-write]', bs => bs.map(b => b.dataset.osWrite)), ['hire', 'uniforms']);
-  assert.equal(await page.locator('#osBody .os-ck .os-ingame', {hasNotText: /ask a headhunter/}).count(), 1);
+  assert.equal(await page.locator('#osBody .os-ck .os-ingame', {hasNotText: textRe('gr.os.ck.staff.headhunter', {}, {})}).count(), 1);
   assert.equal(await page.locator('#osBody .os-gate').count(), 0);
 });
 
@@ -773,7 +775,7 @@ test('uniforms wait for hours: staff with no station shifts is a to-do, and only
   await opened(page, {staff: 3, stationShifts: 0}, FULL);
   let r = await rows(page);
   assert.equal(r[3].state, 'todo');
-  assert.match(r[3].sub, /Set once staff have hours/);
+  assert.match(r[3].sub, enRe('gr.os.ck.uni.noshifts'));
   await page.evaluate(() => { D.businesses.find(x => x.key === osPlan().key).stationShifts = 4; drawOpenStore(); });
   assert.equal((await rows(page))[3].state, 'done');
   await page.evaluate(() => { D.businesses.find(x => x.key === osPlan().key).staff = 0; drawOpenStore(); });
@@ -794,12 +796,12 @@ test('a coffee shop without chairs does not meet its seating demand; a gym\'s wo
   });
   assert.ok(out.seat, 'a type asks for seating');
   assert.notEqual(out.seat[0].state, 'done');
-  assert.match(out.seat[0].sub, /missing .*Seating/);
-  assert.match(out.seat[1].sub, /^(All )?\d+ of \d+ met|demands? met/);
+  assert.match(out.seat[0].sub, textRe('gr.os.ck.dem.part', {items: en('gr.os.ck.dem.seating')}, {}));
+  assert.match(out.seat[1].sub, new RegExp(['gr.os.ck.dem.done', 'gr.os.ck.dem.check', 'gr.os.ck.dem.part'].map(k => textRe(k).source).join('|')));
   assert.ok(out.gym, 'a type asks for workout variety');
   assert.notEqual(out.gym.state, 'done');
-  assert.match(out.gym.sub, /Workout variety/);
-  assert.match(out.gym.act, /Check Workout variety in the game/);
+  assert.match(out.gym.sub, enRe('gr.os.ck.dem.variety'));
+  assert.match(out.gym.act, textRe('gr.os.ck.dem.ingame', {items: en('gr.os.ck.dem.variety')}, {}));
 });
 
 test('an office needs no deliveries, before opening too and with no factory button', async t => {
@@ -811,9 +813,9 @@ test('an office needs no deliveries, before opening too and with no factory butt
     const ask = (plan, biz) => { const r = osCkLogistics(plan, biz); return {state: r.state, sub: r.sub.replace(/<[^>]+>/g, ''), ok: /class="ok"/.test(r.sub), act: r.act}; };
     return {opened: ask({type, key: b.key}, b), vacant: ask({type, key: 'ba:street_nowhere#1'}, null)}; });
   assert.equal(out.opened.state, 'done');
-  assert.match(out.opened.sub, /No deliveries needed/);
+  assert.match(out.opened.sub, textRe('gr.os.ck.log.office', {}, {}));
   assert.equal(out.vacant.state, 'todo');
-  assert.match(out.vacant.sub, /No deliveries needed/);
+  assert.match(out.vacant.sub, textRe('gr.os.ck.log.office.todo'));
   assert.ok(!out.vacant.ok, 'a to-do row has no green text');
   assert.ok(out.opened.ok, 'an opened office says it in green');
   assert.equal(out.vacant.act, '');
@@ -829,12 +831,12 @@ test('a shop needs a route for every product it sells, from a stock target or a 
   await page.evaluate(() => { D.supply.facts[D.businesses.length - 1] = {'ba:itemname_beer': {st: 'covered'}, 'ba:itemname_whisky': {st: 'covered'}}; drawOpenStore(); });
   let r = (await rows(page))[6];
   assert.equal(r.state, 'todo');
-  assert.match(r.act, /Plan a factory/);
+  assert.match(r.act, enRe('gr.os.ck.log.go'));
   /* a product the shop stocks but has not sold yet counts as much as one it sells: the pairs are not tied to sales rows */
   await routed(page, [all[0]]);
   r = (await rows(page))[6];
   assert.equal(r.state, 'part');
-  assert.match(r.sub, /No delivery route or import for/);
+  assert.match(r.sub, textRe('gr.os.ck.log.part', {}, {}));
   await routed(page, all.slice(1));
   assert.equal((await rows(page))[6].state, 'done');
 });
@@ -848,7 +850,7 @@ test('a product with a zero stock target is not routed, and nothing in D.supply.
   const r = (await rows(page))[6];
   assert.equal(r.state, 'part');
   assert.ok(r.sub.includes(await page.evaluate(p => itemName(p), all[0])), r.sub);
-  assert.match(r.act, /Plan a factory/);
+  assert.match(r.act, enRe('gr.os.ck.log.go'));
 });
 
 test('a link on the graph is not a route: only a stock target or a wholesale contract is', async t => {
@@ -866,9 +868,9 @@ test('a different business at the address is named, and the rows wait for the pl
   await opened(page, {staff: 3, typeSlug: 'ba:businesstype_bakery', type: 'Bakery', stationShifts: 2}, FULL);
   const r = await rows(page);
   assert.equal(r[0].state, 'todo');
-  assert.match(r[0].sub, /^Rented · /);
+  assert.match(r[0].sub, textRe('gr.os.ck.lease.rented', {}, {anchor: 'start'}));
   assert.deepEqual(r.slice(1).map(x => x.state), ['todo', 'todo', 'todo', 'todo', 'todo', 'todo']);
-  assert.match(await page.locator('#osBody').innerText(), /is a Bakery, not the .* you planned/);
+  assert.match(await page.locator('#osBody').innerText(), textRe('gr.os.ck.othertype', {type: 'Bakery'}, {}));
 });
 
 test('a rented address with nothing opened there yet leaves the lease a to-do', async t => {
@@ -877,8 +879,8 @@ test('a rented address with nothing opened there yet leaves the lease a to-do', 
   await opened(page, {status: 'vacant', staff: 0});
   const r = await rows(page);
   assert.equal(r[0].state, 'todo');
-  assert.match(r[0].sub, /^Rented · .*nothing opened there yet/);
-  assert.match(await page.locator('#osBody .os-prog').innerText(), /0 of 7/);
+  assert.match(r[0].sub, textRe('gr.os.ck.lease.vacant', {}, {anchor: 'start'}));
+  assert.match(await page.locator('#osBody .os-prog').innerText(), textRe('gr.os.ck.count', {n: 0, of: 7}, {}));
   /* once a business of the planned type stands there, the lease ticks */
   await page.evaluate(() => { D.businesses.find(x => x.key === osPlan().key).status = 'retail'; drawOpenStore(); });
   assert.equal((await rows(page))[0].state, 'done');
@@ -891,7 +893,7 @@ test('Set the cheapest mix opens the site panel\'s marketing write for the plan\
   await linked(page);
   const r = (await rows(page))[5];
   assert.equal(r.state, 'todo');
-  assert.match(r.sub, /No campaign for .* · Cheapest mix: Small internet · \$100\/day · 100%/i);
+  assert.match(r.sub, new RegExp(textRe('gr.os.ck.mk.none').source + ' \u00b7 ' + textRe('sp.mk.line', {mix: en('gr.os.mk.smallinternet'), cost: 100, p: 100}).source, 'i'));
   await page.evaluate(() => { window.__writes = [];
     SOURCE.write = async (kind, body, o) => { window.__writes.push({kind, body, dryRun: o && o.dryRun});
       return {body: {ok: false, rows: [{error: 'no_contact', agency: {name: 'CityAds', address: {street: 'ba:street_secondavenue', number: 5}}, opens: null, address: body.sites[0].address}]}}; }; });
@@ -903,8 +905,8 @@ test('Set the cheapest mix opens the site panel\'s marketing write for the plan\
   assert.equal(sent.kind, 'marketing');
   assert.equal(sent.dryRun, true);
   assert.deepEqual(sent.body.sites, [{address: {street: 'ba:street_broadwaystreet', number: 9}, on: ['SmallInternet'], was: []}]);
-  assert.equal(await dlg.locator('h2').innerText(), 'Set the cheapest mix');
-  assert.match(await dlg.innerText(), /CityAds is not in your phone's contacts/);
+  assert.equal(await dlg.locator('h2').innerText(), en('sp.gw.mk.title'));
+  assert.match(await dlg.innerText(), textRe('nav.dlg.refuse.nocontact.rule', {agency: 'CityAds'}, {}));
 });
 
 test('a mix that waits on an agency says why and its button does nothing; without the write it says what to switch in BizMan', async t => {
@@ -913,13 +915,13 @@ test('a mix that waits on an agency says why and its button does nothing; withou
   await opened(page, {staff: 1, marketingPlan: {...MKPLAN, agencies: ['ba:street_nowhere#1']}}, FULL);
   await linked(page);
   const r = (await rows(page))[5];
-  assert.match(r.sub, /No agency can add these switches/);
+  assert.match(r.sub, textRe('sp.mk.why.none', {}, {}));
   const btn = page.locator('#osBody [data-os-write="marketing"]');
   assert.equal(await btn.getAttribute('aria-disabled'), 'true');
   await btn.click({force: true});
   assert.equal(await page.locator('dialog.gw-dlg[open]').count(), 0);
   await linked(page, {...LINK, writes: ['hire', 'uniforms']});
-  assert.match((await rows(page))[5].act, /Book Small internet at a marketing agency/i);
+  assert.match((await rows(page))[5].act, textRe('sp.mk.hand.visit', {types: en('gr.os.mk.smallinternet')}, {flags: 'i'}));
 });
 
 test('no agency in the phone yet: the row says which to visit, with no button', async t => {
@@ -930,7 +932,7 @@ test('no agency in the phone yet: the row says which to visit, with no button', 
   await linked(page);
   const r = (await rows(page))[5];
   assert.equal(r.state, 'todo');
-  assert.match(r.act, /Visit CityAds \(5 Second Avenue\) once to book campaigns/);
+  assert.match(r.act, textRe('sp.mk.novisit2', {agencies: 'CityAds (5 Second Avenue)'}, {}));
   assert.equal(await page.locator('#osBody [data-os-write="marketing"]').count(), 0);
 });
 
@@ -949,7 +951,7 @@ test('a running campaign, from the save\'s enabled set, leaves the marketing row
   await page.evaluate(() => { const b = D.businesses.find(x => x.key === osPlan().key); b.marketingPlan = {...b.marketingPlan, on: [], costPlan: 0, promotionPlan: 100}; drawOpenStore(); });
   const done = (await rows(page))[5];
   assert.equal(done.state, 'done');
-  assert.match(done.sub, /No campaign needed/);
+  assert.match(done.sub, textRe('gr.os.ck.mk.unneeded', {}, {}));
 });
 
 test('a mix of no campaigns says none would raise promotion; a missing switch is set up, an unvisited agency named', async t => {
@@ -959,8 +961,8 @@ test('a mix of no campaigns says none would raise promotion; a missing switch is
   await linked(page);
   let r = (await rows(page))[5];
   assert.equal(r.state, 'done');
-  assert.match(r.sub, /No campaign would raise promotion here/);
-  assert.doesNotMatch(r.act, /start a campaign/);
+  assert.match(r.sub, enRe('gr.os.ck.mk.useless'));
+  assert.doesNotMatch(r.act, textRe('gr.os.ck.mk.ingame', {}, {}));
   assert.equal(await page.locator('#osBody [data-os-write="marketing"]').count(), 0);
   /* a switch BizMan lacks: the site panel's set-up, through gwMarketing's setup mode */
   await page.evaluate(() => { const b = D.businesses.find(x => x.key === osPlan().key); b.marketingPlan = {...b.marketingPlan, needsSetup: true}; window.__mk = [];
@@ -980,22 +982,22 @@ test('a mix of no campaigns says none would raise promotion; a missing switch is
     const b = D.businesses.find(x => x.key === osPlan().key); b.marketingPlan = {...b.marketingPlan, needsSetup: false, visit: ['ba:street_secondavenue#5']}; drawOpenStore(); });
   r = (await rows(page))[5];
   assert.equal(r.state, 'todo');
-  assert.match(r.act, /Visit CityAds \(5 Second Avenue\) once for a better mix/);
-  assert.doesNotMatch(r.sub, /would raise/);
-  assert.match(r.sub, /No campaign for/);
+  assert.match(r.act, textRe('sp.mk.better2', {agencies: 'CityAds (5 Second Avenue)'}, {}));
+  assert.doesNotMatch(r.sub, textRe('gr.os.ck.mk.useless', {}, {}));
+  assert.match(r.sub, textRe('gr.os.ck.mk.none', {}, {}));
   /* a switch to set up and an agency to visit: the button, and the visit hint after it */
   await page.evaluate(() => { const b = D.businesses.find(x => x.key === osPlan().key); b.marketingPlan = {...b.marketingPlan, needsSetup: true}; drawOpenStore(); });
   r = (await rows(page))[5];
-  assert.match(r.sub, /No campaign for/);
-  assert.doesNotMatch(r.sub, /would raise/);
+  assert.match(r.sub, textRe('gr.os.ck.mk.none', {}, {}));
+  assert.doesNotMatch(r.sub, textRe('gr.os.ck.mk.useless', {}, {}));
   assert.equal(await page.locator('#osBody [data-os-write="marketing"]').count(), 1);
-  assert.match(r.act, /Visit CityAds \(5 Second Avenue\) once for a better mix/);
+  assert.match(r.act, textRe('sp.mk.better2', {agencies: 'CityAds (5 Second Avenue)'}, {}));
   /* linked, but a mod without the marketing write: the set-up is optional, the better mix still needs the visit */
   await linked(page, {...LINK, writes: ['hire', 'uniforms']});
   r = (await rows(page))[5];
   assert.equal(r.state, 'todo');
   assert.equal(await page.locator('#osBody [data-os-write="marketing"]').count(), 0);
-  assert.match(r.act, /Visit CityAds \(5 Second Avenue\) once for a better mix/);
+  assert.match(r.act, textRe('sp.mk.better2', {agencies: 'CityAds (5 Second Avenue)'}, {}));
 });
 
 test('an unmet hairdresser shelf is named in words, not by its id', async t => {
@@ -1003,7 +1005,7 @@ test('an unmet hairdresser shelf is named in words, not by its id', async t => {
   await until(page);
   await opened(page, {staff: 1, stationShifts: 1}, {placed: 20, req: [['shelfwithhaircareproducts', 1, 0]], seating: false});
   const r = (await rows(page))[1];
-  assert.match(r.sub, /missing A shelf with hair-care products on it/);
+  assert.match(r.sub, textRe('gr.os.ck.furn.part', {items: en('gr.os.ck.furn.haircare')}, {}));
   assert.doesNotMatch(r.sub, /Shelfwithhaircareproducts/i);
 });
 
@@ -1059,7 +1061,7 @@ test('once the planned store stands at the address the plan keeps what it said a
   await page.locator('#osBody .os-links [data-os-step="open"]').click();
   await page.waitForFunction(() => osStep === 'open');
   // Step 6's strip says what and where only; the tiles carry the numbers.
-  assert.deepEqual((await strip(page)).map(c => c.split(' ')[0]), ['OPEN', 'WHERE']);
+  assert.deepEqual((await strip(page)).map(c => c.split(' ')[0]), [en('gr.os.strip.open'), en('gr.os.strip.whereLab')].map(s => s.toUpperCase().split(' ')[0]));
   const kept = await page.evaluate(() => { const p = JSON.parse(localStorage.getItem(osStore())).plans[0]; return {snap: osSnapClean(p.snap), opened: p.opened}; });
   assert.deepEqual(kept, {snap: JSON.parse(snap), opened: OPENED});
 });
@@ -1138,13 +1140,13 @@ test('just opened with no sales: invested, nothing earned, no day to go yet', as
   const {inv} = await traded(page, {state: 'unknown'});
   await goOpen(page);
   const k = await tiles(page);
-  assert.match(k[0], new RegExp(`INVESTED \\$${inv.toLocaleString('en-US')} as planned`));
-  assert.match(k[1], /PROFIT SO FAR -\$400 1 day · since day 30/);
-  assert.match(k[2], /PAID BACK 0%/);
-  assert.match(k[3], /BREAK EVEN – no day with sales yet/);
-  assert.match(await page.locator('#osBody').innerText(), /No day with sales has finished yet/);
+  assert.match(k[0], new RegExp(enRe('gr.os.roi.invested').source + ' ' + ('$' + inv.toLocaleString('en-US')).replace(/[$]/g, '\\$&') + ' ' + enRe('gr.os.roi.asPlanned').source, 'i'));
+  assert.match(k[1], new RegExp([textRe('gr.os.roi.soFar', {}).source, '-\\$400', textRe('gr.os.roi.days', {n: 1}).source, '\u00b7', textRe('gr.os.roi.since', {n: 30}).source].join(" "), 'i'));
+  assert.match(k[2], new RegExp([textRe('gr.os.roi.paid', {}).source, '0%'].join(" "), 'i'));
+  assert.match(k[3], new RegExp([textRe('gr.os.strip.beLab', {}).source, '\u2013', textRe('gr.os.roi.unknown', {}).source].join(" "), 'i'));
+  assert.match(await page.locator('#osBody').innerText(), textRe('gr.os.roi.noSales', {}, {}));
   const r = await pvsa(page);
-  assert.deepEqual(r.map(x => x[0].split(' ')[0]), ['Furniture', 'Installation', 'Deposit', 'Investment', 'Profit', 'Days']);
+  assert.deepEqual(r.map(x => x[0].split(' ')[0]), ['gr.os.roi.furn', 'gr.os.inv.fee', 'gr.os.inv.deposit', 'gr.os.inv.total', 'gr.os.roi.day', 'gr.os.roi.be'].map(k => en(k).split(' ')[0]));
   assert.equal(r[4][2], '–', 'no recent profit before a sale');
   // The plan's profit and days are single figures, the range on hover.
   assert.match(r[4][1], /^\$[\d,]+$/);
@@ -1152,7 +1154,8 @@ test('just opened with no sales: invested, nothing earned, no day to go yet', as
   // The links: the site's page, the Payback column and the checklist, in one row.
   const links = await page.locator('#osBody .os-links > *').allInnerTexts();
   assert.equal(links.length, 3);
-  assert.match(links[2], /^Until opening · \d of 7$/);
+  assert.match(links[2], textRe('gr.os.roi.until', {of: 7}, {anchor: 'full'}));
+  // Pins the wording: the retired checklist sentence must not come back.
   assert.equal(await page.locator('#osBody p', {hasText: 'on the checklist until opening'}).count(), 0);
 });
 
@@ -1165,9 +1168,9 @@ test('trading and paying back: profit so far, the share paid back, days to go ag
   const {inv, profit, rate} = await traded(page, {daily, state: 'togo', extra: {days: 25}});
   await goOpen(page);
   const k = await tiles(page);
-  assert.match(k[1], new RegExp(`PROFIT SO FAR \\$${profit.toLocaleString('en-US')} 17 days · since day 30`));
-  assert.match(k[2], new RegExp(`PAID BACK ${Math.floor(profit / inv * 100)}%`));
-  assert.match(k[3], /BREAK EVEN 25 days to go about day 71/);
+  assert.match(k[1], new RegExp([enRe('gr.os.roi.soFar').source, '\\$' + profit.toLocaleString('en-US'), enRe('gr.os.roi.days', {n: 17}).source, '\u00b7', enRe('gr.os.roi.since', {n: 30}).source].join(' '), 'i'));
+  assert.match(k[2], new RegExp(enRe('gr.os.roi.paid').source + ' ' + Math.floor(profit / inv * 100) + '%', 'i'));
+  assert.match(k[3], new RegExp([textRe('gr.os.strip.beLab', {}).source, '25', textRe('gr.os.roi.togo', {n: 25}).source, textRe('gr.os.roi.about', {n: 71}).source].join(" "), 'i'));
   assert.equal(await page.locator('#osBody .os-roi .os-meter').getAttribute('style'), `--w:${(profit / inv * 100).toFixed(1)}%`);
   // The chart: the running total, a bar a day, the investment, the plan's line and the way on,
   // its points in days after opening as the axis says (the calendar day is the tile's).
@@ -1176,19 +1179,19 @@ test('trading and paying back: profit so far, the share paid back, days to go ag
   assert.equal(await chart.locator('polyline.plan').count(), 1);
   assert.equal(await chart.locator('line.fc').count(), 1);
   // Day 46 is 16 days after opening; 25 days to go lands 41 days after it, as the tile's day 71.
-  assert.match(await chart.textContent(), /today, 16 days after opening/);
-  assert.match(await chart.textContent(), /41 days after opening/);
-  assert.doesNotMatch(await chart.textContent(), /day 71/);
+  assert.match(await chart.textContent(), textRe('gr.os.roi.chart.today', {after: en('gr.os.roi.chart.after', {n: 16})}, {}));
+  assert.match(await chart.textContent(), textRe('gr.os.roi.chart.after', {n: 41}, {}));
+  assert.doesNotMatch(await chart.textContent(), textRe('gr.os.be.day', {n: 71}, {}));
   const mid = Math.round(snap.profit * (0.8 + 1.05) / 2);
   const ramp = Math.round(snap.curve.slice(0, 5).reduce((a, b) => a + b, 0) * (0.8 + 1.05) / 2);
-  const row = await pvRow(page, 'Profit a day');
+  const row = await pvRow(page, en('gr.os.roi.day'));
   assert.equal(money(row[1]), mid);
   assert.equal(row[2], '$' + Math.round(rate).toLocaleString('en-US'));
   // The first five days with sales against the plan's ramped first days.
   const first = daily.slice(0, 5).reduce((a, b) => a + b, 0);
-  assert.deepEqual((await pvRow(page, 'The first 5 days')).slice(1, 3), ['$' + ramp.toLocaleString('en-US'), '$' + first.toLocaleString('en-US')]);
+  assert.deepEqual((await pvRow(page, en('gr.os.roi.ramp', {n: 5}))).slice(1, 3), ['$' + ramp.toLocaleString('en-US'), '$' + first.toLocaleString('en-US')]);
   // Days to break even, counted as the plan counts them: the first day with sales is day 1.
-  assert.match((await pvRow(page, 'Days to break even'))[2], /^about 41 days$/);
+  assert.match((await pvRow(page, en('gr.os.roi.be')))[2], textRe('gr.os.roi.aboutDays', {n: 41}, {anchor: 'full'}));
 });
 
 test('a forecast past the chart\'s edge is cut at it, and the chart keeps its own days', async t => {
@@ -1201,7 +1204,7 @@ test('a forecast past the chart\'s edge is cut at it, and the chart keeps its ow
   const x2 = +(await fc.getAttribute('x2'));
   assert.ok(x2 <= 900 - 18 + 0.5, `the forecast stops at the chart's right edge (${x2})`);
   assert.equal(await page.locator('#osBody svg.os-chart circle.hit').count(), 0, 'no break-even point off the chart');
-  assert.match((await tiles(page))[3], /5,000 days to go/);
+  assert.match((await tiles(page))[3], new RegExp(['5,000', textRe('gr.os.roi.togo', {n: 5000}).source].join(" "), 'i'));
 });
 
 test('paid back: the day it broke even, the plan beside it, and the way to the site page and the Payback column', async t => {
@@ -1212,18 +1215,18 @@ test('paid back: the day it broke even, the plan beside it, and the way to the s
   await traded(page, {daily: Array(16).fill(day), state: 'reached', extra: {day: 39, after: 9}});
   await goOpen(page);
   const k = await tiles(page);
-  assert.match(k[2], /PAID BACK 100%/);
-  assert.match(k[3], /BREAK EVEN day 39 9 days after opening/);
-  assert.match(await page.locator('#osBody svg.os-chart').textContent(), /[^\d]9 days after opening/, 'the chart\'s point says what the tile says');
+  assert.match(k[2], new RegExp([textRe('gr.os.roi.paid', {}).source, '100%'].join(" "), 'i'));
+  assert.match(k[3], new RegExp([textRe('gr.os.strip.beLab', {}).source, textRe('gr.os.be.day', {n: 39}).source, textRe('gr.os.roi.after', {n: 9}).source].join(" "), 'i'));
+  assert.match(await page.locator('#osBody svg.os-chart').textContent(), new RegExp('(?:^|\\D)' + textRe('gr.os.roi.chart.after', {n: 9}).source), 'the chart\'s point says what the tile says');
   const done = page.locator('#osBody .os-done');
-  assert.match(await done.innerText(), /Break even on day 39, 9 days after opening[\s\S]*Plan \d+ days?\. The site page keeps the row; the plan is done\./);
+  assert.match(await done.innerText(), new RegExp([textRe('co.payback.reached', {day: 39, n: 9}).source, textRe('gr.os.roi.done.plan', {}).source].join("[\\s\\S]*"), 'i'));
   assert.equal(await page.locator('#osBody .os-links').count(), 0, 'the done strip carries the links');
-  assert.match((await pvRow(page, 'Days to break even'))[2], /^9 days$/);
+  assert.match((await pvRow(page, en('gr.os.roi.be')))[2], textRe('gr.os.roi.days', {n: 9}, {anchor: 'full'}));
   assert.equal(await page.evaluate(() => osPlan().paid), true);
   // Listed as open and paid back.
   await page.locator('#osCtl select[data-os-plan]').selectOption('');
-  assert.match(await page.locator('#osBody .os-plan').innerText(), /Liquor Store\s*Open[\s\S]*Open · paid back/i);
-  assert.match(await page.locator('#osCtl select[data-os-plan] option').nth(1).textContent(), /Liquor Store · 9 Broadway Street · open/);
+  assert.match(await page.locator('#osBody .os-plan').innerText(), new RegExp('Liquor Store\\s*' + enRe('gr.os.plans.open').source + '[\\s\\S]*' + enRe('gr.os.stage.paid').source, 'i'));
+  assert.match(await page.locator('#osCtl select[data-os-plan] option').nth(1).textContent(), enRe('gr.os.plan.nameOpen', {type: 'Liquor Store', address: '9 Broadway Street'}));
   await page.locator('#osBody [data-os-open]').click();
   await page.waitForFunction(() => osStep === 'open');
   await page.locator('#osBody .os-done [data-os-results]').click();
@@ -1245,18 +1248,18 @@ test('the figures follow the install mode Results and the site page use; the pla
   await page.evaluate(() => { osPlan().mode = 'firm'; paybackSetMode('self'); drawOpenStore(); });
   await goOpen(page);
   const k = await tiles(page);
-  assert.match(k[0], new RegExp(`INVESTED \\$${Math.round(snap.inv.furniture + snap.inv.deposit).toLocaleString('en-US')} Self-installation`));
-  assert.match(k[3], /BREAK EVEN day 30/);
+  assert.match(k[0], new RegExp(enRe('gr.os.roi.invested').source + ' ' + ('$' + Math.round(snap.inv.furniture + snap.inv.deposit).toLocaleString('en-US')).replace(/[$]/g, '\\$&') + ' ' + enRe('gr.os.inv.self').source, 'i'));
+  assert.match(k[3], new RegExp([textRe('gr.os.strip.beLab', {}).source, textRe('gr.os.be.day', {n: 30}).source].join(" "), 'i'));
   const head = await page.$$eval('#osBody .os-pvsa thead th', ths => ths.map(th => th.innerText.trim()));
-  assert.match(head[1], /PLAN · INSTALLATION FIRM/i);
-  assert.match(head[2], /NOW · SELF-INSTALLATION/i);
-  assert.match(await page.locator('#osBody').innerText(), /The plan was made for Installation firm; now follows Businesses › Results, set to Self-installation\./);
-  assert.equal((await pvRow(page, 'Investment'))[3], '', 'no difference across two modes');
+  assert.match(head[1], textRe('gr.os.roi.col.planMode', {mode: en('gr.os.inv.firm')}, {flags: 'i'}));
+  assert.match(head[2], textRe('gr.os.roi.col.nowMode', {mode: en('gr.os.inv.self')}, {flags: 'i'}));
+  assert.match(await page.locator('#osBody').innerText(), textRe('gr.os.roi.modes', {plan: en('gr.os.inv.firm'), now: en('gr.os.inv.self')}, {}));
+  assert.equal((await pvRow(page, en('gr.os.inv.total')))[3], '', 'no difference across two modes');
   // The site's page says the same.
   await page.locator('#osBody .os-done [data-os-site]').click();
   await page.waitForFunction(site => siteOpen && siteKey === site, SITE);
   await page.locator('.sp-pay').first().waitFor();
-  assert.match(await page.locator('.sp-pay').first().innerText(), /Payback: Break even on day 30/);
+  assert.match(await page.locator('.sp-pay').first().innerText(), new RegExp([textRe('sp.payback.line', {what: en('co.payback.reached', {day: 30, n: 0})}).source].join(" "), 'i'));
 });
 
 test('past the record\'s reach: profit is the record\'s, the share unknown, unless break even was reached', async t => {
@@ -1266,18 +1269,18 @@ test('past the record\'s reach: profit is the record\'s, the share unknown, unle
   await page.evaluate(site => { const r = D.payback.sites[site]; delete r.days; delete r.before; drawOpenStore(); }, SITE);
   await goOpen(page);
   let k = await tiles(page);
-  assert.match(k[1], /PROFIT IN THE RECORD .* since day 40, the oldest the save keeps/);
-  assert.match(k[2], /PAID BACK – the days since the opening are not all in the save/);
+  assert.match(k[1], new RegExp([textRe('gr.os.roi.record', {}).source, textRe('gr.os.roi.record.sub', {n: 40}).source].join(" .* "), 'i'));
+  assert.match(k[2], new RegExp([textRe('gr.os.roi.paid', {}).source, '\u2013', textRe('gr.os.roi.paid.unknown', {}).source].join(" "), 'i'));
   assert.equal(await page.locator('#osBody svg.os-chart').count(), 0);
-  assert.match(await page.locator('#osBody').innerText(), /The save's record starts after the opening/);
+  assert.match(await page.locator('#osBody').innerText(), textRe('gr.os.roi.old', {}, {}));
   // Seen from its opening once, but the days between are lost.
   await page.evaluate(site => { D.payback.sites[site].rolled = true; drawOpenStore(); }, SITE);
-  assert.match(await page.locator('#osBody').innerText(), /no longer reaches the opening, and the days between were not kept/);
-  assert.doesNotMatch(await page.locator('#osBody').innerText(), /record starts after the opening/);
+  assert.match(await page.locator('#osBody').innerText(), textRe('gr.os.roi.rolled', {}, {}));
+  assert.doesNotMatch(await page.locator('#osBody').innerText(), textRe('gr.os.roi.old', {}, {}));
   // A remembered break even: 100%, and the paid-back strip.
   await page.evaluate(site => { const r = D.payback.sites[site]; r.firm = r.self = {state: 'reached', day: 40, after: 10, kept: true}; drawOpenStore(); }, SITE);
   k = await tiles(page);
-  assert.match(k[2], /PAID BACK 100%/);
+  assert.match(k[2], new RegExp([textRe('gr.os.roi.paid', {}).source, '100%'].join(" "), 'i'));
   assert.equal(await page.locator('#osBody .os-done').count(), 1);
 });
 
@@ -1289,22 +1292,22 @@ test('a store that closed, or another in its place, leaves the plan as history a
   const snap = await page.evaluate(() => JSON.stringify(osPlan().snap));
   // Closed: nothing at the address.
   await page.evaluate(site => { D.businesses.find(b => b.key === site).status = 'vacant'; drawOpenStore(); }, SITE);
-  assert.match(await page.locator('#osBody .os-state').innerText(), /CLOSED\s*The liquor store this plan opened on day 30 no longer trades\./);
-  assert.match(await page.locator('#osBody').innerText(), /Nothing trades at 9 Broadway Street now\./);
+  assert.match(await page.locator('#osBody .os-state').innerText(), new RegExp([textRe('gr.os.roi.closed', {}).source, textRe('gr.os.roi.closedText', {type: 'liquor store', day: 30}).source].join("\\s*"), 'i'));
+  assert.match(await page.locator('#osBody').innerText(), textRe('gr.os.roi.closedNow', {address: '9 Broadway Street'}, {}));
   assert.equal(await page.locator('#osBody .os-roi').count(), 0);
   assert.equal(await page.evaluate(() => JSON.stringify(osPlan().snap)), snap, 'the plan\'s figures are never taken again');
   // Another type in its place.
   await page.evaluate(site => { Object.assign(D.businesses.find(b => b.key === site), {status: 'retail', typeSlug: 'ba:businesstype_giftshop', type: 'Gift Shop', opened: 44}); drawOpenStore(); }, SITE);
-  assert.match(await page.locator('#osBody').innerText(), /9 Broadway Street now holds a Gift Shop, opened on day 44\./);
+  assert.match(await page.locator('#osBody').innerText(), textRe('gr.os.roi.replaced', {address: '9 Broadway Street', type: 'Gift Shop', day: 44}, {}));
   assert.equal(await page.evaluate(() => JSON.stringify(osPlan().snap)), snap);
   // The same type again, opened later: a new business, not this plan's.
   await page.evaluate(site => { Object.assign(D.businesses.find(b => b.key === site), {typeSlug: 'ba:businesstype_liquorstore', type: 'Liquor Store', opened: 45}); drawOpenStore(); }, SITE);
-  assert.match(await page.locator('#osBody').innerText(), /now holds a Liquor Store, opened on day 45\./);
+  assert.match(await page.locator('#osBody').innerText(), textRe('gr.os.roi.replaced', {type: 'Liquor Store', day: 45}, {}));
   assert.equal(await page.locator('#osBody .os-roi').count(), 0);
   // Listed as closed.
   await page.locator('#osCtl select[data-os-plan]').selectOption('');
-  assert.match(await page.locator('#osBody .os-plan').innerText(), /Closed/);
-  assert.match(await page.locator('#osCtl select[data-os-plan] option').nth(1).textContent(), /· closed$/);
+  assert.match(await page.locator('#osBody .os-plan').innerText(), enRe('gr.os.stage.closed'));
+  assert.match(await page.locator('#osCtl select[data-os-plan] option').nth(1).textContent(), textRe('gr.os.plan.nameClosed', {}, {anchor: 'full'}));
 });
 
 test('opened plans are history: twelve of them leave room for new plans, across a reload', async t => {
@@ -1343,18 +1346,18 @@ test('not paying back, with the planned loan beside what the bank is owed in all
   await traded(page, {daily: Array(16).fill(-150), state: 'never'});
   await goOpen(page);
   const k = await tiles(page);
-  assert.match(k[1], /PROFIT SO FAR -\$2,800/);
-  assert.match(k[3], /BREAK EVEN Not paying back at recent profit/);
-  assert.match(await page.locator('#osBody .os-state').innerText(), /NOT PAYING BACK\s*At recent profit, -\$150 a day, the store does not earn its investment back\./);
+  assert.match(k[1], new RegExp([textRe('gr.os.roi.soFar', {}).source, '-\\$2,800'].join(" "), 'i'));
+  assert.match(k[3], new RegExp([textRe('gr.os.strip.beLab', {}).source, textRe('gr.os.roi.never', {}).source, textRe('gr.os.roi.never.sub', {}).source].join(" "), 'i'));
+  assert.match(await page.locator('#osBody .os-state').innerText(), new RegExp([textRe('gr.os.roi.notPaying', {}).source, textRe('gr.os.roi.never.note', {w: '-$150'}).source].join("\\s*"), 'i'));
   let loan = await page.locator('#osBody .os-roiloan').innerText();
-  assert.match(loan, /PLANNED\s*\$20,000[\s\S]*\$83 repaid \+ \$28 interest a day for 241 days/);
-  assert.match(loan, /OWED TO VANTANDER BANK NOW\s*–\s*no loan from the bank in the save/);
+  assert.match(loan, new RegExp([textRe('gr.os.roi.loan.plan', {}).source, '\\$20,000', textRe('gr.os.roi.loan.plan.sub', {r: '$83', i: '$28', n: 241}).source].join("[\\s\\S]*"), 'i'));
+  assert.match(loan, new RegExp([textRe('gr.os.roi.loan.owed', {bank: 'Vantander Bank'}).source, '\u2013', textRe('gr.os.roi.loan.nothing', {}).source].join("\\s*"), 'i'));
   // Two loans at the bank: their total, said as the bank's, not this store's.
   await page.evaluate(key => { D.loans.push({bank: 'Vantander', key, total: 20000, remaining: 4000, repaid: 80, dailyPayment: 83, dailyInterest: 28},
     {bank: 'Vantander', key, total: 20000, remaining: 15000, repaid: 25, dailyPayment: 83, dailyInterest: 28}); drawOpenStore(); }, bankKey);
   loan = await page.locator('#osBody .os-roiloan').innerText();
-  assert.match(loan, /OWED TO VANTANDER BANK NOW\s*\$19,000\s*2 loans · the bank's total, not this store's/);
-  assert.match(loan, /A DAY NOW\s*\$222\s*\$166 repaid \+ \$56 interest, to the bank in all/);
+  assert.match(loan, new RegExp([textRe('gr.os.roi.loan.owed', {bank: 'Vantander Bank'}).source, '\\$19,000', textRe('gr.os.roi.loan.owed.sub', {n: 2}).source].join("\\s*"), 'i'));
+  assert.match(loan, new RegExp([textRe('gr.os.roi.loan.daily', {}).source, '\\$222', textRe('gr.os.roi.loan.daily.sub2', {r: '$166', i: '$56'}).source].join("\\s*"), 'i'));
 });
 
 test('a save from before the opening leaves the plan unopened, not closed; a closed plan\'s checklist writes nothing', async t => {
@@ -1372,7 +1375,7 @@ test('a save from before the opening leaves the plan unopened, not closed; a clo
     type: 'Liquor Store', opened: opened + 10, staff: 0, stationShifts: 0, campaigns: []})); drawOpenStore(); }, {site: SITE, opened: OPENED});
   await linked(page);
   await page.locator('#osCtl [data-os-step="opening"]').click();
-  assert.match(await page.locator('#osBody').innerText(), /CLOSED/);
+  assert.match(await page.locator('#osBody').innerText(), enRe('gr.os.roi.closed'));
   assert.equal(await page.locator('#osBody [data-os-write]').count(), 0);
   assert.equal(await page.evaluate(() => { const b = document.createElement('button'); b.dataset.osWrite = 'marketing'; document.querySelector('#osBody').append(b); b.click();
     return document.querySelectorAll('dialog.gw-dlg[open]').length; }), 0);
@@ -1409,7 +1412,7 @@ test('step 4: the one figure the headline gives is the day the chart marks', asy
   await page.locator('#osCtl [data-os-step="breakeven"]').click();
   await page.waitForFunction(() => osStep === 'breakeven');
   const head = (await page.locator('#osBody .os-big > div').first().locator('b').innerText()).trim();
-  assert.match(head, /^\d+ days?$/);
+  assert.match(head, textRe('gr.os.days', {n: await page.evaluate(() => { const p = osPlan(), e = osEstimate(p, osBuilding(p.key)); return e.days[osMode(p)].mid; })}, {anchor: 'full'}));
   const labels = await page.$$eval('#osBody svg.os-chart text.lbl', ts => ts.map(t => t.textContent));
   assert.ok(labels.includes(head), `${head} among ${labels.join(' | ')}`);
   const mid = await page.evaluate(() => { const p = osPlan(), e = osEstimate(p, osBuilding(p.key)); return e.days[osMode(p)]; });
@@ -1422,10 +1425,10 @@ test('a cost centre\'s row is no payback; a plan kept before its figures were co
   await traded(page, {daily: Array(16).fill(500), state: 'togo', extra: {days: 300}});
   await goOpen(page);
   await page.evaluate(() => { delete osPlan().snap; drawOpenStore(); });
-  assert.match(await page.locator('#osBody').innerText(), /This plan was made before its figures were kept, so the plan column has the investment only\./);
-  assert.deepEqual((await pvsa(page)).map(r => r[0].split(' ')[0]), ['Furniture', 'Installation', 'Deposit', 'Investment']);
+  assert.match(await page.locator('#osBody').innerText(), enRe('gr.os.roi.live2'));
+  assert.deepEqual((await pvsa(page)).map(r => r[0].split(' ')[0]), ['gr.os.roi.furn', 'gr.os.inv.fee', 'gr.os.inv.deposit', 'gr.os.inv.total'].map(k => en(k).split(' ')[0]));
   await page.evaluate(site => { D.payback.sites[site] = {costCentre: true, cost: {firm: 1, self: 1}, exact: true, opened: 30, profit: -5}; drawOpenStore(); }, SITE);
-  assert.match(await page.locator('#osBody').innerText(), /The save holds no payback for 9 Broadway Street yet\./);
+  assert.match(await page.locator('#osBody').innerText(), textRe('gr.os.roi.norow', {address: '9 Broadway Street'}, {}));
 });
 
 test('a real _payback() row from a payload snapshot draws in step 6', async t => {
@@ -1436,8 +1439,8 @@ test('a real _payback() row from a payload snapshot draws in step 6', async t =>
   await page.evaluate(({site, real}) => { D.payback.sites[site] = real; osPlan().opened = null; drawOpenStore(); }, {site: SITE, real});
   await goOpen(page);
   const k = await tiles(page);
-  assert.match(k[0], new RegExp(`INVESTED \\$${Math.round(real.cost.firm).toLocaleString('en-US')}`));
-  assert.match(k[1], new RegExp(`PROFIT SO FAR \\$${Math.round(real.profit).toLocaleString('en-US')}`));
-  assert.match(k[3], new RegExp(`${real.firm.days.toLocaleString('en-US')} days to go`));
+  assert.match(k[0], new RegExp(enRe('gr.os.roi.invested').source + ' ' + ('$' + Math.round(real.cost.firm).toLocaleString('en-US')).replace(/[$]/g, '\\$&'), 'i'));
+  assert.match(k[1], new RegExp(enRe('gr.os.roi.soFar').source + ' \\$' + Math.round(real.profit).toLocaleString('en-US'), 'i'));
+  assert.match(k[3], new RegExp(real.firm.days.toLocaleString('en-US') + ' ' + enRe('gr.os.roi.togo', {n: real.firm.days}).source));
   assert.equal(await page.locator('#osBody svg.os-chart .os-dbar').count(), Math.min(real.days.length, 9999));
 });

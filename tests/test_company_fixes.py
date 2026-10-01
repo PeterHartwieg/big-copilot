@@ -6,6 +6,7 @@ station held by someone's second skill.
 import os
 import tempfile
 import unittest
+from tests.i18n_check import MsgAsserts
 from unittest.mock import patch
 
 import es3_fixture
@@ -42,7 +43,7 @@ def extract_company(change, table=None, names=None):
             return extract(save, names, None)
 
 
-class NewHomeTests(unittest.TestCase):
+class NewHomeTests(MsgAsserts, unittest.TestCase):
     """EX-1: a home rented today has no residential statement yet."""
 
     def test_a_residential_building_is_a_home_before_its_first_statement(self):
@@ -56,7 +57,8 @@ class NewHomeTests(unittest.TestCase):
                                table=TABLE)
         self.assertEqual([h["key"] for h in data["homes"]], ["ba:street_tenthstreet#2"])
         self.assertNotIn("ba:street_tenthstreet#2", [b["key"] for b in data["businesses"]])
-        self.assertFalse([a for a in data["alerts"] + data["minor"]["rows"] if "vacant" in a["text"]])
+        for row in data["alerts"] + data["minor"]["rows"]:
+            self.assertNoMsg(row["text"], "f.vacant")
 
 
 class SameNameShopTests(unittest.TestCase):

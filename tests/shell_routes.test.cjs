@@ -9,6 +9,7 @@
 // existing installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -325,10 +326,10 @@ test('the critical count follows a refresh made away from the Overview, which wa
 
 test('Staffing › Payroll draws Payroll; Staff needs carries the demands and the hiring page', async t => {
   const page = await board(t, {hash: '#staffing/payroll'});
-  assert.equal(await page.locator('[data-view-ctl="staffing/payroll"] h2').textContent(), 'Payroll');
+  assert.equal(await page.locator('[data-view-ctl="staffing/payroll"] h2').textContent(), en("co.pay.title"));
   await page.locator('#localNav a[data-route="staffing/needs"]').click();
   assert.equal(await page.locator('#secNeeds #nxDemands').isVisible(), true);
-  assert.equal(await page.locator('#secStaff .hs-head h2').textContent(), 'Whom to hire');
+  assert.equal(await page.locator('#secStaff .hs-head h2').textContent(), en("co.needs.hire.title"));
   assert.equal(await page.locator('#secPayroll').isHidden(), true);
 });
 
@@ -417,7 +418,7 @@ test('"Whom should I hire?" lands on Staff needs\' hiring block, with the way ba
   assert.equal(got.page, 'staffing');
   assert.equal(got.hash, '#staffing/needs');
   assert.equal((await where(page)).lit, 'staffing/needs', 'the area\'s row lights Staff needs');
-  assert.match(got.strip, /Whom should I hire\?.*Staffing › Staff needs.*Back to Overview/);
+  assert.match(got.strip, new RegExp(enRe("nav.ask.hire.q").source + ".*" + enRe("nav.ask.hire.lands.needs").source + ".*" + enRe("nav.ask.back", {page: en("nav.area.overview")}).source));
   assert.ok(got.staff >= 0 && got.staff < 300, `the hiring block is on screen: ${got.staff}`);
   await page.locator('#pageStaffing .ss-asked [data-ss="back"]').click();
   await page.waitForTimeout(200);
@@ -443,7 +444,7 @@ test('on a 320 x 568 phone, and at 130% on 390 x 844, the first critical finding
     assert.equal(await page.locator('#clock > b').isVisible(), true, `${what}: the day is in the drawer`);
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('#clock > b').isVisible(), false, `${what}: Escape closes the drawer`);
-    assert.match(m.ctx, /Profit.*Cash.*All figures/);
+    assert.match(m.ctx, new RegExp(enRe("today.ctx.profit").source + ".*" + enRe("today.ctx.cash").source + ".*" + enRe("today.ctx.all").source));
     assert.equal(m.over, 0, `${what}: every action's words are inside its button`);
     assert.equal(m.sideways, false, `${what}: nothing scrolls sideways`);
   }
@@ -453,8 +454,9 @@ test('Staffing › Schedules is named for shops and offices, in the board\'s wor
   const page = await board(t, {hash: '#staffing/schedules'});
   // The heading, for screen readers: the lit tab shows the view, and no line under it restates it (declutter G1, G9).
   const head = await page.locator('#secSchedules > .sechead').textContent();
-  assert.match(head, /Shop and office schedules/);
+  assert.match(head, enRe("co.sched.title.all"));
   assert.equal(await page.locator('#secSchedules > .sechead .quiet').count(), 0);
+  // Pins the wording: scheduling vocabulary excludes roster, shift and post.
   assert.doesNotMatch(head, /\b(roster|shifts?|posts?)\b/i);
 });
 
@@ -469,8 +471,8 @@ test('Staffing › Schedules counts an office default\'s computers in the right 
     drawSchedules();
     return document.querySelector(`#secSchedules [data-sched-pick="${key}"] .st`).textContent;
   }, n);
-  assert.equal(await line(1), 'Office default: 1 of 1 computer staffed');
-  assert.equal(await line(3), 'Office default: 1 of 3 computers staffed');
+  assert.equal(await line(1), en("co.sched.office.plan", {s: "1", n: 1}));
+  assert.equal(await line(3), en("co.sched.office.plan", {s: "1", n: 3}));
 });
 
 /* The attention journey of the redesign's acceptance: a finding opens its
@@ -490,7 +492,8 @@ test('a finding opens Imports on its line, Goods flow follows the depot, and the
   assert.match(await page.locator('#sbCard[data-sb-at] .sbi-title').textContent(), /Water · HART\. Hub/);
   // The place and the item; the kind is the card's to say, and the back button says where from.
   assert.match(await page.locator('#arrive').textContent(), /Water · HART\. Hub/);
-  assert.doesNotMatch(await page.locator('#arrive').textContent(), /Weekly order too small|You came from/);
+  // Pins the wording: the obsolete arrival prompt must stay absent.
+  assert.doesNotMatch(await page.locator('#arrive').textContent(), new RegExp(enRe("nav.kind.order.label").source + "|You came from"));
   // Its supply route, followed.
   await page.locator('#sbCard [data-sb-toflow]').click();
   await page.waitForFunction(() => route === 'supply/flow');
@@ -696,10 +699,10 @@ test("the full sidebar holds the open area's views; the page starts with the vie
   assert.equal(await bar.locator('select[data-sb-scope], [data-sb-mode]').count() >= 3, true);
   assert.equal(await page.locator('#secImports .sb-verdict, #secImports .sbv-bar').count(), 0);
   // The summary is the view's tip, in the sidebar.
-  assert.match(await page.locator('#localNav a[data-route="supply/imports"]').getAttribute('data-tip'), /next delivery with room/);
+  assert.match(await page.locator('#localNav a[data-route="supply/imports"]').getAttribute('data-tip'), enRe("sb.wh.room"));
   // The sidebar comes first to the keyboard, then the page.
   assert.ok(await page.evaluate(() => !!(document.getElementById('mast').compareDocumentPosition(document.querySelector('.wrap')) & Node.DOCUMENT_POSITION_FOLLOWING)));
-  assert.equal(await page.evaluate(() => document.getElementById('mast').tagName + ':' + document.getElementById('mast').getAttribute('aria-label')), 'NAV:Main');
+  assert.equal(await page.evaluate(() => document.getElementById('mast').tagName + ':' + document.getElementById('mast').getAttribute('aria-label')), 'NAV:' + en('nav.label'));
   // Another view from the sidebar: its controls take the top, the last view's go home.
   await page.locator('#localNav a[data-route="supply/deliveries"]').click();
   await page.locator('#viewCtl [data-view-ctl="supply/deliveries"]').waitFor();
@@ -728,14 +731,14 @@ test('the fold button makes the sidebar a rail and back, remembered on this devi
   const page = await board(t, {hash: '#supply/imports', width: 1440});
   await page.locator('#viewCtl .sbv-bar').waitFor();
   const fold = page.locator('#sdToggle');
-  assert.equal(await fold.getAttribute('aria-label'), 'Collapse the sidebar');
+  assert.equal(await fold.getAttribute('aria-label'), en("nav.side.collapse"));
   assert.equal(await fold.getAttribute('aria-expanded'), 'true');
   await fold.click();
   let s = await shell(page);
   assert.equal(s.rail, true);
   assert.ok(s.side[2] - s.side[0] <= 66, `a 64 px rail: ${s.side}`);
   assert.equal(s.stored, 'rail');
-  assert.equal(await fold.getAttribute('aria-label'), 'Expand the sidebar');
+  assert.equal(await fold.getAttribute('aria-label'), en("nav.side.expand"));
   assert.equal(await fold.getAttribute('aria-expanded'), 'false');
   // The views are back at the top of the page, before the controls, on one line at 1440.
   assert.equal(s.inSide, false);
@@ -743,7 +746,7 @@ test('the fold button makes the sidebar a rail and back, remembered on this devi
   const boxes = await page.evaluate(() => ['localNav', 'viewCtl'].map(id => { const r = document.getElementById(id).getBoundingClientRect(); return [r.left, r.top, r.bottom]; }));
   assert.ok(boxes[0][0] < boxes[1][0] && boxes[1][1] < boxes[0][2] && boxes[0][1] < boxes[1][2], `one row: ${JSON.stringify(boxes)}`);
   // The rail keeps icons: each place says its name on hover.
-  assert.equal(await page.locator('#nav > a[data-id="staffing"]').getAttribute('data-tip'), 'Staffing');
+  assert.equal(await page.locator('#nav > a[data-id="staffing"]').getAttribute('data-tip'), en("nav.area.staffing"));
   // Its word stays in the link for a screen reader, out of sight.
   assert.ok(await page.locator('#nav > a[data-id="staffing"] > span').evaluate(el => el.getBoundingClientRect().width <= 1));
   assert.equal(await page.locator('#ssFieldBtn').isVisible(), true);

@@ -1,5 +1,6 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
+const {en} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
@@ -58,7 +59,7 @@ test('a user source change supersedes pending restoration', async () => {
 });
 test('a remembered game link is opened and the folder path skipped', async () => {
   const result = await resume('granted', {link:'http://127.0.0.1:8323'});
-  assert.deepEqual(result.links, [['Opening the game link', 0]]);
+  assert.deepEqual(result.links, [[en("app.open.link"), 0]]);
   assert.deepEqual(result.loads, [], 'the folder handle is left alone');
   assert.equal(result.context.linkUrl, 'http://127.0.0.1:8323');
   assert.deepEqual(result.notes, [], 'the probe owns whatever is said next');
