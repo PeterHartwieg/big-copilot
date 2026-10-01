@@ -55,8 +55,8 @@ opposite: it compares against your own `version.json`, so it appears after you
 pull.
 
 To update: `git pull`, then `python3 build_web.py --assemble`, then hard-refresh the
-page. `web/_headers` is read only by
-Cloudflare, so your server caches `index.html` however it sees fit.
+page. `web/_headers` is read only by Cloudflare, so your server caches `index.html`
+however it sees fit.
 
 This is for your own use. Questions about the board are welcome as issues; setting
 up a server is not something the project supports.
