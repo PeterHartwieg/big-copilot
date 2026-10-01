@@ -3,7 +3,9 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
-const source = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.html'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.js'), 'utf8');
+// The markup, and the page's earlier script that defines featureDiscovery.
+const markup = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.html'), 'utf8');
 const {between} = require('./_slice.cjs');
 
 /* The boot slice starts at the shell, so the no-save path comes with it. */
@@ -56,7 +58,7 @@ function board({saved = {}, data = {}} = {}) {
      are read through its tt(). */
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8'), context);
   vm.runInContext(between(source, 'const SEC_PAGE =', '/* The business a finding'), context);
-  vm.runInContext(between(source, 'const featureDiscovery =', '/* --- changelog dialog'), context);
+  vm.runInContext(between(markup, 'const featureDiscovery =', '/* --- changelog dialog'), context);
   vm.runInContext(between(source, 'const PAGES =', '/* --- which kinds of finding'), context);
   /* The crumb row above a site's head, and its clicks. */
   vm.runInContext(between(source, 'const SS_BACK =', "/* The site's page stands on its own"), context);
@@ -106,7 +108,7 @@ test('the sidebar is Overview, Businesses, Supply, Staffing, Expansion, then Cit
   assert.match(b.$('navRefs').innerHTML, /data-id="map"/);
   assert.match(b.$('navRefs').innerHTML, /data-id="wiki"/);
   // The utilities are the foot's ···, after the references, inside the sidebar.
-  const side = between(source, '<nav class="sd" id="mast"', '<div class="wrap">');
+  const side = between(markup, '<nav class="sd" id="mast"', '<div class="wrap">');
   assert.ok(side.indexOf('id="navRefs"') < side.indexOf('class="sd-foot"')
     && side.indexOf('class="sd-foot"') < side.indexOf('id="navMore"'), 'the utilities menu sits in the foot, after the references');
   assert.doesNotMatch(b.$('navRefs').innerHTML, /navMore/);

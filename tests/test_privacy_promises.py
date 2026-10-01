@@ -78,7 +78,7 @@ class PrivacyPromises(unittest.TestCase):
     def test_the_site_sets_no_cookies_of_its_own(self):
         # "Big Copilot sets no cookies of its own." IndexedDB is named in the
         # notice (the history lives there, in app.js); cookies are not.
-        for path in [WEB / name for name in SCRIPTS + ("i18n.js",) + PAGES] + [ROOT / "ba_dashboard.py", ROOT / "template" / "board.html"]:
+        for path in [WEB / name for name in SCRIPTS + ("i18n.js",) + PAGES] + [ROOT / "ba_dashboard.py", ROOT / "template" / "board.html", ROOT / "template" / "board.js"]:
             with self.subTest(name=path.name):
                 self.assertNotIn("document.cookie", path.read_text(encoding="utf-8"))
         for path in (ROOT / "server").glob("*.mjs"):

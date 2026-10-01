@@ -12,8 +12,6 @@ import re
 import unittest
 from pathlib import Path
 
-import ba_dashboard
-
 ROOT = Path(__file__).resolve().parent.parent
 MARKER = re.compile(r"^(<{7}|={7}|>{7})( |$)", re.M)
 
@@ -49,7 +47,7 @@ def walk(css):
 
 class CssIntegrity(unittest.TestCase):
     def sheets(self):
-        styles = re.findall(r"<style[^>]*>(.*?)</style>", ba_dashboard.load_template(), re.S)
+        styles = re.findall(r"<style[^>]*>(.*?)</style>", (ROOT / "template" / "board.html").read_text(encoding="utf-8"), re.S)
         self.assertTrue(styles, "template/board.html has its stylesheet")
         out = [(f"template/board.html <style> {k + 1}", css) for k, css in enumerate(styles)]
         for name in ("map.css", "wiki.css", "community.css"):
