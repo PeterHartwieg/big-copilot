@@ -7315,6 +7315,32 @@ def _line_hours(posted: list, machines: int, rate: float, dem_makes: float, basi
     }
 
 
+def _line_use(machines: int, rate: float, makes: float, sold: float | None) -> dict:
+    """A factory line's use against what it makes at 24 h, for display only:
+    staffing and sizing keep _line_hours()'s 24 h cap.
+
+    `sold` is the line's share of what the ends draw of its product a day,
+    as Demand sizing reads it (demand(): the shops' measured sales down the
+    plan and the factory lines that eat it), with no margin, in either
+    sizing; None where no demand can be read. `soldDay` is that, `needDay`
+    that plus the margin, never capped. `production` is short where
+    `needDay` is past what the line makes at 24 h: a line at 24 h cannot
+    gain hours, so it is a machine gap, `more` machines at the recipe's
+    rate, making `makesWith` a day with them; critical where the sales
+    alone are past it, a warning where only the margin is. Covered
+    otherwise, and None with `sold`."""
+    if sold is None:
+        return {"soldDay": None, "needDay": None, "production": None}
+    need = sold * (1 + SUPPLY_MARGIN)
+    out = {"soldDay": round(sold), "needDay": round(need), "production": {"status": "covered", "level": "ok"}}
+    each = rate * 24
+    if each and round(need, 6) > round(makes, 6):
+        total = max(machines + 1, math.ceil(round(need / each, 6)))
+        out["production"] = {"status": "short", "level": "critical" if round(sold, 6) > round(makes, 6) else "warn",
+                             "more": total - machines, "makesWith": round(total * each)}
+    return out
+
+
 def _factories(
     save: Save,
     names: Names,
@@ -7608,9 +7634,10 @@ def _factories(
             # eat it, dem_eats(); an export takes the surplus), this line's
             # share of it, never past capacity. With nothing drawn there is
             # no demand to read, and the line is taken at capacity.
-            dem_makes, ramp, dem_basis = makes, (), "none"
+            dem_makes, ramp, dem_basis, sold = makes, (), "none", None
             if demand:
                 wanted, ramp = demand(key, slug, eats=dem_eats)
+                sold = wanted * makes / capacity[slug] if capacity[slug] else 0.0
                 if wanted > 0 and capacity[slug]:
                     dem_makes = min(makes, wanted * makes / capacity[slug])
                     dem_basis = "sales"
@@ -7647,6 +7674,7 @@ def _factories(
                     "atRoster": round(makes * share),
                     **staffing,
                     **_line_hours(posted[key][(station, rid)], n, rec["out"], dem_makes, dem_basis),
+                    **_line_use(n, rec["out"], makes, sold),
                 }
             )
             made_by[slug].add(key)
