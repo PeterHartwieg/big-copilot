@@ -1,6 +1,10 @@
 {
  "alerts": [
   {
+   "amt": {
+    "n": 1,
+    "unit": "staff"
+   },
    "group": "jobdemand",
    "i18n": {
     "text": [
@@ -61,6 +65,10 @@
    "worth": null
   },
   {
+   "amt": {
+    "n": 16,
+    "unit": "hours covered"
+   },
    "ev": {
     "slug": "ba:itemname_water"
    },
@@ -88,6 +96,11 @@
    "worth": null
   },
   {
+   "amt": {
+    "n": 0,
+    "of": 168,
+    "unit": "hours staffed"
+   },
    "ev": {
     "slot": 2,
     "slug": "ba:itemname_beer"
@@ -202,6 +215,11 @@
    "worth": null
   },
   {
+   "amt": {
+    "n": 64.0,
+    "sign": "%",
+    "unit": "satisfied"
+   },
    "group": "satisfaction",
    "i18n": {
     "text": [
@@ -300,6 +318,10 @@
    "worth": null
   },
   {
+   "amt": {
+    "n": 600,
+    "unit": "/week used"
+   },
    "ev": {
     "slug": "ba:itemname_cheapgift"
    },
@@ -332,6 +354,10 @@
    "worth": null
   },
   {
+   "amt": {
+    "n": 21,
+    "unit": "/day"
+   },
    "ev": {
     "slug": "ba:itemname_umbrella"
    },
@@ -355,6 +381,11 @@
    "worth": null
   },
   {
+   "amt": {
+    "n": 84,
+    "of": 168,
+    "unit": "hours staffed"
+   },
    "ev": {
     "slot": 1,
     "slug": "ba:itemname_beer"
@@ -470,6 +501,10 @@
  "alertsDemand": {
   "lines": [
    {
+    "amt": {
+     "n": 1,
+     "unit": "staff"
+    },
     "group": "jobdemand",
     "i18n": {
      "text": [
@@ -506,6 +541,11 @@
     "worth": null
    },
    {
+    "amt": {
+     "n": 0,
+     "of": 56,
+     "unit": "hours staffed"
+    },
     "ev": {
      "slot": 2,
      "slug": "ba:itemname_beer"
@@ -620,6 +660,11 @@
     "worth": null
    },
    {
+    "amt": {
+     "n": 64.0,
+     "sign": "%",
+     "unit": "satisfied"
+    },
     "group": "satisfaction",
     "i18n": {
      "text": [
@@ -718,6 +763,10 @@
     "worth": null
    },
    {
+    "amt": {
+     "n": 600,
+     "unit": "/week used"
+    },
     "ev": {
      "slug": "ba:itemname_cheapgift"
     },
@@ -750,6 +799,10 @@
     "worth": null
    },
    {
+    "amt": {
+     "n": 21,
+     "unit": "/day"
+    },
     "ev": {
      "slug": "ba:itemname_umbrella"
     },
@@ -4215,6 +4268,12 @@
    "cap": 20,
    "capTop": 20,
    "fix": "another counter",
+   "heldBy": [
+    [
+     "post",
+     "ba:skill_customerservice"
+    ]
+   ],
    "hours": 14,
    "i18n": {
     "fix": [

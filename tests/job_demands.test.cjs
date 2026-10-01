@@ -154,8 +154,8 @@ test('both demand findings can be filtered and link somewhere', async () => {
     assert.deepEqual(links, [{sec: 'secDetail', site: true}, {sec: 'secDetail', site: true}]);
     // The amount column carries the people, since these findings have no money.
     const amounts = await page.evaluate(() => [
-      findingAmount({group: 'jobdemand', text: '2 staff with unmet demands: Mouse Pad for 2 (nice to have)'}),
-      findingAmount({group: 'companydemand', text: '11 staff with unmet demands: Gold Health Insurance for 4'}),
+      findingAmount({group: 'jobdemand', text: '2 staff with unmet demands: Mouse Pad for 2 (nice to have)', amt: {n: 2, unit: 'staff'}}),
+      findingAmount({group: 'companydemand', text: '11 staff with unmet demands: Gold Health Insurance for 4', amt: {n: 11, unit: 'staff'}}),
       splitFinding({group: 'jobdemand', site: 'HART. Gifts', text: '2 staff with unmet demands: Mouse Pad for 2 (nice to have)'}).what,
     ]);
     // Pins the wording: these legacy finding fixtures exercise the English text parser.

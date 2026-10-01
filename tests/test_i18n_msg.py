@@ -536,7 +536,7 @@ class FindingsHalfA(unittest.TestCase):
             shop("k3", "B", promotion=70, traffic=50, marketingIndex=20, customers=3, missingUniformLocker=True),
         ]
         trends = [{"s": 2, "ready": True, "change": -0.3, "last7": 700.0, "prev7": 1000.0}]
-        cap = {"kind": "cap", "limit": "staffing", "cap": 30, "when": "Mon 12", "hours": 2, "throughput": 50.0,
+        cap = {"kind": "cap", "limit": "staffing", "heldBy": [["staff", None]], "cap": 30, "when": "Mon 12", "hours": 2, "throughput": 50.0,
                "fix": "more staff"}
         hours = [dict(cap, key="k2", site="A"), dict(cap, key="k3", site="B")]
         out = _wire_msgs(_alerts(businesses, SUPPLY, [], trends, [], hours, [], 60, 0.0))
