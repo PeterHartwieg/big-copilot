@@ -49,9 +49,9 @@ def walk(css):
 
 class CssIntegrity(unittest.TestCase):
     def sheets(self):
-        styles = re.findall(r"<style[^>]*>(.*?)</style>", ba_dashboard.TEMPLATE, re.S)
-        self.assertTrue(styles, "the TEMPLATE has its stylesheet")
-        out = [(f"TEMPLATE <style> {k + 1}", css) for k, css in enumerate(styles)]
+        styles = re.findall(r"<style[^>]*>(.*?)</style>", ba_dashboard.load_template(), re.S)
+        self.assertTrue(styles, "template/board.html has its stylesheet")
+        out = [(f"template/board.html <style> {k + 1}", css) for k, css in enumerate(styles)]
         for name in ("map.css", "wiki.css", "community.css"):
             out.append((f"web/{name}", (ROOT / "web" / name).read_text(encoding="utf-8")))
         return out

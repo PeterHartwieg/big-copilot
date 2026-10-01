@@ -10,8 +10,8 @@ before. None of it reads the delivery log: every save here has an empty one.
 """
 import unittest
 
-from ba_dashboard import (plain, RECIPE_ITEMS, SUMMARIES, TEMPLATE, WEEKDAYS, History, Names, _alerts,
-                          _factories, _import_notes, _supply, _supply_facts, site_key)
+from ba_dashboard import (plain, RECIPE_ITEMS, SUMMARIES, WEEKDAYS, History, Names, _alerts,
+                          _factories, _import_notes, _supply, _supply_facts, load_template, site_key)
 from test_recipe_identity import BEER, RID, WATER
 from test_recipe_identity import SaveStub as FactoryStub
 
@@ -304,7 +304,7 @@ class RoutedSupplyTests(unittest.TestCase):
         of them condense into, name the next import or route round, or the
         next delivery, rather than an import alone."""
         self.assertNotIn("import", SUMMARIES["shortfall"](3, "Coffee"))
-        [kind] = [line for line in TEMPLATE.splitlines() if 'id:"shortfall"' in line]
+        [kind] = [line for line in load_template().splitlines() if 'id:"shortfall"' in line]
         self.assertIn("import or route round", kind)
 
     def test_a_paused_backup_beside_a_covering_route_is_judged_over_a_week(self):

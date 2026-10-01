@@ -4,12 +4,12 @@ import re
 import subprocess
 import unittest
 
-from ba_dashboard import TEMPLATE
+from ba_dashboard import load_template
 
 
 class CompanyOrderRegressions(unittest.TestCase):
     def test_company_order_scenarios(self):
-        match = re.search(r"function planOrder\([^)]*\)\{.*?\n\}", TEMPLATE, re.S)
+        match = re.search(r"function planOrder\([^)]*\)\{.*?\n\}", load_template(), re.S)
         self.assertIsNotNone(match, "Planner must expose its actual order calculation")
         cases = [
             ("unchanged shared ingredient", 168000, 168000, 262000, 262000, 0),
