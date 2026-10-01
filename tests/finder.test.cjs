@@ -16,6 +16,7 @@ const HK = ['ba:street_broadwaystreet#1', 'ba:street_broadwaystreet#2', 'ba:stre
 const MT = ['ba:street_broadwaystreet#10', 'ba:street_broadwaystreet#11', 'ba:street_broadwaystreet#13', 'ba:street_broadwaystreet#3', 'ba:street_broadwaystreet#4', 'ba:street_broadwaystreet#5', 'ba:street_broadwaystreet#6'];
 const CLOTHES = 'ba:businesstype_clothingstore', COFFEE = 'ba:businesstype_coffeeshop', LAW = 'ba:businesstype_lawfirm';
 const THEATER = 'ba:businesstype_theater';
+const CINEMA_AT = 'ba:street_thirdavenue#15';
 /* A business name is the player's or a rival's own text, so one of them is markup. */
 const HOSTILE = '<img src=x onerror=window.__x=1>';
 const HK_NAME = "Hell's Kitchen";
@@ -53,6 +54,8 @@ const PREMISES = {
     // at all, so that row can never be scored.
     site(HK[5], {type: 'theater', size: 'R', m2: 1200, cap: [150, 200], rent: 900, traffic: 64}),
     site(MT[3], {type: 'theater', size: 'R', m2: 1200, cap: [150, 200], rent: null, traffic: 70}),
+    // A cinema reads its own layout's number, never a range (15 Third Avenue, S3).
+    site(CINEMA_AT, {type: 'cinema', size: 'S', m2: 1200, cap: 100, rent: 800, traffic: 55}),
     // One of yours, in a building you bought.
     // A hospital: occupied, named, and never available whoever asks.
     site(MT[6], {type: 'special', size: 'M', m2: 2000, cap: null, rent: null, traffic: 40,
@@ -1199,6 +1202,10 @@ test('the Cap column sits between m² and Upfront and sorts on what it can promi
     await page.locator('#cityMapPage .fchip.cat[data-cat="theater"]').click();
     assert.deepEqual(await page.$$eval('#cityMapPage .place.fr .cap', v => v.map(x => x.textContent)),
       ['150–200', '150–200']);
+    // A cinema shows its own layout's one number.
+    await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
+    assert.deepEqual(await page.$$eval('#cityMapPage .place.fr .cap', v => v.map(x => x.textContent)),
+      ['100']);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

@@ -645,8 +645,8 @@ class TheatreGridTests(unittest.TestCase):
         self.assertEqual((service["counters"], service["staffed"][MONDAY][10]), (100, 50))
         self.assertEqual(grid["staffed"][MONDAY][10], 50)
         [finding] = self.findings(grid)
-        self.assertEqual(plain(finding["limit"]), "staffing")
-        self.assertNotIn("Actor", plain(finding["fix"]))
+        self.assertEqual((plain(finding["limit"]), plain(finding["fix"])),
+                         ("staffing", "more service staff on those hours"))
 
     def test_a_projection_booth_in_a_theatre_is_no_role(self):
         """The game assigns no Projectionist in a theatre (ASSIGN_SKILLS), so a
@@ -675,6 +675,8 @@ class TheatreGridTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             seeds.append(run.stdout)
         self.assertEqual(seeds[0], seeds[1])
+        # Customer Service's ticket booth and register both serve 50 an hour,
+        # so the role's station is the tie's first by name: the register.
         self.assertEqual(json.loads(seeds[0]), [
             [ACTOR, "Actor", "Dressing Room", 160, "dressing rooms"],
             [SERVICE, "Customer Service", "Concessions Stand Register", 100, None],
