@@ -1,0 +1,207 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-10-01T12:00:00Z"
+ },
+ "title": "Big Copilot Open a factory",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1280,
+   "h": 900,
+   "title": "0 · A: Expansion › Open a factory, its own view",
+   "is_interactive": true
+  },
+  "EntryB.dc.html": {
+   "x": 1360,
+   "y": 0,
+   "w": 1280,
+   "h": 900,
+   "title": "0b · B: one view, Open a site, with a Store / Factory switch",
+   "is_interactive": true
+  },
+  "Links.dc.html": {
+   "x": 2720,
+   "y": 0,
+   "w": 1280,
+   "h": 680,
+   "title": "0c · The ways in: the store checklist, Plan a factory, Overview",
+   "is_interactive": true
+  },
+  "Recipe.dc.html": {
+   "x": 0,
+   "y": 1320,
+   "w": 1280,
+   "h": 1000,
+   "title": "1 · What: the lines, sized to the chain",
+   "is_interactive": true
+  },
+  "NoDepot.dc.html": {
+   "x": 1360,
+   "y": 1320,
+   "w": 1280,
+   "h": 860,
+   "title": "1b · What: no depot yet, the plan adds one",
+   "is_interactive": true
+  },
+  "Location.dc.html": {
+   "x": 2720,
+   "y": 1320,
+   "w": 1280,
+   "h": 1000,
+   "title": "2 · Where: warehouse buildings near the depot",
+   "is_interactive": true
+  },
+  "LocationFar.dc.html": {
+   "x": 4080,
+   "y": 1320,
+   "w": 1280,
+   "h": 1200,
+   "title": "2b · Where: across the river from the depot",
+   "is_interactive": true
+  },
+  "Investment.dc.html": {
+   "x": 0,
+   "y": 2940,
+   "w": 1280,
+   "h": 1180,
+   "title": "3 · Investment: self-installation",
+   "is_interactive": true
+  },
+  "InvestmentFirm.dc.html": {
+   "x": 1360,
+   "y": 2940,
+   "w": 1280,
+   "h": 1000,
+   "title": "3b · Investment: installation firm",
+   "is_interactive": true
+  },
+  "BreakEven.dc.html": {
+   "x": 2720,
+   "y": 2940,
+   "w": 1280,
+   "h": 1130,
+   "title": "4 · Break even: A what the factory adds, B the chain as one",
+   "is_interactive": true
+  },
+  "BreakEvenStates.dc.html": {
+   "x": 4080,
+   "y": 2940,
+   "w": 1000,
+   "h": 800,
+   "title": "4b · Break even: chain not paid back, too big, nothing to replace",
+   "is_interactive": true
+  },
+  "Checklist.dc.html": {
+   "x": 0,
+   "y": 4540,
+   "w": 1280,
+   "h": 1380,
+   "title": "5 · Until production · game linked",
+   "is_interactive": true
+  },
+  "ChecklistNoLink.dc.html": {
+   "x": 1360,
+   "y": 4540,
+   "w": 1280,
+   "h": 1480,
+   "title": "5b · Until production · not linked",
+   "is_interactive": true
+  },
+  "Hire.dc.html": {
+   "x": 2720,
+   "y": 4540,
+   "w": 1120,
+   "h": 900,
+   "title": "5c, 5d · The quick buttons' dialogs",
+   "is_interactive": true
+  },
+  "Running.dc.html": {
+   "x": 0,
+   "y": 6440,
+   "w": 1280,
+   "h": 1240,
+   "title": "6 · Running: output and payback",
+   "is_interactive": true
+  },
+  "RunningBelow.dc.html": {
+   "x": 1360,
+   "y": 6440,
+   "w": 1280,
+   "h": 1280,
+   "title": "6b · Running: output below plan",
+   "is_interactive": true
+  },
+  "Results.dc.html": {
+   "x": 2720,
+   "y": 6440,
+   "w": 1280,
+   "h": 820,
+   "title": "7 · Businesses › Results: the chain row and its history",
+   "is_interactive": true
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "EntryB.dc.html",
+  "Links.dc.html",
+  "Recipe.dc.html",
+  "NoDepot.dc.html",
+  "Location.dc.html",
+  "LocationFar.dc.html",
+  "Investment.dc.html",
+  "InvestmentFirm.dc.html",
+  "BreakEven.dc.html",
+  "BreakEvenStates.dc.html",
+  "Checklist.dc.html",
+  "ChecklistNoLink.dc.html",
+  "Hire.dc.html",
+  "Running.dc.html",
+  "RunningBelow.dc.html",
+  "Results.dc.html"
+ ],
+ "notes": {
+  "row0": {
+   "x": 0,
+   "y": -240,
+   "text": "Open a factory: where it lives",
+   "kind": "title1",
+   "maxW": 5440
+  },
+  "row1": {
+   "x": 0,
+   "y": 1080,
+   "text": "What to make, and where",
+   "kind": "title1",
+   "maxW": 5440
+  },
+  "row2": {
+   "x": 0,
+   "y": 2700,
+   "text": "The investment and its break even",
+   "kind": "title1",
+   "maxW": 5440
+  },
+  "row3": {
+   "x": 0,
+   "y": 4300,
+   "text": "Until production runs",
+   "kind": "title1",
+   "maxW": 5440
+  },
+  "row4": {
+   "x": 0,
+   "y": 6200,
+   "text": "Running, and paid back",
+   "kind": "title1",
+   "maxW": 5440
+  }
+ },
+ "designSystems": []
+}
