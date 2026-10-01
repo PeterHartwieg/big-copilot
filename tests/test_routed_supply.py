@@ -348,6 +348,24 @@ class RoutedSupplyTests(MsgAsserts, unittest.TestCase):
         supply, _ = depot_supply(1.0, [contract(5200, 0, smart=True)])
         self.assertEqual(dict(supply["factories"]["depotRoutes"]), {})
 
+    def test_a_plan_to_an_address_not_the_company_s_does_not_break_the_walk(self):
+        # A depot's plan to a building the company no longer runs, its key
+        # sorting after the shop's: the walk once added that address to the
+        # share table while looping over it ("dictionary changed size").
+        plans = [plan(DEPOT, SHOP, 5000), plan(FACTORY, DEPOT, 7000), plan(DEPOT, ("zzz", 9), 500)]
+        recipes = {FOOD: {"slug": FOOD, "item": "Frozen Food", "out": DRAW / 24,
+                          "workstation": "bottledgoods", "ingredients": []}}
+
+        def business(site, name, kind, status, units, rate):
+            return {"key": site_key(site), "name": name, "code": "", "neighbourhood": "", "type": kind,
+                    "typeSlug": kind, "status": status,
+                    "lines": [{"slug": FOOD, "item": "Frozen Food", "units": units, "rate": rate, "price": 1}]}
+
+        businesses = [business(FACTORY, "F", "factory", "support", 0, 0),
+                      business(DEPOT, "D", "warehouse", "support", 2700, 0),
+                      business(SHOP, "S", "supermarket", "retail", 500, DRAW)]
+        _supply(SaveStub(plans, [], machines=1), Names({}), businesses, DAY, {}, recipes)
+
     def test_a_depot_fed_only_by_imports_reads_as_before(self):
         """No route into the depot: the whole draw is the import's, and a 5,000
         order against a 25,200 week is short. The depot is walked a round at
