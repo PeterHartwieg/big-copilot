@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "bffba2aac5";</script>
-<link rel="stylesheet" href="community.css?v=bffba2aac5">
+<script>window.LEDGER_BUILD = "a6d166099a";</script>
+<link rel="stylesheet" href="community.css?v=a6d166099a">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=bffba2aac5">
+<link rel="stylesheet" href="fonts/fonts.css?v=a6d166099a">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5897,7 +5897,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"bffba2aac5","latest":{"pr":205,"date":"2026-10-01","title":"Factories: what your shops sell against what each line makes","summary":"Supply › Production and each factory's page have a Sold / day column: what the shops a line supplies actually sell a day, next to what it makes and ships. When a line cannot keep up even round the clock, its status reads short: needs N more machines, and the tip says what that gives, for example 1 more machine makes 9,600 a day against 5,066 needed. Every short now says what is short: hours, the ingredient order, or production, each as its own chip, so a short order is no longer read as a short line. A factory with a line short of machines opens under Needs a change."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"a6d166099a","latest":{"pr":205,"date":"2026-10-01","title":"Factories: what your shops sell against what each line makes","summary":"Supply › Production and each factory's page have a Sold / day column: what the shops a line supplies actually sell a day, next to what it makes and ships. When a line cannot keep up even round the clock, its status reads short: needs N more machines, and the tip says what that gives, for example 1 more machine makes 9,600 a day against 5,066 needed. Every short now says what is short: hours, the ingredient order, or production, each as its own chip, so a short order is no longer read as a short line. A factory with a line short of machines opens under Needs a change."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5985,8 +5985,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=bffba2aac5"></script>
-<script src="community.js?v=bffba2aac5"></script>
+<script src="app.js?v=a6d166099a"></script>
+<script src="community.js?v=a6d166099a"></script>
 
 <script>
 
@@ -13125,7 +13125,7 @@ function drawSite(){
       ${sechead(tt("sp.stock.title", "Stock"), {icon: "crate", why: `${tt("sp.stock.why", "The next seven days, left to right from today. A filled cell is a day covered, red hatching is a day dry, and the truck sits on the day it lands.")}${
         rows.length ? "" : ` ${tt("sp.stock.why.none", "Nothing is held or imported here yet.")}`}`, aside: basisMoves ? `<span class="seg" id="spSizing"></span>` : ""})}
       ${rows.length ? `<div class="scrollx"><table>
-        <thead><tr><th>${tt("sp.stock.col.line", "Line")}</th><th>${tt("sp.stock.col.onhand", "On hand")}</th><th>${tt("sp.stock.col.draw", "Draw / day")}</th><th class="l">${
+        <thead><tr><th>${tt("sp.stock.col.line", "Line")}</th><th>${tt("sp.stock.col.onhand", "On hand")}</th><th data-tip="${attr(tt("sp.stock.col.draw.tip", "What is drawn each day: the logistics rounds out of here and, at a factory, what its own lines eat"))}">${tt("sp.stock.col.draw", "Draw / day")}</th><th class="l">${
           spDays(D.meta.day % 7)}</th><th></th><th>${tt("sp.stock.col.order", "Weekly order")}</th><th>${tt("sp.stock.col.feeds", "Feeds")}</th></tr></thead>
         <tbody>${rows.map(r => `<tr data-el="${attr(r.el.join(" "))}" data-read="${attr(r.read)}">
           <td class="l">${spEsc(r.item)}${r.chip ? ` ${r.chip}` : ""}</td><td>${r.hand === 0
@@ -13499,17 +13499,29 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     .lead = tt("sb.ck.lead.loose", "choose a supplying depot before setting an order"));
   imports.forEach(r => {
     const f = r.fact || {};
+    /* A factory input topped up each morning keeps its daily word; its own
+       contract is judged beside it (`import`), and the run-out is that one's. */
+    const fi = f.import || f;
     const catchUp = Number.isFinite(r.catchUp) && r.catchUp > 0 ? r.catchUp : null;
     /* Units to bring in by hand, and by when. */
     const bring = !catchUp ? "" : r.runsOut
       ? tt("sb.ck.bring.day", {one: "Bring in {n:,} extra unit before {day}.", other: "Bring in {n:,} extra units before {day}."}, {n: catchUp, day: sbDay(r.runsOut)})
       : tt("sb.ck.bring", {one: "Bring in {n:,} extra unit.", other: "Bring in {n:,} extra units."}, {n: catchUp});
+    /* The one-offs from the import lines come first by site, not by line:
+       the rows are grouped by kind and site below, so moving this one ahead
+       of the site's first Weekly imports row puts the site's "Before the
+       next delivery" group, its other one-offs with it, ahead of its order
+       changes (a paused import to resume among them). */
+    const first = () => {
+      const at = rows.findIndex(x => x.kind === "Weekly imports" && x.site === r.s);
+      if(at >= 0) rows.splice(at, 0, rows.pop());
+    };
     if(f.st === "paused" && !rows.some(x => x.kind === "Weekly imports" && x.site === r.s && x.slug === r.slug)) add("Weekly imports", r.s, r, null, null,
       r.from ? tt("sb.ck.review.from", "Review the paused import from {from}; resume it in-game if still needed.", {from: r.from})
         : tt("sb.ck.review", "Review the paused import from the supplier; resume it in-game if still needed.")).lead = r.from
       ? tt("sb.ck.lead.review.from", "review the paused import from {from}; resume it in-game if still needed", {from: r.from})
       : tt("sb.ck.lead.review", "review the paused import from the supplier; resume it in-game if still needed");
-    else if(f.st === "short" && f.why === "shortfall" && r.covered){
+    else if(fi.st === "short" && fi.why === "shortfall" && r.covered){
       const row = add("Before the next delivery", r.s, r, null, catchUp, sbCkJoin([bring, !r.paused
         ? tt("sb.ck.round", "A route brings the week's draw, but a busy day may empty the shelf before its next round.")
         : r.from ? tt("sb.ck.round.paused.from", "A route brings the week's draw, but a busy day may empty the shelf before its next round, and the backup import from {from} is paused.", {from: r.from})
@@ -13520,14 +13532,19 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
         ? tt("sb.ck.lead.round", "a route brings the week's draw, but a busy day may empty the shelf before its next round")
         : r.from ? tt("sb.ck.lead.round.paused.from", "a route brings the week's draw, but a busy day may empty the shelf before its next round, and the backup import from {from} is paused", {from: r.from})
         : tt("sb.ck.lead.round.paused", "a route brings the week's draw, but a busy day may empty the shelf before its next round, and the backup import from the supplier is paused");
+      first();
     }
-    else if(f.st === "short" && f.why === "shortfall"){
+    /* An order short of its week whose stock also runs out before the next
+       drop: the finding names the order, but raising it does not bridge the
+       days to that drop, so the one-off comes too, ahead of the order. */
+    else if(fi.st === "short" && (fi.why === "shortfall" || (fi.why === "order" && r.coverFit === "short" && catchUp))){
       const row = add("Before the next delivery", r.s, r, null, catchUp, sbCkJoin([bring,
         catchUp ? tt("sb.ck.estimate", "Estimated demand minus current stock and scheduled incoming deliveries, rounded up to whole units.") : "",
         tt("sb.ck.runOut", {one: "Stock may run out {n} day before a scheduled delivery.", other: "Stock may run out {n} days before a scheduled delivery."}, {n: r.shortBy}),
         tt("sb.ck.oneOff", "Arrange a one-off supply; a weekly order change alone will not bridge this gap.")]));
       if(!catchUp) row.lead = tt("sb.ck.lead.runOut",
         {one: "stock may run out {n} day before a scheduled delivery", other: "stock may run out {n} days before a scheduled delivery"}, {n: r.shortBy});
+      first();
     }
   });
   sites.forEach(s => s.rows.forEach(r => {
@@ -15334,7 +15351,7 @@ function sbImportCtx(d){
 /* --- Warehouses: every depot, first tier or second --------------------- */
 const SB_WH_KINDS = ["Weekly imports", "Before the next delivery", "Depot daily top-ups", "Wholesale deliveries"];
 const SB_WH_COLS = [sbCol(() => tt("sb.col.product", "Product"), r => r.item, "l"), sbCol(() => tt("sb.col.onHand", "On hand"), r => r.stock ?? null),
-  sbCol(() => tt("sb.col.draw", "Draw / day"), r => r.draw ?? null, "", () => tt("sb.col.draw.tip", "What leaves each day: the logistics rounds out of here")),
+  sbCol(() => tt("sb.col.draw", "Draw / day"), r => r.draw ?? null, "", () => tt("sb.col.draw.tip", "What is drawn each day: the logistics rounds out of here and, at a factory, what its own lines eat")),
   sbCol(() => tt("sb.col.busiest", "Busiest"), r => r.busy ?? null),
   sbCol(() => tt("sb.col.cover", "Cover"), null, "l",
     () => tt("sb.col.cover.tip", "A weekly import: the week from today, a cell a day, the truck on import day. A daily round: the busiest day against what the round brings.")),

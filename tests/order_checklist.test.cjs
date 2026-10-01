@@ -177,8 +177,10 @@ test('a paused order or delivery gap is a review action, not an invented quantit
   ]});
   assert.equal(rows.length, 2);
   assert.ok(rows.every(r => r.proposed === null));
-  assert.match(rows[0].reason, enRe("sb.ck.review.from", {from: "Importer"}));
-  assert.match(rows[1].reason, enRe("sb.ck.oneOff"));
+  // The site's one-offs come ahead of its import changes.
+  assert.deepEqual(rows.map(r => r.item), ['Sugar', 'Flour']);
+  assert.match(rows[1].reason, enRe("sb.ck.review.from", {from: "Importer"}));
+  assert.match(rows[0].reason, enRe("sb.ck.oneOff"));
   // A paused backup a route covers is no action: its fact is covered.
   assert.deepEqual(build({checks:[{s:0, item:'Water', paused:true, covered:true, from:'Importer',
     fact:fact('covered', {why:'route'})}]}), []);
@@ -218,6 +220,65 @@ test('a measured delivery gap has a one-off quantity, separate from the recurrin
   assert.match(text, enRe("sb.ck.copy.once", {n: 217}));
   assert.doesNotMatch(text, new RegExp(enRe("sb.ck.copy.notSet").source + " ->"));
   assert.notEqual(rows[0].key, build({checks:[{...gap, catchUp:230}]})[0].key);
+});
+
+test('a factory input topped up each morning takes its run-out from its own import fact', () => {
+  // The daily word stays on the outer fact; the contract beside it is `import`.
+  const gap = {s:1, item:'Water', shortBy:2.1, catchUp:480, runsOut:'Friday',
+    fact:fact('covered', {role:'input', cad:'daily', import:fact('short', {why:'shortfall', role:'input', cad:'weekly'})})};
+  const rows = build({checks:[gap]});
+  assert.deepEqual(rows.map(r => [r.kind, r.item, r.proposed]), [['Before the next delivery', 'Water', 480]]);
+  // A paused contract is still read off the outer fact.
+  assert.deepEqual(build({checks:[{...gap, catchUp:null, from:'Importer',
+    fact:fact('covered', {import:fact('paused')})}]}), []);
+});
+
+test('an order short of its week that also runs dry before the drop gives the one-off first, then the order', () => {
+  const short = fact('short', {why:'order', lvl:'critical', setTo:1500});
+  const run = {s:0, item:'Sugar', coverFit:'short', shortBy:2.3, catchUp:540, runsOut:'Friday', fact:short};
+  const rows = build({imports:[{s:0, rows:[order({fact:short})]}], checks:[run]});
+  assert.deepEqual(rows.map(r => [r.kind, r.item, r.proposed]),
+    [['Before the next delivery', 'Sugar', 540], ['Weekly imports', 'Sugar', 1500]]);
+  assert.match(rows[0].reason, enRe("sb.ck.bring.day", {n: 540, day: 'Friday'}, {anchor: 'start'}));
+  // Stock that reaches the drop leaves the order alone.
+  assert.deepEqual(build({imports:[{s:0, rows:[order({fact:short})]}], checks:[{...run, coverFit:'ok', catchUp:0}]})
+    .map(r => r.kind), ['Weekly imports']);
+});
+
+test('the one-offs come first by site, ahead of all its order changes, in the copied text too', () => {
+  const short = fact('short', {why:'order', lvl:'critical', setTo:1500});
+  const big = order({item:'Flour', current:5000, inGame:5000, setTo:9000, value:9000, fact:fact('short', {why:'order', setTo:9000})});
+  const run = {s:0, item:'Sugar', coverFit:'short', shortBy:2.3, catchUp:540, runsOut:'Friday', fact:short};
+  const other = {s:1, item:'Salt', coverFit:'short', shortBy:1.5, catchUp:90, runsOut:'Thursday',
+    fact:fact('short', {why:'shortfall'})};
+  const rows = build({imports:[{s:0, rows:[big, order({fact:short})]}, {s:1, rows:[order({s:1, item:'Salt', fact:fact('short', {why:'order', setTo:1500})})]}],
+    checks:[run, other]});
+  assert.deepEqual(rows.map(r => [r.kind, r.site, r.item]), [
+    ['Before the next delivery', 0, 'Sugar'], ['Weekly imports', 0, 'Flour'], ['Weekly imports', 0, 'Sugar'],
+    ['Before the next delivery', 1, 'Salt'], ['Weekly imports', 1, 'Salt']]);
+  const text = context.orderChecklistText(rows, 'Company');
+  const at = words => text.indexOf(words);
+  assert.ok(at('Sugar: ' + en('sb.ck.copy.once', {n: 540})) < at('Flour: '), text);
+  assert.ok(at('Flour: ') < at('Salt: ' + en('sb.ck.copy.once', {n: 90})), text);
+});
+
+test('a depot a route feeds, its backup import paused, lists the one-off before resuming the import', () => {
+  const f = fact('short', {why:'shortfall', lvl:'critical'});
+  const rows = build({imports:[{s:0, rows:[order({item:'Water', fit:'paused', paused:true, pausedWeekly:1000, current:0,
+    inGame:1000, setTo:1500, value:1500, need:1500, fact:f})]}],
+    checks:[{s:0, item:'Water', covered:true, paused:true, from:'Importer', shortBy:1, catchUp:300, runsOut:'Sunday', fact:f}]});
+  assert.deepEqual(rows.map(r => [r.kind, r.item]), [['Before the next delivery', 'Water'], ['Weekly imports', 'Water']]);
+  assert.match(rows[0].reason, enRe("sb.ck.bring.day", {n: 300, day: 'Sunday'}, {anchor: 'start'}));
+  assert.match(rows[1].reason, enRe("sb.ck.resume", {}, {anchor: 'start'}));
+});
+
+test('a factory topped up each morning whose own import is short and runs dry gets both, the one-off first', () => {
+  const imp = fact('short', {why:'order', lvl:'critical', role:'input', cad:'weekly', setTo:1500});
+  const outer = fact('covered', {role:'input', cad:'daily', import:imp, imp:true});
+  const rows = build({imports:[{s:1, rows:[order({s:1, item:'Water', fact:imp})]}],
+    checks:[{s:1, item:'Water', coverFit:'short', shortBy:2, catchUp:480, runsOut:'Friday', fact:outer}]});
+  assert.deepEqual(rows.map(r => [r.kind, r.item, r.proposed]),
+    [['Before the next delivery', 'Water', 480], ['Weekly imports', 'Water', 1500]]);
 });
 
 test('completion identities survive site reordering but change with settings and sources', () => {
