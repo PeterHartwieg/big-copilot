@@ -5439,7 +5439,7 @@ def _supply(
             return dem_levels_at[memo]
         dem_levels_at[memo] = {}  # a loop back into this item holds nothing down
         sites, limits, fixed, caps_at = {}, {}, collections.defaultdict(float), {}
-        for (dest, it), weights in dem_graph["share"].items():
+        for (dest, it), weights in list(dem_graph["share"].items()):
             if it != item or dest not in index:
                 continue
             more, _behind = demand(dest, item, eats=eats, held_down=False)
@@ -5567,7 +5567,9 @@ def _supply(
         if eats is not None and not measured:
             total += eats(key, item)
         for dest_key in _in_order({d for d, i, _a in dem_graph["edges"].get(key, []) if i == item and d != key}):
-            weights = dem_graph["share"][(dest_key, item)]
+            # .get(): a plan to an address not the company's has no share, and
+            # reading the defaultdict would add one while dem_levels() walks it.
+            weights = dem_graph["share"].get((dest_key, item)) or {}
             if not weights.get(key):
                 continue
             more, behind = demand(dest_key, item, seen | {key}, eats, held_down, measured)
