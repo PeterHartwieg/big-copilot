@@ -993,7 +993,7 @@ check one: on a copy of the company, save, change one machine's recipe in game, 
 and compare that machine's id across the two saves. If the table is wrong, drop the source.
 
 To update the table: review the upstream diff, verify the changed ids that way, edit
-`RECIPE_ITEMS`, run `tests/test_recipe_identity.py`, then `python build_web.py`.
+`RECIPE_ITEMS`, run `tests/test_recipe_identity.py`, then `python build_web.py --assemble`.
 
 ### Why some rows have no price
 

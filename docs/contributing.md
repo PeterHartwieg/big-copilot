@@ -116,7 +116,8 @@ blocked); a later version can notify again. Reload is always manual and uses
 the existing save restoration flow. Single-file imports may need selecting
 again. Existing tabs from before this feature need one manual reload first.
 
-Deploy with `npm run deploy` from an up-to-date main checkout (`tools/deploy.mjs`). It
+Deploy with `npm run deploy` from an up-to-date main checkout (`tools/deploy.mjs`); it
+also accepts a branch that contains origin/main. It
 refuses a working tree with any modified, staged or untracked file, runs `git fetch origin`
 and stops unless `git merge-base --is-ancestor origin/main HEAD` passes, runs
 `python build_web.py --assemble` and stops if that changed a committed file, runs
