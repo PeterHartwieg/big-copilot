@@ -34,7 +34,7 @@ starts only when the player opens it.
 
 For every business the player runs:
 
-- **Investment** = furniture + interior + deposit.
+- **Investment** = furniture + interior + deposit + vehicles (vehicles added with #172).
   - Furniture: Σ `ItemInstance.priceOnPurchase` over the site's `itemInstances`. Use the item's
     default price when it is 0 or missing, as the game's `GetWorth` does. Stacked children are
     top-level instances too; `stackedItems` entries only reference them.
@@ -48,6 +48,13 @@ For every business the player runs:
     - Where the save's transaction log still holds the site's `ba:transaction_interiorinstallation`
       (about 7 days), it shows what really happened. That transaction's `transactionData` carries
       the address as text, e.g. "4 3rd Avenue".
+  - Vehicles, in both modes: the business's own, the ids in its registration's `vehicleSlots`
+    (`Entities.VehicleSlot.vehicleInstanceId`, a warehouse's or factory's parking) looked up in
+    `VehicleInstances` and priced by `vehicleTypeName` from `ba_store_rules.json` `vehicles`.
+    A vehicle in no slot, such as the player's own car, counts nowhere. A delivered vehicle
+    costs more than its price (a Freight Truck T1 $103,000 against $98,000): while the log
+    holds the `ba:transaction_vehiclebought`, the excess is matched to the newest instance of
+    that type and remembered, as the installation bill is.
 - **Profit so far**: Σ `TotalProfit` over `financialSummaries[].businessIncomeStatements` for the
   site. That covers 60 days and includes rent paid before the opening day.
 - **Break-even day**: the first day that profit so far ≥ investment.
