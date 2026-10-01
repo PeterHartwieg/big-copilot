@@ -16713,8 +16713,10 @@ def _factory_kits(names: Names, prices: dict) -> dict:
     return out
 
 
-def _factory_days(save: Save, reg: dict) -> list:
-    """What left a factory each finished day: [[day, out, exported]].
+def _factory_days(save: Save, reg: dict) -> dict:
+    """What left a factory each finished day, per item:
+    {"first": day, "out": {item: [units a day, ...]}, "sold": {item: [...]}},
+    each list one entry a day from `first` to yesterday.
 
     The save keeps no count of what a factory made. What it keeps is what
     left: its delivery log (deliveryTransactions, the last DELIVERY_LOG_SIZE
@@ -16722,26 +16724,39 @@ def _factory_days(save: Save, reg: dict) -> list:
     rounds to the player's own sites and the piers' pickup of the exports
     alike -- and its sales (orderHistory's itemSales, amountSold), which are
     the exports alone and count the same units again. So `out` is the log's
-    goods leaving, and `exported` (None on a day the sales history no longer
-    holds) is the part of it sold to the piers. A full log has lost part of
-    its oldest day, so that day is left out; today is still running and is
-    left out too. What is made and still held is in neither.
+    goods leaving, and `sold` (None on a day the sales history no longer
+    holds) the part of it sold to the piers. A full log has lost part of its
+    oldest day, so that day is left out; today is still running and is left
+    out too. What is made and still held is in neither. {} with no log.
     """
     today = save.root.get("Day")
     log = [t for t in save.items(reg.get("deliveryTransactions")) if isinstance(t, dict) and isinstance(t.get("dayOfDelivery"), int)]
     if not log:
-        return []
-    out = collections.Counter()
+        return {}
+    out = collections.defaultdict(collections.Counter)
     for t in log:
-        out[t["dayOfDelivery"]] += sum(-(e.get("amountDelivered") or 0) for e in save.items(t.get("deliveryItems"))
-                                       if isinstance(e, dict) and (e.get("amountDelivered") or 0) < 0)
-    sold = {}
+        for e in save.items(t.get("deliveryItems")):
+            amount = (e.get("amountDelivered") or 0) if isinstance(e, dict) else 0
+            if amount < 0 and isinstance(e.get("itemName"), str):
+                out[e["itemName"]][t["dayOfDelivery"]] -= amount
+    sold = collections.defaultdict(dict)
+    covered = set()
     for e in save.items(reg.get("orderHistory")):
         if isinstance(e, dict) and isinstance(e.get("dayNumber"), int):
-            sold[e["dayNumber"]] = sum(s.get("amountSold") or 0 for s in save.items(e.get("itemSales")) if isinstance(s, dict))
+            covered.add(e["dayNumber"])
+            for s_ in save.items(e.get("itemSales")):
+                if isinstance(s_, dict) and isinstance(s_.get("itemName"), str) and s_.get("amountSold"):
+                    sold[s_["itemName"]][e["dayNumber"]] = sold[s_["itemName"]].get(e["dayNumber"], 0) + s_["amountSold"]
     logged = {t["dayOfDelivery"] for t in log}
     first = min(logged) + (1 if len(log) >= DELIVERY_LOG_SIZE else 0)
-    return [[d, int(out[d]), int(sold[d]) if d in sold else None] for d in range(first, today) if d >= first]
+    days = range(first, today)
+    if not days:
+        return {}
+    return {
+        "first": first,
+        "out": {item: [int(out[item][d]) for d in days] for item in _in_order(out)},
+        "sold": {item: [int(sold[item].get(d, 0)) if d in covered else None for d in days] for item in _in_order(sold)},
+    }
 
 
 def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, recipes: dict,

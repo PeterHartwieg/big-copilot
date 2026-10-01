@@ -60,23 +60,30 @@ def pickup(day, *amounts):
 
 
 class FactoryDaysTests(unittest.TestCase):
-    """What left a factory a day: the delivery log's pickups, exports included,
-    and the exports alone from its sales; never what it made and still holds."""
+    """What left a factory a day, per item: the delivery log's pickups, exports
+    included, and the exports alone from its sales; never what it made and
+    still holds."""
 
     def test_each_finished_day_is_the_log_out_with_the_exports_beside_it(self):
         reg = {"deliveryTransactions": [pickup(10, -500, -300), pickup(10, -200), pickup(11, -900, 400), pickup(12, -50)],
-               "orderHistory": [{"dayNumber": 10, "itemSales": [{"amountSold": 200}]},
-                                {"dayNumber": 11, "itemSales": [{"amountSold": 0}]}]}
+               "orderHistory": [{"dayNumber": 10, "itemSales": [{"itemName": BEER, "amountSold": 200}]},
+                                {"dayNumber": 11, "itemSales": [{"itemName": BEER, "amountSold": 0}]}]}
         # Arrivals (positive) are not output; day 12 is today and still running.
-        self.assertEqual(ba_dashboard._factory_days(StubSave(12), reg), [[10, 1000, 200], [11, 900, 0]])
+        self.assertEqual(ba_dashboard._factory_days(StubSave(12), reg),
+                         {"first": 10, "out": {BEER: [1000, 900]}, "sold": {BEER: [200, 0]}})
 
     def test_a_full_log_drops_its_oldest_day_and_a_quiet_day_is_a_zero(self):
         log = [pickup(5, -10)] + [pickup(7, -1)] * (ba_dashboard.DELIVERY_LOG_SIZE - 1)
         days = ba_dashboard._factory_days(StubSave(8), {"deliveryTransactions": log, "orderHistory": []})
-        self.assertEqual(days, [[6, 0, None], [7, ba_dashboard.DELIVERY_LOG_SIZE - 1, None]])
+        self.assertEqual(days, {"first": 6, "out": {BEER: [0, ba_dashboard.DELIVERY_LOG_SIZE - 1]}, "sold": {}})
+
+    def test_a_day_the_sales_history_no_longer_holds_is_unknown_not_zero(self):
+        reg = {"deliveryTransactions": [pickup(3, -10), pickup(4, -10)],
+               "orderHistory": [{"dayNumber": 4, "itemSales": [{"itemName": BEER, "amountSold": 4}]}]}
+        self.assertEqual(ba_dashboard._factory_days(StubSave(5), reg)["sold"], {BEER: [None, 4]})
 
     def test_no_log_is_no_days(self):
-        self.assertEqual(ba_dashboard._factory_days(StubSave(9), {}), [])
+        self.assertEqual(ba_dashboard._factory_days(StubSave(9), {}), {})
 
 
 class PayloadTests(unittest.TestCase):
@@ -136,7 +143,7 @@ class PayloadTests(unittest.TestCase):
         self.assertEqual(sites[DEPOT]["imports"], [[WATER, True]])
         self.assertEqual(sites[DEPOT]["vehicles"], [["ba:vehicletype_freighttruckt1", False]])
         self.assertEqual(sites[FACTORY]["vehicles"], [])
-        self.assertIsInstance(sites[FACTORY]["days"], list)
+        self.assertIsInstance(sites[FACTORY]["days"], dict)
         self.assertNotIn("days", sites[DEPOT])
 
     def test_headquarters_counts_agents_against_contracts_and_managers_against_sites(self):

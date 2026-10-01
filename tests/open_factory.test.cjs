@@ -164,7 +164,7 @@ test('the lines table carries Saves / week, line by line and in its total row', 
   assert.equal(await page.locator('#planBody thead th.saves').count(), 1);
   const r = await page.evaluate(b => {
     const tr = document.querySelector(`#planBody tr.line[data-slug="${b}"]`), host = tr.closest('table');
-    const want = (+host.dataset.pershop || 0) * 7 * (+host.dataset.shops || 0), made = +tr.dataset.m * +tr.dataset.rate * 24 * 7;
+    const want = (+(tr.dataset.pershop ?? host.dataset.pershop) || 0) * 7 * (+host.dataset.shops || 0), made = +tr.dataset.m * +tr.dataset.rate * 24 * 7;
     return {cell: tr.querySelector('td.saves').textContent, want, expect: fmt(ofSaves({slug: b, made, want})), foot: $('vFootSaves').textContent};
   }, BEER);
   assert.ok(r.want > 0, 'the fixture measures the liquor store');
@@ -174,7 +174,7 @@ test('the lines table carries Saves / week, line by line and in its total row', 
 
 test('Running charts what left the factory each day against the plan line', async t => {
   const page = await board(t);
-  await page.evaluate(k => { D.openFactory.sites[k].days = [[40, 900, 100], [41, 1100, 200], [42, 1200, null]]; ofGo('running'); }, BREWERY);
+  await page.evaluate(([k, b]) => { D.openFactory.sites[k].days = {first: 40, out: {[b]: [900, 1100, 1200]}, sold: {[b]: [100, 200, null]}}; ofGo('running'); }, [BREWERY, BEER]);
   await page.waitForFunction(() => ofStep === 'running');
   const chart = page.locator('#ofBody svg.ff-chart');
   assert.equal(await chart.count(), 1);
@@ -182,6 +182,103 @@ test('Running charts what left the factory each day against the plan line', asyn
   assert.equal(await chart.locator('rect.ff-pier').count(), 2, 'the piers part where the sales history holds it');
   assert.equal(await chart.locator('line.inv').count(), 1, 'the plan line');
   /* Too few days: said, not drawn. */
-  await page.evaluate(k => { D.openFactory.sites[k].days = [[42, 1200, null]]; drawPlan(); }, BREWERY);
+  await page.evaluate(([k, b]) => { D.openFactory.sites[k].days = {first: 42, out: {[b]: [1200]}, sold: {}}; drawPlan(); }, [BREWERY, BEER]);
   assert.equal(await page.locator('#ofBody svg.ff-chart').count(), 0);
+});
+
+/* --- review round 1 (#172) ------------------------------------------------- */
+
+test('each product goes at its own measured rate a shop; one never sold at the type\'s average', async t => {
+  const page = await board(t);
+  const r = await page.evaluate(([b, liq]) => {
+    const rows = Object.fromEntries(ofLines().map(l => [l.slug, l]));
+    const host = document.querySelector('#planBody table[data-pershop]');
+    return {beer: rows[b].want, soda: (rows['ba:itemname_sodacan'] || {}).want, measured: D.plan.own[liq].perDay[b],
+      avg: +host.dataset.pershop, shops: +host.dataset.shops};
+  }, [BEER, LIQ]);
+  assert.equal(r.beer, r.measured * 7 * r.shops);
+  if(r.soda !== undefined) assert.equal(r.soda, r.avg * 7 * r.shops, 'Soda is sold nowhere yet: the average');
+});
+
+test('a factory running other types\' lines is judged on this plan\'s lines alone', async t => {
+  const page = await board(t);
+  const r = await page.evaluate(([k, b]) => {
+    /* The brewery also runs five machines of a gift product, ships it, and it waits on plastic. */
+    const site = D.supply.factories.sites[0];
+    site.lines.push({...site.lines[0], slug: 'ba:itemname_cheapgift', item: 'Gift (Cheap)', machines: 5, atRoster: 99999, missing: ['Plastic']});
+    D.openFactory.sites[k].days = {first: 40, out: {[b]: [1200, 1200], 'ba:itemname_cheapgift': [50000, 50000]}, sold: {}};
+    drawPlan();
+    const machines = ofUntilRows(null).flatMap(g => g[1]).find(x => /Machines/.test(x.title));
+    ofGo('running');
+    const why = document.querySelector('#ofBody .ff-why');
+    return {machines, left: document.querySelector('#ofBody .os-roi .kpi .v').textContent, why: why ? why.textContent : ''};
+  }, [BREWERY, BEER]);
+  assert.equal(r.machines.state, 'done', 'the beer machines are all there; the gift ones are not counted');
+  assert.equal(r.left.replace(/[^0-9]/g, ''), String(1200 * 7), 'only beer left the factory for this plan');
+  assert.doesNotMatch(r.why, /Plastic/, 'another type\'s waiting line is not this plan\'s');
+});
+
+test('the order ahead for one factory leaves every other factory\'s consumption ordered', async t => {
+  const page = await board(t);
+  const r = await page.evaluate(() => {
+    /* A second factory makes the same beer and eats the same water; the
+       company orders enough for both. */
+    const f = D.supply.factories, two = JSON.parse(JSON.stringify(f.sites[0]));
+    two.s = 0; f.sites.push(two);
+    const water = 2 * f.sites[0].lines[0].machines * RECIPE_BY['ba:itemname_beer'].ingredients[0].per * 24 * 7;
+    D.plan.sources['ba:itemname_water'].ordered = water;
+    drawPlan();
+    const tr = [...document.querySelectorAll('#ingBody tr')].find(x => x.dataset.name === 'Water');
+    return {target: +tr.querySelector('.set').textContent.replace(/[^0-9]/g, ''), change: tr.querySelector('td.chg').textContent.trim(), water};
+  });
+  assert.equal(r.target, Math.ceil(r.water / 100) * 100, 'the plan for one unchanged factory keeps the whole order');
+  assert.equal(r.change, '');
+});
+
+test('Running reports what left, labels the staffed rate an estimate, and keeps an input shortage in view', async t => {
+  const page = await board(t);
+  const r = await page.evaluate(([k, b]) => {
+    Object.assign(D.supply.factories.sites[0].lines[0], {atRoster: 1200, toCity: 600, toPier: 600, missing: ['Water']});
+    D.openFactory.sites[k].days = {first: 40, out: {[b]: [0, 0]}, sold: {[b]: [0, 0]}};
+    ofGo('running');
+    const why = document.querySelector('#ofBody .ff-why');
+    return {tiles: [...document.querySelectorAll('#ofBody .os-roi .kpi .v')].map(v => v.textContent),
+      tip: document.querySelector('#ofBody .ff-out thead th[data-tip]').dataset.tip, why: why ? why.textContent : ''};
+  }, [BREWERY, BEER]);
+  assert.equal(r.tiles[0], '0', 'nothing left the factory: not what the staffed hours allow');
+  assert.equal(r.tiles[2], '$0', 'nothing exported');
+  assert.match(r.tip, /estimate/);
+  assert.match(r.why, /Water/, 'the line waiting on water is named');
+});
+
+test('a line the shops want with no machine on it is a shortage row too', async t => {
+  const page = await board(t);
+  await page.locator('#planFor [data-of-for="new"]').click();
+  await page.evaluate(b => { planCounts[b] = 0; planCounts['ba:itemname_sodacan'] = 1; drawPlan(); }, BEER);
+  assert.match(await page.locator('#ofWhat').innerText(), /Beer stays short/);
+});
+
+test('an owned factory\'s pallet shelves are sized over every line it keeps, less those standing', async t => {
+  const page = await board(t);
+  const r = await page.evaluate(([k, b]) => {
+    /* The brewery also keeps four machines of another product, boxed small. */
+    RECIPE_BY['ba:itemname_x'] = {slug: 'ba:itemname_x', item: 'X', out: 100, workstation: 'bottledgoods', ingredients: [{slug: 'ba:itemname_water', item: 'Water', per: 100}]};
+    D.openFactory.products['ba:itemname_x'] = {w: 1, i: 1, bx: 100, mo: 1000};
+    const site = D.supply.factories.sites[0];
+    site.lines.push({...site.lines[0], slug: 'ba:itemname_x', item: 'X', machines: 4});
+    D.openFactory.sites[k].shelves = 3;
+    const inv = ofInvestment(null), mine = Object.fromEntries(ofLines().map(l => [l.slug, l.m]));
+    return {inv, all: ofBoxes({...ofNow(k), ...mine}), own: ofBoxes(mine), cc: D.openFactory.shelf.cc};
+  }, [BREWERY, BEER]);
+  assert.ok(r.all > r.own, 'the other line needs room too');
+  assert.equal(r.inv.boxes, r.all);
+  assert.equal(r.inv.shelves, Math.max(0, Math.ceil(r.all / r.cc) - 3));
+});
+
+test('the Overview task and Production\'s button open Plan a factory on a new factory', async t => {
+  const page = await board(t, '#overview');
+  await page.locator('a.ov-task[data-ov-route="expansion/factory"]').click();
+  await page.waitForFunction(() => route === 'expansion/factory');
+  assert.equal(await page.evaluate(() => planTarget), 'new');
+  assert.equal(await page.locator('#planFor [data-of-for="new"].on').count(), 1);
 });

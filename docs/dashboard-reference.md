@@ -964,7 +964,8 @@ shows in the shops' results.
 
 - **What** is the planner above. For a new factory with no plan yet, a table first lists
   what your shops of the type buy that a factory can make: sold a week, the imports that
-  costs, the machines sized to the peak day, what they cost, the surplus and what the line
+  costs (each product at what your shops measurably sell of it, the type's average only
+  for one they do not sell yet), the machines sized to the peak day, what they cost, the surplus and what the line
   saves a day (the imports it replaces, less the raw material it eats). **Size to** sets
   every line to the peak day, an average day, or, for a factory you run, as it runs now;
   the lines table's **Saves / week** column is each line's saving on the same basis,
@@ -996,10 +997,14 @@ shows in the shops' results.
   out), ticked from the save. Hiring (Staff this factory) and the weekly import amounts are
   buttons when the game link has the write; machines, recipes, contracts, the delivery
   plan, the truck and its driver are steps in the game.
-- **Running** compares what the factory makes a week with the plan, what reaches the
-  depot with what the shops take, what goes to the piers and the raw material that
-  arrives, line by line, and names the two causes it knows: machine-hours nobody staffs,
-  and raw material that arrives short. Its chart, **Left the factory a day**, is the save's
+- **Running** compares what left the factory a week (the save's delivery log, its last
+  seven days) with the plan, what went to your sites with what the shops take, what went
+  to the piers and the raw material that arrived, all over the plan's own products and
+  what they eat (a factory also running another type's lines is not judged on those).
+  Each line also shows what its staffed hours allow, labelled an estimate. It names what
+  holds output back, whatever the output reads: machine-hours nobody staffs, a line
+  waiting on an input, raw material arriving short. The weekly-amounts button acts only on
+  the sites whose import contracts bring those ingredients. Its chart, **Left the factory a day**, is the save's
   own record: the factory's delivery log (`deliveryTransactions`, every pickup, the piers'
   included) for each finished day it still covers, the piers' part lighter from the
   factory's sales (`orderHistory`), against the plan's day as a dashed line. The save

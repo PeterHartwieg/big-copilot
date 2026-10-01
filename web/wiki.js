@@ -1920,6 +1920,9 @@ function wikiCanPlan(){
 }
 function wikiPlanChain(){
   if(!wikiCanPlan()) return false;
+  /* Through Plan a factory's own way in, so a plan kept for another type
+     does not come back over this one (openPlan(), #172). */
+  if(typeof openPlan === "function") return openPlan({type: wikiPlanKey()}) !== false;
   planType = wikiPlanKey();
   planCounts = {};
   showSub("growth", "plan");
