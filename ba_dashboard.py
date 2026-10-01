@@ -19158,10 +19158,29 @@ def safe_extract(save: Save, names: Names, history_path: str | None) -> dict:
         newer = build is not None and build > VERIFIED_BUILD
         raise SaveShapeError(
             "the save does not have the shape this board expects "
-            f"({type(exc).__name__}: {exc}). Game build {build}, board checked on "
+            f"({type(exc).__name__}: {exc}{_raised_at(exc)}). Game build {build}, board checked on "
             f"build {VERIFIED_BUILD}"
             + (": the game has probably changed its save format" if newer else "")
         ) from exc
+    except Exception as exc:  # a bug of the board's own: say where, so a screenshot finds it
+        raise SaveShapeError(
+            f"the board hit a bug reading this save ({type(exc).__name__}: {exc}{_raised_at(exc)}). "
+            f"Game build {build}"
+        ) from exc
+
+
+def _raised_at(exc: BaseException) -> str:
+    """", in fn, line N": the innermost frame of the board's own code (this file
+    or ba_save.py) that ``exc`` passed through; web/py/ holds the same files,
+    so the line is the source's at that release."""
+    where = ""
+    tb = exc.__traceback__
+    while tb is not None:
+        code = tb.tb_frame.f_code
+        if os.path.basename(code.co_filename) in ("ba_dashboard.py", "ba_save.py"):
+            where = f", in {code.co_name}, {os.path.basename(code.co_filename)} line {tb.tb_lineno}"
+        tb = tb.tb_next
+    return where
 
 
 def browser_build(
