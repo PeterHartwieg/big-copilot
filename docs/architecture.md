@@ -891,7 +891,8 @@ keyboard returns to the control that opened it.
 
 A board left open on a second screen should cost next to nothing. The landing's and the
 board's sphere loops (`requestAnimationFrame`) stop once they settle, wake on input, layout
-or scroll, and pause while the tab is hidden. The live and folder-watch dots are steady, not
+or scroll, and pause while the tab is hidden; the Map orb and the wiki's route ball animate
+while their page is open. The live and folder-watch dots are steady, not
 pulsing: one small pulsing dot kept the compositor drawing about 75 frames a second on an
 idle page. Folder checks run one at a time, release their guard after a failure and wait
 while the tab is hidden. `tests/performance.test.cjs` holds the loops and the folder guard;
@@ -1003,7 +1004,7 @@ row's state and `pgPill()` draws it with words and a symbol, never colour alone.
 | State | Set by | Cleared by |
 | --- | --- | --- |
 | Marked by you (`marked`) | the player's tick: a Supply checklist row (`ba_order_marks_v1:<character>`), or every entry of a week on Schedules (`ba_dash_roster:<site>`) | the player (untick, Clear my marks), or the row changing: a new figure is a new row |
-| Applied · awaiting refresh (`applied`) | `pgRecord()`, called only from a successful answer to a game-link write: imports (`pgImportsDone()`), a shop's or office's schedule (`pgScheduleDone()`), a hire or move (`pgHireDone()`), uniforms (`pgUniformDone()`) | a later board judging it, an undo of the write (`pgDrop()`; a hire before mod 0.4.0 has no undo), or `PG_KEEP_DAYS` (14) game days |
+| Applied · awaiting refresh (`applied`) | `pgRecord()`, called only from a successful answer to a game-link write: imports (`pgImportsDone()`), a shop's or office's schedule (`pgScheduleDone()`), a hire or move (`pgHireDone()`), uniforms (`pgUniformDone()`) | a later board judging it, an undo of the write (`pgDrop()`; a hire before mod 0.4.0, or the company's first hire, has no undo), or `PG_KEEP_DAYS` (14) game days |
 | Confirmed · day N (`confirmed`) | `pgEvaluate()`, when a later board shows the write's postcondition (`PG_CHECK`) | Clear these on Supply › Changes (`pgClearSettled()`, import records only), or 14 game days |
 
 *Not confirmed* (`changed`) is a later board showing something else; it is final and never
