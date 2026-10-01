@@ -746,6 +746,41 @@ class FactoryOwnImportTests(unittest.TestCase):
         self.assertEqual(_deepest_use(100, flat, 20, 26, 1.0, True, None, (240, 0.5)), 700 + 240 * 5.5)
         self.assertEqual(_deepest_use(100, flat, 20, 26, 1.0, True, None, (240, 0.5), False), 700 + 240 * 6.5)
 
+    def test_a_paused_import_beside_a_route_walks_the_machines_to_the_weeks_end(self):
+        """The brewery's own import is paused, and a hub's route brings all
+        it uses (340 a day at full rate: 240 its machines eat, 100 on to the
+        bar). The bar is three times as busy on Friday, the last of the week
+        of rounds walked from Saturday noon: that round outruns the route by
+        200 and the machines still eat that day, nothing landing to feed
+        them. Today: the route's surplus over the round, less half a day of
+        the machines; the five days between: even."""
+        c = Chain()
+        c.profile = [100, 100, 100, 100, 100, 300, 100]
+        c.factory(BREWERY, "Brewery", machines=1)
+        c.hold(BREWERY, WATER, 0)
+        c.contract(BREWERY, WATER, 3000, active=False)
+        c.site(WH, "Hub")
+        c.hold(WH, WATER, 5000)
+        c.contract(WH, WATER, 5000, pier=2)
+        c.plan(WH, BREWERY, WATER, 1000)
+        c.plan(BREWERY, SHOP, WATER, 400)
+        c.plan(BREWERY, SHOP, BEER, 1000)
+        c.shop(SHOP, "Bar")
+        c.hold(SHOP, WATER, 400, 100)
+        c.hold(SHOP, BEER, 1000, 300)
+        c.run()
+        for mode in ("cap", "dem"):
+            with self.subTest(mode=mode):
+                rows = c.supply["imports"] if mode == "cap" else c.supply["importsDem"]
+                row = next(r for r in rows if r["s"] == c.index(BREWERY) and r["slug"] == WATER)
+                self.assertTrue(row["paused"] and row["covered"] and row["rounds"])
+                eats, onward = row["eats"], row["perDay"] - row["eats"]
+                self.assertEqual(row["routed"], row["perDay"])
+                expected = 2 * onward - 0.5 * eats
+                self.assertGreater(expected, 0)
+                for field in ("dueNeed", "catchUp", "carry"):
+                    self.assertAlmostEqual(row[field], expected, delta=1, msg=field)
+
     def test_stock_that_reaches_the_drop_is_no_finding(self):
         c = self.brewery(1200)
         for mode in ("cap", "dem"):

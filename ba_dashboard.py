@@ -3452,8 +3452,9 @@ def _deepest_use(per_day, weekly, day, until, left_today, rounds=False, extra=No
     own import has not landed yet). `steady` (units a day, today's share) is
     a draw that runs round the clock whatever the rounds do, the site's own
     factory lines: charged flat for the hours left today and each whole day
-    before `until`, never on the delivery day, whose drop feeds them; every
-    day where no drop lands at `until` (`drop` False: a week's horizon).
+    before `until`, never on the delivery day, whose drop feeds them. With
+    `drop` False nothing lands at `until` (a paused line walked a week), so
+    the steady draw is charged on `until` too.
     """
     extra = extra or {}
     used = deepest = 0.0
