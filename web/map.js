@@ -298,6 +298,7 @@ function finderSortName(s){
     case "m2": return tt("map.sortname.m2", "m²");
     case "cap": return tt("map.sortname.cap", "cap");
     case "deposit": return tt("map.sortname.deposit", "upfront");
+    case "rent": return tt("map.sortname.rent", "rent");
     default: return s;
   }
 }
@@ -723,7 +724,13 @@ class CityMapView {
   /* A warehouse has no score and no demand; every other category has both. A
      sort the new category cannot show falls back to the one it ranks by, so a
      header is always lit. */
-  sortKeys(cat = this.fs.cat){ return cat === 'warehouse' ? ['m2', 'traffic', 'cap', 'deposit'] : ['score', 'traffic', 'demand', 'm2', 'cap', 'deposit']; }
+  /* A factory plan's finder ranks warehouse buildings by rent, cheapest
+     first (Plan a factory, issue #172): a factory has no customers, so
+     neither traffic nor a building capacity tells one place from another. */
+  sortKeys(cat = this.fs.cat){
+    if(cat === 'warehouse' && this.planning) return ['rent', 'm2', 'deposit'];
+    return cat === 'warehouse' ? ['m2', 'traffic', 'cap', 'deposit'] : ['score', 'traffic', 'demand', 'm2', 'cap', 'deposit'];
+  }
   /* The business types this save reports demand for in a category, by slug. */
   catTypes(cat = this.fs.cat){
     const types = new Map();
@@ -800,7 +807,7 @@ class CityMapView {
     if(!FINDER_CATS.includes(fs.cat)) fs.cat = "retail";
     fs.type = typeof fs.type === "string" ? fs.type : "";
     fs.hoods = Array.isArray(fs.hoods) && fs.hoods.length ? fs.hoods.slice() : null;
-    fs.sort = fs.cat === 'warehouse' ? 'm2' : 'score';
+    fs.sort = this.sortKeys(fs.cat)[0];
     return fs;
   }
   /* The plan's type or neighbourhood changed: its question starts afresh, at
@@ -1047,12 +1054,12 @@ class CityMapView {
     // A range sorts on the cap it can promise, the same bound the filter reads.
     const value = r => fs.sort === 'traffic' ? r.bld.traffic : fs.sort === 'demand' ? r.f.demand
       : fs.sort === 'cap' ? capMin(r.bld.cap) : fs.sort === 'deposit' ? r.bld.deposit
-      : fs.sort === 'm2' ? r.bld.m2 : r.f.score;
+      : fs.sort === 'rent' ? r.bld.rent : fs.sort === 'm2' ? r.bld.m2 : r.f.score;
     // Every column reads best-first: the most of anything good, but the least
     // money up front, since the deposit decides whether a player can sign at all.
     // A row with nothing to sort on stays at the bottom whichever way the
     // column points; it is not the smallest value, it is no value at all.
-    const dir = fs.sort === 'deposit' ? -1 : 1;
+    const dir = fs.sort === 'deposit' || fs.sort === 'rent' ? -1 : 1;
     out.sort((a, b) => {
       const x = value(a), y = value(b);
       if(x == null || y == null) return (x == null) - (y == null) || b.bld.traffic - a.bld.traffic;
@@ -1079,10 +1086,13 @@ class CityMapView {
   finderList(rows){
     // A warehouse ranks by floor area already, so its list has no second m²
     // column and keeps the narrower grid (class wh).
-    const fs = this.fs, wh = fs.cat === 'warehouse', grid = wh ? ' wh' : '';
+    const fs = this.fs, wh = fs.cat === 'warehouse', fac = wh && !!this.planning, grid = fac ? ' wh fpw' : wh ? ' wh' : '';
     const address = tt("map.col.address", "Address"), m2 = tt("map.unit.m2", "m²"), traffic = tt("map.col.traffic", "Traffic");
     const cap = tt("map.col.cap", "Cap"), upfront = tt("map.col.upfront", "Upfront");
-    const cols = wh ? [["","#"],["",""],["",address],["m2",m2],["traffic",traffic],["",""],["cap",cap],["deposit",upfront]]
+    /* A factory plan's columns: floor area, the parking slots a building of
+       its size has (an H one, the rest two), rent and the deposit. */
+    const cols = fac ? [["","#"],["",""],["",address],["m2",m2],["",tt("map.col.vehicles", "Vehicles")],["",""],["rent",tt("map.col.rent", "Rent")],["deposit",upfront]]
+      : wh ? [["","#"],["",""],["",address],["m2",m2],["traffic",traffic],["",""],["cap",cap],["deposit",upfront]]
                     : [["","#"],["",""],["",address],["score",tt("map.col.score", "Score")],["traffic",traffic],["demand",tt("map.col.demand", "Demand")],["m2",m2],["cap",cap],["deposit",upfront]];
     const head = `<div class="fhead${grid}">${cols.map(([key, label]) => key
       ? `<span data-s="${key}" role="button" tabindex="0" class="${key === fs.sort ? 'on' : ''}">${mapText(label)}</span>`
@@ -1104,12 +1114,14 @@ class CityMapView {
         : f.fit && !fs.type ? tt("map.list.bestfit", "best fit: {type}", {type: f.fit}) : hoodName(b.hood);
       const sub = what + (f.rivals != null ? ` · ${tt("map.list.rivals", {one: "{n} rival", other: "{n} rivals"}, {n: f.rivals})}` : '');
       // Floor area is not shaded, like the cap: bigger is not better for every business.
-      const numbers = wh
+      const numbers = fac
+        ? `<span class="v">${num(b.m2)}</span><span class="v">${b.size === 'H' ? 1 : 2}</span><span class="v"></span>`
+        : wh
         ? `<span class="v sc sh"${lead(b.m2, SHADE_LEAD)}>${num(b.m2)}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v"></span>`
         : `<span class="v sc sh"${lead(f.score, SHADE_LEAD)}>${f.score ?? '—'}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v sh"${byDemand(f.demand, SHADE_SIDE)}>${f.demand ?? '—'}</span><span class="v m2">${num(b.m2)}</span>`;
       // The dot says what taking this place would mean: an empty floor to rent
       // or a rival to buy out.
-      return `<button type="button" class="place fr${grid}${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood">${mapText(hoodTag(b.hood))}</span><span class="nm">${mapText(b.address)}<small>${this.layoutTag(b)}${mapText(sub)}</small></span>${numbers}<span class="v cap">${mapText(capText(b.cap))}</span><span class="v dep" data-tip="${attr(depositNote(b))}">${b.deposit != null ? mapText(fmt(b.deposit)) : '—'}</span></button>`;
+      return `<button type="button" class="place fr${grid}${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood">${mapText(hoodTag(b.hood))}</span><span class="nm">${mapText(b.address)}<small>${this.layoutTag(b)}${mapText(sub)}</small></span>${numbers}${fac ? `<span class="v cap">${b.rent != null ? mapText(fmt(b.rent)) : '—'}</span>` : `<span class="v cap">${mapText(capText(b.cap))}</span>`}<span class="v dep" data-tip="${attr(depositNote(b))}">${b.deposit != null ? mapText(fmt(b.deposit)) : '—'}</span></button>`;
     }).join('');
   }
   saleList(rows){
@@ -1222,7 +1234,7 @@ class CityMapView {
     const select = this.root.querySelector('[data-f="type"]');
     // A plan's type is fixed, even one this save has no demand reading for.
     const fixed = this.root.querySelector('.fplan-type');
-    if(fixed) fixed.textContent = this.typeName(this.fs.type) || mapKindName(this.fs.cat);
+    if(fixed) fixed.textContent = this.typeName(this.fs.type) || (typeof gameName === "function" && this.fs.type && gameName(this.fs.type)) || mapKindName(this.fs.cat);
     if(select){
       const types = this.catTypes(this.fs.cat);
       const options = [...types].sort((a, b) => mapCompare(a[1], b[1]));

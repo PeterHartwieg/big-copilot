@@ -2583,7 +2583,7 @@ const SEC_PAGE = {
      opens the view that took their place. */
   secShops:["supply","deliveries"], secWarehouses:["supply","imports"], secFactories:["supply","production"],
   secLogistics:["supply","imports"], secStock:["supply","deliveries"], sbStrip:["supply","changes"],
-  secMarket:["growth","market"], secOpen:["growth","open"], secPlan:["growth","plan"], secIngredients:["growth","plan"],  // changed for growth: no secExpand
+  secMarket:["growth","market"], secOpen:["growth","open"], secPlan:["growth","plan"], secIngredients:["growth","plan"], secPlanFlow:["growth","plan"],  // changed for growth: no secExpand
   secProducts:["company","products"], secPrices:["company","products"], secStandards:["company","standards"],
   secGoals:["company","milestones"],
   /* Staffing: the schedules, the staff needs (main's Staff page, issue #89,
@@ -8736,9 +8736,9 @@ function sbObject(tab, s, o){
     <div class="body">${o.body}</div></details>`;
 }
 /* An object with nothing to read under Needs a change: one quiet line. */
-function sbFlat(s, icn, text, name){
+function sbFlat(s, icn, text, name, extra = ""){
   const b = D.businesses[s];
-  return `<div class="sb-flat"><span class="ic">${spIcon(icn)}</span><span>${b ? sbName(b) : name || ""} &nbsp; ${text}</span><span class="check">${icon("tick")}</span></div>`;
+  return `<div class="sb-flat"><span class="ic">${spIcon(icn)}</span><span>${b ? sbName(b) : name || ""} &nbsp; ${text}${extra ? ` &nbsp; ${extra}` : ""}</span><span class="check">${icon("tick")}</span></div>`;
 }
 /* A sortable table with the tick column in front. `units` are rows, or
    groups ({group, kids}) whose parent row opens the kids on a click. */
@@ -9606,10 +9606,13 @@ function sbFactoryPart(d, claimed, ctx, view, o){
     if(!lines.length && !inputs.length && !imports.length) return "";
     const arrivedHere = sbArrive && sbArrive.view === view && sbArrive.s === s;
     const whole = all || (arrivedHere && sbArrive.slug === null);
+    /* Production: Plan a factory for this factory (For = it), on its full and its compact row. */
+    const planLink = view === "production" && b && D.meta.locale !== false
+      ? `<a class="sb-plan" href="#expansion/factory" data-of-goto="${attr(b.key)}">${spI("gear")}<em>${tt("sb.prod.planThis", "Plan more for it")}</em></a>` : "";
     if(!whole && !keep.length && !arrivedHere)
       return sbFlat(s, "gear", o.lines ? tt("sb.fac.flat2", "{lines} and {inputs}", {lines: sbLines(lines.length), inputs: sbInputs(inputs.length)})
         : o.inputs ? sbInputs(inputs.length)
-        : tt("sb.fac.imports.n", {one: "{n} import", other: "{n} imports"}, {n: imports.length}));
+        : tt("sb.fac.imports.n", {one: "{n} import", other: "{n} imports"}, {n: imports.length}), "", planLink);
     const shownLines = whole ? lines : lines.filter(r => r.keep);
     const shownInputs = whole ? inputs : inputs.filter(r => r.keep);
     const shownImports = whole ? imports : imports.filter(r => r.keep);
@@ -9632,7 +9635,9 @@ function sbFactoryPart(d, claimed, ctx, view, o){
     const firsts = sbList(to.slice(0, 3).map(x => spEsc(shortText(x, 40))));
     const how = [from.length ? `<span>${spI("truck")}<em>${tt("sb.how.morning", "each morning from {from}", {from: sbAnd(from.map(x => `<b>${spEsc(x)}</b>`))})}</em></span>` : "",
       to.length ? `<span>${spI("right")}<em>${tt("sb.fac.shipsTo", "ships to {who}", {who: to.length > 3
-        ? tt("sb.list.more", "{list} and {n} more", {list: firsts, n: to.length - 3}) : firsts})}</em></span>` : ""].join("");
+        ? tt("sb.list.more", "{list} and {n} more", {list: firsts, n: to.length - 3}) : firsts})}</em></span>` : "",
+      /* Production: Plan a factory for this factory (For = it). */
+      planLink].join("");
     const placed = site.machines, running = (sent.find(x => x.s === s) || {}).running;
     const staffed = Math.round(site.lines.reduce((t, l) => t + (l.hoursWeek || 0), 0) / 7);
     const stats = sbStat(tt("sb.col.machines", "Machines"), placed, Number.isFinite(running) && running < placed ? tt("sb.fac.running", "{n} running", {n: running}) : "",
@@ -10150,7 +10155,7 @@ function drawProductionView(){
       : tt("sb.prod.none", "No factory yet")}</h3><p>${D.meta.locale === false
       ? tt("sb.fac.noLocale", "Factory lines need the game's recipe pages: load en.json (More menu) to see them.")
       : tt("sb.prod.none.text", "Production plans a factory's lines, their hours and the staff they take. With no factory there is nothing to plan here yet.")}</p>${
-      D.meta.locale === false ? "" : `<a class="nx-btn sm" href="#expansion/factory" data-ov-route="expansion/factory">${tt("sb.prod.plan", "Plan a factory")}${icon("go")}</a>`}</div></div>`);
+      D.meta.locale === false ? "" : `<a class="nx-btn sm" href="#expansion/factory" data-ov-route="expansion/factory" data-of-target="new">${tt("sb.prod.plan", "Plan a factory")}${icon("go")}</a>`}</div></div>`);
     return;
   }
   const fac = sbFactoryPart(d, claimed, ctx, "production", {lines: true, inputs: true});
@@ -10809,8 +10814,7 @@ function osInvestment(plan, b){
 }
 /* Self-installation's shopping list by store: each item from a store that
    sells it, as few stores as will do, the one that sells the most first. */
-function osStores(out){
-  const items = osFacts().items || {};
+function osStores(out, items = osFacts().items || {}){
   let left = out.lines.map((l, i) => i);
   const stores = [];
   while(left.length){
@@ -11427,8 +11431,8 @@ function osSelfHtml(b, out, inv){
 }
 /* The city with the stores and the new site pinned at their addresses: a
    still crop of the map around them, not the whole interactive map. */
-function osPaintMini(){
-  const host = $("osMini");
+function osPaintMini(id = "osMini"){
+  const host = $(id);
   if(!host || typeof loadCityMap !== "function") return;
   let pins = [];
   try{ pins = JSON.parse(host.dataset.pins || "[]"); }catch(e){}
@@ -11866,7 +11870,8 @@ function osRoutes(opened, key){
 }
 function osCkLogistics(plan, opened){
   const title = tt("gr.os.ck.log", "Logistics");
-  const go = `<button type="button" class="os-btn" data-os-route="expansion/factory">${osIcon("factory")}${tt("gr.os.ck.log.go", "Plan a factory")}${osIcon("chev")}</button>`;
+  /* Into step 1 of Plan a factory, on this store's type and a new factory. */
+  const go = `<button type="button" class="os-btn" data-of-goto="new" data-of-type="${attr(plan.type)}">${osIcon("factory")}${tt("gr.os.ck.log.go", "Plan a factory")}<span class="feature-new" data-new-feature="factory-flow" hidden>${tt("nav.new", "New")}</span>${osIcon("chev")}</button>`;
   const t = osType(plan.type) || {};
   if(t.model === "office") return osCk("truck", opened ? "done" : "todo", title, opened
     ? tt("gr.os.ck.log.office", "<span class=\"ok\">No deliveries needed</span> · an office holds no stock")
@@ -12515,6 +12520,7 @@ const machinesOn = slug => Math.max(0, planCounts[slug] ?? planSeed[slug] ?? 1);
 function drawPlan(){
   indexPlan();
   pcPopClose(false);
+  ofLoad();
   /* A redraw (a live refresh, a pick) replaces the rate field being typed in:
      the same product's field gets focus and caret back afterwards. */
   const act = document.activeElement;
@@ -12524,15 +12530,25 @@ function drawPlan(){
   if(!types.length){
     $("planNote").textContent = tt("gr.plan.noCatalogue", "No product catalogue in this save.");
     $("planPicker").innerHTML = ""; $("planBody").innerHTML = ""; $("ingBody").innerHTML = "";
+    ["planFor", "ofCtl", "ofStrip", "ofStart", "ofWhat", "ofBody"].forEach(id => { const el = $(id); if(el) el.innerHTML = ""; });
+    if($("ofWhere")) $("ofWhere").hidden = true;
     return;
   }
+  /* A first visit for a factory the player runs opens on what it makes. */
+  if(!types.includes(planType) && ofTarget() !== "new") planType = ofBestType(planTarget);
   if(!types.includes(planType))
     planType = types.includes("ba:businesstype_supermarket")
       ? "ba:businesstype_supermarket" : types[0];
+  /* The flow's plan follows the pickers: one made for another type or
+     another factory is put aside, and its lines come back with it. */
+  ofTarget();
+  const kept = ofPlan();
+  if(kept && (kept.type !== planType || (kept.site || "new") !== planTarget)){ ofCur = null; ofStep = "what"; ofSave(); }
+  else if(kept) planCounts = {...kept.counts, ...planCounts};
   const cat = D.plan.catalogue, own = (D.plan.own || {})[planType];
   const added = planAdded(planType);
   const weightOf = Object.fromEntries((cat[planType].extra || []).map(([s, w]) => [s, w]));
-  planSeed = factoryCounts(planType, added);
+  planSeed = ofSeed(planType, added);
   const shops = own ? (own.shops ?? own.sites) || 0 : 0;
   const perShop = defaultRate(planType) || 0;
   const pick = k => { planType = k; planCounts = {}; drawPlan(); };
@@ -12541,7 +12557,7 @@ function drawPlan(){
      type the city sells is one select away. */
   const owned = types.filter(k => (D.plan.own || {})[k]);
   const others = types.filter(k => !owned.includes(k));
-  $("planPicker").innerHTML = (owned.length ? `<span class="seg" id="planTypes"></span>` : "") + (others.length
+  $("planPicker").innerHTML = `<span class="os-lab">${tt("gr.of.shops", "Shops")}</span>` + (owned.length ? `<span class="seg" id="planTypes"></span>` : "") + (others.length
     ? `<span class="field" style="margin:0"><select id="planPick" aria-label="${attr(tt("gr.plan.pickAria", "Another business type"))}">
         <option value="" ${others.includes(planType) ? "" : "selected"} disabled>${tt("gr.plan.pickOther", "Another type…")}</option>${
         others.map(k => `<option value="${attr(k)}" ${k === planType ? "selected" : ""}>${cat[k].type} · ${cat[k].products.length}</option>`).join("")}
@@ -12564,8 +12580,12 @@ function drawPlan(){
   const view = factoryView(), alias = view.aliases || {};
   const norm = slug => alias[slug] || slug;  // a recipe input to the product actually traded
   const range = new Set([...cat[planType].products, ...added]);
-  const baseline = {};
-  view.sites.forEach(s => s.lines.forEach(l => {
+  /* The plan stands for one factory, so only that factory's machines are
+     what it replaces: a factory the player runs has its own lines as the
+     baseline, a new factory none (every other factory keeps eating what it
+     eats, and its orders stay). */
+  const baseline = {}, at = ofTarget() === "new" ? -1 : (D.businesses || []).findIndex(b => b.key === planTarget);
+  view.sites.filter(s => s.s === at).forEach(s => s.lines.forEach(l => {
     const r = RECIPE_BY[l.slug];
     if(!r || !range.has(l.slug)) return;
     r.ingredients.forEach(i => { baseline[i.item] = (baseline[i.item] || 0) + (l.machines || 0) * i.per * HOURS * 7; });
@@ -12597,15 +12617,23 @@ function drawPlan(){
   const removeBtn = slug => `<button type="button" class="pc-x" data-pc-x="${attr(slug)}" aria-label="${
     attr(tt("gr.line.removeAria", "Remove {name} from the range", {name: itemName(slug)}))}" data-tip="${
     attr(tt("gr.line.remove", "Remove from the range"))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>`;
+  const none = [...cat[planType].products, ...added].every(slug => !RECIPE_BY[slug]);
+  /* A main product the shops are measured selling goes at its own rate a
+     shop (#172, review); one nobody has sold yet at the type's average. */
+  /* perDay is the average over the shops that sell it: spread over every
+     shop of the type, as an added product's is (extraRate()). */
+  const ownRate = slug => { const v = ((own || {}).perDay || {})[slug]; if(!(v > 0)) return null;
+    const n = Math.min(shops, (((own || {}).stocked || {})[slug]) ?? shops); return shops ? v * n / shops : v; };
   const lines = [...cat[planType].products, ...added].map(slug => {
     const r = RECIPE_BY[slug];
     const extra = added.includes(slug) ? extraRate(slug) : null;
+    const measured = extra ? null : ownRate(slug);
     if(!r){
       bought++;
-      const want = extra ? extra.rate * 7 * shops : wantWeek;
-      return `<tr${extra ? ` class="pc-added" data-pershop="${extra.rate}"` : ""}><td class="l">${spEsc(itemName(slug))}${extra ? removeBtn(slug) : ""}${
+      const want = extra ? extra.rate * 7 * shops : measured ? measured * 7 * shops : wantWeek;
+      return `<tr${extra ? ` class="pc-added" data-pershop="${extra.rate}"` : measured ? ` data-pershop="${measured}"` : ""}><td class="l">${spEsc(itemName(slug))}${extra ? removeBtn(slug) : ""}${
           want ? `<span class="sub">${tt("gr.line.shopsWant", "shops want {n:,}/week", {n: Math.round(want)})}</span>` : ""}</td>
-        <td class="l" colspan="4"><span class="quiet">${tt("gr.line.noRecipeNote", "the game documents no way to make this one; the shops buy it from an importer")}</span></td></tr>`;
+        <td class="l" colspan="${none ? 4 : 5}"><span class="quiet">${tt("gr.line.noRecipeNote", "the game documents no way to make this one; the shops buy it from an importer")}</span></td></tr>`;
     }
     const station = ws[r.workstation] || {};
     const kit = [...(station.assembly || []), ...(station.machines || [])];
@@ -12666,16 +12694,16 @@ function drawPlan(){
     const rateField = extra && extra.typed ? `<span class="pc-rate"><label><input type="text" inputmode="decimal" autocomplete="off" value="${extra.rate}" data-pc-rate="${attr(slug)}" aria-label="${
         attr(tt("gr.line.rateAria", "{name} a shop sells a day, your estimate", {name: r.item}))}">${tt("gr.line.rateUnit", "/shop/day")}</label>·<em tabindex="0" data-tip="${
         attr(rateTip)}">${tt("gr.line.rateYours", "your estimate")}</em></span>` : "";
-    return `<tr class="line${extra ? " pc-added" : ""}" data-m="${machinesOn(slug)}" data-min="0" data-max="99" data-rate="${r.out}" data-ing="${attr(ing)}" data-kit="${attr(JSON.stringify(kit))}" data-slug="${attr(slug)}" data-name="${attr(r.item)}"${extra ? ` data-pershop="${extra.rate}"` : ""}>
+    return `<tr class="line${extra ? " pc-added" : ""}" data-m="${machinesOn(slug)}" data-min="0" data-max="99" data-rate="${r.out}" data-ing="${attr(ing)}" data-kit="${attr(JSON.stringify(kit))}" data-slug="${attr(slug)}" data-name="${attr(r.item)}"${extra ? ` data-pershop="${extra.rate}"` : measured ? ` data-pershop="${measured}"` : ""}>
       <td class="l">${spEsc(r.item)}${extra ? removeBtn(slug) : ""}<span class="sub" data-tip="${attr(tt("gr.line.kitTip", "One {station} is {kit}; one makes {n:,} a day",
         {station: station.name || r.workstation, kit: kit.length ? kit.join(" + ") : tt("gr.line.oneMachine", "one machine"), n: r.out * HOURS}))}">${
         tt("gr.line.rated", "{n:,}/h rated · {station}", {n: r.out, station: station.name || r.workstation})}</span></td>
       <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="${attr(tt("gr.line.fewer", "one machine fewer"))}">−</a><b>${machinesOn(slug)}</b><a href="#" data-d="1" aria-label="${attr(tt("gr.line.more", "one machine more"))}">+</a><span class="machines"></span></span></td>
-      <td class="made"></td><td class="covers">${rateField ? `<span class="pc-cov"></span>${rateField}` : ""}</td><td class="l"><span class="ing"></span></td></tr>`;
+      <td class="made"></td><td class="covers">${rateField ? `<span class="pc-cov"></span>${rateField}` : ""}</td><td class="l"><span class="ing"></span></td><td class="saves"></td></tr>`;
   });
   /* The range's last row: what else the type sells, one click from a line. */
   const offered = (cat[planType].extra || []).length;
-  if(offered > added.length) lines.push(`<tr class="pc-addrow"><td class="l" colspan="5"><button type="button" class="pc-add" data-pc-toggle aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>${
+  if(offered > added.length) lines.push(`<tr class="pc-addrow"><td class="l" colspan="6"><button type="button" class="pc-add" data-pc-toggle aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>${
     tt("gr.plan.add", "Add product")}<small>${tt("gr.plan.addMore", "{n} more", {n: offered - added.length})}</small></button></td></tr>`);
 
   /* changed for growth: a type's service list is explained, never planned —
@@ -12692,31 +12720,39 @@ function drawPlan(){
   if(planSaid) $("planPicker").dataset.tip = planSaid; else delete $("planPicker").dataset.tip;
   /* Every product bought in: the table and its notes say so, and nothing
      can be made, so no tiles, no ingredients, no sentence (declutter E7). */
-  const none = bought === cat[planType].products.length + added.length;
+
   /* Hidden also while another Expansion view is on screen: a redraw of every
      page (renderCalm(), a language switch) must not show it under that view. */
   const ing = $("secIngredients");
-  if(ing) ing.hidden = none || !String(ing.dataset.sub || "").split(" ").includes(sub.growth);
+  /* The order-ahead table belongs to a factory the player runs, in step 1. */
+  ofIngNone = none;
+  if(ing) ing.hidden = none || !String(ing.dataset.sub || "").split(" ").includes(sub.growth) || ofStep !== "what" || !ofIsOwned();
+  /* The table scrolls inside its own box on a narrow window (.scrollx). */
   $("planBody").innerHTML = none ? `
-    <table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length + added.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
+    <div class="scrollx"><table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length + added.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
       <thead><tr><th>${tt("gr.col.product", "Product")}</th><th class="l" colspan="4"></th></tr></thead>
       <tbody>${lines.join("")}</tbody>
-    </table>` : `
+    </table></div>` : `
     <div class="planstats">
       <div class="planstat"><span class="lab">${tt("gr.stat.machines", "Machines")}</span><div class="v" id="vMachines"></div></div>
       <div class="planstat" id="vMadeTile"><span class="lab">${tt("gr.stat.made", "Made / week")}</span><div class="v"><span id="vMade"></span><small>${tt("gr.stat.units", "units")}</small></div></div>
       <div class="planstat"><span class="lab">${tt("gr.stat.raw", "Raw material / week")}</span><div class="v"><span id="vRaw"></span><small>${tt("gr.stat.import", "units to import")}</small></div></div>
     </div>
-    <table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length + added.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
+    <div class="scrollx"><table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length + added.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
       <thead><tr><th>${tt("gr.col.product", "Product")}</th><th class="l">${tt("gr.col.machines", "Machines")}</th><th>${tt("gr.col.made", "Made / week")}</th><th>${
-        tt("gr.col.supplies", "Supplies")}</th><th class="l">${tt("gr.col.raw", "Raw material / week")}</th></tr></thead>
+        tt("gr.col.supplies", "Supplies")}</th><th class="l">${tt("gr.col.raw", "Raw material / week")}</th><th class="saves" data-tip="${
+        attr(tt("gr.col.saves.tip", "What a line saves against imports: the imports it replaces, less the raw material its machines eat, both at import prices"))}">${tt("gr.col.saves", "Saves / week")}</th></tr></thead>
       <tbody>${lines.join("")}</tbody>
-    </table>
+      <tfoot class="pl-foot"><tr><td class="l" id="vFootWs"></td><td></td><td id="vFootMade"></td><td></td><td id="vFootRaw"></td><td class="saves" id="vFootSaves"></td></tr></tfoot>
+    </table></div>
     <p class="quiet" id="vKit" style="margin:12px 0 0"></p>`;
   /* No sentence under the table (Peter's testing, A14): each row's Supplies
      cell says what the shops take and what is over, and the Made tile's tip
      sums it, or says why it cannot be measured. */
+  const forHost = $("planFor");
+  if(forHost) forHost.innerHTML = ofForHtml();
   planDraw();
+  ofDraw();
   wireTips();
   const again = typing && $$("#planBody [data-pc-rate]").find(el => el.dataset.pcRate === typing.slug);
   if(again){
@@ -12726,6 +12762,1184 @@ function drawPlan(){
     again.focus({preventScroll: true});
     try{ again.setSelectionRange(typing.from ?? again.value.length, typing.to ?? again.value.length); }catch(e){}
   }
+}
+
+/* --- Expansion › Plan a factory: the flow -----------------------------------
+   Issue #172 (the canvas mockup/factory-flow on branch factory-flow-canvas and
+   its NOTES.md). The planner above is step 1 of five -- What · Where ·
+   Investment · Until production · Running -- for a new factory or for one the
+   player runs: the For picker sets planTarget, "new" or the factory's key. A
+   factory the player runs walks the same steps: Where is its own building,
+   ticked; the investment is only what the change adds; Until production is
+   only the change's rows.
+
+   Python sends the facts (_open_factory(): prices, the workstations' kits,
+   storage, vehicles, what each warehouse and factory holds); the arithmetic
+   runs here, as for Open a store, whose parts (the os- classes, osStores(),
+   osLoan()) it reuses. No break-even and no payback: a factory is a cost
+   centre of its chain. The investment is the one-off, upfront cost (machines
+   and shelves at list price, the installation firm's fee or the furniture
+   delivery, the deposit, the truck); raw material, wages and rent are the
+   running costs a week, never part of it. Plans are kept per character in
+   localStorage under OF_KEY, every access guarded. */
+const OF_KEY = "ba_open_factory_v1";
+const OF_STEPS = ["what", "where", "investment", "until", "running"];
+const OF_MAX_PLANS = 12;
+/* The board's staffing rule for a factory: a worker for every 50
+   machine-hours a week, rounded up. */
+const OF_WORKER_HOURS = 50;
+/* Storage (NOTES.md, decision 16): a week of raw material, since a plain
+   import contract delivers once a week, and two days of output, which ships
+   daily. */
+const OF_RAW_DAYS = 7, OF_OUT_DAYS = 2;
+/* A depot the plan adds receives on this many pallet shelves. */
+const OF_DEPOT_SHELVES = 8;
+const OF_FACTORY = "ba:businesstype_factory", OF_DEPOT = "ba:businesstype_warehouse";
+/* A warehouse building's parking: one vehicle in an H, two in the rest. */
+const ofSlots = b => b && b.size === "H" ? 1 : 2;
+let ofPlans = [], ofPlansFor = null, ofCur = null, ofStep = "what", ofFinder = null, ofSizeMode = "auto";
+/* What the plan is for: "new", or the key of a factory the player runs. */
+let planTarget = null;
+const ofFacts = () => (typeof D !== "undefined" && D && D.openFactory) || {};
+const ofG = () => ofFacts().game || {};
+const ofStore = () => `${OF_KEY}:${(D && D.meta && D.meta.character) || "default"}`;
+const ofIcon = name => OS_ICON[name] ? osIcon(name) : SP_ICON[name] ? spIcon(name) : icon(name);
+
+/* --- the plans, per character -------------------------------------------- */
+function ofLoad(){
+  const who = ofStore();
+  if(ofPlansFor === who) return;
+  /* Another character: nothing of the last one's flow carries over, its
+     machine counts and target included. */
+  const switched = ofPlansFor !== null;
+  ofPlansFor = who; ofPlans = []; ofCur = null; ofStep = "what"; ofSizeMode = "auto"; ofModeNow = "self";
+  if(switched){ planCounts = {}; planTarget = null; }
+  try{
+    const raw = JSON.parse(localStorage.getItem(who));
+    if(raw && Array.isArray(raw.plans)){
+      ofPlans = raw.plans.filter(p => p && typeof p.id === "string" && typeof p.type === "string").slice(0, OF_MAX_PLANS)
+        .map(p => ({id: p.id, type: p.type, site: typeof p.site === "string" ? p.site : null,
+          counts: p.counts && typeof p.counts === "object" && !Array.isArray(p.counts)
+            ? Object.fromEntries(Object.entries(p.counts).filter(([, n]) => Number.isFinite(n) && n >= 0)) : {},
+          size: ["peak", "average", "now", "custom", "auto"].includes(p.size) ? p.size : "custom",
+          key: typeof p.key === "string" ? p.key : null, mode: p.mode === "self" || p.mode === "firm" ? p.mode : null,
+          depot: typeof p.depot === "boolean" ? p.depot : null, depotKey: typeof p.depotKey === "string" ? p.depotKey : null,
+          finance: p.finance && typeof p.finance === "object" ? {on: !!p.finance.on,
+            amount: p.finance.amount == null || !Number.isFinite(+p.finance.amount) ? null : Math.max(0, +p.finance.amount),
+            bank: typeof p.finance.bank === "string" ? p.finance.bank : null} : {on: false, amount: null, bank: null},
+          step: OF_STEPS.includes(p.step) ? p.step : "what", made: Number.isFinite(p.made) ? p.made : null,
+          inv: Number.isFinite(p.inv) ? p.inv : null}));
+      ofCur = ofPlans.some(p => p.id === raw.current) ? raw.current : null;
+    }
+  }catch(e){}
+  /* A plan kept as the current one comes back with its type, its factory and its lines. */
+  const plan = ofPlan();
+  if(plan){ planType = plan.type; planTarget = plan.site || "new"; planCounts = {...plan.counts}; ofStep = plan.step; }
+}
+function ofSave(){
+  const plan = ofPlan();
+  if(plan) plan.step = ofStep;
+  try{ localStorage.setItem(ofStore(), JSON.stringify({plans: ofPlans, current: ofCur})); }catch(e){}
+}
+const ofPlan = () => ofPlans.find(p => p.id === ofCur) || null;
+/* "auto" until the player picks: as the factory runs it now, or a new
+   factory's peak day (ofSeed()). */
+const ofSize = () => { const plan = ofPlan(); const m = plan ? plan.size : ofSizeMode;
+  return m === "auto" ? (ofIsOwned() ? "now" : "peak") : m; };
+/* The factories the player runs: the For picker's segments, in the order the
+   businesses come. */
+function ofOwned(){
+  return (D.businesses || []).filter(b => b.typeSlug === OF_FACTORY && b.status !== "vacant").map(b => ({key: b.key, b}));
+}
+/* The plan's target, kept to what this save has: a factory that is gone
+   falls back to the first one the player runs, else a new factory. */
+function ofTarget(){
+  const owned = ofOwned();
+  if(planTarget === "new" || owned.some(f => f.key === planTarget)) return planTarget;
+  planTarget = owned.length ? owned[0].key : "new";
+  return planTarget;
+}
+const ofIsOwned = () => !!planTarget && planTarget !== "new";
+/* A factory's lines as Supply reads them: the factory view's site for the business. */
+function ofSite(key){
+  const i = (D.businesses || []).findIndex(b => b.key === key);
+  if(i < 0) return null;
+  return factoryView().sites.find(s => s.s === i) || null;
+}
+/* The machines a factory runs on each product today. */
+function ofNow(key){
+  const now = {}, site = ofSite(key);
+  (site ? site.lines : []).forEach(l => { now[l.slug] = (now[l.slug] || 0) + (l.machines || 0); });
+  return now;
+}
+/* A line starts as the factory picked in For runs it ("as now"); a factory
+   making nothing of the type, and a new factory, start as the planner always
+   has (factoryCounts()). */
+function ofSeed(type, added){
+  const products = [...(((D.plan.catalogue || {})[type] || {}).products || []), ...added];
+  if(ofIsOwned()){
+    const now = ofNow(planTarget);
+    if(products.some(p => now[p])) return Object.fromEntries(products.map(p => [p, now[p] || 0]));
+    return factoryCounts(type, added);
+  }
+  /* A new factory starts sized to the shops' peak day, where they are
+     measured; an added product, or a type with no shop, as a sketch. */
+  const own = (D.plan.own || {})[type], shops = own ? (own.shops ?? own.sites) || 0 : 0, per = defaultRate(type) || 0;
+  const seed = factoryCounts(type, added);
+  if(!shops || !per) return seed;
+  ((D.plan.catalogue[type] || {}).products || []).forEach(p => { const r = RECIPE_BY[p], v = ((own || {}).perDay || {})[p];
+    const each = v > 0 ? v * Math.min(shops, ((own || {}).stocked || {})[p] ?? shops) / shops : per;
+    if(r && r.out) seed[p] = Math.max(1, Math.ceil(each * (D.plan.peak || 1) * shops / (r.out * HOURS))); });
+  return seed;
+}
+/* The type a factory the player runs makes most of: the one its For
+   segment opens on, when the type on screen is nothing it makes. */
+function ofBestType(key){
+  const now = ofNow(key), cat = (D.plan || {}).catalogue || {};
+  let best = null, most = 0;
+  planTypes().forEach(t => { const n = (cat[t].products || []).reduce((s, p) => s + (now[p] || 0), 0); if(n > most){ most = n; best = t; } });
+  return best;
+}
+function ofEnsure(){
+  let plan = ofPlan();
+  if(plan) return plan;
+  if(ofPlans.length >= OF_MAX_PLANS) ofPlans = ofPlans.slice(0, OF_MAX_PLANS - 1);
+  const id = `f${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  plan = {id, type: planType, site: ofIsOwned() ? planTarget : null, counts: ofCounts(), size: ofSizeMode, key: null, mode: null,
+    depot: null, finance: {on: false, amount: null, bank: null}, step: ofStep, made: (D.meta || {}).day || null, inv: null};
+  ofPlans.unshift(plan);
+  ofCur = id;
+  ofSave();
+  return plan;
+}
+/* The machines on every line as the planner shows them now. */
+const ofCounts = () => Object.fromEntries(ofLines().map(l => [l.slug, l.m]));
+
+/* --- the lines, as the planner draws them ---------------------------------
+   Read off the planner's own rows, so every figure here is the one its table
+   shows, a typed rate a shop included. */
+function ofLines(){
+  const rows = $$("#planBody tr.line[data-slug]");
+  const host = rows.length ? rows[0].closest("table") : null;
+  const shops = host ? +host.dataset.shops || 0 : 0, peak = host ? +host.dataset.peak || 1 : 1, per = host ? +host.dataset.pershop || 0 : 0;
+  return rows.map(tr => {
+    const slug = tr.dataset.slug, r = RECIPE_BY[slug] || {};
+    const m = +tr.dataset.m || 0, rate = +tr.dataset.rate || 0;
+    const each = tr.dataset.pershop !== undefined ? +tr.dataset.pershop || 0 : per;
+    return {slug, name: r.item || itemName(slug), m, rate, made: m * rate * HOURS * 7, want: each * 7 * shops,
+      peakDay: each * peak * shops, avgDay: each * shops, station: r.workstation, ingredients: r.ingredients || []};
+  });
+}
+const ofMachines = () => ofLines().reduce((n, l) => n + l.m, 0);
+/* Machines to cover a day of what the shops take: the peak day or an average one. */
+const ofSized = (l, mode) => l.rate && (mode === "peak" ? l.peakDay : l.avgDay) > 0
+  ? Math.ceil((mode === "peak" ? l.peakDay : l.avgDay) / (l.rate * HOURS)) : l.m;
+
+/* --- prices ------------------------------------------------------------------
+   ItemHelper.GetWholesalePrice: an import costs the item's wholesale price ×
+   the product's price index × the public prices, less the best purchasing
+   agent's discount (as _open_store() takes it); a pier pays that × the export
+   price, with no discount (ProductMarketHelper.GetProductExportPrice). */
+/* By the recipe's name, or the one the city trades it under (rawtomato is
+   tomato in every warehouse: the factory view's aliases). */
+function ofProd(slug){
+  const P = ofFacts().products || {};
+  if(P[slug]) return P[slug];
+  const alias = ((D.supply || {}).factories || {}).aliases || {};
+  const from = Object.keys(alias).find(k => alias[k] === slug && P[k]);
+  return from ? P[from] : null;
+}
+const ofDiscount = () => 1 - 0.25 * Math.max(0, Math.min(100, ofG().agent ?? 100)) / 100;
+const ofWholesale = slug => { const p = ofProd(slug); return p ? (p.w || 0) * (p.i || 1) * (ofG().prices || 1) : 0; };
+const ofImportPrice = slug => ofWholesale(slug) * ofDiscount();
+const ofExportPrice = slug => ofWholesale(slug) * (ofG().export || 0);
+/* The raw material one unit made eats, at import prices. */
+const ofRawUnit = slug => { const r = RECIPE_BY[slug];
+  return r && r.out ? r.ingredients.reduce((s, i) => s + i.per * ofImportPrice(i.slug), 0) / r.out : 0; };
+/* SkillData.baseHourlyWage × (1 + 1.05^skill / 100) × the game's salary
+   multiplier, at skill 100, as the store flow plans its staff. */
+const ofHourly = skill => ((ofFacts().skills || {})[`ba:skill_${skill}`] || 0) * (1 + Math.pow(1.05, 100) / 100) * (ofG().wages || 0);
+/* What a line saves a week: the imports it replaces, less the raw material
+   its machines eat running flat out. The surplus is valued apart, as an export. */
+const ofSaves = l => Math.min(l.made, l.want) * ofImportPrice(l.slug) - l.made * ofRawUnit(l.slug);
+/* A week of raw material for these machines, per ingredient. */
+function ofRawWeek(counts){
+  const out = {};
+  Object.entries(counts).forEach(([slug, m]) => { const r = RECIPE_BY[slug];
+    if(r && m > 0) r.ingredients.forEach(i => { out[i.slug] = (out[i.slug] || 0) + m * i.per * HOURS * 7; }); });
+  return out;
+}
+const ofRawCost = counts => Object.entries(ofRawWeek(counts)).reduce((s, [slug, n]) => s + n * ofImportPrice(slug), 0);
+/* The agent the prices are discounted for, in one sentence. */
+function ofAgentLine(){
+  const g = ofG(), pct = Math.round((1 - ofDiscount()) * 100);
+  return g.agentName ? tt("gr.of.price.agent", "At import prices: wholesale × today's price index × public prices {m}, less {pct}% for {name}, your best Purchasing Agent (skill {lvl}%).",
+      {m: num(g.prices || 1), pct, name: spEsc(g.agentName), lvl: g.agent})
+    : tt("gr.of.price.noAgent", "At import prices: wholesale × today's price index × public prices {m}, less {pct}% for a Purchasing Agent at skill {lvl}%, as most players hire.",
+      {m: num(g.prices || 1), pct, lvl: g.agent ?? 100});
+}
+
+/* --- the investment ----------------------------------------------------------
+   One-off and upfront only: each workstation's kit at list price, the pallet
+   shelves, the installation firm's fee on the floor or a delivery per store,
+   the deposit and the truck. A factory the player runs adds only the new
+   machines and the shelves its new plan needs beyond those standing there. */
+function ofKit(counts){
+  const kits = ofFacts().kits || {}, out = new Map();
+  Object.entries(counts).forEach(([slug, m]) => { const r = RECIPE_BY[slug];
+    if(r && m > 0) (kits[r.workstation] || []).forEach(([item]) => out.set(item, (out.get(item) || 0) + m)); });
+  return out;
+}
+/* Boxes for a week of each ingredient and two days of each product. A box
+   holds the item's own box size (Item.boxSize); an item with none is not counted. */
+function ofBoxes(counts){
+  const box = slug => (ofProd(slug) || {}).bx || 0, need = new Map();
+  const add = (slug, n) => need.set(slug, (need.get(slug) || 0) + n);
+  Object.entries(counts).forEach(([slug, m]) => { const r = RECIPE_BY[slug];
+    if(!r || !(m > 0)) return;
+    add(slug, m * r.out * HOURS * OF_OUT_DAYS);
+    r.ingredients.forEach(i => add(i.slug, m * i.per * HOURS * OF_RAW_DAYS)); });
+  let boxes = 0;
+  need.forEach((n, slug) => { if(box(slug)) boxes += Math.ceil(n / box(slug)); });
+  return boxes;
+}
+const ofBuilding = key => key && typeof premises === "function" && premises() ? premises().buildings.find(b => b.key === key) || null : null;
+/* The company has no depot: the factory's output has nowhere to go to the
+   shops, so a new factory's plan adds one unless the player says not to. */
+const ofNoDepot = () => !(D.businesses || []).some(b => b.typeSlug === OF_DEPOT && b.status !== "vacant");
+/* Once costed, the depot is the plan's (plan.depotKey): its rows and cost
+   stay through its setup, after the company has a depot. */
+const ofWantsDepot = plan => !ofIsOwned() && !(plan && plan.depot === false) && (ofNoDepot() || !!(plan && plan.depotKey));
+/* The depot beside the factory: the cheapest warehouse to rent in its
+   neighbourhood, else the cheapest anywhere. */
+function ofDepotPick(b){
+  const free = (premises() ? premises().buildings : []).filter(x => x.type === "warehouse" && x.status === "vacant" && (!b || x.key !== b.key) && x.rent != null);
+  const near = free.filter(x => b && x.hood === b.hood);
+  return (near.length ? near : free).slice().sort((x, y) => x.rent - y.rent || x.key.localeCompare(y.key))[0] || null;
+}
+function ofInvestment(plan){
+  const F = ofFacts(), g = ofG(), owned = ofIsOwned(), items = F.items || {};
+  if(!F.kits) return null;
+  const b = owned ? ofBuilding(planTarget) : plan && ofBuilding(plan.key);
+  if(!b) return null;
+  const lines = ofLines(), counts = Object.fromEntries(lines.map(l => [l.slug, l.m]));
+  const now = owned ? ofNow(planTarget) : {};
+  const adds = owned ? Object.fromEntries(lines.map(l => [l.slug, Math.max(0, l.m - (now[l.slug] || 0))])) : counts;
+  /* A factory you run stores for every line it keeps after the change, its
+     other types' included, against the shelves standing there. */
+  const shelf = F.shelf || {}, cc = shelf.cc || 60, boxes = ofBoxes(owned ? {...now, ...counts} : counts);
+  const placed = owned ? (((F.sites || {})[planTarget] || {}).shelves || 0) : 0;
+  const shelves = Math.max(0, Math.ceil(boxes / cc) - placed);
+  const out = {lines: [...ofKit(adds)].map(([item, qty]) => [item, qty, "ws"])};
+  if(shelves && shelf.item) out.lines.push([shelf.item, shelves, "shelf"]);
+  const price = item => (items[item] || {}).p || 0;
+  const furniture = out.lines.reduce((s, [item, qty]) => s + qty * price(item), 0);
+  const stores = osStores(out, items);
+  const delivery = furniture ? stores.length * (g.delivery || 0) : 0;
+  const fee = (g.installFee || 0) * (b.m2 || 0);
+  const truck = owned ? 0 : ((F.vehicles || {}).truck || {}).p || 0;
+  const deposit = owned ? 0 : b.deposit || 0;
+  let depot = null;
+  if(ofWantsDepot(plan)){
+    /* The remembered depot, while it is not the factory's own building and
+       still free to rent or the player's own; else one picked afresh. */
+    const kept = plan && plan.depotKey && plan.depotKey !== b.key ? ofBuilding(plan.depotKey) : null;
+    const at = (kept && (kept.status === "vacant" || kept.status === "mine") ? kept : null) || ofDepotPick(b), van = ((F.vehicles || {}).van || {}).p || 0;
+    if(plan && at && plan.depotKey !== at.key){ plan.depotKey = at.key; ofSave(); }
+    if(at){
+      const racks = OF_DEPOT_SHELVES * (shelf.p || 0);
+      depot = {b: at, deposit: at.deposit || 0, shelves: OF_DEPOT_SHELVES, racks, van, delivery: g.delivery || 0,
+        total: (at.deposit || 0) + racks + van + (g.delivery || 0)};
+    }
+  }
+  const extra = truck + deposit + (depot ? depot.total : 0);
+  return {b, out, stores, furniture, delivery, fee, truck, deposit, depot, boxes, shelves, placed,
+    items: out.lines.reduce((n, l) => n + l[1], 0), adds,
+    self: furniture + delivery + extra, firm: fee + furniture + extra};
+}
+/* Self-installation unless the player picks the firm (NOTES.md, decision 5). */
+let ofModeNow = "self";
+const ofMode = plan => (plan && plan.mode) || ofModeNow;
+/* Running costs a week (NOTES.md, decision 15), never part of the
+   investment: the raw material at import prices, the wages -- the workers
+   paid the machines' hours, a driver the game's flat 5.7 h a day, and a
+   Purchasing Agent or a Logistics Manager the plan has to hire at
+   headquarters -- and the rent. A factory the player runs counts only what
+   the change adds: the extra raw material and the new workers' wages. */
+function ofHq(plan){
+  const hq = ofFacts().hq || {}, need = ofIngredientsUncontracted().length > 0;
+  const managers = Math.max(0, 1 + (ofWantsDepot(plan) ? 1 : 0) - Math.max(0, (hq.managers || 0) - (hq.managed || 0)));
+  const agents = need && (hq.agents || 0) <= (hq.contracts || 0) ? 1 : 0;
+  return {managers, agents};
+}
+function ofRunning(plan, inv){
+  const g = ofG(), lines = ofLines(), counts = Object.fromEntries(lines.map(l => [l.slug, l.m]));
+  const machines = lines.reduce((n, l) => n + l.m, 0);
+  if(ofIsOwned()){
+    const all = ofNow(planTarget), now = Object.fromEntries(lines.map(l => [l.slug, all[l.slug] || 0]));
+    const was = lines.reduce((n, l) => n + now[l.slug], 0);
+    const raw = ofRawCost(counts) - ofRawCost(now), workers = Math.max(0, machines - was) * 168 * ofHourly("factoryworker");
+    return {raw, wages: workers, rent: 0, workers, driver: 0, hq: 0, total: raw + workers};
+  }
+  const hq = ofHq(plan), b = inv ? inv.b : plan && ofBuilding(plan.key);
+  const raw = ofRawCost(counts), workers = machines * 168 * ofHourly("factoryworker");
+  const drivers = 1 + (inv && inv.depot ? 1 : 0);
+  const driver = drivers * (g.driverHours || 5.7) * 7 * ofHourly("deliverydriver");
+  const office = (hq.agents * ofHourly("purchasingagent") + hq.managers * ofHourly("logisticsmanager")) * (g.hqHours || 40);
+  const rent = ((b && b.rent) || 0) * 7 + (inv && inv.depot ? (inv.depot.b.rent || 0) * 7 : 0);
+  return {raw, wages: workers + driver + office, rent, workers, driver, hq: office, total: raw + workers + driver + office + rent};
+}
+/* The ingredients the plan's lines eat that no active import contract brings. */
+function ofIngredientsUncontracted(){
+  const view = factoryView(), alias = view.aliases || {}, sources = (D.plan || {}).sources || {};
+  const counts = Object.fromEntries(ofLines().map(l => [l.slug, l.m]));
+  return Object.keys(ofRawWeek(counts)).filter(slug => { const s = sources[alias[slug] || slug] || sources[slug]; return !(s && s.active); });
+}
+
+/* --- the view ------------------------------------------------------------------ */
+const ofStepLabel = s => ({what: tt("gr.of.step.what", "What"), where: tt("gr.of.step.where", "Where"),
+  investment: tt("gr.of.step.investment", "Investment"), until: tt("gr.of.step.until", "Until production"),
+  running: tt("gr.of.step.running", "Running")})[s];
+/* The factory standing at the plan's building, once it is rented and set up. */
+const ofFactoryAt = key => key ? (D.businesses || []).find(b => b.key === key && b.typeSlug === OF_FACTORY && b.status !== "vacant") || null : null;
+/* A step opens once what it needs is there: machines on a line, the
+   building for a new factory, and for Running a factory that stands. */
+function ofStepReady(s){
+  const plan = ofPlan(), owned = ofIsOwned();
+  if(s === "what") return true;
+  if(s === "where") return !owned && ofMachines() > 0;
+  if(owned) return s === "running" ? !!ofSite(planTarget) : ofMachines() > 0;
+  if(s === "running") return !!(plan && ofFactoryAt(plan.key));
+  return !!(plan && ofBuilding(plan.key)) && ofMachines() > 0;
+}
+const ofTargetBuilding = () => ofIsOwned() ? ofBuilding(planTarget) || (D.businesses || []).find(b => b.key === planTarget) : null;
+function ofCtlHtml(plan){
+  const at = OF_STEPS.indexOf(ofStep), owned = ofIsOwned(), home = ofTargetBuilding();
+  const steps = OF_STEPS.map((s, i) => {
+    const mine = owned && s === "where";
+    const ready = ofStepReady(s), done = mine || (i < at && ready), cls = s === ofStep ? "on" : done ? "done" : "";
+    const label = mine ? tt("gr.of.step.yours", "{address} · yours", {address: spEsc(home ? home.address : planTarget)}) : ofStepLabel(s);
+    return `${i ? `<span class="sep" aria-hidden="true"></span>` : ""}<button type="button" class="${cls}" data-of-step="${s}"${ready && !mine ? "" : " disabled"}${
+      s === ofStep ? ` aria-current="step"` : ""}${mine ? ` data-tip="${attr(tt("gr.of.step.yoursTip", "Not needed: the factory is already rented"))}"` : ""}><i>${done ? icon("tick") : String(i + 1)}</i>${label}</button>`;
+  }).join("");
+  const opts = ofPlans.map(p => `<option value="${attr(p.id)}"${p.id === ofCur ? " selected" : ""}>${spEsc(ofPlanName(p))}</option>`).join("");
+  return `<nav class="os-steps" aria-label="${attr(tt("gr.of.steps.label", "Plan a factory, step by step"))}">${steps}</nav>
+    <div class="aside"><label class="os-planpick"><span>${tt("gr.of.plan.pick", "Plan")}</span><select data-of-plan aria-label="${attr(tt("gr.of.plan.pickAria", "Which factory plan"))}">
+      <option value=""${ofCur ? "" : " selected"}>${tt("gr.of.plan.new", "New plan")}</option>${opts}</select>${icon("chev")}</label></div>`;
+}
+/* Two names and how many more. */
+const ofNames = names => names.length > 2 ? tt("gr.os.why.more", "{items} +{n}", {items: names.slice(0, 2).join(", "), n: names.length - 2}) : names.join(", ");
+function ofPlanName(p){
+  const made = Object.entries(p.counts || {}).filter(([, m]) => m > 0).map(([slug]) => itemName(slug));
+  const what = made.length ? ofNames(made) : osTypeName(p.type);
+  const b = p.site ? ofBuilding(p.site) || (D.businesses || []).find(x => x.key === p.site) : ofBuilding(p.key);
+  return b ? tt("gr.of.plan.name", "{what} · {address}", {what, address: b.address}) : what;
+}
+/* The For picker: a new factory, then each factory the player runs. */
+function ofForHtml(){
+  const owned = ofOwned();
+  const btn = (key, label, ico) => `<button type="button" class="${planTarget === key ? "on" : ""}" data-of-for="${attr(key)}" aria-pressed="${planTarget === key}">${ofIcon(ico)}${label}</button>`;
+  return `<span class="os-lab">${tt("gr.of.for", "For")}</span><nav class="ff-kind" aria-label="${attr(tt("gr.of.forAria", "What the plan is for"))}">${
+    btn("new", tt("gr.of.for.new", "New factory"), "plus")}${owned.map(f => btn(f.key, `<span translate="no">${spEsc(f.b.address || shortName(f.b))}</span>`, "factory")).join("")}</nav>`;
+}
+/* The plan in one strip: what, where, the investment and the running costs,
+   which sit apart behind a dashed edge because they are not part of it. */
+function ofStripHtml(plan){
+  const owned = ofIsOwned(), lines = ofLines(), made = lines.filter(l => l.m > 0);
+  const cell = (lab, body, cls = "") => `<div${cls ? ` class="${cls}"` : ""}><span class="os-lab">${lab}</span>${body}</div>`;
+  const ws = made.reduce((n, l) => n + l.m, 0);
+  const typeName = osTypeName(planType);
+  let make;
+  if(owned){
+    const now = ofNow(planTarget);
+    const up = made.filter(l => l.m > (now[l.slug] || 0)).map(l => tt("gr.of.strip.line", "{name} ×{n}", {name: l.name, n: l.m - (now[l.slug] || 0)}));
+    const kept = made.filter(l => l.m <= (now[l.slug] || 0)).map(l => tt("gr.of.strip.line", "{name} ×{n}", {name: l.name, n: l.m}));
+    make = `<b>${up.length ? tt("gr.of.strip.added", "{lines} added", {lines: spEsc(ofNames(up))}) : tt("gr.of.strip.nothing", "Nothing added")}</b><small>${
+      kept.length ? tt("gr.of.strip.asNow", "{lines} as now", {lines: spEsc(ofNames(kept))}) : tt("gr.of.strip.shops", "for your {type} shops", {type: spEsc(typeName)})}</small>`;
+  } else make = made.length ? `<b>${spEsc(ofNames(made.map(l => tt("gr.of.strip.line", "{name} ×{n}", {name: l.name, n: l.m}))))}</b><small>${
+      tt("gr.of.strip.ws", {one: "{n} workstation · for your {type} shops", other: "{n} workstations · for your {type} shops"}, {n: ws, type: spEsc(typeName)})}</small>`
+    : `<b class="dim">${tt("gr.of.strip.none", "No machines yet")}</b><small>${tt("gr.of.strip.shops", "for your {type} shops", {type: spEsc(typeName)})}</small>`;
+  const home = owned ? ofTargetBuilding() : null, b = owned ? null : plan && ofBuilding(plan.key);
+  const where = owned ? `<b translate="no">${spEsc(home ? home.address : planTarget)}</b><small>${tt("gr.of.strip.yours", "yours · nothing to rent")}</small>`
+    : b ? `<b translate="no">${spEsc(b.address)}</b><small>${tt("gr.os.strip.where", "{hood} · {layout} · {m2} m² · rent {rent}/day",
+      {hood: hoodName(b.hood), layout: osLayout(b), m2: num(b.m2), rent: fmt(b.rent || 0)})}</small>`
+    : `<b class="dim">${tt("gr.os.strip.nowhere", "Not picked yet")}</b><small>${tt("gr.of.strip.anysize", "a warehouse building, any size")}</small>`;
+  const inv = ofInvestment(plan), mode = ofMode(plan);
+  const invest = inv ? `<b class="m">${fmt(inv[mode])}</b><small>${owned ? tt("gr.of.strip.newOnly", "new machines only · one-off")
+      : mode === "self" ? tt("gr.of.strip.self", "Self-installation · one-off, upfront") : tt("gr.of.strip.firm", "Installation firm · one-off, upfront")}</small>`
+    : `<b class="dim">–</b><small>${tt("gr.os.strip.afterWhere", "after the location")}</small>`;
+  const run = ofRunning(plan, inv);
+  const parts = run.rent ? tt("gr.of.strip.run.rent", "raw {raw} · wages {wages} · rent {rent}", {raw: fmt(run.raw), wages: fmt(run.wages), rent: fmt(run.rent)})
+    : tt("gr.of.strip.run", "raw {raw} · wages {wages}", {raw: fmt(run.raw), wages: fmt(run.wages)});
+  const running = `<b class="m">${tt("gr.of.strip.week", "{w}/week", {w: fmt(run.total)})}</b><small>${parts}</small><small>${tt("gr.of.strip.notInv", "not in the investment")}</small>`;
+  return `<div class="os-pb ff-pb">${cell(tt("gr.of.strip.make", "Make"), make)}${cell(tt("gr.os.strip.whereLab", "Where"), where)}${
+    cell(tt("gr.os.strip.invest", "Investment"), invest)}${cell(owned ? tt("gr.of.strip.runAdded", "Running costs added") : tt("gr.of.strip.runLab", "Running costs"), running, "ff-run")}</div>`;
+}
+
+/* Step 1, above the lines: what the shops buy that a factory can make, each
+   product's machines sized to the peak day (a new factory with no plan yet),
+   and how the lines are sized. */
+function ofStartHtml(plan){
+  const lines = ofLines(), owned = ofIsOwned(), mode = ofSize();
+  const sized = lines.some(l => l.want > 0);
+  const seg = !sized ? "" : `<div class="ff-size"><span class="os-lab">${tt("gr.of.size", "Size to")}</span><nav class="os-seg" aria-label="${attr(tt("gr.of.sizeAria", "How the lines are sized"))}">${
+    (owned ? ["now", "peak", "custom"] : ["peak", "average", "custom"]).map(k => `<button type="button" class="${mode === k ? "on" : ""}" data-of-size="${k}" aria-pressed="${mode === k}">${
+      ({now: tt("gr.of.size.now", "As now"), peak: tt("gr.of.size.peak", "Peak day"), average: tt("gr.of.size.average", "Average day"), custom: tt("gr.of.size.custom", "Custom")})[k]}</button>`).join("")}</nav>${
+    mode === "custom" && lines.some(l => l.m > 0 && ofSized(l, "peak") !== l.m) ? `<span class="os-dim">${tt("gr.of.size.hint", "peak day: {lines}",
+      {lines: spEsc(ofNames(lines.filter(l => l.m > 0).map(l => tt("gr.of.strip.line", "{name} ×{n}", {name: l.name, n: ofSized(l, "peak")}))))})}</span>` : ""}</div>`;
+  if(owned || plan || !sized) return seg;
+  const kits = ofFacts().kits || {}, items = ofFacts().items || {};
+  const kitPrice = st => (kits[st] || []).reduce((s, [item]) => s + ((items[item] || {}).p || 0), 0);
+  const rows = lines.filter(l => l.rate && l.want > 0).map(l => {
+    const k = Math.max(1, ofSized(l, "peak")), made = k * l.rate * HOURS * 7, x = {...l, m: k, made};
+    return {l, k, made, cost: kitPrice(l.station) * k, surplus: made - l.want, saves: ofSaves(x) / 7};
+  }).sort((a, b) => b.saves - a.saves);
+  if(!rows.length) return seg;
+  const own = (D.plan.own || {})[planType] || {};
+  const body = rows.map(r => `<tr><td class="l"><b>${spEsc(r.l.name)}</b><span class="sub">${spEsc(((D.plan.workstations || {})[r.l.station] || {}).name || r.l.station || "")} · ${
+      tt("gr.of.start.rate", "{n:,}/h each", {n: r.l.rate})}</span></td><td>${num(Math.round(r.l.want))}</td><td>${fmt(r.l.want * ofImportPrice(r.l.slug))}</td><td>${r.k}</td><td>${fmt(r.cost)}</td>
+      <td>${r.surplus > 0 ? chipHtml("ok", `+${num(Math.round(r.surplus))}`) : `<span class="quiet">${tt("gr.of.start.allUsed", "all used")}</span>`}</td><td>${fmt(r.saves)}</td>
+      <td class="go"><button type="button" data-of-start="${attr(r.l.slug)}" data-of-k="${r.k}" aria-label="${attr(tt("gr.of.start.go", "Plan {name}", {name: r.l.name}))}">${icon("chev")}</button></td></tr>`).join("");
+  return `<section class="os-card ff-start"><div class="ff-planhead"><h3>${tt("gr.of.start.title", "What your {type} shops buy that a factory can make", {type: spEsc(gnLower(osTypeName(planType)))})}</h3>
+      <span class="os-dim">${tt("gr.of.start.shops", {one: "{n} shop", other: "{n} shops"}, {n: own.shops ?? own.sites ?? 0})}</span></div>
+    <p class="os-dim ff-lead">${tt("gr.of.start.lead", "A shop's measured sales a day. Machines are sized to the peak day; the saving is the imports they replace, less the raw material they eat.")} ${ofAgentLine()}</p>
+    <div class="scrollx"><table class="ff-make"><thead><tr><th class="l">${tt("gr.col.product", "Product")}</th><th>${tt("gr.of.start.sold", "Sold / wk")}</th><th>${tt("gr.of.start.imports", "Imports / wk")}</th>
+      <th>${tt("gr.col.machines", "Machines")}</th><th>${tt("gr.of.start.cost", "They cost")}</th><th>${tt("gr.of.start.surplus", "Surplus / wk")}</th><th>${tt("gr.of.start.saves", "Saves / day")}</th><th></th></tr></thead>
+      <tbody>${body}</tbody></table></div></section>${seg}`;
+}
+/* Step 1, under the lines: the prices, a line left short of the shops, the
+   surplus as an export, a missing depot and the chain as a strip. */
+function ofWhatHtml(plan){
+  const lines = ofLines(), on = lines.filter(l => l.m > 0), sources = (D.plan || {}).sources || {};
+  if(!lines.some(l => l.rate)) return "";
+  const short = lines.filter(l => l.rate && l.want > 0 && l.made < l.want - 0.5).map(l => {
+    const src = sources[l.slug], from = src && src.active ? src.from : null;
+    const said = tt("gr.of.short.made", {one: "{m} machine makes {made:,} a week; your shops take {want:,}.", other: "{m} machines make {made:,} a week; your shops take {want:,}."},
+      {m: l.m, made: Math.round(l.made), want: Math.round(l.want)});
+    const rest = from ? tt("gr.of.short.from", "The rest keeps coming from {from}.", {from: spEsc(from)}) : tt("gr.of.short.buy", "The rest has to be bought in.");
+    return `<div class="ff-short"><span class="mk" aria-hidden="true"></span>${spIcon("alert")}<span class="t">${tt("gr.of.short.title", "{name} stays short", {name: spEsc(l.name)})}<small>${said} ${rest}</small></span>
+      <span class="a">${num(-Math.round(l.want - l.made))}<small>${tt("gr.of.short.week", "a week")}</small></span></div>`;
+  }).join("");
+  const g = ofG();
+  /* Only against shops that are measured: with none, nothing is surplus yet. */
+  const exports = on.filter(l => l.want > 0 && l.made > l.want + 0.5 && ofProd(l.slug)).map(l => {
+    const p = ofProd(l.slug), n = Math.round(l.made - l.want), each = ofExportPrice(l.slug);
+    const drop = p.mo ? 0.25 * n / p.mo : null;
+    return `<div class="ff-note">${spIcon("crate")}<span><b>${tt("gr.of.export.head", "{n:,} {name} a week more than your shops take, worth {w} as an export.", {n, name: spEsc(l.name), w: fmt(n * each)})}</b>
+      ${tt("gr.of.export.how", "A pier pays {each} each today: wholesale {w} × {name}'s price index {i} × public prices {m} × export price {e}.",
+        {each: `$${num(Math.round(each * 100) / 100)}`, w: `$${num(p.w)}`, name: spEsc(l.name), i: num(Math.round((p.i || 1) * 100) / 100), m: num(g.prices || 1), e: num(g.export || 0)})}
+      ${drop != null ? tt("gr.of.export.drop", "Exporting {n:,} a week pulls that index down by {d} a week, a quarter of it over the importer's weekly cap of {mo:,}; it never falls below 0.5.",
+        {n, d: num(Math.round(drop * 1000) / 1000), mo: p.mo}) : ""}</span></div>`;
+  }).join("");
+  const saved = `<p class="ff-saves">${ofAgentLine()}</p>`;
+  const depot = !ofIsOwned() && ofNoDepot() ? `<div class="ff-note warn">${spIcon("crate")}<span>${ofWantsDepot(plan)
+      ? tt("gr.of.depot.adds", "<b>No depot yet.</b> To supply your shops, the factory needs a depot, so this plan adds one: a warehouse building, pallet shelves to receive, a van and a driver, and a Logistics Manager for its delivery plan.")
+      : tt("gr.of.depot.without", "<b>No depot yet.</b> This plan leaves it out: the factory's goods reach the shops only once a depot takes them.")}</span>
+      <button type="button" class="os-btn" data-of-depot>${ofWantsDepot(plan) ? tt("gr.of.depot.drop", "Without a depot") : tt("gr.of.depot.add", "With a depot")}</button></div>` : "";
+  return saved + short + exports + depot + ofFlowHtml(plan);
+}
+/* The chain as a strip: the factory, the depot, the shops it supplies. */
+function ofFlowHtml(plan){
+  const owned = ofIsOwned(), b = owned ? ofTargetBuilding() : plan && ofBuilding(plan.key);
+  const depots = (D.businesses || []).filter(x => x.typeSlug === OF_DEPOT && x.status !== "vacant");
+  const shops = (D.businesses || []).filter(x => x.typeSlug === planType && x.status !== "vacant");
+  if(!shops.length) return "";
+  const node = (cls, ico, title, sub, named) => `<div class="ff-node ${cls}"><span class="ic">${ofIcon(ico)}</span><span><b${named ? ` translate="no"` : ""}>${title}</b><small>${sub}</small></span></div>`;
+  const fac = node(owned ? "" : "new", "factory", spEsc(b ? b.address : tt("gr.of.flow.newFactory", "A new factory")),
+    owned ? tt("gr.of.flow.yours", "your factory") : b ? tt("gr.of.flow.new", "new factory · {hood}", {hood: hoodName(b.hood)}) : tt("gr.of.flow.where", "location not picked yet"), !!b);
+  const dep = depots.length === 1 ? node("", "crate", spEsc(depots[0].name), `<span translate="no">${spEsc(depots[0].address || "")}</span>`, true)
+    : depots.length ? node("", "crate", tt("gr.of.flow.depots", {one: "{n} depot", other: "{n} depots"}, {n: depots.length}), tt("gr.of.flow.depots.sub", "your depots"))
+    : node("miss", "crate", tt("gr.of.flow.depot", "A depot"), ofWantsDepot(plan) ? tt("gr.of.flow.depot.adds", "none yet · the plan adds one") : tt("gr.of.flow.depot.none", "none yet"));
+  const chips = shops.slice(0, 5).map(s => `<span translate="no">${hoodHtml(s)}${spEsc(s.address || shortName(s))}</span>`).join("")
+    + (shops.length > 5 ? `<span>${tt("gr.of.flow.more", "+{n} more", {n: shops.length - 5})}</span>` : "");
+  return `<div class="ff-flow">${fac}<span class="ff-arrow" aria-hidden="true"></span>${dep}<span class="ff-arrow" aria-hidden="true"></span><div class="ff-shops">${chips}</div></div>`;
+}
+/* The way on from step 1, and the plans kept. */
+function ofNextHtml(){
+  if(!ofMachines()) return "";
+  const next = ofIsOwned() ? "investment" : "where";
+  return `<div class="ff-next"><button type="button" class="os-cta" data-of-step="${next}">${ofStepLabel(next)}${icon("go")}</button></div>`;
+}
+function ofPlansHtml(){
+  if(!ofPlans.length) return "";
+  const rows = ofPlans.map(p => {
+    const at = OF_STEPS.indexOf(p.step), b = p.site ? ofBuilding(p.site) || (D.businesses || []).find(x => x.key === p.site) : ofBuilding(p.key);
+    const sub = p.site ? tt("gr.of.plans.yours", "{address} · yours · for {type} shops", {address: b ? b.address : p.site, type: osTypeName(p.type)})
+      : b ? tt("gr.of.plans.at", "{address} · {hood} · for {type} shops", {address: b.address, hood: hoodName(b.hood), type: osTypeName(p.type)})
+      : tt("gr.of.plans.none", "no location yet · for {type} shops", {type: osTypeName(p.type)});
+    return `<div class="os-plan"><button type="button" class="os-plango" data-of-open="${attr(p.id)}"><span><b>${spEsc(ofPlanName(p))}</b><small>${spEsc(sub)}</small></span>
+      <span><span class="os-lab">${ofStepLabel(p.step)}</span><span class="os-meter" style="--w:${Math.round((at + 1) / OF_STEPS.length * 100)}%"><i></i></span></span>
+      <span class="v">${p.inv != null ? fmt(p.inv) : `<span class="os-dim">–</span>`}</span>${icon("chev")}</button>
+      <button type="button" class="os-x" data-of-drop="${attr(p.id)}" aria-label="${attr(tt("gr.of.plans.drop", "Delete the plan {name}", {name: ofPlanName(p)}))}" data-tip="${
+        attr(tt("gr.os.plans.dropTip", "Delete this plan"))}">×</button></div>`;
+  }).join("");
+  return `<div class="os-h"><h2>${tt("gr.of.plans.title", "Your factory plans")}</h2><span class="c">${ofPlans.length}</span></div><div class="os-plans">${rows}</div>`;
+}
+
+/* Step 2: Find a location in plan mode, on warehouse buildings: every size
+   and neighbourhood, ranked by rent. Size is the player's call, so nothing
+   is filtered out or judged for room. */
+function ofShowFinder(){
+  if(typeof CityMapView !== "function" || !premises()) return;
+  const preset = {cat: "warehouse", type: OF_FACTORY, hoods: null};
+  if(!ofFinder || !ofFinder.root.isConnected){
+    ofFinder = new CityMapView($("ofFinderMap"), {plan: {preset, onPlan: key => ofPick(key), label: () => tt("gr.of.where.go", "Plan here")}});
+  } else ofFinder.planFor(preset);
+}
+function ofWhereHtml(){
+  const fact = (lab, b, s) => `<div><span class="os-lab">${lab}</span><b>${b}</b><small>${s}</small></div>`;
+  return `<div class="ff-facts">${fact(tt("gr.of.where.building", "Building"), tt("gr.of.where.warehouse", "Warehouse"), tt("gr.of.where.warehouse.sub", "every factory rents one"))}${
+    fact(tt("gr.of.where.deposit", "Deposit"), tt("gr.of.where.days", "~90 days"), tt("gr.of.where.days.sub", "of rent, as for a depot"))}${
+    fact(tt("gr.of.where.vehicles", "Vehicles"), tt("gr.of.where.slots", "H 1 · I–Q 2"), tt("gr.of.where.slots.sub", "one parking slot per truck"))}${
+    fact(tt("gr.of.where.not", "Not counted"), tt("gr.of.where.distance", "distance"), tt("gr.of.where.distance.sub", "deliveries cost nothing by distance"))}</div>`;
+}
+function ofPick(key){
+  const plan = ofEnsure();
+  plan.key = key;
+  /* A depot not rented yet is picked again beside the new building; one the
+     player rents (premises "mine", set up or not) stays. */
+  if(plan.depotKey && (ofBuilding(plan.depotKey) || {}).status !== "mine") plan.depotKey = null;
+  ofStep = "investment";
+  ofSave();
+  drawPlan();
+  if(typeof settleScroll === "function") settleScroll($("secPlan"));
+}
+
+/* Step 3: the investment, one-off and upfront. */
+function ofInvestHtml(plan){
+  const inv = ofInvestment(plan), F = ofFacts();
+  if(!inv) return `<p class="quiet os-gap">${tt("gr.of.inv.none", "Pick a building first.")}</p>`;
+  const mode = ofMode(plan), owned = ofIsOwned();
+  const tool = `<div class="os-toolbar"><nav class="os-seg big" aria-label="${attr(tt("gr.os.inv.mode", "Interior"))}">
+    <button type="button" class="${mode === "firm" ? "on" : ""}" data-of-mode="firm" aria-pressed="${mode === "firm"}">${tt("gr.os.inv.firm", "Installation firm")} <b>${fmt(inv.firm)}</b></button>
+    <button type="button" class="${mode === "self" ? "on" : ""}" data-of-mode="self" aria-pressed="${mode === "self"}">${tt("gr.os.inv.self", "Self-installation")} <b>${fmt(inv.self)}</b></button></nav>
+    <div class="aside"><span>${owned ? tt("gr.of.inv.added", "Added") : tt("gr.of.inv.ready", "Ready to produce")}</span><b>${owned ? tt("gr.os.inv.items", {one: "{n} item", other: "{n} items"}, {n: inv.items})
+      : tt("gr.of.inv.itemsTruck", {one: "{n} item · 1 truck", other: "{n} items · 1 truck"}, {n: inv.items})}</b>
+    <span>${tt("gr.os.inv.itemsLab", "Items")}</span><b>${fmt(inv.furniture)}</b></div></div>`;
+  if(!inv.items && owned) return tool + `<p class="quiet os-gap">${tt("gr.of.inv.nothing", "Nothing to buy: the plan adds no machine and no shelf.")}</p>`;
+  const body = mode === "self" ? ofSelfHtml(inv) : ofFirmHtml(inv);
+  if(plan){ plan.inv = Math.round(inv[mode]); ofSave(); }
+  return tool + body + (owned ? "" : ofFinHtml(plan, inv))
+    + `<div class="ff-next"><button type="button" class="os-cta" data-of-step="until">${ofStepLabel("until")}${icon("go")}</button></div>`;
+}
+const ofWhy = (kind, inv) => kind === "shelf"
+  ? `<span class="os-tag req">${tt("gr.of.why.shelf", {one: "{n} box: a week in, two days out", other: "{n} boxes: a week in, two days out"}, {n: inv.boxes})}</span>`
+  : `<span class="os-tag req">${tt("gr.of.why.ws", "Workstation")}</span>`;
+function ofSelfHtml(inv){
+  const F = ofFacts(), items = F.items || {}, vendors = F.vendors || {}, fee = ofG().delivery || 0, owned = ofIsOwned();
+  const storeTotal = s => s.lines.reduce((t, k) => t + inv.out.lines[k][1] * ((items[inv.out.lines[k][0]] || {}).p || 0), 0) + fee;
+  const cards = inv.stores.map((s, i) => {
+    const v = vendors[s.key] || {};
+    const rows = s.lines.map(k => { const [item, qty, kind] = inv.out.lines[k];
+      return `<tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: qty, item: osItemName(item)})}</td><td class="w">${ofWhy(kind, inv)}</td><td>${fmt(qty * ((items[item] || {}).p || 0))}</td></tr>`; }).join("");
+    return `<div class="os-store"><div class="os-sh"><span class="k">${osLetter(i)}</span><span><b>${spEsc(v.n || s.key)}</b><small>${spEsc(v.a || "")}${v.h ? ` · ${spEsc(hoodName(v.h))}` : ""}</small></span><span class="t">${fmt(storeTotal(s))}</span></div>
+      <table><tbody>${rows}<tr class="del"><td class="l">${tt("gr.os.self.delivery", "Delivery")}</td><td class="w"></td><td>${fmt(fee)}</td></tr></tbody></table></div>`;
+  }).join("");
+  const truck = (F.vehicles || {}).truck || {}, van = (F.vehicles || {}).van || {};
+  const dealer = inv.truck ? `<div class="os-store"><div class="os-sh"><span class="k">${osLetter(inv.stores.length)}</span><span><b>${spEsc(truck.dealer || "")}</b><small>${
+      tt("gr.of.self.driveIn", "{address} · you drive it in", {address: spEsc(ofAddress(truck.at))})}</small></span><span class="t">${fmt(inv.truck)}</span></div>
+    <table><tbody><tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: 1, item: spEsc(truck.name || "")})}</td><td class="w"><span class="os-tag req">${
+      tt("gr.of.why.truck", "One vehicle to deliver")}</span> <span class="os-tag cap">${tt("gr.of.why.driver", "Driver at 95% skill")}</span></td><td>${fmt(inv.truck)}</td></tr></tbody></table></div>` : "";
+  const dep = inv.deposit ? `<div class="os-store"><div class="os-sh"><span class="k p">${osIcon("key")}</span><span><b>${tt("gr.os.inv.deposit", "Deposit")}</b><small>${
+    tt("gr.of.self.deposit", "about 90 days of rent ({rent}/day) with the building's own fittings · refunded when the lease ends", {rent: fmt(inv.b.rent || 0)})}</small></span><span class="t">${fmt(inv.deposit)}</span></div></div>` : "";
+  const depot = inv.depot ? `<div class="os-store"><div class="os-sh"><span class="k p">${spIcon("crate")}</span><span><b>${tt("gr.of.depot.title", "A depot")}</b><small>${
+      tt("gr.of.depot.sub", "beside the factory: {address}, {hood}, {layout}", {address: spEsc(inv.depot.b.address), hood: hoodName(inv.depot.b.hood), layout: osLayout(inv.depot.b)})}</small></span><span class="t">${fmt(inv.depot.total)}</span></div>
+    <table><tbody><tr><td class="l">${tt("gr.os.inv.deposit", "Deposit")}</td><td class="w"></td><td>${fmt(inv.depot.deposit)}</td></tr>
+      <tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: inv.depot.shelves, item: osItemName((F.shelf || {}).item || "")})}</td><td class="w"><span class="os-tag req">${tt("gr.of.why.receive", "Receives deliveries")}</span></td><td>${fmt(inv.depot.racks)}</td></tr>
+      <tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: 1, item: spEsc(van.name || "")})}</td><td class="w"><span class="os-tag req">${tt("gr.of.why.van", "One vehicle")}</span></td><td>${fmt(inv.depot.van)}</td></tr>
+      <tr class="del"><td class="l">${tt("gr.os.self.delivery", "Delivery")}</td><td class="w"></td><td>${fmt(inv.depot.delivery)}</td></tr></tbody></table></div>` : "";
+  const nothing = owned ? `<div class="ff-callout">${osIcon("key")}<span>${tt("gr.of.inv.nothingElse", "<b>Nothing else to pay.</b> The lease, the deposit and the vehicles are there already; the installation firm would charge for the whole floor again ({fee}).",
+    {fee: fmt(inv.fee)})}</span></div>` : "";
+  const sub = owned ? tt("gr.of.inv.total.owned", {one: "one-off, upfront · the new machines and shelves · {n} delivery", other: "one-off, upfront · the new machines and shelves · {n} deliveries"}, {n: inv.stores.length})
+    : tt("gr.of.inv.total.sub", {one: "one-off, upfront · {items} · {n} delivery · a truck · deposit", other: "one-off, upfront · {items} · {n} deliveries · a truck · deposit"},
+      {n: inv.stores.length, items: tt("gr.os.inv.items", {one: "{n} item", other: "{n} items"}, {n: inv.items})});
+  const pins = [...inv.stores.map((s, i) => [s.key, osLetter(i), "store"]), ...(inv.truck && truck.at ? [[truck.at, osLetter(inv.stores.length), "store"]] : []),
+    [inv.b.key, owned ? tt("gr.of.map.yours", "F") : tt("gr.os.map.new", "NEW"), "new"], ...(inv.depot ? [[inv.depot.b.key, "D", "new"]] : [])];
+  const legend = inv.stores.map((s, i) => `<div><i>${osLetter(i)}</i><span>${spEsc(((F.vendors || {})[s.key] || {}).n || s.key)}</span><b>${fmt(storeTotal(s))}</b></div>`).join("")
+    + (inv.truck ? `<div><i>${osLetter(inv.stores.length)}</i><span>${spEsc(truck.dealer || "")}</span><b>${fmt(inv.truck)}</b></div>` : "")
+    + `<div><i class="n">${owned ? tt("gr.of.map.yours", "F") : tt("gr.os.map.new", "NEW")}</i><span>${spEsc(inv.b.address)}</span><b></b></div>`;
+  return `<div class="os-self"><div>${cards}${dealer}${dep}${depot}${nothing}
+    <div class="os-total"><span>${tt("gr.os.inv.total", "Investment")}</span><small>${sub}</small><b>${fmt(inv.self)}</b></div></div>
+    <div><div class="os-mini" id="ofMini" data-pins="${attr(JSON.stringify(pins))}"></div><div class="os-maplist">${legend}</div></div></div>`;
+}
+const ofAddress = key => { const v = ((ofFacts().vendors || {})[key]) || {}; const b = ofBuilding(key); return v.a || (b && b.address) || String(key || "").replace(/^ba:street_/, ""); };
+function ofFirmHtml(inv){
+  const F = ofFacts(), items = F.items || {}, g = ofG(), owned = ofIsOwned();
+  const grp = (title, note, total) => `<tr class="grp"><td colspan="5">${title}${note ? `<span>${note}</span>` : ""}<b>${fmt(total)}</b></td></tr>`;
+  const rows = [grp(tt("gr.os.inv.firm", "Installation firm"), tt("gr.of.firm.note", "the fee is per square metre of floor, whatever goes on it"), inv.fee),
+    `<tr><td class="l">${tt("gr.os.inv.fee", "Installation fee")}<span class="sub">${tt("gr.os.inv.fee.sub", "{fee} × {m2} m²", {fee: num(g.installFee || 0), m2: num(inv.b.m2 || 0)})}</span></td><td class="w"></td><td></td><td></td><td>${fmt(inv.fee)}</td></tr>`,
+    grp(tt("gr.of.firm.production", "Production"), tt("gr.of.firm.production.note", "workstations and storage"), inv.furniture)];
+  inv.out.lines.forEach(([item, qty, kind]) => { const each = (items[item] || {}).p || 0;
+    rows.push(`<tr><td class="l">${spEsc(osItemName(item))}</td><td class="w">${ofWhy(kind, inv)}</td><td>${qty}</td><td>${fmt(each)}</td><td>${fmt(each * qty)}</td></tr>`); });
+  const truck = (F.vehicles || {}).truck || {};
+  if(inv.truck) rows.push(grp(tt("gr.of.firm.yours", "Bought by you either way"), tt("gr.of.firm.yours.note", "the firm places no vehicle"), inv.truck),
+    `<tr><td class="l">${spEsc(truck.name || "")}<span class="sub">${spEsc(truck.dealer || "")} · ${spEsc(ofAddress(truck.at))}</span></td><td class="w"><span class="os-tag req">${
+      tt("gr.of.why.truck", "One vehicle to deliver")}</span></td><td>1</td><td>${fmt(inv.truck)}</td><td>${fmt(inv.truck)}</td></tr>`);
+  if(inv.deposit) rows.push(grp(tt("gr.os.inv.deposit", "Deposit"), tt("gr.os.inv.deposit.note", "refunded when the lease ends"), inv.deposit),
+    `<tr><td class="l">${tt("gr.of.firm.deposit", "About 90 days of rent")}<span class="sub">${tt("gr.of.firm.deposit.sub", "{rent}/day, with the building's own fittings", {rent: fmt(inv.b.rent || 0)})}</span></td><td class="w"></td><td></td><td></td><td>${fmt(inv.deposit)}</td></tr>`);
+  if(inv.depot) rows.push(grp(tt("gr.of.depot.title", "A depot"), tt("gr.of.depot.sub", "beside the factory: {address}, {hood}, {layout}", {address: spEsc(inv.depot.b.address), hood: hoodName(inv.depot.b.hood), layout: osLayout(inv.depot.b)}), inv.depot.total));
+  const callout = !owned && inv.fee > inv.furniture ? `<div class="ff-callout">${spIcon("alert")}<span>${tt("gr.of.firm.callout", "<b>The fee alone is {fee}</b>, more than the machines: a factory floor is {m2} m². Self-installation saves {w} here.",
+      {fee: fmt(inv.fee), m2: num(inv.b.m2 || 0), w: fmt(inv.firm - inv.self)})}</span></div>`
+    : owned ? `<div class="ff-callout">${spIcon("alert")}<span>${tt("gr.of.firm.again", "<b>The firm prices the whole floor again</b>: {fee} for {m2} m², on top of the new machines.", {fee: fmt(inv.fee), m2: num(inv.b.m2 || 0)})}</span></div>` : "";
+  return `${callout}<table class="os-inv"><thead><tr><th class="l">${tt("gr.os.inv.col.item", "Item")}</th><th class="l">${tt("gr.os.inv.col.why", "Why")}</th>
+    <th>${tt("gr.os.inv.col.qty", "Qty")}</th><th>${tt("gr.os.inv.col.each", "Each")}</th><th>${tt("gr.os.inv.col.total", "Total")}</th></tr></thead>
+    <tbody>${rows.join("")}</tbody><tfoot><tr><td class="l">${tt("gr.os.inv.total", "Investment")}<span class="sub">${tt("gr.of.inv.oneOff", "one-off, upfront")}</span></td><td></td><td></td><td></td><td>${fmt(inv.firm)}</td></tr></tfoot></table>`;
+}
+/* The financing panel: part of the investment borrowed, what that costs a
+   day while it runs and the interest over its term. No days to earn it back:
+   that needs a profit, and a factory is a cost centre. */
+function ofBank(plan){
+  const banks = (osFacts().finance || {}).banks || [], fin = (plan && plan.finance) || {};
+  return banks.find(b => b.id === fin.bank) || banks.find(b => b.id === "VantanderBankSettings") || banks[0] || null;
+}
+function ofFinHtml(plan, inv){
+  const f = osFacts().finance || {}, banks = f.banks || [];
+  if(!banks.length || !plan) return "";
+  const fin = plan.finance || (plan.finance = {on: false, amount: null, bank: null}), on = !!fin.on;
+  const head = `<div class="os-finhead"><h3>${osIcon("bank")}${tt("gr.os.fin.title", "Financing")}</h3>
+    <label class="os-switch"><input type="checkbox" data-of-fin-on${on ? " checked" : ""}><span>${tt("gr.os.fin.on", "Borrow part of it")}</span></label></div>`;
+  if(!on) return `<div class="os-card os-fin" id="ofFin">${head}<p class="quiet">${tt("gr.of.fin.off",
+    "A bank loan pays part of the investment now and costs interest every day until it is repaid. The game books the loan to the company, not to the factory.")}</p></div>`;
+  const bank = ofBank(plan), total = inv[ofMode(plan)];
+  const lenders = banks.map(b => `<button type="button" class="${b.id === bank.id ? "on" : ""}" data-of-bank="${attr(b.id)}" aria-pressed="${b.id === bank.id}">${spEsc(b.name)} <b>${
+    tt("gr.os.fin.rate", "{r}% a year · {d} days", {r: num(Math.round(b.rate * (f.multiplier || 0) * 10) / 10), d: b.term})}</b></button>`).join("");
+  const limit = Math.min(osLoanLimit(bank), Math.floor(total));
+  const amount = Math.max(0, Math.min(limit, fin.amount ?? Math.round(total / 2)));
+  return `<div class="os-card os-fin" id="ofFin">${head}
+    <div class="os-finctl"><div class="os-fr"><span>${tt("gr.os.fin.lender", "Lender")}</span><nav class="os-seg">${lenders}</nav></div>
+    <div class="os-fr"><span>${tt("gr.os.fin.amount", "Amount")}</span><div class="os-amount"><label class="os-num">$<input type="number" min="0" max="${limit}" step="1000" value="${Math.round(amount)}" data-of-fin-amount aria-label="${attr(tt("gr.os.fin.amountAria", "Amount to borrow"))}"></label>
+      <input type="range" min="0" max="${limit}" step="${Math.max(500, osNiceStep(limit / 100))}" value="${Math.round(amount)}" data-of-fin-range aria-label="${attr(tt("gr.os.fin.amountAria", "Amount to borrow"))}">
+      <small>${tt("gr.os.fin.limit", "{bank} lends you up to {w} now", {bank: bank.name, w: fmt(osLoanLimit(bank))})}</small></div></div></div>
+    <div class="os-finfacts" id="ofFinFacts">${ofFinFacts(total, bank, amount)}</div></div>`;
+}
+function ofFinFacts(total, bank, amount){
+  const f = osFacts().finance || {}, loan = osLoan(amount, bank);
+  const cell = (lab, value, sub) => `<div><span class="os-lab">${lab}</span><b>${value}</b><small>${sub}</small></div>`;
+  if(!loan) return cell(tt("gr.os.fin.upfront", "Cash upfront"), fmt(total), tt("gr.os.fin.min", "a bank lends {w} at least", {w: fmt(f.minimum || 0)}));
+  return cell(tt("gr.of.fin.borrow", "Borrow"), fmt(amount), tt("gr.of.fin.of", "of {w}", {w: fmt(total)}))
+    + cell(tt("gr.os.fin.upfront", "Cash upfront"), fmt(total - amount), tt("gr.of.fin.rest", "the rest of the investment"))
+    + cell(tt("gr.of.fin.daily", "Repaid a day"), fmt(loan.interest + loan.repay), tt("gr.of.fin.daily.sub", "{r} back + {i} interest", {r: fmt(loan.repay), i: fmt(loan.interest)}))
+    + cell(tt("gr.os.fin.interest", "Interest"), fmt(loan.total), tt("gr.of.fin.interest.sub", "over {n} days · less if paid off early", {n: num(loan.days)}));
+}
+function ofFinUpdate(amount){
+  const plan = ofPlan(), inv = plan && ofInvestment(plan);
+  if(!plan || !inv) return;
+  const bank = ofBank(plan), total = inv[ofMode(plan)];
+  if(!bank) return;
+  const limit = Math.min(osLoanLimit(bank), Math.floor(total)), asked = Math.round(+amount || 0);
+  amount = Math.max(0, Math.min(limit, asked));
+  plan.finance.amount = amount;
+  ofSave();
+  const facts = $("ofFinFacts");
+  if(facts) facts.innerHTML = ofFinFacts(total, bank, amount);
+  const fin = $("ofFin");
+  if(fin) fin.querySelectorAll("[data-of-fin-amount], [data-of-fin-range]").forEach(i => {
+    if(document.activeElement !== i || asked !== amount) i.value = amount; });
+}
+
+/* --- step 4: until production -------------------------------------------------
+   Three groups, ticked from the save once a factory stands at the address. A
+   write the game link has (hire, the weekly amounts) is a button; machines,
+   recipes, contracts, the delivery plan, the truck and its driver are steps
+   in the game. A factory the player runs lists only what the change needs. */
+const ofHand = () => `<span class="ff-hand">${tt("gr.of.ck.hand", "in the game")}</span>`;
+function ofAct(kind, label, ico, ingame, data = ""){
+  const link = gwLink();
+  if(link && (link.writes || []).includes(kind))
+    return `<button type="button" class="os-cta sm" data-of-write="${kind}" ${data}>${ofIcon(ico)}${spEsc(label)}</button>`;
+  return ingame ? osIngame(ingame) : "";
+}
+/* The factory's people: its staff, the workers its machine-hours want and a
+   driver for the truck. */
+function ofCkStaff(key, machines, total, owned){
+  const title = owned ? tt("gr.of.ck.staff.new", "Staff for the new machines") : tt("gr.of.ck.staff", "Staff for the machines");
+  const hours = machines * 168, workers = Math.ceil(hours / OF_WORKER_HOURS);
+  const needSub = owned ? tt("gr.of.ck.staff.more", {one: "{h:,} machine-hours a week more · {n} Factory Worker", other: "{h:,} machine-hours a week more · {n} Factory Workers"}, {h: hours, n: workers})
+    : tt("gr.of.ck.staff.need", "{h:,} h a week, {m} machines around the clock · {n} Factory Workers · 1 Delivery Driver at 95% skill or more", {h: hours, m: machines, n: workers});
+  const fac = ofFactoryAt(key);
+  if(!fac) return osCk("people", "todo", title, `${needSub} · ${tt("gr.of.ck.staff.later", "hired once the factory is rented")}`);
+  /* Staffed is what the factory's lines are scheduled for, against every
+     planned machine around the clock. */
+  const site = ofSite(key), full = total * 168, mine = new Set(ofLines().map(l => l.slug));
+  const staffed = site ? site.lines.filter(l => mine.has(l.slug)).reduce((s, l) => s + (l.hoursWeek || 0), 0) : 0;
+  if(full && staffed >= full) return osCk("people", "done", title, tt("gr.of.ck.staff.done", "<span class=\"ok\">{h:,} of {of:,} machine-hours a week staffed</span>", {h: Math.round(staffed), of: full}));
+  const ingame = owned
+    ? tt("gr.of.ck.staff.ingameMore", {one: "<b>MyEmployees</b> on your phone: hire {n} Factory Worker for {address}, then their week in <b>BizMan › Schedule</b>.",
+      other: "<b>MyEmployees</b> on your phone: hire {n} Factory Workers for {address}, then their week in <b>BizMan › Schedule</b>."}, {n: workers, address: spEsc(fac.address || key)})
+    : tt("gr.of.ck.staff.ingame", "<b>MyEmployees</b> on your phone: hire {n} Factory Workers and a Delivery Driver for {address}, then their week in <b>BizMan › Schedule</b>.",
+      {n: workers, address: spEsc(fac.address || key)});
+  const act = hrCanHire() && osStaffWork(key) ? ofAct("hire", tt("gr.of.ck.staff.go", "Staff this factory"), "hire", ingame, `data-of-key="${attr(key)}"`) : osIngame(ingame);
+  return osCk("people", staffed ? "part" : "todo", title, `${tt("gr.of.ck.staff.have", "{h:,} of {of:,} machine-hours a week staffed", {h: Math.round(staffed), of: full})} · ${needSub}`, act,
+    full ? Math.round(100 * Math.min(staffed, full) / full) : 0);
+}
+function ofUntilRows(plan){
+  const owned = ofIsOwned(), key = owned ? planTarget : plan && plan.key, b = owned ? ofTargetBuilding() : ofBuilding(key);
+  const address = spEsc(b ? b.address : key || "");
+  const F = ofFacts(), facts = (F.sites || {})[key] || {};
+  const fac = owned ? (D.businesses || []).find(x => x.key === key) : ofFactoryAt(key), site = fac ? ofSite(key) : null;
+  const lines = ofLines().filter(l => l.m > 0), now = owned ? ofNow(key) : {};
+  const adds = lines.filter(l => !owned || l.m > (now[l.slug] || 0));
+  const machines = adds.reduce((n, l) => n + (owned ? l.m - (now[l.slug] || 0) : l.m), 0);
+  const planned = lines.reduce((n, l) => n + l.m, 0);
+  const inv = ofInvestment(plan);
+  const truck = (F.vehicles || {}).truck || {}, truckName = spEsc(truck.name || "");
+  const view = factoryView(), alias = view.aliases || {}, sources = (D.plan || {}).sources || {};
+  const src = slug => sources[alias[slug] || slug] || sources[slug];
+  const site_ = [], people = [], goods = [];
+  /* The site */
+  if(!owned){
+    const rented = (D.businesses || []).find(x => x.key === key);
+    site_.push(osCk("key", fac ? "done" : "todo", tt("gr.os.ck.lease", "Lease"), fac
+      ? tt("gr.of.ck.lease.done", "<span class=\"ok\">Rented</span> · {address}", {address})
+      : rented ? tt("gr.of.ck.lease.other", "Rented · {address} · <span class=\"w\">not set up as a factory yet</span>", {address})
+      : tt("gr.os.ck.lease.todo", "{address} · not rented yet", {address})));
+  }
+  /* Machines on the plan's own products, and those placed with no recipe yet
+     (the change's, still to be set): never the factory's other lines. */
+  const placed = site ? site.lines.filter(l => lines.some(x => x.slug === l.slug)).reduce((n, l) => n + (l.machines || 0), 0)
+    + (site.unnamed || []).reduce((n, u) => n + (u.machines || 0), 0) : 0;
+  const shelves = inv ? inv.shelves : 0;
+  const shelvesSaid = tt("gr.of.ck.shelves", {one: "{n} pallet shelf", other: "{n} pallet shelves"}, {n: shelves});
+  const mSub = owned ? tt("gr.of.ck.machines.new2", {one: "{n} new workstation, {shelves} · room on the floor: check in the game",
+      other: "{n} new workstations, {shelves} · room on the floor: check in the game"}, {n: machines, shelves: shelvesSaid})
+    : tt("gr.of.ck.machines.sub2", {one: "{n} workstation, {shelves}", other: "{n} workstations, {shelves}"}, {n: planned, shelves: shelvesSaid});
+  const mDone = !!site && placed >= planned;
+  site_.push(osCk("gear", mDone ? "done" : placed ? "part" : "todo", `${tt("gr.of.ck.machines", "Machines")} ${ofHand()}`,
+    mDone ? tt("gr.of.ck.machines.done", "<span class=\"ok\">{n} workstations placed</span>", {n: placed})
+      : site ? `${tt("gr.of.ck.machines.part", "{n} of {of} workstations placed", {n: placed, of: planned})} · ${mSub}` : mSub,
+    mDone ? "" : osIngame(tt("gr.of.ck.machines.ingame", "Place them at {address}, each production machine against its assembly machine.", {address})),
+    planned ? Math.round(100 * Math.min(placed, planned) / planned) : 0));
+  const running = {};
+  (site ? site.lines : []).forEach(l => { running[l.slug] = (running[l.slug] || 0) + (l.machines || 0); });
+  const unset = adds.filter(l => (running[l.slug] || 0) < l.m);
+  site_.push(osCk("route", !unset.length && site ? "done" : "todo", `${tt("gr.of.ck.recipes", "Recipes")} ${ofHand()}`,
+    !unset.length && site ? tt("gr.of.ck.recipes.done", "<span class=\"ok\">Every line runs its recipe</span>")
+      : tt("gr.of.ck.recipes.todo", "{lines} · not set yet", {lines: spEsc(ofNames(unset.map(l => tt("gr.of.strip.line", "{name} ×{n}", {name: l.name, n: l.m - (running[l.slug] || 0)}))))}),
+    unset.length || !site ? osIngame(tt("gr.of.ck.recipes.ingame", "<b>BizMan › {address} › Production</b>: pick each new workstation's recipe.", {address})) : ""));
+  if(!owned){
+    const vehicles = facts.vehicles || [];
+    site_.push(osCk("truck", vehicles.length ? "done" : "todo", tt("gr.of.ck.truck", "Truck"), vehicles.length
+      ? tt("gr.of.ck.truck.done", {one: "<span class=\"ok\">{n} vehicle parked</span> at {address}", other: "<span class=\"ok\">{n} vehicles parked</span> at {address}"}, {n: vehicles.length, address})
+      : tt("gr.of.ck.truck.todo", "No vehicle at {address} yet", {address}),
+      vehicles.length ? "" : osIngame(tt("gr.of.ck.truck.ingame", "<b>{dealer}</b>, {where}: buy a {truck} and park it at {address}.",
+        {dealer: spEsc(truck.dealer || ""), where: spEsc(ofAddress(truck.at)), truck: truckName, address}))));
+    const driven = vehicles.some(v => v[1]);
+    site_.push(osCk("key", driven ? "done" : "todo", `${tt("gr.of.ck.driver", "Driver on the truck")} ${ofHand()}`, driven
+      ? tt("gr.of.ck.driver.done", "<span class=\"ok\">A driver is assigned</span>")
+      : tt("gr.of.ck.driver.todo", "No driver assigned to a vehicle yet"),
+      driven ? "" : osIngame(tt("gr.of.ck.driver.ingame", "<b>BizMan › {address} › Vehicles</b>: assign the Delivery Driver to the {truck}, once hired.", {address, truck: truckName}))));
+  }
+  /* People */
+  people.push(ofCkStaff(key, machines, planned, owned));
+  if(!owned){
+    const hq = ofHq(plan), H = F.hq || {};
+    const parts = [hq.managers ? `<span class="w">${ofWantsDepot(plan) ? tt("gr.of.ck.hq.managerN", {one: "{n} Logistics Manager short for the factory and its depot", other: "{n} Logistics Managers short for the factory and its depot"}, {n: hq.managers})
+      : tt("gr.of.ck.hq.manager", "no Logistics Manager free for the factory")}</span>` : tt("gr.of.ck.hq.managerOk", "a Logistics Manager is free"),
+      hq.agents ? `<span class="w">${tt("gr.of.ck.hq.agent", "no Purchasing Agent free for a new contract")}</span>` : tt("gr.of.ck.hq.agentOk", "a Purchasing Agent is free or not needed")];
+    const roles = [hq.managers, hq.agents].filter(Boolean);
+    const ingame = !roles.length ? "" : osIngame(hq.managers && hq.agents
+      ? tt("gr.of.ck.hq.ingame.both", {one: "<b>MyEmployees</b>: hire {n} Logistics Manager and a Purchasing Agent for headquarters and give each a computer workstation.",
+        other: "<b>MyEmployees</b>: hire {n} Logistics Managers and a Purchasing Agent for headquarters and give each a computer workstation."}, {n: hq.managers})
+      : hq.managers ? tt("gr.of.ck.hq.ingame.manager", {one: "<b>MyEmployees</b>: hire {n} Logistics Manager for headquarters and give them a computer workstation.",
+        other: "<b>MyEmployees</b>: hire {n} Logistics Managers for headquarters and give each a computer workstation."}, {n: hq.managers})
+      : tt("gr.of.ck.hq.ingame.agent", "<b>MyEmployees</b>: hire a Purchasing Agent for headquarters and give them a computer workstation."));
+    const quick = roles.length && gwLink() && (gwLink().writes || []).includes("hire")
+      ? `<button type="button" class="os-btn" data-of-route="staffing/needs" data-of-into="#hsQuick">${osIcon("hire")}${tt("gr.of.ck.hq.quick", "Quick hire")}</button>` : "";
+    people.push(osCk("desk", roles.length ? (roles.length < 2 ? "part" : "todo") : "done", tt("gr.of.ck.hq", "Headquarters"),
+      tt("gr.of.ck.hq.sub", "{managers} · {agents} · {m} Logistics Managers and {a} Purchasing Agents on staff", {managers: parts[0], agents: parts[1], m: H.managers || 0, a: H.agents || 0}),
+      quick + ingame, roles.length < 2 ? 50 : 0));
+  }
+  /* Goods in and out */
+  const needIn = Object.keys(ofRawWeek(Object.fromEntries(adds.map(l => [l.slug, owned ? l.m - (now[l.slug] || 0) : l.m]))));
+  const bare = needIn.filter(slug => { const s = src(slug); return !(s && s.active); });
+  const names = list => spEsc(ofNames(list.map(itemName)));
+  goods.push(osCk("crate", bare.length ? "todo" : "done", `${owned ? tt("gr.of.ck.contract.new", "New ingredients on a contract") : tt("gr.of.ck.contract", "Raw material contract")} ${ofHand()}`,
+    bare.length ? tt("gr.of.ck.contract.todo", "<span class=\"w\">No import contract brings {items} yet</span>", {items: names(bare)})
+      : tt("gr.of.ck.contract.done", "<span class=\"ok\">Every ingredient is on an import contract</span>"),
+    bare.length ? osIngame(tt("gr.of.ck.contract.ingame", "Go to an importer with your Purchasing Agent and add {items} to a contract, delivered to {address} or to your depot.", {items: names(bare), address})) : ""));
+  const eatsAll = new Set(lines.flatMap(l => l.ingredients.flatMap(i => [i.slug, (view.aliases || {})[i.slug] || i.slug])));
+  const needs = site ? (site.needs || []).filter(n => eatsAll.has(n.slug)) : [];
+  const shortIn = needs.filter(n => n.perWeek > 0 && (n.arrives || 0) < n.perWeek * 0.95);
+  const later = bare.length || !site;
+  goods.push(osCk("crate", later ? "later" : shortIn.length ? "todo" : "done", tt("gr.of.ck.amounts", "Weekly amounts"),
+    later ? `<span class="lt">${tt("gr.of.ck.amounts.later", "once the contracts exist and the factory runs")}</span> · ${tt("gr.of.ck.amounts.plan", "{items}, at what the machines eat a week", {items: names(needIn)})}`
+      : shortIn.length ? tt("gr.of.ck.amounts.short", "<span class=\"w\">{items} arrive short of what the machines eat</span>", {items: spEsc(ofNames(shortIn.map(n => n.item)))})
+      : tt("gr.of.ck.amounts.done", "<span class=\"ok\">The machines get what they eat</span>"),
+    later || !shortIn.length ? "" : ofImportsAct(shortIn.map(n => n.slug), "set",
+      tt("gr.of.ck.amounts.ingame", "<b>BizMan › Imports</b>: set {items} to what the machines eat a week.", {items: spEsc(ofNames(shortIn.map(n => n.item)))}))));
+  const shipped = {};
+  (site ? site.lines : []).forEach(l => { if((l.toCity || 0) > 0) shipped[l.slug] = true; });
+  const unshipped = adds.filter(l => !shipped[l.slug]);
+  const depots = (D.businesses || []).filter(x => x.typeSlug === OF_DEPOT && x.status !== "vacant");
+  const depot = depots.length === 1 ? spEsc(depots[0].name) : tt("gr.of.ck.route.depot", "your depot");
+  goods.push(osCk("route", unshipped.length || !site ? "todo" : "done", `${tt("gr.of.ck.route", "Delivery plan")} ${ofHand()}`,
+    unshipped.length || !site ? tt("gr.of.ck.route.todo", "{items} from {address} to {depot}, daily", {items: names(unshipped.map(l => l.slug)), address, depot})
+      : tt("gr.of.ck.route.done", "<span class=\"ok\">Every line's product is on a delivery plan</span>"),
+    unshipped.length || !site ? osIngame(tt("gr.of.ck.route.ingame", "<b>BizMan › Logistics</b>: add {items} to the factory's delivery plan.", {items: names(unshipped.map(l => l.slug))})) : ""));
+  const still = adds.filter(l => { const s = sources[l.slug]; return s && s.active && s.ordered > 0; });
+  goods.push(osCk("crate", still.length ? (site && !unshipped.length ? "todo" : "later") : "done", tt("gr.of.ck.depotImports", "The depot's imports"),
+    still.length ? `${site && !unshipped.length ? "" : `<span class="lt">${tt("gr.of.ck.depotImports.later", "after the first delivery")}</span> · `}${
+      tt("gr.of.ck.depotImports.todo", "{items} still come from {from}", {items: names(still.map(l => l.slug)), from: spEsc(ofNames([...new Set(still.map(l => sources[l.slug].from))]))})}`
+      : tt("gr.of.ck.depotImports.done", "<span class=\"ok\">Nothing the factory makes is still imported</span>"),
+    still.length && site && !unshipped.length ? ofImportsAct(still.map(l => l.slug), "lower",
+      tt("gr.of.ck.depotImports.ingame", "<b>BizMan › Imports</b>: lower {items} now the factory delivers.", {items: names(still.map(l => l.slug))})) : ""));
+  /* The depot the plan adds (no depot in the company): rented and set up,
+     its van and driver, and its round to the shops, all in the game. */
+  if(!owned && inv && inv.depot){
+    /* The warehouse the plan costed, or any rented since the plan was made. */
+    const depots = (D.businesses || []).filter(x => x.typeSlug === OF_DEPOT && x.status !== "vacant"
+      && (x.key === inv.depot.b.key || (plan && plan.made != null && (x.opened ?? -1) >= plan.made)));
+    const dAddr = spEsc(inv.depot.b.address), van = spEsc(((F.vehicles || {}).van || {}).name || "");
+    const there = depots.length > 0;
+    site_.push(osCk("crate", there ? "done" : "todo", `${tt("gr.of.ck.depot", "The depot")} ${ofHand()}`,
+      there ? tt("gr.of.ck.depot.done", "<span class=\"ok\">{name} is rented and set up as a depot</span>", {name: spEsc(depots[0].name)})
+        : tt("gr.of.ck.depot.todo", "{address} · not rented yet · {n} pallet shelves to receive on", {address: dAddr, n: inv.depot.shelves}),
+      there ? "" : osIngame(tt("gr.of.ck.depot.ingame", "Rent {address} and set it up as a warehouse, with {n} pallet shelves.", {address: dAddr, n: inv.depot.shelves}))));
+    const dv = there ? ((F.sites || {})[depots[0].key] || {}).vehicles || [] : [];
+    site_.push(osCk("truck", dv.some(v => v[1]) ? "done" : "todo", `${tt("gr.of.ck.depotVan", "The depot's van and driver")} ${ofHand()}`,
+      dv.some(v => v[1]) ? tt("gr.of.ck.depotVan.done", "<span class=\"ok\">A driven vehicle is parked at the depot</span>")
+        : tt("gr.of.ck.depotVan.todo", "A {van} and a Delivery Driver at 75% skill or more", {van}),
+      dv.some(v => v[1]) ? "" : osIngame(tt("gr.of.ck.depotVan.ingame", "Buy a {van} at General US Trucks, park it at the depot, hire a Delivery Driver and assign them to it.", {van}))));
+    /* Done once the depot itself delivers each shop of the type every
+       product the factory makes that the shop stocks: the goods graph's
+       logistics links out of the depot (a shop's own wholesale contract is
+       no delivery from it). */
+    const graph = (D.supply || {}).graph || {}, from = new Set(depots.map(x => x.key));
+    const delivered = new Set((graph.links || []).filter(k => from.has(k.from)).flatMap(k => (k.slugs || []).map(sl => `${k.to}|${sl}`)));
+    /* What each shop stocks is its own product lines (the goods graph leaves
+       out a shop with no route and little stock). */
+    const made = lines.map(l => l.slug);
+    const need = (D.businesses || []).filter(x => x.typeSlug === planType && x.status !== "vacant")
+      .flatMap(x => { const has = new Set((x.lines || []).map(l => l.slug)); return made.filter(sl => has.has(sl)).map(sl => `${x.key}|${sl}`); });
+    const served = there && need.length > 0 && need.every(k => delivered.has(k));
+    goods.push(osCk("route", served ? "done" : "todo", `${tt("gr.of.ck.depotRoute", "Deliveries to the shops")} ${ofHand()}`,
+      served ? tt("gr.of.ck.depotRoute.done", "<span class=\"ok\">Every shop gets every product the factory makes</span>")
+        : tt("gr.of.ck.depotRoute.todo", "The depot's delivery plan to your {type} shops", {type: spEsc(osTypeName(planType))}),
+      served ? "" : osIngame(tt("gr.of.ck.depotRoute.ingame", "<b>BizMan › Logistics</b>: give a Logistics Manager the depot's plan to your shops."))));
+  }
+  if(!owned) goods.push(osCk("shirt", "skip", tt("gr.os.ck.uni", "Uniforms"), tt("gr.of.ck.uni", "Not needed: no customer comes into a factory")));
+  return [[tt("gr.of.ck.site", "The site"), site_], [tt("gr.of.ck.people", "People"), people], [tt("gr.of.ck.goods", "Goods in and out"), goods]];
+}
+function ofUntilHtml(plan){
+  const groups = ofUntilRows(plan), rows = groups.flatMap(g => g[1]).filter(r => r.state !== "skip");
+  const done = rows.filter(r => r.state === "done").length, link = gwLink(), m = D.meta || {};
+  const clock = Number.isFinite(Number(m.day)) ? tt("gr.os.ck.read", "from the save · day {day}, {time}",
+    {day: num(m.day), time: `${String(Number(m.hour) || 0).padStart(2, "0")}:${String(Math.floor(Number(m.minute) || 0)).padStart(2, "0")}`}) : "";
+  const live = link ? `<span class="os-live"><i></i>${tt("gr.os.ck.live", "Game linked")}</span>` : `<span class="os-live off"><i></i>${tt("gr.os.ck.live.off", "Save file · game not linked")}</span>`;
+  const gate = link ? "" : `<div class="os-gate">${osIcon("plug")}<span>${tt("gr.of.ck.gate", "<b>Link the game</b> and staff and amounts become buttons. Machines, recipes, contracts and delivery plans stay in the game: the link has no write for them.")}</span><button type="button" class="os-btn" data-of-howlink>${
+    tt("gr.os.ck.gate.how", "How to link")}</button></div>`;
+  const row = r => `<div class="os-ck ${r.state}"${r.state === "part" ? ` style="--p:${r.p}%"` : ""}><span class="st">${r.state === "done" ? osIcon("tick") : ""}</span><span class="ic">${ofIcon(r.icon)}</span><div class="tx"><b>${r.title}</b><small>${r.sub}</small></div><div class="act">${r.act}</div></div>`;
+  return `<div class="os-prog"><h2>${tt("gr.of.ck.title", "Until production")}</h2><span class="m" style="--w:${rows.length ? Math.round(100 * done / rows.length) : 0}%"><i></i></span><span class="c">${
+    tt("gr.os.ck.count", "{n} of {of}", {n: done, of: rows.length})}</span><div class="aside">${live}<span>${ofIsOwned() ? tt("gr.of.ck.change", "only what the change needs") : clock}</span></div></div>
+    ${groups.filter(g => g[1].length).map(([title, list]) => `<div class="ff-sub">${title}</div><div class="os-cks">${list.map(row).join("")}</div>`).join("")}${gate}
+    ${ofStepReady("running") ? `<div class="ff-next"><button type="button" class="os-cta" data-of-step="running">${ofStepLabel("running")}${icon("go")}</button></div>` : ""}`;
+}
+
+/* --- step 5: running -------------------------------------------------------------
+   Once the factory stands, what it makes against the plan, what reaches the
+   depot against what the shops take, what goes to the piers and the raw
+   material that arrives, all from Supply's reading of the factory. Two causes
+   it already knows are named with their write: machine-hours nobody staffs,
+   and raw material that arrives short. */
+/* What the save saw leave the factory, over the plan's own products: per day
+   over the delivery log (_factory_days()), and each product's average over
+   its last seven of those days. Null where the save has no log yet. */
+function ofObserved(key, slugs){
+  const d = (((ofFacts().sites || {})[key]) || {}).days || {};
+  if(!d.first) return null;
+  const out = d.out || {}, sold = d.sold || {}, mine = [...slugs];
+  const n = Math.max(0, ...Object.values(out).map(a => a.length), ...Object.values(sold).map(a => a.length));
+  if(!n) return null;
+  const covered = i => Array.isArray(d.covered) ? !!d.covered[i] : Object.values(sold).some(a => a[i] != null);
+  const days = [];
+  for(let i = 0; i < n; i++) days.push([d.first + i, mine.reduce((t, sl) => t + ((out[sl] || [])[i] || 0), 0),
+    covered(i) ? mine.reduce((t, sl) => t + ((sold[sl] || [])[i] || 0), 0) : null]);
+  const span = Math.min(7, n), avg = {};
+  mine.forEach(sl => {
+    const o = (out[sl] || []).slice(-span);
+    const so = Array.from({length: span}, (_, k) => n - span + k).filter(covered).map(i => (sold[sl] || [])[i] || 0);
+    avg[sl] = {out: o.reduce((t, v) => t + (v || 0), 0) / span, sold: so.length ? so.reduce((t, v) => t + v, 0) / so.length : null};
+  });
+  return {days, avg, span};
+}
+/* The sites whose import contracts bring any of these items: the factory
+   itself or a depot that supplies it (openFactory.sites[].imports). */
+function ofImportSites(items){
+  const alias = factoryView().aliases || {}, want = new Set([...items].flatMap(sl => [sl, alias[sl] || sl]));
+  return Object.entries(ofFacts().sites || {}).filter(([, v]) => (v.imports || []).some(([sl, on]) => on && want.has(sl))).map(([k]) => k);
+}
+/* The weekly amounts write, scoped to the sites whose contracts bring these
+   items: one button a site, named; the step in the game where none has. */
+function ofImportsAct(items, kind, ingame){
+  const sites = ofImportSites(items).slice(0, 3);
+  const link = gwLink(), can = link && (link.writes || []).includes("imports");
+  if(!can || !sites.length) return ingame ? osIngame(ingame) : "";
+  return sites.map(k => { const b = (D.businesses || []).find(x => x.key === k), site = b ? shortName(b) : k;
+    const label = kind === "lower" ? tt("gr.of.imports.lower", "Lower the imports at {site}", {site})
+      : tt("gr.of.imports.set", "Set the weekly amounts at {site}", {site});
+    return `<button type="button" class="os-cta sm" data-of-write="imports" data-of-site="${attr(k)}">${ofIcon("crate")}${spEsc(label)}</button>`; }).join("");
+}
+function ofRunHtml(plan){
+  const owned = ofIsOwned(), key = owned ? planTarget : plan && plan.key, site = key ? ofSite(key) : null;
+  if(!site) return `<p class="quiet os-gap">${tt("gr.of.run.none", "Production has not started yet: once the factory runs, its output shows here against the plan.")}</p>`;
+  /* Only the plan's own products and what they eat: a factory running lines
+     for another type is not this plan's business (review, #172). */
+  const lines = ofLines().filter(l => l.m > 0), mine = new Set(lines.map(l => l.slug));
+  const alias = factoryView().aliases || {};
+  const eats = new Set(lines.flatMap(l => l.ingredients.flatMap(i => [i.slug, alias[i.slug] || i.slug])));
+  const siteLines = site.lines.filter(l => mine.has(l.slug)), needs = (site.needs || []).filter(n => eats.has(n.slug));
+  const obs = ofObserved(key, mine);
+  const planDay = lines.reduce((t, l) => t + l.made / 7, 0), want = lines.reduce((t, l) => t + l.want, 0);
+  const staffed = {};
+  siteLines.forEach(l => { staffed[l.slug] = (staffed[l.slug] || 0) + (l.atRoster || 0); });
+  const kpi = (lab, v, sub, cls = "") => `<div class="kpi"><span class="lab">${lab}</span><span class="v${cls}">${v}</span><span class="sub">${sub}</span></div>`;
+  const rawPlan = ofRawCost(Object.fromEntries(lines.map(l => [l.slug, l.m])));
+  /* What arrived of an ingredient other lines share is counted at this plan's share of what the factory eats. */
+  const planWeek = {};
+  Object.entries(ofRawWeek(Object.fromEntries(lines.map(l => [l.slug, l.m])))).forEach(([sl, n]) => { const k = alias[sl] || sl; planWeek[k] = (planWeek[k] || 0) + n; });
+  const rawIn = needs.reduce((t, n) => t + (n.arrives || 0) * ofImportPrice(n.slug) * (n.perWeek ? Math.min(1, (planWeek[n.slug] || 0) / n.perWeek) : 0), 0);
+  let tiles, pct = null;
+  if(obs){
+    const out = [...mine].reduce((t, sl) => t + obs.avg[sl].out, 0), pier = [...mine].reduce((t, sl) => t + (obs.avg[sl].sold || 0), 0);
+    const value = [...mine].reduce((t, sl) => t + (obs.avg[sl].sold || 0) * 7 * ofExportPrice(sl), 0);
+    pct = planDay ? Math.round(out / planDay * 100) : 0;
+    tiles = `<div class="os-roi">${kpi(tt("gr.of.run.left", "Left a week"), num(Math.round(out * 7)),
+        tt("gr.of.run.left.sub", "plan {n:,} · {p}% · the delivery log's last {d} days", {n: Math.round(planDay * 7), p: pct, d: obs.span}), pct < 90 ? " neg" : "")}${
+      kpi(tt("gr.of.run.sites", "To your sites"), num(Math.round(Math.max(0, out - pier) * 7)), tt("gr.of.run.depot.sub", "a week · the shops take {n:,}", {n: Math.round(want)}))}${
+      kpi(tt("gr.of.run.export", "Exported"), fmt(value), tt("gr.of.run.export.sub", "{n:,} a week to the piers", {n: Math.round(pier * 7)}))}${
+      kpi(tt("gr.of.run.raw", "Raw material"), fmt(rawIn), tt("gr.of.run.raw.sub", "arrived a week · plan {w}", {w: fmt(rawPlan)}))}</div>`;
+  } else {
+    const est = Object.values(staffed).reduce((t, v) => t + v, 0);
+    tiles = `<div class="os-roi">${kpi(tt("gr.of.run.est", "At staffed hours"), num(Math.round(est * 7)),
+        tt("gr.of.run.est.sub", "an estimate a week: the save's delivery log holds no day yet · plan {n:,}", {n: Math.round(planDay * 7)}))}${
+      kpi(tt("gr.of.run.raw", "Raw material"), fmt(rawIn), tt("gr.of.run.raw.sub", "arrived a week · plan {w}", {w: fmt(rawPlan)}))}</div>`;
+  }
+  const rows = lines.map(l => {
+    const a = obs ? obs.avg[l.slug] : null, left = a ? a.out : null, p = left != null && l.made ? Math.round(left * 7 / l.made * 100) : null, low = p != null && p < 90;
+    return `<tr><td class="l"><b>${spEsc(l.name)}</b><span class="sub">${tt("gr.of.run.machines", {one: "{n} machine planned", other: "{n} machines planned"}, {n: l.m})}</span></td><td>${num(Math.round(l.made / 7))}</td>
+      <td class="os-dim">${num(Math.round(staffed[l.slug] || 0))}</td>
+      <td class="${low ? "w" : ""}">${left == null ? "–" : `${num(Math.round(left))} <small class="os-dim">${p}%</small><span class="ff-meter${low ? " w" : ""}" style="--w:${Math.min(100, p)}%"><i></i></span>`}</td>
+      <td>${a && a.sold != null ? num(Math.round(a.sold)) : "–"}</td></tr>`; }).join("");
+  const table = `<div class="scrollx"><table class="ff-out"><thead><tr><th class="l">${tt("gr.of.run.col.line", "Line")}</th><th>${tt("gr.of.run.col.plan", "Plan")}</th><th data-tip="${
+    attr(tt("gr.of.run.col.staffed.tip", "An estimate: the line's rate over the hours its machines are staffed"))}">${tt("gr.of.run.col.staffed", "Staffed hours allow")}</th><th>${tt("gr.of.run.col.left", "Left")}</th><th>${tt("gr.of.run.col.pier", "To the piers")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  /* What the board can name, each one row over the plan's own lines and what
+     they eat: machine-hours nobody staffs, a line waiting on an input, raw
+     material arriving short. Always said, whatever the output reads. */
+  const gaps = siteLines.filter(l => l.fullWeek && l.hoursWeek < l.fullWeek);
+  const waiting = siteLines.filter(l => (l.missing || []).length);
+  const shortIn = needs.filter(n => n.perWeek > 0 && (n.arrives || 0) < n.perWeek * 0.95);
+  const why = [];
+  const row = (ico, title, sub, act) => `<div><span class="mk" aria-hidden="true"></span>${spIcon(ico)}<span class="t">${title}<small>${sub}</small></span><span>${act}</span></div>`;
+  if(gaps.length){
+    const h = gaps.reduce((a, l) => a + (l.hoursWeek || 0), 0), of = gaps.reduce((a, l) => a + (l.fullWeek || 0), 0);
+    why.push(row("people", tt("gr.of.run.why.staff", "Machine-hours nobody staffs: {lines}", {lines: spEsc(ofNames(gaps.map(l => l.item)))}),
+      tt("gr.of.run.why.staff.sub", "{h:,} of {of:,} h a week staffed on these lines", {h: Math.round(h), of: Math.round(of)}),
+      hrCanHire() && osStaffWork(key) ? ofAct("hire", tt("gr.of.ck.staff.go", "Staff this factory"), "hire", "", `data-of-key="${attr(key)}"`) : ""));
+  }
+  waiting.forEach(l => why.push(row("crate", tt("gr.of.run.why.waits", "{line} waits on {items}", {line: spEsc(l.item), items: spEsc(ofNames(l.missing))}),
+    tt("gr.of.run.why.waits.sub", "the factory holds none of it, so the line stands still"), "")));
+  if(shortIn.length){
+    const a = shortIn.reduce((x, n) => x + (n.arrives || 0), 0), need = shortIn.reduce((x, n) => x + n.perWeek, 0);
+    why.push(row("crate", tt("gr.of.run.why.raw", "Raw material arrives short: {items}", {items: spEsc(ofNames(shortIn.map(n => n.item)))}),
+      tt("gr.of.run.why.raw.sub", "{a:,} a week arrives; the machines eat {n:,}", {a: Math.round(a), n: Math.round(need)}),
+      ofImportsAct(shortIn.map(n => n.slug), "set", "")));
+  }
+  const whyHtml = why.length ? `<div class="os-h"><h2>${pct != null && pct < 100 ? tt("gr.of.run.why", "Why output is below plan") : tt("gr.of.run.watch", "What holds output back")}</h2><span class="c">${why.length}</span></div><div class="ff-why">${why.join("")}</div>` : "";
+  const chart = `<section class="os-card"><h3>${tt("gr.of.run.chart.title", "Left the factory a day")}</h3>${ofDayChart(obs ? obs.days : [], planDay)}
+    <p class="os-dim ff-lead">${owned ? tt("gr.of.run.chart.noteNew", "From the save's delivery log: goods shipped to your sites and, lighter, to the piers. The save does not count what is made, so what stays on the shelves is not in the bars. The plan line is the new plan; a line added lately shows as the bars climbing to it.")
+      : tt("gr.of.run.chart.note", "From the save's delivery log: goods shipped to your sites and, lighter, to the piers. The save does not count what is made, so what stays on the shelves is not in the bars.")}</p></section>`;
+  return `${tiles}<div class="os-two ff-run2">${chart}<section class="os-card ff-outc"><h3>${owned ? tt("gr.of.run.vsNew", "Output against the new plan") : tt("gr.of.run.vs", "Output against plan")}</h3>${table}
+    <p class="os-dim ff-lead">${tt("gr.of.run.note2", "A day. Left is what the save's delivery log saw go, its last seven days; staffed hours allow is an estimate from the line's rate and its staffed hours.")}</p></section></div>${whyHtml}`;
+}
+
+/* Ingredients (the order-ahead table) belong to step 1 for a factory the
+   player runs; the view's sweep (showSub()) shows every section of the view. */
+let ofIngNone = false;
+function ofIngShow(){
+  const ing = $("secIngredients");
+  if(ing && (ofIngNone || ofStep !== "what" || !ofIsOwned())) ing.hidden = true;
+}
+/* Each finished day the save's delivery log covers: what left the factory,
+   the piers' part of it lighter, against the plan's day as a dashed line
+   (_factory_days()). The save counts what leaves, not what is made, so a
+   day's bar is goods out of the door: what is made and still held is not in
+   it. The plan line is the plan on screen, so for a factory you run it is the
+   new plan, and a line added lately shows as the bars climbing to it. */
+function ofDayChart(days, planDay){
+  if(!days || days.length < 2) return `<p class="quiet">${tt("gr.of.run.chart.none", "Not enough days in the save's delivery log to chart yet.")}</p>`;
+  const W = 520, H = 250, x0 = 56, y0 = 16, x1 = W - 12, y1 = H - 40;
+  const top = Math.max(planDay * 1.1, ...days.map(d => d[1]), 1);
+  const step = osNiceStep(top / 4), vmax = Math.ceil(top / step) * step;
+  const n = days.length, bw = (x1 - x0) / n;
+  const X = i => x0 + bw * i, Y = v => y1 - (y1 - y0) * Math.max(0, v) / vmax;
+  const g = [];
+  for(let v = 0; v <= vmax + 1e-6; v += step) g.push(`<line class="grid" x1="${x0}" x2="${x1}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"></line><text x="${x0 - 8}" y="${(Y(v) + 3.5).toFixed(1)}" text-anchor="end">${num(v)}</text>`);
+  const every = Math.max(1, Math.ceil(n / 8));
+  days.forEach(([d], i) => { if(i % every === 0 || i === n - 1) g.push(`<text x="${(X(i) + bw / 2).toFixed(1)}" y="${y1 + 18}" text-anchor="middle">${d}</text>`); });
+  const bars = days.map(([d, out, pier], i) => {
+    const w = (bw * 0.7).toFixed(1), x = (X(i) + bw * 0.15).toFixed(1), p = Math.min(out, pier || 0);
+    const tip = pier == null ? tt("gr.of.run.chart.tipOut", "Day {d}: {n:,} left the factory", {d, n: out})
+      : tt("gr.of.run.chart.tip", "Day {d}: {n:,} left the factory, {p:,} of it to the piers", {d, n: out, p: pier});
+    return `<g><title>${spEsc(tip)}</title><rect class="os-dbar" x="${x}" y="${Y(out).toFixed(1)}" width="${w}" height="${(Y(0) - Y(out)).toFixed(1)}"></rect>${
+      p ? `<rect class="ff-pier" x="${x}" y="${Y(p).toFixed(1)}" width="${w}" height="${(Y(0) - Y(p)).toFixed(1)}"></rect>` : ""}</g>`;
+  }).join("");
+  const plan = planDay > 0 ? `<line class="inv" x1="${x0}" x2="${x1}" y1="${Y(planDay).toFixed(1)}" y2="${Y(planDay).toFixed(1)}"></line><text class="lbl w" x="${x0 + 6}" y="${(Y(planDay) - 7).toFixed(1)}">${
+    tt("gr.of.run.chart.plan", "plan {n:,} a day", {n: Math.round(planDay)})}</text>` : "";
+  return `<svg class="os-chart ff-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${attr(tt("gr.of.run.chart.aria", "What left the factory a day, against the plan"))}">${g.join("")}${bars}
+    <line class="ax" x1="${x0}" x2="${x1}" y1="${y1}" y2="${y1}"></line>${plan}<text x="${x1}" y="${y1 + 34}" text-anchor="end">${tt("gr.of.run.chart.axis", "game day")}</text></svg>`;
+}
+/* The flow drawn around the planner: called by drawPlan() once the lines are
+   on the page, and by planDraw() after a stepper moves (ofAfterLines()). */
+function ofDraw(){
+  if(!$("ofCtl") || !hasData()) return;
+  const plan = ofPlan();
+  if(!OF_STEPS.includes(ofStep) || !ofStepReady(ofStep)) ofStep = "what";
+  const what = ofStep === "what";
+  $("ofCtl").innerHTML = ofCtlHtml(plan);
+  $("ofStrip").innerHTML = ofStripHtml(plan);
+  ["ofStart", "planBody", "ofWhat"].forEach(id => { const el = $(id); if(el) el.hidden = !what; });
+  $("ofStart").innerHTML = what ? ofStartHtml(plan) : "";
+  $("ofWhat").innerHTML = what ? ofWhatHtml(plan) : "";
+  const where = ofStep === "where" && !ofIsOwned();
+  $("ofWhere").hidden = !where;
+  $("ofBody").innerHTML = what ? ofNextHtml() + ofPlansHtml() : where ? ofWhereHtml() : ofStep === "investment" ? ofInvestHtml(plan)
+    : ofStep === "until" ? ofUntilHtml(plan) : ofStep === "running" ? ofRunHtml(plan) : "";
+  if(where) ofShowFinder();
+  if(ofStep === "investment" && ofMode(plan) === "self") osPaintMini("ofMini");
+  ofDeltas();
+  if(typeof wireTips === "function") wireTips();
+}
+/* After a stepper: the plan keeps its lines, and the figures around them follow. */
+function ofAfterLines(){
+  if(!$("ofCtl") || !hasData() || !Object.keys(RECIPE_BY).length) return;
+  const plan = ofPlan();
+  if(plan && plan.type === planType){ plan.counts = ofCounts(); ofSave(); }
+  if(ofStep !== "what") return;
+  $("ofStrip").innerHTML = ofStripHtml(plan);
+  $("ofStart").innerHTML = ofStartHtml(plan);
+  $("ofWhat").innerHTML = ofWhatHtml(plan);
+  const next = q("#ofBody .ff-next");
+  if(!next !== !ofMachines()) $("ofBody").innerHTML = ofNextHtml() + ofPlansHtml();
+  ofDeltas();
+}
+/* A stepper moved a line: the sizing is the player's own now. */
+function ofStepped(){
+  const plan = ofPlan();
+  if(plan) plan.size = "custom"; else ofSizeMode = "custom";
+}
+/* For a factory the player runs, each line says the change: +2, or as now. */
+function ofDeltas(){
+  if(!ofIsOwned()) return;
+  const now = ofNow(planTarget);
+  $$("#planBody tr.line[data-slug]").forEach(tr => {
+    const cell = tr.children[1];
+    if(!cell) return;
+    let el = q(".ff-delta", cell);
+    if(!el){ el = document.createElement("span"); el.className = "ff-delta"; cell.appendChild(el); }
+    const d = (+tr.dataset.m || 0) - (now[tr.dataset.slug] || 0);
+    el.classList.toggle("same", !d);
+    el.textContent = d ? (d > 0 ? `+${d}` : String(d)) : tt("gr.of.delta.same", "as now");
+  });
+}
+/* Lines sized to the peak day, an average day, or as the factory runs them. */
+function ofSizeTo(mode){
+  const lines = ofLines(), now = ofIsOwned() ? ofNow(planTarget) : {};
+  if(mode !== "custom") lines.forEach(l => { planCounts[l.slug] = mode === "now" ? now[l.slug] || 0 : ofSized(l, mode); });
+  const plan = ofPlan();
+  if(plan) plan.size = mode; else ofSizeMode = mode;
+  drawPlan();
+}
+/* A product from the start table: a plan making it alone, sized to the peak day. */
+function ofStartWith(slug, k){
+  ofLines().forEach(l => { planCounts[l.slug] = l.slug === slug ? k : 0; });
+  ofSizeMode = "custom";
+  drawPlan();
+  const plan = ofEnsure();
+  plan.counts = ofCounts();
+  ofSave();
+  drawPlan();
+}
+function ofGo(step){
+  if(!OF_STEPS.includes(step) || !ofStepReady(step)) return;
+  ofEnsure();
+  ofStep = step;
+  ofSave();
+  drawPlan();
+  if(typeof settleScroll === "function") settleScroll($("secPlan"));
+}
+/* Another plan from the picker, or none (a new one). */
+function ofOpen(id){
+  ofCur = ofPlans.some(p => p.id === id) ? id : null;
+  const plan = ofPlan();
+  if(plan){ planType = plan.type; planTarget = plan.site || "new"; planCounts = {...plan.counts}; ofStep = plan.step; }
+  else { planCounts = {}; ofStep = "what"; ofSizeMode = "auto"; }
+  ofSave();
+  drawPlan();
+}
+/* Every link into Plan a factory sets what it knows -- the shops' type, the
+   factory it is for, or both -- and the view opens on step 1 of that. A plan
+   for something else is put aside, as a pick in the view does. */
+function ofPreset(o = {}){
+  ofLoad();
+  const plan = ofPlan();
+  if(o.type && o.type !== planType){ planType = o.type; planCounts = {}; ofSizeMode = "auto"; }
+  if(o.target && o.target !== planTarget){ planTarget = o.target; planCounts = {}; ofSizeMode = "auto"; }
+  /* A factory named with no type opens on what it makes most, unless it makes the type on screen. */
+  if(o.target && o.target !== "new" && !o.type && D.plan){
+    const now = ofNow(o.target), made = (((D.plan.catalogue || {})[planType] || {}).products || []).some(p => now[p]);
+    const best = made ? null : ofBestType(o.target);
+    if(best){ planType = best; planCounts = {}; }
+  }
+  if(plan && (plan.type !== planType || (plan.site || "new") !== (planTarget || "new"))){ ofCur = null; ofStep = "what"; planCounts = {}; ofSave(); }
+  /* The view may stand drawn from an earlier visit: it follows the preset now. */
+  if(hasData() && D.plan && $("ofCtl")) drawPlan();
+}
+function openPlan(o = {}){
+  ofPreset(o);
+  return openRoute("expansion/factory", o.route || {});
+}
+let ofWired = false;
+function wireOpenFactory(){
+  if(ofWired) return;
+  ofWired = true;
+  on("click", "[data-of-step]", el => ofGo(el.dataset.ofStep));
+  on("change", "[data-of-plan]", el => ofOpen(el.value || null));
+  on("click", "[data-of-for]", el => {
+    if(planTarget === el.dataset.ofFor) return;
+    planTarget = el.dataset.ofFor; ofCur = null; ofStep = "what"; planCounts = {}; ofSizeMode = "auto";
+    if(ofIsOwned()){
+      const now = ofNow(planTarget), made = (((D.plan.catalogue || {})[planType] || {}).products || []).some(p => now[p]);
+      const best = made ? null : ofBestType(planTarget);
+      if(best) planType = best;
+    }
+    ofSave(); drawPlan();
+  });
+  on("click", "[data-of-size]", el => ofSizeTo(el.dataset.ofSize));
+  on("click", "[data-of-start]", el => ofStartWith(el.dataset.ofStart, +el.dataset.ofK || 1));
+  on("click", "[data-of-open]", (el, e) => { e.preventDefault(); ofOpen(el.dataset.ofOpen); });
+  on("click", "[data-of-drop]", (el, e) => {
+    e.preventDefault();
+    ofPlans = ofPlans.filter(p => p.id !== el.dataset.ofDrop);
+    if(!ofPlan()){ ofCur = null; ofStep = "what"; }
+    ofSave(); drawPlan();
+  });
+  on("click", "[data-of-mode]", el => { const plan = ofPlan(); if(plan) plan.mode = el.dataset.ofMode; ofModeNow = el.dataset.ofMode; ofSave(); drawPlan(); });
+  on("click", "[data-of-depot]", () => { const plan = ofEnsure(); plan.depot = !ofWantsDepot(plan) ? true : false; ofSave(); drawPlan(); });
+  on("change", "[data-of-fin-on]", el => { const plan = ofPlan(); if(!plan) return; plan.finance = {...(plan.finance || {}), on: el.checked}; ofSave(); drawPlan(); });
+  on("click", "[data-of-bank]", el => { const plan = ofPlan(); if(!plan) return; plan.finance = {...(plan.finance || {}), bank: el.dataset.ofBank}; ofSave(); drawPlan(); });
+  on("input", "[data-of-fin-amount], [data-of-fin-range]", el => ofFinUpdate(el.value));
+  on("click", "[data-of-goto]", (el, e) => { e.preventDefault(); openPlan({type: el.dataset.ofType || null, target: el.dataset.ofGoto}); });
+  on("click", "[data-of-route]", (el, e) => { e.preventDefault(); openRoute(el.dataset.ofRoute, el.dataset.ofInto ? {into: el.dataset.ofInto} : {}); });
+  on("click", "[data-of-write]", el => {
+    if(el.getAttribute("aria-disabled") === "true") return;
+    const kind = el.dataset.ofWrite;
+    if(kind === "hire" && el.dataset.ofKey) hrReview({scope: "site", site: el.dataset.ofKey});
+    else if(kind === "imports" && el.dataset.ofSite) gwImports(el.dataset.ofSite);
+  });
+  on("click", "[data-of-howlink]", () => {
+    const a = document.querySelector('a[data-visit-feature="game-link"]');
+    if(a && a.href) window.open(a.href, "_blank", "noopener");
+  });
 }
 
 /* The top of the list is the money; the full list is what a factory planner
@@ -16456,7 +17670,8 @@ const ROUTES = {
     featureDiscovery.visit("open-store");
     if(o.osType && typeof osStart === "function" && hasData()) osStart(o.osType, o.osHood || null);
   }},
-  "expansion/factory": {host: ["growth", "plan"]},
+  /* Any visit marks the view's New badge seen (the factory flow, #172). */
+  "expansion/factory": {host: ["growth", "plan"], after(){ featureDiscovery.visit("factory-flow"); }},
   /* The map as the reader left it: with the finder on, that is Find a
      location, and the address says so (routeFor()). */
   /* The City map is the plain map: reached with the finder on (the
@@ -16750,6 +17965,8 @@ function showSub(pageId, id){
   sub[pageId] = id;
   drawStale(pageId);
   document.querySelectorAll(`#${sv.host} [data-sub]`).forEach(el => { el.hidden = !String(el.dataset.sub || "").split(" ").includes(id); });
+  /* Plan a factory's Ingredients stand only in step 1, for a factory you run. */
+  if(pageId === "growth" && id === "plan" && typeof ofIngShow === "function") ofIngShow();
   /* The site panel is only on screen while a site is open, so it owns its own
      visibility and the sweep above is corrected by the panel itself. */
   if(pageId === "company" && hasData()) drawSite();
@@ -17037,7 +18254,7 @@ function paintShell(){
 /* A view that is new carries the New badge in its area's row until it is
    opened (featureDiscovery); docs/contributing.md, "New feature badges". A var:
    paintLocal() runs before this line on load, as viewTips below does. */
-var VIEW_NEW = {"expansion/open": "open-store"};
+var VIEW_NEW = {"expansion/open": "open-store", "expansion/factory": "factory-flow"};
 function paintLocal(){
   const host = $("localNav");
   if(!host) return;
@@ -18691,7 +19908,7 @@ const SS_VIEWS = [
    syn: ["new store", "new shop", "open a shop", "break even", "investment", "outfit", "installation firm", "loan", "second store"],
    go: () => openRoute("expansion/open")},
   {id: "plan", get t(){ return tt("nav.search.plan.title", "Plan a factory"); },
-   get p(){ return tt("nav.search.plan.line", "Expansion › Plan a factory"); }, ic: "growth", syn: ["new factory", "recipe plan", "expand", "plan a chain"],
+   get p(){ return tt("nav.search.plan.line", "Expansion › Plan a factory"); }, ic: "growth", syn: ["new factory", "recipe plan", "expand", "plan a chain", "open a factory", "factory location", "add machines"],
    go: () => openRoute("expansion/factory")},
   {id: "finder", get t(){ return tt("nav.search.finder.title", "Find a location"); },
    get p(){ return tt("nav.search.finder.line", "Expansion › Find a location"); }, ic: "pin", syn: ["rent", "premises", "building", "floor size", "m²", "vacant", "where should i open", "size"],
@@ -19520,6 +20737,8 @@ const wireCards = once(() => {
     if(a.dataset.ovInto) o.into = a.dataset.ovInto;
     if(a.dataset.ovFollow && typeof flowPickId !== "undefined") flowPickId = a.dataset.ovFollow;
     if(id === "expansion/finder") o.preset = {cat: "retail", type: "", hoods: null};
+    /* Supply › Production with no factory: Plan a factory on a new one. */
+    if(a.dataset.ofTarget && typeof ofPreset === "function") ofPreset({target: a.dataset.ofTarget});
     /* Build shop schedules opens on the shop it names. */
     if(a.id === "optimizeStaffingCard" && a.dataset.site) o.pick = a.dataset.site;
     /* A finding's own link: the way back is Needs attention, not All tools. */
@@ -20125,7 +21344,7 @@ const wireHeat = once(() => {
   on("click", "#market .mk-plan[data-plan]", (a, e) => {
     e.preventDefault();
     // The type already open keeps the machines the player stepped.
-    if(planType !== a.dataset.plan){ planType = a.dataset.plan; planCounts = {}; }
+    if(planType !== a.dataset.plan) ofPreset({type: a.dataset.plan});
     drawPlan();
     reveal("secPlan");
   });
@@ -20306,7 +21525,7 @@ function planDraw(){
   const peakDay = host ? (+host.dataset.pershop || 0) * (+host.dataset.peak || 1) : 0;
   const wantWeek = perShopWeek * shopsOwned;  // one product, every shop, a week
   const fmtN = n => num(Math.round(n));
-  let machines = 0, made = 0, raw = 0, exportWeek = 0, takeWeek = 0;
+  let machines = 0, made = 0, raw = 0, exportWeek = 0, takeWeek = 0, saves = 0, savesAny = false, raws = 0;
   const ing = {}, kitCount = {};
   lines.forEach(tr => {
     const m = +tr.dataset.m, rate = +tr.dataset.rate, wk = m * rate * HOURS * 7;
@@ -20341,6 +21560,15 @@ function planDraw(){
     });
     const ingEl = q(".ing", tr);
     if(ingEl) ingEl.innerHTML = grList(parts.map(([name, f]) => `<b>${fmtN(wk * f)}</b> ${spEsc(name)}`));
+    /* What the line saves a week against imports (the factory flow's prices):
+       measured shops only, since with none there is nothing to replace. */
+    const savesEl = q(".saves", tr);
+    if(savesEl && typeof ofSaves === "function"){
+      const v = lineWant > 0 && tr.dataset.slug ? ofSaves({slug: tr.dataset.slug, made: wk, want: lineWant}) : null;
+      if(v !== null){ saves += v; savesAny = true; }
+      raws += typeof ofRawUnit === "function" && tr.dataset.slug ? wk * ofRawUnit(tr.dataset.slug) : 0;
+      savesEl.innerHTML = v === null ? `<span class="quiet">—</span>` : fmt(v);
+    }
     parts.forEach(([name, f]) => {
       raw += wk * f;
       const r = ing[name] || (ing[name] = {week: 0, by: []});
@@ -20368,6 +21596,10 @@ function planDraw(){
   takeWeek += Math.max(0, products - lines.length - boughtOwn.length) * wantWeek
     + boughtOwn.reduce((a, tr) => a + (+tr.dataset.pershop || 0) * 7 * shopsOwned, 0);
   put("vMachines", machines); put("vMade", fmtN(made)); put("vRaw", fmtN(raw));
+  /* The table's total row: workstations, made, raw material at import prices and the saving. */
+  put("vFootWs", tt("gr.foot.ws", {one: "{n} workstation", other: "{n} workstations"}, {n: machines}));
+  put("vFootMade", fmtN(made)); put("vFootRaw", raws ? fmt(raws) : "");
+  put("vFootSaves", savesAny ? fmt(saves) : "");
   /* What the shops take of that sits behind the Made tile, not in a tile or a
      sentence of its own; a line short of the shelves is red in its Supplies
      cell (declutter E8). */
@@ -20444,6 +21676,8 @@ function planDraw(){
     const note = $("ingNote");
     if(note) note.textContent = !total ? tt("gr.ing.none", "Nothing to import; this range is bought as finished goods.") : "";
   }
+  /* The flow's figures around the lines follow every step of a line. */
+  if(typeof ofAfterLines === "function") ofAfterLines();
 }
 const bindPlan = once(() => {
   on("click", "tr.line .step a[data-d]", (a, e) => {
@@ -20454,6 +21688,7 @@ const bindPlan = once(() => {
     const min = tr.dataset.min !== undefined ? +tr.dataset.min : 1;
     tr.dataset.m = Math.max(min, Math.min(max, +tr.dataset.m + +a.dataset.d));
     if(tr.dataset.slug) planCounts[tr.dataset.slug] = +tr.dataset.m;
+    ofStepped();
     planDraw();
   });
   /* Add product: the toggle opens the picker, a pick adds a line, the × on an
@@ -23162,7 +24397,7 @@ function wireAll(){
      not a business's page has been drawn in this visit. */
   wireRoster();
   wireFlow(); bindSupply();
-  wireHeat(); wirePlan(); wireOpenStore();
+  wireHeat(); wirePlan(); wireOpenStore(); wireOpenFactory();
   wireReveal(); wireWrites(); wireStaff();
 }
 

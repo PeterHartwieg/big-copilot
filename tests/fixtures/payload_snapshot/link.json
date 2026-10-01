@@ -1951,6 +1951,94 @@
   "ba:neighborhood_thehamptons": "The Hamptons"
  },
  "officeStaffing": [],
+ "openFactory": {
+  "game": {
+   "agent": 100,
+   "agentName": null,
+   "delivery": 250,
+   "driverHours": 5.7,
+   "export": 0.65,
+   "hqHours": 40,
+   "installFee": 586,
+   "prices": 1.0,
+   "wages": 0.7
+  },
+  "hq": {
+   "agents": 0,
+   "contracts": 3,
+   "managed": 1,
+   "managers": 0
+  },
+  "items": {
+   "ba:itemname_palletshelf": {
+    "p": 2500.0,
+    "v": [
+     "ba:street_fifthavenue#13",
+     "ba:street_twentyfifthstreet#2"
+    ]
+   }
+  },
+  "kits": {},
+  "products": {},
+  "shelf": {
+   "cc": 60,
+   "item": "ba:itemname_palletshelf",
+   "p": 2500.0
+  },
+  "sites": {
+   "ba:street_pier#9": {
+    "imports": [
+     [
+      "ba:itemname_candle",
+      false
+     ],
+     [
+      "ba:itemname_paperbag",
+      true
+     ]
+    ],
+    "kind": "depot",
+    "shelves": 0,
+    "vehicles": []
+   }
+  },
+  "skills": {
+   "ba:skill_deliverydriver": 18,
+   "ba:skill_factoryworker": 12,
+   "ba:skill_logisticsmanager": 30,
+   "ba:skill_purchasingagent": 30
+  },
+  "vehicles": {
+   "truck": {
+    "at": "ba:street_seventhavenue#1",
+    "dealer": "General US Trucks",
+    "hood": "ba:neighborhood_industrycity",
+    "name": "Freighttruckt 1",
+    "p": 98000.0,
+    "type": "ba:vehicletype_freighttruckt1"
+   },
+   "van": {
+    "at": "ba:street_seventhavenue#1",
+    "dealer": "General US Trucks",
+    "hood": "ba:neighborhood_industrycity",
+    "name": "Deliverytruck",
+    "p": 72500.0,
+    "type": "ba:vehicletype_deliverytruck"
+   }
+  },
+  "vendors": {
+   "ba:street_fifthavenue#13": {
+    "a": "13 Fifth Avenue",
+    "h": "ba:neighborhood_garmentdistrict",
+    "n": "AJ Pederson & Son"
+   },
+   "ba:street_twentyfifthstreet#2": {
+    "a": "2 25th Street",
+    "h": "ba:neighborhood_industrycity",
+    "n": "Factory Supply Depot"
+   }
+  }
+ },
  "openStore": {
   "built": {
    "ba:street_broadway#2": {

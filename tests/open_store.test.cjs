@@ -335,8 +335,10 @@ test('before the business exists every row is a to-do, and only logistics has a 
     [en('gr.os.ck.uni'), 'todo'], [en('gr.os.ck.dem'), 'todo'], [en('gr.os.ck.mk'), 'todo'], [en('gr.os.ck.log'), 'todo']]);
   assert.deepEqual(r.map(x => x.act), ['', '', '', '', '', '', en('gr.os.ck.log.go')]);
   assert.match(await page.locator('#osBody .os-prog').innerText(), textRe('gr.os.ck.count', {n: 0, of: 7}, {}));
-  await page.locator('#osBody [data-route="expansion/factory"], #osBody [data-os-route="expansion/factory"]').first().click();
+  /* Into Plan a factory's step 1, on the store's type and a new factory (#172). */
+  await page.locator('#osBody [data-of-goto="new"]').first().click();
   await page.waitForFunction(() => route === 'expansion/factory');
+  assert.deepEqual(await page.evaluate(() => [planType, planTarget, ofStep]), [LIQ, 'new', 'what']);
 });
 
 test('no row reads done before a business exists, whatever the type asks for', async t => {

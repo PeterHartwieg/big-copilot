@@ -106,6 +106,8 @@
 .place.fr{grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 40px 52px;gap:0 5px;padding:9px 8px 9px 6px}
 /* A warehouse leads with its floor area, so it has one number column fewer. */
 .fhead.wh,.place.fr.wh{grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 52px}
+/* A factory plan's warehouse list: m², vehicles, rent, deposit (Plan a factory). */
+.fhead.wh.fpw,.place.fr.wh.fpw{grid-template-columns:26px 24px 1fr 44px 52px 0 50px 60px}
 .place.fr .rk{display:flex;align-items:center;justify-content:flex-end;gap:3px;font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
 /* Green is an empty floor to rent, amber a rival to buy out. */
 .place.fr .rk i{flex:none;width:5px;height:5px;border-radius:50%;background:var(--accent)}
@@ -304,6 +306,7 @@ body.map-modal-open{overflow:hidden}
  .place.fr:not(.sale):not(.wh) > :nth-child(n+5):nth-child(-n+8),
  .fhead.wh span:nth-child(n+5):nth-child(-n+7),
  .place.fr.wh > :nth-child(n+5):nth-child(-n+7){display:none}
+ .fhead.wh.fpw,.place.fr.wh.fpw{grid-template-columns:28px 24px 1fr 42px 56px}
  .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 44px 70px}
  .fhead.sale span:nth-child(3),.place.fr.sale > :nth-child(3){display:none}
 }

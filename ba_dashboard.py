@@ -2086,6 +2086,8 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     # out from (_open_store(), docs/open-a-store-scope.md).
     open_store = _open_store(save, names, buildings, businesses, premises, all_grids,
                              stmt_history, daily, staff)
+    # Expansion › Plan a factory: what a factory plan is priced from (_open_factory()).
+    open_factory = _open_factory(save, names, buildings, businesses, recipes, staff)
     net_worth = _net_worth(root, history, character, day)
     entry = {
         "hour": root["Hour"],
@@ -2178,6 +2180,9 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         # Expansion › Open a store: outfits, market, own shops, loans
         # (_open_store()).
         "openStore": open_store,
+        # Expansion › Plan a factory: prices, kits, storage, vehicles and what
+        # the company's warehouses and factories hold (_open_factory()).
+        "openFactory": open_factory,
         "trends": trends,
         "hypeExposure": hype,
         "hours": grids,
@@ -15764,7 +15769,7 @@ def load_store_rules() -> dict:
     return _store_rules
 
 
-STORE_RULE_PARTS = ("products", "furniture", "types", "hoods", "banks", "vendors", "vehicles")
+STORE_RULE_PARTS = ("products", "furniture", "types", "hoods", "banks", "vendors", "vehicles", "skills")
 # The building kinds a store can be planned in.
 PLAN_KINDS = ("retail", "office", "cinema", "theater")
 # The structural wage estimate (research PROFIT_MODEL.md, "Costs"): base
@@ -16691,6 +16696,223 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     }
 
 
+# ----------------------------------------------------------- plan a factory
+# Expansion › Plan a factory (issue #172, mockup/factory-flow/NOTES.md on the
+# factory-flow-canvas branch): the facts a factory plan is priced from. As for
+# a store, Python says what the save and the game's tables hold and the board
+# does the arithmetic the reader moves (the lines, the building, the install
+# mode, the loan). No break-even: a factory is a cost centre of its chain.
+# The vehicle a factory plans, and a depot the plan adds: the game's own
+# delivery vehicles. A Freight Truck T1 wants a driver at 95% skill, a Vord
+# Courier D500 one at 75% (the help pages). Both are sold by General US Trucks.
+FACTORY_TRUCK = "ba:vehicletype_freighttruckt1"
+DEPOT_VAN = "ba:vehicletype_deliverytruck"
+VEHICLE_DEALER = ("General US Trucks", "ba:street_seventhavenue#1", "ba:neighborhood_industrycity")
+PALLET_SHELF = "ba:itemname_palletshelf"
+# The game pays a delivery driver a flat 5.7 hours a day, whatever the round
+# takes (NOTES.md, decision 15); a hire at headquarters is planned at 40 h.
+DRIVER_DAY_HOURS = 5.7
+HQ_WEEK_HOURS = 40
+
+
+def _factory_kits(names: Names, prices: dict) -> dict:
+    """Each workstation's kit, priced: {workstation: [[item, price], ...]},
+    the assembly machine first, as the help page lists them."""
+    table = prices.get("items") or {}
+    out = {}
+    for key, text in sorted(names.locale.items()):
+        match = re.match(r"^help_factory_workstation_([a-z0-9]+)_content$", key)
+        if not match:
+            continue
+        machines, _, rest = text.partition("To an Assembly Machine")
+        assembly = rest.partition("can be used to create")[0]
+        kit = ["ba:itemname_" + s for _n, s in _FURNITURE_RE.findall(assembly)]
+        kit += ["ba:itemname_" + s for _n, s in _FURNITURE_RE.findall(machines)]
+        out[match.group(1)] = [[item, float((table.get(item) or {}).get("p") or 0)]
+                               for item in dict.fromkeys(kit)]
+    return out
+
+
+def _factory_days(save: Save, reg: dict) -> dict:
+    """What left a factory each finished day, per item:
+    {"first": day, "out": {item: [units a day, ...]}, "sold": {item: [...]}},
+    each list one entry a day from `first` to yesterday.
+
+    The save keeps no count of what a factory made. What it keeps is what
+    left: its delivery log (deliveryTransactions, the last DELIVERY_LOG_SIZE
+    transactions), where every pickup is a negative amount -- the logistics
+    rounds to the player's own sites and the piers' pickup of the exports
+    alike -- and its sales (orderHistory's itemSales, amountSold), which are
+    the exports alone and count the same units again. So `out` is the log's
+    goods leaving, and `sold` (None on a day the sales history no longer
+    holds; `covered` says which days it holds) the part of it sold to the piers. A full log has lost part of its
+    oldest day, so that day is left out; today is still running and is left
+    out too. What is made and still held is in neither. {} with no log.
+    """
+    today = save.root.get("Day")
+    log = [t for t in save.items(reg.get("deliveryTransactions")) if isinstance(t, dict) and isinstance(t.get("dayOfDelivery"), int)]
+    if not log:
+        return {}
+    out = collections.defaultdict(collections.Counter)
+    for t in log:
+        for e in save.items(t.get("deliveryItems")):
+            amount = (e.get("amountDelivered") or 0) if isinstance(e, dict) else 0
+            if amount < 0 and isinstance(e.get("itemName"), str):
+                out[e["itemName"]][t["dayOfDelivery"]] -= amount
+    sold = collections.defaultdict(dict)
+    covered = set()
+    for e in save.items(reg.get("orderHistory")):
+        if isinstance(e, dict) and isinstance(e.get("dayNumber"), int):
+            covered.add(e["dayNumber"])
+            for s_ in save.items(e.get("itemSales")):
+                if isinstance(s_, dict) and isinstance(s_.get("itemName"), str) and s_.get("amountSold"):
+                    sold[s_["itemName"]][e["dayNumber"]] = sold[s_["itemName"]].get(e["dayNumber"], 0) + s_["amountSold"]
+    logged = {t["dayOfDelivery"] for t in log}
+    first = min(logged) + (1 if len(log) >= DELIVERY_LOG_SIZE else 0)
+    days = range(first, today)
+    if not days:
+        return {}
+    return {
+        "first": first,
+        # Which days the sales history holds: a day it holds with no exports is a 0.
+        "covered": [int(d in covered) for d in days],
+        "out": {item: [int(out[item][d]) for d in days] for item in _in_order(out)},
+        "sold": {item: [int(sold[item].get(d, 0)) if d in covered else None for d in days] for item in _in_order(sold)},
+    }
+
+
+def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, recipes: dict,
+                  staff: list) -> dict:
+    """The facts Expansion › Plan a factory prices a plan from.
+
+    `products`: per recipe product and ingredient, its wholesale price (`w`),
+    the save's import price index (`i`, 1 where the market has none, as for
+    raw material), the units a box holds (`bx`) and the most one importer
+    takes a week (`mo`). An ingredient the help names one way and the city
+    trades another (Bag of Tomatoes: rawtomato and tomato) is read under the
+    name the store rules know, by its label, as the supply walk resolves it.
+    The board prices an import at w x i x the public prices, less the best
+    purchasing agent's discount, and an export at w x i x the public prices x
+    the export price, with no discount (ItemHelper.GetWholesalePrice,
+    ProductMarketHelper.GetProductExportPrice).
+
+    `kits`, each workstation's machines at list price; `shelf`, the Pallet
+    Shelf and the boxes it holds; `vehicles`, the factory's truck and a new
+    depot's van at their price with the dealer; `items` and `vendors`, who
+    sells the machines and the shelf. `sites`, per warehouse and factory the
+    player runs: its pallet shelves, the products import contracts deliver to
+    it ([slug, active]) and its vehicles ([type, has a driver]). `hq`: the
+    purchasing agents and import contracts, the logistics managers and the
+    warehouses and factories they manage (one each, the help pages).
+    """
+    rules = load_store_rules()
+    products = rules.get("products") or {}
+    if not products:
+        return {}
+    prices = load_item_prices()
+    root = save.root
+    gv = save.deref(root.get("gameVariables")) or {}
+    agents = sorted(((p.get("level") or 0, str(p.get("name") or "")) for p in staff
+                     if p.get("skill") == "ba:skill_purchasingagent"), key=lambda a: (-a[0], a[1]))
+    agent = int(agents[0][0]) if agents else 100
+    by_label = collections.defaultdict(list)
+    for slug, label in names.locale.items():
+        if slug.startswith("ba:itemname_") and slug in products:
+            by_label[label].append(slug)
+    index = {}
+    for entry in save.items(root.get("productMarketEntries")):
+        name = entry.get("itemName") if isinstance(entry, dict) else None
+        if isinstance(name, str):
+            index[name] = entry.get("importPriceIndex") or 1.0
+
+    def known(slug, label):
+        if slug in products:
+            return slug
+        return next(iter(sorted(by_label.get(label) or ())), slug)
+
+    wanted = {}
+    for rec in recipes.values():
+        wanted.setdefault(rec["slug"], rec["item"])
+        for ing in rec["ingredients"]:
+            wanted.setdefault(ing["slug"], ing["item"])
+    facts = {}
+    for slug in _in_order(wanted):
+        base = known(slug, wanted[slug])
+        row = products.get(base) or {}
+        facts[slug] = {"w": row.get("w") or 0, "i": round(index.get(base, 1.0), 4),
+                       "bx": row.get("bx") or 0, "mo": row.get("mo") or 0}
+
+    kits = _factory_kits(names, prices)
+    furniture = rules.get("furniture") or {}
+    table = prices.get("items") or {}
+    used = {item for kit in kits.values() for item, _p in kit} | {PALLET_SHELF}
+    items = {item: {"p": float((table.get(item) or {}).get("p") or 0),
+                    "v": (furniture.get(item) or {}).get("v") or []} for item in _in_order(used)}
+    vendors = rules.get("vendors") or {}
+    sold_by = {v for item in used for v in (furniture.get(item) or {}).get("v") or ()}
+    vehicle_prices = rules.get("vehicles") or {}
+
+    instances = {v.get("id"): v for v in save.items(root.get("VehicleInstances")) if isinstance(v, dict)}
+    regs = {site_key((r["StreetName"], r["StreetNumber"])): r for r in regs_list}
+    contracts = collections.defaultdict(dict)
+    partnerships = save.items(root.get("importPartnerships"))
+    for partnership in partnerships:
+        active = bool(partnership.get("isActive"))
+        for product in save.items(partnership.get("products")):
+            where = site_key(save.address(product.get("assignedWarehouse")))
+            slug = product.get("itemName")
+            if where and isinstance(slug, str):
+                contracts[where][slug] = contracts[where].get(slug, False) or active
+    sites = {}
+    for b in businesses:
+        kind = {"ba:businesstype_factory": "factory", "ba:businesstype_warehouse": "depot"}.get(b.get("typeSlug"))
+        reg = regs.get(b.get("key"))
+        if not kind or reg is None:
+            continue
+        vehicles = []
+        for slot in save.items(reg.get("vehicleSlots")):
+            vid = slot.get("vehicleInstanceId") if isinstance(slot, dict) else None
+            if vid and vid in instances:
+                vehicles.append([_vehicle_type(instances[vid]), bool(slot.get("employeeDriverId"))])
+        sites[b["key"]] = {
+            "kind": kind,
+            "shelves": _placed_items(save, reg).get(PALLET_SHELF, 0),
+            "imports": [[slug, contracts[b["key"]][slug]] for slug in _in_order(contracts[b["key"]])],
+            "vehicles": vehicles,
+            **({"days": _factory_days(save, reg)} if kind == "factory" else {}),
+        }
+    roles = collections.Counter(p.get("skill") for p in staff)
+    return {
+        "game": {
+            "prices": round(gv.get("marketPriceMultiplier") or 1.0, 4),
+            "export": round(gv.get("exportMultiplier") or 0.65, 4),
+            "wages": round(gv.get("employeeHourlySalaryMultiplier") or 0.7, 4),
+            "agent": agent,
+            "agentName": agents[0][1] if agents else None,
+            "installFee": INSTALL_FEE_PER_M2,
+            "delivery": FURNITURE_DELIVERY_FEE,
+            "driverHours": DRIVER_DAY_HOURS,
+            "hqHours": HQ_WEEK_HOURS,
+        },
+        "skills": {skill: wage for skill, wage in sorted((rules.get("skills") or {}).items())
+                   if skill in ("ba:skill_factoryworker", "ba:skill_deliverydriver",
+                                "ba:skill_purchasingagent", "ba:skill_logisticsmanager")},
+        "products": facts,
+        "kits": kits,
+        "shelf": {"item": PALLET_SHELF, "p": items[PALLET_SHELF]["p"],
+                  "cc": (furniture.get(PALLET_SHELF) or {}).get("cc") or 60},
+        "vehicles": {role: {"type": kind, "p": float(vehicle_prices.get(kind) or 0), "name": names.label(kind),
+                            "dealer": VEHICLE_DEALER[0], "at": VEHICLE_DEALER[1], "hood": VEHICLE_DEALER[2]}
+                     for role, kind in (("truck", FACTORY_TRUCK), ("van", DEPOT_VAN))},
+        "items": items,
+        "vendors": {key: vendors[key] for key in _in_order(sold_by) if key in vendors},
+        "sites": sites,
+        "hq": {"agents": roles.get("ba:skill_purchasingagent", 0), "contracts": len(partnerships),
+               "managers": roles.get("ba:skill_logisticsmanager", 0),
+               "managed": len(sites)},
+    }
+
+
 def _hype_exposure(businesses: list, market: dict) -> list:
     """What each running hype wave is worth, and what the day after looks like.
 
@@ -16985,6 +17207,13 @@ def _plan(
                 s: len(v)
                 for s, v in products.items()
                 if s in planable and s not in entry.get("products", ())
+            },
+            # The same for its main products: perDay is their average over
+            # the shops that stock them, which Plan a factory spreads over all.
+            "stocked": {
+                s: len(v)
+                for s, v in products.items()
+                if s in entry.get("products", ())
             },
         }
 
