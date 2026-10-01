@@ -8037,10 +8037,19 @@ def _hourly(
             [round(sum(h) / len(h), 1) if h else None for h in row] for row in seen
         ]
 
+        # A station whose skill this business type takes nobody for is left
+        # out: nobody can be assigned here to work it, so it serves nobody and
+        # gates nothing. The game lets any item be placed in any business, so a
+        # liquor store can hold a leftover fitness planning board.
+        accepts = None if office else ASSIGN_SKILLS.get(business.get("typeSlug"))
+        stray = collections.Counter()
         here, labels, slugs, keys = {}, {}, {}, {}
         for holder in save.items(b["itemInstances"]):
             item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
             if item and item.get("itemName") in posts:
+                if accepts is not None and posts[item["itemName"]][0] not in accepts:
+                    stray[item["itemName"]] += 1
+                    continue
                 here[item.get("id")] = posts[item["itemName"]]
                 slugs[item.get("id")] = item["itemName"]
                 labels[item.get("id")] = (
@@ -8219,8 +8228,22 @@ def _hourly(
             ),
         }
         entry["capHours"] = len(_capped_cells(entry))
+        if stray:
+            entry["unstaffable"] = _unstaffable_rows(
+                stray, {slug: posts[slug][0] for slug in stray}, names)
         out.append(entry)
     return out
+
+
+def _unstaffable_rows(counts: collections.Counter, skills: dict, names: Names | None) -> list:
+    """Stations this business type takes nobody for, as the Staffing note names
+    them: {slug, station, skill, role, n}, by station name."""
+    label = lambda key: names.label(key) if key and names else key  # noqa: E731
+    return sorted(
+        ({"slug": slug, "station": label(slug), "skill": skills[slug],
+          "role": label(skills[slug]), "n": n} for slug, n in counts.items()),
+        key=lambda r: (str(r["station"]), r["slug"]),
+    )
 
 
 def _capped_cells(grid: dict) -> set:
@@ -12739,7 +12762,18 @@ def _plan_site(
     need = _need_curve(_run_measured(grid, run, daily), day=curve.get("d"), ceiling=ceiling,
                        rates=dict(rates))
 
-    cover_posts = _cover_posts(save, building, names)
+    # A locker or cleaning station this business type takes nobody for is
+    # left out, as _hourly() leaves out its serving stations: a theatre takes
+    # no Security Guard, so a locker there is nobody's week and no hire.
+    accepts = ASSIGN_SKILLS.get(business.get("typeSlug"))
+    cover_posts, stray = [], collections.Counter()
+    for post in _cover_posts(save, building, names):
+        if accepts is None or COVER_STATIONS[post["slug"]][1] in accepts:
+            cover_posts.append(post)
+        else:
+            stray[post["slug"]] += 1
+    unstaffable = (grid.get("unstaffable") or []) + _unstaffable_rows(
+        stray, {slug: COVER_STATIONS[slug][1] for slug in stray}, names)
     pool = _site_pool(people, business, bench)
     # Everybody's week as it stood before this site placed anybody: the
     # full-cover plan is the other choice for this site, not a second site, so
@@ -12760,6 +12794,7 @@ def _plan_site(
         "ceiling": ceiling,
         "need": need,
         "coverPosts": cover_posts,
+        "unstaffable": unstaffable,
         "own": [person for person in pool if person["addr"]],
         "before": before,
         "week": week,
@@ -12822,6 +12857,9 @@ def _finish_site(site, full, names, people, opened=None) -> dict:
             for role in grid["roles"]
         ],
         "ceiling": site["ceiling"],
+        # Stations here this business type takes nobody for, which no plan
+        # staffs (_hourly(), _plan_site()): the Staffing block names them.
+        **({"unstaffable": site["unstaffable"]} if site["unstaffable"] else {}),
         **_plan_fields(week, table, names, people, cost),
         # The demand test: every station of every role, every hour, placed by the
         # same placer with the same rules. Same shape as the demand plan above,
@@ -28306,6 +28344,7 @@ function spRosterNone(row, pick, key){
       ? tt("sp.roster.failed.why", "This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.")
       : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling counts everyone who may walk in, not the customers a shop like this serves, so nothing is suggested from it.")})}
     ${pick || ""}
+    ${spRosterStray((key && spRosterRow(key)) || row)}
     <div class="chartbox sp-gantt sp-empty">${rows}</div>
     <div class="sp-read">${failed ? tt("sp.roster.failed", "Plan unavailable") : tt("sp.roster.none", "Nothing to schedule")}</div>
     ${key && gwLink() ? gwStaffButton(key, true) : ""}
@@ -28778,6 +28817,17 @@ function spUnmeasuredLine(row){
   return `<p class="sp-unmline">${spI("clock")}<span>${tt("sp.unm.line", "<b>No customers on file: {words}.</b> Counted as none.", {words})}</span></p>`;
 }
 
+/* Stations here this business type takes nobody for (`unstaffable`): the
+   game places any item anywhere, but nobody can be assigned to work it, so
+   no plan staffs or hires for it. One line, each station named once. */
+function spRosterStray(row){
+  const list = (row && row.unstaffable) || [];
+  if(!list.length) return "";
+  const words = list.map(u => tt("sp.roster.stray.one", "{station} ({role})",
+    {station: spEsc(gameName(u.slug) || u.station || ""), role: spEsc(gameName(u.skill) || u.role || "")})).join(", ");
+  return `<p class="sp-unmline">${spI("info")}<span>${tt("sp.roster.stray", "<b>Left out of this week: {stations}.</b> This business takes nobody with that skill, so nobody can be scheduled there.", {stations: words})}</span></p>`;
+}
+
 function spPlanPick(base, full){
   /* The open-hours plan where it is the other choice (spOpenFirst()). */
   const first = spOpenFirst(base) ? tt("sp.pick.open", "Open hours")
@@ -29029,6 +29079,7 @@ function spRosterBlock(b){
     ${/* Which shop it is about rides in the heading: the Optimize staffing
           card lands here with the shop's own heading scrolled off the top. */""}
     ${pick}
+    ${spRosterStray(base)}
     ${c.full || row.variant === "open" ? "" : spUnmeasuredLine(row)}
     ${c.cover ? spRosterNew(c, counts) : ""}
     <div class="sp-ba">
@@ -35876,7 +35927,10 @@ function hrModel(){
     const plan = variant ? (site.plans || {})[variant] || {} : {};
     const S = {site, i, key: site.key, b: byKey.get(site.key) || null, variant, plan,
                row: variant ? hrPlanRow(site, variant) : null, planned: !!site.planned, weeks: []};
-    S.weeks = (plan.hireWeeks || []).map((w, j) => ({w, j, S, who: null}));
+    /* Only weeks in a role the site takes: the game refuses a hire for any
+       other (`no_skill`), and the plan leaves such stations out anyway. */
+    const takes = new Set(site.accepts || []);
+    S.weeks = (plan.hireWeeks || []).map((w, j) => ({w, j, S, who: null})).filter(x => takes.has(x.w.skill));
     return S;
   });
   const moves = [];
@@ -36429,6 +36483,13 @@ function hrSiteWeek(S, fill, away, arriving, inbound, additive){
   const stranded = [];
   const days = hrWeek(S, fill, away, arriving, lost, {additive: !!additive, stranded});
   return {days, lost, stranded, changes: inbound || hrDiffers(S.row || {}, days, away)};
+}
+/* Whom a `shift` refusal row of a hire answer names: its site's week in
+   the call, that day, that entry. */
+function hrShiftWho(req, row){
+  const site = row.address && ((req.body || {}).sites || []).find(x => x.days && gwKeyOf(x.address) === gwKeyOf(row.address));
+  const day = site && site.days.find(x => x.d === row.d);
+  return ((day && day.shifts || [])[row.i] || {}).employeeId;
 }
 /* The action, one call: who is hired and moved where, and every week it
    writes, with what the review needs to name every row of it.
@@ -37743,8 +37804,25 @@ function hrReview(o = {}, hooks = {}){
     verdict: answer => answer.ok ? (goneOf(answer).size ? `<b>${tt("co.hire.v.some", "The game can take {n} of {of}", {n: counts().hire - goneOf(answer).size, of: counts().hire})}</b>`
         : `<b>${tt("co.hire.v.all", "The game can take all of it")}</b>`)
       : answer.blocked === "myemployees" ? `<b>${tt("co.hire.v.myemployees", "Close MyEmployees in the game")}</b>` : `<b>${tt("sp.gw.refuses", "The game refuses this")}</b>`,
+    /* A refused hire or move never happens, so the game reads every shift
+       of theirs in the same call as somebody not assigned there: those rows
+       are the refusal above, not a second problem. */
+    fold: rows => {
+      const out = new Set(rows.filter(r => r && r.error && (r.scope === "hire" || r.scope === "move")).map(r => r.id));
+      return out.size ? rows.filter(r => !(r && r.scope === "shift" && r.error === "not_assigned" && out.has(hrShiftWho(hrLast.req, r)))) : rows;
+    },
     object: row => {
-      if(row.scope === "hire" || row.scope === "move") return spEsc(nameOf(row.id));
+      /* A candidate is nobody's staff yet: the chip says where and as what
+         the plan hires them, so it does not read as someone already here. */
+      if(row.scope === "hire" || row.scope === "move"){
+        const sent = row.scope === "hire" ? hrLast.req.body.hires.find(x => x.candidateId === row.id)
+          : hrLast.req.body.moves.find(x => x.employeeId === row.id);
+        const to = sent && (row.scope === "hire" ? sent.address : sent.to);
+        const S = to && hrLast.m.sites.find(x => x.key === gwKeyOf(to));
+        const skill = (hrLast.req.names.get(row.id) || {}).skill;
+        return S && S.b && skill ? tt("co.hire.refuse.chip", "{name} as {role} at {site}",
+          {name: spEsc(nameOf(row.id)), role: hrRole(skill), site: spEsc(shortName(S.b))}) : spEsc(nameOf(row.id));
+      }
       const S = row.address && hrLast.m.sites.find(x => x.key === gwKeyOf(row.address));
       const site = S && S.b ? spEsc(shortName(S.b)) : row.address ? gwSiteName(row) : tt("co.hire.asite.cap", "A site");
       return row.scope === "shift" && row.d !== undefined ? `${site}: ${ttDay(row.d)}` : site;
@@ -44197,8 +44275,11 @@ GW_REFUSE.hire = Object.assign({}, GW_REFUSE.schedule, {
     : r.scope === "move" ? {rule: tt("sp.gw.hire.refuse.noone.rule", "Nobody by that id works for you any more"), fix: tt("sp.gw.hire.refuse.refresh", "Refresh the board.")} : GW_REFUSE.any.not_found,
   changed: r => r.scope === "hire" ? {rule: tt("sp.gw.hire.refuse.wage.rule", "The candidate's wage has changed since this board was read"), fix: tt("sp.gw.hire.refuse.wage.fix", "Refresh the board: the page picks again.")}
     : r.scope === "move" ? {rule: tt("sp.gw.hire.refuse.moved.rule", "Not where this board read them any more"), fix: tt("sp.gw.hire.refuse.refresh", "Refresh the board.")} : GW_REFUSE.any.changed,
+  /* Refreshing would plan the same hire again, so the fix is to leave it out. */
   no_skill: r => r.scope === "shift" ? GW_REFUSE.schedule.no_skill
-    : {rule: tt("sp.gw.hire.refuse.skill.rule", "Has none of the skills this business takes"), fix: tt("sp.gw.hire.refuse.refresh", "Refresh the board.")},
+    : {rule: tt("sp.gw.hire.refuse.skill.rule", "Has none of the skills this business takes"),
+       fix: r.scope === "move" ? tt("sp.gw.hire.refuse.skill.move", "Untick the move.")
+         : tt("sp.gw.hire.refuse.skill.fix", "Untick them in Change picks.")},
   in_training: {get rule(){ return tt("sp.gw.hire.refuse.training.rule", "In training: the game moves nobody who is training"); },
     get fix(){ return tt("sp.gw.hire.refuse.training.fix", "Wait for the training to end, or untick the move."); }},
   no_business: {get rule(){ return tt("sp.gw.hire.refuse.nobusiness.rule", "No business is set up here"); },
@@ -44232,7 +44313,9 @@ function gwRefusals(spec, answer){
   const site = answer.siteError && !(answer.rows || []).some(r => r && r.error === answer.siteError && r.d === undefined)
     ? [Object.assign({}, answer, {error: answer.siteError})] : [];
   const groups = new Map();
-  site.concat(answer.rows || []).filter(r => r && r.error).forEach(r => {
+  /* A write may fold rows that only follow from another row (spec.fold). */
+  const rows = spec.fold ? spec.fold(answer.rows || []) : answer.rows || [];
+  site.concat(rows).filter(r => r && r.error).forEach(r => {
     const known = (GW_REFUSE[spec.kind] || {})[r.error] || GW_REFUSE.any[r.error];
     const say = typeof known === "function" ? known(r) : known || {rule: tt("nav.dlg.refused.code", "The game refused this ({code})", {code: spEsc(r.error)}), fix: ""};
     const key = `${say.rule}|${say.fix}`;

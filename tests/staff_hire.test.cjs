@@ -3442,3 +3442,55 @@ test("an open week's reason leaves out a spare in training", async (t) => {
   await phase(page, 'ready');
   assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), /HART\. Gifts: the free Customer Service people ask for [^.]+\./);
 });
+
+test('a refused hire names its site and role, and its hours are not a second refusal', async (t) => {
+  // 1 October 2026: two theatres planned a hire for a locker they take nobody
+  // for. The game refused each hire (no_skill) and then every shift of theirs
+  // as somebody not assigned there: one problem shown as two.
+  const page = await board(t, {link: ONE});
+  await page.evaluate(src => {
+    window.answerFor = eval(src);
+    window.hrAnswer = async (kind, body, o) => {
+      const bare = body.sites.find(s => s.days && s.address.street === 'ba:street_fifthavenue');
+      const rows = [{scope: 'hire', id: 'c1', error: 'no_skill'}];
+      bare.days.forEach(({d, shifts}) => shifts.forEach((s, i) => {
+        if(s.employeeId === 'c1') rows.push({scope: 'shift', address: bare.address, d, i, error: 'not_assigned'});
+      }));
+      // Somebody else's entry the game reads as not assigned stays its own refusal.
+      bare.days.some(({d, shifts}) => shifts.some((s, i) => s.employeeId && s.employeeId !== 'c1'
+        && rows.push({scope: 'shift', address: bare.address, d, i, error: 'not_assigned'})));
+      return {status: 200, error: null, body: window.answerFor(body, {dryRun: !!o.dryRun, ok: false, extra: {rows}})};
+    };
+  }, `(${answerFor.toString()})`);
+  const sent = await request(page);
+  const bare = sent.sites.find(s => s.days && s.address.street === 'ba:street_fifthavenue');
+  assert.ok(bare.days.some(x => x.shifts.some(s => s.employeeId === 'c1')), 'the fixture gives Ada hours at Bare');
+  assert.ok(bare.days.some(x => x.shifts.some(s => s.employeeId && s.employeeId !== 'c1')), 'and somebody else hours there too');
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  const cards = page.locator('dialog.gw-dlg .gw-no');
+  const texts = await cards.allTextContents();
+  assert.equal(texts.length, 2, texts.join(' | '));
+  const hire = texts.find(x => /Has none of the skills this business takes/.test(x));
+  assert.match(hire, /Ada Brandt as Customer Service at (HART. )?Bare/);
+  // Refreshing would plan the same hire again: the fix is to leave it out.
+  assert.match(hire, /Untick them in Change picks\./);
+  assert.doesNotMatch(hire, /Refresh the board/);
+  const left = texts.find(x => /not assigned to this business/.test(x));
+  assert.ok(left, 'the unrelated not_assigned row is still said');
+  assert.equal((left.match(/Bare: /g) || []).length, 1, 'only the unrelated entry is left under it');
+});
+
+test('a hire week in a role the site takes nobody for is never planned or sent', async (t) => {
+  // The planner leaves such stations out; the page holds the line too.
+  const d = JSON.parse(payload);
+  const gifts = d.hiring.sites.find(s => s.key === G);
+  const week = gifts.plans.demand.hireWeeks[0];
+  gifts.plans.demand.hireWeeks.push(Object.assign({}, week, {skill: 'ba:skill_gymtrainer'}));
+  d.candidates.push(cand('g1', 'Gus Trainer', [['ba:skill_gymtrainer', 99]], 10));
+  const page = await board(t, {data: JSON.stringify(d)});
+  const m = await model(page);
+  assert.deepEqual(m.weeks.find(([key]) => key === G), [G, 'demand', ['move:SPARE1', 'hire:c2']]);
+  assert.ok(!m.roles.some(r => r.skill === 'ba:skill_gymtrainer'));
+  assert.ok(!(await request(page)).hires.some(h => h.candidateId === 'g1'));
+});

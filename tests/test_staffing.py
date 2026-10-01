@@ -41,7 +41,10 @@ SERVICE = "ba:skill_customerservice"
 TRAINER = "ba:skill_gymtrainer"
 CLEANING = "ba:skill_cleaning"
 GUARD = "ba:skill_securityguard"
+STAGECREW = "ba:skill_stagecrew"
 SHOP = "ba:businesstype_clothingstore"
+GYM = "ba:businesstype_gym"
+THEATER = "ba:businesstype_theater"
 
 
 def role(skill, rates, staffed=None):
@@ -410,18 +413,22 @@ BOARD = "ba:itemname_fitnessplanningboard"
 BOOTH = "ba:itemname_boothticket"
 CLEAN_STATION = "ba:itemname_cleaningstation"
 LOCKER = "ba:itemname_securityguardlocker"
-STATIONS = {REGISTER: (SERVICE, 20), BOARD: (TRAINER, 20), BOOTH: (SERVICE, 50)}
+LIGHTS = "ba:itemname_boothlighting"
+STATIONS = {REGISTER: (SERVICE, 20), BOARD: (TRAINER, 20), BOOTH: (SERVICE, 50),
+            LIGHTS: (STAGECREW, 20)}
 LABELS = Names(
     {
         SERVICE: "Customer Service",
         TRAINER: "Gym Trainer",
         CLEANING: "Cleaning",
         GUARD: "Security Guard",
+        STAGECREW: "Stage Crew",
         REGISTER: "Cash register",
         BOARD: "Fitness planning board",
         BOOTH: "Ticket booth",
         CLEAN_STATION: "Cleaning station",
         LOCKER: "Security guard locker",
+        LIGHTS: "Lighting booth",
     }
 )
 
@@ -546,7 +553,10 @@ def plan_inputs(specs, employees, status="retail", day=None, build_at_start=None
     # How many people work there, where a test says: the board opens a shop
     # nobody works at on its open-hours plan (_opens_first()).
     manned = [spec.pop("staff", None) for spec in specs]
-    regs = [registration(**spec) for spec in specs]
+    # The business type, where a test needs one other than a clothing store:
+    # a station the type takes nobody for is left out of every plan.
+    types = [spec.pop("type_slug", SHOP) for spec in specs]
+    regs = [dict(registration(**spec), businessTypeName=t) for spec, t in zip(specs, types)]
     save = Save(
         {
             "EmployeeInstances": {"$items": employees},
@@ -560,7 +570,8 @@ def plan_inputs(specs, employees, status="retail", day=None, build_at_start=None
         "test.hsg",
     )
     sites = [
-        dict(business(status, reg["StreetNumber"], days), **({"staff": n} if n else {}))
+        dict(business(status, reg["StreetNumber"], days), typeSlug=reg["businessTypeName"],
+             **({"staff": n} if n else {}))
         for reg, days, n in zip(regs, opened, manned)
     ]
     _by_addr, staff = _staff(save, LABELS)
@@ -1294,13 +1305,13 @@ class MultiRoleTest(unittest.TestCase):
     """A theatre passes every customer through every role, so each is sized alone."""
 
     def test_each_role_packs_its_own_stations(self):
-        items = [(1, BOOTH), (2, REGISTER), (3, REGISTER), (4, BOARD), (5, BOARD)]
-        people = [employee(f"p{i}", [SERVICE, TRAINER]) for i in range(12)]
-        row = plan(items, people, {h: 30 for h in range(24)})
-        # 30 an hour: one 50-an-hour booth, but two 20-an-hour registers, and
-        # the site's throughput is the slowest role either way.
+        items = [(1, BOOTH), (2, REGISTER), (3, REGISTER), (4, LIGHTS), (5, LIGHTS)]
+        people = [employee(f"p{i}", [SERVICE, STAGECREW]) for i in range(12)]
+        row = plan(items, people, {h: 30 for h in range(24)}, type_slug=THEATER)
+        # 30 an hour: one 50-an-hour booth, but two 20-an-hour lighting booths,
+        # and the site's throughput is the slowest role either way.
         self.assertEqual(row["need"][SERVICE][1][12], 1)
-        self.assertEqual(row["need"][TRAINER][1][12], 2)
+        self.assertEqual(row["need"][STAGECREW][1][12], 2)
 
     def test_a_hairdresser_plans_its_chairs_and_its_head_wash(self):
         """Issue #154: the chairs were never planned, only the head wash.
@@ -1328,7 +1339,7 @@ class MultiRoleTest(unittest.TestCase):
         save = Save({"EmployeeInstances": {"$items": people},
                      "BuildingRegistrations": {"$items": [dict(reg, RentedByPlayer=True)]}},
                     {}, "test.hsg")
-        sites = [business()]
+        sites = [dict(business(), typeSlug="ba:businesstype_hairdresser")]
         _by_addr, staff = _staff(save, names)
         grids = _hourly(save, [reg], sites, stations, set(),
                         {p["id"]: p["skill"] for p in staff}, names)
@@ -1480,7 +1491,7 @@ class SurvivalTest(unittest.TestCase):
         self.assertTrue(open_lines(row))
 
     def test_a_station_nobody_can_man(self):
-        row = plan([(1, BOARD)], [employee("a", [SERVICE])], FLAT)
+        row = plan([(1, BOARD)], [employee("a", [SERVICE])], FLAT, type_slug=GYM)
         self.assertEqual(staffed(row), [])
         self.assertGreater(row["headcount"][TRAINER]["hire"], 0)
         # The board the gym owns and nobody may work is drawn as the hours it

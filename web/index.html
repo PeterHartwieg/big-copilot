@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "470c4e1c25";</script>
-<link rel="stylesheet" href="community.css?v=470c4e1c25">
+<script>window.LEDGER_BUILD = "38052d49c7";</script>
+<link rel="stylesheet" href="community.css?v=38052d49c7">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=470c4e1c25">
+<link rel="stylesheet" href="fonts/fonts.css?v=38052d49c7">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5895,7 +5895,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"470c4e1c25","latest":{"pr":175,"date":"2026-09-29","title":"Open a new store: plan it, open it, and watch it earn the investment back","summary":"Expansion has a new view, Open a store. Pick a type from the neighbourhoods with the most demand, from any type, or from a Demand cell's new Open a store here, then pick the building in Find a location, fixed to that type. The board lists everything a fully outfitted store of that type needs in that building: what the type requires to open, an item for each customer demand, enough tills for the building's capacity and shelving copied from your own store of the same layout, with the installation firm's price or, for self-installation, a shopping list by furniture store on the map, and the deposit. It then estimates the profit a day from the game's own rules for customers, prices, demand and wages, with the best marketing mix, and shows how many days it takes to earn the investment back, as a range, after tax, against what your own stores of that type earn, and with an optional bank loan. Offices are estimated too; cinemas and theatres show the investment only. A checklist then follows the store until it opens, ticking itself from the save: the lease, furniture, staff for the opening hours, uniforms, customer demands, marketing and logistics, with buttons to staff the store, assign uniforms and set the cheapest marketing mix through the game link. Once the store trades, the plan compares itself with it: the investment, the profit a day and the first days against the plan, the share paid back, the day it breaks even, and any loan it was planned with. Your plans are kept per character, opened stores included. Businesses › Results also has a Payback column: for each shop, office and chain, the day its setup was earned back or how many days are still to go, with the same line on a business's own page."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"38052d49c7","latest":{"pr":175,"date":"2026-09-29","title":"Open a new store: plan it, open it, and watch it earn the investment back","summary":"Expansion has a new view, Open a store. Pick a type from the neighbourhoods with the most demand, from any type, or from a Demand cell's new Open a store here, then pick the building in Find a location, fixed to that type. The board lists everything a fully outfitted store of that type needs in that building: what the type requires to open, an item for each customer demand, enough tills for the building's capacity and shelving copied from your own store of the same layout, with the installation firm's price or, for self-installation, a shopping list by furniture store on the map, and the deposit. It then estimates the profit a day from the game's own rules for customers, prices, demand and wages, with the best marketing mix, and shows how many days it takes to earn the investment back, as a range, after tax, against what your own stores of that type earn, and with an optional bank loan. Offices are estimated too; cinemas and theatres show the investment only. A checklist then follows the store until it opens, ticking itself from the save: the lease, furniture, staff for the opening hours, uniforms, customer demands, marketing and logistics, with buttons to staff the store, assign uniforms and set the cheapest marketing mix through the game link. Once the store trades, the plan compares itself with it: the investment, the profit a day and the first days against the plan, the share paid back, the day it breaks even, and any loan it was planned with. Your plans are kept per character, opened stores included. Businesses › Results also has a Payback column: for each shop, office and chain, the day its setup was earned back or how many days are still to go, with the same line on a business's own page."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5983,8 +5983,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=470c4e1c25"></script>
-<script src="community.js?v=470c4e1c25"></script>
+<script src="app.js?v=38052d49c7"></script>
+<script src="community.js?v=38052d49c7"></script>
 
 <script>
 
@@ -11305,6 +11305,7 @@ function spRosterNone(row, pick, key){
       ? tt("sp.roster.failed.why", "This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.")
       : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling counts everyone who may walk in, not the customers a shop like this serves, so nothing is suggested from it.")})}
     ${pick || ""}
+    ${spRosterStray((key && spRosterRow(key)) || row)}
     <div class="chartbox sp-gantt sp-empty">${rows}</div>
     <div class="sp-read">${failed ? tt("sp.roster.failed", "Plan unavailable") : tt("sp.roster.none", "Nothing to schedule")}</div>
     ${key && gwLink() ? gwStaffButton(key, true) : ""}
@@ -11777,6 +11778,17 @@ function spUnmeasuredLine(row){
   return `<p class="sp-unmline">${spI("clock")}<span>${tt("sp.unm.line", "<b>No customers on file: {words}.</b> Counted as none.", {words})}</span></p>`;
 }
 
+/* Stations here this business type takes nobody for (`unstaffable`): the
+   game places any item anywhere, but nobody can be assigned to work it, so
+   no plan staffs or hires for it. One line, each station named once. */
+function spRosterStray(row){
+  const list = (row && row.unstaffable) || [];
+  if(!list.length) return "";
+  const words = list.map(u => tt("sp.roster.stray.one", "{station} ({role})",
+    {station: spEsc(gameName(u.slug) || u.station || ""), role: spEsc(gameName(u.skill) || u.role || "")})).join(", ");
+  return `<p class="sp-unmline">${spI("info")}<span>${tt("sp.roster.stray", "<b>Left out of this week: {stations}.</b> This business takes nobody with that skill, so nobody can be scheduled there.", {stations: words})}</span></p>`;
+}
+
 function spPlanPick(base, full){
   /* The open-hours plan where it is the other choice (spOpenFirst()). */
   const first = spOpenFirst(base) ? tt("sp.pick.open", "Open hours")
@@ -12028,6 +12040,7 @@ function spRosterBlock(b){
     ${/* Which shop it is about rides in the heading: the Optimize staffing
           card lands here with the shop's own heading scrolled off the top. */""}
     ${pick}
+    ${spRosterStray(base)}
     ${c.full || row.variant === "open" ? "" : spUnmeasuredLine(row)}
     ${c.cover ? spRosterNew(c, counts) : ""}
     <div class="sp-ba">
@@ -18875,7 +18888,10 @@ function hrModel(){
     const plan = variant ? (site.plans || {})[variant] || {} : {};
     const S = {site, i, key: site.key, b: byKey.get(site.key) || null, variant, plan,
                row: variant ? hrPlanRow(site, variant) : null, planned: !!site.planned, weeks: []};
-    S.weeks = (plan.hireWeeks || []).map((w, j) => ({w, j, S, who: null}));
+    /* Only weeks in a role the site takes: the game refuses a hire for any
+       other (`no_skill`), and the plan leaves such stations out anyway. */
+    const takes = new Set(site.accepts || []);
+    S.weeks = (plan.hireWeeks || []).map((w, j) => ({w, j, S, who: null})).filter(x => takes.has(x.w.skill));
     return S;
   });
   const moves = [];
@@ -19428,6 +19444,13 @@ function hrSiteWeek(S, fill, away, arriving, inbound, additive){
   const stranded = [];
   const days = hrWeek(S, fill, away, arriving, lost, {additive: !!additive, stranded});
   return {days, lost, stranded, changes: inbound || hrDiffers(S.row || {}, days, away)};
+}
+/* Whom a `shift` refusal row of a hire answer names: its site's week in
+   the call, that day, that entry. */
+function hrShiftWho(req, row){
+  const site = row.address && ((req.body || {}).sites || []).find(x => x.days && gwKeyOf(x.address) === gwKeyOf(row.address));
+  const day = site && site.days.find(x => x.d === row.d);
+  return ((day && day.shifts || [])[row.i] || {}).employeeId;
 }
 /* The action, one call: who is hired and moved where, and every week it
    writes, with what the review needs to name every row of it.
@@ -20742,8 +20765,25 @@ function hrReview(o = {}, hooks = {}){
     verdict: answer => answer.ok ? (goneOf(answer).size ? `<b>${tt("co.hire.v.some", "The game can take {n} of {of}", {n: counts().hire - goneOf(answer).size, of: counts().hire})}</b>`
         : `<b>${tt("co.hire.v.all", "The game can take all of it")}</b>`)
       : answer.blocked === "myemployees" ? `<b>${tt("co.hire.v.myemployees", "Close MyEmployees in the game")}</b>` : `<b>${tt("sp.gw.refuses", "The game refuses this")}</b>`,
+    /* A refused hire or move never happens, so the game reads every shift
+       of theirs in the same call as somebody not assigned there: those rows
+       are the refusal above, not a second problem. */
+    fold: rows => {
+      const out = new Set(rows.filter(r => r && r.error && (r.scope === "hire" || r.scope === "move")).map(r => r.id));
+      return out.size ? rows.filter(r => !(r && r.scope === "shift" && r.error === "not_assigned" && out.has(hrShiftWho(hrLast.req, r)))) : rows;
+    },
     object: row => {
-      if(row.scope === "hire" || row.scope === "move") return spEsc(nameOf(row.id));
+      /* A candidate is nobody's staff yet: the chip says where and as what
+         the plan hires them, so it does not read as someone already here. */
+      if(row.scope === "hire" || row.scope === "move"){
+        const sent = row.scope === "hire" ? hrLast.req.body.hires.find(x => x.candidateId === row.id)
+          : hrLast.req.body.moves.find(x => x.employeeId === row.id);
+        const to = sent && (row.scope === "hire" ? sent.address : sent.to);
+        const S = to && hrLast.m.sites.find(x => x.key === gwKeyOf(to));
+        const skill = (hrLast.req.names.get(row.id) || {}).skill;
+        return S && S.b && skill ? tt("co.hire.refuse.chip", "{name} as {role} at {site}",
+          {name: spEsc(nameOf(row.id)), role: hrRole(skill), site: spEsc(shortName(S.b))}) : spEsc(nameOf(row.id));
+      }
       const S = row.address && hrLast.m.sites.find(x => x.key === gwKeyOf(row.address));
       const site = S && S.b ? spEsc(shortName(S.b)) : row.address ? gwSiteName(row) : tt("co.hire.asite.cap", "A site");
       return row.scope === "shift" && row.d !== undefined ? `${site}: ${ttDay(row.d)}` : site;
@@ -31612,8 +31652,11 @@ GW_REFUSE.hire = Object.assign({}, GW_REFUSE.schedule, {
     : r.scope === "move" ? {rule: tt("sp.gw.hire.refuse.noone.rule", "Nobody by that id works for you any more"), fix: tt("sp.gw.hire.refuse.refresh", "Refresh the board.")} : GW_REFUSE.any.not_found,
   changed: r => r.scope === "hire" ? {rule: tt("sp.gw.hire.refuse.wage.rule", "The candidate's wage has changed since this board was read"), fix: tt("sp.gw.hire.refuse.wage.fix", "Refresh the board: the page picks again.")}
     : r.scope === "move" ? {rule: tt("sp.gw.hire.refuse.moved.rule", "Not where this board read them any more"), fix: tt("sp.gw.hire.refuse.refresh", "Refresh the board.")} : GW_REFUSE.any.changed,
+  /* Refreshing would plan the same hire again, so the fix is to leave it out. */
   no_skill: r => r.scope === "shift" ? GW_REFUSE.schedule.no_skill
-    : {rule: tt("sp.gw.hire.refuse.skill.rule", "Has none of the skills this business takes"), fix: tt("sp.gw.hire.refuse.refresh", "Refresh the board.")},
+    : {rule: tt("sp.gw.hire.refuse.skill.rule", "Has none of the skills this business takes"),
+       fix: r.scope === "move" ? tt("sp.gw.hire.refuse.skill.move", "Untick the move.")
+         : tt("sp.gw.hire.refuse.skill.fix", "Untick them in Change picks.")},
   in_training: {get rule(){ return tt("sp.gw.hire.refuse.training.rule", "In training: the game moves nobody who is training"); },
     get fix(){ return tt("sp.gw.hire.refuse.training.fix", "Wait for the training to end, or untick the move."); }},
   no_business: {get rule(){ return tt("sp.gw.hire.refuse.nobusiness.rule", "No business is set up here"); },
@@ -31647,7 +31690,9 @@ function gwRefusals(spec, answer){
   const site = answer.siteError && !(answer.rows || []).some(r => r && r.error === answer.siteError && r.d === undefined)
     ? [Object.assign({}, answer, {error: answer.siteError})] : [];
   const groups = new Map();
-  site.concat(answer.rows || []).filter(r => r && r.error).forEach(r => {
+  /* A write may fold rows that only follow from another row (spec.fold). */
+  const rows = spec.fold ? spec.fold(answer.rows || []) : answer.rows || [];
+  site.concat(rows).filter(r => r && r.error).forEach(r => {
     const known = (GW_REFUSE[spec.kind] || {})[r.error] || GW_REFUSE.any[r.error];
     const say = typeof known === "function" ? known(r) : known || {rule: tt("nav.dlg.refused.code", "The game refused this ({code})", {code: spEsc(r.error)}), fix: ""};
     const key = `${say.rule}|${say.fix}`;

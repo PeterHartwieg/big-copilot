@@ -577,6 +577,38 @@ test('a security locker nobody staffs is shown as new spending, in hours it can 
   } finally { await page.close(); }
 });
 
+test('a station the business takes nobody for is named once, and only where there is one', async () => {
+  const page = await shop('full', row => {
+    row.unstaffable = [{slug: 'ba:itemname_fitnessplanningboard', station: 'Fitness Planning Board',
+      skill: 'ba:skill_gymtrainer', role: 'Gym Trainer', n: 2}];
+  });
+  try {
+    const note = page.locator('#sp-roster .sp-unmline', {hasText: 'Left out of this week'});
+    assert.equal(await note.count(), 1);
+    const text = await note.innerText();
+    assert.match(text, /Left out of this week: Fitness Planning Board \(Gym Trainer\)\./);
+    assert.match(text, /nobody can be scheduled there/);
+    assert.doesNotMatch(text, /roster|shift/i);
+  } finally { await page.close(); }
+  const plain = await shop('full');
+  try {
+    assert.doesNotMatch(await plain.locator('#sp-roster').innerText(), /Left out of this week/);
+  } finally { await plain.close(); }
+});
+
+test('a plan with nothing in it still names the station it left out', async () => {
+  const page = await shop('full', row => {
+    row.shifts = [];
+    row.unstaffable = [{slug: 'ba:itemname_securityguardlocker', station: 'Security Guard Locker',
+      skill: 'ba:skill_securityguard', role: 'Security Guard', n: 1}];
+  });
+  try {
+    const text = await page.locator('#sp-roster').innerText();
+    assert.match(text, /Nothing to schedule/);
+    assert.match(text, /Left out of this week: Security Guard Locker \(Security Guard\)\./);
+  } finally { await page.close(); }
+});
+
 test('a bench member is counted off every role they hold, not just the first', async () => {
   // BENCH holds cleaning and security, and `headcount.have` counts them under
   // both. Taking them off under one showed them as somebody already here under
