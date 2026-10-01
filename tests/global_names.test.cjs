@@ -74,9 +74,10 @@ function literalEnd(rest, i){
 
 /* The names one column-0 `const`/`let`/`var` line declares: the first, and
    every further `, name =` at bracket depth 0 on the same line, with strings,
-   templates, regular expressions and comments passed over. A declarator list
-   carried on to the next line, or a destructuring pattern, is refused, so the
-   test cannot miss names quietly. */
+   templates, regular expressions and comments passed over. A line that ends
+   its declarator list with a comma, or a destructuring pattern, is refused.
+   A declarator whose value spans lines and is followed by another
+   (`const a = f(\n x), b = 1;`) would hide that next name; none does today. */
 function declarators(rest, where){
   if(/^[[{]/.test(rest)) throw new Error(`${where}: destructuring at column 0; teach tests/global_names.test.cjs to read it`);
   const names = [];
