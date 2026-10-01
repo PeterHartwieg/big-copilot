@@ -4,7 +4,9 @@
 // existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
-const {en, enRe} = require('./_i18n.cjs');
+const {en, enBetween, enRe} = require('./_i18n.cjs');
+// Any ceiling sentence ("… is the limit; the fix is …"), whatever its numbers.
+const LIMIT = new RegExp([1, 2].map(n => enBetween('sp.cap.ceiling', 'limit', 'fix', {n}).trim()).join('|'));
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -518,7 +520,7 @@ test('every ceiling the busy hours ran into gets a chip and a lit icon', async (
     const chipLook = await page.$$eval('#sp-hours .sp-hchip.cap', (els, ceilingPattern) =>
       els.map(e => [e.classList.contains('sp-bcap'),
         e.querySelector('.fix') ? e.querySelector('.fix').textContent : null,
-        new RegExp(ceilingPattern).test(e.dataset.tip)]), enRe('sp.cap.ceiling', {n: 1}).source + '|' + enRe('sp.cap.ceiling', {n: 2}).source);
+        new RegExp(ceilingPattern).test(e.dataset.tip)]), LIMIT.source);
     assert.deepEqual(chipLook, [
       [true, null, false],
       [false, en('sp.py.fix.service.staff'), true],

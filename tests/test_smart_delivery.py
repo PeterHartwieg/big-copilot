@@ -5,7 +5,7 @@ stock level: each delivery brings max(0, level - stock of that item at the
 depot), and a later contract sees what an earlier one brought that morning.
 """
 import unittest
-from tests.i18n_check import MsgAsserts, find_msg, matches, msg_param
+from tests.i18n_check import MsgAsserts, matches, msg_param
 from unittest.mock import patch
 
 import test_import_routes as fixtures
@@ -202,7 +202,6 @@ class SmartSupplyTests(MsgAsserts, unittest.TestCase):
         [note] = _import_notes(data["businesses"], data["supply"], set())
         self.assertHasMsg(note["text"], "f.smart.plus", level=700, after=400)
         self.assertMsg(note["text"], "f.import.smart.at.raise", at="1 Pier", **{"set": 1280})
-        self.assertNotEqual(find_msg(note["text"], "f.smart.plus").p["level"], 1100)
         # Plain first, the same contracts read as the level alone.
         data = self.routes.build([contract(400, pier=2, destination=("factory", 0)),
                                   smart(700, destination=("factory", 0))])

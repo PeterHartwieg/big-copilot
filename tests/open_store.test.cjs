@@ -1217,7 +1217,7 @@ test('paid back: the day it broke even, the plan beside it, and the way to the s
   const k = await tiles(page);
   assert.match(k[2], new RegExp([textRe('gr.os.roi.paid', {}).source, '100%'].join(" "), 'i'));
   assert.match(k[3], new RegExp([textRe('gr.os.strip.beLab', {}).source, textRe('gr.os.be.day', {n: 39}).source, textRe('gr.os.roi.after', {n: 9}).source].join(" "), 'i'));
-  assert.match(await page.locator('#osBody svg.os-chart').textContent(), textRe('gr.os.roi.chart.after', {n: 9}, {}), 'the chart\'s point says what the tile says');
+  assert.match(await page.locator('#osBody svg.os-chart').textContent(), new RegExp('(?:^|\\D)' + textRe('gr.os.roi.chart.after', {n: 9}).source), 'the chart\'s point says what the tile says');
   const done = page.locator('#osBody .os-done');
   assert.match(await done.innerText(), new RegExp([textRe('co.payback.reached', {day: 39, n: 9}).source, textRe('gr.os.roi.done.plan', {}).source].join("[\\s\\S]*"), 'i'));
   assert.equal(await page.locator('#osBody .os-links').count(), 0, 'the done strip carries the links');

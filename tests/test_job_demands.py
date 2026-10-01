@@ -259,6 +259,7 @@ class JobDemandFindingTests(MsgAsserts, unittest.TestCase):
         [line] = self.alerts(b)
         text = self.assertMsg(line["text"], "f.jobdemand", n=2)
         [item] = list_items(text.p["demands"])
+        self.assertMsg(item, "f.jobdemand.item", demand="Full-time", n=2)
         self.assertMsg(item.p["why"], "f.jobdemand.why", priority=msg_param("f.jobdemand.critical"),
                        over=msg_param("f.jobdemand.over.hours", max=50))
 
@@ -280,7 +281,7 @@ class JobDemandFindingTests(MsgAsserts, unittest.TestCase):
         [line] = self.alerts(evaluate(staff))
         text = self.assertMsg(line["text"], "f.jobdemand", n=3)
         [item] = list_items(text.p["demands"])
-        self.assertEqual(item.p["n"], 3)
+        self.assertMsg(item, "f.jobdemand.item", demand="Full-time", n=3)
         self.assertMsg(item.p["why"], "f.jobdemand.why", priority=msg_param("f.jobdemand.critical"),
                        over=msg_param("f.jobdemand.over.hours.some", n=2, max=50))
 

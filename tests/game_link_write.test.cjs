@@ -138,8 +138,8 @@ async function linked(t, {writes = ['uniforms', 'imports', 'schedule'], approved
   await page.goto(`${ORIGIN}/#link=${mockUrl}`);
   if (link) {
     await page.locator('#linkBtn').click();
-    await page.waitForFunction(() => document.body.classList.contains('has-board')
-      && document.getElementById('srcStrip').classList.contains('calm'));
+    await page.waitForFunction(current => document.body.classList.contains('has-board')
+      && document.getElementById('srcStatus').textContent === current, en('app.state.current'));
   }
   return page;
 }
@@ -281,8 +281,8 @@ test('an approval survives a reload, and goes only to the linked mod on this com
   await ready(page);
   await dialog(page).getByRole('button', {name: en("nav.dlg.cancel")}).click();
   await page.reload();  // the page opens the remembered link by itself
-  await page.waitForFunction(() => document.body.classList.contains('has-board')
-    && document.getElementById('srcStrip').classList.contains('calm'));
+  await page.waitForFunction(current => document.body.classList.contains('has-board')
+    && document.getElementById('srcStatus').textContent === current, en('app.state.current'));
   await button(page, GIFTS).click();
   await ready(page);
   assert.equal(asks, 1, 'asked once, not again after the reload');
@@ -1154,7 +1154,7 @@ test('a board that fails to take a build keeps the stamp behind it, and the next
   assert.equal(await page.evaluate(() => LEDGER_SOURCE.link().stamp), before, 'not the stamp of bytes the board did not take');
   assert.notEqual(await mockStamp(), before);
   await watchNow(page);
-  await page.waitForFunction(() => document.getElementById('srcStrip').classList.contains('calm'), null, {timeout: 20000});
+  await page.waitForFunction(current => document.getElementById('srcStatus').textContent === current, en('app.state.current'), {timeout: 20000});
   assert.equal(await page.evaluate(() => LEDGER_SOURCE.link().stamp), await mockStamp());
 });
 test('an apply answering ok false, or for another kind, is uncertain and sent once each', async (t) => {
@@ -1268,7 +1268,7 @@ test('imports: the Set to figure is written, and undone', async (t) => {
     window.buildData = JSON.stringify(d);
   });
   await dialog(page).locator('[data-gw-b="apply"]').click();
-  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}).replace(/^./, c => c.toUpperCase())})).waitFor();
+  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}, {cap: true})})).waitFor();
   const writes = await applied();
   assert.deepEqual(writes[0].body, {dryRun: false, contracts: [{id: 'CONTRACTone', activate: false,
     products: [{itemName: 'ba:itemname_paperbag', warehouse: DEPOT_ADDRESS, amount: 4200, expect: 3800}]}]});
@@ -1330,7 +1330,7 @@ test("imports: the figure written is the fact's, with no figure typed", async (t
   assert.match(await dialog(page).locator('.gw-line', {hasText: 'Paperbag'}).locator('.gw-num').textContent(),
     new RegExp('^' + enRe('sp.gw.tile.from').source + ' 3,800 ' + enRe('sp.gw.tile.to').source + ' 4,370' + enRe('sb.unit.stock').source + '$'));
   await dialog(page).locator('[data-gw-b="apply"]').click();
-  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}).replace(/^./, c => c.toUpperCase())})).waitFor();
+  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}, {cap: true})})).waitFor();
   assert.equal((await applied())[0].body.contracts[0].products[0].amount, 4370);
 });
 
@@ -1374,7 +1374,7 @@ test('imports: the figure written is the one extraction worked out, the margin a
   await applyImports(page).click();
   await ready(page);
   await dialog(page).locator('[data-gw-b="apply"]').click();
-  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}).replace(/^./, c => c.toUpperCase())})).waitFor();
+  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}, {cap: true})})).waitFor();
   assert.equal((await applied())[0].body.contracts[0].products[0].amount, fact.setTo);
 });
 
@@ -1430,7 +1430,7 @@ test('imports: after an undo, Apply again asks from the board read after it', as
   await applyImports(page).click();
   await ready(page);
   await dialog(page).locator('[data-gw-b="apply"]').click();
-  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}).replace(/^./, c => c.toUpperCase())})).waitFor();
+  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}, {cap: true})})).waitFor();
   // The board reads the write: the contract holds 4,200.
   await page.waitForFunction(() => gwImportRows.some((r) => r.contracts.some((c) => c.id === 'CONTRACTone' && c.amount === 4200)));
   const release = await holdSave(page);
@@ -1490,7 +1490,7 @@ test('imports: an undo refused while a BizMan screen is open is offered again, a
   await applyImports(page).click();
   await ready(page);
   await dialog(page).locator('[data-gw-b="apply"]').click();
-  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}).replace(/^./, c => c.toUpperCase())})).waitFor();
+  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}, {cap: true})})).waitFor();
   await configure({refuseWrite: 'refused:screen_open'});
   await dialog(page).locator('[data-gw-b="undo"]').click();
   await page.locator('dialog.gw-dlg[data-phase="failed"]').waitFor();
@@ -1514,7 +1514,7 @@ test('imports: an apply refused while a BizMan screen is open, and a refused dry
   await dialog(page).getByRole('button', {name: en('nav.dlg.tryagain')}).click();
   await ready(page);
   await dialog(page).locator('[data-gw-b="apply"]').click();
-  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}).replace(/^./, c => c.toUpperCase())})).waitFor();
+  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}, {cap: true})})).waitFor();
   assert.deepEqual((await applied()).map((w) => w.kind), ['imports']);
 });
 
@@ -1639,7 +1639,7 @@ test('imports: the ranked list is the game\'s order, read only, and a write send
   await dialog(page).locator('.gw-line', {hasText: 'Paperbag'})
     .getByText(en("sb.gw.plain", {"list":"2 Pier","n":1})).waitFor();
   await dialog(page).locator('[data-gw-b="apply"]').click();
-  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}).replace(/^./, c => c.toUpperCase())})).waitFor();
+  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}, {cap: true})})).waitFor();
   assert.equal('order' in (await applied())[0].body, false);
 });
 
@@ -1659,7 +1659,7 @@ test('imports: Apply sends only what the dry run judged', async (t) => {
   await dialog(page).locator('.gw-line .gw-num', {hasText: '4,300'}).waitFor();
   assert.equal((await applied()).length, 0, 'asked again, not applied');
   await dialog(page).locator('[data-gw-b="apply"]').click();
-  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}).replace(/^./, c => c.toUpperCase())})).waitFor();
+  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}, {cap: true})})).waitFor();
   assert.equal((await applied())[0].body.contracts[0].products[0].amount, 4300);
 });
 test('imports: a stopped contract is started, with its next delivery against cash; what the cap leaves is said', async (t) => {
@@ -1687,7 +1687,7 @@ test('imports: a stopped contract is started, with its next delivery against cas
   assert.equal(await dialog(page).getByText(textRe("sb.gw.unc.bold")).count(), 0);
   assert.equal(await dialog(page).locator('.gw-imp.stopped', {hasText: '3 Pier'}).count(), 1);
   await dialog(page).locator('[data-gw-b="apply"]').click();
-  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}).replace(/^./, c => c.toUpperCase()) + ", " + en("sb.gw.done.started", {n:1})})).waitFor();
+  await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}, {cap: true}) + ", " + en("sb.gw.done.started", {n:1})})).waitFor();
   assert.deepEqual((await applied())[0].body.contracts, [{id: 'CONTRACTthree', activate: true,
     products: [{itemName: 'ba:itemname_candle', warehouse: DEPOT_ADDRESS, amount: 600, expect: 500}]}]);
 });

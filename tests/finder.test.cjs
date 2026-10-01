@@ -1703,7 +1703,7 @@ test('a picked building shows its floor plan in its card; one with none shows no
     // Finder off: any building with a layout.
     await page.evaluate(key => cityMapPage.select(key), HK[0]);
     await page.locator(`${plan} .lp-svg`).waitFor();
-    assert.match(await page.locator(`${plan} .lp-planhead`).textContent(), new RegExp('^' + enRe('map.row.layout').source + 'C1' + enRe('map.plan.doors', {n: 1}).source + enRe('map.plan.metres').source + '$'));
+    assert.match(await page.locator(`${plan} .lp-planhead`).textContent(), new RegExp('^' + enRe('map.row.layout').source + 'C1' + enRe('map.plan.doors', {n: 1}).source + enRe('map.plan.metres', {n: /\d+/}).source + '$'));
     const card = await page.locator('#cityMapPage .site').boundingBox(), stage = await page.locator('#cityMapPage [data-stage]').boundingBox();
     const svg = await page.locator(`${plan} .lp-svg`).boundingBox();
     assert.ok(svg.x >= card.x && svg.x + svg.width <= card.x + card.width, 'the plan keeps inside the card');

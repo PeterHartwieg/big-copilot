@@ -1,7 +1,7 @@
 // The one-time news strip under the update banner (#newsStrip in build_web.py; web/update.js shows it).
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
-const {enRe} = require('./_i18n.cjs');
+const {en, enRe} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require('playwright');
@@ -35,13 +35,13 @@ async function setup(t, options = {}) {
 
 test('the strip shows on first load with its text, its link to the new view and named Dismiss', async t => {
   const page = await setup(t);
-  const strip = page.locator('#newsStrip');
+  const strip = page.getByRole('complementary', {name: en('upd.news')});
   assert.equal(await strip.isVisible(), true);
   assert.match(await strip.innerText(), enRe('upd.news.open-store'));
-  const link = page.locator('#newsLink');
+  const link = page.getByRole('link', {name: en('upd.news.open-store-go')});
   assert.equal(await link.getAttribute('href'), '#expansion/open');
   assert.equal(await link.getAttribute('target'), null, 'a place on the board, not another tab');
-  assert.equal(await page.locator('#newsDismiss').isVisible(), true);
+  assert.equal(await page.getByRole('button', {name: en('upd.news.dismiss')}).isVisible(), true);
 });
 
 test('Dismiss hides the strip and it stays hidden after reload; a new id shows again', async t => {

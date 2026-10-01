@@ -424,7 +424,6 @@ test('a line nobody can be given is a dashed anticipated hire, and cannot be tic
     // because there is nobody on it yet.
     assert.match(await hire.innerText(), enRe('sp.shift.tohire', {}, {anchor: 'start'}));
     assert.match(await hire.getAttribute('data-read'), enRe('sp.shift.hire'));
-    assert.match(await hire.getAttribute('data-read'), enRe('sp.shift.hire'));
     assert.equal(await page.locator('#sp-roster .sp-shift.sp-hire').count(), 16);
   } finally { await page.close(); }
 });
@@ -1377,7 +1376,7 @@ test('a role with fewer full weeks in it than people does not read backwards', a
     assert.deepEqual([h.min, h.max], [2, 1]);
     const read = await page.locator('#sp-roster .sp-hc > span').first().getAttribute('data-read');
     assert.match(read, enRe('sp.hc.band.thin', {n: 2, max: 1}));
-    assert.doesNotMatch(read, /2 to 1/);
+    assert.doesNotMatch(read, enRe('sp.hc.band.range', {min: 2, max: 1}));
     // And the hiring clause stays quiet here: the band has just said it.
     assert.doesNotMatch(read, enRe('sp.hc.over'));
   } finally { await page.close(); }
@@ -1772,7 +1771,10 @@ test('a player who never opened BizMan is offered the plan, not told they are un
     });
     assert.equal(shown[0], en('today.moves.staff.badge.hours', {n: shown[3]}));
     assert.match(shown[1], enRe('today.moves.staff.week.hire', {site: 'Big shop', hours: shown[3], entries: en('today.moves.staff.entries', {n: 26}), people: en('today.moves.staff.people', {n: 4})}));
-    assert.doesNotMatch(shown[1], enRe('today.moves.staff.none'));
+    // None of the lines that wait on a measured week.
+    assert.doesNotMatch(shown[1], new RegExp(['today.moves.staff.none', 'today.moves.staff.cover.saves.none',
+      'today.moves.staff.cover.saves.wait', 'today.moves.staff.cover.saves.hire.none',
+      'today.moves.staff.cover.saves.hire.wait'].map(k => enRe(k).source).join('|')));
     assert.equal(shown[2], 'b');
   } finally { await page.close(); }
 });

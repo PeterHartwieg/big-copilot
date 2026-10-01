@@ -920,7 +920,6 @@ test('the day figure is named as an assumption, not as a measurement', async () 
   const w = wiki();
   const html = await w.load('wiki/businesstypes-giftshop');
   assert.match(html, htmlRe('wiki.copy.fullDayHint', {}, {}));
-  assert.match(html, htmlRe('wiki.copy.fullDayHint', {}, {}));
   // Pins the wording: assumed output must not claim uninterrupted or measured production.
   assert.doesNotMatch(html, /never idles|measured factory draw/);
 });

@@ -58,7 +58,8 @@ async function loadFiles(page, count = 12) {
     Object.defineProperty(input, 'files', {value:files, configurable:true});
     input.dispatchEvent(new Event('change'));
   }, count);
-  await page.waitForFunction(() => document.body.classList.contains('has-board') && document.getElementById('srcStrip').classList.contains('calm'));
+  await page.waitForFunction(current => document.body.classList.contains('has-board') && document.getElementById('srcStatus').textContent === current,
+    en('app.state.current'));
 }
 
 test('save picker supports keyboard selection, dismissal and the saved preference', async () => {

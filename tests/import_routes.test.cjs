@@ -7,9 +7,7 @@
 // hold the tabs and the checklist to the facts that extraction sends.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
-const {en, enRe} = require('./_i18n.cjs');
-// The line tips capitalize their first word; rendered text omits emphasis tags.
-const textRe = (key, params = {}, options = {}) => { const {cap, ...opts} = options, re = enRe(key, params, opts); const src = re.source.replace(/<[^>]*>/g, ''); return new RegExp(cap ? src.replace(/^(\^?)(.)/, (_, a, b) => a + b.toUpperCase()) : src, re.flags); };
+const {en, enRe, textRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');

@@ -519,6 +519,6 @@ test('Plan a factory says nothing its table already says; Demand has no trend-hi
   assert.doesNotMatch(text, /books part/i);
   if (await page.locator('#secPayroll .pay-off').count()) {
     assert.equal(await page.locator('#secPayroll .pay-off h3').innerText(), en('co.pay.off.title2'));
-    assert.match(await page.locator('#secPayroll .pay-off li small').first().innerText(), enRe('co.pay.off.row2', {}, {anchor: 'full'}));
+    assert.match(await page.locator('#secPayroll .pay-off li small').first().innerText(), enRe('co.pay.off.row2', {b: /\$[\d,.k]+/, r: /\$[\d,.k]+/}, {anchor: 'full'}));
   }
 });

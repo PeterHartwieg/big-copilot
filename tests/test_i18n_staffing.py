@@ -261,6 +261,10 @@ class LimitsAndCapitals(MsgAsserts, unittest.TestCase):
                 self.assertIsInstance(got, Msg)
                 self.assertEqual(got.key, key)
         self.assertMsg(_cap_first(joined).p["a"], "sp.py.limit.staffing.first")
+        # On the wire the nested message travels as {"m": [key, params, english]}.
+        wired = _cap_first(joined).wire()[1]["a"]["m"]
+        self.assertEqual(wired[:2], ["sp.py.limit.staffing.first", {}])
+        self.assertEqual(wired[2], str(_cap_first(joined).p["a"]))
         # A station's own plural keeps its name's token.
         booth = tok("ba:itemname_projectionbooth", "Projection Booth")
         station = _cap_first(msg("sp.py.limit.station", "{stations}", stations="projection booths", station_name=booth))

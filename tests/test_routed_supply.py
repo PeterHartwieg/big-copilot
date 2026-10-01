@@ -304,6 +304,8 @@ class RoutedSupplyTests(MsgAsserts, unittest.TestCase):
         of them condense into, name the next import or route round, or the
         next delivery, rather than an import alone."""
         self.assertMsg(SUMMARIES["shortfall"](3, "Coffee"), "f.sum.shortfall", n=3, subject="Coffee")
+        # Pins the wording: the condensed line must not blame an import alone.
+        self.assertNotIn("import", plain(SUMMARIES["shortfall"](3, "Coffee")))
         [kind] = [line for line in load_template().splitlines() if 'id:"shortfall"' in line]
         # Pins the wording: the kind description must name route rounds as well as imports.
         self.assertIn("import or route round", kind)

@@ -470,14 +470,13 @@ test('every finding is reached from the keyboard, a synthetic one too, and lands
   const page = await board({chains: [CHAIN], shop: {staffLackingCompany: 1, staffDemands: [
     {slug: 'ba:jobdemand_goldhealthinsurance', demand: 'Gold Health Insurance', count: 1, priority: 1, company: true}]}});
   try {
-    await page.evaluate(f => {
+    await page.evaluate(([f, company, text]) => {
       siteOpen = false; drawSite();
       // As _alerts() writes it: about "Company", with no site of its own.
-      D.alerts = [{id: 'c1', level: 'warn', site: 'Company', siteKey: null, group: 'companydemand',
-                   text: '1 staff with unmet demands: Gold Health Insurance for 1'}, f];
+      D.alerts = [{id: 'c1', level: 'warn', site: company, siteKey: null, group: 'companydemand', text}, f];
       drawAlerts(); showPage('today');
       document.activeElement?.blur();
-    }, FINDING);
+    }, [FINDING, en('f.site.company'), en('f.companydemand', {n: 1, demands: 'Gold Health Insurance for 1'})]);
     // Tab from the top of the page to the first finding: its sentence is a button.
     const tabTo = async test => {
       for (let i = 0; i < 80; i++) {
@@ -495,7 +494,9 @@ test('every finding is reached from the keyboard, a synthetic one too, and lands
       'a button: no link, so no new-tab expectation to break');
     // Its name says whose finding it is, and the row opens its detail as it
     // does under the pointer.
-    assert.equal(await page.locator('#alertSection .find[data-id="c1"] button.what').count(), 1);
+    // The row shows the finding's headline, cut at its first colon (splitFinding()).
+    const head = en('f.companydemand', {n: 1, demands: ''}).split(':')[0];
+    assert.equal(await page.getByRole('button', {name: `${en('f.site.company')}: ${head}`, exact: true}).count(), 1);
     // The detail fades in under the focus: wait for the fade to finish, then
     // say what it shows.
     await page.waitForFunction(() => !document.querySelector('#alertSection .find[data-id="c1"] .more').getAnimations().length,
@@ -511,7 +512,7 @@ test('every finding is reached from the keyboard, a synthetic one too, and lands
     // Then the map button beside it, then the finding itself.
     assert.ok(await tabTo(() => document.activeElement.closest('.find')?.dataset.id === 'loss1'
       && document.activeElement.className === 'what'));
-    assert.equal(await page.locator('#alertSection .find[data-id="loss1"] button.what').count(), 1);
+    assert.equal(await page.getByRole('button', {name: new RegExp('^HART\\. Gifts:? ' + enRe('f.loss', {w: 200}).source)}).count(), 1);
     await page.keyboard.press('Enter');
     assert.equal(await page.evaluate(() => [location.hash, spArrived].join(' ')), `${HERE} loss1`);
     // A silenced row leaves the Tab order with its fold.

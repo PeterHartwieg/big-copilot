@@ -3,7 +3,9 @@
 // may point at an existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
-const {en, enRe} = require('./_i18n.cjs');
+const {en, enBetween, enRe} = require('./_i18n.cjs');
+// Any ceiling sentence ("… is the limit; the fix is …"), whatever its numbers.
+const LIMIT = new RegExp([1, 2].map(n => enBetween('sp.cap.ceiling', 'limit', 'fix', {n}).trim()).join('|'));
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -117,8 +119,8 @@ test('an office reads its grid as staffed workstations, with the finding and its
     assert.doesNotMatch(tip, new RegExp(enRe('sp.hours.what.registers').source + '|' + enRe('sp.hour.registers').source));
     // The ceiling sentence moved out of the ? into the chip under the grid.
     const cap = await capChip(page);
-    assert.match(cap, enRe('sp.cap.ceiling', {n: 1, limit: 'workstations', fix: 'another computer workstation'}));
-    assert.doesNotMatch(tip, new RegExp(enRe('sp.cap.ceiling', {n: 1}).source + '|' + enRe('sp.cap.ceiling', {n: 2}).source));
+    assert.match(cap, enRe('sp.cap.ceiling', {n: 1, limit: en('sp.py.workstations'), fix: en('sp.py.fix.office.post')}));
+    assert.doesNotMatch(tip, LIMIT);
     const read = await page.locator('#sitePanel .hc.cap').first().getAttribute('data-read');
     assert.match(read, new RegExp(enRe('sp.hour.customers', {n: 3}).source + ' · ' + enRe('sp.hour.desks', {n: 3, of: 3}).source + ' · <b>' + enRe('sp.hour.atceiling').source + '</b>'));
     assert.match(await page.locator('#sitePanel .sstat', {hasText: en('sp.tile.customers')}).innerText(), enRe('sp.tile.basket.hour', {x: 387.89}));
@@ -214,7 +216,7 @@ test('a finding naming two tied answers reads as a plural', async () => {
     const tip = await (await capChips(page))[0].getAttribute('data-tip');
     assert.match(tip, enRe('sp.cap.ceiling', {n: 2, limit: en('sp.py.list.and', {a: en('sp.py.limit.staffing'), b: 'projection booths'}), fix: en('sp.py.list.and', {a: en('sp.py.fix.service.staff'), b: en('sp.py.fix.role.post', {station: 'projection booth'})})}));
     assert.doesNotMatch(tip, enRe('sp.cap.ceiling', {n: 1, limit: 'projection booths'}));
-    assert.doesNotMatch(await hourTip(page), new RegExp(enRe('sp.cap.ceiling', {n: 1}).source + '|' + enRe('sp.cap.ceiling', {n: 2}).source));
+    assert.doesNotMatch(await hourTip(page), LIMIT);
   } finally { await page.close(); }
 });
 
@@ -269,7 +271,8 @@ test('two findings of one kind on different roles do not light each other\'s hou
     // Python names the role as a game-name token; the page reads it in English.
     const kinds = THEATRE.findings.filter(f => f.kind === 'cap')
       .map(f => f.limit.replace(/⟦[^|⟧]*\|([^⟧]*)⟧/g, '$1'));
-    assert.deepEqual(kinds, [en('sp.py.limit.staffing') + ' and projection booths', en('sp.py.limit.station.staff.first', {station: 'Projectionist'})]);
+    assert.deepEqual(kinds, [en('sp.py.list.and', {a: en('sp.py.limit.staffing'), b: 'projection booths'}),
+      en('sp.py.limit.role', {role: 'Projectionist'}, {cap: true})]);
     const chips = await capChips(page);
     assert.equal(await chips[1].getAttribute('data-show'), 'staff:ba:skill_projectionist');
     await hoverChip(page, 1);

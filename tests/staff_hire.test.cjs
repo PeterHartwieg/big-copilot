@@ -2004,7 +2004,7 @@ test('Quick hire writes its pick\'s plan week whole: hours set there give way, a
   assert.doesNotMatch(await box.locator('.hs-match').textContent(), new RegExp(enRe('co.hire.p.newbreak').source + '|meet hours already set'));
   const dlg = await quickConfirm(page);
   const text = await dlg.locator('.gw-body').textContent();
-  assert.doesNotMatch(text, new RegExp(textRe('sp.gw.chk.demand', {who:'Bram Castell'}).source + '|' + textRe('co.hire.zero.head', {n:1}).source + '|' + textRe('co.hire.zero.head', {n:2}).source));
+  assert.doesNotMatch(text, new RegExp(textRe('sp.gw.chk.demand', {who:'Bram Castell'}).source + '|' + textRe('co.hire.zero.head').source));
 });
 
 test('Quick hire: a better match no plan week fits still joins, with no hours, past the fitting ones', async (t) => {
