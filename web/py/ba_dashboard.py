@@ -18768,19 +18768,35 @@ def render(
     )
 
 
-# The board's HTML, CSS and script: template/board.html, beside this file. It
-# is read on the first render(), never at import: the Pyodide worker imports
-# this module with only its fetched files on disk and never renders.
+# The board's HTML and CSS (template/board.html) and its script
+# (template/board.js), beside this file. They are read on the first render(),
+# never at import: the Pyodide worker imports this module with only its
+# fetched files on disk and never renders.
 _template = None
+# Where the board script stands in board.html: a line of its own, the whole
+# body of the page's last <script> block (tools/split_board_script.py).
+BOARD_SCRIPT_SLOT = "/*__BOARD_SCRIPT__*/\n"
+
+
+def splice_board_script(page: str, script: str) -> str:
+    """board.html with board.js in its slot: the page as one string again."""
+    if page.count(BOARD_SCRIPT_SLOT) != 1:
+        raise ValueError("template/board.html must carry %r once" % BOARD_SCRIPT_SLOT.strip())
+    return page.replace(BOARD_SCRIPT_SLOT, script, 1)
 
 
 def load_template() -> str:
-    """template/board.html as one string, read once, with LF line endings."""
+    """template/board.html with template/board.js spliced in, as one string,
+    read once, with LF line endings. The splice comes before every other
+    placeholder, so render() sees the page as if it were one file."""
     global _template
     if _template is None:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "template", "board.html")
-        with open(path, encoding="utf-8") as fh:
-            _template = fh.read()
+        folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "template")
+        with open(os.path.join(folder, "board.html"), encoding="utf-8") as fh:
+            page = fh.read()
+        with open(os.path.join(folder, "board.js"), encoding="utf-8") as fh:
+            script = fh.read()
+        _template = splice_board_script(page, script)
     return _template
 
 
