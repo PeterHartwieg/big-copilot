@@ -103,8 +103,8 @@ rule in new text and leave historical docs as they are.
 
 ## Sources and generated files
 
-Change the source, then rebuild. The code-derived site under `web/` (the rows below marked
-gitignored) is not committed: `python build_web.py --assemble` writes it from the committed sources
+Change the source, then rebuild. The code-derived site under `web/` (the `web/` rows below
+marked gitignored) is not committed: `python build_web.py --assemble` writes it from the committed sources
 without the game, and CI and `npm run deploy` run it, so there is nothing to commit for it.
 The game-derived files stay committed. A merge conflict in `web/py/gametext.json`,
 `web/names/` or the game's part of `web/wiki-data.json` needs the full `python build_web.py`
