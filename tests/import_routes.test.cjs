@@ -294,9 +294,11 @@ test('a line short of its hours is a change at full production; under shop deman
   try {
     const cake = (await bySlug(cap, 'secProduction', 1)).cake;
     assert.ok(cake.tick);
-    // Line, Machines, Hours a day, Makes, Ships, Held, Status after the tick.
+    // Line, Machines, Hours a day, Makes, Sold, Ships, Held, Status after the
+    // tick. The status names what is short: the hours, and the cake's flour,
+    // whose top-up is short, as a chip of its own.
     assert.match(cake.cells[3], /^12 24 h$/);
-    assert.match(cake.cells[7], /^short$/);
+    assert.match(cake.cells[8], /^hours short ingredients short$/);
     assert.match(cake.tip, /^Staffed 12 h of the 24 hours a day it needs\./);
     assert.doesNotMatch(cake.tip, /planned for full production/);
     assert.match(await counted(cap), /0 of 10/);
@@ -305,7 +307,7 @@ test('a line short of its hours is a change at full production; under shop deman
   try {
     const cake = (await bySlug(dem, 'secProduction', 1)).cake;
     assert.equal(cake.tick, false);
-    assert.match(cake.cells[7], /^covered$/);
+    assert.match(cake.cells[8], /^covered$/);
     assert.match(cake.tip, /^Needs 10 of its 12 hours: fewer would do\./);
     assert.ok((await actions(dem)).every(a => a.kind !== 'Factory run hours'));
     // Bread feeds nothing a shop draws: Demand sizes it round the clock too.
@@ -445,9 +447,9 @@ test('Ships / day says what a line tops up to your own sites and what it exports
   const page = await board(fixture(), {which: 'all'});
   try {
     const lines = await bySlug(page, 'secProduction', 1);
-    assert.match(lines.cake.cells[5], /tops up to 270/);
-    assert.match(lines.bread.cells[5], /\+960 export/);
-    assert.doesNotMatch(lines.bread.cells[5], /tops up to/);
+    assert.match(lines.cake.cells[6], /tops up to 270/);
+    assert.match(lines.bread.cells[6], /\+960 export/);
+    assert.doesNotMatch(lines.bread.cells[6], /tops up to/);
   } finally { await page.close(); }
 });
 

@@ -1379,9 +1379,8 @@ class FixtureKeyTests(unittest.TestCase):
         "needs": {"dem", "ownPaused"}, "idle": {"unfed", "routedFrom", "importLevel", "smart", "dem"},
         "shops": {"wholesale", "wholesaleDay"},
         # R13's line hours: accepted whether or not the fixture carries them yet.
-        # and #145's use against what the line makes, likewise.
         "lines": {"hoursNow", "thinDay", "needHours", "demBasis", "running", "status", "why", "level",
-                  "dem", "soldDay", "needDay", "production"},
+                  "dem"},
     }
 
     @staticmethod
