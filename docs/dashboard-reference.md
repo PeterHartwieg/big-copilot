@@ -1201,7 +1201,8 @@ A plan made before its figures were kept compares the investment only.
   day is 0), the same count as the tile's "n days after opening"; the calendar day is the
   tile's. It is drawn only where the whole run from the opening is known.
 - **Plan and now**: furniture, the installation fee (or the firm's real bill where the save
-  holds it, or walls and floors for self-installation), the deposit and the total; the profit
+  holds it, or walls and floors for self-installation), the deposit, the store's own vehicles
+  where it has any (the plan buys none) and the total; the profit
   a day against the recent days; the first five days with sales against the plan's first days,
   which count the ramp and a first seller's hype; and the days to break even, both counted
   from the first day with sales as day 1.
@@ -1251,6 +1252,17 @@ export rather than counter sales.
 
 The week-on-week column is blank for a site open under two weeks, and for a chain where
 any of its earners is. A comparison that spans a shop's opening measures the opening.
+
+**Payback** (Businesses › Results, and a line on a shop's page) sets the investment against the
+profit so far. A site's investment is its furniture, the installation firm's fee (or its real
+bill while the save holds it) or the walls and floors for self-installation, the deposit, and
+its own vehicles: the ones parked in its vehicle slots, at their type's price plus the delivery
+where the purchase was delivered (a Freight Truck T1 is $98,000, $103,000 delivered). The
+delivery is read off the transaction log, which keeps about a week, and remembered after that.
+A vehicle in no business's slot, such as your own car, counts nowhere. A depot or a factory has
+no payback of its own; its investment, trucks included, counts in its chain's, so a chain's
+Invested and break-even day include them. A remembered break-even day stands while the
+investment moves by 1% or less; a larger change, such as a new truck, judges it again.
 
 ## Businesses: finances, prices and standards
 

@@ -1533,6 +1533,15 @@ def _in_order(keys) -> list:
     return sorted(keys, key=lambda k: (k is None, str(k)))
 
 
+def _frozen(table):
+    """`table` as plain dicts all the way down. A defaultdict built in a loop
+    and read by key after it is frozen with this, so a read of a key it does
+    not hold adds nothing, and cannot change its size while a walk iterates it."""
+    if isinstance(table, dict):
+        return {key: _frozen(value) for key, value in table.items()}
+    return table
+
+
 # ------------------------------------------------------------------ premises
 # Every building in the city, so the map can answer "which available premises
 # are best right now?". The save only carries rent and door capacity for a
@@ -4128,6 +4137,9 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
         for dest, item, target in legs:
             if dest in index and dest != source:
                 senders[(dest, item)].append((source, target or 0))
+    # Frozen once built, as every table below that the closures read by key:
+    # a read of a missing key adds nothing while another walk iterates it.
+    senders = dict(senders)
     nodes = set(leaves) | set(eats) | set(steady) | set(drops) | set(senders)
     nodes |= {(s, item) for (_d, item), legs in senders.items() for s, _t in legs}
 
@@ -4157,10 +4169,10 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
         weight = collections.defaultdict(float)
         for s, t in able:
             weight[s] += t / total if total else 1 / len(able)
-        return weight
+        return dict(weight)
 
-    need_memo, asked = {}, collections.defaultdict(dict)  # asked[sender node][dest] = (use, need)
-    asked_raw = collections.defaultdict(dict)  # the same before the route's target caps it
+    need_memo, asked = {}, {}  # asked[sender node][dest] = (use, need)
+    asked_raw = {}  # the same before the route's target caps it
     route_cap = {}
     for source, legs in edges.items():
         for dest, item, target in legs:
@@ -4182,7 +4194,7 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
         caps = {s: scale[(s, d[1])] * need * w for s, w in weights.items()
                 if (s, d[1]) in scale}
         if need <= 0:
-            return dict(weights)
+            return weights
         parts = _share_with_room(need, weights, caps, own(d))
         return {s: part / need for s, part in parts.items()}
 
@@ -4209,7 +4221,7 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
                 residual_at[d] = dneed
                 portions[d] = portion(d, dneed)
             f = portions[d].get(key, 0.0)
-            asked_raw[n][dest] = dneed * f
+            asked_raw.setdefault(n, {})[dest] = dneed * f
             # A round a day brings no more than the route's target. Where the
             # site has a supply of its own, what it needs beyond the target is
             # that supply's to bring, and is not asked of this one as well
@@ -4219,7 +4231,7 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
             cap = route_cap.get((key, dest, item), 0)
             if dneed * f > cap > 0 and supplied(dest, item):
                 f *= cap / (dneed * f)
-            asked[n][dest] = ((dlu + dsu) * f, dneed * f)
+            asked.setdefault(n, {})[dest] = ((dlu + dsu) * f, dneed * f)
             lu, ln, su, sn = lu + dlu * f, ln + dln * f, su + dsu * f, sn + dsn * f
         need_memo[n] = (lu, ln, su, sn)
         return need_memo[n]
@@ -4505,6 +4517,7 @@ def _supply(
                 item, amount = target["itemName"], target["targetAmount"]
                 edges[source].append((dest_key, item, amount))
                 target_at.setdefault((dest_key, item), []).append((amount, source))
+    edges = dict(edges)  # read by key from here on; its values are lists, so one level is all
     # Where several plans top one line up, the one that counts is the highest
     # target of a site that has the item to send (it holds some, imports it,
     # is routed it, or is a factory that may make it); failing any, the
@@ -4681,6 +4694,10 @@ def _supply(
                     in_by_day[key][entry["itemName"]][when] += amount
                     inbound_days[key].add(when)
                 by_day[key][entry["itemName"]][when] += amount
+    # Read by key from here on, by _factories() too (_frozen()).
+    shipped, received, by_day = _frozen(shipped), _frozen(received), _frozen(by_day)
+    out_by_day, in_by_day = _frozen(out_by_day), _frozen(in_by_day)
+    round_days, inbound_days = _frozen(round_days), _frozen(inbound_days)
 
     def first_fill(dest: str, item: str) -> tuple:
         """A site's first fill of `item` inside the window, as (day, one-off
@@ -4695,7 +4712,7 @@ def _supply(
             return None, 0.0
         if dest in log_full and first_logged.get(dest, first) >= first:
             return None, 0.0
-        arrived = in_by_day[dest][item]
+        arrived = in_by_day.get(dest, {}).get(item, {})
         later = max((units for d, units in arrived.items() if d > first), default=0.0)
         return first, max(0.0, arrived.get(first, 0.0) - later)
 
@@ -4707,11 +4724,11 @@ def _supply(
         days = round_days.get(key, ())
         if len(days) < SHIPPED_MIN_DAYS:
             return None
-        total = shipped[key].get(item, 0.0)
+        total = shipped.get(key, {}).get(item, 0.0)
         for dest in {d for d, i, _a in edges.get(key, []) if i == item and d != key}:
             when, units = first_fill(dest, item)
             if when is not None:
-                total -= min(units, out_by_day[key][item].get(when, 0.0))
+                total -= min(units, out_by_day.get(key, {}).get(item, {}).get(when, 0.0))
         return max(0.0, total) / len(days)
 
     def received_per_day(key: str, item: str) -> float | None:
@@ -4719,13 +4736,13 @@ def _supply(
         days = inbound_days.get(key, ())
         if len(days) < SHIPPED_MIN_DAYS:
             return None
-        return received[key].get(item, 0.0) / len(days)
+        return received.get(key, {}).get(item, 0.0) / len(days)
 
     def forwarded_per_day(key: str, item: str) -> float:
         """What a site sent on of an item, over the same days as its inflow:
         a factory passing an import to a depot target did not eat it."""
         days = inbound_days.get(key, ())
-        return shipped[key].get(item, 0.0) / len(days) if days else 0.0
+        return shipped.get(key, {}).get(item, 0.0) / len(days) if days else 0.0
 
     # --- imports: what lands weekly, and when
     # A contract is plain or Smart Delivery (isTarget; the save leaves out a
@@ -5295,7 +5312,7 @@ def _supply(
             # One cut of the plans' loops for everything: the one Demand
             # sizing made (dem_graph), so the two modes never disagree on it.
             walked[mode] = _supply_walk(index, dem_graph.get("edges", edges), leaves, eats.get(mode, {}),
-                                        grown, drops, unknown)
+                                        dict(grown), drops, unknown)
         import_rows[:] = depot_rows("cap")
         import_rows_dem[:] = depot_rows("dem")
         routed_in, route_only = {}, {}
@@ -5379,7 +5396,9 @@ def _supply(
             whole = sum(t for _s, t in able)
             for s, t in able:
                 share[line][s] += t / whole if whole else 1 / len(able)
-        dem_graph["share"] = share
+        # Frozen: demand() and dem_levels() read it by key while dem_levels()
+        # walks it, and a plan to an address not the company's has no entry.
+        dem_graph["share"] = _frozen(share)
         # What a sender can bring of it a day: what a factory can make, or
         # what an import or a wholesale delivery brings a site (the walk's
         # has() in 24/7). A sender whose shares would pass it hands the rest
@@ -5567,8 +5586,7 @@ def _supply(
         if eats is not None and not measured:
             total += eats(key, item)
         for dest_key in _in_order({d for d, i, _a in dem_graph["edges"].get(key, []) if i == item and d != key}):
-            # .get(): a plan to an address not the company's has no share, and
-            # reading the defaultdict would add one while dem_levels() walks it.
+            # .get(): a plan to an address not the company's has no share.
             weights = dem_graph["share"].get((dest_key, item)) or {}
             if not weights.get(key):
                 continue
@@ -5620,9 +5638,9 @@ def _supply(
         "shipped": shipped_per_day,
         "received": received_per_day,
         "forwarded": forwarded_per_day,
-        "byDay": lambda key, item: by_day[key][item],
-        "outByDay": lambda key, item: out_by_day[key][item],
-        "inByDay": lambda key, item: in_by_day[key][item],
+        "byDay": lambda key, item: by_day.get(key, {}).get(item, {}),
+        "outByDay": lambda key, item: out_by_day.get(key, {}).get(item, {}),
+        "inByDay": lambda key, item: in_by_day.get(key, {}).get(item, {}),
         # A site's first fill of an item in the window (first_fill()).
         "firstFill": first_fill,
         # A shop listing the item sells it, and so does any site whose line
@@ -14729,13 +14747,14 @@ class History:
         "trail" ([day, profit, sales] from the opening, capped), "before" (the
         lease's cost before the opening), "since" (the first day the record
         held), or "rolled" once the record moved past the trail; per chain
-        name the same without the bill and the trail. Changed in place; a
-        record whose `opened` no longer matches is a new business at that
-        address."""
+        name the same without the bill and the trail; and "vehicleFees", the
+        delivery paid per vehicle id, company-wide, since a truck changes
+        slots. Changed in place; a record whose `opened` no longer matches is
+        a new business at that address."""
         store = self._for(character).setdefault("payback", {})
         if not isinstance(store, dict):
             store = self._for(character)["payback"] = {}
-        for part in ("sites", "chains"):
+        for part in ("sites", "chains", "vehicleFees"):
             if not isinstance(store.get(part), dict):
                 store[part] = {}
         return store
@@ -15225,15 +15244,18 @@ def item_price(name: str, paid, prices: dict | None = None) -> float:
     return float((table.get(name) or {}).get("p") or 0)
 
 
-def setup_cost(items, materials, square_metres, deposit, prices: dict | None = None) -> dict:
+def setup_cost(items, materials, square_metres, deposit, prices: dict | None = None,
+               vehicles: float = 0) -> dict:
     """What a store costs to set up, in both install modes.
 
     `items` are (item name, price paid) pairs, the paid price 0 or None where
     nothing was paid yet; `materials` the MaterialIDs of the wall and floor
     slots; `square_metres` the building's floor (ba_buildings.json `m`). A store
     that exists passes its save's furniture and slots and its lastDeposit; a
-    planned one passes its shopping list and its deposit estimate. `firm` and
-    `self` are the investment in each mode, deposit included.
+    planned one passes its shopping list and its deposit estimate. `vehicles`
+    is what the business's own vehicles cost, delivery included
+    (_site_vehicles()). `firm` and `self` are the investment in each mode,
+    deposit and vehicles included.
     """
     prices = prices if prices is not None else load_item_prices()
     furniture = sum(item_price(name, paid, prices) for name, paid in items)
@@ -15241,18 +15263,78 @@ def setup_cost(items, materials, square_metres, deposit, prices: dict | None = N
     walls = sum(float((table.get(m) or {}).get("p") or 0) for m in materials)
     fee = INSTALL_FEE_PER_M2 * float(square_metres or 0)
     deposit = float(deposit or 0)
+    vehicles = float(vehicles or 0)
     return {
         "furniture": money(furniture),
         "materials": money(walls),
         "fee": money(fee),
         "deposit": money(deposit),
-        "firm": money(furniture + fee + deposit),
-        "self": money(furniture + walls + deposit),
+        "vehicles": money(vehicles),
+        "firm": money(furniture + fee + deposit + vehicles),
+        "self": money(furniture + walls + deposit + vehicles),
     }
 
 
-def _site_setup(save: Save, registration: dict, addr, prices: dict) -> dict:
-    """setup_cost() for a rented building, read off its registration."""
+def _vehicle_type(vehicle: dict):
+    """A vehicle instance's type slug; None in a save too old to name it."""
+    name = (vehicle or {}).get("vehicleTypeName")
+    return name if isinstance(name, str) else None
+
+
+def _vehicle_deliveries(save: Save, table: dict) -> dict:
+    """What was paid to have a vehicle delivered, per vehicle id, for the
+    purchases the transaction log still holds (about a week).
+
+    A purchase is ba:transaction_vehiclebought, its transactionData naming the
+    type (`vehicleName`) but neither the vehicle nor where it went: a Freight
+    Truck T1 bought for delivery costs $103,000 against its $98,000 price, one
+    collected at the dealer the price alone. VehicleInstances grows in the
+    order vehicles are bought, so the log's purchases of a type, oldest first,
+    are the last instances of that type in the list; the excess over the
+    type's price (ba_store_rules.json `vehicles`) is the delivery.
+    """
+    bought = collections.defaultdict(list)
+    for t in save.items(save.root.get("Transactions")):
+        if not isinstance(t, dict) or t.get("transactionType") != "ba:transaction_vehiclebought":
+            continue
+        data = {e.get("$k"): e.get("$v") for e in save.items(t.get("transactionData")) if isinstance(e, dict)}
+        kind = data.get("vehicleName")
+        if isinstance(kind, str) and kind in table:
+            bought[kind].append(-float(t.get("amount") or 0) - float(table[kind]))
+    by_type = collections.defaultdict(list)
+    for v in save.items(save.root.get("VehicleInstances")):
+        if isinstance(v, dict) and v.get("id") and _vehicle_type(v) in bought:
+            by_type[_vehicle_type(v)].append(v["id"])
+    out = {}
+    for kind, fees in bought.items():
+        ids = by_type[kind][-len(fees):]
+        for vid, fee in zip(ids, fees[len(fees) - len(ids):]):
+            if fee > 0:
+                out[vid] = money(fee)
+    return out
+
+
+def _site_vehicles(save: Save, registration: dict, table: dict) -> dict:
+    """The vehicles a business holds, {vehicle id: price by type}.
+
+    The tie is the building registration's `vehicleSlots`, a warehouse's or a
+    factory's parking (Entities.VehicleSlot: `vehicleInstanceId`, and the
+    `employeeDriverId` driving it), each id one of the save's VehicleInstances.
+    A vehicle in no slot, such as the player's own car, belongs to no
+    business. A type with no price (a hand truck, a flatbed) counts nothing.
+    """
+    instances = {v.get("id"): v for v in save.items(save.root.get("VehicleInstances")) if isinstance(v, dict)}
+    out = {}
+    for slot in save.items(registration.get("vehicleSlots")):
+        vid = slot.get("vehicleInstanceId") if isinstance(slot, dict) else None
+        if vid and vid in instances:
+            out[vid] = float(table.get(_vehicle_type(instances[vid])) or 0)
+    return out
+
+
+def _site_setup(save: Save, registration: dict, addr, prices: dict, vehicles: float = 0) -> dict:
+    """setup_cost() for a rented building, read off its registration;
+    `vehicles` the business's own, as _payback() prices them."""
     items = []
     # Stacked items are top-level instances too; stackedItems only points at them.
     for holder in save.items(registration.get("itemInstances")):
@@ -15265,7 +15347,7 @@ def _site_setup(save: Save, registration: dict, addr, prices: dict) -> dict:
             if isinstance(slot, dict) and slot.get("MaterialID"):
                 materials.append(slot["MaterialID"])
     building = load_buildings().get(addr) or {}
-    return setup_cost(items, materials, building.get("m"), registration.get("lastDeposit"), prices)
+    return setup_cost(items, materials, building.get("m"), registration.get("lastDeposit"), prices, vehicles)
 
 
 def _install_bills(save: Save, names: Names, addresses: dict) -> dict:
@@ -15473,6 +15555,9 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
     row only when it sells something (a factory selling outside the company);
     one that sells nothing has nothing to pay anything back with.
 
+    A site's investment takes in the vehicles it holds (_site_vehicles()), so
+    a chain's counts its depots' and factories' trucks.
+
     The history keeps what the statements forget. An older save of the same
     character reads it and changes nothing, as the ledger does, so going back
     to an earlier save and forward again loses no remembered day.
@@ -15481,6 +15566,8 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
     regs = {site_key((b["StreetName"], b["StreetNumber"])): b for b in buildings}
     addresses = {key: (b["StreetName"], b["StreetNumber"]) for key, b in regs.items()}
     bills = _install_bills(save, names, addresses)
+    vehicle_prices = load_store_rules().get("vehicles") or {}
+    deliveries = _vehicle_deliveries(save, vehicle_prices)
     start = stmt_history[0][0] if stmt_history else None
     last_day = stmt_history[-1][0] if stmt_history else None
     # Fewer statements than the game keeps: nothing has dropped out yet.
@@ -15498,6 +15585,15 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
     elif now is not None:
         store["day"] = now
     kept_sites, kept_chains = store["sites"], store["chains"]
+    # Each vehicle's delivery, by vehicle id for the whole company: the log
+    # shows it for a week, and the truck may change slots after that. An
+    # entry goes when the vehicle is gone from the save.
+    existing = {v.get("id") for v in save.items(save.root.get("VehicleInstances")) if isinstance(v, dict)}
+    kept_fees = store["vehicleFees"]
+    vehicle_fees = {vid: deliveries.get(vid, kept_fees.get(vid)) for vid in existing if vid}
+    vehicle_fees = {vid: fee for vid, fee in vehicle_fees.items() if isinstance(fee, (int, float)) and fee > 0}
+    kept_fees.clear()
+    kept_fees.update(vehicle_fees)
 
     sites, series, window_exact, runs = {}, {}, {}, {}
     for b in businesses:
@@ -15521,7 +15617,11 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
         memory = kept_sites.get(key)
         if not isinstance(memory, dict) or memory.get("opened") != opened:
             memory = {"opened": opened}
-        cost = _site_setup(save, regs[key], addr, prices)
+        # The business's own vehicles at their type's price, and the delivery
+        # paid for each, wherever it is parked now.
+        held = _site_vehicles(save, regs[key], vehicle_prices)
+        cost = _site_setup(save, regs[key], addr, prices,
+                           sum(held.values()) + sum(vehicle_fees.get(vid, 0) for vid in held))
         # The firm's real bill where the log still holds it, and remembered
         # after it drops out, so the investment does not jump a week later.
         # Only the bill that set the site up counts: the lease starts inside
@@ -15536,7 +15636,7 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
         billed = memory.get("bill") or 0
         if billed:
             cost["billed"] = money(billed)
-            cost["firm"] = money(cost["deposit"] + billed)
+            cost["firm"] = money(cost["deposit"] + billed + cost["vehicles"])
         kept_sites[key] = memory
         series[key] = days
         row = {"costCentre": b["costCentre"], "cost": cost}
@@ -15580,7 +15680,7 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
                            and not any(sales > 0 for k in members for _d, _p, sales in series[k])):
             continue
         cost = {field: money(sum(sites[k]["cost"].get(field, 0) for k in members))
-                for field in ("furniture", "materials", "fee", "deposit", "billed", "firm", "self")}
+                for field in ("furniture", "materials", "fee", "deposit", "vehicles", "billed", "firm", "self")}
         # Every member's whole run known (the record's, or a kept trail): the
         # chain's is their sum and exact. Otherwise the record's days, and
         # the record's own reach.

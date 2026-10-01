@@ -201,6 +201,10 @@ and never attach one to an issue.
   order of anything that reaches the payload, iterate it through `_in_order()`, which sorts
   `None` last because real saves hold items with no name. When a set decides a winner
   (`most_common()`, first-wins), break the tie explicitly, as `_chains()` does.
+- A `defaultdict[key]` read inserts the key. If another loop is iterating that dict at the
+  time, Python raises "dictionary changed size during iteration" (PR #210). Once other
+  functions read a built defaultdict by key, freeze it with `_frozen()` and read it with
+  `.get()`.
 - The Pyodide worker's virtual filesystem holds only the files `web/worker.js` fetches from
   `web/py/` and the few it writes at runtime (`docs/architecture.md`, "Pyodide"), so
   `ba_dashboard` must not open any other file at import time. Read a file lazily, inside a function, as

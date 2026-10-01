@@ -105,6 +105,22 @@ test('sorting by Payback orders the chains by the day they pay back', async t =>
   assert.notDeepEqual(up, down);
 });
 
+test('a depot\'s own truck is in its chain\'s investment and says so', async t => {
+  const page = await board(t, await context(t));
+  // The fixture's hub holds a Freight Truck T1 ($98,000); the player's car
+  // is in no slot and counts nowhere.
+  const tips = await page.$$eval('#portfolio tr.chain', rows => rows.map(r => {
+    const row = paybackChain(D.chains.find(c => enOf(c, 'name') === r.dataset.chain));
+    return row ? [row.cost.vehicles, r.querySelector('.pb-cell')?.dataset.tip || ''] : null;
+  }).filter(Boolean));
+  const withTruck = tips.filter(([v]) => v > 0);
+  assert.deepEqual(withTruck.map(([v]) => v), [98000]);
+  assert.match(withTruck[0][1], enRe('co.payback.cost.vehicles', {v: 98000}));
+  for(const [, tip] of tips.filter(([v]) => !v)) assert.doesNotMatch(tip, enRe('co.payback.cost.vehicles'));
+  assert.doesNotMatch(await page.$eval(`#portfolio tr.kid[data-key="${SPIRITS}"] .pb-cell`, e => e.dataset.tip),
+    enRe('co.payback.cost.vehicles'));
+});
+
 test('the site panel has a Payback line for a shop and none for a factory', async t => {
   const page = await board(t, await context(t));
   await page.evaluate(k => openSite(k), SPIRITS);

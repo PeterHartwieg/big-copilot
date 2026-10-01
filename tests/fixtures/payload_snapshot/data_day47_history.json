@@ -8064,7 +8064,7 @@
    "multiplier": 0.7,
    "owed": 29900.0,
    "profit7": -480.14,
-   "wealth": 275560.0,
+   "wealth": 384560.0,
    "year": 60
   },
   "game": {
@@ -15868,7 +15868,8 @@
      "firm": 132750.0,
      "furniture": 900.0,
      "materials": 0.0,
-     "self": 900.0
+     "self": 900.0,
+     "vehicles": 0.0
     },
     "exact": true,
     "firm": {
@@ -15893,10 +15894,11 @@
      "billed": 0.0,
      "deposit": 0.0,
      "fee": 1646074.0,
-     "firm": 1704024.0,
+     "firm": 1802024.0,
      "furniture": 57950.0,
      "materials": 0.0,
-     "self": 57950.0
+     "self": 155950.0,
+     "vehicles": 98000.0
     },
     "exact": true,
     "firm": {
@@ -15926,7 +15928,8 @@
      "firm": 132750.0,
      "furniture": 900.0,
      "materials": 0.0,
-     "self": 900.0
+     "self": 900.0,
+     "vehicles": 0.0
     },
     "costCentre": false,
     "days": [
@@ -16055,10 +16058,11 @@
     "cost": {
      "deposit": 0.0,
      "fee": 757112.0,
-     "firm": 757112.0,
+     "firm": 855112.0,
      "furniture": 0.0,
      "materials": 0.0,
-     "self": 0.0
+     "self": 98000.0,
+     "vehicles": 98000.0
     },
     "costCentre": true,
     "exact": true,
@@ -16073,7 +16077,8 @@
      "firm": 812112.0,
      "furniture": 55000.0,
      "materials": 0.0,
-     "self": 55000.0
+     "self": 55000.0,
+     "vehicles": 0.0
     },
     "costCentre": true,
     "exact": true,
@@ -16089,7 +16094,8 @@
      "firm": 134800.0,
      "furniture": 2950.0,
      "materials": 0.0,
-     "self": 2950.0
+     "self": 2950.0,
+     "vehicles": 0.0
     },
     "costCentre": false,
     "days": [

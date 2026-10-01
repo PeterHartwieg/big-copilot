@@ -3838,6 +3838,10 @@ function paybackTip(row, chain){
     : c.billed && mode === "firm" ? tt("co.payback.cost.billed", "Invested {w:$}: the installation firm's bill {bill:$} and the deposit {dep:$}.", {w, bill: c.billed, dep: c.deposit})
     : mode === "self" ? tt("co.payback.cost.self", "Invested {w:$}: furniture {f:$}, walls and floors {m:$}, deposit {dep:$}.", {w, f: c.furniture, m: c.materials, dep: c.deposit})
     : tt("co.payback.cost.firm", "Invested {w:$}: furniture {f:$}, the installation firm's fee {fee:$}, deposit {dep:$}.", {w, f: c.furniture, fee: c.fee, dep: c.deposit});
+  /* A depot's or a factory's own vehicles, at their price and any delivery
+     paid, are part of the investment too. */
+  const vehicles = c.vehicles > 0
+    ? tt("co.payback.cost.vehicles", "Vehicles {v:$} of it, at their price plus any delivery paid.", {v: c.vehicles}) : "";
   const profit = row.since === null || row.since === undefined ? ""
     : row.exact ? tt("co.payback.profit", "Profit since day {day}: {w:$}.", {day: row.since, w: row.profit})
     : tt("co.payback.profit.window", "Profit since day {day}, the oldest day the save keeps: {w:$}.", {day: row.since, w: row.profit});
@@ -3845,7 +3849,7 @@ function paybackTip(row, chain){
     : tt("co.payback.rate", "Recent profit {w:$} a day.", {w: row.rate});
   const o = paybackOf(row);
   const kept = o && o.kept ? tt("co.payback.kept", "The break-even day is remembered from an earlier save.") : "";
-  return [cost, profit, rate, kept].filter(Boolean).join(" ");
+  return [cost, vehicles, profit, rate, kept].filter(Boolean).join(" ");
 }
 /* A table cell: the short form, the whole sentence and its basis on hover. */
 function paybackCell(row, chain){
@@ -12144,6 +12148,9 @@ function osRoiTable(row, snap, planMode, o){
       m(planFit), m(nowMode === "self" ? c.materials : c.fee), diff(nowMode === "self" ? c.materials : c.fee, planFit, true)));
   }
   rows.push(tr(tt("gr.os.inv.deposit", "Deposit"), "", m(p && p.deposit), m(c.deposit), diff(c.deposit, p && p.deposit, true)));
+  // The plan buys no vehicle; a store that has one since counts it.
+  if(c.vehicles > 0) rows.push(tr(tt("gr.os.roi.vehicles", "Vehicles"), tt("gr.os.roi.vehicles.sub", "the store's own, at their price plus any delivery paid"),
+    "–", m(c.vehicles), diff(c.vehicles, p ? 0 : null, true)));
   rows.push(tr(tt("gr.os.inv.total", "Investment"), "", m(p && p[planMode]), m(c[nowMode]), diff(c[nowMode], p && p[planMode], true), "os-sum"));
   const steady = snap ? snap.profit : null;
   if(steady != null){
