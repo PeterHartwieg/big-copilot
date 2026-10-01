@@ -52,9 +52,12 @@ def split(page: str) -> tuple[str, str] | None:
     if not page.startswith(nl, start):
         raise SystemExit("template/board.html: the last <script> tag is not on a line of its own")
     body = page[start + len(nl):end]
+    slots = page.count(BOARD_SCRIPT_SLOT.strip())
     if body == slot:
+        if slots > 1:
+            raise SystemExit("template/board.html carries %s more than once: resolve by hand" % BOARD_SCRIPT_SLOT.strip())
         return None
-    if BOARD_SCRIPT_SLOT.strip() in page:
+    if slots:
         raise SystemExit("template/board.html carries the slot and an inline script: resolve by hand")
     if not body.endswith(nl):
         raise SystemExit("template/board.html: </script> of the board script is not on a line of its own")

@@ -23,6 +23,11 @@ class SplitBoardScript(unittest.TestCase):
     def test_a_split_page_is_left_alone(self):
         self.assertIsNone(split_board_script.split(read("board.html")))
 
+    def test_a_second_slot_is_refused(self):
+        page = read("board.html").replace("<body>", "<body>/*__BOARD_SCRIPT__*/", 1)
+        with self.assertRaises(SystemExit):
+            split_board_script.split(page)
+
     def test_line_endings_are_kept(self):
         page, script = split_board_script.split(load_template().replace("\n", "\r\n"))
         self.assertEqual((page, script), (read("board.html").replace("\n", "\r\n"), read("board.js").replace("\n", "\r\n")))
