@@ -13059,7 +13059,9 @@ function szShortWord(f){
 const sbMachinesTip = p => tt("sb.line.machines.tip", {one: "{n} more machine makes {makes:,} a day against {need:,} needed",
   other: "{n} more machines make {makes:,} a day against {need:,} needed"}, {n: p.more, makes: p.makesWith, need: p.need});
 const sbInputsTip = g => tt("sb.line.inputs.tip", "Short of {items}", {items: sbList(g.items.map(spEsc))});
-/* A line's production and ingredient statuses, each a chip of its own. */
+/* A line's production and ingredient statuses, each a chip of its own. A
+   line short of machines drops its hours' covered chip (sbLineRow()): hours
+   cannot help a line at 24 h, and covered beside short reads as a contradiction. */
 function sbLineChips(r){
   return (r.prod ? " " + sbStatus(r.prod, sbMachinesTip(r.prod), "", szShortWord(r.prod)) : "")
     + (r.ing ? " " + sbStatus(r.ing, sbInputsTip(r.ing), "", szShortWord(r.ing)) : "");
@@ -13942,7 +13944,7 @@ function sbLineRow(d, r, site){
       ? `<span class="sub" data-tip="${attr(tt("sb.line.makers.tip", "Shared by the {n} lines making {item}", {n: r.makers, item: r.item}))}">${
         tt("sb.line.makers", "all {n} {item} lines", {n: r.makers, item: spEsc(r.item)})}</span>` : ""}</td>
     <td>${num(r.stock ?? 0)}${Number.isFinite(r.limit) ? `<span class="sub">${tt("sb.line.of", "of {n:,}", {n: r.limit})}</span>` : ""}</td>`}
-    <td class="l st">${f ? sbStatus(f, reason, tip, szShortWord(f)) + sbLineChips(r) : "—"}</td></tr>`;
+    <td class="l st">${f ? (r.prod && f.st === "covered" ? "" : sbStatus(f, reason, tip, szShortWord(f))) + sbLineChips(r) : "—"}</td></tr>`;
 }
 function sbInputRow(d, r, site){
   const f = r.fact, b = D.businesses[r.s];

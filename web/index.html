@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "108ff20138";</script>
-<link rel="stylesheet" href="community.css?v=108ff20138">
+<script>window.LEDGER_BUILD = "9880a59d36";</script>
+<link rel="stylesheet" href="community.css?v=9880a59d36">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=108ff20138">
+<link rel="stylesheet" href="fonts/fonts.css?v=9880a59d36">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5897,7 +5897,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"108ff20138","latest":{"pr":175,"date":"2026-09-29","title":"Open a new store: plan it, open it, and watch it earn the investment back","summary":"Expansion has a new view, Open a store. Pick a type from the neighbourhoods with the most demand, from any type, or from a Demand cell's new Open a store here, then pick the building in Find a location, fixed to that type. The board lists everything a fully outfitted store of that type needs in that building: what the type requires to open, an item for each customer demand, enough tills for the building's capacity and shelving copied from your own store of the same layout, with the installation firm's price or, for self-installation, a shopping list by furniture store on the map, and the deposit. It then estimates the profit a day from the game's own rules for customers, prices, demand and wages, with the best marketing mix, and shows how many days it takes to earn the investment back, as a range, after tax, against what your own stores of that type earn, and with an optional bank loan. Offices are estimated too; cinemas and theatres show the investment only. A checklist then follows the store until it opens, ticking itself from the save: the lease, furniture, staff for the opening hours, uniforms, customer demands, marketing and logistics, with buttons to staff the store, assign uniforms and set the cheapest marketing mix through the game link. Once the store trades, the plan compares itself with it: the investment, the profit a day and the first days against the plan, the share paid back, the day it breaks even, and any loan it was planned with. Your plans are kept per character, opened stores included. Businesses › Results also has a Payback column: for each shop, office and chain, the day its setup was earned back or how many days are still to go, with the same line on a business's own page."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"9880a59d36","latest":{"pr":175,"date":"2026-09-29","title":"Open a new store: plan it, open it, and watch it earn the investment back","summary":"Expansion has a new view, Open a store. Pick a type from the neighbourhoods with the most demand, from any type, or from a Demand cell's new Open a store here, then pick the building in Find a location, fixed to that type. The board lists everything a fully outfitted store of that type needs in that building: what the type requires to open, an item for each customer demand, enough tills for the building's capacity and shelving copied from your own store of the same layout, with the installation firm's price or, for self-installation, a shopping list by furniture store on the map, and the deposit. It then estimates the profit a day from the game's own rules for customers, prices, demand and wages, with the best marketing mix, and shows how many days it takes to earn the investment back, as a range, after tax, against what your own stores of that type earn, and with an optional bank loan. Offices are estimated too; cinemas and theatres show the investment only. A checklist then follows the store until it opens, ticking itself from the save: the lease, furniture, staff for the opening hours, uniforms, customer demands, marketing and logistics, with buttons to staff the store, assign uniforms and set the cheapest marketing mix through the game link. Once the store trades, the plan compares itself with it: the investment, the profit a day and the first days against the plan, the share paid back, the day it breaks even, and any loan it was planned with. Your plans are kept per character, opened stores included. Businesses › Results also has a Payback column: for each shop, office and chain, the day its setup was earned back or how many days are still to go, with the same line on a business's own page."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -5985,8 +5985,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=108ff20138"></script>
-<script src="community.js?v=108ff20138"></script>
+<script src="app.js?v=9880a59d36"></script>
+<script src="community.js?v=9880a59d36"></script>
 
 <script>
 
@@ -14717,7 +14717,9 @@ function szShortWord(f){
 const sbMachinesTip = p => tt("sb.line.machines.tip", {one: "{n} more machine makes {makes:,} a day against {need:,} needed",
   other: "{n} more machines make {makes:,} a day against {need:,} needed"}, {n: p.more, makes: p.makesWith, need: p.need});
 const sbInputsTip = g => tt("sb.line.inputs.tip", "Short of {items}", {items: sbList(g.items.map(spEsc))});
-/* A line's production and ingredient statuses, each a chip of its own. */
+/* A line's production and ingredient statuses, each a chip of its own. A
+   line short of machines drops its hours' covered chip (sbLineRow()): hours
+   cannot help a line at 24 h, and covered beside short reads as a contradiction. */
 function sbLineChips(r){
   return (r.prod ? " " + sbStatus(r.prod, sbMachinesTip(r.prod), "", szShortWord(r.prod)) : "")
     + (r.ing ? " " + sbStatus(r.ing, sbInputsTip(r.ing), "", szShortWord(r.ing)) : "");
@@ -15600,7 +15602,7 @@ function sbLineRow(d, r, site){
       ? `<span class="sub" data-tip="${attr(tt("sb.line.makers.tip", "Shared by the {n} lines making {item}", {n: r.makers, item: r.item}))}">${
         tt("sb.line.makers", "all {n} {item} lines", {n: r.makers, item: spEsc(r.item)})}</span>` : ""}</td>
     <td>${num(r.stock ?? 0)}${Number.isFinite(r.limit) ? `<span class="sub">${tt("sb.line.of", "of {n:,}", {n: r.limit})}</span>` : ""}</td>`}
-    <td class="l st">${f ? sbStatus(f, reason, tip, szShortWord(f)) + sbLineChips(r) : "—"}</td></tr>`;
+    <td class="l st">${f ? (r.prod && f.st === "covered" ? "" : sbStatus(f, reason, tip, szShortWord(f))) + sbLineChips(r) : "—"}</td></tr>`;
 }
 function sbInputRow(d, r, site){
   const f = r.fact, b = D.businesses[r.s];

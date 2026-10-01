@@ -97,6 +97,9 @@ test('a line short of production reads short with the machine count, and is coun
       assert.match(prod.cls, /\bbad\b/);
       assert.match(prod.tip, /1 more machine makes 1,440 a day against 1,150 needed/);
       assert.match(bread.cells['Sold / day'], /^1,000 ?needs 1,150 with the margin$/);
+      // Its hours are covered, but a covered chip beside short reads as a
+      // contradiction: the production chip stands alone.
+      assert.ok(!bread.chips.some(c => c.word === 'covered'), JSON.stringify(bread.chips));
       // No chip on a factory row reads a bare "short".
       assert.ok(!bread.chips.some(c => c.word === 'short'), JSON.stringify(bread.chips));
       // The view's verdict (its tab's tip) counts the line.
@@ -109,6 +112,14 @@ test('a line short of production reads short with the machine count, and is coun
   try {
     assert.ok((await line(dem, 'bread')).chips.some(c => c.word === 'short: needs 1 more machine'));
   } finally { await dem.close(); }
+  // An hours problem that is short still shows beside it.
+  const data = shortOfMachines(fixture());
+  Object.assign(data.supply.factories.sites[0].lines.find(l => l.slug === 'bread'), {status: 'short', why: 'hours', level: 'warn', hoursNow: 12});
+  const both = await board(data);
+  try {
+    const words = (await line(both, 'bread')).chips.map(c => c.word);
+    assert.ok(words.includes('hours short') && words.includes('short: needs 1 more machine'), words.join(' | '));
+  } finally { await both.close(); }
 });
 
 test('an order short and a production short on one line are two separate statuses', async () => {
