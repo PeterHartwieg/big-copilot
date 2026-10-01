@@ -2000,12 +2000,16 @@ and 0 for a character who has paid none.
 `customerCapacity` is also stored only for an occupied building. The cap a size buys
 comes instead from the game's own help page `help_building_types_content`, which lists a
 customer capacity per layout code. A code is a letter and a digit — C1 and C2 are both
-225 m² retail floors — and the building table records only the letter, so the codes
-collapse to their letter. The same letter is a different floor in a different kind of
-building: a C is 30 customers as a shop and 8 as an office. Where a letter's layouts
-genuinely differ the cap is a `[min, max]` range, which today is only the cinema (S, 100
-to 150) and the theater (R, 150 to 200). Warehouses have a vehicle capacity, not a door
-cap, and carry none; neither do residential or special buildings.
+225 m² retail floors — and the codes collapse to their letter. The same letter is a
+different floor in a different kind of building: a C is 30 customers as a shop and 8 as an
+office. Where a letter's layouts genuinely differ, the cinema and the theater, the letter
+carries a `[min, max]` range. A cinema's layouts are also kept by code, and a cinema
+building reads its own: the building table records each building's layout version (`v`),
+and every cinema the player runs in the saves on hand reads `customerCapacity` exactly its
+layout's number (4 Broadway S1 150, 5 Sixth Street S2 125, 15 Third Avenue S3 100), with
+no rival's above it (`LAYOUT_CAP_CATEGORIES`). A theater keeps the range, R 150 to 200.
+Warehouses have a vehicle capacity, not a building capacity, and carry none; neither do
+residential or special buildings.
 
 The help page travels with the game text the web build ships, and a player's own `en.json`
 wins over it. The table is also hardcoded as it stands on builds 3675 and 3680, and it
@@ -2017,7 +2021,7 @@ only when there is no game text at all:
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Retail | 15 | 30 | 40 | | | 75 | | |
 | Office | 4 | 8 | 10 | 10 | 50 | | | |
-| Cinema | | | | | | | 100–150 | |
+| Cinema | | | | | | | 100–150 (S1 150, S2 125, S3 100) | |
 | Theater | | | | | | | | 150–200 |
 
 One discrepancy is known and left alone: the page says an office K seats 50, while the
