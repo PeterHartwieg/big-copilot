@@ -1607,6 +1607,23 @@ VENUE_TYPES = {
 }
 
 
+def _cap_rows(names: Names):
+    """(category, size letter, layout code, customer capacity) for each size row
+    of help_building_types_content, in a CAP_CATEGORIES section: the one parse
+    _door_caps() and _venue_caps() both read."""
+    section = None
+    for line in (names.locale.get("help_building_types_content") or "").split("\n"):
+        line = line.strip()
+        head = _CAP_SECTION_RE.match(line)
+        if head:
+            section = head.group(1).strip().lower()
+            continue
+        size = _CAP_SIZE_RE.match(line)
+        if size and section in CAP_CATEGORIES:
+            letter = size.group(1).upper()
+            yield section, letter, letter + size.group(2), int(size.group(3).replace(",", ""))
+
+
 def _door_caps(names: Names) -> dict:
     """{building type: {size letter: capacity}} from help_building_types_content.
 
@@ -1620,19 +1637,10 @@ def _door_caps(names: Names) -> dict:
     """
     found: dict[str, dict[str, list]] = {}
     codes: dict[str, dict[str, int]] = {}
-    section = None
-    for line in (names.locale.get("help_building_types_content") or "").split("\n"):
-        line = line.strip()
-        head = _CAP_SECTION_RE.match(line)
-        if head:
-            section = head.group(1).strip().lower()
-            continue
-        size = _CAP_SIZE_RE.match(line)
-        if size and section in CAP_CATEGORIES:
-            cap = int(size.group(3).replace(",", ""))
-            found.setdefault(section, {}).setdefault(size.group(1), []).append(cap)
-            if section in LAYOUT_CAP_CATEGORIES:
-                codes.setdefault(section, {})[size.group(1) + size.group(2)] = cap
+    for section, letter, code, cap in _cap_rows(names):
+        found.setdefault(section, {}).setdefault(letter, []).append(cap)
+        if section in LAYOUT_CAP_CATEGORIES:
+            codes.setdefault(section, {})[code] = cap
     caps = {kind: dict(letters) for kind, letters in FALLBACK_CAPS.items()}
     for kind, letters in found.items():
         caps[kind] = {
@@ -15910,20 +15918,11 @@ def plan_layout(row: dict) -> str | None:
 
 def _venue_caps(names: Names) -> dict:
     """{size and version: customer capacity} for the cinemas and theatres
-    (S1 150, S2 125, S3 100; R1 200 ...), from the help text _door_caps()
-    reads by letter alone."""
-    out, section = {}, None
-    code = re.compile(r"^\*\s*\*\*([A-Z]+\d+)\*\*:.*?/\s*([\d,]+)\s*customer capacity", re.I)
-    for line in (names.locale.get("help_building_types_content") or "").split("\n"):
-        line = line.strip()
-        head = _CAP_SECTION_RE.match(line)
-        if head:
-            section = head.group(1).strip().lower()
-            continue
-        size = code.match(line)
-        if size and section in ("cinema", "theater"):
-            out[size.group(1).upper()] = int(size.group(2).replace(",", ""))
-    return out
+    (S1 150, S2 125, S3 100; R1 200 ...), from the same rows _door_caps()
+    reads (_cap_rows()). An outfit is planned per layout, so a theatre's are
+    kept exact here even where the finder shows its letter's range."""
+    return {code: cap for section, _letter, code, cap in _cap_rows(names)
+            if section in ("cinema", "theater")}
 
 
 def _building_row(reg: dict) -> dict:
@@ -16231,7 +16230,7 @@ def _own_shops(save: Save, regs: dict, businesses: list, grids: list, stmt_histo
         total = sum(by_day[d].get("TotalSales", 0) - by_day[d].get("SalaryExpenses", 0)
                     - by_day[d].get("RentExpenses", 0) - by_day[d].get("MarketingExpenses", 0)
                     - by_day[d].get("LicensingFees", 0) for d in days)
-        door = caps.get(row.get("t"), {}).get(row.get("z"))
+        door = _size_cap(row, caps)
         # What the game starts each hour from for this shop: its own shelves
         # in an old game, as _plan_site() reads them.
         initial = _plan_initial(save.root.get("buildNumberAtStart"), models.get(slug), door, slug,

@@ -475,11 +475,14 @@ invisible here until the station table saw its boards — a site with no Custome
 station at all had no capacity to read.
 
 **Roles.** A shop asks for one skill and its capacity is the registers manned. A cinema
-asks for two (Projectionist at the projection booths, Customer Service at the concessions
-stand registers; its ticket kiosk is self-service and no station) and a theatre for three
-(Customer Service at the ticket booths, Stage Crew at the costume, lighting and sound booths,
-Actor in the dressing rooms; a theatre has no projection booth and employs no
-projectionist). A customer has to pass through all of them, so the site is only as fast as
+asks for two: Projectionist at the projection booths and Customer Service at the
+concessions stand registers. The board does not count its ticket kiosk, which no employee
+works. A theatre asks for three: Customer Service at the ticket booths and the concessions
+stand registers, Stage Crew at the costume, lighting and sound booths, and Actor in the
+dressing rooms. A theatre has no projection booth and employs no projectionist. The board
+pools a theatre's ticket booths and registers into one Customer Service role; whether the
+game lets customers in through the ticket booths alone is not known. A customer has to pass
+through all of the roles, so the site is only as fast as
 its slowest role: the grid shows the minimum across roles, the sum only within one, and each
 role's own staffing is judged separately in the findings. Two projection booths with one
 projectionist hold the whole cinema back to 25 an hour however many concessions staff are on.

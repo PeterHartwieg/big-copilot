@@ -560,22 +560,31 @@ class AlertIdTests(unittest.TestCase):
 
 class TheatreGridTests(unittest.TestCase):
     """A theatre as the game builds one (issue #159): Customer Service at the
-    ticket booths, Stage Crew at the costume, lighting and sound booths, Actors
-    in the dressing rooms. It has no projection booth and employs no
-    projectionist. The site is only as fast as its slowest role."""
+    ticket booths and the concessions stand register (both required), Stage
+    Crew at the costume, lighting and sound booths, Actors in the dressing
+    rooms. It has no projection booth and employs no projectionist. The site is
+    only as fast as its slowest role.
+
+    The board pools the ticket booths and the registers into one Customer
+    Service role. Whether the game gates entry on the ticket booths alone is
+    not known (issue #159), so these tests pin the pooling as it stands."""
 
     def theatre(self, actors=1, rooms=1, service_booths=1, service_staff=2, crew=3,
                 customers=50, extra=()):
-        """Ticket booths at 50/h, one each of the three crew booths at 100/h and
-        dressing rooms at 80/h, with the people given on them 8-20 Monday."""
+        """Ticket booths and one concessions stand register at 50/h each, one each
+        of the three crew booths at 100/h and dressing rooms at 80/h, with the
+        people given on them 8-20 Monday. Service staff fill the ticket booths
+        first, then the register."""
         items = [(1 + i, BOOTH) for i in range(service_booths)]
+        items += [(5, CONCESSION)]
         items += [(11, COSTUME), (12, LIGHTING), (13, SOUND)]
         items += [(20 + i, DRESSING) for i in range(rooms)]
         items += list(extra)
         people = {f"t{i + 1}": SERVICE for i in range(service_staff)}
         people.update({f"c{i + 1}": STAGECREW for i in range(crew)})
         people.update({f"a{i + 1}": ACTOR for i in range(actors)})
-        shifts = [shift(f"t{i + 1}", (i % service_booths) + 1, 8, 20) for i in range(service_staff)]
+        posts = [1 + i for i in range(service_booths)] + [5]
+        shifts = [shift(f"t{i + 1}", posts[i % len(posts)], 8, 20) for i in range(service_staff)]
         shifts += [shift(f"c{i + 1}", 11 + i, 8, 20) for i in range(crew)]
         shifts += [shift(f"a{i + 1}", 20 + (i % max(rooms, 1)), 8, 20) for i in range(actors)]
         hourly = {h: customers if 8 <= h < 20 else 0 for h in range(24)}
@@ -589,9 +598,10 @@ class TheatreGridTests(unittest.TestCase):
     def test_the_site_is_only_as_fast_as_its_slowest_role(self):
         grid = self.theatre()
         self.assertEqual([r["skill"] for r in grid["roles"]], [ACTOR, SERVICE, STAGECREW])
-        self.assertEqual(sorted(r["counters"] for r in grid["roles"]), [50, 80, 300])
-        self.assertEqual(grid["counters"], 50)  # the ticket booth, not the 430 installed
-        self.assertEqual(grid["staffed"][MONDAY][10], 50)
+        # Customer Service pools the ticket booth and the register: 50 + 50.
+        self.assertEqual(sorted(r["counters"] for r in grid["roles"]), [80, 100, 300])
+        self.assertEqual(grid["counters"], 80)  # the dressing room, not the 480 installed
+        self.assertEqual(grid["staffed"][MONDAY][10], 80)
         self.assertEqual(grid["onShift"][MONDAY][10], 1)  # the one actor binds the count
 
     def test_a_role_left_unmanned_stops_the_site(self):
@@ -605,7 +615,7 @@ class TheatreGridTests(unittest.TestCase):
 
     def test_the_role_that_holds_the_site_back_gets_its_own_line(self):
         """Two dressing rooms and one actor: the ceiling is the actor's."""
-        grid = self.theatre(rooms=2, service_booths=2, customers=80)
+        grid = self.theatre(rooms=2, customers=80)
         [finding] = self.findings(grid)
         self.assertEqual((plain(finding["limit"]), finding["hours"]), ("Actor staffing", 12))
         self.assertEqual((plain(finding["fix"]), finding["noun"]),
@@ -618,7 +628,7 @@ class TheatreGridTests(unittest.TestCase):
         short, but hiring one cannot raise the site while the dressing room is
         the slowest thing in it.
         """
-        grid = self.theatre(service_booths=2, crew=2, customers=80)
+        grid = self.theatre(crew=2, customers=80)
         crew = next(r for r in grid["roles"] if r["skill"] == STAGECREW)
         self.assertEqual((crew["counters"], crew["staffed"][MONDAY][10]), (300, 200))
         self.assertEqual(grid["staffed"][MONDAY][10], 80)
@@ -627,12 +637,23 @@ class TheatreGridTests(unittest.TestCase):
                          ("dressing rooms", "another dressing room"))
         self.assertNotIn("Stage Crew", plain(finding["fix"]))
 
+    def test_customer_service_short_of_people_binds_below_the_actor(self):
+        """One server for a ticket booth and a register: 50 an hour, under the
+        dressing room's 80, and short of a person, not of a station."""
+        grid = self.theatre(service_staff=1, customers=50)
+        service = next(r for r in grid["roles"] if r["skill"] == SERVICE)
+        self.assertEqual((service["counters"], service["staffed"][MONDAY][10]), (100, 50))
+        self.assertEqual(grid["staffed"][MONDAY][10], 50)
+        [finding] = self.findings(grid)
+        self.assertEqual(plain(finding["limit"]), "staffing")
+        self.assertNotIn("Actor", plain(finding["fix"]))
+
     def test_a_projection_booth_in_a_theatre_is_no_role(self):
         """The game assigns no Projectionist in a theatre (ASSIGN_SKILLS), so a
         leftover projection booth there holds nobody and gates nothing."""
         grid = self.theatre(extra=[(30, PROJECTION)])
         self.assertNotIn(PROJECTIONIST, [r["skill"] for r in grid["roles"]])
-        self.assertEqual(grid["staffed"][MONDAY][10], 50)
+        self.assertEqual(grid["staffed"][MONDAY][10], 80)
 
     def test_the_words_do_not_move_between_runs(self):
         """The same fixture under two hash seeds names the roles in one order."""
@@ -656,7 +677,7 @@ class TheatreGridTests(unittest.TestCase):
         self.assertEqual(seeds[0], seeds[1])
         self.assertEqual(json.loads(seeds[0]), [
             [ACTOR, "Actor", "Dressing Room", 160, "dressing rooms"],
-            [SERVICE, "Customer Service", "Ticket Booth", 50, None],
+            [SERVICE, "Customer Service", "Concessions Stand Register", 100, None],
             [STAGECREW, "Stage Crew", "Costume Booth", 300, "costume booths"],
         ])
 

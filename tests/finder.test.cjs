@@ -15,7 +15,7 @@ const at = key => geometry.buildings.find(b => b.key === key);
 const HK = ['ba:street_broadwaystreet#1', 'ba:street_broadwaystreet#2', 'ba:street_firstavenue#1', 'ba:street_firstavenue#10', 'ba:street_firstavenue#11', 'ba:street_firstavenue#12'];
 const MT = ['ba:street_broadwaystreet#10', 'ba:street_broadwaystreet#11', 'ba:street_broadwaystreet#13', 'ba:street_broadwaystreet#3', 'ba:street_broadwaystreet#4', 'ba:street_broadwaystreet#5', 'ba:street_broadwaystreet#6'];
 const CLOTHES = 'ba:businesstype_clothingstore', COFFEE = 'ba:businesstype_coffeeshop', LAW = 'ba:businesstype_lawfirm';
-const CINEMA = 'ba:businesstype_cinema';
+const THEATER = 'ba:businesstype_theater';
 /* A business name is the player's or a rival's own text, so one of them is markup. */
 const HOSTILE = '<img src=x onerror=window.__x=1>';
 const HK_NAME = "Hell's Kitchen";
@@ -48,10 +48,11 @@ const PREMISES = {
     site(MT[4], {traffic: 95, status: 'service', owner: 'city',
       occupant: {name: 'First City Bank', type: 'Bank', typeSlug: 'ba:businesstype_bank'}}),
     site(HK[4], {type: 'office', size: 'J', m2: 180, cap: 10, rent: 90, traffic: 45}), // score 27 on law 60
-    // Two cinemas: a size letter whose auditoriums differ carries a range, and
-    // Midtown has no cinema reading at all, so that row can never be scored.
-    site(HK[5], {type: 'cinema', size: 'S', m2: 1200, cap: [100, 150], rent: 900, traffic: 64}),
-    site(MT[3], {type: 'cinema', size: 'S', m2: 1200, cap: [100, 150], rent: null, traffic: 70}),
+    // Two theaters: a size letter whose auditoriums differ carries a range (a
+    // cinema reads its own layout's number), and Midtown has no theater reading
+    // at all, so that row can never be scored.
+    site(HK[5], {type: 'theater', size: 'R', m2: 1200, cap: [150, 200], rent: 900, traffic: 64}),
+    site(MT[3], {type: 'theater', size: 'R', m2: 1200, cap: [150, 200], rent: null, traffic: 70}),
     // One of yours, in a building you bought.
     // A hospital: occupied, named, and never available whoever asks.
     site(MT[6], {type: 'special', size: 'M', m2: 2000, cap: null, rent: null, traffic: 40,
@@ -63,7 +64,7 @@ const PREMISES = {
   forSale: [
     {key: MT[2], address: at(MT[2]).address, hood: MT_HOOD, type: 'retail', size: 'M', m2: 1000, price: 4200000},
     // A tower on a mature save runs past a billion.
-    {key: MT[3], address: at(MT[3]).address, hood: MT_HOOD, type: 'cinema', size: 'S', m2: 1200, price: 5584228352},
+    {key: MT[3], address: at(MT[3]).address, hood: MT_HOOD, type: 'theater', size: 'R', m2: 1200, price: 5584228352},
     {key: HK[0], address: at(HK[0]).address, hood: HK_HOOD, type: 'retail', size: 'C', m2: 225, price: 750000},
   ],
   demand: {
@@ -71,7 +72,7 @@ const PREMISES = {
       {slug: CLOTHES, type: 'Clothing Store', demand: 77, providers: 2, mine: false, category: 'retail'},
       {slug: COFFEE, type: 'Coffee Shop', demand: 40, providers: 1, mine: false, category: 'retail'},
       {slug: LAW, type: 'Law Firm', demand: 60, providers: 0, mine: false, category: 'office'},
-      {slug: CINEMA, type: 'Cinema', demand: 50, providers: 0, mine: false, category: 'cinema'},
+      {slug: THEATER, type: 'Theater', demand: 50, providers: 0, mine: false, category: 'theater'},
     ],
     [MT_HOOD]: [
       {slug: CLOTHES, type: 'Clothing Store', demand: 50, providers: 3, mine: false, category: 'retail'},
@@ -82,7 +83,7 @@ const PREMISES = {
   rivalNames: {9: 'Amanda Mason'},
   rent: {constant: 30, rates: {}, officeFactor: 1.033, check: {leases: 3, worst: 0.003},
     deposit: {factors: {lease: 62.84, warehouse: 93.61}, check: {deposits: 6, worst: 0.004}}},
-  caps: {retail: {C: 30, D: 40, M: 75}, office: {J: 10}, cinema: {S: [100, 150]}, theater: {R: [150, 200]}},
+  caps: {retail: {C: 30, D: 40, M: 75}, office: {J: 10}, cinema: {S: [100, 150], S1: 150, S2: 125, S3: 100}, theater: {R: [150, 200]}},
 };
 const MARKET = {
   hoods: [HK_HOOD, MT_HOOD], rows: [], trendDays: 0, movers: [], hype: [], noOffices: [], catalogue: {},
@@ -378,7 +379,7 @@ test('for sale is a plain list, cheapest first, and the neighbourhood chips stil
     await openMap(page); await turnOn(page);
     await page.locator('#cityMapPage .fchip.show[data-show="sale"]').click();
     await page.locator('#cityMapPage .place.fr.sale').first().waitFor();
-    // Kind still applies: the cinema on the list is not a retail building.
+    // Kind still applies: the theater on the list is not a retail building.
     assert.deepEqual(await rowKeys(page), [HK[0], MT[2]]);
     assert.equal(await page.locator('#cityMapPage .fchip.show[data-show="sale"] b').textContent(), '2');
     assert.equal(await page.locator('#cityMapPage .fhead.sale').count(), 1);
@@ -387,7 +388,7 @@ test('for sale is a plain list, cheapest first, and the neighbourhood chips stil
     assert.deepEqual(await page.$$eval('#cityMapPage .place.fr.sale > :last-child', v => v.map(x => x.textContent)),
       ['$750k', '$4.20M']);
     // A price past a billion says so rather than counting in thousands of millions.
-    await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
+    await page.locator('#cityMapPage .fchip.cat[data-cat="theater"]').click();
     assert.deepEqual(await rowKeys(page), [MT[3]]);
     assert.deepEqual(await page.$$eval('#cityMapPage .place.fr.sale > :last-child', v => v.map(x => x.textContent)),
       ['$5.58bn']);
@@ -941,18 +942,18 @@ test('both ends of the door cap judge a range by its smallest variant', async ()
   try{
     await openMap(page); await turnOn(page);
     const cap = end => page.locator(`#cityMapPage .fchip.num input[data-f="${end}Cap"]`);
-    await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
+    await page.locator('#cityMapPage .fchip.cat[data-cat="theater"]').click();
     assert.deepEqual(await rowKeys(page), [HK[5], MT[3]]);
-    // 100 to 150 seats clears a minimum of 100 and fails one of 125.
-    await cap('min').fill('100');
+    // 150 to 200 seats clears a minimum of 150 and fails one of 175.
+    await cap('min').fill('150');
     assert.equal(await page.locator('#cityMapPage .place.fr').count(), 2);
-    await cap('min').fill('125');
+    await cap('min').fill('175');
     assert.equal(await page.locator('#cityMapPage .places .empty').textContent(), 'Nothing matches.');
-    // The maximum mirrors it: 100 to 150 fits under 120, not under 90.
+    // The maximum mirrors it: 150 to 200 fits under 170, not under 140.
     await cap('min').fill('0');
-    await cap('max').fill('120');
+    await cap('max').fill('170');
     assert.equal(await page.locator('#cityMapPage .place.fr').count(), 2);
-    await cap('max').fill('90');
+    await cap('max').fill('140');
     assert.equal(await page.locator('#cityMapPage .places .empty').textContent(), 'Nothing matches.');
     // A plain cap is judged as itself: the 40-seat shop is out above 30.
     await cap('max').fill('0');
@@ -974,8 +975,8 @@ test('a row with nothing to sort on stays at the bottom whichever way the column
   const {page, errors} = await fixture();
   try{
     await openMap(page); await turnOn(page);
-    await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
-    // Midtown has no cinema demand and no rent estimate: unscored, unpriced.
+    await page.locator('#cityMapPage .fchip.cat[data-cat="theater"]').click();
+    // Midtown has no theater demand and no rent estimate: unscored, unpriced.
     assert.deepEqual(await rowKeys(page), [HK[5], MT[3]]);
     await page.locator('#cityMapPage .fhead [data-s="deposit"]').click();
     assert.deepEqual(await rowKeys(page), [HK[5], MT[3]]);
@@ -1195,9 +1196,9 @@ test('the Cap column sits between m² and Upfront and sorts on what it can promi
     await page.locator('#cityMapPage .fhead [data-s="cap"]').click();
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);   // back to score
     // A range shows both ends and sorts on the lower one.
-    await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
+    await page.locator('#cityMapPage .fchip.cat[data-cat="theater"]').click();
     assert.deepEqual(await page.$$eval('#cityMapPage .place.fr .cap', v => v.map(x => x.textContent)),
-      ['100–150', '100–150']);
+      ['150–200', '150–200']);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -1664,8 +1665,8 @@ test('the Layout filter offers the kind\'s layout keys and lists by them', async
     assert.deepEqual(await rowKeys(page), [HK[4]]);
     await page.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
     assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
-    // Cinemas have no layouts: no row for them.
-    await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
+    // Theaters have no layouts: no row for them.
+    await page.locator('#cityMapPage .fchip.cat[data-cat="theater"]').click();
     assert.equal(await page.locator('#cityMapPage .frow.flayout').isVisible(), false);
     assert.deepEqual(await tags(page), ['', '']);
     // The map has no dock and no plan switch: the stage is the map's.
