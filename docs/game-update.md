@@ -251,7 +251,9 @@ change, so commit it, run `python -m unittest tests.test_payback` and rebuild.
 
 The store planner's rules come from the same bundles: what each business type sells and
 requires, product prices and sales ratios, what each piece of furniture holds and must stand
-on, the neighbourhoods and the banks' loan terms. Which store sells a piece of furniture comes
+on, the neighbourhoods and the banks' loan terms, and for Plan a factory each good's box
+size and importer order cap, the storage shelves' box capacity and each skill's base hourly
+wage. Which store sells a piece of furniture comes
 from the committed `web/wiki-data.json`, so run this after the wiki data is rebuilt. With
 UnityPy on `PYTHONPATH`, run `python make_store_rules.py` and then `git diff --stat
 ba_store_rules.json`; a diff is the change, so commit it and rebuild.
