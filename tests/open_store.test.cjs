@@ -8,12 +8,7 @@
 // Chromium browser to run; NODE_PATH may point at an existing installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
-const {en, enRe} = require('./_i18n.cjs');
-const textEn = (key, params = {}) => en(key, params).replace(/<[^>]*>/g, '');
-const textRe = (key, params = {}, options = {}) => {
-  const re = enRe(key, params, options);
-  return new RegExp(re.source.replace(/<[^>]*>/g, ''), re.flags);
-};
+const {en, enRe, enText: textEn, textRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const {chromium} = require('playwright');

@@ -9,10 +9,13 @@
 //                        the page. For a Playwright locator or a text match.
 //   enRe(key, params)    a RegExp for that English; a placeholder not in
 //                        params matches anything (lazily), a plural key with
-//                        no n matches either form, and {flags, anchor: 'start'
-//                        | 'full', text} in the third argument.
-//   textRe(key, params)  enRe() with the English's markup (<b>) dropped, for
-//                        innerText.
+//                        no n matches either form, the English's tags are
+//                        optional (so one RegExp reads a data-tip and
+//                        innerText), and {flags, anchor: 'start' | 'full',
+//                        text} in the third argument.
+//   textRe(key, params), enText(key, params)
+//                        enRe() and en() with the English's markup (<b>)
+//                        dropped, for innerText.
 //   wire(row, field)     [key, params] Python sent beside a Msg field
 //                        (row.i18n[field], _wire_msgs() in ba_dashboard.py).
 //   assertMsg(row, field, key, params)
@@ -54,6 +57,9 @@ function english(key){
   throw new Error(`no catalogue key ${JSON.stringify(key)}`);
 }
 
+/* The one form of a plural English the page writes for params.n. */
+const ttEnglishOf = (base, params) => i18n().ttEnglish(base, params);
+
 let runtime = null;
 /* web/i18n.js in a VM with no table loaded: ttText() is then the English. */
 function i18n(){
@@ -76,15 +82,20 @@ const escape = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const PLACEHOLDER = /\{(\w+)(?::([^{}]+))?\}/g;
 
 /* A RegExp for en(key, params), any unfilled placeholder a lazy wildcard.
-   A plural key with no params.n matches any of its forms. With text, the
-   markup in the English (<b>…</b>) is dropped, to match innerText. */
+   A plural key with no params.n matches any of its forms. The English's
+   markup (<b>…</b>) is optional; with text it is dropped. */
 function enRe(key, params = {}, {flags = '', anchor = null, text = false} = {}){
   const base = english(key);
-  const forms = typeof base === 'object' && !Object.prototype.hasOwnProperty.call(params, 'n')
-    ? [...new Set([base.one, base.other].map(form => i18n().ttText(key, form, params)))]
-    : [en(key, params)];
-  const one = s => {
-    if (text) s = s.replace(/<[^>]*>/g, '');
+  const templates = typeof base === 'object'
+    ? (Object.prototype.hasOwnProperty.call(params, 'n') ? [ttEnglishOf(base, params)] : [base.one, base.other])
+    : [base];
+  // A tag in the English (<b>, <span class="w">) is optional in the match, so
+  // the same RegExp reads markup (data-tip, innerHTML) and innerText; with
+  // text it is dropped. Only the template's own tags: a param's text, markup
+  // or not, is matched as it is.
+  const forms = [...new Set(templates.map(t => i18n().ttText(key,
+    text ? t.replace(/<[^>]*>/g, '') : t.replace(/<[^>]*>/g, tag => `\u0001${tag}\u0002`), params)))];
+  const plain = s => {
     let src = '', last = 0;
     for (const m of s.matchAll(PLACEHOLDER)) {
       src += escape(s.slice(last, m.index)) + '.+?';
@@ -92,14 +103,17 @@ function enRe(key, params = {}, {flags = '', anchor = null, text = false} = {}){
     }
     return src + escape(s.slice(last));
   };
+  const one = s => s.split(/\u0001([^\u0002]*)\u0002/).map((part, i) => i % 2 ? `(?:${escape(part)})?` : plain(part)).join('');
   let src = forms.length > 1 ? `(?:${forms.map(one).join('|')})` : one(forms[0]);
   if (anchor === 'start' || anchor === 'full') src = '^' + src;
   if (anchor === 'full') src += '$';
   return new RegExp(src, flags);
 }
 
-/* enRe() for rendered text: the English's markup dropped, as innerText reads it. */
+/* enRe() and en() for rendered text: the English's markup dropped, as
+   innerText reads it. */
 const textRe = (key, params = {}, options = {}) => enRe(key, params, {...options, text: true});
+const enText = (key, params = {}) => en(key, params).replace(/<[^>]*>/g, '');
 
 /* [key, params] Python sent for a row's Msg field. */
 function wire(row, field){
@@ -149,4 +163,4 @@ function findMsg(w, key){
   return null;
 }
 
-module.exports = {catalogue, english, en, enRe, textRe, wire, assertMsg, msgParam, findMsg};
+module.exports = {catalogue, english, en, enText, enRe, textRe, wire, assertMsg, msgParam, findMsg};

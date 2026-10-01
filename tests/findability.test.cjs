@@ -5,7 +5,7 @@
 // at an existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
-const {en, enRe, textRe} = require('./_i18n.cjs');
+const {en, enRe, enText, textRe} = require('./_i18n.cjs');
 // The readout renders catalogue markup as text.
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
@@ -154,7 +154,7 @@ test('a depot reads out its thinnest line', async () => {
     importRow({item: 'Chips', slug: 'chips', cover: 9, coverFit: 'ok', runsOut: null}), importRow()],
     facts: {0: {chips: sf('covered'), soda: sf('short', 'shortfall')}}}});
   try {
-    assert.match(await readOf(page, 'stock'), textRe('sp.stock.thinnest', {item: 'Soda', read: en('sp.stock.read.drytruck', {day: en('day.2')})}, {anchor: 'start'}));
+    assert.match(await readOf(page, 'stock'), textRe('sp.stock.thinnest', {item: 'Soda', read: enText('sp.stock.read.drytruck', {day: en('day.2')})}, {anchor: 'start'}));
   } finally { await page.close(); }
 });
 
