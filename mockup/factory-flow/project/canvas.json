@@ -18,25 +18,17 @@
    "title": "0 · Expansion › Plan a factory: no factory yet",
    "is_interactive": true
   },
-  "Grow.dc.html": {
+  "Links.dc.html": {
    "x": 1360,
    "y": 0,
    "w": 1280,
-   "h": 1560,
-   "title": "0b · Plan a factory: for a factory you own",
-   "is_interactive": true
-  },
-  "Links.dc.html": {
-   "x": 2720,
-   "y": 0,
-   "w": 1280,
-   "h": 760,
-   "title": "0c · One menu point, and every way in",
+   "h": 700,
+   "title": "0b · One menu point, and every way in",
    "is_interactive": true
   },
   "Recipe.dc.html": {
    "x": 0,
-   "y": 1980,
+   "y": 1380,
    "w": 1280,
    "h": 1100,
    "title": "1 · What: the lines, a custom count left short",
@@ -44,7 +36,7 @@
   },
   "NoDepot.dc.html": {
    "x": 1360,
-   "y": 1980,
+   "y": 1380,
    "w": 1280,
    "h": 860,
    "title": "1b · What: no depot yet, the plan adds one",
@@ -52,7 +44,7 @@
   },
   "Location.dc.html": {
    "x": 2720,
-   "y": 1980,
+   "y": 1380,
    "w": 1280,
    "h": 960,
    "title": "2 · Where: warehouse buildings with room for the machines",
@@ -60,7 +52,7 @@
   },
   "Investment.dc.html": {
    "x": 0,
-   "y": 3500,
+   "y": 2900,
    "w": 1280,
    "h": 1360,
    "title": "3 · Investment: self-installation, and the loan",
@@ -68,7 +60,7 @@
   },
   "InvestmentFirm.dc.html": {
    "x": 1360,
-   "y": 3500,
+   "y": 2900,
    "w": 1280,
    "h": 1000,
    "title": "3b · Investment: installation firm",
@@ -76,7 +68,7 @@
   },
   "Checklist.dc.html": {
    "x": 0,
-   "y": 5280,
+   "y": 4680,
    "w": 1280,
    "h": 1450,
    "title": "4 · Until production · game linked",
@@ -84,7 +76,7 @@
   },
   "ChecklistNoLink.dc.html": {
    "x": 1360,
-   "y": 5280,
+   "y": 4680,
    "w": 1280,
    "h": 1560,
    "title": "4b · Until production · not linked",
@@ -92,7 +84,7 @@
   },
   "Hire.dc.html": {
    "x": 2720,
-   "y": 5280,
+   "y": 4680,
    "w": 1120,
    "h": 900,
    "title": "4c, 4d · The quick buttons' dialogs",
@@ -100,7 +92,7 @@
   },
   "Running.dc.html": {
    "x": 0,
-   "y": 7260,
+   "y": 6660,
    "w": 1280,
    "h": 900,
    "title": "5 · Running: output against plan",
@@ -108,7 +100,7 @@
   },
   "RunningBelow.dc.html": {
    "x": 1360,
-   "y": 7260,
+   "y": 6660,
    "w": 1280,
    "h": 1080,
    "title": "5b · Running: output below plan",
@@ -116,16 +108,47 @@
   },
   "Results.dc.html": {
    "x": 2720,
-   "y": 7260,
+   "y": 6660,
    "w": 1280,
    "h": 820,
    "title": "6 · Businesses › Results: the factory in its chain",
+   "is_interactive": true
+  },
+  "GrowWhat.dc.html": {
+   "x": 0,
+   "y": 8160,
+   "w": 1280,
+   "h": 1240,
+   "title": "A1 · Your factory: what (Where is done, it is yours)",
+   "is_interactive": true
+  },
+  "GrowInvestment.dc.html": {
+   "x": 1360,
+   "y": 8160,
+   "w": 1280,
+   "h": 900,
+   "title": "A3 · Your factory: only the new machines",
+   "is_interactive": true
+  },
+  "GrowChecklist.dc.html": {
+   "x": 2720,
+   "y": 8160,
+   "w": 1280,
+   "h": 1000,
+   "title": "A4 · Your factory: only what the change needs",
+   "is_interactive": true
+  },
+  "GrowRunning.dc.html": {
+   "x": 4080,
+   "y": 8160,
+   "w": 1280,
+   "h": 900,
+   "title": "A5 · Your factory: output against the new plan",
    "is_interactive": true
   }
  },
  "order": [
   "Main.dc.html",
-  "Grow.dc.html",
   "Links.dc.html",
   "Recipe.dc.html",
   "NoDepot.dc.html",
@@ -137,7 +160,11 @@
   "Hire.dc.html",
   "Running.dc.html",
   "RunningBelow.dc.html",
-  "Results.dc.html"
+  "Results.dc.html",
+  "GrowWhat.dc.html",
+  "GrowInvestment.dc.html",
+  "GrowChecklist.dc.html",
+  "GrowRunning.dc.html"
  ],
  "notes": {
   "row0": {
@@ -149,29 +176,36 @@
   },
   "row1": {
    "x": 0,
-   "y": 1740,
+   "y": 1140,
    "text": "What to make, and where",
    "kind": "title1",
    "maxW": 5440
   },
   "row2": {
    "x": 0,
-   "y": 3260,
+   "y": 2660,
    "text": "The investment",
    "kind": "title1",
    "maxW": 5440
   },
   "row3": {
    "x": 0,
-   "y": 5040,
+   "y": 4440,
    "text": "Until production runs",
    "kind": "title1",
    "maxW": 5440
   },
   "row4": {
    "x": 0,
-   "y": 7020,
+   "y": 6420,
    "text": "Running",
+   "kind": "title1",
+   "maxW": 5440
+  },
+  "row5": {
+   "x": 0,
+   "y": 7920,
+   "text": "The same steps for a factory you own",
    "kind": "title1",
    "maxW": 5440
   }

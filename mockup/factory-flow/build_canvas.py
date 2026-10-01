@@ -462,6 +462,8 @@ OS_CSS = r"""
 # --------------------------------------------------------------------------
 FF_CSS = r"""
 .os-views a .os-new{margin-left:auto}
+.feature-new{display:inline-block;flex:none;margin-left:auto;padding:2px 5px;border-radius:4px;background:var(--accent-soft);color:var(--accent);font:600 9px/1.2 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;vertical-align:middle}
+.os-views a.on .feature-new{background:var(--ground)}
 .ff-ab{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 6px;border-radius:6px;background:var(--ink);color:var(--ground);font:600 11.5px/1 "IBM Plex Mono",monospace}
 .ff-abh{display:flex;align-items:center;gap:10px;margin:0 0 12px}
 .ff-abh b{font-size:14.5px;font-weight:600}
@@ -827,6 +829,8 @@ def city(pins: str, ic: bool = True, zoom: bool = True) -> str:
 AREAS = [("overview", "Overview", "today"), ("businesses", "Businesses", "company"), ("supply", "Supply", "supply"),
          ("staffing", "Staffing", "people"), ("expansion", "Expansion", "growth")]
 VIEWS_A = [("demand", "Demand"), ("finder", "Find a location"), ("open", "Open a store"), ("factory", "Plan a factory")]
+# the board's feature badge (docs/contributing.md, "New feature badges"): VIEW_NEW["expansion/factory"]
+FEATURE_NEW = '<span class="feature-new" data-new-feature="factory-flow">New</span>'
 VIEWS_BIZ = [("results", "Results"), ("prices", "Products & prices"), ("standards", "Standards"), ("milestones", "Milestones")]
 
 
@@ -839,7 +843,7 @@ def sidebar(area: str, view: str, day: str = DAY, views=None) -> str:
         if key == area:
             vs = views or (VIEWS_A if key == "expansion" else VIEWS_BIZ)
             rows.append('<div class="os-views">' + "".join(
-                f'<a class="{"on" if k == view else ""}" href="#">{v}</a>'
+                f'<a class="{"on" if k == view else ""}" href="#">{v}{FEATURE_NEW if k == "factory" else ""}</a>'
                 for k, v in vs) + "</div>")
     return f"""<nav class="os-sd" aria-label="Main">
   <div class="os-sdh"><div class="brand"><span class="wordmark">{COMPANY}</span><span class="dot"></span></div><span class="os-orb" aria-hidden="true"></span></div>
@@ -853,17 +857,21 @@ def sidebar(area: str, view: str, day: str = DAY, views=None) -> str:
 
 STEPS = ["What", "Where", "Investment", "Until production", "Running"]
 STEP_FILES = ["Recipe.dc.html", "Location.dc.html", "Investment.dc.html", "Checklist.dc.html", "Running.dc.html"]
+GROW_FILES = ["GrowWhat.dc.html", "GrowWhat.dc.html", "GrowInvestment.dc.html", "GrowChecklist.dc.html", "GrowRunning.dc.html"]
 
 
-def steps(on: int) -> str:
+def steps(on: int, owned: bool = False) -> str:
     out = []
-    for i, (s, f) in enumerate(zip(STEPS, STEP_FILES)):
-        cls = "on" if i == on else ("done" if i < on else "")
-        mark = svg("tick") if i < on else str(i + 1)
+    files = GROW_FILES if owned else STEP_FILES
+    for i, (s_, f) in enumerate(zip(STEPS, files)):
+        skip = owned and i == 1
+        cls = "on" if i == on else ("done" if i < on or skip else "")
+        mark = svg("tick") if i < on or skip else str(i + 1)
+        label = f'{NEW["addr"]} <small style="opacity:.7">yours</small>' if skip else s_
         if i:
             out.append('<span class="sep"></span>')
-        out.append(f'<a class="{cls}" href="{f}"><i>{mark}</i>{s}</a>')
-    return f'<nav class="os-steps" aria-label="Open a factory, step by step">{"".join(out)}</nav>'
+        out.append(f'<a class="{cls}" href="{f}"{" title=\"Not needed: the factory is already rented\"" if skip else ""}><i>{mark}</i>{label}</a>')
+    return f'<nav class="os-steps" aria-label="Plan a factory, step by step">{"".join(out)}</nav>'
 
 
 def planpick(label: str = "Whisky and Wine") -> str:
@@ -872,7 +880,7 @@ def planpick(label: str = "Whisky and Wine") -> str:
 
 def pickers(target: str = "new", type_: str = "Liquor Store") -> str:
     types = "".join(f'<a class="{"on" if t == type_ else ""}" href="#">{t}</a>' for t in ("Liquor Store", "Bookstore"))
-    fac = "" if target == "none" else f'<a class="{"on" if target == "owned" else ""}" href="Grow.dc.html">{svg("factory")}{NEW["addr"]}</a>'
+    fac = "" if target == "none" else f'<a class="{"on" if target == "owned" else ""}" href="GrowWhat.dc.html">{svg("factory")}{NEW["addr"]}</a>'
     return (f'<div class="os-ctl ff-pick"><span class="os-lab">Shops</span><nav class="os-seg" aria-label="Shops to supply">{types}</nav>'
             f'<span class="os-planpick">Another type{svg("chev")}</span>'
             f'<span class="os-lab" style="margin-left:14px">For</span><nav class="ff-kind" aria-label="What the plan is for">'
@@ -880,7 +888,8 @@ def pickers(target: str = "new", type_: str = "Liquor Store") -> str:
 
 
 def ctl(on: int, pick: str = "Whisky and Wine", target: str = "none") -> str:
-    return pickers(target) + f'<div class="os-ctl">{steps(on)}<div class="aside">{planpick(pick)}</div></div>'
+    owned = target == "owned"
+    return pickers(target) + f'<div class="os-ctl">{steps(on, owned)}<div class="aside">{planpick("Beer at 4 22nd Street" if owned else pick)}</div></div>'
 
 
 def planbar(where: bool = True, inv: str = "self", make: str = "") -> str:
@@ -977,7 +986,7 @@ def links() -> str:
     ways = [("Overview", "Plan a new factory", "the task list, unchanged", "Main.dc.html"),
             ("Expansion › Demand", "Plan a chain", "a type's row: the view opens on that type", "Main.dc.html"),
             ("Wiki › a business type", "Plan a factory", "the button opens the view on that type", "Main.dc.html"),
-            ("Supply › Production", "Plan a factory", "a factory's lines: the view opens on that factory", "Grow.dc.html"),
+            ("Supply › Production", "Plan a factory", "a factory's lines: the view opens on that factory", "GrowWhat.dc.html"),
             ("Find a location", "Plan a factory", "the finder's context strip", "Main.dc.html"),
             ("Search", "new factory, plan a chain, open a factory", "one entry, Plan a factory", "Main.dc.html")]
     rows = "".join(f'<a class="os-plan" style="grid-template-columns:200px minmax(0,1fr) 20px" href="{h}"><span><b>{w}</b></span>'
@@ -1116,35 +1125,117 @@ def grow_ingredients() -> str:
             f'<tfoot><tr><td class="l">Total</td><td></td><td></td><td></td><td></td><td>{money(tot)}</td></tr></tfoot></table>')
 
 
-def grow() -> str:
-    added = sum(k - now for _p, now, k in GROW)
-    add_h = added * 168
-    add_w = -(-(MACHINE_H + add_h) // 50) - WORKERS
-    btn = lambda icon, label: f'<a class="os-cta sm" href="Hire.dc.html">{svg(icon)}{label}</a>'  # noqa: E731
-    needs = "".join([
-        ck("", "gear", f"Machines {hand()}", f"{added} Bottled Goods Workstations, {money(KIT['bottled'] * added)} at Factory Supply Depot · "
-           "room on the floor: check in the game", ingame(f"Buy and place them at {NEW['addr']}, each production machine against its Food Assembly Machine.")),
-        ck("", "list", f"Recipes {hand()}", "Beer on the two new workstations", ingame(f"<b>BizMan › {NEW['addr']} › Production</b>: pick Beer.")),
-        ck("", "people", "Staff for the new machines", f"{add_h} machine-hours a week more · {add_w} Factory Workers · <span class=\"ok\">19 candidates</span>",
-           btn("hire", f"Hire {add_w}")),
-        ck("", "ship", f"New ingredients on the contract {hand()}", "Hops and Carbon Dioxide are not on the Aquatic Bay Cargo contract yet",
-           ingame("At <b>8 Pier</b>, add Hops and Carbon Dioxide to the factory's contract.")),
-        ck("later", "crate", "Weekly amounts", "<span class=\"lt\">once both are on the contract</span> · the targets below", btn("crate", "Set 5 amounts")),
-        ck("", "route", f"Delivery plan {hand()}", f"Add Beer, up to 16,800, to {NEW['addr']} → {DEPOT['name']}",
-           ingame("<b>BizMan › Logistics</b>: add Beer to the factory's plan.")),
-    ])
+GROW_ADDED = sum(k - now for _p, now, k in GROW)                     # 2 workstations
+GROW_SHELVES = 4
+GROW_ITEMS = [(m, p_, GROW_ADDED) for m, p_ in WS["bottled"][1]] + [(SHELVES[0], SHELVES[1], GROW_SHELVES)]
+GROW_TOTAL = sum(p_ * q for _m, p_, q in GROW_ITEMS) + DELIVERY        # 275,250
+GROW_FIRM = FEE + sum(p_ * q for _m, p_, q in GROW_ITEMS)               # the firm prices the whole floor again
+GROW_WORKERS = -(-(MACHINE_H + GROW_ADDED * 168) // 50) - WORKERS     # 6
+
+
+def grow_raw_week() -> float:
+    tot = 0.0
+    for p_, _now, k in GROW:
+        for m, q in RECIPES[p_][2]:
+            tot += q * 168 * k * RAW_PRICE[m] * MARKET
+    return tot
+
+
+def grow_bar(stage: str = "") -> str:
+    inv = (f'<b class="m">{money(GROW_TOTAL)}</b><small>new machines only</small>' if stage != "what"
+           else '<b class="dim">–</b><small>after the lines</small>')
+    return (f'<div class="os-pb"><div><span class="os-lab">Make</span><b>Beer ×2 added</b><small>Whisky ×2 · Wine ×1 as now</small></div>'
+            f'<div><span class="os-lab">Where</span><b>{NEW["addr"]}</b><small>yours since day {FACTORY_OPENED} · nothing to rent</small></div>'
+            f'<div><span class="os-lab">Investment</span>{inv}</div>'
+            f'<div><span class="os-lab">Raw material</span><b class="m">{money(grow_raw_week())}</b><small>a week · was {money(RAW_COST_WK)}</small></div></div>')
+
+
+def grow_what() -> str:
     short = SOLD_BY["Beer"] * 7 - 2 * 50 * 168
-    return f"""{pickers("owned")}
-<div class="ff-now"><span class="ic">{svg("factory")}</span><span><b>{NEW["addr"]}</b> · Whisky ×2, Wine ×1 · producing since day {STARTED} · 3 of 3 workstations staffed</span>
-  <span class="aside"><a class="os-link" href="#">Factory page</a><a class="os-link" href="#">Supply › Production</a></span></div>
-<div class="os-h"><h2>Lines</h2><span class="c">Brightwater Spirits · 4 liquor stores</span>
+    return f"""{ctl(0, target="owned")}
+{grow_bar("what")}
+<div class="os-h"><h2>Lines</h2><span class="c">{NEW["addr"]} · producing since day {STARTED}</span>
   <div class="aside"><span class="os-lab">Size to</span><nav class="os-seg"><a href="#">As now</a><a href="#">Peak day</a><a class="on" href="#">Custom</a></nav></div></div>
 {grow_lines()}
 <div class="os-rows" style="margin-top:14px"><div class="os-row"><span class="mk"></span>{svg("alert")}<span class="t">Beer stays short<small>2 machines make {n(2 * 50 * 168)} a week; your shops take {n(SOLD_BY["Beer"] * 7)}. The rest keeps coming from United Ocean Import.</small></span><span class="a">{n(-short)}<small>A WEEK</small></span><span></span></div></div>
-<div class="os-h"><h2>What the change needs</h2><span class="c">{added} workstations more</span></div>
-<div class="os-cks">{needs}</div>
 <div class="os-h"><h2>Ingredients</h2><span class="c">order ahead · all your factories</span></div>
-{grow_ingredients()}"""
+{grow_ingredients()}
+<div style="display:flex;justify-content:flex-end;margin-top:18px"><a class="os-cta" href="GrowInvestment.dc.html">Investment{svg("right")}</a></div>"""
+
+
+def grow_invest() -> str:
+    a = VENDORS["fsd"]
+    rows = "".join(f'<tr><td class="l">{q} × {m}</td><td class="w">{tag("req", "Workstation") if m != SHELVES[0] else tag("req", "Holds stock")}</td><td>{money(p_ * q)}</td></tr>'
+                   for m, p_, q in GROW_ITEMS)
+    tog = (f'<div class="os-toolbar"><nav class="os-seg big" aria-label="Interior"><a href="#">Installation firm <b>{money(GROW_FIRM)}</b></a>'
+           f'<a class="on" href="#">Self-installation <b>{money(GROW_TOTAL)}</b></a></nav>'
+           f'<div class="aside"><span>Added</span><b>{sum(q for *_x, q in GROW_ITEMS)} items</b></div></div>')
+    pins = pin(a[2], "A", "store") + pin(NEW["addr"], "4", "new", NEW["addr"])
+    return f"""{ctl(2, target="owned")}
+{grow_bar()}
+{tog}
+<div class="os-self">
+  <div><div class="os-store"><div class="os-sh"><span class="k">{a[0]}</span><span><b>{a[1]}</b><small>{a[2]} · Industry City</small></span><span class="t">{money(GROW_TOTAL)}</span></div>
+<table><tbody>{rows}<tr class="del"><td class="l">Delivery</td><td class="w"></td><td>{money(DELIVERY)}</td></tr></tbody></table></div>
+    <div class="ff-callout" style="background:var(--raised)">{svg("key")}<span><b>Nothing else to pay.</b> The lease, the deposit and the {TRUCK[0]} are there already;
+      the installation firm would charge for the whole floor again ({money(FEE)}).</span></div>
+    <div class="os-total"><span>Investment</span><small>the new machines and shelves · 1 delivery</small><b>{money(GROW_TOTAL)}</b></div></div>
+  <div>{city(pins, zoom=False)}</div>
+</div>"""
+
+
+def grow_until() -> str:
+    btn = lambda icon, label: f'<a class="os-cta sm" href="Hire.dc.html">{svg(icon)}{label}</a>'  # noqa: E731
+    rows = "".join([
+        ck("", "gear", f"Machines {hand()}", f"{GROW_ADDED} new workstations, {GROW_SHELVES} pallet shelves · room on the floor: check in the game",
+           ingame(f"Place them at {NEW['addr']}, each production machine against its Food Assembly Machine.")),
+        ck("", "list", f"Recipes {hand()}", "Beer on workstations 4 and 5", ingame(f"<b>BizMan › {NEW['addr']} › Production</b>: pick Beer.")),
+        ck("", "people", "Staff for the new machines", f"{GROW_ADDED * 168} machine-hours a week more · {GROW_WORKERS} Factory Workers · <span class=\"ok\">19 candidates</span>",
+           btn("hire", f"Hire {GROW_WORKERS}")),
+        ck("", "ship", f"New ingredients on the contract {hand()}", "Hops and Carbon Dioxide are not on the Aquatic Bay Cargo contract yet",
+           ingame("At <b>8 Pier</b>, add Hops and Carbon Dioxide to the factory's contract.")),
+        ck("later", "crate", "Weekly amounts", "<span class=\"lt\">once both are on the contract</span> · Barley, Water and Yeast up, Hops and Carbon Dioxide new",
+           btn("crate", "Set 5 amounts")),
+        ck("", "route", f"Delivery plan {hand()}", f"Add Beer, up to 16,800, to {NEW['addr']} → {DEPOT['name']}",
+           ingame("<b>BizMan › Logistics</b>: add Beer to the factory's plan.")),
+        ck("later", "crate", "The depot's imports", "<span class=\"lt\">after the first delivery</span> · Beer still comes from United Ocean Import",
+           '<a class="os-btn" href="#">' + svg("crate") + "Lower 1 amount</a>"),
+    ])
+    return f"""{ctl(3, target="owned")}
+{grow_bar()}
+<div class="os-prog"><h2>Until production</h2><span class="m" style="--w:0%"><i></i></span><span class="c">0 of 7</span>
+  <div class="aside"><span class="os-live"><i></i>Game linked</span><span>only what the change needs</span></div></div>
+<div class="os-cks">{rows}</div>"""
+
+
+def grow_running() -> str:
+    lines = [("Whisky", "Workstations 1 and 2", 2400, 2280, 1850), ("Bottle of Wine", "Workstation 3", 1200, 1140, 1140),
+             ("Beer", "Workstations 4 and 5 · new", 2400, 2160, 2160)]
+    out = []
+    for p_, sub, plan, made, ship in lines:
+        pct = made / plan * 100
+        out.append(f'<tr><td class="l"><b>{p_}</b><span class="sub">{sub}</span></td><td>{n(plan)}</td>'
+                   f'<td>{n(made)} <small class="os-dim">{pct:.0f}%</small><span class="ff-meter" style="--w:{pct:.0f}%"><i></i></span></td><td>{n(ship)}</td></tr>')
+    table = (f'<table class="ff-out"><thead><tr><th class="l">Line</th><th>Plan</th><th>Made</th><th>To the depot</th></tr></thead>'
+             f'<tbody>{"".join(out)}</tbody></table>')
+    plan_day = sum(l_[2] for l_ in lines)
+    daily = [3420, 3410, 3420, 4300, 5310, 5520, 5560, 5570, 5580, 5570]
+    week = sum(daily[-7:])
+    exp_wk = (2280 - SOLD_BY["Whisky"]) * 7
+    return f"""{ctl(4, target="owned")}
+{grow_bar()}
+<div class="os-roi">
+  <div class="kpi"><span class="lab">Made a week</span><span class="v">{n(week)}</span><span class="sub">new plan {n(plan_day * 7)} · {week / (plan_day * 7) * 100:.0f}%</span></div>
+  <div class="kpi"><span class="lab">To the depot</span><span class="v">{n((1850 + 1140 + 2160) * 7)}</span><span class="sub">a week · the shops take {n((SOLD_BY["Whisky"] + SOLD_BY["Bottle of Wine"] + SOLD_BY["Beer"]) * 7)}</span></div>
+  <div class="kpi"><span class="lab">Exported</span><span class="v">{money(exp_wk * EXPORT_EACH)}</span><span class="sub">{n(exp_wk)} Whisky a week at ${EXPORT_EACH:.2f}</span></div>
+  <div class="kpi"><span class="lab">Raw material</span><span class="v">{money(grow_raw_week() * 0.97)}</span><span class="sub">a week · new plan {money(grow_raw_week())}</span></div>
+</div>
+<div class="os-two" style="margin-top:18px;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr)">
+  <section class="os-card"><h3>Made a day</h3>{made_chart(daily, 460, 250, plan_day, 8000)}
+    <p class="os-dim" style="font-size:11.5px;margin:6px 0 0">The Beer line started on day 4 of this chart; the plan line is the new plan.</p></section>
+  <section class="os-card"><h3>Output against the new plan</h3>{table}
+    <p class="os-dim" style="font-size:11.5px;margin:10px 0 0">A day, last 7 days. Beer stays 1,400 a week short of the shops, as planned.</p></section>
+</div>"""
 
 
 # --------------------------------------------------------------------------
@@ -1372,17 +1463,17 @@ def output_table(low: bool = False) -> str:
             f'<tbody>{"".join(out)}</tbody></table>')
 
 
-def made_chart(daily: list, w: int = 560, h: int = 260) -> str:
+def made_chart(daily: list, w: int = 560, h: int = 260, plan: int | None = None, vmax: int = 4000) -> str:
     x0, y0, x1, y1 = 52, 18, w - 16, h - 40
-    dmax, vmax = 16, 4000
-    plan = sum(MADE_DAY.values())
+    dmax = len(daily)
+    plan = plan or sum(MADE_DAY.values())
     X = lambda d: x0 + (x1 - x0) * d / dmax  # noqa: E731
     Y = lambda v: y1 - (y1 - y0) * v / vmax  # noqa: E731
     g = []
-    for v in range(0, vmax + 1, 1000):
+    for v in range(0, vmax + 1, vmax // 4):
         g.append(f'<line class="grid" x1="{x0}" x2="{x1}" y1="{Y(v):.1f}" y2="{Y(v):.1f}"></line>'
                  f'<text x="{x0 - 8}" y="{Y(v) + 3.5:.1f}" text-anchor="end">{n(v)}</text>')
-    for d in range(0, dmax + 1, 4):
+    for d in range(0, dmax + 1, 4 if dmax > 10 else 2):
         g.append(f'<text x="{X(d):.1f}" y="{y1 + 18}" text-anchor="middle">{d}</text>')
     bw = (x1 - x0) / dmax * .7
     bars = "".join(f'<rect class="os-dbar" style="opacity:{.55 if v >= plan * .9 else .3}" x="{X(i) + bw * .2:.1f}" y="{Y(v):.1f}" width="{bw:.1f}" height="{Y(0) - Y(v):.1f}"></rect>'
@@ -1392,7 +1483,7 @@ def made_chart(daily: list, w: int = 560, h: int = 260) -> str:
 <line class="ax" x1="{x0}" x2="{x1}" y1="{y1}" y2="{y1}"></line>
 <line class="inv" x1="{x0}" x2="{x1}" y1="{Y(plan):.1f}" y2="{Y(plan):.1f}"></line>
 <text class="lbl w" x="{x0 + 6}" y="{Y(plan) - 7:.1f}">plan {n(plan)} a day</text>
-<text x="{x1}" y="{y1 + 34}" text-anchor="end">days since production started · both lines</text>
+<text x="{x1}" y="{y1 + 34}" text-anchor="end">days since production started · all lines</text>
 </svg>"""
 
 
@@ -1513,8 +1604,7 @@ E = "expansion"
 # file, title, builder, width, height, row, extra root class
 BOARDS = [
     ("Main.dc.html", "0 · Expansion › Plan a factory: no factory yet", lambda: page(E, "factory", start()), W, 960, 0, ""),
-    ("Grow.dc.html", "0b · Plan a factory: for a factory you own", lambda: page(E, "factory", grow(), "Day 230 · Mon 10:00"), W, 1560, 0, ""),
-    ("Links.dc.html", "0c · One menu point, and every way in", links, W, 760, 0, ""),
+    ("Links.dc.html", "0b · One menu point, and every way in", links, W, 700, 0, ""),
     ("Recipe.dc.html", "1 · What: the lines, a custom count left short", lambda: page(E, "factory", recipe()), W, 1100, 1, ""),
     ("NoDepot.dc.html", "1b · What: no depot yet, the plan adds one", lambda: page(E, "factory", no_depot()), W, 860, 1, ""),
     ("Location.dc.html", "2 · Where: warehouse buildings with room for the machines", lambda: page(E, "factory", location()), W, 960, 1, ""),
@@ -1526,10 +1616,14 @@ BOARDS = [
     ("Running.dc.html", "5 · Running: output against plan", lambda: page(E, "factory", running(), f"Day {TODAY} · Sun 09:40"), W, 900, 4, ""),
     ("RunningBelow.dc.html", "5b · Running: output below plan", lambda: page(E, "factory", running(True), f"Day {TODAY} · Sun 09:40"), W, 1080, 4, ""),
     ("Results.dc.html", "6 · Businesses › Results: the factory in its chain", lambda: page("businesses", "results", results(), f"Day {TODAY} · Sun 09:40"), W, 820, 4, ""),
+    ("GrowWhat.dc.html", "A1 · Your factory: what (Where is done, it is yours)", lambda: page(E, "factory", grow_what(), "Day 230 · Mon 10:00"), W, 1240, 5, ""),
+    ("GrowInvestment.dc.html", "A3 · Your factory: only the new machines", lambda: page(E, "factory", grow_invest(), "Day 230 · Mon 10:00"), W, 900, 5, ""),
+    ("GrowChecklist.dc.html", "A4 · Your factory: only what the change needs", lambda: page(E, "factory", grow_until(), "Day 232 · Wed 11:00"), W, 1000, 5, ""),
+    ("GrowRunning.dc.html", "A5 · Your factory: output against the new plan", lambda: page(E, "factory", grow_running(), "Day 244 · Mon 09:00"), W, 900, 5, ""),
 ]
 
 ROW_TITLES = ["Plan a factory: one view, new or owned", "What to make, and where", "The investment",
-              "Until production runs", "Running"]
+              "Until production runs", "Running", "The same steps for a factory you own"]
 
 
 def css(theme: str) -> str:

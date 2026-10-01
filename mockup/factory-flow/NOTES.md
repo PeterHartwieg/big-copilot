@@ -36,6 +36,13 @@ checklist rows and finder plan mode. What only a factory needs is `ff-`.
 6. **Export prices from the game's own rule** (below): the surplus is valued as an export.
 7. **One menu point**: the factory flow and today's Plan a factory are one view, **Plan a
    factory** (next section).
+8. **The For picker sits above the steps**, as drawn.
+9. **A factory the player runs goes through the same five steps**: Where is ticked and named
+   after the building ("4 22nd Street · yours"); Investment lists only the new machines and
+   shelves (no lease, deposit or truck; the installation firm would price the whole floor
+   again); Until production lists only what the change needs; Running compares output with the
+   new plan. The Ingredients order-ahead table sits in step 1.
+10. **Plan a factory gets the New badge** for the release (below).
 
 ## One menu point: Plan a factory
 
@@ -56,12 +63,15 @@ then one segment per factory you run).
   · Until production · Running. Step 1 is today's planner (lines with steppers, made a week
   against what the shops take, raw material) plus the shortage row and the export value. A
   player with no factory sees only New factory in the For picker.
-- **For: a factory you own** (`Grow`): no steps. The lines start at the machines running there
-  ("as now"), the steppers show the change (+2), the shortage row as above, then **What the
-  change needs** (the checklist rows for an addition: machines and recipes in the game, Hire n,
-  new ingredients on the contract in the game, Set amounts, the delivery plan in the game), then
-  today's **Ingredients** table (order ahead: company target, on order now, change, cash a week)
-  across all your factories, unchanged in meaning.
+- **For: a factory you own** (`GrowWhat`, `GrowInvestment`, `GrowChecklist`, `GrowRunning`):
+  the same steps. Step 1 starts the lines at the machines running there ("as now"), the
+  steppers show the change (+2), the shortage row as above, then today's **Ingredients** table
+  (order ahead: company target, on order now, change, cash a week) across all your factories.
+  Step 2 is ticked and reads "4 22nd Street · yours". Step 3 is the new machines and shelves
+  only ($275,250; the firm would charge $757,112 for the floor again). Step 4 is the change's
+  own rows: machines and recipes in the game, Hire 6, Hops and Carbon Dioxide onto the contract
+  in the game, Set 5 amounts, Beer onto the delivery plan in the game, then the depot's Beer
+  import lowered. Step 5 compares output with the new plan, Beer's ramp-up included.
 
 Nothing Plan a factory offers today is lost: the type picker, the steppers, Made / week,
 Supplies (shops / surplus / short), Raw material / week, the kit list, the services note, the
@@ -93,15 +103,14 @@ Read from `BigAmbitions.dll` with `research/il_dump.py` (main checkout):
   write's dry run already returns it per product as `cap`. Until it is read, the canvas says
   exports pull the index down and does not size the drop.
 
-## Artboards (14)
+## Artboards (17)
 
 Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
 
 | File | Shows |
 | --- | --- |
 | `Main` · 0 | Expansion › Plan a factory, For: New factory, a player with no factory. What the chain's shops buy that a factory can make, sorted by what it saves a day: sold and imported a week, machines sized to the peak day, what they cost, the surplus a week, saves a day. Your factory plans. |
-| `Grow` · 0b | Plan a factory, For: 4 22nd Street (a factory the player runs): Beer +2, the shortage row, what the change needs, the Ingredients table. |
-| `Links` · 0c | The one menu point in the sidebar; the store checklist's button (same label, into step 1); every other way in and where it lands. |
+| `Links` · 0b | The one menu point in the sidebar; the store checklist's button (same label, into step 1); every other way in and where it lands. |
 | `Recipe` · 1 | The lines with steppers, sizing on Custom (peak day: Wine ×2); made a week against what the shops take; raw material a week; saves a week. The shortage finding row (decision 4). The surplus valued as an export with its formula. The chain as a strip. |
 | `NoDepot` · 1b | No depot yet: to supply these shops the factory needs a depot, so the plan adds one. |
 | `Location` · 2 | Warehouse buildings of size I or larger in Industry City, ranked by rent: vehicles, rent, deposit, rent a week. Facts strip: warehouse building, ~90 days' deposit, vehicles per size, distance not counted. |
@@ -112,6 +121,10 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
 | `Hire` · 4c, 4d | The hire and weekly-amounts dialogs in the write-dialogs language. |
 | `Running` · 5 | Made a week against plan, shipped to the depot against what the shops take, exported (value), raw material; made a day against the plan line; output per line. |
 | `RunningBelow` · 5b | Output below plan, with its two causes and their write buttons. |
+| `GrowWhat` · A1 | For: 4 22nd Street. Step 1: lines as now with the change (Beer +2), the shortage row, the Ingredients order-ahead table; step 2 ticked as "yours". |
+| `GrowInvestment` · A3 | Only the new machines and shelves; nothing else to pay. |
+| `GrowChecklist` · A4 | Only what the change needs, with Hire 6 and Set 5 amounts. |
+| `GrowRunning` · A5 | Output against the new plan, Beer's ramp-up in the daily chart. |
 | `Results` · 6 | Businesses › Results with the factory as a cost centre in its chain; Invested as `setup_cost()` counts it today. |
 
 ## Numbers (synthetic company, the game's rules and prices)
@@ -147,16 +160,6 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
    its newest member opened (`chain_window_day()`), so a paid-back chain's day moves to the
    factory's opening (day 170 here).
 
-## Design calls for Peter (new with the merge)
-
-1. **The For picker's place**: above the steps as drawn, or inside step 1 only (the steps then
-   show for every target, greyed for an owned factory)? Drawn: above, steps only for New factory.
-2. **Owned factory: where the additions go.** Drawn as one page (lines, what the change needs,
-   ingredients). Alternative: the same five steps with Where skipped and Investment showing
-   only the new machines. One page is shorter; the steps reuse more.
-3. **Badge**: Plan a factory is an existing view, so no NEW badge is drawn. Give it one for the
-   release?
-
 ## Open questions for Peter
 
 1. **Invested and vehicles.** `setup_cost()` counts furniture and deposit ($463,820 for this
@@ -176,15 +179,24 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
 
 - Keep the route `expansion/factory`, its host `["growth","plan"]`, the label
   `nav.view.factory` "Plan a factory" and the legacy alias `growth/plan`. No new route, no new
-  `VIEW_NEW` (or a NEW badge on the existing view for one release, a changelog call).
+  route (the New badge is below).
 - `secPlan` stays the view's section; add `secPlanFlow` (the steps, plan strip and step bodies)
   beside it in `SEC_PAGE` (`["growth","plan"]`). `secIngredients` stays and shows only for an
   owned-factory target (it already hides in the store flow, `tests/open_store.test.cjs` 307–315).
 - `drawPlan()` gains the two pickers (it already builds the type picker; the For picker is new,
-  from `factoryView().sites`) and dispatches: For = an owned factory → today's lines seeded from
-  that factory's machines (`factoryCounts()` narrowed to one site), the change checklist, the
-  Ingredients table; For = New factory → `drawOpenFactory()`, the `of*` step bodies.
-  `planDraw()` keeps its arithmetic and is shared by both.
+  from `factoryView().sites`) and draws the five steps for both targets through the `of*`
+  bodies. For an owned factory: step 1 seeds the lines from that factory's machines
+  (`factoryCounts()` narrowed to one site) and shows the Ingredients table; step 2 is marked
+  done with the building's address; step 3 prices only the added items (`osStores()` over the
+  difference); step 4 builds only the change's rows (added machine-hours → hire, ingredients not
+  on the factory's contract → in game, amounts → `gwImports()`, the products new to the delivery
+  plan → in game); step 5 compares with the new plan. `planDraw()` keeps its arithmetic.
+- **New badge:** add `"expansion/factory": "factory-flow"` to `VIEW_NEW` (`paintLocal()` then
+  renders `<span class="feature-new" data-new-feature="factory-flow">`); put the same ID on the
+  Overview's "Plan a new factory" task and the store checklist's Plan a factory button so all
+  badges clear together (`docs/contributing.md`, "New feature badges"); call
+  `featureDiscovery.visit("factory-flow")` when the view opens. A new ID, not "open-store", so
+  players who saw Open a store still get it. Drop it from `VIEW_NEW` a release or two later.
 - `PAGE_DRAWS`: the existing `["growth/plan", () => drawPlan()]` row stays the only row; the
   flow draws from inside it.
 - Navigation tables: `ROUTES`/`routeLabel` unchanged; `tests/navigation.test.cjs` row
