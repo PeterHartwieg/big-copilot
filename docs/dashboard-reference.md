@@ -986,7 +986,7 @@ and ingredients still come from the game's help text.
 - An id the table does not know, on a newer build, waits for the picker until the table is
   updated.
 
-Four ids are unverified in game, two pairs the save cannot tell apart:
+Four ids are unverified in game:
 `XMndnWD5o0SgWbgdUecVw==` (table: Martini) and `6FwXLAY4S0qEWikfkkX5iQ==` (Whisky);
 `buvcJRWqukKvDtwZVXyR6g==` (Headphones) and `mFpiOPcgFUKtjFu2TYBUCg==` (Smartwatch 2). To
 check one: on a copy of the company, save, change one machine's recipe in game, save again,

@@ -887,15 +887,15 @@ on the web page; the CLI's page says where its history file is). `data-open-pref
 anywhere opens Preferences on that row. Escape closes a popover first, then the sheet, and the
 keyboard returns to the control that opened it.
 
-### Nothing runs at rest
+### Idle work
 
-A board left open on a second screen costs nothing. An animation-frame loop stops once it
-settles, wakes on input, layout or scroll, and pauses while the tab is hidden. Nothing shown
-in a steady state carries `animation: … infinite`: the live and folder-watch dots are
-steady, since one small pulsing dot kept the compositor drawing about 75 frames a second.
-A transient state (a busy button, a write waiting on the game) may loop. Folder checks run
-one at a time, release their guard after a failure and wait while the tab is hidden.
-`tests/performance.test.cjs` holds the loops and the folder guard; the CSS rule has no test.
+A board left open on a second screen should cost next to nothing. The landing's and the
+board's sphere loops (`requestAnimationFrame`) stop once they settle, wake on input, layout
+or scroll, and pause while the tab is hidden. The live and folder-watch dots are steady, not
+pulsing: one small pulsing dot kept the compositor drawing about 75 frames a second on an
+idle page. Folder checks run one at a time, release their guard after a failure and wait
+while the tab is hidden. `tests/performance.test.cjs` holds the loops and the folder guard;
+the dots have no test.
 The measurements are in [archive/performance-investigation.md](archive/performance-investigation.md).
 
 ### Routes
@@ -1003,7 +1003,7 @@ row's state and `pgPill()` draws it with words and a symbol, never colour alone.
 | State | Set by | Cleared by |
 | --- | --- | --- |
 | Marked by you (`marked`) | the player's tick: a Supply checklist row (`ba_order_marks_v1:<character>`), or every entry of a week on Schedules (`ba_dash_roster:<site>`) | the player (untick, Clear my marks), or the row changing: a new figure is a new row |
-| Applied · awaiting refresh (`applied`) | `pgRecord()`, called only from a successful answer to a game-link write: imports (`pgImportsDone()`), a shop's or office's schedule (`pgScheduleDone()`), a hire or move (`pgHireDone()`), uniforms (`pgUniformDone()`) | a later board judging it, an undo of the write (`pgDrop()`; a hire has no undo), or `PG_KEEP_DAYS` (14) game days |
+| Applied · awaiting refresh (`applied`) | `pgRecord()`, called only from a successful answer to a game-link write: imports (`pgImportsDone()`), a shop's or office's schedule (`pgScheduleDone()`), a hire or move (`pgHireDone()`), uniforms (`pgUniformDone()`) | a later board judging it, an undo of the write (`pgDrop()`; a hire before mod 0.4.0 has no undo), or `PG_KEEP_DAYS` (14) game days |
 | Confirmed · day N (`confirmed`) | `pgEvaluate()`, when a later board shows the write's postcondition (`PG_CHECK`) | Clear these on Supply › Changes (`pgClearSettled()`, import records only), or 14 game days |
 
 *Not confirmed* (`changed`) is a later board showing something else; it is final and never
@@ -1021,7 +1021,7 @@ What `PG_CHECK` reads, by family:
 
 | Family | Confirmed when | Otherwise |
 | --- | --- | --- |
-| `imports` | every contract the write set, on its line in `supply.factories.depots[<depot>][<material>]`, holds the amount written, and runs if the write started it | Not confirmed, with the figure the game holds now; the line gone is Not confirmed |
+| `imports` | every contract the write set, on its line in `supply.factories.depots[<depot's index>][<material>]`, holds the amount written, and runs if the write started it | Not confirmed, with the figure the game holds now; the line gone is Not confirmed |
 | `schedule` | the site's `shiftPrint` equals the answer's print | Not confirmed; a site without a print says nothing |
 | `hire` | every person hired or moved is among that site's people (`pgPeopleSites()`: `staffing`, `officeStaffing`, `factoryStaffing.cap`, `hiring.people[].site`) | one at another site: Not confirmed; some seen: partly; none seen (a warehouse or headquarters lists no people): stays Applied |
 | `uniform` | none of the roles written is in the shop's `uniformGapSkills` | a role still there, or the shop gone: Not confirmed; no `uniformGapSkills` says nothing |

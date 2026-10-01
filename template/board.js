@@ -20979,8 +20979,9 @@ function gwUniforms(keys){
       gwSvg("skip")}${tt("sp.gw.uni.leave", "Leave it out")}</button>` : ""}</div>` : ""}</div>`;
   };
   const outRow = b => `<div class="gw-shop out"><div class="nm">${hoodHtml(b)}<span>${spEsc(shortName(b))}</span></div><span class="gw-minis"></span><span class="c">${tt("sp.gw.uni.out", "out")}</span></div>`;
-  /* The records this write made (docs/architecture.md, "Progress"): Applied
-     from its answer, Confirmed by a later board; its undo takes them back. */
+  /* The records this write made (docs/architecture.md, "Progress: marked,
+     applied, confirmed"): Applied from its answer, Confirmed by a later board;
+     its undo takes them back. */
   let written = [];
   gwConfirm({
     kind: "uniforms", icon: "shirt", againLabel: tt("sp.gw.uni.again", "Set again"),
@@ -22653,7 +22654,8 @@ function gwImports(depotKey, only = null){
     applying: tt("sb.gw.applying", "Changing the imports in the game…"),
     changed: answer => (answer.rows || []).some(r => r.reactivated || (r.products || []).some(p => p.before !== p.amount)),
     /* Applied: each line written is Applied until a later read shows its
-       contracts holding what was written (docs/architecture.md, "Progress"). */
+       contracts holding what was written (docs/architecture.md, "Progress:
+       marked, applied, confirmed"). */
     onDone: answer => { pgImportsDone(shown, answer); written = pgImportIds(shown); },
     onUndo: () => { pgDrop(written); written = []; },
     done: answer => {

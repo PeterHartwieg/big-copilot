@@ -191,7 +191,7 @@ and never attach one to an issue.
   through `between()`/`at()` in `tests/_slice.cjs` or a bare `indexOf`, matching a line with a
   regex, or loading the whole board script into a VM through `loadBoard()` in
   `tests/_board.cjs`. When you change a comment or declaration in a source file, update the
-  tests that read it: `rg -l "board\.js" tests` lists them (put the file's name in the
+  tests that read it: `rg -l "board\.js|_board\.cjs" tests` lists them (put the file's name in the
   pattern: `board\.html`, `app\.js`, `map\.js`, `worker\.js`, `ba_dashboard\.py`); `check_profit_model.py` slices `board.js` too. A reworded
   `_slice.cjs` anchor fails loudly; a bare `indexOf` can slice the wrong span.
 - Text on the page goes through a key, one per sentence (`docs/architecture.md`, "UI
