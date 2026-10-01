@@ -45,7 +45,8 @@ and extracts every save it finds and prints a table, which catches a parse that 
 while producing plausible wrong figures. If you touched `ba_save.py` or `ba_dashboard.py`,
 run `python build_web.py` so the browser copies match.
 `python build_web.py --check` confirms that `web/` matches the sources without needing
-the installed game; `tests/test_web_fresh.py` runs the same check.
+the installed game, and `python build_web.py --assemble` writes everything it compares,
+also without the game; `tests/test_web_fresh.py` runs the same check.
 
 Run `python -m unittest discover -s tests` for the portable planner regressions.
 They need no save file; `tests/test_plan_orders.py` runs the board script under Node.js.
@@ -97,8 +98,8 @@ GitHub access.
 When a pull request's CI is green and merging main into it conflicts only in generated
 files (the table in AGENTS.md, "Sources and generated files"):
 
-1. Take either side of each conflict, run `python build_web.py`, then
-   `python build_web.py --check`. The rebuild is the resolution.
+1. Take either side of each conflict, run `python build_web.py --assemble` (no game needed),
+   then `python build_web.py --check`. The rebuild is the resolution.
 2. Commit the merge and push it.
 3. `git fetch origin`. If main has not moved since that merge, merge the pull request
    straight away, without waiting for another CI run: the green run already covers every

@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 import build_web
 
@@ -143,6 +144,43 @@ class WebFresh(unittest.TestCase):
                 self.assertEqual(stale.returncode, 1, stale.stdout + stale.stderr)
                 self.assertIn("stale: web/version.json", stale.stdout)
                 self.assertIn("stale: web/index.html", stale.stdout)
+
+
+    def test_assemble_rebuilds_what_check_compares_without_the_game(self):
+        # Every file --check compares is written from the committed sources;
+        # any route to the installed game fails the test.
+        def no_game(*_args, **_kwargs):
+            raise AssertionError("assemble() looked for the installed game")
+
+        assembled = ("web/index.html", "web/version.json", "web/sitemap.xml", "web/robots.txt",
+                     "web/py/ba_save.py", "web/py/ba_dashboard.py", "web/py/ba_buildings.json",
+                     "web/py/ba_demand_curves.json", "web/py/ba_item_prices.json",
+                     "web/py/ba_store_rules.json")
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch("ba_save.load_game_locale", no_game), \
+                mock.patch("ba_save.find_game_locale", no_game), \
+                mock.patch("build_web.load_game_locale", no_game), \
+                mock.patch("build_web.game_data_dir", no_game), \
+                mock.patch("build_web.write_public_wiki", no_game), \
+                mock.patch("builtins.print"):
+            standalone(tmp)
+            for name in assembled:
+                Path(tmp, name).unlink()
+            for tree in ("web/i18n", "web/wiki"):
+                for path in sorted(Path(tmp, tree).rglob("*"), reverse=True):
+                    path.unlink() if path.is_file() else path.rmdir()
+            build_web.assemble(tmp)
+            self.assertEqual(build_web.check(tmp), [])
+            for name in assembled:
+                self.assertEqual(Path(tmp, name).read_bytes().replace(b"\r\n", b"\n"),
+                                 (ROOT / name).read_bytes().replace(b"\r\n", b"\n"), name)
+            # An edited article reaches the wiki payload too, as check() expects.
+            topics = Path(tmp, "tools/wiki_topics.json")
+            topics.write_text(topics.read_text(encoding="utf-8").replace(
+                "0.02482", "0.02483", 1), encoding="utf-8")
+            self.assertIn("web/wiki-data.json", build_web.check(tmp))
+            build_web.assemble(tmp)
+            self.assertEqual(build_web.check(tmp), [])
 
 
 if __name__ == "__main__":

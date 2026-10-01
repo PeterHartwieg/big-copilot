@@ -1,6 +1,7 @@
 """Assemble the in-browser board under web/.
 
     python build_web.py
+    python build_web.py --assemble
     python build_web.py --check
 
 Writes web/index.html from the same template the local server uses, with the
@@ -10,6 +11,11 @@ worker to fetch. It also writes the static wiki pages under web/wiki/,
 web/sitemap.xml and web/robots.txt from web/wiki-data.json (tools/wiki_pages.py).
 web/app.js and web/worker.js are kept by hand. Nothing else
 is needed: the folder is a static site.
+
+--assemble needs no installed game: it writes every file --check compares from
+the committed sources, taking gametext.json, web/names/ and the game's part of
+web/wiki-data.json as they stand. Only a change to the game text, the game names
+or the wiki's game data needs the full build.
 
 --check writes nothing and needs no installed game: it reports the files under
 web/ that no longer match the sources, so a review catches a forgotten rebuild.
@@ -26,7 +32,10 @@ from ba_dashboard import (
     name_coverage, name_table, render,
 )
 from ba_save import NotEnglishText, bundled_locale, load_game_locale, load_locale, locale_search_paths
-from tools.build_wiki_data import topics as wiki_topics, write_public_wiki
+from tools.build_wiki_data import (
+    check_privacy as check_wiki_privacy, serialise as serialise_wiki, topics as wiki_topics,
+    validate_public as validate_wiki, write_public_wiki,
+)
 from tools import i18n as ui_text
 from tools import wiki_pages
 from tools.extract_wiki import game_data_dir
@@ -698,16 +707,92 @@ def check(root: str = HERE) -> list[str]:
     return stale
 
 
-def main() -> None:
-    os.makedirs(os.path.join(WEB, "py"), exist_ok=True)
-    # The floor plans come from the game through make_floor_plans.py, not from
-    # this build; a set that misses a layout the table uses stops it here.
-    gaps = floor_plan_gaps()
+def refuse_floor_plan_gaps(root: str = HERE) -> None:
+    """Stop the build when the floor plans miss a layout the table uses.
+
+    The floor plans come from the game through make_floor_plans.py, not from
+    this build, so neither main() nor assemble() can mend a gap.
+    """
+    gaps = floor_plan_gaps(root)
     if gaps:
         raise SystemExit(
             "web/maps/floor-plans.json does not cover every layout in ba_buildings.json ("
             + ", ".join(gaps[:8]) + "); run make_floor_plans.py (owner-side, needs the game)"
         )
+
+
+def splice_wiki_topics(root: str = HERE) -> bool:
+    """Carry tools/wiki_topics.json into the committed web/wiki-data.json.
+
+    The hand-written articles are the one part of the wiki payload the game
+    does not write: write_public_wiki() copies them in as they stand and counts
+    them. So replacing them in the committed payload gives the bytes a full
+    build would write, without the game. Returns whether the file changed.
+    """
+    path = os.path.join(root, "web", "wiki-data.json")
+    rows = wiki_topics(os.path.join(root, "tools", "wiki_topics.json"))
+    with open(path, encoding="utf-8") as fh:
+        payload = json.load(fh)
+    if payload.get("topics") == rows:
+        return False
+    payload["topics"] = rows
+    payload["provenance"]["counts"]["topics"] = len(rows)
+    check_wiki_privacy(payload, [])
+    validate_wiki(payload)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(serialise_wiki(payload))
+    return True
+
+
+def assemble(root: str = HERE) -> None:
+    """Write every file check() compares, from the committed sources; no game.
+
+    The game's part -- web/py/gametext.json, web/names/ and web/wiki-data.json
+    but for its hand-written articles -- is read as committed; main() rebuilds
+    it from the installed game first and then calls this. root redirects what
+    is written, with the limits check() describes: render() reads this
+    checkout's board whatever root says.
+    """
+    web = os.path.join(root, "web")
+    refuse_floor_plan_gaps(root)
+    missing = [f"{NAMES_DIR}/{code}.json" for code in NAME_LANGS
+               if not os.path.isfile(os.path.join(root, NAMES_DIR, f"{code}.json"))]
+    if missing:
+        raise SystemExit(
+            "missing game name tables (" + ", ".join(missing)
+            + "); run python build_web.py with the installed game"
+        )
+    if splice_wiki_topics(root):
+        print("web/wiki-data.json: hand-written articles updated from tools/wiki_topics.json")
+    # The static wiki pages, sitemap.xml and robots.txt follow the payload.
+    pages = wiki_pages.write(web)
+    print(f"web/wiki/: {pages} static pages, sitemap.xml and robots.txt")
+    os.makedirs(os.path.join(web, "py"), exist_ok=True)
+    # The building table, the arrival curves, the item prices and the store
+    # rules travel with the code; make_buildings.py, make_demand_curves.py,
+    # make_item_prices.py and make_store_rules.py have to have been run, since
+    # the worker hands them to Python as data.
+    for name in ("ba_save.py", "ba_dashboard.py", "ba_buildings.json", "ba_demand_curves.json",
+                 "ba_item_prices.json", "ba_store_rules.json"):
+        shutil.copyfile(os.path.join(root, name), os.path.join(web, "py", name))
+    # Big Copilot's own text in other languages, from i18n/ (tools/i18n.py).
+    ui_text.ship(root=root)
+    print(f"web/i18n/: {', '.join(ui_text.languages()) or 'no'} UI tables")
+    # Everything the stamp reads is now in place, so the page and version.json
+    # describe the folder as it stands.
+    release = release_info(root)
+    page = page_html(release, root)
+    out = os.path.join(web, "index.html")
+    with open(out, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(page)
+    with open(os.path.join(web, "version.json"), "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(release_json(release) + "\n")
+    print(f"wrote {out} ({len(page) // 1024} KB) and web/py/")
+
+
+def main() -> None:
+    os.makedirs(os.path.join(WEB, "py"), exist_ok=True)
+    refuse_floor_plan_gaps()
     # Resolve the game text before anything else is written. Every step below
     # needs it, and the wiki reads helpstructure.json beside it, so a path that
     # is not the game's own has to stop the build here with a message that says
@@ -748,49 +833,39 @@ def main() -> None:
     for kind, rows in json.loads(wiki_text)["provenance"]["issues"].items():
         for row in rows:
             print(f"wiki {kind} issue: {row.get('key') or ''} {row.get('reason') or row}".strip())
-    # The static wiki pages, sitemap.xml and robots.txt follow the payload.
-    pages = wiki_pages.write(WEB)
-    print(f"web/wiki/: {pages} static pages, sitemap.xml and robots.txt")
-    for name in ("ba_save.py", "ba_dashboard.py"):
-        shutil.copyfile(os.path.join(HERE, name), os.path.join(WEB, "py", name))
-    # The building table, the arrival curves, the item prices and the store
-    # rules travel with the code; make_buildings.py, make_demand_curves.py,
-    # make_item_prices.py and make_store_rules.py have to have been run, since
-    # the worker hands them to Python as data.
-    for name in ("ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json",
-                 "ba_store_rules.json"):
-        shutil.copyfile(os.path.join(HERE, name), os.path.join(WEB, "py", name))
     text = {k: v for k, v in locale.items() if ships(k, v)}
     with open(os.path.join(WEB, "py", "gametext.json"), "w", encoding="utf-8", newline=chr(10)) as fh:
         json.dump(text, fh, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     print(f"gametext.json: {len(text)} entries")
     tables = write_name_tables(locale_path, locale)
     print(f"names: {len(tables)} languages under {NAMES_DIR}/")
-    # Big Copilot's own text in other languages, from i18n/ (tools/i18n.py).
-    ui_text.ship()
-    print(f"web/i18n/: {', '.join(ui_text.languages()) or 'no'} UI tables")
-    # Everything the stamp reads is now in place, so the page and version.json
-    # describe the folder as it stands.
-    release = release_info()
-    page = page_html(release)
-    out = os.path.join(WEB, "index.html")
-    with open(out, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(page)
-    with open(os.path.join(WEB, "version.json"), "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(release_json(release) + "\n")
-    print(f"wrote {out} ({len(page) // 1024} KB) and web/py/")
+    # Everything else follows from the committed sources and what was just written.
+    assemble()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Assemble the in-browser board under web/.")
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--assemble", action="store_true",
+        help="write every file --check compares from the committed sources; needs no installed game",
+    )
+    mode.add_argument(
         "--check", action="store_true",
         help="report the files under web/ that no longer match the sources; write nothing",
     )
-    if parser.parse_args().check:
+    args = parser.parse_args()
+    if args.assemble:
+        assemble()
+    elif args.check:
         stale = check()
         for path in stale:
-            fix = "make_floor_plans.py" if path == "web/maps/floor-plans.json" else "python build_web.py"
+            if path == "web/maps/floor-plans.json":
+                fix = "make_floor_plans.py"
+            elif path.startswith(NAMES_DIR + "/"):
+                fix = "python build_web.py, with the installed game"
+            else:
+                fix = "python build_web.py --assemble"
             print(f"stale: {path} (run {fix})")
         if stale:
             raise SystemExit(1)

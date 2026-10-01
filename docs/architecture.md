@@ -27,7 +27,7 @@ flowchart TD
 
   subgraph web["Browser — bigcopilot.com"]
     direction TB
-    bw["build_web.py main()"] --> ri["release_info() · build stamp + newest changelog entry"]
+    bw["build_web.py main() · --assemble · assemble()"] --> ri["release_info() · build stamp + newest changelog entry"]
     ri --> ph["page_html(release) · builds the head, fills BEFORE_SCRIPT"]
     chk["build_web.py --check · check()"] -.->|"reuses both"| ri
     ph --> renderW["render(None, live=True, banner=BANNER, before_script=…, head=…)"]
@@ -671,7 +671,9 @@ analysis needs but `ships()` does not keep is simply absent in the browser, with
 `python build_web.py --check` calls `check()`, which reuses the same `release_info()` and
 `page_html()` and compares their output against what is committed under `web/`. That is why
 it needs no installed game: it re-derives the page from the sources and the committed
-`gametext.json`, `wiki-data.json` and `web/names/` rather than rebuilding them. `stamp()` normalises CRLF
+`gametext.json`, `wiki-data.json` and `web/names/` rather than rebuilding them.
+`python build_web.py --assemble` calls `assemble()`, which writes those same files from the same
+sources, so it needs no game either; `main()` rebuilds the game's files and then calls it. `stamp()` normalises CRLF
 to LF for everything except the `.svg` background, so a Windows checkout is not stale by
 itself.
 
