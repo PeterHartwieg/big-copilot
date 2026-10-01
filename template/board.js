@@ -12252,7 +12252,7 @@ function osRoiTable(row, snap, planMode, o){
   rows.push(tr(tt("gr.os.inv.deposit", "Deposit"), "", m(p && p.deposit), m(c.deposit), diff(c.deposit, p && p.deposit, true)));
   // The plan buys no vehicle; a store that has one since counts it.
   if(c.vehicles > 0) rows.push(tr(tt("gr.os.roi.vehicles", "Vehicles"), tt("gr.os.roi.vehicles.sub", "the store's own, at their price plus any delivery paid"),
-    "–", m(c.vehicles), `<td></td>`));
+    "–", m(c.vehicles), diff(c.vehicles, p ? 0 : null, true)));
   rows.push(tr(tt("gr.os.inv.total", "Investment"), "", m(p && p[planMode]), m(c[nowMode]), diff(c[nowMode], p && p[planMode], true), "os-sum"));
   const steady = snap ? snap.profit : null;
   if(steady != null){

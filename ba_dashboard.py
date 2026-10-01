@@ -14714,19 +14714,19 @@ class History:
 
     def payback(self, character: str) -> dict:
         """What the statements forget after 61 days, kept for _payback(): per
-        site key, {"opened", "bill", "vehicleFees" ({vehicle id: delivery
-        paid}), "firm": [day, investment], "self": [...]},
+        site key, {"opened", "bill", "firm": [day, investment], "self": [...]},
         and for a trading site its run from the opening (_payback_trail()):
         "trail" ([day, profit, sales] from the opening, capped), "before" (the
         lease's cost before the opening), "since" (the first day the record
         held), or "rolled" once the record moved past the trail; per chain
-        name the same without the bill and the trail. Changed in place; a
-        record whose `opened` no longer matches is a new business at that
-        address."""
+        name the same without the bill and the trail; and "vehicleFees", the
+        delivery paid per vehicle id, company-wide, since a truck changes
+        slots. Changed in place; a record whose `opened` no longer matches is
+        a new business at that address."""
         store = self._for(character).setdefault("payback", {})
         if not isinstance(store, dict):
             store = self._for(character)["payback"] = {}
-        for part in ("sites", "chains"):
+        for part in ("sites", "chains", "vehicleFees"):
             if not isinstance(store.get(part), dict):
                 store[part] = {}
         return store
@@ -15557,6 +15557,15 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
     elif now is not None:
         store["day"] = now
     kept_sites, kept_chains = store["sites"], store["chains"]
+    # Each vehicle's delivery, by vehicle id for the whole company: the log
+    # shows it for a week, and the truck may change slots after that. An
+    # entry goes when the vehicle is gone from the save.
+    existing = {v.get("id") for v in save.items(save.root.get("VehicleInstances")) if isinstance(v, dict)}
+    kept_fees = store["vehicleFees"]
+    vehicle_fees = {vid: deliveries.get(vid, kept_fees.get(vid)) for vid in existing if vid}
+    vehicle_fees = {vid: fee for vid, fee in vehicle_fees.items() if isinstance(fee, (int, float)) and fee > 0}
+    kept_fees.clear()
+    kept_fees.update(vehicle_fees)
 
     sites, series, window_exact, runs = {}, {}, {}, {}
     for b in businesses:
@@ -15581,16 +15590,10 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
         if not isinstance(memory, dict) or memory.get("opened") != opened:
             memory = {"opened": opened}
         # The business's own vehicles at their type's price, and the delivery
-        # paid for one where the log showed it, remembered after it drops out.
+        # paid for each, wherever it is parked now.
         held = _site_vehicles(save, regs[key], vehicle_prices)
-        kept_fees = memory.get("vehicleFees") if isinstance(memory.get("vehicleFees"), dict) else {}
-        fees = {vid: deliveries.get(vid, kept_fees.get(vid)) for vid in held}
-        fees = {vid: fee for vid, fee in fees.items() if isinstance(fee, (int, float)) and fee > 0}
-        if fees:
-            memory["vehicleFees"] = fees
-        else:
-            memory.pop("vehicleFees", None)
-        cost = _site_setup(save, regs[key], addr, prices, sum(held.values()) + sum(fees.values()))
+        cost = _site_setup(save, regs[key], addr, prices,
+                           sum(held.values()) + sum(vehicle_fees.get(vid, 0) for vid in held))
         # The firm's real bill where the log still holds it, and remembered
         # after it drops out, so the investment does not jump a week later.
         # Only the bill that set the site up counts: the lease starts inside
