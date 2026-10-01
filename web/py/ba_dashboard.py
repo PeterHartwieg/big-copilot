@@ -8037,10 +8037,14 @@ def _hourly(
             [round(sum(h) / len(h), 1) if h else None for h in row] for row in seen
         ]
 
+        # A station the game does not let work in this type (a concession
+        # stand register in a shop) serves nobody there and holds no post.
+        furniture = load_store_rules().get("furniture") or {}
+        kind = (business.get("typeSlug") or "").removeprefix("ba:businesstype_")
         here, labels, slugs, keys = {}, {}, {}, {}
         for holder in save.items(b["itemInstances"]):
             item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
-            if item and item.get("itemName") in posts:
+            if item and item.get("itemName") in posts and works_in(furniture.get(item["itemName"]) or {}, kind):
                 here[item.get("id")] = posts[item["itemName"]]
                 slugs[item.get("id")] = item["itemName"]
                 labels[item.get("id")] = (

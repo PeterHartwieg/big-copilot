@@ -407,7 +407,9 @@ NUMBER = 12
 KEY = site_key((STREET, NUMBER))
 REGISTER = "ba:itemname_cashregister"
 BOARD = "ba:itemname_fitnessplanningboard"
-BOOTH = "ba:itemname_boothticket"
+# A 50-an-hour Customer Service station with no business-type limit (a ticket
+# booth works in theaters only, so a shop would not count it: works_in()).
+BOOTH = "ba:itemname_coatcheckleft"
 CLEAN_STATION = "ba:itemname_cleaningstation"
 LOCKER = "ba:itemname_securityguardlocker"
 STATIONS = {REGISTER: (SERVICE, 20), BOARD: (TRAINER, 20), BOOTH: (SERVICE, 50)}
@@ -419,7 +421,7 @@ LABELS = Names(
         GUARD: "Security Guard",
         REGISTER: "Cash register",
         BOARD: "Fitness planning board",
-        BOOTH: "Ticket booth",
+        BOOTH: "Coat check",
         CLEAN_STATION: "Cleaning station",
         LOCKER: "Security guard locker",
     }

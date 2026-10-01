@@ -595,6 +595,16 @@ class NineDayGateTest(unittest.TestCase):
         # A finished Tuesday still reads its own day.
         self.assertEqual(measured["customers"][2][10], 25.0)
 
+    def test_a_station_the_type_cannot_use_holds_no_post(self):
+        """A concession stand register works in cinemas and theaters only
+        (works_in()): in a clothing store it serves nobody, so it is no post."""
+        concession = "ba:itemname_concessionsstandregister"
+        reg = dict(registration([(1, REGISTER), (2, concession)], {10: 25}, days=10), RentedByPlayer=True)
+        save = Save({"Day": 10, "EmployeeInstances": {"$items": []},
+                     "BuildingRegistrations": {"$items": [reg]}}, {}, "t.hsg")
+        grid = _hourly(save, [reg], [business()], {**STATIONS, concession: (SERVICE, 50)}, set(), {}, LABELS)[0]
+        self.assertEqual([s["slug"] for s in grid["stations"]], [REGISTER])
+
     def test_the_threshold_directly(self):
         stations = [{"id": 1}, {"id": 2}]
         slots = [[[0, 24]]] * 7

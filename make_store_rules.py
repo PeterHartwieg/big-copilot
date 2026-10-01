@@ -66,10 +66,10 @@ where noted):
                               "bt": [business types its tags name, no prefix],
                               "m": [[furniture it must be attached to], ...], one
                                     group per placement requirement: one of each group,
-                              "o": [the only business types it works in, no prefix],
-                              "no": [business types it does not work in, no prefix],
                                     "wt": the WorkoutExercise.workoutType a gym machine trains,
                                     "st": the seats a seat carries (its sittingPositions),
+                              "o": [the only business types it works in, no prefix],
+                              "no": [business types it does not work in, no prefix],
                               "v": [vendor site keys]}},  (lists omitted when empty)
      "types": {"<business type>": {"b": building type, "c": 1 player can create,
                                    "i": [[item, impact], ...], "a": maxAmountPerProduct,
