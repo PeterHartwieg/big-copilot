@@ -460,3 +460,14 @@ test('Supply › Production opens Plan a factory on each factory it lists', asyn
   await page.waitForFunction(() => route === 'expansion/factory');
   assert.equal(await page.evaluate(() => planTarget), BREWERY);
 });
+
+test('a factory with nothing to change still links to its plan from Production\'s compact row', async t => {
+  const page = await board(t, '#supply/production');
+  /* The compact row (sbFlat) carries the link sbFactoryPart() hands it. */
+  const r = await page.evaluate(k => {
+    const s = D.businesses.findIndex(b => b.key === k);
+    return {flat: sbFlat(s, 'gear', 'all fine', '', '<a class="sb-plan" data-of-goto="x">x</a>'), src: String(sbFactoryPart)};
+  }, BREWERY);
+  assert.match(r.flat, /class="sb-flat"[\s\S]*data-of-goto="x"/);
+  assert.match(r.src, /return sbFlat\([\s\S]*?, "", planLink\);/, 'the compact factory row is given the plan link');
+});

@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "289f4c8435";</script>
-<link rel="stylesheet" href="community.css?v=289f4c8435">
+<script>window.LEDGER_BUILD = "3fa4de383a";</script>
+<link rel="stylesheet" href="community.css?v=3fa4de383a">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=289f4c8435">
+<link rel="stylesheet" href="fonts/fonts.css?v=3fa4de383a">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -6053,7 +6053,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"289f4c8435","latest":{"pr":213,"date":"2026-10-01","title":"Plan a factory: from what to make to production, step by step","summary":"Expansion › Plan a factory now walks a factory plan through five steps: What, Where, Investment, Until production and Running. Pick the shops it supplies and, in For, a new factory or one you already run. What is the planner you know, with each product's machines sized to your shops' peak day, a warning when a line stays short of what they take, and the surplus valued as an export at the game's own export price. Where lists every warehouse building to rent, cheapest first, with its parking for trucks and its deposit. Investment is the one-off cost: the machines and pallet shelves at list price, the installation firm or a delivery, the deposit and a Freight Truck T1, with an optional bank loan; raw material, wages and rent a week are shown beside it as running costs. Until production is a checklist ticked from your save, with buttons for hiring and weekly import amounts when the game is linked. Running compares output with the plan once the factory works. For a factory you run, the steps cover only what the change adds. Businesses › Results now also counts a depot's and a factory's own vehicles in what was invested."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"3fa4de383a","latest":{"pr":213,"date":"2026-10-01","title":"Plan a factory: from what to make to production, step by step","summary":"Expansion › Plan a factory now walks a factory plan through five steps: What, Where, Investment, Until production and Running. Pick the shops it supplies and, in For, a new factory or one you already run. What is the planner you know, with each product's machines sized to your shops' peak day, a warning when a line stays short of what they take, and the surplus valued as an export at the game's own export price. Where lists every warehouse building to rent, cheapest first, with its parking for trucks and its deposit. Investment is the one-off cost: the machines and pallet shelves at list price, the installation firm or a delivery, the deposit and a Freight Truck T1, with an optional bank loan; raw material, wages and rent a week are shown beside it as running costs. Until production is a checklist ticked from your save, with buttons for hiring and weekly import amounts when the game is linked. Running compares output with the plan once the factory works. For a factory you run, the steps cover only what the change adds. Businesses › Results now also counts a depot's and a factory's own vehicles in what was invested."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -6141,8 +6141,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=289f4c8435"></script>
-<script src="community.js?v=289f4c8435"></script>
+<script src="app.js?v=3fa4de383a"></script>
+<script src="community.js?v=3fa4de383a"></script>
 
 <script>
 
@@ -14883,9 +14883,9 @@ function sbObject(tab, s, o){
     <div class="body">${o.body}</div></details>`;
 }
 /* An object with nothing to read under Needs a change: one quiet line. */
-function sbFlat(s, icn, text, name){
+function sbFlat(s, icn, text, name, extra = ""){
   const b = D.businesses[s];
-  return `<div class="sb-flat"><span class="ic">${spIcon(icn)}</span><span>${b ? sbName(b) : name || ""} &nbsp; ${text}</span><span class="check">${icon("tick")}</span></div>`;
+  return `<div class="sb-flat"><span class="ic">${spIcon(icn)}</span><span>${b ? sbName(b) : name || ""} &nbsp; ${text}${extra ? ` &nbsp; ${extra}` : ""}</span><span class="check">${icon("tick")}</span></div>`;
 }
 /* A sortable table with the tick column in front. `units` are rows, or
    groups ({group, kids}) whose parent row opens the kids on a click. */
@@ -15753,10 +15753,13 @@ function sbFactoryPart(d, claimed, ctx, view, o){
     if(!lines.length && !inputs.length && !imports.length) return "";
     const arrivedHere = sbArrive && sbArrive.view === view && sbArrive.s === s;
     const whole = all || (arrivedHere && sbArrive.slug === null);
+    /* Production: Plan a factory for this factory (For = it), on its full and its compact row. */
+    const planLink = view === "production" && b && D.meta.locale !== false
+      ? `<a class="sb-plan" href="#expansion/factory" data-of-goto="${attr(b.key)}">${spI("gear")}<em>${tt("sb.prod.planThis", "Plan more for it")}</em></a>` : "";
     if(!whole && !keep.length && !arrivedHere)
       return sbFlat(s, "gear", o.lines ? tt("sb.fac.flat2", "{lines} and {inputs}", {lines: sbLines(lines.length), inputs: sbInputs(inputs.length)})
         : o.inputs ? sbInputs(inputs.length)
-        : tt("sb.fac.imports.n", {one: "{n} import", other: "{n} imports"}, {n: imports.length}));
+        : tt("sb.fac.imports.n", {one: "{n} import", other: "{n} imports"}, {n: imports.length}), "", planLink);
     const shownLines = whole ? lines : lines.filter(r => r.keep);
     const shownInputs = whole ? inputs : inputs.filter(r => r.keep);
     const shownImports = whole ? imports : imports.filter(r => r.keep);
@@ -15781,7 +15784,7 @@ function sbFactoryPart(d, claimed, ctx, view, o){
       to.length ? `<span>${spI("right")}<em>${tt("sb.fac.shipsTo", "ships to {who}", {who: to.length > 3
         ? tt("sb.list.more", "{list} and {n} more", {list: firsts, n: to.length - 3}) : firsts})}</em></span>` : "",
       /* Production: Plan a factory for this factory (For = it). */
-      view === "production" && b && D.meta.locale !== false ? `<a class="sb-plan" href="#expansion/factory" data-of-goto="${attr(b.key)}">${spI("gear")}<em>${tt("sb.prod.planThis", "Plan more for it")}</em></a>` : ""].join("");
+      planLink].join("");
     const placed = site.machines, running = (sent.find(x => x.s === s) || {}).running;
     const staffed = Math.round(site.lines.reduce((t, l) => t + (l.hoursWeek || 0), 0) / 7);
     const stats = sbStat(tt("sb.col.machines", "Machines"), placed, Number.isFinite(running) && running < placed ? tt("sb.fac.running", "{n} running", {n: running}) : "",

@@ -8736,9 +8736,9 @@ function sbObject(tab, s, o){
     <div class="body">${o.body}</div></details>`;
 }
 /* An object with nothing to read under Needs a change: one quiet line. */
-function sbFlat(s, icn, text, name){
+function sbFlat(s, icn, text, name, extra = ""){
   const b = D.businesses[s];
-  return `<div class="sb-flat"><span class="ic">${spIcon(icn)}</span><span>${b ? sbName(b) : name || ""} &nbsp; ${text}</span><span class="check">${icon("tick")}</span></div>`;
+  return `<div class="sb-flat"><span class="ic">${spIcon(icn)}</span><span>${b ? sbName(b) : name || ""} &nbsp; ${text}${extra ? ` &nbsp; ${extra}` : ""}</span><span class="check">${icon("tick")}</span></div>`;
 }
 /* A sortable table with the tick column in front. `units` are rows, or
    groups ({group, kids}) whose parent row opens the kids on a click. */
@@ -9606,10 +9606,13 @@ function sbFactoryPart(d, claimed, ctx, view, o){
     if(!lines.length && !inputs.length && !imports.length) return "";
     const arrivedHere = sbArrive && sbArrive.view === view && sbArrive.s === s;
     const whole = all || (arrivedHere && sbArrive.slug === null);
+    /* Production: Plan a factory for this factory (For = it), on its full and its compact row. */
+    const planLink = view === "production" && b && D.meta.locale !== false
+      ? `<a class="sb-plan" href="#expansion/factory" data-of-goto="${attr(b.key)}">${spI("gear")}<em>${tt("sb.prod.planThis", "Plan more for it")}</em></a>` : "";
     if(!whole && !keep.length && !arrivedHere)
       return sbFlat(s, "gear", o.lines ? tt("sb.fac.flat2", "{lines} and {inputs}", {lines: sbLines(lines.length), inputs: sbInputs(inputs.length)})
         : o.inputs ? sbInputs(inputs.length)
-        : tt("sb.fac.imports.n", {one: "{n} import", other: "{n} imports"}, {n: imports.length}));
+        : tt("sb.fac.imports.n", {one: "{n} import", other: "{n} imports"}, {n: imports.length}), "", planLink);
     const shownLines = whole ? lines : lines.filter(r => r.keep);
     const shownInputs = whole ? inputs : inputs.filter(r => r.keep);
     const shownImports = whole ? imports : imports.filter(r => r.keep);
@@ -9634,7 +9637,7 @@ function sbFactoryPart(d, claimed, ctx, view, o){
       to.length ? `<span>${spI("right")}<em>${tt("sb.fac.shipsTo", "ships to {who}", {who: to.length > 3
         ? tt("sb.list.more", "{list} and {n} more", {list: firsts, n: to.length - 3}) : firsts})}</em></span>` : "",
       /* Production: Plan a factory for this factory (For = it). */
-      view === "production" && b && D.meta.locale !== false ? `<a class="sb-plan" href="#expansion/factory" data-of-goto="${attr(b.key)}">${spI("gear")}<em>${tt("sb.prod.planThis", "Plan more for it")}</em></a>` : ""].join("");
+      planLink].join("");
     const placed = site.machines, running = (sent.find(x => x.s === s) || {}).running;
     const staffed = Math.round(site.lines.reduce((t, l) => t + (l.hoursWeek || 0), 0) / 7);
     const stats = sbStat(tt("sb.col.machines", "Machines"), placed, Number.isFinite(running) && running < placed ? tt("sb.fac.running", "{n} running", {n: running}) : "",
