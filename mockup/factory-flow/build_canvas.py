@@ -798,7 +798,8 @@ MADE_LOW = [1700, 2600, 2900, 2980, 3010, 3030, 1830, 3030, 3030, 3020, 3030, 30
 FINDS = [("4 22nd Street", "I3", 1292, 2, 388, 36_320), ("8 22nd Street", "I3", 1292, 2, 402, 37_630),
          ("1 22nd Street", "I3", 1292, 2, 410, 38_380), ("5 23rd Street", "I3", 1292, 2, 410, 38_380),
          ("6 24th Street", "I3", 1292, 2, 366, 34_260), ("1 25th Street", "P2", 2184, 2, 618, 57_850),
-         ("8 25th Street", "Q2", 2610, 2, 739, 69_180)]
+         ("8 25th Street", "Q2", 2610, 2, 739, 69_180), ("3 Twelfth Street", "H1", 690, 1, 171, 16_010),
+         ("8 Twelfth Street", "H1", 690, 1, 201, 18_820), ("51 Second Street", "H1", 690, 1, 223, 20_880)]
 FINDS = sorted([f for f in FINDS if f[0] != DEPOT["addr"]], key=lambda f: f[4])
 VENDORS = {"fsd": ("A", "Factory Supply Depot", "2 25th Street"), "trucks": ("B", "General US Trucks", "1 Seventh Avenue")}
 
@@ -897,7 +898,7 @@ def ctl(on: int, pick: str = "Whisky and Wine", target: str = "none") -> str:
 def planbar(where: bool = True, inv: str = "self", make: str = "") -> str:
     m = make or '<b>Whisky ×2 · Wine ×1</b><small>3 Bottled Goods Workstations · Brightwater Spirits</small>'
     w = (f'<b>{NEW["addr"]}</b><small>{NEW["hood"]} · {NEW["size"]} · {n(NEW["m2"])} m² · rent {money(NEW["rent"])}/day</small>' if where
-         else '<b class="dim">Not picked yet</b><small>a warehouse building, size I or larger</small>')
+         else '<b class="dim">Not picked yet</b><small>a warehouse building, any size</small>')
     if inv == "none":
         i = '<b class="dim">–</b><small>after the location</small>'
     else:
@@ -1245,20 +1246,21 @@ def grow_running() -> str:
 # --------------------------------------------------------------------------
 def location() -> str:
     pins = (pin(VENDORS["fsd"][2], "A", "store") + pin(VENDORS["trucks"][2], "B", "store")
-            + "".join(pin(a, str(i + 1), "dim" if i else "") for i, (a, *_r) in enumerate(FINDS)))
+            + "".join(pin(a, str(i + 1), "" if a == NEW["addr"] else "dim") for i, (a, *_r) in enumerate(FINDS)
+                      if LOC[a]["region"] == "industry-city"))
     rows = []
     for i, (a, lay, m2, veh, rent, dep) in enumerate(FINDS):
         h = LOC[a]["hood"]
-        rows.append(f'<tr class="{"pick" if i == 0 else ""}"><td class="l os-mono" style="white-space:nowrap">{i + 1} {hood(h)}</td>'
+        rows.append(f'<tr class="{"pick" if a == NEW["addr"] else ""}"><td class="l os-mono" style="white-space:nowrap">{i + 1} {hood(h)}</td>'
                     f'<td class="l"><b>{a}</b><small>{lay} · {n(m2)} m²</small></td><td>{veh}</td>'
                     f'<td>{money(rent)}</td><td>{money(dep)}</td><td>{money(rent * 7)}</td></tr>')
-        if i == 0:
+        if a == NEW["addr"]:
             more = (f'<div class="os-pick"><div class="fx"><span>Rent<b>{money(rent)}/day</b></span><span>Deposit<b>{money(dep)}</b></span>'
                     f'<span>Vehicles<b>{veh}</b></span><span>Floor<b>{n(m2)} m²</b></span></div>'
                     f'<a class="os-cta sm" href="Investment.dc.html">Plan here{svg("right")}</a></div>')
             rows.append(f'<tr class="more"><td></td><td colspan="5">{more}</td></tr>')
-    hoods = "".join(f'<span class="os-ch{" on" if t == "IC" else ""}">{t}</span>' for t in ("GD", "HK", "IC", "LM", "MT", "MH", "HA"))
-    sizes = "".join(f'<span class="os-ch{" on" if z in ("I", "P", "Q") else ""}">{z} · {m}</span>' for z, m in (("H", "690"), ("I", "1,292"), ("P", "2,184"), ("Q", "2,610")))
+    hoods = "".join(f'<span class="os-ch on">{t}</span>' for t in ("GD", "HK", "IC", "LM", "MT", "MH", "HA"))
+    sizes = '<span class="os-ch">min –</span><span class="os-ch">max –</span>'
     note = (f'<div class="ff-facts"><div><span class="os-lab">Building</span><b>Warehouse</b><small>every factory rents one</small></div>'
             f'<div><span class="os-lab">Deposit</span><b>~90 days</b><small>of rent, as for a depot</small></div>'
             f'<div><span class="os-lab">Vehicles</span><b>H 1 · I–Q 2</b><small>one parking slot per truck</small></div>'
@@ -1266,11 +1268,11 @@ def location() -> str:
     return f"""{ctl(1)}
 {planbar(where=False, inv="none")}
 <div class="ff-finder">
-  <div>{city(pins)}</div>
+  <div>{city(pins)}<p class="os-dim" style="font-size:11.5px;margin:6px 0 0">Industry City. Rows 1 to 3 are in Manhattan; the map shows the district of the row you pick.</p></div>
   <div class="os-fp">
     <div class="os-fr"><span>Type</span><div class="row"><span class="os-ch on set">Factory</span><span class="os-dim" style="font-size:12px">warehouse buildings, from the plan</span></div></div>
-    <div class="os-fr"><span>Show</span><div class="row"><span class="os-ch on">To rent 31</span><span class="os-ch">For sale 9</span></div></div>
-    <div class="os-fr"><span>Size</span><div class="row">{sizes}<span class="os-dim" style="font-size:12px">room for 3 workstations</span></div></div>
+    <div class="os-fr"><span>Show</span><div class="row"><span class="os-ch on">To rent 52</span><span class="os-ch">For sale 9</span></div></div>
+    <div class="os-fr"><span>Size</span><div class="row">{sizes}<span class="os-dim" style="font-size:12px">every size, H to Q</span></div></div>
     <div class="os-fr"><span>Where</span><div class="row">{hoods}</div></div>
     <table class="os-ft"><thead><tr><th class="l">#</th><th class="l">Address</th><th>Vehicles</th><th>Rent</th><th>Deposit</th><th>Rent / week</th></tr></thead>
     <tbody>{"".join(rows)}</tbody></table>
@@ -1609,7 +1611,7 @@ BOARDS = [
     ("Links.dc.html", "0b · One menu point, and every way in", links, W, 700, 0, ""),
     ("Recipe.dc.html", "1 · What: the lines, a custom count left short", lambda: page(E, "factory", recipe()), W, 1100, 1, ""),
     ("NoDepot.dc.html", "1b · What: no depot yet, the plan adds one", lambda: page(E, "factory", no_depot()), W, 860, 1, ""),
-    ("Location.dc.html", "2 · Where: warehouse buildings with room for the machines", lambda: page(E, "factory", location()), W, 960, 1, ""),
+    ("Location.dc.html", "2 · Where: warehouse buildings with room for the machines", lambda: page(E, "factory", location()), W, 1180, 1, ""),
     ("Investment.dc.html", "3 · Investment: self-installation, and the loan", lambda: page(E, "factory", investment_self()), W, 1360, 2, ""),
     ("InvestmentFirm.dc.html", "3b · Investment: installation firm", lambda: page(E, "factory", investment_firm()), W, 1000, 2, ""),
     ("Checklist.dc.html", "4 · Until production · game linked", lambda: page(E, "factory", checklist(True), "Day 171 · Fri 14:05"), W, 1450, 3, ""),

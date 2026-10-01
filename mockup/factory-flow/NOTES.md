@@ -30,8 +30,8 @@ checklist rows and finder plan mode. What only a factory needs is `ff-`.
    take 8,680. The rest keeps coming from United Ocean Import." No advice to add machines or
    sites.
 5. **Distance costs nothing in the game.** No distance column, no "near the depot" filter, no
-   across-the-river state. The location step filters by size (room for the workstations) and
-   ranks by rent; it shows vehicles (parking slots: H 1, I to Q 2, one truck each) and the
+   across-the-river state. The location step ranks by rent, every size and neighbourhood
+   shown (decision 13); it shows vehicles (parking slots: H 1, I to Q 2, one truck each) and the
    deposit.
 6. **Export prices from the game's own rule** (below): the surplus is valued as an export.
 7. **One menu point**: the factory flow and today's Plan a factory are one view, **Plan a
@@ -58,6 +58,11 @@ checklist rows and finder plan mode. What only a factory needs is `ff-`.
     factory is $561,820 (furniture $427,500 + deposit $36,320 + Freight Truck T1 $98,000; the
     plan's $250 furniture delivery is a plan figure the save does not show), and the chain's
     total includes it. No "proposed" marker.
+13. **Size is the player's call.** Even a small warehouse can be made to work, so the Where
+    step neither filters out small buildings nor judges whether the machines fit. It lists every
+    warehouse size, H (690 m², 1 vehicle) to Q (2,610 m², 2 vehicles), with floor, vehicle slots,
+    rent and deposit as facts, ranked by rent, in every neighbourhood. The finder's own Size
+    filter (min / max) is there for the player to set, defaulting to all.
 
 ## One menu point: Plan a factory
 
@@ -128,7 +133,7 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
 | `Links` · 0b | The one menu point in the sidebar; the store checklist's button (same label, into step 1); every other way in and where it lands. |
 | `Recipe` · 1 | The lines with steppers, sizing on Custom (peak day: Wine ×2); made a week against what the shops take; raw material a week; saves a week. The shortage finding row (decision 4). The surplus valued as an export with its formula. The chain as a strip. |
 | `NoDepot` · 1b | No depot yet: to supply these shops the factory needs a depot, so the plan adds one. |
-| `Location` · 2 | Warehouse buildings of size I or larger in Industry City, ranked by rent: vehicles, rent, deposit, rent a week. Facts strip: warehouse building, ~90 days' deposit, vehicles per size, distance not counted. |
+| `Location` · 2 | Warehouse buildings of every size and neighbourhood, ranked by rent (H in Manhattan first): vehicles, rent, deposit, rent a week. Facts strip: warehouse building, ~90 days' deposit, vehicles per size, distance not counted. |
 | `Investment` · 3 | Self-installation (default), the shopping list by store with map pins, the total, then the financing panel. |
 | `InvestmentFirm` · 3b | Installation firm: 586 × 1,292 m² is more than the machines. |
 | `Checklist` · 4 | Until production, linked: the site, people, goods; quick buttons only for `hire` and `imports`; manual steps tagged "in the game". |
@@ -183,8 +188,6 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
 2. **Purchasing Agent discount** on raw material: model it (the store flow does for goods)?
 3. **Pallet shelves**: 12 is a placeholder; size them to raw material and output once the
    units per box are known.
-4. **Does a size I floor hold 3 workstations?** The size filter assumes I and up;
-   `web/maps/floor-plans.json` has the shells for a fit check.
 
 ## Porting plan
 
@@ -283,8 +286,9 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
 
 **`web/map.js`**
 
-- `options.plan` with `cat: "warehouse"` and a minimum size; the map switches to the Industry
-  City inset.
+- `options.plan` with `cat: "warehouse"`, no size preset (the existing Size filter stays the
+  player's, empty by default) and no fit check; the map shows the inset of the picked row's
+  region (Industry City or Manhattan).
 
 **Other**
 
