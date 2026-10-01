@@ -20,7 +20,8 @@
 //                        a sentence that opens with the message writes it).
 //   enBetween(key, a, b, params)
 //                        the fixed English between placeholders {a} and {b},
-//                        for a broad check ("is the limit" in any sentence).
+//                        for a broad check ("is the limit" in any sentence);
+//                        escapeRe(s) makes it safe inside new RegExp().
 //   textRe(key, params), enText(key, params)
 //                        enRe() and en() with the English's markup (<b>)
 //                        dropped, for innerText.
@@ -78,7 +79,11 @@ function catalogue(){
     throw new Error(`tools/i18n.py extract failed (${out.error ? out.error.message : `exit ${out.status}`}): ${out.stderr}`);
   }
   table = JSON.parse(out.stdout.toString('utf8'));
-  try { if (sig) fs.writeFileSync(cache, JSON.stringify({sig, table})); } catch (e) {}
+  try {
+    // Written aside and renamed, so a test file starting at the same moment
+    // never reads half a cache.
+    if (sig) { const part = `${cache}.${process.pid}`; fs.writeFileSync(part, JSON.stringify({sig, table})); fs.renameSync(part, cache); }
+  } catch (e) {}
   return table;
 }
 
@@ -136,12 +141,15 @@ const PLACEHOLDER = /\{(\w+)(?::([^{}]+))?\}/g;
    markup (<b>…</b>) is optional; with text it is dropped. */
 function enRe(key, params = {}, {flags = '', anchor = null, text = false, cap = false} = {}){
   const base = english(key);
+  // A plural form is chosen by a number n only: an n given as a RegExp (or
+  // not at all) matches either form.
+  const counted = typeof params.n === 'number';
   // A RegExp param goes in as a marker the escaping leaves alone.
   const patterns = [];
   params = Object.fromEntries(Object.entries(params).map(([k, v]) =>
     v instanceof RegExp ? [k, `\u0003${patterns.push(v.source) - 1}\u0003`] : [k, v]));
   const templates = typeof base === 'object'
-    ? (Object.prototype.hasOwnProperty.call(params, 'n') ? [ttEnglishOf(base, params)] : [base.one, base.other])
+    ? (counted ? [ttEnglishOf(base, params)] : [base.one, base.other])
     : [base];
   // A tag in the English (<b>, <span class="w">) is optional in the match, so
   // the same RegExp reads markup (data-tip, innerHTML) and innerText; with
@@ -220,4 +228,4 @@ function findMsg(w, key){
   return null;
 }
 
-module.exports = {catalogue, useCatalogue, english, en, enBetween, enText, enRe, textRe, wire, assertMsg, msgParam, findMsg};
+module.exports = {catalogue, useCatalogue, english, en, enBetween, enText, enRe, textRe, escapeRe: escape, wire, assertMsg, msgParam, findMsg};

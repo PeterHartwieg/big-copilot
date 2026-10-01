@@ -4,9 +4,9 @@
 // existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
-const {en, enBetween, enRe} = require('./_i18n.cjs');
+const {en, enBetween, enRe, escapeRe} = require('./_i18n.cjs');
 // Any ceiling sentence ("… is the limit; the fix is …"), whatever its numbers.
-const LIMIT = new RegExp([1, 2].map(n => enBetween('sp.cap.ceiling', 'limit', 'fix', {n}).trim()).join('|'));
+const LIMIT = new RegExp([1, 2].map(n => escapeRe(enBetween('sp.cap.ceiling', 'limit', 'fix', {n}).trim())).join('|'));
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');

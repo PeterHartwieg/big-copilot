@@ -36,6 +36,10 @@ test('enRe() leaves unfilled placeholders open, takes RegExp params and either p
   const add = h.enRe('t.add');
   assert.ok(add.test('Add 1 person: hire 1 Cook'));
   assert.ok(add.test('Add 3 people: hire 3 Cooks'));
+  const some = h.enRe('t.add', {n: /\d+/, who: 'x'}, {anchor: 'full'});
+  assert.ok(some.test('Add 1 person: x'), 'an n given as a RegExp takes the singular');
+  assert.ok(some.test('Add 12 people: x'), 'and the plural');
+  assert.ok(!some.test('Add many people: x'));
   const metres = h.enRe('t.metres', {n: /\d+/}, {anchor: 'full'});
   assert.ok(metres.test('12 m'));
   assert.ok(!metres.test('NaN m'));
@@ -55,6 +59,8 @@ test("the English's own tags are optional, or dropped for text; a param's markup
   assert.ok(!h.textRe('t.gap', {site: hostile, n: 1, role: 'Cook'}).test(' keeps 1 Cook open'));
   assert.equal(h.enBetween('t.ceiling', 'limit', 'fix', {n: 1}), ' is the limit; the fix is ');
   assert.equal(h.enBetween('t.ceiling', 'limit', 'fix', {n: 2}), ' are the limit; the fix is ');
+  assert.ok(new RegExp(h.escapeRe('a.b (c)?')).test('x a.b (c)? y'));
+  assert.ok(!new RegExp(h.escapeRe('a.b')).test('axb'));
 }));
 
 test('payload wires: wire(), assertMsg() with msgParam(), findMsg()', () => {
