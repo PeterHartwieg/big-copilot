@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Open a factory: 0b · The ways in: the store checklist, Plan a factory, Overview</title>
+<title>Plan a factory: 0c · One menu point, and every way in</title>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -1526,32 +1526,31 @@ td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)
 .ff-kind a{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:7px;color:var(--ink-2);font-size:13.5px;font-weight:500;text-decoration:none}
 .ff-kind a svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .ff-kind a.on{background:var(--ink);color:var(--ground)}
+.ff-pick{gap:10px 12px;border-bottom:0;min-height:54px}
+.ff-pick .ff-kind a{height:30px;font-size:12.5px}
+.ff-now{display:flex;align-items:center;gap:14px;margin-top:16px;padding:12px 16px;border-radius:12px;border:1px solid var(--rule-soft);background:var(--surface);font-size:13px;color:var(--ink-2)}
+.ff-now b{color:var(--ink);font-weight:600}
+.ff-now .ic{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:var(--accent);color:var(--on-accent)}
+.ff-now .ic svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ff-now .aside{margin-left:auto;display:flex;gap:16px}
+.ff-delta{font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--accent);margin-left:6px}
+.ff-ing td{padding:9px 10px}
+.ff-ing td.l b{font-weight:600}
 </style>
 </helmet>
-<div class="board os  {{theme}}" style="width: 1280px; height: 680px;">
+<div class="board os  {{theme}}" style="width: 1280px; height: 760px;">
 <div class="ff-links">
-  <div><h2>From the store flow's checklist</h2><p class="lead">Open a store › Until opening › Logistics. Today it goes to Plan a factory.</p>
-    <div class="ff-frame"><div class="os-cks" style="border-top:0"><div class="os-ck  "><span class="st"></span><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span><span class="tx"><b>Logistics</b><small>Beer, Bottle of Wine, Cigar, Cigarette, Whisky: nothing delivers here yet</small></span><span class="act"><a class="os-btn" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V10l6 4V10l6 4V6h6v15z"></path><path d="M7 17h2M12 17h2M17 17h2"></path></svg>Plan a factory<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></span></div></div></div>
-    <p class="lead" style="margin:16px 0 10px">With the factory flow: the depot's deliveries when it already imports the goods (a plan made in the game), the factory beside it.</p>
-    <div class="ff-frame ff-hl"><div class="os-cks" style="border-top:0"><div class="os-ck  "><span class="st"></span><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span><span class="tx"><b>Logistics</b><small>Nothing delivers here yet · <span class="ok">Brightwater Depot imports all five</span></small></span><span class="act"><a class="os-btn" href="#">Depot deliveries<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a><a class="os-btn" href="Main.dc.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V10l6 4V10l6 4V6h6v15z"></path><path d="M7 17h2M12 17h2M17 17h2"></path></svg>Open a factory<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></span></div></div></div></div>
-  <div><h2>From Plan a factory</h2><p class="lead">The planner keeps its job (size the lines, order ahead). Its sizing becomes step 1 of a plan.</p>
-    <div class="ff-frame"><div class="ff-planhead"><h3>Plan a factory</h3><span class="os-dim" style="font-size:12.5px">Liquor Store · 4 shops</span>
-  <div class="aside"><a class="os-cta sm" href="Recipe.dc.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V10l6 4V10l6 4V6h6v15z"></path><path d="M7 17h2M12 17h2M17 17h2"></path></svg>Open this factory<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></div></div>
-<div class="os-kpis ff-ghost" style="margin-top:12px;grid-template-columns:repeat(3,minmax(0,1fr))">
-  <div class="kpi"><span class="lab">Machines</span><span class="v">3</span></div>
-  <div class="kpi"><span class="lab">Made / week</span><span class="v">25,200</span></div>
-  <div class="kpi"><span class="lab">Raw material / week</span><span class="v">100,800</span></div></div></div>
-    <h2 style="margin-top:26px">From the Overview's tasks</h2><p class="lead">The task list gains one line, beside Plan a new factory.</p>
-    <div class="ff-frame" style="padding-top:14px"><div class="ff-planhead" style="margin-top:0"><h3 style="font-size:15px">Overview · tasks</h3></div>
-<div style="display:flex;flex-direction:column;gap:6px;margin-top:10px">
-  <a class="os-type" href="#">Find a suitable location</a>
-  <a class="os-type ff-hl" href="Main.dc.html">Open a factory <small>NEW</small></a>
-  <a class="os-type" href="#">Plan a new factory</a>
-  <a class="os-type" href="#">Explore market demand</a></div></div></div>
+  <div><h2>One menu point: Plan a factory</h2><p class="lead">Expansion keeps four views. Plan a factory is now the whole flow: the planner is its first step.</p>
+    <div class="ff-frame" style="padding:14px 18px">
+      <div class="os-views" style="margin:0;padding-left:12px"><a href="#">Demand</a><a href="#">Find a location</a><a href="#">Open a store</a><a class="on" href="#">Plan a factory</a></div></div>
+    <h2 style="margin-top:26px">From the store flow's checklist</h2><p class="lead">Open a store › Until opening › Logistics: the same button, now into step 1 with the store's type picked.</p>
+    <div class="ff-frame ff-hl"><div class="os-cks" style="border-top:0"><div class="os-ck  "><span class="st"></span><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.500" cy="17.500" r="1.800"></circle><circle cx="16.500" cy="17.500" r="1.800"></circle></svg></span><span class="tx"><b>Logistics</b><small>Nothing delivers here yet · <span class="ok">Brightwater Depot imports all five</span></small></span><span class="act"><a class="os-btn" href="#">Depot deliveries<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a><a class="os-btn" href="Main.dc.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V10l6 4V10l6 4V6h6v15z"></path><path d="M7 17h2M12 17h2M17 17h2"></path></svg>Plan a factory<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></span></div></div></div></div>
+  <div><h2>Every other way in</h2><p class="lead">All of them open the same route; the ones that know a factory open it on that factory.</p>
+    <div class="os-plans"><a class="os-plan" style="grid-template-columns:200px minmax(0,1fr) 20px" href="Main.dc.html"><span><b>Overview</b></span><span><b style="font-weight:500">Plan a new factory</b><small>the task list, unchanged</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a><a class="os-plan" style="grid-template-columns:200px minmax(0,1fr) 20px" href="Main.dc.html"><span><b>Expansion › Demand</b></span><span><b style="font-weight:500">Plan a chain</b><small>a type's row: the view opens on that type</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a><a class="os-plan" style="grid-template-columns:200px minmax(0,1fr) 20px" href="Main.dc.html"><span><b>Wiki › a business type</b></span><span><b style="font-weight:500">Plan a factory</b><small>the button opens the view on that type</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a><a class="os-plan" style="grid-template-columns:200px minmax(0,1fr) 20px" href="Grow.dc.html"><span><b>Supply › Production</b></span><span><b style="font-weight:500">Plan a factory</b><small>a factory's lines: the view opens on that factory</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a><a class="os-plan" style="grid-template-columns:200px minmax(0,1fr) 20px" href="Main.dc.html"><span><b>Find a location</b></span><span><b style="font-weight:500">Plan a factory</b><small>the finder's context strip</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a><a class="os-plan" style="grid-template-columns:200px minmax(0,1fr) 20px" href="Main.dc.html"><span><b>Search</b></span><span><b style="font-weight:500">new factory, plan a chain, open a factory</b><small>one entry, Plan a factory</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></div></div>
 </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":true,"section":"Theme"},"$preview":{"width":1280,"height":680}}'>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":true,"section":"Theme"},"$preview":{"width":1280,"height":760}}'>
 class Component extends DCLogic {
   renderVals() { return { theme: (this.props.dark ?? true) ? 'dark' : 'light' }; }
   componentDidMount() {

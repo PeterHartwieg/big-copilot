@@ -1,4 +1,4 @@
-# Open a factory: design notes
+# Plan a factory (open a factory): design notes
 
 Canvas: https://claude.ai/artifact/HVNSkyctB3YTsfTGCDoLWu (Design type). Generator:
 `build_canvas.py`; never hand-edit `project/`. `--preview` writes plain HTML to `_preview/`
@@ -15,8 +15,8 @@ checklist rows and finder plan mode. What only a factory needs is `ff-`.
 
 ## Peter's decisions (1 Oct 2026)
 
-1. **Entry: its own view**, Expansion › Open a factory. The single "Open a site" view with a
-   Store / Factory switch is dropped.
+1. **Entry: its own view under Expansion.** The single "Open a site" view with a Store /
+   Factory switch is dropped.
 2. **No break-even for a factory for now.** The Break even step is gone (five steps: What ·
    Where · Investment · Until production · Running), and so is every payback figure: days to
    pay back on the start page, the payback KPIs, chart and "paid back" state after opening,
@@ -34,6 +34,40 @@ checklist rows and finder plan mode. What only a factory needs is `ff-`.
    ranks by rent; it shows vehicles (parking slots: H 1, I to Q 2, one truck each) and the
    deposit.
 6. **Export prices from the game's own rule** (below): the surplus is valued as an export.
+7. **One menu point**: the factory flow and today's Plan a factory are one view, **Plan a
+   factory** (next section).
+
+## One menu point: Plan a factory
+
+**Name: Plan a factory.** It is the view's name today (`nav.view.factory`), the Overview task
+("Plan a new factory"), the store checklist's button, Supply › Production's button, the Wiki's
+"Open Plan a factory with {name} selected" and the search entry; keeping it keeps every link,
+translation and habit. It also covers both jobs: planning more output for a factory you run, and
+planning a new one through to production. Alternatives considered: "Open a factory" (the store
+flow's sibling, but it hides the owned-factory case), "Factories" (a place, not a job; the
+board's Expansion views are verbs), "Plan a chain" (the old internal name; a chain also means a
+store chain on Results).
+
+**How the view reads.** Two pickers above everything: **Shops** (the planner's existing type
+picker: owned types as segments, "Another type" as the dropdown) and **For** (**New factory**,
+then one segment per factory you run).
+
+- **For: New factory** (`Main`, `Recipe` … `Running`): the five steps What · Where · Investment
+  · Until production · Running. Step 1 is today's planner (lines with steppers, made a week
+  against what the shops take, raw material) plus the shortage row and the export value. A
+  player with no factory sees only New factory in the For picker.
+- **For: a factory you own** (`Grow`): no steps. The lines start at the machines running there
+  ("as now"), the steppers show the change (+2), the shortage row as above, then **What the
+  change needs** (the checklist rows for an addition: machines and recipes in the game, Hire n,
+  new ingredients on the contract in the game, Set amounts, the delivery plan in the game), then
+  today's **Ingredients** table (order ahead: company target, on order now, change, cash a week)
+  across all your factories, unchanged in meaning.
+
+Nothing Plan a factory offers today is lost: the type picker, the steppers, Made / week,
+Supplies (shops / surplus / short), Raw material / week, the kit list, the services note, the
+Ingredients order-ahead table (target, on order, change, cash, "not ordered", Smart, paused, no
+price) and its price span all stay; the Demand grid's "Plan a chain" link, the Wiki button and
+Supply › Production's button keep their targets.
 
 ## Export prices (confirmed in the game code, build on disk 1 Oct 2026)
 
@@ -59,14 +93,15 @@ Read from `BigAmbitions.dll` with `research/il_dump.py` (main checkout):
   write's dry run already returns it per product as `cap`. Until it is read, the canvas says
   exports pull the index down and does not size the drop.
 
-## Artboards (13)
+## Artboards (14)
 
 Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
 
 | File | Shows |
 | --- | --- |
-| `Main` · 0 | Expansion › Open a factory (NEW). What the chain's shops buy that a factory can make, sorted by what it saves a day: sold and imported a week, machines sized to the peak day, what they cost, the surplus a week, saves a day. Your factory plans. |
-| `Links` · 0b | The ways in: the store checklist's Logistics row, Plan a factory's "Open this factory", the Overview task list. |
+| `Main` · 0 | Expansion › Plan a factory, For: New factory, a player with no factory. What the chain's shops buy that a factory can make, sorted by what it saves a day: sold and imported a week, machines sized to the peak day, what they cost, the surplus a week, saves a day. Your factory plans. |
+| `Grow` · 0b | Plan a factory, For: 4 22nd Street (a factory the player runs): Beer +2, the shortage row, what the change needs, the Ingredients table. |
+| `Links` · 0c | The one menu point in the sidebar; the store checklist's button (same label, into step 1); every other way in and where it lands. |
 | `Recipe` · 1 | The lines with steppers, sizing on Custom (peak day: Wine ×2); made a week against what the shops take; raw material a week; saves a week. The shortage finding row (decision 4). The surplus valued as an export with its formula. The chain as a strip. |
 | `NoDepot` · 1b | No depot yet: to supply these shops the factory needs a depot, so the plan adds one. |
 | `Location` · 2 | Warehouse buildings of size I or larger in Industry City, ranked by rent: vehicles, rent, deposit, rent a week. Facts strip: warehouse building, ~90 days' deposit, vehicles per size, distance not counted. |
@@ -112,6 +147,16 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
    its newest member opened (`chain_window_day()`), so a paid-back chain's day moves to the
    factory's opening (day 170 here).
 
+## Design calls for Peter (new with the merge)
+
+1. **The For picker's place**: above the steps as drawn, or inside step 1 only (the steps then
+   show for every target, greyed for an owned factory)? Drawn: above, steps only for New factory.
+2. **Owned factory: where the additions go.** Drawn as one page (lines, what the change needs,
+   ingredients). Alternative: the same five steps with Where skipped and Investment showing
+   only the new machines. One page is shorter; the steps reuse more.
+3. **Badge**: Plan a factory is an existing view, so no NEW badge is drawn. Give it one for the
+   release?
+
 ## Open questions for Peter
 
 1. **Invested and vehicles.** `setup_cost()` counts furniture and deposit ($463,820 for this
@@ -127,46 +172,74 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
 
 ## Porting plan
 
+**One view: what happens to Plan a factory**
+
+- Keep the route `expansion/factory`, its host `["growth","plan"]`, the label
+  `nav.view.factory` "Plan a factory" and the legacy alias `growth/plan`. No new route, no new
+  `VIEW_NEW` (or a NEW badge on the existing view for one release, a changelog call).
+- `secPlan` stays the view's section; add `secPlanFlow` (the steps, plan strip and step bodies)
+  beside it in `SEC_PAGE` (`["growth","plan"]`). `secIngredients` stays and shows only for an
+  owned-factory target (it already hides in the store flow, `tests/open_store.test.cjs` 307–315).
+- `drawPlan()` gains the two pickers (it already builds the type picker; the For picker is new,
+  from `factoryView().sites`) and dispatches: For = an owned factory → today's lines seeded from
+  that factory's machines (`factoryCounts()` narrowed to one site), the change checklist, the
+  Ingredients table; For = New factory → `drawOpenFactory()`, the `of*` step bodies.
+  `planDraw()` keeps its arithmetic and is shared by both.
+- `PAGE_DRAWS`: the existing `["growth/plan", () => drawPlan()]` row stays the only row; the
+  flow draws from inside it.
+- Navigation tables: `ROUTES`/`routeLabel` unchanged; `tests/navigation.test.cjs` row
+  `['growth','plan','secPlan','growthNav']` gains `secPlanFlow` if the test lists sections;
+  `tests/shell_routes.test.cjs` (`expansion/factory`) and `tests/open_store.test.cjs` (the four
+  Expansion routes) stay as they are.
+- Search: the existing `plan` entry keeps `openRoute("expansion/factory")`; add synonyms "open a
+  factory", "new factory", "factory location", "add machines". No second entry.
+- Links that point at Plan a factory keep their target and gain a preset: the store checklist's
+  `osCkLogistics()` (type preset, For = New factory), Supply › Production's button (`sb.prod.plan`,
+  For = that factory), the Overview task, the Demand grid's `.mk-plan[data-plan]` (type), the
+  Wiki's `wikiPlanChain()` (type), the finder's `[data-fx="factory"]`. One helper,
+  `openPlan({type, target})`, sets `planType` and the new `planTarget` before `openRoute()`.
+- Tests that set `planType` and call `drawPlan()` (`tests/wiki.test.cjs`,
+  `tests/wiki-guides.test.cjs`, `tests/import_setto.test.cjs`, `tests/hostile_names.test.cjs`,
+  `tests/market.test.cjs`, `tests/layout.test.cjs` on `#planPicker`, `tests/i18n_layout.test.cjs`
+  on `#secPlan, #secIngredients`) keep working if `planTarget` defaults to the first owned factory,
+  else New factory, and `#planPicker` keeps its id.
+- `docs/architecture.md`: the views table row "Plan a factory (`plan`)" gains `secPlanFlow`; the
+  payload row `plan` gains `openFactory`.
+
 **Python, `ba_dashboard.py`**
 
-- New `_open_factory(save, names, businesses, chains, premises)` beside `_open_store()`,
-  payload key `openFactory`:
-  - per chain (`_chains()`), the products its shops sell that a recipe makes: sold a day,
-    `import_price` and `export_price` per product (wholesale × `importPriceIndex` ×
-    `marketPriceMultiplier`, × `exportMultiplier` for exports), recipe, kit;
-  - per depot, what it imports (for the store checklist's link and the no-depot state);
+- New `_open_factory(save, names, businesses, chains, premises)`, payload key `openFactory`:
+  - per type (the planner's catalogue), import and export price per product (wholesale ×
+    `importPriceIndex` × `marketPriceMultiplier`, × `exportMultiplier` for exports);
+  - per depot, what it imports (the store checklist's link and the no-depot state);
   - candidate buildings: `_premises()` rows with `t == "warehouse"`, with `vehicles`
     (H 1, I/P/Q 2);
-  - HQ facts: free Logistics Managers and Purchasing Agents, free computer workstations.
+  - HQ facts: free Logistics Managers and Purchasing Agents, free computer workstations;
+  - per owned factory, which ingredients are on its import contracts (for "not on the contract
+    yet").
 - Reuse `_recipes()`, `_workstations()`, `_plan()` (`D.plan`); `setup_cost()` unchanged for the
   shopping list; vehicle prices from `ba_store_rules.json` `vehicles`.
 - `make_store_rules.py`: add `Item.maxOrderAmountPerImporter` per product, so the index drop
   from exports can be sized.
 - `_payback()` unchanged: the factory stays a cost centre.
-- `docs/dashboard-reference.md` "Open a factory": the export price rule and the index drop.
+- `docs/dashboard-reference.md` "Plan a factory": the For picker, the export price rule.
 
 **Board script (TEMPLATE)**
 
-- New `of*` functions mirroring `os*`: `ofLoad/ofSave` (`ba_open_factory_v1:<character>`),
-  `ofCtlHtml` (five steps), `ofStripHtml`, `ofWhatHtml`, `ofLinesHtml` (steppers on
-  `planDraw()`'s arithmetic; the shortage row when a custom count leaves the shops short),
-  `ofInvestHtml` (reuse `osStores()`, `osToolbar()`, `osWhy()`), the financing panel through
-  `osLoan()`/`osLoanLimit()` without `osLoanDays()`, `ofUntilRows` (reuse `osAct()`,
-  `osIngame()`, the `os-ck` rows), `ofRunHtml` (output against plan, exports, raw material).
+- `of*` functions mirroring `os*`: `ofLoad/ofSave` (`ba_open_factory_v1:<character>`),
+  `ofCtlHtml` (five steps), `ofStripHtml`, `ofWhatHtml`, the shortage row, `ofInvestHtml` (reuse
+  `osStores()`, `osToolbar()`, `osWhy()`), the financing panel through `osLoan()`/`osLoanLimit()`,
+  `ofUntilRows` and the owned-factory change rows (reuse `osAct()`, `osIngame()`, the `os-ck`
+  rows), `ofRunHtml`.
 - Write buttons: `hrReview({scope:"site"})` for the factory, Quick hire for the HQ agent,
-  `gwImports()` for the contract's amounts and the depot's own lines.
-- Route `expansion/openfactory`, `VIEW_NEW`, a `PAGE_DRAWS` row, the navigation tables
-  (`tests/navigation.test.cjs`), a search synonym.
-- Store checklist: `osCkLogistics()` gains "Open a factory" and "Depot deliveries". Plan a
-  factory gains "Open this factory". Overview: one `ov-task` line.
+  `gwImports()` for amounts and the depot's own lines.
 
 **`web/map.js`**
 
-- `options.plan` with `cat: "warehouse"` and a minimum size; no distance anchor; the map
-  switches to the Industry City inset.
+- `options.plan` with `cat: "warehouse"` and a minimum size; the map switches to the Industry
+  City inset.
 
 **Other**
 
-- `docs/architecture.md` registries (view, payload key), a changelog entry, i18n keys.
-- Tests: `tests/test_open_factory.py` (synthetic fixtures; the export price rule),
-  `tests/open_factory.test.cjs`, slice anchors for the `of*` block.
+- A changelog entry, i18n keys, `tests/test_open_factory.py` (synthetic fixtures; the export
+  price rule), `tests/open_factory.test.cjs`, slice anchors for the `of*` block.
