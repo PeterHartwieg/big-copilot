@@ -954,6 +954,64 @@ say so. The cash figure states its own coverage: *one week of stock costs $X acr
 of 22 ingredients this company already buys*. Estimating the other ten would be inventing
 a price list.
 
+### The flow: five steps, for a new factory or one you run
+
+Plan a factory is one view with two pickers above five steps: **Shops** (the business
+type the factory supplies) and **For** (**New factory**, then each factory you run). The
+steps are What · Where · Investment · Until production · Running. There is no break-even
+and no payback figure for a factory: it is a cost centre of its chain, and its saving
+shows in the shops' results.
+
+- **What** is the planner above. For a new factory with no plan yet, a table first lists
+  what your shops of the type buy that a factory can make: sold a week, the imports that
+  costs, the machines sized to the peak day, what they cost, the surplus and what the line
+  saves a day (the imports it replaces, less the raw material it eats). **Size to** sets
+  every line to the peak day, an average day, or, for a factory you run, as it runs now;
+  a stepper makes it Custom. A line left short of what the shops take is a finding row
+  ("Bottle of Wine stays short"), saying where the rest still comes from; it never advises
+  more machines or another site. A surplus is valued as an export (below). With no depot
+  in the company, the plan adds one beside the factory: the cheapest warehouse building in
+  its neighbourhood, eight pallet shelves, a Vord Courier D500 and its driver.
+- **Where** is Find a location in plan mode on warehouse buildings, every size and
+  neighbourhood, ranked by rent, cheapest first, with each building's floor, its parking
+  (an H one vehicle, I to Q two), rent and deposit. Size is your call: the finder's own
+  Size filter is empty by default and nothing judges whether the machines fit. Distance
+  costs nothing in the game and is not counted. A factory you run has its Where ticked:
+  "4 22nd Street · yours".
+- **Investment** is the one-off, upfront cost only: each workstation's machines at list
+  price, the pallet shelves, the installation firm's fee (586 a m² of floor) or a furniture
+  delivery per store (self-installation, the default), the deposit and a Freight Truck T1
+  ($98,000 at General US Trucks). The financing panel prices a loan as Open a store does:
+  borrowed, cash upfront, repaid a day and the interest over its term. For a factory you
+  run it is only the new machines and the shelves its plan needs beyond those standing;
+  the firm would price the whole floor again.
+- **Running costs** a week sit in the plan strip behind a dashed edge, never in the
+  investment: the raw material at import prices, the wages (factory workers paid the
+  machines' hours, a driver a flat 5.7 hours a day, a Purchasing Agent or Logistics
+  Manager the plan has to hire at 40 hours) and the rent. For a factory you run, only the
+  added raw material and the new workers.
+- **Until production** is a checklist in three groups (the site, people, goods in and
+  out), ticked from the save. Hiring (Staff this factory) and the weekly import amounts are
+  buttons when the game link has the write; machines, recipes, contracts, the delivery
+  plan, the truck and its driver are steps in the game.
+- **Running** compares what the factory makes a week with the plan, what reaches the
+  depot with what the shops take, what goes to the piers and the raw material that
+  arrives, line by line, and names the two causes it knows: machine-hours nobody staffs,
+  and raw material that arrives short.
+
+**Prices.** An import costs the item's wholesale price × the product's import price index
+(1 where the market has none, as for raw material) × the public prices multiplier, less
+the best Purchasing Agent's discount, 0.25 × skill / 100 (a company with none is planned
+at skill 100). A pier pays the wholesale price × the index × the public prices × the export
+price, with no discount (`ProductMarketHelper.GetProductExportPrice`). Each week's exports
+pull the index down by a quarter of what is exported over the importer's weekly cap, never
+below 0.5.
+
+**Wages** are the game's own: the skill's base hourly wage × (1 + 1.05^100 / 100) × the
+salary multiplier, at skill 100. **Storage**: a Pallet Shelf holds 60 boxes and a box holds
+the item's own box size; the plan sizes the shelves to a week of raw material and two days
+of output.
+
 ## Open a store
 
 Expansion › Open a store plans a store that does not exist yet, in four steps: what to
