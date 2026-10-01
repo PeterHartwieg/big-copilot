@@ -188,8 +188,10 @@ test('a paused order or delivery gap is a review action, not an invented quantit
   ]});
   assert.equal(rows.length, 2);
   assert.ok(rows.every(r => r.proposed === null));
-  assert.match(rows[0].reason, /paused/);
-  assert.match(rows[1].reason, /one-off supply/);
+  // The site's one-offs come ahead of its import changes.
+  assert.deepEqual(rows.map(r => r.item), ['Sugar', 'Flour']);
+  assert.match(rows[1].reason, /paused/);
+  assert.match(rows[0].reason, /one-off supply/);
   // A paused backup a route covers is no action: its fact is covered.
   assert.deepEqual(build({checks:[{s:0, item:'Water', paused:true, covered:true, from:'Importer',
     fact:fact('covered', {why:'route'})}]}), []);
@@ -252,6 +254,32 @@ test('an order short of its week that also runs dry before the drop gives the on
   // Stock that reaches the drop leaves the order alone.
   assert.deepEqual(build({imports:[{s:0, rows:[order({fact:short})]}], checks:[{...run, coverFit:'ok', catchUp:0}]})
     .map(r => r.kind), ['Weekly imports']);
+});
+
+test('the one-offs come first by site, ahead of all its order changes, in the copied text too', () => {
+  const short = fact('short', {why:'order', lvl:'critical', setTo:1500});
+  const big = order({item:'Flour', current:5000, inGame:5000, setTo:9000, value:9000, fact:fact('short', {why:'order', setTo:9000})});
+  const run = {s:0, item:'Sugar', coverFit:'short', shortBy:2.3, catchUp:540, runsOut:'Friday', fact:short};
+  const other = {s:1, item:'Salt', coverFit:'short', shortBy:1.5, catchUp:90, runsOut:'Thursday',
+    fact:fact('short', {why:'shortfall'})};
+  const rows = build({imports:[{s:0, rows:[big, order({fact:short})]}, {s:1, rows:[order({s:1, item:'Salt', fact:fact('short', {why:'order', setTo:1500})})]}],
+    checks:[run, other]});
+  assert.deepEqual(rows.map(r => [r.kind, r.site, r.item]), [
+    ['Before the next delivery', 0, 'Sugar'], ['Weekly imports', 0, 'Flour'], ['Weekly imports', 0, 'Sugar'],
+    ['Before the next delivery', 1, 'Salt'], ['Weekly imports', 1, 'Salt']]);
+  const text = context.orderChecklistText(rows, 'Company');
+  const at = words => text.indexOf(words);
+  assert.ok(at('Sugar: add 540 units once') < at('Flour: '), text);
+  assert.ok(at('Flour: ') < at('Salt: add 90 units once'), text);
+});
+
+test('a factory topped up each morning whose own import is short and runs dry gets both, the one-off first', () => {
+  const imp = fact('short', {why:'order', lvl:'critical', role:'input', cad:'weekly', setTo:1500});
+  const outer = fact('covered', {role:'input', cad:'daily', import:imp, imp:true});
+  const rows = build({imports:[{s:1, rows:[order({s:1, item:'Water', fact:imp})]}],
+    checks:[{s:1, item:'Water', coverFit:'short', shortBy:2, catchUp:480, runsOut:'Friday', fact:outer}]});
+  assert.deepEqual(rows.map(r => [r.kind, r.item, r.proposed]),
+    [['Before the next delivery', 'Water', 480], ['Weekly imports', 'Water', 1500]]);
 });
 
 test('completion identities survive site reordering but change with settings and sources', () => {

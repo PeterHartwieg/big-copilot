@@ -11858,7 +11858,11 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
         tt("sb.ck.oneOff", "Arrange a one-off supply; a weekly order change alone will not bridge this gap.")]));
       if(!catchUp) row.lead = tt("sb.ck.lead.runOut",
         {one: "stock may run out {n} day before a scheduled delivery", other: "stock may run out {n} days before a scheduled delivery"}, {n: r.shortBy});
-      const order = rows.findIndex(x => x.kind === "Weekly imports" && x.site === r.s && x.slug === r.slug);
+      /* The one-offs come first by site, not by line: the rows are grouped
+         by kind and site below, so this site's "Before the next delivery"
+         group goes ahead of its Weekly imports group, its other one-offs
+         with it. */
+      const order = rows.findIndex(x => x.kind === "Weekly imports" && x.site === r.s);
       if(order >= 0) rows.splice(order, 0, rows.pop());
     }
   });
