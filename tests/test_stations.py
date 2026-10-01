@@ -128,9 +128,7 @@ def site(name="Pump", number=3, basket=12.0):
 def grid_of(b, crew, stations, name="Pump", basket=12.0):
     [grid] = _hourly(
         Save({}, {}, ""), [b],
-        # Of the building's own type, as every real business is: a station
-        # limited to some types (works_in()) counts only there.
-        [dict(site(name, number=b["StreetNumber"], basket=basket), typeSlug=b["businessTypeName"])],
+        [site(name, number=b["StreetNumber"], basket=basket)],
         stations, set(), crew, NAMES,
     )
     return grid

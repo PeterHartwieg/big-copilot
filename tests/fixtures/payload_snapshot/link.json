@@ -1952,7 +1952,74 @@
  },
  "officeStaffing": [],
  "openStore": {
-  "built": {},
+  "built": {
+   "ba:street_broadway#2": {
+    "placed": 3,
+    "req": [
+     [
+      "anyprimaryproduct",
+      1,
+      0
+     ],
+     [
+      "pointofsales",
+      1,
+      1
+     ],
+     [
+      "stackofshoppingbaskets",
+      1,
+      0
+     ]
+    ],
+    "seating": false,
+    "sells": []
+   },
+   "ba:street_fifthavenue#4": {
+    "placed": 2,
+    "req": [
+     [
+      "anyprimaryproduct",
+      1,
+      0
+     ],
+     [
+      "pointofsales",
+      1,
+      1
+     ],
+     [
+      "stackofshoppingbaskets",
+      1,
+      0
+     ]
+    ],
+    "seating": false,
+    "sells": []
+   },
+   "ba:street_secondavenue#10": {
+    "placed": 3,
+    "req": [
+     [
+      "anyprimaryproduct",
+      1,
+      0
+     ],
+     [
+      "pointofsales",
+      1,
+      1
+     ],
+     [
+      "stackofshoppingbaskets",
+      1,
+      0
+     ]
+    ],
+    "seating": false,
+    "sells": []
+   }
+  },
   "campaigns": [
    [
     "smallinternet",
@@ -1985,7 +2052,32 @@
     600
    ]
   ],
-  "decor": {},
+  "decor": {
+   "C1": {
+    "50": {
+     "cost": 2775.0,
+     "floor": "f6ziX3fRZEKK04LyuFsYlw==",
+     "floorPrice": 5,
+     "floors": 225,
+     "score": 50,
+     "wall": "4B8VksD+f0iunv1XsGj78Q==",
+     "wallPrice": 30,
+     "walls": 55
+    }
+   },
+   "K1": {
+    "50": {
+     "cost": 6660.0,
+     "floor": "f6ziX3fRZEKK04LyuFsYlw==",
+     "floorPrice": 5,
+     "floors": 660,
+     "score": 50,
+     "wall": "4B8VksD+f0iunv1XsGj78Q==",
+     "wallPrice": 30,
+     "walls": 112
+    }
+   }
+  },
   "finance": {
    "banks": [
     {
@@ -2079,12 +2171,4215 @@
     "strength": 1
    }
   },
-  "items": {},
-  "market": {},
+  "items": {
+   "ba:itemname_armchair1": {
+    "p": 130.0,
+    "v": [
+     "ba:street_fourthstreet#50"
+    ]
+   },
+   "ba:itemname_bakeryshowcase": {
+    "p": 895.0,
+    "v": [
+     "ba:street_fourthavenue#16"
+    ]
+   },
+   "ba:itemname_beachtowelextended": {
+    "p": 20.0,
+    "v": [
+     "ba:street_seventhavenue#5"
+    ]
+   },
+   "ba:itemname_boxingbag": {
+    "p": 450.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
+   "ba:itemname_cashregister": {
+    "p": 900.0,
+    "v": [
+     "ba:street_eleventhstreet#16",
+     "ba:street_fifthavenue#13",
+     "ba:street_fourthavenue#16",
+     "ba:street_seventhavenue#13"
+    ]
+   },
+   "ba:itemname_changingroom": {
+    "p": 1000.0,
+    "v": [
+     "ba:street_fifthavenue#13",
+     "ba:street_seventhavenue#13"
+    ]
+   },
+   "ba:itemname_checkoutcounterleft": {
+    "p": 2300.0,
+    "v": [
+     "ba:street_fifthavenue#13",
+     "ba:street_seventhavenue#13"
+    ]
+   },
+   "ba:itemname_clothingrack": {
+    "p": 490.0,
+    "v": [
+     "ba:street_fifthavenue#13",
+     "ba:street_seventhavenue#13"
+    ]
+   },
+   "ba:itemname_coatcheckleft": {
+    "p": 3000.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
+   "ba:itemname_computer": {
+    "p": 900.0,
+    "v": [
+     "ba:street_fourthavenue#39",
+     "ba:street_fourthstreet#50"
+    ]
+   },
+   "ba:itemname_counter1": {
+    "p": 470.0,
+    "v": [
+     "ba:street_fifthavenue#13",
+     "ba:street_fourthavenue#16",
+     "ba:street_fourthstreet#50"
+    ]
+   },
+   "ba:itemname_djbooth": {
+    "p": 1000.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
+   "ba:itemname_drinksfridge": {
+    "p": 875.0,
+    "v": [
+     "ba:street_eleventhstreet#16",
+     "ba:street_fourthavenue#16"
+    ]
+   },
+   "ba:itemname_drinksshelf": {
+    "p": 850.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
+   "ba:itemname_fitball": {
+    "p": 60.0,
+    "v": [
+     "ba:street_eleventhstreet#16",
+     "ba:street_fourthstreet#50"
+    ]
+   },
+   "ba:itemname_fitnessplanningboard": {
+    "p": 375.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
+   "ba:itemname_fitnesstrampoline": {
+    "p": 525.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
+   "ba:itemname_flatwoodendisplaystand": {
+    "p": 400.0,
+    "v": [
+     "ba:street_fourthavenue#16"
+    ]
+   },
+   "ba:itemname_fruitpallet": {
+    "p": 1200.0,
+    "v": [
+     "ba:street_fourthavenue#16"
+    ]
+   },
+   "ba:itemname_gymlockers": {
+    "p": 2350.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
+   "ba:itemname_hairdresserchair": {
+    "p": 1250.0,
+    "v": [
+     "ba:street_fifthavenue#13"
+    ]
+   },
+   "ba:itemname_hairdresserheadwash": {
+    "p": 2400.0,
+    "v": [
+     "ba:street_fifthavenue#13"
+    ]
+   },
+   "ba:itemname_hairdressershelf": {
+    "p": 600.0,
+    "v": [
+     "ba:street_fifthavenue#13"
+    ]
+   },
+   "ba:itemname_hotdoggrill": {
+    "p": 2200.0,
+    "v": [
+     "ba:street_fourthavenue#16"
+    ]
+   },
+   "ba:itemname_icecreamcounter": {
+    "p": 1800.0,
+    "v": [
+     "ba:street_fourthavenue#16"
+    ]
+   },
+   "ba:itemname_industrialcoffeemachine": {
+    "p": 4700.0,
+    "v": [
+     "ba:street_fourthavenue#16"
+    ]
+   },
+   "ba:itemname_industrialfreezer": {
+    "p": 4800.0,
+    "v": [
+     "ba:street_fourthavenue#16"
+    ]
+   },
+   "ba:itemname_industrialfridge": {
+    "p": 3300.0,
+    "v": [
+     "ba:street_fourthavenue#16"
+    ]
+   },
+   "ba:itemname_industrialfryermachine": {
+    "p": 4400.0,
+    "v": [
+     "ba:street_fourthavenue#16"
+    ]
+   },
+   "ba:itemname_industrialgrill": {
+    "p": 1400.0,
+    "v": [
+     "ba:street_fourthavenue#16"
+    ]
+   },
+   "ba:itemname_jewelryfloorshowcase": {
+    "p": 8900.0,
+    "v": [
+     "ba:street_fifthavenue#13",
+     "ba:street_seventhavenue#13"
+    ]
+   },
+   "ba:itemname_loadedbarbell": {
+    "p": 2100.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
+   "ba:itemname_loudspeaker4": {
+    "p": 80.0,
+    "v": [
+     "ba:street_fourthstreet#50",
+     "ba:street_seventhavenue#13"
+    ]
+   },
+   "ba:itemname_officedesk1": {
+    "p": 800.0,
+    "v": [
+     "ba:street_fifthavenue#68",
+     "ba:street_fourthavenue#39",
+     "ba:street_fourthstreet#50"
+    ]
+   },
+   "ba:itemname_pizzaoven": {
+    "p": 10756.0,
+    "v": [
+     "ba:street_fourthavenue#16"
+    ]
+   },
+   "ba:itemname_productdisplaystandtiered": {
+    "p": 450.0,
+    "v": [
+     "ba:street_fifthavenue#13"
+    ]
+   },
+   "ba:itemname_productdisplaytable": {
+    "p": 3250.0,
+    "v": [
+     "ba:street_fifthavenue#13",
+     "ba:street_seventhavenue#13"
+    ]
+   },
+   "ba:itemname_productpanel": {
+    "p": 500.0,
+    "v": [
+     "ba:street_fifthavenue#13"
+    ]
+   },
+   "ba:itemname_publicshower": {
+    "p": 2600.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
+   "ba:itemname_pullupbar": {
+    "p": 280.0,
+    "v": [
+     "ba:street_eleventhstreet#16",
+     "ba:street_fourthstreet#50"
+    ]
+   },
+   "ba:itemname_roundedshelf": {
+    "p": 1200.0,
+    "v": [
+     "ba:street_fifthavenue#13"
+    ]
+   },
+   "ba:itemname_saladbar": {
+    "p": 4000.0,
+    "v": [
+     "ba:street_fourthavenue#16"
+    ]
+   },
+   "ba:itemname_singlebookshelf": {
+    "p": 350.0,
+    "v": [
+     "ba:street_fifthavenue#13"
+    ]
+   },
+   "ba:itemname_sink": {
+    "p": 220.0,
+    "v": [
+     "ba:street_fourthstreet#50",
+     "ba:street_seventhavenue#13"
+    ]
+   },
+   "ba:itemname_stackofshoppingbaskets": {
+    "p": 200.0,
+    "v": [
+     "ba:street_eleventhstreet#16",
+     "ba:street_fifthavenue#13",
+     "ba:street_fourthavenue#16",
+     "ba:street_seventhavenue#13"
+    ]
+   },
+   "ba:itemname_standingdigitalscale": {
+    "p": 250.0,
+    "v": [
+     "ba:street_fourthavenue#16"
+    ]
+   },
+   "ba:itemname_tobaccoshelf1": {
+    "p": 1895.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
+   "ba:itemname_toilet": {
+    "p": 380.0,
+    "v": [
+     "ba:street_fourthstreet#50",
+     "ba:street_seventhavenue#13"
+    ]
+   },
+   "ba:itemname_toiletstall": {
+    "p": 2100.0,
+    "v": [
+     "ba:street_eleventhstreet#16",
+     "ba:street_seventhavenue#13"
+    ]
+   },
+   "ba:itemname_uniformlocker": {
+    "p": 1950.0,
+    "v": [
+     "ba:street_fifthavenue#13",
+     "ba:street_seventhavenue#13"
+    ]
+   },
+   "ba:itemname_wineshelf": {
+    "p": 1570.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
+   "ba:itemname_woodencocktailbarbeershelf": {
+    "p": 850.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
+   "ba:itemname_woodencocktailbardrinkscounter": {
+    "p": 690.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
+   "ba:itemname_woodenproductcrate": {
+    "p": 150.0,
+    "v": [
+     "ba:street_fourthavenue#16"
+    ]
+   }
+  },
+  "market": {
+   "ba:itemname_apple": {
+    "cost": 0.24,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 2.89,
+    "r": 1,
+    "s": 0
+   },
+   "ba:itemname_banana": {
+    "cost": 0.195,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 2.35,
+    "r": 1,
+    "s": 0
+   },
+   "ba:itemname_beer": {
+    "cost": 1.5,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 12,
+    "r": 0.66,
+    "s": 0
+   },
+   "ba:itemname_bottleofwine": {
+    "cost": 4.35,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 21,
+    "r": 0.7,
+    "s": 0
+   },
+   "ba:itemname_burger": {
+    "cost": 3.5625,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 12.5,
+    "r": 0.75,
+    "s": 0
+   },
+   "ba:itemname_carrot": {
+    "cost": 0.21,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 2.24,
+    "r": 0.95,
+    "s": 0
+   },
+   "ba:itemname_cheapflower": {
+    "cost": 4.5,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 25,
+    "r": 0.6,
+    "s": 0
+   },
+   "ba:itemname_cheapgift": {
+    "cost": 3.75,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 18,
+    "r": 0.85,
+    "s": 0
+   },
+   "ba:itemname_cheapjewelry": {
+    "cost": 68.25,
+    "d": 1,
+    "hoods": {},
+    "opt": 3,
+    "p": 160,
+    "r": 0.8,
+    "s": 0
+   },
+   "ba:itemname_cigar": {
+    "cost": 2.7,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 12,
+    "r": 0.5,
+    "s": 0
+   },
+   "ba:itemname_cigarette": {
+    "cost": 2.4,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 10,
+    "r": 0.8,
+    "s": 0
+   },
+   "ba:itemname_classiccheapfemaleclothing": {
+    "cost": 18.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 5,
+    "p": 55,
+    "r": 0.5,
+    "s": 0
+   },
+   "ba:itemname_classiccheapmaleclothing": {
+    "cost": 18.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 5,
+    "p": 55,
+    "r": 0.5,
+    "s": 0
+   },
+   "ba:itemname_classicexpensivefemaleclothing": {
+    "cost": 30.75,
+    "d": 1,
+    "hoods": {},
+    "opt": 4,
+    "p": 122,
+    "r": 0.35,
+    "s": 0
+   },
+   "ba:itemname_classicexpensivemaleclothing": {
+    "cost": 30.75,
+    "d": 1,
+    "hoods": {},
+    "opt": 4,
+    "p": 122,
+    "r": 0.35,
+    "s": 0
+   },
+   "ba:itemname_coatcheckfee": {
+    "cost": 0.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 5,
+    "r": 0.66,
+    "s": 1
+   },
+   "ba:itemname_croissant": {
+    "cost": 2.1825,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 7.2,
+    "r": 0.45,
+    "s": 0
+   },
+   "ba:itemname_cupcake": {
+    "cost": 1.575,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 5.2,
+    "r": 0.45,
+    "s": 0
+   },
+   "ba:itemname_cupofcoffee": {
+    "cost": 0.675,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 3.9,
+    "r": 0.9,
+    "s": 0
+   },
+   "ba:itemname_cupoftea": {
+    "cost": 0.675,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 3.9,
+    "r": 0.9,
+    "s": 0
+   },
+   "ba:itemname_donut": {
+    "cost": 1.14,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 3.8,
+    "r": 0.7,
+    "s": 0
+   },
+   "ba:itemname_earbuds01": {
+    "cost": 59.25,
+    "d": 1,
+    "hoods": {},
+    "opt": 3,
+    "p": 159,
+    "r": 0.24,
+    "s": 0
+   },
+   "ba:itemname_energydrink": {
+    "cost": 0.675,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 3.9,
+    "r": 0.9,
+    "s": 0
+   },
+   "ba:itemname_expensiveflower": {
+    "cost": 7.5,
+    "d": 1,
+    "hoods": {},
+    "opt": 6,
+    "p": 40,
+    "r": 0.4,
+    "s": 0
+   },
+   "ba:itemname_expensivegift": {
+    "cost": 5.25,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 32,
+    "r": 0.5,
+    "s": 0
+   },
+   "ba:itemname_expensivejewelry": {
+    "cost": 576.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 2,
+    "p": 1270,
+    "r": 0.175,
+    "s": 0
+   },
+   "ba:itemname_frenchfries": {
+    "cost": 1.665,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 6.25,
+    "r": 0.8,
+    "s": 0
+   },
+   "ba:itemname_freshfood": {
+    "cost": 1.875,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 8,
+    "r": 0.55,
+    "s": 0
+   },
+   "ba:itemname_frozenfood": {
+    "cost": 0.825,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 6,
+    "r": 0.55,
+    "s": 0
+   },
+   "ba:itemname_gymcovercharge": {
+    "cost": 0.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 20,
+    "r": 1,
+    "s": 1
+   },
+   "ba:itemname_haircareproduct": {
+    "cost": 6.75,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 19,
+    "r": 0.2,
+    "s": 0
+   },
+   "ba:itemname_hairchemicalfee": {
+    "cost": 0.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 3,
+    "p": 150,
+    "r": 0.15,
+    "s": 1
+   },
+   "ba:itemname_haircuttingfee": {
+    "cost": 0.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 5,
+    "p": 80,
+    "r": 0.65,
+    "s": 1
+   },
+   "ba:itemname_hairshampooingfee": {
+    "cost": 0.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 5,
+    "p": 60,
+    "r": 0.45,
+    "s": 1
+   },
+   "ba:itemname_hairstylingfee": {
+    "cost": 0.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 4,
+    "p": 105,
+    "r": 0.3,
+    "s": 1
+   },
+   "ba:itemname_headphones01": {
+    "cost": 150.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 2,
+    "p": 349,
+    "r": 0.16,
+    "s": 0
+   },
+   "ba:itemname_hotdog": {
+    "cost": 3.3375,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 11.65,
+    "r": 0.66,
+    "s": 0
+   },
+   "ba:itemname_hourlyeventplanningfee": {
+    "cost": 0.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 3,
+    "p": 150,
+    "r": 1,
+    "s": 1
+   },
+   "ba:itemname_hourlygraphicdesignerfee": {
+    "cost": 0.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 3,
+    "p": 160,
+    "r": 1,
+    "s": 1
+   },
+   "ba:itemname_hourlylawyerfee": {
+    "cost": 0.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 3,
+    "p": 225,
+    "r": 1,
+    "s": 1
+   },
+   "ba:itemname_hourlyprogrammerfee": {
+    "cost": 0.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 3,
+    "p": 165,
+    "r": 1,
+    "s": 1
+   },
+   "ba:itemname_hourlytravelconsultantfee": {
+    "cost": 0.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 3,
+    "p": 145,
+    "r": 1,
+    "s": 1
+   },
+   "ba:itemname_icecream": {
+    "cost": 3.2475,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 11.5,
+    "r": 0.35,
+    "s": 0
+   },
+   "ba:itemname_kabob": {
+    "cost": 3.9,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 14,
+    "r": 0.66,
+    "s": 0
+   },
+   "ba:itemname_lettuce": {
+    "cost": 0.21,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 2.12,
+    "r": 0.9,
+    "s": 0
+   },
+   "ba:itemname_limitededitionbook": {
+    "cost": 33.75,
+    "d": 1,
+    "hoods": {},
+    "opt": 4,
+    "p": 90,
+    "r": 0.35,
+    "s": 0
+   },
+   "ba:itemname_margarita": {
+    "cost": 3.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 16,
+    "r": 0.7,
+    "s": 0
+   },
+   "ba:itemname_martini": {
+    "cost": 3.75,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 20,
+    "r": 0.7,
+    "s": 0
+   },
+   "ba:itemname_moderncheapfemaleclothing": {
+    "cost": 20.25,
+    "d": 1,
+    "hoods": {},
+    "opt": 5,
+    "p": 57,
+    "r": 0.5,
+    "s": 0
+   },
+   "ba:itemname_moderncheapmaleclothing": {
+    "cost": 20.25,
+    "d": 1,
+    "hoods": {},
+    "opt": 5,
+    "p": 57,
+    "r": 0.5,
+    "s": 0
+   },
+   "ba:itemname_modernexpensivefemaleclothing": {
+    "cost": 33.75,
+    "d": 1,
+    "hoods": {},
+    "opt": 4,
+    "p": 127,
+    "r": 0.35,
+    "s": 0
+   },
+   "ba:itemname_modernexpensivemaleclothing": {
+    "cost": 33.75,
+    "d": 1,
+    "hoods": {},
+    "opt": 4,
+    "p": 127,
+    "r": 0.35,
+    "s": 0
+   },
+   "ba:itemname_motivationalbook": {
+    "cost": 7.5,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 25,
+    "r": 0.7,
+    "s": 0
+   },
+   "ba:itemname_nightclubweekdaycovercharge": {
+    "cost": 0.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 15,
+    "r": 1,
+    "s": 1
+   },
+   "ba:itemname_nightclubweekendcovercharge": {
+    "cost": 0.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 30,
+    "r": 1,
+    "s": 1
+   },
+   "ba:itemname_novel": {
+    "cost": 8.625,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 28,
+    "r": 0.66,
+    "s": 0
+   },
+   "ba:itemname_pear": {
+    "cost": 0.2175,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 2.62,
+    "r": 0.85,
+    "s": 0
+   },
+   "ba:itemname_picturebook": {
+    "cost": 1.875,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 6,
+    "r": 0.85,
+    "s": 0
+   },
+   "ba:itemname_pizza": {
+    "cost": 6.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 22,
+    "r": 0.4,
+    "s": 0
+   },
+   "ba:itemname_salad": {
+    "cost": 3.675,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 13,
+    "r": 0.4,
+    "s": 0
+   },
+   "ba:itemname_smartphone1": {
+    "cost": 262.5,
+    "d": 1,
+    "hoods": {},
+    "opt": 2,
+    "p": 799,
+    "r": 0.26,
+    "s": 0
+   },
+   "ba:itemname_smartphone2": {
+    "cost": 337.5,
+    "d": 1,
+    "hoods": {},
+    "opt": 2,
+    "p": 999,
+    "r": 0.2,
+    "s": 0
+   },
+   "ba:itemname_smartwatch1": {
+    "cost": 187.5,
+    "d": 1,
+    "hoods": {},
+    "opt": 2,
+    "p": 399,
+    "r": 0.14,
+    "s": 0
+   },
+   "ba:itemname_smartwatch2": {
+    "cost": 112.5,
+    "d": 1,
+    "hoods": {},
+    "opt": 3,
+    "p": 324,
+    "r": 0.18,
+    "s": 0
+   },
+   "ba:itemname_sodacan": {
+    "cost": 0.375,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 3,
+    "r": 0.66,
+    "s": 0
+   },
+   "ba:itemname_technicalmanual": {
+    "cost": 13.5,
+    "d": 1,
+    "hoods": {},
+    "opt": 6,
+    "p": 44,
+    "r": 0.4,
+    "s": 0
+   },
+   "ba:itemname_tomato": {
+    "cost": 0.2175,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 2.56,
+    "r": 0.9,
+    "s": 0
+   },
+   "ba:itemname_umbrella": {
+    "cost": 5.25,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 24,
+    "r": 0.5,
+    "s": 0
+   },
+   "ba:itemname_whisky": {
+    "cost": 6.0,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 26,
+    "r": 0.66,
+    "s": 0
+   },
+   "ba:itemname_youngnovel": {
+    "cost": 4.125,
+    "d": 1,
+    "hoods": {},
+    "opt": 7,
+    "p": 14,
+    "r": 0.85,
+    "s": 0
+   }
+  },
   "own": {},
   "sales": {},
-  "types": {},
-  "vendors": {},
+  "types": {
+   "ba:businesstype_bookstore": {
+    "amt": 1,
+    "cat": "retail",
+    "days": [
+     1.0,
+     0.85,
+     0.7,
+     0.85,
+     0.9,
+     0.95,
+     1.0
+    ],
+    "demands": [
+     [
+      "music",
+      1
+     ],
+     [
+      "employeeuniforms",
+      1
+     ],
+     [
+      "interiordesign",
+      1
+     ],
+     [
+      "toilet",
+      0.5
+     ],
+     [
+      "toiletprivacy",
+      0.5
+     ],
+     [
+      "sink",
+      0.5
+     ]
+    ],
+    "fee": null,
+    "feeWeekend": null,
+    "hours": [
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.2,
+     0.6,
+     0.6,
+     0.6,
+     0.6,
+     0.6,
+     0.9,
+     0.9,
+     0.9,
+     0.7,
+     0.7,
+     0.2,
+     0.2,
+     0.05,
+     0.05,
+     0.05
+    ],
+    "initial": {
+     "C1": 191.25
+    },
+    "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 11050.0,
+      "lines": [
+       [
+        "ba:itemname_checkoutcounterleft",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_singlebookshelf",
+        12,
+        "shelf",
+        [
+         "ba:itemname_novel",
+         "ba:itemname_youngnovel",
+         "ba:itemname_motivationalbook",
+         "ba:itemname_technicalmanual",
+         "ba:itemname_picturebook",
+         "ba:itemname_limitededitionbook"
+        ]
+       ]
+      ]
+     }
+    },
+    "model": "retail",
+    "noOrder": false,
+    "products": [
+     [
+      "ba:itemname_novel",
+      1
+     ],
+     [
+      "ba:itemname_youngnovel",
+      1
+     ],
+     [
+      "ba:itemname_motivationalbook",
+      1
+     ],
+     [
+      "ba:itemname_technicalmanual",
+      1
+     ],
+     [
+      "ba:itemname_picturebook",
+      1
+     ],
+     [
+      "ba:itemname_limitededitionbook",
+      1
+     ],
+     [
+      "ba:itemname_cheapgift",
+      0.25
+     ],
+     [
+      "ba:itemname_cheapflower",
+      0.25
+     ],
+     [
+      "ba:itemname_earbuds01",
+      0.33
+     ],
+     [
+      "ba:itemname_umbrella",
+      0.75
+     ]
+    ],
+    "run": 0
+   },
+   "ba:businesstype_clothingstore": {
+    "amt": 1,
+    "cat": "retail",
+    "days": [
+     0.85,
+     0.75,
+     0.7,
+     0.6,
+     0.7,
+     0.8,
+     0.9
+    ],
+    "demands": [
+     [
+      "music",
+      1
+     ],
+     [
+      "employeeuniforms",
+      1
+     ],
+     [
+      "interiordesign",
+      1
+     ],
+     [
+      "toilet",
+      0.5
+     ],
+     [
+      "toiletprivacy",
+      0.5
+     ],
+     [
+      "sink",
+      0.5
+     ]
+    ],
+    "fee": null,
+    "feeWeekend": null,
+    "hours": [
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.2,
+     0.8,
+     0.5,
+     0.5,
+     0.5,
+     0.5,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     0.8,
+     0.8,
+     0.8,
+     0.2,
+     0.2,
+     0.05,
+     0.05
+    ],
+    "initial": {
+     "C1": 112.5
+    },
+    "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 20610.0,
+      "lines": [
+       [
+        "ba:itemname_checkoutcounterleft",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_changingroom",
+        1,
+        "req",
+        "changingroom"
+       ],
+       [
+        "ba:itemname_changingroom",
+        1,
+        "cap",
+        "changingroom"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_clothingrack",
+        24,
+        "shelf",
+        [
+         "ba:itemname_classiccheapmaleclothing",
+         "ba:itemname_classiccheapfemaleclothing",
+         "ba:itemname_moderncheapmaleclothing",
+         "ba:itemname_moderncheapfemaleclothing",
+         "ba:itemname_classicexpensivemaleclothing",
+         "ba:itemname_classicexpensivefemaleclothing",
+         "ba:itemname_modernexpensivemaleclothing",
+         "ba:itemname_modernexpensivefemaleclothing"
+        ]
+       ]
+      ]
+     }
+    },
+    "model": "retail",
+    "noOrder": false,
+    "products": [
+     [
+      "ba:itemname_classiccheapmaleclothing",
+      1
+     ],
+     [
+      "ba:itemname_classiccheapfemaleclothing",
+      1
+     ],
+     [
+      "ba:itemname_moderncheapmaleclothing",
+      1
+     ],
+     [
+      "ba:itemname_moderncheapfemaleclothing",
+      1
+     ],
+     [
+      "ba:itemname_classicexpensivemaleclothing",
+      1
+     ],
+     [
+      "ba:itemname_classicexpensivefemaleclothing",
+      1
+     ],
+     [
+      "ba:itemname_modernexpensivemaleclothing",
+      1
+     ],
+     [
+      "ba:itemname_modernexpensivefemaleclothing",
+      1
+     ],
+     [
+      "ba:itemname_cheapjewelry",
+      0.2
+     ],
+     [
+      "ba:itemname_expensivejewelry",
+      0.15
+     ]
+    ],
+    "run": 0
+   },
+   "ba:businesstype_coffeeshop": {
+    "amt": 5,
+    "cat": "retail",
+    "days": [
+     0.85,
+     1.0,
+     0.98,
+     0.95,
+     0.92,
+     0.9,
+     0.85
+    ],
+    "demands": [
+     [
+      "music",
+      1
+     ],
+     [
+      "employeeuniforms",
+      1
+     ],
+     [
+      "interiordesign",
+      1
+     ],
+     [
+      "seating",
+      1
+     ],
+     [
+      "toilet",
+      1
+     ],
+     [
+      "toiletprivacy",
+      1
+     ],
+     [
+      "sink",
+      1
+     ]
+    ],
+    "fee": null,
+    "feeWeekend": null,
+    "hours": [
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.65,
+     1.0,
+     1.0,
+     1.0,
+     0.8,
+     0.8,
+     0.7,
+     0.7,
+     0.7,
+     0.25,
+     0.25,
+     0.7,
+     0.7,
+     0.3,
+     0.3,
+     0.3,
+     0.05,
+     0.05,
+     0.05
+    ],
+    "initial": {
+     "C1": 202.5
+    },
+    "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 26370.0,
+      "lines": [
+       [
+        "ba:itemname_cashregister",
+        1,
+        "req",
+        "cashregister"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_cashregister",
+        1,
+        "cap",
+        "cashregister"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_beachtowelextended",
+        1,
+        "dem",
+        "seating"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_industrialcoffeemachine",
+        2,
+        "shelf",
+        [
+         "ba:itemname_cupofcoffee",
+         "ba:itemname_cupoftea"
+        ]
+       ],
+       [
+        "ba:itemname_counter1",
+        2,
+        "shelf",
+        "mount"
+       ],
+       [
+        "ba:itemname_bakeryshowcase",
+        6,
+        "shelf",
+        [
+         "ba:itemname_croissant",
+         "ba:itemname_cupcake",
+         "ba:itemname_donut"
+        ]
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        2,
+        "shelf",
+        [
+         "ba:itemname_sodacan"
+        ]
+       ],
+       [
+        "ba:itemname_icecreamcounter",
+        1,
+        "shelf",
+        [
+         "ba:itemname_icecream"
+        ]
+       ]
+      ]
+     }
+    },
+    "model": "retail",
+    "noOrder": false,
+    "products": [
+     [
+      "ba:itemname_cupofcoffee",
+      1
+     ],
+     [
+      "ba:itemname_cupoftea",
+      1
+     ],
+     [
+      "ba:itemname_croissant",
+      1
+     ],
+     [
+      "ba:itemname_cupcake",
+      1
+     ],
+     [
+      "ba:itemname_donut",
+      1
+     ],
+     [
+      "ba:itemname_sodacan",
+      0.95
+     ],
+     [
+      "ba:itemname_icecream",
+      0.9
+     ],
+     [
+      "ba:itemname_salad",
+      0.3
+     ],
+     [
+      "ba:itemname_apple",
+      0.3
+     ],
+     [
+      "ba:itemname_banana",
+      0.3
+     ]
+    ],
+    "run": 0
+   },
+   "ba:businesstype_electronicsstore": {
+    "amt": 1,
+    "cat": "retail",
+    "days": [
+     1.0,
+     0.95,
+     0.9,
+     0.85,
+     0.9,
+     1.0,
+     1.0
+    ],
+    "demands": [
+     [
+      "employeeuniforms",
+      1
+     ],
+     [
+      "interiordesign",
+      1
+     ],
+     [
+      "music",
+      1
+     ],
+     [
+      "toilet",
+      0.5
+     ],
+     [
+      "toiletprivacy",
+      0.5
+     ],
+     [
+      "sink",
+      0.5
+     ]
+    ],
+    "fee": null,
+    "feeWeekend": null,
+    "hours": [
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.3,
+     0.5,
+     0.5,
+     0.5,
+     0.7,
+     0.7,
+     1.0,
+     1.0,
+     1.0,
+     0.7,
+     0.7,
+     0.4,
+     0.4,
+     0.05,
+     0.05,
+     0.05
+    ],
+    "initial": {
+     "C1": 58.5
+    },
+    "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 65350.0,
+      "lines": [
+       [
+        "ba:itemname_checkoutcounterleft",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_productdisplaytable",
+        18,
+        "shelf",
+        [
+         "ba:itemname_smartphone1",
+         "ba:itemname_smartphone2",
+         "ba:itemname_smartwatch1",
+         "ba:itemname_smartwatch2",
+         "ba:itemname_earbuds01",
+         "ba:itemname_headphones01"
+        ]
+       ]
+      ]
+     }
+    },
+    "model": "retail",
+    "noOrder": false,
+    "products": [
+     [
+      "ba:itemname_smartphone1",
+      1
+     ],
+     [
+      "ba:itemname_smartphone2",
+      1
+     ],
+     [
+      "ba:itemname_smartwatch1",
+      1
+     ],
+     [
+      "ba:itemname_smartwatch2",
+      1
+     ],
+     [
+      "ba:itemname_earbuds01",
+      1
+     ],
+     [
+      "ba:itemname_headphones01",
+      1
+     ],
+     [
+      "ba:itemname_sodacan",
+      0.75
+     ],
+     [
+      "ba:itemname_energydrink",
+      0.75
+     ]
+    ],
+    "run": 0
+   },
+   "ba:businesstype_eventplanningagency": {
+    "amt": 1,
+    "cat": "office",
+    "days": [
+     1.35,
+     1.35,
+     1.2,
+     1.2,
+     1.35,
+     1.0,
+     1.0
+    ],
+    "demands": [],
+    "fee": null,
+    "feeWeekend": null,
+    "hours": [
+     0.1,
+     0.1,
+     0.1,
+     0.1,
+     0.1,
+     0.1,
+     0.1,
+     0.1,
+     0.1,
+     0.1,
+     0.4,
+     0.4,
+     0.6,
+     0.6,
+     0.8,
+     0.8,
+     0.9,
+     0.9,
+     1.0,
+     1.0,
+     0.4,
+     0.4,
+     0.1,
+     0.1
+    ],
+    "initial": {
+     "K1": 50
+    },
+    "layouts": {
+     "K1": {
+      "fee": 386760.0,
+      "from": null,
+      "furniture": 93900.0,
+      "lines": [
+       [
+        "ba:itemname_computer",
+        1,
+        "req",
+        "workcomputer"
+       ],
+       [
+        "ba:itemname_armchair1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_officedesk1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_computer",
+        49,
+        "cap",
+        "workcomputer"
+       ],
+       [
+        "ba:itemname_armchair1",
+        49,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_officedesk1",
+        49,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_toilet",
+        4,
+        "req",
+        "toiletstalls"
+       ],
+       [
+        "ba:itemname_sink",
+        4,
+        "req",
+        "sinks"
+       ]
+      ]
+     }
+    },
+    "model": "office",
+    "noOrder": false,
+    "products": [
+     [
+      "ba:itemname_hourlyeventplanningfee",
+      1
+     ]
+    ],
+    "run": 0,
+    "wage": 33
+   },
+   "ba:businesstype_fastfoodrestaurant": {
+    "amt": 3,
+    "cat": "retail",
+    "days": [
+     0.9,
+     0.75,
+     0.7,
+     0.6,
+     0.7,
+     0.8,
+     1.0
+    ],
+    "demands": [
+     [
+      "music",
+      1
+     ],
+     [
+      "employeeuniforms",
+      1
+     ],
+     [
+      "interiordesign",
+      1
+     ],
+     [
+      "seating",
+      1
+     ],
+     [
+      "toilet",
+      1
+     ],
+     [
+      "toiletprivacy",
+      1
+     ],
+     [
+      "sink",
+      1
+     ]
+    ],
+    "fee": null,
+    "feeWeekend": null,
+    "hours": [
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.85,
+     0.85,
+     0.85,
+     0.85,
+     0.2,
+     0.2,
+     1.0,
+     1.0,
+     1.0,
+     0.2,
+     0.2,
+     0.2,
+     0.75,
+     0.75,
+     0.75,
+     0.75,
+     0.1,
+     0.1,
+     0.1
+    ],
+    "initial": {
+     "C1": 180.0
+    },
+    "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 52922.0,
+      "lines": [
+       [
+        "ba:itemname_cashregister",
+        1,
+        "req",
+        "cashregister"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_cashregister",
+        1,
+        "cap",
+        "cashregister"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_beachtowelextended",
+        1,
+        "dem",
+        "seating"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_industrialgrill",
+        4,
+        "shelf",
+        [
+         "ba:itemname_burger",
+         "ba:itemname_kabob"
+        ]
+       ],
+       [
+        "ba:itemname_counter1",
+        4,
+        "shelf",
+        "mount"
+       ],
+       [
+        "ba:itemname_industrialfryermachine",
+        1,
+        "shelf",
+        [
+         "ba:itemname_frenchfries"
+        ]
+       ],
+       [
+        "ba:itemname_hotdoggrill",
+        1,
+        "shelf",
+        [
+         "ba:itemname_hotdog"
+        ]
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "shelf",
+        "mount"
+       ],
+       [
+        "ba:itemname_pizzaoven",
+        2,
+        "shelf",
+        [
+         "ba:itemname_pizza"
+        ]
+       ],
+       [
+        "ba:itemname_saladbar",
+        2,
+        "shelf",
+        [
+         "ba:itemname_salad"
+        ]
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        2,
+        "shelf",
+        [
+         "ba:itemname_sodacan"
+        ]
+       ]
+      ]
+     }
+    },
+    "model": "retail",
+    "noOrder": false,
+    "products": [
+     [
+      "ba:itemname_burger",
+      1
+     ],
+     [
+      "ba:itemname_frenchfries",
+      1
+     ],
+     [
+      "ba:itemname_hotdog",
+      1
+     ],
+     [
+      "ba:itemname_pizza",
+      1
+     ],
+     [
+      "ba:itemname_salad",
+      1
+     ],
+     [
+      "ba:itemname_sodacan",
+      1
+     ],
+     [
+      "ba:itemname_icecream",
+      1
+     ],
+     [
+      "ba:itemname_apple",
+      0.7
+     ],
+     [
+      "ba:itemname_banana",
+      0.4
+     ],
+     [
+      "ba:itemname_kabob",
+      1
+     ]
+    ],
+    "run": 0
+   },
+   "ba:businesstype_florist": {
+    "amt": 1,
+    "cat": "retail",
+    "days": [
+     1.0,
+     0.95,
+     0.9,
+     0.9,
+     0.9,
+     0.95,
+     1.0
+    ],
+    "demands": [
+     [
+      "employeeuniforms",
+      1
+     ],
+     [
+      "interiordesign",
+      1
+     ],
+     [
+      "toilet",
+      0.5
+     ],
+     [
+      "toiletprivacy",
+      0.5
+     ],
+     [
+      "sink",
+      0.5
+     ]
+    ],
+    "fee": null,
+    "feeWeekend": null,
+    "hours": [
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.2,
+     0.5,
+     0.5,
+     0.5,
+     0.6,
+     0.6,
+     1.0,
+     1.0,
+     1.0,
+     0.7,
+     0.7,
+     0.2,
+     0.2,
+     0.05,
+     0.05,
+     0.05
+    ],
+    "initial": {
+     "C1": 135.0
+    },
+    "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 8570.0,
+      "lines": [
+       [
+        "ba:itemname_checkoutcounterleft",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_productdisplaystandtiered",
+        4,
+        "shelf",
+        [
+         "ba:itemname_cheapflower",
+         "ba:itemname_expensiveflower"
+        ]
+       ]
+      ]
+     }
+    },
+    "model": "retail",
+    "noOrder": false,
+    "products": [
+     [
+      "ba:itemname_cheapflower",
+      1
+     ],
+     [
+      "ba:itemname_expensiveflower",
+      1
+     ],
+     [
+      "ba:itemname_sodacan",
+      0.8
+     ],
+     [
+      "ba:itemname_energydrink",
+      0.8
+     ],
+     [
+      "ba:itemname_cheapgift",
+      0.6
+     ],
+     [
+      "ba:itemname_expensivegift",
+      0.6
+     ],
+     [
+      "ba:itemname_umbrella",
+      0.75
+     ]
+    ],
+    "run": 0
+   },
+   "ba:businesstype_fruitandvegetablestore": {
+    "amt": 5,
+    "cat": "retail",
+    "days": [
+     0.95,
+     0.85,
+     0.75,
+     0.75,
+     0.75,
+     0.85,
+     1.0
+    ],
+    "demands": [
+     [
+      "music",
+      1
+     ],
+     [
+      "employeeuniforms",
+      1
+     ],
+     [
+      "interiordesign",
+      1
+     ],
+     [
+      "toilet",
+      0.5
+     ],
+     [
+      "toiletprivacy",
+      0.5
+     ],
+     [
+      "sink",
+      0.5
+     ]
+    ],
+    "fee": null,
+    "feeWeekend": null,
+    "hours": [
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.5,
+     1.0,
+     1.0,
+     1.0,
+     0.8,
+     0.8,
+     0.8,
+     0.8,
+     0.8,
+     0.6,
+     0.6,
+     0.6,
+     0.9,
+     0.9,
+     0.9,
+     0.1,
+     0.1,
+     0.1,
+     0.1
+    ],
+    "initial": {
+     "C1": 225.0
+    },
+    "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 14750.0,
+      "lines": [
+       [
+        "ba:itemname_checkoutcounterleft",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_standingdigitalscale",
+        1,
+        "req",
+        "scale"
+       ],
+       [
+        "ba:itemname_flatwoodendisplaystand",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_standingdigitalscale",
+        1,
+        "cap",
+        "scale"
+       ],
+       [
+        "ba:itemname_flatwoodendisplaystand",
+        1,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_woodenproductcrate",
+        12,
+        "shelf",
+        [
+         "ba:itemname_apple",
+         "ba:itemname_banana",
+         "ba:itemname_carrot",
+         "ba:itemname_lettuce",
+         "ba:itemname_pear",
+         "ba:itemname_tomato"
+        ]
+       ],
+       [
+        "ba:itemname_flatwoodendisplaystand",
+        12,
+        "shelf",
+        "mount"
+       ]
+      ]
+     }
+    },
+    "model": "retail",
+    "noOrder": false,
+    "products": [
+     [
+      "ba:itemname_apple",
+      1
+     ],
+     [
+      "ba:itemname_banana",
+      1
+     ],
+     [
+      "ba:itemname_carrot",
+      1
+     ],
+     [
+      "ba:itemname_lettuce",
+      1
+     ],
+     [
+      "ba:itemname_pear",
+      1
+     ],
+     [
+      "ba:itemname_tomato",
+      1
+     ],
+     [
+      "ba:itemname_salad",
+      0.7
+     ]
+    ],
+    "run": 0
+   },
+   "ba:businesstype_giftshop": {
+    "amt": 1,
+    "cat": "retail",
+    "days": [
+     0.95,
+     0.8,
+     0.75,
+     0.7,
+     0.75,
+     0.9,
+     1.0
+    ],
+    "demands": [
+     [
+      "music",
+      1
+     ],
+     [
+      "employeeuniforms",
+      1
+     ],
+     [
+      "interiordesign",
+      1
+     ],
+     [
+      "toilet",
+      1
+     ],
+     [
+      "toiletprivacy",
+      1
+     ],
+     [
+      "sink",
+      1
+     ]
+    ],
+    "fee": null,
+    "feeWeekend": null,
+    "hours": [
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.65,
+     0.65,
+     0.65,
+     0.65,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     0.7,
+     0.7,
+     0.3,
+     0.3,
+     0.05,
+     0.05,
+     0.05
+    ],
+    "initial": {
+     "C1": 191.25
+    },
+    "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": "ba:street_fifthavenue#4",
+      "furniture": 17550.0,
+      "lines": [
+       [
+        "ba:itemname_checkoutcounterleft",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_productpanel",
+        6,
+        "shelf",
+        [
+         "ba:itemname_cheapgift",
+         "ba:itemname_umbrella"
+        ]
+       ],
+       [
+        "ba:itemname_roundedshelf",
+        2,
+        "shelf",
+        [
+         "ba:itemname_expensivegift"
+        ]
+       ],
+       [
+        "ba:itemname_productdisplaystandtiered",
+        4,
+        "shelf",
+        [
+         "ba:itemname_cheapflower",
+         "ba:itemname_expensiveflower"
+        ]
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        4,
+        "shelf",
+        [
+         "ba:itemname_sodacan",
+         "ba:itemname_energydrink"
+        ]
+       ]
+      ]
+     }
+    },
+    "model": "retail",
+    "noOrder": false,
+    "products": [
+     [
+      "ba:itemname_cheapgift",
+      1
+     ],
+     [
+      "ba:itemname_expensivegift",
+      1
+     ],
+     [
+      "ba:itemname_cheapflower",
+      0.6
+     ],
+     [
+      "ba:itemname_expensiveflower",
+      0.6
+     ],
+     [
+      "ba:itemname_umbrella",
+      1
+     ],
+     [
+      "ba:itemname_sodacan",
+      0.9
+     ],
+     [
+      "ba:itemname_energydrink",
+      0.9
+     ],
+     [
+      "ba:itemname_smartwatch1",
+      0.2
+     ],
+     [
+      "ba:itemname_smartwatch2",
+      0.2
+     ],
+     [
+      "ba:itemname_headphones01",
+      0.2
+     ],
+     [
+      "ba:itemname_earbuds01",
+      0.2
+     ]
+    ],
+    "run": 3
+   },
+   "ba:businesstype_graphicdesigner": {
+    "amt": 1,
+    "cat": "office",
+    "days": [
+     0.1,
+     1.4,
+     1.45,
+     1.5,
+     1.5,
+     1.45,
+     0.1
+    ],
+    "demands": [],
+    "fee": null,
+    "feeWeekend": null,
+    "hours": [
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.5,
+     0.5,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     0.94,
+     0.94,
+     0.5,
+     0.5,
+     0.01,
+     0.01,
+     0.01
+    ],
+    "initial": {
+     "K1": 50
+    },
+    "layouts": {
+     "K1": {
+      "fee": 386760.0,
+      "from": null,
+      "furniture": 93900.0,
+      "lines": [
+       [
+        "ba:itemname_computer",
+        1,
+        "req",
+        "workcomputer"
+       ],
+       [
+        "ba:itemname_armchair1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_officedesk1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_computer",
+        49,
+        "cap",
+        "workcomputer"
+       ],
+       [
+        "ba:itemname_armchair1",
+        49,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_officedesk1",
+        49,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_toilet",
+        4,
+        "req",
+        "toiletstalls"
+       ],
+       [
+        "ba:itemname_sink",
+        4,
+        "req",
+        "sinks"
+       ]
+      ]
+     }
+    },
+    "model": "office",
+    "noOrder": false,
+    "products": [
+     [
+      "ba:itemname_hourlygraphicdesignerfee",
+      1
+     ]
+    ],
+    "run": 0,
+    "wage": 35
+   },
+   "ba:businesstype_gym": {
+    "amt": 1,
+    "cat": "retail",
+    "days": [
+     1.0,
+     1.0,
+     0.95,
+     0.9,
+     0.9,
+     0.95,
+     1.0
+    ],
+    "demands": [
+     [
+      "music",
+      1
+     ],
+     [
+      "employeeuniforms",
+      1
+     ],
+     [
+      "interiordesign",
+      1
+     ],
+     [
+      "workoutvariety",
+      1
+     ],
+     [
+      "toilet",
+      1
+     ],
+     [
+      "toiletprivacy",
+      1
+     ],
+     [
+      "sink",
+      1
+     ]
+    ],
+    "fee": "ba:itemname_gymcovercharge",
+    "feeWeekend": null,
+    "hours": [
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.7,
+     1.0,
+     1.0,
+     1.0,
+     0.9,
+     0.9,
+     0.8,
+     0.8,
+     0.8,
+     0.65,
+     0.65,
+     0.85,
+     0.85,
+     0.7,
+     0.7,
+     0.7,
+     0.65,
+     0.65,
+     0.65
+    ],
+    "initial": {
+     "C1": 225.0
+    },
+    "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 24205.0,
+      "lines": [
+       [
+        "ba:itemname_fitball",
+        1,
+        "req",
+        "workoutmachine"
+       ],
+       [
+        "ba:itemname_fitball",
+        14,
+        "cap",
+        "workoutmachine"
+       ],
+       [
+        "ba:itemname_gymlockers",
+        1,
+        "req",
+        "gymlockers"
+       ],
+       [
+        "ba:itemname_gymlockers",
+        2,
+        "cap",
+        "gymlockers"
+       ],
+       [
+        "ba:itemname_publicshower",
+        1,
+        "req",
+        "publicshower"
+       ],
+       [
+        "ba:itemname_publicshower",
+        2,
+        "cap",
+        "publicshower"
+       ],
+       [
+        "ba:itemname_fitnessplanningboard",
+        1,
+        "req",
+        "fitnessplanningboard"
+       ],
+       [
+        "ba:itemname_fitnessplanningboard",
+        1,
+        "cap",
+        "fitnessplanningboard"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_pullupbar",
+        1,
+        "dem",
+        "workoutvariety"
+       ],
+       [
+        "ba:itemname_boxingbag",
+        1,
+        "dem",
+        "workoutvariety"
+       ],
+       [
+        "ba:itemname_fitnesstrampoline",
+        1,
+        "dem",
+        "workoutvariety"
+       ],
+       [
+        "ba:itemname_loadedbarbell",
+        1,
+        "dem",
+        "workoutvariety"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ]
+      ]
+     }
+    },
+    "model": "retail",
+    "noOrder": true,
+    "products": [
+     [
+      "ba:itemname_gymcovercharge",
+      1
+     ],
+     [
+      "ba:itemname_energydrink",
+      1
+     ],
+     [
+      "ba:itemname_sodacan",
+      1
+     ]
+    ],
+    "run": 0
+   },
+   "ba:businesstype_hairdresser": {
+    "amt": 1,
+    "cat": "retail",
+    "days": [
+     0.95,
+     0.65,
+     0.65,
+     0.65,
+     0.7,
+     0.8,
+     0.95
+    ],
+    "demands": [
+     [
+      "music",
+      1
+     ],
+     [
+      "interiordesign",
+      1
+     ],
+     [
+      "toilet",
+      0.5
+     ],
+     [
+      "toiletprivacy",
+      0.5
+     ],
+     [
+      "sink",
+      0.5
+     ]
+    ],
+    "fee": null,
+    "feeWeekend": null,
+    "hours": [
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.5,
+     0.5,
+     0.5,
+     0.95,
+     0.95,
+     0.95,
+     0.95,
+     0.95,
+     0.7,
+     0.7,
+     0.4,
+     0.4,
+     0.05,
+     0.05,
+     0.05
+    ],
+    "initial": {
+     "C1": 146.25
+    },
+    "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 22240.0,
+      "lines": [
+       [
+        "ba:itemname_cashregister",
+        1,
+        "req",
+        "cashregister"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_cashregister",
+        1,
+        "cap",
+        "cashregister"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_hairdresserchair",
+        1,
+        "req",
+        "hairdresserchair"
+       ],
+       [
+        "ba:itemname_hairdresserchair",
+        5,
+        "cap",
+        "hairdresserchair"
+       ],
+       [
+        "ba:itemname_hairdresserheadwash",
+        1,
+        "req",
+        "headwasher"
+       ],
+       [
+        "ba:itemname_hairdresserheadwash",
+        2,
+        "cap",
+        "headwasher"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_hairdressershelf",
+        4,
+        "shelf",
+        [
+         "ba:itemname_haircareproduct",
+         "ba:itemname_haircareproduct"
+        ]
+       ]
+      ]
+     }
+    },
+    "model": "retail",
+    "noOrder": false,
+    "products": [
+     [
+      "ba:itemname_hairshampooingfee",
+      1
+     ],
+     [
+      "ba:itemname_hairchemicalfee",
+      1
+     ],
+     [
+      "ba:itemname_haircuttingfee",
+      1
+     ],
+     [
+      "ba:itemname_hairstylingfee",
+      1
+     ],
+     [
+      "ba:itemname_haircareproduct",
+      1
+     ]
+    ],
+    "run": 0
+   },
+   "ba:businesstype_jewelrystore": {
+    "amt": 1,
+    "cat": "retail",
+    "days": [
+     1.0,
+     0.95,
+     0.9,
+     0.8,
+     0.85,
+     1.0,
+     1.0
+    ],
+    "demands": [
+     [
+      "music",
+      1
+     ],
+     [
+      "employeeuniforms",
+      1
+     ],
+     [
+      "interiordesign",
+      1
+     ],
+     [
+      "toilet",
+      0.5
+     ],
+     [
+      "toiletprivacy",
+      0.5
+     ],
+     [
+      "sink",
+      0.5
+     ]
+    ],
+    "fee": null,
+    "feeWeekend": null,
+    "hours": [
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.85,
+     0.85,
+     0.85,
+     0.85,
+     0.85,
+     0.95,
+     0.95,
+     1.0,
+     1.0,
+     0.9,
+     0.65,
+     0.05,
+     0.05,
+     0.05,
+     0.05
+    ],
+    "initial": {
+     "C1": 180.0
+    },
+    "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 42450.0,
+      "lines": [
+       [
+        "ba:itemname_checkoutcounterleft",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_jewelryfloorshowcase",
+        4,
+        "shelf",
+        [
+         "ba:itemname_cheapjewelry",
+         "ba:itemname_expensivejewelry"
+        ]
+       ]
+      ]
+     }
+    },
+    "model": "retail",
+    "noOrder": false,
+    "products": [
+     [
+      "ba:itemname_cheapjewelry",
+      1
+     ],
+     [
+      "ba:itemname_expensivejewelry",
+      1
+     ],
+     [
+      "ba:itemname_smartwatch1",
+      0.5
+     ],
+     [
+      "ba:itemname_smartwatch2",
+      0.5
+     ]
+    ],
+    "run": 0
+   },
+   "ba:businesstype_lawfirm": {
+    "amt": 1,
+    "cat": "office",
+    "days": [
+     0.1,
+     1.5,
+     1.5,
+     1.5,
+     1.45,
+     1.4,
+     0.1
+    ],
+    "demands": [],
+    "fee": null,
+    "feeWeekend": null,
+    "hours": [
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.5,
+     0.5,
+     0.96,
+     0.96,
+     0.96,
+     1.0,
+     1.0,
+     1.0,
+     0.92,
+     0.92,
+     0.5,
+     0.5,
+     0.5,
+     0.5,
+     0.01,
+     0.01,
+     0.01,
+     0.01
+    ],
+    "initial": {
+     "K1": 50
+    },
+    "layouts": {
+     "K1": {
+      "fee": 386760.0,
+      "from": null,
+      "furniture": 93900.0,
+      "lines": [
+       [
+        "ba:itemname_computer",
+        1,
+        "req",
+        "workcomputer"
+       ],
+       [
+        "ba:itemname_armchair1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_officedesk1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_computer",
+        49,
+        "cap",
+        "workcomputer"
+       ],
+       [
+        "ba:itemname_armchair1",
+        49,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_officedesk1",
+        49,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_toilet",
+        4,
+        "req",
+        "toiletstalls"
+       ],
+       [
+        "ba:itemname_sink",
+        4,
+        "req",
+        "sinks"
+       ]
+      ]
+     }
+    },
+    "model": "office",
+    "noOrder": false,
+    "products": [
+     [
+      "ba:itemname_hourlylawyerfee",
+      1
+     ]
+    ],
+    "run": 0,
+    "wage": 50
+   },
+   "ba:businesstype_liquorstore": {
+    "amt": 1,
+    "cat": "retail",
+    "days": [
+     0.95,
+     0.8,
+     0.75,
+     0.75,
+     0.8,
+     0.95,
+     1.0
+    ],
+    "demands": [
+     [
+      "music",
+      1
+     ],
+     [
+      "employeeuniforms",
+      1
+     ],
+     [
+      "interiordesign",
+      1
+     ],
+     [
+      "toilet",
+      0.5
+     ],
+     [
+      "toiletprivacy",
+      0.5
+     ],
+     [
+      "sink",
+      0.5
+     ]
+    ],
+    "fee": null,
+    "feeWeekend": null,
+    "hours": [
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.05,
+     0.3,
+     0.3,
+     0.75,
+     0.75,
+     0.75,
+     0.75,
+     0.75,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     0.8,
+     0.2,
+     0.2
+    ],
+    "initial": {
+     "C1": 180.0
+    },
+    "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 25550.0,
+      "lines": [
+       [
+        "ba:itemname_checkoutcounterleft",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_wineshelf",
+        3,
+        "shelf",
+        [
+         "ba:itemname_bottleofwine"
+        ]
+       ],
+       [
+        "ba:itemname_drinksshelf",
+        12,
+        "shelf",
+        [
+         "ba:itemname_beer",
+         "ba:itemname_whisky",
+         "ba:itemname_margarita",
+         "ba:itemname_martini"
+        ]
+       ],
+       [
+        "ba:itemname_tobaccoshelf1",
+        2,
+        "shelf",
+        [
+         "ba:itemname_cigar",
+         "ba:itemname_cigarette"
+        ]
+       ]
+      ]
+     }
+    },
+    "model": "retail",
+    "noOrder": false,
+    "products": [
+     [
+      "ba:itemname_bottleofwine",
+      1
+     ],
+     [
+      "ba:itemname_beer",
+      1
+     ],
+     [
+      "ba:itemname_whisky",
+      1
+     ],
+     [
+      "ba:itemname_cigar",
+      1
+     ],
+     [
+      "ba:itemname_cigarette",
+      1
+     ],
+     [
+      "ba:itemname_margarita",
+      0.7
+     ],
+     [
+      "ba:itemname_martini",
+      0.7
+     ],
+     [
+      "ba:itemname_sodacan",
+      0.85
+     ],
+     [
+      "ba:itemname_energydrink",
+      0.85
+     ]
+    ],
+    "run": 0
+   },
+   "ba:businesstype_nightclub": {
+    "amt": 2,
+    "cat": "retail",
+    "days": [
+     0.95,
+     0.5,
+     0.1,
+     0.1,
+     0.8,
+     1.0,
+     1.0
+    ],
+    "demands": [
+     [
+      "music",
+      1
+     ],
+     [
+      "employeeuniforms",
+      1
+     ],
+     [
+      "interiordesign",
+      1
+     ],
+     [
+      "toilet",
+      1
+     ],
+     [
+      "toiletprivacy",
+      1
+     ],
+     [
+      "sink",
+      1
+     ]
+    ],
+    "fee": "ba:itemname_nightclubweekdaycovercharge",
+    "feeWeekend": "ba:itemname_nightclubweekendcovercharge",
+    "hours": [
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     0.7,
+     0.7,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.4,
+     0.4,
+     0.9,
+     0.9,
+     0.9,
+     0.9
+    ],
+    "initial": {
+     "C1": 225.0
+    },
+    "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 11270.0,
+      "lines": [
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "req",
+        "loudspeaker"
+       ],
+       [
+        "ba:itemname_djbooth",
+        1,
+        "req",
+        "djbooth"
+       ],
+       [
+        "ba:itemname_coatcheckleft",
+        1,
+        "req",
+        "coatcheck"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_woodencocktailbarbeershelf",
+        1,
+        "shelf",
+        [
+         "ba:itemname_beer"
+        ]
+       ],
+       [
+        "ba:itemname_woodencocktailbardrinkscounter",
+        3,
+        "shelf",
+        [
+         "ba:itemname_martini",
+         "ba:itemname_margarita",
+         "ba:itemname_whisky"
+        ]
+       ]
+      ]
+     }
+    },
+    "model": "retail",
+    "noOrder": true,
+    "products": [
+     [
+      "ba:itemname_nightclubweekdaycovercharge",
+      1
+     ],
+     [
+      "ba:itemname_nightclubweekendcovercharge",
+      1
+     ],
+     [
+      "ba:itemname_coatcheckfee",
+      1
+     ],
+     [
+      "ba:itemname_beer",
+      1
+     ],
+     [
+      "ba:itemname_martini",
+      1
+     ],
+     [
+      "ba:itemname_margarita",
+      1
+     ],
+     [
+      "ba:itemname_whisky",
+      1
+     ],
+     [
+      "ba:itemname_sodacan",
+      0.33
+     ],
+     [
+      "ba:itemname_energydrink",
+      0.6
+     ]
+    ],
+    "run": 0
+   },
+   "ba:businesstype_supermarket": {
+    "amt": 3,
+    "cat": "retail",
+    "days": [
+     0.9,
+     0.75,
+     0.7,
+     0.6,
+     0.7,
+     0.8,
+     1.0
+    ],
+    "demands": [
+     [
+      "music",
+      1
+     ],
+     [
+      "employeeuniforms",
+      1
+     ],
+     [
+      "interiordesign",
+      1
+     ],
+     [
+      "toilet",
+      0.5
+     ],
+     [
+      "toiletprivacy",
+      0.5
+     ],
+     [
+      "sink",
+      0.5
+     ]
+    ],
+    "fee": null,
+    "feeWeekend": null,
+    "hours": [
+     0.1,
+     0.1,
+     0.1,
+     0.1,
+     0.1,
+     0.1,
+     0.5,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     0.7,
+     0.7,
+     0.7,
+     0.7,
+     0.7,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     0.1,
+     0.1,
+     0.1
+    ],
+    "initial": {
+     "C1": 202.5
+    },
+    "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 33750.0,
+      "lines": [
+       [
+        "ba:itemname_checkoutcounterleft",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_industrialfridge",
+        2,
+        "shelf",
+        [
+         "ba:itemname_freshfood"
+        ]
+       ],
+       [
+        "ba:itemname_industrialfreezer",
+        2,
+        "shelf",
+        [
+         "ba:itemname_frozenfood",
+         "ba:itemname_icecream"
+        ]
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        4,
+        "shelf",
+        [
+         "ba:itemname_sodacan",
+         "ba:itemname_energydrink"
+        ]
+       ],
+       [
+        "ba:itemname_fruitpallet",
+        6,
+        "shelf",
+        [
+         "ba:itemname_apple",
+         "ba:itemname_banana",
+         "ba:itemname_carrot",
+         "ba:itemname_lettuce",
+         "ba:itemname_pear",
+         "ba:itemname_tomato"
+        ]
+       ]
+      ]
+     }
+    },
+    "model": "retail",
+    "noOrder": false,
+    "products": [
+     [
+      "ba:itemname_freshfood",
+      1
+     ],
+     [
+      "ba:itemname_frozenfood",
+      1
+     ],
+     [
+      "ba:itemname_sodacan",
+      1
+     ],
+     [
+      "ba:itemname_energydrink",
+      1
+     ],
+     [
+      "ba:itemname_icecream",
+      1
+     ],
+     [
+      "ba:itemname_apple",
+      0.7
+     ],
+     [
+      "ba:itemname_banana",
+      0.7
+     ],
+     [
+      "ba:itemname_carrot",
+      0.7
+     ],
+     [
+      "ba:itemname_lettuce",
+      0.7
+     ],
+     [
+      "ba:itemname_pear",
+      0.7
+     ],
+     [
+      "ba:itemname_tomato",
+      0.7
+     ],
+     [
+      "ba:itemname_bottleofwine",
+      0.2
+     ],
+     [
+      "ba:itemname_croissant",
+      0.2
+     ],
+     [
+      "ba:itemname_cupcake",
+      0.2
+     ],
+     [
+      "ba:itemname_donut",
+      0.2
+     ]
+    ],
+    "run": 0
+   },
+   "ba:businesstype_travelagency": {
+    "amt": 1,
+    "cat": "office",
+    "days": [
+     0.4,
+     1.3,
+     1.3,
+     1.5,
+     1.5,
+     1.35,
+     0.4
+    ],
+    "demands": [],
+    "fee": null,
+    "feeWeekend": null,
+    "hours": [
+     0.1,
+     0.1,
+     0.1,
+     0.1,
+     0.1,
+     0.1,
+     0.1,
+     0.1,
+     0.5,
+     0.5,
+     0.8,
+     0.8,
+     1.0,
+     1.0,
+     0.9,
+     0.9,
+     0.7,
+     0.7,
+     0.3,
+     0.3,
+     0.3,
+     0.1,
+     0.1,
+     0.1
+    ],
+    "initial": {
+     "K1": 50
+    },
+    "layouts": {
+     "K1": {
+      "fee": 386760.0,
+      "from": null,
+      "furniture": 93900.0,
+      "lines": [
+       [
+        "ba:itemname_computer",
+        1,
+        "req",
+        "workcomputer"
+       ],
+       [
+        "ba:itemname_armchair1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_officedesk1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_computer",
+        49,
+        "cap",
+        "workcomputer"
+       ],
+       [
+        "ba:itemname_armchair1",
+        49,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_officedesk1",
+        49,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_toilet",
+        4,
+        "req",
+        "toiletstalls"
+       ],
+       [
+        "ba:itemname_sink",
+        4,
+        "req",
+        "sinks"
+       ]
+      ]
+     }
+    },
+    "model": "office",
+    "noOrder": false,
+    "products": [
+     [
+      "ba:itemname_hourlytravelconsultantfee",
+      1
+     ]
+    ],
+    "run": 0,
+    "wage": 31
+   },
+   "ba:businesstype_webdevelopmentagency": {
+    "amt": 1,
+    "cat": "office",
+    "days": [
+     0.1,
+     1.5,
+     1.5,
+     1.4,
+     1.5,
+     1.45,
+     0.1
+    ],
+    "demands": [],
+    "fee": null,
+    "feeWeekend": null,
+    "hours": [
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.01,
+     0.5,
+     0.5,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     0.94,
+     0.94,
+     0.5,
+     0.5,
+     0.01,
+     0.01,
+     0.01,
+     0.01
+    ],
+    "initial": {
+     "K1": 50
+    },
+    "layouts": {
+     "K1": {
+      "fee": 386760.0,
+      "from": null,
+      "furniture": 93900.0,
+      "lines": [
+       [
+        "ba:itemname_computer",
+        1,
+        "req",
+        "workcomputer"
+       ],
+       [
+        "ba:itemname_armchair1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_officedesk1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_computer",
+        49,
+        "cap",
+        "workcomputer"
+       ],
+       [
+        "ba:itemname_armchair1",
+        49,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_officedesk1",
+        49,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_toilet",
+        4,
+        "req",
+        "toiletstalls"
+       ],
+       [
+        "ba:itemname_sink",
+        4,
+        "req",
+        "sinks"
+       ]
+      ]
+     }
+    },
+    "model": "office",
+    "noOrder": false,
+    "products": [
+     [
+      "ba:itemname_hourlyprogrammerfee",
+      1
+     ]
+    ],
+    "run": 0,
+    "wage": 36
+   }
+  },
+  "vendors": {
+   "ba:street_eleventhstreet#16": {
+    "a": "16 Eleventh Street",
+    "h": "ba:neighborhood_lowermanhattan",
+    "n": "Essentials Appliances"
+   },
+   "ba:street_fifthavenue#13": {
+    "a": "13 Fifth Avenue",
+    "h": "ba:neighborhood_garmentdistrict",
+    "n": "AJ Pederson & Son"
+   },
+   "ba:street_fifthavenue#68": {
+    "a": "68 Fifth Avenue",
+    "h": "ba:neighborhood_murrayhill",
+    "n": "Lux Concept"
+   },
+   "ba:street_fourthavenue#16": {
+    "a": "16 Fourth Avenue",
+    "h": "ba:neighborhood_hellskitchen",
+    "n": "Square Appliances"
+   },
+   "ba:street_fourthavenue#39": {
+    "a": "39 Fourth Avenue",
+    "h": "ba:neighborhood_lowermanhattan",
+    "n": "Mr. Scott's Office Supplies"
+   },
+   "ba:street_fourthstreet#50": {
+    "a": "50 Fourth Street",
+    "h": "ba:neighborhood_garmentdistrict",
+    "n": "Ika Bohag"
+   },
+   "ba:street_seventhavenue#13": {
+    "a": "13 Seventh Avenue",
+    "h": "ba:neighborhood_thehamptons",
+    "n": "Hampton Supplies"
+   },
+   "ba:street_seventhavenue#5": {
+    "a": "5 Seventh Avenue",
+    "h": "ba:neighborhood_thehamptons",
+    "n": "Marquis Living"
+   }
+  },
   "venues": {}
  },
  "ownedBuildings": [],

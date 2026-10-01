@@ -70,6 +70,28 @@ test('a rival that sells the product takes the monopoly bonus and caps the price
   assert.equal(m.lines[0].demand, 100 - Math.floor(300 / 7) - 0.5);
 });
 
+test('a store of the type already at the address is a seller already of what its shelves hold', () => {
+  const facts = JSON.parse(JSON.stringify(RETAIL));
+  facts.market.P.hoods.H = [1, 0, null];
+  const at = (sells, biz = {key: 'k', typeSlug: 'T'}) =>
+    model({...facts, built: {[biz.key]: {sells}}}, {businesses: [biz]}).osModel('T', SHOP, {sat: 50, open: HOUR});
+  // Premises set up before the plan, offering P (the game's provider count):
+  // the market's one seller is this store, so the demand is a lone seller's, 85.5.
+  assert.equal(at(['P']).lines[0].demand, 85.5);
+  // Nothing on offer (stock in the storeroom only): not counted, the plan adds itself.
+  const added = model(facts).osModel('T', SHOP, {sat: 50, open: HOUR}).lines[0].demand;
+  assert.ok(added < 85.5);
+  assert.equal(at([]).lines[0].demand, added);
+  // A store of another type at the address, or this type elsewhere, is no part of it.
+  assert.equal(at(['P'], {key: 'k', typeSlug: 'U'}).lines[0].demand, added);
+  assert.equal(at(['P'], {key: 'j', typeSlug: 'T'}).lines[0].demand, added);
+  // Nor does it take a demand step from your other shops nearby.
+  facts.sales = {H: {P: [['other', 10, 2]]}};
+  const cannibal = sells => model({...facts, built: {k: {sells}}}, {businesses: [{key: 'k', typeSlug: 'T'}]});
+  assert.equal(cannibal(['P']).osCannibal('T', 'H', cannibal(['P']).osProvides('T', SHOP)), null);
+  assert.ok(cannibal([]).osCannibal('T', 'H', cannibal([]).osProvides('T', SHOP)).loss > 0);
+});
+
 test('the borrowing limit: whichever of the bank\'s room and the company\'s means binds', () => {
   const limit = (finance, bank) => model({...RETAIL, finance}).osLoanLimit({term: 240, owed: 0, max: 2000000, ...bank});
   // The bank's own cap less what it is owed.

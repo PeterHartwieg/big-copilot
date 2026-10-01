@@ -469,6 +469,7 @@ class WorksInTests(unittest.TestCase):
         self.assertFalse(ba_dashboard.works_in({"no": ["cinema", "theater"]}, "cinema"))
         self.assertTrue(ba_dashboard.works_in({"no": ["cinema", "theater"]}, "clothingstore"))
         self.assertTrue(ba_dashboard.works_in({}, "clothingstore"))
+        self.assertTrue(ba_dashboard.works_in(venue, ""), "a business of no known type is not judged")
 
     def test_never_planned_where_it_cannot_work(self):
         # The cheapest till per customer by far, tagged for the shop: still not planned.

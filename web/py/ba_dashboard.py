@@ -8041,10 +8041,19 @@ def _hourly(
         # stand register in a shop) serves nobody there and holds no post.
         furniture = load_store_rules().get("furniture") or {}
         kind = (business.get("typeSlug") or "").removeprefix("ba:businesstype_")
+        # A station whose skill this business type takes nobody for is left
+        # out: nobody can be assigned here to work it, so it serves nobody and
+        # gates nothing. The game lets any item be placed in any business, so a
+        # liquor store can hold a leftover fitness planning board.
+        accepts = None if office else ASSIGN_SKILLS.get(business.get("typeSlug"))
+        stray = collections.Counter()
         here, labels, slugs, keys = {}, {}, {}, {}
         for holder in save.items(b["itemInstances"]):
             item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
             if item and item.get("itemName") in posts and works_in(furniture.get(item["itemName"]) or {}, kind):
+                if accepts is not None and posts[item["itemName"]][0] not in accepts:
+                    stray[item["itemName"]] += 1
+                    continue
                 here[item.get("id")] = posts[item["itemName"]]
                 slugs[item.get("id")] = item["itemName"]
                 labels[item.get("id")] = (
@@ -8223,8 +8232,22 @@ def _hourly(
             ),
         }
         entry["capHours"] = len(_capped_cells(entry))
+        if stray:
+            entry["unstaffable"] = _unstaffable_rows(
+                stray, {slug: posts[slug][0] for slug in stray}, names)
         out.append(entry)
     return out
+
+
+def _unstaffable_rows(counts: collections.Counter, skills: dict, names: Names | None) -> list:
+    """Stations this business type takes nobody for, as the Staffing note names
+    them: {slug, station, skill, role, n}, by station name."""
+    label = lambda key: names.label(key) if key and names else key  # noqa: E731
+    return sorted(
+        ({"slug": slug, "station": label(slug), "skill": skills[slug],
+          "role": label(skills[slug]), "n": n} for slug, n in counts.items()),
+        key=lambda r: (str(r["station"]), r["slug"]),
+    )
 
 
 def _capped_cells(grid: dict) -> set:
@@ -12743,7 +12766,18 @@ def _plan_site(
     need = _need_curve(_run_measured(grid, run, daily), day=curve.get("d"), ceiling=ceiling,
                        rates=dict(rates))
 
-    cover_posts = _cover_posts(save, building, names)
+    # A locker or cleaning station this business type takes nobody for is
+    # left out, as _hourly() leaves out its serving stations: a theatre takes
+    # no Security Guard, so a locker there is nobody's week and no hire.
+    accepts = ASSIGN_SKILLS.get(business.get("typeSlug"))
+    cover_posts, stray = [], collections.Counter()
+    for post in _cover_posts(save, building, names):
+        if accepts is None or COVER_STATIONS[post["slug"]][1] in accepts:
+            cover_posts.append(post)
+        else:
+            stray[post["slug"]] += 1
+    unstaffable = (grid.get("unstaffable") or []) + _unstaffable_rows(
+        stray, {slug: COVER_STATIONS[slug][1] for slug in stray}, names)
     pool = _site_pool(people, business, bench)
     # Everybody's week as it stood before this site placed anybody: the
     # full-cover plan is the other choice for this site, not a second site, so
@@ -12764,6 +12798,7 @@ def _plan_site(
         "ceiling": ceiling,
         "need": need,
         "coverPosts": cover_posts,
+        "unstaffable": unstaffable,
         "own": [person for person in pool if person["addr"]],
         "before": before,
         "week": week,
@@ -12826,6 +12861,9 @@ def _finish_site(site, full, names, people, opened=None) -> dict:
             for role in grid["roles"]
         ],
         "ceiling": site["ceiling"],
+        # Stations here this business type takes nobody for, which no plan
+        # staffs (_hourly(), _plan_site()): the Staffing block names them.
+        **({"unstaffable": site["unstaffable"]} if site["unstaffable"] else {}),
         **_plan_fields(week, table, names, people, cost),
         # The demand test: every station of every role, every hour, placed by the
         # same placer with the same rules. Same shape as the demand plan above,
@@ -15627,7 +15665,10 @@ def works_in(facts: dict, kind: str) -> bool:
     only types, "no" the types it does not work in. A piece whose requirement
     is unmet stands in the shop but the game leaves it out of the business
     (ItemHelper.HasAnyMissingRequirements): a concession stand register in a
-    clothing store is no point of sale, though the opening check counts it."""
+    clothing store is no point of sale, though the opening check counts it.
+    A business of no known type is not judged."""
+    if not kind:
+        return True
     only = facts.get("o")
     return (not only or kind in only) and kind not in (facts.get("no") or ())
 
@@ -16030,10 +16071,12 @@ def _stocked_products(save: Save, reg: dict, furniture: dict) -> set:
 
 
 def _opened_stores(save: Save, regs: dict, businesses: list, types: dict, rules: dict, prices: dict) -> dict:
-    """{site key: {"placed", "req", "seating"}} for every business of a planned
-    type: how much furniture stands in it, which opening requirements it meets
-    and whether anything to sit on does. The checklist until opening reads it
-    (Open a store, step 5)."""
+    """{site key: {"placed", "req", "seating", "sells"}} for every business of a
+    planned type: how much furniture stands in it, which opening requirements
+    it meets, whether anything to sit on does, and what it offers for sale
+    (cachedAvailableProducts, which the game counts it a provider of). The
+    checklist until opening reads it (Open a store, step 5); the model reads
+    `sells` for a store already at a plan's address."""
     out = {}
     table = prices.get("items") or {}
     for b in businesses:
@@ -16047,6 +16090,7 @@ def _opened_stores(save: Save, regs: dict, businesses: list, types: dict, rules:
             "req": required_placed(placed, b["typeSlug"], rules, prices, _building_row(reg).get("m"), available,
                                    _stocked_products(save, reg, rules.get("furniture") or {})),
             "seating": any(int((table.get(n) or {}).get("t") or 0) & SEATING_FLAG for n in placed),
+            "sells": sorted(available),
         }
     return out
 
@@ -16313,7 +16357,7 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
         own = [b for b in businesses if b.get("typeSlug") == slug and b.get("status") != "vacant"]
         layouts, initial = {}, {}
         for layout in _in_order({plan_layout(b) for b in buildings if b["type"] == cat and plan_layout(b)
-                                 and b["status"] in ("vacant", "rival")}):
+                                 and b["status"] in ("vacant", "rival", "mine")}):
             sample = next(b for b in buildings if b["type"] == cat and plan_layout(b) == layout)
             source = None
             same = [b for b in own if b["key"] in regs and plan_layout(_building_row(regs[b["key"]])) == layout]
@@ -28326,6 +28370,7 @@ function spRosterNone(row, pick, key){
       ? tt("sp.roster.failed.why", "This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.")
       : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling counts everyone who may walk in, not the customers a shop like this serves, so nothing is suggested from it.")})}
     ${pick || ""}
+    ${spRosterStray((key && spRosterRow(key)) || row)}
     <div class="chartbox sp-gantt sp-empty">${rows}</div>
     <div class="sp-read">${failed ? tt("sp.roster.failed", "Plan unavailable") : tt("sp.roster.none", "Nothing to schedule")}</div>
     ${key && gwLink() ? gwStaffButton(key, true) : ""}
@@ -28798,6 +28843,17 @@ function spUnmeasuredLine(row){
   return `<p class="sp-unmline">${spI("clock")}<span>${tt("sp.unm.line", "<b>No customers on file: {words}.</b> Counted as none.", {words})}</span></p>`;
 }
 
+/* Stations here this business type takes nobody for (`unstaffable`): the
+   game places any item anywhere, but nobody can be assigned to work it, so
+   no plan staffs or hires for it. One line, each station named once. */
+function spRosterStray(row){
+  const list = (row && row.unstaffable) || [];
+  if(!list.length) return "";
+  const words = list.map(u => tt("sp.roster.stray.one", "{station} ({role})",
+    {station: spEsc(gameName(u.slug) || u.station || ""), role: spEsc(gameName(u.skill) || u.role || "")})).join(", ");
+  return `<p class="sp-unmline">${spI("info")}<span>${tt("sp.roster.stray", "<b>Left out of this week: {stations}.</b> This business takes nobody with that skill, so nobody can be scheduled there.", {stations: words})}</span></p>`;
+}
+
 function spPlanPick(base, full){
   /* The open-hours plan where it is the other choice (spOpenFirst()). */
   const first = spOpenFirst(base) ? tt("sp.pick.open", "Open hours")
@@ -29049,6 +29105,7 @@ function spRosterBlock(b){
     ${/* Which shop it is about rides in the heading: the Optimize staffing
           card lands here with the shop's own heading scrolled off the top. */""}
     ${pick}
+    ${spRosterStray(base)}
     ${c.full || row.variant === "open" ? "" : spUnmeasuredLine(row)}
     ${c.cover ? spRosterNew(c, counts) : ""}
     <div class="sp-ba">
@@ -33697,7 +33754,9 @@ function osLoad(){
             amount: p.finance.amount == null || !Number.isFinite(+p.finance.amount) ? null : Math.max(0, +p.finance.amount),
             bank: typeof p.finance.bank === "string" ? p.finance.bank : null} : {on: false, amount: null, bank: null},
           step: OS_STEPS.includes(p.step) ? p.step : "what", made: +p.made || null, snap: osSnapClean(p.snap),
-          opened: Number.isFinite(p.opened) ? p.opened : null, paid: !!p.paid}));
+          opened: Number.isFinite(p.opened) ? p.opened : null, paid: !!p.paid,
+          /* A plan kept before `sold` was: one whose store opened is taken as a record. */
+          sold: "sold" in p ? !!p.sold : Number.isFinite(p.opened)}));
       /* The stores that opened since the last visit are history before the caps count. */
       dirty = osReconcile();
       const before = osPlans.length;
@@ -33846,14 +33905,16 @@ function osPrice(item, hood){
   const ref = row[2] ? Math.min(m.p, row[2]) : m.p;
   return {price: ref * (h.idx + (mono ? 0.3 : 0)), mono};
 }
-/* A new shop counts itself among the sellers; an existing one already is. */
+/* A new shop counts itself among the sellers; an existing one already is.
+   `existing` may also say so item by item (osModel()). */
 function osDemand(item, hood, existing){
   const m = (osFacts().market || {})[item];
   if(!m) return 0;
   if(!m.d) return 100;
   if(m.only && !m.only.includes(hood)) return 0;
   const row = (m.hoods || {})[hood] || [0];
-  return osDemandWith((row[0] || 0) + (existing ? 0 : 1), m.p);
+  const counted = typeof existing === "function" ? existing(item) : existing;
+  return osDemandWith((row[0] || 0) + (counted ? 0 : 1), m.p);
 }
 /* The satisfaction the plan settles at: the player's own shops of the type,
    their median, else a well-run shop's. */
@@ -33877,9 +33938,18 @@ function osInitial(t, b, o){
    neighbourhood's marketing strength, never above 100. */
 const osPromo = (b, h, o) => o.promoTotal ?? Math.min(100, Math.round((b.traffic || 0)
   + Math.round(Math.min((o.reach || 0) / (b.m2 || 1), 1) * 100) * h.strength));
+/* A store of the type already at the building (premises set up before the
+   plan picked them) is a seller already of what it offers for sale, as the
+   game counts providers (cachedAvailableProducts): which items, or null. */
+function osProvides(slug, b){
+  const here = b && (D.businesses || []).some(x => x.key === b.key && x.typeSlug === slug);
+  const sells = here && ((osFacts().built || {})[b.key] || {}).sells;
+  return Array.isArray(sells) && sells.length ? p => sells.includes(p) : null;
+}
 function osModel(slug, b, o = {}){
   const F = osFacts(), t = osType(slug), g = F.game || {}, h = (F.hoods || {})[b.hood];
   if(!t || !h) return null;
+  if(o.existing === undefined){ const provides = osProvides(slug, b); if(provides) o = {...o, existing: provides}; }
   if(t.model === "office") return osOfficeModel(slug, t, b, h, o);
   if(t.model !== "retail") return null;
   const cap = osCap(b);
@@ -34013,15 +34083,16 @@ function osOwnRatio(slug){
 }
 /* What the player's own shops in the neighbourhood lose: a new seller moves
    the demand for every product it sells one step down there, for them too,
-   whatever the product's weight for either type. */
-function osCannibal(slug, hood){
+   whatever the product's weight for either type. A product the store at the
+   address sells already (`provides`, osProvides()) moves nothing more. */
+function osCannibal(slug, hood, provides){
   const t = osType(slug), sales = ((osFacts().sales || {})[hood]) || {};
   const shops = new Set(), items = [];
   let loss = 0;
   (t ? t.products : []).forEach(([p]) => {
     const rows = sales[p];
     const m = (osFacts().market || {})[p];
-    if(!rows || !m || !m.d) return;
+    if(!rows || !m || !m.d || (provides && provides(p))) return;
     const n = ((m.hoods || {})[hood] || [0])[0] || 0;
     const now = osDemandWith(n, m.p), after = osDemandWith(n + 1, m.p);
     if(now <= 0 || after >= now) return;
@@ -34278,10 +34349,30 @@ function osShowFinder(plan){
   } else osFinder.planFor(preset);
 }
 function osPick(key){
-  const plan = osPlan();
+  let plan = osPlan();
   if(!plan) return;
+  if(plan.key !== key){
+    /* A plan whose store has sold (osReconcile() marks it, and it stays
+       marked once the store closes) is that store's record: another place is
+       a new plan of the type there. Any other plan starts over at the new
+       place, since what it kept for the last one is not this one's. */
+    if(plan.opened != null && plan.sold){
+      plan = osNew(plan.type, null);
+      if(!plan){
+        osCur = null; osStep = "what";
+        osNotice = tt("gr.os.plans.full", "All twelve plans have a building. Delete one to start another.");
+        drawOpenStore();
+        return;
+      }
+    } else { plan.snap = null; plan.opened = null; plan.paid = false; plan.sold = false; }
+  }
   plan.key = key;
   if(!plan.hood){ const b = osBuilding(key); if(b) plan.hood = b.hood; }
+  /* Premises rented and set up as the planned type before the plan picked
+     them: their store has never sold, so its figures are kept now, as an
+     empty address's are on the next draw (osSnapTake()). */
+  const at = osOpenedAt(plan), b = osBuilding(key);
+  if(!plan.snap && at && !at.hasTraded && b) plan.snap = osSnapOf(plan, b);
   osStep = "investment";
   osSave();
   drawOpenStore();
@@ -34423,7 +34514,7 @@ function osBreakHtml(plan){
   const big = (key, alt) => `<div${alt ? ` class="alt"` : ""}><span class="os-lab">${key === "firm" ? tt("gr.os.inv.firm", "Installation firm") : tt("gr.os.inv.self", "Self-installation")}</span><b>${
     p > 0 ? osRange(est.days[key]) : tt("gr.os.be.never", "not at this profit")}</b></div>`;
   const tax = (osFacts().game || {}).tax || 0;
-  const t = osType(plan.type), own = osOwnRatio(plan.type), cann = osCannibal(plan.type, b.hood);
+  const t = osType(plan.type), own = osOwnRatio(plan.type), cann = osCannibal(plan.type, b.hood, osProvides(plan.type, b));
   const row = (label, value, cls = "") => `<div class="os-site${cls}"><span><b>${label}</b></span><span class="v">${value}</span></div>`;
   const mix = (m.mix || []).length ? m.mix.map(osCampaignName).join(", ") : tt("gr.os.be.mix.none", "none");
   const detail = [
@@ -34962,6 +35053,7 @@ function osReconcile(){
   osPlans.forEach(p => {
     const b = osAttached(p);
     if(b && p.opened == null){ p.opened = b.opened; changed = true; }
+    if(b && !p.sold && b.hasTraded){ p.sold = true; changed = true; }
     if(b && !p.paid && osPaidBack(osNowOf(paybackSite(p.key)))){ p.paid = true; changed = true; }
   });
   return changed;
@@ -35896,7 +35988,10 @@ function hrModel(){
     const plan = variant ? (site.plans || {})[variant] || {} : {};
     const S = {site, i, key: site.key, b: byKey.get(site.key) || null, variant, plan,
                row: variant ? hrPlanRow(site, variant) : null, planned: !!site.planned, weeks: []};
-    S.weeks = (plan.hireWeeks || []).map((w, j) => ({w, j, S, who: null}));
+    /* Only weeks in a role the site takes: the game refuses a hire for any
+       other (`no_skill`), and the plan leaves such stations out anyway. */
+    const takes = new Set(site.accepts || []);
+    S.weeks = (plan.hireWeeks || []).map((w, j) => ({w, j, S, who: null})).filter(x => takes.has(x.w.skill));
     return S;
   });
   const moves = [];
@@ -36449,6 +36544,13 @@ function hrSiteWeek(S, fill, away, arriving, inbound, additive){
   const stranded = [];
   const days = hrWeek(S, fill, away, arriving, lost, {additive: !!additive, stranded});
   return {days, lost, stranded, changes: inbound || hrDiffers(S.row || {}, days, away)};
+}
+/* Whom a `shift` refusal row of a hire answer names: its site's week in
+   the call, that day, that entry. */
+function hrShiftWho(req, row){
+  const site = row.address && ((req.body || {}).sites || []).find(x => x.days && gwKeyOf(x.address) === gwKeyOf(row.address));
+  const day = site && site.days.find(x => x.d === row.d);
+  return ((day && day.shifts || [])[row.i] || {}).employeeId;
 }
 /* The action, one call: who is hired and moved where, and every week it
    writes, with what the review needs to name every row of it.
@@ -37763,8 +37865,25 @@ function hrReview(o = {}, hooks = {}){
     verdict: answer => answer.ok ? (goneOf(answer).size ? `<b>${tt("co.hire.v.some", "The game can take {n} of {of}", {n: counts().hire - goneOf(answer).size, of: counts().hire})}</b>`
         : `<b>${tt("co.hire.v.all", "The game can take all of it")}</b>`)
       : answer.blocked === "myemployees" ? `<b>${tt("co.hire.v.myemployees", "Close MyEmployees in the game")}</b>` : `<b>${tt("sp.gw.refuses", "The game refuses this")}</b>`,
+    /* A refused hire or move never happens, so the game reads every shift
+       of theirs in the same call as somebody not assigned there: those rows
+       are the refusal above, not a second problem. */
+    fold: rows => {
+      const out = new Set(rows.filter(r => r && r.error && (r.scope === "hire" || r.scope === "move")).map(r => r.id));
+      return out.size ? rows.filter(r => !(r && r.scope === "shift" && r.error === "not_assigned" && out.has(hrShiftWho(hrLast.req, r)))) : rows;
+    },
     object: row => {
-      if(row.scope === "hire" || row.scope === "move") return spEsc(nameOf(row.id));
+      /* A candidate is nobody's staff yet: the chip says where and as what
+         the plan hires them, so it does not read as someone already here. */
+      if(row.scope === "hire" || row.scope === "move"){
+        const sent = row.scope === "hire" ? hrLast.req.body.hires.find(x => x.candidateId === row.id)
+          : hrLast.req.body.moves.find(x => x.employeeId === row.id);
+        const to = sent && (row.scope === "hire" ? sent.address : sent.to);
+        const S = to && hrLast.m.sites.find(x => x.key === gwKeyOf(to));
+        const skill = (hrLast.req.names.get(row.id) || {}).skill;
+        return S && S.b && skill ? tt("co.hire.refuse.chip", "{name} as {role} at {site}",
+          {name: spEsc(nameOf(row.id)), role: hrRole(skill), site: spEsc(shortName(S.b))}) : spEsc(nameOf(row.id));
+      }
       const S = row.address && hrLast.m.sites.find(x => x.key === gwKeyOf(row.address));
       const site = S && S.b ? spEsc(shortName(S.b)) : row.address ? gwSiteName(row) : tt("co.hire.asite.cap", "A site");
       return row.scope === "shift" && row.d !== undefined ? `${site}: ${ttDay(row.d)}` : site;
@@ -44217,8 +44336,11 @@ GW_REFUSE.hire = Object.assign({}, GW_REFUSE.schedule, {
     : r.scope === "move" ? {rule: tt("sp.gw.hire.refuse.noone.rule", "Nobody by that id works for you any more"), fix: tt("sp.gw.hire.refuse.refresh", "Refresh the board.")} : GW_REFUSE.any.not_found,
   changed: r => r.scope === "hire" ? {rule: tt("sp.gw.hire.refuse.wage.rule", "The candidate's wage has changed since this board was read"), fix: tt("sp.gw.hire.refuse.wage.fix", "Refresh the board: the page picks again.")}
     : r.scope === "move" ? {rule: tt("sp.gw.hire.refuse.moved.rule", "Not where this board read them any more"), fix: tt("sp.gw.hire.refuse.refresh", "Refresh the board.")} : GW_REFUSE.any.changed,
+  /* Refreshing would plan the same hire again, so the fix is to leave it out. */
   no_skill: r => r.scope === "shift" ? GW_REFUSE.schedule.no_skill
-    : {rule: tt("sp.gw.hire.refuse.skill.rule", "Has none of the skills this business takes"), fix: tt("sp.gw.hire.refuse.refresh", "Refresh the board.")},
+    : {rule: tt("sp.gw.hire.refuse.skill.rule", "Has none of the skills this business takes"),
+       fix: r.scope === "move" ? tt("sp.gw.hire.refuse.skill.move", "Untick the move.")
+         : tt("sp.gw.hire.refuse.skill.fix", "Untick them in Change picks.")},
   in_training: {get rule(){ return tt("sp.gw.hire.refuse.training.rule", "In training: the game moves nobody who is training"); },
     get fix(){ return tt("sp.gw.hire.refuse.training.fix", "Wait for the training to end, or untick the move."); }},
   no_business: {get rule(){ return tt("sp.gw.hire.refuse.nobusiness.rule", "No business is set up here"); },
@@ -44252,7 +44374,9 @@ function gwRefusals(spec, answer){
   const site = answer.siteError && !(answer.rows || []).some(r => r && r.error === answer.siteError && r.d === undefined)
     ? [Object.assign({}, answer, {error: answer.siteError})] : [];
   const groups = new Map();
-  site.concat(answer.rows || []).filter(r => r && r.error).forEach(r => {
+  /* A write may fold rows that only follow from another row (spec.fold). */
+  const rows = spec.fold ? spec.fold(answer.rows || []) : answer.rows || [];
+  site.concat(rows).filter(r => r && r.error).forEach(r => {
     const known = (GW_REFUSE[spec.kind] || {})[r.error] || GW_REFUSE.any[r.error];
     const say = typeof known === "function" ? known(r) : known || {rule: tt("nav.dlg.refused.code", "The game refused this ({code})", {code: spEsc(r.error)}), fix: ""};
     const key = `${say.rule}|${say.fix}`;
