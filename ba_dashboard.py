@@ -4517,7 +4517,7 @@ def _supply(
                 item, amount = target["itemName"], target["targetAmount"]
                 edges[source].append((dest_key, item, amount))
                 target_at.setdefault((dest_key, item), []).append((amount, source))
-    edges = dict(edges)  # read by key from here on (_frozen())
+    edges = dict(edges)  # read by key from here on; its values are lists, so one level is all
     # Where several plans top one line up, the one that counts is the highest
     # target of a site that has the item to send (it holds some, imports it,
     # is routed it, or is a factory that may make it); failing any, the
