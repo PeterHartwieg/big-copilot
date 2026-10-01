@@ -165,6 +165,7 @@ class Company:
                       "units": line["units"], "rate": line["rate"],
                       "tradeRate": line.get("tradeRate", line["rate"]),
                       **({"weekSold": line["weekSold"]} if "weekSold" in line else {}),
+                      **({"issued": True} if line.get("issued") else {}),
                       **({"soldDays": line["soldDays"]} if line.get("soldDays") else {})}
                      for slug, line in self.lines[site["addr"]].items()]
             out.append({
@@ -1473,6 +1474,33 @@ class FixtureKeyTests(unittest.TestCase):
                     self.assertEqual(set(row["delta"]), {"workers", "perDay"})
                     for line in row["lines"]:
                         self.assertEqual(set(line) - {"unnamed"}, self.STAFFING_LINE)
+
+
+class IssuedTicketTests(unittest.TestCase):
+    """Issue #159: a cinema's ticket is issued at the kiosk, never stocked."""
+
+    def cinema(self):
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.shop(SHOP_A, "Cinema")
+        c.hold(HUB, "ba:itemname_popcorn", 1000)
+        c.hold(SHOP_A, "ba:itemname_popcorn", 300, 100)
+        c.hold(SHOP_A, "ba:itemname_cinematicket", 0, 1300, issued=True)
+        c.plan(HUB, SHOP_A, "ba:itemname_popcorn", 400)
+        c.run()
+        return c
+
+    def test_the_flow_node_holds_the_concessions_and_not_the_ticket(self):
+        # The flow panel read the ticket as "0 on hand, needs 1,300, refill
+        # brings 0", a stocked line with no plan.
+        c = self.cinema()
+        node = next(n for n in c.supply["graph"]["nodes"] if n["id"] == site_key(SHOP_A))
+        self.assertEqual([i["slug"] for i in node["items"]], ["ba:itemname_popcorn"])
+
+    def test_the_ticket_has_no_fact_and_no_finding(self):
+        c = self.cinema()
+        self.assertIsNone(c.fact(SHOP_A, "ba:itemname_cinematicket"))
+        self.assertFalse([f for f in c.findings() if "ticket" in json.dumps(f).lower()])
 
 
 if __name__ == "__main__":

@@ -5999,6 +5999,10 @@ def _supply(
         weekly = beat(business)
         factor, _peak_day = peak_of(business)
         for line in business["lines"]:
+            # A ticket is issued at the booth, never held: no stock, need or
+            # refill belongs on the node (issue #159).
+            if line.get("issued"):
+                continue
             shop = shop_need[business["key"]].get(line["item"])
             depot = depot_need[business["key"]].get(line["item"])
             own = (business["key"], line["slug"])
