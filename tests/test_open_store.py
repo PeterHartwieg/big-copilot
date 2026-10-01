@@ -507,5 +507,44 @@ class WorksInTests(unittest.TestCase):
         self.assertEqual(furniture["ba:itemname_cashregister"].get("no"), ["cinema", "theater"])
 
 
+class FactoryRulesTests(unittest.TestCase):
+    """The game facts Plan a factory sizes storage, wages and exports with
+    (issue #172), as make_store_rules.py reads them out of the bundles."""
+
+    @classmethod
+    def setUpClass(cls):
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ba_store_rules.json")
+        with open(path, encoding="utf-8") as fh:
+            cls.rules = json.load(fh)
+
+    def test_goods_carry_their_box_size_and_importer_cap_and_services_neither(self):
+        products = self.rules["products"]
+        self.assertEqual(products["ba:itemname_whisky"].get("bx"), 300)
+        self.assertEqual(products["ba:itemname_sugar"].get("bx"), 1500)
+        self.assertEqual(products["ba:itemname_barley"].get("bx"), 500)
+        self.assertEqual(products["ba:itemname_whisky"].get("mo"), 15000)
+        fee = products["ba:itemname_haircuttingfee"]
+        self.assertNotIn("bx", fee)
+        self.assertNotIn("mo", fee)
+
+    def test_storage_shelves_carry_their_box_capacity(self):
+        furniture = self.rules["furniture"]
+        self.assertEqual(furniture["ba:itemname_palletshelf"].get("cc"), 60)
+        self.assertEqual(furniture["ba:itemname_storageshelf"].get("cc"), 16)
+        self.assertNotIn("cc", furniture["ba:itemname_wardrobe"], "only storage shelves hold boxes")
+
+    def test_every_skill_has_its_base_hourly_wage(self):
+        skills = self.rules["skills"]
+        self.assertEqual(skills["ba:skill_factoryworker"], 12)
+        self.assertEqual(skills["ba:skill_deliverydriver"], 18)
+        self.assertEqual(skills["ba:skill_purchasingagent"], 30)
+        # The planner's hand-kept tables agree with the game's own.
+        self.assertEqual(skills["ba:skill_customerservice"], ba_dashboard.PLAN_WAGES["cashier"])
+        self.assertEqual(skills["ba:skill_cleaning"], ba_dashboard.PLAN_WAGES["cleaner"])
+        self.assertEqual(skills["ba:skill_securityguard"], ba_dashboard.PLAN_WAGES["guard"])
+        for skill, wage in ba_dashboard.PLAN_OFFICE_WAGES.items():
+            self.assertEqual(skills[skill], wage, skill)
+
+
 if __name__ == "__main__":
     unittest.main()

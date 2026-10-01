@@ -10,7 +10,7 @@ owner-side only, and nothing ba_dashboard.py imports needs either. The planner
 reads it to price a store that does not exist yet and to list the furniture a
 fully outfitted one needs.
 
-Five bundles under <game>/Big Ambitions_Data/StreamingAssets/aa/StandaloneWindows64/:
+Eight bundles under <game>/Big Ambitions_Data/StreamingAssets/aa/StandaloneWindows64/:
 
   defaultlocalgroup_assets_items_*.bundle
       every Item (wholesalePrice, defaultMarketPrice, productSalesRatio, type
@@ -36,6 +36,8 @@ Five bundles under <game>/Big Ambitions_Data/StreamingAssets/aa/StandaloneWindow
       minimum interior score
   defaultlocalgroup_assets_buildings_*.bundle
       the banks' loan terms (VantanderBankSettings, JensenCapitalSettings)
+  defaultlocalgroup_assets_skills_*.bundle
+      every SkillData's baseHourlyWage
   defaultlocalgroup_assets_vehicletypes_*.bundle
       each VehicleType's price; a motor vehicle (maxFuel above 0) counts
       towards the wealth a bank lends against (PlayerHelper.GetTotalAssetsWorth)
@@ -60,7 +62,10 @@ where noted):
     {"products": {"<item>": {"w": wholesale price, "p": market price,
                              "r": productSalesRatio, "d": 1 demanded product,
                              "s": 1 service, "k": 1 ticket,
-                             "l": [neighbourhoods] (omitted when empty)}},
+                             "l": [neighbourhoods] (omitted when empty),
+                             "bx": units a box holds (Item.boxSize),
+                             "mo": maxOrderAmountPerImporter (both left out
+                                   for a service)}},
      "furniture": {"<item>": {"c": customers per hour (omitted when 0),
                               "h": [products it holds], "x": [short tags],
                               "bt": [business types its tags name, no prefix],
@@ -68,6 +73,8 @@ where noted):
                                     group per placement requirement: one of each group,
                                     "wt": the WorkoutExercise.workoutType a gym machine trains,
                                     "st": the seats a seat carries (its sittingPositions),
+                              "cc": boxes a storage shelf holds (Item.cargoCapacity,
+                                    business or warehouse storage only),
                               "o": [the only business types it works in, no prefix],
                               "no": [business types it does not work in, no prefix],
                               "v": [vendor site keys]}},  (lists omitted when empty)
@@ -84,7 +91,8 @@ where noted):
      "banks": {"<asset name>": {"r": annual interest %, "y": years, "x": max loan,
                                 "e": 1 emergency loan}},
      "vendors": {"<site key>": {"n": name, "a": street label, "h": neighbourhood}},
-     "vehicles": {"<vehicle type>": price}}  (motor vehicles only: what a bank counts as wealth)
+     "vehicles": {"<vehicle type>": price},  (motor vehicles only: what a bank counts as wealth)
+     "skills": {"<skill>": baseHourlyWage}}
 
 `products` holds every item a business type sells (the gifts and flowers are
 furniture too, and sit in both tables), every entrance fee, and every other
@@ -128,6 +136,9 @@ SHORT_TAGS = {
     "ba:itemtag_isweighingscale": "scale",
     "ba:itemtag_shelf": "shelf",
 }
+# Shelves that hold boxes of stock: a shop's Storage Shelf, a warehouse's or
+# factory's Pallet Shelf (which carries only the warehouse tag).
+STORAGE_TAGS = {"ba:itemtag_isbusinessstorage", "ba:itemtag_iswarehousestorage"}
 # The help's own sentence ahead of a furniture page's vendor list.
 _PURCHASE = "can be purchased from the following locations"
 _ADDRESS_LINK = re.compile(r"\[([^\]]+)\]\(address:\s*([^)]+)\)")
@@ -206,6 +217,10 @@ def _furniture(items: dict, placement: dict, by_type: dict, type_slugs: set) -> 
                        if tag.removeprefix("ba:itemtag_") in type_slugs)
         if kinds:
             row["bt"] = kinds
+        # A storage shelf's box capacity: Item.cargoCapacity on the pieces
+        # tagged as a business's or a warehouse's storage.
+        if STORAGE_TAGS & set(tree.get("tags") or []) and int(tree.get("cargoCapacity") or 0) > 0:
+            row["cc"] = int(tree["cargoCapacity"])
         # Each placement requirement is a group of its own: a computer needs a
         # desk and a chair, one of each, never the cheapest of all of them.
         needs = []
@@ -259,6 +274,12 @@ def _products(items: dict, types: list) -> dict:
         hoods = list(tree.get("limitDemandToNeighbourhoods") or [])
         if hoods:
             row["l"] = hoods
+        # Goods come in boxes and an importer caps an order; a service has neither.
+        if not row["s"]:
+            if int(tree.get("boxSize") or 0) > 0:
+                row["bx"] = int(tree["boxSize"])
+            if int(tree.get("maxOrderAmountPerImporter") or 0) > 0:
+                row["mo"] = int(tree["maxOrderAmountPerImporter"])
         out[name] = row
     return out
 
@@ -353,6 +374,16 @@ def _vehicles(root: str) -> dict:
         name = tree.get("vehicleTypeName")
         if name and float(tree.get("maxFuel") or 0) > 0:
             out[name] = _price(tree.get("price"))
+    return out
+
+
+def _skills(root: str) -> dict:
+    """{skill: SkillData.baseHourlyWage}, the hourly wage before skill and the
+    difficulty's salary multiplier."""
+    out = {}
+    for tree in _behaviours(_bundle(root, "defaultlocalgroup_assets_skills")):
+        if tree.get("skillName") and "baseHourlyWage" in tree:
+            out[tree["skillName"]] = _round(tree["baseHourlyWage"])
     return out
 
 
@@ -486,6 +517,7 @@ def main() -> None:
         "banks": _banks(root),
         "vendors": vendors,
         "vehicles": _vehicles(root),
+        "skills": _skills(root),
     }
     if not all(out.values()):
         raise SystemExit(
