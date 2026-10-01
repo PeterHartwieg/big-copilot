@@ -2787,7 +2787,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
   #sp-shelves > table{display:block;overflow-x:auto;max-width:100%}
   #sp-shelves td.l{white-space:nowrap}
 }
-/* ===== the redesign's shell and Overview (docs/ui-route-migration.md) =========
+/* ===== the redesign's shell and Overview (docs/architecture.md, Pages) ========
    Five destinations in the sidebar, City map and Game guide under them, the
    area's own views (under its place, or in a row on top of the page on the
    rail; the sidebar's own rules are at the end of this sheet), a strip that says why the reader
@@ -4067,7 +4067,7 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 /*__I18N_SCRIPT__*/
 </script>
 <!--__BANNER__-->
-<!-- The sidebar and the page beside it (docs/ui-declutter.md, "Sidebar"). -->
+<!-- The sidebar and the page beside it (docs/architecture.md, "The sidebar"). -->
 <div class="sd-app" id="sdApp">
 <script>
 /* Collapsed to its rail before the first paint: the reader's choice on this
@@ -4153,12 +4153,12 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 
   <!-- Staffing: the shop schedules, who is needed and asks for what, and the
        payroll. Schedules draws the picked business's week in place; Staff
-       needs lists the demands and whom to hire (docs/ui-route-migration.md). -->
+       needs lists the demands and whom to hire (docs/architecture.md, Pages). -->
   <div class="page" id="pageStaffing" hidden>
     <div class="sechead subhead" hidden><nav class="seg" id="staffingNav" aria-label="Staffing views" data-tt-aria-label="nav.sub.staffing"></nav></div>
     <section class="sec rv" id="secSchedules" data-sub="schedules"></section>
     <section class="sec rv" id="secNeeds" data-sub="needs"></section>
-    <!-- Hiring for every site (drawStaff(), docs/staff-hire-plan.md): open
+    <!-- Hiring for every site (drawStaff(), docs/dashboard-reference.md): open
          places, candidates, Quick hire and staff with no hours. -->
     <section class="sec rv" id="secStaff" data-sub="needs"></section>
     <section class="sec rv" id="secPayroll" data-sub="payroll"></section>

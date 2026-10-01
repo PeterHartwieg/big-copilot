@@ -923,7 +923,7 @@ TREND_MOVE = 0.15  # how far a site's week has to move before it is news
 PROMOTION_CAP = 100  # promotion and marketing both stop counting here
 PROMOTION_GAP = 10  # a shortfall smaller than this is an opportunity, not a warning
 
-# --- marketing campaigns (docs/marketing-write-scope.md) --------------------
+# --- marketing campaigns (docs/dashboard-reference.md, "Promotion") ---------
 # The six campaign types, indexed by the game's enum id (Entities.MarketingTypeName):
 # (name, $ a day, reach in m²). Hard-coded in MarketingTypeSettings..cctor in
 # BigAmbitions.dll, build 3680; no bundle carries them.
@@ -1058,8 +1058,8 @@ def weekday(day: int) -> str:
 # Recipe identity only; rates and ingredients still come from _recipes(names).
 # Source (MIT stated in README; no upstream LICENSE file), pinned for review:
 # https://github.com/tiagovitorin/BigAmbitionsCompanion/blob/5db2e6a07145db9b19239efddc63c101be7346d6/data/normalized/recipes.json
-# Extraction build is unknown. In-game mapping verification is pending; see
-# docs/issue-2-recipe-identity-scope.md before releasing this change.
+# Extraction build is unknown. Four ids are still unverified in game:
+# docs/dashboard-reference.md, "Which recipe a machine runs".
 RECIPE_ITEMS = {
     'Vqbpzomo9k67pEjqY+aXag==': 'ba:itemname_apple',
     'AKSV3auI1UySifPRajzUhQ==': 'ba:itemname_banana',
@@ -8638,7 +8638,8 @@ def _need_curve(
 
 # ------------------------------------------------------------ roster building
 # The rules any suggested roster has to obey, read from BigAmbitions.dll at
-# VERIFIED_BUILD. docs/staffing-assistant-scope.md section 2 quotes each source.
+# VERIFIED_BUILD. docs/dashboard-reference.md, "The rules every planned week
+# keeps", lists each source.
 # The longest shift, and the most hours the plan gives anybody in one day: the
 # game's own auto-filler stops at 12 a day too, short of the 14 that raise
 # sickness (ScheduleHelper.GetOverworkedDays).
@@ -12877,7 +12878,8 @@ def _plan_site(
 
     The demand plan is cut from the measured hours. The full-cover plan, which
     staffs every station every hour as a two-week demand test for a shop with
-    nothing measured yet (docs/mod-write-back-scope.md, section 5), is placed
+    nothing measured yet (docs/dashboard-reference.md, "The week the board would
+    copy into BizMan"), is placed
     later by _staffing(), once every site's demand plan has taken its people
     off the bench; _finish_site() then builds the row from both.
     """
@@ -13076,7 +13078,7 @@ def _finish_site(site, full, names, people, opened=None) -> dict:
     }
 
 
-# --- hiring: the Staff page (issue #89, docs/staff-hire-plan.md section 2)
+# --- hiring: the Staff page (issue #89; docs/architecture.md, the payload contract)
 #
 # The skills a business accepts when the player assigns somebody to it, as the
 # game's own check has them (AssignToBusinessAndHireMassAction and
@@ -13125,7 +13127,7 @@ ASSIGN_SKILLS = {
 }
 FACTORY_TYPES = COST_CENTRE_TYPES - OVERHEAD_TYPES
 
-# Peter's office default (25 Sep 2026, docs/mod-write-back-scope.md): "computers
+# Peter's office default (25 Sep 2026; docs/dashboard-reference.md): "computers
 # staffed 24/7 = 3 in a 50-capacity building, proportionally fewer in smaller
 # ones (at least 1); every computer 8 to 22 on weekdays; half the computers 8 to
 # 22 on weekends." For every office: round(3 x door / 50) computers, at least 1
@@ -13579,7 +13581,7 @@ def _company_facts(save: Save) -> dict:
 
 def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict,
             office_staffing: list) -> dict:
-    """The Staff page's payload key `hiring` (docs/staff-hire-plan.md, 2.3).
+    """The Staff page's payload key `hiring` (docs/architecture.md, the payload contract).
 
     Takes each plan row's `_hire` off it. One site per business the player runs,
     in the `businesses` order; `people` describes everybody a site's `spare` or

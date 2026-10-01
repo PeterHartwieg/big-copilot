@@ -270,6 +270,15 @@ the map.
   of categories and searchable pages. The Gift Shop guide presents setup
   checklists, products and their fixtures/suppliers, recipe flows and map links.
   Checklist ticks are planning notes, not proof that equipment is installed.
+  With a save open, a business guide adds **Prices in your save**: your shops of that type
+  by neighbourhood with the price set for each product ("Not set" where none is), beside the
+  lowest market price, MarketInsider's minimum rebuilt from the save
+  (`_wiki_market_prices()`: positive prices at named, open businesses of any type in that
+  neighbourhood, yours included). It is withheld, not guessed, for an item in an active
+  type 3 or 4 supplier event, when a seller's neighbourhood is unknown, and when nobody sells
+  the item (the game's fallback price is not reproduced). The rule was read from
+  `ItemHelper.GetLowestMarketPrice`; MarketInsider caches, so the game can show an older
+  figure. These are comparisons, not recommended prices.
   Game help and Big Copilot's calculations are labelled separately; live company
   information belongs in the guide's Yours section.
 
@@ -804,6 +813,29 @@ says why in one line instead of the progress: the demand plan also needs every s
 every hour (keep this staffing), or the game does not staff every station every open hour
 (the data is complete as staffed, and an empty station may have turned customers away).
 
+### The rules every planned week keeps
+
+Every week the board plans or writes, for a shop, an office or a factory, keeps the game's
+own scheduling rules. They were read from `BigAmbitions.dll` at `VERIFIED_BUILD`; re-check
+them before bumping it (`docs/game-update.md`, "Hand-read tables no script checks").
+
+| Rule | In the board | Game source |
+| --- | --- | --- |
+| An entry runs at most 12 hours, and nobody is given more than 12 hours in a day | `SHIFT_CAP` | `ScheduleHelper.ShiftLengthCap`, `ScheduleAutoFiller.MaxEmployeeHoursPerDay` |
+| More than 14 hours in a day is overworked and raises sickness; the plan stops at 12 | the mod's `overworked` warning | `ScheduleHelper.GetOverworkedDays` |
+| One person on a station in an hour, one station for a person in an hour | the placer, and the check before a write | `ScheduleAutoFiller.AddMaxOneEmployeePerWorkstationConstraint`, `AddMaxOneShiftPerEmployeeConstraint` |
+| A station takes only somebody holding its skill | `STATION_SKILLS` | the item's `suitableSkills` |
+| Full time is 30 to 50 hours a week, part time 10 to 30, both ends included | `FULL_TIME`, `JOB_DEMANDS` | `HoursWorkingPerWeek.Fulfilled()` |
+| A four- or five-day week is exactly that many days: three fails a four-day demand as surely as five | `JOB_DEMANDS` | `DaysWorkingPerWeek.Fulfilled()`, which fails on `!=` |
+| Free weekends are the game's days 6 and 7 | `WEEKEND_WEEKDAYS` | the freeweekends demand |
+
+The board's own choices, not the game's, are the 10% slack budget (`SLACK_SHARE`) and one
+person for every open hour on cleaning stations and security lockers (`COVER_STATIONS`),
+both under *The entries* above; no Customer Service employee on a cleaning station
+(*The people*); and `MIN_SPLIT`: where the plan cuts an entry to share a day or top up a
+week, both pieces run at least four hours. The game takes a one-hour entry, but a scrap is
+not worth typing, so a demand that could only be met with less is reported unmet.
+
 ## Staff demands
 
 Each employee holds up to three demands, and an ignored one wears their satisfaction down
@@ -813,7 +845,7 @@ its code at build 3680:
 
 - **Hours and days.** Full-time is 30 to 50 assigned hours a week, part-time 10 to 30, and
   the hours worked so far this week must not pass the top. Four or five days a week counts
-  the days assigned, and the days worked so far must not pass it; free weekends means no
+  the days assigned, which must match exactly, and the days worked so far must not pass it; free weekends means no
   Saturday or Sunday among them. A schedule changed mid-week can meet the demand while the
   week already worked has passed its top, so where that is the only failure the finding and
   the site's Crew say so: *Full-time for 4 (critical, worked over 50 hours this week)*, or
@@ -937,6 +969,31 @@ hourly rates asks for six workstations of each kind at an average day's rate, wh
 exactly what both factories have installed. The planner then adds the peak-day margin and
 asks for seven, which is the honest reading of it: the plant as it stands is sized for an
 ordinary day, not a Saturday.
+
+### Which recipe a machine runs
+
+The save stores a machine's recipe only as an opaque `selectedRecipeId`. `RECIPE_ITEMS` in
+`ba_dashboard.py` maps all 62 to the product they make, from the Big Ambitions Companion's
+`recipes.json`, pinned at commit 5db2e6a (its README says MIT; the repository has no LICENSE
+file; the extraction build is unknown). The table only names the product: workstation, rates
+and ingredients still come from the game's help text.
+
+- A table entry is used when the game has that recipe's help text and its workstation
+  matches the machine's. Otherwise the player's own name for the id (the picker, kept in
+  `market_history.json` under `lineNames` and in the browser), otherwise the picker.
+- A line is never named from what it ships or eats, and a name the player gave never
+  overrides a usable table entry.
+- An id the table does not know, on a newer build, waits for the picker until the table is
+  updated.
+
+Four ids are unverified in game:
+`XMndnWD5o0SgWbgdUecVw==` (table: Martini) and `6FwXLAY4S0qEWikfkkX5iQ==` (Whisky);
+`buvcJRWqukKvDtwZVXyR6g==` (Headphones) and `mFpiOPcgFUKtjFu2TYBUCg==` (Smartwatch 2). To
+check one: on a copy of the company, save, change one machine's recipe in game, save again,
+and compare that machine's id across the two saves. If the table is wrong, drop the source.
+
+To update the table: review the upstream diff, verify the changed ids that way, edit
+`RECIPE_ITEMS`, run `tests/test_recipe_identity.py`, then `python build_web.py`.
 
 ### Why some rows have no price
 
@@ -1235,7 +1292,7 @@ recommendation.
   about, found, missing, or not scored yet (the game scores a shop once customers have walked it);
   and the roles with no uniform, or no uniform locker. The uniform write (game link) sits in that
   cell, with its progress: Applied once the game answers, Confirmed once a later board shows no
-  gap for those roles (`docs/ui-progress-postconditions.md`).
+  gap for those roles (`docs/architecture.md`, "Progress: marked, applied, confirmed").
 
 ## The business detail
 
@@ -1690,25 +1747,13 @@ Supply › Production turns the same log on the factories themselves:
   at all, an import order short of what the factories eat, or an input that is planned
   and stocked at the depot but not being drawn.
 
-The save stores each machine's recipe only as an opaque id, so the recipe is read from
-the flow: two machines rated 60 an hour that ship 2,880 garments a day are the
-cheap-clothing line. A line whose output never leaves the factory is named from what it
-eats instead, so 960 cigar paper a day is two machines at 20 an hour and nothing else on
-that workstation, after the lines already named have had their share taken off. Twin
-lines with the same machine count are certain as a pair and marked *paired*; a line named
-only from the product held is marked *likely*; an id named once is remembered in
-`market_history.json`, so a line that stops for want of an input keeps its name. A line
-nothing can name is listed as such, with what the top-up plan suggests it was set up for
-and which of its inputs never arrive.
-
-That last case is the one that matters most, being a line set up before its ingredients
-flow, which is exactly when the delta is worth knowing, and it is the one the flow cannot
-settle. So an unidentified line carries a picker: say what it runs, and its needs join
-the feed view at once (machines times the recipe's hourly draw times 24) with the same
-verdicts, worked out on the page from the recipes the planner already carries. The name is
-kept in the browser; on the live board it is also sent to the watcher, which stores it in
-`market_history.json` and rebuilds, so the alerts follow. A line named this way is marked
-*named by you*, with a x to forget it. A line stopped for want of one input says so, and
+Each line is named from its machines' recipe id ("Which recipe a machine runs", under Plan
+a factory), never from what it ships or eats, so a new line is named and its inputs listed
+before its first delivery. A line whose id the board cannot name carries a picker: say what
+it runs, and its needs join the feed view on the next refresh. The name is kept in the
+browser; on the live board it is also sent to the watcher, which stores it in
+`market_history.json` and rebuilds. A line named this way is marked *named by you*, with a x
+to forget it; one named from the table is marked *Recipe table*. A line stopped for want of one input says so, and
 its other inputs read as *waiting* rather than as a problem of their own; an input that is
 planned and stocked at the depot but arrived not at all in a week says that too.
 

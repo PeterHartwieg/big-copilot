@@ -727,8 +727,8 @@ The UI redesign (26 Sep 2026, chunk 1) put a layer of routes over the pages: the
 (see [The sidebar](#the-sidebar)) shows five areas and two references, and every place the reader can be is a route such as
 `supply/imports` (see [Routes](#routes)). The pages below are the routes' *hosts*: they keep
 their ids, sections and `PAGE_DRAWS` tags, so lazy drawing and the calm refresh are as they
-were. [ui-route-migration.md](ui-route-migration.md) maps every route to the host view that
-shows it until chunks 2 and 3 move its presentation.
+were. `ROUTES` names each route's host page and view, and `HOST_ROUTES` the route a host view
+shows by default.
 
 `const PAGES =` in the board script lists the host pages; `SUBS` lists the views inside
 four of them. Each page is a `div.page` that `showPage()` unhides.
@@ -757,7 +757,7 @@ Staffing's views:
 | View | Section | Drawn by |
 | --- | --- | --- |
 | Schedules | `secSchedules` | `drawSchedules`: every shop and office in a list (`data-sched-pick`), each with its plan's state and progress (`schedProgress()`), and the chosen one's scheduling beside it in `#schDetail`: a shop's `spRosterBlock()` or an office's `spOfficeRoster()`, the planner and its write, `#sp-roster`. Since chunk 3 this is the one place the planner is drawn: a business's page summarises it (`spSchedSummary()`) and links here. Its handlers are bound by `wireAll()` (`wireRoster()`). The pick (`schedLit`) rides on the history entry (`nxSch`). Factories open Supply › Production on their scope |
-| Staff needs (`needs`) | `secNeeds`, `secStaff` | `drawNeeds` (Unmet demands, `#nxDemands`, and the last hire or move made from here with its progress), then the hiring page from `hiring`, `candidates`, `staffing`, `factoryStaffing` and `officeStaffing` (`drawStaff`, issue #89, `docs/staff-hire-plan.md`) under "Whom to hire": open places, candidates, Quick hire, the hire write, and its short current-staff summary (`hrPayroll`) linking to Payroll. "Write their week" opens Schedules on the site |
+| Staff needs (`needs`) | `secNeeds`, `secStaff` | `drawNeeds` (Unmet demands, `#nxDemands`, and the last hire or move made from here with its progress), then the hiring page from `hiring`, `candidates`, `staffing`, `factoryStaffing` and `officeStaffing` (`drawStaff`, issue #89; [dashboard-reference.md](dashboard-reference.md), "What's on the board") under "Whom to hire": open places, candidates, Quick hire, the hire write, and its short current-staff summary (`hrPayroll`) linking to Payroll. "Write their week" opens Schedules on the site |
 | Payroll | `secPayroll` | `drawPayroll`: rate and booked tiles and their difference, the roles, and the sites whose books part from their rates (`payrollOff()`), each opening its crew; the view an old `#payroll` or `#secPayroll` link opens |
 
 Supply's views are five task views (the redesign's chunk 2); shops, warehouses and factories
@@ -793,7 +793,8 @@ every view afresh (`sbForget()`). A finding's link, the search and the Goods flo
 through `sbLand()`: the view, Everything where the row is no change, its group opened,
 `[data-sb-at]` lit (on Imports the card too), and a crumb back. The three meanings of done
 (Marked by you, Applied · awaiting refresh, Confirmed) are `pgState()` and `pgPill()`, from the
-marks and the progress records (`docs/ui-progress-postconditions.md`). Supply's old views still
+marks and the progress records ([Progress: marked, applied,
+confirmed](#progress-marked-applied-confirmed)). Supply's old views still
 resolve: a remembered `ba_dash_supply` of `shops`, `warehouses`, `factories`, `checks`, `map`
 or `orders` opens Deliveries, Imports, Production, Deliveries, Goods flow or Changes
 (`SUPPLY_WAS`), and an old `#secShops`, `#secWarehouses`, `#secFactories`, `#secStock`,
@@ -838,8 +839,8 @@ that stubs `window.drawX` is the one the row runs.
 
 ### The sidebar
 
-Since 27 Sep 2026 the places run down the left (the navigation canvas's variant B,
-[ui-declutter.md](ui-declutter.md), "Sidebar"). The markup is `<nav class="sd" id="mast">`
+Since 27 Sep 2026 the places run down the left (the navigation canvas's variant B; its
+history is [archive/ui-declutter.md](archive/ui-declutter.md), "Sidebar"). The markup is `<nav class="sd" id="mast">`
 inside `div.sd-app`, a two-column grid whose second column is `.wrap`; the news strip and the
 update banner stay above it at full width. The sidebar is sticky and as tall as the window less
 what is above it (`sdFit()` sets `--sd-cut` while the news strip is in view). Top to bottom:
@@ -886,6 +887,18 @@ on the web page; the CLI's page says where its history file is). `data-open-pref
 anywhere opens Preferences on that row. Escape closes a popover first, then the sheet, and the
 keyboard returns to the control that opened it.
 
+### Idle work
+
+A board left open on a second screen should cost next to nothing. The landing's and the
+board's sphere loops (`requestAnimationFrame`) stop once they settle, wake on input, layout
+or scroll, and pause while the tab is hidden; the Map orb and the wiki's route ball animate
+while their page is open. The live and folder-watch dots are steady, not
+pulsing: one small pulsing dot kept the compositor drawing about 75 frames a second on an
+idle page. Folder checks run one at a time, release their guard after a failure and wait
+while the tab is hidden. `tests/performance.test.cjs` holds the loops and the folder guard;
+the dots have no test.
+The measurements are in [archive/performance-investigation.md](archive/performance-investigation.md).
+
 ### Routes
 
 The hash is the board's address bar, and `pageFromHash()` / `openHash()` read it. A hash
@@ -909,8 +922,10 @@ and the arrival that the next `showPage()` writes. A history entry keeps `nxRout
 a site's page stands under, when it is not Businesses › Results), `nxArr` (why the reader
 arrived: the strip `#arrive`, which takes the keyboard on arrival) and, on the Overview's
 entry, `nxOv` (its filters, folds and the row the reader left from). A load with no hash opens
-`ba_dash_route`. [ui-route-migration.md](ui-route-migration.md) is the full table, with every
-old hash, finding kind and task.
+`ba_dash_route`. The code's tables are the record: `ROUTES` and `AREAS` for the routes,
+`ROUTE_ALIASES`, `ROUTE_ALIAS_INTO`, `PAGE_ALIASES`, `SEC_PAGE`, `SEC_MOVED` and `SUPPLY_WAS`
+for old addresses, `FINDING_ROUTES` for each finding kind, and the `data-ov-route` links in
+`#toolPanels` (`template/board.html`) for All tools.
 
 Two routes share the Map page: `map` with the finder off and `expansion/finder` with it on.
 `routeFor()` reads the switch (`routeFinderOn()`), and the switch calls `routeSync()`, so the
@@ -979,6 +994,50 @@ link from another save — lands on the portfolio and replaces the hash with `#c
 a save of another character arriving under an open site's page (`siteFor` against
 `siteCharacter()`), which drops the crumb's way back and the lit finding with it.
 
+### Progress: marked, applied, confirmed
+
+A change on the board has three meanings of done, kept apart so a note of the player's own is
+never taken for the game's word. The code is the board script's
+`/* --- progress: marked by you, applied, confirmed` section; `pgState()` gives a checklist
+row's state and `pgPill()` draws it with words and a symbol, never colour alone.
+
+| State | Set by | Cleared by |
+| --- | --- | --- |
+| Marked by you (`marked`) | the player's tick: a Supply checklist row (`ba_order_marks_v1:<character>`), or every entry of a week on Schedules (`ba_dash_roster:<site>`) | the player (untick, Clear my marks), or the row changing: a new figure is a new row |
+| Applied · awaiting refresh (`applied`) | `pgRecord()`, called only from a successful answer to a game-link write: imports (`pgImportsDone()`), a shop's or office's schedule (`pgScheduleDone()`), a hire or move (`pgHireDone()`), uniforms (`pgUniformDone()`) | a later board judging it, an undo of the write (`pgDrop()`; a hire before mod 0.4.0, or the company's first hire, has no undo), or `PG_KEEP_DAYS` (14) game days |
+| Confirmed · day N (`confirmed`) | `pgEvaluate()`, when a later board shows the write's postcondition (`PG_CHECK`) | Clear these on Supply › Changes (`pgClearSettled()`, import records only), or 14 game days |
+
+*Not confirmed* (`changed`) is a later board showing something else; it is final and never
+counts as done. A dry run, a click, or a write that failed, was refused, was cancelled or got
+no answer records nothing.
+
+A board is *later* when both hold: the company's board count (`n`, one more per board taken
+in, `pgBoard()`) is past the write's `seq`, and the game clock it was read at is not earlier
+than the write's, in whole minutes (`pgMinutes()`). A board at the write's own minute may
+confirm but never says Not confirmed, since a read already in flight, or a save file read
+again after a reload, can hold the bytes from before the write. A judged record is not
+judged again.
+
+What `PG_CHECK` reads, by family:
+
+| Family | Confirmed when | Otherwise |
+| --- | --- | --- |
+| `imports` | every contract the write set, on its line in `supply.factories.depots[<depot's index>][<material>]`, holds the amount written, and runs if the write started it | Not confirmed, with the figure the game holds now; the line gone is Not confirmed |
+| `schedule` | the site's `shiftPrint` equals the answer's print | Not confirmed; a site without a print says nothing |
+| `hire` | every person hired or moved is among that site's people (`pgPeopleSites()`: `staffing`, `officeStaffing`, `factoryStaffing.cap`, `hiring.people[].site`) | one at another site: Not confirmed; some seen: partly; none seen (a warehouse or headquarters lists no people): stays Applied |
+| `uniform` | none of the roles written is in the shop's `uniformGapSkills` | a role still there, or the shop gone: Not confirmed; no `uniformGapSkills` says nothing |
+
+Confirmation says only that: an import figure confirmed is not the stock gap covered or the
+factory hours set (each its own row), and a hire confirmed is not the person's hours. A
+uniform record shows on Standards (`stdTable()`), on the shop's page (`spStandards()`) and on
+the Overview's finding (`ovStatePill()`), all through `pgUniformState()`.
+
+Records are kept per character in `localStorage["ba_progress_v1:<character>"]` as
+`{v: 1, n, recs}`; without a character id nothing is written and records last as long as the
+page. `pgSave()` merges over what is stored: what is stored stands, less what this page took
+away; what this page made or judged goes over it; and a record another tab removed goes here
+too.
+
 ## Registries
 
 A registry is a table kept by hand that a new thing has to be added to. Nothing generates
@@ -1016,7 +1075,7 @@ Every other row is *only if*. The same summary sits above each of those tables i
 | `const ALERT_GROUPS = [` (board script) | `{id, label, note, on}`. The settings panel, `kindLabel`, `kindCounts`, search and the map's `kindOff` all read it. Keep a noisy kind `on: false` | `tests/alert_kinds.test.cjs`, "At capacity is on by default" and the per-kind tests; `tests/test_doc_registries.py`, "test_every_alert_group_is_a_group_the_findings_emit" |
 | `const ALERT_DEFAULTS_V1 =` (board script) | Never add to it: it is the frozen migration of old settings | `tests/alert_kinds.test.cjs`, "a stored whole map keeps only …" |
 | `const ALERT_LINKS = {` (board script) | Where a click lands: `{sec, view?, site?, port?}`, where `view` is a Supply view (`imports`, `deliveries`, `production`) or `"route"` for the view of the finding's route (`findingRoute()`). Without it `goToAlert()` does nothing | `tests/alert_kinds.test.cjs`, "every finding kind has an ALERT_LINKS entry …", the per-kind tests and "the supply kinds land on the Supply view of their route"; `tests/job_demands.test.cjs`, "both demand findings can be filtered and link somewhere" |
-| `const FINDING_ROUTES = {` (board script) | Its route and the action's words: `{route, act, pick?}`, `pick(a)` returning another `{route, act}` for some of its findings (a route-fed shortfall is a delivery, a staff finding at a factory is Production). `ALERT_LINKS` stays the landing until chunks 2 and 3 give the route its own presentation | `tests/shell_routes.test.cjs`, "every finding kind names a real route, and every route is a view of its area"; a new kind also bumps the kind count that test pins |
+| `const FINDING_ROUTES = {` (board script) | Its route and the action's words: `{route, act, pick?}`, `pick(a)` returning another `{route, act}` for some of its findings (a route-fed shortfall is a delivery, a staff finding at a factory is Production). `ALERT_LINKS` is the landing inside the route | `tests/shell_routes.test.cjs`, "every finding kind names a real route, and every route is a view of its area"; a new kind also bumps the kind count that test pins |
 | `const ALERT_SITE_PICK = {` (board script) | *Only if* the kind is company-wide, with no site of its own | `tests/job_demands.test.cjs` |
 | `const ALERT_LANDS_ON_ROW = new Set(` (board script) | *Only if* the finding is about one shelf, stock or input row | none |
 | `const ALERT_EVIDENCE = {` (board script) | The site panel block it lights, `{block, hit?}`. A kind with no site panel goes on `NO_EVIDENCE` in `tests/alert_kinds.test.cjs` instead | `tests/alert_kinds.test.cjs`, "every finding kind with a site panel has an ALERT_EVIDENCE entry"; `tests/site_panel.test.cjs`, "the findings here are the ones about this site, and each lights its block" |
@@ -1044,7 +1103,7 @@ all three.
 | `const SUBS = {` (board script) | *Only for a view*: its `[id, label, section]` item; a new page with views needs the whole entry | `tests/navigation.test.cjs`, "Businesses carries Results, Products & prices, Standards and Milestones; Staffing its three views" and "every view in SUBS has its SEC_PAGE row and a PAGE_DRAWS tag" |
 | `const SEC_PAGE = {` (board script) | `secX: [page, view]` for every section. Without it `reveal()`, the sub-nav and `pageFromHash()` fail | `tests/navigation.test.cjs`, "every view in SUBS has its SEC_PAGE row …" and "every Company section deep link opens the view that holds it"; `tests/alert_kinds.test.cjs`, "the supply kinds land on the Supply view of their route" |
 | `const PAGE_DRAWS = [` (board script) | `["page/view", () => drawX()]`, tagged with every view whose markup it writes | `tests/calm_refresh.test.cjs`, "a refresh on Today draws Today …"; `tests/navigation.test.cjs`, "every PAGE_DRAWS tag names a real page or view" and the SUBS test above |
-| `const ROUTES = {`, `const AREAS = [`, `routeViewLabel(` (board script) | *For a route*: `{host: [page, view?], scopes?, enter?, after?, into?}`, its view id in its area's `views`, and its words; `HOST_ROUTES` names it when a host view shows it by default, and `docs/ui-route-migration.md` lists it | `tests/shell_routes.test.cjs`, "every finding kind names a real route, and every route is a view of its area"; `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, then City map and Wiki" |
+| `const ROUTES = {`, `const AREAS = [`, `routeViewLabel(` (board script) | *For a route*: `{host: [page, view?], scopes?, enter?, after?, into?}`, its view id in its area's `views`, and its words; `HOST_ROUTES` names it when a host view shows it by default | `tests/shell_routes.test.cjs`, "every finding kind names a real route, and every route is a view of its area"; `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, then City map and Wiki" |
 | `const ROUTE_ALIASES =` (board script) | *Only when* an old page or view name becomes a route | `tests/navigation.test.cjs`, "the old #payroll hash, #secPayroll and a remembered Payroll open Staffing › Payroll" and "the #staff hash, #secStaff and a remembered Staff open Staffing › Staff needs" |
 | `const SS_VIEWS = [` (board script) | `{id, t, p, ic, syn, go}`, so search can open it | `tests/search.test.cjs`, "the index holds every group …" |
 | `function showPage(` (board script) | *Only if* the page loads or draws when shown, as the Map does | none |
@@ -1070,10 +1129,11 @@ watch server, `web/worker.js` and `web/app.js` all pass the whole dict through.
 
 All in `web/map.js`, covered by `tests/finder.test.cjs`. `saveFinder()` and `loadFinder()`
 keep the filters per character in `localStorage`, under `finderStore()`'s
-`FINDER_KEY:<character>`. Two things are not stored: the on/off switch, `fs.on` (every load
-opens the plain map), and the floor-plan layout pick, `layoutPick`, which a preset or a
-saved search clears. The layout pick does not follow the checklist below. Saved searches
-are a separate list under `FINDER_SAVED_KEY`.
+`FINDER_KEY:<character>`. One thing is not stored: the on/off switch, `fs.on` (every load
+opens the plain map). The floor-plan layouts, `fs.layouts`, are stored with the rest by
+`saveFinder()`; a preset or a change of category clears them, and a saved search keeps them
+only where its kind has two or more layouts. Saved searches are a separate list under
+`FINDER_SAVED_KEY`.
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |

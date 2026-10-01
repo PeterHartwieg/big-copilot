@@ -9,7 +9,7 @@ namespace BigCopilotLink
     /// <summary>
     /// POST /write/hire (from 0.3.0): hires headhunter candidates into sites, moves
     /// employees between sites, and writes the weeks of the sites involved, in one call
-    /// (docs/game-link-api.md, docs/mod-write-back-scope.md section 11). The moves are the
+    /// (docs/game-link-api.md, POST /write/hire). The moves are the
     /// game's MyEmployees "Assign business" mass action (AssignBusinessMassAction's
     /// closure, build 3682 IL), the hires its "Assign business and hire"
     /// (AssignToBusinessAndHireMassAction.HireAndAssignBusiness's closure), calling the

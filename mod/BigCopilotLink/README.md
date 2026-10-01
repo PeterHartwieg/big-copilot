@@ -366,7 +366,7 @@ the new bytes.
 
 ### In-game checklist for 0.3.0
 
-The plan's list (`docs/staff-hire-plan.md`, "What Peter does on the Mac"), with what to
+The plan's list (`docs/archive/staff-hire-plan.md`, "What Peter does on the Mac"), with what to
 look at. Built as above; `curl http://127.0.0.1:8322/health` answers `"modVersion":"0.3.0"`
 and `"writes"` includes `"hire"`. The board on the mock's scenarios has passed first
 (the integrator's QA), and the browser is approved, so the popup's new text ("…and to
@@ -434,7 +434,7 @@ http://127.0.0.1:8322/health` answers `"modVersion":"0.3.1"`.
 
 #### Marketing
 
-The marketing write (`docs/marketing-write-scope.md`). Built as above; `curl
+The marketing write (`docs/game-link-api.md`, `POST /write/marketing`). Built as above; `curl
 http://127.0.0.1:8322/health` answers `"modVersion":"0.4.0"` and `"writes"` includes
 `"marketing"`. Forget approved browsers first, so the popup's new text ("…staff schedules and
 marketing…") is seen once. After each apply, check the notification ("Big Copilot updated

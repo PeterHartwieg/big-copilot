@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      # Several Python tests execute the board's embedded JS.
+      # tests/test_plan_orders.py runs the board script under Node.
       - uses: actions/setup-node@v7
         with:
           node-version: 24

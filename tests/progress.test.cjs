@@ -1,6 +1,6 @@
 // Chunk 2 of the redesign: one proposal from the row to the copy, the basis
 // kept per company, the stores migrated, and the three meanings of done
-// (docs/ui-progress-postconditions.md). The board runs on the synthetic R8
+// (docs/architecture.md, "Progress: marked, applied, confirmed"). The board runs on the synthetic R8
 // fixture (tests/fixtures/r8_supply.json); a later board is the same payload
 // taken in again, changed the way the game would hold it.
 const {test, before, after} = require('node:test');

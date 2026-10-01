@@ -236,7 +236,7 @@ class OfficeBusinessTests(MsgAsserts, unittest.TestCase):
                                    "toiletprivacy", "unplanned", "unsourced", "outruns"})
 
     def test_an_office_short_of_promotion_is_told_which_agency_to_visit(self):
-        # Offices run campaigns too (docs/marketing-write-scope.md): with no
+        # Offices run campaigns too (docs/dashboard-reference.md, Campaign mix): with no
         # switch and no agency known, the line names the agencies by name.
         rows = [a for a in alerts([business()]) if a["group"] == "promotion"]
         self.assertEqual([a["level"] for a in rows], ["info"])

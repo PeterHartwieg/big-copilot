@@ -8,7 +8,7 @@ namespace BigCopilotLink
 {
     /// <summary>
     /// POST /write/schedule: one business's seven days of shifts, replaced
-    /// (docs/mod-link-scope.md section 5, docs/mod-write-back-scope.md sections 5 and 9).
+    /// (docs/game-link-api.md, POST /write/schedule).
     /// The rules are the BizMan schedule grid's; the calls after the change are
     /// ScheduleHelper.UpdateEmployeeAfterWorkShiftChange's for every employee who had or
     /// has a shift here, then what the schedule screen does as it closes
