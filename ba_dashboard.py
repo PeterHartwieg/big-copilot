@@ -3435,7 +3435,7 @@ def _goals(save: Save, names: Names, businesses: list) -> dict:
 
 
 # --------------------------------------------------------------------- supply
-def _deepest_use(per_day, weekly, day, until, left_today, rounds=False, extra=None):
+def _deepest_use(per_day, weekly, day, until, left_today, rounds=False, extra=None, steady=None):
     """The most a walk from now to the start of `until` has used at any point.
 
     A day's use can be negative (a route's surplus beyond it stays on the
@@ -3449,18 +3449,30 @@ def _deepest_use(per_day, weekly, day, until, left_today, rounds=False, extra=No
     once today's round is in the log), and the delivery day's own round is
     charged too, because it leaves before the import lands. `extra` {day:
     units} is added to a day's draw (the depot rows' routes to depots whose
-    own import has not landed yet).
+    own import has not landed yet). `steady` (units a day, today's share) is
+    a draw that runs round the clock whatever the rounds do, the site's own
+    factory lines: charged flat for the hours left today and each whole day
+    before `until`, never on the delivery day, whose drop feeds them.
     """
     extra = extra or {}
     used = deepest = 0.0
     for ahead in range(max(0, until - day + (1 if rounds else 0))):
         share = left_today if ahead == 0 else 1
         used += (per_day * weekly[(day + ahead) % 7] + extra.get(day + ahead, 0.0)) * share
+        used += _steady_on(steady, ahead, day + ahead < until)
         deepest = max(deepest, used)
     return deepest
 
 
-def _import_catch_up(stock, per_day, weekly, day, arrives, left_today, rounds=False, extra=None):
+def _steady_on(steady, ahead, before_drop=True):
+    """What a round-the-clock draw (`steady`: units a day, today's share)
+    takes on the day `ahead` days from now; nothing from the drop on."""
+    if not steady or not before_drop:
+        return 0.0
+    return steady[0] * (steady[1] if ahead == 0 else 1.0)
+
+
+def _import_catch_up(stock, per_day, weekly, day, arrives, left_today, rounds=False, extra=None, steady=None):
     """Extra whole units needed until the scheduled delivery lands.
 
     Use the same weekday demand and partial current day (or whole rounds) as
@@ -3469,7 +3481,7 @@ def _import_catch_up(stock, per_day, weekly, day, arrives, left_today, rounds=Fa
     the way (_deepest_use), not the net over the stretch.
     """
     return max(0, math.ceil(
-        _deepest_use(per_day, weekly, day, arrives, left_today, rounds, extra) - stock))
+        _deepest_use(per_day, weekly, day, arrives, left_today, rounds, extra, steady) - stock))
 
 
 def _import_setting(supply: dict) -> dict:
@@ -3685,7 +3697,8 @@ def _import_drop(stock, drops):
     return brought
 
 
-def _scheduled_import_gap(stock, per_day, weekly, day, deliveries, left_today, rounds=False, added=None):
+def _scheduled_import_gap(stock, per_day, weekly, day, deliveries, left_today, rounds=False, added=None,
+                          steady=None):
     """Project stock through the last upcoming drop, retaining each quantity.
 
     The maximum running deficit is the one-off amount that bridges every gap;
@@ -3700,7 +3713,8 @@ def _scheduled_import_gap(stock, per_day, weekly, day, deliveries, left_today, r
     each day's round leaves before that day's drop lands, so the walk charges
     the round first, and the last delivery day's round is part of it.
     `added` {day: units} is added to a day's draw, as in _deepest_use()'s
-    `extra`.
+    `extra`; `steady` is its round-the-clock draw, charged after a day's
+    drop has landed and not on the last delivery day.
     """
     added = added or {}
     drops = collections.defaultdict(list)
@@ -3722,14 +3736,25 @@ def _scheduled_import_gap(stock, per_day, weekly, day, deliveries, left_today, r
                 remaining += _import_drop(remaining, drops[when])
             share = left_today if when == day else 1.0
             use = (per_day * weekly[when % 7] + added.get(when, 0.0)) * share
+            eat = _steady_on(steady, when - day, when < until)
+            if not rounds:
+                use, eat = use + eat, 0.0
             if use > remaining and cover is None:
                 cover = elapsed + share * max(remaining, 0) / use if use else elapsed
                 runs_out = when
             remaining -= use
             low = min(low, remaining)
-            elapsed += share
             if when in drops and rounds:
                 remaining += _import_drop(remaining, drops[when])
+            if eat:
+                # A round-fed site's own lines eat through the day, after
+                # the morning's round and drop.
+                if eat > remaining and cover is None:
+                    cover = elapsed + share * max(remaining, 0) / eat
+                    runs_out = when
+                remaining -= eat
+                low = min(low, remaining)
+            elapsed += share
         return (cover if cover is not None else elapsed), runs_out, -low
 
     cover, runs_out, deficit = walk(0)
@@ -3739,6 +3764,7 @@ def _scheduled_import_gap(stock, per_day, weekly, day, deliveries, left_today, r
         # counting no day's use below nothing.
         lo, hi = 0, math.ceil(sum(
             max(0.0, (per_day * weekly[when % 7] + added.get(when, 0.0)) * (left_today if when == day else 1.0))
+            + _steady_on(steady, when - day, when < until)
             for when in range(day, last)
         ))
         while lo < hi:
@@ -4882,10 +4908,14 @@ def _supply(
                 # import are part of it: the shelf runs dry for the machines
                 # as surely as for a round (in this mode's sizing, full rate
                 # or Demand), though their week is still judged on the fact
-                # (_supply_facts). Nothing drawing on it, there is no draw to
+                # (_supply_facts). They eat round the clock, flat whatever the
+                # weekday, so the walk charges them apart (`steady`) from what
+                # leaves (`onward`), which may follow the shops' week and the
+                # morning rounds. Nothing drawing on it, there is no draw to
                 # walk.
                 per_day = node.get("use", 0.0)
                 eaten = min(eats_now.get(mode, {}).get((business["key"], item), (0.0, 0.0))[0], per_day)
+                onward = per_day - eaten
                 if per_day <= 0:
                     continue  # the graph's pipe then shows what arrived last week
                 driven = customer_driven(business["key"], item)
@@ -4923,7 +4953,7 @@ def _supply(
                     reduced = asked_use * max(0.0, 1 - left / routes_use)
                     off += reduced
                     replayed.append((dest, asked_use, reduced, routes_use, dnode.get("use", 0.0), there["arrives"]))
-                serves_more = per_day - sum(r[1] for r in replayed) > 0.5
+                serves_more = onward - sum(r[1] for r in replayed) > 0.5
                 tops_up = {}
                 for dest, asked_use, reduced, routes_use, dest_use, arrives in replayed:
                     dest_stock = held.get(dest, {}).get(item, 0)
@@ -4953,7 +4983,7 @@ def _supply(
                         before[when] += part - (asked_use - reduced)
                     if charged > 0:
                         tops_up[dest] = (charged, target)
-                physical = max(0.0, 1 - off / per_day)
+                physical = max(0.0, 1 - off / onward) if onward > 0 else 1.0
 
                 # Walk real days forward rather than dividing by an average: three
                 # days that land on a weekend eat more than three ordinary ones. Today
@@ -4979,7 +5009,7 @@ def _supply(
                 # way, round the clock.
                 routed = min(node.get("credit", 0.0) + made_now.get(mode, {}).get((business["key"], item), 0.0),
                              gross)
-                week_draw = sum(gross * weekly[wd] for wd in range(7))
+                week_draw = sum(onward * weekly[wd] for wd in range(7)) + 7 * eaten
                 covered = bool(node.get("covered"))
                 import_avg = gross
                 if routed:
@@ -4999,12 +5029,14 @@ def _supply(
                 walk_routed = min(gross, node.get("reach", 0),
                                   node.get("potential", 0.0) + held_behind / to_drop) if node.get("inbound") else 0.0
                 walk_routed = max(walk_routed, routed)
-                walk_weekly, walk_per_day = weekly, per_day * physical
+                walk_weekly, walk_per_day = weekly, onward * physical
                 if walk_routed:
-                    walk_weekly = {wd: gross * physical * weekly[wd] - walk_routed for wd in range(7)}
+                    walk_weekly = {wd: onward * physical * weekly[wd] - walk_routed for wd in range(7)}
                     walk_per_day = 1.0
-                    weekly = {wd: gross * weekly[wd] - walk_routed for wd in range(7)}
+                    weekly = {wd: onward * weekly[wd] - walk_routed for wd in range(7)}
                     per_day = 1.0
+                else:
+                    per_day = onward
                 # A depot its plans empty is emptied a round at a time: each round
                 # leaves in the morning, today's counts only while it has not left
                 # yet (today's log is the one record of that), and the delivery
@@ -5014,12 +5046,18 @@ def _supply(
                     i == item and d != business["key"] for d, i, _a in edges.get(business["key"], ()))
                 today = ((0.0 if (business["key"], item) in rounds_today else 1.0)
                          if rounds else left_today)
+                # The site's own lines: the hours left today, then whole days.
+                steady = (eaten, left_today) if eaten else None
+                landing = supply["arrives"] if supply["active"] and rounds else None
                 def cover_walk(extra):
                     remaining, cover, runs_out = line["units"], 0.0, None
                     for ahead in range(60):
                         share = today if ahead == 0 else 1.0
-                        today_use = (walk_per_day * walk_weekly[(day + ahead) % 7]
-                                     + extra.get(day + ahead, 0.0)) * share
+                        # On a round-fed site's delivery day only the round
+                        # leaves before the drop; the lines eat after it.
+                        today_use = ((walk_per_day * walk_weekly[(day + ahead) % 7]
+                                      + extra.get(day + ahead, 0.0)) * share
+                                     + _steady_on(steady, ahead, day + ahead != landing))
                         if today_use <= 0:
                             remaining -= today_use  # a route's surplus stays on the shelf
                             cover += share
@@ -5050,7 +5088,7 @@ def _supply(
                 week_need = (
                     import_avg * 7 if routed
                     else week_draw if walk_routed
-                    else sum(per_day * weekly[(start + ahead) % 7] for ahead in range(7))
+                    else sum(per_day * weekly[(start + ahead) % 7] for ahead in range(7)) + 7 * eaten
                 )
                 due = until_drop(supply["arrives"]) if supply["active"] else None
                 # A paused backup beside a route that brings the week has no drop
@@ -5079,10 +5117,11 @@ def _supply(
                 )
                 catch_up = _import_catch_up(
                     line["units"], walk_per_day, walk_weekly, day,
-                    week_on if horizon else supply["arrives"], today, rounds, before
+                    week_on if horizon else supply["arrives"], today, rounds, before, steady
                 ) if supply["active"] or horizon else None
                 schedule = _scheduled_import_gap(
-                    line["units"], walk_per_day, walk_weekly, day, supply["deliveries"], today, rounds, before)
+                    line["units"], walk_per_day, walk_weekly, day, supply["deliveries"], today, rounds, before,
+                    steady)
                 stock_cover = cover
                 if schedule:
                     cover, runs_out = schedule["cover"], schedule["runsOut"]
@@ -5154,7 +5193,7 @@ def _supply(
                         # plans sell and eat (_supply_walk()).
                         "basis": "sales",
                         "peakDay": peak_day,
-                        "peakPerDay": round(gross * factor),
+                        "peakPerDay": round(onward * factor + eaten),
                         "cover": round(cover, 1),
                         "stockCover": round(stock_cover, 1),
                         # The plain division, without the weekday walk: units on the
@@ -5172,7 +5211,7 @@ def _supply(
                         # line is walked a week.
                         "dueNeed": round(_deepest_use(
                             walk_per_day, walk_weekly, day,
-                            supply["arrives"] if supply["active"] else week_on, today, rounds, before)),
+                            supply["arrives"] if supply["active"] else week_on, today, rounds, before, steady)),
                         "rounds": rounds,
                         "orderFit": order_fit,
                         "coverFit": cover_fit,
@@ -5190,7 +5229,7 @@ def _supply(
                             _deepest_use(
                                 walk_per_day, walk_weekly, day,
                                 week_on if horizon else supply["arrives"] if supply["active"] else until,
-                                today, rounds, before),
+                                today, rounds, before, steady),
                             line["units"] + catch_up if catch_up else 0,
                         )) if walk_routed else None,
                         "paused": not supply["active"],

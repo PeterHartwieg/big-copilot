@@ -637,6 +637,50 @@ class FactoryOwnImportTests(unittest.TestCase):
                 self.assertEqual(row["catchUp"], {"cap": 1080, "dem": 149}[mode])
                 self.assertEqual(row["eats"], row["perDay"])
 
+    def mixed(self, *, round_left=False, profile=None):
+        """The brewery imports its water, eats it, and also sends water on
+        to its bar on the morning rounds (the bar sells 100 water and 300
+        beer a day); nothing in stock, the drop in three days, day 20 at noon."""
+        c = Chain()
+        c.profile = profile
+        c.factory(BREWERY, "Brewery", machines=1)
+        c.hold(BREWERY, WATER, 0)
+        c.contract(BREWERY, WATER, 3000, due=c.day + 3)
+        c.plan(BREWERY, SHOP, WATER, 400)
+        c.plan(BREWERY, SHOP, BEER, 1000)
+        c.shop(SHOP, "Bar")
+        c.hold(SHOP, WATER, 400, 100)
+        c.hold(SHOP, BEER, 1000, 300)
+        if round_left:
+            c.ship(c.day, BREWERY, SHOP, {WATER: 100})
+        c.run()
+        return c
+
+    def assert_split_walk(self, c, round_today):
+        """The machines are charged flat, half of today and two whole days,
+        never on the delivery day; the rounds on the shop's week, today's
+        only while it has not left, and the delivery day's."""
+        week = {wd: (c.profile[wd] / 100 if c.profile else 1.0) for wd in range(7)}
+        for mode in ("cap", "dem"):
+            with self.subTest(mode=mode):
+                rows = c.supply["imports"] if mode == "cap" else c.supply["importsDem"]
+                row = next(r for r in rows if r["s"] == c.index(BREWERY) and r["slug"] == WATER)
+                self.assertTrue(row["rounds"])
+                eats, onward = row["eats"], row["perDay"] - row["eats"]
+                self.assertGreater(eats, 0)
+                self.assertGreater(onward, 0)
+                expected = eats * 2.5 + onward * (
+                    (week[c.day % 7] if round_today else 0) + sum(week[(c.day + a) % 7] for a in (1, 2, 3)))
+                self.assertAlmostEqual(row["catchUp"], expected, delta=2)
+
+    def test_a_round_gone_today_leaves_the_machines_eating(self):
+        self.assert_split_walk(self.mixed(round_left=True), round_today=False)
+
+    def test_the_shops_week_shapes_only_what_leaves(self):
+        # Day 20 is a Saturday: a busy one, then a quiet Sunday.
+        profile = [50, 100, 100, 100, 100, 100, 200]
+        self.assert_split_walk(self.mixed(profile=profile), round_today=True)
+
     def test_stock_that_reaches_the_drop_is_no_finding(self):
         c = self.brewery(1200)
         for mode in ("cap", "dem"):
