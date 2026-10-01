@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
-const source = fs.readFileSync(path.join(__dirname, '..', 'ba_dashboard.py'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.html'), 'utf8');
 const {between} = require('./_slice.cjs');
 
 /* The boot slice starts at the shell, so the no-save path comes with it. */

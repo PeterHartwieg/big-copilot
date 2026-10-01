@@ -1,4 +1,4 @@
-// Source slices for the tests that run a piece of ba_dashboard.py or
+// Source slices for the tests that run a piece of template/board.html or
 // web/app.js in a VM. A bare indexOf() that misses returns -1, and the slice
 // then quietly takes the wrong span; these throw instead, naming the anchor.
 // Not a test file itself: the leading underscore keeps it out of the

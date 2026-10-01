@@ -18,17 +18,13 @@ const root = path.join(__dirname, '..');
 const PYTHON = process.env.PYTHON || 'python';
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
-// The board script is the TEMPLATE string; map.js and wiki.js run inside it.
-const dashboard = read('ba_dashboard.py');
-const templateAt = dashboard.indexOf('TEMPLATE = r"""');
-const template = dashboard.slice(templateAt, dashboard.indexOf('"""', templateAt + 15));
-const firstLine = dashboard.slice(0, templateAt).split('\n').length;
-const SOURCES = [['ba_dashboard.py', template, firstLine], ['web/map.js', read('web/map.js'), 1],
+// The board script is in template/board.html; map.js and wiki.js run inside it.
+const template = read('template/board.html');
+const SOURCES = [['template/board.html', template, 1], ['web/map.js', read('web/map.js'), 1],
   ['web/wiki.js', read('web/wiki.js'), 1], ['web/i18n.js', read('web/i18n.js'), 1]];
 const NUM = 'const num = (n, opts) => Number(n).toLocaleString(NUM_LOCALE, opts);';
 
 test('no bare toLocaleString() in the board script, map.js, wiki.js or i18n.js: numbers go through num()', () => {
-  assert.ok(templateAt >= 0, 'TEMPLATE not found');
   assert.equal(template.split(NUM).length, 2, 'num() is defined once, in the board script');
   for (const [file, src, first] of SOURCES) {
     const bare = src.split('\n').map((line, i) => `${file}:${first + i}: ${line.trim()}`)

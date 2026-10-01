@@ -509,6 +509,8 @@ STAMP_INPUTS = (
     "web/py/ba_item_prices.json",
     # What a store sells, needs and can buy where, for the store planner (make_store_rules.py).
     "web/py/ba_store_rules.json",
+    # The board's markup, CSS and script, which render() reads (ba_dashboard.load_template()).
+    "template/board.html",
 )
 
 
@@ -596,8 +598,8 @@ def page_html(release: dict, root: str = HERE) -> str:
     """web/index.html for one release: the same string the build writes.
 
     root redirects the one file read here, web/update.js. It does not reach
-    render(): the board template, the footer changelog and the embedded
-    map.js, map.css, wiki.js and wiki.css all come from the web/ folder beside
+    render(): the board template (template/board.html), the footer changelog
+    and the embedded map.js, map.css, wiki.js and wiki.css all come from beside
     the imported ba_dashboard.py, whatever root says. So a page built for
     another root mixes that root's update.js and stamp with this checkout's
     board. For check() that is the intent -- the shared board is the one under
@@ -643,7 +645,7 @@ def check(root: str = HERE) -> list[str]:
     web/update.js, web/version.json and web/index.html. It does not redirect
     what render() reads through the imported ba_dashboard -- the board
     template, the footer changelog and the embedded map.js, map.css, wiki.js
-    and wiki.css come from this checkout's web/ folder. A check against another
+    and wiki.css come from this checkout's template/ and web/ folders. A check against another
     root therefore compares that root's index.html with a page built from this
     checkout's board, which is only meaningful when the two share it, as the
     tests' temporary copies do.

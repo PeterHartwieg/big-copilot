@@ -43,7 +43,7 @@ flowchart TD
   payload -->|"embedded as /*__DATA__*/"| board
 ```
 
-Both doors run the same `extract()` and the same `TEMPLATE`. Only the wrapper differs:
+Both doors run the same `extract()` and the same template, `template/board.html`. Only the wrapper differs:
 locally `main()` calls `load_save()` and `render(data)`; in the browser `web/worker.js` calls
 `browser_build()`, which does the same work on Pyodide's virtual filesystem and returns
 JSON. A third source feeds either door: the Big Copilot Link mod serves the running
@@ -353,7 +353,7 @@ name; the footer's Language sets both.
 | Where | How |
 | --- | --- |
 | A script (board script, `web/*.js`) | `tt("sp.tile.size", "Size")`, `tt("f.x", "{n:,} units short", {n})`, `tt("f.m", {one: "{n} machine", other: "{n} machines"}, {n})` |
-| Markup (`TEMPLATE`, `BANNER`, `footer_html()`) | `<span data-tt="nav.today">Today</span>`; `data-tt-title`, `data-tt-aria-label`, `data-tt-placeholder` and `data-tt-tip` (for `data-tip`) name the key beside the attribute they fill |
+| Markup (`template/board.html`, `BANNER`, `footer_html()`) | `<span data-tt="nav.today">Today</span>`; `data-tt-title`, `data-tt-aria-label`, `data-tt-placeholder` and `data-tt-tip` (for `data-tip`) name the key beside the attribute they fill |
 | Python (`ba_dashboard.py`) | `msg("f.loss", "Lost {w:$} yesterday", w=abs(b["profit"]))` |
 
 With no table loaded every one of these gives its English, so an English page is byte for
@@ -561,7 +561,12 @@ without its `.git`) or inside any other git work tree.
 
 ## Template placeholders
 
-`TEMPLATE` carries seventeen tokens. All seventeen are substituted by `render()`, but the
+The board's page is `template/board.html`, a file of its own beside `ba_dashboard.py`.
+`render()` reads it through `load_template()`, once per process and never at import time:
+the Pyodide worker imports `ba_dashboard` without the file and never renders. It is in
+`build_web.STAMP_INPUTS`, so an edit to it changes the build stamp.
+
+The template carries seventeen tokens. All seventeen are substituted by `render()`, but the
 text for three of them is supplied by the caller.
 
 | Token | Filled with |
@@ -597,7 +602,7 @@ opened directly: delete either and `render()` raises.
 `__UPDATE_SCRIPT__`, `__BUILD__`, `__ICON_FOLDER__`, `__ICON_LINK__`, `__ICON_MORE__`
 (`tests/test_doc_registries.py` holds this list to `build_web.py`). Those are substituted
 inside `BANNER` and `BEFORE_SCRIPT` before either string reaches
-`render()`, so they never appear in `TEMPLATE`. `BANNER` also carries the template's own
+`render()`, so they never appear in the template. `BANNER` also carries the template's own
 `<!--__FOOTER__-->`, which `build_web.py` fills with `footer_html(landing=True, site=True)`.
 
 ## Assembly order of `web/index.html`
@@ -617,13 +622,13 @@ What `page_html()` produces, top of the file down:
    script, and Cloudflare's automatic Web Analytics injection is switched off for the
    domain, because the privacy notice says the site runs none. `page_html()` then swaps the
    template's Google Fonts links for `web/fonts/fonts.css`, stamped the same way.
-3. `TEMPLATE`, whose head scripts are the theme and `web/i18n.js`, with the landing screen
+3. The template (`template/board.html`), whose head scripts are the theme and `web/i18n.js`, with the landing screen
    (`BANNER`) substituted into its `<!--__BANNER__-->` slot: the release banner, the drop
    zone, the save-location help and the footer.
 4. `BEFORE_SCRIPT`, filled in by `page_html()` with the stamp, the release JSON and the
    inlined `web/update.js`, in its slot just ahead of the board's own script:
    `window.LEDGER_RELEASE`, `update.js`, `app.js?v=<stamp>`, `community.js?v=<stamp>`.
-5. The board script, the last `<script>` block of `TEMPLATE`.
+5. The board script, the last `<script>` block of the template.
 
 Before any of that, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`,
 `ba_dashboard.py`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json` and `ba_store_rules.json` into `web/py/`, and
@@ -683,7 +688,7 @@ hash, `web/wiki.js` fetches `wiki-data.json` with the build stamp, and the board
 `i18n/<lang>.json` with it for a UI language. The dynamic ones
 carry no version, because the whole point is to see the current state: `web/update.js`
 polls `version.json` with `cache: "no-store"`, and `web/community.js` calls
-`/api/community/*`. Nothing comes from another origin: `TEMPLATE` links Google Fonts for
+`/api/community/*`. Nothing comes from another origin: the template links Google Fonts for
 the local `dashboard.html`, but `build_web.py` swaps those links for the site's own copies
 in `web/fonts/`, so the privacy notice (`web/privacy.html`) can name Cloudflare as the
 only party that sees a request. `tests/test_privacy_promises.py` holds the site to that,
@@ -966,7 +971,7 @@ the payload table, the private build tokens, the finding groups, and the
 above its declaration (`tests/test_doc_registries.py`). The other covering tests check the entries that exist
 today, so extend them for the new entry. Rows marked
 *only if* apply to some entries, not all. All anchors are in `ba_dashboard.py` unless a row
-says otherwise; "board script" means the last `<script>` block of its `TEMPLATE`.
+says otherwise; "board script" means the last `<script>` block of `template/board.html`.
 
 ### A finding kind
 
@@ -976,7 +981,7 @@ rows in `ALERT_GROUPS`, `ALERT_LINKS`, `FINDING_ROUTES` and `ALERT_EVIDENCE` (or
 (else `NOT_MONEY` there); `SS_KIND_SYN` if players have words for it; and its
 player-facing line under "What counts as a finding" in `docs/dashboard-reference.md`.
 Every other row is *only if*. The same summary sits above each of those tables in
-`ba_dashboard.py`.
+`ba_dashboard.py` and `template/board.html`.
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
@@ -1012,7 +1017,7 @@ all three.
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
-| The markup: `<div class="page" id="page…">` for a page, or `<section class="sec rv" id="sec…" data-sub="…">` inside its page for a view; a page with views also gets its `<nav class="seg" id="…Nav">` | The host element | the navigation tests, indirectly |
+| The markup (`template/board.html`): `<div class="page" id="page…">` for a page, or `<section class="sec rv" id="sec…" data-sub="…">` inside its page for a view; a page with views also gets its `<nav class="seg" id="…Nav">` | The host element | the navigation tests, indirectly |
 | `const PAGES = [` (board script) | *Only for a page*: `{id, label, host, newFeature?}` | `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, then City map and Wiki" |
 | `const ICON = {` (board script) | *Only for a page*: its nav icon, keyed by page id | none |
 | `const SUBS = {` (board script) | *Only for a view*: its `[id, label, section]` item; a new page with views needs the whole entry | `tests/navigation.test.cjs`, "Businesses carries Results, Products & prices, Standards and Milestones; Staffing its three views" and "every view in SUBS has its SEC_PAGE row and a PAGE_DRAWS tag" |
