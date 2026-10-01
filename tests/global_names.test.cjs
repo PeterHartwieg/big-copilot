@@ -51,11 +51,32 @@ const SOURCES = [
 const DECL = /^(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)|^class\s+([A-Za-z_$][\w$]*)|^(?:const|let|var)\s+(.*)$/;
 const IDENT_START = /^\s*([A-Za-z_$][\w$]*)\s*(?:=(?![=>])|,|;|$)/;
 
+/* Where the literal that opens at rest[i] ends (the index of its last
+   character): a string, a template (to its next backtick, so a nested one
+   inside `${}` would end it early; none sits on a declaration line today),
+   a regular expression or a block comment. A `/` is a regular expression where
+   an operand is expected, which is after one of ( , = : [ ! & | ? { } ; or at
+   the start. Returns i for anything else. */
+function literalEnd(rest, i){
+  const c = rest[i];
+  const until = (j, stop) => { for(; j < rest.length; j++){ if(rest[j] === '\\') j++; else if(stop(j)) return j; } return rest.length - 1; };
+  if(c === '"' || c === "'" || c === '`') return until(i + 1, j => rest[j] === c);
+  if(c !== '/') return i;
+  if(rest[i + 1] === '*'){ const end = rest.indexOf('*/', i + 2); return end < 0 ? rest.length - 1 : end + 1; }
+  if(rest[i + 1] === '/' || !/(^|[(,=:[!&|?{};])\s*$/.test(rest.slice(0, i))) return i;
+  let inClass = false;
+  return until(i + 1, j => {
+    if(rest[j] === '[') inClass = true;
+    else if(rest[j] === ']') inClass = false;
+    return rest[j] === '/' && !inClass;
+  });
+}
+
 /* The names one column-0 `const`/`let`/`var` line declares: the first, and
-   every further `, name =` at bracket depth 0 on the same line (strings are
-   not skipped, so a bracket inside one could hide a later declarator; none
-   does today). A declarator list carried on to the next line, or a
-   destructuring pattern, is refused, so the test cannot miss names quietly. */
+   every further `, name =` at bracket depth 0 on the same line, with strings,
+   templates, regular expressions and comments passed over. A declarator list
+   carried on to the next line, or a destructuring pattern, is refused, so the
+   test cannot miss names quietly. */
 function declarators(rest, where){
   if(/^[[{]/.test(rest)) throw new Error(`${where}: destructuring at column 0; teach tests/global_names.test.cjs to read it`);
   const names = [];
@@ -67,10 +88,12 @@ function declarators(rest, where){
   };
   for(let i = 0; i < rest.length; i++){
     const c = rest[i];
+    if(c === '/' && rest[i + 1] === '/'){ rest = rest.slice(0, i); break; }
+    const end = literalEnd(rest, i);
+    if(end !== i){ i = end; continue; }
     if(c === '(' || c === '[' || c === '{') depth++;
     else if(c === ')' || c === ']' || c === '}') depth--;
     else if(c === ',' && depth === 0){ segment(rest.slice(start, i)); start = i + 1; }
-    else if(c === '/' && rest[i + 1] === '/' && depth === 0) { rest = rest.slice(0, i); break; }
   }
   const tail = rest.slice(start);
   if(depth === 0 && /,\s*$/.test(rest)) throw new Error(`${where}: declarator list continues on the next line; teach tests/global_names.test.cjs to read it`);
@@ -93,6 +116,8 @@ function topLevelNames({name, text, firstLine = 1}){
 test('the reader finds the declarations it should', () => {
   const names = s => topLevelNames({name: 't', text: s}).map(d => d.name);
   assert.deepEqual(names('let a = 1, b = f(x, y), c;\nconst d = x => ({e: 1, f: 2}), g = [1, 2];'), ['a', 'b', 'c', 'd', 'g']);
+  assert.deepEqual(names('const s = "a,b//c(", t = \'x,[\\\'\', u = `p,${q}`, v = /[,"/]\\//g, w = 1 /* , x = 2 */;'), ['s', 't', 'u', 'v', 'w']);
+  assert.deepEqual(names('const r = a / b, y = c / d;'), ['r', 'y']);
   assert.deepEqual(names('function h(){}\nasync function i(){}\nfunction* j(){}\nclass K {}\nvar l;'), ['h', 'i', 'j', 'K', 'l']);
   assert.deepEqual(names('  const nested = 1;\n// const commented = 1;\nlet m = 1; // , n = 2'), ['m']);
   assert.throws(() => names('let a = 1,\n  b = 2;'), /continues on the next line/);
