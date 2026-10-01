@@ -10,18 +10,18 @@ For setup, see the [README](../README.md). File paths below are relative to the 
 | `ba_dashboard.py` | Pulls the numbers out of a parsed save and renders the HTML from `template/board.html` and `template/board.js`. |
 | `template/board.html` | The board's markup and CSS, with the placeholders `render()` fills in. |
 | `template/board.js` | The board script, spliced into the last `<script>` block of `board.html` (`/*__BOARD_SCRIPT__*/`). A branch from before the split: [Template placeholders](architecture.md#template-placeholders). |
-| `build_web.py` | Assembles `web/` from the same template the local server uses. Run `python build_web.py` after changing either Python file or either template file. |
-| `web/` | The static site. `index.html` is generated; `app.js` and `worker.js` are kept by hand; `py/` holds the copies of the Python files and data the worker fetches ([The static site](architecture.md#pyodide)). |
+| `build_web.py` | Assembles `web/` from the same template the local server uses. `python build_web.py --assemble` writes the code-derived site without the game; it is gitignored, so run it before the tests and before looking at the site locally. The full `python build_web.py` also rebuilds the committed game-derived files and needs the game. |
+| `web/` | The static site. `index.html` is assembled and not committed; `app.js` and `worker.js` are kept by hand; `py/` holds the copies of the Python files and data the worker fetches ([The static site](architecture.md#pyodide)). |
 | `web/map.js`, `web/map.css` | Shared map/overlay code, embedded by `render()` into browser and local output. |
 | `web/maps/locations.json`, `web/maps/map-background.svg` | Generated address hit geometry and zoomable background. The approved poster exports remain unchanged. |
 | `export_map.py` | Builds runtime assets from approved canonical geometry, its recipe and the poster SVG. Extraction snapshots are retained privately. |
 | `web/maps/floor-plans.json`, `make_floor_plans.py` | The finder's floor plans, one for each building layout, drawn from the installed game's building shells. |
 | `check_saves.py` | Parses and extracts every save under the save root and prints a table, plus spot-checks of known numbers. Run `python check_saves.py [folder]`. |
-| `wrangler.jsonc` | Cloudflare assets and community Worker config. `npx wrangler deploy` publishes the server and `web/`. |
+| `wrangler.jsonc` | Cloudflare assets and community Worker config. `npm run deploy` assembles `web/` and publishes it with the server ([Deployment baseline](#deployment-baseline)). |
 | `server/`, `migrations/` | Community presence/voting API, curated feature list, and D1 schema. Server code stays outside public assets. |
 | `web/community.js`, `web/community.css` | Hosted-site community controls; included by the browser build only. |
 | `web/wiki.js`, `web/wiki.css` | Wiki navigation, readers and visual business guides, including primary and secondary products. |
-| `web/i18n.js`, `tools/i18n.py`, `i18n/` | Big Copilot's own text in other languages: `tt()` and the table loader, the catalogue tool, and the translations (German first). `web/i18n/` is generated from `i18n/` by `python build_web.py`. |
+| `web/i18n.js`, `tools/i18n.py`, `i18n/` | Big Copilot's own text in other languages: `tt()` and the table loader, the catalogue tool, and the translations (German first). `web/i18n/` is assembled from `i18n/` by `python build_web.py --assemble` and not committed. |
 | `tools/build_wiki_data.py`, `web/wiki-data.json` | Build the public Wiki catalogue from the installed game's help. The browser build refreshes this before calculating its cache version. |
 | `dashboard.html` | The generated page from a local run. Overwritten each time. |
 | `market_history.json` | Rolling demand snapshots and the cash/net-worth ledger, per character, from local runs. Safe to delete; it rebuilds, but the accumulated trend history is lost, so back it up rather than deleting it. |
@@ -42,11 +42,17 @@ public. A save holds your whole company.
 
 Before sending a change, run `python check_saves.py` over your own save folder. It parses
 and extracts every save it finds and prints a table, which catches a parse that succeeds
-while producing plausible wrong figures. If you touched `ba_save.py` or `ba_dashboard.py`,
-run `python build_web.py` so the browser copies match.
-`python build_web.py --check` confirms that `web/` matches the sources without needing
-the installed game, and `python build_web.py --assemble` writes everything it compares,
-also without the game; `tests/test_web_fresh.py` runs the same check.
+while producing plausible wrong figures.
+
+The code-derived site under `web/` (`index.html`, `version.json`, the `web/py/` copies,
+`web/i18n/`, the static wiki pages, `sitemap.xml`, `robots.txt`) is not committed.
+`python build_web.py --assemble` writes it from the committed sources without the installed
+game; run it before the tests, since many of them read the built page. `python build_web.py
+--check` confirms that `web/` matches the sources, and `tests/test_web_fresh.py` runs the same
+check. The game-derived files (`web/py/gametext.json`, `web/wiki-data.json`, `web/names/`)
+are committed; a change that reaches them, such as to the wiki generator or to how
+`ba_dashboard.py` builds the name tables, needs the full `python build_web.py` with the game,
+and the rebuilt files are committed with it.
 
 Run `python -m unittest discover -s tests` for the portable planner regressions.
 They need no save file; `tests/test_plan_orders.py` runs the board script under Node.js.
@@ -61,7 +67,7 @@ table sizing, crowded planner controls, keyboard access to downtime, and scrolli
 inside tables on narrow screens.
 
 Community checks use real local D1 via Miniflare and browser fixtures with synthetic
-identities. Run `npm run test:community` after `python build_web.py`, and
+identities. Run `npm run test:community` after `python build_web.py --assemble`, and
 `npm run check:worker` to validate the deployment bundle without publishing it.
 See [Community features](community-features.md) for database/secret setup and the
 first production release steps. No live API credentials are needed for tests.
@@ -77,8 +83,8 @@ why both the shared layout and the displayed content need regression coverage.
 Every word Big Copilot writes itself goes through a key, so it can be translated: the
 call forms, keys, placeholders and the one-key-per-sentence rule are in
 [UI text](architecture.md#ui-text). After adding or changing such text, run
-`python -m unittest discover -s tests -p "test_i18n*.py"`, `node --test tests/i18n_*.test.cjs`
-and `python build_web.py`. The German for a new key comes later, from a translation pass;
+`python build_web.py --assemble`, then `python -m unittest discover -s tests -p "test_i18n*.py"`
+and `node --test tests/i18n_*.test.cjs`. The German for a new key comes later, from a translation pass;
 until then the page shows the English.
 
 ## Changelog
@@ -88,34 +94,17 @@ user-facing capability. A change that adds neither gets no entry and is not
 announced to players: refactors, tooling, tests, documentation, build changes
 and internal fixes all stay out of the changelog. An entry carries its PR
 number, merge date (`YYYY-MM-DD`), a short title and a plain-language summary
-of what changed for the player. Run `python build_web.py` afterwards to include
-the entry in the footer changelog on both the landing screen and the dashboard.
+of what changed for the player. `python build_web.py --assemble` (and so the next
+deploy) includes the entry in the footer changelog on both the landing screen and the
+dashboard.
 Entries appear newest first and link to their PR; reading them does not require
 GitHub access.
 
-## Merging a green pull request
-
-When a pull request's CI is green and merging main into it conflicts only in generated
-files (the table in AGENTS.md, "Sources and generated files"):
-
-1. Take either side of each conflict, run `python build_web.py --assemble` (no game needed),
-   then `python build_web.py --check`. The rebuild is the resolution. A conflict in
-   `web/py/gametext.json`, `web/names/` or `web/wiki-data.json` beyond its `topics` needs
-   the full `python build_web.py` with the installed game instead: `--assemble` keeps
-   whichever side you took.
-2. Commit the merge and push it.
-3. `git fetch origin`. If main has not moved since that merge, merge the pull request
-   straight away, without waiting for another CI run: the green run already covers every
-   hand-written file, and the merge added only rebuilt output.
-4. If main moved in the meantime, merge it in again and go back to step 1.
-
-Wait for CI again when any hand-written file conflicted.
-
 ## Deployment baseline
 
-`python build_web.py` also generates `web/version.json` with the same content
+`python build_web.py --assemble` also writes `web/version.json` with the same content
 fingerprint embedded in the page and the latest changelog entry. Deploy the whole
-`web/` directory together. Rebuilding identical inputs keeps the same version;
+`web/` directory together, which `npm run deploy` does. Rebuilding identical inputs keeps the same version;
 shell, Python, map and changelog changes update it.
 
 Open browser tabs check this small, uncached file once a minute while visible,
@@ -127,11 +116,16 @@ blocked); a later version can notify again. Reload is always manual and uses
 the existing save restoration flow. Single-file imports may need selecting
 again. Existing tabs from before this feature need one manual reload first.
 
-Before deploying, run `git fetch origin` and
-`git merge-base --is-ancestor origin/main HEAD` from the release checkout; stop
-if the second command fails. Check the previous release for changes that have
-not reached main yet, and preserve them too. Build and test that checkout, then
-deploy with its explicit `--config` path. A passing suite on an older feature
+Deploy with `npm run deploy` from an up-to-date main checkout (`tools/deploy.mjs`). It
+refuses a working tree with any modified, staged or untracked file, runs `git fetch origin`
+and stops unless `git merge-base --is-ancestor origin/main HEAD` passes, runs
+`python build_web.py --assemble` and stops if that changed a committed file, runs
+`python build_web.py --check`, and then runs `wrangler deploy --config wrangler.jsonc`.
+Arguments after `--` go to wrangler: `npm run deploy -- --dry-run` does everything but the
+upload. Never deploy with a bare `npx wrangler deploy`: the code-derived files under `web/`
+are not committed, so without the assemble step it publishes whatever an earlier
+assemble left there, or nothing. Check the previous release for changes that have
+not reached main yet, and preserve them too. A passing suite on an older feature
 branch does not establish that newer live features are preserved.
 
 Verify the generated page on the live domain after deployment, including the
@@ -139,7 +133,7 @@ map's layer chips, rented homes and interactive ball, plus the feature being
 released. The map code is embedded in `index.html`, so checking the standalone
 `map.js` file alone is insufficient.
 
-Run `node --test tests/release.test.cjs` before deploying; set `RELEASE_URL` to
+Run `node --test tests/release.test.cjs` before deploying, after `python build_web.py --assemble`; set `RELEASE_URL` to
 `https://bigcopilot.com/` and run it again afterwards. It checks the generated
 page's map controls, ball interaction and persistent feature badges together.
 
@@ -161,7 +155,7 @@ same ID on all entry points so their badges disappear together.
 Visits are stored per browser under `ba_dash_feature_seen:<id>`, independently
 of the loaded save. If storage is unavailable, dismissal lasts for the current
 page session. Map and Changelog are the first examples; new changelog entries
-do not reset the Changelog feature badge. Rebuild with `python build_web.py`.
+do not reset the Changelog feature badge. Assemble with `python build_web.py --assemble` to see them.
 
 ## Map assets
 
@@ -175,7 +169,7 @@ into screen-sized overlay text so they cannot obscure buildings when zoomed in.
 The original PNG/SVG remain unchanged. All snapshot paths are explicit inputs;
 no player save or installed-game access is required for this export.
 
-Run `python build_web.py` after map UI or asset changes. Browser and local watch
+Run `python build_web.py --assemble` after map UI or asset changes. Browser and local watch
 views load the same runtime assets lazily; standalone HTML embeds them so opening
 it through `file://` works. A standalone file is therefore larger than the browser
 shell. The watch server allowlists the three runtime asset routes.

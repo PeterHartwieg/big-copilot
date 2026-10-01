@@ -1,10 +1,11 @@
 """web/ matches the sources, and the stamp does not depend on line endings.
 
-The browser build is committed, so a change to ba_save.py, ba_dashboard.py, the
-wiki generator or any stamped asset that is not followed by
-`python build_web.py` ships a stale page. build_web.check() catches that without
-the installed game, and this suite runs the same check over the repository, over
-a doctored copy of it, and once through the command line itself.
+The code-derived site is not committed: `python build_web.py --assemble` writes
+it from the sources (CI and `npm run deploy` run it first). build_web.check()
+holds the assembled folder, and the committed game-derived files it reads, to
+the sources without the installed game. This suite runs that check over the
+repository, over a doctored copy of it, and once through the command line
+itself, and assembles a copy with every route to the game shut.
 """
 from pathlib import Path
 import subprocess
@@ -71,7 +72,7 @@ def run_check(root):
 class WebFresh(unittest.TestCase):
     def test_repository_is_fresh(self):
         stale = build_web.check()
-        self.assertEqual(stale, [], f"run python build_web.py: {', '.join(stale)}")
+        self.assertEqual(stale, [], f"run python build_web.py --assemble: {', '.join(stale)}")
 
     def test_stale_copy_is_reported(self):
         with tempfile.TemporaryDirectory() as tmp:

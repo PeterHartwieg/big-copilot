@@ -28,6 +28,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+      # The site under web/ is not committed; several suites read it.
+      - run: python build_web.py --assemble
       - run: python -m unittest discover -s tests
 
   node:
@@ -50,17 +52,26 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install --with-deps chromium
+      # The site under web/ is not committed; several suites serve or read it.
+      - run: python build_web.py --assemble
       # tests/*.test.cjs includes the community suites (npm run test:community).
       - run: node --test --test-concurrency=2 tests/*.test.cjs
       - run: npm run check:worker
 
   web-fresh:
-    name: web/ matches its sources
+    name: web/ assembles from its sources
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      # Needs no installed game: it compares web/ with a build of the committed sources.
+      # Needs no installed game. Assembling must leave every committed file as it
+      # is (a stale web/wiki-data.json article shows up here) and write nothing
+      # .gitignore does not cover; --check then holds the result to the sources.
+      - run: python build_web.py --assemble
+      - name: Assembling changed no committed file and left nothing untracked
+        run: |
+          git diff --exit-code --stat
+          test -z "$(git status --porcelain)" || { git status --porcelain; exit 1; }
       - run: python build_web.py --check

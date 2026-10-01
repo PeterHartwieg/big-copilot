@@ -295,8 +295,8 @@ plain, script-free HTML from the committed `web/wiki-data.json`:
 - Styles are inline; the only request is `/fonts/fonts.css`. No script, no
   third-party request, so the privacy notice holds.
 
-`python build_web.py` writes them after the payload, and removes pages the
-payload no longer has. `python build_web.py --check` rebuilds them in memory
+`python build_web.py` and `python build_web.py --assemble` write them after the
+payload, and remove pages the payload no longer has. They are not committed. `python build_web.py --check` rebuilds them in memory
 from the committed payload and reports a missing, edited or orphaned page or a
 stale sitemap. Neither step needs the installed game for this part, and
 `python tools/wiki_pages.py` (or `--check`) runs it alone. Tests:

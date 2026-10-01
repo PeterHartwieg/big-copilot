@@ -37,7 +37,7 @@ You need Python 3 and a clone of this repository.
 4. Run `python tools/i18n.py status fr --strict` (it fails on a broken placeholder), then
    open a pull request.
 
-To see your change on the page, run `python build_web.py` (it needs the game installed)
-and serve `web/`, or ask in the pull request and it will be built for you.
+To see your change on the page, run `python build_web.py --assemble` (it needs no game)
+and serve `web/`.
 
 How the tables work is in [architecture.md](architecture.md), "UI text".
