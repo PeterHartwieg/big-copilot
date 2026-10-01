@@ -99,7 +99,10 @@ When a pull request's CI is green and merging main into it conflicts only in gen
 files (the table in AGENTS.md, "Sources and generated files"):
 
 1. Take either side of each conflict, run `python build_web.py --assemble` (no game needed),
-   then `python build_web.py --check`. The rebuild is the resolution.
+   then `python build_web.py --check`. The rebuild is the resolution. A conflict in
+   `web/py/gametext.json`, `web/names/` or `web/wiki-data.json` beyond its `topics` needs
+   the full `python build_web.py` with the installed game instead: `--assemble` keeps
+   whichever side you took.
 2. Commit the merge and push it.
 3. `git fetch origin`. If main has not moved since that merge, merge the pull request
    straight away, without waiting for another CI run: the green run already covers every

@@ -104,7 +104,9 @@ rule in new text and leave historical docs as they are.
 
 Change the source, then rebuild. After a merge conflict in a generated file, take either
 side and run `python build_web.py --assemble` — the rebuild is the resolution, and it needs
-no installed game. A pull request whose CI was green and whose
+no installed game. That holds for the files `--assemble` writes; a conflict in
+`web/py/gametext.json`, `web/names/` or the game's part of `web/wiki-data.json` needs the full
+`python build_web.py` with the installed game, since `--assemble` keeps whichever side you took. A pull request whose CI was green and whose
 merge with main conflicted only in generated files is then merged without another CI run, as
 long as main has not moved (`docs/contributing.md`, "Merging a green pull request").
 

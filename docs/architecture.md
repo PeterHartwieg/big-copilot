@@ -672,8 +672,8 @@ analysis needs but `ships()` does not keep is simply absent in the browser, with
 `page_html()` and compares their output against what is committed under `web/`. That is why
 it needs no installed game: it re-derives the page from the sources and the committed
 `gametext.json`, `wiki-data.json` and `web/names/` rather than rebuilding them.
-`python build_web.py --assemble` calls `assemble()`, which writes those same files from the same
-sources, so it needs no game either; `main()` rebuilds the game's files and then calls it. `stamp()` normalises CRLF
+`python build_web.py --assemble` calls `assemble()`, which writes every file `check()` compares
+from the same sources, taking the game's files as committed, so it needs no game either; `main()` rebuilds the game's files and then calls it. `stamp()` normalises CRLF
 to LF for everything except the `.svg` background, so a Windows checkout is not stale by
 itself.
 
