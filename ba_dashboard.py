@@ -1784,7 +1784,7 @@ def _rival_names(save: Save, numbers: dict) -> dict:
             found[rival] = SPECIAL_RIVAL_NAMES.get(rival)
 
     registrations = {
-        (reg.get("StreetName"), reg.get("StreetNumber")): reg
+        _address_of(reg): reg
         for reg in save.items(save.root.get("BuildingRegistrations"))
     }
     claimed = collections.defaultdict(set)
@@ -1892,7 +1892,7 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
     }
     buildings, deviations = [], []
     for reg in save.items(save.root.get("BuildingRegistrations")):
-        addr = (reg.get("StreetName"), reg.get("StreetNumber"))
+        addr = _address_of(reg)
         row = table.get(addr)
         if not row:
             continue
@@ -2010,7 +2010,7 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     agencies = _marketing_agencies(save, names)
     businesses = []
     for b in buildings:
-        addr = (b["StreetName"], b["StreetNumber"])
+        addr = _address_of(b, strict=True)
         if addr in residential:
             continue
         row = _business(save, names, b, addr, latest, stmt_history, staff_by_addr, day, agencies)
@@ -2321,8 +2321,8 @@ def _residential_addresses(save: Save, summaries: list, buildings: list = ()) ->
     """
     table = load_buildings() if buildings else {}
     out = {
-        (b["StreetName"], b["StreetNumber"]) for b in buildings
-        if (table.get((b["StreetName"], b["StreetNumber"])) or {}).get("t") == "residential"
+        _address_of(b, strict=True) for b in buildings
+        if (table.get(_address_of(b, strict=True)) or {}).get("t") == "residential"
     }
     for s in summaries[-5:]:
         for r in save.items(s.get("residentialStatements")):
@@ -2470,12 +2470,20 @@ def _cleanliness(save: Save, building: dict) -> float:
     return float(max(0, int(100 - sum(dirt) / len(dirt) - visible / len(dirt))))
 
 
+def _item_instances(save: Save, instances):
+    """The items an itemInstances collection holds, each one dereferenced. An
+    empty or unreadable slot is skipped."""
+    for holder in save.items(instances):
+        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
+        if item:
+            yield item
+
+
 def _items_by_name(save: Save, registration: dict) -> dict:
     """A building's items, as lists by item name."""
     held = collections.defaultdict(list)
-    for holder in save.items(registration.get("itemInstances")):
-        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
-        if item and item.get("itemName"):
+    for item in _item_instances(save, registration.get("itemInstances")):
+        if item.get("itemName"):
             held[item["itemName"]].append(item)
     return held
 
@@ -2518,7 +2526,7 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
     root = save.root
     by_key = {b["key"]: b for b in businesses}
     regs = {
-        site_key((r["StreetName"], r["StreetNumber"])): r
+        site_key(_address_of(r, strict=True)): r
         for r in save.items(root["BuildingRegistrations"])
         if r.get("RentedByPlayer")
     }
@@ -2813,10 +2821,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
 
     stock = collections.Counter()
     has_uniform_locker = False
-    for holder in save.items(b["itemInstances"]):
-        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
-        if not item:
-            continue
+    for item in _item_instances(save, b["itemInstances"]):
         if item.get("itemName") == "ba:itemname_uniformlocker":
             has_uniform_locker = True
         for cargo in save.items(item.get("cargoInstances")):
@@ -3064,7 +3069,7 @@ def _marketing_agencies(save, names=None) -> list:
     root = save.root
     contacts = {(c.get("streetName"), c.get("streetNumber"))
                 for c in save.items(root.get("Contacts")) if isinstance(c, dict)}
-    regs = {(r.get("StreetName"), r.get("StreetNumber")): r
+    regs = {_address_of(r): r
             for r in save.items(root.get("BuildingRegistrations")) if isinstance(r, dict)}
     day, hour = root.get("Day") or 0, int(root.get("Hour") or 0)
     out = []
@@ -3428,7 +3433,7 @@ def _homes(buildings: list, residential: set, names: Names) -> list[dict]:
     table = load_buildings()
     result = []
     for b in buildings:
-        addr = (b["StreetName"], b["StreetNumber"])
+        addr = _address_of(b, strict=True)
         if addr in residential:
             row = table.get(addr) or {}
             result.append({
@@ -4540,10 +4545,9 @@ def _supply(
     for building in save.items(save.root["BuildingRegistrations"]):
         if not building.get("RentedByPlayer"):
             continue
-        for holder in save.items(building.get("itemInstances")):
-            machine = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
-            if machine and machine.get("workstationType") and RECIPE_ITEMS.get(machine.get("selectedRecipeId")):
-                makes_here.add((site_key((building["StreetName"], building["StreetNumber"])),
+        for machine in _item_instances(save, building.get("itemInstances")):
+            if machine.get("workstationType") and RECIPE_ITEMS.get(machine.get("selectedRecipeId")):
+                makes_here.add((site_key(_address_of(building, strict=True)),
                                 RECIPE_ITEMS[machine["selectedRecipeId"]]))
 
     def has_it(source, item):
@@ -4666,7 +4670,7 @@ def _supply(
     for building in save.items(save.root["BuildingRegistrations"]):
         if not building.get("RentedByPlayer"):
             continue
-        key = site_key((building["StreetName"], building["StreetNumber"]))
+        key = site_key(_address_of(building, strict=True))
         if len(save.items(building.get("deliveryTransactions"))) >= DELIVERY_LOG_SIZE:
             log_full.add(key)
         for transaction in save.items(building.get("deliveryTransactions")):
@@ -7490,13 +7494,12 @@ def _factories(
     for building in save.items(save.root["BuildingRegistrations"]):
         if not building.get("RentedByPlayer"):
             continue
-        key = site_key((building["StreetName"], building["StreetNumber"]))
+        key = site_key(_address_of(building, strict=True))
         if key not in index:
             continue
         posts = {}
-        for holder in save.items(building["itemInstances"]):
-            item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
-            if not item or not item.get("workstationType"):
+        for item in _item_instances(save, building["itemInstances"]):
+            if not item.get("workstationType"):
                 continue
             station = item["workstationType"].replace(WS_PREFIX, "").removesuffix("workstation")
             line = (station, item.get("selectedRecipeId"))
@@ -8164,7 +8167,7 @@ def _hourly(
     role_of = _station_roles(stations, names)
     out = []
     for b in buildings:
-        key = site_key((b["StreetName"], b["StreetNumber"]))
+        key = site_key(_address_of(b, strict=True))
         business = by_key.get(key)
         if not business or business["status"] not in ("retail", "office"):
             continue
@@ -8199,9 +8202,8 @@ def _hourly(
         accepts = None if office else ASSIGN_SKILLS.get(business.get("typeSlug"))
         stray = collections.Counter()
         here, labels, slugs, keys = {}, {}, {}, {}
-        for holder in save.items(b["itemInstances"]):
-            item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
-            if item and item.get("itemName") in posts and works_in(furniture.get(item["itemName"]) or {}, kind):
+        for item in _item_instances(save, b["itemInstances"]):
+            if item.get("itemName") in posts and works_in(furniture.get(item["itemName"]) or {}, kind):
                 if accepts is not None and posts[item["itemName"]][0] not in accepts:
                     stray[item["itemName"]] += 1
                     continue
@@ -10450,8 +10452,11 @@ def _current_roster(save: Save, building: dict, stations: dict) -> dict:
     }
 
 
-def _address_of(building: dict) -> tuple:
-    """A building registration's address as the building table keys it."""
+def _address_of(building: dict, strict: bool = False) -> tuple:
+    """A building registration's address as the building table keys it. With
+    strict, a registration without StreetName or StreetNumber raises KeyError."""
+    if strict:
+        return (building["StreetName"], building["StreetNumber"])
     return (building.get("StreetName"), building.get("StreetNumber"))
 
 
@@ -10502,9 +10507,8 @@ def _role_wage(site_pool: list, skill: str | None) -> float:
 def _cover_posts(save: Save, building: dict, names: Names) -> list:
     """The site's cleaning stations and security lockers, sorted."""
     out = []
-    for holder in save.items(building.get("itemInstances")):
-        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
-        if item and item.get("itemName") in COVER_STATIONS:
+    for item in _item_instances(save, building.get("itemInstances")):
+        if item.get("itemName") in COVER_STATIONS:
             out.append(
                 {
                     "id": item.get("id"),
@@ -11603,7 +11607,7 @@ def _staffing(
     """
     by_key = {b["key"]: b for b in businesses}
     buildings = {
-        site_key((b["StreetName"], b["StreetNumber"])): b
+        site_key(_address_of(b, strict=True)): b
         for b in save.items(save.root.get("BuildingRegistrations"))
         if b.get("RentedByPlayer")
     }
@@ -13366,9 +13370,8 @@ def _station_groups(save: Save, registration: dict) -> dict:
     list for every employee of three offices on two saves (26 September 2026).
     """
     items = []
-    for holder in save.items(registration.get("itemInstances")):
-        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
-        if item and item.get("id") is not None:
+    for item in _item_instances(save, registration.get("itemInstances")):
+        if item.get("id") is not None:
             items.append(item)
     by_id = {item["id"]: item for item in items}
     kids = collections.defaultdict(list)
@@ -13504,9 +13507,8 @@ def _station_roots(save: Save, registration: dict) -> list:
     by the player: the desk demands its desks meet, one entry per group.
     """
     items = []
-    for holder in save.items(registration.get("itemInstances")):
-        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
-        if item and item.get("id") is not None:
+    for item in _item_instances(save, registration.get("itemInstances")):
+        if item.get("id") is not None:
             items.append(item)
     ids = {item["id"] for item in items}
     return [item["id"] for item in items if item.get("parentId") not in ids]
@@ -14175,7 +14177,7 @@ def _wiki_market_prices(save, day):
     for b in save.items(save.root.get("BuildingRegistrations")):
         if not b or b.get("temporarilyClosed") or not b.get("BusinessName"):
             continue
-        building = buildings.get((b.get("StreetName"), b.get("StreetNumber")))
+        building = buildings.get(_address_of(b))
         hood = hood_key(building)
         for line in save.items(b.get("retailPrices")):
             if not line or not line.get("itemName"):
@@ -15342,9 +15344,8 @@ def _site_setup(save: Save, registration: dict, addr, prices: dict, vehicles: fl
     `vehicles` the business's own, as _payback() prices them."""
     items = []
     # Stacked items are top-level instances too; stackedItems only points at them.
-    for holder in save.items(registration.get("itemInstances")):
-        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
-        if item and item.get("itemName"):
+    for item in _item_instances(save, registration.get("itemInstances")):
+        if item.get("itemName"):
             items.append((item["itemName"], item.get("priceOnPurchase")))
     materials = []
     for design in save.items(registration.get("interiorDesigns")):
@@ -15568,8 +15569,8 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
     to an earlier save and forward again loses no remembered day.
     """
     prices = load_item_prices()
-    regs = {site_key((b["StreetName"], b["StreetNumber"])): b for b in buildings}
-    addresses = {key: (b["StreetName"], b["StreetNumber"]) for key, b in regs.items()}
+    regs = {site_key(_address_of(b, strict=True)): b for b in buildings}
+    addresses = {key: _address_of(b, strict=True) for key, b in regs.items()}
     bills = _install_bills(save, names, addresses)
     vehicle_prices = load_store_rules().get("vehicles") or {}
     deliveries = _vehicle_deliveries(save, vehicle_prices)
@@ -16143,7 +16144,7 @@ def _venue_caps(names: Names) -> dict:
 
 
 def _building_row(reg: dict) -> dict:
-    return load_buildings().get((reg.get("StreetName"), reg.get("StreetNumber"))) or {}
+    return load_buildings().get(_address_of(reg)) or {}
 
 
 def _cheapest_cover(need: int, pieces: dict) -> list:
@@ -16181,7 +16182,7 @@ def _layout_slots(save: Save, regs: list, prices: dict) -> dict:
     materials = prices.get("materials") or {}
     out = dict(LAYOUT_SLOTS)
     for reg in regs:
-        layout = _layout(table.get((reg.get("StreetName"), reg.get("StreetNumber"))) or {})
+        layout = _layout(table.get(_address_of(reg)) or {})
         if not layout:
             continue
         designs = list(save.items(reg.get("interiorDesigns")))
@@ -16203,9 +16204,8 @@ def _copied_shelving(save: Save, reg: dict, type_slug: str, rules: dict) -> list
     furniture = rules.get("furniture") or {}
     sells = {p for p, _impact in ((rules.get("types") or {}).get(type_slug) or {}).get("i") or ()}
     counts = collections.Counter()
-    for holder in save.items(reg.get("itemInstances")):
-        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
-        name = (item or {}).get("itemName")
+    for item in _item_instances(save, reg.get("itemInstances")):
+        name = item.get("itemName")
         if name:
             counts[name] += 1
     out = []
@@ -16283,9 +16283,8 @@ def required_placed(placed: collections.Counter, type_slug: str, rules: dict, pr
 def _placed_items(save: Save, reg: dict) -> collections.Counter:
     """The furniture standing in a rented building, per item name."""
     placed = collections.Counter()
-    for holder in save.items(reg.get("itemInstances")):
-        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
-        if item and item.get("itemName"):
+    for item in _item_instances(save, reg.get("itemInstances")):
+        if item.get("itemName"):
             placed[item["itemName"]] += 1
     return placed
 
@@ -16295,10 +16294,9 @@ def _stocked_products(save: Save, reg: dict, furniture: dict) -> set:
     held by an item whose furniture facts (`h`) list that product. Stock in
     storage shelving is not on display."""
     out = set()
-    for holder in save.items(reg.get("itemInstances")):
-        item = save.deref(holder.get("$v")) if isinstance(holder, dict) else None
-        shows = set((furniture.get((item or {}).get("itemName")) or {}).get("h") or ())
-        for cargo in save.items((item or {}).get("cargoInstances")):
+    for item in _item_instances(save, reg.get("itemInstances")):
+        shows = set((furniture.get(item.get("itemName")) or {}).get("h") or ())
+        for cargo in save.items(item.get("cargoInstances")):
             if cargo.get("itemName") in shows and (cargo.get("amount") or 0) > 0:
                 out.add(cargo["itemName"])
     return out
@@ -16367,7 +16365,7 @@ def _store_market(save: Save, rules: dict, items: set, mpm: float, agent: int) -
     for reg in save.items(save.root.get("BuildingRegistrations")):
         if not reg or not reg.get("BusinessName") or reg.get("temporarilyClosed"):
             continue
-        hood = hood_key(table.get((reg.get("StreetName"), reg.get("StreetNumber"))))
+        hood = hood_key(table.get(_address_of(reg)))
         if not hood:
             continue
         stocked = {n for n in save.items(reg.get("cachedAvailableProducts")) if isinstance(n, str) and n in items}
@@ -16424,7 +16422,7 @@ def _own_shops(save: Save, regs: dict, businesses: list, grids: list, stmt_histo
         reg = regs.get(b["key"])
         if b.get("status") not in ("retail", "office") or not reg:
             continue
-        addr = (reg["StreetName"], reg["StreetNumber"])
+        addr = _address_of(reg, strict=True)
         row = table.get(addr) or {}
         opened = b.get("opened") or 0
         orders = {e.get("dayNumber"): e for e in save.items(reg.get("orderHistory"))}
@@ -16571,7 +16569,7 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     # with none yet is planned as if it hires a good one, as its shops will.
     agents = [p.get("level") or 0 for p in staff if p.get("skill") == "ba:skill_purchasingagent"]
     agent = int(max(agents)) if agents else 100
-    regs = {site_key((r["StreetName"], r["StreetNumber"])): r for r in regs_list}
+    regs = {site_key(_address_of(r, strict=True)): r for r in regs_list}
     caps = premises.get("caps") or {}
     buildings = premises.get("buildings") or []
 
@@ -16853,7 +16851,7 @@ def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, r
     vehicle_prices = rules.get("vehicles") or {}
 
     instances = {v.get("id"): v for v in save.items(root.get("VehicleInstances")) if isinstance(v, dict)}
-    regs = {site_key((r["StreetName"], r["StreetNumber"])): r for r in regs_list}
+    regs = {site_key(_address_of(r, strict=True)): r for r in regs_list}
     contracts = collections.defaultdict(dict)
     partnerships = save.items(root.get("importPartnerships"))
     for partnership in partnerships:
@@ -17050,7 +17048,7 @@ def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list)
     for building in save.items(save.root["BuildingRegistrations"]):
         if not building.get("RentedByPlayer"):
             continue
-        key = site_key((building["StreetName"], building["StreetNumber"]))
+        key = site_key(_address_of(building, strict=True))
         log = save.items(building.get("deliveryTransactions"))
         days = {t.get("dayOfDelivery") for t in log if isinstance(t.get("dayOfDelivery"), int)}
         if not days:

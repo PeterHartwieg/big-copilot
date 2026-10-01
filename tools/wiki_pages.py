@@ -92,7 +92,7 @@ thead th{color:var(--ink-2);font-weight:500}
 # --- the game's markdown, as web/wiki.js reads it -------------------------------
 
 def text(value) -> str:
-    """Text between tags or inside an attribute; the same five as wikiText."""
+    """Text between tags or inside an attribute; the same five as ssEsc() in the board script."""
     table = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}
     return re.sub(r"[&<>\"']", lambda m: table[m.group(0)], "" if value is None else str(value))
 

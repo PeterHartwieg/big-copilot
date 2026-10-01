@@ -16,6 +16,9 @@ const {between} = require('./_slice.cjs');
 
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.js'), 'utf8');
 const CODE = between(SRC, '/* --- Expansion › Open a store', '/* --- plan a chain');
+/* The board's guarded localStorage helpers (remembered(), rememberJson(), ...),
+   declared near the top of the script, which the section saves through. */
+const STORAGE = between(SRC, '/* localStorage, every access guarded', 'const el = ');
 
 function model(facts, extra = {}){
   const store = new Map();
@@ -25,6 +28,7 @@ function model(facts, extra = {}){
     localStorage: {getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v)},
     Map, Math, JSON, Number, Array, String, Object, Set};
   vm.createContext(ctx);
+  vm.runInContext(STORAGE, ctx);
   vm.runInContext(CODE, ctx);
   return ctx;
 }
