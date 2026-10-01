@@ -4879,11 +4879,13 @@ def _supply(
                 # The draw: what the ends down the plans use (the shops' sales,
                 # the machines' need, what goes to an address not ours), worked
                 # out by _supply_walk(). A factory's own lines eating its own
-                # import are left out: their week is judged on the fact
-                # (_supply_facts), and a row walks what leaves the site.
-                # Nothing drawing on it, there is no draw to walk.
-                eaten = eats_now.get(mode, {}).get((business["key"], item), (0.0, 0.0))[0]
-                per_day = max(0.0, node.get("use", 0.0) - eaten)
+                # import are part of it: the shelf runs dry for the machines
+                # as surely as for a round (in this mode's sizing, full rate
+                # or Demand), though their week is still judged on the fact
+                # (_supply_facts). Nothing drawing on it, there is no draw to
+                # walk.
+                per_day = node.get("use", 0.0)
+                eaten = min(eats_now.get(mode, {}).get((business["key"], item), (0.0, 0.0))[0], per_day)
                 if per_day <= 0:
                     continue  # the graph's pipe then shows what arrived last week
                 driven = customer_driven(business["key"], item)
@@ -5140,6 +5142,9 @@ def _supply(
                         # (importPerDay): the week, cover and catch-up below are
                         # judged on the last.
                         "perDay": round(gross),
+                        # Of it, what the site's own factory lines eat; the
+                        # rest leaves the site.
+                        **({"eats": round(eaten)} if eaten else {}),
                         "routed": round(routed),
                         "importPerDay": round(import_avg),
                         # The route covers all of it: a paused import beside it
@@ -6050,7 +6055,7 @@ def _supply(
                     max(supply["arrives"] - day - spent_today, 0.0)
                     if supply and supply["weekly"] else 0.0
                 ) or 7.0
-                onward = depot["perDay"] if depot else 0
+                onward = depot["perDay"] - depot.get("eats", 0) if depot else 0
                 # The larger, not the sum: the measured draw already carries the
                 # top-ups to other factories that depotNeed plans for. A starved
                 # neighbour makes this an underestimate.

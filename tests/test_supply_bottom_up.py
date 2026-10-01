@@ -603,6 +603,49 @@ class DemandSizingTests(unittest.TestCase):
         self.assertEqual((fact["use"], fact["need"]), (700, 805))
 
 
+class FactoryOwnImportTests(unittest.TestCase):
+    """Issue #193: a factory's own import walked to its drop on what the
+    factory's own machines eat, not only on what leaves the site."""
+
+    def brewery(self, water):
+        """A brewery (240 water a day at full rate) importing its own water,
+        2,000 a week landing in five days, holding `water`; its bar sells 100
+        beer a day (about 33 water, 38 with the margin)."""
+        c = Chain()
+        c.factory(BREWERY, "Brewery", machines=1)
+        c.hold(BREWERY, WATER, water)
+        c.contract(BREWERY, WATER, 2000, due=c.day + 5)
+        c.plan(BREWERY, SHOP, BEER, 400)
+        c.shop(SHOP, "Bar")
+        c.hold(SHOP, BEER, 400, 100)
+        c.run()
+        return c
+
+    def test_an_empty_input_runs_dry_before_the_drop_in_both_sizings(self):
+        c = self.brewery(0)
+        for mode in ("cap", "dem"):
+            with self.subTest(mode=mode):
+                fact = c.fact(BREWERY, WATER, mode)
+                # The order covers the week either way: it is the stock.
+                self.assertEqual((fact["role"], fact["st"], fact["why"]), ("input", "short", "shortfall"))
+                notes = [n for n in _import_notes(c.business_list, c.supply, set(), mode)
+                         if n["group"] == "shortfall"]
+                self.assertEqual(len(notes), 1)
+                rows = c.supply["imports"] if mode == "cap" else c.supply["importsDem"]
+                row = next(r for r in rows if r["s"] == c.index(BREWERY) and r["slug"] == WATER)
+                # The one-off to bring in: 4.5 days of the machines' draw.
+                self.assertEqual(row["catchUp"], {"cap": 1080, "dem": 149}[mode])
+                self.assertEqual(row["eats"], row["perDay"])
+
+    def test_stock_that_reaches_the_drop_is_no_finding(self):
+        c = self.brewery(1200)
+        for mode in ("cap", "dem"):
+            with self.subTest(mode=mode):
+                self.assertNotEqual(c.fact(BREWERY, WATER, mode)["why"], "shortfall")
+                self.assertEqual([n for n in _import_notes(c.business_list, c.supply, set(), mode)
+                                  if n["group"] == "shortfall"], [])
+
+
 def cafe_board():
     """The café of UnsourcedTests as the board reads it: its supply, its
     businesses and its findings. tests/import_routes.test.cjs lands its
