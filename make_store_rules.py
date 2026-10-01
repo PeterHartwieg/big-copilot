@@ -21,9 +21,11 @@ Five bundles under <game>/Big Ambitions_Data/StreamingAssets/aa/StandaloneWindow
       placement requirements those furnitureRequirements point at. Only two
       kinds name other furniture: "Has counter/desk/chair attached" carry an
       `itemType` bit, expanded to the furniture carrying it, and "Is attached
-      to factory ... workstation" carry a `workstationItemName`. The rest
-      (height, business type, entrance, not duplicated, licensing fee) name no
-      item and are left out.
+      to factory ... workstation" carry a `workstationItemName`. "Can only be
+      used in ..." (IsPlacedInBusinessOfType(s), `businessTypeName(s)` and
+      `invertResult`) limits the business types a piece works in. The rest
+      (height, entrance, not duplicated, licensing fee) name no item and are
+      left out.
   defaultlocalgroup_assets_businesstypes_*.bundle
       every business type: building type, products and their impact, the
       entrance fees, customer demand sets, requirements and primary skills
@@ -64,6 +66,8 @@ where noted):
                               "bt": [business types its tags name, no prefix],
                               "m": [[furniture it must be attached to], ...], one
                                     group per placement requirement: one of each group,
+                              "o": [the only business types it works in, no prefix],
+                              "no": [business types it does not work in, no prefix],
                                     "wt": the WorkoutExercise.workoutType a gym machine trains,
                                     "st": the seats a seat carries (its sittingPositions),
                               "v": [vendor site keys]}},  (lists omitted when empty)
@@ -209,6 +213,12 @@ def _furniture(items: dict, placement: dict, by_type: dict, type_slugs: set) -> 
             req = placement.get(ref.get("m_PathID"))
             if req is None or ref.get("m_FileID"):
                 unresolved.add(str(ref))
+                continue
+            # "Can only be used in Cinemas or Theaters": the game leaves a piece
+            # whose requirement is unmet out of the business (HasAnyMissingRequirements).
+            kinds = req.get("businessTypeNames") or ([req["businessTypeName"]] if req.get("businessTypeName") else [])
+            if kinds:
+                row["no" if req.get("invertResult") else "o"] = _names(k.removeprefix("ba:businesstype_") for k in kinds)
                 continue
             group = _names(_requirement_items(req, by_type))
             if group and group not in needs:

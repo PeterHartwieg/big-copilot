@@ -46,6 +46,9 @@ RULES = {
         "ba:itemname_till": {"c": 20, "v": VENDOR},
         "ba:itemname_bigtill": {"c": 40, "v": VENDOR},
         "ba:itemname_cinematill": {"c": 100, "v": VENDOR, "bt": ["cinema"]},  # made for cinemas only
+        # Tagged for the shop too, but the game lets it work in venues only, as
+        # the concession stand register ("Can only be used in Cinemas or Theaters").
+        "ba:itemname_venuetill": {"c": 100, "v": VENDOR, "bt": ["liquorstore", "cinema"], "o": ["cinema", "theater"]},
         "ba:itemname_baskets": {"v": VENDOR},
         "ba:itemname_sink": {"v": VENDOR},
         "ba:itemname_speaker": {"v": VENDOR},
@@ -59,7 +62,8 @@ RULES = {
 }
 PRICES = {"items": {
     "ba:itemname_till": {"p": 900, "t": POS}, "ba:itemname_bigtill": {"p": 2300, "t": POS},
-    "ba:itemname_cinematill": {"p": 100, "t": POS}, "ba:itemname_baskets": {"p": 200},
+    "ba:itemname_cinematill": {"p": 100, "t": POS}, "ba:itemname_venuetill": {"p": 100, "t": POS},
+    "ba:itemname_baskets": {"p": 200},
     "ba:itemname_sink": {"p": 220, "t": SINK}, "ba:itemname_speaker": {"p": 80, "t": MUSIC},
     "ba:itemname_nobodysells": {"p": 10, "t": MUSIC}, "ba:itemname_toilet": {"p": 380, "t": TOILET},
     "ba:itemname_stall": {"p": 2100, "t": TOILET}, "ba:itemname_fridge": {"p": 1500},
@@ -451,6 +455,36 @@ class PayloadTests(unittest.TestCase):
             for key in ("key", "hood", "cap", "initial", "promo", "marketing", "open", "actual", "days"):
                 self.assertIn(key, row)
             self.assertGreaterEqual(row["days"], 3)
+
+
+
+class WorksInTests(unittest.TestCase):
+    """"Can only be used in ...": a piece the game will not let work in the
+    type is never planned, and does not meet an opening requirement here."""
+
+    def test_the_rule_both_ways(self):
+        venue = RULES["furniture"]["ba:itemname_venuetill"]
+        self.assertTrue(ba_dashboard.works_in(venue, "cinema"))
+        self.assertFalse(ba_dashboard.works_in(venue, "liquorstore"))
+        self.assertFalse(ba_dashboard.works_in({"no": ["cinema", "theater"]}, "cinema"))
+        self.assertTrue(ba_dashboard.works_in({"no": ["cinema", "theater"]}, "clothingstore"))
+        self.assertTrue(ba_dashboard.works_in({}, "clothingstore"))
+
+    def test_never_planned_where_it_cannot_work(self):
+        # The cheapest till per customer by far, tagged for the shop: still not planned.
+        for cap in (20, 100, 400):
+            self.assertNotIn("ba:itemname_venuetill", {item for item, _group in lines_of(cap, 100)})
+
+    def test_no_point_of_sale_where_it_cannot_work(self):
+        got = lambda placed: {r[0]: r[2] for r in ba_dashboard.required_placed(
+            collections.Counter(placed), SHOP, RULES, PRICES, 100)}["pointofsales"]
+        self.assertEqual(got({"ba:itemname_venuetill": 2}), 0)
+        self.assertEqual(got({"ba:itemname_venuetill": 2, "ba:itemname_till": 1}), 1)
+
+    def test_the_shipped_rules_carry_the_registers_rule(self):
+        furniture = ba_dashboard.load_store_rules()["furniture"]
+        self.assertEqual(furniture["ba:itemname_concessionsstandregister"].get("o"), ["cinema", "theater"])
+        self.assertEqual(furniture["ba:itemname_cashregister"].get("no"), ["cinema", "theater"])
 
 
 if __name__ == "__main__":
