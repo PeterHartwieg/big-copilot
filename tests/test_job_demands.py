@@ -5,6 +5,7 @@ import unittest
 
 from ba_dashboard import plain, JOB_DEMANDS, _alerts, _business, _cleanliness, _job_demands
 from ba_save import Names, Save
+from i18n_check import MsgAsserts, list_items, msg_param
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from build_web import ships  # noqa: E402
@@ -188,7 +189,12 @@ class EnvironmentRuleTests(unittest.TestCase):
         self.assertEqual(score([100, 100]), 0.0)
 
 
-class JobDemandFindingTests(unittest.TestCase):
+def items(text):
+    """A f.jobdemand line's demands, in order: (demand, count, the key of its why)."""
+    return [(plain(i.p["demand"]), i.p["n"], i.p["why"].key) for i in list_items(text.p["demands"])]
+
+
+class JobDemandFindingTests(MsgAsserts, unittest.TestCase):
     def alerts(self, b):
         supply = {"graph": {"links": []}, "shops": [], "idle": [], "nextImportWeekday": None, "imports": []}
         result = _alerts([b], supply, [], [], [], [], [], 8, 1000000)
@@ -200,17 +206,18 @@ class JobDemandFindingTests(unittest.TestCase):
                  employee(["ba:jobdemand_hasmousepad"], eid="b")]
         [line] = self.alerts(evaluate(staff))
         self.assertEqual((line["level"], line["group"], line["siteKey"]), ("warn", "jobdemand", KEY))
-        self.assertEqual(plain(line["text"]), "2 staff with unmet demands: "
-                         "Full-time for 1 (critical), Mouse Pad for 2 (nice to have)")
+        text = self.assertMsg(line["text"], "f.jobdemand", n=2)
+        self.assertEqual(items(text), [("Full-time", 1, "f.jobdemand.critical"),
+                                       ("Mouse Pad", 2, "f.jobdemand.nice")])
 
     def test_a_quit_warning_makes_the_line_critical(self):
         staff = [employee(["ba:jobdemand_hasmousepad"], hasSendQuitWarning=True)]
         [line] = self.alerts(evaluate(staff))
         self.assertEqual(line["level"], "critical")
-        self.assertTrue(plain(line["text"]).endswith("; 1 of them has warned they will quit"))
+        self.assertMsg(line["text"], "f.jobdemand.quit", count=1, n=1)
         two = [employee(["ba:jobdemand_hasmousepad"], eid=e, hasSendQuitWarning=True) for e in "ab"]
         [line] = self.alerts(evaluate(two))
-        self.assertTrue(plain(line["text"]).endswith("; 2 of them have warned they will quit"))
+        self.assertMsg(line["text"], "f.jobdemand.quit", count=2, n=2)
 
     def test_a_quit_warning_from_somebody_with_every_demand_met_is_not_counted(self):
         staff = [employee(["ba:jobdemand_hasmousepad"], eid="a"),
@@ -250,8 +257,10 @@ class JobDemandFindingTests(unittest.TestCase):
         b = evaluate(staff)
         self.assertEqual(b["staffDemands"][0]["workedOver"], {"count": 2, "max": 50, "unit": "hours"})
         [line] = self.alerts(b)
-        self.assertEqual(plain(line["text"]), "2 staff with unmet demands: "
-                         "Full-time for 2 (critical, worked over 50 hours this week)")
+        text = self.assertMsg(line["text"], "f.jobdemand", n=2)
+        [item] = list_items(text.p["demands"])
+        self.assertMsg(item.p["why"], "f.jobdemand.why", priority=msg_param("f.jobdemand.critical"),
+                       over=msg_param("f.jobdemand.over.hours", max=50))
 
     def test_a_roster_outside_the_band_is_a_roster_failure_whatever_was_worked(self):
         full = "ba:jobdemand_fulltime"
@@ -260,7 +269,8 @@ class JobDemandFindingTests(unittest.TestCase):
         b = evaluate(staff)
         self.assertNotIn("workedOver", b["staffDemands"][0])
         [line] = self.alerts(b)
-        self.assertEqual(plain(line["text"]), "2 staff with unmet demands: Full-time for 2 (critical)")
+        text = self.assertMsg(line["text"], "f.jobdemand", n=2)
+        self.assertEqual(items(text), [("Full-time", 2, "f.jobdemand.critical")])
 
     def test_mixed_causes_count_the_ones_that_only_worked_over(self):
         full = "ba:jobdemand_fulltime"
@@ -268,8 +278,11 @@ class JobDemandFindingTests(unittest.TestCase):
                  employee([full], eid="b", workedHoursThisWeek=51),
                  employee([full], eid="c", workedHoursThisWeek=58)]
         [line] = self.alerts(evaluate(staff))
-        self.assertEqual(plain(line["text"]), "3 staff with unmet demands: "
-                         "Full-time for 3 (critical, 2 worked over 50 hours this week)")
+        text = self.assertMsg(line["text"], "f.jobdemand", n=3)
+        [item] = list_items(text.p["demands"])
+        self.assertEqual(item.p["n"], 3)
+        self.assertMsg(item.p["why"], "f.jobdemand.why", priority=msg_param("f.jobdemand.critical"),
+                       over=msg_param("f.jobdemand.over.hours.some", n=2, max=50))
 
     def test_a_days_demand_names_the_days_worked(self):
         five = "ba:jobdemand_fivedaysweek"
@@ -277,8 +290,11 @@ class JobDemandFindingTests(unittest.TestCase):
         b = evaluate(staff)
         self.assertEqual(b["staffDemands"][0]["workedOver"], {"count": 1, "max": 5, "unit": "days"})
         [line] = self.alerts(b)
-        self.assertEqual(plain(line["text"]), "1 staff member with unmet demands: "
-                         "Five days a week for 1 (important, worked over 5 days this week)")
+        text = self.assertMsg(line["text"], "f.jobdemand", n=1)
+        [item] = list_items(text.p["demands"])
+        self.assertMsg(item, "f.jobdemand.item", demand="Five days a week", n=1)
+        self.assertMsg(item.p["why"], "f.jobdemand.why", priority=msg_param("f.jobdemand.important"),
+                       over=msg_param("f.jobdemand.over.days", max=5))
 
     def test_staff_at_no_site_or_somewhere_else_are_not_counted(self):
         away = [employee(["ba:jobdemand_hasmousepad"], eid="a", assignedAddress=None),
@@ -290,17 +306,18 @@ class JobDemandFindingTests(unittest.TestCase):
         staff = [employee(["ba:jobdemand_goldhealthinsurance", "ba:jobdemand_peacefulworkenvironment"])]
         [line] = self.alerts(evaluate(staff, happiness=10))
         self.assertEqual((line["group"], line["site"], line["siteKey"]), ("companydemand", "Company", None))
-        self.assertTrue(plain(line["text"]).startswith("1 staff member with unmet demands: "))
-        self.assertIn("Gold Health Insurance for 1", plain(line["text"]))
-        self.assertIn("Happy boss for 1", plain(line["text"]))
-        self.assertIn("HR manager's plan", plain(line["text"]))
+        # The insurance form of the line names the HR manager's plan.
+        text = self.assertMsg(line["text"], "f.companydemand.insurance", n=1)
+        self.assertEqual([(plain(i.p["demand"]), i.p["n"]) for i in list_items(text.p["demands"])],
+                         [("Gold Health Insurance", 1), ("Happy boss", 1)])
+        self.assertTrue(all(i.key == "f.companydemand.item" for i in list_items(text.p["demands"])))
 
     def test_a_quit_warning_over_company_demands_alone_still_raises_the_site(self):
         staff = [employee(["ba:jobdemand_goldhealthinsurance"], hasSendQuitWarning=True)]
         lines = {a["group"]: a for a in self.alerts(evaluate(staff))}
         self.assertEqual(lines["jobdemand"]["level"], "critical")
-        self.assertEqual(plain(lines["jobdemand"]["text"]), "1 staff with unmet demands: "
-                         "Gold Health Insurance for 1 (company-wide); 1 of them has warned they will quit")
+        text = self.assertMsg(lines["jobdemand"]["text"], "f.jobdemand.quit", count=1, n=1)
+        self.assertEqual(items(text), [("Gold Health Insurance", 1, "f.jobdemand.company")])
         self.assertIn("companydemand", lines)
 
     def test_quitters_lacking_only_company_demands_are_counted_with_everybody_else(self):
@@ -308,8 +325,9 @@ class JobDemandFindingTests(unittest.TestCase):
                  employee(["ba:jobdemand_goldhealthinsurance"], eid="y", hasSendQuitWarning=True),
                  employee(["ba:jobdemand_goldhealthinsurance"], eid="z", hasSendQuitWarning=True)]
         [line] = [a for a in self.alerts(evaluate(staff)) if a["group"] == "jobdemand"]
-        self.assertEqual(plain(line["text"]), "3 staff with unmet demands: Gold Health Insurance for 2 "
-                         "(company-wide), Mouse Pad for 1 (nice to have); 2 of them have warned they will quit")
+        text = self.assertMsg(line["text"], "f.jobdemand.quit", count=3, n=2)
+        self.assertEqual(items(text), [("Gold Health Insurance", 2, "f.jobdemand.company"),
+                                       ("Mouse Pad", 1, "f.jobdemand.nice")])
 
     def test_a_site_not_trading_yet_still_reports_its_staff(self):
         b = evaluate([employee(["ba:jobdemand_hasmousepad", "ba:jobdemand_goldhealthinsurance"])])
