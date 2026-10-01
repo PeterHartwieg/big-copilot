@@ -12397,7 +12397,10 @@ function planTypes(){
    the split between shelf and export starts from his trading, not a guess. */
 function defaultRate(kind){
   const own = (D.plan.own || {})[kind];
-  const vals = own ? Object.values(own.perDay || {}) : [];
+  /* The type's main products only: perDay also measures the products it can
+     additionally sell, which sell less and would pull the figure down. */
+  const main = new Set(((D.plan.catalogue || {})[kind] || {}).products || []);
+  const vals = own ? Object.entries(own.perDay || {}).filter(([s]) => !main.size || main.has(s)).map(([, v]) => v) : [];
   if(!vals.length) return null;
   return Math.max(1, Math.round(vals.reduce((a,b) => a+b, 0) / vals.length));
 }
@@ -12427,14 +12430,58 @@ function planOrder(week, baseline, ordered){
    the ingredient table on first paint is the logistics view's own figure.
    Where no factory makes anything of the type, every line starts at one
    machine, as a sketch. A stepped line keeps its count until the type changes. */
-function factoryCounts(type){
+function factoryCounts(type, added = []){
   const made = {};
   factoryView().sites.forEach(s => s.lines.forEach(l => { made[l.slug] = (made[l.slug] || 0) + (l.machines || 0); }));
   const products = ((D.plan.catalogue || {})[type] || {}).products || [];
   const any = products.some(p => made[p]);
   const out = {};
   products.forEach(p => out[p] = any ? (made[p] || 0) : 1);
+  /* A product the player added is a line he asked for: the machines already
+     on it, else one, as a sketch. */
+  added.forEach(p => out[p] = made[p] || 1);
   return out;
+}
+/* Add product (issue #162): what a type "can additionally sell" is the game's
+   own list for it (catalogue[type].extra, [[slug, weight], ...], weight under
+   1). Added products are kept per type, each with the per-shop rate the player
+   typed (null until he types one), for the session and in one localStorage
+   key, so a type keeps its additions when the picker moves to another. */
+const PLAN_EXTRA_KEY = "ba_plan_extra_v1";
+let planExtra = null;
+let pcPop = null, pcPopFor = null;  // the Add product picker and its button (pcPopOpen())
+function planExtraAll(){
+  if(planExtra) return planExtra;
+  planExtra = {};
+  try{
+    const saved = JSON.parse(localStorage.getItem(PLAN_EXTRA_KEY) || "{}");
+    if(saved && typeof saved === "object" && !Array.isArray(saved))
+      Object.entries(saved).forEach(([type, slugs]) => {
+        if(!slugs || typeof slugs !== "object" || Array.isArray(slugs)) return;
+        const keep = {};
+        Object.entries(slugs).forEach(([slug, rate]) => {
+          keep[slug] = typeof rate === "number" && Number.isFinite(rate) && rate >= 0 ? rate : null;
+        });
+        planExtra[type] = keep;
+      });
+  }catch(e){}
+  return planExtra;
+}
+function planExtraKeep(){
+  try{ localStorage.setItem(PLAN_EXTRA_KEY, JSON.stringify(planExtraAll())); }catch(e){}
+}
+/* The added products of a type that its list still offers, in the list's order. */
+function planAdded(type){
+  const mine = planExtraAll()[type] || {};
+  return (((D.plan.catalogue || {})[type] || {}).extra || []).map(([slug]) => slug).filter(slug => slug in mine);
+}
+/* A rate nobody measured yet starts as the type's measured rate a shop times
+   the game's weight for the product, to the nearest ten (to the nearest one
+   under ten, so a small shop's figure does not round to nothing). */
+function planExtraDefault(perShop, weight){
+  const v = (perShop || 0) * (weight || 0);
+  if(!v) return 0;
+  return v >= 10 ? Math.round(v / 10) * 10 : Math.max(1, Math.round(v));
 }
 let planSeed = {};
 /* The days the unit prices were read over (_ingredient_prices()): a week of
@@ -12448,6 +12495,7 @@ const machinesOn = slug => Math.max(0, planCounts[slug] ?? planSeed[slug] ?? 1);
 
 function drawPlan(){
   indexPlan();
+  pcPopClose(false);
   const types = planTypes();
   if(!types.length){
     $("planNote").textContent = tt("gr.plan.noCatalogue", "No product catalogue in this save.");
@@ -12458,7 +12506,9 @@ function drawPlan(){
     planType = types.includes("ba:businesstype_supermarket")
       ? "ba:businesstype_supermarket" : types[0];
   const cat = D.plan.catalogue, own = (D.plan.own || {})[planType];
-  planSeed = factoryCounts(planType);
+  const added = planAdded(planType);
+  const weightOf = Object.fromEntries((cat[planType].extra || []).map(([s, w]) => [s, w]));
+  planSeed = factoryCounts(planType, added);
   const shops = own ? (own.shops ?? own.sites) || 0 : 0;
   const perShop = defaultRate(planType) || 0;
   const pick = k => { planType = k; planCounts = {}; drawPlan(); };
@@ -12489,7 +12539,7 @@ function drawPlan(){
      added here raises the target by exactly what it eats. */
   const view = factoryView(), alias = view.aliases || {};
   const norm = slug => alias[slug] || slug;  // a recipe input to the product actually traded
-  const range = new Set(cat[planType].products);
+  const range = new Set([...cat[planType].products, ...added]);
   const baseline = {};
   view.sites.forEach(s => s.lines.forEach(l => {
     const r = RECIPE_BY[l.slug];
@@ -12503,12 +12553,28 @@ function drawPlan(){
   const meta = {};
   const wantWeek = perShop * 7 * shops;  // what the shops take of one product a week
   let bought = 0;
-  const lines = cat[planType].products.map(slug => {
+  /* An added product's rate a shop: what the type's shops already sell of it
+     where they do (measured beats typed, and no field), else the rate the
+     player typed, else the default; with no shop of the type, nothing to
+     type, as for the main lines. */
+  const extraRate = slug => {
+    const measured = ((own || {}).perDay || {})[slug];
+    if(measured) return {rate: Math.max(1, Math.round(measured)), typed: false};
+    if(!shops) return {rate: 0, typed: false};
+    const typed = (planExtraAll()[planType] || {})[slug];
+    return {rate: typed ?? planExtraDefault(perShop, weightOf[slug]), typed: true};
+  };
+  const removeBtn = slug => `<button type="button" class="pc-x" data-pc-x="${attr(slug)}" aria-label="${
+    attr(tt("gr.line.removeAria", "Remove {name} from the range", {name: itemName(slug)}))}" data-tip="${
+    attr(tt("gr.line.remove", "Remove from the range"))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>`;
+  const lines = [...cat[planType].products, ...added].map(slug => {
     const r = RECIPE_BY[slug];
+    const extra = added.includes(slug) ? extraRate(slug) : null;
     if(!r){
       bought++;
-      return `<tr><td class="l">${spEsc(itemName(slug))}${
-          wantWeek ? `<span class="sub">${tt("gr.line.shopsWant", "shops want {n:,}/week", {n: Math.round(wantWeek)})}</span>` : ""}</td>
+      const want = extra ? extra.rate * 7 * shops : wantWeek;
+      return `<tr${extra ? ` class="pc-added" data-pershop="${extra.rate}"` : ""}><td class="l">${spEsc(itemName(slug))}${extra ? removeBtn(slug) : ""}${
+          want ? `<span class="sub">${tt("gr.line.shopsWant", "shops want {n:,}/week", {n: Math.round(want)})}</span>` : ""}</td>
         <td class="l" colspan="4"><span class="quiet">${tt("gr.line.noRecipeNote", "the game documents no way to make this one; the shops buy it from an importer")}</span></td></tr>`;
     }
     const station = ws[r.workstation] || {};
@@ -12560,13 +12626,23 @@ function drawPlan(){
         unit: unit === undefined ? null : unit,
       };
     });
-    return `<tr class="line" data-m="${machinesOn(slug)}" data-min="0" data-max="99" data-rate="${r.out}" data-ing="${attr(ing)}" data-kit="${attr(JSON.stringify(kit))}" data-slug="${attr(slug)}" data-name="${attr(r.item)}">
-      <td class="l">${spEsc(r.item)}<span class="sub" data-tip="${attr(tt("gr.line.kitTip", "One {station} is {kit}; one makes {n:,} a day",
+    /* The rate field sits under the coverage figure, in the player's colour,
+       and says once that the figure is his. */
+    const rateField = extra && extra.typed ? `<span class="pc-rate"><label><input type="number" min="0" step="10" inputmode="numeric" value="${extra.rate}" data-pc-rate="${attr(slug)}" aria-label="${
+        attr(tt("gr.line.rateAria", "{name} a shop sells a day, your estimate", {name: r.item}))}">${tt("gr.line.rateUnit", "/shop/day")}</label>·<em tabindex="0" data-tip="${
+        attr(tt("gr.line.rateYoursTip", "Your {type} shops do not sell this yet, so this rate is yours, not measured. It starts at {per:,} a shop, what one sells of a main product, times the game's {w}% weight",
+          {type: cat[planType].type, per: perShop, w: Math.round((weightOf[slug] || 0) * 100)}))}">${tt("gr.line.rateYours", "your estimate")}</em></span>` : "";
+    return `<tr class="line${extra ? " pc-added" : ""}" data-m="${machinesOn(slug)}" data-min="0" data-max="99" data-rate="${r.out}" data-ing="${attr(ing)}" data-kit="${attr(JSON.stringify(kit))}" data-slug="${attr(slug)}" data-name="${attr(r.item)}"${extra ? ` data-pershop="${extra.rate}"` : ""}>
+      <td class="l">${spEsc(r.item)}${extra ? removeBtn(slug) : ""}<span class="sub" data-tip="${attr(tt("gr.line.kitTip", "One {station} is {kit}; one makes {n:,} a day",
         {station: station.name || r.workstation, kit: kit.length ? kit.join(" + ") : tt("gr.line.oneMachine", "one machine"), n: r.out * HOURS}))}">${
         tt("gr.line.rated", "{n:,}/h rated · {station}", {n: r.out, station: station.name || r.workstation})}</span></td>
       <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="${attr(tt("gr.line.fewer", "one machine fewer"))}">−</a><b>${machinesOn(slug)}</b><a href="#" data-d="1" aria-label="${attr(tt("gr.line.more", "one machine more"))}">+</a><span class="machines"></span></span></td>
-      <td class="made"></td><td class="covers"></td><td class="l"><span class="ing"></span></td></tr>`;
+      <td class="made"></td><td class="covers">${rateField ? `<span class="pc-cov"></span>${rateField}` : ""}</td><td class="l"><span class="ing"></span></td></tr>`;
   });
+  /* The range's last row: what else the type sells, one click from a line. */
+  const offered = (cat[planType].extra || []).length;
+  if(offered) lines.push(`<tr class="pc-addrow"><td class="l" colspan="5"><button type="button" class="pc-add" data-pc-toggle aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>${
+    tt("gr.plan.add", "Add product")}<small>${tt("gr.plan.addMore", "{n} more", {n: offered - added.length})}</small></button></td></tr>`);
 
   /* changed for growth: a type's service list is explained, never planned —
      services are charged for work done, so no factory line makes or stocks
@@ -12575,20 +12651,20 @@ function drawPlan(){
   /* No line under the controls (declutter round 2): the count and the
      services are the type picker's tip. */
   const planSaid = [bought ? tt("gr.plan.bought", {one: "{n} product of {total} bought in", other: "{n} products of {total} bought in"},
-      {n: bought, total: cat[planType].products.length}) : "",
+      {n: bought, total: cat[planType].products.length + added.length}) : "",
     svcs.length ? tt("gr.plan.services", "also sells {list} as services, which no line makes or stocks", {list: grList(svcs)}) : ""]
     .filter(Boolean).join(" · ");
   $("planNote").textContent = "";
   if(planSaid) $("planPicker").dataset.tip = planSaid; else delete $("planPicker").dataset.tip;
   /* Every product bought in: the table and its notes say so, and nothing
      can be made, so no tiles, no ingredients, no sentence (declutter E7). */
-  const none = bought === cat[planType].products.length;
+  const none = bought === cat[planType].products.length + added.length;
   /* Hidden also while another Expansion view is on screen: a redraw of every
      page (renderCalm(), a language switch) must not show it under that view. */
   const ing = $("secIngredients");
   if(ing) ing.hidden = none || !String(ing.dataset.sub || "").split(" ").includes(sub.growth);
   $("planBody").innerHTML = none ? `
-    <table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
+    <table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length + added.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
       <thead><tr><th>${tt("gr.col.product", "Product")}</th><th class="l" colspan="4"></th></tr></thead>
       <tbody>${lines.join("")}</tbody>
     </table>` : `
@@ -12597,7 +12673,7 @@ function drawPlan(){
       <div class="planstat" id="vMadeTile"><span class="lab">${tt("gr.stat.made", "Made / week")}</span><div class="v"><span id="vMade"></span><small>${tt("gr.stat.units", "units")}</small></div></div>
       <div class="planstat"><span class="lab">${tt("gr.stat.raw", "Raw material / week")}</span><div class="v"><span id="vRaw"></span><small>${tt("gr.stat.import", "units to import")}</small></div></div>
     </div>
-    <table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
+    <table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length + added.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
       <thead><tr><th>${tt("gr.col.product", "Product")}</th><th class="l">${tt("gr.col.machines", "Machines")}</th><th>${tt("gr.col.made", "Made / week")}</th><th>${
         tt("gr.col.supplies", "Supplies")}</th><th class="l">${tt("gr.col.raw", "Raw material / week")}</th></tr></thead>
       <tbody>${lines.join("")}</tbody>
@@ -20188,22 +20264,30 @@ function planDraw(){
   const peakDay = host ? (+host.dataset.pershop || 0) * (+host.dataset.peak || 1) : 0;
   const wantWeek = perShopWeek * shopsOwned;  // one product, every shop, a week
   const fmtN = n => num(Math.round(n));
-  let machines = 0, made = 0, raw = 0, exportWeek = 0;
+  let machines = 0, made = 0, raw = 0, exportWeek = 0, takeWeek = 0;
   const ing = {}, kitCount = {};
   lines.forEach(tr => {
     const m = +tr.dataset.m, rate = +tr.dataset.rate, wk = m * rate * HOURS * 7;
     machines += m; made += wk;
+    /* An added product carries its own rate a shop (measured or typed); every
+       other line sells at the type's. */
+    const ownRate = tr.dataset.pershop !== undefined;
+    const lineWant = ownRate ? (+tr.dataset.pershop || 0) * 7 * shopsOwned : wantWeek;
+    const linePeak = ownRate ? (+tr.dataset.pershop || 0) * (host ? +host.dataset.peak || 1 : 1) : peakDay;
+    takeWeek += lineWant;
     /* The line runs flat out; what the shops do not take is exported, and a
        line under what they take is short. */
-    const surplus = wk - wantWeek;
+    const surplus = wk - lineWant;
     if(surplus > 0) exportWeek += surplus;
     const set = (sel, v) => { const n = q(sel, tr); if(n) n.textContent = v; };
     set(".step b", m); set(".made", fmtN(wk));
-    const covers = peakDay ? wk / 7 / peakDay : null;
-    const coversEl = q(".covers", tr);
+    const covers = linePeak ? wk / 7 / linePeak : null;
+    /* A typed rate's field sits in the same cell; only the figure above it is
+       rewritten, so typing keeps the caret where it is. */
+    const coversEl = q(".covers .pc-cov", tr) || q(".covers", tr);
     if(coversEl) coversEl.innerHTML = (covers === null ? "—"
         : covers === 1 ? tt("gr.line.coversOne", "{n:.1f} shop", {n: covers}) : tt("gr.line.covers", "{n:.1f} shops", {n: covers}))
-      + (wantWeek ? `<span class="sub">${tt("gr.line.take", "shops take {n:,}", {n: Math.round(wantWeek)})} · ${surplus >= 0
+      + (lineWant ? `<span class="sub">${tt("gr.line.take", "shops take {n:,}", {n: Math.round(lineWant)})} · ${surplus >= 0
           ? chipHtml("ok", `+${fmtN(surplus)}`, tt("gr.line.surplusTip", "Surplus a week, for export"))
           : chipHtml("bad", fmtN(surplus), tt("gr.line.shortTip", "Short a week; this line needs more machines"))}</span>` : "");
     let kit = []; try{ kit = JSON.parse(tr.dataset.kit || "[]"); }catch(e){}
@@ -20235,14 +20319,20 @@ function planDraw(){
   /* Shelf demand counts every product of the type, the bought-in ones too:
      the shops take a week of each whether or not a line makes it. */
   const products = host ? (+host.dataset.products || lines.length) : lines.length;
+  /* The bought-in products take their week too: an added one at its own rate,
+     the rest at the type's. */
+  const boughtRows = host ? $$("tbody tr:not(.line):not(.pc-addrow)", host) : [];
+  const boughtOwn = boughtRows.filter(tr => tr.dataset.pershop !== undefined);
+  takeWeek += Math.max(0, products - lines.length - boughtOwn.length) * wantWeek
+    + boughtOwn.reduce((a, tr) => a + (+tr.dataset.pershop || 0) * 7 * shopsOwned, 0);
   put("vMachines", machines); put("vMade", fmtN(made)); put("vRaw", fmtN(raw));
   /* What the shops take of that sits behind the Made tile, not in a tile or a
      sentence of its own; a line short of the shelves is red in its Supplies
      cell (declutter E8). */
   const madeTile = $("vMadeTile");
-  if(madeTile) madeTile.dataset.tip = wantWeek
+  if(madeTile) madeTile.dataset.tip = takeWeek
     ? tt("gr.made.tip", "The shops take {take:,} units a week across the range; {surplus:,} is surplus for export",
-      {take: Math.round(wantWeek * products), surplus: Math.round(exportWeek)})
+      {take: Math.round(takeWeek), surplus: Math.round(exportWeek)})
     : shopsOwned ? tt("gr.made.unknown", {one: "Demand is unknown: the {n} shop sells services or goods this planner cannot measure, so shop coverage and export surplus cannot be estimated",
       other: "Demand is unknown: the {n} shops sell services or goods this planner cannot measure, so shop coverage and export surplus cannot be estimated"}, {n: shopsOwned})
     : tt("gr.made.none", "Nothing measured yet: all {n:,} units a week are surplus for export until the shops exist", {n: Math.round(made)});
@@ -20313,16 +20403,119 @@ function planDraw(){
     if(note) note.textContent = !total ? tt("gr.ing.none", "Nothing to import; this range is bought as finished goods.") : "";
   }
 }
-const bindPlan = once(() => on("click", "tr.line .step a[data-d]", (a, e) => {
-  e.preventDefault();
-  const tr = a.closest("tr.line");
-  const max = +tr.dataset.max || 99;
-  // changed for growth: data-min="0" lets a line be switched off (bought in instead)
-  const min = tr.dataset.min !== undefined ? +tr.dataset.min : 1;
-  tr.dataset.m = Math.max(min, Math.min(max, +tr.dataset.m + +a.dataset.d));
-  if(tr.dataset.slug) planCounts[tr.dataset.slug] = +tr.dataset.m;
-  planDraw();
-}));
+const bindPlan = once(() => {
+  on("click", "tr.line .step a[data-d]", (a, e) => {
+    e.preventDefault();
+    const tr = a.closest("tr.line");
+    const max = +tr.dataset.max || 99;
+    // changed for growth: data-min="0" lets a line be switched off (bought in instead)
+    const min = tr.dataset.min !== undefined ? +tr.dataset.min : 1;
+    tr.dataset.m = Math.max(min, Math.min(max, +tr.dataset.m + +a.dataset.d));
+    if(tr.dataset.slug) planCounts[tr.dataset.slug] = +tr.dataset.m;
+    planDraw();
+  });
+  /* Add product: the toggle opens the picker, a pick adds a line, the × on an
+     added line takes it out again. Each redraws the range; a typed rate only
+     reworks the figures, so the field keeps its focus. */
+  on("click", "[data-pc-toggle]", (b, e) => {
+    e.preventDefault();
+    if(pcPop && !pcPop.hidden && pcPopFor === b) pcPopClose(true); else pcPopOpen(b);
+  });
+  on("click", "#pcPop [data-pc-pick]", (o, e) => {
+    e.preventDefault();
+    if(o.getAttribute("aria-disabled") === "true") return;
+    const all = planExtraAll();
+    (all[planType] || (all[planType] = {}))[o.dataset.pcPick] = null;
+    planExtraKeep();
+    pcPopClose(false);
+    drawPlan();
+    const back = q("#planBody [data-pc-toggle]");
+    if(back) back.focus({preventScroll: true});
+  });
+  on("click", "[data-pc-x]", (x, e) => {
+    e.preventDefault();
+    const mine = planExtraAll()[planType];
+    if(mine) delete mine[x.dataset.pcX];
+    delete planCounts[x.dataset.pcX];
+    planExtraKeep();
+    if(typeof hideTip === "function") hideTip();
+    drawPlan();
+    const back = q("#planBody [data-pc-toggle]");
+    if(back) back.focus({preventScroll: true});
+  });
+  on("input", "[data-pc-rate]", el => {
+    const v = el.value === "" ? 0 : Math.max(0, +el.value || 0);
+    const all = planExtraAll();
+    (all[planType] || (all[planType] = {}))[el.dataset.pcRate] = v;
+    planExtraKeep();
+    const tr = el.closest("tr.line");
+    if(tr) tr.dataset.pershop = v;
+    planDraw();
+  });
+});
+/* The picker: one element at body level, placed under the Add product button,
+   the way #alertPop is, since a section's paint containment would clip it.
+   Escape and a press outside close it. */
+function pcPopOpen(btn){
+  const entry = ((D.plan || {}).catalogue || {})[planType];
+  if(!entry) return;
+  if(!pcPop){
+    pcPop = document.createElement("div");
+    pcPop.id = "pcPop";
+    pcPop.className = "pc-pop";
+    pcPop.setAttribute("role", "dialog");
+    pcPop.hidden = true;
+    document.body.appendChild(pcPop);
+    document.addEventListener("mousedown", e => {
+      if(pcPop.hidden || pcPop.contains(e.target) || (pcPopFor && pcPopFor.contains(e.target))) return;
+      pcPopClose(false);
+    });
+    document.addEventListener("keydown", e => { if(e.key === "Escape" && !pcPop.hidden){ e.preventDefault(); pcPopClose(true); } });
+    window.addEventListener("resize", () => pcPopClose(false));
+    document.addEventListener("scroll", () => { if(!pcPop.hidden) pcPopPlace(); }, true);
+  }
+  if(pcPopFor && pcPopFor !== btn) pcPopFor.setAttribute("aria-expanded", "false");
+  pcPopFor = btn;
+  const added = new Set(planAdded(planType)), ws = D.plan.workstations || {};
+  const head = tt("gr.plan.alsoSells", "A {type} also sells", {type: entry.type});
+  pcPop.setAttribute("aria-label", head);
+  pcPop.innerHTML = `<div class="pc-pop-h"><b>${spEsc(head)}</b><span tabindex="0" data-tip="${
+      attr(tt("gr.plan.weightTip", "The game's own weight for each at a {type}; a main product is 100%", {type: entry.type}))}">${
+      tt("gr.plan.weight", "Weight")}</span></div>` + (entry.extra || []).map(([slug, w]) => {
+    const on = added.has(slug), r = RECIPE_BY[slug], pct = Math.round(w * 100);
+    const where = r ? (ws[r.workstation] || {}).name || r.workstation : tt("gr.plan.boughtIn", "bought in");
+    return `<button type="button" class="pc-opt${on ? " on" : ""}" data-pc-pick="${attr(slug)}"${on ? ` aria-disabled="true"` : ""}>` +
+      `<span><b>${spEsc(itemName(slug))}${on ? `<svg class="pc-tick" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>` : ""}</b><small>${spEsc(where)}</small></span>` +
+      `<span class="pc-w" aria-hidden="true"><i style="--w:${pct}%"></i></span><em>${pct}%</em></button>`;
+  }).join("");
+  pcPop.hidden = false;
+  btn.setAttribute("aria-expanded", "true");
+  if(typeof hideTip === "function") hideTip();
+  pcPopPlace();
+  wireTips();
+  (pcPop.querySelector(".pc-opt:not(.on)") || pcPop.querySelector(".pc-opt") || pcPop).focus({preventScroll: true});
+}
+function pcPopPlace(){
+  if(!pcPop || pcPop.hidden || !pcPopFor) return;
+  if(!pcPopFor.isConnected || !pcPopFor.getClientRects().length){ pcPopClose(false); return; }
+  const vw = document.documentElement.clientWidth || window.innerWidth;
+  const vh = document.documentElement.clientHeight || window.innerHeight;
+  const r = pcPopFor.getBoundingClientRect(), w = pcPop.offsetWidth, h = pcPop.offsetHeight;
+  /* Under the button, its left edge on the button's; above it when the
+     window has no room below. */
+  let y = r.bottom + 8;
+  if(y + h > vh - 12 && r.top - 8 - h >= 12) y = r.top - 8 - h;
+  pcPop.style.left = `${Math.max(12, Math.min(r.left, vw - w - 12))}px`;
+  pcPop.style.top = `${Math.max(12, y)}px`;
+}
+/* `restore` hands focus back to the button (Escape, or the button again). */
+function pcPopClose(restore){
+  if(!pcPop || pcPop.hidden) return;
+  pcPop.hidden = true;
+  const btn = pcPopFor;
+  if(btn) btn.setAttribute("aria-expanded", "false");
+  if(restore && btn && btn.isConnected) btn.focus({preventScroll: true});
+}
 function wirePlan(){ bindPlan(); planDraw(); }
 
 /* site detail: the panel answers the pointer -------------------------------------

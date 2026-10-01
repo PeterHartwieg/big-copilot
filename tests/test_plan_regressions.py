@@ -138,6 +138,37 @@ class PlannerRegressions(unittest.TestCase):
             # Its concessions keep the type in the planner.
             self.assertIn(ITEM + "popcorn", entry["products"])
 
+    def test_extra_is_what_a_type_can_additionally_sell(self):
+        # Issue #162: the game's own list for the type, weight under 1, heaviest first,
+        # equal weights in the game's order.
+        florist = self.plan()["catalogue"]["ba:businesstype_florist"]
+        self.assertEqual(florist["extra"], [
+            [ITEM + "sodacan", 0.8], [ITEM + "energydrink", 0.8], [ITEM + "umbrella", 0.75],
+            [ITEM + "cheapgift", 0.6], [ITEM + "expensivegift", 0.6]])
+
+    def test_extra_never_repeats_a_main_product_or_a_service(self):
+        catalogue = self.plan()["catalogue"]
+        for kind, entry in catalogue.items():
+            for slug, weight in entry["extra"]:
+                self.assertTrue(0 < weight < 1, (kind, slug))
+                self.assertNotIn(slug, entry["products"], kind)
+                self.assertNotIn(slug, entry["services"], kind)
+        # A cinema's concessions are its range already, weights under 1 or not.
+        self.assertEqual(catalogue["ba:businesstype_cinema"]["extra"], [])
+        self.assertEqual(catalogue["ba:businesstype_lawfirm"]["extra"], [])
+
+    def test_an_extra_the_shops_sell_is_measured(self):
+        business = {"status": "retail", "revenue": 1000, "typeSlug": "ba:businesstype_florist",
+                    "lines": [{"slug": ITEM + "cheapflower", "price": 25, "rate": 150},
+                              {"slug": ITEM + "umbrella", "price": 24, "rate": 40},
+                              {"slug": ITEM + "novel", "price": 20, "rate": 9}]}
+        result = self.plan(businesses=[business])
+        # Measured beats typed: the umbrella's rate is the shop's; a product the
+        # type cannot sell at all stays out.
+        self.assertEqual(result["own"]["ba:businesstype_florist"]["perDay"],
+                         {ITEM + "cheapflower": 150, ITEM + "umbrella": 40})
+        self.assertIn(ITEM + "umbrella", result["items"])
+
     def test_service_revenue_catalogue_is_preserved(self):
         self.plan()
         self.assertIn(ITEM + "gymcovercharge", self.catalogue[GYM])

@@ -16639,6 +16639,22 @@ def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list)
     }
 
 
+def _plan_extra(kind: str, taken: set) -> list:
+    """What a type can additionally sell, as [[slug, weight], ...], heaviest first.
+
+    The game's own product list for the type (ba_store_rules.json, `types[kind].i`)
+    gives each product a weight; a main product is 1, and those under 1 are the
+    extras its shelves also take. A product already in the type's range, or a
+    service, is left out. Equal weights keep the game's order. Read lazily
+    through load_store_rules(), never at import (the browser worker writes the
+    file first).
+    """
+    listed = (load_store_rules()["types"].get(kind) or {}).get("i") or []
+    extra = [[slug, weight] for slug, weight in listed
+             if isinstance(weight, (int, float)) and 0 < weight < 1 and slug not in taken]
+    return sorted(extra, key=lambda pair: -pair[1])
+
+
 def _plan(
     save: Save,
     names: Names,
@@ -16700,6 +16716,7 @@ def _plan(
             "type": names.label(kind),
             "products": sorted(physical),
             "services": kind_services,
+            "extra": _plan_extra(kind, physical | set(kind_services) | services),
         }
 
     # What the owner's own shops of each type actually sell, per product per day,
@@ -16719,7 +16736,10 @@ def _plan(
         # shops make from a service fee is dropped. A type whose measured
         # sales were all services keeps its site count all the same — the
         # shops exist even where nothing plan-able was sold.
-        planable = set(catalogue_out.get(kind, {}).get("products", ()))
+        entry = catalogue_out.get(kind, {})
+        # A product the type can additionally sell counts too: what the shops
+        # already sell of it is measured, and beats the rate the player types.
+        planable = set(entry.get("products", ())) | {s for s, _w in entry.get("extra", ())}
         own[kind] = {
             "sites": sites[kind],
             # The same count under the name the chain planner prints.
@@ -16737,7 +16757,7 @@ def _plan(
         for ing in recipe["ingredients"]:
             labels[ing["slug"]] = ing["item"]
     for entry in catalogue_out.values():
-        for slug in entry["products"] + entry["services"]:
+        for slug in entry["products"] + entry["services"] + [s for s, _w in entry["extra"]]:
             labels.setdefault(slug, names.label(slug))
 
     # Orders are placed importer by importer in the game, and each one already
