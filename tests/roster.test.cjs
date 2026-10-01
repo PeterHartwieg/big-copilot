@@ -479,7 +479,7 @@ test('a shop with nothing to hire names no hiring lines on the tile', async () =
   try {
     const tile = page.locator('#sp-roster .sp-ba > div').first();
     assert.doesNotMatch(await tile.innerText(), enRe('sp.ba.tohire'));
-    assert.doesNotMatch(await tile.getAttribute('data-read'), enRe('sp.ba.hire'));
+    assert.doesNotMatch(await tile.getAttribute('data-read'), new RegExp(enRe('sp.new.lines.hire').source + '|' + enRe('sp.new.lines.allhire').source));
   } finally { await page.close(); }
 });
 
@@ -1488,7 +1488,7 @@ test('a shop with serving shifts and no line to enter is told to hire, not to cl
     const note = await page.locator('#sp-roster .sp-note').innerText();
     // The dangerous sentence is the one that used to win here.
     assert.match(note, textRe('sp.care.hire.head'));
-    assert.doesNotMatch(note, enRe('sp.care.keep'));
+    assert.doesNotMatch(note, textRe('sp.care.keep'));
     // And it still says what happens to the serving hours.
     assert.match(note, enRe('sp.care.hire.kept', {n: kept}));
     // Nor is any day offered for pasting over them -- and a day with nobody on
@@ -1848,7 +1848,7 @@ test('a plan half of which waits on hires says what to delete and what to leave'
     // "these" is dashed, and the hours under them would stand bare.
     assert.match(note, enRe('sp.care.keep.hire'));
     assert.match(note, enRe('sp.care.keep.hire', {n: counts.hire}));
-    assert.doesNotMatch(note, enRe('sp.care.keep'));
+    assert.doesNotMatch(note, textRe('sp.care.keep'));
   } finally { await page.close(); }
 });
 

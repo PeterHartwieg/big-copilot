@@ -130,7 +130,7 @@ test('an office lists its fee, not shelves to top up', async () => {
   try {
     const panel = await page.locator('#sitePanel').innerText();
     assert.match(panel, enRe('sp.fees.title'));
-    assert.doesNotMatch(panel, new RegExp([enRe('sp.shelf.title').source, enRe('sp.shelf.col.onhand').source, enRe('sp.shelf.col.pressure').source].join('|')));
+    assert.doesNotMatch(panel, new RegExp([enRe('sp.shelf.title').source, enRe('sp.shelf.col.onhand').source, enRe('sp.shelf.col.pressure').source, "before tomorrow's top-up"].join('|')));
     const heads = await page.$$eval('#sitePanel table thead th', ths => ths.map(th => th.textContent));
     assert.deepEqual(heads, [en('sp.fees.col.fee'), en('sp.fees.col.hours'), en('sp.shelf.col.revenue')]);
     const fees = await page.$$eval('#sitePanel table tbody tr', rows => rows.map(r => r.cells[0].firstChild.textContent));

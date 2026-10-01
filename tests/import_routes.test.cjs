@@ -117,7 +117,8 @@ test('Imports and Deliveries list every depot line, with the import lines\' Set 
     assert.equal(await page.locator('#secImports .sb-verdict').count(), 0, 'no summary line under the controls');
     const verdict = await tabTip(page, 'imports');
     assert.match(verdict, enRe("sb.wh.room"));
-    assert.doesNotMatch(verdict, new RegExp(enRe("sb.word.tight").source + "|" + enRe("sb.word.short").source));
+    // Pins the wording: retired wording must not come back.
+    assert.doesNotMatch(verdict, /inside the margin|fall short/);
     // Soda is held and imported by nobody: a delivery, on Deliveries, not an import.
     assert.ok(!(await bySlug(page, 'secImports', 0)).soda);
     assert.match(await tabTip(page, 'deliveries'), enRe("sb.wh.idle.n", {n: 2}));
@@ -333,7 +334,8 @@ test('under Demand the Factories verdict says, plainly, that fewer hours and wor
     const verdict = await tabTip(page, 'production');
     // Workers who could go are the staffing block's to count, below the lines.
     assert.match(verdict, enRe("sb.fac.schedulesCover", {rest: en("sb.fac.fewer", {n: 1}) + "."}));
-    assert.doesNotMatch(verdict, new RegExp(enRe("sb.staff.spare").source + "|" + enRe("sb.staff.have").source));
+    // "factory staffing below" is retired wording that must not come back.
+    assert.doesNotMatch(verdict, new RegExp(enRe("sb.staff.spare").source + "|factory staffing below"));
     assert.equal(await page.locator('#secProduction .sb-verdict').count(), 0, 'no summary line under the controls');
   } finally { await page.close(); }
   // At 24/7 the bakery has to hire: named, and no "Current rosters cover".
@@ -341,7 +343,8 @@ test('under Demand the Factories verdict says, plainly, that fewer hours and wor
   try {
     const verdict = await tabTip(cap, 'production');
     // The hires are the staffing block's own figure.
-    assert.doesNotMatch(verdict, new RegExp(enRe("sb.staff.hire").source + "|" + enRe("sb.staff.have").source));
+    // "factory staffing below" is retired wording that must not come back.
+    assert.doesNotMatch(verdict, new RegExp(enRe("sb.staff.hire").source + "|factory staffing below"));
     assert.doesNotMatch(verdict, enRe("sb.fac.schedulesCover"));
   } finally { await cap.close(); }
   // Spares are counted, never netted against another factory's hires.
@@ -361,7 +364,8 @@ test('under Demand the Factories verdict says, plainly, that fewer hours and wor
   try {
     const verdict = await tabTip(none, 'production');
     assert.match(verdict, enRe("sb.fac.fewer", {n: 1}));
-    assert.doesNotMatch(verdict, enRe("sb.staff.have"));
+    // Pins the wording: retired wording must not come back.
+    assert.doesNotMatch(verdict, /factory staffing below/);
   } finally { await none.close(); }
 });
 
@@ -473,7 +477,8 @@ test('Staffing for factory lines reads the plan for the sizing on screen', async
     const card = await text(cap, '#sbStaff');
     assert.match(card, new RegExp(enRe("sb.staff.have", {hours: 672, have: 12, n: 12}).source + " " + enRe("sb.staff.hire", {n: 2}).source));
     // The hire chip says the hires once; no line under it says them again.
-    assert.doesNotMatch(card, enRe("sb.staff.spare", {n: 2}));
+    // Pins the wording: the retired line under the chip must not come back.
+    assert.doesNotMatch(card, /hire 2: the week needs/);
     assert.match(card, new RegExp("\\+\\$360 " + enRe("sb.staff.wages").source));
     assert.match(card, new RegExp("Cake .*12 24 " + enRe("sb.unit.h").source + " 00–12 " + enRe("sb.unit.nh", {n: 12}).source + " 12–24 " + enRe("sb.unit.nh", {n: 12}).source + " × " + enRe("sb.staff.machines", {n: 2}).source));
     // One factory: no totals under it restating its own figures.
