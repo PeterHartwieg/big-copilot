@@ -127,6 +127,8 @@ class WarehouseFedByRouteTests(unittest.TestCase):
         [note] = c.notes(WH, "unsourced")
         self.assertIn("the route from Brewery only passes on what it holds, about 18 days",
                       plain(note["text"]))
+        # The amount column shows the same 18 days.
+        self.assertEqual(note["amt"], {"n": 18, "unit": "days"})
 
     def test_a_route_from_a_factory_that_makes_enough_is_judged_on_its_target(self):
         """The brewery's machine makes 720 a day: the route is the whole of the
@@ -405,7 +407,11 @@ class RouteBehindAnImportTests(unittest.TestCase):
         c, row = self.chain(machines=0, brewery_units=20000)
         self.assertEqual((row["routed"], row["orderFit"], row["reason"]), (0, "short", "order"))
         self.assertEqual((c.verdict(WH)["st"], c.verdict(WH)["why"]), ("short", "order"))
-        self.assertEqual(len(c.notes(WH, "order")), 1)
+        [note] = c.notes(WH, "order")
+        # The amount column shows the units short the sentence names: Smart
+        # Delivery keeps 1,000 against the 3,500 week.
+        self.assertEqual(note["amt"], {"n": 2500, "unit": "units short"})
+        self.assertIn("2,500 short", plain(note["text"]))
 
     def test_without_a_route_the_order_is_judged(self):
         c, row = self.chain(target=0)
@@ -633,6 +639,10 @@ class FactoryOwnImportTests(unittest.TestCase):
                 self.assertEqual(len(notes), 1)
                 rows = c.supply["imports"] if mode == "cap" else c.supply["importsDem"]
                 row = next(r for r in rows if r["s"] == c.index(BREWERY) and r["slug"] == WATER)
+                # The amount column shows the days early with the sentence's one decimal.
+                amt = notes[0]["amt"]
+                self.assertEqual((amt["unit"], amt["dp"]), ("days early", 1))
+                self.assertIn(f"{amt['n']:.1f} days before", plain(notes[0]["text"]))
                 # The one-off to bring in: 4.5 days of the machines' draw.
                 self.assertEqual(row["catchUp"], {"cap": 1080, "dem": 149}[mode])
                 self.assertEqual(row["eats"], row["perDay"])

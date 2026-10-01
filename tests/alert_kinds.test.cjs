@@ -268,17 +268,26 @@ test('Wholesale delivery too low is a kind of its own, landing on Deliveries, th
   assert.match(source, /wholesale: \["wholesale", "contract", "delivery"\]/);
 });
 
-test('a wholesale finding shows the week used, or the units left, in the amount column', () => {
-  const ctx = vm.createContext({money: String, fmt: String});
+/* A finding with no money shows the figure Python sends beside it (`amt`,
+   _amt() in ba_dashboard.py), never one read back out of its sentence: a
+   reworded or translated sentence keeps its amount. */
+test("the amount column shows a finding's amt, whatever its sentence says", () => {
+  const ctx = vm.createContext({money: String, fmt: n => `$${Number(n).toLocaleString('en-US')}`,
+    num: n => Number(n).toLocaleString('en-US')});
   vm.runInContext(I18N, ctx);
   vm.runInContext(between(source, '/* The figure on the right', '/* A finding whose kind is switched off'), ctx);
   const amount = a => vm.runInContext('findingAmount', ctx)(a);
-  assert.equal(amount({group: 'wholesale', text: "Soda's wholesale delivery brings 600 a week against the 700 it sells"}),
-    '700<small>/week used</small>');
-  assert.equal(amount({group: 'wholesale', text: "Water's wholesale delivery brings 1,000 a week against 1,680 used"}),
-    '1,680<small>/week used</small>');
-  assert.equal(amount({group: 'wholesale', text: "Beer runs out before Tuesday's wholesale delivery: 150 left at 100/day"}),
-    '150<small>left</small>');
+  const said = 'Words with 999 units and $5/day in them';
+  assert.equal(amount({group: 'wholesale', text: said, amt: {n: 1680, unit: '/week used'}}), '1,680<small>/week used</small>');
+  assert.equal(amount({group: 'wholesale', text: said, amt: {n: 150, unit: 'left'}}), '150<small>left</small>');
+  assert.equal(amount({group: 'staff', text: said, amt: {n: 84, of: 168, unit: 'hours staffed'}}), '84/168<small>hours staffed</small>');
+  assert.equal(amount({group: 'target', text: said, amt: {n: 64, unit: 'daily sales', sign: 'x'}}), '64x<small>daily sales</small>');
+  assert.equal(amount({group: 'hype', text: said, amt: {n: 1550, unit: '/day under hype', sign: '$'}}), '$1,550<small>/day under hype</small>');
+  assert.equal(amount({group: 'shortfall', text: said, amt: {n: 4.2, unit: 'days early'}}), '4.2<small>days early</small>');
+  // No amt, no figure, however many numbers the sentence holds.
+  assert.equal(amount({group: 'outruns', text: said}), '');
+  // Money wins over amt.
+  assert.equal(amount({group: 'dead', text: said, worth: 12, unit: '/day tied up', amt: {n: 4, unit: 'weeks'}}), '$12<small>/day tied up</small>');
 });
 
 /* Today reads the findings of the sizing on screen: Python runs the list

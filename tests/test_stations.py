@@ -389,6 +389,8 @@ class BindingRoleTests(unittest.TestCase):
              "another Gym Trainer on those hours and another counter",
              "fitness planning boards and counters", 2),
         )
+        # Both roles held those hours, as data the page lights the cells by.
+        self.assertEqual(finding["heldBy"], [["staff", TRAINER], ["post", SERVICE]])
 
     def test_a_tie_prices_its_hours_once_and_not_once_per_role(self):
         """The same gym: 12 capped hours of 25 customers at a $12 basket.

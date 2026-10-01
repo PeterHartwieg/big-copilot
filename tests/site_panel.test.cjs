@@ -395,7 +395,7 @@ test("the tiles carry the fortnight, the costs of the day and the ceilings", asy
     shop: {series: fortnight(), cogs: 400, profit: 200},
     trends: READY,
     hourFindings: [{kind: 'cap', key: KEY, site: 'HART. Gifts', office: false, hours: 3,
-                    when: 'Fri 12-13', limit: 'the building', fix: '',
+                    when: 'Fri 12-13', limit: 'the building', heldBy: [['door']], fix: '',
                     cap: 50, capTop: 50, basket: 30, throughput: 900}],
     hours: grid(false, 3),
   });
@@ -488,15 +488,15 @@ test('every ceiling the busy hours ran into gets a chip and a lit icon', async (
   // rows below are what it would emit for this grid.
   // These three rows are not hand-written: they are what the real
   // _hour_findings() emits for mixedGrid(), copied verbatim.
-  const cap = (when, limit, fix, at, throughput, limits) => ({kind: 'cap', key: KEY,
-    site: 'HART. Gifts', office: false, hours: 7, when, limit, fix, cap: at, capTop: at,
+  const cap = (when, limit, heldBy, fix, at, throughput, limits) => ({kind: 'cap', key: KEY,
+    site: 'HART. Gifts', office: false, hours: 7, when, limit, heldBy, fix, cap: at, capTop: at,
     basket: 30, throughput, ...(limits ? {limits, noun: null} : {})});
   const page = await site({
     hours: mixedGrid(),
     hourFindings: [
-      cap('every day 9', 'the building', '', 50, 1500),
-      cap('every day 12', 'staffing', 'more service staff on those hours', 2, 60, 1),
-      cap('every day 15', 'registers', 'another counter', 3, 90, 1),
+      cap('every day 9', 'the building', [['door']], '', 50, 1500),
+      cap('every day 12', 'staffing', [['staff', SERVICE]], 'more service staff on those hours', 2, 60, 1),
+      cap('every day 15', 'registers', [['post', SERVICE]], 'another counter', 3, 90, 1),
     ],
   });
   try {
@@ -506,11 +506,8 @@ test('every ceiling the busy hours ran into gets a chip and a lit icon', async (
     // A cell says which kind of ceiling held it and whose role held it, as
     // `<kind>:<skill>`; the door is nobody's role, so its token stands alone.
     const chips = await page.$$eval('#sp-hours .sp-hchip.cap', els =>
-      els.map(e => [e.dataset.limit, e.dataset.show]));
-    assert.deepEqual(chips, [
-      ['the building', 'door'],
-      ['staffing', `staff:${SERVICE}`],
-      ['registers', `post:${SERVICE}`]]);
+      els.map(e => e.dataset.show));
+    assert.deepEqual(chips, ['door', `staff:${SERVICE}`, `post:${SERVICE}`]);
     // The building's chip is information, not a warning: the neutral
     // modifier, no fix arrow, and a tip that only says how much. The staffing
     // and registers chips keep their warning look and their fixes.
@@ -570,7 +567,7 @@ test('a site held only by its building opens on its busiest hour, at building ca
   const page = await site({
     hours: [g],
     hourFindings: [{kind: 'cap', key: KEY, site: 'HART. Gifts', office: false, hours: 7,
-      when: 'every day 9', limit: 'the building', fix: '', cap: 50, capTop: 50, basket: 30, throughput: 1500}],
+      when: 'every day 9', limit: 'the building', heldBy: [['door']], fix: '', cap: 50, capTop: 50, basket: 30, throughput: 1500}],
   });
   try {
     const read = await page.locator('#hourRead').textContent();

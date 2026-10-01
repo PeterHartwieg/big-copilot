@@ -60,7 +60,7 @@ async function site(status) {
       }],
       hourFindings: [{
         kind: 'cap', key, site: 'HART. &Partners', office, hours: 8, when: 'Mon 9-17',
-        limit: office ? 'workstations' : 'registers', fix: office ? 'another computer workstation' : 'another counter',
+        limit: office ? 'workstations' : 'registers', heldBy: [['post', null]], fix: office ? 'another computer workstation' : 'another counter',
         cap: 3, capTop: 3, basket: 387.89, throughput: 1330.08,
       }],
     };

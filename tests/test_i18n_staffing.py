@@ -304,7 +304,7 @@ class TheTodayLinesKeepTheirWords(unittest.TestCase):
                 (True, "sp.py.workstations", "workstations", "sp.py.workstations.first")):
             words = _role_words({"skill": None if office else "ba:skill_customerservice"}, office)
             said = words["posts"]
-            cap = {"kind": "cap", "key": "k1", "site": "A", "office": office, "limit": said[0], "fix": said[1],
+            cap = {"kind": "cap", "key": "k1", "site": "A", "office": office, "limit": said[0], "fix": said[1], "heldBy": [["post", None if office else "ba:skill_customerservice"]],
                    "limits": 1, "noun": None, "cap": 30, "capTop": 30, "when": _hour_phrase({1: {12, 13}}),
                    "hours": 2, "throughput": 50.0}
             with self.subTest(office=office):
