@@ -13,7 +13,8 @@ const {chromium} = require('playwright');
 const root = path.join(__dirname, '..');
 const geometry = JSON.parse(fs.readFileSync(path.join(root, 'web/maps/locations.json')));
 const at = key => geometry.buildings.find(b => b.key === key);
-const HK = ['ba:street_broadwaystreet#1', 'ba:street_broadwaystreet#2', 'ba:street_firstavenue#1', 'ba:street_firstavenue#10', 'ba:street_firstavenue#11'];
+const HK = ['ba:street_broadwaystreet#1', 'ba:street_broadwaystreet#2', 'ba:street_firstavenue#1', 'ba:street_firstavenue#10', 'ba:street_firstavenue#11',
+  'ba:street_firstavenue#12', 'ba:street_firstavenue#13'];
 const MT = ['ba:street_broadwaystreet#10', 'ba:street_broadwaystreet#11', 'ba:street_broadwaystreet#13'];
 const CLOTHES = 'ba:businesstype_clothingstore', COFFEE = 'ba:businesstype_coffeeshop', LAW = 'ba:businesstype_lawfirm';
 const hoodKey = name => `ba:neighborhood_${name.toLowerCase().replace(/[^a-z]/g, '')}`;
@@ -23,7 +24,9 @@ const site = (key, over) => {
     size: 'C', m2: 225, traffic: 50, cap: 30, rent: 100, status: 'vacant', occupant: null, ...over};
   return {deposit: b.rent == null ? null : b.rent * 6, ...b};
 };
-/* Three vacant shops, a rival, one of yours and a vacant office. */
+/* Three vacant shops, a rival, a vacant office, and premises you rent: a gym,
+   an empty shop, a clothing store that never sold, one that trades and an
+   empty office. */
 const PREMISES = {
   buildings: [
     site(HK[0], {traffic: 60, rent: 140, owner: 'city'}),   // clothing 46, coffee 24
@@ -36,6 +39,8 @@ const PREMISES = {
     // Yours as well: one rented and still empty, one already a clothing store.
     site(HK[2], {status: 'mine', owner: 'city'}),
     site(HK[3], {status: 'mine', owner: 'you', occupant: {name: 'HART. Wear', type: 'Clothing Store', typeSlug: CLOTHES}}),
+    site(HK[5], {status: 'mine', occupant: {name: 'HART. Threads', type: 'Clothing Store', typeSlug: CLOTHES}}),
+    site(HK[6], {status: 'mine', type: 'office', size: 'J', m2: 180, cap: 10}),
   ],
   forSale: [{key: HK[0], address: at(HK[0]).address, hood: HK_HOOD, type: 'retail', size: 'C', m2: 225, price: 750000}],
   demand: {
@@ -82,7 +87,7 @@ async function fixture({character = 'plan-a', preset = {cat: 'retail', type: CLO
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.route('https://**', r => r.abort());
   await page.goto(url);
-  await page.evaluate(({premises, character, stored}) => {
+  await page.evaluate(({premises, character, stored, keys}) => {
     window.__writes = [];
     const set = Storage.prototype.setItem;
     Storage.prototype.setItem = function(k, v){ window.__writes.push(String(k)); return set.call(this, k, v); };
@@ -93,10 +98,13 @@ async function fixture({character = 'plan-a', preset = {cat: 'retail', type: CLO
     // The character's own finder filters, which a plan must never pick up.
     if(stored) localStorage.setItem(`ba_finder_v1:${character}`, JSON.stringify(stored));
     window.__writes = [];
-    D = {meta: {character, day: 20, save: 'Plan'}, businesses: [], alerts: [], minor: {rows: []},
+    // The two clothing stores you rent: one has never sold, one trades.
+    const store = (key, name, hasTraded) => ({key, name, address: '', type: 'Clothing Store', typeSlug: 'ba:businesstype_clothingstore',
+      status: 'retail', hasTraded, profit: 0, rent: 100, staff: 0, opened: 18, lines: []});
+    D = {meta: {character, day: 20, save: 'Plan'}, businesses: [store(keys[0], 'HART. Wear', false), store(keys[1], 'HART. Threads', true)], alerts: [], minor: {rows: []},
       supply: {shops: []}, daily: [], premises, market: {hoods: [], rows: [], types: [], offices: []}};
     refreshCityMaps();
-  }, {premises: PREMISES, character, stored});
+  }, {premises: PREMISES, character, stored, keys: [HK[3], HK[5]]});
   const state = await page.evaluate(() => JSON.stringify(history.state));
   await page.evaluate(preset => {
     const host = document.createElement('div');
@@ -169,16 +177,16 @@ test('a picked row opens its card with the plan\'s button, which hands the build
     assert.equal(await card.locator('h3 a').count(), 0);
     await go.click();
     assert.deepEqual(await page.evaluate(() => window.__planned), [MT[0]]);
-    // A building the plan cannot open in has no button: a rival, or your own
-    // that holds another type.
-    for(const key of [HK[1], MT[2]]){
+    // A building the plan cannot open in has no button: a rival, your own that
+    // holds another type or trades already, or your own of another kind.
+    for(const key of [HK[1], MT[2], HK[5], HK[6]]){
       await page.evaluate(key => window.__plan.select(key), key);
       await page.waitForFunction(key => window.__plan.selected === key && document.querySelector('#planHost .site.in'), key);
       assert.equal(await go.isVisible(), false, key);
       assert.equal(await card.locator('a.ss-sl').count(), 0, key);
     }
-    // Your own premises, empty or already the plan's type, take the plan: a
-    // lease signed before the plan picked the place.
+    // Your own premises, empty or a store of the plan's type that never sold,
+    // take the plan: a lease signed before the plan picked the place.
     for(const key of [HK[2], HK[3]]){
       await page.evaluate(key => window.__plan.select(key), key);
       await page.waitForFunction(key => window.__plan.selected === key && document.querySelector('#planHost .site.in'), key);

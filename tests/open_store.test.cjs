@@ -1064,6 +1064,31 @@ test('once the planned store stands at the address the plan keeps what it said a
   assert.deepEqual(kept, {snap: JSON.parse(snap), opened: OPENED});
 });
 
+test("premises rented and set up before the plan picked them keep their figures; a new pick drops the last place's", async t => {
+  const page = await board(t);
+  await planned(page);
+  /* One of your own shops turned into a liquor store that has never sold: a
+     lease signed and the place set up before the plan picked it. */
+  const moved = await page.evaluate(site => {
+    const p = osPlan();
+    const b = premises().buildings.find(x => x.key !== site && x.type === 'retail' && x.status === 'mine' && osOutfit(p, x));
+    Object.assign(D.businesses.find(x => x.key === b.key), {typeSlug: p.type, status: 'retail', hasTraded: false, revenue: 0, opened: 46, lines: []});
+    const before = JSON.stringify(p.snap);
+    osPick(b.key);
+    return {key: b.key, before, after: JSON.stringify(p.snap), want: JSON.stringify(osSnapOf(p, b)), opened: p.opened, step: osStep};
+  }, SITE);
+  assert.ok(moved.key);
+  assert.notEqual(moved.after, 'null', 'its figures are kept at the pick');
+  assert.equal(moved.after, moved.want, "and they are this place's, not the last one's");
+  assert.equal(moved.opened, 46, 'the plan follows the store that stands there');
+  assert.equal(moved.step, 'investment');
+  // Back to the empty shop: nothing of the store is kept.
+  const back = await page.evaluate(site => { const p = osPlan(); osPick(site);
+    return {opened: p.opened, snap: JSON.stringify(p.snap), want: JSON.stringify(osSnapOf(p, osBuilding(site)))}; }, SITE);
+  assert.equal(back.opened, null);
+  assert.equal(back.snap, back.want);
+});
+
 test('just opened with no sales: invested, nothing earned, no day to go yet', async t => {
   const page = await board(t);
   await openedPlan(page, {hasTraded: false, revenue: 0});

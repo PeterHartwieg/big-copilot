@@ -70,6 +70,24 @@ test('a rival that sells the product takes the monopoly bonus and caps the price
   assert.equal(m.lines[0].demand, 100 - Math.floor(300 / 7) - 0.5);
 });
 
+test('a store of the type already at the address is a seller already of what its shelves hold', () => {
+  const facts = JSON.parse(JSON.stringify(RETAIL));
+  facts.market.P.hoods.H = [1, 0, null];
+  const at = lines => model(facts, {businesses: [{key: 'k', typeSlug: 'T', lines}]}).osModel('T', SHOP, {sat: 50, open: HOUR});
+  // Premises set up before the plan, P on the shelves: the market's one seller
+  // is this store, so the plan's demand is a lone seller's, 85.5.
+  assert.equal(at([{slug: 'P', units: 5}]).lines[0].demand, 85.5);
+  // Shelves empty: the game does not count it yet, so the plan adds itself.
+  const added = model(facts).osModel('T', SHOP, {sat: 50, open: HOUR}).lines[0].demand;
+  assert.ok(added < 85.5);
+  assert.equal(at([{slug: 'P', units: 0}]).lines[0].demand, added);
+  // A store of another type at the address, or this type elsewhere, is no part of it.
+  assert.equal(model(facts, {businesses: [{key: 'k', typeSlug: 'U', lines: [{slug: 'P', units: 5}]}]})
+    .osModel('T', SHOP, {sat: 50, open: HOUR}).lines[0].demand, added);
+  assert.equal(model(facts, {businesses: [{key: 'j', typeSlug: 'T', lines: [{slug: 'P', units: 5}]}]})
+    .osModel('T', SHOP, {sat: 50, open: HOUR}).lines[0].demand, added);
+});
+
 test('the borrowing limit: whichever of the bank\'s room and the company\'s means binds', () => {
   const limit = (finance, bank) => model({...RETAIL, finance}).osLoanLimit({term: 240, owed: 0, max: 2000000, ...bank});
   // The bank's own cap less what it is owed.

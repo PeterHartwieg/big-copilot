@@ -7937,6 +7937,30 @@
    ]
   ],
   "decor": {
+   "C1": {
+    "50": {
+     "cost": 2775.0,
+     "floor": "f6ziX3fRZEKK04LyuFsYlw==",
+     "floorPrice": 5,
+     "floors": 225,
+     "score": 50,
+     "wall": "4B8VksD+f0iunv1XsGj78Q==",
+     "wallPrice": 30,
+     "walls": 55
+    }
+   },
+   "C2": {
+    "50": {
+     "cost": 3435.0,
+     "floor": "f6ziX3fRZEKK04LyuFsYlw==",
+     "floorPrice": 5,
+     "floors": 225,
+     "score": 50,
+     "wall": "4B8VksD+f0iunv1XsGj78Q==",
+     "wallPrice": 30,
+     "walls": 77
+    }
+   },
    "M1": {
     "50": {
      "cost": 9195.0,
@@ -8204,6 +8228,12 @@
      "ba:street_fourthavenue#16"
     ]
    },
+   "ba:itemname_industrialfreezer": {
+    "p": 4800.0,
+    "v": [
+     "ba:street_fourthavenue#16"
+    ]
+   },
    "ba:itemname_industrialfridge": {
     "p": 3300.0,
     "v": [
@@ -8326,6 +8356,12 @@
      "ba:street_fourthavenue#16"
     ]
    },
+   "ba:itemname_tobaccoshelf1": {
+    "p": 1895.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
    "ba:itemname_tobaccoshelf3": {
     "p": 1095.0,
     "v": [
@@ -8362,6 +8398,12 @@
     "p": 690.0,
     "v": [
      "ba:street_eleventhstreet#16"
+    ]
+   },
+   "ba:itemname_woodenproductcrate": {
+    "p": 150.0,
+    "v": [
+     "ba:street_fourthavenue#16"
     ]
    }
   },
@@ -10792,9 +10834,135 @@
      0.05
     ],
     "initial": {
+     "C1": 30,
+     "C2": 30,
      "M1": 75
     },
     "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 10470.0,
+      "lines": [
+       [
+        "ba:itemname_concessionsstandregister",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_singlebookshelf",
+        12,
+        "shelf",
+        [
+         "ba:itemname_novel",
+         "ba:itemname_youngnovel",
+         "ba:itemname_motivationalbook",
+         "ba:itemname_technicalmanual",
+         "ba:itemname_picturebook",
+         "ba:itemname_limitededitionbook"
+        ]
+       ]
+      ]
+     },
+     "C2": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 10470.0,
+      "lines": [
+       [
+        "ba:itemname_concessionsstandregister",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_singlebookshelf",
+        12,
+        "shelf",
+        [
+         "ba:itemname_novel",
+         "ba:itemname_youngnovel",
+         "ba:itemname_motivationalbook",
+         "ba:itemname_technicalmanual",
+         "ba:itemname_picturebook",
+         "ba:itemname_limitededitionbook"
+        ]
+       ]
+      ]
+     },
      "M1": {
       "fee": 586000.0,
       "from": null,
@@ -10989,9 +11157,163 @@
      0.05
     ],
     "initial": {
+     "C1": 30,
+     "C2": 30,
      "M1": 75
     },
     "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 20030.0,
+      "lines": [
+       [
+        "ba:itemname_concessionsstandregister",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_changingroom",
+        1,
+        "req",
+        "changingroom"
+       ],
+       [
+        "ba:itemname_changingroom",
+        1,
+        "cap",
+        "changingroom"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_clothingrack",
+        24,
+        "shelf",
+        [
+         "ba:itemname_classiccheapmaleclothing",
+         "ba:itemname_classiccheapfemaleclothing",
+         "ba:itemname_moderncheapmaleclothing",
+         "ba:itemname_moderncheapfemaleclothing",
+         "ba:itemname_classicexpensivemaleclothing",
+         "ba:itemname_classicexpensivefemaleclothing",
+         "ba:itemname_modernexpensivemaleclothing",
+         "ba:itemname_modernexpensivefemaleclothing"
+        ]
+       ]
+      ]
+     },
+     "C2": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 20030.0,
+      "lines": [
+       [
+        "ba:itemname_concessionsstandregister",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_changingroom",
+        1,
+        "req",
+        "changingroom"
+       ],
+       [
+        "ba:itemname_changingroom",
+        1,
+        "cap",
+        "changingroom"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_clothingrack",
+        24,
+        "shelf",
+        [
+         "ba:itemname_classiccheapmaleclothing",
+         "ba:itemname_classiccheapfemaleclothing",
+         "ba:itemname_moderncheapmaleclothing",
+         "ba:itemname_moderncheapfemaleclothing",
+         "ba:itemname_classicexpensivemaleclothing",
+         "ba:itemname_classicexpensivefemaleclothing",
+         "ba:itemname_modernexpensivemaleclothing",
+         "ba:itemname_modernexpensivefemaleclothing"
+        ]
+       ]
+      ]
+     },
      "M1": {
       "fee": 586000.0,
       "from": null,
@@ -11204,9 +11526,215 @@
      0.05
     ],
     "initial": {
+     "C1": 30,
+     "C2": 30,
      "M1": 75
     },
     "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 26370.0,
+      "lines": [
+       [
+        "ba:itemname_cashregister",
+        1,
+        "req",
+        "cashregister"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_cashregister",
+        1,
+        "cap",
+        "cashregister"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_beachtowelextended",
+        1,
+        "dem",
+        "seating"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_industrialcoffeemachine",
+        2,
+        "shelf",
+        [
+         "ba:itemname_cupofcoffee",
+         "ba:itemname_cupoftea"
+        ]
+       ],
+       [
+        "ba:itemname_counter1",
+        2,
+        "shelf",
+        "mount"
+       ],
+       [
+        "ba:itemname_bakeryshowcase",
+        6,
+        "shelf",
+        [
+         "ba:itemname_croissant",
+         "ba:itemname_cupcake",
+         "ba:itemname_donut"
+        ]
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        2,
+        "shelf",
+        [
+         "ba:itemname_sodacan"
+        ]
+       ],
+       [
+        "ba:itemname_icecreamcounter",
+        1,
+        "shelf",
+        [
+         "ba:itemname_icecream"
+        ]
+       ]
+      ]
+     },
+     "C2": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 26370.0,
+      "lines": [
+       [
+        "ba:itemname_cashregister",
+        1,
+        "req",
+        "cashregister"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_cashregister",
+        1,
+        "cap",
+        "cashregister"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_beachtowelextended",
+        1,
+        "dem",
+        "seating"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_industrialcoffeemachine",
+        2,
+        "shelf",
+        [
+         "ba:itemname_cupofcoffee",
+         "ba:itemname_cupoftea"
+        ]
+       ],
+       [
+        "ba:itemname_counter1",
+        2,
+        "shelf",
+        "mount"
+       ],
+       [
+        "ba:itemname_bakeryshowcase",
+        6,
+        "shelf",
+        [
+         "ba:itemname_croissant",
+         "ba:itemname_cupcake",
+         "ba:itemname_donut"
+        ]
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        2,
+        "shelf",
+        [
+         "ba:itemname_sodacan"
+        ]
+       ],
+       [
+        "ba:itemname_icecreamcounter",
+        1,
+        "shelf",
+        [
+         "ba:itemname_icecream"
+        ]
+       ]
+      ]
+     },
      "M1": {
       "fee": 586000.0,
       "from": null,
@@ -11423,9 +11951,123 @@
      0.05
     ],
     "initial": {
+     "C1": 30,
+     "C2": 30,
      "M1": 75
     },
     "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 65350.0,
+      "lines": [
+       [
+        "ba:itemname_checkoutcounterleft",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_productdisplaytable",
+        18,
+        "shelf",
+        [
+         "ba:itemname_smartphone1",
+         "ba:itemname_smartphone2",
+         "ba:itemname_smartwatch1",
+         "ba:itemname_smartwatch2",
+         "ba:itemname_earbuds01",
+         "ba:itemname_headphones01"
+        ]
+       ]
+      ]
+     },
+     "C2": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 65350.0,
+      "lines": [
+       [
+        "ba:itemname_checkoutcounterleft",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_productdisplaytable",
+        18,
+        "shelf",
+        [
+         "ba:itemname_smartphone1",
+         "ba:itemname_smartphone2",
+         "ba:itemname_smartwatch1",
+         "ba:itemname_smartwatch2",
+         "ba:itemname_earbuds01",
+         "ba:itemname_headphones01"
+        ]
+       ]
+      ]
+     },
      "M1": {
       "fee": 586000.0,
       "from": null,
@@ -11604,9 +12246,255 @@
      0.1
     ],
     "initial": {
+     "C1": 30,
+     "C2": 30,
      "M1": 75
     },
     "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 52922.0,
+      "lines": [
+       [
+        "ba:itemname_cashregister",
+        1,
+        "req",
+        "cashregister"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_cashregister",
+        1,
+        "cap",
+        "cashregister"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_beachtowelextended",
+        1,
+        "dem",
+        "seating"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_industrialgrill",
+        4,
+        "shelf",
+        [
+         "ba:itemname_burger",
+         "ba:itemname_kabob"
+        ]
+       ],
+       [
+        "ba:itemname_counter1",
+        4,
+        "shelf",
+        "mount"
+       ],
+       [
+        "ba:itemname_industrialfryermachine",
+        1,
+        "shelf",
+        [
+         "ba:itemname_frenchfries"
+        ]
+       ],
+       [
+        "ba:itemname_hotdoggrill",
+        1,
+        "shelf",
+        [
+         "ba:itemname_hotdog"
+        ]
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "shelf",
+        "mount"
+       ],
+       [
+        "ba:itemname_pizzaoven",
+        2,
+        "shelf",
+        [
+         "ba:itemname_pizza"
+        ]
+       ],
+       [
+        "ba:itemname_saladbar",
+        2,
+        "shelf",
+        [
+         "ba:itemname_salad"
+        ]
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        2,
+        "shelf",
+        [
+         "ba:itemname_sodacan"
+        ]
+       ]
+      ]
+     },
+     "C2": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 52922.0,
+      "lines": [
+       [
+        "ba:itemname_cashregister",
+        1,
+        "req",
+        "cashregister"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_cashregister",
+        1,
+        "cap",
+        "cashregister"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_beachtowelextended",
+        1,
+        "dem",
+        "seating"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_industrialgrill",
+        4,
+        "shelf",
+        [
+         "ba:itemname_burger",
+         "ba:itemname_kabob"
+        ]
+       ],
+       [
+        "ba:itemname_counter1",
+        4,
+        "shelf",
+        "mount"
+       ],
+       [
+        "ba:itemname_industrialfryermachine",
+        1,
+        "shelf",
+        [
+         "ba:itemname_frenchfries"
+        ]
+       ],
+       [
+        "ba:itemname_hotdoggrill",
+        1,
+        "shelf",
+        [
+         "ba:itemname_hotdog"
+        ]
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "shelf",
+        "mount"
+       ],
+       [
+        "ba:itemname_pizzaoven",
+        2,
+        "shelf",
+        [
+         "ba:itemname_pizza"
+        ]
+       ],
+       [
+        "ba:itemname_saladbar",
+        2,
+        "shelf",
+        [
+         "ba:itemname_salad"
+        ]
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        2,
+        "shelf",
+        [
+         "ba:itemname_sodacan"
+        ]
+       ]
+      ]
+     },
      "M1": {
       "fee": 586000.0,
       "from": null,
@@ -11839,9 +12727,115 @@
      0.05
     ],
     "initial": {
+     "C1": 30,
+     "C2": 30,
      "M1": 75
     },
     "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 7990.0,
+      "lines": [
+       [
+        "ba:itemname_concessionsstandregister",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_productdisplaystandtiered",
+        4,
+        "shelf",
+        [
+         "ba:itemname_cheapflower",
+         "ba:itemname_expensiveflower"
+        ]
+       ]
+      ]
+     },
+     "C2": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 7990.0,
+      "lines": [
+       [
+        "ba:itemname_concessionsstandregister",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_productdisplaystandtiered",
+        4,
+        "shelf",
+        [
+         "ba:itemname_cheapflower",
+         "ba:itemname_expensiveflower"
+        ]
+       ]
+      ]
+     },
      "M1": {
       "fee": 586000.0,
       "from": null,
@@ -12014,9 +13008,195 @@
      0.1
     ],
     "initial": {
+     "C1": 30,
+     "C2": 30,
      "M1": 75
     },
     "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 14100.0,
+      "lines": [
+       [
+        "ba:itemname_concessionsstandregister",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_flatwoodendisplaystand",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_standingdigitalscale",
+        1,
+        "req",
+        "scale"
+       ],
+       [
+        "ba:itemname_flatwoodendisplaystand",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_standingdigitalscale",
+        1,
+        "cap",
+        "scale"
+       ],
+       [
+        "ba:itemname_flatwoodendisplaystand",
+        1,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_woodenproductcrate",
+        12,
+        "shelf",
+        [
+         "ba:itemname_apple",
+         "ba:itemname_banana",
+         "ba:itemname_carrot",
+         "ba:itemname_lettuce",
+         "ba:itemname_pear",
+         "ba:itemname_tomato"
+        ]
+       ],
+       [
+        "ba:itemname_flatwoodendisplaystand",
+        12,
+        "shelf",
+        "mount"
+       ]
+      ]
+     },
+     "C2": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 14100.0,
+      "lines": [
+       [
+        "ba:itemname_concessionsstandregister",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_flatwoodendisplaystand",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_standingdigitalscale",
+        1,
+        "req",
+        "scale"
+       ],
+       [
+        "ba:itemname_flatwoodendisplaystand",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_standingdigitalscale",
+        1,
+        "cap",
+        "scale"
+       ],
+       [
+        "ba:itemname_flatwoodendisplaystand",
+        1,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_woodenproductcrate",
+        12,
+        "shelf",
+        [
+         "ba:itemname_apple",
+         "ba:itemname_banana",
+         "ba:itemname_carrot",
+         "ba:itemname_lettuce",
+         "ba:itemname_pear",
+         "ba:itemname_tomato"
+        ]
+       ],
+       [
+        "ba:itemname_flatwoodendisplaystand",
+        12,
+        "shelf",
+        "mount"
+       ]
+      ]
+     },
      "M1": {
       "fee": 586000.0,
       "from": null,
@@ -12223,9 +13403,179 @@
      0.05
     ],
     "initial": {
+     "C1": 30,
+     "C2": 30,
      "M1": 75
     },
     "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": "ba:street_broadwaystreet#19",
+      "furniture": 16970.0,
+      "lines": [
+       [
+        "ba:itemname_concessionsstandregister",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_productpanel",
+        6,
+        "shelf",
+        [
+         "ba:itemname_cheapgift",
+         "ba:itemname_umbrella"
+        ]
+       ],
+       [
+        "ba:itemname_roundedshelf",
+        2,
+        "shelf",
+        [
+         "ba:itemname_expensivegift"
+        ]
+       ],
+       [
+        "ba:itemname_productdisplaystandtiered",
+        4,
+        "shelf",
+        [
+         "ba:itemname_cheapflower",
+         "ba:itemname_expensiveflower"
+        ]
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        4,
+        "shelf",
+        [
+         "ba:itemname_sodacan",
+         "ba:itemname_energydrink"
+        ]
+       ]
+      ]
+     },
+     "C2": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 16970.0,
+      "lines": [
+       [
+        "ba:itemname_concessionsstandregister",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_productpanel",
+        6,
+        "shelf",
+        [
+         "ba:itemname_cheapgift",
+         "ba:itemname_umbrella"
+        ]
+       ],
+       [
+        "ba:itemname_roundedshelf",
+        2,
+        "shelf",
+        [
+         "ba:itemname_expensivegift"
+        ]
+       ],
+       [
+        "ba:itemname_productdisplaystandtiered",
+        4,
+        "shelf",
+        [
+         "ba:itemname_cheapflower",
+         "ba:itemname_expensiveflower"
+        ]
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        4,
+        "shelf",
+        [
+         "ba:itemname_sodacan",
+         "ba:itemname_energydrink"
+        ]
+       ]
+      ]
+     },
      "M1": {
       "fee": 586000.0,
       "from": null,
@@ -12450,9 +13800,217 @@
      0.65
     ],
     "initial": {
+     "C1": 30,
+     "C2": 30,
      "M1": 75
     },
     "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 24205.0,
+      "lines": [
+       [
+        "ba:itemname_fitball",
+        1,
+        "req",
+        "workoutmachine"
+       ],
+       [
+        "ba:itemname_fitball",
+        14,
+        "cap",
+        "workoutmachine"
+       ],
+       [
+        "ba:itemname_gymlockers",
+        1,
+        "req",
+        "gymlockers"
+       ],
+       [
+        "ba:itemname_gymlockers",
+        2,
+        "cap",
+        "gymlockers"
+       ],
+       [
+        "ba:itemname_publicshower",
+        1,
+        "req",
+        "publicshower"
+       ],
+       [
+        "ba:itemname_publicshower",
+        2,
+        "cap",
+        "publicshower"
+       ],
+       [
+        "ba:itemname_fitnessplanningboard",
+        1,
+        "req",
+        "fitnessplanningboard"
+       ],
+       [
+        "ba:itemname_fitnessplanningboard",
+        1,
+        "cap",
+        "fitnessplanningboard"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_pullupbar",
+        1,
+        "dem",
+        "workoutvariety"
+       ],
+       [
+        "ba:itemname_boxingbag",
+        1,
+        "dem",
+        "workoutvariety"
+       ],
+       [
+        "ba:itemname_fitnesstrampoline",
+        1,
+        "dem",
+        "workoutvariety"
+       ],
+       [
+        "ba:itemname_loadedbarbell",
+        1,
+        "dem",
+        "workoutvariety"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ]
+      ]
+     },
+     "C2": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 24205.0,
+      "lines": [
+       [
+        "ba:itemname_fitball",
+        1,
+        "req",
+        "workoutmachine"
+       ],
+       [
+        "ba:itemname_fitball",
+        14,
+        "cap",
+        "workoutmachine"
+       ],
+       [
+        "ba:itemname_gymlockers",
+        1,
+        "req",
+        "gymlockers"
+       ],
+       [
+        "ba:itemname_gymlockers",
+        2,
+        "cap",
+        "gymlockers"
+       ],
+       [
+        "ba:itemname_publicshower",
+        1,
+        "req",
+        "publicshower"
+       ],
+       [
+        "ba:itemname_publicshower",
+        2,
+        "cap",
+        "publicshower"
+       ],
+       [
+        "ba:itemname_fitnessplanningboard",
+        1,
+        "req",
+        "fitnessplanningboard"
+       ],
+       [
+        "ba:itemname_fitnessplanningboard",
+        1,
+        "cap",
+        "fitnessplanningboard"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_pullupbar",
+        1,
+        "dem",
+        "workoutvariety"
+       ],
+       [
+        "ba:itemname_boxingbag",
+        1,
+        "dem",
+        "workoutvariety"
+       ],
+       [
+        "ba:itemname_fitnesstrampoline",
+        1,
+        "dem",
+        "workoutvariety"
+       ],
+       [
+        "ba:itemname_loadedbarbell",
+        1,
+        "dem",
+        "workoutvariety"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ]
+      ]
+     },
      "M1": {
       "fee": 586000.0,
       "from": null,
@@ -12638,9 +14196,175 @@
      0.05
     ],
     "initial": {
+     "C1": 30,
+     "C2": 30,
      "M1": 75
     },
     "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 22240.0,
+      "lines": [
+       [
+        "ba:itemname_cashregister",
+        1,
+        "req",
+        "cashregister"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_cashregister",
+        1,
+        "cap",
+        "cashregister"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_hairdresserchair",
+        1,
+        "req",
+        "hairdresserchair"
+       ],
+       [
+        "ba:itemname_hairdresserchair",
+        5,
+        "cap",
+        "hairdresserchair"
+       ],
+       [
+        "ba:itemname_hairdresserheadwash",
+        1,
+        "req",
+        "headwasher"
+       ],
+       [
+        "ba:itemname_hairdresserheadwash",
+        2,
+        "cap",
+        "headwasher"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_hairdressershelf",
+        4,
+        "shelf",
+        [
+         "ba:itemname_haircareproduct",
+         "ba:itemname_haircareproduct"
+        ]
+       ]
+      ]
+     },
+     "C2": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 22240.0,
+      "lines": [
+       [
+        "ba:itemname_cashregister",
+        1,
+        "req",
+        "cashregister"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_cashregister",
+        1,
+        "cap",
+        "cashregister"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "cap",
+        "mount"
+       ],
+       [
+        "ba:itemname_hairdresserchair",
+        1,
+        "req",
+        "hairdresserchair"
+       ],
+       [
+        "ba:itemname_hairdresserchair",
+        5,
+        "cap",
+        "hairdresserchair"
+       ],
+       [
+        "ba:itemname_hairdresserheadwash",
+        1,
+        "req",
+        "headwasher"
+       ],
+       [
+        "ba:itemname_hairdresserheadwash",
+        2,
+        "cap",
+        "headwasher"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_hairdressershelf",
+        4,
+        "shelf",
+        [
+         "ba:itemname_haircareproduct",
+         "ba:itemname_haircareproduct"
+        ]
+       ]
+      ]
+     },
      "M1": {
       "fee": 586000.0,
       "from": null,
@@ -12817,9 +14541,127 @@
      0.05
     ],
     "initial": {
+     "C1": 30,
+     "C2": 30,
      "M1": 75
     },
     "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 41870.0,
+      "lines": [
+       [
+        "ba:itemname_concessionsstandregister",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_jewelryfloorshowcase",
+        4,
+        "shelf",
+        [
+         "ba:itemname_cheapjewelry",
+         "ba:itemname_expensivejewelry"
+        ]
+       ]
+      ]
+     },
+     "C2": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 41870.0,
+      "lines": [
+       [
+        "ba:itemname_concessionsstandregister",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_jewelryfloorshowcase",
+        4,
+        "shelf",
+        [
+         "ba:itemname_cheapjewelry",
+         "ba:itemname_expensivejewelry"
+        ]
+       ]
+      ]
+     },
      "M1": {
       "fee": 586000.0,
       "from": null,
@@ -12986,9 +14828,165 @@
      0.2
     ],
     "initial": {
+     "C1": 30,
+     "C2": 30,
      "M1": 75
     },
     "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 24970.0,
+      "lines": [
+       [
+        "ba:itemname_concessionsstandregister",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_wineshelf",
+        3,
+        "shelf",
+        [
+         "ba:itemname_bottleofwine"
+        ]
+       ],
+       [
+        "ba:itemname_drinksshelf",
+        12,
+        "shelf",
+        [
+         "ba:itemname_beer",
+         "ba:itemname_whisky",
+         "ba:itemname_margarita",
+         "ba:itemname_martini"
+        ]
+       ],
+       [
+        "ba:itemname_tobaccoshelf1",
+        2,
+        "shelf",
+        [
+         "ba:itemname_cigar",
+         "ba:itemname_cigarette"
+        ]
+       ]
+      ]
+     },
+     "C2": {
+      "fee": 131850.0,
+      "from": "ba:street_eighthstreet#5",
+      "furniture": 24970.0,
+      "lines": [
+       [
+        "ba:itemname_concessionsstandregister",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_wineshelf",
+        3,
+        "shelf",
+        [
+         "ba:itemname_bottleofwine"
+        ]
+       ],
+       [
+        "ba:itemname_drinksshelf",
+        12,
+        "shelf",
+        [
+         "ba:itemname_beer",
+         "ba:itemname_whisky",
+         "ba:itemname_margarita",
+         "ba:itemname_martini"
+        ]
+       ],
+       [
+        "ba:itemname_tobaccoshelf1",
+        2,
+        "shelf",
+        [
+         "ba:itemname_cigar",
+         "ba:itemname_cigarette"
+        ]
+       ]
+      ]
+     },
      "M1": {
       "fee": 586000.0,
       "from": null,
@@ -13194,9 +15192,133 @@
      0.9
     ],
     "initial": {
+     "C1": 30,
+     "C2": 30,
      "M1": 75
     },
     "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 11270.0,
+      "lines": [
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "req",
+        "loudspeaker"
+       ],
+       [
+        "ba:itemname_djbooth",
+        1,
+        "req",
+        "djbooth"
+       ],
+       [
+        "ba:itemname_coatcheckleft",
+        1,
+        "req",
+        "coatcheck"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_woodencocktailbarbeershelf",
+        1,
+        "shelf",
+        [
+         "ba:itemname_beer"
+        ]
+       ],
+       [
+        "ba:itemname_woodencocktailbardrinkscounter",
+        3,
+        "shelf",
+        [
+         "ba:itemname_martini",
+         "ba:itemname_margarita",
+         "ba:itemname_whisky"
+        ]
+       ]
+      ]
+     },
+     "C2": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 11270.0,
+      "lines": [
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "req",
+        "loudspeaker"
+       ],
+       [
+        "ba:itemname_djbooth",
+        1,
+        "req",
+        "djbooth"
+       ],
+       [
+        "ba:itemname_coatcheckleft",
+        1,
+        "req",
+        "coatcheck"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_woodencocktailbarbeershelf",
+        1,
+        "shelf",
+        [
+         "ba:itemname_beer"
+        ]
+       ],
+       [
+        "ba:itemname_woodencocktailbardrinkscounter",
+        3,
+        "shelf",
+        [
+         "ba:itemname_martini",
+         "ba:itemname_margarita",
+         "ba:itemname_whisky"
+        ]
+       ]
+      ]
+     },
      "M1": {
       "fee": 586000.0,
       "from": null,
@@ -13380,9 +15502,187 @@
      0.1
     ],
     "initial": {
+     "C1": 30,
+     "C2": 30,
      "M1": 75
     },
     "layouts": {
+     "C1": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 33170.0,
+      "lines": [
+       [
+        "ba:itemname_concessionsstandregister",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_industrialfridge",
+        2,
+        "shelf",
+        [
+         "ba:itemname_freshfood"
+        ]
+       ],
+       [
+        "ba:itemname_industrialfreezer",
+        2,
+        "shelf",
+        [
+         "ba:itemname_frozenfood",
+         "ba:itemname_icecream"
+        ]
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        4,
+        "shelf",
+        [
+         "ba:itemname_sodacan",
+         "ba:itemname_energydrink"
+        ]
+       ],
+       [
+        "ba:itemname_fruitpallet",
+        6,
+        "shelf",
+        [
+         "ba:itemname_apple",
+         "ba:itemname_banana",
+         "ba:itemname_carrot",
+         "ba:itemname_lettuce",
+         "ba:itemname_pear",
+         "ba:itemname_tomato"
+        ]
+       ]
+      ]
+     },
+     "C2": {
+      "fee": 131850.0,
+      "from": null,
+      "furniture": 33170.0,
+      "lines": [
+       [
+        "ba:itemname_concessionsstandregister",
+        1,
+        "req",
+        "pointofsales"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
+       ],
+       [
+        "ba:itemname_stackofshoppingbaskets",
+        1,
+        "req",
+        "stackofshoppingbaskets"
+       ],
+       [
+        "ba:itemname_loudspeaker4",
+        1,
+        "dem",
+        "music"
+       ],
+       [
+        "ba:itemname_uniformlocker",
+        1,
+        "dem",
+        "employeeuniforms"
+       ],
+       [
+        "ba:itemname_toiletstall",
+        1,
+        "dem",
+        "toilet+privacy"
+       ],
+       [
+        "ba:itemname_sink",
+        1,
+        "dem",
+        "sink"
+       ],
+       [
+        "ba:itemname_industrialfridge",
+        2,
+        "shelf",
+        [
+         "ba:itemname_freshfood"
+        ]
+       ],
+       [
+        "ba:itemname_industrialfreezer",
+        2,
+        "shelf",
+        [
+         "ba:itemname_frozenfood",
+         "ba:itemname_icecream"
+        ]
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        4,
+        "shelf",
+        [
+         "ba:itemname_sodacan",
+         "ba:itemname_energydrink"
+        ]
+       ],
+       [
+        "ba:itemname_fruitpallet",
+        6,
+        "shelf",
+        [
+         "ba:itemname_apple",
+         "ba:itemname_banana",
+         "ba:itemname_carrot",
+         "ba:itemname_lettuce",
+         "ba:itemname_pear",
+         "ba:itemname_tomato"
+        ]
+       ]
+      ]
+     },
      "M1": {
       "fee": 586000.0,
       "from": null,

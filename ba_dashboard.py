@@ -16293,7 +16293,7 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
         own = [b for b in businesses if b.get("typeSlug") == slug and b.get("status") != "vacant"]
         layouts, initial = {}, {}
         for layout in _in_order({plan_layout(b) for b in buildings if b["type"] == cat and plan_layout(b)
-                                 and b["status"] in ("vacant", "rival")}):
+                                 and b["status"] in ("vacant", "rival", "mine")}):
             sample = next(b for b in buildings if b["type"] == cat and plan_layout(b) == layout)
             source = None
             same = [b for b in own if b["key"] in regs and plan_layout(_building_row(regs[b["key"]])) == layout]
@@ -33826,14 +33826,16 @@ function osPrice(item, hood){
   const ref = row[2] ? Math.min(m.p, row[2]) : m.p;
   return {price: ref * (h.idx + (mono ? 0.3 : 0)), mono};
 }
-/* A new shop counts itself among the sellers; an existing one already is. */
+/* A new shop counts itself among the sellers; an existing one already is.
+   `existing` may also say so item by item (osModel()). */
 function osDemand(item, hood, existing){
   const m = (osFacts().market || {})[item];
   if(!m) return 0;
   if(!m.d) return 100;
   if(m.only && !m.only.includes(hood)) return 0;
   const row = (m.hoods || {})[hood] || [0];
-  return osDemandWith((row[0] || 0) + (existing ? 0 : 1), m.p);
+  const counted = typeof existing === "function" ? existing(item) : existing;
+  return osDemandWith((row[0] || 0) + (counted ? 0 : 1), m.p);
 }
 /* The satisfaction the plan settles at: the player's own shops of the type,
    their median, else a well-run shop's. */
@@ -33860,6 +33862,13 @@ const osPromo = (b, h, o) => o.promoTotal ?? Math.min(100, Math.round((b.traffic
 function osModel(slug, b, o = {}){
   const F = osFacts(), t = osType(slug), g = F.game || {}, h = (F.hoods || {})[b.hood];
   if(!t || !h) return null;
+  /* A store of the type already at the address (premises set up before the
+     plan picked them) is a seller already, as the game counts providers, of
+     its services and of whatever its shelves hold. */
+  if(o.existing === undefined){
+    const here = (D.businesses || []).find(x => x.key === b.key && x.typeSlug === slug);
+    if(here) o = {...o, existing: p => !!(F.market[p] || {}).s || (here.lines || []).some(l => l.slug === p && l.units > 0)};
+  }
   if(t.model === "office") return osOfficeModel(slug, t, b, h, o);
   if(t.model !== "retail") return null;
   const cap = osCap(b);
@@ -34260,8 +34269,15 @@ function osShowFinder(plan){
 function osPick(key){
   const plan = osPlan();
   if(!plan) return;
+  /* Another place: what the plan kept for the last one is not this one's. */
+  if(plan.key !== key){ plan.snap = null; plan.opened = null; plan.paid = false; }
   plan.key = key;
   if(!plan.hood){ const b = osBuilding(key); if(b) plan.hood = b.hood; }
+  /* Premises rented and set up as the planned type before the plan picked
+     them: their store has never sold, so its figures are kept now, as an
+     empty address's are on the next draw (osSnapTake()). */
+  const at = osOpenedAt(plan), b = osBuilding(key);
+  if(!plan.snap && at && !at.hasTraded && b) plan.snap = osSnapOf(plan, b);
   osStep = "investment";
   osSave();
   drawOpenStore();
