@@ -14714,7 +14714,8 @@ class History:
 
     def payback(self, character: str) -> dict:
         """What the statements forget after 61 days, kept for _payback(): per
-        site key, {"opened", "bill", "firm": [day, investment], "self": [...]},
+        site key, {"opened", "bill", "vehicleFees" ({vehicle id: delivery
+        paid}), "firm": [day, investment], "self": [...]},
         and for a trading site its run from the opening (_payback_trail()):
         "trail" ([day, profit, sales] from the opening, capped), "before" (the
         lease's cost before the opening), "since" (the first day the record
@@ -15215,15 +15216,18 @@ def item_price(name: str, paid, prices: dict | None = None) -> float:
     return float((table.get(name) or {}).get("p") or 0)
 
 
-def setup_cost(items, materials, square_metres, deposit, prices: dict | None = None) -> dict:
+def setup_cost(items, materials, square_metres, deposit, prices: dict | None = None,
+               vehicles: float = 0) -> dict:
     """What a store costs to set up, in both install modes.
 
     `items` are (item name, price paid) pairs, the paid price 0 or None where
     nothing was paid yet; `materials` the MaterialIDs of the wall and floor
     slots; `square_metres` the building's floor (ba_buildings.json `m`). A store
     that exists passes its save's furniture and slots and its lastDeposit; a
-    planned one passes its shopping list and its deposit estimate. `firm` and
-    `self` are the investment in each mode, deposit included.
+    planned one passes its shopping list and its deposit estimate. `vehicles`
+    is what the business's own vehicles cost, delivery included
+    (_site_vehicles()). `firm` and `self` are the investment in each mode,
+    deposit and vehicles included.
     """
     prices = prices if prices is not None else load_item_prices()
     furniture = sum(item_price(name, paid, prices) for name, paid in items)
@@ -15231,18 +15235,78 @@ def setup_cost(items, materials, square_metres, deposit, prices: dict | None = N
     walls = sum(float((table.get(m) or {}).get("p") or 0) for m in materials)
     fee = INSTALL_FEE_PER_M2 * float(square_metres or 0)
     deposit = float(deposit or 0)
+    vehicles = float(vehicles or 0)
     return {
         "furniture": money(furniture),
         "materials": money(walls),
         "fee": money(fee),
         "deposit": money(deposit),
-        "firm": money(furniture + fee + deposit),
-        "self": money(furniture + walls + deposit),
+        "vehicles": money(vehicles),
+        "firm": money(furniture + fee + deposit + vehicles),
+        "self": money(furniture + walls + deposit + vehicles),
     }
 
 
-def _site_setup(save: Save, registration: dict, addr, prices: dict) -> dict:
-    """setup_cost() for a rented building, read off its registration."""
+def _vehicle_type(vehicle: dict):
+    """A vehicle instance's type slug; None in a save too old to name it."""
+    name = (vehicle or {}).get("vehicleTypeName")
+    return name if isinstance(name, str) else None
+
+
+def _vehicle_deliveries(save: Save, table: dict) -> dict:
+    """What was paid to have a vehicle delivered, per vehicle id, for the
+    purchases the transaction log still holds (about a week).
+
+    A purchase is ba:transaction_vehiclebought, its transactionData naming the
+    type (`vehicleName`) but neither the vehicle nor where it went: a Freight
+    Truck T1 bought for delivery costs $103,000 against its $98,000 price, one
+    collected at the dealer the price alone. VehicleInstances grows in the
+    order vehicles are bought, so the log's purchases of a type, oldest first,
+    are the last instances of that type in the list; the excess over the
+    type's price (ba_store_rules.json `vehicles`) is the delivery.
+    """
+    bought = collections.defaultdict(list)
+    for t in save.items(save.root.get("Transactions")):
+        if not isinstance(t, dict) or t.get("transactionType") != "ba:transaction_vehiclebought":
+            continue
+        data = {e.get("$k"): e.get("$v") for e in save.items(t.get("transactionData")) if isinstance(e, dict)}
+        kind = data.get("vehicleName")
+        if isinstance(kind, str) and kind in table:
+            bought[kind].append(-float(t.get("amount") or 0) - float(table[kind]))
+    by_type = collections.defaultdict(list)
+    for v in save.items(save.root.get("VehicleInstances")):
+        if isinstance(v, dict) and v.get("id") and _vehicle_type(v) in bought:
+            by_type[_vehicle_type(v)].append(v["id"])
+    out = {}
+    for kind, fees in bought.items():
+        ids = by_type[kind][-len(fees):]
+        for vid, fee in zip(ids, fees[len(fees) - len(ids):]):
+            if fee > 0:
+                out[vid] = money(fee)
+    return out
+
+
+def _site_vehicles(save: Save, registration: dict, table: dict) -> dict:
+    """The vehicles a business holds, {vehicle id: price by type}.
+
+    The tie is the building registration's `vehicleSlots`, a warehouse's or a
+    factory's parking (Entities.VehicleSlot: `vehicleInstanceId`, and the
+    `employeeDriverId` driving it), each id one of the save's VehicleInstances.
+    A vehicle in no slot, such as the player's own car, belongs to no
+    business. A type with no price (a hand truck, a flatbed) counts nothing.
+    """
+    instances = {v.get("id"): v for v in save.items(save.root.get("VehicleInstances")) if isinstance(v, dict)}
+    out = {}
+    for slot in save.items(registration.get("vehicleSlots")):
+        vid = slot.get("vehicleInstanceId") if isinstance(slot, dict) else None
+        if vid and vid in instances:
+            out[vid] = float(table.get(_vehicle_type(instances[vid])) or 0)
+    return out
+
+
+def _site_setup(save: Save, registration: dict, addr, prices: dict, vehicles: float = 0) -> dict:
+    """setup_cost() for a rented building, read off its registration;
+    `vehicles` the business's own, as _payback() prices them."""
     items = []
     # Stacked items are top-level instances too; stackedItems only points at them.
     for holder in save.items(registration.get("itemInstances")):
@@ -15255,7 +15319,7 @@ def _site_setup(save: Save, registration: dict, addr, prices: dict) -> dict:
             if isinstance(slot, dict) and slot.get("MaterialID"):
                 materials.append(slot["MaterialID"])
     building = load_buildings().get(addr) or {}
-    return setup_cost(items, materials, building.get("m"), registration.get("lastDeposit"), prices)
+    return setup_cost(items, materials, building.get("m"), registration.get("lastDeposit"), prices, vehicles)
 
 
 def _install_bills(save: Save, names: Names, addresses: dict) -> dict:
@@ -15463,6 +15527,9 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
     row only when it sells something (a factory selling outside the company);
     one that sells nothing has nothing to pay anything back with.
 
+    A site's investment takes in the vehicles it holds (_site_vehicles()), so
+    a chain's counts its depots' and factories' trucks.
+
     The history keeps what the statements forget. An older save of the same
     character reads it and changes nothing, as the ledger does, so going back
     to an earlier save and forward again loses no remembered day.
@@ -15471,6 +15538,8 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
     regs = {site_key((b["StreetName"], b["StreetNumber"])): b for b in buildings}
     addresses = {key: (b["StreetName"], b["StreetNumber"]) for key, b in regs.items()}
     bills = _install_bills(save, names, addresses)
+    vehicle_prices = load_store_rules().get("vehicles") or {}
+    deliveries = _vehicle_deliveries(save, vehicle_prices)
     start = stmt_history[0][0] if stmt_history else None
     last_day = stmt_history[-1][0] if stmt_history else None
     # Fewer statements than the game keeps: nothing has dropped out yet.
@@ -15511,7 +15580,17 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
         memory = kept_sites.get(key)
         if not isinstance(memory, dict) or memory.get("opened") != opened:
             memory = {"opened": opened}
-        cost = _site_setup(save, regs[key], addr, prices)
+        # The business's own vehicles at their type's price, and the delivery
+        # paid for one where the log showed it, remembered after it drops out.
+        held = _site_vehicles(save, regs[key], vehicle_prices)
+        kept_fees = memory.get("vehicleFees") if isinstance(memory.get("vehicleFees"), dict) else {}
+        fees = {vid: deliveries.get(vid, kept_fees.get(vid)) for vid in held}
+        fees = {vid: fee for vid, fee in fees.items() if isinstance(fee, (int, float)) and fee > 0}
+        if fees:
+            memory["vehicleFees"] = fees
+        else:
+            memory.pop("vehicleFees", None)
+        cost = _site_setup(save, regs[key], addr, prices, sum(held.values()) + sum(fees.values()))
         # The firm's real bill where the log still holds it, and remembered
         # after it drops out, so the investment does not jump a week later.
         # Only the bill that set the site up counts: the lease starts inside
@@ -15526,7 +15605,7 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
         billed = memory.get("bill") or 0
         if billed:
             cost["billed"] = money(billed)
-            cost["firm"] = money(cost["deposit"] + billed)
+            cost["firm"] = money(cost["deposit"] + billed + cost["vehicles"])
         kept_sites[key] = memory
         series[key] = days
         row = {"costCentre": b["costCentre"], "cost": cost}
@@ -15570,7 +15649,7 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
                            and not any(sales > 0 for k in members for _d, _p, sales in series[k])):
             continue
         cost = {field: money(sum(sites[k]["cost"].get(field, 0) for k in members))
-                for field in ("furniture", "materials", "fee", "deposit", "billed", "firm", "self")}
+                for field in ("furniture", "materials", "fee", "deposit", "vehicles", "billed", "firm", "self")}
         # Every member's whole run known (the record's, or a kept trail): the
         # chain's is their sum and exact. Otherwise the record's days, and
         # the record's own reach.

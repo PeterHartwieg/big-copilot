@@ -1427,6 +1427,11 @@ test('a cost centre\'s row is no payback; a plan kept before its figures were co
   await page.evaluate(() => { delete osPlan().snap; drawOpenStore(); });
   assert.match(await page.locator('#osBody').innerText(), enRe('gr.os.roi.live2'));
   assert.deepEqual((await pvsa(page)).map(r => r[0].split(' ')[0]), ['gr.os.roi.furn', 'gr.os.inv.fee', 'gr.os.inv.deposit', 'gr.os.inv.total'].map(k => en(k).split(' ')[0]));
+  // A store that has a vehicle of its own since: a row of its own, no plan figure.
+  await page.evaluate(site => { const c = D.payback.sites[site].cost; c.vehicles = 98000; c.firm += 98000; drawOpenStore(); }, SITE);
+  const vehicles = await pvRow(page, en('gr.os.roi.vehicles'));
+  assert.ok(vehicles, 'a Vehicles row');
+  assert.deepEqual(vehicles.slice(-3), ['–', '$98,000', '']);
   await page.evaluate(site => { D.payback.sites[site] = {costCentre: true, cost: {firm: 1, self: 1}, exact: true, opened: 30, profit: -5}; drawOpenStore(); }, SITE);
   assert.match(await page.locator('#osBody').innerText(), textRe('gr.os.roi.norow', {address: '9 Broadway Street'}, {}));
 });
