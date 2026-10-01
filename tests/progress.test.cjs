@@ -5,6 +5,7 @@
 // taken in again, changed the way the game would hold it.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe, textRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -101,11 +102,11 @@ test('a figure kept by the previous board has no basis: Needs review, out of eve
   assert.deepEqual(await row(), [15000, true, null], 'the figure is kept, and asks for a review');
   assert.equal(await page.evaluate(() => gwImportPlan(null).some(l => l.r.slug === 'flour')), false, 'never written as it stands');
   // The Changes row and the card say so.
-  assert.match(await page.locator('#secChanges .sbc-row', {hasText: 'Flour'}).first().textContent(), /Needs review/);
+  assert.match(await page.locator('#secChanges .sbc-row', {hasText: 'Flour'}).first().textContent(), enRe("sb.st.review"));
   await page.evaluate(() => { sbSelOff = false; sbSel = {s: 0, slug: 'flour'}; drawImportsView(); wireAll(); });
-  assert.match(await page.locator('#sbCard .sbi-basis').textContent(), /kept from before the board recorded a basis/);
+  assert.match(await page.locator('#sbCard .sbi-basis').textContent(), textRe("sb.card.basis.review"));
   // The copied line says it too.
-  assert.match(await page.evaluate(() => orderChecklistText(sbData().rows, 'T')), /Flour: 14000 -> 15000 units\/week\..*review it first/);
+  assert.match(await page.evaluate(() => orderChecklistText(sbData().rows, 'T')), new RegExp(enRe("sb.ck.copy.row", {item: "Flour", change: en("sb.ck.copy.weekly", {from: 14000, n: 15000})}).source + ".*" + enRe("sb.ck.basis.unknown").source));
   // Kept for the basis on screen: an ordinary figure of the player's, written like any other.
   await page.locator('#sbCard [data-imp-keep]').click();
   assert.deepEqual(await row(), [15000, false, 'cap']);
@@ -161,9 +162,10 @@ test('the recurring order and the one-time catch-up are two changes, each with i
   await page.evaluate(() => { sbSelOff = false; sbSel = {s: 0, slug: 'flour'}; drawImportsView(); wireAll(); });
   const card = page.locator('#sbCard');
   assert.equal(await card.locator('.sbi-sec').count(), 2, 'the order and the gap, side by side');
-  assert.match(await card.locator('.sbi-gap').textContent(), /~600\s*units, bought now/);
+  assert.match(await card.locator('.sbi-gap').textContent(), new RegExp("~600\\s*" + enRe("sb.card.gap.units").source));
   // No write offers itself for the purchase, and no line says so (A4).
   assert.equal(await card.locator('.sbi-gap [data-gw]').count(), 0);
+  // Pins the wording: a manual record must not advertise a game-link write.
   assert.doesNotMatch(await card.locator('.sbi-gap').textContent(), /game-link/);
   // No copy of its own: Manual instructions says the same (Peter's testing, A2).
   assert.equal(await card.locator('[data-sb-copy]').count(), 0);
@@ -181,8 +183,8 @@ test('the recurring order and the one-time catch-up are two changes, each with i
   assert.deepEqual(await st(), [['Weekly imports', 'marked'], ['Before the next delivery', 'marked']]);
   // Copy the changes: both, each in its own words.
   const copied = await page.evaluate(() => orderChecklistText(sbData().rows.filter(r => r.slug === 'flour' && r.site === 0 && r.view === 'imports'), 'T'));
-  assert.match(copied, /Flour: 14000 -> 14420 units\/week/);
-  assert.match(copied, /Flour: add 600 units once/);
+  assert.match(copied, enRe("sb.ck.copy.row", {item: "Flour", change: en("sb.ck.copy.weekly", {from: 14000, n: 14420})}));
+  assert.match(copied, enRe("sb.ck.copy.row", {item: "Flour", change: en("sb.ck.copy.once", {n: 600})}));
 });
 
 test('one figure and one basis from the row to the copy, under both bases', async t => {
@@ -193,15 +195,16 @@ test('one figure and one basis from the row to the copy, under both bases', asyn
     const box = page.locator('#sbCard input.imp-in');
     await box.fill('15500'); await box.press('Enter');
     // Kept once the card is drawn again with the figure as the player's own.
-    await page.waitForFunction(() => /set while planning/.test(document.querySelector('#sbCard .sbi-basis')?.textContent || ''));
-    const basis = mode === 'cap' ? 'full production' : 'shop demand';
+    await page.waitForFunction(own => new RegExp(own).test(document.querySelector('#sbCard .sbi-basis')?.textContent || ''),
+      textRe("sb.card.basis.own").source);
+    const basis = en("sb.basis." + mode + ".low");
     // The card: the box, what it is planned for, Why and the manual instructions.
-    assert.match(await page.locator('#sbCard .sbi-basis').textContent(), new RegExp(`set while planning for ${basis}`));
+    assert.match(await page.locator('#sbCard .sbi-basis').textContent(), textRe("sb.card.basis.own", {basis}));
     await page.click('#sbCard [data-sbi-panel=why]');
     // Planned on the basis on screen: the switch says which, the heading does not again.
-    assert.match(await page.locator('#sbCard .sbi-panel[data-panel=why] h4').textContent(), /^Why 15,500 a week$/i);
+    assert.match(await page.locator('#sbCard .sbi-panel[data-panel=why] h4').textContent(), enRe("sb.card.why.head2", {n: "15,500", unit: en("sb.unit.week")}, {anchor: "full", flags: "i"}));
     await page.click('#sbCard [data-sbi-panel=manual]');
-    assert.match(await page.locator('#sbCard .sbi-panel[data-panel=manual]').textContent(), /set the amount to 15,500 a week/);
+    assert.match(await page.locator('#sbCard .sbi-panel[data-panel=manual]').textContent(), textRe("sb.card.do.weekly", {n: "15,500"}));
     // Changes, its copy, and the write the game link would send.
     const got = await page.evaluate(() => {
       const r = sbData().rows.find(x => x.kind === 'Weekly imports' && x.slug === 'flour');
@@ -210,15 +213,15 @@ test('one figure and one basis from the row to the copy, under both bases', asyn
     });
     assert.deepEqual([got.proposed, got.basis, got.write], [15500, mode, 15500]);
     // The copy's header names the basis; a line names it only when it is the other one.
-    assert.match(got.text, /14000 -> 15500 units\/week/);
-    assert.match(got.text, new RegExp(`Planned for ${basis}:`));
-    assert.doesNotMatch(got.text, /Planned for [a-z ]+\./);
+    assert.match(got.text, enRe("sb.ck.copy.weekly", {from: 14000, n: 15500}));
+    assert.match(got.text, enRe("sb.ck.copy." + (mode === "cap" ? "full" : "shop")));
+    for (const other of ["cap", "dem"]) assert.doesNotMatch(got.text, enRe("sb.ck.basis", {basis: en("sb.basis." + other + ".low")}));
     await redraw(page);
     assert.match(await page.locator('#secChanges .sbc-row', {hasText: 'Flour'}).first().textContent(), /15,500/);
     // The other basis keeps the figure, beside its own suggestion, with a way back to it.
     await page.evaluate(m => { sizing = m === 'cap' ? 'dem' : 'cap'; sbStamp++; drawSupplyStrip(); drawImportsView(); wireAll(); }, mode);
     assert.equal(await page.locator('#sbCard input.imp-in').inputValue(), '15500');
-    assert.match(await page.locator('#sbCard .sbi-basis').textContent(), new RegExp(`set while planning for ${basis}.*on screen now`));
+    assert.match(await page.locator('#sbCard .sbi-basis').textContent(), new RegExp(textRe("sb.card.basis.own", {basis}).source + ".*" + enRe("sb.card.basis.now").source));
     assert.equal(await page.locator('#sbCard .sbi-basis [data-imp-reset]').count(), 1);
   }
 });
@@ -227,14 +230,15 @@ test('the factory hours an import is planned on: named on the card, a step of th
   // Full production: the Flour order assumes the cake line runs 24 h; it runs 12.
   const cap = await board(t);
   await cap.evaluate(() => { sbSelOff = false; sbSel = {s: 0, slug: 'flour'}; drawImportsView(); wireAll(); });
-  assert.match(await cap.locator('#sbCard .sbi-dep').textContent(), /Needs a factory-hours change\..*Cake.*staffed 12 h a day → 24 h a day each/s);
-  assert.match(await cap.locator('#sbCard .sbi-dep').textContent(), /less than planned/);
+  assert.match(await cap.locator('#sbCard .sbi-dep').textContent(), new RegExp(enRe("sb.card.dep").source + ".*" + textRe("sb.dep.line.each", {thin: "", item: "Cake", now: en("sb.dep.h", {h: 12}), need: 24, m: 2, n: 2}).source, "s"));
+  assert.match(await cap.locator('#sbCard .sbi-dep').textContent(), enRe("sb.dep.less.n"));
   await cap.click('#sbCard [data-sbi-panel=manual]');
-  assert.match(await cap.locator('#sbCard .sbi-steps').textContent(), /Schedule: staff Cake 24 h a day on each of its 2 machines \(now 12 h\)\./);
+  assert.match(await cap.locator('#sbCard .sbi-steps').textContent(), textRe("sb.card.do.hours.each2", {item: "Cake", need: 24, m: 2, n: 2, now: en("sb.dep.h", {h: 12})}));
+  // Pins the wording: manual steps must not advertise a game link.
   assert.doesNotMatch(await cap.locator('#sbCard .sbi-steps').textContent(), /game link/);
   const hours = () => cap.evaluate(() => sbData().rows.filter(r => r.kind === 'Factory run hours').map(r => [r.current, r.proposed, (r.forImports || []).map(x => x.item).join()]));
   assert.deepEqual(await hours(), [[12, 24, 'Flour']]);
-  assert.match(await cap.locator('#secChanges .sbc-row[data-key*="Factory run hours"]').textContent(), /factory staffing, for Flour/);
+  assert.match(await cap.locator('#secChanges .sbc-row[data-key*="Factory run hours"]').textContent(), enRe("sb.cw.hoursFor", {items: "Flour"}));
   // The link offers no write for it.
   assert.equal(await cap.evaluate(() => gwImportPlan(null).some(l => l.r.item === 'Cake')), false);
   // Shop demand: Flour needs no change, so nothing depends on the hours; a
@@ -245,7 +249,7 @@ test('the factory hours an import is planned on: named on the card, a step of th
   const row = await dem.evaluate(() => sbData().rows.filter(r => r.kind === 'Factory run hours').map(r => [r.current, r.proposed, !!r.dep]));
   assert.deepEqual(row, [[12, 10, true]]);
   await dem.evaluate(() => { sbSelOff = false; sbSel = {s: 0, slug: 'flour'}; drawImportsView(); wireAll(); });
-  assert.match(await dem.locator('#sbCard .sbi-dep').textContent(), /staffed 12 h a day → 10 h a day each.*more than planned/s);
+  assert.match(await dem.locator('#sbCard .sbi-dep').textContent(), new RegExp(textRe("sb.dep.line.each", {thin: "", now: en("sb.dep.h", {h: 12}), need: 10, m: 2, n: 2}).source + ".*" + enRe("sb.dep.more.draw").source, "s"));
 });
 
 test('Applied is set only by a write that went through; Confirmed only by a later board that holds it', async t => {
@@ -265,7 +269,7 @@ test('Applied is set only by a write that went through; Confirmed only by a late
   assert.equal(await state(), 'applied');
   // Changes, when next shown, says so rather than the mark.
   await page.evaluate(() => { sub.supply = 'changes'; drawStale('supply'); });
-  assert.match(await page.locator('#secChanges .sbc-row', {hasText: 'Flour'}).first().textContent(), /Applied · awaiting refresh/);
+  assert.match(await page.locator('#secChanges .sbc-row', {hasText: 'Flour'}).first().textContent(), enRe("sb.st.applied"));
   // The same board again is no evidence.
   await page.evaluate(() => { pgJudged = 0; pgEvaluate(); });
   assert.equal(await state(), 'applied');
@@ -276,7 +280,7 @@ test('Applied is set only by a write that went through; Confirmed only by a late
     d.meta.hour = 13; takeData(d); sbStamp++; drawSupplyStrip(); drawChangesView();
   });
   assert.equal(await state(), 'confirmed');
-  assert.match(await page.locator('#secChanges .sbc-settled').textContent(), /Confirmed · day 30/);
+  assert.match(await page.locator('#secChanges .sbc-settled').textContent(), enRe("sb.st.confirmed.day", {n: 30}));
   // A later read that holds another figure is not a confirmation.
   await page.evaluate(() => {
     pgRecord({id: 'imports|hub#1|sugar|weekly|3000', family: 'imports', target: {depot: 'hub#1', slug: 'sugar'},
@@ -315,7 +319,7 @@ test('a schedule is confirmed by its shift print on a later read; a hire by each
   assert.deepEqual((await hire())[0], 'partly', 'the hire is seen, the move to a warehouse is not');
   // Staff needs says how many were seen, never the clock the board judged them at.
   const said = await page.evaluate(() => { drawNeeds(); return document.querySelector('#secNeeds .nd-pg').textContent; });
-  assert.match(said, /1 of 2 seen at their sites so far/);
+  assert.match(said, enRe("co.needs.pg.partly", {seen: 1, of: 2}));
   assert.doesNotMatch(said, /object/);
   // Someone found at another site than the one they were sent to: not confirmed.
   await page.evaluate(k => { const d = JSON.parse(JSON.stringify(D)); d.staffing.push({key: 'dist#6', people: [{id: 'E9', name: 'Moved'}]}); d.meta.minute = 9; takeData(d); pgEvaluate(); }, key);
@@ -425,14 +429,14 @@ test('a figure typed under one basis keeps it after a switch; the hours it assum
   assert.deepEqual(got.deps, [[24, 'cap']], 'the hours of the plan the figure was set for');
   // Shop demand plans the cake line for 10 h: 24 h is no step of this checklist.
   assert.deepEqual(got.hours, []);
-  assert.match(got.text, /Flour: 14000 -> 15500 units\/week\..*Its figure assumes Cake at .* runs 24 hours a day, as full production plans; that is not a step here, where shop demand plans 10 h\..*Planned for full production\./);
-  assert.doesNotMatch(got.text, /Cake: run/);
-  assert.match(got.text, /Lines that name another basis keep the figure they were set for; the factory hours are this basis's/);
+  assert.match(got.text, new RegExp(enRe("sb.ck.copy.row", {item: "Flour", change: en("sb.ck.copy.weekly", {from: 14000, n: 15500})}).source + ".*" + enRe("sb.ck.dep.clash", {item: "Cake", n: 24, basis: en("sb.basis.cap.low"), now: en("sb.basis.dem.low"), m: 10}).source + ".*" + enRe("sb.ck.basis", {basis: en("sb.basis.cap.low")}).source));
+  assert.doesNotMatch(got.text, enRe("sb.ck.copy.row", {item: "Cake", change: en("sb.ck.copy.hours")}));
+  assert.match(got.text, enRe("sb.ck.copy.mixed2"));
   // The card says so, and its manual steps have no hours step.
   await page.evaluate(() => { sbSelOff = false; sbSel = {s: 0, slug: 'flour'}; drawImportsView(); wireAll(); });
-  assert.match(await page.locator('#sbCard .sbi-dep').textContent(), /Planned on other factory hours\..*15,500 assumes Cake at .* runs 24 h a day, as full production plans; shop demand plans 10 h/s);
+  assert.match(await page.locator('#sbCard .sbi-dep').textContent(), new RegExp(enRe("sb.card.clash").source + ".*" + enRe("sb.card.clash.line", {value: "15,500", item: "Cake", n: 24, basis: en("sb.basis.cap.low"), now: en("sb.basis.dem.low"), m: 10}).source, "s"));
   await page.click('#sbCard [data-sbi-panel=manual]');
-  assert.doesNotMatch(await page.locator('#sbCard .sbi-steps').textContent(), /staff Cake/);
+  assert.doesNotMatch(await page.locator('#sbCard .sbi-steps').textContent(), textRe("sb.card.do.hours.each2", {item: "Cake"}));
 });
 
 test('an import figure typed on full production, then shop demand on screen: Why explains full production, and the machines get one hours step', async t => {
@@ -449,11 +453,11 @@ test('an import figure typed on full production, then shop demand on screen: Why
   assert.notEqual(want.cap, want.dem, 'the two bases use different weeks here');
   await page.click('#sbCard [data-sbi-panel=why]');
   const why = page.locator('#sbCard [data-panel=why]');
-  assert.match(await why.locator('h4').textContent(), /17,000 a week · planned for full production/i);
-  const uses = await why.locator('tr', {hasText: 'Uses a week'}).locator('td').nth(1).textContent();
+  assert.match(await why.locator('h4').textContent(), enRe("sb.card.why.head", {n: "17,000", unit: en("sb.unit.week"), basis: en("sb.basis.cap.low")}, {flags: "i"}));
+  const uses = await why.locator('tr', {hasText: en("sb.card.why.use")}).locator('td').nth(1).textContent();
   assert.equal(uses, await page.evaluate(n => num(n), want.cap), 'the week full production uses, not shop demand\'s');
-  assert.match(await why.textContent(), /With shop demand instead/);
-  assert.doesNotMatch(await why.textContent(), /With full production instead/);
+  assert.match(await why.textContent(), enRe("sb.card.why.alt", {basis: en("sb.basis.dem.low")}));
+  assert.doesNotMatch(await why.textContent(), enRe("sb.card.why.alt", {basis: en("sb.basis.cap.low")}));
   // Changes and its copy: one hours step for the Beer machines, never two.
   const got = await page.evaluate(() => {
     const d = sbData();
@@ -461,8 +465,8 @@ test('an import figure typed on full production, then shop demand on screen: Why
     return {hours: hours.map(h => h.proposed), text: orderChecklistText(d.rows, 'T', sizing)};
   });
   assert.ok(got.hours.length <= 1, `one hours step for the Beer machines, got ${got.hours}`);
-  assert.equal((got.text.match(/Beer: run/g) || []).length, got.hours.length);
-  assert.doesNotMatch(got.text, /Beer: run [^\n]*-> 24 hours/, 'full production\'s 24 h is not a step on shop demand');
+  assert.equal((got.text.match(enRe("sb.ck.copy.row", {item: "Beer", change: en("sb.ck.copy.hours")}, {flags: "g"})) || []).length, got.hours.length);
+  assert.doesNotMatch(got.text, enRe("sb.ck.copy.row", {item: "Beer", change: en("sb.ck.copy.hours", {n: 24})}), 'full production\'s 24 h is not a step on shop demand');
 });
 
 test('the factory hours an import assumes are each machine\'s: 12 h and 0 h at the day-47 brewery', async t => {
@@ -471,11 +475,11 @@ test('the factory hours an import assumes are each machine\'s: 12 h and 0 h at t
   // Full production: both machines round the clock against 84 machine-hours a week staffed.
   await page.evaluate(([s, slug]) => { sbSelOff = false; sbSel = {s, slug}; drawImportsView(); wireAll(); }, [hub, WATER]);
   const dep = page.locator('#sbCard .sbi-dep');
-  assert.match(await dep.textContent(), /Beer at HART\. Brewery \(2 machines\): staffed 12 h and 0 h a day → 24 h a day each/);
+  assert.match(await dep.textContent(), textRe("sb.dep.line.each", {thin: "", item: "Beer", site: "HART. Brewery", m: 2, n: 2, now: en("sb.and", {a: en("sb.dep.h", {h: 12}), b: en("sb.dep.h", {h: 0})}), need: 24}));
   // 25 Water a machine-hour: (336 - 84) × 25 a week less than the plan.
-  assert.match(await dep.textContent(), /about 6,300 a week less than planned/);
+  assert.match(await dep.textContent(), enRe("sb.dep.less.n", {n: "6,300"}));
   await page.click('#sbCard [data-sbi-panel=manual]');
-  assert.match(await page.locator('#sbCard .sbi-steps').textContent(), /staff Beer 24 h a day on each of its 2 machines \(now 12 h and 0 h\)/);
+  assert.match(await page.locator('#sbCard .sbi-steps').textContent(), textRe("sb.card.do.hours.each2", {item: "Beer", need: 24, m: 2, n: 2, now: en("sb.and", {a: en("sb.dep.h", {h: 12}), b: en("sb.dep.h", {h: 0})})}));
   // Production's observation: 12 machine-hours a day, not the least-staffed machine's 0 twice.
   await page.evaluate(() => drawProductionView());
   assert.equal(await page.locator('#secProduction .sbp-tile.obs b').textContent(), '12');
@@ -484,8 +488,8 @@ test('the factory hours an import assumes are each machine\'s: 12 h and 0 h at t
     sizing = 'dem'; impSetKeep(impSetId(k, slug), {value: 2600, inGame: 3000, basis: 'dem'}); sbStamp++;
     sbSel = {s, slug}; drawSupplyStrip(); drawImportsView(); wireAll();
   }, [hub, WATER, HUB47]);
-  assert.match(await dep.textContent(), /staffed 12 h and 0 h a day → 8 h a day each/);
-  assert.match(await dep.textContent(), /about 700 a week less than planned/);
+  assert.match(await dep.textContent(), textRe("sb.dep.line.each", {thin: "", m: 2, n: 2, now: en("sb.and", {a: en("sb.dep.h", {h: 12}), b: en("sb.dep.h", {h: 0})}), need: 8}));
+  assert.match(await dep.textContent(), enRe("sb.dep.less.n", {n: "700"}));
 });
 
 test('an old write\'s record lights a finding only where its line has no open change', async t => {
@@ -506,7 +510,7 @@ test('an old write\'s record lights a finding only where its line has no open ch
     pgRecord({id: `imports|hub#1|${slug}|weekly|1`, family: 'imports', target: {depot: 'hub#1', slug}, expect: {contracts: [], inGame: 1}, rowKeys: [], label: slug});
     pgStore().recs[`imports|hub#1|${slug}|weekly|1`].state = 'confirmed';
   }, quiet);
-  assert.match(await pill(quiet), /Confirmed/);
+  assert.match(await pill(quiet), enRe("sb.st.confirmed"));
 });
 
 test('Supply\'s view state is the company\'s, and keeps its sites by key', async t => {
@@ -559,7 +563,7 @@ test('Goods flow draws the chain in the order the goods travel: Pier, Hub, Brewe
     return {heads: [...document.querySelectorAll('#flow text.col')].map(t => t.textContent),
       pier: x('import:ba:street_pier#1'), hub: x('ba:street_eighthavenue#4'), brewery: x('ba:street_eighthavenue#8'), shop: x('ba:street_eighthstreet#5')};
   });
-  assert.deepEqual(got.heads, ['IMPORTERS', 'DEPOTS', 'FACTORIES', 'SHOPS']);
+  assert.deepEqual(got.heads, ["importers", "depots", "factories", "shops"].map(k => en("sb.flow.col." + k).toUpperCase()));
   assert.ok(got.pier < got.hub && got.hub < got.brewery && got.brewery < got.shop, JSON.stringify(got));
 });
 
@@ -576,7 +580,7 @@ test('Changes counts what the Overview counts, lists only import records, and co
     sbStamp++; drawSupplyStrip(); drawChangesView(); wireAll();
   });
   const n = await page.evaluate(() => { const d = sbData(); return {total: d.rows.length, done: d.rows.filter(r => pgDone(d, r)).length}; });
-  assert.equal(await page.locator('#sbcTop .sb-road').getAttribute('aria-label'), `${n.done} of ${n.total} changes recorded or applied`);
+  assert.equal(await page.locator('#sbcTop .sb-road').getAttribute('aria-label'), en("sb.cw.road", {done: n.done, n: n.total}));
   const settled = await page.locator('#secChanges .sbc-settled .sbc-row').allTextContents();
   assert.equal(settled.length, 1);
   assert.match(settled[0], /Milk/);
@@ -598,7 +602,9 @@ test('Production speaks the board\'s words: no roster, shift or posting, and the
     const sec = document.getElementById('secProduction');
     return [sec.textContent, ...[...sec.querySelectorAll('[data-tip]')].map(e => e.dataset.tip), SB_STAFF_WHY()].join(' \n ');
   });
+  // Pins the wording: scheduling terms and basis names follow the board vocabulary.
   assert.doesNotMatch(words, /\b(roster|rostered|shifts?|posted|post)\b/i);
+  // Pins the wording: scheduling terms and basis names follow the board vocabulary.
   assert.doesNotMatch(words, /24\/7|under Demand/);
 });
 
@@ -660,15 +666,15 @@ test('lines drawing more than planned: the figure is weighed against what the st
     return document.querySelector('#sbCard .sbi-dep').textContent.replace(/\s+/g, ' ');
   }, [hub, WATER, HUB47, value]);
   const covers = await said(5000);
-  assert.match(covers, /staffed 12 h and 0 h a day → 4 h a day each/);
-  assert.match(covers, /the lines draw about 1,400 a week more than planned\. 5,000 still covers the 4,200 a week that takes\./);
-  assert.doesNotMatch(covers, /runs short/);
-  assert.match(await said(4000), /4,000 runs short of the 4,200 a week that takes\./);
+  assert.match(covers, textRe("sb.dep.line.each", {thin: "", m: 2, n: 2, now: en("sb.and", {a: en("sb.dep.h", {h: 12}), b: en("sb.dep.h", {h: 0})}), need: 4}));
+  assert.match(covers, new RegExp(enRe("sb.dep.more.draw", {n: "1,400"}).source + " " + enRe("sb.dep.more.covers", {value: "5,000", need: "4,200"}).source));
+  assert.doesNotMatch(covers, enRe("sb.dep.more.short"));
+  assert.match(await said(4000), enRe("sb.dep.more.short", {value: "4,000", need: "4,200"}));
   // A line whose rate the board does not know: the lead alone, no verdict.
   await page.evaluate(slug => { D.plan.recipes.find(r => r.slug === slug).ingredients = []; }, brewery.lines[0].slug);
   const unknown = await said(4100);
-  assert.match(unknown, /the lines draw more than planned: check that 4,100 covers it/);
-  assert.doesNotMatch(unknown, /runs short|still covers/);
+  assert.match(unknown, enRe("sb.dep.more.check", {value: "4,100"}));
+  assert.doesNotMatch(unknown, new RegExp(enRe("sb.dep.more.short").source + "|" + enRe("sb.dep.more.covers").source));
 });
 
 test('machines split unevenly that draw the plan\'s total read as uneven, not as a draw that differs', async t => {
@@ -682,9 +688,9 @@ test('machines split unevenly that draw the plan\'s total read as uneven, not as
     sbSelOff = false; sbSel = {s: 0, slug: 'flour'}; drawSupplyStrip(); drawImportsView(); wireAll();
     return document.querySelector('#sbCard .sbi-dep').textContent.replace(/\s+/g, ' ');
   });
-  assert.match(text, /staffed 24 h and 0 h a day → 12 h a day each/);
-  assert.match(text, /The machines' hours are uneven, but together they draw what 12,000 is planned on\./);
-  assert.doesNotMatch(text, /is not what|more than planned|less than planned/);
+  assert.match(text, textRe("sb.dep.line.each", {thin: "", m: 2, n: 2, now: en("sb.and", {a: en("sb.dep.h", {h: 24}), b: en("sb.dep.h", {h: 0})}), need: 12}));
+  assert.match(text, enRe("sb.dep.even", {value: "12,000"}));
+  assert.doesNotMatch(text, new RegExp(enRe("sb.dep.mixed").source + "|" + enRe("sb.dep.more.draw").source + "|" + enRe("sb.dep.less.n").source));
 });
 
 // --- round 3 of the chunk's review -------------------------------------------

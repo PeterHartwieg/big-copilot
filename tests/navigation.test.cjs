@@ -1,5 +1,6 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
@@ -97,8 +98,8 @@ function board({saved = {}, data = {}} = {}) {
 test('the sidebar is Overview, Businesses, Supply, Staffing, Expansion, then City map and Wiki', () => {
   const b = board();
   assert.deepEqual([...vm.runInContext('AREAS.map(a => a.label)', b.context)],
-    ['Overview', 'Businesses', 'Supply', 'Staffing', 'Expansion']);
-  assert.deepEqual([...vm.runInContext('REFS.map(r => r.label)', b.context)], ['City map', 'Wiki']);
+    ["overview", "businesses", "supply", "staffing", "expansion"].map(k => en("nav.area." + k)));
+  assert.deepEqual([...vm.runInContext('REFS.map(r => r.label)', b.context)], [en("nav.ref.map"), en("nav.ref.wiki2")]);
   assert.ok(!vm.runInContext('PAGES.some(p => p.id === "results")', b.context),
     'Results is a view inside Businesses, not a page of its own');
   for (const id of ['overview', 'businesses', 'supply', 'staffing', 'expansion'])
@@ -116,11 +117,11 @@ test('the sidebar is Overview, Businesses, Supply, Staffing, Expansion, then Cit
 test('Businesses carries Results, Products & prices, Standards and Milestones; Staffing its three views', () => {
   const b = board();
   const items = vm.runInContext('SUBS.company.items', b.context);
-  assert.deepEqual([...items].map(([, label]) => label), ['Results', 'Products & prices', 'Standards', 'Milestones']);
+  assert.deepEqual([...items].map(([, label]) => label), [en("nav.view.results"), en("nav.view.prices"), en("nav.view.standards"), en("nav.view.milestones")]);
   assert.deepEqual([...items].map(([, , anchor]) => anchor), ['secDaily', 'secProducts', 'secStandards', 'secGoals']);
   assert.equal(vm.runInContext('SUBS.company.start', b.context), 'results');
   const staffing = vm.runInContext('SUBS.staffing.items', b.context);
-  assert.deepEqual([...staffing].map(([, label]) => label), ['Schedules', 'Staff needs', 'Payroll']);
+  assert.deepEqual([...staffing].map(([, label]) => label), [en("nav.view.schedules"), en("nav.view.needs"), en("nav.view.payroll")]);
   assert.deepEqual([...staffing].map(([, , anchor]) => anchor), ['secSchedules', 'secStaff', 'secPayroll'],
     'Staff needs is anchored on the hiring page (issue #89)');
   b.context.showSub('staffing', 'payroll');
@@ -264,8 +265,8 @@ test('Supply is five task views; shops, warehouses and factories are their scope
   const b = board();
   const items = vm.runInContext('SUBS.supply.items', b.context);
   assert.deepEqual([...items].map(([k, label, anchor]) => [k, label, anchor]),
-    [['changes', 'Changes', 'secChanges'], ['imports', 'Imports', 'secImports'], ['deliveries', 'Deliveries', 'secDeliveries'],
-     ['production', 'Production', 'secProduction'], ['flow', 'Goods flow', 'secFlow']]);
+    [['changes', en("nav.view.changes"), 'secChanges'], ['imports', en("nav.view.imports"), 'secImports'], ['deliveries', en("nav.view.deliveries"), 'secDeliveries'],
+     ['production', en("nav.view.production"), 'secProduction'], ['flow', en("nav.view.flow"), 'secFlow']]);
   b.context.showSub('supply', 'production');
   assert.match(b.$('supplyNav').innerHTML, /href="#secProduction" data-id="production" class="on">/);
 });
@@ -586,20 +587,20 @@ test('arriving from a finding names the page it was on, through Back, Forward an
   const b = board({data: sites()});
   b.boot();
   b.context.openSite(SHOP, false, 'a1');
-  assert.deepEqual({...b.from()}, {label: 'Needs attention', hash: '#today'});
-  assert.deepEqual({...b.states[1].ssFrom}, {label: 'Needs attention', hash: '#today'}, 'the entry carries it');
+  assert.deepEqual({...b.from()}, {label: en("nav.from.overview"), hash: '#today'});
+  assert.deepEqual({...b.states[1].ssFrom}, {label: en("nav.from.overview"), hash: '#today'}, 'the entry carries it');
   b.move(-1); b.move(1);
-  assert.deepEqual({...b.from()}, {label: 'Needs attention', hash: '#today'});
+  assert.deepEqual({...b.from()}, {label: en("nav.from.overview"), hash: '#today'});
   // A reload replays the same entry.
   const again = board({data: sites()});
   again.context.location.hash = '#site/fifthavenue-57';
-  again.states[0] = {ssFrom: {label: 'Needs attention', hash: '#today'}};
+  again.states[0] = {ssFrom: {label: en("nav.from.overview"), hash: "#today"}};
   again.boot();
-  assert.equal(again.from().label, 'Needs attention');
+  assert.equal(again.from().label, en("nav.from.overview"));
   // Anywhere else a finding is clicked: the view's own word.
   b.context.showSub('supply', 'imports'); b.context.showPage('supply');
   b.context.openSite(DEPOT, false, 'a2');
-  assert.deepEqual({...b.from()}, {label: 'Imports', hash: '#supply/imports'},
+  assert.deepEqual({...b.from()}, {label: en("nav.view.imports"), hash: '#supply/imports'},
     'a Supply view is named as itself');
   // The picker, a name or a portfolio row is no finding: back to the portfolio.
   b.context.openSite(SHOP);
@@ -611,8 +612,8 @@ test('the crumb leads back where the reader came from, else to the portfolio', (
   b.boot();
   b.context.openSite(SHOP, false, 'a1');
   const html = b.context.siteCrumbs(SHOP, 'HART. Clothing', true);
-  assert.match(html, /<a class="ss-crumb from" href="#today" data-ss="back">.*Needs attention<\/a>/);
-  assert.match(html, /data-ss="portfolio">Portfolio<\/a><i>›<\/i><a href="#secPortfolio" data-ss="chain" data-chain="Clothing Stores">/);
+  assert.match(html, new RegExp('<a class="ss-crumb from" href="#today" data-ss="back">.*' + enRe("nav.from.overview").source + '</a>'));
+  assert.match(html, new RegExp('data-ss="portfolio">' + enRe("sp.crumb.portfolio").source + '</a><i>›</i><a href="#secPortfolio" data-ss="chain" data-chain="Clothing Stores">'));
   assert.match(html, /<div class="ss-pick" id="sitePick">/);
   // Clicking it is the browser's own Back.
   const nav = {};
@@ -625,7 +626,7 @@ test('the crumb leads back where the reader came from, else to the portfolio', (
   // Without a finding the crumb is the portfolio, and a home is in no picker.
   b.context.openSite(FLAT);
   const home = b.context.siteCrumbs(FLAT, '13 Broadway Street', false);
-  assert.match(home, /<a class="ss-crumb" href="#secPortfolio" data-ss="portfolio">.*Portfolio<\/a>/);
+  assert.match(home, new RegExp('<a class="ss-crumb" href="#secPortfolio" data-ss="portfolio">.*' + enRe("sp.crumb.portfolio").source + '</a>'));
   assert.doesNotMatch(home, /sitePick|data-ss="chain"/);
 });
 
@@ -650,12 +651,12 @@ test('a search or a question that opens a site names where it was asked from, as
   b.boot();
   // ssOpenSite() passes cameFrom: no finding, and still a way back.
   b.context.openSite(SHOP, true, null, 'push', true);
-  assert.deepEqual({...b.from()}, {label: 'Needs attention', hash: '#today'});
-  assert.deepEqual({...b.states[1].ssFrom}, {label: 'Needs attention', hash: '#today'});
+  assert.deepEqual({...b.from()}, {label: en("nav.from.overview"), hash: '#today'});
+  assert.deepEqual({...b.states[1].ssFrom}, {label: en("nav.from.overview"), hash: '#today'});
   // A home opens the same way.
   b.move(-1);
   assert.ok(b.context.openSite(FLAT, true, null, 'push', true));
-  assert.equal(b.from().label, 'Needs attention');
+  assert.equal(b.from().label, en("nav.from.overview"));
   // From one site's page to another there is nothing new to go back to.
   b.context.openSite(SHOP, true, null, 'push', true);
   assert.equal(b.from(), null);
@@ -676,12 +677,12 @@ test('the site on screen, opened again, keeps its way back', () => {
   const b = board({data: sites()});
   b.boot();
   b.context.openSite(SHOP, false, 'a1');
-  assert.equal(b.from().label, 'Needs attention');
+  assert.equal(b.from().label, en("nav.from.overview"));
   // Its name, the picker's own entry, or a search for it.
   b.context.openSite(SHOP);
-  assert.equal(b.from().label, 'Needs attention');
+  assert.equal(b.from().label, en("nav.from.overview"));
   b.context.openSite(SHOP, true, null, 'push', true);
-  assert.equal(b.from().label, 'Needs attention');
+  assert.equal(b.from().label, en("nav.from.overview"));
   // Another site is somewhere new.
   b.context.openSite(DEPOT);
   assert.equal(b.from(), null);

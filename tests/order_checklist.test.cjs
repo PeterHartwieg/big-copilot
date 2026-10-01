@@ -5,6 +5,7 @@
 // verdict); these tests hand it facts and check what it does with them.
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
@@ -58,7 +59,7 @@ test('a paused contract beside a top-up that falls short is resumed; one the top
     fact: fact('paused', {why: lvl === 'info' ? 'topup' : 'order', lvl, use: 0, need: 0})});
   const rows = build({imports: [{s: 1, rows: [paused('critical')]}]});
   assert.deepEqual(rows.map(r => [r.kind, r.item, !!r.paused]), [['Weekly imports', 'Water', true]]);
-  assert.match(rows[0].reason, /The top-up beside it falls short without it; resume it, or raise the top-up\./);
+  assert.match(rows[0].reason, enRe("sb.ck.paused.topup"));
   assert.deepEqual(build({imports: [{s: 1, rows: [paused('info')]}]}), []);
 });
 
@@ -72,10 +73,10 @@ test('a wholesale contract short of the week that also runs dry gives two change
     ['Wholesale deliveries', 'Soda', 1200, 1420],
     ['Before the next delivery', 'Soda', null, 164],
     ['Wholesale deliveries', 'Syrup', 1000, 1680]]);
-  assert.match(rows[0].reason, /^Sells 1,232 a week, plus a 15% margin, 1,417 in all\./);
-  assert.match(rows[1].reason, /^Bring in 164 extra units by hand before Monday's wholesale delivery/);
+  assert.match(rows[0].reason, enRe("sb.ck.ws.sells.all", {n: 1232, margin: en("sb.ck.margin.pct", {pct: 15}), need: 1417}, {anchor: "start"}));
+  assert.match(rows[1].reason, enRe("sb.ck.ws.bring.day", {n: 164, day: "Monday"}, {anchor: "start"}));
   // Factory lines sized 24/7 take no margin: need is use, and none is claimed.
-  assert.match(rows[2].reason, /^Uses 1,680 a week\. Change the amount/);
+  assert.match(rows[2].reason, new RegExp(enRe("sb.ck.ws.uses", {n: 1680}, {anchor: "start"}).source + " " + enRe("sb.ck.ws.change").source));
 });
 
 test('a depot only a route feeds gets its daily top-up, from the site whose plan sets it', () => {
@@ -87,8 +88,8 @@ test('a depot only a route feeds gets its daily top-up, from the site whose plan
   assert.deepEqual(rows.map(r => [r.kind, r.item, r.current, r.proposed, !!r.tight, r.source]), [
     ['Depot daily top-ups', 'Paper Bag', 80, 120, false, 1],
     ['Depot daily top-ups', 'Soda', 104, 120, true, 1]]);
-  assert.match(rows[0].reason, /^Set on the plan of Factory · 2 Factory Street\. Its busiest day sends on 100 units, plus a 15% margin\.$/);
-  assert.equal(rows[0].group, 'Depot daily top-ups · Depot · 1 Depot Street');
+  assert.match(rows[0].reason, new RegExp("^" + enRe("sb.ck.depot.plan", {site: "Factory · 2 Factory Street"}).source + " " + enRe("sb.ck.depot.busiest", {n: 100, margin: en("sb.ck.margin.pct", {pct: 15})}).source + "$"));
+  assert.equal(rows[0].group, en("sb.ck.kind.depot") + ' · Depot · 1 Depot Street');
 });
 
 test('weekly order changes propose the fact\'s figure and say what it was sized on', () => {
@@ -96,7 +97,7 @@ test('weekly order changes propose the fact\'s figure and say what it was sized 
   assert.equal(rows.length, 1);
   assert.equal(rows[0].current, 1000);
   assert.equal(rows[0].proposed, 1500);
-  assert.match(rows[0].reason, /Uses 1,300 a week \(factory lines and shops\), plus a 15% margin/);
+  assert.match(rows[0].reason, enRe("sb.ck.uses.both", {n: 1300, route: "", margin: en("sb.ck.margin.pct", {pct: 15})}));
 });
 
 test('a row whose fact asks for nothing is not on the list', () => {
@@ -111,7 +112,7 @@ test('a row whose fact asks for nothing is not on the list', () => {
 test('a tight order is a change, marked so Today leaves it out', () => {
   const [row] = build({imports:[{s:0, rows:[order({fit:'tight', current:1400, inGame:1400})]}]});
   assert.equal(row.tight, true);
-  assert.match(row.reason, /covers the use but not the margin/);
+  assert.match(row.reason, enRe("sb.ck.tight"));
   const [short] = build({imports:[{s:0, rows:[order({})]}]});
   assert.equal(short.tight, undefined);
 });
@@ -125,12 +126,12 @@ test('shop top-ups propose the shelf fact\'s figure and need a route or a depot 
   ]});
   assert.equal(rows.length, 1);
   assert.equal(rows[0].proposed, 280); // daily, never seven times the peak
-  assert.match(rows[0].reason, /Saturday/);
+  assert.match(rows[0].reason, enRe("sb.ck.peak.day", {n: 235, day: "Saturday", margin: en("sb.ck.margin")}));
   // A shelf on no plan that a depot could send to names that depot (via).
   const [via] = build({shops:[{s:2, item:'Soda', target:0, peakSold:61, from:null,
     fact:fact('noplan', {setTo:70, via:0})}]});
   assert.deepEqual([via.current, via.proposed, via.source], [0, 70, 0]);
-  assert.match(via.reason, /^From Depot · 1 Depot Street\./);
+  assert.match(via.reason, enRe("sb.ck.from", {site: "Depot · 1 Depot Street"}, {anchor: "start"}));
 });
 
 test('incomplete data preserves saved marks until a complete snapshot can reconcile them', () => {
@@ -188,8 +189,8 @@ test('a paused order or delivery gap is a review action, not an invented quantit
   ]});
   assert.equal(rows.length, 2);
   assert.ok(rows.every(r => r.proposed === null));
-  assert.match(rows[0].reason, /paused/);
-  assert.match(rows[1].reason, /one-off supply/);
+  assert.match(rows[0].reason, enRe("sb.ck.review.from", {from: "Importer"}));
+  assert.match(rows[1].reason, enRe("sb.ck.oneOff"));
   // A paused backup a route covers is no action: its fact is covered.
   assert.deepEqual(build({checks:[{s:0, item:'Water', paused:true, covered:true, from:'Importer',
     fact:fact('covered', {why:'route'})}]}), []);
@@ -201,14 +202,14 @@ test('unassigned factories require depot selection; a top-up is the input fact\'
     sites:[{s:1, rows:[{item:'Flour', target:0, perDay:215, from:null, fact:fact('noplan', {setTo:250})}]}],
   });
   assert.equal(rows[0].proposed, null);
-  assert.match(rows[0].reason, /Choose a supplying depot/);
-  assert.match(rows[0].reason, /1,501 units\/week/);
+  assert.match(rows[0].reason, enRe("sb.ck.loose"));
+  assert.match(rows[0].reason, enRe("sb.ck.loose.use", {n: 1501}));
   assert.equal(rows[1].proposed, 250);
-  assert.match(rows[1].reason, /Full-rate input requirement, plus the margin; confirm staffing and output limits/);
+  assert.match(rows[1].reason, enRe("sb.ck.input.cap", {margin: en("sb.ck.margin")}));
   // Under Demand the reason says what the figure was sized for.
   const [dem] = build({sites:[{s:1, rows:[{item:'Flour', target:100, perDay:215, from:0, margin:0.15,
     sizedFor:'dem', fact:fact('short', {setTo:250})}]}]});
-  assert.match(dem.reason, /^From Depot · 1 Depot Street\. What the shops at the end of the chain use, plus a 15% margin/);
+  assert.match(dem.reason, new RegExp("^" + enRe("sb.ck.from", {site: "Depot · 1 Depot Street"}).source + " " + enRe("sb.ck.input.dem", {margin: en("sb.ck.margin.pct", {pct: 15})}).source));
 });
 
 test('a stalled input asks to check the route; one waiting on another input does not', () => {
@@ -224,10 +225,10 @@ test('a measured delivery gap has a one-off quantity, separate from the recurrin
   const rows = build({checks:[gap]});
   assert.equal(rows[0].proposed, 217);
   assert.equal(rows[0].current, null);
-  assert.match(rows[0].reason, /before Sunday/);
+  assert.match(rows[0].reason, enRe("sb.ck.bring.day", {n: 217, day: "Sunday"}));
   const text = context.orderChecklistText(rows, 'Company');
-  assert.match(text, /add 217 units once/);
-  assert.doesNotMatch(text, /not set ->/);
+  assert.match(text, enRe("sb.ck.copy.once", {n: 217}));
+  assert.doesNotMatch(text, new RegExp(enRe("sb.ck.copy.notSet").source + " ->"));
   assert.notEqual(rows[0].key, build({checks:[{...gap, catchUp:230}]})[0].key);
 });
 
@@ -246,10 +247,10 @@ test('copied checklist groups actions and includes units and read-only instructi
   const rows = build({imports:[{s:0, rows:[order({})]}],
     checks:[{s:0, item:'Sugar', paused:true, from:'Importer', fact:fact('paused')}]});
   const text = context.orderChecklistText(rows, 'Company · day 12');
-  assert.match(text, /Enter these settings in-game/);
-  assert.match(text, /units, not boxes/);
-  assert.match(text, /1000 -> 1500/);
-  assert.equal(text.split('Weekly imports · Depot').length - 1, 1);
+  assert.match(text, enRe("sb.ck.copy.enter"));
+  assert.match(text, enRe("sb.ck.copy.units"));
+  assert.match(text, enRe("sb.ck.copy.weekly", {from: 1000, n: 1500}));
+  assert.equal(text.split(en("sb.ck.kind.imports") + " · Depot").length - 1, 1);
 });
 
 test('empty or incomplete supply data does not invent an action', () => {
@@ -341,13 +342,13 @@ test('the checklist names a Smart Delivery stock level, not a weekly order', () 
   const rows = build({imports:[{s:0, rows:[row(f, {weekly:900, smart:true, target:900})]}]});
   assert.equal(rows.length, 1);
   assert.deepEqual([rows[0].current, rows[0].proposed, rows[0].mode], [900, 1400, 'smart']);
-  assert.match(rows[0].reason, /^Set Smart Delivery stock to 1,400\./);
+  assert.match(rows[0].reason, enRe("sb.ck.set.smart", {n: 1400}, {anchor: "start"}));
   const text = context.orderChecklistText(rows, 'Company');
-  assert.match(text, /Smart Delivery stock 900 -> 1400 units/);
-  assert.doesNotMatch(text, /units\/week/);
+  assert.match(text, enRe("sb.ck.copy.smart", {from: 900, n: 1400}));
+  assert.doesNotMatch(text, enRe("sb.ck.copy.weekly"));
   const plain = build({imports:[{s:0, rows:[row(f, {weekly:900})]}]});
-  assert.match(plain[0].reason, /^Set the weekly order to 1,400\./);
-  assert.match(context.orderChecklistText(plain, 'Company'), /900 -> 1400 units\/week/);
+  assert.match(plain[0].reason, enRe("sb.ck.set.weekly", {n: 1400}, {anchor: "start"}));
+  assert.match(context.orderChecklistText(plain, 'Company'), enRe("sb.ck.copy.weekly", {from: 900, n: 1400}));
   assert.notEqual(rows[0].key, plain[0].key, 'a level and an order are not the same mark');
 });
 
@@ -355,19 +356,19 @@ test('the checklist names the contract that holds the level', () => {
   const held = {weekly:1100, smart:true, target:500, levelImporter:'A', levelName:'1 Pier, its 2nd of 2 contracts here'};
   const rows = build({imports:[{s:0, rows:[row(fact('short', {setTo:800}), held)]}]});
   assert.equal(rows[0].proposed, 800);
-  assert.match(rows[0].reason, /^Set Smart Delivery stock at 1 Pier, its 2nd of 2 contracts here to 800\./);
+  assert.match(rows[0].reason, enRe("sb.ck.set.smartAt", {at: "1 Pier, its 2nd of 2 contracts here", n: 800}, {anchor: "start"}));
 });
 
 test('an edited figure feeds the checklist, including on a row the board finds covered', () => {
   const edited = build({imports:[{s:0, rows:[row(fact('covered'), {weekly:1500, smart:true, target:1500}, 3000)]}]});
   assert.equal(edited.length, 1);
   assert.deepEqual([edited[0].current, edited[0].proposed], [1500, 3000]);
-  assert.match(edited[0].reason, /Your own figure\./);
+  assert.match(edited[0].reason, enRe("sb.ck.yours"));
   // An edit on a short row replaces the suggestion.
   const f = fact('short', {setTo:1400});
   const short = build({imports:[{s:0, rows:[row(f, {weekly:900}, 2500)]}]});
   assert.equal(short[0].proposed, 2500);
-  assert.match(short[0].reason, /Your own figure; the board suggests 1,400/);
+  assert.match(short[0].reason, enRe("sb.ck.yours.suggest", {n: 1400}));
   // Typing the figure in game turns the suggestion down: nothing to do.
   assert.deepEqual(build({imports:[{s:0, rows:[row(f, {weekly:900}, 900)]}]}), []);
   // A new figure is a new action: an old tick does not carry over.
@@ -380,18 +381,18 @@ test('a paused contract resumes at a typed figure, or says the fact\'s week', ()
   const rows = build({imports:[{s:0, rows:[row(f, {weekly:0, pausedWeekly:3000, smart:true, target:3000}, 1600)]}]});
   assert.equal(rows.length, 1);
   assert.equal(rows[0].proposed, 1600);
-  assert.match(rows[0].reason, /Resume the paused import contract\. It is set to keep 3,000 in stock\. Set Smart Delivery stock to 1,600\./);
+  assert.match(rows[0].reason, new RegExp(enRe("sb.ck.resume").source + " " + enRe("sb.ck.paused.smart", {n: 3000}).source + " " + enRe("sb.ck.set.smart", {n: 1600}).source));
   const [untouched] = build({imports:[{s:0, rows:[row(f, {weekly:0, pausedWeekly:13000})]}]});
   assert.equal(untouched.proposed, null);
   assert.match(untouched.reason,
-    /Resume the paused import contract\. It is configured for 13,000 units\/week\. Uses 1,300 a week \(factory lines and shops\), plus a 15% margin: 1,610 a week\./);
+    new RegExp(enRe("sb.ck.resume").source + " " + enRe("sb.ck.paused.weekly", {n: 13000}).source + " " + enRe("sb.ck.paused.sized", {sized: en("sb.ck.uses.both", {n: 1300, route: "", margin: en("sb.ck.margin.pct", {pct: 15})}), n: 1610}).source));
 });
 
 test('a route that brings part of the week is named once, off the week', () => {
   const f = fact('short', {setTo:14490, use:12600, parts:{lines:14000, sites:11200, route:12600}});
   const [action] = build({imports:[{s:0, rows:[row(f, {weekly:5000})]}]});
   assert.deepEqual([action.current, action.proposed], [5000, 14490]);
-  assert.match(action.reason, /less the 12,600 a week a route brings, plus a 15% margin/);
+  assert.match(action.reason, new RegExp(enRe("sb.ck.route.less", {n: 12600}).source + enRe("sb.ck.margin.pct", {pct: 15}).source));
   // A route that brings the whole week covers the line: nothing to ask of the import.
   assert.deepEqual(build({imports:[{s:0, rows:[row(fact('covered', {why:'route'}), {weekly:5000}, undefined, {covered:true, need:0})]}]}), []);
 });
@@ -406,33 +407,33 @@ test('the Plan imports card has four states, and counts what the checklist has t
   const one = build({imports:[{s:0, rows:[order({item:'Metal Band', smart:true, current:15200, setTo:20200,
     value:20200, inGame:15200, levelName:'Import Hub'})]}]});
   assert.equal(one.length, 1);
-  assert.deepEqual(card(one), {badge:'1 TO CHANGE', live:true,
-    what:`<b>Metal Band</b> at Import Hub: Smart Delivery stock 15,200 → 20,200.`});
+  assert.deepEqual(card(one), {badge:en("today.moves.plan.badge.one"), live:true,
+    what:en("today.moves.plan.one.at", {item: "<b>Metal Band</b>", site: "Import Hub", change: en("today.moves.plan.smart", {from: "15,200", to: "20,200"})})});
 
   const many = build({
     imports:[{s:0, rows:[order({item:'Sugar'}), order({item:'Flour'})]}],
     shops:[{s:2, item:'Paper Bag', from:0, peakSold:400, target:100, peakDay:'Saturday', fact:fact('short', {setTo:460})}],
   });
   assert.equal(many.length, 3);
-  assert.deepEqual(card(many), {badge:'3 TO CHANGE', live:true,
-    what:'<b>3 changes</b> at Import Hub and Shop, starting with Sugar.'});
+  assert.deepEqual(card(many), {badge:en("today.moves.plan.badge.many", {n: 3}), live:true,
+    what:en("today.moves.plan.many.at2", {changes: "<b>" + en("today.moves.plan.changes", {n: 3}) + "</b>", site: "Import Hub", other: "Shop", item: "Sugar"})});
   // A tick takes a row off the count, as it takes it off the checklist's "to do".
   const left = card(many, [many[0].key]);
-  assert.equal(left.badge, '2 TO CHANGE');
-  assert.match(left.what, /starting with Flour\.$/);
-  assert.equal(card(many, [many[0].key, many[2].key]).badge, '1 TO CHANGE');
+  assert.equal(left.badge, en("today.moves.plan.badge.many", {n: 2}));
+  assert.match(left.what, enRe("today.moves.plan.many.at", {item: "Flour", changes: "<b>" + en("today.moves.plan.changes", {n: 2}) + "</b>"}));
+  assert.equal(card(many, [many[0].key, many[2].key]).badge, en("today.moves.plan.badge.one"));
 
-  assert.deepEqual(card(many, many.map(r => r.key)), {badge:'ALL TICKED', live:false,
-    what:'You ticked all 3. A change the game has taken leaves the list with the next save.'});
+  assert.deepEqual(card(many, many.map(r => r.key)), {badge:en("today.moves.plan.badge.ticked"), live:false,
+    what:en("today.moves.plan.ticked", {n: 3})});
   assert.deepEqual(card([], [], {complete: true, unnamed: 0}),
-    {badge:'ALL SET', live:false, what:'No changes found in the supply data.'});
+    {badge:en("today.moves.plan.badge.set"), live:false, what:en("today.moves.plan.clear")});
 });
 
 test('tight never reaches Today: with only margin changes left, the card says nothing falls short', () => {
   // drawSupplyStrip() hands the card the rows that are not tight, and how many are.
-  assert.deepEqual(card([], [], {complete: true, unnamed: 0, margin: 2}), {badge:'ALL SET', live:false,
-    what:'Nothing falls short. Supply lists 2 changes that would restore the margin.'});
-  assert.doesNotMatch(card([], [], {complete: true, unnamed: 0, margin: 1}).what, /tight/i);
+  assert.deepEqual(card([], [], {complete: true, unnamed: 0, margin: 2}), {badge:en("today.moves.plan.badge.set"), live:false,
+    what:en("today.moves.plan.short", {changes: en("today.moves.plan.margin", {n: 2})})});
+  assert.doesNotMatch(card([], [], {complete: true, unnamed: 0, margin: 1}).what, enRe("sb.word.tight", {}, {flags: "i"}));
   const drawn = between(source, 'function drawSupplyStrip(', '/* The Set to figures the player typed');
   assert.match(drawn, /const urgent = rows\.filter\(r => !r\.tight && !r\.lower\);/);
   assert.match(drawn, /planImportsState\(urgent,/);
@@ -442,33 +443,33 @@ test('a top-up target set too high is a change to lower, never tight and never o
   const [row] = build({shops:[{s:2, item:'Paper Bag', target:3000, sold:90, peakSold:99, peakDay:'Saturday', from:0,
     fact:fact('idle', {why:'targetHigh', role:'shelf', cad:'daily', use:99, need:114, have:3000, setTo:120, lowers:true})}]});
   assert.deepEqual([row.kind, row.current, row.proposed, row.lower, row.tight], ['Shop daily top-ups', 3000, 120, true, undefined]);
-  assert.match(row.reason, /^From Depot · 1 Depot Street\. Lower the top-up: it holds 33 days of sales\./);
+  assert.match(row.reason, new RegExp("^" + enRe("sb.ck.from", {site: "Depot · 1 Depot Street"}).source + " " + enRe("sb.ck.lower.days", {n: 33}).source));
   // An idle shelf without the figure asks for nothing.
   assert.deepEqual(build({shops:[{s:2, item:'Paper Bag', target:3000, sold:90, peakSold:99, from:0,
     fact:fact('idle', {why:'targetHigh', setTo:null})}]}), []);
   // With only a top-up to lower left, Today's card says nothing falls short.
-  assert.deepEqual(card([], [], {complete: true, unnamed: 0, lower: 1}), {badge:'ALL SET', live:false,
-    what:'Nothing falls short. Supply lists one top-up to lower.'});
+  assert.deepEqual(card([], [], {complete: true, unnamed: 0, lower: 1}), {badge:en("today.moves.plan.badge.set"), live:false,
+    what:en("today.moves.plan.short", {changes: en("today.moves.plan.lower", {n: 1})})});
   assert.equal(card([], [], {complete: true, unnamed: 0, margin: 1, lower: 3}).what,
-    'Nothing falls short. Supply lists one change that would restore the margin and 3 top-ups to lower.');
+    en("today.moves.plan.short.both", {margin: en("today.moves.plan.margin", {n: 1}), lower: en("today.moves.plan.lower", {n: 3})}));
   // Beside changes to type, the card says what else Supply lists, so its count and the strip's add up.
   const one = build({imports:[{s:0, rows:[order({})]}]});
-  assert.match(card(one, [], {complete: true, unnamed: 0, margin: 1, lower: 2}).what, / 3 more on Supply only restore the margin or lower a target\.$/);
-  assert.match(card(one, [one[0].key], {complete: true, unnamed: 0, lower: 2}).what, /next save\. 2 more on Supply only lower a target\.$/);
-  assert.doesNotMatch(card(one, [], {complete: true, unnamed: 0}).what, /more on Supply/);
+  assert.match(card(one, [], {complete: true, unnamed: 0, margin: 1, lower: 2}).what, new RegExp(" " + enRe("today.moves.plan.more.both", {n: 3}).source + "$"));
+  assert.match(card(one, [one[0].key], {complete: true, unnamed: 0, lower: 2}).what, new RegExp(enRe("today.moves.plan.ticked", {n: 1}).source + " " + enRe("today.moves.plan.more.lower", {n: 2}).source + "$"));
+  assert.doesNotMatch(card(one, [], {complete: true, unnamed: 0}).what, enRe("today.moves.plan.more.both"));
 });
 
 test('an empty checklist that could not see everything does not say ALL SET', () => {
   // The same caveats the checklist gives: recipes still unnamed, or no game text.
-  assert.deepEqual(card([], [], {complete: true, unnamed: 3}), {badge:'NONE FOUND', live:false,
-    what:'No changes found, but 3 factory recipes are still unnamed and not included.'});
+  assert.deepEqual(card([], [], {complete: true, unnamed: 3}), {badge:en("today.moves.plan.badge.none"), live:false,
+    what:en("today.moves.plan.none.unnamed", {unnamed: en("today.moves.plan.unnamed", {n: 3})})});
   assert.deepEqual(card([], [], {complete: true, unnamed: 1}).what,
-    'No changes found, but 1 factory recipe is still unnamed and not included.');
-  assert.deepEqual(card([], [], {complete: false, unnamed: 0}), {badge:'NONE FOUND', live:false,
-    what:"No changes found, but factory lines need the game's text to be included."});
+    en("today.moves.plan.none.unnamed", {unnamed: en("today.moves.plan.unnamed", {n: 1})}));
+  assert.deepEqual(card([], [], {complete: false, unnamed: 0}), {badge:en("today.moves.plan.badge.none"), live:false,
+    what:en("today.moves.plan.none.text")});
   // Both gaps at once are both named.
   assert.equal(card([], [], {complete: false, unnamed: 2}).what,
-    "No changes found, but 2 factory recipes are still unnamed and not included, and factory lines need the game's text to be included.");
+    en("today.moves.plan.none.both", {unnamed: en("today.moves.plan.unnamed", {n: 2})}));
 });
 
 test('a paused import with a figure reads as a resume, not an order from "not set"', () => {
@@ -480,18 +481,18 @@ test('a paused import with a figure reads as a resume, not an order from "not se
   // The row says it is paused; the card reads that, not the reason's wording.
   assert.deepEqual(rows.map(r => r.paused), [true, true]);
   assert.equal(card(rows.map(r => ({...r, reason: 'Anything.'})), [rows[1].key]).what,
-    `<b>Sugar</b> at Import Hub: resume the paused import, 1,600/week.`);
+    en("today.moves.plan.one.at", {item: "<b>Sugar</b>", site: "Import Hub", change: en("today.moves.plan.resume.week", {to: "1,600"})}));
   assert.equal(build({imports:[{s:0, rows:[order({})]}]})[0].paused, undefined, 'an ordinary order carries no flag');
   assert.equal(card(rows, [rows[1].key]).what,
-    `<b>Sugar</b> at Import Hub: resume the paused import, 1,600/week.`);
+    en("today.moves.plan.one.at", {item: "<b>Sugar</b>", site: "Import Hub", change: en("today.moves.plan.resume.week", {to: "1,600"})}));
   assert.equal(card(rows, [rows[0].key]).what,
-    `<b>Salt</b> at Import Hub: resume the paused import, Smart Delivery stock 1,200.`);
+    en("today.moves.plan.one.at", {item: "<b>Salt</b>", site: "Import Hub", change: en("today.moves.plan.resume.smart", {to: "1,200"})}));
 });
 
 test('the card says a review in the checklist’s own words, and escapes a save’s names', () => {
   const rows = build({loose:[{item:'<Glue>', week:700}]});
-  assert.deepEqual(card(rows), {badge:'1 TO CHANGE', live:true,
-    what:'<b>&lt;Glue></b>: choose a supplying depot before setting an order.'});
+  assert.deepEqual(card(rows), {badge:en("today.moves.plan.badge.one"), live:true,
+    what:en("today.moves.plan.one", {item: "<b>&lt;Glue></b>", change: en("sb.ck.lead.loose")})});
 });
 
 test("in another language the words change, and the kinds, tick keys and Today's wording stay whole", () => {
@@ -503,12 +504,16 @@ test("in another language the words change, and the kinds, tick keys and Today's
   try {
     const de = build(input);
     assert.deepEqual(de.map(r => [r.kind, r.key, r.legacyKey]), en.map(r => [r.kind, r.key, r.legacyKey]));
+    // Pins the wording: translation-table interpolation and grouping.
     assert.match(de[0].group, /^Wochenimporte · Depot · 1 Depot Street$/);
     const review = de.find(r => r.proposed === null);
+    // Pins the wording: the supplied German translation is rendered.
     assert.match(review.reason, /^Wähle ein Depot\. /);
     // Today's card takes the review's own first sentence, not a slice of the reason.
+    // Pins the wording: translated review lead is kept whole.
     assert.equal(card([review]).what, '<b>Glue</b>: wähle ein Depot.');
     // The copied checklist follows the UI language.
+    // Pins the wording: the supplied copy template is interpolated.
     assert.match(context.orderChecklistText(de, 'Company'), /\n\[ \] Glue – Review – Wähle ein Depot\./);
   } finally {
     context.ttSetTable('en', null);
@@ -532,11 +537,11 @@ test('a factory line short of its hours is one "Factory run hours" row; more hou
   const rows = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [], [], lines)));
   assert.deepEqual(rows.map(r => [r.kind, r.item, r.current, r.proposed, r.mode]),
     [['Factory run hours', 'Cake', 12, 24, 'hours']]);
-  assert.match(rows[0].reason, /^Staff Cake for 24 hours a day, on each of its 2 machines; the schedule has them 12\. Planned for full production/);
+  assert.match(rows[0].reason, new RegExp("^" + enRe("sb.ck.staff.each", {item: "Cake", n: 24, m: 2, now: 12}).source + " " + enRe("sb.ck.hours.full").source));
   // Keyed by the item's key, as every checklist row is.
   assert.equal(rows[0].key, JSON.stringify(['Factory run hours', 'factory#2', 'ba:itemname_cake', 12, 24, null]));
-  assert.match(context.orderChecklistText(rows, 'Company'), /Cake: run 12 -> 24 hours\/day/);
-  assert.match(context.orderChecklistText(rows, 'Company', 'dem'), /sized for what the shops at the end of each chain use/);
-  assert.match(context.orderChecklistText(rows, 'Company'), /assume the lines run round the clock/);
-  assert.equal(card(rows).what, '<b>Cake</b> at Factory: run hours 12 \u2192 24 a day.');
+  assert.match(context.orderChecklistText(rows, 'Company'), enRe("sb.ck.copy.row", {item: "Cake", change: en("sb.ck.copy.hours", {from: 12, n: 24})}));
+  assert.match(context.orderChecklistText(rows, 'Company', 'dem'), enRe("sb.ck.copy.shop"));
+  assert.match(context.orderChecklistText(rows, 'Company'), enRe("sb.ck.copy.full"));
+  assert.equal(card(rows).what, en("today.moves.plan.one.at", {item: "<b>Cake</b>", site: "Factory", change: en("today.moves.plan.hours", {from: "12", to: "24"})}));
 });
