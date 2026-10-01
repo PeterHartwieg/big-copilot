@@ -7,9 +7,10 @@ For setup, see the [README](../README.md). File paths below are relative to the 
 | File | What it does |
 | --- | --- |
 | `ba_save.py` | Reads the `.hsg` format, being gzip around an Easy Save 3 binary stream. The format notes are in the module docstring. |
-| `ba_dashboard.py` | Pulls the numbers out of a parsed save and renders the HTML from `template/board.html`. |
-| `template/board.html` | The board's markup, CSS and script, with the placeholders `render()` fills in. |
-| `build_web.py` | Assembles `web/` from the same template the local server uses. Run `python build_web.py` after changing either Python file or `template/board.html`. |
+| `ba_dashboard.py` | Pulls the numbers out of a parsed save and renders the HTML from `template/board.html` and `template/board.js`. |
+| `template/board.html` | The board's markup and CSS, with the placeholders `render()` fills in. |
+| `template/board.js` | The board script, spliced into the last `<script>` block of `board.html` (`/*__BOARD_SCRIPT__*/`). `tools/split_board_script.py` moves a script edited inline in `board.html` back out. |
+| `build_web.py` | Assembles `web/` from the same template the local server uses. Run `python build_web.py` after changing either Python file or either template file. |
 | `web/` | The static site. `index.html` is generated; `app.js` and `worker.js` are kept by hand; `py/` holds the copies of the two Python files the worker fetches. |
 | `web/map.js`, `web/map.css` | Shared map/overlay code, embedded by `render()` into browser and local output. |
 | `web/maps/locations.json`, `web/maps/map-background.svg` | Generated address hit geometry and zoomable background. The approved poster exports remain unchanged. |
@@ -64,7 +65,7 @@ identities. Run `npm run test:community` after `python build_web.py`, and
 See [Community features](community-features.md) for database/secret setup and the
 first production release steps. No live API credentials are needed for tests.
 
-Keep layout changes in the shared template, `template/board.html`: let section
+Keep layout changes in the shared template, `template/board.html` and `template/board.js`: let section
 controls wrap, let text cells grow and wrap while keeping amounts intact, and put
 lengthy per-machine detail behind a disclosure. Do not reintroduce a fixed board
 width or use an unbroken note to size a metric column. Issue #7's screenshots show

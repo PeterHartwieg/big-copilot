@@ -43,7 +43,7 @@ flowchart TD
   payload -->|"embedded as /*__DATA__*/"| board
 ```
 
-Both doors run the same `extract()` and the same template, `template/board.html`. Only the wrapper differs:
+Both doors run the same `extract()` and the same template, `template/board.html` with the board script `template/board.js`. Only the wrapper differs:
 locally `main()` calls `load_save()` and `render(data)`; in the browser `web/worker.js` calls
 `browser_build()`, which does the same work on Pyodide's virtual filesystem and returns
 JSON. A third source feeds either door: the Big Copilot Link mod serves the running
@@ -561,13 +561,22 @@ without its `.git`) or inside any other git work tree.
 
 ## Template placeholders
 
-The board's page is `template/board.html`, a file of its own beside `ba_dashboard.py`.
-`render()` reads it through `load_template()`, once per process and never at import time:
-the Pyodide worker imports `ba_dashboard` without the file and never renders. It is in
-`build_web.STAMP_INPUTS`, so an edit to it changes the build stamp.
+The board's page is `template/board.html`, a file of its own beside `ba_dashboard.py`, and
+its script is `template/board.js` beside it. `render()` reads both through
+`load_template()`, once per process and never at import time: the Pyodide worker imports
+`ba_dashboard` without the files and never renders. `load_template()` first splices
+`board.js` into the line `/*__BOARD_SCRIPT__*/`, the whole body of the page's last
+`<script>` block, so `render()` sees the page as one string and fills the placeholders in
+both files in the same order as when they were one. Both files are in
+`build_web.STAMP_INPUTS`, so an edit to either changes the build stamp.
 
-The template carries seventeen tokens. All seventeen are substituted by `render()`, but the
-text for three of them is supplied by the caller.
+`tools/split_board_script.py` made the split and does it again: run on a `board.html` whose
+last `<script>` block still holds the script inline (a branch that edited the script before
+the split, say), it moves the body to `board.js` and leaves the slot; `--join` puts it back.
+
+The template carries seventeen tokens besides the slot, some in `board.html` and some in
+`board.js`. All seventeen are substituted by `render()`, but the text for three of them is
+supplied by the caller.
 
 | Token | Filled with |
 | --- | --- |
@@ -628,7 +637,7 @@ What `page_html()` produces, top of the file down:
 4. `BEFORE_SCRIPT`, filled in by `page_html()` with the stamp, the release JSON and the
    inlined `web/update.js`, in its slot just ahead of the board's own script:
    `window.LEDGER_RELEASE`, `update.js`, `app.js?v=<stamp>`, `community.js?v=<stamp>`.
-5. The board script, the last `<script>` block of the template.
+5. The board script, `template/board.js`, in the last `<script>` block of the template.
 
 Before any of that, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`,
 `ba_dashboard.py`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json` and `ba_store_rules.json` into `web/py/`, and
@@ -971,7 +980,7 @@ the payload table, the private build tokens, the finding groups, and the
 above its declaration (`tests/test_doc_registries.py`). The other covering tests check the entries that exist
 today, so extend them for the new entry. Rows marked
 *only if* apply to some entries, not all. All anchors are in `ba_dashboard.py` unless a row
-says otherwise; "board script" means the last `<script>` block of `template/board.html`.
+says otherwise; "board script" means `template/board.js`, the last `<script>` block of the page.
 
 ### A finding kind
 
@@ -981,7 +990,7 @@ rows in `ALERT_GROUPS`, `ALERT_LINKS`, `FINDING_ROUTES` and `ALERT_EVIDENCE` (or
 (else `NOT_MONEY` there); `SS_KIND_SYN` if players have words for it; and its
 player-facing line under "What counts as a finding" in `docs/dashboard-reference.md`.
 Every other row is *only if*. The same summary sits above each of those tables in
-`ba_dashboard.py` and `template/board.html`.
+`ba_dashboard.py` and `template/board.js`.
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |

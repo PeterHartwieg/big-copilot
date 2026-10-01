@@ -509,8 +509,9 @@ STAMP_INPUTS = (
     "web/py/ba_item_prices.json",
     # What a store sells, needs and can buy where, for the store planner (make_store_rules.py).
     "web/py/ba_store_rules.json",
-    # The board's markup, CSS and script, which render() reads (ba_dashboard.load_template()).
+    # The board's markup and CSS, and its script, which render() reads (ba_dashboard.load_template()).
     "template/board.html",
+    "template/board.js",
 )
 
 
@@ -598,7 +599,7 @@ def page_html(release: dict, root: str = HERE) -> str:
     """web/index.html for one release: the same string the build writes.
 
     root redirects the one file read here, web/update.js. It does not reach
-    render(): the board template (template/board.html), the footer changelog
+    render(): the board template (template/board.html and board.js), the footer changelog
     and the embedded map.js, map.css, wiki.js and wiki.css all come from beside
     the imported ba_dashboard.py, whatever root says. So a page built for
     another root mixes that root's update.js and stamp with this checkout's
