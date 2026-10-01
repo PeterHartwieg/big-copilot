@@ -4062,6 +4062,97 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
   .os-inv,.os-dl,.os-pvsa{display:block;overflow-x:auto}
 }
 
+/* ----- Expansion › Plan a factory, the flow (the of* functions; issue #172),
+   ported from the approved canvas (mockup/factory-flow on branch
+   factory-flow-canvas, FF_CSS). It stands on Open a store's os- parts; what
+   only a factory needs is ff- ----- */
+:where(#secPlan, #secPlanFlow) button{font:inherit;color:inherit}
+#secPlanFlow{margin-top:0}
+.ff-for{display:flex;align-items:center;gap:10px;min-width:0}
+.ff-kind{display:inline-flex;flex-wrap:wrap;padding:3px;gap:2px;border:1px solid var(--rule);border-radius:10px;background:var(--surface)}
+.ff-kind button{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 12px;border:0;border-radius:7px;background:none;color:var(--ink-2);font-size:12.5px;font-weight:500;white-space:nowrap;cursor:pointer}
+.ff-kind button:hover{color:var(--ink)}
+.ff-kind button.on{background:var(--ink);color:var(--ground)}
+.ff-kind button svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ff-kind button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#planPicker > .os-lab{margin-right:2px}
+.ff-ctl{margin:6px 0 0}
+.ff-pb>div.ff-run{border-left:1px dashed var(--rule);background:color-mix(in srgb,var(--ground) 60%,transparent);border-radius:0 12px 12px 0}
+.ff-pb>div.ff-run small{white-space:normal;overflow:visible}
+.ff-size{display:flex;align-items:center;flex-wrap:wrap;gap:10px 12px;margin:20px 0 4px;font-size:12.5px}
+.ff-start{margin-top:22px}
+.ff-planhead{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px}
+.ff-planhead h3{margin:0;font-size:14.5px;font-weight:600}
+.ff-planhead .os-dim{margin-left:auto;font-size:12.5px}
+.ff-lead{margin:6px 0 10px;font-size:12.5px;line-height:1.45}
+.ff-make th,.ff-make td{padding:10px 8px}
+.ff-make td.l b{display:block;font-family:Archivo,sans-serif;font-weight:600;color:var(--ink)}
+.ff-make td.l{font-family:Archivo,sans-serif}
+.ff-make td.go{width:1%;padding-right:2px}
+.ff-make td.go button{display:inline-grid;place-items:center;width:30px;height:30px;padding:0;border-radius:8px;border:1px solid var(--rule);background:none;color:var(--ink-2);cursor:pointer}
+.ff-make td.go button:hover{border-color:var(--ink-3);color:var(--ink)}
+.ff-delta{margin-left:8px;font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--accent);white-space:nowrap}
+.ff-delta.same{color:var(--ink-3)}
+.ff-saves{margin:12px 0 0;font-size:12.5px;line-height:1.45;color:var(--ink-3)}
+.ff-short{display:grid;grid-template-columns:14px 18px minmax(0,1fr) auto;gap:12px;align-items:center;min-height:54px;margin-top:12px;padding:8px 4px;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.ff-short+.ff-short{margin-top:0;border-top:0}
+.ff-short .mk{width:8px;height:8px;border-radius:50%;justify-self:center;background:var(--warn)}
+.ff-short>svg{width:16px;height:16px;stroke:var(--ink-3);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ff-short .t{font-size:14px;font-weight:600}
+.ff-short .t small{display:block;margin-top:3px;font-size:12.5px;font-weight:400;color:var(--ink-3)}
+.ff-short .a{font:500 13.5px/1.2 "IBM Plex Mono",monospace;text-align:right;color:var(--warn)}
+.ff-short .a small{display:block;font-size:10.5px;color:var(--ink-3);letter-spacing:.04em;text-transform:uppercase}
+.ff-note{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:12px;align-items:center;margin-top:16px;padding:13px 16px;border-radius:12px;border:1px solid var(--rule);background:var(--surface);font-size:13px;line-height:1.45;color:var(--ink-2)}
+.ff-note>svg{width:18px;height:18px;stroke:var(--info);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ff-note.warn{border-color:color-mix(in srgb,var(--warn) 45%,transparent);background:color-mix(in srgb,var(--warn) 6%,var(--surface))}
+.ff-note.warn>svg{stroke:var(--warn)}
+.ff-note b{color:var(--ink);font-weight:600}
+.ff-flow{display:flex;align-items:center;flex-wrap:wrap;gap:10px 0;margin-top:16px;padding:14px 16px;border-radius:12px;border:1px solid var(--rule-soft);background:var(--surface)}
+.ff-node{display:flex;align-items:center;gap:10px;min-width:0}
+.ff-node .ic{display:grid;place-items:center;flex:none;width:34px;height:34px;border-radius:9px;background:var(--raised);color:var(--ink-2)}
+.ff-node .ic svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ff-node.new .ic{background:var(--accent);color:var(--on-accent)}
+.ff-node.miss .ic{background:none;border:1.5px dashed var(--warn);color:var(--warn)}
+.ff-node b{display:block;font-size:13px;font-weight:600;white-space:nowrap}
+.ff-node small{display:block;margin-top:2px;font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.ff-arrow{flex:0 0 34px;height:2px;margin:0 8px;background:repeating-linear-gradient(90deg,var(--ink-3) 0 4px,transparent 4px 8px);position:relative}
+.ff-arrow::after{content:"";position:absolute;right:-2px;top:-4px;border:5px solid transparent;border-left-color:var(--ink-3);border-right:0}
+.ff-shops{display:flex;flex-wrap:wrap;gap:5px;min-width:0}
+.ff-shops span{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border-radius:6px;background:var(--raised);font-size:12px;color:var(--ink-2);white-space:nowrap}
+.ff-shops .hood{height:16px;min-width:20px;font-size:9px}
+.ff-next{display:flex;justify-content:flex-end;margin-top:18px}
+.ff-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-top:12px;border:1px solid var(--rule-soft);border-radius:10px;background:var(--ground)}
+.ff-facts>div{display:flex;flex-direction:column;gap:5px;min-width:0;padding:11px 13px;border-left:1px solid var(--rule-soft)}
+.ff-facts>div:first-child{border-left:0}
+.ff-facts b{font:500 14px/1.1 "IBM Plex Mono",monospace}
+.ff-facts small{font-size:11.5px;color:var(--ink-3);line-height:1.35}
+.ff-callout{display:flex;align-items:center;gap:12px;margin-top:14px;padding:12px 14px;border-radius:10px;background:var(--warn-soft);color:var(--ink-2);font-size:13px}
+.ff-callout b{color:var(--ink);font-weight:600}
+.ff-callout svg{width:17px;height:17px;flex:none;stroke:var(--warn);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ff-hand{display:inline-flex;align-items:center;height:20px;margin-left:8px;padding:0 7px;border-radius:5px;border:1px dashed var(--rule);font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap;vertical-align:2px}
+.ff-sub{margin:26px 0 0;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.ff-sub+.os-cks{margin-top:8px}
+.os-ck.skip .st{border-style:dashed}
+.os-ck.skip .tx b{color:var(--ink-3);font-weight:500}
+.os-ck .act{flex-wrap:wrap}
+.os-ck .tx small .lt{color:var(--info)}
+.ff-outc{margin-top:18px}
+.ff-outc h3{margin:0 0 10px}
+.ff-out th,.ff-out td{padding:10px 12px}
+.ff-out td.l b{display:block;font-family:Archivo,sans-serif;font-weight:600}
+.ff-out td.w{color:var(--warn)}
+.ff-meter{display:block;width:110px;height:5px;margin:6px 0 0 auto;border-radius:3px;background:var(--rule);overflow:hidden}
+.ff-meter i{display:block;height:100%;width:var(--w);background:var(--accent)}
+.ff-meter.w i{background:var(--warn)}
+.ff-why{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+.ff-why>div{display:grid;grid-template-columns:14px 18px minmax(0,1fr) auto;gap:12px;align-items:center;min-height:54px;padding:6px 4px;border-bottom:1px solid var(--rule-soft)}
+.ff-why .mk{width:8px;height:8px;border-radius:50%;justify-self:center;background:var(--warn)}
+.ff-why>div>svg{width:16px;height:16px;stroke:var(--ink-3);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ff-why .t{font-size:14px;font-weight:600}
+.ff-why .t small{display:block;margin-top:3px;font-size:12.5px;font-weight:400;color:var(--ink-3)}
+@media (max-width:1100px){.ff-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.ff-facts>div:nth-child(3){border-left:0}.ff-facts>div:nth-child(n+3){border-top:1px solid var(--rule-soft)}}
+@media (max-width:620px){.ff-make,.ff-out{display:block;overflow-x:auto}.ff-arrow{display:none}.ff-flow{flex-direction:column;align-items:flex-start}.ff-short,.ff-why>div{grid-template-columns:14px minmax(0,1fr) auto}.ff-short>svg,.ff-why>div>svg{display:none}}
+
 </style>
 <script>
 /*__I18N_SCRIPT__*/
@@ -4146,7 +4237,7 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
         <div class="ov-p"><div class="ov-ph"><b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16"></path><path d="M14 10h5a1 1 0 0 1 1 1v10M4 21h17M8 8h2M8 12h2M8 16h2M17 14h1M17 18h1"></path></svg><span data-tt="nav.area.businesses">Businesses</span></b><svg class="ov-ill" viewBox="0 0 118 56" aria-hidden="true"><rect class="oi-bar" x="8" y="14" width="16" height="30" rx="2"></rect><rect class="oi-bar" x="30" y="22" width="16" height="22" rx="2"></rect><rect class="oi-bar" x="52" y="8" width="16" height="36" rx="2"></rect><rect class="oi-bar" x="74" y="28" width="16" height="16" rx="2"></rect><rect class="oi-bar n" x="96" y="44" width="16" height="9" rx="2"></rect><line x1="4" x2="114" y1="44" y2="44" stroke="var(--rule)"></line><circle class="oi-dotg" cx="16" cy="6" r="3"></circle><circle class="oi-dotg" cx="38" cy="14" r="3"></circle><circle class="oi-dotg" cx="60" cy="0" r="3"></circle><circle class="oi-dotw" cx="82" cy="20" r="3"></circle><circle class="oi-dotw" cx="104" cy="44" r="3"></circle></svg></div>
           <a class="ov-task" href="#businesses/results" data-ov-route="businesses/results"><span data-tt="today.task.results">Compare business profits</span><span class="c" data-ov-count="results" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a class="ov-task" href="#businesses/prices" data-ov-route="businesses/prices"><span data-tt="today.task.prices">Check prices and product sales</span><span class="c" data-ov-count="prices" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a class="ov-task" href="#businesses/standards" data-ov-route="businesses/standards"><span data-tt="today.task.standards">Improve customer satisfaction</span><span class="c" data-ov-count="standards" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div>
         <div class="ov-p"><div class="ov-ph"><b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18 10 12l4 4 6-7"></path><path d="M15 9h5v5"></path></svg><span data-tt="nav.area.expansion">Expansion</span></b><svg class="ov-ill" viewBox="0 0 118 56" aria-hidden="true"><rect class="oi-flr" x="30" y="10" width="80" height="42"></rect><path class="oi-wall" d="M30 10 H110 V52 H78 M62 52 H30 Z"></path><path class="oi-wall" d="M86 10 V28 H110" style="stroke-width:1.3"></path><path class="oi-pin" d="M18 4a9 9 0 0 1 9 9c0 7-9 15-9 15s-9-8-9-15a9 9 0 0 1 9-9z"></path><circle cx="18" cy="13" r="3.2" fill="var(--ground)"></circle></svg></div>
-          <a class="ov-task" href="#expansion/finder" data-ov-route="expansion/finder" id="findLocationCard" data-tip=""><span data-tt="today.task.finder">Find a suitable location</span><span class="soon"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg><span class="what"></span><span class="go"></span></a><a class="ov-task" href="#expansion/factory" data-ov-route="expansion/factory"><span data-tt="today.task.factory">Plan a new factory</span><span class="c" data-ov-count="factory" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a class="ov-task" href="#expansion/demand" data-ov-route="expansion/demand"><span data-tt="today.task.demand">Explore market demand</span><span class="c" data-ov-count="demand" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div>
+          <a class="ov-task" href="#expansion/finder" data-ov-route="expansion/finder" id="findLocationCard" data-tip=""><span data-tt="today.task.finder">Find a suitable location</span><span class="soon"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg><span class="what"></span><span class="go"></span></a><a class="ov-task" href="#expansion/factory" data-ov-route="expansion/factory"><span data-tt="today.task.factory">Plan a new factory</span><span class="feature-new" data-new-feature="factory-flow" hidden data-tt="nav.new">New</span><span class="c" data-ov-count="factory" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a class="ov-task" href="#expansion/demand" data-ov-route="expansion/demand"><span data-tt="today.task.demand">Explore market demand</span><span class="c" data-ov-count="demand" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div>
       </div>
     </section>
   </div>
@@ -4204,12 +4295,22 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
       <div id="osBody"></div>
     </section>
 
+    <!-- Expansion › Plan a factory (drawPlan(), the of* functions; issue #172):
+         the Shops and For pickers beside the view's tabs, the five steps and
+         the plan picker (#ofCtl), the plan's strip, the start table and the
+         lines (step 1), then #secIngredients (a factory you run, step 1) and
+         #secPlanFlow, the other steps' bodies and the embedded finder. -->
     <section class="sec rv" id="secPlan" data-sub="plan">
       <div class="sechead" data-view-ctl="expansion/factory"><h2 class="nx-sr" data-tt="gr.plan.title2">Plan a factory</h2>
         <span class="why" data-tt-tip="gr.plan.why" data-tip="Every machine runs 24 hours at its rated rate, so a line makes its full quantity whether or not the shelves need it. Build the factory first; the shops come after, and what they do not take is exported. Step a single line up when one product deserves more, down to none to buy it in instead." tabindex="0"><i>?</i></span>
         <span class="quiet" id="planNote"></span>
-        <div class="aside" id="planPicker"></div></div>
+        <div class="aside" id="planPicker"></div>
+        <div class="ff-for" id="planFor"></div></div>
+      <div class="sechead os-ctl ff-ctl" id="ofCtl"></div>
+      <div id="ofStrip"></div>
+      <div id="ofStart"></div>
       <div id="planBody"></div>
+      <div id="ofWhat"></div>
     </section>
     <section class="sec rv" id="secIngredients" data-sub="plan">
       <div class="sechead"><h2 data-tt="gr.ing.title">Ingredients</h2>
@@ -4221,6 +4322,11 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
         <tfoot id="ingFoot"></tfoot>
       </table></div>
       <p class="quiet" id="ingNote" style="margin:12px 0 0"></p>
+    </section>
+    <section class="sec rv" id="secPlanFlow" data-sub="plan">
+      <h2 class="nx-sr" data-tt="gr.of.title">Plan a factory, step by step</h2>
+      <div id="ofWhere" class="os-where" hidden><div class="os-finder" id="ofFinderMap"></div></div>
+      <div id="ofBody"></div>
     </section>
   </div>
 
