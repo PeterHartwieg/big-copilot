@@ -4,6 +4,7 @@ holds back, a new shop on a wholesale contract, unrouted stock a factory
 needs, and the unit prices the Plan page reads.
 """
 import unittest
+from tests.i18n_check import MsgAsserts, find_msg
 
 from ba_dashboard import DELIVERY_LOG_SIZE, RECIPE_ITEMS, Names, _ingredient_prices, plain, site_key
 from test_supply_facts import (BEER, DISTRIB, FACTORY, HUB, RECIPES, RID, SHOP_A, SODA, WATER,
@@ -79,7 +80,8 @@ class LimitedInputTests(unittest.TestCase):
         [need] = c.supply["factories"]["sites"][0]["needs"]
         self.assertTrue(need["limited"])
         self.assertEqual((c.fact(FACTORY, WATER)["st"], c.fact(FACTORY, WATER)["why"]), ("covered", "limit"))
-        self.assertFalse([f for f in c.findings() if f["group"] == "feed" and "reaching the factory" in f["text"]])
+        self.assertFalse([f for f in c.findings() if f["group"] == "feed"
+                          and any(find_msg(f["text"], key) for key in ("f.feed.notdrawn", "f.feed.notdrawn.resume"))])
         # The working keys stay off the payload.
         self.assertNotIn("_shipDraw", need)
         self.assertNotIn("_allLimit", need)
@@ -114,7 +116,7 @@ class StarvedLineTests(unittest.TestCase):
         self.assertEqual((c.fact(FACTORY, WATER)["st"], c.fact(FACTORY, WATER)["why"]), ("stalled", "notDrawn"))
 
 
-class WholesalePlanTests(unittest.TestCase):
+class WholesalePlanTests(MsgAsserts, unittest.TestCase):
     """SU-3: a new shop a repeating wholesale contract delivers to has a plan."""
 
     def new_shop(self, **wholesale):
@@ -131,15 +133,15 @@ class WholesalePlanTests(unittest.TestCase):
     def test_a_repeating_wholesale_contract_is_a_delivery_plan(self):
         shop, note = self.new_shop()
         self.assertNotIn("plan", shop["notTrading"])
-        self.assertNotIn("no delivery plan", note["text"])
+        self.assertNoMsg(note["text"], "f.notrading.plan")
 
     def test_a_one_off_order_is_not(self):
         shop, note = self.new_shop(repeating=False)
         self.assertIn("plan", shop["notTrading"])
-        self.assertIn("no delivery plan", note["text"])
+        self.assertHasMsg(note["text"], "f.notrading.plan")
 
 
-class NotRoutedFactoryTests(unittest.TestCase):
+class NotRoutedFactoryTests(MsgAsserts, unittest.TestCase):
     """SU-4: stock no plan sends on while a factory needs it is one finding."""
 
     def test_the_factory_input_gives_way_to_not_routed(self):
@@ -153,7 +155,7 @@ class NotRoutedFactoryTests(unittest.TestCase):
         groups = [f["group"] for f in c.findings() if f["group"] in ("notrouted", "feed")]
         self.assertEqual(groups, ["notrouted"])
         [note] = [f for f in c.findings() if f["group"] == "notrouted"]
-        self.assertIn("Brewery needs", plain(note["text"]))
+        self.assertMsg(note["text"], "f.notrouted.one.needs.held", who="Brewery")
 
     def test_with_nothing_held_anywhere_the_factory_still_says_so(self):
         c = Company()
@@ -161,7 +163,7 @@ class NotRoutedFactoryTests(unittest.TestCase):
         c.hold(FACTORY, WATER, 50)
         c.run()
         [note] = [f for f in c.findings() if f["group"] == "feed"]
-        self.assertIn("no depot tops it up", plain(note["text"]))
+        self.assertMsg(note["text"], "f.feed.noplan")
 
 
 class IngredientPriceTests(unittest.TestCase):

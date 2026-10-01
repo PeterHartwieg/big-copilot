@@ -5,6 +5,7 @@ stock level: each delivery brings max(0, level - stock of that item at the
 depot), and a later contract sees what an earlier one brought that morning.
 """
 import unittest
+from tests.i18n_check import MsgAsserts, find_msg, matches, msg_param
 from unittest.mock import patch
 
 import test_import_routes as fixtures
@@ -148,7 +149,7 @@ class ScheduledGapTests(unittest.TestCase):
         self.assertEqual((result["catchUp"], result["runsOut"]), (50, 11))
 
 
-class SmartSupplyTests(unittest.TestCase):
+class SmartSupplyTests(MsgAsserts, unittest.TestCase):
     def setUp(self):
         # Built through the module, so its test class is not collected twice.
         self.routes = fixtures.ImportRoutesTests()
@@ -199,9 +200,9 @@ class SmartSupplyTests(unittest.TestCase):
                          (1100, 700, 400))
         self.assertEqual(need["raiseImport"], 1280)
         [note] = _import_notes(data["businesses"], data["supply"], set())
-        self.assertIn("Smart Delivery keeps 700 in stock, plus 400 a week on top", note["text"])
-        self.assertIn("raise the Smart Delivery stock at 1 Pier to 1,280", note["text"])
-        self.assertNotIn("1,100 in stock", note["text"])
+        self.assertHasMsg(note["text"], "f.smart.plus", level=700, after=400)
+        self.assertMsg(note["text"], "f.import.smart.at.raise", at="1 Pier", **{"set": 1280})
+        self.assertNotEqual(find_msg(note["text"], "f.smart.plus").p["level"], 1100)
         # Plain first, the same contracts read as the level alone.
         data = self.routes.build([contract(400, pier=2, destination=("factory", 0)),
                                   smart(700, destination=("factory", 0))])
@@ -244,28 +245,24 @@ class SmartSupplyTests(unittest.TestCase):
         high["id"] = "c-3"
         _, line = self.depot([low, plain, high], routed=True)
         self.assertEqual((line["target"], line["levelId"]), (600, "c-3"))
-        self.assertEqual(line["levelName"], "1 Pier, its 2nd of 2 contracts here")
+        self.assertMsg(line["levelName"], "sb.py.levelName", importer="1 Pier", n=2,
+                       nth=msg_param("sb.py.ord.nd", n=2))
         # The number counts that importer's own contracts, paused and zero
         # ones too: plain 0, level 500, level 600 at 1 Pier, 300 at 2 Pier.
         zero, low, high = contract(0, last=0), smart(500), smart(600)
         _, line = self.depot([zero, low, high, contract(300, pier=2)], routed=True)
-        self.assertEqual(line["levelName"], "1 Pier, its 3rd of 3 contracts here")
+        self.assertMsg(line["levelName"], "sb.py.levelName", importer="1 Pier", n=3,
+                       nth=msg_param("sb.py.ord.rd", n=3))
         # One contract per importer needs no number.
         _, line = self.depot([smart(1000), contract(400, pier=2)], routed=True)
         self.assertEqual(line["levelName"], "1 Pier")
 
     def test_plain_delivered_first_that_passes_the_level_says_so(self):
-        self.assertEqual(_smart_words(1000, 0, 1400),
-                         "Smart Delivery keeps 1,000 in stock, but the 1,400 a week delivered "
-                         "before it already passes the 1,000 level")
-        self.assertEqual(_smart_words(1000, 200, 600),
-                         "Smart Delivery keeps 1,000 in stock, counting the 600 a week delivered "
-                         "before it, plus 200 a week on top")
+        self.assertMsg(_smart_words(1000, 0, 1400), "f.smart.passes", level=1000, before=1400)
+        self.assertMsg(_smart_words(1000, 200, 600), "f.smart.counting.plus", level=1000, before=600, after=200)
 
     def test_plain_delivered_first_that_equals_the_level_reaches_it(self):
-        self.assertEqual(_smart_words(1000, 0, 1000),
-                         "Smart Delivery keeps 1,000 in stock, but the 1,000 a week delivered "
-                         "before it already reaches the 1,000 level")
+        self.assertMsg(_smart_words(1000, 0, 1000), "f.smart.reaches", level=1000, before=1000)
 
     def test_a_raise_without_a_pass_falls_back_as_the_page_does(self):
         self.assertEqual(_raise_import({"smart": True, "plainAfter": 400}, 1800), 1400)
@@ -321,15 +318,16 @@ class SmartSupplyTests(unittest.TestCase):
     def test_feed_findings_say_the_level_is_kept_in_stock(self):
         data = self.routes.build([smart(700, destination=("factory", 0))])
         [note] = _import_notes(data["businesses"], data["supply"], set())
-        self.assertIn("Smart Delivery keeps 700 in stock", note["text"])
-        self.assertIn("raise the Smart Delivery stock at 1 Pier to 1,680", note["text"])
-        self.assertNotIn("import order", note["text"])
+        self.assertHasMsg(note["text"], "f.smart", level=700)
+        self.assertMsg(note["text"], "f.import.smart.at.raise", at="1 Pier", **{"set": 1680})
+        self.assertNoMsg(note["text"], "f.import.order")
+        self.assertNoMsg(note["text"], "f.import.order.raise")
         data = self.routes.build([smart(1650, destination=("factory", 0))])
         [note] = _import_notes(data["businesses"], data["supply"], set())
-        self.assertIn("Smart Delivery keeps 1,650 in stock", note["text"])
+        self.assertHasMsg(note["text"], "f.smart", level=1650)
         data = self.routes.build([contract(700, destination=("factory", 0))])
         [note] = _import_notes(data["businesses"], data["supply"], set())
-        self.assertIn("import order is 700", note["text"])
+        self.assertMsg(note["text"], "f.import.order.raise", order=700)
 
     def measured(self, contracts):
         """The depot tops up a shop selling 200 a day, so its draw is known
@@ -368,8 +366,9 @@ class SmartSupplyTests(unittest.TestCase):
         result = _alerts(data["businesses"], data["supply"], [], [], [], [], [], 10, 1e9)
         texts = [a["text"] for a in result["lines"] + result["minor"]["rows"]
                  if a["group"] == "order"]
-        self.assertTrue(any("Smart Delivery keeps 1,000 in stock against a 1,400 week" in t
-                            for t in texts), texts)
+        self.assertTrue(any(matches(t, key, {"use": 1400, "smart": msg_param("f.smart", level=1000)})
+                            for t in texts for key in ("f.order.smart", "f.order.smart.dry",
+                                                      "f.order.smart.passes", "f.order.smart.lasts")), texts)
 
     @staticmethod
     def pipes(data):

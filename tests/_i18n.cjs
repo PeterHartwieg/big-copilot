@@ -8,8 +8,11 @@
 //                        ttText(), so specs ({n:,}, {w:$}, {d:day}) read as on
 //                        the page. For a Playwright locator or a text match.
 //   enRe(key, params)    a RegExp for that English; a placeholder not in
-//                        params matches anything (lazily), and {flags,
-//                        anchor: 'start' | 'full'} in the third argument.
+//                        params matches anything (lazily), a plural key with
+//                        no n matches either form, and {flags, anchor: 'start'
+//                        | 'full', text} in the third argument.
+//   textRe(key, params)  enRe() with the English's markup (<b>) dropped, for
+//                        innerText.
 //   wire(row, field)     [key, params] Python sent beside a Msg field
 //                        (row.i18n[field], _wire_msgs() in ba_dashboard.py).
 //   assertMsg(row, field, key, params)
@@ -72,19 +75,31 @@ function en(key, params = {}){
 const escape = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const PLACEHOLDER = /\{(\w+)(?::([^{}]+))?\}/g;
 
-/* A RegExp for en(key, params), any unfilled placeholder a lazy wildcard. */
-function enRe(key, params = {}, {flags = '', anchor = null} = {}){
-  const text = en(key, params);
-  let src = '', last = 0;
-  for (const m of text.matchAll(PLACEHOLDER)) {
-    src += escape(text.slice(last, m.index)) + '.+?';
-    last = m.index + m[0].length;
-  }
-  src += escape(text.slice(last));
+/* A RegExp for en(key, params), any unfilled placeholder a lazy wildcard.
+   A plural key with no params.n matches any of its forms. With text, the
+   markup in the English (<b>…</b>) is dropped, to match innerText. */
+function enRe(key, params = {}, {flags = '', anchor = null, text = false} = {}){
+  const base = english(key);
+  const forms = typeof base === 'object' && !Object.prototype.hasOwnProperty.call(params, 'n')
+    ? [...new Set([base.one, base.other].map(form => i18n().ttText(key, form, params)))]
+    : [en(key, params)];
+  const one = s => {
+    if (text) s = s.replace(/<[^>]*>/g, '');
+    let src = '', last = 0;
+    for (const m of s.matchAll(PLACEHOLDER)) {
+      src += escape(s.slice(last, m.index)) + '.+?';
+      last = m.index + m[0].length;
+    }
+    return src + escape(s.slice(last));
+  };
+  let src = forms.length > 1 ? `(?:${forms.map(one).join('|')})` : one(forms[0]);
   if (anchor === 'start' || anchor === 'full') src = '^' + src;
   if (anchor === 'full') src += '$';
   return new RegExp(src, flags);
 }
+
+/* enRe() for rendered text: the English's markup dropped, as innerText reads it. */
+const textRe = (key, params = {}, options = {}) => enRe(key, params, {...options, text: true});
 
 /* [key, params] Python sent for a row's Msg field. */
 function wire(row, field){
@@ -134,4 +149,4 @@ function findMsg(w, key){
   return null;
 }
 
-module.exports = {catalogue, english, en, enRe, wire, assertMsg, msgParam, findMsg};
+module.exports = {catalogue, english, en, enRe, textRe, wire, assertMsg, msgParam, findMsg};

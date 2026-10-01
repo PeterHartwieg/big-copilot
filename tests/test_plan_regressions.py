@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import unittest
+from tests.i18n_check import MsgAsserts, msg_param
 
 from ba_dashboard import Names, _plan, _recipes, _type_catalogue_from_help
 
@@ -32,7 +33,7 @@ def contract(amount, active=True, warehouse=("Depot", 1), smart=False, importer=
     }
 
 
-class PlannerRegressions(unittest.TestCase):
+class PlannerRegressions(MsgAsserts, unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.names = Names(json.loads((ROOT / "web/py/gametext.json").read_text(encoding="utf-8")))
@@ -103,7 +104,9 @@ class PlannerRegressions(unittest.TestCase):
         source = self.water([contract(0), contract(500, smart=True), contract(600, smart=True),
                              contract(300, importer=("Other", 3))])
         [depot] = source["depots"]
-        self.assertEqual((depot["level"], depot["name"]), (600, "2 Importer, its 3rd of 3 contracts here"))
+        self.assertEqual(depot["level"], 600)
+        self.assertMsg(depot["name"], "sb.py.levelName", importer="2 Importer", n=3,
+                       nth=msg_param("sb.py.ord.rd", n=3))
 
     def test_a_paused_level_is_kept_apart_and_named_as_one(self):
         source = self.water([contract(3000, active=False, smart=True)])

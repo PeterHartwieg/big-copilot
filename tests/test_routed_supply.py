@@ -9,6 +9,7 @@ out, a standing order does not. A depot fed by imports alone reads exactly as
 before. None of it reads the delivery log: every save here has an empty one.
 """
 import unittest
+from tests.i18n_check import MsgAsserts
 
 from ba_dashboard import (plain, RECIPE_ITEMS, SUMMARIES, WEEKDAYS, History, Names, _alerts,
                           _factories, _import_notes, _supply, _supply_facts, load_template, site_key)
@@ -133,7 +134,7 @@ class SupplyOnly(list):
         return iter(())
 
 
-class RoutedSupplyTests(unittest.TestCase):
+class RoutedSupplyTests(MsgAsserts, unittest.TestCase):
     def test_a_depot_fed_daily_by_a_factory_is_not_short(self):
         """The Costy Co case: the factory's machines make what the shop sells
         and its route brings it each morning, and a Smart Delivery backup at
@@ -291,20 +292,20 @@ class RoutedSupplyTests(unittest.TestCase):
         self.assertEqual((supply["facts"]["1"][FOOD]["st"], supply["facts"]["1"][FOOD]["why"]),
                          ("short", "shortfall"))
         result = _alerts(SupplyOnly(businesses), supply, [], [], [], [], [], DAY, 0.0)
-        texts = [plain(a["text"]) for a in result["lines"] + result["minor"]["rows"]]
-        [text] = [t for t in texts if "Frozen Food" in t]
-        self.assertIn("a route brings the week's draw (3,600/day)", text)
-        # The headline is cut at the first comma: when it runs dry, and why.
-        self.assertRegex(text, r"^Frozen Food[^,;]* runs dry [^,;]+, before the route's next round; ")
-        self.assertNotIn("import", text)
+        [text] = [a["text"] for a in result["lines"] + result["minor"]["rows"]
+                  if a.get("ev", {}).get("slug") == FOOD]
+        self.assertMsg(text, "f.shortfall.route", item="Frozen Food", routed=3600)
+        self.assertNoMsg(text, "f.shortfall")
+        self.assertNoMsg(text, "f.shortfall.routed")
 
     def test_the_shortfall_kind_is_named_for_a_route_s_round_too(self):
         """The Saturday above stays a `shortfall`, so a player's switch for the
         kind keeps what it meant; the kind's description, and the line three
         of them condense into, name the next import or route round, or the
         next delivery, rather than an import alone."""
-        self.assertNotIn("import", SUMMARIES["shortfall"](3, "Coffee"))
+        self.assertMsg(SUMMARIES["shortfall"](3, "Coffee"), "f.sum.shortfall", n=3, subject="Coffee")
         [kind] = [line for line in load_template().splitlines() if 'id:"shortfall"' in line]
+        # Pins the wording: the kind description must name route rounds as well as imports.
         self.assertIn("import or route round", kind)
 
     def test_a_paused_backup_beside_a_covering_route_is_judged_over_a_week(self):
@@ -359,7 +360,7 @@ class RoutedSupplyTests(unittest.TestCase):
                          ("short", True, True, 5 * DRAW, 7 * DRAW))
 
 
-class RoutedFactoryViewTests(unittest.TestCase):
+class RoutedFactoryViewTests(MsgAsserts, unittest.TestCase):
     """A factory drawing water from a depot with a 1,000 a week import; its one
     machine eats 240 a day, 1,680 a week."""
 
@@ -449,8 +450,8 @@ class RoutedFactoryViewTests(unittest.TestCase):
         fact, [note] = self.route_fact(120.0)
         self.assertEqual((fact["st"], fact["lvl"], fact["use"], fact["parts"]),
                          ("noplan", "critical", 840, {"lines": 1680, "sites": 0, "route": 840}))
-        self.assertIn("holds 400, 0.5 weeks of the 840 a week the factories eat "
-                      "beyond the 840 a week a route brings", plain(note["text"]))
+        self.assertMsg(note["text"], "f.import.noplan.route", stock=400, use=840, route=840)
+        self.assertAlmostEqual(note["text"].p["weeks"], 400 / 840)
 
     def test_the_no_import_finding_names_what_the_route_leaves_of_everything(self):
         """The depot also sends the shops 840 a week: of the 2,520 that leave,
@@ -459,11 +460,10 @@ class RoutedFactoryViewTests(unittest.TestCase):
         fact, [note] = self.route_fact(2000 / 7, shops_day=120.0)
         self.assertEqual((fact["use"], fact["parts"]),
                          (520, {"lines": 1680, "sites": 840, "route": 2000}))
-        self.assertIn("of the 520 a week the factories and other sites draw beyond the "
-                      "2,000 a week a route brings", plain(note["text"]))
+        self.assertMsg(note["text"], "f.import.noplan.sites.route", use=520, route=2000)
         fact, [note] = self.route_fact(None, shops_day=120.0)
-        self.assertIn("of the 2,520 a week the factories and other sites draw", plain(note["text"]))
-        self.assertNotIn("route", plain(note["text"]))
+        self.assertMsg(note["text"], "f.import.noplan.sites", use=2520)
+        self.assertNoMsg(note["text"], "f.import.noplan.sites.route")
         # A route bringing all of it leaves nothing to say.
         fact, notes = self.route_fact(240.0)
         self.assertEqual((fact["st"], fact["why"], notes), ("covered", "route", []))

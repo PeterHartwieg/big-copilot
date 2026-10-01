@@ -11,6 +11,7 @@ it reached. These fixtures build that log for one import depot, one factory
 whose line eats water, and a second depot.
 """
 import unittest
+from tests.i18n_check import MsgAsserts
 
 from ba_dashboard import (
     Names, _feed_notes, _idle_notes, _deepest_use, _import_catch_up,
@@ -330,7 +331,7 @@ class FactoryChainTests(unittest.TestCase):
         self.assertEqual((fact["use"], fact["parts"]["lines"], fact["parts"]["sites"]), (3360, 3360, 0))
 
 
-class RouteAdviceTests(unittest.TestCase):
+class RouteAdviceTests(MsgAsserts, unittest.TestCase):
     def test_a_raw_material_routed_where_nothing_uses_it_names_the_route(self):
         """Defect 12: the target is the thing to change."""
         f = forwarding_fixture()
@@ -342,8 +343,7 @@ class RouteAdviceTests(unittest.TestCase):
         notes = _idle_notes(f.businesses, f.supply["idle"], set())
         text = next(n["text"] for n in notes if n["site"] == "Distrib")
         # The stock may be meant for sites no plan reaches yet: both ways out.
-        self.assertIn("Factory tops it up to 250 here and no plan sends it on: add a plan to the "
-                      "shops that should get it, or stop the top-up", text)
+        self.assertMsg(text, "f.dead.route", src="Factory", target=250)
 
     def test_no_route_advice_where_the_depot_sends_it_on(self):
         f = forwarding_fixture()

@@ -14,7 +14,9 @@ rewording the English breaks no test. Mix MsgAsserts into a TestCase:
 A param given as a str is compared with plain() on both sides, so a game name
 reads as its English whether or not it travels as a token; a nested Msg param
 is compared by key with msg_param("key", **params), or by its English as a
-str. Not a test module: the name keeps it out of discovery.
+str. Import it as tests.i18n_check, which also works where a test module is
+imported as tests.<name> (the fixtures, the hash-seed runs). Not a test
+module: the name keeps it out of discovery.
 """
 from ba_dashboard import Msg, plain
 

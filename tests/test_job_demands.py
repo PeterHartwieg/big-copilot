@@ -5,7 +5,7 @@ import unittest
 
 from ba_dashboard import plain, JOB_DEMANDS, _alerts, _business, _cleanliness, _job_demands
 from ba_save import Names, Save
-from i18n_check import MsgAsserts, list_items, msg_param
+from tests.i18n_check import MsgAsserts, list_items, msg_param
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from build_web import ships  # noqa: E402

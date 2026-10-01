@@ -9,6 +9,8 @@ import sys
 import tempfile
 import unittest
 
+from tests.i18n_check import MsgAsserts, list_items, msg_param
+
 sys.path.insert(0, os.path.dirname(__file__))
 import es3_fixture  # noqa: E402
 from ba_dashboard import (  # noqa: E402
@@ -48,7 +50,7 @@ def record_for(name, btype, orders=(), demands=(), shelves=(), prices=(), opened
     }, list(shelves)
 
 
-class SiteFieldTests(unittest.TestCase):
+class SiteFieldTests(MsgAsserts, unittest.TestCase):
     def build(self, name="HART. Flowers", btype=FLORIST, crew=None, **options):
         """A save holding one building, with the refs its cargo points at."""
         record, shelves = record_for(name, btype, **options)
@@ -148,7 +150,7 @@ class SiteFieldTests(unittest.TestCase):
                                    "ba:itemname_popcorn")
         b, alerts = self.silent(btype=cinema, prices=[(ticket, 12.0)], crew=CREW)
         self.assertEqual(b["notTrading"], [])
-        self.assertIn("staffed and priced", alerts["lines"][0]["text"])
+        self.assertHasMsg(alerts["lines"][0]["text"], "f.notrading.ready.office")
         self.assertTrue(next(l for l in b["lines"] if l["slug"] == ticket)["issued"])
         b, _ = self.silent(btype=cinema, prices=[(ticket, 12.0), (popcorn, 4.0)], crew=CREW)
         self.assertEqual(b["notTrading"], ["stock", "plan"])
@@ -161,7 +163,7 @@ class SiteFieldTests(unittest.TestCase):
             planned=True, shelves=[("gift", 10), ("card", 10)],
             prices=[("gift", 10.0), ("card", 5.0)], crew=CREW)
         self.assertEqual(b["notTrading"], [])
-        self.assertIn("no trading day booked yet", alerts["lines"][0]["text"])
+        self.assertHasMsg(alerts["lines"][0]["text"], "f.notrading.ready")
 
     def test_a_ready_site_shut_with_the_switch_says_it_is_closed(self):
         # Everything in place, but the game's temporarily-closed switch is on:
@@ -170,15 +172,15 @@ class SiteFieldTests(unittest.TestCase):
             planned=True, closed=True, shelves=[("gift", 10), ("card", 10)],
             prices=[("gift", 10.0), ("card", 5.0)], crew=CREW)
         self.assertEqual(b["notTrading"], ["closed"])
-        self.assertEqual(alerts["lines"][0]["text"],
-                         "HART. Flowers opened day 1, not trading yet: temporarily closed, "
-                         "$0/day rent")
+        self.assertMsg(alerts["lines"][0]["text"], "f.notrading", site="HART. Flowers", day=1, rent=0,
+                       reasons=msg_param("f.notrading.closed"))
 
     def test_a_closed_site_lists_its_other_failures_after_the_switch(self):
         b, alerts = self.silent(closed=True)
         self.assertEqual(b["notTrading"], ["closed", "staff", "prices", "plan"])
-        self.assertIn("not trading yet: temporarily closed, no staff, no prices set, "
-                      "no delivery plan", alerts["lines"][0]["text"])
+        self.assertMsg(alerts["lines"][0]["text"], "f.notrading")
+        self.assertEqual([m.key for m in list_items(alerts["lines"][0]["text"].p["reasons"])],
+                         ["f.notrading.closed", "f.notrading.staff", "f.notrading.prices", "f.notrading.plan"])
 
     def test_extract_carries_the_switch_onto_the_business(self):
         # The flag lives on the building registration; extract() copies it on.
@@ -246,7 +248,7 @@ def stub(key, name, status, **over):
     }
 
 
-class FindingEvidenceTests(unittest.TestCase):
+class FindingEvidenceTests(MsgAsserts, unittest.TestCase):
     """_condense() drops `rank` and `subject`, so the row the site panel pulses
     has to survive as `ev` — the item's slug, or a machine's list position."""
 
@@ -321,7 +323,7 @@ class FindingEvidenceTests(unittest.TestCase):
         offsite = self.one("feed", DEPOT_KEY)
         # The sentence says "Fizzy Drink"; the depot's line is "Soda". Only the
         # slug joins the two, so that is what travels.
-        self.assertIn("Fizzy Drink", offsite["text"])
+        self.assertHasMsg(offsite["text"], "f.import.order.raise", item="Fizzy Drink")
         self.assertEqual(offsite["ev"], {"slug": SODA})
 
     def test_a_staffing_finding_carries_the_machines_list_position(self):
@@ -365,5 +367,5 @@ class FindingEvidenceTests(unittest.TestCase):
         result = _alerts(list(self.businesses), supply, [], [], [], [], [], 20, 0.0)
         merged = next(r for r in result["lines"] + result["minor"]["rows"]
                       if r["group"] == "order")
-        self.assertIn("{n} weekly orders".format(n=3)[:3], merged["text"])
+        self.assertMsg(merged["text"], "f.sum.order", n=3)
         self.assertEqual(merged["ev"], {"slug": "ba:itemname_juice"})
