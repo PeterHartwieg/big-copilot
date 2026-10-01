@@ -6,199 +6,167 @@ Canvas: https://claude.ai/artifact/HVNSkyctB3YTsfTGCDoLWu (Design type). Generat
 `_preview/ic.jpg` (Industry City, `web/maps/full-map.png` cropped to the inset's bounds);
 `_preview/` is ignored.
 
-Issue #172, round 1, 1 Oct 2026, for Peter's review; revised the same day after a gpt-6.1-sol review ("Review fixes" below). Nothing is built. The sibling is the
-shipped Open a store flow (`drawOpenStore()`, `os*`, `_open_store()`); its canvas is
-`mockup/open-store/` on branch `open-store-canvas` (e8802364). This canvas reuses its
-stylesheet unchanged (the shipped board kept the `os-` names), its six-step controls row, plan
-strip, investment toggle, financing panel, checklist rows and ROI view. What only a factory
-needs is `ff-`.
+Issue #172. Round 1 drawn 1 Oct 2026, revised the same day after a gpt-6.1-sol review, then
+cut to Peter's decisions (below). Nothing is built. The sibling is the shipped Open a store flow
+(`drawOpenStore()`, `os*`, `_open_store()`); its canvas is `mockup/open-store/` on branch
+`open-store-canvas` (e8802364). This canvas reuses its stylesheet unchanged (the shipped board
+kept the `os-` names), its controls row, plan strip, investment toggle, financing panel,
+checklist rows and finder plan mode. What only a factory needs is `ff-`.
 
-## Artboards
+## Peter's decisions (1 Oct 2026)
+
+1. **Entry: its own view**, Expansion › Open a factory. The single "Open a site" view with a
+   Store / Factory switch is dropped.
+2. **No break-even for a factory for now.** The Break even step is gone (five steps: What ·
+   Where · Investment · Until production · Running), and so is every payback figure: days to
+   pay back on the start page, the payback KPIs, chart and "paid back" state after opening,
+   the factory's break-even cell and history in Results. The **investment total and the
+   financing panel stay**: the loan stands on its own (amount, cash upfront, a day while it
+   runs, interest); "your own cash back in n days" is dropped because it needs a profit
+   estimate.
+3. **No profit band** (0.80–1.05, midpoint 0.925): no ranges, no midpoint-scaled figures.
+4. **A custom machine count that leaves the shops short gets a warning**, as a finding row
+   under the lines: "Bottle of Wine stays short · 1 machine makes 8,400 a week; your shops
+   take 8,680. The rest keeps coming from United Ocean Import." No advice to add machines or
+   sites.
+5. **Distance costs nothing in the game.** No distance column, no "near the depot" filter, no
+   across-the-river state. The location step filters by size (room for the workstations) and
+   ranks by rent; it shows vehicles (parking slots: H 1, I to Q 2, one truck each) and the
+   deposit.
+6. **Export prices from the game's own rule** (below): the surplus is valued as an export.
+
+## Export prices (confirmed in the game code, build on disk 1 Oct 2026)
+
+Read from `BigAmbitions.dll` with `research/il_dump.py` (main checkout):
+
+- `ProductMarketHelper.GetProductExportPrice(item)` =
+  `ItemHelper.GetWholesalePrice(item) × gameVariables.exportMultiplier`.
+- `ItemHelper.GetWholesalePrice(item)` = `Item.wholesalePrice × importPriceIndex ×
+  gameVariables.marketPriceMultiplier`, where `importPriceIndex` is the product's
+  `ProductMarketEntry` in the save (`productMarketEntries[].importPriceIndex`; 1 when the
+  product has none, as raw materials do).
+- So a pier pays wholesale × that product's index × public prices × export price. On Normal
+  that is wholesale × index × 0.7 × 0.65; both multipliers are already read off the save
+  (`HOUSE_RULES`). The same `GetWholesalePrice` is what imports cost, so the canvas now prices
+  imports and raw material with the 0.7 too (it left it out before).
+- Exports move the index: `ProductMarketHelper.UpdateMarketDemand` ends with
+  `importPriceIndex = max(0.5, importPriceIndex − 0.25 × exportedThisWeek ÷
+  Item.maxOrderAmountPerImporter)`, where `GetAmountExportedThisWeek` sums the factories'
+  `factoryExports` and their `orderHistory` sales since Monday. The index otherwise moves
+  randomly, clamped to 0.5–1.3.
+- **Gap:** `Item.maxOrderAmountPerImporter` is not in the board's data (`ba_store_rules.json`
+  has no field for it; `make_store_rules.py` would add it from the items bundle). The imports
+  write's dry run already returns it per product as `cap`. Until it is read, the canvas says
+  exports pull the index down and does not size the drop.
+
+## Artboards (13)
 
 Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
 
 | File | Shows |
 | --- | --- |
-| `Main` · 0 A | **Expansion › Open a factory** as its own view (NEW). "What your shops buy that a factory can make": per product the chain sells, sold and imported a week, machines sized to the chain, what they cost, what they save a day, and the days the machines take to pay back. Your factory plans. |
-| `EntryB` · 0b B | The alternative: one view, **Open a site**, with a Store / Factory switch above the steps. |
-| `Links` · 0c | The ways in: the store checklist's Logistics row (today Plan a factory; with this, "Depot deliveries" when the depot already imports the goods, and "Open a factory"), Plan a factory gains "Open this factory", the Overview task list gains a line. |
-| `Recipe` · 1 | The lines with steppers (Whisky ×2, Wine ×1, Beer bought in; sizing reads Custom, since the peak day would give Wine ×2), made a week against what the shops take (surplus / short chips), raw material a week per input, saves a week. The kit's machines and price. The surplus note (send it to a pier). The chain as a strip: factory → depot → river → shops. |
-| `NoDepot` · 1b | No depot yet: a factory delivers only to depots and piers, so the plan adds one (deposit, pallet shelves, a Vord Courier D500). |
-| `Location` · 2 | Find a location in plan mode: warehouse buildings, near your depot, Industry City map with the depot (D) and the two vendors (A, B). Columns: vehicles, rent, deposit, to the depot. Facts strip: every factory rents a warehouse building, ~90 days' deposit, no interior asked, distance only inside one region. |
-| `LocationFar` · 2b | The pick is across the river (3 Twelfth Street, Lower Manhattan): the strip draws the river twice, a Manhattan map shows the pick and the shops, a warning card. |
-| `Investment` · 3 | Self-installation (the default here): Factory Supply Depot (3 kits, 12 pallet shelves, delivery), General US Trucks (Freight Truck T1, needs a 95% driver), walls and floors $0, deposit. Industry City map with A, B, NEW and D. |
-| `InvestmentFirm` · 3b | Installation firm: 586 × 1,292 m² = $757,112, more than the machines; the callout says what self-installation saves. The truck is bought by you either way. |
-| `BreakEven` · 4 | **A** what the factory adds (investment ÷ the chain's extra profit a day at the store flow's midpoint, 0.925 of plan, with its 0.8–1.05 band and both install modes) beside the itemised "Added to Brightwater Spirits a day"; **B** the chain as one, as `_chains()`/`_payback()` compute it; the financing panel. |
-| `BreakEvenStates` · 4b | Chain not paid back yet (B: day 176 without, 188 with); bigger than the chain (one clothing line for two stores loses $1,080 a day before wages; exports to a pier are an in-game step); nothing to replace (no estimate). |
-| `Checklist` · 5 | Until production, game linked, in three groups: the site (lease, machines, recipes, truck, the driver assigned to the truck in the game), people (staff for the machines **Hire 12**, headquarters **Hire 1**), goods (raw material contract, weekly amounts **Set 5 amounts**, delivery plan, the depot's imports **Lower 2 amounts**, uniforms not needed). Manual steps carry an "in the game" tag and an in-game instruction even when linked. |
-| `ChecklistNoLink` · 5b | The same without the link: every button becomes an instruction; one strip says which steps the link can never do. |
-| `Hire` · 5c, 5d | The two quick buttons' dialogs in the write-dialogs language: Staff this factory (hire with the week written; the driver is hired as qualified for the truck, not assigned to it) and Weekly amounts (imports, starts the contract). |
-| `Running` · 6 | Producing for 16 days: invested, added so far, paid back, days to go; cumulative chart against the plan line; output against plan per line; plan and now; the paid-back end state. |
-| `RunningBelow` · 6b | Output below plan: Workstation 2 unstaffed on Sundays (**Staff Sunday**), Barley ordered short (**Set Barley to 33,600**); break even slips 12 days. |
-| `Results` · 7 | Businesses › Results: the chain row (its profit the sum of its members; break even day 170, the factory's opening, since `chain_window_day()` never returns a day before the newest member opened; day 118 kept in the history as before the factory), the factory and depot as kids (the factory's cell = A), Invested marked "with the truck · proposed", and the chain's history. |
+| `Main` · 0 | Expansion › Open a factory (NEW). What the chain's shops buy that a factory can make, sorted by what it saves a day: sold and imported a week, machines sized to the peak day, what they cost, the surplus a week, saves a day. Your factory plans. |
+| `Links` · 0b | The ways in: the store checklist's Logistics row, Plan a factory's "Open this factory", the Overview task list. |
+| `Recipe` · 1 | The lines with steppers, sizing on Custom (peak day: Wine ×2); made a week against what the shops take; raw material a week; saves a week. The shortage finding row (decision 4). The surplus valued as an export with its formula. The chain as a strip. |
+| `NoDepot` · 1b | No depot yet: to supply these shops the factory needs a depot, so the plan adds one. |
+| `Location` · 2 | Warehouse buildings of size I or larger in Industry City, ranked by rent: vehicles, rent, deposit, rent a week. Facts strip: warehouse building, ~90 days' deposit, vehicles per size, distance not counted. |
+| `Investment` · 3 | Self-installation (default), the shopping list by store with map pins, the total, then the financing panel. |
+| `InvestmentFirm` · 3b | Installation firm: 586 × 1,292 m² is more than the machines. |
+| `Checklist` · 4 | Until production, linked: the site, people, goods; quick buttons only for `hire` and `imports`; manual steps tagged "in the game". |
+| `ChecklistNoLink` · 4b | The same without the link. |
+| `Hire` · 4c, 4d | The hire and weekly-amounts dialogs in the write-dialogs language. |
+| `Running` · 5 | Made a week against plan, shipped to the depot against what the shops take, exported (value), raw material; made a day against the plan line; output per line. |
+| `RunningBelow` · 5b | Output below plan, with its two causes and their write buttons. |
+| `Results` · 6 | Businesses › Results with the factory as a cost centre in its chain; Invested as `setup_cost()` counts it today. |
 
 ## Numbers (synthetic company, the game's rules and prices)
 
-- Brightwater Spirits: 4 liquor stores (36 Fifth Avenue, 14 First Avenue, 8 Sixth Avenue,
-  18 Second Avenue) and Brightwater Depot (6 24th Street, Industry City). Sales a day invented:
-  Whisky 1,850, Beer 2,600, Wine 1,240, Cigar 1,040, Cigarettes 1,400.
-- Recipes (`web/wiki-data.json`): Whisky 50/h from Barley 100, Water 50, Yeast 50; Wine 50/h
-  from Grapes 100, Sugar 50, Yeast 50; Beer 50/h from five inputs at 50; Cigar and Cigarettes
-  100/h on the Consumer Goods Workstation.
-- Kits (`ba_item_prices.json`): Bottled Goods = Food Assembly 60,000 + Bottling 27,500 +
-  Industrial Blending 45,000 = 132,500; Consumer Goods = 240,000 + 145,000 = 385,000. Pallet
-  Shelf 2,500 (60 boxes). Freight Truck T1 98,000, Vord Courier D500 72,500.
-- Wholesale (`ba_store_rules.json` `w`): Whisky 8, Wine 5.80, Beer 2, raw 0.01–0.35.
-- Plan: 3 kits, 25,200 made a week, raw $14,784 a week, 11 workers (504 machine-hours ÷ 50,
-  the board's own rule), 1 driver.
-- 4 22nd Street, I3, 1,292 m², rent $388, deposit $36,320 (`_rent_estimate`,
-  `_deposit_estimate` = rent × 93.61, the warehouse factor).
-- Self $562,070 = 427,500 items + 250 delivery + 98,000 truck + 36,320 deposit. Firm
-  $1,318,932 = 757,112 fee + items + truck + deposit.
-- Added a day $17,372 as planned = 21,760 imports replaced − 2,112 raw − 1,296 workers − 192
-  driver − 400 HQ − 388 rent. The headline takes the store flow's midpoint (`OS_MID` = 0.925):
-  $16,069 a day → 35 days self (31–41 over the 0.80–1.05 band), 83 firm. Loan $280,000 at
-  Vantander: 392 + 1,166 a day, own cash back in 20 days.
-- Results: shops 12,010 + 16,640 + 10,980 + 13,874, depot −980, factory −4,060 = chain
-  $48,464 a day; Invested 1,356,705 with the truck and delivery, 1,258,455 as `setup_cost()`
-  counts today.
+- Brightwater Spirits: 4 liquor stores and Brightwater Depot (6 24th Street). Sales a day
+  invented: Whisky 1,850, Beer 2,600, Wine 1,240, Cigar 1,040, Cigarettes 1,400. Price
+  indexes invented: Whisky 0.96, Wine 1.08, others 1.00. Normal difficulty.
+- Recipes (`web/wiki-data.json`), kits and prices (`ba_item_prices.json`), wholesale
+  (`ba_store_rules.json`) as before. Plan: Whisky ×2, Wine ×1, 25,200 made a week, raw
+  $10,349 a week (wholesale × 0.7), 11 workers (504 machine-hours ÷ 50), 1 driver.
+- Surplus 3,850 Whisky a week × $3.49 ($8 × 0.96 × 0.7 × 0.65) = $13,453 a week.
+- 4 22nd Street, I3, 1,292 m², rent $388, deposit $36,320. Self $562,070 = 427,500 items +
+  250 delivery + 98,000 truck + 36,320 deposit. Firm $1,318,932.
+- Loan $280,000 at Vantander: 392 interest + 1,166 back a day, $94,472 interest over 241 days.
+- Results: shops 12,010 + 16,640 + 10,980 + 13,874, depot −980, factory −4,060 = $48,464 a day.
 
-## Decisions taken
+## Other decisions taken
 
-1. **Same skeleton as the store flow**: six steps (What · Where · Investment · Break even ·
-   Until production · Running), the four-cell plan strip (Make · Where · Investment · Break
-   even), the plan picker, saved plans per character.
-2. **Step 1 starts from the chain, not from a product list.** The start page ranks what the
-   player's shops buy that a factory can make, by how fast the machines pay for themselves.
-   Products none of the shops sell show with no estimate.
-3. **Machines sized to the chain's peak day** (Plan a factory's own rule), with Average day
-   and Custom. The drawn plan is Custom (Wine ×1, 280 a week short and bought in), and the
-   control says the peak day would give Wine ×2. Machines run flat out, so raw material and the surplus follow from the count. The
-   surplus has one honest outlet the game offers: a pier in the factory's delivery plan.
-4. **Every factory rents a warehouse building** (`types.factory.b = "warehouse"`), so the
-   issue's "factory building vs warehouse with a 90-day deposit" does not exist: every
-   factory pays the warehouse deposit. The canvas says so once, in the facts strip.
-5. **Distance is drawn only inside one region.** Industry City and Manhattan are separate
-   insets with their own scales (`full-map.png`: "Insets use independent scales"), and the
-   board has no road graph. Inside Industry City the column is a relative bar with "close" /
-   "farther"; across the river it says "over the river" and warns.
-6. **Self-installation is the default for a factory**: the firm's 586/m² on 1,292 m² is more
-   than the machines. The toggle still carries both totals.
-7. **The truck is part of the investment** in both modes (the game requires one vehicle; the
-   firm places none).
-8. **Break even A is the headline**, at the store flow's midpoint (0.925 of plan) as Open a
-   store does for its headline and financing: the factory's investment against what it adds to the
-   chain a day, itemised. B (the chain as one, `_payback()`'s chain row) sits under it,
-   because for a chain that has already paid back it only says "stays paid back".
-9. **Checklist in three groups** (the site, people, goods); assigning the driver to the truck is
-   its own in-game row, since `hire` hires and writes hours but assigns no vehicle. Quick buttons only where a write
-   exists: `hire` (factory workers and the driver with their week; the HQ Purchasing Agent
-   through Quick hire) and `imports` (weekly amounts once the contract exists; lowering the
-   depot's own Whisky and Wine imports after the first delivery). Machines, recipes, signing
-   the contract, the delivery plan and the truck are marked "in the game" in both states.
-   Uniforms show as not needed; marketing is left out.
-10. **After opening, "added" is measured** as the chain's profit a day now less its last 7 days
-    before production started. Output against plan per line, with the two causes the board
-    already knows (unstaffed machine-hours, raw material ordered short) as rows with their
-    write buttons.
-11. **The break-even day lands in the chain's history** on Businesses › Results; the factory's
-    kid row shows A's day.
+1. Same skeleton as the store flow: the steps, the plan strip (Make · Where · Investment · Raw
+   material), the plan picker, saved plans per character.
+2. Step 1 starts from the chain: what its shops buy that a recipe makes.
+3. Machines sized to the peak day (Plan a factory's rule), with Average day and Custom.
+4. Every factory rents a warehouse building (`types.factory.b = "warehouse"`), so every factory
+   pays the warehouse deposit (~90 days).
+5. Self-installation is the default; the truck is part of the investment either way.
+6. Checklist in three groups; quick buttons only where a write exists (`hire`, `imports`);
+   machines, recipes, signing the contract, the delivery plan, the truck and assigning the
+   driver to it are in-game steps. Uniforms show as not needed.
+7. After opening, the board measures output (made, shipped, exported, raw material) against the
+   plan, and names the two causes it already knows (unstaffed machine-hours, raw material
+   ordered short).
+8. Results as shipped. One side effect to know: a chain's break-even day can never be before
+   its newest member opened (`chain_window_day()`), so a paid-back chain's day moves to the
+   factory's opening (day 170 here).
 
 ## Open questions for Peter
 
-1. **Entry: A or B?** Its own view under Expansion (A, `Main`), or Open a store becomes Open a
-   site with a Store / Factory switch (B, `EntryB`).
-2. **Break even: A or B as the headline?** A (what the factory adds) is the useful number for
-   the decision; B is what Results shows today for a chain (here "day 170", the factory's
-   opening, because the chain had already paid back).
-3. **The 0.80–1.05 band and its 0.925 midpoint are calibrated on shops** (`check_profit_model.py`),
-   not on factories. Keep them for a factory, or narrow them (a factory's figures are mostly
-   fixed: recipe rates, wholesale prices, wages) once real factories have been checked?
-4. **Wine ×1 or ×2?** The peak-day rule gives 2; the drawn plan keeps 1 (Custom). Should the
-   plan warn when a custom count leaves the shops short?
-5. **Does distance cost anything in the game?** The Wiki says drivers deliver unseen at 02:00
-   and factory plans ship at 08:00. If distance is free, drop the column and keep only "near
-   the vendors you drive to". If not, the board needs a road scale per region.
-6. **Wages assumed**: factory worker $18/h, driver $16/h, HQ staff $35/h. The port reads
-   `SkillData.baseHourlyWage` as offices do (`PLAN_OFFICE_WAGES`).
-7. **Imports priced at wholesale × today's index**; is a Purchasing Agent's discount on raw
-   material worth modelling (it is for the store flow's goods)?
-8. **Pallet shelves**: 12 is a placeholder. Size them to two days of raw material and output
-   once the units per box are known.
-9. **Does a size I floor hold 3 workstations?** `web/maps/floor-plans.json` has the shells; a
-   fit check could place the kits. Not drawn.
-10. **Surplus to a pier**: export prices are not in the save (MarketInsider). Show the surplus
-   as worth nothing, or ask the player for a price?
-11. **Should `_payback()` count vehicles?** Today `setup_cost()` counts furniture only
-   ($463,820 for this factory). Results is drawn with the proposed extension ($562,070, truck
-   and delivery counted, marked "proposed"), so its day matches the plan's.
+1. **Invested and vehicles.** `setup_cost()` counts furniture and deposit ($463,820 for this
+   factory); the plan's investment adds the truck and its delivery ($562,070). Should Results'
+   Invested count vehicles too?
+2. **Wages**: the port reads `SkillData.baseHourlyWage`, as offices do. Not needed for any
+   figure the canvas shows now; needed if the plan shows running costs.
+3. **Purchasing Agent discount** on raw material: model it (the store flow does for goods)?
+4. **Pallet shelves**: 12 is a placeholder; size them to raw material and output once the
+   units per box are known.
+5. **Does a size I floor hold 3 workstations?** The size filter assumes I and up;
+   `web/maps/floor-plans.json` has the shells for a fit check.
 
 ## Porting plan
 
 **Python, `ba_dashboard.py`**
 
-- New `_open_factory(save, names, businesses, chains, premises, plan)` beside `_open_store()`,
+- New `_open_factory(save, names, businesses, chains, premises)` beside `_open_store()`,
   payload key `openFactory`:
   - per chain (`_chains()`), the products its shops sell that a recipe makes: sold a day,
-    wholesale, recipe, kit;
-  - per depot, what it imports (for "Depot deliveries" and the no-depot state);
-  - candidate buildings: `_premises()` rows with `t == "warehouse"`, with `vehicles` (H 1,
-    I/P/Q 2) and `region` from `locations.json`;
-  - HQ facts: free Logistics Managers, free Purchasing Agents, free computer workstations.
-- Reuse `_recipes()`, `_workstations()`, `_ingredient_prices()` and `_plan()` (`D.plan`) for
-  the lines; `setup_cost()` unchanged for the shopping list (machines and shelves are items).
-  Add vehicle prices from `ba_store_rules.json` `vehicles`.
-- `_payback()`: a cost-centre row gets an `added` figure (chain profit a day after its opening
-  less the 7 days before), and the factory's own outcome from it, so Results can show A's day.
-  Remember the reached day in `History` as for sites. Document both in
-  `docs/dashboard-reference.md`.
-- `make_store_rules.py`: furniture vendors already cover Factory Supply Depot; add vehicle
-  vendors (General US Trucks) if the trucks get map pins.
+    `import_price` and `export_price` per product (wholesale × `importPriceIndex` ×
+    `marketPriceMultiplier`, × `exportMultiplier` for exports), recipe, kit;
+  - per depot, what it imports (for the store checklist's link and the no-depot state);
+  - candidate buildings: `_premises()` rows with `t == "warehouse"`, with `vehicles`
+    (H 1, I/P/Q 2);
+  - HQ facts: free Logistics Managers and Purchasing Agents, free computer workstations.
+- Reuse `_recipes()`, `_workstations()`, `_plan()` (`D.plan`); `setup_cost()` unchanged for the
+  shopping list; vehicle prices from `ba_store_rules.json` `vehicles`.
+- `make_store_rules.py`: add `Item.maxOrderAmountPerImporter` per product, so the index drop
+  from exports can be sized.
+- `_payback()` unchanged: the factory stays a cost centre.
+- `docs/dashboard-reference.md` "Open a factory": the export price rule and the index drop.
 
 **Board script (TEMPLATE)**
 
 - New `of*` functions mirroring `os*`: `ofLoad/ofSave` (`ba_open_factory_v1:<character>`),
-  `ofCtlHtml`, `ofStripHtml`, `ofWhatHtml` (the ranking), `ofLinesHtml` (steppers; reuse
-  `planDraw()`'s arithmetic, `planOrder()`), `ofInvestHtml` (reuse `osStores()`, `osToolbar()`,
-  `osWhy()` with new tags), `ofBreakHtml` (reuse `osChart()`, `osBreakDay()`, `osRange()`,
-  `osFinHtml()`/`osLoan*()` unchanged), `ofUntilRows` (reuse `osAct()`, `osIngame()`, the
-  `os-ck` rows), `ofRoiHtml` (reuse `osRoiChart()`, `osRoiTable()`).
-- Write buttons: `hrReview({scope:"site"})` for the factory (the staffing assistant's factory
-  rules already plan 12-hour entries); Quick hire for the HQ agent; `gwImports()` for the
-  contract's amounts and the depot's own lines.
-- If A (own view): route `expansion/openfactory`, `VIEW_NEW`, `PAGE_DRAWS` row, navigation
-  tables (`tests/navigation.test.cjs`), search synonym. If B: a kind switch at the top of
-  `secOpen`, plans keyed by kind.
-- Store checklist: `osCkLogistics()` gains "Open a factory" (`data-os-route`) and "Depot
-  deliveries" when a depot imports the products.
-- Plan a factory: an "Open this factory" button in `#secPlan` that seeds a plan with the
-  current machine counts. Overview: one `ov-task` line.
+  `ofCtlHtml` (five steps), `ofStripHtml`, `ofWhatHtml`, `ofLinesHtml` (steppers on
+  `planDraw()`'s arithmetic; the shortage row when a custom count leaves the shops short),
+  `ofInvestHtml` (reuse `osStores()`, `osToolbar()`, `osWhy()`), the financing panel through
+  `osLoan()`/`osLoanLimit()` without `osLoanDays()`, `ofUntilRows` (reuse `osAct()`,
+  `osIngame()`, the `os-ck` rows), `ofRunHtml` (output against plan, exports, raw material).
+- Write buttons: `hrReview({scope:"site"})` for the factory, Quick hire for the HQ agent,
+  `gwImports()` for the contract's amounts and the depot's own lines.
+- Route `expansion/openfactory`, `VIEW_NEW`, a `PAGE_DRAWS` row, the navigation tables
+  (`tests/navigation.test.cjs`), a search synonym.
+- Store checklist: `osCkLogistics()` gains "Open a factory" and "Depot deliveries". Plan a
+  factory gains "Open this factory". Overview: one `ov-task` line.
 
 **`web/map.js`**
 
-- `options.plan` with `cat: "warehouse"`, a "Near" anchor (the depot) and a distance cell that
-  returns null across regions; the map switches to the Industry City inset.
+- `options.plan` with `cat: "warehouse"` and a minimum size; no distance anchor; the map
+  switches to the Industry City inset.
 
 **Other**
 
-- `docs/architecture.md` registries (view, payload key), `docs/dashboard-reference.md`
-  ("Open a factory"), changelog entry (a new feature), i18n keys for every new string.
-- Tests: `tests/test_open_factory.py` (synthetic fixtures), `tests/open_factory.test.cjs`, and
-  the slice anchors for the new `of*` block.
-
-## Review fixes (gpt-6.1-sol, 1 Oct 2026)
-
-1. Hire dialog: the driver is "qualified for the Freight Truck T1"; a new in-game checklist row
-   assigns the driver to the truck (checklist now 2 of 10).
-2. Bigger than the chain: the pier export is an in-game instruction, not a button.
-3. Links: raw material a week is the plan's own sum, 100,800.
-4. Recipe: the sizing control reads Custom (peak day: Wine ×2); `machines_for()` no longer
-   forces Wine to 1, so the start page sizes Wine to 2 (50 days).
-5. Start page: "paid back in" is the first day that covers it (ceil): Whisky 20 days.
-6. Break even and financing use `OS_MID` (0.925): 35 days self, 83 firm, own cash 20 days; the
-   running plan line and "plan and now" use it too.
-7. Results: the chain's profit a day is the sum of its members.
-8. Results: the chain's day is 170 (no earlier than its newest member); day 118 is history.
-9. Results: Invested is marked "with the truck · proposed", with what `setup_cost()` counts today.
-10. No depot: "To supply these shops, the factory needs a depot".
-11. No code names in the product copy.
+- `docs/architecture.md` registries (view, payload key), a changelog entry, i18n keys.
+- Tests: `tests/test_open_factory.py` (synthetic fixtures; the export price rule),
+  `tests/open_factory.test.cjs`, slice anchors for the `of*` block.

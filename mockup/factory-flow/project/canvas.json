@@ -15,31 +15,23 @@
    "y": 0,
    "w": 1280,
    "h": 900,
-   "title": "0 · A: Expansion › Open a factory, its own view",
-   "is_interactive": true
-  },
-  "EntryB.dc.html": {
-   "x": 1360,
-   "y": 0,
-   "w": 1280,
-   "h": 900,
-   "title": "0b · B: one view, Open a site, with a Store / Factory switch",
+   "title": "0 · Expansion › Open a factory",
    "is_interactive": true
   },
   "Links.dc.html": {
-   "x": 2720,
+   "x": 1360,
    "y": 0,
    "w": 1280,
    "h": 680,
-   "title": "0c · The ways in: the store checklist, Plan a factory, Overview",
+   "title": "0b · The ways in: the store checklist, Plan a factory, Overview",
    "is_interactive": true
   },
   "Recipe.dc.html": {
    "x": 0,
    "y": 1320,
    "w": 1280,
-   "h": 1000,
-   "title": "1 · What: the lines, sized to the chain",
+   "h": 1100,
+   "title": "1 · What: the lines, a custom count left short",
    "is_interactive": true
   },
   "NoDepot.dc.html": {
@@ -54,111 +46,83 @@
    "x": 2720,
    "y": 1320,
    "w": 1280,
-   "h": 1000,
-   "title": "2 · Where: warehouse buildings near the depot",
-   "is_interactive": true
-  },
-  "LocationFar.dc.html": {
-   "x": 4080,
-   "y": 1320,
-   "w": 1280,
-   "h": 1200,
-   "title": "2b · Where: across the river from the depot",
+   "h": 960,
+   "title": "2 · Where: warehouse buildings with room for the machines",
    "is_interactive": true
   },
   "Investment.dc.html": {
    "x": 0,
-   "y": 2940,
+   "y": 2840,
    "w": 1280,
-   "h": 1180,
-   "title": "3 · Investment: self-installation",
+   "h": 1360,
+   "title": "3 · Investment: self-installation, and the loan",
    "is_interactive": true
   },
   "InvestmentFirm.dc.html": {
    "x": 1360,
-   "y": 2940,
+   "y": 2840,
    "w": 1280,
    "h": 1000,
    "title": "3b · Investment: installation firm",
    "is_interactive": true
   },
-  "BreakEven.dc.html": {
-   "x": 2720,
-   "y": 2940,
-   "w": 1280,
-   "h": 1200,
-   "title": "4 · Break even: A what the factory adds, B the chain as one",
-   "is_interactive": true
-  },
-  "BreakEvenStates.dc.html": {
-   "x": 4080,
-   "y": 2940,
-   "w": 1000,
-   "h": 800,
-   "title": "4b · Break even: chain not paid back, too big, nothing to replace",
-   "is_interactive": true
-  },
   "Checklist.dc.html": {
    "x": 0,
-   "y": 4560,
+   "y": 4620,
    "w": 1280,
    "h": 1450,
-   "title": "5 · Until production · game linked",
+   "title": "4 · Until production · game linked",
    "is_interactive": true
   },
   "ChecklistNoLink.dc.html": {
    "x": 1360,
-   "y": 4560,
+   "y": 4620,
    "w": 1280,
    "h": 1560,
-   "title": "5b · Until production · not linked",
+   "title": "4b · Until production · not linked",
    "is_interactive": true
   },
   "Hire.dc.html": {
    "x": 2720,
-   "y": 4560,
+   "y": 4620,
    "w": 1120,
    "h": 900,
-   "title": "5c, 5d · The quick buttons' dialogs",
+   "title": "4c, 4d · The quick buttons' dialogs",
    "is_interactive": true
   },
   "Running.dc.html": {
    "x": 0,
-   "y": 6540,
+   "y": 6600,
    "w": 1280,
-   "h": 1240,
-   "title": "6 · Running: output and payback",
+   "h": 900,
+   "title": "5 · Running: output against plan",
    "is_interactive": true
   },
   "RunningBelow.dc.html": {
    "x": 1360,
-   "y": 6540,
+   "y": 6600,
    "w": 1280,
-   "h": 1280,
-   "title": "6b · Running: output below plan",
+   "h": 1080,
+   "title": "5b · Running: output below plan",
    "is_interactive": true
   },
   "Results.dc.html": {
    "x": 2720,
-   "y": 6540,
+   "y": 6600,
    "w": 1280,
-   "h": 1180,
-   "title": "7 · Businesses › Results: the chain row and its history",
+   "h": 820,
+   "title": "6 · Businesses › Results: the factory in its chain",
    "is_interactive": true
   }
  },
  "order": [
   "Main.dc.html",
-  "EntryB.dc.html",
   "Links.dc.html",
   "Recipe.dc.html",
   "NoDepot.dc.html",
   "Location.dc.html",
-  "LocationFar.dc.html",
   "Investment.dc.html",
   "InvestmentFirm.dc.html",
-  "BreakEven.dc.html",
-  "BreakEvenStates.dc.html",
   "Checklist.dc.html",
   "ChecklistNoLink.dc.html",
   "Hire.dc.html",
@@ -183,22 +147,22 @@
   },
   "row2": {
    "x": 0,
-   "y": 2700,
-   "text": "The investment and its break even",
+   "y": 2600,
+   "text": "The investment",
    "kind": "title1",
    "maxW": 5440
   },
   "row3": {
    "x": 0,
-   "y": 4320,
+   "y": 4380,
    "text": "Until production runs",
    "kind": "title1",
    "maxW": 5440
   },
   "row4": {
    "x": 0,
-   "y": 6300,
-   "text": "Running, and paid back",
+   "y": 6360,
+   "text": "Running",
    "kind": "title1",
    "maxW": 5440
   }
