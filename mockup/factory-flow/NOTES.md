@@ -43,6 +43,16 @@ checklist rows and finder plan mode. What only a factory needs is `ff-`.
    again); Until production lists only what the change needs; Running compares output with the
    new plan. The Ingredients order-ahead table sits in step 1.
 10. **Plan a factory gets the New badge** for the release (below).
+11. **Investment is the fixed, one-off upfront cost only**: machines and furniture at list
+    price, the installation fee (firm) or the furniture delivery (self-installation), the
+    deposit, vehicles. No raw material or stock, wages, rent beyond the deposit, import costs
+    or first-weeks buffer. The drawn totals already held only one-off items, so no figure
+    changed: $562,070 self and $1,318,932 firm for a new factory, $275,250 and $1,032,112 for
+    the owned-factory addition, $688,830 with a new depot, loan $280,000 with $282,070 cash
+    upfront. What changed is the separation: the plan strip's fourth cell is now **Running
+    costs** (raw material a week, marked "not in the investment", set apart with a dashed
+    edge), every investment total says "one-off, upfront", the loan's day figure reads "Repaid
+    a day", and the no-depot step says the depot's rent and driver are running costs.
 
 ## One menu point: Plan a factory
 
@@ -243,6 +253,10 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
   `osStores()`, `osToolbar()`, `osWhy()`), the financing panel through `osLoan()`/`osLoanLimit()`,
   `ofUntilRows` and the owned-factory change rows (reuse `osAct()`, `osIngame()`, the `os-ck`
   rows), `ofRunHtml`.
+- The investment sum (`ofInvestment()`, like `osInvestment()`) takes only one-off items:
+  furniture (`setup_cost()` items), fee or delivery, deposit, vehicles. Running costs (raw
+  material from the plan's lines; wages and rent once modelled) are a separate figure for the
+  plan strip and Running, never added to it, and the loan is sized on the investment alone.
 - Write buttons: `hrReview({scope:"site"})` for the factory, Quick hire for the HQ agent,
   `gwImports()` for amounts and the depot's own lines.
 

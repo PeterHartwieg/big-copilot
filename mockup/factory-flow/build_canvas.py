@@ -464,6 +464,8 @@ FF_CSS = r"""
 .os-views a .os-new{margin-left:auto}
 .feature-new{display:inline-block;flex:none;margin-left:auto;padding:2px 5px;border-radius:4px;background:var(--accent-soft);color:var(--accent);font:600 9px/1.2 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;vertical-align:middle}
 .os-views a.on .feature-new{background:var(--ground)}
+.os-pb>div.ff-run{border-left:1px dashed var(--rule);background:color-mix(in srgb,var(--ground) 60%,transparent);border-radius:0 12px 12px 0}
+.ff-wk{font-size:12px;color:var(--ink-3);margin-left:2px}
 .ff-ab{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 6px;border-radius:6px;background:var(--ink);color:var(--ground);font:600 11.5px/1 "IBM Plex Mono",monospace}
 .ff-abh{display:flex;align-items:center;gap:10px;margin:0 0 12px}
 .ff-abh b{font-size:14.5px;font-weight:600}
@@ -900,11 +902,11 @@ def planbar(where: bool = True, inv: str = "self", make: str = "") -> str:
         i = '<b class="dim">–</b><small>after the location</small>'
     else:
         total, how = (FIRM, "Installation firm") if inv == "firm" else (SELF, "Self-installation")
-        i = f'<b class="m">{money(total)}</b><small>{how} · all in</small>'
-    raw = f'<b class="m">{money(RAW_COST_WK)}</b><small>a week · Aquatic Bay Cargo, 8 Pier</small>'
+        i = f'<b class="m">{money(total)}</b><small>{how} · one-off, upfront</small>'
+    raw = f'<b class="m">{money(RAW_COST_WK)}<span class="ff-wk">/week</span></b><small>raw material · not in the investment</small>'
     return (f'<div class="os-pb"><div><span class="os-lab">Make</span>{m}</div>'
             f'<div><span class="os-lab">Where</span>{w}</div><div><span class="os-lab">Investment</span>{i}</div>'
-            f'<div><span class="os-lab">Raw material</span>{raw}</div></div>')
+            f'<div class="ff-run"><span class="os-lab">Running costs</span>{raw}</div></div>')
 
 
 def page(area: str, view: str, body: str, day: str = DAY, views=None) -> str:
@@ -1077,7 +1079,7 @@ def no_depot() -> str:
 <tr><td class="l">Pallet Shelf</td><td class="w">{tag("req", "Receives deliveries")}</td><td>{DEPOT_SHELVES}</td><td>{money(SHELVES[1])}</td><td>{money(DEPOT_SHELVES * SHELVES[1])}</td></tr>
 <tr><td class="l">{VAN[0]}</td><td class="w">{tag("req", "One vehicle")} {tag("", "up to 6 stops: your 4 shops")}</td><td>1</td><td>{money(VAN[1])}</td><td>{money(VAN[1])}</td></tr>
 </tbody><tfoot><tr><td class="l">Factory and depot</td><td></td><td></td><td></td><td>{money(SELF + DEPOT_TOTAL)}</td></tr></tfoot></table>
-<p class="os-dim" style="font-size:12.5px;margin-top:10px">Its rent ({money(DEPOT_NEW["rent"])}/day) and a driver join the factory's costs in step 4. The depot belongs to the chain like the factory does.</p>"""
+<p class="os-dim" style="font-size:12.5px;margin-top:10px">Only one-off costs count here. The depot's rent ({money(DEPOT_NEW["rent"])}/day) and its driver are running costs, outside the investment. The depot belongs to the chain like the factory does.</p>"""
 
 
 GROW = [("Whisky", 2, 2), ("Bottle of Wine", 1, 1), ("Beer", 0, 2)]   # product, machines now, planned
@@ -1142,12 +1144,12 @@ def grow_raw_week() -> float:
 
 
 def grow_bar(stage: str = "") -> str:
-    inv = (f'<b class="m">{money(GROW_TOTAL)}</b><small>new machines only</small>' if stage != "what"
+    inv = (f'<b class="m">{money(GROW_TOTAL)}</b><small>new machines only · one-off</small>' if stage != "what"
            else '<b class="dim">–</b><small>after the lines</small>')
     return (f'<div class="os-pb"><div><span class="os-lab">Make</span><b>Beer ×2 added</b><small>Whisky ×2 · Wine ×1 as now</small></div>'
             f'<div><span class="os-lab">Where</span><b>{NEW["addr"]}</b><small>yours since day {FACTORY_OPENED} · nothing to rent</small></div>'
             f'<div><span class="os-lab">Investment</span>{inv}</div>'
-            f'<div><span class="os-lab">Raw material</span><b class="m">{money(grow_raw_week())}</b><small>a week · was {money(RAW_COST_WK)}</small></div></div>')
+            f'<div class="ff-run"><span class="os-lab">Running costs</span><b class="m">{money(grow_raw_week())}<span class="ff-wk">/week</span></b><small>raw material, was {money(RAW_COST_WK)} · not in the investment</small></div></div>')
 
 
 def grow_what() -> str:
@@ -1179,7 +1181,7 @@ def grow_invest() -> str:
 <table><tbody>{rows}<tr class="del"><td class="l">Delivery</td><td class="w"></td><td>{money(DELIVERY)}</td></tr></tbody></table></div>
     <div class="ff-callout" style="background:var(--raised)">{svg("key")}<span><b>Nothing else to pay.</b> The lease, the deposit and the {TRUCK[0]} are there already;
       the installation firm would charge for the whole floor again ({money(FEE)}).</span></div>
-    <div class="os-total"><span>Investment</span><small>the new machines and shelves · 1 delivery</small><b>{money(GROW_TOTAL)}</b></div></div>
+    <div class="os-total"><span>Investment</span><small>one-off, upfront · the new machines and shelves · 1 delivery</small><b>{money(GROW_TOTAL)}</b></div></div>
   <div>{city(pins, zoom=False)}</div>
 </div>"""
 
@@ -1319,7 +1321,7 @@ def investment_self() -> str:
 {toolbar("self")}
 <div class="os-self">
   <div>{cards}
-    <div class="os-total"><span>Investment</span><small>{sum(q for *_x, q in ITEMS)} items · 1 delivery · a truck · deposit</small><b>{money(SELF)}</b></div></div>
+    <div class="os-total"><span>Investment</span><small>one-off, upfront · {sum(q for *_x, q in ITEMS)} items · 1 delivery · a truck · deposit</small><b>{money(SELF)}</b></div></div>
   <div>{city(pins, zoom=False)}<div class="os-maplist">{legend}</div>
     <p class="os-dim" style="font-size:12px;margin-top:12px">Everything is bought in Industry City, a few streets from the factory.</p></div>
 </div>{finance()}"""
@@ -1342,7 +1344,7 @@ def investment_firm() -> str:
   Self-installation saves {money(FIRM - SELF)} here.</span></div>
 <table class="os-inv"><thead><tr><th class="l">Item</th><th class="l">Why</th><th>Qty</th><th>Each</th><th>Total</th></tr></thead>
 <tbody>{"".join(body)}</tbody>
-<tfoot><tr><td class="l">Investment</td><td></td><td></td><td></td><td>{money(FIRM)}</td></tr></tfoot></table>"""
+<tfoot><tr><td class="l">Investment<span class="sub">one-off, upfront</span></td><td></td><td></td><td></td><td>{money(FIRM)}</td></tr></tfoot></table>"""
 
 
 def finance() -> str:
@@ -1352,7 +1354,7 @@ def finance() -> str:
     <span class="os-dim" style="font-size:12.5px">lends you up to $2,000,000 now</span></div></div>
   <div class="ff-fin"><div><span class="os-lab">Borrow</span><b>{money(LOAN)}</b><small>of {money(SELF)}</small></div>
     <div><span class="os-lab">Cash upfront</span><b>{money(SELF - LOAN)}</b><small>the rest of the investment</small></div>
-    <div><span class="os-lab">A day while it runs</span><b>{money(LOAN_INT + LOAN_REPAY)}</b><small>{money(LOAN_REPAY)} back + {money(LOAN_INT)} interest</small></div>
+    <div><span class="os-lab">Repaid a day</span><b>{money(LOAN_INT + LOAN_REPAY)}</b><small>{money(LOAN_REPAY)} back + {money(LOAN_INT)} interest</small></div>
     <div><span class="os-lab">Interest</span><b>{money(LOAN_INT * LOAN_DAYS)}</b><small>over {LOAN_DAYS} days · less if paid off early</small></div></div>
 </section>"""
 
