@@ -19925,11 +19925,16 @@
        "makes": 1200,
        "missing": [],
        "missingSlugs": [],
+       "needDay": 370,
        "needHours": {
         "cap": 24,
         "dem": 8
        },
        "piling": false,
+       "production": {
+        "level": "ok",
+        "status": "covered"
+       },
        "rate": 25,
        "rid": "LScSWfyqVU+2BYQazKeF6g==",
        "running": 1,
@@ -19939,6 +19944,7 @@
         2
        ],
        "slug": "ba:itemname_beer",
+       "soldDay": 321,
        "status": "short",
        "stock": 900,
        "toCity": 600,
