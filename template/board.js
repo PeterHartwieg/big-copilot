@@ -12480,6 +12480,18 @@ function planAdded(type){
 /* A rate nobody measured yet starts as the type's measured rate a shop times
    the game's weight for the product, to the nearest ten (to the nearest one
    under ten, so a small shop's figure does not round to nothing). */
+/* A rate as the player types it: a "." or "," with one or two digits after it
+   at the end is the decimal mark, any other is a thousands separator ("12,5"
+   and "12.5" are 12.5, "1,200" is 1200). One decimal is kept; a negative, an
+   empty field or text that is no number is 0. */
+function planRateParse(text){
+  const t = String(text ?? "").replace(/\s/g, "");
+  if(!t || t.startsWith("-")) return 0;
+  const m = t.match(/[.,](\d{1,2})$/);
+  const whole = (m ? t.slice(0, -m[0].length) : t).replace(/[.,]/g, "");
+  if(!/^\d*$/.test(whole) || (!whole && !m)) return 0;
+  return Math.round(Number(`${whole || 0}.${m ? m[1] : 0}`) * 10) / 10;
+}
 function planExtraDefault(perShop, weight){
   const v = (perShop || 0) * (weight || 0);
   if(!v) return 0;
@@ -12502,7 +12514,7 @@ function drawPlan(){
      the same product's field gets focus and caret back afterwards. */
   const act = document.activeElement;
   const typing = act && act.matches && act.matches("[data-pc-rate]")
-    ? {slug: act.dataset.pcRate, from: act.selectionStart, to: act.selectionEnd} : null;
+    ? {slug: act.dataset.pcRate, from: act.selectionStart, to: act.selectionEnd, text: act.value} : null;
   const types = planTypes();
   if(!types.length){
     $("planNote").textContent = tt("gr.plan.noCatalogue", "No product catalogue in this save.");
@@ -12560,10 +12572,11 @@ function drawPlan(){
   const meta = {};
   const wantWeek = perShop * 7 * shops;  // what the shops take of one product a week
   let bought = 0;
-  /* An added product's rate a shop: what the type's shops already sell of it
-     where they do (measured beats typed, and no field), else the rate the
-     player typed, else the default; with no shop of the type, nothing to
-     type, as for the main lines. */
+  /* An added product's rate per shop. Measured, with no field, only when
+     every shop of the type sells it. Otherwise a field holding the rate the
+     player typed, else what the shops that sell it sell spread over all of
+     them, else the default. With no shop of the type, nothing to type, as for
+     the main lines. */
   const extraRate = slug => {
     const measured = ((own || {}).perDay || {})[slug];
     const sellers = Math.min(shops, (((own || {}).sellers || {})[slug]) ?? shops);
@@ -12645,7 +12658,7 @@ function drawPlan(){
         {n: extra.sellers, total: shops, type: cat[planType].type})
       : tt("gr.line.rateYoursTip", "Your {type} shops do not sell this yet, so this rate is yours, not measured. It starts at {per:,} a shop, what one sells of a main product, times the game's {w}% weight",
         {type: cat[planType].type, per: perShop, w: Math.round((weightOf[slug] || 0) * 100)});
-    const rateField = extra && extra.typed ? `<span class="pc-rate"><label><input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" value="${extra.rate}" data-pc-rate="${attr(slug)}" aria-label="${
+    const rateField = extra && extra.typed ? `<span class="pc-rate"><label><input type="text" inputmode="decimal" autocomplete="off" value="${extra.rate}" data-pc-rate="${attr(slug)}" aria-label="${
         attr(tt("gr.line.rateAria", "{name} a shop sells a day, your estimate", {name: r.item}))}">${tt("gr.line.rateUnit", "/shop/day")}</label>·<em tabindex="0" data-tip="${
         attr(rateTip)}">${tt("gr.line.rateYours", "your estimate")}</em></span>` : "";
     return `<tr class="line${extra ? " pc-added" : ""}" data-m="${machinesOn(slug)}" data-min="0" data-max="99" data-rate="${r.out}" data-ing="${attr(ing)}" data-kit="${attr(JSON.stringify(kit))}" data-slug="${attr(slug)}" data-name="${attr(r.item)}"${extra ? ` data-pershop="${extra.rate}"` : ""}>
@@ -12702,6 +12715,9 @@ function drawPlan(){
   wireTips();
   const again = typing && $$("#planBody [data-pc-rate]").find(el => el.dataset.pcRate === typing.slug);
   if(again){
+    /* The text as it stood, an empty field or a half-typed "12," included,
+       so the next keystroke goes where the player expects. */
+    again.value = typing.text;
     again.focus({preventScroll: true});
     try{ again.setSelectionRange(typing.from ?? again.value.length, typing.to ?? again.value.length); }catch(e){}
   }
@@ -20467,13 +20483,8 @@ const bindPlan = once(() => {
     if(back) back.focus({preventScroll: true});
   });
   on("input", "[data-pc-rate]", el => {
-    const digits = el.value.replace(/[^0-9]/g, "");
-    if(digits !== el.value){
-      const at = Math.max(0, (el.selectionStart || 0) - (el.value.length - digits.length));
-      el.value = digits;
-      try{ el.setSelectionRange(at, at); }catch(e){}
-    }
-    const v = digits === "" ? 0 : +digits;
+    /* The text stays as typed; only the figure read from it moves the plan. */
+    const v = planRateParse(el.value);
     const all = planExtraAll();
     (all[planType] || (all[planType] = {}))[el.dataset.pcRate] = v;
     planExtraKeep();

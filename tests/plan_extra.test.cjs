@@ -168,6 +168,28 @@ test('a typed rate is restored from storage, and survives a type switch and a li
   } finally { await page.close(); }
 });
 
+test('a typed rate reads a decimal comma or point, thousands separators, and never goes below 0', async () => {
+  const page = await board(added(['umbrella']));
+  try{
+    const field = line(page, ITEM + 'umbrella').locator('[data-pc-rate]');
+    const cases = [['12,5', 12.5], ['12.5', 12.5], ['1,200', 1200], ['1.200', 1200], ['-5', 0], ['', 0], ['0', 0], ['7,25', 7.3]];
+    for(const [text, rate] of cases){
+      await field.fill(text);
+      assert.equal(await field.inputValue(), text, 'the text stays as typed');
+      assert.equal(+(await line(page, ITEM + 'umbrella').getAttribute('data-pershop')), rate, text);
+    }
+    await field.fill('12,5');
+    assert.match(await line(page, ITEM + 'umbrella').locator('.covers .sub').textContent(), /shops take 350/);  // 12.5 x 7 x 4
+    // An empty field stays empty through a redraw, the caret at its start.
+    await field.fill('');
+    await page.evaluate(() => drawPlan());
+    assert.deepEqual(await page.evaluate(() => { const a = document.activeElement; return [a.dataset.pcRate, a.value]; }),
+      [ITEM + 'umbrella', '']);
+    await page.keyboard.type('3');
+    assert.equal(await line(page, ITEM + 'umbrella').locator('[data-pc-rate]').inputValue(), '3');
+  } finally { await page.close(); }
+});
+
 test('the Add product row goes once everything is added', async () => {
   const page = await board(added(['sodacan', 'energydrink', 'umbrella', 'cheapgift']));
   try{
