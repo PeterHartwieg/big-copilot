@@ -4,6 +4,7 @@
 // existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -129,7 +130,7 @@ test('a finding arrived at from the list is marked, and show all unfolds the res
   ]});
   try {
     assert.equal(await page.locator('#sitePanel .sp-find').count(), 4);
-    assert.match(await page.locator('#sitePanel .sp-findmore').innerText(), /2 more · show all/);
+    assert.match(await page.locator('#sitePanel .sp-findmore').innerText(), new RegExp(enRe('sp.finds.more', {n: 2}).source + ' · ' + enRe('sp.finds.all').source));
     await page.click('[data-allfinds]');
     assert.equal(await page.locator('#sitePanel .sp-find').count(), 6);
     // Arriving from the board's own list marks the row it came from.
@@ -254,7 +255,7 @@ test('a big role in a narrow Crew block keeps its name, its count and its dots i
         assert.ok(r.apart, `${at}: ${r.role} and its count overlap ${JSON.stringify(r)}`);
         assert.ok(r.spill <= 0.5, `${at}: ${r.role}'s count runs ${r.spill.toFixed(1)}px out of the block`);
       }
-      assert.match(rows[1].count, /^80\s·\s4 off\s·\s\$64,000\/day$/);
+      assert.match(rows[1].count, new RegExp('^80\\s·\\s' + enRe('sp.crew.off', {n: 4}).source + '\\s·\\s\\$64,000/day$'));
       // Eighty dots at 16px a dot (11 and a 5px gap) fill the block's whole
       // width: a handful of lines, not eighty. Six where the block is 220px or
       // wider; about 200px wide (768px beside the sidebar's rail) it holds
@@ -309,8 +310,8 @@ test('a silent shop shows the six pre-flight checks in the order it needs them',
       els.map(e => [e.dataset.check, e.className, e.dataset.tip]));
     assert.deepEqual(checks.map(c => c[1]), ['no', 'ok', 'ok', 'ok', 'ok', 'ok']);
     assert.equal(checks[0][0], 'closed');
-    assert.equal(checks[0][2], 'temporarily closed');
-    assert.equal(checks[1][2], 'staffed');
+    assert.equal(checks[0][2], en('sp.check.closed.no'));
+    assert.equal(checks[1][2], en('sp.check.staff'));
   } finally { await closed.close(); }
 
   // Every check passed and the site simply has not booked a day yet.
@@ -405,11 +406,11 @@ test("the tiles carry the fortnight, the costs of the day and the ceilings", asy
       els.map(e => [e.className.trim(), e.children.length, e.querySelectorAll('i.l').length]));
     assert.deepEqual(spark, [['sp-spark dn', 14, 7], ['sp-spark', 14, 7]]);
     // The cost bar replaces the profit tile's tooltip, and ends in the profit.
-    assert.equal(await page.locator('#sp-tiles .sstat', {hasText: 'Profit'}).getAttribute('data-tip'), null);
+    assert.equal(await page.locator('#sp-tiles .sstat', {hasText: en('sp.tile.profit')}).getAttribute('data-tip'), null);
     const parts = await page.$$eval('#sp-tiles .sp-cost i', els =>
       els.map(e => [e.className, e.dataset.read]));
     assert.equal(parts.at(-1)[0], 'p');
-    assert.match(parts.at(-1)[1], /^Profit/);
+    assert.match(parts.at(-1)[1], enRe('sp.tile.profit', {}, {anchor: 'start'}));
     // The three ceilings, with the one this shop's busy hours ran into lit.
     const ceil = await page.$$eval('#sp-tiles .sp-ceil .sp-i', els =>
       els.map(e => e.classList.contains('on')));
@@ -435,8 +436,8 @@ test('two full weeks shade the chart with their own averages', async () => {
     assert.equal(bands.length, 2);
     assert.equal(bands[1][0], true);
     // The windows are day numbers, not positions: days 15-21 and 22-28.
-    assert.match(bands[0][1], /^<b>days 15–21<\/b> \$/);
-    assert.match(bands[1][1], /^<b>days 22–28<\/b> \$/);
+    assert.match(bands[0][1], enRe('sp.profit.band', {from: 15, to: 21}));
+    assert.match(bands[1][1], enRe('sp.profit.band', {from: 22, to: 28}));
     assert.equal(await page.locator('#sp-profit polyline[stroke-dasharray]').count(), 0);
   } finally { await page.close(); }
 });
@@ -459,7 +460,7 @@ test('a trend with no week before it reads as a dash, not as no change', async (
   try {
     const chip = await page.locator('#sp-tiles .chip').first();
     assert.equal((await chip.innerText()).trim(), '—');
-    assert.match(await chip.getAttribute('data-tip'), /took nothing to compare/);
+    assert.match(await chip.getAttribute('data-tip'), enRe('sp.trend.nothing'));
     assert.equal(await page.locator('#sp-tiles .chip svg').count(), 0);
   } finally { await page.close(); }
 });
@@ -467,7 +468,7 @@ test('a trend with no week before it reads as a dash, not as no change', async (
 test('the ramp chip counts only while the site is still ramping up', async () => {
   const ramping = await site({shop: {daysOpen: 9}});
   try {
-    assert.equal((await ramping.locator('#sp-tiles .chip').first().innerText()).trim(), 'day 9 of 14');
+    assert.equal((await ramping.locator('#sp-tiles .chip').first().innerText()).trim(), en('sp.trend.ramp', {n: 9, of: 14}));
   } finally { await ramping.close(); }
 
   // Old enough for a trend, but without the history behind it: no number to give.
@@ -475,7 +476,7 @@ test('the ramp chip counts only while the site is still ramping up', async () =>
   try {
     const chip = old.locator('#sp-tiles .chip').first();
     assert.equal((await chip.innerText()).trim(), '—');
-    assert.match(await chip.getAttribute('data-tip'), /No full fortnight/);
+    assert.match(await chip.getAttribute('data-tip'), enRe('sp.trend.none'));
     assert.ok(await chip.evaluate(e => e.classList.contains('none')));
   } finally { await old.close(); }
 });
@@ -502,30 +503,30 @@ test('every ceiling the busy hours ran into gets a chip and a lit icon', async (
   try {
     // Before anything is pointed at, the read-out opens on the worst hour with
     // something to fix: 15:00, not the building's busier 09:00.
-    assert.match(await page.locator('#hourRead').textContent(), /^Worst hour · Monday 15:00 /);
+    assert.match(await page.locator('#hourRead').textContent(), new RegExp('^' + enRe('sp.hour.worst').source + ' · ' + enRe('sp.hour.when', {d: 1, h: '15'}).source + ' '));
     // A cell says which kind of ceiling held it and whose role held it, as
     // `<kind>:<skill>`; the door is nobody's role, so its token stands alone.
     const chips = await page.$$eval('#sp-hours .sp-hchip.cap', els =>
       els.map(e => [e.dataset.limit, e.dataset.show]));
     assert.deepEqual(chips, [
-      ['the building', 'door'],
-      ['staffing', `staff:${SERVICE}`],
-      ['registers', `post:${SERVICE}`]]);
+      [en('sp.py.limit.building'), 'door'],
+      [en('sp.py.limit.staffing'), `staff:${SERVICE}`],
+      [en('sp.py.limit.registers'), `post:${SERVICE}`]]);
     // The building's chip is information, not a warning: the neutral
     // modifier, no fix arrow, and a tip that only says how much. The staffing
     // and registers chips keep their warning look and their fixes.
-    const chipLook = await page.$$eval('#sp-hours .sp-hchip.cap', els =>
+    const chipLook = await page.$$eval('#sp-hours .sp-hchip.cap', (els, ceilingPattern) =>
       els.map(e => [e.classList.contains('sp-bcap'),
         e.querySelector('.fix') ? e.querySelector('.fix').textContent : null,
-        /the fix is/.test(e.dataset.tip)]));
+        new RegExp(ceilingPattern).test(e.dataset.tip)]), enRe('sp.cap.ceiling', {n: 1}).source + '|' + enRe('sp.cap.ceiling', {n: 2}).source);
     assert.deepEqual(chipLook, [
       [true, null, false],
-      [false, 'more service staff on those hours', true],
-      [false, 'another counter', true]]);
+      [false, en('sp.py.fix.service.staff'), true],
+      [false, en('sp.py.fix.service.post'), true]]);
     const door = page.locator('#sp-hours .sp-hchip[data-show="door"]');
     assert.match(await door.getAttribute('data-tip'),
-      /^At the building's capacity 7 hours a week \(every day 9\); \$[\d.,]+k?\/day of sales in those hours\.$/);
-    assert.match(await door.innerText(), /at building capacity/);
+      enRe('sp.cap.door', {hours: 7, when: 'every day 9'}, {anchor: 'full'}));
+    assert.match(await door.innerText(), enRe('sp.hour.atdoor'));
     // Its hours wear the neutral ring too; the other ceilings' hours do not.
     const rings = await page.$$eval('#sp-hours .hc.cap', els =>
       [...new Set(els.map(e => `${e.dataset.caps.split(':')[0]}:${e.classList.contains('sp-bcap')}`))].sort());
@@ -574,9 +575,9 @@ test('a site held only by its building opens on its busiest hour, at building ca
   });
   try {
     const read = await page.locator('#hourRead').textContent();
-    assert.match(read, /^Busiest hour · Monday 09:00 50 customers/);
-    assert.match(read, /at building capacity$/);
-    assert.doesNotMatch(read, /at the ceiling/);
+    assert.match(read, new RegExp('^' + enRe('sp.hour.busiest').source + ' · ' + enRe('sp.hour.when', {d: 1, h: '09'}).source + ' ' + enRe('sp.hour.customers', {n: 50}).source));
+    assert.match(read, new RegExp(enRe('sp.hour.atdoor').source + '$'));
+    assert.doesNotMatch(read, enRe('sp.hour.atceiling'));
   } finally { await page.close(); }
 });
 
@@ -607,7 +608,7 @@ test('an office draws its workstations where a shop draws its pull, and its pull
       els.map(e => e.classList.contains('sp-z')));
     // Four workstations, three of them manned at the busiest hour.
     assert.deepEqual(squares, [false, false, false, true]);
-    assert.match(await page.locator('#sp-desks .sp-readout').innerText(), /3 of 4 staffed/);
+    assert.match(await page.locator('#sp-desks .sp-readout').innerText(), enRe('sp.desks.read', {n: 3, of: 4}));
   } finally { await page.close(); }
 });
 
@@ -733,7 +734,7 @@ test('a depot draws its week of trucks, and no hour grid', async () => {
     ]);
     // One row a site that draws on the depot, and the tile that counts them.
     assert.equal(await page.locator('#sp-feeds .sp-feed').count(), 1);
-    assert.match(await page.locator('#sp-tiles .sstat', {hasText: 'Feeds'}).innerText(), /1\s*site/);
+    assert.match(await page.locator('#sp-tiles .sstat', {hasText: en('sp.tile.feeds')}).innerText(), enRe('sp.tile.feeds.sub', {n: 1}));
     // A depot books no sale, so the cost bar has no profit to close it with.
     assert.equal(await page.locator('#sp-tiles .sp-cost i.p, #sp-tiles .sp-cost i.l').count(), 0);
   } finally { await page.close(); }
@@ -756,7 +757,7 @@ test('a paused import whose delivery day has gone by is dry all week', async () 
         ['sp-c', 'sp-c', 'sp-d', 'sp-d', 'sp-d', 'sp-d', 'sp-d'], `arrives ${arrives}`);
       assert.deepEqual(row.trucks, []);
       assert.match(await page.locator('#sp-stock tbody tr').first().getAttribute('data-read'),
-        /paused<\/b>; <b>2<\/b> days left/);
+        enRe('sp.stock.read.paused', {n: 2}));
     } finally { await page.close(); }
   }
 });
@@ -779,7 +780,7 @@ test('the truck the cover is measured against is the one the rail draws', async 
     assert.deepEqual(row.cells,
       ['sp-c', 'sp-c', 'sp-c', 'sp-d', 'sp-d', 'sp-c', 'sp-c']);
     assert.match(await page.locator('#sp-stock tbody tr').first().getAttribute('data-read'),
-      /Runs dry <b>Thursday<\/b>, the truck lands <b>Saturday<\/b>/);
+      enRe('sp.stock.read.drytruck', {day: en('day.4'), lands: 6}));
   } finally { await page.close(); }
 });
 
@@ -851,12 +852,12 @@ test('a depot and a factory say each line\'s word as Checks does', async () => {
   });
   try {
     const words = await page.$$eval('#sp-stock tbody tr', rs => rs.map(r => r.cells[0].textContent.replace(/\s+/g, ' ').trim()));
-    assert.deepEqual(words, ['Soda short', 'Napkins idle']);
+    assert.deepEqual(words, ['Soda ' + en('sb.word.short'), 'Napkins ' + en('sb.word.idle')]);
   } finally { await page.close(); }
   page = await site({shop: FACTORY, supply: {factories: factories(), facts: FACTORY_FACTS}});
   try {
     const words = await page.$$eval('#sp-inputs tbody tr', rs => rs.map(r => r.cells[0].textContent.replace(/\s+/g, ' ').trim()));
-    assert.ok(words.includes('Ground Beef short') && words.includes('Grapes covered'), JSON.stringify(words));
+    assert.ok(words.includes('Ground Beef ' + en('sb.word.short')) && words.includes('Grapes ' + en('sb.word.covered')), JSON.stringify(words));
   } finally { await page.close(); }
 });
 
@@ -887,7 +888,7 @@ test('a wholesale finding opens its shop on the shelf row, lit, and a depot on i
     // And its row says the word Checks says.
     const cell = await page.$$eval('#sp-shelves tbody tr', rs => rs.map(r => r.cells[0].firstChild.textContent.trim() + ' ' +
       (r.cells[0].querySelector('.chip') || {}).textContent));
-    assert.ok(cell.includes('Energy Drink short'), JSON.stringify(cell));
+    assert.ok(cell.includes('Energy Drink ' + en('sb.word.short')), JSON.stringify(cell));
   } finally { await page.close(); }
   const depot = await site({shop: DEPOT, alerts: [finding('w2', 'wholesale', 'HART. Depot', KEY, 'warn', {slug: 'soda'})],
     supply: {day: 29, imports: [importRow()], facts: {0: {soda: sf('short', 'order', {wholesale: true})}}}});
@@ -919,7 +920,7 @@ for (const width of [1440, 390]) {
         await landingSettled(page, '#sp-stock');
         const landed = await page.evaluate(landing);
         assert.equal(landed.lit.length, 1, `${group}: ${JSON.stringify(landed)}`);
-        assert.match(landed.lit[0], /short$/);
+        assert.match(landed.lit[0], new RegExp(enRe('sb.word.short').source + '$'));
         assert.ok(landed.inView, group);
       } finally { await page.close(); }
     }
@@ -1012,7 +1013,7 @@ test('a factory fills each machine square by the week it is rostered', async () 
     // The read-out names the machine and the hours behind the fill.
     await page.hover(`#sp-lines .sp-line[data-line="${slugTok('wine')}"] .sp-m`);
     assert.match(await page.locator('#sp-lines .sp-readout').innerText(),
-      /Machine 3 · 144 of 168 h staffed: nobody on it on Sundays/);
+      new RegExp(enRe('sp.mach.read.off2', {slot: 3, hours: 144, of: 168, off: 'on Sundays'}).source.replace(/<[^>]*>/g, '')));
   } finally { await page.close(); }
 });
 
@@ -1026,7 +1027,7 @@ test('the picker is offered on the same terms the Supply page offers it', async 
   try {
     assert.equal(await page.locator('#sp-lines select.linepick').count(), 0);
     assert.match(await page.locator('#sp-lines .sp-line:not(.sp-head) .quiet').innerText(),
-      /Unnamed recipe/);
+      enRe('sp.lines.unnamed'));
   } finally { await page.close(); }
 });
 
@@ -1037,8 +1038,8 @@ test('hovering a factory input lights the lines that draw on it', async () => {
       rs.map(r => [r.dataset.lines, r.dataset.el, r.dataset.read]));
     assert.deepEqual(rows, [
       [slugTok('burger'), `${slugTok('gb')} target`,
-       'Tops up to <b>8,000</b>, the machines eat <b>9,600</b>'],
-      [slugTok('wine'), slugTok('grapes'), 'In step'],
+       en('sp.need.target', {target: '8,000', use: '9,600'})],
+      [slugTok('wine'), slugTok('grapes'), en('sp.need.instep')],
     ]);
     await page.hover('#sp-inputs tbody tr:first-child');
     const lit = await page.$$eval('#sp-lines .sp-line.sp-on', els => els.map(e => e.dataset.line));
@@ -1151,7 +1152,7 @@ test('unknown production reads as a dash, never as a zero', async () => {
     assert.equal(await blind.locator('#sp-tiles .sp-meter').count(), 0);
     // And the reader is told why the totals are short.
     assert.match(await blind.locator('#sp-lines .why').getAttribute('data-tip'),
-      /cannot name is in none of the totals/);
+      enRe('sp.lines.why.blind'));
   } finally { await blind.close(); }
 
   // The production keys missing outright: still a dash, not a zero.
@@ -1161,7 +1162,7 @@ test('unknown production reads as a dash, never as a zero', async () => {
   try {
     const tiles = await bare.$$eval('#sp-tiles .sstat', els =>
       els.map(e => e.querySelector('.v').textContent.trim()));
-    assert.deepEqual(tiles.slice(0, 3), ['3· 1 running', '—', '—']);
+    assert.deepEqual(tiles.slice(0, 3), ['3· ' + en('sb.fac.running', {n: 1}), '—', '—']);
   } finally { await bare.close(); }
 });
 
@@ -1191,17 +1192,17 @@ test('a depot line nothing imports is covered by what leaves it', async () => {
     // 14,200 on hand against 4,100 a day is 3.5 days, and the factory that
     // makes the soup is not what tops this line up.
     assert.equal(rows[0].el, slugTok('tomato'));
-    assert.equal(rows[0].read, '<b>3.5</b> days on hand');
+    assert.equal(rows[0].read, en('sp.stock.read.days1', {n: 3.5}));
     assert.equal(rows[0].cells.at(-1), '1');
     assert.equal(rows[0].zzz, false);
     // Nothing draws on the napkins, so there is no cover and no truck.
     assert.equal(rows[1].el, `${slugTok('napkins')} dead`);
     assert.equal(rows[1].zzz, true);
-    assert.match(rows[1].read, /Idle stock.*nothing draws on these/);
+    assert.match(rows[1].read, enRe('sp.stock.read.still'));
     assert.equal(rows[1].cells.at(-2), '—');
     // The Thinnest tile reads the same row, not only the imported lines.
-    assert.match(await page.locator('#sp-tiles .sstat', {hasText: 'Thinnest'}).innerText(),
-      /3\.5 d\s*Tomatoes/);
+    assert.match(await page.locator('#sp-tiles .sstat', {hasText: en('sp.tile.thinnest')}).innerText(),
+      new RegExp(enRe('sp.tile.days', {x: 3.5}).source + '\\s*Tomatoes'));
   } finally { await page.close(); }
 });
 
@@ -1219,7 +1220,7 @@ test('a depot line made in this company names the factory that makes it', async 
   });
   try {
     const cells = await page.$$eval('#sp-stock tbody tr td', tds => tds.map(td => td.textContent.trim()));
-    assert.match(cells.at(-2), /^made at /);
+    assert.match(cells.at(-2), enRe('sp.stock.madeat', {}, {anchor: 'start'}));
   } finally { await page.close(); }
 });
 
@@ -1234,7 +1235,7 @@ test('naming a line on the factory panel redraws it named', async () => {
   try {
     // Nothing is named yet: one machine, no output the board can put a figure to.
     assert.equal(await page.locator('#sp-lines select.linepick').count(), 1);
-    assert.match(await page.locator('#sp-tiles .sstat', {hasText: 'Made / day'}).innerText(), /—/);
+    assert.match(await page.locator('#sp-tiles .sstat', {hasText: en('sp.tile.made')}).innerText(), /—/);
     assert.equal(await page.locator('#sp-inputs tbody tr').count(), 0);
 
     await page.selectOption('#sp-lines select.linepick', {label: 'Pizza'});
@@ -1253,8 +1254,8 @@ test('naming a line on the factory panel redraws it named', async () => {
     assert.equal(await page.locator('#sp-inputs tbody tr').first().getAttribute('data-lines'), tok('s-pizza'));
     assert.deepEqual(await page.evaluate(() => factoryView().sites[0].needs.map(n => [n.lines, n.lineSlugs])),
       [[['Pizza'], ['pizza']]]);
-    assert.match(await page.locator('#sp-tiles .sstat', {hasText: 'Made / day'}).innerText(),
-      /960\s*of 960 rated/);
+    assert.match(await page.locator('#sp-tiles .sstat', {hasText: en('sp.tile.made')}).innerText(),
+      new RegExp('960\\s*' + enRe('sp.lines.rated', {n: '960'}).source));
     // And the choice really went to the store the Supply page reads.
     assert.deepEqual(await page.evaluate(() => localNames()), {r9: 'pizza'});
   } finally { await page.close(); }
@@ -1265,12 +1266,12 @@ test('an empty depot and an unreadable factory still draw', async () => {
   try {
     assert.equal(await bare.locator('#sp-stock').count(), 1);
     assert.equal(await bare.locator('#sp-stock tbody tr').count(), 0);
-    assert.equal((await bare.locator('#sp-stock .quiet').innerText()).trim(), 'No stock');
+    assert.equal((await bare.locator('#sp-stock .quiet').innerText()).trim(), en('sp.stock.none'));
     // Empty blocks and tiles are left out (declutter BP12): no Feeds, no Thinnest.
     assert.equal(await bare.locator('#sp-feeds').count(), 0);
-    assert.equal(await bare.locator('#sp-tiles .sstat', {hasText: 'Thinnest'}).count(), 0);
-    assert.equal(await bare.locator('#sp-tiles .sstat', {hasText: 'Feeds'}).count(), 0);
-    assert.match(await bare.locator('#sp-tiles .sstat', {hasText: 'On the floor'}).innerText(), /—/);
+    assert.equal(await bare.locator('#sp-tiles .sstat', {hasText: en('sp.tile.thinnest')}).count(), 0);
+    assert.equal(await bare.locator('#sp-tiles .sstat', {hasText: en('sp.tile.feeds')}).count(), 0);
+    assert.match(await bare.locator('#sp-tiles .sstat', {hasText: en('sp.tile.floor')}).innerText(), /—/);
   } finally { await bare.close(); }
 
   // A factory row with the keys simply missing: no needs, no unnamed, a line
@@ -1280,7 +1281,7 @@ test('an empty depot and an unreadable factory still draw', async () => {
   try {
     assert.equal(await holes.locator('#sp-lines .sp-line:not(.sp-head)').count(), 1);
     assert.equal(await holes.locator('#sp-lines .sp-m').count(), 0);
-    assert.equal((await holes.locator('#sp-inputs .quiet').innerText()).trim(), 'No inputs');
+    assert.equal((await holes.locator('#sp-inputs .quiet').innerText()).trim(), en('sp.inputs.none'));
     assert.equal(await holes.locator('#sp-tiles .sstat').count(), 4);
   } finally { await holes.close(); }
 
@@ -1296,7 +1297,7 @@ test('an empty depot and an unreadable factory still draw', async () => {
     assert.equal(await square.getAttribute('class'), 'sp-m sp-u');
     assert.equal((await square.innerText()).trim(), '');
     assert.match(await square.getAttribute('data-read'),
-      /^Machine 1 · hours <b>not known<\/b>: nobody on it Sunday$/);
+      enRe('sp.mach.unknown.off', {slot: 1, off: 'Sunday'}, {anchor: 'full'}));
     assert.equal(await square.evaluate(e => e.style.getPropertyValue('--h')), '');
   } finally { await noHours.close(); }
 
@@ -1381,10 +1382,10 @@ test('a depot expected to hold something and holding none draws that row', async
     assert.equal(rows[0].cells[1], '0');
     assert.equal(rows[0].red, true);
     assert.equal(rows[0].cells[2], '4,100');
-    assert.match(rows[0].cells.at(-2), /no import/);
+    assert.match(rows[0].cells.at(-2), enRe('sp.stock.noimport'));
     assert.equal(rows[0].cells.at(-1), '1');
     assert.deepEqual(rows[0].cells7, Array(7).fill(''));
-    assert.match(rows[0].read, /^<b>Nothing on hand<\/b>; <b>4,100<\/b>\/day/);
+    assert.match(rows[0].read, enRe('sp.stock.read.none', {n: '4,100'}, {anchor: 'start'}));
     // And the finding that named it now has a row to pulse.
     const row = await page.$eval('#sitePanel .sp-find', r => [r.dataset.ev, r.dataset.hit]);
     assert.deepEqual(row, ['stock', slugTok('tomato')]);
@@ -1502,16 +1503,16 @@ test('the zero-stock row says why there is none of it, for every verdict', async
   const need = over => ({...FACTORY_SITE.needs[0], item: 'Bag of Tomatoes', slug: 'tomato',
                          perDay: 4100, lines: ['Burger'], lineSlugs: ['burger'], from: 0, target: 0,
                          importWeekly: null, madeAt: [], ...over});
-  const nothing = /<b>Nothing on hand<\/b>; <b>4,100<\/b>\/day is drawn from here/;
+  const nothing = enRe('sp.stock.read.none', {n: '4,100'});
   const cases = [
-    [sf('paused', 'order'), {importWeekly: 0}, /paused/, /Import <b>paused<\/b>; <b>nothing<\/b> on hand/],
+    [sf('paused', 'order'), {importWeekly: 0}, enRe('sp.stock.paused'), enRe('sp.stock.read.pausednone')],
     [sf('short', 'order'), {importWeekly: 8000}, /8,000\s*\/wk/,
-     /<b>8,000<\/b> a week is on order; <b>nothing<\/b> on hand yet/],
+     enRe('sp.stock.read.ordered', {n: '8,000'})],
     [sf('covered'), {importWeekly: 8000}, /8,000\s*\/wk/,
-     /<b>8,000<\/b> a week is on order; <b>nothing<\/b> on hand yet/],
-    [sf('made'), {madeAt: [1]}, /made at HART\. Other/,
-     /Made at <b>HART\. Other<\/b>; <b>nothing<\/b> on hand here/],
-    [sf('noplan'), {}, /no import/, nothing],
+     enRe('sp.stock.read.ordered', {n: '8,000'})],
+    [sf('made'), {madeAt: [1]}, enRe('sp.stock.madeat', {site: 'HART. Other'}),
+     enRe('sp.stock.read.made', {site: 'HART. Other'})],
+    [sf('noplan'), {}, enRe('sp.stock.noimport'), nothing],
     // Nothing these say is about the supply, so nothing is claimed about it.
     [sf('short', 'target'), {}, /^—$/, nothing],
     [sf('stalled', 'waiting'), {}, /^—$/, nothing],
@@ -1583,14 +1584,14 @@ test('a home draws its three tiles and none of the shop blocks', async () => {
       t.querySelector('.lab').textContent, t.querySelector('.v').textContent]));
     // Rent a day, never a week as well: the week is only seven of them.
     assert.deepEqual(tiles, [
-      ['Rent / day', '$1,150'],
-      ['Size', '204m²'],
-      ['Per m²', '$5.64/day'],
+      [en('sp.home.rentday'), '$1,150'],
+      [en('sp.home.size'), '204m²'],
+      [en('sp.home.perm2'), en('sp.home.perm2.v', {x: 5.64}) + en('sp.perday')],
     ]);
     // The head names the flat and its neighbourhood, with the hood's two letters.
     assert.equal(await page.textContent('#sitePanel .sitehead h2'), '14 Bleecker Street');
     assert.equal(await page.textContent('#sitePanel .sitehead .bullet'), 'HK');
-    assert.match(await page.textContent('#sitePanel .sitehead .sub'), /^Home · Hell's Kitchen$/);
+    assert.match(await page.textContent('#sitePanel .sitehead .sub'), new RegExp('^' + enRe('sp.home.kind').source + " · Hell's Kitchen$"));
     // Nothing a shop draws belongs to a flat, and neither does the picker.
     for(const sel of ['#sp-tiles', '#sp-standards', '#sp-pull', '#sp-hours', '#sp-crew',
                       '#sp-shelves', '#sp-profit', '#sp-week', '#sp-stock', '.sp-find', '#sitePick'])
@@ -1614,7 +1615,7 @@ test('a flat the building table does not carry reads as a dash, never a zero', a
     const tiles = await page.$$eval('#sitePanel .sp-hometiles .sstat .v', vs => vs.map(v => v.textContent));
     assert.deepEqual(tiles, ['$1,150', '—', '—']);
     // No neighbourhood is no bullet and no second half of the line.
-    assert.equal(await page.textContent('#sitePanel .sitehead .sub'), 'Home');
+    assert.equal(await page.textContent('#sitePanel .sitehead .sub'), en('sp.home.kind'));
     assert.equal(await page.locator('#sitePanel .sitehead .bullet').count(), 0);
   } finally { await page.close(); }
 });
@@ -1641,6 +1642,7 @@ test('a key in both lists is the business: the flat never wins the fork', async 
     assert.equal(await page.locator('#sitePanel #sp-tiles').count(), 1);
     // The shop's own head, rank chip and all, not the flat's address.
     assert.match(await page.textContent('#sitePanel .sitehead h2'), /^HART\. Gifts\b/);
+    // Pins the wording: the obsolete home-versus-shop warning must stay absent.
     assert.doesNotMatch(await page.textContent('#sitePanel .sitehead'), /Not the shop/);
   } finally { await page.close(); }
 });
@@ -1694,7 +1696,7 @@ test('the hours block tells the overstaffed week the Today line tells', async ()
   try {
     assert.equal(await page.locator('#sp-hours .sp-hchip.idle').count(), 0, 'the finding row says it; no chip repeats it');
     // Not arrived from the line, the read-out opens on the grid's own hour.
-    assert.doesNotMatch(await page.locator('#hourRead').textContent(), /^Overstaffed/);
+    assert.doesNotMatch(await page.locator('#hourRead').textContent(), enRe('sp.hours.read.idle', {}, {anchor: 'start'}));
     // The finding's row lights the hours block and pulses the same week.
     const row = page.locator(`.sp-find[data-id="${IDLE.row.id}"]`);
     assert.equal(await row.getAttribute('data-ev'), 'hours');
@@ -1712,7 +1714,7 @@ test('arrived from the Today line, the hours block opens on its week', async () 
     const worth = await page.evaluate(w => fmt(w), IDLE.row.worth);
     assert.equal(await page.locator(`.sp-find.arrived`).getAttribute('data-id'), IDLE.row.id);
     assert.equal((await page.locator('#hourRead').textContent()).trim(),
-      `Overstaffed · 72 staff-hours a week · 3 fitness planning boards Mon-Wed 8-20 · ${worth}/day of wages`);
+      en('sp.hours.read.idle', {read: en('sp.idle.read', {n: 72, runs: "3 fitness planning boards Mon-Wed 8-20", w: worth})}).replace(/<[^>]*>/g, ''));
   } finally { await page.close(); }
 });
 
@@ -1723,9 +1725,10 @@ test('a roster that differs by day is told one headcount at a time, on the page 
   try {
     const worth = await page.evaluate(w => fmt(w), MIXED.row.worth);
     const runs = '2 fitness planning boards Mon 8-20; 4 fitness planning boards Tue 8-20';
-    assert.match(MIXED.row.text, new RegExp(`: ${runs}, at `));
+    // Not a Msg: MIXED.row.text is a plain str after the fixture's JSON dump.
+    assert.match(MIXED.row.text, new RegExp(': ' + runs + ', at '));
     await idleArrive(page, MIXED.row, MIXED);
-    assert.equal((await page.locator('#hourRead').textContent()).trim(), `Overstaffed · 48 staff-hours a week · ${runs} · ${worth}/day of wages`);
+    assert.equal((await page.locator('#hourRead').textContent()).trim(), en('sp.hours.read.idle', {read: en('sp.idle.read', {n: 48, runs: runs, w: worth})}).replace(/<[^>]*>/g, ''));
     await page.locator(`.sp-find[data-id="${MIXED.row.id}"]`).hover();
     assert.deepEqual(await cellsWith(page, 'sp-hit'), hoursOf([1, 2], 8, 20));
   } finally { await page.close(); }
@@ -1738,9 +1741,10 @@ test('a week of three headcounts names the biggest two, on the page as on Today,
   try {
     const worth = await page.evaluate(w => fmt(w), MANY.row.worth);
     const runs = '3 fitness planning boards Tue 8-20; 4 fitness planning boards Wed 8-20 (and 1 more)';
-    assert.ok(MANY.row.text.includes(`: ${runs}, at `), MANY.row.text);
+    // Not a Msg: MANY.row.text is a plain str after the fixture's JSON dump.
+    assert.ok(MANY.row.text.includes(': ' + runs + ', at '), MANY.row.text);
     await idleArrive(page, MANY.row, MANY);
-    assert.equal((await page.locator('#hourRead').textContent()).trim(), `Overstaffed · 72 staff-hours a week · ${runs} · ${worth}/day of wages`);
+    assert.equal((await page.locator('#hourRead').textContent()).trim(), en('sp.hours.read.idle', {read: en('sp.idle.read', {n: 72, runs: en('sp.idle.more', {said: '3 fitness planning boards Tue 8-20; 4 fitness planning boards Wed 8-20', n: 1}), w: worth})}).replace(/<[^>]*>/g, ''));
     // "(and 1 more)": every hour of the week is still lit, Monday's included.
     await page.locator(`.sp-find[data-id="${MANY.row.id}"]`).hover();
     assert.deepEqual(await cellsWith(page, 'sp-hit'), hoursOf([1, 2, 3], 8, 20));
@@ -1764,7 +1768,7 @@ test('a finding written before the week existed reads as a week of its one run',
     const worth = await page.evaluate(w => fmt(w), old[0].worth);
     await idleArrive(page, IDLE.row);
     assert.equal((await page.locator('#hourRead').textContent()).trim(),
-      `Overstaffed · 24 staff-hours a week · 3 fitness planning boards Mon 8-20 · ${worth}/day of wages`);
+      en('sp.hours.read.idle', {read: en('sp.idle.read', {n: 24, runs: "3 fitness planning boards Mon 8-20", w: worth})}).replace(/<[^>]*>/g, ''));
     await page.locator(`.sp-find[data-id="${IDLE.row.id}"]`).hover();
     assert.deepEqual(await cellsWith(page, 'sp-hit'), hoursOf([1], 8, 20));
   } finally { await page.close(); }
@@ -1808,12 +1812,12 @@ test('a factory page carries the sizing switch, and its inputs follow it', async
   facts[0].gb.dem = {st: 'covered', why: null, lvl: 'ok', use: 7000, need: 8050, setTo: null, ramp: [1]};
   const page = await site({shop: FACTORY, supply: {day: 29, factories: factories(), facts}});
   try {
-    assert.equal(await page.locator('#sp-inputs #spSizing a.on').textContent(), 'Full production');
+    assert.equal(await page.locator('#sp-inputs #spSizing a.on').textContent(), en('sb.basis.cap'));
     assert.match(await page.locator('#sp-inputs tbody tr').first().innerText(), /9,600/);
     await page.evaluate(() => { renderAll = () => drawSite(); });
-    await page.locator('#spSizing').getByText('Shop demand').click();
+    await page.locator('#spSizing').locator('[data-id="dem"]').click();
     const row = await page.locator('#sp-inputs tbody tr').first();
-    assert.match(await row.innerText(), /7,000\s*may still be ramping/);
+    assert.match(await row.innerText(), new RegExp('7,000\\s*' + enRe('sb.ramp').source));
     assert.equal(await row.locator('.sp-up').count(), 0, 'nothing to raise under Demand');
     assert.match(await page.locator('#sp-inputs .sz-ramp').getAttribute('data-tip'), /HART\. Other/);
     // Kept for this company only (docs/ui-progress-postconditions.md).

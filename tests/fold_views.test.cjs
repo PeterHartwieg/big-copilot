@@ -6,6 +6,7 @@
 // NODE_PATH may point at an existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -70,8 +71,9 @@ const readout = page => page.locator('#dailyBox .fv-readout').evaluate(el => el.
 test('By weekday is offered only when a company series clears the weekly-cycle test', async () => {
   const none = await board({recent: {days: 28, revenue: null, profit: null, customers: null}});
   try {
-    assert.deepEqual(await tools(none.page), ['30 days', 'All']);
+    assert.deepEqual(await tools(none.page), [en('co.daily.tool.30'), en('co.daily.tool.all')]);
     assert.equal(await none.page.locator('#secRhythm').count(), 0, 'the Weekly rhythm section is gone');
+    // Pins the wording: the removed weekly-history notice must stay absent.
     assert.doesNotMatch(await none.page.locator('#pageCompany').innerText(), /Not enough history to separate/);
     assert.deepEqual(none.errors, []);
   } finally { await none.page.close(); }
@@ -79,30 +81,30 @@ test('By weekday is offered only when a company series clears the weekly-cycle t
   const some = await board({recent: {days: 28, revenue: profile([106, 101, 95, 105, 116, 87, 82]),
     profit: profile([102, 85, 80, 99, 121, 104, 96]), customers: null}});
   try {
-    assert.deepEqual(await tools(some.page), ['30 days', 'All', 'By weekday']);
+    assert.deepEqual(await tools(some.page), [en('co.daily.tool.30'), en('co.daily.tool.all'), en('co.daily.tool.wd')]);
     await some.page.locator('#chartTools a[data-id="wd"]').click();
     // Revenue first; the series that failed the test (customers) has no chip.
     assert.deepEqual(await some.page.$$eval('#dailyBox [data-week]', as => as.map(a => a.textContent.trim())),
-      ['Revenue', 'Profit']);
-    assert.equal(await some.page.locator('#dailyBox [data-week].on').textContent(), 'Revenue');
+      [en('co.wd.revenue'), en('co.wd.profit')]);
+    assert.equal(await some.page.locator('#dailyBox [data-week].on').textContent(), en('co.wd.revenue'));
     // The series line names what it reads: the company's revenue over its last four weeks.
     assert.equal((await some.page.locator('#dailyBox .fv-basis').innerText()).replace(/\s+/g, ' ').trim(),
-      'Company revenue · every site · 4 weeks');
-    assert.equal(await readout(some.page), 'Peaks Friday +16 · lowest Sunday −18');
-    assert.match(await some.page.locator('[data-view-ctl="businesses/results"] .why').getAttribute('data-tip'), /from the company's last 4 weeks of daily results/);
+      en('co.wd.revenue.what') + ' · ' + en('co.wd.scope.sites') + ' · ' + en('co.wd.weeks', {n: 4}));
+    assert.equal(await readout(some.page), en('co.wd.peaks', {hi: en('day.5'), hiPts: '+16', lo: en('day.0'), loPts: '−18'}));
+    assert.match(await some.page.locator('[data-view-ctl="businesses/results"] .why').getAttribute('data-tip'), enRe('co.wd.why', {n: 4}));
     // One run of text: the read-out's flex gap does not split "Peaks Friday +16".
     assert.equal(await some.page.locator('#dailyBox .fv-readout > *').count(), 1);
     // Day 73 is a Wednesday: its column is outlined, and the tooltip reads it.
     assert.equal(await some.page.locator('#dailyBox .wd.now').getAttribute('data-read'),
-      'Wednesday <b>95%</b> of a normal day · from 4 weeks');
+      en('co.wd.read', {day: en('day.3'), pct: '<b>95%</b>', n: 4}));
     assert.match(await some.page.locator('#dailyBox .fv-basis').getAttribute('data-tip'),
-      /Today is Wednesday, normally -5%\. Yesterday was Tuesday, normally \+1%\./);
+      new RegExp(enRe('co.wd.today', {day: en('day.3'), pct: '-5%'}).source + ' ' + enRe('co.wd.yesterday', {day: en('day.2'), pct: '+1%'}).source));
     // A weekday reads out on the series line while it is pointed at.
     await some.page.locator('#dailyBox .wd').nth(4).hover();
-    assert.equal(await readout(some.page), 'Friday 116% of a normal day · from 4 weeks');
+    assert.equal(await readout(some.page), en('co.wd.read', {day: en('day.5'), pct: '116%', n: 4}));
     await some.page.locator('#dailyBox [data-week="profit"]').click();
     assert.equal((await some.page.locator('#dailyBox .fv-basis').innerText()).replace(/\s+/g, ' ').trim(),
-      'Company profit · every site · 4 weeks');
+      en('co.wd.profit.what') + ' · ' + en('co.wd.scope.sites') + ' · ' + en('co.wd.weeks', {n: 4}));
     // Back to the days: the SVG chart, untouched.
     await some.page.locator('#chartTools a[data-id="30"]').click();
     assert.equal(await some.page.locator('#dailyBox svg').count(), 1);
@@ -115,8 +117,8 @@ test('a save that stops clearing the test falls back to the days', async () => {
   try {
     await page.locator('#chartTools a[data-id="wd"]').click();
     await page.evaluate(() => { D.rhythm.recent.revenue = null; drawChart(); });
-    assert.deepEqual(await tools(page), ['30 days', 'All']);
-    assert.equal(await page.locator('#chartTools a.on').textContent(), '30 days');
+    assert.deepEqual(await tools(page), [en('co.daily.tool.30'), en('co.daily.tool.all')]);
+    assert.equal(await page.locator('#chartTools a.on').textContent(), en('co.daily.tool.30'));
     assert.equal(await page.evaluate(() => chartWindow), 30);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
@@ -131,15 +133,15 @@ test('site by site keeps its table, and the verdict stays plain text', async () 
   try {
     await page.locator('#chartTools a[data-id="wd"]').click();
     const tip = await page.locator('#dailyBox .fv-basis').getAttribute('data-tip');
-    assert.match(tip, /7 sites peak Saturday/);
-    assert.match(tip, /Shop 7 peaks Tuesday/);
+    assert.match(tip, enRe('co.wd.verdict.pack', {n: 7, day: en('day.6')}));
+    assert.match(tip, enRe('co.wd.verdict.others', {n: 1, sites: 'Shop 7', day: en('day.2')}));
     assert.doesNotMatch(tip, /<button|<svg|data-map-key/);
     assert.equal(await page.locator('.fv-sites').isHidden(), true);
     await page.locator('#rhythmToggle').click();
-    assert.equal(await page.locator('#rhythmToggle').textContent(), 'hide the table');
+    assert.equal(await page.locator('#rhythmToggle').textContent(), en('co.wd.hide'));
     assert.equal(await page.locator('#rhythmSites tbody tr').count(), 8);
     assert.deepEqual(await page.$$eval('#rhythmSites thead th', th => th.map(x => x.textContent)),
-      ['Business', 'Peaks', 'Swing', 'Across the week']);
+      [en('co.col.business'), en('co.wd.col.peaks'), en('co.wd.col.swing'), en('co.wd.col.week')]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -150,13 +152,13 @@ test('Products names its peaks in units, with the weeks they come from', async (
   const {page, errors} = await board({products: [product('Shirts', 'Saturday', 37), product('Hats', 'Sunday', 20, 3),
     product('Socks', null, 0)]});
   try {
-    const th = page.locator('#secProducts th', {hasText: 'Peaks'});
-    assert.equal(await th.textContent(), 'Peaks · units');
-    assert.match(await th.getAttribute('data-tip'), /most units, across every store that carries it, from the last 2 to 3 weeks of sales/);
+    const th = page.locator('#secProducts th', {hasText: en('co.prod.col.peaks')});
+    assert.equal(await th.textContent(), en('co.prod.col.peaks'));
+    assert.match(await th.getAttribute('data-tip'), enRe('co.prod.col.peaks.tip.range', {range: en('co.prod.range', {lo: 2, hi: 3})}));
     // Each cell reads its own product's weeks.
     assert.deepEqual(await page.locator('#secProducts td.pos').evaluateAll(tds => tds.map(td => td.dataset.tip)), [
-      'Units sold across 7 stores, last 2 weeks: peaks Saturday, 37 points between best and worst day',
-      'Units sold across 7 stores, last 3 weeks: peaks Sunday, 20 points between best and worst day']);
+      en('co.prod.peak.tip.weeks', {stores: en('co.prod.stores', {n: 7}), weeks: en('co.prod.weeks', {n: 2}), day: en('day.6'), n: 37}),
+      en('co.prod.peak.tip.weeks', {stores: en('co.prod.stores', {n: 7}), weeks: en('co.prod.weeks', {n: 3}), day: en('day.0'), n: 20})]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -167,7 +169,7 @@ test('the difficulty chip sits on the build line on a desktop and opens its sett
   const {page, errors} = await board({width: 1600});
   try {
     const mast = page.locator('#clock .fv-diff');
-    assert.equal(await mast.textContent(), 'CUSTOM · 2 HARDER · 1 EASIER');
+    assert.equal(await mast.textContent(), (en('nav.diff.custom') + ' · ' + en('nav.diff.harder', {n: 2}) + ' · ' + en('nav.diff.easier', {n: 1})).toUpperCase());
     assert.equal(await mast.isVisible(), true);
     assert.equal(await page.locator('#footDiff .fv-diff').isVisible(), false, 'the footer copy is for 1500 px and under');
     assert.equal(await mast.getAttribute('aria-expanded'), 'false');
@@ -176,13 +178,13 @@ test('the difficulty chip sits on the build line on a desktop and opens its sett
     assert.equal(await pop.evaluate(el => [el.parentElement === document.body, getComputedStyle(el).position].join()),
       'true,fixed', 'hung off the body, so no section can clip it');
     assert.equal(await mast.getAttribute('aria-expanded'), 'true');
-    assert.match(await pop.locator('h3').textContent(), /Custom difficulty\s*2 harder\s*1 easier/);
-    assert.match(await pop.locator('p').first().textContent(), /differs from the game's Normal preset\. Started with \$0\./);
+    assert.match(await pop.locator('h3').textContent(), new RegExp(enRe('nav.diff.pop.title', {name: en('nav.diff.custom')}).source + '\\s*' + enRe('nav.diff.harder', {n: 2}).source + '\\s*' + enRe('nav.diff.easier', {n: 1}).source));
+    assert.match(await pop.locator('p').first().textContent(), new RegExp(enRe('nav.diff.lead.custom').source + ' ' + enRe('nav.diff.started', {w: '$0'}).source));
     // The settings that moved, not the one left at Normal.
     assert.deepEqual(await pop.locator('.fv-rule .n').evaluateAll(ns => ns.map(n => n.firstChild.textContent)),
       ['Public prices', 'Export price', 'Tax rate']);
     assert.equal(await pop.locator('.fv-rule').nth(2).getAttribute('data-tip'),
-      'What it does. Normal is 5%, so this game is easier.');
+      en('nav.diff.rule.easier', {what: 'What it does', normal: '5%'}));
     // Right is harder: Export price is lower than Normal and still to the right of the tick.
     const knob = n => pop.locator('.fv-rule').nth(n).locator('.me').evaluate(el => parseFloat(el.style.left));
     assert.ok(await knob(1) > 50);
@@ -490,7 +492,7 @@ test('on a phone the chip moves to the footer stamp', async () => {
     assert.equal(await page.locator('#clock .fv-diff').isVisible(), false);
     const foot = page.locator('#footDiff .fv-diff');
     assert.equal(await foot.isVisible(), true);
-    assert.equal(await foot.textContent(), 'Custom · 2 harder · 1 easier');
+    assert.equal(await foot.textContent(), en('nav.diff.custom') + ' · ' + en('nav.diff.harder', {n: 2}) + ' · ' + en('nav.diff.easier', {n: 1}));
     await foot.scrollIntoViewIfNeeded();
     await foot.click();
     const box = await page.locator('#fvDiffPop').boundingBox();
@@ -504,22 +506,22 @@ test('a preset says its name, Normal included, and lists what differs', async ()
   const normal = await board({houseRules: {label: 'Normal', slot: 2, harder: 0, easier: 0, startingMoney: 10000,
     rules: [rule('Public prices', 0.7, 0.7, 'level')]}});
   try {
-    assert.equal(await normal.page.locator('#clock .fv-diff').textContent(), 'NORMAL');
+    assert.equal(await normal.page.locator('#clock .fv-diff').textContent(), en('nav.diff.normal').toUpperCase());
     await normal.page.locator('#clock .fv-diff').click();
     assert.equal(await normal.page.locator('#fvDiffPop .fv-rule').count(), 0);
-    assert.match(await normal.page.locator('#fvDiffPop').textContent(), /Normal difficulty[\s\S]*Started with \$10,000/);
+    assert.match(await normal.page.locator('#fvDiffPop').textContent(), new RegExp(enRe('nav.diff.pop.title', {name: en('nav.diff.normal')}).source + '[\\s\\S]*' + enRe('nav.diff.started', {w: '$10,000'}).source));
   } finally { await normal.page.close(); }
   const hard = await board({houseRules: {label: 'Hard', slot: 3, harder: 1, easier: 0, startingMoney: 4200,
     rules: [rule('Wholesale urgent fee', 0.3, 0.2, 'harder')]}});
   try {
-    assert.equal(await hard.page.locator('#clock .fv-diff').textContent(), 'HARD');
-    assert.match(await hard.page.locator('#clock .fv-diff').getAttribute('data-tip'), /Hard preset: 1 setting harder than Normal/);
+    assert.equal(await hard.page.locator('#clock .fv-diff').textContent(), en('nav.diff.hard').toUpperCase());
+    assert.match(await hard.page.locator('#clock .fv-diff').getAttribute('data-tip'), enRe('nav.diff.tip.vs', {what: en('nav.diff.what.preset', {name: en('nav.diff.hard')}), vs: en('nav.diff.vs.harder', {n: 1})}));
   } finally { await hard.page.close(); }
   const old = await board({houseRules: null, difficulty: 'Hard'});
   try {
     // A board built before the house rules still names the difficulty, with nothing to open.
     const plain = old.page.locator('#clock .fv-diff');
-    assert.equal(await plain.textContent(), 'HARD');
+    assert.equal(await plain.textContent(), en('nav.diff.hard').toUpperCase());
     assert.equal(await plain.evaluate(el => el.tagName), 'SPAN');
     await plain.click();
     assert.equal(await old.page.locator('#fvDiffPop.on').count(), 0);
@@ -535,9 +537,9 @@ test('a preset says its name, Normal included, and lists what differs', async ()
   const unmoved = await board({houseRules: {label: 'Custom', slot: 0, harder: 0, easier: 0, startingMoney: 0,
     rules: [rule('Public prices', 0.7, 0.7, 'level')]}});
   try {
-    assert.equal(await unmoved.page.locator('#clock .fv-diff').textContent(), 'CUSTOM');
+    assert.equal(await unmoved.page.locator('#clock .fv-diff').textContent(), en('nav.diff.custom').toUpperCase());
     await unmoved.page.locator('#clock .fv-diff').click();
-    assert.match(await unmoved.page.locator('#fvDiffPop p').textContent(), /^No setting differs from the game's Normal preset\./);
+    assert.match(await unmoved.page.locator('#fvDiffPop p').textContent(), enRe('nav.diff.lead.none', {}, {anchor: 'start'}));
   } finally { await unmoved.page.close(); }
 });
 
@@ -566,7 +568,7 @@ test('the site page names its own week', async () => {
       drawSite();
       return document.querySelector('#sp-week .fv-basis').textContent.replace(/\s+/g, ' ').trim();
     });
-    assert.equal(line, 'This shop’s revenue · 3 weeks');
+    assert.equal(line, en('sp.week.basis.shop', {n: 3}).replace(/<[^>]*>/g, ''));
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

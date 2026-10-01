@@ -13,6 +13,8 @@
 // existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe, textRe} = require('./_i18n.cjs');
+// The readout renders catalogue markup as text.
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -246,8 +248,8 @@ test('a copy hint points at a tab to the left: Monday is the first tab, Sunday t
     for (const [d, src] of got.same.entries())
       if (src !== null) assert.ok(got.order.indexOf(src) < got.order.indexOf(d), `day ${d} points forward to ${src}`);
     assert.equal(got.tabs[0][0], 1, 'the tabs open on Monday');
-    assert.doesNotMatch(got.tabs[0][1], /same/, got.tabs[0][1]);
-    assert.match(got.tabs[6][1], /same/, 'the Sunday tab offers the copy');
+    assert.doesNotMatch(got.tabs[0][1], enRe('sp.tab.copy'), got.tabs[0][1]);
+    assert.match(got.tabs[6][1], enRe('sp.tab.copy'), 'the Sunday tab offers the copy');
   } finally { await page.close(); }
 });
 
@@ -331,10 +333,10 @@ test('the need strip says what each basis is, and never calls a censored hour a 
         .map(i => [i.className, i.dataset.read]));
     const censored = reads.find(([cls]) => /sp-cens/.test(cls));
     assert.ok(censored, reads.map(r => r[0]).join('|'));
-    assert.match(censored[1], /measured at the ceiling.*floor, not a target/);
+    assert.match(censored[1], enRe('sp.basis.censored'));
     const scaled = await page.locator('#sp-roster .sp-day[data-d="3"] .sp-need').first();
     assert.match(await scaled.getAttribute('class'), /sp-scaled/);
-    assert.match(await scaled.getAttribute('data-read'), /scaled from the best measured day/);
+    assert.match(await scaled.getAttribute('data-read'), enRe('sp.basis.scaled'));
   } finally { await page.close(); }
 });
 
@@ -347,8 +349,8 @@ test('a measured hour says so, and is the only basis drawn plain', async () => {
       els => els.map(i => [i.className, i.dataset.read]));
     assert.ok(reads.length, 'the busy hours are drawn');
     assert.ok(reads.every(([cls]) => !/sp-cens|sp-scaled/.test(cls)), 'none of them is a guess');
-    assert.match(reads[0][1], / · measured$/);
-    assert.match(reads[0][1], /2 stations/);
+    assert.match(reads[0][1], new RegExp(' · ' + enRe('sp.basis.measured').source + '$'));
+    assert.match(reads[0][1], enRe('sp.need.stations', {n: 2}));
   } finally { await page.close(); }
 });
 
@@ -360,7 +362,7 @@ test('a day the doors never open says so rather than reporting a measurement', a
     const sun = page.locator('#sp-roster .sp-day[data-d="0"] .sp-needrow');
     assert.equal(await sun.locator('.sp-need').count(), 0);
     assert.equal(await sun.locator('.lab').getAttribute('data-read'),
-      'The doors do not open on Sunday');
+      en('sp.need.shut', {d: 0}));
   } finally { await page.close(); }
 });
 
@@ -401,15 +403,15 @@ test('a shift bar wears its kind, its pin and the bench mark', async () => {
     const part = ROWS.pinned.people.findIndex(p => p.name === 'PART1');
     const bar = page.locator(`${mon}.sp-shift[data-p="${part}"]`);
     assert.equal(await bar.locator('.sp-pin').count(), 1);
-    assert.match(await bar.getAttribute('data-read'), /the plan works around it/);
+    assert.match(await bar.getAttribute('data-read'), enRe('sp.shift.around'));
     // BENCH is not this shop's yet, so their bar and a MyEmployees step say so.
     const bench = ROWS.pinned.bench[0].p;
     assert.match(await page.locator(`#sp-roster .sp-shift[data-p="${bench}"]`).first().getAttribute('data-read'),
-      /from the bench.*assign them here in MyEmployees first/);
+      enRe('sp.shift.bench'));
     // One step names everybody to add first, the bench member among them.
     const add = page.locator('#sp-roster .sp-step.sp-add');
     assert.equal(await add.locator(`[data-p="${bench}"]`).count(), 1);
-    assert.match(await add.innerText(), /assign BENCH \(unassigned\)/);
+    assert.match(await add.innerText(), enRe('sp.add.assign', {assign: 'BENCH'}));
   } finally { await page.close(); }
 });
 
@@ -420,9 +422,9 @@ test('a line nobody can be given is a dashed anticipated hire, and cannot be tic
     assert.equal(await hire.evaluate(el => el.tagName), 'SPAN', 'nothing to type yet');
     // It is part of the week, drawn in its own hours, and carries no name
     // because there is nobody on it yet.
-    assert.match(await hire.innerText(), /^to hire/);
-    assert.match(await hire.getAttribute('data-read'), /nobody to work it/);
-    assert.match(await hire.getAttribute('data-read'), /no one here can take them/);
+    assert.match(await hire.innerText(), enRe('sp.shift.tohire', {}, {anchor: 'start'}));
+    assert.match(await hire.getAttribute('data-read'), enRe('sp.shift.hire'));
+    assert.match(await hire.getAttribute('data-read'), enRe('sp.shift.hire'));
     assert.equal(await page.locator('#sp-roster .sp-shift.sp-hire').count(), 16);
   } finally { await page.close(); }
 });
@@ -456,21 +458,19 @@ test('the tile, the ring and the card all size the same week', async () => {
     });
     const shown = (await tile.innerText()).replace(/\s+/g, '').trim();
     const posts = await page.evaluate(() => spPlanPosts(D.staffing[0]));
-    assert.ok(shown.includes(`${hours[0]}h${hours[1]}h4226entries`), shown);
-    assert.ok(shown.endsWith(`+${posts}tohire`), shown);
+    assert.ok(shown.includes(String(hours[0]) + 'h' + hours[1] + 'h42' + en('sp.n.entries', {n: 26}).replace(/\s+/g, '')), shown);
+    assert.ok(shown.endsWith(en('sp.ba.tohire', {n: posts}).replace(/\s+/g, '')), shown);
     assert.equal(await tile.locator('.sp-v s, .v s').first().innerText(),
       `${hours[0]} h`, 'struck through');
-    assert.match(await tile.getAttribute('data-read'), new RegExp(
-      `<b>${hours[1]} h</b> in 26 entries, against <b>${hours[0]} h</b> in 42 entries today`));
-    assert.match(await tile.getAttribute('data-read'), new RegExp(
-      `${posts} people to hire for the 16 entries drawn without a name, at 30 hours a week or more each`));
+    assert.match(await tile.getAttribute('data-read'), enRe('sp.ba.hours', {h: hours[1], entries: en('sp.n.entries', {n: 26}), was: hours[0], wasEntries: en('sp.n.entries', {n: 42})}));
+    assert.match(await tile.getAttribute('data-read'), enRe('sp.ba.hire', {people: en('sp.n.people', {n: posts}), entries: en('sp.n.entries', {n: 16})}));
     // No "n of m copied" beside the ticks (Peter's testing, A9): nothing is ticked yet.
     assert.equal(await page.locator('#sp-roster .sp-shift.sp-done').count(), 0);
     const badge = await page.evaluate(() => {
       drawOptimizeStaffing();
       return $('optimizeStaffingCard').querySelector('.soon').textContent;
     });
-    assert.equal(badge, '\u221216 ENTRIES', '42 scraps become 26 entries and the hires');
+    assert.equal(badge, en('today.moves.staff.badge.saves', {n: 16}), '42 scraps become 26 entries and the hires');
   } finally { await page.close(); }
 });
 
@@ -478,8 +478,8 @@ test('a shop with nothing to hire names no hiring lines on the tile', async () =
   const page = await shop('shut');
   try {
     const tile = page.locator('#sp-roster .sp-ba > div').first();
-    assert.doesNotMatch(await tile.innerText(), /hire/);
-    assert.doesNotMatch(await tile.getAttribute('data-read'), /waiting on a hire/);
+    assert.doesNotMatch(await tile.innerText(), enRe('sp.ba.tohire'));
+    assert.doesNotMatch(await tile.getAttribute('data-read'), enRe('sp.ba.hire'));
   } finally { await page.close(); }
 });
 
@@ -528,7 +528,7 @@ test("a locker line in the game's week with nobody on it is not a guard", async 
   });
   try {
     const guard = page.locator('#sp-roster .sp-hc .sp-new').first();
-    assert.match(await guard.getAttribute('data-read'), /nobody covers this locker today/);
+    assert.match(await guard.getAttribute('data-read'), enRe('sp.hc.newhours'));
   } finally { await page.close(); }
 });
 
@@ -544,10 +544,10 @@ test("a locker the game's own week has guards on is not called uncovered", async
   });
   try {
     const guard = page.locator('#sp-roster .sp-hc .sp-new').first();
-    assert.match(await guard.innerText(), /\+96 h\/wk/);
+    assert.match(await guard.innerText(), enRe('sp.hc.newshort', {n: 96}));
     const read = await guard.getAttribute('data-read');
-    assert.match(read, /new wages/);
-    assert.doesNotMatch(read, /nobody covers this locker/);
+    assert.match(read, enRe('sp.hc.newhours.more'));
+    assert.doesNotMatch(read, enRe('sp.hc.newhours'));
   } finally { await page.close(); }
 });
 
@@ -558,7 +558,7 @@ test('a day that is an earlier day again is marked as its copy', async () => {
       as => as.map(a => [a.dataset.day, a.querySelector('u') ? 'copy' : 'own', a.dataset.read]));
     const tue = tabs.find(t => t[0] === '2');
     assert.equal(tue[1], 'copy');
-    assert.match(tue[2], /the same as Monday, people and all: copy schedule, paste schedule/);
+    assert.match(tue[2], enRe('sp.tab.copy', {c: 1}));
     assert.equal(tabs.find(t => t[0] === '1')[1], 'own');
   } finally { await page.close(); }
 });
@@ -568,8 +568,8 @@ test('a security locker nobody staffs is shown as new spending, in hours it can 
   try {
     const guard = page.locator('#sp-roster .sp-hc .sp-new').first();
     // The hires' weeks' own hours (eight twelve-hour lines), not 30 a hire.
-    assert.match(await guard.innerText(), /\+96 h\/wk/);
-    assert.match(await guard.getAttribute('data-read'), /new wages.*nobody covers this locker today/);
+    assert.match(await guard.innerText(), enRe('sp.hc.newshort', {n: 96}));
+    assert.match(await guard.getAttribute('data-read'), enRe('sp.hc.newhours'));
     // "Customer Service" and "Cleaning station" are both CS: the codes on the
     // line have to stay apart or the shop looks like it has two of one role.
     const codes = await page.$$eval('#sp-roster .sp-hc .sp-code', cs => cs.map(c => c.textContent));
@@ -583,16 +583,17 @@ test('a station the business takes nobody for is named once, and only where ther
       skill: 'ba:skill_gymtrainer', role: 'Gym Trainer', n: 2}];
   });
   try {
-    const note = page.locator('#sp-roster .sp-unmline', {hasText: 'Left out of this week'});
+    const note = page.locator('#sp-roster .sp-unmline', {hasText: textRe('sp.roster.stray')});
     assert.equal(await note.count(), 1);
     const text = await note.innerText();
-    assert.match(text, /Left out of this week: Fitness Planning Board \(Gym Trainer\)\./);
-    assert.match(text, /nobody can be scheduled there/);
+    assert.match(text, textRe('sp.roster.stray', {stations: 'Fitness Planning Board (Gym Trainer)'}));
+    assert.match(text, textRe('sp.roster.stray'));
+    // Pins the wording: board vocabulary uses staffing and hours.
     assert.doesNotMatch(text, /roster|shift/i);
   } finally { await page.close(); }
   const plain = await shop('full');
   try {
-    assert.doesNotMatch(await plain.locator('#sp-roster').innerText(), /Left out of this week/);
+    assert.doesNotMatch(await plain.locator('#sp-roster').innerText(), textRe('sp.roster.stray'));
   } finally { await plain.close(); }
 });
 
@@ -604,8 +605,8 @@ test('a plan with nothing in it still names the station it left out', async () =
   });
   try {
     const text = await page.locator('#sp-roster').innerText();
-    assert.match(text, /Nothing to schedule/);
-    assert.match(text, /Left out of this week: Security Guard Locker \(Security Guard\)\./);
+    assert.match(text, enRe('sp.roster.none'));
+    assert.match(text, textRe('sp.roster.stray', {stations: 'Security Guard Locker (Security Guard)'}));
   } finally { await page.close(); }
 });
 
@@ -641,7 +642,7 @@ test('somebody the plan gives no hours is spare, not short of a demand', async (
     // September 2026) -- so the role counts them and no chip names a demand.
     assert.equal(ROWS.full.shortHours.length, 5);
     assert.ok(ROWS.full.shortHours.every(r => !r.hours));
-    assert.match(text, /9 spare/, 'the role counts them all');
+    assert.match(text, enRe('sp.hc.spare', {n: 9}), 'the role counts them all');
     assert.doesNotMatch(text, /0\/30 h/);
     assert.equal(await page.locator('#sp-roster .sp-hc .sp-new[data-p]').count(), 0);
   } finally { await page.close(); }
@@ -654,7 +655,7 @@ test('only the first few people the plan would leave short are named', async () 
   try {
     const text = await page.locator('#sp-roster .sp-hc').innerText();
     assert.match(text, /21\/30 h/);
-    assert.match(text, /\+2 more/, 'five short, three named');
+    assert.match(text, enRe('sp.short.more', {n: 2}), 'five short, three named');
   } finally { await page.close(); }
 });
 
@@ -667,10 +668,10 @@ test('a day count the plan cannot meet is named the same way', async () => {
   });
   try {
     const text = await page.locator('#sp-roster .sp-hc').innerText();
-    assert.match(text, /3\/4 days/);
+    assert.match(text, new RegExp('3/' + enRe('sp.hc.days', {n: 4}).source));
     const read = await page.locator('#sp-roster .sp-hc .sp-new[data-p="1"]').getAttribute('data-read');
-    assert.match(read, /the game counts exactly that/);
-    assert.doesNotMatch(read, /no days/, 'three days is not none');
+    assert.match(read, enRe('sp.short.days', {n: 3}));
+    assert.doesNotMatch(read, enRe('sp.short.days', {n: 0}), 'three days is not none');
   } finally { await page.close(); }
 });
 
@@ -684,8 +685,8 @@ test('the now/plan toggle swaps the plan for the fragments the game holds', asyn
     // neither: 42 blocks today, struck through, against 26 to drag in.
     const tile = (await page.locator('#sp-roster .sp-ba > div').first().innerText())
       .replace(/\s+/g, '');
-    assert.ok(tile.includes('4226entries'), tile);
-    assert.match(await page.locator('#sp-roster .sp-nowplan a.sp-on').innerText(), /now/);
+    assert.ok(tile.includes('42' + en('sp.n.entries', {n: 26}).replace(/\s+/g, '')), tile);
+    assert.match(await page.locator('#sp-roster .sp-nowplan a.sp-on').innerText(), enRe('sp.view.now'));
   } finally { await page.close(); }
 });
 
@@ -867,18 +868,18 @@ test('a line whose station or person the save does not name cannot be ticked', a
       /* The week is the lines with somebody on them; the ring is the narrower
          set the board can mark, and the line beside it says so. */
       assert.ok(staffed > tickable, `${what}: a line to type that cannot be ticked`);
-      assert.ok(tile.includes('42' + staffed + 'entries'), `${what}: ${tile}`);
+      assert.ok(tile.includes('42' + en('sp.n.entries', {n: staffed}).replace(/\s+/g, '')), `${what}: ${tile}`);
       assert.equal(JSON.parse(counts).hire, 16, `${what}: the hires are unchanged`);
       // And the card sizes the same week the block does.
       const badge = await page.evaluate(() => {
         drawOptimizeStaffing();
         return $('optimizeStaffingCard').querySelector('.soon').textContent;
       });
-      assert.equal(badge, `\u2212${42 - staffed} ENTRIES`, what);
+      assert.equal(badge, en('today.moves.staff.badge.saves', {n: 42 - staffed}), what);
       assert.match(
         await page.locator('#sp-roster .sp-shift:not(button):not(.sp-hire)')
           .first().getAttribute('data-read'),
-        /no id to tick against/);
+        enRe('sp.shift.noid'));
     } finally { await page.close(); }
   }
 });
@@ -930,8 +931,8 @@ test('an unmeasured shop with cover to type gets the whole block, not the empty 
     // The head says what the week asks for; the read-out waits for an entry
     // to be pointed at, and the role strip leaves the hires to the head (declutter T3).
     assert.equal((await page.locator('#sp-roster .sp-read.sp-readout').innerText()).trim(), '');
-    assert.match(await page.locator('#sp-roster').innerText(), /\+2 to hire/);
-    assert.doesNotMatch(await page.locator('#sp-roster .sp-hc').innerText(), /hire/);
+    assert.match(await page.locator('#sp-roster').innerText(), enRe('sp.ba.tohire', {n: 2}));
+    assert.doesNotMatch(await page.locator('#sp-roster .sp-hc').innerText(), enRe('sp.ba.tohire'));
     assert.equal(await page.locator('#sp-roster .sp-hc .sp-new').count(), 0);
   } finally { await page.close(); }
 });
@@ -943,8 +944,8 @@ test('an unmeasured need strip is empty, and the note above it says why', async 
     assert.equal(await page.locator('#sp-roster .sp-grow.sp-needrow.sp-unmeas').count(), 7);
     const note = page.locator('#sp-roster .sp-note');
     assert.equal(await note.count(), 1);
-    assert.match(await note.innerText(), /New shop/);
-    assert.match(await note.innerText(), /cleaning and security cover only/);
+    assert.match(await note.innerText(), enRe('sp.new.label.new'));
+    assert.match(await note.innerText(), textRe('sp.new.cover.until'));
     assert.equal(await page.locator(mon + '.sp-grow').count(), 4, 'the strip and three stations');
     assert.equal(await page.locator(mon + '.sp-grow:nth-child(2) .sp-shift').count(), 0);
     // _staffing() writes 0 alongside every `none`, so this cannot arrive from a
@@ -964,10 +965,10 @@ test('a shop with nothing at all to schedule gets the empty state', async () => 
   const page = await shop('cover', row => { row.shifts = []; });
   try {
     assert.equal(await page.locator('#sp-roster .sp-shift').count(), 0);
-    assert.equal(await page.locator('#sp-roster .sp-read').innerText(), 'Nothing to schedule');
+    assert.equal(await page.locator('#sp-roster .sp-read').innerText(), en('sp.roster.none'));
     assert.equal(await page.locator('#sp-roster .sp-daytabs').count(), 0);
     assert.match(await page.locator('#sp-roster .sechead .why').getAttribute('data-tip'),
-      /arrival ceiling counts everyone who may walk in/);
+      enRe('sp.roster.none.why'));
     assert.equal(await page.locator('#sp-roster .sp-gantt .sp-grow').count(), 3,
       'the stations are still named');
   } finally { await page.close(); }
@@ -980,9 +981,9 @@ test('a site the planner could not plan says so rather than leaving a hole', asy
       D.staffing = [{key: k, name: 'HART. Test 12', typeSlug: 'x', failed: true}];
       drawShop();
     }, KEY);
-    assert.equal(await page.locator('#sp-roster .sp-read').innerText(), 'Plan unavailable');
+    assert.equal(await page.locator('#sp-roster .sp-read').innerText(), en('sp.roster.failed'));
     assert.match(await page.locator('#sp-roster .sechead .why').getAttribute('data-tip'),
-      /could not be read.*Nothing else on the board is affected/);
+      enRe('sp.roster.failed.why'));
   } finally { await page.close(); }
 });
 
@@ -1050,26 +1051,26 @@ test('the note says how new the shop is, what the plan covers, and what not to c
   try {
     const note = page.locator('#sp-roster .sp-note');
     const text = await note.innerText();
-    assert.match(text, /New shop/);
+    assert.match(text, enRe('sp.new.label.new'));
     // Straight out of the planner: opened five days ago, and not one hour
     // report filed yet.
-    assert.match(text, /Open 5 days, no hour reports on file/);
-    assert.match(text, /arrives 9 days after its first customer, closed days included \(Demand data: 0 of 9 days\)/);
-    assert.match(text, /Demand data: 0 of 9 days\. Until then the plan is cleaning and security only/);
-    assert.match(text, /2 reports of that same weekday/);
-    assert.match(text, /cleaning and security cover only/);
+    assert.match(text, enRe('sp.new.agenone', {n: 5}));
+    assert.match(text, textRe('sp.new.why.arrives.progress', {days: 9, progress: en('sp.new.progress', {n: 0, of: 9})}));
+    assert.match(text, textRe('sp.new.sum.progress', {progress: en('sp.new.progress', {n: 0, of: 9})}));
+    assert.match(text, textRe('sp.new.why.arrives.progress', {need: 2}));
+    assert.match(text, textRe('sp.new.cover.until.now'));
     // 56 shifts in the game, 28 of them cleaning: the other 28 are the ones
     // nothing here can put back.
-    assert.match(text, /Do not clear the whole schedule/);
-    assert.match(text, /28 serving entries/);
+    assert.match(text, textRe('sp.care.keep.head'));
+    assert.match(text, textRe('sp.care.keep.short', {n: 28}));
     assert.equal(await page.locator('#sp-roster .sp-note.sp-care').count(), 1);
     const steps = await page.locator('#sp-roster .sp-step').evaluateAll(
       b => b.map(x => x.innerText.replace(/\s+/g, ' ')));
     // Hiring first, because a shift cannot be entered for somebody who has not
     // been hired, and there is a schedule here to lose in the meantime.
-    assert.match(steps[0], /^Add 1 person to fill this plan: hire 1 Security Guard/);
-    assert.match(steps[1], /^Clear the cleaning and security hours/);
-    assert.match(steps[1], /leave the rest$/);
+    assert.match(steps[0], enRe('sp.step.add', {n: 1, who: en('sp.add.hire', {hire: '1 Security Guard'})}, {anchor: 'start'}));
+    assert.match(steps[1], enRe('sp.step.clear.cover', {}, {anchor: 'start'}));
+    assert.match(steps[1], new RegExp(enRe('sp.step.where.rest').source + '$'));
   } finally { await page.close(); }
 });
 
@@ -1092,9 +1093,9 @@ test('a new shop draws its fortnight off the hour grid, and nothing without one'
     });
     assert.deepEqual(drawn.days.slice(0, 2), [['full', 2], ['', 1]]);
     assert.deepEqual(drawn.days.slice(2), Array(5).fill(['', 0]));
-    assert.match(drawn.words, /^1 of 7 weekdays at 2 reports/);
+    assert.match(drawn.words, enRe('sp.wk.tip', {read: 1, n: 2}, {anchor: 'start'}));
     // The warning is its own row, not the tail of a paragraph.
-    assert.match(await page.locator('#sp-roster .sp-nwarn').innerText(), /^Do not clear the whole schedule/);
+    assert.match(await page.locator('#sp-roster .sp-nwarn').innerText(), textRe('sp.care.keep.head', {}, {anchor: 'start'}));
   } finally { await page.close(); }
 });
 
@@ -1102,11 +1103,11 @@ test('with nothing scheduled yet the note says there is nothing to lose', async 
   const page = await shop('cover');
   try {
     const text = await page.locator('#sp-roster .sp-note').innerText();
-    assert.match(text, /nothing to lose by clearing/);
-    assert.doesNotMatch(text, /Do not clear/);
+    assert.match(text, enRe('sp.care.empty'));
+    assert.doesNotMatch(text, textRe('sp.care.keep.head'));
     assert.equal(await page.locator('#sp-roster .sp-note.sp-care').count(), 0);
     assert.match(await page.locator('#sp-roster .sp-step').first().innerText(),
-      /^Clear entire schedule/);
+      enRe('sp.step.clear', {}, {anchor: 'start'}));
   } finally { await page.close(); }
 });
 
@@ -1119,9 +1120,9 @@ test('a schedule of nothing but cover can be cleared, and the note says so', asy
   });
   try {
     const text = await page.locator('#sp-roster .sp-note').innerText();
-    assert.match(text, /clearing it loses nothing this week does not put back/);
-    assert.doesNotMatch(text, /Nothing is scheduled here yet/);
-    assert.doesNotMatch(text, /Do not clear/);
+    assert.match(text, new RegExp(enRe('sp.care.cover').source + '|' + enRe('sp.care.cover.hire').source));
+    assert.doesNotMatch(text, enRe('sp.care.empty'));
+    assert.doesNotMatch(text, textRe('sp.care.keep.head'));
   } finally { await page.close(); }
 });
 
@@ -1140,19 +1141,19 @@ test('a measured shop whose hours need nobody is still a cover-only plan', async
     // not offer to clear a schedule it cannot rebuild.
     const note = page.locator('#sp-roster .sp-note');
     assert.equal(await note.count(), 1);
-    assert.match(await note.innerText(), /Cover only/);
-    assert.match(await note.innerText(), /need nobody on its serving stations/);
-    assert.doesNotMatch(await note.innerText(), /days after its first customer/);
-    assert.match(await note.innerText(), /Do not clear the whole schedule/);
+    assert.match(await note.innerText(), enRe('sp.new.label.cover'));
+    assert.match(await note.innerText(), textRe('sp.new.why.measured'));
+    assert.doesNotMatch(await note.innerText(), new RegExp(textRe('sp.new.why.arrives').source + '|' + textRe('sp.new.why.arrives.progress').source));
+    assert.match(await note.innerText(), textRe('sp.care.keep.head'));
     const steps = await page.locator('#sp-roster .sp-step').evaluateAll(
       b => b.map(x => x.innerText.replace(/\s+/g, ' ')));
-    assert.ok(steps.some(s => /^Clear the cleaning and security hours/.test(s)), steps.join(' | '));
+    assert.ok(steps.some(s => enRe('sp.step.clear.cover', {}, {anchor: 'start'}).test(s)), steps.join(' | '));
     assert.equal(await page.locator('#sp-roster .sp-ba > div').first()
-      .locator('.lab').innerText(), 'Cover hours / week');
+      .locator('.lab').innerText(), en('sp.ba.lab.cover'));
     const tabs = await page.locator('#sp-roster .sp-daytabs a')
       .evaluateAll(a => a.map(x => x.dataset.read));
-    assert.ok(tabs.some(r => /Copy schedule pastes the whole day/.test(r)));
-    assert.ok(!tabs.some(r => /copy schedule, paste schedule/.test(r)));
+    assert.ok(tabs.some(r => enRe('sp.tab.kept').test(r)));
+    assert.ok(!tabs.some(r => enRe('sp.tab.copy').test(r)));
   } finally { await page.close(); }
 });
 
@@ -1171,13 +1172,12 @@ test('the Today card sizes that shop on its cover shifts, and names the reason',
     const {now, nowCover, tickable} = shown.counts;
     // Half the schedule is serving scraps the plan replaces none of.
     assert.ok(now > nowCover && nowCover > 0);
-    assert.match(shown.what, new RegExp(
-      `${nowCover} cleaning and security entries become ${tickable}`));
-    assert.doesNotMatch(shown.what, new RegExp(`${now} entries become`));
+    assert.match(shown.what, enRe('today.moves.staff.cover.saves.hire.none', {now: nowCover, week: tickable}));
+    assert.doesNotMatch(shown.what, enRe('today.moves.staff.saves.hire', {now}));
     // And this shop has been measured: it is not waiting for a fortnight it
     // has already had.
-    assert.match(shown.what, /its measured hours need nobody at the registers/);
-    assert.doesNotMatch(shown.what, /wait on the shop\u2019s first measured week/);
+    assert.match(shown.what, enRe('today.moves.staff.cover.saves.hire.none'));
+    assert.doesNotMatch(shown.what, enRe('today.moves.staff.cover.saves.hire.wait'));
   } finally { await page.close(); }
 });
 
@@ -1188,12 +1188,12 @@ test('the waiting chip on that shop does not tell them to wait either', async ()
     assert.equal(short.length, 1);
     assert.equal(short[0].planned, false, 'a full-time cashier the plan cannot use');
     const hc = page.locator('#sp-roster .sp-hc');
-    assert.match(await hc.innerText(), /1 with no week in this plan/);
-    assert.doesNotMatch(await hc.innerText(), /first measured week/);
+    assert.match(await hc.innerText(), enRe('sp.new.chip.measured', {n: 1}));
+    assert.doesNotMatch(await hc.innerText(), enRe('sp.new.chip'));
     const reads = await hc.locator('.sp-new').evaluateAll(els => els.map(e => e.dataset.read));
-    const group = reads.find(r => /no role it could plan/.test(r)) || "";
-    assert.match(group, /need nobody on the stations they could work/);
-    assert.doesNotMatch(group, /waits on the shop\u2019s first measured one/);
+    const group = reads.find(r => [enRe('sp.new.read', {n: 1}), enRe('sp.new.read'), enRe('sp.new.read.measured', {n: 1}), enRe('sp.new.read.measured')].some(re => re.test(r))) || "";
+    assert.match(group, enRe('sp.new.read.measured', {n: 1}));
+    assert.doesNotMatch(group, enRe('sp.new.read', {n: 1}));
   } finally { await page.close(); }
 });
 
@@ -1213,12 +1213,12 @@ test('a week that is all anticipated hires does not bless clearing the cover the
     const posts = await page.evaluate(() => Object.values(D.staffing[0].headcount)
       .reduce((n, h) => n + h.hire, 0));
     assert.ok(posts > 0 && posts < counts.hire, `${posts} of ${counts.hire}`);
-    assert.match(steps[0], new RegExp(`^Add ${posts} people to fill this plan: hire ${posts} Cleaning`));
-    assert.ok(!steps.some(s => /^Clear/.test(s)), steps.join(' | '));
+    assert.match(steps[0], enRe('sp.step.add', {n: posts, who: en('sp.add.hire', {hire: en('sp.add.hireone', {n: posts, role: 'Cleaning'})})}, {anchor: 'start'}));
+    assert.ok(!steps.some(s => new RegExp(enRe('sp.step.clear', {}, {anchor: 'start'}).source + '|' + enRe('sp.step.clear.cover', {}, {anchor: 'start'}).source).test(s)), steps.join(' | '));
     const note = await page.locator('#sp-roster .sp-note').innerText();
-    assert.match(note, /Hire before you clear/);
-    assert.doesNotMatch(note, /nothing to lose by clearing/);
-    assert.doesNotMatch(note, /loses nothing this week does not put back/);
+    assert.match(note, textRe('sp.care.hire.head'));
+    assert.doesNotMatch(note, enRe('sp.care.empty'));
+    assert.doesNotMatch(note, new RegExp(enRe('sp.care.cover').source + '|' + enRe('sp.care.cover.hire').source));
     // And the tiles offer no saving either, on this shop as on the other.
     assert.equal(await page.locator('#sp-roster .sp-ba > div').first().locator('s').count(), 0);
     assert.equal(await page.locator('#sp-roster .sp-ba > div').nth(1).locator('s').count(), 0);
@@ -1238,8 +1238,8 @@ test('a cover bill the row does not carry is left unsaid, not rendered as NaN', 
     assert.equal(await wages.locator('s').count(), 0, 'nothing to strike through');
     const read = await wages.getAttribute('data-read');
     assert.doesNotMatch(read, /NaN/);
-    assert.match(read, /not in this board's figures/);
-    assert.doesNotMatch(read, /the same bill either way/);
+    assert.match(read, enRe('sp.ba.cost.unknown'));
+    assert.doesNotMatch(read, enRe('sp.ba.cost.same'));
   } finally { await page.close(); }
 });
 
@@ -1250,8 +1250,8 @@ test('a measured shop gets no note at all, and its heading does not repeat the b
     assert.equal(await page.locator('#sp-roster .sechead .quiet').count(), 0);
     // What the block is for stays a hover away, on the heading's own note.
     const why = await page.locator('#sp-roster .sechead [data-tip]').getAttribute('data-tip');
-    assert.match(why, /BizMan \u203a Schedule/);
-    assert.match(why, /change nothing in the save/);
+    assert.match(why, enRe('sp.step.where'));
+    assert.match(why, enRe('sp.roster.why.entries'));
   } finally { await page.close(); }
 });
 
@@ -1259,22 +1259,22 @@ test('the tiles on a cover-only plan compare cover with cover', async () => {
   const page = await shop('fresh');
   try {
     const tiles = page.locator('#sp-roster .sp-ba > div');
-    assert.equal(await tiles.nth(0).locator('.lab').innerText(), 'Cover hours / week');
+    assert.equal(await tiles.nth(0).locator('.lab').innerText(), en('sp.ba.lab.cover'));
     // 28 cleaning blocks in the game against 12 to drag in, not the 56 the
     // whole schedule holds.
     assert.equal(await tiles.nth(0).locator('.v small s').innerText(), '28');
     const read = await tiles.nth(0).getAttribute('data-read');
-    assert.match(read, /^Cleaning and security hours to set for the week/);
+    assert.match(read, enRe('sp.ba.hours.cover.frag', {}, {anchor: 'start'}));
     // The scraps counted are the ones on the side the plan replaces: 28
     // cleaning pieces of two hours, not the 56 the whole schedule holds.
     const counts = await page.evaluate(() => spRosterCounts(D.staffing[0]));
     assert.equal(counts.coverFragments, 28);
     assert.equal(counts.fragments, 56);
-    assert.match(read, /28 of them two hours long/);
-    assert.match(read, /28 serving entries in the game are not in this plan/);
+    assert.match(read, enRe('sp.ba.hours.cover.frag', {frag: 28}));
+    assert.match(read, enRe('sp.ba.kept', {n: 28}));
     const wages = await tiles.nth(1).getAttribute('data-read');
-    assert.match(wages, /for the cleaning and security hours as they stand/);
-    assert.match(wages, /28 serving entries in the game are not in this plan/);
+    assert.match(wages, enRe('sp.ba.cost.cover'));
+    assert.match(wages, enRe('sp.ba.kept', {n: 28}));
   } finally { await page.close(); }
 });
 
@@ -1282,11 +1282,11 @@ test('a measured shop still compares the whole schedule', async () => {
   const page = await shop('full');
   try {
     const tile = page.locator('#sp-roster .sp-ba > div').first();
-    assert.equal(await tile.locator('.lab').innerText(), 'Hours / week');
+    assert.equal(await tile.locator('.lab').innerText(), en('sp.ba.lab'));
     const counts = await page.evaluate(() => spRosterCounts(D.staffing[0]));
     assert.equal(await tile.locator('.v small s').innerText(), String(counts.now));
-    assert.match(await tile.getAttribute('data-read'), /^Hours to set for the week/);
-    assert.doesNotMatch(await tile.getAttribute('data-read'), /not in this plan/);
+    assert.match(await tile.getAttribute('data-read'), enRe('sp.ba.hours', {}, {anchor: 'start'}));
+    assert.doesNotMatch(await tile.getAttribute('data-read'), enRe('sp.ba.kept'));
   } finally { await page.close(); }
 });
 
@@ -1300,7 +1300,7 @@ test('a figure the plan does not change is not struck through against itself', a
   try {
     const wages = page.locator('#sp-roster .sp-ba > div').nth(1);
     assert.equal(await wages.locator('s').count(), 0);
-    assert.match(await wages.getAttribute('data-read'), /the same bill either way/);
+    assert.match(await wages.getAttribute('data-read'), enRe('sp.ba.cost.same'));
   } finally { await page.close(); }
 });
 
@@ -1316,7 +1316,7 @@ test('two bills that only round to the same figure are not the same bill', async
     // this tile says two figures match, and these do not.
     assert.equal(await wages.locator('s').innerText(), '$2k');
     assert.equal(await wages.locator('.v').innerText(), '$2k$2k');
-    assert.doesNotMatch(await wages.getAttribute('data-read'), /the same bill either way/);
+    assert.doesNotMatch(await wages.getAttribute('data-read'), enRe('sp.ba.cost.same'));
     assert.match(await wages.getAttribute('data-read'), /\$1,600/);
     assert.match(await wages.getAttribute('data-read'), /\$2,400/);
   } finally { await page.close(); }
@@ -1335,20 +1335,20 @@ test('a cover-only plan does not offer to let the shop\u2019s cashiers go', asyn
     assert.equal(short.filter(r => r.planned === true).length, 1);
     // The cashiers are not named, offered around or let go: one chip, and the
     // reason is the board's, not theirs.
-    assert.match(text, /3 waiting on the shop's first measured week/);
+    assert.match(text, enRe('sp.new.chip', {n: 3}));
     assert.doesNotMatch(text, /S0 0\/30 h/);
     /* Read by what they say rather than by position: the headcount line's own
        entries wear the same class when a locker is new spending. */
     const reads = await hc.locator('.sp-new').evaluateAll(
       els => els.map(e => e.dataset.read));
-    const group = reads.find(r => /no role it could plan/.test(r)) || "";
+    const group = reads.find(r => [enRe('sp.new.read', {n: 1}), enRe('sp.new.read'), enRe('sp.new.read.measured', {n: 1}), enRe('sp.new.read.measured')].some(re => re.test(r))) || "";
     assert.ok(group, 'the waiting chip is there');
-    assert.match(group, /Nothing to do about it here/);
-    assert.doesNotMatch(group, /let them go/);
+    assert.match(group, enRe('sp.new.read'));
+    assert.doesNotMatch(group, new RegExp(enRe('sp.spare', {n: 1}).source + '|' + enRe('sp.spare').source));
     assert.match(group, /S0, S1, S2/, 'and it still names who');
     // The cleaner keeps the chip that tells the player what to do.
     assert.match(text, /CLEAN2 8\/30 h/);
-    assert.ok(reads.some(r => /their demand asks for 30/.test(r)),
+    assert.ok(reads.some(r => enRe('sp.short.hours', {min: 30}).test(r)),
       'and the cleaner keeps the answer the player can act on');
   } finally { await page.close(); }
 });
@@ -1362,8 +1362,8 @@ test('more people to hire than the hours would pay full weeks says why', async (
     const h = await page.evaluate(() => D.staffing[0].headcount['ba:skill_cleaning']);
     assert.deepEqual([h.min, h.max, h.hire], [1, 1, 2]);
     const read = await page.locator('#sp-roster .sp-hc > span').first().getAttribute('data-read');
-    assert.match(read, /2 to hire/);
-    assert.match(read, /nobody may work more than twelve hours in a day/);
+    assert.match(read, enRe('sp.hc.here.hire', {hire: 2}));
+    assert.match(read, enRe('sp.hc.over'));
   } finally { await page.close(); }
 });
 
@@ -1376,10 +1376,10 @@ test('a role with fewer full weeks in it than people does not read backwards', a
     const h = await page.evaluate(() => D.staffing[0].headcount['ba:skill_cleaning']);
     assert.deepEqual([h.min, h.max], [2, 1]);
     const read = await page.locator('#sp-roster .sp-hc > span').first().getAttribute('data-read');
-    assert.match(read, /takes 2 people, with a full week for 1 of them/);
+    assert.match(read, enRe('sp.hc.band.thin', {n: 2, max: 1}));
     assert.doesNotMatch(read, /2 to 1/);
     // And the hiring clause stays quiet here: the band has just said it.
-    assert.doesNotMatch(read, /more people than those hours would pay/);
+    assert.doesNotMatch(read, enRe('sp.hc.over'));
   } finally { await page.close(); }
 });
 
@@ -1391,12 +1391,12 @@ test('an unfilled line is named as a line, and priced as nothing it can price', 
     assert.ok(hire > 0);
     const posts = await page.evaluate(() => spPlanPosts(D.staffing[0]));
     assert.ok(posts > 0);
-    assert.match(await tiles.nth(0).innerText(), new RegExp(`[+]${posts} to hire`));
+    assert.match(await tiles.nth(0).innerText(), enRe('sp.ba.tohire', {n: posts}));
     // The plan prices nobody, so it quotes nothing rather than a confident $0.
     assert.match(await tiles.nth(1).locator('.v').innerText(), /\u2014$/);
     assert.equal(await tiles.nth(1).locator('.v s').innerText(), '$1k');
     assert.match(await tiles.nth(1).getAttribute('data-read'),
-      /1 person still to hire is not priced/);
+      enRe('sp.ba.cost.hire', {n: 1}));
   } finally { await page.close(); }
 });
 
@@ -1420,7 +1420,7 @@ test('a day with nobody on it is not offered for copying, whatever the rest of t
       JSON.stringify(days.map(d => d.staffed)));
     for(const d of days){
       if(d.dash) assert.ok(d.staffed, `${d.wd} offers a copy of nobody: ${d.read}`);
-      if(!d.staffed) assert.doesNotMatch(d.read, /copy schedule, paste schedule/);
+      if(!d.staffed) assert.doesNotMatch(d.read, enRe('sp.tab.copy'));
     }
   } finally { await page.close(); }
 });
@@ -1430,15 +1430,15 @@ test('a repeated day on a cover-only plan is not offered as copy and paste', asy
   try {
     const reads = await page.locator('#sp-roster .sp-daytabs a')
       .evaluateAll(tabs => tabs.map(a => a.dataset.read));
-    const repeats = reads.filter(r => /the same cover as/.test(r));
+    const repeats = reads.filter(r => enRe('sp.tab.kept').test(r));
     assert.ok(repeats.length, 'the fixture does repeat a day');
     // And no dash either: the mark is the offer of the paste.
     assert.equal(await page.locator('#sp-roster .sp-daytabs a u').count(), 0);
     for(const r of repeats){
       // BizMan pastes the whole day, and the serving shifts this shop keeps
       // are in that day: the shortcut would undo the warning above the grid.
-      assert.match(r, /Copy schedule pastes the whole day/);
-      assert.doesNotMatch(r, /copy schedule, paste schedule/);
+      assert.match(r, enRe('sp.tab.kept'));
+      assert.doesNotMatch(r, enRe('sp.tab.copy'));
     }
   } finally { await page.close(); }
 });
@@ -1448,7 +1448,7 @@ test('a measured shop still gets the copy-and-paste shortcut', async () => {
   try {
     const reads = await page.locator('#sp-roster .sp-daytabs a')
       .evaluateAll(tabs => tabs.map(a => a.dataset.read));
-    assert.ok(reads.some(r => /copy schedule, paste schedule/.test(r)));
+    assert.ok(reads.some(r => enRe('sp.tab.copy').test(r)));
   } finally { await page.close(); }
 });
 
@@ -1464,12 +1464,12 @@ test('lines the board cannot mark are still lines to enter, everywhere it counts
     assert.ok(counts.staffed > 0, 'and a week to type all the same');
     // The note counts the week, not the ticks, and does not call it all hires.
     const note = await page.locator('#sp-roster .sp-note').innerText();
-    assert.match(note, new RegExp(`cover only: ${counts.staffed} entries`));
-    assert.doesNotMatch(note, /every one of them waiting on a hire/);
-    assert.doesNotMatch(note, /Hire before you clear/);
+    assert.match(note, textRe('sp.new.cover.until.now', {lines: en('sp.new.lines.hire', {n: counts.staffed}), now: counts.nowCover}));
+    assert.doesNotMatch(note, enRe('sp.new.lines.allhire'));
+    assert.doesNotMatch(note, textRe('sp.care.hire.head'));
     // The tile counts the same week, and its saving is a real one.
     const tile = page.locator('#sp-roster .sp-ba > div').first();
-    assert.match(await tile.innerText(), new RegExp(`${counts.nowCover} ${counts.staffed} entries`));
+    assert.match(await tile.innerText(), new RegExp(String(counts.nowCover) + ' ' + enRe('sp.n.entries', {n: counts.staffed}).source));
     assert.equal(await tile.locator('.v small s').innerText(), String(counts.nowCover));
     // None of its lines is one the board can tick.
     assert.equal(await page.locator('#sp-roster').getAttribute('data-tickable'), '0');
@@ -1487,21 +1487,21 @@ test('a shop with serving shifts and no line to enter is told to hire, not to cl
     assert.ok(kept > 0, 'serving shifts the plan keeps');
     const note = await page.locator('#sp-roster .sp-note').innerText();
     // The dangerous sentence is the one that used to win here.
-    assert.match(note, /Hire before you clear/);
-    assert.doesNotMatch(note, /delete the cleaning and security hours and drag these in/);
+    assert.match(note, textRe('sp.care.hire.head'));
+    assert.doesNotMatch(note, enRe('sp.care.keep'));
     // And it still says what happens to the serving hours.
-    assert.match(note, new RegExp(`${kept} serving entries in the game are not in this plan either`));
+    assert.match(note, enRe('sp.care.hire.kept', {n: kept}));
     // Nor is any day offered for pasting over them -- and a day with nobody on
     // it is not "the same as" another one "people and all" either.
     assert.equal(await page.locator('#sp-roster .sp-daytabs a u').count(), 0);
     const tabs = await page.locator('#sp-roster .sp-daytabs a')
       .evaluateAll(a => a.map(x => x.dataset.read));
-    for(const read of tabs.filter(r => /the same cover as/.test(r)))
-      assert.doesNotMatch(read, /people and all/);
+    for(const read of tabs.filter(r => enRe('sp.tab.kept').test(r)))
+      assert.doesNotMatch(read, enRe('sp.tab.kept.people'));
     assert.equal(await page.locator('#sp-roster .sp-note.sp-care').count(), 1);
     const steps = await page.locator('#sp-roster .sp-step').evaluateAll(
       b => b.map(x => x.innerText.replace(/\s+/g, ' ')));
-    assert.ok(!steps.some(s => /^Clear/.test(s)), steps.join(' | '));
+    assert.ok(!steps.some(s => new RegExp(enRe('sp.step.clear', {}, {anchor: 'start'}).source + '|' + enRe('sp.step.clear.cover', {}, {anchor: 'start'}).source).test(s)), steps.join(' | '));
     // Nor do the tiles offer the saving the note is warning against.
     assert.equal(await page.locator('#sp-roster .sp-ba > div').first().locator('s').count(), 0);
     assert.equal(await page.locator('#sp-roster .sp-ba > div').nth(1).locator('s').count(), 0);
@@ -1518,8 +1518,8 @@ test('a weekday of its own that could not be read says so, on a shop that was', 
     // By weekday, not by the order the tabs run in.
     const reads = await page.evaluate(() => [0, 1, 2, 3, 4, 5, 6].map(
       wd => q(`#sp-roster .sp-day[data-d="${wd}"] .sp-needrow .lab`).dataset.read));
-    assert.match(reads[3], /Not enough hour reports to read this weekday yet/);
-    for(const wd of [1, 2, 4, 5, 6, 0]) assert.match(reads[wd], /Measured, and these hours need nobody/);
+    assert.match(reads[3], enRe('sp.need.thin'));
+    for(const wd of [1, 2, 4, 5, 6, 0]) assert.match(reads[wd], enRe('sp.need.nobody'));
   } finally { await page.close(); }
 });
 
@@ -1532,8 +1532,8 @@ test('a weekday read off another one does not claim to have been measured itself
   try {
     const read = await page.evaluate(
       () => q('#sp-roster .sp-day[data-d="3"] .sp-needrow .lab').dataset.read);
-    assert.match(read, /Read off the best measured weekday through the game's day curve/);
-    assert.doesNotMatch(read, /^Measured/);
+    assert.match(read, enRe('sp.need.scaled'));
+    assert.doesNotMatch(read, enRe('sp.need.nobody', {}, {anchor: 'start'}));
   } finally { await page.close(); }
 });
 
@@ -1548,8 +1548,8 @@ test('the need strip on a shop measured at nothing says so, lane by lane', async
       .evaluateAll(els => els.map(e => e.dataset.read));
     assert.equal(reads.length, 7);
     for(const r of reads){
-      assert.match(r, /Measured, and these hours need nobody/);
-      assert.doesNotMatch(r, /Not enough hour reports/);
+      assert.match(r, enRe('sp.need.nobody'));
+      assert.doesNotMatch(r, enRe('sp.need.thin'));
     }
   } finally { await page.close(); }
 });
@@ -1588,7 +1588,7 @@ test('a row that predates the cover count has it worked out rather than called n
     const counts = await page.evaluate(() => spRosterCounts(D.staffing[0]));
     assert.equal(counts.coverFragments, 28, 'read off the list the row still carries');
     assert.match(await page.locator('#sp-roster .sp-ba > div').first().getAttribute('data-read'),
-      /28 of them two hours long/);
+      enRe('sp.ba.hours.cover.frag', {frag: 28}));
   } finally { await page.close(); }
 });
 
@@ -1596,9 +1596,9 @@ test('a row that says nothing about the shop\u2019s age does not call it new', a
   const page = await shop('fresh', row => { row.measure = {days: 0, need: 2, open: null}; });
   try {
     const note = await page.locator('#sp-roster .sp-note').innerText();
-    assert.match(note, /Not measured/);
-    assert.doesNotMatch(note, /New shop/);
-    assert.doesNotMatch(note, /Open /);
+    assert.match(note, enRe('sp.new.label.unmeasured'));
+    assert.doesNotMatch(note, enRe('sp.new.label.new'));
+    assert.doesNotMatch(note, enRe('sp.new.agenone'));
   } finally { await page.close(); }
 });
 
@@ -1650,7 +1650,7 @@ test('the read-out answers a keyboard as well as a pointer', async () => {
     const tile = page.locator('#sp-roster .sp-ba > div[data-read]').first();
     await tile.focus();
     assert.match(await page.locator('#sp-roster .sp-readout').innerText(),
-      /Hours to set for the week/);
+      textRe('sp.ba.hours'));
   } finally { await page.close(); }
 });
 
@@ -1673,8 +1673,8 @@ test('the Optimize staffing card opens the shop with most work to save', async (
       const card = $('optimizeStaffingCard');
       return [card.querySelector('.soon').textContent, card.querySelector('.what').textContent, card.dataset.site];
     });
-    assert.equal(shown[0], '−174 ENTRIES');
-    assert.match(shown[1], /Big saving: 200 entries become 26, and 4 people to hire\./);
+    assert.equal(shown[0], en('today.moves.staff.badge.saves', {n: 174}));
+    assert.match(shown[1], enRe('today.moves.staff.saves.hire', {site: 'Big saving', now: 200, week: 26, people: en('today.moves.staff.people', {n: 4})}));
     assert.equal(shown[2], 'b');
   } finally { await page.close(); }
 });
@@ -1713,8 +1713,8 @@ test('the card measures a saving in lines to enter, not in lines the plan drew',
         JSON.stringify(rows.map(r => spRosterCounts(r).tickable))];
     }, [a, b]);
     assert.equal(shown[3], '[70,70]', 'both plans are 70 blocks to drag in');
-    assert.equal(shown[0], '\u221230 ENTRIES');
-    assert.match(shown[1], /shop-a: 100 entries become 70, and 4 people to hire\./);
+    assert.equal(shown[0], en('today.moves.staff.badge.saves', {n: 30}));
+    assert.match(shown[1], enRe('today.moves.staff.saves.hire', {site: 'shop-a', now: 100, week: 70, people: en('today.moves.staff.people', {n: 4})}));
     assert.equal(shown[2], 'shop-a', 'not shop-b, which saves ten');
   } finally { await page.close(); }
 });
@@ -1731,9 +1731,9 @@ test('the card scores the saving on the lines somebody can be put on', async () 
       return [card.querySelector('.soon').textContent, card.querySelector('.what').textContent,
 ];
     });
-    assert.equal(shown[0], '−16 ENTRIES');
-    assert.match(shown[1], /42 entries become 26, and 4 people to hire\./);
-    assert.doesNotMatch(shown[1], /become 42/);
+    assert.equal(shown[0], en('today.moves.staff.badge.saves', {n: 16}));
+    assert.match(shown[1], enRe('today.moves.staff.saves.hire', {now: 42, week: 26, people: en('today.moves.staff.people', {n: 4})}));
+    assert.doesNotMatch(shown[1], enRe('today.moves.staff.saves.hire', {week: 42}));
   } finally { await page.close(); }
 });
 
@@ -1747,9 +1747,8 @@ test('the card sizes a plan with nothing to save on the same week', async () => 
       return [card.querySelector('.soon').textContent, card.querySelector('.what').textContent,
         spPlanHours(D.staffing[0])];
     });
-    assert.equal(shown[0], `${shown[2]} HOURS`, 'the hours somebody can be put on');
-    assert.match(shown[1], new RegExp(
-      `a week of ${shown[2]} hours to set, in 26 entries, and 4 people to hire[.]`));
+    assert.equal(shown[0], en('today.moves.staff.badge.hours', {n: shown[2]}), 'the hours somebody can be put on');
+    assert.match(shown[1], enRe('today.moves.staff.week.hire', {hours: shown[2], entries: en('today.moves.staff.entries', {n: 26}), people: en('today.moves.staff.people', {n: 4})}));
   } finally { await page.close(); }
 });
 
@@ -1771,10 +1770,9 @@ test('a player who never opened BizMan is offered the plan, not told they are un
       return [card.querySelector('.soon').textContent, card.querySelector('.what').textContent,
         card.dataset.site, spPlanHours(D.staffing[1])];
     });
-    assert.equal(shown[0], `${shown[3]} HOURS`);
-    assert.match(shown[1], new RegExp(
-      `Big shop: a week of ${shown[3]} hours to set, in 26 entries, and 4 people to hire[.]`));
-    assert.doesNotMatch(shown[1], /measured/);
+    assert.equal(shown[0], en('today.moves.staff.badge.hours', {n: shown[3]}));
+    assert.match(shown[1], enRe('today.moves.staff.week.hire', {site: 'Big shop', hours: shown[3], entries: en('today.moves.staff.entries', {n: 26}), people: en('today.moves.staff.people', {n: 4})}));
+    assert.doesNotMatch(shown[1], enRe('today.moves.staff.none'));
     assert.equal(shown[2], 'b');
   } finally { await page.close(); }
 });
@@ -1793,10 +1791,9 @@ test('a plan nobody can be put on yet is still sized as a plan', async () => {
     // Nobody here may clean, so every block the planner drew waits on a hire.
     assert.equal(shown.counts.tickable, 0);
     assert.ok(shown.counts.hire > 0);
-    assert.equal(shown.badge, `${shown.hours} HOURS`);
-    assert.match(shown.what, new RegExp(
-      `a week of ${shown.hours} cleaning and security hours to set, in ${shown.counts.hire} entries, every one of them waiting on a hire`));
-    assert.doesNotMatch(shown.what, /week of 0/);
+    assert.equal(shown.badge, en('today.moves.staff.badge.hours', {n: shown.hours}));
+    assert.match(shown.what, enRe('today.moves.staff.cover.week.hiring', {hours: shown.hours, entries: en('today.moves.staff.entries', {n: shown.counts.hire})}));
+    assert.doesNotMatch(shown.what, enRe('today.moves.staff.cover.week.hiring', {hours: 0}));
   } finally { await page.close(); }
 });
 
@@ -1812,9 +1809,9 @@ test('a saving nobody could set is not offered as one', async () => {
         spRosterCounts(D.staffing[0]).nowCover];
     });
     assert.ok(shown[2] > 0, 'there is cover in the game to lose');
-    assert.doesNotMatch(shown[0], /ENTRIES/);
-    assert.match(shown[0], /HOURS$/);
-    assert.doesNotMatch(shown[1], /become 0/);
+    assert.doesNotMatch(shown[0], enRe('today.moves.staff.badge.saves'));
+    assert.match(shown[0], enRe('today.moves.staff.badge.hours'));
+    assert.doesNotMatch(shown[1], enRe('today.moves.staff.saves.hire', {week: 0}));
   } finally { await page.close(); }
 });
 
@@ -1833,12 +1830,11 @@ test('the Today card sizes a cover-only plan on the cover blocks alone', async (
     // 56 blocks in the game, 28 of them cover, and 12 to drag in: the card
     // is about the 28, because the other 28 are the ones it cannot replace.
     assert.ok(now > nowCover && nowCover > tickable, JSON.stringify(shown.counts));
-    assert.equal(shown.badge, `\u2212${nowCover - tickable} ENTRIES`);
-    assert.match(shown.what, new RegExp(
-      `${nowCover} cleaning and security entries become ${tickable}`));
-    assert.doesNotMatch(shown.what, new RegExp(`${now} entries become`));
-    assert.match(shown.what, /registers wait on the shop\u2019s first measured week/);
-    assert.match(shown.go, /\u203a Staffing$/);
+    assert.equal(shown.badge, en('today.moves.staff.badge.saves', {n: nowCover - tickable}));
+    assert.match(shown.what, enRe('today.moves.staff.cover.saves.hire.wait', {now: nowCover, week: tickable}));
+    assert.doesNotMatch(shown.what, enRe('today.moves.staff.saves.hire', {now}));
+    assert.match(shown.what, enRe('today.moves.staff.cover.saves.hire.wait'));
+    assert.match(shown.go, enRe('today.moves.staff.go'));
   } finally { await page.close(); }
 });
 
@@ -1850,9 +1846,9 @@ test('a plan half of which waits on hires says what to delete and what to leave'
     const note = await page.locator('#sp-roster .sp-note').innerText();
     // Not "delete the cleaning and security hours and drag these in": half of
     // "these" is dashed, and the hours under them would stand bare.
-    assert.match(note, /Delete the cleaning and security hours the solid entries replace/);
-    assert.match(note, new RegExp(`leave what is under the ${counts.hire} dashed ${counts.hire === 1 ? 'entry' : 'entries'}`));
-    assert.doesNotMatch(note, /drag these in instead/);
+    assert.match(note, enRe('sp.care.keep.hire'));
+    assert.match(note, enRe('sp.care.keep.hire', {n: counts.hire}));
+    assert.doesNotMatch(note, enRe('sp.care.keep'));
   } finally { await page.close(); }
 });
 
@@ -1868,8 +1864,7 @@ test('a week with hires in it says so on the card as well as in the block', asyn
     // 26 entries to set and five people still to find: a card that stopped at
     // 26 would describe a week the player cannot finish.
     assert.ok(shown.counts.staffed > 0 && shown.counts.hire > 0 && shown.posts > 0);
-    assert.match(shown.what, new RegExp(
-      `become ${shown.counts.staffed}, and ${shown.posts} people to hire`));
+    assert.match(shown.what, enRe('today.moves.staff.saves.hire', {week: shown.counts.staffed, people: en('today.moves.staff.people', {n: shown.posts})}));
   } finally { await page.close(); }
 });
 
@@ -1886,7 +1881,7 @@ test('a card with nothing to open stops pointing at the site it used to', async 
       return [was, card.querySelector('.soon').textContent, card.dataset.site];
     });
     assert.equal(shown[0], KEY);
-    assert.equal(shown[1], 'NO PLAN');
+    assert.equal(shown[1], en('today.moves.staff.badge.none'));
     assert.equal(shown[2], undefined, 'and it no longer opens the old site');
   } finally { await page.close(); }
 });
@@ -1900,7 +1895,7 @@ test('the card says nothing it cannot know before the payload carries a plan', a
       const card = $('optimizeStaffingCard');
       return [card.querySelector('.soon').textContent, card.dataset.site];
     });
-    assert.equal(shown[0], 'SOON');
+    assert.equal(shown[0], en('today.moves.soon'));
     assert.equal(shown[1], undefined);
   } finally { await page.close(); }
 });
@@ -1914,12 +1909,12 @@ test('a new shop offers cover only or the demand test, and remembers the pick', 
   const page = await shop('newshop');
   try {
     // Cover only is the default, and it is what the note under it describes.
-    assert.deepEqual(await pickText(page), [['Cover only', true], ['Full cover 24/7', false]]);
+    assert.deepEqual(await pickText(page), [[en('sp.new.label.cover'), true], [en('sp.pick.full'), false]]);
     assert.equal(await page.locator('#sp-roster .sp-note').count(), 1);
     assert.equal(await page.locator(mon + '.sp-shift:not(.sp-clean):not(.sp-security)').count(), 0);
-    assert.match(await page.locator('#sp-roster .sp-note').innerText(), /Full cover 24\/7, above, is that week/);
+    assert.match(await page.locator('#sp-roster .sp-note').innerText(), enRe('sp.new.why.full'));
     await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
-    assert.deepEqual(await pickText(page), [['Cover only', false], ['Full cover 24/7', true]]);
+    assert.deepEqual(await pickText(page), [[en('sp.new.label.cover'), false], [en('sp.pick.full'), true]]);
     // The test: both registers every hour, the doors opened first, and the
     // one line that says what it is for.
     assert.equal(await page.locator('#sp-roster .sp-note').count(), 0);
@@ -1928,12 +1923,12 @@ test('a new shop offers cover only or the demand test, and remembers the pick', 
     assert.equal(regs.length, 4, 'two registers, two twelve-hour entries each');
     const steps = await page.locator('#sp-roster .sp-step').evaluateAll(
       b => b.map(x => x.innerText.replace(/\s+/g, ' ')));
-    assert.match(steps[0], /^Open every day 0 to 24/);
+    assert.match(steps[0], enRe('sp.step.open', {}, {anchor: 'start'}));
     assert.match(await page.locator('#sp-roster .sp-pickwhy').innerText(),
-      /^Run it until 9 days after the shop's first customer, then switch to the demand plan\. Demand data: 0 of 9 days\.$/);
-    assert.equal(await page.locator('#sp-roster .sp-progress').innerText(), 'Demand data: 0 of 9 days.');
+      new RegExp('^' + enRe('sp.pick.run', {n: 9}).source + ' ' + enRe('sp.pick.progress', {n: 0, of: 9}).source + '$'));
+    assert.equal(await page.locator('#sp-roster .sp-progress').innerText(), en('sp.pick.progress', {n: 0, of: 9}));
     assert.match(await page.locator('#sp-roster .sp-needrow .lab').first().getAttribute('data-read'),
-      /Every station, every hour/);
+      enRe('sp.need.full'));
     // The payload carries no need for the test; the strip is read off the
     // station list: both registers, every hour of the day.
     assert.equal(ROWS.newshop.fullCover.need, undefined);
@@ -1948,9 +1943,9 @@ test('a new shop offers cover only or the demand test, and remembers the pick', 
     assert.equal(await page.evaluate(k => localStorage.getItem('ba_dash_plan:roster-fixture:' + k), KEY), 'full');
     // The pick survives the next draw, and going back forgets it.
     await page.evaluate(() => drawShop());
-    assert.deepEqual(await pickText(page), [['Cover only', false], ['Full cover 24/7', true]]);
+    assert.deepEqual(await pickText(page), [[en('sp.new.label.cover'), false], [en('sp.pick.full'), true]]);
     await page.evaluate(() => q('#sp-roster [data-plan="demand"]').click());
-    assert.deepEqual(await pickText(page), [['Cover only', true], ['Full cover 24/7', false]]);
+    assert.deepEqual(await pickText(page), [[en('sp.new.label.cover'), true], [en('sp.pick.full'), false]]);
     assert.equal(await page.evaluate(k => localStorage.getItem('ba_dash_plan:roster-fixture:' + k), KEY), null);
   } finally { await page.close(); }
 });
@@ -1958,14 +1953,14 @@ test('a new shop offers cover only or the demand test, and remembers the pick', 
 test('a measured shop names its plan the demand plan and offers the test beside it', async () => {
   const page = await shop('full');
   try {
-    assert.deepEqual(await pickText(page), [['Demand plan', true], ['Full cover 24/7', false]]);
+    assert.deepEqual(await pickText(page), [[en('sp.pick.demand'), true], [en('sp.pick.full'), false]]);
     assert.equal(await page.locator('#sp-roster .sp-pickwhy').count(), 0);
     assert.equal(await page.locator('#sp-roster .sp-handover').count(), 0);
     // Already open around the clock, so there are no doors to open.
     await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
     const steps = await page.locator('#sp-roster .sp-step').evaluateAll(
       b => b.map(x => x.innerText.replace(/\s+/g, ' ')));
-    assert.ok(!steps.some(s => /^Open every day/.test(s)), steps.join(' | '));
+    assert.ok(!steps.some(s => enRe('sp.step.open', {}, {anchor: 'start'}).test(s)), steps.join(' | '));
   } finally { await page.close(); }
 });
 
@@ -1976,13 +1971,13 @@ test('Staffing › Schedules summarises the plan the shop shows, and follows a c
   try {
     const counts = which => page.evaluate(([k, which]) => {
       const base = spRosterRow(k), c = spRosterCounts(which === 'full' ? spFullRow(base) : base);
-      return `${c.now} entries now, ${c.staffed} in the plan`;
+      return {now: c.now, week: c.staffed};
     }, [KEY, which]);
     const line = () => page.evaluate(k => {
       const b = document.querySelector(`#secSchedules [data-sched-pick="${CSS.escape(k)}"]`);
       return b ? b.querySelector('.st').textContent : null;
     }, KEY);
-    const demand = await counts('demand'), full = await counts('full');
+    const demand = en('co.sched.plan', await counts('demand')), full = en('co.sched.plan', await counts('full'));
     assert.notEqual(demand, full, 'the two plans differ, so the row can tell them apart');
     await page.evaluate(() => { drawSchedules(); openRoute('staffing/schedules'); });
     assert.ok((await line()).startsWith(demand), await line());
@@ -2017,13 +2012,13 @@ test('the pick works without storage of any kind', async () => {
       {get(){ throw new Error('site data blocked'); }});
   });
   try {
-    assert.deepEqual(await pickText(page), [['Cover only', true], ['Full cover 24/7', false]]);
+    assert.deepEqual(await pickText(page), [[en('sp.new.label.cover'), true], [en('sp.pick.full'), false]]);
     // Nothing can be stored, and the pick still holds for as long as the page.
     await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
     assert.equal(await page.locator('#sp-roster').count(), 1);
-    assert.deepEqual(await pickText(page), [['Cover only', false], ['Full cover 24/7', true]]);
+    assert.deepEqual(await pickText(page), [[en('sp.new.label.cover'), false], [en('sp.pick.full'), true]]);
     await page.evaluate(() => drawShop());
-    assert.deepEqual(await pickText(page), [['Cover only', false], ['Full cover 24/7', true]]);
+    assert.deepEqual(await pickText(page), [[en('sp.new.label.cover'), false], [en('sp.pick.full'), true]]);
   } finally { await page.close(); }
 });
 
@@ -2031,14 +2026,14 @@ test('the pick belongs to one company: another character on the same map starts 
   const page = await shop('newshop');
   try {
     await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
-    assert.deepEqual(await pickText(page), [['Cover only', false], ['Full cover 24/7', true]]);
+    assert.deepEqual(await pickText(page), [[en('sp.new.label.cover'), false], [en('sp.pick.full'), true]]);
     // Every character plays the same map, so the same address is another
     // company's shop there.
     await page.evaluate(() => { D.meta.character = 'someone-else'; drawShop(); });
-    assert.deepEqual(await pickText(page), [['Cover only', true], ['Full cover 24/7', false]]);
+    assert.deepEqual(await pickText(page), [[en('sp.new.label.cover'), true], [en('sp.pick.full'), false]]);
     assert.equal(await page.evaluate(k => localStorage.getItem('ba_dash_plan:someone-else:' + k), KEY), null);
     await page.evaluate(() => { D.meta.character = 'roster-fixture'; drawShop(); });
-    assert.deepEqual(await pickText(page), [['Cover only', false], ['Full cover 24/7', true]]);
+    assert.deepEqual(await pickText(page), [[en('sp.new.label.cover'), false], [en('sp.pick.full'), true]]);
   } finally { await page.close(); }
 });
 
@@ -2048,7 +2043,7 @@ test('a browser that reads storage but refuses to write it still switches on the
   });
   try {
     await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
-    assert.deepEqual(await pickText(page), [['Cover only', false], ['Full cover 24/7', true]]);
+    assert.deepEqual(await pickText(page), [[en('sp.new.label.cover'), false], [en('sp.pick.full'), true]]);
   } finally { await page.close(); }
 });
 
@@ -2060,12 +2055,11 @@ test('one step names everybody to add, and the hours that wait on them', async (
     const step = page.locator('#sp-roster .sp-step.sp-add');
     assert.equal(await step.count(), 1);
     const text = (await step.innerText()).replace(/\s+/g, ' ');
-    assert.match(text, new RegExp(`^Add ${add.people} people to fill this plan: assign BENCH \\(unassigned\\) and hire ${
-      add.hire.map(h => `${h.people} ${h.role}`).join(', ')}`));
-    assert.match(await step.getAttribute('data-tip'), new RegExp(`^${add.hoursUncovered} h a week stay empty until they are added`));
+    assert.match(text, enRe('sp.step.add', {n: add.people, who: en('sp.add.both', {assign: 'BENCH', hire: add.hire.map(h => en('sp.add.hireone', {n: h.people, role: h.role})).join(', ')})}, {anchor: 'start'}));
+    assert.match(await step.getAttribute('data-tip'), enRe('sp.step.empty', {n: add.hoursUncovered}, {anchor: 'start'}));
     // No second, competing line: the old per-person bench steps are gone.
     assert.equal(await page.locator('#sp-roster .sp-step[data-p]').count(), 0);
-    assert.equal(await page.locator('#sp-roster .sp-step').filter({hasText: /^Hire /}).count(), 0);
+    assert.equal(await page.locator('#sp-roster .sp-step').filter({hasText: enRe('sp.add.hire', {}, {anchor: 'start'})}).count(), 0);
   } finally { await page.close(); }
 });
 
@@ -2083,21 +2077,21 @@ test('complete demand data on full cover says so on the block and on the Today c
     assert.equal(ROWS.handover.demandDataComplete, true);
     const line = page.locator('#sp-roster .sp-handover');
     // With the demand plan on screen there is nothing to switch to (A8).
-    assert.deepEqual(await pickText(page), [['Demand plan', true], ['Full cover 24/7', false]]);
+    assert.deepEqual(await pickText(page), [[en('sp.pick.demand'), true], [en('sp.pick.full'), false]]);
     assert.equal(await line.count(), 0);
     // On the test's own view the line is the way to it.
     await page.evaluate(() => q('#sp-roster .sp-plans [data-plan="full"]').click());
-    assert.equal(await line.innerText(), 'Demand data complete: switch to the demand plan');
+    assert.equal(await line.innerText(), en('sp.pick.done', {switch: en('sp.pick.switch')}).replace(/<[^>]*>/g, ''));
     assert.equal(await page.locator('#sp-roster .sp-pickwhy').count(), 0, 'one line, not two');
     await page.evaluate(() => q('#sp-roster .sp-handover [data-plan="demand"]').click());
-    assert.deepEqual(await pickText(page), [['Demand plan', true], ['Full cover 24/7', false]]);
+    assert.deepEqual(await pickText(page), [[en('sp.pick.demand'), true], [en('sp.pick.full'), false]]);
     assert.equal(await line.count(), 0);
     const card = await page.evaluate(() => {
       drawOptimizeStaffing();
       const c = $('optimizeStaffingCard');
       return [c.querySelector('.what').textContent, c.dataset.site];
     });
-    assert.equal(card[0], 'Demand data complete at HART. Test 12: switch to the demand plan.');
+    assert.equal(card[0], en('today.moves.staff.done', {site: 'HART. Test 12'}));
     assert.equal(card[1], KEY);
   } finally { await page.close(); }
 });
@@ -2107,7 +2101,7 @@ test("the progress line counts the days since the shop's first customer", async 
   try {
     await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
     assert.equal(await page.locator('#sp-roster .sp-progress').innerText(),
-      'Demand data: 5 of 9 days.');
+      en('sp.pick.progress', {n: 5, of: 9}));
     // Not on the other view, and not once the data is complete.
     await page.evaluate(() => q('#sp-roster [data-plan="demand"]').click());
     assert.equal(await page.locator('#sp-roster .sp-progress').count(), 0);
@@ -2128,7 +2122,7 @@ test('complete data with no hand-over says why, in one line', async () => {
   try {
     await same.evaluate(() => q('#sp-roster .sp-plans [data-plan="full"]').click());
     assert.equal(await same.locator('#sp-roster .sp-pickwhy').innerText(),
-      'The demand plan also needs every station every hour: keep this staffing.');
+      en('sp.pick.keep'));
     assert.equal(await same.locator('#sp-roster .sp-progress').count(), 0);
     assert.equal(await same.locator('#sp-roster .sp-handover').count(), 0);
   } finally { await same.close(); }
@@ -2140,7 +2134,7 @@ test('complete data with no hand-over says why, in one line', async () => {
   try {
     await off.evaluate(() => q('#sp-roster .sp-plans [data-plan="full"]').click());
     assert.equal(await off.locator('#sp-roster .sp-pickwhy').innerText(),
-      'Demand data complete, as staffed: an empty station may have turned customers away.');
+      en('sp.pick.asstaffed'));
   } finally { await off.close(); }
 });
 
@@ -2151,7 +2145,7 @@ test('open hours no report has measured are named in one line and marked on the 
   try {
     const line = page.locator('#sp-roster .sp-unmline');
     assert.equal(await line.count(), 1);
-    assert.equal(await line.innerText(), 'No customers on file: every day 8-20. Counted as none.');
+    assert.equal(await line.innerText(), en('sp.unm.line', {words: en('sp.unm.every', {hours: '8-20'})}).replace(/<[^>]*>/g, ''));
     assert.equal(await page.locator(mon + '.sp-unmh').count(), 12);
     // The test staffs every hour anyway: not on its view.
     await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
@@ -2171,13 +2165,13 @@ test('the line names the weekdays, and weekdays with the same hours share an ent
   });
   try {
     assert.equal(await page.locator('#sp-roster .sp-unmline').innerText(),
-      'No customers on file: Mon, Tue 0-2, 22-24; Fri 0-1, 7-8. Counted as none.');
+      en('sp.unm.line', {words: 'Mon, Tue 0-2, 22-24; Fri 0-1, 7-8'}).replace(/<[^>]*>/g, ''));
   } finally { await page.close(); }
   // Hours that hold every day may run across midnight.
   const every = await shop('quiet', row => { row.unmeasured = Array(7).fill([22, 23, 0, 1]); });
   try {
     assert.equal(await every.locator('#sp-roster .sp-unmline').innerText(),
-      'No customers on file: every day 22-2. Counted as none.');
+      en('sp.unm.line', {words: en('sp.unm.every', {hours: '22-2'})}).replace(/<[^>]*>/g, ''));
   } finally { await every.close(); }
 });
 
@@ -2190,12 +2184,12 @@ test('a shorter day busy all its hours has nothing to switch to', async () => {
     assert.equal(ROWS.partday.fullCover.inGame, true);
     await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
     assert.equal(await page.locator('#sp-roster .sp-pickwhy').innerText(),
-      'The demand plan also needs every station every hour: keep this staffing.');
+      en('sp.pick.keep'));
     const card = await page.evaluate(() => {
       drawOptimizeStaffing();
       return $('optimizeStaffingCard').querySelector('.what').textContent;
     });
-    assert.doesNotMatch(card, /Demand data complete/);
+    assert.doesNotMatch(card, enRe('today.moves.staff.done'));
   } finally { await page.close(); }
 });
 
@@ -2227,7 +2221,7 @@ test('no hand-over line on a shop whose demand data is not complete', async () =
         drawOptimizeStaffing();
         return $('optimizeStaffingCard').querySelector('.what').textContent;
       });
-      assert.doesNotMatch(card, /Demand data complete/, which);
+      assert.doesNotMatch(card, enRe('today.moves.staff.done'), which);
     } finally { await page.close(); }
   }
 });
@@ -2239,7 +2233,7 @@ test('a shop without complete data is on its open-hours plan: every station the 
   const page = await shop('newshop', null, null, {noOpenPlan: false});
   try {
     assert.equal(ROWS.newshop.openCover.complete, false);
-    assert.deepEqual(await pickText(page), [['Open hours', true], ['Full cover 24/7', false]]);
+    assert.deepEqual(await pickText(page), [[en('sp.pick.open'), true], [en('sp.pick.full'), false]]);
     // The registers are staffed the hours it opens, never an hour more.
     const regs = await page.locator(mon + '.sp-shift:not(.sp-clean):not(.sp-security)').count();
     assert.ok(regs > 0, 'serving entries on Monday');
@@ -2252,9 +2246,9 @@ test('a shop without complete data is on its open-hours plan: every station the 
     assert.deepEqual(same, {on: 'open', variant: 'open', full: false, shifts: true, open: false, unmeasured: false});
     // The demand test is still one click away, and back.
     await page.evaluate(() => q('#sp-roster [data-plan="full"]').click());
-    assert.deepEqual(await pickText(page), [['Open hours', false], ['Full cover 24/7', true]]);
+    assert.deepEqual(await pickText(page), [[en('sp.pick.open'), false], [en('sp.pick.full'), true]]);
     await page.evaluate(() => q('#sp-roster [data-plan="demand"]').click());
-    assert.deepEqual(await pickText(page), [['Open hours', true], ['Full cover 24/7', false]]);
+    assert.deepEqual(await pickText(page), [[en('sp.pick.open'), true], [en('sp.pick.full'), false]]);
   } finally { await page.close(); }
 });
 
@@ -2275,7 +2269,7 @@ test('the Optimize staffing card sizes a new shop by the plan its Staffing shows
     assert.equal(out.key, KEY);
     assert.equal(out.same, true);
     assert.equal(out.badge, out.want);
-    assert.notEqual(out.badge, `${out.cover} HOURS`, 'not the cover-only week');
+    assert.notEqual(out.badge, en('today.moves.staff.badge.hours', {n: out.cover}), 'not the cover-only week');
   } finally { await page.close(); }
 });
 
@@ -2289,10 +2283,10 @@ test('the open-hours plan draws its own need: every station the hours it opens a
     // Open 8 to 20: twelve hours, each every serving station, said as such.
     assert.equal(cells.length, 12);
     assert.ok(cells.every(([, n]) => n === String(regs)), JSON.stringify(cells));
-    assert.ok(cells.every(([, , read]) => /every station/.test(read)), cells[0][2]);
+    assert.ok(cells.every(([, , read]) => enRe('sp.basis.open').test(read)), cells[0][2]);
     assert.equal(await page.locator(mon + '.sp-unmh').count(), 0, 'no hour marked as counted as none');
     // The row's label says whose need it is: not the measured hours'.
-    assert.match(await page.locator(mon + '.sp-needrow .lab').getAttribute('data-read'), /what the measured hours ask for, and every station in the hours nothing is read yet/);
+    assert.match(await page.locator(mon + '.sp-needrow .lab').getAttribute('data-read'), enRe('sp.need.open'));
   } finally { await page.close(); }
 });
 
@@ -2309,9 +2303,9 @@ test('a shop nobody works at any more is on its open-hours plan, and the need ro
       return {on: spPlanOf(base), regs: (base.roles || []).reduce((n, r) => n + (r.stations || []).length, 0)};
     }, KEY);
     assert.equal(out.on, 'open');
-    assert.match(await page.locator(mon + '.sp-needrow .lab').getAttribute('data-read'), /Every station, the hours the shop opens/);
+    assert.match(await page.locator(mon + '.sp-needrow .lab').getAttribute('data-read'), enRe('sp.need.openall'));
     const cells = await page.locator(mon + '.sp-need').evaluateAll(n => n.map(x => [x.style.getPropertyValue('--n'), x.dataset.read]));
     assert.ok(cells.length > 0);
-    assert.ok(cells.every(([n, read]) => n === String(out.regs) && /while nobody works here yet/.test(read)), JSON.stringify(cells[0]));
+    assert.ok(cells.every(([n, read]) => n === String(out.regs) && enRe('sp.basis.openall').test(read)), JSON.stringify(cells[0]));
   } finally { await page.close(); }
 });

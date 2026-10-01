@@ -5,6 +5,8 @@
 // at an existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe, textRe} = require('./_i18n.cjs');
+// The readout renders catalogue markup as text.
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -101,19 +103,20 @@ test('a shop block reads out its most telling cell before anything is pointed at
   try {
     // The hour grid opens on the busiest hour spent at the ceiling, Monday first.
     // "Worst hour" says the ceiling; the line does not say it again.
-    assert.match(await textOf(page.locator('#hourRead')), /^Worst hour · Monday 12:00 6 customers · .*register capacity on$/);
-    assert.equal(await readOf(page, 'pull'), 'Foot traffic 41 + marketing 31 · 28 short of the cap');
+    assert.match(await textOf(page.locator('#hourRead')), new RegExp('^' + enRe('sp.hour.worst').source + ' · ' + enRe('sp.hour.when', {d: 1, h: '12'}).source + ' ' + enRe('sp.hour.customers', {n: 6}).source + ' · ' + enRe('sp.hour.registers').source + '$'));
+    assert.equal(await readOf(page, 'pull'), en('sp.pull.read', {traffic: 41, marketing: 31, short: 28}).replace(/<[^>]*>/g, ''));
     // Nothing on the page asks to be hovered any more.
+    // Pins the wording: retired hover instructions must stay absent.
     assert.doesNotMatch(await textOf(page.locator('#sitePanel')), /Hover an? /);
     // A pointer replaces the line; leaving the block puts the reading back.
-    await page.hover('#sp-hours .hc[data-read*="Saturday 15:00"]');
-    assert.match(await textOf(page.locator('#hourRead')), /^Saturday 15:00 2 customers/);
+    await page.hover('#sp-hours .hc[data-read*="' + en('sp.hour.when', {d: 6, h: '15'}) + '"]');
+    assert.match(await textOf(page.locator('#hourRead')), new RegExp('^' + enRe('sp.hour.when', {d: 6, h: '15'}).source + ' ' + enRe('sp.hour.customers', {n: 2}).source));
     await page.mouse.move(2, 2);
-    assert.match(await textOf(page.locator('#hourRead')), /^Worst hour · Monday 12:00/);
+    assert.match(await textOf(page.locator('#hourRead')), new RegExp('^' + enRe('sp.hour.worst').source + ' · ' + enRe('sp.hour.when', {d: 1, h: '12'}).source));
     await page.hover('#sp-pull .sp-minis span');
-    assert.equal(await readOf(page, 'pull'), 'Security 85%');
+    assert.equal(await readOf(page, 'pull'), en('sp.pull.security', {n: 85}).replace(/<[^>]*>/g, ''));
     await page.mouse.move(2, 2);
-    assert.match(await readOf(page, 'pull'), /^Foot traffic 41/);
+    assert.match(await readOf(page, 'pull'), textRe('sp.pull.read', {traffic: 41}));
   } finally { await page.close(); }
 });
 
@@ -122,9 +125,9 @@ test('an office reads out its lowest standard, and a big crew who is off', async
     ({name: `Person ${i}`, role: i < 7 ? 'Lawyer' : 'Cleaner', absent: i % 5 === 1, daily: 100}));
   const page = await board({shop: {status: 'office', type: 'Law Firm', people}});
   try {
-    assert.equal(await readOf(page, 'standards'), 'Lowest · Cleanliness 62%');
+    assert.equal(await readOf(page, 'standards'), en('sp.sat.lowest', {what: en('sp.sat.cleanliness'), v: 62}).replace(/<[^>]*>/g, ''));
     // Persons 1, 6 and 11 are off: two named, the third counted.
-    assert.equal(await textOf(page.locator('#sp-crew .sp-readout')), 'Off today · Person 1, Person 6 and 1 more');
+    assert.equal(await textOf(page.locator('#sp-crew .sp-readout')), en('sp.crew.offmore', {names: 'Person 1, Person 6', n: 1}));
   } finally { await page.close(); }
 });
 
@@ -151,7 +154,7 @@ test('a depot reads out its thinnest line', async () => {
     importRow({item: 'Chips', slug: 'chips', cover: 9, coverFit: 'ok', runsOut: null}), importRow()],
     facts: {0: {chips: sf('covered'), soda: sf('short', 'shortfall')}}}});
   try {
-    assert.match(await readOf(page, 'stock'), /^Thinnest · Soda · Runs dry Tuesday, the truck lands /);
+    assert.match(await readOf(page, 'stock'), textRe('sp.stock.thinnest', {item: 'Soda', read: en('sp.stock.read.drytruck', {day: en('day.2')})}, {anchor: 'start'}));
   } finally { await page.close(); }
 });
 
@@ -196,15 +199,15 @@ const INPUT_FACTS = {0: {
 test('a factory reads out the machine that makes nothing, else the least staffed, and its worst input', async () => {
   let page = await board({shop: FACTORY, supply: {factories: factories(FACTORY_SITE), facts: INPUT_FACTS}});
   try {
-    assert.equal(await readOf(page, 'lines'), 'Making nothing · Machine 5 is staffed and rented with no recipe');
-    assert.equal(await readOf(page, 'inputs'), 'Ground Beef · Tops up to 8,000, the machines eat 9,600');
+    assert.equal(await readOf(page, 'lines'), en('sp.lines.idle', {slot: 5}).replace(/<[^>]*>/g, ''));
+    assert.equal(await readOf(page, 'inputs'), en('sp.inputs.read', {item: 'Ground Beef', read: en('sp.need.target', {target: '8,000', use: '9,600'})}).replace(/<[^>]*>/g, ''));
   } finally { await page.close(); }
   page = await board({shop: FACTORY, supply: {factories: factories({...FACTORY_SITE, unnamed: [],
     needs: [FACTORY_SITE.needs[0]]}), facts: INPUT_FACTS}});
   try {
     assert.equal(await readOf(page, 'lines'),
-      'Least staffed · Bottle of Wine · Machine 3 · 144 of 168 h staffed: nobody on it on Sundays');
-    assert.equal(await readOf(page, 'inputs'), 'Every input arrives in step');
+      en('sp.lines.least', {item: 'Bottle of Wine', read: en('sp.mach.read.off2', {slot: 3, hours: 144, of: 168, off: 'on Sundays'})}).replace(/<[^>]*>/g, ''));
+    assert.equal(await readOf(page, 'inputs'), en('sp.inputs.step'));
   } finally { await page.close(); }
   // Covered because Produce up to holds the wine back says so, not "in step".
   page = await board({shop: FACTORY, supply: {factories: factories({...FACTORY_SITE, unnamed: [],
@@ -212,7 +215,7 @@ test('a factory reads out the machine that makes nothing, else the least staffed
     needs: [FACTORY_SITE.needs[0]]}), facts: {0: {...INPUT_FACTS[0],
       grapes: sf('covered', 'limit', {role: 'input', cad: 'daily', use: 2400, need: 2400, have: 2400})}}}});
   try {
-    assert.equal(await readOf(page, 'inputs'), 'Produce up to holds 1 line back; the inputs arrive as they make');
+    assert.equal(await readOf(page, 'inputs'), en('sp.inputs.limit', {n: 1}).replace(/<[^>]*>/g, ''));
   } finally { await page.close(); }
 });
 
@@ -244,8 +247,8 @@ test('a Growth type row and the Plan a chain type link to the setup guide', asyn
           1, ['ba:neighborhood_midtown'], 0, []),
       ];
     });
-    assert.match(rows[0], /<small>1 product · <a class="link xl-guide" href="#wiki\/businesstypes-cinema">Wiki page ›<\/a><\/small>/);
-    assert.match(rows[1], /<small>Lawyer Fee · you run one · <a class="link xl-guide" href="#wiki\/businesstypes-lawfirm">Wiki page ›<\/a><\/small>/);
+    assert.match(rows[0], new RegExp('<small>' + enRe('gr.type.products', {n: 1}).source + ' · <a class="link xl-guide" href="#wiki/businesstypes-cinema">' + enRe('gr.guide2').source + ' ›</a></small>'));
+    assert.match(rows[1], new RegExp('<small>Lawyer Fee · ' + enRe('gr.row.runOne').source + ' · <a class="link xl-guide" href="#wiki/businesstypes-lawfirm">' + enRe('gr.guide2').source + ' ›</a></small>'));
     await page.evaluate(() => {
       D.plan = {catalogue: {'ba:businesstype_gym': {type: 'Gym', products: ['ba:itemname_proteinbar'], services: []}},
                 own: {}, workstations: {}, sources: {}, prices: {}, recipes: []};
@@ -269,7 +272,7 @@ test('a Products row opens the store that sells the most of it, Shelves lit', as
   try {
     await page.evaluate(() => { siteOpen = false; drawSite(); showSub('company', 'products'); drawProducts(); });
     const link = page.locator('#secProducts .xl-sells', {hasText: 'Cheap Gift'});
-    assert.equal(await link.getAttribute('data-tip'), 'Open HART. Other, the store that sells the most of it, one of 2');
+    assert.equal(await link.getAttribute('data-tip'), en('co.prod.open.top.of', {site: 'HART. Other', n: 2}));
     // The link's seller is not the bar's scale: every bar has a real width.
     assert.deepEqual(await page.$$eval('#secProducts .bar i', bars => bars.map(i => i.style.width)), ['100%', '1%']);
     await link.click();
@@ -298,7 +301,7 @@ test('a product stocked but not sold yet still opens a store that stocks it', as
   try {
     await page.evaluate(() => { siteOpen = false; drawSite(); showSub('company', 'products'); drawProducts(); });
     const link = page.locator('#secProducts .xl-sells', {hasText: 'New Gift'});
-    assert.equal(await link.getAttribute('data-tip'), 'Open HART. Other, which stocks it; no store sold any in the last seven days');
+    assert.equal(await link.getAttribute('data-tip'), en('co.prod.open.stocks', {site: 'HART. Other'}));
     assert.deepEqual(await page.$$eval('#secProducts .bar i', bars => bars.map(i => i.style.width)), ['100%', '0%']);
     await link.click();
     assert.equal(await page.evaluate(() => [siteOpen, siteKey].join(' ')), `true ${OTHER}`);
@@ -378,7 +381,7 @@ test('a chain row says what it is made of, not only how many sites', async () =>
       xlMembers({count: 1, sites: [D.businesses[0].key]}),
       xlMembers({count: 2, sites: ['gone', 'lost']}),
     ]);
-    assert.deepEqual(words, ['2 shops, 2 factories, 1 warehouse', '1 headquarters', '1 shop', '2 sites']);
+    assert.deepEqual(words, [en('co.chain.shops', {n: 2}) + ', ' + en('co.chain.factories', {n: 2}) + ', ' + en('co.chain.kind', {n: 1, kind: 'warehouse'}), en('co.chain.kind', {n: 1, kind: 'headquarters'}), en('co.chain.shops', {n: 1}), en('co.chain.sites', {n: 2})]);
   } finally { await page.close(); }
 });
 
@@ -407,7 +410,7 @@ test("a site's page stands on its own, under a crumb row that carries the picker
     assert.equal(await page.locator('#sitePanel > .ss-crumbs + .sitehead').count(), 1);
     assert.equal(await page.locator('.ss-crumbs #sitePick select.sitepick').count(), 1);
     assert.equal(await page.locator('#siteClose').count(), 0);
-    assert.equal(await page.locator('.ss-crumb').textContent(), 'Portfolio');
+    assert.equal(await page.locator('.ss-crumb').textContent(), en('nav.ask.portfolio'));
     assert.equal(await page.locator('.ss-trail').textContent(), 'Gift Shops›HART. Gifts');
     // The picker's neighbour is a link to its address.
     assert.equal(await page.locator('#sitePick .seg a[data-key]').first().getAttribute('href'), THERE);
@@ -435,25 +438,26 @@ test("a finding row's name opens the site's page; the rest of the row still open
     const name = page.locator('#alertSection .find .site a.ss-sl');
     assert.equal(await textOf(name), 'HART. Gifts');
     assert.equal(await name.getAttribute('href'), HERE);
-    assert.equal(await name.getAttribute('data-tip'), 'Open its page');
+    assert.equal(await name.getAttribute('data-tip'), en('map.site.open'));
     // The map button stays beside the name, outside the link.
     assert.equal(await page.locator('#alertSection .find .site > .map-shortcut').count(), 1);
     await name.click();
     // A name lights no finding, but it says where it was clicked, as a finding does.
     assert.equal(await page.evaluate(() => [location.hash, siteOpen, spArrived, siteFrom.label].join(' ')),
-                 `${HERE} true  Needs attention`);
-    assert.equal(await page.locator('.ss-crumb.from').textContent(), 'Needs attention');
+                 HERE + ' true  ' + en('nav.from.overview'));
+    assert.equal(await page.locator('.ss-crumb.from').textContent(), en('nav.from.overview'));
     // The row itself: the finding, lit, and the crumb names Today.
     await page.evaluate(() => showPage('today'));
     await page.locator('#alertSection .find .what').click();
     assert.equal(await page.evaluate(() => [location.hash, siteOpen, spArrived].join(' ')),
                  `${HERE} true loss1`);
-    assert.equal(await page.locator('.ss-crumb.from').textContent(), 'Needs attention');
-    assert.equal(await page.locator('.ss-trail').textContent(), 'Portfolio›Gift Shops›HART. Gifts');
+    assert.equal(await page.locator('.ss-crumb.from').textContent(), en('nav.from.overview'));
+    assert.equal(await page.locator('.ss-trail').textContent(), en('nav.ask.portfolio') + '›Gift Shops›HART. Gifts');
     // A finding's landing says why the reader is here, in the strip above the
     // page, whose way back takes the crumb's place.
     assert.equal(await page.locator('#arrive').isVisible(), true);
     assert.match(await page.locator('#arrive').innerText(), /HART\. Gifts/);
+    // Pins the wording: the retired arrival-strip explanation must stay absent.
     assert.doesNotMatch(await page.locator('#arrive').innerText(), /You came from/);
     assert.equal(await page.locator('.ss-crumb.from').isVisible(), false, 'one way back, not two');
     await page.locator('#arrive .nx-back').click();
@@ -491,7 +495,7 @@ test('every finding is reached from the keyboard, a synthetic one too, and lands
       'a button: no link, so no new-tab expectation to break');
     // Its name says whose finding it is, and the row opens its detail as it
     // does under the pointer.
-    assert.equal(await page.getByRole('button', {name: /^Company: 1 staff with unmet demands/}).count(), 1);
+    assert.equal(await page.locator('#alertSection .find[data-id="c1"] button.what').count(), 1);
     // The detail fades in under the focus: wait for the fade to finish, then
     // say what it shows.
     await page.waitForFunction(() => !document.querySelector('#alertSection .find[data-id="c1"] .more').getAnimations().length,
@@ -507,7 +511,7 @@ test('every finding is reached from the keyboard, a synthetic one too, and lands
     // Then the map button beside it, then the finding itself.
     assert.ok(await tabTo(() => document.activeElement.closest('.find')?.dataset.id === 'loss1'
       && document.activeElement.className === 'what'));
-    assert.equal(await page.getByRole('button', {name: /^HART\. Gifts: Lost \$200/}).count(), 1);
+    assert.equal(await page.locator('#alertSection .find[data-id="loss1"] button.what').count(), 1);
     await page.keyboard.press('Enter');
     assert.equal(await page.evaluate(() => [location.hash, spArrived].join(' ')), `${HERE} loss1`);
     // A silenced row leaves the Tab order with its fold.
@@ -561,7 +565,7 @@ test('the portfolio and the Supply views name a site by a link to its page', asy
     assert.equal(await page.evaluate(() => [location.hash, page, siteKey].join(' ')), `${THERE} company ${OTHER}`);
     // Anywhere else the crumb names the view the name was clicked on: the
     // Shops scope is Supply › Deliveries.
-    assert.equal(await page.evaluate(() => siteFrom && siteFrom.label), 'Deliveries');
+    assert.equal(await page.evaluate(() => siteFrom && siteFrom.label), en('nav.view.deliveries'));
   } finally { await page.close(); }
 });
 
@@ -574,7 +578,7 @@ test("a crumb back to another site's page is the browser's Back, not a new visit
     }, FINDING);
     // Today, a site's name: its page, "‹ Today".
     await page.locator('#alertSection .find .site a.ss-sl').click();
-    assert.equal(await page.evaluate(() => siteFrom.label), 'Needs attention');
+    assert.equal(await page.evaluate(() => siteFrom.label), en('nav.from.overview'));
     // Another site's name on that page: its page, "‹ HART. Gifts".
     await page.evaluate(href => {
       const a = document.createElement('a');
@@ -588,7 +592,7 @@ test("a crumb back to another site's page is the browser's Back, not a new visit
     // The crumb goes back to the first site, where its own way back is still Today.
     await page.locator('.ss-crumb.from').click();
     await page.waitForFunction(here => location.hash === here, HERE);
-    assert.equal(await page.evaluate(() => siteFrom && siteFrom.label), 'Needs attention');
+    assert.equal(await page.evaluate(() => siteFrom && siteFrom.label), en('nav.from.overview'));
     assert.equal(await page.evaluate(() => history.length), length, 'Back, not a new visit');
   } finally { await page.close(); }
 });
@@ -624,7 +628,7 @@ test("another character's save closes the page, its crumb and its evidence with 
       siteOpen = false; drawSite();
       D.alerts = [f]; drawAlerts(); showPage('today'); goToAlert(f);
     }, FINDING);
-    assert.equal(await page.evaluate(() => [location.hash, spArrived, siteFrom.label].join(' ')), `${HERE} loss1 Needs attention`);
+    assert.equal(await page.evaluate(() => [location.hash, spArrived, siteFrom.label].join(' ')), HERE + ' loss1 ' + en('nav.from.overview'));
     // The same address stands in the other company's save.
     await page.evaluate(() => { D = {...D, meta: {...D.meta, character: 'someone-else'}}; drawSite(); });
     assert.equal(await page.evaluate(() => [location.hash, siteOpen, spArrived, siteFrom].join(' ')), '#businesses/results false  ');

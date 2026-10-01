@@ -3,6 +3,7 @@
 // Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -55,7 +56,7 @@ test('staff with no hours are a quiet note under the crew, not a demand', async 
     assert.equal(await page.locator('#sitePanel .sp-dem').count(), 0);
     const note = page.locator('#sitePanel .sp-spare');
     assert.equal((await note.textContent()).trim(),
-                 "2 people here aren't needed: move them to a site that needs them, or let them go");
+                 en('sp.spare', {n: 2}));
     assert.equal(await note.getAttribute('data-el'), 'spare');
   } finally { await page.close(); }
 });
@@ -86,12 +87,12 @@ test('a site lists its unmet staff demands as chips under the crew', async () =>
                      ['Full-time ×1', 'Gold Health Insurance ×2', '1']);
     assert.deepEqual(chips, [
       {text: 'Full-time ×1', priority: [true, true, true], high: true, evidence: 'demand',
-       company: false, quit: false, tip: 'Full-time for 1 · critical'},
+       company: false, quit: false, tip: en('sp.dem.tip', {demand: 'Full-time', n: 1, priority: en('sp.pri.2')})},
       {text: 'Gold Health Insurance ×2', priority: [true, true, false], high: false, evidence: 'demand company',
        company: true, quit: false,
-       tip: 'Gold Health Insurance for 2 · important · settled company-wide, not here'},
+       tip: en('sp.dem.tip', {demand: 'Gold Health Insurance', n: 2, priority: en('sp.pri.1')}) + ' · ' + en('sp.dem.settled')},
       {text: '1', priority: [], high: false, evidence: 'quit', company: false, quit: true,
-       tip: '1 person here has warned they will quit'},
+       tip: en('sp.dem.quit.tip', {n: 1})},
     ]);
   } finally { await page.close(); }
 });
@@ -105,7 +106,7 @@ test("an ampersand in a demand's own name reads as one, on the chip and in its t
   try {
     const chip = page.locator('#sitePanel .sp-dem').first();
     assert.equal((await chip.innerText()).replace(/\s+/g, ' ').trim(), 'R & R time ×3');
-    assert.equal(await chip.getAttribute('data-tip'), 'R & R time for 3 · nice to have');
+    assert.equal(await chip.getAttribute('data-tip'), en('sp.dem.tip', {demand: 'R & R time', n: 3, priority: en('sp.pri.0')}));
   } finally { await page.close(); }
 });
 
@@ -124,10 +125,10 @@ test("a demand failed only on the week already worked says so in the chip's tip"
   try {
     const tips = await page.$$eval('#sitePanel .sp-dem', els => els.map(e => e.getAttribute('data-tip')));
     assert.deepEqual(tips, [
-      'Full-time for 4 · critical · worked over 50 hours this week',
-      'Part-time for 3 · critical · 1 worked over 30 hours this week',
-      'Five days a week for 2 · important · worked over 5 days this week',
-      'Four days a week for 1 · important',
+      en('sp.dem.tip', {demand: 'Full-time', n: 4, priority: en('sp.pri.2')}) + ' · ' + en('sp.dem.worked.all', {max: 50, unit: 'hours'}),
+      en('sp.dem.tip', {demand: 'Part-time', n: 3, priority: en('sp.pri.2')}) + ' · ' + en('sp.dem.worked', {n: 1, max: 30, unit: 'hours'}),
+      en('sp.dem.tip', {demand: 'Five days a week', n: 2, priority: en('sp.pri.1')}) + ' · ' + en('sp.dem.worked.all', {max: 5, unit: 'days'}),
+      en('sp.dem.tip', {demand: 'Four days a week', n: 1, priority: en('sp.pri.1')}),
     ]);
     // The chip itself keeps to the demand and its count.
     assert.equal((await page.locator('#sitePanel .sp-dem').first().innerText()).replace(/\s+/g, ' ').trim(),
@@ -157,7 +158,8 @@ test('both demand findings can be filtered and link somewhere', async () => {
       findingAmount({group: 'companydemand', text: '11 staff with unmet demands: Gold Health Insurance for 4'}),
       splitFinding({group: 'jobdemand', site: 'HART. Gifts', text: '2 staff with unmet demands: Mouse Pad for 2 (nice to have)'}).what,
     ]);
-    assert.deepEqual(amounts, ['2<small>staff</small>', '11<small>staff</small>', '2 staff with unmet demands']);
+    // Pins the wording: these legacy finding fixtures exercise the English text parser.
+    assert.deepEqual(amounts, ['2<small>' + en('today.amt.staff') + '</small>', '11<small>' + en('today.amt.staff') + '</small>', '2 staff with unmet demands']);
   } finally { await page.close(); }
 });
 
