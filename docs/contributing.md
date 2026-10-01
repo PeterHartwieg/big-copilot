@@ -9,7 +9,7 @@ For setup, see the [README](../README.md). File paths below are relative to the 
 | `ba_save.py` | Reads the `.hsg` format, being gzip around an Easy Save 3 binary stream. The format notes are in the module docstring. |
 | `ba_dashboard.py` | Pulls the numbers out of a parsed save and renders the HTML from `template/board.html`. |
 | `template/board.html` | The board's markup, CSS and script, with the placeholders `render()` fills in. |
-| `build_web.py` | Assembles `web/` from the same template the local server uses. Run `python build_web.py` after changing either Python file. |
+| `build_web.py` | Assembles `web/` from the same template the local server uses. Run `python build_web.py` after changing either Python file or `template/board.html`. |
 | `web/` | The static site. `index.html` is generated; `app.js` and `worker.js` are kept by hand; `py/` holds the copies of the two Python files the worker fetches. |
 | `web/map.js`, `web/map.css` | Shared map/overlay code, embedded by `render()` into browser and local output. |
 | `web/maps/locations.json`, `web/maps/map-background.svg` | Generated address hit geometry and zoomable background. The approved poster exports remain unchanged. |
@@ -147,7 +147,7 @@ page's map controls, ball interaction and persistent feature badges together.
 
 New user-facing features get a small `New` badge on their navigation link or
 entry button until the player first opens them. Reuse the shared
-`featureDiscovery` helper in `ba_dashboard.py`; keep a stable feature ID across
+`featureDiscovery` helper in `template/board.html`; keep a stable feature ID across
 releases so routine updates do not reannounce an already visited feature.
 
 For a top-level page, add `newFeature: "your-feature-id"` to its `PAGES` entry;

@@ -1017,7 +1017,7 @@ all three.
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
-| The markup: `<div class="page" id="page…">` for a page, or `<section class="sec rv" id="sec…" data-sub="…">` inside its page for a view; a page with views also gets its `<nav class="seg" id="…Nav">` | The host element | the navigation tests, indirectly |
+| The markup (`template/board.html`): `<div class="page" id="page…">` for a page, or `<section class="sec rv" id="sec…" data-sub="…">` inside its page for a view; a page with views also gets its `<nav class="seg" id="…Nav">` | The host element | the navigation tests, indirectly |
 | `const PAGES = [` (board script) | *Only for a page*: `{id, label, host, newFeature?}` | `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, then City map and Wiki" |
 | `const ICON = {` (board script) | *Only for a page*: its nav icon, keyed by page id | none |
 | `const SUBS = {` (board script) | *Only for a view*: its `[id, label, section]` item; a new page with views needs the whole entry | `tests/navigation.test.cjs`, "Businesses carries Results, Products & prices, Standards and Milestones; Staffing its three views" and "every view in SUBS has its SEC_PAGE row and a PAGE_DRAWS tag" |
