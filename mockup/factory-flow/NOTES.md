@@ -53,6 +53,11 @@ checklist rows and finder plan mode. What only a factory needs is `ff-`.
     costs** (raw material a week, marked "not in the investment", set apart with a dashed
     edge), every investment total says "one-off, upfront", the loan's day figure reads "Repaid
     a day", and the no-depot step says the depot's rent and driver are running costs.
+12. **Vehicles are investment**, in the plan and in Results: a business's own vehicles count
+    at their purchase price plus their delivery, if one was paid. Results' Invested for the
+    factory is $561,820 (furniture $427,500 + deposit $36,320 + Freight Truck T1 $98,000; the
+    plan's $250 furniture delivery is a plan figure the save does not show), and the chain's
+    total includes it. No "proposed" marker.
 
 ## One menu point: Plan a factory
 
@@ -135,7 +140,7 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
 | `GrowInvestment` · A3 | Only the new machines and shelves; nothing else to pay. |
 | `GrowChecklist` · A4 | Only what the change needs, with Hire 6 and Set 5 amounts. |
 | `GrowRunning` · A5 | Output against the new plan, Beer's ramp-up in the daily chart. |
-| `Results` · 6 | Businesses › Results with the factory as a cost centre in its chain; Invested as `setup_cost()` counts it today. |
+| `Results` · 6 | Businesses › Results with the factory as a cost centre in its chain; Invested counts its truck. |
 
 ## Numbers (synthetic company, the game's rules and prices)
 
@@ -149,7 +154,8 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
 - 4 22nd Street, I3, 1,292 m², rent $388, deposit $36,320. Self $562,070 = 427,500 items +
   250 delivery + 98,000 truck + 36,320 deposit. Firm $1,318,932.
 - Loan $280,000 at Vantander: 392 interest + 1,166 back a day, $94,472 interest over 241 days.
-- Results: shops 12,010 + 16,640 + 10,980 + 13,874, depot −980, factory −4,060 = $48,464 a day.
+- Results: shops 12,010 + 16,640 + 10,980 + 13,874, depot −980, factory −4,060 = $48,464 a day;
+  Invested 200,770 + 211,290 + 199,690 + 99,115 + 83,770 + 561,820 = $1,356,455.
 
 ## Other decisions taken
 
@@ -172,15 +178,12 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
 
 ## Open questions for Peter
 
-1. **Invested and vehicles.** `setup_cost()` counts furniture and deposit ($463,820 for this
-   factory); the plan's investment adds the truck and its delivery ($562,070). Should Results'
-   Invested count vehicles too?
-2. **Wages**: the port reads `SkillData.baseHourlyWage`, as offices do. Not needed for any
+1. **Wages**: the port reads `SkillData.baseHourlyWage`, as offices do. Not needed for any
    figure the canvas shows now; needed if the plan shows running costs.
-3. **Purchasing Agent discount** on raw material: model it (the store flow does for goods)?
-4. **Pallet shelves**: 12 is a placeholder; size them to raw material and output once the
+2. **Purchasing Agent discount** on raw material: model it (the store flow does for goods)?
+3. **Pallet shelves**: 12 is a placeholder; size them to raw material and output once the
    units per box are known.
-5. **Does a size I floor hold 3 workstations?** The size filter assumes I and up;
+4. **Does a size I floor hold 3 workstations?** The size filter assumes I and up;
    `web/maps/floor-plans.json` has the shells for a fit check.
 
 ## Porting plan
@@ -243,7 +246,25 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
   shopping list; vehicle prices from `ba_store_rules.json` `vehicles`.
 - `make_store_rules.py`: add `Item.maxOrderAmountPerImporter` per product, so the index drop
   from exports can be sized.
-- `_payback()` unchanged: the factory stays a cost centre.
+- `_payback()`: the factory stays a cost centre (no break-even of its own).
+- **Vehicles in the investment** (decision 12): `setup_cost()` gains a `vehicles` part, and
+  `firm` and `self` include it. `_site_setup()` passes each business's own vehicles: the
+  save's `VehicleInstances` that belong to that business (the field tying a vehicle to its
+  warehouse or factory slot is to be read off a save; a vehicle no business holds, such as the
+  player's own car, counts nowhere), priced by `vehicleTypeName` through
+  `ba_store_rules.json` `vehicles` (the table `_open_store()`'s loan wealth already uses), plus a
+  vehicle delivery where the transaction log shows one. `_payback()` sums it like the other
+  parts, so a chain's Invested and break-even day include its depots' and factories' trucks.
+  - Effect on existing figures: every chain with a depot or factory that owns a vehicle shows a
+    higher Invested and, where not yet paid back, a later break-even day; shops rarely own one.
+    A remembered break-even day stays (`_payback_row` keeps a reached day while the cost moves
+    by 1% or less; more than that re-judges it, so note it in the changelog entry).
+  - Tests and snapshots that move: `tests/fixtures/payload_snapshot/*.json` (regenerate with
+    `python tests/test_payload_snapshot.py --update` and review the `payback` diff),
+    `tests/test_payback.py` (add a case with a vehicle), `tests/payback.test.cjs` (the
+    Invested column), `tests/test_open_store.py` and `tests/open_store.test.cjs` where they
+    assert a cost breakdown; `docs/dashboard-reference.md` (Payback) and
+    `docs/open-a-store-scope.md` ("Investment = furniture + interior + deposit").
 - `docs/dashboard-reference.md` "Plan a factory": the For picker, the export price rule.
 
 **Board script (TEMPLATE)**

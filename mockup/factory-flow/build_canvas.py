@@ -1539,7 +1539,7 @@ def results() -> str:
         ("kid", "8 Sixth Avenue", "Murray Hill · opened day 118", 10_980, 199_690, be_cell("ok", "Day 146", "28 days after opening")),
         ("kid", "18 Second Avenue", "Midtown · opened day 147", 13_874, 99_115, be_cell("ok", "Day 159", "12 days after opening")),
         ("kid", DEPOT["name"], f"{DEPOT['addr']} · depot", -980, 83_770, be_cell("dim", "Cost centre", "counted in the chain")),
-        ("kid", NEW["addr"], f"factory · opened day {FACTORY_OPENED}, producing since {STARTED}", -4_060, SELF - TRUCK[1] - DELIVERY,
+        ("kid", NEW["addr"], f"factory · opened day {FACTORY_OPENED}, producing since {STARTED}", -4_060, SELF - DELIVERY,
          be_cell("dim", "Cost centre", "counted in the chain")),
     ]
     port = [("chain", CHAIN, "4 shops, 1 depot, 1 factory", sum(k[3] for k in kids), sum(k[4] for k in kids),
@@ -1554,7 +1554,7 @@ def results() -> str:
 <div class="os-h"><h2>Portfolio</h2></div>
 <table class="os-port"><thead><tr><th class="l">Business</th><th>Profit a day</th><th>Invested</th><th class="l">Break even</th></tr></thead>
 <tbody>{"".join(rows)}</tbody></table>
-<p class="os-dim" style="font-size:12px;margin:12px 0 0">The factory's Invested is what Results counts today: furniture and deposit, {money(SELF - TRUCK[1] - DELIVERY)}. The plan's {money(SELF)} adds the truck and its delivery.</p>"""
+"""
 
 
 # --------------------------------------------------------------------------
