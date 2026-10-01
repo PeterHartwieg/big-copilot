@@ -94,7 +94,7 @@ function board({saved = {}, data = {}} = {}) {
   };
 }
 
-/* The redesign's sidebar (docs/ui-route-migration.md): five destinations,
+/* The redesign's sidebar (docs/architecture.md, "The sidebar"): five destinations,
    then the two references, then the foot's ···. The pages behind them are
    hosts, which keep their ids. */
 test('the sidebar is Overview, Businesses, Supply, Staffing, Expansion, then City map and Wiki', () => {

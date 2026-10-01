@@ -1,4 +1,4 @@
-"""The cheapest campaign mix (docs/marketing-write-scope.md, section 2).
+"""The cheapest campaign mix (docs/dashboard-reference.md, Promotion).
 
 marketing_score() is the game's own formula, so it is held against every
 promotion the saves on this machine store, when there are any; the optimizer

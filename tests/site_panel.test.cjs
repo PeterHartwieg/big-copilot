@@ -145,7 +145,7 @@ test('an office draws no amenity lamps, and its Promotion block', async () => {
   const page = await site({shop: {status: 'office', type: 'Law Firm', basket: 387.89}});
   try {
     assert.equal(await page.locator('#sitePanel [data-amenity]').count(), 0);
-    // Offices run campaigns too (docs/marketing-write-scope.md, section 4).
+    // Offices run campaigns too (docs/dashboard-reference.md, Promotion).
     assert.equal(await page.locator('#sitePanel [data-block="pull"]').count(), 1);
     // The standards it is asked about are the four satisfaction parts alone.
     const parts = await page.$$eval('#sitePanel [data-sat]', els => els.map(e => e.dataset.sat));
@@ -1819,7 +1819,7 @@ test('a factory page carries the sizing switch, and its inputs follow it', async
     assert.match(await row.innerText(), new RegExp('7,000\\s*' + enRe('sb.ramp').source));
     assert.equal(await row.locator('.sp-up').count(), 0, 'nothing to raise under Demand');
     assert.match(await page.locator('#sp-inputs .sz-ramp').getAttribute('data-tip'), /HART\. Other/);
-    // Kept for this company only (docs/ui-progress-postconditions.md).
+    // Kept for this company only (SIZING_KEY in the board script).
     assert.deepEqual(await page.evaluate(() => [sizing, szRead(),
       D.meta.character ? localStorage.getItem('ba_dash_sizing:' + D.meta.character) : 'dem', localStorage.getItem('ba_dash_sizing')]),
       ['dem', 'dem', 'dem', null]);

@@ -375,7 +375,7 @@ test('on a phone search is in the drawer, and the palette is the whole screen, t
 // --- Ask the board ---------------------------------------------------------------------
 
 /* The questions were a row under Next moves as well; All tools took that
-   row's place (docs/ui-route-migration.md), and the questions are the search
+   row's place (docs/architecture.md, Pages), and the questions are the search
    palette's empty state. A question lands on its answer, lit, as before. */
 test('a question lands on its answer, lit, and the questions are the palette\'s empty state', async () => {
   const page = await board();

@@ -1,5 +1,5 @@
-// The cheapest marketing mix on the board (docs/marketing-write-scope.md,
-// section 4): the Promotion block's line and Set button on a shop and an
+// The cheapest marketing mix on the board (docs/dashboard-reference.md,
+// Promotion): the Promotion block's line and Set button on a shop and an
 // office, the promotion finding's action, Standards' "Set up all", and the
 // write dialog for kind "marketing". The board is the real page from render(),
 // its payload the real extract() of the synthetic company in

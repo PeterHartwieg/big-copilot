@@ -7,7 +7,7 @@ namespace BigCopilotLink
 {
     /// <summary>
     /// POST /write/imports: purchasing-agent contract amounts, the running state and the
-    /// plan order (docs/mod-write-back-scope.md section 4). The game's UI edits an amount
+    /// plan order (docs/game-link-api.md, POST /write/imports). The game's UI edits an amount
     /// only on a stopped contract, so a running one is Cancel, edit, Start
     /// (PurchasingAgentPlanUI, build 3680 IL); the mod writes the net of that: the new
     /// amount, isActive, nextDeliveryDay = DeliveryHelper.GetNextDeliveryDay() as Start

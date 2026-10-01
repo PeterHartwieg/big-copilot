@@ -5,10 +5,6 @@ web/py/
 web/index.html
 web/wiki-data.json
 web/wiki/
-# Design canvases the mockup/*/build_*.py generators write, top level and project/
-# folders alike: edit the generator.
-mockup/*/*.dc.html
-mockup/**/project/
 # Not generated: the 8 MB city map export_map.py reads. Large and rarely what a
 # search is after.
 web/maps/full-map.svg

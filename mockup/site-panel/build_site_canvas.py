@@ -695,7 +695,7 @@ def up(now: str, to: str, bad: bool = True) -> str:
 
 
 # --------------------------------------------------------------------------
-# the roster: docs/staffing-assistant-scope.md's `staffing` row, drawn
+# the roster: docs/archive/staffing-assistant-scope.md's `staffing` row, drawn
 # --------------------------------------------------------------------------
 STATIONS = [("C1", "Checkout counter 1 · serves 30 an hour", "serve"), ("C2", "Checkout counter 2 · serves 30 an hour", "serve"),
             ("C3", "Checkout counter 3 · serves 30 an hour", "serve"), ("CL", "Cleaning station · covered every open hour", "clean"),

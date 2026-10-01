@@ -24,7 +24,7 @@ A new view under Expansion, beside Demand, Find a location and Plan a factory:
    becomes a short in-game instruction.
 6. **After opening: ROI monitoring.** The plan is kept per character, like the finder's saved
    searches. When a save shows a business at the chosen address, the plan attaches to it.
-   Built in phase 4 (`docs/open-a-store-phase4-handover.md`): the plan against the site's
+   Built in phase 4 (`docs/archive/open-a-store-phase4-handover.md`): the plan against the site's
    payback, with its own figures kept from before the opening.
 
 Never suggest opening a store because another is at building capacity (AGENTS.md). The flow

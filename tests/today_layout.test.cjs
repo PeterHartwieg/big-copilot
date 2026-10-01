@@ -279,7 +279,7 @@ test('a product short at several suppliers is a chip of its own, not folded with
   } finally { await page.close(); }
 });
 
-/* Next moves and the Ask the board row became All tools (docs/ui-route-migration.md):
+/* Next moves and the Ask the board row became All tools (docs/architecture.md, Pages):
    the live Plan imports card is the Calculate import amounts row, by the same id. */
 test('at 390 px the count lines, the tool panels and a live import task share the Overview without overlap', async () => {
   const page = await today(390);

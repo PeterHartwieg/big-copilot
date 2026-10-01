@@ -16,7 +16,7 @@ the numbers drift.
 | --- | --- |
 | Extraction (save → numbers) | `def extract(` and the `_` helpers before `def render(`, in `ba_dashboard.py` |
 | The board's HTML and CSS | `template/board.html`, read on the first `render()` by `load_template()` |
-| The board script | `template/board.js`, which `load_template()` splices into `/*__BOARD_SCRIPT__*/`, the body of the page's last `<script>` block, before any other placeholder is filled. A branch from before the split conflicts in `board.html`: resolve it with `python tools/split_board_script.py --resolve`, never by taking one side and re-splitting |
+| The board script | `template/board.js`, which `load_template()` splices into `/*__BOARD_SCRIPT__*/`, the body of the page's last `<script>` block, before any other placeholder is filled. A branch from before the split that conflicts in `board.html` is resolved by `tools/split_board_script.py --resolve` (`docs/architecture.md`, "Template placeholders") |
 | Where `web/map.js` and `web/wiki.js` are spliced in | `/*__MAP_SCRIPT__*/`, `/*__WIKI_SCRIPT__*/` in `template/board.js` |
 | CLI, save catalogue and watch server | `def main(` and the functions around it, in `ba_dashboard.py` |
 
@@ -120,8 +120,9 @@ long as main has not moved (`docs/contributing.md`, "Merging a green pull reques
 | `ba_demand_curves.json` | `make_demand_curves.py`, which reads the installed game's Addressables bundles with UnityPy; owner only |
 | `ba_item_prices.json` | `make_item_prices.py`, the furniture prices and wall and floor materials out of the installed game's Addressables bundles with UnityPy; owner only, and re-run on a game update |
 | `ba_store_rules.json` | `make_store_rules.py`, what each business type sells and needs, product and furniture facts, neighbourhoods and bank terms out of the installed game's Addressables bundles with UnityPy, and furniture vendors from the committed `web/wiki-data.json`; owner only, and re-run on a game update |
-| `mockup/*/*.dc.html` and `mockup/*/canvas.json` | the `mockup/*/build_*.py` generators, such as `mockup/revamp/build_canvas.py` |
-| `mockup/find-location/data.json` | `mockup/find-location/make_data.py`, which reads a real save and a session-scratchpad `hart.json` at hard-coded paths, so it does not run as committed; owner only. Every other file under `mockup/` is hand-made or owner-supplied, `mockup/ui-mockup.html` and the `city.jpg` backdrops included |
+| A design canvas: `mockup/*/*.dc.html`, `mockup/*/project/` and their `canvas.json` | the `build_*.py` generator in the same folder, such as `mockup/revamp/build_canvas.py`; gitignored, so rerun it to see the canvas |
+| `mockup/find-location/data.json` | `mockup/find-location/make_data.py`, which reads a real save and a session-scratchpad `hart.json` at hard-coded paths, so it does not run as committed; owner only |
+| `mockup/floor-plans/plans.json` | `mockup/floor-plans/make_plans.py`, from the committed `plans/*.png`, which an uncommitted render script drew from the game; owner only. Every other file under `mockup/` is hand-made, owner-supplied or a published canvas export (`big-copilot-*.html`), `mockup/ui-mockup.html`, `mockup/map-revamp/data.json` and the `city.jpg` backdrops included |
 | `tests/fixtures/payload_snapshot/*.json` | `python tests/test_payload_snapshot.py --update`; they move with `ba_dashboard.py`, `ba_save.py`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json`, `ba_store_rules.json`, `tests/es3_fixture.py` and `tests/save_fixtures.py` |
 | `dashboard.html`, `market_history.json` | local runs; gitignored |
 
@@ -156,8 +157,7 @@ long as main has not moved (`docs/contributing.md`, "Merging a green pull reques
 installed game; run it when you cannot rebuild.
 
 Changelog: only a new feature or a new user-facing capability gets an entry in
-`web/changelog.json`. Mechanical changes and fixes that add neither get no entry and are
-not announced to users. Format and the rest of the rule: `docs/contributing.md`.
+`web/changelog.json`; the rule and the format are in `docs/contributing.md`, "Changelog".
 
 Saves are private company data. Tests use synthetic fixtures only — never add a real save,
 and never attach one to an issue.
@@ -172,7 +172,7 @@ and never attach one to an issue.
 - A worktree without `node_modules` either points `NODE_PATH` at the canonical checkout's
   `node_modules`, or runs `npm ci` and then `npx playwright install chromium`.
 - `PLAYWRIGHT_CHANNEL=msedge` (or `chrome`) uses an installed browser instead.
-- The Python tests need `node` on PATH: several of them execute embedded JS.
+- The Python tests need `node` on PATH: `tests/test_plan_orders.py` runs the board script.
 
 ## Traps
 
@@ -187,49 +187,23 @@ and never attach one to an issue.
   place it against its anchor, the way `#tip` and `#alertPop` do. The
   `section.measured{content-visibility:visible}` escape hatch is for the Playwright tests,
   which add `measured` to measure a section that is off screen; it is not the fix.
-- Several Node tests find code by slicing the source between comment or declaration
-  strings, so when you change a comment or declaration near such an anchor, update the test
-  to match. In `template/board.js`: `tests/alert_kinds.test.cjs`, `tests/fold_views.test.cjs`,
-  `tests/milestones.test.cjs`, `tests/navigation.test.cjs` (which also slices the markup and
-  `featureDiscovery` out of `template/board.html`), `tests/search.test.cjs`,
-  `tests/open_store_model.test.cjs` (and `check_profit_model.py`, which runs the same
-  section). In `web/app.js`:
-  `tests/game_link.test.cjs`, `tests/game_text.test.cjs`, `tests/performance.test.cjs`,
-  `tests/resume.test.cjs`, `tests/save_location.test.cjs`. `tests/alert_kinds.test.cjs` also
-  matches a fragment of the findings loop in `mapFindings()` in `web/map.js` with a regex,
-  and slices the Python `ALERT_UNITS` out of `ba_dashboard.py`.
-  The tests above find their anchors through `between()` and `at()` in `tests/_slice.cjs`.
-  They throw naming a start anchor that is missing or no longer unique, or an end anchor
-  missing after it, so a reworded anchor fails loudly rather than slicing the wrong span.
-  End anchors are not checked for uniqueness: the first one after the start wins.
-  `tests/game_names.test.cjs` and `tests/i18n_runtime.test.cjs` also slice
-  `template/board.js`, still with a bare `indexOf`, and `tests/number_locale.test.cjs`
-  scans it and `template/board.html` line by line.
-  `tests/order_checklist.test.cjs` and `tests/test_plan_orders.py` instead load the whole
-  board script into a VM through `loadBoard()` in `tests/_board.cjs`, which stubs the DOM
-  with one inert object (the checklist test still slices `drawSupplyStrip()` to read its
-  text); use it for a pure function whose test needs no stubbed helper. Three more Python tests read the template as text:
-  `tests/test_routed_supply.py` checks the line with `id:"shortfall"` in `board.js`,
-  `tests/test_css_integrity.py` checks the `<style>` blocks of `board.html`, and
-  `tests/test_doc_registries.py` reads the `ALERT_GROUPS` ids in `board.js` and the tokens of
-  both files, finds the `Registry:` comments in them and in `ba_dashboard.py`, and parses
-  `_alerts()` and the `_*_notes` helpers in `ba_dashboard.py` for the finding groups they
-  emit.
-- Text on the page is `tt("area.thing", "English")`, `data-tt="area.thing"` or
-  `msg("area.thing", "English", ...)` once its area is converted, one key per sentence,
-  never a sentence built from pieces (docs/architecture.md, "UI text"). A `Msg` that is
-  concatenated or `.replace()`d becomes a plain `str` and stays English; board code that
-  parses Python's English reads `enOf(row, field)`, not the field.
+- Many tests read source files as text — slicing between comment or declaration anchors
+  through `between()`/`at()` in `tests/_slice.cjs` or a bare `indexOf`, matching a line with a
+  regex, or loading the whole board script into a VM through `loadBoard()` in
+  `tests/_board.cjs`. When you change a comment or declaration in a source file, update the
+  tests that read it: `rg -l "board\.js" tests` lists them (put the file's name in the
+  pattern: `board\.html`, `app\.js`, `map\.js`, `worker\.js`, `ba_dashboard\.py`); `check_profit_model.py` slices `board.js` too. A reworded
+  `_slice.cjs` anchor fails loudly; a bare `indexOf` can slice the wrong span.
+- Text on the page goes through a key, one per sentence (`docs/architecture.md`, "UI
+  text"). A `Msg` that is concatenated or `.replace()`d becomes a plain `str` and stays
+  English; board code that parses Python's English reads `enOf(row, field)`, not the field.
 - Set iteration order follows Python's per-process hash seed, so when a set decides the
   order of anything that reaches the payload, iterate it through `_in_order()`, which sorts
   `None` last because real saves hold items with no name. When a set decides a winner
   (`most_common()`, first-wins), break the tie explicitly, as `_chains()` does.
-- The Pyodide worker fetches seven files from `web/py/` — `ba_save.py`, `ba_dashboard.py`,
-  `gametext.json`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json`,
-  `ba_store_rules.json` — and at runtime writes
-  the save, the player's optional `en.json` and the history; `browser_build()` writes the `.character` sidecar from
-  the Python side. Nothing else is on the virtual filesystem when `ba_dashboard` is imported,
-  so it must not open any other file at import time. Read it lazily, inside a function, as
+- The Pyodide worker's virtual filesystem holds only the files `web/worker.js` fetches from
+  `web/py/` and the few it writes at runtime (`docs/architecture.md`, "Pyodide"), so
+  `ba_dashboard` must not open any other file at import time. Read a file lazily, inside a function, as
   `load_buildings()`, `load_demand_curves()` and `load_template()` (through `render()`) do.
   `template/board.html` and `template/board.js` are not among the fetched files: the worker
   never renders.

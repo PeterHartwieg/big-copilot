@@ -30,7 +30,7 @@ const WIDTHS = [360, 768, 1280, 1500, 1501, 1920];
 const CONVERTED = {
   /* The masthead's own lines: its live dot's word is community.js's. The
      shell's places, references, the area's row, the arrival strip's way back
-     and the phone's bar are the redesign's (docs/ui-route-migration.md). */
+     and the phone's bar are the redesign's (docs/architecture.md, "The sidebar"). */
   nav: '#nav, #navRefs, #localNav, #arrive .nx-back, #phoneNav, #companyNav, #supplyNav, #growthNav, #staffingNav, #clock > b, '
     + '#clock > small:not(.fv-diffline), #clock .flag, #clock .fv-diff, #ssField',
   foot: '.sitefoot',

@@ -1,4 +1,4 @@
-// Chunk 3 of the redesign (docs/ui-implementation-plan.md): Businesses'
+// Chunk 3 of the redesign (docs/archive/ui-implementation-plan.md): Businesses'
 // Results, Products & prices, Standards and Milestones, a business's own page
 // with its ways to the planners, Expansion's Demand → Find a location journey,
 // the City map against the finder in history, the uniform write's progress,
