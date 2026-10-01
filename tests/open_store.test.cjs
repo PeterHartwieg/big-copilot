@@ -1073,6 +1073,7 @@ test("premises rented and set up before the plan picked them keep their figures;
     const p = osPlan();
     const b = premises().buildings.find(x => x.key !== site && x.type === 'retail' && x.status === 'mine' && osOutfit(p, x));
     Object.assign(D.businesses.find(x => x.key === b.key), {typeSlug: p.type, status: 'retail', hasTraded: false, revenue: 0, opened: 46, lines: []});
+    delete (D.payback.sites || {})[b.key];
     const before = JSON.stringify(p.snap);
     osPick(b.key);
     return {key: b.key, before, after: JSON.stringify(p.snap), want: JSON.stringify(osSnapOf(p, b)), opened: p.opened, step: osStep};
@@ -1087,11 +1088,21 @@ test("premises rented and set up before the plan picked them keep their figures;
     return {opened: p.opened, snap: JSON.stringify(p.snap), want: JSON.stringify(osSnapOf(p, osBuilding(site)))}; }, SITE);
   assert.equal(back.opened, null);
   assert.equal(back.snap, back.want);
-  // A plan whose store has sold is a record: another pick keeps it.
-  const kept = await page.evaluate(key => { const p = osPlan(); osPick(key);
-    Object.assign(D.businesses.find(x => x.key === key), {hasTraded: true, revenue: 500}); const before = JSON.stringify([p.snap, p.opened]);
-    osPick('ba:street_broadwaystreet#9'); return {before, after: JSON.stringify([p.snap, p.opened])}; }, moved.key);
+  // A plan whose store has sold is its record: another pick is a new plan of
+  // the type there, and the record stays where it was.
+  const kept = await page.evaluate(({key, site}) => { const p = osPlan(); osPick(key);
+    D.payback.sites[key] = {days: [[46, -400, 0], [47, 200, 600]], firm: {state: 'unknown'}, self: {state: 'unknown'}};
+    const before = JSON.stringify([p.key, p.snap, p.opened]), n = osPlans.length;
+    osPick(site);
+    return {before, after: JSON.stringify([p.key, p.snap, p.opened]), added: osPlans.length - n, now: osPlan().key, fresh: osPlan() !== p, type: osPlan().type === p.type};
+  }, {key: moved.key, site: SITE});
   assert.equal(kept.after, kept.before);
+  assert.deepEqual([kept.added, kept.now, kept.fresh, kept.type], [1, SITE, true, true]);
+  // One that closed before it ever sold has no record: it starts over at the new place.
+  const restart = await page.evaluate(({key, site}) => { osPick(key); const p = osPlan();
+    delete D.payback.sites[key]; D.businesses = D.businesses.filter(x => x.key !== key);
+    osPick(site); return {same: osPlan() === p, key: p.key, opened: p.opened}; }, {key: moved.key, site: SITE});
+  assert.deepEqual(restart, {same: true, key: SITE, opened: null});
 });
 
 test('just opened with no sales: invested, nothing earned, no day to go yet', async t => {

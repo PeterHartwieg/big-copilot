@@ -34273,12 +34273,16 @@ function osShowFinder(plan){
   } else osFinder.planFor(preset);
 }
 function osPick(key){
-  const plan = osPlan();
+  let plan = osPlan();
   if(!plan) return;
-  /* Another place: what the plan kept for the last one is not this one's,
-     unless its store has sold there; then the plan is a record, kept. */
-  const was = plan.opened != null ? osAttached(plan) : null;
-  if(plan.key !== key && (plan.opened == null || (was && !was.hasTraded))){ plan.snap = null; plan.opened = null; plan.paid = false; }
+  if(plan.key !== key){
+    /* A plan whose store has sold is that store's record: another place is a
+       new plan of the type there. Any other plan starts over at the new
+       place, since what it kept for the last one is not this one's. */
+    const row = plan.opened != null && plan.key ? paybackSite(plan.key) : null;
+    if(row && osSelling(row).length){ plan = osNew(plan.type, null); if(!plan) return; }
+    else { plan.snap = null; plan.opened = null; plan.paid = false; }
+  }
   plan.key = key;
   if(!plan.hood){ const b = osBuilding(key); if(b) plan.hood = b.hood; }
   /* Premises rented and set up as the planned type before the plan picked
