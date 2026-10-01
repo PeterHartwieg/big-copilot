@@ -270,7 +270,9 @@ class ImportRoutesTests(unittest.TestCase):
         order = contract(4000, destination=("factory", 0))
         order["nextDeliveryDay"] = 17
         row = self.held(self.build([order], routed=True, target=300, second=True))
-        self.assertEqual((row["need"], row["cycleNeed"], row["fit"]), (3120, 3360, "ok"))
+        # The order covers the week, but the 1,000 here and the 1,000 the depot
+        # can pass on do not reach the drop at 480 a day (issue #193): short.
+        self.assertEqual((row["need"], row["cycleNeed"], row["fit"]), (3120, 3360, "short"))
         self.assertTrue(row["low"])
 
     def test_factory_panel_names_a_paused_direct_import(self):
