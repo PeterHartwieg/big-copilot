@@ -7880,7 +7880,8 @@
       0
      ]
     ],
-    "seating": false
+    "seating": false,
+    "sells": []
    },
    "ba:street_eighthstreet#5": {
     "placed": 5,
@@ -7901,7 +7902,8 @@
       0
      ]
     ],
-    "seating": false
+    "seating": false,
+    "sells": []
    }
   },
   "campaigns": [

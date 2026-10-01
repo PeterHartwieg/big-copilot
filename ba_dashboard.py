@@ -16010,10 +16010,12 @@ def _stocked_products(save: Save, reg: dict, furniture: dict) -> set:
 
 
 def _opened_stores(save: Save, regs: dict, businesses: list, types: dict, rules: dict, prices: dict) -> dict:
-    """{site key: {"placed", "req", "seating"}} for every business of a planned
-    type: how much furniture stands in it, which opening requirements it meets
-    and whether anything to sit on does. The checklist until opening reads it
-    (Open a store, step 5)."""
+    """{site key: {"placed", "req", "seating", "sells"}} for every business of a
+    planned type: how much furniture stands in it, which opening requirements
+    it meets, whether anything to sit on does, and what it offers for sale
+    (cachedAvailableProducts, which the game counts it a provider of). The
+    checklist until opening reads it (Open a store, step 5); the model reads
+    `sells` for a store already at a plan's address."""
     out = {}
     table = prices.get("items") or {}
     for b in businesses:
@@ -16027,6 +16029,7 @@ def _opened_stores(save: Save, regs: dict, businesses: list, types: dict, rules:
             "req": required_placed(placed, b["typeSlug"], rules, prices, _building_row(reg).get("m"), available,
                                    _stocked_products(save, reg, rules.get("furniture") or {})),
             "seating": any(int((table.get(n) or {}).get("t") or 0) & SEATING_FLAG for n in placed),
+            "sells": sorted(available),
         }
     return out
 
@@ -33859,16 +33862,18 @@ function osInitial(t, b, o){
    neighbourhood's marketing strength, never above 100. */
 const osPromo = (b, h, o) => o.promoTotal ?? Math.min(100, Math.round((b.traffic || 0)
   + Math.round(Math.min((o.reach || 0) / (b.m2 || 1), 1) * 100) * h.strength));
+/* A store of the type already at the building (premises set up before the
+   plan picked them) is a seller already of what it offers for sale, as the
+   game counts providers (cachedAvailableProducts): which items, or null. */
+function osProvides(slug, b){
+  const here = b && (D.businesses || []).some(x => x.key === b.key && x.typeSlug === slug);
+  const sells = here && ((osFacts().built || {})[b.key] || {}).sells;
+  return Array.isArray(sells) && sells.length ? p => sells.includes(p) : null;
+}
 function osModel(slug, b, o = {}){
   const F = osFacts(), t = osType(slug), g = F.game || {}, h = (F.hoods || {})[b.hood];
   if(!t || !h) return null;
-  /* A store of the type already at the address (premises set up before the
-     plan picked them) is a seller already, as the game counts providers, of
-     its services and of whatever its shelves hold. */
-  if(o.existing === undefined){
-    const here = (D.businesses || []).find(x => x.key === b.key && x.typeSlug === slug);
-    if(here) o = {...o, existing: p => !!(F.market[p] || {}).s || (here.lines || []).some(l => l.slug === p && l.units > 0)};
-  }
+  if(o.existing === undefined){ const provides = osProvides(slug, b); if(provides) o = {...o, existing: provides}; }
   if(t.model === "office") return osOfficeModel(slug, t, b, h, o);
   if(t.model !== "retail") return null;
   const cap = osCap(b);
@@ -34002,15 +34007,16 @@ function osOwnRatio(slug){
 }
 /* What the player's own shops in the neighbourhood lose: a new seller moves
    the demand for every product it sells one step down there, for them too,
-   whatever the product's weight for either type. */
-function osCannibal(slug, hood){
+   whatever the product's weight for either type. A product the store at the
+   address sells already (`provides`, osProvides()) moves nothing more. */
+function osCannibal(slug, hood, provides){
   const t = osType(slug), sales = ((osFacts().sales || {})[hood]) || {};
   const shops = new Set(), items = [];
   let loss = 0;
   (t ? t.products : []).forEach(([p]) => {
     const rows = sales[p];
     const m = (osFacts().market || {})[p];
-    if(!rows || !m || !m.d) return;
+    if(!rows || !m || !m.d || (provides && provides(p))) return;
     const n = ((m.hoods || {})[hood] || [0])[0] || 0;
     const now = osDemandWith(n, m.p), after = osDemandWith(n + 1, m.p);
     if(now <= 0 || after >= now) return;
@@ -34269,8 +34275,10 @@ function osShowFinder(plan){
 function osPick(key){
   const plan = osPlan();
   if(!plan) return;
-  /* Another place: what the plan kept for the last one is not this one's. */
-  if(plan.key !== key){ plan.snap = null; plan.opened = null; plan.paid = false; }
+  /* Another place: what the plan kept for the last one is not this one's,
+     unless its store has sold there; then the plan is a record, kept. */
+  const was = plan.opened != null ? osAttached(plan) : null;
+  if(plan.key !== key && (plan.opened == null || (was && !was.hasTraded))){ plan.snap = null; plan.opened = null; plan.paid = false; }
   plan.key = key;
   if(!plan.hood){ const b = osBuilding(key); if(b) plan.hood = b.hood; }
   /* Premises rented and set up as the planned type before the plan picked
@@ -34419,7 +34427,7 @@ function osBreakHtml(plan){
   const big = (key, alt) => `<div${alt ? ` class="alt"` : ""}><span class="os-lab">${key === "firm" ? tt("gr.os.inv.firm", "Installation firm") : tt("gr.os.inv.self", "Self-installation")}</span><b>${
     p > 0 ? osRange(est.days[key]) : tt("gr.os.be.never", "not at this profit")}</b></div>`;
   const tax = (osFacts().game || {}).tax || 0;
-  const t = osType(plan.type), own = osOwnRatio(plan.type), cann = osCannibal(plan.type, b.hood);
+  const t = osType(plan.type), own = osOwnRatio(plan.type), cann = osCannibal(plan.type, b.hood, osProvides(plan.type, b));
   const row = (label, value, cls = "") => `<div class="os-site${cls}"><span><b>${label}</b></span><span class="v">${value}</span></div>`;
   const mix = (m.mix || []).length ? m.mix.map(osCampaignName).join(", ") : tt("gr.os.be.mix.none", "none");
   const detail = [

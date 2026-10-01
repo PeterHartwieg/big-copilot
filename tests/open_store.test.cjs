@@ -1082,11 +1082,16 @@ test("premises rented and set up before the plan picked them keep their figures;
   assert.equal(moved.after, moved.want, "and they are this place's, not the last one's");
   assert.equal(moved.opened, 46, 'the plan follows the store that stands there');
   assert.equal(moved.step, 'investment');
-  // Back to the empty shop: nothing of the store is kept.
+  // Back to the empty shop: nothing of the unsold store is kept.
   const back = await page.evaluate(site => { const p = osPlan(); osPick(site);
     return {opened: p.opened, snap: JSON.stringify(p.snap), want: JSON.stringify(osSnapOf(p, osBuilding(site)))}; }, SITE);
   assert.equal(back.opened, null);
   assert.equal(back.snap, back.want);
+  // A plan whose store has sold is a record: another pick keeps it.
+  const kept = await page.evaluate(key => { const p = osPlan(); osPick(key);
+    Object.assign(D.businesses.find(x => x.key === key), {hasTraded: true, revenue: 500}); const before = JSON.stringify([p.snap, p.opened]);
+    osPick('ba:street_broadwaystreet#9'); return {before, after: JSON.stringify([p.snap, p.opened])}; }, moved.key);
+  assert.equal(kept.after, kept.before);
 });
 
 test('just opened with no sales: invested, nothing earned, no day to go yet', async t => {

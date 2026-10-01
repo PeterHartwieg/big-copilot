@@ -1972,7 +1972,8 @@
       0
      ]
     ],
-    "seating": false
+    "seating": false,
+    "sells": []
    },
    "ba:street_fifthavenue#4": {
     "placed": 2,
@@ -1993,7 +1994,8 @@
       0
      ]
     ],
-    "seating": false
+    "seating": false,
+    "sells": []
    },
    "ba:street_secondavenue#10": {
     "placed": 3,
@@ -2014,7 +2016,8 @@
       0
      ]
     ],
-    "seating": false
+    "seating": false,
+    "sells": []
    }
   },
   "campaigns": [
