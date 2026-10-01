@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import multiprocessing
 import os
 import re
 import sys
@@ -44,6 +45,7 @@ MAC_SAVE_ROOT = os.path.expanduser(
 )
 # _raised_at() names the line an error passed through; the line moves with the code.
 ERROR_LINE = re.compile(r"(\.py) line \d+")
+ADDRESS = re.compile(r" at 0x[0-9a-fA-F]+")
 
 _locale: dict[str, str] = {}
 
@@ -68,20 +70,27 @@ def dump_one(path: str) -> str:
         # Through JSON once, as the board receives it: a None or int key turns
         # into a string there, and sort_keys could not order it beside strings.
         payload = json.loads(json.dumps(payload, ensure_ascii=False))
+        return snapshot.dump(payload)
     except Exception as exc:  # one bad save must not stop the sweep
-        message = ERROR_LINE.sub(r"\1", str(exc))
+        message = ADDRESS.sub("", ERROR_LINE.sub(r"\1", str(exc)))
+        # Two checkouts dumped against each other differ in where they live.
+        for where in sorted({os.path.realpath(ROOT), ROOT}, key=len, reverse=True):
+            message = message.replace(where, "<repo>")
         return json.dumps({"error": f"{type(exc).__name__}: {message}"}, indent=1,
                           ensure_ascii=False) + "\n"
-    return snapshot.dump(payload)
 
 
 def _check_outdir(outdir: str) -> str | None:
     """Why OUTDIR will not do, or None."""
-    full = os.path.realpath(outdir)
-    repo, research = os.path.realpath(ROOT), os.path.realpath(os.path.join(ROOT, "research"))
+    # macOS and Windows folders ignore case, so compare without it there.
+    fold = (lambda p: p.lower()) if sys.platform in ("darwin", "win32") else os.path.normcase
+    full = fold(os.path.realpath(outdir))
+    # research/ by name, not resolved: a research/ that links into tests/ does not count.
+    repo = fold(os.path.realpath(ROOT))
+    research = os.path.join(repo, "research")
     if (full == repo or full.startswith(repo + os.sep)) and not full.startswith(research + os.sep):
         return f"{outdir} is inside the repository; use research/<name> or a folder outside it"
-    if os.path.exists(full) and (not os.path.isdir(full) or os.listdir(full)):
+    if os.path.exists(outdir) and (not os.path.isdir(outdir) or os.listdir(outdir)):
         return f"{outdir} exists and is not an empty folder"
     return None
 
@@ -101,9 +110,12 @@ def dump(outdir: str, root: str | None, jobs: int) -> int:
         return 2
     source, locale = game_text()
     print(locale_note(source, locale), file=sys.stderr)
+    # Every worker (spawned, so it reads this) hashes alike: set order cannot differ between dumps.
+    os.environ["PYTHONHASHSEED"] = "0"
     start = time.perf_counter()
     failed = 0
-    with ProcessPoolExecutor(max_workers=jobs, initializer=_start, initargs=(locale,)) as pool:
+    with ProcessPoolExecutor(max_workers=jobs, mp_context=multiprocessing.get_context("spawn"),
+                             initializer=_start, initargs=(locale,)) as pool:
         for path, text in zip(saves, pool.map(dump_one, saves)):
             target = os.path.join(outdir, os.path.relpath(path, root) + ".json")
             os.makedirs(os.path.dirname(target), exist_ok=True)
@@ -126,6 +138,9 @@ def compare(a: str, b: str) -> int:
             print(f"no such folder: {folder}", file=sys.stderr)
             return 2
     left, right = _files(a), _files(b)
+    if not left or not right:
+        print(f"no dump in {a if not left else b}", file=sys.stderr)
+        return 2
     differing = 0
     for name in sorted(left | right):
         if name not in right or name not in left:
@@ -157,7 +172,9 @@ def main(argv: list[str] | None = None) -> int:
                    help=f"differing paths shown per save (default {snapshot.MAX_DIFFS})")
     args = parser.parse_args(argv)
     if args.cmd == "dump":
-        return dump(args.outdir, args.root, max(1, args.jobs))
+        # Windows caps a process pool at 61 workers.
+        jobs = max(1, min(args.jobs, 61) if sys.platform == "win32" else args.jobs)
+        return dump(args.outdir, args.root, jobs)
     snapshot.MAX_DIFFS = max(1, args.limit)
     return compare(args.a, args.b)
 
