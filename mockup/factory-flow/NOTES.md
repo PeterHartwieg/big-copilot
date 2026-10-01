@@ -63,6 +63,25 @@ checklist rows and finder plan mode. What only a factory needs is `ff-`.
     warehouse size, H (690 m², 1 vehicle) to Q (2,610 m², 2 vehicles), with floor, vehicle slots,
     rent and deposit as facts, ranked by rent, in every neighbourhood. The finder's own Size
     filter (min / max) is there for the player to set, defaulting to all.
+14. **Purchasing Agent discount on imports and raw material**, exactly as `_open_store()`
+    applies it to goods: × (1 − 0.25 × the best Purchasing Agent's skill / 100), a company with
+    none planned at skill 100 ("most players use a highly skilled agent"). Brightwater's best
+    agent is skill 100, so 25% off. It applies to buying (raw material, the imports the factory
+    replaces), not to what a pier pays for exports. Said in one line where prices are used
+    ("At import prices: … less 25% for Ana Kerr, your best Purchasing Agent (skill 100%)").
+15. **Running costs a week = raw material + wages + rent**, shown in the plan strip's Running
+    costs cell with its breakdown, never in the investment.
+    - Wages are the game's own: `SkillData.baseHourlyWage` × (1 + 1.05^skill / 100) ×
+      `employeeHourlySalaryMultiplier` (research `PROFIT_COSTS.md` C1), at skill 100 as the
+      store flow plans its staff, Normal 0.7. Bases: Factory Worker 12, Delivery Driver 18,
+      Purchasing Agent 30 → $19.45, $29.17, $48.62 an hour.
+    - Paid hours: the machines' 504 h a week; a driver is paid a flat 5.7 h a day (the game's
+      rule); the new Purchasing Agent 40 h a week at headquarters (an assumption: the HQ's
+      week is the player's).
+    - Rent is included: the board treats rent as a running cost (the store flow's profit model
+      subtracts wages, rent and marketing), and nothing else in the plan counts it.
+    - An owned factory shows only what the change adds: the added raw material and the new
+      workers' wages, no rent.
 
 ## One menu point: Plan a factory
 
@@ -153,8 +172,14 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
   invented: Whisky 1,850, Beer 2,600, Wine 1,240, Cigar 1,040, Cigarettes 1,400. Price
   indexes invented: Whisky 0.96, Wine 1.08, others 1.00. Normal difficulty.
 - Recipes (`web/wiki-data.json`), kits and prices (`ba_item_prices.json`), wholesale
-  (`ba_store_rules.json`) as before. Plan: Whisky ×2, Wine ×1, 25,200 made a week, raw
-  $10,349 a week (wholesale × 0.7), 11 workers (504 machine-hours ÷ 50), 1 driver.
+  (`ba_store_rules.json`) as before. Plan: Whisky ×2, Wine ×1, 25,200 made a week, 11 workers
+  (504 machine-hours ÷ 50), 1 driver, 1 new Purchasing Agent.
+- Running costs a week $23,387: raw material $7,762 (wholesale × 0.7 × 0.75; was $10,349
+  before the discount), wages $12,909 (workers $9,801, driver $1,164, agent $1,945), rent
+  $2,716. Owned-factory addition: $9,092 (raw $2,558, wages $6,534).
+- Start page, saves a day (was → now): Whisky $9,106 → $6,829, Wine $4,160 → $3,120, Beer
+  $2,909 → $2,182, Cigarettes $2,128 → $1,596, Cigar $1,445 → $1,084. Lines, saves a week:
+  Whisky $63,739 → $47,804, Wine $32,364 → $24,273.
 - Surplus 3,850 Whisky a week × $3.49 ($8 × 0.96 × 0.7 × 0.65) = $13,453 a week.
 - 4 22nd Street, I3, 1,292 m², rent $388, deposit $36,320. Self $562,070 = 427,500 items +
   250 delivery + 98,000 truck + 36,320 deposit. Firm $1,318,932.
@@ -183,10 +208,7 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
 
 ## Open questions for Peter
 
-1. **Wages**: the port reads `SkillData.baseHourlyWage`, as offices do. Not needed for any
-   figure the canvas shows now; needed if the plan shows running costs.
-2. **Purchasing Agent discount** on raw material: model it (the store flow does for goods)?
-3. **Pallet shelves**: 12 is a placeholder; size them to raw material and output once the
+1. **Pallet shelves**: 12 is a placeholder; size them to raw material and output once the
    units per box are known.
 
 ## Porting plan
@@ -279,8 +301,15 @@ Every page is 1280 px wide with the shipped sidebar. Each has a `dark` Tweak.
   rows), `ofRunHtml`.
 - The investment sum (`ofInvestment()`, like `osInvestment()`) takes only one-off items:
   furniture (`setup_cost()` items), fee or delivery, deposit, vehicles. Running costs (raw
-  material from the plan's lines; wages and rent once modelled) are a separate figure for the
-  plan strip and Running, never added to it, and the loan is sized on the investment alone.
+  material from the plan's lines, wages, rent) are a separate figure for the plan strip and
+  Running, never added to it, and the loan is sized on the investment alone.
+- Prices: `_open_factory()` takes `agent` and the discount from the same lines `_open_store()`
+  uses (best `ba:skill_purchasingagent` level, default 100; `discount = 1 − 0.25 × agent / 100`);
+  import and raw prices carry it, export prices do not.
+- Wages: a `SKILL_BASE_WAGES` table read from the skills bundle (`SkillData.baseHourlyWage`) by
+  `make_store_rules.py` (today only `PLAN_WAGES` and `PLAN_OFFICE_WAGES` are hand-kept), the
+  board's `(1 + 1.05^100 / 100) × wages` factor as `osOfficeModel()` uses it; drivers at the
+  game's flat 5.7 h a day; HQ staff the plan adds at the HQ's scheduled hours.
 - Write buttons: `hrReview({scope:"site"})` for the factory, Quick hire for the HQ agent,
   `gwImports()` for amounts and the depot's own lines.
 

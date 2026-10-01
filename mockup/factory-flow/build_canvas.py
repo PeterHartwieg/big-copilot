@@ -465,6 +465,7 @@ FF_CSS = r"""
 .feature-new{display:inline-block;flex:none;margin-left:auto;padding:2px 5px;border-radius:4px;background:var(--accent-soft);color:var(--accent);font:600 9px/1.2 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;vertical-align:middle}
 .os-views a.on .feature-new{background:var(--ground)}
 .os-pb>div.ff-run{border-left:1px dashed var(--rule);background:color-mix(in srgb,var(--ground) 60%,transparent);border-radius:0 12px 12px 0}
+.os-pb>div.ff-run small{white-space:normal;overflow:visible}
 .ff-wk{font-size:12px;color:var(--ink-3);margin-left:2px}
 .ff-ab{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 6px;border-radius:6px;background:var(--ink);color:var(--ground);font:600 11.5px/1 "IBM Plex Mono",monospace}
 .ff-abh{display:flex;align-items:center;gap:10px;margin:0 0 12px}
@@ -715,20 +716,26 @@ SOLD_BY = dict(zip(["Whisky", "Beer", "Bottle of Wine", "Cigar", "Pack of Cigare
 # product has none, as raw materials do) × gameVariables.marketPriceMultiplier; an export pays that
 # × gameVariables.exportMultiplier. Normal's multipliers; the indexes are invented for the canvas.
 MARKET, EXPORT_MULT = 0.7, 0.65
+# _open_store(): the best purchasing agent's skill sets the import discount (1 − 0.25 × skill / 100);
+# a company with none is planned at skill 100. Brightwater's best agent (invented): skill 100.
+AGENT = ("Ana Kerr", 100)
+DISCOUNT = 1 - 0.25 * AGENT[1] / 100                       # 0.75
+RAW_FACTOR = MARKET * DISCOUNT
 INDEX = {"Whisky": 0.96, "Bottle of Wine": 1.08, "Beer": 1.0, "Cigar": 1.0, "Pack of Cigarettes": 1.0}
 
 
 def import_price(product: str) -> float:
-    return WHOLESALE[product] * INDEX.get(product, 1.0) * MARKET
+    return WHOLESALE[product] * INDEX.get(product, 1.0) * MARKET * DISCOUNT
 
 
 def export_price(product: str) -> float:
-    return import_price(product) * EXPORT_MULT
+    """A pier pays the undiscounted wholesale price × export price: the agent's discount is on buying."""
+    return WHOLESALE[product] * INDEX.get(product, 1.0) * MARKET * EXPORT_MULT
 
 
 def raw_unit(product: str) -> float:
     _, rate, raw = RECIPES[product]
-    return sum(q * RAW_PRICE[m] * MARKET for m, q in raw) / rate
+    return sum(q * RAW_PRICE[m] * RAW_FACTOR for m, q in raw) / rate
 
 
 def machines_for(product: str) -> int:
@@ -756,7 +763,7 @@ for p, k in LINES:
     for m, q in RECIPES[p][2]:
         if k:
             RAW_WK[m] = RAW_WK.get(m, 0) + q * 24 * 7 * k                           # Barley 33,600 · Water 16,800 · Yeast 25,200 · Grapes 16,800 · Sugar 8,400
-RAW_COST_WK = sum(v * RAW_PRICE[m] * MARKET for m, v in RAW_WK.items())          # 10,349
+RAW_COST_WK = sum(v * RAW_PRICE[m] * RAW_FACTOR for m, v in RAW_WK.items())      # 7,762
 EXPORT_EACH = export_price("Whisky")                                               # 3.49
 EXPORT_WK = SURPLUS_WK * EXPORT_EACH                                               # 13,453
 
@@ -764,6 +771,22 @@ EXPORT_WK = SURPLUS_WK * EXPORT_EACH                                            
 MACHINE_H = KITS * 168                                    # 504 h a week
 WORKERS = -(-MACHINE_H // 50)                             # 11
 DRIVER_H = 84
+BASE_WAGE = {"factoryworker": 12, "deliverydriver": 18, "purchasingagent": 30}   # SkillData.baseHourlyWage
+SALARY = 0.7                                                                     # Normal's employeeHourlySalaryMultiplier
+HOURLY = {k: v * (1 + 1.05 ** 100 / 100) * SALARY for k, v in BASE_WAGE.items()}  # 19.45 · 29.17 · 48.62
+DRIVER_PAID_H = 5.7 * 7                                   # the game pays a delivery driver a flat 5.7 h a day
+AGENT_H = 40                                              # the new Purchasing Agent's week at headquarters (assumed)
+WAGES_WK = {"workers": MACHINE_H * HOURLY["factoryworker"], "driver": DRIVER_PAID_H * HOURLY["deliverydriver"],
+            "agent": AGENT_H * HOURLY["purchasingagent"]}
+
+
+def run_cell(raw: float, wages: float, rent: float) -> str:
+    """The Running costs cell: a week of raw material, wages and rent; never part of the investment."""
+    tot = raw + wages + rent
+    parts = f"raw {money(raw)} · wages {money(wages)}" + (f" · rent {money(rent)}" if rent else "")
+    return (f'<b class="m">{money(tot)}<span class="ff-wk">/week</span></b><small>{parts}</small>'
+            f'<small>not in the investment</small>')
+
 
 NEW = {"addr": "4 22nd Street", "hood": "Industry City", "size": "I3", "m2": 1292, "veh": 2, "rent": 388, "deposit": 36_320}
 FEE = 586 * NEW["m2"]                                      # 757,112
@@ -904,7 +927,7 @@ def planbar(where: bool = True, inv: str = "self", make: str = "") -> str:
     else:
         total, how = (FIRM, "Installation firm") if inv == "firm" else (SELF, "Self-installation")
         i = f'<b class="m">{money(total)}</b><small>{how} · one-off, upfront</small>'
-    raw = f'<b class="m">{money(RAW_COST_WK)}<span class="ff-wk">/week</span></b><small>raw material · not in the investment</small>'
+    raw = run_cell(RAW_COST_WK, sum(WAGES_WK.values()), NEW["rent"] * 7)
     return (f'<div class="os-pb"><div><span class="os-lab">Make</span>{m}</div>'
             f'<div><span class="os-lab">Where</span>{w}</div><div><span class="os-lab">Investment</span>{i}</div>'
             f'<div class="ff-run"><span class="os-lab">Running costs</span>{raw}</div></div>')
@@ -976,7 +999,7 @@ def start() -> str:
 <section class="os-card" style="margin-top:22px">
   <div class="ff-planhead" style="margin-top:0"><h3>What your liquor stores buy that a factory can make</h3>
     <div class="aside"><span class="os-dim" style="font-size:12.5px">Brightwater Spirits · 4 shops</span></div></div>
-  <p class="os-dim" style="margin:6px 0 10px;font-size:12.5px">Your last 7 days of sales. Machines are sized to the peak day; the saving is the imports they replace, less the raw material they eat.</p>
+  <p class="os-dim" style="margin:6px 0 10px;font-size:12.5px">Your last 7 days of sales. Machines are sized to the peak day; the saving is the imports they replace, less the raw material they eat, both at import prices less {1 - DISCOUNT:.0%} for {AGENT[0]}, your best Purchasing Agent (skill {AGENT[1]}%).</p>
   {make_table()}
 </section>
 <div class="os-h"><h2>Your factory plans</h2><span class="c">2</span></div>
@@ -1056,6 +1079,7 @@ def recipe() -> str:
   <div class="aside"><span class="os-lab">Size to</span><nav class="os-seg"><a href="#">Peak day</a><a href="#">Average day</a><a class="on" href="#">Custom</a></nav>
   <span class="os-dim" style="font-size:12px">peak day: Wine ×2</span></div></div>
 {lines_table()}
+<p class="os-dim" style="font-size:12px;margin:10px 0 0">At import prices: wholesale × today's price index × public prices {MARKET}, less {1 - DISCOUNT:.0%} for {AGENT[0]}, your best Purchasing Agent (skill {AGENT[1]}%).</p>
 <div class="ff-kit">{svg("gear", "os-ico")}<span><b>One Bottled Goods Workstation</b> = {kit} = <span class="m">{money(KIT["bottled"])}</span></span>
   <span class="aside">Factory Supply Depot · 2 25th Street</span></div>
 <div class="os-rows" style="margin-top:14px"><div class="os-row"><span class="mk"></span>{svg("alert")}<span class="t">Bottle of Wine stays short<small>1 machine makes {n(MADE_DAY["Bottle of Wine"] * 7)} a week; your shops take {n(SOLD_BY["Bottle of Wine"] * 7)}. The rest keeps coming from United Ocean Import.</small></span><span class="a">{n(-SHORT_WK)}<small>A WEEK</small></span><span></span></div></div>
@@ -1117,7 +1141,7 @@ def grow_ingredients() -> str:
             continue
         on = now_wk[m]
         ch = plan_wk[m] - on
-        cash = plan_wk[m] * RAW_PRICE[m] * MARKET
+        cash = plan_wk[m] * RAW_PRICE[m] * RAW_FACTOR
         tot += cash
         chg = (f'<span class="ff-delta">+{n(ch)}</span>' if ch else '<span class="os-dim">–</span>')
         tag_ = '' if on else ' <span class="ff-chip short">not ordered</span>'
@@ -1140,7 +1164,7 @@ def grow_raw_week() -> float:
     tot = 0.0
     for p_, _now, k in GROW:
         for m, q in RECIPES[p_][2]:
-            tot += q * 168 * k * RAW_PRICE[m] * MARKET
+            tot += q * 168 * k * RAW_PRICE[m] * RAW_FACTOR
     return tot
 
 
@@ -1150,7 +1174,7 @@ def grow_bar(stage: str = "") -> str:
     return (f'<div class="os-pb"><div><span class="os-lab">Make</span><b>Beer ×2 added</b><small>Whisky ×2 · Wine ×1 as now</small></div>'
             f'<div><span class="os-lab">Where</span><b>{NEW["addr"]}</b><small>yours since day {FACTORY_OPENED} · nothing to rent</small></div>'
             f'<div><span class="os-lab">Investment</span>{inv}</div>'
-            f'<div class="ff-run"><span class="os-lab">Running costs</span><b class="m">{money(grow_raw_week())}<span class="ff-wk">/week</span></b><small>raw material, was {money(RAW_COST_WK)} · not in the investment</small></div></div>')
+            f'<div class="ff-run"><span class="os-lab">Running costs added</span>{run_cell(grow_raw_week() - RAW_COST_WK, GROW_ADDED * 168 * HOURLY["factoryworker"], 0)}</div></div>')
 
 
 def grow_what() -> str:
@@ -1163,6 +1187,7 @@ def grow_what() -> str:
 <div class="os-rows" style="margin-top:14px"><div class="os-row"><span class="mk"></span>{svg("alert")}<span class="t">Beer stays short<small>2 machines make {n(2 * 50 * 168)} a week; your shops take {n(SOLD_BY["Beer"] * 7)}. The rest keeps coming from United Ocean Import.</small></span><span class="a">{n(-short)}<small>A WEEK</small></span><span></span></div></div>
 <div class="os-h"><h2>Ingredients</h2><span class="c">order ahead · all your factories</span></div>
 {grow_ingredients()}
+<p class="os-dim" style="font-size:12px;margin:10px 0 0">At import prices: wholesale × today's price index × public prices {MARKET}, less {1 - DISCOUNT:.0%} for {AGENT[0]}, your best Purchasing Agent (skill {AGENT[1]}%).</p>
 <div style="display:flex;justify-content:flex-end;margin-top:18px"><a class="os-cta" href="GrowInvestment.dc.html">Investment{svg("right")}</a></div>"""
 
 
@@ -1436,10 +1461,10 @@ def hire_dialogs() -> str:
                      sites + gw.call("info", "clock", "Each machine gets two 12-hour entries a day, placed around the workers' own wishes."),
                      gw.hint("Undo stays until your next hire") + gw.btn("Cancel", "ghost") + gw.btn("Hire", "go", "right", str(WORKERS + 1)))
     amts = [("Barley", 0, 33_600), ("Grapes", 0, 16_800), ("Yeast", 0, 25_200), ("Water", 0, 16_800), ("Sugar", 0, 8_400)]
-    rows = "".join(f'<tr><td class="l">{m}</td><td class="v was">{n(a)}</td><td class="v">{n(b)}</td><td class="v">{money(b * RAW_PRICE[m] * MARKET)}</td></tr>' for m, a, b in amts)
+    rows = "".join(f'<tr><td class="l">{m}</td><td class="v was">{n(a)}</td><td class="v">{n(b)}</td><td class="v">{money(b * RAW_PRICE[m] * RAW_FACTOR)}</td></tr>' for m, a, b in amts)
     body = (f'<table class="ff-amts"><thead><tr><th class="l">Raw material</th><th>Now</th><th>A week</th><th>Cost</th></tr></thead><tbody>{rows}'
             f'<tr><td class="l"><b>Next delivery</b></td><td></td><td></td><td class="v"><b>{money(RAW_COST_WK)}</b></td></tr></tbody></table>'
-            + gw.call("info", "truck", "Arrives at the factory every Monday. The contract starts with the write (Repeating on)."))
+            + gw.call("info", "truck", f"Arrives at the factory every Monday, at import prices less {1 - DISCOUNT:.0%} for {AGENT[0]} (skill {AGENT[1]}%). The contract starts with the write (Repeating on)."))
     imp = gw.dialog("crate", "Weekly amounts", gw.where("IC", f"Aquatic Bay Cargo → {NEW['addr']}"),
                     gw.verdict("ok", "<b>The game agrees</b>: 5 amounts, contract started", "orders close Sun 20:00 · in 4 d"),
                     body, gw.hint("Nothing changes until you apply") + gw.btn("Cancel", "ghost") + gw.btn("Set 5 amounts", "go", "right"))
@@ -1682,7 +1707,7 @@ def build(preview: bool = False) -> None:
              "pages": [], "boards": boards, "order": order, "notes": notes, "designSystems": []}
     (ROOT / "canvas.json").write_text(json.dumps(index, indent=1, ensure_ascii=False), encoding="utf-8", newline="\n")
     print("wrote", len(order), "artboards;", f"self {SELF:,} firm {FIRM:,} items {ITEMS_TOTAL:,}; raw {RAW_COST_WK:,.0f}/wk {RAW_WK}; "
-          f"workers {WORKERS}; export {EXPORT_EACH:.2f} each, {EXPORT_WK:,.0f}/wk; loan {LOAN_INT}+{LOAN_REPAY}/day")
+          f"workers {WORKERS}; wages {sum(WAGES_WK.values()):,.0f}/wk; export {EXPORT_EACH:.2f} each, {EXPORT_WK:,.0f}/wk; loan {LOAN_INT}+{LOAN_REPAY}/day")
 
 
 if __name__ == "__main__":
