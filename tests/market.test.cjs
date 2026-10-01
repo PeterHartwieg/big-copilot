@@ -4,6 +4,7 @@
 // existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -65,13 +66,17 @@ test('a type cell is the average demand of its range, and a one-product type rea
   try {
     assert.deepEqual(await rowNames(page), ['Cinema', 'Supermarket', 'Travel Agency', 'Law Firm']);
     // The default ranking is no sentence under the heading (declutter E1).
+    // Pins the wording: the obsolete ranking summary stays absent.
     assert.doesNotMatch(await page.locator('#marketNote').innerText(), /Ranked by/);
     assert.equal((await cell(page, 1, 2).innerText()).trim(), '64');
     assert.match(await cell(page, 1, 2).getAttribute('data-tip'),
-      /average demand 64 across its 3 products, 1 seller on average$/);
+      new RegExp(enRe("gr.fact.avgAll", {d: 64, n: 3}).source + ", " + enRe("gr.fact.sellersAvg", {n: 1}).source + "$"));
     const texts = await page.$$eval('#market .cell', cs => cs.map(c => c.textContent + ' ' + c.dataset.tip).join('\n'));
+    // Pins the wording: demand and seller vocabulary must not misdescribe the figures.
     assert.doesNotMatch(texts, /\d\/\d|strong demand/, 'no product count against the 60 line anywhere');
+    // Pins the wording: demand and seller vocabulary must not misdescribe the figures.
     assert.doesNotMatch(texts, /rival seller/, 'the seller count includes the player, so nobody is called a rival');
+    // Pins the wording: demand and seller vocabulary must not misdescribe the figures.
     assert.doesNotMatch(await page.locator('#marketWhy').getAttribute('data-tip'), /strong demand|rival seller/);
     // The only cinema in Midtown being yours is one seller, not one rival; a
     // range with a product missing here says the average is over what is left.
@@ -81,13 +86,13 @@ test('a type cell is the average demand of its range, and a one-product type rea
       drawMarket();
     });
     assert.match(await cell(page, 0, 2).getAttribute('data-tip'),
-      /^Cinema in Midtown: demand 64 for its one product, 1 seller, yours among them$/);
+      enRe("gr.cell.tip", {name: "Cinema", hood: "Midtown", facts: en("gr.fact.oneProduct", {d: 64}) + ", " + en("gr.fact.sellers", {n: 1}) + ", " + en("gr.fact.yours")}, {anchor: "full"}));
     assert.match(await cell(page, 1, 0).getAttribute('data-tip'),
-      /average demand 55 across the 2 of its 3 products with a reading here, 2 sellers on average$/);
+      new RegExp(enRe("gr.fact.avgSome", {d: 55, count: 2, n: 3}).source + ", " + enRe("gr.fact.sellersAvg", {n: 2}).source + "$"));
     assert.equal((await cell(page, 0, 1).innerText()).trim(), '90');
-    assert.match(await cell(page, 0, 1).getAttribute('data-tip'), /demand 90 for its one product/);
+    assert.match(await cell(page, 0, 1).getAttribute('data-tip'), enRe("gr.fact.oneProduct", {d: 90}));
     // The row ends on the way to the type's setup guide in the Wiki.
-    assert.match(await page.locator('#market .r[data-r="0"] small').innerText(), /^1 product · Wiki page ›$/);
+    assert.match(await page.locator('#market .r[data-r="0"] small').innerText(), new RegExp("^" + enRe("gr.type.products", {n: 1}).source + " · " + enRe("gr.guide2").source + " ›$"));
   } finally { await page.close(); }
 });
 
@@ -96,14 +101,14 @@ test('offices follow the shop types as a band of their own, read from their fee'
   try {
     const around = await page.$eval('#market .band', b => [b.previousElementSibling.dataset.r, b.nextElementSibling.dataset.r]);
     assert.deepEqual(around, ['1', '2'], 'band sits between the last shop row and the first office row');
-    assert.match(await page.locator('#market .band').innerText(), /Offices/i);
+    assert.match(await page.locator('#market .band').innerText(), enRe("gr.band.title", {}, {flags: "i"}));
     const law = page.locator('#market .cell[data-office][data-r="3"][data-c="0"]');
     assert.equal((await law.innerText()).trim(), '33');
     assert.match(await law.getAttribute('class'), /\bmine\b/);
-    assert.match(await law.getAttribute('data-tip'), /2 firms charging it, yours among them/);
-    assert.match(await cell(page, 3, 2).getAttribute('data-tip'), /no firm charging it yet/);
+    assert.match(await law.getAttribute('data-tip'), enRe("gr.fact.firmsYours", {n: 2}));
+    assert.match(await cell(page, 3, 2).getAttribute('data-tip'), enRe("gr.fact.noFirm"));
     assert.match(await page.locator('#market .cell.none[data-office][data-c="1"]').first().getAttribute('data-tip'),
-      /no office buildings here/);
+      enRe("gr.cell.noOffice"));
     const rows = await page.$$eval('#market .r', rs => rs.map(r => r.dataset.r));
     assert.equal(new Set(rows).size, rows.length);
   } finally { await page.close(); }
@@ -118,8 +123,8 @@ test('sorting by a neighbourhood orders each band by demand, the emptier market 
     // The lit header shows the sort, its arrow and its tip; the note keeps only the way back (declutter E1).
     const head = page.locator('#market .h[data-hood="ba:neighborhood_midtown"]');
     assert.equal(await head.locator('.mk-dir').textContent(), '↓');
-    assert.equal(await head.getAttribute('data-tip'), 'Sorted by demand in Midtown, highest first');
-    assert.equal((await page.locator('#marketNote').innerText()).trim(), 'usual order');
+    assert.equal(await head.getAttribute('data-tip'), en("gr.note.sortHigh", {hood: "Midtown"}));
+    assert.equal((await page.locator('#marketNote').innerText()).trim(), en("gr.note.usual"));
     // A second click reverses the whole order, ties included: the least
     // inviting cell (equal demand, more sellers) leads.
     await page.locator('#market .h[data-hood="ba:neighborhood_midtown"]').click();
@@ -143,12 +148,12 @@ test('a shop row carries its own way into Plan a chain; an office row has none, 
     });
     // Plan a factory is the next tab, with its own type picker: no row links it (declutter E2).
     assert.equal(await page.locator('#market .mk-plan').count(), 0);
-    assert.equal(await page.locator('#market .r[data-r="0"] small').innerText(), '1 product · Wiki page ›');
+    assert.equal(await page.locator('#market .r[data-r="0"] small').innerText(), en("gr.type.products", {n: 1}) + " · " + en("gr.guide2") + " ›");
     // Nothing is drawn under the grid.
     assert.equal(await page.locator('#cellDetail').count(), 0);
     await page.evaluate(() => { marketView = 'mine'; drawMarket(); });
     assert.equal(await page.locator('#market .mk-plan').count(), 0);
-    assert.equal(await page.locator('#market .r[data-r="1"] small').innerText(), 'you sell it');
+    assert.equal(await page.locator('#market .r[data-r="1"] small').innerText(), en("gr.row.sell"));
   } finally { await page.close(); }
 });
 

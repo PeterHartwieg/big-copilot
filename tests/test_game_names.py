@@ -10,6 +10,8 @@ import os
 import re
 import tempfile
 import unittest
+
+from tests.i18n_check import MsgAsserts, msg_param
 from pathlib import Path
 
 import build_web
@@ -141,7 +143,7 @@ class Picker(unittest.TestCase):
         for landing in (False, True):
             with self.subTest(landing=landing):
                 markup = footer_html(landing=landing, site=True)
-                self.assertIn(">Language</h2>", markup)
+                self.assertIn('data-tt="foot.lang.head"', markup)
                 self.assertIn('<div class="gn-pick" data-gn-pick data-value="en" data-drafted="es fr pt ru ko tr">', markup)
                 self.assertIn('aria-haspopup="listbox"', markup)
                 # The button shows the first choice until the script paints the kept one.
@@ -212,14 +214,16 @@ class Lang(unittest.TestCase):
 
 
 
-class Tokens(unittest.TestCase):
+class Tokens(MsgAsserts, unittest.TestCase):
     """Game names inside Python's sentences travel as tokens the page resolves;
     what Python keeps for itself stays plain English."""
 
     def test_a_token_carries_its_key_and_its_english(self):
         from ba_dashboard import plain, tok
         said = f"{tok('ba:itemname_paperbag', 'Paper Bag')} runs dry"
+        # Pins the wording: token encoding and plain() decoding mechanics.
         self.assertEqual(said, "⟦ba:itemname_paperbag|Paper Bag⟧ runs dry")
+        # Pins the wording: plain() removes only the game-name token wrapper.
         self.assertEqual(plain(said), "Paper Bag runs dry")
         # No key, no token: the words stay as they are.
         self.assertEqual(tok(None, "the depot"), "the depot")
@@ -234,13 +238,15 @@ class Tokens(unittest.TestCase):
         note = _shortfall_note(row, "Paper Bag", "Depot", "ba:street_pier#9")
         self.assertEqual(note["id"], _alert_id("shortfall", "ba:street_pier#9", "Paper Bag"))
         self.assertEqual(note["subject"], "Paper Bag")
-        self.assertTrue(note["text"].startswith("⟦ba:itemname_paperbag|Paper Bag⟧ runs dry"))
+        self.assertMsg(note["text"], "f.shortfall", item="Paper Bag")
+        self.assertEqual(note["text"].p["item"], "⟦ba:itemname_paperbag|Paper Bag⟧")
         rows = [dict(row, slug=s, cover=2 + n) for n, s in
                 enumerate(("ba:itemname_paperbag", "ba:itemname_sodacan", "ba:itemname_energydrink"))]
         merged = _condense([_shortfall_note(r, r["slug"][12:], "Depot", "ba:street_pier#9") for r in rows], 0.0)
         [line] = merged["lines"]
         self.assertEqual(line["id"], _alert_id("summary", "shortfall", "ba:street_pier#9"))
-        self.assertTrue(line["text"].endswith("soonest ⟦ba:itemname_paperbag|paperbag⟧"))
+        self.assertMsg(line["text"], "f.sum.shortfall", subject="paperbag")
+        self.assertEqual(line["text"].p["subject"], "⟦ba:itemname_paperbag|paperbag⟧")
         self.assertNotIn("named", line)
 
     def test_an_hour_limit_names_its_role_and_keeps_its_id(self):
@@ -248,9 +254,11 @@ class Tokens(unittest.TestCase):
         from tests.game_names_fixture import fixture
         payload = fixture()["payload"]
         finding = next(f for f in payload["hourFindings"] if f["kind"] == "cap" and "⟦" in f["limit"])
-        self.assertEqual(plain(finding["limit"]), "Projectionist staffing")
+        self.assertMsg(finding["limit"], "sp.py.limit.role", role="Projectionist")
         line = next(a for a in payload["alerts"] if a["group"] == "atcap" and "⟦" in a["text"])
-        self.assertIn("⟦ba:skill_projectionist|Projectionist⟧ staffing is the limit", line["text"])
+        self.assertMsg(line["text"], "f.atcap", limit=msg_param("sp.py.limit.role", role="Projectionist"))
+        self.assertEqual(line["text"].p["limit"].p["role"], "⟦ba:skill_projectionist|Projectionist⟧")
+        # Pins the wording: existing silence ids hash the historical English limit.
         self.assertEqual(line["id"], _alert_id("atcap", finding["key"], "Projectionist staffing"))
 
     def test_nothing_python_keeps_carries_a_token(self):

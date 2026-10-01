@@ -4,6 +4,7 @@
 // from the raw minor rows.
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
@@ -96,12 +97,12 @@ test('the gate and the switches are two lines, not one "smaller" count (issue #5
 
 test('the switched-off line names each kind with its count and worth', () => {
   const kinds = vm.runInContext('switchedOffKinds', context);
-  const label = id => ({atcap: 'At capacity', idlestaff: 'Overstaffed hours', dead: 'Idle stock'})[id];
+  const label = id => en("nav.kind." + id + ".label");
   const money = n => `$${Math.round(n / 1000)}k`;
   const rows = [row('atcap', 97000, 'a'), row('atcap', 31000, 'b'), row('atcap', 8000, 'c'),
                 row('idlestaff', 400, 'd'), row('dead', null, 'e')];
   assert.equal(kinds(rows, label, money),
-    'At capacity (3, $136k/day), Overstaffed hours (1, $0k/day), Idle stock (1)');
+    [en("today.minor.offKind.worth", {kind: label("atcap"), n: 3, worth: "$136k"}), en("today.minor.offKind.worth", {kind: label("idlestaff"), n: 1, worth: "$0k"}), en("today.minor.offKind", {kind: label("dead"), n: 1})].join(", "));
 });
 
 test('the switched-off line lists its kinds in the tune panel order', () => {
@@ -111,14 +112,15 @@ test('the switched-off line lists its kinds in the tune panel order', () => {
   // Below-gate rows come first in the rows handed over; the order is the panel's.
   const rows = [row('dead', null, 'a'), row('idlestaff', 300, 'b'), row('atcap', 900, 'c'), row('mystery', null, 'd')];
   assert.equal(kinds(rows, label, money, ['atcap', 'idlestaff', 'dead']),
-    'atcap (1, $900/day), idlestaff (1, $300/day), dead (1), mystery (1)');
+    [en("today.minor.offKind.worth", {kind: "atcap", n: 1, worth: "$900"}), en("today.minor.offKind.worth", {kind: "idlestaff", n: 1, worth: "$300"}), en("today.minor.offKind", {kind: "dead", n: 1}), en("today.minor.offKind", {kind: "mystery", n: 1})].join(", "));
 });
 
 test('the count lines say which is which', () => {
   assert.match(DRAW, /partitionFindings\(/);
-  assert.match(DRAW, /below the \{gate:\$\}\/day line/);
+  assert.match(DRAW, /tt\("today\.minor\.below(?:\.worth)?"/);
   // Overstaffed hours is off by default, so the line cannot say "you".
-  assert.match(DRAW, /in kinds switched off: /);
+  assert.match(DRAW, /tt\("today\.minor\.off"/);
+  // Pins the wording: default-off kinds must not be attributed to the player.
   assert.doesNotMatch(DRAW, /you switched off/);
   assert.match(DRAW, /switchedOffKinds\(switchedOff, kindLabel, compact, ALERT_GROUPS\.map\(g => g\.id\)\)/);
 });
@@ -221,9 +223,9 @@ test('idle stock has one name, and a renamed kind keeps its id', () => {
   const kind = id => (source.match(new RegExp(`\\{id:"${id}",\\s*get label\\(\\)\\{ return tt\\("[^"]+", "([^"]+)"`)) || [])[1];
   // A depot's idle group on Supply (R13) and the finding kind share one name.
   const group = (source.match(/slug: null, item: tt\("[^"]+", "([^"]+)"\), fact: kids\[0\]\.fact/) || [])[1];
-  assert.equal(kind('dead'), 'Idle stock');
+  assert.equal(kind('dead'), en("nav.kind.dead.label"));
   assert.equal(group, kind('dead'), 'the idle group and the finding kind share one name');
-  assert.equal(kind('staff'), 'Nobody staffed');
+  assert.equal(kind('staff'), en("nav.kind.staff.label"));
 });
 
 /* R8: stock a depot holds that no plan sends on, while the company's own
@@ -231,7 +233,7 @@ test('idle stock has one name, and a renamed kind keeps its id', () => {
    kind knows it. */
 test('Not routed is a kind, on by default, linked to Supply › Deliveries and the depot\'s Stock', () => {
   const g = run('ALERT_GROUPS').find(x => x.id === 'notrouted');
-  assert.deepEqual([g.label, g.on], ['Not routed', true]);
+  assert.deepEqual([g.label, g.on], [en("nav.kind.notrouted.label"), true]);
   const links = between(source, 'const ALERT_LINKS = {', 'const SEC_PAGE =');
   assert.match(links, /notrouted: \{sec:"secDeliveries", view:"deliveries"\}/);
   const evidence = between(source, 'const ALERT_EVIDENCE = {', 'const SEV_KIND =');
@@ -244,7 +246,7 @@ test('Not routed is a kind, on by default, linked to Supply › Deliveries and t
    its Stock, since Before the import never lists such a depot. */
 test("Depot top-up too low is a kind, on by default, landing on Deliveries, the depot's own Stock its evidence", () => {
   const g = run('ALERT_GROUPS').find(x => x.id === 'topup');
-  assert.deepEqual([g.label, g.on], ['Depot top-up too low', true]);
+  assert.deepEqual([g.label, g.on], [en("nav.kind.topup.label"), true]);
   const links = between(source, 'const ALERT_LINKS = {', 'const SEC_PAGE =');
   assert.match(links, /topup: \{sec:"secDeliveries", view:"deliveries"\}/);
   const evidence = between(source, 'const ALERT_EVIDENCE = {', 'const SEV_KIND =');
@@ -257,9 +259,9 @@ test("Depot top-up too low is a kind, on by default, landing on Deliveries, the 
    shelves (a shop) or its Stock (a depot). Top-up stays a route's. */
 test('Wholesale delivery too low is a kind of its own, landing on Deliveries, the shelves or the depot\'s Stock its evidence', () => {
   const g = run('ALERT_GROUPS').find(x => x.id === 'wholesale');
-  assert.deepEqual([g.label, g.on], ['Wholesale delivery too low', true]);
-  assert.match(g.note, /wholesale store delivers/);
-  assert.match(run('ALERT_GROUPS').find(x => x.id === 'topup').note, /route from your own site/);
+  assert.deepEqual([g.label, g.on], [en("nav.kind.wholesale.label"), true]);
+  assert.match(g.note, enRe("nav.kind.wholesale.note"));
+  assert.match(run('ALERT_GROUPS').find(x => x.id === 'topup').note, enRe("nav.kind.topup.note"));
   const links = between(source, 'const ALERT_LINKS = {', 'const SEC_PAGE =');
   assert.match(links, /wholesale: \{sec:"secDeliveries", view:"deliveries"\}/);
   const evidence = between(source, 'const ALERT_EVIDENCE = {', 'const SEV_KIND =');
@@ -274,11 +276,11 @@ test('a wholesale finding shows the week used, or the units left, in the amount 
   vm.runInContext(between(source, '/* The figure on the right', '/* A finding whose kind is switched off'), ctx);
   const amount = a => vm.runInContext('findingAmount', ctx)(a);
   assert.equal(amount({group: 'wholesale', text: "Soda's wholesale delivery brings 600 a week against the 700 it sells"}),
-    '700<small>/week used</small>');
+    '700<small>' + en("today.amt.weekUsed") + '</small>');
   assert.equal(amount({group: 'wholesale', text: "Water's wholesale delivery brings 1,000 a week against 1,680 used"}),
-    '1,680<small>/week used</small>');
+    '1,680<small>' + en("today.amt.weekUsed") + '</small>');
   assert.equal(amount({group: 'wholesale', text: "Beer runs out before Tuesday's wholesale delivery: 150 left at 100/day"}),
-    '150<small>left</small>');
+    '150<small>' + en("today.amt.left") + '</small>');
 });
 
 /* Today reads the findings of the sizing on screen: Python runs the list

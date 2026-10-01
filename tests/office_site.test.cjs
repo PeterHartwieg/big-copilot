@@ -3,6 +3,9 @@
 // may point at an existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enBetween, enRe, escapeRe} = require('./_i18n.cjs');
+// Any ceiling sentence ("… is the limit; the fix is …"), whatever its numbers.
+const LIMIT = new RegExp([1, 2].map(n => escapeRe(enBetween('sp.cap.ceiling', 'limit', 'fix', {n}).trim())).join('|'));
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -105,22 +108,22 @@ async function cinema() {
   return page;
 }
 
-const hourTip = page => page.locator('#sitePanel .sechead', {hasText: 'Customers by hour'}).locator('.why').getAttribute('data-tip');
+const hourTip = page => page.locator('#sp-hours .sechead').locator('.why').getAttribute('data-tip');
 const capChip = page => page.locator('#sitePanel .sp-hchip.cap').getAttribute('data-tip');
 
 test('an office reads its grid as staffed workstations, with the finding and its money', async () => {
   const page = await site('office');
   try {
     const tip = await hourTip(page);
-    assert.match(tip, /3 workstations, each billing 1 customer an hour when staffed, 50\/h building capacity/);
-    assert.doesNotMatch(tip, /register capacity|counter/);
+    assert.match(tip, enRe('sp.hours.why.cap.door', {what: en('sp.hours.what.desks', {n: 3, rate: en('sp.hour.customers', {n: 1})}), door: 50}));
+    assert.doesNotMatch(tip, new RegExp(enRe('sp.hours.what.registers').source + '|' + enRe('sp.hour.registers').source));
     // The ceiling sentence moved out of the ? into the chip under the grid.
     const cap = await capChip(page);
-    assert.match(cap, /workstations is the limit; the fix is another computer workstation\. \$[\d.,]+k?\/day of sales/);
-    assert.doesNotMatch(tip, /is the limit/);
+    assert.match(cap, enRe('sp.cap.ceiling', {n: 1, limit: en('sp.py.workstations'), fix: en('sp.py.fix.office.post')}));
+    assert.doesNotMatch(tip, LIMIT);
     const read = await page.locator('#sitePanel .hc.cap').first().getAttribute('data-read');
-    assert.match(read, /3 customers · 3 of 3 workstations staffed · <b>at the ceiling<\/b>/);
-    assert.match(await page.locator('#sitePanel .sstat', {hasText: 'Customers'}).innerText(), /\$387\.89\/hour billed/);
+    assert.match(read, new RegExp(enRe('sp.hour.customers', {n: 3}).source + ' · ' + enRe('sp.hour.desks', {n: 3, of: 3}).source + ' · <b>' + enRe('sp.hour.atceiling').source + '</b>'));
+    assert.match(await page.locator('#sitePanel .sstat', {hasText: en('sp.tile.customers')}).innerText(), enRe('sp.tile.basket.hour', {x: 387.89}));
   } finally { await page.close(); }
 });
 
@@ -128,13 +131,13 @@ test('an office lists its fee, not shelves to top up', async () => {
   const page = await site('office');
   try {
     const panel = await page.locator('#sitePanel').innerText();
-    assert.match(panel, /Fees/);
-    assert.doesNotMatch(panel, /Shelves|before tomorrow's top-up|On hand|Pressure/);
+    assert.match(panel, enRe('sp.fees.title'));
+    assert.doesNotMatch(panel, new RegExp([enRe('sp.shelf.title').source, enRe('sp.shelf.col.onhand').source, enRe('sp.shelf.col.pressure').source, "before tomorrow's top-up"].join('|')));
     const heads = await page.$$eval('#sitePanel table thead th', ths => ths.map(th => th.textContent));
-    assert.deepEqual(heads, ['Fee', 'Hours billed / day', 'Revenue / day']);
+    assert.deepEqual(heads, [en('sp.fees.col.fee'), en('sp.fees.col.hours'), en('sp.shelf.col.revenue')]);
     const fees = await page.$$eval('#sitePanel table tbody tr', rows => rows.map(r => r.cells[0].firstChild.textContent));
     assert.deepEqual(fees, ['Lawyer Fee (Hourly)'], 'boxed furniture is not a fee');
-    assert.doesNotMatch(panel, /odds and ends/);
+    assert.doesNotMatch(panel, enRe('sp.shelf.show'));
   } finally { await page.close(); }
 });
 
@@ -142,16 +145,16 @@ test('a shop keeps its registers and shelves', async () => {
   const page = await site('retail');
   try {
     const tip = await hourTip(page);
-    assert.match(tip, /3 register capacity across 3 counters, 50\/h building capacity/);
+    assert.match(tip, enRe('sp.hours.why.cap.door', {what: en('sp.hours.what.registers', {n: 3, rate: 3}), door: 50}));
     const read = await page.locator('#sitePanel .hc.cap').first().getAttribute('data-read');
-    assert.match(read, /3 of 3 register capacity on/);
+    assert.match(read, enRe('sp.hour.registers', {n: 3, of: 3}));
     const panel = await page.locator('#sitePanel').innerText();
-    assert.match(panel, /Shelves/);
+    assert.match(panel, enRe('sp.shelf.title'));
     // The same boxed phone is a shop's odds and ends, behind the toggle.
-    assert.match(panel, /show 1 more: bags, drinks, odds and ends/);
-    assert.match(await page.locator('#sitePanel .sstat', {hasText: 'Customers'}).innerText(), /\/visit/);
+    assert.match(panel, enRe('sp.shelf.show', {n: 1}));
+    assert.match(await page.locator('#sitePanel .sstat', {hasText: en('sp.tile.customers')}).innerText(), enRe('sp.tile.basket'));
     const cap = await capChip(page);
-    assert.match(cap, /registers is the limit; the fix is another counter/);
+    assert.match(cap, enRe('sp.cap.ceiling', {n: 1, limit: 'registers', fix: 'another counter'}));
   } finally { await page.close(); }
 });
 
@@ -170,12 +173,12 @@ test('a cinema counts furniture and capacity as two numbers, never as one', asyn
   const page = await cinema();
   try {
     const tip = await hourTip(page);
-    assert.match(tip, /2 roles, the slowest 50 an hour, 150\/h building capacity/);
-    assert.doesNotMatch(tip, /register capacity/);
+    assert.match(tip, enRe('sp.hours.why.cap.door', {what: en('sp.hours.what.roles', {n: 2, rate: 50}), door: 150}));
+    assert.doesNotMatch(tip, new RegExp(enRe('sp.hours.what.registers').source + '|' + enRe('sp.hour.registers').source));
     // 12:00: one projection booth of two is manned, and one booth is 25/h.
     // The old wording said "25 of 25 projection booths", which is neither.
     const [, noon] = await capReads(page);
-    assert.match(noon, /25 customers · 1 of 2 projection booths · 25\/h · slowest of 2 roles · <b>at the ceiling<\/b>/);
+    assert.match(noon, new RegExp(enRe('sp.hour.customers', {n: 25}).source + ' · ' + enRe('sp.hour.slowest', {n: 2, roles: en('sp.hour.role', {n: 1, of: 2, noun: 'projection booths', rate: 25})}).source + ' · <b>' + enRe('sp.hour.atceiling').source + '</b>'));
     assert.doesNotMatch(noon, /25 of 25/);
   } finally { await page.close(); }
 });
@@ -187,8 +190,8 @@ test('Customer Service binding a multi-role site names its stations, not registe
     // site number would read "50 of 50 register capacity on" — full, and
     // about the site's minimum rather than the registers.
     const [ten] = await capReads(page);
-    assert.match(ten, /50 customers · 1 of 2 concessions stand registers · 50\/h/);
-    assert.doesNotMatch(ten, /register capacity|counter/);
+    assert.match(ten, new RegExp(enRe('sp.hour.customers', {n: 50}).source + ' · ' + enRe('sp.hour.role', {n: 1, of: 2, noun: 'concessions stand registers', rate: 50}).source));
+    assert.doesNotMatch(ten, new RegExp(enRe('sp.hours.what.registers').source + '|' + enRe('sp.hour.registers').source));
   } finally { await page.close(); }
 });
 
@@ -198,7 +201,7 @@ test('two roles tied at the ceiling are both named', async () => {
     // 10:00: one register of two at 50, and both projection booths at 50.
     // Neither alone is the answer, so the cell says both, as the finding does.
     const [ten] = await capReads(page);
-    assert.match(ten, /1 of 2 concessions stand registers · 50\/h \+ 2 of 2 projection booths · 50\/h · slowest of 2 roles/);
+    assert.match(ten, enRe('sp.hour.slowest', {n: 2, roles: en('sp.hour.role', {n: 1, of: 2, noun: 'concessions stand registers', rate: 50}) + ' + ' + en('sp.hour.role', {n: 2, of: 2, noun: 'projection booths', rate: 50})}));
   } finally { await page.close(); }
 });
 
@@ -207,12 +210,13 @@ test('a finding naming two tied answers reads as a plural', async () => {
   try {
     // The sentence lives in the chip under the grid, not in the head's ?.
     const tie = CINEMA.findings.find(f => f.limits === 2);
+    // Not a Msg: tie.limit is a plain str after the fixture's JSON dump.
     assert.equal(tie.limit, 'staffing and projection booths',
       'the planner really does join a people limit to a posts one');
     const tip = await (await capChips(page))[0].getAttribute('data-tip');
-    assert.match(tip, /staffing and projection booths are the limit; the fix is more service staff on those hours and another projection booth/);
-    assert.doesNotMatch(tip, /projection booths is the limit/);
-    assert.doesNotMatch(await hourTip(page), /is the limit|are the limit/);
+    assert.match(tip, enRe('sp.cap.ceiling', {n: 2, limit: en('sp.py.list.and', {a: en('sp.py.limit.staffing'), b: 'projection booths'}), fix: en('sp.py.list.and', {a: en('sp.py.fix.service.staff'), b: en('sp.py.fix.role.post', {station: 'projection booth'})})}));
+    assert.doesNotMatch(tip, enRe('sp.cap.ceiling', {n: 1, limit: 'projection booths'}));
+    assert.doesNotMatch(await hourTip(page), LIMIT);
   } finally { await page.close(); }
 });
 
@@ -267,7 +271,8 @@ test('two findings of one kind on different roles do not light each other\'s hou
     // Python names the role as a game-name token; the page reads it in English.
     const kinds = CINEMA.findings.filter(f => f.kind === 'cap')
       .map(f => f.limit.replace(/⟦[^|⟧]*\|([^⟧]*)⟧/g, '$1'));
-    assert.deepEqual(kinds, ['staffing and projection booths', 'Projectionist staffing']);
+    assert.deepEqual(kinds, [en('sp.py.list.and', {a: en('sp.py.limit.staffing'), b: 'projection booths'}),
+      en('sp.py.limit.role', {role: 'Projectionist'}, {cap: true})]);
     const chips = await capChips(page);
     assert.equal(await chips[1].getAttribute('data-show'), 'staff:ba:skill_projectionist');
     await hoverChip(page, 1);
@@ -299,7 +304,7 @@ test('an idle hour names the role that is idle', async () => {
     const slack = page.locator('#sitePanel .hc.slack');
     assert.equal(await slack.count(), 3, 'the quiet hours 14:00-16:00');
     const read = await slack.first().getAttribute('data-read');
-    assert.match(read, /5 customers · 1 of 2 projection booths · 25\/h · slowest of 2 roles · Customer Service idle/);
-    assert.doesNotMatch(read, /Projectionist idle/);
+    assert.match(read, new RegExp(enRe('sp.hour.customers', {n: 5}).source + ' · ' + enRe('sp.hour.slowest', {n: 2, roles: en('sp.hour.role', {n: 1, of: 2, noun: 'projection booths', rate: 25})}).source + ' · ' + enRe('sp.hour.idle.roles', {roles: 'Customer Service'}).source));
+    assert.doesNotMatch(read, enRe('sp.hour.idle.roles', {roles: 'Projectionist'}));
   } finally { await page.close(); }
 });

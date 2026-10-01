@@ -61,13 +61,16 @@ class HouseRulesTests(unittest.TestCase):
         self.assertEqual(rules_of(0)["label"], "Custom")
         h = rules_of(0, taxPercentage=51, wholesaleUrgentFeeMultiplier=0.1)
         self.assertEqual((h["harder"], h["easier"]), (1, 1))
+        # Not a Msg: house-rule name is a plain str.
         tax = next(r for r in h["rules"] if r["name"] == "Tax rate")
         self.assertEqual((tax["value"], tax["normal"], tax["unit"]), (51, 5, "%"))
 
     def test_base_customer_promotion_uses_the_games_wording(self):
         rules = rules_of(3)["rules"]
+        # Pins the wording: this vocabulary regression requires the game's Base customer promotion label.
         self.assertNotIn("Base customers", [r["name"] for r in rules])
         rule = next(r for r in rules if r["name"] == "Base customer promotion")
+        # Not a Msg: house-rule what is a plain str.
         self.assertEqual(rule["what"], "base level of customers without traffic or marketing")
         self.assertEqual((rule["value"], rule["normal"], rule["lean"]), (0.5, 0.55, "harder"))
 
@@ -87,13 +90,16 @@ class HouseRulesTests(unittest.TestCase):
 
     def test_a_zero_tax_rate_is_a_setting(self):
         h = rules_of(0, taxPercentage=0)
+        # Not a Msg: house-rule name is a plain str.
         tax = next(r for r in h["rules"] if r["name"] == "Tax rate")
         self.assertEqual(tax["lean"], "easier")
 
     def test_a_missing_or_unknown_slot_is_not_passed_off_as_custom(self):
+        # Not a Msg: difficulty label is a plain str.
         self.assertEqual(_difficulty(Save({}, {}, "empty.hsg"))["label"], "Unknown")
         # A preset a later build adds still gets its settings compared with Normal.
         h = rules_of(4, taxPercentage=40)
+        # Not a Msg: difficulty label is a plain str.
         self.assertEqual(h["label"], "Unknown")
         self.assertEqual((h["harder"], h["easier"]), (1, 0))
 

@@ -4,6 +4,7 @@
 // NODE_PATH may point at an existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -87,7 +88,7 @@ async function board(data = fixture()){
 }
 // The Product cell of a Shops row names the product (the tick and the shop come first).
 const products = page => page.$$eval('#secDeliveries [data-sb-table="shops"] tbody tr', rows => rows.map(r => r.cells[2].textContent.trim()));
-const header = (page, label) => page.locator('#secDeliveries [data-sb-table="shops"] thead th', {hasText: label});
+const header = (page, col) => page.locator(`#secDeliveries [data-sb-table="shops"] thead th[data-i="${col}"]`);
 const shopNote = page => page.locator('#secDeliveries .sb-tw[data-sb-table="shops"] .sb-more').textContent();
 /* Each depot is its own table; the product cell opens with the material. */
 const depots = page => page.$$eval('#secImports .sb-obj', list =>
@@ -100,17 +101,17 @@ test('a Shops header sorts high to low, then low to high, then back to the usual
   try{
     // Usual order: worst word first, then the tightest shelf.
     assert.deepEqual(await products(page), ['Bread', 'Apples', 'Milk', 'Eggs']);
-    await header(page, 'Pressure').click();
+    await header(page, 5).click();
     // A shelf with no plan has no pressure to rank, so it stays at the bottom.
     assert.deepEqual(await products(page), ['Bread', 'Apples', 'Milk', 'Eggs']);
-    assert.equal(await header(page, 'Pressure').getAttribute('aria-sort'), 'descending');
-    assert.match(await shopNote(page), /Sorted by Pressure, high to low/);
-    await header(page, 'Pressure').click();
+    assert.equal(await header(page, 5).getAttribute('aria-sort'), 'descending');
+    assert.match(await shopNote(page), enRe("sb.sort.by", {col: en("sb.col.pressure"), way: en("sb.sort.highLow")}));
+    await header(page, 5).click();
     assert.deepEqual(await products(page), ['Milk', 'Apples', 'Bread', 'Eggs']);
-    assert.equal(await header(page, 'Pressure').getAttribute('aria-sort'), 'ascending');
+    assert.equal(await header(page, 5).getAttribute('aria-sort'), 'ascending');
     await page.locator('#secDeliveries [data-sb-table="shops"] [data-usual]').click();
     assert.deepEqual(await products(page), ['Bread', 'Apples', 'Milk', 'Eggs']);
-    assert.equal(await header(page, 'Pressure').getAttribute('aria-sort'), 'none');
+    assert.equal(await header(page, 5).getAttribute('aria-sort'), 'none');
     assert.equal(await page.locator('#secDeliveries .sb-tw[data-sb-table="shops"] .sb-more').count(), 0);
   } finally { await page.close(); }
 });
@@ -118,10 +119,10 @@ test('a Shops header sorts high to low, then low to high, then back to the usual
 test('a name column reads A to Z first, and equal names keep the usual order', async () => {
   const page = await board();
   try{
-    await header(page, 'Product').click();
+    await header(page, 1).click();
     assert.deepEqual(await products(page), ['Apples', 'Bread', 'Eggs', 'Milk']);
-    assert.match(await shopNote(page), /Sorted by Product, A to Z/);
-    await header(page, 'Shop').click();
+    assert.match(await shopNote(page), enRe("sb.sort.by", {col: en("sb.col.product"), way: en("sb.sort.az")}));
+    await header(page, 0).click();
     // Birch runs Apples and Milk, in that order in the tab's own ranking.
     assert.deepEqual(await products(page), ['Bread', 'Apples', 'Milk', 'Eggs']);
   } finally { await page.close(); }
@@ -130,10 +131,10 @@ test('a name column reads A to Z first, and equal names keep the usual order', a
 test('a header sorts from the keyboard and keeps the focus', async () => {
   const page = await board();
   try{
-    await header(page, 'Sells / day').locator('button').focus();
+    await header(page, 2).locator('button').focus();
     await page.keyboard.press('Enter');
     assert.deepEqual(await products(page), ['Apples', 'Milk', 'Bread', 'Eggs']);
-    assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Sells / day');
+    assert.equal(await page.evaluate(() => document.activeElement.textContent), en("sb.col.sells"));
     await page.keyboard.press('Space');
     assert.deepEqual(await products(page), ['Eggs', 'Bread', 'Milk', 'Apples']);
     assert.equal(await page.evaluate(() => document.activeElement.closest('th')?.getAttribute('aria-sort')), 'ascending');
@@ -147,8 +148,8 @@ test('every shelf is on the table: no cap holds rows back', async () => {
   const page = await board(data);
   try{
     assert.equal((await products(page)).length, 50);
-    await header(page, 'Pressure').click();
-    await header(page, 'Pressure').click();
+    await header(page, 5).click();
+    await header(page, 5).click();
     const low = await products(page);
     assert.deepEqual([low[0], low[49]], ['Item 49', 'Item 00']);
   } finally { await page.close(); }
@@ -157,18 +158,18 @@ test('every shelf is on the table: no cap holds rows back', async () => {
 test('usual order from the keyboard puts the focus on the column it un-sorted', async () => {
   const page = await board();
   try{
-    await header(page, 'Pressure').click();
+    await header(page, 5).click();
     await page.locator('#secDeliveries [data-sb-table="shops"] [data-usual]').focus();
     await page.keyboard.press('Enter');
     assert.deepEqual(await products(page), ['Bread', 'Apples', 'Milk', 'Eggs']);
-    assert.equal(await page.evaluate(() => document.activeElement?.textContent), 'Pressure');
+    assert.equal(await page.evaluate(() => document.activeElement?.textContent), en("sb.col.pressure"));
   } finally { await page.close(); }
 });
 
 test('usual order clicked with the mouse leaves the focus where the click put it', async () => {
   const page = await board();
   try{
-    await header(page, 'Pressure').click();
+    await header(page, 5).click();
     await page.locator('#secDeliveries [data-sb-table="shops"] [data-usual]').click();
     assert.deepEqual(await products(page), ['Bread', 'Apples', 'Milk', 'Eggs']);
     // Not carried back up to a header the reader did not ask for.
@@ -182,17 +183,17 @@ test('depot lines sort inside each depot, and the depots keep their order', asyn
     // Usual order: most used a week first.
     assert.deepEqual(await depots(page), [['Pear', 'Apple', 'Fig'], ['Lime', 'Kiwi', 'Kale']]);
     const first = page.locator('#secImports .sb-obj').first();
-    await first.locator('thead th', {hasText: 'On hand'}).click();
+    await first.locator('thead th[data-i="1"]').click();
     assert.deepEqual(await depots(page), [['Pear', 'Apple', 'Fig'], ['Kiwi', 'Lime', 'Kale']]);
     // Every depot's header shows the one order.
-    assert.deepEqual(await page.$$eval('#secImports thead th[data-dir]', th => th.map(x => x.textContent)), ['On hand', 'On hand']);
-    await page.locator('#secImports .sb-obj').first().locator('thead th', {hasText: 'Product'}).click();
+    assert.deepEqual(await page.$$eval('#secImports thead th[data-dir]', th => th.map(x => x.textContent)), [en("sb.col.onHand"), en("sb.col.onHand")]);
+    await page.locator('#secImports .sb-obj').first().locator('thead th[data-i="0"]').click();
     assert.deepEqual(await depots(page), [['Apple', 'Fig', 'Pear'], ['Kale', 'Kiwi', 'Lime']]);
-    assert.match(await page.locator('#secImports .sb-more').first().textContent(), /Sorted by Product, A to Z/);
+    assert.match(await page.locator('#secImports .sb-more').first().textContent(), enRe("sb.sort.by", {col: en("sb.col.product"), way: en("sb.sort.az")}));
     await page.locator('#secImports [data-usual]').first().click();
     assert.deepEqual(await depots(page), [['Pear', 'Apple', 'Fig'], ['Lime', 'Kiwi', 'Kale']]);
     // What to set a line to is an action, not a figure; the Shops order is untouched.
-    assert.equal(await page.locator('#secImports thead th', {hasText: 'Order / top-up'}).first().locator('button').count(), 0);
+    assert.equal(await page.locator('#secImports thead th', {hasText: en("sb.col.order")}).first().locator('button').count(), 0);
     assert.equal(await page.locator('#secDeliveries [data-sb-table="shops"] thead th[data-dir]').count(), 0);
   } finally { await page.close(); }
 });
@@ -201,7 +202,7 @@ test('an import nothing uses sorts as a dash, not as a zero', async () => {
   const page = await board();
   try{
     const south = page.locator('#secImports .sb-obj').nth(1);
-    const used = south.locator('thead th', {hasText: 'Uses / week'});
+    const used = south.locator('thead th[data-i="6"]');
     await used.click();
     assert.deepEqual((await depots(page))[1], ['Lime', 'Kiwi', 'Kale']);
     await used.click();
@@ -213,12 +214,12 @@ test('factory inputs sort inside their factory, a route with no reading last', a
   const page = await board();
   try{
     assert.deepEqual(await inputs(page), ['Pear', 'Apple', 'Fig']);
-    const arrives = page.locator('#secProduction thead th', {hasText: 'Arrived / day'});
+    const arrives = page.locator('#secProduction [data-sb-table="factory-inputs"] thead th[data-i="3"]');
     await arrives.click();
     assert.deepEqual(await inputs(page), ['Pear', 'Apple', 'Fig']);
     await arrives.click();
     assert.deepEqual(await inputs(page), ['Apple', 'Pear', 'Fig']);
-    assert.match(await page.locator('#secProduction [data-sb-table="factory-inputs"] .sb-more').textContent(), /Sorted by Arrived \/ day, low to high/);
+    assert.match(await page.locator('#secProduction [data-sb-table="factory-inputs"] .sb-more').textContent(), enRe("sb.sort.by", {col: en("sb.col.arrived"), way: en("sb.sort.lowHigh")}));
     // The lines keep their own order.
     assert.equal(await page.locator('#secProduction [data-sb-table="factory-lines"] thead th[data-dir]').count(), 0);
   } finally { await page.close(); }
@@ -234,10 +235,10 @@ test('the Status column sorts worst first, by the facts Python sent', async () =
   });
   const page = await board(data);
   try{
-    await header(page, 'Status').click();
+    await header(page, 7).click();
     assert.deepEqual(await products(page), ['Eggs', 'Bread', 'Apples', 'Milk']);
-    assert.match(await shopNote(page), /Sorted by Status, worst first/);
-    await header(page, 'Status').click();
+    assert.match(await shopNote(page), enRe("sb.sort.by", {col: en("sb.col.status"), way: en("sb.sort.worstFirst")}));
+    await header(page, 7).click();
     assert.deepEqual(await products(page), ['Milk', 'Apples', 'Bread', 'Eggs']);
   } finally { await page.close(); }
 });

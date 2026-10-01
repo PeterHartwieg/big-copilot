@@ -14,6 +14,7 @@ C. a Smart Delivery import beside a factory route that covers the week.
 """
 import itertools
 import unittest
+from tests.i18n_check import MsgAsserts, msg_param
 
 from ba_dashboard import plain, Names, RECIPE_ITEMS, WEEKDAYS, _deepest_use, _idle_notes, _import_notes, _order_says, _shelf_notes, _supply, _supply_fact
 from test_supply_facts import BEER, RECIPES, WATER, Company
@@ -89,7 +90,7 @@ def full_log(c):
         c.ship(day, WH, SHOP, {BEER: 1000})
 
 
-class WarehouseFedByRouteTests(unittest.TestCase):
+class WarehouseFedByRouteTests(MsgAsserts, unittest.TestCase):
     """Symptom A: a warehouse with no import, a factory route into it."""
 
     def test_a_route_from_a_factory_that_only_holds_asks_for_an_import(self):
@@ -103,7 +104,7 @@ class WarehouseFedByRouteTests(unittest.TestCase):
         self.assertEqual(c.verdict(WH), {"st": "noplan", "why": "order", "lvl": "critical", "cad": "weekly",
                                          "use": 2100, "need": 2415, "have": None, "setTo": 2420})
         [note] = c.notes(WH, "unsourced")
-        self.assertIn("import 2,420 a week", plain(note["text"]))
+        self.assertMsg(note["text"], "f.depot.noplan.passes", **{"set": 2420})
 
     def test_the_missing_import_is_said_once(self):
         """The brewery sends its 500 on to the warehouse and nothing brings it
@@ -125,8 +126,8 @@ class WarehouseFedByRouteTests(unittest.TestCase):
         self.assertEqual((fact["st"], fact["lvl"], fact["setTo"], fact["lasts"], fact["passes"]),
                          ("noplan", "warn", 2420, 18.3, c.index(BREWERY)))
         [note] = c.notes(WH, "unsourced")
-        self.assertIn("the route from Brewery only passes on what it holds, about 18 days",
-                      plain(note["text"]))
+        self.assertMsg(note["text"], "f.depot.noplan.passes", sender="Brewery",
+                       lasts=msg_param("f.lasts.about", n=18))
 
     def test_a_route_from_a_factory_that_makes_enough_is_judged_on_its_target(self):
         """The brewery's machine makes 720 a day: the route is the whole of the
@@ -145,7 +146,7 @@ class WarehouseFedByRouteTests(unittest.TestCase):
         self.assertEqual(c.verdict(WH), {"st": "short", "why": "target", "lvl": "critical", "cad": "daily",
                                          "use": 300, "need": 345, "have": 200, "setTo": 350})
         [note] = c.notes(WH, "topup")
-        self.assertIn("raise the top-up to 350", plain(note["text"]))
+        self.assertMsg(note["text"], "f.topup", **{"set": 350})
 
     def test_the_delivery_log_changes_no_verdict(self):
         """None of the above reads the log: a day of rounds, or a full log
@@ -190,7 +191,7 @@ class YoungShopTests(unittest.TestCase):
         self.assertEqual(self.shop(rounds).verdict(SHOP), self.shop().verdict(SHOP))
 
 
-class UnsourcedTests(unittest.TestCase):
+class UnsourcedTests(MsgAsserts, unittest.TestCase):
     """Symptom B: a new café topped up to 45 a day from a warehouse."""
 
     def cafe(self, wh_units=0, imported=False):
@@ -214,7 +215,7 @@ class UnsourcedTests(unittest.TestCase):
         self.assertEqual((fact["st"], fact["why"], fact["lvl"], fact["from"]),
                          ("noplan", "source", "warn", c.index(WH)))
         [note] = c.notes(CAFE, "unsourced")
-        self.assertIn("nothing brings it to Warehouse", plain(note["text"]))
+        self.assertMsg(note["text"], "f.unsourced", source="Warehouse")
         wh = c.verdict(WH)
         self.assertEqual((wh["st"], wh["why"], wh["cad"], wh["use"], wh["setTo"]),
                          ("noplan", "order", "weekly", 315, 320))
@@ -259,7 +260,7 @@ class UnsourcedTests(unittest.TestCase):
                 self.assertEqual((fact["st"], fact["why"], fact["lvl"], fact["setTo"]),
                                  ("noplan", "priced", "warn", None))
                 [note] = c.notes(CAFE, "unsourced")
-                self.assertIn("is priced here but nothing brings it", plain(note["text"]))
+                self.assertMsg(note["text"], "f.unsourced.priced")
 
     def test_the_types_own_range_at_its_default_price_is_no_finding(self):
         """Every price list holds the type's whole range at default prices:
@@ -297,7 +298,7 @@ class UnsourcedTests(unittest.TestCase):
         """Two added goods nothing brings are one finding listing both."""
         c = self.priced(slugs=(BEER, WATER))
         [note] = c.notes(CAFE, "unsourced")
-        self.assertIn("Nothing upstream supplies 2 goods Cafe is topped up with or prices", plain(note["text"]))
+        self.assertMsg(note["text"], "f.unsourced.list", n=2, site="Cafe")
 
     def test_a_second_route_from_a_site_with_supply_is_a_source(self):
         """Topped up from an empty warehouse and from a hub that imports it:
@@ -1608,7 +1609,7 @@ class PooledRoomTests(unittest.TestCase):
                                                       days=70, judge_from=42), [])
 
 
-class ThroughputTests(unittest.TestCase):
+class ThroughputTests(MsgAsserts, unittest.TestCase):
     """Round 13: a sender routes also feed is held to what it can pass on
     (its own supply plus what its senders can bring it), so a depot's own
     import further down brings what that leaves, in both sizings; and a
@@ -1846,7 +1847,7 @@ class ThroughputTests(unittest.TestCase):
             self.assertEqual((c.fact(hub, BEER, mode)["st"], c.fact(hub, BEER, mode)["why"]), ("short", "shortfall"))
         self.assertEqual((row["runsOut"], row["topsUp"]), ("Tuesday", [c.index(self.REGIONAL), 1500]))
         [note] = c.notes(hub, "shortfall")
-        self.assertIn("the morning rounds top Regional up to 1,500 before its own import lands", plain(note["text"]))
+        self.assertMsg(note["text"], "f.shortfall.topup", site="Regional", target=1500)
 
     def test_the_rounds_follow_the_depots_weekday_rhythm(self):
         """Round 16: weekends at 200%, weekdays at 60%. Saturday; the hub
@@ -1948,7 +1949,7 @@ class ThroughputTests(unittest.TestCase):
                     self.assertEqual((fact["st"], fact["why"], fact["setTo"]), ("covered", "route", None), mode)
 
 
-class RoundEightTests(unittest.TestCase):
+class RoundEightTests(MsgAsserts, unittest.TestCase):
     """Several sites topping one depot up, judged as two questions (targets
     on the busiest day, supply on an average day) and checked by applying
     every change the board suggests and replaying six weeks of rounds from
@@ -2123,7 +2124,7 @@ class RoundEightTests(unittest.TestCase):
         self.assertEqual((fact["st"], fact["why"], fact["setTo"]), ("short", "target", 1500))
         self.assertEqual(fact.get("raise"), [[c.index(self.BREW_B), 500, 1500]])
         [note] = c.notes(WH, "topup")
-        self.assertIn("raise the top-ups on the plans of", plain(note["text"]))
+        self.assertMsg(note["text"], "f.topup.several")
         self.check(senders, 1000)
 
     def test_a_brewery_beside_a_hub_on_a_low_target(self):

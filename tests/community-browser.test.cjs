@@ -1,5 +1,6 @@
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require('playwright');
@@ -82,10 +83,10 @@ async function setup(t, options = {}) {
   }
   return {context,state,newPage,loadSave,page:await newPage()};
 }
-const online = page => page.locator('#live').getByText(/^\d+ online$/);
+const online = page => page.locator('#live').getByText(enRe('comm.online', {n: 40}, {anchor: 'full'}));
 const openVotes = async page => {
-  await page.getByRole('button',{name:/Vote on features/}).filter({visible:true}).click();
-  return page.getByRole('dialog',{name:'Vote on upcoming features'});
+  await page.locator('[data-community-open]').filter({visible:true}).click();
+  return page.locator('dialog.community-dialog');
 };
 
 test('landing is network quiet; actual save loading starts presence and preserves footer controls', async t => {
@@ -94,7 +95,7 @@ test('landing is network quiet; actual save loading starts presence and preserve
   const dialog = await openVotes(page);
   await dialog.getByText('Optimize staffing',{exact:true}).waitFor();
   assert.equal(state.reads,1); assert.equal(state.heartbeats.length,0);
-  await dialog.getByRole('button',{name:'Close',exact:true}).click();
+  await dialog.locator('.community-head button[autofocus]').click();
   await loadSave(page);
   await online(page).waitFor();
   assert.equal(state.heartbeats.length,1);
@@ -120,12 +121,12 @@ test('landing is network quiet; actual save loading starts presence and preserve
     const msg = saveWorker.messages.filter(m => m.kind === 'build').at(-1);
     saveWorker.onmessage({data:{kind:'failed',id:msg.id,error:'fixture could not rebuild'}});
   });
-  await page.getByText('Stale',{exact:true}).waitFor();
+  await page.locator('#live').getByText(en('nav.stale.word'), {exact:true}).waitFor();
   await loadSave(page);
   await online(page).waitFor();
   assert.equal(state.heartbeats.length,1);
   await page.evaluate(() => { BigCopilotCommunity.start(); BigCopilotCommunity.start(); });
-  assert.equal(await page.getByRole('button',{name:/Vote on features/}).count(),1);
+  assert.equal(await page.locator('[data-community-open]').count(),1);
   assert.equal(state.heartbeats.length,1);
 });
 
@@ -298,18 +299,18 @@ for(const options of [{blockStorage:true},{fullStorage:true}]) test(`presence to
 test('voting fetches on demand, prevents duplicates and uses the mutation result without refetching', async t => {
   const {page,state} = await setup(t);
   const dialog = await openVotes(page);
-  const vote = dialog.getByRole('button',{name:'Vote',exact:true}).first();
+  const vote = dialog.getByRole('button',{name:en('comm.vote'),exact:true}).first();
   await vote.click();
-  await dialog.getByRole('button',{name:'Voted',exact:true}).waitFor();
+  await dialog.getByRole('button',{name:en('comm.voted'),exact:true}).waitFor();
   assert.equal(state.votes.length,1); assert.equal(state.reads,1);
-  assert.equal(await dialog.getByRole('button',{name:'Voted',exact:true}).isDisabled(),true);
-  await dialog.getByRole('button',{name:'Vote',exact:true}).click();
+  assert.equal(await dialog.getByRole('button',{name:en('comm.voted'),exact:true}).isDisabled(),true);
+  await dialog.getByRole('button',{name:en('comm.vote'),exact:true}).click();
   assert.equal(state.votes.length,2,'each feature has its own vote');
   await page.keyboard.press('Escape');
-  await page.getByRole('button',{name:/Vote on features/}).waitFor();
-  assert.equal(await page.getByRole('button',{name:/Vote on features/}).evaluate(el => el === document.activeElement),true);
+  await page.getByRole('button',{name:en('foot.vote.cta')}).waitFor();
+  assert.equal(await page.getByRole('button',{name:en('foot.vote.cta')}).evaluate(el => el === document.activeElement),true);
   await openVotes(page);
-  await page.waitForFunction(() => [...document.querySelectorAll('dialog[open] button')].filter(b => b.textContent === 'Voted').length === 2);
+  await page.waitForFunction(() => document.querySelectorAll('dialog[open] button.community-vote[disabled]').length === 2);
   assert.equal(state.reads,2);
   // The landing's footer and the board's both carry the badge under one id, so
   // voting has to clear every copy, not just the one on screen.
@@ -320,11 +321,11 @@ test('voting errors have a user-triggered retry and feature text is rendered as 
   const {page,state} = await setup(t);
   state.failVotes = true;
   const dialog = await openVotes(page);
-  await dialog.getByRole('button',{name:/Retry/}).waitFor();
+  await dialog.locator('.community-retry').waitFor();
   assert.equal(state.reads,1);
   state.failVotes = false;
   state.features[0].title = '<img src=x onerror=alert(1)>';
-  await dialog.getByRole('button',{name:/Retry/}).click();
+  await dialog.locator('.community-retry').click();
   await dialog.getByText('<img src=x onerror=alert(1)>',{exact:true}).waitFor();
   assert.equal(await dialog.locator('img').count(),0);
   assert.equal(state.reads,2);
@@ -353,13 +354,13 @@ test('reopening the dialog during a vote waits for that mutation before fetching
   state.holdVote = new Promise(resolve => { release = resolve; });
   t.after(() => release());
   const sent = page.waitForRequest('**/api/community/vote');
-  await dialog.getByRole('button',{name:'Vote',exact:true}).first().click();
+  await dialog.getByRole('button',{name:en('comm.vote'),exact:true}).first().click();
   await sent;
   await page.keyboard.press('Escape');
   await openVotes(page);
   assert.equal(state.reads,1,'on-open GET waits for the in-flight mutation');
   release();
-  await dialog.getByRole('button',{name:'Voted',exact:true}).waitFor();
+  await dialog.getByRole('button',{name:en('comm.voted'),exact:true}).waitFor();
   assert.equal(state.reads,2);
 });
 

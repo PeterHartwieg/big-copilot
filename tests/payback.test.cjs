@@ -7,6 +7,7 @@
 // its Chromium browser to run; NODE_PATH may point at an existing installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const {chromium} = require('playwright');
@@ -51,7 +52,7 @@ const kidCell = (page, key) => page.$eval(`#portfolio tr.kid[data-key="${key}"] 
 test('the Payback column: its header, a cell per chain and site, and every row as wide as the header', async t => {
   const page = await board(t, await context(t));
   const heads = await page.$$eval('#portfolio thead th', ths => ths.map(th => th.innerText.trim()));
-  assert.equal(heads[heads.length - 1].toLowerCase(), 'payback');
+  assert.equal(heads[heads.length - 1].toLowerCase(), en('co.col.payback').toLowerCase());
   // Every row spans the header: the chain rows, the sites, the total and the
   // two company-cost rows under it (their colspan is counted).
   const widths = await page.$$eval('#portfolio tbody tr, #portfolio tfoot tr', rows =>
@@ -60,15 +61,15 @@ test('the Payback column: its header, a cell per chain and site, and every row a
   for(const w of widths) assert.equal(w, heads.length);
   assert.equal(await page.locator('#portfolio tfoot tr.td-outside').count(), 2);
   // The company profit stays under Profit, not under Margin or Payback.
-  const profitAt = heads.findIndex(h => /profit/i.test(h));
+  const profitAt = heads.findIndex(h => enRe('co.col.profit', {}, {flags: 'i'}).test(h));
   const net = await page.$$eval('#portfolio tfoot tr.td-net td', tds => tds.map(td => +td.getAttribute('colspan') || 1));
   assert.equal(net[0], profitAt);
   // Installation firm by default: the shop still has days to go; the brewery
   // is a cost centre and has no payback of its own.
-  assert.equal(await kidCell(page, SPIRITS), '146 d');
+  assert.equal(await kidCell(page, SPIRITS), en('co.payback.cell.togo', {n: 146}));
   assert.equal(await kidCell(page, BREWERY), '—');
   assert.match(await page.$eval(`#portfolio tr.kid[data-key="${SPIRITS}"] .pb-cell`, e => e.dataset.tip),
-    /^146 days to go at recent profit\. Invested \$[\d,]+: furniture/);
+    new RegExp('^' + enRe('co.payback.togo', {n: 146}).source + '\\.' + ' ' + enRe('co.payback.cost.firm').source));
   // Beside the sidebar at 1280 px the whole table fits, Payback included.
   const fit = await page.$eval('#portfolio', t => [t.parentElement.scrollWidth, t.parentElement.clientWidth]);
   assert.ok(fit[0] <= fit[1], `the table overflows at 1280 px: ${fit}`);
@@ -79,13 +80,13 @@ test('the install mode changes the cells and is kept per character', async t => 
   const page = await board(t, ctx);
   assert.equal(await page.locator('#paybackMode a.on').getAttribute('data-id'), 'firm');
   await page.click('#paybackMode a[data-id="self"]');
-  assert.equal(await kidCell(page, SPIRITS), 'day 30');
+  assert.equal(await kidCell(page, SPIRITS), en('co.payback.cell.reached', {day: 30}));
   assert.match(await page.$eval(`#portfolio tr.kid[data-key="${SPIRITS}"] .pb-cell`, e => e.dataset.tip),
-    /^Break even on day 30, 27 days after opening\./);
+    new RegExp('^' + enRe('co.payback.reached', {day: 30, n: 27}).source + '\\.'));
   assert.equal(await page.evaluate(k => localStorage.getItem(k), STORE), 'self');
   const again = await board(t, ctx);
   assert.equal(await again.locator('#paybackMode a.on').getAttribute('data-id'), 'self');
-  assert.equal(await kidCell(again, GIFTS), 'day 27');
+  assert.equal(await kidCell(again, GIFTS), en('co.payback.cell.reached', {day: 27}));
   // Another character's board does not read this one's choice.
   assert.equal(await again.evaluate(() => { D.meta.character = 'OTHERco'; return paybackMode(); }), 'firm');
 });
@@ -108,7 +109,7 @@ test('the site panel has a Payback line for a shop and none for a factory', asyn
   const page = await board(t, await context(t));
   await page.evaluate(k => openSite(k), SPIRITS);
   await page.waitForSelector('#sitePanel .sitehead');
-  assert.equal(await page.locator('#sitePanel .sp-pay').innerText(), 'Payback: 146 days to go at recent profit');
+  assert.equal(await page.locator('#sitePanel .sp-pay').innerText(), en('sp.payback.line', {what: en('co.payback.togo', {n: 146})}));
   await page.evaluate(k => openSite(k), BREWERY);
   await page.waitForFunction(k => siteKey === k, BREWERY);
   assert.equal(await page.locator('#sitePanel .sp-pay').count(), 0);
@@ -118,10 +119,10 @@ test('a real bill is the firm figure only, and an old lease reads as an estimate
   const page = await board(t, await context(t));
   const tip = () => page.$eval(`#portfolio tr.kid[data-key="${SPIRITS}"] .pb-cell`, e => e.dataset.tip);
   await page.evaluate(k => { D.payback.sites[k].cost.billed = 120000; drawPortfolio(); }, SPIRITS);
-  assert.match(await tip(), /the installation firm's bill \$120,000/);
+  assert.match(await tip(), enRe('co.payback.cost.billed', {bill: 120000}));
   await page.click('#paybackMode a[data-id="self"]');
-  assert.doesNotMatch(await tip(), /bill/);
-  assert.match(await tip(), /walls and floors/);
+  assert.doesNotMatch(await tip(), enRe('co.payback.cost.billed'));
+  assert.match(await tip(), enRe('co.payback.cost.self'));
   await page.click('#paybackMode a[data-id="firm"]');
   // A lease older than the record: the opening plus the payback period, as a
   // day, whether it has passed or not, and sorted by that day.
@@ -131,13 +132,13 @@ test('a real bill is the firm figure only, and an old lease reads as an estimate
     D.payback.sites[g].opened = 10; D.payback.sites[g].firm = {state: 'window', days: 200, day: 210};
     drawPortfolio();
   }, [SPIRITS, GIFTS]);
-  assert.equal(await kidCell(page, SPIRITS), '~day 30');
-  assert.match(await tip(), /^Paid back around day 30, an estimate from recent profit/);
-  assert.equal(await kidCell(page, GIFTS), '~day 210');
+  assert.equal(await kidCell(page, SPIRITS), en('co.payback.cell.window', {day: 30}));
+  assert.match(await tip(), enRe('co.payback.window.past', {day: 30}, {anchor: 'start'}));
+  assert.equal(await kidCell(page, GIFTS), en('co.payback.cell.window', {day: 210}));
   assert.ok(210 > day);
   assert.match(await page.$eval(`#portfolio tr.kid[data-key="${GIFTS}"] .pb-cell`, e => e.dataset.tip),
-    /^Pays back around day 210 at recent profit/);
-  assert.doesNotMatch(await page.$eval(`#portfolio tr.kid[data-key="${GIFTS}"] .pb-cell`, e => e.dataset.tip), /to go/);
+    enRe('co.payback.window.ahead', {day: 210}, {anchor: 'start'}));
+  assert.doesNotMatch(await page.$eval(`#portfolio tr.kid[data-key="${GIFTS}"] .pb-cell`, e => e.dataset.tip), enRe('co.payback.togo'));
   assert.deepEqual(await page.evaluate(([k, g]) => [paybackRank(paybackSite(k)), paybackRank(paybackSite(g))], [SPIRITS, GIFTS]), [30, 210]);
 });
 
@@ -154,13 +155,13 @@ test('an old chain whose members opened on different days shows the day Python w
   }, [SPIRITS, BREWERY]);
   const name = await page.evaluate(k => enOf(D.chains.find(c => c.sites[0] === k), 'name'), SPIRITS);
   const cell = await page.$eval(`#portfolio tr.chain[data-chain="${name}"] td:last-child`, td => td.innerText.trim());
-  assert.equal(cell, '~day 140');
+  assert.equal(cell, en('co.payback.cell.window', {day: 140}));
   assert.match(await page.$eval(`#portfolio tr.chain[data-chain="${name}"] .pb-cell`, e => e.dataset.tip),
-    /^Pays back around day 140 at recent profit, counted from each site's opening/);
+    enRe('co.payback.window.ahead.chain', {day: 140}, {anchor: 'start'}));
   assert.equal(await page.evaluate(k => paybackRank(D.payback.chains[k]), SPIRITS), 140);
   // With no member earning, the plain wording and no day.
   await page.evaluate(k => { D.payback.chains[k].firm = {state: 'window'}; drawPortfolio(); }, SPIRITS);
   const plain = await page.$eval(`#portfolio tr.chain[data-chain="${name}"] .pb-cell`, e => [e.innerText.trim(), e.dataset.tip]);
   assert.equal(plain[0], '—');
-  assert.match(plain[1], /^Opened before the save's record\./);
+  assert.match(plain[1], new RegExp('^' + enRe('co.payback.window.none').source + '\\.'));
 });

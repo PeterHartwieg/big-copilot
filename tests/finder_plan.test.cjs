@@ -5,6 +5,7 @@
    finder never notices it. The premises payload is synthetic. */
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
@@ -132,12 +133,12 @@ test('a plan finder opens on the plan: its type fixed, its neighbourhood, premis
     assert.equal(await page.locator('#planHost [data-action="full"]').count(), 0);
     // The type is a chip naming it, not a control; no kind, no saved searches.
     assert.deepEqual(await page.$$eval('#planHost .filters .frow:not([hidden]) .lab', l => l.map(x => x.textContent)),
-      ['Type', 'Show', 'Where', 'Size', 'Capacity', 'Traffic']);
+      ['type', 'show', 'where', 'size', 'cap', 'traffic'].map(k => en('map.row.' + k)));
     assert.equal(await page.locator('#planHost .fchip.cat').count(), 0);
     assert.equal(await page.locator('#planHost select[data-f="type"]').count(), 0);
     assert.equal(await page.locator('#planHost .fsaved').count(), 0);
     assert.equal(await page.locator('#planHost .fplan-type').textContent(), 'Clothing Store');
-    assert.equal(await page.locator('#planHost .fplan-note').textContent(), 'from the plan');
+    assert.equal(await page.locator('#planHost .fplan-note').textContent(), en('map.fplan.from'));
     // Only premises to rent are a new store.
     assert.deepEqual(await page.$$eval('#planHost .fchip.show', c => c.map(x => [x.dataset.show, x.classList.contains('on')])), [['rent', true]]);
     // The plan's neighbourhood alone, scored on the plan's type.
@@ -166,7 +167,7 @@ test('a picked row opens its card with the plan\'s button, which hands the build
     const card = page.locator('#planHost .site');
     // Rent, deposit and capacity are among the card's facts.
     const facts = await card.locator('.facts span').allTextContents();
-    for(const want of ['Building capacity40', 'Est. rent / day$300', 'Deposit$1,800']) assert.ok(facts.includes(want), `${want} in ${facts}`);
+    for(const want of [en('map.fact.cap') + '40', en('map.fact.rent') + '$300', en('map.fact.deposit') + '$1,800']) assert.ok(facts.includes(want), `${want} in ${facts}`);
     const go = card.locator('[data-action="plan"]');
     assert.equal(await go.isVisible(), true);
     assert.equal(await go.textContent(), 'Plan it here');

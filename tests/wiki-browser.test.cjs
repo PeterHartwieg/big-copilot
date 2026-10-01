@@ -1,6 +1,7 @@
 // Exercise the generated site and its real app lifecycle with no save/runtime.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require('playwright');
@@ -61,8 +62,8 @@ async function fixture(t, {hash='', width=1280, theme='dark', motion='reduce', c
 }
 
 async function openFromLanding(page) {
-  await page.getByRole('button', {name:'Browse the wiki',exact:true}).click();
-  await page.getByRole('searchbox', {name:'Search the wiki'}).waitFor();
+  await page.locator('#lgWikiLink').click();
+  await page.locator('#wikiSearch').waitFor();
 }
 
 test('the landing Wiki entry is visible with and without reduced motion', async t => {
@@ -99,7 +100,7 @@ test('a link into Prices in your save lands on that section, and only once', asy
     const el = document.getElementById('wk-prices');
     return el && scrollY > 0 && Math.abs(el.getBoundingClientRect().top) < 260;
   });
-  assert.match(await page.locator('#wk-prices h2').innerText(), /Prices in your save/);
+  assert.match(await page.locator('#wk-prices h2').innerText(), enRe('wiki.prices.title'));
   assert.match(page.url(), /#wiki\/businesstypes-giftshop\/prices$/);
   // A redraw afterwards leaves the reader where they have scrolled to.
   await page.evaluate(() => { scrollTo(0, 0); drawWiki(); });
@@ -276,7 +277,7 @@ test('a page without the section a link names starts at its top, not where the l
 test('search keeps focus when cleared and preserves mid-query edits', async t => {
   const {page, errors} = await fixture(t);
   await openFromLanding(page);
-  const search = page.getByRole('searchbox', {name:'Search the wiki'});
+  const search = page.locator('#wikiSearch');
   await search.fill('gift');
   await search.press('Home');
   await search.press('ArrowRight');
@@ -317,7 +318,7 @@ test('a selected graph survives resizing and parks its ball after clearing', asy
   await page.setViewportSize({width:1100,height:900});
   await page.waitForFunction(n => document.querySelectorAll('#wikiGraph path.lit').length === n, lines);
   assert.equal(await product.getAttribute('aria-pressed'), 'true');
-  await page.getByRole('button', {name:'Let go of the picked node',exact:true}).click();
+  await page.locator('#wikiGraph [data-wiki-letgo]').click();
   assert.equal(await product.getAttribute('aria-pressed'), 'false');
   assert.equal(await page.locator('#wikiGraph .wk-ball').isVisible(), true);
   assert.deepEqual(errors, []);
@@ -325,9 +326,9 @@ test('a selected graph survives resizing and parks its ball after clearing', asy
 
 test('supplier pin opens its real address and Escape restores focus', async t => {
   const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop'});
-  const pin = page.getByRole('button', {name:'Show 13 Fifth Avenue on map',exact:true});
+  const pin = page.locator('.map-shortcut[data-map-key="ba:street_fifthavenue#13"]');
   await pin.click();
-  const dialog = page.getByRole('dialog', {name:'Location map',exact:true});
+  const dialog = page.locator('#locationMapDialog');
   await dialog.waitFor();
   assert.match(await dialog.innerText(), /13 Fifth Avenue/);
   await page.keyboard.press('Escape');
@@ -392,8 +393,8 @@ test('a guide draws its services and its side range as cards of the same make', 
   const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-florist', changeData:addGuides});
   await page.getByRole('heading', {name:'Florist',exact:true,level:1}).waitFor();
   const seen = await page.locator('#wikiRoot h2').allTextContents();
-  assert.deepEqual(seen, ['To open', 'Sells', 'Services', 'Also sells', 'Fits together',
-    'Make it', 'Also make', 'Where to go', 'Yours', 'Prices in your save', 'Source']);
+  assert.deepEqual(seen, [en('wiki.copy.setupTitle'), en('wiki.copy.primaryTitle'), en('wiki.copy.servicesTitle'), en('wiki.copy.secondaryTitle'), en('wiki.copy.graphTitle'),
+    en('wiki.copy.primaryRecipesTitle'), en('wiki.copy.secondaryRecipesTitle'), en('wiki.copy.suppliersTitle'), en('wiki.yours.title'), en('wiki.prices.title'), en('wiki.copy.sourceTitle')]);
   assert.equal(await page.locator('.wk-card').count(), 3, 'a card each for both ranges and the fee');
   // The square is the control, and the row it belongs to answers to it.
   const square = page.locator('.wk-item .wk-tick').first();
@@ -403,7 +404,7 @@ test('a guide draws its services and its side range as cards of the same make', 
   await square.click();
   assert.equal(await page.locator('.wk-item.done').count(), 0);
   const service = page.locator('.wk-card.svc');
-  assert.match(await service.innerText(), /Delivery Fee[\s\S]*Automatic[\s\S]*A van/);
+  assert.match(await service.innerText(), new RegExp("Delivery Fee[\\s\\S]*" + enRe('wiki.copy.automaticFee').source + "[\\s\\S]*A van", ''));
   // A service's dependency keeps the help's own link, and it goes somewhere.
   await service.getByRole('link', {name:'Gift Shops',exact:true}).click();
   await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
@@ -562,9 +563,9 @@ test('the real source shapes read as lines, not as file markers', {skip: !guided
   // No bullet the help file wrote, no furniture among the stock, nothing twice.
   assert.doesNotMatch(text, /(^|\s)\*\s+\w/m, 'a source bullet marker in the checklist');
   const card = name => open.locator('.wk-group').filter({has:page.getByRole('heading',{name,exact:true,level:3})});
-  assert.doesNotMatch(await card('Stock and consumables').innerText(), /Hairdresser Chair/);
-  assert.match(await card('Equipment').innerText(), /Hairdresser Chair or Hairdresser Chair \(Modern\)/);
-  assert.equal((await card('People').innerText()).match(/Hair Stylist/g).length, 1);
+  assert.doesNotMatch(await card(en('wiki.ui.stockTitle')).innerText(), /Hairdresser Chair/);
+  assert.match(await card(en('wiki.ui.fixturesTitle')).innerText(), /Hairdresser Chair or Hairdresser Chair \(Modern\)/);
+  assert.equal((await card(en('wiki.ui.staffTitle')).innerText()).match(/Hair Stylist/g).length, 1);
   // The service cards still carry every line the source gives them.
   const service = page.locator('.wk-card.svc').first();
   assert.equal(await service.locator('.wk-need').count(), 3);
@@ -584,9 +585,9 @@ test('an office shows what its workstation needs, on a phone and at a desk',
       const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-lawfirm', width});
       await page.getByRole('heading', {name:'Law Firm',exact:true,level:1}).waitFor();
       const kit = page.locator('.wk-group').filter({
-        has:page.getByRole('heading', {name:'Equipment', exact:true, level:3})});
+        has:page.getByRole('heading', {name:en('wiki.ui.fixturesTitle'), exact:true, level:3})});
       const text = (await kit.evaluate(el => el.textContent)).replace(/\s+/g, ' ');
-      assert.match(text, /Equipment and service requirements/, `${width}px: no caption for them`);
+      assert.match(text, enRe('wiki.ui.linkedRequirements'), `${width}px: no caption for them`);
       // A computer is on the opening list, not behind "Show all".
       assert.match(text, /Computer.*(Laptop|ZanaMan Computer)/, `${width}px: ${text}`);
       assert.equal(await kit.locator('[data-wiki-fix]').count(), 0, 'nothing of the workstation is hidden');
@@ -601,7 +602,7 @@ test('an office shows what its workstation needs, on a phone and at a desk',
 
 test('every guide this build ships draws a page of its own', {skip: !guided.length}, async t => {
   const {page, errors} = await fixture(t, {hash:'#wiki'});
-  await page.getByRole('searchbox', {name:'Search the wiki'}).waitFor();
+  await page.locator('#wikiSearch').waitFor();
   const trouble = [];
   for(const [id, name] of guided) {
     await page.evaluate(hash => { location.hash = hash; }, `#wiki/${id}`);
@@ -703,8 +704,10 @@ test('unknown recipe output and wholesale availability stay unknown', async t =>
   }});
   await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
   const card = page.locator('.wk-card').filter({has:page.getByRole('heading',{name:'Gift (Cheap)',exact:true})});
-  assert.match(await card.innerText(), /Wholesale not stated/, 'unknown is said, not guessed');
-  assert.doesNotMatch(await card.innerText(), /No wholesaler|cannot/i);
+  assert.match(await card.innerText(), enRe('wiki.card.wholesale.unknown'), 'unknown is said, not guessed');
+  assert.doesNotMatch(await card.innerText(), new RegExp(enRe('wiki.card.wholesale.none').source + '|cannot', 'i'));
+  // Pins the wording: missing wholesale data must not claim that buying is impossible.
+  assert.doesNotMatch(await card.innerText(), /cannot/i);
   assert.doesNotMatch(await page.locator('#wikiRoot').innerText(), /\b0\/(?:h|day)\b/);
   assert.deepEqual(errors, []);
 });
@@ -721,14 +724,14 @@ test('save pricing is readable at desktop and phone widths and clears with the s
       drawWiki();
     });
     require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(() => D), 'wiki-browser');
-    const section = page.locator('section').filter({has:page.getByRole('heading',{name:'Prices in your save',exact:true})});
+    const section = page.locator('#wk-prices');
     await section.scrollIntoViewIfNeeded();
     await page.waitForFunction(() => Array.from(document.querySelectorAll('.wk-prices'))
       .some(el => el.innerText.includes('My Gifts: $30.27')));
     if(process.env.WIKI_PRICING_QA_DIR) await section.screenshot({path:path.join(process.env.WIKI_PRICING_QA_DIR, `pricing-${width}.png`)});
     assert.match(await section.innerText(), /My Gifts: \$30\.27/);
     assert.match(await section.innerText(), /\$25\.63/);
-    assert.match(await section.innerText(), /Not set/);
+    assert.match(await section.innerText(), enRe('wiki.prices.notSet'));
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false);
     const marketCell = section.locator('tbody tr').first().locator('td').last();
     assert.equal(await marketCell.evaluate(el => el.getBoundingClientRect().right <= innerWidth), true);
@@ -739,8 +742,8 @@ test('save pricing is readable at desktop and phone widths and clears with the s
     await page.keyboard.press('Enter');
     assert.notEqual(await disclosure.getAttribute('open'), null);
     await page.evaluate(() => { D = null; drawWiki(); });
-    await page.waitForFunction(() => document.querySelector('#wikiRoot').innerText.includes('Open a save to see your configured prices'));
-    assert.match(await section.innerText(), /Open a save/);
+    await page.waitForFunction(text => document.querySelector('#wikiRoot').innerText.includes(text), en('wiki.prices.nosave'));
+    assert.match(await section.innerText(), enRe('wiki.prices.nosave'));
     assert.doesNotMatch(await section.innerText(), /\$\d/);
     assert.deepEqual(errors, []);
   }
@@ -752,9 +755,9 @@ test('a payload with no guides falls back to the sample it does carry', async t 
     data.sample.PRODUCTS.cheapgift.wholesale = null;
   }});
   await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
-  await page.getByRole('heading', {name:'To open',exact:true,level:2}).waitFor();
+  await page.getByRole('heading', {name:en('wiki.ui.setupTitle'),exact:true,level:2}).waitFor();
   const card = page.locator('.wk-card').filter({has:page.getByRole('heading',{name:'Gift (Cheap)',exact:true})});
-  assert.match(await card.innerText(), /Wholesale not stated/);
+  assert.match(await card.innerText(), enRe('wiki.card.wholesale.unknown'));
   assert.deepEqual(errors, []);
 });
 
@@ -782,6 +785,6 @@ test('a live refresh keeps the open sections and the focus', async t => {
   assert.deepEqual(before.open, [false, true]);
   await page.evaluate(() => { D = {...D, meta:{day:191}}; wikiVisit(); });
   assert.deepEqual(await state(), before);
-  assert.match(await page.locator('#wikiRoot').innerText(), /save day 191/);
+  assert.match(await page.locator('#wikiRoot').innerText(), enRe('wiki.prices.day', {day: 191}, {}));
   assert.deepEqual(errors, []);
 });

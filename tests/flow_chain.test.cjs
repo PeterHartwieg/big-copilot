@@ -6,6 +6,7 @@
 // an existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -82,7 +83,7 @@ test('the chain orders the stages as the goods travel: the hub between the pier 
   const s = await state(page);
   assert.equal(s.chain, true);
   assert.equal(s.svg, false, 'the picture waits hidden');
-  assert.deepEqual(s.rails, ['Importers', 'Depots', 'Factories', 'Depots', 'Shops']);
+  assert.deepEqual(s.rails, [en("sb.flow.col.importers"), en("sb.flow.col.depots"), en("sb.flow.col.factories"), en("sb.flow.col.depots"), en("sb.flow.col.shops")]);
   assert.deepEqual(s.cards, ['import:pier', 'hub#1', 'factory#2', 'dist#6', 'shop#3', 'shop#4']);
   // Every link is a pipe, the one that skips a stage too, and the weekly import is dashed.
   assert.equal(s.pipes.length, 6);
@@ -132,7 +133,7 @@ test('a depot\'s shops fold into one card from four up, which lists them on a ta
   assert.deepEqual(s.cards, ['import:pier', 'dist#6', 'g:dist#6']);
   const group = four.locator('#flowChain [data-fc-group="g:dist#6"]');
   assert.match(await group.textContent(), /4/);
-  assert.match(await group.textContent(), /46 a day/);
+  assert.match(await group.textContent(), enRe("sb.flow.chain.perDay", {n: 46}));
   assert.equal(await group.getAttribute('aria-expanded'), 'false');
   await group.click();
   assert.equal(await four.locator('#flowChain [data-fc-group="g:dist#6"]').getAttribute('aria-expanded'), 'true');
@@ -141,18 +142,18 @@ test('a depot\'s shops fold into one card from four up, which lists them on a ta
   // A shop in the list follows that shop.
   await four.locator('#flowChain .sb-fc-r[data-fc-id="extra#2"]').click();
   assert.equal(await four.evaluate(() => flowPickId), 'extra#2');
-  assert.match(await four.locator('#flowChain .sb-fc-where').textContent(), /Following Shop 2/);
+  assert.match(await four.locator('#flowChain .sb-fc-where').textContent(), enRe("sb.flow.chain.following", {name: "Shop 2"}));
 });
 
 test('shops no pipe reaches share one line at the bottom', async t => {
   const page = await board(t, fixture(), 390);
   const line = page.locator('#flowChain [data-fc-group="unfed"]');
-  assert.match(await line.textContent(), /1 shop no pipe reaches/);
+  assert.match(await line.textContent(), enRe("sb.flow.chain.unfed", {n: 1}));
   assert.match(await line.textContent(), /Gym/);
   assert.equal((await state(page)).cards.includes('gym#5'), false, 'not a stage of its own');
   await line.click();
   assert.equal(await page.locator('#flowChain [data-fc-rows="unfed"] .sb-fc-r[data-fc-id="gym#5"]').count(), 1);
-  assert.match(await page.locator('#flowChain [data-fc-rows="unfed"]').textContent(), /No pipe reaches these/);
+  assert.match(await page.locator('#flowChain [data-fc-rows="unfed"]').textContent(), enRe("sb.flow.chain.unfed.head", {}));
 });
 
 test('no pipe at all: the box says so and links the wiki, at any width', async t => {
@@ -162,7 +163,7 @@ test('no pipe at all: the box says so and links the wiki, at any width', async t
     data.supply.graph = {nodes: keep ? data.supply.graph.nodes.filter(n => n.id === 'shop#3') : [], links: []};
     const page = await board(t, data, width);
     assert.equal(await page.locator('#sbFlowBox').isVisible(), true, `${width}: the box stays`);
-    assert.match(await page.locator('#flowChain').textContent(), /No goods move between your sites yet/);
+    assert.match(await page.locator('#flowChain').textContent(), enRe("sb.flow.empty.title", {}));
     assert.equal(await page.locator('#flowChain a.sb-fc-btn').getAttribute('href'), '#wiki/importers-overview');
     assert.equal(await page.locator('#sbFlowBox .sb-flowleg').isVisible(), false);
   }
@@ -191,20 +192,20 @@ test('following a site: in above, out below, the pipe carrying its problem colou
   assert.ok(hub);
   const bad = await pipeInto([sick.slug]);
   assert.match(bad.cls, sick.lvl === 'critical' ? /\bbad\b/ : /\bwarn\b/);
-  assert.match(await page.locator('#flowChain [data-fc-card="in:hub#1"]').textContent(), new RegExp(`${sick.st === 'noplan' ? 'no plan' : sick.st}`));
+  assert.match(await page.locator('#flowChain [data-fc-card="in:hub#1"]').textContent(), enRe("sb.word." + sick.st));
   const fine = await pipeInto([well.slug]);
   assert.match(fine.cls, /\blit\b/);
   assert.doesNotMatch(fine.cls, /warn|bad/);
   const s = await state(page);
-  assert.deepEqual(s.rails, ['Comes in', 'Here', 'Goes out']);
+  assert.deepEqual(s.rails, [en("sb.flow.chain.in"), en("sb.flow.chain.here"), en("sb.flow.chain.out")]);
   assert.deepEqual(s.cards, ['in:hub#1', 'here', 'out:shop#3', 'out:shop#4', 'out:dist#6']);
   assert.equal(await page.locator('#sbFlowBox .sb-flowleg').isVisible(), false);
   // Its facts in words.
-  assert.match(await page.locator('#flowChain .sb-fc-why').textContent(), /Worth a look/);
+  assert.match(await page.locator('#flowChain .sb-fc-why').textContent(), enRe("sb.flow.chain.why.head", {}));
   // The crumb goes back to the whole chain.
   await page.locator('#flowChain [data-fc-back]').click();
   assert.equal(await page.evaluate(() => flowPickId), null);
-  assert.equal((await state(page)).rails[0], 'Importers');
+  assert.equal((await state(page)).rails[0], en("sb.flow.col.importers"));
 });
 
 test('a tap gives the rows and the site page; a vanished site drops the focus', async t => {
@@ -230,7 +231,7 @@ test('a tap gives the rows and the site page; a vanished site drops the focus', 
   await gone.evaluate(() => { flowFocus('shop#4'); D.supply.graph.nodes = D.supply.graph.nodes.filter(n => n.id !== 'shop#4');
     D.supply.graph.links = D.supply.graph.links.filter(l => l.to !== 'shop#4'); drawFlow(); });
   assert.equal(await gone.evaluate(() => flowPickId), null);
-  assert.equal((await state(gone)).rails[0], 'Importers');
+  assert.equal((await state(gone)).rails[0], en("sb.flow.col.importers"));
 });
 
 test('a long Japanese site name stays inside its card, two lines at most', async t => {
@@ -266,7 +267,7 @@ function roundTrip(){
 test('a depot that feeds a factory and takes its output back stays above the shops, and the way back is drawn', async t => {
   const page = await board(t, roundTrip(), 390);
   const s = await state(page);
-  assert.deepEqual(s.rails, ['Importers', 'Depots', 'Factories', 'Shops']);
+  assert.deepEqual(s.rails, [en("sb.flow.col.importers"), en("sb.flow.col.depots"), en("sb.flow.col.factories"), en("sb.flow.col.shops")]);
   assert.deepEqual(s.cards, ['import:pier', 'hub#1', 'factory#2', 'shop#3', 'shop#4']);
   assert.equal(s.pipes.length, 5, 'every link is a pipe, the one back up too');
   const back = s.pipes.find(p => p.a === 'factory#2' && p.b === 'hub#1');
@@ -288,7 +289,7 @@ test("which link of a round trip is the way back does not depend on the save's s
   g.links.push({from: 'import:pier', to: 'factory#2', perDay: 100, items: 1, slugs: ['milk'], cadence: 'weekly', paused: false, arrives: 34});
   const page = await board(t, data, 390);
   const s = await state(page);
-  assert.deepEqual(s.rails, ['Importers', 'Depots', 'Factories', 'Shops']);
+  assert.deepEqual(s.rails, [en("sb.flow.col.importers"), en("sb.flow.col.depots"), en("sb.flow.col.factories"), en("sb.flow.col.shops")]);
   assert.match(s.pipes.find(p => p.a === 'factory#2' && p.b === 'hub#1').cls, /\bback\b/);
 });
 
@@ -302,7 +303,7 @@ test('a depot no importer fills keeps its place above its factory in a round tri
     if(order === 'factory first') g.nodes = [g.nodes.find(n => n.id === 'factory#2'), ...g.nodes.filter(n => n.id !== 'factory#2')];
     const page = await board(t, data, 390);
     const s = await state(page);
-    assert.deepEqual(s.rails, ['Depots', 'Factories', 'Shops'], order);
+    assert.deepEqual(s.rails, [en("sb.flow.col.depots"), en("sb.flow.col.factories"), en("sb.flow.col.shops")], order);
     assert.match(s.pipes.find(p => p.a === 'factory#2' && p.b === 'hub#1').cls, /\bback\b/, order);
     // A fixed-size arrowhead, whatever the pipe's width.
     assert.equal(await page.$eval('#flowChain marker[id^="sbFcArrow-"]', m => m.getAttribute('markerUnits')), 'userSpaceOnUse');
@@ -331,7 +332,7 @@ test('a return is always the way back: a hand-stocked hub beside an importer to 
     if(factoryFirst) g.nodes = [g.nodes.find(n => n.id === 'factory#2'), ...g.nodes.filter(n => n.id !== 'factory#2')];
     const page = await board(t, data, 390);
     const s = await state(page);
-    assert.deepEqual(s.rails, ['Importers', 'Depots', 'Factories', 'Shops'], `factory first: ${factoryFirst}`);
+    assert.deepEqual(s.rails, [en("sb.flow.col.importers"), en("sb.flow.col.depots"), en("sb.flow.col.factories"), en("sb.flow.col.shops")], `factory first: ${factoryFirst}`);
     assert.match(s.pipes.find(p => p.a === 'factory#2' && p.b === 'hub#1').cls, /\bback\b/);
   }
 });
@@ -339,7 +340,7 @@ test('a return is always the way back: a hand-stocked hub beside an importer to 
 test('a factory in round trips with two depots sits below both, both returns drawn back', async t => {
   const page = await board(t, roundTrips(2), 390);
   const s = await state(page);
-  assert.deepEqual(s.rails, ['Depots', 'Factories', 'Shops']);
+  assert.deepEqual(s.rails, [en("sb.flow.col.depots"), en("sb.flow.col.factories"), en("sb.flow.col.shops")]);
   assert.deepEqual(s.cards.slice(0, 3).sort(), ['dep#1', 'factory#2', 'hub#1']);
   assert.equal(s.cards[2], 'factory#2');
   const backs = s.pipes.filter(p => p.a === 'factory#2');
@@ -404,7 +405,7 @@ test('a factory on no pipe sits with the factories, not after the shops', async 
   g.links = g.links.filter(l => l.from !== 'factory#2' && l.to !== 'factory#2');
   const page = await board(t, data, 390);
   const s = await state(page);
-  assert.deepEqual(s.rails, ['Importers', 'Factories', 'Depots', 'Shops']);
+  assert.deepEqual(s.rails, [en("sb.flow.col.importers"), en("sb.flow.col.factories"), en("sb.flow.col.depots"), en("sb.flow.col.shops")]);
   assert.equal(s.cards[1], 'lone#9');
 });
 
@@ -439,7 +440,7 @@ test('a live refresh keeps the site followed and the open group, and lays the pi
   await page.evaluate(() => flowFocus('dist#6'));
   assert.equal(await refresh(), true);
   assert.equal(await page.evaluate(() => flowPickId), 'dist#6');
-  assert.match(await page.locator('#flowChain .sb-fc-where').textContent(), /Following Cake Distr\./);
+  assert.match(await page.locator('#flowChain .sb-fc-where').textContent(), enRe("sb.flow.chain.following", {name: "Cake Distr."}));
   assert.ok((await state(page)).pipes.length >= 2);
 });
 
@@ -474,7 +475,7 @@ test('the five-stage fixture chain fits a 1366 window with the sidebar folded: s
   // Folded to its rail, the sidebar leaves the page nearly the whole window.
   await page.evaluate(() => new Promise(done => { sdSet(true); requestAnimationFrame(() => requestAnimationFrame(done)); }));
   const m = await measure(page);
-  assert.deepEqual(m.heads, ['IMPORTERS', 'DEPOTS', 'FACTORIES', 'DEPOTS', 'SHOPS']);
+  assert.deepEqual(m.heads, ["importers", "depots", "factories", "depots", "shops"].map(k => en("sb.flow.col." + k).toUpperCase()));
   assert.ok(m.scale >= 0.8 && m.scale < 1, `scaled to ${m.scale.toFixed(2)}`);
   assert.ok(m.lastHeadRight <= m.boxRight, `SHOPS ends at ${m.lastHeadRight.toFixed(0)}, the box at ${m.boxRight.toFixed(0)}`);
   assert.equal(m.scrolls, false);
@@ -504,7 +505,7 @@ test('Goods flow moves like the map: the whole chain first, + and − zoom about
   assert.equal(await page.evaluate(() => document.getElementById('sbFlowScroll').scrollWidth <= document.getElementById('sbFlowScroll').clientWidth), true);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth));
   assert.deepEqual(await page.locator('#sbFlowZoom button').evaluateAll(bs => bs.map(b => b.getAttribute('aria-label'))),
-    ['Zoom in', 'Zoom out', 'The whole chain']);
+    [en("map.zoom.in"), en("map.zoom.out"), en("sb.flow.fit")]);
   // + zooms in about the middle, − back out.
   await page.click('#sbFlowZoom [data-fz="in"]');
   const c1 = await cam(page);
