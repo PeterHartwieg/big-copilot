@@ -1076,7 +1076,8 @@ test("premises rented and set up before the plan picked them keep their figures;
     delete (D.payback.sites || {})[b.key];
     const before = JSON.stringify(p.snap);
     osPick(b.key);
-    return {key: b.key, before, after: JSON.stringify(p.snap), want: JSON.stringify(osSnapOf(p, b)), opened: p.opened, step: osStep};
+    return {key: b.key, before, after: JSON.stringify(p.snap), want: JSON.stringify(osSnapOf(p, b)), opened: p.opened, step: osStep,
+      store: JSON.parse(JSON.stringify(D.businesses.find(x => x.key === b.key)))};
   }, SITE);
   assert.ok(moved.key);
   assert.notEqual(moved.after, 'null', 'its figures are kept at the pick');
@@ -1091,7 +1092,9 @@ test("premises rented and set up before the plan picked them keep their figures;
   // A plan whose store has sold is its record: another pick is a new plan of
   // the type there, and the record stays where it was.
   const kept = await page.evaluate(({key, site}) => { const p = osPlan(); osPick(key);
-    D.payback.sites[key] = {days: [[46, -400, 0], [47, 200, 600]], firm: {state: 'unknown'}, self: {state: 'unknown'}};
+    // It sold, then closed: the plan remembers the sale with no store or payback row left.
+    Object.assign(D.businesses.find(x => x.key === key), {hasTraded: true, revenue: 500}); drawOpenStore();
+    D.businesses = D.businesses.filter(x => x.key !== key); delete (D.payback.sites || {})[key];
     const before = JSON.stringify([p.key, p.snap, p.opened]), n = osPlans.length;
     osPick(site);
     return {before, after: JSON.stringify([p.key, p.snap, p.opened]), added: osPlans.length - n, now: osPlan().key, fresh: osPlan() !== p, type: osPlan().type === p.type};
@@ -1099,9 +1102,12 @@ test("premises rented and set up before the plan picked them keep their figures;
   assert.equal(kept.after, kept.before);
   assert.deepEqual([kept.added, kept.now, kept.fresh, kept.type], [1, SITE, true, true]);
   // One that closed before it ever sold has no record: it starts over at the new place.
-  const restart = await page.evaluate(({key, site}) => { osPick(key); const p = osPlan();
-    delete D.payback.sites[key]; D.businesses = D.businesses.filter(x => x.key !== key);
-    osPick(site); return {same: osPlan() === p, key: p.key, opened: p.opened}; }, {key: moved.key, site: SITE});
+  const restart = await page.evaluate(({key, site, store}) => { D.businesses.push(store); osPick(key); const p = osPlan();
+    const attached = p.opened;
+    D.businesses = D.businesses.filter(x => x.key !== key);
+    osPick(site); return {attached, same: osPlan() === p, key: p.key, opened: p.opened}; }, {key: moved.key, site: SITE, store: moved.store});
+  assert.equal(restart.attached, 46);
+  delete restart.attached;
   assert.deepEqual(restart, {same: true, key: SITE, opened: null});
 });
 

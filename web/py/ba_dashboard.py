@@ -33680,7 +33680,7 @@ function osLoad(){
             amount: p.finance.amount == null || !Number.isFinite(+p.finance.amount) ? null : Math.max(0, +p.finance.amount),
             bank: typeof p.finance.bank === "string" ? p.finance.bank : null} : {on: false, amount: null, bank: null},
           step: OS_STEPS.includes(p.step) ? p.step : "what", made: +p.made || null, snap: osSnapClean(p.snap),
-          opened: Number.isFinite(p.opened) ? p.opened : null, paid: !!p.paid}));
+          opened: Number.isFinite(p.opened) ? p.opened : null, paid: !!p.paid, sold: !!p.sold}));
       /* The stores that opened since the last visit are history before the caps count. */
       dirty = osReconcile();
       const before = osPlans.length;
@@ -34276,12 +34276,19 @@ function osPick(key){
   let plan = osPlan();
   if(!plan) return;
   if(plan.key !== key){
-    /* A plan whose store has sold is that store's record: another place is a
-       new plan of the type there. Any other plan starts over at the new
+    /* A plan whose store has sold (osReconcile() marks it, and it stays
+       marked once the store closes) is that store's record: another place is
+       a new plan of the type there. Any other plan starts over at the new
        place, since what it kept for the last one is not this one's. */
-    const row = plan.opened != null && plan.key ? paybackSite(plan.key) : null;
-    if(row && osSelling(row).length){ plan = osNew(plan.type, null); if(!plan) return; }
-    else { plan.snap = null; plan.opened = null; plan.paid = false; }
+    if(plan.opened != null && plan.sold){
+      plan = osNew(plan.type, null);
+      if(!plan){
+        osCur = null; osStep = "what";
+        osNotice = tt("gr.os.plans.full", "All twelve plans have a building. Delete one to start another.");
+        drawOpenStore();
+        return;
+      }
+    } else { plan.snap = null; plan.opened = null; plan.paid = false; plan.sold = false; }
   }
   plan.key = key;
   if(!plan.hood){ const b = osBuilding(key); if(b) plan.hood = b.hood; }
@@ -34970,6 +34977,7 @@ function osReconcile(){
   osPlans.forEach(p => {
     const b = osAttached(p);
     if(b && p.opened == null){ p.opened = b.opened; changed = true; }
+    if(b && !p.sold && b.hasTraded){ p.sold = true; changed = true; }
     if(b && !p.paid && osPaidBack(osNowOf(paybackSite(p.key)))){ p.paid = true; changed = true; }
   });
   return changed;
