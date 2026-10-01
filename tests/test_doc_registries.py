@@ -42,6 +42,7 @@ def between(text: str, start: str, end: str, what: str) -> str:
 
 ARCH = read("docs/architecture.md")
 DASHBOARD = read("ba_dashboard.py")
+BOARD = read("template/board.html")
 TOKEN = re.compile(r"__[A-Z_]+__")
 
 
@@ -90,11 +91,10 @@ class BuildTokenTests(unittest.TestCase):
 
     @staticmethod
     def code_tokens() -> set:
-        template = between(DASHBOARD, 'TEMPLATE = r"""', '"""', "TEMPLATE")
         # BANNER carries the template's own <!--__FOOTER__-->, which the
-        # "Template placeholders" table documents; only the tokens TEMPLATE does
-        # not carry are build_web.py's private set.
-        return set(TOKEN.findall(read("build_web.py"))) - set(TOKEN.findall(template))
+        # "Template placeholders" table documents; only the tokens
+        # template/board.html does not carry are build_web.py's private set.
+        return set(TOKEN.findall(read("build_web.py"))) - set(TOKEN.findall(BOARD))
 
     def test_the_private_token_list_matches_build_web(self):
         doc, code = self.doc_tokens(), self.code_tokens()
@@ -182,7 +182,7 @@ class FindingGroupTests(unittest.TestCase):
 
     @staticmethod
     def board_kinds() -> set:
-        table = between(DASHBOARD, "const ALERT_GROUPS = [", "\n];", "ALERT_GROUPS")
+        table = between(BOARD, "const ALERT_GROUPS = [", "\n];", "ALERT_GROUPS")
         return set(re.findall(r'\{id:"(\w+)"', table))
 
     def test_every_alert_group_is_a_group_the_findings_emit(self):
@@ -195,8 +195,8 @@ class FindingGroupTests(unittest.TestCase):
 
 class RegistryPointerTests(unittest.TestCase):
     """(d) Each table a checklist under Registries names by its declaration
-    carries a `Registry: "<heading>"` comment just above it in ba_dashboard.py,
-    so a reader who lands on the table finds the checklist. Only the comment
+    carries a `Registry: "<heading>"` comment just above it, in ba_dashboard.py
+    or template/board.html, so a reader who lands on the table finds the checklist. Only the comment
     directly above the declaration counts, not a neighbour's."""
 
     HEADINGS = ("A finding kind", "A view or a page")
@@ -230,20 +230,20 @@ class RegistryPointerTests(unittest.TestCase):
         return "\n".join(found)
 
     def test_every_declared_table_points_at_its_checklist(self):
-        lines = DASHBOARD.split("\n")
+        sources = [DASHBOARD.split("\n"), BOARD.split("\n")]
         for heading in self.HEADINGS:
             tag = 'Registry: "%s"' % heading
             missing = []
             tables = self.named_tables(heading) - self.SKIPPED
             for name in sorted(tables):
                 decl = re.compile(r"^(?:const )?%s\s*=" % name)
-                at = [i for i, line in enumerate(lines) if decl.match(line)]
-                if not at:
+                found = [(lines, i) for lines in sources for i, line in enumerate(lines) if decl.match(line)]
+                if not found:
                     continue
-                if tag not in self.comment_above(lines, at[0]):
+                if tag not in self.comment_above(*found[0]):
                     missing.append(name)
             self.assertFalse(missing, (
-                "%s has no %s comment above its declaration in ba_dashboard.py: add the "
+                "%s has no %s comment above its declaration: add the "
                 "block or the only-if pointer, as the tables beside it have"
                 % (", ".join(missing), tag)))
 
