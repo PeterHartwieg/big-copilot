@@ -7,6 +7,7 @@ from ba_dashboard import (
     FALLBACK_CAPS,
     _deposit_estimate,
     _door_caps,
+    _size_cap,
     _premises,
     _premises_demand,
     _rent_estimate,
@@ -252,8 +253,21 @@ class CapTests(unittest.TestCase):
 
     def test_auditorium_letters_keep_their_range(self):
         caps = _door_caps(Names({"help_building_types_content": CAPS_HELP}))
-        self.assertEqual(caps["cinema"], {"S": [100, 150]})
+        # A cinema's layouts are exact as well (issue #159): the saves read
+        # each one's number. A theatre keeps the letter's range alone.
+        self.assertEqual(caps["cinema"], {"S": [100, 150], "S1": 150, "S2": 125, "S3": 100})
         self.assertEqual(caps["theater"], {"R": [150, 200]})
+
+    def test_a_cinema_carries_its_own_layout_cap(self):
+        caps = _door_caps(Names({"help_building_types_content": CAPS_HELP}))
+        self.assertEqual([_size_cap({"t": "cinema", "z": "S", "v": v}, caps) for v in (1, 2, 3)],
+                         [150, 125, 100])
+        # A row without its version falls back to the letter's range, and a
+        # theatre's layout to its letter's.
+        self.assertEqual(_size_cap({"t": "cinema", "z": "S"}, caps), [100, 150])
+        self.assertEqual(_size_cap({"t": "theater", "z": "R", "v": 1}, caps), [150, 200])
+        # A shop's layout version changes nothing: the letter is its cap.
+        self.assertEqual(_size_cap({"t": "retail", "z": "C", "v": 2}, caps), 30)
 
     def test_vehicle_capacity_is_not_a_door_cap(self):
         caps = _door_caps(Names({"help_building_types_content": CAPS_HELP}))

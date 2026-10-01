@@ -298,9 +298,11 @@ test('a line short of its hours is a change at full production; under shop deman
   try {
     const cake = (await bySlug(cap, 'secProduction', 1)).cake;
     assert.ok(cake.tick);
-    // Line, Machines, Hours a day, Makes, Ships, Held, Status after the tick.
+    // Line, Machines, Hours a day, Makes, Sold, Ships, Held, Status after the
+    // tick. The status names what is short: the hours, and the cake's flour,
+    // whose top-up is short, as a chip of its own.
     assert.match(cake.cells[3], new RegExp("^12 24 " + enRe("sb.unit.h").source + "$"));
-    assert.match(cake.cells[7], enRe("sb.word.short", {}, {anchor: "full"}));
+    assert.equal(cake.cells[8], en("sb.word.short.hours") + " " + en("sb.word.short.inputs"));
     assert.match(cake.tip, textRe("sb.line.short.each2", {now: en("sb.dep.h", {h: 12}), n: 24}, {anchor: "start", cap: true}));
     assert.doesNotMatch(cake.tip, enRe("sb.ck.hours.full"));
     assert.match(await counted(cap), enRe("sb.cw.road", {done: 0, n: 10}));
@@ -309,7 +311,7 @@ test('a line short of its hours is a change at full production; under shop deman
   try {
     const cake = (await bySlug(dem, 'secProduction', 1)).cake;
     assert.equal(cake.tick, false);
-    assert.match(cake.cells[7], enRe("sb.word.covered", {}, {anchor: "full"}));
+    assert.match(cake.cells[8], enRe("sb.word.covered", {}, {anchor: "full"}));
     assert.match(cake.tip, textRe("sb.line.fewer", {lower: 10, now: 12}, {anchor: "start", cap: true}));
     assert.ok((await actions(dem)).every(a => a.kind !== 'Factory run hours'));
     // Bread feeds nothing a shop draws: Demand sizes it round the clock too.
@@ -452,9 +454,9 @@ test('Ships / day says what a line tops up to your own sites and what it exports
   const page = await board(fixture(), {which: 'all'});
   try {
     const lines = await bySlug(page, 'secProduction', 1);
-    assert.match(lines.cake.cells[5], enRe("sb.line.toCity", {n: 270}));
-    assert.match(lines.bread.cells[5], enRe("sb.line.toPier", {n: 960}));
-    assert.doesNotMatch(lines.bread.cells[5], enRe("sb.line.toCity"));
+    assert.match(lines.cake.cells[6], enRe("sb.line.toCity", {n: 270}));
+    assert.match(lines.bread.cells[6], enRe("sb.line.toPier", {n: 960}));
+    assert.doesNotMatch(lines.bread.cells[6], enRe("sb.line.toCity"));
   } finally { await page.close(); }
 });
 

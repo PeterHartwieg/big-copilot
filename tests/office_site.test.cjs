@@ -13,16 +13,16 @@ const {chromium} = require('playwright');
 
 let browser;
 let html;
-let THEATRE;
+let CINEMA;
 before(async () => {
   const result = spawnSync(process.env.PYTHON || 'python', ['-c',
     'from ba_dashboard import render; import sys; sys.stdout.buffer.write(render(None).encode("utf-8"))'],
   {cwd: path.join(__dirname, '..'), maxBuffer: 4 * 1024 * 1024});
   assert.equal(result.status, 0, result.stderr?.toString());
-  const fixture = spawnSync(process.env.PYTHON || 'python', ['-m', 'tests.theatre_fixture'],
+  const fixture = spawnSync(process.env.PYTHON || 'python', ['-m', 'tests.cinema_fixture'],
     {cwd: path.join(__dirname, '..'), maxBuffer: 8 * 1024 * 1024});
   assert.equal(fixture.status, 0, fixture.stderr?.toString());
-  THEATRE = JSON.parse(fixture.stdout.toString());
+  CINEMA = JSON.parse(fixture.stdout.toString());
   html = process.env.BOARD_TARGET === 'web'
     ? fs.readFileSync(path.join(__dirname, '..', 'web', 'index.html'), 'utf8')
     : result.stdout.toString();
@@ -74,12 +74,12 @@ async function site(status) {
   return page;
 }
 
-// A theatre: three roles at one site, and a different one holding it back each
-// hour. Both the grid and the findings come out of tests/theatre_fixture.py,
+// A cinema: two roles at one site, and a different one holding it back each
+// hour. Both the grid and the findings come out of tests/cinema_fixture.py,
 // which runs the real _hour_findings() over the grid it builds — a hand-written
 // finding beside a hand-written grid drifted from it, and said "staffing and
 // projection booths" over hours where both roles were short of people.
-async function theatre() {
+async function cinema() {
   const page = await browser.newPage({viewport: {width: 1280, height: 1100}});
   await page.route('https://**', route => route.abort());
   await page.setContent(html, {waitUntil: 'load'});
@@ -88,12 +88,12 @@ async function theatre() {
     /* Through the page's own door, as every board arrives: the findings name
        their roles as game-name tokens, which takeData() resolves. */
     takeData({
-      meta: {character: 'theatre-fixture', day: 29},
+      meta: {character: 'cinema-fixture', day: 29},
       rhythm: null,
       supply: {shops: []},
       businesses: [{
-        key: grid.key, status: 'retail', name: 'Playhouse', code: 'PH', type: 'Theatre',
-        address: '7 Second Avenue', neighbourhood: 'ba:neighborhood_hellskitchen',
+        key: grid.key, status: 'retail', name: 'Picture House', code: 'PH', type: 'Cinema',
+        address: '4 Broadway Street', neighbourhood: 'ba:neighborhood_midtown',
         opened: 12, revenue: 3000, customers: 180, basket: 20, profit: 500, margin: 16.6,
         cogs: 0, wages: 1200, rent: 400, marketing: 0, theft: 0, licensing: 0,
         staff: 6, staffCost: 1200, crew: [], people: [], lines: [],
@@ -104,7 +104,7 @@ async function theatre() {
     });
     siteKey = grid.key; siteOpen = true;
     drawSite();
-  }, [THEATRE.grid, THEATRE.findings]);
+  }, [CINEMA.grid, CINEMA.findings]);
   return page;
 }
 
@@ -169,47 +169,47 @@ const hoverChip = (page, k) => page.evaluate(i => document
 const capState = page => page.$$eval('#sitePanel .hc.cap',
   cells => cells.map(c => Number(getComputedStyle(c).opacity) > 0.5 ? 'lit' : 'dim'));
 
-test('a theatre counts furniture and capacity as two numbers, never as one', async () => {
-  const page = await theatre();
+test('a cinema counts furniture and capacity as two numbers, never as one', async () => {
+  const page = await cinema();
   try {
     const tip = await hourTip(page);
-    assert.match(tip, enRe('sp.hours.why.cap', {what: en('sp.hours.what.roles', {n: 3, rate: 50})}));
+    assert.match(tip, enRe('sp.hours.why.cap.door', {what: en('sp.hours.what.roles', {n: 2, rate: 50}), door: 150}));
     assert.doesNotMatch(tip, new RegExp(enRe('sp.hours.what.registers').source + '|' + enRe('sp.hour.registers').source));
     // 12:00: one projection booth of two is manned, and one booth is 25/h.
     // The old wording said "25 of 25 projection booths", which is neither.
     const [, noon] = await capReads(page);
-    assert.match(noon, new RegExp(enRe('sp.hour.customers', {n: 25}).source + ' · ' + enRe('sp.hour.slowest', {n: 3, roles: en('sp.hour.role', {n: 1, of: 2, noun: 'projection booths', rate: 25})}).source + ' · <b>' + enRe('sp.hour.atceiling').source + '</b>'));
+    assert.match(noon, new RegExp(enRe('sp.hour.customers', {n: 25}).source + ' · ' + enRe('sp.hour.slowest', {n: 2, roles: en('sp.hour.role', {n: 1, of: 2, noun: 'projection booths', rate: 25})}).source + ' · <b>' + enRe('sp.hour.atceiling').source + '</b>'));
     assert.doesNotMatch(noon, /25 of 25/);
   } finally { await page.close(); }
 });
 
-test('Customer Service binding a multi-role site names its booths, not registers', async () => {
-  const page = await theatre();
+test('Customer Service binding a multi-role site names its stations, not register capacity', async () => {
+  const page = await cinema();
   try {
-    // 10:00: one of two ticket booths manned, 50 of 100. The site number would
-    // read "50 of 50 register capacity on" — full, and about furniture the
-    // theatre does not have.
+    // 10:00: one of two concessions stand registers manned, 50 of 100. The
+    // site number would read "50 of 50 register capacity on" — full, and
+    // about the site's minimum rather than the registers.
     const [ten] = await capReads(page);
-    assert.match(ten, new RegExp(enRe('sp.hour.customers', {n: 50}).source + ' · ' + enRe('sp.hour.role', {n: 1, of: 2, noun: 'ticket booths', rate: 50}).source));
+    assert.match(ten, new RegExp(enRe('sp.hour.customers', {n: 50}).source + ' · ' + enRe('sp.hour.role', {n: 1, of: 2, noun: 'concessions stand registers', rate: 50}).source));
     assert.doesNotMatch(ten, new RegExp(enRe('sp.hours.what.registers').source + '|' + enRe('sp.hour.registers').source));
   } finally { await page.close(); }
 });
 
 test('two roles tied at the ceiling are both named', async () => {
-  const page = await theatre();
+  const page = await cinema();
   try {
-    // 10:00: one ticket booth of two at 50, and both projection booths at 50.
+    // 10:00: one register of two at 50, and both projection booths at 50.
     // Neither alone is the answer, so the cell says both, as the finding does.
     const [ten] = await capReads(page);
-    assert.match(ten, enRe('sp.hour.slowest', {n: 3, roles: en('sp.hour.role', {n: 1, of: 2, noun: 'ticket booths', rate: 50}) + ' + ' + en('sp.hour.role', {n: 2, of: 2, noun: 'projection booths', rate: 50})}));
+    assert.match(ten, enRe('sp.hour.slowest', {n: 2, roles: en('sp.hour.role', {n: 1, of: 2, noun: 'concessions stand registers', rate: 50}) + ' + ' + en('sp.hour.role', {n: 2, of: 2, noun: 'projection booths', rate: 50})}));
   } finally { await page.close(); }
 });
 
 test('a finding naming two tied answers reads as a plural', async () => {
-  const page = await theatre();
+  const page = await cinema();
   try {
     // The sentence lives in the chip under the grid, not in the head's ?.
-    const tie = THEATRE.findings.find(f => f.limits === 2);
+    const tie = CINEMA.findings.find(f => f.limits === 2);
     // Not a Msg: tie.limit is a plain str after the fixture's JSON dump.
     assert.equal(tie.limit, 'staffing and projection booths',
       'the planner really does join a people limit to a posts one');
@@ -221,12 +221,12 @@ test('a finding naming two tied answers reads as a plural', async () => {
 });
 
 test('a chip for two tied answers asks for both kinds of hour, not the door', async () => {
-  const page = await theatre();
+  const page = await cinema();
   try {
     // "staffing and projection booths" is a tie between people and posts, and
     // the chip has to ask the grid for both. Looking the joined sentence up in
     // a table of single limits misses, and the miss used to light the door's
-    // hours — a ceiling this theatre does not even have.
+    // hours — a ceiling that holds none of this cinema's hours.
     const chips = await capChips(page);
     assert.equal(await chips[0].getAttribute('data-show'),
       'staff:ba:skill_customerservice post:ba:skill_projectionist');
@@ -237,11 +237,11 @@ test('a chip for two tied answers asks for both kinds of hour, not the door', as
 });
 
 test('a role-specific limit draws people and its own furniture, never a door', async () => {
-  const page = await theatre();
+  const page = await cinema();
   try {
     // The four old limits had an icon apiece; a role's words -- "Projectionist
     // staffing", "projection booths", the two joined -- matched none of them,
-    // and every miss fell through to a DOOR, on a site with no door cap.
+    // and every miss fell through to a DOOR, on a site whose door never binds.
     const named = sel => page.evaluate(s => {
       const want = {};
       for(const k of ['door', 'person', 'counter', 'monitor'])
@@ -254,7 +254,7 @@ test('a role-specific limit draws people and its own furniture, never a door', a
     assert.deepEqual(icons.slice(0, 2), ['person', 'counter']);
     assert.ok(!icons.includes('door'), icons.join(','));
     // And the ceiling icons on the tile light what the findings name: the
-    // theatre has no door cap at all, so that one stays off.
+    // cinema's 150 never holds an hour, so that one stays off.
     const ceiling = await page.$$eval('#sitePanel .sp-ceil .sp-i',
       els => els.map(e => e.classList.contains('on')));
     assert.deepEqual(ceiling, [false, true, true], 'door off, counter and person lit');
@@ -263,13 +263,13 @@ test('a role-specific limit draws people and its own furniture, never a door', a
 
 
 test('two findings of one kind on different roles do not light each other\'s hours', async () => {
-  const page = await theatre();
+  const page = await cinema();
   try {
-    // 10:00 is held partly by the ticket booths' staffing and 12:00 wholly by
+    // 10:00 is held partly by the registers' staffing and 12:00 wholly by
     // projection's. Both are "short of people", so a cell stamped with the
     // kind alone belonged to both chips and hovering either lit both hours.
     // Python names the role as a game-name token; the page reads it in English.
-    const kinds = THEATRE.findings.filter(f => f.kind === 'cap')
+    const kinds = CINEMA.findings.filter(f => f.kind === 'cap')
       .map(f => f.limit.replace(/⟦[^|⟧]*\|([^⟧]*)⟧/g, '$1'));
     assert.deepEqual(kinds, [en('sp.py.list.and', {a: en('sp.py.limit.staffing'), b: 'projection booths'}),
       en('sp.py.limit.role', {role: 'Projectionist'}, {cap: true})]);
@@ -281,7 +281,7 @@ test('two findings of one kind on different roles do not light each other\'s hou
 });
 
 test('every role standing at a capped hour names its own ceiling on the cell', async () => {
-  const page = await theatre();
+  const page = await cinema();
   try {
     // 10:00 two roles stand at the site's 50/h, one short of people and one
     // with every booth it owns already manned; 12:00 projection alone, short
@@ -296,15 +296,15 @@ test('every role standing at a capped hour names its own ceiling on the cell', a
 });
 
 test('an idle hour names the role that is idle', async () => {
-  const page = await theatre();
+  const page = await cinema();
   try {
     // The site's own onShift is 1 all afternoon, so the old site-wide test saw
-    // nothing; the stage crew's five are idle against five customers an hour,
-    // and the hover has to say it was the stage crew.
+    // nothing; the two concessions staff are idle against five customers an
+    // hour, and the hover has to say it was Customer Service.
     const slack = page.locator('#sitePanel .hc.slack');
     assert.equal(await slack.count(), 3, 'the quiet hours 14:00-16:00');
     const read = await slack.first().getAttribute('data-read');
-    assert.match(read, new RegExp(enRe('sp.hour.customers', {n: 5}).source + ' · ' + enRe('sp.hour.slowest', {n: 3, roles: en('sp.hour.role', {n: 1, of: 2, noun: 'projection booths', rate: 25})}).source + ' · ' + enRe('sp.hour.idle.roles', {roles: 'Stage Crew'}).source));
-    assert.doesNotMatch(read, enRe('sp.hour.idle.roles', {roles: 'Customer Service'}));
+    assert.match(read, new RegExp(enRe('sp.hour.customers', {n: 5}).source + ' · ' + enRe('sp.hour.slowest', {n: 2, roles: en('sp.hour.role', {n: 1, of: 2, noun: 'projection booths', rate: 25})}).source + ' · ' + enRe('sp.hour.idle.roles', {roles: 'Customer Service'}).source));
+    assert.doesNotMatch(read, enRe('sp.hour.idle.roles', {roles: 'Projectionist'}));
   } finally { await page.close(); }
 });
