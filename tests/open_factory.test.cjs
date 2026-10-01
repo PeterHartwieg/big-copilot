@@ -282,3 +282,52 @@ test('the Overview task and Production\'s button open Plan a factory on a new fa
   assert.equal(await page.evaluate(() => planTarget), 'new');
   assert.equal(await page.locator('#planFor [data-of-for="new"].on').count(), 1);
 });
+
+/* --- review round 2 (#172) ------------------------------------------------- */
+
+test('an imports button opens the weekly imports for its site and leaves the depot choice alone', async t => {
+  const page = await board(t);
+  const r = await page.evaluate(k => {
+    window.__imports = [];
+    SOURCE.link = () => ({writes: ['imports', 'hire']});
+    window.gwImports = site => window.__imports.push(site);
+    const plan = ofEnsure();
+    ofGo('running');
+    const btn = document.querySelector('#ofBody [data-of-write="imports"]');
+    if(btn) btn.click();
+    return {found: !!btn, site: btn && btn.dataset.ofSite, depot: plan.depot, calls: window.__imports, step: ofStep};
+  }, BREWERY);
+  assert.ok(r.found, 'water arrives short of what the brewery eats');
+  assert.deepEqual(r.calls, [r.site], 'the dialog for the site whose contract brings water');
+  assert.equal(r.depot, null, 'the depot choice is untouched');
+  assert.equal(r.step, 'running');
+});
+
+test('the depot a new factory\'s plan costed stays the plan\'s through its setup, and ticks', async t => {
+  const page = await board(t);
+  await page.locator('#planFor [data-of-for="new"]').click();
+  const r = await page.evaluate(() => {
+    /* No depot yet: the company's warehouse stands empty. */
+    const wh = D.businesses.find(b => b.typeSlug === 'ba:businesstype_warehouse');
+    wh.status = 'vacant';
+    const free = premises().buildings.filter(b => b.type === 'warehouse' && b.status === 'vacant');
+    /* A second warehouse to rent, for the depot beside the factory. */
+    premises().buildings.push({...free[0], key: 'ba:street_twentyfourthstreet#6', address: '6 24th Street', rent: 300, deposit: 28000});
+    ofGo('where'); ofPick(free[0].key);
+    const plan = ofPlan(), inv = ofInvestment(plan);
+    const before = {depotKey: plan.depotKey, cost: inv.depot && inv.depot.total};
+    /* The player rents the warehouse the plan picked, sets it up, parks a driven van. */
+    wh.status = 'overhead'; wh.key = plan.depotKey; wh.opened = (D.meta || {}).day;
+    D.openFactory.sites[plan.depotKey] = {kind: 'depot', shelves: 8, imports: [], vehicles: [['ba:vehicletype_deliverytruck', true]]};
+    const after = ofInvestment(plan);
+    const rows = ofUntilRows(plan).flatMap(g => g[1]);
+    const pick = re => rows.find(x => re.test(x.title)) || {state: 'missing: ' + rows.map(x => x.title).join(' | ')};
+    return {before, after: after.depot && after.depot.total, rented: pick(/^The depot </).state, van: pick(/van and driver/).state,
+      route: pick(/Deliveries to the shops/).state};
+  });
+  assert.ok(r.before.depotKey, 'the plan keeps which warehouse it costed');
+  assert.equal(r.after, r.before.cost, 'and its cost, once the company has a depot');
+  assert.equal(r.rented, 'done');
+  assert.equal(r.van, 'done');
+  assert.ok(['done', 'todo'].includes(r.route), 'its deliveries have their own condition');
+});

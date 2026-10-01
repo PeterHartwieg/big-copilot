@@ -17186,6 +17186,13 @@ def _plan(
                 for s, v in products.items()
                 if s in planable and s not in entry.get("products", ())
             },
+            # The same for its main products: perDay is their average over
+            # the shops that stock them, which Plan a factory spreads over all.
+            "stocked": {
+                s: len(v)
+                for s, v in products.items()
+                if s in entry.get("products", ())
+            },
         }
 
     labels = {}

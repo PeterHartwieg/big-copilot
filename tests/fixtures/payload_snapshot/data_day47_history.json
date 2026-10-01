@@ -16472,7 +16472,11 @@
     },
     "sellers": {},
     "shops": 1,
-    "sites": 1
+    "sites": 1,
+    "stocked": {
+     "ba:itemname_cheapgift": 1,
+     "ba:itemname_umbrella": 1
+    }
    },
    "ba:businesstype_liquorstore": {
     "perDay": {
@@ -16480,7 +16484,10 @@
     },
     "sellers": {},
     "shops": 1,
-    "sites": 1
+    "sites": 1,
+    "stocked": {
+     "ba:itemname_beer": 1
+    }
    }
   },
   "peak": 1.27,
