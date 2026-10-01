@@ -172,15 +172,16 @@ test('the recurring order and the one-time catch-up are two changes, each with i
   // The card has no mark buttons of its own (declutter U20): each change has
   // its tick on its own row of Changes.
   assert.equal(await card.locator('[data-sb-mark]').count(), 0);
-  const keys = await page.evaluate(() => sbData().rows.filter(r => r.slug === 'flour' && r.site === 0 && r.view === 'imports').map(r => r.key));
+  // Each change found by its kind: the checklist puts one-offs first (#202).
+  const keys = Object.fromEntries(await page.evaluate(() => sbData().rows.filter(r => r.slug === 'flour' && r.site === 0 && r.view === 'imports').map(r => [r.kind, r.key])));
   await page.evaluate(() => { openRoute('supply/changes'); });
   const tick = key => page.locator(`#secChanges .sbc-row[data-key="${key.replace(/"/g, '\\"')}"] .sb-tick`);
-  const st = () => page.evaluate(() => sbData().rows.filter(r => r.slug === 'flour' && r.site === 0 && r.view === 'imports')
-    .map(r => [r.kind, pgState(sbData(), r)]));
-  await tick(keys[1]).click();
-  assert.deepEqual(await st(), [['Weekly imports', 'suggested'], ['Before the next delivery', 'marked']]);
-  await tick(keys[0]).click();
-  assert.deepEqual(await st(), [['Weekly imports', 'marked'], ['Before the next delivery', 'marked']]);
+  const st = async () => Object.fromEntries(await page.evaluate(() => sbData().rows.filter(r => r.slug === 'flour' && r.site === 0 && r.view === 'imports')
+    .map(r => [r.kind, pgState(sbData(), r)])));
+  await tick(keys['Before the next delivery']).click();
+  assert.deepEqual(await st(), {'Weekly imports': 'suggested', 'Before the next delivery': 'marked'});
+  await tick(keys['Weekly imports']).click();
+  assert.deepEqual(await st(), {'Weekly imports': 'marked', 'Before the next delivery': 'marked'});
   // Copy the changes: both, each in its own words.
   const copied = await page.evaluate(() => orderChecklistText(sbData().rows.filter(r => r.slug === 'flour' && r.site === 0 && r.view === 'imports'), 'T'));
   assert.match(copied, enRe("sb.ck.copy.row", {item: "Flour", change: en("sb.ck.copy.weekly", {from: 14000, n: 14420})}));
