@@ -12708,6 +12708,7 @@ function drawPlan(){
   const removeBtn = slug => `<button type="button" class="pc-x" data-pc-x="${attr(slug)}" aria-label="${
     attr(tt("gr.line.removeAria", "Remove {name} from the range", {name: itemName(slug)}))}" data-tip="${
     attr(tt("gr.line.remove", "Remove from the range"))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>`;
+  const none = [...cat[planType].products, ...added].every(slug => !RECIPE_BY[slug]);
   const lines = [...cat[planType].products, ...added].map(slug => {
     const r = RECIPE_BY[slug];
     const extra = added.includes(slug) ? extraRate(slug) : null;
@@ -12716,7 +12717,7 @@ function drawPlan(){
       const want = extra ? extra.rate * 7 * shops : wantWeek;
       return `<tr${extra ? ` class="pc-added" data-pershop="${extra.rate}"` : ""}><td class="l">${spEsc(itemName(slug))}${extra ? removeBtn(slug) : ""}${
           want ? `<span class="sub">${tt("gr.line.shopsWant", "shops want {n:,}/week", {n: Math.round(want)})}</span>` : ""}</td>
-        <td class="l" colspan="4"><span class="quiet">${tt("gr.line.noRecipeNote", "the game documents no way to make this one; the shops buy it from an importer")}</span></td></tr>`;
+        <td class="l" colspan="${none ? 4 : 5}"><span class="quiet">${tt("gr.line.noRecipeNote", "the game documents no way to make this one; the shops buy it from an importer")}</span></td></tr>`;
     }
     const station = ws[r.workstation] || {};
     const kit = [...(station.assembly || []), ...(station.machines || [])];
@@ -12782,11 +12783,11 @@ function drawPlan(){
         {station: station.name || r.workstation, kit: kit.length ? kit.join(" + ") : tt("gr.line.oneMachine", "one machine"), n: r.out * HOURS}))}">${
         tt("gr.line.rated", "{n:,}/h rated · {station}", {n: r.out, station: station.name || r.workstation})}</span></td>
       <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="${attr(tt("gr.line.fewer", "one machine fewer"))}">−</a><b>${machinesOn(slug)}</b><a href="#" data-d="1" aria-label="${attr(tt("gr.line.more", "one machine more"))}">+</a><span class="machines"></span></span></td>
-      <td class="made"></td><td class="covers">${rateField ? `<span class="pc-cov"></span>${rateField}` : ""}</td><td class="l"><span class="ing"></span></td></tr>`;
+      <td class="made"></td><td class="covers">${rateField ? `<span class="pc-cov"></span>${rateField}` : ""}</td><td class="l"><span class="ing"></span></td><td class="saves"></td></tr>`;
   });
   /* The range's last row: what else the type sells, one click from a line. */
   const offered = (cat[planType].extra || []).length;
-  if(offered > added.length) lines.push(`<tr class="pc-addrow"><td class="l" colspan="5"><button type="button" class="pc-add" data-pc-toggle aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>${
+  if(offered > added.length) lines.push(`<tr class="pc-addrow"><td class="l" colspan="6"><button type="button" class="pc-add" data-pc-toggle aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>${
     tt("gr.plan.add", "Add product")}<small>${tt("gr.plan.addMore", "{n} more", {n: offered - added.length})}</small></button></td></tr>`);
 
   /* changed for growth: a type's service list is explained, never planned —
@@ -12803,7 +12804,7 @@ function drawPlan(){
   if(planSaid) $("planPicker").dataset.tip = planSaid; else delete $("planPicker").dataset.tip;
   /* Every product bought in: the table and its notes say so, and nothing
      can be made, so no tiles, no ingredients, no sentence (declutter E7). */
-  const none = bought === cat[planType].products.length + added.length;
+
   /* Hidden also while another Expansion view is on screen: a redraw of every
      page (renderCalm(), a language switch) must not show it under that view. */
   const ing = $("secIngredients");
@@ -12823,8 +12824,10 @@ function drawPlan(){
     </div>
     <div class="scrollx"><table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length + added.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
       <thead><tr><th>${tt("gr.col.product", "Product")}</th><th class="l">${tt("gr.col.machines", "Machines")}</th><th>${tt("gr.col.made", "Made / week")}</th><th>${
-        tt("gr.col.supplies", "Supplies")}</th><th class="l">${tt("gr.col.raw", "Raw material / week")}</th></tr></thead>
+        tt("gr.col.supplies", "Supplies")}</th><th class="l">${tt("gr.col.raw", "Raw material / week")}</th><th class="saves" data-tip="${
+        attr(tt("gr.col.saves.tip", "What a line saves against imports: the imports it replaces, less the raw material its machines eat, both at import prices"))}">${tt("gr.col.saves", "Saves / week")}</th></tr></thead>
       <tbody>${lines.join("")}</tbody>
+      <tfoot class="pl-foot"><tr><td class="l" id="vFootWs"></td><td></td><td id="vFootMade"></td><td></td><td id="vFootRaw"></td><td class="saves" id="vFootSaves"></td></tr></tfoot>
     </table></div>
     <p class="quiet" id="vKit" style="margin:12px 0 0"></p>`;
   /* No sentence under the table (Peter's testing, A14): each row's Supplies
@@ -13288,9 +13291,7 @@ function ofWhatHtml(plan){
       ${drop != null ? tt("gr.of.export.drop", "Exporting {n:,} a week pulls that index down by {d} a week, a quarter of it over the importer's weekly cap of {mo:,}; it never falls below 0.5.",
         {n, d: num(Math.round(drop * 1000) / 1000), mo: p.mo}) : ""}</span></div>`;
   }).join("");
-  const saves = on.filter(l => l.want > 0).reduce((s, l) => s + ofSaves(l), 0);
-  const saved = on.some(l => l.want > 0) ? `<p class="ff-saves">${tt("gr.of.saves", "These lines save {w} a week against imports.", {w: fmt(saves)})} ${ofAgentLine()}</p>`
-    : `<p class="ff-saves">${ofAgentLine()}</p>`;
+  const saved = `<p class="ff-saves">${ofAgentLine()}</p>`;
   const depot = !ofIsOwned() && ofNoDepot() ? `<div class="ff-note warn">${spIcon("crate")}<span>${ofWantsDepot(plan)
       ? tt("gr.of.depot.adds", "<b>No depot yet.</b> To supply your shops, the factory needs a depot, so this plan adds one: a warehouse building, pallet shelves to receive, a van and a driver, and a Logistics Manager for its delivery plan.")
       : tt("gr.of.depot.without", "<b>No depot yet.</b> This plan leaves it out: the factory's goods reach the shops only once a depot takes them.")}</span>
@@ -13692,8 +13693,12 @@ function ofRunHtml(plan){
       ofAct("imports", tt("gr.of.ck.amounts.go", "Set the weekly amounts"), "crate", "")}</span></div>`);
   }
   const whyHtml = why.length && pct < 100 ? `<div class="os-h"><h2>${tt("gr.of.run.why", "Why output is below plan")}</h2><span class="c">${why.length}</span></div><div class="ff-why">${why.join("")}</div>` : "";
-  return `${tiles}<section class="os-card ff-outc"><h3>${owned ? tt("gr.of.run.vsNew", "Output against the new plan") : tt("gr.of.run.vs", "Output against plan")}</h3>${table}
-    <p class="os-dim ff-lead">${tt("gr.of.run.note", "A day, from the factory's staffed hours and its delivery plan. A worker's skill sets the share of the rate a machine reaches.")}</p></section>${whyHtml}`;
+  const days = (((ofFacts().sites || {})[key]) || {}).days || [];
+  const chart = `<section class="os-card"><h3>${tt("gr.of.run.chart.title", "Left the factory a day")}</h3>${ofDayChart(days, planDay)}
+    <p class="os-dim ff-lead">${owned ? tt("gr.of.run.chart.noteNew", "From the save's delivery log: goods shipped to your sites and, lighter, to the piers. The save does not count what is made, so what stays on the shelves is not in the bars. The plan line is the new plan; a line added lately shows as the bars climbing to it.")
+      : tt("gr.of.run.chart.note", "From the save's delivery log: goods shipped to your sites and, lighter, to the piers. The save does not count what is made, so what stays on the shelves is not in the bars.")}</p></section>`;
+  return `${tiles}<div class="os-two ff-run2">${chart}<section class="os-card ff-outc"><h3>${owned ? tt("gr.of.run.vsNew", "Output against the new plan") : tt("gr.of.run.vs", "Output against plan")}</h3>${table}
+    <p class="os-dim ff-lead">${tt("gr.of.run.note", "A day, from the factory's staffed hours and its delivery plan. A worker's skill sets the share of the rate a machine reaches.")}</p></section></div>${whyHtml}`;
 }
 
 /* Ingredients (the order-ahead table) belong to step 1 for a factory the
@@ -13702,6 +13707,35 @@ let ofIngNone = false;
 function ofIngShow(){
   const ing = $("secIngredients");
   if(ing && (ofIngNone || ofStep !== "what" || !ofIsOwned())) ing.hidden = true;
+}
+/* Each finished day the save's delivery log covers: what left the factory,
+   the piers' part of it lighter, against the plan's day as a dashed line
+   (_factory_days()). The save counts what leaves, not what is made, so a
+   day's bar is goods out of the door: what is made and still held is not in
+   it. The plan line is the plan on screen, so for a factory you run it is the
+   new plan, and a line added lately shows as the bars climbing to it. */
+function ofDayChart(days, planDay){
+  if(!days || days.length < 2) return `<p class="quiet">${tt("gr.of.run.chart.none", "Not enough days in the save's delivery log to chart yet.")}</p>`;
+  const W = 520, H = 250, x0 = 56, y0 = 16, x1 = W - 12, y1 = H - 40;
+  const top = Math.max(planDay * 1.1, ...days.map(d => d[1]), 1);
+  const step = osNiceStep(top / 4), vmax = Math.ceil(top / step) * step;
+  const n = days.length, bw = (x1 - x0) / n;
+  const X = i => x0 + bw * i, Y = v => y1 - (y1 - y0) * Math.max(0, v) / vmax;
+  const g = [];
+  for(let v = 0; v <= vmax + 1e-6; v += step) g.push(`<line class="grid" x1="${x0}" x2="${x1}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"></line><text x="${x0 - 8}" y="${(Y(v) + 3.5).toFixed(1)}" text-anchor="end">${num(v)}</text>`);
+  const every = Math.max(1, Math.ceil(n / 8));
+  days.forEach(([d], i) => { if(i % every === 0 || i === n - 1) g.push(`<text x="${(X(i) + bw / 2).toFixed(1)}" y="${y1 + 18}" text-anchor="middle">${d}</text>`); });
+  const bars = days.map(([d, out, pier], i) => {
+    const w = (bw * 0.7).toFixed(1), x = (X(i) + bw * 0.15).toFixed(1), p = Math.min(out, pier || 0);
+    const tip = pier == null ? tt("gr.of.run.chart.tipOut", "Day {d}: {n:,} left the factory", {d, n: out})
+      : tt("gr.of.run.chart.tip", "Day {d}: {n:,} left the factory, {p:,} of it to the piers", {d, n: out, p: pier});
+    return `<g><title>${spEsc(tip)}</title><rect class="os-dbar" x="${x}" y="${Y(out).toFixed(1)}" width="${w}" height="${(Y(0) - Y(out)).toFixed(1)}"></rect>${
+      p ? `<rect class="ff-pier" x="${x}" y="${Y(p).toFixed(1)}" width="${w}" height="${(Y(0) - Y(p)).toFixed(1)}"></rect>` : ""}</g>`;
+  }).join("");
+  const plan = planDay > 0 ? `<line class="inv" x1="${x0}" x2="${x1}" y1="${Y(planDay).toFixed(1)}" y2="${Y(planDay).toFixed(1)}"></line><text class="lbl w" x="${x0 + 6}" y="${(Y(planDay) - 7).toFixed(1)}">${
+    tt("gr.of.run.chart.plan", "plan {n:,} a day", {n: Math.round(planDay)})}</text>` : "";
+  return `<svg class="os-chart ff-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${attr(tt("gr.of.run.chart.aria", "What left the factory a day, against the plan"))}">${g.join("")}${bars}
+    <line class="ax" x1="${x0}" x2="${x1}" y1="${y1}" y2="${y1}"></line>${plan}<text x="${x1}" y="${y1 + 34}" text-anchor="end">${tt("gr.of.run.chart.axis", "game day")}</text></svg>`;
 }
 /* The flow drawn around the planner: called by drawPlan() once the lines are
    on the page, and by planDraw() after a stepper moves (ofAfterLines()). */
@@ -21432,7 +21466,7 @@ function planDraw(){
   const peakDay = host ? (+host.dataset.pershop || 0) * (+host.dataset.peak || 1) : 0;
   const wantWeek = perShopWeek * shopsOwned;  // one product, every shop, a week
   const fmtN = n => num(Math.round(n));
-  let machines = 0, made = 0, raw = 0, exportWeek = 0, takeWeek = 0;
+  let machines = 0, made = 0, raw = 0, exportWeek = 0, takeWeek = 0, saves = 0, savesAny = false, raws = 0;
   const ing = {}, kitCount = {};
   lines.forEach(tr => {
     const m = +tr.dataset.m, rate = +tr.dataset.rate, wk = m * rate * HOURS * 7;
@@ -21467,6 +21501,15 @@ function planDraw(){
     });
     const ingEl = q(".ing", tr);
     if(ingEl) ingEl.innerHTML = grList(parts.map(([name, f]) => `<b>${fmtN(wk * f)}</b> ${spEsc(name)}`));
+    /* What the line saves a week against imports (the factory flow's prices):
+       measured shops only, since with none there is nothing to replace. */
+    const savesEl = q(".saves", tr);
+    if(savesEl && typeof ofSaves === "function"){
+      const v = lineWant > 0 && tr.dataset.slug ? ofSaves({slug: tr.dataset.slug, made: wk, want: lineWant}) : null;
+      if(v !== null){ saves += v; savesAny = true; }
+      raws += typeof ofRawUnit === "function" && tr.dataset.slug ? wk * ofRawUnit(tr.dataset.slug) : 0;
+      savesEl.innerHTML = v === null ? `<span class="quiet">—</span>` : fmt(v);
+    }
     parts.forEach(([name, f]) => {
       raw += wk * f;
       const r = ing[name] || (ing[name] = {week: 0, by: []});
@@ -21494,6 +21537,10 @@ function planDraw(){
   takeWeek += Math.max(0, products - lines.length - boughtOwn.length) * wantWeek
     + boughtOwn.reduce((a, tr) => a + (+tr.dataset.pershop || 0) * 7 * shopsOwned, 0);
   put("vMachines", machines); put("vMade", fmtN(made)); put("vRaw", fmtN(raw));
+  /* The table's total row: workstations, made, raw material at import prices and the saving. */
+  put("vFootWs", tt("gr.foot.ws", {one: "{n} workstation", other: "{n} workstations"}, {n: machines}));
+  put("vFootMade", fmtN(made)); put("vFootRaw", raws ? fmt(raws) : "");
+  put("vFootSaves", savesAny ? fmt(saves) : "");
   /* What the shops take of that sits behind the Made tile, not in a tile or a
      sentence of its own; a line short of the shelves is red in its Supplies
      cell (declutter E8). */

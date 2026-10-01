@@ -46,6 +46,39 @@ class KitTests(unittest.TestCase):
                                                  ["ba:itemname_industrialblendingmachine", 45000.0]]})
 
 
+class StubSave:
+    """Just what _factory_days() reads: the day and plain lists."""
+    def __init__(self, day):
+        self.root = {"Day": day}
+
+    def items(self, v):
+        return v or []
+
+
+def pickup(day, *amounts):
+    return {"dayOfDelivery": day, "deliveryItems": [{"itemName": BEER, "amountDelivered": a} for a in amounts]}
+
+
+class FactoryDaysTests(unittest.TestCase):
+    """What left a factory a day: the delivery log's pickups, exports included,
+    and the exports alone from its sales; never what it made and still holds."""
+
+    def test_each_finished_day_is_the_log_out_with_the_exports_beside_it(self):
+        reg = {"deliveryTransactions": [pickup(10, -500, -300), pickup(10, -200), pickup(11, -900, 400), pickup(12, -50)],
+               "orderHistory": [{"dayNumber": 10, "itemSales": [{"amountSold": 200}]},
+                                {"dayNumber": 11, "itemSales": [{"amountSold": 0}]}]}
+        # Arrivals (positive) are not output; day 12 is today and still running.
+        self.assertEqual(ba_dashboard._factory_days(StubSave(12), reg), [[10, 1000, 200], [11, 900, 0]])
+
+    def test_a_full_log_drops_its_oldest_day_and_a_quiet_day_is_a_zero(self):
+        log = [pickup(5, -10)] + [pickup(7, -1)] * (ba_dashboard.DELIVERY_LOG_SIZE - 1)
+        days = ba_dashboard._factory_days(StubSave(8), {"deliveryTransactions": log, "orderHistory": []})
+        self.assertEqual(days, [[6, 0, None], [7, ba_dashboard.DELIVERY_LOG_SIZE - 1, None]])
+
+    def test_no_log_is_no_days(self):
+        self.assertEqual(ba_dashboard._factory_days(StubSave(9), {}), [])
+
+
 class PayloadTests(unittest.TestCase):
     """_open_factory() end to end on the synthetic trading company."""
 
@@ -103,6 +136,8 @@ class PayloadTests(unittest.TestCase):
         self.assertEqual(sites[DEPOT]["imports"], [[WATER, True]])
         self.assertEqual(sites[DEPOT]["vehicles"], [["ba:vehicletype_freighttruckt1", False]])
         self.assertEqual(sites[FACTORY]["vehicles"], [])
+        self.assertIsInstance(sites[FACTORY]["days"], list)
+        self.assertNotIn("days", sites[DEPOT])
 
     def test_headquarters_counts_agents_against_contracts_and_managers_against_sites(self):
         self.assertEqual(self.facts["hq"], {"agents": 0, "contracts": 1, "managers": 0, "managed": 2})

@@ -16702,6 +16702,37 @@ def _factory_kits(names: Names, prices: dict) -> dict:
     return out
 
 
+def _factory_days(save: Save, reg: dict) -> list:
+    """What left a factory each finished day: [[day, out, exported]].
+
+    The save keeps no count of what a factory made. What it keeps is what
+    left: its delivery log (deliveryTransactions, the last DELIVERY_LOG_SIZE
+    transactions), where every pickup is a negative amount -- the logistics
+    rounds to the player's own sites and the piers' pickup of the exports
+    alike -- and its sales (orderHistory's itemSales, amountSold), which are
+    the exports alone and count the same units again. So `out` is the log's
+    goods leaving, and `exported` (None on a day the sales history no longer
+    holds) is the part of it sold to the piers. A full log has lost part of
+    its oldest day, so that day is left out; today is still running and is
+    left out too. What is made and still held is in neither.
+    """
+    today = save.root.get("Day")
+    log = [t for t in save.items(reg.get("deliveryTransactions")) if isinstance(t, dict) and isinstance(t.get("dayOfDelivery"), int)]
+    if not log:
+        return []
+    out = collections.Counter()
+    for t in log:
+        out[t["dayOfDelivery"]] += sum(-(e.get("amountDelivered") or 0) for e in save.items(t.get("deliveryItems"))
+                                       if isinstance(e, dict) and (e.get("amountDelivered") or 0) < 0)
+    sold = {}
+    for e in save.items(reg.get("orderHistory")):
+        if isinstance(e, dict) and isinstance(e.get("dayNumber"), int):
+            sold[e["dayNumber"]] = sum(s.get("amountSold") or 0 for s in save.items(e.get("itemSales")) if isinstance(s, dict))
+    logged = {t["dayOfDelivery"] for t in log}
+    first = min(logged) + (1 if len(log) >= DELIVERY_LOG_SIZE else 0)
+    return [[d, int(out[d]), int(sold[d]) if d in sold else None] for d in range(first, today) if d >= first]
+
+
 def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, recipes: dict,
                   staff: list) -> dict:
     """The facts Expansion › Plan a factory prices a plan from.
@@ -16800,6 +16831,7 @@ def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, r
             "shelves": _placed_items(save, reg).get(PALLET_SHELF, 0),
             "imports": [[slug, contracts[b["key"]][slug]] for slug in _in_order(contracts[b["key"]])],
             "vehicles": vehicles,
+            **({"days": _factory_days(save, reg)} if kind == "factory" else {}),
         }
     roles = collections.Counter(p.get("skill") for p in staff)
     return {

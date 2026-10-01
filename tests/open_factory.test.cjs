@@ -158,3 +158,30 @@ test('the old ways in still work: a type set and drawPlan() draws the planner', 
   assert.equal(await page.evaluate(() => route), 'expansion/factory');
   assert.deepEqual(await page.evaluate(() => [planType, planTarget, ofStep]), [LIQ, 'new', 'what']);
 });
+
+test('the lines table carries Saves / week, line by line and in its total row', async t => {
+  const page = await board(t);
+  assert.equal(await page.locator('#planBody thead th.saves').count(), 1);
+  const r = await page.evaluate(b => {
+    const tr = document.querySelector(`#planBody tr.line[data-slug="${b}"]`), host = tr.closest('table');
+    const want = (+host.dataset.pershop || 0) * 7 * (+host.dataset.shops || 0), made = +tr.dataset.m * +tr.dataset.rate * 24 * 7;
+    return {cell: tr.querySelector('td.saves').textContent, want, expect: fmt(ofSaves({slug: b, made, want})), foot: $('vFootSaves').textContent};
+  }, BEER);
+  assert.ok(r.want > 0, 'the fixture measures the liquor store');
+  assert.equal(r.cell, r.expect);
+  assert.ok(r.foot.length > 0);
+});
+
+test('Running charts what left the factory each day against the plan line', async t => {
+  const page = await board(t);
+  await page.evaluate(k => { D.openFactory.sites[k].days = [[40, 900, 100], [41, 1100, 200], [42, 1200, null]]; ofGo('running'); }, BREWERY);
+  await page.waitForFunction(() => ofStep === 'running');
+  const chart = page.locator('#ofBody svg.ff-chart');
+  assert.equal(await chart.count(), 1);
+  assert.equal(await chart.locator('rect.os-dbar').count(), 3, 'a bar a day');
+  assert.equal(await chart.locator('rect.ff-pier').count(), 2, 'the piers part where the sales history holds it');
+  assert.equal(await chart.locator('line.inv').count(), 1, 'the plan line');
+  /* Too few days: said, not drawn. */
+  await page.evaluate(k => { D.openFactory.sites[k].days = [[42, 1200, null]]; drawPlan(); }, BREWERY);
+  assert.equal(await page.locator('#ofBody svg.ff-chart').count(), 0);
+});

@@ -967,6 +967,8 @@ shows in the shops' results.
   costs, the machines sized to the peak day, what they cost, the surplus and what the line
   saves a day (the imports it replaces, less the raw material it eats). **Size to** sets
   every line to the peak day, an average day, or, for a factory you run, as it runs now;
+  the lines table's **Saves / week** column is each line's saving on the same basis,
+  totalled in its last row;
   a stepper makes it Custom. A line left short of what the shops take is a finding row
   ("Bottle of Wine stays short"), saying where the rest still comes from; it never advises
   more machines or another site. A surplus is valued as an export (below). With no depot
@@ -997,7 +999,13 @@ shows in the shops' results.
 - **Running** compares what the factory makes a week with the plan, what reaches the
   depot with what the shops take, what goes to the piers and the raw material that
   arrives, line by line, and names the two causes it knows: machine-hours nobody staffs,
-  and raw material that arrives short.
+  and raw material that arrives short. Its chart, **Left the factory a day**, is the save's
+  own record: the factory's delivery log (`deliveryTransactions`, every pickup, the piers'
+  included) for each finished day it still covers, the piers' part lighter from the
+  factory's sales (`orderHistory`), against the plan's day as a dashed line. The save
+  counts no units made, so what is made and still on the shelves is not in the bars; for
+  a factory you run the line is the new plan, and a line added lately shows as the bars
+  climbing to it.
 
 **Prices.** An import costs the item's wholesale price × the product's import price index
 (1 where the market has none, as for raw material) × the public prices multiplier, less
