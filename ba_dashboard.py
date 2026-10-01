@@ -13918,6 +13918,14 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                     sum(grid["customers"][wd][h] for wd, h in cells) * basket / 7
                 ),
             }
+            # What held those hours, as data: the page lights the grid's cells
+            # and draws the chip's icons by it, never by the words. ["door"]
+            # for the building, else a ["staff" or "post", role key] per role.
+            finding["heldBy"] = [
+                ["door"] if kind == "the building"
+                else ["staff" if kind == "staffing" else "post", skill]
+                for kind, skill in limits
+            ]
             if limits[0][0] == "the building":
                 # The building's capacity comes with the lease, and the board
                 # has no advice for it: the finding names the ceiling and what
@@ -17085,6 +17093,31 @@ ALERT_UNITS = {
 }
 
 
+def _amt(n, unit: str, *, of=None, sign: str = "", places: int = 0) -> dict:
+    """The figure a finding with no money worth shows on the right, as data,
+    so the page never reads it back out of the sentence: `n` (and `of`, for
+    "84/168") in `unit`, one of the unit ids the page's amtUnit() words.
+    `sign` is "$", "%" or "x". A number the sentence rounds is rounded the
+    same way here, so the two always agree; `places` is how many decimals
+    the sentence writes ("1.0 days"), sent as `dp` for the page to keep."""
+    out = {"n": n, "unit": unit}
+    if of is not None:
+        out["of"] = of
+    if sign:
+        out["sign"] = sign
+    if places:
+        out["n"] = _shown(n, places)
+        out["dp"] = places
+    return out
+
+
+def _shown(v, places: int = 0):
+    """v as a finding's sentence writes it with `places` decimals
+    (_half_away()), as a number: an int when it is whole."""
+    r = _half_away(v, places)
+    return int(r) if r == r.to_integral_value() else float(r)
+
+
 def _msg_list(items: list):
     """Several names or phrases as one list, "a, b, c", that stays a message:
     a nested "{a}, {b}" per comma, the last pair under a key of its own
@@ -17146,6 +17179,7 @@ def _finding(
     always: bool = False,
     ev: dict | None = None,
     named: str | None = None,
+    amt: dict | None = None,
 ) -> dict:
     """One row of the list.
 
@@ -17163,6 +17197,9 @@ def _finding(
 
     `subject` is English, since the id hashes it; `named` is how a summary
     line of several rows names it (_condense()), with its game names as tokens.
+
+    `amt` is the figure a row with no money worth shows (_amt()), left off
+    where the sentence has none.
     """
     return {
         "level": level,
@@ -17178,6 +17215,7 @@ def _finding(
         "siteKey": key,
         "always": always,
         **({"ev": ev} if ev else {}),
+        **({"amt": amt} if amt else {}),
     }
 
 
@@ -17212,10 +17250,10 @@ def _alerts(
     found = []
 
     def note(level, site, group, text, rank=0.0, subject="", worth=None, always=False,
-             key=None, ev=None, named=None):
+             key=None, ev=None, named=None, amt=None):
         found.append(
             _finding(level, site, group, text, key=key, rank=rank, subject=subject,
-                     worth=worth, always=always, ev=ev, named=named)
+                     worth=worth, always=always, ev=ev, named=named, amt=amt)
         )
 
     # A delivery plan: a route or an import into the site, or a repeating
@@ -17310,7 +17348,7 @@ def _alerts(
         sat = b["satisfaction"]["overall"]
         if sat is not None and b["customers"] and sat < 80:
             note("warn", b["name"], "satisfaction", msg("f.satisfaction", "Customer satisfaction at {n}%", n=sat),
-                 key=b["key"])
+                 key=b["key"], amt=_amt(sat, "satisfied", sign="%"))
         if b.get("missingUniformLocker"):
             # Installing the locker is the first action to take, so it stands in
             # for whichever roles are uncovered behind it.
@@ -17371,7 +17409,7 @@ def _alerts(
                        n=count, demands=_msg_list(items))
         note(
             "critical" if quitting else "warn", b["name"], "jobdemand", text,
-            always=True, key=b["key"],
+            always=True, key=b["key"], amt=_amt(count, "staff"),
         )
 
     # --- the staff demands no single site can settle: health insurance comes
@@ -17401,7 +17439,7 @@ def _alerts(
             msg("f.companydemand", {"one": "{n} staff member with unmet demands: {demands}",
                                     "other": "{n} staff with unmet demands: {demands}"},
                 n=lacking, demands=demands),
-            always=True,
+            always=True, amt=_amt(lacking, "staff"),
         )
 
     # --- the promotion cap, which is reached with campaigns or not at all
@@ -17475,6 +17513,7 @@ def _alerts(
             "warn" if any(gain(b) >= PROMOTION_GAP for b in raised) else "info",
             site if n == 1 else sites_of(raised), "promotion", text, rank=-max(gain(b) for b in raised),
             subject="mix-raise", always=True, key=raised[0]["key"] if n == 1 else None,
+            amt=_amt(top, "promotion", sign="%"),
         )
     if saved:
         saved.sort(key=lambda b: (b["marketingPlan"]["costPlan"] - b["marketingPlan"]["costNow"], b["name"]))
@@ -17491,6 +17530,7 @@ def _alerts(
         note(
             "info", saved[0]["name"] if len(saved) == 1 else sites_of(saved), "promotion", text,
             subject="mix-save", always=True, key=saved[0]["key"] if len(saved) == 1 else None,
+            amt=_amt(_shown(w), "/day", sign="$"),
         )
     by_key = {a["key"]: a["name"] for a in agencies}
     agencies_of = lambda group: _msg_list([by_key.get(k) or k for k in  # noqa: E731
@@ -17632,6 +17672,7 @@ def _alerts(
                     "them started, so there is no baseline to say what the drop will be", **said),
                 always=True,
                 key=top["key"],
+                amt=_amt(_shown(top["revenue"]), "/day under hype", sign="$"),
             )
 
     # --- a site whose week moved, against the week before it
@@ -17684,7 +17725,7 @@ def _alerts(
         if (
             finding["kind"] == "cap"
             and finding["key"] not in silent
-            and finding["limit"] != "the building"
+            and finding["heldBy"][0][0] != "door"
         ):
             same.setdefault(
                 (
@@ -17869,7 +17910,8 @@ def _shelf_notes(businesses: list, supply: dict, silent: set, mode: str = "cap")
                     fact["lvl"], b["name"], "unplanned",
                     msg("f.unplanned", "{item} is on no distribution plan: {units:,} left at {rate:,}/day",
                         item=item, units=line["units"], rate=rate),
-                    key=b["key"], rank=-line["units"], subject=line["item"], named=item, ev={"slug": slug}))
+                    key=b["key"], rank=-line["units"], subject=line["item"], named=item, ev={"slug": slug},
+                    amt=_amt(rate, "/day")))
             elif fact["st"] == "short" and fact["cad"] == "weekly":
                 # Fed by a weekly wholesale delivery, not a top-up.
                 rate = round(line.get("tradeRate", line["rate"]))
@@ -17900,7 +17942,9 @@ def _shelf_notes(businesses: list, supply: dict, silent: set, mode: str = "cap")
                 notes.append(_finding(
                     fact["lvl"], b["name"], "wholesale", text, key=b["key"],
                     rank=ratio - 10 if fact["why"] == "shortfall" else ratio,
-                    subject=line["item"], named=item, ev={"slug": slug}))
+                    subject=line["item"], named=item, ev={"slug": slug},
+                    amt=_amt(line["units"], "left") if fact["why"] == "shortfall" and not also_short
+                    else _amt(fact["use"], "/week used")))
             elif fact["st"] == "short" and fact["why"] == "target":
                 peak = (rows.get((s, slug)) or {}).get("peakDay")
                 notes.append(_finding(
@@ -18042,11 +18086,12 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                 notes.append(_finding(
                     fact["lvl"], site, "wholesale", text,
                     key=key, rank=round(fact["have"] / fact["use"], 2) if fact["use"] else 0,
-                    subject=item, named=named, ev=ev))
+                    subject=item, named=named, ev=ev, amt=_amt(fact["use"], "/week used")))
                 continue
             smart = _smart_words(entry.get("target") or 0, entry.get("plainAfter", 0),
                                  entry.get("plainBefore", 0)) if entry.get("smart") else ""
             if parts.get("lines") or fact["role"] == "input":
+                amt = None
                 if st == "paused":
                     text = msg("f.import.paused.resume", "{item} import is paused; resume the contract supplying "
                                "{site}", item=named, site=site)
@@ -18054,6 +18099,7 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                     stock = next((l["units"] for l in b["lines"] if l["slug"] == slug), 0)
                     said = dict(item=named, site=site, stock=stock, use=fact["use"], route=parts.get("route"),
                                 weeks=stock / fact["use"] if fact["use"] else 0)
+                    amt = _amt(said["weeks"], "weeks", places=1)
                     # The factories alone, or other sites drawing on it too;
                     # and a route bringing part of the week, or not.
                     if not parts.get("sites") and parts.get("route"):
@@ -18094,7 +18140,7 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                     text = msg("f.import.order", "{item}: this import needs to cover {use:,} a week and the import "
                                "order is {order:,}", item=named, use=fact["use"], order=entry.get("weekly", 0))
                 notes.append(_finding(fact["lvl"], site, "feed", text, key=key,
-                                      rank=-round(fact["use"] / 7), subject=item, named=named, ev=ev))
+                                      rank=-round(fact["use"] / 7), subject=item, named=named, ev=ev, amt=amt))
                 continue
             if st == "noplan":
                 # A depot only shops draw on, with no standing import: nothing
@@ -18122,7 +18168,8 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                 else:
                     text = msg("f.depot.noplan", "{item}: nothing brings it to {site}, which sends on {use:,} a "
                                "week; import {set:,} a week", **said)
-                said_as = dict(key=key, rank=-round(fact["use"] / 7), subject=item, named=named, ev=ev)
+                said_as = dict(key=key, rank=-round(fact["use"] / 7), subject=item, named=named, ev=ev,
+                               amt=_amt(said["lasts"].p["n"], "days") if passes is not None else None)
                 notes.append(_finding(fact["lvl"], site, "order", text, **said_as) if group == "order"
                              else _finding(fact["lvl"], site, "unsourced", text, **said_as))
                 continue
@@ -18135,11 +18182,13 @@ def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap"
                             item=named, n=round(cover), rate=row.get("importPerDay", row["perDay"]))
                         if row else msg("f.paused.bare", "{item} import is paused", item=named))
                 notes.append(_finding(fact["lvl"], site, "paused", text,
-                                      key=key, rank=cover, subject=item, named=named, ev=ev))
+                                      key=key, rank=cover, subject=item, named=named, ev=ev,
+                                      amt=_amt(row.get("importPerDay", row["perDay"]), "/day") if row else None))
                 continue
             text = _order_text(businesses, fact, entry, row, named)
             notes.append(_finding(fact["lvl"], site, "order", text,
-                                  key=key, rank=cover, subject=item, named=named, ev=ev))
+                                  key=key, rank=cover, subject=item, named=named, ev=ev,
+                                  amt=_amt(text.p["short"], "units short")))
     return notes
 
 
@@ -18260,8 +18309,12 @@ def _shortfall_note(row: dict, item: str, site: str, key: str, businesses: list 
                 if row.get("routed") else
                 msg("f.shortfall", "{item} runs dry {when}, {by:.1f} days before {arrives:day}'s import ({rate:,}/day, "
                     "{peak:,} at peak)", peak=row["peakPerDay"], **said))
+    # How many days early it runs dry, or, where a route brings the week, the
+    # route's draw.
+    amt = (_amt(said["routed"], "/day") if row.get("covered")
+           else _amt(said["by"], "days early", places=1))
     return _finding("critical", site, "shortfall", text,
-                    key=key, rank=row["cover"], subject=item, named=named, ev={"slug": row["slug"]})
+                    key=key, rank=row["cover"], subject=item, named=named, ev={"slug": row["slug"]}, amt=amt)
 
 
 def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
@@ -18308,6 +18361,7 @@ def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
                 _finding(
                     level, business["name"], group, text,
                     key=business["key"], rank=-machines, subject=where, named=shown,
+                    amt=_amt(machines, "machine" if machines == 1 else "machines"),
                 )
             )
     return notes
@@ -18366,6 +18420,7 @@ def _staff_notes(businesses: list, factories: dict, silent: set, mode: str = "ca
                         named=msg("sp.py.staff.named", "{item} at position {slot}",
                                   item=named, slot=machine["slot"]),
                         ev={"slot": machine["slot"], "slug": line.get("slug")},
+                        amt=_amt(machine["hours"], "hours staffed", of=week),
                     )
                 )
     return notes
@@ -18401,7 +18456,9 @@ def _feed_notes(businesses: list, factories: dict, silent: set, mode: str = "cap
             # whatever the sentence says first.
             own = bool(row.get("ownPaused"))
             said = dict(item=item, per=per_day, depot=depot, site=business["name"])
+            amt = _amt(per_day, "/day needed")
             if status == "noplan":
+                amt = _amt(per_day, "/day")
                 said.update(lines=_msg_list(lines) if lines else "")
                 text = (msg("f.feed.noplan.resume", "{item} feeds {lines} at {per:,}/day but no depot tops it up; "
                             "or resume the paused {item} import to {site}", **said)
@@ -18415,6 +18472,7 @@ def _feed_notes(businesses: list, factories: dict, silent: set, mode: str = "cap
                             set=raise_to)
                 if row.get("stalled"):
                     said.update(stock=row["depotStock"])
+                amt = _amt(said["n"], "hours covered")
                 text = _feed_target_text(bool(raise_to), bool(row.get("stalled")), own, said)
             elif status == "short" and why == "dry":
                 said.update(arrives=row["arrives"], stock=row["depotStock"])
@@ -18438,7 +18496,7 @@ def _feed_notes(businesses: list, factories: dict, silent: set, mode: str = "cap
                 _finding(
                     row["level"], business["name"], "feed", text,
                     key=business["key"], rank=-base["perDay"], subject=row["item"], named=item,
-                    ev={"slug": row["slug"]},
+                    ev={"slug": row["slug"]}, amt=amt,
                 )
             )
     return notes
@@ -18580,7 +18638,8 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
             text = _notrouted_text(len(sites) == 1, all(b["status"] != "retail" for b in sites), bool(days), said)
             notes.append(_finding(
                 "warn", name, "notrouted", text,
-                key=key, rank=-row["stock"], subject=row["item"], named=item, ev=ev))
+                key=key, rank=-row["stock"], subject=row["item"], named=item, ev=ev,
+                amt=_amt(said["per"], "/day")))
         elif why == "notMoving":
             # Brought here by a top-up target, with no shelf, onward route or
             # line here to use it: most likely a target set on the wrong route.
@@ -18610,13 +18669,15 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
             )
             notes.append(_finding(
                 "info", name, "dead", text,
-                key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev))
+                key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev,
+                amt=_amt(_shown(row["weeks"]), "weeks")))
         else:
             notes.append(_finding(
                 "info", name, "dead",
                 msg("f.dead.weeks", "{stock:,} {item} is {weeks:.0f} weeks of what leaves",
                     stock=row["stock"], item=item, weeks=row["weeks"]),
-                key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev))
+                key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev,
+                amt=_amt(_shown(row["weeks"]), "weeks")))
 
     # A top-up target set too high groups by the target behind it: the same
     # number in the same plan, repeated across shops, is one setting to change.
@@ -18638,6 +18699,7 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
             r["value"] / max(1.0, r["weeks"] * 7) for r in rows if r["price"]
         ) or None
         if target and daily:
+            amt = _amt(_shown(target / daily), "daily sales", sign="x")
             text = msg("f.target", {
                 "one": "{items} top-up target of {target:,} is {x:.0f}x daily sales in {n} shop; lower the target",
                 "other": "{items} top-up target of {target:,} is {x:.0f}x daily sales in {n} shops; lower the target",
@@ -18648,13 +18710,14 @@ def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") ->
                 "one": "{units:,} units of {items} across {n} site is {weeks:.0f} weeks of supply",
                 "other": "{units:,} units of {items} across {n} sites is {weeks:.0f} weeks of supply",
             }, units=stock, items=shown, n=sites, weeks=stock / max(sum(r["perWeek"] for r in rows), 1))
+            amt = _amt(stock, "units")
         one = businesses[rows[0]["s"]] if sites == 1 else None
         site = one["name"] if one else msg("f.target.site", {"one": "{n} shop", "other": "{n} shops"}, n=sites)
         notes.append(
             _finding(
                 "info", site, "target", text,
                 key=one["key"] if one else None, rank=-stock, subject=items[0],
-                named=tok(slug_of[items[0]], items[0]), worth=worth,
+                named=tok(slug_of[items[0]], items[0]), worth=worth, amt=amt,
                 # One target set too high can span several shops; the panel can
                 # only point at a row when a single site owns the finding, and
                 # the row it points at is the one the sentence names. Across
@@ -18755,6 +18818,8 @@ def _condense(found: list, gate: float) -> dict:
                 "detail": worst["text"],
                 "worth": sum(worths) if worths else None,
                 "unit": ALERT_UNITS.get(group, ""),
+                # How many findings the line stands for, where it has no money.
+                "amt": _amt(len(rows), "orders" if group == "order" else "findings"),
                 # The subject is dropped here, so the merged row is keyed on
                 # where it is alone.
                 "id": _alert_id("summary", group, where),

@@ -290,8 +290,9 @@ matches again.
 
 One ceiling and one role: a capped hour's cell carries `data-caps`, a space-separated list
 of `<kind>:<skill>` tokens (`door` alone for the building), and a cap chip's `data-show`
-carries the same tokens, worked back out of the finding's own words by `spLimitShow()` and
-`spLimitRole()`. Hovering a chip lights the cells holding *every* token it names. Keying on
+carries the same tokens, built by `spLimitShow()` from the finding's `heldBy` (`["door"]`,
+or a `["staff" | "post", role key]` per role, from `_hour_findings()`). Hovering a chip
+lights the cells holding *every* token it names. Keying on
 the kind alone let two findings of one kind on two different roles light each other's
 hours, and a tie between people and posts light neither's.
 
@@ -343,10 +344,9 @@ anything sent to the game stay plain English. A name Python pluralises or lowerc
 stays English. A board handed to the page anywhere but `takeData()` would show the
 tokens raw, which is why every door goes through it. A key the table lacks stays English. `setGameNames(lang)` fetches
 `web/names/<lang>.json` with the build stamp and redraws the whole board through
-`renderCalm(false)`, the path another save takes; Python never runs again. A join
-between a swapped name and Python's English prose (`spLimitRole()`) asks
-`englishName(key)` as well. The wiki swaps only what it shows, through `wikiName(key,
-english)`, because its matching against the help's own words needs the English.
+`renderCalm(false)`, the path another save takes; Python never runs again. The wiki
+swaps only what it shows, through `wikiName(key, english)`, because its matching against
+the help's own words needs the English.
 
 ## UI text
 
@@ -496,15 +496,16 @@ area. Ids, `subject`, the history, anything sent to the game and CLI output neve
 On the page, `localiseNames()` hands its fresh copy to `ttPayload()`, which, while a table
 is loaded, swaps each field its row's `i18n` names and keeps the English it showed on the
 row under a symbol key (so `{...row}` copies keep it, and JSON and `Object.keys()` never
-see it). **Code that reads Python's words reads `enOf(row, field)`**: the English,
-whatever the page shows. `findingAmount()`, `spLimitShow()` (and through it
-`spLimitRole()`), the site panel's cap chips (`limitEn()` in `drawSite()`: the
-`"the building"` tests, `capSentence`, `spLimitIcons()` and `data-limit`) and its ceiling
-strip (`spBindingLimits()`, which `spCeiling()` reads) do; `splitFinding()` only looks for its two English sentence shapes while
-the row is shown in English, and its generic cut (`:`, `;`, `. `, the comma within
-`HEADLINE_MAX`) works in any language, so a translation puts its headline first and the
-detail after `: ` or `; `. Any other comparison against Python's English has to move to
-`enOf()` in the pull request that converts its sentence.
+see it). **The page never reads a number or a kind back out of Python's words**: what
+code needs goes into the payload as data beside the sentence. A finding's figure is its
+`amt` (`_amt()`, read by `findingAmount()`), a cap finding's ceiling is its `heldBy`
+(read by `spLimitShow()`, `spLimitIcons()` and `spAtDoor()`), and the Today picture
+(`ovPicture()`) reads the sentence's own params (`ovParams()`). Code that still needs
+Python's words reads `enOf(row, field)`: the English, whatever the page shows, such as a
+chain's name used as a key. `splitFinding()` only looks for its two English sentence
+shapes while the row is shown in English, and its generic cut (`:`, `;`, `. `, the comma
+within `HEADLINE_MAX`) works in any language, so a translation puts its headline first
+and the detail after `: ` or `; `.
 
 ### The catalogue and the translations
 
@@ -1011,7 +1012,7 @@ Every other row is *only if*. The same summary sits above each of those tables i
 | `AMENITY_DEMANDS = {` | *Only if* it is an amenity kind: `slug: (group, text)` | `tests/test_uniform_alerts.py`, "test_an_empty_cache_means_every_demand_failed" |
 | `ALERT_UNITS = {` | *Only if* its `worth` is money: the unit, such as `"/day rent"`. Otherwise the kind goes on `NOT_MONEY` in `tests/alert_kinds.test.cjs` | `tests/alert_kinds.test.cjs`, "every finding kind has an ALERT_UNITS unit or is listed as carrying no money" |
 | `SUMMARIES = {`, and `WORST_FIRST =` for mixed severities | *Only if* three or more at one site should merge into one counted line | none; a missing entry just stops the merge |
-| `def _condense(` | *Only if* the kind merges and a field of its own must survive the merge. A merged row is built fresh: it keeps `group`, the key the rows were merged on; from the worst row it keeps `level`, `site`, `siteKey`, `detail` (that row's `text`) and `ev` when present; `text` is the `SUMMARIES` line, `worth` the sum of the rows' non-null worths (or `None` when there are none), `unit` from `ALERT_UNITS`, `id` a new `_alert_id("summary", …)`, and `always` is true if any row's is. Every other field is dropped. Every row, merged or not, also loses `rank` and `subject`, and `always` once the materiality gate has used it | none |
+| `def _condense(` | *Only if* the kind merges and a field of its own must survive the merge. A merged row is built fresh: it keeps `group`, the key the rows were merged on; from the worst row it keeps `level`, `site`, `siteKey`, `detail` (that row's `text`) and `ev` when present; `text` is the `SUMMARIES` line, `worth` the sum of the rows' non-null worths (or `None` when there are none), `unit` from `ALERT_UNITS`, `id` a new `_alert_id("summary", …)`, `amt` the count of rows it stands for (`orders` for `order`, else `findings`), and `always` is true if any row's is. Every other field is dropped. Every row, merged or not, also loses `rank` and `subject`, and `always` once the materiality gate has used it | none |
 | `const ALERT_GROUPS = [` (board script) | `{id, label, note, on}`. The settings panel, `kindLabel`, `kindCounts`, search and the map's `kindOff` all read it. Keep a noisy kind `on: false` | `tests/alert_kinds.test.cjs`, "At capacity is on by default" and the per-kind tests; `tests/test_doc_registries.py`, "test_every_alert_group_is_a_group_the_findings_emit" |
 | `const ALERT_DEFAULTS_V1 =` (board script) | Never add to it: it is the frozen migration of old settings | `tests/alert_kinds.test.cjs`, "a stored whole map keeps only …" |
 | `const ALERT_LINKS = {` (board script) | Where a click lands: `{sec, view?, site?, port?}`, where `view` is a Supply view (`imports`, `deliveries`, `production`) or `"route"` for the view of the finding's route (`findingRoute()`). Without it `goToAlert()` does nothing | `tests/alert_kinds.test.cjs`, "every finding kind has an ALERT_LINKS entry …", the per-kind tests and "the supply kinds land on the Supply view of their route"; `tests/job_demands.test.cjs`, "both demand findings can be filtered and link somewhere" |
@@ -1020,7 +1021,7 @@ Every other row is *only if*. The same summary sits above each of those tables i
 | `const ALERT_LANDS_ON_ROW = new Set(` (board script) | *Only if* the finding is about one shelf, stock or input row | none |
 | `const ALERT_EVIDENCE = {` (board script) | The site panel block it lights, `{block, hit?}`. A kind with no site panel goes on `NO_EVIDENCE` in `tests/alert_kinds.test.cjs` instead | `tests/alert_kinds.test.cjs`, "every finding kind with a site panel has an ALERT_EVIDENCE entry"; `tests/site_panel.test.cjs`, "the findings here are the ones about this site, and each lights its block" |
 | `const SP_EVIDENCE_KIND = {`, `const SP_EVIDENCE_HIT = {` (board script) | *Only if* a depot or factory keeps it in another block, or the hit depends on the site | `tests/alert_kinds.test.cjs` for the first; none for the second |
-| `function findingAmount(` (board script) | *Only if* the generic number patterns miss its amount | `tests/alert_kinds.test.cjs`, `tests/job_demands.test.cjs` |
+| `amt=` on its `note(` or `_finding(` (`_amt()`), and `amtUnit()` in the board script for a new unit | *Only if* its `worth` is not money and its sentence has a figure worth showing in the amount column; without it the column is empty | `tests/alert_kinds.test.cjs`, "the amount column shows a finding's amt"; `tests/test_payload_snapshot.py` |
 | `const SS_KIND_SYN = {` (board script) | The players' own words for it, for search | `tests/search.test.cjs`, "the index holds every group …" |
 | `function ssKindLands(` (board script) | *Only if* the kind's `ALERT_LINKS` entry has no `site`, no `tab` and no `port`, and its `sec` is not `secMarket` or `secPortfolio` (a finding that lands on Payroll or Milestones, say); every other kind already lands where it should | none |
 | "What counts as a finding" in `docs/dashboard-reference.md` | The player-facing description | none |

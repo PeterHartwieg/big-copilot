@@ -86,13 +86,13 @@ test('a shortfall a route feeds is a delivery; one an import still falls short o
   assert.equal(await routeOf('f.shortfall'), 'supply/imports');
 });
 
-test('a share is read with its decimals: 64.0% satisfied is 64, and 64.5% is 64.5', async t => {
+test('a share is shown with its decimals: 64.0% satisfied is 64, and 64.5% is 64.5', async t => {
   const page = await board(t);
   const amounts = await page.evaluate(() => [
-    findingAmount({group: 'satisfaction', text: 'Customer satisfaction at 64.0%', i18n: {text: ['f.satisfaction', {n: 64.0}]}}),
-    findingAmount({group: 'satisfaction', text: 'Customer satisfaction at 64.5%'}),
-    findingAmount({group: 'promotion', text: 'HART. Gifts promotes at 80.0% of the 100% cap', i18n: {text: ['f.promotion', {promotion: 80.0}]}}),
-    findingAmount({group: 'promotion', text: 'HART. Gifts promotes at 72.5% of the 100% cap'}),
+    findingAmount({group: 'satisfaction', text: 'Customer satisfaction at 64.0%', amt: {n: 64.0, unit: 'satisfied', sign: '%'}}),
+    findingAmount({group: 'satisfaction', text: 'Customer satisfaction at 64.5%', amt: {n: 64.5, unit: 'satisfied', sign: '%'}}),
+    findingAmount({group: 'promotion', text: 'HART. Gifts can reach 80% promotion', amt: {n: 80, unit: 'promotion', sign: '%'}}),
+    findingAmount({group: 'promotion', text: 'HART. Gifts can reach 72.5% promotion', amt: {n: 72.5, unit: 'promotion', sign: '%'}}),
   ]);
   assert.deepEqual(amounts, ['64%<small>satisfied</small>', '64.5%<small>satisfied</small>',
     '80%<small>promotion</small>', '72.5%<small>promotion</small>']);

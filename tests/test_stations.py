@@ -410,6 +410,8 @@ class BindingRoleTests(MsgAsserts, unittest.TestCase):
                        a=msg_param("sp.py.noun.station", stations="fitness planning boards",
                                    station_name="Fitness Planning Board"), b=msg_param("sp.py.counters"))
         self.assertEqual(finding["limits"], 2)
+        # Both roles held those hours, as data the page lights the cells by.
+        self.assertEqual(finding["heldBy"], [["staff", TRAINER], ["post", SERVICE]])
 
     def test_a_tie_prices_its_hours_once_and_not_once_per_role(self):
         """The same gym: 12 capped hours of 25 customers at a $12 basket.
