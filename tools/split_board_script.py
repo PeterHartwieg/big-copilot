@@ -14,7 +14,8 @@ with main in template/board.html when the two meet, by merge or by rebase
 either way round. Resolve it with --resolve, and only with it: it takes the
 three versions of board.html git staged (base, ours, theirs), splits each one
 that still holds the script inline, takes board.js for a side that is already
-split from that side's commit, and merges board.html and board.js three ways
+split from git's stage for that side (or that side's commit when git staged
+none), and merges board.html and board.js three ways
 with `git merge-file`. Both sides' edits survive, the markup and CSS as well as
 the script. A clean result is staged; otherwise both files keep git's conflict
 markers for a human, and nothing is staged. Then continue the merge or rebase
@@ -205,7 +206,7 @@ def resolve(root: str = ROOT) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     mode = ap.add_mutually_exclusive_group()
-    mode.add_argument("--resolve", action="store_true", help="merge both files of a merge or rebase stopped on board.html")
+    mode.add_argument("--resolve", action="store_true", help="merge both files of a merge, rebase or cherry-pick stopped on board.html")
     mode.add_argument("--join", action="store_true", help="put template/board.js back inline")
     args = ap.parse_args()
     if args.resolve:
