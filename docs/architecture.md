@@ -194,7 +194,13 @@ least-rostered machine, or `covered`) and the same under `dem` sized for demand,
 hours than needed adds `lower`, a suggestion rather than a change; `hoursNow` is that
 machine's week in whole hours a day and `thinDay` (`{day, hours}`) the weekday with fewest
 hours where it is under that; `demBasis` is `none` where nothing is drawn and Demand also
-sizes the line at 24. `supply.factories.sites[]` counts `running` machines (a recipe and
+sizes the line at 24. Each line also carries its use against what it makes at 24 h, for
+display only (`_line_use()`, issue #145): `soldDay`, its share of what the shops down its
+plan measurably sell a day (no margin, no target or coming week, no factory line eating
+it); `needDay`, the uncapped figure Demand sizing works from plus the margin; and
+`production`, `{status, level}` with `more` machines and `makesWith` a day where
+`needDay` is past what the line makes, so the 24 h cap on the hours stays. All three are
+null where no demand can be read. `supply.factories.sites[]` counts `running` machines (a recipe and
 somebody posted) beside the placed ones (`machines`).
 
 An `officeStaffing` row is one office planned by Peter's office default (25 Sep 2026,
