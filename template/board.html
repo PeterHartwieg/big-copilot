@@ -1194,6 +1194,7 @@ html:has(dialog:modal){overflow:hidden}
 #pageSupply .sb-v{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:4px;font:500 11px/1.5 "IBM Plex Mono",monospace;letter-spacing:.02em;white-space:nowrap;cursor:default}
 #pageSupply .sb-v svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 #pageSupply .sb-v.ok{background:var(--accent-soft);color:var(--accent)}
+#pageSupply .sb-t td.st .sb-v + .sb-v{margin:3px 0 0 4px}
 #pageSupply .sb-v.warn{background:#f0913a22;color:var(--warn)}
 #pageSupply .sb-v.bad{background:#ff625722;color:var(--neg)}
 #pageSupply .sb-v.plan{box-shadow:inset 0 0 0 1px var(--neg);color:var(--neg);background:none}
@@ -1265,8 +1266,9 @@ html:has(dialog:modal){overflow:hidden}
    leaves the table about 890 px); the status and the figures' second lines
    give instead. */
 #pageSupply [data-sb-table="factory-lines"] .sb-t tr > :nth-child(2){min-width:220px}
-#pageSupply [data-sb-table="factory-lines"] .sb-t td.st{min-width:104px}
-@media (max-width:1400px){#pageSupply [data-sb-table="factory-lines"] .sb-t th,#pageSupply [data-sb-table="factory-lines"] .sb-t td{padding-left:6px;padding-right:6px}}
+#pageSupply [data-sb-table="factory-lines"] .sb-t td.st{min-width:80px}
+@media (max-width:1400px){#pageSupply [data-sb-table="factory-lines"] .sb-t th,#pageSupply [data-sb-table="factory-lines"] .sb-t td{padding-left:4px;padding-right:4px}#pageSupply [data-sb-table="factory-lines"] .sb-t thead th{letter-spacing:0}}
+#pageSupply [data-sb-table="factory-lines"] td.st .sb-v{white-space:normal}
 #pageSupply [data-sb-table="factory-lines"] .sb-t td .sub{white-space:normal}
 /* Column heads never wrap (Peter's testing, A5): the Supply tables take
    tighter cells and a narrower status instead, so Imports fits beside the
@@ -2236,7 +2238,7 @@ tr:hover .sp-zz{animation:sp-zz 1.2s ease-in-out infinite}
 .sp-tname{display:inline-block;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:-3px}
 
 /* a factory's lines: one square a machine, filled by its share of the week */
-.sp-line{display:grid;grid-template-columns:230px minmax(116px,auto) 1fr 110px 110px 110px;gap:14px;align-items:center;padding:13px 0;border-bottom:1px solid var(--rule-soft);transition:opacity .2s}
+.sp-line{display:grid;grid-template-columns:230px minmax(116px,auto) 1fr 110px 110px 110px 110px;gap:14px;align-items:center;padding:13px 0;border-bottom:1px solid var(--rule-soft);transition:opacity .2s}
 .sp-line.sp-head{padding:0 0 8px;border-bottom:1px solid var(--rule);font:500 10.5px/1.4 "IBM Plex Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
 .sp-line .sp-n{font-family:"IBM Plex Mono",monospace;font-size:13.5px;text-align:right;white-space:nowrap}
 .sp-line.sp-head .sp-n{font-size:10.5px}
@@ -2776,7 +2778,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
   #sitePanel .sp-lamps{margin-left:0}
   #sp-hours .chartbox{overflow-x:auto;overscroll-behavior-x:contain}
   #sp-hours .chartbox > .hours{min-width:620px}
-  #sitePanel .sp-lines{min-width:760px}
+  #sitePanel .sp-lines{min-width:880px}
   #sitePanel .sp-ba{gap:18px 26px}
   #sitePanel .sp-typed{margin-left:0}
   #sitePanel .sp-steps .sp-nowplan{margin-left:0!important}

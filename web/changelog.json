@@ -6,6 +6,12 @@
     "summary": "Expansion › Plan a factory now has Add product under the range. It lists what the business type can also stock beyond its main products, such as umbrellas or soda at a Florist, each with the game's own weight for that type. An added product gets its own line, with machines, output, raw material and the weekly ingredient order like the main products, and × takes it out again. If every shop of the type already sells it, the line uses what they sell; otherwise you type an estimate a shop sells a day, which starts from what your shops sell of it or, if none do, from your main products' rate times the weight. Your additions are kept per type."
   },
   {
+    "pr": 205,
+    "date": "2026-10-01",
+    "title": "Factories: what your shops sell against what each line makes",
+    "summary": "Supply › Production and each factory's page have a Sold / day column: what the shops a line supplies actually sell a day, next to what it makes and ships. When a line cannot keep up even round the clock, its status reads short: needs N more machines, and the tip says what that gives, for example 1 more machine makes 9,600 a day against 5,066 needed. Every short now says what is short: hours, the ingredient order, or production, each as its own chip, so a short order is no longer read as a short line. A factory with a line short of machines opens under Needs a change."
+  },
+  {
     "pr": 175,
     "date": "2026-09-29",
     "title": "Open a new store: plan it, open it, and watch it earn the investment back",
