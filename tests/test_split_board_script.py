@@ -153,6 +153,44 @@ class Resolve(unittest.TestCase):
         self.assert_both_sides()
         self.assertEqual(self.git("log", "--format=%s", "-1").stdout.strip(), "old edits")
 
+    def test_the_conflicted_page_line_endings_are_kept(self):
+        self.git("checkout", "-q", "main")
+        self.stopped("merge", "old")
+        path = os.path.join(self.root, "template", "board.html")
+        with open(path, "rb") as fh:
+            crlf = fh.read().replace(b"\n", b"\r\n")
+        with open(path, "wb") as fh:
+            fh.write(crlf)
+        self.assertEqual(split_board_script.resolve(self.root), 0)
+        for name in ("board.html", "board.js"):
+            with open(os.path.join(self.root, "template", name), "rb") as fh:
+                data = fh.read()
+            self.assertEqual(data.count(b"\n"), data.count(b"\r\n"), name)
+
+    def test_a_cherry_picked_merge_commit_is_refused_before_anything_is_written(self):
+        # A merge commit on a side branch whose second parent turns .c blue,
+        # where main turned it lime: picking it with -m 1 stops on board.html.
+        split = self.git("rev-parse", "main~1").stdout.strip()
+        self.git("checkout", "-q", "-b", "side", split)
+        page = self.file("board.html").replace("green", "blue")
+        self.commit("side turns c blue", page)
+        self.git("checkout", "-q", "-b", "into", split)
+        self.git("merge", "-q", "--no-ff", "-m", "merge side", "side")
+        merge = self.git("rev-parse", "HEAD").stdout.strip()
+        self.git("checkout", "-q", "main")
+        self.stopped("cherry-pick", "-m", "1", merge)
+        before = (self.file("board.html"), self.file("board.js"))
+        with self.assertRaises(SystemExit):
+            split_board_script.resolve(self.root)
+        self.assertEqual((self.file("board.html"), self.file("board.js")), before)
+
+    def test_unrelated_histories_are_refused(self):
+        self.git("checkout", "-q", "--orphan", "other")
+        self.commit("unrelated", inline_page(css=[c.replace("red", "pink") for c in CSS]))
+        self.stopped("merge", "--allow-unrelated-histories", "main")
+        with self.assertRaises(SystemExit):
+            split_board_script.resolve(self.root)
+
     def test_edits_to_the_same_line_are_left_for_a_human(self):
         # main made it return 33; the old branch makes it return 4.
         self.commit("old edits the same line", inline_page(script=[s.replace("return 3", "return 4") for s in SCRIPT]))

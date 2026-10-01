@@ -18,12 +18,19 @@ split from that side's commit, and merges board.html and board.js three ways
 with `git merge-file`. Both sides' edits survive, the markup and CSS as well as
 the script. A clean result is staged; otherwise both files keep git's conflict
 markers for a human, and nothing is staged. Then continue the merge or rebase
-as usual.
+as usual. Running --resolve again starts over from what git staged, so it drops
+any hand edits made to the two files since.
+
+It recognises a merge, a rebase and a cherry-pick of an ordinary commit, by
+MERGE_HEAD, REBASE_HEAD or CHERRY_PICK_HEAD. `merge --squash`, `stash pop` and
+`revert` leave none of these, and a cherry-pick of a merge commit (-m) is
+refused: redo those as a plain merge, then run --resolve.
 
 Splitting and joining by hand are for files without conflict markers: both
 refuse a file that carries them.
 
-Line endings are kept as they are on disk; git normalises them on commit.
+Line endings are kept as they are on disk (--resolve writes both files in the
+line endings of the conflicted board.html); git normalises them on commit.
 """
 import argparse
 import os
@@ -123,12 +130,18 @@ def side_commits(root: str) -> dict:
     head = _commit(root, "HEAD")
     merge = _commit(root, "MERGE_HEAD")
     if merge:
-        base = git(root, "merge-base", head, merge).stdout.split()[0]
-        return {1: base, 2: head, 3: merge}
+        bases = git(root, "merge-base", head, merge, check=False).stdout.split()
+        if not bases:
+            raise SystemExit("--resolve: HEAD and MERGE_HEAD have no merge base; resolve by hand")
+        return {1: bases[0], 2: head, 3: merge}
     for ref in ("REBASE_HEAD", "CHERRY_PICK_HEAD"):
         other = _commit(root, ref)
         if other:
-            return {1: _commit(root, other + "^"), 2: head, 3: other}
+            parents = git(root, "rev-list", "--parents", "-n", "1", other).stdout.split()[1:]
+            if len(parents) != 1:
+                raise SystemExit(f"--resolve: {ref} is a merge commit or a root commit; redo it as a "
+                                 "plain merge, or resolve by hand")
+            return {1: parents[0], 2: head, 3: other}
     raise SystemExit("--resolve: no merge, rebase or cherry-pick is in progress")
 
 
@@ -142,7 +155,11 @@ def side_files(root: str, stage: int, commit: str) -> tuple[str, str]:
     parts = split(page)
     if parts is not None:
         return parts
-    script = show(root, f"{commit}:{SCRIPT_PATH}")
+    # When git staged board.js too, its stage is this side's version; the
+    # side's commit stands in only where there is none.
+    script = show(root, f":{stage}:{SCRIPT_PATH}")
+    if script is None:
+        script = show(root, f"{commit}:{SCRIPT_PATH}")
     if script is None:
         raise SystemExit(f"--resolve: {commit[:10]} has a split {PAGE_PATH} but no {SCRIPT_PATH}")
     return page, script
@@ -167,14 +184,18 @@ def resolve(root: str = ROOT) -> int:
     """Merge board.html and board.js three ways; the number of files left in conflict."""
     commits = side_commits(root)
     base, ours, theirs = (side_files(root, stage, commits[stage]) for stage in (1, 2, 3))
+    on_disk = os.path.join(root, PAGE_PATH)
+    crlf = os.path.exists(on_disk) and "\r\n" in read(on_disk)
+    merged = [merge3(ours[i], base[i], theirs[i], path) for i, path in enumerate((PAGE_PATH, SCRIPT_PATH))]
     left = []
-    for i, path in enumerate((PAGE_PATH, SCRIPT_PATH)):
-        text, conflicts = merge3(ours[i], base[i], theirs[i], path)
-        write(os.path.join(root, path), text)
+    for path, (text, conflicts) in zip((PAGE_PATH, SCRIPT_PATH), merged):
+        text = text.replace("\r\n", "\n")
+        write(os.path.join(root, path), text.replace("\n", "\r\n") if crlf else text)
         if conflicts:
             left.append(path)
     if left:
-        print("conflicts left in " + " and ".join(left) + ": resolve them, then git add both files")
+        print("conflicts left in " + " and ".join(left) + ": resolve them by hand, then git add both "
+              "files (running --resolve again starts over from the index and drops hand edits)")
         return len(left)
     git(root, "add", PAGE_PATH, SCRIPT_PATH)
     print(f"resolved and staged {PAGE_PATH} and {SCRIPT_PATH}")
