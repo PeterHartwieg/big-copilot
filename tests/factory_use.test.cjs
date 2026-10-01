@@ -122,6 +122,48 @@ test('a line short of production reads short with the machine count, and is coun
   } finally { await both.close(); }
 });
 
+test('a factory with a line critically short of machines opens, and its head says so', async () => {
+  // Nothing else to read: every input covered, the cake's hours covered, so
+  // there is no change to type and no other critical row.
+  const data = shortOfMachines(fixture());
+  for(const fact of Object.values(data.supply.facts['1'])){
+    if(fact.st === 'made') continue;
+    Object.assign(fact, {st: 'covered', why: null, lvl: 'ok', setTo: null});
+    delete fact.dem;
+  }
+  Object.assign(data.supply.factories.sites[0].lines.find(l => l.slug === 'cake'),
+    {status: 'covered', why: null, level: 'ok', hoursNow: 24, hoursWeek: 336, gaps: []});
+  const page = await board(data, {which: 'changes'});
+  try {
+    const obj = await page.$eval('#secProduction details.sb-obj', d => ({
+      open: d.open, head: d.querySelector('summary').textContent.replace(/\s+/g, ' ')}));
+    assert.ok(obj.open, JSON.stringify(obj));
+    assert.match(obj.head, /1 line short of machines/);
+  } finally { await page.close(); }
+});
+
+test('the factory page names the line furthest short of machines, in plain words in its tips', async () => {
+  const data = shortOfMachines(fixture());
+  const site = data.supply.factories.sites[0];
+  Object.assign(site.lines.find(l => l.slug === 'cake'), {soldDay: 900, needDay: 1035,
+    production: {status: 'short', level: 'critical', more: 2, makesWith: 960}});
+  site.needs.find(n => n.slug === 'flour').item = 'Flour & Salt';
+  Object.assign(data.supply.facts['1'].flour, {st: 'short', why: 'order', lvl: 'critical', cad: 'weekly'});
+  const page = await board(data);
+  try {
+    const got = await page.evaluate(() => {
+      const site = D.supply.factories.sites[0];
+      const el = document.createElement('div');
+      el.innerHTML = spLines(site);
+      const row = [...el.querySelectorAll('.sp-line:not(.sp-head)')].find(r => r.textContent.includes('Bread'));
+      const order = [...row.querySelectorAll('.chip')].find(c => c.textContent.trim() === 'order short');
+      return {read: spLinesRead(site), tip: order.dataset.tip};
+    });
+    assert.match(got.read, /<b>Cake<\/b> needs 2 more machines to cover the 1,035 a day it needs with the margin/);
+    assert.equal(got.tip, 'Short of Flour & Salt');
+  } finally { await page.close(); }
+});
+
 test('an order short and a production short on one line are two separate statuses', async () => {
   const data = shortOfMachines(fixture());
   // Flour, which the bread line eats, comes on an import order that does not

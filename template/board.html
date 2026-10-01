@@ -10828,9 +10828,13 @@ function spLinesRead(site){
       ? tt("sp.lines.idle", "Making nothing · Machine {slot} is staffed and rented with <b>no recipe</b>", {slot: spEsc(slot)})
       : tt("sp.lines.idle.any", "Making nothing · a machine is staffed and rented with <b>no recipe</b>");
   }
-  const lacking = (site.lines || []).find(l => sbProdFact(l));
-  if(lacking) return tt("sp.lines.machines", {one: "Short of machines · <b>{item}</b> needs {n} more machine to make what its shops sell",
-    other: "Short of machines · <b>{item}</b> needs {n} more machines to make what its shops sell"}, {item: spEsc(lacking.item), n: lacking.production.more});
+  /* The line furthest short of machines: the most to add, then the most
+     need past what it makes. */
+  const lacking = (site.lines || []).filter(l => sbProdFact(l)).sort((a, b) => b.production.more - a.production.more
+    || ((b.needDay || 0) - (b.makes || 0)) - ((a.needDay || 0) - (a.makes || 0)))[0];
+  if(lacking) return tt("sp.lines.machines", {one: "Short of machines · <b>{item}</b> needs {n} more machine to cover the {need} a day it needs with the margin: what its shops sell and other lines use",
+    other: "Short of machines · <b>{item}</b> needs {n} more machines to cover the {need} a day it needs with the margin: what its shops sell and other lines use"},
+    {item: spEsc(lacking.item), n: lacking.production.more, need: spNum(lacking.needDay)});
   let worst = null;
   (site.lines || []).forEach(l => (l.gaps || []).forEach((g, k) => {
     if(g && Number.isFinite(g.hours) && (!worst || g.hours < worst.g.hours))
@@ -10882,7 +10886,7 @@ function spMachines(count, gaps, slots){
 function spLineChips(site, l){
   const p = sbProdFact(l), g = sbLineInputsFact(site, l);
   return (p ? " " + chipHtml(SZ_CHIP[p.lvl] || "warn", szShortWord(p), sbMachinesTip(p)) : "")
-    + (g ? " " + chipHtml(SZ_CHIP[g.lvl] || "warn", szShortWord(g), sbInputsTip(g)) : "");
+    + (g ? " " + chipHtml(SZ_CHIP[g.lvl] || "warn", szShortWord(g), sbInputsTip(g, x => x)) : "");
 }
 const spLineHead = () => `<div class="sp-line sp-head"><span>${tt("sp.lines.col.line", "Line")}</span><span>${tt("sp.lines.col.machines", "Machines")}</span><span></span>${
   [tt("sp.lines.col.makes", "Makes / day"), tt("sp.lines.col.sold", "Sold / day"), tt("sp.lines.col.ships", "Ships / day"), tt("sp.lines.col.onhand", "On hand")].map(t => `<span class="sp-n">${t}</span>`).join("")}</div>`;
@@ -10900,7 +10904,7 @@ function spLines(site){
       ${spMachines(l.machines, l.gaps, l.slots)}
       <div class="sp-belt${stop ? " sp-stop" : ""}"></div>
       <div class="sp-n">${spNum(l.atRoster)}<small>${tt("sp.lines.rated", "of {n} rated", {n: spNum(l.makes)})}</small></div>
-      <div class="sp-n sp-sold" data-tip="${attr(tt("sb.col.sold.tip", "Measured: what the shops this line supplies sell a day, without the margin"))}">${
+      <div class="sp-n" data-tip="${attr(tt("sb.col.sold.tip", "Measured: what the shops this line supplies sell a day, without the margin"))}">${
         Number.isFinite(l.soldDay) ? spNum(l.soldDay) : "—"}${sbProdFact(l) && Number.isFinite(l.needDay)
         ? `<small>${tt("sp.lines.needDay", "needs {n}", {n: spNum(l.needDay)})}</small>` : ""}</div>
       <div class="sp-n">${spNum(l.ships)}</div>
@@ -13058,7 +13062,7 @@ function szShortWord(f){
 /* What a production status's tip and an ingredient status's tip say. */
 const sbMachinesTip = p => tt("sb.line.machines.tip", {one: "{n} more machine makes {makes:,} a day against {need:,} needed",
   other: "{n} more machines make {makes:,} a day against {need:,} needed"}, {n: p.more, makes: p.makesWith, need: p.need});
-const sbInputsTip = g => tt("sb.line.inputs.tip", "Short of {items}", {items: sbList(g.items.map(spEsc))});
+const sbInputsTip = (g, esc = spEsc) => tt("sb.line.inputs.tip", "Short of {items}", {items: sbList(g.items.map(esc))});
 /* A line's production and ingredient statuses, each a chip of its own. A
    line short of machines drops its hours' covered chip (sbLineRow()): hours
    cannot help a line at 24 h, and covered beside short reads as a contradiction. */
@@ -14043,7 +14047,14 @@ function sbFactoryPart(d, claimed, ctx, view, o){
         Number.isFinite(running) ? tt("sb.fac.running.tip", "{placed} placed; {n} run a recipe with someone scheduled at some hour", {placed, n: running}) : "")
       + sbStat(tt("sb.fac.staffed", "Staffed"), num(staffed), tt("sb.unit.hoursDay", "h a day"),
         tt("sb.fac.staffed.tip", "Hours a day someone is scheduled on a machine, all lines together"));
-    return sbObject(view, s, {icon: "gear", how, stats, left, open: left > 0 || keep.some(r => r.fact && r.fact.lvl === "critical"), body});
+    /* Lines short of machines keep their hours covered and carry no change to
+       type, so the head says how many there are, and a critical one opens it. */
+    const lacking = lines.filter(r => r.prod);
+    const worst = lacking.find(r => r.prod.lvl === "critical") || lacking[0];
+    const short = worst ? " " + sbStatus(worst.prod, "", "", tt("sb.fac.machines.chip",
+      {one: "{n} line short of machines", other: "{n} lines short of machines"}, {n: lacking.length})) : "";
+    return sbObject(view, s, {icon: "gear", how, stats: stats + short, left,
+      open: left > 0 || keep.some(r => (r.fact && r.fact.lvl === "critical") || (r.prod && r.prod.lvl === "critical")), body});
   });
   const lineN = szTally(everyLine.filter(r => r.fact), r => r.fact);
   const hoursShort = everyLine.filter(r => r.fact && r.fact.st === "short" && r.fact.why === "hours").length;
