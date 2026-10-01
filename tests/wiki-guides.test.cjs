@@ -11,6 +11,12 @@
 */
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
+// Match UI messages after the wiki escapes them into HTML.
+const htmlRe = (key, params = {}, options = {}) => {
+  const re = enRe(key, params, options);
+  return new RegExp(re.source.replace(/&/g, '&amp;').replace(/'/g, "(?:'|&#39;)"), re.flags);
+};
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
@@ -383,9 +389,9 @@ test('each business is drawn from its own guide, and never from another one\'s',
 test('a page with no guide behind it is still the reader', async () => {
   const w = wiki();
   const html = await w.load('wiki/products-coffee');
-  assert.deepEqual(headings(html), ['Yours']);
+  assert.deepEqual(headings(html), [en('wiki.yours.title')]);
   assert.match(html, /class="wk-read rv"/);
-  assert.doesNotMatch(html, /<h2>To open<\/h2>/);
+  assert.doesNotMatch(html, new RegExp("<h2>" + htmlRe('wiki.copy.setupTitle').source + "<\\/h2>", ''));
 });
 
 /* --- what a shop also carries -------------------------------------------- */
@@ -393,8 +399,8 @@ test('a page with no guide behind it is still the reader', async () => {
 test('everything a shop carries is a card, its own range and the rest alike', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-coffeeshop');
-  const own = section(html, 'Sells');
-  const also = section(html, 'Also sells');
+  const own = section(html, en('wiki.copy.primaryTitle'));
+  const also = section(html, en('wiki.copy.secondaryTitle'));
   assert.match(own, /<h3>.*Coffee<\/a>|<h3>Coffee<\/h3>/s, 'its own range');
   assert.match(own, /Tea/);
   assert.doesNotMatch(own, /Cake|Mug/);
@@ -402,29 +408,30 @@ test('everything a shop carries is a card, its own range and the rest alike', as
   assert.match(also, /class="wk-card rv"/);
   assert.match(also, /Cake/);
   assert.match(also, /Mug/);
-  assert.match(also, /<dt>Goes on<\/dt>/, 'the same three facts as the main range');
-  assert.match(also, /<dt>Comes from<\/dt>/);
-  assert.match(also, /also carried/, 'and it says which range it belongs to');
+  assert.match(also, new RegExp("<dt>" + htmlRe('wiki.card.goesOn').source + "<\\/dt>", ''), 'the same three facts as the main range');
+  assert.match(also, new RegExp("<dt>" + htmlRe('wiki.card.comesFrom').source + "<\\/dt>", ''));
+  assert.match(also, enRe('wiki.copy.alsoCarried'), 'and it says which range it belongs to');
   assert.equal((html.match(/class="wk-card rv"/g) || []).length, 4, 'four products, four cards');
 });
 
 test('the recipes of the side range are on the page too, in their own section', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-coffeeshop');
-  assert.ok(headings(html).includes('Make it'));
-  assert.ok(headings(html).includes('Also make'));
-  const rest = section(html, 'Also make');
+  assert.ok(headings(html).includes(en('wiki.copy.primaryRecipesTitle')));
+  assert.ok(headings(html).includes(en('wiki.copy.secondaryRecipesTitle')));
+  const rest = section(html, en('wiki.copy.secondaryRecipesTitle'));
   assert.match(rest, /Bake Recipe|Bakery Workstation/, 'the side range keeps its recipe');
   assert.match(rest, /30<small>\/h<\/small>/);
-  assert.doesNotMatch(section(html, 'Make it'), /Bakery Workstation/);
+  assert.doesNotMatch(section(html, en('wiki.copy.primaryRecipesTitle')), /Bakery Workstation/);
 });
 
 test('a recipe two products share is drawn once and names them both', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-coffeeshop');
-  const ours = section(html, 'Make it');
+  const ours = section(html, en('wiki.copy.primaryRecipesTitle'));
   assert.equal((ours.match(/Beverage Workstation/g) || []).length, 1, 'one flow, not one per product');
   assert.match(ours, /class="wk-for"/);
+  // Not a Msg: recipe user groups are plain strings from the guide data.
   assert.match(ours, /Coffee<b>primary<\/b>/);
   assert.match(ours, /Tea<b>primary<\/b>/);
 });
@@ -432,18 +439,18 @@ test('a recipe two products share is drawn once and names them both', async () =
 test('each recipe runs on its own workstation, not on a single assumed one', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-coffeeshop');
-  assert.match(section(html, 'Make it'), /Beverage Workstation/);
-  assert.match(section(html, 'Also make'), /Bakery Workstation/);
+  assert.match(section(html, en('wiki.copy.primaryRecipesTitle')), /Beverage Workstation/);
+  assert.match(section(html, en('wiki.copy.secondaryRecipesTitle')), /Bakery Workstation/);
   const model = w.call('wikiGraphModel(wikiOffers(wikiActive).filter(o => o.kind !== "fee"), wikiActive)');
-  const stations = model.nodes.source.filter(n => n.sub === 'your factory').map(n => n.name);
+  const stations = model.nodes.source.filter(n => n.sub === en('wiki.graph.factory')).map(n => n.name);
   assert.equal([...stations].sort().join(' · '), 'Bakery Workstation · Beverage Workstation');
 });
 
 test('a recipe page this build has lost is a gap on the page, not a silence', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-coffeeshop');
-  const rest = section(html, 'Also make');
-  assert.match(rest, /Recipe page missing/);
+  const rest = section(html, en('wiki.copy.secondaryRecipesTitle'));
+  assert.match(rest, enRe('wiki.copy.missingRecipe'));
   assert.match(rest, /class="chip bad"/, 'and it wears the gap badge');
   assert.match(rest, /Mug/, 'named by the product that points at it');
   assert.doesNotMatch(html, /null|undefined|NaN/);
@@ -454,7 +461,7 @@ test('a recipe page this build has lost is a gap on the page, not a silence', as
 test('a service card carries what the help says it depends on, and no shelf', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-hairdresser');
-  const services = section(html, 'Services');
+  const services = section(html, en('wiki.copy.servicesTitle'));
   assert.match(services, /Hair Cutting Fee/);
   assert.match(services, /Hair Chemical \/ Color Fee/);
   // The dependency lines keep the help's own wording, alternatives included,
@@ -468,28 +475,28 @@ test('a service card carries what the help says it depends on, and no shelf', as
   assert.doesNotMatch(services, /class="wk-need">\s*\*/);
   assert.doesNotMatch(services, /&gt;\s*\*|>\* /);
   // A fee is charged, not stocked.
-  assert.doesNotMatch(services, /Any wholesaler|No wholesaler listed|Wholesale not stated/);
-  assert.doesNotMatch(services, /<dt>Goes on<\/dt>/);
-  assert.doesNotMatch(services, /Your factory/);
+  assert.doesNotMatch(services, new RegExp(htmlRe('wiki.card.wholesale.any').source + "|" + htmlRe('wiki.card.wholesale.none').source + "|" + htmlRe('wiki.card.wholesale.unknown').source, ''));
+  assert.doesNotMatch(services, new RegExp("<dt>" + htmlRe('wiki.card.goesOn').source + "<\\/dt>", ''));
+  assert.doesNotMatch(services, enRe('wiki.card.factory'));
 });
 
 test('a fee is called automatic only where its own page says so', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-hairdresser');
-  const services = section(html, 'Services');
+  const services = section(html, en('wiki.copy.servicesTitle'));
   const colouring = services.slice(services.indexOf('Hair Chemical'));
-  assert.match(colouring, /Automatic/);
+  assert.match(colouring, enRe('wiki.copy.automaticFee'));
   const haircut = services.slice(services.indexOf('Hair Cutting Fee'), services.indexOf('Hair Chemical'));
-  assert.doesNotMatch(haircut, /Automatic/);
+  assert.doesNotMatch(haircut, enRe('wiki.copy.automaticFee'));
 });
 
 test('a shop of services still shows the goods it carries, as cards', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-hairdresser');
-  const also = section(html, 'Also sells');
+  const also = section(html, en('wiki.copy.secondaryTitle'));
   assert.match(also, /Hair Care Product/);
   assert.match(also, /Hairdresser Shelf<b>100<\/b>/, 'with its shelf and its capacity');
-  assert.match(section(html, 'Fits together'), /Hair Care Product/);
+  assert.match(section(html, en('wiki.copy.graphTitle')), /Hair Care Product/);
 });
 
 /* --- the opening checklist, against the shapes the help really writes -------- */
@@ -497,9 +504,9 @@ test('a shop of services still shows the goods it carries, as cards', async () =
 test('the alternatives a requirement offers are kept, on the card they belong to', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-hairdresser');
-  const open = section(html, 'To open');
-  const kit = open.slice(open.indexOf('<h3>Fixtures</h3>'), open.indexOf('<h3>Stock</h3>'));
-  const stock = open.slice(open.indexOf('<h3>Stock</h3>'), open.indexOf('<h3>People</h3>'));
+  const open = section(html, en('wiki.copy.setupTitle'));
+  const kit = open.slice(open.indexOf('<h3>' + en('wiki.copy.fixturesTitle') + '</h3>'), open.indexOf('<h3>' + en('wiki.copy.stockTitle') + '</h3>'));
+  const stock = open.slice(open.indexOf('<h3>' + en('wiki.copy.stockTitle') + '</h3>'), open.indexOf('<h3>' + en('wiki.copy.staffTitle') + '</h3>'));
   // One line, both chairs, the help's own "or" — and it is equipment, however
   // little the payload knows about either chair.
   assert.match(kit, /Hairdresser Chair<\/a> or <a class="wk-link"[^>]*>Hairdresser Chair \(Modern\)/);
@@ -509,7 +516,7 @@ test('the alternatives a requirement offers are kept, on the card they belong to
   // The product the business page requires is in stock, once.
   assert.equal((visible(stock).match(/Hair Care Product/g) || []).length, 1);
   // The skill the services ask for is the skill the business page lists, once.
-  const people = open.slice(open.indexOf('<h3>People</h3>'));
+  const people = open.slice(open.indexOf('<h3>' + en('wiki.copy.staffTitle') + '</h3>'));
   assert.equal((visible(people).match(/Hair Stylist/g) || []).length, 1);
 });
 
@@ -526,15 +533,15 @@ test('the file\'s own bullet marker never reaches the reader', async () => {
 test('an office repeats neither its workstation nor its lawyer', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-lawfirm');
-  const open = section(html, 'To open');
+  const open = section(html, en('wiki.copy.setupTitle'));
   // The fee asks for the workstation the business page already requires.
   assert.equal((visible(open).match(/Computer Workstation/g) || []).length, 1);
-  const people = open.slice(open.indexOf('<h3>People</h3>'));
+  const people = open.slice(open.indexOf('<h3>' + en('wiki.copy.staffTitle') + '</h3>'));
   assert.match(people, /Lawyer/);
   assert.doesNotMatch(visible(people), /Lawyer Employee/, 'the longer label is the same person');
   assert.equal((people.match(/data-tick=/g) || []).length, 2, 'the two skills the page lists');
   // And the service card still carries every line the source gives it.
-  const services = section(html, 'Services');
+  const services = section(html, en('wiki.copy.servicesTitle'));
   assert.match(services, /Computer Workstation/);
   assert.match(services, /Lawyer Employee/);
 });
@@ -551,12 +558,12 @@ test('a service requirement the business page does not name is kept, and placed'
     '* [Paralegal](skill-paralegal)',
   ];
   const w = wiki({data});
-  const open = section(await w.load('wiki/businesstypes-lawfirm'), 'To open');
-  const kit = open.slice(open.indexOf('<h3>Fixtures</h3>'), open.indexOf('<h3>Stock</h3>'));
-  const stock = open.slice(open.indexOf('<h3>Stock</h3>'), open.indexOf('<h3>People</h3>'));
-  const people = open.slice(open.indexOf('<h3>People</h3>'));
+  const open = section(await w.load('wiki/businesstypes-lawfirm'), en('wiki.copy.setupTitle'));
+  const kit = open.slice(open.indexOf('<h3>' + en('wiki.copy.fixturesTitle') + '</h3>'), open.indexOf('<h3>' + en('wiki.copy.stockTitle') + '</h3>'));
+  const stock = open.slice(open.indexOf('<h3>' + en('wiki.copy.stockTitle') + '</h3>'), open.indexOf('<h3>' + en('wiki.copy.staffTitle') + '</h3>'));
+  const people = open.slice(open.indexOf('<h3>' + en('wiki.copy.staffTitle') + '</h3>'));
   assert.match(kit, /Standing Desk/, 'an alternative the business page does not offer is equipment');
-  assert.match(kit, /Before adding these products/, 'and it says whose requirement it is');
+  assert.match(kit, htmlRe('wiki.ui.conditionalRequirements', {}, {}), 'and it says whose requirement it is');
   assert.doesNotMatch(stock, /Standing Desk/);
   assert.match(stock, /Notary Stamp/);
   assert.match(people, /Paralegal/);
@@ -577,26 +584,28 @@ test('recruiters are named once for the business, not once per skill', async () 
   hair.SUPPLIERS[SALON] = {...SUPPLIERS[SALON], name: 'Style Recruitment', kind: 'Recruitment'};
   hair.BUSINESS.hiring = [ANDERSON, SALON];
   const w = wiki({data});
-  const open = section(await w.load('wiki/businesstypes-hairdresser'), 'To open');
-  const people = open.slice(open.indexOf('<h3>People</h3>'));
+  const open = section(await w.load('wiki/businesstypes-hairdresser'), en('wiki.copy.setupTitle'));
+  const people = open.slice(open.indexOf('<h3>' + en('wiki.copy.staffTitle') + '</h3>'));
   // Each agency once, under one label, however many skills the business lists.
-  assert.match(people, /class="wk-sub"[^>]*>Recruitment</);
+  assert.match(people, new RegExp("class=\"wk-sub\"[^>]*>" + htmlRe('wiki.copy.recruitmentTitle').source + "<", ''));
   assert.equal((visible(people).match(/Anderson Recruitment Corp\./g) || []).length, 1);
   assert.equal((visible(people).match(/Style Recruitment/g) || []).length, 1);
   assert.equal((people.match(/data-tick=/g) || []).length, 2, 'the skills are the things to do');
   // No skill claims an agency of its own, and none says where it is hired.
-  assert.doesNotMatch(people, /Hair Stylist<\/strong>\s*<span class="wk-m">[^<]*Recruitment/);
+  assert.doesNotMatch(people, new RegExp("Hair Stylist<\\/strong>\\s*<span class=\"wk-m\">[^<]*" + htmlRe('wiki.copy.recruitmentTitle').source, ''));
+  // Pins the wording: a recruiter list must not claim an employee was hired there.
   assert.doesNotMatch(people, /Hired at/);
   // The glance tile names them without assigning them either.
-  const tile = (await w.go('wiki/businesstypes-hairdresser')).match(/data-tip="([^"]*)"[^>]*>\s*<span class="lab">Staff skills/);
-  assert.ok(tile && /Recruitment: Anderson Recruitment Corp\., 16 Fifth Avenue; Style Recruitment/.test(tile[1]), tile && tile[1]);
+  const tile = (await w.go('wiki/businesstypes-hairdresser')).match(new RegExp('data-tip="([^"]*)"[^>]*>\\s*<span class="lab">' + htmlRe('wiki.tile.skills').source));
+  assert.ok(tile && htmlRe('wiki.tile.skills.hiring', {title: en('wiki.copy.recruitmentTitle'), agencies: 'Anderson Recruitment Corp., 16 Fifth Avenue; Style Recruitment, 7 Broadway Street'}).test(tile[1]), tile && tile[1]);
+  // Pins the wording: the glance tile must not claim hiring at an agency.
   assert.ok(tile && !/Hired at/.test(tile[1]));
 });
 
 test('one agency is still one agency, and a mapping the payload verifies is used', async () => {
   const w = wiki();
-  const open = section(await w.load('wiki/businesstypes-lawfirm'), 'To open');
-  const people = open.slice(open.indexOf('<h3>People</h3>'));
+  const open = section(await w.load('wiki/businesstypes-lawfirm'), en('wiki.copy.setupTitle'));
+  const people = open.slice(open.indexOf('<h3>' + en('wiki.copy.staffTitle') + '</h3>'));
   assert.equal((visible(people).match(/Anderson Recruitment Corp\./g) || []).length, 1);
   assert.match(people, /16 Fifth Avenue/);
 
@@ -607,8 +616,8 @@ test('one agency is still one agency, and a mapping the payload verifies is used
   law.BUSINESS.hiring = [ANDERSON, SALON];
   law.BUSINESS.hiringBySkill = {Lawyer: [SALON], Cleaning: [ANDERSON]};
   const told = wiki({data});
-  const open2 = section(await told.load('wiki/businesstypes-lawfirm'), 'To open');
-  const people2 = open2.slice(open2.indexOf('<h3>People</h3>'));
+  const open2 = section(await told.load('wiki/businesstypes-lawfirm'), en('wiki.copy.setupTitle'));
+  const people2 = open2.slice(open2.indexOf('<h3>' + en('wiki.copy.staffTitle') + '</h3>'));
   const lawyer = people2.slice(people2.indexOf('Lawyer'), people2.indexOf('Cleaning'));
   assert.match(lawyer, /Bar Association Hiring/);
   assert.doesNotMatch(lawyer, /Anderson/);
@@ -629,8 +638,8 @@ test('a requirement names the page it links to, not whatever name it contains', 
     station: null, needs: null, mount: null, capacity: [], pageId: 'furniture-laptop',
     group: ['computergroup']};
   const w = wiki({data});
-  const open = section(await w.load('wiki/businesstypes-lawfirm'), 'To open');
-  const kit = open.slice(open.indexOf('<h3>Fixtures</h3>'));
+  const open = section(await w.load('wiki/businesstypes-lawfirm'), en('wiki.copy.setupTitle'));
+  const kit = open.slice(open.indexOf('<h3>' + en('wiki.copy.fixturesTitle') + '</h3>'));
   const workstation = row(kit, 'businesstypes-lawfirm:req-computerworkstation');
   assert.match(workstation, /^<div class="wk-item req"/, 'the piece its own link names');
   assert.doesNotMatch(visible(workstation), /·\s*Computer\b/, 'and not the component whose name it contains');
@@ -648,8 +657,8 @@ test('a group requirement still names every piece the payload puts in it', async
     station: null, needs: null, mount: null, capacity: [], group: ['bathrooms']};
   law.FIXTURES.toilet.group = ['bathrooms'];
   const w = wiki({data});
-  const open = section(await w.load('wiki/businesstypes-lawfirm'), 'To open');
-  const kit = open.slice(open.indexOf('<h3>Fixtures</h3>'));
+  const open = section(await w.load('wiki/businesstypes-lawfirm'), en('wiki.copy.setupTitle'));
+  const kit = open.slice(open.indexOf('<h3>' + en('wiki.copy.fixturesTitle') + '</h3>'));
   // The square is keyed to the pieces the group resolved to, in payload order.
   const id = /data-tick="(businesstypes-lawfirm:req-(?:toilet\+toiletstall|toiletstall\+toilet))"/.exec(kit);
   assert.ok(id, kit.slice(0, 400));
@@ -693,8 +702,8 @@ function office(line = WORKSTATION_LINE) {
 }
 /* The equipment card alone: the rows this fix is about are all inside it. */
 function kitOf(html) {
-  const open = section(html, 'To open');
-  const at = open.indexOf('<h3>Fixtures</h3>');
+  const open = section(html, en('wiki.copy.setupTitle'));
+  const at = open.indexOf('<h3>' + en('wiki.copy.fixturesTitle') + '</h3>');
   const kit = open.slice(at);
   const end = kit.indexOf('<h3>', 4);
   return end < 0 ? kit : kit.slice(0, end);
@@ -709,7 +718,7 @@ test('what the required piece needs in turn is a requirement, not a suggestion',
   assert.equal(linked.length, 3, kit);
   for (const id of linked) assert.match(row(kit, `businesstypes-lawfirm:${id}`), /^<div class="wk-item req"/,
     'a filled square: the help says it is required');
-  assert.match(kit, /class="wk-sub"[^>]*>Equipment and service requirements</,
+  assert.match(kit, new RegExp("class=\"wk-sub\"[^>]*>" + htmlRe('wiki.copy.linkedRequirements').source + "<", ''),
     'under the caption for what another page requires');
   // Each row is the help's own word for the group, still pointing at the group's
   // own page, with the pieces the payload puts in that group named under it.
@@ -718,13 +727,13 @@ test('what the required piece needs in turn is a requirement, not a suggestion',
   assert.match(visible(desk), /Standard Office Desk · Executive Office Desk/,
     'the alternatives the payload puts in that group');
   // The sentence that asked for it is the note on the row, whole.
-  assert.match(desk, /Computer Workstation requires this on its own help page/);
+  assert.match(desk, htmlRe('wiki.setup.linked.tip', {fixture: 'Computer Workstation'}, {}));
   // And no component is a suggestion, or behind the control that hides the tail.
   assert.doesNotMatch(kit, /data-wiki-fix/);
   for (const key of ['desk0', 'chair0', 'pc0', 'pc3'])
     assert.doesNotMatch(kit, new RegExp(`data-tick="businesstypes-lawfirm:fix-${key}"`));
   // The one piece nothing asked for is still where the suggestions are.
-  assert.match(kit.slice(kit.indexOf('Additional equipment')), /data-tick="businesstypes-lawfirm:fix-toilet"/);
+  assert.match(kit.slice(kit.indexOf(en('wiki.copy.suggestedEquipment'))), /data-tick="businesstypes-lawfirm:fix-toilet"/);
 });
 
 test('every computer choice is on the page before anything is expanded', async () => {
@@ -734,7 +743,7 @@ test('every computer choice is on the page before anything is expanded', async (
   // The defect this replaces put all four behind "Show all 15".
   for (const name of MACHINES_PC) assert.match(visible(kit), new RegExp(name.replace(/[()]/g, '\\$&')),
     `${name} is not on the opening list`);
-  assert.doesNotMatch(kit, /Show all/);
+  assert.doesNotMatch(kit, htmlRe('wiki.list.showAll'));
 });
 
 test('an "or" inside the sentence is one requirement with two answers', async () => {
@@ -772,19 +781,19 @@ test('a linked requirement the business page already names is not said twice', a
 test('a requirement the help gives no link for is still read by its words', async () => {
   const w = wiki();
   // The Gift Shop page writes this one as plain text, with no link to follow.
-  const open = section(await w.load('wiki/businesstypes-gym'), 'To open');
+  const open = section(await w.load('wiki/businesstypes-gym'), en('wiki.copy.setupTitle'));
   assert.match(open, /Point of Sales/);
   assert.match(open, /Cash Register <b>20<\/b>\/h · Checkout Counter <b>30<\/b>\/h/, 'the group it names');
   const told = wiki({data: {...DATA, guides: {...DATA.guides, 'businesstypes-gym': {...GYM,
     BUSINESS: {...GYM.BUSINESS, requirements: {src: 'help_g', raw: ['A Cash Register of some kind']}}}}}});
-  const plain = section(await told.load('wiki/businesstypes-gym'), 'To open');
+  const plain = section(await told.load('wiki/businesstypes-gym'), en('wiki.copy.setupTitle'));
   assert.match(plain, /data-tick="businesstypes-gym:req-cashregister"/, 'the words are all there is to go on');
 });
 
 test('a requirement that points at a group names the pieces the payload puts in it', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-gym');
-  const open = section(html, 'To open');
+  const open = section(html, en('wiki.copy.setupTitle'));
   // The game's own group of tills: both members are named under the one line.
   assert.match(open, /Point of Sales/);
   assert.match(open, /Cash Register <b>20<\/b>\/h · Checkout Counter <b>30<\/b>\/h/);
@@ -799,7 +808,7 @@ test('with no group behind it, the requirement stands on its own words', async (
   const bare = JSON.parse(JSON.stringify(DATA));
   Object.values(bare.guides['businesstypes-gym'].FIXTURES).forEach(f => { delete f.group; delete f.groups; });
   const w = wiki({data: bare});
-  const open = section(await w.load('wiki/businesstypes-gym'), 'To open');
+  const open = section(await w.load('wiki/businesstypes-gym'), en('wiki.copy.setupTitle'));
   assert.match(open, /Point of Sales/, 'the line the help wrote');
   assert.doesNotMatch(open, /Cash Register <b>20<\/b>\/h ·/, 'and no guess at which equipment it means');
   // Nothing disappears for want of that answer: both are still equipment here.
@@ -812,13 +821,13 @@ test('a long tail of equipment waits behind one control', async () => {
   const html = await w.load('wiki/businesstypes-gym');
   const shown = (html.match(/data-tick="businesstypes-gym:fix-/g) || []).length;
   assert.equal(shown, 6, 'a practical list, not every machine in the catalogue');
-  assert.match(html, /data-wiki-fix>Show all 9</);
+  assert.match(html, new RegExp('data-wiki-fix>' + htmlRe('wiki.list.showAll', {n: 9}).source + '<'));
   const all = w.click('[data-wiki-fix]', {});
   assert.equal((all.match(/data-tick="businesstypes-gym:fix-/g) || []).length, 9);
   // And the tail is forgotten when the reader moves on.
   await w.go('wiki/businesstypes-coffeeshop');
   const back = await w.go('wiki/businesstypes-gym');
-  assert.match(back, /data-wiki-fix>Show all 9</);
+  assert.match(back, new RegExp('data-wiki-fix>' + htmlRe('wiki.list.showAll', {n: 9}).source + '<'));
 });
 
 test('no link ever sits inside a checkbox', async () => {
@@ -829,7 +838,7 @@ test('no link ever sits inside a checkbox', async () => {
       assert.doesNotMatch(button, /<a\s/, `${id}: a control inside a control`);
     // The links the help wrote are still on the page, beside the square.
     if (id === 'businesstypes-hairdresser')
-      assert.match(section(html, 'To open'), /<a class="wk-link"/);
+      assert.match(section(html, en('wiki.copy.setupTitle')), /<a class="wk-link"/);
   }
 });
 
@@ -839,17 +848,17 @@ test('an office is drawn without shelves, recipes or a graph it has no use for',
   const w = wiki();
   const html = await w.load('wiki/businesstypes-lawfirm');
   const seen = headings(html);
-  assert.deepEqual(seen, ['To open', 'Services', 'Where to go', 'Yours', 'Prices in your save', 'Source']);
-  assert.ok(!seen.includes('Sells') && !seen.includes('Fits together') && !seen.includes('Make it'));
+  assert.deepEqual(seen, [en('wiki.copy.setupTitle'), en('wiki.copy.servicesTitle'), en('wiki.copy.suppliersTitle'), en('wiki.yours.title'), en('wiki.prices.title'), en('wiki.copy.sourceTitle')]);
+  assert.ok(!seen.includes(en('wiki.copy.primaryTitle')) && !seen.includes(en('wiki.copy.graphTitle')) && !seen.includes(en('wiki.copy.primaryRecipesTitle')));
   // No retail size codes borrowed from a shop that has them.
   assert.doesNotMatch(html, /A1|M1/);
   assert.match(html, /<span class="v t">Office<\/span>/);
   // The room, the equipment its page names and the people; an office stocks
   // nothing, so there is no card for stock.
-  assert.match(html, /<h3>The room<\/h3>/);
-  assert.match(html, /<h3>Fixtures<\/h3>/);
-  assert.match(html, /<h3>People<\/h3>/);
-  assert.doesNotMatch(html, /<h3>Stock<\/h3>/);
+  assert.match(html, new RegExp("<h3>" + htmlRe('wiki.copy.roomTitle').source + "<\\/h3>", ''));
+  assert.match(html, new RegExp("<h3>" + htmlRe('wiki.copy.fixturesTitle').source + "<\\/h3>", ''));
+  assert.match(html, new RegExp("<h3>" + htmlRe('wiki.copy.staffTitle').source + "<\\/h3>", ''));
+  assert.doesNotMatch(html, new RegExp("<h3>" + htmlRe('wiki.copy.stockTitle').source + "<\\/h3>", ''));
 });
 
 /* --- a range too wide for three lanes ------------------------------------- */
@@ -860,12 +869,12 @@ test('a wide range asks which product to draw, and the cards keep them all', asy
   assert.match(html, /class="wk-picker"/);
   assert.equal((html.match(/class="wk-tab/g) || []).length, 8, 'one chip per product');
   assert.equal((html.match(/class="wk-card rv"/g) || []).length, 8, 'and every product still has a card');
-  const graph = section(html, 'Fits together');
+  const graph = section(html, en('wiki.copy.graphTitle'));
   assert.match(graph, /data-node="p:apples"/);
   assert.doesNotMatch(graph, /data-node="p:bread"/, 'one product at a time');
 
   const after = w.click('[data-focus]', {focus: 'bread'});
-  const moved = section(after, 'Fits together');
+  const moved = section(after, en('wiki.copy.graphTitle'));
   assert.match(moved, /data-node="p:bread"/);
   assert.doesNotMatch(moved, /data-node="p:apples"/);
   assert.match(moved, /class="wk-tab on" data-focus="bread"/);
@@ -875,7 +884,7 @@ test('a narrow range is drawn whole, with no chooser in the way', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-coffeeshop');
   assert.doesNotMatch(html, /class="wk-picker"/);
-  const graph = section(html, 'Fits together');
+  const graph = section(html, en('wiki.copy.graphTitle'));
   for (const key of ['coffee', 'tea', 'cake', 'mug'])
     assert.match(graph, new RegExp(`data-node="p:${key}"`), key);
 });
@@ -893,7 +902,7 @@ test('a tick belongs to the business it was made on', async () => {
   assert.doesNotMatch(hair, /aria-checked="true"/, 'another shop\'s room is not ticked here');
   const back = await w.go('wiki/businesstypes-coffeeshop');
   assert.match(back, /data-tick="businesstypes-coffeeshop:room"\n?[^>]*/);
-  assert.match(back.slice(back.indexOf('<h3>The room</h3>')), /aria-checked="true"/, 'and it is still ticked there');
+  assert.match(back.slice(back.indexOf('<h3>' + en('wiki.copy.roomTitle') + '</h3>')), /aria-checked="true"/, 'and it is still ticked there');
 });
 
 test('the graph lets go of everything when the page changes', async () => {
@@ -917,16 +926,16 @@ test('the planner control sits with a business\'s own range, never with the rest
   w.context.$ = id => (id === 'wikiRoot' ? w.root : id === 'wikiPlanSlot' ? slot : null);
   const coffee = await w.load('wiki/businesstypes-coffeeshop');
   // Its own recipes carry the control; the side range's section never does.
-  assert.match(section(coffee, 'Make it'), /id="wikiPlanSlot"/);
-  assert.doesNotMatch(section(coffee, 'Also make'), /id="wikiPlanSlot"/);
-  assert.doesNotMatch(section(coffee, 'Also sells'), /id="wikiPlanSlot"/);
+  assert.match(section(coffee, en('wiki.copy.primaryRecipesTitle')), /id="wikiPlanSlot"/);
+  assert.doesNotMatch(section(coffee, en('wiki.copy.secondaryRecipesTitle')), /id="wikiPlanSlot"/);
+  assert.doesNotMatch(section(coffee, en('wiki.copy.secondaryTitle')), /id="wikiPlanSlot"/);
   assert.equal((coffee.match(/id="wikiPlanSlot"/g) || []).length, 1);
   assert.match(slot.innerHTML, /data-wiki-plan/);
-  assert.match(slot.innerHTML, /Open Plan a factory with Coffee Shop selected/);
+  assert.match(slot.innerHTML, htmlRe('wiki.plan.tip', {name: 'Coffee Shop'}, {}));
 
   // With no recipes of its own the control goes with the range itself.
   const hair = await w.go('wiki/businesstypes-hairdresser');
-  assert.match(section(hair, 'Services'), /id="wikiPlanSlot"/);
+  assert.match(section(hair, en('wiki.copy.servicesTitle')), /id="wikiPlanSlot"/);
   assert.equal((hair.match(/id="wikiPlanSlot"/g) || []).length, 1);
 
   // And the key it hands over is this business's, not the last one's.
@@ -940,7 +949,7 @@ test('a business the save\'s planner has never heard of offers no button', async
   w.context.$ = id => (id === 'wikiRoot' ? w.root : id === 'wikiPlanSlot' ? slot : null);
   await w.load('wiki/businesstypes-coffeeshop');
   assert.doesNotMatch(slot.innerHTML, /<button/);
-  assert.match(slot.innerHTML, /Not in this save&#39;s catalogue|Not in this save's catalogue/);
+  assert.match(slot.innerHTML, new RegExp("Not in this save&#39;s catalogue|" + htmlRe('wiki.plan.missing').source, ''));
 });
 
 /* --- the addresses, the gaps and the words ---------------------------------- */
@@ -948,27 +957,29 @@ test('a business the save\'s planner has never heard of offers no button', async
 test('only the suppliers this business needs are on its page, with their roles', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-coffeeshop');
-  const places = section(html, 'Where to go');
-  assert.match(places, /AJ Pederson &amp; Son[\s\S]*?fixtures/);
+  const places = section(html, en('wiki.copy.suppliersTitle'));
+  assert.match(places, new RegExp("AJ Pederson &amp; Son[\\s\\S]*?" + htmlRe('wiki.place.role.fixtures').source, ''));
   assert.match(places, /Bluestone Imports/);
-  assert.match(places, /Factory Supply Depot[\s\S]*?machines/, 'the workstations name their vendors');
-  assert.match(places, /Anderson Recruitment Corp\.[\s\S]*?people/);
+  assert.match(places, new RegExp("Factory Supply Depot[\\s\\S]*?" + htmlRe('wiki.place.role.machines').source, ''), 'the workstations name their vendors');
+  assert.match(places, new RegExp("Anderson Recruitment Corp\\.[\\s\\S]*?" + htmlRe('wiki.place.role.people').source));
   assert.doesNotMatch(places, /Salon Supplies/, 'the hairdresser\'s vendor belongs to the hairdresser');
   // One of a thing is counted as one, here as everywhere.
-  assert.match(places, /1 wholesaler</);
+  assert.match(places, htmlRe('wiki.place.wholesalers', {n: 1}, {}));
+  // Pins the wording: singular counts must not use plural supplier nouns.
   assert.doesNotMatch(places, /1 wholesalers|1 vendors/);
 });
 
 test('a guide\'s gaps and its own words are its own', async () => {
   const w = wiki();
   const coffee = await w.load('wiki/businesstypes-coffeeshop');
-  assert.match(section(coffee, 'Source'), /Cake rate/);
-  assert.match(coffee, /<i><\/i>1 gap</, 'one of them, counted as one');
+  assert.match(section(coffee, en('wiki.copy.sourceTitle')), /Cake rate/);
+  assert.match(coffee, new RegExp('<i></i>' + htmlRe('wiki.source.gaps', {n: 1}).source + '<'), 'one of them, counted as one');
+  // Pins the wording: one missing fact must use the singular gap noun.
   assert.doesNotMatch(coffee, /1 gaps/);
   // The key the extraction recorded reads as words out here.
   assert.doesNotMatch(coffee, /help_recipes_bake_content/);
   const hair = await w.go('wiki/businesstypes-hairdresser');
-  assert.doesNotMatch(section(hair, 'Source'), /Cake rate/);
+  assert.doesNotMatch(section(hair, en('wiki.copy.sourceTitle')), /Cake rate/);
 });
 
 test('the authored opening line and notes are shown as they arrived', async () => {
@@ -984,6 +995,7 @@ test('the authored opening line and notes are shown as they arrived', async () =
   assert.match(hair, /<p class="wk-lede rv"><\/p>/, 'no range of goods of its own, so no sentence about one');
 });
 
+// Pins the wording: supplied labels and translation fallback must survive unchanged.
 test('the labels the payload carries are the ones the page wears', async () => {
   const w = wiki({data: {...DATA, COPY: {primaryTitle: 'On the shelves', secondaryTitle: 'Also on the shelves',
     servicesTitle: 'What it charges for', primaryRecipesTitle: 'Making it'}}});
@@ -1022,15 +1034,15 @@ test('pricing uses configured values and stable IDs, including secondary product
     {slug:'ba:itemname_cake', cells:[{hood:'ba:neighborhood_midtown',marketPrice:null,marketPriceNote:'Supply-event pricing unavailable'}]},
   ]}};
   const w = wiki({save});
-  const html = section(await w.load('wiki/businesstypes-coffeeshop'), 'Prices in your save');
-  assert.match(html, /save day 190/);
+  const html = section(await w.load('wiki/businesstypes-coffeeshop'), en('wiki.prices.title'));
+  assert.match(html, htmlRe('wiki.prices.day', {day: 190}, {}));
   assert.match(html, /Coffee &lt;One&gt;: <b>\$205\.20/);
   assert.match(html, /Coffee Two: <b>\$6\.50/);
   assert.match(html, /\$0\.00/);
   assert.match(html, /\$8\.75/);
   assert.match(html, /\$4\.25/);
   assert.match(html, /\$3\.10/);
-  assert.match(html, /Not set/);
+  assert.match(html, enRe('wiki.prices.notSet'));
   assert.match(html, /Supply-event pricing unavailable/);
   assert.doesNotMatch(html, /999\.99|111\.11|<One>/);
   const midtown = html.split('<summary>Murray Hill</summary>')[0];
@@ -1043,9 +1055,9 @@ test('the range sold in your shops is matched by the item key, never by its name
     {item: 'Coffee', slug: 'ba:itemname_coffee', price: 3, stores: 1, units: 2},
     {item: 'Coffee', slug: 'ba:itemname_coffeebeans', price: 3, stores: 1, units: 2}]}});
   const html = await w.load('wiki/businesstypes-coffeeshop');
-  assert.match(html, /Its range, sold/);
-  assert.match(html, /Coffee moved in your shops in the last seven days\./);
-  assert.doesNotMatch(html, /Coffee, Coffee moved/);
+  assert.match(html, enRe('wiki.yours.rangeSold'));
+  assert.match(html, htmlRe('wiki.yours.rangeSold.tip', {items: 'Coffee'}, {}));
+  assert.doesNotMatch(html, htmlRe('wiki.yours.rangeSold.tip', {items: 'Coffee, Coffee'}));
 });
 
 test('pricing retains unlocated and closed shops, excludes vacant leases, and handles old payloads', async () => {
@@ -1058,34 +1070,34 @@ test('pricing retains unlocated and closed shops, excludes vacant leases, and ha
     {name:'Vacant lease',typeSlug:COFFEE.BUSINESS.nameSrc,status:'vacant',neighbourhood:'ba:neighborhood_midtown',
       lines:[{slug:'ba:itemname_coffee',configuredPrice:999.99}]},
   ],market:{rows:[]}}});
-  const html = section(await w.load('wiki/businesstypes-coffeeshop'), 'Prices in your save');
-  assert.match(html, /Unknown neighbourhood/);
+  const html = section(await w.load('wiki/businesstypes-coffeeshop'), en('wiki.prices.title'));
+  assert.match(html, enRe('wiki.prices.hood.unknown'));
   assert.match(html, /Unlocated: <b>\$12\.34/);
-  assert.match(html, /Unlocated: <b>Not set/);
+  assert.match(html, new RegExp("Unlocated: <b>" + htmlRe('wiki.prices.notSet').source, ''));
   assert.match(html, /Unlocated: <b>\$0\.00/);
-  assert.match(html, /Unlocated: <b>Unavailable/);
+  assert.match(html, new RegExp("Unlocated: <b>" + htmlRe('wiki.prices.unavailable').source, ''));
   assert.match(html, /Closed Coffee: <b>\$3\.25/);
   assert.doesNotMatch(html, /Vacant lease|999\.99|9\.99/);
-  assert.match(w.root.innerHTML, /Businesses of this type in your company: Unlocated, Closed Coffee/);
+  assert.match(w.root.innerHTML, htmlRe('wiki.yours.shops.tip', {shops: 'Unlocated, Closed Coffee'}, {}));
 });
 
 test('pricing works before owning a business, for services, and clears with saves', async () => {
   const w = wiki({save:{meta:{day:8}, businesses:[], market:{rows:[
     {slug:'ba:itemname_haircut', cells:[{hood:'ba:neighborhood_midtown',marketPrice:20.50}]},
   ]}}});
-  let html = section(await w.load('wiki/businesstypes-hairdresser'), 'Prices in your save');
+  let html = section(await w.load('wiki/businesstypes-hairdresser'), en('wiki.prices.title'));
   assert.match(html, /Hair Cutting Fee/);
   assert.match(html, /\$20\.50/);
-  assert.match(html, /No matching shop/);
-  html = section(await w.go('wiki/businesstypes-coffeeshop'), 'Prices in your save');
+  assert.match(html, enRe('wiki.prices.noShop'));
+  html = section(await w.go('wiki/businesstypes-coffeeshop'), en('wiki.prices.title'));
   assert.doesNotMatch(html, /\$20\.50/);
   w.context.D = {meta:{day:9}, businesses:[], market:{rows:[]}};
   w.call('drawWiki()');
-  assert.doesNotMatch(section(w.root.innerHTML, 'Prices in your save'), /\$20\.50/);
+  assert.doesNotMatch(section(w.root.innerHTML, en('wiki.prices.title')), /\$20\.50/);
   w.context.D = null;
   w.call('drawWiki()');
-  html = section(w.root.innerHTML, 'Prices in your save');
-  assert.match(html, /Open a save/);
+  html = section(w.root.innerHTML, en('wiki.prices.title'));
+  assert.match(html, htmlRe('wiki.prices.nosave'));
   assert.doesNotMatch(html, /\$\d/);
 });
 
@@ -1104,8 +1116,8 @@ test('every guide the shipped catalogue carries draws a whole page', {skip: !gui
     if (!html.includes(`<h1>${name}`)) trouble.push([id, 'no title']);
     if (/\bundefined\b|\bNaN\b|>null</.test(html)) trouble.push([id, 'a value that is not a value']);
     if (/help_[a-z_:]+_content|ba:[a-z]+_[a-z0-9]+/.test(text)) trouble.push([id, 'a source key in the reading']);
-    if (!headings(html).includes('To open')) trouble.push([id, 'no setup']);
-    if (!headings(html).includes('Source')) trouble.push([id, 'no source']);
+    if (!headings(html).includes(en('wiki.copy.setupTitle'))) trouble.push([id, 'no setup']);
+    if (!headings(html).includes(en('wiki.copy.sourceTitle'))) trouble.push([id, 'no source']);
     // A business's page names no other business's own range.
     for (const other of names)
       if (other !== name && html.includes(`<h1>${other}<`)) trouble.push([id, `drew ${other}`]);
@@ -1118,7 +1130,7 @@ test('every guide the shipped catalogue carries draws a whole page', {skip: !gui
 test('a shelf that counts two kinds of goods shows both rows, never the larger', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-coffeeshop');
-  const own = section(html, 'Sells');
+  const own = section(html, en('wiki.copy.primaryTitle'));
   // Tea's own line cannot be told from the fixture page's two, so both labelled
   // rows are shown rather than one number standing for both.
   const tea = own.slice(own.indexOf('<h3>Tea'), own.indexOf('</dl>', own.indexOf('<h3>Tea')));
@@ -1128,7 +1140,7 @@ test('a shelf that counts two kinds of goods shows both rows, never the larger',
   const coffee = own.slice(own.indexOf('<h3>'), own.indexOf('<h3>Tea'));
   assert.match(coffee, /Coffee Machine<b>200<\/b>/);
   // And where the extraction settled it, the number it settled on is shown.
-  const also = section(html, 'Also sells');
+  const also = section(html, en('wiki.copy.secondaryTitle'));
   assert.match(also, /Cake Stand<b>60<\/b>/);
 });
 

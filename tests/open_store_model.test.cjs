@@ -8,6 +8,7 @@
 // `/* --- plan a chain`), with the few board helpers it reaches stubbed.
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
+const {enRe} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
@@ -190,7 +191,7 @@ test('a cinema or a theatre shows its investment and no estimate', () => {
   ctx.premises = () => ({buildings: [{key: 'c', hood: 'H', size: 'S', layout: null, deposit: 100, m2: 900, cap: [100, 150]}]});
   const est = vm.runInContext('osEstimate({type: "C", key: "c", mode: "firm"}, osBuilding("c"))', ctx);
   assert.equal(est.inv.firm, 1600, 'kept by the building\'s size, having no layout');
-  assert.match(est.none, /screens, seats and actors/);
+  assert.match(est.none, enRe('gr.os.none.venue'));
 });
 
 test('a store that pays back in a day or two keeps its two investment labels on opposite edges', () => {

@@ -9,6 +9,7 @@
 // existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -195,6 +196,7 @@ test('a name written into a sentence as a token reads in the language on screen'
   const own = 'fills ⟦ba:itemname_nosuchthing|Widget⟧';
   context.__raw = {names: FIX.payload.names, alerts: [{text: said}, {text: own}]};
   run('takeData(__raw)');
+  // Pins the wording: the fixture sentence must replace its game-name token and retain surrounding text.
   assert.equal(context.D.alerts[0].text, '2 Kundendienst short at HART. Gifts');
   assert.equal(context.D.alerts[1].text, 'fills Widget');
   run('gnTable = null; gnLang = "en"; D = localiseNames(D);');
@@ -272,6 +274,7 @@ test('the offer shows once, in the language the browser prefers, and a No is kep
   const offer = page.locator('.gn-offer');
   await offer.waitFor();
   // German is a language the whole page comes in, so the offer is for the page.
+  // Not a Msg: the language offer is assembled from plain strings.
   assert.equal((await offer.locator('p').textContent()).trim(), 'Show Big Copilot in Deutsch?');
   assert.equal(await offer.locator('[lang="de"]').textContent(), 'Deutsch');
   await offer.locator('.gn-no').click();
@@ -355,11 +358,11 @@ test('the picker is a listbox button: every choice listed, the current one marke
   assert.deepEqual(rows.map(r => r[0]), LIST);
   // Each group has its heading, which is not an option.
   assert.deepEqual(await pop.locator('.gn-grp').evaluateAll(els => els.map(e => [e.textContent, e.getAttribute('role'),
-    e.nextElementSibling.dataset.value])), [['Whole page', 'presentation', 'en'], ['Game names only', 'presentation', 'cs']]);
+    e.nextElementSibling.dataset.value])), [[en('foot.lang.page'), 'presentation', 'en'], [en('foot.lang.names'), 'presentation', 'cs']]);
   // Each group names its options, so a screen reader says which group a language is in.
   assert.deepEqual(await pop.locator('[role="group"]').evaluateAll(els => els.map(e => [
     document.getElementById(e.getAttribute('aria-labelledby')).textContent, e.querySelectorAll('[role="option"]').length])),
-    [['Whole page', 8], ['Game names only', 14]]);
+    [[en('foot.lang.page'), 8], [en('foot.lang.names'), 14]]);
   assert.deepEqual(rows.find(r => r[0] === 'ja'), ['ja', 'ja', '日本語']);
   assert.deepEqual(await pop.locator('[aria-selected="true"]').evaluateAll(els => els.map(e => e.dataset.value)), ['en']);
   // 22 rows scroll inside a list that stays within the window.
@@ -452,12 +455,13 @@ test("a whole-page language switches the page's words with the names, and says i
   await choose(page, 'fr');
   await page.waitForFunction(() => gnLang === 'fr' && ttLang === 'fr');
   assert.equal(await page.evaluate(() => document.documentElement.lang), 'fr');
+  // Pins the wording: the supplied French table must replace the English label.
   assert.equal(await page.locator('.sf-landing [data-tt="foot.lang.head"]').textContent(), 'Langue');
   assert.equal(await note.isVisible(), true);
   // A language that changes only the names leaves the page English, and the note goes.
   await choose(page, 'pl');
   await page.waitForFunction(() => gnLang === 'pl' && ttLang === 'en');
-  assert.equal(await page.locator('.sf-landing [data-tt="foot.lang.head"]').textContent(), 'Language');
+  assert.equal(await page.locator('.sf-landing [data-tt="foot.lang.head"]').textContent(), en('foot.lang.head'));
   assert.equal(await note.isHidden(), true);
   // German is reviewed: no note.
   await choose(page, 'de');
@@ -504,6 +508,7 @@ test('the offer of a names-only language is for the names', async t => {
   const {page} = await site(t, {locale: 'pl-PL'});
   const offer = page.locator('.gn-offer');
   await offer.waitFor();
+  // Not a Msg: the game-name offer is assembled from plain strings.
   assert.equal((await offer.locator('p').textContent()).trim(), 'Show game names in Polski?');
   await offer.locator('.gn-yes').click();
   await page.waitForFunction(() => gnLang === 'pl');
@@ -671,6 +676,7 @@ test('no game-name token reaches the page, in English or in German', async t => 
     return seen;
   });
   assert.deepEqual(await sweep(), []);
+  // Pins the wording: fixture finding sentences retain their surrounding text when game names switch.
   const english = await page.evaluate(() => alertLines().map(a => a.text).join('\n'));
   assert.match(english, /Garment District hype/);
   assert.match(english, /Projectionist staffing is the limit/);
@@ -788,7 +794,7 @@ test('a fixture that needs stock names both in the language picked', async t => 
   await page.locator('#pageWiki h1').filter({hasText: 'Geschenkeladen'}).waitFor();
   const register = FIX.de['ba:itemname_cashregister'];
   const tips = await page.$$eval('#pageWiki [data-tip]', els => els.map(e => e.dataset.tip));
-  assert.ok(tips.some(t => t.startsWith(`${register} requires Papiertüte, according to its help page.`)), tips.join(' | '));
+  assert.ok(tips.some(t => t.startsWith(en('wiki.setup.need.tip', {fixture: register, need: 'Papiert\u00fcte'}))), tips.join(' | '));
   const rows = await page.$$eval('#pageWiki .wk-item strong', els => els.map(e => e.textContent));
   assert.ok(rows.includes('Papiertüte'), rows.join(' | '));
 });

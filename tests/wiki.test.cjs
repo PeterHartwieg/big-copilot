@@ -12,6 +12,12 @@
 */
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
+const {en, enRe} = require('./_i18n.cjs');
+// Match UI messages after the wiki escapes them into HTML.
+const htmlRe = (key, params = {}, options = {}) => {
+  const re = enRe(key, params, options);
+  return new RegExp(re.source.replace(/&/g, '&amp;').replace(/'/g, "(?:'|&#39;)"), re.flags);
+};
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
@@ -335,7 +341,7 @@ test('a catalogue that will not load says so and offers a retry that works', asy
     return {ok: true, status: 200, json: async () => DATA};
   }});
   const failed = await w.load('wiki');
-  assert.match(failed, /could not be opened/);
+  assert.match(failed, htmlRe('wiki.state.error', {}, {}));
   assert.match(failed, /network down/);
   assert.match(failed, /data-wiki-retry/);
   assert.doesNotMatch(failed, /undefined/);
@@ -350,16 +356,16 @@ test('a catalogue that will not load says so and offers a retry that works', asy
 test('a catalogue this build does not understand is refused rather than half-drawn', async () => {
   const w = wiki({data: {schemaVersion: 99, pages: [{id: 'x', title: 'X', body: ''}]}});
   const html = await w.load('wiki');
-  assert.match(html, /does not understand/);
+  assert.match(html, htmlRe('wiki.fail.schema', {}, {}));
   const empty = wiki({data: {schemaVersion: 1, pages: [], categories: []}});
-  assert.match(await empty.load('wiki'), /carries no pages/);
+  assert.match(await empty.load('wiki'), htmlRe('wiki.fail.empty', {}, {}));
 });
 
 test('a page the catalogue does not have is a said-so, not a dead link', async () => {
   const w = wiki();
   const html = await w.load('wiki/not-a-page');
-  assert.match(html, /Not here/);
-  assert.match(html, /No page called/);
+  assert.match(html, enRe('wiki.missing.title'));
+  assert.match(html, htmlRe('wiki.missing.page', {id: 'not-a-page'}, {}));
   assert.match(html, /href="#wiki"/);
 });
 
@@ -367,7 +373,7 @@ test('a hand-authored topic reads as a page, and says where its numbers came fro
   const w = wiki();
   // The front page is the way to it without knowing it is there.
   const home = await w.load('wiki');
-  assert.match(home, /Big Copilot topics/);
+  assert.match(home, enRe('wiki.topics.label'));
   assert.match(home, /topic%2Fhow-rent-works/);
   // And the search finds it exactly as it finds a help page.
   assert.deepEqual([...w.call(`wikiFind("rent")`)].map(h => h.id), ['topic/how-rent-works']);
@@ -375,7 +381,7 @@ test('a hand-authored topic reads as a page, and says where its numbers came fro
   const html = await w.go('wiki/topic%2Fhow-rent-works');
   assert.match(html, /<h1>How rent works<\/h1>/);
   // Our reading, not the game's help, so it wears the Big Copilot badge.
-  assert.match(html, /Big Copilot's guidance or calculation/);
+  assert.match(html, htmlRe('wiki.badge.model.tip'));
   assert.match(html, /rent per day = floor area × \(30 \+ traffic index\) × district rate/);
   assert.match(html, /<b>1\.033<\/b>/);
   // Seven districts, one row each, under the two column headers.
@@ -396,8 +402,8 @@ test('what is new in the Wiki is badged until the reader reaches it', async () =
   const home = await w.load('wiki');
   assert.equal((home.match(/class="feature-new"/g) || []).length, 2,
     'the shelf and the one new entry, and nothing else');
-  assert.match(home, /Big Copilot topics<span class="feature-new" data-new-feature="wiki-topics">New</);
-  assert.match(home, /How rent works<span class="feature-new" data-new-feature="wiki-topic-how-rent-works">New</);
+  assert.match(home, new RegExp(htmlRe('wiki.topics.label').source + "<span class=\"feature-new\" data-new-feature=\"wiki-topics\">" + htmlRe('wiki.new').source + "<", ''));
+  assert.match(home, new RegExp('How rent works<span class="feature-new" data-new-feature="wiki-topic-how-rent-works">' + htmlRe('wiki.new').source + '<'));
   // Never the nav's own id: sharing it would clear these the moment the tab opened.
   assert.doesNotMatch(home, /data-new-feature="wiki"/);
 
@@ -407,7 +413,7 @@ test('what is new in the Wiki is badged until the reader reaches it', async () =
   assert.equal(seen['ba_dash_feature_seen:wiki-topics'], '1');
   assert.equal(seen['ba_dash_feature_seen:wiki'], undefined, "the nav's own badge is left alone");
   assert.doesNotMatch(await w.go('wiki'), /feature-new/);
-  assert.match(w.root.innerHTML, /Big Copilot topics/, 'the shelf itself stays; only the badge goes');
+  assert.match(w.root.innerHTML, enRe('wiki.topics.label'), 'the shelf itself stays; only the badge goes');
 
   // A reader who has already met it is not told again.
   const quiet = wiki({seen: {'ba_dash_feature_seen:wiki-topics': '1',
@@ -429,9 +435,9 @@ test('a build that carries no topics simply has none of them', async () => {
   delete bare.topics;
   const w = wiki({data: bare});
   const home = await w.load('wiki');
-  assert.doesNotMatch(home, /Big Copilot topics/);
+  assert.doesNotMatch(home, enRe('wiki.topics.label'));
   assert.deepEqual([...w.call(`wikiFind("rent")`)].map(h => h.id), []);
-  assert.match(await w.go('wiki/topic%2Fhow-rent-works'), /Not here/);
+  assert.match(await w.go('wiki/topic%2Fhow-rent-works'), enRe('wiki.missing.title'));
 });
 
 /* --- search -------------------------------------------------------------- */
@@ -532,7 +538,7 @@ test('a long result list is cut, and the reader can ask for all of it', async ()
   const w = wiki({data: many});
   await w.load('wiki/q/thing');
   assert.equal((w.root.innerHTML.match(/class="wk-hit"/g) || []).length, 10);
-  assert.match(w.root.innerHTML, /Show all 40/);
+  assert.match(w.root.innerHTML, htmlRe('wiki.list.showAll', {n: 40}, {}));
   w.root.fire('click', {target: {closest: sel => sel === '[data-wiki-all]' ? {} : null}});
   assert.equal((w.root.innerHTML.match(/class="wk-hit"/g) || []).length, 40);
 });
@@ -546,7 +552,7 @@ test('a category lists the pages this build actually holds', async () => {
   assert.match(html, /href="#wiki\/businesstypes-giftshop"/);
   assert.match(html, /href="#wiki\/businesstypes-florist"/);
   assert.doesNotMatch(html, /href="#wiki\/products-cheapgift"/, 'and nothing from another category');
-  assert.match(html, /2 pages/);
+  assert.match(html, htmlRe('wiki.cat.pages', {n: 2}, {}));
 });
 
 test('the shelf leads with what a player reaches for, keeping the file\'s ids and counts', async () => {
@@ -557,7 +563,7 @@ test('the shelf leads with what a player reaches for, keeping the file\'s ids an
     'business types first and general last, whatever order the help menu stores');
   // The one label the game writes as a file path reads as a shelf here; the
   // rest keep the game's own words.
-  assert.match(html, /<b>Wholesalers &amp; importers<\/b>/);
+  assert.match(html, new RegExp('<b>' + htmlRe('wiki.cat.importers').source + '</b>'));
   assert.match(html, /<b>Goods and Services<\/b>/);
   assert.match(html, /<b>Business Types<\/b>/);
   assert.equal((html.match(/class="wk-cat rv"/g) || []).length, CATEGORY_COUNT);
@@ -734,14 +740,14 @@ test('every address the shipped catalogue links to is a building on the map', {s
 test('the verified business is drawn as the design draws it', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-giftshop');
-  for (const heading of ['To open', 'Sells', 'Fits together', 'Make it', 'Where to go', 'Yours', 'Source'])
+  for (const heading of [en('wiki.copy.setupTitle'), en('wiki.copy.primaryTitle'), en('wiki.copy.graphTitle'), en('wiki.copy.primaryRecipesTitle'), en('wiki.copy.suppliersTitle'), en('wiki.yours.title'), en('wiki.copy.sourceTitle')])
     assert.match(html, new RegExp(`<h2>${heading}</h2>`), heading);
   assert.match(html, /Gift Shop/);
   assert.equal((html.match(/class="wk-group rv"/g) || []).length, 4, 'the room, fixtures, stock and people');
-  assert.match(html, /1 of its 2 products can be ordered from any wholesaler/);
+  assert.match(html, htmlRe('wiki.guide.lede.some', {n: 1, total: 2}, {}));
   assert.match(html, /100<small>\/h<\/small>/);
-  assert.match(html, /2,400\/day/, 'the day figure is the hourly maximum times 24');
-  assert.match(html, /The game&#39;s own words|The game's own words/, 'the help text itself is still readable');
+  assert.match(html, enRe('wiki.recipe.perDay', {n: 2400}), 'the day figure is the hourly maximum times 24');
+  assert.match(html, htmlRe('wiki.copy.originalHelp'), 'the help text itself is still readable');
 });
 
 test('the page claims help, and claims a second file only for what was read in one', async () => {
@@ -749,19 +755,21 @@ test('the page claims help, and claims a second file only for what was read in o
   const html = await w.load('wiki/businesstypes-giftshop');
   // The fixtures were counted in the shops the game ships, so that much is a
   // second kind of file — and the chip says exactly that much.
-  assert.match(html, /<i><\/i>fixtures counted in shipped shops</);
+  assert.match(html, new RegExp("<i><\\/i>" + htmlRe('wiki.guide.chip.counted').source + "<", ''));
+  // Pins the wording: no blanket verification claim over the whole page.
   assert.doesNotMatch(html, /Every claim on this page/, 'no blanket claim over the whole page');
-  assert.match(html, /class="chip help"[^>]*><i><\/i>game help</);
+  assert.match(html, new RegExp("class=\"chip help\"[^>]*><i><\\/i>" + htmlRe('wiki.guide.chip.help').source + "<", ''));
   // Two help pages agreeing is help agreeing with itself, and says so.
-  assert.match(html, /class="chip help"[^>]*>.{0,400}read both ways/s);
+  assert.match(html, new RegExp("class=\"chip help\"[^>]*>.{0,400}" + htmlRe('wiki.graph.both').source, 's'));
+  // Pins the wording: agreement within one help file is not an independent check.
   assert.doesNotMatch(html, /checked both ways/);
 
   const bare = wiki({data: {...DATA, sample: {...SAMPLE,
     FIXTURES: Object.fromEntries(Object.entries(SAMPLE.FIXTURES).map(([k, f]) => [k, {...f, observed: null}])),
     PRODUCTS: Object.fromEntries(Object.entries(SAMPLE.PRODUCTS).map(([k, p]) => [k, {...p, crosscheck: null}]))}}});
   const plain = await bare.load('wiki/businesstypes-giftshop');
-  assert.doesNotMatch(plain, /counted in shipped shops/, 'nothing counted, nothing claimed');
-  assert.doesNotMatch(plain, /read both ways/);
+  assert.doesNotMatch(plain, htmlRe('wiki.guide.chip.counted', {}, {}), 'nothing counted, nothing claimed');
+  assert.doesNotMatch(plain, enRe('wiki.graph.both'));
   assert.doesNotMatch(plain, /class="chip ok"/, 'and no green badge anywhere on it');
 });
 
@@ -808,33 +816,34 @@ test('the Paper Bags catch is marked only while the business page really omits i
   const html = await w.load('wiki/businesstypes-giftshop');
   assert.match(html, /Paper Bag/, 'the till\'s own page names them');
   assert.match(html, /wk-catch/, 'and this page does not, so it is marked');
-  assert.match(html, /does not mention this requirement/);
+  assert.match(html, htmlRe('wiki.setup.need.missed', {}, {}));
 
   const told = wiki({data: {...DATA, pages: DATA.pages.map(p => p.id === 'businesstypes-giftshop'
     ? {...p, body: p.body.replace('* At least one product to sell (see below)',
         '* At least one product to sell (see below)\n* [Paper Bag](products-paperbag)')} : p)}});
   const html2 = await told.load('wiki/businesstypes-giftshop');
   assert.doesNotMatch(html2, /wk-catch/, 'a page that does name them is not accused of leaving them out');
-  assert.doesNotMatch(html2, /does not mention this requirement/);
+  assert.doesNotMatch(html2, htmlRe('wiki.setup.need.missed', {}, {}));
 });
 
 test('wholesale is three states, and only one of them is a claim', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-giftshop');
-  assert.match(html, /Any wholesaler/);
-  assert.match(html, /wk-pill no[^>]*>No wholesaler listed/);
-  assert.match(html, /That is the help being silent, not a rule in the game/);
-  assert.match(html, /<b>Gift \(Expensive\) is on no wholesaler's list\.<\/b>/);
+  assert.match(html, enRe('wiki.card.wholesale.any'));
+  assert.match(html, new RegExp("wk-pill no[^>]*>" + htmlRe('wiki.card.wholesale.none').source, ''));
+  assert.match(html, htmlRe('wiki.card.wholesale.none.tip', {}, {}));
+  assert.match(html, htmlRe('wiki.guide.lede.none', {product: 'Gift (Expensive)'}, {}));
+  // Pins the wording: absent help must not be described as a buying prohibition.
   assert.doesNotMatch(html, /products? cannot|cannot be ordered|cannot buy/,
     'an absence in the help is never written up as a prohibition');
 
   const unsure = wiki({data: {...DATA, sample: {...SAMPLE, PRODUCTS: {...SAMPLE.PRODUCTS,
     expensivegift: {...SAMPLE.PRODUCTS.expensivegift, wholesale: null}}}}});
   const html2 = await unsure.load('wiki/businesstypes-giftshop');
-  assert.match(html2, /Wholesale not stated/);
-  assert.doesNotMatch(html2, /No wholesaler listed/, 'unknown never becomes a no');
+  assert.match(html2, enRe('wiki.card.wholesale.unknown'));
+  assert.doesNotMatch(html2, enRe('wiki.card.wholesale.none'), 'unknown never becomes a no');
   assert.doesNotMatch(html2, /wk-pill no/);
-  assert.match(html2, /the help does not say either way/);
+  assert.match(html2, htmlRe('wiki.card.wholesale.unknown.tip', {}, {}));
 });
 
 test('a recipe with no stated rate shows no rate, and no day figure derived from one', async () => {
@@ -843,7 +852,7 @@ test('a recipe with no stated rate shows no rate, and no day figure derived from
     inputs: [{item: 'Clay', per: null, from: [HARVEST]}],
     out: {item: 'Gift (Cheap)', per: null}}}}}});
   const html = await w.load('wiki/businesstypes-giftshop');
-  assert.match(html, /rate not stated/);
+  assert.match(html, new RegExp(htmlRe('wiki.recipe.noRate').source, ''));
   assert.doesNotMatch(html, /0<small>\/h<\/small>/, 'no invented zero');
   assert.doesNotMatch(html, /0\/day/);
   assert.doesNotMatch(html, /null|undefined|NaN/);
@@ -856,16 +865,16 @@ test('a fixture with no stated capacity shows none, rather than an empty number'
   const html = await w.load('wiki/businesstypes-giftshop');
   const shelf = row(html, 'businesstypes-giftshop:fix-roundedshelf');
   assert.match(shelf, /Rounded Shelf/);
-  assert.doesNotMatch(shelf, /holds <b>/, 'no capacity stated, none shown');
+  assert.doesNotMatch(shelf, htmlRe('wiki.setup.holds'), 'no capacity stated, none shown');
   assert.doesNotMatch(html, /<b><\/b>/);
   assert.doesNotMatch(html, /null|undefined|NaN/);
   // What the shipped shops hold was still counted, so that much is still said.
-  assert.match(html, /Counted in the shops the game ships/);
+  assert.match(html, htmlRe('wiki.fix.observed', {}, {}));
 
   const silent = wiki({data: {...DATA, sample: {...SAMPLE, FIXTURES: {...SAMPLE.FIXTURES,
     roundedshelf: {name: 'Rounded Shelf', sells: ['cheapgift'], vendors: [PEDERSON]}}}}});
   const bare = await silent.load('wiki/businesstypes-giftshop');
-  assert.match(bare, /Its help page gives no numbers for this one/);
+  assert.match(bare, htmlRe('wiki.fix.none', {}, {}));
   assert.doesNotMatch(bare, /null|undefined|NaN/);
 });
 
@@ -896,9 +905,9 @@ test('the weekly-limit note is the extraction\'s own, not lore typed into the pa
   const keyed = wiki({data: {...DATA, sample: {...SAMPLE, GAPS: [{what: 'Weekly delivery limits',
     detail: 'help_wholesalers_weeklylimits_content says every wholesaler caps each item per week.'}]}}});
   const html3 = await keyed.load('wiki/businesstypes-giftshop');
-  const where = html3.slice(html3.indexOf('<h2>Where to go</h2>'), html3.indexOf('<h2>Yours</h2>'));
+  const where = html3.slice(html3.indexOf('<h2>' + en('wiki.copy.suppliersTitle') + '</h2>'), html3.indexOf('<h2>' + en('wiki.yours.title') + '</h2>'));
   assert.doesNotMatch(where, /help_wholesalers|caps each item per week/);
-  const source = html3.slice(html3.indexOf('<h2>Source</h2>'));
+  const source = html3.slice(html3.indexOf('<h2>' + en('wiki.copy.sourceTitle') + '</h2>'));
   assert.doesNotMatch(source, /help_wholesalers/);
   assert.match(source, /the help's own page says every wholesaler caps each item per week/);
 
@@ -910,18 +919,18 @@ test('the weekly-limit note is the extraction\'s own, not lore typed into the pa
 test('the day figure is named as an assumption, not as a measurement', async () => {
   const w = wiki();
   const html = await w.load('wiki/businesstypes-giftshop');
-  assert.match(html, /maximum hourly rate times 24/);
-  assert.match(html, /assumes the line runs all day, uninterrupted and at full rate/);
-  assert.doesNotMatch(html, /never idles/);
-  assert.doesNotMatch(html, /measured factory draw/);
+  assert.match(html, htmlRe('wiki.copy.fullDayHint', {}, {}));
+  assert.match(html, htmlRe('wiki.copy.fullDayHint', {}, {}));
+  // Pins the wording: assumed output must not claim uninterrupted or measured production.
+  assert.doesNotMatch(html, /never idles|measured factory draw/);
 });
 
 test('no page claims the game files carry no prices anywhere', async () => {
   const w = wiki();
   for (const hash of ['wiki', 'wiki/businesstypes-giftshop', 'wiki/products-cheapgift']) {
     const html = await w.go(hash);
-    assert.doesNotMatch(html, /no prices anywhere/i, hash);
-    assert.doesNotMatch(html, /carries no price/i, hash);
+    // Pins the wording: the help catalogue must not claim the game has no prices.
+    assert.doesNotMatch(html, /no prices anywhere|carries no price/i, hash);
   }
 });
 
@@ -929,25 +938,25 @@ test('the stamp dates the game files and names a build only as a save build, in 
   const w = wiki();
   const html = await w.load('wiki');
   // In the tip, not a chip on the page (declutter M2).
-  assert.match(html, /data-tip="[^"]*game files of 2026-09-03/);
-  assert.doesNotMatch(html, /class="[^"]*chip[^"]*"[^>]*>game files of/);
+  assert.match(html, new RegExp('data-tip="[^"]*' + htmlRe('wiki.stamp.date.said', {date: '2026-09-03'}).source));
+  assert.doesNotMatch(html, new RegExp('class="[^"]*chip[^"]*"[^>]*>' + htmlRe('wiki.stamp.date.said').source));
   assert.doesNotMatch(html, /build 3675/, 'the mockup\'s number is not a fact about this install');
   assert.doesNotMatch(html, /25231854/, 'Steam\'s depot id is not the save build');
-  assert.doesNotMatch(html, /from build/, 'this catalogue states none, so none is said');
+  assert.doesNotMatch(html, htmlRe('wiki.stamp.build.said'), 'this catalogue states none, so none is said');
 
   const known = wiki({data: {...DATA, provenance: {...DATA.provenance, saveBuildNumber: 3675}}});
   const html2 = await known.load('wiki');
-  assert.match(html2, /data-tip="[^"]*A save from build 3,?675 matches these pages/);
+  assert.match(html2, new RegExp('data-tip="[^"]*' + htmlRe('wiki.stamp.build.said', {build: 3675}).source));
 });
 
 test('a page the sample does not cover is a reader, not the authored layout', async () => {
   const w = wiki();
   const html = await w.load('wiki/products-cheapgift');
-  assert.doesNotMatch(html, /<h2>To open<\/h2>/);
+  assert.doesNotMatch(html, new RegExp("<h2>" + htmlRe('wiki.copy.setupTitle').source + "<\\/h2>", ''));
   assert.match(html, /class="wk-read rv"/);
   assert.match(html, /Gift \(Cheap\)/);
   assert.match(html, /href="#wiki\/businesstypes-giftshop"/, 'its links reach the pages that exist');
-  assert.match(html, /Where this page comes from/);
+  assert.match(html, enRe('wiki.src.title'));
 });
 
 test('the relation graph wires products to fixtures and to their supply', async () => {
@@ -1017,7 +1026,7 @@ test('picking a node lights its own lines and nothing else', async () => {
   assert.ok(g.graph.classList.contains('picked'));
   assert.deepEqual(g.nodes.map(n => n.classList.contains('lit')), [true, true, true, false]);
   assert.deepEqual(g.paths().map(p => p.classList.contains('lit')), [true, true, false]);
-  assert.match(g.say.textContent, /2 links/);
+  assert.match(g.say.textContent, enRe('wiki.graph.say', {n: 2}));
   assert.equal(g.letgo.hidden, false, 'and the way to let go is offered');
   w.call('wikiPick(null)');
   assert.ok(!g.graph.classList.contains('picked'));
@@ -1101,8 +1110,8 @@ test('the ball stops when the wiki is no longer the page on screen', async () =>
 test('with no save open the page says what it would show, and shows no number', async () => {
   const w = wiki();
   const html = await w.load('wiki/products-cheapgift');
-  assert.match(html, /no save open/);
-  assert.match(html, /Open a save/);
+  assert.match(html, enRe('wiki.chip.noSave'));
+  assert.match(html, htmlRe('wiki.yours.nosave'));
   assert.doesNotMatch(html, /wk-slot/, 'and invents nothing to fill the strip with');
 });
 
@@ -1114,9 +1123,9 @@ test('with a save open the strip is that save\'s own numbers, matched by the pag
       cells: [{hood: 'ba:neighborhood_midtown', demand: 72}, {hood: 'ba:neighborhood_thehamptons', demand: 30}]}]},
   }});
   const html = await w.load('wiki/products-cheapgift');
-  assert.match(html, /from your save/);
-  assert.match(html, /72 in Midtown/, 'demand comes from the save\'s own snapshot');
-  assert.match(html, /2 shops/);
+  assert.match(html, enRe('wiki.chip.fromSave'));
+  assert.match(html, htmlRe('wiki.yours.demand.v', {demand: 72, hood: 'Midtown'}, {}), 'demand comes from the save\'s own snapshot');
+  assert.match(html, htmlRe('wiki.yours.sell.v', {n: 2}, {}));
   assert.match(html, /\$12\.50/, 'a unit price is written out rather than rounded into a lie');
   assert.doesNotMatch(html, /\$13</);
 });
@@ -1129,13 +1138,13 @@ test('a save row that only shares the page\'s name is not the page\'s thing', as
       cells: [{hood: 'ba:neighborhood_midtown', demand: 72}]}]},
   }});
   const html = await w.load('wiki/products-cheapgift');
-  assert.match(html, /Nothing in the open save matches this page/);
+  assert.match(html, htmlRe('wiki.yours.nomatch', {}, {}));
 });
 
 test('a save that says nothing about this page leaves the strip empty and says why', async () => {
   const w = wiki({save: {products: [], businesses: [], market: {rows: []}}});
   const html = await w.load('wiki/products-cheapgift');
-  assert.match(html, /Nothing in the open save matches this page/);
+  assert.match(html, htmlRe('wiki.yours.nomatch', {}, {}));
 });
 
 /* --- the hand-off to Growth ---------------------------------------------- */
@@ -1157,7 +1166,7 @@ test('with no save the hand-off is a sentence, never a button that does nothing'
   await w.load('wiki/businesstypes-giftshop');
   assert.equal(w.call('wikiCanPlan()'), false);
   assert.doesNotMatch(slot.innerHTML, /<button/);
-  assert.match(slot.innerHTML, /Open a save to plan this range/);
+  assert.match(slot.innerHTML, enRe('wiki.plan.nosave'));
   assert.equal(w.call('wikiPlanChain()'), false, 'and asking anyway changes nothing');
   assert.deepEqual(w.drawn, []);
 });
@@ -1168,7 +1177,7 @@ test('a save whose catalogue lacks the type says that, rather than offering the 
   w.context.$ = id => (id === 'wikiRoot' ? w.root : id === 'wikiPlanSlot' ? slot : null);
   await w.load('wiki/businesstypes-giftshop');
   assert.doesNotMatch(slot.innerHTML, /<button/);
-  assert.match(slot.innerHTML, /Not in this save's catalogue|Not in this save&#39;s catalogue/);
+  assert.match(slot.innerHTML, htmlRe('wiki.plan.missing'));
 });
 
 /* --- the squares you tick ------------------------------------------------ */
@@ -1209,6 +1218,7 @@ test('a setup square is a real checkbox, and each card keeps its own score', asy
 /* A translation is text: in a sentence that carries markup only its <b> is
    put back, and a name inside it is escaped; one whose plural follows the
    count its verb follows gets that count. */
+// Pins the wording: translated fixtures test escaping, retained markup and plural selection.
 test('a translated sentence cannot become markup, and keeps only its <b>', async () => {
   const w = wiki();
   await w.load('wiki/businesstypes-giftshop');
