@@ -12446,15 +12446,17 @@ function factoryCounts(type, added = []){
    own list for it (catalogue[type].extra, [[slug, weight], ...], weight under
    1). Added products are kept per type, each with the per-shop rate the player
    typed (null until he types one), for the session and in one localStorage
-   key, so a type keeps its additions when the picker moves to another. */
+   key per character, so a type keeps its additions when the picker moves to
+   another. */
 const PLAN_EXTRA_KEY = "ba_plan_extra_v1";
-let planExtra = null;
+const planExtraStore = () => `${PLAN_EXTRA_KEY}:${(D && D.meta && D.meta.character) || "default"}`;
+let planExtra = null, planExtraFor = null;
 let pcPop = null, pcPopFor = null;  // the Add product picker and its button (pcPopOpen())
 function planExtraAll(){
-  if(planExtra) return planExtra;
-  planExtra = {};
+  if(planExtra && planExtraFor === planExtraStore()) return planExtra;
+  planExtra = {}; planExtraFor = planExtraStore();
   try{
-    const saved = JSON.parse(localStorage.getItem(PLAN_EXTRA_KEY) || "{}");
+    const saved = JSON.parse(localStorage.getItem(planExtraFor) || "{}");
     if(saved && typeof saved === "object" && !Array.isArray(saved))
       Object.entries(saved).forEach(([type, slugs]) => {
         if(!slugs || typeof slugs !== "object" || Array.isArray(slugs)) return;
@@ -12468,7 +12470,7 @@ function planExtraAll(){
   return planExtra;
 }
 function planExtraKeep(){
-  try{ localStorage.setItem(PLAN_EXTRA_KEY, JSON.stringify(planExtraAll())); }catch(e){}
+  try{ localStorage.setItem(planExtraStore(), JSON.stringify(planExtraAll())); }catch(e){}
 }
 /* The added products of a type that its list still offers, in the list's order. */
 function planAdded(type){
@@ -12496,6 +12498,11 @@ const machinesOn = slug => Math.max(0, planCounts[slug] ?? planSeed[slug] ?? 1);
 function drawPlan(){
   indexPlan();
   pcPopClose(false);
+  /* A redraw (a live refresh, a pick) replaces the rate field being typed in:
+     the same product's field gets focus and caret back afterwards. */
+  const act = document.activeElement;
+  const typing = act && act.matches && act.matches("[data-pc-rate]")
+    ? {slug: act.dataset.pcRate, from: act.selectionStart, to: act.selectionEnd} : null;
   const types = planTypes();
   if(!types.length){
     $("planNote").textContent = tt("gr.plan.noCatalogue", "No product catalogue in this save.");
@@ -12559,10 +12566,15 @@ function drawPlan(){
      type, as for the main lines. */
   const extraRate = slug => {
     const measured = ((own || {}).perDay || {})[slug];
-    if(measured) return {rate: Math.max(1, Math.round(measured)), typed: false};
+    const sellers = Math.min(shops, (((own || {}).sellers || {})[slug]) ?? shops);
+    if(measured && sellers >= shops) return {rate: Math.max(1, Math.round(measured)), typed: false};
     if(!shops) return {rate: 0, typed: false};
+    /* Only some of the shops sell it (a trial at one of them, say): what they
+       sell is spread over every shop of the type, and the figure stays the
+       player's to change. */
+    const spread = measured ? Math.max(1, Math.round(measured * sellers / shops)) : null;
     const typed = (planExtraAll()[planType] || {})[slug];
-    return {rate: typed ?? planExtraDefault(perShop, weightOf[slug]), typed: true};
+    return {rate: typed ?? spread ?? planExtraDefault(perShop, weightOf[slug]), typed: true, sellers: measured ? sellers : 0};
   };
   const removeBtn = slug => `<button type="button" class="pc-x" data-pc-x="${attr(slug)}" aria-label="${
     attr(tt("gr.line.removeAria", "Remove {name} from the range", {name: itemName(slug)}))}" data-tip="${
@@ -12628,10 +12640,14 @@ function drawPlan(){
     });
     /* The rate field sits under the coverage figure, in the player's colour,
        and says once that the figure is his. */
-    const rateField = extra && extra.typed ? `<span class="pc-rate"><label><input type="number" min="0" step="10" inputmode="numeric" value="${extra.rate}" data-pc-rate="${attr(slug)}" aria-label="${
+    const rateTip = extra && extra.sellers
+      ? tt("gr.line.rateSomeTip", "{n} of your {total} {type} shops sell this, so it starts at what they sell spread over all {total}. The rate is yours to change",
+        {n: extra.sellers, total: shops, type: cat[planType].type})
+      : tt("gr.line.rateYoursTip", "Your {type} shops do not sell this yet, so this rate is yours, not measured. It starts at {per:,} a shop, what one sells of a main product, times the game's {w}% weight",
+        {type: cat[planType].type, per: perShop, w: Math.round((weightOf[slug] || 0) * 100)});
+    const rateField = extra && extra.typed ? `<span class="pc-rate"><label><input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" value="${extra.rate}" data-pc-rate="${attr(slug)}" aria-label="${
         attr(tt("gr.line.rateAria", "{name} a shop sells a day, your estimate", {name: r.item}))}">${tt("gr.line.rateUnit", "/shop/day")}</label>·<em tabindex="0" data-tip="${
-        attr(tt("gr.line.rateYoursTip", "Your {type} shops do not sell this yet, so this rate is yours, not measured. It starts at {per:,} a shop, what one sells of a main product, times the game's {w}% weight",
-          {type: cat[planType].type, per: perShop, w: Math.round((weightOf[slug] || 0) * 100)}))}">${tt("gr.line.rateYours", "your estimate")}</em></span>` : "";
+        attr(rateTip)}">${tt("gr.line.rateYours", "your estimate")}</em></span>` : "";
     return `<tr class="line${extra ? " pc-added" : ""}" data-m="${machinesOn(slug)}" data-min="0" data-max="99" data-rate="${r.out}" data-ing="${attr(ing)}" data-kit="${attr(JSON.stringify(kit))}" data-slug="${attr(slug)}" data-name="${attr(r.item)}"${extra ? ` data-pershop="${extra.rate}"` : ""}>
       <td class="l">${spEsc(r.item)}${extra ? removeBtn(slug) : ""}<span class="sub" data-tip="${attr(tt("gr.line.kitTip", "One {station} is {kit}; one makes {n:,} a day",
         {station: station.name || r.workstation, kit: kit.length ? kit.join(" + ") : tt("gr.line.oneMachine", "one machine"), n: r.out * HOURS}))}">${
@@ -12641,7 +12657,7 @@ function drawPlan(){
   });
   /* The range's last row: what else the type sells, one click from a line. */
   const offered = (cat[planType].extra || []).length;
-  if(offered) lines.push(`<tr class="pc-addrow"><td class="l" colspan="5"><button type="button" class="pc-add" data-pc-toggle aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>${
+  if(offered > added.length) lines.push(`<tr class="pc-addrow"><td class="l" colspan="5"><button type="button" class="pc-add" data-pc-toggle aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>${
     tt("gr.plan.add", "Add product")}<small>${tt("gr.plan.addMore", "{n} more", {n: offered - added.length})}</small></button></td></tr>`);
 
   /* changed for growth: a type's service list is explained, never planned —
@@ -12684,6 +12700,11 @@ function drawPlan(){
      sums it, or says why it cannot be measured. */
   planDraw();
   wireTips();
+  const again = typing && $$("#planBody [data-pc-rate]").find(el => el.dataset.pcRate === typing.slug);
+  if(again){
+    again.focus({preventScroll: true});
+    try{ again.setSelectionRange(typing.from ?? again.value.length, typing.to ?? again.value.length); }catch(e){}
+  }
 }
 
 /* The top of the list is the money; the full list is what a factory planner
@@ -20256,7 +20277,7 @@ function showGrowthRow(slug){
 /* plan a chain: every line runs 24/7; step a line's machines and everything follows */
 function planDraw(){
   const lines = $$("tr.line[data-m][data-rate]"); if(!lines.length) return;
-  const host = lines[0].closest("[data-pershop], [data-shops]");
+  const host = lines[0].closest("table");
   const perShopWeek = host ? (+host.dataset.pershop || 0) * 7 : 0, shopsOwned = host ? (+host.dataset.shops || 0) : 0;
   /* How many shops a line supplies is judged on a shop's busiest day: the
      chain's weekly peak over its average, so a line that only keeps up on a
@@ -20429,7 +20450,9 @@ const bindPlan = once(() => {
     planExtraKeep();
     pcPopClose(false);
     drawPlan();
-    const back = q("#planBody [data-pc-toggle]");
+    /* Focus stays with the range: the Add product button while there is more
+       to add, else the new line's own remove button. */
+    const back = q("#planBody [data-pc-toggle]") || $$("#planBody [data-pc-x]").find(x => x.dataset.pcX === o.dataset.pcPick);
     if(back) back.focus({preventScroll: true});
   });
   on("click", "[data-pc-x]", (x, e) => {
@@ -20444,7 +20467,13 @@ const bindPlan = once(() => {
     if(back) back.focus({preventScroll: true});
   });
   on("input", "[data-pc-rate]", el => {
-    const v = el.value === "" ? 0 : Math.max(0, +el.value || 0);
+    const digits = el.value.replace(/[^0-9]/g, "");
+    if(digits !== el.value){
+      const at = Math.max(0, (el.selectionStart || 0) - (el.value.length - digits.length));
+      el.value = digits;
+      try{ el.setSelectionRange(at, at); }catch(e){}
+    }
+    const v = digits === "" ? 0 : +digits;
     const all = planExtraAll();
     (all[planType] || (all[planType] = {}))[el.dataset.pcRate] = v;
     planExtraKeep();
@@ -20477,7 +20506,7 @@ function pcPopOpen(btn){
   if(pcPopFor && pcPopFor !== btn) pcPopFor.setAttribute("aria-expanded", "false");
   pcPopFor = btn;
   const added = new Set(planAdded(planType)), ws = D.plan.workstations || {};
-  const head = tt("gr.plan.alsoSells", "A {type} also sells", {type: entry.type});
+  const head = tt("gr.plan.alsoSells", "{type} also sells", {type: entry.type});
   pcPop.setAttribute("aria-label", head);
   pcPop.innerHTML = `<div class="pc-pop-h"><b>${spEsc(head)}</b><span tabindex="0" data-tip="${
       attr(tt("gr.plan.weightTip", "The game's own weight for each at a {type}; a main product is 100%", {type: entry.type}))}">${
@@ -20500,13 +20529,19 @@ function pcPopPlace(){
   if(!pcPopFor.isConnected || !pcPopFor.getClientRects().length){ pcPopClose(false); return; }
   const vw = document.documentElement.clientWidth || window.innerWidth;
   const vh = document.documentElement.clientHeight || window.innerHeight;
-  const r = pcPopFor.getBoundingClientRect(), w = pcPop.offsetWidth, h = pcPop.offsetHeight;
-  /* Under the button, its left edge on the button's; above it when the
-     window has no room below. */
-  let y = r.bottom + 8;
-  if(y + h > vh - 12 && r.top - 8 - h >= 12) y = r.top - 8 - h;
+  const r = pcPopFor.getBoundingClientRect(), w = pcPop.offsetWidth;
+  /* Under the button, its left edge on the button's; above it when only
+     there is room. In a window too short for either, it takes the larger
+     space and its list scrolls; it never leaves the window. */
+  pcPop.style.maxHeight = "";
+  const full = pcPop.offsetHeight;
+  const below = vh - 12 - (r.bottom + 8), above = r.top - 8 - 12;
+  const down = full <= below || !(full <= above) && below >= above;
+  pcPop.style.maxHeight = `${Math.max(120, Math.min(full, down ? below : above))}px`;
+  const h = pcPop.offsetHeight;
+  const y = Math.max(12, Math.min(down ? r.bottom + 8 : r.top - 8 - h, vh - h - 12));
   pcPop.style.left = `${Math.max(12, Math.min(r.left, vw - w - 12))}px`;
-  pcPop.style.top = `${Math.max(12, y)}px`;
+  pcPop.style.top = `${y}px`;
 }
 /* `restore` hands focus back to the button (Escape, or the button again). */
 function pcPopClose(restore){

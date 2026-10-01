@@ -167,6 +167,8 @@ class PlannerRegressions(unittest.TestCase):
         # type cannot sell at all stays out.
         self.assertEqual(result["own"]["ba:businesstype_florist"]["perDay"],
                          {ITEM + "cheapflower": 150, ITEM + "umbrella": 40})
+        # Only the extras carry a seller count: the page spreads them over every shop.
+        self.assertEqual(result["own"]["ba:businesstype_florist"]["sellers"], {ITEM + "umbrella": 1})
         self.assertIn(ITEM + "umbrella", result["items"])
 
     def test_service_revenue_catalogue_is_preserved(self):

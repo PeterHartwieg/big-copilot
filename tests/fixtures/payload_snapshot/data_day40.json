@@ -16152,6 +16152,7 @@
      "ba:itemname_cheapgift": 85.7,
      "ba:itemname_umbrella": 21.4
     },
+    "sellers": {},
     "shops": 1,
     "sites": 1
    },
@@ -16159,6 +16160,7 @@
     "perDay": {
      "ba:itemname_beer": 302.9
     },
+    "sellers": {},
     "shops": 1,
     "sites": 1
    }

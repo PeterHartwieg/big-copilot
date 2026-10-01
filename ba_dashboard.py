@@ -16749,6 +16749,14 @@ def _plan(
                 for s, v in products.items()
                 if s in planable
             },
+            # How many of those shops sell each product the type can
+            # additionally sell: a product only some of them trial is spread
+            # over all of them on the page, and stays the player's to type.
+            "sellers": {
+                s: len(v)
+                for s, v in products.items()
+                if s in planable and s not in entry.get("products", ())
+            },
         }
 
     labels = {}

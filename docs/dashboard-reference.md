@@ -892,18 +892,20 @@ own product list for the type (`types[kind].i` in `ba_store_rules.json`), the pr
 with a weight under 1 that are not main products already. The picker shows that weight as
 a percentage, heaviest first; a main product is 100%. An added product gets a line like
 the others, its machines start at what the factories already run on it, or one, and only
-added lines carry a × to take them out again. Its rate a shop is chosen in this order:
+added lines carry a × to take them out again. Its rate per shop is chosen in this order:
 
-- **Measured.** If your shops of the type already sell it, their average a shop a day.
-  The line shows no field, as a main line shows none.
+- **Measured.** If every one of your shops of the type sells it, what they sell of it a
+  day, averaged over those shops. The line shows no field, as a main line shows none.
 - **Your estimate.** Otherwise, a figure you type in the line's Supplies cell, marked
-  "your estimate". It starts at the type's measured rate a shop (the main products only)
-  times the product's weight, to the nearest ten (to the nearest one below ten): 150 a
-  shop and a 75% weight start at 110.
+  "your estimate". Where only some of the shops sell it (a trial at one of four, say), it
+  starts at what they sell a day, summed and spread over every shop of the type: 40 at
+  one of four Florists starts at 10. Where none sells it, it starts at the type's measured
+  rate per shop (the main products only) times the product's weight, to the nearest ten
+  (to the nearest one below ten): 150 a shop and a 75% weight start at 110.
 - **No shops of the type**: no field and no coverage figure, the same as the main lines.
 
 Added products and typed rates are kept per type, for the session and in the browser
-(`ba_plan_extra_v1`), so moving to another type and back keeps them. The weight is one
+per character (`ba_plan_extra_v1:<character>`), so moving to another type and back keeps them. The weight is one
 factor in what each customer buys (see Open a store, "What each customer buys"), so the
 default is a starting point, not a forecast: on 294 secondary products sold in the saves
 checked on 1 Oct 2026, the measured rate was a median 0.67 of main rate × weight (p25 0.46,
