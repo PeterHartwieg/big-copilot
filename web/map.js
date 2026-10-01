@@ -1679,11 +1679,14 @@ class CityMapView {
     if(card.classList.contains('in')) this.placeCard();
   }
   /* The plan's button, on a building the plan could open in: premises of its
-     kind to rent. The label is the plan's own, read afresh in the UI language. */
+     kind to rent, or premises of its kind you already rent that are empty or
+     already the plan's type, as when the lease was signed before the plan
+     picked the place. The label is the plan's own, read afresh in the UI language. */
   paintPlanGo(key){
     const go = this.card.querySelector('.fplan-go'); if(!go) return;
     const b = this.planning && key ? this.sites?.get(key) : null;
-    go.hidden = !(b && b.type === this.fs.cat && this.candidate(b));
+    const yours = b && b.status === 'mine' && (!b.occupant || b.occupant.typeSlug === this.fs.type);
+    go.hidden = !(b && b.type === this.fs.cat && (this.candidate(b) || yours));
     if(go.hidden) return;
     go.textContent = this.planning.label?.() || tt("map.fplan.go", "Plan here");
   }

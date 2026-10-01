@@ -33,6 +33,9 @@ const PREMISES = {
       occupant: {name: 'Bean There', type: 'Coffee Shop', typeSlug: COFFEE}}),
     site(MT[2], {status: 'mine', owner: 'you', occupant: {name: 'HART. Gym', type: 'Gym', typeSlug: 'ba:businesstype_gym'}}),
     site(HK[4], {type: 'office', size: 'J', m2: 180, cap: 10, rent: 90, traffic: 45}),
+    // Yours as well: one rented and still empty, one already a clothing store.
+    site(HK[2], {status: 'mine', owner: 'city'}),
+    site(HK[3], {status: 'mine', owner: 'you', occupant: {name: 'HART. Wear', type: 'Clothing Store', typeSlug: CLOTHES}}),
   ],
   forSale: [{key: HK[0], address: at(HK[0]).address, hood: HK_HOOD, type: 'retail', size: 'C', m2: 225, price: 750000}],
   demand: {
@@ -166,13 +169,25 @@ test('a picked row opens its card with the plan\'s button, which hands the build
     assert.equal(await card.locator('h3 a').count(), 0);
     await go.click();
     assert.deepEqual(await page.evaluate(() => window.__planned), [MT[0]]);
-    // A building the plan cannot open in has no button: a rival, or your own.
+    // A building the plan cannot open in has no button: a rival, or your own
+    // that holds another type.
     for(const key of [HK[1], MT[2]]){
       await page.evaluate(key => window.__plan.select(key), key);
       await page.waitForFunction(key => window.__plan.selected === key && document.querySelector('#planHost .site.in'), key);
       assert.equal(await go.isVisible(), false, key);
       assert.equal(await card.locator('a.ss-sl').count(), 0, key);
     }
+    // Your own premises, empty or already the plan's type, take the plan: a
+    // lease signed before the plan picked the place.
+    for(const key of [HK[2], HK[3]]){
+      await page.evaluate(key => window.__plan.select(key), key);
+      await page.waitForFunction(key => window.__plan.selected === key && document.querySelector('#planHost .site.in'), key);
+      assert.equal(await go.isVisible(), true, key);
+      await go.click();
+    }
+    assert.deepEqual(await page.evaluate(() => window.__planned), [MT[0], HK[2], HK[3]]);
+    // Not in the list, which is premises to rent.
+    assert.equal(await page.locator(`#planHost .place[data-pick="${HK[2]}"], #planHost .place[data-pick="${HK[3]}"]`).count(), 0);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
