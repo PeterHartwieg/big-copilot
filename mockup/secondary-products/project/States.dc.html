@@ -1,20 +1,17 @@
-<title>__TITLE__</title>
-<script>
-/* The remembered theme, before anything paints. It has to be an inline, blocking
-   script in the head: the board's own script runs at the end of the body, which
-   is far too late to stop a dark page flashing white, or the reverse. "Auto"
-   stores nothing and leaves the attribute off, so prefers-color-scheme decides.
-   Blocked or full storage throws, and the system setting is then the answer,
-   which is what the default is anyway. */
-try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
-</script>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Add product: B · Add product: closed, open, added, after one add</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
 <style>
-/*__MAP_CSS__*/
-/*__WIKI_CSS__*/
+
+
 /* Tokens: the generator's .board palette. Dark is the base, as on the canvas;
    the light values follow the system setting or an explicit data-theme, which the
    footer's theme control sets. color-scheme rides along with each set so that
@@ -1194,7 +1191,6 @@ html:has(dialog:modal){overflow:hidden}
 #pageSupply .sb-v{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:4px;font:500 11px/1.5 "IBM Plex Mono",monospace;letter-spacing:.02em;white-space:nowrap;cursor:default}
 #pageSupply .sb-v svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 #pageSupply .sb-v.ok{background:var(--accent-soft);color:var(--accent)}
-#pageSupply .sb-t td.st .sb-v + .sb-v{margin:3px 0 0 4px}
 #pageSupply .sb-v.warn{background:#f0913a22;color:var(--warn)}
 #pageSupply .sb-v.bad{background:#ff625722;color:var(--neg)}
 #pageSupply .sb-v.plan{box-shadow:inset 0 0 0 1px var(--neg);color:var(--neg);background:none}
@@ -1266,9 +1262,8 @@ html:has(dialog:modal){overflow:hidden}
    leaves the table about 890 px); the status and the figures' second lines
    give instead. */
 #pageSupply [data-sb-table="factory-lines"] .sb-t tr > :nth-child(2){min-width:220px}
-#pageSupply [data-sb-table="factory-lines"] .sb-t td.st{min-width:80px}
-@media (max-width:1400px){#pageSupply [data-sb-table="factory-lines"] .sb-t th,#pageSupply [data-sb-table="factory-lines"] .sb-t td{padding-left:4px;padding-right:4px}#pageSupply [data-sb-table="factory-lines"] .sb-t thead th{letter-spacing:0}}
-#pageSupply [data-sb-table="factory-lines"] td.st .sb-v{white-space:normal}
+#pageSupply [data-sb-table="factory-lines"] .sb-t td.st{min-width:104px}
+@media (max-width:1400px){#pageSupply [data-sb-table="factory-lines"] .sb-t th,#pageSupply [data-sb-table="factory-lines"] .sb-t td{padding-left:6px;padding-right:6px}}
 #pageSupply [data-sb-table="factory-lines"] .sb-t td .sub{white-space:normal}
 /* Column heads never wrap (Peter's testing, A5): the Supply tables take
    tighter cells and a narrower status instead, so Imports fits beside the
@@ -1666,44 +1661,6 @@ td .ing{font-size:12px;color:var(--ink-2);white-space:normal;font-family:Archivo
 td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)}
 .planline{margin:14px 0 0;font-size:13.5px;color:var(--ink-2)}
 .planline b{color:var(--ink);font-family:"IBM Plex Mono",monospace;font-weight:500}
-/* Add product (issue #162): the range's last row opens a picker of what the
-   type also sells; an added line gets a remove button by its name and, where
-   no shop of the type sells it yet, a rate the player types in Supplies. The
-   picker hangs off <body>, position:fixed, as #alertPop does. */
-tr.pc-addrow td{padding:10px 12px 12px;border-bottom:0}
-tbody tr.pc-addrow:hover{background:none}
-.pc-add{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 12px 0 10px;border-radius:8px;border:1px dashed var(--rule);background:none;color:var(--ink-2);font:500 12.5px/1 Archivo,sans-serif;cursor:pointer;transition:border-color .15s,color .15s,background .15s}
-.pc-add:hover,.pc-add[aria-expanded="true"]{border-color:var(--accent);border-style:solid;color:var(--ink);background:var(--accent-soft)}
-.pc-add svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
-.pc-add small{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3);margin-left:2px}
-.pc-pop{position:fixed;z-index:60;width:380px;max-width:calc(100vw - 24px);max-height:min(460px,calc(100vh - 24px));overflow:auto;overscroll-behavior:contain;padding:6px;border-radius:12px;background:var(--raised);border:1px solid var(--rule);box-shadow:0 18px 48px #0006}
-:root[data-theme="light"] .pc-pop{box-shadow:0 24px 60px -24px #1a1f1c77}
-.pc-pop[hidden]{display:none}
-.pc-pop-h{display:flex;align-items:baseline;justify-content:space-between;padding:8px 10px}
-.pc-pop-h b,.pc-pop-h span{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
-.pc-pop-h span{cursor:help;border-bottom:1px dotted var(--ink-3)}
-.pc-opt{display:grid;grid-template-columns:minmax(0,1fr) 56px 34px;align-items:center;gap:12px;width:100%;min-height:44px;padding:6px 10px;border:0;border-radius:8px;background:none;color:var(--ink);text-align:left;font:inherit;cursor:pointer;transition:background .12s}
-.pc-opt:hover,.pc-opt:focus-visible{background:var(--surface);outline:none}
-.pc-opt span b{display:block;font:500 13.5px/1.25 Archivo,sans-serif}
-.pc-opt span small{display:block;margin-top:2px;font:400 11.5px/1.3 "IBM Plex Mono",monospace;color:var(--ink-3)}
-.pc-w{height:4px;border-radius:2px;background:var(--rule);overflow:hidden}
-.pc-w i{display:block;height:100%;background:var(--ink-3);width:var(--w)}
-.pc-opt em{font:500 12px/1 "IBM Plex Mono",monospace;font-style:normal;color:var(--ink-2);text-align:right}
-.pc-opt.on{cursor:default}
-.pc-opt.on span b{color:var(--ink-2)}
-.pc-opt.on em{color:var(--accent)}
-.pc-opt.on .pc-w i{background:var(--accent)}
-.pc-opt .pc-tick{display:inline-block;width:14px;height:14px;stroke:var(--accent);fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px;margin-left:6px}
-.pc-x{display:inline-grid;place-items:center;width:22px;height:22px;margin-left:6px;vertical-align:-5px;border-radius:6px;border:1px solid transparent;background:none;color:var(--ink-3);cursor:pointer;transition:all .15s}
-.pc-x:hover,.pc-x:focus-visible{border-color:var(--rule);color:var(--neg);outline:none}
-.pc-x svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round}
-.pc-rate{display:flex;align-items:baseline;justify-content:flex-end;gap:6px;margin-top:6px;font:400 11.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3);white-space:nowrap}
-.pc-rate label{display:inline-flex;align-items:baseline;gap:4px;cursor:text}
-.pc-rate input{width:44px;padding:3px 4px 2px;border:0;border-bottom:1px dashed var(--info);border-radius:0;background:none;color:var(--info);font:600 12.5px/1 "IBM Plex Mono",monospace;text-align:right;-moz-appearance:textfield;appearance:textfield}
-.pc-rate input::-webkit-inner-spin-button,.pc-rate input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
-.pc-rate input:hover{background:color-mix(in srgb,var(--info) 12%,transparent)}
-.pc-rate input:focus{outline:none;border-bottom-style:solid;background:color-mix(in srgb,var(--info) 12%,transparent)}
-.pc-rate em{font-style:normal;color:var(--info);cursor:help}
 
 /* flow map ---------------------------------------------------------------- */
 .flow .node rect{fill:var(--surface);stroke:var(--rule);transition:stroke .15s,transform .2s}
@@ -2238,7 +2195,7 @@ tr:hover .sp-zz{animation:sp-zz 1.2s ease-in-out infinite}
 .sp-tname{display:inline-block;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:-3px}
 
 /* a factory's lines: one square a machine, filled by its share of the week */
-.sp-line{display:grid;grid-template-columns:230px minmax(116px,auto) 1fr 110px 110px 110px 110px;gap:14px;align-items:center;padding:13px 0;border-bottom:1px solid var(--rule-soft);transition:opacity .2s}
+.sp-line{display:grid;grid-template-columns:230px minmax(116px,auto) 1fr 110px 110px 110px;gap:14px;align-items:center;padding:13px 0;border-bottom:1px solid var(--rule-soft);transition:opacity .2s}
 .sp-line.sp-head{padding:0 0 8px;border-bottom:1px solid var(--rule);font:500 10.5px/1.4 "IBM Plex Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
 .sp-line .sp-n{font-family:"IBM Plex Mono",monospace;font-size:13.5px;text-align:right;white-space:nowrap}
 .sp-line.sp-head .sp-n{font-size:10.5px}
@@ -2778,7 +2735,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
   #sitePanel .sp-lamps{margin-left:0}
   #sp-hours .chartbox{overflow-x:auto;overscroll-behavior-x:contain}
   #sp-hours .chartbox > .hours{min-width:620px}
-  #sitePanel .sp-lines{min-width:880px}
+  #sitePanel .sp-lines{min-width:760px}
   #sitePanel .sp-ba{gap:18px 26px}
   #sitePanel .sp-typed{margin-left:0}
   #sitePanel .sp-steps .sp-nowplan{margin-left:0!important}
@@ -4062,312 +4019,190 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
   .os-inv,.os-dl,.os-pvsa{display:block;overflow-x:auto}
 }
 
+
+html,body{margin:0}
+.pc-board{position:relative;overflow:hidden}
+.pc-board .sd{height:100%}
+.pc-board .orb{opacity:1}
+
+/* the Add product row: the last row of the range, never a column of its own */
+tr.pc-addrow td{padding:10px 12px 12px;border-bottom:0}
+.pc-add{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 12px 0 10px;border-radius:8px;border:1px dashed var(--rule);background:none;color:var(--ink-2);font:500 12.5px/1 Archivo,sans-serif;cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+.pc-add:hover,.pc-add[aria-expanded="true"]{border-color:var(--accent);border-style:solid;color:var(--ink);background:var(--accent-soft)}
+.pc-add svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.pc-add small{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3);margin-left:2px}
+
+/* the picker: a popover off the Add product button (on the board it hangs off <body>,
+   position:fixed, as #alertPop does) */
+.pc-anchor{position:relative;display:inline-block}
+.pc-pop{position:absolute;left:0;top:calc(100% + 8px);z-index:20;width:380px;padding:6px;border-radius:12px;background:var(--raised);border:1px solid var(--rule);box-shadow:0 18px 48px #0006}
+.pc-pop[hidden]{display:none}
+.pc-pop-h{display:flex;align-items:baseline;justify-content:space-between;padding:8px 10px 8px}
+.pc-pop-h b{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.pc-pop-h span{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);cursor:help;border-bottom:1px dotted var(--ink-3)}
+.pc-opt{display:grid;grid-template-columns:minmax(0,1fr) 56px 34px;align-items:center;gap:12px;width:100%;min-height:44px;padding:6px 10px;border:0;border-radius:8px;background:none;color:var(--ink);text-align:left;font:inherit;cursor:pointer;transition:background .12s}
+.pc-opt:hover,.pc-opt:focus-visible{background:var(--surface);outline:none}
+.pc-opt span b{display:block;font:500 13.5px/1.25 Archivo,sans-serif}
+.pc-opt span small{display:block;margin-top:2px;font:400 11.5px/1.3 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.pc-w{height:4px;border-radius:2px;background:var(--rule);overflow:hidden}
+.pc-w i{display:block;height:100%;background:var(--ink-3);width:var(--w)}
+.pc-opt em{font:500 12px/1 "IBM Plex Mono",monospace;font-style:normal;color:var(--ink-2);text-align:right}
+.pc-opt.on{cursor:default}
+.pc-opt.on span b{color:var(--ink-2)}
+.pc-opt.on em{color:var(--accent)}
+.pc-opt.on .pc-w i{background:var(--accent)}
+.pc-opt .pc-tick{display:inline-block;width:14px;height:14px;stroke:var(--accent);fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px;margin-left:6px}
+
+/* an added line: the same row, a remove button by its name and the rate in Supplies */
+tr.pc-added td.l:first-child{position:relative}
+.pc-x{display:inline-grid;place-items:center;width:22px;height:22px;margin-left:6px;vertical-align:-5px;border-radius:6px;border:1px solid transparent;background:none;color:var(--ink-3);cursor:pointer;transition:all .15s}
+.pc-x:hover,.pc-x:focus-visible{border-color:var(--rule);color:var(--neg);outline:none}
+.pc-x svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round}
+tr.pc-added.pc-out{display:none}
+.pc-rate{display:flex;align-items:baseline;justify-content:flex-end;gap:6px;margin-top:6px;font:400 11.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3);white-space:nowrap}
+.pc-rate label{display:inline-flex;align-items:baseline;gap:4px;cursor:text}
+.pc-rate input{width:44px;padding:3px 4px 2px;border:0;border-bottom:1px dashed var(--info);border-radius:0;background:none;color:var(--info);font:600 12.5px/1 "IBM Plex Mono",monospace;text-align:right;-moz-appearance:textfield}
+.pc-rate input::-webkit-inner-spin-button,.pc-rate input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.pc-rate input:hover{background:var(--info-soft)}
+.pc-rate input:focus{outline:none;border-bottom-style:solid;background:var(--info-soft)}
+.pc-rate em{font-style:normal;color:var(--info)}
+
+/* artboard B: the states, one range a band */
+.pc-states{padding:40px 56px 56px;display:flex;flex-direction:column;gap:44px}
+.pc-state{display:grid;grid-template-columns:200px minmax(0,1fr);gap:32px;align-items:start}
+.pc-state > div:first-child b{display:block;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.pc-state > div:first-child p{margin:10px 0 0;font-size:13px;line-height:1.45;color:var(--ink-2);text-wrap:pretty}
+.pc-state table{background:var(--ground)}
+.pc-state.tall{min-height:500px}
 </style>
-<script>
-/*__I18N_SCRIPT__*/
-</script>
-<!--__BANNER__-->
-<!-- The sidebar and the page beside it (docs/ui-declutter.md, "Sidebar"). -->
-<div class="sd-app" id="sdApp">
-<script>
-/* Collapsed to its rail before the first paint: the reader's choice on this
-   device, else a window 1100 px wide or less. sdLayout() keeps it from here. */
-(function(){ var w = window.innerWidth, rail = w <= 1100;
-  try{ var v = localStorage.getItem("ba_dash_sidebar"); if(v === "rail" || (v === "full" && w > 1100)) rail = v === "rail"; }catch(e){}
-  if(rail && w > 560) document.body.classList.add("sd-rail"); })();
-</script>
-<nav class="sd" id="mast" aria-label="Main" data-tt-aria-label="nav.label">
-  <div class="sd-in" id="sdIn">
-    <div class="sd-head" id="sdHead">
-      <div class="brand" id="brand"><span class="wordmark" id="title"></span><span class="dot" id="dot"></span></div>
-      <div class="orb" id="orb" aria-hidden="true"><i></i><u></u></div>
-    </div>
-    <!-- Search goes here (ssField); then the five places, the open one's
-         views under it (#localNav), and the two references, built by the
-         board script from AREAS and REFS. -->
-    <div class="sd-areas" id="nav"></div>
-    <div class="sd-refs" id="navRefs" role="group" aria-label="Reference" data-tt-aria-label="nav.more.refs"></div>
-    <div class="sd-foot">
-      <div class="clock tr" id="clock" tabindex="0"
-        data-tip="Game time when the save was written. Day 1 was a Monday."></div>
-      <div class="sd-clk" id="sdClk" aria-hidden="true"></div>
-      <!-- A host page puts its Update and ··· here (#mastSrc) and its ···
-           takes the utilities in; the local server page keeps the board's. -->
-      <div class="sd-row" id="sdRow">
-        <button type="button" class="sd-ib" id="navMore" aria-haspopup="true" aria-expanded="false"></button>
-        <button type="button" class="sd-ib sd-tog" id="sdToggle" aria-expanded="true"></button>
-      </div>
-    </div>
-  </div>
-</nav>
-<div class="wrap">
-  <!-- A host page (the in-browser board) fills these with its source controls;
-       the local server page leaves them empty and they take no room. -->
-  <div class="source-row" id="sourceRow"></div>
-  <div class="source-note" id="sourceNote"></div>
-  <!-- The area's own views and, beside them, the view's own controls (the
-       element marked data-view-ctl, moved here by ctlHoist()); then why the
-       reader is here (paintShell()). -->
-  <div class="nx-localrow" id="localRow" hidden><nav class="nx-local" id="localNav" hidden></nav><div class="nx-ctl" id="viewCtl" hidden></div></div>
-  <div class="nx-arrive" id="arrive" role="status" tabindex="-1" hidden></div>
-
-  <div class="page" id="pageToday">
-    <div class="ov-ctx" id="ovCtx"></div>
-    <div class="kpis" id="kpis"></div>
-
-    <section class="sec rv" id="alertSection" aria-labelledby="ovTitle">
-      <!-- drawAlerts() fills the head (title, the three severity filters, All
-           tools) around this Customize checks button, which is bound once at
-           boot and is moved into each fresh head rather than rebuilt. -->
-      <div id="alertHead">
-        <button type="button" class="nx-btn sm ghost" id="alertKindsToggle" aria-expanded="false"
-          data-tip="Which kinds of finding make the list. A kind switched off is counted under the list, never dropped. Saved on this device." data-tt-tip="today.kinds.toggle2"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg><span data-tt="today.kinds.customize">Customize checks</span></button>
-      </div>
-      <div class="ov-sticky" id="ovSticky" aria-hidden="true"></div>
-      <p class="ov-news" id="ovNews" role="status" hidden></p>
-      <div class="finds" id="alerts"></div>
-      <div class="ov-more" id="ovMore" hidden></div>
-      <p class="silenced" id="silenced"><b></b> · <a class="link" href="#" data-tt="today.silenced.undo">undo</a></p>
-      <div class="td-minor" id="alertMinor"></div>
-    </section>
-
-    <!-- All tools: the thirteen tasks, in four stable groups (drawTools()).
-         Three rows carry what they can say about this save, as the Next moves
-         cards did: paintPlanImports() (from the change checklist),
-         drawOptimizeStaffing() and drawFindLocation() fill their badge and
-         line, found by the same ids. -->
-    <section class="sec rv" id="secMoves">
-      <div class="ov-toolshead" id="tools"><h2 id="toolsTitle" tabindex="-1" data-tt="today.tools.title">All tools</h2></div>
-      <div class="ov-tp" id="toolPanels">
-        <div class="ov-p"><div class="ov-ph"><b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 8.5 12 4l8.5 4.5v8L12 21l-8.5-4.5z"></path><path d="M3.5 8.5 12 13l8.5-4.5M12 13v8"></path></svg><span data-tt="nav.area.supply">Supply</span></b><svg class="ov-ill" viewBox="0 0 118 56" aria-hidden="true"><path class="oi-ln wk" d="M16 28 H52"></path><path class="oi-ln lit" d="M64 28 C80 28 80 14 96 14"></path><path class="oi-ln lit" d="M64 28 C80 28 80 42 96 42"></path><circle class="oi-nd" cx="12" cy="28" r="8"></circle><rect class="oi-nd a" x="50" y="18" width="18" height="20" rx="3"></rect><rect class="oi-nd" x="96" y="6" width="16" height="16" rx="3"></rect><rect class="oi-nd" x="96" y="34" width="16" height="16" rx="3"></rect></svg></div>
-          <a class="ov-task" href="#supply/imports" data-ov-route="supply/imports" id="planImportsCard" data-tip=""><span data-tt="today.task.imports">Calculate import amounts</span><span class="soon"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg><span class="what"></span><span class="go"></span></a><a class="ov-task" href="#supply/deliveries" data-ov-route="supply/deliveries"><span data-tt="today.task.deliveries">Set delivery targets</span><span class="c" data-ov-count="deliveries" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a class="ov-task" href="#supply/production" data-ov-route="supply/production"><span data-tt="today.task.production">Plan factory running hours</span><span class="c" data-ov-count="production" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a class="ov-task" href="#supply/flow" data-ov-route="supply/flow"><span data-tt="today.task.flow">Trace goods through the company</span><span class="c" data-ov-count="flow" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div>
-        <div class="ov-p"><div class="ov-ph"><b><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg><span data-tt="nav.area.staffing">Staffing</span></b><svg class="ov-ill" viewBox="0 0 118 56" aria-hidden="true"><rect class="oi-cell" x="4.0" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="13.2" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="22.4" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="31.6" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="40.8" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="50.0" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="59.2" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="68.4" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="77.6" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="86.8" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="96.0" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="105.2" y="6" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="4.0" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="13.2" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="22.4" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="31.6" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="40.8" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="50.0" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="59.2" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="68.4" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="77.6" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="86.8" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="96.0" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="105.2" y="17" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="4.0" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="13.2" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="22.4" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="31.6" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="40.8" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="50.0" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="59.2" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="68.4" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="77.6" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="86.8" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="96.0" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="105.2" y="28" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="4.0" y="39" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="13.2" y="39" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="22.4" y="39" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="31.6" y="39" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="40.8" y="39" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="50.0" y="39" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="59.2" y="39" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="68.4" y="39" width="7.6" height="9" rx="1.5"></rect><rect class="oi-cell" x="105.2" y="39" width="7.6" height="9" rx="1.5"></rect><rect class="oi-gap" x="77.6" y="39" width="26" height="9" rx="1.5" stroke-dasharray="3 2"></rect></svg></div>
-          <a class="ov-task" href="#staffing/schedules" data-ov-route="staffing/schedules" id="optimizeStaffingCard" data-tip=""><span data-tt="today.task.schedules">Build shop schedules</span><span class="soon"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg><span class="what"></span><span class="go"></span></a><a class="ov-task" href="#staffing/needs" data-ov-route="staffing/needs" data-ov-into="#secStaff"><span data-tt="today.task.hire">See whom to hire</span><span class="c" data-ov-count="hire" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a class="ov-task" href="#staffing/needs" data-ov-route="staffing/needs" data-ov-into="#nxDemands"><span data-tt="today.task.demands">Resolve staff demands</span><span class="c" data-ov-count="demands" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div>
-        <div class="ov-p"><div class="ov-ph"><b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16"></path><path d="M14 10h5a1 1 0 0 1 1 1v10M4 21h17M8 8h2M8 12h2M8 16h2M17 14h1M17 18h1"></path></svg><span data-tt="nav.area.businesses">Businesses</span></b><svg class="ov-ill" viewBox="0 0 118 56" aria-hidden="true"><rect class="oi-bar" x="8" y="14" width="16" height="30" rx="2"></rect><rect class="oi-bar" x="30" y="22" width="16" height="22" rx="2"></rect><rect class="oi-bar" x="52" y="8" width="16" height="36" rx="2"></rect><rect class="oi-bar" x="74" y="28" width="16" height="16" rx="2"></rect><rect class="oi-bar n" x="96" y="44" width="16" height="9" rx="2"></rect><line x1="4" x2="114" y1="44" y2="44" stroke="var(--rule)"></line><circle class="oi-dotg" cx="16" cy="6" r="3"></circle><circle class="oi-dotg" cx="38" cy="14" r="3"></circle><circle class="oi-dotg" cx="60" cy="0" r="3"></circle><circle class="oi-dotw" cx="82" cy="20" r="3"></circle><circle class="oi-dotw" cx="104" cy="44" r="3"></circle></svg></div>
-          <a class="ov-task" href="#businesses/results" data-ov-route="businesses/results"><span data-tt="today.task.results">Compare business profits</span><span class="c" data-ov-count="results" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a class="ov-task" href="#businesses/prices" data-ov-route="businesses/prices"><span data-tt="today.task.prices">Check prices and product sales</span><span class="c" data-ov-count="prices" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a class="ov-task" href="#businesses/standards" data-ov-route="businesses/standards"><span data-tt="today.task.standards">Improve customer satisfaction</span><span class="c" data-ov-count="standards" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div>
-        <div class="ov-p"><div class="ov-ph"><b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18 10 12l4 4 6-7"></path><path d="M15 9h5v5"></path></svg><span data-tt="nav.area.expansion">Expansion</span></b><svg class="ov-ill" viewBox="0 0 118 56" aria-hidden="true"><rect class="oi-flr" x="30" y="10" width="80" height="42"></rect><path class="oi-wall" d="M30 10 H110 V52 H78 M62 52 H30 Z"></path><path class="oi-wall" d="M86 10 V28 H110" style="stroke-width:1.3"></path><path class="oi-pin" d="M18 4a9 9 0 0 1 9 9c0 7-9 15-9 15s-9-8-9-15a9 9 0 0 1 9-9z"></path><circle cx="18" cy="13" r="3.2" fill="var(--ground)"></circle></svg></div>
-          <a class="ov-task" href="#expansion/finder" data-ov-route="expansion/finder" id="findLocationCard" data-tip=""><span data-tt="today.task.finder">Find a suitable location</span><span class="soon"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg><span class="what"></span><span class="go"></span></a><a class="ov-task" href="#expansion/factory" data-ov-route="expansion/factory"><span data-tt="today.task.factory">Plan a new factory</span><span class="c" data-ov-count="factory" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a><a class="ov-task" href="#expansion/demand" data-ov-route="expansion/demand"><span data-tt="today.task.demand">Explore market demand</span><span class="c" data-ov-count="demand" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></div>
-      </div>
-    </section>
-  </div>
-
-  <!-- Staffing: the shop schedules, who is needed and asks for what, and the
-       payroll. Schedules draws the picked business's week in place; Staff
-       needs lists the demands and whom to hire (docs/ui-route-migration.md). -->
-  <div class="page" id="pageStaffing" hidden>
-    <div class="sechead subhead" hidden><nav class="seg" id="staffingNav" aria-label="Staffing views" data-tt-aria-label="nav.sub.staffing"></nav></div>
-    <section class="sec rv" id="secSchedules" data-sub="schedules"></section>
-    <section class="sec rv" id="secNeeds" data-sub="needs"></section>
-    <!-- Hiring for every site (drawStaff(), docs/staff-hire-plan.md): open
-         places, candidates, Quick hire and staff with no hours. -->
-    <section class="sec rv" id="secStaff" data-sub="needs"></section>
-    <section class="sec rv" id="secPayroll" data-sub="payroll"></section>
-  </div>
-
-  <!-- Supply's five views, one section each (drawChangesView(),
-       drawImportsView(), drawDeliveriesView(), drawProductionView(),
-       drawFlowView()); shops, warehouses and factories are each view's
-       scope. The goods-flow picture's one svg#flow waits in #sbFlowHome and
-       moves into Goods flow's .sb-diag while that view is on (sbPlaceFlow()). -->
-  <div class="page" id="pageSupply" hidden>
-    <div class="sechead subhead" hidden><nav class="seg" id="supplyNav" aria-label="Supply views" data-tt-aria-label="nav.sub.supply"></nav></div>
-    <section class="sec rv sb-view" id="secChanges" data-sub="changes"></section>
-    <section class="sec rv sb-view" id="secImports" data-sub="imports"></section>
-    <section class="sec rv sb-view" id="secDeliveries" data-sub="deliveries"></section>
-    <section class="sec rv sb-view" id="secProduction" data-sub="production"></section>
-    <section class="sec rv sb-view" id="secFlow" data-sub="flow"></section>
-    <div id="sbFlowHome" hidden><div class="sb-flowbox" id="sbFlowBox"><div class="sb-flowscroll" id="sbFlowScroll"><svg class="flow" id="flow"></svg></div><div class="sb-fc" id="flowChain" hidden></div>
-      <div class="sb-flowleg"><span><u></u><span data-tt="sb.flow.leg.weekly">weekly import</span></span><span><u class="d"></u><span data-tt="sb.flow.leg.morning">morning round</span></span><span><i style="background:var(--neg)"></i><span data-tt="sb.flow.leg.short">short or no plan</span></span><span><i style="background:var(--warn)"></i><span data-tt="sb.flow.leg.watch">worth watching</span></span><span class="sb-fc-leg-click" data-tt="sb.flow.leg.follow">Click a site to follow its goods</span><span class="sb-fc-leg-tap" data-tt="sb.flow.leg.tap">Tap a site to follow its goods. Tap a group to list its shops.</span></div></div></div>
-  </div>
-
-  <div class="page" id="pageGrowth" hidden>
-    <div class="sechead subhead" hidden><nav class="seg" id="growthNav" aria-label="Expansion views" data-tt-aria-label="nav.sub.growth"></nav></div>
-
-    <section class="sec rv" id="secMarket" data-sub="market">
-      <div class="sechead" data-view-ctl="expansion/demand"><h2 class="nx-sr" data-tt="gr.market.title">Market demand</h2>
-        <span class="why" id="marketWhy" data-tip="" tabindex="0"><i>?</i></span>
-        <span class="quiet" id="marketNote"></span>
-        <div class="aside"><span class="seg" id="marketTools" aria-label="Market views" data-tt-aria-label="gr.market.views"></span></div></div>
-      <div class="waves" id="movers"></div>
-      <div class="heat" id="market"></div>
-    </section>
-
-    <!-- Expansion › Open a store (drawOpenStore(), docs/open-a-store-scope.md):
-         the steps and the plan picker in #osCtl (beside the view's tabs), the
-         plan's strip, the embedded finder for step 2 (#osFinderMap, a
-         CityMapView in plan mode, kept between draws) and the step's body. -->
-    <section class="sec rv" id="secOpen" data-sub="open">
-      <h2 class="nx-sr" data-tt="gr.os.title">Open a store</h2>
-      <div class="sechead os-ctl" id="osCtl" data-view-ctl="expansion/open"></div>
-      <div id="osStrip"></div>
-      <div id="osWhere" class="os-where" hidden><div class="os-finder" id="osFinderMap"></div></div>
-      <div id="osBody"></div>
-    </section>
-
-    <section class="sec rv" id="secPlan" data-sub="plan">
-      <div class="sechead" data-view-ctl="expansion/factory"><h2 class="nx-sr" data-tt="gr.plan.title2">Plan a factory</h2>
-        <span class="why" data-tt-tip="gr.plan.why" data-tip="Every machine runs 24 hours at its rated rate, so a line makes its full quantity whether or not the shelves need it. Build the factory first; the shops come after, and what they do not take is exported. Step a single line up when one product deserves more, down to none to buy it in instead." tabindex="0"><i>?</i></span>
-        <span class="quiet" id="planNote"></span>
-        <div class="aside" id="planPicker"></div></div>
-      <div id="planBody"></div>
-    </section>
-    <section class="sec rv" id="secIngredients" data-sub="plan">
-      <div class="sechead"><h2 data-tt="gr.ing.title">Ingredients</h2>
-        <span class="why" data-tt-tip="gr.ing.why" data-tip="What the machines above eat, added up across every line that shares an ingredient. Per day and per week are this range's own figures. Company target is the order for the whole company once the plan runs: never less than a week of this range, and beyond that what the range adds over what your factories already eat, on top of every contract already active, rounded up to the hundred the logistics manager takes. You type that target across your importer contracts in the game yourself; the board never guesses a split per warehouse. Hover an ingredient for what is on order today, and Used by for every line that eats it. A cash column appears once the company already buys one of these ingredients, at the price it last paid." tabindex="0"><i>?</i></span></div>
-      <div class="scrollx"><table class="ingtable" id="ingTable">
-        <thead><tr><th data-tt="gr.ing.col.name">Ingredient</th><th class="l" data-tt="gr.ing.col.usedBy">Used by</th><th data-tt="gr.ing.col.day">Per day</th><th data-tt="gr.ing.col.week">Per week</th><th data-tt="gr.ing.col.target" data-tt-tip="gr.ing.col.target.tip" data-tip="Company-wide: you type each one across your importer contracts in the game; the board adds them up and never guesses a split per warehouse.">Company target</th>
-          <th data-tt="gr.ing.col.onOrder" data-tt-tip="gr.ing.col.onOrder.tip" data-tip="Active contracts only. For Smart Delivery, a week at most: the most its stock levels supply in a week.">On order now</th><th class="chg" data-tt="gr.ing.col.change">Change</th><th class="cash" data-tt="gr.ing.col.cash">Cash / week</th></tr></thead>
-        <tbody id="ingBody"></tbody>
-        <tfoot id="ingFoot"></tfoot>
-      </table></div>
-      <p class="quiet" id="ingNote" style="margin:12px 0 0"></p>
-    </section>
-  </div>
-
-  <!-- The company page: how it went first, then the reference tables, one view
-       at a time behind the secondary nav. Each section's head and body are
-       drawn by its own draw*(). -->
-  <div class="page" id="pageCompany" hidden>
-    <div class="sechead subhead" hidden><nav class="seg" id="companyNav" aria-label="Businesses views" data-tt-aria-label="nav.sub.company"></nav></div>
-
-    <section class="sec rv" id="secDaily" data-sub="results">
-      <div id="dailyHead"></div>
-      <div id="dailyBox"></div>
-    </section>
-
-    <!-- Company finances: cash beside profit, loans, and how far back the
-         board's history reaches (drawFinance()). -->
-    <section class="sec rv" id="secFinance" data-sub="results"></section>
-
-    <!-- Standards: the portfolio's Operations comparison under the subjects it
-         answers for (drawStandards()); the portfolio below it is the same
-         section Results shows. -->
-    <section class="sec rv" id="secStandards" data-sub="standards"></section>
-
-    <section class="sec rv" id="secPortfolio" data-sub="results standards">
-      <div id="portHead"></div>
-      <div style="overflow-x:auto"><table id="portfolio"></table></div>
-    </section>
-
-    <section class="sec rv" id="secDetail" data-sub="results" hidden><div id="sitePanel"></div></section>
-
-    <!-- Products & prices: a shop's live prices and the price guides
-         (drawPriceShops()), then the company's product sales. -->
-    <section class="sec rv" id="secPrices" data-sub="products"></section>
-    <section class="sec rv" id="secProducts" data-sub="products"></section>
-    <section class="sec rv" id="secGoals" data-sub="milestones"></section>
-  </div>
-
-  <div class="page" id="pageMap" hidden>
-    <div class="fx-head" id="mapHead"></div>
-    <div id="cityMapPage"></div>
-    <!-- Find a location's ways on (drawFinderCtx()): the type's demand, its
-         setup guide, and Plan a factory. -->
-    <nav class="fx-ctx" id="finderCtx" hidden aria-label="Next from Find a location" data-tt-aria-label="map.ctx.label"></nav>
-  </div>
-
-  <!-- The wiki: the game's own help, read without a save. wiki.js takes this
-       host over on the first visit; the sentence below is what a build without
-       the wiki files shows instead. -->
-  <div class="page" id="pageWiki" hidden>
-    <div class="wiki" id="wikiRoot">
-      <p class="quiet" style="margin-top:44px" data-tt="wiki.absent">The wiki is not part of this build.</p>
-    </div>
-  </div>
-<!--__FOOTER__-->
-  <nav class="nx-tabs" id="phoneNav" aria-label="Places" data-tt-aria-label="nav.label.phone"></nav>
+</helmet>
+<div class="pc-board" data-theme="{{theme}}" style="width: 1440px; height: 1900px; background: var(--ground); color: var(--ink);">
+<div class="pc-states">
+  <div class="pc-state"><div><b>1 · Closed</b><p>The main products, as today. One quiet row under them.</p></div><div><table class="pc-range" data-pershop="150" data-shops="4" data-peak="1.09" data-products="2">
+      <thead><tr><th>Product</th><th class="l">Machines</th><th>Made / week</th><th>Supplies</th><th class="l">Raw material / week</th></tr></thead>
+      <tbody><tr class="line" data-m="2" data-rate="100">
+      <td class="l">Flower (Cheap)<span class="sub" data-tip="One Garden Workstation is Food Assembly Machine + Hydroponic Planter; one makes 2,400 a day">100/h rated · Garden Workstation</span></td>
+      <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="one machine fewer">−</a><b>2</b><a href="#" data-d="1" aria-label="one machine more">+</a><span class="machines"><i class="on"></i><i class="on"></i></span></span></td>
+      <td class="made">33,600</td><td class="covers">29.4 shops<span class="sub">shops take 4,200 · <span class="chip ok" data-tip="Surplus a week, for export">+29,400</span></span></td><td class="l"><span class="ing"><b>33,600</b> Seeds (Flower Cheap), <b>33,600</b> Water</span></td></tr><tr class="line" data-m="1" data-rate="100">
+      <td class="l">Flower (Expensive)<span class="sub" data-tip="One Garden Workstation is Food Assembly Machine + Hydroponic Planter; one makes 2,400 a day">100/h rated · Garden Workstation</span></td>
+      <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="one machine fewer">−</a><b>1</b><a href="#" data-d="1" aria-label="one machine more">+</a><span class="machines"><i class="on"></i></span></span></td>
+      <td class="made">16,800</td><td class="covers">14.7 shops<span class="sub">shops take 4,200 · <span class="chip ok" data-tip="Surplus a week, for export">+12,600</span></span></td><td class="l"><span class="ing"><b>16,800</b> Seeds (Flower Expensive), <b>16,800</b> Water</span></td></tr>
+      <tr class="pc-addrow"><td class="l" colspan="5"><span class="pc-anchor"><button type="button" class="pc-add" aria-expanded="false" aria-haspopup="true" data-pc-toggle><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add product<small>5 more</small></button>
+      <div class="pc-pop" role="menu" aria-label="Products a Florist also sells" hidden>
+        <div class="pc-pop-h"><b>A Florist also sells</b><span data-tip="The game's own weight for each at a Florist; a main product is 100%">Weight</span></div>
+        <button type="button" class="pc-opt" data-pc-pick="soda can"><span><b>Soda Can</b><small>Bottledgoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:80%"></i></span><em>80%</em></button><button type="button" class="pc-opt" data-pc-pick="energy drink"><span><b>Energy Drink</b><small>Bottledgoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:80%"></i></span><em>80%</em></button><button type="button" class="pc-opt" data-pc-pick="umbrella"><span><b>Umbrella</b><small>Consumergoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:75%"></i></span><em>75%</em></button><button type="button" class="pc-opt" data-pc-pick="gift (cheap)"><span><b>Gift (Cheap)</b><small>Consumergoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:60%"></i></span><em>60%</em></button><button type="button" class="pc-opt" data-pc-pick="gift (expensive)"><span><b>Gift (Expensive)</b><small>Consumergoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:60%"></i></span><em>60%</em></button>
+      </div></span></td></tr></tbody>
+    </table></div></div>
+  <div class="pc-state tall"><div><b>2 · Open</b><p>The type's other products, the game's weight beside each. One click adds a line.</p></div><div><table class="pc-range" data-pershop="150" data-shops="4" data-peak="1.09" data-products="2">
+      <thead><tr><th>Product</th><th class="l">Machines</th><th>Made / week</th><th>Supplies</th><th class="l">Raw material / week</th></tr></thead>
+      <tbody><tr class="line" data-m="2" data-rate="100">
+      <td class="l">Flower (Cheap)<span class="sub" data-tip="One Garden Workstation is Food Assembly Machine + Hydroponic Planter; one makes 2,400 a day">100/h rated · Garden Workstation</span></td>
+      <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="one machine fewer">−</a><b>2</b><a href="#" data-d="1" aria-label="one machine more">+</a><span class="machines"><i class="on"></i><i class="on"></i></span></span></td>
+      <td class="made">33,600</td><td class="covers">29.4 shops<span class="sub">shops take 4,200 · <span class="chip ok" data-tip="Surplus a week, for export">+29,400</span></span></td><td class="l"><span class="ing"><b>33,600</b> Seeds (Flower Cheap), <b>33,600</b> Water</span></td></tr><tr class="line" data-m="1" data-rate="100">
+      <td class="l">Flower (Expensive)<span class="sub" data-tip="One Garden Workstation is Food Assembly Machine + Hydroponic Planter; one makes 2,400 a day">100/h rated · Garden Workstation</span></td>
+      <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="one machine fewer">−</a><b>1</b><a href="#" data-d="1" aria-label="one machine more">+</a><span class="machines"><i class="on"></i></span></span></td>
+      <td class="made">16,800</td><td class="covers">14.7 shops<span class="sub">shops take 4,200 · <span class="chip ok" data-tip="Surplus a week, for export">+12,600</span></span></td><td class="l"><span class="ing"><b>16,800</b> Seeds (Flower Expensive), <b>16,800</b> Water</span></td></tr>
+      <tr class="pc-addrow"><td class="l" colspan="5"><span class="pc-anchor"><button type="button" class="pc-add" aria-expanded="true" aria-haspopup="true" data-pc-toggle><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add product<small>5 more</small></button>
+      <div class="pc-pop" role="menu" aria-label="Products a Florist also sells">
+        <div class="pc-pop-h"><b>A Florist also sells</b><span data-tip="The game's own weight for each at a Florist; a main product is 100%">Weight</span></div>
+        <button type="button" class="pc-opt" data-pc-pick="soda can"><span><b>Soda Can</b><small>Bottledgoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:80%"></i></span><em>80%</em></button><button type="button" class="pc-opt" data-pc-pick="energy drink"><span><b>Energy Drink</b><small>Bottledgoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:80%"></i></span><em>80%</em></button><button type="button" class="pc-opt" data-pc-pick="umbrella"><span><b>Umbrella</b><small>Consumergoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:75%"></i></span><em>75%</em></button><button type="button" class="pc-opt" data-pc-pick="gift (cheap)"><span><b>Gift (Cheap)</b><small>Consumergoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:60%"></i></span><em>60%</em></button><button type="button" class="pc-opt" data-pc-pick="gift (expensive)"><span><b>Gift (Expensive)</b><small>Consumergoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:60%"></i></span><em>60%</em></button>
+      </div></span></td></tr></tbody>
+    </table></div></div>
+  <div class="pc-state"><div><b>3 · Added, rate typed</b><p>A line like the others. The rate is the player's: blue, editable, said once. × takes the line out again.</p></div><div><table class="pc-range" data-pershop="150" data-shops="4" data-peak="1.09" data-products="2">
+      <thead><tr><th>Product</th><th class="l">Machines</th><th>Made / week</th><th>Supplies</th><th class="l">Raw material / week</th></tr></thead>
+      <tbody><tr class="line" data-m="2" data-rate="100">
+      <td class="l">Flower (Cheap)<span class="sub" data-tip="One Garden Workstation is Food Assembly Machine + Hydroponic Planter; one makes 2,400 a day">100/h rated · Garden Workstation</span></td>
+      <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="one machine fewer">−</a><b>2</b><a href="#" data-d="1" aria-label="one machine more">+</a><span class="machines"><i class="on"></i><i class="on"></i></span></span></td>
+      <td class="made">33,600</td><td class="covers">29.4 shops<span class="sub">shops take 4,200 · <span class="chip ok" data-tip="Surplus a week, for export">+29,400</span></span></td><td class="l"><span class="ing"><b>33,600</b> Seeds (Flower Cheap), <b>33,600</b> Water</span></td></tr><tr class="line" data-m="1" data-rate="100">
+      <td class="l">Flower (Expensive)<span class="sub" data-tip="One Garden Workstation is Food Assembly Machine + Hydroponic Planter; one makes 2,400 a day">100/h rated · Garden Workstation</span></td>
+      <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="one machine fewer">−</a><b>1</b><a href="#" data-d="1" aria-label="one machine more">+</a><span class="machines"><i class="on"></i></span></span></td>
+      <td class="made">16,800</td><td class="covers">14.7 shops<span class="sub">shops take 4,200 · <span class="chip ok" data-tip="Surplus a week, for export">+12,600</span></span></td><td class="l"><span class="ing"><b>16,800</b> Seeds (Flower Expensive), <b>16,800</b> Water</span></td></tr><tr class="line pc-added" data-m="1" data-rate="100" data-pc="umbrella">
+      <td class="l">Umbrella<button type="button" class="pc-x" aria-label="Remove Umbrella from the range" data-tip="Remove from the range"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button><span class="sub" data-tip="One Consumergoods Workstation is Consumer Goods Assembly Machine + Laser Cutting Machine; one makes 2,400 a day">100/h rated · Consumergoods Workstation</span></td>
+      <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="one machine fewer">−</a><b>1</b><a href="#" data-d="1" aria-label="one machine more">+</a><span class="machines"><i class="on"></i></span></span></td>
+      <td class="made">16,800</td><td class="covers"><span class="pc-cov">55.0 shops</span><span class="pc-sub"><span class="sub">shops take 1,120 · <span class="chip ok" data-tip="Surplus a week, for export">+15,680</span></span></span>
+        <span class="pc-rate"><label><input type="number" min="0" step="10" value="40" aria-label="Umbrellas a shop sells a day, your estimate" data-pc-rate>/shop/day</label>·<em data-tip="Your Florists do not sell umbrellas yet, so this rate is yours, not measured. It starts at 150 a shop, what they sell of a flower, times the game's 75% weight">your estimate</em></span></td>
+      <td class="l"><span class="ing"><b>16,800</b> Metal Wire, <b>8,400</b> Plastic</span></td></tr>
+      <tr class="pc-addrow"><td class="l" colspan="5"><span class="pc-anchor"><button type="button" class="pc-add" aria-expanded="false" aria-haspopup="true" data-pc-toggle><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add product<small>4 more</small></button>
+      <div class="pc-pop" role="menu" aria-label="Products a Florist also sells" hidden>
+        <div class="pc-pop-h"><b>A Florist also sells</b><span data-tip="The game's own weight for each at a Florist; a main product is 100%">Weight</span></div>
+        <button type="button" class="pc-opt" data-pc-pick="soda can"><span><b>Soda Can</b><small>Bottledgoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:80%"></i></span><em>80%</em></button><button type="button" class="pc-opt" data-pc-pick="energy drink"><span><b>Energy Drink</b><small>Bottledgoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:80%"></i></span><em>80%</em></button><button type="button" class="pc-opt on" data-pc-pick="umbrella" aria-disabled="true"><span><b>Umbrella<svg class="pc-tick" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></b><small>Consumergoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:75%"></i></span><em>75%</em></button><button type="button" class="pc-opt" data-pc-pick="gift (cheap)"><span><b>Gift (Cheap)</b><small>Consumergoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:60%"></i></span><em>60%</em></button><button type="button" class="pc-opt" data-pc-pick="gift (expensive)"><span><b>Gift (Expensive)</b><small>Consumergoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:60%"></i></span><em>60%</em></button>
+      </div></span></td></tr></tbody>
+    </table></div></div>
+  <div class="pc-state tall"><div><b>4 · Picker after one add</b><p>An added product stays in the list, ticked; the count drops.</p></div><div><table class="pc-range" data-pershop="150" data-shops="4" data-peak="1.09" data-products="2">
+      <thead><tr><th>Product</th><th class="l">Machines</th><th>Made / week</th><th>Supplies</th><th class="l">Raw material / week</th></tr></thead>
+      <tbody><tr class="line" data-m="2" data-rate="100">
+      <td class="l">Flower (Cheap)<span class="sub" data-tip="One Garden Workstation is Food Assembly Machine + Hydroponic Planter; one makes 2,400 a day">100/h rated · Garden Workstation</span></td>
+      <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="one machine fewer">−</a><b>2</b><a href="#" data-d="1" aria-label="one machine more">+</a><span class="machines"><i class="on"></i><i class="on"></i></span></span></td>
+      <td class="made">33,600</td><td class="covers">29.4 shops<span class="sub">shops take 4,200 · <span class="chip ok" data-tip="Surplus a week, for export">+29,400</span></span></td><td class="l"><span class="ing"><b>33,600</b> Seeds (Flower Cheap), <b>33,600</b> Water</span></td></tr><tr class="line" data-m="1" data-rate="100">
+      <td class="l">Flower (Expensive)<span class="sub" data-tip="One Garden Workstation is Food Assembly Machine + Hydroponic Planter; one makes 2,400 a day">100/h rated · Garden Workstation</span></td>
+      <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="one machine fewer">−</a><b>1</b><a href="#" data-d="1" aria-label="one machine more">+</a><span class="machines"><i class="on"></i></span></span></td>
+      <td class="made">16,800</td><td class="covers">14.7 shops<span class="sub">shops take 4,200 · <span class="chip ok" data-tip="Surplus a week, for export">+12,600</span></span></td><td class="l"><span class="ing"><b>16,800</b> Seeds (Flower Expensive), <b>16,800</b> Water</span></td></tr><tr class="line pc-added" data-m="1" data-rate="100" data-pc="umbrella">
+      <td class="l">Umbrella<button type="button" class="pc-x" aria-label="Remove Umbrella from the range" data-tip="Remove from the range"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button><span class="sub" data-tip="One Consumergoods Workstation is Consumer Goods Assembly Machine + Laser Cutting Machine; one makes 2,400 a day">100/h rated · Consumergoods Workstation</span></td>
+      <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="one machine fewer">−</a><b>1</b><a href="#" data-d="1" aria-label="one machine more">+</a><span class="machines"><i class="on"></i></span></span></td>
+      <td class="made">16,800</td><td class="covers"><span class="pc-cov">20.0 shops</span><span class="pc-sub"><span class="sub">shops take 3,080 · <span class="chip ok" data-tip="Surplus a week, for export">+13,720</span></span></span>
+        <span class="pc-rate"><label><input type="number" min="0" step="10" value="110" aria-label="Umbrellas a shop sells a day, your estimate" data-pc-rate>/shop/day</label>·<em data-tip="Your Florists do not sell umbrellas yet, so this rate is yours, not measured. It starts at 150 a shop, what they sell of a flower, times the game's 75% weight">your estimate</em></span></td>
+      <td class="l"><span class="ing"><b>16,800</b> Metal Wire, <b>8,400</b> Plastic</span></td></tr>
+      <tr class="pc-addrow"><td class="l" colspan="5"><span class="pc-anchor"><button type="button" class="pc-add" aria-expanded="true" aria-haspopup="true" data-pc-toggle><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add product<small>4 more</small></button>
+      <div class="pc-pop" role="menu" aria-label="Products a Florist also sells">
+        <div class="pc-pop-h"><b>A Florist also sells</b><span data-tip="The game's own weight for each at a Florist; a main product is 100%">Weight</span></div>
+        <button type="button" class="pc-opt" data-pc-pick="soda can"><span><b>Soda Can</b><small>Bottledgoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:80%"></i></span><em>80%</em></button><button type="button" class="pc-opt" data-pc-pick="energy drink"><span><b>Energy Drink</b><small>Bottledgoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:80%"></i></span><em>80%</em></button><button type="button" class="pc-opt on" data-pc-pick="umbrella" aria-disabled="true"><span><b>Umbrella<svg class="pc-tick" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></b><small>Consumergoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:75%"></i></span><em>75%</em></button><button type="button" class="pc-opt" data-pc-pick="gift (cheap)"><span><b>Gift (Cheap)</b><small>Consumergoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:60%"></i></span><em>60%</em></button><button type="button" class="pc-opt" data-pc-pick="gift (expensive)"><span><b>Gift (Expensive)</b><small>Consumergoods</small></span><span class="pc-w" aria-hidden="true"><i style="--w:60%"></i></span><em>60%</em></button>
+      </div></span></td></tr></tbody>
+    </table></div></div>
 </div>
 </div>
-<dialog class="changelog-dialog" id="changelogDialog" aria-labelledby="changelogTitle">
-  <div class="changelog-head"><div><h2 id="changelogTitle" data-tt="nav.dlg.changelog.title">Changelog</h2></div><button type="button" class="btn2" id="closeChangelog" autofocus data-tt="nav.dlg.close">Close</button></div>
-  <ol class="changelog-list"><!--__CHANGELOG__--></ol>
-</dialog>
-<script>
-/* Shared feature discovery: stable IDs persist across releases and saves. */
-const featureDiscovery = (() => {
-  const seen = new Set();
-  const key = id => 'ba_dash_feature_seen:' + id;
-  function refresh(){
-    document.querySelectorAll('[data-new-feature]').forEach(badge => {
-      const id = badge.dataset.newFeature;
-      try { if(localStorage.getItem(key(id)) === '1') seen.add(id); } catch(e) {}
-      badge.hidden = seen.has(id);
-    });
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":true,"section":"Theme"},"$preview":{"width":1440,"height":1900}}'>
+class Component extends DCLogic {
+  renderVals() { const dark = this.props.dark ?? true;
+    try { document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light'); } catch (e) {}
+    return { theme: dark ? 'dark' : 'light' }; }
+  componentDidMount() {
+    const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+    const fmt = v => Math.round(v).toLocaleString('en-US');
+    const SHOPS = 4, PEAK = 1.09;
+    const recalc = tr => {
+      const inp = tr.querySelector('[data-pc-rate]'); if (!inp) return;
+      const per = Math.max(0, +inp.value || 0), wk = (+tr.dataset.m) * (+tr.dataset.rate) * 24 * 7;
+      const take = per * 7 * SHOPS, surplus = wk - take;
+      const c = per ? wk / 7 / (per * PEAK) : null;
+      tr.querySelector('.pc-cov').textContent = c === null ? '—' : c.toFixed(1) + (c.toFixed(1) === '1.0' ? ' shop' : ' shops');
+      tr.querySelector('.pc-sub').innerHTML = per ? '<span class="sub">shops take ' + fmt(take) + ' · <span class="chip ' + (surplus >= 0 ? 'ok">+' : 'bad">') + fmt(surplus) + '</span></span>' : '';
+    };
+    const count = tbl => {
+      const on = $$('tr.pc-added:not(.pc-out)', tbl).length;
+      const sm = tbl.querySelector('.pc-add small'); if (sm) sm.textContent = (5 - on) + ' more';
+      $$('.pc-opt[data-pc-pick="umbrella"]', tbl).forEach(o => {
+        o.classList.toggle('on', !!on);
+        if (on) o.setAttribute('aria-disabled', 'true'); else o.removeAttribute('aria-disabled');
+        o.querySelector('em').style.color = '';
+      });
+    };
+    $$('[data-pc-toggle]').forEach(b => b.addEventListener('click', () => {
+      const pop = b.parentElement.querySelector('.pc-pop'), open = pop.hidden;
+      pop.hidden = !open; b.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }));
+    $$('.pc-opt').forEach(o => o.addEventListener('click', () => {
+      const tbl = o.closest('table'), pop = o.closest('.pc-pop');
+      if (o.dataset.pcPick === 'umbrella') {
+        const tr = tbl.querySelector('tr.pc-added');
+        if (tr && tr.classList.contains('pc-out')) { tr.classList.remove('pc-out'); recalc(tr); }
+      }
+      pop.hidden = true; const b = tbl.querySelector('[data-pc-toggle]'); if (b) b.setAttribute('aria-expanded', 'false');
+      count(tbl);
+    }));
+    $$('.pc-x').forEach(x => x.addEventListener('click', () => {
+      const tr = x.closest('tr'); tr.classList.add('pc-out'); count(tr.closest('table'));
+    }));
+    $$('[data-pc-rate]').forEach(i => i.addEventListener('input', () => recalc(i.closest('tr'))));
+    $$('.step a').forEach(a => a.addEventListener('click', e => {
+      e.preventDefault(); const tr = a.closest('tr'), m = Math.max(0, Math.min(12, +tr.dataset.m + +a.dataset.d));
+      tr.dataset.m = m; tr.querySelector('.step b').textContent = m;
+      tr.querySelector('.machines').innerHTML = '<i class="on"></i>'.repeat(m);
+      const wk = m * (+tr.dataset.rate) * 24 * 7; tr.querySelector('.made').textContent = fmt(wk);
+      if (tr.querySelector('[data-pc-rate]')) recalc(tr);
+    }));
   }
-  function visit(id){
-    if(!id) return;
-    seen.add(id);
-    try { localStorage.setItem(key(id), '1'); } catch(e) {}
-    refresh();
-  }
-  return {refresh, visit};
-})();
-featureDiscovery.refresh();
-/* --- changelog dialog ------------------------------------------------ */
-(() => {
-  const dialog = document.getElementById('changelogDialog');
-  document.addEventListener('click', event => {
-    if(event.target.closest('[data-changelog]')) {
-      dialog.showModal();
-      featureDiscovery.visit('changelog');
-      dialog.scrollTop = 0;
-    }
-  });
-  document.getElementById('closeChangelog').addEventListener('click', () => dialog.close());
-  dialog.addEventListener('click', event => {
-    const box = dialog.getBoundingClientRect();
-    if(event.target === dialog && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom)) dialog.close();
-  });
-})();
-/* An entry point marked data-visit-feature dismisses that feature's badges when
-   it is used, wherever it sits: a footer link, a button the shell owns. */
-document.addEventListener('click', event => {
-  const entry = event.target.closest('[data-visit-feature]');
-  if(entry) featureDiscovery.visit(entry.dataset.visitFeature);
-});
-/* --- theme control --------------------------------------------------- */
-/* Three states over one attribute on <html>, which the palette keys off:
-   light and dark set it, auto removes it and lets prefers-color-scheme decide.
-   The head's inline script has already applied the stored choice by the time
-   this runs; all this adds is the buttons and keeping them in step.
-
-   Every copy of the control is wired, because the landing's footer and the
-   board's are both in the page until the board replaces the landing, and the
-   two have to agree. Storage that throws still switches the theme for this
-   page; only remembering it across visits is lost. */
-(() => {
-  const KEY = 'ba_dash_theme';
-  const read = () => {
-    let stored = null;
-    try { stored = localStorage.getItem(KEY); } catch(e) {}
-    return stored === 'light' || stored === 'dark' ? stored : 'auto';
-  };
-  function paint(mode){
-    const root = document.documentElement;
-    if(mode === 'auto') root.removeAttribute('data-theme');
-    else root.setAttribute('data-theme', mode);
-    document.querySelectorAll('[data-theme-set]').forEach(button => {
-      button.setAttribute('aria-pressed', button.dataset.themeSet === mode ? 'true' : 'false');
-    });
-  }
-  document.addEventListener('click', event => {
-    const button = event.target.closest('[data-theme-set]');
-    if(!button) return;
-    const mode = button.dataset.themeSet;
-    try {
-      if(mode === 'auto') localStorage.removeItem(KEY);
-      else localStorage.setItem(KEY, mode);
-    } catch(e) {}
-    paint(mode);
-  });
-  paint(read());
-})();
+}
 </script>
-<dialog class="map-dialog" id="locationMapDialog" aria-labelledby="locationMapTitle">
-  <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
-  <div id="cityMapOverlay"></div>
-</dialog>
-<!--__BEFORE_SCRIPT__-->
-<script>
-/*__BOARD_SCRIPT__*/
-</script>
+</body>
+</html>
