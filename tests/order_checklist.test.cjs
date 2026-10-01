@@ -231,6 +231,29 @@ test('a measured delivery gap has a one-off quantity, separate from the recurrin
   assert.notEqual(rows[0].key, build({checks:[{...gap, catchUp:230}]})[0].key);
 });
 
+test('a factory input topped up each morning takes its run-out from its own import fact', () => {
+  // The daily word stays on the outer fact; the contract beside it is `import`.
+  const gap = {s:1, item:'Water', shortBy:2.1, catchUp:480, runsOut:'Friday',
+    fact:fact('covered', {role:'input', cad:'daily', import:fact('short', {why:'shortfall', role:'input', cad:'weekly'})})};
+  const rows = build({checks:[gap]});
+  assert.deepEqual(rows.map(r => [r.kind, r.item, r.proposed]), [['Before the next delivery', 'Water', 480]]);
+  // A paused contract is still read off the outer fact.
+  assert.deepEqual(build({checks:[{...gap, catchUp:null, from:'Importer',
+    fact:fact('covered', {import:fact('paused')})}]}), []);
+});
+
+test('an order short of its week that also runs dry before the drop gives the one-off first, then the order', () => {
+  const short = fact('short', {why:'order', lvl:'critical', setTo:1500});
+  const run = {s:0, item:'Sugar', coverFit:'short', shortBy:2.3, catchUp:540, runsOut:'Friday', fact:short};
+  const rows = build({imports:[{s:0, rows:[order({fact:short})]}], checks:[run]});
+  assert.deepEqual(rows.map(r => [r.kind, r.item, r.proposed]),
+    [['Before the next delivery', 'Sugar', 540], ['Weekly imports', 'Sugar', 1500]]);
+  assert.match(rows[0].reason, /^Bring in 540 extra units before Friday\./);
+  // Stock that reaches the drop leaves the order alone.
+  assert.deepEqual(build({imports:[{s:0, rows:[order({fact:short})]}], checks:[{...run, coverFit:'ok', catchUp:0}]})
+    .map(r => r.kind), ['Weekly imports']);
+});
+
 test('completion identities survive site reordering but change with settings and sources', () => {
   const shop = {s:2, item:'Flowers', target:100, peakSold:235, from:0, fact:fact('short', {setTo:280})};
   const before = build({shops:[shop]})[0];
