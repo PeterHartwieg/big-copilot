@@ -18,9 +18,11 @@ const root = path.join(__dirname, '..');
 const PYTHON = process.env.PYTHON || 'python';
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
-// The board script is in template/board.html; map.js and wiki.js run inside it.
-const template = read('template/board.html');
-const SOURCES = [['template/board.html', template, 1], ['web/map.js', read('web/map.js'), 1],
+// The board script is template/board.js; map.js and wiki.js run inside it, and
+// template/board.html holds the page's smaller scripts.
+const template = read('template/board.js');
+const SOURCES = [['template/board.js', template, 1], ['template/board.html', read('template/board.html'), 1],
+  ['web/map.js', read('web/map.js'), 1],
   ['web/wiki.js', read('web/wiki.js'), 1], ['web/i18n.js', read('web/i18n.js'), 1]];
 const NUM = 'const num = (n, opts) => Number(n).toLocaleString(NUM_LOCALE, opts);';
 

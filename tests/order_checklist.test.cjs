@@ -1,29 +1,16 @@
 // Run with: node --test tests/order_checklist.test.cjs
-// Exercise the pure checklist logic from the shared page template, without
+// Exercise the pure checklist logic from the board script, without
 // copying the implementation into a test or requiring private save files.
 // Every figure the checklist proposes is a fact's (supplyFact, Python's
 // verdict); these tests hand it facts and check what it does with them.
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
-const source = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.html'), 'utf8');
-const {at, between} = require('./_slice.cjs');
-const start = at(source, 'function buildOrderChecklist(');
-const end = at(source, 'const orderMarkCache', {from: start});
-const context = vm.createContext({});
-// tt(), which the Plan imports card's wording goes through (web/i18n.js).
-vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8'), context);
-// The row setting the imports table computes, which feeds the checklist.
-const settingStart = at(source, 'function importSetting(');
-assert.ok(settingStart < start);
-// The board's number formatter, which the checklist's wording goes through.
-vm.runInContext(between(source, 'let NUM_LOCALE', 'const compact ='), context);
-// The weekday names and Supply's word helpers (sbDay, sbDayShort) the reasons use.
-vm.runInContext(between(source, 'const WEEKDAY_NAMES', 'function drawWeekday('), context);
-vm.runInContext(between(source, '/* A list as one message: the last pair is its own key (sb.list.last)', "/* A node's name cut to fit"), context);
-vm.runInContext(source.slice(settingStart, end), context);
+// The whole board script, web/i18n.js ahead of it (tt(), which the Plan
+// imports card's wording goes through), as the page runs them.
+const {loadBoard, SOURCE: source} = require('./_board.cjs');
+const {between} = require('./_slice.cjs');
+const context = loadBoard();
 const businesses = [
   {key:'depot#1', name:'Depot', address:'1 Depot Street'},
   {key:'factory#2', name:'Factory', address:'2 Factory Street'},
@@ -170,14 +157,15 @@ test('a row is keyed by its item key, and a tick stored under the item name stil
 test('with the names in German, a tick stored under the English name still counts', () => {
   // The board's names in German: the row carries the German name, the tick was
   // stored under the English one, before rows were keyed by the item's key.
-  const names = {'ba:itemname_sugar': 'Sugar'};
-  Object.assign(context, {gnLang: 'de', englishName: key => names[key] || ''});
+  // The board's own state: the language, and the payload's English names
+  // that englishName() reads.
+  vm.runInContext('gnLang = "de"; D = {names: {"ba:itemname_sugar": "Sugar"}};', context);
   try {
     const [row] = build({imports:[{s:0, rows:[order({item: 'Zucker', slug: 'ba:itemname_sugar'})]}]});
     const stored = JSON.stringify(['Weekly imports', 'depot#1', 'Sugar', 1000, 1500, null]);
     assert.deepEqual([...context.reconcileOrderMarks(new Set([stored]), [row], true)], [row.key]);
   } finally {
-    delete context.gnLang; delete context.englishName;
+    vm.runInContext('gnLang = "en"; D = null;', context);
   }
 });
 

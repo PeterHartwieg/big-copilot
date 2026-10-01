@@ -13,8 +13,8 @@ The English is never kept in a file: it stays at the call site, beside its key
 (docs/architecture.md, "UI text"), and `extract` reads it from there:
 
 - scripts: tt("key", "English") and tt("key", {one: "...", other: "..."}) in the
-  board script (template/board.html), the landing (build_web.py's BANNER)
-  and web/*.js;
+  board script (template/board.js), the page's smaller scripts
+  (template/board.html), the landing (build_web.py's BANNER) and web/*.js;
 - markup: data-tt="key" around English, and data-tt-title, -aria-label,
   -placeholder and -tip beside the attribute they fill;
 - Python: msg("key", "English", ...) in ba_dashboard.py;
@@ -57,7 +57,7 @@ if ROOT not in sys.path:
 SOURCE_DIR = os.path.join(ROOT, "i18n")
 # Beside <lang>.json and <lang>.base.json: the machine-drafted keys awaiting review.
 AI_SUFFIX = ".ai.json"
-# The scripts a page runs, beside the board script in template/board.html.
+# The scripts a page runs, beside the board script in template/board.js.
 JS_FILES = ("web/i18n.js", "web/app.js", "web/update.js", "web/community.js", "web/map.js", "web/wiki.js")
 # A key is <area>.<thing>[.<part>]; the area names the page, and the pull
 # request that owns it (docs/architecture.md, "UI text").
@@ -399,7 +399,12 @@ def calls() -> list[dict]:
     import ba_dashboard
     import build_web
     found = []
-    found += markup_calls(ba_dashboard.load_template(), "template/board.html")
+    # The page, then its board script, in the order the page runs them, each
+    # with its own file's line numbers.
+    with open(os.path.join(ROOT, "template", "board.html"), encoding="utf-8") as fh:
+        found += markup_calls(fh.read(), "template/board.html")
+    with open(os.path.join(ROOT, "template", "board.js"), encoding="utf-8") as fh:
+        found += js_calls(fh.read(), "template/board.js")
     found += markup_calls(build_web.BANNER, "build_web.py", _file_line("build_web.py", "BANNER = "))
     for landing in (False, True):
         found += markup_calls(ba_dashboard.footer_html(landing=landing, site=True), "ba_dashboard.py",

@@ -9,9 +9,10 @@ out, a standing order does not. A depot fed by imports alone reads exactly as
 before. None of it reads the delivery log: every save here has an empty one.
 """
 import unittest
+from pathlib import Path
 
 from ba_dashboard import (plain, RECIPE_ITEMS, SUMMARIES, WEEKDAYS, History, Names, _alerts,
-                          _factories, _import_notes, _supply, _supply_facts, load_template, site_key)
+                          _factories, _import_notes, _supply, _supply_facts, site_key)
 from test_recipe_identity import BEER, RID, WATER
 from test_recipe_identity import SaveStub as FactoryStub
 
@@ -304,7 +305,8 @@ class RoutedSupplyTests(unittest.TestCase):
         of them condense into, name the next import or route round, or the
         next delivery, rather than an import alone."""
         self.assertNotIn("import", SUMMARIES["shortfall"](3, "Coffee"))
-        [kind] = [line for line in load_template().splitlines() if 'id:"shortfall"' in line]
+        board = Path(__file__).resolve().parent.parent / "template" / "board.js"
+        [kind] = [line for line in board.read_text(encoding="utf-8").splitlines() if 'id:"shortfall"' in line]
         self.assertIn("import or route round", kind)
 
     def test_a_paused_backup_beside_a_covering_route_is_judged_over_a_week(self):
