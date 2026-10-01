@@ -188,15 +188,15 @@ test('?ui=de reaches the board: Python\'s messages in the table, and their Engli
   });
   assert.deepEqual(staff, [TABLE['f.staff.none'], PAYLOAD.alerts.find(a => a.group === 'staff').text, PAYLOAD.alerts.find(a => a.group === 'staff').text]);
   assert.ok((await page.locator('#alertSection').innerText()).includes(TABLE['f.staff.none']));
-  // The board code that reads Python's words reads them through enOf(), so a
-  // translated row keeps its amount and its cap chip.
+  // A translated row keeps its amount and its cap chip: both are data beside
+  // the words (amt, heldBy), never read out of them.
   const read = await page.evaluate(() => {
     const wire = {text: ['f.staff.none', {}], limit: ['f.staff.none', {}]};
-    const row = ttPayload({group: 'order', text: 'Coffee is 1,500 short of its week', i18n: wire});
-    const cap = ttPayload({limit: 'the building', i18n: wire});
-    return [row.text !== enOf(row, 'text'), findingAmount(row), cap.limit !== 'the building', spLimitShow(cap, {})];
+    const row = ttPayload({group: 'order', text: 'Coffee is 1,500 short of its week', amt: {n: 1500, unit: 'units short'}, i18n: wire});
+    const cap = ttPayload({limit: 'the building', heldBy: [['door']], i18n: wire});
+    return [row.text !== enOf(row, 'text'), findingAmount(row), cap.limit !== 'the building', spLimitShow(cap)];
   });
-  // The figure is read out of the English and written in the page's numbers.
+  // The figure is written in the page's numbers.
   assert.deepEqual(read, [true, `1.500<small>${TABLE['today.amt.unitsShort']}</small>`, true, 'door']);
   // Numbers follow the UI language, on the board and in tt(); back in English, en-US again.
   assert.deepEqual(await page.evaluate(() => [NUM_LOCALE, fmt(1234.4), tt('f.x', '{n:,}', {n: 1234})]),
@@ -208,7 +208,7 @@ test('?ui=de reaches the board: Python\'s messages in the table, and their Engli
   assert.deepEqual(errors, []);
 });
 
-test('a cap chip keys on the English limit, whatever language its words are in', async t => {
+test('a cap chip keys on what held its hours, whatever language its words are in', async t => {
   const payload = JSON.parse(JSON.stringify(PAYLOAD));
   const findings = payload.hourFindings.filter(f => f.limit);
   assert.ok(findings.length, 'the fixture has capped hours');
@@ -218,7 +218,7 @@ test('a cap chip keys on the English limit, whatever language its words are in',
     const got = await page.evaluate(key => {
       openSite(key, false);
       const chips = [...document.querySelectorAll('#sitePanel .sp-hchip.cap')].map(e =>
-        [e.dataset.limit, e.dataset.show, e.classList.contains('sp-bcap'), e.querySelectorAll('svg').length]);
+        [e.dataset.show, e.classList.contains('sp-bcap'), e.querySelectorAll('svg').length]);
       // The ceiling strip lights the door, counter or person each limit names.
       const ceiling = [...document.querySelectorAll('#sitePanel .sp-ceil > span')].map(e => e.className);
       return {chips, ceiling};

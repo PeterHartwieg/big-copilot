@@ -1433,7 +1433,9 @@ test('a cost centre\'s row is no payback; a plan kept before its figures were co
   await page.evaluate(site => { const c = D.payback.sites[site].cost; c.vehicles = 98000; c.firm += 98000; drawOpenStore(); }, SITE);
   const vehicles = await pvRow(page, en('gr.os.roi.vehicles'));
   assert.ok(vehicles, 'a Vehicles row');
-  assert.deepEqual(vehicles.slice(-3), ['–', '$98,000', '']);
+  // Its difference is against the plan's none, so the rows' differences
+  // still add up to the total's.
+  assert.deepEqual(vehicles.slice(-3), ['–', '$98,000', await page.evaluate(() => osSigned(98000))]);
   await page.evaluate(site => { D.payback.sites[site] = {costCentre: true, cost: {firm: 1, self: 1}, exact: true, opened: 30, profit: -5}; drawOpenStore(); }, SITE);
   assert.match(await page.locator('#osBody').innerText(), textRe('gr.os.roi.norow', {address: '9 Broadway Street'}, {}));
 });

@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "09466f30cc";</script>
-<link rel="stylesheet" href="community.css?v=09466f30cc">
+<script>window.LEDGER_BUILD = "d620d070fb";</script>
+<link rel="stylesheet" href="community.css?v=d620d070fb">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=09466f30cc">
+<link rel="stylesheet" href="fonts/fonts.css?v=d620d070fb">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -5069,9 +5069,8 @@ function ttWire(w, english){
   return ttNames(ttFill(s, p));
 }
 /* The English Python wrote for a field of a payload row, whatever the page
-   shows: for the code that reads Python's words (findingAmount(),
-   spLimitShow(), splitFinding()). It is the row's own field when nothing was
-   translated. */
+   shows: for the code that reads Python's words (splitFinding(), a chain's
+   name as a key). It is the row's own field when nothing was translated. */
 function enOf(row, field){
   const en = row && row[TT_EN];
   return en && ttOwn(en, field) ? en[field] : row ? row[field] : undefined;
@@ -6049,7 +6048,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"09466f30cc","latest":{"pr":213,"date":"2026-10-01","title":"Plan a factory: from what to make to production, step by step","summary":"Expansion › Plan a factory now walks a factory plan through five steps: What, Where, Investment, Until production and Running. Pick the shops it supplies and, in For, a new factory or one you already run. What is the planner you know, with each product's machines sized to your shops' peak day, a warning when a line stays short of what they take, and the surplus valued as an export at the game's own export price. Where lists every warehouse building to rent, cheapest first, with its parking for trucks and its deposit. Investment is the one-off cost: the machines and pallet shelves at list price, the installation firm or a delivery, the deposit and a Freight Truck T1, with an optional bank loan; raw material, wages and rent a week are shown beside it as running costs. Until production is a checklist ticked from your save, with buttons for hiring and weekly import amounts when the game is linked. Running compares output with the plan once the factory works. For a factory you run, the steps cover only what the change adds. Businesses › Results now also counts a depot's and a factory's own vehicles in what was invested."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"d620d070fb","latest":{"pr":213,"date":"2026-10-01","title":"Plan a factory: from what to make to production, step by step","summary":"Expansion › Plan a factory now walks a factory plan through five steps: What, Where, Investment, Until production and Running. Pick the shops it supplies and, in For, a new factory or one you already run. What is the planner you know, with each product's machines sized to your shops' peak day, a warning when a line stays short of what they take, and the surplus valued as an export at the game's own export price. Where lists every warehouse building to rent, cheapest first, with its parking for trucks and its deposit. Investment is the one-off cost: the machines and pallet shelves at list price, the installation firm or a delivery, the deposit and a Freight Truck T1, with an optional bank loan; raw material, wages and rent a week are shown beside it as running costs. Until production is a checklist ticked from your save, with buttons for hiring and weekly import amounts when the game is linked. Running compares output with the plan once the factory works. For a factory you run, the steps cover only what the change adds. Businesses › Results now also counts a depot's and a factory's own vehicles in what was invested."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -6137,8 +6136,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=09466f30cc"></script>
-<script src="community.js?v=09466f30cc"></script>
+<script src="app.js?v=d620d070fb"></script>
+<script src="community.js?v=d620d070fb"></script>
 
 <script>
 
@@ -6435,7 +6434,7 @@ const GN_LISTS = [["items", "slugs"], ["fees", "feeSlugs"], ["lines", "lineSlugs
    in Python), and it reads as that key's name in the language on screen, or
    as the English Python wrote where there is no table or the table has no
    word for it. Nothing else of the string moves, so a sentence the board
-   parses (spLimitRole(), splitFinding()) reads as it did, names swapped. */
+   parses (splitFinding()) reads as it did, names swapped. */
 const GN_TOKEN = /\u27e6(ba:[^\u27e7|\s]+)(?:\|([^\u27e7]*))?\u27e7/g;
 function gnString(s, T, EN){
   if(s.indexOf("\u27e6") < 0) return s;
@@ -9070,22 +9069,16 @@ function splitFinding(a){
 /* The figure on the right: the finding's worth in its unit, whole dollars up
    to a million and compact beyond it. A row with no money still carries a
    number worth reading — the units an order is short, the machines on an
-   unnamed line, the multiple a target is over — so that comes out of the
-   sentence, in its unit; only a row with no number at all leaves the column
-   empty. A condensed row with no money shows how many findings it stands for. */
-/* The unit under a figure read out of Python's English sentence, in the UI
-   language; a word this does not know is shown as it came. */
+   unnamed line, the multiple a target is over — which Python sends beside the
+   sentence as `amt` (_amt()), in its unit; only a row with no number at all
+   leaves the column empty. A condensed row with no money shows how many
+   findings it stands for. */
+/* The unit under an `amt` figure, in the UI language; a word this does not
+   know is shown as it came. */
 function amtUnit(u){
   switch(u){
     case "findings": return tt("today.amt.findings", "findings");
-    case "order": return tt("today.amt.order", "order");
     case "orders": return tt("today.amt.orders", "orders");
-    case "holding": return tt("today.amt.holding", "holding");
-    case "holdings": return tt("today.amt.holdings", "holdings");
-    case "shop": return tt("today.amt.shop", "shop");
-    case "shops": return tt("today.amt.shops", "shops");
-    case "line": return tt("today.amt.line", "line");
-    case "lines": return tt("today.amt.lines", "lines");
     case "machine": return tt("today.amt.machine", "machine");
     case "machines": return tt("today.amt.machines", "machines");
     case "hours staffed": return tt("today.amt.hoursStaffed", "hours staffed");
@@ -9097,89 +9090,29 @@ function amtUnit(u){
     case "/day under hype": return tt("today.amt.dayHype", "/day under hype");
     case "/day needed": return tt("today.amt.dayNeeded", "/day needed");
     case "hours covered": return tt("today.amt.hoursCovered", "hours covered");
-    case "/week eaten": return tt("today.amt.weekEaten", "/week eaten");
     case "satisfied": return tt("today.amt.satisfied", "satisfied");
     case "staff": return tt("today.amt.staff", "staff");
     case "promotion": return tt("today.amt.promotion", "promotion");
     case "/day": return tt("today.amt.day", "/day");
     case "units": return tt("today.amt.units", "units");
     case "days": return tt("today.amt.days", "days");
-    case "hours": return tt("today.amt.hours", "hours");
     case "weeks": return tt("today.amt.weeks", "weeks");
-    case "customers": return tt("today.amt.customers", "customers");
     default: return u;
   }
 }
-/* A figure read out of Python's English ("1,500", "3.5") in the UI
-   language's numbers; in English it is shown exactly as Python wrote it. */
-const amtNum = s => {
-  if(typeof ttLang === "undefined" || ttLang === "en") return s;
-  const v = Number(String(s).replace(/,/g, ""));
-  return Number.isFinite(v) ? num(v) : s;
-};
 const amtHtml = (n, unit) => `${n}<small>${unit ? amtUnit(unit) : ""}</small>`;
 function findingAmount(a){
   if(typeof a.worth === "number")
     /* Python's unit (ALERT_UNITS) is a message of its own (f.unit.*), already
        in the UI language. */
     return `${Math.abs(a.worth) >= 1e6 ? money(a.worth) : fmt(a.worth)}<small>${a.unit || ""}</small>`;
-  /* Python's English, whatever language the row is shown in. */
-  const t = String((typeof enOf === "function" ? enOf(a, "text") : a.text) || "");
-  let m;
-  if(a.detail && (m = t.match(/^(\d+) (weekly orders?|orders?|holdings?|shops?|lines?)?/)))
-    return amtHtml(amtNum(m[1]), m[2] ? m[2].replace(/^weekly /, "") : "findings");
-  switch(a.group){
-    case "unnamed": case "unset":
-      if((m = t.match(/^(\d+) machines?/))) return amtHtml(amtNum(m[1]), m[1] === "1" ? "machine" : "machines");
-      break;
-    case "staff":
-      if((m = t.match(/staffed (\d+) of (\d+) hours/))) return amtHtml(`${amtNum(m[1])}/${amtNum(m[2])}`, "hours staffed");
-      break;
-    case "target":
-      if((m = t.match(/(\d+)x daily sales/))) return amtHtml(`${amtNum(m[1])}x`, "daily sales");
-      break;
-    case "order":
-      if((m = t.match(/([\d,]+) short/))) return amtHtml(amtNum(m[1]), "units short");
-      break;
-    case "shortfall":
-      if((m = t.match(/([\d.]+) days before/))) return amtHtml(amtNum(m[1]), "days early");
-      break;
-    case "wholesale":
-      if((m = t.match(/against (?:the )?([\d,]+)/))) return amtHtml(amtNum(m[1]), "/week used");
-      if((m = t.match(/([\d,]+) left/))) return amtHtml(amtNum(m[1]), "left");
-      break;
-    case "hype":
-      if((m = t.match(/\$([\d,]+)\/day/))) return amtHtml(`$${amtNum(m[1])}`, "/day under hype");
-      break;
-    case "feed":
-      if((m = t.match(/against ([\d,]+) (?:needed|the machines)/))) return amtHtml(amtNum(m[1]), "/day needed");
-      if((m = t.match(/covers (\d+) hours/))) return amtHtml(amtNum(m[1]), "hours covered");
-      if((m = t.match(/eat ([\d,]+) a week/))) return amtHtml(amtNum(m[1]), "/week eaten");
-      break;
-    /* A share is read from the finding's own number where it carries one,
-       else from its sentence with its decimals: "64.0%" is 64, never "0". */
-    case "satisfaction": {
-      const n = ((a.i18n && a.i18n.text && a.i18n.text[1]) || {}).n;
-      if(typeof n === "number" && isFinite(n)) return amtHtml(`${amtNum(String(n))}%`, "satisfied");
-      if((m = t.match(/(\d+(?:\.\d+)?)%/))) return amtHtml(`${amtNum(String(+m[1]))}%`, "satisfied");
-      break;
-    }
-    case "jobdemand": case "companydemand":
-      if((m = t.match(/^(\d+) staff/))) return amtHtml(amtNum(m[1]), "staff");
-      break;
-    case "promotion": {
-      const n = ((a.i18n && a.i18n.text && a.i18n.text[1]) || {}).promotion;
-      if(typeof n === "number" && isFinite(n)) return amtHtml(`${amtNum(String(n))}%`, "promotion");
-      if((m = t.match(/(\d+(?:\.\d+)?)%/))) return amtHtml(`${amtNum(String(+m[1]))}%`, "promotion");
-      break;
-    }
-  }
-  if((m = t.match(/\$([\d,]+)(\/day)?/))) return amtHtml(`$${amtNum(m[1])}`, m[2] || "");
-  if((m = t.match(/([\d,]+)\/day/))) return amtHtml(amtNum(m[1]), "/day");
-  if((m = t.match(/(\d[\d,]*(?:\.\d+)?) (units|days|hours|machines|shops|lines|orders|weeks|customers)\b/)))
-    return amtHtml(amtNum(m[1]), m[2]);
-  if((m = t.match(/\b(\d+)x\b/))) return amtHtml(`${amtNum(m[1])}x`, "");
-  return "";
+  const m = a.amt;
+  if(!m || typeof m.n !== "number" || !isFinite(m.n)) return "";
+  /* `dp`: the decimals the sentence writes, kept ("1.0 days early"). */
+  let n = m.sign === "$" ? fmt(m.n) : num(m.n, m.dp ? {minimumFractionDigits: m.dp, maximumFractionDigits: m.dp} : undefined);
+  if(typeof m.of === "number") n += `/${num(m.of)}`;
+  if(m.sign === "%" || m.sign === "x") n += m.sign;
+  return amtHtml(n, m.unit);
 }
 /* A finding whose kind is switched off still shows, under the list, wearing
    its kind's name so it is clear why it is down there. */
@@ -9485,8 +9418,6 @@ function ovLamps(b){
 }
 function ovPicture(a, b){
   const p = ovParams(a), ok = v => typeof v === "number" && isFinite(v);
-  const t = String((typeof enOf === "function" ? enOf(a, "text") : a.text) || "");
-  let m;
   switch(a.group){
     case "order":
       if(ok(p.brought) && ok(p.use)) return ovBars([[tt("today.pic.ordered", "Ordered a week"), p.brought, ""], [tt("today.pic.used", "Used a week"), p.use, "w"]]);
@@ -9499,7 +9430,7 @@ function ovPicture(a, b){
       if(ok(p.have) && ok(p.use)) return ovBars([[tt("today.pic.topup", "Daily top-up"), p.have, ""], [tt("today.pic.busiest", "Busiest day"), p.use, "w"]]);
       break;
     case "staff":
-      if((m = t.match(/staffed (\d+) of (\d+) hours/))) return ovBars([[tt("today.pic.staffed", "Hours staffed"), +m[1], +m[1] ? "w" : "n"], [tt("today.pic.hoursWeek", "Hours in the week"), +m[2], "a"]]);
+      if(ok(p.hours) && ok(p.week)) return ovBars([[tt("today.pic.staffed", "Hours staffed"), p.hours, p.hours ? "w" : "n"], [tt("today.pic.hoursWeek", "Hours in the week"), p.week, "a"]]);
       break;
     case "feed":
       /* An import that feeds the line, the depot's daily top-up, or what
@@ -9507,13 +9438,9 @@ function ovPicture(a, b){
       if(ok(p.order) && ok(p.use)) return ovBars([[tt("today.pic.ordered", "Ordered a week"), p.order, ""], [tt("today.pic.used", "Used a week"), p.use, "w"]]);
       if(ok(p.target) && ok(p.per)) return ovBars([[tt("today.pic.topup", "Daily top-up"), p.target, ""], [tt("today.pic.needed", "Needed a day"), p.per, "w"]]);
       if(ok(p.arrives) && ok(p.per)) return ovBars([[tt("today.pic.arrives", "Arrives a day"), p.arrives, ""], [tt("today.pic.needed", "Needed a day"), p.per, "w"]]);
-      if((m = t.match(/covers (\d+) hours/))) return ovBars([[tt("today.pic.covered", "Hours covered"), +m[1], "w"], [tt("today.pic.hoursDay", "Hours it runs"), 24, "a"]]);
       break;
     case "satisfaction":
       if(ok(p.n)) return ovBars([[tt("today.pic.satisfied", "Satisfied"), p.n, "w"], [tt("today.pic.full", "Everyone"), 100, "a"]], ovPct);
-      break;
-    case "promotion":
-      if((m = t.match(/at ([\d.]+)% of the ([\d.]+)% cap/))) return ovBars([[tt("today.pic.promotion", "Promotion"), +m[1], "w"], [tt("today.pic.cap", "Cap"), +m[2], "a"]], ovPct);
       break;
     case "unplanned":
       if(ok(p.units) && ok(p.rate) && p.rate > 0) return ovCover(p.units / p.rate);
@@ -10546,9 +10473,9 @@ const spTrend = key => (D.trends || []).find(t => t.key === key) || null;
    day is held by staffing then and by the door later — so the panel lights
    each of them and draws a chip apiece. */
 const spCapNotes = key => (D.hourFindings || []).filter(f => f.key === key && f.kind === "cap");
-/* Python's English limit, whatever language the chip's words are in
-   (enOf(), web/i18n.js): spCeiling() and spLimitIcons() compare it. */
-const spBindingLimits = key => spCapNotes(key).map(f => typeof enOf === "function" ? enOf(f, "limit") : f.limit);
+/* Whether a cap finding is the building's own capacity: _hour_findings()
+   writes ["door"] as its `heldBy` then. */
+const spAtDoor = n => ((n.heldBy || [])[0] || [])[0] === "door";
 /* This site's overstaffed week, in the words of its Today line (_alerts() in
    the Python): the spare staff-hours of every idle run, their wages summed,
    who was on and when, and the weekday-hours named. A finding written before
@@ -10605,33 +10532,12 @@ const spCellLimit = (g, wd, h) => {
       || a.localeCompare(b))
     .join(" ");
 };
-/* Which of the grid's roles a limit's words name. _role_words() builds those
-   words out of the role itself -- "<label> staffing", or the station's own
-   plural -- while a shop's Customer Service and an office's single role keep
-   the older "staffing", "registers" and "workstations". */
-const SP_PLAIN_LIMIT = {staffing: true, registers: true, workstations: true};
-function spLimitRole(part, roles){
-  if(SP_PLAIN_LIMIT[part]) return (roles || []).find(r => !r.noun) || null;
-  const staffing = /\bstaffing$/.test(part);
-  const want = part.replace(/\s*staffing$/, "");
-  /* The finding is Python's English; the role's label may be in the player's
-     language, so its English name is asked as well. */
-  /* One of two roles of one skill says "<station> staffing" (`shared`). */
-  return (roles || []).find(r => staffing
-    ? (r.shared ? r.one === want : r.label === want || englishName(r.skill) === want)
-    : r.noun === part) || null;
-}
-/* The cells one cap chip is about, in the cells' own tokens. A finding naming
-   two tied answers -- "Gym Trainer staffing and registers" -- is about the
-   hours where both held at once, so it asks for both and the grid lights the
-   overlap alone. */
-const spLimitShow = (n, g, lim = typeof enOf === "function" ? enOf(n, "limit") : n.limit) =>
-  lim === "the building" ? "door"
-  : String(lim).split(" and ").map(part => {
-      const role = spLimitRole(part, (g || {}).roles);
-      return spRoleToken(/\bstaffing$/.test(part) ? "staff" : "post",
-        role ? spRoleKey(role) : "");
-    }).join(" ");
+/* The cells one cap chip is about, in the cells' own tokens, from the
+   finding's `heldBy`. A finding held by two tied answers -- "Gym Trainer
+   staffing and registers" -- is about the hours where both held at once, so it
+   asks for both and the grid lights the overlap alone. */
+const spLimitShow = n => (n.heldBy || []).map(([kind, role]) =>
+  kind === "door" ? "door" : spRoleToken(kind, role)).join(" ");
 /* the roster ------------------------------------------------------------------
    docs/dashboard-reference.md's `staffing` row: the week the player would
    otherwise drag out by hand in BizMan, drawn on the hour grid's own 24
@@ -11418,17 +11324,11 @@ const spCostBar = (costs, profit) => {
       (v / total).toFixed(4)} 0 0;--k:${SP_COST_SHADE[id] || 40}%" data-read="${attr(
       tt("sp.cost.read", "{what} <b>{w:$}</b>", {what: SP_COST_WORD[id], w: v}))}"></i>`).join("")}</div><div class="sp-tread sp-readout"></div></div>`;
 };
-/* The limits an hour at the ceiling is held by, drawn. A finding names them in
-   its own words, and since the staffing track those words belong to the role:
-   "Trainer staffing", "projection booths", or both joined for an hour two
-   roles are tied on. Looking a joined or role-specific phrase up in a table of
-   the four old limits missed, and every miss drew a DOOR -- on a gym, a
-   theatre or a salon, often one with no door cap at all. So the phrase is read
-   instead: people wherever a part ends in "staffing", and the site's own kind
-   of post otherwise. */
-const spLimitIcons = (limit, office) => limit === "the building" ? ["door"]
-  : [...new Set(String(limit).split(" and ").map(part =>
-      /\bstaffing$/.test(part) ? "person" : office ? "monitor" : "counter"))];
+/* The limits a cap finding's hours are held by, drawn from its `heldBy`: the
+   door for the building, people for a role short of staff, and the site's own
+   kind of post for a role short of stations. */
+const spLimitIcons = (n, office) => [...new Set((n.heldBy || []).map(([kind]) =>
+  kind === "door" ? "door" : kind === "staff" ? "person" : office ? "monitor" : "counter"))];
 /* An office's desks: one square a workstation, filled while somebody is
    posted at it, at the hour the office was busiest over the fortnight. */
 function spDesks(grid){
@@ -12268,8 +12168,8 @@ function spRosterBlock(b){
   </section>`;
 }
 
-const spCeiling = (office, limits) => {
-  const lit = limits.flatMap(l => spLimitIcons(l, office));
+const spCeiling = (office, capNotes) => {
+  const lit = capNotes.flatMap(n => spLimitIcons(n, office));
   return `<div class="sp-ceil">${
     ["door", office ? "monitor" : "counter", "person"].map(k =>
       `<span class="sp-i${lit.includes(k) ? ` on${k === "door" ? " sp-bcap" : ""}` : ""}">${spIcon(k)}</span>`).join("")}</div>`;
@@ -12967,7 +12867,6 @@ function drawSite(){
   const finds = spAny ? spSiteFindings(b.key) : [];
   const rank = sp ? spRank(b.key) : null;
   const trend = sp ? spTrend(b.key) : null;
-  const limits = sp ? spBindingLimits(b.key) : [];
   /* The sentences the hour grid used to carry in its ?; on the shop and office
      panel they are the chips under the grid instead — one per ceiling the busy
      hours ran into, and one for idle capacity. */
@@ -12975,10 +12874,7 @@ function drawSite(){
   const idleNote = (D.hourFindings || []).find(f => f.key === b.key && f.kind !== "cap");
   /* The building's own capacity is no warning: plenty of good sites run at it,
      and there is nothing to fix, so its sentence only says how much. */
-  /* A cap's limit as Python wrote it: what the chips compare and key on,
-     whatever language the words on screen are in (enOf(), web/i18n.js). */
-  const limitEn = n => typeof enOf === "function" ? enOf(n, "limit") : n.limit;
-  const capSentence = n => limitEn(n) === "the building"
+  const capSentence = n => spAtDoor(n)
     ? tt("sp.cap.door", "At the building's capacity {hours} hours a week ({when}); {w}/day of sales in those hours.",
       {hours: n.hours, when: n.when, w: fmt(n.throughput)})
     : tt("sp.cap.ceiling", {
@@ -13045,7 +12941,7 @@ function drawSite(){
       b.margin === null ? "" : `<small ${SMALL}>${tt("sp.tile.margin", "{x:.1f}% margin", {x: b.margin})}</small>`}</div>${
       sp ? spCostBar(costs, b.profit) : ""}</div>
     <div class="sstat"><span class="lab">${capLabel}</span><div class="v">${capTile}</div>${
-      sp ? spCeiling(office, limits) : ""}</div>`;
+      sp ? spCeiling(office, capNotes) : ""}</div>`;
 
   /* One pill a person, as on the canvas: the name, the role under it, dimmed
      when they are off today. A big site keeps to a dozen and a "+n more"
@@ -13216,9 +13112,9 @@ function drawSite(){
      held by staffing at night and by its door by day — and one for idle
      capacity. Hovering one picks its hours out of the grid. */
   const hourChips = !sp ? "" : `<div class="sp-hchips">${
-    capNotes.map(n => `<span class="sp-hchip cap${limitEn(n) === "the building" ? " sp-bcap" : ""}" data-show="${attr(spLimitShow(n, grid))}" data-limit="${attr(limitEn(n))}" data-tip="${
+    capNotes.map(n => `<span class="sp-hchip cap${spAtDoor(n) ? " sp-bcap" : ""}" data-show="${attr(spLimitShow(n))}" data-tip="${
       attr(capSentence(n).replace(/\s+/g, " "))}"><i class="sp-sw"></i>${
-      spLimitIcons(limitEn(n), office).map(spI).join("")}${limitEn(n) === "the building"
+      spLimitIcons(n, office).map(spI).join("")}${spAtDoor(n)
         ? tt("sp.chip.door", "<b>{n} h/wk</b> at building capacity · {when} · {w}/day through it", {n: n.hours, when: n.when, w: fmt(n.throughput)})
         : tt("sp.chip.ceiling", "<b>{n} h/wk</b> full · {when} · {w}/day of sales", {n: n.hours, when: n.when, w: fmt(n.throughput)})}${
       n.fix ? `<span class="fix">${spI("right")}${n.fix}</span>` : ""}</span>`).join("") +
@@ -18395,7 +18291,7 @@ function osRoiTable(row, snap, planMode, o){
   rows.push(tr(tt("gr.os.inv.deposit", "Deposit"), "", m(p && p.deposit), m(c.deposit), diff(c.deposit, p && p.deposit, true)));
   // The plan buys no vehicle; a store that has one since counts it.
   if(c.vehicles > 0) rows.push(tr(tt("gr.os.roi.vehicles", "Vehicles"), tt("gr.os.roi.vehicles.sub", "the store's own, at their price plus any delivery paid"),
-    "–", m(c.vehicles), `<td></td>`));
+    "–", m(c.vehicles), diff(c.vehicles, p ? 0 : null, true)));
   rows.push(tr(tt("gr.os.inv.total", "Investment"), "", m(p && p[planMode]), m(c[nowMode]), diff(c[nowMode], p && p[planMode], true), "os-sum"));
   const steady = snap ? snap.profit : null;
   if(steady != null){

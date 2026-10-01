@@ -14,6 +14,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -134,6 +135,23 @@ class BrowserBuild(unittest.TestCase):
         with self.assertRaises(ba_dashboard.SaveShapeError) as caught:
             ba_dashboard.browser_build(path, self.locale, self.history, self.names)
         self.assertIn("notes.hsg is not a Big Ambitions save", str(caught.exception))
+
+    def test_a_bug_of_the_board_s_own_names_where_it_was_raised(self):
+        # The page shows only this sentence, and a player's screenshot is all
+        # a report carries: the exception and the line must both be in it.
+        path = self.write_data_save()
+        with (mock.patch.object(ba_dashboard, "History", side_effect=RuntimeError("boom")),
+              self.assertRaises(ba_dashboard.SaveShapeError) as caught):
+            ba_dashboard.browser_build(path, self.locale, self.history, self.names)
+        self.assertRegex(str(caught.exception),
+                         r"RuntimeError: boom, in extract, ba_dashboard\.py line \d+\)")
+
+    def test_a_shape_error_names_where_it_was_raised_too(self):
+        path = self.write_data_save()
+        with (mock.patch.object(ba_dashboard, "History", side_effect=KeyError("Day")),
+              self.assertRaises(ba_dashboard.SaveShapeError) as caught):
+            ba_dashboard.browser_build(path, self.locale, self.history, self.names)
+        self.assertRegex(str(caught.exception), r"KeyError: 'Day', in extract, ba_dashboard\.py line \d+\)")
 
 
 if __name__ == "__main__":

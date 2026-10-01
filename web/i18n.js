@@ -166,9 +166,8 @@ function ttWire(w, english){
   return ttNames(ttFill(s, p));
 }
 /* The English Python wrote for a field of a payload row, whatever the page
-   shows: for the code that reads Python's words (findingAmount(),
-   spLimitShow(), splitFinding()). It is the row's own field when nothing was
-   translated. */
+   shows: for the code that reads Python's words (splitFinding(), a chain's
+   name as a key). It is the row's own field when nothing was translated. */
 function enOf(row, field){
   const en = row && row[TT_EN];
   return en && ttOwn(en, field) ? en[field] : row ? row[field] : undefined;
