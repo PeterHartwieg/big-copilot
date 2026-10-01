@@ -3,7 +3,7 @@
 //
 // The code-derived files under web/ are not committed (.gitignore), so the
 // site exists only after `python build_web.py --assemble`. This script refuses
-// to publish anything a commit on main does not describe:
+// to publish anything but a committed HEAD that contains origin/main:
 //   1. the working tree is clean (nothing modified, staged or untracked);
 //   2. origin/main, freshly fetched, is an ancestor of HEAD
 //      (docs/contributing.md, "Deployment baseline");
