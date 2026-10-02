@@ -8,6 +8,7 @@ repository, over a doctored copy of it, and once through the command line
 itself, and assembles a copy with every route to the game shut.
 """
 from pathlib import Path
+import json
 import re
 import subprocess
 import sys
@@ -125,8 +126,8 @@ class WebFresh(unittest.TestCase):
         # order. web/_headers caches /py/* for a year, so each is a stamp input
         # (the code through its source, which check() holds the copy to).
         worker = (ROOT / "web/worker.js").read_text(encoding="utf-8")
-        code = re.search(r"for \(const file of \[([^\]]*)\]\)", worker)
-        self.assertIsNotNone(code, "web/worker.js no longer loops over the code files")
+        code = re.search(r"const code = \[([^\]]*)\]\.map\(", worker)
+        self.assertIsNotNone(code, "web/worker.js no longer maps the code downloads")
         self.assertEqual(tuple(re.findall(r'"([^"]+)"', code.group(1))), build_web.PY_CODE)
         # Every other py/ fetch is a data file, and carries the stamp.
         self.assertEqual(tuple(re.findall(r"fetch\(`py/([^?`$]+)", worker)), build_web.PY_DATA)
@@ -135,6 +136,21 @@ class WebFresh(unittest.TestCase):
             self.assertIn(name, build_web.STAMP_INPUTS)
         for name in build_web.PY_DATA:
             self.assertIn(f"web/py/{name}", build_web.STAMP_INPUTS)
+
+    def test_stamp_tracks_compiler_changes_without_unrelated_dependency_cache_busts(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(build_web, "STAMP_INPUTS", ("package-lock.json",)):
+            lock = {"packages": {"node_modules/esbuild": {"version": "0.28.1", "integrity": "compiler-a"},
+                                 "node_modules/playwright": {"version": "1.0.0"}}}
+            def write():
+                place(tmp, "package-lock.json", json.dumps(lock).encode("utf-8"))
+            write()
+            original = build_web.stamp(tmp)
+            lock["packages"]["node_modules/playwright"]["version"] = "2.0.0"
+            write()
+            self.assertEqual(build_web.stamp(tmp), original)
+            lock["packages"]["node_modules/esbuild"]["integrity"] = "compiler-b"
+            write()
+            self.assertNotEqual(build_web.stamp(tmp), original)
 
     def test_command_line_reports_a_stale_copy(self):
         with tempfile.TemporaryDirectory() as tmp:

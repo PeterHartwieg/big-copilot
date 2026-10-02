@@ -678,6 +678,13 @@ from the same sources, taking the game's files as committed, so it needs no game
 to LF for everything except the `.svg` background, so a Windows checkout is not stale by
 itself.
 
+Deployment checks that readable assembly first, then `tools/optimize_web.mjs`
+minifies its inline JavaScript with esbuild before uploading. It preserves the
+classic scripts' global names and order and leaves markup and CSS as assembled.
+The optimizer and esbuild’s lock entry are stamp inputs. Reassemble before
+running `--check` on a locally optimized page. See [contributing.md](contributing.md),
+"Deployment baseline", for the deployment sequence.
+
 ### The seam: `window.LEDGER_SOURCE`
 
 The board script does not know which door it is behind. It reads
@@ -1197,6 +1204,15 @@ fails when the worker's fetches differ from those lists:
   and every number it does state still comes off the measured hour grid; without the prices
   furniture counts at what the save says was paid, and walls and floors at nothing; without
   the store rules the store planner has no game data to plan a new store with.
+
+All seven board files download concurrently with the runtime. Startup joins the
+runtime and all response bodies through `Promise.all`, creates `/save` and `/data`,
+writes the successful downloads, then imports Python. A failed required fetch or
+runtime load is observed immediately even while the other branch is still pending;
+startup reports the failure through the existing `startup-failed` message.
+Runtime completion and each consumed body or optional HTTP fallback emit progress
+before the join, keeping the pending-save inactivity timer informed.
+`tests/worker_startup.test.cjs` checks ordering, progress, cache policy and error paths.
 
 Gradual (percentage) deployments are unsupported for that reason: while two versions serve
 side by side, a `/py/` file from the old one could be cached immutably under the new stamp.

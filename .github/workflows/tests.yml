@@ -56,6 +56,10 @@ jobs:
       - run: python build_web.py --assemble
       # tests/*.test.cjs includes the community suites (npm run test:community).
       - run: node --test --test-concurrency=2 tests/*.test.cjs
+      - name: Test the optimized hosted page
+        run: |
+          node tools/optimize_web.mjs
+          BOARD_TARGET=web node --test --test-concurrency=2 tests/businesses_expansion.test.cjs tests/shell_routes.test.cjs tests/game_names.test.cjs tests/i18n_runtime.test.cjs tests/news.test.cjs tests/update.test.cjs tests/theme.test.cjs tests/release.test.cjs tests/csp.test.cjs tests/optimize_web.test.cjs
       - run: npm run check:worker
 
   web-fresh:

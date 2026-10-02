@@ -46,6 +46,8 @@ function headersFor(pathname, rules) {
 let server, base, mock, mockUrl, browser, dir, save;
 
 before(async () => {
+  const {optimizePage} = await import('../tools/optimize_web.mjs');
+  const optimizedHtml = optimizePage(fs.readFileSync(path.join(web, 'index.html'), 'utf8'));
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'csp-'));
   save = path.join(dir, 'csp.hsg');
   const made = spawnSync(PYTHON, [path.join(root, 'tests', 'es3_fixture.py'), save, path.join(dir, 'payload.json')], {cwd: root});
@@ -57,6 +59,7 @@ before(async () => {
     if (file.startsWith(web) && fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
     if (!file.startsWith(web) || !fs.existsSync(file)) { res.writeHead(404, headersFor(pathname, rules)); return res.end(); }
     res.writeHead(200, {'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', ...headersFor(pathname, rules)});
+    if (file === path.join(web, 'index.html')) return res.end(optimizedHtml);
     fs.createReadStream(file).pipe(res);
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));

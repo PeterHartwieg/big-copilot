@@ -37,38 +37,64 @@ const say = (stage, detail) => postMessage({kind: "progress", stage, detail: det
 
 const ready = (async () => {
   say("runtime", "Loading the Python runtime (about 6 MB the first time)");
-  // A module worker: some embedders refuse a classic cross-origin importScripts
-  // but allow a dynamic import, and every current browser supports this form.
-  const {loadPyodide} = await import(PYODIDE_URL + "pyodide.mjs");
-  py = await loadPyodide({indexURL: PYODIDE_URL});
-  say("code", "Loading the board's code");
   // The page passes its build stamp on this worker's URL; the Python files
   // are fetched with the same stamp so a deploy never mixes old and new.
   const stamp = new URL(self.location.href).searchParams.get("v") || "dev";
   // A stamped URL never changes content (web/_headers caches /py/* for a year),
   // so the browser may keep it; an unstamped dev build always refetches.
   const cache = stamp === "dev" ? "no-store" : "default";
-  for (const file of ["ba_save.py", "ba_dashboard.py"]) {
-    const res = await fetch(`py/${file}?v=${stamp}`, {cache});
-    if (!res.ok) throw new Error(`could not load ${file}: ${res.status}`);
-    py.FS.writeFile(`/${file}`, await res.text());
-  }
+  // Runtime and board files are independent. Start every download now and
+  // consume response bodies before joining, instead of paying seven network
+  // round trips after the runtime finishes. Promise.all observes both branches
+  // immediately, including a download that fails while WebAssembly starts.
+  const [runtime, files] = await Promise.all([
+    (async () => {
+      // A module worker: some embedders refuse a classic importScripts but
+      // allow a dynamic import, and every current browser supports this form.
+      const {loadPyodide} = await import(PYODIDE_URL + "pyodide.mjs");
+      const runtime = await loadPyodide({indexURL: PYODIDE_URL});
+      // The page times inactivity, so report completed work before the join.
+      say("code", "Loading the board's code");
+      return runtime;
+    })(),
+    (async () => {
+      const code = ["ba_save.py", "ba_dashboard.py"].map(async file => {
+        const res = await fetch(`py/${file}?v=${stamp}`, {cache});
+        if (!res.ok) throw new Error(`could not load ${file}: ${res.status}`);
+        return [`/${file}`, await res.text()];
+      });
+      // An optional table's HTTP failure keeps the existing Python fallback.
+      const optional = async (path, response) => {
+        const res = await response;
+        return res.ok ? [path, await res.text()] : null;
+      };
+      return Promise.all([
+        ...code,
+        optional(NAMES, fetch(`py/gametext.json?v=${stamp}`, {cache})),
+        optional(BUILDINGS, fetch(`py/ba_buildings.json?v=${stamp}`, {cache})),
+        optional(CURVES, fetch(`py/ba_demand_curves.json?v=${stamp}`, {cache})),
+        optional(PRICES, fetch(`py/ba_item_prices.json?v=${stamp}`, {cache})),
+        optional(RULES, fetch(`py/ba_store_rules.json?v=${stamp}`, {cache})),
+      ].map(async task => {
+        const file = await task;
+        // Each consumed body (or optional HTTP fallback) is real progress,
+        // even when runtime startup or another download is still pending.
+        say("code", "Loading the board's code");
+        return file;
+      }));
+    })(),
+  ]);
+  py = runtime;
+  say("code", "Loading the board's code");
   py.FS.mkdir(SAVE_DIR);
   py.FS.mkdir(DATA_DIR);
-  const names = await fetch(`py/gametext.json?v=${stamp}`, {cache});
-  if (names.ok) py.FS.writeFile(NAMES, await names.text());
-  const buildings = await fetch(`py/ba_buildings.json?v=${stamp}`, {cache});
-  if (buildings.ok) py.FS.writeFile(BUILDINGS, await buildings.text());
   // The data tables are optional: the board falls back to the name prefix
   // without the city map, states no arrival ceiling without the curves, and
   // prices furniture at what the save says was paid without the price table,
   // and plans no new store without the store rules.
-  const curves = await fetch(`py/ba_demand_curves.json?v=${stamp}`, {cache});
-  if (curves.ok) py.FS.writeFile(CURVES, await curves.text());
-  const prices = await fetch(`py/ba_item_prices.json?v=${stamp}`, {cache});
-  if (prices.ok) py.FS.writeFile(PRICES, await prices.text());
-  const rules = await fetch(`py/ba_store_rules.json?v=${stamp}`, {cache});
-  if (rules.ok) py.FS.writeFile(RULES, await rules.text());
+  for (const file of files) {
+    if (file) py.FS.writeFile(file[0], file[1]);
+  }
   await py.runPythonAsync(`
 import sys
 sys.path.insert(0, "/")

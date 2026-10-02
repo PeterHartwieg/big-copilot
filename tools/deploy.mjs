@@ -8,7 +8,7 @@
 //   2. origin/main, freshly fetched, is an ancestor of HEAD
 //      (docs/contributing.md, "Deployment baseline");
 //   3. assembling leaves every committed file as it is, and --check agrees.
-// Then it runs `wrangler deploy --config wrangler.jsonc`. Extra arguments go
+// Then it optimizes the generated page and runs `wrangler deploy --config wrangler.jsonc`. Extra arguments go
 // to wrangler, so `npm run deploy -- --dry-run` runs every step but the upload.
 
 import { spawnSync } from 'node:child_process';
@@ -69,6 +69,14 @@ if (changed.length) {
     + changed.join('\n'));
 }
 if (run(py, ['build_web.py', '--check']) !== 0) stop('python build_web.py --check reports stale files');
+// Check the reproducible Python output first; minification only changes the
+// ignored deployment artifact, and every deploy assembles it afresh.
+try {
+  const { optimizeWeb } = await import('./optimize_web.mjs');
+  optimizeWeb(ROOT);
+} catch (err) {
+  stop(`page optimization failed: ${err.message}; ensure dependencies are installed with npm ci`);
+}
 
 // wrangler's own entry point, run by this Node: no .cmd shim, so no shell on Windows.
 const wrangler = path.join(ROOT, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
