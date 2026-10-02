@@ -146,7 +146,7 @@ the Worker dry run and the freshness check. It needs no installed game, producti
 credentials or clean working tree.
 `npm test` runs the assembled Node suite; `npm test -- tests/name.test.cjs` selects a suite
 (quote wildcard patterns for portability). `npm run test:optimized` checks the optimized
-hosted page and restores the raw assembly afterward. `npm run test:python -- tests.test_name` runs
+hosted page and restores the raw assembly on success. `npm run test:python -- tests.test_name` runs
 an assembled Python subset. Both use the same stages as CI. `PYTHON` selects an executable;
 otherwise the runner tries `python3`, `python`, then `py`, resolves the executable and
 passes it to subprocesses. Prefer these commands over raw test commands when working
