@@ -456,7 +456,7 @@ test('Preferences is a sheet: the checks panel over it, Escape in order, and the
   assert.equal(await page.locator('#pxSheet').isVisible(), false);
   assert.equal(await page.evaluate(() => document.activeElement.id), opener);
   // The footer's theme switch is the one there is.
-  await page.locator('.sitefoot [data-theme-set="light"]').click();
+  await page.locator('.sitefoot [data-theme-set="light"]:visible').click();
   assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), 'light');
   // Company finances' history link opens the sheet on its History row, the
   // row itself focused, not Forget history (round 1, L1); a click says so there.
@@ -494,7 +494,7 @@ test('Help & feedback is a sheet with the way to ask; the changelog and the proj
   assert.doesNotMatch(text, new RegExp([enRe('foot.source.text').source, enRe('nav.more.search').source, enRe('land.help.summary').source].join('|')));
   assert.equal(await page.locator('#pxSheet [data-changelog]').count(), 0);
   await page.keyboard.press('Escape');
-  await page.locator('.sitefoot [data-changelog]').first().click();
+  await page.locator('.sitefoot [data-changelog]:visible').click();
   assert.equal(await page.evaluate(() => document.getElementById('changelogDialog').open), true);
 });
 

@@ -102,7 +102,11 @@ test('unchanged or missing notes use a generic banner; invalid manifests and out
 test('reload gets the new shell while retaining the page hash and saved browser state', async t => {
   const {page, state, check} = await setup(t);
   await check(next);
-  state.html = html.replace(`window.LEDGER_RELEASE = ${JSON.stringify(loaded)}`, `window.LEDGER_RELEASE = ${JSON.stringify(next)}`);
+  // Replace the assignment's block: deployed JavaScript is minified, so its
+  // whitespace and object-key quoting differ from the readable assembly.
+  state.html = html.replace(/<script>\s*window\.LEDGER_RELEASE\s*=[\s\S]*?<\/script>/,
+    () => `<script>window.LEDGER_RELEASE = ${JSON.stringify(next)};</script>`);
+  assert.notEqual(state.html, html, 'the reload fixture replaces the release block');
   await page.evaluate(() => localStorage.setItem('ledger_history', 'remembered history'));
   await Promise.all([page.waitForEvent('load'), page.locator('#releaseReload').click()]);
   await page.evaluate(() => window.advanceRelease());

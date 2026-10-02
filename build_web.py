@@ -499,7 +499,7 @@ details.help[open] summary::after{content:"\2013"}
 """.replace("__ICON_FOLDER__", ICON_FOLDER).replace("__ICON_LINK__", ICON_LINK).replace("__ICON_MORE__", ICON_MORE).replace("__BUILD__", str(VERIFIED_BUILD)).replace("<!--__FOOTER__-->", footer_html(landing=True, site=True))
 
 # What web/worker.js fetches from web/py/ into Pyodide's filesystem, in the
-# order it fetches them: the code, without which the worker never becomes
+# order it lists them (downloads run together): the code, without which the worker never becomes
 # ready, and the data, written only when its fetch succeeds. The worker names
 # each file itself; tests/test_web_fresh.py holds it to these two lists.
 PY_CODE = ("ba_save.py", "ba_dashboard.py")
@@ -536,6 +536,9 @@ STAMP_INPUTS = (
     # The board's markup and CSS, and its script, which render() reads (ba_dashboard.load_template()).
     "template/board.html",
     "template/board.js",
+    # The deployment transform and its pinned compiler affect the served page.
+    # stamp() selects only esbuild's lock entry, not unrelated dev dependencies.
+    "tools/optimize_web.mjs", "package-lock.json",
 )
 
 
@@ -581,6 +584,9 @@ def stamp(root: str = HERE) -> str:
     for name in STAMP_INPUTS:
         with open(os.path.join(root, name), "rb") as fh:
             data = fh.read()
+        if name == "package-lock.json":
+            compiler = json.loads(data)["packages"]["node_modules/esbuild"]
+            data = json.dumps(compiler, sort_keys=True, separators=(",", ":")).encode("utf-8")
         if not name.endswith(".svg"):
             data = data.replace(b"\r\n", b"\n")
         h.update(data)

@@ -122,7 +122,18 @@ also accepts a branch that contains origin/main. It refuses a working tree with 
 modified, staged or untracked file, runs `git fetch origin`
 and stops unless `git merge-base --is-ancestor origin/main HEAD` passes, runs
 `python build_web.py --assemble` and stops if that changed a committed file, runs
-`python build_web.py --check`, and then runs `wrangler deploy --config wrangler.jsonc`.
+`python build_web.py --check`, minifies the generated page's inline JavaScript
+through `tools/optimize_web.mjs`, and then runs `wrangler deploy --config wrangler.jsonc`.
+The transform uses the existing esbuild dependency, preserves shared global names
+and escapes inline script terminators; blocks with HTML comment openers keep their
+original escaping. Its source and esbuild’s lock entry in `package-lock.json` are
+build stamp inputs. Python assembly stays independent of Node: `--assemble` restores the
+readable output, which is what `--check` compares. Run `node tools/optimize_web.mjs`
+after assembly to preview the deployment artifact locally; assemble again before
+running tests or `--check`. CI also runs the hosted-page checks against optimized output.
+`tests/csp.test.cjs` serves the optimized page with real Pyodide,
+map, guide and game-link loading, and `tests/optimize_web.test.cjs` guards script
+boundaries and shared globals.
 Arguments after `--` go to wrangler: `npm run deploy -- --dry-run` does everything but the
 upload. Never deploy with a bare `npx wrangler deploy`: the code-derived files under `web/`
 are not committed, so without the assemble step it publishes whatever an earlier
