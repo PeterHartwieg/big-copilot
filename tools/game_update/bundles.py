@@ -66,8 +66,8 @@ PROMOTION_TAG = "ba:buildingtypetag_hasmarketingpromotion"
 # a player cannot run. A new type the game adds lands in neither these nor the
 # board's sets, and is reported. Classify it by what the player can do with it:
 #   a walk-in shop the player runs -> RETAIL_TYPES, with its DEMANDS_NOT_MADE row;
-#       a service or ticket shop also goes into RESELLER_TYPES' exclusions, and one
-#       with a building class of its own into VENUE_TYPES and CAP_CATEGORIES
+#       a ticket it issues goes into ISSUED_ITEMS, and a type with a building
+#       class of its own into VENUE_TYPES and CAP_CATEGORIES
 #   an office the player runs -> OFFICE_TYPES
 #   a factory the player runs -> the literal set in COST_CENTRE_TYPES
 #   a warehouse, distribution centre or headquarters-like overhead site ->

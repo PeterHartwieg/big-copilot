@@ -1503,6 +1503,29 @@ class IssuedTicketTests(unittest.TestCase):
         self.assertIsNone(c.fact(SHOP_A, "ba:itemname_cinematicket"))
         self.assertFalse([f for f in c.findings() if "ticket" in json.dumps(f).lower()])
 
+    def test_a_theatres_concessions_are_stock_like_any_shops(self):
+        """Issue #159: a theatre's main line is its ticket, but its martini and
+        cheese platter are bought in and run out. Nothing in supply reads the
+        business type to drop them: the plan, the shelf row and the flow node
+        all carry them, the ticket none of these."""
+        c = Company()
+        c.site(HUB, "Import Hub")
+        c.site(SHOP_A, "Playhouse", status="retail", kind="ba:businesstype_theater")
+        c.hold(HUB, "ba:itemname_cheeseplatter", 1000)
+        c.hold(SHOP_A, "ba:itemname_cheeseplatter", 50, 100)
+        c.hold(SHOP_A, "ba:itemname_martini", 0, 80)
+        c.hold(SHOP_A, "ba:itemname_theaterticket", 0, 900, issued=True)
+        c.plan(HUB, SHOP_A, "ba:itemname_cheeseplatter", 300)
+        c.run()
+        rows = {r["slug"]: r for r in c.supply["shops"] if r["s"] == c.index(SHOP_A)}
+        self.assertEqual(rows["ba:itemname_cheeseplatter"]["target"], 300)
+        self.assertNotIn("ba:itemname_theaterticket", rows)
+        node = next(n for n in c.supply["graph"]["nodes"] if n["id"] == site_key(SHOP_A))
+        self.assertEqual(sorted(i["slug"] for i in node["items"]),
+                         ["ba:itemname_cheeseplatter", "ba:itemname_martini"])
+        self.assertIsNotNone(c.fact(SHOP_A, "ba:itemname_cheeseplatter"))
+        self.assertIsNone(c.fact(SHOP_A, "ba:itemname_theaterticket"))
+
 
 if __name__ == "__main__":
     unittest.main()

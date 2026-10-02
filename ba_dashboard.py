@@ -687,20 +687,12 @@ RETAIL_TYPES = {
     "ba:businesstype_theater",
 }
 
-# Shops that resell goods bought in, so running out is a restocking problem.
-# Factories make their own output; a cinema, theater, gym or hairdresser's
-# real line is a ticket or a service fee, not stock that can run out, even
-# though each also carries a couple of incidental wholesaler-sourced drinks.
-RESELLER_TYPES = RETAIL_TYPES - {
-    "ba:businesstype_cinema",
-    "ba:businesstype_gym",
-    "ba:businesstype_hairdresser",
-    "ba:businesstype_theater",
-}
-
 # Tickets a cinema or theater issues at the kiosk or booth: sold like a product,
 # but nothing imports, makes or shelves them, so no plan, top-up, pressure or
-# on-hand figure applies to them.
+# on-hand figure applies to them. Their concessions (a cinema's popcorn, cotton
+# candy and slushies, a theater's martini, whisky and cheese platter) are stock
+# like any shop's: supply, the factory view and the Growth planner count them
+# line by line, by item, never by the business type.
 ISSUED_ITEMS = {"ba:itemname_cinematicket", "ba:itemname_theaterticket"}
 
 # The office agencies left out of RETAIL_TYPES above. Their customers are digital,
@@ -1235,6 +1227,43 @@ def _station_roles(stations: dict, names: Names | None) -> dict:
     return out
 
 
+def _requirement_roles(type_slug: str | None, stations: dict) -> dict:
+    """{station slug: role key} for a cinema or a theatre, whose queues are its
+    business requirements rather than its skills.
+
+    The game caps a shop's hour at the smallest of its requirement groups, each
+    the sum of its manned stations (RetailBusinessSimulator
+    .GetMaxCustomerCapacityThisHour over ItemHelper.GetItemsSortedByCapacity,
+    build 3682), and never sums two groups. A theatre's ticket booths and its
+    concessions stand register are two requirements both worked by Customer
+    Service, and its costume, lighting and sound booths three worked by Stage
+    Crew, so one booth of each holds a theatre to 100 an hour, not 300. Each
+    requirement is its own role here, keyed the way _station_roles() keys a
+    split skill: the group holding the alphabetically first station keeps the
+    bare skill, and the others are skill|first station. The requirement lists
+    are ba_store_rules.json's (`rq`). Every other type keeps the key
+    _station_roles() gives it ({} here). A venue's station that no requirement
+    lists is in no capacity group, and _hourly() leaves it out of the grid.
+    """
+    if type_slug not in VENUE_TYPES:
+        return {}
+    rules = ((load_store_rules().get("types") or {}).get(type_slug) or {}).get("rq") or ()
+    groups = collections.defaultdict(set)
+    for requirement in rules:
+        by_skill = collections.defaultdict(list)
+        for slug in requirement.get("i") or ():
+            if slug in stations:
+                by_skill[stations[slug][0]].append(slug)
+        for skill, slugs in by_skill.items():
+            groups[skill].add(tuple(sorted(slugs)))
+    out = {}
+    for skill, sets in groups.items():
+        for rank, slugs in enumerate(sorted(sets)):
+            for slug in slugs:
+                out.setdefault(slug, skill if rank == 0 else f"{skill}|{slugs[0]}")
+    return out
+
+
 def _role_key(role: dict):
     """A role's own key: its skill, or the split key _station_roles() gave it."""
     return role.get("key", role["skill"])
@@ -1584,26 +1613,25 @@ DEPOSIT_MIN_FACTOR = 30
 DEPOSIT_MAX_FACTOR = 300
 DEPOSIT_TRANSACTION = "ba:transaction_deposit"
 
-# The door capacity each size letter buys, per building type. Read from the
-# game's help page, which travels with the bundled game text (a player's own
-# en.json wins over it); this is the same table as builds 3675 and 3680 ship, and
-# it stands for any category the page does not yield. A local run without the game
-# reads the page from the bundle, so this is reached only when there is no game
-# text at all. A letter whose variants disagree carries [min, max]; in a
-# LAYOUT_CAP_CATEGORIES category each layout code (S1) carries its own number
-# beside it.
+# The door capacity each size buys, per building type. Read from the game's help
+# page, which travels with the bundled game text (a player's own en.json wins over
+# it); this is the same table as builds 3675 and 3680 ship, and it stands for any
+# category the page does not yield. A local run without the game reads the page
+# from the bundle, so this is reached only when there is no game text at all. A
+# letter whose layouts all seat the same crowd is keyed by the letter (C: 30); one
+# whose layouts differ, the cinema's and the theater's, by each layout code (S1:
+# 150), which a building row's size and version (`z`, `v`) name. The saves agree
+# with the layout's number: every player cinema reads customerCapacity exactly its
+# layout's (4 Broadway S1 150, 5 Sixth Street S2 125, 15 Third Avenue S3 100) once
+# it is fitted out, and no rival cinema or theater reads above its own layout's
+# (issue #159).
 CAP_CATEGORIES = ("retail", "office", "cinema", "theater")
 FALLBACK_CAPS = {
     "retail": {"A": 15, "C": 30, "D": 40, "M": 75},
     "office": {"A": 4, "C": 8, "D": 10, "J": 10, "K": 50},
-    "cinema": {"S": [100, 150], "S1": 150, "S2": 125, "S3": 100},
-    "theater": {"R": [150, 200]},
+    "cinema": {"S1": 150, "S2": 125, "S3": 100},
+    "theater": {"R1": 200, "R2": 175, "R3": 150},
 }
-# Where the help page's per-layout number is the building's own, confirmed by
-# the saves: every player cinema reads customerCapacity exactly its layout's
-# (4 Broadway S1 150, 5 Sixth Street S2 125, 15 Third Avenue S3 100), and no
-# rival's reads above it. A building row's version (`v`) names its layout.
-LAYOUT_CAP_CATEGORIES = ("cinema",)
 _CAP_SECTION_RE = re.compile(r"^\*\*([A-Za-z][A-Za-z /]*)\*\*$")
 _CAP_SIZE_RE = re.compile(
     r"^\*\s*\*\*([A-Z]+)(\d+)\*\*:.*?/\s*([\d,]+)\s*customer capacity", re.I
@@ -1633,38 +1661,35 @@ def _cap_rows(names: Names):
 
 
 def _door_caps(names: Names) -> dict:
-    """{building type: {size letter: capacity}} from help_building_types_content.
+    """{building type: {size: capacity}} from help_building_types_content.
 
-    The page lists a code per layout — C1 and C2 are both 225 m2 retail floors —
-    so the codes collapse to their letter, which is what ba_buildings.json
-    records as `z`. A theatre's three layouts seat different crowds, so a
-    letter whose variants disagree keeps [min, max] rather than pretending to
-    a single number. A cinema's do too, and there the saves confirm the page's
-    number per layout, so each code is also kept as its own key (S1: 150),
-    which _size_cap() reads off the row's `z` and `v`.
+    The page lists a code per layout. C1 and C2 are both 225 m2 retail floors
+    that seat 30, so a letter whose codes agree collapses to the letter, which
+    is what ba_buildings.json records as `z`. A cinema's and a theatre's three
+    layouts seat different crowds, so a letter whose codes disagree keeps each
+    code as its own key (S1: 150) and no letter key: _size_cap() reads the
+    row's `z` and `v` for it.
     """
-    found: dict[str, dict[str, list]] = {}
-    codes: dict[str, dict[str, int]] = {}
+    found: dict[str, dict[str, dict[str, int]]] = {}
     for section, letter, code, cap in _cap_rows(names):
-        found.setdefault(section, {}).setdefault(letter, []).append(cap)
-        if section in LAYOUT_CAP_CATEGORIES:
-            codes.setdefault(section, {})[code] = cap
-    caps = {kind: dict(letters) for kind, letters in FALLBACK_CAPS.items()}
+        found.setdefault(section, {}).setdefault(letter, {})[code] = cap
+    caps = {kind: dict(sizes) for kind, sizes in FALLBACK_CAPS.items()}
     for kind, letters in found.items():
-        caps[kind] = {
-            letter: (min(seen) if min(seen) == max(seen) else [min(seen), max(seen)])
-            for letter, seen in sorted(letters.items())
-        }
-        caps[kind].update(sorted(codes.get(kind, {}).items()))
+        sizes = {}
+        for letter, codes in sorted(letters.items()):
+            if len(set(codes.values())) == 1:
+                sizes[letter] = next(iter(codes.values()))
+            else:
+                sizes.update(sorted(codes.items()))
+        caps[kind] = sizes
     return caps
 
 
 def _size_cap(row: dict, caps: dict):
-    """The customer capacity a building row's size buys, out of _door_caps().
-
-    A number: the layout's own (S1 150) where the table keys the layout, else
-    the size letter's. [min, max] for a theatre, whose layouts seat different
-    crowds; None for a type or size the table does not know.
+    """The customer capacity a building row's size buys, out of _door_caps():
+    its layout's own (S1 150) where the type keys its layouts, else its size
+    letter's. None for a type or size the table does not know, and for a row
+    of a split letter with no version, which could be any of its layouts.
     """
     kind = caps.get(row.get("t"), {})
     if row.get("z") and row.get("v") is not None:
@@ -2940,7 +2965,6 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
         "status": status,
         "costCentre": btype in COST_CENTRE_TYPES,
         "key": site_key(addr),
-        "restocks": btype in RESELLER_TYPES,
         "address": f"{house_number(b['StreetNumber'])} {names.street(b['StreetName'])}",
         "opened": b.get("creationDay", 0),
         "rent": money(b.get("RentPerDay", 0)),
@@ -8236,6 +8260,8 @@ def _hourly(
         # gates nothing. The game lets any item be placed in any business, so a
         # liquor store can hold a leftover fitness planning board.
         accepts = None if office else ASSIGN_SKILLS.get(business.get("typeSlug"))
+        # A cinema's or a theatre's queues are its business requirements.
+        venue_roles = {} if office else _requirement_roles(business.get("typeSlug"), posts)
         stray = collections.Counter()
         here, labels, slugs, keys = {}, {}, {}, {}
         for item in _item_instances(save, b["itemInstances"]):
@@ -8243,13 +8269,19 @@ def _hourly(
                 if accepts is not None and posts[item["itemName"]][0] not in accepts:
                     stray[item["itemName"]] += 1
                     continue
+                # A coat check or a checkout counter in a theatre is in no
+                # requirement, so the game counts it in no capacity group: it
+                # neither serves the venue's queue nor gates it.
+                if venue_roles and item["itemName"] not in venue_roles:
+                    continue
                 here[item.get("id")] = posts[item["itemName"]]
                 slugs[item.get("id")] = item["itemName"]
                 labels[item.get("id")] = (
                     names.label(item["itemName"]) if names else item["itemName"]
                 )
                 keys[item.get("id")] = (
-                    None if office else role_of.get(item["itemName"], here[item.get("id")][0])
+                    None if office else venue_roles.get(item["itemName"])
+                    or role_of.get(item["itemName"], here[item.get("id")][0])
                 )
         # One role per queue the site's stations hold: per skill, with a skill
         # whose stations do different work split by _station_roles(). A set
@@ -8300,6 +8332,9 @@ def _hourly(
         for role in roles:
             if sum(1 for other in roles if other["skill"] == role["skill"]) > 1:
                 role["shared"] = True
+                # A theatre's two Customer Service queues are named by their
+                # station too, not both "registers".
+                role["noun"] = _role_words(role, office)["noun"]
 
         # The roster, read the same way the game reads it: scheduleDay.day is the
         # game day modulo 7, with 7 standing in for Sunday's 0. A site with no
@@ -8328,6 +8363,11 @@ def _hourly(
                     if shift.get("type") != STATION_SHIFT:
                         continue
                     post = shift.get("itemInstanceId")
+                    # A shift naming no station serves nobody, a theatre's
+                    # actor included: the game's one stationless schedule row
+                    # is the stage's licensing fee, and a theatre sells nothing
+                    # without an actor at a dressing room (issue #159; read off
+                    # the build 3682 code, no theatre save to check against).
                     if post not in here:
                         continue
                     needed = here[post][0]
@@ -8479,10 +8519,7 @@ def _initial_customers(
     largest productSalesRatio among the products the shop has on hand that are
     primary for its type, times the building's square metres. `build_at_start`
     is the save's buildNumberAtStart; a save without one reads as 0, the old
-    rule, the way the game's own default does. A theater size whose layouts
-    seat different crowds comes as [min, max]; its top is taken, which
-    keeps the ceiling an upper bound, and the door clips it to the building's
-    own number anyway.
+    rule, the way the game's own default does.
 
     0 where it cannot be known: a new game's building of unknown size, or an old
     game's shop with no known floor area, holding none of its type's primary
@@ -8491,8 +8528,6 @@ def _initial_customers(
     curves for.
     """
     if (build_at_start or 0) >= CAPPED_INITIAL_BUILD:
-        if isinstance(size_cap, list):
-            size_cap = max(size_cap, default=0)
         return size_cap if isinstance(size_cap, (int, float)) and size_cap > 0 else 0
     curves = load_demand_curves()
     curve = curves["types"].get(type_slug)
@@ -8529,8 +8564,6 @@ def _arrival_ceiling(
     baseCustomerPromotionMultiplier plus 0.75 x the promotion total over 100.
     `door` is the registration's customerCapacity, the grid's door. The game
     sends arrivals in open hours only; which those are is the caller's to know.
-    Where `initial` is the top of a theater's capacity range, the
-    grid is a bound on that venue's arrivals rather than the game's exact number.
 
     **These are the game's arrivals, an upper bound on customers served, never
     the demand, and the board must never print them as one.** An arrival is
@@ -13909,7 +13942,7 @@ def _role_words(role: dict, office: bool) -> dict:
             "posts": (msg("sp.py.workstations", "workstations"),
                       msg("sp.py.fix.office.post", "another computer workstation")),
         }
-    if role["skill"] == SERVICE_SKILL:
+    if role["skill"] == SERVICE_SKILL and not role.get("shared"):
         return {
             "noun": None,
             "staffing": (msg("sp.py.limit.staffing", "staffing"),
@@ -16035,7 +16068,6 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
     furniture = rules.get("furniture") or {}
     table = prices.get("items") or {}
     products = rules.get("products") or {}
-    cap = cap[0] if isinstance(cap, (list, tuple)) else cap
     cap = int(cap or 0)
 
     def price(name):
@@ -16228,8 +16260,7 @@ def plan_layout(row: dict) -> str | None:
 def _venue_caps(names: Names) -> dict:
     """{size and version: customer capacity} for the cinemas and theatres
     (S1 150, S2 125, S3 100; R1 200 ...), from the same rows _door_caps()
-    reads (_cap_rows()). An outfit is planned per layout, so a theatre's are
-    kept exact here even where the finder shows its letter's range."""
+    reads (_cap_rows()), keyed by layout code for every venue."""
     return {code: cap for section, _letter, code, cap in _cap_rows(names)
             if section in ("cinema", "theater")}
 
@@ -16546,7 +16577,7 @@ def _own_shops(save: Save, regs: dict, businesses: list, grids: list, stmt_histo
             "hood": b.get("neighbourhood"),
             "layout": plan_layout(row),
             "m2": row.get("m"),
-            "cap": door[0] if isinstance(door, list) else door,
+            "cap": door,
             "initial": round(initial, 4),
             "promo": b.get("promotion") or 0,
             "marketing": money(sum(by_day[d].get("MarketingExpenses", 0) for d in days) / n),
@@ -16687,7 +16718,7 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
             if same:
                 source = max(same, key=lambda b: (sum(s["profit"] for s in (b.get("series") or [])[-7:]), b["key"]))
             copied = _copied_shelving(save, regs[source["key"]], slug, rules) if source else None
-            # A venue's own version seats its own crowd, not the size's lowest.
+            # A venue's own version seats its own crowd (S1 150, S3 100).
             cap = venue_caps.get(layout, sample.get("cap")) if cat in ("cinema", "theater") else sample.get("cap")
             lines = outfit_lines(slug, rules, prices, cap, sample.get("m2"), copied)
             cost = setup_cost(_setup_items(lines), [], sample.get("m2"), 0, prices)

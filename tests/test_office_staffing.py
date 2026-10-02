@@ -225,8 +225,7 @@ class OfficeBusinessTests(MsgAsserts, unittest.TestCase):
         b = business(staff=[LAWYER_PERSON])
         self.assertEqual(b["status"], "office")
         self.assertEqual(b["satisfaction"]["overall"], 70)
-        self.assertEqual((b["missingAmenities"], b["missingUniformLocker"], b["restocks"]),
-                         ([], False, False))
+        self.assertEqual((b["missingAmenities"], b["missingUniformLocker"]), ([], False))
 
     def test_an_office_gets_the_trading_alerts_and_none_of_the_shop_floor_ones(self):
         groups = {a["group"] for a in alerts([business()])}

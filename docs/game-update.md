@@ -216,8 +216,8 @@ none of `RETAIL_TYPES`, `OFFICE_TYPES` and `COST_CENTRE_TYPES`, nor in the scrip
 does not model at build 3682. Classify a new one by what the player can do with it:
 
 - a walk-in shop the player runs: `RETAIL_TYPES`, with its `DEMANDS_NOT_MADE` row. If it
-  sells a service or tickets rather than stock, also add it to the exclusions in
-  `RESELLER_TYPES` (`RETAIL_TYPES` minus cinema, gym, hairdresser and theater today). If
+  issues a ticket at a kiosk or booth, add the ticket to `ISSUED_ITEMS`, so no plan,
+  stock or import is asked of it; its other lines are stock like any shop's. If
   it has a building class of its own, as the cinema and the theater do, it also needs a
   `VENUE_TYPES` entry and a `CAP_CATEGORIES` category (with its `FALLBACK_CAPS` row);
 - an office the player runs: `OFFICE_TYPES`;

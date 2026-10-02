@@ -463,8 +463,15 @@ grid and three lines meet.
   manned in that hour, not the number of staff times a guess. Two people scheduled on one
   station count that station once.
 - **The building capacity** is the building's own `customerCapacity`: 30 for the small
-  supermarkets, 75 for the big ones and the electronics stores, 100 to 150 for a cinema
-  depending on its layout. It is a per-hour limit, not a daily total.
+  supermarkets, 75 for the big ones and the electronics stores, 150, 125 or 100 for a
+  cinema and 200, 175 or 150 for a theatre, by its layout. It is a per-hour limit, not a
+  daily total. The game sets it to the layout's number or less: it is the smallest of
+  that number and each of the type's required furniture, summed per requirement whether
+  anyone works it or not (`BusinessHelper.UpdateCustomerCapacity`). A cinema with one
+  screen and one projection booth reads 25 until it has more of both, which is why a fresh
+  S3 cinema at 15 Third Avenue reads 25 and the fitted-out one 100. The board does not yet
+  tell the two apart: an hour held at 25 there shows as "at building capacity" like one held
+  at the layout's own number, though another screen and projection booth would lift it.
 
 Effective capacity is the smallest of these, and the useful finding is *which* one binds.
 Every hour at 95% or more of it is an hour at the ceiling; the grid outlines those in red (in a neutral grey where the building's own capacity held the hour),
@@ -491,13 +498,30 @@ asks for two: Projectionist at the projection booths and Customer Service at the
 concessions stand registers. The board does not count its ticket kiosk, which no employee
 works. A theatre asks for three: Customer Service at the ticket booths and the concessions
 stand registers, Stage Crew at the costume, lighting and sound booths, and Actor in the
-dressing rooms. A theatre has no projection booth and employs no projectionist. The board
-pools a theatre's ticket booths and registers into one Customer Service role; whether the
-game lets customers in through the ticket booths alone is not known. A customer has to pass
-through all of the roles, so the site is only as fast as
-its slowest role: the grid shows the minimum across roles, the sum only within one, and each
-role's own staffing is judged separately in the findings. Two projection booths with one
-projectionist hold the whole cinema back to 25 an hour however many concessions staff are on.
+dressing rooms. A theatre has no projection booth and employs no projectionist. A customer
+has to pass through all of the roles, so the site is only as fast as its slowest role: the
+grid shows the minimum across roles, the sum only within one, and each role's own staffing
+is judged separately in the findings. Two projection booths with one projectionist hold the
+whole cinema back to 25 an hour however many concessions staff are on.
+
+In a cinema or a theatre a role is one of the type's business requirements, not one skill
+(`_requirement_roles()`), because the game caps the hour at the smallest requirement and
+never adds two together (`RetailBusinessSimulator.GetMaxCustomerCapacityThisHour`, build
+3682). A theatre's ticket booths and its concessions stand registers are two roles, both
+Customer Service, and its costume, lighting and sound booths three, all Stage Crew. A
+theatre with one of each serves 50 an hour, the ticket booth's and the register's, where
+pooling the skills would have said 80. Two roles of one skill are named by their station:
+"ticket booth staffing", "another Customer Service at the ticket booth".
+
+Two pieces of a venue's furniture are not roles. A cinema's screens are not worked by
+anyone: projectionists work at the projection booths, and the screens' rows in the game's
+schedule hold only the licensing fee. A screen still caps the cinema at 25 an hour each,
+through the building capacity above, which counts them. A theatre's schedule has a row with
+no station at all; it is the stage's licensing fee, not a place to work, and an actor works
+in a dressing room. The game sells a theatre's customers nothing in an hour with no actor in
+a dressing room (`BusinessHelper.ShouldWarnTheaterHasNoActors`), so scheduled hours that
+name no station count for nobody here either. No save on hand holds a theatre, so this
+reading of the game's code has not been checked against one.
 
 Only stations the business type can staff count. The game lets any item be placed in any
 business but assigns a person only in a skill the type takes (`ASSIGN_SKILLS`), so a leftover
@@ -2179,12 +2203,15 @@ comes instead from the game's own help page `help_building_types_content`, which
 customer capacity per layout code. A code is a letter and a digit — C1 and C2 are both
 225 m² retail floors — and the codes collapse to their letter. The same letter is a
 different floor in a different kind of building: a C is 30 customers as a shop and 8 as an
-office. Where a letter's layouts genuinely differ, the cinema and the theater, the letter
-carries a `[min, max]` range. A cinema's layouts are also kept by code, and a cinema
-building reads its own: the building table records each building's layout version (`v`),
-and every cinema the player runs in the saves on hand reads `customerCapacity` exactly its
-layout's number (4 Broadway S1 150, 5 Sixth Street S2 125, 15 Third Avenue S3 100), with
-no rival's above it (`LAYOUT_CAP_CATEGORIES`). A theater keeps the range, R 150 to 200.
+office. Where a letter's layouts genuinely differ, the cinema and the theater, each layout
+keeps its own number and the letter has none: the building table records each building's
+layout version (`v`), and the building reads the number for its size and version. Every
+cinema the player runs in the saves on hand reads `customerCapacity` exactly its layout's
+number once it is fitted out (4 Broadway S1 150, 5 Sixth Street S2 125, 15 Third Avenue S3
+100), and no rival cinema or theater reads above its own layout's (the highest rival R1
+reads 190, R2 174, R3 124). A building whose version is not known gets no number rather
+than a guess. A fresh cinema can read less than its layout's number, held down by its own
+furniture (see "The shop's week, hour by hour").
 Warehouses have a vehicle capacity, not a building capacity, and carry none; neither do
 residential or special buildings.
 
@@ -2198,8 +2225,8 @@ only when there is no game text at all:
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Retail | 15 | 30 | 40 | | | 75 | | |
 | Office | 4 | 8 | 10 | 10 | 50 | | | |
-| Cinema | | | | | | | 100–150 (S1 150, S2 125, S3 100) | |
-| Theater | | | | | | | | 150–200 |
+| Cinema | | | | | | | S1 150, S2 125, S3 100 | |
+| Theater | | | | | | | | R1 200, R2 175, R3 150 |
 
 One discrepancy is known and left alone: the page says an office K seats 50, while the
 law firm in the office K building at 10 Second Avenue reads `customerCapacity` 20 in the

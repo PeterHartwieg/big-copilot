@@ -151,13 +151,9 @@ const premises = () => D?.premises || null;
 /* Names sort in the language the board shows them in (gnCompare()). */
 const mapCompare = (a, b) => typeof gnCompare === 'function' ? gnCompare(a, b) : String(a).localeCompare(String(b));
 const mapCharacter = () => D?.meta?.character || D?.supply?.factories?.character || D?.meta?.save || "";
-/* A size letter whose layouts disagree carries [min, max] rather than a number:
-   a theatre today, since a cinema's cap comes by its own layout (S1 150). */
-const capText = c => c == null ? "—" : Array.isArray(c) ? `${c[0]}–${c[1]}` : String(c);
-/* A cap you can count on is the smallest the size letter's variants give, so
-   both ends of the filter read a range by its lower bound: a theatre seating
-   150 to 200 is not a building that seats 175. */
-const capMin = c => Array.isArray(c) ? c[0] : c;
+/* Every building capacity is one number: a cinema's and a theatre's come by
+   their own layout (S1 150, R2 175), not their size letter (issue #159). */
+const capText = c => c == null ? "—" : String(c);
 /* A number filter left at 0 is no limit; one that is set turns away a building
    with no reading, since nothing is known about it either way. */
 const finderFits = (v, lo, hi) => !(lo && (v == null || v < lo)) && !(hi && (v == null || v > hi));
@@ -1043,16 +1039,13 @@ class CityMapView {
       if(!this.candidate(b)) continue;
       if(!this.hoodOn(b.hood) || !this.layoutOn(b.layout) || b.traffic < fs.minTraffic) continue;
       if(!finderFits(b.m2, fs.minM2, fs.maxM2)) continue;
-      // Both ends judge a range by its smallest variant: a theatre seating 150
-      // to 200 clears a minimum of 150 and fits under a maximum of 170, but a
-      // building with no building capacity at all can promise neither.
-      if(!finderFits(capMin(b.cap), fs.minCap, fs.maxCap)) continue;
+      // A building with no building capacity at all can promise neither end.
+      if(!finderFits(b.cap, fs.minCap, fs.maxCap)) continue;
       const loc = this.assets.byKey.get(b.key);
       out.push({key:b.key, address:b.address, hood:b.hood, bld:b, f:this.fitFor(b), region:loc?.region, bounds:loc?.bounds});
     }
-    // A range sorts on the cap it can promise, the same bound the filter reads.
     const value = r => fs.sort === 'traffic' ? r.bld.traffic : fs.sort === 'demand' ? r.f.demand
-      : fs.sort === 'cap' ? capMin(r.bld.cap) : fs.sort === 'deposit' ? r.bld.deposit
+      : fs.sort === 'cap' ? r.bld.cap : fs.sort === 'deposit' ? r.bld.deposit
       : fs.sort === 'rent' ? r.bld.rent : fs.sort === 'm2' ? r.bld.m2 : r.f.score;
     // Every column reads best-first: the most of anything good, but the least
     // money up front, since the deposit decides whether a player can sign at all.
@@ -1077,7 +1070,7 @@ class CityMapView {
       if(!this.hoodOn(s.hood) || !this.saleKind(s) || !this.layoutOn(s.layout)) return false;
       const b = this.sites?.get(s.key);
       return finderFits(b?.traffic, fs.minTraffic, 0) && finderFits(s.m2, fs.minM2, fs.maxM2)
-        && finderFits(capMin(b?.cap), fs.minCap, fs.maxCap);
+        && finderFits(b?.cap, fs.minCap, fs.maxCap);
     }).sort((a, b) => a.price - b.price)
       .map(s => { const loc = this.assets.byKey.get(s.key); return {...s, region:loc?.region, bounds:loc?.bounds}; });
   }
