@@ -180,7 +180,10 @@ the map.
     (never above readable size) and moves like the map: drag to pan, the wheel or + and − to
     zoom, *Fit* to see the whole chain again, arrow keys and + − 0 from the keyboard; following
     a site centres it. Click a site to follow it: a panel says what it holds and
-    lists the changes on its route; *Table* goes back to the view you came from. A finding
+    lists the changes on its route; *Table* goes back to the view you came from. The
+    panel's *Needs before refill* and status follow the sizing on screen, as Changes does:
+    Full production at the lines' rated output, Shop demand at what the shops at the end
+    of the chain use. A finding
     on the Overview lands on its view, on its row, lit, with a way back.
     On a phone or a portrait tablet (a diagram box under about 950 px) the diagram is the
     chain instead: the stages down the page in the order the goods travel, so the Import Hub

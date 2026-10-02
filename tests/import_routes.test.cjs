@@ -933,6 +933,42 @@ test('each basis lists only its own depot top-up changes', async () => {
   } finally { await page.close(); }
 });
 
+/* Issue #203: Goods flow follows the sizing on screen. A depot importing 700
+   water a week tops up a brewery: at full production it needs 1,440 before
+   its refill and reads short; for what the bar sells it needs far less and
+   reads covered, as Changes and the site's facts say. Its order for factory
+   lines alone, at full production, names no margin. */
+test('Goods flow shows the needs and words of the sizing on screen', async () => {
+  const data = JSON.parse(python('import sys,json; sys.path.insert(0,"tests"); '
+    + 'from test_supply_bottom_up import goods_flow_sizing_board; print(json.dumps(goods_flow_sizing_board()))'));
+  const page = await board(data, {which: 'all', tab: 'flow'});
+  try {
+    const node = data.supply.graph.nodes.find(n => n.name === 'Water depot');
+    const water = node.items.find(i => i.slug === 'ba:itemname_water');
+    const panel = mode => page.evaluate(([mode, id]) => {
+      sizing = mode; flowPickId = id; showSub('supply', 'flow'); drawFlowView();
+      const tr = document.querySelector('#sbFlowPanel .sbf-t tbody tr');
+      return {cells: [...tr.cells].map(c => c.textContent.trim()), facts: [szFact(node(id), 'ba:itemname_water').st]};
+      function node(id){ return D.supply.graph.nodes.find(n => n.id === id).site; }
+    }, [mode, node.id]);
+    const num = n => n.toLocaleString('en-US');
+    const cap = await panel('cap');
+    assert.deepEqual(cap.cells, ['Water', num(300), num(water.need), num(700), en('sb.word.short')]);
+    assert.equal(cap.facts[0], 'short');
+    const dem = await panel('dem');
+    const want = {...water, ...water.dem};
+    assert.ok(want.need < water.need, JSON.stringify(water));
+    assert.deepEqual(dem.cells, ['Water', num(300), num(want.need), num(700), en('sb.word.covered')]);
+    assert.equal(dem.facts[0], 'covered');
+    // Back to full production, the 24/7 figures again.
+    assert.deepEqual((await panel('cap')).cells, cap.cells);
+    // The order's Set to box at full production: a week of the lines, no margin.
+    await page.evaluate(() => { sizing = 'cap'; showSub('supply', 'imports'); drawImportsView(); });
+    const tip = await page.locator('#secImports input.imp-in').first().evaluate(el => el.closest('[data-tip]')?.dataset.tip || el.dataset.tip || '');
+    assert.match(tip, enRe("sb.imp.box.suggests", {n: 1680, says: en("sb.imp.says.week.cap")}, {anchor: "full"}));
+  } finally { await page.close(); }
+});
+
 /* QA of PR #195: a depot whose order is short of its week while it still
    holds months of stock reads short, so its line sits on Imports; its idle
    and target findings land on Deliveries, which shows it too, lit. */

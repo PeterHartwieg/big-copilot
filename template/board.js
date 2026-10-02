@@ -7404,6 +7404,17 @@ function sbCkJoin(items){
    factory's own import beside a top-up that falls short without it (its
    fact is paused at more than info). One the top-up covers stays quiet. */
 const importResumes = r => r.fit === "paused" && !!r.fact && !!r.fact.lvl && r.fact.lvl !== "info";
+/* What a figure's chain margin is on, as the fact carries it: "none" where
+   its need is no more than its use (24/7 sizes factory lines at capacity
+   with no margin, and Demand stops a line at its capacity), "shops" where 24/7
+   sizes factory lines and shops together (`sizedFor` other than "dem": the
+   margin is on the shops' share only), else "all". A row with no fact, or
+   no sizing named, claims the whole margin, as it always did. */
+function sbMarginOn(r){
+  const f = (r && r.fact) || {}, p = (r && r.parts) || f.parts || {};
+  if(Number.isFinite(f.need) && Number.isFinite(f.use) && f.need <= f.use) return "none";
+  return r.sizedFor && r.sizedFor !== "dem" && p.lines && p.sites ? "shops" : "all";
+}
 /* `sizedFor` on a factory input or line is the sizing it was figured for:
    "dem" (what the shops at the end of the chain use) or anything else, 24/7.
    A row with no figure to type (a review) carries `lead`: its first sentence
@@ -7433,8 +7444,14 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
   };
   /* What a figure was sized on, in the words of the sizing on screen: the
      margin, as a clause its sentence ends on ({margin}). */
-  const margin = m => Number.isFinite(m) ? tt("sb.ck.margin.pct", ", plus a {pct}% margin", {pct: Math.round(m * 100)})
-    : tt("sb.ck.margin", ", plus the margin");
+  const margin = (m, r = null) => {
+    const on = r ? sbMarginOn(r) : "all";
+    if(on === "none") return "";
+    if(on === "shops") return Number.isFinite(m) ? tt("sb.ck.margin.shops.pct", ", plus a {pct}% margin on the shops' share", {pct: Math.round(m * 100)})
+      : tt("sb.ck.margin.shops", ", plus the margin on the shops' share");
+    return Number.isFinite(m) ? tt("sb.ck.margin.pct", ", plus a {pct}% margin", {pct: Math.round(m * 100)})
+      : tt("sb.ck.margin", ", plus the margin");
+  };
   const from = s => tt("sb.ck.from", "From {site}.", {site: address(s)});
   importRows.forEach(d => d.rows.forEach(r => {
     // The Set to box: the player's figure where they typed one, else the suggestion.
@@ -7451,7 +7468,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     // What a route from the company's own site brings is off the week already.
     const p = r.parts || {};
     const route = p.route ? tt("sb.ck.route.less", ", less the {n:,} a week a route brings", {n: p.route}) : "";
-    const m = margin(r.margin);
+    const m = margin(r.margin, r);
     const sized = !r.use ? tt("sb.ck.sized", "Sized{route}{margin}", {route, margin: m})
       : p.lines && p.sites ? tt("sb.ck.uses.both", "Uses {n:,} a week (factory lines and shops){route}{margin}", {n: r.use, route, margin: m})
       : p.lines ? tt("sb.ck.uses.lines", "Uses {n:,} a week (factory lines){route}{margin}", {n: r.use, route, margin: m})
@@ -7535,8 +7552,8 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     if(set(f)) add("Factory daily top-ups", s.s, r, r.target || 0, f.setTo,
       sbCkJoin([r.from === null || r.from === undefined ? tt("sb.ck.choose", "Choose a supplying depot.") : from(r.from),
         r.sizedFor === "dem"
-          ? tt("sb.ck.input.dem", "What the shops at the end of the chain use{margin}; confirm staffing and output limits.", {margin: margin(r.margin)})
-          : tt("sb.ck.input.cap", "Full-rate input requirement{margin}; confirm staffing and output limits.", {margin: margin(r.margin)})]),
+          ? tt("sb.ck.input.dem", "What the shops at the end of the chain use{margin}; confirm staffing and output limits.", {margin: margin(r.margin, {fact: f})})
+          : tt("sb.ck.input.cap", "Full-rate input requirement{margin}; confirm staffing and output limits.", {margin: margin(r.margin, {fact: f})})]),
       r.from ?? null, null, false, f.st === "tight");
     if(f.st === "stalled" && f.why !== "waiting") add("Check the delivery route", s.s, r, null, null,
       sbCkJoin([tt("sb.ck.stalled", "No delivery was recorded despite stock at {site}.", {site: address(r.from)}),
@@ -7606,7 +7623,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     add("Depot daily top-ups", r.s, r, Number.isFinite(f.have) ? f.have : 0, f.setTo,
       sbCkJoin([src !== null ? tt("sb.ck.depot.plan", "Set on the plan of {site}.", {site: address(src)}) : "",
         tt("sb.ck.depot.busiest", {one: "Its busiest day sends on {n:,} unit{margin}.", other: "Its busiest day sends on {n:,} units{margin}."},
-          {n: f.use || 0, margin: margin(r.margin)})]),
+          {n: f.use || 0, margin: margin(r.margin, {fact: f})})]),
       src, null, false, f.st === "tight");
     /* Several sites top it up and more than one target has to rise: each
        plan is a change of its own, to the same level. */
@@ -7615,7 +7632,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
       add("Depot daily top-ups", r.s, r, Number.isFinite(have) ? have : 0, level,
         sbCkJoin([tt("sb.ck.depot.plan", "Set on the plan of {site}.", {site: address(other)}),
           tt("sb.ck.depot.busiest", {one: "Its busiest day sends on {n:,} unit{margin}.", other: "Its busiest day sends on {n:,} units{margin}."},
-            {n: f.use || 0, margin: margin(r.margin)})]),
+            {n: f.use || 0, margin: margin(r.margin, {fact: f})})]),
         other, null, false, f.st === "tight");
     });
   });
@@ -8565,7 +8582,7 @@ function supplyChecklistRows(){
         if(wFact) setting.why = {basis: setting.ownBasis, other: sizing, parts: wFact.parts || {}, use: wFact.use, need: wFact.need,
           setTo: importSetting(wFact, contract, undefined).setTo, alt: setting.suggested};
       }
-      return {item: label(s, slug), slug, s, fact, total: fact.use, use: fact.use, parts: fact.parts || {}, margin,
+      return {item: label(s, slug), slug, s, fact, total: fact.use, use: fact.use, parts: fact.parts || {}, margin, sizedFor,
               /* What the import must bring: none where a route covers it, and none
                  to resume where the contract is paused and Python does not call it so. */
               covered, need: covered || (setting.paused && fact.st !== "paused") ? 0 : fact.need, users: drawers[`${s}|${slug}`] || [], ...setting, impId,
@@ -9284,6 +9301,11 @@ function sbImportCtx(d){
       : dem ? tt("sb.imp.says.week.dem", "a week of what the shops at the end of each chain use")
       : tt("sb.imp.says.week.cap", "a week of everything this depot feeds at full capacity");
     if(r.parts.route) says = tt("sb.imp.says.route", "{says}, less the {n:,} a week a route brings", {says, n: r.parts.route});
+    // The margin as the fact carries it (sbMarginOn()): none on factory lines at full production.
+    const on = sbMarginOn(r);
+    if(on === "none") return says;
+    if(on === "shops") return Number.isFinite(margin) ? tt("sb.imp.says.margin.shops", "{says}, plus a {pct}% margin on the shops' share", {says, pct: Math.round(margin * 100)})
+      : tt("sb.imp.says.theMargin.shops", "{says}, plus the margin on the shops' share", {says});
     return Number.isFinite(margin) ? tt("sb.imp.says.margin", "{says}, plus a {pct}% margin", {says, pct: Math.round(margin * 100)})
       : tt("sb.imp.says.theMargin", "{says}, plus the margin", {says});
   };
@@ -10273,7 +10295,9 @@ function drawFlowPanel(){
   g.links.forEach(l => { if(l.from === node.id) near.add(l.to); if(l.to === node.id) near.add(l.from); });
   const sites = new Set([...near].map(id => { const n = g.nodes.find(x => x.id === id); return n && Number.isInteger(n.site) ? n.site : D.businesses.findIndex(b => b.key === id); }).filter(x => x >= 0));
   const fixes = d.rows.filter(r => sites.has(r.site));
-  const items = (node.items || []).slice(0, 12).map(it => `<tr><td class="l">${spEsc(it.item)}</td><td>${num(it.stock || 0)}</td><td>${num(it.need || 0)}</td><td>${num(it.provision || 0)}</td><td class="l">${
+  /* The figures and the word under the sizing on screen: Python's 24/7 ones,
+     with what Demand sizing changes (`dem`) laid over them. */
+  const items = (node.items || []).slice(0, 12).map(x => sizing === "dem" && x.dem ? {...x, ...x.dem} : x).map(it => `<tr><td class="l">${spEsc(it.item)}</td><td>${num(it.stock || 0)}</td><td>${num(it.need || 0)}</td><td>${num(it.provision || 0)}</td><td class="l">${
     it.st && SZ_WORD[it.st] ? `<span class="sbf-w ${it.st}">${SZ_WORD[it.st]}</span>` : ""}</td></tr>`).join("");
   const into = s >= 0 ? (sbTabOf(s) === "factories" ? "production" : sbTabOf(s) === "shops" ? "deliveries" : "imports") : "deliveries";
   host.innerHTML = `<div class="sbf-card"><h3>${spEsc(node.name)}${node.sub ? `<small>${spEsc(node.sub)}</small>` : ""}</h3>${items

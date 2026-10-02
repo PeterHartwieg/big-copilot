@@ -6091,9 +6091,11 @@ def _supply(
     shop_need = collections.defaultdict(dict)
     for row in shop_rows:
         shop_need[businesses[row["s"]]["key"]][row["item"]] = row
-    depot_need = collections.defaultdict(dict)
+    depot_need, depot_need_dem = collections.defaultdict(dict), collections.defaultdict(dict)
     for row in import_rows:
         depot_need[businesses[row["s"]]["key"]][row["item"]] = row
+    for row in import_rows_dem:
+        depot_need_dem[businesses[row["s"]]["key"]][row["item"]] = row
     # A factory's inputs are judged by the factory view against what its
     # machines eat; its outputs are made on the spot and need no refill.
     feed_need, made_here = {}, set()
@@ -6116,6 +6118,7 @@ def _supply(
                 continue
             shop = shop_need[business["key"]].get(line["item"])
             depot = depot_need[business["key"]].get(line["item"])
+            depot_dem = depot_need_dem[business["key"]].get(line["item"])
             own = (business["key"], line["slug"])
             feed = feed_need.get(own)
             # An input a line here makes for another, with no route bringing
@@ -6131,134 +6134,142 @@ def _supply(
             # measured onward draw from it.
             ordered = (imports.get(own) or {}).get("weekly", 0)
             if own in made_here and not ordered and not feed:
-                depot = None
+                depot = depot_dem = None
             made = not (feed or shop or depot or ordered) and own in made_here
-            fit = why = None
-            backed = keeps = False
-            if shop and shop.get("wholesale") and not shop["target"]:
-                # A wholesale store delivers the week: the sales to its next
-                # drop against what the delivery brings.
-                deal = wholesale[(business["key"], line["slug"])]
-                need = round(shop["sold"] * (deal["days"] or 0))
-                provision = deal["weekly"]
-                cycle_need, cadence = round(shop["sold"] * 7), "weekly"
-            elif shop:
-                need = shop["peakSold"]
-                provision = shop["target"]
-                # A shelf is refilled daily, so a day's peak is the whole test.
-                cycle_need, cadence = need, "daily"
-            elif feed and feed["target"] and not feed["directImport"]:
-                # Topped up each morning: the next refill is tomorrow's round, so
-                # a day of the machines is the test, with the factory view's
-                # slack. The depot's import is judged on the depot.
-                need, provision = feed["perDay"], feed["target"]
-                cycle_need, cadence = need, "daily"
-                fit = "short" if provision < feed["dailyNeed"] * (1 - FEED_SLACK) else "ok"
-            elif feed and feed["directImport"]:
-                # Imported straight to the factory: the week's order has to feed
-                # the machines here, the factories topped up from here, and
-                # anything measured leaving onward. Machines run flat, so the
-                # hours to the drop need no weekday walk. A drop due now leaves
-                # the next one a week out, as for a depot.
-                supply = imports.get(own)
-                due = (
-                    max(supply["arrives"] - day - spent_today, 0.0)
-                    if supply and supply["weekly"] else 0.0
-                ) or 7.0
-                onward = depot["perDay"] - depot.get("eats", 0) if depot else 0
-                # The larger, not the sum: the measured draw already carries the
-                # top-ups to other factories that depotNeed plans for. A starved
-                # neighbour makes this an underestimate.
-                per_day = max(feed["depotNeed"] / 7, feed["perDay"] + onward)
-                need = round(per_day * due)
-                provision = feed["directWeekly"] or 0
-                cycle_need, cadence = round(per_day * 7), "weekly"
-                # A target only fills up to its level, so beside an import that
-                # covers the week it ships nothing until stock runs down; one
-                # that covers a day of everything drawn here is a floor under the
-                # week, and the holding cannot run dry before the drop.
-                backed = bool(
-                    feed["target"] and feed["target"] >= per_day * (1 - FEED_SLACK)
-                )
-                if feed["importPaused"]:
-                    fit, why = "short", "paused"
+
+            def sized(depot, mode):
+                """The line's figures on the node in one sizing mode, `depot`
+                being that mode's import row, or None where nothing belongs on
+                the node. Only a factory input's draw and a depot line's walk
+                differ between the modes; a shelf sells what it sells."""
+                fit = why = None
+                backed = keeps = False
+                # What the machines here draw a day: at full rate in 24/7,
+                # for the shops at the end of the chain in Demand (demDay).
+                machines = (feed["perDay"] if mode == "cap" else feed.get("demDay", feed["perDay"])) if feed else 0
+                if shop and shop.get("wholesale") and not shop["target"]:
+                    # A wholesale store delivers the week: the sales to its next
+                    # drop against what the delivery brings.
+                    deal = wholesale[(business["key"], line["slug"])]
+                    need = round(shop["sold"] * (deal["days"] or 0))
+                    provision = deal["weekly"]
+                    cycle_need, cadence = round(shop["sold"] * 7), "weekly"
+                elif shop:
+                    need = shop["peakSold"]
+                    provision = shop["target"]
+                    # A shelf is refilled daily, so a day's peak is the whole test.
+                    cycle_need, cadence = need, "daily"
+                elif feed and feed["target"] and not feed["directImport"]:
+                    # Topped up each morning: the next refill is tomorrow's round, so
+                    # a day of the machines is the test, with the factory view's
+                    # slack. The depot's import is judged on the depot.
+                    day_need = feed["dailyNeed"] if mode == "cap" else machines
+                    need, provision = machines, feed["target"]
+                    cycle_need, cadence = need, "daily"
+                    fit = "short" if provision < day_need * (1 - FEED_SLACK) else "ok"
+                elif feed and feed["directImport"]:
+                    # Imported straight to the factory: the week's order has to feed
+                    # the machines here, the factories topped up from here, and
+                    # anything measured leaving onward. Machines run flat, so the
+                    # hours to the drop need no weekday walk. A drop due now leaves
+                    # the next one a week out, as for a depot.
+                    supply = imports.get(own)
+                    due = (
+                        max(supply["arrives"] - day - spent_today, 0.0)
+                        if supply and supply["weekly"] else 0.0
+                    ) or 7.0
+                    onward = depot["perDay"] - depot.get("eats", 0) if depot else 0
+                    # The larger, not the sum: the measured draw already carries the
+                    # top-ups to other factories that depotNeed plans for. A starved
+                    # neighbour makes this an underestimate. depotNeed is the
+                    # factories' draw at full rate, so Demand sizing reads the
+                    # machines here at demand (demDay) and what leaves in its
+                    # own walk (`depot`, Demand's import row).
+                    per_day = (max(feed["depotNeed"] / 7, machines + onward) if mode == "cap"
+                               else machines + onward)
+                    need = round(per_day * due)
+                    provision = feed["directWeekly"] or 0
+                    cycle_need, cadence = round(per_day * 7), "weekly"
+                    # A target only fills up to its level, so beside an import that
+                    # covers the week it ships nothing until stock runs down; one
+                    # that covers a day of everything drawn here is a floor under the
+                    # week, and the holding cannot run dry before the drop.
+                    backed = bool(
+                        feed["target"] and feed["target"] >= per_day * (1 - FEED_SLACK)
+                    )
+                    if feed["importPaused"]:
+                        fit, why = "short", "paused"
+                    else:
+                        # Past the order's own need, measured onward draw can only
+                        # make the week longer, never shorter. importFit is the
+                        # factory view's 24/7 verdict.
+                        fit = max((feed["importFit"] if mode == "cap" else None) or "ok",
+                                  _fit(cycle_need, provision), key=FIT_ORDER.index)
+                elif feed:
+                    # Neither imported here nor topped up: nothing brings it in.
+                    need, provision = machines, 0
+                    cycle_need, cadence = need, "daily"
+                    fit, why = "short", "unplanned"
+                elif depot:
+                    # The import's share of the draw: what a route from the
+                    # company's own factory brings every morning is not its to cover.
+                    # A line a route helps feed carries what its own weekday walk
+                    # says the shelf must hold to the drop: quiet days' surplus
+                    # counts, a busy day's extra too.
+                    # Otherwise the row's own walk to its next drop: flat for a
+                    # line that feeds machines, the weekday profile for one that
+                    # feeds shelves, and whole rounds where the draw is the rounds.
+                    if depot["routed"]:
+                        need = depot["carry"]
+                    else:
+                        need = depot["dueNeed"]
+                    provision = depot["weekly"]
+                    # A Smart Delivery level is what the depot keeps, not what a
+                    # refill brings: that is the level less the stock on the day.
+                    keeps = bool(depot.get("smart"))
+                    # The order arrives weekly, so it has to cover a week — comparing
+                    # it with the days left until the next one would flatter it.
+                    cycle_need, cadence = round(depot["importPerDay"] * 7), "weekly"
+                elif made:
+                    need = provision = cycle_need = 0
+                    cadence = "made"
+                elif ordered and own in made_here:
+                    # An output made here and imported too, before any draw or order
+                    # history gives it a depot row: the order is known, the need not.
+                    need = cycle_need = 0
+                    provision, cadence = ordered, "weekly"
                 else:
-                    # Past the order's own need, measured onward draw can only
-                    # make the week longer, never shorter.
-                    fit = max(feed["importFit"] or "ok", _fit(cycle_need, provision),
-                              key=FIT_ORDER.index)
-            elif feed:
-                # Neither imported here nor topped up: nothing brings it in.
-                need, provision = feed["perDay"], 0
-                cycle_need, cadence = need, "daily"
-                fit, why = "short", "unplanned"
-            elif depot:
-                # The import's share of the draw: what a route from the
-                # company's own factory brings every morning is not its to cover.
-                # A line a route helps feed carries what its own weekday walk
-                # says the shelf must hold to the drop: quiet days' surplus
-                # counts, a busy day's extra too.
-                # Otherwise the row's own walk to its next drop: flat for a
-                # line that feeds machines, the weekday profile for one that
-                # feeds shelves, and whole rounds where the draw is the rounds.
-                if depot["routed"]:
-                    need = depot["carry"]
-                else:
-                    need = depot["dueNeed"]
-                provision = depot["weekly"]
-                # A Smart Delivery level is what the depot keeps, not what a
-                # refill brings: that is the level less the stock on the day.
-                keeps = bool(depot.get("smart"))
-                # The order arrives weekly, so it has to cover a week — comparing
-                # it with the days left until the next one would flatter it.
-                cycle_need, cadence = round(depot["importPerDay"] * 7), "weekly"
-            elif made:
-                need = provision = cycle_need = 0
-                cadence = "made"
-            elif ordered and own in made_here:
-                # An output made here and imported too, before any draw or order
-                # history gives it a depot row: the order is known, the need not.
-                need = cycle_need = 0
-                provision, cadence = ordered, "weekly"
-            else:
-                out = draw(business["key"], line["slug"])
-                if out <= 0 and line["units"] <= 0:
-                    continue
-                target = next(
-                    (
-                        amount
-                        for (dest, item), (amount, _src) in target_at.items()
-                        if dest == business["key"] and item == line["slug"]
-                    ),
-                    0,
-                )
-                need = round(out * factor)
-                provision, cycle_need, cadence = target, need, "daily"
-            if not need and not line["units"] and not provision:
-                continue
-            # A factory input carries the verdict set above, which follows the
-            # factory view's sizing checks: a thin week of arrivals is a
-            # delivery question, not whether the order covers a cycle. A depot
-            # line already carries its verdict, weekday-walked and withheld
-            # where no draw has been measured; do not second-guess it.
-            if fit is None:
-                fit = depot["orderFit"] if depot else _fit(cycle_need, provision)
-            # The verdict is the fact's: one word for the (site, item),
-            # whichever view shows it.
-            fact = facts.get(str(index[business["key"]]), {}).get(line["slug"])
-            if fact:
-                fit = NODE_FIT.get(fact["st"], "ok")
-            entry["items"].append(
-                {
-                    "item": line["item"],
-                    "slug": line["slug"],
+                    out = draw(business["key"], line["slug"])
+                    if out <= 0 and line["units"] <= 0:
+                        return None
+                    target = next(
+                        (
+                            amount
+                            for (dest, item), (amount, _src) in target_at.items()
+                            if dest == business["key"] and item == line["slug"]
+                        ),
+                        0,
+                    )
+                    need = round(out * factor)
+                    provision, cycle_need, cadence = target, need, "daily"
+                # A factory input carries the verdict set above, which follows the
+                # factory view's sizing checks: a thin week of arrivals is a
+                # delivery question, not whether the order covers a cycle. A depot
+                # line already carries its verdict, weekday-walked and withheld
+                # where no draw has been measured; do not second-guess it.
+                if fit is None:
+                    fit = depot["orderFit"] if depot else _fit(cycle_need, provision)
+                # The verdict is the fact's: one word for the (site, item),
+                # whichever view shows it.
+                fact = _supply_fact(facts, index[business["key"]], line["slug"], mode)
+                if fact:
+                    fit = NODE_FIT.get(fact["st"], "ok")
+                return {
                     "st": fact["st"] if fact else None,
-                    "stock": line["units"],
                     "need": need,
                     "cycleNeed": cycle_need,
                     "provision": provision,
                     "cadence": cadence,
-                    "made": made,
                     "keeps": keeps,
                     "why": why,
                     "fit": fit,
@@ -6269,7 +6280,26 @@ def _supply(
                         cadence == "weekly" and need and line["units"] < need and not backed
                     ),
                 }
-            )
+
+            figures = sized(depot, "cap")
+            if figures is None or not (figures["need"] or line["units"] or figures["provision"]):
+                continue
+            item = {"item": line["item"], "slug": line["slug"], "stock": line["units"], "made": made, **figures}
+            # The same line in Demand sizing: what it changes, under `dem`, for
+            # the goods-flow panel to lay over the 24/7 figures (_mode_changes()).
+            # A depot line nothing draws on in Demand has no import row there:
+            # it needs nothing before its refill, and its order still brings
+            # what it brings. A line takes the same branch in either mode.
+            if depot and not depot_dem:
+                depot_dem = {**depot, "dueNeed": 0, "carry": 0, "importPerDay": 0,
+                             "perDay": 0, "eats": 0, "orderFit": "ok"}
+            elif not depot:
+                depot_dem = None
+            dem = sized(depot_dem, "dem")
+            changed = _mode_changes(figures, dem) if dem else {}
+            if changed:
+                item["dem"] = changed
+            entry["items"].append(item)
         rank = {"short": 0, "tight": 1, "ok": 2}
         entry["items"].sort(
             key=lambda i: (rank[i["fit"]], not i["low"], -i["need"])

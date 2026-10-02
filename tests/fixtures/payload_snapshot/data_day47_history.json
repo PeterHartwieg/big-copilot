@@ -20599,6 +20599,14 @@
       {
        "cadence": "weekly",
        "cycleNeed": 8400,
+       "dem": {
+        "cycleNeed": 2247,
+        "fit": "ok",
+        "low": false,
+        "need": 1284,
+        "short": false,
+        "st": "covered"
+       },
        "fit": "short",
        "item": "Water",
        "keeps": false,
@@ -20631,6 +20639,13 @@
       {
        "cadence": "daily",
        "cycleNeed": 1200,
+       "dem": {
+        "cycleNeed": 321,
+        "fit": "ok",
+        "need": 321,
+        "short": false,
+        "st": "covered"
+       },
        "fit": "short",
        "item": "Water",
        "keeps": false,
