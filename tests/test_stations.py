@@ -718,6 +718,16 @@ class TheatreGridTests(MsgAsserts, unittest.TestCase):
         self.assertEqual(self.role(grid, ACTOR)["staffed"][MONDAY][10], 0)
         self.assertEqual(grid["staffed"][MONDAY][10], 0)
 
+    def test_a_station_no_requirement_lists_joins_no_queue(self):
+        """A coat check is Customer Service furniture, but no theatre
+        requirement lists it, so the game counts it in no capacity group. It
+        must not swell the ticket booth's queue."""
+        grid = self.theatre(extra=[(40, COAT), (41, REGISTER)])
+        self.assertNotIn(COAT, [s["slug"] for s in grid["stations"]])
+        self.assertNotIn(REGISTER, [s["slug"] for s in grid["stations"]])
+        self.assertEqual(self.role(grid, SERVICE)["counters"], 50)
+        self.assertEqual(self.role(grid, SERVICE)["station"], "Ticket Booth")
+
     def test_a_projection_booth_in_a_theatre_is_no_role(self):
         """The game assigns no Projectionist in a theatre (ASSIGN_SKILLS), so a
         leftover projection booth there holds nobody and gates nothing."""

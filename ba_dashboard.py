@@ -8231,6 +8231,11 @@ def _hourly(
                 if accepts is not None and posts[item["itemName"]][0] not in accepts:
                     stray[item["itemName"]] += 1
                     continue
+                # A coat check or a checkout counter in a theatre is in no
+                # requirement, so the game counts it in no capacity group: it
+                # neither serves the venue's queue nor gates it.
+                if venue_roles and item["itemName"] not in venue_roles:
+                    continue
                 here[item.get("id")] = posts[item["itemName"]]
                 slugs[item.get("id")] = item["itemName"]
                 labels[item.get("id")] = (
@@ -16534,7 +16539,7 @@ def _own_shops(save: Save, regs: dict, businesses: list, grids: list, stmt_histo
             "hood": b.get("neighbourhood"),
             "layout": plan_layout(row),
             "m2": row.get("m"),
-            "cap": door[0] if isinstance(door, list) else door,
+            "cap": door,
             "initial": round(initial, 4),
             "promo": b.get("promotion") or 0,
             "marketing": money(sum(by_day[d].get("MarketingExpenses", 0) for d in days) / n),

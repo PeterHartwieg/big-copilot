@@ -466,7 +466,9 @@ grid and three lines meet.
   that number and each of the type's required furniture, summed per requirement whether
   anyone works it or not (`BusinessHelper.UpdateCustomerCapacity`). A cinema with one
   screen and one projection booth reads 25 until it has more of both, which is why a fresh
-  S3 cinema at 15 Third Avenue reads 25 and the fitted-out one 100.
+  S3 cinema at 15 Third Avenue reads 25 and the fitted-out one 100. The board does not yet
+  tell the two apart: an hour held at 25 there shows as "at building capacity" like one held
+  at the layout's own number, though another screen and projection booth would lift it.
 
 Effective capacity is the smallest of these, and the useful finding is *which* one binds.
 Every hour at 95% or more of it is an hour at the ceiling; the grid outlines those in red (in a neutral grey where the building's own capacity held the hour),
