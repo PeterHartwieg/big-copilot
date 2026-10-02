@@ -471,6 +471,7 @@ class FewestCoveringTests(unittest.TestCase):
         asked = []
 
         def place(count):
+            self.assertTrue(low <= count <= high, count)
             asked.append(count)
             return {"count": count, "shifts": [{"employee": None if pattern[count - low] == "F" else 1}]}
 
@@ -518,6 +519,8 @@ class FewestCoveringTests(unittest.TestCase):
         self.assertEqual(self.search(17, pattern)[0], 55)
         # And a lone covering count between misses, below the halving's answer.
         self.assertEqual(self.search(9, "FFTFTTT")[0], 11)
+        # Two misses in a row do not end the walk down; three would.
+        self.assertEqual(self.search(0, "FFTFFTT")[0], 2)
 
     def test_nothing_below_the_last_count_covers_gives_the_last_count(self):
         # The last count is the one that may hire; it is placed, covering or not.
