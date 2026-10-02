@@ -474,16 +474,23 @@ test('a live refresh gives focus back to the chip that had it, and to nothing el
   } finally { await page.close(); }
 });
 
-test('renderAll asks which chip has focus before the chips are replaced', () => {
-  // The order the refresh test above stands in for: fvChipFocus() read before
-  // drawMast() and drawFooter(), and handed to drawDifficulty().
-  const src = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.js'), 'utf8');
-  // The function up to its closing brace, the first "\n}" after the anchor.
-  const body = require('./_slice.cjs').between(src, 'function renderAll(){', '\n}');
-  const at = needle => { const i = body.indexOf(needle); assert.ok(i >= 0, needle); return i; };
-  assert.ok(at('const diffFocus = fvChipFocus();') < at('drawMast();'));
-  assert.ok(at('drawMast();') < at('drawFooter();'));
-  assert.ok(at('drawFooter();') < at('drawDifficulty(diffFocus);'));
+test('renderAll() hands focus back to the chip it replaced', async () => {
+  // The board's own refresh, not the stand-in above: it must ask which chip
+  // has focus before drawMast() and drawFooter() replace the chips.
+  const {page, errors} = await board({width: 1600});
+  try {
+    const mast = page.locator('#clock .fv-diff');
+    await mast.click();
+    await mast.focus();
+    await page.evaluate(() => { document.activeElement.dataset.old = '1'; });
+    await page.mouse.move(5, 600);
+    await page.evaluate(() => { D.meta.minute = (D.meta.minute + 1) % 60; renderAll(); });
+    assert.deepEqual(await page.evaluate(() => [document.activeElement.dataset.fvAt, document.activeElement.dataset.old,
+      document.activeElement.isConnected]), ['mast', undefined, true]);
+    const s = await state(page);
+    assert.deepEqual([s.open, s.expanded, s.tip], [true, ['true', 'false'], false]);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
 });
 
 test('on a phone the chip moves to the footer stamp', async () => {

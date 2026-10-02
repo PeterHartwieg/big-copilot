@@ -14,7 +14,7 @@ const vm = require('node:vm');
 
 const ROOT = path.join(__dirname, '..');
 const SOURCE = fs.readFileSync(path.join(ROOT, 'web', 'i18n.js'), 'utf8');
-const BOARD = fs.readFileSync(path.join(ROOT, 'template', 'board.js'), 'utf8').replace(/\r\n/g, '\n');
+const {loadBoard} = require('./_board.cjs');
 const COFFEE = '⟦ba:itemname_coffee|Coffee⟧';
 
 /* A minimal element: attributes, text, element children, matches(). */
@@ -108,11 +108,9 @@ test("the board's num() does the formatting once it exists", () => {
 });
 
 test("in English every spec writes what the board code it replaces wrote", () => {
-  const from = BOARD.indexOf('const fmt = n =>');
-  const to = BOARD.indexOf('const el = (t,c,h)');
-  assert.ok(from > 0 && to > from, 'fmt/compact moved: update tests/i18n_runtime.test.cjs');
-  const board = vm.createContext({});
-  vm.runInContext(BOARD.slice(from, to).replace(/^const /gm, 'var ').replace(/^let /gm, 'var '), board);
+  // The board's own num(), fmt() and compact(), from the whole board script.
+  const loaded = loadBoard();
+  const board = Object.fromEntries(['num', 'fmt', 'compact'].map(name => [name, vm.runInContext(name, loaded)]));
   // tt() in the vm formats through this num(), as it does on the page.
   const {run} = load({extra: {num: board.num}});
   const values = [0, 0.4, -0.4, 2.5, -2.5, 98, 999.5, 1000, 1234.5, -1234.5, 1234.5678, -0.04, 0.1 + 0.2,
@@ -331,7 +329,17 @@ test('a language switch tells the board, which redraws', async () => {
   b.run('ttSetTable("de", __t)');
   b.run('ttSetTable("en", null)');
   assert.deepEqual(seen, ['de', 'en']);
-  // The board registers its listener with a guard, so a page without i18n.js
-  // still runs: numbers follow the language, then the board redraws.
-  assert.match(BOARD, /if\(typeof ttOnChange === "function"\) ttOnChange\(\(\) => \{ NUM_LOCALE = ttNumLocale\(\); gnNote\(\); gnRedraw\(\); \}\);/);
+  // The board listens: its numbers follow the language, then it redraws.
+  const board = loadBoard();
+  const num = () => vm.runInContext('num(1234.5)', board);
+  // What a redraw would write: the numbers have followed before it runs.
+  const redraws = [];
+  board.gnRedraw = () => { redraws.push(num()); };
+  assert.equal(num(), '1,234.5');
+  board.__t = {'nav.today': 'Heute'};
+  vm.runInContext('ttSetTable("de", __t)', board);
+  const german = (1234.5).toLocaleString(vm.runInContext('ttNumLocale()', board));
+  assert.notEqual(german, '1,234.5', 'German numbers are not grouped as English ones');
+  vm.runInContext('ttSetTable("en", null)', board);
+  assert.deepEqual(redraws, [german, '1,234.5']);
 });

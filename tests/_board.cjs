@@ -2,8 +2,10 @@
 // its pure functions: no slicing, so no anchors to keep in step with the code.
 // What it touches at load (document, window, storage, observers) is one inert
 // stub that answers every property and call with itself, so the boot code runs
-// and does nothing. A test that needs a real helper or real DOM still slices
-// (tests/_slice.cjs) and stubs what that piece reaches.
+// and does nothing. A test that runs a draw and reads what it wrote passes
+// recordingDocument()'s document (below). A test that needs real events or
+// layout runs in the browser, and one that drives its own stubbed DOM
+// (tests/navigation.test.cjs) still slices (tests/_slice.cjs).
 // What it does not provide: render() fills no placeholder, so there is no
 // map.js or wiki.js, and D, GN_EMBED and HOOD_NAMES keep their defaults (null,
 // null, {}): set them with vm.runInContext. The stub answers `then` with itself,
@@ -55,4 +57,29 @@ function loadBoard(globals = {}){
   return context;
 }
 
-module.exports = {loadBoard, SOURCE};
+/* A document for loadBoard({document}) whose getElementById(id) hands back one
+   element per id. The element keeps what a draw writes to it (innerHTML,
+   hidden, ...) and answers everything else as the inert stub does, so a test
+   can run a draw and read what it wrote: element(id).innerHTML. */
+function recordingDocument(){
+  const elements = new Map();
+  const element = id => {
+    if(!elements.has(id)){
+      const own = {};
+      elements.set(id, new Proxy(function(){}, {
+        get: (_, key) => key in own ? own[key] : inert[key],
+        set(_, key, value){ own[key] = value; return true; },
+        apply: () => inert,
+      }));
+    }
+    return elements.get(id);
+  };
+  const document = new Proxy(function(){}, {
+    get: (_, key) => key === 'getElementById' ? element : inert[key],
+    apply: () => inert,
+    set: () => true,
+  });
+  return {document, element};
+}
+
+module.exports = {loadBoard, recordingDocument, SOURCE};

@@ -2,35 +2,24 @@
 // model on a one-product type with flat curves, the borrowing limit with each
 // of its limits binding, the day the owner's cash is back with a loan, what a
 // new seller takes from the player's own shops, and how plans are started.
-// The board's own code runs in a VM: the "Expansion › Open a store" section of
-// the board script, template/board.js, sliced out between its banner and the
-// next one (the anchors are `/* --- Expansion › Open a store` and
-// `/* --- plan a chain`), with the few board helpers it reaches stubbed.
+// The board's own code runs in a VM: the whole board script, through
+// loadBoard() (tests/_board.cjs), with D and the device's storage set.
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {enRe} = require('./_i18n.cjs');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
-const {between} = require('./_slice.cjs');
+const {loadBoard} = require('./_board.cjs');
 
-const SRC = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.js'), 'utf8');
-const CODE = between(SRC, '/* --- Expansion › Open a store', '/* --- plan a chain');
-/* The board's guarded localStorage helpers (remembered(), rememberJson(), ...),
-   declared near the top of the script, which the section saves through. */
-const STORAGE = between(SRC, '/* localStorage, every access guarded', 'const el = ');
-
+/* The board, its D the facts given. Its functions are properties of the
+   context; D (a `let`) is read through the getter below. */
 function model(facts, extra = {}){
   const store = new Map();
   const D = {openStore: facts, meta: {day: 40, character: 'c1'}, businesses: [], ...extra};
-  const ctx = {D, gameName: () => '', icon: () => '', prettySlug: s => s, paybackMode: () => 'firm', paybackSetMode(){},
-    premises: () => ({buildings: []}), tt: (k, en) => typeof en === 'string' ? en : en.other, gnLower: s => String(s).toLowerCase(),
-    localStorage: {getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v)},
-    Map, Math, JSON, Number, Array, String, Object, Set};
-  vm.createContext(ctx);
-  vm.runInContext(STORAGE, ctx);
-  vm.runInContext(CODE, ctx);
-  return ctx;
+  const board = loadBoard({__D: D,
+    localStorage: {getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v)}});
+  vm.runInContext('D = __D', board);
+  Object.defineProperty(board, 'D', {get: () => vm.runInContext('D', board)});
+  return board;
 }
 const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs ${b}`);
 
@@ -192,6 +181,7 @@ test('a cinema or a theatre shows its investment and no estimate', () => {
   const facts = JSON.parse(JSON.stringify(RETAIL));
   facts.types.C = {cat: 'cinema', model: null, products: [], layouts: {S: {lines: [], furniture: 1000, fee: 500}}};
   const ctx = model(facts);
+  // premises() is map.js's, which loadBoard() does not load: the test hands one over.
   ctx.premises = () => ({buildings: [{key: 'c', hood: 'H', size: 'S', layout: null, deposit: 100, m2: 900, cap: [100, 150]}]});
   const est = vm.runInContext('osEstimate({type: "C", key: "c", mode: "firm"}, osBuilding("c"))', ctx);
   assert.equal(est.inv.firm, 1600, 'kept by the building\'s size, having no layout');
@@ -200,7 +190,6 @@ test('a cinema or a theatre shows its investment and no estimate', () => {
 
 test('a store that pays back in a day or two keeps its two investment labels on opposite edges', () => {
   const ctx = model(RETAIL);
-  Object.assign(ctx, {fmt: n => `$${Math.round(n)}`, money: n => `$${Math.round(n)}`, attr: s => s});
   const m = {revenue: 12000, cogs: 2000, wages: 500, rent: 200, marketing: 300, profit: 9000};
   const est = {profit: m.profit, inv: {firm: 12000, self: 10000}, day: k => ctx.osDayProfit(m, null, k)};
   const svg = vm.runInContext('osChart', ctx)(est, 'firm');
