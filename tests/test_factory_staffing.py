@@ -462,5 +462,80 @@ class SameHoursBothSizingsTest(unittest.TestCase):
         self.assertEqual(placed, ["cap", "dem"])
 
 
+class FewestCoveringTests(unittest.TestCase):
+    """_fewest_covering() over a made-up answer per count, as a string of
+    F (a shift left open) and T (covered) from `low` on."""
+
+    def search(self, low, pattern):
+        high = low + len(pattern) - 1
+        asked = []
+
+        def place(count):
+            self.assertTrue(low <= count <= high, count)
+            asked.append(count)
+            return {"count": count, "shifts": [{"employee": None if pattern[count - low] == "F" else 1}]}
+
+        return ba_dashboard._fewest_covering(place, low, high)["count"], asked
+
+    def first_covering(self, low, pattern):
+        """What trying every count upward gave: the first T below the last count, else the last."""
+        return low + next((i for i, c in enumerate(pattern[:-1]) if c == "T"), len(pattern) - 1)
+
+    def test_monotonic_answers_match_trying_every_count(self):
+        for low, length in ((0, 1), (3, 1), (25, 199), (17, 112), (41, 8)):
+            for first in range(length):
+                pattern = "F" * first + "T" * (length - first)
+                with self.subTest(low=low, pattern=pattern):
+                    count, asked = self.search(low, pattern)
+                    self.assertEqual(count, self.first_covering(low, pattern))
+                    self.assertEqual(len(asked), len(set(asked)))
+                    high = low + length - 1
+                    self.assertEqual(high in asked, count == high)
+
+    def test_every_short_pattern_answers_a_covering_count_or_the_last(self):
+        for low in (0, 1, 5):
+            for length in range(1, 9):
+                for bits in range(2 ** length):
+                    pattern = "".join("T" if bits >> i & 1 else "F" for i in range(length))
+                    with self.subTest(low=low, pattern=pattern):
+                        count, asked = self.search(low, pattern)
+                        high = low + length - 1
+                        self.assertTrue(count == high or pattern[count - low] == "T")
+                        self.assertEqual(high in asked, count == high)
+                        self.assertEqual(len(asked), len(set(asked)))
+
+    def test_the_hiring_count_is_not_the_answer_when_a_count_below_covers(self):
+        # The doubling strides step past 2 and every count after up to the
+        # last fails: the walk down still finds 2.
+        for pattern in ("FFTFF", "FFTFT"):
+            with self.subTest(pattern=pattern):
+                count, asked = self.search(0, pattern)
+                self.assertEqual(count, 2)
+                self.assertNotIn(4, asked)
+
+    def test_a_dip_above_the_fewest_is_walked_past(self):
+        # The player's warehouse: 55 and 56 cover, 57 does not, 58 on do again.
+        pattern = "F" * (55 - 17) + "TTF" + "T" * (128 - 57)
+        self.assertEqual(self.search(17, pattern)[0], 55)
+        # And a lone covering count between misses, below the halving's answer.
+        self.assertEqual(self.search(9, "FFTFTTT")[0], 11)
+        # Two misses in a row do not end the walk down; three would.
+        self.assertEqual(self.search(0, "FFTFFTT")[0], 2)
+
+    def test_nothing_below_the_last_count_covers_gives_the_last_count(self):
+        # The last count is the one that may hire; it is placed, covering or not.
+        count, asked = self.search(24, "F" * 10)
+        self.assertEqual(count, 33)
+        self.assertEqual(asked[-1], 33)
+        self.assertEqual(self.search(24, "FFFFT")[0], 28)
+
+    def test_a_large_pool_asks_a_few_counts_not_every_one(self):
+        pattern = "F" * (188 - 25) + "T" * (223 - 187)
+        count, asked = self.search(25, pattern)
+        self.assertEqual(count, 188)
+        self.assertLess(len(asked), 25)
+        self.assertEqual(len(asked), len(set(asked)))
+
+
 if __name__ == "__main__":
     unittest.main()
