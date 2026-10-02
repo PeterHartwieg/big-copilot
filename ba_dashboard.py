@@ -11998,6 +11998,62 @@ def _factory_hours(site: dict, mode: str) -> list:
                for line in site.get("unnamed", []) if line.get("rid") is not None])
 
 
+# How many counts in a row that leave a shift open end _fewest_covering()'s
+# walk down. Coverage is not monotonic in the count: a player's warehouse
+# (2 October 2026) covered its week with 55 and 56 workers, not with 57, and
+# again from 58 on.
+STEP_DOWN_MISSES = 3
+
+
+def _fewest_covering(place, low: int, high: int) -> dict:
+    """The week of the fewest workers that cover it, `place(count)` for low <= count <= high.
+
+    `place(count)` places the week on the first `count` of the ranked pool,
+    and a week covers when every shift has somebody on it. Trying every count
+    upward placed 164 weeks for one factory with a pool of 223 (a player's
+    save, 2 October 2026), which timed the browser out. So the count is found
+    in three steps: up from `low` in doubling strides until a week covers,
+    halving the gap between the last count that left a shift open and the
+    first that covered, then down one at a time until STEP_DOWN_MISSES counts
+    in a row leave a shift open, keeping the lowest that covered. The walk
+    down is what finds the fewest when the halving lands just above a count
+    that does not cover. Counts below `high` never hire; with none of them
+    covering, the week is `high`'s, the one count that may.
+    """
+    weeks = {}
+
+    def covers(count):
+        if count not in weeks:
+            weeks[count] = place(count)
+        return all(shift["employee"] is not None for shift in weeks[count]["shifts"])
+
+    missed, best, count, stride = low - 1, None, low, 1
+    while count < high:
+        if covers(count):
+            best = count
+            break
+        missed, count, stride = count, min(high, count + stride), stride * 2
+    # `high` is never asked here: it is the hiring count, not one more of the pool.
+    top = high if best is None else best
+    while top - missed > 1:
+        middle = (missed + top) // 2
+        if covers(middle):
+            top = best = middle
+        else:
+            missed = middle
+    if best is None:
+        covers(high)
+        return weeks[high]
+    count, misses = best - 1, 0
+    while count >= low and misses < STEP_DOWN_MISSES:
+        if covers(count):
+            best, misses = count, 0
+        else:
+            misses += 1
+        count -= 1
+    return weeks[best]
+
+
 def _factory_site_plan(save, building, site, business, posts_of, pool, people, mode, label,
                        names, wage_day, state=None):
     """One factory's row of _factory_staffing() in one sizing, or None with no line.
@@ -12055,9 +12111,9 @@ def _factory_site_plan(save, building, site, business, posts_of, pool, people, m
         "stations": runs,
     }}
     # The fewest of the factory's own workers that cover the week. The placer
-    # spreads a week over everybody it is given, so it is given the least
-    # ceil(machine-hours / 50) first, and one more while a line is left with
-    # nobody on it: whoever it is not given is spare. The factory's own staff
+    # spreads a week over everybody it is given, so it is given a count of
+    # the ranked pool and whoever it is not given is spare: see
+    # _fewest_covering() for how the count is found. The factory's own staff
     # before anybody off the bench, then those whose blackout windows touch
     # the fewest shifts, then the pool's order.
     pieces = [cut for line in lines for cut in line["cuts"]]
@@ -12078,20 +12134,21 @@ def _factory_site_plan(save, building, site, business, posts_of, pool, people, m
     )
     ranked = [person for _index, person in ranked]
     needed = sum(len(hours) for days in runs.values() for hours in days)
-    for count in range(min(math.ceil(needed / FULL_TIME[1]), len(ranked)), len(ranked) + 1):
+
+    def place(count):
         trial = ranked[:count]
         trial_state = {
             person["id"]: _copy_state(state[person["id"]]) if state else _fresh_state()
             for person in trial
         }
-        # Hires only in the last trial, the whole pool's: an earlier one that
-        # leaves a line open is only the answer "more of the pool", and the
-        # count search goes on to ask it.
-        week = _place_week(grid, need, ALL_DAY_OPEN, [], trial, people, business,
+        # Hires only in the whole pool's trial: an earlier one that leaves a
+        # line open is only the answer "more of the pool", and the count
+        # search goes on to ask it.
+        return _place_week(grid, need, ALL_DAY_OPEN, [], trial, people, business,
                            [p for p in trial if not p["addr"]], trial_state,
                            current=current["list"], hires=count == len(ranked))
-        if all(shift["employee"] is not None for shift in week["shifts"]):
-            break
+
+    week = _fewest_covering(place, min(math.ceil(needed / FULL_TIME[1]), len(ranked)), len(ranked))
     table = _index_table(stations + idle, (week["shifts"], current["list"]),
                          (current["list"], week["shifts"], week["shortHours"], week["placed"]),
                          people)
