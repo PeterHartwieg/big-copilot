@@ -15,7 +15,24 @@ before(async()=>{
   browser=await chromium.launch({headless:true,channel:process.env.PLAYWRIGHT_CHANNEL});
 });
 after(async()=>{await browser?.close();await new Promise(resolve=>server?.close(resolve));});
-const settle=ms=>new Promise(r=>setTimeout(r,ms));
+/* Waits out the newest ball's entrance. Spawn and the hook refuse while a ball
+   is busy, and busy clears only in the entrance's last frame (p >= 1). First
+   the ball stands where it rests, full size; the frame before the last is under
+   1 ms short of the end and may already round to that pose. Its step asked for
+   the last frame before this asks for one, so it runs first in any frame
+   stamped past now plus that 1 ms, and then the entrance is over (as in
+   map.test.cjs). Under reduced motion the pose and busy change together. */
+async function entranceOver(page){
+  await page.waitForFunction(()=>{
+    const o=[...document.querySelectorAll('.orb')].pop();
+    return !!o&&/^translate\(-?0px, -?0px\) scale\(1\)$/.test(o.style.transform);
+  },null,{polling:50});
+  await page.evaluate(()=>new Promise(done=>{
+    const seen=performance.now();
+    const frame=t=>t>seen+1?done():requestAnimationFrame(frame);
+    requestAnimationFrame(frame);
+  }));
+}
 async function fixture(reduced){
   // Wide enough for three balls: the shelf ends short of the search field.
   const page=await browser.newPage({viewport:{width:1920,height:960}});const errors=[];
@@ -35,19 +52,21 @@ async function fixture(reduced){
 async function rollOut(page,count){
   await page.click('.wordmark');
   await page.waitForFunction(k=>document.querySelectorAll('.orb').length>=k,count,{timeout:5000});
-  await settle(1700);
+  await entranceOver(page);
 }
 const orbs=page=>page.locator('.orb').count();
 
 test('the map hook swallows every shelf ball one after another and the shelf recovers',async()=>{
   const {page,errors}=await fixture();
   try{
-    await settle(2000); // the first ball's entrance
+    await entranceOver(page); // the first ball's entrance
     await rollOut(page,2);await rollOut(page,3);
     assert.equal(await orbs(page),3);
     const started=await page.evaluate(()=>window.__consumeBalls(600,400,()=>window.__eaten=(window.__eaten||0)+1));
     assert.equal(started,3);
-    await settle(2500);
+    // each ball is gone once its flight lands: the last leaves 280 ms after
+    // the first and flies 700 ms
+    await page.waitForFunction(()=>document.querySelectorAll('.orb').length===0,null,{polling:50});
     assert.equal(await orbs(page),0);
     assert.equal(await page.evaluate(()=>window.__eaten),3);
     // the shelf is empty now, so there is nothing left to swallow
@@ -62,7 +81,7 @@ test('the map hook swallows every shelf ball one after another and the shelf rec
 test('with reduced motion the hook empties the shelf at once and reports each ball',async()=>{
   const {page,errors}=await fixture(true);
   try{
-    await settle(700); // under reduced motion an entrance ends at its 400 ms mark
+    await entranceOver(page); // under reduced motion an entrance ends at its 400 ms mark
     assert.equal(await orbs(page),1);
     const started=await page.evaluate(()=>window.__consumeBalls(600,400,()=>window.__eaten=(window.__eaten||0)+1));
     assert.equal(started,1);
