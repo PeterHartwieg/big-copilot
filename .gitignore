@@ -10,7 +10,7 @@ __pycache__/
 
 # Cloudflare and Node
 .wrangler/
-node_modules/
+node_modules
 dist/
 
 # OS
