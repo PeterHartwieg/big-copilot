@@ -1308,14 +1308,45 @@ class MultiRoleTest(unittest.TestCase):
     """A site whose every customer passes through every role sizes each alone."""
 
     def test_each_role_packs_its_own_stations(self):
-        items = [(1, BOOTH), (2, REGISTER), (3, REGISTER), (4, LIGHTS), (5, LIGHTS)]
-        people = [employee(f"p{i}", [SERVICE, STAGECREW]) for i in range(12)]
-        row = plan(items, people, {h: 30 for h in range(24)}, type_slug=THEATER)
-        # 30 an hour: one 50-an-hour station, but two 20-an-hour lighting
-        # booths, and the site's throughput is the slowest role either way. (A
-        # cash register works in no theater, so the registers add nothing.)
-        self.assertEqual(row["need"][SERVICE][1][12], 1)
-        self.assertEqual(row["need"][STAGECREW][1][12], 2)
+        """A theatre as the game builds it (issue #159): each business
+        requirement is its own queue, planned alone, and the people are one
+        pool per skill. 60 an hour want both 50-an-hour ticket booths and both
+        concessions stand registers, but one each of the 100-an-hour costume,
+        lighting and sound booths and the 80-an-hour dressing room."""
+        actor, ticket, concession, costume, lighting, sound, dressing = (
+            "ba:skill_actor", "ba:itemname_boothticket", "ba:itemname_concessionsstandregister",
+            "ba:itemname_boothcostume", LIGHTS, "ba:itemname_boothsound",
+            "ba:itemname_dressingroom")
+        stations = {ticket: (SERVICE, 50), concession: (SERVICE, 50), costume: (STAGECREW, 100),
+                    lighting: (STAGECREW, 100), sound: (STAGECREW, 100), dressing: (actor, 80)}
+        names = Names(dict(LABELS.locale, **{
+            actor: "Actor", ticket: "Ticket Booth", concession: "Concessions Stand Register",
+            costume: "Costume Booth", lighting: "Lighting Booth", sound: "Sound Booth",
+            dressing: "Dressing Room"}))
+        items = [(1, ticket), (2, ticket), (3, concession), (4, concession), (5, costume),
+                 (6, lighting), (7, sound), (8, dressing)]
+        reg = registration(items=items, hourly={h: 60 for h in range(24)})
+        people = ([employee(f"s{i}", [SERVICE]) for i in range(8)]
+                  + [employee(f"c{i}", [STAGECREW]) for i in range(6)]
+                  + [employee(f"a{i}", [actor]) for i in range(3)])
+        save = Save({"EmployeeInstances": {"$items": people},
+                     "BuildingRegistrations": {"$items": [dict(reg, RentedByPlayer=True)]}},
+                    {}, "test.hsg")
+        sites = [dict(business(), typeSlug=THEATER)]
+        _by_addr, staff = _staff(save, names)
+        grids = _hourly(save, [reg], sites, stations, set(),
+                        {p["id"]: p["skill"] for p in staff}, names)
+        [row] = _staffing(save, names, sites, grids, staff, 0.55)
+        need = {key: row["need"][key][1][12] for key in row["need"]}
+        self.assertEqual(need, {
+            actor: 1, SERVICE: 2, f"{SERVICE}|{concession}": 2, STAGECREW: 1,
+            f"{STAGECREW}|{lighting}": 1, f"{STAGECREW}|{sound}": 1})
+        served = {row["stations"][s["s"]]["id"]
+                  for s in staffed(row) if kind(s) == "serve" and s["d"] == 1
+                  and s["f"] <= 12 < s["t"]}
+        self.assertEqual(served, {1, 2, 3, 4, 5, 6, 7, 8})
+        # One pool of people per skill, not one per queue.
+        self.assertEqual(sorted(row["headcount"]), sorted([actor, SERVICE, STAGECREW]))
 
     def test_a_hairdresser_plans_its_chairs_and_its_head_wash(self):
         """Issue #154: the chairs were never planned, only the head wash.

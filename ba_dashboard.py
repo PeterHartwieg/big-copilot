@@ -1241,8 +1241,9 @@ def _requirement_roles(type_slug: str | None, stations: dict) -> dict:
     requirement is its own role here, keyed the way _station_roles() keys a
     split skill: the group holding the alphabetically first station keeps the
     bare skill, and the others are skill|first station. The requirement lists
-    are ba_store_rules.json's (`rq`). Every other type, and a station no
-    requirement lists, keeps the key _station_roles() gives it ({} here).
+    are ba_store_rules.json's (`rq`). Every other type keeps the key
+    _station_roles() gives it ({} here). A venue's station that no requirement
+    lists is in no capacity group, and _hourly() leaves it out of the grid.
     """
     if type_slug not in VENUE_TYPES:
         return {}
