@@ -29,7 +29,7 @@ body:has(.br-dialog[open]){overflow:hidden}
 .br-preview{margin:12px 0 4px;font-size:12.5px}
 .br-preview summary{cursor:pointer;color:var(--ink-2)}
 .br-preview-list{margin:8px 0 0;padding:10px 12px 10px 28px;border:1px solid var(--rule-soft);border-radius:8px;font:500 11.5px/1.7 "IBM Plex Mono",monospace;color:var(--ink-2);overflow-wrap:anywhere}
-.br-status{margin:10px 0 0;font-size:13px;line-height:1.55}
+.br-status{margin:10px 0 0;font-size:13px;line-height:1.55;scroll-margin-bottom:96px}
 .br-status:empty{display:none}
 .br-status.ok{color:var(--ink)}
 .br-status.bad{color:var(--neg)}

@@ -307,6 +307,9 @@
       a.textContent = link.words;
       s.append(a);
     }
+    // On a short screen the status sits below the fold, under the sticky
+    // buttons: bring it into view (its scroll margin clears them).
+    if (text && typeof s.scrollIntoView === "function") s.scrollIntoView({block: "nearest"});
   }
 
   function brLock(on) {

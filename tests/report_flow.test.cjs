@@ -27,8 +27,8 @@ let browser;
 before(async () => { browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL}); });
 after(async () => { await browser?.close(); });
 
-async function setup(t, {api = 'created', delay = 0} = {}) {
-  const context = await browser.newContext({viewport: {width: 1280, height: 900}, reducedMotion: 'reduce'});
+async function setup(t, {api = 'created', delay = 0, width = 1280, height = 900} = {}) {
+  const context = await browser.newContext({viewport: {width, height}, reducedMotion: 'reduce'});
   t.after(() => context.close());
   await context.addInitScript(() => {
     localStorage.setItem('ledger_history', 'private-history-sentinel');
@@ -269,4 +269,21 @@ test('a reader answer that will not decode still leaves the save with the reader
   const parts = await partsOf(posts[0]);
   assert.deepEqual(parts.save, Buffer.from([9, 9, 9]));
   assert.equal(JSON.parse(parts.report).gameBuild, 3682, 'read again by the reader');
+});
+
+test('on a phone the answer is scrolled into view above the sticky buttons', async (t) => {
+  for (const api of ['created', 'unavailable']) {
+    const {page} = await setup(t, {api, width: 375, height: 667});
+    await failRead(page);
+    await page.locator('#reportBtn').click();
+    await page.locator('.br-dialog[open]').waitFor();
+    await page.locator('#brText').fill('It broke.');
+    await page.locator('.br-foot .primary').click();
+    const link = page.locator('.br-status a');
+    await link.waitFor();
+    await page.waitForTimeout(50);
+    const [a, foot, dialog] = await Promise.all([link.boundingBox(), page.locator('.br-foot').boundingBox(), page.locator('.br-dialog').boundingBox()]);
+    assert.ok(a.y + a.height <= foot.y + 1, `${api}: the link (${a.y}+${a.height}) ends above the buttons (${foot.y})`);
+    assert.ok(a.y >= dialog.y, `${api}: the link is inside the dialog's view`);
+  }
 });
