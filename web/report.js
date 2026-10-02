@@ -28,6 +28,8 @@
   const BR_API = "/api/report";
   const BR_TEXT_MAX = 5000;
   const BR_TRACE_MAX = 100000;
+  const BR_ERROR_MAX = 2000;
+  const BR_DETAILS_MAX = 250 * 1024;  // the Worker takes 256 KiB
   const BR_THEME_KEY = "ba_dash_theme";  // the footer's Theme (template/board.html)
 
   /* --- what is sent ---------------------------------------------------------- */
@@ -76,7 +78,7 @@
      the message first. The message goes only to private storage, with the
      whole traceback. The Worker accepts nothing that does not have this shape. */
   const BR_PY_HEAD = "Traceback (most recent call last):";
-  const BR_PY_FRAME = /^ {2}File "(?:[^"\n]*\/)?([A-Za-z_]\w{0,56}\.py)", line (\d{1,7}), in ([A-Za-z_]\w{0,79}|<module>)$/;
+  const BR_PY_FRAME = /^ {2}File "(?:[^"\n]*\/)?([A-Za-z_]\w{0,56}\.py)", line (\d{1,7}), in ([A-Za-z_]\w{0,79}|<(?:module|lambda|genexpr|listcomp|dictcomp|setcomp)>)$/;
   const BR_PY_CLASS = /^(?:[A-Za-z_]\w*\.)*([A-Z]\w{0,79})(?::|$)/;
   const BR_NAME = /^[A-Z]\w{0,79}$/;
   function brErrorLine(ctx) {
@@ -93,6 +95,21 @@
       return frame ? `${kind[1]} in ${frame[3]} (${frame[1]} line ${frame[2]})` : kind[1];
     }
     return BR_NAME.test(String(ctx.errorName || "")) ? ctx.errorName : "";
+  }
+
+  // The private details, held under the Worker's cap in bytes as sent: a
+  // message can repeat a long name read from the save, in any script. The
+  // traceback keeps its end, where the error is, and loses its start first.
+  function brDetails(ctx, env) {
+    const settings = brSettings(env);
+    const error = String(ctx.error || "").slice(0, BR_ERROR_MAX);
+    let trace = String(ctx.trace || "").slice(-BR_TRACE_MAX);
+    const size = (text) => new TextEncoder().encode(text).byteLength;
+    for (;;) {
+      const body = JSON.stringify({error, trace, settings});
+      if (size(body) <= BR_DETAILS_MAX || !trace) return body;
+      trace = trace.slice(Math.ceil(trace.length / 4));
+    }
   }
 
   const brBuild = (v) => (Number.isSafeInteger(v) && v > 0 && v < 1000000 ? v : null);
@@ -119,11 +136,7 @@
     }
     const parts = [["report", JSON.stringify(report)]];
     if (choice.details) {
-      parts.push(["details", JSON.stringify({
-        error: String(ctx.error || ""),
-        trace: String(ctx.trace || "").slice(-BR_TRACE_MAX),
-        settings: brSettings(env),
-      })]);
+      parts.push(["details", brDetails(ctx, env)]);
     }
     if (choice.save && choice.bytes && choice.bytes.byteLength) {
       parts.push(["save", new Blob([choice.bytes], {type: "application/octet-stream"}), "save.hsg"]);

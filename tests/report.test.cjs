@@ -16,7 +16,7 @@ const SOURCE = fs.readFileSync(path.join(__dirname, '..', 'web', 'report.js'), '
 
 function load() {
   const window = {};
-  vm.runInNewContext(SOURCE, {window, Blob, URL, JSON});
+  vm.runInNewContext(SOURCE, {window, Blob, URL, JSON, TextEncoder});
   return window.BigCopilotReport;
 }
 
@@ -149,6 +149,8 @@ test('report.js: the public error line is the class and the deepest frame, read 
     [{trace: pyTrace([['ba_dashboard.py', 9, '_premises']], ["KeyError: 'X\\' Alice \"Y\"'"])}, 'KeyError in _premises (ba_dashboard.py line 9)'],
     // No frame of our shape: the class alone.
     [{trace: pyTrace([['<exec>', 3, '<module>']], ['ImportError: no module named Alice'])}, 'ImportError'],
+    // A comprehension's own frame is named as Python names it.
+    [{trace: pyTrace([['ba_dashboard.py', 9, '_staffing'], ['ba_dashboard.py', 12, '<listcomp>']], ['KeyError: x'])}, 'KeyError in <listcomp> (ba_dashboard.py line 12)'],
     // A frame name longer than the Worker takes is left out.
     [{trace: pyTrace([['ba_dashboard.py', 9, 'f'.repeat(90)]], ['KeyError: x'])}, 'KeyError'],
     // The page's own script: only the error's name, never its stack, whose
@@ -184,6 +186,17 @@ test('report.js: a real Python failure on a save named like a class publishes on
   assert.match(got, WORKER_ERROR);
   assert.doesNotMatch(got, /Alice|Smith/);
   assert.match(got, /^BadGzipFile in \w+ \(gzip\.py line \d+\)$/, 'the cause, read from the first traceback block');
+});
+
+test('report.js: the details stay under the Worker\'s 256 KiB in bytes, whatever the script', () => {
+  const report = load();
+  const wide = '中'.repeat(100000);  // three bytes each in UTF-8
+  const ctx = {trace: `Traceback (most recent call last):\n  File "/ba_save.py", line 255, in body\nValueError: body tag in ${wide}\nTHE-END`, error: wide};
+  const details = byName(report.parts(ctx, {text: 'x', details: true}, env())).details;
+  assert.ok(Buffer.byteLength(details) <= 256 * 1024, `${Buffer.byteLength(details)} bytes`);
+  const parsed = JSON.parse(details);
+  assert.ok(parsed.trace.endsWith('THE-END'), 'the end of the traceback, where the error is, is kept');
+  assert.equal(parsed.error.length, 2000);
 });
 
 test('report.js: only an issue of this repository is linked', () => {

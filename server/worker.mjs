@@ -31,7 +31,7 @@ const REPORT_DETAILS_MAX = 256 * 1024;
 // deepest frame of its traceback, both read from before any message text
 // (web/report.js, brErrorLine()); never the message, which can carry anything
 // the save holds.
-const REPORT_ERROR = /^[A-Z]\w{0,79}(?: in (?:[A-Za-z_]\w{0,79}|<module>) \([A-Za-z_]\w{0,56}\.py line [0-9]{1,7}\))?$/;
+const REPORT_ERROR = /^[A-Z]\w{0,79}(?: in (?:[A-Za-z_]\w{0,79}|<(?:module|lambda|genexpr|listcomp|dictcomp|setcomp)>) \([A-Za-z_]\w{0,56}\.py line [0-9]{1,7}\))?$/;
 const REPORT_PARTS = ["report", "save", "details"];
 const REPORT_BROWSERS = { chrome: "Chrome", edge: "Edge", firefox: "Firefox", safari: "Safari", other: "Other" };
 const REPORT_SOURCES = { folder: "Save folder", file: "One save file", link: "Game link", none: "No save loaded" };
@@ -69,8 +69,9 @@ export default {
     }
   },
   async scheduled(_controller, env) {
-    // A bug report folder whose issue never opened goes within a day, whatever
-    // stopped the request (docs/community-features.md, "Bug reports").
+    // A bug report folder whose issue never opened goes at the next run that finds
+    // it over an hour old, so within two days, whatever stopped the request
+    // (docs/community-features.md, "Bug reports").
     // The two cleanups run side by side and each is awaited to its end, so one
     // failing never cuts the other short.
     const db = env.COMMUNITY_DB;
