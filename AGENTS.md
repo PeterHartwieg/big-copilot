@@ -7,9 +7,10 @@ Cloudflare Worker API adds the community features.
 
 ## Where changes go
 
-The board is three files: `ba_dashboard.py` (the Python), `template/board.html` (the page
+The board's main files are `ba_dashboard.py` (the Python), `template/board.html` (the page
 `render()` fills in: markup, CSS and the small head scripts) and `template/board.js` (the
-board script). Find each part by its anchor, never by line number — the files are long and
+board script), with Open a store arithmetic in `template/open-store-model.js`.
+Find each part by its anchor, never by line number — the files are long and
 the numbers drift.
 
 | Part | Anchor |
@@ -17,6 +18,7 @@ the numbers drift.
 | Extraction (save → numbers) | `def extract(` and the `_` helpers before `def render(`, in `ba_dashboard.py` |
 | The board's HTML and CSS | `template/board.html`, read on the first `render()` by `load_template()` |
 | The board script | `template/board.js`, which `load_template()` splices into `/*__BOARD_SCRIPT__*/`, the body of the page's last `<script>` block, before any other placeholder is filled. A branch from before the split that conflicts in `board.html` is resolved by `tools/split_board_script.py --resolve` (`docs/architecture.md`, "Template placeholders") |
+| Open a store calculations | `template/open-store-model.js`: an explicit-input calculation module, embedded before the board script by `load_template()` and imported directly by its arithmetic tests and `check_profit_model.py` |
 | Where `web/map.js` and `web/wiki.js` are spliced in | `/*__MAP_SCRIPT__*/`, `/*__WIKI_SCRIPT__*/` in `template/board.js` |
 | CLI, save catalogue and watch server | `def main(` and the functions around it, in `ba_dashboard.py` |
 
@@ -49,8 +51,9 @@ Everything else:
   (`make_item_prices.py`); the rules are in `docs/open-a-store-scope.md`
 - open a store (Expansion › Open a store: investment and break-even for a store not yet
   rented): the facts are `_open_store()` in `ba_dashboard.py` (the `openStore` payload key,
-  over `ba_store_rules.json` from `make_store_rules.py`); the model, the steps and the loan are
-  `drawOpenStore()` and the `os*` functions in the board script; step 2 is the finder's plan
+  over `ba_store_rules.json` from `make_store_rules.py`); the model and loan calculations are
+  in `template/open-store-model.js`; `drawOpenStore()` and the `os*` adapters in the board
+  script own the steps and UI state; step 2 is the finder's plan
   mode (`options.plan` in `web/map.js`); a Demand cell's popover is `demCellPop()`. The rules
   are in `docs/dashboard-reference.md`, "Open a store"; `check_profit_model.py` checks the
   model against the player's own shops on every save on the machine
@@ -137,6 +140,18 @@ side and running `--assemble`.
 `npm run check:worker` and `python build_web.py --check` on every pull request and push to main,
 each after `python build_web.py --assemble`.
 
+After dependency and browser setup, `npm run verify` runs that full gate locally through
+`tools/verify.mjs`: assembly, Python, Node (concurrency 2), optimized hosted-page tests,
+the Worker dry run and the freshness check. It needs no installed game, production
+credentials or clean working tree.
+`npm test` runs the assembled Node suite; `npm test -- tests/name.test.cjs` selects a suite
+(quote wildcard patterns for portability). `npm run test:optimized` checks the optimized
+hosted page and restores the raw assembly on success. `npm run test:python -- tests.test_name` runs
+an assembled Python subset. Both use the same stages as CI. `PYTHON` selects an executable;
+otherwise the runner tries `python3`, `python`, then `py`, resolves the executable and
+passes it to subprocesses. Prefer these commands over raw test commands when working
+across platforms. The table below names each change's required suites.
+
 The site under `web/` is assembled, not committed, so run `python build_web.py --assemble`
 before the tests below and again after each change you test: about twenty suites read or
 serve the built page (`web/index.html`, `web/version.json`, `web/i18n/`), and a missing or
@@ -146,6 +161,8 @@ stale one fails them.
 | --- | --- |
 | `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`. Premises extraction is `tests/test_premises.py`. `tests/test_payload_snapshot.py` compares whole `extract()` payloads with `tests/fixtures/payload_snapshot/`; after an intended change regenerate them with `python tests/test_payload_snapshot.py --update` and review the diff. A change meant to leave the payload alone also runs `python tools/payload_diff.py dump research/<name>` on main and on the branch and `compare`s the two (owner only: it reads every save on the machine) |
 | `template/board.html` or `template/board.js` (the board's markup, CSS or script) | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs` |
+| `template/open-store-model.js` (Open a store arithmetic) | `npm run verify`; its direct arithmetic tests are `tests/open_store_model.test.cjs`, and its board integration uses `tests/open_store.test.cjs` and `tests/finder_plan.test.cjs`. Compare `python check_profit_model.py <save-root>` before and after locally when owner saves are available; never commit its private outputs |
+| `tools/verify.mjs`, npm verification scripts or the CI stage wiring | `npm test -- tests/verify.test.cjs`, then `npm run verify` |
 | `web/app.js`, `web/worker.js`, `web/update.js` | `node --test tests/*.test.cjs` |
 | `build_web.py` `BANNER` or `BEFORE_SCRIPT` (landing screen, news strip) | `python build_web.py --assemble` first, since the Node tests and `tests.test_privacy_promises` read the built page; then `node --test tests/news.test.cjs tests/release.test.cjs tests/update.test.cjs` and `python -m unittest tests.test_privacy_promises tests.test_footer` |
 | `web/changelog.json` | `python build_web.py --assemble`, then `python -m unittest tests.test_release_latest`: the file is a build stamp input |
@@ -201,6 +218,8 @@ and never attach one to an issue.
   global scope from the head (its names start `tt`/`TT_`). `tests/global_names.test.cjs`
   fails on a column-0 name declared twice across them, `template/board.html`'s inline
   scripts and the site's scripts.
+  `template/open-store-model.js` is embedded ahead of the board and exposes only the
+  `OpenStoreModel` namespace; keep its arithmetic independent of board globals and the DOM.
 - `section{content-visibility:auto}` clips absolutely positioned children, so a popover
   rendered inside a section is cut off. Hang it off `<body>` with `position:fixed` and
   place it against its anchor, the way `#tip` and `#alertPop` do. The
@@ -211,7 +230,8 @@ and never attach one to an issue.
   regex, or loading the whole board script into a VM through `loadBoard()` in
   `tests/_board.cjs`. When you change a comment or declaration in a source file, update the
   tests that read it: `rg -l "board\.js|_board\.cjs" tests` lists them (put the file's name in the
-  pattern: `board\.html`, `app\.js`, `map\.js`, `worker\.js`, `ba_dashboard\.py`); `check_profit_model.py` slices `board.js` too. A reworded
+  pattern: `board\.html`, `app\.js`, `map\.js`, `worker\.js`, `ba_dashboard\.py`). `check_profit_model.py`
+  imports `template/open-store-model.js` directly. A reworded
   `_slice.cjs` anchor fails loudly; a bare `indexOf` can slice the wrong span.
 - Text on the page goes through a key, one per sentence (`docs/architecture.md`, "UI
   text"). A `Msg` that is concatenated or `.replace()`d becomes a plain `str` and stays
@@ -230,7 +250,7 @@ and never attach one to an issue.
   `PY_CODE` and `PY_DATA` in `build_web.py`; the worker names each one itself, and
   `tests/test_web_fresh.py` fails when the two disagree. Read a file lazily, inside a function, as
   `load_buildings()`, `load_demand_curves()` and `load_template()` (through `render()`) do.
-  `template/board.html` and `template/board.js` are not among the fetched files: the worker
+  `template/board.html`, `template/board.js` and `template/open-store-model.js` are not among the fetched files: the worker
   never renders.
 
 ## Where to read more

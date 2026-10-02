@@ -2,8 +2,8 @@
 // model on a one-product type with flat curves, the borrowing limit with each
 // of its limits binding, the day the owner's cash is back with a loan, what a
 // new seller takes from the player's own shops, and how plans are started.
-// The board's own code runs in a VM: the whole board script, through
-// loadBoard() (tests/_board.cjs), with D and the device's storage set.
+// Arithmetic imports the feature module directly. Plan and chart integration
+// checks below still use the board VM through loadBoard().
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {enRe} = require('./_i18n.cjs');
@@ -12,7 +12,7 @@ const {loadBoard} = require('./_board.cjs');
 
 /* The board, its D the facts given. Its functions are properties of the
    context; D (a `let`) is read through the getter below. */
-function model(facts, extra = {}){
+function boardModel(facts, extra = {}){
   const store = new Map();
   const D = {openStore: facts, meta: {day: 40, character: 'c1'}, businesses: [], ...extra};
   const board = loadBoard({__D: D,
@@ -21,6 +21,15 @@ function model(facts, extra = {}){
   Object.defineProperty(board, 'D', {get: () => vm.runInContext('D', board)});
   return board;
 }
+const OpenStoreModel = require('../template/open-store-model.js');
+
+/* Arithmetic runs directly in Node, without board/DOM/storage globals. */
+function model(facts, extra = {}){
+  const company = {day: 40, businesses: [], ...extra};
+  const core = OpenStoreModel.create({facts, company});
+  return {company, ...Object.fromEntries(Object.entries(core).map(([name, fn]) => ['os' + name[0].toUpperCase() + name.slice(1), fn]))};
+}
+
 const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs ${b}`);
 
 /* One product, flat curves, one open hour a week. */
@@ -124,7 +133,7 @@ test('what a new seller takes from the player\'s shops nearby, secondary product
 });
 
 test('a plan for the same type and neighbourhood is taken up again; a full list never drops a planned building', () => {
-  const ctx = model(RETAIL);
+  const ctx = boardModel(RETAIL);
   vm.runInContext('osLoad()', ctx);
   const first = ctx.osNew('T', 'H');
   assert.equal(ctx.osNew('T', 'H').id, first.id, 'no second plan for the same question');
@@ -148,7 +157,7 @@ test('the first days: the ramp on the gross margin, fixed costs whole, and break
   // 2,000 is covered on day 6 (130 + 352 + 364 + 382 + 394 + 400 = 2,022), not day 5 as 2,000 / 400 would say.
   const day = k => ctx.osDayProfit(m, null, k);
   assert.equal(ctx.osBreakDay(2000, day), 6);
-  assert.equal(vm.runInContext('osDays(2000, 400)', ctx), 5);
+  assert.equal(ctx.osDays(2000, 400), 5);
   assert.equal(ctx.osBreakDay(1e9, k => ctx.osDayProfit({...m, profit: -1, revenue: 100}, null, k)), null);
 });
 
@@ -162,9 +171,9 @@ test('the first seller in a neighbourhood gets +20 demand on the product for its
   const ctx = model(facts);
   // Day 40: P was last sold on day 0 (21 days ago or more), R on day 30.
   assert.equal(JSON.stringify(ctx.osHyped('T', 'H')), JSON.stringify(['P']));
-  ctx.D.meta.day = 51;
+  ctx.company.day = 51;
   assert.equal(JSON.stringify(ctx.osHyped('T', 'H')), JSON.stringify(['P', 'R']), '21 days after its last sale R hypes too');
-  ctx.D.meta.day = 40;
+  ctx.company.day = 40;
   const plain = ctx.osModel('T', SHOP, {sat: 50, open: HOUR});
   const hyped = ctx.osModel('T', SHOP, {sat: 50, open: HOUR, hype: ['P']});
   assert.equal(hyped.lines[0].demand, Math.min(100, plain.lines[0].demand + 20));
@@ -180,7 +189,7 @@ test('the first seller in a neighbourhood gets +20 demand on the product for its
 test('a cinema or a theatre shows its investment and no estimate', () => {
   const facts = JSON.parse(JSON.stringify(RETAIL));
   facts.types.C = {cat: 'cinema', model: null, products: [], layouts: {S: {lines: [], furniture: 1000, fee: 500}}};
-  const ctx = model(facts);
+  const ctx = boardModel(facts);
   // premises() is map.js's, which loadBoard() does not load: the test hands one over.
   ctx.premises = () => ({buildings: [{key: 'c', hood: 'H', size: 'S', layout: null, deposit: 100, m2: 900, cap: [100, 150]}]});
   const est = vm.runInContext('osEstimate({type: "C", key: "c", mode: "firm"}, osBuilding("c"))', ctx);
@@ -189,7 +198,7 @@ test('a cinema or a theatre shows its investment and no estimate', () => {
 });
 
 test('a store that pays back in a day or two keeps its two investment labels on opposite edges', () => {
-  const ctx = model(RETAIL);
+  const ctx = boardModel(RETAIL);
   const m = {revenue: 12000, cogs: 2000, wages: 500, rent: 200, marketing: 300, profit: 9000};
   const est = {profit: m.profit, inv: {firm: 12000, self: 10000}, day: k => ctx.osDayProfit(m, null, k)};
   const svg = vm.runInContext('osChart', ctx)(est, 'firm');
@@ -197,4 +206,63 @@ test('a store that pays back in a day or two keeps its two investment labels on 
   const w = label('w'), i = label('i');
   assert.ok(w && i, 'both labels drawn');
   assert.notEqual(/text-anchor="end"/.test(w), /text-anchor="end"/.test(i), `${w} ${i}`);
+});
+
+test('investment uses layout, decoration and deterministic vendor order without board state', () => {
+  const facts = JSON.parse(JSON.stringify(RETAIL));
+  facts.game.delivery = 100;
+  facts.hoods.H.interior = 50;
+  facts.decor = {C1: {'50': {cost: 200}}};
+  facts.types.T.layouts.C1 = {furniture: 1000, fee: 500, lines: [['A', 2], ['B', 1], ['C', 3]]};
+  facts.items = {A: {v: ['z', 'a']}, B: {v: ['z', 'a']}, C: {v: ['c']}};
+  const api = OpenStoreModel.create({facts});
+  assert.deepEqual(api.stores(facts.types.T.layouts.C1), [{key: 'a', lines: [0, 1]}, {key: 'c', lines: [2]}]);
+  assert.deepEqual(api.investment({type: 'T'}, {...SHOP, deposit: 50}),
+    {furniture: 1000, fee: 500, deposit: 50, stores: 2, delivery: 200, decor: 200, firm: 1550, self: 1450, items: 6});
+  assert.equal(api.investment({type: 'missing'}, SHOP), null);
+  assert.equal(api.model('missing', SHOP), null);
+});
+
+test('office billing, staffed-hour wages and own-shop calibration use explicit inputs', () => {
+  const facts = JSON.parse(JSON.stringify(RETAIL));
+  facts.types.T.model = 'office';
+  facts.types.T.wage = 20;
+  const company = {businesses: [{key: SHOP.key, rent: 50}], day: 40};
+  const api = OpenStoreModel.create({facts, company});
+  const options = {promoTotal: 20, sat: 50, open: HOUR, existing: true, computers: 20};
+  const before = JSON.stringify({facts, company, options});
+  const m = api.model('T', SHOP, options);
+  // One weekend daytime hour staffs half the computers: 10, all billed.
+  close(m.customers, 10 / 7, 'clients');
+  close(m.revenue, 10 / 7 * 15, 'fees');
+  const skill = 1 + Math.pow(1.05, 100) / 100;
+  close(m.wages, (10 * 20 + 12) * skill * 0.7 / 7, 'staffed hours and cleaning');
+  assert.equal(JSON.stringify({facts, company, options}), before, 'calculation leaves inputs intact');
+  facts.own = {T: [{...SHOP, promo: 20, marketing: 0, open: HOUR, sat: 50, actual: 1, k: [0, 1]}]};
+  // Use positive daily profit for the ratio; the company's rent remains explicit.
+  facts.market.P.p = 1000;
+  const expected = api.model('T', SHOP, {...options, computers: undefined});
+  const ramped = (api.dayProfit(expected, null, 0) + api.dayProfit(expected, null, 1)) / 2;
+  const ratio = api.ownRatio('T');
+  close(ratio.rows[0].model, ramped, 'opening days included');
+  close(ratio.ratio, 1 / ramped, 'actual divided by predicted');
+  const other = OpenStoreModel.create({facts: {...facts, market: {...facts.market, P: {...facts.market.P, p: 2000}}}, company});
+  assert.ok(other.model('T', SHOP, options).revenue > api.model('T', SHOP, options).revenue, 'factories do not share a facts cache');
+});
+
+
+test('an estimate captures the calculation core once for its repeated day callback', () => {
+  const facts = JSON.parse(JSON.stringify(RETAIL));
+  facts.types.T.layouts.C1 = {furniture: 100, fee: 50, lines: []};
+  const ctx = boardModel(facts);
+  vm.runInContext(`
+    const originalCreate = OpenStoreModel.create;
+    let modelCreates = 0;
+    OpenStoreModel.create = inputs => { modelCreates++; return originalCreate(inputs); };
+  `, ctx);
+  const estimate = ctx.osEstimate({type: 'T'}, SHOP);
+  const before = vm.runInContext('modelCreates', ctx);
+  assert.ok(estimate.day);
+  for(let k = 0; k < 20000; k++) estimate.day(k);
+  assert.equal(vm.runInContext('modelCreates', ctx), before, 'simulated days reuse the bound API');
 });

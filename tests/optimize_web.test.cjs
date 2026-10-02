@@ -67,3 +67,24 @@ test('a later script compilation failure leaves the deployment artifact intact',
   assert.throws(() => optimizeWeb(root));
   assert.equal(fs.readFileSync(file, 'utf8'), invalid);
 });
+
+test('optimizer CLI finds esbuild through NODE_PATH without local node_modules', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'optimize with spaces '));
+  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+  fs.mkdirSync(path.join(root, 'tools'));
+  fs.mkdirSync(path.join(root, 'web'));
+  fs.copyFileSync(path.join(__dirname, '../tools/optimize_web.mjs'), path.join(root, 'tools', 'optimize_web.mjs'));
+  const shared = path.join(root, 'shared dependencies');
+  fs.mkdirSync(shared);
+  fs.symlinkSync(path.dirname(require.resolve('esbuild/package.json')), path.join(shared, 'esbuild'), process.platform === 'win32' ? 'junction' : 'dir');
+  const file = path.join(root, 'web', 'index.html');
+  const input = '<script>globalThis.answer = 1 + 2;</script>';
+  fs.writeFileSync(file, input);
+  const result = spawnSync(process.execPath, [path.join(root, 'tools', 'optimize_web.mjs')], {
+    encoding: 'utf8', env: {...process.env, NODE_PATH: shared},
+  });
+  assert.equal(result.status, 0, result.error?.message || result.stderr);
+  assert.equal(fs.readFileSync(file, 'utf8'), optimizePage(input));
+  assert.match(result.stdout, /optimized web\/index.html/);
+  assert.equal(fs.existsSync(path.join(root, 'node_modules')), false);
+});

@@ -643,10 +643,12 @@ class ProvenanceTests(FixtureCase):
         a_streaming = os.path.join(self._tmp.name, "A", "Big Ambitions_Data", "StreamingAssets")
         via = os.path.join(self.link_dir(os.path.join(a_streaming, "locale"), b_locale), "en.json")
         self.assertTrue(os.path.isfile(via))
-        b_data = os.path.dirname(os.path.dirname(b_locale))
+        b_data = os.path.realpath(os.path.dirname(os.path.dirname(b_locale)))
         self.assertEqual(extract_wiki.game_data_dir(via), b_data)
 
     def test_a_ba_locale_inside_an_install_resolves(self):
+        # macOS may expose the temp root through the /var -> /private/var alias.
+        self.game = os.path.realpath(self.game)
         with mock.patch.dict(os.environ, {"BA_LOCALE": self.locale_path()}, clear=True):
             paths = extract_wiki.default_paths(None)
         self.assertEqual(paths, extract_wiki.default_paths(self.game))

@@ -40,6 +40,7 @@ function inlineScripts(rel){
 const SOURCES = [
   {name: 'web/i18n.js', text: read('web/i18n.js')},
   ...inlineScripts('template/board.html'),
+  {name: 'template/open-store-model.js', text: read('template/open-store-model.js')},
   {name: 'template/board.js', text: read('template/board.js')},
   {name: 'web/map.js', text: read('web/map.js')},
   {name: 'web/wiki.js', text: read('web/wiki.js')},

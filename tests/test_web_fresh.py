@@ -31,7 +31,7 @@ CHECK_INPUTS = tuple(dict.fromkeys(
 # modules build_web imports, and the web/ assets render() embeds in the page.
 CLI_INPUTS = tuple(dict.fromkeys(
     CHECK_INPUTS
-    + ("ba_save.py", "ba_dashboard.py", "template/board.html", "template/board.js", "web/changelog.json", "web/map.js", "web/map.css",
+    + ("ba_save.py", "ba_dashboard.py", "template/board.html", "template/board.js", "template/open-store-model.js", "web/changelog.json", "web/map.js", "web/map.css",
        "web/wiki.js", "web/wiki.css", "web/wiki-data.json", "web/sitemap.xml", "web/robots.txt")
 ))
 # The translations under i18n/ are the source of web/i18n/, which --check rebuilds.
@@ -165,9 +165,9 @@ class WebFresh(unittest.TestCase):
             self.assertIn("stale: web/py/ba_dashboard.py", stale.stdout)
 
     def test_command_line_reports_an_edited_template(self):
-        # render() reads the board from template/board.html and board.js, so an
-        # edit to either changes the page and, through STAMP_INPUTS, the stamp.
-        for name, before in (("board.html", b"<title>"), ("board.js", b"let D = ")):
+        # render() reads the board markup, script and calculation core, so an
+        # edit to any changes the page and, through STAMP_INPUTS, the stamp.
+        for name, before in (("board.html", b"<title>"), ("board.js", b"let D = "), ("open-store-model.js", b"const OpenStoreModel = ")):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
                 standalone(tmp)
                 board = Path(tmp, "template", name)

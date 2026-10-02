@@ -26,6 +26,16 @@ class RenderPayload(unittest.TestCase):
         self.assertNotIn("<", safe)
         self.assertEqual(json.loads(safe), {"name": NAME})
 
+    def test_standalone_and_browser_render_embed_the_same_calculation_source(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "template", "open-store-model.js"), encoding="utf-8") as fh:
+            core = fh.read()
+        for live in (False, True):
+            with self.subTest(live=live):
+                page = ba_dashboard.render(None, live=live)
+                self.assertEqual(page.count(core), 1)
+                self.assertLess(page.index(core), page.index("let D = "))
+
     def test_a_name_reaches_the_board_whole(self):
         data = {"meta": {"save": "Plain Co"}, "businesses": [{"name": NAME}]}
         page = ba_dashboard.render(data, live=True)

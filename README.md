@@ -220,6 +220,14 @@ Contributions are welcome: fixes, features, docs and tests.
 - AI-written code is welcome: run code review agents, address their findings
   and check the result yourself. Summarize the review in your PR.
 
+For development, install Python 3 and Node.js 24, run `npm ci` and
+`npx playwright install chromium`, then `npm run verify` for the complete CI gate.
+`npm test -- tests/map.test.cjs` runs a focused Node suite after assembly
+(filenames/patterns only, without raw Node test flags);
+`npm run test:python -- tests.test_premises` runs a focused Python suite.
+`npm run test:optimized` checks the optimized hosted page and restores readable
+assembly on success.
+
 See the [contribution guide](docs/contributing.md) for build instructions, tests
 and the source-file map.
 

@@ -7,7 +7,11 @@
 The board script is the body of the last <script> block of template/board.html.
 Splitting writes that body, unchanged, to template/board.js and leaves the line
 /*__BOARD_SCRIPT__*/ in its place; ba_dashboard.load_template() splices it back
-before render() fills any other placeholder, so the page is the same string.
+before render() fills any other placeholder. This is a historical two-file migration
+helper. The current renderer also prepends open-store-model.js: split refuses
+assembled multi-file scripts and join refuses board.js with that dependency.
+Use the renderer to assemble a current page; --resolve still handles older
+inline branches against the slotted page without joining either side.
 
 A branch that edited board.html while the script was still inline conflicts
 with main in template/board.html when the two meet, by merge or by rebase
@@ -87,6 +91,8 @@ def split(page: str) -> tuple[str, str] | None:
         raise SystemExit(f"{PAGE_PATH} carries the slot and an inline script: resolve by hand")
     if SIGNATURE not in body:
         raise SystemExit(f"{PAGE_PATH}: the last <script> block is not the board script ({SIGNATURE!r} missing)")
+    if re.search(r"\bOpenStoreModel\b", body):
+        raise SystemExit(f"{PAGE_PATH}: multi-file calculation script; use load_template(), nothing written")
     if not body.endswith(nl):
         raise SystemExit(f"{PAGE_PATH}: </script> of the board script is not on a line of its own")
     new_page = page[:start + len(nl)] + slot + page[end:]
@@ -100,6 +106,8 @@ def join(page: str, script: str) -> str:
     """board.html with board.js back inline, in the page's line endings."""
     refuse_conflicts(page, PAGE_PATH)
     refuse_conflicts(script, SCRIPT_PATH)
+    if re.search(r"\bOpenStoreModel\b", script):
+        raise SystemExit(f"{SCRIPT_PATH}: depends on open-store-model.js; use load_template(), nothing written")
     nl = "\r\n" if "\r\n" in page else "\n"
     try:
         joined = splice_board_script(page.replace("\r\n", "\n"), script.replace("\r\n", "\n"))

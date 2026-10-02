@@ -102,3 +102,30 @@ Monitor Worker requests and D1 rows read/written after release; total unique vis
 alone cannot establish daily backend consumption. Community failures should show
 an unavailable count or a retryable voting message while the save dashboard keeps
 working.
+
+## Failure diagnostics
+
+Handled request failures emit one structured console error with only three fields:
+`event: "community_api_failure"`, `operation`, and `category`. Operations are
+`presence`, `vote`, or `features`; `request` is the fallback when a failure occurs
+before a community route is selected. These tags come from application constants.
+
+Categories identify the boundary that failed:
+
+- `configuration`: a required D1 binding, rate limiter, or IP secret is absent.
+- `limiter`: the rate-limit binding call failed. A normal denied request is quiet.
+- `database`: D1 statement preparation, binding, or batch execution failed.
+- `unexpected`: a failure outside those boundaries, including response processing.
+
+Start with the category when checking deployment configuration or service health.
+The event deliberately contains no exception message or stack, SQL, URL, query,
+IP, browser ID, voter hash, request body, headers, or secret. Clients still receive
+the same generic 503 response. Successful requests and ordinary validation or
+rate-limit responses emit no event; best-effort cache failures remain quiet and
+fall back to D1. Scheduled cleanup is outside this request diagnostic. Invocation
+logging and tracing remain disabled, and no telemetry service is added.
+
+At release validation, inspect a stored failure event's platform metadata as well
+as these application fields. Confirm that the deployed logging configuration still
+honors the documented absence of request access logs; local tests cover the event
+body and configuration, not Cloudflare's stored metadata.

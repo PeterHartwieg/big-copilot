@@ -536,6 +536,7 @@ STAMP_INPUTS = (
     # The board's markup and CSS, and its script, which render() reads (ba_dashboard.load_template()).
     "template/board.html",
     "template/board.js",
+    "template/open-store-model.js",
     # The deployment transform and its pinned compiler affect the served page.
     # stamp() selects only esbuild's lock entry, not unrelated dev dependencies.
     "tools/optimize_web.mjs", "package-lock.json",
