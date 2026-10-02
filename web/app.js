@@ -369,7 +369,7 @@
           if (msg.stale || msg.gone) throw failure(() => tt("app.reader.section.gone", "The reader could not read the save again: Update to try once more"));
           const got = JSON.parse(msg.data);
           if (!got || typeof got.sections !== "object" || !got.sections) throw failure(() => tt("app.reader.invalid.bare", "Invalid reader response"));
-          if (sectionFailure && sectionFailure.gen === p.boardGen && sectionFailure.name === p.name) sectionFailure = null;
+          if (sectionFailure && sectionFailure.gen === p.boardGen && sectionFailure.name in got.sections) sectionFailure = null;  // it works now
           p.resolve(got);
           return;
         }
