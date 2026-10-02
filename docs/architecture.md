@@ -1049,7 +1049,7 @@ them, and a missing row often fails quietly: a finding that goes nowhere when cl
 view search cannot find. Each checklist below names the anchor to grep, what goes in it,
 and the test that covers the table ("none" means no test reads it). A few tables are held
 to each other or to this document, so a missing row fails with its name: the finding-kind
-tables (`tests/alert_kinds.test.cjs`), the view tables (`tests/navigation.test.cjs`), and
+record (`tests/alert_kinds.test.cjs`), the view tables (`tests/navigation.test.cjs`), and
 the payload table, the private build tokens, the finding groups, and the
 `Registry: "<heading>"` comment each table named in the two checklists below carries
 above its declaration (`tests/test_doc_registries.py`). The other covering tests check the entries that exist
@@ -1184,6 +1184,9 @@ Everything else it fetches is same-origin, from `web/py/`, carrying the page's b
 Because every one of those files is a stamp input, `web/_headers` caches `/py/*` as
 immutable and the worker fetches with the browser's default cache (`no-store` only for
 the unstamped `dev` build):
+
+`build_web.py` names them once, as `PY_CODE` and `PY_DATA`, and `tests/test_web_fresh.py`
+fails when the worker's fetches differ from those lists:
 
 - `ba_save.py` and `ba_dashboard.py` — a failed fetch throws and the worker never becomes
   ready.

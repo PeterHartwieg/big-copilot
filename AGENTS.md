@@ -34,7 +34,7 @@ Everything else:
 - update banner: `web/update.js`
 - map: `web/map.js`, `web/map.css`, with assets from `export_map.py`
 - wiki pipeline: the `.py` files directly in `tools/` (not `tools/game_update/`,
-  `tools/game_link_mock.py`, `tools/split_board_script.py` or `tools/payload_diff.py`), with the authored wording in `tools/wiki_sample.json` and the
+  `tools/game_link_mock.py`, `tools/split_board_script.py`, `tools/payload_diff.py` or `tools/i18n.py`), with the authored wording in `tools/wiki_sample.json` and the
   hand-written articles in `tools/wiki_topics.json`. `tools/` also holds the GLM launcher,
   `tools/Invoke-ZaiClaude.ps1`, and the deploy script, `tools/deploy.mjs`; neither is anything to do with the wiki
 - static wiki pages for search engines (`/wiki/...`, the sitemap, robots.txt):
@@ -149,15 +149,15 @@ stale one fails them.
 | `web/app.js`, `web/worker.js`, `web/update.js` | `node --test tests/*.test.cjs` |
 | `build_web.py` `BANNER` or `BEFORE_SCRIPT` (landing screen, news strip) | `python build_web.py --assemble` first, since the Node tests and `tests.test_privacy_promises` read the built page; then `node --test tests/news.test.cjs tests/release.test.cjs tests/update.test.cjs` and `python -m unittest tests.test_privacy_promises tests.test_footer` |
 | `web/changelog.json` | `python build_web.py --assemble`, then `python -m unittest tests.test_release_latest`: the file is a build stamp input |
-| A new finding kind, view, payload key, finder filter, footer link or news item | the matching checklist in the Registries section of `docs/architecture.md`, and the tests it names. `python -m unittest tests.test_doc_registries` holds the doc's payload table and private build tokens, and the finding groups, to the code; `node --test tests/alert_kinds.test.cjs tests/navigation.test.cjs` holds the finding-kind and view tables to each other |
-| `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs tests/finder_plan.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`. The finder lives in `web/map.js`; `tests/finder.test.cjs` also covers `drawFindLocation` in `template/board.js`, and `finderPreset`, through a Growth › Demand cell opening the finder |
-| `tools/*.py` (the wiki pipeline, not `tools/game_update/`, `tools/game_link_mock.py`, `tools/split_board_script.py` or `tools/payload_diff.py`), `tools/wiki_sample.json`, `tools/wiki_topics.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` (the hand-written articles are `tests/test_wiki_build.py`) and `node --test tests/wiki*.test.cjs`, then `python build_web.py` with the installed game, which rebuilds `web/wiki-data.json` (an edit to `tools/wiki_topics.json` alone needs only `--assemble`) |
+| A new finding kind, view, payload key, finder filter, footer link or news item | the matching checklist in the Registries section of `docs/architecture.md`, and the tests it names. `python -m unittest tests.test_doc_registries` holds the doc's payload table and private build tokens, and the finding groups, to the code; `node --test tests/alert_kinds.test.cjs tests/navigation.test.cjs` checks each `FINDING_KINDS` record and holds the view tables to each other |
+| `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs tests/finder_plan.test.cjs tests/global_names.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`. The finder lives in `web/map.js`; `tests/finder.test.cjs` also covers `drawFindLocation` in `template/board.js`, and `finderPreset`, through a Growth › Demand cell opening the finder |
+| `tools/*.py` (the wiki pipeline, not `tools/game_update/`, `tools/game_link_mock.py`, `tools/split_board_script.py`, `tools/payload_diff.py` or `tools/i18n.py`), `tools/wiki_sample.json`, `tools/wiki_topics.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` (the hand-written articles are `tests/test_wiki_build.py`) and `node --test tests/wiki*.test.cjs tests/global_names.test.cjs`, then `python build_web.py` with the installed game, which rebuilds `web/wiki-data.json` (an edit to `tools/wiki_topics.json` alone needs only `--assemble`) |
 | `server/`, `migrations/` | `npm run test:community` and `npm run check:worker` |
 | `web/community.js`, `web/community.css` | those two npm commands, after `python build_web.py --assemble` — both files are cache-busted by the build stamp |
 | `make_buildings.py`, `make_floor_plans.py` or what they write | `python -m unittest tests.test_floor_plans tests.test_premises`, then `python build_web.py` with the installed game: `ba_buildings.json` feeds `web/wiki-data.json` |
 | `_open_store()` and its helpers, `ba_store_rules.json`, or the board's `os*` functions (Open a store) | `python -m unittest tests.test_open_store` and `node --test tests/open_store.test.cjs tests/finder_plan.test.cjs`; after a change to the profit model, `python check_profit_model.py` and compare its numbers with `docs/dashboard-reference.md`, "Open a store" |
 | `make_item_prices.py`, `ba_item_prices.json`, or the payback figures (`_payback()`, the Payback column, `spPayback()`) | `python -m unittest tests.test_payback` and `node --test tests/payback.test.cjs` |
-| Added or changed UI text (`tt()`, `data-tt*`, `msg()`), `web/i18n.js`, `tools/i18n.py`, `i18n/` | `python -m unittest discover -s tests -p "test_i18n*.py"` and `node --test tests/i18n_*.test.cjs`, plus the rows for the files the text is in |
+| Added or changed UI text (`tt()`, `data-tt*`, `msg()`), `web/i18n.js`, `tools/i18n.py`, `i18n/` | `python -m unittest discover -s tests -p "test_i18n*.py"` and `node --test tests/i18n_*.test.cjs tests/global_names.test.cjs`, plus the rows for the files the text is in |
 | `tools/Invoke-ZaiClaude.ps1` | `python -m unittest tests.test_agent_cli` |
 | `tools/split_board_script.py`, or the splice in `load_template()` | `python -m unittest tests.test_split_board_script` |
 | `tools/game_update/` | no tests: run the script you changed against the installed game (`docs/game-update.md`) |
@@ -195,9 +195,12 @@ and never attach one to an issue.
 - CSS classes are global across every page of the board, so give a new class a feature
   prefix or scope it under its page's root class. `.site` and `.chip` have collided before.
 - `web/map.js` and `web/wiki.js` are spliced into the board script (`template/board.js`) and
-  run in its global scope, reusing its helpers (`attr`, `icon`, `wireTips`, `ICON`, `shortName`). A new top-level
+  run in its global scope, reusing its helpers (`attr`, `icon`, `wireTips`, `ICON`, `shortName`,
+  `ssEsc`, `spEsc`, `hrNum`). A new top-level
   name must be unique across all three files, and `web/i18n.js`, which runs in the same
-  global scope from the head (its names start `tt`/`TT_`).
+  global scope from the head (its names start `tt`/`TT_`). `tests/global_names.test.cjs`
+  fails on a column-0 name declared twice across them, `template/board.html`'s inline
+  scripts and the site's scripts.
 - `section{content-visibility:auto}` clips absolutely positioned children, so a popover
   rendered inside a section is cut off. Hang it off `<body>` with `position:fixed` and
   place it against its anchor, the way `#tip` and `#alertPop` do. The
