@@ -524,12 +524,21 @@ test('clicking the ball swallows the masthead balls',async()=>{
     await page.waitForSelector('.orb.live');
     assert.equal(await page.evaluate(()=>typeof window.__consumeBalls),'function','the shelf offers its balls');
     // The masthead ball finishes its entrance first; the hook refuses while it
-    // is busy. The entrance's last frame puts every ball at full size exactly
-    // where it rests (scale alone rounds to 1 a few frames early).
+    // is busy. Wait for every ball at full size where it rests (scale alone
+    // rounds to 1 a few frames early).
     await page.waitForFunction(()=>{
       const orbs=[...document.querySelectorAll('.orb')];
       return orbs.length>0&&orbs.every(o=>/^translate\(-?0px, -?0px\) scale\(1\)$/.test(o.style.transform));
     },null,{polling:50});
+    // That pose is not the end yet: the frame before the last, under 1 ms short,
+    // already rounds to it, and busy clears only in the last. Its step asked for
+    // one more frame before this call asks for one, so it runs first in any
+    // frame stamped past now plus that 1 ms, and then the entrance is over.
+    await page.evaluate(()=>new Promise(done=>{
+      const seen=performance.now();
+      const frame=t=>t>seen+1?done():requestAnimationFrame(frame);
+      requestAnimationFrame(frame);
+    }));
     const before=await page.evaluate(()=>document.querySelector('#cityMapPage .layer .ball').getBoundingClientRect().width);
     await page.evaluate(()=>document.querySelector('#cityMapPage .layer .ball').click());
     await page.waitForFunction(()=>document.querySelectorAll('.orb').length===0,null,{timeout:2500});
