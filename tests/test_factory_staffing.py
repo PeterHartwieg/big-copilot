@@ -485,7 +485,32 @@ class FewestCoveringTests(unittest.TestCase):
             for first in range(length):
                 pattern = "F" * first + "T" * (length - first)
                 with self.subTest(low=low, pattern=pattern):
-                    self.assertEqual(self.search(low, pattern)[0], self.first_covering(low, pattern))
+                    count, asked = self.search(low, pattern)
+                    self.assertEqual(count, self.first_covering(low, pattern))
+                    self.assertEqual(len(asked), len(set(asked)))
+                    high = low + length - 1
+                    self.assertEqual(high in asked, count == high)
+
+    def test_every_short_pattern_answers_a_covering_count_or_the_last(self):
+        for low in (0, 1, 5):
+            for length in range(1, 9):
+                for bits in range(2 ** length):
+                    pattern = "".join("T" if bits >> i & 1 else "F" for i in range(length))
+                    with self.subTest(low=low, pattern=pattern):
+                        count, asked = self.search(low, pattern)
+                        high = low + length - 1
+                        self.assertTrue(count == high or pattern[count - low] == "T")
+                        self.assertEqual(high in asked, count == high)
+                        self.assertEqual(len(asked), len(set(asked)))
+
+    def test_the_hiring_count_is_not_the_answer_when_a_count_below_covers(self):
+        # The doubling strides step past 2 and every count after up to the
+        # last fails: the walk down still finds 2.
+        for pattern in ("FFTFF", "FFTFT"):
+            with self.subTest(pattern=pattern):
+                count, asked = self.search(0, pattern)
+                self.assertEqual(count, 2)
+                self.assertNotIn(4, asked)
 
     def test_a_dip_above_the_fewest_is_walked_past(self):
         # The player's warehouse: 55 and 56 cover, 57 does not, 58 on do again.

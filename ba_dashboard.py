@@ -12017,8 +12017,12 @@ def _fewest_covering(place, low: int, high: int) -> dict:
     first that covered, then down one at a time until STEP_DOWN_MISSES counts
     in a row leave a shift open, keeping the lowest that covered. The walk
     down is what finds the fewest when the halving lands just above a count
-    that does not cover. Counts below `high` never hire; with none of them
-    covering, the week is `high`'s, the one count that may.
+    that does not cover, and it starts below `high` when nothing short of it
+    covered on the way up. Counts below `high` never hire; with none of them
+    found covering, the week is `high`'s, the one count that may. Where
+    coverage rises with the count this is the fewest, as trying every count
+    was; a covering count below STEP_DOWN_MISSES failing ones in a row is
+    not found, and the answer is the count above them.
     """
     weeks = {}
 
@@ -12033,7 +12037,8 @@ def _fewest_covering(place, low: int, high: int) -> dict:
             best = count
             break
         missed, count, stride = count, min(high, count + stride), stride * 2
-    # `high` is never asked here: it is the hiring count, not one more of the pool.
+    # Neither the halving nor the walk down asks `high`: it is the hiring
+    # count, not one more of the pool.
     top = high if best is None else best
     while top - missed > 1:
         middle = (missed + top) // 2
@@ -12041,16 +12046,16 @@ def _fewest_covering(place, low: int, high: int) -> dict:
             top = best = middle
         else:
             missed = middle
-    if best is None:
-        covers(high)
-        return weeks[high]
-    count, misses = best - 1, 0
+    count, misses = top - 1, 0
     while count >= low and misses < STEP_DOWN_MISSES:
         if covers(count):
             best, misses = count, 0
         else:
             misses += 1
         count -= 1
+    if best is None:
+        covers(high)
+        return weeks[high]
     return weeks[best]
 
 
