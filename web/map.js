@@ -21,7 +21,7 @@ function mapButton(key, label){
   return `<button type="button" class="map-shortcut" data-map-key="${attr(key)}" aria-label="${attr(name)}" title="${attr(tt("map.btn.title", "Show on map"))}">${MAP_ICON}</button>`;
 }
 function mapRef(b, label){
-  return b ? `${mapText(label === undefined ? shortName(b) : label)}${mapButton(b.key, b.name || b.address)}` : "—";
+  return b ? `${ssEsc(label === undefined ? shortName(b) : label)}${mapButton(b.key, b.name || b.address)}` : "—";
 }
 /* A site's name, wherever the board prints it, is a way to the site's own
    page (siteHref() in the board script): plain text until the pointer is on
@@ -29,7 +29,7 @@ function mapRef(b, label){
    text. The map button, where there is one, sits beside the link, never in it. */
 function siteLink(b, label){
   if(!b) return "—";
-  const text = mapText(label === undefined ? shortName(b) : label);
+  const text = ssEsc(label === undefined ? shortName(b) : label);
   const href = typeof siteHref === "function" ? siteHref(b.key) : "";
   return href ? `<a class="ss-sl" href="${attr(href)}" data-tip="${attr(tt("map.site.open", "Open its page"))}">${text}</a>` : text;
 }
@@ -38,7 +38,6 @@ function siteLink(b, label){
 const SS_PAGE = '<span class="ss-i"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M8 8h8M8 12h8M8 16h5"></path></svg></span>';
 let cityMapAssets = null, cityMapPage = null, cityMapOverlay = null, cityMapCharacter;
 const mapViews = new Set();
-const mapText = value => String(value ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function loadCityMap(){
   if(!cityMapAssets){
     cityMapAssets = (async () => {
@@ -105,7 +104,7 @@ function mapKind(findings){
 /* An address and its map pin. The pin comes from the key the payload carries
    beside the words: the words may be in any language, so they are never read
    back into a key. */
-function mapAddress(label, key){ return `${mapText(label)}${mapButton(key,label)}`; }
+function mapAddress(label, key){ return `${ssEsc(label)}${mapButton(key,label)}`; }
 /* One source for a neighbourhood's two letters: a business carries its own,
    anything else takes the board's table, and only a place the table does not
    name falls back to initials. The card and the list read the same tag. */
@@ -206,7 +205,7 @@ const rivalTag = (n, lead) => {
   const start = lead === "start";
   if(n == null) return start ? tt("map.rival.co", "Rival company") : tt("map.rival.co.inline", "rival company");
   const name = rivalName(n);
-  return name ? mapText(name) : `<span data-tip="${attr(tt("map.rival.tip", "The save names a rival company once it has opened a business; until then only its number is stable."))}">${
+  return name ? ssEsc(name) : `<span data-tip="${attr(tt("map.rival.tip", "The save names a rival company once it has opened a business; until then only its number is stable."))}">${
     start ? tt("map.rival.co.n", "Rival company {n}", {n}) : tt("map.rival.co.inline.n", "rival company {n}", {n})}</span>`;
 };
 const typeLabel = t => mapKindName(t);
@@ -270,8 +269,8 @@ function finderReadSaved(raw){
 }
 function finderSaved(){
   if(!finderSavedList){
-    let raw = null, old = false;
-    try{ raw = localStorage.getItem(FINDER_SAVED_KEY); }catch(e){}
+    const raw = remembered(FINDER_SAVED_KEY);
+    let old = false;
     try{ old = (JSON.parse(raw) || []).some(s => finderOldHoods(s?.filters?.hoods)); }catch(e){}
     finderSavedList = finderReadSaved(raw);
     // Written back once in keys, so the old names are gone from storage.
@@ -281,7 +280,7 @@ function finderSaved(){
 }
 function finderKeepSaved(list){
   finderSavedList = list;
-  try{ localStorage.setItem(FINDER_SAVED_KEY, JSON.stringify(list)); }catch(e){}
+  rememberJson(FINDER_SAVED_KEY, list);
 }
 window.addEventListener("storage", e => {
   if(e.key !== FINDER_SAVED_KEY) return;
@@ -342,7 +341,7 @@ function floorPlanSvg(plan, s, label){
 function floorPlanScale(s){
   const m = [1, 2, 5, 10, 20, 50].find(n => n * s >= 36) || 50;
   return `<span class="lp-scale" aria-label="${attr(tt("map.plan.scale", {one: "Scale: {n} metre", other: "Scale: {n} metres"}, {n: m}))}"><i style="width:${(m * s).toFixed(1)}px"></i><span>${
-    mapText(tt("map.plan.metres", "{n} m", {n: m}))}</span></span>`;
+    ssEsc(tt("map.plan.metres", "{n} m", {n: m}))}</span></span>`;
 }
 
 /* The words build() writes once. A change of language does not build the map
@@ -498,7 +497,7 @@ class CityMapView {
       e.preventDefault();
       this.sortBy(sorter.dataset.s);
     });
-    root.innerHTML = `<p class="map-status" role="status" data-mw="loading">${mapText(MAP_WORDS.loading)}</p>`;
+    root.innerHTML = `<p class="map-status" role="status" data-mw="loading">${ssEsc(MAP_WORDS.loading)}</p>`;
     mapViews.add(this);
     this.ready = this.load();
   }
@@ -508,7 +507,7 @@ class CityMapView {
       this.build(); this.update();
       return true;
     } catch(error){
-      this.root.innerHTML = `<p class="map-status" role="status">${mapText(error.message)}</p><button type="button" class="btn2" data-mw="retry">${mapText(MAP_WORDS.retry)}</button>`;
+      this.root.innerHTML = `<p class="map-status" role="status">${ssEsc(error.message)}</p><button type="button" class="btn2" data-mw="retry">${ssEsc(MAP_WORDS.retry)}</button>`;
       this.root.querySelector('button').onclick = () => {
         this.ready = this.load();
         this.ready.then(ok=>{if(ok && this.selected)this.select(this.selected,true,this.freshSelection);});
@@ -526,11 +525,11 @@ class CityMapView {
     // A plan's finder is always on, so it has no plain map's header at all.
     const head = this.panel && !this.planning ? `<div class="sechead map-head moff">
       <span class="layers" role="group" aria-label="${attr(MAP_WORDS.layers)}" data-mw-aria="layers">
-        <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" data-tip="${attr(MAP_WORDS.mineTip)}" data-mw-tip="mineTip"><i></i><span class="lw" data-mw="mine">${mapText(MAP_WORDS.mine)}</span><span class="n">0</span></button>
-        <button type="button" class="sev lay own" data-l="own" aria-pressed="true" data-tip="${attr(MAP_WORDS.ownTip)}" data-mw-tip="ownTip"><i></i><span class="lw" data-mw="own">${mapText(MAP_WORDS.own)}</span><span class="n">0</span></button>
-        <button type="button" class="sev lay home" data-l="home" aria-pressed="true" data-tip="${attr(MAP_WORDS.homeTip)}" data-mw-tip="homeTip"><i></i><span class="lw" data-mw="home">${mapText(MAP_WORDS.home)}</span><span class="n">0</span></button>
-        <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" data-tip="${attr(MAP_WORDS.fndTip)}" data-mw-tip="fndTip"><i></i><span class="lw" data-mw="fnd">${mapText(MAP_WORDS.fnd)}</span><span class="n">0</span></button>
-        <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" data-tip="${attr(MAP_WORDS.allTip)}" data-mw-tip="allTip"><i></i><span class="lw" data-mw="all">${mapText(MAP_WORDS.all)}</span><span class="n">${a.buildings.length}</span></button>
+        <button type="button" class="sev lay mine" data-l="mine" aria-pressed="true" data-tip="${attr(MAP_WORDS.mineTip)}" data-mw-tip="mineTip"><i></i><span class="lw" data-mw="mine">${ssEsc(MAP_WORDS.mine)}</span><span class="n">0</span></button>
+        <button type="button" class="sev lay own" data-l="own" aria-pressed="true" data-tip="${attr(MAP_WORDS.ownTip)}" data-mw-tip="ownTip"><i></i><span class="lw" data-mw="own">${ssEsc(MAP_WORDS.own)}</span><span class="n">0</span></button>
+        <button type="button" class="sev lay home" data-l="home" aria-pressed="true" data-tip="${attr(MAP_WORDS.homeTip)}" data-mw-tip="homeTip"><i></i><span class="lw" data-mw="home">${ssEsc(MAP_WORDS.home)}</span><span class="n">0</span></button>
+        <button type="button" class="sev lay fnd" data-l="fnd" aria-pressed="true" data-tip="${attr(MAP_WORDS.fndTip)}" data-mw-tip="fndTip"><i></i><span class="lw" data-mw="fnd">${ssEsc(MAP_WORDS.fnd)}</span><span class="n">0</span></button>
+        <button type="button" class="sev lay all off" data-l="all" aria-pressed="false" data-tip="${attr(MAP_WORDS.allTip)}" data-mw-tip="allTip"><i></i><span class="lw" data-mw="all">${ssEsc(MAP_WORDS.all)}</span><span class="n">${a.buildings.length}</span></button>
       </span>
       <span class="why" data-tip="${attr(MAP_WORDS.layersWhy)}" data-mw-tip="layersWhy"><i>?</i></span>
       <span class="aside"><label class="srch">${ICON.search}<input id="${id}-search" type="search" aria-label="${attr(MAP_WORDS.findPlace)}" data-mw-aria="findPlace" data-control="search" placeholder="${attr(MAP_WORDS.search)}" data-mw-ph="search" autocomplete="off"><span class="cnt mono" aria-live="polite"></span></label></span>
@@ -538,11 +537,11 @@ class CityMapView {
     this.root.innerHTML = `${head}<div class="citymap${this.narrow ? " narrow" : ""}"><div class="stage" data-stage>
       <svg class="map-canvas" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${attr(MAP_WORDS.canvas)}" data-mw-aria="canvas">
       <defs><clipPath id="${clipId}"><rect class="map-region-clip" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}"/></clipPath></defs><g clip-path="url(#${clipId})"><image class="map-detail-background" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}" href="${a.imageUrl}"/><image class="map-fast-background" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}" href="${a.previewUrl}"/>
-      <g class="map-footprints">${a.buildings.map(b => `<path class="location fp" data-location="${mapText(b.key)}" d="${b.path}" fill-rule="evenodd"><title>${mapText(b.address)}</title></path>`).join('')}</g>
+      <g class="map-footprints">${a.buildings.map(b => `<path class="location fp" data-location="${ssEsc(b.key)}" d="${b.path}" fill-rule="evenodd"><title>${ssEsc(b.address)}</title></path>`).join('')}</g>
       <g class="map-pips"></g></g></svg>
-      <div class="layer">${(a.districtLabels || []).map(l=>`<span class="dlabel" data-x="${l.anchor[0]}" data-y="${l.anchor[1]}">${mapText(l.label)}</span>`).join('')}
+      <div class="layer">${(a.districtLabels || []).map(l=>`<span class="dlabel" data-x="${l.anchor[0]}" data-y="${l.anchor[1]}">${ssEsc(l.label)}</span>`).join('')}
         <div class="shadow" aria-hidden="true"></div><div class="ball" aria-hidden="true"><i></i><u></u></div>
-        <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="${attr(MAP_WORDS.close)}" data-mw-aria="close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="st" hidden></div><div class="facts" hidden></div><div class="lp-plan" hidden></div><div class="fit" hidden></div><p class="why" hidden></p><div class="finds2"></div><button type="button" class="os-cta sm fplan-go" data-action="plan" hidden></button><a class="go2 ss-pagego" href="#detail" data-action="details" data-mw="itsPage">${SS_PAGE}${mapText(MAP_WORDS.itsPage)}</a></div>
+        <div class="site" role="region" aria-live="polite" hidden><span class="tail"></span><button type="button" class="x" aria-label="${attr(MAP_WORDS.close)}" data-mw-aria="close">${ICON.x}</button><h3></h3><div class="sub"></div><div class="nums"></div><div class="st" hidden></div><div class="facts" hidden></div><div class="lp-plan" hidden></div><div class="fit" hidden></div><p class="why" hidden></p><div class="finds2"></div><button type="button" class="os-cta sm fplan-go" data-action="plan" hidden></button><a class="go2 ss-pagego" href="#detail" data-action="details" data-mw="itsPage">${SS_PAGE}${ssEsc(MAP_WORDS.itsPage)}</a></div>
       </div>
       ${this.panel ? this.finderControls() : ""}
       <div class="zoomer" role="group" aria-label="${attr(MAP_WORDS.zoom)}" data-mw-aria="zoom"><button type="button" class="ibtn" data-action="in" aria-label="${attr(MAP_WORDS.zoomIn)}" data-mw-aria="zoomIn">+</button><button type="button" class="ibtn" data-action="out" aria-label="${attr(MAP_WORDS.zoomOut)}" data-mw-aria="zoomOut">−</button><button type="button" class="ibtn" data-action="reset" aria-label="${attr(MAP_WORDS.city)}" data-mw-aria="city"${this.panel ? ` data-tip="${attr(MAP_WORDS.city)}" data-mw-tip="city"` : ''}>${ICON.home}</button>${this.panel && !this.planning && document.fullscreenEnabled ? `<button type="button" class="ibtn" data-action="full" aria-label="${attr(MAP_WORDS.full)}" data-mw-aria="full" data-tip="${attr(MAP_WORDS.full)}" data-mw-tip="full">${ICON.full}</button>` : ''}</div>
@@ -607,31 +606,31 @@ class CityMapView {
     if(!premises() || this.planning) return "";
     /* A chip with its name on it: a bare pin in the corner was the most
        hidden way into a headline feature. */
-    return `<div class="fswitch"><button type="button" class="ibtn" data-f="tog" aria-pressed="false" data-visit-feature="floor-plans">${ICON.pin}<span data-mw="finder">${mapText(MAP_WORDS.finder)}</span><span class="feature-new" data-new-feature="floor-plans" aria-hidden="true" data-mw="isNew" hidden>${mapText(MAP_WORDS.isNew)}</span></button></div>`;
+    return `<div class="fswitch"><button type="button" class="ibtn" data-f="tog" aria-pressed="false" data-visit-feature="floor-plans">${ICON.pin}<span data-mw="finder">${ssEsc(MAP_WORDS.finder)}</span><span class="feature-new" data-new-feature="floor-plans" aria-hidden="true" data-mw="isNew" hidden>${ssEsc(MAP_WORDS.isNew)}</span></button></div>`;
   }
   /* Every control is the same chip: outlined when it is not chosen, filled when
      it is. Nothing is ever dimmed, so nothing reads as unavailable. */
   finderPanel(){
     const P = premises(); if(!P) return "";
-    const row = (word, body, cls = "") => `<div class="frow${cls}"><span class="lab" data-mw="${word}">${mapText(MAP_WORDS[word])}</span>${body}</div>`;
+    const row = (word, body, cls = "") => `<div class="frow${cls}"><span class="lab" data-mw="${word}">${ssEsc(MAP_WORDS[word])}</span>${body}</div>`;
     const kinds = FINDER_CATS.map(c =>
-      `<button type="button" class="fchip cat" data-cat="${c}" aria-pressed="false" data-mw="${mapWordKey("cat", c)}">${mapText(mapKindName(c))}</button>`).join('');
+      `<button type="button" class="fchip cat" data-cat="${c}" aria-pressed="false" data-mw="${mapWordKey("cat", c)}">${ssEsc(mapKindName(c))}</button>`).join('');
     const hoods = this.hoodList().map(h =>
-      `<button type="button" class="fchip hd" data-h="${attr(h)}" aria-pressed="true" data-tip="${attr(hoodName(h))}">${mapText(hoodTag(h))}</button>`).join('');
+      `<button type="button" class="fchip hd" data-h="${attr(h)}" aria-pressed="true" data-tip="${attr(hoodName(h))}">${ssEsc(hoodTag(h))}</button>`).join('');
     const numChip = (f, aria, unit = false) => `<label class="fchip num" data-mw="${f.startsWith("min") ? "min" : "max"}">${
-      mapText(f.startsWith("min") ? MAP_WORDS.min : MAP_WORDS.max)}<input type="number" min="0" data-f="${f}" value="0" aria-label="${attr(MAP_WORDS[aria])}" data-mw-aria="${aria}">${
-      unit ? `<b data-mw="m2">${mapText(MAP_WORDS.m2)}</b>` : ""}</label>`;
+      ssEsc(f.startsWith("min") ? MAP_WORDS.min : MAP_WORDS.max)}<input type="number" min="0" data-f="${f}" value="0" aria-label="${attr(MAP_WORDS[aria])}" data-mw-aria="${aria}">${
+      unit ? `<b data-mw="m2">${ssEsc(MAP_WORDS.m2)}</b>` : ""}</label>`;
     /* In a plan the type is the plan's: one chip naming it, in place of the
        kind and the type picker. Only premises to rent are a new store, and a
        saved search belongs to the City map's finder. */
     const plan = this.planning;
-    const typeRow = plan ? row('rowType', `<span class="fchip on fplan-type"></span><span class="fplan-note" data-mw="fromPlan">${mapText(MAP_WORDS.fromPlan)}</span>`, ' ftype')
-      : row('rowType', `<label class="fsel"><select data-f="type" aria-label="${attr(MAP_WORDS.typeAria)}" data-mw-aria="typeAria"><option value="">${mapText(MAP_WORDS.anyType)}</option></select><i class="fchev">${ICON.chev}</i></label>`, ' ftype');
+    const typeRow = plan ? row('rowType', `<span class="fchip on fplan-type"></span><span class="fplan-note" data-mw="fromPlan">${ssEsc(MAP_WORDS.fromPlan)}</span>`, ' ftype')
+      : row('rowType', `<label class="fsel"><select data-f="type" aria-label="${attr(MAP_WORDS.typeAria)}" data-mw-aria="typeAria"><option value="">${ssEsc(MAP_WORDS.anyType)}</option></select><i class="fchev">${ICON.chev}</i></label>`, ' ftype');
     return `<div class="filters fonly">
       ${plan ? "" : row('rowKind', kinds)}
       ${typeRow}
       ${row('rowShow', (plan ? ["rent"] : FINDER_SHOWS).map(key =>
-        `<button type="button" class="fchip show" data-show="${key}" aria-pressed="false" data-tip="${attr(finderShowTip(key))}" data-mw-tip="${mapWordKey("show", key)}Tip" data-mw="${mapWordKey("show", key)}">${mapText(finderShowName(key))}<b>0</b></button>`).join('')
+        `<button type="button" class="fchip show" data-show="${key}" aria-pressed="false" data-tip="${attr(finderShowTip(key))}" data-mw-tip="${mapWordKey("show", key)}Tip" data-mw="${mapWordKey("show", key)}">${ssEsc(finderShowName(key))}<b>0</b></button>`).join('')
         + `<span class="why" tabindex="0" data-tip=""><i>?</i></span>`)}
       ${row('rowWhere', hoods)}
       ${row('rowSize', `${numChip("minM2", "minM2", true)}
@@ -642,7 +641,7 @@ class CityMapView {
       ${row('rowLayout', `<span class="flays" role="group" aria-label="${attr(MAP_WORDS.layouts)}" data-mw-aria="layouts"></span>`, ' flayout')}
       ${plan ? "" : row('rowSaved', `<span class="fsaved" role="group" aria-label="${attr(MAP_WORDS.saved)}" data-mw-aria="saved"><span class="fsaved-list"></span><span class="fsaved-new">
         <label class="fchip fname" hidden><input type="text" maxlength="24" data-f="name" aria-label="${attr(MAP_WORDS.nameAria)}" data-mw-aria="nameAria"></label>
-        <span class="fsave"><button type="button" class="fchip fnew" data-f="save" data-tip="${attr(MAP_WORDS.saveTip)}" data-mw-tip="saveTip" data-mw="save">${ICON.plus}${mapText(MAP_WORDS.save)}</button><button type="button" class="fdel" data-f="cancel" aria-label="${attr(MAP_WORDS.cancel)}" data-mw-aria="cancel" hidden>${ICON.x}</button></span>
+        <span class="fsave"><button type="button" class="fchip fnew" data-f="save" data-tip="${attr(MAP_WORDS.saveTip)}" data-mw-tip="saveTip" data-mw="save">${ICON.plus}${ssEsc(MAP_WORDS.save)}</button><button type="button" class="fdel" data-f="cancel" aria-label="${attr(MAP_WORDS.cancel)}" data-mw-aria="cancel" hidden>${ICON.x}</button></span>
       </span></span>`, ' fsaves')}
     </div>`;
   }
@@ -783,7 +782,7 @@ class CityMapView {
     // The switch lasts the session, not the storage: it stays on across pages,
     // and a new load opens the plain map with the filters where they were left.
     const {on, ...filters} = this.fs;
-    try{ localStorage.setItem(store, JSON.stringify(filters)); }catch(e){}
+    rememberJson(store, filters);
     finderStateRemember(this);
   }
   /* Opened from Today or a Growth cell: the finder comes on with a preset. */
@@ -999,7 +998,7 @@ class CityMapView {
     const sig = JSON.stringify([list.map(s => [s.name, this.savedTip(s)]), on, ttLang]);
     if(host === this.savedHost && sig === this.savedSig) return;
     this.savedHost = host; this.savedSig = sig;
-    host.innerHTML = list.map((s, i) => `<span class="fsave"><button type="button" class="fchip${i === on ? ' on' : ''}" data-saved="${attr(s.name)}" aria-pressed="${i === on}" data-tip="${attr(this.savedTip(s))}">${mapText(s.name)}</button><button type="button" class="fdel" data-unsave="${attr(s.name)}" aria-label="${attr(tt("map.saved.delete", "Delete the saved search {name}", {name: s.name}))}">${ICON.x}</button></span>`).join('');
+    host.innerHTML = list.map((s, i) => `<span class="fsave"><button type="button" class="fchip${i === on ? ' on' : ''}" data-saved="${attr(s.name)}" aria-pressed="${i === on}" data-tip="${attr(this.savedTip(s))}">${ssEsc(s.name)}</button><button type="button" class="fdel" data-unsave="${attr(s.name)}" aria-label="${attr(tt("map.saved.delete", "Delete the saved search {name}", {name: s.name}))}">${ICON.x}</button></span>`).join('');
   }
   /* The type demand this row is scored on: the chosen type, or the strongest
      type of the category in that neighbourhood when "any type" is picked. */
@@ -1095,8 +1094,8 @@ class CityMapView {
       : wh ? [["","#"],["",""],["",address],["m2",m2],["traffic",traffic],["",""],["cap",cap],["deposit",upfront]]
                     : [["","#"],["",""],["",address],["score",tt("map.col.score", "Score")],["traffic",traffic],["demand",tt("map.col.demand", "Demand")],["m2",m2],["cap",cap],["deposit",upfront]];
     const head = `<div class="fhead${grid}">${cols.map(([key, label]) => key
-      ? `<span data-s="${key}" role="button" tabindex="0" class="${key === fs.sort ? 'on' : ''}">${mapText(label)}</span>`
-      : `<span>${mapText(label)}</span>`).join('')}</div>`;
+      ? `<span data-s="${key}" role="button" tabindex="0" class="${key === fs.sort ? 'on' : ''}">${ssEsc(label)}</span>`
+      : `<span>${ssEsc(label)}</span>`).join('')}</div>`;
     // Each shaded column is stretched over the values actually on screen, so a
     // field of close scores still reads. Rent is never shaded: high is not good.
     const scale = pick => {
@@ -1121,13 +1120,13 @@ class CityMapView {
         : `<span class="v sc sh"${lead(f.score, SHADE_LEAD)}>${f.score ?? '—'}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v sh"${byDemand(f.demand, SHADE_SIDE)}>${f.demand ?? '—'}</span><span class="v m2">${num(b.m2)}</span>`;
       // The dot says what taking this place would mean: an empty floor to rent
       // or a rival to buy out.
-      return `<button type="button" class="place fr${grid}${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${mapText(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood">${mapText(hoodTag(b.hood))}</span><span class="nm">${mapText(b.address)}<small>${this.layoutTag(b)}${mapText(sub)}</small></span>${numbers}${fac ? `<span class="v cap">${b.rent != null ? mapText(fmt(b.rent)) : '—'}</span>` : `<span class="v cap">${mapText(capText(b.cap))}</span>`}<span class="v dep" data-tip="${attr(depositNote(b))}">${b.deposit != null ? mapText(fmt(b.deposit)) : '—'}</span></button>`;
+      return `<button type="button" class="place fr${grid}${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${ssEsc(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood">${ssEsc(hoodTag(b.hood))}</span><span class="nm">${ssEsc(b.address)}<small>${this.layoutTag(b)}${ssEsc(sub)}</small></span>${numbers}${fac ? `<span class="v cap">${b.rent != null ? ssEsc(fmt(b.rent)) : '—'}</span>` : `<span class="v cap">${ssEsc(capText(b.cap))}</span>`}<span class="v dep" data-tip="${attr(depositNote(b))}">${b.deposit != null ? ssEsc(fmt(b.deposit)) : '—'}</span></button>`;
     }).join('');
   }
   saleList(rows){
-    return `<div class="fhead sale"><span></span><span>${mapText(tt("map.col.address", "Address"))}</span><span>${mapText(tt("map.col.type", "Type"))}</span><span>${
-      mapText(tt("map.unit.m2", "m²"))}</span><span>${mapText(tt("map.col.price", "Price"))}</span></div>`
-      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${mapText(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood">${mapText(hoodTag(s.hood))}</span><span class="nm">${mapText(s.address)}<small>${this.layoutTag(s)}${mapText(hoodName(s.hood))}</small></span><span class="v t">${mapText(typeLabel(s.type))}</span><span class="v">${num(s.m2)}</span><span class="v">${mapText(askingPrice(s.price))}</span></button>`).join('');
+    return `<div class="fhead sale"><span></span><span>${ssEsc(tt("map.col.address", "Address"))}</span><span>${ssEsc(tt("map.col.type", "Type"))}</span><span>${
+      ssEsc(tt("map.unit.m2", "m²"))}</span><span>${ssEsc(tt("map.col.price", "Price"))}</span></div>`
+      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${ssEsc(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood">${ssEsc(hoodTag(s.hood))}</span><span class="nm">${ssEsc(s.address)}<small>${this.layoutTag(s)}${ssEsc(hoodName(s.hood))}</small></span><span class="v t">${ssEsc(typeLabel(s.type))}</span><span class="v">${num(s.m2)}</span><span class="v">${ssEsc(askingPrice(s.price))}</span></button>`).join('');
   }
   /* The facts every address carries, finder on or off: what the place is, what
      it would cost and whether it is free. */
@@ -1138,31 +1137,31 @@ class CityMapView {
     if(!b) return;
     st.hidden = facts.hidden = false;
     st.className = `st ${b.status === 'rival' ? 'rival' : b.status === 'mine' ? 'mine' : b.status === 'vacant' ? 'vacant' : 'na'}`;
-    st.innerHTML = `<i></i>${mapText(finderStatus(b))}`;
-    const fact = (label, value, cls = "") => `<span${cls}>${mapText(label)}<b>${value}</b></span>`;
+    st.innerHTML = `<i></i>${ssEsc(finderStatus(b))}`;
+    const fact = (label, value, cls = "") => `<span${cls}>${ssEsc(label)}<b>${value}</b></span>`;
     facts.innerHTML = fact(tt("map.fact.owner", "Owner"), this.ownerOf(b), ' class="wide"')
       + fact(tt("map.fact.renter", "Renter"), this.renterOf(b), ' class="wide"')
-      + fact(`${typeLabel(b.type)} ${b.size || ''}`.trim(), mapText(tt("map.fact.m2", "{n:,} m²", {n: Number(b.m2)})))
+      + fact(`${typeLabel(b.type)} ${b.size || ''}`.trim(), ssEsc(tt("map.fact.m2", "{n:,} m²", {n: Number(b.m2)})))
       + fact(tt("map.fact.traffic", "Foot traffic"), b.traffic)
-      + fact(tt("map.fact.cap", "Building capacity"), mapText(capText(b.cap)))
-      + fact(tt("map.fact.rent", "Est. rent / day"), b.rent != null ? mapText(fmt(b.rent)) : '—')
-      + fact(tt("map.fact.deposit", "Deposit"), b.deposit != null ? mapText(fmt(b.deposit)) : '—');
+      + fact(tt("map.fact.cap", "Building capacity"), ssEsc(capText(b.cap)))
+      + fact(tt("map.fact.rent", "Est. rent / day"), b.rent != null ? ssEsc(fmt(b.rent)) : '—')
+      + fact(tt("map.fact.deposit", "Deposit"), b.deposit != null ? ssEsc(fmt(b.deposit)) : '—');
     // Only a candidate reads as one: your own shop keeps its business numbers.
     if(!this.finderOn() || this.saleView() || b.type !== this.fs.cat || !this.candidate(b)) return;
     const f = this.fitFor(b);
     fit.hidden = false;
-    fit.innerHTML = f.fit ? tt("map.fit.in", "<b>{type}</b> in {hood}", {type: mapText(f.fit), hood: mapText(hoodName(b.hood))})
-      : mapText(tt("map.fit.none", "No demand reading for this category here."));
+    fit.innerHTML = f.fit ? tt("map.fit.in", "<b>{type}</b> in {hood}", {type: ssEsc(f.fit), hood: ssEsc(hoodName(b.hood))})
+      : ssEsc(tt("map.fit.none", "No demand reading for this category here."));
     const why = card.querySelector('.why');
     why.hidden = !f.fit;
     if(f.fit) why.textContent = this.whyRanked(b, f);
-    const stat = (v, lab, cls = "") => `<div class="num"><b class="mono${cls}">${v}</b><span>${mapText(lab)}</span></div>`;
+    const stat = (v, lab, cls = "") => `<div class="num"><b class="mono${cls}">${v}</b><span>${ssEsc(lab)}</span></div>`;
     // The demand is the Growth grid's own reading, so it leads back to that
     // type's row there.
     const demand = f.slug && !this.planning
-      ? `<a class="num mf-grow" href="#secMarket" data-grow="${mapText(f.slug)}" data-tip="${
-          mapText(tt("map.demand.tip", "{type} in every neighbourhood, on Expansion › Demand", {type: f.fit}))}"><b class="mono">${f.demand}</b><span>${
-          mapText(tt("map.stat.demandgo", "demand ›"))}</span></a>`
+      ? `<a class="num mf-grow" href="#secMarket" data-grow="${ssEsc(f.slug)}" data-tip="${
+          ssEsc(tt("map.demand.tip", "{type} in every neighbourhood, on Expansion › Demand", {type: f.fit}))}"><b class="mono">${f.demand}</b><span>${
+          ssEsc(tt("map.stat.demandgo", "demand ›"))}</span></a>`
       : stat(f.demand, tt("map.stat.demand", "demand"));
     const traffic = tt("map.stat.traffic", "traffic");
     card.querySelector('.nums').innerHTML = f.score != null
@@ -1175,20 +1174,20 @@ class CityMapView {
   /* Who the building belongs to, and who trades from it. Both name the rival
      company where the save knows its name. */
   ownerOf(b){
-    return b.owner === 'you' ? mapText(tt("map.owner.you", "You"))
+    return b.owner === 'you' ? ssEsc(tt("map.owner.you", "You"))
       : b.owner === 'rival' ? rivalTag(b.ownerRival, 'start')
-      : b.owner === 'city' ? mapText(tt("map.owner.city", "The city")) : '—';
+      : b.owner === 'city' ? ssEsc(tt("map.owner.city", "The city")) : '—';
   }
   renterOf(b){
     const who = b.occupant;
     // A place you rent is yours whether or not a business trades from it.
     // Your own is named by a way to its page.
-    if(b.status === 'mine') return who?.name ? tt("map.renter.mine", "{name} (you)", {name: this.planning ? mapText(who.name) : siteLink({key: b.key, name: who.name}, who.name)})
-      : mapText(tt("map.owner.you", "You"));
-    if(!who) return mapText(tt("map.renter.none", "Nobody"));
+    if(b.status === 'mine') return who?.name ? tt("map.renter.mine", "{name} (you)", {name: this.planning ? ssEsc(who.name) : siteLink({key: b.key, name: who.name}, who.name)})
+      : ssEsc(tt("map.owner.you", "You"));
+    if(!who) return ssEsc(tt("map.renter.none", "Nobody"));
     // A hospital or a casino is occupied while still being unavailable, so the
     // occupant is named whatever the status says about taking the place.
-    const name = mapText(who.name || mapUnnamed()), kind = mapText(who.type || mapBusiness());
+    const name = ssEsc(who.name || mapUnnamed()), kind = ssEsc(who.type || mapBusiness());
     return b.status === 'rival' ? tt("map.renter.rival", "{name} · {type} ({company})", {name, type: kind, company: rivalTag(b.occupantRival, 'inline')})
       : b.status === 'service' ? tt("map.renter.service", "{name} · {type} (game service)", {name, type: kind})
       : `${name} · ${kind}`;
@@ -1241,8 +1240,8 @@ class CityMapView {
       if(this.fs.type && !types.has(this.fs.type)) this.fs.type = "";
       // Rebuilt only when the list changed: replacing the options closes a list
       // the player has open, and a live refresh rarely changes them.
-      const html = `<option value="">${mapText(MAP_WORDS.anyType)}</option>` + options.map(([slug, label]) =>
-        `<option value="${attr(slug)}"${slug === this.fs.type ? ' selected' : ''}>${mapText(label)}</option>`).join('');
+      const html = `<option value="">${ssEsc(MAP_WORDS.anyType)}</option>` + options.map(([slug, label]) =>
+        `<option value="${attr(slug)}"${slug === this.fs.type ? ' selected' : ''}>${ssEsc(label)}</option>`).join('');
       if(select.typesHtml !== html){ select.innerHTML = html; select.typesHtml = html; }
       if(select.value !== this.fs.type) select.value = this.fs.type;
       select.disabled = !options.length;
@@ -1268,7 +1267,7 @@ class CityMapView {
     const host = layout.querySelector('.flays'), sig = JSON.stringify(keys);
     if(host.dataset.sig !== sig){
       host.dataset.sig = sig;
-      host.innerHTML = keys.map(c => `<button type="button" class="fchip flay" data-flay="${attr(c)}" aria-pressed="false">${mapText(c)}</button>`).join('');
+      host.innerHTML = keys.map(c => `<button type="button" class="fchip flay" data-flay="${attr(c)}" aria-pressed="false">${ssEsc(c)}</button>`).join('');
     }
     host.querySelectorAll('.flay').forEach(chip => mark(chip, this.fs.layouts.includes(chip.dataset.flay)));
     this.root.querySelectorAll('.fchip.show').forEach(chip => {
@@ -1512,7 +1511,7 @@ class CityMapView {
     loadFloorPlans().then(plans => { this.plans = plans; if(plans && this.svg) this.update(); });
   }
   planOf(b){ const code = b?.layout; return code && this.plans?.plans?.[code] ? code : null; }
-  layoutTag(b){ return b?.layout ? `<span class="lp-tag">${mapText(b.layout)}</span>` : ''; }
+  layoutTag(b){ return b?.layout ? `<span class="lp-tag">${ssEsc(b.layout)}</span>` : ''; }
   /* The kind's layout keys, from the buildings themselves: A1, A2, C1… Kept
      for the payload they were read from, since every row asks. */
   layoutKeys(cat = this.fs.cat){
@@ -1547,7 +1546,7 @@ class CityMapView {
     const plan = this.plans.plans[code], wh = b.type === 'warehouse', n = wh ? plan.bays : plan.doors;
     const count = wh ? tt("map.plan.bays", {one: "{n} loading bay", other: "{n} loading bays"}, {n})
       : tt("map.plan.doors", {one: "{n} entrance", other: "{n} entrances"}, {n});
-    box.innerHTML = `<div class="lp-planhead"><span class="lp-lab" tabindex="0" data-tip="${attr(floorPlanTip())}">${mapText(MAP_WORDS.rowLayout)}</span><b>${mapText(code)}</b><span class="lp-count">${mapText(count)}</span><span class="lp-scalehost"></span></div>`
+    box.innerHTML = `<div class="lp-planhead"><span class="lp-lab" tabindex="0" data-tip="${attr(floorPlanTip())}">${ssEsc(MAP_WORDS.rowLayout)}</span><b>${ssEsc(code)}</b><span class="lp-count">${ssEsc(count)}</span><span class="lp-scalehost"></span></div>`
       + `<div class="lp-planbox">${floorPlanSvg(plan, 10, tt("map.plan.aria", "Floor plan {code}", {code}))}</div>`;
   }
   /* The plan takes the card's width and what height the stage leaves it, up to
@@ -1639,7 +1638,7 @@ class CityMapView {
       const some = this.showAll ? all : all.slice(0, 80);
       this.list.innerHTML = (this.saleView() ? this.saleList(some) : this.finderList(some))
         + (all.length > some.length ? `<button type="button" class="more" data-more aria-label="${attr(tt("map.list.more", "Show the remaining places"))}">+${all.length - some.length}</button>` : '')
-        + (all.length ? '' : `<div class="empty">${mapText(tt("map.list.empty", "Nothing matches."))}</div>`);
+        + (all.length ? '' : `<div class="empty">${ssEsc(tt("map.list.empty", "Nothing matches."))}</div>`);
       if(focusedKey) [...this.list.children].find(b=>b.dataset.pick===focusedKey)?.focus({preventScroll:true});
       this.list.scrollTop=listScroll;
     }
@@ -1661,24 +1660,24 @@ class CityMapView {
        everywhere else on the board. */
     // A plan's finder stays on the plan: no way off to a site's page.
     const siteAddr = (b || home) && !this.planning && typeof siteHref === 'function' ? siteHref(key) : '';
-    const shown = mapText(title.replace(/^\[\w+\]\s*/, ''));
+    const shown = ssEsc(title.replace(/^\[\w+\]\s*/, ''));
     card.querySelector('h3').innerHTML = siteAddr ? `<a class="ss-sl" href="${attr(siteAddr)}" data-tip="${attr(tt("map.site.open", "Open its page"))}">${shown}</a>` : shown;
-    const sub = b ? `${mapText(b.address)} · ${mapText(b.type)}`
-      : owned ? mapText(owned.purchaseDay != null ? tt("map.card.owned.day", "Owned building · bought day {d}", {d: owned.purchaseDay}) : tt("map.card.owned", "Owned building"))
-      : home ? mapText(tt("map.card.home", "Home")) + (loc?.hood ? ` · ${mapText(hoodName(loc.hood))}` : '')
+    const sub = b ? `${ssEsc(b.address)} · ${ssEsc(b.type)}`
+      : owned ? ssEsc(owned.purchaseDay != null ? tt("map.card.owned.day", "Owned building · bought day {d}", {d: owned.purchaseDay}) : tt("map.card.owned", "Owned building"))
+      : home ? ssEsc(tt("map.card.home", "Home")) + (loc?.hood ? ` · ${ssEsc(hoodName(loc.hood))}` : '')
       // The title is already the address; a bare location adds its neighbourhood.
-      : mapText((loc?.hood && hoodName(loc.hood)) || loc?.address || '');
-    card.querySelector('.sub').innerHTML = `<span class="hood">${mapText(hoodCode(b, loc?.hood || b?.neighbourhood))}</span><span>${sub}${!loc ? ` · ${mapText(tt("map.card.nopos", "no map position"))}` : ''}</span>`;
-    const stat = (v, lab) => `<div class="num"><b class="mono">${v}</b><span>${mapText(lab)}</span></div>`;
+      : ssEsc((loc?.hood && hoodName(loc.hood)) || loc?.address || '');
+    card.querySelector('.sub').innerHTML = `<span class="hood">${ssEsc(hoodCode(b, loc?.hood || b?.neighbourhood))}</span><span>${sub}${!loc ? ` · ${ssEsc(tt("map.card.nopos", "no map position"))}` : ''}</span>`;
+    const stat = (v, lab) => `<div class="num"><b class="mono">${v}</b><span>${ssEsc(lab)}</span></div>`;
     const perDay = tt("map.stat.rent", "rent / day");
     card.querySelector('.nums').innerHTML = trading
-      ? stat(`<span class="${(b.profit || 0) >= 0 ? 'pos' : 'neg'}">${mapText(fmt(b.profit || 0))}</span>`, tt("map.stat.yesterday", "yesterday")) + stat(mapText(fmt(b.rent || 0)), perDay) + stat(mapText(b.staff ?? '—'), tt("map.stat.staff", "staff"))
-      : b ? stat(mapText(fmt(b.rent || 0)), perDay) + stat('—', tt("map.stat.closed", "not trading"))
-      : owned ? stat(owned.purchasePrice != null ? mapText(money(owned.purchasePrice)) : '—', tt("map.stat.paid", "paid"))
-      : home ? stat(mapText(fmt(home.rent || 0)), perDay) : '';
+      ? stat(`<span class="${(b.profit || 0) >= 0 ? 'pos' : 'neg'}">${ssEsc(fmt(b.profit || 0))}</span>`, tt("map.stat.yesterday", "yesterday")) + stat(ssEsc(fmt(b.rent || 0)), perDay) + stat(ssEsc(b.staff ?? '—'), tt("map.stat.staff", "staff"))
+      : b ? stat(ssEsc(fmt(b.rent || 0)), perDay) + stat('—', tt("map.stat.closed", "not trading"))
+      : owned ? stat(owned.purchasePrice != null ? ssEsc(money(owned.purchasePrice)) : '—', tt("map.stat.paid", "paid"))
+      : home ? stat(ssEsc(fmt(home.rent || 0)), perDay) : '';
     const findings = this.findings.get(key) || [];
     const f = card.querySelector('.finds2');
-    f.innerHTML = findings.map(a => `<div class="f ${mapKind([a])}"><i></i><span>${mapText(splitFinding(a).what)}<span class="fa">${findingAmount(a)}</span></span></div>`).join('');
+    f.innerHTML = findings.map(a => `<div class="f ${mapKind([a])}"><i></i><span>${ssEsc(splitFinding(a).what)}<span class="fa">${findingAmount(a)}</span></span></div>`).join('');
     f.hidden = !findings.length;
     /* "its page" opens the site's own page, at its address. A business has
        always had one; a home has one too, and it is the only way in — a flat

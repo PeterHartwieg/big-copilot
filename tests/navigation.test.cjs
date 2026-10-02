@@ -58,6 +58,8 @@ function board({saved = {}, data = {}} = {}) {
   /* web/i18n.js runs ahead of the board script on the page: the tabs' labels
      are read through its tt(). */
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8'), context);
+  /* The guarded localStorage helpers, declared near the top of the script. */
+  vm.runInContext(between(source, '/* localStorage, every access guarded', 'const el = '), context);
   vm.runInContext(between(source, 'const SEC_PAGE =', '/* The business a finding'), context);
   vm.runInContext(between(markup, 'const featureDiscovery =', '/* --- changelog dialog'), context);
   vm.runInContext(between(source, 'const PAGES =', '/* --- which kinds of finding'), context);

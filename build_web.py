@@ -6,8 +6,8 @@
 
 Writes web/index.html from the same template the local server uses, with the
 landing screen above the board and the worker data source wired in ahead of
-the board's script, and copies the two Python files into web/py/ for the
-worker to fetch. It also writes the static wiki pages under web/wiki/,
+the board's script, and copies the Python files and data tables (PY_COPIED)
+into web/py/ for the worker to fetch. It also writes the static wiki pages under web/wiki/,
 web/sitemap.xml and web/robots.txt from web/wiki-data.json (tools/wiki_pages.py).
 web/app.js and web/worker.js are kept by hand. Nothing else
 is needed: the folder is a static site.
@@ -498,6 +498,17 @@ details.help[open] summary::after{content:"\2013"}
 </template>
 """.replace("__ICON_FOLDER__", ICON_FOLDER).replace("__ICON_LINK__", ICON_LINK).replace("__ICON_MORE__", ICON_MORE).replace("__BUILD__", str(VERIFIED_BUILD)).replace("<!--__FOOTER__-->", footer_html(landing=True, site=True))
 
+# What web/worker.js fetches from web/py/ into Pyodide's filesystem, in the
+# order it fetches them: the code, without which the worker never becomes
+# ready, and the data, written only when its fetch succeeds. The worker names
+# each file itself; tests/test_web_fresh.py holds it to these two lists.
+PY_CODE = ("ba_save.py", "ba_dashboard.py")
+PY_DATA = ("gametext.json", "ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json", "ba_store_rules.json")
+# The ones copied into web/py/ from the top of the checkout. gametext.json is
+# written there from the installed game instead (main()).
+PY_COPIED = tuple(name for name in PY_CODE + PY_DATA if name != "gametext.json")
+_PY_DATA_SHIPPED = tuple(f"web/py/{name}" for name in PY_DATA)
+
 # Everything the page fetches, together with the build inputs that shape it:
 # build_web.py itself, and the wiki generator (code, authored wording and
 # hand-written articles) that writes web/wiki-data.json.
@@ -507,7 +518,10 @@ details.help[open] summary::after{content:"\2013"}
 # changing that order, or appending to the list, changes the stamp, which is
 # the point for an append: a deploy busts caches.
 STAMP_INPUTS = (
-    "build_web.py", "web/app.js", "web/community.js", "web/community.css", "web/update.js", "web/_headers", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "web/maps/map-background.svg", "web/changelog.json", "ba_save.py", "ba_dashboard.py", "web/py/gametext.json", "web/py/ba_buildings.json", "web/py/ba_demand_curves.json",
+    "build_web.py", "web/app.js", "web/community.js", "web/community.css", "web/update.js", "web/_headers", "web/worker.js", "web/map.js", "web/map.css", "web/maps/locations.json", "web/maps/map-background.svg", "web/changelog.json",
+    # The Python code is hashed from the checkout, the data from web/py/. The
+    # prices and the store rules came later and sit further down: the order is the stamp.
+    *PY_CODE, *_PY_DATA_SHIPPED[:3],
     "web/wiki.js", "web/wiki.css", "web/wiki-data.json",
     "tools/build_wiki_data.py", "tools/wiki_data.py", "tools/extract_wiki.py", "tools/wiki_sample.json",
     "tools/wiki_topics.json", "web/fonts/fonts.css", "web/maps/floor-plans.json",
@@ -516,9 +530,9 @@ STAMP_INPUTS = (
     # table, which the page fetches (tools/i18n.py ship writes them).
     "web/i18n.js", *(f"web/i18n/{lang}.json" for lang in ui_text.languages()),
     # The furniture and material prices the payback figures read (make_item_prices.py).
-    "web/py/ba_item_prices.json",
+    _PY_DATA_SHIPPED[3],
     # What a store sells, needs and can buy where, for the store planner (make_store_rules.py).
-    "web/py/ba_store_rules.json",
+    _PY_DATA_SHIPPED[4],
     # The board's markup and CSS, and its script, which render() reads (ba_dashboard.load_template()).
     "template/board.html",
     "template/board.js",
@@ -651,7 +665,7 @@ def check(root: str = HERE) -> list[str]:
     gametext.json and wiki-data.json feed the stamp as they stand. Line endings
     are ignored on both sides, so a CRLF checkout is not stale by itself.
 
-    root redirects everything read directly here: the three source files and
+    root redirects everything read directly here: the PY_COPIED files and
     their copies under web/py/, every STAMP_INPUTS entry, web/changelog.json,
     web/update.js, web/version.json and web/index.html. It does not redirect
     what render() reads through the imported ba_dashboard -- the board
@@ -669,8 +683,7 @@ def check(root: str = HERE) -> list[str]:
         except FileNotFoundError:
             return True
 
-    for name in ("ba_save.py", "ba_dashboard.py", "ba_buildings.json", "ba_demand_curves.json",
-                 "ba_item_prices.json", "ba_store_rules.json"):
+    for name in PY_COPIED:
         copied = "web/py/" + name
         if differs(copied, read_text(os.path.join(root, name))):
             stale.append(copied)
@@ -777,8 +790,7 @@ def assemble(root: str = HERE) -> None:
     # rules travel with the code; make_buildings.py, make_demand_curves.py,
     # make_item_prices.py and make_store_rules.py have to have been run, since
     # the worker hands them to Python as data.
-    for name in ("ba_save.py", "ba_dashboard.py", "ba_buildings.json", "ba_demand_curves.json",
-                 "ba_item_prices.json", "ba_store_rules.json"):
+    for name in PY_COPIED:
         shutil.copyfile(os.path.join(root, name), os.path.join(web, "py", name))
     # Big Copilot's own text in other languages, from i18n/ (tools/i18n.py).
     ui_text.ship(root=root)

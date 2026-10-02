@@ -57,6 +57,14 @@ const compact = n => {
   if(a>=1e3) return s+"$"+Math.round(a/1e3)+"k";
   return s+"$"+Math.round(a);
 };
+/* localStorage, every access guarded: a private window or a full quota throws,
+   and a choice that cannot be kept is simply not kept. A value that is not
+   JSON reads as null. Declared as functions so a call made while the script
+   is still loading finds them. */
+function remembered(key){ try{ return localStorage.getItem(key); }catch(e){ return null; } }
+function remember(key, v){ try{ localStorage.setItem(key, v); }catch(e){} }
+function rememberedJson(key){ try{ return JSON.parse(localStorage.getItem(key)); }catch(e){ return null; } }
+function rememberJson(key, v){ try{ localStorage.setItem(key, JSON.stringify(v)); }catch(e){} }
 const el = (t,c,h) => { const e=document.createElement(t); if(c)e.className=c; if(h!==undefined)e.innerHTML=h; return e; };
 const sign = n => n>0?"pos":n<0?"neg":"";
 const sum = (rows,key) => rows.reduce((a,b)=>a+(b[key]||0),0);
@@ -409,10 +417,10 @@ const gnLangs = () => {
 };
 const gnKnown = lang => gnLangs().some(([code]) => code === lang);
 function gnStored(){
-  try{ return localStorage.getItem(GN_KEY) || ""; }catch(e){ return ""; }
+  return remembered(GN_KEY) || "";
 }
 function gnRemember(lang){
-  try{ localStorage.setItem(GN_KEY, lang); }catch(e){}
+  remember(GN_KEY, lang);
 }
 /* A language's table: fetched once beside the page, with the build stamp so a
    deploy busts it. */
@@ -529,10 +537,10 @@ function gnBrowserLang(list){
   return "en";
 }
 function gnOfferDone(){
-  try{ return !!localStorage.getItem(GN_OFFER_KEY); }catch(e){ return false; }
+  return !!remembered(GN_OFFER_KEY);
 }
 function gnOfferClose(el, answer){
-  try{ localStorage.setItem(GN_OFFER_KEY, answer); }catch(e){}
+  remember(GN_OFFER_KEY, answer);
   el.remove();
 }
 /* Once, ever: a reader whose browser prefers a language the game has is asked
@@ -826,7 +834,7 @@ let weekSeries=null;
 /* Everything that is folded away by default, so a refresh does not re-fold what
    the reader has just opened. */
 let openChains = new Set(), showMinor = false, showRhythmSites = false;
-let showAllShelves = false, showRhythmCards = false;
+let showAllShelves = false;
 let showAllProducts = false;
 /* Each Supply table's own order as {col, dir}: one per Checks view, one for
    the imports, one for the top-ups. None is the order the view ranks by. */
@@ -1945,7 +1953,7 @@ const SIZING_KEY = "ba_dash_sizing";
    refuses leaves the page's pick in place. szAdopt() reads it for every board
    taken in (takeData()). */
 const szMem = {};
-const szDevice = () => { try{ return localStorage.getItem(SIZING_KEY) === "dem" ? "dem" : "cap"; }catch(e){ return "cap"; } };
+const szDevice = () => remembered(SIZING_KEY) === "dem" ? "dem" : "cap";
 const szWho = () => (D && D.meta && D.meta.character) || "";
 function szRead(who = szWho()){
   if(Object.prototype.hasOwnProperty.call(szMem, who)) return szMem[who];
@@ -2194,8 +2202,6 @@ function szTally(rows, factOf){
   rows.forEach(r => { const st = factOf(r).st; n[st] = (n[st] || 0) + 1; });
   return n;
 }
-/* A row worth reading is one Python did not call covered or made here. */
-const szKeep = f => f.st !== "covered" && f.st !== "made";
 /* What to do about a factory input, after its chip, in the input's own
    words: the figure is the fact's, the rest is what the row already knows
    (the depot it comes from, what arrives, the lines it feeds). */
@@ -2249,13 +2255,13 @@ function factoryLineText(site, need){
   }));
 }
 function localNames(){
-  try{ return JSON.parse(localStorage.getItem(LINE_NAMES_KEY)) || {}; }catch(e){ return {}; }
+  return rememberedJson(LINE_NAMES_KEY) || {};
 }
 function nameLine(rid, slug){
   spViewCache = null;
   const names = localNames();
   if(slug) names[rid] = slug; else delete names[rid];
-  try{ localStorage.setItem(LINE_NAMES_KEY, JSON.stringify(names)); }catch(e){}
+  rememberJson(LINE_NAMES_KEY, names);
   /* The site panel reads the same overlaid view, so the open factory has to
      be redrawn with the tables. */
   const again = () => { sbStamp++; drawSupplyStrip(); drawSupplyView(sub.supply); drawSite(); wireAll(); };
@@ -4132,9 +4138,9 @@ function miniChart(series, key, colour, o = {}){
    building's own capacity held it). The sentence under the grid
    says which, and when capacity stood idle. */
 const HOUR_ROWS = [1,2,3,4,5,6,0];
-const WEEK_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-/* WEEK_SHORT[wd] in the UI language, for the site panel's own labels. The
-   arrays stay English: spIdleWeek() reads Python's English weekday off them. */
+/* A weekday (0 = Sunday) as a short label in the UI language, for the site
+   panel's own labels. WEEKDAY_NAMES stays English: spIdleWeek() reads Python's
+   English weekday off it. */
 function spWd(wd){
   switch(((Math.trunc(Number(wd)) % 7) + 7) % 7){
     case 0: return tt("sp.wd.0", "Sun");
@@ -5759,15 +5765,14 @@ function spOfficeRoster(b){
   const comp = gwOfficeComputers(row);
   /* Now, and after the write adds what it can: it never takes an entry away. */
   const now = ((row.current || {}).list || []).filter(s => comp.has(s.s)), after = now.concat(gwRosterWeek(row).added);
-  const hours = list => list.reduce((n, s) => n + s.t - s.f, 0);
   const people = list => new Set(list.map(s => s.p).filter(p => p !== null && p !== undefined)).size;
   const open = (row.shifts || []).filter(s => spNobody(s.p));
-  const facts = [[tt("sp.off.hours", "Hours / week"), hours(now), hours(after)], [tt("sp.off.people", "People"), people(now), people(after)]];
+  const facts = [[tt("sp.off.hours", "Hours / week"), gwHours(now), gwHours(after)], [tt("sp.off.people", "People"), people(now), people(after)]];
   return `<section class="sec rv" data-block="roster" id="sp-roster" data-site="${attr(b.key)}">
     ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", quiet: tt("sp.off.quiet", "the office default: {n} always on, every computer on weekdays 8 to 22", {n: row.alwaysOn || 0})})}
     <p class="quiet">${tt("sp.off.after", "Computers now → after adding the office default where they are free")}</p>
     <div class="sp-offroster">${facts.map(([k, a, z]) => `<div><span>${k}</span><b>${a === z ? z : `<s>${a}</s> → ${z}`}</b></div>`).join("")}${
-      open.length ? `<div><span>${tt("sp.off.open", "Waiting on a hire")}</span><b>${tt("sp.off.openh", "{n} h", {n: hours(open)})}</b></div>` : ""}</div>
+      open.length ? `<div><span>${tt("sp.off.open", "Waiting on a hire")}</span><b>${tt("sp.off.openh", "{n} h", {n: gwHours(open)})}</b></div>` : ""}</div>
     ${gwLink() ? gwRosterButtons(b.key) : `<p class="quiet">${tt("sp.off.link", "Link the game to write this week from here.")}</p>`}
   </section>`;
 }
@@ -7250,7 +7255,6 @@ function spActs(b, kind){
    the type on a line under the name. */
 const siteTd = b => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${siteLink(b)}${mapButton(b.key, b.name || b.address)}<span class="sub"${
   b.code ? ` style="padding-left:34px"` : ""}>${spEsc(b.type)}</span>`;
-const checkMark = `<span class="check" style="vertical-align:-4px;margin-right:6px">${icon("tick")}</span>`;
 
 /* One import row's setting: what the game holds, what the board suggests,
    and what the Set to box shows. Pure, so it can be checked without a page.
@@ -8125,7 +8129,6 @@ function pgStateAt(siteKey, slug){
 const SB_VIEWS = ["changes", "imports", "deliveries", "production", "flow"];
 /* Registry: "A view or a page" (only if: see the checklist). */
 const SB_SEC = {changes: "secChanges", imports: "secImports", deliveries: "secDeliveries", production: "secProduction", flow: "secFlow"};
-const SB_LABEL = {shops: "Shops", warehouses: "Warehouses", factories: "Factories"};
 /* The view each kind of change is typed on. A catch-up belongs to the import
    it bridges, or to the wholesale delivery; a factory's daily top-up and its
    run hours to Production, which plans the lines that eat them. */
@@ -8243,8 +8246,7 @@ function sbData(){
   // No character id means no persistent marks; never mix two unknown companies.
   if(!storageKey) orderMarkCache.delete(null);
   if(!orderMarkCache.has(storageKey)){
-    let saved = [];
-    try{ saved = storageKey ? JSON.parse(localStorage.getItem(storageKey)) : []; }catch(e){}
+    const saved = storageKey ? rememberedJson(storageKey) : [];
     orderMarkCache.set(storageKey, new Set(Array.isArray(saved) ? saved.filter(x => typeof x === "string") : []));
   }
   const complete = D.meta.locale === true;
@@ -8262,7 +8264,7 @@ function sbData(){
   const kept = reconcileOrderMarks(held, c.rows.concat(sbOtherKeys.rows), complete);
   held.clear(); kept.forEach(k => held.add(k));
   const marks = held;
-  if(complete && storageKey) try{ localStorage.setItem(storageKey, JSON.stringify([...marks])); }catch(e){}
+  if(complete && storageKey) rememberJson(storageKey, [...marks]);
   const byView = {imports: [], deliveries: [], production: []};
   const at = new Map();
   c.rows.forEach((r, i) => {
@@ -8403,7 +8405,7 @@ function impSetEdits(){
   const key = character ? IMP_SET_V3 + character : null;
   if(!impSetMemo.has(key)){
     let saved = null, legacy = null;
-    if(key) try{ saved = JSON.parse(localStorage.getItem(key)); }catch(e){}
+    if(key) saved = rememberedJson(key);
     if(key && (saved === null || saved === undefined)) try{ legacy = JSON.parse(localStorage.getItem(IMP_SET_V2 + character)); }catch(e){}
     const edits = saved !== null && saved !== undefined ? impSetParse(saved, false) : impSetParse(legacy, true);
     impSetMemo.set(key, edits);
@@ -8424,7 +8426,7 @@ function impSetKeep(id, entry){
   // The supply rows read the figures: they are built again (sbData()).
   sbStamp++;
   if(entry === null) delete edits[id]; else edits[id] = {...entry, basis: impBasisOf(entry.basis)};
-  if(key) try{ localStorage.setItem(key, JSON.stringify(edits)); }catch(e){}
+  if(key) rememberJson(key, edits);
 }
 
 /* --- the supply rows ------------------------------------------------------
@@ -14144,7 +14146,7 @@ const HR_WINDOWS = {"ba:jobdemand_nomornings": [[6, 10]], "ba:jobdemand_noaftern
   "ba:jobdemand_noevenings": [[18, 22]], "ba:jobdemand_nonights": [[22, 24], [0, 4]]};
 function hrBreaks(slug, w, row){
   const slots = w.slots || [];
-  const hours = Number.isFinite(Number(w.hours)) && w.hours !== undefined ? Number(w.hours) : slots.reduce((n, s) => n + s.t - s.f, 0);
+  const hours = Number.isFinite(Number(w.hours)) && w.hours !== undefined ? Number(w.hours) : gwHours(slots);
   const days = Number.isFinite(Number(w.days)) && w.days !== undefined ? Number(w.days) : new Set(slots.map(s => s.d)).size;
   /* The hours demands are the game's own (JOB_DEMANDS,
      HoursWorkingPerWeek.Fulfilled), both ends included: a part-timer takes a
@@ -15913,7 +15915,6 @@ const hrBenchSlots = (S, x) => {
   const row = S.row || {}, p = (row.people || []).findIndex(y => y.id === x.id);
   return p < 0 ? [] : (row.shifts || []).filter(s => s.p === p);
 };
-const hrSlotHours = slots => slots.reduce((n, s) => n + s.t - s.f, 0);
 const HR_MODES = ["both", "hire", "week"];
 const HR_MODE_ICON = {both: "roster", hire: "hire", week: "clock"};
 const hrModeWord = k => k === "both" ? tt("co.hire.mode.both", "Hire and schedule")
@@ -15977,7 +15978,7 @@ function hrReviewSites(req, phase, gone, status){
           : x.from ? tt("co.hire.p.from", "reassigned from {site}", {site: spEsc(x.from.b ? shortName(x.from.b) : tt("co.hire.asite", "a site"))})
           : tt("co.hire.p.fromnone", "reassigned, unassigned before"), mv: true},
         hrRole(x.skill), x.p.level !== undefined ? `${Math.round(x.p.level)}%` : "–", x.p.wage !== undefined ? hrWage(x.p.wage) : "–",
-        weekly ? hrBenchSlots(S, x) : [], weekly ? `${hrSlotHours(hrBenchSlots(S, x))} h` : "–")).join("")}${
+        weekly ? hrBenchSlots(S, x) : [], weekly ? `${gwHours(hrBenchSlots(S, x))} h` : "–")).join("")}${
       gaps.map(x => person(tt("co.hire.p.nobody", "Nobody"), {t: x.w.band === "short" ? tt("co.hire.p.short", "too few hours for a hire")
           : (hrLast && hrGapWhyShort(hrLast.m, x)) || tt("co.hire.p.nomatch", "no {role} matches", {role: hrRole(x.w.skill)})}, hrRole(x.w.skill), "–", "–",
         x.w.slots, `${x.w.hours || 0} h`, "gap")).join("")}</div>` : "";
@@ -17503,15 +17504,11 @@ const PAGES = [
   ...(typeof showWikiRoute === "function" ? [{id:"wiki", get label(){ return tt("nav.ref.wiki2", "Wiki"); }, host:"pageWiki", newFeature:"wiki"}] : []),
 ];
 /* A view of a page, [id, label, anchor], its label (index 1) read in the UI
-   language every time. navSubLabel() is a view's label by its id. */
+   language every time. */
 function navView(id, label, anchor){
   const v = [id, "", anchor];
   Object.defineProperty(v, 1, {get: label, enumerable: true});
   return v;
-}
-function navSubLabel(pageId, id){
-  const v = SUBS[pageId] && SUBS[pageId].items.find(([k]) => k === id);
-  return v ? v[1] : id;
 }
 /* Hashes that named a page which has since become a view of another. Every link
    already saved, printed or shared keeps working, without a page behind it. */
@@ -17552,8 +17549,6 @@ const SUBS = {
                   navView("plan", () => tt("nav.view.factory", "Plan a factory"), "secPlan")]},
 };
 const PAGE_KEY = "ba_dash_page";
-const remembered = key => { try{ return localStorage.getItem(key); }catch(e){ return null; } };
-const remember = (key, v) => { try{ localStorage.setItem(key, v); }catch(e){} };
 let page = "today";
 const sub = {};
 /* Supply's views before the redesign, and the view each is now: the R13
@@ -18135,7 +18130,7 @@ const SD_KEY = "ba_dash_sidebar";
 let sdChoice = "";
 function sdPref(){
   let v = sdChoice;
-  if(!v) try{ v = localStorage.getItem(SD_KEY) || ""; }catch(e){}
+  if(!v) v = remembered(SD_KEY) || "";
   return v === "rail" || v === "full" ? v : "";
 }
 const sdPhone = () => !!(window.matchMedia && matchMedia("(max-width:560px)").matches);
@@ -18167,7 +18162,7 @@ let sdNarrowFull = false;
 function sdSet(rail){
   sdNarrowFull = !rail && (window.innerWidth || 1440) <= 1100;
   sdChoice = rail ? "rail" : "full";
-  try{ localStorage.setItem(SD_KEY, sdChoice); }catch(e){}
+  remember(SD_KEY, sdChoice);
   sdLayout();
 }
 /* The phone's drawer, over the page behind a scrim; Escape, the scrim or a
@@ -18893,14 +18888,13 @@ function toggleKindsPanel(anchor){
    counts are filled in each time it opens, so a live refresh cannot leave a
    stale number behind. */
 function buildAlertSettingsPanel(){
-  let saved = null;
-  try{ saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY)); }catch(e){}
+  const saved = rememberedJson(ALERT_SETTINGS_KEY);
   alertKindChoices = readKindChoices(saved);
   Object.assign(alertGroupPrefs, kindPrefs(alertKindChoices));
   /* A legacy map is rewritten in the new shape at once, so the migration runs
      a single time and a later default change is never read against it. */
   if(saved && saved.v !== 2){
-    try{ localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify({v: 2, set: alertKindChoices})); }catch(e){}
+    rememberJson(ALERT_SETTINGS_KEY, {v: 2, set: alertKindChoices});
   }
   if(kindsPop){ drawKindRows(); return; }
   kindsPop = document.createElement("div");
@@ -19406,16 +19400,6 @@ function ssGroupMore(g, n){
     default: return tt("nav.search.more.wiki", {one: "{n} more wiki ›", other: "{n} more wiki ›"}, {n});
   }
 }
-function ssGroupEvery(g){
-  switch(g){
-    case "views": return tt("nav.search.every.views", "every pages & views");
-    case "sites": return tt("nav.search.every.sites", "every sites");
-    case "products": return tt("nav.search.every.products", "every products");
-    case "kinds": return tt("nav.search.every.kinds", "every finding kinds");
-    case "finder": return tt("nav.search.every.finder", "every find a location");
-    default: return tt("nav.search.every.wiki", "every wiki");
-  }
-}
 /* Your own sites lead a tie; the wiki is reference, and waits. */
 const SS_BIAS = {sites: 10, wiki: -15};
 const SS_PER = 4, SS_PER_PHONE = 3;
@@ -19507,13 +19491,6 @@ function ssPrices(slug){
 }
 /* The site Optimize staffing would open, as its card names it. */
 const ssStaffingSite = () => ($("optimizeStaffingCard") || {dataset: {}}).dataset.site || "";
-/* Whose crew to show: a site with unmet staff demands, else the first that trades. */
-function ssCrewSite(){
-  const a = alertLines().find(x => x.group === "jobdemand" && x.siteKey);
-  const b = (a && D.businesses.find(x => x.key === a.siteKey))
-    || D.businesses.find(x => x.status === "retail" || x.status === "office");
-  return b ? b.key : "";
-}
 /* Ring one tile or row a palette entry landed on, the way the Roster rings. */
 function ssRing(el){
   if(!el) return;
@@ -19581,9 +19558,7 @@ const ssLands = qn => typeof qn.lands === "function" ? qn.lands() : qn.lands;
    task directory); the questions remain
    the palette's empty state. */
 function ssAskUsed(){
-  let used = false;
-  try{ used = localStorage.getItem(SS_ASK_KEY) === "1"; }catch(e){}
-  return used;
+  return remembered(SS_ASK_KEY) === "1";
 }
 function ssAskPaint(){
   const used = ssAskUsed();
@@ -19600,7 +19575,7 @@ let ssAsked = null, ssTicket = 0, ssPending = null;
 function ssAsk(id, from = page, origin = null){
   const qn = SS_QUESTIONS.find(x => x.id === id);
   if(!qn || !hasData()) return;
-  try{ localStorage.setItem(SS_ASK_KEY, "1"); }catch(e){}
+  remember(SS_ASK_KEY, "1");
   ssAskPaint();
   ssClearAsked();
   const ticket = ++ssTicket;
@@ -20395,13 +20370,12 @@ function ssWatchWiki(){
 
 /* Where you were: the last three places the palette opened, newest first. */
 function ssRecent(){
-  let list = [];
-  try{ list = JSON.parse(localStorage.getItem(SS_RECENT_KEY)) || []; }catch(e){}
+  const list = rememberedJson(SS_RECENT_KEY) || [];
   return Array.isArray(list) ? list.filter(x => x && typeof x.id === "string") : [];
 }
 function ssRemember(e){
   const list = [{id: e.id, g: e.g, t: e.t, p: e.p}, ...ssRecent().filter(x => x.id !== e.id)].slice(0, 3);
-  try{ localStorage.setItem(SS_RECENT_KEY, JSON.stringify(list)); }catch(err){}
+  rememberJson(SS_RECENT_KEY, list);
 }
 /* A remembered place still has to be on this board; a wiki page read before its
    file is in comes back from what was remembered. */
@@ -20965,8 +20939,6 @@ document.body.append(pxScrim, pxSheet);
 /* A row is a div, not a section: sections skip their painting off screen
    (content-visibility), which a sheet's rows must never do. */
 const pxRow = (id, title, lead, body) => `<div class="px-row" role="group" aria-labelledby="pxh-${id}" data-px="${id}"><div class="px-l"><h3 id="pxh-${id}">${title}</h3>${lead ? `<p>${lead}</p>` : ""}</div><div class="px-c">${body}</div></div>`;
-/* The theme in force: the attribute on <html>, or the system's. */
-const pxTheme = () => document.documentElement.getAttribute("data-theme") || "auto";
 function pxPrefsHtml(){
   /* Theme and language live in the footer, on every page (declutter X5). */
   const chip = $("localeChip"), reset = $("localeReset");
@@ -21163,7 +21135,7 @@ function wireSev(){ bindSev(); applySev(); }
 const SILENCED_KEY = "ba_dash_silenced";
 let silencedIds = new Set();
 try{ silencedIds = new Set(JSON.parse(localStorage.getItem(SILENCED_KEY)) || []); }catch(e){}
-const saveSilenced = () => { try{ localStorage.setItem(SILENCED_KEY, JSON.stringify([...silencedIds])); }catch(e){} };
+const saveSilenced = () => { rememberJson(SILENCED_KEY, [...silencedIds]); };
 function silencedLine(){
   const line = $("silenced"); if(!line) return;
   const n = $$(".find.gone").length;
@@ -21989,7 +21961,7 @@ const bindKinds = once(() => on("click", ".sw[data-kind]", s => {
   const kind = s.dataset.kind; if(!kind) return;
   alertGroupPrefs[kind] = s.classList.contains("on");
   alertKindChoices = setKindChoice(alertKindChoices, kind, alertGroupPrefs[kind]);
-  try{ localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify({v: 2, set: alertKindChoices})); }catch(e){}
+  rememberJson(ALERT_SETTINGS_KEY, {v: 2, set: alertKindChoices});
   drawAlerts();
   /* The map's Findings layer reads the same switches. */
   refreshCityMaps();
@@ -23950,7 +23922,7 @@ function gwPersonBreaks(list, demands, clean){
      as spare, which is fine (Peter, 29 September 2026). */
   if(!list.length) return [];
   const out = [], dem = demands || [];
-  const hours = list.reduce((n, e) => n + e.t - e.f, 0);
+  const hours = gwHours(list);
   const band = dem.map(d => GW_BANDS[d]).find(Boolean);
   const [lo, hi] = band || [0, GW_MOST];
   if(hours > hi || (band && hours < lo)) out.push({k: band ? "hours" : "most", n: hours, lo, hi});
@@ -23960,7 +23932,7 @@ function gwPersonBreaks(list, demands, clean){
   [...days].sort((a, b) => HR_DAYS.indexOf(a) - HR_DAYS.indexOf(b)).forEach(d => {
     const day = list.filter(e => e.d === d).sort((a, b) => a.f - b.f);
     const long = day.find(e => e.t - e.f > GW_CAP);
-    const total = day.reduce((n, e) => n + e.t - e.f, 0);
+    const total = gwHours(day);
     /* One long entry is the long day too: said once. */
     if(long) out.push({k: "entry", d, n: long.t - long.f});
     else if(total > GW_CAP) out.push({k: "day", d, n: total});
@@ -23981,10 +23953,10 @@ function gwPersonBreaks(list, demands, clean){
 function gwAddBreaks(list, e, demands, clean){
   const dem = demands || [];
   const band = dem.map(d => GW_BANDS[d]).find(Boolean), want = dem.map(d => GW_DAYS[d]).find(Boolean);
-  const day = list.filter(x => x.d === e.d), sum = xs => xs.reduce((n, x) => n + x.t - x.f, 0);
-  return sum(list) + e.t - e.f > (band ? band[1] : GW_MOST)
+  const day = list.filter(x => x.d === e.d);
+  return gwHours(list) + e.t - e.f > (band ? band[1] : GW_MOST)
     || (!!want && !day.length && new Set(list.map(x => x.d)).size >= want)
-    || e.t - e.f > GW_CAP || sum(day) + e.t - e.f > GW_CAP
+    || e.t - e.f > GW_CAP || gwHours(day) + e.t - e.f > GW_CAP
     || day.some(x => x.f < e.t && e.f < x.t)
     || gwPersonBreaks([e], dem.filter(d => !GW_BANDS[d] && !GW_DAYS[d]), clean).some(b => b.k === "demand");
 }
@@ -24162,6 +24134,7 @@ function gwRosterButtons(key){
       {h: add.hoursUncovered || 0, n: add.people})}</span>` : ""}</div>` : "";
 }
 const gwInitials = name => String(name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+/* The hours in a list of entries or slots ({f, t}), for every schedule on the board. */
 const gwHours = list => list.reduce((n, s) => n + s.t - s.f, 0);
 /* Three figures, now → after. */
 const gwTiles = items => `<div class="gw-tiles">${items.map(([label, a, b]) => `<div class="gw-tile"><span class="gw-lab">${label}</span><div class="v">${
