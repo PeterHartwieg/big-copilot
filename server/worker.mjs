@@ -67,21 +67,23 @@ export default {
   async scheduled(_controller, env) {
     // A bug report folder whose issue never opened goes within a day, whatever
     // stopped the request (docs/community-features.md, "Bug reports").
-    const sweep = env.REPORTS ? sweepReports(env.REPORTS) : null;
+    // The two cleanups run side by side and each is awaited to its end, so one
+    // failing never cuts the other short.
     const db = env.COMMUNITY_DB;
-    if (db) {
+    const results = await Promise.allSettled([
+      env.REPORTS ? sweepReports(env.REPORTS) : null,
       // The privacy notice promises both: presence rows go within two days, and a
       // poll's vote hashes go once its feature leaves features.json.
-      const ids = FEATURES.map((f) => f.id);
-      await db.batch([
+      db ? (async () => db.batch([
         db.prepare("DELETE FROM community_presence WHERE last_seen <= ?1")
           .bind(Math.floor(Date.now() / 1000) - 24 * 60 * 60),
-        ids.length
-          ? db.prepare(`DELETE FROM community_votes WHERE feature_id NOT IN (${ids.map((_, i) => `?${i + 1}`).join(", ")})`).bind(...ids)
+        FEATURES.length
+          ? db.prepare(`DELETE FROM community_votes WHERE feature_id NOT IN (${FEATURES.map((_, i) => `?${i + 1}`).join(", ")})`).bind(...FEATURES.map((f) => f.id))
           : db.prepare("DELETE FROM community_votes"),
-      ]);
-    }
-    if (sweep) await sweep;
+      ]))() : null,
+    ]);
+    const failed = results.find((r) => r.status === "rejected");
+    if (failed) throw failed.reason;
   },
 };
 
@@ -362,10 +364,20 @@ function publicError(line) {
   const one = line.replace(/[\u0000-\u001f\u007f]+/g, " ").trim()
     .replace(/\/save\/(?:[^'"`]*?\.hsg\b|[^\s'"`]*)/gi, "/save/<save>")
     .replace(/\b[A-Za-z]:[\\/]+Users[\\/]+[^\\/'"`]+/gi, "<home>")
-    .replace(/\/(?:Users|home)\/[^/'"`]+/g, "<home>")
-    .replace(/'[^']*'|"[^"]*"|`[^`]*`/g, (quoted) => quoted[0] + "…" + quoted[0])
-    .replace(/\b[0-9a-f]{2}(?:\s+[0-9a-f]{2}){3,}\b/gi, "<bytes>");
-  return one || null;
+    .replace(/\/(?:Users|home)\/[^/'"`]+/g, "<home>");
+  const masked = maskQuotes(one).replace(/\b[0-9a-f]{2}(?:\s+[0-9a-f]{2}){3,}\b/gi, "<bytes>");
+  return masked || null;
+}
+
+// Every quoted value becomes '…'. Escape-aware (Python writes 'it\'s'), and a
+// quote left open masks the rest of the line: when in doubt, less is shown.
+function maskQuotes(line) {
+  const marks = "'\"`";
+  const marked = line.replace(/[-]/g, "")
+    .replace(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`/g, (quoted) => String.fromCharCode(0xE000 + marks.indexOf(quoted[0])));
+  const open = marked.search(/['"`]/);
+  return (open < 0 ? marked : marked.slice(0, open + 1) + "…")
+    .replace(/[-]/g, (mark) => { const quote = marks[mark.charCodeAt(0) - 0xE000]; return quote + "…" + quote; });
 }
 
 function reportTitle(facts) {
@@ -433,7 +445,6 @@ async function openIssue(token, title, body) {
   return { number, url };
 }
 
-// True when nothing of the report is left in R2.
 // True when nothing of the report is left in R2. A delete that still fails is
 // caught by the daily sweep.
 async function removeReport(bucket, keys) {

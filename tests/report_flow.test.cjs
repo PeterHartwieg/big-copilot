@@ -248,3 +248,25 @@ test('a send in flight keeps the form open and sends only what it was sent with'
   await page.locator('.br-foot .btn2:not(.primary)').click();
   assert.equal(await page.locator('.br-dialog[open]').count(), 0);
 });
+
+test('a reader answer that will not decode still leaves the save with the reader for the form', async (t) => {
+  const {page, posts} = await setup(t);
+  await page.setInputFiles('#savePick', {name: SAVE_NAME, mimeType: 'application/octet-stream', buffer: SAVE});
+  await page.waitForFunction(() => fixture.messages.some((m) => m.kind === 'build'));
+  // Python can write NaN, which JSON.parse refuses.
+  await page.evaluate(() => {
+    const msg = fixture.messages.find((m) => m.kind === 'build');
+    fixture.worker.onmessage({data: {kind: 'built', id: msg.id, history: '', data: '{"meta":{"save":"x"},"kpi":NaN}'}});
+  });
+  await page.locator('#reportBtn').waitFor({state: 'visible'});
+  await page.locator('#reportBtn').click();
+  await page.locator('.br-dialog[open]').waitFor();
+  await page.waitForFunction(() => !document.getElementById('brSave').disabled);
+  await page.locator('#brText').fill('Nothing showed.');
+  await page.locator('#brSave').check();
+  await page.locator('.br-foot .primary').click();
+  await page.locator('.br-status a').waitFor();
+  const parts = await partsOf(posts[0]);
+  assert.deepEqual(parts.save, Buffer.from([9, 9, 9]));
+  assert.equal(JSON.parse(parts.report).gameBuild, 3682, 'read again by the reader');
+});

@@ -461,6 +461,14 @@ test('report: quoted values and the save parser\'s hex window never reach the is
   const issue = JSON.parse(github.calls[0].body);
   assert.match(issue.body, /ValueError: bad tag 0x99 at offset 0x1f0 <bytes> for '…'/);
   assert.doesNotMatch(issue.body, /Alice|41 00 6c/);
+  // An escaped quote does not end the value, and an open one hides the rest.
+  for (const [sent, shown] of [["ValueError: 'X\\' Alice Smith \"Y\"' end", "ValueError: '…' end"], ["KeyError: 'Alice Smith", "KeyError: '…"]]) {
+    github.calls = [];
+    await expectStatus(await send([['report', reportJson({error: sent})], ['details', '{"trace":"x"}']]), 201, sent);
+    const body = JSON.parse(github.calls[0].body).body;
+    assert.ok(body.includes('```text\n' + shown + '\n```'), body);
+    assert.doesNotMatch(body, /Alice|Smith/);
+  }
 });
 
 test('report: the store-and-file work runs under waitUntil, so a closed tab cannot cut it short', async () => {
@@ -492,5 +500,11 @@ test('sweep: the daily cron removes folders whose issue never opened, and only t
   };
   const {worker} = vmWorker(created);
   await worker.scheduled({}, {REPORTS: bucket});
+  assert.deepEqual(deleted.sort(), ['2026-10-01-b/report.json', '2026-10-01-b/save.hsg']);
+  // A failing D1 cleanup still waits for the sweep to finish, then fails the run.
+  deleted.length = 0;
+  const slow = Object.assign({}, bucket, {list: async (opts) => { await new Promise((r) => setTimeout(r, 30)); return bucket.list(opts); }});
+  const db = {prepare: () => ({bind() { return this; }}), batch: async () => { throw new Error('d1 down'); }};
+  await assert.rejects(worker.scheduled({}, {REPORTS: slow, COMMUNITY_DB: db}), /d1 down/);
   assert.deepEqual(deleted.sort(), ['2026-10-01-b/report.json', '2026-10-01-b/save.hsg']);
 });

@@ -1,6 +1,6 @@
 [
   {
-    "pr": 0,
+    "pr": 241,
     "date": "2026-10-02",
     "title": "Report a bug from the page, with your save",
     "summary": "Report a bug in the footer, in Help & feedback and beside Could not read the save opens a short form. Describe what went wrong, and tick Attach my save and Attach technical details if you want to. Your text becomes a public issue on GitHub, and the form links to it. The save and the full error are never published. They are kept privately for 30 days and used only to fix the bug. If the report cannot be sent, the form points to the Discord support channel instead."

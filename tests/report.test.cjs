@@ -139,8 +139,16 @@ test('report.js: the public line skips the save parser\'s hex window and is one 
   // worker.js shows as the last line. UTF-16 "Alice" is 41 00 6c 00 69 00 ...
   const parser = 'Traceback (most recent call last):\n  File "/ba_save.py", line 9\nValueError: unknown tag 0x99 at offset 0x1f0\n  41 00 6c 00 69 00 63 00 65 00 20 00';
   assert.equal(sent({error: '  41 00 6c 00 69 00 63 00 65 00 20 00', trace: parser}), 'ValueError: unknown tag 0x99 at offset 0x1f0');
+  // browser_build() wraps it: "<file> is not a ... save this board can read
+  // (ValueError: ... at offset 0x1f0\n  41 00 ...)". The file name is masked.
+  const wrapped = "SaveShapeError: Alice Smith-live.hsg is not a Big Ambitions save this board can read (ValueError: unknown tag 0x99 at offset 0x1f0\n  41 00 6c 00 69 00 63 00)";
+  assert.equal(sent({error: '  41 00 6c 00 69 00 63 00)', trace: 'Traceback (most recent call last):\n' + wrapped, names: ['Alice Smith-live.hsg']}),
+    'SaveShapeError: <save> is not a Big Ambitions save this board can read (ValueError: unknown tag 0x99 at offset 0x1f0');
   // A startup failure hands its whole traceback over as the error.
   assert.equal(sent({error: 'Traceback (most recent call last):\n  File "/x.py", line 1\nImportError: no module', trace: ''}), 'ImportError: no module');
+  // Quotes: escape-aware, and one left open masks the rest of the line.
+  assert.equal(report.mask("ValueError: 'X\\' Alice Smith \"Y\"' end", []), "ValueError: '…' end");
+  assert.equal(report.mask("KeyError: 'Alice Smith", []), "KeyError: '…");
   // Bytes inside a line are masked as well.
   assert.equal(report.mask('bad at 0x10 41 00 6c 00 69 00', []), 'bad at 0x10 <bytes>');
 });

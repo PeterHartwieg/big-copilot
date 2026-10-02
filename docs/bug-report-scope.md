@@ -128,7 +128,8 @@ covers bug reports:
   when "Attach technical details" is ticked, so an unticked form sends nothing but the
   text and the safe details. The Worker rejects an `error` field without a `details` part.
   The page masks the save's file name, the company, any `/save/` or home-folder path,
-  any quoted value (a `KeyError` can quote a name from the save) and any run of hex
+  any quoted value (a `KeyError` can quote a name from the save; the mask reads
+  Python's `\'` escapes, and a quote left open hides the rest of the line) and any run of hex
   bytes (the save parser prints the bytes around a fault, and those can spell a name)
   before sending, and the Worker masks the same again. When the line on screen is that
   hex window, the page takes the traceback's last line that says something instead.

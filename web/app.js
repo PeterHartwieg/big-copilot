@@ -353,6 +353,9 @@
         if (typeof msg.history === "string") stored.set(HISTORY_KEY, msg.history);
         p.resolve(data);
       } catch (err) {
+        // The reader read the save even when its answer would not decode: it
+        // still holds the save, for a bug report.
+        if (msg.kind === "built" && err && typeof err === "object") err.held = true;
         p.reject(err);
       }
     };
@@ -1719,7 +1722,7 @@
       // the save (the board could not draw it) leaves the save with the reader.
       const builtOn = built && built.meta && Number.isInteger(built.meta.build) ? built.meta.build : null;
       heldFailure = {name: file.name, error: String(err.message || ""), trace: err.trace || String(err.stack || ""),
-        bytes: err.bytes || null, held: !!built,
+        bytes: err.bytes || null, held: !!built || err.held === true,
         build: builtOn !== null ? builtOn : file.linkStamp && linkHealth && Number.isInteger(linkHealth.build) ? linkHealth.build : null};
       state("bad", () => tt("app.build.failed", "Could not read the save"),
         () => tt("app.build.attempted", "{name} · attempted {when}", {name: file.name, when: fmtTime(at)}));
@@ -2416,7 +2419,7 @@
       gameBuild: async () => {
         if (!failed) return boardSave ? boardBuild : null;
         if (failed.build !== null) return failed.build;
-        if (!failed.bytes) return null;
+        if (!failed.bytes && !failed.held) return null;
         const h = await readerHeld(true);
         return h && h.name === failed.name ? h.build : null;
       },

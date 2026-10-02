@@ -85,7 +85,7 @@
       .replace(/\/save\/(?:[^'"`]*?\.hsg\b|[^\s'"`]*)/gi, "/save/" + BR_MASK)
       .replace(/\b[A-Za-z]:[\\/]+Users[\\/]+[^\\/'"`]+/gi, "<home>")
       .replace(/\/(?:Users|home)\/[^/'"`]+/g, "<home>")
-      .replace(/'[^']*'|"[^"]*"|`[^`]*`/g, (q) => q[0] + "…" + q[0])
+      .replace(/^[\s\S]*$/, (all) => brQuotes(all))
       .replace(/\b[0-9a-f]{2}(?:\s+[0-9a-f]{2}){3,}\b/gi, "<bytes>")
       .slice(0, 500);
   }
@@ -93,12 +93,25 @@
   // The line the issue shows: the error on screen, unless that is the hex
   // window the save parser adds under its message; then the traceback's last
   // line that says something.
-  const BR_HEX_LINE = /^\s*[0-9a-f]{2}(?:\s+[0-9a-f]{2})*\s*$/i;
+  // browser_build() wraps the parser's message in "(...)", so the window can end
+  // in a bracket or a full stop.
+  const BR_HEX_LINE = /^[\s([]*[0-9a-f]{2}(?:\s+[0-9a-f]{2})*[\s)\].,]*$/i;
   function brErrorLine(ctx) {
     const said = (text) => String(text || "").split("\n").filter((l) => l.trim() && !BR_HEX_LINE.test(l));
     const own = said(ctx.error);
     const lines = own.length ? own : said(ctx.trace);
     return lines.length ? brMask(lines[lines.length - 1], ctx.names) : "";
+  }
+
+  // Every quoted value becomes '…'. Escape-aware (Python writes 'it\'s'), and a
+  // quote left open masks the rest of the line: when in doubt, less is shown.
+  function brQuotes(line) {
+    const marks = "'\"`";
+    const marked = line.replace(/[-]/g, "")
+      .replace(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`/g, (q) => String.fromCharCode(0xE000 + marks.indexOf(q[0])));
+    const open = marked.search(/['"`]/);
+    return (open < 0 ? marked : marked.slice(0, open + 1) + "…")
+      .replace(/[-]/g, (m) => { const q = marks[m.charCodeAt(0) - 0xE000]; return q + "…" + q; });
   }
 
   const brBuild = (v) => (Number.isSafeInteger(v) && v > 0 && v < 1000000 ? v : null);
@@ -111,7 +124,9 @@
      box is ticked. */
   function brParts(ctx, choice, env) {
     const report = {
-      text: String(choice.text || "").trim().slice(0, BR_TEXT_MAX),
+      // The control characters the Worker would drop go here already: JSON
+      // writes each as six bytes, which could push the part past its cap.
+      text: String(choice.text || "").replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "").trim().slice(0, BR_TEXT_MAX),
       siteBuild: brSiteBuild(ctx.siteBuild),
       gameBuild: brBuild(choice.gameBuild),
       browser: brBrowser(env.nav),
