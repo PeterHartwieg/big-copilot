@@ -1079,18 +1079,34 @@ test('the rent tooltip reports how the estimate did against your own leases', as
   } finally { await page.close(); }
 });
 
-test('on a phone the address keeps its room and the numbers stay on the card', async () => {
+test('on a phone the address keeps its room and capacity is visible in the row', async () => {
   const {page, errors} = await fixture();
   try{
     await openMap(page); await turnOn(page);
-    await page.setViewportSize({width: 360, height: 800});
-    await page.waitForTimeout(300);
+    await page.setViewportSize({width: 375, height: 800});
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#cityMapPage .places')).position === 'static');
     const shown = await page.$$eval('#cityMapPage .fhead:not(.sale) span',
       s => s.filter(x => x.offsetParent !== null).map(x => x.textContent));
     assert.deepEqual(shown, ['#', '', 'Address', 'Score', 'Upfront']);
     const nm = await page.locator(`#cityMapPage .place.fr .nm`).first().boundingBox();
     assert.ok(nm.width > 120, `address column starved at ${nm.width}px`);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1), false);
+    const capacity = page.locator(`#cityMapPage .place[data-pick="${HK[0]}"] .fr-phone-fact`);
+    assert.equal(await capacity.innerText(), `${en('map.fact.cap')}: 30`);
+    assert.equal(await capacity.isVisible(), true);
+    const columns = await page.evaluate(() => {
+      const head = [...document.querySelectorAll('#cityMapPage .fhead > span')].filter(e => e.offsetParent);
+      const row = [...document.querySelector('#cityMapPage .place.fr').children].filter(e => e.offsetParent);
+      return head.map((e, i) => Math.abs(e.getBoundingClientRect().right - row[i].getBoundingClientRect().right));
+    });
+    assert.ok(columns.every(delta => delta < 1), `header alignment: ${columns}`);
+    await page.setViewportSize({width: 1440, height: 1000});
+    assert.equal(await capacity.isVisible(), false);
+    assert.equal(await page.locator('#cityMapPage .fhead [data-s="cap"]').isVisible(), true);
+    await page.locator('#cityMapPage .fhead [data-s="cap"]').click();
+    assert.equal(await page.locator('#cityMapPage .fhead [data-s="cap"]').getAttribute('class'), 'on');
+    await page.setViewportSize({width: 375, height: 800});
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#cityMapPage .places')).position === 'static');
     // The panel flows under the map rather than floating over it.
     assert.equal(await page.locator('#cityMapPage .places').evaluate(e => getComputedStyle(e).position), 'static');
     // The card is still the place every number lives.
@@ -1246,6 +1262,49 @@ test('floor area is a column that sorts, and a filter on every list', async () =
     await m2('min').fill('0');
     await m2('max').fill('500');
     assert.deepEqual(await rowKeys(page), [HK[0]]);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('phone finder facts fit warehouse, factory planning, range and sale rows', async () => {
+  const WH = geometry.buildings.find(b => b.hood === 'Midtown' && ![...HK, ...MT].includes(b.key)).key;
+  const premises = {...PREMISES, buildings: [...PREMISES.buildings,
+    site(WH, {type: 'warehouse', size: 'E', m2: 1887, cap: null, rent: 140, traffic: 30})]};
+  const {page, errors} = await fixture(null, {premises});
+  const fits = async root => {
+    const metrics = await page.locator(root).evaluate(host => {
+      const head = [...host.querySelector('.fhead').children].filter(e => e.offsetParent);
+      const row = [...host.querySelector('.place.fr').children].filter(e => e.offsetParent);
+      return {address: host.querySelector('.place.fr .nm').getBoundingClientRect().width,
+        aligned: head.length === row.length && head.every((e, i) =>
+          Math.abs(e.getBoundingClientRect().right - row[i].getBoundingClientRect().right) < 1)};
+    });
+    assert.ok(metrics.address > 120, `address room: ${metrics.address}`);
+    assert.ok(metrics.aligned, 'header and rows align');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1), false);
+  };
+  try{
+    await openMap(page); await turnOn(page);
+    await page.setViewportSize({width: 375, height: 800});
+    await page.locator('#cityMapPage .fchip.cat[data-cat="theater"]').click();
+    assert.equal(await page.locator('#cityMapPage .place.fr .fr-phone-fact').first().innerText(), `${en('map.fact.cap')}: 150–200`);
+    await fits('#cityMapPage');
+    await page.locator('#cityMapPage .fchip.cat[data-cat="warehouse"]').click();
+    assert.equal(await page.locator('#cityMapPage .place.fr.wh .fr-phone-fact').count(), 0);
+    await fits('#cityMapPage');
+    await page.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
+    await page.locator('#cityMapPage .fchip.show[data-show="sale"]').click();
+    assert.equal(await page.locator(`#cityMapPage .place.fr.sale[data-pick="${HK[0]}"] .fr-phone-fact`).innerText(), `${en('map.fact.cap')}: 30`);
+    await fits('#cityMapPage');
+    await page.evaluate(async () => {
+      const host = document.createElement('div'); host.id = 'factoryPhone';
+      document.getElementById('cityMapPage').appendChild(host);
+      window.__factoryPhone = new CityMapView(host, {plan: {preset: {cat: 'warehouse', hoods: null}}});
+      await window.__factoryPhone.ready;
+    });
+    await page.locator('#factoryPhone .place.fr.wh.fpw').first().waitFor();
+    assert.equal(await page.locator('#factoryPhone .fr-phone-fact').innerText(), `${en('map.col.rent')}: $140`);
+    await fits('#factoryPhone');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

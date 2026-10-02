@@ -4265,13 +4265,30 @@ function hourRoles(g, wd, h){
   return at.length ? at : roles;
 }
 
+/* A singular game label for translations; the English plurals remain data
+   for the English sentences and comparisons against Python's limits. */
+const spRoleStationName = r => gnLocal(r.stationKey) || tt("sp.hour.stations", "stations");
 /* One role's stations that hour, furniture and throughput kept apart: how many
    of them were manned, then what they were worth an hour. */
 function roleRead(r, wd, h){
   const n = r.posts ? r.posts[wd][h] : 0;
   const many = r.many || r.noun || tt("sp.hour.stations", "stations");
   return tt("sp.hour.role", "{n} of {of} {noun} · {rate}/h",
-    {n, of: r.stationCount, noun: r.stationCount === 1 ? (r.one || many) : many, rate: r.staffed[wd][h]});
+    {n, of: r.stationCount, noun: r.stationCount === 1 ? (r.one || many) : many, noun_name: spRoleStationName(r), rate: r.staffed[wd][h]});
+}
+
+/* The station description in the Customers by hour header. */
+function spHoursWhat(grid){
+  return grid.office
+    ? tt("sp.hours.what.desks", {one: "{n} workstation, each billing {rate} an hour when staffed",
+        other: "{n} workstations, each billing {rate} an hour when staffed"},
+        {n: grid.stationCount, rate: tt("sp.hour.customers", {one: "{n} customer", other: "{n} customers"}, {n: grid.postRate})})
+    : (grid.roles || []).length > 1
+      ? tt("sp.hours.what.roles", "{n} roles, the slowest {rate} an hour", {n: grid.roles.length, rate: grid.counters})
+      : grid.roles && grid.roles[0] && grid.roles[0].noun
+        ? tt("sp.hours.what.noun", "{n} {noun}, {rate} an hour between them", {n: grid.roles[0].stationCount, noun: grid.roles[0].noun, noun_name: spRoleStationName(grid.roles[0]), rate: grid.counters})
+        : tt("sp.hours.what.registers", {one: "{rate} register capacity across {n} counter", other: "{rate} register capacity across {n} counters"},
+            {n: grid.stationCount, rate: grid.counters});
 }
 
 /* The hour the grid's read-out opens on before one is pointed at: the busiest
@@ -4444,7 +4461,7 @@ function spIdleParts(parts, noun){
   const named = parts.map((p, i) => i)
     .sort((a, z) => ((parts[z].spare || 0) - (parts[a].spare || 0)) || a - z)
     .slice(0, SP_IDLE_PARTS).sort((a, z) => a - z);
-  const said = named.map(i => tt("sp.idle.part", "{n} {noun} {when}", {n: parts[i].staff, noun: parts[i].noun || noun, when: parts[i].when})).join("; ");
+  const said = named.map(i => tt("sp.idle.part", "{n} {noun} {when}", {n: parts[i].staff, noun: parts[i].noun || noun, noun_name: parts[i].noun || noun, when: parts[i].when})).join("; ");
   const more = parts.length - named.length;
   return more ? tt("sp.idle.more", "{said} (and {n} more)", {said, n: more}) : said;
 }
@@ -7211,16 +7228,7 @@ function drawSite(){
     ${grid ? `<section class="sec rv" data-block="hours" id="sp-hours">
       ${sechead(tt("sp.hours.title", "Customers by hour"), {icon: "hours", why: (() => {
         const weeks = Math.min(...grid.weeks.filter(w => w));
-        const what = grid.office
-          ? tt("sp.hours.what.desks", {one: "{n} workstation, each billing {rate} an hour when staffed",
-              other: "{n} workstations, each billing {rate} an hour when staffed"},
-              {n: grid.stationCount, rate: tt("sp.hour.customers", {one: "{n} customer", other: "{n} customers"}, {n: grid.postRate})})
-          : (grid.roles || []).length > 1
-            ? tt("sp.hours.what.roles", "{n} roles, the slowest {rate} an hour", {n: grid.roles.length, rate: grid.counters})
-            : grid.roles && grid.roles[0] && grid.roles[0].noun
-              ? tt("sp.hours.what.noun", "{n} {noun}, {rate} an hour between them", {n: grid.roles[0].stationCount, noun: grid.roles[0].noun, rate: grid.counters})
-              : tt("sp.hours.what.registers", {one: "{rate} register capacity across {n} counter", other: "{rate} register capacity across {n} counters"},
-                  {n: grid.stationCount, rate: grid.counters});
+        const what = spHoursWhat(grid);
         return `${grid.thin.some(Boolean)
           ? tt("sp.hours.why.weeks.thin", {one: "{n} week of hour reports; starred days rest on under 2 weeks.", other: "{n} weeks of hour reports; starred days rest on under 2 weeks."}, {n: weeks})
           : tt("sp.hours.why.weeks", {one: "{n} week of hour reports.", other: "{n} weeks of hour reports."}, {n: weeks})} ${
