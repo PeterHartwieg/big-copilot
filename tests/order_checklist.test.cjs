@@ -590,3 +590,48 @@ test('a factory line short of its hours is one "Factory run hours" row; more hou
   assert.match(context.orderChecklistText(rows, 'Company'), enRe("sb.ck.copy.full"));
   assert.equal(card(rows).what, en("today.moves.plan.one.at", {item: "<b>Cake</b>", site: "Factory", change: en("today.moves.plan.hours", {from: "12", to: "24"})}));
 });
+
+/* Issue #203: the margin is named only where the figure carries it. Full
+   production sizes factory lines at capacity with no margin, so an order or
+   a top-up for factory lines alone claims none, in the copied text too; one
+   for lines and shops puts it on the shops' share; shop demand keeps it. */
+test('a factory-lines order at full production names no margin; lines and shops name it on the shops\' share', () => {
+  const lines = {lines: 67200, sites: 0, route: 0}, both = {lines: 1000, sites: 300, route: 0};
+  const at = (parts, use, need, sizedFor) => order({item: 'Ground Beef', current: 10000, inGame: 10000, setTo: need, value: need,
+    use, parts, sizedFor, fact: fact('short', {use, need, setTo: need, parts})});
+  const [full] = build({imports: [{s: 0, rows: [at(lines, 67200, 67200, 'cap')]}]});
+  assert.equal(full.proposed, 67200);
+  const linesOnly = enRe("sb.ck.uses.lines", {n: 67200, route: "", margin: ""}).source + "\\.";
+  assert.match(full.reason, new RegExp(linesOnly + "$"));
+  const text = context.orderChecklistText([full], 'Company');
+  assert.match(text, new RegExp(linesOnly));
+  assert.doesNotMatch(text, enRe("sb.ck.margin.pct", {pct: 15}));
+  // Lines and shops at full production: the margin is on the shops' share.
+  const [mixed] = build({imports: [{s: 0, rows: [at(both, 1300, 1345, 'cap')]}]});
+  assert.match(mixed.reason, enRe("sb.ck.uses.both", {n: 1300, route: "", margin: en("sb.ck.margin.shops.pct", {pct: 15})}));
+  // Shop demand adds the margin over the whole chain.
+  const [dem] = build({imports: [{s: 0, rows: [at(both, 1300, 1495, 'dem')]}]});
+  assert.match(dem.reason, enRe("sb.ck.uses.both", {n: 1300, route: "", margin: en("sb.ck.margin.pct", {pct: 15})}));
+});
+
+test('a full-rate factory input and a depot feeding factory lines name no margin they do not add', () => {
+  const [input] = build({sites: [{s: 1, rows: [{item: 'Water', target: 100, perDay: 240, from: 0, margin: 0.15, sizedFor: 'cap',
+    fact: fact('short', {use: 240, need: 240, setTo: 240})}]}]});
+  assert.match(input.reason, new RegExp(enRe("sb.ck.input.cap", {margin: ""}).source + "$"));
+  const depot = {s: 0, item: 'Water', slug: 'water', margin: 0.15,
+    fact: fact('short', {role: 'depot', cad: 'daily', use: 240, need: 240, have: 100, setTo: 240, from: 1})};
+  const [row] = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [depot])));
+  assert.match(row.reason, new RegExp(enRe("sb.ck.depot.busiest", {n: 240, margin: ""}).source + "$"));
+  // 240 a day to factory lines and 100 to shops at full production: 355, the
+  // margin on the shops' share alone. Under shop demand it is on all of it.
+  const mixed = sizedFor => ({...depot, sizedFor, fact: {...depot.fact, use: 340, need: sizedFor === 'dem' ? 391 : 355, setTo: 360}});
+  const [cap] = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [mixed('cap')])));
+  assert.match(cap.reason, enRe("sb.ck.depot.busiest", {n: 340, margin: en("sb.ck.margin.shops.pct", {pct: 15})}));
+  const [dem] = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [mixed('dem')])));
+  assert.match(dem.reason, enRe("sb.ck.depot.busiest", {n: 340, margin: en("sb.ck.margin.pct", {pct: 15})}));
+  // A wholesale contract into a depot feeding lines and shops at full production.
+  const ws = {s: 0, item: 'Syrup', slug: 'syrup', margin: 0.15, sizedFor: 'cap', fact: fact('short', {why: 'order', lvl: 'critical',
+    role: 'depot', cad: 'weekly', use: 2380, need: 2485, have: 2000, setTo: 2490, wholesale: true, parts: {lines: 1680, sites: 700, route: 0}})};
+  const [w] = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [], [ws])));
+  assert.match(w.reason, enRe("sb.ck.ws.uses.all", {n: 2380, margin: en("sb.ck.margin.shops.pct", {pct: 15}), need: 2485}));
+});

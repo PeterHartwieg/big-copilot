@@ -2393,3 +2393,122 @@ def two_breweries_board():
     c = t.build([(t.BREW_A, "brewery", 1, 500, 0), (t.BREW_B, "brewery", 1, 500, 0)], 1000)
     return {"meta": {"character": "bottom-up", "day": c.day, "save": "Fixture"},
             "supply": c.supply, "businesses": c.business_list, "alerts": [], "plan": {"recipes": []}}
+
+
+def goods_flow_sizing_chain():
+    """Issue #203: a depot importing 700 water a week (landing in five days,
+    300 held) tops up a one-machine brewery, which eats 240 water a day at
+    full rate; the brewery's bar sells 100 beer a day, about 33 water."""
+    c = Chain()
+    c.site(WH, "Water depot")
+    c.contract(WH, WATER, 700, due=c.day + 5)
+    c.hold(WH, WATER, 300)
+    c.factory(BREWERY, "Brewery", machines=1)
+    c.hold(BREWERY, WATER, 240)
+    c.plan(WH, BREWERY, WATER, 240)
+    c.plan(BREWERY, SHOP, BEER, 400)
+    c.shop(SHOP, "Bar")
+    c.hold(SHOP, BEER, 400, 100)
+    c.run()
+    return c
+
+
+def goods_flow_sizing_board():
+    """goods_flow_sizing_chain() as the board reads it: tests/import_routes.test.cjs
+    follows the depot on Goods flow in each sizing."""
+    c = goods_flow_sizing_chain()
+    return {"meta": {"character": "bottom-up", "day": c.day, "save": "Fixture"},
+            "supply": c.supply, "businesses": c.business_list, "alerts": [], "plan": {"recipes": []}}
+
+
+class GoodsFlowSizingTests(unittest.TestCase):
+    """Issue #203: a site's figures on the goods flow follow the sizing, as
+    its facts and import rows do: 24/7 on the item, what Demand sizing
+    changes under `dem`."""
+
+    def item(self, c, addr, slug=WATER):
+        node = next(n for n in c.supply["graph"]["nodes"] if n["site"] == c.index(addr))
+        return next(i for i in node["items"] if i["slug"] == slug)
+
+    def test_a_depot_line_needs_what_each_sizings_walk_says(self):
+        c = goods_flow_sizing_chain()
+        item, s = self.item(c, WH), c.index(WH)
+        rows = {mode: next(r for r in c.supply[key] if r["s"] == s and r["slug"] == WATER)
+                for mode, key in (("cap", "imports"), ("dem", "importsDem"))}
+        dem = {**item, **item.get("dem", {})}
+        self.assertEqual(item["need"], rows["cap"]["dueNeed"])
+        self.assertEqual(dem["need"], rows["dem"]["dueNeed"])
+        self.assertLess(dem["need"], item["need"])
+        self.assertEqual((item["cycleNeed"], dem["cycleNeed"]),
+                         tuple(round(rows[m]["importPerDay"] * 7) for m in ("cap", "dem")))
+        # The order is the order in either sizing: no change to lay over it.
+        self.assertNotIn("provision", item["dem"])
+        # The word is the fact's in each sizing: short at full production,
+        # covered for what the bar sells.
+        facts = c.supply["facts"]
+        self.assertEqual((item["st"], dem["st"]),
+                         (_supply_fact(facts, s, WATER)["st"], _supply_fact(facts, s, WATER, "dem")["st"]))
+        self.assertEqual((item["st"], dem["st"]), ("short", "covered"))
+
+    def test_a_factory_input_needs_its_machines_draw_in_each_sizing(self):
+        c = goods_flow_sizing_chain()
+        item = self.item(c, BREWERY)
+        site = next(x for x in c.supply["factories"]["sites"] if x["s"] == c.index(BREWERY))
+        row = next(n for n in site["needs"] if n["slug"] == WATER)
+        self.assertEqual(item["need"], row["perDay"])
+        self.assertEqual({**item, **item.get("dem", {})}["need"], row["demDay"])
+        self.assertLess(row["demDay"], row["perDay"])
+
+    def test_a_depot_only_routes_feed_needs_its_factory_lines_draw(self):
+        """water_depot_chain(): no import at the depot, so its need is a
+        day of what leaves it in each sizing's walk, the brewery's ten
+        machines included (2,400 at full rate), not the shops' sales alone."""
+        c = water_depot_chain()
+        item = self.item(c, WH)
+        walked = {mode: c.fact(WH, WATER, mode) for mode in ("cap", "dem")}
+        self.assertEqual(item["cadence"], "daily")
+        self.assertEqual(item["need"], walked["cap"]["use"])
+        self.assertEqual(item["need"], 2400)
+        self.assertEqual(item["dem"]["need"], walked["dem"]["use"])
+        self.assertLess(item["dem"]["need"], item["need"])
+
+    def test_a_depot_line_nothing_draws_on_in_demand_needs_nothing_there(self):
+        """The bar sells one beer a day: the brewery's water for shop demand
+        rounds to nothing, so Demand's walk has no import row for the
+        depot's water. The line needs nothing before its refill there, its
+        order still brings 700, and the word is Demand's."""
+        c = Chain()
+        c.site(WH, "Water depot")
+        c.contract(WH, WATER, 700, due=c.day + 5)
+        c.hold(WH, WATER, 300)
+        c.factory(BREWERY, "Brewery", machines=1)
+        c.hold(BREWERY, WATER, 240)
+        c.plan(WH, BREWERY, WATER, 240)
+        c.plan(BREWERY, SHOP, BEER, 400)
+        c.shop(SHOP, "Bar")
+        c.hold(SHOP, BEER, 400, 1)
+        c.run()
+        s = c.index(WH)
+        self.assertFalse([r for r in c.supply["importsDem"] if r["s"] == s and r["slug"] == WATER])
+        item = self.item(c, WH)
+        self.assertGreater(item["need"], 0)
+        dem = {**item, **item.get("dem", {})}
+        self.assertEqual((dem["need"], dem["cycleNeed"], dem["provision"]), (0, 0, 700))
+        self.assertEqual(dem["st"], _supply_fact(c.supply["facts"], s, WATER, "dem")["st"])
+
+    def test_a_factorys_own_import_needs_its_machines_demand_draw(self):
+        """FactoryOwnImportTests' brewery: its own import, landing in five
+        days, eats 240 a day at full rate and what the bar's beer takes for
+        shop demand; nothing leaves the site."""
+        c = FactoryOwnImportTests().brewery(500)
+        item = self.item(c, BREWERY)
+        site = next(x for x in c.supply["factories"]["sites"] if x["s"] == c.index(BREWERY))
+        row = next(n for n in site["needs"] if n["slug"] == WATER)
+        dem = {**item, **item.get("dem", {})}
+        self.assertEqual(item["cycleNeed"], max(row["depotNeed"], row["perDay"] * 7))
+        self.assertEqual(dem["cycleNeed"], row["demDay"] * 7)
+        self.assertLess(dem["need"], item["need"])
+
+    def test_a_shelf_is_the_same_in_both(self):
+        c = goods_flow_sizing_chain()
+        self.assertNotIn("dem", self.item(c, SHOP, BEER))
