@@ -118,4 +118,10 @@ test('English role, header and idle sentences remain exactly unchanged', () => {
   assert.equal(c.spHoursWhat({roles: [role], counters: 30}), '3 projection booths, 30 an hour between them');
   assert.equal(c.spIdleParts([{staff: 2, noun: role.noun, when: '09–10'}], 'counters'), '2 projection booths 09–10');
   assert.equal(role.noun, 'projection booths');
+  // English has no game-name table: a shared station idle beside another role
+  // keeps its English plural, as it did before.
+  const grid = {roles: [{...role, posts: week(2), staffed: week(20), onShift: week(2)},
+      {...role, many: 'ticket booths', shared: true, posts: week(2), staffed: week(30), onShift: week(2)}],
+    counters: 30, peak: 10, customers: week(10), effective: week(20), thin: Array(7).fill(false)};
+  assert.ok(c.hourGrid(grid, 0).includes('ticket booths idle'));
 });
