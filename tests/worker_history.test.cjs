@@ -69,7 +69,7 @@ function worker({failSection = false} = {}) {
 let lastSave = null;
 let localeText = null;
 let queue = Promise.resolve();
-let held = null;
+let heldGen = null;
 let boards = 0;
 const ready = Promise.resolve();
 const say = () => {};
@@ -214,5 +214,12 @@ test('a section Python cannot work out fails like a build, with its last line', 
   const w = worker({failSection: true});
   await w.send(build(1, ''));
   await w.send({kind: 'section', id: 2, name: 'hiring', gen: 1});
-  assert.equal(JSON.stringify(w.posted.at(-1)), JSON.stringify({kind: 'failed', id: 2, error: 'the board hit a bug'}));
+  const reply = w.posted.at(-1);
+  assert.equal(reply.kind, 'failed');
+  assert.equal(reply.id, 2);
+  assert.equal(reply.error, 'the board hit a bug');
+  // The whole traceback rides along for a bug report, as a build's does; a
+  // section sends no save bytes (it was given none).
+  assert.match(reply.trace, /SaveShapeError: the board hit a bug/);
+  assert.equal(reply.bytes, null);
 });
