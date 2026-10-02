@@ -598,33 +598,43 @@ class AlertIdTests(MsgAsserts, unittest.TestCase):
 
 class TheatreGridTests(MsgAsserts, unittest.TestCase):
     """A theatre as the game builds one (issue #159): Customer Service at the
-    ticket booths and the concessions stand register (both required), Stage
-    Crew at the costume, lighting and sound booths, Actors in the dressing
-    rooms. It has no projection booth and employs no projectionist. The site is
-    only as fast as its slowest role.
+    ticket booths and the concessions stand register, Stage Crew at the
+    costume, lighting and sound booths, Actors in the dressing rooms. It has no
+    projection booth and employs no projectionist.
 
-    The board pools the ticket booths and the registers into one Customer
-    Service role. Whether the game gates entry on the ticket booths alone is
-    not known (issue #159), so these tests pin the pooling as it stands."""
+    The game caps the hour at the smallest of the type's business requirements
+    (ticket booth, dressing room, lighting, sound and costume booth, cash
+    register), each the sum of its manned stations, and never sums two of them
+    (_requirement_roles()). So each requirement is its own role, and one of
+    each holds the theatre to 50 an hour, not the 80 a pooled Customer Service
+    and Stage Crew would give."""
 
-    def theatre(self, actors=1, rooms=1, service_booths=1, service_staff=2, crew=3,
-                customers=50, extra=()):
-        """Ticket booths and one concessions stand register at 50/h each, one each
-        of the three crew booths at 100/h and dressing rooms at 80/h, with the
-        people given on them 8-20 Monday. Service staff fill the ticket booths
-        first, then the register."""
-        items = [(1 + i, BOOTH) for i in range(service_booths)]
-        items += [(5, CONCESSION)]
-        items += [(11, COSTUME), (12, LIGHTING), (13, SOUND)]
+    BARE = [ACTOR, SERVICE, f"{SERVICE}|{CONCESSION}", STAGECREW,
+            f"{STAGECREW}|{LIGHTING}", f"{STAGECREW}|{SOUND}"]
+
+    def theatre(self, actors=1, rooms=1, booths=1, ticket_staff=1, registers=1,
+                register_staff=1, crew=3, lighting=1, customers=50, extra=(), stage=()):
+        """Ticket booths and concessions stand registers at 50/h each, the
+        costume, lighting and sound booths at 100/h and dressing rooms at 80/h,
+        with the people given on them 8-20 Monday. Stage Crew take the costume
+        booth, then the sound booth, then the lighting booths. `stage` are
+        actors on a shift that names no station."""
+        crew_posts = [11, 16] + [12 + i for i in range(lighting)]
+        items = [(1 + i, BOOTH) for i in range(booths)]
+        items += [(5 + i, CONCESSION) for i in range(registers)]
+        items += [(11, COSTUME), (16, SOUND)] + [(12 + i, LIGHTING) for i in range(lighting)]
         items += [(20 + i, DRESSING) for i in range(rooms)]
         items += list(extra)
-        people = {f"t{i + 1}": SERVICE for i in range(service_staff)}
+        people = {f"t{i + 1}": SERVICE for i in range(ticket_staff)}
+        people.update({f"r{i + 1}": SERVICE for i in range(register_staff)})
         people.update({f"c{i + 1}": STAGECREW for i in range(crew)})
         people.update({f"a{i + 1}": ACTOR for i in range(actors)})
-        posts = [1 + i for i in range(service_booths)] + [5]
-        shifts = [shift(f"t{i + 1}", posts[i % len(posts)], 8, 20) for i in range(service_staff)]
-        shifts += [shift(f"c{i + 1}", 11 + i, 8, 20) for i in range(crew)]
+        people.update({f"s{i + 1}": ACTOR for i in range(len(stage))})
+        shifts = [shift(f"t{i + 1}", 1 + i, 8, 20) for i in range(ticket_staff)]
+        shifts += [shift(f"r{i + 1}", 5 + i, 8, 20) for i in range(register_staff)]
+        shifts += [shift(f"c{i + 1}", crew_posts[i], 8, 20) for i in range(crew)]
         shifts += [shift(f"a{i + 1}", 20 + (i % max(rooms, 1)), 8, 20) for i in range(actors)]
+        shifts += [shift(f"s{i + 1}", post, 8, 20) for i, post in enumerate(stage)]
         hourly = {h: customers if 8 <= h < 20 else 0 for h in range(24)}
         b = building(items, shifts, hourly, 200, btype=THEATRE, number=7, name="Playhouse")
         return grid_of(b, people, _service_stations(NAMES), name="Playhouse", basket=20.0,
@@ -633,27 +643,35 @@ class TheatreGridTests(MsgAsserts, unittest.TestCase):
     def findings(self, grid):
         return _hour_findings([grid], [site("Playhouse", number=7, basket=20.0, btype=THEATRE)], {})
 
-    def test_the_site_is_only_as_fast_as_its_slowest_role(self):
+    def role(self, grid, key):
+        return next(r for r in grid["roles"] if r["key"] == key)
+
+    def test_each_requirement_is_its_own_queue(self):
         grid = self.theatre()
-        self.assertEqual([r["skill"] for r in grid["roles"]], [ACTOR, SERVICE, STAGECREW])
-        # Customer Service pools the ticket booth and the register: 50 + 50.
-        self.assertEqual(sorted(r["counters"] for r in grid["roles"]), [80, 100, 300])
-        self.assertEqual(grid["counters"], 80)  # the dressing room, not the 480 installed
-        self.assertEqual(grid["staffed"][MONDAY][10], 80)
-        self.assertEqual(grid["onShift"][MONDAY][10], 1)  # the one actor binds the count
+        self.assertEqual([r["key"] for r in grid["roles"]], self.BARE)
+        self.assertEqual([r["counters"] for r in grid["roles"]], [80, 50, 50, 100, 100, 100])
+        # One of each: the ticket booth and the register hold it to 50, where
+        # a pooled Customer Service read 100 and the dressing room's 80 bound.
+        self.assertEqual(grid["counters"], 50)
+        self.assertEqual(grid["staffed"][MONDAY][10], 50)
+        # The two queues of one skill are named by their stations.
+        service = [r for r in grid["roles"] if r["skill"] == SERVICE]
+        self.assertTrue(all(r.get("shared") for r in service))
+        self.assertEqual([r["noun"] for r in service], ["ticket booths", "concessions stand registers"])
 
     def test_a_role_left_unmanned_stops_the_site(self):
         grid = self.theatre(actors=0)
         self.assertEqual(grid["staffed"][MONDAY][10], 0)
         self.assertEqual(grid["onShift"][MONDAY][10], 0)
-        actor = next(r for r in grid["roles"] if r["skill"] == ACTOR)
-        crew = next(r for r in grid["roles"] if r["skill"] == STAGECREW)
-        self.assertEqual(actor["staffed"][MONDAY][10], 0)
-        self.assertEqual(crew["staffed"][MONDAY][10], 300)
+        self.assertEqual(self.role(grid, ACTOR)["staffed"][MONDAY][10], 0)
+        self.assertEqual(self.role(grid, STAGECREW)["staffed"][MONDAY][10], 100)
 
     def test_the_role_that_holds_the_site_back_gets_its_own_line(self):
-        """Two dressing rooms and one actor: the ceiling is the actor's."""
-        grid = self.theatre(rooms=2, customers=80)
+        """Two dressing rooms and one actor, everything else at 100: the
+        ceiling is the actor's."""
+        grid = self.theatre(rooms=2, booths=2, ticket_staff=2, registers=2, register_staff=2,
+                            customers=80)
+        self.assertEqual(grid["staffed"][MONDAY][10], 80)
         [finding] = self.findings(grid)
         self.assertEqual(finding["hours"], 12)
         self.assertMsg(finding["limit"], "sp.py.limit.role", role="Actor")
@@ -661,38 +679,51 @@ class TheatreGridTests(MsgAsserts, unittest.TestCase):
         self.assertMsg(finding["noun"], "sp.py.noun.station", stations="dressing rooms")
 
     def test_a_role_faster_than_the_binding_one_is_not_the_limit(self):
-        """Two crew for three booths, the one dressing room manned.
-
-        The dressing room holds the site at 80 an hour. Stage Crew is a person
-        short, but hiring one cannot raise the site while the dressing room is
-        the slowest thing in it.
-        """
-        grid = self.theatre(crew=2, customers=80)
-        crew = next(r for r in grid["roles"] if r["skill"] == STAGECREW)
-        self.assertEqual((crew["counters"], crew["staffed"][MONDAY][10]), (300, 200))
+        """Two lighting booths and one Stage Crew on them: the dressing room
+        holds the site at 80 an hour. Lighting is a person short, but hiring
+        one cannot raise the site while the dressing room is the slowest
+        thing in it."""
+        grid = self.theatre(booths=2, ticket_staff=2, registers=2, register_staff=2,
+                            lighting=2, customers=80)
+        lights = self.role(grid, f"{STAGECREW}|{LIGHTING}")
+        self.assertEqual((lights["counters"], lights["staffed"][MONDAY][10]), (200, 100))
         self.assertEqual(grid["staffed"][MONDAY][10], 80)
         [finding] = self.findings(grid)
         self.assertMsg(finding["limit"], "sp.py.limit.station", stations="dressing rooms")
         self.assertMsg(finding["fix"], "sp.py.fix.role.post", station="dressing room")
-        self.assertNoMsg(finding["fix"], "sp.py.fix.role.staff")
+        self.assertNoMsg(finding["fix"], "sp.py.fix.station.staff")
 
-    def test_customer_service_short_of_people_binds_below_the_actor(self):
-        """One server for a ticket booth and a register: 50 an hour, under the
-        dressing room's 80, and short of a person, not of a station."""
-        grid = self.theatre(service_staff=1, customers=50)
-        service = next(r for r in grid["roles"] if r["skill"] == SERVICE)
-        self.assertEqual((service["counters"], service["staffed"][MONDAY][10]), (100, 50))
+    def test_a_ticket_booth_short_of_people_is_named_by_its_station(self):
+        """Two ticket booths and one person on them, two registers manned: 50
+        an hour, under the dressing room's 80, short of a person at the ticket
+        booth, not of a register."""
+        grid = self.theatre(booths=2, ticket_staff=1, registers=2, register_staff=2)
+        booth = self.role(grid, SERVICE)
+        self.assertEqual((booth["counters"], booth["staffed"][MONDAY][10]), (100, 50))
         self.assertEqual(grid["staffed"][MONDAY][10], 50)
         [finding] = self.findings(grid)
-        self.assertMsg(finding["limit"], "sp.py.limit.staffing")
-        self.assertMsg(finding["fix"], "sp.py.fix.service.staff")
+        self.assertMsg(finding["limit"], "sp.py.limit.station.staff", station="ticket booth")
+        self.assertMsg(finding["fix"], "sp.py.fix.station.staff", role="Customer Service",
+                       station="ticket booth")
+        self.assertNoMsg(finding["fix"], "sp.py.fix.service.staff")
+
+    def test_an_actor_on_a_shift_with_no_station_serves_nobody(self):
+        """The game's schedule has a row with no station in a theatre, but it
+        is the stage's licensing fee, not a post (ScheduleCellView hides its
+        hours), and the theatre sells nothing unless an actor is at a dressing
+        room (BusinessHelper.ShouldWarnTheaterHasNoActors, build 3682). An
+        actor on a shift that names no station is counted nowhere. No save
+        holds a theatre to confirm it against (issue #159)."""
+        grid = self.theatre(actors=0, stage=["", None])
+        self.assertEqual(self.role(grid, ACTOR)["staffed"][MONDAY][10], 0)
+        self.assertEqual(grid["staffed"][MONDAY][10], 0)
 
     def test_a_projection_booth_in_a_theatre_is_no_role(self):
         """The game assigns no Projectionist in a theatre (ASSIGN_SKILLS), so a
         leftover projection booth there holds nobody and gates nothing."""
         grid = self.theatre(extra=[(30, PROJECTION)])
         self.assertNotIn(PROJECTIONIST, [r["skill"] for r in grid["roles"]])
-        self.assertEqual(grid["staffed"][MONDAY][10], 80)
+        self.assertEqual(grid["staffed"][MONDAY][10], 50)
 
     def test_the_words_do_not_move_between_runs(self):
         """The same fixture under two hash seeds names the roles in one order."""
@@ -702,7 +733,7 @@ class TheatreGridTests(MsgAsserts, unittest.TestCase):
             "sys.path[:0] = [sys.argv[1], sys.argv[2]]\n"
             "import test_stations as T\n"
             "grid = T.TheatreGridTests().theatre(rooms=2)\n"
-            "print(json.dumps([(r['skill'], r['label'], r['station'], r['counters'], r['noun'])"
+            "print(json.dumps([(r['key'], r['label'], r['station'], r['counters'], r['noun'])"
             " for r in grid['roles']]))\n"
         )
         seeds = []
@@ -714,13 +745,15 @@ class TheatreGridTests(MsgAsserts, unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             seeds.append(run.stdout)
         self.assertEqual(seeds[0], seeds[1])
-        # Customer Service's ticket booth and register both serve 50 an hour,
-        # so the role's station is the tie's first by name: the register.
         # Not a Msg: grid roles' noun is a plain str used by the page's limit matching.
         self.assertEqual(json.loads(seeds[0]), [
             [ACTOR, "Actor", "Dressing Room", 160, "dressing rooms"],
-            [SERVICE, "Customer Service", "Concessions Stand Register", 100, None],
-            [STAGECREW, "Stage Crew", "Costume Booth", 300, "costume booths"],
+            [SERVICE, "Customer Service", "Ticket Booth", 50, "ticket booths"],
+            [f"{SERVICE}|{CONCESSION}", "Customer Service", "Concessions Stand Register", 50,
+             "concessions stand registers"],
+            [STAGECREW, "Stage Crew", "Costume Booth", 100, "costume booths"],
+            [f"{STAGECREW}|{LIGHTING}", "Stage Crew", "Lighting Booth", 100, "lighting booths"],
+            [f"{STAGECREW}|{SOUND}", "Stage Crew", "Sound Booth", 100, "sound booths"],
         ])
 
 
@@ -729,16 +762,17 @@ class CinemaGridTests(MsgAsserts, unittest.TestCase):
     projection booths, Customer Service at the concessions stand registers. The
     ticket kiosk is self-service and the screens hold no queue."""
 
-    def cinema(self, projectionists=1, booths=1, registers=1, service_staff=1, customers=25):
+    def cinema(self, projectionists=1, booths=1, registers=1, service_staff=1, customers=25,
+               screens=2, door=150):
         items = [(1 + i, CONCESSION) for i in range(registers)]
         items += [(10 + i, PROJECTION) for i in range(booths)]
-        items += [(30, KIOSK), (31, SCREEN), (32, SCREEN)]
+        items += [(30, KIOSK)] + [(31 + i, SCREEN) for i in range(screens)]
         people = {f"t{i + 1}": SERVICE for i in range(service_staff)}
         people.update({f"p{i + 1}": PROJECTIONIST for i in range(projectionists)})
         shifts = [shift(f"t{i + 1}", 1 + (i % registers), 8, 20) for i in range(service_staff)]
         shifts += [shift(f"p{i + 1}", 10 + (i % booths), 8, 20) for i in range(projectionists)]
         hourly = {h: customers if 8 <= h < 20 else 0 for h in range(24)}
-        b = building(items, shifts, hourly, 150, btype=CINEMA, number=4, name="Picture House")
+        b = building(items, shifts, hourly, door, btype=CINEMA, number=4, name="Picture House")
         return grid_of(b, people, _service_stations(NAMES), name="Picture House", basket=20.0,
                        btype=CINEMA)
 
@@ -771,6 +805,22 @@ class CinemaGridTests(MsgAsserts, unittest.TestCase):
         self.assertMsg(finding["fix"], "sp.py.fix.role.post", station="projection booth")
         self.assertNoMsg(finding["fix"], "sp.py.fix.service.staff")
         self.assertNoMsg(finding["fix"], "sp.py.fix.service.post")
+
+    def test_the_screens_cap_it_through_the_buildings_own_capacity(self):
+        """A screen is no post: nobody works it, so it is no role. It caps the
+        cinema all the same, 25 a screen, through the customerCapacity the save
+        records, which the game sets to the smallest of the layout's number and
+        each requirement's furniture (BusinessHelper.UpdateCustomerCapacity).
+        One screen and two manned projection booths: the hour is the
+        building's 25, not the booths' 50, and the building holds it, not a
+        role (issue #159, 15 Third Avenue's fresh cinema)."""
+        grid = self.cinema(projectionists=2, booths=2, registers=1, service_staff=1,
+                           screens=1, door=25)
+        self.assertNotIn(SCREEN, [s["slug"] for s in grid["stations"]])
+        self.assertEqual(grid["staffed"][MONDAY][10], 50)
+        self.assertEqual(grid["effective"][MONDAY][10], 25)
+        [finding] = self.findings(grid)
+        self.assertEqual((finding["limit"], finding["heldBy"]), ("the building", [["door"]]))
 
 
 class HairdresserTests(MsgAsserts, unittest.TestCase):

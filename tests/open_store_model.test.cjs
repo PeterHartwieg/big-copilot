@@ -191,7 +191,7 @@ test('a cinema or a theatre shows its investment and no estimate', () => {
   facts.types.C = {cat: 'cinema', model: null, products: [], layouts: {S: {lines: [], furniture: 1000, fee: 500}}};
   const ctx = boardModel(facts);
   // premises() is map.js's, which loadBoard() does not load: the test hands one over.
-  ctx.premises = () => ({buildings: [{key: 'c', hood: 'H', size: 'S', layout: null, deposit: 100, m2: 900, cap: [100, 150]}]});
+  ctx.premises = () => ({buildings: [{key: 'c', hood: 'H', size: 'S', layout: null, deposit: 100, m2: 900, cap: 100}]});
   const est = vm.runInContext('osEstimate({type: "C", key: "c", mode: "firm"}, osBuilding("c"))', ctx);
   assert.equal(est.inv.firm, 1600, 'kept by the building\'s size, having no layout');
   assert.match(est.none, enRe('gr.os.none.venue'));

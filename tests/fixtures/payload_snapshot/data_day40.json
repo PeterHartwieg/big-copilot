@@ -1116,7 +1116,6 @@
    "promotion": 120.0,
    "quitWarnings": 1,
    "rent": 225.0,
-   "restocks": true,
    "revenue": 1800.0,
    "rhythm": [
     {
@@ -1436,7 +1435,6 @@
    "promotion": 80.0,
    "quitWarnings": 0,
    "rent": 100.0,
-   "restocks": true,
    "revenue": 1260.0,
    "rhythm": [
     {
@@ -1692,7 +1690,6 @@
    "promotion": 0,
    "quitWarnings": 0,
    "rent": 460.0,
-   "restocks": false,
    "revenue": 0.0,
    "rhythm": null,
    "satisfaction": {
@@ -1931,7 +1928,6 @@
    "promotion": 0,
    "quitWarnings": 0,
    "rent": 445.0,
-   "restocks": false,
    "revenue": 0.0,
    "rhythm": null,
    "satisfaction": {
@@ -16623,10 +16619,6 @@
   ],
   "caps": {
    "cinema": {
-    "S": [
-     100,
-     150
-    ],
     "S1": 150,
     "S2": 125,
     "S3": 100
@@ -16645,10 +16637,9 @@
     "M": 75
    },
    "theater": {
-    "R": [
-     150,
-     200
-    ]
+    "R1": 200,
+    "R2": 175,
+    "R3": 150
    }
   },
   "demand": {

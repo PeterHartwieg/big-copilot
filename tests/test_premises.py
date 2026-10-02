@@ -11,6 +11,7 @@ from ba_dashboard import (
     _premises,
     _premises_demand,
     _rent_estimate,
+    load_buildings,
 )
 from ba_save import Names, Save
 
@@ -251,23 +252,39 @@ class CapTests(unittest.TestCase):
         self.assertEqual(caps["office"]["C"], 8)
         self.assertEqual(caps["office"], {"A": 4, "C": 8, "D": 10, "J": 10, "K": 50})
 
-    def test_auditorium_letters_keep_their_range(self):
+    def test_auditorium_letters_are_keyed_by_layout(self):
+        """Issue #159: a cinema's and a theatre's layouts seat different crowds,
+        so each layout keeps its own number and the letter has none."""
         caps = _door_caps(Names({"help_building_types_content": CAPS_HELP}))
-        # A cinema's layouts are exact as well (issue #159): the saves read
-        # each one's number. A theatre keeps the letter's range alone.
-        self.assertEqual(caps["cinema"], {"S": [100, 150], "S1": 150, "S2": 125, "S3": 100})
-        self.assertEqual(caps["theater"], {"R": [150, 200]})
+        self.assertEqual(caps["cinema"], {"S1": 150, "S2": 125, "S3": 100})
+        self.assertEqual(caps["theater"], {"R1": 200, "R2": 175, "R3": 150})
 
-    def test_a_cinema_carries_its_own_layout_cap(self):
+    def test_a_venue_carries_its_own_layout_cap(self):
         caps = _door_caps(Names({"help_building_types_content": CAPS_HELP}))
         self.assertEqual([_size_cap({"t": "cinema", "z": "S", "v": v}, caps) for v in (1, 2, 3)],
                          [150, 125, 100])
-        # A row without its version falls back to the letter's range, and a
-        # theatre's layout to its letter's.
-        self.assertEqual(_size_cap({"t": "cinema", "z": "S"}, caps), [100, 150])
-        self.assertEqual(_size_cap({"t": "theater", "z": "R", "v": 1}, caps), [150, 200])
+        self.assertEqual([_size_cap({"t": "theater", "z": "R", "v": v}, caps) for v in (1, 2, 3)],
+                         [200, 175, 150])
+        # A row without its version could be any layout: no number, not a guess.
+        self.assertIsNone(_size_cap({"t": "cinema", "z": "S"}, caps))
         # A shop's layout version changes nothing: the letter is its cap.
         self.assertEqual(_size_cap({"t": "retail", "z": "C", "v": 2}, caps), 30)
+
+    def test_no_cap_is_a_range(self):
+        """The finder used to show a theatre as 150-200; every cap is now one number."""
+        for caps in (FALLBACK_CAPS, _door_caps(Names({"help_building_types_content": CAPS_HELP}))):
+            for kind, sizes in caps.items():
+                for size, cap in sizes.items():
+                    with self.subTest(kind=kind, size=size):
+                        self.assertIsInstance(cap, int)
+
+    def test_every_venue_in_the_building_table_has_a_number(self):
+        caps = _door_caps(Names({"help_building_types_content": CAPS_HELP}))
+        rows = [r for r in load_buildings().values() if r.get("t") in ("cinema", "theater")]
+        self.assertTrue(rows)
+        for row in rows:
+            with self.subTest(row=(row.get("t"), row.get("z"), row.get("v"))):
+                self.assertIsInstance(_size_cap(row, caps), int)
 
     def test_vehicle_capacity_is_not_a_door_cap(self):
         caps = _door_caps(Names({"help_building_types_content": CAPS_HELP}))

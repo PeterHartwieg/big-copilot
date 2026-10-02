@@ -50,11 +50,11 @@ const PREMISES = {
     site(MT[4], {traffic: 95, status: 'service', owner: 'city',
       occupant: {name: 'First City Bank', type: 'Bank', typeSlug: 'ba:businesstype_bank'}}),
     site(HK[4], {type: 'office', size: 'J', m2: 180, cap: 10, rent: 90, traffic: 45}), // score 27 on law 60
-    // Two theaters: a size letter whose auditoriums differ carries a range (a
-    // cinema reads its own layout's number), and Midtown has no theater reading
-    // at all, so that row can never be scored.
-    site(HK[5], {type: 'theater', size: 'R', m2: 1200, cap: [150, 200], rent: 900, traffic: 64}),
-    site(MT[3], {type: 'theater', size: 'R', m2: 1200, cap: [150, 200], rent: null, traffic: 70}),
+    // Two theaters, each reading its own layout's number (an R1 200, an R3
+    // 150; issue #159), and Midtown has no theater reading at all, so that row
+    // can never be scored.
+    site(HK[5], {type: 'theater', size: 'R', m2: 1200, cap: 200, rent: 900, traffic: 64}),
+    site(MT[3], {type: 'theater', size: 'R', m2: 1200, cap: 150, rent: null, traffic: 70}),
     // A cinema reads its own layout's number, never a range (15 Third Avenue, S3).
     site(CINEMA_AT, {type: 'cinema', size: 'S', m2: 1200, cap: 100, rent: 800, traffic: 55}),
     // One of yours, in a building you bought.
@@ -87,7 +87,7 @@ const PREMISES = {
   rivalNames: {9: 'Amanda Mason'},
   rent: {constant: 30, rates: {}, officeFactor: 1.033, check: {leases: 3, worst: 0.003},
     deposit: {factors: {lease: 62.84, warehouse: 93.61}, check: {deposits: 6, worst: 0.004}}},
-  caps: {retail: {C: 30, D: 40, M: 75}, office: {J: 10}, cinema: {S: [100, 150], S1: 150, S2: 125, S3: 100}, theater: {R: [150, 200]}},
+  caps: {retail: {C: 30, D: 40, M: 75}, office: {J: 10}, cinema: {S1: 150, S2: 125, S3: 100}, theater: {R1: 200, R2: 175, R3: 150}},
 };
 const MARKET = {
   hoods: [HK_HOOD, MT_HOOD], rows: [], trendDays: 0, movers: [], hype: [], noOffices: [], catalogue: {},
@@ -940,22 +940,23 @@ test('a board built before premises keeps the card and the plain map', async () 
   } finally { await page.close(); }
 });
 
-test('both ends of the door cap judge a range by its smallest variant', async () => {
+test('both ends of the door cap judge a theatre by its own layout', async () => {
   const {page, errors} = await fixture();
   try{
     await openMap(page); await turnOn(page);
     const cap = end => page.locator(`#cityMapPage .fchip.num input[data-f="${end}Cap"]`);
     await page.locator('#cityMapPage .fchip.cat[data-cat="theater"]').click();
     assert.deepEqual(await rowKeys(page), [HK[5], MT[3]]);
-    // 150 to 200 seats clears a minimum of 150 and fails one of 175.
+    // The R1's 200 and the R3's 150 both clear a minimum of 150; only the
+    // R1 clears 175.
     await cap('min').fill('150');
     assert.equal(await page.locator('#cityMapPage .place.fr').count(), 2);
     await cap('min').fill('175');
-    assert.equal(await page.locator('#cityMapPage .places .empty').textContent(), en('map.list.empty'));
-    // The maximum mirrors it: 150 to 200 fits under 170, not under 140.
+    assert.deepEqual(await rowKeys(page), [HK[5]]);
+    // The maximum mirrors it: the R3 fits under 170, neither under 140.
     await cap('min').fill('0');
     await cap('max').fill('170');
-    assert.equal(await page.locator('#cityMapPage .place.fr').count(), 2);
+    assert.deepEqual(await rowKeys(page), [MT[3]]);
     await cap('max').fill('140');
     assert.equal(await page.locator('#cityMapPage .places .empty').textContent(), en('map.list.empty'));
     // A plain cap is judged as itself: the 40-seat shop is out above 30.
@@ -1198,10 +1199,10 @@ test('the Cap column sits between m² and Upfront and sorts on what it can promi
     assert.deepEqual(await rowKeys(page), [MT[0], HK[0], MT[1]]);   // 40, 30, 15
     await page.locator('#cityMapPage .fhead [data-s="cap"]').click();
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);   // back to score
-    // A range shows both ends and sorts on the lower one.
+    // A theatre shows its own layout's one number, never a range.
     await page.locator('#cityMapPage .fchip.cat[data-cat="theater"]').click();
     assert.deepEqual(await page.$$eval('#cityMapPage .place.fr .cap', v => v.map(x => x.textContent)),
-      ['150–200', '150–200']);
+      ['200', '150']);
     // A cinema shows its own layout's one number.
     await page.locator('#cityMapPage .fchip.cat[data-cat="cinema"]').click();
     assert.deepEqual(await page.$$eval('#cityMapPage .place.fr .cap', v => v.map(x => x.textContent)),

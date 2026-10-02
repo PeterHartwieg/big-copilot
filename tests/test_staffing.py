@@ -326,8 +326,9 @@ class ArrivalCeilingTest(unittest.TestCase):
         self.assertEqual(self.ceiling(build=3682, promotion=100)[1][12], 39)
         self.assertEqual(self.ceiling(build=3682, promotion=100, door=30)[1][12], 30)
 
-    def test_a_capacity_range_takes_its_top_so_it_stays_a_bound(self):
-        self.assertEqual(self.ceiling(build=3682, size_cap=[100, 150])[1][12], 83)
+    def test_a_venue_layouts_own_capacity_sizes_it(self):
+        # An R2 theatre's 175 x 0.55 = 96.25, rounded up (issue #159: no range).
+        self.assertEqual(self.ceiling(build=3682, size_cap=175)[1][12], 97)
 
     def test_a_new_game_on_an_unknown_size_has_no_ceiling(self):
         self.assertIsNone(self.ceiling(build=3682, size_cap=None))

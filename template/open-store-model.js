@@ -26,7 +26,7 @@ const OpenStoreModel = (() => {
     const osFacts = () => facts;
     const osType = slug => (osFacts().types || {})[slug] || null;
     const osCap = b => { const v = b && (osFacts().venues || {})[b.key];
-      return v && v[1] ? v[1] : Array.isArray(b && b.cap) ? b.cap[0] : (b && b.cap) || 0; };
+      return v && v[1] ? v[1] : (b && b.cap) || 0; };
     /* The outfit for the building's layout: its lines and furniture total. */
     /* The key an outfit is kept by: the layout, or a cinema's or theatre's size
        (Python's plan_layout()). */

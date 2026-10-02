@@ -164,7 +164,7 @@ class OutfitTests(unittest.TestCase):
                  "products": {}}
         prices = {"items": {"ba:itemname_screen": {"p": 2800}, "ba:itemname_seat": {"p": 250},
                             "ba:itemname_row": {"p": 800}, "ba:itemname_armchair": {"p": 100}}}
-        lines = {(l["item"], l["group"]): l["qty"] for l in outfit_lines(cinema, rules, prices, [100, 150], 2000)}
+        lines = {(l["item"], l["group"]): l["qty"] for l in outfit_lines(cinema, rules, prices, 100, 2000)}
         # Four screens for 100 an hour at 25 each; 25 seats each for the least:
         # six rows of 4 and one single (5,050) beat seven rows (5,600).
         self.assertEqual(lines[("ba:itemname_screen", "req")] + lines[("ba:itemname_screen", "cap")], 4)
