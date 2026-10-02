@@ -442,6 +442,7 @@ details.help[open] summary::after{content:"\2013"}
         <a class="btn2" id="modLink" href="https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395" target="_blank" rel="noopener" hidden title="Big Copilot Link on the Steam Workshop: subscribe, enable it in the game's Mods menu, load a save" data-tt-title="app.strip.mod.title" data-tt="app.strip.mod">Get the mod</a>
         <button type="button" class="btn2 primary" id="recoverBtn" hidden>__ICON_FOLDER__Choose the folder again</button>
         <button type="button" class="btn2 primary" id="reloadBtn" hidden data-tt="app.strip.reload">Reload app</button>
+        <button type="button" class="btn2" id="reportBtn" hidden aria-haspopup="dialog" data-tt="app.strip.report">Report a bug</button>
         <button type="button" class="btn2" id="updateBtn" disabled title="Read the newest save from the chosen folder again">Update</button>
       </div>
     </div>
@@ -540,6 +541,8 @@ STAMP_INPUTS = (
     # The deployment transform and its pinned compiler affect the served page.
     # stamp() selects only esbuild's lock entry, not unrelated dev dependencies.
     "tools/optimize_web.mjs", "package-lock.json",
+    # The bug report form, which web/app.js loads on demand with the stamp.
+    "web/report.js", "web/report.css",
 )
 
 

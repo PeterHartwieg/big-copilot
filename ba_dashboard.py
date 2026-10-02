@@ -186,6 +186,12 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
                   # The difficulty chip, shown here at 1500 px and under; wider
                   # than that it ends the masthead clock's last line.
                   '<span class="fv-footdiff" id="footDiff"></span>')
+    # The bug report form (web/report.js) needs web/app.js, which loads it, and
+    # the site's /api/report, so only the site's pages carry its control; the
+    # CLI's dashboard.html keeps the plain Discord link beside it. Marked by
+    # attribute: Help & feedback on the board copies it (pxHelpHtml()).
+    report = ('<button type="button" class="sf-link sf-btn" data-bug-report aria-haspopup="dialog">'
+              '<span data-tt="foot.report">Report a bug</span></button>\n        ' if site else "")
     return f'''<footer class="sitefoot{" sf-landing rv" if landing else ""}">
   <div class="sf-in">
     <div class="sf-rule"><span class="sf-orb"></span></div>
@@ -226,7 +232,7 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
         <h2 class="sf-head" translate="no">Big Copilot</h2>
         <button type="button" class="sf-link sf-btn" data-changelog aria-haspopup="dialog"><span data-tt="foot.changelog">Changelog</span><span class="feature-new" data-new-feature="changelog" data-tt="nav.new" hidden>New</span></button>
         {_sf_out(WORKSHOP_URL, "Game link mod", title="Big Copilot Link on the Steam Workshop: the board reads the game you are playing.", feature="game-link", key="foot.mod")}
-        {_sf_out(FEEDBACK_URL, "Bugs and feedback", title="The Discord's support channel: a save that will not build, a wrong number, or something the board should show, all welcome.", key="foot.feedback", attrs=" data-sf-feedback")}
+        {report}{_sf_out(FEEDBACK_URL, "Bugs and feedback", title="The Discord's support channel: a save that will not build, a wrong number, or something the board should show, all welcome.", key="foot.feedback", attrs=" data-sf-feedback")}
         {_sf_out(REPO_URL, "Source code", title="MIT-licensed", key="foot.source")}
       </div>
       <div class="sf-col">

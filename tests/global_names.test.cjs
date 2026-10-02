@@ -2,7 +2,7 @@
 // head, the inline scripts of template/board.html, and the board script
 // (template/board.js), which render() splices map.js and wiki.js into. The
 // site's page adds web/update.js (inline) and web/app.js and web/community.js
-// (classic <script src>). So a top-level name declared twice is a bug: a second
+// (classic <script src>), and web/report.js, which app.js loads on demand. So a top-level name declared twice is a bug: a second
 // `const` or `let` is a SyntaxError that stops the whole script (a blank board),
 // and a second `function` silently replaces the first. This test reads the
 // column-0 declarations of all of them and wants each name once.
@@ -47,6 +47,7 @@ const SOURCES = [
   {name: 'web/update.js', text: read('web/update.js')},
   {name: 'web/app.js', text: read('web/app.js')},
   {name: 'web/community.js', text: read('web/community.js')},
+  {name: 'web/report.js', text: read('web/report.js')},
 ];
 
 const DECL = /^(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)|^class\s+([A-Za-z_$][\w$]*)|^(?:const|let|var)\s+(.*)$/;

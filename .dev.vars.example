@@ -2,3 +2,9 @@
 # The value below is a fixed, clearly nonproduction sample -- never use it in
 # production. Set the real secret with: npx wrangler secret put COMMUNITY_IP_SECRET
 COMMUNITY_IP_SECRET=local-dev-sample-secret-not-for-production
+# The bug report form's GitHub token (POST /api/report). This sample is not a
+# token, so a local report fails at GitHub, the Worker deletes what it stored,
+# and the form points to Discord. Never put a real token here: a local report
+# with one would open a real public issue. The production secret is set with:
+# npx wrangler secret put GITHUB_REPORT_TOKEN
+GITHUB_REPORT_TOKEN=local-dev-sample-not-a-github-token

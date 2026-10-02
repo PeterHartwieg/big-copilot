@@ -20708,15 +20708,20 @@ function pxHelpHtml(){
   const words = a => { const c = a.cloneNode(true); c.querySelectorAll(".feature-new, svg, .sf-sr").forEach(x => x.remove()); return c.textContent.trim().replace(/\s+/g, " "); };
   const link = a => a ? `<a class="nx-btn sm" href="${attr(a.getAttribute("href"))}" target="_blank" rel="noopener">${spEsc(words(a))}${icon("go")}</a>` : "";
   const feedback = out("a[data-sf-feedback]")[0];
+  /* The site's footer has a Report a bug control (the CLI's has not); a copy
+     keeps its data-bug-report mark, so web/app.js opens the form from either. */
+  const report = out("[data-bug-report]")[0];
   const vote = out("[data-vote-card]")[0];
   /* Search, the save's help, What's new, the vote and the project's links are
      the masthead's, the ··· menu's and the footer's, on the same page under
      the sheet (declutter X6): Help keeps the one prompt they do not have. */
   const find = pxRow("find", tt("nav.px.help.find.title", "Can't find something?"), tt("nav.px.help.find.lead", "Tell us the task in your own words: it is how the names and the places on the board get better."),
     feedback ? `<div class="px-acts">${link(feedback)}</div>` : "");
+  const bug = report ? pxRow("bug", tt("nav.px.help.bug.title", "Found a bug?"), tt("nav.px.help.bug.lead", "Send a report with your save attached. Your text becomes an issue on GitHub; the save is kept privately."),
+    `<div class="px-acts"><button type="button" class="nx-btn sm" data-bug-report aria-haspopup="dialog">${spEsc(words(report))}</button></div>`) : "";
   const ballot = vote && !vote.hidden ? "" : pxRow("ballot", tt("nav.px.help.vote.title", "Feature requests"), "",
     `<p class="px-note">${tt("nav.px.help.vote.off", "The ballot is on bigcopilot.com, where the board can reach the community server.")}</p>`);
-  return find + ballot;
+  return bug + find + ballot;
 }
 function pxOpen(which, from = null, focusRow = null){
   nxMenuClose(false);
