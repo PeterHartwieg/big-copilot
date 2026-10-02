@@ -120,6 +120,7 @@ working directory unless you specify `-o`.
 | `--port 8770` | Set the local server port. |
 | `--interval 5` | Set the seconds between save checks. |
 | `--no-open` | With `--watch`, do not open the browser; no effect otherwise. |
+| `--game` | Read the running game through the Big Copilot Link mod instead of a save folder. Add the mod's address if it is not `http://127.0.0.1:8322`. The game's bytes are kept as `game-link.hsg` beside the output file. |
 | `--lang de` | Show the game's own names in one of its languages (`de`, `fr`, `ja`, `zh-cn` and so on). Big Copilot's own words follow only where it has a translation, and only after `python3 build_web.py --assemble`. |
 
 Add `--watch` to either startup command to keep the board live while playing.

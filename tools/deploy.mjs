@@ -40,10 +40,7 @@ function stop(message) {
 }
 
 function dirty() {
-  // node_modules may be a symlink to another checkout's, which the
-  // directory-only node_modules/ ignore rule does not cover.
-  return output('git', ['status', '--porcelain'])
-    .split('\n').filter(line => line && line.slice(3) !== 'node_modules');
+  return output('git', ['status', '--porcelain']).split('\n').filter(Boolean);
 }
 
 // The Python that runs build_web.py: $PYTHON, else the first of python3,
