@@ -548,6 +548,28 @@ def hood_label(key: str | None, default: str = "") -> str:
         return default
     return HOOD_LABEL.get(key) or _plain(key.removeprefix(HOOD_PREFIX))
 
+
+def _load_data(name: str, shape, empty, catch: tuple) -> dict:
+    """A table this module ships beside itself, shaped by `shape`, or `empty()`.
+
+    Tries the copy beside this file, then /data/ (where the browser worker puts
+    it). `catch` is the caller's exception policy: an exception it names, raised
+    opening, parsing or shaping a copy, moves on to the next place; any other
+    propagates. Neither place usable gives `empty()`.
+    """
+    for path in (
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), name),
+        "/data/" + name,  # where the worker puts it in a browser
+    ):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                loaded = json.load(fh)
+            return shape(loaded)
+        except catch:
+            continue  # not here, or unreadable: try the next place
+    return empty()
+
+
 # Every building in the city, from the game's fixed map: make_buildings.py
 # generates ba_buildings.json beside this file, and the browser worker writes it
 # to /data/. A missing table is not an error — the [XX] prefix in the business
@@ -564,18 +586,11 @@ def load_buildings() -> dict:
     """
     global _buildings
     if _buildings is None:
-        for path in (
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), "ba_buildings.json"),
-            "/data/ba_buildings.json",  # where the worker puts it in a browser
-        ):
-            try:
-                with open(path, encoding="utf-8") as fh:
-                    _buildings = {(r["s"], r["n"]): r for r in json.load(fh)}
-                break
-            except (OSError, ValueError):
-                continue  # not here, or unreadable: try the next place
-        else:
-            _buildings = {}
+        # No AttributeError here, unlike the other tables: a malformed row raises.
+        _buildings = _load_data(
+            "ba_buildings.json", lambda rows: {(r["s"], r["n"]): r for r in rows}, dict,
+            catch=(OSError, ValueError),
+        )
     return _buildings
 
 
@@ -599,24 +614,15 @@ def load_demand_curves() -> dict:
     """
     global _demand_curves
     if _demand_curves is None:
-        for path in (
-            os.path.join(
-                os.path.dirname(os.path.abspath(__file__)), "ba_demand_curves.json"
-            ),
-            "/data/ba_demand_curves.json",  # where the worker puts it in a browser
-        ):
-            try:
-                with open(path, encoding="utf-8") as fh:
-                    loaded = json.load(fh)
-                _demand_curves = {
-                    "types": loaded.get("types") or {},
-                    "items": loaded.get("items") or {},
-                }
-                break
-            except (OSError, ValueError, AttributeError):
-                continue  # not here, or unreadable: try the next place
-        else:
-            _demand_curves = {"types": {}, "items": {}}
+        _demand_curves = _load_data(
+            "ba_demand_curves.json",
+            lambda loaded: {
+                "types": loaded.get("types") or {},
+                "items": loaded.get("items") or {},
+            },
+            lambda: {"types": {}, "items": {}},
+            catch=(OSError, ValueError, AttributeError),
+        )
     return _demand_curves
 
 
@@ -638,22 +644,15 @@ def load_item_prices() -> dict:
     """
     global _item_prices
     if _item_prices is None:
-        for path in (
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), "ba_item_prices.json"),
-            "/data/ba_item_prices.json",  # where the worker puts it in a browser
-        ):
-            try:
-                with open(path, encoding="utf-8") as fh:
-                    loaded = json.load(fh)
-                _item_prices = {
-                    "items": loaded.get("items") or {},
-                    "materials": loaded.get("materials") or {},
-                }
-                break
-            except (OSError, ValueError, AttributeError):
-                continue  # not here, or unreadable: try the next place
-        else:
-            _item_prices = {"items": {}, "materials": {}}
+        _item_prices = _load_data(
+            "ba_item_prices.json",
+            lambda loaded: {
+                "items": loaded.get("items") or {},
+                "materials": loaded.get("materials") or {},
+            },
+            lambda: {"items": {}, "materials": {}},
+            catch=(OSError, ValueError, AttributeError),
+        )
     return _item_prices
 
 
@@ -15754,19 +15753,12 @@ def load_store_rules() -> dict:
     """
     global _store_rules
     if _store_rules is None:
-        for path in (
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), "ba_store_rules.json"),
-            "/data/ba_store_rules.json",  # where the worker puts it in a browser
-        ):
-            try:
-                with open(path, encoding="utf-8") as fh:
-                    loaded = json.load(fh)
-                _store_rules = {part: loaded.get(part) or {} for part in STORE_RULE_PARTS}
-                break
-            except (OSError, ValueError, AttributeError):
-                continue  # not here, or unreadable: try the next place
-        else:
-            _store_rules = {part: {} for part in STORE_RULE_PARTS}
+        _store_rules = _load_data(
+            "ba_store_rules.json",
+            lambda loaded: {part: loaded.get(part) or {} for part in STORE_RULE_PARTS},
+            lambda: {part: {} for part in STORE_RULE_PARTS},
+            catch=(OSError, ValueError, AttributeError),
+        )
     return _store_rules
 
 

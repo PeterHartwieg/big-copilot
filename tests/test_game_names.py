@@ -125,9 +125,8 @@ class Build(unittest.TestCase):
 
     def test_check_reports_a_missing_table(self):
         with tempfile.TemporaryDirectory() as tmp:
-            for name in build_web.STAMP_INPUTS + ("ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json", "ba_store_rules.json",
-                                                   "web/py/ba_buildings.json", "web/py/ba_demand_curves.json",
-                                                   "web/py/ba_save.py", "web/py/ba_dashboard.py"):
+            for name in (*build_web.STAMP_INPUTS, *build_web.PY_COPIED,
+                         *(f"web/py/{copied}" for copied in build_web.PY_COPIED)):
                 dest = Path(tmp, name)
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_bytes((ROOT / name).read_bytes())
