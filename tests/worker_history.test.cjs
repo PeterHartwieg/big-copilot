@@ -1,8 +1,11 @@
 // web/worker.js's side of the history and the game text (#109): the page's
 // history is taken on a build only (WB-3), "forget" drops the copy the worker
 // holds, and a remembered en.json is rewritten whenever its text changes, not
-// only when its length does (WB-4). Pyodide is stood in for by a filesystem
-// map and a runPython that does what browser_build/browser_name do to it.
+// only when its length does (WB-4). And its sections (#238): computed only for
+// the build the worker holds, never writing the history, and answered stale
+// unrun once a newer build is asked for. Pyodide is stood in for by a
+// filesystem map and a runPython that does what browser_build/browser_name/
+// browser_section do to it.
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -19,10 +22,11 @@ const names = ['SAVE_DIR', 'DATA_DIR', 'HISTORY', 'LOCALE', 'NAMES'].map((name) 
   return line;
 }).join('\n');
 
-function worker() {
+function worker({failSection = false} = {}) {
   const files = new Map();
   const posted = [];
   const writes = [];
+  const calls = [];
   const py = {
     FS: {
       writeFile(p, data) { writes.push(p); files.set(p, typeof data === 'string' ? data : '<bytes>'); },
@@ -35,6 +39,13 @@ function worker() {
     // history on the filesystem, as History.named()/write() do.
     runPython(code) {
       const hist = '/data/market_history.json';
+      calls.push(code);
+      if (code.includes('browser_section(')) {
+        if (failSection) throw new Error('Traceback...\nSaveShapeError: the board hit a bug');
+        const [, name, gen] = /browser_section\("(\w+)", (\d+)\)/.exec(code);
+        return JSON.stringify({generation: Number(gen), sections: {[name]: {[name]: []}}});
+      }
+      if (code.includes('browser_build(') && files.has('/save/boom.hsg')) throw new Error('Traceback...\nSaveShapeError: not a save');
       if (code.includes('browser_name(')) {
         const [, rid] = /browser_name\("[^"]+", "([^"]+)"/.exec(code);
         const book = JSON.parse(files.get(hist) || '{"names":[]}');
@@ -52,17 +63,19 @@ function worker() {
   };
   const context = vm.createContext({
     py, postMessage: (m) => posted.push(m), performance: {now: () => 0},
-    String, JSON, Uint8Array, Math, Error,
+    String, JSON, Uint8Array, Math, Error, MessageChannel,
   });
   vm.runInContext(`${names}
 let lastSave = null;
 let localeText = null;
 let queue = Promise.resolve();
+let held = null;
+let boards = 0;
 const ready = Promise.resolve();
 const say = () => {};
 ${handler}
 this.send = (data) => { onmessage({data}); return queue; };`, context);
-  return {send: context.send, files, posted, writes};
+  return {send: context.send, files, posted, writes, calls};
 }
 
 const HIST = '/data/market_history.json';
@@ -130,4 +143,76 @@ test('a build that leaves no history file for another reason hands back none', a
   const w = worker();
   await w.send(build(1, ''));  // nothing sent, nothing written (the stand-in writes no file)
   assert.strictEqual(w.posted.at(-1).history, null, 'null: the page keeps what it has stored');
+});
+
+test('a section is computed for the build the worker holds, and writes no history', async () => {
+  const w = worker();
+  await w.send(build(1, JSON.stringify({names: ['page']})));
+  assert.equal(w.posted.at(-1).gen, 1, 'a build names its generation');
+  const before = w.writes.length;
+  await w.send({kind: 'section', id: 2, name: 'hiring', gen: 1});
+  const reply = w.posted.at(-1);
+  assert.equal(reply.kind, 'section');
+  assert.equal(reply.id, 2);
+  assert.equal(JSON.stringify(JSON.parse(reply.data).sections), JSON.stringify({hiring: {hiring: []}}));
+  assert.equal('history' in reply, false, 'a section carries no history');
+  assert.equal(w.writes.length, before, 'and writes nothing to the filesystem');
+  assert.match(w.calls.at(-1), /browser_section\("hiring", 1\)/);
+});
+
+test('a section of a build the worker no longer holds is answered stale, unrun', async () => {
+  const w = worker();
+  await w.send(build(1, ''));
+  await w.send(build(3, ''));
+  const ran = w.calls.length;
+  await w.send({kind: 'section', id: 4, name: 'hiring', gen: 1});
+  assert.equal(JSON.stringify(w.posted.at(-1)), JSON.stringify({kind: 'section', id: 4, stale: true}));
+  assert.equal(w.calls.length, ran, 'Python is not asked');
+});
+
+test('a section still waiting when a newer build is asked for is dropped', async () => {
+  const w = worker();
+  await w.send(build(1, ''));
+  // Asked together: the section for board 1 waits behind nothing but is
+  // overtaken by the build asked for after it.
+  const section = w.send({kind: 'section', id: 2, name: 'factoryStaffing', gen: 1});
+  const rebuild = w.send(build(3, ''));
+  await Promise.all([section, rebuild]);
+  const answer = w.posted.find(m => m.id === 2);
+  assert.equal(JSON.stringify(answer), JSON.stringify({kind: 'section', id: 2, stale: true}));
+  assert.equal(w.calls.filter(c => c.includes('browser_section(')).length, 0);
+  assert.equal(w.posted.at(-1).gen, 3);
+});
+
+test('a build delivered after a section has reached the front of the queue still goes first', async () => {
+  const w = worker();
+  await w.send(build(1, ''));
+  // The section is taken off the queue first; the build arrives as a task of
+  // its own a moment later, before the section has started Python.
+  const section = w.send({kind: 'section', id: 2, name: 'hiring', gen: 1});
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  const rebuild = w.send(build(3, ''));
+  await Promise.all([section, rebuild]);
+  assert.equal(JSON.stringify(w.posted.find(m => m.id === 2)), JSON.stringify({kind: 'section', id: 2, stale: true}));
+  assert.equal(w.calls.filter(c => c.includes('browser_section(')).length, 0, 'the old section never ran');
+});
+
+test('a build that fails leaves no build to ask sections of', async () => {
+  const w = worker();
+  await w.send(build(1, ''));
+  // The next build throws in Python: the worker holds nothing afterwards,
+  // not the board before it either (its save was let go first).
+  await w.send({kind: 'build', id: 2, name: 'boom.hsg', bytes: new ArrayBuffer(4), mtime: 1, locale: '', history: ''});
+  assert.equal(w.posted.at(-1).kind, 'failed');
+  await w.send({kind: 'section', id: 3, name: 'hiring', gen: 1});
+  assert.equal(w.posted.at(-1).gone, true, 'the older board is not served, and no newer one is coming');
+  await w.send({kind: 'section', id: 4, name: 'hiring', gen: 2});
+  assert.equal(w.posted.at(-1).gone, true, 'nor the failed one');
+});
+
+test('a section Python cannot work out fails like a build, with its last line', async () => {
+  const w = worker({failSection: true});
+  await w.send(build(1, ''));
+  await w.send({kind: 'section', id: 2, name: 'hiring', gen: 1});
+  assert.equal(JSON.stringify(w.posted.at(-1)), JSON.stringify({kind: 'failed', id: 2, error: 'the board hit a bug'}));
 });

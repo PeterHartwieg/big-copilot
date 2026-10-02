@@ -68,6 +68,11 @@
   };
   const failure = (words) => Object.assign(new Error(words()), {say: words});
   const errWords = (err) => (err && typeof err.say === "function" ? err.say : err ? err.message : "");
+  // A build's generation on its data (the worker's number for it), and the
+  // refusal of a section asked for a build the worker no longer holds: the
+  // board drops that answer and asks again for the board it has then.
+  const BUILD_GEN = Symbol.for("bigcopilot.build");
+  const staleSection = () => Object.assign(failure(() => tt("app.reader.section.stale", "The save on screen has been read again since")), {stale: true});
 
   // Every word this file writes goes through tt() (web/i18n.js, which the
   // page loads first; docs/architecture.md, "UI text"). A sentence that holds
@@ -295,6 +300,9 @@
     busy = false;
     heldFailure = null;  // a report from the new source is not about the old one
     queued = null;
+    // A failure, not stale: whether a new board comes is not known here (a
+    // folder with no save, a game that is not there, a reader that stopped),
+    // so a section in flight says so with Try again, and a new board asks anew.
     for (const p of pending.values()) p.reject(new Error(tt("app.reader.superseded", "Save selection changed")));
     pending.clear();
     timeReader();
@@ -342,6 +350,21 @@
       try {
         if (p.gen !== sourceGen) throw new Error(tt("app.reader.superseded", "Save selection changed"));
         if (msg.kind === "held") { p.resolve(msg); return; }
+        if (msg.kind === "section") {
+          // A section is the board's to merge (its need()); it carries no
+          // history, which only a build records.
+          // Stale means the worker has moved on to a newer build. Only a
+          // build or name still waiting here brings a board that asks again;
+          // with none (it was cancelled, and its board dropped), the board on
+          // screen gets no section from this worker: an error, as `gone` is.
+          const coming = [...pending.values()].some((q) => (q.kind === "build" || q.kind === "name") && q.gen === sourceGen);
+          if (msg.stale && coming) throw staleSection();
+          if (msg.stale || msg.gone) throw failure(() => tt("app.reader.section.gone", "The reader could not read the save again: Update to try once more"));
+          const got = JSON.parse(msg.data);
+          if (!got || typeof got.sections !== "object" || !got.sections) throw failure(() => tt("app.reader.invalid.bare", "Invalid reader response"));
+          p.resolve(got);
+          return;
+        }
         // A failed build carries its whole traceback and its bytes back, for a
         // bug report; only the last line is shown.
         if (msg.kind !== "built") throw msg.error ? Object.assign(new Error(msg.error), {
@@ -351,6 +374,10 @@
         const data = JSON.parse(msg.data);
         if (!data || typeof data !== "object") throw failure(() => tt("app.reader.invalid.bare", "Invalid reader response"));
         if (typeof msg.history === "string") stored.set(HISTORY_KEY, msg.history);
+        // The build's generation, which the board names when it asks for a
+        // section of it (LEDGER_SOURCE.section()). Not a payload key: JSON,
+        // Object.keys() and a copy never see it.
+        Object.defineProperty(data, BUILD_GEN, {value: msg.gen});
         p.resolve(data);
       } catch (err) {
         // The reader read the save even when its answer would not decode: it
@@ -367,7 +394,7 @@
     return new Promise((resolve, reject) => {
       if (readerError || gen !== sourceGen) { reject(readerError || new Error(tt("app.reader.superseded", "Save selection changed"))); return; }
       const id = nextId++;
-      pending.set(id, {resolve, reject, gen});
+      pending.set(id, {resolve, reject, gen, kind: msg.kind});
       try { worker.postMessage(Object.assign({id}, msg), transfer || []); }
       catch (err) { pending.delete(id); reject(err); }
       timeReader();
@@ -2452,6 +2479,10 @@
     // history goes with it: the worker names against the copy it holds, so
     // names asked for together all keep theirs (worker.js).
     name: (rid, slug) => ask({kind: "name", rid, slug: slug || null}),
+    // One section of the build `gen` (the board's), computed on demand from
+    // the build the worker holds: resolves to {generation, sections}, or
+    // rejects stale (err.stale) once a newer build has been asked for.
+    section: (name, gen) => ask({kind: "section", name, gen}),
     watch: (h) => { handlers = h; },
     // The game link, for the board's write buttons: the kinds the mod takes
     // and whose company it is, and the game's day and hour at the last

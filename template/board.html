@@ -4163,6 +4163,17 @@ a.sb-plan:hover em{color:var(--ink);text-decoration:underline}
 @media (max-width:1100px){.ff-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.ff-facts>div:nth-child(3){border-left:0}.ff-facts>div:nth-child(n+3){border-top:1px solid var(--rule-soft)}}
 @media (max-width:620px){.ff-make,.ff-out{display:block;overflow-x:auto}.ff-arrow{display:none}.ff-flow{flex-direction:column;align-items:flex-start}.ff-short,.ff-why>div{grid-template-columns:14px minmax(0,1fr) auto}.ff-short>svg,.ff-why>div>svg{display:none}}
 
+/* A section worked out on demand (odWaitHtml()): the words while it runs, or
+   why it did not, with Try again. */
+.od-wait{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:12px 0;padding:12px 14px;border:1px dashed var(--rule);border-radius:10px;color:var(--ink-2);font-size:13px;line-height:1.4}
+.od-wait.sm{margin:8px 0;padding:8px 10px;font-size:12.5px}
+.od-wait.err{border-style:solid;color:var(--ink)}
+.od-wait>svg{width:16px;height:16px;flex:none;stroke:var(--neg);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.od-wait>span:not(.od-spin){flex:1 1 12em;min-width:0}
+.od-spin{width:14px;height:14px;flex:none;border-radius:50%;border:2px solid var(--rule);border-top-color:var(--accent);animation:od-turn .9s linear infinite}
+@keyframes od-turn{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.od-spin{animation:none;border-top-color:var(--ink-3)}}
+
 </style>
 <script>
 /*__I18N_SCRIPT__*/

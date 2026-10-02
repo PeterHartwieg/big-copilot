@@ -15,7 +15,7 @@ the numbers drift.
 
 | Part | Anchor |
 | --- | --- |
-| Extraction (save → numbers) | `def extract(` and the `_` helpers before `def render(`, in `ba_dashboard.py` |
+| Extraction (save → numbers) | `def build_core(` (the core), `SECTIONS` (the sections) and the `_` helpers before `def render(`, in `ba_dashboard.py`; `def extract(` is both |
 | The board's HTML and CSS | `template/board.html`, read on the first `render()` by `load_template()` |
 | The board script | `template/board.js`, which `load_template()` splices into `/*__BOARD_SCRIPT__*/`, the body of the page's last `<script>` block, before any other placeholder is filled. A branch from before the split that conflicts in `board.html` is resolved by `tools/split_board_script.py --resolve` (`docs/architecture.md`, "Template placeholders") |
 | Open a store calculations | `template/open-store-model.js`: an explicit-input calculation module, embedded before the board script by `load_template()` and imported directly by its arithmetic tests and `check_profit_model.py` |
@@ -24,6 +24,11 @@ the numbers drift.
 
 Everything else:
 
+- the payload's sections, computed on demand: `SECTIONS`, `Build`, `build_core()`,
+  `section()` and `materialize_all()` in `ba_dashboard.py`; `browser_section()` and the
+  worker's `section` message; `OD_SECTIONS`, `odNeed()` and `odWaitHtml()` in the board
+  script. The rules, and what a new feature declares, are in `docs/architecture.md`,
+  "Sections"
 - save parser: `ba_save.py`
 - web build: `build_web.py`; deploy: `npm run deploy` (`tools/deploy.mjs`), which assembles
   `web/` and runs `wrangler deploy`
@@ -160,6 +165,7 @@ stale one fails them.
 
 | You changed | Run |
 | --- | --- |
+| `SECTIONS`, `build_core()`, `section()`, `materialize_all()`, `browser_section()`, the worker's `section` message or the board's `od*` functions (what is core and what is computed on demand) | `python -m unittest tests.test_sections tests.test_browser_build tests.test_payload_snapshot` and `node --test tests/on_demand.test.cjs tests/worker_history.test.cjs tests/worker_startup.test.cjs`; then the `tools/payload_diff.py` dump and compare below, since a payload with every section computed must not change |
 | `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`. Premises extraction is `tests/test_premises.py`. `tests/test_payload_snapshot.py` compares whole `extract()` payloads with `tests/fixtures/payload_snapshot/`; after an intended change regenerate them with `python tests/test_payload_snapshot.py --update` and review the diff. A change meant to leave the payload alone also runs `python tools/payload_diff.py dump research/<name>` on main and on the branch and `compare`s the two (owner only: it reads every save on the machine) |
 | `template/board.html` or `template/board.js` (the board's markup, CSS or script) | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs` |
 | `template/open-store-model.js` (Open a store arithmetic) | `npm run verify`; its direct arithmetic tests are `tests/open_store_model.test.cjs`, and its board integration uses `tests/open_store.test.cjs` and `tests/finder_plan.test.cjs`. Compare `python check_profit_model.py <save-root>` before and after locally when owner saves are available; never commit its private outputs |
@@ -241,6 +247,12 @@ and never attach one to an issue.
   order of anything that reaches the payload, iterate it through `_in_order()`, which sorts
   `None` last because real saves hold items with no name. When a set decides a winner
   (`most_common()`, first-wins), break the tie explicitly, as `_chains()` does.
+- In the browser a section's keys (`factoryStaffing`, `hiring`, `candidates`; `SECTIONS`)
+  are missing from the board until a page asks for them. Read one through `odNeed()` (on
+  screen) or `odReady()`, and draw `odWaitHtml()` while it is missing: `D.hiring || {}`
+  reads a section not yet computed as an empty one, and a write or a progress check must
+  never be judged on that. A new key is core only when the warnings need it
+  (`docs/architecture.md`, "Sections").
 - A `defaultdict[key]` read inserts the key. If another loop is iterating that dict at the
   time, Python raises "dictionary changed size during iteration" (PR #210). Once other
   functions read a built defaultdict by key, freeze it with `_frozen()` and read it with

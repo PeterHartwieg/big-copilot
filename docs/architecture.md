@@ -17,7 +17,7 @@ flowchart TD
   subgraph local["Local CLI — python ba_dashboard.py"]
     direction TB
     save --> load["load_save() · ba_save.py"]
-    load --> extract["extract(save, names, history_path)"]
+    load --> extract["extract(save, names, history_path): build_core() + materialize_all()"]
     extract --> payload["the payload dict"]
     payload --> renderL["render(data)"]
     renderL --> out(["dashboard.html"])
@@ -33,9 +33,11 @@ flowchart TD
     ph --> renderW["render(None, live=True, banner=BANNER, before_script=…, head=…)"]
     renderW --> index(["web/index.html + web/py/ + web/version.json"])
     index --> app["web/app.js — landing screen, save picking, owns the worker"]
-    app -->|"postMessage build / name"| wk["web/worker.js — Pyodide"]
-    wk --> bb["browser_build() → JSON string"]
+    app -->|"postMessage build / name / section"| wk["web/worker.js — Pyodide"]
+    wk --> bb["browser_build() → the core, JSON"]
+    wk --> bs["browser_section() → one section, JSON"]
     bb --> app
+    bs --> app
     app -->|"window.LEDGER_SOURCE"| board["the board script — let D"]
   end
 
@@ -43,10 +45,12 @@ flowchart TD
   payload -->|"embedded as /*__DATA__*/"| board
 ```
 
-Both doors run the same `extract()` and the same template, `template/board.html` with the board script `template/board.js`. Only the wrapper differs:
-locally `main()` calls `load_save()` and `render(data)`; in the browser `web/worker.js` calls
-`browser_build()`, which does the same work on Pyodide's virtual filesystem and returns
-JSON. A third source feeds either door: the Big Copilot Link mod serves the running
+Both doors run the same `build_core()` and the same sections (`SECTIONS`, see
+[Sections](#sections)), and the same template, `template/board.html` with the board script
+`template/board.js`. Only the wrapper differs: locally `main()` calls `load_save()`,
+`extract()` (the core and every section, `materialize_all()`) and `render(data)`; in the
+browser `web/worker.js` calls `browser_build()`, which builds the core on Pyodide's virtual
+filesystem and returns it as JSON, and `browser_section()` when a page asks for a section. A third source feeds either door: the Big Copilot Link mod serves the running
 game's own save bytes on loopback HTTP ([game-link-api.md](game-link-api.md)), and
 `--game` on the CLI or "Link to the game" in the browser takes the bytes from there.
 Those bytes are a normal `.hsg`, so nothing downstream knows where they came from.
@@ -54,7 +58,8 @@ Those bytes are a normal `.hsg`, so nothing downstream knows where they came fro
 ## The payload contract
 
 Every top-level key of the dict `extract()` returns, what produces it, and which functions
-read it.
+read it. A key is the core's, computed on every build, unless the table says it is a
+section's, computed when a page asks for it ([Sections](#sections)).
 
 **Reader convention.** A reader is a function whose *own body* references `D.<key>` —
 `D?.<key>` and `D["<key>"]` included, as is destructuring off `D`. A reference inside an
@@ -76,7 +81,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `loans` | `_loans()`; each loan carries its bank's site `key` | `drawKpis`, the `SS_VIEWS` `cash` entry's `live()`, and `osRoiLoan()` (Open a store, step 6) |
 | `supply` | `_supply()`; its `facts` from `_supply_facts()`, each fact's status word from `_supply_status()`; `margin` and `roundTo` are `SUPPLY_MARGIN` and `SUPPLY_ROUND_TO`; `roundTo` has no board reader, since the rounding is done in Python before the numbers ship | `supplyChecklistRows`, `sbData`, Supply's five view drawers (with `sbDepotRows`, `sbTabOf`, `sbDeps`, `sbNodeOpen`, `drawFlowPanel`), `pgEvaluate` (a later board's evidence for an applied write), `drawSite`, `drawFlow`, `flowLayout` (its columns are `flowStages`' stages), the phone chain's `flowStages`, `drawFlowChain`, `drawFlowFocus` and `flowPipeProblem` (which reads each `graph.links` entry's `slugs`, the products its pipe carries), `factoryView`; `web/map.js` `refreshCityMaps`. `supply.facts` only through `supplyFact()` (below), and `supply.idle` only through `idleRows()`, which keeps the rows idle under the sizing on screen (`modes`) with their `dem` laid over. `supply.wholesaleShops` (the shops a repeating wholesale contract delivers to) has no board reader: `_alerts()` counts it as a delivery plan. `supply.routed` (the `[shop index, product]` pairs a stock target above zero or a weekly wholesale contract delivers, whatever the shop sells) is read only by the Open a store checklist's Logistics row, `osRoutes()` |
 | `rhythm` | `_chain_rhythm()`; its `recent` key holds the same three series over the last `RHYTHM_RECENT_DAYS` (28) calendar days before the last finished day, which the chart draws, while the full-length ones feed `_supply()` | `weekdaySeries` (which `drawChart` asks), `drawSite` |
-| `market` | `_market()`; its `catalogue` key is popped out and handed to `_plan()` | `drawMovers`, `drawMarket`; `web/wiki.js` `wikiOwn`, `wikiGuidePrices` |
+| `market` | `_market()`; its `catalogue` key is popped out into the build's private data (`build.private["catalogue"]`) and handed to `_plan()` | `drawMovers`, `drawMarket`; `web/wiki.js` `wikiOwn`, `wikiGuidePrices` |
 | `premises` | `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `finderPreset`, `wireCards`; `web/map.js` `premises` |
 | `chains` | `_chains()` | `drawPortfolio`, `siteCrumbs` |
 | `payback` | `_payback()`, with `_site_setup()` and `setup_cost()` (the investment in both install modes, reusable for a store not yet rented; `vehicles` the site's own, from `_site_vehicles()` and `_vehicle_deliveries()`), `_install_bills()`, `_payback_row()`, `payback_outcome()` and `_payback_rate()`; `History.payback()` keeps the firm's bill, each vehicle's delivery and each reached break-even day after the save forgets them (an older save of the same character reads it and writes nothing). An outcome is `reached`, `latest`, `togo`, `never`, `unknown`, or `window` for a lease older than the statements: the whole payback period at recent profit, since what it earned before is unknown. `{sites: {key: …}, chains: {first site key: …}, recentDays}`; a trading site whose run from the opening is known also carries `days` (`[day, profit, sales]` from the opening) and `before` (the lease's cost before it); `_payback_trail()` keeps and extends those days in the history after the record stops reaching the opening, and a site whose kept days no longer meet the record says `rolled` | `paybackSite`, `paybackChain`, through `drawPortfolio`'s Payback column, `spPayback()` in `drawSite()` and `osRoiHtml()` (Open a store, step 6) |
@@ -86,11 +91,11 @@ this column is where to look when you change a key's shape — not a complete ca
 | `hypeExposure` | `_hype_exposure()`; `extract()` also passes the same list to `_alerts()`, where the `hype` findings come from | `spHypeRow` (a `const` arrow function, called from `spPull()` for the site panel's Promotion block) |
 | `hours` | `_hourly()`, the sites with hour reports behind them | `drawSite` |
 | `hourFindings` | `_hour_findings()` | `drawSite` |
-| `staffing` | `_staff_plans()`, which plans shops, then offices, then factories over one pool (`_plan_world()`: `_plan_people()` once, one week per person, one bench); `_staffing()`, with `_plan_site()`, `_need_curve()`, `_initial_customers()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, the placer `_place_week()` (hires as placeholder people, `_place_hires()`; the week of somebody already working there kept where a plan would cut them short on a partial week, `_worse_off()` and `_pin_weeks()`), `_current_roster()`, `_index_table()`, `_shift_row()` | `drawSite` through `spRosterBlock`, and `drawOptimizeStaffing` for the Next-moves card |
-| `factoryStaffing` | `_factory_staffing()`, once per sizing (`{cap, dem}`), with `_factory_site_plan()`, `_factory_run_start()` and the shop placer `_place_week()`, drawing on the unassigned factory workers the shops and offices left; its hours come from each factory line's `needHours`, `hoursNow` and `_posts` (the machines' ids, set by `_line_hours()` in `_factories()` on each line and on each unnamed line with a recipe, and taken off the payload here, by the line's place in its list) | `drawFactoryStaffing`, through `drawProductionView` |
+| `staffing` | `build_core()`, which plans shops, then offices over one pool (`_plan_world()`: `_plan_people()` once, one week per person, one bench), and keeps that pool for the factories (the `factoryStaffing` section); `_staffing()`, with `_plan_site()`, `_need_curve()`, `_initial_customers()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, the placer `_place_week()` (hires as placeholder people, `_place_hires()`; the week of somebody already working there kept where a plan would cut them short on a partial week, `_worse_off()` and `_pin_weeks()`), `_current_roster()`, `_index_table()`, `_shift_row()` | `drawSite` through `spRosterBlock`, and `drawOptimizeStaffing` for the Next-moves card |
+| `factoryStaffing` | Section `factoryStaffing`: `_factory_staffing()`, once per sizing (`{cap, dem}`), with `_factory_site_plan()`, `_factory_run_start()` and the shop placer `_place_week()`, drawing on the unassigned factory workers the shops and offices left; its hours come from each factory line's `needHours`, `hoursNow` and `_posts` (the machines' ids, set by `_line_hours()` in `_factories()` on each line and on each unnamed line with a recipe, and taken off the payload by `build_core()` through `_take_posts()`, by the line's place in its list, into `build.private["posts"]`) | `drawFactoryStaffing`, through `drawProductionView` (it asks for the section); `sbFactoryPart` (reads it when there); `spSpareIds` for a factory; `hrPlanRow`; `pgPeopleSites` |
 | `officeStaffing` | `_office_staffing()`, with `_office_site_plan()`, `_office_runs()` (Peter's office default) and the shop placer `_place_week()`, drawing on the unassigned people no shop plan counts on (the bench `_staffing()` leaves in `_plan_world()`) | the Staff page (issue #89) |
-| `candidates` | `_candidates()`, with `_character()` and `_skill_rows()` | the Staff page |
-| `hiring` | `_hiring()`, which takes each plan row's private `_hire` (`_hire_fields()`: `hireWeeks`, the placeholder hires' weeks from `_place_hires()`, each with its `band` from `_hire_band()` -- `full` at 30 hours or more, `part` from 10, `short` under -- and `shortHires`, the weeks under 10 hours as `{skill, hours}`; `spare`, `bench`) off `staffing`, `staffing[].fullCover`, `factoryStaffing` and `officeStaffing`; `accepts` from `ASSIGN_SKILLS`, `facts` from `_site_facts()`, `stations` from `_station_facts()` (the desk and chair demands each station meets), `company` from `_company_facts()`, `recruiting` from `_recruiting()` | the Staff page |
+| `candidates` | Section `hiring`: `_candidates()`, with `_character()` and `_skill_rows()` | the Staff page; `gwWho` |
+| `hiring` | Section `hiring` (after `factoryStaffing`): `_hiring()`, which reads each plan row's private `_hire` (`_hire_fields()`: `hireWeeks`, the placeholder hires' weeks from `_place_hires()`, each with its `band` from `_hire_band()` -- `full` at 30 hours or more, `part` from 10, `short` under -- and `shortHires`, the weeks under 10 hours as `{skill, hours}`; `spare`, `bench`) for `staffing`, `staffing[].fullCover`, `staffing[].openCover`, `factoryStaffing` and `officeStaffing` from `build.private["hires"]`, which `_take_hires()` filled as each plan was made; `accepts` from `ASSIGN_SKILLS`, `facts` from `_site_facts()`, `stations` from `_station_facts()` (the desk and chair demands each station meets), `company` from `_company_facts()`, `recruiting` from `_recruiting()` | the Staff page (`drawStaffPage` asks for the section); the site panel's Staffing block (`spRosterBlock`, through `spRowLess` and `hrFromCall`) and its writes (`gwRosterButtons`, `gwStaffButton`); Open a store's and Plan a factory's staff rows (`osCkStaff`, `osStaffAct`, `ofCkStaff`, `ofRunHtml`); the hire and schedule write dialogs (`gwConfirm` `needs`); `pgPeopleSites` |
 | `plan` | `_plan()`; its `prices`, `priceFrom` and `priceDay` from `_ingredient_prices()`; each `catalogue` entry's `extra`, what the type can additionally sell as `[[slug, weight], ...]`, from `_plan_extra()` over `ba_store_rules.json` (`types[kind].i`, weight under 1); `own[kind].sellers`, how many of the type's shops sell each of those extras | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`, Add product's `planAdded` and `pcPopOpen`; `web/wiki.js` `wikiCanPlan` |
 | `names` | `_game_names()`: every `NAME_PREFIXES` key of `names.locale` but the `_description`s, plus `HOOD_LABEL` for a neighbourhood the text lacks | `itemName`, `gameName` (and through it `hoodName`), `englishName` (from the English payload), `localiseNames` |
 | `marketingAgencies` | `_marketing_agencies()`: the city's agencies from `MARKETING_AGENCIES`, each with its name, address, whether it is a phone contact (`Contacts`), the types it sells, its opening slots per weekday (`_open_hours()`) and, at the save's clock, `open` and `opens` (`open_at()`, `next_open()`); `_marketing()` adds new switches through the contacts only; `extract()` also passes the list to `_alerts()`, which names the agencies to visit | `gwMkAgency`, the marketing write's lookups (`gwMkBlocked`, `gwMkWhy`, `gwMkVisit`, `gwMkAgencyOf`, `gwMkOpensOf`), judged at the game's clock from `LEDGER_SOURCE.link()`, which `web/app.js` moves on every `/health` read; `gwMkTick` (the source's `linkClock`) redraws the pages on screen when an agency opens or shuts |
@@ -348,6 +353,123 @@ tokens raw, which is why every door goes through it. A key the table lacks stays
 `renderCalm(false)`, the path another save takes; Python never runs again. The wiki
 swaps only what it shows, through `wikiName(key, english)`, because its matching against
 the help's own words needs the English.
+
+## Sections
+
+The payload is computed in two parts. The **core** is computed on every build: the
+warnings and everything they read. The rest is split into **sections**, each computed only
+when a page needs it, from the same build. The map, for example, never needs the staffing
+optimisation, and the Staff page's numbers wait until somebody opens it.
+
+**Python.** `SECTIONS` in `ba_dashboard.py` is the registry: per section its payload keys,
+the sections it needs computed first, its producer, and the words the page is told while
+it runs. `PAYLOAD_KEYS` is every top-level key in the order the page has always had them.
+
+- `build_core(save, names, history_path, generation)` returns a `Build`: `core` (the core's
+  keys, wired with `_wire_msgs()`, ready to send), `shared` (the intermediates a section
+  reads: `businesses`, the supply's `factories`, `staff`, the planning `world`), `private`
+  (what never ships: `posts`, each factory line's machines; `hires`, every plan row's
+  `_hire` part by the row's identity; the market's `catalogue`) and `sections`. It records
+  the history; nothing else does.
+- `section(build, name)` computes one section from the `Build`, its needs first, once per
+  build. It never parses the save again and never writes the history.
+- `materialize_all(build)` computes every section and returns the payload in
+  `PAYLOAD_KEYS` order. `extract()` is `materialize_all(build_core(...))`, so the CLI's
+  `dashboard.html`, the watch server's `data.json`, the tests and
+  `tools/payload_diff.py` all take one path, and a payload with every section computed is
+  what one build used to give.
+
+Planning keeps its order: the core plans shops, then offices, over one pool of people
+(`_plan_world()`), and keeps the pool on the build; the `factoryStaffing` section plans the
+factory lines over the bench the offices left, and `hiring` reads every plan. Asking for
+`hiring` first still computes `factoryStaffing` before it.
+
+| Section | Keys | Needs | Asked for by |
+| --- | --- | --- | --- |
+| factoryStaffing | `factoryStaffing` | (none) | Supply › Production's staffing block (`drawFactoryStaffing`); a factory's site panel (`spSpareIds`) |
+| hiring | `hiring`, `candidates` | factoryStaffing | Staffing › Staff needs (`drawStaffPage`); the site panel's Staffing block and its writes (`spRosterBlock`, `gwRosterButtons`, `gwStaffButton`); Open a store and Plan a factory's staff rows; the hire and schedule write dialogs; a hire's progress check |
+
+**The browser.** `web/worker.js` holds one build at a time. A `build` (or `name`) message
+runs `browser_build()`, which sends the core and keeps the `Build` under the message's id,
+its generation; the reply carries it as `gen`, and `web/app.js` puts it on the data under
+`Symbol.for("bigcopilot.build")`. A `section` message names a section and a generation, and
+`browser_section()` answers `{generation, sections}`: the section asked for and every
+section it needs, so a retry after a failure half way still sends them all. A section for a
+build the worker no longer holds is answered `stale` without running: one whose generation
+is not the build held, or one asked for before a newer build or name. Before it starts, a
+section lets every message already sent to the worker arrive (`waiting()`, a
+`MessageChannel` round trip), so a build sent behind it makes it stale and goes first. A
+section asked after a build failed, with no build asked since, is answered `gone`: no board
+will replace the one on screen, and `web/app.js` rejects it as an error (Update reads the
+save again), not as stale. A request cut off by a change of save or a reader that stopped
+(`supersede()`) is rejected as an error too: nothing says a new board will come. The
+worker's `stale` means it has moved on to a newer build; `web/app.js` passes it on as stale
+only while a build or name of the current source is still waiting, whose board will ask
+again, and as an error otherwise (a build that was cancelled, its board dropped). A build lets the old
+`Build` go before it parses the new save, so a build that fails holds none. Python reports
+progress while it works (`set_progress()`, the worker's `say` through the
+`big_copilot_worker` module): no JavaScript timer can fire during `runPython`, and the
+page's inactivity cutoff (`LOAD_TIMEOUT_MS`) hears a long section through these messages.
+
+**The board.** `OD_SECTIONS` in the board script mirrors `SECTIONS`
+(`tests/test_sections.py` holds the two together).
+
+- `odReady(name)` is a pure read: the board holds the section's keys, and its needs'. On
+  a source with no `section()` (`odOnDemand()` false) it is always true: such a source sent
+  every section it has, and a key missing there is simply empty.
+- `odNeed(name)` is the one way to ask: true when the board holds the section; otherwise it
+  asks `LEDGER_SOURCE.section(name, generation)` once for this board (with what it needs)
+  and returns false. Call it from what draws on screen, never from a count.
+  `renderAll()` sets `odHidden` while it draws a row of a view that is not on screen: an
+  `odNeed()` there asks nothing and leaves the row out of date (`pageStale`), so it asks when
+  its view opens (`drawStale()`).
+- A `PAGE_DRAWS` row's fourth element names the sections the row reads (Staffing ›
+  Schedules and Staff needs: `hiring`; Supply › Production: `factoryStaffing`; Today none).
+  `odWantView()` asks for them as the view opens (`drawStale()`) and as a board arrives on
+  it (`renderAll()`). A block whose need depends on the site (the site panel) asks from its
+  draw instead.
+- `odState(name)` is `ready`, `loading`, `error` or `missing`; `odWaitHtml(name, small)` draws
+  the words while it is worked out ("Working out staff needs…"), or why it was not, with
+  Try again (`odRetry()`).
+- `odTake()` merges an arriving section into the English payload (`D[GN_SRC]`) and its
+  localised copy into `D` (`gnWalk()`, `gnUnkeyed()`, `ttPayload()`), the way
+  `localiseNames()` would. It is not `takeData()`: no board count, no history, no
+  `sbBoard()`. An answer for an older board is dropped. Then `odArrived()` clears the
+  memos keyed on the board (`hrSiteMemo`), lets the progress checks run again
+  (`pgJudged`), redraws the page on screen (`renderCalm()`), plans a write dialog that
+  was waiting (`odDialog()`, which a failure and a Try again call too), and runs what
+  `odThen()` held: a click that opens a write review before the board has its section
+  (`hrReview()`) opens it once it arrives, and is dropped if it fails.
+
+A board whose source has no `section()` (the CLI's page, the watch server) gets every
+section in the payload.
+
+**Correctness rules.**
+
+- A missing section never reads as an empty one. A reader that would judge something
+  (spare people, a hire count, "nothing to do") asks with `odNeed()` and draws
+  `odWaitHtml()` until it arrives, or says nothing.
+- A write is judged and sent only on a board that has its sections: `gwConfirm()` takes
+  `needs`, waits with Apply off, and plans again when they arrive. The hire and schedule
+  writes need `hiring`, and their buttons are not offered until it is there.
+- A progress check returns null (not judged) until its sections are there (`PG_CHECK.hire`).
+- A `stale` refusal (the worker has started a newer build) is no failure: the section stays
+  loading, held work keeps waiting, and the newer board asks again as it arrives
+  (`odThensAsk()`, which also plans a waiting dialog again). If that build fails, the
+  source's `stale(why)` turns it into an error (`odSourceFailed()`).
+- Today asks for no section. Its Next-moves staffing card counts the shop plan's own hires
+  until `hiring` is on the board, and the people who could come from other sites only
+  after (`spRowLess()`), so the count can drop once a staffing page has been opened.
+- Sections are not kept across builds: each new board asks again (a bounded cache is a
+  later phase of #238).
+
+**Adding a feature.** Decide whether it is core or a section. Core is for what the warnings
+need; anything computed on load needs that reason, written beside it. A section declares its
+keys, its needs, its producer and its words in `SECTIONS` and `OD_SECTIONS`; its readers
+ask with `odNeed()` and draw `odWaitHtml()`; it has no side effect on the core (no write to
+an object the core already sent, no history), which `tests/test_sections.py` checks; and
+it is invalidated by the next build. A private part a section needs goes on
+`build.private`, never on a payload object.
 
 ## UI text
 
@@ -714,15 +836,16 @@ server, with four members: `label` ("Live"), `data()` fetches the `data.json` ro
 `name()` POSTs to `name`, and `watch()` polls `stamp` every 15 seconds and pulls fresh
 numbers only when the stamp moves.
 
-`web/app.js` sets `window.LEDGER_SOURCE` before the board script runs. It has seven
+`web/app.js` sets `window.LEDGER_SOURCE` before the board script runs. It has eight
 members. Four satisfy the same contract: `label`, `data()` resolves to a fresh data object
 (by posting a `build` message to the worker), `name(rid, slug)` records a factory-line name
 and resolves to the data that follows, and `watch(h)` keeps the callbacks `changed(data)`,
-`stale(why)` and `lost()`. Three exist only in the browser: `link()` describes the game
-link (its writes and character) when one is up, `write(kind, body, opts)` sends a write to
-the game, and `refresh()` reads the source again. The board checks
-`typeof SOURCE.link === "function"` (and the same for `refresh`) before it calls either, so
-the local page runs without them.
+`stale(why)` and `lost()`. Four exist only in the browser: `section(name, generation)`
+resolves to a section of the build on screen ([Sections](#sections)), `link()` describes
+the game link (its writes and character) when one is up, `write(kind, body, opts)` sends a
+write to the game, and `refresh()` reads the source again. The board checks
+`typeof SOURCE.link === "function"` (and the same for `refresh` and `section`) before it
+calls one, so the local page runs without them.
 
 The bytes behind `data()` can come from the game link as well as from a folder handle or a
 file: when the player has linked the page to the running game, `app.js` fetches
@@ -1138,14 +1261,16 @@ all three.
 
 ### A payload key
 
-Nothing between `extract()` and the board filters keys: `browser_build()`, `render()`, the
-watch server, `web/worker.js` and `web/app.js` all pass the whole dict through.
+Nothing between `extract()` and the board filters keys: `render()`, the watch server,
+`web/worker.js` and `web/app.js` pass the whole dict through. The browser's
+`browser_build()` sends the core, and each section follows when a page asks
+([Sections](#sections)).
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
-| The `return {` at the end of `def extract(` | `"key": _producer(...)`. It must be JSON-serialisable, with any set ordered through `_in_order()` | only JSON-serialisability: `tests/test_supply_facts.py`, "test_the_payload_carries_the_facts_and_both_passes_of_findings" |
+| `PAYLOAD_KEYS`, and the `core = _wire_msgs({` at the end of `def build_core(` or a section's producer in `SECTIONS` (with `OD_SECTIONS` in the board script) | `"key": _producer(...)`. It must be JSON-serialisable, with any set ordered through `_in_order()`. Core only with a reason: the warnings need it | JSON-serialisability: `tests/test_supply_facts.py`, "test_the_payload_carries_the_facts_and_both_passes_of_findings"; the key's place: `tests/test_sections.py` |
 | The payload table in [The payload contract](#the-payload-contract) | A row that follows the reader convention | `tests/test_doc_registries.py`, "test_the_payload_table_has_a_row_for_every_key_extract_returns" (the key column only) |
-| The reader, `D.<key>`, in the board script, `web/map.js` or `web/wiki.js` | A reader that survives a missing key (fall back to an empty value), because many Node tests build a partial `D` | indirect |
+| The reader, `D.<key>`, in the board script, `web/map.js` or `web/wiki.js` | A reader that survives a missing key (fall back to an empty value), because many Node tests build a partial `D`. A section's reader asks for it with `odNeed()` and never takes a missing key for an empty one | indirect; `tests/on_demand.test.cjs` |
 | `class History:` and the `history.ledger(` / `history.write()` lines in `extract()` | *Only if* the value has to persist between saves | none |
 
 ### A finder filter
@@ -1244,13 +1369,20 @@ optional `en.json` and the history JSON under `/data`, and Python itself writes 
 `ba_dashboard` must not open a file at import time. See the trap in
 [AGENTS.md](../AGENTS.md).
 
-Two entry points, both called through `py.runPython` with paths interpolated as JSON:
+Three entry points, called through `py.runPython` with paths interpolated as JSON:
 
-- `browser_build(save_path, locale_path, history_path, names_path)` — parse, extract, and
-  return the payload as a JSON string. It also writes `<history_path>.character` so a later
-  name can be filed under the right company without reparsing the save.
+- `browser_build(save_path, locale_path, history_path, names_path, generation)` — parse,
+  build the core, keep the `Build` under `generation` for the sections, and return the
+  core as a JSON string. It also writes `<history_path>.character` so a later name can be
+  filed under the right company without reparsing the save.
+- `browser_section(name, generation)` — one section of the build held, as JSON
+  ([Sections](#sections)); `StaleBuild` for a build no longer held. Never writes the history.
 - `browser_name(history_path, rid, slug)` — record a factory-line name; the worker then
   rebuilds from the save already in the filesystem.
+
+At startup the worker registers its `say` as the module `big_copilot_worker` and hands it to
+`ba_dashboard.set_progress()`, so Python reports progress during a long build or section
+(`_progress()`, every `PROGRESS_EVERY_S` from the placer, and at once as a section starts).
 
 Two traps:
 
