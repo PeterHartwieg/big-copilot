@@ -22,16 +22,18 @@ const COUNT_CACHE_PATH = "/api/community/_presence-count-v1";
 // minutes, so a loop of fresh browser ids cannot inflate the online count on the
 // budget meant for voting. Every other route shares COMMUNITY_LIMITER.
 const routes = {
-  "/api/community/presence": { method: "POST", write: true, handler: presence, limiter: "PRESENCE_LIMITER" },
-  "/api/community/vote": { method: "POST", write: true, handler: vote },
-  "/api/community/features": { method: "GET", write: false, handler: features },
+  "/api/community/presence": { operation: "presence", method: "POST", write: true, handler: presence, limiter: "PRESENCE_LIMITER" },
+  "/api/community/vote": { operation: "vote", method: "POST", write: true, handler: vote },
+  "/api/community/features": { operation: "features", method: "GET", write: false, handler: features },
 };
 
 export default {
   async fetch(request, env) {
+    const diagnostic = { operation: "request", category: "unexpected" };
     try {
-      return await handleApi(request, env);
+      return await handleApi(request, env, diagnostic);
     } catch {
+      reportFailure(diagnostic);
       // Never leak internals: generic JSON for any unhandled failure.
       return json({ error: "Service unavailable" }, 503);
     }
@@ -52,19 +54,35 @@ export default {
   },
 };
 
-async function handleApi(request, env) {
+// Only application constants reach console output; never inspect an exception.
+function reportFailure({ operation, category }) {
+  console.error({
+    event: "community_api_failure",
+    operation: ["presence", "vote", "features"].includes(operation) ? operation : "request",
+    category: ["configuration", "limiter", "database"].includes(category) ? category : "unexpected",
+  });
+}
+
+async function handleApi(request, env, diagnostic) {
   const { pathname, origin } = new URL(request.url);
   if (!pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
   const route = routes[pathname];
   if (!route) return json({ error: "Not found" }, 404);
   if (request.method !== route.method) return json({ error: "Method not allowed" }, 405);
+  diagnostic.operation = route.operation;
   const { COMMUNITY_DB: db, COMMUNITY_IP_SECRET: secret } = env;
   const limiter = env[route.limiter || "COMMUNITY_LIMITER"];
-  if (!db || !limiter || !secret) return json({ error: "Service unavailable" }, 503);
+  if (!db || !limiter || !secret) {
+    reportFailure({ operation: route.operation, category: "configuration" });
+    return json({ error: "Service unavailable" }, 503);
+  }
   const ip = clientIp(request);
   if (!ip) return json({ error: "Invalid request" }, 400);
   const sign = await signer(secret);
-  const { success } = await limiter.limit({ key: await sign("rate:" + ip) });
+  const key = await sign("rate:" + ip);
+  diagnostic.category = "limiter";
+  const { success } = await limiter.limit({ key });
+  diagnostic.category = "unexpected";
   if (!success) return json({ error: "Too many requests" }, 429, { "retry-after": "60" });
   let body = null;
   if (route.write) {
@@ -72,10 +90,10 @@ async function handleApi(request, env) {
     if (body instanceof Response) return body;
     if (body === null) return json({ error: "Invalid request" }, 400);
   }
-  return route.handler(request, env, body, ip, sign);
+  return route.handler(request, env, body, ip, sign, diagnostic);
 }
 
-async function presence(request, env, body, _ip, _sign) {
+async function presence(request, env, body, _ip, _sign, diagnostic) {
   const browserId = singleString(body, "browserId");
   if (!browserId || !UUID_RE.test(browserId)) return json({ error: "Invalid request" }, 400);
   const id = browserId.toLowerCase();
@@ -90,6 +108,7 @@ async function presence(request, env, body, _ip, _sign) {
   // The upsert refreshes last_seen only for rows at least REFRESH_AFTER old, so
   // duplicate heartbeats neither write a fresh row nor change the count. The
   // batch reads observe the upsert atomically; cached counts skip the count scan.
+  diagnostic.category = "database";
   const statements = [
     db.prepare(
       "INSERT INTO community_presence (browser_id, last_seen) VALUES (?1, ?2) " +
@@ -102,6 +121,7 @@ async function presence(request, env, body, _ip, _sign) {
     db.prepare("SELECT COUNT(*) AS n FROM community_presence WHERE last_seen > ?1").bind(now - COUNT_WINDOW),
   );
   const [, row, total] = await db.batch(statements);
+  diagnostic.category = "unexpected";
   if (!snapshot) {
     snapshot = { count: total.results[0].n, countedAt: now };
     try {
@@ -123,34 +143,41 @@ async function presence(request, env, body, _ip, _sign) {
   });
 }
 
-async function vote(_request, env, body, ip, sign) {
+async function vote(_request, env, body, ip, sign, diagnostic) {
   const featureId = singleString(body, "featureId");
   const feature = FEATURES.find((f) => f.id === featureId);
   if (!feature) return json({ error: "Unknown feature" }, 400);
   const db = env.COMMUNITY_DB;
+  const voterHash = await sign(`vote:${feature.id}:${ip}`);
+  diagnostic.category = "database";
   const [, total] = await db.batch([
     // Insert-if-absent keeps retries and double clicks idempotent; totals are
     // always derived from stored votes, never a mutable counter.
     db.prepare(
       "INSERT INTO community_votes (feature_id, voter_hash, created_at) VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING"
-    ).bind(feature.id, await sign(`vote:${feature.id}:${ip}`), Math.floor(Date.now() / 1000)),
+    ).bind(feature.id, voterHash, Math.floor(Date.now() / 1000)),
     db.prepare("SELECT COUNT(*) AS n FROM community_votes WHERE feature_id = ?1").bind(feature.id),
   ]);
+  diagnostic.category = "unexpected";
   return json({ feature: { ...feature, votes: total.results[0].n, voted: true } });
 }
 
-async function features(_request, env, _body, ip, sign) {
+async function features(_request, env, _body, ip, sign, diagnostic) {
   if (!FEATURES.length) return json({ features: [] });
   const db = env.COMMUNITY_DB;
   const statements = [];
   for (const feature of FEATURES) {
     const voterHash = await sign(`vote:${feature.id}:${ip}`);
+    diagnostic.category = "database";
     statements.push(
       db.prepare("SELECT COUNT(*) AS n FROM community_votes WHERE feature_id = ?1").bind(feature.id),
       db.prepare("SELECT COUNT(*) AS n FROM community_votes WHERE feature_id = ?1 AND voter_hash = ?2").bind(feature.id, voterHash),
     );
+    diagnostic.category = "unexpected";
   }
+  diagnostic.category = "database";
   const results = await db.batch(statements);
+  diagnostic.category = "unexpected";
   return json({
     features: FEATURES.map((feature, i) => ({
       ...feature,

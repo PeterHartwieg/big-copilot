@@ -55,20 +55,52 @@ are committed; a change that reaches them, such as to the wiki generator or to h
 `ba_dashboard.py` builds the name tables, needs the full `python build_web.py` with the game,
 and the rebuilt files are committed with it.
 
-Run `python -m unittest discover -s tests` for the portable planner regressions.
-They need no save file; `tests/test_plan_orders.py` runs the board script under Node.js.
+Install Python 3 and Node.js 24, then run `npm ci` and
+`npx playwright install chromium` (on Linux, use `--with-deps` if system browser
+libraries are missing). Run `npm run verify` for the complete CI gate: assembly,
+Python unittest discovery, all Node suites with concurrency 2, the optimized
+hosted-page suites, the Worker dry-run, and the assembled-file check. The runner
+restores readable assembly before the final freshness check. It needs no game, real saves or production credentials,
+and works in a dirty development checkout. Each failure stops later stages.
 
-The UI regressions also run in a real browser. Install the development dependencies
-with `npm ci` and
-`npx playwright install chromium`, then run `node --test tests/*.test.cjs`.
-Alternatively, set `PLAYWRIGHT_CHANNEL=msedge` or `chrome` to use an installed browser.
+Except for the standalone Worker check, Python is selected from `PYTHON`, then
+`python3`, `python` or the Windows `py`
+launcher. An explicit invalid `PYTHON` fails without falling back. Set `PYTHON` to
+an executable path, without command arguments; paths with spaces are supported.
+The resolved interpreter is passed to every child, including the Node suites.
+
+Focused commands also assemble first:
+
+- `npm test` runs all Node suites; `npm test -- tests/map.test.cjs` selects a suite
+  (multiple filenames and quoted `*` filename patterns are accepted). Focused
+  `npm test` accepts filenames/patterns, not raw Node test flags.
+- `npm run test:python` runs Python discovery;
+  `npm run test:python -- tests.test_premises` selects a module. Arguments after
+  `--` are passed to unittest, including discovery options.
+- `npm run test:optimized` assembles, optimizes the hosted page, runs CI’s hosted
+  suites with `BOARD_TARGET=web` and concurrency 2, then restores readable assembly
+  on success. If optimization or a hosted test fails, later stages stop; run
+  `npm run verify:assemble` to restore readable output before inspecting it.
+- `npm run test:community` runs the community API and browser suites.
+- `npm run check:worker` checks the Worker bundle without publishing it.
+- `npm run verify:assemble` assembles only; `npm run verify:check` checks the
+  existing assembly without rebuilding it.
+
+CI uses the same stages in separate jobs and additionally requires assembly to
+leave no committed changes or untracked files. Local verification does not require
+a clean working tree. Worktrees can reuse installed dependencies by setting
+`NODE_PATH` to the canonical checkout’s `node_modules` instead of running `npm ci`
+again; this also supplies Wrangler for the dry-run and esbuild for the optimizer.
+
+The UI regressions run in a real browser. Set `PLAYWRIGHT_CHANNEL=msedge` or
+`chrome` to use an installed browser instead of downloaded Chromium.
 Set `BOARD_TARGET=web` to check the generated browser page after rebuilding it.
 The layout fixtures are synthetic; no game or save is needed. They cover desktop
 table sizing, crowded planner controls, keyboard access to downtime, and scrolling
 inside tables on narrow screens.
 
 Community checks use real local D1 via Miniflare and browser fixtures with synthetic
-identities. Run `npm run test:community` after `python build_web.py --assemble`, and
+identities. Run `npm run test:community`, and
 `npm run check:worker` to validate the deployment bundle without publishing it.
 See [Community features](community-features.md) for database/secret setup and the
 first production release steps. No live API credentials are needed for tests.
@@ -130,7 +162,8 @@ original escaping. Its source and esbuild’s lock entry in `package-lock.json` 
 build stamp inputs. Python assembly stays independent of Node: `--assemble` restores the
 readable output, which is what `--check` compares. Run `node tools/optimize_web.mjs`
 after assembly to preview the deployment artifact locally; assemble again before
-running tests or `--check`. CI also runs the hosted-page checks against optimized output.
+running tests or `--check`. `npm run test:optimized` manages this sequence and
+runs the same optimized hosted-page checks as CI.
 `tests/csp.test.cjs` serves the optimized page with real Pyodide,
 map, guide and game-link loading, and `tests/optimize_web.test.cjs` guards script
 boundaries and shared globals.

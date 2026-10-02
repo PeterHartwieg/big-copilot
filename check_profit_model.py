@@ -5,9 +5,8 @@
     python check_profit_model.py -v                  # also list every shop, worst first
 
 For each character's newest save at or above MIN_BUILD, extract() builds the payload
-and the board's own model (the "Expansion › Open a store" section of the board
-script, template/board.js, run in Node) prices each of the player's trading shops
-and offices on its own building, hours, promotion and satisfaction. The ratio is
+and the shared calculation module (template/open-store-model.js, run in Node)
+prices each of the player's trading shops and offices on its own building, hours, promotion and satisfaction. The ratio is
 what the shop really earned a day over its last finished days
 (_own_shops(), goods at import prices) against what the rules give it. Above 1
 means the model under-predicts. docs/open-a-store-scope.md, "Expected profit", has
@@ -31,24 +30,19 @@ from ba_dashboard import MIN_BUILD, OWN_PROFIT_DAYS, Names, extract
 from check_saves import SAVE_ROOT
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-START = "/* --- Expansion › Open a store ---"
-END = "/* --- plan a chain ---"
+MODEL = os.path.join(HERE, "template", "open-store-model.js")
 
-# Runs the board's model over one payload per argument and prints one JSON
-# row per shop. The board's helpers the model touches are stubbed.
+# Runs the shared calculation API over one payload per argument and prints
+# one JSON row per shop. No board source or browser stubs are needed.
 RUNNER = r"""
-const fs = require('fs'), vm = require('vm');
-const code = fs.readFileSync(process.argv[2], 'utf8');
+const fs = require('fs');
+const OpenStoreModel = require(process.argv[2]);
 const rows = [];
 for(const file of process.argv.slice(3)){
   const P = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const ctx = {D: P, gameName: k => (P.names || {})[k] || '', icon: () => '', prettySlug: s => s, paybackMode: () => 'firm',
-    premises: () => P.premises, localStorage: {getItem(){ return null; }, setItem(){}}, tt: (k, en) => typeof en === 'string' ? en : '',
-    once: f => f, Map, Math, JSON, Number, Array, String, Object, Set, console};
-  vm.createContext(ctx);
-  vm.runInContext(code + '\n;this.osOwnRatio = osOwnRatio;', ctx);
+  const modelAPI = OpenStoreModel.create({facts: P.openStore || {}, company: {businesses: P.businesses || [], day: (P.meta || {}).day}});
   for(const slug of Object.keys((P.openStore || {}).own || {})){
-    const r = ctx.osOwnRatio(slug);
+    const r = modelAPI.ownRatio(slug);
     if(!r) continue;
     const model = ((P.openStore.types || {})[slug] || {}).model;
     r.rows.forEach(x => rows.push({save: P.who, modded: P.modded, type: slug.replace('ba:businesstype_', ''), model, key: x.key,
@@ -81,14 +75,6 @@ def modded(save, path: str) -> bool:
         return bool(save.root.get("hasEverUsedMods"))
     words = [f"{m.get('modDisplayName') or ''} {m.get('modId') or ''}" for m in active]
     return any(not any(h in w for h in HARMLESS_MODS) for w in words)
-
-
-def board_model() -> str:
-    """The Open a store section of the board script, as the page runs it."""
-    with open(os.path.join(HERE, "template", "board.js"), encoding="utf-8") as fh:
-        text = fh.read()
-    start = text.index(START)
-    return text[start:text.index(END, start)]
 
 
 def stats(values: list) -> dict:
@@ -135,13 +121,10 @@ def collect(root: str) -> tuple[int, list]:
             files.append(file)
         if not files:
             return 0, []
-        model = os.path.join(scratch, "model.js")
-        with open(model, "w", encoding="utf-8") as fh:
-            fh.write(board_model())
         runner = os.path.join(scratch, "run.cjs")
         with open(runner, "w", encoding="utf-8") as fh:
             fh.write(RUNNER)
-        done = subprocess.run(["node", runner, model, *files], capture_output=True, text=True, encoding="utf-8")
+        done = subprocess.run(["node", runner, MODEL, *files], capture_output=True, text=True, encoding="utf-8")
         if done.returncode:
             raise SystemExit(done.stderr)
         return len(files), json.loads(done.stdout)

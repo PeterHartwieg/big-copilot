@@ -19317,7 +19317,7 @@ def render(
 
 
 # The board's HTML and CSS (template/board.html) and its script
-# (template/board.js), beside this file. They are read on the first render(),
+# (template/board.js and template/open-store-model.js), beside this file. They are read on the first render(),
 # never at import: the Pyodide worker imports this module with only its
 # fetched files on disk and never renders.
 _template = None
@@ -19334,7 +19334,7 @@ def splice_board_script(page: str, script: str) -> str:
 
 
 def load_template() -> str:
-    """template/board.html with template/board.js spliced in, as one string,
+    """template/board.html with the calculation core and board.js spliced in,
     read once, with LF line endings. The splice comes before every other
     placeholder, so render() sees the page as if it were one file."""
     global _template
@@ -19344,7 +19344,9 @@ def load_template() -> str:
             page = fh.read()
         with open(os.path.join(folder, "board.js"), encoding="utf-8") as fh:
             script = fh.read()
-        _template = splice_board_script(page, script)
+        with open(os.path.join(folder, "open-store-model.js"), encoding="utf-8") as fh:
+            model = fh.read()
+        _template = splice_board_script(page, model + "\n" + script)
     return _template
 
 

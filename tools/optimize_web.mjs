@@ -1,9 +1,10 @@
 // The deployment-only transform of the Python-assembled page. Source files and
 // standalone dashboard exports stay readable; only ignored web/index.html changes.
-import {readFileSync, writeFileSync} from 'node:fs';
+import {readFileSync, writeFileSync, realpathSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
-import {transformSync} from 'esbuild';
+import {createRequire} from 'node:module';
+const {transformSync} = createRequire(import.meta.url)('esbuild');
 
 export function optimizePage(html) {
   // render() emits plain classic script blocks. Leave external scripts and
@@ -31,6 +32,6 @@ export function optimizeWeb(root) {
   console.log(`optimized web/index.html: ${Buffer.byteLength(html)} → ${Buffer.byteLength(optimized)} bytes`);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   optimizeWeb(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 }

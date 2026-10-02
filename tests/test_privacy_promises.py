@@ -97,17 +97,36 @@ class PrivacyPromises(unittest.TestCase):
         self.assertRegex(config, r'"invocation_logs"\s*:\s*false')
         self.assertRegex(config, r'"traces"\s*:\s*\{\s*"enabled"\s*:\s*false\s*\}')
 
-    def test_worker_code_logs_nothing(self):
-        # "We keep no access logs ourselves." Observability is on, so anything
-        # the Worker prints is stored in Workers Logs; the Worker prints nothing,
-        # and nothing ships its logs elsewhere. A new log line has to be checked
-        # for request data (IP, URL, ids) before this test is loosened.
+    def test_worker_code_logs_only_bounded_failure_events(self):
+        # "We keep no access logs ourselves." Only the reviewed diagnostic
+        # helper may print: three fields, each a literal or a fixed allowlist.
+        # Runtime sentinel/quietness tests live in community-api.test.cjs.
+        # No request data or arbitrary exception text may enter this helper.
         config = (ROOT / "wrangler.jsonc").read_text(encoding="utf-8")
         self.assertNotIn("logpush", config)
         self.assertNotIn("tail_consumers", config)
         for path in (ROOT / "server").glob("*.mjs"):
             with self.subTest(name=path.name):
-                self.assertNotRegex(path.read_text(encoding="utf-8"), r"\bconsole\s*\.")
+                source = path.read_text(encoding="utf-8")
+                if path.name == "worker.mjs":
+                    helper = re.search(
+                        r"function reportFailure\(\{ operation, category \}\) \{(.*?)\n\}",
+                        source, re.S,
+                    )
+                    self.assertIsNotNone(helper, "missing bounded failure helper")
+                    # Full match prevents extra fields, exception arguments or
+                    # arbitrary request-derived values in console output.
+                    self.assertIsNotNone(re.fullmatch(
+                        r'\s*console\.error\(\{\s*'
+                        r'event: "community_api_failure",\s*'
+                        r'operation: \["presence", "vote", "features"\]\.includes\(operation\) '
+                        r'\? operation : "request",\s*'
+                        r'category: \["configuration", "limiter", "database"\]\.includes\(category\) '
+                        r'\? category : "unexpected",\s*'
+                        r'\}\);\s*', helper.group(1),
+                    ), "failure event must contain only fixed, allowlisted fields")
+                    source = source[:helper.start()] + source[helper.end():]
+                self.assertNotRegex(source, r"\bconsole\s*(?:\.|\[)")
 
     def test_daily_cleanup_is_scheduled(self):
         # "Both are deleted within two days" (presence) and "within one day

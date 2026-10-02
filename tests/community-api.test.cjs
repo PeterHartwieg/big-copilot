@@ -935,3 +935,128 @@ test('rate limit: presence has its own budget, so a heartbeat loop stops early a
   await expectJSON(await postJSON(mf, origin, '/api/community/vote', { featureId: feature.id }, ip), 200,
     'vote from an IP whose presence budget is spent');
 });
+
+/* ------------------------------------------ privacy-safe failure events */
+
+// Run the unchanged Worker source with synthetic Web API bindings so exceptions
+// and console output can be inspected without runtime-generated access logs.
+function diagnosticWorker({ cacheFails = false } = {}) {
+  const events = [];
+  const source = fs.readFileSync(WORKER_PATH, 'utf8')
+    .replace('import FEATURES from "./features.json";', `const FEATURES = ${JSON.stringify(BALLOT)};`)
+    .replace('export default {', 'globalThis.worker = {');
+  const context = {
+    Request: globalThis.Request, Response: globalThis.Response, URL, TextEncoder, TextDecoder,
+    crypto: crypto.webcrypto,
+    console: { error: (...args) => events.push(args) },
+    caches: { default: {
+      match: async () => { if (cacheFails) throw new Error(DIAGNOSTIC_SENTINEL); return null; },
+      put: async () => { if (cacheFails) throw new Error(DIAGNOSTIC_SENTINEL); },
+    } },
+  };
+  require('node:vm').runInNewContext(source, context);
+  return { worker: context.worker, events };
+}
+
+const DIAGNOSTIC_SENTINEL = '192.0.2.123 browser-private voter-hash-private SELECT secret-token-private';
+const DIAGNOSTIC_BROWSER = '11111111-2222-3333-4444-555555555555';
+function diagnosticEnv() {
+  return {
+    COMMUNITY_IP_SECRET: 'secret-token-private',
+    COMMUNITY_LIMITER: { limit: async () => ({ success: true }) },
+    PRESENCE_LIMITER: { limit: async () => ({ success: true }) },
+    COMMUNITY_DB: {
+      prepare: () => ({ bind() { return this; } }),
+      batch: async () => Array.from({ length: 4 }, () => ({ results: [{ n: 1, last_seen: nowSec() }] })),
+    },
+    ASSETS: { fetch: async () => new globalThis.Response('static fixture') },
+  };
+}
+function diagnosticRequest(operation, options = {}) {
+  return new globalThis.Request(`https://diagnostics.test/api/community/${operation}?secret-token-private`, {
+    method: operation === 'features' ? 'GET' : 'POST',
+    headers: { Origin: 'https://diagnostics.test', 'Content-Type': 'application/json', 'CF-Connecting-IP': '192.0.2.123' },
+    ...(operation === 'features' ? {} : { body: JSON.stringify(operation === 'presence'
+      ? { browserId: DIAGNOSTIC_BROWSER } : { featureId: BALLOT[0].id }) }),
+    ...options,
+  });
+}
+
+async function assertDiagnosticFailure(worker, events, request, env, operation, category) {
+  const response = await worker.fetch(request, env);
+  assert.equal(response.status, 503);
+  assert.equal(await response.text(), '{"error":"Service unavailable"}');
+  assert.equal(response.headers.get('content-type'), 'application/json; charset=utf-8');
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+  // JSON roundtrip also removes the VM realm's distinct object prototypes.
+  assert.deepEqual(JSON.parse(JSON.stringify(events)), [[{
+    event: 'community_api_failure', operation, category,
+  }]]);
+  assert.doesNotMatch(JSON.stringify(events), /192\.0\.2\.123|browser-private|voter-hash-private|SELECT|secret-token-private|11111111/);
+}
+
+test('diagnostics: each route reports one bounded event for configuration, limiter and D1 failures', async () => {
+  for (const operation of ['presence', 'vote', 'features']) {
+    for (const binding of ['COMMUNITY_DB', 'COMMUNITY_IP_SECRET', operation === 'presence' ? 'PRESENCE_LIMITER' : 'COMMUNITY_LIMITER']) {
+      const { worker, events } = diagnosticWorker();
+      const env = diagnosticEnv();
+      delete env[binding];
+      await assertDiagnosticFailure(worker, events, diagnosticRequest(operation), env, operation, 'configuration');
+    }
+    for (const category of ['limiter', 'database']) {
+      for (const boundary of category === 'database' ? ['prepare', 'batch'] : ['limit']) {
+        const { worker, events } = diagnosticWorker();
+        const env = diagnosticEnv();
+        const target = category === 'database' ? env.COMMUNITY_DB : env[operation === 'presence' ? 'PRESENCE_LIMITER' : 'COMMUNITY_LIMITER'];
+        target[boundary] = boundary === 'prepare'
+          ? () => { throw new Error(DIAGNOSTIC_SENTINEL); }
+          : async () => { throw new Error(DIAGNOSTIC_SENTINEL); };
+        await assertDiagnosticFailure(worker, events, diagnosticRequest(operation), env, operation, category);
+      }
+    }
+  }
+});
+
+test('diagnostics: unknown exceptions use unexpected without logging their message or stack', async () => {
+  const { worker, events } = diagnosticWorker();
+  const request = diagnosticRequest('presence');
+  // A stream/read failure occurs outside limiter and D1 boundaries.
+  request.body.getReader = () => { throw new Error(DIAGNOSTIC_SENTINEL); };
+  await assertDiagnosticFailure(worker, events, request, diagnosticEnv(), 'presence', 'unexpected');
+});
+
+test('diagnostics: malformed D1 results and failures before route selection stay bounded', async () => {
+  {
+    const { worker, events } = diagnosticWorker();
+    const env = diagnosticEnv();
+    env.COMMUNITY_DB.batch = async () => [];
+    await assertDiagnosticFailure(worker, events, diagnosticRequest('features'), env, 'features', 'unexpected');
+  }
+  {
+    const { worker, events } = diagnosticWorker();
+    const env = diagnosticEnv();
+    env.ASSETS.fetch = async () => { throw new Error(DIAGNOSTIC_SENTINEL); };
+    await assertDiagnosticFailure(worker, events, new globalThis.Request('https://diagnostics.test/secret-token-private'), env, 'request', 'unexpected');
+  }
+});
+
+test('diagnostics: successful requests, cache failures and ordinary 4xx responses stay quiet', async () => {
+  const { worker, events } = diagnosticWorker({ cacheFails: true });
+  for (const operation of ['presence', 'vote', 'features']) {
+    assert.equal((await worker.fetch(diagnosticRequest(operation), diagnosticEnv())).status, 200);
+  }
+  const cases = [
+    [diagnosticRequest('missing', { method: 'GET', body: undefined }), diagnosticEnv(), 404],
+    [diagnosticRequest('presence', { method: 'GET', body: undefined }), diagnosticEnv(), 405],
+    [diagnosticRequest('presence', { body: '{"browserId":"browser-private"}' }), diagnosticEnv(), 400],
+    [diagnosticRequest('vote', { body: '{"featureId":"secret-token-private"}' }), diagnosticEnv(), 400],
+    [diagnosticRequest('presence', { body: ' '.repeat(1025) }), diagnosticEnv(), 413],
+    [diagnosticRequest('presence', { body: '{' }), diagnosticEnv(), 400],
+  ];
+  const limited = diagnosticEnv();
+  limited.COMMUNITY_LIMITER.limit = async () => ({ success: false });
+  cases.push([diagnosticRequest('features'), limited, 429]);
+  for (const [request, env, status] of cases) assert.equal((await worker.fetch(request, env)).status, status);
+  assert.deepEqual(events, []);
+});

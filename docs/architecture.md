@@ -571,15 +571,36 @@ without its `.git`) or inside any other git work tree.
 ## Template placeholders
 
 The board's page is `template/board.html`, a file of its own beside `ba_dashboard.py`, and
-its script is `template/board.js` beside it. `render()` reads both through
+its script is `template/board.js` beside it. The self-contained calculation core is
+`template/open-store-model.js`. `render()` reads these files through
 `load_template()`, once per process and never at import time: the Pyodide worker imports
 `ba_dashboard` without the files and never renders. `load_template()` first splices
-`board.js` into the line `/*__BOARD_SCRIPT__*/`, the whole body of the page's last
+`open-store-model.js` followed by `board.js` into the line `/*__BOARD_SCRIPT__*/`, the whole body of the page's last
 `<script>` block, so `render()` sees the page as one string and fills the placeholders in
-both files in the same order as when they were one. Both files are in
-`build_web.STAMP_INPUTS`, so an edit to either changes the build stamp.
+the page in the same order as when it was one file. All three sources are in
+`build_web.STAMP_INPUTS`, so an edit to any changes the build stamp. The calculation
+source stays inline in the existing script block for both standalone `file://` output
+and the hosted build, requiring neither npm nor a network import for Python rendering.
 
-`tools/split_board_script.py` made the split. A branch from before it, with the script
+`OpenStoreModel.create({facts, company})` is the Open a store arithmetic boundary.
+`facts` is the `openStore` payload; `company` contains businesses (provider checks and
+own-shop rent) and the current game day (demand waves). Its API handles investment,
+retail/office profit, own-shop calibration, cannibalization, opening-day ramp, payback
+and financing without reading the board, DOM, storage or translations. Named building,
+plan and options arguments are described beside the factory. The `os*` adapters in
+`board.js` pass the current payload on each call; the board retains marketing caching,
+plan persistence, finder integration, rendering and game-link writes. Shared game rules
+are defined only in the module. `tests/open_store_model.test.cjs` imports it directly
+for arithmetic tests and retains board integration checks for plans and charts;
+`check_profit_model.py` requires the same API in Node instead of slicing board source.
+
+`tools/split_board_script.py` made the original two-file split. Its split/join helpers
+remain historical migration tools: they refuse an assembled page containing the
+calculation module, or a board script depending on that module, before writing files.
+This prevents copying the core into `board.js` twice or producing an incomplete page.
+Use `load_template()`/`render()` for current multi-file assembly. `--resolve` still works
+with older inline branches and a current slotted page: it merges the board sources
+without joining the calculation module into either side. A branch from before it, with the script
 still inline, conflicts in `board.html` when it meets main, by merge or rebase. The one way
 to resolve that is `python tools/split_board_script.py --resolve`: it splits each of the
 three staged versions of `board.html` that is still inline, takes `board.js` from the

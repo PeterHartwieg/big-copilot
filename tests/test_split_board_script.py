@@ -1,13 +1,12 @@
-"""tools/split_board_script.py undoes ba_dashboard.load_template()'s splice: a page
-with the board script inline splits back into the committed board.html and board.js,
---join puts it back, and --resolve merges an inline branch with a split one, by
-merge or by rebase, keeping both sides' edits."""
+"""Historical two-file split/join and merge migration, plus safe refusal of the
+current multi-file production assembly."""
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
@@ -22,15 +21,36 @@ def read(name: str) -> str:
 
 
 class SplitBoardScript(unittest.TestCase):
-    def test_the_inline_page_splits_into_the_two_files(self):
-        self.assertEqual(split_board_script.split(load_template()), (read("board.html"), read("board.js")))
+    def test_the_historical_inline_page_splits_into_two_files(self):
+        page = inline_page()
+        markup, script = split_board_script.split(page)
+        self.assertEqual(script, "\n".join(SCRIPT) + "\n")
+        self.assertEqual(splice_board_script(markup, script), page)
+
+    def test_production_split_and_join_are_refused_before_writes(self):
+        for joining in (False, True):
+            with self.subTest(joining=joining), tempfile.TemporaryDirectory() as tmp:
+                os.makedirs(os.path.join(tmp, "template"))
+                page_file = os.path.join(tmp, "template", "board.html")
+                script_file = os.path.join(tmp, "template", "board.js")
+                page = read("board.html") if joining else load_template()
+                script = read("board.js")
+                split_board_script.write(page_file, page)
+                split_board_script.write(script_file, script)
+                with mock.patch.object(split_board_script, "ROOT", tmp), \
+                        mock.patch.object(sys, "argv", ["split_board_script.py"] + (["--join"] if joining else [])):
+                    with self.assertRaisesRegex(SystemExit, "nothing written"):
+                        split_board_script.main()
+                self.assertEqual(split_board_script.read(page_file), page)
+                self.assertEqual(split_board_script.read(script_file), script)
 
     def test_a_split_page_is_left_alone(self):
         self.assertIsNone(split_board_script.split(read("board.html")))
 
     def test_join_and_split_round_trip(self):
-        joined = split_board_script.join(read("board.html"), read("board.js"))
-        self.assertEqual(joined, load_template())
+        parts = split_board_script.split(inline_page())
+        joined = split_board_script.join(*parts)
+        self.assertEqual(joined, inline_page())
         self.assertEqual(splice_board_script(*split_board_script.split(joined)), joined)
 
     def test_a_second_slot_is_refused(self):
@@ -56,8 +76,10 @@ class SplitBoardScript(unittest.TestCase):
             split_board_script.join(read("board.html"), "<<<<<<< HEAD\n" + read("board.js"))
 
     def test_line_endings_are_kept(self):
-        page, script = split_board_script.split(load_template().replace("\n", "\r\n"))
-        self.assertEqual((page, script), (read("board.html").replace("\n", "\r\n"), read("board.js").replace("\n", "\r\n")))
+        historical = inline_page().replace("\n", "\r\n")
+        page, script = split_board_script.split(historical)
+        self.assertEqual(script, ("\n".join(SCRIPT) + "\n").replace("\n", "\r\n"))
+        self.assertEqual(split_board_script.join(page, script), historical)
 
 
 # A small board: CSS, then the board script inline, with unchanged lines

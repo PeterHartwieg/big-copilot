@@ -29,8 +29,7 @@ jobs:
         with:
           node-version: 24
       # The site under web/ is not committed; several suites read it.
-      - run: python build_web.py --assemble
-      - run: python -m unittest discover -s tests
+      - run: npm run test:python
 
   node:
     name: Node suites
@@ -53,13 +52,10 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install --with-deps chromium
       # The site under web/ is not committed; several suites serve or read it.
-      - run: python build_web.py --assemble
-      # tests/*.test.cjs includes the community suites (npm run test:community).
-      - run: node --test --test-concurrency=2 tests/*.test.cjs
+      # npm test assembles first and includes the community suites.
+      - run: npm test
       - name: Test the optimized hosted page
-        run: |
-          node tools/optimize_web.mjs
-          BOARD_TARGET=web node --test --test-concurrency=2 tests/businesses_expansion.test.cjs tests/shell_routes.test.cjs tests/game_names.test.cjs tests/i18n_runtime.test.cjs tests/news.test.cjs tests/update.test.cjs tests/theme.test.cjs tests/release.test.cjs tests/csp.test.cjs tests/optimize_web.test.cjs
+        run: npm run test:optimized
       - run: npm run check:worker
 
   web-fresh:
@@ -70,12 +66,15 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
       # Needs no installed game. Assembling must leave every committed file as it
       # is (a stale web/wiki-data.json article shows up here) and write nothing
       # .gitignore does not cover; --check then holds the result to the sources.
-      - run: python build_web.py --assemble
+      - run: npm run verify:assemble
       - name: Assembling changed no committed file and left nothing untracked
         run: |
           git diff --exit-code --stat
           test -z "$(git status --porcelain)" || { git status --porcelain; exit 1; }
-      - run: python build_web.py --check
+      - run: npm run verify:check
