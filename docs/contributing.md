@@ -17,6 +17,7 @@ For setup, see the [README](../README.md). File paths below are relative to the 
 | `export_map.py` | Builds runtime assets from approved canonical geometry, its recipe and the poster SVG. Extraction snapshots are retained privately. |
 | `web/maps/floor-plans.json`, `make_floor_plans.py` | The finder's floor plans, one for each building layout, drawn from the installed game's building shells. |
 | `check_saves.py` | Parses and extracts every save under the save root and prints a table, plus spot-checks of known numbers. Run `python check_saves.py [folder]`. |
+| `tools/payload_diff.py` | Proves a refactor leaves the payload alone over every save on the machine: `dump research/<name>` on main and on the branch, then `compare` the two; it exits 1 on any difference. The dumps hold save contents, so they go under the gitignored `research/` and are never committed. |
 | `wrangler.jsonc` | Cloudflare assets and community Worker config. `npx wrangler deploy` publishes the server and `web/`. |
 | `server/`, `migrations/` | Community presence/voting API, curated feature list, and D1 schema. Server code stays outside public assets. |
 | `web/community.js`, `web/community.css` | Hosted-site community controls; included by the browser build only. |
