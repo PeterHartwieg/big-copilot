@@ -31,8 +31,9 @@ per connection IP. Duplicate submissions are safe. Shared networks may share a
 vote, and changing IP addresses can permit another vote. The online count uses a
 random per-page-load ID independently of the voting identity.
 
-Save bytes, company names, character IDs and calculations never enter these API
-requests. The voting database holds feature-specific HMACs of connection IPs, not
+Save bytes, company names, character IDs and calculations never enter the community
+API's requests. The bug report form is separate and sends a save only when the player
+attaches one (see Bug reports below). The voting database holds feature-specific HMACs of connection IPs, not
 raw IPs. These hashes are pseudonymous identifiers, not a claim of anonymity.
 Presence rows hold only the tab's ID and last-seen time. Daily cleanup deletes
 rows not seen for 24 hours, so stale records can remain for approximately 48 hours.
@@ -41,6 +42,63 @@ The same cleanup deletes the votes of every feature no longer in
 privacy notice promises both. Cloudflare still processes the connection IP in
 handling network requests. Worker invocation logs are switched off in
 `wrangler.jsonc`, so no request URL or country is kept either.
+
+## Bug reports
+
+The footer's Report a bug control, its copy in Help & feedback, and the Report a bug
+button in the source strip after a failed read open the form in `web/report.js`, which
+`web/app.js` loads on first use. Only the site carries the control (`footer_html(site=True)`);
+the CLI's `dashboard.html` keeps the plain Discord link. The form posts
+`multipart/form-data` to `POST /api/report` in `server/worker.mjs`:
+
+- `report`, always: the player's text (at most 5,000 characters), the site build
+  (`LEDGER_BUILD`), the game build, the browser family, the source kind and, only with
+  the technical details ticked, the error's last line with save names and home paths
+  masked. The Worker rejects any other field or value outside its allowlist.
+- `details`, only when "Attach technical details" is ticked: the whole traceback and the
+  language, theme and platform. Nothing else is read from browser storage.
+- `save`, only when "Attach my save" is ticked: the bytes the page read. For a failed
+  read the worker hands them back with the error; for a working board `web/worker.js`
+  copies the save it holds (`held`). The Worker stores them as they came, with no gzip
+  check, and never decompresses them.
+
+The Worker refuses a body whose `Content-Length` is over 8 MB, or missing, before
+reading it, and holds the stream to the same cap. It writes `report.json` (the public
+facts, without the text), `details.json` and `save.hsg` to the `REPORTS` bucket under a
+folder named `<date>-<uuid>`, then opens an issue in `PeterHartwieg/big-copilot` labelled
+`bug-report`. The issue puts the player's text and the error line in fenced code blocks,
+so no link, image or mention in them renders, and names the folder. If GitHub fails,
+the Worker deletes the folder and answers 503, and the form points to the Discord
+support channel. If GitHub created the issue but its answer never arrived, the issue
+names a folder that is already gone; the reverse, a save without an issue, cannot
+happen unless the delete fails, and then the lifecycle rule removes it within 30 days.
+With nothing attached the Worker writes nothing to R2.
+
+`REPORT_LIMITER` allows three reports a minute per IP at each Cloudflare location: a
+burst guard, not a daily cap. If spam shows up, add a daily cap counted in D1, then
+Turnstile.
+
+The bucket `big-copilot-reports` is in the EU jurisdiction, so its binding carries
+`"jurisdiction": "eu"`, and its lifecycle rule `delete-after-30-days` deletes objects
+after 30 days (set once with `npx wrangler r2 bucket lifecycle add`). The issue token is
+the secret `GITHUB_REPORT_TOKEN`: a fine-grained token with Issues read and write on this
+repository only, which expires on 1 October 2027. Renew it before then, or report filing
+stops and every report answers 503.
+
+To read a report's save, download it into the gitignored `reports/` folder:
+
+```sh
+npx wrangler r2 object get big-copilot-reports/<folder>/save.hsg --jurisdiction eu --remote --file reports/<folder>/save.hsg
+```
+
+Saves stay out of the repository. When a player withdraws consent, delete the folder
+(`npx wrangler r2 object delete ... --jurisdiction eu --remote` for each object) and the
+issue.
+
+Locally, `npm run dev` simulates the bucket. The sample token in `.dev.vars.example` is
+not a token, so a local report fails at GitHub and the form shows the Discord fallback;
+never put a real token in `.dev.vars`. The tests replace GitHub with a stub
+(`tests/community-report.test.cjs`, `tests/report_flow.test.cjs`).
 
 ## Configuration and release
 
@@ -107,14 +165,17 @@ working.
 
 Handled request failures emit one structured console error with only three fields:
 `event: "community_api_failure"`, `operation`, and `category`. Operations are
-`presence`, `vote`, or `features`; `request` is the fallback when a failure occurs
+`presence`, `vote`, `features` or `report`; `request` is the fallback when a failure occurs
 before a community route is selected. These tags come from application constants.
 
 Categories identify the boundary that failed:
 
-- `configuration`: a required D1 binding, rate limiter, or IP secret is absent.
+- `configuration`: a required D1 binding, rate limiter, IP secret, or the bug report route's bucket or token, is absent.
 - `limiter`: the rate-limit binding call failed. A normal denied request is quiet.
 - `database`: D1 statement preparation, binding, or batch execution failed.
+- `storage`: a bug report's R2 write failed, or its folder could not be deleted after
+  GitHub failed (the folder then waits for the 30-day lifecycle rule).
+- `github`: GitHub did not open the issue; the report's folder was deleted.
 - `unexpected`: a failure outside those boundaries, including response processing.
 
 Start with the category when checking deployment configuration or service health.

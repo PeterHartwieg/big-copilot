@@ -1,0 +1,42 @@
+/* The bug report form (web/report.js). Hosted build only: web/app.js adds this
+   stylesheet the first time the form opens. Everything is prefixed br-; colours
+   and fonts come from the board's own tokens, and the buttons reuse .btn2. The
+   shape follows the vote dialog (web/community.css). */
+
+body:has(.br-dialog[open]){overflow:hidden}
+.br-dialog{width:min(560px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);padding:0;border:1px solid var(--rule);border-radius:14px;background:var(--ground);color:var(--ink);box-shadow:0 24px 80px #00000055;overflow:auto;overscroll-behavior:contain}
+.br-dialog::backdrop{background:#00000088;backdrop-filter:blur(5px)}
+.br-form{margin:0}
+.br-head{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 28px;border-bottom:1px solid var(--rule);background:var(--ground)}
+.br-head h2{margin:0;font-size:24px;font-weight:600;letter-spacing:-.04em}
+.br-x{flex:none;width:32px;height:32px;border:1px solid var(--rule);border-radius:8px;background:transparent;color:var(--ink-2);font-size:20px;line-height:1;cursor:pointer}
+.br-x:hover{color:var(--ink)}
+.br-body{padding:16px 28px 8px}
+.br-intro{margin:0 0 12px;color:var(--ink-2);font-size:13px;line-height:1.6}
+.br-err{margin:0 0 14px;padding:10px 12px;border:1px solid var(--rule-soft);border-radius:8px;font-size:12.5px;line-height:1.5;overflow-wrap:anywhere}
+.br-err[hidden]{display:none}
+.br-err-head{display:block;color:var(--ink-3);font-size:11.5px;margin-bottom:3px}
+.br-err-line{font:500 12px/1.5 "IBM Plex Mono",monospace;color:var(--ink)}
+.br-label{display:block;margin:0 0 6px;font-size:13px;font-weight:600}
+.br-text{display:block;box-sizing:border-box;width:100%;min-height:120px;resize:vertical;padding:10px 12px;border:1px solid var(--rule);border-radius:8px;background:transparent;color:var(--ink);font:inherit;font-size:13.5px;line-height:1.55}
+.br-text:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.br-public{margin:6px 0 14px;color:var(--ink-2);font-size:12px;font-weight:600}
+.br-opt{margin:0 0 10px}
+.br-check{display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer}
+.br-check input{width:16px;height:16px;margin:0;accent-color:var(--accent)}
+.br-check input:disabled + .br-check-words{color:var(--ink-3)}
+.br-hint{margin:3px 0 0 24px;color:var(--ink-3);font-size:12px;line-height:1.5}
+.br-preview{margin:12px 0 4px;font-size:12.5px}
+.br-preview summary{cursor:pointer;color:var(--ink-2)}
+.br-preview-list{margin:8px 0 0;padding:10px 12px 10px 28px;border:1px solid var(--rule-soft);border-radius:8px;font:500 11.5px/1.7 "IBM Plex Mono",monospace;color:var(--ink-2);overflow-wrap:anywhere}
+.br-status{margin:10px 0 0;font-size:13px;line-height:1.55}
+.br-status:empty{display:none}
+.br-status.ok{color:var(--ink)}
+.br-status.bad{color:var(--neg)}
+.br-status a,.br-privacy{color:var(--accent)}
+.br-privacy{display:inline-block;margin:12px 0 4px;font-size:12px}
+.br-foot{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:10px;padding:14px 28px 20px;border-top:1px solid var(--rule-soft);background:var(--ground)}
+.br-foot .btn2:disabled{opacity:.45;cursor:default;transform:none}
+.br-foot .btn2[hidden]{display:none}
+.br-dialog button:focus-visible,.br-dialog a:focus-visible,.br-check input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:640px){.br-head{padding:18px 20px}.br-body{padding:14px 20px 6px}.br-foot{padding:12px 20px 16px}}

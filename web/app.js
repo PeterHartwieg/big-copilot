@@ -242,6 +242,11 @@
   const REOPEN_KEY = "ledger_reopen";
   const fileAgain = () => !linkUrl && !dirHandle && (snapshot || (reopen && reopen.kind)) === "file";
   let lastEntries = null; // {file, dir} for every save and sidecar last seen
+  // For the bug report form (web/report.js): the last failed build, with the
+  // whole traceback and the bytes the worker handed back, kept in memory until
+  // the next build and never stored; and the game build of the board on screen.
+  let heldFailure = null;
+  let boardBuild = null;
   let busy = false;
   let runtimeReady = false;
   // Watching the folder: Chromium only, once read access is granted.
@@ -335,7 +340,13 @@
       timeReader();
       try {
         if (p.gen !== sourceGen) throw new Error(tt("app.reader.superseded", "Save selection changed"));
-        if (msg.kind !== "built") throw msg.error ? new Error(msg.error) : failure(() => tt("app.reader.invalid.bare", "Invalid reader response"));
+        if (msg.kind === "held") { p.resolve(msg); return; }
+        // A failed build carries its whole traceback and its bytes back, for a
+        // bug report; only the last line is shown.
+        if (msg.kind !== "built") throw msg.error ? Object.assign(new Error(msg.error), {
+          trace: typeof msg.trace === "string" ? msg.trace : "",
+          bytes: msg.bytes instanceof ArrayBuffer ? msg.bytes : null,
+        }) : failure(() => tt("app.reader.invalid.bare", "Invalid reader response"));
         const data = JSON.parse(msg.data);
         if (!data || typeof data !== "object") throw failure(() => tt("app.reader.invalid.bare", "Invalid reader response"));
         if (typeof msg.history === "string") stored.set(HISTORY_KEY, msg.history);
@@ -449,6 +460,9 @@
     $("recoverBtn").append(linkUrl ? tt("app.recover.link", "Choose a folder instead")
       : fileAgain() ? tt("app.recover.file", "Choose the file again") : tt("app.recover", "Choose the folder again"));
     $("reloadBtn").hidden = !readerError;
+    // Something went wrong: the form that files it, save and error attached.
+    const reportBtn = $("reportBtn");
+    if (reportBtn) reportBtn.hidden = !bad;
     // On the landing the strip only shows when it has something to say: a
     // remembered folder, a save being read, a folder that would not read.
     const quietLoad = strip.tone === "busy" && !lastFile && !dirHandle && !attempt;
@@ -1658,6 +1672,7 @@
     busy = true;
     lastFile = file;
     lastFileGen = gen;
+    heldFailure = null;
     // Linked bytes carry their stamp: the strip names the game's state and
     // not the generated file name.
     const line = (extra) => (file.linkStamp ? linkLine(linkHealth, extra) : fileLine(file, extra));
@@ -1678,6 +1693,7 @@
       lastGoodDir = dir || "";
       lastGoodSource = gen;
       company = (data.meta && data.meta.save) || company;
+      boardBuild = data.meta && Number.isInteger(data.meta.build) ? data.meta.build : null;
       // The board on screen is these bytes once it has taken them; while it
       // takes them, link().stamp is already theirs. Should it throw, the stamp
       // before stays, so the watcher reads these bytes again, not skips them.
@@ -1696,6 +1712,8 @@
       busy = false;
       finishAttempt(gen);
       const at = Date.now(), kept = lastGood, paused = !!(dirHandle && watching && !watchTimer);
+      heldFailure = {name: file.name, error: String(err.message || ""), trace: err.trace || String(err.stack || ""),
+        bytes: err.bytes || null, build: file.linkStamp && linkHealth && Number.isInteger(linkHealth.build) ? linkHealth.build : null};
       state("bad", () => tt("app.build.failed", "Could not read the save"),
         () => tt("app.build.attempted", "{name} · attempted {when}", {name: file.name, when: fmtTime(at)}));
       const rewritten = err.name === "NotReadableError";
@@ -2335,6 +2353,77 @@
     if (lastFile && lastFileGen === sourceGen) buildFrom(lastFile);
   }
 
+  /* --- the bug report form ------------------------------------------------ */
+  // web/report.js and web/report.css load on the first click of a Report a bug
+  // control: #reportBtn in the strip after a failure, or any [data-bug-report]
+  // (the footer's, and its copy in Help & feedback). What the form may know is
+  // handed over here; it decides what is sent (docs/bug-report-scope.md).
+  let reportLoad = null;
+  function loadReport() {
+    if (window.BigCopilotReport) return Promise.resolve(window.BigCopilotReport);
+    if (!reportLoad) {
+      reportLoad = new Promise((resolve, reject) => {
+        const stamp = encodeURIComponent(window.LEDGER_BUILD || "dev");
+        const css = document.createElement("link");
+        css.rel = "stylesheet";
+        css.href = `report.css?v=${stamp}`;
+        document.head.append(css);
+        const script = document.createElement("script");
+        script.src = `report.js?v=${stamp}`;
+        script.onload = () => (window.BigCopilotReport ? resolve(window.BigCopilotReport) : reject(new Error("report form missing")));
+        script.onerror = () => { reportLoad = null; script.remove(); reject(new Error("report form unavailable")); };
+        document.head.append(script);
+      });
+    }
+    return reportLoad;
+  }
+  const reportSource = () => (linkUrl ? "link" : dirHandle || snapshot === "folder" ? "folder" : lastFile ? "file" : "none");
+  // The reader's copy of the save it last read: the board's, or the one that
+  // just failed. Null when there is no reader to ask.
+  async function readerHeld(build) {
+    if (!worker || readerError || !runtimeReady || !lastFile) return null;
+    try { return await ask({kind: "held", build}); } catch (e) { return null; }
+  }
+  function reportContext() {
+    const failed = heldFailure;
+    const error = failed ? failed.error : readerError ? String(readerError.message || "") : "";
+    const boardSave = !failed && onBoard() && lastGood && lastFile === lastGood;
+    return {
+      siteBuild: window.LEDGER_BUILD || "dev",
+      source: reportSource(),
+      error,
+      trace: failed ? failed.trace : readerError ? String(readerError.stack || "") : "",
+      // Names that must not reach the public error line: the save's file and
+      // the company.
+      names: [failed && failed.name, lastFile && lastFile.name, lastGood && lastGood.name, company].filter(Boolean),
+      // The failed build's own bytes, or a copy of the board's save from the
+      // reader; the board's game build is in its payload, a failed save's
+      // needs the reader to parse it again.
+      bytes: async () => {
+        if (failed) return failed.bytes;
+        if (!boardSave) return null;
+        const h = await readerHeld(false);
+        return h && h.name === lastGood.name ? h.bytes : null;
+      },
+      gameBuild: async () => {
+        if (!failed) return boardSave ? boardBuild : null;
+        if (failed.build !== null) return failed.build;
+        if (!failed.bytes) return null;
+        const h = await readerHeld(true);
+        return h && h.name === failed.name ? h.build : null;
+      },
+    };
+  }
+  async function openReport(from) {
+    try {
+      (await loadReport()).open(reportContext(), from);
+    } catch (e) {
+      // No form to load (an old cached page, or offline): the support channel.
+      const feedback = document.querySelector("a[data-sf-feedback]");
+      if (feedback) window.open(feedback.href, "_blank", "noopener");
+    }
+  }
+
   /* --- what the board asks for ----------------------------------------- */
   window.LEDGER_SOURCE = {
     // Read on every masthead paint, so it follows the UI language.
@@ -2704,6 +2793,11 @@
     });
     $("recoverBtn").addEventListener("click", () => (fileAgain() ? $("savePick").click() : pickFolder()));
     $("reloadBtn").addEventListener("click", () => location.reload());
+    if ($("reportBtn")) $("reportBtn").addEventListener("click", (e) => openReport(e.currentTarget));
+    document.addEventListener("click", (e) => {
+      const control = e.target.closest && e.target.closest("[data-bug-report]");
+      if (control) { e.preventDefault(); openReport(control); }
+    });
     $("savePickLabel").addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("savePick").click(); }
     });

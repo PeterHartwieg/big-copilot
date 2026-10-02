@@ -62,6 +62,22 @@ class Footer(unittest.TestCase):
                 # would ship a vote card it cannot cast.
                 self.assertRegex(card.group(1), r"(?:^|\s)hidden(?:\s|$)")
 
+    def test_only_the_site_offers_the_bug_report_form(self):
+        # web/app.js loads the form and the site's API takes the report, so the
+        # CLI's dashboard.html has neither the control nor anything to open; it
+        # keeps the plain Discord link, which the site keeps beside the form.
+        for name, markup in (("site board", footer_html(site=True)), ("site landing", footer_html(landing=True, site=True))):
+            with self.subTest(name):
+                self.assertEqual(markup.count("data-bug-report"), 1)
+                self.assertIn("data-sf-feedback", markup)
+        # The page's board script names the mark (pxHelpHtml() copies the
+        # control when there is one), so the page is checked for the control.
+        for name, markup in (("cli", footer_html()), ("cli page", render(None))):
+            with self.subTest(name):
+                self.assertNotIn('data-tt="foot.report"', markup)
+                self.assertIn("data-sf-feedback", markup)
+        self.assertNotIn("data-bug-report", footer_html())
+
     def test_the_landing_states_the_build_it_was_checked_on(self):
         # It has no save yet, so it cannot be told one the way the board is.
         self.assertIn(f'data-foot-build="{VERIFIED_BUILD}"', footer_html(landing=True, site=True))

@@ -369,7 +369,7 @@ byte what it was: `tests/i18n_layout.test.cjs` checks the page asks for no table
 
 **Keys** are `<area>.<thing>[.<part>]`. The area names the page, and the pull request that
 owns it; they are the CSS prefixes: `nav`, `land`, `app`, `foot`, `today`, `f` (findings),
-`co`, `sp` (site panel), `sb` (supply), `gr`, `map`, `wiki`, `comm`, `upd`, and `day` for the
+`co`, `sp` (site panel), `sb` (supply), `gr`, `map`, `wiki`, `comm`, `upd`, `br` (the bug report form), and `day` for the
 weekday names in `web/i18n.js`. `AREAS` in `tools/i18n.py` is the list. A key never ends in
 `_one`, `_other` or another plural category: the catalogue writes plurals that way.
 
@@ -1180,7 +1180,7 @@ A new filter is a user-facing change, so it also gets a `web/changelog.json` ent
 | --- | --- | --- |
 | The URL constants (`REPO_URL =` to `GAME_MAKER_URL =`) | `NEW_URL = "…"`. Never put a URL in `web/*.js` | `tests/test_privacy_promises.py`, "test_scripts_fetch_only_from_this_site" |
 | `def footer_html(` | `{_sf_out(URL, "Label", icon, title=, feature=)}` in its column. One function fills both the board and the landing screen | `tests/test_footer.py`, "test_the_two_homes_do_not_share_an_id"; `tests/restore.test.cjs`, "the board footer offers the game, the channel and the Discord …" (exact link counts) |
-| Section 7, "External links and donations", in `web/privacy.html` | The provider's name in its list | none |
+| Section 8, "External links and donations", in `web/privacy.html` | The provider's name in its list | none |
 | `feature=` on `_sf_out` | *Only for* a New badge; see [contributing.md](contributing.md) | none |
 
 Then `python build_web.py --assemble`.

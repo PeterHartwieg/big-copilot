@@ -1,0 +1,439 @@
+'use strict';
+
+/**
+ * The bug report route, POST /api/report (docs/bug-report-scope.md).
+ *
+ * Runs the real worker (server/worker.mjs) in Miniflare with an in-memory R2
+ * bucket, the report limiter as wrangler.jsonc declares it, a stubbed ASSETS
+ * binding and an outbound service in place of GitHub, so no test ever reaches
+ * api.github.com. The contract:
+ *
+ *   multipart/form-data: report (JSON), save (optional file), details (optional text)
+ *   -> 201 {issue: {number, url}}; attachments in R2 under one random folder;
+ *      one issue, labelled bug-report, that holds only the public fields.
+ *   GitHub failing -> 503, and the folder is gone again.
+ *
+ * The last block runs the worker source in a VM with synthetic bindings, for
+ * the R2 failures Miniflare cannot produce and the console events they write.
+ */
+
+const {test, before, after, beforeEach} = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const {Miniflare, convertV4MiniflareOptions, Response: MfResponse} = require('miniflare');
+
+const ROOT = path.join(__dirname, '..');
+const WORKER_PATH = path.join(ROOT, 'server', 'worker.mjs');
+const TOKEN = 'test-token-not-a-github-token';
+const MAX_BYTES = 8 * 1024 * 1024;
+const ISSUE_URL = 'https://github.com/PeterHartwieg/big-copilot/issues/';
+// What the private parts carry in these tests: none of it may reach GitHub.
+const TRACE_SENTINEL = 'Traceback private-trace-sentinel /save/Alice Smith-live.hsg';
+const SAVE_SENTINEL = 'private-save-bytes-sentinel';
+
+let mf = null;
+let bucket = null;
+let workerScript = '';
+let ipCounter = 0;
+// What the stand-in for GitHub saw, and how it answers the next call.
+const github = {calls: [], answer: null};
+
+async function bundleWorker() {
+  const result = await require('esbuild').build({
+    entryPoints: [WORKER_PATH],
+    bundle: true,
+    write: false,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2022',
+  });
+  return result.outputFiles[0].text;
+}
+
+function limiterFromConfig(name) {
+  const config = fs.readFileSync(path.join(ROOT, 'wrangler.jsonc'), 'utf8');
+  const m = new RegExp(`"name":\\s*"${name}",\\s*"namespace_id":\\s*"(\\d+)",\\s*"simple":\\s*\\{\\s*"limit":\\s*(\\d+),\\s*"period":\\s*(\\d+)`).exec(config);
+  assert.ok(m, `wrangler.jsonc declares ${name}`);
+  return {namespace_id: m[1], simple: {limit: Number(m[2]), period: Number(m[3])}};
+}
+
+function baseOptions() {
+  return {
+    modules: true,
+    script: workerScript,
+    compatibilityDate: '2026-09-01',
+    d1Databases: ['COMMUNITY_DB'],
+    r2Buckets: ['REPORTS'],
+    bindings: {COMMUNITY_IP_SECRET: 'local-test-secret-not-production', GITHUB_REPORT_TOKEN: TOKEN},
+    ratelimits: {
+      COMMUNITY_LIMITER: {namespace_id: '1001', simple: {limit: 120, period: 60}},
+      PRESENCE_LIMITER: {namespace_id: '1002', simple: {limit: 20, period: 60}},
+      REPORT_LIMITER: limiterFromConfig('REPORT_LIMITER'),
+    },
+    serviceBindings: {ASSETS: async () => new MfResponse('static fixture')},
+    outboundService: async (request) => {
+      const call = {url: request.url, method: request.method, headers: Object.fromEntries(request.headers), body: await request.text()};
+      github.calls.push(call);
+      const answer = github.answer || defaultAnswer;
+      return answer(call);
+    },
+  };
+}
+
+let issueNumber = 100;
+function defaultAnswer() {
+  issueNumber += 1;
+  return new MfResponse(JSON.stringify({number: issueNumber, html_url: ISSUE_URL + issueNumber}), {
+    status: 201, headers: {'content-type': 'application/json'},
+  });
+}
+
+const nextIp = () => { ipCounter += 1; return `10.88.${Math.floor(ipCounter / 250) % 256}.${(ipCounter % 250) + 1}`; };
+const ORIGIN = 'https://report.test';
+
+function reportJson(overrides = {}) {
+  return JSON.stringify(Object.assign({
+    text: 'The board stopped at Reading the save.\nIt worked yesterday.',
+    siteBuild: '0123456789',
+    gameBuild: 3682,
+    browser: 'chrome',
+    source: 'folder',
+  }, overrides));
+}
+
+// A multipart body as the browser's FormData writes it.
+async function multipart(fields) {
+  const form = new FormData();
+  for (const [name, value, filename] of fields) {
+    if (filename) form.append(name, value, filename); else form.append(name, value);
+  }
+  const request = new Request('https://encode.test/', {method: 'POST', body: form});
+  return {body: Buffer.from(await request.arrayBuffer()), type: request.headers.get('content-type')};
+}
+
+async function send(fields, {ip = nextIp(), origin = ORIGIN, instance = mf, headers = {}} = {}) {
+  const {body, type} = await multipart(fields);
+  return instance.dispatchFetch(`${ORIGIN}/api/report`, {
+    method: 'POST',
+    headers: Object.assign({origin, 'content-type': type, 'content-length': String(body.length), 'CF-Connecting-IP': ip}, headers),
+    body,
+  });
+}
+
+async function objects(target = bucket) {
+  return (await target.list()).objects.map((o) => o.key).sort();
+}
+
+async function expectStatus(res, status, label) {
+  const text = await res.text();
+  assert.equal(res.status, status, `${label}: ${text}`);
+  assert.match(res.headers.get('content-type') || '', /application\/json/);
+  return JSON.parse(text);
+}
+
+before(async () => {
+  workerScript = await bundleWorker();
+  mf = new Miniflare(convertV4MiniflareOptions(baseOptions()));
+  await mf.ready;
+  bucket = await mf.getR2Bucket('REPORTS');
+});
+
+beforeEach(async () => {
+  github.calls = [];
+  github.answer = null;
+  const keys = await objects();
+  if (keys.length) await bucket.delete(keys);
+});
+
+after(async () => { if (mf) await mf.dispose(); });
+
+/* ------------------------------------------------------------- the happy path */
+
+test('report: a save and details go to R2 in one folder; the issue holds only the public fields', async () => {
+  const save = new Blob([SAVE_SENTINEL, new Uint8Array([0, 1, 2, 255])]); // not gzip: stored as it came
+  const details = JSON.stringify({trace: TRACE_SENTINEL, settings: {language: 'en', theme: 'dark', platform: 'windows'}});
+  const res = await send([
+    ['report', reportJson({error: 'KeyError: ProductShelf'})],
+    ['details', details],
+    ['save', save, 'save.hsg'],
+  ]);
+  const body = await expectStatus(res, 201, 'report with attachments');
+  assert.equal(body.issue.url, ISSUE_URL + body.issue.number);
+  assert.equal(res.headers.get('cache-control'), 'no-store');
+
+  const keys = await objects();
+  assert.equal(keys.length, 3, keys.join(', '));
+  const folder = keys[0].split('/')[0];
+  assert.match(folder, /^\d{4}-\d{2}-\d{2}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  assert.deepEqual(keys, [`${folder}/details.json`, `${folder}/report.json`, `${folder}/save.hsg`]);
+  const stored = await bucket.get(`${folder}/save.hsg`);
+  assert.deepEqual(Buffer.from(await stored.arrayBuffer()), Buffer.from(await save.arrayBuffer()), 'the save is stored byte for byte');
+  assert.equal(await (await bucket.get(`${folder}/details.json`)).text(), details);
+  const meta = JSON.parse(await (await bucket.get(`${folder}/report.json`)).text());
+  assert.deepEqual(Object.keys(meta).sort(), ['browser', 'details', 'gameBuild', 'receivedAt', 'save', 'siteBuild', 'source']);
+  assert.equal(meta.save, true);
+  assert.equal(JSON.stringify(meta).includes('worked yesterday'), false, "the player's text goes to the issue only");
+
+  assert.equal(github.calls.length, 1);
+  const [call] = github.calls;
+  assert.equal(call.method, 'POST');
+  assert.equal(call.url, 'https://api.github.com/repos/PeterHartwieg/big-copilot/issues');
+  assert.equal(call.headers.authorization, `Bearer ${TOKEN}`);
+  const issue = JSON.parse(call.body);
+  assert.deepEqual(Object.keys(issue).sort(), ['body', 'labels', 'title']);
+  assert.deepEqual(issue.labels, ['bug-report']);
+  assert.equal(issue.title, 'Bug report: The board stopped at Reading the save.');
+  assert.match(issue.body, /```text\nThe board stopped at Reading the save\.\nIt worked yesterday\.\n```/);
+  assert.match(issue.body, /\| Site build \| `0123456789` \|/);
+  assert.match(issue.body, /\| Game build \| 3682 \|/);
+  assert.match(issue.body, /\| Browser \| Chrome \|/);
+  assert.match(issue.body, /\| Source \| Save folder \|/);
+  assert.match(issue.body, /\| Save attached \| yes \|/);
+  assert.ok(issue.body.includes(`| Private folder | \`${folder}\` |`), 'the issue names the folder');
+  assert.match(issue.body, /### Last line of the error\n\n```text\nKeyError: ProductShelf\n```/);
+  for (const secret of ['private-trace-sentinel', 'Alice', SAVE_SENTINEL, 'windows', 'dark', TOKEN]) {
+    assert.equal(issue.body.includes(secret) || issue.title.includes(secret), false, `the issue must not hold ${secret}`);
+  }
+});
+
+test('report: with nothing attached nothing is stored, and the issue says so', async () => {
+  const body = await expectStatus(await send([['report', reportJson({gameBuild: null, source: 'none'})]]), 201, 'bare report');
+  assert.ok(body.issue.number > 0);
+  assert.deepEqual(await objects(), []);
+  const issue = JSON.parse(github.calls[0].body);
+  assert.match(issue.body, /\| Game build \| unknown \|/);
+  assert.match(issue.body, /\| Save attached \| no \|/);
+  assert.match(issue.body, /\| Technical details attached \| no \|/);
+  assert.doesNotMatch(issue.body, /Private folder|Last line of the error/);
+});
+
+test('report: the error line is public only with the details, and paths that can name the player are masked', async () => {
+  // An error without the details part is refused: the box was not ticked.
+  await expectStatus(await send([['report', reportJson({error: 'ValueError: bad'})]]), 400, 'error without details');
+  assert.equal(github.calls.length, 0);
+  const error = "FileNotFoundError: '/save/Alice Smith-live.hsg' at C:\\Users\\alice\\x and /Users/alice/y and /home/alice/z";
+  await expectStatus(await send([['report', reportJson({error})], ['details', '{"trace":"x"}']]), 201, 'masked error');
+  const issue = JSON.parse(github.calls[0].body);
+  assert.doesNotMatch(issue.body, /alice|Alice|Smith/);
+  assert.match(issue.body, /\/save\/<save>/);
+  assert.match(issue.body, /<home>/);
+});
+
+test('report: player text is fenced, so markup, links and mentions do not render', async () => {
+  const text = 'Look ```` here @PeterHartwieg ![x](https://tracker.example/p.png) <img src=x>';
+  await expectStatus(await send([['report', reportJson({text})]]), 201, 'fenced text');
+  const issue = JSON.parse(github.calls[0].body);
+  assert.ok(issue.body.includes('`````text\n' + text + '\n`````'), 'a fence longer than any backtick run in the text');
+});
+
+/* ------------------------------------------------------------- GitHub failing */
+
+test('report: when GitHub fails the folder is deleted again and the form gets a 503', async () => {
+  const answers = [
+    () => new MfResponse('{"message":"Bad credentials"}', {status: 401}),
+    () => new MfResponse('oops', {status: 500}),
+    () => new MfResponse(JSON.stringify({number: 7, html_url: 'https://evil.test/issues/7'}), {status: 201}),
+    () => new MfResponse('not json', {status: 201}),
+    () => { throw new Error('network down'); },
+  ];
+  for (const [i, answer] of answers.entries()) {
+    github.calls = [];
+    github.answer = answer;
+    const res = await send([
+      ['report', reportJson()],
+      ['details', '{"trace":"x"}'],
+      ['save', new Blob([SAVE_SENTINEL]), 'save.hsg'],
+    ]);
+    const body = await expectStatus(res, 503, `GitHub answer #${i + 1}`);
+    assert.deepEqual(body, {error: 'Service unavailable'});
+    assert.equal(github.calls.length, 1);
+    assert.deepEqual(await objects(), [], `answer #${i + 1}: no save may sit in R2 without an issue`);
+  }
+});
+
+/* ------------------------------------------------------------- the body */
+
+test('report: Content-Length is checked before reading, and over 8 MB is refused', async () => {
+  const big = new Blob([new Uint8Array(MAX_BYTES + 1)]);
+  await expectStatus(await send([['report', reportJson()], ['save', big, 'save.hsg']]), 413, 'oversized save');
+  // A body with no declared length (a stream) is refused before it is read.
+  const {body, type} = await multipart([['report', reportJson()]]);
+  const res = await mf.dispatchFetch(`${ORIGIN}/api/report`, {
+    method: 'POST',
+    headers: {origin: ORIGIN, 'content-type': type, 'CF-Connecting-IP': nextIp()},
+    body: new ReadableStream({start(c) { c.enqueue(body); c.close(); }}),
+    duplex: 'half',
+  });
+  await expectStatus(res, 411, 'no Content-Length');
+  assert.equal(github.calls.length, 0);
+  assert.deepEqual(await objects(), []);
+});
+
+test('report: each part is checked by name, kind and size, and the report by its fields', async () => {
+  const cases = [
+    ['unknown part', [['report', reportJson()], ['extra', 'x']]],
+    ['report twice', [['report', reportJson()], ['report', reportJson()]]],
+    ['no report', [['details', '{}']]],
+    ['report as a file', [['report', new Blob([reportJson()]), 'r.json']]],
+    ['save as text', [['report', reportJson()], ['save', 'abc']]],
+    ['empty save', [['report', reportJson()], ['save', new Blob([]), 'save.hsg']]],
+    ['details as a file', [['report', reportJson()], ['details', new Blob(['{}']), 'd.json']]],
+    ['details too large', [['report', reportJson()], ['details', 'x'.repeat(256 * 1024 + 1)]]],
+    ['report too large', [['report', reportJson({text: 'x'.repeat(4000), extra: 'y'.repeat(20000)})]]],
+    ['text too long', [['report', reportJson({text: 'x'.repeat(5001)})]]],
+    ['blank text', [['report', reportJson({text: '  \n '})]]],
+    ['unknown field', [['report', reportJson({email: 'a@b.c'})]]],
+    ['bad site build', [['report', reportJson({siteBuild: 'abc'})]]],
+    ['bad game build', [['report', reportJson({gameBuild: '3682'})]]],
+    ['unknown browser', [['report', reportJson({browser: 'Mozilla/5.0 (Windows NT 10.0)'})]]],
+    ['unknown source', [['report', reportJson({source: 'C:\\Users\\alice'})]]],
+    ['error too long', [['report', reportJson({error: 'e'.repeat(501)})], ['details', '{}']]],
+    ['not JSON', [['report', '{']]],
+    ['an array', [['report', '[]']]],
+  ];
+  for (const [label, fields] of cases) {
+    await expectStatus(await send(fields), 400, label);
+  }
+  // The text cap is 5,000 characters, not bytes.
+  await expectStatus(await send([['report', reportJson({text: 'é'.repeat(5000)})]]), 201, '5,000 characters');
+  const json = await mf.dispatchFetch(`${ORIGIN}/api/report`, {
+    method: 'POST', headers: {origin: ORIGIN, 'content-type': 'application/json', 'CF-Connecting-IP': nextIp()}, body: reportJson(),
+  });
+  await expectStatus(json, 400, 'JSON instead of multipart');
+  await expectStatus(await send([['report', reportJson()]], {origin: 'https://elsewhere.test'}), 400, 'cross-origin');
+  await expectStatus(await mf.dispatchFetch(`${ORIGIN}/api/report`, {headers: {'CF-Connecting-IP': nextIp()}}), 405, 'GET');
+  assert.equal(github.calls.length, 1, 'only the valid report reached GitHub');
+  assert.deepEqual(await objects(), []);
+});
+
+/* ------------------------------------------------------------- limits and config */
+
+test('rate limit: a few reports a minute per IP, then 429 without touching GitHub or R2', async () => {
+  const {limit, period} = limiterFromConfig('REPORT_LIMITER').simple;
+  assert.equal(period, 60);
+  assert.ok(limit >= 2 && limit <= 10, 'a few a minute');
+  // Miniflare's limiter windows are aligned to the wall clock: start early in one.
+  while (Date.now() % 60000 > 45000) await new Promise((resolve) => setTimeout(resolve, 250));
+  const ip = nextIp();
+  const statuses = [];
+  for (let i = 0; i < limit + 2; i++) statuses.push((await send([['report', reportJson()], ['save', new Blob(['s']), 'save.hsg']], {ip})).status);
+  assert.deepEqual(statuses, [...Array(limit).fill(201), 429, 429]);
+  assert.equal(github.calls.length, limit);
+  assert.equal((await objects()).length, limit * 2, 'report.json and save.hsg per accepted report');
+  // Another connection still has its budget.
+  assert.equal((await send([['report', reportJson()]])).status, 201);
+});
+
+test('config: without the bucket or the token the route answers 503 and the community API still works', async () => {
+  for (const drop of ['REPORTS', 'GITHUB_REPORT_TOKEN', 'REPORT_LIMITER']) {
+    const options = baseOptions();
+    if (drop === 'REPORTS') delete options.r2Buckets;
+    else if (drop === 'GITHUB_REPORT_TOKEN') delete options.bindings.GITHUB_REPORT_TOKEN;
+    else delete options.ratelimits.REPORT_LIMITER;
+    const scoped = new Miniflare(convertV4MiniflareOptions(options));
+    try {
+      await scoped.ready;
+      github.calls = [];
+      await expectStatus(await send([['report', reportJson()]], {instance: scoped}), 503, `without ${drop}`);
+      assert.equal(github.calls.length, 0);
+      const features = await scoped.dispatchFetch(`${ORIGIN}/api/community/features`, {headers: {'CF-Connecting-IP': nextIp()}});
+      // No D1 tables in this instance: only proves the route table is intact.
+      assert.ok([200, 503].includes(features.status));
+    } finally {
+      await scoped.dispose();
+    }
+  }
+});
+
+test('config: wrangler.jsonc binds the EU bucket and names the token as a secret, never a var', () => {
+  const config = fs.readFileSync(path.join(ROOT, 'wrangler.jsonc'), 'utf8');
+  assert.match(config, /"binding":\s*"REPORTS",\s*"bucket_name":\s*"big-copilot-reports",\s*"jurisdiction":\s*"eu"/);
+  assert.match(config, /"required":\s*\[[^\]]*"GITHUB_REPORT_TOKEN"/);
+  assert.doesNotMatch(config, /"vars"/);
+  const example = fs.readFileSync(path.join(ROOT, '.dev.vars.example'), 'utf8');
+  assert.match(example, /^GITHUB_REPORT_TOKEN=local-dev-sample/m);
+  assert.doesNotMatch(example, /gh[pousr]_|github_pat_/, 'no real token shape in the example');
+});
+
+/* ------------------------------------------------------------- R2 failures, in a VM */
+
+// The unchanged worker source with synthetic bindings, as the diagnostics
+// tests in community-api.test.cjs run it.
+function vmWorker(fetchImpl) {
+  const events = [];
+  const source = fs.readFileSync(WORKER_PATH, 'utf8')
+    .replace('import FEATURES from "./features.json";', 'const FEATURES = [];')
+    .replace('export default {', 'globalThis.worker = {');
+  const context = {
+    Request, Response, FormData, Blob, File, URL, TextEncoder, TextDecoder, AbortSignal,
+    crypto: crypto.webcrypto,
+    console: {error: (...args) => events.push(args)},
+    fetch: fetchImpl,
+    caches: {default: {match: async () => null, put: async () => {}}},
+  };
+  require('node:vm').runInNewContext(source, context);
+  return {worker: context.worker, events};
+}
+
+function vmEnv(bucketImpl) {
+  return {
+    COMMUNITY_IP_SECRET: 'secret',
+    GITHUB_REPORT_TOKEN: TOKEN,
+    REPORT_LIMITER: {limit: async () => ({success: true})},
+    REPORTS: bucketImpl,
+    ASSETS: {fetch: async () => new Response('static')},
+  };
+}
+
+async function vmRequest(fields, headers = {}) {
+  const {body, type} = await multipart(fields);
+  return new Request('https://vm.test/api/report', {
+    method: 'POST',
+    headers: Object.assign({Origin: 'https://vm.test', 'Content-Type': type, 'Content-Length': String(body.length), 'CF-Connecting-IP': '192.0.2.9'}, headers),
+    body,
+  });
+}
+
+const created = async () => new Response(JSON.stringify({number: 5, html_url: ISSUE_URL + '5'}), {status: 201});
+
+test('storage: a failed R2 write removes what landed, opens no issue and logs one bounded event', async () => {
+  const deleted = [];
+  let puts = 0;
+  let fetched = 0;
+  const {worker, events} = vmWorker(async () => { fetched++; return created(); });
+  const res = await worker.fetch(await vmRequest([['report', reportJson()], ['details', '{}'], ['save', new Blob(['s']), 'save.hsg']]), vmEnv({
+    put: async () => { if (++puts === 2) throw new Error('r2 down /save/Alice'); },
+    delete: async (keys) => { deleted.push(...keys); },
+  }));
+  assert.equal(res.status, 503);
+  assert.equal(fetched, 0, 'no issue without its attachments');
+  assert.equal(deleted.length, 2, 'the written and the failed key are both removed');
+  assert.deepEqual(JSON.parse(JSON.stringify(events)), [[{event: 'community_api_failure', operation: 'report', category: 'storage'}]]);
+});
+
+test('storage: GitHub failing with a cleanup that fails too is reported as storage; with a clean one as github', async () => {
+  for (const [cleanup, category] of [[false, 'storage'], [true, 'github']]) {
+    const {worker, events} = vmWorker(async () => new Response('no', {status: 502}));
+    const res = await worker.fetch(await vmRequest([['report', reportJson()], ['save', new Blob(['s']), 'save.hsg']]), vmEnv({
+      put: async () => {},
+      delete: async () => { if (!cleanup) throw new Error('still down'); },
+    }));
+    assert.equal(res.status, 503);
+    assert.deepEqual(JSON.parse(JSON.stringify(events)), [[{event: 'community_api_failure', operation: 'report', category}]]);
+  }
+});
+
+test('report: a body longer than its declared length is cut off at the cap', async () => {
+  let puts = 0;
+  const {worker} = vmWorker(created);
+  const request = new Request('https://vm.test/api/report', {
+    method: 'POST',
+    headers: {Origin: 'https://vm.test', 'Content-Type': 'multipart/form-data; boundary=x', 'Content-Length': '100', 'CF-Connecting-IP': '192.0.2.9'},
+    body: new Uint8Array(MAX_BYTES + 10),
+  });
+  const res = await worker.fetch(request, vmEnv({put: async () => { puts++; }, delete: async () => {}}));
+  assert.equal(res.status, 413);
+  assert.equal(puts, 0);
+});

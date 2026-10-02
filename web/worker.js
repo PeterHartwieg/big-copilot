@@ -9,6 +9,9 @@
  *            save already on hand, against the history this worker already
  *            holds (names asked for together each keep theirs)
  *   forget - the player forgot the history: drop the copy held here too
+ *   held   - the bug report form wants the save on hand (and, when asked,
+ *            the game build it was saved on); a failed build already sends
+ *            its bytes and whole traceback back with the error
  * Nothing here talks to the network except the one-time runtime download,
  * which comes from this site: Pyodide's core files are served from
  * web/pyodide/ rather than a CDN, so no visitor's IP address reaches a third
@@ -128,6 +131,23 @@ function placeSave(name, bytes, mtime) {
   return path;
 }
 
+// For the bug report form: a copy of the save last placed here (the board's,
+// or the one that just failed), and, when asked, the game build it was saved
+// on. The build needs a second parse of the save, so it is read only on request.
+function heldSave(msg) {
+  const reply = {kind: "held", id: msg.id, bytes: null, build: null, name: lastSave ? lastSave.name : ""};
+  if (!lastSave) return reply;
+  const path = `${SAVE_DIR}/${lastSave.name}`;
+  try { reply.bytes = py.FS.readFile(path).buffer; } catch (e) {}
+  if (msg.build) {
+    try {
+      const build = py.runPython(`ba_save.load_save(${JSON.stringify(path)}).root.get("buildNumberAtLastSave")`);
+      reply.build = Number.isInteger(build) ? build : null;
+    } catch (e) {}
+  }
+  return reply;
+}
+
 function build(path) {
   // A JSON string crosses the worker boundary cheaply; a proxy would not.
   return py.runPython(`ba_dashboard.browser_build(${JSON.stringify(path)}, ${JSON.stringify(LOCALE)}, ${JSON.stringify(HISTORY)}, ${JSON.stringify(NAMES)})`);
@@ -169,6 +189,9 @@ onmessage = (e) => {
         postMessage({kind: "built", id: msg.id, data, history: heldHistory(), ms: 0});
       } else if (msg.kind === "forget") {
         writeText(HISTORY, "");
+      } else if (msg.kind === "held") {
+        const reply = heldSave(msg);
+        postMessage(reply, reply.bytes ? [reply.bytes] : []);
       }
     } catch (err) {
       // Pyodide hands back a whole traceback; the last line is the sentence
@@ -177,7 +200,11 @@ onmessage = (e) => {
       console.error(whole);  // the whole traceback, for a report from the console
       const lines = whole.split(String.fromCharCode(10));
       const last = lines[lines.length - 1].replace(/^[\w.]+(Error|Exception): /, "");
-      postMessage({kind: "failed", id: msg.id, error: last});
+      // The page keeps the whole traceback and, for a build, the bytes it sent,
+      // for a bug report: it does not hold them otherwise, and reading the
+      // File again can give a newer save or fail.
+      const bytes = msg.kind === "build" && msg.bytes instanceof ArrayBuffer && msg.bytes.byteLength ? msg.bytes : null;
+      postMessage({kind: "failed", id: msg.id, error: last, trace: whole, bytes}, bytes ? [bytes] : []);
     }
   });
 };
