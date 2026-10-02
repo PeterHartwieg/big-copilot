@@ -2771,7 +2771,8 @@ const FINDING_KINDS = [
 /* The tables the board reads, each a view of FINDING_KINDS keyed by kind id:
    a kind without the field has no entry. Never add to them; add to the
    record. ALERT_GROUPS keeps the records' order and reads label and note
-   through, so they stay in the language on screen. */
+   through, so they stay in the language on screen. The others iterate in
+   that order too; their readers only look a kind up by id. */
 const findingKindsWith = field => Object.fromEntries(FINDING_KINDS.filter(k => k[field] !== undefined).map(k => [k.id, k[field]]));
 const ALERT_GROUPS = FINDING_KINDS.map(k => ({id: k.id, get label(){ return k.label; }, get note(){ return k.note; }, on: k.on}));
 const ALERT_LINKS = findingKindsWith("link");
