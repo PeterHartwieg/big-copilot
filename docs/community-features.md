@@ -58,7 +58,7 @@ Install the pinned development dependencies with `npm ci`. For local development
 1. Copy `.dev.vars.example` to `.dev.vars` and replace its example value with a
    local development secret. This file is ignored by Git.
 2. Run `npx wrangler d1 migrations apply big-copilot-community --local`.
-3. Run `python build_web.py`, then `npm run dev`. Open
+3. Run `python build_web.py --assemble`, then `npm run dev`. Open
    `http://127.0.0.1:8789`. The configured local host keeps same-origin checks and
    the local IP fallback working despite production custom-domain routes. If you
    change the dev port, update `dev.port` and `dev.host` together.
@@ -72,8 +72,8 @@ For a fresh deployment to another account:
 3. Set `COMMUNITY_IP_SECRET` using `npx wrangler secret put COMMUNITY_IP_SECRET`.
    Use a random secret of at least 32 bytes. Keep it stable: replacing it changes
    voting identities and allows previous IPs to vote again.
-4. Follow the release-baseline checks in [Contributing](contributing.md), rebuild,
-   validate with `npx wrangler deploy --dry-run`, and deploy the complete site.
+4. Follow the release-baseline checks in [Contributing](contributing.md), validate with
+   `npm run deploy -- --dry-run`, and deploy the complete site with `npm run deploy`.
 
 Never publish the sample secret. An unconfigured community API returns unavailable
 while static Copilot assets remain usable. Test locally without real saves or IPs.

@@ -6,7 +6,8 @@
     "dev": "wrangler dev",
     "test": "node --test tests/*.test.cjs",
     "test:community": "node --test tests/community-*.test.cjs",
-    "check:worker": "wrangler deploy --dry-run"
+    "check:worker": "wrangler deploy --dry-run",
+    "deploy": "node tools/deploy.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.1",

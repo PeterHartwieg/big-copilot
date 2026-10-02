@@ -956,7 +956,7 @@ def main(argv=None) -> int:
         elif args.cmd == "ship":
             stale = ship(check=args.check)
             for path in stale:
-                print(f"stale: {path} (run python build_web.py)")
+                print(f"stale: {path} (run python build_web.py --assemble)")
             return 1 if stale else 0
         elif args.cmd == "accept":
             done = accept(args.lang, args.keys)

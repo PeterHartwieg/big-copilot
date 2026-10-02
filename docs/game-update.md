@@ -318,9 +318,10 @@ python tools/game_update/textdiff.py
 
 `build_web.py` needs the installed game, and refuses the bundled text. It regenerates
 `web/py/gametext.json` and `web/wiki-data.json` from the new `en.json` and
-`helpstructure.json`, then `web/index.html`, `web/version.json`, the `web/py/` copies,
-and the static wiki pages built from `web/wiki-data.json`: `web/wiki/**/index.html`,
-`web/sitemap.xml` and `web/robots.txt`. Commit them all.
+`helpstructure.json`, and `web/names/` from the game's other locales, then assembles
+the rest (`web/index.html`, `web/version.json`, the `web/py/` copies, the static wiki pages,
+`web/sitemap.xml` and `web/robots.txt`). Commit the game-derived files it changed; the
+assembled ones are gitignored.
 
 A line diff of `web/wiki-data.json` runs to hundreds of lines for one changed fact.
 `textdiff.py` compares both files with `HEAD` by key and by page instead, and prints the
@@ -402,8 +403,8 @@ numbers do not settle it, ask the owner before changing `OFFICE_POST_RATE`.
 - No `web/changelog.json` entry. A compatibility bump is neither a feature nor a new
   capability; see the Changelog section of `docs/contributing.md`.
 
-Then run `python build_web.py` again, because `VERIFIED_BUILD` is baked into the landing
-page and `web/py/ba_dashboard.py`.
+Then run `python build_web.py --assemble` again, because `VERIFIED_BUILD` is baked into the
+landing page and `web/py/ba_dashboard.py`.
 
 **The game link mod** is versioned apart from the board. Two places name the game build it
 was checked on: `Made for game build N` in `mod/workshop/description.bbcode`, and the

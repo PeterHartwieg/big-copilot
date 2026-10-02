@@ -43,3 +43,20 @@ mod/**/obj/
 mockup/**/*.dc.html
 mockup/**/canvas.json
 mockup/*/project/
+
+# The code-derived site, written by `python build_web.py --assemble` from the
+# committed sources (npm run deploy and CI run it). The game-derived files
+# under web/ (web/py/gametext.json, web/wiki-data.json, web/names/, the map
+# assets and floor plans) stay committed.
+/web/index.html
+/web/version.json
+/web/sitemap.xml
+/web/robots.txt
+/web/wiki/
+/web/i18n/
+/web/py/ba_save.py
+/web/py/ba_dashboard.py
+/web/py/ba_buildings.json
+/web/py/ba_demand_curves.json
+/web/py/ba_item_prices.json
+/web/py/ba_store_rules.json
