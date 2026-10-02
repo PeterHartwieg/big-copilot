@@ -364,7 +364,8 @@
   async function brSend() {
     if (brBusy || brSent) return;
     const e = brEls;
-    const text = e.text.value.trim();
+    // What the Worker would keep: control characters go, as in brParts().
+    const text = e.text.value.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "").trim();
     if (!text) { brStatus(tt("br.empty", "Describe what went wrong first."), {tone: "bad"}); e.text.focus(); return; }
     const seq = brSeq;
     // What this send is, taken now, so nothing a later open holds can join it.
