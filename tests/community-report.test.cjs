@@ -222,12 +222,13 @@ test('report: the error line is public only with the details, and only as a clas
     'ValueError in Alice Smith (ba_save.py line 255)',
     'ValueError in body (/save/Alice.hsg line 1)',
     'ValueError 41 00 6c 00',
+    'SyntaxError in onmessage (app.js line 340)',
     'valueError',
   ]) {
     await expectStatus(await send([['report', reportJson({error})], ['details', '{"trace":"x"}']]), 400, error);
   }
   assert.equal(github.calls.length, 0);
-  for (const error of ['KeyError', 'KeyError in _staffing (ba_dashboard.py line 4120)', 'SyntaxError in onmessage (app.js line 340)', 'ImportError in <module> (x.py line 3)']) {
+  for (const error of ['KeyError', 'KeyError in _staffing (ba_dashboard.py line 4120)', 'ImportError in <module> (x.py line 3)']) {
     github.calls = [];
     await expectStatus(await send([['report', reportJson({error})], ['details', '{"trace":"x"}']]), 201, error);
     assert.ok(JSON.parse(github.calls[0].body).body.includes('```text\n' + error + '\n```'));

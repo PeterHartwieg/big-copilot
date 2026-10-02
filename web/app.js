@@ -1721,7 +1721,10 @@
       // The reader hands a failed save's bytes back; a failure after it read
       // the save (the board could not draw it) leaves the save with the reader.
       const builtOn = built && built.meta && Number.isInteger(built.meta.build) ? built.meta.build : null;
+      // kind: a script error's own name, the one part of it a public report may
+      // name (web/report.js, brErrorLine()); a Python failure's is in its trace.
       heldFailure = {name: file.name, error: String(err.message || ""), trace: err.trace || String(err.stack || ""),
+        kind: err.trace ? "" : String(err.name || ""),
         bytes: err.bytes || null, held: !!built || err.held === true,
         build: builtOn !== null ? builtOn : file.linkStamp && linkHealth && Number.isInteger(linkHealth.build) ? linkHealth.build : null};
       state("bad", () => tt("app.build.failed", "Could not read the save"),
@@ -2402,7 +2405,10 @@
       siteBuild: window.LEDGER_BUILD || "dev",
       source: reportSource(),
       error,
-      trace: failed ? failed.trace : readerError ? String(readerError.stack || "") : "",
+      // A reader that failed to start hands over Python's traceback as its message.
+      trace: failed ? failed.trace : readerError
+        ? String((/^Traceback /.test(readerError.message || "") ? readerError.message : readerError.stack) || "") : "",
+      errorName: failed ? failed.kind : readerError && !/^Traceback /.test(readerError.message || "") ? String(readerError.name || "") : "",
       // The failed build's own bytes, or a copy of the board's save from the
       // reader; the board's game build is in its payload, a failed save's
       // needs the reader to parse it again.

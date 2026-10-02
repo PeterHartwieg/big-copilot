@@ -41,7 +41,7 @@ function env(stored = STORED) {
   };
 }
 
-const TRACE = 'Traceback (most recent call last):\n  File "/ba_dashboard.py", line 4120, in _staffing\n    for x in save["Alice Smith"]:\nprivate-trace-sentinel\nKeyError: \'Alice Smith\'';
+const TRACE = 'Traceback (most recent call last):\n  File "/ba_dashboard.py", line 4120, in _staffing\n    for x in save["Alice Smith"]:\nKeyError: \'Alice Smith\'\nprivate-trace-sentinel';
 const CTX = {
   siteBuild: '0123456789',
   source: 'link',
@@ -125,29 +125,65 @@ test('report.js: the build, source and browser are held to the values the Worker
 // read from its source so the two cannot drift apart.
 const WORKER_ERROR = new RegExp(/const REPORT_ERROR = \/(.+)\/;/.exec(fs.readFileSync(path.join(__dirname, '..', 'server', 'worker.mjs'), 'utf8'))[1]);
 
-test('report.js: the public error line is the class and the place in our code, never the message', () => {
+// A Python traceback as Pyodide hands it over: the header, the frames with
+// their source lines, then the exception's line and its message.
+const pyTrace = (frames, rest) => ['Traceback (most recent call last):',
+  ...frames.flatMap(([file, line, fn]) => [`  File "/${file}", line ${line}, in ${fn}`, '    some_code()']), ...rest].join('\n');
+
+test('report.js: the public error line is the class and the deepest frame, read from before the message', () => {
   const report = load();
-  const line = (error, trace = '') => report.errorLine({error, trace});
+  const frames = [['ba_dashboard.py', 19590, 'browser_build'], ['ba_save.py', 255, 'body']];
   const cases = [
-    // The save parser: an unquoted type name read from the save, and the hex
-    // window of the bytes around the fault (UTF-16 "Alice").
-    ['  41 00 6c 00 69 00 63 00)', 'Traceback (most recent call last):\n  File "/ba_dashboard.py", line 19590, in browser_build\n  File "/ba_save.py", line 255, in body\nba_dashboard.SaveShapeError: Alice Smith-live.hsg is not a Big Ambitions save this board can read (ValueError: body tag 0xff in Private Employee Alice Smith at offset 0x3a\n  41 00 6c 00 69 00 63 00)',
+    // The save parser: an unquoted type name and the hex window of the bytes
+    // around the fault (UTF-16 "Alice").
+    [{trace: pyTrace(frames, ['ba_dashboard.SaveShapeError: Alice Smith-live.hsg is not a save this board can read (ValueError: body tag 0xff in Private Employee Alice at offset 0x3a', '  41 00 6c 00 69 00)'])},
       'SaveShapeError in body (ba_save.py line 255)'],
-    // Escaped and nested quotes in the message.
-    ["'X\\' Alice \"Y\"'", 'Traceback (most recent call last):\n  File "/ba_dashboard.py", line 9, in _premises\nValueError: \'X\\\' Alice "Y"\'', 'ValueError in _premises (ba_dashboard.py line 9)'],
-    // A startup failure hands its whole traceback over as the error.
-    ['Traceback (most recent call last):\n  File "<exec>", line 3, in <module>\nImportError: no module named Alice', '', 'ImportError'],
-    // The page's own script: V8's JSON error quotes a piece of the payload.
-    ['Unexpected token N, ..."privateName":"Bob","x":NaN}" is not valid JSON', 'SyntaxError: Unexpected token N, ..."privateName":"Bob"... is not valid JSON\n    at JSON.parse (<anonymous>)\n    at Worker.onmessage (http://report.test/app.js?v=abc:340:27)', 'SyntaxError in onmessage (app.js line 340)'],
+    // A type name read from the save that holds lines shaped like a class or a
+    // frame: they come after the exception's line, so they are message.
+    [{trace: pyTrace(frames, ['ba_save.SaveFormatError: body tag 0x09 in Acme', 'SmithFamilyHoldingsError at offset 0x1234',
+      '  File "/AliceSmith.py", line 123, in PrivateCompany', 'AliceSmithError: x', 'Traceback (most recent call last):', '  File "/Alice.py", line 1, in Bob', 'BobError'])},
+      'SaveFormatError in body (ba_save.py line 255)'],
+    // A save named like a class: the message is never read.
+    [{trace: pyTrace(frames, ['ValueError: AliceSmithError.hsg is not gzip']), error: 'AliceSmithError.hsg is not gzip'}, 'ValueError in body (ba_save.py line 255)'],
+    // Escaped and nested quotes.
+    [{trace: pyTrace([['ba_dashboard.py', 9, '_premises']], ["KeyError: 'X\\' Alice \"Y\"'"])}, 'KeyError in _premises (ba_dashboard.py line 9)'],
+    // No frame of our shape: the class alone.
+    [{trace: pyTrace([['<exec>', 3, '<module>']], ['ImportError: no module named Alice'])}, 'ImportError'],
+    // A frame name longer than the Worker takes is left out.
+    [{trace: pyTrace([['ba_dashboard.py', 9, 'f'.repeat(90)]], ['KeyError: x'])}, 'KeyError'],
+    // The page's own script: only the error's name, never its stack, whose
+    // first line is the message (V8's JSON error quotes the payload).
+    [{trace: 'SyntaxError: ..."Bob","x":NaN}" is not valid JSON\n    at Worker.onmessage (http://report.test/app.js?v=abc:340:27)', errorName: 'SyntaxError'}, 'SyntaxError'],
+    [{trace: 'Error: x', errorName: 'not a name'}, ''],
     // Nothing recognisable: nothing published.
-    ["'Alice Smith-live.hsg' could not be read", '', ''],
+    [{error: "'Alice Smith-live.hsg' could not be read", trace: ''}, ''],
   ];
-  for (const [error, trace, expected] of cases) {
-    const got = line(error, trace);
-    assert.equal(got, expected, error);
-    assert.doesNotMatch(got, /Alice|Smith|Bob|private|41 00/);
+  for (const [ctx, expected] of cases) {
+    const got = report.errorLine(ctx);
+    assert.equal(got, expected, JSON.stringify(ctx));
+    assert.doesNotMatch(got, /Alice|Smith|Bob|Private|41 00/);
     if (got) assert.match(got, WORKER_ERROR, 'the Worker accepts what the page builds');
   }
+});
+
+test('report.js: a real Python failure on a save named like a class publishes only code words', () => {
+  // The board's own browser_build() on a broken save whose file name looks like
+  // an exception class, the traceback as Python formats it.
+  const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'br-'));
+  fs.writeFileSync(path.join(dir, 'AliceSmithError.hsg'), 'not gzip');
+  const script = [
+    'import sys, traceback', `sys.path.insert(0, ${JSON.stringify(path.join(__dirname, '..'))})`, 'import ba_dashboard',
+    'try:', "    ba_dashboard.browser_build('AliceSmithError.hsg', 'none.json', 'history.json')",
+    'except Exception:', '    sys.stdout.write(traceback.format_exc())',
+  ].join('\n');
+  const run = require('node:child_process').spawnSync(process.env.PYTHON || 'python3', ['-c', script], {cwd: dir, encoding: 'utf8'});
+  fs.rmSync(dir, {recursive: true, force: true});
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stdout, /AliceSmithError\.hsg is not a Big Ambitions save/, 'the message names the save');
+  const got = load().errorLine({trace: run.stdout.trim(), error: 'AliceSmithError.hsg is not a Big Ambitions save'});
+  assert.match(got, WORKER_ERROR);
+  assert.doesNotMatch(got, /Alice|Smith/);
+  assert.match(got, /^BadGzipFile in \w+ \(gzip\.py line \d+\)$/, 'the cause, read from the first traceback block');
 });
 
 test('report.js: only an issue of this repository is linked', () => {

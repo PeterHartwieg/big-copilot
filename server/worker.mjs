@@ -27,10 +27,11 @@ const REPORT_MAX_BYTES = 8 * 1024 * 1024;
 const REPORT_TEXT_MAX = 5000;
 const REPORT_PART_MAX = 24 * 1024;
 const REPORT_DETAILS_MAX = 256 * 1024;
-// The error line the issue may show: an exception class and, optionally, where
-// it was raised, all words from Big Copilot's own code, never the message (it
-// can carry anything the save holds). web/report.js, brErrorLine(), builds it.
-const REPORT_ERROR = /^[A-Z]\w{0,79}(?: in (?:[A-Za-z_$][\w$]{0,79}|<module>) \([A-Za-z_][\w-]{0,59}\.(?:py|js|html) line [0-9]{1,7}\))?$/;
+// The error line the issue may show: an exception class and, for Python, the
+// deepest frame of its traceback, both read from before any message text
+// (web/report.js, brErrorLine()); never the message, which can carry anything
+// the save holds.
+const REPORT_ERROR = /^[A-Z]\w{0,79}(?: in (?:[A-Za-z_]\w{0,79}|<module>) \([A-Za-z_]\w{0,56}\.py line [0-9]{1,7}\))?$/;
 const REPORT_PARTS = ["report", "save", "details"];
 const REPORT_BROWSERS = { chrome: "Chrome", edge: "Edge", firefox: "Firefox", safari: "Safari", other: "Other" };
 const REPORT_SOURCES = { folder: "Save folder", file: "One save file", link: "Game link", none: "No save loaded" };

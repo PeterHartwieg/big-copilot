@@ -21,7 +21,7 @@ const files = {
 };
 const SAVE = Buffer.from([31, 139, 8, 0, 0x42, 0x43, 0x44, 0x45]);
 const SAVE_NAME = 'Alice Smith-live.hsg';
-const TRACE = `Traceback (most recent call last):\n  File "/ba_dashboard.py", line 4120, in _staffing\n    rows = held["${SAVE_NAME}"]\nprivate-trace-sentinel\nKeyError: '${SAVE_NAME}'`;
+const TRACE = `Traceback (most recent call last):\n  File "/ba_dashboard.py", line 4120, in _staffing\n    rows = held["${SAVE_NAME}"]\nKeyError: '${SAVE_NAME}'\nprivate-trace-sentinel`;
 
 let browser;
 before(async () => { browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL}); });
@@ -225,7 +225,7 @@ test('when the board cannot draw a save the reader read, the form attaches the r
   assert.deepEqual(parts.save, Buffer.from([9, 9, 9]), 'the copy the reader holds');
   const report = JSON.parse(parts.report);
   assert.equal(report.gameBuild, 3690, 'from what the reader answered');
-  assert.ok(report.error, 'the board\'s own error line');
+  assert.equal(report.error, 'TypeError', 'a script error is named by its class alone');
   assert.match(JSON.parse(parts.details).trace, /report\.test|at /, 'the script error\'s stack stays private');
 });
 

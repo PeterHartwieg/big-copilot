@@ -54,8 +54,9 @@ the CLI's `dashboard.html` keeps the plain Discord link. The form posts
 - `report`, always: the player's text (at most 5,000 characters), the site build
   (`LEDGER_BUILD`), the game build, the browser family, the source kind and, only with
   the technical details ticked, the error's class and where it was raised
-  (`KeyError in _staffing (ba_dashboard.py line 4120)`, built by `brErrorLine()`), never
-  its message, which can carry anything the save holds. The Worker rejects any field
+  (`KeyError in _staffing (ba_dashboard.py line 4120)`, built by `brErrorLine()` from
+  the part of a Python traceback that comes before any message text; for a script error,
+  its name alone), never its message, which can carry anything the save holds. The Worker rejects any field
   or value outside its allowlist, an `error` of any other shape included.
 - `details`, only when "Attach technical details" is ticked: the whole traceback and the
   language, theme and platform. Nothing else is read from browser storage.

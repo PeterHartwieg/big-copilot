@@ -65,33 +65,34 @@
   }
 
   /* The error line the issue shows is built, not copied. An error's message
-     can carry anything the save holds (a name quoted by a KeyError, a type name
-     the parser read, the bytes around a fault, a piece of the payload), and no
-     mask has kept up with all of it. So the public line holds only what comes
-     from Big Copilot's own code: the exception's class, and where it was
-     raised, as a function, a file and a line. "KeyError in _staffing
-     (ba_dashboard.py line 4120)" for Python, "TypeError in drawMast
-     (index.html line 2402)" for the page's own script. The message itself goes
-     only to private storage, with the whole traceback. The Worker accepts
-     nothing that does not have this shape. */
-  const BR_CLASS = /^\s*(?:[A-Za-z_]\w*\.)*([A-Z]\w*(?:Error|Exception|Warning|Exit|Interrupt))\b/;
-  const BR_PY_FRAME = /File "(?:[^"\n]*\/)?([A-Za-z_]\w*\.py)", line (\d{1,7}), in ([A-Za-z_]\w*|<module>)/g;
-  const BR_JS_FRAME = /\bat ([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*) \((?:[^()\s]*\/)?([A-Za-z_][\w-]*\.(?:js|html))(?:\?[^:()\s]*)?:(\d{1,7}):\d+\)/;
+     can carry anything the save holds (a name a KeyError quotes, a type name
+     the parser read, the bytes around a fault, a piece of the payload, even
+     lines shaped like a traceback), and no mask kept up with all of it. So the
+     public line holds only what comes before any message text: the class and
+     the deepest frame of a Python traceback, read from its header and frame
+     block, which end where the exception's own line begins ("KeyError in
+     _staffing (ba_dashboard.py line 4120)"); or, for the page's own script,
+     the error object's name alone ("TypeError"), since a script's stack prints
+     the message first. The message goes only to private storage, with the
+     whole traceback. The Worker accepts nothing that does not have this shape. */
+  const BR_PY_HEAD = "Traceback (most recent call last):";
+  const BR_PY_FRAME = /^ {2}File "(?:[^"\n]*\/)?([A-Za-z_]\w{0,56}\.py)", line (\d{1,7}), in ([A-Za-z_]\w{0,79}|<module>)$/;
+  const BR_PY_CLASS = /^(?:[A-Za-z_]\w*\.)*([A-Z]\w{0,79})(?::|$)/;
+  const BR_NAME = /^[A-Z]\w{0,79}$/;
   function brErrorLine(ctx) {
-    const text = [ctx.trace, ctx.error].map((t) => String(t || "")).join("\n");
-    const lines = text.split("\n");
-    let kind = "";
-    // The last line that opens with a class is the error raised; JavaScript's
-    // stack opens with it, so the first is taken when no other is found.
-    for (let i = lines.length - 1; i >= 0 && !kind; i--) {
-      const m = BR_CLASS.exec(lines[i]);
-      if (m) kind = m[1];
+    const lines = String(ctx.trace || "").split("\n");
+    if (lines[0].trim() === BR_PY_HEAD) {
+      let frame = null, i = 1;
+      // The frame block: the "File" lines and the indented source under them.
+      for (; i < lines.length && /^\s/.test(lines[i]); i++) {
+        const m = BR_PY_FRAME.exec(lines[i]);
+        if (m) frame = m;
+      }
+      const kind = i < lines.length ? BR_PY_CLASS.exec(lines[i]) : null;
+      if (!kind) return "";
+      return frame ? `${kind[1]} in ${frame[3]} (${frame[1]} line ${frame[2]})` : kind[1];
     }
-    if (!kind) return "";
-    const py = [...text.matchAll(BR_PY_FRAME)].pop();
-    const js = py ? null : BR_JS_FRAME.exec(text);
-    const where = py ? [py[3], py[1], py[2]] : js ? [js[1].split(".").pop(), js[2], js[3]] : null;
-    return where ? `${kind} in ${where[0]} (${where[1]} line ${where[2]})` : kind;
+    return BR_NAME.test(String(ctx.errorName || "")) ? ctx.errorName : "";
   }
 
   const brBuild = (v) => (Number.isSafeInteger(v) && v > 0 && v < 1000000 ? v : null);
@@ -112,7 +113,7 @@
       browser: brBrowser(env.nav),
       source: BR_SOURCES.includes(ctx.source) ? ctx.source : "none",
     };
-    if (choice.details && (ctx.error || ctx.trace)) {
+    if (choice.details) {
       const line = brErrorLine(ctx);
       if (line) report.error = line;
     }
@@ -278,7 +279,7 @@
       tt("br.pv.source", "Source: {source}", {source: brSourceWords(brCtx.source)}),
       e.save.input.checked ? tt("br.pv.save.yes", "Save attached: yes, kept privately") : tt("br.pv.save.no", "Save attached: no"),
     ];
-    const where = brCtx.error || brCtx.trace ? brErrorLine(brCtx) : "";
+    const where = brErrorLine(brCtx);
     if (e.details.input.checked && where) lines.push(tt("br.pv.error", "Error: {line}", {line: where}));
     e.previewBody.replaceChildren(...lines.map((line) => { const li = brEl("li"); li.textContent = line; return li; }));
   }
@@ -313,7 +314,7 @@
     if (!brDialog) brBuildDialog();
     if (typeof brDialog.showModal !== "function") return;
     const seq = ++brSeq;
-    brCtx = Object.assign({siteBuild: "dev", source: "none", error: "", trace: ""}, ctx || {});
+    brCtx = Object.assign({siteBuild: "dev", source: "none", error: "", trace: "", errorName: ""}, ctx || {});
     brOpener = opener || null;
     brSent = null;
     brBusy = false;

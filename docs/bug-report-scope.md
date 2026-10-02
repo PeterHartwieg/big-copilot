@@ -128,9 +128,12 @@ covers bug reports:
   line in the issue. Reviews showed that a message can carry anything the save holds: a
   name a `KeyError` quotes (with Python's `\'` escapes), a type name the save parser read
   unquoted, the bytes around a parse fault, a piece of the payload in a JSON error. Each
-  mask was beaten by the next case. So the issue gets only words from Big Copilot's own
-  code: the exception's class and where it was raised, as `KeyError in _staffing
-  (ba_dashboard.py line 4120)` (`brErrorLine()` in `web/report.js`). The Worker refuses
+  mask was beaten by the next case, and a message can even hold lines shaped like a
+  traceback. So the issue gets only what a Python traceback prints before any message
+  text: the class from the exception's own line and the deepest frame from the frame
+  block above it, as `KeyError in _staffing (ba_dashboard.py line 4120)`
+  (`brErrorLine()` in `web/report.js`). For an error in the page's own script, whose
+  stack prints the message first, it is the error object's name alone. The Worker refuses
   any `error` value of another shape (`REPORT_ERROR`), and any `error` without a
   `details` part, so an unticked form sends nothing but the text and the safe details.
   The message itself goes to R2 with the whole traceback.
