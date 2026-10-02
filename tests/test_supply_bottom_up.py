@@ -2459,6 +2459,32 @@ class GoodsFlowSizingTests(unittest.TestCase):
         self.assertEqual({**item, **item.get("dem", {})}["need"], row["demDay"])
         self.assertLess(row["demDay"], row["perDay"])
 
+    def test_a_depot_only_routes_feed_needs_its_factory_lines_draw(self):
+        """water_depot_chain(): no import at the depot, so its need is a
+        day of what leaves it in each sizing's walk, the brewery's ten
+        machines included (2,400 at full rate), not the shops' sales alone."""
+        c = water_depot_chain()
+        item = self.item(c, WH)
+        walked = {mode: c.fact(WH, WATER, mode) for mode in ("cap", "dem")}
+        self.assertEqual(item["cadence"], "daily")
+        self.assertEqual(item["need"], walked["cap"]["use"])
+        self.assertEqual(item["need"], 2400)
+        self.assertEqual(item["dem"]["need"], walked["dem"]["use"])
+        self.assertLess(item["dem"]["need"], item["need"])
+
+    def test_a_factorys_own_import_needs_its_machines_demand_draw(self):
+        """FactoryOwnImportTests' brewery: its own import, landing in five
+        days, eats 240 a day at full rate and what the bar's beer takes for
+        shop demand; nothing leaves the site."""
+        c = FactoryOwnImportTests().brewery(500)
+        item = self.item(c, BREWERY)
+        site = next(x for x in c.supply["factories"]["sites"] if x["s"] == c.index(BREWERY))
+        row = next(n for n in site["needs"] if n["slug"] == WATER)
+        dem = {**item, **item.get("dem", {})}
+        self.assertEqual(item["cycleNeed"], max(row["depotNeed"], row["perDay"] * 7))
+        self.assertEqual(dem["cycleNeed"], row["demDay"] * 7)
+        self.assertLess(dem["need"], item["need"])
+
     def test_a_shelf_is_the_same_in_both(self):
         c = goods_flow_sizing_chain()
         self.assertNotIn("dem", self.item(c, SHOP, BEER))

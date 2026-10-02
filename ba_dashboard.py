@@ -6239,8 +6239,15 @@ def _supply(
                     need = cycle_need = 0
                     provision, cadence = ordered, "weekly"
                 else:
-                    out = draw(business["key"], line["slug"])
-                    if out <= 0 and line["units"] <= 0:
+                    # What leaves a day in this mode's walk: the shops' sales
+                    # and the factory lines' draw down the plans (at full rate
+                    # or for shop demand); draw() alone, which follows only
+                    # the shops, where the chain was not walked.
+                    walk_node = walked.get(mode, {}).get(own)
+                    out = walk_node.get("use", 0.0) if walk_node else draw(business["key"], line["slug"])
+                    # Whether the line is on the node at all is 24/7's call;
+                    # Demand only changes its figures.
+                    if out <= 0 and line["units"] <= 0 and mode == "cap":
                         return None
                     target = next(
                         (

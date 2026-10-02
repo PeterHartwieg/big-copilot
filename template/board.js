@@ -7408,12 +7408,18 @@ const importResumes = r => r.fit === "paused" && !!r.fact && !!r.fact.lvl && r.f
    its need is no more than its use (24/7 sizes factory lines at capacity
    with no margin, and Demand stops a line at its capacity), "shops" where 24/7
    sizes factory lines and shops together (`sizedFor` other than "dem": the
-   margin is on the shops' share only), else "all". A row with no fact, or
-   no sizing named, claims the whole margin, as it always did. */
+   margin is on the shops' share only), else "all". A fact with no parts (a
+   depot's daily top-up) shares its use out between lines and shops by its
+   figures: at full production a need short of the whole margin (`margin`)
+   is one only part of the use carries. A row with no fact, or no sizing
+   named, claims the whole margin, as it always did. */
 function sbMarginOn(r){
-  const f = (r && r.fact) || {}, p = (r && r.parts) || f.parts || {};
+  const f = (r && r.fact) || {}, p = (r && r.parts) || f.parts || null;
   if(Number.isFinite(f.need) && Number.isFinite(f.use) && f.need <= f.use) return "none";
-  return r.sizedFor && r.sizedFor !== "dem" && p.lines && p.sites ? "shops" : "all";
+  if(!r.sizedFor || r.sizedFor === "dem") return "all";
+  if(p) return p.lines && p.sites ? "shops" : "all";
+  // One unit either side is the rounding of a day's figures.
+  return Number.isFinite(r.margin) && Number.isFinite(f.need) && f.need < f.use * (1 + r.margin) - 1 ? "shops" : "all";
 }
 /* `sizedFor` on a factory input or line is the sizing it was figured for:
    "dem" (what the shops at the end of the chain use) or anything else, 24/7.
@@ -7623,7 +7629,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     add("Depot daily top-ups", r.s, r, Number.isFinite(f.have) ? f.have : 0, f.setTo,
       sbCkJoin([src !== null ? tt("sb.ck.depot.plan", "Set on the plan of {site}.", {site: address(src)}) : "",
         tt("sb.ck.depot.busiest", {one: "Its busiest day sends on {n:,} unit{margin}.", other: "Its busiest day sends on {n:,} units{margin}."},
-          {n: f.use || 0, margin: margin(r.margin, {fact: f})})]),
+          {n: f.use || 0, margin: margin(r.margin, r)})]),
       src, null, false, f.st === "tight");
     /* Several sites top it up and more than one target has to rise: each
        plan is a change of its own, to the same level. */
@@ -7632,7 +7638,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
       add("Depot daily top-ups", r.s, r, Number.isFinite(have) ? have : 0, level,
         sbCkJoin([tt("sb.ck.depot.plan", "Set on the plan of {site}.", {site: address(other)}),
           tt("sb.ck.depot.busiest", {one: "Its busiest day sends on {n:,} unit{margin}.", other: "Its busiest day sends on {n:,} units{margin}."},
-            {n: f.use || 0, margin: margin(r.margin, {fact: f})})]),
+            {n: f.use || 0, margin: margin(r.margin, r)})]),
         other, null, false, f.st === "tight");
     });
   });
@@ -8610,7 +8616,7 @@ function supplyChecklistRows(){
     .filter(x => x.rows.length);
   const factRows = test => Object.keys(facts).flatMap(si => Object.keys(facts[si]).map(slug => {
     const fact = szFact(+si, slug);
-    return D.businesses[+si] && test(fact) ? {s: +si, slug, item: label(+si, slug), fact, margin} : null;
+    return D.businesses[+si] && test(fact) ? {s: +si, slug, item: label(+si, slug), fact, margin, sizedFor} : null;
   }).filter(Boolean)).sort((a, b) => szRank(a.fact) - szRank(b.fact) || (b.fact.use || 0) - (a.fact.use || 0));
   /* Depots only a route from your own site fills, each morning, judged on
      that top-up against their busiest day (a day's figures); and the shops
@@ -10296,8 +10302,13 @@ function drawFlowPanel(){
   const sites = new Set([...near].map(id => { const n = g.nodes.find(x => x.id === id); return n && Number.isInteger(n.site) ? n.site : D.businesses.findIndex(b => b.key === id); }).filter(x => x >= 0));
   const fixes = d.rows.filter(r => sites.has(r.site));
   /* The figures and the word under the sizing on screen: Python's 24/7 ones,
-     with what Demand sizing changes (`dem`) laid over them. */
-  const items = (node.items || []).slice(0, 12).map(x => sizing === "dem" && x.dem ? {...x, ...x.dem} : x).map(it => `<tr><td class="l">${spEsc(it.item)}</td><td>${num(it.stock || 0)}</td><td>${num(it.need || 0)}</td><td>${num(it.provision || 0)}</td><td class="l">${
+     with what Demand sizing changes (`dem`) laid over them, worst first in
+     that sizing as Python orders them for 24/7 (short, tight, then the rest;
+     the low ones, then the biggest need). */
+  const fitRank = it => ({short: 0, tight: 1})[it.fit] ?? 2;
+  const lines = (node.items || []).map(x => sizing === "dem" && x.dem ? {...x, ...x.dem} : x);
+  if(sizing === "dem") lines.sort((a, b) => fitRank(a) - fitRank(b) || !!b.low - !!a.low || (b.need || 0) - (a.need || 0));
+  const items = lines.slice(0, 12).map(it => `<tr><td class="l">${spEsc(it.item)}</td><td>${num(it.stock || 0)}</td><td>${num(it.need || 0)}</td><td>${num(it.provision || 0)}</td><td class="l">${
     it.st && SZ_WORD[it.st] ? `<span class="sbf-w ${it.st}">${SZ_WORD[it.st]}</span>` : ""}</td></tr>`).join("");
   const into = s >= 0 ? (sbTabOf(s) === "factories" ? "production" : sbTabOf(s) === "shops" ? "deliveries" : "imports") : "deliveries";
   host.innerHTML = `<div class="sbf-card"><h3>${spEsc(node.name)}${node.sub ? `<small>${spEsc(node.sub)}</small>` : ""}</h3>${items

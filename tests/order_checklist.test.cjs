@@ -622,4 +622,11 @@ test('a full-rate factory input and a depot feeding factory lines name no margin
     fact: fact('short', {role: 'depot', cad: 'daily', use: 240, need: 240, have: 100, setTo: 240, from: 1})};
   const [row] = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [depot])));
   assert.match(row.reason, new RegExp(enRe("sb.ck.depot.busiest", {n: 240, margin: ""}).source + "$"));
+  // 240 a day to factory lines and 100 to shops at full production: 355, the
+  // margin on the shops' share alone. Under shop demand it is on all of it.
+  const mixed = sizedFor => ({...depot, sizedFor, fact: {...depot.fact, use: 340, need: sizedFor === 'dem' ? 391 : 355, setTo: 360}});
+  const [cap] = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [mixed('cap')])));
+  assert.match(cap.reason, enRe("sb.ck.depot.busiest", {n: 340, margin: en("sb.ck.margin.shops.pct", {pct: 15})}));
+  const [dem] = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [mixed('dem')])));
+  assert.match(dem.reason, enRe("sb.ck.depot.busiest", {n: 340, margin: en("sb.ck.margin.pct", {pct: 15})}));
 });
