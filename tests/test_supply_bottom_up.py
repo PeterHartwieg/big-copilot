@@ -2472,6 +2472,30 @@ class GoodsFlowSizingTests(unittest.TestCase):
         self.assertEqual(item["dem"]["need"], walked["dem"]["use"])
         self.assertLess(item["dem"]["need"], item["need"])
 
+    def test_a_depot_line_nothing_draws_on_in_demand_needs_nothing_there(self):
+        """The bar sells one beer a day: the brewery's water for shop demand
+        rounds to nothing, so Demand's walk has no import row for the
+        depot's water. The line needs nothing before its refill there, its
+        order still brings 700, and the word is Demand's."""
+        c = Chain()
+        c.site(WH, "Water depot")
+        c.contract(WH, WATER, 700, due=c.day + 5)
+        c.hold(WH, WATER, 300)
+        c.factory(BREWERY, "Brewery", machines=1)
+        c.hold(BREWERY, WATER, 240)
+        c.plan(WH, BREWERY, WATER, 240)
+        c.plan(BREWERY, SHOP, BEER, 400)
+        c.shop(SHOP, "Bar")
+        c.hold(SHOP, BEER, 400, 1)
+        c.run()
+        s = c.index(WH)
+        self.assertFalse([r for r in c.supply["importsDem"] if r["s"] == s and r["slug"] == WATER])
+        item = self.item(c, WH)
+        self.assertGreater(item["need"], 0)
+        dem = {**item, **item.get("dem", {})}
+        self.assertEqual((dem["need"], dem["cycleNeed"], dem["provision"]), (0, 0, 700))
+        self.assertEqual(dem["st"], _supply_fact(c.supply["facts"], s, WATER, "dem")["st"])
+
     def test_a_factorys_own_import_needs_its_machines_demand_draw(self):
         """FactoryOwnImportTests' brewery: its own import, landing in five
         days, eats 240 a day at full rate and what the bar's beer takes for

@@ -629,4 +629,9 @@ test('a full-rate factory input and a depot feeding factory lines name no margin
   assert.match(cap.reason, enRe("sb.ck.depot.busiest", {n: 340, margin: en("sb.ck.margin.shops.pct", {pct: 15})}));
   const [dem] = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [mixed('dem')])));
   assert.match(dem.reason, enRe("sb.ck.depot.busiest", {n: 340, margin: en("sb.ck.margin.pct", {pct: 15})}));
+  // A wholesale contract into a depot feeding lines and shops at full production.
+  const ws = {s: 0, item: 'Syrup', slug: 'syrup', margin: 0.15, sizedFor: 'cap', fact: fact('short', {why: 'order', lvl: 'critical',
+    role: 'depot', cad: 'weekly', use: 2380, need: 2485, have: 2000, setTo: 2490, wholesale: true, parts: {lines: 1680, sites: 700, route: 0}})};
+  const [w] = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [], [ws])));
+  assert.match(w.reason, enRe("sb.ck.ws.uses.all", {n: 2380, margin: en("sb.ck.margin.shops.pct", {pct: 15}), need: 2485}));
 });

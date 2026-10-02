@@ -7603,7 +7603,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     /* The margin as the fact carries it: a depot's factory lines sized 24/7
        take none, so its need is its use and no margin is claimed. */
     const all = Number.isFinite(f.need) && Number.isFinite(f.use) && f.need > f.use;
-    const n = f.use || 0, m = margin(r.margin);
+    const n = f.use || 0, m = margin(r.margin, r);
     if(set(f)) add("Wholesale deliveries", r.s, r, Number.isFinite(f.have) ? f.have : null, f.setTo,
       sbCkJoin([f.role === "depot"
         ? (all ? tt("sb.ck.ws.uses.all", "Uses {n:,} a week{margin}, {need:,} in all.", {n, margin: m, need: f.need})
