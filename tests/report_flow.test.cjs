@@ -275,6 +275,36 @@ test('a reader answer that will not decode still leaves the save with the reader
   assert.equal(JSON.parse(parts.report).gameBuild, 3682, 'read again by the reader');
 });
 
+test('a section of a working board that Python could not work out is what the report sends (#238)', async (t) => {
+  const {page, posts} = await setup(t);
+  await page.setInputFiles('#savePick', {name: SAVE_NAME, mimeType: 'application/octet-stream', buffer: SAVE});
+  await page.waitForFunction(() => fixture.messages.some((m) => m.kind === 'build'));
+  await page.evaluate(() => {
+    const msg = fixture.messages.find((m) => m.kind === 'build');
+    fixture.worker.onmessage({data: {kind: 'built', id: msg.id, gen: msg.id, history: '', data: JSON.stringify({meta: {save: 'Alice Co', build: 3690}, kpi: {}, daily: []})}});
+  });
+  await page.waitForFunction(() => document.body.classList.contains('has-board'));
+  // A section asked of this board fails in Python, with its whole traceback.
+  await page.evaluate(({trace, name}) => {
+    const gen = fixture.messages.find((m) => m.kind === 'build').id;
+    window.LEDGER_SOURCE.section('hiring', gen).catch(() => {});
+    const msg = fixture.messages.find((m) => m.kind === 'section');
+    fixture.worker.onmessage({data: {kind: 'failed', id: msg.id, error: `'${name}'`, trace, bytes: null}});
+  }, {trace: TRACE, name: SAVE_NAME});
+  await page.locator('.wrap > .sitefoot [data-bug-report]').click();
+  await page.locator('.br-dialog[open]').waitFor();
+  await page.waitForFunction(() => !document.getElementById('brSave').disabled);
+  await page.locator('#brText').fill('Staff needs would not load.');
+  await page.locator('#brSave').check();
+  await page.locator('#brDetails').check();
+  await page.locator('.br-foot .primary').click();
+  await page.locator('.br-status a').waitFor();
+  const parts = await partsOf(posts[0]);
+  assert.deepEqual(parts.save, Buffer.from([9, 9, 9]), 'the board\'s save, from the reader');
+  assert.equal(JSON.parse(parts.report).error, 'KeyError in _staffing (ba_dashboard.py line 4120)');
+  assert.equal(JSON.parse(parts.details).trace, TRACE);
+});
+
 test('on a phone the answer is scrolled into view above the sticky buttons', async (t) => {
   for (const api of ['created', 'unavailable']) {
     const {page} = await setup(t, {api, width: 375, height: 667});

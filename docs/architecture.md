@@ -457,6 +457,10 @@ section in the payload.
   loading, held work keeps waiting, and the newer board asks again as it arrives
   (`odThensAsk()`, which also plans a waiting dialog again). If that build fails, the
   source's `stale(why)` turns it into an error (`odSourceFailed()`).
+- A section Python fails on carries its traceback in the worker's `failed` reply, as a
+  build's does. `web/app.js` keeps the last one for the board on screen
+  (`sectionFailure`), and the bug report sends it with the board's save when no build
+  failed.
 - Today asks for no section. Its Next-moves staffing card counts the shop plan's own hires
   until `hiring` is on the board, and the people who could come from other sites only
   after (`spRowLess()`), so the count can drop once a staffing page has been opened.

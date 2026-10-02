@@ -251,6 +251,10 @@
   // whole traceback and the bytes the worker handed back, kept in memory until
   // the next build and never stored; and the game build of the board on screen.
   let heldFailure = null;
+  // The last section of the board on screen Python could not work out (a
+  // failed reply to a `section`), for a bug report about that board: its
+  // sentence and whole traceback. A new build or source clears it.
+  let sectionFailure = null;
   let boardBuild = null;
   let busy = false;
   let runtimeReady = false;
@@ -299,6 +303,7 @@
     reopen = null;
     busy = false;
     heldFailure = null;  // a report from the new source is not about the old one
+    sectionFailure = null;
     queued = null;
     // A failure, not stale: whether a new board comes is not known here (a
     // folder with no save, a game that is not there, a reader that stopped),
@@ -383,6 +388,9 @@
         // The reader read the save even when its answer would not decode: it
         // still holds the save, for a bug report.
         if (msg.kind === "built" && err && typeof err === "object") err.held = true;
+        // Python failed on a section of the board on screen: kept for a report.
+        if (p.kind === "section" && msg.kind === "failed" && p.gen === sourceGen && err && err.trace)
+          sectionFailure = {error: String(err.message || ""), trace: err.trace};
         p.reject(err);
       }
     };
@@ -1704,6 +1712,7 @@
     lastFile = file;
     lastFileGen = gen;
     heldFailure = null;
+    sectionFailure = null;
     // Linked bytes carry their stamp: the strip names the game's state and
     // not the generated file name.
     const line = (extra) => (file.linkStamp ? linkLine(linkHealth, extra) : fileLine(file, extra));
@@ -2426,14 +2435,16 @@
   }
   function reportContext() {
     const failed = heldFailure;
-    const error = failed ? failed.error : readerError ? String(readerError.message || "") : "";
+    // With the board on screen, a section of it that failed is what to report.
+    const section = !failed && !readerError ? sectionFailure : null;
+    const error = failed ? failed.error : section ? section.error : readerError ? String(readerError.message || "") : "";
     const boardSave = !failed && onBoard() && lastGood && lastFile === lastGood;
     return {
       siteBuild: window.LEDGER_BUILD || "dev",
       source: reportSource(),
       error,
       // A reader that failed to start hands over Python's traceback as its message.
-      trace: failed ? failed.trace : readerError
+      trace: failed ? failed.trace : section ? section.trace : readerError
         ? String((/^Traceback /.test(readerError.message || "") ? readerError.message : readerError.stack) || "") : "",
       errorName: failed ? failed.kind : readerError && !/^Traceback /.test(readerError.message || "") ? String(readerError.name || "") : "",
       // The failed build's own bytes, or a copy of the board's save from the
