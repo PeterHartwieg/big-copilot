@@ -341,9 +341,10 @@ test('the supply kinds land on the Supply view of their route', () => {
     ['secImports', 'secDeliveries', 'secDeliveries', 'secImports', 'secProduction']);
 });
 
-/* Issue #100 Change C: a finding kind is a row in several hand-kept tables
-   (docs/architecture.md, Registries, "A finding kind"). Every ALERT_GROUPS id
-   needs a row in each, and no table keeps a row for a kind that is gone. */
+/* Issue #100 Change C: a finding kind is one FINDING_KINDS record
+   (docs/architecture.md, Registries, "A finding kind"), and the tables read
+   here are derived from it. Every ALERT_GROUPS id needs an entry in each, so a
+   record without its link or evidence fails here. */
 const GROUP_IDS = run('ALERT_GROUPS').map(g => g.id);
 /* The keys of a board-script table. */
 const tableKeys = name => run(`Object.keys(${name})`);
