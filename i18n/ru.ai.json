@@ -2081,6 +2081,8 @@
  "map.fit.none": "gpt-6-sol",
  "map.fplan.from": "gpt-6-sol",
  "map.fplan.go": "gpt-6-sol",
+ "map.fr.phone.cap": "gpt-6.1-sol",
+ "map.fr.phone.rent": "gpt-6.1-sol",
  "map.head.finder": "gpt-6-sol",
  "map.head.map": "gpt-6-sol",
  "map.kind.cinema": "gpt-6-sol",

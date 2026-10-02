@@ -1092,7 +1092,7 @@ test('on a phone the address keeps its room and capacity is visible in the row',
     assert.ok(nm.width > 120, `address column starved at ${nm.width}px`);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1), false);
     const capacity = page.locator(`#cityMapPage .place[data-pick="${HK[0]}"] .fr-phone-fact`);
-    assert.equal(await capacity.innerText(), `${en('map.fact.cap')}: 30`);
+    assert.equal(await capacity.innerText(), en('map.fr.phone.cap', {n: '30'}));
     assert.equal(await capacity.isVisible(), true);
     const columns = await page.evaluate(() => {
       const head = [...document.querySelectorAll('#cityMapPage .fhead > span')].filter(e => e.offsetParent);
@@ -1266,7 +1266,7 @@ test('floor area is a column that sorts, and a filter on every list', async () =
   } finally { await page.close(); }
 });
 
-test('phone finder facts fit warehouse, factory planning, range and sale rows', async () => {
+test('phone finder facts fit warehouse, factory planning and sale rows', async () => {
   const WH = geometry.buildings.find(b => b.hood === 'Midtown' && ![...HK, ...MT].includes(b.key)).key;
   const premises = {...PREMISES, buildings: [...PREMISES.buildings,
     site(WH, {type: 'warehouse', size: 'E', m2: 1887, cap: null, rent: 140, traffic: 30})]};
@@ -1287,14 +1287,14 @@ test('phone finder facts fit warehouse, factory planning, range and sale rows', 
     await openMap(page); await turnOn(page);
     await page.setViewportSize({width: 375, height: 800});
     await page.locator('#cityMapPage .fchip.cat[data-cat="theater"]').click();
-    assert.equal(await page.locator('#cityMapPage .place.fr .fr-phone-fact').first().innerText(), `${en('map.fact.cap')}: 150–200`);
+    assert.equal(await page.locator('#cityMapPage .place.fr .fr-phone-fact').first().innerText(), en('map.fr.phone.cap', {n: '200'}));
     await fits('#cityMapPage');
     await page.locator('#cityMapPage .fchip.cat[data-cat="warehouse"]').click();
     assert.equal(await page.locator('#cityMapPage .place.fr.wh .fr-phone-fact').count(), 0);
     await fits('#cityMapPage');
     await page.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
     await page.locator('#cityMapPage .fchip.show[data-show="sale"]').click();
-    assert.equal(await page.locator(`#cityMapPage .place.fr.sale[data-pick="${HK[0]}"] .fr-phone-fact`).innerText(), `${en('map.fact.cap')}: 30`);
+    assert.equal(await page.locator(`#cityMapPage .place.fr.sale[data-pick="${HK[0]}"] .fr-phone-fact`).innerText(), en('map.fr.phone.cap', {n: '30'}));
     await fits('#cityMapPage');
     await page.evaluate(async () => {
       const host = document.createElement('div'); host.id = 'factoryPhone';
@@ -1303,8 +1303,30 @@ test('phone finder facts fit warehouse, factory planning, range and sale rows', 
       await window.__factoryPhone.ready;
     });
     await page.locator('#factoryPhone .place.fr.wh.fpw').first().waitFor();
-    assert.equal(await page.locator('#factoryPhone .fr-phone-fact').innerText(), `${en('map.col.rent')}: $140`);
+    assert.equal(await page.locator('#factoryPhone .fr-phone-fact').innerText(), en('map.fr.phone.rent', {n: '$140'}));
     await fits('#factoryPhone');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('phone finder facts use a complete translated line in every language', async () => {
+  const {page, errors} = await fixture();
+  try{
+    await openMap(page);
+    for(const lang of ['de', 'es', 'fr', 'ko', 'pt', 'ru', 'tr']){
+      const table = JSON.parse(fs.readFileSync(path.join(root, `web/i18n/${lang}.json`)));
+      assert.ok(table['map.fr.phone.cap'], `${lang}: capacity line shipped`);
+      assert.ok(table['map.fr.phone.rent'], `${lang}: rent line shipped`);
+      const lines = await page.evaluate(({lang, table}) => {
+        ttSetTable(lang, table);
+        return [cityMapPage.finderPhoneFact({cap: 200}),
+          cityMapPage.finderPhoneFact({rent: 140}, true),
+          cityMapPage.finderPhoneFact({rent: null}, true)];
+      }, {lang, table});
+      for(const [i, key, n] of [[0, 'map.fr.phone.cap', '200'], [1, 'map.fr.phone.rent', '$140'], [2, 'map.fr.phone.rent', '—']]){
+        assert.equal(lines[i], `<span class="fr-phone-fact">${table[key].replace('{n}', n)}</span>`, lang);
+      }
+    }
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

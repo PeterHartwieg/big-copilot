@@ -1725,6 +1725,8 @@
  "map.fit.none": "Hier kein Nachfragewert für diese Kategorie.",
  "map.fplan.from": "aus dem Plan",
  "map.fplan.go": "Hier planen",
+ "map.fr.phone.cap": "Gebäudekapazität: {n}",
+ "map.fr.phone.rent": "Miete: {n}",
  "map.head.finder": "Räume, bewertet für das Unternehmen, das du eröffnen möchtest – mit Miete, Kaution und Grundriss.",
  "map.head.map": "Deine Unternehmen, Gebäude in deinem Besitz und gemieteten Wohnungen auf der Spielkarte.",
  "map.kind.cinema": "Kino",

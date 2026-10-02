@@ -4347,7 +4347,7 @@ function hourGrid(g, todayWd, lead = null, idle = []){
             ? roleRead(binding[0], wd, h)
             : tt("sp.hour.registers", "{n} of {of} register capacity on", {n: g.staffed[wd][h], of: g.counters});
       const idleWord = roles.length > 1 && idle.length
-        ? tt("sp.hour.idle.roles", "{roles} idle", {roles: idle.map(r => (r.shared && (gnLocal(r.stationKey) || r.many)) || r.label || tt("sp.hour.capacity", "capacity")).join(", ")})
+        ? tt("sp.hour.idle.roles", "{roles} idle", {roles: idle.map(r => (r.shared && spRoleStationName(r)) || r.label || tt("sp.hour.capacity", "capacity")).join(", ")})
         : tt("sp.hour.idle", "capacity idle");
       /* The ceilings this hour stood at, as `<kind>:<skill>` tokens, so a chip
          can ask for its own hours by kind and role together. */

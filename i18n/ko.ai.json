@@ -1504,6 +1504,8 @@
  "map.fit.none": "claude-opus-5-5",
  "map.fplan.from": "gpt-6-sol",
  "map.fplan.go": "gpt-6-sol",
+ "map.fr.phone.cap": "gpt-6.1-sol",
+ "map.fr.phone.rent": "gpt-6.1-sol",
  "map.kind.cinema": "claude-opus-5-5",
  "map.kind.office": "claude-opus-5-5",
  "map.kind.residential": "claude-opus-5-5",

@@ -1644,6 +1644,8 @@
  "map.fit.none": "No demand reading for this category here.",
  "map.fplan.from": "from the plan",
  "map.fplan.go": "Plan here",
+ "map.fr.phone.cap": "Building capacity: {n}",
+ "map.fr.phone.rent": "Rent: {n}",
  "map.kind.cinema": "Cinema",
  "map.kind.office": "Office",
  "map.kind.residential": "Residential",

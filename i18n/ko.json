@@ -1504,6 +1504,8 @@
  "map.fit.none": "이곳에는 이 분류의 수요 수치가 없어요.",
  "map.fplan.from": "계획 기준",
  "map.fplan.go": "여기에 계획",
+ "map.fr.phone.cap": "건물 수용 인원: {n}",
+ "map.fr.phone.rent": "임대료: {n}",
  "map.kind.cinema": "영화관",
  "map.kind.office": "사무실",
  "map.kind.residential": "주거",

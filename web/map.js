@@ -1079,9 +1079,10 @@ class CityMapView {
      rent) gets a separate line rather than taking another fixed column. */
   finderPhoneFact(b, fac = false){
     if(!b || (!fac && b.cap == null)) return '';
-    const label = fac ? tt("map.col.rent", "Rent") : tt("map.fact.cap", "Building capacity");
-    const value = fac ? (b.rent != null ? fmt(b.rent) : '—') : capText(b.cap);
-    return `<span class="fr-phone-fact">${ssEsc(label)}: ${ssEsc(value)}</span>`;
+    const n = fac ? (b.rent != null ? fmt(b.rent) : '—') : capText(b.cap);
+    const line = fac ? tt("map.fr.phone.rent", "Rent: {n}", {n})
+      : tt("map.fr.phone.cap", "Building capacity: {n}", {n});
+    return `<span class="fr-phone-fact">${ssEsc(line)}</span>`;
   }
   finderList(rows){
     // A warehouse ranks by floor area already, so its list has no second m²
