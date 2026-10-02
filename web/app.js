@@ -251,10 +251,12 @@
   // whole traceback and the bytes the worker handed back, kept in memory until
   // the next build and never stored; and the game build of the board on screen.
   let heldFailure = null;
-  // The last section of the board on screen Python could not work out (a
-  // failed reply to a `section`), for a bug report about that board: its
-  // sentence and whole traceback. A new build or source clears it.
+  // The last section Python could not work out (a failed reply to a
+  // `section`), for a bug report about the board it belongs to: {gen, error,
+  // trace}. Reported only while that build is the newest one handed over
+  // (`builtGen`); a section of it that then works clears it.
   let sectionFailure = null;
+  let builtGen = null;
   let boardBuild = null;
   let busy = false;
   let runtimeReady = false;
@@ -367,6 +369,7 @@
           if (msg.stale || msg.gone) throw failure(() => tt("app.reader.section.gone", "The reader could not read the save again: Update to try once more"));
           const got = JSON.parse(msg.data);
           if (!got || typeof got.sections !== "object" || !got.sections) throw failure(() => tt("app.reader.invalid.bare", "Invalid reader response"));
+          if (sectionFailure && sectionFailure.gen === p.boardGen && sectionFailure.name === p.name) sectionFailure = null;
           p.resolve(got);
           return;
         }
@@ -383,6 +386,7 @@
         // section of it (LEDGER_SOURCE.section()). Not a payload key: JSON,
         // Object.keys() and a copy never see it.
         Object.defineProperty(data, BUILD_GEN, {value: msg.gen});
+        builtGen = msg.gen;
         p.resolve(data);
       } catch (err) {
         // The reader read the save even when its answer would not decode: it
@@ -390,7 +394,7 @@
         if (msg.kind === "built" && err && typeof err === "object") err.held = true;
         // Python failed on a section of the board on screen: kept for a report.
         if (p.kind === "section" && msg.kind === "failed" && p.gen === sourceGen && err && err.trace)
-          sectionFailure = {error: String(err.message || ""), trace: err.trace};
+          sectionFailure = {gen: p.boardGen, name: p.name, error: String(err.message || ""), trace: err.trace};
         p.reject(err);
       }
     };
@@ -402,7 +406,7 @@
     return new Promise((resolve, reject) => {
       if (readerError || gen !== sourceGen) { reject(readerError || new Error(tt("app.reader.superseded", "Save selection changed"))); return; }
       const id = nextId++;
-      pending.set(id, {resolve, reject, gen, kind: msg.kind});
+      pending.set(id, {resolve, reject, gen, kind: msg.kind, boardGen: msg.gen, name: msg.name});
       try { worker.postMessage(Object.assign({id}, msg), transfer || []); }
       catch (err) { pending.delete(id); reject(err); }
       timeReader();
@@ -2436,7 +2440,7 @@
   function reportContext() {
     const failed = heldFailure;
     // With the board on screen, a section of it that failed is what to report.
-    const section = !failed && !readerError ? sectionFailure : null;
+    const section = !failed && !readerError && sectionFailure && sectionFailure.gen === builtGen ? sectionFailure : null;
     const error = failed ? failed.error : section ? section.error : readerError ? String(readerError.message || "") : "";
     const boardSave = !failed && onBoard() && lastGood && lastFile === lastGood;
     return {

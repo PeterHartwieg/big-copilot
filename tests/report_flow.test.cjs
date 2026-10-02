@@ -305,6 +305,39 @@ test('a section of a working board that Python could not work out is what the re
   assert.equal(JSON.parse(parts.details).trace, TRACE);
 });
 
+test('a section failure of a board since replaced is not reported with the new one', async (t) => {
+  const {page, posts} = await setup(t);
+  await page.setInputFiles('#savePick', {name: SAVE_NAME, mimeType: 'application/octet-stream', buffer: SAVE});
+  await page.waitForFunction(() => fixture.messages.some((m) => m.kind === 'build'));
+  const board = (gen) => fixture.worker.onmessage({data: {kind: 'built', id: gen, gen, history: '',
+    data: JSON.stringify({meta: {save: 'Alice Co', build: 3690}, kpi: {}, daily: []})}});
+  await page.evaluate((board) => {
+    const msg = fixture.messages.find((m) => m.kind === 'build');
+    eval(`(${board})`)(msg.id);
+  }, board.toString());
+  await page.waitForFunction(() => document.body.classList.contains('has-board'));
+  // The section of board 1 is asked; a newer board arrives (a name, here);
+  // then the old section fails.
+  await page.evaluate(({trace, board}) => {
+    const gen = fixture.messages.find((m) => m.kind === 'build').id;
+    window.LEDGER_SOURCE.section('hiring', gen).catch(() => {});
+    window.LEDGER_SOURCE.name('rid', 'beer').catch(() => {});
+    const name = fixture.messages.find((m) => m.kind === 'name');
+    eval(`(${board})`)(name.id);
+    const msg = fixture.messages.find((m) => m.kind === 'section');
+    fixture.worker.onmessage({data: {kind: 'failed', id: msg.id, error: 'boom', trace, bytes: null}});
+  }, {trace: TRACE, board: board.toString()});
+  await page.locator('.wrap > .sitefoot [data-bug-report]').click();
+  await page.locator('.br-dialog[open]').waitFor();
+  await page.locator('#brText').fill('All fine, a question.');
+  await page.locator('#brDetails').check();
+  await page.locator('.br-foot .primary').click();
+  await page.locator('.br-status a').waitFor();
+  const parts = await partsOf(posts[0]);
+  assert.equal(JSON.parse(parts.report).error, undefined, 'board 1\'s failure is not board 2\'s');
+  assert.equal(JSON.parse(parts.details).trace || '', '');
+});
+
 test('on a phone the answer is scrolled into view above the sticky buttons', async (t) => {
   for (const api of ['created', 'unavailable']) {
     const {page} = await setup(t, {api, width: 375, height: 667});
