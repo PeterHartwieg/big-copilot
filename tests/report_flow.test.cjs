@@ -27,7 +27,7 @@ let browser;
 before(async () => { browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL}); });
 after(async () => { await browser?.close(); });
 
-async function setup(t, {api = 'created'} = {}) {
+async function setup(t, {api = 'created', delay = 0} = {}) {
   const context = await browser.newContext({viewport: {width: 1280, height: 900}, reducedMotion: 'reduce'});
   t.after(() => context.close());
   await context.addInitScript(() => {
@@ -58,6 +58,7 @@ async function setup(t, {api = 'created'} = {}) {
     if (url.pathname === '/api/report') {
       const request = route.request();
       posts.push({type: request.headers()['content-type'], body: request.postDataBuffer()});
+      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
       if (api === 'created') return route.fulfill({status: 201, contentType: 'application/json', body: JSON.stringify({issue: {number: 42, url: 'https://github.com/PeterHartwieg/big-copilot/issues/42'}})});
       if (api === 'unavailable') return route.fulfill({status: 503, contentType: 'application/json', body: '{"error":"Service unavailable"}'});
       return route.abort();
@@ -126,7 +127,7 @@ test('a failed read offers the form, which sends the failed save and the traceba
   assert.equal(report.source, 'file');
   assert.equal(report.gameBuild, 3682);
   assert.equal(report.siteBuild, await page.evaluate(() => window.LEDGER_BUILD));
-  assert.equal(report.error, "'<save>'");
+  assert.equal(report.error, "'…'", 'the save name in quotes is masked');
   assert.doesNotMatch(parts.report, /Alice|Smith|private-trace-sentinel/);
   const details = JSON.parse(parts.details);
   assert.equal(details.trace, TRACE);
@@ -200,4 +201,50 @@ test('on a working board the footer and Help & feedback attach the board\'s save
   assert.deepEqual(parts.save, Buffer.from([9, 9, 9]));
   assert.equal(JSON.parse(parts.report).gameBuild, 3690, 'the board\'s own game build, no second parse');
   assert.equal(await page.evaluate(() => fixture.messages.filter((m) => m.kind === 'held').map((m) => m.build).join()), 'false');
+});
+
+test('when the board cannot draw a save the reader read, the form attaches the reader\'s copy', async (t) => {
+  const {page, posts} = await setup(t);
+  await page.setInputFiles('#savePick', {name: SAVE_NAME, mimeType: 'application/octet-stream', buffer: SAVE});
+  await page.waitForFunction(() => fixture.messages.some((m) => m.kind === 'build'));
+  // A payload the board throws on (no kpi): the read worked, the drawing did not.
+  await page.evaluate(() => {
+    const msg = fixture.messages.find((m) => m.kind === 'build');
+    fixture.worker.onmessage({data: {kind: 'built', id: msg.id, history: '', data: JSON.stringify({meta: {save: 'Alice Co', build: 3690}, daily: []})}});
+  });
+  await page.locator('#reportBtn').waitFor({state: 'visible'});
+  await page.locator('#reportBtn').click();
+  await page.locator('.br-dialog[open]').waitFor();
+  await page.waitForFunction(() => !document.getElementById('brSave').disabled);
+  await page.locator('#brText').fill('The board went blank.');
+  await page.locator('#brSave').check();
+  await page.locator('#brDetails').check();
+  await page.locator('.br-foot .primary').click();
+  await page.locator('.br-status a').waitFor();
+  const parts = await partsOf(posts[0]);
+  assert.deepEqual(parts.save, Buffer.from([9, 9, 9]), 'the copy the reader holds');
+  const report = JSON.parse(parts.report);
+  assert.equal(report.gameBuild, 3690, 'from what the reader answered');
+  assert.ok(report.error, 'the board\'s own error line');
+  assert.match(JSON.parse(parts.details).trace, /report\.test|at /, 'the script error\'s stack stays private');
+});
+
+test('a send in flight keeps the form open and sends only what it was sent with', async (t) => {
+  // The stub answers after a second, so the checks below run while the send is out.
+  const {page, posts} = await setup(t, {delay: 1000});
+  await failRead(page);
+  await page.locator('#reportBtn').click();
+  await page.locator('.br-dialog[open]').waitFor();
+  await page.waitForFunction(() => !document.getElementById('brSave').disabled);
+  await page.locator('#brText').fill('First.');
+  await page.locator('.br-foot .primary').click();
+  // While it is out, neither Cancel nor Escape closes the form.
+  assert.equal(await page.locator('.br-foot .btn2:not(.primary)').isDisabled(), true);
+  await page.keyboard.press('Escape');
+  await page.locator('.br-status a').waitFor();
+  assert.equal(await page.locator('.br-dialog[open]').count(), 1);
+  assert.deepEqual(Object.keys(await partsOf(posts[0])), ['report'], 'unticked, so nothing else');
+  // Closing lets go of what the form held.
+  await page.locator('.br-foot .btn2:not(.primary)').click();
+  assert.equal(await page.locator('.br-dialog[open]').count(), 0);
 });

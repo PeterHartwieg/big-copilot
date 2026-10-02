@@ -53,13 +53,16 @@ the CLI's `dashboard.html` keeps the plain Discord link. The form posts
 
 - `report`, always: the player's text (at most 5,000 characters), the site build
   (`LEDGER_BUILD`), the game build, the browser family, the source kind and, only with
-  the technical details ticked, the error's last line with save names and home paths
-  masked. The Worker rejects any other field or value outside its allowlist.
+  the technical details ticked, the error's last line. The page masks the save's and
+  the company's names, `/save/` and home-folder paths, quoted values and runs of hex
+  bytes in that line (the save parser prints the bytes around a fault), and the Worker
+  masks the same again. The Worker rejects any other field or value outside its
+  allowlist.
 - `details`, only when "Attach technical details" is ticked: the whole traceback and the
   language, theme and platform. Nothing else is read from browser storage.
 - `save`, only when "Attach my save" is ticked: the bytes the page read. For a failed
-  read the worker hands them back with the error; for a working board `web/worker.js`
-  copies the save it holds (`held`). The Worker stores them as they came, with no gzip
+  read the worker hands them back with the error; for a working board, or a save the
+  board could not draw, `web/worker.js` copies the save it holds (`held`). The Worker stores them as they came, with no gzip
   check, and never decompresses them.
 
 The Worker refuses a body whose `Content-Length` is over 8 MB, or missing, before
@@ -67,12 +70,16 @@ reading it, and holds the stream to the same cap. It writes `report.json` (the p
 facts, without the text), `details.json` and `save.hsg` to the `REPORTS` bucket under a
 folder named `<date>-<uuid>`, then opens an issue in `PeterHartwieg/big-copilot` labelled
 `bug-report`. The issue puts the player's text and the error line in fenced code blocks,
-so no link, image or mention in them renders, and names the folder. If GitHub fails,
-the Worker deletes the folder and answers 503, and the form points to the Discord
-support channel. If GitHub created the issue but its answer never arrived, the issue
-names a folder that is already gone; the reverse, a save without an issue, cannot
-happen unless the delete fails, and then the lifecycle rule removes it within 30 days.
-With nothing attached the Worker writes nothing to R2.
+so no link, image or mention in them renders, and names the folder. Once the issue is
+open it writes `issue.json` (number and address) into the folder. If GitHub fails, the
+Worker deletes the folder (three tries) and answers 503, and the form points to the
+Discord support channel. The writes, the issue and the cleanup run under
+`ctx.waitUntil()`, so a closed tab does not stop them halfway. Whatever still slips
+through, the daily cron (`scheduled()`, `sweepReports()`) deletes every folder older than
+an hour that has no `issue.json`, and the 30-day lifecycle rule is the last net. If
+GitHub created the issue but its answer never arrived, the issue names a folder that is
+already gone; that direction is accepted. With nothing attached the Worker writes
+nothing to R2.
 
 `REPORT_LIMITER` allows three reports a minute per IP at each Cloudflare location: a
 burst guard, not a daily cap. If spam shows up, add a daily cap counted in D1, then
@@ -174,7 +181,7 @@ Categories identify the boundary that failed:
 - `limiter`: the rate-limit binding call failed. A normal denied request is quiet.
 - `database`: D1 statement preparation, binding, or batch execution failed.
 - `storage`: a bug report's R2 write failed, or its folder could not be deleted after
-  GitHub failed (the folder then waits for the 30-day lifecycle rule).
+  GitHub failed (the daily sweep then deletes it), or `issue.json` could not be written.
 - `github`: GitHub did not open the issue; the report's folder was deleted.
 - `unexpected`: a failure outside those boundaries, including response processing.
 

@@ -76,8 +76,9 @@
   "secrets": {
     "required": ["COMMUNITY_IP_SECRET", "GITHUB_REPORT_TOKEN"]
   },
-  // Daily cleanup of presence rows older than 24 hours and of votes for polls
-  // no longer in server/features.json.
+  // Daily cleanup of presence rows older than 24 hours, of votes for polls
+  // no longer in server/features.json, and of bug report folders whose issue
+  // never opened.
   "triggers": {
     "crons": ["17 3 * * *"]
   },

@@ -25,7 +25,7 @@ const COUNT_CACHE_PATH = "/api/community/_presence-count-v1";
 // a small JSON object, the details part the private traceback and settings.
 const REPORT_MAX_BYTES = 8 * 1024 * 1024;
 const REPORT_TEXT_MAX = 5000;
-const REPORT_PART_MAX = 16 * 1024;
+const REPORT_PART_MAX = 24 * 1024;
 const REPORT_DETAILS_MAX = 256 * 1024;
 const REPORT_ERROR_MAX = 500;
 const REPORT_PARTS = ["report", "save", "details"];
@@ -35,6 +35,8 @@ const REPORT_REPO = "PeterHartwieg/big-copilot";
 const REPORT_LABEL = "bug-report";
 const REPORT_ISSUE_URL = /^https:\/\/github\.com\/PeterHartwieg\/big-copilot\/issues\/[1-9][0-9]*$/;
 const GITHUB_TIMEOUT_MS = 15000;
+const REPORT_TRIES = 3;
+const REPORT_SWEEP_AFTER_MS = 60 * 60 * 1000;
 
 // Presence has its own, tighter limiter: a real tab sends one heartbeat every five
 // minutes, so a loop of fresh browser ids cannot inflate the online count on the
@@ -52,10 +54,10 @@ const routes = {
 };
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const diagnostic = { operation: "request", category: "unexpected" };
     try {
-      return await handleApi(request, env, diagnostic);
+      return await handleApi(request, env, diagnostic, ctx);
     } catch {
       reportFailure(diagnostic);
       // Never leak internals: generic JSON for any unhandled failure.
@@ -63,18 +65,23 @@ export default {
     }
   },
   async scheduled(_controller, env) {
+    // A bug report folder whose issue never opened goes within a day, whatever
+    // stopped the request (docs/community-features.md, "Bug reports").
+    const sweep = env.REPORTS ? sweepReports(env.REPORTS) : null;
     const db = env.COMMUNITY_DB;
-    if (!db) return;
-    // The privacy notice promises both: presence rows go within two days, and a
-    // poll's vote hashes go once its feature leaves features.json.
-    const ids = FEATURES.map((f) => f.id);
-    await db.batch([
-      db.prepare("DELETE FROM community_presence WHERE last_seen <= ?1")
-        .bind(Math.floor(Date.now() / 1000) - 24 * 60 * 60),
-      ids.length
-        ? db.prepare(`DELETE FROM community_votes WHERE feature_id NOT IN (${ids.map((_, i) => `?${i + 1}`).join(", ")})`).bind(...ids)
-        : db.prepare("DELETE FROM community_votes"),
-    ]);
+    if (db) {
+      // The privacy notice promises both: presence rows go within two days, and a
+      // poll's vote hashes go once its feature leaves features.json.
+      const ids = FEATURES.map((f) => f.id);
+      await db.batch([
+        db.prepare("DELETE FROM community_presence WHERE last_seen <= ?1")
+          .bind(Math.floor(Date.now() / 1000) - 24 * 60 * 60),
+        ids.length
+          ? db.prepare(`DELETE FROM community_votes WHERE feature_id NOT IN (${ids.map((_, i) => `?${i + 1}`).join(", ")})`).bind(...ids)
+          : db.prepare("DELETE FROM community_votes"),
+      ]);
+    }
+    if (sweep) await sweep;
   },
 };
 
@@ -87,7 +94,7 @@ function reportFailure({ operation, category }) {
   });
 }
 
-async function handleApi(request, env, diagnostic) {
+async function handleApi(request, env, diagnostic, ctx) {
   const { pathname, origin } = new URL(request.url);
   if (!pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
   const route = routes[pathname];
@@ -115,7 +122,7 @@ async function handleApi(request, env, diagnostic) {
     if (body instanceof Response) return body;
     if (body === null) return json({ error: "Invalid request" }, 400);
   }
-  return route.handler(request, env, body, ip, sign, diagnostic);
+  return route.handler(request, env, body, ip, sign, diagnostic, ctx);
 }
 
 async function presence(request, env, body, _ip, _sign, diagnostic) {
@@ -222,7 +229,7 @@ async function features(_request, env, _body, ip, sign, diagnostic) {
 // validated fields of the report part reach the public issue: the save and the
 // details are stored as they came and never read here (a broken save is exactly
 // what gets reported, so there is no gzip check and no decompression).
-async function report(request, env, _body, _ip, _sign, diagnostic) {
+async function report(request, env, _body, _ip, _sign, diagnostic, ctx) {
   const { origin } = new URL(request.url);
   if (request.headers.get("Origin") !== origin) return json({ error: "Invalid request" }, 400);
   const type = (request.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
@@ -243,7 +250,16 @@ async function report(request, env, _body, _ip, _sign, diagnostic) {
   const parts = reportParts(form);
   const facts = parts && reportFacts(parts.report, parts.details !== null);
   if (!facts) return json({ error: "Invalid request" }, 400);
+  // From the first write to the issue or the cleanup is one piece of work. A
+  // player closing the tab cancels the request; waitUntil() keeps the work
+  // running to its end, so a write is never left without its issue or its
+  // cleanup.
+  const work = fileReport(env, parts, facts, diagnostic);
+  if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(work.catch(() => {}));
+  return work;
+}
 
+async function fileReport(env, parts, facts, diagnostic) {
   const attached = { save: parts.save !== null, details: parts.details !== null };
   const folder = attached.save || attached.details
     ? `${new Date().toISOString().slice(0, 10)}-${crypto.randomUUID()}` : "";
@@ -280,6 +296,15 @@ async function report(request, env, _body, _ip, _sign, diagnostic) {
     const cleaned = await removeReport(env.REPORTS, written);
     reportFailure({ operation: "report", category: cleaned ? "github" : "storage" });
     return json({ error: "Service unavailable" }, 503);
+  }
+  // The folder now has its issue: say so in it, so the daily sweep keeps it.
+  // Should even that write fail, the sweep removes a save whose issue exists,
+  // never the other way round.
+  if (folder) {
+    const marked = await retried(() => env.REPORTS.put(`${folder}/issue.json`, JSON.stringify(issue), {
+      httpMetadata: { contentType: "application/json" },
+    }));
+    if (!marked) reportFailure({ operation: "report", category: "storage" });
   }
   return json({ issue }, 201);
 }
@@ -325,16 +350,21 @@ function reportFacts(raw, withDetails) {
 }
 
 // The error's last line goes into a public issue, so it is cut to one line and
-// any path that can name the player is masked: the worker's /save/<file> (a
-// game link's file is <character>-live.hsg) and a home folder. The page masks
-// the same before sending; this is the second net. A file or folder name can
-// hold spaces, so a mask runs to the save's extension or the next separator:
-// it may take a word too many, never one too few.
+// anything in it that can come from the save or name the player is masked: the
+// worker's /save/<file> (a game link's file is <character>-live.hsg), a home
+// folder, any quoted value (a KeyError names what it did not find) and any run
+// of hex bytes (the save parser shows the bytes around a fault). The page masks
+// the same, and the save's and company's names, before sending; this is the
+// second net. A file or folder name can hold spaces, so a path mask runs to the
+// save's extension or the next separator: it may take a word too many, never
+// one too few.
 function publicError(line) {
   const one = line.replace(/[\u0000-\u001f\u007f]+/g, " ").trim()
     .replace(/\/save\/(?:[^'"`]*?\.hsg\b|[^\s'"`]*)/gi, "/save/<save>")
     .replace(/\b[A-Za-z]:[\\/]+Users[\\/]+[^\\/'"`]+/gi, "<home>")
-    .replace(/\/(?:Users|home)\/[^/'"`]+/g, "<home>");
+    .replace(/\/(?:Users|home)\/[^/'"`]+/g, "<home>")
+    .replace(/'[^']*'|"[^"]*"|`[^`]*`/g, (quoted) => quoted[0] + "…" + quoted[0])
+    .replace(/\b[0-9a-f]{2}(?:\s+[0-9a-f]{2}){3,}\b/gi, "<bytes>");
   return one || null;
 }
 
@@ -378,7 +408,7 @@ function reportBody(facts, folder, attached) {
     ...rows.map(([name, value]) => `| ${name} | ${value} |`),
   ];
   if (facts.error) lines.push("", "### Last line of the error", "", fenced(facts.error));
-  if (folder) lines.push("", "The attachments are kept privately for 30 days and are never posted here.");
+  if (folder) lines.push("", "The attachments are kept privately for 30 days and are never published here.");
   return lines.join("\n");
 }
 
@@ -404,14 +434,49 @@ async function openIssue(token, title, body) {
 }
 
 // True when nothing of the report is left in R2.
+// True when nothing of the report is left in R2. A delete that still fails is
+// caught by the daily sweep.
 async function removeReport(bucket, keys) {
-  if (!keys.length) return true;
-  try {
-    await bucket.delete(keys);
-    return true;
-  } catch {
-    return false;
+  return !keys.length || retried(() => bucket.delete(keys));
+}
+
+// Three tries a short pause apart: an R2 hiccup should not leave a save behind.
+async function retried(task) {
+  for (let attempt = 0; attempt < REPORT_TRIES; attempt++) {
+    if (attempt) await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+    try {
+      await task();
+      return true;
+    } catch {}
   }
+  return false;
+}
+
+// The daily cron's part for bug reports: every folder without issue.json whose
+// newest object is over an hour old lost its issue to a failure the request
+// could not clean up after (a delete that kept failing, or the Worker stopped
+// mid-request). An hour is far beyond any request; the 30-day lifecycle rule
+// stays the last net.
+async function sweepReports(bucket, now = Date.now()) {
+  const folders = new Map();
+  let cursor;
+  do {
+    const page = await bucket.list({ cursor, limit: 1000 });
+    for (const object of page.objects) {
+      const cut = object.key.indexOf("/");
+      if (cut < 1) continue;
+      const name = object.key.slice(0, cut);
+      const folder = folders.get(name) || { keys: [], issue: false, newest: 0 };
+      folder.keys.push(object.key);
+      folder.issue = folder.issue || object.key.slice(cut + 1) === "issue.json";
+      folder.newest = Math.max(folder.newest, new Date(object.uploaded).getTime() || now);
+      folders.set(name, folder);
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  const stale = [...folders.values()].filter((f) => !f.issue && now - f.newest > REPORT_SWEEP_AFTER_MS)
+    .flatMap((f) => f.keys);
+  for (let i = 0; i < stale.length; i += 1000) await bucket.delete(stale.slice(i, i + 1000));
 }
 
 function json(data, status = 200, headers = {}) {

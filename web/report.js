@@ -65,10 +65,12 @@
     };
   }
 
-  // The error's last line is public, so every name that can identify the
-  // player is masked first: the save's file name (a game link's is
-  // <character>-live.hsg), the company, the worker's /save/ path and a home
-  // folder. The Worker applies the path masks again.
+  // The error's last line is public, so everything in it that can come from
+  // the save or name the player is masked first: the save's file name (a game
+  // link's is <character>-live.hsg), the company, the worker's /save/ path, a
+  // home folder, any quoted value (a KeyError names what it did not find, which
+  // can be a name from the save) and any run of hex bytes (the save parser
+  // shows the bytes around a fault). The Worker applies the same masks again.
   function brMask(line, names) {
     let out = String(line || "").replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
     for (const name of names || []) {
@@ -83,7 +85,20 @@
       .replace(/\/save\/(?:[^'"`]*?\.hsg\b|[^\s'"`]*)/gi, "/save/" + BR_MASK)
       .replace(/\b[A-Za-z]:[\\/]+Users[\\/]+[^\\/'"`]+/gi, "<home>")
       .replace(/\/(?:Users|home)\/[^/'"`]+/g, "<home>")
+      .replace(/'[^']*'|"[^"]*"|`[^`]*`/g, (q) => q[0] + "…" + q[0])
+      .replace(/\b[0-9a-f]{2}(?:\s+[0-9a-f]{2}){3,}\b/gi, "<bytes>")
       .slice(0, 500);
+  }
+
+  // The line the issue shows: the error on screen, unless that is the hex
+  // window the save parser adds under its message; then the traceback's last
+  // line that says something.
+  const BR_HEX_LINE = /^\s*[0-9a-f]{2}(?:\s+[0-9a-f]{2})*\s*$/i;
+  function brErrorLine(ctx) {
+    const said = (text) => String(text || "").split("\n").filter((l) => l.trim() && !BR_HEX_LINE.test(l));
+    const own = said(ctx.error);
+    const lines = own.length ? own : said(ctx.trace);
+    return lines.length ? brMask(lines[lines.length - 1], ctx.names) : "";
   }
 
   const brBuild = (v) => (Number.isSafeInteger(v) && v > 0 && v < 1000000 ? v : null);
@@ -102,8 +117,8 @@
       browser: brBrowser(env.nav),
       source: BR_SOURCES.includes(ctx.source) ? ctx.source : "none",
     };
-    if (choice.details && ctx.error) {
-      const masked = brMask(ctx.error, ctx.names);
+    if (choice.details && (ctx.error || ctx.trace)) {
+      const masked = brErrorLine(ctx);
       if (masked) report.error = masked;
     }
     const parts = [["report", JSON.stringify(report)]];
@@ -203,11 +218,14 @@
     details.input.addEventListener("change", brPreview);
     brDialog.addEventListener("click", (event) => {
       const r = brDialog.getBoundingClientRect();
-      if (event.target === brDialog && (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom)) brDialog.close();
+      if (!brBusy && event.target === brDialog && (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom)) brDialog.close();
     });
+    // Escape waits for a send in flight too.
+    brDialog.addEventListener("cancel", (event) => { if (brBusy) event.preventDefault(); });
     brDialog.addEventListener("close", () => {
       if (brOpener && document.contains(brOpener)) brOpener.focus();
       brOpener = null;
+      if (!brBusy) brRelease();
     });
     brEls = {title, close, intro, err, errHead, errLine, label, text, pub, save, details, preview, previewHead, previewBody, status, privacy, cancel, send};
     document.body.appendChild(brDialog);
@@ -224,11 +242,11 @@
     e.errHead.textContent = tt("br.err.head", "The error on screen:");
     e.label.textContent = tt("br.text.label", "What went wrong?");
     e.text.setAttribute("placeholder", tt("br.text.placeholder", "What you did, what you saw, and what you expected"));
-    e.pub.textContent = tt("br.text.public", "This text is posted publicly on GitHub.");
+    e.pub.textContent = tt("br.text.public", "This text is published on GitHub, where anyone can read it.");
     e.save.words.textContent = tt("br.save", "Attach my save");
     e.details.words.textContent = tt("br.details", "Attach technical details");
-    e.details.hint.textContent = tt("br.details.hint", "The error's last line is posted with your text. The full error and your language, theme and system are kept privately for 30 days.");
-    e.previewHead.textContent = tt("br.preview", "What is posted publicly");
+    e.details.hint.textContent = tt("br.details.hint", "The error's last line is published with your text. The full error and your language, theme and system are kept privately for 30 days.");
+    e.previewHead.textContent = tt("br.preview", "What is published");
     e.privacy.textContent = tt("br.privacy", "How a bug report is kept and deleted");
     e.cancel.textContent = brSent ? tt("br.close", "Close") : tt("br.cancel", "Cancel");
     e.send.textContent = tt("br.send", "Send report");
@@ -242,7 +260,7 @@
     s.input.disabled = brBusy || !!brSent || !ready;
     if (!ready) s.input.checked = false;
     s.hint.textContent = ready === undefined ? tt("br.save.wait", "Getting the save ready…")
-      : ready ? tt("br.save.hint", "The save is kept privately for 30 days and never posted.")
+      : ready ? tt("br.save.hint", "The save is kept privately for 30 days and never published.")
       : tt("br.save.none", "No save is held on this page, so none can be attached.");
   }
 
@@ -265,7 +283,7 @@
       tt("br.pv.source", "Source: {source}", {source: brSourceWords(brCtx.source)}),
       e.save.input.checked ? tt("br.pv.save.yes", "Save attached: yes, kept privately") : tt("br.pv.save.no", "Save attached: no"),
     ];
-    const masked = brCtx.error ? brMask(brCtx.error, brCtx.names) : "";
+    const masked = brCtx.error || brCtx.trace ? brErrorLine(brCtx) : "";
     if (e.details.input.checked && masked) lines.push(tt("br.pv.error", "Error: {line}", {line: masked}));
     e.previewBody.replaceChildren(...lines.map((line) => { const li = brEl("li"); li.textContent = line; return li; }));
   }
@@ -289,6 +307,10 @@
     e.details.input.disabled = on || !!brSent;
     e.send.disabled = on || !!brSent;
     e.send.hidden = !!brSent;
+    // A send in flight cannot be called back, so the form stays until it
+    // answers: the player then sees the issue it opened, or why not.
+    e.cancel.disabled = on;
+    e.close.disabled = on;
     brSaveHint();
   }
 
@@ -320,23 +342,39 @@
     brGame.then((build) => { if (seq === brSeq) { brKnown.build = brBuild(build); brPreview(); } });
   }
 
+  // A closed form lets go of the save, the traceback and the pending lookups,
+  // so they live no longer than the page's own copy. A send in flight keeps
+  // its own snapshot and lets go when it ends.
+  function brRelease() {
+    brSeq++;
+    brCtx = null;
+    brBytes = brGame = null;
+    brKnown = {bytes: undefined, build: undefined};
+  }
+
   async function brSend() {
     if (brBusy || brSent) return;
     const e = brEls;
     const text = e.text.value.trim();
     if (!text) { brStatus(tt("br.empty", "Describe what went wrong first."), {tone: "bad"}); e.text.focus(); return; }
     const seq = brSeq;
+    // What this send is, taken now, so nothing a later open holds can join it.
+    const ctx = brCtx, saveOn = e.save.input.checked, detailsOn = e.details.input.checked;
+    const bytesSoon = saveOn ? brBytes : null, buildSoon = brGame;
     brLock(true);
     brStatus(tt("br.sending", "Sending…"));
     let res = null;
     try {
-      const [bytes, gameBuild] = await Promise.all([e.save.input.checked ? brBytes : null, brGame]);
-      const parts = brParts(brCtx, {text, save: e.save.input.checked, details: e.details.input.checked, bytes, gameBuild}, brEnv());
+      const [bytes, gameBuild] = await Promise.all([bytesSoon, buildSoon]);
+      const parts = brParts(ctx, {text, save: saveOn, details: detailsOn, bytes, gameBuild}, brEnv());
       const form = new FormData();
       for (const [name, value, file] of parts) { if (file) form.append(name, value, file); else form.append(name, value); }
       res = await fetch(BR_API, {method: "POST", body: form, cache: "no-store"});
     } catch (err) { res = null; }
     if (seq !== brSeq) return;
+    // Closed all the same (a browser lets a second Escape through): nobody is
+    // there to read the answer, so the form only lets go.
+    if (!brDialog.open) { brLock(false); brRelease(); return; }
     let issue = null;
     if (res && res.status === 201) {
       const data = await res.json().catch(() => null);
@@ -353,7 +391,7 @@
     }
     brLock(false);
     const discord = brFeedbackHref();
-    const away = discord ? {href: discord, words: tt("br.fail.discord", "Post it in the Discord support channel instead."), tone: "bad"} : {tone: "bad"};
+    const away = discord ? {href: discord, words: tt("br.fail.discord", "Send it to the Discord support channel instead."), tone: "bad"} : {tone: "bad"};
     if (res && res.status === 429) brStatus(tt("br.limited", "Too many reports from this connection. Try again in a minute."), {tone: "bad"});
     else if (res && res.status === 413) brStatus(tt("br.toolarge", "The save is too large to send."), away);
     else brStatus(tt("br.fail", "The report could not be sent."), away);

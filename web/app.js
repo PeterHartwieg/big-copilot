@@ -293,6 +293,7 @@
     sourceGen++;
     reopen = null;
     busy = false;
+    heldFailure = null;  // a report from the new source is not about the old one
     queued = null;
     for (const p of pending.values()) p.reject(new Error(tt("app.reader.superseded", "Save selection changed")));
     pending.clear();
@@ -1679,6 +1680,7 @@
     note("");
     state("busy", () => tt("app.build.reading", "Reading {name}", {name: file.name}), () => line());
     const t = performance.now();
+    let built = null;  // the reader's answer, when what failed came after it
     try {
       const bytes = await file.arrayBuffer();
       if (gen !== sourceGen) return;
@@ -1686,6 +1688,7 @@
         kind: "build", name: file.name, bytes, mtime: file.lastModified,
         locale: stored.get(LOCALE_KEY), history: stored.get(HISTORY_KEY),
       }, [bytes], gen);
+      built = data;
       if (gen !== sourceGen) return;
       busy = false;
       finishAttempt(gen);
@@ -1712,8 +1715,12 @@
       busy = false;
       finishAttempt(gen);
       const at = Date.now(), kept = lastGood, paused = !!(dirHandle && watching && !watchTimer);
+      // The reader hands a failed save's bytes back; a failure after it read
+      // the save (the board could not draw it) leaves the save with the reader.
+      const builtOn = built && built.meta && Number.isInteger(built.meta.build) ? built.meta.build : null;
       heldFailure = {name: file.name, error: String(err.message || ""), trace: err.trace || String(err.stack || ""),
-        bytes: err.bytes || null, build: file.linkStamp && linkHealth && Number.isInteger(linkHealth.build) ? linkHealth.build : null};
+        bytes: err.bytes || null, held: !!built,
+        build: builtOn !== null ? builtOn : file.linkStamp && linkHealth && Number.isInteger(linkHealth.build) ? linkHealth.build : null};
       state("bad", () => tt("app.build.failed", "Could not read the save"),
         () => tt("app.build.attempted", "{name} · attempted {when}", {name: file.name, when: fmtTime(at)}));
       const rewritten = err.name === "NotReadableError";
@@ -2400,10 +2407,11 @@
       // reader; the board's game build is in its payload, a failed save's
       // needs the reader to parse it again.
       bytes: async () => {
-        if (failed) return failed.bytes;
-        if (!boardSave) return null;
+        if (failed && failed.bytes) return failed.bytes;
+        const name = failed ? (failed.held ? failed.name : "") : boardSave ? lastGood.name : "";
+        if (!name) return null;
         const h = await readerHeld(false);
-        return h && h.name === lastGood.name ? h.bytes : null;
+        return h && h.name === name ? h.bytes : null;
       },
       gameBuild: async () => {
         if (!failed) return boardSave ? boardBuild : null;

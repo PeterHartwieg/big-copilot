@@ -164,10 +164,11 @@ test('report: a save and details go to R2 in one folder; the issue holds only th
   assert.equal(res.headers.get('cache-control'), 'no-store');
 
   const keys = await objects();
-  assert.equal(keys.length, 3, keys.join(', '));
+  assert.equal(keys.length, 4, keys.join(', '));
   const folder = keys[0].split('/')[0];
   assert.match(folder, /^\d{4}-\d{2}-\d{2}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-  assert.deepEqual(keys, [`${folder}/details.json`, `${folder}/report.json`, `${folder}/save.hsg`]);
+  assert.deepEqual(keys, [`${folder}/details.json`, `${folder}/issue.json`, `${folder}/report.json`, `${folder}/save.hsg`]);
+  assert.deepEqual(JSON.parse(await (await bucket.get(`${folder}/issue.json`)).text()), body.issue, "the folder knows its issue, so the sweep keeps it");
   const stored = await bucket.get(`${folder}/save.hsg`);
   assert.deepEqual(Buffer.from(await stored.arrayBuffer()), Buffer.from(await save.arrayBuffer()), 'the save is stored byte for byte');
   assert.equal(await (await bucket.get(`${folder}/details.json`)).text(), details);
@@ -217,7 +218,7 @@ test('report: the error line is public only with the details, and paths that can
   await expectStatus(await send([['report', reportJson({error})], ['details', '{"trace":"x"}']]), 201, 'masked error');
   const issue = JSON.parse(github.calls[0].body);
   assert.doesNotMatch(issue.body, /alice|Alice|Smith/);
-  assert.match(issue.body, /\/save\/<save>/);
+  assert.match(issue.body, /FileNotFoundError: '…' at <home>/);
   assert.match(issue.body, /<home>/);
 });
 
@@ -256,8 +257,20 @@ test('report: when GitHub fails the folder is deleted again and the form gets a 
 /* ------------------------------------------------------------- the body */
 
 test('report: Content-Length is checked before reading, and over 8 MB is refused', async () => {
-  const big = new Blob([new Uint8Array(MAX_BYTES + 1)]);
-  await expectStatus(await send([['report', reportJson()], ['save', big, 'save.hsg']]), 413, 'oversized save');
+  // An oversized upload is answered from its header, without a read. (Run in the
+  // VM: over a real socket the client may see the early answer as a broken pipe.)
+  {
+    const {body, type} = await multipart([['report', reportJson()], ['save', new Blob([new Uint8Array(MAX_BYTES + 1)]), 'save.hsg']]);
+    const request = new Request('https://vm.test/api/report', {method: 'POST', body,
+      headers: {Origin: 'https://vm.test', 'Content-Type': type, 'Content-Length': String(body.length), 'CF-Connecting-IP': '192.0.2.9'}});
+    let read = false;
+    const getReader = request.body.getReader.bind(request.body);
+    request.body.getReader = () => { read = true; return getReader(); };
+    const {worker} = vmWorker(created);
+    const res = await worker.fetch(request, vmEnv({put: async () => { throw new Error('no write expected'); }, delete: async () => {}}));
+    assert.equal(res.status, 413);
+    assert.equal(read, false, 'refused before reading');
+  }
   // A body with no declared length (a stream) is refused before it is read.
   const {body, type} = await multipart([['report', reportJson()]]);
   const res = await mf.dispatchFetch(`${ORIGIN}/api/report`, {
@@ -321,7 +334,7 @@ test('rate limit: a few reports a minute per IP, then 429 without touching GitHu
   for (let i = 0; i < limit + 2; i++) statuses.push((await send([['report', reportJson()], ['save', new Blob(['s']), 'save.hsg']], {ip})).status);
   assert.deepEqual(statuses, [...Array(limit).fill(201), 429, 429]);
   assert.equal(github.calls.length, limit);
-  assert.equal((await objects()).length, limit * 2, 'report.json and save.hsg per accepted report');
+  assert.equal((await objects()).length, limit * 3, 'report.json, save.hsg and issue.json per accepted report');
   // Another connection still has its budget.
   assert.equal((await send([['report', reportJson()]])).status, 201);
 });
@@ -367,7 +380,7 @@ function vmWorker(fetchImpl) {
     .replace('import FEATURES from "./features.json";', 'const FEATURES = [];')
     .replace('export default {', 'globalThis.worker = {');
   const context = {
-    Request, Response, FormData, Blob, File, URL, TextEncoder, TextDecoder, AbortSignal,
+    Request, Response, FormData, Blob, File, URL, TextEncoder, TextDecoder, AbortSignal, setTimeout,
     crypto: crypto.webcrypto,
     console: {error: (...args) => events.push(args)},
     fetch: fetchImpl,
@@ -416,11 +429,13 @@ test('storage: a failed R2 write removes what landed, opens no issue and logs on
 test('storage: GitHub failing with a cleanup that fails too is reported as storage; with a clean one as github', async () => {
   for (const [cleanup, category] of [[false, 'storage'], [true, 'github']]) {
     const {worker, events} = vmWorker(async () => new Response('no', {status: 502}));
+    let tries = 0;
     const res = await worker.fetch(await vmRequest([['report', reportJson()], ['save', new Blob(['s']), 'save.hsg']]), vmEnv({
       put: async () => {},
-      delete: async () => { if (!cleanup) throw new Error('still down'); },
+      delete: async () => { tries++; if (!cleanup) throw new Error('still down'); },
     }));
     assert.equal(res.status, 503);
+    assert.equal(tries, cleanup ? 1 : 3, 'a failing delete is tried three times');
     assert.deepEqual(JSON.parse(JSON.stringify(events)), [[{event: 'community_api_failure', operation: 'report', category}]]);
   }
 });
@@ -436,4 +451,46 @@ test('report: a body longer than its declared length is cut off at the cap', asy
   const res = await worker.fetch(request, vmEnv({put: async () => { puts++; }, delete: async () => {}}));
   assert.equal(res.status, 413);
   assert.equal(puts, 0);
+});
+
+test('report: quoted values and the save parser\'s hex window never reach the issue', async () => {
+  // ba_save's _where() ends a parse error with the bytes around the fault;
+  // UTF-16 "Alice" is 41 00 6c 00 69 00 63 00 65 00.
+  const error = "ValueError: bad tag 0x99 at offset 0x1f0 41 00 6c 00 69 00 63 00 65 00 for 'Alice Smith'";
+  await expectStatus(await send([['report', reportJson({error})], ['details', '{"trace":"x"}']]), 201, 'hex and quotes');
+  const issue = JSON.parse(github.calls[0].body);
+  assert.match(issue.body, /ValueError: bad tag 0x99 at offset 0x1f0 <bytes> for '…'/);
+  assert.doesNotMatch(issue.body, /Alice|41 00 6c/);
+});
+
+test('report: the store-and-file work runs under waitUntil, so a closed tab cannot cut it short', async () => {
+  const kept = [];
+  const {worker} = vmWorker(created);
+  const res = await worker.fetch(await vmRequest([['report', reportJson()], ['save', new Blob(['s']), 'save.hsg']]),
+    vmEnv({put: async () => {}, delete: async () => {}}), {waitUntil: (promise) => kept.push(promise)});
+  assert.equal(res.status, 201);
+  assert.equal(kept.length, 1, 'one piece of work, from the first write to the issue or the cleanup');
+});
+
+test('sweep: the daily cron removes folders whose issue never opened, and only those', async () => {
+  const hour = 60 * 60 * 1000;
+  const now = Date.now();
+  const stored = [
+    ['2026-10-01-a/report.json', now - 5 * hour], ['2026-10-01-a/save.hsg', now - 5 * hour], ['2026-10-01-a/issue.json', now - 5 * hour],
+    ['2026-10-01-b/report.json', now - 5 * hour], ['2026-10-01-b/save.hsg', now - 5 * hour],
+    ['2026-10-02-c/report.json', now - 60 * 1000], ['2026-10-02-c/save.hsg', now - 60 * 1000],
+  ];
+  const deleted = [];
+  const bucket = {
+    // Two pages, as a large bucket answers.
+    list: async ({cursor}) => {
+      const from = cursor ? Number(cursor) : 0;
+      const page = stored.slice(from, from + 4).map(([key, at]) => ({key, uploaded: new Date(at)}));
+      return {objects: page, truncated: from + 4 < stored.length, cursor: String(from + 4)};
+    },
+    delete: async (keys) => { deleted.push(...keys); },
+  };
+  const {worker} = vmWorker(created);
+  await worker.scheduled({}, {REPORTS: bucket});
+  assert.deepEqual(deleted.sort(), ['2026-10-01-b/report.json', '2026-10-01-b/save.hsg']);
 });

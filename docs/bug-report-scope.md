@@ -127,16 +127,34 @@ covers bug reports:
 - **The error line needs the details box.** The issue gets the error's last line only
   when "Attach technical details" is ticked, so an unticked form sends nothing but the
   text and the safe details. The Worker rejects an `error` field without a `details` part.
-  The page masks the save's file name, the company and any `/save/` or home-folder path
-  in that line before sending, and the Worker masks the paths again.
+  The page masks the save's file name, the company, any `/save/` or home-folder path,
+  any quoted value (a `KeyError` can quote a name from the save) and any run of hex
+  bytes (the save parser prints the bytes around a fault, and those can spell a name)
+  before sending, and the Worker masks the same again. When the line on screen is that
+  hex window, the page takes the traceback's last line that says something instead.
+- **"Published", not "posted".** The board's vocabulary rule bans "post", so the form
+  says "This text is published on GitHub, where anyone can read it."
+- **No save without an issue, even when the request dies.** The Worker runs the writes,
+  the issue and the cleanup under `ctx.waitUntil()`, so a closed tab does not cut them
+  short; a failing delete is tried three times. After the issue opens it writes
+  `issue.json` into the folder, and the existing daily cron deletes every folder older
+  than an hour without one. The 30-day lifecycle rule stays the last net. This adds work
+  to the cron the scope said not to add; the alternative was a save that could outlive
+  its failed report by 30 days.
 - **A save on a working board.** The footer's form can attach a save too. The page asks
   the Python worker for a copy of the save it holds (a new `held` message in
   `web/worker.js`); the same message, asked for the build, parses a failed save once
   more to read its game build. The board's own build comes from the payload
   (`meta.build`), a linked game's from `/health`.
 - **What R2 holds.** Per report folder: `report.json` (the public facts without the
-  player's text), `details.json` and `save.hsg`. With nothing ticked the Worker writes no
-  folder.
+  player's text), `details.json`, `save.hsg` and, once the issue is open, `issue.json`
+  (its number and address). With nothing ticked the Worker writes no folder.
+- **A failure after the read.** When Python read the save but the board could not draw
+  it, the reader still holds the save; the form asks it for a copy, as on a working
+  board.
+- **The form's own copy.** The open form holds the save and traceback while it is open
+  and lets go when it closes. A send in flight keeps the form open (Cancel and Escape
+  wait) and sends what it was started with.
 - **The issue.** Title `Bug report: ` plus the text's first line, cut at 60 characters.
   The text and the error line sit in fenced code blocks, so links, images and mentions
   in them do not render. Every other value comes from an allowlist or a pattern.

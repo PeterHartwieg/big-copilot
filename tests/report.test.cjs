@@ -79,7 +79,7 @@ test('report.js: the details carry the traceback and three settings, and nothing
   // The public report: the error's last line, masked, and never the traceback.
   const sent = JSON.parse(parts.report);
   assert.equal(sent.gameBuild, null);
-  assert.equal(sent.error, "KeyError: '<save>' in /save/<save> for <save>");
+  assert.equal(sent.error, "KeyError: '…' in /save/<save> for <save>");
   assert.equal(parts.report.includes('private-trace-sentinel'), false);
   assert.doesNotMatch(parts.report, /Alice|Smith|Traceback/);
 });
@@ -124,11 +124,25 @@ test('report.js: the build, source and browser are held to the values the Worker
 
 test('report.js: home folders and save paths are masked even with spaces in them', () => {
   const report = load();
-  assert.equal(report.mask("No such file: 'C:\\Users\\Bob Jones\\Saves\\x.hsg'", []), "No such file: '<home>\\Saves\\x.hsg'");
+  assert.equal(report.mask('No such file: C:\\Users\\Bob Jones\\Saves', []), 'No such file: <home>\\Saves');
+  assert.equal(report.mask("KeyError: 'Bob Jones Bakery'", []), "KeyError: '…'", 'a quoted value can be a name from the save');
   assert.equal(report.mask('at /Users/bob/Library and /home/bob/.local', []), 'at <home>/Library and <home>/.local');
   assert.equal(report.mask('open /save/Recover #3.hsg failed', []), 'open /save/<save> failed');
   assert.equal(report.mask('line\nbreak', []).includes('\n'), false);
   assert.equal(report.mask('ALICE CO lost', ['Alice Co']), '<save> lost', 'names are masked whatever their case');
+});
+
+test('report.js: the public line skips the save parser\'s hex window and is one line of a multiline error', () => {
+  const report = load();
+  const sent = (ctx) => JSON.parse(report.parts(Object.assign({names: []}, ctx), {text: 'x', details: true}, env())[0][1]).error;
+  // ba_save's _where(): the message, then the bytes around the fault, which
+  // worker.js shows as the last line. UTF-16 "Alice" is 41 00 6c 00 69 00 ...
+  const parser = 'Traceback (most recent call last):\n  File "/ba_save.py", line 9\nValueError: unknown tag 0x99 at offset 0x1f0\n  41 00 6c 00 69 00 63 00 65 00 20 00';
+  assert.equal(sent({error: '  41 00 6c 00 69 00 63 00 65 00 20 00', trace: parser}), 'ValueError: unknown tag 0x99 at offset 0x1f0');
+  // A startup failure hands its whole traceback over as the error.
+  assert.equal(sent({error: 'Traceback (most recent call last):\n  File "/x.py", line 1\nImportError: no module', trace: ''}), 'ImportError: no module');
+  // Bytes inside a line are masked as well.
+  assert.equal(report.mask('bad at 0x10 41 00 6c 00 69 00', []), 'bad at 0x10 <bytes>');
 });
 
 test('report.js: only an issue of this repository is linked', () => {
