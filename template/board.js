@@ -1436,7 +1436,7 @@ function flowWatch(){
   let last = 0;
   flowObs = new ResizeObserver(() => {
     const w = box.getBoundingClientRect().width;
-    if(!w || typeof D === "undefined" || !D || !D.supply || flowChainDrawn === null) return;
+    if(!w || !D || !D.supply || flowChainDrawn === null) return;
     const turned = Math.abs(w - last) >= 1;
     last = w;
     const narrow = flowNarrow() || !flowHasPipes(D.supply.graph);
@@ -1954,7 +1954,7 @@ const SIZING_KEY = "ba_dash_sizing";
    taken in (takeData()). */
 const szMem = {};
 const szDevice = () => remembered(SIZING_KEY) === "dem" ? "dem" : "cap";
-const szWho = () => (typeof D !== "undefined" && D && D.meta && D.meta.character) || "";
+const szWho = () => (D && D.meta && D.meta.character) || "";
 function szRead(who = szWho()){
   if(Object.prototype.hasOwnProperty.call(szMem, who)) return szMem[who];
   if(who) try{ const v = localStorage.getItem(`${SIZING_KEY}:${who}`); if(v === "cap" || v === "dem") return v; }catch(e){}
@@ -1971,7 +1971,7 @@ function szAdopt(){ sizing = szRead(); }
 const szName = (v = sizing) => v === "dem" ? tt("sb.basis.dem", "Shop demand") : tt("sb.basis.cap", "Full production");
 const szNameLow = (v = sizing) => v === "dem" ? tt("sb.basis.dem.low", "shop demand") : tt("sb.basis.cap.low", "full production");
 function supplyFact(s, slug){
-  const f = ((((typeof D !== "undefined" && D) || {}).supply || {}).facts || {})[s];
+  const f = (((D || {}).supply || {}).facts || {})[s];
   const fact = f && f[slug];
   if(!fact) return null;
   return sizing === "dem" && fact.dem ? {...fact, ...fact.dem} : fact;
@@ -1987,7 +1987,7 @@ const szFact = (s, slug) => supplyFact(s, slug) || SZ_NONE;
 /* The import rows walked under the sizing on screen: Demand's own walk
    (supply.importsDem) where Python sent one, else 24/7's (supply.imports). */
 function supplyImports(){
-  const s = (((typeof D !== "undefined" && D) || {}).supply || {});
+  const s = ((D || {}).supply || {});
   return (sizing === "dem" && s.importsDem) || s.imports || [];
 }
 /* The nine words, and the chip colour from the fact's severity. */
@@ -2110,7 +2110,7 @@ const szMatters = () => !!(D && D.supply && ((D.supply.factories || {}).sites ||
 /* Run `fn` with the other basis on the page's global, and put everything the
    supply rows leave behind back as it was. */
 function szWith(mode, fn){
-  const was = sizing, rows = typeof gwImportRows !== "undefined" ? gwImportRows : null;
+  const was = sizing, rows = gwImportRows;
   sizing = mode;
   try{ return fn(); } finally { sizing = was; if(rows !== null) gwImportRows = rows; }
 }
@@ -2730,7 +2730,7 @@ function alertLanding(a, link){
   if(link.port){
     /* The Operations comparison is Standards' (routeStdWas keeps what
        Results showed, for when the reader goes back to it). */
-    if(link.port === "ops" && view !== "ops" && typeof routeStdWas !== "undefined") routeStdWas = view;
+    if(link.port === "ops" && view !== "ops") routeStdWas = view;
     view = link.port; sortKey = null;
     drawPortfolio();
   }
@@ -2848,7 +2848,7 @@ const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const FINDING_CUT_MARKS = /[,(:;.]/;
 let findingNamesFor = null, findingNamesList = [];
 function findingNames(){
-  const names = (typeof D !== "undefined" && D && D.names) || null;
+  const names = (D && D.names) || null;
   if(names !== findingNamesFor){
     findingNamesFor = names;
     findingNamesList = [...new Set(Object.values(names || {}))]
@@ -2980,7 +2980,7 @@ function findingAmount(a){
 }
 /* A finding whose kind is switched off still shows, under the list, wearing
    its kind's name so it is clear why it is down there. */
-const kindLabel = id => ((typeof ALERT_GROUPS !== "undefined" && ALERT_GROUPS.find(g => g.id === id)) || {}).label || id;
+const kindLabel = id => (ALERT_GROUPS.find(g => g.id === id) || {}).label || id;
 const kindOff = a => alertGroupPrefs[a.group] === false;
 /* --- where each kind of finding is fixed ------------------------------------
    The route a finding's action names, and the words on its button. The route
@@ -3038,7 +3038,7 @@ const ovParams = a => (a && a.i18n && a.i18n.text && a.i18n.text[1]) || {};
 function ovAtFactory(a){
   const b = alertSite(a);
   const s = b ? D.businesses.indexOf(b) : -1;
-  if(s >= 0 && D.supply && typeof sbTabOf === "function" && sbTabOf(s) === "factories") return true;
+  if(s >= 0 && D.supply && sbTabOf(s) === "factories") return true;
   /* Without the supply facts a factory is still known: a finding about one
      of its machines names the machine, and the site names its type. */
   return !!(a.ev && a.ev.slot !== undefined) || !!(b && b.typeSlug === "ba:businesstype_factory");
@@ -3049,7 +3049,7 @@ function ovAtFactory(a){
    Schedules; a business's page carries its summary (spSchedSummary()). */
 function nxStaffInto(b){
   if(!b || b.status !== "office") return "#sp-sched";
-  const row = typeof gwOfficeRow === "function" ? gwOfficeRow(b.key) : null;
+  const row = gwOfficeRow(b.key);
   return row && (row.shifts || []).length ? "#sp-sched" : "#sp-crew";
 }
 function ovActLabel(act){
@@ -3165,9 +3165,9 @@ function ovSnapshot(focus = null){
   const row = focus ? ovRows().find(f => f.dataset.id === focus) : null;
   const tools = focus === "tools" ? $("tools") : null;
   const at = row || tools;
-  return {y: Math.round(window.scrollY || 0), sev: typeof sevOff !== "undefined" ? [...sevOff] : [], all: ovShowAll,
+  return {y: Math.round(window.scrollY || 0), sev: [...sevOff], all: ovShowAll,
     open: [...ovOpen], focus, top: at ? Math.round(at.getBoundingClientRect().top) : null,
-    below: typeof showMinor !== "undefined" && showMinor, off: typeof showSwitchedOff !== "undefined" && showSwitchedOff};
+    below: showMinor, off: showSwitchedOff};
 }
 /* Set by ovRemember() for the departure it was called for. */
 let ovLeft = false;
@@ -3182,7 +3182,7 @@ function ovRemember(focus){
    it stood. A row gone with the latest numbers is said, not faked. */
 function ovArrive(snap){
   if(!snap || typeof snap !== "object" || !hasData()) return;
-  if(Array.isArray(snap.sev) && typeof sevOff !== "undefined"){ sevOff.clear(); snap.sev.forEach(k => sevOff.add(k)); }
+  if(Array.isArray(snap.sev)){ sevOff.clear(); snap.sev.forEach(k => sevOff.add(k)); }
   ovShowAll = !!snap.all;
   ovOpen.clear(); (Array.isArray(snap.open) ? snap.open : []).forEach(id => ovOpen.add(id));
   if(typeof snap.below === "boolean") showMinor = snap.below;
@@ -3329,12 +3329,12 @@ function ovDetails(a, b, fr){
    Confirmed, so the reader who comes back sees what they did. */
 function ovStatePill(a, b){
   /* A uniform finding: the shop's uniform write, where there was one. */
-  if(a.group === "uniform" && b && typeof pgUniformState === "function"){
+  if(a.group === "uniform" && b){
     const u = pgUniformState(b.key);
     return u ? ` <span class="ov-pg">${pgPill(u.state, u.rec)}</span>` : "";
   }
   const slug = (a.ev || {}).slug;
-  if(!b || !slug || typeof pgStateAt !== "function") return "";
+  if(!b || !slug) return "";
   const st = pgStateAt(b.key, slug);
   return st ? ` <span class="ov-pg">${pgPill(st)}</span>` : "";
 }
@@ -3342,7 +3342,7 @@ function ovStatePill(a, b){
    Supply shows, its figure, unit, basis and state. */
 function ovPlanHtml(a, b){
   const slug = (a.ev || {}).slug;
-  if(!b || !slug || !hasData() || !D.supply || typeof sbData !== "function" || routeArea(findingRoute(a).route) !== "supply") return "";
+  if(!b || !slug || !hasData() || !D.supply || routeArea(findingRoute(a).route) !== "supply") return "";
   let d;
   try{ d = sbData(); }catch(e){ return ""; }
   const s = D.businesses.indexOf(b);
@@ -3388,7 +3388,7 @@ function findingRow(a, o = {}){
   const open = ovOpen.has(a.id) && !!details;
   const det = `ov-x${n}`;
   /* The kind and what it means ride on the sentence, as its tip. */
-  const g = typeof ALERT_GROUPS !== "undefined" ? ALERT_GROUPS.find(x => x.id === a.group) : null;
+  const g = ALERT_GROUPS.find(x => x.id === a.group);
   const kindTip = `${kindLabel(a.group)}${g && g.note ? `. ${g.note}` : ""}`;
   return `<div class="find ${band} ov-f${o.rich ? "" : " ov-one"}${o.later ? " ov-later" : ""}${o.isNew ? " ov-new" : ""}" data-id="${attr(a.id)}" data-kind="${attr(a.group)}">
     <span class="mark" data-tip="${attr(tt("today.find.silence", "Silence this finding"))}"></span>
@@ -4552,7 +4552,7 @@ const spTyped = (row, shifts, ticks) => (shifts || []).reduce(
    a stored one, so a browser that reads storage and refuses to write it still
    switches on the click. */
 const SP_PLAN_STORE = "ba_dash_plan:";
-const spCharacter = () => (typeof D !== "undefined" && D && D.meta && D.meta.character) || null;
+const spCharacter = () => (D && D.meta && D.meta.character) || null;
 const spPlanKey = key => `${spCharacter() || ""}:${key}`;
 const spPlanMem = {};
 const spPlanRead = key => {
@@ -4567,7 +4567,7 @@ const spPlanWrite = (key, which) => {
   spPlanMem[at] = which === "full" ? "full" : "demand";
   hrStale();
   /* Staffing › Schedules summarises the plan shown (spShownRow()). */
-  if(typeof nxSchedStale === "function") nxSchedStale();
+  nxSchedStale();
   if(!spCharacter()) return;
   try {
     if(which === "full") localStorage.setItem(SP_PLAN_STORE + at, "full");
@@ -5040,7 +5040,7 @@ function spStandards(b){
   /* A uniform write made here or on Standards: its progress, beside the
      write (docs/architecture.md, "Progress: marked, applied, confirmed"), as
      Standards shows it. */
-  const u = typeof pgUniformState === "function" ? pgUniformState(b.key) : null;
+  const u = pgUniformState(b.key);
   const pill = u ? `<span class="sp-unipg">${pgPill(u.state, u.rec)}</span>` : "";
   return `${eq}
     <div class="sp-lamps">${lamps}${roles.map(r => `<span class="sp-role" data-el="uniform" data-read="${attr(
@@ -6374,7 +6374,7 @@ const spFactorySites = () => {
   if(spViewCache) return spViewCache;
   const own = (((D || {}).supply || {}).factories || {}).sites || [];
   try{
-    const view = D && D.supply && D.supply.factories && typeof factoryView === "function"
+    const view = D && D.supply && D.supply.factories
       ? factoryView() : null;
     spViewCache = (view && view.sites) || own;
   }catch(e){ spViewCache = own; }
@@ -7218,8 +7218,8 @@ function drawSite(){
    planner, on Staffing › Schedules with this business picked; the planner is
    not drawn twice (docs/architecture.md, Pages). */
 function spSchedSummary(b){
-  const pg = typeof schedProgress === "function" ? schedProgress(b) : null;
-  const state = typeof schedStatus === "function" ? schedStatus(b) : "";
+  const pg = schedProgress(b);
+  const state = schedStatus(b);
   /* The header's Schedule button opens the planner, and the page's own
      finding rows name the findings; an office's staffed workstations are the
      Desks block's to say. */
@@ -7240,7 +7240,7 @@ function spActs(b, kind){
      empty view on a scope that is none of its choices. */
   const s = D.businesses.indexOf(b);
   const supplied = !!(D.supply && (D.supply.facts || {})[s]);
-  const tab = supplied && typeof sbTabOf === "function" ? sbTabOf(s) : null;
+  const tab = supplied ? sbTabOf(s) : null;
   const go = (route, label, ic) => `<button type="button" class="nx-btn sm" data-site-go="${route}" data-site-key="${attr(b.key)}">${spIcon(ic)}<span>${label}</span></button>`;
   const acts = kind === "retail" ? [go("staffing/schedules", tt("sp.act.schedule", "Schedule"), "roster"),
       tab === "shops" ? go("supply/deliveries", tt("sp.act.deliveries", "Deliveries"), "truck") : "", go("businesses/prices", tt("sp.act.prices", "Prices"), "tag")]
@@ -7356,7 +7356,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     // The key a tick was stored under while rows were keyed by the item's
     // name, for reconcileOrderMarks to carry over. That name was English, so
     // with the names in another language it is the key's English name.
-    const legacyKey = id(typeof gnLang !== "undefined" && gnLang !== "en" ? englishName(slug) || item : item);
+    const legacyKey = id(gnLang !== "en" ? englishName(slug) || item : item);
     const row = {key, legacyKey, group, item, slug, current, proposed, reason, kind, site: s, source, mode,
                  ...(paused ? {paused: true} : {}), ...(tight ? {tight: true} : {}), ...(lower ? {lower: true} : {})};
     rows.push(row);
@@ -7562,7 +7562,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     const item = r.item, n = r.need, m = r.machines, had = now ?? 0, h = r.thinDay ? r.thinDay.hours : null;
     /* Each machine's own hours where the line says them ("12 h and 0 h"),
        unless a thin weekday is the thing to name. */
-    const each = Array.isArray(r.each) && r.each.length && typeof sbHoursWords === "function" ? sbHoursWords(r.each) : null;
+    const each = Array.isArray(r.each) && r.each.length ? sbHoursWords(r.each) : null;
     add("Factory run hours", r.s, r, now, r.need, sbCkJoin([r.machines > 1
       ? (!day && each ? tt("sb.ck.staff.each.now", {one: "Staff {item} for {n} hour a day, on each of its {m} machines; the schedule has them at {now} a day.",
             other: "Staff {item} for {n} hours a day, on each of its {m} machines; the schedule has them at {now} a day."}, {item, n, m, now: each})
@@ -7607,7 +7607,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
       && x.proposed === dep.need);
     if(!row){
       const had = dep.now, n = dep.need, m = dep.machines, item = dep.item, material = dep.material;
-      const depot = address(dep.depot), now = typeof sbHoursWords === "function" && dep.each ? sbHoursWords(dep.each) : `${had}`;
+      const depot = address(dep.depot), now = dep.each ? sbHoursWords(dep.each) : `${had}`;
       row = add("Factory run hours", dep.s, {item, slug: dep.slug}, had, n, sbCkJoin([m > 1
         ? tt("sb.ck.dep.each.now", {one: "Staff {item} for {n} hour a day on each of its {m} machines; the schedule has them at {now}.",
             other: "Staff {item} for {n} hours a day on each of its {m} machines; the schedule has them at {now}."}, {item, n, m, now})
@@ -7670,7 +7670,7 @@ function orderChecklistText(rows, title, mode = "cap"){
       : r.mode === "hours" ? tt("sb.ck.copy.hours", {one: "run {from} -> {n} hour/day", other: "run {from} -> {n} hours/day"}, {from: was, n})
       : r.mode === "weekly" ? tt("sb.ck.copy.weekly", {one: "{from} -> {n} unit/week", other: "{from} -> {n} units/week"}, {from: was, n})
       : tt("sb.ck.copy.daily", {one: "{from} -> {n} unit/day", other: "{from} -> {n} units/day"}, {from: was, n});
-    const basis = typeof sbCkBasisWords === "function" ? sbCkBasisWords(r, mode) : "";
+    const basis = sbCkBasisWords(r, mode);
     out.push(tt("sb.ck.copy.row", "[ ] {item}: {change}. {reason}", {item: r.item, change, reason: basis ? sbCkJoin([r.reason, basis]) : r.reason}));
   });
   return out.join("\n");
@@ -7786,7 +7786,7 @@ const orderMarkCache = new Map();
 const PG_KEY = "ba_progress_v1:";
 const PG_KEEP_DAYS = 14;
 const pgMemo = new Map();
-const pgWho = () => (typeof D !== "undefined" && D && D.meta && D.meta.character) || "";
+const pgWho = () => (D && D.meta && D.meta.character) || "";
 /* The company's boards are counted in its store (`n`), so "a board after
    the write" holds across a reload. */
 function pgStore(){
@@ -7858,7 +7858,7 @@ function pgBoard(){
    later than every board after it. */
 const pgMinutes = c => c && Number.isFinite(Number(c.day)) ? (Number(c.day) * 24 + (Number(c.hour) || 0)) * 60 + Math.floor(Number(c.minute) || 0) : null;
 function pgClockNow(){
-  const l = typeof gwLink === "function" ? gwLink() : null;
+  const l = gwLink();
   const m = l && Number.isFinite(Number(l.day)) ? l : (D && D.meta) || {};
   return {day: Number(m.day), hour: Number(m.hour) || 0, minute: Number(m.minute) || 0};
 }
@@ -7869,7 +7869,7 @@ function pgRecord(rec){
   memo.gone.delete(rec.id); memo.mine.add(rec.id); memo.synced.delete(rec.id);
   recs[rec.id] = Object.assign({}, rec, {state: "applied", at: Date.now(), seq: memo.n, clock: pgClockNow()});
   pgSave();
-  if(typeof sbStamp !== "undefined") sbStamp++;
+  sbStamp++;
 }
 /* What each family's postcondition reads on a later board: {state} with
    confirmed, changed (the board shows something else) or partly, or null
@@ -8001,7 +8001,7 @@ function pgClearSettled(family = "imports"){
 const pgImportIds = lines => lines.filter(l => l.contracts.length).map(l => `imports|${l.depot.key}|${l.r.slug}|${l.r.smart ? "smart" : "weekly"}|${l.r.value}`);
 function pgImportsDone(lines, answer){
   const rows = (answer || {}).rows || [];
-  const d = typeof sbData === "function" && D.supply ? sbData() : null;
+  const d = D.supply ? sbData() : null;
   lines.filter(l => l.contracts.length).forEach(l => {
     const r = l.r, depot = l.depot.key;
     const contracts = l.contracts.map(({c}) => {
@@ -8017,14 +8017,14 @@ function pgImportsDone(lines, answer){
                basis: r.basis ?? null, unit: r.smart ? tt("sb.unit.stock", "in stock") : tt("sb.unit.week", "a week")},
       rowKeys, label: `${r.item} · ${shortName(l.depot)}`});
   });
-  if(typeof drawSupplyStrip === "function") drawSupplyStrip();
-  if(typeof page !== "undefined" && page === "supply" && typeof drawSupplyView === "function"){ drawSupplyView(sub.supply); wireAll(); }
+  drawSupplyStrip();
+  if(page === "supply"){ drawSupplyView(sub.supply); wireAll(); }
   pgSupplyStale();
 }
 /* Supply's views not on screen say the new state when next shown. */
 function pgSupplyStale(){
-  if(typeof PAGE_DRAWS === "undefined" || !hasData()) return;
-  const here = typeof page !== "undefined" && page === "supply" ? `supply/${sub.supply}` : "";
+  if(!hasData()) return;
+  const here = page === "supply" ? `supply/${sub.supply}` : "";
   PAGE_DRAWS.forEach(row => { if(/^supply\/\w+$/.test(row[0]) && row[0] !== here) pageStale.add(row); });
 }
 /* A schedule: the shift print the game says the week now has. */
@@ -8036,7 +8036,7 @@ function pgScheduleDone(key, last, answer){
   const id = `schedule|${key}|${print}`;
   pgRecord({id, family: "schedule", target: {site: key, plan: row && row.office ? "office" : row && row.full ? "full" : row && row.variant === "open" ? "open" : "demand"},
     expect: {print, added: Number(answer.added) || 0, removed: Number(answer.removed) || 0}, rowKeys: [], label: b ? shortName(b) : key});
-  if(typeof nxSchedStale === "function") nxSchedStale();
+  nxSchedStale();
   return [id];
 }
 /* A hire or a move: each person the game hired or moved, and the site it
@@ -8071,7 +8071,7 @@ function pgUniformDone(answer){
   return ids;
 }
 /* A shop's newest uniform record, and its state as a pill says it. */
-const pgUniformAt = key => typeof pgOfFamily === "function" ? pgOfFamily("uniform").find(r => r.target && r.target.site === key) || null : null;
+const pgUniformAt = key => pgOfFamily("uniform").find(r => r.target && r.target.site === key) || null;
 function pgUniformState(key){
   const rec = pgUniformAt(key);
   if(!rec) return null;
@@ -8080,14 +8080,13 @@ function pgUniformState(key){
 /* The pages that show a shop's uniforms say the new state when next drawn:
    Standards, the business's own page and the Overview's uniform findings. */
 function pgUniformStale(){
-  if(typeof PAGE_DRAWS === "undefined" || !hasData()) return;
+  if(!hasData()) return;
   PAGE_DRAWS.forEach(row => { if(row[0].split(" ").some(t => t === "company/standards" || t === "today")) pageStale.add(row); });
-  if(typeof page === "undefined") return;
   if(page === "company"){
-    if(sub.company === "standards" && typeof drawStandards === "function") drawStandards();
-    if(siteOpen && typeof drawSite === "function") drawSite();
-  } else if(page === "today" && typeof drawAlerts === "function") drawAlerts();
-  if(typeof wireAll === "function") wireAll();
+    if(sub.company === "standards") drawStandards();
+    if(siteOpen) drawSite();
+  } else if(page === "today") drawAlerts();
+  wireAll();
 }
 /* An undo takes its write's records back: nothing is left to confirm. */
 function pgDrop(ids){
@@ -8095,14 +8094,14 @@ function pgDrop(ids){
   const {recs, memo} = pgStore();
   ids.forEach(id => { delete recs[id]; memo.gone.add(id); memo.mine.delete(id); });
   pgSave();
-  if(typeof sbStamp !== "undefined") sbStamp++;
+  sbStamp++;
   pgSupplyStale();
 }
 /* The records of one family, newest first. */
 const pgOfFamily = family => Object.values(pgStore().recs).filter(r => r.family === family).sort((a, z) => (z.at || 0) - (a.at || 0));
 /* The best state for one site's item, for a finding on the Overview. */
 function pgStateAt(siteKey, slug){
-  if(!hasData() || !D.supply || typeof sbData !== "function") return null;
+  if(!hasData() || !D.supply) return null;
   let d;
   try{ d = sbData(); }catch(e){ return null; }
   const s = D.businesses.findIndex(b => b.key === siteKey);
@@ -8191,7 +8190,7 @@ const sbIndexOf = key => { const s = key && hasData() ? (D.businesses || []).fin
 const sbSnap = () => ({who: hasData() ? D.meta.character || "" : "", scope: {...sbScope}, mode: {...sbMode},
   sel: sbSel ? {key: sbKeyOf(sbSel.s), slug: sbSel.slug} : null,
   arrive: sbArrive ? {view: sbArrive.view, key: sbKeyOf(sbArrive.s), slug: sbArrive.slug, crumb: sbArrive.crumb} : null,
-  table: sbTableView, pick: typeof flowPickId !== "undefined" ? flowPickId : null});
+  table: sbTableView, pick: flowPickId});
 function sbRestore(x){
   if(!x || typeof x !== "object") return;
   /* Another company's entry keeps nothing of its own here. */
@@ -8204,13 +8203,13 @@ function sbRestore(x){
   const at = a && typeof a.key === "string" ? sbIndexOf(a.key) : null;
   sbArrive = a && (at !== null || a.key === null) ? {view: a.view, s: at, slug: a.slug ?? null, crumb: a.crumb || ""} : null;
   if(SB_VIEWS.includes(x.table)) sbTableView = x.table;
-  if(typeof flowPickId !== "undefined") flowPickId = typeof x.pick === "string" ? x.pick : null;
+  flowPickId = typeof x.pick === "string" ? x.pick : null;
 }
 /* Every view back to its first state: another company's board. */
 function sbForget(){
   Object.keys(sbScope).forEach(k => { sbScope[k] = "all"; });
   sbSel = null; sbSelOff = false; sbArrive = null;
-  if(typeof flowPickId !== "undefined") flowPickId = null;
+  flowPickId = null;
 }
 /* A new board (takeData()): another company's forgets the views' state; the
    same company's keeps the reviewed line and the landing on their sites, by
@@ -8224,7 +8223,7 @@ function sbBoard(old){
 }
 /* The entry on screen keeps what the reader changed here. */
 function sbKeep(){
-  if(typeof page === "undefined" || page !== "supply") return;
+  if(page !== "supply") return;
   try{ history.replaceState({...(history.state || {}), nxSb: sbSnap()}, "", location.hash); }catch(e){}
 }
 /* The rows, the ticks and the views' own tables, built once per board, sizing
@@ -8331,7 +8330,7 @@ function sbUpdateStrip(){
   const open = r => !pgDone(d, r);
   sbLeft = {imports: 0, deliveries: 0, production: 0};
   Object.keys(sbLeft).forEach(v => { sbLeft[v] = d.byView[v].filter(open).length; });
-  if(typeof paintLocal === "function" && typeof page !== "undefined" && page === "supply") paintLocal();
+  if(page === "supply") paintLocal();
   /* Tight never reaches Today: a change that only restores the margin stays
      on Supply, and so does a top-up to lower; the card counts the rest. */
   const unnamed = d.f.sites.reduce((n, s) => n + (s.unnamed || []).length, 0);
@@ -8425,7 +8424,7 @@ function impSetMigrate(character, edits){
 function impSetKeep(id, entry){
   const {key, edits} = impSetEdits();
   // The supply rows read the figures: they are built again (sbData()).
-  if(typeof sbStamp !== "undefined") sbStamp++;
+  sbStamp++;
   if(entry === null) delete edits[id]; else edits[id] = {...entry, basis: impBasisOf(entry.basis)};
   if(key) rememberJson(key, edits);
 }
@@ -8865,7 +8864,7 @@ function sbBasisDiffers(here, build){
    outside the views otherwise. */
 function sbPlaceFlow(){
   const box = $("sbFlowBox");
-  if(!box || typeof sub === "undefined") return;
+  if(!box) return;
   const host = sub.supply === "flow" ? q("#secFlow .sb-diag") : null;
   const home = host || $("sbFlowHome");
   if(box.parentElement !== home) home.appendChild(box);
@@ -12802,7 +12801,7 @@ const ofSlots = b => b && b.size === "H" ? 1 : 2;
 let ofPlans = [], ofPlansFor = null, ofCur = null, ofStep = "what", ofFinder = null, ofSizeMode = "auto";
 /* What the plan is for: "new", or the key of a factory the player runs. */
 let planTarget = null;
-const ofFacts = () => (typeof D !== "undefined" && D && D.openFactory) || {};
+const ofFacts = () => (D && D.openFactory) || {};
 const ofG = () => ofFacts().game || {};
 const ofStore = () => `${OF_KEY}:${(D && D.meta && D.meta.character) || "default"}`;
 const ofIcon = name => OS_ICON[name] ? osIcon(name) : SP_ICON[name] ? spIcon(name) : icon(name);
@@ -13304,7 +13303,7 @@ function ofPick(key){
   ofStep = "investment";
   ofSave();
   drawPlan();
-  if(typeof settleScroll === "function") settleScroll($("secPlan"));
+  settleScroll($("secPlan"));
 }
 
 /* Step 3: the investment, one-off and upfront. */
@@ -13809,7 +13808,7 @@ function ofDraw(){
   if(where) ofShowFinder();
   if(ofStep === "investment" && ofMode(plan) === "self") osPaintMini("ofMini");
   ofDeltas();
-  if(typeof wireTips === "function") wireTips();
+  wireTips();
 }
 /* After a stepper: the plan keeps its lines, and the figures around them follow. */
 function ofAfterLines(){
@@ -13867,7 +13866,7 @@ function ofGo(step){
   ofStep = step;
   ofSave();
   drawPlan();
-  if(typeof settleScroll === "function") settleScroll($("secPlan"));
+  settleScroll($("secPlan"));
 }
 /* Another plan from the picker, or none (a new one). */
 function ofOpen(id){
@@ -16931,7 +16930,7 @@ function stdTable(){
     const lamps = b.status !== "retail" ? `<span class="bz-q">${tt("co.std.office.lamps", "offices are not asked")}</span>`
       : asked.length ? `<span class="bz-lamps">${asked.map(sl => lamp(b, sl)).join("")}</span>` : `<span class="bz-q">—</span>`;
     const gaps = b.uniformGaps || [];
-    const u = typeof pgUniformState === "function" ? pgUniformState(b.key) : null;
+    const u = pgUniformState(b.key);
     const pill = u ? pgPill(u.state, u.rec) : "";
     const uni = b.status !== "retail" ? `<span class="bz-q">—</span>`
       : b.missingUniformLocker ? `<span class="bz-warn">${spIcon("locker")}${tt("co.std.uni.locker", "no uniform locker")}</span>`
@@ -17004,7 +17003,7 @@ function drawFinance(){
 let bzPriceLit = null;
 const bzPriceSites = () => D.businesses.filter(b => b.status === "retail" || b.status === "office");
 function bzPriceKeep(){
-  if(typeof page === "undefined" || page !== "company" || siteOpen) return;
+  if(page !== "company" || siteOpen) return;
   try{ history.replaceState({...(history.state || {}), nxPrice: {pick: bzPriceLit}}, "", location.hash); }catch(e){}
 }
 function drawPriceShops(){
@@ -17089,7 +17088,7 @@ function schedPick(key){
 }
 /* The entry on screen keeps the business on screen, its day and its view. */
 function schedKeep(){
-  if(typeof page === "undefined" || page !== "staffing") return;
+  if(page !== "staffing") return;
   try{ history.replaceState({...(history.state || {}), nxSch: {pick: schedLit, day: schedDay, view: schedView}}, "", location.hash); }catch(e){}
 }
 /* The kept day and view on the planner just drawn, as a click would set them. */
@@ -17113,7 +17112,7 @@ function schedStatus(b){
   const plans = new Map((D.staffing || []).map(r => [r.key, r]));
   if(b.status === "office"){
     /* The office default where it plans the office (spOfficeRoster()). */
-    const o = typeof gwOfficeRow === "function" ? gwOfficeRow(b.key) : null;
+    const o = gwOfficeRow(b.key);
     return o && (o.shifts || []).length && o.computers
       ? tt("co.sched.office.plan", {one: "Office default: {s} of {n} computer staffed", other: "Office default: {s} of {n} computers staffed"},
         {n: o.computers, s: o.staffedComputers || 0})
@@ -17134,7 +17133,7 @@ function schedStatus(b){
    (Applied until a later read shows the week's shift print, then Confirmed),
    else Marked by you once every entry the board can mark is ticked. */
 function schedProgress(b){
-  const rec = (typeof pgOfFamily === "function" ? pgOfFamily("schedule") : []).find(r => r.target && r.target.site === b.key);
+  const rec = pgOfFamily("schedule").find(r => r.target && r.target.site === b.key);
   if(rec) return {state: rec.state === "confirmed" ? "confirmed" : rec.state === "changed" ? "changed" : "applied", rec};
   const base = b.status === "office" ? null : spRosterRow(b.key);
   if(!base || base.failed) return null;
@@ -17148,7 +17147,7 @@ function schedProgress(b){
 function schedChosen(sites){
   const has = key => sites.some(b => b.key === key);
   if(schedLit && has(schedLit)) return schedLit;
-  const named = typeof ssStaffingSite === "function" ? ssStaffingSite() : "";
+  const named = ssStaffingSite();
   if(named && has(named)) return named;
   const planned = sites.find(b => { const r = spRosterRow(b.key); return r && !r.failed && (r.shifts || []).length; });
   return (planned || sites[0] || {}).key || null;
@@ -17205,7 +17204,7 @@ function drawNeeds(){
   const host = $("secNeeds");
   if(!host || !hasData()) return;
   const demands = nxFindings(["jobdemand", "companydemand"]);
-  const hire = typeof pgOfFamily === "function" ? pgOfFamily("hire")[0] : null;
+  const hire = pgOfFamily("hire")[0];
   const hireLine = !hire ? "" : (() => {
     const x = hire.expect || {}, state = hire.state === "confirmed" ? "confirmed" : hire.state === "changed" ? "changed" : "applied";
     const words = hire.state === "confirmed" ? tt("co.needs.pg.ok", "Every person hired or moved from here is at the site it was sent to.")
@@ -17308,7 +17307,7 @@ function fvCloseDiff(restore){
   }
   /* "What am I playing on?" lit the chip while the popover is its answer;
      Esc and a resize close it without a click the landing would hear. */
-  if(typeof ssCheckLanding === "function") ssCheckLanding();
+  ssCheckLanding();
 }
 function fvOpenDiff(anchor){
   const h = D && D.meta && D.meta.houseRules;
@@ -17394,7 +17393,7 @@ function drawDifficulty(hadFocus = null){
 let calmLazy = false;
 function renderAll(){
   /* Every write's progress, judged on this board if it is a later one. */
-  if(typeof pgEvaluate === "function") try{ pgEvaluate(); }catch(e){ console.error(e); }
+  try{ pgEvaluate(); }catch(e){ console.error(e); }
   /* Asked before drawMast() and drawFooter() replace the difficulty chips. */
   const diffFocus = fvChipFocus();
   const here = calmLazy ? viewOf(page) : null;
@@ -20215,7 +20214,7 @@ const ssMastControl = () => [ssField, ssFieldBtn].find(el => el.isConnected && e
 function nxFitMast(){
   const mast = $("mast");
   if(!mast) return;
-  if(typeof sdLayout === "function") sdLayout();
+  sdLayout();
   mast.dispatchEvent(new Event("nxfit"));
 }
 window.addEventListener("resize", nxFitMast);
@@ -20292,7 +20291,7 @@ function ssOpen(text = ""){
   ssWhole = {};
   ssPointer = null;
   ssIndex = ssBuild();
-  if(typeof kindsPop !== "undefined" && kindsPop && kindsPop.classList.contains("on")) closeKindsPanel();
+  if(kindsPop && kindsPop.classList.contains("on")) closeKindsPanel();
   /* The difficulty's popover stands above the palette: it goes too, and
      closing the palette later hands focus to its chip, not to the popover
      now hidden. */
@@ -20309,7 +20308,7 @@ function ssOpen(text = ""){
   document.body.classList.add("ss-open");
   featureDiscovery.visit("board-search");
   ssField.classList.add("on");
-  if(typeof hideTip === "function") hideTip();
+  hideTip();
   ssInput.value = text;
   ssWatchViewport(true);
   ssFitSheet();
@@ -20357,7 +20356,7 @@ function ssClose(restore = true){
   if(restore && back && back.isConnected && back !== document.body && typeof back.focus === "function")
     try{ back.focus({preventScroll: true}); }catch(e){}
   /* A chip given focus back would open its tooltip over the page. */
-  if(typeof hideTip === "function") hideTip();
+  hideTip();
 }
 function ssWatchWiki(){
   clearTimeout(ssWikiWait);
@@ -20709,10 +20708,10 @@ const wireCards = once(() => {
     const label = (a.querySelector("[data-tt]") || a).textContent.trim();
     const o = {};
     if(a.dataset.ovInto) o.into = a.dataset.ovInto;
-    if(a.dataset.ovFollow && typeof flowPickId !== "undefined") flowPickId = a.dataset.ovFollow;
+    if(a.dataset.ovFollow) flowPickId = a.dataset.ovFollow;
     if(id === "expansion/finder") o.preset = {cat: "retail", type: "", hoods: null};
     /* Supply › Production with no factory: Plan a factory on a new one. */
-    if(a.dataset.ofTarget && typeof ofPreset === "function") ofPreset({target: a.dataset.ofTarget});
+    if(a.dataset.ofTarget) ofPreset({target: a.dataset.ofTarget});
     /* Build shop schedules opens on the shop it names. */
     if(a.id === "optimizeStaffingCard" && a.dataset.site) o.pick = a.dataset.site;
     /* A finding's own link: the way back is Needs attention, not All tools. */
@@ -20772,7 +20771,7 @@ const wireAdapters = once(() => {
   });
   on("click", "[data-sched-fac]", (btn, e) => {
     e.preventDefault();
-    if(typeof sbScope !== "undefined") sbScope.production = `site:${btn.dataset.schedFac}`;
+    sbScope.production = `site:${btn.dataset.schedFac}`;
     openRoute("supply/production", {arrival: routeCarry("supply/production")});
   });
   on("click", "[data-pay-site]", (a, e) => { e.preventDefault(); routeOpenSite(a.dataset.paySite, "#sp-crew", "staffing/payroll"); });
@@ -20799,7 +20798,7 @@ const wireAdapters = once(() => {
     const o = {arrival: {what: "", pos: "", back: "businesses/results", backLabel: shortName(b), site: key, depth: 1}};
     if(id === "staffing/schedules" || id === "businesses/prices") o.pick = key;
     const view = id.startsWith("supply/") ? id.split("/")[1] : null;
-    if(view && typeof sbScope !== "undefined"){ sbScope[view] = `site:${key}`; if(typeof sbMode !== "undefined") sbMode[view] = "all"; }
+    if(view){ sbScope[view] = `site:${key}`; sbMode[view] = "all"; }
     openRoute(id, o);
   });
   on("click", "[data-prod-staff]", (btn, e) => { e.preventDefault(); openRoute("supply/production", {into: "#sbStaff"}); });
@@ -20882,7 +20881,7 @@ function nxMenuInto(slot){
 if(typeof ttOnChange === "function") ttOnChange(() => { if(nxHostSlot) nxMenuInto(nxHostSlot); });
 function nxMenuDo(id, from = null){
   if(id === "map" || id === "wiki"){ if(hasData()) openRoute(id); else if(window.BigCopilotBoard) window.BigCopilotBoard.browseWiki(); return; }
-  if(id === "search"){ if(typeof ssOpen === "function") ssOpen(); return; }
+  if(id === "search"){ ssOpen(); return; }
   if(id === "news"){
     const d = $("changelogDialog");
     if(d && !d.open){ d.showModal(); featureDiscovery.visit("changelog"); d.scrollTop = 0; }
@@ -20982,12 +20981,12 @@ function pxHelpHtml(){
   return find + ballot;
 }
 function pxOpen(which, from = null, focusRow = null){
-  if(typeof nxMenuClose === "function") nxMenuClose(false);
+  nxMenuClose(false);
   pxWhich = which; pxFrom = from || document.activeElement;
   pxRender(which);
   pxScrim.hidden = false; pxSheet.hidden = false;
   document.body.classList.add("px-on");
-  if(typeof wireTips === "function") wireTips();
+  wireTips();
   const row = focusRow ? pxSheet.querySelector(`[data-px="${focusRow}"]`) : null;
   if(row){
     /* The row itself takes the keyboard, not its first control: from
@@ -21013,7 +21012,7 @@ function pxRender(which){
     if(btn){ btn.id = "pxGnBtn"; btn.setAttribute("aria-labelledby", "pxGnLab pxGnBtn"); btn.setAttribute("aria-expanded", "false"); }
     slot.innerHTML = `<span class="px-sr" id="pxGnLab">${tt("foot.lang.head", "Language")}</span>`;
     slot.appendChild(copy);
-    if(typeof wireGameNames === "function") wireGameNames();
+    wireGameNames();
   }
 }
 /* A new UI language while a sheet is open (its own Language picker, or any
@@ -21030,13 +21029,13 @@ if(typeof ttOnChange === "function") ttOnChange(() => {
   pxRender(pxWhich);
   if(lit){ const again = q(`[data-px="${lit.dataset.px}"]`, pxSheet); if(again){ again.classList.add("px-lit"); again.tabIndex = -1; } }
   pxSheet.scrollTop = top;
-  if(typeof wireTips === "function") wireTips();
+  wireTips();
   const to = inPicker ? $("pxGnBtn") : row ? q(`[data-px="${row.dataset.px}"]`, pxSheet) : $("pxTitle");
   if(to){ if(!to.matches("button, a")) to.tabIndex = -1; to.focus({preventScroll: true}); }
 });
 function pxClose(focus = true){
   if(pxSheet.hidden) return;
-  if(typeof gnPopFor !== "undefined" && gnPopFor && pxSheet.contains(gnPopFor) && typeof gnClose === "function") gnClose(false);
+  if(gnPopFor && pxSheet.contains(gnPopFor)) gnClose(false);
   pxSheet.hidden = true; pxScrim.hidden = true; pxWhich = null;
   document.body.classList.remove("px-on");
   /* The language copy leaves with the sheet. */
@@ -21063,7 +21062,7 @@ pxSheet.addEventListener("click", e => {
     if(row && !said){ said = document.createElement("p"); said.className = "px-note px-said"; said.setAttribute("role", "status"); b.closest(".px-c").appendChild(said); }
     if(said) said.textContent = tt("app.history.forgotten", "History forgotten. The next save starts a fresh record.");
   }
-  else if(what === "search"){ pxClose(false); if(typeof ssOpen === "function") ssOpen(); }
+  else if(what === "search"){ pxClose(false); ssOpen(); }
   else if(what === "saves"){
     /* The save-location help lives in the source menu on the web page. */
     pxClose(false);
@@ -21081,8 +21080,8 @@ document.addEventListener("keydown", e => {
   if(pxSheet.hidden) return;
   const inPop = e.target && e.target.closest && e.target.closest("#gnPop, #alertPop, #fvDiffPop, dialog[open]");
   if(e.key === "Escape" && !inPop){
-    const popOpen = (typeof gnPopFor !== "undefined" && gnPopFor) || (typeof kindsPop !== "undefined" && kindsPop && kindsPop.classList.contains("on"))
-      || (typeof fvDiffPop !== "undefined" && fvDiffPop && fvDiffPop.classList.contains("on"));
+    const popOpen = gnPopFor || (kindsPop && kindsPop.classList.contains("on"))
+      || (fvDiffPop && fvDiffPop.classList.contains("on"));
     if(!popOpen){ e.preventDefault(); pxClose(true); }
     return;
   }
@@ -21371,7 +21370,7 @@ function demCellPop(cell){
   const c = row && at >= 0 ? row.cells[at] : null;
   const rent = ((D.premises || {}).buildings || []).filter(b => b.type === go.cat && b.hood === hood && b.status === "vacant").length;
   const type = demTypeName(slug, hood);
-  const plan = typeof osType === "function" && !!osType(slug);
+  const plan = !!osType(slug);
   const fact = (lab, v) => `<div><span class="os-lab">${lab}</span><b>${v}</b></div>`;
   demPop.setAttribute("aria-label", tt("gr.pop.aria", "{type} in {hood}", {type, hood: hoodName(hood)}));
   demPop.innerHTML = `<h4>${spEsc(tt("gr.pop.title", "{type} · {hood}", {type, hood: hoodName(hood)}))}</h4>
@@ -21381,7 +21380,7 @@ function demCellPop(cell){
       <button type="button" class="os-btn" data-dem-go="find">${icon("pin")}${tt("gr.pop.find", "Find a location")}</button></div>`;
   demPop.hidden = false;
   cell.setAttribute("aria-expanded", "true");
-  if(typeof hideTip === "function") hideTip();
+  hideTip();
   demPopPlace();
   (demPop.querySelector("[data-dem-go]") || demPop).focus({preventScroll: true});
 }
@@ -21408,7 +21407,7 @@ function demPopClose(restore){
   demPop.hidden = true;
   const cell = demPopCell;
   if(cell) cell.setAttribute("aria-expanded", "false");
-  if(restore && cell && cell.isConnected){ cell.focus({preventScroll: true}); if(typeof hideTip === "function") hideTip(); }
+  if(restore && cell && cell.isConnected){ cell.focus({preventScroll: true}); hideTip(); }
 }
 /* The finder preset a Growth cell opens: its type, the type's category and
    only its neighbourhood. A cell with no demand reading has no type to look
@@ -21438,7 +21437,7 @@ function drawFinderCtx(){
 function demTypeName(slug, hood){
   const d = ((D.premises || {}).demand || {})[hood] || [];
   const hit = d.find(x => x.slug === slug);
-  return hit && hit.type ? hit.type : (typeof gnLocal === "function" && gnLocal(slug)) || slug;
+  return hit && hit.type ? hit.type : gnLocal(slug) || slug;
 }
 /* Demand's entry keeps the cell that opened the finder. */
 function demRemember(cell){
@@ -21454,7 +21453,7 @@ function demArrive(cell){
   const hit = q(`#market .cell[data-slug="${CSS.escape(cell.slug)}"][data-hood="${CSS.escape(cell.hood || "")}"]`);
   const at = hit || row;
   if(!at) return;
-  if(typeof settleScroll === "function") settleScroll(at); else at.scrollIntoView({block: "center"});
+  settleScroll(at);
   [row, hit].filter(Boolean).forEach(el => { el.classList.remove("mk-arrive"); void el.offsetWidth; el.classList.add("mk-arrive");
     setTimeout(() => el.classList.remove("mk-arrive"), 2600); });
   if(!at.hasAttribute("tabindex")) at.setAttribute("tabindex", "-1");
@@ -21535,10 +21534,10 @@ function planDraw(){
     /* What the line saves a week against imports (the factory flow's prices):
        measured shops only, since with none there is nothing to replace. */
     const savesEl = q(".saves", tr);
-    if(savesEl && typeof ofSaves === "function"){
+    if(savesEl){
       const v = lineWant > 0 && tr.dataset.slug ? ofSaves({slug: tr.dataset.slug, made: wk, want: lineWant}) : null;
       if(v !== null){ saves += v; savesAny = true; }
-      raws += typeof ofRawUnit === "function" && tr.dataset.slug ? wk * ofRawUnit(tr.dataset.slug) : 0;
+      raws += tr.dataset.slug ? wk * ofRawUnit(tr.dataset.slug) : 0;
       savesEl.innerHTML = v === null ? `<span class="quiet">—</span>` : fmt(v);
     }
     parts.forEach(([name, f]) => {
@@ -21649,7 +21648,7 @@ function planDraw(){
     if(note) note.textContent = !total ? tt("gr.ing.none", "Nothing to import; this range is bought as finished goods.") : "";
   }
   /* The flow's figures around the lines follow every step of a line. */
-  if(typeof ofAfterLines === "function") ofAfterLines();
+  ofAfterLines();
 }
 const bindPlan = once(() => {
   on("click", "tr.line .step a[data-d]", (a, e) => {
@@ -21689,7 +21688,7 @@ const bindPlan = once(() => {
     if(mine) delete mine[x.dataset.pcX];
     delete planCounts[x.dataset.pcX];
     planExtraKeep();
-    if(typeof hideTip === "function") hideTip();
+    hideTip();
     drawPlan();
     const back = q("#planBody [data-pc-toggle]");
     if(back) back.focus({preventScroll: true});
@@ -21747,7 +21746,7 @@ function pcPopOpen(btn){
   pcPop.hidden = false;
   pcPop.scrollTop = 0;
   btn.setAttribute("aria-expanded", "true");
-  if(typeof hideTip === "function") hideTip();
+  hideTip();
   pcPopPlace();
   wireTips();
   (pcPop.querySelector(".pc-opt:not(.on)") || pcPop.querySelector(".pc-opt") || pcPop).focus({preventScroll: true});
@@ -21903,7 +21902,7 @@ const wireRoster = once(() => {
     if(!b) return;
     /* On Staffing › Schedules the list beside the planner says the plan
        picked, so the view is drawn again, the pick keeping the keyboard. */
-    if(s.closest("#schDetail") && typeof drawSchedules === "function"){
+    if(s.closest("#schDetail")){
       drawSchedules(); wireAll();
       const back = q(`#sp-roster [data-plan="${a.dataset.plan}"]`);
       if(back) back.focus();
