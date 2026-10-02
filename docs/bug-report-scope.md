@@ -124,15 +124,16 @@ covers bug reports:
 
 ## Decided while building
 
-- **The error line needs the details box.** The issue gets the error's last line only
-  when "Attach technical details" is ticked, so an unticked form sends nothing but the
-  text and the safe details. The Worker rejects an `error` field without a `details` part.
-  The page masks the save's file name, the company, any `/save/` or home-folder path,
-  any quoted value (a `KeyError` can quote a name from the save; the mask reads
-  Python's `\'` escapes, and a quote left open hides the rest of the line) and any run of hex
-  bytes (the save parser prints the bytes around a fault, and those can spell a name)
-  before sending, and the Worker masks the same again. When the line on screen is that
-  hex window, the page takes the traceback's last line that says something instead.
+- **The public error line is built, not copied.** The table above puts the error's last
+  line in the issue. Reviews showed that a message can carry anything the save holds: a
+  name a `KeyError` quotes (with Python's `\'` escapes), a type name the save parser read
+  unquoted, the bytes around a parse fault, a piece of the payload in a JSON error. Each
+  mask was beaten by the next case. So the issue gets only words from Big Copilot's own
+  code: the exception's class and where it was raised, as `KeyError in _staffing
+  (ba_dashboard.py line 4120)` (`brErrorLine()` in `web/report.js`). The Worker refuses
+  any `error` value of another shape (`REPORT_ERROR`), and any `error` without a
+  `details` part, so an unticked form sends nothing but the text and the safe details.
+  The message itself goes to R2 with the whole traceback.
 - **"Published", not "posted".** The board's vocabulary rule bans "post", so the form
   says "This text is published on GitHub, where anyone can read it."
 - **No save without an issue, even when the request dies.** The Worker runs the writes,

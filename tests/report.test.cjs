@@ -41,13 +41,12 @@ function env(stored = STORED) {
   };
 }
 
-const TRACE = 'Traceback (most recent call last):\n  File "/save/Alice Smith-live.hsg"\nprivate-trace-sentinel\nKeyError: shelf';
+const TRACE = 'Traceback (most recent call last):\n  File "/ba_dashboard.py", line 4120, in _staffing\n    for x in save["Alice Smith"]:\nprivate-trace-sentinel\nKeyError: \'Alice Smith\'';
 const CTX = {
   siteBuild: '0123456789',
   source: 'link',
   error: "KeyError: 'Alice Smith-live.hsg' in /save/Alice Smith-live.hsg for Alice Co",
   trace: TRACE,
-  names: ['Alice Smith-live.hsg', 'Alice Co'],
 };
 const BYTES = new Uint8Array([31, 139, 8, 0, 1, 2, 3]).buffer;
 const byName = (parts) => Object.fromEntries(parts.map(([name, value]) => [name, value]));
@@ -76,10 +75,10 @@ test('report.js: the details carry the traceback and three settings, and nothing
     assert.equal(parts.details.includes(value), false, `details must not carry ${value}`);
     assert.equal(parts.report.includes(value), false, `the report must not carry ${value}`);
   }
-  // The public report: the error's last line, masked, and never the traceback.
+  // The public report: the error's class and where it was raised, never its message.
   const sent = JSON.parse(parts.report);
   assert.equal(sent.gameBuild, null);
-  assert.equal(sent.error, "KeyError: '…' in /save/<save> for <save>");
+  assert.equal(sent.error, 'KeyError in _staffing (ba_dashboard.py line 4120)');
   assert.equal(parts.report.includes('private-trace-sentinel'), false);
   assert.doesNotMatch(parts.report, /Alice|Smith|Traceback/);
 });
@@ -122,35 +121,33 @@ test('report.js: the build, source and browser are held to the values the Worker
   for (const [ua, family] of Object.entries(browsers)) assert.equal(report.browser({userAgent: ua}), family);
 });
 
-test('report.js: home folders and save paths are masked even with spaces in them', () => {
-  const report = load();
-  assert.equal(report.mask('No such file: C:\\Users\\Bob Jones\\Saves', []), 'No such file: <home>\\Saves');
-  assert.equal(report.mask("KeyError: 'Bob Jones Bakery'", []), "KeyError: '…'", 'a quoted value can be a name from the save');
-  assert.equal(report.mask('at /Users/bob/Library and /home/bob/.local', []), 'at <home>/Library and <home>/.local');
-  assert.equal(report.mask('open /save/Recover #3.hsg failed', []), 'open /save/<save> failed');
-  assert.equal(report.mask('line\nbreak', []).includes('\n'), false);
-  assert.equal(report.mask('ALICE CO lost', ['Alice Co']), '<save> lost', 'names are masked whatever their case');
-});
+// The Worker's own pattern for the public line (server/worker.mjs, REPORT_ERROR),
+// read from its source so the two cannot drift apart.
+const WORKER_ERROR = new RegExp(/const REPORT_ERROR = \/(.+)\/;/.exec(fs.readFileSync(path.join(__dirname, '..', 'server', 'worker.mjs'), 'utf8'))[1]);
 
-test('report.js: the public line skips the save parser\'s hex window and is one line of a multiline error', () => {
+test('report.js: the public error line is the class and the place in our code, never the message', () => {
   const report = load();
-  const sent = (ctx) => JSON.parse(report.parts(Object.assign({names: []}, ctx), {text: 'x', details: true}, env())[0][1]).error;
-  // ba_save's _where(): the message, then the bytes around the fault, which
-  // worker.js shows as the last line. UTF-16 "Alice" is 41 00 6c 00 69 00 ...
-  const parser = 'Traceback (most recent call last):\n  File "/ba_save.py", line 9\nValueError: unknown tag 0x99 at offset 0x1f0\n  41 00 6c 00 69 00 63 00 65 00 20 00';
-  assert.equal(sent({error: '  41 00 6c 00 69 00 63 00 65 00 20 00', trace: parser}), 'ValueError: unknown tag 0x99 at offset 0x1f0');
-  // browser_build() wraps it: "<file> is not a ... save this board can read
-  // (ValueError: ... at offset 0x1f0\n  41 00 ...)". The file name is masked.
-  const wrapped = "SaveShapeError: Alice Smith-live.hsg is not a Big Ambitions save this board can read (ValueError: unknown tag 0x99 at offset 0x1f0\n  41 00 6c 00 69 00 63 00)";
-  assert.equal(sent({error: '  41 00 6c 00 69 00 63 00)', trace: 'Traceback (most recent call last):\n' + wrapped, names: ['Alice Smith-live.hsg']}),
-    'SaveShapeError: <save> is not a Big Ambitions save this board can read (ValueError: unknown tag 0x99 at offset 0x1f0');
-  // A startup failure hands its whole traceback over as the error.
-  assert.equal(sent({error: 'Traceback (most recent call last):\n  File "/x.py", line 1\nImportError: no module', trace: ''}), 'ImportError: no module');
-  // Quotes: escape-aware, and one left open masks the rest of the line.
-  assert.equal(report.mask("ValueError: 'X\\' Alice Smith \"Y\"' end", []), "ValueError: '…' end");
-  assert.equal(report.mask("KeyError: 'Alice Smith", []), "KeyError: '…");
-  // Bytes inside a line are masked as well.
-  assert.equal(report.mask('bad at 0x10 41 00 6c 00 69 00', []), 'bad at 0x10 <bytes>');
+  const line = (error, trace = '') => report.errorLine({error, trace});
+  const cases = [
+    // The save parser: an unquoted type name read from the save, and the hex
+    // window of the bytes around the fault (UTF-16 "Alice").
+    ['  41 00 6c 00 69 00 63 00)', 'Traceback (most recent call last):\n  File "/ba_dashboard.py", line 19590, in browser_build\n  File "/ba_save.py", line 255, in body\nba_dashboard.SaveShapeError: Alice Smith-live.hsg is not a Big Ambitions save this board can read (ValueError: body tag 0xff in Private Employee Alice Smith at offset 0x3a\n  41 00 6c 00 69 00 63 00)',
+      'SaveShapeError in body (ba_save.py line 255)'],
+    // Escaped and nested quotes in the message.
+    ["'X\\' Alice \"Y\"'", 'Traceback (most recent call last):\n  File "/ba_dashboard.py", line 9, in _premises\nValueError: \'X\\\' Alice "Y"\'', 'ValueError in _premises (ba_dashboard.py line 9)'],
+    // A startup failure hands its whole traceback over as the error.
+    ['Traceback (most recent call last):\n  File "<exec>", line 3, in <module>\nImportError: no module named Alice', '', 'ImportError'],
+    // The page's own script: V8's JSON error quotes a piece of the payload.
+    ['Unexpected token N, ..."privateName":"Bob","x":NaN}" is not valid JSON', 'SyntaxError: Unexpected token N, ..."privateName":"Bob"... is not valid JSON\n    at JSON.parse (<anonymous>)\n    at Worker.onmessage (http://report.test/app.js?v=abc:340:27)', 'SyntaxError in onmessage (app.js line 340)'],
+    // Nothing recognisable: nothing published.
+    ["'Alice Smith-live.hsg' could not be read", '', ''],
+  ];
+  for (const [error, trace, expected] of cases) {
+    const got = line(error, trace);
+    assert.equal(got, expected, error);
+    assert.doesNotMatch(got, /Alice|Smith|Bob|private|41 00/);
+    if (got) assert.match(got, WORKER_ERROR, 'the Worker accepts what the page builds');
+  }
 });
 
 test('report.js: only an issue of this repository is linked', () => {

@@ -21,7 +21,7 @@ const files = {
 };
 const SAVE = Buffer.from([31, 139, 8, 0, 0x42, 0x43, 0x44, 0x45]);
 const SAVE_NAME = 'Alice Smith-live.hsg';
-const TRACE = `Traceback (most recent call last):\n  File "/save/${SAVE_NAME}", line 1\nprivate-trace-sentinel\nKeyError: 'shelf'`;
+const TRACE = `Traceback (most recent call last):\n  File "/ba_dashboard.py", line 4120, in _staffing\n    rows = held["${SAVE_NAME}"]\nprivate-trace-sentinel\nKeyError: '${SAVE_NAME}'`;
 
 let browser;
 before(async () => { browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL}); });
@@ -127,7 +127,7 @@ test('a failed read offers the form, which sends the failed save and the traceba
   assert.equal(report.source, 'file');
   assert.equal(report.gameBuild, 3682);
   assert.equal(report.siteBuild, await page.evaluate(() => window.LEDGER_BUILD));
-  assert.equal(report.error, "'…'", 'the save name in quotes is masked');
+  assert.equal(report.error, 'KeyError in _staffing (ba_dashboard.py line 4120)', 'the class and the place, never the message');
   assert.doesNotMatch(parts.report, /Alice|Smith|private-trace-sentinel/);
   const details = JSON.parse(parts.details);
   assert.equal(details.trace, TRACE);

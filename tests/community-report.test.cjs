@@ -155,7 +155,7 @@ test('report: a save and details go to R2 in one folder; the issue holds only th
   const save = new Blob([SAVE_SENTINEL, new Uint8Array([0, 1, 2, 255])]); // not gzip: stored as it came
   const details = JSON.stringify({trace: TRACE_SENTINEL, settings: {language: 'en', theme: 'dark', platform: 'windows'}});
   const res = await send([
-    ['report', reportJson({error: 'KeyError: ProductShelf'})],
+    ['report', reportJson({error: 'KeyError in _staffing (ba_dashboard.py line 4120)'})],
     ['details', details],
     ['save', save, 'save.hsg'],
   ]);
@@ -193,7 +193,7 @@ test('report: a save and details go to R2 in one folder; the issue holds only th
   assert.match(issue.body, /\| Source \| Save folder \|/);
   assert.match(issue.body, /\| Save attached \| yes \|/);
   assert.ok(issue.body.includes(`| Private folder | \`${folder}\` |`), 'the issue names the folder');
-  assert.match(issue.body, /### Last line of the error\n\n```text\nKeyError: ProductShelf\n```/);
+  assert.match(issue.body, /### Error\n\n```text\nKeyError in _staffing \(ba_dashboard\.py line 4120\)\n```/);
   for (const secret of ['private-trace-sentinel', 'Alice', SAVE_SENTINEL, 'windows', 'dark', TOKEN]) {
     assert.equal(issue.body.includes(secret) || issue.title.includes(secret), false, `the issue must not hold ${secret}`);
   }
@@ -207,19 +207,31 @@ test('report: with nothing attached nothing is stored, and the issue says so', a
   assert.match(issue.body, /\| Game build \| unknown \|/);
   assert.match(issue.body, /\| Save attached \| no \|/);
   assert.match(issue.body, /\| Technical details attached \| no \|/);
-  assert.doesNotMatch(issue.body, /Private folder|Last line of the error/);
+  assert.doesNotMatch(issue.body, /Private folder|### Error/);
 });
 
-test('report: the error line is public only with the details, and paths that can name the player are masked', async () => {
+test('report: the error line is public only with the details, and only as a class and a place in the code', async () => {
   // An error without the details part is refused: the box was not ticked.
-  await expectStatus(await send([['report', reportJson({error: 'ValueError: bad'})]]), 400, 'error without details');
+  await expectStatus(await send([['report', reportJson({error: 'KeyError'})]]), 400, 'error without details');
   assert.equal(github.calls.length, 0);
-  const error = "FileNotFoundError: '/save/Alice Smith-live.hsg' at C:\\Users\\alice\\x and /Users/alice/y and /home/alice/z";
-  await expectStatus(await send([['report', reportJson({error})], ['details', '{"trace":"x"}']]), 201, 'masked error');
-  const issue = JSON.parse(github.calls[0].body);
-  assert.doesNotMatch(issue.body, /alice|Alice|Smith/);
-  assert.match(issue.body, /FileNotFoundError: '…' at <home>/);
-  assert.match(issue.body, /<home>/);
+  // A message, a path, a quote or bytes: anything but the built shape is refused.
+  for (const error of [
+    'KeyError: shelf',
+    "FileNotFoundError: '/save/Alice Smith-live.hsg'",
+    'ValueError in body (ba_save.py line 255) Alice',
+    'ValueError in Alice Smith (ba_save.py line 255)',
+    'ValueError in body (/save/Alice.hsg line 1)',
+    'ValueError 41 00 6c 00',
+    'valueError',
+  ]) {
+    await expectStatus(await send([['report', reportJson({error})], ['details', '{"trace":"x"}']]), 400, error);
+  }
+  assert.equal(github.calls.length, 0);
+  for (const error of ['KeyError', 'KeyError in _staffing (ba_dashboard.py line 4120)', 'SyntaxError in onmessage (app.js line 340)', 'ImportError in <module> (x.py line 3)']) {
+    github.calls = [];
+    await expectStatus(await send([['report', reportJson({error})], ['details', '{"trace":"x"}']]), 201, error);
+    assert.ok(JSON.parse(github.calls[0].body).body.includes('```text\n' + error + '\n```'));
+  }
 });
 
 test('report: player text is fenced, so markup, links and mentions do not render', async () => {
@@ -302,7 +314,7 @@ test('report: each part is checked by name, kind and size, and the report by its
     ['bad game build', [['report', reportJson({gameBuild: '3682'})]]],
     ['unknown browser', [['report', reportJson({browser: 'Mozilla/5.0 (Windows NT 10.0)'})]]],
     ['unknown source', [['report', reportJson({source: 'C:\\Users\\alice'})]]],
-    ['error too long', [['report', reportJson({error: 'e'.repeat(501)})], ['details', '{}']]],
+    ['error too long', [['report', reportJson({error: 'E' + 'e'.repeat(200)})], ['details', '{}']]],
     ['not JSON', [['report', '{']]],
     ['an array', [['report', '[]']]],
   ];
@@ -451,24 +463,6 @@ test('report: a body longer than its declared length is cut off at the cap', asy
   const res = await worker.fetch(request, vmEnv({put: async () => { puts++; }, delete: async () => {}}));
   assert.equal(res.status, 413);
   assert.equal(puts, 0);
-});
-
-test('report: quoted values and the save parser\'s hex window never reach the issue', async () => {
-  // ba_save's _where() ends a parse error with the bytes around the fault;
-  // UTF-16 "Alice" is 41 00 6c 00 69 00 63 00 65 00.
-  const error = "ValueError: bad tag 0x99 at offset 0x1f0 41 00 6c 00 69 00 63 00 65 00 for 'Alice Smith'";
-  await expectStatus(await send([['report', reportJson({error})], ['details', '{"trace":"x"}']]), 201, 'hex and quotes');
-  const issue = JSON.parse(github.calls[0].body);
-  assert.match(issue.body, /ValueError: bad tag 0x99 at offset 0x1f0 <bytes> for '…'/);
-  assert.doesNotMatch(issue.body, /Alice|41 00 6c/);
-  // An escaped quote does not end the value, and an open one hides the rest.
-  for (const [sent, shown] of [["ValueError: 'X\\' Alice Smith \"Y\"' end", "ValueError: '…' end"], ["KeyError: 'Alice Smith", "KeyError: '…"]]) {
-    github.calls = [];
-    await expectStatus(await send([['report', reportJson({error: sent})], ['details', '{"trace":"x"}']]), 201, sent);
-    const body = JSON.parse(github.calls[0].body).body;
-    assert.ok(body.includes('```text\n' + shown + '\n```'), body);
-    assert.doesNotMatch(body, /Alice|Smith/);
-  }
 });
 
 test('report: the store-and-file work runs under waitUntil, so a closed tab cannot cut it short', async () => {

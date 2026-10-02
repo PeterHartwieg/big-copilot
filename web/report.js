@@ -11,8 +11,8 @@
  *   - the player's text, the site build (the loaded page's LEDGER_BUILD, never
  *     a fresh version.json), the game build, the browser family and the source
  *     kind go into a public GitHub issue;
- *   - with "Attach technical details" ticked, the error's last line goes into
- *     the issue too, with any path that can name the player masked, and the
+ *   - with "Attach technical details" ticked, the issue also names the error's
+ *     class and where it was raised (brErrorLine(), never its message), and the
  *     whole traceback and three settings (language, theme, platform) go to
  *     private storage; nothing else is read from browser storage;
  *   - with "Attach my save" ticked, the save's bytes as the page read them go
@@ -29,7 +29,6 @@
   const BR_TEXT_MAX = 5000;
   const BR_TRACE_MAX = 100000;
   const BR_THEME_KEY = "ba_dash_theme";  // the footer's Theme (template/board.html)
-  const BR_MASK = "<save>";
 
   /* --- what is sent ---------------------------------------------------------- */
 
@@ -65,53 +64,34 @@
     };
   }
 
-  // The error's last line is public, so everything in it that can come from
-  // the save or name the player is masked first: the save's file name (a game
-  // link's is <character>-live.hsg), the company, the worker's /save/ path, a
-  // home folder, any quoted value (a KeyError names what it did not find, which
-  // can be a name from the save) and any run of hex bytes (the save parser
-  // shows the bytes around a fault). The Worker applies the same masks again.
-  function brMask(line, names) {
-    let out = String(line || "").replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
-    for (const name of names || []) {
-      const plain = String(name || "").trim();
-      if (plain.length < 3) continue;
-      for (const form of new Set([plain, plain.replace(/\.hsg$/i, "")])) {
-        if (form.length < 3) continue;
-        out = out.replace(new RegExp(form.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), BR_MASK);
-      }
-    }
-    return out
-      .replace(/\/save\/(?:[^'"`]*?\.hsg\b|[^\s'"`]*)/gi, "/save/" + BR_MASK)
-      .replace(/\b[A-Za-z]:[\\/]+Users[\\/]+[^\\/'"`]+/gi, "<home>")
-      .replace(/\/(?:Users|home)\/[^/'"`]+/g, "<home>")
-      .replace(/^[\s\S]*$/, (all) => brQuotes(all))
-      .replace(/\b[0-9a-f]{2}(?:\s+[0-9a-f]{2}){3,}\b/gi, "<bytes>")
-      .slice(0, 500);
-  }
-
-  // The line the issue shows: the error on screen, unless that is the hex
-  // window the save parser adds under its message; then the traceback's last
-  // line that says something.
-  // browser_build() wraps the parser's message in "(...)", so the window can end
-  // in a bracket or a full stop.
-  const BR_HEX_LINE = /^[\s([]*[0-9a-f]{2}(?:\s+[0-9a-f]{2})*[\s)\].,]*$/i;
+  /* The error line the issue shows is built, not copied. An error's message
+     can carry anything the save holds (a name quoted by a KeyError, a type name
+     the parser read, the bytes around a fault, a piece of the payload), and no
+     mask has kept up with all of it. So the public line holds only what comes
+     from Big Copilot's own code: the exception's class, and where it was
+     raised, as a function, a file and a line. "KeyError in _staffing
+     (ba_dashboard.py line 4120)" for Python, "TypeError in drawMast
+     (index.html line 2402)" for the page's own script. The message itself goes
+     only to private storage, with the whole traceback. The Worker accepts
+     nothing that does not have this shape. */
+  const BR_CLASS = /^\s*(?:[A-Za-z_]\w*\.)*([A-Z]\w*(?:Error|Exception|Warning|Exit|Interrupt))\b/;
+  const BR_PY_FRAME = /File "(?:[^"\n]*\/)?([A-Za-z_]\w*\.py)", line (\d{1,7}), in ([A-Za-z_]\w*|<module>)/g;
+  const BR_JS_FRAME = /\bat ([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*) \((?:[^()\s]*\/)?([A-Za-z_][\w-]*\.(?:js|html))(?:\?[^:()\s]*)?:(\d{1,7}):\d+\)/;
   function brErrorLine(ctx) {
-    const said = (text) => String(text || "").split("\n").filter((l) => l.trim() && !BR_HEX_LINE.test(l));
-    const own = said(ctx.error);
-    const lines = own.length ? own : said(ctx.trace);
-    return lines.length ? brMask(lines[lines.length - 1], ctx.names) : "";
-  }
-
-  // Every quoted value becomes '…'. Escape-aware (Python writes 'it\'s'), and a
-  // quote left open masks the rest of the line: when in doubt, less is shown.
-  function brQuotes(line) {
-    const marks = "'\"`";
-    const marked = line.replace(/[-]/g, "")
-      .replace(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`/g, (q) => String.fromCharCode(0xE000 + marks.indexOf(q[0])));
-    const open = marked.search(/['"`]/);
-    return (open < 0 ? marked : marked.slice(0, open + 1) + "…")
-      .replace(/[-]/g, (m) => { const q = marks[m.charCodeAt(0) - 0xE000]; return q + "…" + q; });
+    const text = [ctx.trace, ctx.error].map((t) => String(t || "")).join("\n");
+    const lines = text.split("\n");
+    let kind = "";
+    // The last line that opens with a class is the error raised; JavaScript's
+    // stack opens with it, so the first is taken when no other is found.
+    for (let i = lines.length - 1; i >= 0 && !kind; i--) {
+      const m = BR_CLASS.exec(lines[i]);
+      if (m) kind = m[1];
+    }
+    if (!kind) return "";
+    const py = [...text.matchAll(BR_PY_FRAME)].pop();
+    const js = py ? null : BR_JS_FRAME.exec(text);
+    const where = py ? [py[3], py[1], py[2]] : js ? [js[1].split(".").pop(), js[2], js[3]] : null;
+    return where ? `${kind} in ${where[0]} (${where[1]} line ${where[2]})` : kind;
   }
 
   const brBuild = (v) => (Number.isSafeInteger(v) && v > 0 && v < 1000000 ? v : null);
@@ -133,8 +113,8 @@
       source: BR_SOURCES.includes(ctx.source) ? ctx.source : "none",
     };
     if (choice.details && (ctx.error || ctx.trace)) {
-      const masked = brErrorLine(ctx);
-      if (masked) report.error = masked;
+      const line = brErrorLine(ctx);
+      if (line) report.error = line;
     }
     const parts = [["report", JSON.stringify(report)]];
     if (choice.details) {
@@ -260,7 +240,7 @@
     e.pub.textContent = tt("br.text.public", "This text is published on GitHub, where anyone can read it.");
     e.save.words.textContent = tt("br.save", "Attach my save");
     e.details.words.textContent = tt("br.details", "Attach technical details");
-    e.details.hint.textContent = tt("br.details.hint", "The error's last line is published with your text. The full error and your language, theme and system are kept privately for 30 days.");
+    e.details.hint.textContent = tt("br.details.hint", "The kind of error and where in Big Copilot's code it happened are published with your text. The error message, the full error and your language, theme and system are kept privately for 30 days.");
     e.previewHead.textContent = tt("br.preview", "What is published");
     e.privacy.textContent = tt("br.privacy", "How a bug report is kept and deleted");
     e.cancel.textContent = brSent ? tt("br.close", "Close") : tt("br.cancel", "Cancel");
@@ -298,8 +278,8 @@
       tt("br.pv.source", "Source: {source}", {source: brSourceWords(brCtx.source)}),
       e.save.input.checked ? tt("br.pv.save.yes", "Save attached: yes, kept privately") : tt("br.pv.save.no", "Save attached: no"),
     ];
-    const masked = brCtx.error || brCtx.trace ? brErrorLine(brCtx) : "";
-    if (e.details.input.checked && masked) lines.push(tt("br.pv.error", "Error: {line}", {line: masked}));
+    const where = brCtx.error || brCtx.trace ? brErrorLine(brCtx) : "";
+    if (e.details.input.checked && where) lines.push(tt("br.pv.error", "Error: {line}", {line: where}));
     e.previewBody.replaceChildren(...lines.map((line) => { const li = brEl("li"); li.textContent = line; return li; }));
   }
 
@@ -333,7 +313,7 @@
     if (!brDialog) brBuildDialog();
     if (typeof brDialog.showModal !== "function") return;
     const seq = ++brSeq;
-    brCtx = Object.assign({siteBuild: "dev", source: "none", error: "", trace: "", names: []}, ctx || {});
+    brCtx = Object.assign({siteBuild: "dev", source: "none", error: "", trace: ""}, ctx || {});
     brOpener = opener || null;
     brSent = null;
     brBusy = false;
@@ -422,5 +402,5 @@
     return {number: raw.number, url: url.href};
   }
 
-  window.BigCopilotReport = {open: brOpen, parts: brParts, mask: brMask, settings: brSettings, browser: brBrowser, issue: brIssue};
+  window.BigCopilotReport = {open: brOpen, parts: brParts, errorLine: brErrorLine, settings: brSettings, browser: brBrowser, issue: brIssue};
 })();

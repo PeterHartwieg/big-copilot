@@ -2403,9 +2403,6 @@
       source: reportSource(),
       error,
       trace: failed ? failed.trace : readerError ? String(readerError.stack || "") : "",
-      // Names that must not reach the public error line: the save's file and
-      // the company.
-      names: [failed && failed.name, lastFile && lastFile.name, lastGood && lastGood.name, company].filter(Boolean),
       // The failed build's own bytes, or a copy of the board's save from the
       // reader; the board's game build is in its payload, a failed save's
       // needs the reader to parse it again.

@@ -27,7 +27,10 @@ const REPORT_MAX_BYTES = 8 * 1024 * 1024;
 const REPORT_TEXT_MAX = 5000;
 const REPORT_PART_MAX = 24 * 1024;
 const REPORT_DETAILS_MAX = 256 * 1024;
-const REPORT_ERROR_MAX = 500;
+// The error line the issue may show: an exception class and, optionally, where
+// it was raised, all words from Big Copilot's own code, never the message (it
+// can carry anything the save holds). web/report.js, brErrorLine(), builds it.
+const REPORT_ERROR = /^[A-Z]\w{0,79}(?: in (?:[A-Za-z_$][\w$]{0,79}|<module>) \([A-Za-z_][\w-]{0,59}\.(?:py|js|html) line [0-9]{1,7}\))?$/;
 const REPORT_PARTS = ["report", "save", "details"];
 const REPORT_BROWSERS = { chrome: "Chrome", edge: "Edge", firefox: "Firefox", safari: "Safari", other: "Other" };
 const REPORT_SOURCES = { folder: "Save folder", file: "One save file", link: "Game link", none: "No save loaded" };
@@ -327,7 +330,7 @@ function reportParts(form) {
 
 // The report part, held to exactly the fields the issue may show: the player's
 // text, the site and game builds, the browser family, the source and, only when
-// the technical details are attached, the error's last line. Anything else, an
+// the technical details are attached, the error's class and place. Anything else, an
 // unknown key or a value outside its allowlist, rejects the report.
 function reportFacts(raw, withDetails) {
   let data;
@@ -347,37 +350,8 @@ function reportFacts(raw, withDetails) {
   if (gameBuild !== null && !(Number.isSafeInteger(gameBuild) && gameBuild > 0 && gameBuild < 1000000)) return null;
   if (typeof browser !== "string" || !Object.hasOwn(REPORT_BROWSERS, browser)) return null;
   if (typeof source !== "string" || !Object.hasOwn(REPORT_SOURCES, source)) return null;
-  if (error !== null && (typeof error !== "string" || error.length > REPORT_ERROR_MAX || !withDetails)) return null;
-  return { text: said, siteBuild, gameBuild, browser, source, error: error === null ? null : publicError(error) };
-}
-
-// The error's last line goes into a public issue, so it is cut to one line and
-// anything in it that can come from the save or name the player is masked: the
-// worker's /save/<file> (a game link's file is <character>-live.hsg), a home
-// folder, any quoted value (a KeyError names what it did not find) and any run
-// of hex bytes (the save parser shows the bytes around a fault). The page masks
-// the same, and the save's and company's names, before sending; this is the
-// second net. A file or folder name can hold spaces, so a path mask runs to the
-// save's extension or the next separator: it may take a word too many, never
-// one too few.
-function publicError(line) {
-  const one = line.replace(/[\u0000-\u001f\u007f]+/g, " ").trim()
-    .replace(/\/save\/(?:[^'"`]*?\.hsg\b|[^\s'"`]*)/gi, "/save/<save>")
-    .replace(/\b[A-Za-z]:[\\/]+Users[\\/]+[^\\/'"`]+/gi, "<home>")
-    .replace(/\/(?:Users|home)\/[^/'"`]+/g, "<home>");
-  const masked = maskQuotes(one).replace(/\b[0-9a-f]{2}(?:\s+[0-9a-f]{2}){3,}\b/gi, "<bytes>");
-  return masked || null;
-}
-
-// Every quoted value becomes '…'. Escape-aware (Python writes 'it\'s'), and a
-// quote left open masks the rest of the line: when in doubt, less is shown.
-function maskQuotes(line) {
-  const marks = "'\"`";
-  const marked = line.replace(/[-]/g, "")
-    .replace(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`/g, (quoted) => String.fromCharCode(0xE000 + marks.indexOf(quoted[0])));
-  const open = marked.search(/['"`]/);
-  return (open < 0 ? marked : marked.slice(0, open + 1) + "…")
-    .replace(/[-]/g, (mark) => { const quote = marks[mark.charCodeAt(0) - 0xE000]; return quote + "…" + quote; });
+  if (error !== null && (typeof error !== "string" || !REPORT_ERROR.test(error) || !withDetails)) return null;
+  return { text: said, siteBuild, gameBuild, browser, source, error };
 }
 
 function reportTitle(facts) {
@@ -419,7 +393,7 @@ function reportBody(facts, folder, attached) {
     "| --- | --- |",
     ...rows.map(([name, value]) => `| ${name} | ${value} |`),
   ];
-  if (facts.error) lines.push("", "### Last line of the error", "", fenced(facts.error));
+  if (facts.error) lines.push("", "### Error", "", fenced(facts.error));
   if (folder) lines.push("", "The attachments are kept privately for 30 days and are never published here.");
   return lines.join("\n");
 }
