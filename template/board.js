@@ -2529,46 +2529,267 @@ function drawKpiLine(){
     + `<button type="button" class="ov-kmore" aria-expanded="${open}" aria-controls="kpis">${tt("today.ctx.all", "All figures")}${nxIcon("chevd")}</button>`;
 }
 
-/* Where each kind of finding is spelt out on the board: a Supply view (the
-   one named, or with view "route" the view of the finding's route), or the
-   site's own page. A finding is a headline; the link is the rest of the
-   story. */
+/* --- the finding kinds -------------------------------------------------------
+   Every "group" a finding in the Needs attention panel can carry, one record
+   each, in the order the kinds panel lists them. Python emits the group (note()
+   in _alerts(), _finding() in a helper such as _idle_notes(), or an
+   AMENITY_DEMANDS row); the two sides share only the group key.
+   - label, note: the kinds panel's words, read in the UI language every time
+     (keep them literal getters: a copy would freeze one language);
+   - on: switched on by default; keep a noisy kind off;
+   - link: where a click lands, {sec, view?, site?, port?}. A supply finding
+     lands on its Supply view, on its row, lit: an import on Imports (a depot's
+     and a factory's own contract alike), a delivery on Deliveries, a factory's
+     line or input on Production; view "route" is the view of the finding's
+     route. A site kind opens the site's own page; the rest reveal `sec`;
+   - route: the route the finding's action names, where it is fixed, and the
+     words on its button, {route, act, pick?}; `pick(a)` returns another
+     {route, act} for some of its findings, by their site or sentence. The
+     link is the landing inside it;
+   - evidence: the block of the site's own panel to light, {block, hit?}, and
+     (named by their data-el) the things inside it that carry the evidence.
+     This is the shop and office panel's answer; spEvidence() drops a block
+     the open kind does not draw. A kind with no site panel has none;
+   - evidenceAt (only if): where a depot or a factory keeps it instead, by
+     panel kind. Both are `support` sites, so an import, idle-stock or
+     staffing finding can carry one of their keys: stock standing still is a
+     shelf on a shop, a line on a depot, and at a factory an input it eats or
+     something it makes; an import finding is about the depot's own holding,
+     and about a factory's inputs when the factory imports directly; a `feed`
+     finding is attributed to the import site by _feed_notes(), so on a depot
+     it is about that depot's stock; `staff` on a factory is a machine nobody
+     is posted to; neither draws a profit chart, so a trend lands on the tiles;
+   - evidenceHit (only if): the hit, when it depends on the site;
+   - landsOnRow (only if): about one line of a site's shelves, Stock or
+     Inputs; once the link targets the site, it lands on that line's row, lit.
+     The kinds that link to a Supply view today are marked so they behave
+     alike the moment they do;
+   - syn (only if): the words players use for it, for search;
+   - sitePick (only if): a kind about the company as a whole carries no site,
+     yet it is still shown on one: `site` picks the site where it bites
+     hardest, `otherwise` is where the link goes when no site has it. */
 /* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
    needs: its group, emitted by note() in _alerts() or _finding() in a helper
-   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
-   FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
-   ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
-   search words, if players have any; its line under "What counts as a finding"
-   in docs/dashboard-reference.md. The checklist has the only-if tables. */
-const ALERT_LINKS = {
-  /* A supply finding lands on its Supply view (the route's), on its row, lit:
-     an import on Imports (a depot's and a factory's own contract alike), a
-     delivery on Deliveries, a factory's line or input on Production. A
-     route-fed depot's shortfall is a delivery (FINDING_ROUTES picks it). */
-  shortfall: {sec:"secImports", view:"route"}, order: {sec:"secImports", view:"imports"},
-  paused: {sec:"secImports", view:"imports"},
-  outruns: {sec:"secDeliveries", view:"deliveries"}, unplanned: {sec:"secDeliveries", view:"deliveries"},
-  /* A shelf nothing upstream supplies is a delivery; a depot nothing brings
-     its goods to is an import (FINDING_ROUTES picks it). */
-  unsourced: {sec:"secDeliveries", view:"route"},
-  dead: {sec:"secDeliveries", view:"deliveries"}, target: {sec:"secDeliveries", view:"deliveries"},
-  notrouted: {sec:"secDeliveries", view:"deliveries"},
-  /* A depot only a route from your own site feeds, and a wholesale store's
-     weekly delivery to a shop or a depot: Deliveries, on the row. */
-  topup: {sec:"secDeliveries", view:"deliveries"},
-  wholesale: {sec:"secDeliveries", view:"deliveries"},
-  feed: {sec:"secProduction", view:"production"}, staff: {sec:"secProduction", view:"production"},
-  unnamed: {sec:"secProduction", view:"production"}, unset: {sec:"secProduction", view:"production"},
-  atcap: {sec:"secDetail", site:true}, idlestaff: {sec:"secDetail", site:true},
-  trend: {sec:"secDetail", site:true}, loss: {sec:"secDetail", site:true},
-  notrading: {sec:"secDetail", site:true}, satisfaction: {sec:"secDetail", site:true},
-  uniform: {sec:"secDetail", site:true}, bathroom: {sec:"secDetail", site:true},
-  toiletprivacy: {sec:"secDetail", site:true}, sink: {sec:"secDetail", site:true},
-  music: {sec:"secDetail", site:true}, interior: {sec:"secDetail", site:true},
-  jobdemand: {sec:"secDetail", site:true}, companydemand: {sec:"secDetail", site:true},
-  hype: {sec:"secMarket"}, vacant: {sec:"secPortfolio"},
-  promotion: {sec:"secPortfolio", port:"ops"},
-};
+   such as _idle_notes() (or an AMENITY_DEMANDS row); its FINDING_KINDS record
+   with id, label, note, on, link, route and evidence (or NO_EVIDENCE in
+   tests/alert_kinds.test.cjs); ALERT_UNITS if its worth is money, else
+   NOT_MONEY there; its line under "What counts as a finding" in
+   docs/dashboard-reference.md. The checklist has the only-if fields. */
+const FINDING_KINDS = [
+  {id:"notrading", get label(){ return tt("nav.kind.notrading.label", "Not trading yet"); }, get note(){ return tt("nav.kind.notrading.note", "Temporarily closed, or open but with no staff, no prices, no stock or no trading day"); }, on:true,
+   link: {sec:"secDetail", site:true},
+   route: {route: "businesses/results", act: "readiness"},
+   evidence: {block: "tiles"}},
+  {id:"vacant", get label(){ return tt("nav.kind.vacant.label", "Vacant leases"); }, get note(){ return tt("nav.kind.vacant.note", "A lease still paying rent with no business in it"); }, on:true,
+   link: {sec:"secPortfolio"},
+   route: {route: "businesses/results", act: "costs"}},
+  {id:"loss", get label(){ return tt("nav.kind.loss.label", "Losing money"); }, get note(){ return tt("nav.kind.loss.note", "A business that lost money yesterday"); }, on:true,
+   link: {sec:"secDetail", site:true},
+   route: {route: "businesses/results", act: "results"},
+   evidence: {block: "tiles"},
+   syn: ["loss", "losing"]},
+  {id:"staff", get label(){ return tt("nav.kind.staff.label", "Nobody staffed"); }, get note(){ return tt("nav.kind.staff.note", "A shop or office with nobody working, or a machine nobody staffs"); }, on:true,
+   link: {sec:"secProduction", view:"production"},
+   /* Nobody on a factory's machine is a Production plan; nobody at a shop or
+      an office is its schedule. */
+   route: {route: "staffing/schedules", act: "schedule", pick: a => ovAtFactory(a) ? {route: "supply/production", act: "factoryHours"} : null},
+   evidence: {block: "crew"},
+   evidenceAt: {factory: "lines"},
+   syn: ["unstaffed", "no staff", "staffing", "hire", "on shift"]},
+  {id:"satisfaction", get label(){ return tt("nav.kind.satisfaction.label", "Low satisfaction"); }, get note(){ return tt("nav.kind.satisfaction.note", "Customer satisfaction under 80%"); }, on:true,
+   link: {sec:"secDetail", site:true},
+   route: {route: "businesses/standards", act: "satisfaction"},
+   evidence: {block: "standards"},
+   syn: ["standards"]},
+  {id:"promotion", get label(){ return tt("nav.kind.promotion.label", "Campaign mix"); }, get note(){ return tt("nav.kind.promotion.note", "A shop or office whose cheapest campaign mix differs from what it runs, or that waits on a first visit to an agency"); }, on:true,
+   link: {sec:"secPortfolio", port:"ops"},
+   route: {route: "businesses/standards", act: "promotion"},
+   evidence: {block: "pull"},
+   syn: ["pull"]},
+  {id:"uniform", get label(){ return tt("nav.kind.uniform.label", "Uniforms / locker"); }, get note(){ return tt("nav.kind.uniform.note", "Missing uniform locker or staff uniforms"); }, on:true,
+   link: {sec:"secDetail", site:true},
+   route: {route: "businesses/standards", act: "uniforms"},
+   /* The hit depends on the site (evidenceHit): the locker while there is
+      none, the roles once there is one. */
+   evidence: {block: "standards", hit: "uniform"},
+   evidenceHit: b => b.missingUniformLocker ? "locker" : "uniform"},
+  {id:"bathroom", get label(){ return tt("nav.kind.bathroom.label", "No customer bathroom"); }, get note(){ return tt("nav.kind.bathroom.note", "Customers here expect a bathroom and there is none"); }, on:true,
+   link: {sec:"secDetail", site:true},
+   route: {route: "businesses/standards", act: "amenities"},
+   evidence: {block: "standards", hit: "bathroom"}},
+  {id:"toiletprivacy", get label(){ return tt("nav.kind.toiletprivacy.label", "Bathroom has no privacy"); }, get note(){ return tt("nav.kind.toiletprivacy.note", "A customer bathroom with no stall or door"); }, on:true,
+   link: {sec:"secDetail", site:true},
+   route: {route: "businesses/standards", act: "amenities"},
+   evidence: {block: "standards", hit: "toiletprivacy"}},
+  {id:"sink", get label(){ return tt("nav.kind.sink.label", "No customer sink"); }, get note(){ return tt("nav.kind.sink.note", "Nowhere for customers to wash their hands"); }, on:true,
+   link: {sec:"secDetail", site:true},
+   route: {route: "businesses/standards", act: "amenities"},
+   evidence: {block: "standards", hit: "sink"}},
+  {id:"music", get label(){ return tt("nav.kind.music.label", "No music playing"); }, get note(){ return tt("nav.kind.music.note", "A shop trading in silence"); }, on:true,
+   link: {sec:"secDetail", site:true},
+   route: {route: "businesses/standards", act: "amenities"},
+   evidence: {block: "standards", hit: "music"}},
+  {id:"interior", get label(){ return tt("nav.kind.interior.label", "Interior design too low"); }, get note(){ return tt("nav.kind.interior.note", "Interior design below what customers expect here"); }, on:true,
+   link: {sec:"secDetail", site:true},
+   route: {route: "businesses/standards", act: "amenities"},
+   evidence: {block: "standards", hit: "interior"}},
+  {id:"jobdemand", get label(){ return tt("nav.kind.jobdemand.label", "Staff demands"); }, get note(){ return tt("nav.kind.jobdemand.note", "Schedule, desk or building demands of a site's staff not met"); }, on:true,
+   link: {sec:"secDetail", site:true},
+   route: {route: "staffing/needs", act: "demand"},
+   evidence: {block: "crew"},
+   syn: ["demands", "unhappy staff", "quit", "hire"]},
+  {id:"companydemand", get label(){ return tt("nav.kind.companydemand.label", "Insurance / happy boss"); }, get note(){ return tt("nav.kind.companydemand.note", "Staff demands only the owner can meet"); }, on:true,
+   link: {sec:"secDetail", site:true},
+   route: {route: "staffing/needs", act: "demand"},
+   evidence: {block: "crew", hit: "company"},
+   syn: ["insurance", "health insurance", "hr manager"],
+   /* Never on a site's own list. Health insurance and a happy boss are asked
+      for at each site and settled company-wide, so the link picks the Crew
+      with the most people lacking one of them, lands on its crew block and
+      pulses the company-wide demand chips. A tie keeps the first site in the
+      save's order. With no site lacking it, Staffing › Staff needs lists it as
+      company-wide. */
+   sitePick: {otherwise: "secNeeds", site: () => {
+     let best = null, most = 0;
+     D.businesses.forEach(b => {
+       if(b.status === "vacant") return;
+       const n = b.staffLackingCompany
+         ?? Math.max(0, ...(b.staffDemands || []).filter(d => d.company).map(d => d.count));
+       if(n > most){ best = b; most = n; }
+     });
+     return best;
+   }}},
+  {id:"hype", get label(){ return tt("nav.kind.hype.label", "Demand wave ending"); }, get note(){ return tt("nav.kind.hype.note", "A wave with days left and a site trading under it"); }, on:false,
+   link: {sec:"secMarket"},
+   route: {route: "expansion/demand", act: "wave"},
+   evidence: {block: "pull", hit: "wave"},
+   syn: ["wave", "hype"]},
+  {id:"trend", get label(){ return tt("nav.kind.trend.label", "Revenue trend"); }, get note(){ return tt("nav.kind.trend.note", "A shop's or office's week up or down by more than 15%"); }, on:true,
+   link: {sec:"secDetail", site:true},
+   route: {route: "businesses/results", act: "results"},
+   evidence: {block: "profit"},
+   evidenceAt: {depot: "tiles", factory: "tiles"}},
+  {id:"unplanned", get label(){ return tt("nav.kind.unplanned.label", "No distribution plan"); }, get note(){ return tt("nav.kind.unplanned.note", "A shelf selling goods no plan tops up"); }, on:true,
+   link: {sec:"secDeliveries", view:"deliveries"},
+   route: {route: "supply/deliveries", act: "delivery"},
+   evidence: {block: "shelves", hit: "noplan"},
+   landsOnRow: true},
+  {id:"unsourced", get label(){ return tt("nav.kind.unsourced.label", "Nothing upstream supplies it"); }, get note(){ return tt("nav.kind.unsourced.note", "Goods a shelf is topped up with or prices, or a depot sends on, that nothing brings in"); }, on:true,
+   /* A shelf nothing upstream supplies is a delivery; a depot nothing brings
+      its goods to is an import (its route's pick decides). */
+   link: {sec:"secDeliveries", view:"route"},
+   route: {route: "supply/deliveries", act: "delivery", pick: a => { const b = alertSite(a); return b && b.status !== "retail" ? {route: "supply/imports", act: "import"} : null; }},
+   evidence: {block: "shelves", hit: "noplan"},
+   evidenceAt: {depot: "stock"},
+   landsOnRow: true,
+   syn: ["no supplier", "no source", "never stocked", "not supplied", "missing import"]},
+  {id:"outruns", get label(){ return tt("nav.kind.outruns.label", "Outsells its top-up"); }, get note(){ return tt("nav.kind.outruns.note", "A peak day that empties the shelf before the next drop"); }, on:true,
+   link: {sec:"secDeliveries", view:"deliveries"},
+   route: {route: "supply/deliveries", act: "delivery"},
+   evidence: {block: "shelves", hit: "outruns"},
+   landsOnRow: true},
+  {id:"paused", get label(){ return tt("nav.kind.paused.label", "Import paused"); }, get note(){ return tt("nav.kind.paused.note", "An import switched off, not covered by a route, with the depot still drawing"); }, on:true,
+   link: {sec:"secImports", view:"imports"},
+   route: {route: "supply/imports", act: "import"},
+   evidence: {block: "stock"},
+   evidenceAt: {depot: "stock", factory: "inputs"},
+   landsOnRow: true},
+  {id:"feed", get label(){ return tt("nav.kind.feed.label", "Factory inputs"); }, get note(){ return tt("nav.kind.feed.note", "An input arriving short of what the machines need"); }, on:true,
+   link: {sec:"secProduction", view:"production"},
+   route: {route: "supply/production", act: "input"},
+   evidence: {block: "inputs"},
+   evidenceAt: {depot: "stock", factory: "inputs"},
+   landsOnRow: true,
+   syn: ["fed", "inputs", "ingredients", "starved"]},
+  {id:"unnamed", get label(){ return tt("nav.kind.unnamed.label", "Unnamed factory line"); }, get note(){ return tt("nav.kind.unnamed.note", "A machine running a recipe the board cannot name"); }, on:true,
+   link: {sec:"secProduction", view:"production"},
+   route: {route: "supply/production", act: "recipe"},
+   evidence: {block: "lines", hit: "unnamed"}},
+  {id:"unset", get label(){ return tt("nav.kind.unset.label", "Machine with no recipe"); }, get note(){ return tt("nav.kind.unset.note", "A machine staffed and rented, making nothing"); }, on:true,
+   link: {sec:"secProduction", view:"production"},
+   route: {route: "supply/production", act: "recipe"},
+   evidence: {block: "lines", hit: "unset"}},
+  {id:"shortfall", get label(){ return tt("nav.kind.shortfall.label", "Import shortfall"); }, get note(){ return tt("nav.kind.shortfall.note", "A depot that runs dry before the next import or route round"); }, on:true,
+   /* A route-fed depot's shortfall is a delivery (its route's pick decides):
+      a depot a route feeds runs dry before the route's round, so its fix is
+      the route, not an import (f.shortfall.route*). */
+   link: {sec:"secImports", view:"route"},
+   route: {route: "supply/imports", act: "import", pick: a => /^f\.shortfall\.route(\.|$)/.test(ovKey(a)) ? {route: "supply/deliveries", act: "delivery"} : null},
+   evidence: {block: "stock"},
+   evidenceAt: {depot: "stock", factory: "inputs"},
+   landsOnRow: true},
+  {id:"topup", get label(){ return tt("nav.kind.topup.label", "Depot top-up too low"); }, get note(){ return tt("nav.kind.topup.note", "A depot fed only by a route from your own site, whose busiest day outruns its daily top-up"); }, on:true,
+   /* A depot only a route from your own site feeds: Deliveries, on the row. */
+   link: {sec:"secDeliveries", view:"deliveries"},
+   route: {route: "supply/deliveries", act: "delivery"},
+   evidence: {block: "stock"},
+   evidenceAt: {depot: "stock"},
+   landsOnRow: true,
+   syn: ["top-up", "route too low", "depot top-up"]},
+  {id:"wholesale", get label(){ return tt("nav.kind.wholesale.label", "Wholesale delivery too low"); }, get note(){ return tt("nav.kind.wholesale.note", "A shop or depot a wholesale store delivers to each week, whose delivery brings less than a week's use or runs out before the next one"); }, on:true,
+   /* A wholesale store's weekly delivery to a shop or a depot: Deliveries, on
+      the row. On a shop the evidence is its shelves; on a depot, its Stock. */
+   link: {sec:"secDeliveries", view:"deliveries"},
+   route: {route: "supply/deliveries", act: "delivery"},
+   evidence: {block: "shelves"},
+   evidenceAt: {depot: "stock"},
+   landsOnRow: true,
+   syn: ["wholesale", "contract", "delivery"]},
+  {id:"order", get label(){ return tt("nav.kind.order.label", "Weekly order too small"); }, get note(){ return tt("nav.kind.order.note", "An import that cannot cover its own week"); }, on:true,
+   link: {sec:"secImports", view:"imports"},
+   route: {route: "supply/imports", act: "import"},
+   evidence: {block: "stock"},
+   evidenceAt: {depot: "stock", factory: "inputs"},
+   landsOnRow: true},
+  {id:"atcap", get label(){ return tt("nav.kind.atcap.label", "At capacity"); }, get note(){ return tt("nav.kind.atcap.note", "Hours a week the staff, registers or workstations turn people away"); }, on:true,
+   link: {sec:"secDetail", site:true},
+   route: {route: "businesses/results", act: "hours"},
+   evidence: {block: "hours"},
+   syn: ["capacity", "full", "ceiling", "turned away"]},
+  {id:"idlestaff", get label(){ return tt("nav.kind.idlestaff.label", "Overstaffed hours"); }, get note(){ return tt("nav.kind.idlestaff.note", "More counters or workstations staffed than the customers need"); }, on:false,
+   link: {sec:"secDetail", site:true},
+   route: {route: "staffing/schedules", act: "schedule"},
+   evidence: {block: "hours", hit: "idle"},
+   syn: ["overstaffed", "idle staff", "too many staff", "hire"]},
+  {id:"dead", get label(){ return tt("nav.kind.dead.label", "Idle stock"); }, get note(){ return tt("nav.kind.dead.note", "Goods sitting in a depot no line draws from"); }, on:true,
+   link: {sec:"secDeliveries", view:"deliveries"},
+   /* Idle stock at a factory is read on Production, where the factory is. */
+   route: {route: "supply/deliveries", act: "idle", pick: a => ovAtFactory(a) ? {route: "supply/production", act: "idle"} : null},
+   evidence: {block: "shelves"},
+   evidenceAt: {depot: "stock", factory: "lines"},
+   syn: ["dead stock", "stock not moving", "not moving"]},
+  {id:"notrouted", get label(){ return tt("nav.kind.notrouted.label", "Not routed"); }, get note(){ return tt("nav.kind.notrouted.note", "Stock a depot or factory holds that no plan sends on, while your own sites sell or need it"); }, on:true,
+   link: {sec:"secDeliveries", view:"deliveries"},
+   route: {route: "supply/deliveries", act: "routes"},
+   /* About the depot that holds the stock; its shelves-to-be are named in the
+      sentence. */
+   evidence: {block: "stock"},
+   evidenceAt: {depot: "stock"},
+   landsOnRow: true,
+   syn: ["not routed", "no route", "unrouted", "stuck in the warehouse"]},
+  {id:"target", get label(){ return tt("nav.kind.target.label", "Top-up target too high"); }, get note(){ return tt("nav.kind.target.note", "A top-up target far above what the shops sell"); }, on:true,
+   link: {sec:"secDeliveries", view:"deliveries"},
+   route: {route: "supply/deliveries", act: "target"},
+   evidence: {block: "shelves"},
+   evidenceAt: {depot: "stock", factory: "lines"},
+   syn: ["overstock"]},
+];
+/* The tables the board reads, each a view of FINDING_KINDS keyed by kind id:
+   a kind without the field has no entry. Never add to them; add to the
+   record. ALERT_GROUPS keeps the records' order and reads label and note
+   through, so they stay in the language on screen. The others iterate in
+   that order too; their readers only look a kind up by id. */
+const findingKindsWith = field => Object.fromEntries(FINDING_KINDS.filter(k => k[field] !== undefined).map(k => [k.id, k[field]]));
+const ALERT_GROUPS = FINDING_KINDS.map(k => ({id: k.id, get label(){ return k.label; }, get note(){ return k.note; }, on: k.on}));
+const ALERT_LINKS = findingKindsWith("link");
+const FINDING_ROUTES = findingKindsWith("route");
+const ALERT_EVIDENCE = findingKindsWith("evidence");
+const SP_EVIDENCE_KIND = Object.fromEntries(["depot", "factory"].map(panel => [panel,
+  Object.fromEntries(FINDING_KINDS.filter(k => (k.evidenceAt || {})[panel]).map(k => [k.id, k.evidenceAt[panel]]))]));
+const SP_EVIDENCE_HIT = findingKindsWith("evidenceHit");
+const ALERT_LANDS_ON_ROW = new Set(FINDING_KINDS.filter(k => k.landsOnRow).map(k => k.id));
+const SS_KIND_SYN = findingKindsWith("syn");
+const ALERT_SITE_PICK = findingKindsWith("sitePick");
 /* Which page, and which view on it, each section lives on. A finding's link
    opens that page first, then scrolls; the reader never lands on a hidden
    section. */
@@ -2664,27 +2885,6 @@ function alertSite(a){
   if(a.siteKey === undefined) return D.businesses.find(x => x.name === a.site) || null;
   return null;
 }
-/* A finding about the company as a whole carries no site, yet it is still
-   shown on one: `site` picks the site where it bites hardest, `otherwise` is
-   where the link goes when no site has it. */
-/* Registry: "A finding kind" (only if: see the checklist). */
-const ALERT_SITE_PICK = {
-  /* Health insurance and a happy boss are asked for at each site and settled
-     company-wide, so the Crew with the most people lacking one of them is the
-     place that shows the demand. A tie keeps the first site in the save's
-     order. */
-  /* With no site lacking it, Staffing › Staff needs lists it as company-wide. */
-  companydemand: {otherwise: "secNeeds", site: () => {
-    let best = null, most = 0;
-    D.businesses.forEach(b => {
-      if(b.status === "vacant") return;
-      const n = b.staffLackingCompany
-        ?? Math.max(0, ...(b.staffDemands || []).filter(d => d.company).map(d => d.count));
-      if(n > most){ best = b; most = n; }
-    });
-    return best;
-  }},
-};
 /* A finding's landing, under the route its action names (FINDING_ROUTES):
    whichever page the landing below opens, the shell shows that route, and a
    site's page keeps it in its history entry. */
@@ -2763,67 +2963,6 @@ function alertLanding(a, link){
   reveal(link.sec);
 }
 const alertPage = a => (SEC_PAGE[(ALERT_LINKS[a.group] || {}).sec] || ["today"])[0];
-/* The kinds about a single line of a site's shelves, Stock or Inputs: once a
-   kind's link targets the site (ALERT_LINKS site:true), it lands on that
-   line's row, lit. The kinds that link to a Checks view today are listed so
-   they behave alike the moment they do. */
-/* Registry: "A finding kind" (only if: see the checklist). */
-const ALERT_LANDS_ON_ROW = new Set(["wholesale", "topup", "outruns", "unplanned", "unsourced", "shortfall", "order",
-                                    "paused", "notrouted", "feed"]);
-
-/* Where the same findings sit when the site's own panel is open: the block to
-   light, and — named by their data-el — the things inside it that carry the
-   evidence. One row per group that can be about a single site. This table is
-   the shop and office panel's answer; SP_EVIDENCE_KIND overrides it where a
-   depot or a factory keeps the same finding somewhere else, and spEvidence()
-   drops any block the open kind does not draw, so a row never lights nothing
-   and scrolls nowhere. */
-/* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
-   needs: its group, emitted by note() in _alerts() or _finding() in a helper
-   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
-   FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
-   ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
-   search words, if players have any; its line under "What counts as a finding"
-   in docs/dashboard-reference.md. The checklist has the only-if tables. */
-const ALERT_EVIDENCE = {
-  notrading: {block: "tiles"},
-  loss: {block: "tiles"},
-  trend: {block: "profit"},
-  atcap: {block: "hours"},
-  idlestaff: {block: "hours", hit: "idle"},
-  staff: {block: "crew"},
-  jobdemand: {block: "crew"},
-  /* Never on a site's own list; the link picks the site (ALERT_SITE_PICK) and
-     lands here, pulsing the company-wide demand chips. */
-  companydemand: {block: "crew", hit: "company"},
-  satisfaction: {block: "standards"},
-  /* The hit depends on the site, so SP_EVIDENCE_HIT decides it: the locker
-     while there is none, the roles once there is one. */
-  uniform: {block: "standards", hit: "uniform"},
-  bathroom: {block: "standards", hit: "bathroom"},
-  toiletprivacy: {block: "standards", hit: "toiletprivacy"},
-  sink: {block: "standards", hit: "sink"},
-  music: {block: "standards", hit: "music"},
-  interior: {block: "standards", hit: "interior"},
-  hype: {block: "pull", hit: "wave"},
-  promotion: {block: "pull"},
-  outruns: {block: "shelves", hit: "outruns"},
-  unplanned: {block: "shelves", hit: "noplan"},
-  unsourced: {block: "shelves", hit: "noplan"},
-  target: {block: "shelves"},
-  dead: {block: "shelves"},
-  /* About the depot that holds the stock; its shelves-to-be are named in the sentence. */
-  notrouted: {block: "stock"},
-  topup: {block: "stock"},
-  /* On a shop, its shelves; on a depot, its Stock (SP_EVIDENCE_KIND). */
-  wholesale: {block: "shelves"},
-  shortfall: {block: "stock"},
-  order: {block: "stock"},
-  paused: {block: "stock"},
-  feed: {block: "inputs"},
-  unnamed: {block: "lines", hit: "unnamed"},
-  unset: {block: "lines", hit: "unset"},
-};
 
 /* The three severities of the list: the alert levels Python assigns, in the
    design's words, as each counter's tooltip says them. */
@@ -2983,56 +3122,10 @@ function findingAmount(a){
 const kindLabel = id => (ALERT_GROUPS.find(g => g.id === id) || {}).label || id;
 const kindOff = a => alertGroupPrefs[a.group] === false;
 /* --- where each kind of finding is fixed ------------------------------------
-   The route a finding's action names, and the words on its button. The route
-   is where the finding is fixed; ALERT_LINKS above is the landing inside it
-   (docs/architecture.md, Registries, "A finding kind"). `pick`
-   decides between two homes by the finding's own site or sentence. */
-/* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
-   needs: its group, emitted by note() in _alerts() or _finding() in a helper
-   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
-   FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
-   ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
-   search words, if players have any; its line under "What counts as a finding"
-   in docs/dashboard-reference.md. The checklist has the only-if tables. */
-const FINDING_ROUTES = {
-  notrading: {route: "businesses/results", act: "readiness"},
-  vacant: {route: "businesses/results", act: "costs"},
-  loss: {route: "businesses/results", act: "results"},
-  trend: {route: "businesses/results", act: "results"},
-  atcap: {route: "businesses/results", act: "hours"},
-  /* Nobody on a factory's machine is a Production plan; nobody at a shop or
-     an office is its schedule. */
-  staff: {route: "staffing/schedules", act: "schedule", pick: a => ovAtFactory(a) ? {route: "supply/production", act: "factoryHours"} : null},
-  idlestaff: {route: "staffing/schedules", act: "schedule"},
-  satisfaction: {route: "businesses/standards", act: "satisfaction"},
-  promotion: {route: "businesses/standards", act: "promotion"},
-  uniform: {route: "businesses/standards", act: "uniforms"},
-  bathroom: {route: "businesses/standards", act: "amenities"},
-  toiletprivacy: {route: "businesses/standards", act: "amenities"},
-  sink: {route: "businesses/standards", act: "amenities"},
-  music: {route: "businesses/standards", act: "amenities"},
-  interior: {route: "businesses/standards", act: "amenities"},
-  jobdemand: {route: "staffing/needs", act: "demand"},
-  companydemand: {route: "staffing/needs", act: "demand"},
-  hype: {route: "expansion/demand", act: "wave"},
-  unplanned: {route: "supply/deliveries", act: "delivery"},
-  unsourced: {route: "supply/deliveries", act: "delivery", pick: a => { const b = alertSite(a); return b && b.status !== "retail" ? {route: "supply/imports", act: "import"} : null; }},
-  outruns: {route: "supply/deliveries", act: "delivery"},
-  topup: {route: "supply/deliveries", act: "delivery"},
-  wholesale: {route: "supply/deliveries", act: "delivery"},
-  target: {route: "supply/deliveries", act: "target"},
-  /* Idle stock at a factory is read on Production, where the factory is. */
-  dead: {route: "supply/deliveries", act: "idle", pick: a => ovAtFactory(a) ? {route: "supply/production", act: "idle"} : null},
-  notrouted: {route: "supply/deliveries", act: "routes"},
-  /* A depot a route feeds runs dry before the route's round: its fix is the
-     route, not an import (f.shortfall.route*). */
-  shortfall: {route: "supply/imports", act: "import", pick: a => /^f\.shortfall\.route(\.|$)/.test(ovKey(a)) ? {route: "supply/deliveries", act: "delivery"} : null},
-  order: {route: "supply/imports", act: "import"},
-  paused: {route: "supply/imports", act: "import"},
-  feed: {route: "supply/production", act: "input"},
-  unnamed: {route: "supply/production", act: "recipe"},
-  unset: {route: "supply/production", act: "recipe"},
-};
+   The route a finding's action names (its kind's `route`, FINDING_ROUTES),
+   and the words on its button. The route is where the finding is fixed; the
+   kind's `link` (ALERT_LINKS) is the landing inside it. `pick` decides between
+   two homes by the finding's own site or sentence. */
 const ovKey = a => (a && a.i18n && a.i18n.text && a.i18n.text[0]) || "";
 const ovParams = a => (a && a.i18n && a.i18n.text && a.i18n.text[1]) || {};
 function ovAtFactory(a){
@@ -4871,10 +4964,6 @@ const spPri = p => `<span class="sp-pri${p >= 2 ? " hi" : ""}">${
 /* The head line of a finding, and the row: severity dot, headline, amount, an
    arrow to its evidence, and the rest of the sentence folded under it. */
 let spFindsAll = false, spArrived = null;
-/* A group whose evidence depends on the site: the uniform finding is about the
-   locker while there is none, and about the roles once there is one. */
-/* Registry: "A finding kind" (only if: see the checklist). */
-const SP_EVIDENCE_HIT = {uniform: b => b.missingUniformLocker ? "locker" : "uniform"};
 /* Which blocks each kind of panel actually draws. A finding pointing anywhere
    else gets no data-ev at all, rather than dimming the page and scrolling
    nowhere; an office draws `pull` under its `desks`. */
@@ -4884,26 +4973,6 @@ const SP_BLOCKS = {
   depot: ["tiles", "stock", "feeds", "crew"],
   factory: ["tiles", "lines", "inputs", "crew"],
   home: [],
-};
-/* Where a depot and a factory keep the findings the shop panel puts elsewhere.
-   A depot and a factory are both `support` sites, so every import, idle-stock
-   and staffing finding can carry one of their keys.
-   - stock standing still is a shelf on a shop, a line on a depot, and at a
-     factory either an input it eats or something it makes;
-   - an import finding (paused/shortfall/order) is about the depot's own
-     holding, and about a factory's inputs when the factory imports directly;
-   - a `feed` finding is attributed to the import site by _feed_notes(), so on
-     a depot it is about that depot's stock, not about anybody's inputs;
-   - `staff` is "No staff assigned" on a shop and a machine nobody is posted to
-     on a factory;
-   - neither draws a profit chart, so a trend lands on the tiles. */
-/* Registry: "A finding kind" (only if: see the checklist). */
-const SP_EVIDENCE_KIND = {
-  depot: {trend: "tiles", dead: "stock", target: "stock", feed: "stock", notrouted: "stock",
-          topup: "stock", wholesale: "stock", shortfall: "stock", order: "stock", paused: "stock",
-          unsourced: "stock"},
-  factory: {trend: "tiles", staff: "lines", dead: "lines", target: "lines",
-            feed: "inputs", shortfall: "inputs", order: "inputs", paused: "inputs"},
 };
 /* The block a finding points at on the open kind of panel, and the things
    inside it to pulse. What it is about comes off the finding's own `ev` — the
@@ -18708,51 +18777,6 @@ window.addEventListener("hashchange", () => {
 });
 
 /* --- which kinds of finding make the list ------------------------------- */
-/* Every "group" a finding in the Needs attention panel can carry — see note()
-   and _idle_notes() in the Python build. Kept in sync by hand since the two
-   sides only share the group key, not a label. */
-/* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
-   needs: its group, emitted by note() in _alerts() or _finding() in a helper
-   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
-   FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
-   ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
-   search words, if players have any; its line under "What counts as a finding"
-   in docs/dashboard-reference.md. The checklist has the only-if tables. */
-const ALERT_GROUPS = [
-  /* Each label and note is read in the UI language every time. */
-  {id:"notrading", get label(){ return tt("nav.kind.notrading.label", "Not trading yet"); }, get note(){ return tt("nav.kind.notrading.note", "Temporarily closed, or open but with no staff, no prices, no stock or no trading day"); }, on:true},
-  {id:"vacant", get label(){ return tt("nav.kind.vacant.label", "Vacant leases"); }, get note(){ return tt("nav.kind.vacant.note", "A lease still paying rent with no business in it"); }, on:true},
-  {id:"loss", get label(){ return tt("nav.kind.loss.label", "Losing money"); }, get note(){ return tt("nav.kind.loss.note", "A business that lost money yesterday"); }, on:true},
-  {id:"staff", get label(){ return tt("nav.kind.staff.label", "Nobody staffed"); }, get note(){ return tt("nav.kind.staff.note", "A shop or office with nobody working, or a machine nobody staffs"); }, on:true},
-  {id:"satisfaction", get label(){ return tt("nav.kind.satisfaction.label", "Low satisfaction"); }, get note(){ return tt("nav.kind.satisfaction.note", "Customer satisfaction under 80%"); }, on:true},
-  {id:"promotion", get label(){ return tt("nav.kind.promotion.label", "Campaign mix"); }, get note(){ return tt("nav.kind.promotion.note", "A shop or office whose cheapest campaign mix differs from what it runs, or that waits on a first visit to an agency"); }, on:true},
-  {id:"uniform", get label(){ return tt("nav.kind.uniform.label", "Uniforms / locker"); }, get note(){ return tt("nav.kind.uniform.note", "Missing uniform locker or staff uniforms"); }, on:true},
-  {id:"bathroom", get label(){ return tt("nav.kind.bathroom.label", "No customer bathroom"); }, get note(){ return tt("nav.kind.bathroom.note", "Customers here expect a bathroom and there is none"); }, on:true},
-  {id:"toiletprivacy", get label(){ return tt("nav.kind.toiletprivacy.label", "Bathroom has no privacy"); }, get note(){ return tt("nav.kind.toiletprivacy.note", "A customer bathroom with no stall or door"); }, on:true},
-  {id:"sink", get label(){ return tt("nav.kind.sink.label", "No customer sink"); }, get note(){ return tt("nav.kind.sink.note", "Nowhere for customers to wash their hands"); }, on:true},
-  {id:"music", get label(){ return tt("nav.kind.music.label", "No music playing"); }, get note(){ return tt("nav.kind.music.note", "A shop trading in silence"); }, on:true},
-  {id:"interior", get label(){ return tt("nav.kind.interior.label", "Interior design too low"); }, get note(){ return tt("nav.kind.interior.note", "Interior design below what customers expect here"); }, on:true},
-  {id:"jobdemand", get label(){ return tt("nav.kind.jobdemand.label", "Staff demands"); }, get note(){ return tt("nav.kind.jobdemand.note", "Schedule, desk or building demands of a site's staff not met"); }, on:true},
-  {id:"companydemand", get label(){ return tt("nav.kind.companydemand.label", "Insurance / happy boss"); }, get note(){ return tt("nav.kind.companydemand.note", "Staff demands only the owner can meet"); }, on:true},
-  {id:"hype", get label(){ return tt("nav.kind.hype.label", "Demand wave ending"); }, get note(){ return tt("nav.kind.hype.note", "A wave with days left and a site trading under it"); }, on:false},
-  {id:"trend", get label(){ return tt("nav.kind.trend.label", "Revenue trend"); }, get note(){ return tt("nav.kind.trend.note", "A shop's or office's week up or down by more than 15%"); }, on:true},
-  {id:"unplanned", get label(){ return tt("nav.kind.unplanned.label", "No distribution plan"); }, get note(){ return tt("nav.kind.unplanned.note", "A shelf selling goods no plan tops up"); }, on:true},
-  {id:"unsourced", get label(){ return tt("nav.kind.unsourced.label", "Nothing upstream supplies it"); }, get note(){ return tt("nav.kind.unsourced.note", "Goods a shelf is topped up with or prices, or a depot sends on, that nothing brings in"); }, on:true},
-  {id:"outruns", get label(){ return tt("nav.kind.outruns.label", "Outsells its top-up"); }, get note(){ return tt("nav.kind.outruns.note", "A peak day that empties the shelf before the next drop"); }, on:true},
-  {id:"paused", get label(){ return tt("nav.kind.paused.label", "Import paused"); }, get note(){ return tt("nav.kind.paused.note", "An import switched off, not covered by a route, with the depot still drawing"); }, on:true},
-  {id:"feed", get label(){ return tt("nav.kind.feed.label", "Factory inputs"); }, get note(){ return tt("nav.kind.feed.note", "An input arriving short of what the machines need"); }, on:true},
-  {id:"unnamed", get label(){ return tt("nav.kind.unnamed.label", "Unnamed factory line"); }, get note(){ return tt("nav.kind.unnamed.note", "A machine running a recipe the board cannot name"); }, on:true},
-  {id:"unset", get label(){ return tt("nav.kind.unset.label", "Machine with no recipe"); }, get note(){ return tt("nav.kind.unset.note", "A machine staffed and rented, making nothing"); }, on:true},
-  {id:"shortfall", get label(){ return tt("nav.kind.shortfall.label", "Import shortfall"); }, get note(){ return tt("nav.kind.shortfall.note", "A depot that runs dry before the next import or route round"); }, on:true},
-  {id:"topup", get label(){ return tt("nav.kind.topup.label", "Depot top-up too low"); }, get note(){ return tt("nav.kind.topup.note", "A depot fed only by a route from your own site, whose busiest day outruns its daily top-up"); }, on:true},
-  {id:"wholesale", get label(){ return tt("nav.kind.wholesale.label", "Wholesale delivery too low"); }, get note(){ return tt("nav.kind.wholesale.note", "A shop or depot a wholesale store delivers to each week, whose delivery brings less than a week's use or runs out before the next one"); }, on:true},
-  {id:"order", get label(){ return tt("nav.kind.order.label", "Weekly order too small"); }, get note(){ return tt("nav.kind.order.note", "An import that cannot cover its own week"); }, on:true},
-  {id:"atcap", get label(){ return tt("nav.kind.atcap.label", "At capacity"); }, get note(){ return tt("nav.kind.atcap.note", "Hours a week the staff, registers or workstations turn people away"); }, on:true},
-  {id:"idlestaff", get label(){ return tt("nav.kind.idlestaff.label", "Overstaffed hours"); }, get note(){ return tt("nav.kind.idlestaff.note", "More counters or workstations staffed than the customers need"); }, on:false},
-  {id:"dead", get label(){ return tt("nav.kind.dead.label", "Idle stock"); }, get note(){ return tt("nav.kind.dead.note", "Goods sitting in a depot no line draws from"); }, on:true},
-  {id:"notrouted", get label(){ return tt("nav.kind.notrouted.label", "Not routed"); }, get note(){ return tt("nav.kind.notrouted.note", "Stock a depot or factory holds that no plan sends on, while your own sites sell or need it"); }, on:true},
-  {id:"target", get label(){ return tt("nav.kind.target.label", "Top-up target too high"); }, get note(){ return tt("nav.kind.target.note", "A top-up target far above what the shops sell"); }, on:true},
-];
 const ALERT_SETTINGS_KEY = "ba_dash_alert_groups";
 /* What is stored is only what the player switched: {v: 2, set: {kind: on}}, so
    a kind whose default changes later moves with it unless the player chose.
@@ -19912,24 +19936,7 @@ const SS_VIEWS = [
    get p(){ return tt("nav.search.changelog.line", "More · what's new"); }, ic: "list", syn: ["new", "updates", "release notes"], need: false,
    go(){ const d = $("changelogDialog"); if(d && !d.open){ d.showModal(); featureDiscovery.visit("changelog"); d.scrollTop = 0; } }},
 ];
-/* The words players use for a kind of finding. */
-/* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
-   needs: its group, emitted by note() in _alerts() or _finding() in a helper
-   such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
-   FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
-   ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
-   search words, if players have any; its line under "What counts as a finding"
-   in docs/dashboard-reference.md. The checklist has the only-if tables. */
-const SS_KIND_SYN = {feed: ["fed", "inputs", "ingredients", "starved"], atcap: ["capacity", "full", "ceiling", "turned away"],
-  idlestaff: ["overstaffed", "idle staff", "too many staff", "hire"], staff: ["unstaffed", "no staff", "staffing", "hire", "on shift"],
-  jobdemand: ["demands", "unhappy staff", "quit", "hire"], companydemand: ["insurance", "health insurance", "hr manager"],
-  dead: ["dead stock", "stock not moving", "not moving"], target: ["overstock"],
-  notrouted: ["not routed", "no route", "unrouted", "stuck in the warehouse"],
-  topup: ["top-up", "route too low", "depot top-up"],
-  unsourced: ["no supplier", "no source", "never stocked", "not supplied", "missing import"],
-  wholesale: ["wholesale", "contract", "delivery"],
-  satisfaction: ["standards"], promotion: ["pull"], hype: ["wave", "hype"], loss: ["loss", "losing"]};
-/* ...and for the wiki's pages, by title. */
+/* The words players use for the wiki's pages, by title. */
 const SS_WIKI_SYN = {"MyEmployees App": ["hire", "hiring", "fire"], "Headhunter": ["hire", "recruit"],
   "Employee Schedule": ["schedule", "shifts"], "Loans / Investments": ["debt", "loan", "interest"],
   "Sizes / Types": ["floor size", "m²", "building size"], "IRS / Taxes": ["tax"],

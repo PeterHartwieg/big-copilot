@@ -928,7 +928,7 @@ arrived: the strip `#arrive`, which takes the keyboard on arrival) and, on the O
 entry, `nxOv` (its filters, folds and the row the reader left from). A load with no hash opens
 `ba_dash_route`. The code's tables are the record: `ROUTES` and `AREAS` for the routes,
 `ROUTE_ALIASES`, `ROUTE_ALIAS_INTO`, `PAGE_ALIASES`, `SEC_PAGE`, `SEC_MOVED` and `SUPPLY_WAS`
-for old addresses, `FINDING_ROUTES` for each finding kind, and the `data-ov-route` links in
+for old addresses, `FINDING_KINDS` (each kind's `route`) for each finding kind, and the `data-ov-route` links in
 `#toolPanels` (`template/board.html`) for All tools.
 
 Two routes share the Map page: `map` with the finder off and `expansion/finder` with it on.
@@ -1059,13 +1059,12 @@ says otherwise; "board script" means `template/board.js`, the last `<script>` bl
 
 ### A finding kind
 
-A kind needs its group (from `note()`, a `_finding()` call or `AMENITY_DEMANDS`), and
-rows in `ALERT_GROUPS`, `ALERT_LINKS`, `FINDING_ROUTES` and `ALERT_EVIDENCE` (or
-`NO_EVIDENCE` in `tests/alert_kinds.test.cjs`); `ALERT_UNITS` if its worth is money
-(else `NOT_MONEY` there); `SS_KIND_SYN` if players have words for it; and its
-player-facing line under "What counts as a finding" in `docs/dashboard-reference.md`.
-Every other row is *only if*. The same summary sits above each of those tables in
-`ba_dashboard.py` and `template/board.js`.
+A kind needs its group (from `note()`, a `_finding()` call or `AMENITY_DEMANDS`) on the
+Python side, and on the board one record in `FINDING_KINDS`; then `ALERT_UNITS` if its
+worth is money (else `NOT_MONEY` in `tests/alert_kinds.test.cjs`), and its player-facing
+line under "What counts as a finding" in `docs/dashboard-reference.md`. Every other row is
+*only if*. The same summary sits above `ALERT_UNITS` and `_alerts()` in `ba_dashboard.py`
+and above `FINDING_KINDS` in `template/board.js`.
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
@@ -1076,24 +1075,17 @@ Every other row is *only if*. The same summary sits above each of those tables i
 | `ALERT_UNITS = {` | *Only if* its `worth` is money: the unit, such as `"/day rent"`. Otherwise the kind goes on `NOT_MONEY` in `tests/alert_kinds.test.cjs` | `tests/alert_kinds.test.cjs`, "every finding kind has an ALERT_UNITS unit or is listed as carrying no money" |
 | `SUMMARIES = {`, and `WORST_FIRST =` for mixed severities | *Only if* three or more at one site should merge into one counted line | none; a missing entry just stops the merge |
 | `def _condense(` | *Only if* the kind merges and a field of its own must survive the merge. A merged row is built fresh: it keeps `group`, the key the rows were merged on; from the worst row it keeps `level`, `site`, `siteKey`, `detail` (that row's `text`) and `ev` when present; `text` is the `SUMMARIES` line, `worth` the sum of the rows' non-null worths (or `None` when there are none), `unit` from `ALERT_UNITS`, `id` a new `_alert_id("summary", …)`, `amt` the count of rows it stands for (`orders` for `order`, else `findings`), and `always` is true if any row's is. Every other field is dropped. Every row, merged or not, also loses `rank` and `subject`, and `always` once the materiality gate has used it | none |
-| `const ALERT_GROUPS = [` (board script) | `{id, label, note, on}`. The settings panel, `kindLabel`, `kindCounts`, search and the map's `kindOff` all read it. Keep a noisy kind `on: false` | `tests/alert_kinds.test.cjs`, "At capacity is on by default" and the per-kind tests; `tests/test_doc_registries.py`, "test_every_alert_group_is_a_group_the_findings_emit" |
+| `const FINDING_KINDS = [` (board script) | One record per kind, in the order the kinds panel lists them: `{id, label, note, on, link, route, evidence}` and the *only if* fields below. `label` and `note` stay literal getters round `tt()` (a copy or a spread freezes one language); keep a noisy kind `on: false`. `link` is where a click lands, `{sec, view?, site?, port?}`, where `view` is a Supply view (`imports`, `deliveries`, `production`) or `"route"` for the view of the finding's route (`findingRoute()`); without it `goToAlert()` does nothing. `route` is its route and the action's words, `{route, act, pick?}`, `pick(a)` returning another `{route, act}` for some of its findings (a route-fed shortfall is a delivery, a staff finding at a factory is Production); `link` is the landing inside it. `evidence` is the site panel block it lights, `{block, hit?}`; a kind with no site panel has none and goes on `NO_EVIDENCE` in `tests/alert_kinds.test.cjs`. *Only if*: `sitePick` (the kind is company-wide, with no site of its own), `landsOnRow` (the finding is about one shelf, stock or input row), `evidenceAt` (a depot or factory keeps it in another block), `evidenceHit` (the hit depends on the site), `syn` (players have words for it, for search). The board reads it through tables derived from it (`ALERT_GROUPS`, `ALERT_LINKS`, `FINDING_ROUTES`, `ALERT_EVIDENCE`, `ALERT_SITE_PICK`, `ALERT_LANDS_ON_ROW`, `SP_EVIDENCE_KIND`, `SP_EVIDENCE_HIT`, `SS_KIND_SYN`); never add to those. The settings panel, `kindLabel`, `kindCounts`, search and the map's `kindOff` read `ALERT_GROUPS` | `tests/alert_kinds.test.cjs`, "At capacity is on by default", the per-kind tests, "every finding kind has an ALERT_LINKS entry …", "every finding kind with a site panel has an ALERT_EVIDENCE entry" and "the supply kinds land on the Supply view of their route"; `tests/test_doc_registries.py`, "test_every_alert_group_is_a_group_the_findings_emit"; `tests/shell_routes.test.cjs`, "every finding kind names a real route, and every route is a view of its area" (a new kind also bumps the kind count it pins); `tests/job_demands.test.cjs`, "both demand findings can be filtered and link somewhere"; `tests/site_panel.test.cjs`, "the findings here are the ones about this site, and each lights its block"; `tests/search.test.cjs`, "the index holds every group …" |
 | `const ALERT_DEFAULTS_V1 =` (board script) | Never add to it: it is the frozen migration of old settings | `tests/alert_kinds.test.cjs`, "a stored whole map keeps only …" |
-| `const ALERT_LINKS = {` (board script) | Where a click lands: `{sec, view?, site?, port?}`, where `view` is a Supply view (`imports`, `deliveries`, `production`) or `"route"` for the view of the finding's route (`findingRoute()`). Without it `goToAlert()` does nothing | `tests/alert_kinds.test.cjs`, "every finding kind has an ALERT_LINKS entry …", the per-kind tests and "the supply kinds land on the Supply view of their route"; `tests/job_demands.test.cjs`, "both demand findings can be filtered and link somewhere" |
-| `const FINDING_ROUTES = {` (board script) | Its route and the action's words: `{route, act, pick?}`, `pick(a)` returning another `{route, act}` for some of its findings (a route-fed shortfall is a delivery, a staff finding at a factory is Production). `ALERT_LINKS` is the landing inside the route | `tests/shell_routes.test.cjs`, "every finding kind names a real route, and every route is a view of its area"; a new kind also bumps the kind count that test pins |
-| `const ALERT_SITE_PICK = {` (board script) | *Only if* the kind is company-wide, with no site of its own | `tests/job_demands.test.cjs` |
-| `const ALERT_LANDS_ON_ROW = new Set(` (board script) | *Only if* the finding is about one shelf, stock or input row | none |
-| `const ALERT_EVIDENCE = {` (board script) | The site panel block it lights, `{block, hit?}`. A kind with no site panel goes on `NO_EVIDENCE` in `tests/alert_kinds.test.cjs` instead | `tests/alert_kinds.test.cjs`, "every finding kind with a site panel has an ALERT_EVIDENCE entry"; `tests/site_panel.test.cjs`, "the findings here are the ones about this site, and each lights its block" |
-| `const SP_EVIDENCE_KIND = {`, `const SP_EVIDENCE_HIT = {` (board script) | *Only if* a depot or factory keeps it in another block, or the hit depends on the site | `tests/alert_kinds.test.cjs` for the first; none for the second |
 | `amt=` on its `note(` or `_finding(` (`_amt()`), and `amtUnit()` in the board script for a new unit | *Only if* its `worth` is not money and its sentence has a figure worth showing in the amount column; without it the column is empty | `tests/alert_kinds.test.cjs`, "the amount column shows a finding's amt"; `tests/test_payload_snapshot.py` |
-| `const SS_KIND_SYN = {` (board script) | The players' own words for it, for search | `tests/search.test.cjs`, "the index holds every group …" |
-| `function ssKindLands(` (board script) | *Only if* the kind's `ALERT_LINKS` entry has no `site`, no `tab` and no `port`, and its `sec` is not `secMarket` or `secPortfolio` (a finding that lands on Payroll or Milestones, say); every other kind already lands where it should | none |
+| `function ssKindLands(` (board script) | *Only if* the kind's `link` has no `site`, no `tab` and no `port`, and its `sec` is not `secMarket` or `secPortfolio` (a finding that lands on Payroll or Milestones, say); every other kind already lands where it should | none |
 | "What counts as a finding" in `docs/dashboard-reference.md` | The player-facing description | none |
 
 The map colours a finding by its `level` and `kindOff()`, so `web/map.js` needs nothing.
-Not every kind is in every table, and the tests list the exceptions by name: `vacant` has
-no `ALERT_EVIDENCE` entry, since a vacant lease has no site panel (`NO_EVIDENCE`), and
+Not every kind has every field, and the tests list the exceptions by name: `vacant` has
+no `evidence`, since a vacant lease has no site panel (`NO_EVIDENCE`), and
 `ALERT_UNITS` holds only the money kinds (`NOT_MONEY` lists the rest). Most kinds have no
-`SS_KIND_SYN` entry, which no test checks. Many kinds come from `_finding()` in
+`syn`, which no test checks. Many kinds come from `_finding()` in
 a `_*_notes` helper or from `AMENITY_DEMANDS`, not from `note()`, so the group test reads
 all three.
 

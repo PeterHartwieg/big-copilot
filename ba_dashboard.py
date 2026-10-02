@@ -17314,11 +17314,11 @@ def _plan(
 # are left empty because their worth is always None.
 # Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
 # needs: its group, emitted by note() in _alerts() or _finding() in a helper
-# such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
-# FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
-# ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
-# search words, if players have any; its line under "What counts as a finding"
-# in docs/dashboard-reference.md. The checklist has the only-if tables.
+# such as _idle_notes() (or an AMENITY_DEMANDS row); its FINDING_KINDS record
+# in template/board.js with id, label, note, on, link, route and evidence (or
+# NO_EVIDENCE in tests/alert_kinds.test.cjs); ALERT_UNITS if its worth is money,
+# else NOT_MONEY there; its line under "What counts as a finding" in
+# docs/dashboard-reference.md. The checklist has the only-if fields.
 ALERT_UNITS = {
     "notrading": msg("f.unit.rent", "/day rent"),
     "vacant": msg("f.unit.rent", "/day rent"),
@@ -17460,11 +17460,11 @@ def _finding(
 
 # Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
 # needs: its group, emitted by note() in _alerts() or _finding() in a helper
-# such as _idle_notes() (or an AMENITY_DEMANDS row); ALERT_GROUPS; ALERT_LINKS;
-# FINDING_ROUTES; ALERT_EVIDENCE, or NO_EVIDENCE in tests/alert_kinds.test.cjs;
-# ALERT_UNITS if its worth is money, else NOT_MONEY there; SS_KIND_SYN for its
-# search words, if players have any; its line under "What counts as a finding"
-# in docs/dashboard-reference.md. The checklist has the only-if tables.
+# such as _idle_notes() (or an AMENITY_DEMANDS row); its FINDING_KINDS record
+# in template/board.js with id, label, note, on, link, route and evidence (or
+# NO_EVIDENCE in tests/alert_kinds.test.cjs); ALERT_UNITS if its worth is money,
+# else NOT_MONEY there; its line under "What counts as a finding" in
+# docs/dashboard-reference.md. The checklist has the only-if fields.
 def _alerts(
     businesses: list,
     supply: dict,
