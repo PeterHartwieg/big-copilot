@@ -21,11 +21,20 @@ const htmlRe = (key, params = {}, options = {}) => {
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
+const {at} = require('./_slice.cjs');
 
 const WIKI = fs.readFileSync(path.join(__dirname, '..', 'web', 'wiki.js'), 'utf8');
 /* web/i18n.js runs ahead of wiki.js on the page: the Wiki's own words go
    through its tt(). */
 const I18N = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
+/* The board's escaping and count helpers wiki.js calls (ssEsc, spEsc, hrNum),
+   read from template/board.js rather than copied, so the wiki is tested with
+   the real ones. Each is one statement, up to its first ";" at a line end. */
+const BOARD = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.js'), 'utf8');
+const BOARD_HELPERS = ['const ssEsc = ', 'const spEsc = ', 'const hrNum = '].map(anchor => {
+  const i = at(BOARD, anchor);
+  return BOARD.slice(i, BOARD.indexOf(';\n', i) + 2);
+}).join('');
 /* The board's neighbourhood tables, as render() writes them in: keyed by the
    game's key, the words looked up only to be shown. */
 const HOOD_EN = {midtown: 'Midtown', hellskitchen: "Hell's Kitchen", murrayhill: 'Murray Hill',
@@ -251,6 +260,7 @@ function wiki({data = DATA, fetchImpl, save = null, seen = {}} = {}) {
   });
   context.window.window = context.window;
   vm.runInContext(I18N, context);
+  vm.runInContext(BOARD_HELPERS, context);
   vm.runInContext(WIKI, context);
   const call = (expr) => vm.runInContext(expr, context);
   return {
