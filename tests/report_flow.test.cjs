@@ -167,6 +167,10 @@ test('the footer opens the form on the landing, where no save can be attached', 
   // An empty text is not sent.
   await page.locator('.br-foot .primary').click();
   assert.equal(await page.locator('.br-status').innerText(), en('br.empty'));
+  // Control characters alone are empty too: the Worker would drop them.
+  await page.locator('#brText').fill('\u0001\u0002');
+  await page.locator('.br-foot .primary').click();
+  assert.equal(await page.locator('.br-status').innerText(), en('br.empty'));
   assert.equal(posts.length, 0);
   // A network failure says so too.
   await page.locator('#brText').fill('A wrong number on the Today page.');

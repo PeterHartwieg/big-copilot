@@ -369,7 +369,7 @@
     const e = brEls;
     // What the Worker would keep: control characters go, as in brParts().
     const text = e.text.value.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "").trim();
-    if (!text) { brStatus(tt("br.empty", "Describe what went wrong first."), {tone: "bad"}); e.text.focus(); return; }
+    if (!text) { brStatus(tt("br.empty", "Describe what went wrong first."), {tone: "bad"}); e.text.focus({preventScroll: true}); return; }
     const seq = brSeq;
     // What this send is, taken now, so nothing a later open holds can join it.
     const ctx = brCtx, saveOn = e.save.input.checked, detailsOn = e.details.input.checked;
