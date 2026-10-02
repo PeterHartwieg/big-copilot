@@ -826,7 +826,7 @@ let weekSeries=null;
 /* Everything that is folded away by default, so a refresh does not re-fold what
    the reader has just opened. */
 let openChains = new Set(), showMinor = false, showRhythmSites = false;
-let showAllShelves = false, showRhythmCards = false;
+let showAllShelves = false;
 let showAllProducts = false;
 /* Each Supply table's own order as {col, dir}: one per Checks view, one for
    the imports, one for the top-ups. None is the order the view ranks by. */
@@ -2194,8 +2194,6 @@ function szTally(rows, factOf){
   rows.forEach(r => { const st = factOf(r).st; n[st] = (n[st] || 0) + 1; });
   return n;
 }
-/* A row worth reading is one Python did not call covered or made here. */
-const szKeep = f => f.st !== "covered" && f.st !== "made";
 /* What to do about a factory input, after its chip, in the input's own
    words: the figure is the fact's, the rest is what the row already knows
    (the depot it comes from, what arrives, the lines it feeds). */
@@ -4132,9 +4130,9 @@ function miniChart(series, key, colour, o = {}){
    building's own capacity held it). The sentence under the grid
    says which, and when capacity stood idle. */
 const HOUR_ROWS = [1,2,3,4,5,6,0];
-const WEEK_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-/* WEEK_SHORT[wd] in the UI language, for the site panel's own labels. The
-   arrays stay English: spIdleWeek() reads Python's English weekday off them. */
+/* A weekday (0 = Sunday) as a short label in the UI language, for the site
+   panel's own labels. WEEKDAY_NAMES stays English: spIdleWeek() reads Python's
+   English weekday off it. */
 function spWd(wd){
   switch(((Math.trunc(Number(wd)) % 7) + 7) % 7){
     case 0: return tt("sp.wd.0", "Sun");
@@ -7250,7 +7248,6 @@ function spActs(b, kind){
    the type on a line under the name. */
 const siteTd = b => `${hoodHtml(b)}${b.code ? "&nbsp; " : ""}${siteLink(b)}${mapButton(b.key, b.name || b.address)}<span class="sub"${
   b.code ? ` style="padding-left:34px"` : ""}>${spEsc(b.type)}</span>`;
-const checkMark = `<span class="check" style="vertical-align:-4px;margin-right:6px">${icon("tick")}</span>`;
 
 /* One import row's setting: what the game holds, what the board suggests,
    and what the Set to box shows. Pure, so it can be checked without a page.
@@ -8126,7 +8123,6 @@ function pgStateAt(siteKey, slug){
 const SB_VIEWS = ["changes", "imports", "deliveries", "production", "flow"];
 /* Registry: "A view or a page" (only if: see the checklist). */
 const SB_SEC = {changes: "secChanges", imports: "secImports", deliveries: "secDeliveries", production: "secProduction", flow: "secFlow"};
-const SB_LABEL = {shops: "Shops", warehouses: "Warehouses", factories: "Factories"};
 /* The view each kind of change is typed on. A catch-up belongs to the import
    it bridges, or to the wholesale delivery; a factory's daily top-up and its
    run hours to Production, which plans the lines that eat them. */
@@ -17504,15 +17500,11 @@ const PAGES = [
   ...(typeof showWikiRoute === "function" ? [{id:"wiki", get label(){ return tt("nav.ref.wiki2", "Wiki"); }, host:"pageWiki", newFeature:"wiki"}] : []),
 ];
 /* A view of a page, [id, label, anchor], its label (index 1) read in the UI
-   language every time. navSubLabel() is a view's label by its id. */
+   language every time. */
 function navView(id, label, anchor){
   const v = [id, "", anchor];
   Object.defineProperty(v, 1, {get: label, enumerable: true});
   return v;
-}
-function navSubLabel(pageId, id){
-  const v = SUBS[pageId] && SUBS[pageId].items.find(([k]) => k === id);
-  return v ? v[1] : id;
 }
 /* Hashes that named a page which has since become a view of another. Every link
    already saved, printed or shared keeps working, without a page behind it. */
@@ -19407,16 +19399,6 @@ function ssGroupMore(g, n){
     default: return tt("nav.search.more.wiki", {one: "{n} more wiki ›", other: "{n} more wiki ›"}, {n});
   }
 }
-function ssGroupEvery(g){
-  switch(g){
-    case "views": return tt("nav.search.every.views", "every pages & views");
-    case "sites": return tt("nav.search.every.sites", "every sites");
-    case "products": return tt("nav.search.every.products", "every products");
-    case "kinds": return tt("nav.search.every.kinds", "every finding kinds");
-    case "finder": return tt("nav.search.every.finder", "every find a location");
-    default: return tt("nav.search.every.wiki", "every wiki");
-  }
-}
 /* Your own sites lead a tie; the wiki is reference, and waits. */
 const SS_BIAS = {sites: 10, wiki: -15};
 const SS_PER = 4, SS_PER_PHONE = 3;
@@ -19508,13 +19490,6 @@ function ssPrices(slug){
 }
 /* The site Optimize staffing would open, as its card names it. */
 const ssStaffingSite = () => ($("optimizeStaffingCard") || {dataset: {}}).dataset.site || "";
-/* Whose crew to show: a site with unmet staff demands, else the first that trades. */
-function ssCrewSite(){
-  const a = alertLines().find(x => x.group === "jobdemand" && x.siteKey);
-  const b = (a && D.businesses.find(x => x.key === a.siteKey))
-    || D.businesses.find(x => x.status === "retail" || x.status === "office");
-  return b ? b.key : "";
-}
 /* Ring one tile or row a palette entry landed on, the way the Roster rings. */
 function ssRing(el){
   if(!el) return;
@@ -20966,8 +20941,6 @@ document.body.append(pxScrim, pxSheet);
 /* A row is a div, not a section: sections skip their painting off screen
    (content-visibility), which a sheet's rows must never do. */
 const pxRow = (id, title, lead, body) => `<div class="px-row" role="group" aria-labelledby="pxh-${id}" data-px="${id}"><div class="px-l"><h3 id="pxh-${id}">${title}</h3>${lead ? `<p>${lead}</p>` : ""}</div><div class="px-c">${body}</div></div>`;
-/* The theme in force: the attribute on <html>, or the system's. */
-const pxTheme = () => document.documentElement.getAttribute("data-theme") || "auto";
 function pxPrefsHtml(){
   /* Theme and language live in the footer, on every page (declutter X5). */
   const chip = $("localeChip"), reset = $("localeReset");
