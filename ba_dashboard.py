@@ -1895,7 +1895,7 @@ def _premises_demand(market: dict) -> dict:
 # interior (BuildingSizeInfo(size, version)); the type is not part of it, so an
 # office C2 is the same shell as a shop C2. make_floor_plans.py draws one plan
 # for each layout these kinds use.
-FLOOR_PLAN_KINDS = ("retail", "office", "warehouse")
+FLOOR_PLAN_KINDS = ("retail", "office", "warehouse", "cinema", "theater")
 
 
 def _layout(row: dict) -> str | None:
@@ -16489,10 +16489,10 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
 
 def plan_layout(row: dict) -> str | None:
     """What a plan's outfit is kept by: a building's layout (size and version,
-    a premises row's `layout` or a ba_buildings.json row). A cinema or a
-    theatre has no floor plan, so no `layout`, but each version seats its own
-    crowd (S1 150, S3 100): its size and version from the building table.
-    The board reads the same key (osLayout(), from `venues`)."""
+    a premises row's `layout` or a ba_buildings.json row). Older payload rows
+    without a layout fall back to the building table, preserving a venue's
+    version-specific capacity (S1 150, S3 100). The board reads the same key
+    (osLayout(), from `venues`)."""
     if "layout" in row or "size" in row:
         if row.get("layout"):
             return row["layout"]
