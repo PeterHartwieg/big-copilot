@@ -13153,9 +13153,11 @@ function ofPlanName(p){
 /* The For picker: a new factory, then each factory the player runs. */
 function ofForHtml(){
   const owned = ofOwned();
-  const btn = (key, label, ico) => `<button type="button" class="${planTarget === key ? "on" : ""}" data-of-for="${attr(key)}" aria-pressed="${planTarget === key}">${ofIcon(ico)}${label}</button>`;
+  /* A long address is cut short on a phone: its tip names it in full. */
+  const btn = (key, label, ico, tip) => `<button type="button" class="${planTarget === key ? "on" : ""}" data-of-for="${attr(key)}" aria-pressed="${planTarget === key}"${
+    tip ? ` data-tip="${attr(tip)}"` : ""}>${ofIcon(ico)}${label}</button>`;
   return `<span class="os-lab">${tt("gr.of.for", "For")}</span><nav class="ff-kind" aria-label="${attr(tt("gr.of.forAria", "What the plan is for"))}">${
-    btn("new", tt("gr.of.for.new", "New factory"), "plus")}${owned.map(f => btn(f.key, `<span translate="no">${spEsc(f.b.address || shortName(f.b))}</span>`, "factory")).join("")}</nav>`;
+    btn("new", tt("gr.of.for.new", "New factory"), "plus")}${owned.map(f => { const name = f.b.address || shortName(f.b); return btn(f.key, `<span translate="no">${spEsc(name)}</span>`, "factory", name); }).join("")}</nav>`;
 }
 /* The plan in one strip: what, where, the investment and the running costs,
    which sit apart behind a dashed edge because they are not part of it. */
