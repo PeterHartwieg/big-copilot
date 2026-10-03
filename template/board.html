@@ -4110,17 +4110,20 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 .ff-note.warn>svg{stroke:var(--warn)}
 .ff-note b{color:var(--ink);font-weight:600}
 .ff-flow{display:flex;align-items:center;flex-wrap:wrap;gap:10px 0;margin-top:16px;padding:14px 16px;border-radius:12px;border:1px solid var(--rule-soft);background:var(--surface)}
-.ff-node{display:flex;align-items:center;gap:10px;min-width:0}
+.ff-node{display:flex;align-items:center;gap:10px;min-width:0;max-width:100%}
+.ff-node>span{min-width:0}
 .ff-node .ic{display:grid;place-items:center;flex:none;width:34px;height:34px;border-radius:9px;background:var(--raised);color:var(--ink-2)}
 .ff-node .ic svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .ff-node.new .ic{background:var(--accent);color:var(--on-accent)}
 .ff-node.miss .ic{background:none;border:1.5px dashed var(--warn);color:var(--warn)}
-.ff-node b{display:block;font-size:13px;font-weight:600;white-space:nowrap}
-.ff-node small{display:block;margin-top:2px;font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+/* Keep full names readable in the diagram, even above the phone breakpoint. */
+.ff-node b{display:block;font-size:13px;font-weight:600;white-space:normal;overflow-wrap:anywhere}
+.ff-node small{display:block;margin-top:2px;font-size:11.5px;color:var(--ink-3);white-space:normal;overflow-wrap:anywhere}
 .ff-arrow{flex:0 0 34px;height:2px;margin:0 8px;background:repeating-linear-gradient(90deg,var(--ink-3) 0 4px,transparent 4px 8px);position:relative}
 .ff-arrow::after{content:"";position:absolute;right:-2px;top:-4px;border:5px solid transparent;border-left-color:var(--ink-3);border-right:0}
-.ff-shops{display:flex;flex-wrap:wrap;gap:5px;min-width:0}
+.ff-shops{display:flex;flex-wrap:wrap;gap:5px;min-width:0;max-width:100%}
 .ff-shops span{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border-radius:6px;background:var(--raised);font-size:12px;color:var(--ink-2);white-space:nowrap}
+.ff-shops > span{max-width:100%;height:auto;min-height:24px;white-space:normal;overflow-wrap:anywhere}
 .ff-shops .hood{height:16px;min-width:20px;font-size:9px}
 .ff-next{display:flex;justify-content:flex-end;margin-top:18px}
 .ff-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-top:12px;border:1px solid var(--rule-soft);border-radius:10px;background:var(--ground)}
@@ -4226,10 +4229,6 @@ a.sb-plan:hover em{color:var(--ink);text-decoration:underline}
   .os-total,.os-gate,.os-toolbar .aside{flex-wrap:wrap;min-width:0;max-width:100%;overflow-wrap:anywhere}
   .ff-callout>span{min-width:0;overflow-wrap:anywhere}
   .ff-run2,.os-roi{overflow-wrap:anywhere}
-  .ff-node,.ff-shops{max-width:100%}
-  .ff-node>span{min-width:0}
-  .ff-node b,.ff-node small{white-space:normal;overflow-wrap:anywhere}
-  .ff-shops > span{max-width:100%;height:auto;min-height:24px;white-space:normal;overflow-wrap:anywhere}
 }
 
 /* A section worked out on demand (odWaitHtml()): the words while it runs, or
