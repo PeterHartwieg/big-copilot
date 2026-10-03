@@ -138,7 +138,7 @@ test('the CI matrix shards execute every discovered file once and propagate a re
     (name === 'c' ? `throw new Error('intentional shard failure');\n` : '') + '});\n');
   const workflow = fs.readFileSync(path.join(__dirname,'../.github/workflows/tests.yml'),'utf8');
   const shards = [...workflow.matchAll(/'(\d+\/\d+)'/g)].map(match=>match[1]);
-  assert.deepEqual(shards,['1/4','2/4','3/4','4/4']);
+  assert.deepEqual(shards,['1/6','2/6','3/6','4/6','5/6','6/6']);
   const statuses=[];
   // Exercise a fresh CLI invocation; Node suppresses --test inside a test child.
   const env={...process.env};
@@ -149,7 +149,7 @@ test('the CI matrix shards execute every discovered file once and propagate a re
     assert.ok([0,1].includes(result.status),result.stderr);
     statuses.push(result.status);
   }
-  assert.deepEqual(statuses.slice().sort(),[0,0,0,1]);
+  assert.deepEqual(statuses.slice().sort(),[0,0,0,0,0,1]);
   assert.deepEqual(fs.readFileSync(path.join(root,'executed.txt'),'utf8').trim().split(/\r?\n/).sort(),names);
 });
 
