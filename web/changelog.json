@@ -1,5 +1,11 @@
 [
   {
+    "pr": 262,
+    "date": "2026-10-03",
+    "title": "Plan a factory in all seven UI languages",
+    "summary": "Plan a factory, custom product setups, recent production findings and the bug-report form now have text in German, Spanish, French, Korean, Portuguese, Russian and Turkish. The latest cinema capacity advice and staffing labels are included too. These translations are machine drafts and remain open for native-language review."
+  },
+  {
     "pr": 261,
     "date": "2026-10-03",
     "title": "See what holds back a cinema",
