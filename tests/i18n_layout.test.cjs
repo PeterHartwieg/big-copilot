@@ -606,6 +606,8 @@ test('the containing-box check catches each long-name overflow whatever the font
     ['in-game instructions', 'factory', 'until', 790, '.os-ingame{min-width:auto;overflow-wrap:normal}.os-ingame>span{min-width:auto}'],
     ['checklist detail', 'factory', 'until', 790, '.os-ck .tx small{overflow-wrap:normal}'],
     ['map legend address', 'factory', 'investment', 790, '.os-maplist span{min-width:auto;overflow-wrap:normal}'],
+    // Wide letter-spacing stands in for the wider Linux font that showed this in CI.
+    ['strip label', 'open', 'breakeven', 360, '.os-lab{letter-spacing:.9em}.os-pb .os-lab{min-width:auto;overflow-wrap:normal}'],
   ];
   for(const [name, planner, step, width, old] of cases){
     await page.setViewportSize({width, height: 900});
