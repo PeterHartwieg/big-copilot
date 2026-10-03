@@ -658,16 +658,24 @@ if(typeof document !== "undefined" && typeof document.addEventListener === "func
    direct or delegated handlers; retry buttons must remain usable on errors. */
 const OD_ACTION_SECTIONS = [
   ["#secOpen, #osCtl", ["openStore"]],
-  ["#secPlan, #secIngredients, #secPlanFlow, #ofCtl, #planPicker, #planFor, #pcPop", ["openFactory", "openStore"]],
-  ["#secStaff, #secSchedules", ["hiring"]],
+  ["#secPlan, #secIngredients, #secPlanFlow, #ofCtl, #planPicker, #planFor", ["openFactory", "openStore"]],
+  ["#secStaff, #secSchedules, [data-hr-staff], [data-hr-all], [data-gw=\"schedule\"]", ["hiring"]],
   ["#secProducts", ["products"]], ["#secGoals", ["goals"]],
   ["#secProduction", ["factoryStaffing"]],
 ];
+/* Detached controls declare the sections they read on their host (or on
+   the individual action). Close and retry do not read those sections. */
+function odActionNeeds(target){
+  const needs = OD_ACTION_SECTIONS.filter(([sel]) => target.closest(sel)).flatMap(([, names]) => names);
+  for(let el = target.closest("[data-od-needs]"); el; el = el.parentElement?.closest("[data-od-needs]"))
+    needs.push(...el.dataset.odNeeds.split(" ").filter(Boolean));
+  return [...new Set(needs)];
+}
 if(typeof document !== "undefined" && typeof document.addEventListener === "function")
-  ["click", "change", "input"].forEach(type => document.addEventListener(type, e => {
-    if(!e.target?.closest || e.target.closest("[data-od-retry]")) return;
-    const needs = OD_ACTION_SECTIONS.filter(([sel]) => e.target.closest(sel)).flatMap(([, names]) => names);
-    if(needs.filter(n => !odNeed(n)).length){ e.preventDefault(); e.stopImmediatePropagation(); }
+  ["click", "change", "input", "mousedown", "keydown"].forEach(type => document.addEventListener(type, e => {
+    if(!e.target?.closest || e.target.closest("[data-od-retry], [data-od-close]")) return;
+    if(type === "keydown" && (e.key === "Escape" || e.key === "Tab")) return;
+    if(odActionNeeds(e.target).filter(n => !odNeed(n)).length){ e.preventDefault(); e.stopImmediatePropagation(); }
   }, true));
 /* Names sort in the language they are shown in; English keeps the order it
    always had. */
@@ -15459,7 +15467,7 @@ function hrSheetHtml(m, r){
   const lacks = picked.some(c => { const at = r.at.get(c.id); return hrWarns(m, c, at.week ? at.week.S : at.over, at.week).length; });
   const table = rows => `<div class="hs-scroll"><table class="hs-t hs-c">${HR_CAND_HEAD}<tbody>${rows.map(c => hrCandRow(m, r, c)).join("")}</tbody></table></div>`;
   return `<div class="hs-sh"><div><h2 id="hsSheetT">${hrRole(r.skill)}</h2><p>${plural(need, "new hire")} · ${sites.map(({S, n}) => `${spEsc(hrSiteName(S))} (${hrNum(n)})`).join(", ")}</p></div>
-      <button type="button" class="gw-x" data-hs-close aria-label="Close">${gwSvg("close")}</button></div>
+      <button type="button" class="gw-x" data-hs-close data-od-close aria-label="Close">${gwSvg("close")}</button></div>
     <div class="hs-sb">
       ${hrFbar(r.skill, f, `<b>${hrNum(r.pass)}</b> match · <b>${hrNum(r.out)}</b> left out`)}
       <div class="hs-scope"><span>Filters for</span><label class="hs-radio"><input type="radio" name="hsScope" data-hr-scope="all"${own ? "" : " checked"}>every role</label><label class="hs-radio"><input type="radio" name="hsScope" data-hr-scope="own"${own ? " checked" : ""}>${hrRole(r.skill)} only</label></div>
@@ -15472,7 +15480,7 @@ function hrSheetHtml(m, r){
         out.length ? `<a class="link" href="#" data-hs-out>${hrUi.out ? "Hide the left out" : `Show the ${hrNum(out.length)} left out`}</a>` : ""}</div>
     </div>
     <div class="hs-sf"><div class="tot"><div><span>Picked</span><b>${count}</b></div><div><span>Added wages</span><b>+${fmt(bill)}/day</b></div></div>
-      <div class="end"><a class="link" href="#" data-hs-reset>Reset to automatic</a><button type="button" class="hs-cta" data-hs-done>Done</button></div></div>`;
+      <div class="end"><a class="link" href="#" data-hs-reset>Reset to automatic</a><button type="button" class="hs-cta" data-hs-done data-od-close>Done</button></div></div>`;
 }
 /* Change picks is a dialog on <body>: open for hrUi.sheet, drawn again with
    the page, closed when that role is gone. */
@@ -15486,6 +15494,7 @@ function hrSheetPaint(m){
   }
   if(!dlg){
     dlg = document.createElement("dialog");
+    dlg.dataset.odNeeds = "hiring";
     dlg.id = "hsSheet"; dlg.className = "hs-sheet";
     dlg.setAttribute("aria-labelledby", "hsSheetT");
     dlg.addEventListener("close", () => {
@@ -15536,6 +15545,7 @@ function hrPopDraw(m){
   let pop = $("hsDemPop");
   if(!pop){
     pop = document.createElement("div");
+    pop.dataset.odNeeds = "hiring";
     pop.id = "hsDemPop"; pop.setAttribute("role", "dialog"); pop.setAttribute("aria-label", "Leave out anyone asking for");
   }
   const host = anchor.closest("dialog") || document.body;
@@ -15577,6 +15587,7 @@ function hrSelOpen(select){
   let pop = $("hsSelPop");
   if(!pop){
     pop = document.createElement("div");
+    pop.dataset.odNeeds = "hiring";
     pop.id = "hsSelPop"; pop.setAttribute("role", "listbox"); pop.tabIndex = -1;
   }
   const host = select.closest("dialog") || document.body;
@@ -18181,6 +18192,12 @@ function routeSync(){
    site's page is on it, and the ways onto Company that mean the portfolio (the
    nav, a hash, a section) take the site down themselves. */
 function showPage(id, scroll = true, historyMode = "push"){
+  /* Deferred finder restoration belongs to the visit that opened it. Any
+     navigation ends that visit; showFinder() creates the next one's token. */
+  if(typeof cityMapPage !== "undefined" && cityMapPage){
+    cityMapPage.finderRestore = null;
+    odThens = odThens.filter(t => t.key !== "finder-restore");
+  }
   /* Leaving the Overview by any way (the nav, a task, a finding, a name):
      its entry keeps the list as it stands -- filters, "Show N more", open
      Details, the place -- so Back finds it so. A finding or a task has just
@@ -21528,7 +21545,7 @@ function demCellPop(cell, focus = true){
     <div class="fx">${fact(tt("gr.pop.demand", "Demand"), c ? c.demand : "–")}${fact(tt("gr.pop.rivals", "Sellers"), c ? c.providers || 0 : "–")}${
       fact(tt("gr.pop.rent", "To rent"), odReady("premises") ? rent : "—")}</div>
     ${ready ? "" : odWaitHtml("openStore", true)}
-    <div class="acts">${plan ? `<button type="button" class="os-cta" data-dem-go="open">${osIcon("store")}${tt("gr.pop.open", "Open a store here")}</button>` : ""}
+    <div class="acts">${plan ? `<button type="button" class="os-cta" data-dem-go="open" data-od-needs="openStore">${osIcon("store")}${tt("gr.pop.open", "Open a store here")}</button>` : ""}
       <button type="button" class="os-btn" data-dem-go="find">${icon("pin")}${tt("gr.pop.find", "Find a location")}</button></div>`;
   demPop.hidden = false;
   cell.setAttribute("aria-expanded", "true");
@@ -21869,6 +21886,7 @@ function pcPopOpen(btn){
   if(!entry) return;
   if(!pcPop){
     pcPop = document.createElement("div");
+    pcPop.dataset.odNeeds = "openFactory openStore";
     pcPop.id = "pcPop";
     pcPop.className = "pc-pop";
     pcPop.setAttribute("role", "dialog");
@@ -23065,7 +23083,7 @@ function gwDialog(icon, title, where){
   dlg.className = "gw-dlg";
   dlg.tabIndex = -1;  // where focus goes when the control that held it is drawn away
   dlg.setAttribute("aria-labelledby", "gwTitle");
-  dlg.innerHTML = `<div class="gw-grab" aria-hidden="true"></div><div class="gw-head"><span class="gw-kind" aria-hidden="true">${gwSvg(icon)}</span><div><h2 id="gwTitle"></h2><div class="gw-where"></div></div><button type="button" class="gw-x" data-gw-close aria-label="${attr(tt("nav.dlg.close", "Close"))}">${gwSvg("close")}</button></div>
+  dlg.innerHTML = `<div class="gw-grab" aria-hidden="true"></div><div class="gw-head"><span class="gw-kind" aria-hidden="true">${gwSvg(icon)}</span><div><h2 id="gwTitle"></h2><div class="gw-where"></div></div><button type="button" class="gw-x" data-gw-close data-od-close aria-label="${attr(tt("nav.dlg.close", "Close"))}">${gwSvg("close")}</button></div>
     <div class="gw-verdict"></div><div class="gw-fix" aria-live="polite"></div><div class="gw-body" aria-live="polite"></div><div class="gw-foot"></div>`;
   gwHead(dlg, title, where);
   dlg.querySelector("[data-gw-close]").onclick = () => dlg.close();
@@ -23155,6 +23173,7 @@ function gwPaint(dlg, v){
     b.type = "button";
     b.className = `gw-b ${o.kind || "ghost"}${o.busy ? " busy" : ""}`;
     b.dataset.gwB = o.key || label;
+    if(o.close) b.dataset.odClose = "";
     if(o.busy) b.insertAdjacentHTML("beforeend", `<span class="gw-spin" aria-hidden="true"></span>`);
     else if(["undo", "refresh", "skip", "key"].includes(o.icon)) b.insertAdjacentHTML("beforeend", gwSvg(o.icon));
     const text = document.createElement("span");
@@ -23222,7 +23241,7 @@ function gwApprovalView(dlg, allowed){
    never the write itself. */
 function gwFailed(dlg, spec, res, retry, recheck){
   const p = gwProblem(res);
-  const close = [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "ghost"}];
+  const close = [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "ghost", close: true}];
   if(p.uncertain){
     gwPaint(dlg, {phase: "uncertain", wire: "wait", say: `<b>${tt("nav.dlg.say.noanswer", "No answer")}</b>`, meta: gwNow(),
       body: `<p class="gw-said gw-warn">${p.text}</p><div class="gw-reread"><span>${tt("nav.dlg.reread.first", "Reading the game again before anything else is offered")}</span><div class="gw-prog gw-warn"><i></i></div></div>`,
@@ -23233,7 +23252,7 @@ function gwFailed(dlg, spec, res, retry, recheck){
       gwPaint(dlg, {phase: "uncertain", wire: "ok", say: `<b>${tt("nav.dlg.say.uptodate", "The board is up to date")}</b>`, meta: gwNow(),
         body: `<p class="gw-said gw-warn">${p.text}</p>${gwBox("refresh", "dim", `<b>${tt("nav.dlg.uptodate.lead", "The board now shows what the game holds.")}</b> ${
           tt("nav.dlg.uptodate.text", "Check it there: the warning is gone if it went through.")}`)}`,
-        buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go"}]]});
+        buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go", close: true}]]});
     });
     return;
   }
@@ -23298,8 +23317,9 @@ function gwConfirm(spec){
   const title = () => typeof spec.title === "function" ? spec.title() : spec.title;
   const where = () => typeof spec.where === "function" ? spec.where() : spec.where || "";
   const dlg = gwDialog(spec.icon, title(), where());
+  dlg.dataset.odNeeds = (spec.needs || []).join(" ");
   const stays = () => gwUndoStays(spec.kind);
-  const cancel = [tt("nav.dlg.cancel", "Cancel"), () => dlg.close(), {kind: "ghost"}];
+  const cancel = [tt("nav.dlg.cancel", "Cancel"), () => dlg.close(), {kind: "ghost", close: true}];
   const left = [cancel];
   let applying = false;  // one apply per go: a second click must not send a second write
   let judged = "";       // the body the answer on screen judged, as sent
@@ -23324,7 +23344,7 @@ function gwConfirm(spec){
   };
   const nothing = none => gwPaint(dlg, {phase: "nothing", wire: "ok", say: (spec.nothingSay && spec.nothingSay()) || `<b>${tt("nav.dlg.say.nothing", "Nothing to write")}</b>`, meta: gwNow(),
     body: `<p class="gw-said">${none}</p>`,
-    buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go"}]]});
+    buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go", close: true}]]});
   const asking = () => gwPaint(dlg, {phase: "asking", wire: "ask",
     say: allowed ? `<b>${tt("nav.dlg.say.allowed.lead", "Allowed.")}</b> ${tt("nav.dlg.say.allowed.asking", "Asking the game what it would do…")}`
       : `<b>${tt("nav.dlg.say.asking", "Asking the game…")}</b>`, meta: allowed ? "" : tt("nav.dlg.dryrun", "dry run"),
@@ -23371,7 +23391,7 @@ function gwConfirm(spec){
       hint: idle ? "" : answer.ok ? spec.hint || "" : spec.refusedHint ? spec.refusedHint(answer) : tt("nav.dlg.unchanged", "Nothing was changed."),
       warn: !answer.ok && !!spec.refusedHint,
       /* Refused, nothing is left to cancel: the dialog closes. */
-      buttons: [...(answer.ok ? left : [[tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "ghost"}]]),
+      buttons: [...(answer.ok ? left : [[tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "ghost", close: true}]]),
         /* The game moved on since the board was read: the way on is to read it again. */
         ...(gwMovedOn(answer) ? [[tt("nav.dlg.refresh", "Refresh the board"), () => spec.refreshBoard(), {kind: "go", icon: "refresh"}]]
           /* Refused: fixed in the game, the game is asked again from here. */
@@ -23449,7 +23469,7 @@ function gwConfirm(spec){
       hint: !undoable ? "" : typeof hint === "string" ? hint : "",
       buttons: [...(undoable ? [[spec.undoLabel ? spec.undoLabel() : tt("nav.dlg.undo.button", "Undo"), () => gwUndo(spec, dlg), {kind: "undo", icon: "undo", key: "undo"}]] : []), "|",
         ...(spec.more ? [[spec.more.label, spec.more.go, {kind: "ghost", key: "more"}]] : []),
-        [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go"}]]});
+        [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go", close: true}]]});
   };
   /* After an undo in this dialog: the undo said, and the write offered
      again once a board has been built since the undo answered, from the same
@@ -23534,7 +23554,7 @@ async function gwUndo(spec, dlg){
   dlg._gwBoard = D;
   gwPaint(dlg, {phase: "undone", wire: "ok", say: `<b>${tt("nav.dlg.say.undone", "Undone in the game")}</b>`, meta: gwNow(),
     body: `<p class="gw-said ok">${spec.done(answer)}</p>${spec.draw ? spec.draw(answer, "undone") : ""}${gwReread(false)}`,
-    buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go"}]]});
+    buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go", close: true}]]});
 }
 /* Undo, once the dialog is closed: a strip at the foot of the window until
    the next write of that kind, or until the board is another character's or

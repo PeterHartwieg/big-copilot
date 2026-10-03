@@ -43,11 +43,11 @@ print(json.dumps(ba_dashboard.extract(load_save(path), Names(save_fixtures.data_
 });
 after(async () => { await browser?.close(); });
 
-async function open(t, {hash = "", releaseShops = true, savedFactory = false, kept = null} = {}) {
+async function open(t, {hash = "", releaseShops = true, savedFactory = false, kept = null, pick = null} = {}) {
   const context = await browser.newContext({viewport: {width: 1280, height: 1000}, reducedMotion: 'reduce'});
   t.after(() => context.close());
-  await context.addInitScript(({payload, keys, needs, savedFactory, kept}) => {
-    if(kept) history.replaceState({nxFs: kept}, '', location.href);
+  await context.addInitScript(({payload, keys, needs, savedFactory, kept, pick}) => {
+    if(kept) history.replaceState({nxFs: kept, ...(pick ? {nxPick: pick} : {})}, '', location.href);
     if(savedFactory){
       const building = payload.premises.buildings.find(b => b.type === 'warehouse');
       building.status = 'vacant';
@@ -95,7 +95,7 @@ async function open(t, {hash = "", releaseShops = true, savedFactory = false, ke
       window.held = window.held.filter(f => f.section !== name);
       all.forEach(f => f()); return all.length;
     };
-  }, {payload, keys: SECTION_KEYS, needs: SECTION_NEEDS, savedFactory, kept});
+  }, {payload, keys: SECTION_KEYS, needs: SECTION_NEEDS, savedFactory, kept, pick});
   await context.route('https://**', (route) => route.abort());
   await context.route(ORIGIN + '/**', (route) => {
     const file = path.join(web, decodeURIComponent(new URL(route.request().url()).pathname.slice(1)) || 'index.html');
@@ -141,19 +141,76 @@ async function nextBoard(page, other = false){
   }, other);
 }
 
-test('a cold finder reload applies the history question after premises arrive', async t => {
-  const building = payload.premises.buildings.find(b => b.type === 'retail');
+function finderHistoryQuestion(){
+  const building = payload.premises.buildings.find(b => b.type === 'retail' && b.status === 'rival');
+  assert.ok(building, 'the fixture has a rival retail building to pick');
   const demand = payload.premises.demand[building.hood].find(d => d.category === 'retail');
-  const kept = {cat: 'retail', type: demand.slug, hoods: [building.hood], layouts: [building.layout || building.size], show: 'rent'};
-  const page = await open(t, {hash: '#expansion/finder', kept});
+  return {pick: building.key, kept: {cat: 'retail', type: demand.slug, hoods: [building.hood],
+    layouts: [building.layout || building.size], show: 'takeover'}};
+}
+async function assertFinderHistory(page, {kept, pick}){
+  await page.waitForFunction(key => cityMapPage.selected === key, pick);
+  const filters = await page.evaluate(() => finderPick(cityMapPage.fs));
+  for(const key of ['cat', 'type', 'hoods', 'layouts', 'show']) assert.deepEqual(filters[key], kept[key], key);
+  assert.equal(await page.evaluate(() => history.state.nxPick), pick);
+  assert.equal(await page.locator('#cityMapPage .place.on').getAttribute('data-pick'), pick);
+  assert.equal(await page.locator('#cityMapPage .site.in').count(), 1, 'the picked building card is open');
+}
+
+test('a cold finder reload waits for premises, then restores its history filters and pick together', async t => {
+  const question = finderHistoryQuestion();
+  const page = await open(t, {hash: '#expansion/finder', ...question});
   await page.reload();
   await read(page, 2);
   await page.locator('#cityMapPage .list .od-wait').waitFor();
-  assert.deepEqual(await page.evaluate(() => history.state.nxFs), kept, 'loading never overwrites the question');
+  await page.evaluate(() => cityMapPage.ready);
+  assert.deepEqual(await page.evaluate(() => history.state.nxFs), question.kept, 'map readiness never overwrites the question');
+  assert.equal(await page.evaluate(() => history.state.nxPick), question.pick, 'map readiness never deletes the pick');
   await page.evaluate(() => window.release());
-  await page.waitForFunction(() => cityMapPage.fs.type !== '');
-  const filters = await page.evaluate(() => finderPick(cityMapPage.fs));
-  for(const key of ['cat', 'type', 'hoods', 'layouts']) assert.deepEqual(filters[key], kept[key], key);
+  await assertFinderHistory(page, question);
+});
+
+test('Back restores both finder filters and the building after a refresh without premises', async t => {
+  const question = finderHistoryQuestion();
+  const page = await open(t, {hash: '#expansion/finder', ...question});
+  await page.evaluate(() => window.release());
+  await assertFinderHistory(page, question);
+  await page.evaluate(() => openRoute('overview'));
+  await nextBoard(page);
+  await page.goBack();
+  await page.waitForFunction(() => route === 'expansion/finder' && !odReady('premises'));
+  await page.evaluate(() => cityMapPage.ready);
+  assert.deepEqual(await page.evaluate(() => history.state.nxFs), question.kept);
+  assert.equal(await page.evaluate(() => history.state.nxPick), question.pick);
+  await page.evaluate(() => window.release());
+  await assertFinderHistory(page, question);
+});
+
+for(const destination of ['map', 'overview']){
+  test(`leaving a loading history finder for ${destination} cancels its restoration`, async t => {
+    const question = finderHistoryQuestion();
+    const page = await open(t, {hash: '#expansion/finder', ...question});
+    await page.evaluate(() => cityMapPage.ready);
+    await page.evaluate(destination => openRoute(destination), destination);
+    assert.equal(await page.evaluate(() => odThens.some(t => t.key === 'finder-restore')), false, 'navigation drops the queued restoration');
+    const before = await page.evaluate(() => finderPick(cityMapPage.fs));
+    await page.evaluate(() => window.release());
+    await page.waitForFunction(() => odReady('premises'));
+    assert.equal(await page.evaluate(() => route), destination);
+    assert.deepEqual(await page.evaluate(() => finderPick(cityMapPage.fs)), before, 'the abandoned filters never apply');
+    assert.equal(await page.evaluate(() => cityMapPage.finderRestore), null);
+    if(destination === 'map') assert.equal(await page.evaluate(() => cityMapPage.fs.on), false, 'arrival never reopens the finder on City map');
+  });
+}
+
+test('a new finder visit at the same hash does not inherit the abandoned restoration', async t => {
+  const page = await open(t, {hash: '#expansion/finder', ...finderHistoryQuestion()});
+  await page.evaluate(() => cityMapPage.ready);
+  await page.evaluate(() => { openRoute('map'); openRoute('expansion/finder', {preset: {cat: 'office', type: ''}}); });
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => odReady('premises'));
+  assert.equal(await page.evaluate(() => route), 'expansion/finder');
+  assert.equal(await page.evaluate(() => cityMapPage.fs.cat), 'office');
 });
 
 test('same-company refresh keeps section rows and scroll, arrival redraws, another company waits', async t => {
@@ -185,6 +242,102 @@ test('same-company refresh keeps section rows and scroll, arrival redraws, anoth
     assert.ok(await page.locator(`${selector} .od-wait`).count(), `${route}: other company waits`);
     await page.evaluate(() => window.release());
   }
+});
+
+for(const detached of ['sheet', 'demand', 'select']){
+  test(`a retained hiring ${detached} gates actions during refresh and can still close`, async t => {
+    const page = await open(t, {hash: '#staffing/needs'});
+    await page.waitForFunction(() => window.held.some(f => f.section === 'hiring'));
+    await page.evaluate(() => window.release());
+    await page.waitForFunction(() => odReady('hiring'));
+    // This fixture has no recruiting applicants. Add synthetic candidates
+    // for its existing roles so Change picks and both lists can be opened.
+    await page.evaluate(() => {
+      const skills = [...new Set(D.hiring.sites.flatMap(s => s.accepts || []))];
+      D.candidates = skills.map((skill, i) => ({id: `regression-${i}`, name: `Candidate ${i}`, age: 30,
+        skill, level: 90, skills: [{skill, level: 90}], wage: 20, demands: ['ba:jobdemand_freeweekends'],
+        hoursLeft: 100, source: 'headhunter'}));
+      drawStaffPage();
+    });
+    await page.locator('#secStaff [data-hr-open]').first().click();
+    await page.locator('#hsSheet[open]').waitFor();
+    await page.evaluate(() => {
+      const r = hrModel().roles.find(r => r.skill === hrUi.sheet);
+      hrUi.skip.add(r.pool[0].id);
+      window.skipBefore = [...hrUi.skip];
+    });
+    if(detached === 'demand'){
+      await page.locator('#hsSheet [data-hs-dem-open]').click();
+      await page.locator('#hsDemPop').waitFor();
+    } else if(detached === 'select'){
+      await page.evaluate(() => hrSelOpen(document.querySelector('#hsSheet .hs-sel select')));
+      await page.locator('#hsSelPop').waitFor();
+    }
+    await nextBoard(page);
+    await page.evaluate(() => {
+      window.filterBefore = JSON.stringify(hrFilters());
+      window.modelReads = 0; window.originalHrModel = hrModel;
+      hrModel = (...args) => { if(!odReady('hiring')) window.modelReads++; return originalHrModel(...args); };
+    });
+    if(detached === 'sheet') await page.locator('#hsSheet [data-hs-reset]').click();
+    else if(detached === 'demand'){
+      await page.locator('#hsDemPop [data-hs-dem-clear]').click();
+      const checkbox = page.locator('#hsDemPop input').first();
+      if(await checkbox.count()) await checkbox.click();
+    } else {
+      await page.locator('#hsSelPop').press('ArrowDown');
+      await page.locator('#hsSelPop').press('Enter');
+      await page.locator('#hsSelPop [data-hs-opt]').last().click();
+    }
+    assert.equal(await page.evaluate(() => window.modelReads), 0, 'no handler reads the missing hiring model');
+    assert.deepEqual(await page.evaluate(() => [...hrUi.skip]), await page.evaluate(() => skipBefore));
+    assert.equal(await page.evaluate(() => JSON.stringify(hrFilters())), await page.evaluate(() => filterBefore));
+    assert.equal(await page.locator('#hsSheet[open]').count(), 1, 'Change picks stays open');
+    if(detached !== 'sheet'){
+      await page.keyboard.press('Escape');
+      assert.equal(await page.locator(detached === 'demand' ? '#hsDemPop' : '#hsSelPop').count(), 0, 'Escape closes the detached list');
+    }
+    await page.locator('#hsSheet [data-hs-close]').click();
+    await page.locator('#hsSheet').waitFor({state: 'detached'});
+    await page.evaluate(() => window.release());
+    await page.waitForFunction(() => odReady('hiring'));
+    assert.equal(await page.locator('#hsSheet').count(), 0, 'arrival does not reopen a closed dialog');
+  });
+}
+
+test('site write controls gate only the sections their action reads', async t => {
+  const page = await open(t, {hash: '#map'});
+  for(const [kind, expected] of [['uniforms', []], ['marketing', []], ['schedule', ['hiring']]]){
+    const needs = await page.evaluate(kind => {
+      const button = document.createElement('button');
+      button.dataset.gw = kind; button.dataset.gwSites = '["shop"]';
+      return odActionNeeds(button);
+    }, kind);
+    assert.deepEqual(needs, expected, kind);
+  }
+});
+
+test('a retained write review gates its declared readers and keeps Cancel usable', async t => {
+  const page = await open(t, {hash: '#staffing/needs'});
+  await page.waitForFunction(() => window.held.some(f => f.section === 'hiring'));
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => odReady('hiring'));
+  await page.evaluate(() => {
+    window.reviewReads = 0; window.reviewWrites = 0;
+    SOURCE.write = async () => { reviewWrites++; return {body: {ok: true}}; };
+    gwConfirm({kind: 'hire', icon: 'hire', title: 'Review', needs: ['hiring'],
+      body: () => { reviewReads++; return {}; }, applyLabel: () => 'Apply', verdict: () => 'Ready',
+      draw: () => '<button type="button" data-test-review-mode>Change mode</button>',
+      bind: dlg => { dlg.querySelector('[data-test-review-mode]').onclick = () => { reviewReads++; hrModel(); }; }});
+  });
+  await page.locator('.gw-dlg[data-phase="ready"]').waitFor();
+  await nextBoard(page);
+  const before = await page.evaluate(() => [reviewReads, reviewWrites]);
+  await page.locator('.gw-dlg [data-test-review-mode]').click();
+  await page.locator('.gw-dlg [data-gw-b="apply"]').click();
+  assert.deepEqual(await page.evaluate(() => [reviewReads, reviewWrites]), before, 'neither controls nor Apply read missing hiring');
+  await page.locator('.gw-dlg .gw-foot [data-od-close]').click();
+  await page.locator('.gw-dlg').waitFor({state: 'detached'});
 });
 
 test('the drawn finder keeps its list and scroll, ignores filters while loading and redraws on arrival', async t => {

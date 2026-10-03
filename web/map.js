@@ -1882,18 +1882,7 @@ function showFinder(mode = "push"){
      two questions asked from Demand keep their own answers. A new visit
      keeps the filters on screen, and they become its own. */
   const kept = mode !== "push" ? finderEntryState() : null;
-  const restore = view.finderRestore = {};
-  const scope = odBoardScope || odScope();
-  if(kept){
-    odThen("premises", () => view.ready.then(ok => {
-      if(!ok || view.finderRestore !== restore || !odSameScope(scope, odScope())) return;
-      if(!odReady("premises")) return showFinder(mode);
-      view.fs = {...view.fs, ...view.savedFilters({filters: kept}), on: true};
-      view.clampSort(); view.showAll = false;
-      view.update();
-    }), "finder-restore");
-  } else finderStateRemember(view);
-  finderPickRestore(view, mode !== "push");
+  finderPickRestore(view, mode !== "push", kept);
 }
 /* The filters of a visit to Find a location, kept on its history entry
    (nxFs) beside its pick: written whenever they change (saveFinder()), read
@@ -1931,18 +1920,31 @@ function finderPickRemember(view){
    where the entry has none or its building has left the results, exactly as a
    plain reload of that entry shows. */
 const finderEntryPick = () => { try{ return (history.state || {}).nxPick || null; }catch(e){ return null; } };
-function finderPickRestore(view, replay){
-  const entry = location.hash;
-  view.ready.then(ok => {
-    // The reader may have gone on while the map loaded: that visit decides.
-    if(!ok || page !== 'map' || !view.finderOn() || location.hash !== entry) return;
-    if(!replay){ finderPickRemember(view); return; }
-    const key = finderEntryPick();
+function finderPickRestore(view, replay, kept = null){
+  const entry = location.hash, key = finderEntryPick();
+  const restore = view.finderRestore = {};
+  const scope = odBoardScope || odScope();
+  const apply = () => view.ready.then(ok => {
+    // A route can be left and revisited at the same hash: only this visit's
+    // token may restore it, and only for the company/source that opened it.
+    if(!ok || view.finderRestore !== restore || !odSameScope(scope, odScope())
+       || page !== "map" || route !== "expansion/finder" || !view.finderOn() || location.hash !== entry) return;
+    // Map assets can finish after another same-company refresh began.
+    if(!odReady("premises")) return odThen("premises", apply, "finder-restore");
+    if(kept){
+      view.fs = {...view.fs, ...view.savedFilters({filters: kept}), on: true};
+      view.clampSort(); view.showAll = false;
+      view.update();
+    }
+    if(!replay){ finderStateRemember(view); finderPickRemember(view); return; }
     if(key === view.selected) return;
     if(key && view.rows().some(r => r.key === key)){ view.select(key, false); return; }
     if(view.selected) view.deselect();
     else finderPickRemember(view);
   });
+  // Filtering and judging a saved pick share the same readiness gate. The
+  // pick is captured before a redraw can change the current history state.
+  odThen("premises", apply, "finder-restore");
 }
 function refreshCityMaps(){
   const character=D?.meta?.character || D?.supply?.factories?.character || D?.meta?.save;
