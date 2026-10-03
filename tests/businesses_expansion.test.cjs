@@ -118,6 +118,71 @@ test('Standards compares every shop and office: satisfaction against the 80 line
   assert.deepEqual([w.route, w.site], ['businesses/standards', null]);
 });
 
+test('Standards keeps Operations optional and Results still shows its portfolio', async t => {
+  const page = await board(t, {hash: '#businesses/standards'});
+  const panel = page.locator('#portMore');
+  assert.equal(await panel.getAttribute('open'), null);
+  assert.equal(await page.locator('#portfolio').isVisible(), false);
+  await page.locator('#portMoreLabel').click();
+  assert.equal(await page.locator('#portfolio').isVisible(), true);
+  // Promotion still reaches its operating context without an extra manual step.
+  await page.locator('#portMoreLabel').click();
+  const promotion = page.locator('[data-std="promotion"]');
+  if(await promotion.count()) {
+    await promotion.click();
+    assert.equal(await page.locator('#portfolio').isVisible(), true);
+  }
+  await page.getByRole('link', {name: 'Results', exact: true}).click();
+  assert.equal(await page.locator('#portMoreLabel').isVisible(), false);
+  assert.equal(await page.locator('#portfolio').isVisible(), true);
+  await page.getByRole('link', {name: 'Standards', exact: true}).click();
+  assert.equal(await panel.getAttribute('open'), null);
+});
+
+test('Campaign mix findings open the Operations comparison on Standards', async t => {
+  const page = await board(t, {hash: '#overview'});
+  await page.evaluate(() => {
+    const b = D.businesses.find(b => b.status === 'retail');
+    goToAlert({group: 'promotion', siteKey: b.key, site: b.name, ev: {}});
+  });
+  assert.equal((await where(page)).route, 'businesses/standards');
+  assert.equal(await page.locator('#portfolio').isVisible(), true);
+  assert.equal(await page.locator('#portMoreLabel').isVisible(), true);
+  await page.locator('#portMoreLabel').click();
+  assert.equal(await page.locator('#portfolio').isVisible(), false);
+  await page.evaluate(() => {
+    const b = D.businesses.find(b => b.status === 'retail');
+    goToAlert({group: 'promotion', siteKey: b.key, site: b.name, ev: {}});
+  });
+  assert.equal(await page.locator('#portfolio').isVisible(), true);
+  await back(page);
+  assert.equal((await where(page)).route, 'overview');
+});
+
+test('large price selectors keep the selected site and its history without a wall of chips', async t => {
+  const page = await board(t, {hash: '#businesses/prices'});
+  const k = await keys(page);
+  await page.evaluate(() => {
+    const base = D.businesses.find(b => b.status === 'retail');
+    for(let i = 0; i < 8; i++) D.businesses.push({...JSON.parse(JSON.stringify(base)), key: `price-test-${i}`, name: 'Same name', code: `P${i}`});
+    drawPriceShops(); wireAll(); ctlHoist();
+  });
+  const picker = page.getByRole('combobox', {name: en('co.prices.at'), exact: true});
+  const labels = await picker.locator('option').allTextContents();
+  assert.ok(labels.some(s => s.startsWith('P0 · ') && s.includes('Same name')));
+  assert.ok(labels.some(s => s.startsWith('P1 · ') && s.includes('Same name')));
+  assert.equal(await page.locator('[data-price-pick]').count(), 0);
+  await picker.selectOption(k.gifts);
+  assert.equal(await picker.inputValue(), k.gifts);
+  assert.match(await page.locator('#secPrices h2').textContent(), /Gifts/);
+  await page.getByRole('link', {name: 'Results', exact: true}).click();
+  await back(page);
+  assert.equal(await picker.inputValue(), k.gifts);
+  await picker.selectOption(k.spirits);
+  assert.match(await page.locator('#secPrices h2').textContent(), /Spirits/);
+  assert.equal(await picker.evaluate(el => el === document.activeElement), true);
+});
+
 test('Products & prices: a shop picked shows its prices beside the market\'s lowest, and the pick survives Back, Forward and a reload', async t => {
   const page = await board(t, {hash: '#businesses/prices'});
   const k = await keys(page);
