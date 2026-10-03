@@ -103,6 +103,56 @@ test('CLI reports invalid override with nonzero exit', () => {
   assert.equal(result.status,1); assert.match(result.stderr,/PYTHON override is invalid/);
 });
 
+test('Node shards preserve assembly, concurrency and the complete suite list', async t => {
+  const {verify} = await runner; const root = fixture(t); const calls = [];
+  assert.equal(verify(['node','--shard=2/4'],{root,spawn:fakeSpawn(calls),log:()=>{}}),0);
+  assert.deepEqual(calls.map(c=>c.args),[
+    ['build_web.py','--assemble'],
+    ['--test','--test-concurrency=2','--test-shard=2/4',path.join('tests','a.test.cjs'),path.join('tests','z.test.cjs')],
+  ]);
+  for (const args of [
+    ['node','--shard=0/4'], ['node','--shard=5/4'], ['node','--shard=1/0'],
+    ['node','--shard=1.5/4'], ['node','--shard=1/4oops'], ['node','--shard'],
+    ['node','--shard=1/9007199254740992'],
+    ['node','--shard=1/4','tests/a.test.cjs'], ['node','--shard=1/4','--shard=2/4'],
+    ['all','--shard=1/4'], ['optimized','--shard=1/4'],
+  ]) {
+    const rejected=[];
+    assert.throws(()=>verify(args,{root,spawn:fakeSpawn(rejected),log:()=>{}}),/shard|extra arguments/);
+    assert.equal(rejected.length,0,JSON.stringify(args));
+  }
+  const failed=[];
+  assert.equal(verify(['node','--shard=2/4'],{root,spawn:fakeSpawn(failed,2),log:()=>{}}),7);
+});
+
+test('the CI matrix shards execute every discovered file once and propagate a real failure', t => {
+  const root = fixture(t);
+  fs.mkdirSync(path.join(root,'tools'));
+  fs.copyFileSync(path.join(__dirname,'../tools/verify.mjs'),path.join(root,'tools','verify.mjs'));
+  fs.writeFileSync(path.join(root,'build_web.py'),'# Synthetic successful assembly.\n');
+  const names = ['a','b','c','d','e','f','z'];
+  for (const name of names) fs.writeFileSync(path.join(root,'tests',`${name}.test.cjs`),
+    `require('node:test')('${name}', () => {\n` +
+    `require('node:fs').appendFileSync('executed.txt', '${name}\\n');\n` +
+    // One real failure must fail exactly the shard that contains this file.
+    (name === 'c' ? `throw new Error('intentional shard failure');\n` : '') + '});\n');
+  const workflow = fs.readFileSync(path.join(__dirname,'../.github/workflows/tests.yml'),'utf8');
+  const shards = [...workflow.matchAll(/'(\d+\/\d+)'/g)].map(match=>match[1]);
+  assert.deepEqual(shards,['1/4','2/4','3/4','4/4']);
+  const statuses=[];
+  // Exercise a fresh CLI invocation; Node suppresses --test inside a test child.
+  const env={...process.env};
+  delete env.NODE_TEST_CONTEXT;
+  for (const shard of shards) {
+    const result = spawnSync(process.execPath,[path.join(root,'tools','verify.mjs'),'node',`--shard=${shard}`],{cwd:root,encoding:'utf8',env});
+    assert.ifError(result.error);
+    assert.ok([0,1].includes(result.status),result.stderr);
+    statuses.push(result.status);
+  }
+  assert.deepEqual(statuses.slice().sort(),[0,0,0,1]);
+  assert.deepEqual(fs.readFileSync(path.join(root,'executed.txt'),'utf8').trim().split(/\r?\n/).sort(),names);
+});
+
 test('CLI propagates a real failing assembly and never starts later stages in a spaced path', async t => {
   const root = fixture(t);
   fs.mkdirSync(path.join(root,'tools'));

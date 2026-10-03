@@ -31,9 +31,14 @@ jobs:
       # The site under web/ is not committed; several suites read it.
       - run: npm run test:python
 
-  node:
-    name: Node suites
+  node-tests:
+    name: Node (${{ matrix.suite }})
     runs-on: ubuntu-latest
+    strategy:
+      # Collect all failures instead of cancelling the other suites.
+      fail-fast: false
+      matrix:
+        suite: ['1/4', '2/4', '3/4', '4/4', optimized]
     steps:
       - uses: actions/checkout@v7
       # Some suites write fixture saves and serve the game-link mock with Python.
@@ -49,14 +54,32 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-      - run: npx playwright install --with-deps chromium
+          key: playwright-shell-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps --only-shell chromium
       # The site under web/ is not committed; several suites serve or read it.
       # npm test assembles first and includes the community suites.
-      - run: npm test
+      - name: Test Node shard
+        if: matrix.suite != 'optimized'
+        run: npm test -- --shard=${{ matrix.suite }}
       - name: Test the optimized hosted page
+        if: matrix.suite == 'optimized'
         run: npm run test:optimized
-      - run: npm run check:worker
+      - name: Check the Worker bundle
+        if: matrix.suite == 'optimized'
+        run: npm run check:worker
+
+  # Preserve the existing check name for branch rules. A failed, cancelled or
+  # skipped matrix must never turn this aggregate check green.
+  node:
+    name: Node suites
+    runs-on: ubuntu-latest
+    needs: node-tests
+    if: always()
+    steps:
+      - name: Require every Node lane
+        env:
+          RESULT: ${{ needs.node-tests.result }}
+        run: test "$RESULT" = success
 
   web-fresh:
     name: web/ assembles from its sources
