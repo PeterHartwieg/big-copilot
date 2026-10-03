@@ -8495,7 +8495,7 @@ def _cinema_capacity(save: Save, building: dict, names: Names | None) -> dict | 
             continue
         facts = furniture[item["itemName"]]
         # The concessions register must actually stand on a suitable counter.
-        # Unknown or unmet placement requirements make the simple counts unsafe.
+        # Missing counter attachment makes the simple counts unsafe.
         parent = by_id.get(item.get("parentId"), {})
         if any(parent.get("itemName") not in group for group in facts.get("m", ())):
             return None

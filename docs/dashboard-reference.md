@@ -579,7 +579,7 @@ not raised as a finding: plenty of well-run sites sit at their building's capaci
 there is nothing to fix, so it shows on the site page only, as a neutral hour chip ("at
 building capacity") and neutral rings on its hours in the grid. A cinema with a verified
 furniture limit below its layout instead gets a finding and warning rings for those hours;
-a lower staffing limit still takes precedence. Otherwise every role standing at the site's own minimum is named, and only those: a
+a lower staffing limit still takes precedence, and a tied shortfall is named alongside. Otherwise every role standing at the site's own minimum is named, and only those: a
 site with more than one role serves nobody until all of them are manned, but hiring into a
 role already faster than the slowest one buys nothing. A role at the minimum with stations
 standing empty is short of people; one with every station manned is short of stations. A
