@@ -472,10 +472,12 @@ grid and three lines meet.
   S3 cinema at 15 Third Avenue reads 25 and the fitted-out one 100. The board distinguishes a
   cinema's furniture limit when all four capacity-bearing
   requirements are installed and their minimum matches the saved capacity below the known
-  layout capacity. It names every tied requirement (screens, projection booths, ticket
+  layout capacity, the employee stations meet their placement requirements, and no stocked
+  display has an equal or lower product capacity. It names every tied requirement (screens, projection booths, ticket
   kiosks or concessions stand registers), with advice to add furniture and staff any new
   employee stations. Unknown layouts, incomplete setups and unexplained capacity readings
-  keep the existing neutral reading instead of guessed advice.
+  and limits tied with product displays keep the existing neutral reading instead of guessed
+  advice. A tied staffing shortfall is named alongside the equipment.
 
 Effective capacity is the smallest of these, and the useful finding is *which* one binds.
 Every hour at 95% or more of it is an hour at the ceiling; the grid outlines those in red (in a neutral grey where the building's own capacity held the hour),

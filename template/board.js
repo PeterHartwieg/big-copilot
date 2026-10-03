@@ -4777,7 +4777,8 @@ function spIdleWeek(n){
           runs: spIdleParts(w.parts || [], noun)};
 }
 /* Which ceiling held one capped hour, by the same rule _hour_findings() uses:
-   the door if it was reached, else every role standing at the site's own
+   the building if its fixed capacity was reached; cinema equipment can tie
+   with understaffed roles. Otherwise every role standing at the site's own
    minimum that hour, each of them short of people where it has stations
    standing empty and short of stations where they are all manned. An hour two
    roles are tied on is held by both at once and says both.
@@ -4797,7 +4798,12 @@ const spRoleToken = (kind, skill) => `${kind}:${String(skill || "").replace(/\s+
 const SP_CELL_ORDER = {staff: 0, post: 1};
 const spCellLimit = (g, wd, h) => {
   const staffed = g.staffed[wd][h];
-  if(g.door && g.door <= staffed) return g.cinemaCapacity ? "furniture" : "door";
+  if(g.door && g.door <= staffed){
+    if(!g.cinemaCapacity) return "door";
+    const tied = g.door === staffed ? (g.roles || []).filter(r =>
+      r.staffed[wd][h] === staffed && staffed < r.counters).map(r => spRoleToken("staff", spRoleKey(r))) : [];
+    return ["furniture", ...tied].join(" ");
+  }
   const at = (g.roles || []).filter(r => r.staffed[wd][h] === staffed);
   if(!at.length) return spRoleToken(staffed < g.counters ? "staff" : "post", "");
   return [...new Set(at.map(r =>
@@ -5588,10 +5594,10 @@ const spCostBar = (costs, profit) => {
       tt("sp.cost.read", "{what} <b>{w:$}</b>", {what: SP_COST_WORD[id], w: v}))}"></i>`).join("")}</div><div class="sp-tread sp-readout"></div></div>`;
 };
 /* The limits a cap finding's hours are held by, drawn from its `heldBy`: the
-   door for the building, people for a role short of staff, and the site's own
-   kind of post for a role short of stations. */
+   building for its fixed capacity, a screen for cinema equipment, people for
+   a role short of staff, and the site's station for a role short of stations. */
 const spLimitIcons = (n, office) => [...new Set((n.heldBy || []).map(([kind]) =>
-  kind === "door" ? "door" : kind === "staff" ? "person" : office ? "monitor" : "counter"))];
+  kind === "door" ? "door" : kind === "furniture" ? "monitor" : kind === "staff" ? "person" : office ? "monitor" : "counter"))];
 /* An office's desks: one square a workstation, filled while somebody is
    posted at it, at the hour the office was busiest over the fortnight. */
 function spDesks(grid){

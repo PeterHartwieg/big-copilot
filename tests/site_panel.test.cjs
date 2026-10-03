@@ -483,9 +483,9 @@ test('the ramp chip counts only while the site is still ramping up', async () =>
   } finally { await old.close(); }
 });
 
-test('a cinema furniture limit is actionable and highlights its hours rather than building capacity', async () => {
+for(const booths of [1, 2]) test(`a cinema equipment limit with ${booths} booths highlights every tied limit`, async () => {
   const result = spawnSync(process.env.PYTHON || 'python', ['-c',
-    'import json; from tests.test_stations import CinemaGridTests; t=CinemaGridTests(); g=t.known_cinema(screens=1, booths=1, door=25); print(json.dumps({"grid":g,"findings":t.findings(g)}))'],
+    `import json; from tests.test_stations import CinemaGridTests; t=CinemaGridTests(); g=t.known_cinema(screens=1, booths=${booths}, door=25); print(json.dumps({"grid":g,"findings":t.findings(g)}))`],
     {cwd: path.join(__dirname, '..'), encoding: 'utf8'});
   assert.equal(result.status, 0, result.stderr);
   const data = JSON.parse(result.stdout);
@@ -493,16 +493,17 @@ test('a cinema furniture limit is actionable and highlights its hours rather tha
     hourFindings: data.findings.map(f => ({...f, key: KEY})),
     shop: {type: 'Cinema', typeSlug: 'ba:businesstype_cinema', capacity: 25}});
   try{
-    const chip = page.locator('#sp-hours .sp-hchip[data-show="furniture"]');
+    const token = booths === 1 ? 'furniture' : 'furniture staff:ba:skill_projectionist';
+    const chip = page.locator(`#sp-hours .sp-hchip[data-show="${token}"]`);
     assert.equal(await chip.count(), 1);
     assert.equal(await chip.evaluate(e => e.classList.contains('sp-bcap')), false);
-    assert.match(await chip.innerText(), /cinema screens and projection booths/);
+    assert.match(await chip.innerText(), booths === 1 ? /cinema screens and projection booths/ : /cinema screens.*Projectionist/);
     assert.doesNotMatch(await chip.innerText(), enRe('sp.hour.atdoor'));
-    assert.equal(await page.locator('#sp-hours .hc[data-caps="furniture"]').count(), 12);
-    assert.equal(await page.locator('#sp-hours .hc[data-caps="furniture"].sp-bcap').count(), 0);
+    assert.equal(await page.locator(`#sp-hours .hc[data-caps="${token}"]`).count(), 12);
+    assert.equal(await page.locator(`#sp-hours .hc[data-caps="${token}"].sp-bcap`).count(), 0);
     assert.match(await page.locator('#hourRead').innerText(), enRe('sp.hour.worst'));
     await chip.hover();
-    assert.equal(await page.locator('#sp-hours .hc[data-caps="furniture"].sp-lit').count(), 12);
+    assert.equal(await page.locator(`#sp-hours .hc[data-caps="${token}"].sp-lit`).count(), 12);
   } finally { await page.close(); }
 });
 
