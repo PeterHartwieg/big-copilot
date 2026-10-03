@@ -3942,9 +3942,11 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 .os-pin.new i{background:#e9ece6}
 .os-pin em{margin-top:3px;padding:2px 6px;border-radius:4px;background:#0d100fdd;color:#e9ece6;font:500 10.5px/1.2 Archivo,sans-serif;font-style:normal;white-space:nowrap}
 .os-maplist{display:flex;flex-direction:column;gap:6px;margin-top:10px}
-.os-maplist div{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;font-size:12.5px;color:var(--ink-2)}
-.os-maplist i{overflow-wrap:anywhere;display:grid;place-items:center;width:20px;height:auto;min-height:20px;border-radius:10px;background:#6ea8ff;color:#0d100f;font:600 10.5px/1 "IBM Plex Mono",monospace;font-style:normal}
+.os-maplist div{display:grid;grid-template-columns:minmax(22px,auto) minmax(0,1fr) auto;gap:10px;align-items:center;font-size:12.5px;color:var(--ink-2)}
+.os-maplist i{display:grid;place-items:center;width:20px;height:20px;border-radius:10px;background:#6ea8ff;color:#0d100f;font:600 10.5px/1 "IBM Plex Mono",monospace;font-style:normal}
 .os-maplist i.n{background:var(--ink);color:var(--ground);font-size:8.5px}
+/* A translated NEW stays on one line and widens its pill. */
+.os-maplist i.n{width:auto;min-width:20px;white-space:nowrap}
 .os-maplist span{min-width:0;overflow-wrap:anywhere}
 .os-maplist b{font:500 12.5px/1 "IBM Plex Mono",monospace;color:var(--ink)}
 /* step 4: break even ----------------------------------------------------------------- */

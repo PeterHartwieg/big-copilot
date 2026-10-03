@@ -443,7 +443,9 @@ async function expansionWidth(page, label, failures){
     // SVG geometry, proportional meters, hoisted
     // screen-reader labels, native select/input internals, intentional
     // one-line ellipsis, and descendants of horizontal scrolling tables.
-    // The scrolling wrapper itself is still checked against its container.
+    // Only elements with text of their own are measured, and only their
+    // right edge: a text-less wrapper counts through page scroll and the
+    // clip check.
     const planner = '#viewCtl [data-view-ctl]:not([hidden]), #viewCtl [data-view-ctl]:not([hidden]) *, '
       + '#secOpen, #secOpen *, #secPlan, #secPlan *, #secPlanFlow, #secPlanFlow *';
     const local = [];
