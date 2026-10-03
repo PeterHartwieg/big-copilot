@@ -43,10 +43,20 @@ print(json.dumps(ba_dashboard.extract(load_save(path), Names(save_fixtures.data_
 });
 after(async () => { await browser?.close(); });
 
-async function open(t, {hash = "", releaseShops = true} = {}) {
+async function open(t, {hash = "", releaseShops = true, savedFactory = false} = {}) {
   const context = await browser.newContext({viewport: {width: 1280, height: 1000}, reducedMotion: 'reduce'});
   t.after(() => context.close());
-  await context.addInitScript(({payload, keys, needs}) => {
+  await context.addInitScript(({payload, keys, needs, savedFactory}) => {
+    if(savedFactory){
+      const building = payload.premises.buildings.find(b => b.type === 'warehouse');
+      building.status = 'vacant';
+      const saved = {current: 'saved-factory', plans: [{id: 'saved-factory', type: 'ba:businesstype_liquorstore',
+        site: null, key: building.key, counts: {'ba:itemname_beer': 1}, size: 'custom', mode: 'self', depot: false,
+        finance: {on: false, amount: null, bank: null}, step: 'investment'}]};
+      window.factorySavedKey = `ba_open_factory_v1:${payload.meta.character}`;
+      window.factorySavedText = JSON.stringify(saved);
+      localStorage.setItem(window.factorySavedKey, window.factorySavedText);
+    }
     // The worker: a build answers the core (every section's keys left out)
     // and keeps the generation; a section is held until the test lets it go.
     window.asked = [];
@@ -64,20 +74,27 @@ async function open(t, {hash = "", releaseShops = true} = {}) {
           window.asked.push({name: msg.name, gen: msg.gen});
           // The worker has moved on to a build whose board was dropped.
           if (window.movedOn) return queueMicrotask(() => this.onmessage({data: {id: msg.id, kind: 'section', stale: true}}));
-          window.held.push(() => {
+          const release = () => {
             if (msg.gen !== window.lastGen) return this.onmessage({data: {id: msg.id, kind: 'section', stale: true}});
             const chain = n => [...(needs[n] || []).flatMap(chain), n];
             const names = chain(msg.name);
             const sections = {};
             names.forEach(n => { sections[n] = {}; keys[n].forEach(k => { sections[n][k] = payload[k]; }); });
             this.onmessage({data: {id: msg.id, kind: 'section', data: JSON.stringify({generation: msg.gen, sections})}});
-          });
+          };
+          release.section = msg.name;
+          window.held.push(release);
         }
       }
       terminate() {}
     };
     window.release = () => { const all = window.held.splice(0); all.forEach(f => f()); return all.length; };
-  }, {payload, keys: SECTION_KEYS, needs: SECTION_NEEDS});
+    window.releaseSection = name => {
+      const all = window.held.filter(f => f.section === name);
+      window.held = window.held.filter(f => f.section !== name);
+      all.forEach(f => f()); return all.length;
+    };
+  }, {payload, keys: SECTION_KEYS, needs: SECTION_NEEDS, savedFactory});
   await context.route('https://**', (route) => route.abort());
   await context.route(ORIGIN + '/**', (route) => {
     const file = path.join(web, decodeURIComponent(new URL(route.request().url()).pathname.slice(1)) || 'index.html');
@@ -214,6 +231,7 @@ test('Today waits for its shop card and leaves the finder count neutral without 
   await page.locator('#optimizeStaffingCard .od-wait').waitFor({state: 'attached'});
   assert.deepEqual(await asked(page), ['staffing']);
   assert.ok(!(await page.locator('#findLocationCard').textContent()).includes(en('today.moves.find.badge.none')));
+  assert.equal(await page.locator('#findLocationCard .soon').textContent(), '');
   await page.evaluate(() => window.release());
   await page.waitForFunction(() => !document.querySelector('#optimizeStaffingCard .od-wait'));
 });
@@ -242,6 +260,99 @@ test('Map asks for nothing; the finder asks and waits for premises, then shows i
   await page.waitForFunction(gen => window.lastGen !== gen, gen);
   await page.waitForTimeout(100);
   assert.deepEqual(await asked(page), ['premises'], 'a rebuild on Map requests no section');
+});
+
+test('the cold Map finder toggle asks for premises and opens the finder', async t => {
+  const page = await open(t, {hash: '#map'});
+  const toggle = page.locator('#cityMapPage [data-f="tog"]');
+  await toggle.waitFor();
+  assert.deepEqual(await asked(page), []);
+  await toggle.click();
+  await page.locator('#cityMapPage .places .od-wait').waitFor();
+  assert.deepEqual(await asked(page), ['premises']);
+  assert.equal(await page.evaluate(() => route), 'expansion/finder');
+  await page.evaluate(() => window.release());
+  await page.locator('#cityMapPage .filters').waitFor();
+  assert.equal(await page.locator('#cityMapPage .places .od-wait').count(), 0);
+});
+
+test('cold search and Where should I open next preserve their finder presets', async t => {
+  for(const entry of ['search', 'question', 'type', 'warehouse']){
+    const page = await open(t, {hash: '#map'});
+    const preset = await page.evaluate(entry => {
+      if(entry === 'search') SS_VIEWS.find(v => v.id === 'finder').go();
+      else if(entry === 'question') SS_QUESTIONS.find(v => v.id === 'open').go();
+      else if(entry === 'warehouse') ssBuild().find(v => v.id === 'finder:warehouse').go();
+      else {
+        const row = D.market.types.find(r => r.cells.some(Boolean));
+        ssBuild().find(v => v.id === `finder:${row.slug}`).go();
+      }
+      return {...cityMapPage.fs};
+    }, entry);
+    await page.locator('#cityMapPage .places .od-wait').waitFor();
+    assert.deepEqual(await asked(page), ['premises'], entry);
+    assert.equal(await page.evaluate(() => route), 'expansion/finder');
+    await page.evaluate(() => window.release());
+    await page.locator('#cityMapPage .filters').waitFor();
+    assert.equal(await page.evaluate(() => cityMapPage.fs.cat), preset.cat, entry);
+    assert.equal(await page.evaluate(() => cityMapPage.fs.type), preset.type, entry);
+  }
+});
+
+test('cold factory Investment preserves a saved plan until location and financing facts arrive, then Where works', async t => {
+  const page = await open(t, {hash: '#expansion/factory', savedFactory: true});
+  await page.locator('#ofBody .od-wait').first().waitFor();
+  assert.deepEqual((await asked(page)).sort(), ['openFactory', 'openStore']);
+  assert.equal(await page.evaluate(() => localStorage.getItem(factorySavedKey)), await page.evaluate(() => factorySavedText));
+  await page.evaluate(() => window.releaseSection('openFactory'));
+  await page.waitForFunction(() => !!D.openFactory);
+  assert.equal(await page.evaluate(() => 'premises' in D), false);
+  assert.equal(await page.evaluate(() => localStorage.getItem(factorySavedKey)), await page.evaluate(() => factorySavedText));
+  await page.locator('#ofBody .od-wait').waitFor();
+  await page.evaluate(() => window.releaseSection('openStore'));
+  await page.locator('#ofFin').waitFor();
+  assert.equal(await page.evaluate(() => ofStep), 'investment');
+  assert.ok(await page.evaluate(() => ofInvestment(ofPlan()).self > 0));
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem(factorySavedKey)).plans[0].step), 'investment');
+  await page.locator('#ofCtl [data-of-step="where"]').click();
+  await page.locator('#ofFinderMap .place.fr').first().waitFor();
+  const key = await page.evaluate(() => ofPlan().key);
+  await page.evaluate(key => ofPick(key), key);
+  await page.locator('#ofFin').waitFor();
+  assert.equal(await page.evaluate(() => ofStep), 'investment');
+  await page.locator('[data-of-fin-on]').check();
+  assert.equal(await page.locator('#ofFinFacts > div').count(), 4);
+});
+
+test('factory facts and premises alone still wait for openStore financing', async t => {
+  const page = await open(t, {hash: '#map', savedFactory: true});
+  await page.evaluate(() => { odNeed('openFactory'); odNeed('premises'); });
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => !!D.openFactory && !!D.premises);
+  await page.evaluate(() => openRoute('expansion/factory'));
+  await page.locator('#ofBody .od-wait').waitFor();
+  assert.equal(await page.evaluate(() => 'openStore' in D), false);
+  assert.equal(await page.evaluate(() => localStorage.getItem(factorySavedKey)), await page.evaluate(() => factorySavedText));
+  await page.evaluate(() => window.release());
+  await page.locator('#ofFin').waitFor();
+  assert.equal(await page.evaluate(() => ofStep), 'investment');
+});
+
+test('a cold Demand popover requests store facts and refreshes its action and rent count on arrival', async t => {
+  const page = await open(t, {hash: '#expansion/demand'});
+  await page.evaluate(() => {
+    const cell = document.querySelector('.heat .cell[data-slug="ba:businesstype_liquorstore"]');
+    cell.scrollIntoView(); cell.click();
+  });
+  const pop = page.locator('#demCellPop');
+  await pop.locator('.od-wait').waitFor();
+  assert.deepEqual(await asked(page), ['openStore']);
+  assert.equal(await pop.locator('[data-dem-go="open"]').count(), 0);
+  assert.ok((await pop.textContent()).includes('—'));
+  await page.evaluate(() => window.release());
+  await pop.locator('[data-dem-go="open"]').waitFor();
+  assert.equal(await pop.locator('.od-wait').count(), 0);
+  assert.ok(!(await pop.textContent()).includes('—'));
 });
 
 test('Products, Milestones and expansion pages show waits until their facts arrive', async t => {

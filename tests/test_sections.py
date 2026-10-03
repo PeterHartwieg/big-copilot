@@ -113,6 +113,17 @@ class Sections(unittest.TestCase):
                          ba_dashboard._staff_summary(build.shared["staff"], build.shared["businesses"]))
         self.assertEqual(build.core["staff"]["total"], build.core["kpi"]["employees"])
 
+    def test_products_reads_one_private_copy_without_mutating_raw_totals(self):
+        build = self.build()
+        private = build.private["product_businesses"]
+        before = json.dumps(private, sort_keys=True)
+        real = ba_dashboard._products
+        with unittest.mock.patch.object(ba_dashboard, "_products", wraps=real) as products:
+            first = ba_dashboard._products_section(build)
+            self.assertIs(products.call_args.args[0], private)
+        self.assertEqual(json.dumps(private, sort_keys=True), before)
+        self.assertEqual(ba_dashboard._products_section(build), first)
+
     def test_the_fixture_exercises_every_section(self):
         whole = ba_dashboard.materialize_all(self.build())
         self.assertTrue(whole["factoryStaffing"]["cap"], "a factory to staff")

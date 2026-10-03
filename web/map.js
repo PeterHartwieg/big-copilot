@@ -642,7 +642,7 @@ class CityMapView {
     </div>`;
   }
   wireFinder(){
-    if(!premises() || !this.panel) return;
+    if(!this.panel) return;
     const changed = () => { this.showAll = false; this.saveFinder(); this.update(); };
     const tog = this.root.querySelector('[data-f="tog"]');
     if(tog) tog.onclick = () => {
@@ -652,6 +652,7 @@ class CityMapView {
       if(this === cityMapPage && page === "map" && typeof openRoute === "function") openRoute(this.fs.on ? "expansion/finder" : "map", {scroll: false});
       else if(this === cityMapPage && page === "map" && typeof routeSync === "function") routeSync();
     };
+    if(!premises()) return;
     this.root.querySelectorAll('.fchip.cat').forEach(chip => chip.onclick = () => {
       // A sort the player picked travels to the new category when it can; the
       // old category's own default does not, so a warehouse's floor-area order

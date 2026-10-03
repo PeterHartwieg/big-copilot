@@ -2183,8 +2183,7 @@ def _hiring_section(build: Build) -> dict:
 
 def _products_section(build: Build) -> dict:
     """Section products: company product totals and their weekly rhythm."""
-    products = _products([{"lines": [dict(line) for line in b["lines"]]}
-                          for b in build.private["product_businesses"]])
+    products = _products(build.private["product_businesses"])
     rhythm = _product_rhythm(build.save, build.shared["buildings"])
     for entry in products:
         beat = rhythm.get(entry["slug"])
@@ -2322,8 +2321,9 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
 
     daily = _daily_series(save, summaries)
     loans = _loans(save, names)
-    # _products() removes raw totals from lines. Preserve them privately for
-    # the deferred aggregation, and do the removal before businesses ships.
+    # The unrounded totals (_sold, _takings) are the products section's
+    # alone: a private copy keeps them for it, and they come off the lines
+    # before businesses ships.
     build.private["product_businesses"] = [{"lines": [dict(line) for line in b["lines"]]}
                                             for b in businesses]
     for b in businesses:
@@ -3144,8 +3144,8 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
                 "soldPerDay": round(units_sold[item] / span),
                 "soldPerWeek": round(units_sold[item] / span * 7),
                 **({"issued": True} if item in ISSUED_ITEMS else {}),
-                # Unrounded, for _products() alone, which takes them off the
-                # payload: a price from rounded units is no price.
+                # Unrounded, for _products() alone; build_core() takes them
+                # off the payload: a price from rounded units is no price.
                 "_sold": units_sold[item] / span,
                 "_takings": revenue_by_item[item] / span,
             }
@@ -3619,7 +3619,7 @@ def _products(businesses: list) -> list:
             # The day's takings and units before rounding: a line selling 0.4
             # a day is not nothing, and its share of the average price is not
             # free. _business() leaves them for this and nothing else.
-            sold, takings = line.pop("_sold", None), line.pop("_takings", None)
+            sold, takings = line.get("_sold"), line.get("_takings")
             if not line["revenue"] and not line["units"]:
                 continue
             # By key: two items can share a name, and the page names a row

@@ -109,8 +109,10 @@ class SlowSellerTests(unittest.TestCase):
         shop = business(orders, day=8)
         [product] = _products([shop])
         self.assertEqual((product["price"], product["revenue"], product["units"]), (100.0, 14.29, 0))
-        # The unrounded figures are _products()'s alone: they leave the payload.
-        self.assertFalse([k for line in shop["lines"] for k in line if k.startswith("_")])
+        # Aggregation reads the private raw totals intact, including on retry.
+        # build_core(), covered by test_sections, removes them from the payload.
+        self.assertTrue(all("_sold" in line and "_takings" in line for line in shop["lines"]))
+        self.assertEqual(_products([shop]), [product])
 
 
 class RivalNameTests(unittest.TestCase):

@@ -389,17 +389,18 @@ the plans from `build.sections`, not `build.core`.
 
 Today asks only for `staffing`. Its supply card, proposed-change details, finding
 state pills and supply counts read core `plan` immediately, as does supply search.
-A Demand popover offers Open a store here only once `openStore` confirms the type.
+A Demand popover asks for `openStore` on click, waits, and offers Open a store here
+once the section confirms the type. It refreshes only while the same cell is open.
 
 | Section | Keys | Needs | Asked for by |
 | --- | --- | --- | --- |
-| staffing | `staffing` | (none) | Today's shop scheduling card; a shop's Staffing block; Schedules |
+| staffing | `staffing` | (none) | Today's shop scheduling card; a shop's Staffing block; Schedules; Open a store's opened-store staff check |
 | officeStaffing | `officeStaffing` | staffing | An office's Staffing block; Schedules |
 | factoryStaffing | `factoryStaffing` | officeStaffing | Supply › Production's staffing block; a factory's site panel |
 | hiring | `hiring`, `candidates` | factoryStaffing | Staff needs; Schedules; site staffing writes; Open a store and Plan a factory's staff rows; hire and schedule dialogs; an applied hire's first progress check |
-| premises | `premises` | (none) | Find a location, including the planner's finder; Open a store through its dependency |
+| premises | `premises` | (none) | Find a location, including search and the Map toggle; Open a store, Plan a factory and Demand popovers through openStore's dependency |
 | products | `products` | (none) | Products & prices; Wiki's company strips |
-| openStore | `openStore` | premises | Open a store |
+| openStore | `openStore` | premises | Open a store; Plan a factory's location, investment and financing; Demand popovers |
 | openFactory | `openFactory` | (none) | Plan a factory's costs and opening requirements |
 | goals | `goals` | (none) | Milestones |
 
@@ -419,9 +420,9 @@ The extraction's staff list, all hour grids, statements, buildings, recipes, sta
 market and supply objects stay on `build.shared` for deferred producers. The producers
 formerly before `history.write()` (`premises`, `openStore`, `openFactory`, products)
 have no history side effects. The raw product totals are the exception to moving all their
-work: `_products()` removes `_sold` and `_takings` from business lines. The core performs
-that removal before sending businesses and preserves private copies of the lines for the
-deferred aggregation, including a fresh copy for retries. No section changes a core object;
+work: the core removes `_sold` and `_takings` from business lines before sending businesses
+and preserves one private copy of each line for the deferred aggregation. `_products()`
+reads that copy without changing it, so retries use the same raw totals. No section changes a core object;
 the section tests compare core JSON after every producer with the JSON originally sent.
 
 `openStore` and `openFactory` are separate sections because their readers differ.
@@ -439,9 +440,11 @@ section; `ttPayload()` handles that part's messages. The site-key walker still r
 from core. Shell counts use findings, not deferred data.
 
 Light prefetch runs on pointer, focus and touch intent on navigation links and area tabs.
-`odPrefetchSections(view)` maps the view or route to its declared sections and removes any
-section whose dependency chain includes `factoryStaffing`, including `hiring`. It can
-prefetch the factory planner's costs (`openFactory`), which need no staffing.
+`odPrefetchSections(view)` maps the view or route to its declared sections. For a chain
+that includes `factoryStaffing`, it prefetches only the light `staffing` and
+`officeStaffing` stages, skipping `factoryStaffing` and `hiring`. It can prefetch the
+factory planner's costs (`openFactory`) and location and financing (`openStore`),
+which need no staffing.
 Prefetch pauses when `document.hidden`, never runs during an `odHidden` draw, and uses
 `odNeed()` with the same once-per-section-per-board and generation checks as navigation.
 The worker's existing newer-build priority and stale replies are unchanged.

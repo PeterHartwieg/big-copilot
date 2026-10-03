@@ -530,7 +530,8 @@ function odPrefetchSections(view){
   const r = typeof ROUTES !== "undefined" && ROUTES[view];
   const host = r ? r.host.join("/") : view;
   const needs = r ? r.needs || [] : PAGE_DRAWS.filter(row => row[0].split(" ").includes(host)).flatMap(row => row[3] || []);
-  return [...new Set(needs)].filter(n => !odChain(n).includes("factoryStaffing"));
+  return [...new Set(needs.flatMap(n => odChain(n).includes("factoryStaffing")
+    ? odChain(n).filter(stage => stage !== "factoryStaffing" && stage !== "hiring") : [n]))];
 }
 function odPrefetch(view){
   if(document.hidden || odHidden || !hasData()) return;
@@ -580,9 +581,16 @@ function odThensAsk(){
 }
 function odRedraw(){
   if(!hasData()) return;
+  const cell = demPop && !demPop.hidden ? demPopCell : null;
   /* renderAll() replans a waiting dialog itself (odThensAsk()); one that
      threw before it got there still does. */
   try{ renderCalm(true); }catch(e){ console.error(e); odDialog(); }
+  /* Demand's redraw replaces the anchor. Keep only the popover that was
+     still open for this cell, without taking focus from its reader. */
+  if(cell && demPop && !demPop.hidden && demPopCell === cell){
+    const anchor = cell.isConnected ? cell : q(`#market .cell[data-slug="${CSS.escape(cell.dataset.slug)}"][data-hood="${CSS.escape(cell.dataset.hood)}"]`);
+    if(anchor) demCellPop(anchor, false); else demPopClose(false);
+  }
 }
 /* Where a page or block would draw a section it does not have yet: the words
    while it is worked out, or why it was not, with Try again. `small` for a
@@ -3360,14 +3368,10 @@ function ovAtFactory(a){
      of its machines names the machine, and the site names its type. */
   return !!(a.ev && a.ev.slot !== undefined) || !!(b && b.typeSlug === "ba:businesstype_factory");
 }
-/* Where a site's staffing is on its page: a shop's Staffing always, an
-   office's where the office default plans it (spOfficeRoster()), else its
-   Crew, which every staffed site draws. The planner itself is on Staffing ›
-   Schedules; a business's page carries its summary (spSchedSummary()). */
+/* A shop's schedule summary; an office's Schedule action, which exists
+   whether or not the office default has hours. Today need not ask for it. */
 function nxStaffInto(b){
-  if(!b || b.status !== "office") return "#sp-sched";
-  const row = gwOfficeRow(b.key);
-  return row && (row.shifts || []).length ? "#sp-sched" : "#sp-crew";
+  return b && b.status === "office" ? "#sitePanel .sp-acts" : "#sp-sched";
 }
 function ovActLabel(act){
   switch(act){
@@ -11752,6 +11756,7 @@ function osCkStaff(plan, opened){
   const title = tt("gr.os.ck.staff", "Staff for the opening hours");
   if(!opened) return osCk("people", "todo", title, tt("gr.os.ck.staff.todo", "Hired once the business is set up"));
   const have = opened.staff || 0;
+  if(!odNeed("staffing")) return osCk("people", "todo", title, "", odWaitHtml("staffing", true));
   /* Judged on the Staff page's plan only once the board has it. */
   if(!odNeed("hiring")) return osCk("people", "todo", title, "", odWaitHtml("hiring", true));
   const M = hrMemoModel(), S = M.sites.find(s => s.key === plan.key);
@@ -12593,7 +12598,7 @@ const priceSpan = () => {
 const machinesOn = slug => Math.max(0, planCounts[slug] ?? planSeed[slug] ?? 1);
 
 function drawPlan(){
-  const missing = ["openFactory"].filter(n => !odNeed(n));
+  const missing = ["openFactory", "openStore"].filter(n => !odNeed(n));
   if(missing.length){
     $("planNote").textContent = "";
     ["planPicker", "planBody", "ingBody", "planFor", "ofCtl", "ofStrip", "ofStart", "ofWhat"].forEach(id => { if($(id)) $(id).innerHTML = ""; });
@@ -12920,6 +12925,7 @@ function ofLoad(){
   if(plan){ planType = plan.type; planTarget = plan.site || "new"; planCounts = {...plan.counts}; ofStep = plan.step; }
 }
 function ofSave(){
+  if(!odReady("openFactory") || !odReady("openStore")) return;
   const plan = ofPlan();
   if(plan) plan.step = ofStep;
   try{ localStorage.setItem(ofStore(), JSON.stringify({plans: ofPlans, current: ofCur})); }catch(e){}
@@ -13879,6 +13885,7 @@ function ofDayChart(days, planDay){
    on the page, and by planDraw() after a stepper moves (ofAfterLines()). */
 function ofDraw(){
   if(!$("ofCtl") || !hasData()) return;
+  if(!odReady("openFactory") || !odReady("openStore")){ drawPlan(); return; }
   const plan = ofPlan();
   if(!OF_STEPS.includes(ofStep) || !ofStepReady(ofStep)) ofStep = "what";
   const what = ofStep === "what";
@@ -13967,6 +13974,11 @@ function ofOpen(id){
    factory it is for, or both -- and the view opens on step 1 of that. A plan
    for something else is put aside, as a pick in the view does. */
 function ofPreset(o = {}){
+  if(!odReady("openFactory") || !odReady("openStore")){
+    ["openFactory", "openStore"].forEach(odNeed);
+    odThen("openFactory", () => odThen("openStore", () => ofPreset(o), "of-preset-store"), "of-preset");
+    return;
+  }
   ofLoad();
   const plan = ofPlan();
   if(o.type && o.type !== planType){ planType = o.type; planCounts = {}; ofSizeMode = "auto"; }
@@ -16770,7 +16782,7 @@ function drawFindLocation(){
   const vacant = (odReady("premises") ? D.premises?.buildings || [] : []).filter(b => b.type === "retail" && b.status === "vacant");
   if(!vacant.length){
     badge.className = "soon";
-    badge.textContent = D.premises ? tt("today.moves.find.badge.none", "NONE FREE") : tt("today.moves.soon", "SOON");
+    badge.textContent = D.premises ? tt("today.moves.find.badge.none", "NONE FREE") : odOnDemand() ? "" : tt("today.moves.soon", "SOON");
     text.textContent = D.premises ? tt("today.moves.find.none", "No vacant retail unit in the city right now.")
       : tt("today.moves.find.soon", "Free buildings ranked by demand, rivals and the building capacity you would get.");
     return;
@@ -17775,7 +17787,7 @@ const ROUTES = {
     if(o.osType && typeof osStart === "function" && hasData()) osStart(o.osType, o.osHood || null);
   }},
   /* Any visit marks the view's New badge seen (the factory flow, #172). */
-  "expansion/factory": {needs: ["openFactory"], host: ["growth", "plan"], after(){ featureDiscovery.visit("factory-flow"); }},
+  "expansion/factory": {needs: ["openFactory", "openStore"], host: ["growth", "plan"], after(){ featureDiscovery.visit("factory-flow"); }},
   /* The map as the reader left it: with the finder on, that is Find a
      location, and the address says so (routeFor()). */
   /* The City map is the plain map: reached with the finder on (the
@@ -17995,7 +18007,7 @@ const PAGE_DRAWS = [
   ["supply/changes", () => drawChangesView(), null, []], ["supply/imports", () => drawImportsView(), null, []], ["supply/deliveries", () => drawDeliveriesView(), null, []],
   ["supply/production", () => drawProductionView(), null, ["factoryStaffing"]], ["supply/flow", () => drawFlowView(), null, []], ["supply/flow", () => drawFlow(), null, []],
   ["growth/market", () => drawMovers(), null, []], ["growth/market", () => drawMarket(), null, []], ["growth/open", () => drawOpenStore(), null, ["openStore"]],
-  ["growth/plan", () => drawPlan(), null, ["openFactory"]],  // changed for growth: no drawExpansion()
+  ["growth/plan", () => drawPlan(), null, ["openFactory", "openStore"]],  // changed for growth: no drawExpansion()
   ["company/products", () => drawPriceShops(), null, []], ["company/products", () => drawProducts(), null, ["products"]],
   // A third element names a row other code marks stale on its own (hrStale(), nxSchedStale());
   // a fourth, the sections it reads, asked for as its view opens (odWantView()).
@@ -19534,6 +19546,7 @@ function ssDifficulty(){
 }
 function ssFinder(preset){
   if(typeof premises === "function" && premises()) openFinder(preset);
+  else if(odOnDemand()) openRoute("expansion/finder", {preset});
   else showPage("map");
 }
 /* A hash the board already routes (#wiki/...): the hash listener opens it.
@@ -20139,6 +20152,15 @@ function ssBuild(){
       const had = best.get(d.slug);
       if(!had || d.demand > had.demand) best.set(d.slug, {...d, hood});
     }));
+    if(!D.premises && odOnDemand()){
+      const market = D.market || {};
+      [...(market.types || []), ...(market.offices || [])].forEach(row => (row.cells || []).forEach((cell, i) => {
+        const hood = (market.hoods || [])[i], preset = cell && finderPreset(row.slug, hood);
+        if(!preset) return;
+        const had = best.get(row.slug);
+        if(!had || cell.demand > had.demand) best.set(row.slug, {slug: row.slug, type: row.type, category: preset.cat, demand: cell.demand, hood});
+      }));
+    }
     [...best.values()].sort((a, z) => z.demand - a.demand || gnCompare(a.type, z.type)).forEach(d => {
       /* English puts "an" before a vowel; the UI language decides for itself. */
       out.push(ssEntry({id: `finder:${d.slug}`, g: "finder",
@@ -20148,7 +20170,7 @@ function ssBuild(){
         syn: ["new shop", "new business", "open", "expand"], land: tt("nav.search.finder.land", "Expansion › Find a location · {type}", {type: d.type}),
         go: () => ssFinder({cat: d.category, type: d.slug, hoods: [d.hood]})}));
     });
-    if(D.premises) out.push(ssEntry({id: "finder:warehouse", g: "finder", t: tt("nav.search.finder.rent.title", "Rent a warehouse"),
+    if(D.premises || odOnDemand()) out.push(ssEntry({id: "finder:warehouse", g: "finder", t: tt("nav.search.finder.rent.title", "Rent a warehouse"),
       p: tt("nav.search.finder.rent.line", "Expansion › Find a location · Warehouse · by m²"), ic: "crate", syn: ["depot", "storage", "floor size", "warehouse"],
       go: () => ssFinder({cat: "warehouse", type: "", hoods: null})}));
   }
@@ -21409,7 +21431,7 @@ function demOpenStore(slug, hood){
    and Find a location. One element at body level, placed against the cell,
    the way #alertPop is: a section's paint containment would clip it. */
 let demPop = null, demPopCell = null;
-function demCellPop(cell){
+function demCellPop(cell, focus = true){
   const slug = cell.dataset.slug, hood = cell.dataset.hood, go = finderPreset(slug, hood);
   if(!go) return;
   if(!demPop){
@@ -21437,19 +21459,20 @@ function demCellPop(cell){
   const c = row && at >= 0 ? row.cells[at] : null;
   const rent = ((D.premises || {}).buildings || []).filter(b => b.type === go.cat && b.hood === hood && b.status === "vacant").length;
   const type = demTypeName(slug, hood);
-  const plan = odReady("openStore") && !!osType(slug);
+  const ready = odNeed("openStore"), plan = ready && !!osType(slug);
   const fact = (lab, v) => `<div><span class="os-lab">${lab}</span><b>${v}</b></div>`;
   demPop.setAttribute("aria-label", tt("gr.pop.aria", "{type} in {hood}", {type, hood: hoodName(hood)}));
   demPop.innerHTML = `<h4>${spEsc(tt("gr.pop.title", "{type} · {hood}", {type, hood: hoodName(hood)}))}</h4>
     <div class="fx">${fact(tt("gr.pop.demand", "Demand"), c ? c.demand : "–")}${fact(tt("gr.pop.rivals", "Sellers"), c ? c.providers || 0 : "–")}${
       fact(tt("gr.pop.rent", "To rent"), odReady("premises") ? rent : "—")}</div>
+    ${ready ? "" : odWaitHtml("openStore", true)}
     <div class="acts">${plan ? `<button type="button" class="os-cta" data-dem-go="open">${osIcon("store")}${tt("gr.pop.open", "Open a store here")}</button>` : ""}
       <button type="button" class="os-btn" data-dem-go="find">${icon("pin")}${tt("gr.pop.find", "Find a location")}</button></div>`;
   demPop.hidden = false;
   cell.setAttribute("aria-expanded", "true");
   hideTip();
   demPopPlace();
-  (demPop.querySelector("[data-dem-go]") || demPop).focus({preventScroll: true});
+  if(focus) (demPop.querySelector("[data-dem-go]") || demPop).focus({preventScroll: true});
 }
 function demPopPlace(){
   if(!demPop || demPop.hidden || !demPopCell) return;

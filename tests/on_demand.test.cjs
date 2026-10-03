@@ -279,10 +279,10 @@ test('prefetch filters factory dependencies and shares the per-board request and
   const b = board();
   b.run('globalThis.document = {hidden: false}');
   const sections = view => JSON.parse(b.run(`JSON.stringify(odPrefetchSections("${view}"))`));
-  assert.deepEqual(sections('staffing/needs'), []);
-  assert.deepEqual(sections('staffing/schedules'), []);
-  assert.deepEqual(sections('supply/production'), []);
-  assert.deepEqual(sections('expansion/factory'), ['openFactory']);
+  assert.deepEqual(sections('staffing/needs'), ['staffing', 'officeStaffing']);
+  assert.deepEqual(sections('staffing/schedules'), ['staffing', 'officeStaffing']);
+  assert.deepEqual(sections('supply/production'), ['staffing', 'officeStaffing']);
+  assert.deepEqual(sections('expansion/factory'), ['openFactory', 'openStore']);
   assert.deepEqual(sections('expansion/finder'), ['premises']);
   assert.deepEqual(sections('map'), []);
   b.run('document.hidden = true; odPrefetch("expansion/open")');
@@ -297,6 +297,58 @@ test('prefetch filters factory dependencies and shares the per-board request and
   await tick();
   assert.equal(b.run('odReady("openStore")'), false);
   assert.deepEqual(b.asked.map(a => a.gen), [5, 6]);
+});
+
+test('Staffing intent prefetches light planning stages without factory staffing or hiring', () => {
+  const b = board();
+  b.run('delete D.staffing; delete D.officeStaffing; globalThis.document = {hidden: false}; odPrefetch("staffing/schedules"); odPrefetch("staffing/needs")');
+  assert.deepEqual(b.asked.map(a => a.name), ['staffing', 'officeStaffing']);
+});
+
+test('factory planning waits for location and financing before loading or saving its step', () => {
+  for(const core of [{}, {openFactory: {}, premises: {buildings: []}}]){
+    const b = board(core);
+    b.run(`ofStep = "investment"; globalThis.__saved = 0;
+      globalThis.localStorage = {setItem(){ __saved++; }};
+      ofDraw(); ofSave()`);
+    assert.equal(b.run('ofStep'), 'investment');
+    assert.equal(b.run('__saved'), 0);
+    assert.match(b.run('$("ofBody").innerHTML'), /od-wait/);
+    assert.ok(b.asked.some(a => a.name === 'openStore'));
+    assert.equal(b.run('JSON.stringify(ROUTES["expansion/factory"].needs)'), '["openFactory","openStore"]');
+  }
+});
+
+test('an opened store staff check waits for shop plans before judging spare people', () => {
+  const b = board({factoryStaffing: {}, hiring: {}, candidates: []});
+  b.run('delete D.staffing; globalThis.__read = 0; hrMemoModel = () => { __read++; throw new Error("must wait"); }');
+  const row = b.run('osCkStaff({key: "shop"}, {key: "shop", staff: 2, stationShifts: 0})');
+  assert.match(row.act, /od-wait/);
+  assert.doesNotMatch(row.sub, /no hours scheduled|of .*people/);
+  assert.equal(b.run('__read'), 0);
+  assert.deepEqual(b.asked.map(a => a.name), ['staffing']);
+});
+
+test('Today office schedule target is independent of deferred office plans', () => {
+  const b = board();
+  b.run('delete D.officeStaffing');
+  const before = b.run('nxStaffInto({key: "office", status: "office"})');
+  b.run('D.officeStaffing = [{key: "office", shifts: [{h: 8}]}]');
+  assert.equal(b.run('nxStaffInto({key: "office", status: "office"})'), before);
+  assert.equal(before, '#sitePanel .sp-acts');
+  assert.equal(b.asked.length, 0);
+});
+
+test('search and the expansion question enter the on-demand finder with their presets', () => {
+  const b = board({market: {hoods: ['hood'], types: [{slug: 'shop', type: 'Shop', cells: [{demand: 30}]}], offices: []}});
+  b.run('globalThis.__route = null; openRoute = (id, o) => { __route = {id, o}; odNeed("premises"); }');
+  b.run('SS_VIEWS.find(v => v.id === "finder").go()');
+  assert.equal(b.run('__route.id'), 'expansion/finder');
+  b.run('SS_QUESTIONS.find(v => v.id === "open").go()');
+  assert.equal(b.run('__route.id'), 'expansion/finder');
+  b.run('ssFinder({cat: "office", type: "law", hoods: ["hood"]})');
+  assert.equal(b.run('JSON.stringify(__route.o.preset)'), '{"cat":"office","type":"law","hoods":["hood"]}');
+  assert.deepEqual(b.asked.map(a => a.name), ['premises']);
 });
 
 test('navigation intent maps route links and area tabs to their declared prefetch', () => {
@@ -356,17 +408,32 @@ test('Today and shell supply readers use core recipes without a section request'
   assert.equal(b.asked.length, 0);
 });
 
-test('Demand popover offers a store only when openStore facts support that type', () => {
+test('Demand popover asks for store facts and redraws the still-open cell on arrival', async () => {
   const b = board({market: {hoods: ['hood'], types: [{slug: 'shop', cells: [{demand: 30}]}]}});
   b.run(`demPop = {setAttribute(){}, querySelector(){ return null; }, focus(){}};
     demPopPlace = () => {}; hideTip = () => {};
-    globalThis.__cell = {dataset: {slug: "shop", hood: "hood"}, setAttribute(){}};
+    globalThis.__cell = {isConnected: true, dataset: {slug: "shop", hood: "hood"}, setAttribute(){}};
     demCellPop(__cell)`);
   assert.doesNotMatch(b.run('demPop.innerHTML'), /data-dem-go="open"/);
   assert.match(b.run('demPop.innerHTML'), /data-dem-go="find"/);
-  assert.equal(b.asked.length, 0);
-  b.run('odTake(5, {sections: {openStore: {openStore: {types: {other: {}}}}, premises: {premises: {demand: {hood: [{slug: "shop", category: "retail"}]}, buildings: []}}}}); demCellPop(__cell)');
-  assert.doesNotMatch(b.run('demPop.innerHTML'), /data-dem-go="open"/);
-  b.run('D.openStore.types.shop = {}; demCellPop(__cell)');
+  assert.deepEqual(b.asked.map(a => a.name), ['openStore']);
+  assert.match(b.run('demPop.innerHTML'), /od-wait/);
+  assert.match(b.run('demPop.innerHTML'), /To rent<\/span><b>—/);
+  b.asked[0].resolve({sections: {openStore: {openStore: {types: {shop: {}}}},
+    premises: {premises: {demand: {hood: [{slug: 'shop', category: 'retail'}]}, buildings: []}}}});
+  await tick();
   assert.match(b.run('demPop.innerHTML'), /data-dem-go="open"/);
+  assert.doesNotMatch(b.run('demPop.innerHTML'), /od-wait/);
+  assert.match(b.run('demPop.innerHTML'), /To rent<\/span><b>0/);
+});
+
+test('a closed Demand popover stays closed when store facts arrive', async () => {
+  const b = board({market: {hoods: ['hood'], types: [{slug: 'shop', cells: [{demand: 30}]}]}});
+  b.run(`demPop = {setAttribute(){}, querySelector(){ return null; }, focus(){}};
+    demPopPlace = () => {}; hideTip = () => {};
+    globalThis.__cell = {isConnected: true, dataset: {slug: "shop", hood: "hood"}, setAttribute(){}};
+    demCellPop(__cell); demPopClose(false)`);
+  b.asked[0].resolve({sections: {openStore: {openStore: {types: {shop: {}}}}, premises: {premises: {buildings: []}}}});
+  await tick();
+  assert.equal(b.run('demPop.hidden'), true);
 });
