@@ -51,9 +51,8 @@ async function board(data, {mode = 'cap', names = null, which = 'all', tab = 'im
 }
 /* Every view drawn again, as a refresh would. */
 const redraw = page => page.evaluate(() => { drawSupplyStrip(); drawChangesView(); drawImportsView(); drawDeliveriesView(); drawProductionView(); wireAll(); });
-/* How far along Changes is, as its road says it to a screen reader: "3 of 10
-   recorded or applied" (the words on screen went, Peter's testing A9). */
-const counted = page => page.$eval('#sbcTop .sb-road', el => el.getAttribute('aria-label'));
+/* How far along Changes is, shown as text in place of the decorative road. */
+const counted = page => page.$eval('#sbcTop .sbc-progress', el => el.textContent);
 const actions = page => page.evaluate(() => sbData().rows.map(a =>
   ({kind: a.kind, item: a.item, current: a.current, proposed: a.proposed, tight: !!a.tight, paused: !!a.paused,
     ...(a.lower ? {lower: true} : {})})));
@@ -193,7 +192,7 @@ test('Changes counts the marks on every view, and each view counts what is left'
     assert.match(await page.locator('#secImports tr[data-slug="flour"]').getAttribute('class'), /sb-done/);
     // The same mark shows on Changes, as Marked by you.
     assert.match(await page.locator('#secChanges .sbc-row.sb-done').first().textContent(), enRe("sb.st.marked"));
-    // The road says how far along the list is, and no counter says it again (A9);
+    // One visible count says how far along the list is;
     // Copy remaining carries no second count.
     assert.equal(await counted(page), en("sb.cw.road", {done: 3, n: 10}));
     assert.equal(await page.locator('#sbcTop .sbc-n').count(), 0);

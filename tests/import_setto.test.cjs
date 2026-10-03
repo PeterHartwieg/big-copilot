@@ -403,7 +403,7 @@ test('the Plan imports card counts what the checklist has to do', async () => {
       document.querySelector('#planImportsCard .soon').textContent,
       document.querySelector('#planImportsCard .soon').className,
       document.querySelector('#planImportsCard .what').textContent,
-      document.querySelector('#sbcTop .sb-road').getAttribute('aria-label')]);
+      document.querySelector('#sbcTop .sbc-progress').textContent]);
     const [badge, cls, what, todo] = await card();
     assert.deepEqual([badge, cls, todo], [en("today.moves.plan.badge.one"), 'soon live', en("sb.cw.road", {done: 0, n: 1})]);
     assert.match(what, enRe("today.moves.plan.one.at", {item: "Sugar", site: "North Depot", change: en("today.moves.plan.smart", {from: "900", to: "1,400"})}, {anchor: "full"}));

@@ -581,7 +581,7 @@ test('Changes counts what the Overview counts, lists only import records, and co
     sbStamp++; drawSupplyStrip(); drawChangesView(); wireAll();
   });
   const n = await page.evaluate(() => { const d = sbData(); return {total: d.rows.length, done: d.rows.filter(r => pgDone(d, r)).length}; });
-  assert.equal(await page.locator('#sbcTop .sb-road').getAttribute('aria-label'), en("sb.cw.road", {done: n.done, n: n.total}));
+  assert.equal(await page.locator('#sbcTop .sbc-progress').textContent(), en("sb.cw.road", {done: n.done, n: n.total}));
   const settled = await page.locator('#secChanges .sbc-settled .sbc-row').allTextContents();
   assert.equal(settled.length, 1);
   assert.match(settled[0], /Milk/);
