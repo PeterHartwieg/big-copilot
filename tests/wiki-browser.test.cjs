@@ -725,6 +725,9 @@ test('save pricing is readable at desktop and phone widths and clears with the s
     });
     require('./_payload_contract.cjs').assertPayloadShape(await page.evaluate(() => D), 'wiki-browser');
     const section = page.locator('#wk-prices');
+    // Finish the guide's initial layout before scrolling to its prices; a
+    // late landing scroll can move this content-visibility section off screen.
+    await settled(page);
     await section.scrollIntoViewIfNeeded();
     await page.waitForFunction(() => Array.from(document.querySelectorAll('.wk-prices'))
       .some(el => el.innerText.includes('My Gifts: $30.27')));
