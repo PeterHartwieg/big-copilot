@@ -4186,31 +4186,37 @@ a.sb-plan:hover em{color:var(--ink);text-decoration:underline}
   .os-inv{display:block;overflow-x:auto}
   /* The planner finder must wrap translated column/filter labels inside
      its clipped panel, even when a label has no word break. */
-  .os-finder .fhead span{white-space:normal;overflow-wrap:anywhere}
+  .os-finder .fhead span{min-width:0;white-space:normal;overflow-wrap:break-word;hyphens:auto}
   .os-finder .frow .lab{overflow-wrap:anywhere}
 }
 
-/* Phone plan pickers and step bodies accommodate long names and UI text. */
-@media (max-width:620px){
-  /* Supplier rows: item and explanation share the left column, price stays
-     visible on the right. Keep the table markup and its desktop layout. */
+/* Supplier rows follow the card width, including the narrow desktop column. */
+.os-store{container-type:inline-size}
+@container (max-width:540px){
+  /* Item and explanation share the left column; price stays on the right. */
   .os-store table,.os-store tbody{display:block;width:100%;min-width:0}
-  .os-store table tr{display:grid;grid-template-columns:minmax(0,1fr) auto;padding:7px 12px;gap:4px 12px;border-bottom:1px solid var(--rule-soft)}
+  .os-store table tr{display:grid;grid-template-columns:minmax(0,1fr) auto;padding:7px 12px;gap:0 12px;border-bottom:1px solid var(--rule-soft)}
   .os-store table tr:last-child{border-bottom:0}
   .os-store table td{display:block;min-width:0;padding:0;border:0;white-space:normal;overflow-wrap:anywhere}
   .os-store table td.l{grid-column:1;grid-row:1}
-  .os-store table td.w{grid-column:1;grid-row:2}
+  .os-store table td.w{grid-column:1;grid-row:2;margin-top:4px}
   .os-store table td.w:empty{display:none}
   .os-store table td:last-child{grid-column:2;grid-row:1 / span 2;white-space:nowrap}
   .os-store .os-tag{max-width:100%;height:auto;min-height:20px;white-space:normal;overflow-wrap:anywhere;line-height:1.35}
   .os-sh{flex-wrap:wrap}
   .os-sh>span:not(.k):not(.t){flex:1;min-width:0;overflow-wrap:anywhere}
   .os-sh .t{flex-shrink:0}
+}
+
+/* Phone plan pickers and step bodies accommodate long names and UI text. */
+@media (max-width:620px){
   .os-planpick{width:100%}
   .os-planpick>span{min-width:0;overflow:hidden;text-overflow:ellipsis}
   .os-planpick select{width:100%;max-width:none;flex:1;overflow:hidden}
   .os-plango{min-width:0;overflow-wrap:anywhere}
-  .os-btn,.os-cta{max-width:100%;height:auto;min-height:34px;white-space:normal;overflow-wrap:anywhere}
+  .os-btn,.os-cta{max-width:100%;height:auto;white-space:normal;overflow-wrap:anywhere}
+  .os-cta{min-height:40px}
+  .os-btn,.os-cta.sm{min-height:34px}
   .os-btn svg,.os-cta svg{flex-shrink:0}
   .os-seg{max-width:100%;flex-wrap:wrap}
   .os-seg button{min-width:0;max-width:100%;height:auto;min-height:30px;white-space:normal;overflow-wrap:anywhere}

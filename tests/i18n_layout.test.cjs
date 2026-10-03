@@ -406,15 +406,21 @@ async function expansionWidth(page, label, failures){
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   });
   const got = await page.evaluate(() => {
+    // District names extend beyond the map on purpose. Hide only these
+    // while measuring, so clipped finder headers and filters still fail.
+    const labels = [...document.querySelectorAll('.os-finder .dlabel')];
+    const displays = labels.map(el => el.style.display);
+    labels.forEach(el => { el.style.display = 'none'; });
     const root = document.documentElement, width = root.clientWidth, scroll = root.scrollWidth;
     // Hidden/clip containers must not conceal content even when the whole
     // page fits. Map viewports intentionally crop geometry and labels;
     // progress/meter tracks intentionally crop their proportional fill.
     // Hoisted headings remain as visually hidden screen-reader labels.
-    const deliberateClip = '#secOpen > .nx-sr, #secPlanFlow > .nx-sr, '
-      + '.os-finder .stage.finder.panel, .os-finder .map-canvas, .os-mini, .os-meter, .os-prog .m, .ff-meter';
+    const deliberateClip = '#secOpen > .nx-sr, #secPlanFlow > .nx-sr, #viewCtl [data-view-ctl] .nx-sr, '
+      + '.os-finder .map-canvas, .os-mini, .os-meter, .os-prog .m, .ff-meter';
     const clipped = [...document.querySelectorAll(
-      '#secOpen, #secOpen *, #secPlan, #secPlan *, #secPlanFlow, #secPlanFlow *, #osBody, #osBody *, #ofBody, #ofBody *'
+      '#viewCtl [data-view-ctl]:not([hidden]), #viewCtl [data-view-ctl]:not([hidden]) *, '
+      + '#secOpen, #secOpen *, #secPlan, #secPlan *, #secPlanFlow, #secPlanFlow *, #osBody, #osBody *, #ofBody, #ofBody *'
     )].filter(el => {
       if(!el.getClientRects().length || !el.clientWidth || el.matches(deliberateClip)) return false;
       const style = getComputedStyle(el);
@@ -422,7 +428,8 @@ async function expansionWidth(page, label, failures){
       if(style.textOverflow === 'ellipsis' && style.whiteSpace === 'nowrap') return false;
       return el.scrollWidth > el.clientWidth + 1;
     }).map(el => `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : '.' + (el.getAttribute('class') || '').split(' ').join('.')} scrollWidth=${el.scrollWidth} > clientWidth=${el.clientWidth} "${el.textContent.trim().slice(0, 70)}"`);
-    if(scroll <= width + 1) return {width, scroll, clipped};
+    const restoreLabels = () => labels.forEach((el, i) => { el.style.display = displays[i]; });
+    if(scroll <= width + 1){ restoreLabels(); return {width, scroll, clipped}; }
     const right = el => {
       const edges = [el.getBoundingClientRect().right];
       if(getComputedStyle(el).overflowX !== 'visible') return edges[0];
@@ -440,6 +447,7 @@ async function expansionWidth(page, label, failures){
       }
       return true;
     }).map(el => `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : '.' + (el.getAttribute('class') || '').split(' ').join('.')} right=${Math.round(right(el))} in .${el.parentElement.getAttribute('class') || ''} "${el.textContent.trim().slice(0, 50)}"`);
+    restoreLabels();
     return {width, scroll, past, clipped};
   });
   if(got.clipped.length) failures.push(`${label}: clipped content: ${got.clipped.join(', ')}`);
@@ -457,7 +465,7 @@ for(const lang of ['en', 'pseudo', 'de', 'es', 'fr', 'ko', 'pt', 'ru', 'tr']){
       assert.equal(await page.evaluate(() => tt('gr.os.step.what', 'What')), expected['gr.os.step.what']);
     }
     await expansionSeed(page);
-    const widths = lang === 'en' || lang === 'pseudo' ? [360, 375, 640, 700, 768, 1024] : [360, 375];
+    const widths = lang === 'en' || lang === 'pseudo' ? [360, 375, 640, 700, 768, 1024, 1101, 1200, 1279] : lang === 'ru' ? [360, 375, 1101, 1150] : [360, 375];
     for(const width of widths) await t.test(`${width}px`, async () => {
       await page.setViewportSize({width, height: 900});
       // Let the board's resize handlers reposition the sidebar and hoisted
@@ -517,6 +525,57 @@ for(const lang of ['en', 'pseudo', 'de', 'es', 'fr', 'ko', 'pt', 'ru', 'tr']){
     });
   });
 }
+
+test('factory desktop pickers share a row and phone CTAs keep their sizes', async t => {
+  const payload = expansionStress();
+  // Keep the populated planning fixture, with ordinary saved addresses.
+  for(const b of [...payload.businesses, ...payload.premises.buildings]){
+    if(b.address?.startsWith('123 International')) b.address = b.key === 'mobile-factory' ? '12 Factory Road' : '10 Retail Road';
+  }
+  // The names fixture has no demand readings; add one synthetic cell to
+  // exercise the actual Growth popover button.
+  const shop = payload.premises.buildings.find(b => b.type === 'retail');
+  const business = payload.businesses.find(b => b.key === shop.key);
+  payload.premises.demand[shop.hood] = [{slug: business.typeSlug, type: business.type, category: 'retail', demand: 60, rivals: 1}];
+  payload.market.hoods = [shop.hood];
+  payload.market.types = [{slug: business.typeSlug, type: business.type, products: 1, mine: true,
+    cells: [{hood: shop.hood, demand: 60, providers: 1, count: 1, here: true}]}];
+  const {page, errors} = await site(t, {width: 1280, payload});
+  await expansionSeed(page);
+  await page.evaluate(() => openRoute('expansion/factory'));
+  const placement = await page.evaluate(() => {
+    const shops = document.querySelector('#viewCtl #planPicker').getBoundingClientRect();
+    const target = document.querySelector('#viewCtl .ff-for').getBoundingClientRect();
+    return {shops: shops.toJSON(), target: target.toJSON()};
+  });
+  assert.ok(placement.target.left >= placement.shops.right, 'For stays to the right of Shops at 1280px');
+  assert.ok(Math.abs(placement.target.y + placement.target.height / 2 - placement.shops.y - placement.shops.height / 2) <= 1,
+    'For and Shops stay on the same row at 1280px');
+  await page.setViewportSize({width: 360, height: 900});
+  await page.locator('#ofCtl [data-of-step="what"]').click();
+  assert.equal(await page.locator('#ofBody .ff-next .os-cta').evaluate(el => el.getBoundingClientRect().height), 40);
+  await page.locator('#ofCtl [data-of-step="investment"]').click();
+  await page.locator('[data-of-mode="self"]').click();
+  const emptyRows = await page.locator('#ofBody .os-store td.w:empty').evaluateAll(cells => cells.map(cell => {
+    const row = cell.parentElement, style = getComputedStyle(row);
+    // The price spans both rows: its stretched box includes an unwanted
+    // gap. Compare the item box and the price's single text line instead.
+    const content = Math.max(row.querySelector('td.l').getBoundingClientRect().height,
+      parseFloat(getComputedStyle(row.lastElementChild).lineHeight));
+    return {height: row.getBoundingClientRect().height, expected: content + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom) + parseFloat(style.borderBottomWidth)};
+  }));
+  assert.ok(emptyRows.length, 'supplier cards include rows without an explanation');
+  assert.ok(emptyRows.every(row => Math.abs(row.height - row.expected) <= 1), 'empty explanations add no row gap');
+  await page.evaluate(() => {
+    openRoute('expansion/demand');
+    const cell = [...document.querySelectorAll('#secMarket .cell[data-slug]')].find(el => osType(el.dataset.slug));
+    if(!cell) throw new Error('the fixture needs a plannable Demand cell');
+    demCellPop(cell);
+  });
+  assert.equal(await page.locator('#demCellPop .os-cta').evaluate(el => el.getBoundingClientRect().height), 40);
+  assert.equal(await page.locator('#demCellPop .os-btn').evaluate(el => el.getBoundingClientRect().height), 34);
+  assert.deepEqual(errors, []);
+});
 
 /* The landing and the shell around the board, as a player reaches them:
    app.js with a stand-in for the reader, the folder handle and IndexedDB
