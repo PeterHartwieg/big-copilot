@@ -1949,7 +1949,7 @@ function finderPickRestore(view, replay, kept = null){
     if(!ok || view.finderRestore !== restore || !odSameScope(scope, odScope())
        || page !== "map" || route !== "expansion/finder" || !view.finderOn() || location.hash !== entry) return;
     // Map assets can finish after another same-company refresh began.
-    if(!odReady("premises")) return odThen("premises", apply, "finder-restore");
+    if(!odReady("premises")) return odThen("premises", apply, "finder-restore", true);
     if(kept){
       view.fs = {...view.fs, ...view.savedFilters({filters: kept}), on: true};
       view.clampSort(); view.showAll = false;
@@ -1963,7 +1963,9 @@ function finderPickRestore(view, replay, kept = null){
   });
   // Filtering and judging a saved pick share the same readiness gate. The
   // pick is captured before a redraw can change the current history state.
-  odThen("premises", apply, "finder-restore");
+  // Errors keep this visit's restoration for Try again or Update; navigation
+  // and a company/source change still cancel it, as they do while loading.
+  odThen("premises", apply, "finder-restore", true);
 }
 function refreshCityMaps(){
   const character=D?.meta?.character || D?.supply?.factories?.character || D?.meta?.save;

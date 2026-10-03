@@ -499,7 +499,7 @@ function odFailed(chain, gen, err){
   chain.forEach(n => { const a = odAsked.get(n); if(a && a.gen === gen) odAsked.set(n, {gen, state: "error", error}); });
   if(gen !== odGen()) return;
   /* What waited on it is not done: it is said where it is drawn instead. */
-  odThens = odThens.filter(t => !chain.includes(t.name));
+  odThens = odThens.filter(t => t.keepOnError || !chain.includes(t.name));
   odRedraw();
 }
 /* The source could not read the save again (SOURCE.watch()'s stale(why)):
@@ -508,7 +508,7 @@ function odSourceFailed(why){
   let any = false;
   odAsked.forEach((a, n) => { if(a.gen === odGen() && a.state === "loading" && a.stale){ odAsked.set(n, {gen: a.gen, state: "error", error: why || a.stale}); any = true; } });
   if(!any) return;
-  odThens = odThens.filter(t => odState(t.name) !== "error");
+  odThens = odThens.filter(t => t.keepOnError || odState(t.name) !== "error");
   odRedraw();
 }
 /* Held work belongs to this company and source, across its refreshes only.
@@ -540,13 +540,14 @@ function odKeepRow(row, shown){
 function odRowDrawn(row){
   if((row[3] || []).every(odReady)) odDrawn.add(row); else odDrawn.delete(row);
 }
-/* One held per key: a second click replaces the first. */
+/* One held per key: a second click replaces the first. Finder restoration
+   opts into keeping its visit's question through errors, until retry arrives. */
 let odThens = [];
-function odThen(name, run, key = run){
+function odThen(name, run, key = run, keepOnError = false){
   // A different source may have been selected before its board arrives.
   if(odBoardScope && !odSameScope(odBoardScope, odScope())) return;
   if(odNeed(name)) return run();
-  odThens = odThens.filter(t => t.key !== key).concat([{name, run, key, scope: odScope()}]);
+  odThens = odThens.filter(t => t.key !== key).concat([{name, run, key, keepOnError, scope: odScope()}]);
 }
 /* The sections the rows of `view` declare (PAGE_DRAWS' fourth element),
    asked for as the view opens (drawStale()) and as a board arrives on it

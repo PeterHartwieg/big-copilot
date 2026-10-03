@@ -8,6 +8,8 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
+const fs = require('node:fs');
+const path = require('node:path');
 const {loadBoard, recordingDocument} = require('./_board.cjs');
 
 const GEN = Symbol.for('bigcopilot.build');
@@ -46,6 +48,117 @@ function board(core = {}) {
   return {context, asked, take, run, source};
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
+
+/* Real finder filtering/restoration with only the map's drawing and camera
+   stubbed. The current retail question differs from the warehouse visit. */
+function finderBoard(){
+  const b = board({meta: {character: 'A', save: 'A', day: 3}});
+  const stored = new Map();
+  b.context.localStorage = {getItem: key => stored.get(key) || null,
+    setItem: (key, value) => stored.set(key, value)};
+  b.context.location = {hash: '#expansion/finder', href: 'https://example.test/#expansion/finder'};
+  b.context.history = {state: {nxFs: {cat: 'warehouse', minM2: 1000}, nxPick: 'warehouse'},
+    replaceState(state){ this.state = state; }};
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'web/map.js'), 'utf8'), b.context);
+  b.run(`renderCalm = () => {}; drawFinderCtx = () => {};
+    page = 'map'; route = 'expansion/finder';
+    cityMapPage = Object.assign(Object.create(CityMapView.prototype), {
+      panel: true, fs: {...finderDefaults(), on: true}, selected: 'retail',
+      assets: {byKey: new Map()}, ready: Promise.resolve(true),
+      update(){}, select(key){ this.selected = key; finderPickRemember(this); },
+      deselect(){ this.selected = null; finderPickRemember(this); }
+    });`);
+  return {...b, stored};
+}
+const finderPremises = {buildings: [
+  {key: 'warehouse', type: 'warehouse', status: 'vacant', m2: 1500, cap: 0, traffic: 30},
+  {key: 'retail', type: 'retail', status: 'vacant', m2: 100, cap: 30, traffic: 50},
+], demand: {}};
+
+async function failFinder(b, newerBuild){
+  b.asked[0].reject(Object.assign(new Error('premises failed'), newerBuild ? {stale: true} : {}));
+  await tick();
+  if(newerBuild) b.run('odSourceFailed("newer build failed")');
+  assert.equal(b.run('odState("premises")'), 'error');
+}
+
+for(const newerBuild of [false, true]){
+  const failure = newerBuild ? 'a failed newer build' : 'a failed premises request';
+  for(const recovery of ['Try again', 'Update']){
+    test(`finder history question and pick survive ${failure} followed by ${recovery}`, async () => {
+      const b = finderBoard();
+      b.run('finderPickRestore(cityMapPage, true, finderEntryState())');
+      await failFinder(b, newerBuild);
+      assert.equal(b.run('cityMapPage.fs.cat'), 'retail', 'waits before restoring');
+      // A redraw can write the latest question into history; restoration must
+      // still use the question and pick captured on arrival at this visit.
+      b.context.history.state = {nxFs: {cat: 'retail', minM2: 0}, nxPick: 'retail'};
+      if(recovery === 'Update'){
+        b.take({meta: {character: 'A', save: 'A', day: 4}, names: {}, businesses: [],
+          supply: {factories: {sites: []}}}, 6);
+        b.run('odThensAsk()');
+      }else b.run('odRetry("premises")');
+      b.asked.at(-1).resolve({sections: {premises: {premises: finderPremises}}});
+      await tick();
+      assert.equal(b.run('cityMapPage.fs.cat'), 'warehouse');
+      assert.equal(b.run('cityMapPage.fs.minM2'), 1000);
+      assert.equal(b.run('cityMapPage.selected'), 'warehouse');
+      assert.equal(b.context.history.state.nxPick, 'warehouse');
+      assert.equal(b.run('odThens.length'), 0, 'restored once');
+    });
+  }
+
+  test(`finder restoration after ${failure} is cancelled when its visit ends`, async () => {
+    const b = finderBoard();
+    b.run('finderPickRestore(cityMapPage, true, finderEntryState())');
+    await failFinder(b, newerBuild);
+    b.run(`drawStale = () => {}; paintShell = () => {}; wireReveal = () => {}; siteShut = () => {};
+      showPage('today', false, 'none');
+      page = 'map'; route = 'expansion/finder';`);
+    assert.equal(b.run('cityMapPage.finderRestore'), null, 'leaving ends the visit even at the same hash');
+    b.run('odRetry("premises")');
+    b.asked.at(-1).resolve({sections: {premises: {premises: finderPremises}}});
+    await tick();
+    assert.equal(b.run('cityMapPage.fs.cat'), 'retail');
+    assert.equal(b.run('cityMapPage.fs.minM2'), 0);
+    assert.equal(b.run('cityMapPage.selected'), 'retail');
+    assert.equal(b.run('odThens.length'), 0);
+  });
+
+  test(`cold finder preset persistence survives ${failure} and retry`, async () => {
+    const b = finderBoard();
+    b.run(`cityMapPage.fs = {...finderDefaults(), on: true, cat: 'warehouse', minM2: 1000};
+      cityMapPage.selected = null; finderPickRestore(cityMapPage, false)`);
+    await failFinder(b, newerBuild);
+    assert.equal(b.stored.size, 0, 'no persistence before premises arrives');
+    b.run('odRetry("premises")');
+    b.asked.at(-1).resolve({sections: {premises: {premises: finderPremises}}});
+    await tick();
+    const filters = JSON.parse(b.stored.get('ba_finder_v1:A'));
+    assert.equal(filters.cat, 'warehouse');
+    assert.equal(filters.minM2, 1000);
+  });
+}
+
+test('finder restoration retained after failure is cancelled by a company or source change', async () => {
+  for(const change of ['company', 'source']){
+    const b = finderBoard();
+    let source = 1;
+    b.source.identity = () => source;
+    b.run('odBoard(D); finderPickRestore(cityMapPage, true, finderEntryState())');
+    await failFinder(b, false);
+    if(change === 'source') source++;
+    const who = change === 'company' ? 'B' : 'A';
+    b.take({meta: {character: who, save: who}, names: {}, businesses: [],
+      supply: {factories: {sites: []}}}, 6);
+    assert.equal(b.run('odThens.length'), 0);
+    b.run('odRetry("premises")');
+    b.asked.at(-1).resolve({sections: {premises: {premises: finderPremises}}});
+    await tick();
+    assert.equal(b.run('cityMapPage.fs.cat'), 'retail');
+    assert.equal(b.run('cityMapPage.selected'), 'retail');
+  }
+});
 
 test('held planner and finder actions are dropped on another company or source', () => {
   for(const change of ['company', 'source']){
