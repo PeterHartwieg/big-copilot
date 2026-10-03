@@ -45,6 +45,18 @@ export function verify(args = [], { root = ROOT, env = process.env, spawn = spaw
   const [stage = 'all', ...focused] = args;
   if (!['all', 'assemble', 'python', 'node', 'optimized', 'worker', 'check'].includes(stage)) throw new Error(`unknown stage: ${stage}`);
   if (focused.length && !['node', 'python'].includes(stage)) throw new Error(`${stage} does not accept extra arguments`);
+  // Explicit CLI option, never an environment variable: the full local gate must
+  // always run every suite, even when launched from a sharded CI environment.
+  const nodeOptions = [];
+  if (stage === 'node' && focused[0]?.startsWith('--shard')) {
+    const shard = focused.shift();
+    const match = /^--shard=([1-9]\d*)\/([1-9]\d*)$/.exec(shard);
+    if (!match || !Number.isSafeInteger(Number(match[2])) || Number(match[1]) > Number(match[2])) {
+      throw new Error('invalid Node shard; use --shard=index/total with 1 <= index <= total');
+    }
+    if (focused.length) throw new Error('Node sharding runs the full suite list; do not combine it with focused filenames');
+    nodeOptions.push(`--test-shard=${match[1]}/${match[2]}`);
+  }
   const python = stage === 'worker' ? null : selectPython(env, spawn);
   const childEnv = python ? { ...env, PYTHON: python } : { ...env };
   const run = (command, commandArgs, envOverrides = {}) => {
@@ -59,7 +71,7 @@ export function verify(args = [], { root = ROOT, env = process.env, spawn = spaw
   const commands = [];
   if (['all', 'assemble', 'python', 'node', 'optimized'].includes(stage)) commands.push([python, ['build_web.py', '--assemble']]);
   if (['all', 'python'].includes(stage)) commands.push([python, ['-m', 'unittest', ...(focused.length ? focused : ['discover', '-s', 'tests'])]]);
-  if (['all', 'node'].includes(stage)) commands.push([process.execPath, ['--test', `--test-concurrency=${NODE_CONCURRENCY}`, ...files]]);
+  if (['all', 'node'].includes(stage)) commands.push([process.execPath, ['--test', `--test-concurrency=${NODE_CONCURRENCY}`, ...nodeOptions, ...files]]);
   if (['all', 'optimized'].includes(stage)) {
     // Load esbuild only in this child; assemble/Python CI jobs need no npm install.
     commands.push([process.execPath, [path.join(root, 'tools', 'optimize_web.mjs')]]);
