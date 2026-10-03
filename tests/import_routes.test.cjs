@@ -51,8 +51,7 @@ async function board(data, {mode = 'cap', names = null, which = 'all', tab = 'im
 }
 /* Every view drawn again, as a refresh would. */
 const redraw = page => page.evaluate(() => { drawSupplyStrip(); drawChangesView(); drawImportsView(); drawDeliveriesView(); drawProductionView(); wireAll(); });
-/* How far along Changes is, as its road says it to a screen reader: "3 of 10
-   recorded or applied" (the words on screen went, Peter's testing A9). */
+/* How far along Changes is, shown as text in place of the decorative road. */
 const counted = page => page.$eval('#sbcTop .sbc-progress', el => el.textContent);
 const actions = page => page.evaluate(() => sbData().rows.map(a =>
   ({kind: a.kind, item: a.item, current: a.current, proposed: a.proposed, tight: !!a.tight, paused: !!a.paused,

@@ -3266,6 +3266,11 @@ function alertLanding(a, link){
     if(pick){ reveal(pick.otherwise); return; }
   }
   reveal(link.sec);
+  /* Findings can reach this section through reveal(), without route.enter. */
+  if(link.port){
+    if($("portMore")) $("portMore").open = true;
+    if($("portMoreLabel")) $("portMoreLabel").hidden = route !== "businesses/standards";
+  }
 }
 const alertPage = a => (SEC_PAGE[(ALERT_LINKS[a.group] || {}).sec] || ["today"])[0];
 
@@ -10215,7 +10220,10 @@ function sbPaintChangesTop(d){
   const done = rows.filter(r => pgDone(d, r)).length, total = rows.length;
   const left = rows.filter(r => !pgDone(d, r)).length;
   const progress = q(".sbc-progress", top);
-  if(progress) progress.textContent = tt("sb.cw.road", "{done} of {n} changes recorded or applied", {done, n: total});
+  if(progress){
+    progress.textContent = tt("sb.cw.road", "{done} of {n} changes recorded or applied", {done, n: total});
+    progress.hidden = !total;
+  }
   const clear = $("secChanges") && q("[data-sbc-clear]", $("secChanges"));
   if(clear) clear.disabled = !d.marks.size;
   const copy = q("[data-sb-copy=remaining]", top);
@@ -10275,7 +10283,7 @@ function drawChangesView(){
   const remaining = orderChecklistText(left, tt("sb.ck.copy.title", "Big Copilot · {save} · day {day}", {save: D.meta.save, day: D.meta.day}), sizing);
   sbFill(sec, `${sbToolbar("changes", {kinds: ["shops", "warehouses", "factories"], basis})}
     <div class="sbc-wrap"><div class="sbc-top" id="sbcTop">
-      <span class="sbc-progress" role="status"></span>
+      <span class="sbc-progress"></span>
       <span class="sbc-acts"><button type="button" class="nx-btn pri sm" data-sb-copy="remaining">${icon("copy")}<span>${tt("sb.strip.copy", "Copy remaining")}</span></button>${apply}</span>
     </div>
     <p class="sb-copystatus" role="status"></p>
@@ -15469,7 +15477,7 @@ const hrKey = el => {
 function hrWhy(m, slug, S, wk){
   const kind = hrKind(slug);
   if(kind === "schedule") return "the plan's hours break it";
-  if(kind === "company") return hrDemandAt(m, slug, S, wk) === "warn" ? tt("co.hire.require.hrplan", "assign an HR plan") : "not offered";
+  if(kind === "company") return hrDemandAt(m, slug, S, wk) === "warn" ? tt("co.hire.require.hrplan", "assign a plan offering this") : "not offered";
   if(kind === "station"){
     if(hrDemandAt(m, slug, S, wk) === "no") return "none at any site";
     if(hrDeskAnywhere(slug, S)) return wk && wk.w ? "not at this desk" : "met at a desk here: seat them there";
@@ -17269,7 +17277,7 @@ function drawPriceShops(){
   }
   const b = sites.find(x => x.key === bzPriceLit);
   const chips = sites.length > 8 ? `<label class="bz-price-select" data-view-ctl="businesses/prices"><span>${tt("co.prices.at", "Prices at")}</span><select data-price-select>${
-    sites.map(x => `<option value="${attr(x.key)}"${x.key === bzPriceLit ? " selected" : ""}>${spEsc(shortName(x))}</option>`).join("")}</select></label>`
+    sites.map(x => `<option value="${attr(x.key)}"${x.key === bzPriceLit ? " selected" : ""}>${x.code ? `${spEsc(x.code)} · ` : ""}${spEsc(shortName(x))}</option>`).join("")}</select></label>`
     : `<div class="bz-chips" data-view-ctl="businesses/prices" role="group" aria-label="${attr(tt("co.prices.at", "Prices at"))}">${
     sites.map(x => `<button type="button" class="bz-chip" data-price-pick="${attr(x.key)}" aria-pressed="${x.key === bzPriceLit}">${hoodHtml(x)}<span>${spEsc(shortName(x))}</span></button>`).join("")}</div>`;
   ctlRelease(host);
