@@ -4164,7 +4164,8 @@ a.sb-plan:hover em{color:var(--ink);text-decoration:underline}
 @media (max-width:620px){.ff-make,.ff-out{display:block;overflow-x:auto}.ff-arrow{display:none}.ff-flow{flex-direction:column;align-items:flex-start}.ff-short,.ff-why>div{grid-template-columns:14px minmax(0,1fr) auto}.ff-short>svg,.ff-why>div>svg{display:none}}
 
 /* Planning controls wrap or shrink only when their contents need the space. */
-.nx-ctl #osCtl,.nx-ctl [data-view-ctl="expansion/factory"]{flex-wrap:wrap;min-width:0;max-width:100%}
+.nx-ctl #osCtl,.nx-ctl [data-view-ctl="expansion/factory"]{min-width:0;max-width:100%}
+@media (max-width:1100px){.nx-ctl #osCtl,.nx-ctl [data-view-ctl="expansion/factory"]{flex-wrap:wrap}}
 .nx-ctl #osCtl>.aside,#ofCtl>.aside{min-width:0;max-width:100%}
 .os-steps{min-width:0;max-width:100%}
 .os-steps button{max-width:100%;height:auto;min-height:34px;white-space:normal;overflow-wrap:anywhere;text-align:left}
@@ -4173,7 +4174,7 @@ a.sb-plan:hover em{color:var(--ink);text-decoration:underline}
 .nx-ctl [data-view-ctl="expansion/factory"] .field{min-width:0;max-width:100%}
 .nx-ctl [data-view-ctl="expansion/factory"] select{min-width:0;max-width:100%}
 .ff-for,.ff-kind{min-width:0;max-width:100%}
-.ff-for{flex-wrap:wrap}
+@media (max-width:1100px){.ff-for{flex-wrap:wrap}}
 .ff-kind button{min-width:0;max-width:100%}
 .ff-kind button svg{flex-shrink:0}
 .ff-kind button span{min-width:0;overflow:hidden;text-overflow:ellipsis}
@@ -4181,10 +4182,30 @@ a.sb-plan:hover em{color:var(--ink);text-decoration:underline}
 /* Progress metadata and wide investment tables must stay within the page. */
 .os-prog{flex-wrap:wrap}
 .os-prog .aside{flex-wrap:wrap;min-width:0;max-width:100%}
-@media (max-width:760px){.os-inv{display:block;overflow-x:auto}}
+@media (max-width:760px){
+  .os-inv{display:block;overflow-x:auto}
+  /* The planner finder must wrap translated column/filter labels inside
+     its clipped panel, even when a label has no word break. */
+  .os-finder .fhead span{white-space:normal;overflow-wrap:anywhere}
+  .os-finder .frow .lab{overflow-wrap:anywhere}
+}
 
 /* Phone plan pickers and step bodies accommodate long names and UI text. */
 @media (max-width:620px){
+  /* Supplier rows: item and explanation share the left column, price stays
+     visible on the right. Keep the table markup and its desktop layout. */
+  .os-store table,.os-store tbody{display:block;width:100%;min-width:0}
+  .os-store table tr{display:grid;grid-template-columns:minmax(0,1fr) auto;padding:7px 12px;gap:4px 12px;border-bottom:1px solid var(--rule-soft)}
+  .os-store table tr:last-child{border-bottom:0}
+  .os-store table td{display:block;min-width:0;padding:0;border:0;white-space:normal;overflow-wrap:anywhere}
+  .os-store table td.l{grid-column:1;grid-row:1}
+  .os-store table td.w{grid-column:1;grid-row:2}
+  .os-store table td.w:empty{display:none}
+  .os-store table td:last-child{grid-column:2;grid-row:1 / span 2;white-space:nowrap}
+  .os-store .os-tag{max-width:100%;height:auto;min-height:20px;white-space:normal;overflow-wrap:anywhere;line-height:1.35}
+  .os-sh{flex-wrap:wrap}
+  .os-sh>span:not(.k):not(.t){flex:1;min-width:0;overflow-wrap:anywhere}
+  .os-sh .t{flex-shrink:0}
   .os-planpick{width:100%}
   .os-planpick>span{min-width:0;overflow:hidden;text-overflow:ellipsis}
   .os-planpick select{width:100%;max-width:none;flex:1;overflow:hidden}

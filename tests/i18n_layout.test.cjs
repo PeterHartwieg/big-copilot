@@ -407,7 +407,22 @@ async function expansionWidth(page, label, failures){
   });
   const got = await page.evaluate(() => {
     const root = document.documentElement, width = root.clientWidth, scroll = root.scrollWidth;
-    if(scroll <= width + 1) return {width, scroll};
+    // Hidden/clip containers must not conceal content even when the whole
+    // page fits. Map viewports intentionally crop geometry and labels;
+    // progress/meter tracks intentionally crop their proportional fill.
+    // Hoisted headings remain as visually hidden screen-reader labels.
+    const deliberateClip = '#secOpen > .nx-sr, #secPlanFlow > .nx-sr, '
+      + '.os-finder .stage.finder.panel, .os-finder .map-canvas, .os-mini, .os-meter, .os-prog .m, .ff-meter';
+    const clipped = [...document.querySelectorAll(
+      '#secOpen, #secOpen *, #secPlan, #secPlan *, #secPlanFlow, #secPlanFlow *, #osBody, #osBody *, #ofBody, #ofBody *'
+    )].filter(el => {
+      if(!el.getClientRects().length || !el.clientWidth || el.matches(deliberateClip)) return false;
+      const style = getComputedStyle(el);
+      if(style.visibility === 'hidden' || !['hidden', 'clip'].includes(style.overflowX)) return false;
+      if(style.textOverflow === 'ellipsis' && style.whiteSpace === 'nowrap') return false;
+      return el.scrollWidth > el.clientWidth + 1;
+    }).map(el => `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : '.' + (el.getAttribute('class') || '').split(' ').join('.')} scrollWidth=${el.scrollWidth} > clientWidth=${el.clientWidth} "${el.textContent.trim().slice(0, 70)}"`);
+    if(scroll <= width + 1) return {width, scroll, clipped};
     const right = el => {
       const edges = [el.getBoundingClientRect().right];
       if(getComputedStyle(el).overflowX !== 'visible') return edges[0];
@@ -425,8 +440,9 @@ async function expansionWidth(page, label, failures){
       }
       return true;
     }).map(el => `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : '.' + (el.getAttribute('class') || '').split(' ').join('.')} right=${Math.round(right(el))} in .${el.parentElement.getAttribute('class') || ''} "${el.textContent.trim().slice(0, 50)}"`);
-    return {width, scroll, past};
+    return {width, scroll, past, clipped};
   });
+  if(got.clipped.length) failures.push(`${label}: clipped content: ${got.clipped.join(', ')}`);
   if(got.scroll > got.width + 1) failures.push(`${label}: scrollWidth ${got.scroll} > clientWidth ${got.width}; ${got.past.join(', ')}`);
 }
 
@@ -464,7 +480,12 @@ for(const lang of ['en', 'pseudo', 'de', 'es', 'fr', 'ko', 'pt', 'ru', 'tr']){
         assert.equal(await page.evaluate(() => osStep), step);
         if(step === 'what') assert.ok(await page.locator('#osBody .os-plans').isVisible(), 'Your plans is shown');
         if(step === 'where') await page.locator('#osFinderMap .map-canvas').waitFor();
-        await expansionWidth(page, `${lang} ${width}px open/${step}`, failures);
+        if(step === 'investment'){
+          for(const mode of ['firm', 'self']){
+            await page.locator(`[data-os-mode="${mode}"]`).click();
+            await expansionWidth(page, `${lang} ${width}px open/${step}/${mode}`, failures);
+          }
+        }else await expansionWidth(page, `${lang} ${width}px open/${step}`, failures);
       }
       await page.evaluate(() => openRoute('expansion/factory'));
       assert.ok((await page.locator('[data-of-plan] option').last().textContent()).length > 60);
@@ -483,7 +504,12 @@ for(const lang of ['en', 'pseudo', 'de', 'es', 'fr', 'ko', 'pt', 'ru', 'tr']){
             assert.ok(heights.length, 'the factory flow includes a neighbourhood badge');
             assert.ok(heights.every(h => h === 16), `neighbourhood badges keep their 16px height: ${heights}`);
           }
-          await expansionWidth(page, `${lang} ${width}px factory/${id}/${step}`, failures);
+          if(step === 'investment'){
+            for(const mode of ['firm', 'self']){
+              await page.locator(`[data-of-mode="${mode}"]`).click();
+              await expansionWidth(page, `${lang} ${width}px factory/${id}/${step}/${mode}`, failures);
+            }
+          }else await expansionWidth(page, `${lang} ${width}px factory/${id}/${step}`, failures);
         }
       }
       assert.deepEqual(errors, []);
