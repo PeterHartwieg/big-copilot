@@ -595,8 +595,8 @@ namespace BigCopilotLink
             }
             if (employee == null || !WriteService.SameAddress(assigned, site.Address)) return "not_assigned";
 
-            // A theater's empty schedule row holds the stage licensing fee.
-            // It never takes working hours; actors use the Dressing Room.
+            // Every shift needs a station. A theater's empty row holds the
+            // stage licensing fee, not working hours; actors use the Dressing Room.
             if (string.IsNullOrEmpty(itemInstanceId)) return "no_station";
 
             BigAmbitions.Items.ItemInstance station;
