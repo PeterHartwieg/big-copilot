@@ -317,26 +317,38 @@ test('site write controls gate only the sections their action reads', async t =>
   }
 });
 
-test('a retained write review gates its declared readers and keeps Cancel usable', async t => {
+test('a ready schedule review waits on a same-company refresh, then replans with hiring', async t => {
   const page = await open(t, {hash: '#staffing/needs'});
   await page.waitForFunction(() => window.held.some(f => f.section === 'hiring'));
   await page.evaluate(() => window.release());
   await page.waitForFunction(() => odReady('hiring'));
   await page.evaluate(() => {
-    window.reviewReads = 0; window.reviewWrites = 0;
-    SOURCE.write = async () => { reviewWrites++; return {body: {ok: true}}; };
-    gwConfirm({kind: 'hire', icon: 'hire', title: 'Review', needs: ['hiring'],
-      body: () => { reviewReads++; return {}; }, applyLabel: () => 'Apply', verdict: () => 'Ready',
-      draw: () => '<button type="button" data-test-review-mode>Change mode</button>',
-      bind: dlg => { dlg.querySelector('[data-test-review-mode]').onclick = () => { reviewReads++; hrModel(); }; }});
+    window.reviewReads = 0; window.reviewWrites = [];
+    SOURCE.write = async (kind, body, o) => { reviewWrites.push({kind, body, dryRun: o.dryRun}); return {body: {ok: true}}; };
+    gwConfirm({kind: 'schedule', icon: 'staff', title: 'Review', needs: ['hiring'], scope: odScope(),
+      body: () => { reviewReads++; return {day: D.meta.day, sites: D.hiring.sites.map(s => s.key)}; },
+      applyLabel: () => 'Write the week', verdict: () => 'Ready', draw: () => '<p>Planned week</p>'});
   });
+  const apply = page.locator('.gw-dlg [data-gw-b="apply"]');
   await page.locator('.gw-dlg[data-phase="ready"]').waitFor();
+  assert.equal(await apply.isEnabled(), true);
+  const before = await page.evaluate(() => ({reads: reviewReads, writes: reviewWrites}));
   await nextBoard(page);
-  const before = await page.evaluate(() => [reviewReads, reviewWrites]);
-  await page.locator('.gw-dlg [data-test-review-mode]').click();
-  await page.locator('.gw-dlg [data-gw-b="apply"]').click();
-  assert.deepEqual(await page.evaluate(() => [reviewReads, reviewWrites]), before, 'neither controls nor Apply read missing hiring');
+  assert.equal(await page.evaluate(() => odReady('hiring')), false);
+  assert.equal(await apply.isDisabled(), true, 'disabled as soon as the refreshed board arrives, without a click');
+  assert.equal(await page.locator('.gw-dlg').getAttribute('data-phase'), 'asking');
+  assert.match(await page.locator('.gw-dlg .gw-verdict').innerText(), /Working out staff needs/);
   await page.locator('.gw-dlg .gw-body .od-wait').waitFor();
+  assert.equal(await page.locator('.gw-dlg .gw-foot [data-od-close]').isEnabled(), true, 'Cancel stays usable while waiting');
+  assert.deepEqual(await page.evaluate(() => ({reads: reviewReads, writes: reviewWrites})), before, 'no planning or write reads missing hiring');
+  await page.evaluate(() => window.release());
+  await page.locator('.gw-dlg[data-phase="ready"]').waitFor();
+  assert.equal(await apply.isEnabled(), true, 'enabled again after the fresh plan is judged');
+  const after = await page.evaluate(() => ({reads: reviewReads, writes: reviewWrites, day: D.meta.day}));
+  assert.equal(after.reads, before.reads + 1, 'planned again after hiring arrives');
+  assert.equal(after.writes.length, 2);
+  assert.equal(after.writes[1].body.day, after.day, 'the new dry run uses the refreshed board');
+  assert.equal(after.writes[1].dryRun, true, 'no apply was sent');
   await page.locator('.gw-dlg .gw-foot [data-od-close]').click();
   await page.locator('.gw-dlg').waitFor({state: 'detached'});
 });

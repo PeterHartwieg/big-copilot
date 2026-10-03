@@ -526,6 +526,8 @@ function odBoard(old){
   }
   odBoardScope = scope;
   odThens = odThens.filter(t => odSameScope(t.scope, scope));
+  const dlg = gwOpen;
+  if(dlg && dlg.open && typeof dlg._odBoard === "function") dlg._odBoard();
 }
 const odError = name => odChain(name).some(n => odState(n) === "error");
 /* Keep a successfully drawn row while this company's new sections load.
@@ -23554,6 +23556,12 @@ function gwConfirm(spec){
   spec.refreshBoard = () => {
     if(typeof SOURCE.refresh !== "function") return dlg.close();
     dlg.close(); return SOURCE.refresh();
+  };
+  /* A new board suspends an unfinished review immediately, including any
+     dry run still in flight. Completed writes keep their result and Undo. */
+  dlg._odBoard = () => {
+    if(applying || ["applying", "done", "undone"].includes(dlg.dataset.phase)) return;
+    if((spec.needs || []).some(n => !odReady(n))) plan();
   };
   plan();
 }

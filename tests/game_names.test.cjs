@@ -47,7 +47,7 @@ function seam({table = null, lang = 'de'} = {}){
   const drawn = [];
   const context = vm.createContext({
     D: null, HOOD_NAMES: {}, page: 'today', console,
-    SOURCE: {}, gwLink: () => null, odSiteDrawn: null,
+    SOURCE: {}, gwLink: () => null, gwOpen: null, odSiteDrawn: null,
     prettySlug: s => s.replace(/^ba:[a-z]+_/, ''),
     spEsc: s => String(s), attr: s => String(s),
     hasData: () => !!context.D,
