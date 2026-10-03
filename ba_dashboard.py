@@ -1895,7 +1895,7 @@ def _premises_demand(market: dict) -> dict:
 # interior (BuildingSizeInfo(size, version)); the type is not part of it, so an
 # office C2 is the same shell as a shop C2. make_floor_plans.py draws one plan
 # for each layout these kinds use.
-FLOOR_PLAN_KINDS = ("retail", "office", "warehouse")
+FLOOR_PLAN_KINDS = ("retail", "office", "warehouse", "cinema", "theater")
 
 
 def _layout(row: dict) -> str | None:

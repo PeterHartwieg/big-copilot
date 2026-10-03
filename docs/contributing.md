@@ -243,9 +243,12 @@ that folder on `PYTHONPATH`):
 1. `python make_buildings.py --versions` writes each building's version into
    `ba_buildings.json` as `v`, from the game's buildings bundle. It stops if the
    game and the table disagree on a building's type or size.
-2. `python make_floor_plans.py` draws one plan for each layout the retail, office
-   and warehouse buildings use (21 at build 3680; an office C1, C2 or D2 is the
-   same shell as a shop's) into `web/maps/floor-plans.json`, about 55 KB.
+2. `python make_floor_plans.py` draws one plan for each layout the retail, office,
+   warehouse, cinema and theatre buildings use (27 at build 3682; an office C1,
+   C2 or D2 is the same shell as a shop's) into `web/maps/floor-plans.json`, under
+   80 KB. Cinema and theatre plans include their stepped floors. Only warehouse
+   floor gaps count as vehicle bays. The generator finds the bundles beside the
+   installed locale on Windows, macOS and Linux.
 
 Rerun both after a game update that adds a building or a layout, then
 `python build_web.py`, which refuses a plan set that misses a layout the table

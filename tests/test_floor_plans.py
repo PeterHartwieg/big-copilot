@@ -39,6 +39,15 @@ class FloorPlans(unittest.TestCase):
                     self.assertIn(code, PLANS["plans"])
         self.assertEqual(build_web.floor_plan_gaps(), [])
 
+    def test_cinema_and_theatre_layouts_are_available(self):
+        self.assertEqual(PLANS["kinds"]["cinema"], ["S1", "S2", "S3"])
+        self.assertEqual(PLANS["kinds"]["theater"], ["R1", "R2", "R3"])
+        from ba_dashboard import _layout
+        for row in TABLE:
+            if row["t"] in ("cinema", "theater"):
+                with self.subTest(address=(row["n"], row["s"])):
+                    self.assertIn(_layout(row), PLANS["plans"])
+
     def test_a_plan_is_rectangles_inside_its_box(self):
         for code, plan in PLANS["plans"].items():
             with self.subTest(layout=code):

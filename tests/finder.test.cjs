@@ -1719,6 +1719,8 @@ test('a row the demand figure leads back to clears whatever stays at the top of 
 const PLANNED = {...PREMISES, buildings: PREMISES.buildings.map(b =>
   b.key === HK[0] ? {...b, layout: 'C1'} : b.key === HK[1] ? {...b, layout: 'C2'}
   : b.key === MT[0] ? {...b, layout: 'D2', size: 'D'} : b.key === HK[4] ? {...b, layout: 'J1'}
+  : b.key === HK[5] ? {...b, layout: 'R1'} : b.key === MT[3] ? {...b, layout: 'R3'}
+  : b.key === CINEMA_AT ? {...b, layout: 'S3'}
   : b.type === 'retail' || b.type === 'office' ? {...b, layout: null} : b)};
 const tags = page => page.$$eval('#cityMapPage .place.fr', rows => rows.map(r => r.querySelector('.lp-tag')?.textContent || ''));
 const layChips = page => page.$$eval('#cityMapPage .fchip.flay', c => c.map(x => `${x.textContent}${x.getAttribute('aria-pressed') === 'true' ? '*' : ''}`));
@@ -1753,10 +1755,12 @@ test('the Layout filter offers the kind\'s layout keys and lists by them', async
     assert.deepEqual(await rowKeys(page), [HK[4]]);
     await page.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
     assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
-    // Theaters have no layouts: no row for them.
+    // Theatre layouts can now be filtered just like shop layouts (issue #244).
     await page.locator('#cityMapPage .fchip.cat[data-cat="theater"]').click();
-    assert.equal(await page.locator('#cityMapPage .frow.flayout').isVisible(), false);
-    assert.deepEqual(await tags(page), ['', '']);
+    assert.deepEqual(await layChips(page), ['R1', 'R3']);
+    assert.deepEqual(await tags(page), ['R1', 'R3']);
+    await page.locator(layChip('R1')).click();
+    assert.deepEqual(await rowKeys(page), [HK[5]]);
     // The map has no dock and no plan switch: the stage is the map's.
     assert.equal(await page.locator('#cityMapPage .lp-dock, #cityMapPage .lp-seg, #cityMapPage .lp-tile').count(), 0);
     assert.deepEqual(errors, []);
@@ -1807,6 +1811,21 @@ test('a picked building shows its floor plan in its card; one with none shows no
     await pick(page, MT[0]);
     await page.locator(`${plan} .lp-svg`).waitFor();
     assert.match(await page.locator(`${plan} .lp-planhead`).textContent(), /D2/);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('cinema and theatre cards show the shipped auditorium floor plans', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    for(const [kind, key, code] of [['theater', HK[5], 'R1'], ['theater', MT[3], 'R3'], ['cinema', CINEMA_AT, 'S3']]){
+      await page.locator(`#cityMapPage .fchip.cat[data-cat="${kind}"]`).click();
+      await pick(page, key);
+      await page.locator(`${plan} .lp-svg`).waitFor();
+      assert.match(await page.locator(`${plan} .lp-planhead`).textContent(), new RegExp(code));
+      assert.ok(await page.locator(`${plan} .lp-svg path`).count() > 0);
+    }
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

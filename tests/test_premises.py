@@ -389,7 +389,7 @@ class StatusTests(unittest.TestCase):
         })
 
     def test_a_building_carries_its_layout_when_the_finder_has_a_plan_for_it(self):
-        # Layout = size code + version, for the three kinds the finder draws
+        # Layout = size code + version, for the kinds the finder draws
         # plans for. A flat, a special building or a row with no version (a
         # table made before versions were read, as CLOSED_SHOP's) has none.
         self.assertNotIn("v", BUILDINGS[CLOSED_SHOP])
