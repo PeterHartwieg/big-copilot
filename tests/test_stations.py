@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 import unittest
+from unittest.mock import patch
 
 from tests.i18n_check import MsgAsserts, find_msg, msg_param
 
@@ -773,7 +774,7 @@ class CinemaGridTests(MsgAsserts, unittest.TestCase):
     ticket kiosk is self-service and the screens hold no queue."""
 
     def cinema(self, projectionists=1, booths=1, registers=1, service_staff=1, customers=25,
-               screens=2, door=150):
+               screens=2, door=150, displays=(), unplaced_register=False):
         items = [(1 + i, CONCESSION) for i in range(registers)]
         items += [(10 + i, PROJECTION) for i in range(booths)]
         items += [(30, KIOSK)] + [(31 + i, SCREEN) for i in range(screens)]
@@ -783,6 +784,17 @@ class CinemaGridTests(MsgAsserts, unittest.TestCase):
         shifts += [shift(f"p{i + 1}", 10 + (i % booths), 8, 20) for i in range(projectionists)]
         hourly = {h: customers if 8 <= h < 20 else 0 for h in range(24)}
         b = building(items, shifts, hourly, door, btype=CINEMA, number=4, name="Picture House")
+        placed = b["itemInstances"]["$items"]
+        for holder in placed:
+            if holder["$v"]["itemName"] == CONCESSION:
+                holder["$v"]["parentId"] = 100
+        placed.append({"$v": {"id": 100, "itemName": "ba:itemname_concessionscounter"}})
+        if unplaced_register:
+            placed[0]["$v"].pop("parentId")
+        b["cachedAvailableProducts"] = {"$items": [product for _, product in displays]}
+        placed.extend({"$v": {"id": 200 + i, "itemName": slug,
+                               "cargoInstances": {"$items": [{"itemName": product, "amount": 10}]}}}
+                      for i, (slug, product) in enumerate(displays))
         return grid_of(b, people, _service_stations(NAMES), name="Picture House", basket=20.0,
                        btype=CINEMA)
 
@@ -816,21 +828,103 @@ class CinemaGridTests(MsgAsserts, unittest.TestCase):
         self.assertNoMsg(finding["fix"], "sp.py.fix.service.staff")
         self.assertNoMsg(finding["fix"], "sp.py.fix.service.post")
 
-    def test_the_screens_cap_it_through_the_buildings_own_capacity(self):
+    def test_the_screens_cap_it_below_the_buildings_own_capacity(self):
         """A screen is no post: nobody works it, so it is no role. It caps the
         cinema all the same, 25 a screen, through the customerCapacity the save
         records, which the game sets to the smallest of the layout's number and
         each requirement's furniture (BusinessHelper.UpdateCustomerCapacity).
-        One screen and two manned projection booths: the hour is the
-        building's 25, not the booths' 50, and the building holds it, not a
-        role (issue #159, 15 Third Avenue's fresh cinema)."""
-        grid = self.cinema(projectionists=2, booths=2, registers=1, service_staff=1,
-                           screens=1, door=25)
+        One screen and two manned projection booths: the saved capacity is
+        25, below the known layout. The screen holds it, so issue #245 names
+        the furniture instead of treating it as the building's fixed limit."""
+        grid = self.known_cinema(projectionists=2, booths=2, registers=1, service_staff=1,
+                                 screens=1, door=25)
         self.assertNotIn(SCREEN, [s["slug"] for s in grid["stations"]])
         self.assertEqual(grid["staffed"][MONDAY][10], 50)
         self.assertEqual(grid["effective"][MONDAY][10], 25)
         [finding] = self.findings(grid)
-        self.assertEqual((finding["limit"], finding["heldBy"]), ("the building", [["door"]]))
+        self.assertEqual(finding["heldBy"], [["furniture"]])
+        self.assertHasMsg(finding["limit"], "sp.py.cinema.screens")
+
+    def known_cinema(self, **options):
+        with patch("ba_dashboard.load_buildings", return_value={
+            (STREET, 4): {"t": "cinema", "z": "S", "v": 3},
+        }):
+            return self.cinema(**options)
+
+    def test_a_furniture_limited_cinema_names_both_tied_requirements(self):
+        grid = self.known_cinema(screens=1, booths=1, door=25)
+        self.assertEqual(grid["cinemaCapacity"], {"building": 100, "limits": ["screen", "projection"]})
+        [finding] = self.findings(grid)
+        self.assertEqual(finding["heldBy"], [["furniture"]])
+        self.assertHasMsg(finding["fix"], "sp.py.cinema.screens")
+        self.assertHasMsg(finding["fix"], "sp.py.cinema.booths")
+        self.assertEqual(finding["hours"], 12)
+        business = _business(Save({}, {}, ""), NAMES,
+                             building([], [], {9: 1}, 25, btype=CINEMA, number=4),
+                             (STREET, 4), {(STREET, 4): {"TotalSales": 1000}}, [], {}, 3)
+        lines = [a for a in _alerts([business], EMPTY_SUPPLY, [], [], [], [finding], [], 3, 0.0)
+                 ["lines"] if a["group"] == "atcap"]
+        self.assertEqual(len(lines), 1)
+        self.assertHasMsg(lines[0]["text"], "sp.py.cinema.more")
+
+    def test_a_screen_limit_does_not_ask_for_another_spare_booth(self):
+        grid = self.known_cinema(screens=1, booths=2, projectionists=2, door=25)
+        self.assertEqual(grid["cinemaCapacity"]["limits"], ["screen"])
+        [finding] = self.findings(grid)
+        self.assertHasMsg(finding["fix"], "sp.py.cinema.screens")
+        self.assertNoMsg(finding["fix"], "sp.py.cinema.booths")
+        self.assertEqual(grid["staffed"][MONDAY][10], 50)
+        self.assertEqual(grid["effective"][MONDAY][10], 25)
+
+    def test_furniture_does_not_replace_a_lower_staffing_limit(self):
+        grid = self.known_cinema(screens=2, booths=2, projectionists=1, door=50)
+        [finding] = self.findings(grid)
+        self.assertEqual(finding["heldBy"], [["staff", PROJECTIONIST]])
+        self.assertHasMsg(finding["fix"], "sp.py.fix.role.staff")
+
+    def test_true_building_capacity_and_unknown_caps_keep_the_neutral_reading(self):
+        for options in ({"screens": 4, "booths": 4, "projectionists": 4,
+                         "registers": 2, "service_staff": 2, "door": 100, "customers": 100},
+                        {"screens": 2, "booths": 2, "projectionists": 2, "door": 20, "customers": 20}):
+            with self.subTest(options=options):
+                grid = self.known_cinema(**options)
+                self.assertNotIn("cinemaCapacity", grid)
+                [finding] = self.findings(grid)
+                self.assertEqual(finding["heldBy"], [["door"]])
+                self.assertEqual(finding["fix"], "")
+
+    def test_tied_display_capacity_gets_no_incomplete_equipment_advice(self):
+        for slug, product in (("slushimachine", "slushi"), ("concessionsdisplaycase", "popcorn")):
+            grid = self.known_cinema(screens=2, booths=2, projectionists=2, door=50,
+                                     displays=[("ba:itemname_" + slug, "ba:itemname_" + product)])
+            self.assertNotIn("cinemaCapacity", grid)
+
+    def test_display_capacity_above_the_limit_does_not_hide_screen_advice(self):
+        grid = self.known_cinema(screens=1, booths=1, door=25,
+                                 displays=[("ba:itemname_slushimachine", "ba:itemname_slushi")])
+        self.assertIn("cinemaCapacity", grid)
+
+    def test_a_tied_staffing_limit_is_named_with_the_equipment(self):
+        grid = self.known_cinema(screens=1, booths=2, projectionists=1, door=25)
+        [finding] = self.findings(grid)
+        self.assertEqual(finding["heldBy"], [["furniture"], ["staff", PROJECTIONIST]])
+        self.assertHasMsg(finding["fix"], "sp.py.cinema.screens")
+        self.assertHasMsg(finding["fix"], "sp.py.fix.role.staff")
+
+    def test_unplaced_registers_or_unknown_building_rows_get_no_guessed_advice(self):
+        self.assertNotIn("cinemaCapacity", self.known_cinema(
+            screens=2, booths=2, registers=2, door=50, unplaced_register=True))
+        for row in ({}, {"t": "retail", "z": "C"}):
+            with patch("ba_dashboard.load_buildings", return_value={(STREET, 4): row}):
+                self.assertNotIn("cinemaCapacity", self.cinema(screens=1, door=25))
+
+    def test_missing_rules_keep_the_neutral_reading(self):
+        with patch("ba_dashboard.load_store_rules", return_value={"types": {}, "furniture": {}}):
+            self.assertNotIn("cinemaCapacity", self.known_cinema(screens=1, door=25))
+
+    def test_zero_capacity_or_incomplete_furniture_gets_no_guessed_advice(self):
+        for options in ({"screens": 0, "door": 25}, {"screens": 1, "door": 0}):
+            self.assertNotIn("cinemaCapacity", self.known_cinema(**options))
 
 
 class HairdresserTests(MsgAsserts, unittest.TestCase):
