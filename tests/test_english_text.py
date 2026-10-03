@@ -113,8 +113,8 @@ class EnglishTextTests(unittest.TestCase):
         seen = []
         save = mock.Mock(root={"characterId": "c"})
         with mock.patch.object(ba_dashboard, "load_save", return_value=save), \
-                mock.patch.object(ba_dashboard, "safe_extract",
-                                  side_effect=lambda s, n, h: seen.append(n.locale) or {}):
+                mock.patch.object(ba_dashboard, "safe_build",
+                                  side_effect=lambda s, n, h, g: seen.append(n.locale) or ba_dashboard.Build(s, n)):
             ba_dashboard.browser_build("x.hsg", german, history, names)
             ba_dashboard.browser_build("x.hsg", english, history, names)
         self.assertEqual(seen[0], {"ba:itemname_gymcovercharge": "Gym Cover Charge"})

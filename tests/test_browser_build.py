@@ -144,14 +144,14 @@ class BrowserBuild(unittest.TestCase):
               self.assertRaises(ba_dashboard.SaveShapeError) as caught):
             ba_dashboard.browser_build(path, self.locale, self.history, self.names)
         self.assertRegex(str(caught.exception),
-                         r"RuntimeError: boom, in extract, ba_dashboard\.py line \d+\)")
+                         r"RuntimeError: boom, in build_core, ba_dashboard\.py line \d+\)")
 
     def test_a_shape_error_names_where_it_was_raised_too(self):
         path = self.write_data_save()
         with (mock.patch.object(ba_dashboard, "History", side_effect=KeyError("Day")),
               self.assertRaises(ba_dashboard.SaveShapeError) as caught):
             ba_dashboard.browser_build(path, self.locale, self.history, self.names)
-        self.assertRegex(str(caught.exception), r"KeyError: 'Day', in extract, ba_dashboard\.py line \d+\)")
+        self.assertRegex(str(caught.exception), r"KeyError: 'Day', in build_core, ba_dashboard\.py line \d+\)")
 
 
 if __name__ == "__main__":

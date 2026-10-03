@@ -1,17 +1,24 @@
 /* The board's Python, run inside the browser.
  *
  * Boots Pyodide once, copies the two Python files into its virtual filesystem,
- * and then answers two kinds of message from the page:
- *   build  - here is a save (bytes, name, modification time), the locale text
- *            and the history text: parse it and send back the data and the
- *            updated history, both as JSON strings
- *   name   - the player named a factory line: record it and rebuild from the
- *            save already on hand, against the history this worker already
- *            holds (names asked for together each keep theirs)
- *   forget - the player forgot the history: drop the copy held here too
- *   held   - the bug report form wants the save on hand (and, when asked,
- *            the game build it was saved on); a failed build already sends
- *            its bytes and whole traceback back with the error
+ * and then answers these messages from the page:
+ *   build   - here is a save (bytes, name, modification time), the locale text
+ *             and the history text: parse it and send back the core of the
+ *             data and the updated history, both as JSON strings, with the
+ *             build's generation (`gen`, the message's id)
+ *   name    - the player named a factory line: record it and rebuild from the
+ *             save already on hand, against the history this worker already
+ *             holds (names asked for together each keep theirs)
+ *   section - a page asks for one section of the build `gen` (SECTIONS in
+ *             ba_dashboard.py): computed from the build held here, never a
+ *             second parse, and never a history write. A section asked for a
+ *             build this worker no longer holds, or one still waiting when a
+ *             newer build or name is asked for, is answered `stale` unrun;
+ *             one asked after a build failed, with none since, `gone`
+ *   forget  - the player forgot the history: drop the copy held here too
+ *   held    - the bug report form wants the save on hand (and, when asked,
+ *             the game build it was saved on); a failed build already sends
+ *             its bytes and whole traceback back with the error
  * Nothing here talks to the network except the one-time runtime download,
  * which comes from this site: Pyodide's core files are served from
  * web/pyodide/ rather than a CDN, so no visitor's IP address reaches a third
@@ -35,6 +42,8 @@ let py = null;
 let lastSave = null; // {name, mtime} of the save currently in the filesystem
 let localeText = null; // the locale text last written, to skip rewrites
 let queue = Promise.resolve(); // rebuilds run one at a time, like the watcher
+let heldGen = null; // the generation of the build Python holds for sections, if any
+let boards = 0; // builds and names asked for so far: a section waits behind none
 
 const say = (stage, detail) => postMessage({kind: "progress", stage, detail: detail || ""});
 
@@ -98,10 +107,14 @@ const ready = (async () => {
   for (const file of files) {
     if (file) py.FS.writeFile(file[0], file[1]);
   }
+  // Python tells the page it is still working through this during a long
+  // build or section: no timer here can fire while Python runs.
+  py.registerJsModule("big_copilot_worker", {say});
   await py.runPythonAsync(`
 import sys
 sys.path.insert(0, "/")
-import ba_save, ba_dashboard
+import ba_save, ba_dashboard, big_copilot_worker
+ba_dashboard.set_progress(big_copilot_worker.say)
 `);
   say("ready", "");
 })();
@@ -148,17 +161,51 @@ function heldSave(msg) {
   return reply;
 }
 
-function build(path) {
+// The build Python holds becomes `gen` only once it is through: one that
+// fails leaves none, and its sections are stale.
+function build(path, gen) {
+  heldGen = null;
   // A JSON string crosses the worker boundary cheaply; a proxy would not.
-  return py.runPython(`ba_dashboard.browser_build(${JSON.stringify(path)}, ${JSON.stringify(LOCALE)}, ${JSON.stringify(HISTORY)}, ${JSON.stringify(NAMES)})`);
+  const data = py.runPython(`ba_dashboard.browser_build(${JSON.stringify(path)}, ${JSON.stringify(LOCALE)}, ${JSON.stringify(HISTORY)}, ${JSON.stringify(NAMES)}, ${JSON.stringify(gen)})`);
+  heldGen = gen;
+  return data;
 }
+
+// Resolves after every message already queued for this worker: a port's
+// message is a task of the same source as the page's, so it runs behind them.
+const waiting = () => new Promise(resolve => {
+  const channel = new MessageChannel();
+  channel.port1.onmessage = () => { channel.port1.close(); resolve(); };
+  channel.port2.postMessage(0);
+});
 
 onmessage = (e) => {
   const msg = e.data;
+  // A section asked for before this build or name is for an older board.
+  if (msg.kind === "build" || msg.kind === "name") boards++;
+  const behind = boards;
   queue = queue.then(async () => {
     try {
       await ready;
-      if (msg.kind === "build") {
+      if (msg.kind === "section") {
+        // A build or name already sent goes first: let the messages waiting
+        // in the worker's queue arrive (they count `boards`) before this
+        // section starts work no timer can interrupt.
+        await waiting();
+        // No build held and none asked for since: the last one failed, and
+        // no board will replace this one (`gone`). Otherwise a newer board
+        // is coming, or came (`stale`).
+        if (behind === boards && heldGen === null) {
+          postMessage({kind: "section", id: msg.id, gone: true});
+          return;
+        }
+        if (behind !== boards || msg.gen !== heldGen) {
+          postMessage({kind: "section", id: msg.id, stale: true});
+          return;
+        }
+        const data = py.runPython(`ba_dashboard.browser_section(${JSON.stringify(msg.name)}, ${JSON.stringify(msg.gen)})`);
+        postMessage({kind: "section", id: msg.id, data});
+      } else if (msg.kind === "build") {
         // Compared whole: a replacement of the same length is still new.
         if (msg.locale != null && msg.locale !== localeText) {
           writeText(LOCALE, msg.locale);
@@ -168,13 +215,13 @@ onmessage = (e) => {
         const path = placeSave(msg.name, msg.bytes, msg.mtime);
         say("build", `Reading ${msg.name}`);
         const t = performance.now();
-        const data = build(path);
+        const data = build(path, msg.id);
         // A damaged copy Python set aside (.bad) is dropped by the page too
         // (""), so the next build starts a fresh record, as the CLI does.
         const history = heldHistory();
         const setAside = history === null && py.FS.analyzePath(HISTORY + ".bad").exists;
         if (setAside) py.FS.unlink(HISTORY + ".bad");  // said once, not on every build
-        postMessage({kind: "built", id: msg.id, data, history: setAside ? "" : history,
+        postMessage({kind: "built", id: msg.id, gen: msg.id, data, history: setAside ? "" : history,
                      ms: Math.round(performance.now() - t)});
       } else if (msg.kind === "name") {
         if (!lastSave) throw new Error("no save loaded yet");
@@ -185,8 +232,8 @@ onmessage = (e) => {
         // JSON.stringify writes JavaScript's null, which Python does not know.
         const pySlug = msg.slug == null ? "None" : JSON.stringify(msg.slug);
         py.runPython(`ba_dashboard.browser_name(${JSON.stringify(HISTORY)}, ${JSON.stringify(msg.rid)}, ${pySlug})`);
-        const data = build(`${SAVE_DIR}/${lastSave.name}`);
-        postMessage({kind: "built", id: msg.id, data, history: heldHistory(), ms: 0});
+        const data = build(`${SAVE_DIR}/${lastSave.name}`, msg.id);
+        postMessage({kind: "built", id: msg.id, gen: msg.id, data, history: heldHistory(), ms: 0});
       } else if (msg.kind === "forget") {
         writeText(HISTORY, "");
       } else if (msg.kind === "held") {
