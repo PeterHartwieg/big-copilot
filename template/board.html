@@ -3786,6 +3786,8 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 .os-pb{display:grid;grid-template-columns:1fr 1.5fr 1.15fr 1.15fr;margin-top:22px;border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface)}
 .os-pb>div{display:flex;flex-direction:column;gap:6px;min-width:0;padding:13px 16px 12px;border-left:1px solid var(--rule-soft)}
 .os-pb>div:first-child{border-left:0}
+/* A long translated label breaks inside a narrow cell instead of running past it. */
+.os-pb .os-lab{min-width:0;overflow-wrap:anywhere}
 .os-pb b{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .os-pb b.m{font:500 17px/1.1 "IBM Plex Mono",monospace;letter-spacing:-.01em}
 .os-pb small{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -3821,13 +3823,14 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 .os-ck .ic{display:grid;place-items:center;width:34px;height:34px;border-radius:9px;background:var(--raised);color:var(--ink-2)}
 .os-ck .ic svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .os-ck.done .ic{color:var(--ink-3)}
-.os-ck .tx b{display:block;font-size:14px;font-weight:600}
+.os-ck .tx b{display:block;overflow-wrap:anywhere;font-size:14px;font-weight:600}
 .os-ck.done .tx b{color:var(--ink-2);font-weight:500}
-.os-ck .tx small{display:block;margin-top:3px;font-size:12.5px;color:var(--ink-3);line-height:1.4}
+.os-ck .tx small{display:block;overflow-wrap:anywhere;margin-top:3px;font-size:12.5px;color:var(--ink-3);line-height:1.4}
 .os-ck .tx small .w{color:var(--warn)}
 .os-ck .tx small .ok{color:var(--accent)}
-.os-ck .act{display:flex;align-items:center;gap:8px;justify-content:flex-end}
-.os-ingame{display:flex;align-items:flex-start;gap:9px;max-width:360px;padding:9px 12px;border-radius:9px;border:1px dashed var(--rule);font-size:12.5px;line-height:1.45;color:var(--ink-2);text-align:left}
+.os-ck .act{min-width:0;max-width:360px;display:flex;align-items:center;gap:8px;justify-content:flex-end}
+.os-ingame{min-width:0;overflow-wrap:anywhere;display:flex;align-items:flex-start;gap:9px;max-width:360px;padding:9px 12px;border-radius:9px;border:1px dashed var(--rule);font-size:12.5px;line-height:1.45;color:var(--ink-2);text-align:left}
+.os-ingame>span{min-width:0}
 .os-ingame svg{width:15px;height:15px;margin-top:1px;flex:none;stroke:var(--ink-3);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .os-ingame b{color:var(--ink);font-weight:600}
 .os-gate{display:flex;align-items:center;gap:12px;margin-top:18px;padding:12px 14px;border-radius:10px;border:1px dashed var(--rule);font-size:12.5px;color:var(--ink-2)}
@@ -3858,13 +3861,13 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 .os-dl td.go button svg{width:14px;height:14px}
 .os-more{margin:12px 0 0}
 .os-types{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.os-type{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border-radius:9px;border:1px solid var(--rule-soft);background:var(--ground);color:var(--ink);font-size:13px;font-weight:500;text-align:left;cursor:pointer}
+.os-type{overflow-wrap:anywhere;display:flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border-radius:9px;border:1px solid var(--rule-soft);background:var(--ground);color:var(--ink);font-size:13px;font-weight:500;text-align:left;cursor:pointer}
 .os-type:hover{border-color:var(--ink-3)}
 .os-type small{margin-left:auto;font:500 11px/1 "IBM Plex Mono",monospace;color:var(--accent)}
 .os-sub{margin:16px 0 8px;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
 .os-plans{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
 .os-plan{display:flex;align-items:center;border-bottom:1px solid var(--rule-soft)}
-.os-plango{flex:1;display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1.2fr) 130px 20px;gap:16px;align-items:center;min-height:62px;padding:8px 6px;border:0;background:none;text-align:left;cursor:pointer}
+.os-plango{min-width:0;overflow-wrap:anywhere;flex:1;display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1.2fr) 130px 20px;gap:16px;align-items:center;min-height:62px;padding:8px 6px;border:0;background:none;text-align:left;cursor:pointer}
 .os-plango:hover{background:var(--surface)}
 .os-plango b{display:block;font-size:14px;font-weight:600}
 .os-plango small{display:block;margin-top:3px;font-size:12px;color:var(--ink-3)}
@@ -3909,7 +3912,7 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 .os-inv td.w{text-align:left;font-family:Archivo,sans-serif}
 .os-inv td .sub{margin-top:2px}
 .os-inv tr.grp td{padding:14px 12px 7px;background:none;border-bottom:1px solid var(--rule);font:500 10.5px/1.3 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);text-align:left;white-space:normal}
-.os-inv tr.grp td span{margin-left:10px;letter-spacing:0;text-transform:none;font-family:Archivo,sans-serif;font-size:12px;color:var(--ink-3)}
+.os-inv tr.grp td span{overflow-wrap:anywhere;margin-left:10px;letter-spacing:0;text-transform:none;font-family:Archivo,sans-serif;font-size:12px;color:var(--ink-3)}
 .os-inv tr.grp td b{float:right;letter-spacing:0;color:var(--ink-2);font-weight:500}
 .os-inv td.free{color:var(--accent)}
 .os-inv tfoot td{padding:14px 12px;font:500 15px/1.2 "IBM Plex Mono",monospace;border-bottom:0}
@@ -3931,7 +3934,7 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 .os-total{display:flex;align-items:baseline;gap:14px;margin-top:18px;padding:16px;border-radius:12px;border:1px solid var(--rule);background:var(--surface)}
 .os-total b{margin-left:auto;font:500 22px/1 "IBM Plex Mono",monospace}
 .os-total span{font-size:14px;font-weight:600}
-.os-total small{font-size:12px;color:var(--ink-3)}
+.os-total small{min-width:0;overflow-wrap:anywhere;font-size:12px;color:var(--ink-3)}
 .os-mini{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;border:1px solid var(--rule-soft);background:#0d100f}
 .os-mini svg{display:block;width:100%;height:100%}
 .os-pin{position:absolute;transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;pointer-events:none}
@@ -3941,9 +3944,12 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 .os-pin.new i{background:#e9ece6}
 .os-pin em{margin-top:3px;padding:2px 6px;border-radius:4px;background:#0d100fdd;color:#e9ece6;font:500 10.5px/1.2 Archivo,sans-serif;font-style:normal;white-space:nowrap}
 .os-maplist{display:flex;flex-direction:column;gap:6px;margin-top:10px}
-.os-maplist div{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;font-size:12.5px;color:var(--ink-2)}
+.os-maplist div{display:grid;grid-template-columns:minmax(22px,auto) minmax(0,1fr) auto;gap:10px;align-items:center;font-size:12.5px;color:var(--ink-2)}
 .os-maplist i{display:grid;place-items:center;width:20px;height:20px;border-radius:10px;background:#6ea8ff;color:#0d100f;font:600 10.5px/1 "IBM Plex Mono",monospace;font-style:normal}
 .os-maplist i.n{background:var(--ink);color:var(--ground);font-size:8.5px}
+/* A translated NEW stays on one line and widens its pill. */
+.os-maplist i.n{width:auto;min-width:20px;white-space:nowrap}
+.os-maplist span{min-width:0;overflow-wrap:anywhere}
 .os-maplist b{font:500 12.5px/1 "IBM Plex Mono",monospace;color:var(--ink)}
 /* step 4: break even ----------------------------------------------------------------- */
 .os-be{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:22px;margin-top:22px;align-items:start}
@@ -3987,6 +3993,7 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 .os-none small{font-size:12px;color:var(--ink-3)}
 /* the financing panel, in the break-even step --------------------------------------------- */
 .os-fin{margin-top:22px}
+.os-fin .quiet{overflow-wrap:anywhere}
 .os-finhead{display:flex;align-items:center;gap:14px}
 .os-finhead h3{margin:0}
 .os-finhead h3 svg{width:17px;height:17px;stroke:var(--ink-2)}
@@ -4010,7 +4017,7 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 .os-finfacts b{font:500 17px/1.1 "IBM Plex Mono",monospace}
 .os-finfacts small{font-size:12px;line-height:1.4;color:var(--ink-3)}
 /* step 6: after opening ------------------------------------------------------------------ */
-.os-roi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:22px}
+.os-roi{overflow-wrap:anywhere;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:22px}
 .os-roi .kpi .v{font-size:25px}
 .os-roi .kpi .v small{font-family:Archivo,sans-serif;font-size:13px;letter-spacing:0;color:var(--ink-3)}
 .os-roi .kpi .v.os-word{font-size:17px;line-height:1.25;letter-spacing:-.01em}
@@ -4105,22 +4112,26 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 .ff-short .a{font:500 13.5px/1.2 "IBM Plex Mono",monospace;text-align:right;color:var(--warn)}
 .ff-short .a small{display:block;font-size:10.5px;color:var(--ink-3);letter-spacing:.04em;text-transform:uppercase}
 .ff-note{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:12px;align-items:center;margin-top:16px;padding:13px 16px;border-radius:12px;border:1px solid var(--rule);background:var(--surface);font-size:13px;line-height:1.45;color:var(--ink-2)}
+.ff-note>span{min-width:0;overflow-wrap:anywhere}
 .ff-note>svg{width:18px;height:18px;stroke:var(--info);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .ff-note.warn{border-color:color-mix(in srgb,var(--warn) 45%,transparent);background:color-mix(in srgb,var(--warn) 6%,var(--surface))}
 .ff-note.warn>svg{stroke:var(--warn)}
 .ff-note b{color:var(--ink);font-weight:600}
 .ff-flow{display:flex;align-items:center;flex-wrap:wrap;gap:10px 0;margin-top:16px;padding:14px 16px;border-radius:12px;border:1px solid var(--rule-soft);background:var(--surface)}
-.ff-node{display:flex;align-items:center;gap:10px;min-width:0}
+.ff-node{display:flex;align-items:center;gap:10px;min-width:0;max-width:100%}
+.ff-node>span{min-width:0}
 .ff-node .ic{display:grid;place-items:center;flex:none;width:34px;height:34px;border-radius:9px;background:var(--raised);color:var(--ink-2)}
 .ff-node .ic svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .ff-node.new .ic{background:var(--accent);color:var(--on-accent)}
 .ff-node.miss .ic{background:none;border:1.5px dashed var(--warn);color:var(--warn)}
-.ff-node b{display:block;font-size:13px;font-weight:600;white-space:nowrap}
-.ff-node small{display:block;margin-top:2px;font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+/* Keep full names readable in the diagram, even above the phone breakpoint. */
+.ff-node b{display:block;font-size:13px;font-weight:600;white-space:normal;overflow-wrap:anywhere}
+.ff-node small{display:block;margin-top:2px;font-size:11.5px;color:var(--ink-3);white-space:normal;overflow-wrap:anywhere}
 .ff-arrow{flex:0 0 34px;height:2px;margin:0 8px;background:repeating-linear-gradient(90deg,var(--ink-3) 0 4px,transparent 4px 8px);position:relative}
 .ff-arrow::after{content:"";position:absolute;right:-2px;top:-4px;border:5px solid transparent;border-left-color:var(--ink-3);border-right:0}
-.ff-shops{display:flex;flex-wrap:wrap;gap:5px;min-width:0}
+.ff-shops{display:flex;flex-wrap:wrap;gap:5px;min-width:0;max-width:100%}
 .ff-shops span{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border-radius:6px;background:var(--raised);font-size:12px;color:var(--ink-2);white-space:nowrap}
+.ff-shops > span{max-width:100%;height:auto;min-height:24px;white-space:normal;overflow-wrap:anywhere}
 .ff-shops .hood{height:16px;min-width:20px;font-size:9px}
 .ff-next{display:flex;justify-content:flex-end;margin-top:18px}
 .ff-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-top:12px;border:1px solid var(--rule-soft);border-radius:10px;background:var(--ground)}
@@ -4155,13 +4166,82 @@ a.sb-plan:hover em{color:var(--ink);text-decoration:underline}
 .ff-meter i{display:block;height:100%;width:var(--w);background:var(--accent)}
 .ff-meter.w i{background:var(--warn)}
 .ff-why{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
-.ff-why>div{display:grid;grid-template-columns:14px 18px minmax(0,1fr) auto;gap:12px;align-items:center;min-height:54px;padding:6px 4px;border-bottom:1px solid var(--rule-soft)}
+.ff-why>div{display:grid;grid-template-columns:14px 18px minmax(0,1fr) fit-content(50%);gap:12px;align-items:center;min-height:54px;padding:6px 4px;border-bottom:1px solid var(--rule-soft)}
+.ff-why>div>span{min-width:0}
 .ff-why .mk{width:8px;height:8px;border-radius:50%;justify-self:center;background:var(--warn)}
 .ff-why>div>svg{width:16px;height:16px;stroke:var(--ink-3);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.ff-why .t{font-size:14px;font-weight:600}
+.ff-why .t{overflow-wrap:anywhere;font-size:14px;font-weight:600}
 .ff-why .t small{display:block;margin-top:3px;font-size:12.5px;font-weight:400;color:var(--ink-3)}
 @media (max-width:1100px){.ff-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.ff-facts>div:nth-child(3){border-left:0}.ff-facts>div:nth-child(n+3){border-top:1px solid var(--rule-soft)}}
-@media (max-width:620px){.ff-make,.ff-out{display:block;overflow-x:auto}.ff-arrow{display:none}.ff-flow{flex-direction:column;align-items:flex-start}.ff-short,.ff-why>div{grid-template-columns:14px minmax(0,1fr) auto}.ff-short>svg,.ff-why>div>svg{display:none}}
+@media (max-width:620px){.ff-make,.ff-out{display:block;overflow-x:auto}.ff-arrow{display:none}.ff-flow{flex-direction:column;align-items:flex-start}.ff-short{grid-template-columns:14px minmax(0,1fr) auto}.ff-why>div{grid-template-columns:14px minmax(0,1fr) fit-content(50%)}.ff-short>svg,.ff-why>div>svg{display:none}}
+
+/* Planning controls wrap or shrink only when their contents need the space. */
+.nx-ctl #osCtl,.nx-ctl [data-view-ctl="expansion/factory"]{min-width:0;max-width:100%}
+@media (max-width:1100px){.nx-ctl #osCtl,.nx-ctl [data-view-ctl="expansion/factory"]{flex-wrap:wrap}}
+.nx-ctl #osCtl>.aside,#ofCtl>.aside{min-width:0;max-width:100%}
+.os-steps{min-width:0;max-width:100%}
+.os-steps button{max-width:100%;height:auto;min-height:34px;white-space:normal;overflow-wrap:anywhere;text-align:left}
+.os-steps button i{flex-shrink:0}
+.nx-ctl [data-view-ctl="expansion/factory"] .aside{flex-wrap:wrap;min-width:0;max-width:100%}
+.nx-ctl [data-view-ctl="expansion/factory"] .field{min-width:0;max-width:100%}
+.nx-ctl [data-view-ctl="expansion/factory"] select{min-width:0;max-width:100%}
+.ff-for,.ff-kind{min-width:0;max-width:100%}
+@media (max-width:1100px){.ff-for{flex-wrap:wrap}}
+.ff-kind button{min-width:0;max-width:100%}
+.ff-kind button svg{flex-shrink:0}
+.ff-kind button span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+
+/* Above phone widths, let the step group shrink as on the desktop board. */
+@media (min-width:621px){.os-ctl#osCtl{flex-wrap:nowrap}}
+
+/* Progress metadata and wide investment tables must stay within the page. */
+.os-prog{flex-wrap:wrap}
+.os-prog .aside{flex-wrap:wrap;min-width:0;max-width:100%}
+@media (max-width:760px){
+  .os-inv{display:block;overflow-x:auto}
+  /* The planner finder must wrap translated column/filter labels inside
+     its clipped panel, even when a label has no word break. */
+  .os-finder .fhead span{min-width:0;white-space:normal;overflow-wrap:break-word;hyphens:auto}
+  .os-finder .frow .lab{overflow-wrap:anywhere}
+}
+
+/* Supplier rows follow the card width, including the narrow desktop column. */
+.os-store{container-type:inline-size}
+@container (max-width:540px){
+  /* Item and explanation share the left column; price stays on the right. */
+  .os-store table,.os-store tbody{display:block;width:100%;min-width:0}
+  .os-store table tr{display:grid;grid-template-columns:minmax(0,1fr) auto;padding:7px 12px;gap:0 12px;border-bottom:1px solid var(--rule-soft)}
+  .os-store table tr:last-child{border-bottom:0}
+  .os-store table td{display:block;min-width:0;padding:0;border:0;white-space:normal;overflow-wrap:anywhere}
+  .os-store table td.l{grid-column:1;grid-row:1}
+  .os-store table td.w{grid-column:1;grid-row:2;margin-top:4px}
+  .os-store table td.w:empty{display:none}
+  .os-store table td:last-child{grid-column:2;grid-row:1 / span 2;white-space:nowrap}
+  .os-store .os-tag{max-width:100%;height:auto;min-height:20px;white-space:normal;overflow-wrap:anywhere;line-height:1.35}
+  .os-sh{flex-wrap:wrap}
+  .os-sh>span:not(.k):not(.t){flex:1;min-width:0;overflow-wrap:anywhere}
+  .os-sh .t{flex-shrink:0}
+}
+
+/* Named actions keep their usual height when they fit, and grow when needed. */
+.os-btn,.os-cta{max-width:100%;height:auto;white-space:normal;overflow-wrap:anywhere}
+.os-cta{min-height:40px}
+.os-btn,.os-cta.sm{height:auto;min-height:34px}
+.os-btn svg,.os-cta svg{flex-shrink:0}
+
+/* Phone plan pickers and step bodies accommodate long names and UI text. */
+@media (max-width:620px){
+  .os-planpick{width:100%}
+  .os-planpick>span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .os-planpick select{width:100%;max-width:none;flex:1;overflow:hidden}
+  .os-seg{max-width:100%;flex-wrap:wrap}
+  .os-seg button{min-width:0;max-width:100%;height:auto;min-height:30px;white-space:normal;overflow-wrap:anywhere}
+  .os-seg.big button{height:auto;min-height:40px;flex-wrap:wrap}
+  .os-ingame{max-width:100%}
+  .os-total,.os-gate,.os-toolbar .aside{flex-wrap:wrap;min-width:0;max-width:100%;overflow-wrap:anywhere}
+  .ff-callout>span{min-width:0;overflow-wrap:anywhere}
+  .ff-run2{overflow-wrap:anywhere}
+}
 
 /* A section worked out on demand (odWaitHtml()): the words while it runs, or
    why it did not, with Try again. */
