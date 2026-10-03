@@ -385,6 +385,7 @@ var boardSeq = 0;
 function takeData(raw){
   const old = D;
   D = localiseNames(raw);
+  odBoard(old);
   boardSeq++;
   if(typeof sbBoard === "function" && old && old !== raw) sbBoard(old);
   if(typeof pgBoard === "function") pgBoard();
@@ -404,8 +405,15 @@ function takeData(raw){
    as a new board: no history, no board count, no progress-check turn of its
    own. A section is asked for once per board; a newer board asks again. */
 const OD_SECTIONS = {
-  factoryStaffing: {keys: ["factoryStaffing"], needs: []},
+  staffing: {keys: ["staffing"], needs: []},
+  officeStaffing: {keys: ["officeStaffing"], needs: ["staffing"]},
+  factoryStaffing: {keys: ["factoryStaffing"], needs: ["officeStaffing"]},
   hiring: {keys: ["hiring", "candidates"], needs: ["factoryStaffing"]},
+  premises: {keys: ["premises"], needs: []},
+  products: {keys: ["products"], needs: []},
+  openStore: {keys: ["openStore"], needs: ["premises"]},
+  openFactory: {keys: ["openFactory"], needs: []},
+  goals: {keys: ["goals"], needs: []},
 };
 /* The build's generation, which web/app.js puts on the data it hands over. */
 const OD_GEN = Symbol.for("bigcopilot.build");
@@ -414,7 +422,7 @@ const odAsked = new Map();
 /* Set by renderAll() while it draws a row of a view that is not on screen:
    such a draw only reads what is there and asks for nothing, and the row is
    left out of date (odWanted) so it asks once its view opens (drawStale()). */
-let odHidden = false, odWanted = false;
+let odHidden = false, odWanted = false, odBooting = false;
 const odGen = () => { const en = D && (D[GN_SRC] || D); return en ? en[OD_GEN] : undefined; };
 /* A section and everything it needs, its needs first. */
 const odChain = name => [...(OD_SECTIONS[name] || {needs: []}).needs.flatMap(odChain), name]
@@ -440,7 +448,7 @@ function odState(name){
    it (a hidden draw, a count) calls odReady(). */
 function odNeed(name){
   if(odReady(name)) return true;
-  if(odHidden){ odWanted = true; return false; }
+  if(odHidden || odBooting){ odWanted = true; return false; }
   if(!D || !odOnDemand()) return false;
   const gen = odGen();
   if(gen === undefined) return false;
@@ -491,7 +499,7 @@ function odFailed(chain, gen, err){
   chain.forEach(n => { const a = odAsked.get(n); if(a && a.gen === gen) odAsked.set(n, {gen, state: "error", error}); });
   if(gen !== odGen()) return;
   /* What waited on it is not done: it is said where it is drawn instead. */
-  odThens = odThens.filter(t => !chain.includes(t.name));
+  odThens = odThens.filter(t => t.keepOnError || !chain.includes(t.name));
   odRedraw();
 }
 /* The source could not read the save again (SOURCE.watch()'s stale(why)):
@@ -500,16 +508,48 @@ function odSourceFailed(why){
   let any = false;
   odAsked.forEach((a, n) => { if(a.gen === odGen() && a.state === "loading" && a.stale){ odAsked.set(n, {gen: a.gen, state: "error", error: why || a.stale}); any = true; } });
   if(!any) return;
-  odThens = odThens.filter(t => odState(t.name) !== "error");
+  odThens = odThens.filter(t => t.keepOnError || odState(t.name) !== "error");
   odRedraw();
 }
-/* Work waiting for a section (a click that opens a write review): run once
-   the board has it, whichever board that is (odArrived()). One held per
-   `key`: a second click replaces the first. */
+/* Held work belongs to this company and source, across its refreshes only.
+   Source.identity() also identifies file/folder choices without a game link. */
+const odSource = () => typeof SOURCE.identity === "function" ? SOURCE.identity() : (gwLink() || {}).source;
+const odScope = () => ({source: odSource(), character: D?.meta?.character, save: D?.meta?.save});
+const odSameScope = (a, b) => !!a && !!b && a.source === b.source && a.character === b.character && a.save === b.save;
+let odBoardScope = null;
+const odDrawn = new Set();
+function odBoard(old){
+  const scope = odScope();
+  if(!old || !odSameScope(odBoardScope, scope)){
+    odDrawn.clear();
+    odSiteDrawn = null;
+  }
+  odBoardScope = scope;
+  odThens = odThens.filter(t => odSameScope(t.scope, scope));
+  const dlg = gwOpen;
+  if(dlg && dlg.open && typeof dlg._odBoard === "function") dlg._odBoard();
+}
+const odError = name => odChain(name).some(n => odState(n) === "error");
+/* Keep a successfully drawn row while this company's new sections load.
+   This retains DOM only: every reader still uses the current board. */
+function odKeepRow(row, shown){
+  const missing = (row[3] || []).filter(n => !odReady(n));
+  if(!odDrawn.has(row) || !row[0].split(" ").includes(shown) || !missing.length || missing.some(odError)) return false;
+  missing.forEach(odNeed);
+  pageStale.add(row);
+  return true;
+}
+function odRowDrawn(row){
+  if((row[3] || []).every(odReady)) odDrawn.add(row); else odDrawn.delete(row);
+}
+/* One held per key: a second click replaces the first. Finder restoration
+   opts into keeping its visit's question through errors, until retry arrives. */
 let odThens = [];
-function odThen(name, run, key = run){
+function odThen(name, run, key = run, keepOnError = false){
+  // A different source may have been selected before its board arrives.
+  if(odBoardScope && !odSameScope(odBoardScope, odScope())) return;
   if(odNeed(name)) return run();
-  odThens = odThens.filter(t => t.key !== key).concat([{name, run, key}]);
+  odThens = odThens.filter(t => t.key !== key).concat([{name, run, key, keepOnError, scope: odScope()}]);
 }
 /* The sections the rows of `view` declare (PAGE_DRAWS' fourth element),
    asked for as the view opens (drawStale()) and as a board arrives on it
@@ -518,6 +558,30 @@ function odWantView(view){
   if(!hasData()) return;
   PAGE_DRAWS.forEach(row => { if(row[3] && row[0] && row[0].split(" ").includes(view)) row[3].forEach(odNeed); });
 }
+/* Navigation intent only: never run factory planning automatically. */
+function odPrefetchSections(view){
+  const r = typeof ROUTES !== "undefined" && ROUTES[view];
+  const host = r ? r.host.join("/") : view;
+  const needs = r ? r.needs || [] : PAGE_DRAWS.filter(row => row[0].split(" ").includes(host)).flatMap(row => row[3] || []);
+  return [...new Set(needs.flatMap(n => odChain(n).includes("factoryStaffing")
+    ? odChain(n).filter(stage => stage !== "factoryStaffing" && stage !== "hiring") : [n]))];
+}
+function odPrefetch(view){
+  if(document.hidden || odHidden || !hasData()) return;
+  odPrefetchSections(view).forEach(odNeed);
+}
+function odNavIntent(e){
+  const a = e.target && e.target.closest ? e.target.closest("a[href^='#']") : null;
+  if(!a) return;
+  const id = a.dataset.route || a.dataset.ovRoute || a.dataset.id || a.getAttribute("href").slice(1);
+  const hash = a.getAttribute ? a.getAttribute("href").slice(1) : "";
+  const entry = SEC_PAGE[SEC_MOVED[hash] || hash];
+  const view = routeResolve(id) || routeResolve(hash) || (hash.startsWith("wiki/") ? "wiki" : null)
+    || (entry ? entry.join("/") : null);
+  if(view) odPrefetch(view);
+}
+if(typeof document !== "undefined" && typeof document.addEventListener === "function")
+  ["pointerover", "focusin", "touchstart"].forEach(type => document.addEventListener(type, odNavIntent, {passive: true}));
 function odRetry(name){
   odChain(name).forEach(n => { if(odState(n) === "error") odAsked.delete(n); });
   odNeed(name);
@@ -530,9 +594,10 @@ function odArrived(){
   hrSiteMemo = null;
   pgJudged = -1;
   odRedraw();
+  odThens = odThens.filter(t => odSameScope(t.scope, odScope()));
   const ready = odThens.filter(t => odReady(t.name));
   odThens = odThens.filter(t => !odReady(t.name));
-  ready.forEach(t => { try{ t.run(); }catch(e){ console.error(e); } });
+  ready.forEach(t => { if(odSameScope(t.scope, odScope())) try{ t.run(); }catch(e){ console.error(e); } });
 }
 /* A write dialog that waits for a section (gwConfirm()) paints again: it
    plans once the section is there, and says so while it fails or loads.
@@ -540,25 +605,45 @@ function odArrived(){
    failure or a Try again reaches it. */
 function odDialog(){
   const dlg = gwOpen;
+  if(dlg && dlg.open && typeof dlg._odCurrent === "function" && !dlg._odCurrent()) return;
   if(dlg && dlg.open && typeof dlg._odWait === "function"){ const again = dlg._odWait; dlg._odWait = null; again(); }
 }
 /* Work left waiting when a board arrives asks that board for its section,
    and so does a write dialog that waits (it plans again, odDialog()). */
 function odThensAsk(){
+  odThens = odThens.filter(t => odSameScope(t.scope, odScope()));
   [...new Set(odThens.map(t => t.name))].forEach(odNeed);
   odDialog();
 }
 function odRedraw(){
   if(!hasData()) return;
+  const cell = demPop && !demPop.hidden ? demPopCell : null;
   /* renderAll() replans a waiting dialog itself (odThensAsk()); one that
      threw before it got there still does. */
   try{ renderCalm(true); }catch(e){ console.error(e); odDialog(); }
+  /* Demand's redraw replaces the anchor. Keep only the popover that was
+     still open for this cell, without taking focus from its reader. */
+  if(cell && demPop && !demPop.hidden && demPopCell === cell){
+    const anchor = cell.isConnected ? cell : q(`#market .cell[data-slug="${CSS.escape(cell.dataset.slug)}"][data-hood="${CSS.escape(cell.dataset.hood)}"]`);
+    if(anchor) demCellPop(anchor, false); else demPopClose(false);
+  }
 }
 /* Where a page or block would draw a section it does not have yet: the words
    while it is worked out, or why it was not, with Try again. `small` for a
    line inside a block. */
-const odWords = name => name === "hiring" ? tt("nav.od.hiring", "Working out staff needs…")
-  : tt("nav.od.factoryStaffing", "Working out factory staffing…");
+function odWords(name){
+  switch(name){
+    case "staffing": return tt("nav.od.staffing", "Working out shop staffing…");
+    case "officeStaffing": return tt("nav.od.officeStaffing", "Working out office staffing…");
+    case "premises": return tt("nav.od.premises", "Working out locations…");
+    case "products": return tt("nav.od.products", "Working out products…");
+    case "openStore": return tt("nav.od.openStore", "Working out store plans…");
+    case "openFactory": return tt("nav.od.openFactory", "Working out factory costs…");
+    case "goals": return tt("nav.od.goals", "Working out milestones…");
+    case "hiring": return tt("nav.od.hiring", "Working out staff needs…");
+    default: return tt("nav.od.factoryStaffing", "Working out factory staffing…");
+  }
+}
 function odWaitHtml(name, small = false){
   const st = odState(name) === "error" ? "error" : odChain(name).some(n => odState(n) === "error") ? "error" : "loading";
   if(st === "error"){
@@ -573,6 +658,43 @@ if(typeof document !== "undefined" && typeof document.addEventListener === "func
   const b = e.target && e.target.closest ? e.target.closest("[data-od-retry]") : null;
   if(b) odRetry(b.getAttribute("data-od-retry"));
 });
+/* Retained controls must not read missing sections as empty. Capture before
+   direct or delegated handlers; retry buttons must remain usable on errors. */
+const OD_ACTION_SECTIONS = [
+  ["#secOpen, #osCtl", ["openStore"]],
+  ["#secPlan, #secIngredients, #secPlanFlow, #ofCtl, #planPicker, #planFor", ["openFactory", "openStore"]],
+  ["#secStaff, #secSchedules, [data-gw=\"schedule\"]", ["hiring"]],
+  ["#secProducts", ["products"]], ["#secGoals", ["goals"]],
+  ["#secProduction", ["factoryStaffing"]],
+];
+/* Detached controls declare the sections they read on their host (or on
+   the individual action). Close and retry do not read those sections. */
+function odActionNeeds(target){
+  const needs = OD_ACTION_SECTIONS.filter(([sel]) => target.closest(sel)).flatMap(([, names]) => names);
+  for(let el = target.closest("[data-od-needs]"); el; el = el.parentElement?.closest("[data-od-needs]"))
+    needs.push(...el.dataset.odNeeds.split(" ").filter(Boolean));
+  return [...new Set(needs)];
+}
+/* Pass actions that wait for their own data, close/retry, or read only a
+   completed result; plain navigation also needs no section. */
+function odActionBlocked(target){
+  if(!target?.closest || target.closest('[data-od-retry], [data-od-close], [data-hr-staff], [data-hr-all], [data-hr-more], .gw-dlg[data-phase="done"] [data-hr-site]')) return false;
+  const link = target.closest("a[href^='#']");
+  if(link && ![...link.attributes].some(a => a.name.startsWith("data-") && !["data-tip", "data-tt", "data-tt-title"].includes(a.name))) return false;
+  return odActionNeeds(target).filter(n => !odNeed(n)).length > 0;
+}
+if(typeof document !== "undefined" && typeof document.addEventListener === "function")
+  ["click", "mousedown", "change", "input", "keydown"].forEach(type => document.addEventListener(type, e => {
+    if(!e.target?.closest) return;
+    const select = e.target.closest(".hs-sel")?.querySelector("select") || e.target.closest("select");
+    if(type === "mousedown" && !select) return;
+    if(type === "keydown"){
+      if(e.target.closest('textarea, [contenteditable]:not([contenteditable="false"]), input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"])')) return;
+      if(select ? ["Tab", "Escape"].includes(e.key) : ((e.key !== "Enter" && e.key !== " ")
+        || !e.target.closest("button, input, a, [role='button'], [role='option'], [tabindex]"))) return;
+    }
+    if(odActionBlocked(select || e.target)){ e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true));
 /* Names sort in the language they are shown in; English keeps the order it
    always had. */
 let gnCollator = null;
@@ -3319,14 +3441,10 @@ function ovAtFactory(a){
      of its machines names the machine, and the site names its type. */
   return !!(a.ev && a.ev.slot !== undefined) || !!(b && b.typeSlug === "ba:businesstype_factory");
 }
-/* Where a site's staffing is on its page: a shop's Staffing always, an
-   office's where the office default plans it (spOfficeRoster()), else its
-   Crew, which every staffed site draws. The planner itself is on Staffing ›
-   Schedules; a business's page carries its summary (spSchedSummary()). */
+/* A shop's schedule summary; an office's Schedule action, which exists
+   whether or not the office default has hours. Today need not ask for it. */
 function nxStaffInto(b){
-  if(!b || b.status !== "office") return "#sp-sched";
-  const row = gwOfficeRow(b.key);
-  return row && (row.shifts || []).length ? "#sp-sched" : "#sp-crew";
+  return b && b.status === "office" ? "#sitePanel .sp-acts" : "#sp-sched";
 }
 function ovActLabel(act){
   switch(act){
@@ -4948,6 +5066,8 @@ const spNoHours = row => !!row && !row.failed && !(row.open || []).some(day => d
 const spIsFactory = b => ((((D.supply || {}).factories || {}).sites) || []).some(s => (D.businesses || [])[s.s] === b
   || ((D.businesses || [])[s.s] || {}).key === b.key);
 const spSpareIds = b => {
+  const section = b.status === "office" ? "officeStaffing" : b.status === "retail" ? "staffing" : spIsFactory(b) ? "factoryStaffing" : null;
+  if(section && !odReady(section)) return [];
   const ids = Array.isArray(b.staffIdle) ? b.staffIdle : [];
   if(!ids.length) return ids;
   const base = spRosterRow(b.key);
@@ -4960,7 +5080,6 @@ const spSpareIds = b => {
   // Staffing block draws first.
   /* A factory's plan is a section: until the board has it, nobody there is
      called spare. */
-  if(!base && spIsFactory(b) && !odNeed("factoryStaffing")) return [];
   const office = base ? null : [...(Array.isArray(D.officeStaffing) ? D.officeStaffing : []),
     ...(((D.factoryStaffing || {}).cap) || [])].find(r => r.key === b.key);
   const row = base && !base.failed ? spShownRow(base) : office;
@@ -6035,6 +6154,7 @@ function spPlanPick(base, full){
    shop's, which never changes the office's opening hours. The hour grid of
    the week is the Staff page's and the game's; here it is the numbers. */
 function spOfficeRoster(b){
+  if(!odNeed("officeStaffing")) return odWaitHtml("officeStaffing");
   const row = gwOfficeRow(b.key);
   /* No office default to add: Staff this site still, where people move in or out. */
   if(!row || !(row.shifts || []).length){
@@ -6057,6 +6177,7 @@ function spOfficeRoster(b){
   </section>`;
 }
 function spRosterBlock(b){
+  if(!odNeed("staffing")) return odWaitHtml("staffing");
   const base = spRosterRow(b.key);
   const offer = spOffersFull(base);
   const row = spRowLess(spShownRow(base));
@@ -6948,6 +7069,7 @@ function spPayback(b){
   return `<p class="sp-read sp-pay" data-tip="${attr(paybackTip(row))}" tabindex="0">${
     tt("sp.payback.line", "Payback: {what}", {what: paybackSentence(o, row)})}</p>`;
 }
+let odSiteDrawn = null;
 function drawSite(){
   const sec = $("secDetail");
   spViewCache = null;
@@ -6964,6 +7086,8 @@ function drawSite(){
      does turn up in both lists is a business: that is the panel with something
      to say. */
   const home = !b && siteOpen ? spHome(siteKey) : null;
+  const siteSection = b && (b.status === "office" ? "officeStaffing" : "staffing");
+  const keptSchedule = b && odSiteDrawn === b.key && !odReady(siteSection) && !odError(siteSection) ? $("sp-sched") : null;
   if(home){
     sec.hidden = false;
     paintSiteUp(true);
@@ -6986,6 +7110,11 @@ function drawSite(){
   }
   sec.hidden = false;
   paintSiteUp(true);
+  if(page === "company"){
+    if(b.status === "retail") odNeed("staffing");
+    else if(b.status === "office") odNeed("officeStaffing");
+    else if(spIsFactory(b)) odNeed("factoryStaffing");
+  }
 
   const targets = {};
   D.supply.shops.forEach(r => { if(r.s === siteTab) targets[r.slug] = r; });
@@ -7439,7 +7568,7 @@ function drawSite(){
     </section>` : ""}
     ${/* Only a shop is planned: an office bills hours rather than serving a
           queue, and a depot, a factory and a home have no row at all. */""}
-    ${sp && !(fresh && !people.length) ? spSchedSummary(b) : ""}
+    ${sp && !(fresh && !people.length) ? (keptSchedule ? '<div id="sp-sched"></div>' : spSchedSummary(b)) : ""}
     <div class="duo sec"${fresh && !people.length && !shelves.length ? ` style="display:none"` : ` style="grid-template-columns:1fr 2fr"`}>
       <section class="rv" data-block="crew" id="sp-crew">
         ${sechead(tt("sp.crew.title", "Crew"), {icon: spAny ? "crew" : null, why: roleTip || null, quiet: crewQuiet})}
@@ -7469,6 +7598,8 @@ function drawSite(){
           : `<p class="quiet" style="margin:0">${tt("sp.week.none", "Not enough trading history here yet.")}</p>`}</div>
       </section>
     </div>`}`}`;
+  if(keptSchedule) $("sp-sched")?.replaceWith(keptSchedule);
+  odSiteDrawn = sp && odReady(siteSection) ? b.key : keptSchedule ? b.key : null;
   spPruneHits($("sitePanel"));
   /* A depot's and a factory's page carry the sizing switch (supplyFact). */
   if($("spSizing")) szSwitch("spSizing");
@@ -7491,6 +7622,8 @@ function drawSite(){
    planner, on Staffing › Schedules with this business picked; the planner is
    not drawn twice (docs/architecture.md, Pages). */
 function spSchedSummary(b){
+  const section = b.status === "office" ? "officeStaffing" : "staffing";
+  if(!odReady(section)) return odWaitHtml(section, true);
   const pg = schedProgress(b);
   const state = schedStatus(b);
   /* The header's Schedule button opens the planner, and the page's own
@@ -8192,7 +8325,9 @@ const PG_CHECK = {
     return b.shiftPrint === rec.expect.print ? {state: "confirmed"} : {state: "changed"};
   },
   hire(rec){
-    if(!odNeed("hiring")) return null;
+    // The first judgment asks. Partly/unseen records only re-check hiring
+    // already on this board, avoiding every planning stage on each link poll.
+    if(!(rec.state === "applied" ? odNeed("hiring") : odReady("hiring"))) return null;
     const at = pgPeopleSites();
     const want = rec.expect.people || [];
     if(!want.length) return {state: "confirmed"};
@@ -8217,6 +8352,7 @@ const PG_CHECK = {
    warehouse or a headquarters has no such list, so a hire there is never
    seen here, and says so. */
 function pgPeopleSites(){
+  if(!odReady("hiring")) return null;
   const at = new Map();
   const rows = [...(D.staffing || []), ...(Array.isArray(D.officeStaffing) ? D.officeStaffing : []),
     ...(((D.factoryStaffing || {}).cap) || [])];
@@ -11698,6 +11834,7 @@ function osCkStaff(plan, opened){
   const title = tt("gr.os.ck.staff", "Staff for the opening hours");
   if(!opened) return osCk("people", "todo", title, tt("gr.os.ck.staff.todo", "Hired once the business is set up"));
   const have = opened.staff || 0;
+  if(!odNeed("staffing")) return osCk("people", "todo", title, "", odWaitHtml("staffing", true));
   /* Judged on the Staff page's plan only once the board has it. */
   if(!odNeed("hiring")) return osCk("people", "todo", title, "", odWaitHtml("hiring", true));
   const M = hrMemoModel(), S = M.sites.find(s => s.key === plan.key);
@@ -12303,6 +12440,11 @@ function osToResults(){
 function drawOpenStore(){
   const sec = $("secOpen");
   if(!sec || !hasData()) return;
+  if(!odNeed("openStore")){
+    $("osBody").innerHTML = odWaitHtml("openStore");
+    $("osCtl").innerHTML = ""; $("osStrip").innerHTML = ""; $("osWhere").hidden = true;
+    return;
+  }
   osLoad();
   const F = osFacts(), plan = osPlan();
   if(!OS_STEPS.includes(osStep) || !osStepReady(osStep, plan)) osStep = plan ? (osBuilding(plan.key) ? "investment" : "where") : "what";
@@ -12328,6 +12470,7 @@ function osGo(step){
 }
 /* A new plan for a type, from a Demand cell, the grid of types or search. */
 function osStart(type, hood){
+  if(!odReady("openStore")){ odThen("openStore", () => osStart(type, hood), "osStart"); return; }
   osLoad();
   if(!osNew(type, hood)){
     osCur = null; osStep = "what";
@@ -12533,6 +12676,14 @@ const priceSpan = () => {
 const machinesOn = slug => Math.max(0, planCounts[slug] ?? planSeed[slug] ?? 1);
 
 function drawPlan(){
+  const missing = ["openFactory", "openStore"].filter(n => !odNeed(n));
+  if(missing.length){
+    $("planNote").textContent = "";
+    ["planPicker", "planBody", "ingBody", "planFor", "ofCtl", "ofStrip", "ofStart", "ofWhat"].forEach(id => { if($(id)) $(id).innerHTML = ""; });
+    if($("ofWhere")) $("ofWhere").hidden = true;
+    if($("ofBody")) $("ofBody").innerHTML = missing.map(n => odWaitHtml(n)).join("");
+    return;
+  }
   indexPlan();
   pcPopClose(false);
   ofLoad();
@@ -12852,6 +13003,7 @@ function ofLoad(){
   if(plan){ planType = plan.type; planTarget = plan.site || "new"; planCounts = {...plan.counts}; ofStep = plan.step; }
 }
 function ofSave(){
+  if(!odReady("openFactory") || !odReady("openStore")) return;
   const plan = ofPlan();
   if(plan) plan.step = ofStep;
   try{ localStorage.setItem(ofStore(), JSON.stringify({plans: ofPlans, current: ofCur})); }catch(e){}
@@ -13811,6 +13963,7 @@ function ofDayChart(days, planDay){
    on the page, and by planDraw() after a stepper moves (ofAfterLines()). */
 function ofDraw(){
   if(!$("ofCtl") || !hasData()) return;
+  if(!odReady("openFactory") || !odReady("openStore")){ drawPlan(); return; }
   const plan = ofPlan();
   if(!OF_STEPS.includes(ofStep) || !ofStepReady(ofStep)) ofStep = "what";
   const what = ofStep === "what";
@@ -13899,6 +14052,11 @@ function ofOpen(id){
    factory it is for, or both -- and the view opens on step 1 of that. A plan
    for something else is put aside, as a pick in the view does. */
 function ofPreset(o = {}){
+  if(!odReady("openFactory") || !odReady("openStore")){
+    ["openFactory", "openStore"].forEach(odNeed);
+    odThen("openFactory", () => odThen("openStore", () => ofPreset(o), "of-preset-store"), "of-preset");
+    return;
+  }
   ofLoad();
   const plan = ofPlan();
   if(o.type && o.type !== planType){ planType = o.type; planCounts = {}; ofSizeMode = "auto"; }
@@ -13967,6 +14125,7 @@ function wireOpenFactory(){
 /* How many products the table shows before "all n". */
 const PRODUCTS_TOP = 14;
 function drawProducts(){
+  if(!odNeed("products")){ $("secProducts").innerHTML = odWaitHtml("products"); return; }
   const TOP = PRODUCTS_TOP, all = D.products;
   if(!all.length){
     $("secProducts").innerHTML = sechead(tt("co.prod.title", "Products"))
@@ -15326,7 +15485,7 @@ function hrSheetHtml(m, r){
   const lacks = picked.some(c => { const at = r.at.get(c.id); return hrWarns(m, c, at.week ? at.week.S : at.over, at.week).length; });
   const table = rows => `<div class="hs-scroll"><table class="hs-t hs-c">${HR_CAND_HEAD}<tbody>${rows.map(c => hrCandRow(m, r, c)).join("")}</tbody></table></div>`;
   return `<div class="hs-sh"><div><h2 id="hsSheetT">${hrRole(r.skill)}</h2><p>${plural(need, "new hire")} · ${sites.map(({S, n}) => `${spEsc(hrSiteName(S))} (${hrNum(n)})`).join(", ")}</p></div>
-      <button type="button" class="gw-x" data-hs-close aria-label="Close">${gwSvg("close")}</button></div>
+      <button type="button" class="gw-x" data-hs-close data-od-close aria-label="Close">${gwSvg("close")}</button></div>
     <div class="hs-sb">
       ${hrFbar(r.skill, f, `<b>${hrNum(r.pass)}</b> match · <b>${hrNum(r.out)}</b> left out`)}
       <div class="hs-scope"><span>Filters for</span><label class="hs-radio"><input type="radio" name="hsScope" data-hr-scope="all"${own ? "" : " checked"}>every role</label><label class="hs-radio"><input type="radio" name="hsScope" data-hr-scope="own"${own ? " checked" : ""}>${hrRole(r.skill)} only</label></div>
@@ -15339,7 +15498,7 @@ function hrSheetHtml(m, r){
         out.length ? `<a class="link" href="#" data-hs-out>${hrUi.out ? "Hide the left out" : `Show the ${hrNum(out.length)} left out`}</a>` : ""}</div>
     </div>
     <div class="hs-sf"><div class="tot"><div><span>Picked</span><b>${count}</b></div><div><span>Added wages</span><b>+${fmt(bill)}/day</b></div></div>
-      <div class="end"><a class="link" href="#" data-hs-reset>Reset to automatic</a><button type="button" class="hs-cta" data-hs-done>Done</button></div></div>`;
+      <div class="end"><a class="link" href="#" data-hs-reset>Reset to automatic</a><button type="button" class="hs-cta" data-hs-done data-od-close>Done</button></div></div>`;
 }
 /* Change picks is a dialog on <body>: open for hrUi.sheet, drawn again with
    the page, closed when that role is gone. */
@@ -15353,6 +15512,7 @@ function hrSheetPaint(m){
   }
   if(!dlg){
     dlg = document.createElement("dialog");
+    dlg.dataset.odNeeds = "hiring";
     dlg.id = "hsSheet"; dlg.className = "hs-sheet";
     dlg.setAttribute("aria-labelledby", "hsSheetT");
     dlg.addEventListener("close", () => {
@@ -15403,6 +15563,7 @@ function hrPopDraw(m){
   let pop = $("hsDemPop");
   if(!pop){
     pop = document.createElement("div");
+    pop.dataset.odNeeds = "hiring";
     pop.id = "hsDemPop"; pop.setAttribute("role", "dialog"); pop.setAttribute("aria-label", "Leave out anyone asking for");
   }
   const host = anchor.closest("dialog") || document.body;
@@ -15439,11 +15600,12 @@ function hrPopPlace(anchor, pop){
 let hrSel = null;  // {select, at, key, root}: the select whose list is open, the option lit
 const hrSelFine = () => !window.matchMedia || window.matchMedia("(pointer: fine)").matches;
 function hrSelOpen(select){
-  if(!select || select.disabled) return;
+  if(!select || select.disabled || odActionBlocked(select)) return;
   hrPopClose();
   let pop = $("hsSelPop");
   if(!pop){
     pop = document.createElement("div");
+    pop.dataset.odNeeds = "hiring";
     pop.id = "hsSelPop"; pop.setAttribute("role", "listbox"); pop.tabIndex = -1;
   }
   const host = select.closest("dialog") || document.body;
@@ -15734,7 +15896,7 @@ function hrQuickReview(){
      says "Hiring…" and is off until that write ends. */
   if(hrUi.quickPending) return;
   const token = ++hrQuickSeq;
-  hrUi.quickHold = token;
+  hrUi.quickHold = false;
   let dlg = null;
   const release = () => {
     if(hrUi.quickHold === token) hrUi.quickHold = false;
@@ -15747,7 +15909,9 @@ function hrQuickReview(){
       if(b) b.focus({preventScroll: true});
     }
   };
-  hrReview({scope: "quick"}, {
+  const opened = hrReview({scope: "quick"}, {
+    /* Waiting for a new board holds no picks from the old one. */
+    onPlan: () => { hrUi.quickHold = token; },
     /* Who the game hired is staff now (hrReview()); the form starts again,
        and a confirm closed while it applied ends its hold here. */
     onDone: () => {
@@ -15762,6 +15926,7 @@ function hrQuickReview(){
       if(el) el.focus({preventScroll: true});
     }},
   });
+  if(!opened){ release(); return; }
   dlg = gwOpen;
   if(dlg){
     /* Closed, however: the held weeks go back to Open places, unless the
@@ -16103,23 +16268,25 @@ const hrChainNote = n => gwCall("info", "roster", `${tt("co.hire.chain.later", {
   tt("co.hire.chain.update", "A newer Big Copilot Link does it all in one step, with Undo.")}`);
 /* The action's review and confirm. `o`: {scope: "all" | "site" | "quick",
    site (a key), only (Pick more), mode (the one to open on)}; `hooks`:
-   onDone, onFailed and more, for Quick hire's hold. */
+   onPlan, onDone, onFailed and more, for Quick hire's hold.
+   Returns whether the review opened. */
 function hrReview(o = {}, hooks = {}){
-  /* The review plans from the Staff page's key: a click before the board has
-     it opens the review once it arrives (odThen()). */
-  if(!odReady("hiring")) return odThen("hiring", () => hrReview(o, hooks), "hrReview");
+  /* Open at once; gwConfirm's waiting state holds every planning read. */
+  const scope = odScope();
   o = Object.assign({scope: "all"}, o);
   let pick = o.mode || null;
+  let planned = false;
   const build = () => {
+    if(hooks.onPlan) hooks.onPlan();
     const m = hrModel();
     const reqs = {};
     HR_MODES.forEach(k => { reqs[k] = hrAction(o, k, m); });
     const modes = hrModesOf(o, reqs);
     const mode = modes.includes(pick) ? pick : modes[0] || "both";
     hrLast = {m, req: reqs[mode], o, modes, mode, one: reqs[mode].one, answer: null, chain: {}};
+    planned = true;
     return hrLast;
   };
-  build();
   const counts = () => {
     const r = hrLast.req, b = r.body;
     return {hire: b.hires.length, move: b.moves.length, weeks: r.weeks, sites: b.sites.length + r.rest.length};
@@ -16144,12 +16311,15 @@ function hrReview(o = {}, hooks = {}){
   let written = [];  // the progress records of the apply (pgHireDone())
   let applied = null;  // the action as applied, for its Undo
   gwConfirm({
-    kind: "hire", icon: "hire", needs: ["hiring"],
-    title: () => o.only ? tt("co.hire.title.more", "Pick more")
+    kind: "hire", icon: "hire", needs: ["hiring"], scope,
+    title: () => {
+      if(!planned && (!odBoardScope || odSameScope(odBoardScope, scope)) && odReady("hiring")) build();
+      return o.only ? tt("co.hire.title.more", "Pick more")
       : o.scope === "site" ? tt("co.hire.title.site", "Staff {site}", {site: siteB() ? shortName(siteB()) : tt("co.hire.thissite", "this site")})
-      : o.scope === "quick" ? tt("co.hire.title.quick", "Quick hire: {role}", {role: gameName(hrLast.m.quick.q.skill) || tt("co.hire.arole", "a role")})
-      : tt("co.hire.title.all", "Staff all sites"),
-    where: () => siteB() ? gwWhere(siteB()) : `<span>${tt("co.hire.where.all", {one: "{n} site", other: "{n} sites"}, {n: counts().sites})}</span>`,
+      : o.scope === "quick" ? tt("co.hire.title.quick", "Quick hire: {role}", {role: (planned && gameName(hrLast.m.quick.q.skill)) || tt("co.hire.arole", "a role")})
+      : tt("co.hire.title.all", "Staff all sites");
+    },
+    where: () => !planned ? "" : siteB() ? gwWhere(siteB()) : `<span>${tt("co.hire.where.all", {one: "{n} site", other: "{n} sites"}, {n: counts().sites})}</span>`,
     /* Asked first on every dry run and apply: the action is planned afresh
        from the board on screen and the pick, then judged. */
     nothing: () => {
@@ -16339,6 +16509,7 @@ function hrReview(o = {}, hooks = {}){
     },
     /* The verb says which of the three it does. */
     applyLabel: () => {
+      if(!planned) return tt("co.hire.go.both", "Hire and schedule");
       const c = counts(), mode = hrLast.mode;
       if(mode === "week") return tt("co.hire.go.week", {one: "Write {n} week", other: "Write {n} weeks"}, {n: c.weeks});
       if(mode === "hire") return c.move ? tt("co.hire.go.hiremove", "Hire {h}, reassign {m}", {h: c.hire, m: c.move}) : tt("co.hire.go.hire", "Hire {n}", {n: c.hire});
@@ -16415,6 +16586,7 @@ function hrReview(o = {}, hooks = {}){
     more: hooks.more || null,
   });
   if(gwOpen) gwOpen.classList.add("hr-wide");
+  return !!(gwOpen && gwOpen.open);
 }
 /* The people a replaced week gives fewer hours than the game has them on now,
    by the site's plan (`fewer`), for the sites the dry run says it rewrites
@@ -16549,6 +16721,7 @@ function drawPayroll(){
    difficulty used to follow here; it is the chip on the masthead's build line
    now (the footer's at 1500 px and under), see fvDiffChip(). */
 function drawGoals(){
+  if(!odNeed("goals")){ $("secGoals").innerHTML = odWaitHtml("goals"); return; }
   const g = D.goals;
   /* The career's goals as the game counts them, each "n / total" with a bar,
      filled and ticked only when complete. Personal goals have no stored
@@ -16697,10 +16870,10 @@ function paintPlanImports(state){
 function drawFindLocation(){
   const card = $("findLocationCard"); if(!card) return;
   const badge = card.querySelector(".soon"), text = card.querySelector(".what");
-  const vacant = (D.premises?.buildings || []).filter(b => b.type === "retail" && b.status === "vacant");
+  const vacant = (odReady("premises") ? D.premises?.buildings || [] : []).filter(b => b.type === "retail" && b.status === "vacant");
   if(!vacant.length){
     badge.className = "soon";
-    badge.textContent = D.premises ? tt("today.moves.find.badge.none", "NONE FREE") : tt("today.moves.soon", "SOON");
+    badge.textContent = D.premises ? tt("today.moves.find.badge.none", "NONE FREE") : odOnDemand() ? "" : tt("today.moves.soon", "SOON");
     text.textContent = D.premises ? tt("today.moves.find.none", "No vacant retail unit in the city right now.")
       : tt("today.moves.find.soon", "Free buildings ranked by demand, rivals and the building capacity you would get.");
     return;
@@ -16776,6 +16949,12 @@ function drawOptimizeStaffing(){
   /* A shop on full cover whose demand data is complete comes first: it is
      paying for every station every hour, and what it measured is now its own
      plan. The planner decides it (`demandDataComplete`); ties go to the name. */
+  if(!(page === "today" ? odNeed("staffing") : odReady("staffing"))){
+    badge.textContent = ""; badge.className = "soon";
+    text.innerHTML = odWaitHtml("staffing", true); go.textContent = "";
+    delete card.dataset.site;
+    return;
+  }
   const done = (D.staffing || []).filter(r => !r.failed && r.demandDataComplete);
   if(done.length){
     const row = spPickRoster(done, () => 0);
@@ -17182,6 +17361,8 @@ function schedChosen(sites){
 function drawSchedules(){
   const host = $("secSchedules");
   if(!host || !hasData()) return;
+  const missing = ["staffing", "officeStaffing", "hiring"].filter(n => !odNeed(n));
+  if(missing.length){ host.innerHTML = missing.map(n => odWaitHtml(n)).join(""); return; }
   const sites = D.businesses.filter(b => b.status === "retail" || b.status === "office");
   const lit = schedChosen(sites);
   const factories = ((D.supply || {}).factories || {}).sites || [];
@@ -17439,10 +17620,11 @@ function renderAll(){
   const shown = viewOf(page);
   PAGE_DRAWS.forEach(row => {
     if(here !== null && row[0] && !row[0].split(" ").includes(here)){ pageStale.add(row); return; }
+    if(odKeepRow(row, shown)) return;
     pageStale.delete(row);
     odHidden = !!row[0] && !row[0].split(" ").includes(shown);
     odWanted = false;
-    try{ row[1](); staleDraws.delete(row); if(odWanted) pageStale.add(row); }
+    try{ row[1](); odRowDrawn(row); staleDraws.delete(row); if(odWanted) pageStale.add(row); }
     catch(e){ pageStale.add(row); staleDraws.set(row, e && e.message || String(e)); console.error(e); }
     finally{ odHidden = false; odWanted = false; }
   });
@@ -17455,7 +17637,6 @@ function renderAll(){
   refreshCityMaps();
   /* The wiki is the game's own text and does not move with a save, but the one
      strip on it that does is redrawn with everything else. */
-  if(page === "wiki") wikiVisit();
   ssDataChanged();
   ssCheckLanding();
 }
@@ -17637,15 +17818,15 @@ const REFS = [
    (the area's views) and routeViewLabel(), and HOST_ROUTES if a host view shows
    it by default. The checklist has the only-if rows. */
 const ROUTES = {
-  "overview": {host: ["today"]},
+  "overview": {needs: ["staffing"], host: ["today"]},
   /* The portfolio is one table on two views: Standards shows its
      Operations comparison, and Results gets back the view it had before. */
-  "businesses/results": {host: ["company", "results"], enter(){ if(typeof view !== "undefined" && routeStdWas !== null){
+  "businesses/results": {needs: [], host: ["company", "results"], enter(){ if(typeof view !== "undefined" && routeStdWas !== null){
     if(view === "ops") view = routeStdWas;
     routeStdWas = null; sortKey = null; if(hasData()) drawPortfolio(); } }},
   /* The shop whose prices are on screen: a task's or the reader's, kept on
      the history entry (nxPrice), so Back, Forward and a reload give it back. */
-  "businesses/prices": {host: ["company", "products"], after(o){
+  "businesses/prices": {needs: ["products"], host: ["company", "products"], after(o){
     if(typeof drawPriceShops !== "function" || !hasData()) return;
     const kept = o.historyMode && o.historyMode !== "push" ? (routeState().nxPrice || {}).pick : null;
     if(o.pick || kept) bzPriceLit = o.pick || kept;
@@ -17653,19 +17834,19 @@ const ROUTES = {
     if(typeof wireAll === "function") wireAll();
   }},
   /* The portfolio's Operations comparison is the Standards view's body. */
-  "businesses/standards": {host: ["company", "standards"], enter(){ if(typeof view !== "undefined" && view !== "ops"){
+  "businesses/standards": {needs: [], host: ["company", "standards"], enter(){ if(typeof view !== "undefined" && view !== "ops"){
     routeStdWas = view; view = "ops"; sortKey = null; if(hasData()) drawPortfolio(); } }},
-  "businesses/milestones": {host: ["company", "milestones"]},
+  "businesses/milestones": {needs: ["goals"], host: ["company", "milestones"]},
   /* Supply's five views. Back, Forward and a reload give a view back its
      scope, Needs a change / Everything, the reviewed import and the followed
      site from the entry (nxSb); a new visit keeps what this visit last had. */
-  "supply/changes": {host: ["supply", "changes"], enter: routeSupplyEnter, after: routeSupplyAfter},
-  "supply/imports": {host: ["supply", "imports"], enter: routeSupplyEnter, after: routeSupplyAfter},
-  "supply/deliveries": {host: ["supply", "deliveries"], enter: routeSupplyEnter, after: routeSupplyAfter},
-  "supply/production": {host: ["supply", "production"], enter: routeSupplyEnter, after: routeSupplyAfter},
-  "supply/flow": {host: ["supply", "flow"], enter: routeSupplyEnter, after: routeSupplyAfter},
+  "supply/changes": {needs: [], host: ["supply", "changes"], enter: routeSupplyEnter, after: routeSupplyAfter},
+  "supply/imports": {needs: [], host: ["supply", "imports"], enter: routeSupplyEnter, after: routeSupplyAfter},
+  "supply/deliveries": {needs: [], host: ["supply", "deliveries"], enter: routeSupplyEnter, after: routeSupplyAfter},
+  "supply/production": {needs: ["factoryStaffing"], host: ["supply", "production"], enter: routeSupplyEnter, after: routeSupplyAfter},
+  "supply/flow": {needs: [], host: ["supply", "flow"], enter: routeSupplyEnter, after: routeSupplyAfter},
   /* A task or the search may name the shop; the list lights it. */
-  "staffing/schedules": {host: ["staffing", "schedules"], after(o){
+  "staffing/schedules": {needs: ["hiring"], host: ["staffing", "schedules"], after(o){
     if(typeof schedPick !== "function") return;
     const was = o.historyMode && o.historyMode !== "push" ? routeState().nxSch || {} : {};
     const kept = was.pick || null;
@@ -17676,39 +17857,38 @@ const ROUTES = {
     if(typeof wireAll === "function") wireAll();
     if(o.into === "#sp-roster" && typeof settleScroll === "function") settleScroll($("sp-roster") || $("schDetail"));
   }},
-  "staffing/needs": {host: ["staffing", "needs"]},
-  "staffing/payroll": {host: ["staffing", "payroll"]},
+  "staffing/needs": {needs: ["hiring"], host: ["staffing", "needs"]},
+  "staffing/payroll": {needs: [], host: ["staffing", "payroll"]},
   /* Back from Find a location (or a reload) comes back to the cell that
      asked, kept on the entry (nxDem): its row ringed and the cell focused. */
-  "expansion/demand": {host: ["growth", "market"], after(o){
+  "expansion/demand": {needs: [], host: ["growth", "market"], after(o){
     const kept = o.historyMode && o.historyMode !== "push" ? routeState().nxDem : null;
     if(kept && typeof demArrive === "function" && hasData()) demArrive(kept);
   }},
   /* The finder is a mode of the City map's page (web/map.js). */
   /* A task or a Demand cell asks a question (a preset); Back, Forward, a
      reload or the area's own row come back to the finder as it was left. */
-  "expansion/finder": {host: ["map"], after(o){
-    if(typeof premises !== "function" || !premises()) return;
+  "expansion/finder": {needs: ["premises"], host: ["map"], after(o){
     if(o.preset && typeof openFinder === "function") openFinder(o.preset, !!o.focus);
     else if(typeof showFinder === "function") showFinder(o.historyMode || "push");
     if(typeof cityMapPage !== "undefined" && cityMapPage) cityMapPage.ready.then(() => drawFinderCtx()); }},
   /* A Demand cell's "Open a store here" starts a plan for its type and
      neighbourhood (o.osType, o.osHood); any visit marks the view's New badge seen. */
-  "expansion/open": {host: ["growth", "open"], after(o){
+  "expansion/open": {needs: ["openStore"], host: ["growth", "open"], after(o){
     featureDiscovery.visit("open-store");
     if(o.osType && typeof osStart === "function" && hasData()) osStart(o.osType, o.osHood || null);
   }},
   /* Any visit marks the view's New badge seen (the factory flow, #172). */
-  "expansion/factory": {host: ["growth", "plan"], after(){ featureDiscovery.visit("factory-flow"); }},
+  "expansion/factory": {needs: ["openFactory", "openStore"], host: ["growth", "plan"], after(){ featureDiscovery.visit("factory-flow"); }},
   /* The map as the reader left it: with the finder on, that is Find a
      location, and the address says so (routeFor()). */
   /* The City map is the plain map: reached with the finder on (the
      masthead, Back from Find a location) it switches the finder off. Find a
      location is its own route, and Back moves between the two. */
-  "map": {host: ["map"], after(){
+  "map": {needs: [], host: ["map"], after(){
     if(routeFinderOn()){ cityMapPage.fs.on = false; cityMapPage.deselect(); cityMapPage.saveFinder(); cityMapPage.update(); }
     routeSync(); if(typeof drawFinderCtx === "function") drawFinderCtx(); }},
-  "wiki": {host: ["wiki"]},
+  "wiki": {needs: ["products"], host: ["wiki"]},
 };
 /* The route a host page and view shows when nothing more precise was asked
    for: a finding, a search or the reader's own click on a scope tab. */
@@ -17800,7 +17980,7 @@ function routeAccepts(id, p){
    location when the finder is switched on. The switch decides which is on
    screen (it lasts the session, and a new load starts with the plain map). */
 const routeFinderOn = () => typeof cityMapPage !== "undefined" && !!cityMapPage && !!cityMapPage.fs
-  && !!cityMapPage.fs.on && typeof premises === "function" && !!premises();
+  && !!cityMapPage.fs.on;
 function routeFor(p){
   if(p === "map" && typeof cityMapPage !== "undefined" && cityMapPage) return routeFinderOn() ? "expansion/finder" : "map";
   if(routeAccepts(route, p)) return route;
@@ -17848,6 +18028,7 @@ function openRoute(id, o = {}){
   const r = target && ROUTES[target];
   if(!r) return false;
   if(!hasData() && target !== "wiki") return false;
+  (r.needs || []).forEach(odNeed);
   const mode = o.historyMode || "push";
   siteShut();
   /* Asked for first, so a view the route changes on the page on screen does
@@ -17893,35 +18074,40 @@ function routeCarry(id){
      open (cheap), draws the open one where it is (on Company > Results, the
      view on screen whenever a site is open), and resets the factory view the
      site kinds are read from (spViewCache).
-   - drawOptimizeStaffing() names on its task row the site the search and Ask
-     the board open, from any page; drawFindLocation() is a line of text.
+   - drawOptimizeStaffing() asks for shop plans on Today and names the site
+     its task opens; drawFindLocation() passively fills in if premises is ready.
    Everything outside the pages -- the masthead, the footer, the difficulty
    chips, the city maps (the location-map dialog opens from any page), the
    search index -- is drawn by renderAll() itself on every refresh. Each row
    calls its function by name when it runs, so a test that swaps one out is
    heard. */
+function drawWikiSections(){
+  if(odHidden || page !== "wiki"){ odWanted = true; return; }
+  wikiVisit();
+}
 /* Registry: "A view or a page" (docs/architecture.md, Registries). A new view
    needs its section markup (class "sec rv", an id starting sec, and data-sub),
    SUBS, SEC_PAGE, PAGE_DRAWS and SS_VIEWS; for its route also ROUTES, AREAS
    (the area's views) and routeViewLabel(), and HOST_ROUTES if a host view shows
    it by default. The checklist has the only-if rows. */
 const PAGE_DRAWS = [
-  ["today", () => drawKpis()], ["today", () => drawAlerts()], ["today", () => drawTools()],
-  ["company/results", () => drawChart()], ["company/results", () => drawFinance()], ["company/results company/standards", () => drawPortfolio()],
-  ["company/standards", () => drawStandards()],
-  ["company/results", () => drawSitePicker()], ["", () => drawSite()],
-  ["today supply/changes supply/imports supply/deliveries supply/production supply/flow", () => drawSupplyStrip()],
-  ["supply/changes", () => drawChangesView()], ["supply/imports", () => drawImportsView()], ["supply/deliveries", () => drawDeliveriesView()],
-  ["supply/production", () => drawProductionView(), null, ["factoryStaffing"]], ["supply/flow", () => drawFlowView()], ["supply/flow", () => drawFlow()],
-  ["growth/market", () => drawMovers()], ["growth/market", () => drawMarket()], ["growth/open", () => drawOpenStore()],
-  ["growth/plan", () => drawPlan()],  // changed for growth: no drawExpansion()
-  ["company/products", () => drawPriceShops()], ["company/products", () => drawProducts()],
+  ["today", () => drawKpis(), null, []], ["today", () => drawAlerts(), null, []], ["today", () => drawTools(), null, []],
+  ["company/results", () => drawChart(), null, []], ["company/results", () => drawFinance(), null, []], ["company/results company/standards", () => drawPortfolio(), null, []],
+  ["company/standards", () => drawStandards(), null, []],
+  ["company/results", () => drawSitePicker(), null, []], ["", () => drawSite(), null, []],
+  ["today supply/changes supply/imports supply/deliveries supply/production supply/flow", () => drawSupplyStrip(), null, []],
+  ["supply/changes", () => drawChangesView(), null, []], ["supply/imports", () => drawImportsView(), null, []], ["supply/deliveries", () => drawDeliveriesView(), null, []],
+  ["supply/production", () => drawProductionView(), null, ["factoryStaffing"]], ["supply/flow", () => drawFlowView(), null, []], ["supply/flow", () => drawFlow(), null, []],
+  ["growth/market", () => drawMovers(), null, []], ["growth/market", () => drawMarket(), null, []], ["growth/open", () => drawOpenStore(), null, ["openStore"]],
+  ["growth/plan", () => drawPlan(), null, ["openFactory", "openStore"]],  // changed for growth: no drawExpansion()
+  ["company/products", () => drawPriceShops(), null, []], ["company/products", () => drawProducts(), null, ["products"]],
   // A third element names a row other code marks stale on its own (hrStale(), nxSchedStale());
   // a fourth, the sections it reads, asked for as its view opens (odWantView()).
-  ["staffing/schedules", () => drawSchedules(), "schedules", ["hiring"]], ["staffing/needs", () => drawNeeds()], ["staffing/needs", () => drawStaff(), "staff", ["hiring"]],
-  ["staffing/payroll", () => drawPayroll()],
-  ["company/milestones", () => drawGoals()], ["", () => drawFindLocation()], ["", () => drawOptimizeStaffing()],
-  ["", () => drawShellCounts()],
+  ["staffing/schedules", () => drawSchedules(), "schedules", ["hiring"]], ["staffing/needs", () => drawNeeds(), null, []], ["staffing/needs", () => drawStaff(), "staff", ["hiring"]],
+  ["staffing/payroll", () => drawPayroll(), null, []],
+  ["company/milestones", () => drawGoals(), null, ["goals"]], ["", () => drawFindLocation(), null, []], ["today", () => drawOptimizeStaffing(), null, ["staffing"]],
+  ["", () => drawShellCounts(), null, []],
+  ["wiki", () => drawWikiSections(), null, ["products"]],
 ];
 /* The rows a live refresh left out: drawn for older numbers than D. */
 const pageStale = new Set();
@@ -17970,10 +18156,11 @@ function drawStale(pageId){
      hidden: it asks for no section yet (odNeed()). */
   const hidden = pageId !== page;
   due.forEach(row => {
+    if(!hidden && odKeepRow(row, view)) return;
     pageStale.delete(row);
     odHidden = hidden && !!row[0];
     odWanted = false;
-    try{ row[1](); staleDraws.delete(row); if(odWanted) pageStale.add(row); }
+    try{ row[1](); odRowDrawn(row); staleDraws.delete(row); if(odWanted) pageStale.add(row); }
     catch(e){ pageStale.add(row); staleDraws.set(row, e && e.message || String(e)); console.error(e); }
     finally{ odHidden = false; odWanted = false; }
   });
@@ -18033,6 +18220,12 @@ function routeSync(){
    site's page is on it, and the ways onto Company that mean the portfolio (the
    nav, a hash, a section) take the site down themselves. */
 function showPage(id, scroll = true, historyMode = "push"){
+  /* Deferred finder restoration belongs to the visit that opened it. Any
+     navigation ends that visit; showFinder() creates the next one's token. */
+  if(typeof cityMapPage !== "undefined" && cityMapPage){
+    cityMapPage.finderRestore = null;
+    odThens = odThens.filter(t => t.key !== "finder-restore");
+  }
   /* Leaving the Overview by any way (the nav, a task, a finding, a name):
      its entry keeps the list as it stands -- filters, "Show N more", open
      Details, the place -- so Back finds it so. A finding or a task has just
@@ -19452,6 +19645,7 @@ function ssDifficulty(){
 }
 function ssFinder(preset){
   if(typeof premises === "function" && premises()) openFinder(preset);
+  else if(odOnDemand()) openRoute("expansion/finder", {preset});
   else showPage("map");
 }
 /* A hash the board already routes (#wiki/...): the hash listener opens it.
@@ -19486,8 +19680,12 @@ function ssPrices(slug){
   const href = t && typeof wikiTypeHref === "function" ? wikiTypeHref(t.slug, "prices") : "";
   if(href) ssHash(href); else showPage("wiki");
 }
-/* The site Optimize staffing would open, as its card names it. */
-const ssStaffingSite = () => ($("optimizeStaffingCard") || {dataset: {}}).dataset.site || "";
+/* The site Optimize staffing would choose from this board's ready plans. */
+const ssStaffingSite = () => {
+  if(!odReady("staffing")) return "";
+  const done = (D.staffing || []).filter(r => !r.failed && r.demandDataComplete);
+  return (done.length ? spPickRoster(done, () => 0).key : spBestRoster()?.row.key) || "";
+};
 /* Ring one tile or row a palette entry landed on, the way the Roster rings. */
 function ssRing(el){
   if(!el) return;
@@ -19815,7 +20013,7 @@ const SS_VIEWS = [
    go(){ if(weekdaySeries().length) chartWindow = "wd"; reveal("secDaily"); }},
   {id: "products", get t(){ return tt("nav.search.products.title", "Products & prices"); },
    get p(){ return tt("nav.search.products.line", "Businesses › Products & prices"); }, ic: "shelves", syn: ["sales", "units", "total sales", "best sellers", "what sells", "products", "shop prices"],
-   live: () => ({p: tt("nav.search.products.sold", "Businesses › Products & prices · {n} sold", {n: (D.products || []).length})}), go: () => openRoute("businesses/prices")},
+   live: () => odReady("products") ? ({p: tt("nav.search.products.sold", "Businesses › Products & prices · {n} sold", {n: (D.products || []).length})}) : {}, go: () => openRoute("businesses/prices")},
   {id: "payroll", get t(){ return tt("nav.search.payroll.title", "Payroll"); },
    get p(){ return tt("nav.search.payroll.line", "Staffing › Payroll"); }, ic: "people", syn: ["wages", "salary", "salaries", "employees", "headcount", "staff"],
    live: () => D.staff && D.staff.total ? {p: tt("nav.search.payroll.people", {one: "Staffing › Payroll · {s} person", other: "Staffing › Payroll · {s} people"},
@@ -20057,6 +20255,15 @@ function ssBuild(){
       const had = best.get(d.slug);
       if(!had || d.demand > had.demand) best.set(d.slug, {...d, hood});
     }));
+    if(!D.premises && odOnDemand()){
+      const market = D.market || {};
+      [...(market.types || []), ...(market.offices || [])].forEach(row => (row.cells || []).forEach((cell, i) => {
+        const hood = (market.hoods || [])[i], preset = cell && finderPreset(row.slug, hood);
+        if(!preset) return;
+        const had = best.get(row.slug);
+        if(!had || cell.demand > had.demand) best.set(row.slug, {slug: row.slug, type: row.type, category: preset.cat, demand: cell.demand, hood});
+      }));
+    }
     [...best.values()].sort((a, z) => z.demand - a.demand || gnCompare(a.type, z.type)).forEach(d => {
       /* English puts "an" before a vowel; the UI language decides for itself. */
       out.push(ssEntry({id: `finder:${d.slug}`, g: "finder",
@@ -20066,7 +20273,7 @@ function ssBuild(){
         syn: ["new shop", "new business", "open", "expand"], land: tt("nav.search.finder.land", "Expansion › Find a location · {type}", {type: d.type}),
         go: () => ssFinder({cat: d.category, type: d.slug, hoods: [d.hood]})}));
     });
-    if(D.premises) out.push(ssEntry({id: "finder:warehouse", g: "finder", t: tt("nav.search.finder.rent.title", "Rent a warehouse"),
+    if(D.premises || odOnDemand()) out.push(ssEntry({id: "finder:warehouse", g: "finder", t: tt("nav.search.finder.rent.title", "Rent a warehouse"),
       p: tt("nav.search.finder.rent.line", "Expansion › Find a location · Warehouse · by m²"), ic: "crate", syn: ["depot", "storage", "floor size", "warehouse"],
       go: () => ssFinder({cat: "warehouse", type: "", hoods: null})}));
   }
@@ -20184,6 +20391,7 @@ if($("sdHead") && $("sdHead").after) $("sdHead").after(ssField, ssFieldBtn);
 featureDiscovery.refresh();
 ssField.addEventListener("click", () => ssOpen());
 ssFieldBtn.addEventListener("click", () => ssOpen());
+[ssField, ssFieldBtn].forEach(el => el.addEventListener("focus", () => { if(hasData()) odNeed("products"); }));
 /* Whichever of the two is showing. */
 const ssMastControl = () => [ssField, ssFieldBtn].find(el => el.isConnected && el.getClientRects().length) || null;
 /* The sidebar gives the field its own row, full width, so nothing is fitted
@@ -20266,6 +20474,7 @@ function ssChrome(){
 let ssIndex = [], ssRows = [], ssWhole = {}, ssReturn = null, ssWikiWait = null, ssPointer = null;
 const ssIsOpen = () => !ssPal.hidden;
 function ssOpen(text = ""){
+  if(hasData()) odNeed("products");
   if(ssIsOpen()){ ssInput.focus(); return; }
   ssReturn = document.activeElement;
   ssWhole = {};
@@ -20300,6 +20509,7 @@ function ssOpen(text = ""){
    open rebuilds anyway. renderAll() calls this. */
 function ssDataChanged(){
   if(!ssIsOpen()) return;
+  odNeed("products");
   ssIndex = ssBuild();
   ssRender(true);
 }
@@ -21327,7 +21537,7 @@ function demOpenStore(slug, hood){
    and Find a location. One element at body level, placed against the cell,
    the way #alertPop is: a section's paint containment would clip it. */
 let demPop = null, demPopCell = null;
-function demCellPop(cell){
+function demCellPop(cell, focus = true){
   const slug = cell.dataset.slug, hood = cell.dataset.hood, go = finderPreset(slug, hood);
   if(!go) return;
   if(!demPop){
@@ -21355,19 +21565,22 @@ function demCellPop(cell){
   const c = row && at >= 0 ? row.cells[at] : null;
   const rent = ((D.premises || {}).buildings || []).filter(b => b.type === go.cat && b.hood === hood && b.status === "vacant").length;
   const type = demTypeName(slug, hood);
-  const plan = !!osType(slug);
+  const ready = odNeed("openStore"), plan = ready && !!osType(slug);
   const fact = (lab, v) => `<div><span class="os-lab">${lab}</span><b>${v}</b></div>`;
   demPop.setAttribute("aria-label", tt("gr.pop.aria", "{type} in {hood}", {type, hood: hoodName(hood)}));
+  const focusedAction = demPop.contains(document.activeElement) ? document.activeElement.dataset.demGo : null;
   demPop.innerHTML = `<h4>${spEsc(tt("gr.pop.title", "{type} · {hood}", {type, hood: hoodName(hood)}))}</h4>
     <div class="fx">${fact(tt("gr.pop.demand", "Demand"), c ? c.demand : "–")}${fact(tt("gr.pop.rivals", "Sellers"), c ? c.providers || 0 : "–")}${
-      fact(tt("gr.pop.rent", "To rent"), rent)}</div>
-    <div class="acts">${plan ? `<button type="button" class="os-cta" data-dem-go="open">${osIcon("store")}${tt("gr.pop.open", "Open a store here")}</button>` : ""}
+      fact(tt("gr.pop.rent", "To rent"), odReady("premises") ? rent : "—")}</div>
+    ${ready ? "" : odWaitHtml("openStore", true)}
+    <div class="acts">${plan ? `<button type="button" class="os-cta" data-dem-go="open" data-od-needs="openStore">${osIcon("store")}${tt("gr.pop.open", "Open a store here")}</button>` : ""}
       <button type="button" class="os-btn" data-dem-go="find">${icon("pin")}${tt("gr.pop.find", "Find a location")}</button></div>`;
   demPop.hidden = false;
   cell.setAttribute("aria-expanded", "true");
   hideTip();
   demPopPlace();
-  (demPop.querySelector("[data-dem-go]") || demPop).focus({preventScroll: true});
+  if(focus) (demPop.querySelector("[data-dem-go]") || demPop).focus({preventScroll: true});
+  else if(focusedAction) demPop.querySelector(`[data-dem-go="${CSS.escape(focusedAction)}"]`)?.focus({preventScroll: true});
 }
 function demPopPlace(){
   if(!demPop || demPop.hidden || !demPopCell) return;
@@ -21398,8 +21611,12 @@ function demPopClose(restore){
    only its neighbourhood. A cell with no demand reading has no type to look
    for, and a board built before the premises payload has nowhere to send it. */
 function finderPreset(slug, hood){
-  if(!slug || !hood || !D.premises) return null;
-  const cat = (D.premises.demand[hood] || []).find(d => d.slug === slug)?.category;
+  if(!slug || !hood || (!D.premises && !odOnDemand())) return null;
+  const M = D.market || {}, at = (M.hoods || []).indexOf(hood);
+  const row = [...(M.types || []), ...(M.offices || [])].find(r => r.slug === slug);
+  const cat = D.premises ? (D.premises.demand[hood] || []).find(d => d.slug === slug)?.category
+    : row && at >= 0 && row.cells?.[at] ? (M.offices || []).includes(row) ? "office"
+    : slug === "ba:businesstype_cinema" ? "cinema" : slug === "ba:businesstype_theater" ? "theater" : "retail" : null;
   return cat ? {cat, type: slug, hoods: [hood]} : null;
 }
 /* The City map's and Find a location's heading, for screen readers; the
@@ -21697,6 +21914,7 @@ function pcPopOpen(btn){
   if(!entry) return;
   if(!pcPop){
     pcPop = document.createElement("div");
+    pcPop.dataset.odNeeds = "openFactory openStore";
     pcPop.id = "pcPop";
     pcPop.className = "pc-pop";
     pcPop.setAttribute("role", "dialog");
@@ -21765,7 +21983,7 @@ function pcPopClose(restore){
   if(btn) btn.setAttribute("aria-expanded", "false");
   if(restore && btn && btn.isConnected) btn.focus({preventScroll: true});
 }
-function wirePlan(){ bindPlan(); planDraw(); }
+function wirePlan(){ bindPlan(); if(odReady("openFactory") && odReady("openStore")) planDraw(); }
 
 /* site detail: the panel answers the pointer -------------------------------------
    A block reads out on its own line whatever inside it carries data-read, a
@@ -22893,7 +23111,7 @@ function gwDialog(icon, title, where){
   dlg.className = "gw-dlg";
   dlg.tabIndex = -1;  // where focus goes when the control that held it is drawn away
   dlg.setAttribute("aria-labelledby", "gwTitle");
-  dlg.innerHTML = `<div class="gw-grab" aria-hidden="true"></div><div class="gw-head"><span class="gw-kind" aria-hidden="true">${gwSvg(icon)}</span><div><h2 id="gwTitle"></h2><div class="gw-where"></div></div><button type="button" class="gw-x" data-gw-close aria-label="${attr(tt("nav.dlg.close", "Close"))}">${gwSvg("close")}</button></div>
+  dlg.innerHTML = `<div class="gw-grab" aria-hidden="true"></div><div class="gw-head"><span class="gw-kind" aria-hidden="true">${gwSvg(icon)}</span><div><h2 id="gwTitle"></h2><div class="gw-where"></div></div><button type="button" class="gw-x" data-gw-close data-od-close aria-label="${attr(tt("nav.dlg.close", "Close"))}">${gwSvg("close")}</button></div>
     <div class="gw-verdict"></div><div class="gw-fix" aria-live="polite"></div><div class="gw-body" aria-live="polite"></div><div class="gw-foot"></div>`;
   gwHead(dlg, title, where);
   dlg.querySelector("[data-gw-close]").onclick = () => dlg.close();
@@ -22983,6 +23201,7 @@ function gwPaint(dlg, v){
     b.type = "button";
     b.className = `gw-b ${o.kind || "ghost"}${o.busy ? " busy" : ""}`;
     b.dataset.gwB = o.key || label;
+    if(o.close) b.dataset.odClose = "";
     if(o.busy) b.insertAdjacentHTML("beforeend", `<span class="gw-spin" aria-hidden="true"></span>`);
     else if(["undo", "refresh", "skip", "key"].includes(o.icon)) b.insertAdjacentHTML("beforeend", gwSvg(o.icon));
     const text = document.createElement("span");
@@ -23050,7 +23269,7 @@ function gwApprovalView(dlg, allowed){
    never the write itself. */
 function gwFailed(dlg, spec, res, retry, recheck){
   const p = gwProblem(res);
-  const close = [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "ghost"}];
+  const close = [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "ghost", close: true}];
   if(p.uncertain){
     gwPaint(dlg, {phase: "uncertain", wire: "wait", say: `<b>${tt("nav.dlg.say.noanswer", "No answer")}</b>`, meta: gwNow(),
       body: `<p class="gw-said gw-warn">${p.text}</p><div class="gw-reread"><span>${tt("nav.dlg.reread.first", "Reading the game again before anything else is offered")}</span><div class="gw-prog gw-warn"><i></i></div></div>`,
@@ -23061,7 +23280,7 @@ function gwFailed(dlg, spec, res, retry, recheck){
       gwPaint(dlg, {phase: "uncertain", wire: "ok", say: `<b>${tt("nav.dlg.say.uptodate", "The board is up to date")}</b>`, meta: gwNow(),
         body: `<p class="gw-said gw-warn">${p.text}</p>${gwBox("refresh", "dim", `<b>${tt("nav.dlg.uptodate.lead", "The board now shows what the game holds.")}</b> ${
           tt("nav.dlg.uptodate.text", "Check it there: the warning is gone if it went through.")}`)}`,
-        buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go"}]]});
+        buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go", close: true}]]});
     });
     return;
   }
@@ -23120,31 +23339,59 @@ function gwFailed(dlg, spec, res, retry, recheck){
                                when the game approved afresh in an open
                                dialog, which asks the game again)
      onUndo()                  optional: heard once its undo went through
+     scope                     optional: company/source captured at opening;
+                               a pending plan closes when that scope changes
    The dialog dry-runs as it opens, offers Apply only when the game would take
    every row, and after an apply offers Undo until the next write of the kind. */
 function gwConfirm(spec){
   const title = () => typeof spec.title === "function" ? spec.title() : spec.title;
   const where = () => typeof spec.where === "function" ? spec.where() : spec.where || "";
   const dlg = gwDialog(spec.icon, title(), where());
+  dlg.querySelector(".gw-body").dataset.odNeeds = (spec.needs || []).join(" ");
   const stays = () => gwUndoStays(spec.kind);
-  const cancel = [tt("nav.dlg.cancel", "Cancel"), () => dlg.close(), {kind: "ghost"}];
+  const cancel = [tt("nav.dlg.cancel", "Cancel"), () => dlg.close(), {kind: "ghost", close: true}];
   const left = [cancel];
+  const current = () => {
+    if(!spec.scope || odSameScope(spec.scope, odScope())) return true;
+    dlg._odWait = null;
+    dlg.close();
+    return false;
+  };
+  dlg._odCurrent = current;
   let applying = false;  // one apply per go: a second click must not send a second write
   let judged = "";       // the body the answer on screen judged, as sent
   let whose = "";        // and the game it judged it for
   let last = null;       // that answer
   let seq = 0;           // the newest dry run: an older one's late answer is dropped
   let allowed = false;   // the game approved this browser for the dry run under way
-  const view = gwApprovalView(dlg, () => { allowed = true; asking(); });
+  const view = mine => {
+    const show = gwApprovalView(dlg, () => { allowed = true; asking(); });
+    return (state, info) => { if(mine === seq && current()) show(state, info); };
+  };
   /* A write is judged and sent only on a board that has every section it
      reads (`spec.needs`, odNeed()): until then the dialog says it is being
      worked out, Apply stays off, and the section's arrival plans it again
      (odArrived()). */
   const waiting = () => {
-    const missing = (spec.needs || []).filter(n => !odNeed(n));
-    dlg._odWait = missing.length ? () => plan() : null;
+    if(!current()) return true;
+    /* The old board can stay clickable after a source selection. Its
+       completed sections cannot plan a write for the new source. */
+    const rereading = spec.scope && odBoardScope && !odSameScope(odBoardScope, odScope());
+    const missing = (spec.needs || []).filter(n => rereading || !odNeed(n));
+    const soft = dlg.dataset.phase === "ready" || (dlg.dataset.phase === "asking" && dlg._gwSoft);
+    dlg._odWait = missing.length ? () => plan({soft}) : null;
     if(!missing.length) return false;
     judged = "";
+    /* Keep a judged answer readable through refreshes, including another
+       refresh while it is being replanned in place. A section that failed
+       takes the full paint instead, which shows the error and Try again. */
+    if(soft && !missing.some(odError)){
+      quietly();
+      dlg.querySelector(".gw-verdict").innerHTML = `${gwWire("ask")}<span><b>${odWords(missing[0])}</b></span>`;
+      const go = dlg.querySelector('.gw-foot [data-gw-b="apply"]');
+      if(go) go.title = tt("nav.od.dlg.title", "Apply waits for the new board's numbers");
+      return true;
+    }
     gwPaint(dlg, {phase: "asking", wire: "ask", say: `<b>${odWords(missing[0])}</b>`, meta: "",
       body: odWaitHtml(missing[0]), hint: tt("nav.od.dlg.hint", "Apply waits until this is worked out."),
       buttons: [...left, [spec.applyLabel(null), null, {kind: "go", icon: "right", disabled: true, key: "apply"}]]});
@@ -23152,7 +23399,7 @@ function gwConfirm(spec){
   };
   const nothing = none => gwPaint(dlg, {phase: "nothing", wire: "ok", say: (spec.nothingSay && spec.nothingSay()) || `<b>${tt("nav.dlg.say.nothing", "Nothing to write")}</b>`, meta: gwNow(),
     body: `<p class="gw-said">${none}</p>`,
-    buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go"}]]});
+    buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go", close: true}]]});
   const asking = () => gwPaint(dlg, {phase: "asking", wire: "ask",
     say: allowed ? `<b>${tt("nav.dlg.say.allowed.lead", "Allowed.")}</b> ${tt("nav.dlg.say.allowed.asking", "Asking the game what it would do…")}`
       : `<b>${tt("nav.dlg.say.asking", "Asking the game…")}</b>`, meta: allowed ? "" : tt("nav.dlg.dryrun", "dry run"),
@@ -23167,6 +23414,7 @@ function gwConfirm(spec){
      drawing stays where it is while the wire asks, `from` being the control;
      `undone`, the undo just made, said once above the fresh answer. */
   const plan = async (o = {}) => {
+    if(!current()) return;
     const mine = ++seq;
     judged = "";
     gwHead(dlg, title(), where());
@@ -23182,7 +23430,7 @@ function gwConfirm(spec){
     /* A write with nothing for the game to do answers here (spec.local). */
     const here = spec.local ? spec.local(body, true) : null;
     const res = here ? {status: 200, error: null, body: here}
-      : await SOURCE.write(spec.kind, body, {dryRun: true, approval: view, asked: typeof o.asked === "string" ? o.asked : ""});
+      : await SOURCE.write(spec.kind, body, {dryRun: true, approval: view(mine), asked: typeof o.asked === "string" ? o.asked : ""});
     if(!dlg.open || mine !== seq) return;
     /* "Allowed." is said once: a Try again after this does not say it again. */
     if(res.error){ allowed = false; return gwFailed(dlg, spec, res, () => plan(), () => plan()); }
@@ -23194,12 +23442,13 @@ function gwConfirm(spec){
     /* A dry run that would change nothing is said in one line, and Apply
        stays off: never an Apply that does nothing (`spec.idle`). */
     const idle = answer.ok && spec.idle ? spec.idle(answer) : "";
+    const top = dlg._gwSoft ? dlg.querySelector(".gw-body").scrollTop : null;
     gwPaint(dlg, {phase: "ready", wire: answer.ok ? "ok" : "no", say: idle ? `<b>${idle}</b>` : spec.verdict(answer), meta: spec.meta ? spec.meta(answer) : gwNow(),
       body: idle ? "" : (answer.ok || spec.inline ? "" : gwRefusals(spec, answer)) + spec.draw(answer, "ready"),
       hint: idle ? "" : answer.ok ? spec.hint || "" : spec.refusedHint ? spec.refusedHint(answer) : tt("nav.dlg.unchanged", "Nothing was changed."),
       warn: !answer.ok && !!spec.refusedHint,
       /* Refused, nothing is left to cancel: the dialog closes. */
-      buttons: [...(answer.ok ? left : [[tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "ghost"}]]),
+      buttons: [...(answer.ok ? left : [[tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "ghost", close: true}]]),
         /* The game moved on since the board was read: the way on is to read it again. */
         ...(gwMovedOn(answer) ? [[tt("nav.dlg.refresh", "Refresh the board"), () => spec.refreshBoard(), {kind: "go", icon: "refresh"}]]
           /* Refused: fixed in the game, the game is asked again from here. */
@@ -23212,6 +23461,7 @@ function gwConfirm(spec){
        render and every tick of the game's clock): an agency may have opened. */
     dlg._gwIdle = idle ? {at: spec.idleAt ? spec.idleAt() : "", now: spec.idleAt || null, ask: () => plan({soft: true})} : null;
     if(spec.bind) spec.bind(dlg, from => plan({soft: true, from}));
+    if(top !== null) dlg.querySelector(".gw-body").scrollTop = top;
   };
   /* The game asked again from a dialog that shows its answer: the answer on
      screen stays until the new one replaces it; the wire asks, Apply waits,
@@ -23242,7 +23492,7 @@ function gwConfirm(spec){
     gwPaint(dlg, {phase: "applying", wire: "ask", say: `<b>${spec.applying}</b>`, body: spec.draw(last || {}, "applying"),
       buttons: ["|", [tt("nav.dlg.applying", "Applying"), null, {kind: "go", busy: true, disabled: true}]]});
     const local = spec.local ? spec.local(JSON.parse(judged), false) : null;
-    const res = local ? {status: 200, error: null, body: local} : await SOURCE.write(spec.kind, JSON.parse(judged), {dryRun: false, approval: view});
+    const res = local ? {status: 200, error: null, body: local} : await SOURCE.write(spec.kind, JSON.parse(judged), {dryRun: false, approval: view(seq)});
     if(res.error){
       /* No answer: whether the game holds it is unknown, and so is what an
          undo would restore. */
@@ -23277,7 +23527,7 @@ function gwConfirm(spec){
       hint: !undoable ? "" : typeof hint === "string" ? hint : "",
       buttons: [...(undoable ? [[spec.undoLabel ? spec.undoLabel() : tt("nav.dlg.undo.button", "Undo"), () => gwUndo(spec, dlg), {kind: "undo", icon: "undo", key: "undo"}]] : []), "|",
         ...(spec.more ? [[spec.more.label, spec.more.go, {kind: "ghost", key: "more"}]] : []),
-        [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go"}]]});
+        [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go", close: true}]]});
   };
   /* After an undo in this dialog: the undo said, and the write offered
      again once a board has been built since the undo answered, from the same
@@ -23323,6 +23573,12 @@ function gwConfirm(spec){
     if(typeof SOURCE.refresh !== "function") return dlg.close();
     dlg.close(); return SOURCE.refresh();
   };
+  /* A new board suspends an unfinished review immediately, including any
+     dry run still in flight. Completed writes keep their result and Undo. */
+  dlg._odBoard = () => {
+    if(applying || ["applying", "done", "undone"].includes(dlg.dataset.phase)) return;
+    if((spec.needs || []).some(n => !odReady(n))) plan({soft: true});
+  };
   plan();
 }
 /* Undo the kind's last write. In the write's own dialog the dialog goes back
@@ -23362,7 +23618,7 @@ async function gwUndo(spec, dlg){
   dlg._gwBoard = D;
   gwPaint(dlg, {phase: "undone", wire: "ok", say: `<b>${tt("nav.dlg.say.undone", "Undone in the game")}</b>`, meta: gwNow(),
     body: `<p class="gw-said ok">${spec.done(answer)}</p>${spec.draw ? spec.draw(answer, "undone") : ""}${gwReread(false)}`,
-    buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go"}]]});
+    buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go", close: true}]]});
 }
 /* Undo, once the dialog is closed: a strip at the foot of the window until
    the next write of that kind, or until the board is another character's or
@@ -24195,7 +24451,8 @@ function gwSchedule(key){
   const name = spEsc(shortName(b));
   let openAll = true, last = null, schedWritten = [];
   gwConfirm({
-    kind: "schedule", icon: "roster", needs: ["hiring"], againLabel: tt("sp.gw.sch.again", "Write again"),
+    /* The company it was opened on: another company's board closes it. */
+    kind: "schedule", icon: "roster", needs: ["hiring"], scope: odScope(), againLabel: tt("sp.gw.sch.again", "Write again"),
     /* The site its Undo is for: a later write of the site elsewhere drops it. */
     sites: () => [key],
     title: tt("sp.gw.sch.one", "Write this schedule to the game"),
@@ -24394,7 +24651,10 @@ function bootShell(){
   wireNav(); wireCoin(); wireSphere(); wireTips();
 }
 function boot(){
-  renderAll();
+  // The first render precedes restoring the hash. It may paint waits, but
+  // only the view actually opened below asks; a Map deep link never plans Today.
+  odBooting = true;
+  try{ renderAll(); }finally{ odBooting = false; }
   Object.keys(SUBS).forEach(id => showSub(id, sub[id]));
   const h = location.hash.slice(1);
   if(SEC_PAGE[h]?.[1]) showSub(...SEC_PAGE[h]);
@@ -24405,6 +24665,7 @@ function boot(){
     document.body.classList.remove("no-save");
     paintNav();
     showPage(page, false, "none");
+    pgJudged = -1; pgEvaluate(); odThensAsk();
     return;
   }
   paintNav();
@@ -24420,6 +24681,7 @@ function boot(){
   /* Bound once: the nav underline, the coin, and the sphere's entrance. A live
      refresh re-renders the numbers but never replays these. */
   wireNav(); wireCoin(); wireSphere();
+  pgJudged = -1; pgEvaluate(); odThensAsk();
 }
 /* A page written with its numbers boots now. One that receives them later,
    as the in-browser board does, boots on the first delivery. */
@@ -24490,7 +24752,7 @@ function startWatching(){
     /* Another source, with no new board yet: an undo's gate closes again. */
     /* A section left loading for the build just cancelled will not come for
        this board either: it says so (odSourceFailed()), and a new board asks anew. */
-    linkChanged: () => { if(gwOpen && gwOpen._gwGate) gwOpen._gwGate(); odSourceFailed(tt("app.reader.superseded", "Save selection changed")); },
+    linkChanged: () => { odThens = odThens.filter(t => odSameScope(t.scope, odScope())); if(gwOpen && gwOpen._gwGate) gwOpen._gwGate(); odSourceFailed(tt("app.reader.superseded", "Save selection changed")); },
     /* The game's clock moved with no new board: the marketing gates follow it. */
     linkClock: () => gwMkTick(),
     lost(){

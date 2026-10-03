@@ -599,7 +599,7 @@ class CityMapView {
      thing rather than as chrome scattered over the map. */
   finderControls(){
     // A plan's finder cannot be switched off.
-    if(!premises() || this.planning) return "";
+    if((!premises() && !odOnDemand()) || this.planning) return "";
     /* A chip with its name on it: a bare pin in the corner was the most
        hidden way into a headline feature. */
     return `<div class="fswitch"><button type="button" class="ibtn" data-f="tog" aria-pressed="false" data-visit-feature="floor-plans">${ICON.pin}<span data-mw="finder">${ssEsc(MAP_WORDS.finder)}</span><span class="feature-new" data-new-feature="floor-plans" aria-hidden="true" data-mw="isNew" hidden>${ssEsc(MAP_WORDS.isNew)}</span></button></div>`;
@@ -642,7 +642,17 @@ class CityMapView {
     </div>`;
   }
   wireFinder(){
-    if(!premises() || !this.panel) return;
+    if(!this.panel) return;
+    if(!this.filterGuard){
+      this.filterGuard = true;
+      ["click", "input", "change", "keydown"].forEach(type => this.root.addEventListener(type, e => {
+        if(type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+        if(premises() || e.target.closest('[data-od-retry]')) return;
+        if(e.target.closest('.filters, .list') || (this.fs.on && e.target.closest('.srch'))){
+          odNeed("premises"); e.preventDefault(); e.stopImmediatePropagation();
+        }
+      }, true));
+    }
     const changed = () => { this.showAll = false; this.saveFinder(); this.update(); };
     const tog = this.root.querySelector('[data-f="tog"]');
     if(tog) tog.onclick = () => {
@@ -652,6 +662,7 @@ class CityMapView {
       if(this === cityMapPage && page === "map" && typeof openRoute === "function") openRoute(this.fs.on ? "expansion/finder" : "map", {scroll: false});
       else if(this === cityMapPage && page === "map" && typeof routeSync === "function") routeSync();
     };
+    if(!premises()) return;
     this.root.querySelectorAll('.fchip.cat').forEach(chip => chip.onclick = () => {
       // A sort the player picked travels to the new category when it can; the
       // old category's own default does not, so a warehouse's floor-area order
@@ -741,6 +752,7 @@ class CityMapView {
      a second click on the column you are already sorted by puts the list back
      in the order the category ranks by. */
   sortBy(key){
+    if(!premises()) return;
     this.fs.sort = this.fs.sort === key ? this.sortKeys()[0] : key;
     // The category's own order is nobody's choice; any other column is.
     this.fs.sortPicked = this.fs.sort !== this.sortKeys()[0];
@@ -772,6 +784,7 @@ class CityMapView {
     this.fs.on = false;   // a new load opens the plain map; only the filters are stored
   }
   saveFinder(){
+    if(!premises()) return;
     // A plan's finder stores nothing: its filters last as long as the view.
     if(this.planning) return;
     const store = this.finderStore(); if(!store) return;
@@ -790,6 +803,7 @@ class CityMapView {
     this.fs = {...this.fs, on:true, show:'rent', layouts:[], minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, ...preset};
     // It also lands on the column the category ranks by, never on a stale sort.
     this.fs.sort = this.fs.cat === 'warehouse' ? 'm2' : 'score'; this.fs.sortPicked = false;
+    finderStateRemember(this);
     this.saveFinder();
     this.selected = null; this.showAll = false;  // back to the 80-row cap
     finderPickRemember(this);
@@ -1211,17 +1225,18 @@ class CityMapView {
         : tt("map.why.best", "{type} is the strongest {kind} demand in {hood} at {d}, with {rivals} there.", {type: f.fit, kind, hood, d: f.demand, rivals});
     return `${first} ${tt("map.why.score", "Score {s} = traffic {t} × demand {d} ÷ 100.", {s: f.score, t: b.traffic, d: f.demand})}`;
   }
-  finderOn(){ return !!(this.panel && premises() && this.fs.on); }
+  finderOn(){ return !!(this.panel && this.fs.on && (premises() || odOnDemand())); }
   /* Chips, select and inputs read back from the state, so a preset from Today
      or from a Growth cell shows in the controls it set. */
   paintControls(){
-    const P = premises(); if(!P || !this.panel) return;
+    const P = premises(); if(!this.panel) return;
     this.clampSort();
     const on = this.finderOn();
     this.root.classList.toggle('finder', on);
     this.citymap.classList.toggle('finder', on);
     this.stage.classList.toggle('finder', on);
     this.stage.classList.toggle('panel', on);
+    if(!P) return;
     // A chip is filled when it is chosen and outlined when it is not; nothing
     // is ever dimmed, which would read as unavailable rather than unchosen.
     const mark = (el, chosen) => { if(!el) return; el.classList.toggle('on', !!chosen); el.setAttribute('aria-pressed', String(!!chosen)); };
@@ -1595,6 +1610,19 @@ class CityMapView {
   update(){
     if(!this.svg) return;
     this.stale = false;
+    // Preserve the drawn answers and their scroll while this company's next
+    // premises load. Failed sections and another company show the wait/error.
+    if(this.panel && this.fs.on && !odNeed("premises") && !odError("premises") && odSameScope(this.finderDrawnScope, odScope())){
+      this.businesses = mapBusinesses();
+      if(this.businesses.has(this.selected)){
+        this.findings = mapFindings();
+        this.owned = new Map((D?.ownedBuildings || []).map(b=>[b.key,b]));
+        this.homes = new Map((D?.homes || []).map(h=>[h.key,h]));
+        this.paths.forEach((path, key) => path.classList.toggle('sel', key === this.selected));
+        this.fillCard();
+      }
+      return;
+    }
     // A view built before a save was open has no finder controls; the first
     // payload that carries premises brings them in.
     if(this.panel && premises() && !this.root.querySelector('.places .filters')) this.build();
@@ -1606,6 +1634,11 @@ class CityMapView {
     this.loadFinder();
     // Fetched once the map has premises, so the first card opens at its size.
     if(premises()) this.wantPlans();
+    const waiting = this.panel && this.fs.on && !odNeed("premises");
+    if(waiting){
+      this.root.classList.add('finder'); this.citymap.classList.add('finder');
+      this.stage.classList.add('finder', 'panel');
+    }
     this.paintControls();
     const counts = {mine:this.businesses.size, own:this.owned.size, home:this.homes.size, fnd:[...this.businesses.keys()].filter(k => this.findings.has(k)).length, all:this.assets.buildings.length};
     this.root.querySelectorAll('.lay').forEach(chip => { chip.querySelector('.n').textContent = counts[chip.dataset.l]; });
@@ -1633,18 +1666,19 @@ class CityMapView {
       const [x,y,w,h] = this.assets.byKey.get(k).bounds;
       return `<circle class="pip ${mapKind(this.findings.get(k))}" cx="${(x+w/2).toFixed(1)}" cy="${(y+h/2).toFixed(1)}" r="4"></circle>`;
     }).join('') : '';
-    const cnt = this.root.querySelector('.srch .cnt'); if(cnt) cnt.textContent = this.matches.length;
+    const cnt = this.root.querySelector('.srch .cnt'); if(cnt) cnt.textContent = waiting ? "—" : this.matches.length;
     if(this.list && this.finderOn()){
       const focusedKey=this.list.contains(document.activeElement)?document.activeElement.dataset.pick:null, listScroll=this.list.scrollTop;
       const all = this.matches;
       const some = this.showAll ? all : all.slice(0, 80);
-      this.list.innerHTML = (this.saleView() ? this.saleList(some) : this.finderList(some))
+      this.list.innerHTML = waiting ? odWaitHtml("premises") : (this.saleView() ? this.saleList(some) : this.finderList(some))
         + (all.length > some.length ? `<button type="button" class="more" data-more aria-label="${attr(tt("map.list.more", "Show the remaining places"))}">+${all.length - some.length}</button>` : '')
         + (all.length ? '' : `<div class="empty">${ssEsc(tt("map.list.empty", "Nothing matches."))}</div>`);
       if(focusedKey) [...this.list.children].find(b=>b.dataset.pick===focusedKey)?.focus({preventScroll:true});
       this.list.scrollTop=listScroll;
     }
     this.fillCard(); this.paintView();
+    this.finderDrawnScope = premises() && this.finderOn() ? odBoardScope || odScope() : null;
   }
   /* The card beside the picked footprint: name, one identity line, three mono
      numbers, the findings as dot + verb + amount, and the arrow to the site. */
@@ -1736,10 +1770,13 @@ class CityMapView {
     card.style.transform = `translate(${left.toFixed(1)}px,${top.toFixed(1)}px)`;
   }
   async select(key, focus=true, fresh=false){
+    // Finder results wait for premises; own businesses are in the current core.
+    if(this.finderOn() && !premises() && !mapBusinesses().has(key)) return;
     this.selected=key;this.freshSelection=fresh;
     finderPickRemember(this);
     if(!await this.ready) return;
     if(this.selected!==key) return; // A newer selection or character superseded this request.
+    if(this.finderOn() && !premises() && !mapBusinesses().has(key)) return;
     // A dialog that was just reopened has no layout yet; a cached rect from
     // its closed state is zero. Measure afresh and wait a frame if needed.
     this.rect = null;
@@ -1771,6 +1808,9 @@ class CityMapView {
     if(!this.selected) return;
     this.selected = null; this.onSettled = null;
     finderPickRemember(this);
+    // update() may retain the results while premises load; Close still dismisses.
+    if(this.card){ this.card.hidden = true; this.card.classList.remove('in'); }
+    this.paths?.forEach(path => path.classList.remove('sel'));
     this.update();
   }
   /* Let go of a view whose host has left the page: nothing refreshes or
@@ -1782,9 +1822,12 @@ class CityMapView {
     this.buildToken++;
   }
   resetCharacter(){
+    const finding = this.fs.on && !premises() && odOnDemand();
     this.selected=null; this.query=''; this.hot=null; this.onSettled=null;
     this.fsCharacter = undefined; this.showAll = false;
     this.fs = this.planning ? this.planState(this.planning.preset) : finderDefaults();
+    this.loadFinder();
+    if(!this.planning) this.fs.on = finding;
     this.savedUsed = null; this.closeNaming();
     if(this.orb) this.orb.size = 170;
     if(this.svg){ if(this.search) this.search.value=''; this.layers = {mine:true, own:true, home:true, fnd:true, all:false};
@@ -1807,18 +1850,20 @@ function showCityMap(){
    keyboard to the first result (the switch when nothing matches), since the
    control that opened the finder is on a page now hidden. */
 function openFinder(preset = {}, focus = false){
-  if(!premises()) return;
+  if(!premises() && !odOnDemand()) return;
   // The finder is Expansion › Find a location in the board's shell: the page
   // it opens stands under that route (docs/architecture.md, Routes).
   if(typeof routeNext !== "undefined" && routeNext === null) routeNext = "expansion/finder";
   showPage("map");
   showCityMap();
   const view = cityMapPage;
+  view.finderRestore = null;
   // A Growth cell's question starts at the top of its answers, whatever the
   // list was scrolled to before; on a narrow map the whole panel scrolls.
   const toTop = () => view.root.querySelectorAll('.places, .places .list').forEach(el => { el.scrollTop = 0; });
   if(focus) toTop();
   view.setFinder(preset);
+  finderPickRestore(view, false);
   if(focus) view.ready.then(ok => {
     // The player may have left while the map loaded; the focus stays where they went.
     if(!ok || page !== "map") return;
@@ -1841,7 +1886,7 @@ function openFinder(preset = {}, focus = false){
    (finderPickRestore()): `mode` is how the entry was reached, "push" for a
    new visit, "none" or "replace" for Back, Forward and a reload. */
 function showFinder(mode = "push"){
-  if(!premises()) return;
+  if(!premises() && !odOnDemand()) return;
   if(typeof routeNext !== "undefined" && routeNext === null) routeNext = "expansion/finder";
   showPage("map");
   showCityMap();
@@ -1855,15 +1900,8 @@ function showFinder(mode = "push"){
      two questions asked from Demand keep their own answers. A new visit
      keeps the filters on screen, and they become its own. */
   const kept = mode !== "push" ? finderEntryState() : null;
-  if(kept){
-    view.ready.then(ok => {
-      if(!ok) return;
-      view.fs = {...view.fs, ...view.savedFilters({filters: kept}), on: true};
-      view.clampSort(); view.showAll = false;
-      view.update();
-    });
-  } else finderStateRemember(view);
-  finderPickRestore(view, mode !== "push");
+  if(mode === "push"){ finderStateRemember(view); finderPickRemember(view); }
+  finderPickRestore(view, mode !== "push", kept);
 }
 /* The filters of a visit to Find a location, kept on its history entry
    (nxFs) beside its pick: written whenever they change (saveFinder()), read
@@ -1901,18 +1939,33 @@ function finderPickRemember(view){
    where the entry has none or its building has left the results, exactly as a
    plain reload of that entry shows. */
 const finderEntryPick = () => { try{ return (history.state || {}).nxPick || null; }catch(e){ return null; } };
-function finderPickRestore(view, replay){
-  const entry = location.hash;
-  view.ready.then(ok => {
-    // The reader may have gone on while the map loaded: that visit decides.
-    if(!ok || page !== 'map' || !view.finderOn() || location.hash !== entry) return;
-    if(!replay){ finderPickRemember(view); return; }
-    const key = finderEntryPick();
+function finderPickRestore(view, replay, kept = null){
+  const entry = location.hash, key = finderEntryPick();
+  const restore = view.finderRestore = {};
+  const scope = odBoardScope || odScope();
+  const apply = () => view.ready.then(ok => {
+    // A route can be left and revisited at the same hash: only this visit's
+    // token may restore it, and only for the company/source that opened it.
+    if(!ok || view.finderRestore !== restore || !odSameScope(scope, odScope())
+       || page !== "map" || route !== "expansion/finder" || !view.finderOn() || location.hash !== entry) return;
+    // Map assets can finish after another same-company refresh began.
+    if(!odReady("premises")) return odThen("premises", apply, "finder-restore", true);
+    if(kept){
+      view.fs = {...view.fs, ...view.savedFilters({filters: kept}), on: true};
+      view.clampSort(); view.showAll = false;
+      view.update();
+    }
+    if(!replay){ view.saveFinder(); finderPickRemember(view); return; }
     if(key === view.selected) return;
     if(key && view.rows().some(r => r.key === key)){ view.select(key, false); return; }
     if(view.selected) view.deselect();
     else finderPickRemember(view);
   });
+  // Filtering and judging a saved pick share the same readiness gate. The
+  // pick is captured before a redraw can change the current history state.
+  // Errors keep this visit's restoration for Try again or Update; navigation
+  // and a company/source change still cancel it, as they do while loading.
+  odThen("premises", apply, "finder-restore", true);
 }
 function refreshCityMaps(){
   const character=D?.meta?.character || D?.supply?.factories?.character || D?.meta?.save;

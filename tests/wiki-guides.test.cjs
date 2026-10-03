@@ -317,6 +317,9 @@ function wiki({data = DATA, save = null} = {}) {
     fmt: n => (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString('en-US'),
     num: (n, opts) => Number(n).toLocaleString('en-US', opts),
     hasData: () => !!context.D,
+    // These fixtures are full CLI payloads; section waits have their own cases below.
+    odNeed: () => true, odReady: () => true,
+    odWaitHtml: name => `<div class="od-wait" role="status">Waiting for ${name}</div>`,
     showPage(id){ drawn.push(['page', id]); },
     showSub(id, view){ drawn.push(['sub', id, view]); },
     drawPlan(){ drawn.push(['plan', context.planType]); },

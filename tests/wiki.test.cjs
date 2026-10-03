@@ -239,6 +239,9 @@ function wiki({data = DATA, fetchImpl, save = null, seen = {}} = {}) {
     fmt: n => (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString('en-US'),
     num: (n, opts) => Number(n).toLocaleString('en-US', opts),
     hasData: () => !!context.D,
+    // These fixtures are full CLI payloads; section waits have their own cases below.
+    odNeed: () => true, odReady: () => true,
+    odWaitHtml: name => `<div class="od-wait" role="status">Waiting for ${name}</div>`,
     showPage(id){ drawn.push(['page', id]); },
     showSub(id, view){ drawn.push(['sub', id, view]); },
     drawPlan(){ drawn.push(['plan', context.planType]); },
@@ -1245,4 +1248,31 @@ test('a translated sentence cannot become markup, and keeps only its <b>', async
   const again = await w.go('wiki/businesstypes-florist') && await w.go('wiki/businesstypes-giftshop');
   assert.match(again, /ONE 1\/2/);
   w.call('ttSetTable("en", null)');
+});
+
+
+test('the company strip draws core slots while products wait and the planner uses core plan', async () => {
+  const w = wiki();
+  await w.load('wiki/businesstypes-giftshop');
+  const asked = [];
+  const slot = element('wikiPlanSlot');
+  w.context.$ = id => id === 'wikiRoot' ? w.root : id === 'wikiPlanSlot' ? slot : null;
+  w.context.D = {businesses: [{name: "My gifts", typeSlug: "ba:businesstype_giftshop"}], names: {}, market: {rows: [{slug: "ba:itemname_cheapgift", cells: [{demand: 77, hood: "ba:neighborhood_midtown"}]}]}, plan: {catalogue: {"ba:businesstype_giftshop": {}}}};
+  w.context.odNeed = name => { asked.push(name); return false; };
+  w.context.odReady = () => false;
+  assert.match(w.call('wikiYours({key: "ba:itemname_cheapgift"})'), /Waiting for products/);
+  assert.ok(asked.includes('products'));
+  assert.match(w.call('wikiYours({key: "ba:itemname_cheapgift"})'), /77 in Midtown/);
+  assert.match(w.call('wikiYours({key: "ba:businesstype_giftshop"})'), /1 site/);
+  assert.match(w.call('wikiGuideOwn({BUSINESS: {nameSrc: "ba:businesstype_giftshop"}}, [])').join(""), /Your shops/);
+  asked.length = 1;
+  w.call('wikiPlanControl()');
+  assert.deepEqual(asked, ['products']);
+  assert.match(slot.innerHTML, /data-wiki-plan/);
+  assert.doesNotMatch(slot.innerHTML, /Waiting for plan/);
+  // An asynchronous Wiki draw finishing after navigation asks for nothing.
+  asked.length = 0;
+  w.context.page = 'map';
+  w.call('wikiYours({key: "ba:itemname_cheapgift"}); wikiPlanControl()');
+  assert.deepEqual(asked, []);
 });

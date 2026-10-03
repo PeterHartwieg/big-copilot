@@ -71,32 +71,32 @@ this column is where to look when you change a key's shape — not a complete ca
 | Key | Produced by | Read by |
 | --- | --- | --- |
 | `meta` | `extract()` inline, with `_city_date()` and `_difficulty()` | `drawMast`, `drawWeekday`, `drawSite`, `sbData`, `drawSupplyStrip`, `drawProductionView`, `drawFooter`, `fvOpenDiff`, `drawDifficulty`; `web/map.js` `refreshCityMaps`; `web/wiki.js` `wikiGuidePrices` |
-| `kpi` | `extract()` inline, with `_net_worth()` | `drawMast`, `drawKpis` |
+| `kpi` | `build_core()` inline, with `_net_worth()` | `drawMast`, `drawKpis`, `hrReview/firstHire`, `SS_VIEWS.payroll.live` |
 | `daily` | `_daily_series()`, plus the rolling `profit7` added in `extract()` | `drawChart`, `drawKpis`, `drawKpis/hist` |
 | `businesses` | `_business()` per rented non-residential building; each site's `campaigns` and `marketingPlan` from `_marketing()`, with `marketing_plan()` and `marketing_score()` over `MARKETING_TYPES`, `MARKETING_STRENGTH` and `MARKETING_REACH`, planning with the types the site already has a switch for (flipped at any time) and those sold by agencies that are phone contacts, `agencies` naming the ones a new switch needs (`marketingPlan` is None but for a shop or an office; its `on` is None when the site has no switch, no agency is a contact and a change is needed); `_alerts()` reads it for the `promotion` findings | `drawPortfolio`, `drawSitePicker`, `openSite`, `siteKeys`, `drawSite`, `drawWeekday`, `supplyChecklistRows` and its locals `lineOf`, `held`, `label`, `factoryView/held`, `alertSite`, `nameUses`, Supply's views (`drawImportsView`, `drawDeliveriesView`, `drawProductionView`, `drawChangesView`) through their parts `sbShopsPart`, `sbDepotPart`, `sbFactoryPart` and row helpers (`sbObject`, `sbDepotRow`, `sbLineRow`, `sbInputRow`, `sbTabOf`), the Imports card `sbImportCard`, and `drawFactoryStaffing`, the marketing write's `gwMkSites` (with `spMkLine` and `gwMarketing` reading each site's `marketingPlan`); `web/map.js` `mapBusinesses`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn`, `wikiGuidePrices` |
-| `ownedBuildings` | `_owned_buildings()` | `web/map.js` only: `CityMapView.update`, `openLocationMap` |
-| `homes` | `_homes()`, with `m` and `hood` from `load_buildings()` | `spHome`, `siteKeys`; `web/map.js` `CityMapView.update`, `openLocationMap` |
-| `products` | `_products()`, with `peak`/`swing`/`weeks` from `_product_rhythm()` | `drawProducts`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn` |
-| `staff` | `_staff_summary()` | `drawKpis`, `drawPayroll` |
+| `ownedBuildings` | Core: `_owned_buildings()`; cheap map layers (Sections) | `web/map.js` only: `CityMapView.update`, `openLocationMap` |
+| `homes` | Core: `_homes()` (cheap map layers; Sections), with `m` and `hood` from `load_buildings()` | `spHome`, `siteKeys`; `web/map.js` `CityMapView.update`, `openLocationMap` |
+| `products` | Section `products`: `_products()`, with `peak`/`swing`/`weeks` from `_product_rhythm()` | `drawProducts`, `SS_VIEWS.products.live`, `ssBuild`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn` |
+| `staff` | Core: `_staff_summary()` | `drawKpis`, `drawPayroll` |
 | `loans` | `_loans()`; each loan carries its bank's site `key` | `drawKpis`, the `SS_VIEWS` `cash` entry's `live()`, and `osRoiLoan()` (Open a store, step 6) |
 | `supply` | `_supply()`; its `facts` from `_supply_facts()`, each fact's status word from `_supply_status()`; `margin` and `roundTo` are `SUPPLY_MARGIN` and `SUPPLY_ROUND_TO`; `roundTo` has no board reader, since the rounding is done in Python before the numbers ship | `supplyChecklistRows`, `sbData`, Supply's five view drawers (with `sbDepotRows`, `sbTabOf`, `sbDeps`, `sbNodeOpen`, `drawFlowPanel`), `pgEvaluate` (a later board's evidence for an applied write), `drawSite`, `drawFlow`, `flowLayout` (its columns are `flowStages`' stages), the phone chain's `flowStages`, `drawFlowChain`, `drawFlowFocus` and `flowPipeProblem` (which reads each `graph.links` entry's `slugs`, the products its pipe carries), `factoryView`; `web/map.js` `refreshCityMaps`. `supply.facts` only through `supplyFact()` (below), and `supply.idle` only through `idleRows()`, which keeps the rows idle under the sizing on screen (`modes`) with their `dem` laid over. `supply.wholesaleShops` (the shops a repeating wholesale contract delivers to) has no board reader: `_alerts()` counts it as a delivery plan. `supply.routed` (the `[shop index, product]` pairs a stock target above zero or a weekly wholesale contract delivers, whatever the shop sells) is read only by the Open a store checklist's Logistics row, `osRoutes()` |
 | `rhythm` | `_chain_rhythm()`; its `recent` key holds the same three series over the last `RHYTHM_RECENT_DAYS` (28) calendar days before the last finished day, which the chart draws, while the full-length ones feed `_supply()` | `weekdaySeries` (which `drawChart` asks), `drawSite` |
 | `market` | `_market()`; its `catalogue` key is popped out into the build's private data (`build.private["catalogue"]`) and handed to `_plan()` | `drawMovers`, `drawMarket`; `web/wiki.js` `wikiOwn`, `wikiGuidePrices` |
-| `premises` | `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `finderPreset`, `wireCards`; `web/map.js` `premises` |
+| `premises` | Section `premises`: `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `finderPreset`, `wireCards`; `web/map.js` `premises` |
 | `chains` | `_chains()` | `drawPortfolio`, `siteCrumbs` |
 | `payback` | `_payback()`, with `_site_setup()` and `setup_cost()` (the investment in both install modes, reusable for a store not yet rented; `vehicles` the site's own, from `_site_vehicles()` and `_vehicle_deliveries()`), `_install_bills()`, `_payback_row()`, `payback_outcome()` and `_payback_rate()`; `History.payback()` keeps the firm's bill, each vehicle's delivery and each reached break-even day after the save forgets them (an older save of the same character reads it and writes nothing). An outcome is `reached`, `latest`, `togo`, `never`, `unknown`, or `window` for a lease older than the statements: the whole payback period at recent profit, since what it earned before is unknown. `{sites: {key: …}, chains: {first site key: …}, recentDays}`; a trading site whose run from the opening is known also carries `days` (`[day, profit, sales]` from the opening) and `before` (the lease's cost before it); `_payback_trail()` keeps and extends those days in the history after the record stops reaching the opening, and a site whose kept days no longer meet the record says `rolled` | `paybackSite`, `paybackChain`, through `drawPortfolio`'s Payback column, `spPayback()` in `drawSite()` and `osRoiHtml()` (Open a store, step 6) |
-| `openStore` | `_open_store()`, in the "open a store" section after `_payback()`: `load_store_rules()` (`ba_store_rules.json`), `outfit_lines()` (a 100% outfitted store per type and layout, `setup_cost()` pricing it), `decor_route()` (the cheapest walls and floors to each neighbourhood's interior score, kept per layout and score), `_layout_slots()`, `_copied_shelving()`, `_store_market()` (per product: import cost, sellers and rival prices per neighbourhood, `demand_with()`/`optimal_providers()`), `_plan_initial()` (the arrivals each hour starts from, `_initial_customers()` shared with the staffing assistant), `_own_shops()` (the player's shops as the model sees them, measured from each one's first day with sales; `k` for one still in its first days) and `_own_sales()` (what they sell), `_opened_stores()` (per business of a planned type: the furniture standing in it, which opening requirements it meets, `required_placed()`, and what it offers for sale, the game's provider count), `_finance_facts()` (banks, wealth with vehicles and boats, the tutorial's floor, and borrowing room). The facts only; the arithmetic the reader moves runs in the board. `{game, types, market, hoods, decor, items, vendors, own, sales, built, campaigns, finance}`, or `{}` when the store rules are missing | `drawOpenStore` (Expansion › Open a store), with `osModel()`/`osOfficeModel()`, `osBestModel()`, `osDayProfit()` (the first days' ramp and a first seller's hype), `osBreakDay()`, `osOwnRatio()`, `osCannibal()` and `osLoan()`; `demCellPop()` (a Demand cell's Open a store here) |
-| `openFactory` | `_open_factory()`, after `_open_store()`: per recipe product and ingredient its wholesale price, the save's import price index, box size (`bx`) and importer cap (`mo`) from `ba_store_rules.json` (an ingredient the help names one way and the city trades another is read under the name the rules know, by its label); `_factory_kits()` (each workstation's machines at list price); the Pallet Shelf and its box capacity; the factory's truck and a new depot's van with their dealer; who sells the machines; per warehouse and factory the player runs its pallet shelves, the products import contracts deliver to it and its vehicles, and for a factory `_factory_days()` (what left it each finished day by its delivery log, and the piers' part from its sales); at headquarters the purchasing agents against the import contracts and the logistics managers against the sites they manage. `{game, skills, products, kits, shelf, vehicles, items, vendors, sites, hq}`, or `{}` when the store rules are missing | `drawPlan` (Expansion › Plan a factory) through `ofDraw()`: `ofInvestment()` (one-off, upfront), `ofRunning()` (raw material, wages, rent a week), `ofUntilRows()`, `ofRunHtml()`; the loan through `osLoan()` over `openStore.finance` |
+| `openStore` | Section `openStore`: `_open_store()`, in the "open a store" section after `_payback()`: `load_store_rules()` (`ba_store_rules.json`), `outfit_lines()` (a 100% outfitted store per type and layout, `setup_cost()` pricing it), `decor_route()` (the cheapest walls and floors to each neighbourhood's interior score, kept per layout and score), `_layout_slots()`, `_copied_shelving()`, `_store_market()` (per product: import cost, sellers and rival prices per neighbourhood, `demand_with()`/`optimal_providers()`), `_plan_initial()` (the arrivals each hour starts from, `_initial_customers()` shared with the staffing assistant), `_own_shops()` (the player's shops as the model sees them, measured from each one's first day with sales; `k` for one still in its first days) and `_own_sales()` (what they sell), `_opened_stores()` (per business of a planned type: the furniture standing in it, which opening requirements it meets, `required_placed()`, and what it offers for sale, the game's provider count), `_finance_facts()` (banks, wealth with vehicles and boats, the tutorial's floor, and borrowing room). The facts only; the arithmetic the reader moves runs in the board. `{game, types, market, hoods, decor, items, vendors, own, sales, built, campaigns, finance}`, or `{}` when the store rules are missing | `drawOpenStore` (Expansion › Open a store), with `osModel()`/`osOfficeModel()`, `osBestModel()`, `osDayProfit()` (the first days' ramp and a first seller's hype), `osBreakDay()`, `osOwnRatio()`, `osCannibal()` and `osLoan()`; `demCellPop()` (a Demand cell's Open a store here) |
+| `openFactory` | Section `openFactory`: `_open_factory()`, after `_open_store()`: per recipe product and ingredient its wholesale price, the save's import price index, box size (`bx`) and importer cap (`mo`) from `ba_store_rules.json` (an ingredient the help names one way and the city trades another is read under the name the rules know, by its label); `_factory_kits()` (each workstation's machines at list price); the Pallet Shelf and its box capacity; the factory's truck and a new depot's van with their dealer; who sells the machines; per warehouse and factory the player runs its pallet shelves, the products import contracts deliver to it and its vehicles, and for a factory `_factory_days()` (what left it each finished day by its delivery log, and the piers' part from its sales); at headquarters the purchasing agents against the import contracts and the logistics managers against the sites they manage. `{game, skills, products, kits, shelf, vehicles, items, vendors, sites, hq}`, or `{}` when the store rules are missing | `drawPlan` (Expansion › Plan a factory) through `ofDraw()`: `ofInvestment()` (one-off, upfront), `ofRunning()` (raw material, wages, rent a week), `ofUntilRows()`, `ofRunHtml()`; the loan through `osLoan()` over `openStore.finance` |
 | `trends` | `_site_trends()` | `indexTrends` |
 | `hypeExposure` | `_hype_exposure()`; `extract()` also passes the same list to `_alerts()`, where the `hype` findings come from | `spHypeRow` (a `const` arrow function, called from `spPull()` for the site panel's Promotion block) |
 | `hours` | `_hourly()`, the sites with hour reports behind them | `drawSite` |
 | `hourFindings` | `_hour_findings()` | `drawSite` |
-| `staffing` | `build_core()`, which plans shops, then offices over one pool (`_plan_world()`: `_plan_people()` once, one week per person, one bench), and keeps that pool for the factories (the `factoryStaffing` section); `_staffing()`, with `_plan_site()`, `_need_curve()`, `_initial_customers()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, the placer `_place_week()` (hires as placeholder people, `_place_hires()`; the week of somebody already working there kept where a plan would cut them short on a partial week, `_worse_off()` and `_pin_weeks()`), `_current_roster()`, `_index_table()`, `_shift_row()` | `drawSite` through `spRosterBlock`, and `drawOptimizeStaffing` for the Next-moves card |
+| `staffing` | Section `staffing`: `_staffing_section()`, which creates the planning world (`_plan_world()`: `_plan_people()` once, one week per person, one bench) and keeps the state shops leave for `officeStaffing`; `_staffing()`, with `_plan_site()`, `_need_curve()`, `_initial_customers()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, the placer `_place_week()` (hires as placeholder people, `_place_hires()`; the week of somebody already working there kept where a plan would cut them short on a partial week, `_worse_off()` and `_pin_weeks()`), `_current_roster()`, `_index_table()`, `_shift_row()` | `drawOptimizeStaffing` for the Next-moves card; `drawSchedules` through `spRosterBlock`; `drawSite` through `spSchedSummary` and `spSpareIds`; the hiring helpers |
 | `factoryStaffing` | Section `factoryStaffing`: `_factory_staffing()`, once per sizing (`{cap, dem}`), with `_factory_site_plan()`, `_factory_run_start()` and the shop placer `_place_week()`, drawing on the unassigned factory workers the shops and offices left; its hours come from each factory line's `needHours`, `hoursNow` and `_posts` (the machines' ids, set by `_line_hours()` in `_factories()` on each line and on each unnamed line with a recipe, and taken off the payload by `build_core()` through `_take_posts()`, by the line's place in its list, into `build.private["posts"]`) | `drawFactoryStaffing`, through `drawProductionView` (it asks for the section); `sbFactoryPart` (reads it when there); `spSpareIds` for a factory; `hrPlanRow`; `pgPeopleSites` |
-| `officeStaffing` | `_office_staffing()`, with `_office_site_plan()`, `_office_runs()` (Peter's office default) and the shop placer `_place_week()`, drawing on the unassigned people no shop plan counts on (the bench `_staffing()` leaves in `_plan_world()`) | the Staff page (issue #89) |
+| `officeStaffing` | Section `officeStaffing`: `_office_staffing()`, with `_office_site_plan()`, `_office_runs()` (Peter's office default) and the shop placer `_place_week()`, drawing on the unassigned people no shop plan counts on (the bench `_staffing()` leaves in `_plan_world()`) | `drawSchedules` through `spOfficeRoster`; `drawSite` through `spSchedSummary` and `spSpareIds`; `hrPlanRow`, `gwOfficeRow` and the hiring helpers |
 | `candidates` | Section `hiring`: `_candidates()`, with `_character()` and `_skill_rows()` | the Staff page; `gwWho` |
 | `hiring` | Section `hiring` (after `factoryStaffing`): `_hiring()`, which reads each plan row's private `_hire` (`_hire_fields()`: `hireWeeks`, the placeholder hires' weeks from `_place_hires()`, each with its `band` from `_hire_band()` -- `full` at 30 hours or more, `part` from 10, `short` under -- and `shortHires`, the weeks under 10 hours as `{skill, hours}`; `spare`, `bench`) for `staffing`, `staffing[].fullCover`, `staffing[].openCover`, `factoryStaffing` and `officeStaffing` from `build.private["hires"]`, which `_take_hires()` filled as each plan was made; `accepts` from `ASSIGN_SKILLS`, `facts` from `_site_facts()`, `stations` from `_station_facts()` (the desk and chair demands each station meets), `company` from `_company_facts()`, `recruiting` from `_recruiting()` | the Staff page (`drawStaffPage` asks for the section); the site panel's Staffing block (`spRosterBlock`, through `spRowLess` and `hrFromCall`) and its writes (`gwRosterButtons`, `gwStaffButton`); Open a store's and Plan a factory's staff rows (`osCkStaff`, `osStaffAct`, `ofCkStaff`, `ofRunHtml`); the hire and schedule write dialogs (`gwConfirm` `needs`); `pgPeopleSites` |
-| `plan` | `_plan()`; its `prices`, `priceFrom` and `priceDay` from `_ingredient_prices()`; each `catalogue` entry's `extra`, what the type can additionally sell as `[[slug, weight], ...]`, from `_plan_extra()` over `ba_store_rules.json` (`types[kind].i`, weight under 1); `own[kind].sellers`, how many of the type's shops sell each of those extras | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`, Add product's `planAdded` and `pcPopOpen`; `web/wiki.js` `wikiCanPlan` |
+| `plan` | Core: `_plan()` (Today reads its recipes and item names, and every page reads `itemName`; about 4 ms and 65 KB on the largest measured save); its `prices`, `priceFrom` and `priceDay` from `_ingredient_prices()`; each `catalogue` entry's `extra`, what the type can additionally sell as `[[slug, weight], ...]`, from `_plan_extra()` over `ba_store_rules.json` (`types[kind].i`, weight under 1); `own[kind].sellers`, how many of the type's shops sell each of those extras | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`, `sbDeps`, `ofPreset`, the `of*` planner adapters, Add product's `planAdded` and `pcPopOpen`; `web/wiki.js` `wikiCanPlan` |
 | `names` | `_game_names()`: every `NAME_PREFIXES` key of `names.locale` but the `_description`s, plus `HOOD_LABEL` for a neighbourhood the text lacks | `itemName`, `gameName` (and through it `hoodName`), `englishName` (from the English payload), `localiseNames` |
 | `marketingAgencies` | `_marketing_agencies()`: the city's agencies from `MARKETING_AGENCIES`, each with its name, address, whether it is a phone contact (`Contacts`), the types it sells, its opening slots per weekday (`_open_hours()`) and, at the save's clock, `open` and `opens` (`open_at()`, `next_open()`); `_marketing()` adds new switches through the contacts only; `extract()` also passes the list to `_alerts()`, which names the agencies to visit | `gwMkAgency`, the marketing write's lookups (`gwMkBlocked`, `gwMkWhy`, `gwMkVisit`, `gwMkAgencyOf`, `gwMkOpensOf`), judged at the game's clock from `LEDGER_SOURCE.link()`, which `web/app.js` moves on every `/health` read; `gwMkTick` (the source's `linkClock`) redraws the pages on screen when an agency opens or shuts |
 | `skillNames` | `extract()` inline, every skill in `STATION_SKILLS` through `names.label()` | `gwSkillName` |
@@ -105,7 +105,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `alerts` | `_alerts()`, its `lines`, with factory lines sized 24/7 | `alertLines()`, which `drawAlerts`, `kindCounts` and `web/map.js` `mapFindings` ask |
 | `minor` | `_alerts()`, its `minor`, sized 24/7 | `alertLines()` |
 | `alertsDemand` | `_alerts(..., "dem")`, a second pass over the same `supply.facts` with factory lines sized on demand: `{lines, minor}`, the shape of `alerts` and `minor` | `alertLines()`, when the sizing switch reads Demand |
-| `goals` | `_goals()` | `drawGoals` |
+| `goals` | Section `goals`: `_goals()` | `drawGoals` |
 
 Four indirect routes an agent would otherwise miss:
 
@@ -367,9 +367,9 @@ it runs. `PAYLOAD_KEYS` is every top-level key in the order the page has always 
 
 - `build_core(save, names, history_path, generation)` returns a `Build`: `core` (the core's
   keys, wired with `_wire_msgs()`, ready to send), `shared` (the intermediates a section
-  reads: `businesses`, the supply's `factories`, `staff`, the planning `world`), `private`
+  reads, including the grids, recipes, statements, staff and per-stage planning worlds), `private`
   (what never ships: `posts`, each factory line's machines; `hires`, every plan row's
-  `_hire` part by the row's identity; the market's `catalogue`) and `sections`. It records
+  `_hire` part by the row's identity; the market's raw `catalogue`; copied product lines) and `sections`. It records
   the history; nothing else does.
 - `section(build, name)` computes one section from the `Build`, its needs first, once per
   build. It never parses the save again and never writes the history.
@@ -379,15 +379,80 @@ it runs. `PAYLOAD_KEYS` is every top-level key in the order the page has always 
   `tools/payload_diff.py` all take one path, and a payload with every section computed is
   what one build used to give.
 
-Planning keeps its order: the core plans shops, then offices, over one pool of people
-(`_plan_world()`), and keeps the pool on the build; the `factoryStaffing` section plans the
-factory lines over the bench the offices left, and `hiring` reads every plan. Asking for
-`hiring` first still computes `factoryStaffing` before it.
+Planning keeps its order: `_plan_world()` → shops → offices → factories → hiring.
+The first shop request builds the planning world. Each stage copies the previous stage's
+bench and week state, plans over that copy, and keeps its resulting world in
+`build.shared["planning"][section]`. A failed stage cannot change the earlier world;
+Try again starts from that intact state. The people table is read-only. Every stage takes
+its rows' `_hire` parts into `build.private["hires"]` before those rows ship. Hiring reads
+the plans from `build.sections`, not `build.core`.
+
+Today asks only for `staffing`. Its supply card, proposed-change details, finding
+state pills and supply counts read core `plan` immediately, as does supply search.
+A Demand popover asks for `openStore` on click, waits, and offers Open a store here
+once the section confirms the type. It refreshes only while the same cell is open,
+restoring the focused action if the keyboard is still inside the popover.
 
 | Section | Keys | Needs | Asked for by |
 | --- | --- | --- | --- |
-| factoryStaffing | `factoryStaffing` | (none) | Supply › Production's staffing block (`drawFactoryStaffing`); a factory's site panel (`spSpareIds`) |
-| hiring | `hiring`, `candidates` | factoryStaffing | Staffing › Staff needs (`drawStaffPage`); the site panel's Staffing block and its writes (`spRosterBlock`, `gwRosterButtons`, `gwStaffButton`); Open a store and Plan a factory's staff rows; the hire and schedule write dialogs; a hire's progress check |
+| staffing | `staffing` | (none) | Today's shop scheduling card; a shop's Staffing block; Schedules; Open a store's opened-store staff check |
+| officeStaffing | `officeStaffing` | staffing | An office's Staffing block; Schedules |
+| factoryStaffing | `factoryStaffing` | officeStaffing | Supply › Production's staffing block; a factory's site panel |
+| hiring | `hiring`, `candidates` | factoryStaffing | Staff needs; Schedules; site staffing writes; Open a store and Plan a factory's staff rows; hire and schedule dialogs; an applied hire's first progress check |
+| premises | `premises` | (none) | Find a location, including search and the Map toggle; Open a store, Plan a factory and Demand popovers through openStore's dependency |
+| products | `products` | (none) | Products & prices; search intent; Wiki's product slots |
+| openStore | `openStore` | premises | Open a store; Plan a factory's location, investment and financing; Demand popovers |
+| openFactory | `openFactory` | (none) | Plan a factory's costs and opening requirements |
+| goals | `goals` | (none) | Milestones |
+
+The core contains the warnings' keys: `meta`, `kpi`, `names`, `skillNames`, `businesses`,
+`daily`, `loans`, `supply`, `rhythm`, `market`, `chains`, `trends`, `hypeExposure`, `hours`,
+`hourFindings`, `marketingAgencies`, `alerts`, `minor`, `alertsDemand`, `payback`, `cashFlow`
+and `ledgerDays`. It also keeps `ownedBuildings` and `homes`: the map's layers read them,
+the home site panel and site address lookup read homes, and they cost nothing (under
+1 ms and 1 KB on the largest measured save). `staff` stays core because Today's
+fixed-cost tile reads the payroll; `_staff_summary()` costs nothing (under 1 ms
+and 3 KB on the largest measured save). `plan` stays core because Today reads its
+recipes and item names (`factoryView`, `sbDeps`, the supply strip and finding
+pills), and every page reads `itemName`. It costs about 4 ms and 65 KB on the
+largest measured save. Map asks for no section.
+
+The extraction's staff list, all hour grids, statements, buildings, recipes, stations,
+market and supply objects stay on `build.shared` for deferred producers. The producers
+formerly before `history.write()` (`premises`, `openStore`, `openFactory`, products)
+have no history side effects. The raw product totals are the exception to moving all their
+work: the core removes `_sold` and `_takings` from business lines before sending businesses
+and preserves one private copy of each line for the deferred aggregation. `_products()`
+reads that copy without changing it, so retries use the same raw totals. No section changes a core object;
+the section tests compare core JSON after every producer with the JSON originally sent.
+
+`openStore` and `openFactory` are separate sections because their readers differ.
+`plan` is computed in core at its original position before `history.write()`;
+`_ingredient_prices()` is unchanged. The original raw market `catalogue` stays
+private; the processed `plan.catalogue` ships in core. The global `itemName` reads
+the plan's own labels first, then the game-name map. `RECIPE_BY` is rebuilt when
+the factory planner draws; section arrival does not rebuild it or invalidate
+Supply's recipe memos. The search index's product entries and premises entries
+fill in as those sections arrive; missing product counts are omitted. Focusing a search
+control or opening the palette asks for products, and arrival rebuilds the open index.
+The Schedules entry chooses its first site from the current staffing section when ready,
+never from an older card. Wiki draws core demand, site counts and guide slots immediately;
+only product slots wait. Payroll
+headcounts and the first-hire check use core `staff.total`. Today's contracted-cost
+tile reads core `staff.dailyCost` immediately.
+The name-localisation walkers already accept missing keys and run again on each arriving
+section; `ttPayload()` handles that part's messages. The site-key walker still reads homes
+from core. Shell counts use findings, not deferred data.
+
+Light prefetch runs on pointer, focus and touch intent on navigation links and area tabs.
+`odPrefetchSections(view)` maps the view or route to its declared sections. For a chain
+that includes `factoryStaffing`, it prefetches only the light `staffing` and
+`officeStaffing` stages, skipping `factoryStaffing` and `hiring`. It can prefetch the
+factory planner's costs (`openFactory`) and location and financing (`openStore`),
+which need no staffing.
+Prefetch pauses when `document.hidden`, never runs during an `odHidden` draw, and uses
+`odNeed()` with the same once-per-section-per-board and generation checks as navigation.
+The worker's existing newer-build priority and stale replies are unchanged.
 
 **The browser.** `web/worker.js` holds one build at a time. A `build` (or `name`) message
 runs `browser_build()`, which sends the core and keeps the `Build` under the message's id,
@@ -424,9 +489,11 @@ page's inactivity cutoff (`LOAD_TIMEOUT_MS`) hears a long section through these 
   `odNeed()` there asks nothing and leaves the row out of date (`pageStale`), so it asks when
   its view opens (`drawStale()`).
 - A `PAGE_DRAWS` row's fourth element names the sections the row reads (Staffing ›
-  Schedules and Staff needs: `hiring`; Supply › Production: `factoryStaffing`; Today none).
+  Schedules and Staff needs: `hiring`; Supply › Production: `factoryStaffing`; Today: `staffing`).
   `odWantView()` asks for them as the view opens (`drawStale()`) and as a board arrives on
-  it (`renderAll()`). A block whose need depends on the site (the site panel) asks from its
+  it (`renderAll()`). The first boot paints with `odBooting` set until its URL or
+  remembered route has been restored, so it never requests Today from a Map deep link.
+  A block whose need depends on the site (the site panel) asks from its
   draw instead.
 - `odState(name)` is `ready`, `loading`, `error` or `missing`; `odWaitHtml(name, small)` draws
   the words while it is worked out ("Working out staff needs…"), or why it was not, with
@@ -435,11 +502,14 @@ page's inactivity cutoff (`LOAD_TIMEOUT_MS`) hears a long section through these 
   localised copy into `D` (`gnWalk()`, `gnUnkeyed()`, `ttPayload()`), the way
   `localiseNames()` would. It is not `takeData()`: no board count, no history, no
   `sbBoard()`. An answer for an older board is dropped. Then `odArrived()` clears the
-  memos keyed on the board (`hrSiteMemo`), lets the progress checks run again
+  memo keyed on the board (`hrSiteMemo`), lets the progress checks run again
   (`pgJudged`), redraws the page on screen (`renderCalm()`), plans a write dialog that
   was waiting (`odDialog()`, which a failure and a Try again call too), and runs what
   `odThen()` held: a click that opens a write review before the board has its section
-  (`hrReview()`) opens it once it arrives, and is dropped if it fails.
+  (`hrReview()`) opens it once it arrives, and is dropped if it fails. All held callbacks
+  belong to the company and source that asked: same-company refreshes ask again, while a
+  change of company or file, folder or game-link source drops them. Finder history filters
+  are restored through this path after premises arrives, so a cold reload keeps its question.
 
 A board whose source has no `section()` (the CLI's page, the watch server) gets every
 section in the payload.
@@ -452,7 +522,13 @@ section in the payload.
 - A write is judged and sent only on a board that has its sections: `gwConfirm()` takes
   `needs`, waits with Apply off, and plans again when they arrive. The hire and schedule
   writes need `hiring`, and their buttons are not offered until it is there.
-- A progress check returns null (not judged) until its sections are there (`PG_CHECK.hire`).
+- A progress check returns null (not judged) until its sections are there. An `applied`
+  hire record asks for `hiring` with `odNeed()` for its first judgment. A record already
+  judged `partly` or `unseen` rechecks only when this board already holds hiring
+  (`odReady()`), and never requests it on its own. This avoids running every planning
+  stage on each game-link rebuild for hires the save cannot yet confirm. Such a record
+  can age out after `PG_KEEP_DAYS` (14 game days) unjudged unless a page that asks for
+  hiring is opened.
 - A `stale` refusal (the worker has started a newer build) is no failure: the section stays
   loading, held work keeps waiting, and the newer board asks again as it arrives
   (`odThensAsk()`, which also plans a waiting dialog again). If that build fails, the
@@ -462,14 +538,28 @@ section in the payload.
   (`sectionFailure`), and the bug report sends it with the board's save when no build
   failed and that build is still the newest handed over (`builtGen`). The same section
   working later clears it.
-- Today asks for no section. Its Next-moves staffing card counts the shop plan's own hires
+- Today asks only for `staffing`. Its location card shows neutral wording until premises
+  arrives from another view and never asks for premises itself. Its Next-moves staffing
+  card counts the shop plan's own hires
   until `hiring` is on the board, and the people who could come from other sites only
   after (`spRowLess()`), so the count can drop once a staffing page has been opened.
 - Sections are not kept across builds: each new board asks again (a bounded cache is a
-  later phase of #238).
+  later phase of #238). On a same-company, same-source refresh, a row on screen that
+  previously drew with its declared sections keeps its DOM while the new sections load.
+  `odDrawn` records successful draws; `odKeepRow()` leaves a waiting row in `pageStale`
+  and requests its sections. `odArrived()`/`odRedraw()` redraw it on arrival. This includes
+  an open Staff needs page, Today's staffing card, Products, Milestones and both planners.
+  Finder results (including plan maps) and site scheduling blocks follow the same rule,
+  preserving their content and scroll position. First visits, changed companies/sources
+  and failed sections draw the wait or error. Retained controls that read sections wait
+  for the current board too: board event capture gates section-dependent handlers, and
+  finder chips, filters and results ignore input and never save filters without premises.
+  `gwConfirm`, progress checks and `odReady` always read the current board; retained DOM
+  is never cached payload data.
 
 **Adding a feature.** Decide whether it is core or a section. Core is for what the warnings
-need; anything computed on load needs that reason, written beside it. A section declares its
+need (plus the documented cheap map layers); anything computed on load needs that reason,
+written beside it. A section declares its
 keys, its needs, its producer and its words in `SECTIONS` and `OD_SECTIONS`; its readers
 ask with `odNeed()` and draw `odWaitHtml()`; it has no side effect on the core (no write to
 an object the core already sent, no history), which `tests/test_sections.py` checks; and
@@ -1254,8 +1344,8 @@ all three.
 | `const ICON = {` (board script) | *Only for a page*: its nav icon, keyed by page id | none |
 | `const SUBS = {` (board script) | *Only for a view*: its `[id, label, section]` item; a new page with views needs the whole entry | `tests/navigation.test.cjs`, "Businesses carries Results, Products & prices, Standards and Milestones; Staffing its three views" and "every view in SUBS has its SEC_PAGE row and a PAGE_DRAWS tag" |
 | `const SEC_PAGE = {` (board script) | `secX: [page, view]` for every section. Without it `reveal()`, the sub-nav and `pageFromHash()` fail | `tests/navigation.test.cjs`, "every view in SUBS has its SEC_PAGE row …" and "every Company section deep link opens the view that holds it"; `tests/alert_kinds.test.cjs`, "the supply kinds land on the Supply view of their route" |
-| `const PAGE_DRAWS = [` (board script) | `["page/view", () => drawX()]`, tagged with every view whose markup it writes | `tests/calm_refresh.test.cjs`, "a refresh on Today draws Today …"; `tests/navigation.test.cjs`, "every PAGE_DRAWS tag names a real page or view" and the SUBS test above |
-| `const ROUTES = {`, `const AREAS = [`, `routeViewLabel(` (board script) | *For a route*: `{host: [page, view?], scopes?, enter?, after?, into?}`, its view id in its area's `views`, and its words; `HOST_ROUTES` names it when a host view shows it by default | `tests/shell_routes.test.cjs`, "every finding kind names a real route, and every route is a view of its area"; `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, then City map and Wiki" |
+| `const PAGE_DRAWS = [` (board script) | `["page/view", () => drawX(), null, ["section"]]`, tagged with every view whose markup it writes | `tests/calm_refresh.test.cjs`, "a refresh on Today draws Today …"; `tests/navigation.test.cjs`, "every PAGE_DRAWS tag names a real page or view" and the SUBS test above |
+| `const ROUTES = {`, `const AREAS = [`, `routeViewLabel(` (board script) | *For a route*: `{host: [page, view?], scopes?, enter?, after?, into?}`, its view id in its area's `views`, and its words and its `needs` sections; `HOST_ROUTES` names it when a host view shows it by default | `tests/shell_routes.test.cjs`, "every finding kind names a real route, and every route is a view of its area"; `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, then City map and Wiki" |
 | `const ROUTE_ALIASES =` (board script) | *Only when* an old page or view name becomes a route | `tests/navigation.test.cjs`, "the old #payroll hash, #secPayroll and a remembered Payroll open Staffing › Payroll" and "the #staff hash, #secStaff and a remembered Staff open Staffing › Staff needs" |
 | `const SS_VIEWS = [` (board script) | `{id, t, p, ic, syn, go}`, so search can open it | `tests/search.test.cjs`, "the index holds every group …" |
 | `function showPage(` (board script) | *Only if* the page loads or draws when shown, as the Map does | none |
@@ -1273,7 +1363,7 @@ Nothing between `extract()` and the board filters keys: `render()`, the watch se
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
-| `PAYLOAD_KEYS`, and the `core = _wire_msgs({` at the end of `def build_core(` or a section's producer in `SECTIONS` (with `OD_SECTIONS` in the board script) | `"key": _producer(...)`. It must be JSON-serialisable, with any set ordered through `_in_order()`. Core only with a reason: the warnings need it | JSON-serialisability: `tests/test_supply_facts.py`, "test_the_payload_carries_the_facts_and_both_passes_of_findings"; the key's place: `tests/test_sections.py` |
+| `PAYLOAD_KEYS`, and the `core = _wire_msgs({` at the end of `def build_core(` or a section's producer in `SECTIONS` (with `OD_SECTIONS` in the board script) | `"key": _producer(...)`. It must be JSON-serialisable, with any set ordered through `_in_order()`. Core only with a documented reason: the warnings need it, or the cheap map layers | JSON-serialisability: `tests/test_supply_facts.py`, "test_the_payload_carries_the_facts_and_both_passes_of_findings"; the key's place: `tests/test_sections.py` |
 | The payload table in [The payload contract](#the-payload-contract) | A row that follows the reader convention | `tests/test_doc_registries.py`, "test_the_payload_table_has_a_row_for_every_key_extract_returns" (the key column only) |
 | The reader, `D.<key>`, in the board script, `web/map.js` or `web/wiki.js` | A reader that survives a missing key (fall back to an empty value), because many Node tests build a partial `D`. A section's reader asks for it with `odNeed()` and never takes a missing key for an empty one | indirect; `tests/on_demand.test.cjs` |
 | `class History:` and the `history.ledger(` / `history.write()` lines in `extract()` | *Only if* the value has to persist between saves | none |

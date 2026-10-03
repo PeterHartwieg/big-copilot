@@ -172,7 +172,7 @@ test('Staffing › Schedules keeps the business picked through a reload, its pag
   assert.deepEqual([w.route, w.lit], ['supply/deliveries', 'supply/deliveries'], 'Forward keeps it');
 });
 
-test('a staff finding lands on the staffing of its kind: a factory\'s Production without supply facts, an office\'s crew', async t => {
+test('staffing landings use a factory\'s Production without supply facts and an office\'s Schedule action without office plans', async t => {
   const page = await board(t);
   const got = await page.evaluate(() => {
     const factory = D.businesses.find(b => b.typeSlug === 'ba:businesstype_factory');
@@ -185,7 +185,7 @@ test('a staff finding lands on the staffing of its kind: a factory\'s Production
     return {atFactory, route: (() => { D.supply = null; const r = findingRoute({group: 'staff', site: factory.name, siteKey: factory.key}).route; D.supply = supply; return r; })(),
       office: nxStaffInto(office), shop: nxStaffInto(shop)};
   });
-  assert.deepEqual(got, {atFactory: true, route: 'supply/production', office: '#sp-crew', shop: '#sp-sched'});
+  assert.deepEqual(got, {atFactory: true, route: 'supply/production', office: '#sitePanel .sp-acts', shop: '#sp-sched'});
 });
 
 // --- Find a location keeps its filters ---------------------------------------------------

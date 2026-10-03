@@ -2482,6 +2482,8 @@
 
   /* --- what the board asks for ----------------------------------------- */
   window.LEDGER_SOURCE = {
+    // Stable across refreshes, new for every file, folder or link choice.
+    identity: () => sourceGen,
     // Read on every masthead paint, so it follows the UI language.
     get label() { return tt("app.source.label", "In browser"); },
     data: async () => {

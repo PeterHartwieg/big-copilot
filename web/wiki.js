@@ -752,8 +752,9 @@ function wikiSlot(label, value, tip){
     + `<span class="wk-lab">${ssEsc(label)}</span>`
     + `<span class="wk-v${value === null ? " none" : ""}">${value === null ? "—" : ssEsc(value)}</span></div>`;
 }
-function wikiYours(page, extra){
-  const own = wikiOwn(page);
+function wikiYours(article, extra){
+  const waiting = hasData() && !(page === "wiki" ? odNeed("products") : odReady("products"));
+  const own = wikiOwn(article);
   const slots = [];
   if(own && own.best)
     slots.push(wikiSlot(tt("wiki.yours.demand", "Demand"), tt("wiki.yours.demand.v", "{demand} in {hood}", {demand: own.best.demand, hood: hoodName(own.best.hood)}),
@@ -770,6 +771,7 @@ function wikiYours(page, extra){
     slots.push(wikiSlot(tt("wiki.yours.sites", "Yours"), tt("wiki.yours.sites.v", {one: "{n} site", other: "{n} sites"}, {n: own.sites.length}),
       tt("wiki.yours.sites.tip", "Businesses of this type in your company.")));
   (extra || []).forEach(s => slots.push(s));
+  if(waiting) slots.push(odWaitHtml("products", true));
   const body = slots.length
     ? `<div class="wk-savebox">${slots.join("")}</div>`
     : `<div class="wk-savebox empty"><p class="quiet">${spEsc(hasData()
@@ -2000,12 +2002,13 @@ function wikiGuidePrices(g, offers){
 
 function wikiGuideOwn(g, goods){
   if(!hasData()) return [];
+  const ready = page === "wiki" ? odNeed("products") : odReady("products");
   const b = g.BUSINESS || {};
   const mine = (D.businesses || []).filter(x => x.typeSlug === b.nameSrc && x.status !== "vacant");
   const slots = [];
   if(mine.length) slots.push(wikiSlot(tt("wiki.yours.shops", "Your shops"), `${mine.length}`,
     tt("wiki.yours.shops.tip", "Businesses of this type in your company: {shops}.", {shops: mine.slice(0, 4).map(x => x.name).join(", ")})));
-  const sold = (D.products || []).filter(p => goods.some(x => x.slug === p.slug));
+  const sold = ready ? (D.products || []).filter(p => goods.some(x => x.slug === p.slug)) : [];
   if(sold.length && goods.length) slots.push(wikiSlot(tt("wiki.yours.rangeSold", "Its range, sold"), tt("wiki.yours.rangeSold.v", "{n} of {total}", {n: sold.length, total: goods.length}),
     tt("wiki.yours.rangeSold.tip", "{items} moved in your shops in the last seven days.", {items: sold.map(p => p.item).join(", ")})));
   return slots;

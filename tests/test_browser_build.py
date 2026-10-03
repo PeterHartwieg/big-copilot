@@ -85,8 +85,11 @@ class BrowserBuild(unittest.TestCase):
         path = os.path.join(self.save_dir, "Link Co.hsg")
         es3_fixture.write_link_save(path)
         data = self.build(path)
-        for key in ("meta", "kpi", "businesses", "supply", "staffing", "alerts", "names"):
+        for key in ("meta", "kpi", "businesses", "supply", "alerts", "names"):
             self.assertIn(key, data)
+        for spec in ba_dashboard.SECTIONS.values():
+            for key in spec["keys"]:
+                self.assertNotIn(key, data)
         self.assertEqual(data["meta"]["day"], 34)
         # The link company has no characterId: its history files under "default".
         self.assertEqual(self.sidecar(), "default")

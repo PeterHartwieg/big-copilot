@@ -70,8 +70,8 @@ class Registry(unittest.TestCase):
     def test_no_warning_reads_a_section(self):
         # The core is everything the warnings need: the alert keys are core.
         sections = {key for spec in ba_dashboard.SECTIONS.values() for key in spec["keys"]}
-        for key in ("alerts", "minor", "alertsDemand", "businesses", "supply", "staffing",
-                    "officeStaffing", "hours", "hourFindings"):
+        for key in ("alerts", "minor", "alertsDemand", "businesses", "supply",
+                    "hours", "hourFindings"):
             self.assertNotIn(key, sections)
 
 
@@ -100,9 +100,29 @@ class Sections(unittest.TestCase):
                          [k for k in ba_dashboard.PAYLOAD_KEYS if k not in sections])
         self.assertEqual(list(private_fields(build.core)), [])
         # The private parts are kept on the Build instead.
+        self.assertNotIn("world", build.shared, "planning world is deferred too")
+        self.assertEqual(build.shared["planning"], {})
         self.assertTrue(build.private["posts"])
-        self.assertTrue(build.private["hires"])
+        self.assertEqual(build.private["hires"], {})
         self.assertIn("catalogue", build.private)
+
+    def test_payroll_is_core_and_the_staff_list_stays_shared(self):
+        build = self.build()
+        self.assertNotIn("staff", ba_dashboard.SECTIONS)
+        self.assertEqual(build.core["staff"],
+                         ba_dashboard._staff_summary(build.shared["staff"], build.shared["businesses"]))
+        self.assertEqual(build.core["staff"]["total"], build.core["kpi"]["employees"])
+
+    def test_products_reads_one_private_copy_without_mutating_raw_totals(self):
+        build = self.build()
+        private = build.private["product_businesses"]
+        before = json.dumps(private, sort_keys=True)
+        real = ba_dashboard._products
+        with unittest.mock.patch.object(ba_dashboard, "_products", wraps=real) as products:
+            first = ba_dashboard._products_section(build)
+            self.assertIs(products.call_args.args[0], private)
+        self.assertEqual(json.dumps(private, sort_keys=True), before)
+        self.assertEqual(ba_dashboard._products_section(build), first)
 
     def test_the_fixture_exercises_every_section(self):
         whole = ba_dashboard.materialize_all(self.build())
@@ -114,7 +134,7 @@ class Sections(unittest.TestCase):
         build = self.build()
         # A section asked for first brings what it needs with it.
         ba_dashboard.section(build, "hiring")
-        self.assertEqual(set(build.sections), set(ba_dashboard.SECTIONS))
+        self.assertEqual(set(build.sections), {"staffing", "officeStaffing", "factoryStaffing", "hiring"})
         again = normalise(ba_dashboard.materialize_all(build))
         self.assertEqual(list(again), list(ba_dashboard.PAYLOAD_KEYS))
         self.assertEqual(json.dumps(again), json.dumps(whole))
@@ -124,8 +144,11 @@ class Sections(unittest.TestCase):
     def test_no_section_changes_the_core_after_it_was_sent(self):
         build = self.build()
         sent = json.dumps(build.core)
-        ba_dashboard.materialize_all(build)
-        self.assertEqual(json.dumps(build.core), sent)
+        for name in ba_dashboard.SECTIONS:
+            ba_dashboard.section(build, name)
+            self.assertEqual(json.dumps(build.core), sent, name)
+            self.assertEqual(list(private_fields(build.sections[name])), [], name)
+        self.assertNotIn("catalogue", build.core["market"])
 
     def test_a_section_is_computed_once_and_writes_no_history(self):
         history = os.path.join(self.tmp.name, "history.json")
@@ -166,6 +189,7 @@ class Sections(unittest.TestCase):
 
     def test_a_failed_factory_section_leaves_the_pool_whole(self):
         build = self.build()
+        ba_dashboard.section(build, "officeStaffing")
         bench = [p["id"] for p in build.shared["world"]["bench"]]
         state = json.dumps(build.shared["world"]["state"], default=sorted)
         def half_way(*args):
@@ -177,6 +201,131 @@ class Sections(unittest.TestCase):
         self.assertTrue(state != "{}")
         self.assertEqual([p["id"] for p in build.shared["world"]["bench"]], bench)
         self.assertEqual(json.dumps(build.shared["world"]["state"], default=sorted), state)
+
+    def test_core_is_exactly_the_issue_list_and_cheap_map_layers_payroll_and_recipes(self):
+        expected = "meta kpi names skillNames businesses daily loans supply rhythm market chains trends hypeExposure hours hourFindings marketingAgencies alerts minor alertsDemand payback cashFlow ledgerDays ownedBuildings homes staff plan".split()
+        self.assertEqual(set(self.build().core), set(expected))
+
+    def test_later_planning_first_equals_each_stage_in_order(self):
+        for last in ("staffing", "officeStaffing", "factoryStaffing", "hiring"):
+            with self.subTest(last=last):
+                first, ordered = self.build(), self.build()
+                ba_dashboard.section(first, last)
+                for name in ("staffing", "officeStaffing", "factoryStaffing", "hiring"):
+                    ba_dashboard.section(ordered, name)
+                    if name == last:
+                        break
+                self.assertEqual(json.dumps(first.sections), json.dumps(ordered.sections))
+                self.assertEqual(json.dumps(first.shared["planning"], default=sorted),
+                                 json.dumps(ordered.shared["planning"], default=sorted))
+
+    def test_each_failed_stage_can_retry_without_damaging_earlier_state(self):
+        for name, producer in (("staffing", "_staffing"), ("officeStaffing", "_office_staffing"),
+                               ("factoryStaffing", "_factory_staffing")):
+            with self.subTest(stage=name):
+                build = self.build()
+                for need in ba_dashboard.SECTIONS[name]["needs"]:
+                    ba_dashboard.section(build, need)
+                # Materialise just the initial world where no earlier stage exists.
+                ba_dashboard._planning_world(build)
+                before = json.dumps({"world": build.shared["world"],
+                                     "planning": build.shared["planning"]}, default=sorted)
+                def fail(*args, **kwargs):
+                    world = kwargs.get("world", args[-1])
+                    world["bench"].clear()
+                    world["state"].clear()
+                    raise RuntimeError("half way")
+                with unittest.mock.patch.object(ba_dashboard, producer, side_effect=fail):
+                    with self.assertRaisesRegex(RuntimeError, "half way"):
+                        ba_dashboard.section(build, name)
+                self.assertNotIn(name, build.sections)
+                self.assertEqual(json.dumps({"world": build.shared["world"],
+                                             "planning": build.shared["planning"]}, default=sorted), before)
+                retried = ba_dashboard.section(build, name)
+                fresh = ba_dashboard.section(self.build(), name)
+                self.assertEqual(json.dumps(retried), json.dumps(fresh))
+
+    def test_cross_family_orders_keep_every_section_and_core_identical(self):
+        ordered = self.build()
+        ba_dashboard.materialize_all(ordered)
+        names = list(ba_dashboard.SECTIONS)
+        orders = [names[::-1],
+                  ["openStore", "staffing", "hiring", "goals", "products",
+                   "openFactory", "premises", "factoryStaffing", "officeStaffing"]]
+        import random
+        shuffled = names[:]
+        random.Random(238).shuffle(shuffled)
+        orders.append(shuffled)
+        for order in orders:
+            with self.subTest(order=order):
+                build = self.build()
+                core = json.dumps(build.core)
+                for name in order:
+                    ba_dashboard.section(build, name)
+                    self.assertEqual(json.dumps(build.core), core)
+                self.assertEqual(json.dumps(build.core), json.dumps(ordered.core))
+                for name in names:
+                    self.assertEqual(json.dumps(build.sections[name]),
+                                     json.dumps(ordered.sections[name]), name)
+
+    def test_failed_hiring_keeps_completed_plans_and_private_hires_for_retry(self):
+        build = self.build()
+        ba_dashboard.section(build, "factoryStaffing")
+        earlier = json.dumps(build.sections)
+        worlds = json.dumps(build.shared["planning"], default=sorted)
+        hires = dict(build.private["hires"])
+        with unittest.mock.patch.object(ba_dashboard, "_hiring", side_effect=RuntimeError("half way")):
+            with self.assertRaisesRegex(RuntimeError, "half way"):
+                ba_dashboard.section(build, "hiring")
+        self.assertNotIn("hiring", build.sections)
+        self.assertEqual(json.dumps(build.sections), earlier)
+        self.assertEqual(json.dumps(build.shared["planning"], default=sorted), worlds)
+        self.assertEqual(build.private["hires"], hires)
+        retried = ba_dashboard.section(build, "hiring")
+        self.assertEqual(json.dumps(retried), json.dumps(ba_dashboard.section(self.build(), "hiring")))
+
+    def test_every_section_is_once_and_never_records_history(self):
+        build = self.build()
+        with unittest.mock.patch.object(ba_dashboard.History, "write", side_effect=AssertionError("history")):
+            for name in ba_dashboard.SECTIONS:
+                first = ba_dashboard.section(build, name)
+                self.assertIs(ba_dashboard.section(build, name), first)
+
+    def test_shop_and_office_placers_tick_progress(self):
+        for name in ("staffing", "officeStaffing"):
+            build = self.build()
+            heard = []
+            ba_dashboard.set_progress(lambda stage, detail: heard.append(detail))
+            with unittest.mock.patch.object(ba_dashboard, "PROGRESS_EVERY_S", 0):
+                ba_dashboard.section(build, name)
+            self.assertGreater(len(heard), len(build.sections), name)
+
+
+    def test_an_office_stage_ticks_inside_its_placer(self):
+        from test_staff_hire import office_registration, lawyer, save_of, STREET, COMPUTER
+        reg = office_registration(1, [[[8, 20]] for _ in range(7)])
+        save = save_of({"EmployeeInstances": {"$items": [lawyer("p1", here=False)]},
+                        "BuildingRegistrations": {"$items": [reg]}})
+        names = Names({})
+        business = {"key": ba_dashboard.site_key((STREET, 10)), "name": "Halden Law",
+                    "status": "office", "typeSlug": "ba:businesstype_lawfirm", "basket": 388.0, "staff": 0}
+        _by_addr, staff = ba_dashboard._staff(save, names)
+        grids = ba_dashboard._hourly(save, [reg], [business], {}, {COMPUTER},
+                                    {p["id"]: p["skill"] for p in staff}, names)
+        build = ba_dashboard.Build(save, names)
+        build.shared.update(businesses=[business], staff=staff, all_grids=grids,
+                            base_promotion=0.55, planning={})
+        build.private["hires"] = {}
+        ba_dashboard.section(build, "staffing")
+        heard = []
+        ba_dashboard.set_progress(lambda stage, detail: heard.append(detail))
+        with unittest.mock.patch.object(ba_dashboard, "PROGRESS_EVERY_S", 0):
+            result = ba_dashboard.section(build, "officeStaffing")
+        self.assertTrue(result["officeStaffing"])
+        self.assertGreater(len(heard), 1, "heartbeats inside office placing, after the stage start")
+        self.assertIsNot(build.shared["planning"]["officeStaffing"],
+                         build.shared["planning"]["staffing"])
+
 
 
 class BrowserSections(unittest.TestCase):
@@ -208,11 +357,11 @@ class BrowserSections(unittest.TestCase):
         got = json.loads(ba_dashboard.browser_section("hiring", 7))
         self.assertEqual(got["generation"], 7)
         # Asked for first, hiring brings the factory staffing it was planned over.
-        self.assertEqual(set(got["sections"]), {"factoryStaffing", "hiring"})
+        self.assertEqual(set(got["sections"]), {"staffing", "officeStaffing", "factoryStaffing", "hiring"})
         self.assertEqual(set(got["sections"]["hiring"]), {"hiring", "candidates"})
         # Asked again, what was asked for: nothing is computed twice.
         again = json.loads(ba_dashboard.browser_section("factoryStaffing", 7))
-        self.assertEqual(set(again["sections"]), {"factoryStaffing"})
+        self.assertEqual(set(again["sections"]), {"staffing", "officeStaffing", "factoryStaffing"})
         self.assertEqual(again["sections"]["factoryStaffing"],
                          got["sections"]["factoryStaffing"])
 
@@ -228,7 +377,7 @@ class BrowserSections(unittest.TestCase):
         finally:
             ba_dashboard.SECTIONS["hiring"]["produce"] = real
         got = json.loads(ba_dashboard.browser_section("hiring", 8))
-        self.assertEqual(set(got["sections"]), {"factoryStaffing", "hiring"})
+        self.assertEqual(set(got["sections"]), {"staffing", "officeStaffing", "factoryStaffing", "hiring"})
 
     def test_a_section_of_another_build_is_stale(self):
         self.build(1)
@@ -250,7 +399,7 @@ class BrowserSections(unittest.TestCase):
     def test_an_unknown_section_is_refused(self):
         self.build(3)
         with self.assertRaises(ValueError):
-            ba_dashboard.browser_section("goals", 3)
+            ba_dashboard.browser_section("unknown", 3)
 
 
 if __name__ == "__main__":

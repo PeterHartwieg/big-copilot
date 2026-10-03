@@ -8,6 +8,8 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
+const fs = require('node:fs');
+const path = require('node:path');
 const {loadBoard, recordingDocument} = require('./_board.cjs');
 
 const GEN = Symbol.for('bigcopilot.build');
@@ -41,11 +43,179 @@ function board(core = {}) {
     vm.runInContext('takeData(__raw)', context);
   };
   take(Object.assign({meta: {day: 3}, names: {}, businesses: [], supply: {factories: {sites: []}},
-    staffing: [], officeStaffing: []}, core), 5);
+    staffing: [], officeStaffing: [], plan: {}}, core), 5);
   const run = code => vm.runInContext(code, context);
-  return {context, asked, take, run};
+  return {context, asked, take, run, source};
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
+
+/* Real finder filtering/restoration with only the map's drawing and camera
+   stubbed. The current retail question differs from the warehouse visit. */
+function finderBoard(){
+  const b = board({meta: {character: 'A', save: 'A', day: 3}});
+  const stored = new Map();
+  b.context.localStorage = {getItem: key => stored.get(key) || null,
+    setItem: (key, value) => stored.set(key, value)};
+  b.context.location = {hash: '#expansion/finder', href: 'https://example.test/#expansion/finder'};
+  b.context.history = {state: {nxFs: {cat: 'warehouse', minM2: 1000}, nxPick: 'warehouse'},
+    replaceState(state){ this.state = state; }};
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'web/map.js'), 'utf8'), b.context);
+  b.run(`renderCalm = () => {}; drawFinderCtx = () => {};
+    page = 'map'; route = 'expansion/finder';
+    cityMapPage = Object.assign(Object.create(CityMapView.prototype), {
+      panel: true, fs: {...finderDefaults(), on: true}, selected: 'retail',
+      assets: {byKey: new Map()}, ready: Promise.resolve(true),
+      update(){}, select(key){ this.selected = key; finderPickRemember(this); },
+      deselect(){ this.selected = null; finderPickRemember(this); }
+    });`);
+  return {...b, stored};
+}
+const finderPremises = {buildings: [
+  {key: 'warehouse', type: 'warehouse', status: 'vacant', m2: 1500, cap: 0, traffic: 30},
+  {key: 'retail', type: 'retail', status: 'vacant', m2: 100, cap: 30, traffic: 50},
+], demand: {}};
+
+async function failFinder(b, newerBuild){
+  b.asked[0].reject(Object.assign(new Error('premises failed'), newerBuild ? {stale: true} : {}));
+  await tick();
+  if(newerBuild) b.run('odSourceFailed("newer build failed")');
+  assert.equal(b.run('odState("premises")'), 'error');
+}
+
+for(const newerBuild of [false, true]){
+  const failure = newerBuild ? 'a failed newer build' : 'a failed premises request';
+  for(const recovery of ['Try again', 'Update']){
+    test(`finder history question and pick survive ${failure} followed by ${recovery}`, async () => {
+      const b = finderBoard();
+      b.run('finderPickRestore(cityMapPage, true, finderEntryState())');
+      await failFinder(b, newerBuild);
+      assert.equal(b.run('cityMapPage.fs.cat'), 'retail', 'waits before restoring');
+      // A redraw can write the latest question into history; restoration must
+      // still use the question and pick captured on arrival at this visit.
+      b.context.history.state = {nxFs: {cat: 'retail', minM2: 0}, nxPick: 'retail'};
+      if(recovery === 'Update'){
+        b.take({meta: {character: 'A', save: 'A', day: 4}, names: {}, businesses: [],
+          supply: {factories: {sites: []}}}, 6);
+        b.run('odThensAsk()');
+      }else b.run('odRetry("premises")');
+      b.asked.at(-1).resolve({sections: {premises: {premises: finderPremises}}});
+      await tick();
+      assert.equal(b.run('cityMapPage.fs.cat'), 'warehouse');
+      assert.equal(b.run('cityMapPage.fs.minM2'), 1000);
+      assert.equal(b.run('cityMapPage.selected'), 'warehouse');
+      assert.equal(b.context.history.state.nxPick, 'warehouse');
+      assert.equal(b.run('odThens.length'), 0, 'restored once');
+    });
+  }
+
+  test(`finder restoration after ${failure} is cancelled when its visit ends`, async () => {
+    const b = finderBoard();
+    b.run('finderPickRestore(cityMapPage, true, finderEntryState())');
+    await failFinder(b, newerBuild);
+    b.run(`drawStale = () => {}; paintShell = () => {}; wireReveal = () => {}; siteShut = () => {};
+      showPage('today', false, 'none');
+      page = 'map'; route = 'expansion/finder';`);
+    assert.equal(b.run('cityMapPage.finderRestore'), null, 'leaving ends the visit even at the same hash');
+    b.run('odRetry("premises")');
+    b.asked.at(-1).resolve({sections: {premises: {premises: finderPremises}}});
+    await tick();
+    assert.equal(b.run('cityMapPage.fs.cat'), 'retail');
+    assert.equal(b.run('cityMapPage.fs.minM2'), 0);
+    assert.equal(b.run('cityMapPage.selected'), 'retail');
+    assert.equal(b.run('odThens.length'), 0);
+  });
+
+  test(`cold finder preset persistence survives ${failure} and retry`, async () => {
+    const b = finderBoard();
+    b.run(`cityMapPage.fs = {...finderDefaults(), on: true, cat: 'warehouse', minM2: 1000};
+      cityMapPage.selected = null; finderPickRestore(cityMapPage, false)`);
+    await failFinder(b, newerBuild);
+    assert.equal(b.stored.size, 0, 'no persistence before premises arrives');
+    b.run('odRetry("premises")');
+    b.asked.at(-1).resolve({sections: {premises: {premises: finderPremises}}});
+    await tick();
+    const filters = JSON.parse(b.stored.get('ba_finder_v1:A'));
+    assert.equal(filters.cat, 'warehouse');
+    assert.equal(filters.minM2, 1000);
+  });
+}
+
+test('finder restoration retained after failure is cancelled by a company or source change', async () => {
+  for(const change of ['company', 'source']){
+    const b = finderBoard();
+    let source = 1;
+    b.source.identity = () => source;
+    b.run('odBoard(D); finderPickRestore(cityMapPage, true, finderEntryState())');
+    await failFinder(b, false);
+    if(change === 'source') source++;
+    const who = change === 'company' ? 'B' : 'A';
+    b.take({meta: {character: who, save: who}, names: {}, businesses: [],
+      supply: {factories: {sites: []}}}, 6);
+    assert.equal(b.run('odThens.length'), 0);
+    b.run('odRetry("premises")');
+    b.asked.at(-1).resolve({sections: {premises: {premises: finderPremises}}});
+    await tick();
+    assert.equal(b.run('cityMapPage.fs.cat'), 'retail');
+    assert.equal(b.run('cityMapPage.selected'), 'retail');
+  }
+});
+
+test('held planner and finder actions are dropped on another company or source', () => {
+  for(const change of ['company', 'source']){
+    const b = board({meta: {character: 'A', save: 'A', day: 3}});
+    let source = 1;
+    b.source.identity = () => source;
+    b.take({meta: {character: 'A', save: 'A'}, names: {}, businesses: [],
+      supply: {factories: {sites: []}}, staffing: [], officeStaffing: []}, 5);
+    b.run(`osStart('shop', 'hood'); ofPreset({type: 'shop'});
+      globalThis.ran = 0; odThen('premises', () => ran++, 'finder')`);
+    assert.ok(b.run('odThens.length') >= 3);
+    if(change === 'source') source++;
+    b.take({meta: {character: change === 'company' ? 'B' : 'A', save: change === 'company' ? 'B' : 'A'},
+      names: {}, businesses: [], supply: {factories: {sites: []}}, staffing: [], officeStaffing: []}, 6);
+    const asked = b.asked.length;
+    b.run('odThensAsk()');
+    assert.equal(b.asked.length, asked, 'no requests for the previous selection');
+    assert.equal(b.run('odThens.length'), 0);
+    b.run(`D.premises = {}; D.openStore = {}; D.openFactory = {}; D.factoryStaffing = {}; D.hiring = {}; D.candidates = []; odArrived()`);
+    assert.equal(b.run('ran'), 0);
+    assert.equal(b.run('osCur'), null);
+    assert.equal(b.run('ofCur'), null);
+  }
+});
+
+test('a held action on an old board after source selection changes cannot belong to the new source', () => {
+  const b = board();
+  b.source.identity = () => 2; // source changed, its board has not arrived yet
+  b.run(`globalThis.ran = 0; odThen('premises', () => ran++)`);
+  assert.equal(b.run('odThens.length'), 0);
+  assert.equal(b.asked.length, 0);
+  b.take({meta: {day: 4}, names: {}, businesses: [], supply: {factories: {sites: []}}, premises: {}}, 6);
+  b.run('odArrived()');
+  assert.equal(b.run('ran'), 0);
+});
+
+test('a retained row keeps waiting only on its own company, and failure draws the error', () => {
+  const b = board({meta: {character: 'A', save: 'A'}, products: []});
+  b.run(`globalThis.row = PAGE_DRAWS.find(r => r[0] === 'company/products' && r[3].length); odRowDrawn(row)`);
+  const core = who => ({meta: {character: who, save: who}, names: {}, businesses: [], supply: {factories: {sites: []}}});
+  b.take(core('A'), 6);
+  assert.equal(b.run(`odKeepRow(row, 'company/products')`), true);
+  assert.equal(b.run('pageStale.has(row)'), true);
+  b.run(`odAsked.set('products', {gen: 6, state: 'error', error: 'boom'})`);
+  assert.equal(b.run(`odKeepRow(row, 'company/products')`), false);
+  b.take(core('B'), 7);
+  assert.equal(b.run(`odKeepRow(row, 'company/products')`), false);
+});
+
+test('the Schedules search site comes from current staffing, never an old card', () => {
+  const b = board({staffing: [{key: 'new', name: 'New shop', demandDataComplete: true}]});
+  b.run(`$('optimizeStaffingCard').dataset = {site: 'old'}`);
+  assert.equal(b.run('ssStaffingSite()'), 'new');
+  b.run('delete D.staffing');
+  assert.equal(b.run('ssStaffingSite()'), '');
+  assert.equal(b.asked.length, 0);
+});
 
 test('a section is asked for once a board, with its generation, and not by a hidden draw', () => {
   const b = board();
@@ -121,7 +291,7 @@ test('a board with every section (the CLI page, the watch server) asks for nothi
 
 test('a hire is judged only on a board that has worked out where everybody is', async () => {
   const b = board();
-  const rec = {family: 'hire', expect: {people: [{id: 'p1', site: 'ba:street_a#1'}]}};
+  const rec = {family: 'hire', state: 'applied', expect: {people: [{id: 'p1', site: 'ba:street_a#1'}]}};
   b.context.__rec = rec;
   assert.equal(b.run('PG_CHECK.hire(__rec)'), null, 'not Not confirmed: not judged yet');
   assert.deepEqual(b.asked.map(a => a.name), ['hiring']);
@@ -138,7 +308,7 @@ test('nobody at a factory is called spare before its staffing is worked out', ()
   const factory = {key: 'ba:street_f#1', staffIdle: ['w1', 'w2']};
   const b = board({businesses: [factory], supply: {factories: {sites: [{s: 0, lines: []}]}}});
   assert.equal(b.run('spSpareIds(D.businesses[0]).length'), 0);
-  assert.deepEqual(b.asked.map(a => a.name), ['factoryStaffing']);
+  assert.deepEqual(b.asked.map(a => a.name), [], 'a spare count is a pure read; the site draw asks');
 });
 
 test('a shop the game opens no hour is read off its own plan, not the Staff page', () => {
@@ -227,14 +397,213 @@ test('Staff needs without hiring says it is worked out, and closes the demand li
   assert.equal(b.run('hrPop'), null);
 });
 
-test('a view declares the sections its rows read, and Today declares none', () => {
+test('every row and route declares sections; Today asks only for shop plans and Map none', () => {
   const b = board();
   const rows = JSON.parse(b.run('JSON.stringify(PAGE_DRAWS.filter(r => r[3]).map(r => [r[0], r[3]]))'));
   const known = Object.keys(JSON.parse(b.run('JSON.stringify(OD_SECTIONS)')));
   assert.ok(rows.length, 'some rows declare sections');
   rows.forEach(([view, names]) => names.forEach(n => assert.ok(known.includes(n), `${view} declares an unknown section ${n}`)));
-  assert.equal(rows.filter(([view]) => view.split(' ').includes('today')).length, 0);
+  assert.deepEqual([...new Set(rows.filter(([view]) => view.split(' ').includes('today')).flatMap(([, n]) => n))], ['staffing']);
+  assert.equal(b.run('PAGE_DRAWS.every(r => Array.isArray(r[3]))'), true);
+  assert.equal(b.run('Object.values(ROUTES).every(r => Array.isArray(r.needs))'), true);
+  assert.equal(b.run('JSON.stringify(ROUTES.map.needs)'), '[]');
+  assert.equal(b.run('JSON.stringify(ROUTES["expansion/finder"].needs)'), '["premises"]');
   // Opening a view asks for what it declares.
   b.run('odWantView("staffing/needs")');
   assert.deepEqual(b.asked.map(a => a.name), ['hiring']);
+});
+
+
+test('new page-only draws wait without declaring missing data empty', () => {
+  for(const [draw, key, host] of [['drawProducts', 'products', 'secProducts'],
+    ['drawGoals', 'goals', 'secGoals'],
+    ['drawOpenStore', 'openStore', 'osBody'], ['drawPlan', 'openFactory', 'ofBody']]){
+    const b = board();
+    b.run(`${draw}()`);
+    assert.match(b.run(`$("${host}").innerHTML`), /od-wait/, draw);
+    assert.ok(b.asked.some(a => a.name === key), draw);
+  }
+  const b = board();
+  b.run('delete D.staffing; delete D.officeStaffing;');
+  assert.match(b.run('spRosterBlock({key: "x"})'), /od-wait/);
+  assert.match(b.run('spOfficeRoster({key: "x"})'), /od-wait/);
+  assert.match(b.run('spSchedSummary({key: "x", status: "retail"})'), /od-wait/);
+  assert.match(b.run('spSchedSummary({key: "x", status: "office"})'), /od-wait/);
+  assert.deepEqual(b.asked.map(a => a.name), ['staffing', 'officeStaffing']);
+});
+
+test('a partly or unseen hire never requests hiring on its own, but rechecks if ready', () => {
+  for(const state of ['partly', 'unseen']){
+    const b = board();
+    b.context.__rec = {state, expect: {people: []}};
+    assert.equal(b.run('PG_CHECK.hire(__rec)'), null);
+    assert.equal(b.run('pgPeopleSites()'), null);
+    assert.equal(b.asked.length, 0);
+    b.run('D.factoryStaffing = {cap: []}; D.hiring = {people: {}}; D.candidates = [];');
+    assert.equal(b.run('PG_CHECK.hire(__rec).state'), 'confirmed');
+    assert.equal(b.asked.length, 0);
+  }
+});
+
+test('prefetch filters factory dependencies and shares the per-board request and generation checks', async () => {
+  const b = board();
+  b.run('globalThis.document = {hidden: false}');
+  const sections = view => JSON.parse(b.run(`JSON.stringify(odPrefetchSections("${view}"))`));
+  assert.deepEqual(sections('staffing/needs'), ['staffing', 'officeStaffing']);
+  assert.deepEqual(sections('staffing/schedules'), ['staffing', 'officeStaffing']);
+  assert.deepEqual(sections('supply/production'), ['staffing', 'officeStaffing']);
+  assert.deepEqual(sections('expansion/factory'), ['openFactory', 'openStore']);
+  assert.deepEqual(sections('expansion/finder'), ['premises']);
+  assert.deepEqual(sections('map'), []);
+  b.run('document.hidden = true; odPrefetch("expansion/open")');
+  assert.equal(b.asked.length, 0);
+  b.run('document.hidden = false; odHidden = true; odPrefetch("expansion/open")');
+  assert.equal(b.asked.length, 0, 'prefetch never acts as a hidden draw');
+  b.run('odHidden = false; odPrefetch("expansion/open"); odPrefetch("expansion/open"); odNeed("openStore")');
+  assert.deepEqual(b.asked.map(a => [a.name, a.gen]), [['openStore', 5]]);
+  b.take({meta: {day: 4}, businesses: []}, 6);
+  b.run('odPrefetch("expansion/open")');
+  b.asked[0].resolve({generation: 5, sections: {openStore: {openStore: {old: true}}, premises: {premises: {}}}});
+  await tick();
+  assert.equal(b.run('odReady("openStore")'), false);
+  assert.deepEqual(b.asked.map(a => a.gen), [5, 6]);
+});
+
+test('Staffing intent prefetches light planning stages without factory staffing or hiring', () => {
+  const b = board();
+  b.run('delete D.staffing; delete D.officeStaffing; globalThis.document = {hidden: false}; odPrefetch("staffing/schedules"); odPrefetch("staffing/needs")');
+  assert.deepEqual(b.asked.map(a => a.name), ['staffing', 'officeStaffing']);
+});
+
+test('factory planning waits for location and financing before loading or saving its step', () => {
+  for(const core of [{}, {openFactory: {}, premises: {buildings: []}}]){
+    const b = board(core);
+    b.run(`ofStep = "investment"; globalThis.__saved = 0;
+      globalThis.localStorage = {setItem(){ __saved++; }};
+      ofDraw(); ofSave()`);
+    assert.equal(b.run('ofStep'), 'investment');
+    assert.equal(b.run('__saved'), 0);
+    assert.match(b.run('$("ofBody").innerHTML'), /od-wait/);
+    assert.ok(b.asked.some(a => a.name === 'openStore'));
+    assert.equal(b.run('JSON.stringify(ROUTES["expansion/factory"].needs)'), '["openFactory","openStore"]');
+  }
+});
+
+test('an opened store staff check waits for shop plans before judging spare people', () => {
+  const b = board({factoryStaffing: {}, hiring: {}, candidates: []});
+  b.run('delete D.staffing; globalThis.__read = 0; hrMemoModel = () => { __read++; throw new Error("must wait"); }');
+  const row = b.run('osCkStaff({key: "shop"}, {key: "shop", staff: 2, stationShifts: 0})');
+  assert.match(row.act, /od-wait/);
+  assert.doesNotMatch(row.sub, /no hours scheduled|of .*people/);
+  assert.equal(b.run('__read'), 0);
+  assert.deepEqual(b.asked.map(a => a.name), ['staffing']);
+});
+
+test('Today office schedule target is independent of deferred office plans', () => {
+  const b = board();
+  b.run('delete D.officeStaffing');
+  const before = b.run('nxStaffInto({key: "office", status: "office"})');
+  b.run('D.officeStaffing = [{key: "office", shifts: [{h: 8}]}]');
+  assert.equal(b.run('nxStaffInto({key: "office", status: "office"})'), before);
+  assert.equal(before, '#sitePanel .sp-acts');
+  assert.equal(b.asked.length, 0);
+});
+
+test('search and the expansion question enter the on-demand finder with their presets', () => {
+  const b = board({market: {hoods: ['hood'], types: [{slug: 'shop', type: 'Shop', cells: [{demand: 30}]}], offices: []}});
+  b.run('globalThis.__route = null; openRoute = (id, o) => { __route = {id, o}; odNeed("premises"); }');
+  b.run('SS_VIEWS.find(v => v.id === "finder").go()');
+  assert.equal(b.run('__route.id'), 'expansion/finder');
+  b.run('SS_QUESTIONS.find(v => v.id === "open").go()');
+  assert.equal(b.run('__route.id'), 'expansion/finder');
+  b.run('ssFinder({cat: "office", type: "law", hoods: ["hood"]})');
+  assert.equal(b.run('JSON.stringify(__route.o.preset)'), '{"cat":"office","type":"law","hoods":["hood"]}');
+  assert.deepEqual(b.asked.map(a => a.name), ['premises']);
+});
+
+test('navigation intent maps route links and area tabs to their declared prefetch', () => {
+  const b = board();
+  b.run('globalThis.document = {hidden: false}');
+  b.context.__event = {target: {closest: () => ({dataset: {route: 'businesses/prices'}})}};
+  b.run('odNavIntent(__event); odNavIntent(__event)');
+  assert.deepEqual(b.asked.map(a => a.name), ['products']);
+  b.context.__event = {target: {closest: () => ({dataset: {id: 'expansion'}})}};
+  b.run('areaLast.expansion = "open"; odNavIntent(__event)');
+  assert.deepEqual(b.asked.map(a => a.name), ['products', 'openStore']);
+  b.context.__event = {target: {closest: () => ({dataset: {}, getAttribute: () => '#wiki/businesstypes-giftshop'})}};
+  b.run('odNavIntent(__event)');
+  assert.deepEqual(b.asked.map(a => a.name), ['products', 'openStore']);
+});
+
+
+test('a Demand cell can open the finder from core market data without asking for premises', () => {
+  const b = board({market: {hoods: ['hood'], types: [
+    {slug: 'ba:businesstype_cinema', cells: [{demand: 50}]},
+    {slug: 'ba:businesstype_theater', cells: [{demand: 40}]},
+    {slug: 'shop', cells: [{demand: 30}]},
+    {slug: 'missing', cells: [null]}], offices: [{slug: 'law', cells: [{demand: 20}]}]}});
+  assert.equal(b.run('finderPreset("ba:businesstype_cinema", "hood").cat'), 'cinema');
+  assert.equal(b.run('finderPreset("ba:businesstype_theater", "hood").cat'), 'theater');
+  assert.equal(b.run('finderPreset("shop", "hood").cat'), 'retail');
+  assert.equal(b.run('finderPreset("law", "hood").cat'), 'office');
+  assert.equal(b.run('finderPreset("missing", "hood")'), null);
+  assert.equal(b.asked.length, 0);
+});
+
+test('Today fixed costs and Payroll use core staff without a section request', () => {
+  const b = board({staff: {total: 2, dailyCost: 700, roles: [], unhappy: 0, absent: 0, complaining: 0},
+    kpi: {netWorth: null, rentBill: 300, debt: 0, profitAvg7: 0, profitPrev7: 0}, daily: [], loans: []});
+  b.run('drawKpis(); drawPayroll()');
+  assert.match(b.run('$("kpis").innerHTML'), /\$1,000/);
+  assert.doesNotMatch(b.run('$("kpis").innerHTML'), /Working out payroll/);
+  assert.doesNotMatch(b.run('$("secPayroll").innerHTML'), /od-wait/);
+  assert.equal(b.run('JSON.stringify(ROUTES["staffing/payroll"].needs)'), '[]');
+  assert.equal(b.run('JSON.stringify(PAGE_DRAWS.find(r => r[0] === "staffing/payroll")[3])'), '[]');
+  assert.equal(b.asked.length, 0);
+});
+
+test('Today and shell supply readers use core recipes without a section request', () => {
+  const b = board({businesses: [{key: 'factory', lines: []}], supply: {factories: {sites: [
+    {s: 0, lines: [], needs: [], unnamed: [{rid: 'r1', candidates: [{slug: 'beer'}], machines: 1}]}]}},
+    plan: {items: {beer: 'Core Beer'}, recipes: [{slug: 'beer', item: 'Beer', out: 10, ingredients: []}]}});
+  b.run('localNames = () => ({r1: "beer"}); globalThis.__painted = null; paintPlanImports = s => { __painted = s; }; drawSupplyStrip()');
+  assert.equal(b.run('factoryView().unnamed'), 0, 'the core resolves the named factory line immediately');
+  assert.equal(b.run('itemName("beer")'), 'Core Beer', 'plan labels take precedence');
+  assert.ok(b.run('__painted.badge.length > 0'), 'Today has a supply verdict on the first board');
+  assert.equal(b.run('Number.isFinite(routeCount("supply/changes"))'), true);
+  assert.equal(b.run('Number.isFinite(routeCount("supply/production"))'), true);
+  b.run('SS_VIEWS.find(r => r.id === "checklist").live(); pgStateAt("factory", "beer"); ovPlanHtml({ev: {slug: "beer"}, group: "staff"}, D.businesses[0])');
+  assert.equal(b.run('"plan" in OD_SECTIONS'), false);
+  assert.equal(b.run('Object.values(ROUTES).every(r => !r.needs.includes("plan"))'), true);
+  assert.equal(b.asked.length, 0);
+});
+
+test('Demand popover asks for store facts and redraws the still-open cell on arrival', async () => {
+  const b = board({market: {hoods: ['hood'], types: [{slug: 'shop', cells: [{demand: 30}]}]}});
+  b.run(`demPop = {contains(){ return false; }, setAttribute(){}, querySelector(){ return null; }, focus(){}};
+    demPopPlace = () => {}; hideTip = () => {};
+    globalThis.__cell = {isConnected: true, dataset: {slug: "shop", hood: "hood"}, setAttribute(){}};
+    demCellPop(__cell)`);
+  assert.doesNotMatch(b.run('demPop.innerHTML'), /data-dem-go="open"/);
+  assert.match(b.run('demPop.innerHTML'), /data-dem-go="find"/);
+  assert.deepEqual(b.asked.map(a => a.name), ['openStore']);
+  assert.match(b.run('demPop.innerHTML'), /od-wait/);
+  assert.match(b.run('demPop.innerHTML'), /To rent<\/span><b>—/);
+  b.asked[0].resolve({sections: {openStore: {openStore: {types: {shop: {}}}},
+    premises: {premises: {demand: {hood: [{slug: 'shop', category: 'retail'}]}, buildings: []}}}});
+  await tick();
+  assert.match(b.run('demPop.innerHTML'), /data-dem-go="open"/);
+  assert.doesNotMatch(b.run('demPop.innerHTML'), /od-wait/);
+  assert.match(b.run('demPop.innerHTML'), /To rent<\/span><b>0/);
+});
+
+test('a closed Demand popover stays closed when store facts arrive', async () => {
+  const b = board({market: {hoods: ['hood'], types: [{slug: 'shop', cells: [{demand: 30}]}]}});
+  b.run(`demPop = {contains(){ return false; }, setAttribute(){}, querySelector(){ return null; }, focus(){}};
+    demPopPlace = () => {}; hideTip = () => {};
+    globalThis.__cell = {isConnected: true, dataset: {slug: "shop", hood: "hood"}, setAttribute(){}};
+    demCellPop(__cell); demPopClose(false)`);
+  b.asked[0].resolve({sections: {openStore: {openStore: {types: {shop: {}}}}, premises: {premises: {buildings: []}}}});
+  await tick();
+  assert.equal(b.run('demPop.hidden'), true);
 });
