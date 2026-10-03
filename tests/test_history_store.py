@@ -185,7 +185,7 @@ class BrowserBound(Tmp):
 
         save = mock.Mock(root={"characterId": "old3"})
         with mock.patch.object(ba_dashboard, "load_save", return_value=save), \
-                mock.patch.object(ba_dashboard, "safe_extract", return_value={}):
+                mock.patch.object(ba_dashboard, "safe_build", return_value=ba_dashboard.Build(save, None)):
             ba_dashboard.browser_build("x.hsg", "", self.path, None)
         book = json.loads(self.read())["characters"]
         # The character just built is the most recent; the eight kept are the
@@ -200,10 +200,10 @@ class BrowserBound(Tmp):
     def test_a_damaged_browser_history_is_set_aside_and_nothing_written(self):
         self.put('{"characters": {"x"')
         save = mock.Mock(root={"characterId": "c"})
-        # extract() loads the history first, as the real one does.
+        # build_core() loads the history first, as the real one does.
         with mock.patch.object(ba_dashboard, "load_save", return_value=save), \
-                mock.patch.object(ba_dashboard, "safe_extract",
-                                  side_effect=lambda s, n, h: (History(h).write(), {})[1]):
+                mock.patch.object(ba_dashboard, "safe_build",
+                                  side_effect=lambda s, n, h, g: (History(h).write(), ba_dashboard.Build(s, n))[1]):
             ba_dashboard.browser_build("x.hsg", "", self.path, None)
         self.assertFalse(os.path.exists(self.path))
         self.assertEqual(self.read(self.path + ".bad"), '{"characters": {"x"')
@@ -215,7 +215,7 @@ class BrowserBound(Tmp):
         history.write()
         save = mock.Mock(root={"characterId": "c", "Day": 40})
         with mock.patch.object(ba_dashboard, "load_save", return_value=save):
-            with mock.patch.object(ba_dashboard, "safe_extract", return_value={}):
+            with mock.patch.object(ba_dashboard, "safe_build", return_value=ba_dashboard.Build(save, None)):
                 ba_dashboard.browser_build("x.hsg", "", self.path, None)
         days = sorted(map(int, json.loads(self.read())["characters"]["c"]["days"]))
         self.assertEqual(days, list(range(27, 41)) + list(range(47, 61)),

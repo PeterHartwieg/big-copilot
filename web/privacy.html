@@ -37,7 +37,9 @@ a{color:var(--accent);overflow-wrap:anywhere}
   <!-- Every promise here is backed by the code: fonts and Pyodide are served
        from this site (build_web.py, web/worker.js), the online count keeps its
        id in memory (web/community.js), the daily cleanup deletes presence rows
-       and ended polls (server/worker.mjs), Worker invocation logs and traces are off
+       and ended polls (server/worker.mjs), a bug report sends only what
+       web/report.js lists and R2's lifecycle rule deletes its folder after 30 days
+       (wrangler.jsonc, docs/community-features.md), Worker invocation logs and traces are off
        (wrangler.jsonc), and Cloudflare's automatic Web Analytics injection is
        switched off for the domain in the dashboard. Change the text when any of those change. -->
 
@@ -48,35 +50,41 @@ a{color:var(--accent);overflow-wrap:anywhere}
   </address>
 
   <h2>2. In short</h2>
-  <p>Big Copilot sets no cookies of its own and includes no tracking or analytics scripts. Your saves are analysed only in your browser and are never sent to us. If you link the page to the running game through the Big Copilot Link mod, the save travels from that mod to your browser on your own computer and nowhere else.</p>
+  <p>Big Copilot sets no cookies of its own and includes no tracking or analytics scripts. Your saves are analysed only in your browser and are never sent to us, unless you send a bug report with your save attached (section 6). If you link the page to the running game through the Big Copilot Link mod, the save travels from that mod to your browser on your own computer and nowhere else, unless you attach it to a bug report.</p>
 
   <h2>3. Hosting</h2>
   <p>The website is hosted by Cloudflare, Inc., 101 Townsend St, San Francisco, CA 94107, USA. When you visit, Cloudflare processes your IP address, the date and time, the address requested and information about your browser, to deliver the site and protect it against abuse. We evaluate only aggregated statistics from this, such as the number of page views and the countries visitors come from. To defend against attacks, Cloudflare may set a strictly necessary cookie (§ 25(2) no. 2 of the German Telecommunications and Digital Services Data Protection Act, TDDDG). Cloudflare acts on our behalf, keeps this data only as long as these purposes require, and is certified under the EU-US Data Privacy Framework. We keep no access logs ourselves.</p>
   <p>The legal basis is Art. 6(1)(f) GDPR; our legitimate interest is running the website securely and reliably and having an overview of how it is used.</p>
 
   <h2>4. Data in your browser</h2>
-  <p>Settings, the light or dark theme and the language you pick, the save folder or game link you chose, saved searches, the import figures you type, the changes you mark as done, the record of changes applied through the game link (which setting, the amounts, and for a hire the candidate and the site, kept for 14 game days) and the market and cash history are kept in your browser's storage (localStorage, sessionStorage, IndexedDB). They do not leave your device. If you let the page change your game through the Big Copilot Link mod, the approval you gave it in the game is kept in localStorage as well; it is sent only to that mod on your own computer, never anywhere else. To ask for that approval, the page tells the mod a short name for your browser and system, such as "Chrome on Windows". The mod keeps a SHA-256 hash of the approval (never the approval itself), with that name, the address of this site and when the approval was made and last used, in the game's settings on your computer; you can remove them with "Forget approved browsers" in the mod's options. When you approve, the mod also writes the address of this site to the game's log file on your computer. This storage is necessary for the features you use (§ 25(2) no. 2 TDDDG). You can delete this data at any time in your browser settings, and the history also with "Forget history".</p>
+  <p>Settings, the light or dark theme and the language you pick, the save folder or game link you chose, saved searches, the import figures you type, the changes you mark as done, the record of changes applied through the game link (which setting, the amounts, and for a hire the candidate and the site, kept for 14 game days) and the market and cash history are kept in your browser's storage (localStorage, sessionStorage, IndexedDB). They do not leave your device, except the three settings named in section 6 when you send a bug report with technical details attached. If you let the page change your game through the Big Copilot Link mod, the approval you gave it in the game is kept in localStorage as well; it is sent only to that mod on your own computer, never anywhere else. To ask for that approval, the page tells the mod a short name for your browser and system, such as "Chrome on Windows". The mod keeps a SHA-256 hash of the approval (never the approval itself), with that name, the address of this site and when the approval was made and last used, in the game's settings on your computer; you can remove them with "Forget approved browsers" in the mod's options. When you approve, the mod also writes the address of this site to the game's log file on your computer. This storage is necessary for the features you use (§ 25(2) no. 2 TDDDG). You can delete this data at any time in your browser settings, and the history also with "Forget history".</p>
 
   <h2>5. Online count and votes</h2>
   <p>Online count: while you have the dashboard or the wiki open, your browser sends a random identifier to our server about every five minutes, so that we can count how many browser tabs currently have the site open. The identifier is created anew each time the page loads and is not stored in your browser. The server keeps only this identifier and the time; both are deleted within two days.</p>
   <p>Votes: when you vote for a feature, we do not store your IP address but a hash derived from it with a secret key, together with the time of the vote, so that only one vote per connection counts. Both are deleted within one day after we close the poll.</p>
-  <p>To prevent abuse, we limit requests to these features per connection; this, too, uses only a short-lived hash of the IP address.</p>
+  <p>To prevent abuse, we limit requests to these features and to bug reports per connection; this, too, uses only a short-lived hash of the IP address.</p>
   <p>The legal basis is Art. 6(1)(f) GDPR; our legitimate interest is operating these features and preventing abuse.</p>
 
-  <h2>6. Contact by email</h2>
+  <h2>6. Bug reports</h2>
+  <p>The page has a form for reporting a bug. Nothing is sent until you click Send. What it sends:</p>
+  <p>Always: the text you write, the version of this site, the game build when the page knows it, your browser family (such as "Chrome") and whether the page read a save folder, one save file or the game link. Your text and these details become a public issue in the project's repository on GitHub, where anyone can read them. GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, USA, receives them as a recipient; transfers to the USA are covered by the EU-US Data Privacy Framework. Do not write anything in the text you do not want published.</p>
+  <p>Only if you tick "Attach my save": the save file the page read. Only if you tick "Attach technical details": the kind of error and where in Big Copilot's code it happened (such as "KeyError in _staffing (ba_dashboard.py line 4120)"), which is added to the public issue and shown in the form before you send; and, kept private, the error message, the full error and three settings (the page's language, the light or dark theme and your operating system). Nothing else from your browser's storage is sent.</p>
+  <p>The save and the private details are kept at Cloudflare (R2 storage, in the EU), in a folder named in the issue, which only we can read. Cloudflare deletes them automatically after 30 days. If the issue cannot be opened, the attachments are deleted at once, or within two days at the latest. The issue stays on GitHub. We use the attachments only to find and fix the bug.</p>
+  <p>The legal basis is your consent, Art. 6(1)(a) GDPR, which you give by sending the report. You can withdraw it at any time by writing to <a href="mailto:bigcopilot@hartwieg.com">bigcopilot@hartwieg.com</a> and naming the issue; we then delete the stored folder and the issue. Withdrawal does not affect processing before it.</p>
+  <h2>7. Contact by email</h2>
   <p>If you write to us, we use your details only to answer your request. Our mailbox is provided by Google (Google Workspace); transfers to Google LLC in the USA are covered by the EU-US Data Privacy Framework. The legal basis is Art. 6(1)(f) GDPR. We delete the messages once your request has been dealt with.</p>
 
-  <h2>7. External links and donations</h2>
+  <h2>8. External links and donations</h2>
   <p>The footer links out to PayPal, GitHub, YouTube, Reddit, Discord, Steam and the game developer's own site. Following one opens that provider's page; only then do they receive data from you, and their own privacy policies apply.</p>
   <p>Donations are handled by PayPal (Europe) S.à r.l. et Cie, S.C.A., 22–24 Boulevard Royal, L-2449 Luxembourg, as an independent controller. When you donate, PayPal gives us your name, your email address and the amount. We use these details only to process the donation and keep them for as long as we need them as a record of it. The legal basis is Art. 6(1)(b) GDPR, and Art. 6(1)(c) GDPR where a statutory retention duty applies.</p>
 
-  <h2>8. Your rights</h2>
+  <h2>9. Your rights</h2>
   <p>You have the right of access, rectification, erasure, restriction of processing and data portability (Art. 15 to 20 GDPR). To exercise them, write to <a href="mailto:bigcopilot@hartwieg.com">bigcopilot@hartwieg.com</a>. You may also lodge a complaint with a data protection supervisory authority, for example the Bavarian State Office for Data Protection Supervision (<span lang="de">Bayerisches Landesamt für Datenschutzaufsicht</span>, BayLDA).</p>
 
-  <h2>9. Right to object</h2>
+  <h2>10. Right to object</h2>
   <p>You may object at any time, on grounds relating to your particular situation, to processing that we base on Art. 6(1)(f) GDPR (Art. 21 GDPR). To do so, write to <a href="mailto:bigcopilot@hartwieg.com">bigcopilot@hartwieg.com</a>.</p>
 
-  <p class="lead">Last updated: September 2026</p>
+  <p class="lead">Last updated: October 2026</p>
 
   <p class="back"><a href="/">Back to Big Copilot</a> · <a href="impressum.html">Impressum</a></p>
 </main>

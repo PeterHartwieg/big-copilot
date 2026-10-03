@@ -186,6 +186,12 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
                   # The difficulty chip, shown here at 1500 px and under; wider
                   # than that it ends the masthead clock's last line.
                   '<span class="fv-footdiff" id="footDiff"></span>')
+    # The bug report form (web/report.js) needs web/app.js, which loads it, and
+    # the site's /api/report, so only the site's pages carry its control; the
+    # CLI's dashboard.html keeps the plain Discord link beside it. Marked by
+    # attribute: Help & feedback on the board copies it (pxHelpHtml()).
+    report = ('<button type="button" class="sf-link sf-btn" data-bug-report aria-haspopup="dialog">'
+              '<span data-tt="foot.report">Report a bug</span></button>\n        ' if site else "")
     return f'''<footer class="sitefoot{" sf-landing rv" if landing else ""}">
   <div class="sf-in">
     <div class="sf-rule"><span class="sf-orb"></span></div>
@@ -226,7 +232,7 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
         <h2 class="sf-head" translate="no">Big Copilot</h2>
         <button type="button" class="sf-link sf-btn" data-changelog aria-haspopup="dialog"><span data-tt="foot.changelog">Changelog</span><span class="feature-new" data-new-feature="changelog" data-tt="nav.new" hidden>New</span></button>
         {_sf_out(WORKSHOP_URL, "Game link mod", title="Big Copilot Link on the Steam Workshop: the board reads the game you are playing.", feature="game-link", key="foot.mod")}
-        {_sf_out(FEEDBACK_URL, "Bugs and feedback", title="The Discord's support channel: a save that will not build, a wrong number, or something the board should show, all welcome.", key="foot.feedback", attrs=" data-sf-feedback")}
+        {report}{_sf_out(FEEDBACK_URL, "Bugs and feedback", title="The Discord's support channel: a save that will not build, a wrong number, or something the board should show, all welcome.", key="foot.feedback", attrs=" data-sf-feedback")}
         {_sf_out(REPO_URL, "Source code", title="MIT-licensed", key="foot.source")}
       </div>
       <div class="sf-col">
@@ -2009,7 +2015,199 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
 
 
 # ---------------------------------------------------------------- extraction
+# The payload's top-level keys, in the order the page has always been sent
+# them. Each is the core's (computed on every build) or one section's
+# (SECTIONS, computed when a page asks for it); materialize_all() puts every
+# one back in this order, so the CLI's page and the watch server's data.json
+# are what one build with every section computed gives.
+PAYLOAD_KEYS = (
+    "meta", "kpi", "daily", "businesses", "ownedBuildings", "homes", "products", "staff",
+    "loans", "supply", "rhythm", "market", "premises", "chains", "payback", "openStore",
+    "openFactory", "trends", "hypeExposure", "hours", "hourFindings", "staffing",
+    "factoryStaffing", "officeStaffing", "candidates", "hiring", "plan", "names",
+    "skillNames", "marketingAgencies", "cashFlow", "ledgerDays", "alerts", "minor",
+    "alertsDemand", "goals",
+)
+
+
+class Build:
+    """One save's build: the core payload, and what its sections are computed from.
+
+    `core` is the part of the payload every build computes: the warnings and
+    everything they read (docs/architecture.md, "Sections"), wired
+    (_wire_msgs()) and ready to send. `shared` holds the intermediates a
+    section reads, `private` the parts that never reach the payload (a
+    factory line's machines, `posts`; every plan row's `_hire` part, `hires`,
+    by the row's identity; the market's `catalogue`), and `sections` each
+    section computed so far, by name. A section is computed at most once per
+    build, over the objects the core built, so nothing parses the save twice.
+    `generation` is the worker's number for the build (browser_build()).
+    """
+
+    def __init__(self, save: Save, names: Names, generation=None):
+        self.save = save
+        self.names = names
+        self.generation = generation
+        self.core: dict = {}
+        self.shared: dict = {}
+        self.private: dict = {}
+        self.sections: dict = {}
+
+
 def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
+    """The whole payload: the core and every section (materialize_all())."""
+    return materialize_all(build_core(save, names, history_path))
+
+
+def materialize_all(build: Build) -> dict:
+    """Every section of `build` computed, and the payload in PAYLOAD_KEYS order.
+
+    The one path the CLI's dashboard.html, the watch server and extract() take,
+    over the same registry the browser reads a section at a time.
+    """
+    for name in SECTIONS:
+        section(build, name)
+    values = dict(build.core)
+    for name in SECTIONS:
+        values.update(build.sections[name])
+    return {key: values[key] for key in PAYLOAD_KEYS}
+
+
+def section(build: Build, name: str) -> dict:
+    """Section `name` of `build` as {key: value}, its needs computed before it.
+
+    Computed once per build and kept. A section never writes the history,
+    which the core alone records.
+    """
+    if name not in build.sections:
+        spec = SECTIONS[name]
+        for need in spec["needs"]:
+            section(build, need)
+        _progress(spec["words"], force=True)
+        values = spec["produce"](build)
+        build.sections[name] = _wire_msgs({key: values[key] for key in spec["keys"]})
+    return build.sections[name]
+
+
+def _take_posts(factories: dict) -> dict:
+    """Each factory line's `_posts` (its machines' item ids), taken off the line.
+
+    Keyed as _factory_staffing() reads them: ("line" or "unnamed", the site's
+    `s`, the line's place in its list), so two lines making one item keep theirs.
+    """
+    posts = {}
+    for site in factories.get("sites", []):
+        for i, line in enumerate(site["lines"]):
+            posts[("line", site["s"], i)] = line.pop("_posts", [])
+        for i, line in enumerate(site.get("unnamed", [])):
+            posts[("unnamed", site["s"], i)] = line.pop("_posts", [])
+    return posts
+
+
+def _take_hires(rows) -> dict:
+    """Each plan row's private `_hire` part, taken off it: {id(part): hire}.
+
+    A shop's row carries one on itself, on its `fullCover` and on its
+    `openCover`; an office's and a factory's on the row. _hiring() reads them
+    by the row, which the build keeps alive.
+    """
+    out = {}
+    for row in rows:
+        for part in (row, (row or {}).get("fullCover"), (row or {}).get("openCover")):
+            if isinstance(part, dict) and "_hire" in part:
+                out[id(part)] = part.pop("_hire")
+    return out
+
+
+def _factory_staffing_section(build: Build) -> dict:
+    """Section factoryStaffing: every factory line's week, over the bench the offices left."""
+    shared = build.shared
+    # Planned over a copy of the pool the offices left, so an attempt that
+    # fails half way leaves it whole for Try again.
+    world = shared["world"]
+    world = {"people": world["people"], "bench": list(world["bench"]),
+             "state": {pid: _copy_state(week) for pid, week in world["state"].items()}}
+    with _collector_paused():
+        factory = _factory_staffing(
+            build.save, build.names, shared["businesses"], shared["factories"], shared["staff"],
+            world=world, posts=build.private["posts"],
+        )
+    build.private["hires"].update(_take_hires(
+        row for mode in SIZING_MODES for row in factory.get(mode, [])))
+    return {"factoryStaffing": factory}
+
+
+def _hiring_section(build: Build) -> dict:
+    """Section hiring: the Staff page's key and the headhunters' candidates."""
+    factory = build.sections["factoryStaffing"]["factoryStaffing"]
+    with _collector_paused():
+        hiring = _hiring(build.save, build.shared["businesses"], build.core["staffing"], factory,
+                         build.core["officeStaffing"], hires=build.private["hires"])
+    # The Staff page: the headhunters' candidates, best first, and what
+    # every site still needs by role. See _candidates() and _hiring().
+    return {"candidates": _candidates(build.save), "hiring": hiring}
+
+
+# What the board computes only when a page asks for it (docs/architecture.md,
+# "Sections"): each section's payload keys, the sections it needs computed
+# first, its producer, and what the page is told while it runs. Planning keeps
+# its order: the core plans shops and offices over one pool of people
+# (_plan_world()), factory lines plan over what the offices left, and hiring
+# reads every plan. Nothing a warning reads is here.
+SECTIONS = {
+    "factoryStaffing": {
+        "keys": ("factoryStaffing",),
+        "needs": (),
+        "produce": _factory_staffing_section,
+        "words": "Working out factory staffing",
+    },
+    "hiring": {
+        "keys": ("hiring", "candidates"),
+        "needs": ("factoryStaffing",),
+        "produce": _hiring_section,
+        "words": "Working out staff needs",
+    },
+}
+
+
+# The browser worker's progress callback (set_progress()): say(stage, detail).
+# None outside the browser. A JavaScript timer cannot fire while Python runs,
+# so the page's inactivity clock (LOAD_TIMEOUT_MS in web/app.js) hears from a
+# long build or section only through this.
+_PROGRESS = {"say": None, "at": 0.0}
+PROGRESS_EVERY_S = 2.0
+
+
+def set_progress(say) -> None:
+    """Hand Python the worker's say(stage, detail); None takes it away."""
+    _PROGRESS["say"] = say
+    _PROGRESS["at"] = 0.0
+
+
+def _progress(detail: str = "", force: bool = False) -> None:
+    """Tell the page the build is still working: every PROGRESS_EVERY_S at most,
+    or now with `force`. Cheap enough for the placer's inner loop when nobody
+    listens."""
+    say = _PROGRESS["say"]
+    if say is None:
+        return
+    now = time.monotonic()
+    if not force and now - _PROGRESS["at"] < PROGRESS_EVERY_S:
+        return
+    _PROGRESS["at"] = now
+    say("build", detail)
+
+
+def build_core(save: Save, names: Names, history_path: str | None = None,
+               generation=None) -> Build:
+    """The core of one build: every key the warnings need, the history recorded.
+
+    The rest of the payload is SECTIONS, computed from what this keeps on the
+    Build. The order is extract()'s as it has always been, up to the plans:
+    shops and offices are planned here, over the pool the factory lines are
+    planned over next (_factory_staffing_section()).
+    """
+    build = Build(save, names, generation)
     root = save.root
     day = root["Day"]
 
@@ -2095,11 +2293,13 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     grids = [grid for grid in all_grids if grid["reported"]]
     service_wage = _service_wages(staff, {b["key"]: b["status"] for b in businesses})
     hour_findings = _hour_findings(grids, businesses, service_wage)
+    # The market's catalogue is the plan's alone; it never ships.
+    build.private["catalogue"] = market.pop("catalogue")
     plan = _plan(
         save,
         names,
         businesses,
-        market.pop("catalogue"),
+        build.private["catalogue"],
         recipes,
         stations,
         _ingredient_prices(save, names, supply, businesses),
@@ -2123,18 +2323,25 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     ledger = history.ledger(character, day, entry)
     history.write()
     gate = max(profit_avg7 * MATERIAL_SHARE, MATERIAL_FLOOR)
-    # Every site's week over one pool of people: shops, then offices by Peter's
-    # office default, then factory lines in each sizing (which takes the
-    # lines' _posts); then the Staff page's key, which takes every plan's
-    # private `_hire` part off its row.
+    # Every site's week over one pool of people (_plan_world()): shops, then
+    # offices by Peter's office default, here. Factory lines in each sizing
+    # and the Staff page's key are sections, planned over the world the
+    # offices leave (SECTIONS). The private parts come off now, before the
+    # core is sent: each line's machines and each plan row's `_hire`.
+    factories = supply.get("factories", {})
+    build.private["posts"] = _take_posts(factories)
     with _collector_paused():
-        staffing, office_staffing, factory_staffing = _staff_plans(
-            save, names, businesses, all_grids, supply.get("factories", {}), staff,
+        world = _plan_world(save, staff)
+        staffing = _staffing(
+            save, names, businesses, all_grids, staff,
             (save.deref(root.get("gameVariables")) or {}).get(
                 "baseCustomerPromotionMultiplier", 0.55
             ),
+            world,
         )
-        hiring = _hiring(save, businesses, staffing, factory_staffing, office_staffing)
+        office_staffing = _office_staffing(save, names, businesses, all_grids, staff, world)
+    build.private["hires"] = _take_hires([*staffing, *office_staffing])
+    build.shared.update(businesses=businesses, factories=factories, staff=staff, world=world)
     alerts = _alerts(
         businesses, supply, chains, trends, hype, hour_findings, grids, day, gate, agencies=agencies
     )
@@ -2146,8 +2353,9 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
     )
 
     # Every sentence written with msg() carries its key and params to the page
-    # in the row's "i18n" field, in one pass at the end.
-    return _wire_msgs({
+    # in the row's "i18n" field, in one pass at the end; a section's when it
+    # is computed (section()).
+    core = _wire_msgs({
         "meta": {
             "character": character,
             "save": root.get("SaveGameName") or "Save",
@@ -2212,12 +2420,7 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "hours": grids,
         "hourFindings": hour_findings,
         "staffing": staffing,
-        "factoryStaffing": factory_staffing,
         "officeStaffing": office_staffing,
-        # The Staff page: the headhunters' candidates, best first, and what
-        # every site still needs by role. See _candidates() and _hiring().
-        "candidates": _candidates(save),
-        "hiring": hiring,
         "plan": plan,
         # Every game name the text knows -- items, business types,
         # neighbourhoods, stations, skills, job demands -- by the game's own
@@ -2237,6 +2440,8 @@ def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
         "alertsDemand": {"lines": alerts_demand["lines"], "minor": alerts_demand["minor"]},
         "goals": _goals(save, names, businesses),
     })
+    build.core = {key: core[key] for key in PAYLOAD_KEYS if key in core}
+    return build
 
 
 def _net_worth(root: dict, history, character: str, day: int) -> dict:
@@ -11597,7 +11802,8 @@ def _plan_world(save: Save, staff: list) -> dict:
     person, which every placement writes into its own copy of and commits back;
     `bench` the unassigned people nobody is in training among, which each plan
     that gives one of them hours takes them off. Shops, then offices, then
-    factories plan over the same three (_staff_plans()), so an unassigned
+    factories plan over the same three (build_core(), then the factoryStaffing
+    section), so an unassigned
     person is promised to one site at most, whichever kind it is.
     """
     people = _plan_people(save, staff)
@@ -11628,20 +11834,6 @@ def _collector_paused():
     finally:
         if was:
             gc.enable()
-
-
-def _staff_plans(save: Save, names: Names, businesses: list, grids: list, factories: dict,
-                 staff: list, base_promotion: float) -> tuple:
-    """Every site's week, over one pool: (staffing, officeStaffing, factoryStaffing).
-
-    Shops first, in their order, then offices, then factories, each drawing on
-    the unassigned people the ones before it left (_plan_world()).
-    """
-    world = _plan_world(save, staff)
-    staffing = _staffing(save, names, businesses, grids, staff, base_promotion, world)
-    offices = _office_staffing(save, names, businesses, grids, staff, world)
-    factory = _factory_staffing(save, names, businesses, factories, staff, world=world)
-    return staffing, offices, factory
 
 
 def _staffing(
@@ -11972,7 +12164,8 @@ def _factory_run_start(hours: int, pool: list) -> int:
 
 
 def _factory_staffing(save: Save, names, businesses: list, factories: dict, staff: list,
-                      detail: bool = False, world: dict | None = None) -> dict:
+                      detail: bool = False, world: dict | None = None,
+                      posts: dict | None = None) -> dict:
     """Staffing for factory lines, once per sizing: {cap: [row], dem: [row]}.
 
     The shop roster's placer (_place_week) over a synthetic grid: one role,
@@ -11981,7 +12174,7 @@ def _factory_staffing(save: Save, names, businesses: list, factories: dict, staf
     24/7, `needHours.dem` sized for demand) as one run from
     _factory_run_start(), cut into shifts of at most 12 hours. The pool is the
     factory's own staff, then the unassigned factory workers the shops and
-    offices left on `world`'s bench (_staff_plans()), whom either sizing's
+    offices left on `world`'s bench (build_core()), whom either sizing's
     week draws off it. `headcount.needed` is the week's
     machine-hours; `wageDay` the mean day's wage of the factory's factory
     workers; `delta` what hiring the plan's `hire` and letting its `spare` go
@@ -11997,16 +12190,11 @@ def _factory_staffing(save: Save, names, businesses: list, factories: dict, staf
     `delta` (and `unnamedMachines`). `detail` keeps the placer's own tables
     (`stations`, `people`, `shifts`, `placed`, `shortHours`) for the tests.
 
-    Takes each line's `_posts` (its machines' item ids) off the payload, keyed
-    by the line's place in its list, so two lines making one item keep theirs.
+    Each line's `_posts` (its machines' item ids) is `posts`, which the build
+    took off the payload already (_take_posts()), or is taken off it here.
     """
     sites = factories.get("sites", [])
-    posts_of = {}
-    for site in sites:
-        for i, line in enumerate(site["lines"]):
-            posts_of[("line", site["s"], i)] = line.pop("_posts", [])
-        for i, line in enumerate(site.get("unnamed", [])):
-            posts_of[("unnamed", site["s"], i)] = line.pop("_posts", [])
+    posts_of = _take_posts(factories) if posts is None else posts
     world = world or _plan_world(save, staff)
     people = world["people"]
     label = names.label(FACTORY_SKILL) if names else FACTORY_SKILL
@@ -12499,6 +12687,8 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     may work open with no hire weeks, for a caller that only asks whether a
     pool covers the week.
     """
+    # The one step every plan repeats: a long build says it is alive from here.
+    _progress()
     open_hours = [
         sorted({hour for start, end in slots_open[wd] for hour in range(start, end)})
         for wd in range(7)
@@ -13718,10 +13908,12 @@ def _company_facts(save: Save) -> dict:
 
 
 def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict,
-            office_staffing: list) -> dict:
+            office_staffing: list, hires: dict | None = None) -> dict:
     """The Staff page's payload key `hiring` (docs/architecture.md, the payload contract).
 
-    Takes each plan row's `_hire` off it. One site per business the player runs,
+    Reads each plan row's private `_hire` part from `hires` (_take_hires(),
+    which the build took off the rows already), or takes it off the row
+    itself when there is none. One site per business the player runs,
     in the `businesses` order; `people` describes everybody a site's `spare` or
     `bench`, or the top-level `bench`, names, so the page can place them, and
     whether each is in training (`training`), whom the page never moves.
@@ -13739,6 +13931,8 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
     offices = {row["key"]: row for row in office_staffing}
 
     def take(row):
+        if hires is not None:
+            return hires.get(id(row)) if isinstance(row, dict) else None
         return (row or {}).pop("_hire", None)
 
     def rows_of(kind, key):
@@ -13762,6 +13956,7 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             training.add(employee.get("id"))
     sites = []
     for business in businesses:
+        _progress()
         kind = _business_kind(business)
         reg = regs.get(business["key"])
         if kind is None or reg is None:
@@ -19598,6 +19793,21 @@ def safe_extract(save: Save, names: Names, history_path: str | None) -> dict:
     deep inside a helper. Nobody can act on that; the game build and the build
     this tool was checked against are what a report needs.
     """
+    return _safely(save, lambda: extract(save, names, history_path))
+
+
+def safe_build(save: Save, names: Names, history_path: str | None, generation=None) -> Build:
+    """build_core(), its failures said as safe_extract() says them."""
+    return _safely(save, lambda: build_core(save, names, history_path, generation))
+
+
+def safe_section(build: Build, name: str) -> dict:
+    """section(), its failures said as safe_extract() says them."""
+    return _safely(build.save, lambda: section(build, name))
+
+
+def _safely(save: Save, work):
+    """`work()`, with a save too old refused first and a failure in one sentence."""
     build = save.root.get("buildNumberAtLastSave")
     if build is not None and build < MIN_BUILD:
         raise SaveShapeError(
@@ -19606,7 +19816,7 @@ def safe_extract(save: Save, names: Names, history_path: str | None) -> dict:
             "up to date"
         )
     try:
-        return extract(save, names, history_path)
+        return work()
     except (KeyError, TypeError, AttributeError, IndexError, ValueError) as exc:
         newer = build is not None and build > VERIFIED_BUILD
         raise SaveShapeError(
@@ -19636,15 +19846,27 @@ def _raised_at(exc: BaseException) -> str:
     return where
 
 
+# The build the worker holds for browser_section(): its latest, or None once
+# a new one has started (the old save's memory goes first).
+_BROWSER_BUILD = {"build": None}
+
+
+class StaleBuild(Exception):
+    """A section asked for a build the worker no longer holds."""
+
+
 def browser_build(
-    save_path: str, locale_path: str, history_path: str, names_path: str | None = None
+    save_path: str, locale_path: str, history_path: str, names_path: str | None = None,
+    generation=None,
 ) -> str:
-    """One rebuild for the in-browser board: parse, extract, JSON.
+    """One rebuild for the in-browser board: parse, the core, JSON.
 
     Everything arrives as a path on Pyodide's virtual filesystem, so the same
-    extract() runs unchanged; only this wrapper knows it is in a browser. The
-    character id is kept beside the history so a later browser_name() can
-    file the name under the right company without parsing the save again.
+    build_core() runs unchanged; only this wrapper knows it is in a browser.
+    The sections wait for browser_section(), over the Build kept here under
+    `generation`, the worker's number for this build. The character id is
+    kept beside the history so a later browser_name() can file the name under
+    the right company without parsing the save again.
 
     ``names_path`` is the table of display names shipped with the page; the
     player's own en.json, when given, is laid over it and adds the help pages
@@ -19653,6 +19875,7 @@ def browser_build(
     only meets one kept before that check, and the shipped names beat
     translated ones with every recipe and capacity missing.
     """
+    _BROWSER_BUILD["build"] = None
     locale = dict(load_locale(names_path)) if names_path else {}
     own = load_locale(locale_path)
     if english_text(own):
@@ -19665,7 +19888,7 @@ def browser_build(
             f"{os.path.basename(save_path)} is not a Big Ambitions save this board can "
             f"read ({type(exc).__name__}: {exc})"
         ) from exc
-    data = safe_extract(save, names, history_path)
+    build = safe_build(save, names, history_path, generation)
     character = save.root.get("characterId") or "default"
     # The page keeps this file in localStorage, a few MB for the whole site:
     # sixty days of demand for every character ever opened would fill it.
@@ -19677,7 +19900,38 @@ def browser_build(
         history.write()
     with open(history_path + ".character", "w", encoding="utf-8") as fh:
         fh.write(character)
-    return json.dumps(data, separators=(",", ":"))
+    _BROWSER_BUILD["build"] = build
+    return json.dumps(build.core, separators=(",", ":"))
+
+
+def browser_section(name: str, generation) -> str:
+    """One section of the build the worker holds, as JSON: {"generation", "sections"}.
+
+    `sections` is {name: {key: value}} for the section asked for and every
+    section it needs, however deep, so the page holds all of them after it.
+    A build other than `generation` is stale (StaleBuild): the page dropped
+    the board it asked for, or the worker has started a newer one. Writes no
+    history: only a build records one.
+    """
+    build = _BROWSER_BUILD["build"]
+    if build is None or build.generation != generation:
+        raise StaleBuild(f"build {generation} is no longer held")
+    if name not in SECTIONS:
+        raise ValueError(f"no section {name!r}")
+    safe_section(build, name)
+    # Every section it needs too, computed now or before: the page may never
+    # have had one that was computed on the way to a request that then failed.
+    chain = _section_chain(name)
+    sent = {done: build.sections[done] for done in SECTIONS if done in chain}
+    return json.dumps({"generation": generation, "sections": sent}, separators=(",", ":"))
+
+
+def _section_chain(name: str) -> set:
+    """Section `name` and every section it needs, however deep."""
+    out = {name}
+    for need in SECTIONS[name]["needs"]:
+        out |= _section_chain(need)
+    return out
 
 
 def browser_name(history_path: str, rid: str, slug: str | None) -> None:

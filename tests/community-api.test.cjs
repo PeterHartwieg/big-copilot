@@ -897,8 +897,10 @@ test('rate limit: presence has its own budget, so a heartbeat loop stops early a
     [...config.matchAll(/"name":\s*"(\w+)",\s*"namespace_id":\s*"(\d+)",\s*"simple":\s*\{\s*"limit":\s*(\d+),\s*"period":\s*(\d+)/g)]
       .map(([, name, ns, limit, period]) => [name, { ns, limit: Number(limit), period: Number(period) }]),
   );
-  assert.deepEqual(Object.keys(limiters).sort(), ['COMMUNITY_LIMITER', 'PRESENCE_LIMITER']);
-  assert.notEqual(limiters.PRESENCE_LIMITER.ns, limiters.COMMUNITY_LIMITER.ns, 'separate namespaces');
+  // REPORT_LIMITER is the bug report route's; community-report.test.cjs drives it.
+  assert.deepEqual(Object.keys(limiters).sort(), ['COMMUNITY_LIMITER', 'PRESENCE_LIMITER', 'REPORT_LIMITER']);
+  assert.equal(new Set(Object.values(limiters).map((l) => l.ns)).size, 3, 'separate namespaces');
+  delete limiters.REPORT_LIMITER;
   assert.equal(limiters.PRESENCE_LIMITER.period, 60);
   assert.ok(limiters.PRESENCE_LIMITER.limit >= 10 && limiters.PRESENCE_LIMITER.limit <= 20,
     'presence allows about 10-20 heartbeats a minute per IP');

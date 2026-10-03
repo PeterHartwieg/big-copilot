@@ -391,6 +391,188 @@ function takeData(raw){
   if(typeof szAdopt === "function") szAdopt();
   return D;
 }
+
+/* --- sections computed on demand (docs/architecture.md, "Sections") -------
+   Python computes the core of the payload on every build, and the rest a
+   section at a time when a page needs it (SECTIONS in ba_dashboard.py, which
+   this table mirrors; tests/test_sections.py holds the two together). A board
+   whose source computes sections (LEDGER_SOURCE.section(): the in-browser
+   board) arrives without them, and a draw on screen asks for what it needs
+   through odNeed(); the CLI's page and the watch server send every section,
+   so there odReady() is always true. An arriving section is merged into the
+   English payload and localised as the board was (odTake()), never taken in
+   as a new board: no history, no board count, no progress-check turn of its
+   own. A section is asked for once per board; a newer board asks again. */
+const OD_SECTIONS = {
+  factoryStaffing: {keys: ["factoryStaffing"], needs: []},
+  hiring: {keys: ["hiring", "candidates"], needs: ["factoryStaffing"]},
+};
+/* The build's generation, which web/app.js puts on the data it hands over. */
+const OD_GEN = Symbol.for("bigcopilot.build");
+/* Each section asked for on this board: {gen, state: "loading" | "error", error}. */
+const odAsked = new Map();
+/* Set by renderAll() while it draws a row of a view that is not on screen:
+   such a draw only reads what is there and asks for nothing, and the row is
+   left out of date (odWanted) so it asks once its view opens (drawStale()). */
+let odHidden = false, odWanted = false;
+const odGen = () => { const en = D && (D[GN_SRC] || D); return en ? en[OD_GEN] : undefined; };
+/* A section and everything it needs, its needs first. */
+const odChain = name => [...(OD_SECTIONS[name] || {needs: []}).needs.flatMap(odChain), name]
+  .filter((n, i, all) => all.indexOf(n) === i);
+/* Whether the board holds section `name` (and what it needs). A pure read.
+   A source that computes no section sent every one it has: a key missing
+   there is simply empty. */
+const odOnDemand = () => !!SOURCE && typeof SOURCE.section === "function";
+function odReady(name){
+  const s = OD_SECTIONS[name];
+  if(!D || !s) return false;
+  return !odOnDemand() || (s.keys.every(k => k in D) && s.needs.every(odReady));
+}
+/* ready, loading, error, or missing (nobody has asked on this board). */
+function odState(name){
+  if(odReady(name)) return "ready";
+  const a = odAsked.get(name);
+  return a && a.gen === odGen() ? a.state : "missing";
+}
+/* The issue's need(section): true where the board holds section `name`; else
+   asks the source for it (once a board, with what it needs) and says false.
+   Whatever reads a section and is on screen calls this; whatever only reads
+   it (a hidden draw, a count) calls odReady(). */
+function odNeed(name){
+  if(odReady(name)) return true;
+  if(odHidden){ odWanted = true; return false; }
+  if(!D || !odOnDemand()) return false;
+  const gen = odGen();
+  if(gen === undefined) return false;
+  const a = odAsked.get(name);
+  if(a && a.gen === gen) return false;  // asked already: loading, or failed (odRetry())
+  const chain = odChain(name).filter(n => !odReady(n));
+  chain.forEach(n => { if(!odAsked.has(n) || odAsked.get(n).gen !== gen) odAsked.set(n, {gen, state: "loading"}); });
+  let asked;
+  try{ asked = Promise.resolve(SOURCE.section(name, gen)); }catch(e){ asked = Promise.reject(e); }
+  asked.then(got => odTake(gen, got), err => odFailed(chain, gen, err));
+  return false;
+}
+/* Sections arriving for board `gen`: merged into the English payload (so a
+   language switch, which localises from it, keeps them) and localised into
+   D the way localiseNames() does it. An answer for an older board is dropped. */
+function odTake(gen, got){
+  if(gen !== odGen() || !got || !got.sections || typeof got.sections !== "object") return;
+  const en = D[GN_SRC] || D;
+  const took = Object.keys(OD_SECTIONS).filter(name => {
+    const values = got.sections[name];
+    if(!values || typeof values !== "object" || OD_SECTIONS[name].keys.every(k => k in en)) return false;
+    return OD_SECTIONS[name].keys.every(k => k in values);
+  });
+  if(!took.length) return;
+  const part = {};
+  took.forEach(name => OD_SECTIONS[name].keys.forEach(k => { en[k] = got.sections[name][k]; part[k] = en[k]; }));
+  if(D !== en){
+    const EN = en.names || {};
+    const shown = gnWalk(part, gnTable, EN, "");
+    if(gnTable) gnUnkeyed(shown, gnTable, EN);
+    if(typeof ttPayload === "function") ttPayload(shown);
+    Object.keys(part).forEach(k => { D[k] = shown[k]; });
+  }
+  took.forEach(name => odAsked.delete(name));
+  odArrived();
+}
+/* A section that could not be worked out: said where it would have been
+   drawn, with Try again. A stale refusal is no failure: the worker has
+   started a newer build, whose board asks again as it arrives, so the
+   section stays loading and what waits on it keeps waiting. Should that
+   build fail instead, odSourceFailed() says so. */
+function odFailed(chain, gen, err){
+  const error = (err && err.message) || String(err || "");
+  if(err && err.stale){
+    chain.forEach(n => { const a = odAsked.get(n); if(a && a.gen === gen) a.stale = error; });
+    return;
+  }
+  chain.forEach(n => { const a = odAsked.get(n); if(a && a.gen === gen) odAsked.set(n, {gen, state: "error", error}); });
+  if(gen !== odGen()) return;
+  /* What waited on it is not done: it is said where it is drawn instead. */
+  odThens = odThens.filter(t => !chain.includes(t.name));
+  odRedraw();
+}
+/* The source could not read the save again (SOURCE.watch()'s stale(why)):
+   a section left loading by a stale refusal will not come for this board. */
+function odSourceFailed(why){
+  let any = false;
+  odAsked.forEach((a, n) => { if(a.gen === odGen() && a.state === "loading" && a.stale){ odAsked.set(n, {gen: a.gen, state: "error", error: why || a.stale}); any = true; } });
+  if(!any) return;
+  odThens = odThens.filter(t => odState(t.name) !== "error");
+  odRedraw();
+}
+/* Work waiting for a section (a click that opens a write review): run once
+   the board has it, whichever board that is (odArrived()). One held per
+   `key`: a second click replaces the first. */
+let odThens = [];
+function odThen(name, run, key = run){
+  if(odNeed(name)) return run();
+  odThens = odThens.filter(t => t.key !== key).concat([{name, run, key}]);
+}
+/* The sections the rows of `view` declare (PAGE_DRAWS' fourth element),
+   asked for as the view opens (drawStale()) and as a board arrives on it
+   (renderAll()). */
+function odWantView(view){
+  if(!hasData()) return;
+  PAGE_DRAWS.forEach(row => { if(row[3] && row[0] && row[0].split(" ").includes(view)) row[3].forEach(odNeed); });
+}
+function odRetry(name){
+  odChain(name).forEach(n => { if(odState(n) === "error") odAsked.delete(n); });
+  odNeed(name);
+  odRedraw();
+}
+/* What read the board before a section arrived reads it again: the memos
+   keyed on the board, the progress checks that waited (pgEvaluate()), and
+   the page on screen (renderCalm(), as a refresh of the same company). */
+function odArrived(){
+  hrSiteMemo = null;
+  pgJudged = -1;
+  odRedraw();
+  const ready = odThens.filter(t => odReady(t.name));
+  odThens = odThens.filter(t => !odReady(t.name));
+  ready.forEach(t => { try{ t.run(); }catch(e){ console.error(e); } });
+}
+/* A write dialog that waits for a section (gwConfirm()) paints again: it
+   plans once the section is there, and says so while it fails or loads.
+   renderAll() calls it (odThensAsk()), so every redraw after an arrival, a
+   failure or a Try again reaches it. */
+function odDialog(){
+  const dlg = gwOpen;
+  if(dlg && dlg.open && typeof dlg._odWait === "function"){ const again = dlg._odWait; dlg._odWait = null; again(); }
+}
+/* Work left waiting when a board arrives asks that board for its section,
+   and so does a write dialog that waits (it plans again, odDialog()). */
+function odThensAsk(){
+  [...new Set(odThens.map(t => t.name))].forEach(odNeed);
+  odDialog();
+}
+function odRedraw(){
+  if(!hasData()) return;
+  /* renderAll() replans a waiting dialog itself (odThensAsk()); one that
+     threw before it got there still does. */
+  try{ renderCalm(true); }catch(e){ console.error(e); odDialog(); }
+}
+/* Where a page or block would draw a section it does not have yet: the words
+   while it is worked out, or why it was not, with Try again. `small` for a
+   line inside a block. */
+const odWords = name => name === "hiring" ? tt("nav.od.hiring", "Working out staff needs…")
+  : tt("nav.od.factoryStaffing", "Working out factory staffing…");
+function odWaitHtml(name, small = false){
+  const st = odState(name) === "error" ? "error" : odChain(name).some(n => odState(n) === "error") ? "error" : "loading";
+  if(st === "error"){
+    const a = odChain(name).map(n => odAsked.get(n)).find(x => x && x.state === "error") || {};
+    return `<div class="od-wait err${small ? " sm" : ""}" role="alert">${spIcon("alert")}<span>${
+      tt("nav.od.failed", "Could not work this out: {why}", {why: spEsc(a.error || "")})}</span><button type="button" class="nx-btn sm" data-od-retry="${attr(name)}">${
+      tt("nav.od.retry", "Try again")}</button></div>`;
+  }
+  return `<div class="od-wait${small ? " sm" : ""}" role="status" aria-live="polite"><span class="od-spin" aria-hidden="true"></span><span>${odWords(name)}</span></div>`;
+}
+if(typeof document !== "undefined" && typeof document.addEventListener === "function") document.addEventListener("click", e => {
+  const b = e.target && e.target.closest ? e.target.closest("[data-od-retry]") : null;
+  if(b) odRetry(b.getAttribute("data-od-retry"));
+});
 /* Names sort in the language they are shown in; English keeps the order it
    always had. */
 let gnCollator = null;
@@ -2268,7 +2450,8 @@ function nameLine(rid, slug){
   if(!LIVE){ again(); return; }
   SOURCE.name(rid, slug)
     .then(data => { if(data){ takeData(data); renderCalm(); } else again(); })
-    .catch(again);
+    /* A name is a rebuild: one that fails leaves no build for a section. */
+    .catch(err => { odSourceFailed(err && err.message); again(); });
 }
 /* A name kept in this browser that the live board does not yet have — the
    watcher was down when it was picked, or it was picked on the published copy
@@ -2282,7 +2465,7 @@ function syncLocalNames(view){
   missing.forEach(u => syncedNames.add(u.rid));
   Promise.all(missing.map(u => SOURCE.name(u.rid, names[u.rid])))
     .then(results => { const last = results.filter(Boolean).pop(); if(last){ takeData(last); renderCalm(); } })
-    .catch(() => {});
+    .catch(err => odSourceFailed(err && err.message));
 }
 
 /* The factories as Python sent them, plus any line named in this browser.
@@ -4756,6 +4939,14 @@ const spOpenRow = row => Object.assign({}, row, spOpenNeed(row), row.openCover,
    _job_demands()) whom the plan on screen gives no week either: the ones to
    move elsewhere or let go. Somebody the plan does use is a week to write
    (hrIdleHtml()), not a person to let go. A site with no plan keeps them all. */
+/* A shop the game opens no hour, read off its own plan row (eager) while the
+   Staff page's key (a section) is not on the board: the test _hiring() makes
+   for `noHours`, a row that could be built with no opening hours on any day.
+   With the key there, its `noHours` decides (spSpareIds()). */
+const spNoHours = row => !!row && !row.failed && !(row.open || []).some(day => day && day.length);
+/* A site the factory staffing plans (a factory with lines, Supply's sites). */
+const spIsFactory = b => ((((D.supply || {}).factories || {}).sites) || []).some(s => (D.businesses || [])[s.s] === b
+  || ((D.businesses || [])[s.s] || {}).key === b.key);
 const spSpareIds = b => {
   const ids = Array.isArray(b.staffIdle) ? b.staffIdle : [];
   if(!ids.length) return ids;
@@ -4763,10 +4954,13 @@ const spSpareIds = b => {
   /* A shop the game opens no hour: nobody there has a week yet, and the
      people just hired for it are not to be let go -- unless it is on full
      cover, which plans every hour anyway. */
-  if(((D.hiring || {}).sites || []).some(s => s.key === b.key && s.noHours)
-     && spPlanOf(base) !== "full") return [];
+  const noHours = odReady("hiring") ? ((D.hiring || {}).sites || []).some(s => s.key === b.key && s.noHours) : spNoHours(base);
+  if(noHours && spPlanOf(base) !== "full") return [];
   // An office's plan, or a factory's at its rated capacity, the one its
   // Staffing block draws first.
+  /* A factory's plan is a section: until the board has it, nobody there is
+     called spare. */
+  if(!base && spIsFactory(b) && !odNeed("factoryStaffing")) return [];
   const office = base ? null : [...(Array.isArray(D.officeStaffing) ? D.officeStaffing : []),
     ...(((D.factoryStaffing || {}).cap) || [])].find(r => r.key === b.key);
   const row = base && !base.failed ? spShownRow(base) : office;
@@ -6016,7 +6210,9 @@ function spRosterBlock(b){
   /* People elsewhere who fit come first: the row's counts are less them
      already (spRowLess()); the note says so. */
   const adding = (add.assign || []).length + (add.hire || []).reduce((n, h) => n + (h.people || 0), 0);
-  const fromStep = hrFromCall(row);
+  /* Who can come from other sites is the Staff page's plan (a section): the
+     block asks for it, and says it is being worked out until it arrives. */
+  const fromStep = odNeed("hiring") ? hrFromCall(row) : odWaitHtml("hiring", true);
   /* Linked, and the Staff page's plan has people for this site: its "Staff
      this site" (gwRosterButtons()) does this step, so it is not a tick. */
   const addStep = adding && !(hrCanHire() && hrSitePeople(b.key))
@@ -7996,6 +8192,7 @@ const PG_CHECK = {
     return b.shiftPrint === rec.expect.print ? {state: "confirmed"} : {state: "changed"};
   },
   hire(rec){
+    if(!odNeed("hiring")) return null;
     const at = pgPeopleSites();
     const want = rec.expect.people || [];
     if(!want.length) return {state: "confirmed"};
@@ -9779,7 +9976,7 @@ function sbFactoryPart(d, claimed, ctx, view, o){
   let slack = "";
   if(fewer){
     slack = tt("sb.fac.fewer", {one: "{n} line could run fewer hours", other: "{n} lines could run fewer hours"}, {n: fewer});
-    if(!(hoursShort || hires.length)) slack = tt("sb.fac.schedulesCover", "Current schedules cover the needed hours; {rest}", {rest: slack});
+    if(!(hoursShort || hires.length) && odReady("factoryStaffing")) slack = tt("sb.fac.schedulesCover", "Current schedules cover the needed hours; {rest}", {rest: slack});
   }
   let verdict;
   if(!f.sites.length) verdict = D.meta.locale === false
@@ -10337,6 +10534,10 @@ function drawFlowPanel(){
    both sizings (factoryStaffing); this reads the one on screen. */
 const SB_STAFF_WHY = () => tt("sb.staff.why", "The same rules as a shop's Staffing: one person per machine per hour, one schedule entry per person at a time, 12 hours the longest entry. A line needs its machines × the hours it must run: 24 when planned for full production, else the hours shop demand plus the chain margin takes. Each run is cut into entries of at most 12 hours, placed around the workers' own demands. A factory is given the fewest of its own factory workers that cover the week: its machine-hours a week ÷ 50, rounded up, and one more while an entry stays open; the rest could go. Only factory workers already at that factory count. Too few hours is a change to type; fewer workers is a suggestion.");
 function drawFactoryStaffing(keep = () => true){
+  if(!odNeed("factoryStaffing")){
+    const any = ((((D.supply || {}).factories || {}).sites) || []).some(s => keep({s: s.s, key: ((D.businesses || [])[s.s] || {}).key}));
+    return any ? `<div class="sb-staff" id="sbStaff">${sechead(tt("sb.staff.title.plan", "Factory staffing for this plan"), {icon: "crew", why: SB_STAFF_WHY()})}${odWaitHtml("factoryStaffing")}</div>` : "";
+  }
   const rows = (((D.factoryStaffing || {})[sizing]) || []).filter(keep);
   if(!rows.length) return "";
   const h = x => String(x % 24 === 0 && x ? 24 : x % 24).padStart(2, "0");
@@ -11458,14 +11659,17 @@ function osAct(kind, label, ico, data, ingame){
 /* What Staff this site would do at the plan's store (hrRequest(), the site
    panel's action): people hired or reassigned in or out, and weeks written. */
 function osStaffWork(key){
-  if(!D.hiring || !hrCanHire()) return 0;
+  if(!odReady("hiring") || !hrCanHire()) return 0;
   const r = hrRequest(hrMemoModel(), {mode: "both", site: key, one: true});
   return r.body.hires.length + r.body.moves.length + r.weeks;
 }
 /* The row's action on every pending path: Staff this site where the mod
    takes the hire write and the site-scoped action does something; else
    what to do in the game. */
-const osStaffAct = (plan, ingame) => hrCanHire() && osStaffWork(plan.key)
+/* Where the mod hires, the action waits for the Staff page's key (odNeed()):
+   a missing one never reads as nothing to do. */
+const osStaffWait = () => hrCanHire() && !odNeed("hiring");
+const osStaffAct = (plan, ingame) => osStaffWait() ? odWaitHtml("hiring", true) : hrCanHire() && osStaffWork(plan.key)
   ? osAct("hire", tt("sp.gw.staff", "Staff this site"), "hire", "", ingame)
   : ingame ? osIngame(ingame) : "";
 function osReqName(plan, b, name){
@@ -11494,6 +11698,8 @@ function osCkStaff(plan, opened){
   const title = tt("gr.os.ck.staff", "Staff for the opening hours");
   if(!opened) return osCk("people", "todo", title, tt("gr.os.ck.staff.todo", "Hired once the business is set up"));
   const have = opened.staff || 0;
+  /* Judged on the Staff page's plan only once the board has it. */
+  if(!odNeed("hiring")) return osCk("people", "todo", title, "", odWaitHtml("hiring", true));
   const M = hrMemoModel(), S = M.sites.find(s => s.key === plan.key);
   if(!S || !S.planned || S.site.noHours || !S.variant) return osCk("people", "todo", title,
     tt("gr.os.ck.staff.nohours", "No opening hours set yet: set them in BizMan, and the board plans the staff"));
@@ -13277,7 +13483,8 @@ function ofCkStaff(key, machines, total, owned){
       other: "<b>MyEmployees</b> on your phone: hire {n} Factory Workers for {address}, then their week in <b>BizMan › Schedule</b>."}, {n: workers, address: spEsc(fac.address || key)})
     : tt("gr.of.ck.staff.ingame", "<b>MyEmployees</b> on your phone: hire {n} Factory Workers and a Delivery Driver for {address}, then their week in <b>BizMan › Schedule</b>.",
       {n: workers, address: spEsc(fac.address || key)});
-  const act = hrCanHire() && osStaffWork(key) ? ofAct("hire", tt("gr.of.ck.staff.go", "Staff this factory"), "hire", ingame, `data-of-key="${attr(key)}"`) : osIngame(ingame);
+  const act = osStaffWait() ? odWaitHtml("hiring", true)
+    : hrCanHire() && osStaffWork(key) ? ofAct("hire", tt("gr.of.ck.staff.go", "Staff this factory"), "hire", ingame, `data-of-key="${attr(key)}"`) : osIngame(ingame);
   return osCk("people", staffed ? "part" : "todo", title, `${tt("gr.of.ck.staff.have", "{h:,} of {of:,} machine-hours a week staffed", {h: Math.round(staffed), of: full})} · ${needSub}`, act,
     full ? Math.round(100 * Math.min(staffed, full) / full) : 0);
 }
@@ -13543,7 +13750,8 @@ function ofRunHtml(plan){
     const h = gaps.reduce((a, l) => a + (l.hoursWeek || 0), 0), of = gaps.reduce((a, l) => a + (l.fullWeek || 0), 0);
     why.push(row("people", tt("gr.of.run.why.staff", "Machine-hours nobody staffs: {lines}", {lines: spEsc(ofNames(gaps.map(l => l.item)))}),
       tt("gr.of.run.why.staff.sub", "{h:,} of {of:,} h a week staffed on these lines", {h: Math.round(h), of: Math.round(of)}),
-      hrCanHire() && osStaffWork(key) ? ofAct("hire", tt("gr.of.ck.staff.go", "Staff this factory"), "hire", "", `data-of-key="${attr(key)}"`) : ""));
+      osStaffWait() ? odWaitHtml("hiring", true)
+        : hrCanHire() && osStaffWork(key) ? ofAct("hire", tt("gr.of.ck.staff.go", "Staff this factory"), "hire", "", `data-of-key="${attr(key)}"`) : ""));
   }
   waiting.forEach(l => why.push(row("crate", tt("gr.of.run.why.waits", "{line} waits on {items}", {line: spEsc(l.item), items: spEsc(ofNames(l.missing))}),
     tt("gr.of.run.why.waits.sub", "the factory holds none of it, so the line stands still"), "")));
@@ -14994,10 +15202,15 @@ function drawStaff(parts){
 function drawStaffPage(parts){
   const sec = $("secStaff");
   if(!sec) return;
-  const H = D.hiring;
-  if(!H){
-    /* A board built before the hiring payload: the wages are Payroll's tab. */
-    sec.innerHTML = `<div class="hs-head"><h2>Staff</h2></div><p class="hs-note">Hiring needs a newer read of your save: update Big Copilot and open the save again.</p>`;
+  /* The Staff page's key is a section (odNeed()): worked out when the page
+     is on screen, and said so until it arrives. */
+  if(!odNeed("hiring")){
+    /* Change picks and the demand list read the key too: they close, and the
+       picks themselves (hrUi) stay for when it arrives. */
+    if(hrPop) hrPopClose();
+    const sheet = $("hsSheet");
+    if(sheet && sheet.open) sheet.close();
+    sec.innerHTML = `<div class="hs-head"><h2>${tt("co.needs.hire.title", "Whom to hire")}</h2></div>${odWaitHtml("hiring")}`;
     return;
   }
   const m = hrModel(), t = hrTotals(m);
@@ -15176,7 +15389,8 @@ function hrPopPool(m, target){
 }
 function hrPopDraw(m){
   const anchor = document.querySelector(`[data-hs-dem-open="${CSS.escape(hrPop.target)}"]`);
-  if(!anchor){ hrPopClose(); return; }
+  /* Read off the Staff page's key: never drawn without it (odReady()). */
+  if(!anchor || !odReady("hiring")){ hrPopClose(); return; }
   m = m || hrModel();
   const f = hrPopFilter(m, hrPop.target);
   const count = new Map();
@@ -15889,6 +16103,9 @@ const hrChainNote = n => gwCall("info", "roster", `${tt("co.hire.chain.later", {
    site (a key), only (Pick more), mode (the one to open on)}; `hooks`:
    onDone, onFailed and more, for Quick hire's hold. */
 function hrReview(o = {}, hooks = {}){
+  /* The review plans from the Staff page's key: a click before the board has
+     it opens the review once it arrives (odThen()). */
+  if(!odReady("hiring")) return odThen("hiring", () => hrReview(o, hooks), "hrReview");
   o = Object.assign({scope: "all"}, o);
   let pick = o.mode || null;
   const build = () => {
@@ -15925,7 +16142,7 @@ function hrReview(o = {}, hooks = {}){
   let written = [];  // the progress records of the apply (pgHireDone())
   let applied = null;  // the action as applied, for its Undo
   gwConfirm({
-    kind: "hire", icon: "hire",
+    kind: "hire", icon: "hire", needs: ["hiring"],
     title: () => o.only ? tt("co.hire.title.more", "Pick more")
       : o.scope === "site" ? tt("co.hire.title.site", "Staff {site}", {site: siteB() ? shortName(siteB()) : tt("co.hire.thissite", "this site")})
       : o.scope === "quick" ? tt("co.hire.title.quick", "Quick hire: {role}", {role: gameName(hrLast.m.quick.q.skill) || tt("co.hire.arole", "a role")})
@@ -16244,8 +16461,8 @@ function bindHireReview(){
   on("click", "[data-hr-more]", el => {
     const more = hrUi.more;
     if(!more || more.board === D) return;
-    hrUi.more = null;
-    hrReview({only: more.only});
+    /* Kept until the review opens: it may wait for the Staff page's key. */
+    odThen("hiring", () => { hrUi.more = null; hrReview({only: more.only}); }, "hrReview");
   });
 }
 /* The button waits for the board read after the apply. */
@@ -17215,12 +17432,19 @@ function renderAll(){
   /* A row that throws is kept out of date and marks the dot, as in
      drawStale(); the rows after it, the footer and the wiring still run. */
   const typing = calmLazy ? impDraft() : null;
+  /* A row of a view not on screen draws what the board holds and asks for no
+     section (odNeed()); it asks once its view opens (drawStale()). */
+  const shown = viewOf(page);
   PAGE_DRAWS.forEach(row => {
     if(here !== null && row[0] && !row[0].split(" ").includes(here)){ pageStale.add(row); return; }
     pageStale.delete(row);
-    try{ row[1](); staleDraws.delete(row); }
+    odHidden = !!row[0] && !row[0].split(" ").includes(shown);
+    odWanted = false;
+    try{ row[1](); staleDraws.delete(row); if(odWanted) pageStale.add(row); }
     catch(e){ pageStale.add(row); staleDraws.set(row, e && e.message || String(e)); console.error(e); }
+    finally{ odHidden = false; odWanted = false; }
   });
+  if(typeof odWantView === "function"){ odWantView(shown); odThensAsk(); }
   if(typing) typing();
   if(marked || staleDraws.size) paintStale();
   drawFooter();
@@ -17686,12 +17910,13 @@ const PAGE_DRAWS = [
   ["company/results", () => drawSitePicker()], ["", () => drawSite()],
   ["today supply/changes supply/imports supply/deliveries supply/production supply/flow", () => drawSupplyStrip()],
   ["supply/changes", () => drawChangesView()], ["supply/imports", () => drawImportsView()], ["supply/deliveries", () => drawDeliveriesView()],
-  ["supply/production", () => drawProductionView()], ["supply/flow", () => drawFlowView()], ["supply/flow", () => drawFlow()],
+  ["supply/production", () => drawProductionView(), null, ["factoryStaffing"]], ["supply/flow", () => drawFlowView()], ["supply/flow", () => drawFlow()],
   ["growth/market", () => drawMovers()], ["growth/market", () => drawMarket()], ["growth/open", () => drawOpenStore()],
   ["growth/plan", () => drawPlan()],  // changed for growth: no drawExpansion()
   ["company/products", () => drawPriceShops()], ["company/products", () => drawProducts()],
-  // A third element names a row other code marks stale on its own (hrStale(), nxSchedStale()).
-  ["staffing/schedules", () => drawSchedules(), "schedules"], ["staffing/needs", () => drawNeeds()], ["staffing/needs", () => drawStaff(), "staff"],
+  // A third element names a row other code marks stale on its own (hrStale(), nxSchedStale());
+  // a fourth, the sections it reads, asked for as its view opens (odWantView()).
+  ["staffing/schedules", () => drawSchedules(), "schedules", ["hiring"]], ["staffing/needs", () => drawNeeds()], ["staffing/needs", () => drawStaff(), "staff", ["hiring"]],
   ["staffing/payroll", () => drawPayroll()],
   ["company/milestones", () => drawGoals()], ["", () => drawFindLocation()], ["", () => drawOptimizeStaffing()],
   ["", () => drawShellCounts()],
@@ -17708,7 +17933,7 @@ const pageStale = new Set();
    does nothing. */
 let staleSource = "";
 const staleDraws = new Map();  // a PAGE_DRAWS row -> what it threw
-function markStale(why){ staleSource = why || ""; paintStale(); }
+function markStale(why){ staleSource = why || ""; paintStale(); if(why) odSourceFailed(why); }
 function paintStale(){
   const dot = $("live");
   if(!dot || dot.classList.contains("off")) return;
@@ -17731,6 +17956,7 @@ const viewOf = id => SUBS[id] ? `${id}/${sub[id]}` : id;
    view shows older numbers than the dot would otherwise claim); the page
    still opens, and the other rows due on it still draw. */
 function drawStale(pageId){
+  if(pageId === page && typeof odWantView === "function") odWantView(viewOf(pageId));
   if(!pageStale.size || !hasData()) return;
   const view = viewOf(pageId);
   /* A row drawn on every refresh ("") is only out of date when it threw, and
@@ -17738,10 +17964,16 @@ function drawStale(pageId){
   const due = PAGE_DRAWS.filter(row => pageStale.has(row) && (!row[0] || row[0].split(" ").includes(view)));
   if(!due.length) return;
   const had = new Set($$(".rv")), marked = [...staleDraws.values()].join("\n");
+  /* A view picked on a page not on screen (showSub() at boot) is drawn
+     hidden: it asks for no section yet (odNeed()). */
+  const hidden = pageId !== page;
   due.forEach(row => {
     pageStale.delete(row);
-    try{ row[1](); staleDraws.delete(row); }
+    odHidden = hidden && !!row[0];
+    odWanted = false;
+    try{ row[1](); staleDraws.delete(row); if(odWanted) pageStale.add(row); }
     catch(e){ pageStale.add(row); staleDraws.set(row, e && e.message || String(e)); console.error(e); }
+    finally{ odHidden = false; odWanted = false; }
   });
   if([...staleDraws.values()].join("\n") !== marked) paintStale();
   $$(".rv:not(.in)").forEach(el => { if(!had.has(el) && el.closest("[hidden]")) rvSettle(el); });
@@ -20655,7 +20887,7 @@ nxMenu.addEventListener("keydown", e => {
   } else if(e.key === "Home" || e.key === "End"){ e.preventDefault(); (e.key === "Home" ? items[0] : items[items.length - 1]).focus(); }
   else if(e.key === "Tab") nxMenuClose(false);
 });
-document.addEventListener("click", e => {
+if(typeof document !== "undefined" && typeof document.addEventListener === "function") document.addEventListener("click", e => {
   if(nxMenu.hidden || nxMenu.contains(e.target) || (nxMenuFrom && nxMenuFrom.contains(e.target))) return;
   nxMenuClose(false);
 });
@@ -20716,15 +20948,20 @@ function pxHelpHtml(){
   const words = a => { const c = a.cloneNode(true); c.querySelectorAll(".feature-new, svg, .sf-sr").forEach(x => x.remove()); return c.textContent.trim().replace(/\s+/g, " "); };
   const link = a => a ? `<a class="nx-btn sm" href="${attr(a.getAttribute("href"))}" target="_blank" rel="noopener">${spEsc(words(a))}${icon("go")}</a>` : "";
   const feedback = out("a[data-sf-feedback]")[0];
+  /* The site's footer has a Report a bug control (the CLI's has not); a copy
+     keeps its data-bug-report mark, so web/app.js opens the form from either. */
+  const report = out("[data-bug-report]")[0];
   const vote = out("[data-vote-card]")[0];
   /* Search, the save's help, What's new, the vote and the project's links are
      the masthead's, the ··· menu's and the footer's, on the same page under
      the sheet (declutter X6): Help keeps the one prompt they do not have. */
   const find = pxRow("find", tt("nav.px.help.find.title", "Can't find something?"), tt("nav.px.help.find.lead", "Tell us the task in your own words: it is how the names and the places on the board get better."),
     feedback ? `<div class="px-acts">${link(feedback)}</div>` : "");
+  const bug = report ? pxRow("bug", tt("nav.px.help.bug.title", "Found a bug?"), tt("nav.px.help.bug.lead", "Send a report with your save attached. Your text becomes an issue on GitHub; the save is kept privately."),
+    `<div class="px-acts"><button type="button" class="nx-btn sm" data-bug-report aria-haspopup="dialog">${spEsc(words(report))}</button></div>`) : "";
   const ballot = vote && !vote.hidden ? "" : pxRow("ballot", tt("nav.px.help.vote.title", "Feature requests"), "",
     `<p class="px-note">${tt("nav.px.help.vote.off", "The ballot is on bigcopilot.com, where the board can reach the community server.")}</p>`);
-  return find + ballot;
+  return bug + find + ballot;
 }
 function pxOpen(which, from = null, focusRow = null){
   nxMenuClose(false);
@@ -20839,7 +21076,7 @@ document.addEventListener("keydown", e => {
   else if(!e.shiftKey && (document.activeElement === last || !pxSheet.contains(document.activeElement))){ e.preventDefault(); first.focus(); }
 }, true);
 /* A link in context: Company finances' "Preferences" opens the History row. */
-document.addEventListener("click", e => {
+if(typeof document !== "undefined" && typeof document.addEventListener === "function") document.addEventListener("click", e => {
   const a = e.target.closest && e.target.closest("[data-open-prefs]");
   if(!a) return;
   e.preventDefault();
@@ -22897,6 +23134,20 @@ function gwConfirm(spec){
   let seq = 0;           // the newest dry run: an older one's late answer is dropped
   let allowed = false;   // the game approved this browser for the dry run under way
   const view = gwApprovalView(dlg, () => { allowed = true; asking(); });
+  /* A write is judged and sent only on a board that has every section it
+     reads (`spec.needs`, odNeed()): until then the dialog says it is being
+     worked out, Apply stays off, and the section's arrival plans it again
+     (odArrived()). */
+  const waiting = () => {
+    const missing = (spec.needs || []).filter(n => !odNeed(n));
+    dlg._odWait = missing.length ? () => plan() : null;
+    if(!missing.length) return false;
+    judged = "";
+    gwPaint(dlg, {phase: "asking", wire: "ask", say: `<b>${odWords(missing[0])}</b>`, meta: "",
+      body: odWaitHtml(missing[0]), hint: tt("nav.od.dlg.hint", "Apply waits until this is worked out."),
+      buttons: [...left, [spec.applyLabel(null), null, {kind: "go", icon: "right", disabled: true, key: "apply"}]]});
+    return true;
+  };
   const nothing = none => gwPaint(dlg, {phase: "nothing", wire: "ok", say: (spec.nothingSay && spec.nothingSay()) || `<b>${tt("nav.dlg.say.nothing", "Nothing to write")}</b>`, meta: gwNow(),
     body: `<p class="gw-said">${none}</p>`,
     buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go"}]]});
@@ -22917,6 +23168,7 @@ function gwConfirm(spec){
     const mine = ++seq;
     judged = "";
     gwHead(dlg, title(), where());
+    if(waiting()) return;
     const none = spec.nothing ? spec.nothing() : "";
     if(none) return nothing(none);
     /* In place only over the game's answer on screen, or over one already
@@ -22975,6 +23227,8 @@ function gwConfirm(spec){
   };
   const apply = async () => {
     if(applying) return;
+    /* A board read again since the dry run may not have the sections yet. */
+    if(waiting()) return;
     /* The board may have been read again since the dry run. */
     const none = spec.nothing ? spec.nothing() : "";
     if(none) return nothing(none);
@@ -23848,6 +24102,7 @@ const gwOfficeRow = key => {
    has a week of its own to write. `alone` wraps it as the block's only act. */
 function gwStaffButton(key, alone){
   if(!hrCanHire()) return "";
+  if(!odNeed("hiring")) return alone ? odWaitHtml("hiring", true) : "";
   const people = hrSitePeople(key), out = people ? 0 : hrSiteOut(key);
   if(!people && !out) return "";
   const b = gwButton("hire", tt("sp.gw.staff", "Staff this site"), `data-hr-staff="${attr(key)}"`, "", people ? {count: people} : {});
@@ -23858,6 +24113,9 @@ function gwStaffButton(key, alone){
    partial write never reads as the whole week. */
 function gwRosterButtons(key){
   if(!gwLink()) return "";
+  /* Every write here is reviewed against the Staff page's plan (who can come
+     from other sites, who is hired): none is offered before the board has it. */
+  if(!odNeed("hiring")) return odWaitHtml("hiring", true);
   const row = gwRosterPlan(key);
   if(!row) return gwStaffButton(key, true);
   /* Staff this site: the one action, where the Staff page's plan hires or
@@ -23935,7 +24193,7 @@ function gwSchedule(key){
   const name = spEsc(shortName(b));
   let openAll = true, last = null, schedWritten = [];
   gwConfirm({
-    kind: "schedule", icon: "roster", againLabel: tt("sp.gw.sch.again", "Write again"),
+    kind: "schedule", icon: "roster", needs: ["hiring"], againLabel: tt("sp.gw.sch.again", "Write again"),
     /* The site its Undo is for: a later write of the site elsewhere drops it. */
     sites: () => [key],
     title: tt("sp.gw.sch.one", "Write this schedule to the game"),
@@ -24228,7 +24486,9 @@ function startWatching(){
        on screen found current: an undo's gate may open. */
     followDone: () => { if(gwOpen && gwOpen._gwGate){ gwOpen._gwBuilt = true; gwOpen._gwGate(); } },
     /* Another source, with no new board yet: an undo's gate closes again. */
-    linkChanged: () => { if(gwOpen && gwOpen._gwGate) gwOpen._gwGate(); },
+    /* A section left loading for the build just cancelled will not come for
+       this board either: it says so (odSourceFailed()), and a new board asks anew. */
+    linkChanged: () => { if(gwOpen && gwOpen._gwGate) gwOpen._gwGate(); odSourceFailed(tt("app.reader.superseded", "Save selection changed")); },
     /* The game's clock moved with no new board: the marketing gates follow it. */
     linkClock: () => gwMkTick(),
     lost(){

@@ -68,6 +68,11 @@
   };
   const failure = (words) => Object.assign(new Error(words()), {say: words});
   const errWords = (err) => (err && typeof err.say === "function" ? err.say : err ? err.message : "");
+  // A build's generation on its data (the worker's number for it), and the
+  // refusal of a section asked for a build the worker no longer holds: the
+  // board drops that answer and asks again for the board it has then.
+  const BUILD_GEN = Symbol.for("bigcopilot.build");
+  const staleSection = () => Object.assign(failure(() => tt("app.reader.section.stale", "The save on screen has been read again since")), {stale: true});
 
   // Every word this file writes goes through tt() (web/i18n.js, which the
   // page loads first; docs/architecture.md, "UI text"). A sentence that holds
@@ -242,6 +247,17 @@
   const REOPEN_KEY = "ledger_reopen";
   const fileAgain = () => !linkUrl && !dirHandle && (snapshot || (reopen && reopen.kind)) === "file";
   let lastEntries = null; // {file, dir} for every save and sidecar last seen
+  // For the bug report form (web/report.js): the last failed build, with the
+  // whole traceback and the bytes the worker handed back, kept in memory until
+  // the next build and never stored; and the game build of the board on screen.
+  let heldFailure = null;
+  // The last section Python could not work out (a failed reply to a
+  // `section`), for a bug report about the board it belongs to: {gen, error,
+  // trace}. Reported only while that build is the newest one handed over
+  // (`builtGen`); a section of it that then works clears it.
+  let sectionFailure = null;
+  let builtGen = null;
+  let boardBuild = null;
   let busy = false;
   let runtimeReady = false;
   // Watching the folder: Chromium only, once read access is granted.
@@ -288,7 +304,12 @@
     sourceGen++;
     reopen = null;
     busy = false;
+    heldFailure = null;  // a report from the new source is not about the old one
+    sectionFailure = null;
     queued = null;
+    // A failure, not stale: whether a new board comes is not known here (a
+    // folder with no save, a game that is not there, a reader that stopped),
+    // so a section in flight says so with Try again, and a new board asks anew.
     for (const p of pending.values()) p.reject(new Error(tt("app.reader.superseded", "Save selection changed")));
     pending.clear();
     timeReader();
@@ -335,12 +356,45 @@
       timeReader();
       try {
         if (p.gen !== sourceGen) throw new Error(tt("app.reader.superseded", "Save selection changed"));
-        if (msg.kind !== "built") throw msg.error ? new Error(msg.error) : failure(() => tt("app.reader.invalid.bare", "Invalid reader response"));
+        if (msg.kind === "held") { p.resolve(msg); return; }
+        if (msg.kind === "section") {
+          // A section is the board's to merge (its need()); it carries no
+          // history, which only a build records.
+          // Stale means the worker has moved on to a newer build. Only a
+          // build or name still waiting here brings a board that asks again;
+          // with none (it was cancelled, and its board dropped), the board on
+          // screen gets no section from this worker: an error, as `gone` is.
+          const coming = [...pending.values()].some((q) => (q.kind === "build" || q.kind === "name") && q.gen === sourceGen);
+          if (msg.stale && coming) throw staleSection();
+          if (msg.stale || msg.gone) throw failure(() => tt("app.reader.section.gone", "The reader could not read the save again: Update to try once more"));
+          const got = JSON.parse(msg.data);
+          if (!got || typeof got.sections !== "object" || !got.sections) throw failure(() => tt("app.reader.invalid.bare", "Invalid reader response"));
+          if (sectionFailure && sectionFailure.gen === p.boardGen && sectionFailure.name in got.sections) sectionFailure = null;  // it works now
+          p.resolve(got);
+          return;
+        }
+        // A failed build carries its whole traceback and its bytes back, for a
+        // bug report; only the last line is shown.
+        if (msg.kind !== "built") throw msg.error ? Object.assign(new Error(msg.error), {
+          trace: typeof msg.trace === "string" ? msg.trace : "",
+          bytes: msg.bytes instanceof ArrayBuffer ? msg.bytes : null,
+        }) : failure(() => tt("app.reader.invalid.bare", "Invalid reader response"));
         const data = JSON.parse(msg.data);
         if (!data || typeof data !== "object") throw failure(() => tt("app.reader.invalid.bare", "Invalid reader response"));
         if (typeof msg.history === "string") stored.set(HISTORY_KEY, msg.history);
+        // The build's generation, which the board names when it asks for a
+        // section of it (LEDGER_SOURCE.section()). Not a payload key: JSON,
+        // Object.keys() and a copy never see it.
+        Object.defineProperty(data, BUILD_GEN, {value: msg.gen});
+        builtGen = msg.gen;
         p.resolve(data);
       } catch (err) {
+        // The reader read the save even when its answer would not decode: it
+        // still holds the save, for a bug report.
+        if (msg.kind === "built" && err && typeof err === "object") err.held = true;
+        // Python failed on a section of the board on screen: kept for a report.
+        if (p.kind === "section" && msg.kind === "failed" && p.gen === sourceGen && err && err.trace)
+          sectionFailure = {gen: p.boardGen, name: p.name, error: String(err.message || ""), trace: err.trace};
         p.reject(err);
       }
     };
@@ -352,7 +406,7 @@
     return new Promise((resolve, reject) => {
       if (readerError || gen !== sourceGen) { reject(readerError || new Error(tt("app.reader.superseded", "Save selection changed"))); return; }
       const id = nextId++;
-      pending.set(id, {resolve, reject, gen});
+      pending.set(id, {resolve, reject, gen, kind: msg.kind, boardGen: msg.gen, name: msg.name});
       try { worker.postMessage(Object.assign({id}, msg), transfer || []); }
       catch (err) { pending.delete(id); reject(err); }
       timeReader();
@@ -449,6 +503,9 @@
     $("recoverBtn").append(linkUrl ? tt("app.recover.link", "Choose a folder instead")
       : fileAgain() ? tt("app.recover.file", "Choose the file again") : tt("app.recover", "Choose the folder again"));
     $("reloadBtn").hidden = !readerError;
+    // Something went wrong: the form that files it, save and error attached.
+    const reportBtn = $("reportBtn");
+    if (reportBtn) reportBtn.hidden = !bad;
     // On the landing the strip only shows when it has something to say: a
     // remembered folder, a save being read, a folder that would not read.
     const quietLoad = strip.tone === "busy" && !lastFile && !dirHandle && !attempt;
@@ -1658,12 +1715,15 @@
     busy = true;
     lastFile = file;
     lastFileGen = gen;
+    heldFailure = null;
+    sectionFailure = null;
     // Linked bytes carry their stamp: the strip names the game's state and
     // not the generated file name.
     const line = (extra) => (file.linkStamp ? linkLine(linkHealth, extra) : fileLine(file, extra));
     note("");
     state("busy", () => tt("app.build.reading", "Reading {name}", {name: file.name}), () => line());
     const t = performance.now();
+    let built = null;  // the reader's answer, when what failed came after it
     try {
       const bytes = await file.arrayBuffer();
       if (gen !== sourceGen) return;
@@ -1671,6 +1731,7 @@
         kind: "build", name: file.name, bytes, mtime: file.lastModified,
         locale: stored.get(LOCALE_KEY), history: stored.get(HISTORY_KEY),
       }, [bytes], gen);
+      built = data;
       if (gen !== sourceGen) return;
       busy = false;
       finishAttempt(gen);
@@ -1678,6 +1739,7 @@
       lastGoodDir = dir || "";
       lastGoodSource = gen;
       company = (data.meta && data.meta.save) || company;
+      boardBuild = data.meta && Number.isInteger(data.meta.build) ? data.meta.build : null;
       // The board on screen is these bytes once it has taken them; while it
       // takes them, link().stamp is already theirs. Should it throw, the stamp
       // before stays, so the watcher reads these bytes again, not skips them.
@@ -1696,6 +1758,15 @@
       busy = false;
       finishAttempt(gen);
       const at = Date.now(), kept = lastGood, paused = !!(dirHandle && watching && !watchTimer);
+      // The reader hands a failed save's bytes back; a failure after it read
+      // the save (the board could not draw it) leaves the save with the reader.
+      const builtOn = built && built.meta && Number.isInteger(built.meta.build) ? built.meta.build : null;
+      // kind: a script error's own name, the one part of it a public report may
+      // name (web/report.js, brErrorLine()); a Python failure's is in its trace.
+      heldFailure = {name: file.name, error: String(err.message || ""), trace: err.trace || String(err.stack || ""),
+        kind: err.trace ? "" : String(err.name || ""),
+        bytes: err.bytes || null, held: !!built || err.held === true,
+        build: builtOn !== null ? builtOn : file.linkStamp && linkHealth && Number.isInteger(linkHealth.build) ? linkHealth.build : null};
       state("bad", () => tt("app.build.failed", "Could not read the save"),
         () => tt("app.build.attempted", "{name} · attempted {when}", {name: file.name, when: fmtTime(at)}));
       const rewritten = err.name === "NotReadableError";
@@ -2335,6 +2406,80 @@
     if (lastFile && lastFileGen === sourceGen) buildFrom(lastFile);
   }
 
+  /* --- the bug report form ------------------------------------------------ */
+  // web/report.js and web/report.css load on the first click of a Report a bug
+  // control: #reportBtn in the strip after a failure, or any [data-bug-report]
+  // (the footer's, and its copy in Help & feedback). What the form may know is
+  // handed over here; it decides what is sent (docs/bug-report-scope.md).
+  let reportLoad = null;
+  function loadReport() {
+    if (window.BigCopilotReport) return Promise.resolve(window.BigCopilotReport);
+    if (!reportLoad) {
+      reportLoad = new Promise((resolve, reject) => {
+        const stamp = encodeURIComponent(window.LEDGER_BUILD || "dev");
+        const css = document.createElement("link");
+        css.rel = "stylesheet";
+        css.href = `report.css?v=${stamp}`;
+        document.head.append(css);
+        const script = document.createElement("script");
+        script.src = `report.js?v=${stamp}`;
+        script.onload = () => (window.BigCopilotReport ? resolve(window.BigCopilotReport) : reject(new Error("report form missing")));
+        script.onerror = () => { reportLoad = null; script.remove(); reject(new Error("report form unavailable")); };
+        document.head.append(script);
+      });
+    }
+    return reportLoad;
+  }
+  const reportSource = () => (linkUrl ? "link" : dirHandle || snapshot === "folder" ? "folder" : lastFile ? "file" : "none");
+  // The reader's copy of the save it last read: the board's, or the one that
+  // just failed. Null when there is no reader to ask.
+  async function readerHeld(build) {
+    if (!worker || readerError || !runtimeReady || !lastFile) return null;
+    try { return await ask({kind: "held", build}); } catch (e) { return null; }
+  }
+  function reportContext() {
+    const failed = heldFailure;
+    // With the board on screen, a section of it that failed is what to report.
+    const section = !failed && !readerError && sectionFailure && sectionFailure.gen === builtGen ? sectionFailure : null;
+    const error = failed ? failed.error : section ? section.error : readerError ? String(readerError.message || "") : "";
+    const boardSave = !failed && onBoard() && lastGood && lastFile === lastGood;
+    return {
+      siteBuild: window.LEDGER_BUILD || "dev",
+      source: reportSource(),
+      error,
+      // A reader that failed to start hands over Python's traceback as its message.
+      trace: failed ? failed.trace : section ? section.trace : readerError
+        ? String((/^Traceback /.test(readerError.message || "") ? readerError.message : readerError.stack) || "") : "",
+      errorName: failed ? failed.kind : readerError && !/^Traceback /.test(readerError.message || "") ? String(readerError.name || "") : "",
+      // The failed build's own bytes, or a copy of the board's save from the
+      // reader; the board's game build is in its payload, a failed save's
+      // needs the reader to parse it again.
+      bytes: async () => {
+        if (failed && failed.bytes) return failed.bytes;
+        const name = failed ? (failed.held ? failed.name : "") : boardSave ? lastGood.name : "";
+        if (!name) return null;
+        const h = await readerHeld(false);
+        return h && h.name === name ? h.bytes : null;
+      },
+      gameBuild: async () => {
+        if (!failed) return boardSave ? boardBuild : null;
+        if (failed.build !== null) return failed.build;
+        if (!failed.bytes && !failed.held) return null;
+        const h = await readerHeld(true);
+        return h && h.name === failed.name ? h.build : null;
+      },
+    };
+  }
+  async function openReport(from) {
+    try {
+      (await loadReport()).open(reportContext(), from);
+    } catch (e) {
+      // No form to load (an old cached page, or offline): the support channel.
+      const feedback = document.querySelector("a[data-sf-feedback]");
+      if (feedback) window.open(feedback.href, "_blank", "noopener");
+    }
+  }
+
   /* --- what the board asks for ----------------------------------------- */
   window.LEDGER_SOURCE = {
     // Read on every masthead paint, so it follows the UI language.
@@ -2349,6 +2494,10 @@
     // history goes with it: the worker names against the copy it holds, so
     // names asked for together all keep theirs (worker.js).
     name: (rid, slug) => ask({kind: "name", rid, slug: slug || null}),
+    // One section of the build `gen` (the board's), computed on demand from
+    // the build the worker holds: resolves to {generation, sections}, or
+    // rejects stale (err.stale) once a newer build has been asked for.
+    section: (name, gen) => ask({kind: "section", name, gen}),
     watch: (h) => { handlers = h; },
     // The game link, for the board's write buttons: the kinds the mod takes
     // and whose company it is, and the game's day and hour at the last
@@ -2704,6 +2853,11 @@
     });
     $("recoverBtn").addEventListener("click", () => (fileAgain() ? $("savePick").click() : pickFolder()));
     $("reloadBtn").addEventListener("click", () => location.reload());
+    if ($("reportBtn")) $("reportBtn").addEventListener("click", (e) => openReport(e.currentTarget));
+    document.addEventListener("click", (e) => {
+      const control = e.target.closest && e.target.closest("[data-bug-report]");
+      if (control) { e.preventDefault(); openReport(control); }
+    });
     $("savePickLabel").addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("savePick").click(); }
     });

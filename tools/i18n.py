@@ -58,11 +58,11 @@ SOURCE_DIR = os.path.join(ROOT, "i18n")
 # Beside <lang>.json and <lang>.base.json: the machine-drafted keys awaiting review.
 AI_SUFFIX = ".ai.json"
 # The scripts a page runs, beside the board script in template/board.js.
-JS_FILES = ("web/i18n.js", "web/app.js", "web/update.js", "web/community.js", "web/map.js", "web/wiki.js")
+JS_FILES = ("web/i18n.js", "web/app.js", "web/update.js", "web/community.js", "web/report.js", "web/map.js", "web/wiki.js")
 # A key is <area>.<thing>[.<part>]; the area names the page, and the pull
 # request that owns it (docs/architecture.md, "UI text").
 AREAS = ("nav", "land", "app", "foot", "today", "f", "co", "sp", "sb", "gr", "map", "wiki", "comm",
-         "upd", "day")
+         "upd", "br", "day")
 KEY = re.compile(r"[a-z]+(\.[A-Za-z0-9_-]+)+")
 PLURAL_SUFFIX = re.compile(r"_(zero|one|two|few|many|other)$")
 # The placeholder syntax tt() and msg() share, and the specs both implement.

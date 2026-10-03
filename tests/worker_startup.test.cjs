@@ -26,7 +26,15 @@ async function startup(stamp = 'audit') {
         writes.set(file, text);
       },
     },
-    async runPythonAsync() {
+    // Python's progress callback (set_progress()), handed over as a module.
+    registerJsModule(name, module) {
+      assert.equal(name, 'big_copilot_worker');
+      assert.equal(typeof module.say, 'function');
+      py.progress = module.say;
+    },
+    async runPythonAsync(code) {
+      assert.match(code, /ba_dashboard\.set_progress\(big_copilot_worker\.say\)/);
+      assert.equal(typeof py.progress, 'function', 'the callback is registered before the import');
       assert.equal(writes.get('/ba_save.py'), 'ba_save.py');
       assert.equal(writes.get('/ba_dashboard.py'), 'ba_dashboard.py');
       py.imported = true;

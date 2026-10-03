@@ -1,0 +1,240 @@
+// Run with: node --test tests/on_demand.test.cjs
+// The board's sections computed on demand (#238, docs/architecture.md,
+// "Sections"): a board from a source that computes sections arrives without
+// them; what is on screen asks for one through odNeed(), once a board; the
+// answer is merged into the English payload and localised into D, never taken
+// in as a new board; an answer for an older board is dropped; and a write or a
+// progress check never reads a section the board does not have yet.
+const {test} = require('node:test');
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const {loadBoard, recordingDocument} = require('./_board.cjs');
+
+const GEN = Symbol.for('bigcopilot.build');
+
+/* A board whose LEDGER_SOURCE records what it is asked for and answers when
+   the test says. `core` is the payload the build sent. */
+function board(core = {}) {
+  const asked = [];
+  const source = {
+    label: 'In browser',
+    data: async () => null,
+    watch() {},
+    section(name, gen) {
+      return new Promise((resolve, reject) => asked.push({name, gen, resolve, reject}));
+    },
+  };
+  // Everything else on window answers as the harness's stub does: with itself.
+  const inert = new Proxy(function(){}, {
+    get: (_, k) => k === Symbol.toPrimitive ? () => 0 : k === Symbol.iterator ? function*(){} : k === 'length' ? 0 : inert,
+    apply: () => inert, construct: () => inert, set: () => true,
+  });
+  const window = new Proxy({}, {get: (_, k) => k === 'LEDGER_SOURCE' ? source : inert[k]});
+  const {document} = recordingDocument();
+  // The redraw an arrival makes runs on the stub document and throws there;
+  // the board logs and carries on, as it would on the page.
+  const quiet = Object.assign(Object.create(console), {error() {}});
+  const context = loadBoard({document, window, console: quiet});
+  const take = (raw, gen) => {
+    Object.defineProperty(raw, GEN, {value: gen});
+    context.__raw = raw;
+    vm.runInContext('takeData(__raw)', context);
+  };
+  take(Object.assign({meta: {day: 3}, names: {}, businesses: [], supply: {factories: {sites: []}},
+    staffing: [], officeStaffing: []}, core), 5);
+  const run = code => vm.runInContext(code, context);
+  return {context, asked, take, run};
+}
+const tick = () => new Promise(resolve => setImmediate(resolve));
+
+test('a section is asked for once a board, with its generation, and not by a hidden draw', () => {
+  const b = board();
+  assert.equal(b.run('odReady("hiring")'), false);
+  b.run('odHidden = true');
+  assert.equal(b.run('odNeed("hiring")'), false);
+  assert.equal(b.asked.length, 0, 'a view not on screen asks for nothing');
+  assert.equal(b.run('odWanted'), true, 'and its row is left to draw again when it opens');
+  b.run('odHidden = false');
+  assert.equal(b.run('odNeed("hiring")'), false);
+  assert.equal(b.run('odNeed("hiring")'), false);
+  assert.deepEqual(b.asked.map(a => [a.name, a.gen]), [['hiring', 5]]);
+  // Hiring needs the factory staffing: both are being worked out.
+  assert.equal(b.run('odState("hiring")'), 'loading');
+  assert.equal(b.run('odState("factoryStaffing")'), 'loading');
+  assert.match(b.run('odWaitHtml("hiring")'), /class="od-wait" role="status"/);
+});
+
+test('an arriving section is merged into the English payload and the board, not taken as a new board', async () => {
+  const b = board();
+  const seq = b.run('boardSeq');
+  b.run('odNeed("hiring")');
+  b.asked[0].resolve({generation: 5, sections: {
+    factoryStaffing: {factoryStaffing: {cap: [], dem: []}},
+    hiring: {hiring: {sites: [], people: {}}, candidates: [{id: 'c1'}]},
+  }});
+  await tick();
+  assert.equal(b.run('odReady("hiring")'), true);
+  assert.equal(b.run('odReady("factoryStaffing")'), true);
+  assert.equal(b.run('D.candidates[0].id'), 'c1');
+  assert.equal(b.run('D[GN_SRC].candidates[0].id'), 'c1', 'kept in the English payload');
+  assert.notEqual(b.run('D.candidates'), b.run('D[GN_SRC].candidates'), 'D holds a localised copy');
+  assert.equal(b.run('boardSeq'), seq, 'no new board');
+  // A language switch localises from the English payload: the section stays.
+  assert.equal(b.run('localiseNames(D).hiring.sites.length'), 0);
+  assert.equal(b.run('odNeed("hiring")'), true);
+  assert.equal(b.asked.length, 1);
+});
+
+test('an answer for an older board is dropped, and the newer board asks again', async () => {
+  const b = board();
+  b.run('odNeed("factoryStaffing")');
+  b.take({meta: {day: 4}, names: {}, businesses: [], supply: {factories: {sites: []}}, staffing: [], officeStaffing: []}, 6);
+  b.asked[0].resolve({generation: 5, sections: {factoryStaffing: {factoryStaffing: {cap: [{key: 'old'}], dem: []}}}});
+  await tick();
+  assert.equal(b.run('odReady("factoryStaffing")'), false, 'board 5\'s answer is not board 6\'s');
+  assert.equal(b.run('odState("factoryStaffing")'), 'missing');
+  b.run('odNeed("factoryStaffing")');
+  assert.deepEqual(b.asked.map(a => a.gen), [5, 6]);
+});
+
+test('a section that fails says so, and Try again asks again', async () => {
+  const b = board();
+  b.run('odNeed("hiring")');
+  b.asked[0].reject(new Error('the board hit a bug reading this save'));
+  await tick();
+  assert.equal(b.run('odState("hiring")'), 'error');
+  assert.equal(b.run('odState("factoryStaffing")'), 'error');
+  assert.match(b.run('odWaitHtml("hiring")'), /class="od-wait err" role="alert"[^]*the board hit a bug[^]*data-od-retry="hiring"/);
+  assert.equal(b.run('odNeed("hiring")'), false);
+  assert.equal(b.asked.length, 1, 'a failure is not asked again by itself');
+  b.run('odRetry("hiring")');
+  assert.equal(b.asked.length, 2);
+  assert.equal(b.run('odState("hiring")'), 'loading');
+});
+
+test('a board with every section (the CLI page, the watch server) asks for nothing', () => {
+  const b = board({factoryStaffing: {cap: [], dem: []}, hiring: {sites: []}, candidates: []});
+  assert.equal(b.run('odNeed("hiring")'), true);
+  assert.equal(b.run('odNeed("factoryStaffing")'), true);
+  assert.equal(b.asked.length, 0);
+});
+
+test('a hire is judged only on a board that has worked out where everybody is', async () => {
+  const b = board();
+  const rec = {family: 'hire', expect: {people: [{id: 'p1', site: 'ba:street_a#1'}]}};
+  b.context.__rec = rec;
+  assert.equal(b.run('PG_CHECK.hire(__rec)'), null, 'not Not confirmed: not judged yet');
+  assert.deepEqual(b.asked.map(a => a.name), ['hiring']);
+  b.asked[0].resolve({generation: 5, sections: {
+    factoryStaffing: {factoryStaffing: {cap: [], dem: []}},
+    hiring: {hiring: {sites: [], people: {p1: {site: 'ba:street_a#1'}}}, candidates: []},
+  }});
+  await tick();
+  assert.equal(b.run('pgJudged'), b.run('boardSeq'), 'the arrival judged the checks again on this board');
+  assert.equal(b.run('PG_CHECK.hire(__rec).state'), 'confirmed');
+});
+
+test('nobody at a factory is called spare before its staffing is worked out', () => {
+  const factory = {key: 'ba:street_f#1', staffIdle: ['w1', 'w2']};
+  const b = board({businesses: [factory], supply: {factories: {sites: [{s: 0, lines: []}]}}});
+  assert.equal(b.run('spSpareIds(D.businesses[0]).length'), 0);
+  assert.deepEqual(b.asked.map(a => a.name), ['factoryStaffing']);
+});
+
+test('a shop the game opens no hour is read off its own plan, not the Staff page', () => {
+  const b = board();
+  assert.equal(b.run('spNoHours({open: [[], [], [], [], [], [], []]})'), true);
+  assert.equal(b.run('spNoHours({open: [[], [[9, 17]], [], [], [], [], []]})'), false);
+  assert.equal(b.run('spNoHours({failed: true, open: []})'), false);
+  assert.equal(b.run('spNoHours(null)'), false);
+  assert.equal(b.asked.length, 0);
+});
+
+test('work held for a section runs when it arrives; a waiting write dialog hears arrivals and failures', async () => {
+  const b = board();
+  b.run('globalThis.ran = 0; odThen("hiring", () => { globalThis.ran++; })');
+  b.run('globalThis.painted = 0; gwOpen = {open: true, _odWait: () => { globalThis.painted++; }}');
+  assert.equal(b.run('ran'), 0);
+  b.asked[0].reject(new Error('boom'));
+  await tick();
+  assert.equal(b.run('painted'), 1, 'the dialog paints the failure');
+  b.run('gwOpen._odWait = () => { globalThis.painted++; }');
+  b.run('odThen("hiring", () => { globalThis.ran++; })');
+  b.run('odRetry("hiring")');
+  assert.equal(b.run('painted'), 2, 'and paints the Try again');
+  b.run('gwOpen._odWait = () => { globalThis.painted++; }');
+  b.asked.at(-1).resolve({generation: 5, sections: {
+    factoryStaffing: {factoryStaffing: {cap: [], dem: []}},
+    hiring: {hiring: {sites: []}, candidates: []},
+  }});
+  await tick();
+  assert.equal(b.run('ran'), 1, 'the work held before the failure was dropped; the one after it ran');
+  assert.equal(b.run('painted'), 3, 'the dialog plans on arrival');
+  b.run('gwOpen = null');
+});
+
+test('a stale refusal before the new board keeps the section loading and the held work, until the source fails', async () => {
+  const b = board();
+  b.run('globalThis.ran = 0; odThen("hiring", () => { globalThis.ran++; }, "k")');
+  b.run('odThen("hiring", () => { globalThis.ran++; }, "k")');
+  b.asked[0].reject(Object.assign(new Error('The save on screen has been read again since'), {stale: true}));
+  await tick();
+  assert.equal(b.run('odState("hiring")'), 'loading', 'not an error: the newer board asks again');
+  assert.equal(b.run('odThens.length'), 1, 'held once, by its key');
+  // The newer board arrives and asks again; the held work runs once.
+  b.take({meta: {day: 4}, names: {}, businesses: [], supply: {factories: {sites: []}}, staffing: [], officeStaffing: []}, 6);
+  b.run('odThensAsk()');
+  assert.deepEqual(b.asked.map(a => a.gen), [5, 6]);
+  b.asked[1].resolve({generation: 6, sections: {
+    factoryStaffing: {factoryStaffing: {cap: [], dem: []}}, hiring: {hiring: {sites: []}, candidates: []}}});
+  await tick();
+  assert.equal(b.run('ran'), 1);
+  // Had the newer build failed instead, the source says so and it is an error.
+  const c = board();
+  c.run('odNeed("hiring")');
+  c.asked[0].reject(Object.assign(new Error('stale'), {stale: true}));
+  await tick();
+  c.run('markStale("Could not read the save")');
+  assert.equal(c.run('odState("hiring")'), 'error');
+  assert.match(c.run('odWaitHtml("hiring")'), /Could not read the save/);
+});
+
+test('after a read that failed, a section asked for is an error, and Try again stays one', async () => {
+  // The worker answers `gone` (web/app.js rejects it without `stale`): no
+  // newer board is coming to ask again.
+  const b = board();
+  b.run('markStale("Could not read the save")');
+  b.run('odNeed("hiring")');
+  b.asked[0].reject(new Error('The reader could not read the save again: Update to try once more'));
+  await tick();
+  assert.equal(b.run('odState("hiring")'), 'error');
+  b.run('odRetry("hiring")');
+  assert.equal(b.run('odState("hiring")'), 'loading');
+  b.asked[1].reject(new Error('The reader could not read the save again: Update to try once more'));
+  await tick();
+  assert.equal(b.run('odState("hiring")'), 'error', 'not a spinner that never stops');
+});
+
+test('Staff needs without hiring says it is worked out, and closes the demand list it cannot draw', () => {
+  const b = board();
+  b.run('hrPop = {target: "", all: false}; hrUi.sheet = "ba:skill_cleaning"');
+  b.run('drawStaffPage()');
+  assert.equal(b.run('hrPop'), null, 'the demand list is closed');
+  assert.match(b.run('$("secStaff").innerHTML'), /class="od-wait" role="status"/);
+  assert.deepEqual(b.asked.map(a => a.name), ['hiring']);
+  // Drawn again while hiring is still missing, the list stays shut.
+  b.run('hrPop = {target: "", all: false}; hrPopDraw()');
+  assert.equal(b.run('hrPop'), null);
+});
+
+test('a view declares the sections its rows read, and Today declares none', () => {
+  const b = board();
+  const rows = JSON.parse(b.run('JSON.stringify(PAGE_DRAWS.filter(r => r[3]).map(r => [r[0], r[3]]))'));
+  const known = Object.keys(JSON.parse(b.run('JSON.stringify(OD_SECTIONS)')));
+  assert.ok(rows.length, 'some rows declare sections');
+  rows.forEach(([view, names]) => names.forEach(n => assert.ok(known.includes(n), `${view} declares an unknown section ${n}`)));
+  assert.equal(rows.filter(([view]) => view.split(' ').includes('today')).length, 0);
+  // Opening a view asks for what it declares.
+  b.run('odWantView("staffing/needs")');
+  assert.deepEqual(b.asked.map(a => a.name), ['hiring']);
+});

@@ -19,6 +19,9 @@ web/test-*
 watch.log
 watch.err
 
+# Bug report folders downloaded from R2 (docs/community-features.md): saves, never committed
+reports/
+
 # Local research notes, never published
 research/
 
