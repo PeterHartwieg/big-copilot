@@ -64,7 +64,8 @@ JS_FILES = ("web/i18n.js", "web/app.js", "web/update.js", "web/community.js", "w
 AREAS = ("nav", "land", "app", "foot", "today", "f", "co", "sp", "sb", "gr", "map", "wiki", "comm",
          "upd", "br", "day")
 KEY = re.compile(r"[a-z]+(\.[A-Za-z0-9_-]+)+")
-PLURAL_SUFFIX = re.compile(r"_(zero|one|two|few|many|other)$")
+PLURAL_CATEGORIES = ("zero", "one", "two", "few", "many", "other")
+PLURAL_SUFFIX = re.compile(r"_(" + "|".join(PLURAL_CATEGORIES) + r")$")
 # The placeholder syntax tt() and msg() share, and the specs both implement.
 FIELD = re.compile(r"\{(\w+)(?::([^{}]+))?\}")
 SPECS = re.compile(r",|\$|\$c|day|,?\.\df")
@@ -523,10 +524,18 @@ def _english_for(key: str, english: dict) -> tuple[str | None, set | None]:
     the key (or of its plural's `other`), and the placeholders a translation
     may use (every form's, for a plural)."""
     base = _base_key(key)
-    forms = [v for k, v in english.items() if k != base and _base_key(k) == base] if base != key else []
+    # Only these six keys can be forms of this plural. Scanning the whole
+    # catalogue here made shipping translations quadratic in catalogue size.
+    forms = {k: english[k] for category in PLURAL_CATEGORIES
+             if (k := f"{base}_{category}") in english} if base != key else {}
     if forms:
-        names = set().union(*(fields(f) for f in forms))
-        return english.get(f"{base}_other", forms[-1]), names
+        names = set().union(*(fields(f) for f in forms.values()))
+        other = f"{base}_other"
+        if other in forms:
+            return forms[other], names
+        # catalogue() requires `other`; callers supplying a partial catalogue
+        # still get the last form in their original insertion order.
+        return next(english[k] for k in reversed(english) if k in forms), names
     if key in english:
         return english[key], fields(english[key])
     return None, None
