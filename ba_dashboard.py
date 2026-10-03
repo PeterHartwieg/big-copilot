@@ -8484,7 +8484,8 @@ def _cinema_capacity(save: Save, building: dict, names: Names | None) -> dict | 
               ("projection", "ba:itemname_boothprojection"),
               ("concessions", "ba:itemname_concessionsstandregister"))
     # Keep the known labels in step with the game's required capacity groups.
-    required = {slug for req in rules["types"]["ba:businesstype_cinema"]["rq"]
+    requirements = (rules.get("types", {}).get("ba:businesstype_cinema") or {}).get("rq", ())
+    required = {slug for req in requirements
                 for slug in req.get("i", ()) if furniture.get(slug, {}).get("c")}
     if required != {slug for _, slug in groups}:
         return None

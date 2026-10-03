@@ -918,6 +918,10 @@ class CinemaGridTests(MsgAsserts, unittest.TestCase):
             with patch("ba_dashboard.load_buildings", return_value={(STREET, 4): row}):
                 self.assertNotIn("cinemaCapacity", self.cinema(screens=1, door=25))
 
+    def test_missing_rules_keep_the_neutral_reading(self):
+        with patch("ba_dashboard.load_store_rules", return_value={"types": {}, "furniture": {}}):
+            self.assertNotIn("cinemaCapacity", self.known_cinema(screens=1, door=25))
+
     def test_zero_capacity_or_incomplete_furniture_gets_no_guessed_advice(self):
         for options in ({"screens": 0, "door": 25}, {"screens": 1, "door": 0}):
             self.assertNotIn("cinemaCapacity", self.known_cinema(**options))
