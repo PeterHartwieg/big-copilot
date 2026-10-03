@@ -41,6 +41,7 @@ function board({saved = {}, data = {}} = {}) {
     window:{scrollY:0, addEventListener(type, fn){listeners[type] = fn;}},
     drawChart(){chartDraws++;}, wireReveal(){}, requestAnimationFrame(){}, inkHome(){}, icon(){return '';},
     showCityMap(){}, showWikiRoute(){wikiVisits++;}, wireTips(){}, drawSite(){sitePanels++;},
+    odNeed(){return true;}, odReady(){return true;}, odThensAsk(){}, pgEvaluate(){},
     drawPortfolio(){}, CSS:{escape: s => s}, shortName: b => b.name,
     spEsc: s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
     attr: s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'),

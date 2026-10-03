@@ -599,7 +599,7 @@ class CityMapView {
      thing rather than as chrome scattered over the map. */
   finderControls(){
     // A plan's finder cannot be switched off.
-    if(!premises() || this.planning) return "";
+    if((!premises() && !odOnDemand()) || this.planning) return "";
     /* A chip with its name on it: a bare pin in the corner was the most
        hidden way into a headline feature. */
     return `<div class="fswitch"><button type="button" class="ibtn" data-f="tog" aria-pressed="false" data-visit-feature="floor-plans">${ICON.pin}<span data-mw="finder">${ssEsc(MAP_WORDS.finder)}</span><span class="feature-new" data-new-feature="floor-plans" aria-hidden="true" data-mw="isNew" hidden>${ssEsc(MAP_WORDS.isNew)}</span></button></div>`;
@@ -1211,17 +1211,18 @@ class CityMapView {
         : tt("map.why.best", "{type} is the strongest {kind} demand in {hood} at {d}, with {rivals} there.", {type: f.fit, kind, hood, d: f.demand, rivals});
     return `${first} ${tt("map.why.score", "Score {s} = traffic {t} × demand {d} ÷ 100.", {s: f.score, t: b.traffic, d: f.demand})}`;
   }
-  finderOn(){ return !!(this.panel && premises() && this.fs.on); }
+  finderOn(){ return !!(this.panel && this.fs.on && (premises() || odOnDemand())); }
   /* Chips, select and inputs read back from the state, so a preset from Today
      or from a Growth cell shows in the controls it set. */
   paintControls(){
-    const P = premises(); if(!P || !this.panel) return;
+    const P = premises(); if(!this.panel) return;
     this.clampSort();
     const on = this.finderOn();
     this.root.classList.toggle('finder', on);
     this.citymap.classList.toggle('finder', on);
     this.stage.classList.toggle('finder', on);
     this.stage.classList.toggle('panel', on);
+    if(!P) return;
     // A chip is filled when it is chosen and outlined when it is not; nothing
     // is ever dimmed, which would read as unavailable rather than unchosen.
     const mark = (el, chosen) => { if(!el) return; el.classList.toggle('on', !!chosen); el.setAttribute('aria-pressed', String(!!chosen)); };
@@ -1606,6 +1607,11 @@ class CityMapView {
     this.loadFinder();
     // Fetched once the map has premises, so the first card opens at its size.
     if(premises()) this.wantPlans();
+    const waiting = this.panel && this.fs.on && !odNeed("premises");
+    if(waiting){
+      this.root.classList.add('finder'); this.citymap.classList.add('finder');
+      this.stage.classList.add('finder', 'panel');
+    }
     this.paintControls();
     const counts = {mine:this.businesses.size, own:this.owned.size, home:this.homes.size, fnd:[...this.businesses.keys()].filter(k => this.findings.has(k)).length, all:this.assets.buildings.length};
     this.root.querySelectorAll('.lay').forEach(chip => { chip.querySelector('.n').textContent = counts[chip.dataset.l]; });
@@ -1633,12 +1639,12 @@ class CityMapView {
       const [x,y,w,h] = this.assets.byKey.get(k).bounds;
       return `<circle class="pip ${mapKind(this.findings.get(k))}" cx="${(x+w/2).toFixed(1)}" cy="${(y+h/2).toFixed(1)}" r="4"></circle>`;
     }).join('') : '';
-    const cnt = this.root.querySelector('.srch .cnt'); if(cnt) cnt.textContent = this.matches.length;
+    const cnt = this.root.querySelector('.srch .cnt'); if(cnt) cnt.textContent = waiting ? "—" : this.matches.length;
     if(this.list && this.finderOn()){
       const focusedKey=this.list.contains(document.activeElement)?document.activeElement.dataset.pick:null, listScroll=this.list.scrollTop;
       const all = this.matches;
       const some = this.showAll ? all : all.slice(0, 80);
-      this.list.innerHTML = (this.saleView() ? this.saleList(some) : this.finderList(some))
+      this.list.innerHTML = waiting ? odWaitHtml("premises") : (this.saleView() ? this.saleList(some) : this.finderList(some))
         + (all.length > some.length ? `<button type="button" class="more" data-more aria-label="${attr(tt("map.list.more", "Show the remaining places"))}">+${all.length - some.length}</button>` : '')
         + (all.length ? '' : `<div class="empty">${ssEsc(tt("map.list.empty", "Nothing matches."))}</div>`);
       if(focusedKey) [...this.list.children].find(b=>b.dataset.pick===focusedKey)?.focus({preventScroll:true});
@@ -1807,7 +1813,7 @@ function showCityMap(){
    keyboard to the first result (the switch when nothing matches), since the
    control that opened the finder is on a page now hidden. */
 function openFinder(preset = {}, focus = false){
-  if(!premises()) return;
+  if(!premises() && !odOnDemand()) return;
   // The finder is Expansion › Find a location in the board's shell: the page
   // it opens stands under that route (docs/architecture.md, Routes).
   if(typeof routeNext !== "undefined" && routeNext === null) routeNext = "expansion/finder";
@@ -1841,7 +1847,7 @@ function openFinder(preset = {}, focus = false){
    (finderPickRestore()): `mode` is how the entry was reached, "push" for a
    new visit, "none" or "replace" for Back, Forward and a reload. */
 function showFinder(mode = "push"){
-  if(!premises()) return;
+  if(!premises() && !odOnDemand()) return;
   if(typeof routeNext !== "undefined" && routeNext === null) routeNext = "expansion/finder";
   showPage("map");
   showCityMap();

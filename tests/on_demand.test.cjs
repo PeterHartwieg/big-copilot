@@ -121,7 +121,7 @@ test('a board with every section (the CLI page, the watch server) asks for nothi
 
 test('a hire is judged only on a board that has worked out where everybody is', async () => {
   const b = board();
-  const rec = {family: 'hire', expect: {people: [{id: 'p1', site: 'ba:street_a#1'}]}};
+  const rec = {family: 'hire', state: 'applied', expect: {people: [{id: 'p1', site: 'ba:street_a#1'}]}};
   b.context.__rec = rec;
   assert.equal(b.run('PG_CHECK.hire(__rec)'), null, 'not Not confirmed: not judged yet');
   assert.deepEqual(b.asked.map(a => a.name), ['hiring']);
@@ -138,7 +138,7 @@ test('nobody at a factory is called spare before its staffing is worked out', ()
   const factory = {key: 'ba:street_f#1', staffIdle: ['w1', 'w2']};
   const b = board({businesses: [factory], supply: {factories: {sites: [{s: 0, lines: []}]}}});
   assert.equal(b.run('spSpareIds(D.businesses[0]).length'), 0);
-  assert.deepEqual(b.asked.map(a => a.name), ['factoryStaffing']);
+  assert.deepEqual(b.asked.map(a => a.name), [], 'a spare count is a pure read; the site draw asks');
 });
 
 test('a shop the game opens no hour is read off its own plan, not the Staff page', () => {
@@ -227,14 +227,115 @@ test('Staff needs without hiring says it is worked out, and closes the demand li
   assert.equal(b.run('hrPop'), null);
 });
 
-test('a view declares the sections its rows read, and Today declares none', () => {
+test('every row and route declares sections; Today asks only for shop plans and Map none', () => {
   const b = board();
   const rows = JSON.parse(b.run('JSON.stringify(PAGE_DRAWS.filter(r => r[3]).map(r => [r[0], r[3]]))'));
   const known = Object.keys(JSON.parse(b.run('JSON.stringify(OD_SECTIONS)')));
   assert.ok(rows.length, 'some rows declare sections');
   rows.forEach(([view, names]) => names.forEach(n => assert.ok(known.includes(n), `${view} declares an unknown section ${n}`)));
-  assert.equal(rows.filter(([view]) => view.split(' ').includes('today')).length, 0);
+  assert.deepEqual([...new Set(rows.filter(([view]) => view.split(' ').includes('today')).flatMap(([, n]) => n))], ['staffing']);
+  assert.equal(b.run('PAGE_DRAWS.every(r => Array.isArray(r[3]))'), true);
+  assert.equal(b.run('Object.values(ROUTES).every(r => Array.isArray(r.needs))'), true);
+  assert.equal(b.run('JSON.stringify(ROUTES.map.needs)'), '[]');
+  assert.equal(b.run('JSON.stringify(ROUTES["expansion/finder"].needs)'), '["premises"]');
   // Opening a view asks for what it declares.
   b.run('odWantView("staffing/needs")');
   assert.deepEqual(b.asked.map(a => a.name), ['hiring']);
+});
+
+
+test('new page-only draws wait without declaring missing data empty', () => {
+  for(const [draw, key, host] of [['drawProducts', 'products', 'secProducts'],
+    ['drawPayroll', 'staff', 'secPayroll'], ['drawGoals', 'goals', 'secGoals'],
+    ['drawOpenStore', 'openStore', 'osBody'], ['drawPlan', 'plan', 'ofBody']]){
+    const b = board();
+    b.run(`${draw}()`);
+    assert.match(b.run(`$("${host}").innerHTML`), /od-wait/, draw);
+    assert.ok(b.asked.some(a => a.name === key), draw);
+  }
+  const b = board();
+  b.run('delete D.staffing; delete D.officeStaffing;');
+  assert.match(b.run('spRosterBlock({key: "x"})'), /od-wait/);
+  assert.match(b.run('spOfficeRoster({key: "x"})'), /od-wait/);
+  assert.match(b.run('spSchedSummary({key: "x", status: "retail"})'), /od-wait/);
+  assert.match(b.run('spSchedSummary({key: "x", status: "office"})'), /od-wait/);
+  assert.deepEqual(b.asked.map(a => a.name), ['staffing', 'officeStaffing']);
+});
+
+test('a partly or unseen hire never requests hiring on its own, but rechecks if ready', () => {
+  for(const state of ['partly', 'unseen']){
+    const b = board();
+    b.context.__rec = {state, expect: {people: []}};
+    assert.equal(b.run('PG_CHECK.hire(__rec)'), null);
+    assert.equal(b.run('pgPeopleSites()'), null);
+    assert.equal(b.asked.length, 0);
+    b.run('D.factoryStaffing = {cap: []}; D.hiring = {people: {}}; D.candidates = [];');
+    assert.equal(b.run('PG_CHECK.hire(__rec).state'), 'confirmed');
+    assert.equal(b.asked.length, 0);
+  }
+});
+
+test('prefetch filters factory dependencies and shares the per-board request and generation checks', async () => {
+  const b = board();
+  b.run('globalThis.document = {hidden: false}');
+  const sections = view => JSON.parse(b.run(`JSON.stringify(odPrefetchSections("${view}"))`));
+  assert.deepEqual(sections('staffing/needs'), []);
+  assert.deepEqual(sections('staffing/schedules'), []);
+  assert.deepEqual(sections('supply/production'), ['plan']);
+  assert.deepEqual(sections('expansion/factory'), ['plan', 'openFactory']);
+  assert.deepEqual(sections('expansion/finder'), ['premises']);
+  assert.deepEqual(sections('map'), []);
+  b.run('document.hidden = true; odPrefetch("expansion/open")');
+  assert.equal(b.asked.length, 0);
+  b.run('document.hidden = false; odHidden = true; odPrefetch("expansion/open")');
+  assert.equal(b.asked.length, 0, 'prefetch never acts as a hidden draw');
+  b.run('odHidden = false; odPrefetch("expansion/open"); odPrefetch("expansion/open"); odNeed("openStore")');
+  assert.deepEqual(b.asked.map(a => [a.name, a.gen]), [['openStore', 5]]);
+  b.take({meta: {day: 4}, businesses: []}, 6);
+  b.run('odPrefetch("expansion/open")');
+  b.asked[0].resolve({generation: 5, sections: {openStore: {openStore: {old: true}}, premises: {premises: {}}}});
+  await tick();
+  assert.equal(b.run('odReady("openStore")'), false);
+  assert.deepEqual(b.asked.map(a => a.gen), [5, 6]);
+});
+
+test('navigation intent maps route links and area tabs to their declared prefetch', () => {
+  const b = board();
+  b.run('globalThis.document = {hidden: false}');
+  b.context.__event = {target: {closest: () => ({dataset: {route: 'businesses/prices'}})}};
+  b.run('odNavIntent(__event); odNavIntent(__event)');
+  assert.deepEqual(b.asked.map(a => a.name), ['products']);
+  b.context.__event = {target: {closest: () => ({dataset: {id: 'expansion'}})}};
+  b.run('areaLast.expansion = "open"; odNavIntent(__event)');
+  assert.deepEqual(b.asked.map(a => a.name), ['products', 'openStore']);
+  b.context.__event = {target: {closest: () => ({dataset: {}, getAttribute: () => '#wiki/businesstypes-giftshop'})}};
+  b.run('odNavIntent(__event)');
+  assert.deepEqual(b.asked.map(a => a.name), ['products', 'openStore', 'plan']);
+});
+
+
+test('a Demand cell can open the finder from core market data without asking for premises', () => {
+  const b = board({market: {hoods: ['hood'], types: [
+    {slug: 'ba:businesstype_cinema', cells: [{demand: 50}]},
+    {slug: 'ba:businesstype_theater', cells: [{demand: 40}]},
+    {slug: 'shop', cells: [{demand: 30}]},
+    {slug: 'missing', cells: [null]}], offices: [{slug: 'law', cells: [{demand: 20}]}]}});
+  assert.equal(b.run('finderPreset("ba:businesstype_cinema", "hood").cat'), 'cinema');
+  assert.equal(b.run('finderPreset("ba:businesstype_theater", "hood").cat'), 'theater');
+  assert.equal(b.run('finderPreset("shop", "hood").cat'), 'retail');
+  assert.equal(b.run('finderPreset("law", "hood").cat'), 'office');
+  assert.equal(b.run('finderPreset("missing", "hood")'), null);
+  assert.equal(b.asked.length, 0);
+});
+
+test('section arrivals refill recipe indices and invalidate Supply memos without a new board', () => {
+  const b = board();
+  const seq = b.run('boardSeq');
+  b.run('sbCaches.cap = {old: true}; sbOtherKeys = {old: true}');
+  b.run('odTake(5, {sections: {plan: {plan: {recipes: [{slug: "beer", out: 10}]}}}})');
+  assert.equal(b.run('RECIPE_BY.beer.out'), 10);
+  assert.equal(b.run('boardSeq'), seq);
+  // A redraw may fill fresh memos; their old values must be gone.
+  assert.equal(b.run('!!(sbCaches.cap && sbCaches.cap.old)'), false);
+  assert.equal(b.run('!!(sbOtherKeys && sbOtherKeys.old)'), false);
 });

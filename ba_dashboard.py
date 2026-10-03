@@ -2119,14 +2119,44 @@ def _take_hires(rows) -> dict:
     return out
 
 
-def _factory_staffing_section(build: Build) -> dict:
-    """Section factoryStaffing: every factory line's week, over the bench the offices left."""
+def _planning_world(build: Build, previous: str | None = None) -> dict:
+    """Each stage works on a copy; a failure cannot damage its predecessor."""
+    if previous is None:
+        if "world" not in build.shared:
+            build.shared["world"] = _plan_world(build.save, build.shared["staff"])
+        world = build.shared["world"]
+    else:
+        world = build.shared["planning"][previous]
+    return {"people": world["people"], "bench": list(world["bench"]),
+            "state": {pid: _copy_state(week) for pid, week in world["state"].items()}}
+
+
+def _staffing_section(build: Build) -> dict:
     shared = build.shared
-    # Planned over a copy of the pool the offices left, so an attempt that
-    # fails half way leaves it whole for Try again.
-    world = shared["world"]
-    world = {"people": world["people"], "bench": list(world["bench"]),
-             "state": {pid: _copy_state(week) for pid, week in world["state"].items()}}
+    world = _planning_world(build)
+    with _collector_paused():
+        rows = _staffing(build.save, build.names, shared["businesses"], shared["all_grids"],
+                         shared["staff"], shared["base_promotion"], world)
+    build.private["hires"].update(_take_hires(rows))
+    shared["planning"]["staffing"] = world
+    return {"staffing": rows}
+
+
+def _office_staffing_section(build: Build) -> dict:
+    shared = build.shared
+    world = _planning_world(build, "staffing")
+    with _collector_paused():
+        rows = _office_staffing(build.save, build.names, shared["businesses"],
+                                shared["all_grids"], shared["staff"], world)
+    build.private["hires"].update(_take_hires(rows))
+    shared["planning"]["officeStaffing"] = world
+    return {"officeStaffing": rows}
+
+
+def _factory_staffing_section(build: Build) -> dict:
+    """Factory lines use the bench and weeks the offices left."""
+    shared = build.shared
+    world = _planning_world(build, "officeStaffing")
     with _collector_paused():
         factory = _factory_staffing(
             build.save, build.names, shared["businesses"], shared["factories"], shared["staff"],
@@ -2134,39 +2164,84 @@ def _factory_staffing_section(build: Build) -> dict:
         )
     build.private["hires"].update(_take_hires(
         row for mode in SIZING_MODES for row in factory.get(mode, [])))
+    shared["planning"]["factoryStaffing"] = world
     return {"factoryStaffing": factory}
 
 
 def _hiring_section(build: Build) -> dict:
-    """Section hiring: the Staff page's key and the headhunters' candidates."""
-    factory = build.sections["factoryStaffing"]["factoryStaffing"]
+    """Hiring reads the plans held by the sections, never missing core keys."""
     with _collector_paused():
-        hiring = _hiring(build.save, build.shared["businesses"], build.core["staffing"], factory,
-                         build.core["officeStaffing"], hires=build.private["hires"])
-    # The Staff page: the headhunters' candidates, best first, and what
-    # every site still needs by role. See _candidates() and _hiring().
+        hiring = _hiring(build.save, build.shared["businesses"],
+                         build.sections["staffing"]["staffing"],
+                         build.sections["factoryStaffing"]["factoryStaffing"],
+                         build.sections["officeStaffing"]["officeStaffing"],
+                         hires=build.private["hires"])
     return {"candidates": _candidates(build.save), "hiring": hiring}
 
 
-# What the board computes only when a page asks for it (docs/architecture.md,
-# "Sections"): each section's payload keys, the sections it needs computed
-# first, its producer, and what the page is told while it runs. Planning keeps
-# its order: the core plans shops and offices over one pool of people
-# (_plan_world()), factory lines plan over what the offices left, and hiring
-# reads every plan. Nothing a warning reads is here.
+def _products_section(build: Build) -> dict:
+    products = _products([{"lines": [dict(line) for line in b["lines"]]}
+                          for b in build.private["product_businesses"]])
+    rhythm = _product_rhythm(build.save, build.shared["buildings"])
+    for entry in products:
+        beat = rhythm.get(entry["slug"])
+        entry["peak"] = beat["peak"] if beat else None
+        entry["swing"] = beat["swing"] if beat else 0
+        entry["weeks"] = beat["weeks"] if beat else 0
+    return {"products": products}
+
+
+def _premises_section(build: Build) -> dict:
+    return {"premises": _premises(build.save, build.names, build.shared["market"])}
+
+
+def _open_store_section(build: Build) -> dict:
+    s = build.shared
+    return {"openStore": _open_store(build.save, build.names, s["buildings"], s["businesses"],
+                                    build.sections["premises"]["premises"], s["all_grids"],
+                                    s["stmt_history"], s["daily"], s["staff"])}
+
+
+def _open_factory_section(build: Build) -> dict:
+    s = build.shared
+    return {"openFactory": _open_factory(build.save, build.names, s["buildings"],
+                                        s["businesses"], s["recipes"], s["staff"])}
+
+
+def _plan_section(build: Build) -> dict:
+    s = build.shared
+    return {"plan": _plan(build.save, build.names, s["businesses"], build.private["catalogue"],
+                          s["recipes"], s["stations"],
+                          _ingredient_prices(build.save, build.names, s["supply"], s["businesses"]),
+                          s["rhythm"])}
+
+
+# Page-only producers: planning dependencies also preserve the shared bench order.
 SECTIONS = {
-    "factoryStaffing": {
-        "keys": ("factoryStaffing",),
-        "needs": (),
-        "produce": _factory_staffing_section,
-        "words": "Working out factory staffing",
-    },
-    "hiring": {
-        "keys": ("hiring", "candidates"),
-        "needs": ("factoryStaffing",),
-        "produce": _hiring_section,
-        "words": "Working out staff needs",
-    },
+    "staffing": {"keys": ("staffing",), "needs": (),
+                 "produce": _staffing_section, "words": "Working out shop staffing"},
+    "officeStaffing": {"keys": ("officeStaffing",), "needs": ("staffing",),
+                       "produce": _office_staffing_section, "words": "Working out office staffing"},
+    "factoryStaffing": {"keys": ("factoryStaffing",), "needs": ("officeStaffing",),
+                        "produce": _factory_staffing_section, "words": "Working out factory staffing"},
+    "hiring": {"keys": ("hiring", "candidates"), "needs": ("factoryStaffing",),
+               "produce": _hiring_section, "words": "Working out staff needs"},
+    "premises": {"keys": ("premises",), "needs": (),
+                 "produce": _premises_section, "words": "Working out locations"},
+    "products": {"keys": ("products",), "needs": (),
+                 "produce": _products_section, "words": "Working out products"},
+    "staff": {"keys": ("staff",), "needs": (),
+              "produce": lambda b: {"staff": _staff_summary(b.shared["staff"], b.shared["businesses"])},
+              "words": "Working out payroll"},
+    "openStore": {"keys": ("openStore",), "needs": ("premises",),
+                  "produce": _open_store_section, "words": "Working out store plans"},
+    "openFactory": {"keys": ("openFactory",), "needs": (),
+                    "produce": _open_factory_section, "words": "Working out factory costs"},
+    "plan": {"keys": ("plan",), "needs": (),
+             "produce": _plan_section, "words": "Working out factory plans"},
+    "goals": {"keys": ("goals",), "needs": (),
+              "produce": lambda b: {"goals": _goals(b.save, b.names, b.shared["businesses"])},
+              "words": "Working out milestones"},
 }
 
 
@@ -2203,9 +2278,8 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     """The core of one build: every key the warnings need, the history recorded.
 
     The rest of the payload is SECTIONS, computed from what this keeps on the
-    Build. The order is extract()'s as it has always been, up to the plans:
-    shops and offices are planned here, over the pool the factory lines are
-    planned over next (_factory_staffing_section()).
+    Build. History producers stay eager; page-only producers have no history
+    side effects and leave the core whole.
     """
     build = Build(save, names, generation)
     root = save.root
@@ -2245,20 +2319,19 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
 
     daily = _daily_series(save, summaries)
     loans = _loans(save, names)
-    products = _products(businesses)
+    # _products() removes raw totals from lines. Preserve them privately for
+    # the deferred aggregation, and do the removal before businesses ships.
+    build.private["product_businesses"] = [{"lines": [dict(line) for line in b["lines"]]}
+                                            for b in businesses]
+    for b in businesses:
+        for line in b["lines"]:
+            line.pop("_sold", None)
+            line.pop("_takings", None)
     history = History(history_path)
     character = root.get("characterId") or "default"
     rhythm = _chain_rhythm(save, buildings, daily, day)
     supply = _supply(save, names, businesses, day, rhythm, recipes, history, character)
     _order_says(businesses, supply)
-    product_rhythm = _product_rhythm(save, buildings)
-    for entry in products:
-        beat = product_rhythm.get(entry["slug"])
-        entry["peak"] = beat["peak"] if beat else None
-        entry["swing"] = beat["swing"] if beat else 0
-        # How many weeks of sales the peak is read from, which the Products
-        # table names beside it.
-        entry["weeks"] = beat["weeks"] if beat else 0
     market = _market(save, names, businesses, day, history, character)
 
     profits = [d["profit"] for d in daily]
@@ -2295,23 +2368,6 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     hour_findings = _hour_findings(grids, businesses, service_wage)
     # The market's catalogue is the plan's alone; it never ships.
     build.private["catalogue"] = market.pop("catalogue")
-    plan = _plan(
-        save,
-        names,
-        businesses,
-        build.private["catalogue"],
-        recipes,
-        stations,
-        _ingredient_prices(save, names, supply, businesses),
-        rhythm,
-    )
-    premises = _premises(save, names, market)
-    # Expansion › Open a store: the facts a plan for a new store is worked
-    # out from (_open_store(), docs/open-a-store-scope.md).
-    open_store = _open_store(save, names, buildings, businesses, premises, all_grids,
-                             stmt_history, daily, staff)
-    # Expansion › Plan a factory: what a factory plan is priced from (_open_factory()).
-    open_factory = _open_factory(save, names, buildings, businesses, recipes, staff)
     net_worth = _net_worth(root, history, character, day)
     entry = {
         "hour": root["Hour"],
@@ -2323,25 +2379,15 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     ledger = history.ledger(character, day, entry)
     history.write()
     gate = max(profit_avg7 * MATERIAL_SHARE, MATERIAL_FLOOR)
-    # Every site's week over one pool of people (_plan_world()): shops, then
-    # offices by Peter's office default, here. Factory lines in each sizing
-    # and the Staff page's key are sections, planned over the world the
-    # offices leave (SECTIONS). The private parts come off now, before the
-    # core is sent: each line's machines and each plan row's `_hire`.
     factories = supply.get("factories", {})
     build.private["posts"] = _take_posts(factories)
-    with _collector_paused():
-        world = _plan_world(save, staff)
-        staffing = _staffing(
-            save, names, businesses, all_grids, staff,
-            (save.deref(root.get("gameVariables")) or {}).get(
-                "baseCustomerPromotionMultiplier", 0.55
-            ),
-            world,
-        )
-        office_staffing = _office_staffing(save, names, businesses, all_grids, staff, world)
-    build.private["hires"] = _take_hires([*staffing, *office_staffing])
-    build.shared.update(businesses=businesses, factories=factories, staff=staff, world=world)
+    build.private["hires"] = {}
+    build.shared.update(businesses=businesses, factories=factories, staff=staff,
+                        buildings=buildings, residential=residential, all_grids=all_grids,
+                        stmt_history=stmt_history, daily=daily, market=market, supply=supply,
+                        recipes=recipes, stations=stations, rhythm=rhythm, planning={},
+                        base_promotion=(save.deref(root.get("gameVariables")) or {}).get(
+                            "baseCustomerPromotionMultiplier", 0.55))
     alerts = _alerts(
         businesses, supply, chains, trends, hype, hour_findings, grids, day, gate, agencies=agencies
     )
@@ -2396,32 +2442,22 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         },
         "daily": daily,
         "businesses": businesses,
+        # The map's layers and home site panel read these on every draw;
+        # they cost nothing (under 1 ms and 1 KB), so Map needs no section.
         "ownedBuildings": _owned_buildings(save, names),
         "homes": _homes(buildings, residential, names),
-        "products": products,
-        "staff": _staff_summary(staff, businesses),
         "loans": loans,
         "supply": supply,
         "rhythm": rhythm,
         "market": market,
-        "premises": premises,
         "chains": chains,
         # Investment, profit so far and break-even, per site and per chain
         # (_payback(), docs/open-a-store-scope.md).
         "payback": payback,
-        # Expansion › Open a store: outfits, market, own shops, loans
-        # (_open_store()).
-        "openStore": open_store,
-        # Expansion › Plan a factory: prices, kits, storage, vehicles and what
-        # the company's warehouses and factories hold (_open_factory()).
-        "openFactory": open_factory,
         "trends": trends,
         "hypeExposure": hype,
         "hours": grids,
         "hourFindings": hour_findings,
-        "staffing": staffing,
-        "officeStaffing": office_staffing,
-        "plan": plan,
         # Every game name the text knows -- items, business types,
         # neighbourhoods, stations, skills, job demands -- by the game's own
         # key, so the page names anything the payload identifies by key, and a
@@ -2438,7 +2474,6 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         "alerts": alerts["lines"],
         "minor": alerts["minor"],
         "alertsDemand": {"lines": alerts_demand["lines"], "minor": alerts_demand["minor"]},
-        "goals": _goals(save, names, businesses),
     })
     build.core = {key: core[key] for key in PAYLOAD_KEYS if key in core}
     return build
@@ -11802,8 +11837,8 @@ def _plan_world(save: Save, staff: list) -> dict:
     person, which every placement writes into its own copy of and commits back;
     `bench` the unassigned people nobody is in training among, which each plan
     that gives one of them hours takes them off. Shops, then offices, then
-    factories plan over the same three (build_core(), then the factoryStaffing
-    section), so an unassigned
+    factories plan over copies of these three through their planning sections,
+    each taking the state its predecessor left, so an unassigned
     person is promised to one site at most, whichever kind it is.
     """
     people = _plan_people(save, staff)

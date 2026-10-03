@@ -2139,6 +2139,7 @@ test('with mod 0.4.0 Staff all sites is one call, the weeks no hire reaches with
 test('the company\'s first hire: the hint says it cannot be undone, and the done screen says why there is no Undo', async (t) => {
   const d = JSON.parse(payload);
   d.staff = Object.assign({}, d.staff, {total: 0});
+  d.kpi = Object.assign({}, d.kpi, {employees: 0});
   const page = await board(t, {data: JSON.stringify(d), link: ONE});
   await page.evaluate(src => {
     window.answerFor = eval(src);

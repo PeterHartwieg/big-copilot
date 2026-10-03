@@ -752,8 +752,9 @@ function wikiSlot(label, value, tip){
     + `<span class="wk-lab">${ssEsc(label)}</span>`
     + `<span class="wk-v${value === null ? " none" : ""}">${value === null ? "—" : ssEsc(value)}</span></div>`;
 }
-function wikiYours(page, extra){
-  const own = wikiOwn(page);
+function wikiYours(article, extra){
+  if(hasData() && !(page === "wiki" ? odNeed("products") : odReady("products"))) return odWaitHtml("products", true);
+  const own = wikiOwn(article);
   const slots = [];
   if(own && own.best)
     slots.push(wikiSlot(tt("wiki.yours.demand", "Demand"), tt("wiki.yours.demand.v", "{demand} in {hood}", {demand: own.best.demand, hood: hoodName(own.best.hood)}),
@@ -1927,6 +1928,7 @@ function wikiPlanChain(){
 function wikiPlanControl(){
   const slot = $("wikiPlanSlot");
   if(!slot) return;
+  if(hasData() && !(page === "wiki" ? odNeed("plan") : odReady("plan"))){ slot.innerHTML = odWaitHtml("plan", true); return; }
   const b = wikiG().BUSINESS || {};
   const own = b.name ? wikiName(b.nameSrc, b.name) : "";
   if(wikiCanPlan())
@@ -2000,6 +2002,7 @@ function wikiGuidePrices(g, offers){
 
 function wikiGuideOwn(g, goods){
   if(!hasData()) return [];
+  if(!(page === "wiki" ? odNeed("products") : odReady("products"))) return [odWaitHtml("products", true)];
   const b = g.BUSINESS || {};
   const mine = (D.businesses || []).filter(x => x.typeSlug === b.nameSrc && x.status !== "vacant");
   const slots = [];

@@ -28,7 +28,12 @@ Everything else:
   `section()` and `materialize_all()` in `ba_dashboard.py`; `browser_section()` and the
   worker's `section` message; `OD_SECTIONS`, `odNeed()` and `odWaitHtml()` in the board
   script. The rules, and what a new feature declares, are in `docs/architecture.md`,
-  "Sections"
+  "Sections". Shop → office → factory planning keeps a copied bench and week state per
+  stage; hiring reads those sections. Today asks only for shop plans; Map asks for none,
+  and the finder asks for premises. Page rows and routes declare their dependencies.
+  Navigation intent may prefetch light sections, never factory staffing or hiring.
+  `ownedBuildings` and `homes` stay core because the map's layers read them and they cost
+  nothing. An applied hire check asks for hiring; partly/unseen checks only read it if ready.
 - save parser: `ba_save.py`
 - web build: `build_web.py`; deploy: `npm run deploy` (`tools/deploy.mjs`), which assembles
   `web/` and runs `wrangler deploy`
@@ -247,7 +252,7 @@ and never attach one to an issue.
   order of anything that reaches the payload, iterate it through `_in_order()`, which sorts
   `None` last because real saves hold items with no name. When a set decides a winner
   (`most_common()`, first-wins), break the tie explicitly, as `_chains()` does.
-- In the browser a section's keys (`factoryStaffing`, `hiring`, `candidates`; `SECTIONS`)
+- In the browser a section's keys (`staffing`, `premises`, `products`, `plan`, `hiring`; `SECTIONS`)
   are missing from the board until a page asks for them. Read one through `odNeed()` (on
   screen) or `odReady()`, and draw `odWaitHtml()` while it is missing: `D.hiring || {}`
   reads a section not yet computed as an empty one, and a write or a progress check must
