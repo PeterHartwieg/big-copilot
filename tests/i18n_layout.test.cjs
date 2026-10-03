@@ -340,9 +340,9 @@ test('the pseudo-locale fits at every width, on every page, view and site panel'
 
 /* Long saved names must fit even in English; the sweep above only compares
    the extra space pseudo text takes. Use synthetic fixtures only. */
-function expansionStress(){
+function expansionStress({long = true} = {}){
   const payload = structuredClone(PAYLOAD);
-  const address = '123 International Manufacturing Supercalifragilisticexpialidociousboulevard';
+  const address = long ? '123 International Manufacturing ' + 'Supercalifragilisticexpialidociousboulevard'.repeat(4) : '12 Road';
   const shop = payload.premises.buildings.find(b => b.type === 'retail');
   shop.address = address + ' Retail';
   const business = payload.businesses.find(b => b.key === shop.key);
@@ -365,11 +365,18 @@ function expansionStress(){
   payload.plan.own = {[business.typeSlug]: {shops: 1,
     perDay: Object.fromEntries(products.map(slug => [slug, 30]))}};
   const depot = payload.businesses.find(b => b.typeSlug === 'ba:businesstype_warehouse');
+  if(long) depot.name = 'International raw materials ' + 'Supercalifragilisticexpialidociousdepot'.repeat(4);
+  const recipe = payload.plan.recipes.find(r => r.slug === products[0]);
+  const ingredients = recipe.ingredients.map(i => ({slug: i.slug, item: i.item || payload.names[i.slug], perWeek: 1000, arrives: 100}));
+  assert.ok(ingredients.length, 'the factory recipe must consume raw material');
+  payload.openFactory.sites[depot.key].imports = ingredients.map(i => [i.slug, true]);
   const factory = {...structuredClone(depot), key: 'mobile-factory', name: 'Mobile factory',
     address: address + ' Factory', type: 'Factory', typeSlug: 'ba:businesstype_factory'};
   payload.supply.factories.sites.push({s: payload.businesses.length, name: factory.name,
-    lines: [], unnamed: [], needs: [], machines: 0, targets: {}, arrivals: {}});
+    lines: [{slug: products[0], item: recipe.item, machines: 2, atRoster: 100, hoursWeek: 168, fullWeek: 168, missing: []}],
+    unnamed: [], needs: ingredients, machines: 2, targets: {}, arrivals: {}});
   payload.businesses.push(factory);
+  payload.supply.graph.links.push({from: depot.key, to: factory.key, slugs: ingredients.map(i => i.slug)});
   const warehouse = payload.premises.buildings.find(b => b.key === depot.key);
   payload.premises.buildings.push({...structuredClone(warehouse), key: factory.key,
     address: factory.address, occupant: {name: factory.name, type: factory.type, typeSlug: factory.typeSlug}});
@@ -393,12 +400,15 @@ async function expansionSeed(page){
       {id: 'mobile-owned', type, site: factory.key, counts, step: 'what'}];
     localStorage.setItem(ofStore(), JSON.stringify({plans, current: 'mobile-new'}));
     ofPlansFor = null; ofLoad();
+    SOURCE.link = () => ({writes: ['imports']});
     drawOpenStore(); drawPlan();
   });
 }
 
 async function expansionWidth(page, label, failures){
   // Measure the whole page, including controls hoisted outside the section.
+  // Move off controls so a transient hover tip is not part of the view.
+  await page.mouse.move(0, 0);
   await page.evaluate(async () => {
     document.querySelectorAll('section').forEach(s => s.classList.add('measured'));
     window.scrollTo(0, 0);
@@ -428,8 +438,54 @@ async function expansionWidth(page, label, failures){
       if(style.textOverflow === 'ellipsis' && style.whiteSpace === 'nowrap') return false;
       return el.scrollWidth > el.clientWidth + 1;
     }).map(el => `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : '.' + (el.getAttribute('class') || '').split(' ').join('.')} scrollWidth=${el.scrollWidth} > clientWidth=${el.clientWidth} "${el.textContent.trim().slice(0, 70)}"`);
+    // Check local content boxes even when the page itself does not scroll.
+    // Exclusions: the map/finder (its filters still have the clipping check),
+    // SVG geometry, proportional meters, hoisted
+    // screen-reader labels, native select/input internals, intentional
+    // one-line ellipsis, and descendants of horizontal scrolling tables.
+    // The scrolling wrapper itself is still checked against its container.
+    const planner = '#viewCtl [data-view-ctl]:not([hidden]), #viewCtl [data-view-ctl]:not([hidden]) *, '
+      + '#secOpen, #secOpen *, #secPlan, #secPlan *, #secPlanFlow, #secPlanFlow *';
+    const local = [];
+    const box = el => {
+      const r = el.getBoundingClientRect(), s = getComputedStyle(el);
+      return r.right - parseFloat(s.borderRightWidth || 0) - parseFloat(s.paddingRight || 0);
+    };
+    const cell = el => {
+      const s = getComputedStyle(el), p = el.parentElement && getComputedStyle(el.parentElement);
+      return s.display !== 'contents' && (s.display !== 'inline' || /grid|flex/.test(p?.display || ''));
+    };
+    for(const el of document.querySelectorAll(planner)){
+      if(!el.getClientRects().length || getComputedStyle(el).visibility === 'hidden') continue;
+      if(el.closest(deliberateClip + ', .os-finder, svg, select, input, .feature-new')) continue;
+      let excluded = false;
+      for(let p = el; p && p !== document.body; p = p.parentElement){
+        const s = getComputedStyle(p);
+        if(s.textOverflow === 'ellipsis' && s.whiteSpace === 'nowrap') excluded = true;
+        if(p !== el && ['auto', 'scroll'].includes(s.overflowX)) excluded = true;
+      }
+      if(excluded) continue;
+      const nodes = [...el.childNodes].filter(n => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
+      if(!nodes.length && !['nowrap', 'pre'].includes(getComputedStyle(el).whiteSpace)) continue;
+      let host = el.parentElement;
+      while(host && !cell(host)) host = host.parentElement;
+      if(!host) continue;
+      const edges = [el.getBoundingClientRect().right - box(host)];
+      const textHost = cell(el) ? el : host;
+      for(const node of nodes){
+        // Collapsible spaces at a wrapped line's end can hang beyond the
+        // content box. Measure visible runs, including unbroken tokens.
+        const range = document.createRange();
+        for(const run of node.textContent.matchAll(/\S+/g)){
+          range.setStart(node, run.index); range.setEnd(node, run.index + run[0].length);
+          for(const r of range.getClientRects()) edges.push(r.right - box(textHost));
+        }
+      }
+      const excess = Math.max(...edges);
+      if(excess > 1) local.push(`${el.tagName.toLowerCase()}.${el.className} in .${textHost.className} +${excess.toFixed(1)}px "${el.textContent.trim().slice(0, 60)}"`);
+    }
     const restoreLabels = () => labels.forEach((el, i) => { el.style.display = displays[i]; });
-    if(scroll <= width + 1){ restoreLabels(); return {width, scroll, clipped}; }
+    if(scroll <= width + 1){ restoreLabels(); return {width, scroll, clipped, local}; }
     const right = el => {
       const edges = [el.getBoundingClientRect().right];
       if(getComputedStyle(el).overflowX !== 'visible') return edges[0];
@@ -448,8 +504,9 @@ async function expansionWidth(page, label, failures){
       return true;
     }).map(el => `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : '.' + (el.getAttribute('class') || '').split(' ').join('.')} right=${Math.round(right(el))} in .${el.parentElement.getAttribute('class') || ''} "${el.textContent.trim().slice(0, 50)}"`);
     restoreLabels();
-    return {width, scroll, past, clipped};
+    return {width, scroll, past, clipped, local};
   });
+  if(got.local.length) failures.push(`${label}: outside containing box: ${got.local.join(', ')}`);
   if(got.clipped.length) failures.push(`${label}: clipped content: ${got.clipped.join(', ')}`);
   if(got.scroll > got.width + 1) failures.push(`${label}: scrollWidth ${got.scroll} > clientWidth ${got.width}; ${got.past.join(', ')}`);
 }
@@ -465,9 +522,10 @@ for(const lang of ['en', 'pseudo', 'de', 'es', 'fr', 'ko', 'pt', 'ru', 'tr']){
       assert.equal(await page.evaluate(() => tt('gr.os.step.what', 'What')), expected['gr.os.step.what']);
     }
     await expansionSeed(page);
-    // Just above the 620px breakpoint, Mac fallback fonts reproduce the
-    // long flow-node address overflow seen at 640px on Linux Chromium.
-    const widths = lang === 'en' || lang === 'pseudo' ? [360, 375, 600, 622, 630, 640, 700, 768, 1024, 1101, 1200, 1279] : lang === 'ru' ? [360, 375, 1101, 1150] : [360, 375];
+    // Cover both sides of the phone breakpoint and the narrow desktop
+    // checklist. Four repeats make the unbroken tokens wider than any phone
+    // under either platform's fonts; local-box checks also catch overlap.
+    const widths = lang === 'en' || lang === 'pseudo' ? [360, 375, 600, 622, 630, 640, 700, 768, 790, 810, 900, 1024, 1101, 1200, 1279] : lang === 'ru' ? [360, 375, 1101, 1150] : [360, 375];
     for(const width of widths) await t.test(`${width}px`, async () => {
       await page.setViewportSize({width, height: 900});
       // Let the board's resize handlers reposition the sidebar and hoisted
@@ -507,6 +565,11 @@ for(const lang of ['en', 'pseudo', 'de', 'es', 'fr', 'ko', 'pt', 'ru', 'tr']){
           assert.equal(await page.evaluate(step => ofStepReady(step), step), true, `${id}/${step} is reachable`);
           await page.locator(`#ofCtl [data-of-step="${step}"]`).click();
           assert.equal(await page.evaluate(() => ofStep), step);
+          if(step === 'running'){
+            const action = page.locator('#ofBody .ff-why [data-of-write="imports"]');
+            assert.ok(await action.isVisible(), 'the linked raw-material depot action is rendered');
+            assert.ok(await action.evaluate(el => el.getBoundingClientRect().height > 34), 'the small named action grows beyond 34px to hold its wrapped text');
+          }
           if(step === 'what') assert.ok(await page.locator('#ofBody .os-plans').isVisible(), 'factory plans are shown');
           if(step === 'where') await page.locator('#ofFinderMap .map-canvas').waitFor();
           if(step === 'what' && width <= 620){
@@ -527,6 +590,41 @@ for(const lang of ['en', 'pseudo', 'de', 'es', 'fr', 'ko', 'pt', 'ru', 'tr']){
     });
   });
 }
+
+test('the containing-box check catches each long-name overflow whatever the font', async t => {
+  const {page, errors} = await site(t, {width: 790, payload: expansionStress()});
+  await expansionSeed(page);
+  // Put back one unguarded rule at a time on the rendered page, then run
+  // the same detector used by every language and width. The four-repeat saved token is
+  // far wider than these cells, so a platform's font margin cannot hide it.
+  const cases = [
+    ['named imports action', 'factory', 'running', 630,
+      '.os-btn,.os-cta{max-width:none;height:34px;min-height:0;white-space:nowrap;overflow-wrap:normal}.os-cta{height:40px}.os-cta.sm{height:34px}.ff-why>div{grid-template-columns:14px 18px minmax(0,1fr) auto}.ff-why>div>span{min-width:auto;max-width:none}'],
+    ['Your plans address', 'open', 'what', 790, '.os-plango{min-width:auto;overflow-wrap:normal}'],
+    ['in-game instructions', 'factory', 'until', 790, '.os-ingame{min-width:auto;overflow-wrap:normal}.os-ingame>span{min-width:auto}'],
+    ['checklist detail', 'factory', 'until', 790, '.os-ck .tx small{overflow-wrap:normal}'],
+    ['map legend address', 'factory', 'investment', 790, '.os-maplist span{min-width:auto;overflow-wrap:normal}'],
+  ];
+  for(const [name, planner, step, width, old] of cases){
+    await page.setViewportSize({width, height: 900});
+    await page.evaluate(([planner, step]) => {
+      openRoute(`expansion/${planner}`);
+      if(planner === 'factory') ofGo(step);
+      else { osStep = step; drawOpenStore(); }
+    }, [planner, step]);
+    if(step === 'investment') await page.locator('[data-of-mode="self"]').click();
+    const passing = [];
+    await expansionWidth(page, name, passing);
+    assert.deepEqual(passing, [], `${name}: current rules fit`);
+    const rollback = await page.addStyleTag({content: old});
+    const failing = [];
+    await expansionWidth(page, name, failing);
+    await rollback.evaluate(el => el.remove());
+    assert.ok(failing.some(f => f.includes('outside containing box')), `${name}: restored rules must fail local-box checks`);
+    t.diagnostic(`${name}: restored rules detected; ${failing[0].slice(0, 220)}`);
+  }
+  assert.deepEqual(errors, []);
+});
 
 test('factory desktop pickers share a row and phone CTAs keep their sizes', async t => {
   const payload = expansionStress();
