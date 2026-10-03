@@ -386,6 +386,17 @@ for(const kind of ['schedule', 'hire']){
   });
 }
 
+test('a schedule review is scoped to the company it was opened on', async t => {
+  const page = await open(t, {hash: '#staffing/needs'});
+  const scoped = await page.evaluate(() => {
+    const real = gwConfirm, specs = [];
+    gwConfirm = spec => { specs.push(spec); };
+    try{ gwSchedule(D.businesses.find(b => b.status === 'retail').key); }finally{ gwConfirm = real; }
+    return specs.length === 1 && !!specs[0].scope && odSameScope(specs[0].scope, odScope());
+  });
+  assert.equal(scoped, true, 'gwSchedule passes the board scope, so another company closes it');
+});
+
 for(const kind of ['schedule', 'hire']){
   test(`a ready ${kind} review shows a refreshed section's failure with Try again`, async t => {
     const page = await open(t, {hash: '#staffing/needs'});

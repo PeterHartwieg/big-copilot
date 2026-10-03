@@ -24451,7 +24451,8 @@ function gwSchedule(key){
   const name = spEsc(shortName(b));
   let openAll = true, last = null, schedWritten = [];
   gwConfirm({
-    kind: "schedule", icon: "roster", needs: ["hiring"], againLabel: tt("sp.gw.sch.again", "Write again"),
+    /* The company it was opened on: another company's board closes it. */
+    kind: "schedule", icon: "roster", needs: ["hiring"], scope: odScope(), againLabel: tt("sp.gw.sch.again", "Write again"),
     /* The site its Undo is for: a later write of the site elsewhere drops it. */
     sites: () => [key],
     title: tt("sp.gw.sch.one", "Write this schedule to the game"),
