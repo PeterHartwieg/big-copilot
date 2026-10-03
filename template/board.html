@@ -4163,24 +4163,31 @@ a.sb-plan:hover em{color:var(--ink);text-decoration:underline}
 @media (max-width:1100px){.ff-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.ff-facts>div:nth-child(3){border-left:0}.ff-facts>div:nth-child(n+3){border-top:1px solid var(--rule-soft)}}
 @media (max-width:620px){.ff-make,.ff-out{display:block;overflow-x:auto}.ff-arrow{display:none}.ff-flow{flex-direction:column;align-items:flex-start}.ff-short,.ff-why>div{grid-template-columns:14px minmax(0,1fr) auto}.ff-short>svg,.ff-why>div>svg{display:none}}
 
-/* Hoisted planning controls need to wrap within the phone's available width. */
+/* Planning controls wrap or shrink only when their contents need the space. */
+.nx-ctl #osCtl,.nx-ctl [data-view-ctl="expansion/factory"]{flex-wrap:wrap;min-width:0;max-width:100%}
+.nx-ctl #osCtl>.aside,#ofCtl>.aside{min-width:0;max-width:100%}
+.os-steps{min-width:0;max-width:100%}
+.os-steps button{max-width:100%;height:auto;min-height:34px;white-space:normal;overflow-wrap:anywhere;text-align:left}
+.os-steps button i{flex-shrink:0}
+.nx-ctl [data-view-ctl="expansion/factory"] .aside{flex-wrap:wrap;min-width:0;max-width:100%}
+.nx-ctl [data-view-ctl="expansion/factory"] .field{min-width:0;max-width:100%}
+.nx-ctl [data-view-ctl="expansion/factory"] select{min-width:0;max-width:100%}
+.ff-for,.ff-kind{min-width:0;max-width:100%}
+.ff-for{flex-wrap:wrap}
+.ff-kind button{min-width:0;max-width:100%}
+.ff-kind button svg{flex-shrink:0}
+.ff-kind button span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+
+/* Progress metadata and wide investment tables must stay within the page. */
+.os-prog{flex-wrap:wrap}
+.os-prog .aside{flex-wrap:wrap;min-width:0;max-width:100%}
+@media (max-width:760px){.os-inv{display:block;overflow-x:auto}}
+
+/* Phone plan pickers and step bodies accommodate long names and UI text. */
 @media (max-width:620px){
-  .nx-ctl #osCtl,.nx-ctl .sechead:has(.ff-for){flex-wrap:wrap;min-width:0;max-width:100%}
-  .nx-ctl #osCtl>.aside,#ofCtl>.aside{min-width:0;max-width:100%}
-  .os-steps{min-width:0;max-width:100%}
-  .os-steps button{max-width:100%;height:auto;min-height:34px;white-space:normal;overflow-wrap:anywhere;text-align:left}
-  .os-steps button i{flex-shrink:0}
   .os-planpick{width:100%}
   .os-planpick>span{min-width:0;overflow:hidden;text-overflow:ellipsis}
-  .os-planpick select{width:100%;max-width:200px;flex:1;overflow:hidden}
-  .nx-ctl .sechead:has(.ff-for) .aside{flex-wrap:wrap;min-width:0;max-width:100%}
-  .nx-ctl .sechead:has(.ff-for) .field{min-width:0;max-width:100%}
-  .nx-ctl .sechead:has(.ff-for) select{min-width:0;width:100%;max-width:100%}
-  .ff-for,.ff-kind{min-width:0;max-width:100%}
-  .ff-for{flex-wrap:wrap}
-  .ff-kind button{min-width:0;max-width:100%}
-  .ff-kind button svg{flex-shrink:0}
-  .ff-kind button span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .os-planpick select{width:100%;max-width:none;flex:1;overflow:hidden}
   .os-plango{min-width:0;overflow-wrap:anywhere}
   .os-btn,.os-cta{max-width:100%;height:auto;min-height:34px;white-space:normal;overflow-wrap:anywhere}
   .os-btn svg,.os-cta svg{flex-shrink:0}
@@ -4195,7 +4202,7 @@ a.sb-plan:hover em{color:var(--ink);text-decoration:underline}
   .ff-node,.ff-shops{max-width:100%}
   .ff-node>span{min-width:0}
   .ff-node b,.ff-node small{white-space:normal;overflow-wrap:anywhere}
-  .ff-shops span{max-width:100%;height:auto;min-height:24px;white-space:normal;overflow-wrap:anywhere}
+  .ff-shops > span{max-width:100%;height:auto;min-height:24px;white-space:normal;overflow-wrap:anywhere}
 }
 
 /* A section worked out on demand (odWaitHtml()): the words while it runs, or

@@ -342,15 +342,28 @@ test('the pseudo-locale fits at every width, on every page, view and site panel'
    the extra space pseudo text takes. Use synthetic fixtures only. */
 function expansionStress(){
   const payload = structuredClone(PAYLOAD);
-  const snapshot = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/payload_snapshot/data_day47_history.json'), 'utf8'));
-  payload.plan.catalogue = snapshot.plan.catalogue;
-  payload.plan.own = snapshot.plan.own;
   const address = '123 International Manufacturing Supercalifragilisticexpialidociousboulevard';
   const shop = payload.premises.buildings.find(b => b.type === 'retail');
   shop.address = address + ' Retail';
   const business = payload.businesses.find(b => b.key === shop.key);
   business.address = shop.address;
   business.opened = 12;
+  // The fixture has recipes and store rules but no trading catalogue. Build
+  // just this shop's main factory products from those facts, not a snapshot.
+  const recipes = new Set(payload.plan.recipes.map(r => r.slug));
+  const products = payload.openStore.types[business.typeSlug].products
+    .filter(([slug, weight]) => weight === 1 && recipes.has(slug)).map(([slug]) => slug);
+  assert.ok(products.length, 'the synthetic retail shop must have a main product with a factory recipe');
+  payload.plan.catalogue = {[business.typeSlug]: {type: business.type, products, extra: []}};
+  // An unowned type keeps the Shops select present alongside the For row.
+  const other = Object.entries(payload.openStore.types).find(([type, facts]) =>
+    type !== business.typeSlug && facts.products.some(([slug, weight]) => weight === 1 && recipes.has(slug)));
+  assert.ok(other, 'the synthetic store rules must have another factory-supplied type for the Shops select');
+  const [otherType, facts] = other;
+  payload.plan.catalogue[otherType] = {type: payload.names[otherType], extra: [],
+    products: facts.products.filter(([slug, weight]) => weight === 1 && recipes.has(slug)).map(([slug]) => slug)};
+  payload.plan.own = {[business.typeSlug]: {shops: 1,
+    perDay: Object.fromEntries(products.map(slug => [slug, 30]))}};
   const depot = payload.businesses.find(b => b.typeSlug === 'ba:businesstype_warehouse');
   const factory = {...structuredClone(depot), key: 'mobile-factory', name: 'Mobile factory',
     address: address + ' Factory', type: 'Factory', typeSlug: 'ba:businesstype_factory'};
@@ -370,8 +383,11 @@ async function expansionSeed(page){
     localStorage.setItem(osStore(), JSON.stringify({plans: [{id: 'mobile-store', type,
       key: shop.key, hood: shop.hood, step: 'what', opened: 12}], current: 'mobile-store'}));
     osPlansFor = null; osLoad();
-    const factory = ofOwned()[0];
-    const counts = {'ba:itemname_cheapgift': 2};
+    const factory = ofOwned().find(f => f.key === 'mobile-factory');
+    if(!factory) throw new Error('the synthetic mobile-factory must be available to the planner');
+    const product = ((D.plan.catalogue[type] || {}).products || [])[0];
+    if(!product) throw new Error('the synthetic factory catalogue must contain a product');
+    const counts = {[product]: 2};
     const plans = [
       {id: 'mobile-new', type, key: factory.key, counts, step: 'what'},
       {id: 'mobile-owned', type, site: factory.key, counts, step: 'what'}];
@@ -390,7 +406,8 @@ async function expansionWidth(page, label, failures){
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   });
   const got = await page.evaluate(() => {
-    const root = document.documentElement, width = root.clientWidth;
+    const root = document.documentElement, width = root.clientWidth, scroll = root.scrollWidth;
+    if(scroll <= width + 1) return {width, scroll};
     const right = el => {
       const edges = [el.getBoundingClientRect().right];
       if(getComputedStyle(el).overflowX !== 'visible') return edges[0];
@@ -408,26 +425,39 @@ async function expansionWidth(page, label, failures){
       }
       return true;
     }).map(el => `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : '.' + (el.getAttribute('class') || '').split(' ').join('.')} right=${Math.round(right(el))} in .${el.parentElement.getAttribute('class') || ''} "${el.textContent.trim().slice(0, 50)}"`);
-    return {width, scroll: root.scrollWidth, past};
+    return {width, scroll, past};
   });
   if(got.scroll > got.width + 1) failures.push(`${label}: scrollWidth ${got.scroll} > clientWidth ${got.width}; ${got.past.join(', ')}`);
 }
 
 for(const lang of ['en', 'pseudo', 'de', 'es', 'fr', 'ko', 'pt', 'ru', 'tr']){
   test(`Expansion fits phones with long plans and factory addresses: ${lang}`, async t => {
-    for(const width of [360, 375]) await t.test(`${width}px`, async t => {
-      const ui = lang === 'en' ? '' : lang === 'pseudo' ? 'de' : lang;
-      const {page, errors, fetched} = await site(t, {ui, width, payload: expansionStress(), pseudoTable: lang === 'pseudo'});
-      assert.equal(await page.evaluate(() => ttLang), ui || 'en');
-      if(ui){
-        assert.ok(fetched.some(p => p.startsWith(`/i18n/${ui}.json?`)), 'the requested table was fetched');
-        const expected = lang === 'pseudo' ? TABLE : JSON.parse(fs.readFileSync(path.join(WEB, 'i18n', `${ui}.json`), 'utf8'));
-        assert.equal(await page.evaluate(() => tt('gr.os.step.what', 'What')), expected['gr.os.step.what']);
-      }
+    const ui = lang === 'en' ? '' : lang === 'pseudo' ? 'de' : lang;
+    const {page, errors, fetched} = await site(t, {ui, width: 360, payload: expansionStress(), pseudoTable: lang === 'pseudo'});
+    assert.equal(await page.evaluate(() => ttLang), ui || 'en');
+    if(ui){
+      assert.ok(fetched.some(p => p.startsWith(`/i18n/${ui}.json?`)), 'the requested table was fetched');
+      const expected = lang === 'pseudo' ? TABLE : JSON.parse(fs.readFileSync(path.join(WEB, 'i18n', `${ui}.json`), 'utf8'));
+      assert.equal(await page.evaluate(() => tt('gr.os.step.what', 'What')), expected['gr.os.step.what']);
+    }
+    await expansionSeed(page);
+    const widths = lang === 'en' || lang === 'pseudo' ? [360, 375, 640, 700, 768, 1024] : [360, 375];
+    for(const width of widths) await t.test(`${width}px`, async () => {
+      await page.setViewportSize({width, height: 900});
+      // Let the board's resize handlers reposition the sidebar and hoisted
+      // controls before changing views. Both planners redraw on openRoute().
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const failures = [];
-      await expansionSeed(page);
       await page.evaluate(() => openRoute('expansion/open'));
       assert.ok((await page.locator('[data-os-plan] option').last().textContent()).length > 60, 'the saved store plan has a long name');
+      if(width <= 620){
+        const gap = await page.locator('#osCtl .os-planpick').evaluate(label => {
+          const select = label.querySelector('select').getBoundingClientRect();
+          const chevron = label.querySelector('svg').getBoundingClientRect();
+          return chevron.right - select.right;
+        });
+        assert.ok(Math.abs(gap) <= 1, `the plan select must reach its chevron (gap ${gap}px)`);
+      }
       for(const step of ['what', 'where', 'investment', 'breakeven', 'opening', 'open']){
         assert.equal(await page.evaluate(step => osStepReady(step, osPlan()), step), true, `${step} is reachable`);
         await page.locator(`#osCtl [data-os-step="${step}"]`).click();
@@ -447,6 +477,12 @@ for(const lang of ['en', 'pseudo', 'de', 'es', 'fr', 'ko', 'pt', 'ru', 'tr']){
           await page.locator(`#ofCtl [data-of-step="${step}"]`).click();
           assert.equal(await page.evaluate(() => ofStep), step);
           if(step === 'what') assert.ok(await page.locator('#ofBody .os-plans').isVisible(), 'factory plans are shown');
+          if(step === 'where') await page.locator('#ofFinderMap .map-canvas').waitFor();
+          if(step === 'what' && width <= 620){
+            const heights = await page.locator('.ff-shops .hood').evaluateAll(badges => badges.map(b => b.getBoundingClientRect().height));
+            assert.ok(heights.length, 'the factory flow includes a neighbourhood badge');
+            assert.ok(heights.every(h => h === 16), `neighbourhood badges keep their 16px height: ${heights}`);
+          }
           await expansionWidth(page, `${lang} ${width}px factory/${id}/${step}`, failures);
         }
       }
