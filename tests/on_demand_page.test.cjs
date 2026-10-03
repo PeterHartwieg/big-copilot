@@ -19,8 +19,8 @@ const PYTHON = process.env.PYTHON || 'python';
 const ORIGIN = 'http://localhost:9323';
 const TYPES = {'.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml'};
 const SECTION_KEYS = {staffing: ['staffing'], officeStaffing: ['officeStaffing'], factoryStaffing: ['factoryStaffing'],
-  hiring: ['hiring', 'candidates'], premises: ['premises'], products: ['products'], staff: ['staff'],
-  openStore: ['openStore'], openFactory: ['openFactory'], plan: ['plan'], goals: ['goals']};
+  hiring: ['hiring', 'candidates'], premises: ['premises'], products: ['products'],
+  openStore: ['openStore'], openFactory: ['openFactory'], goals: ['goals']};
 const SECTION_NEEDS = {officeStaffing: ['staffing'], factoryStaffing: ['officeStaffing'], hiring: ['factoryStaffing'], openStore: ['premises']};
 
 let browser, payload;
@@ -131,15 +131,15 @@ test('Today asks only for shop plans; Staff needs asks for hiring and draws it w
   await page.evaluate(() => { location.hash = '#supply/production'; });
   await page.locator('#sbStaff').waitFor();
   assert.equal(await page.locator('#sbStaff .od-wait').count(), 0);
-  assert.deepEqual(await asked(page), ['staffing', 'hiring', 'plan']);
+  assert.deepEqual(await asked(page), ['staffing', 'hiring']);
   await page.evaluate(() => window.release());
 });
 
-test('Supply › Production asks for recipes and factory staffing', async (t) => {
+test('Supply › Production uses core recipes and asks for factory staffing', async (t) => {
   const page = await open(t);
   await page.evaluate(() => { location.hash = '#supply/production'; });
   await page.locator('#sbStaff .od-wait').waitFor();
-  assert.deepEqual(await asked(page), ['staffing', 'plan', 'factoryStaffing']);
+  assert.deepEqual(await asked(page), ['staffing', 'factoryStaffing']);
   await page.evaluate(() => window.release());
   await page.locator('#sbStaff .sb-sfac').first().waitFor();
   assert.equal(await page.locator('#sbStaff .od-wait').count(), 0);
@@ -244,14 +244,13 @@ test('Map asks for nothing; the finder asks and waits for premises, then shows i
   assert.deepEqual(await asked(page), ['premises'], 'a rebuild on Map requests no section');
 });
 
-test('Products, Payroll, Milestones and expansion pages show waits until their facts arrive', async t => {
+test('Products, Milestones and expansion pages show waits until their facts arrive', async t => {
   const page = await open(t);
   for(const [route, keys, selector] of [
     ['businesses/prices', ['products'], '#secProducts'],
-    ['staffing/payroll', ['staff'], '#secPayroll'],
     ['businesses/milestones', ['goals'], '#secGoals'],
     ['expansion/open', ['openStore'], '#osBody'],
-    ['expansion/factory', ['plan', 'openFactory'], '#ofBody'],
+    ['expansion/factory', ['openFactory'], '#ofBody'],
   ]){
     const start = (await asked(page)).length;
     await page.evaluate(route => openRoute(route), route);
@@ -261,4 +260,24 @@ test('Products, Payroll, Milestones and expansion pages show waits until their f
     await page.evaluate(() => window.release());
     await page.waitForFunction(selector => !document.querySelector(`${selector} .od-wait`), selector);
   }
+});
+
+
+test('Payroll, fixed costs and Today supply are available with the core', async t => {
+  const page = await open(t, {releaseShops: false});
+  assert.ok(await page.evaluate(() => D.staff.dailyCost > 0));
+  assert.doesNotMatch(await page.locator('#kpis').innerText(), /Working out payroll/);
+  assert.ok((await page.locator('#planImportsCard .soon').innerText()).length > 0);
+  assert.equal(await page.evaluate(() => Number.isFinite(routeCount('supply/changes'))), true);
+  assert.deepEqual(await asked(page), ['staffing']);
+  await page.evaluate(() => openRoute('staffing/payroll'));
+  assert.equal(await page.locator('#secPayroll .od-wait').count(), 0);
+  assert.ok(await page.locator('#secPayroll .pay-tile').count());
+  assert.deepEqual(await asked(page), ['staffing']);
+  await page.evaluate(() => openRoute('supply/imports'));
+  assert.deepEqual(await asked(page), ['staffing']);
+  await page.evaluate(() => window.release());
+  await page.evaluate(() => openRoute('overview'));
+  await page.waitForFunction(() => document.querySelector('#planImportsCard .soon').textContent.length > 0);
+  assert.equal(await page.evaluate(() => Number.isFinite(routeCount('supply/changes'))), true);
 });

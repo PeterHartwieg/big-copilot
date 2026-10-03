@@ -410,10 +410,8 @@ const OD_SECTIONS = {
   hiring: {keys: ["hiring", "candidates"], needs: ["factoryStaffing"]},
   premises: {keys: ["premises"], needs: []},
   products: {keys: ["products"], needs: []},
-  staff: {keys: ["staff"], needs: []},
   openStore: {keys: ["openStore"], needs: ["premises"]},
   openFactory: {keys: ["openFactory"], needs: []},
-  plan: {keys: ["plan"], needs: []},
   goals: {keys: ["goals"], needs: []},
 };
 /* The build's generation, which web/app.js puts on the data it hands over. */
@@ -560,11 +558,6 @@ function odRetry(name){
    the page on screen (renderCalm(), as a refresh of the same company). */
 function odArrived(){
   hrSiteMemo = null;
-  indexPlan();
-  // Recipe overlays and import explanations may now be available. Invalidate
-  // these derived reads without treating an arrival as a new board (sbBoard).
-  sbCaches.cap = sbCaches.dem = null;
-  sbOtherKeys = null;
   pgJudged = -1;
   odRedraw();
   const ready = odThens.filter(t => odReady(t.name));
@@ -600,10 +593,8 @@ function odWords(name){
     case "officeStaffing": return tt("nav.od.officeStaffing", "Working out office staffing…");
     case "premises": return tt("nav.od.premises", "Working out locations…");
     case "products": return tt("nav.od.products", "Working out products…");
-    case "staff": return tt("nav.od.staff", "Working out payroll…");
     case "openStore": return tt("nav.od.openStore", "Working out store plans…");
     case "openFactory": return tt("nav.od.openFactory", "Working out factory costs…");
-    case "plan": return tt("nav.od.plan", "Working out factory plans…");
     case "goals": return tt("nav.od.goals", "Working out milestones…");
     case "hiring": return tt("nav.od.hiring", "Working out staff needs…");
     default: return tt("nav.od.factoryStaffing", "Working out factory staffing…");
@@ -2655,8 +2646,7 @@ function drawKpis(){
   /* Four tiles: what the day made, what it took, what is in the bank, and the
      pace metric once the game reports it again — until then, the cost base.
      Site and staff counts sit in the masthead; debt only appears when there is any. */
-  const payroll = odReady("staff") && D.staff ? D.staff.dailyCost : null;
-  const fixed = payroll === null ? null : k.rentBill + payroll;
+  const fixed = k.rentBill + D.staff.dailyCost;
   /* A clause of its own after the chip's note, set off by a middle dot. */
   const owed = k.debt > 0
     ? ` · ${tt("today.kpi.owed", {one: "{debt:$} owed on {n} loan", other: "{debt:$} owed on {n} loans"},
@@ -2709,10 +2699,10 @@ function drawKpis(){
     {id: "cash", l: tt("today.kpi.cash", "Cash on hand"), v: fmt(k.cash), chip: cashTile.chip,
      sub: heavyDebt ? `${cashTile.sub} · ${tt("today.kpi.cash.debt", "{debt:$c} owed on loans", {debt: k.debt})}` : cashTile.sub},
     k.netWorth === null
-      ? {id: "fixed", l: tt("today.kpi.fixed", "Fixed cost / day"), v: fixed === null ? "—" : fmt(fixed),
+      ? {id: "fixed", l: tt("today.kpi.fixed", "Fixed cost / day"), v: fmt(fixed),
          chip: chipHtml("dim", tt("today.kpi.fixed.chip", "rent {w:$c}", {w: k.rentBill}),
-           payroll === null ? "" : tt("today.kpi.fixed.tip", "{rent:$} rent, {payroll:$} payroll", {rent: k.rentBill, payroll})),
-         sub: payroll === null ? odWords("staff") : tt("today.kpi.fixed.sub", "payroll {w:$c}", {w: payroll}),
+           tt("today.kpi.fixed.tip", "{rent:$} rent, {payroll:$} payroll", {rent: k.rentBill, payroll: D.staff.dailyCost})),
+         sub: tt("today.kpi.fixed.sub", "payroll {w:$c}", {w: D.staff.dailyCost}),
          /* What the days actually paid in rent and wages; the number above is
             today's contracted rate, which is why the last point can sit below it. */
          spark: hist(d => (d.rent || 0) + (d.wages || 0))}
@@ -12469,7 +12459,7 @@ let planType = null, planCounts = {};
 const RECIPE_BY = {};
 function indexPlan(){
   for(const k in RECIPE_BY) delete RECIPE_BY[k];
-  ((D.plan || {}).recipes || []).forEach(r => RECIPE_BY[r.slug] = r);
+  (D.plan.recipes || []).forEach(r => RECIPE_BY[r.slug] = r);
 }
 /* A slug becomes a name through the plan's own list, then the full name map,
    then, if nobody named it, the slug made readable. */
@@ -12603,7 +12593,7 @@ const priceSpan = () => {
 const machinesOn = slug => Math.max(0, planCounts[slug] ?? planSeed[slug] ?? 1);
 
 function drawPlan(){
-  const missing = ["plan", "openFactory"].filter(n => !odNeed(n));
+  const missing = ["openFactory"].filter(n => !odNeed(n));
   if(missing.length){
     $("planNote").textContent = "";
     ["planPicker", "planBody", "ingBody", "planFor", "ofCtl", "ofStrip", "ofStart", "ofWhat"].forEach(id => { if($(id)) $(id).innerHTML = ""; });
@@ -13977,7 +13967,6 @@ function ofOpen(id){
    factory it is for, or both -- and the view opens on step 1 of that. A plan
    for something else is put aside, as a pick in the view does. */
 function ofPreset(o = {}){
-  if(hasData() && !odReady("plan")){ odThen("plan", () => ofPreset(o), "ofPreset"); return; }
   ofLoad();
   const plan = ofPlan();
   if(o.type && o.type !== planType){ planType = o.type; planCounts = {}; ofSizeMode = "auto"; }
@@ -16211,7 +16200,7 @@ function hrReview(o = {}, hooks = {}){
   const people = answer => (answer.hired || []).length + (answer.moved || []).length;
   /* The company's first hire comes with the game's one-time first-employee
      bonus, which no undo takes back: the mod answers it `undoable` false. */
-  const firstHire = () => !!hrLast.one && hrLast.mode !== "week" && counts().hire > 0 && !(D.kpi && D.kpi.employees);
+  const firstHire = () => !!hrLast.one && hrLast.mode !== "week" && counts().hire > 0 && !(D.staff && D.staff.total);
   let firstAsked = false;  /* as the last dry run judged it: an apply rebuilds hrLast */
   const weeksOf = answer => (answer.sites || []).filter(s => s && s.before && s.after).length;
   /* An older mod's weeks written after the call (hrChain()): written, refused
@@ -16589,7 +16578,6 @@ const payrollOff = () => (D.businesses || [])
   .filter(([b, d]) => Math.abs(d) >= Math.max(100, (b.staffCost || 0) * .05))
   .sort((a, z) => Math.abs(z[1]) - Math.abs(a[1]));
 function drawPayroll(){
-  if(!odNeed("staff")){ $("secPayroll").innerHTML = odWaitHtml("staff"); return; }
   const st = D.staff;
   const trouble = [[n => tt("co.pay.unhappy", "{n} unhappy", {n}), st.unhappy, tt("co.pay.unhappy.tip", "Satisfaction below 70%")],
                    [n => tt("co.pay.out", "{n} out", {n}), st.absent, tt("co.pay.out.tip", "Absent today")],
@@ -17748,11 +17736,11 @@ const ROUTES = {
   /* Supply's five views. Back, Forward and a reload give a view back its
      scope, Needs a change / Everything, the reviewed import and the followed
      site from the entry (nxSb); a new visit keeps what this visit last had. */
-  "supply/changes": {needs: ["plan"], host: ["supply", "changes"], enter: routeSupplyEnter, after: routeSupplyAfter},
-  "supply/imports": {needs: ["plan"], host: ["supply", "imports"], enter: routeSupplyEnter, after: routeSupplyAfter},
-  "supply/deliveries": {needs: ["plan"], host: ["supply", "deliveries"], enter: routeSupplyEnter, after: routeSupplyAfter},
-  "supply/production": {needs: ["plan", "factoryStaffing"], host: ["supply", "production"], enter: routeSupplyEnter, after: routeSupplyAfter},
-  "supply/flow": {needs: ["plan"], host: ["supply", "flow"], enter: routeSupplyEnter, after: routeSupplyAfter},
+  "supply/changes": {needs: [], host: ["supply", "changes"], enter: routeSupplyEnter, after: routeSupplyAfter},
+  "supply/imports": {needs: [], host: ["supply", "imports"], enter: routeSupplyEnter, after: routeSupplyAfter},
+  "supply/deliveries": {needs: [], host: ["supply", "deliveries"], enter: routeSupplyEnter, after: routeSupplyAfter},
+  "supply/production": {needs: ["factoryStaffing"], host: ["supply", "production"], enter: routeSupplyEnter, after: routeSupplyAfter},
+  "supply/flow": {needs: [], host: ["supply", "flow"], enter: routeSupplyEnter, after: routeSupplyAfter},
   /* A task or the search may name the shop; the list lights it. */
   "staffing/schedules": {needs: ["hiring"], host: ["staffing", "schedules"], after(o){
     if(typeof schedPick !== "function") return;
@@ -17766,7 +17754,7 @@ const ROUTES = {
     if(o.into === "#sp-roster" && typeof settleScroll === "function") settleScroll($("sp-roster") || $("schDetail"));
   }},
   "staffing/needs": {needs: ["hiring"], host: ["staffing", "needs"]},
-  "staffing/payroll": {needs: ["staff"], host: ["staffing", "payroll"]},
+  "staffing/payroll": {needs: [], host: ["staffing", "payroll"]},
   /* Back from Find a location (or a reload) comes back to the cell that
      asked, kept on the entry (nxDem): its row ringed and the cell focused. */
   "expansion/demand": {needs: [], host: ["growth", "market"], after(o){
@@ -17787,7 +17775,7 @@ const ROUTES = {
     if(o.osType && typeof osStart === "function" && hasData()) osStart(o.osType, o.osHood || null);
   }},
   /* Any visit marks the view's New badge seen (the factory flow, #172). */
-  "expansion/factory": {needs: ["plan", "openFactory"], host: ["growth", "plan"], after(){ featureDiscovery.visit("factory-flow"); }},
+  "expansion/factory": {needs: ["openFactory"], host: ["growth", "plan"], after(){ featureDiscovery.visit("factory-flow"); }},
   /* The map as the reader left it: with the finder on, that is Find a
      location, and the address says so (routeFor()). */
   /* The City map is the plain map: reached with the finder on (the
@@ -17796,7 +17784,7 @@ const ROUTES = {
   "map": {needs: [], host: ["map"], after(){
     if(routeFinderOn()){ cityMapPage.fs.on = false; cityMapPage.deselect(); cityMapPage.saveFinder(); cityMapPage.update(); }
     routeSync(); if(typeof drawFinderCtx === "function") drawFinderCtx(); }},
-  "wiki": {needs: ["products", "plan"], host: ["wiki"]},
+  "wiki": {needs: ["products"], host: ["wiki"]},
 };
 /* The route a host page and view shows when nothing more precise was asked
    for: a finding, a search or the reader's own click on a scope tab. */
@@ -18004,18 +17992,18 @@ const PAGE_DRAWS = [
   ["company/standards", () => drawStandards(), null, []],
   ["company/results", () => drawSitePicker(), null, []], ["", () => drawSite(), null, []],
   ["today supply/changes supply/imports supply/deliveries supply/production supply/flow", () => drawSupplyStrip(), null, []],
-  ["supply/changes", () => drawChangesView(), null, ["plan"]], ["supply/imports", () => drawImportsView(), null, ["plan"]], ["supply/deliveries", () => drawDeliveriesView(), null, ["plan"]],
-  ["supply/production", () => drawProductionView(), null, ["plan", "factoryStaffing"]], ["supply/flow", () => drawFlowView(), null, ["plan"]], ["supply/flow", () => drawFlow(), null, ["plan"]],
+  ["supply/changes", () => drawChangesView(), null, []], ["supply/imports", () => drawImportsView(), null, []], ["supply/deliveries", () => drawDeliveriesView(), null, []],
+  ["supply/production", () => drawProductionView(), null, ["factoryStaffing"]], ["supply/flow", () => drawFlowView(), null, []], ["supply/flow", () => drawFlow(), null, []],
   ["growth/market", () => drawMovers(), null, []], ["growth/market", () => drawMarket(), null, []], ["growth/open", () => drawOpenStore(), null, ["openStore"]],
-  ["growth/plan", () => drawPlan(), null, ["plan", "openFactory"]],  // changed for growth: no drawExpansion()
+  ["growth/plan", () => drawPlan(), null, ["openFactory"]],  // changed for growth: no drawExpansion()
   ["company/products", () => drawPriceShops(), null, []], ["company/products", () => drawProducts(), null, ["products"]],
   // A third element names a row other code marks stale on its own (hrStale(), nxSchedStale());
   // a fourth, the sections it reads, asked for as its view opens (odWantView()).
   ["staffing/schedules", () => drawSchedules(), "schedules", ["hiring"]], ["staffing/needs", () => drawNeeds(), null, []], ["staffing/needs", () => drawStaff(), "staff", ["hiring"]],
-  ["staffing/payroll", () => drawPayroll(), null, ["staff"]],
+  ["staffing/payroll", () => drawPayroll(), null, []],
   ["company/milestones", () => drawGoals(), null, ["goals"]], ["", () => drawFindLocation(), null, []], ["today", () => drawOptimizeStaffing(), null, ["staffing"]],
   ["", () => drawShellCounts(), null, []],
-  ["wiki", () => drawWikiSections(), null, ["products", "plan"]],
+  ["wiki", () => drawWikiSections(), null, ["products"]],
 ];
 /* The rows a live refresh left out: drawn for older numbers than D. */
 const pageStale = new Set();
@@ -19912,8 +19900,8 @@ const SS_VIEWS = [
    live: () => odReady("products") ? ({p: tt("nav.search.products.sold", "Businesses › Products & prices · {n} sold", {n: (D.products || []).length})}) : {}, go: () => openRoute("businesses/prices")},
   {id: "payroll", get t(){ return tt("nav.search.payroll.title", "Payroll"); },
    get p(){ return tt("nav.search.payroll.line", "Staffing › Payroll"); }, ic: "people", syn: ["wages", "salary", "salaries", "employees", "headcount", "staff"],
-   live: () => D.kpi && D.kpi.employees ? {p: tt("nav.search.payroll.people", {one: "Staffing › Payroll · {s} person", other: "Staffing › Payroll · {s} people"},
-     {n: D.kpi.employees, s: ssNum(D.kpi.employees)})} : {}, go: () => reveal("secPayroll")},
+   live: () => D.staff && D.staff.total ? {p: tt("nav.search.payroll.people", {one: "Staffing › Payroll · {s} person", other: "Staffing › Payroll · {s} people"},
+     {n: D.staff.total, s: ssNum(D.staff.total)})} : {}, go: () => reveal("secPayroll")},
   {id: "staff", get t(){ return tt("nav.search.staff.title", "Hiring"); },
    get p(){ return tt("nav.search.staff.line", "Staffing › Staff needs · open places, candidates, Quick hire"); }, ic: "people",
    syn: ["hire", "hiring", "candidates", "headhunter", "quick hire", "open places", "staff", "staff needs"],
@@ -21449,7 +21437,7 @@ function demCellPop(cell){
   const c = row && at >= 0 ? row.cells[at] : null;
   const rent = ((D.premises || {}).buildings || []).filter(b => b.type === go.cat && b.hood === hood && b.status === "vacant").length;
   const type = demTypeName(slug, hood);
-  const plan = odReady("openStore") ? !!osType(slug) : !!go;
+  const plan = odReady("openStore") && !!osType(slug);
   const fact = (lab, v) => `<div><span class="os-lab">${lab}</span><b>${v}</b></div>`;
   demPop.setAttribute("aria-label", tt("gr.pop.aria", "{type} in {hood}", {type, hood: hoodName(hood)}));
   demPop.innerHTML = `<h4>${spEsc(tt("gr.pop.title", "{type} · {hood}", {type, hood: hoodName(hood)}))}</h4>
@@ -23918,7 +23906,7 @@ function gwImports(depotKey, only = null){
   let sent = null, shown = [], replans = 0, board = D, written = [];
   const changes = () => shown.filter(l => l.contracts.length).length || lines().length;
   gwConfirm({
-    kind: "imports", icon: "crate", needs: ["plan"], againLabel: tt("sb.gw.applyAgain", "Apply again"),
+    kind: "imports", icon: "crate", againLabel: tt("sb.gw.applyAgain", "Apply again"),
     title: tt("sb.gw.imports.title", "Weekly imports"),
     // One depot is named below, on its card; two or more are counted here.
     /* Every write names its site: the depot, one depot's lines under its

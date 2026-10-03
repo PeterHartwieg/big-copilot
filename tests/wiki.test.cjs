@@ -1251,20 +1251,21 @@ test('a translated sentence cannot become markup, and keeps only its <b>', async
 });
 
 
-test('the company strip and planner control wait for products and plan instead of judging missing sections', async () => {
+test('the company strip waits for products while the planner control uses core plan', async () => {
   const w = wiki();
   await w.load('wiki/businesstypes-giftshop');
   const asked = [];
   const slot = element('wikiPlanSlot');
   w.context.$ = id => id === 'wikiRoot' ? w.root : id === 'wikiPlanSlot' ? slot : null;
-  w.context.D = {businesses: [], names: {}, market: {}};
+  w.context.D = {businesses: [], names: {}, market: {}, plan: {catalogue: {"ba:businesstype_giftshop": {}}}};
   w.context.odNeed = name => { asked.push(name); return false; };
   w.context.odReady = () => false;
   assert.match(w.call('wikiYours({key: "ba:itemname_cheapgift"})'), /Waiting for products/);
   assert.ok(asked.includes('products'));
   w.call('wikiPlanControl()');
-  assert.ok(asked.includes('plan'));
-  assert.match(slot.innerHTML, /Waiting for plan/);
+  assert.deepEqual(asked, ['products']);
+  assert.match(slot.innerHTML, /data-wiki-plan/);
+  assert.doesNotMatch(slot.innerHTML, /Waiting for plan/);
   // An asynchronous Wiki draw finishing after navigation asks for nothing.
   asked.length = 0;
   w.context.page = 'map';

@@ -33,7 +33,11 @@ Everything else:
   and the finder asks for premises. Page rows and routes declare their dependencies.
   Navigation intent may prefetch light sections, never factory staffing or hiring.
   `ownedBuildings` and `homes` stay core because the map's layers read them and they cost
-  nothing. An applied hire check asks for hiring; partly/unseen checks only read it if ready.
+  nothing. `staff` also stays core: Today's fixed-cost tile reads the payroll, and
+  its summary costs nothing. `plan` stays core: Today reads its recipes and item names
+  (`factoryView`, `sbDeps`, the supply strip and finding pills), and every page reads
+  `itemName`; it costs about 4 ms and 65 KB on the largest measured save. An applied
+  hire check asks for hiring; partly/unseen checks only read it if ready.
 - save parser: `ba_save.py`
 - web build: `build_web.py`; deploy: `npm run deploy` (`tools/deploy.mjs`), which assembles
   `web/` and runs `wrangler deploy`
@@ -252,7 +256,7 @@ and never attach one to an issue.
   order of anything that reaches the payload, iterate it through `_in_order()`, which sorts
   `None` last because real saves hold items with no name. When a set decides a winner
   (`most_common()`, first-wins), break the tie explicitly, as `_chains()` does.
-- In the browser a section's keys (`staffing`, `premises`, `products`, `plan`, `hiring`; `SECTIONS`)
+- In the browser a section's keys (`staffing`, `premises`, `products`, `hiring`; `SECTIONS`)
   are missing from the board until a page asks for them. Read one through `odNeed()` (on
   screen) or `odReady()`, and draw `odWaitHtml()` while it is missing: `D.hiring || {}`
   reads a section not yet computed as an empty one, and a write or a progress check must

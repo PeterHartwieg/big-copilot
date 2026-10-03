@@ -41,7 +41,7 @@ function board(core = {}) {
     vm.runInContext('takeData(__raw)', context);
   };
   take(Object.assign({meta: {day: 3}, names: {}, businesses: [], supply: {factories: {sites: []}},
-    staffing: [], officeStaffing: []}, core), 5);
+    staffing: [], officeStaffing: [], plan: {}}, core), 5);
   const run = code => vm.runInContext(code, context);
   return {context, asked, take, run};
 }
@@ -246,8 +246,8 @@ test('every row and route declares sections; Today asks only for shop plans and 
 
 test('new page-only draws wait without declaring missing data empty', () => {
   for(const [draw, key, host] of [['drawProducts', 'products', 'secProducts'],
-    ['drawPayroll', 'staff', 'secPayroll'], ['drawGoals', 'goals', 'secGoals'],
-    ['drawOpenStore', 'openStore', 'osBody'], ['drawPlan', 'plan', 'ofBody']]){
+    ['drawGoals', 'goals', 'secGoals'],
+    ['drawOpenStore', 'openStore', 'osBody'], ['drawPlan', 'openFactory', 'ofBody']]){
     const b = board();
     b.run(`${draw}()`);
     assert.match(b.run(`$("${host}").innerHTML`), /od-wait/, draw);
@@ -281,8 +281,8 @@ test('prefetch filters factory dependencies and shares the per-board request and
   const sections = view => JSON.parse(b.run(`JSON.stringify(odPrefetchSections("${view}"))`));
   assert.deepEqual(sections('staffing/needs'), []);
   assert.deepEqual(sections('staffing/schedules'), []);
-  assert.deepEqual(sections('supply/production'), ['plan']);
-  assert.deepEqual(sections('expansion/factory'), ['plan', 'openFactory']);
+  assert.deepEqual(sections('supply/production'), []);
+  assert.deepEqual(sections('expansion/factory'), ['openFactory']);
   assert.deepEqual(sections('expansion/finder'), ['premises']);
   assert.deepEqual(sections('map'), []);
   b.run('document.hidden = true; odPrefetch("expansion/open")');
@@ -310,7 +310,7 @@ test('navigation intent maps route links and area tabs to their declared prefetc
   assert.deepEqual(b.asked.map(a => a.name), ['products', 'openStore']);
   b.context.__event = {target: {closest: () => ({dataset: {}, getAttribute: () => '#wiki/businesstypes-giftshop'})}};
   b.run('odNavIntent(__event)');
-  assert.deepEqual(b.asked.map(a => a.name), ['products', 'openStore', 'plan']);
+  assert.deepEqual(b.asked.map(a => a.name), ['products', 'openStore']);
 });
 
 
@@ -328,14 +328,45 @@ test('a Demand cell can open the finder from core market data without asking for
   assert.equal(b.asked.length, 0);
 });
 
-test('section arrivals refill recipe indices and invalidate Supply memos without a new board', () => {
-  const b = board();
-  const seq = b.run('boardSeq');
-  b.run('sbCaches.cap = {old: true}; sbOtherKeys = {old: true}');
-  b.run('odTake(5, {sections: {plan: {plan: {recipes: [{slug: "beer", out: 10}]}}}})');
-  assert.equal(b.run('RECIPE_BY.beer.out'), 10);
-  assert.equal(b.run('boardSeq'), seq);
-  // A redraw may fill fresh memos; their old values must be gone.
-  assert.equal(b.run('!!(sbCaches.cap && sbCaches.cap.old)'), false);
-  assert.equal(b.run('!!(sbOtherKeys && sbOtherKeys.old)'), false);
+test('Today fixed costs and Payroll use core staff without a section request', () => {
+  const b = board({staff: {total: 2, dailyCost: 700, roles: [], unhappy: 0, absent: 0, complaining: 0},
+    kpi: {netWorth: null, rentBill: 300, debt: 0, profitAvg7: 0, profitPrev7: 0}, daily: [], loans: []});
+  b.run('drawKpis(); drawPayroll()');
+  assert.match(b.run('$("kpis").innerHTML'), /\$1,000/);
+  assert.doesNotMatch(b.run('$("kpis").innerHTML'), /Working out payroll/);
+  assert.doesNotMatch(b.run('$("secPayroll").innerHTML'), /od-wait/);
+  assert.equal(b.run('JSON.stringify(ROUTES["staffing/payroll"].needs)'), '[]');
+  assert.equal(b.run('JSON.stringify(PAGE_DRAWS.find(r => r[0] === "staffing/payroll")[3])'), '[]');
+  assert.equal(b.asked.length, 0);
+});
+
+test('Today and shell supply readers use core recipes without a section request', () => {
+  const b = board({businesses: [{key: 'factory', lines: []}], supply: {factories: {sites: [
+    {s: 0, lines: [], needs: [], unnamed: [{rid: 'r1', candidates: [{slug: 'beer'}], machines: 1}]}]}},
+    plan: {items: {beer: 'Core Beer'}, recipes: [{slug: 'beer', item: 'Beer', out: 10, ingredients: []}]}});
+  b.run('localNames = () => ({r1: "beer"}); globalThis.__painted = null; paintPlanImports = s => { __painted = s; }; drawSupplyStrip()');
+  assert.equal(b.run('factoryView().unnamed'), 0, 'the core resolves the named factory line immediately');
+  assert.equal(b.run('itemName("beer")'), 'Core Beer', 'plan labels take precedence');
+  assert.ok(b.run('__painted.badge.length > 0'), 'Today has a supply verdict on the first board');
+  assert.equal(b.run('Number.isFinite(routeCount("supply/changes"))'), true);
+  assert.equal(b.run('Number.isFinite(routeCount("supply/production"))'), true);
+  b.run('SS_VIEWS.find(r => r.id === "checklist").live(); pgStateAt("factory", "beer"); ovPlanHtml({ev: {slug: "beer"}, group: "staff"}, D.businesses[0])');
+  assert.equal(b.run('"plan" in OD_SECTIONS'), false);
+  assert.equal(b.run('Object.values(ROUTES).every(r => !r.needs.includes("plan"))'), true);
+  assert.equal(b.asked.length, 0);
+});
+
+test('Demand popover offers a store only when openStore facts support that type', () => {
+  const b = board({market: {hoods: ['hood'], types: [{slug: 'shop', cells: [{demand: 30}]}]}});
+  b.run(`demPop = {setAttribute(){}, querySelector(){ return null; }, focus(){}};
+    demPopPlace = () => {}; hideTip = () => {};
+    globalThis.__cell = {dataset: {slug: "shop", hood: "hood"}, setAttribute(){}};
+    demCellPop(__cell)`);
+  assert.doesNotMatch(b.run('demPop.innerHTML'), /data-dem-go="open"/);
+  assert.match(b.run('demPop.innerHTML'), /data-dem-go="find"/);
+  assert.equal(b.asked.length, 0);
+  b.run('odTake(5, {sections: {openStore: {openStore: {types: {other: {}}}}, premises: {premises: {demand: {hood: [{slug: "shop", category: "retail"}]}, buildings: []}}}}); demCellPop(__cell)');
+  assert.doesNotMatch(b.run('demPop.innerHTML'), /data-dem-go="open"/);
+  b.run('D.openStore.types.shop = {}; demCellPop(__cell)');
+  assert.match(b.run('demPop.innerHTML'), /data-dem-go="open"/);
 });

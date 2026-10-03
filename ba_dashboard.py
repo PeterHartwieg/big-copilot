@@ -2120,7 +2120,7 @@ def _take_hires(rows) -> dict:
 
 
 def _planning_world(build: Build, previous: str | None = None) -> dict:
-    """Each stage works on a copy; a failure cannot damage its predecessor."""
+    """Return the planning world with a copied bench and weeks, sharing read-only people."""
     if previous is None:
         if "world" not in build.shared:
             build.shared["world"] = _plan_world(build.save, build.shared["staff"])
@@ -2132,6 +2132,7 @@ def _planning_world(build: Build, previous: str | None = None) -> dict:
 
 
 def _staffing_section(build: Build) -> dict:
+    """Section staffing: shop plans over the initial planning world."""
     shared = build.shared
     world = _planning_world(build)
     with _collector_paused():
@@ -2143,6 +2144,7 @@ def _staffing_section(build: Build) -> dict:
 
 
 def _office_staffing_section(build: Build) -> dict:
+    """Section officeStaffing: office plans over the bench and weeks the shops left."""
     shared = build.shared
     world = _planning_world(build, "staffing")
     with _collector_paused():
@@ -2154,7 +2156,7 @@ def _office_staffing_section(build: Build) -> dict:
 
 
 def _factory_staffing_section(build: Build) -> dict:
-    """Factory lines use the bench and weeks the offices left."""
+    """Section factoryStaffing: factory lines over the bench and weeks the offices left."""
     shared = build.shared
     world = _planning_world(build, "officeStaffing")
     with _collector_paused():
@@ -2169,7 +2171,7 @@ def _factory_staffing_section(build: Build) -> dict:
 
 
 def _hiring_section(build: Build) -> dict:
-    """Hiring reads the plans held by the sections, never missing core keys."""
+    """Section hiring: the Staff page's key and the headhunters' candidates, from every plan."""
     with _collector_paused():
         hiring = _hiring(build.save, build.shared["businesses"],
                          build.sections["staffing"]["staffing"],
@@ -2180,6 +2182,7 @@ def _hiring_section(build: Build) -> dict:
 
 
 def _products_section(build: Build) -> dict:
+    """Section products: company product totals and their weekly rhythm."""
     products = _products([{"lines": [dict(line) for line in b["lines"]]}
                           for b in build.private["product_businesses"]])
     rhythm = _product_rhythm(build.save, build.shared["buildings"])
@@ -2192,10 +2195,12 @@ def _products_section(build: Build) -> dict:
 
 
 def _premises_section(build: Build) -> dict:
+    """Section premises: buildings for the location finder."""
     return {"premises": _premises(build.save, build.names, build.shared["market"])}
 
 
 def _open_store_section(build: Build) -> dict:
+    """Section openStore: store planning facts, including the available premises."""
     s = build.shared
     return {"openStore": _open_store(build.save, build.names, s["buildings"], s["businesses"],
                                     build.sections["premises"]["premises"], s["all_grids"],
@@ -2203,20 +2208,17 @@ def _open_store_section(build: Build) -> dict:
 
 
 def _open_factory_section(build: Build) -> dict:
+    """Section openFactory: factory costs and opening requirements."""
     s = build.shared
     return {"openFactory": _open_factory(build.save, build.names, s["buildings"],
                                         s["businesses"], s["recipes"], s["staff"])}
 
 
-def _plan_section(build: Build) -> dict:
-    s = build.shared
-    return {"plan": _plan(build.save, build.names, s["businesses"], build.private["catalogue"],
-                          s["recipes"], s["stations"],
-                          _ingredient_prices(build.save, build.names, s["supply"], s["businesses"]),
-                          s["rhythm"])}
-
-
-# Page-only producers: planning dependencies also preserve the shared bench order.
+# The section registry: each section's payload keys, the sections it needs
+# first, its producer, and what the page is told while it runs. Planning keeps
+# its order: planning world -> shops -> offices -> factory lines -> hiring.
+# Each stage plans over a copy of the bench and weeks the stage before left,
+# kept per stage in build.shared["planning"]. Nothing a warning reads is here.
 SECTIONS = {
     "staffing": {"keys": ("staffing",), "needs": (),
                  "produce": _staffing_section, "words": "Working out shop staffing"},
@@ -2230,15 +2232,10 @@ SECTIONS = {
                  "produce": _premises_section, "words": "Working out locations"},
     "products": {"keys": ("products",), "needs": (),
                  "produce": _products_section, "words": "Working out products"},
-    "staff": {"keys": ("staff",), "needs": (),
-              "produce": lambda b: {"staff": _staff_summary(b.shared["staff"], b.shared["businesses"])},
-              "words": "Working out payroll"},
     "openStore": {"keys": ("openStore",), "needs": ("premises",),
                   "produce": _open_store_section, "words": "Working out store plans"},
     "openFactory": {"keys": ("openFactory",), "needs": (),
                     "produce": _open_factory_section, "words": "Working out factory costs"},
-    "plan": {"keys": ("plan",), "needs": (),
-             "produce": _plan_section, "words": "Working out factory plans"},
     "goals": {"keys": ("goals",), "needs": (),
               "produce": lambda b: {"goals": _goals(b.save, b.names, b.shared["businesses"])},
               "words": "Working out milestones"},
@@ -2278,7 +2275,13 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     """The core of one build: every key the warnings need, the history recorded.
 
     The rest of the payload is SECTIONS, computed from what this keeps on the
-    Build. History producers stay eager; page-only producers have no history
+    Build. History-recording producers, the warnings and everything they read
+    stay eager. ownedBuildings and homes stay here because the map's layers and
+    home site panel read them; staff stays because Today's fixed-cost tile reads
+    the payroll. All three cost nothing. plan stays core because Today reads its
+    recipes and item names (factoryView, sbDeps, the supply strip and finding
+    pills), and every page reads itemName; it costs about 4 ms and 65 KB on the
+    largest measured save. Page-only producers have no history
     side effects and leave the core whole.
     """
     build = Build(save, names, generation)
@@ -2368,6 +2371,16 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     hour_findings = _hour_findings(grids, businesses, service_wage)
     # The market's catalogue is the plan's alone; it never ships.
     build.private["catalogue"] = market.pop("catalogue")
+    plan = _plan(
+        save,
+        names,
+        businesses,
+        build.private["catalogue"],
+        recipes,
+        stations,
+        _ingredient_prices(save, names, supply, businesses),
+        rhythm,
+    )
     net_worth = _net_worth(root, history, character, day)
     entry = {
         "hour": root["Hour"],
@@ -2446,6 +2459,8 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         # they cost nothing (under 1 ms and 1 KB), so Map needs no section.
         "ownedBuildings": _owned_buildings(save, names),
         "homes": _homes(buildings, residential, names),
+        # Today's fixed-cost tile reads the payroll; it costs nothing.
+        "staff": _staff_summary(staff, businesses),
         "loans": loans,
         "supply": supply,
         "rhythm": rhythm,
@@ -2458,6 +2473,7 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         "hypeExposure": hype,
         "hours": grids,
         "hourFindings": hour_findings,
+        "plan": plan,
         # Every game name the text knows -- items, business types,
         # neighbourhoods, stations, skills, job demands -- by the game's own
         # key, so the page names anything the payload identifies by key, and a

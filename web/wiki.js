@@ -1928,7 +1928,6 @@ function wikiPlanChain(){
 function wikiPlanControl(){
   const slot = $("wikiPlanSlot");
   if(!slot) return;
-  if(hasData() && !(page === "wiki" ? odNeed("plan") : odReady("plan"))){ slot.innerHTML = odWaitHtml("plan", true); return; }
   const b = wikiG().BUSINESS || {};
   const own = b.name ? wikiName(b.nameSrc, b.name) : "";
   if(wikiCanPlan())
