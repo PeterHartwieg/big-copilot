@@ -412,6 +412,9 @@ One business per call: its seven days of shifts are replaced.
 
 - `d` is the payload's weekday, `scheduleDays[i].day % 7` (1 is Monday, 0 Sunday). A day
   not listed is written empty; all seven are replaced.
+- Every scheduled entry needs a workstation `itemInstanceId`, including at a theatre:
+  actors use the Dressing Room. The theatre's stationless row holds the stage licensing
+  fee and cannot be scheduled; a missing or empty station answers `no_station`.
 - A shift's type is the mod's to choose, as the game's schedule screen does
   (`GetWorkShiftType`: cleaning stations get the cleaning type).
 - `openAllHours: true` also sets every day open 0 to 24 (`isOpen`, one slot `{0, 24}`), the
