@@ -130,7 +130,7 @@ test('the CI matrix shards execute every discovered file once and propagate a re
   fs.mkdirSync(path.join(root,'tools'));
   fs.copyFileSync(path.join(__dirname,'../tools/verify.mjs'),path.join(root,'tools','verify.mjs'));
   fs.writeFileSync(path.join(root,'build_web.py'),'# Synthetic successful assembly.\n');
-  const names = ['a','b','c','d','e','f','z'];
+  const names = ['a','b','c','d','e','f','g','h','z'];
   for (const name of names) fs.writeFileSync(path.join(root,'tests',`${name}.test.cjs`),
     `require('node:test')('${name}', () => {\n` +
     `require('node:fs').appendFileSync('executed.txt', '${name}\\n');\n` +
@@ -138,7 +138,7 @@ test('the CI matrix shards execute every discovered file once and propagate a re
     (name === 'c' ? `throw new Error('intentional shard failure');\n` : '') + '});\n');
   const workflow = fs.readFileSync(path.join(__dirname,'../.github/workflows/tests.yml'),'utf8');
   const shards = [...workflow.matchAll(/'(\d+\/\d+)'/g)].map(match=>match[1]);
-  assert.deepEqual(shards,['1/6','2/6','3/6','4/6','5/6','6/6']);
+  assert.deepEqual(shards,['1/8','2/8','3/8','4/8','5/8','6/8','7/8','8/8']);
   const statuses=[];
   // Exercise a fresh CLI invocation; Node suppresses --test inside a test child.
   const env={...process.env};
@@ -149,7 +149,7 @@ test('the CI matrix shards execute every discovered file once and propagate a re
     assert.ok([0,1].includes(result.status),result.stderr);
     statuses.push(result.status);
   }
-  assert.deepEqual(statuses.slice().sort(),[0,0,0,0,0,1]);
+  assert.deepEqual(statuses.slice().sort(),[0,0,0,0,0,0,0,1]);
   assert.deepEqual(fs.readFileSync(path.join(root,'executed.txt'),'utf8').trim().split(/\r?\n/).sort(),names);
 });
 

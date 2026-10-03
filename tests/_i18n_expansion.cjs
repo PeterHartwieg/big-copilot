@@ -10,7 +10,7 @@ function expansionTests(languages){
   const fixture = layoutFixture();
   const {site} = fixture;
   let TABLE, PAYLOAD;
-  before(() => { ({TABLE, PAYLOAD} = fixture); });
+  before(async () => { ({TABLE, PAYLOAD} = await fixture.start()); });
 
   /* Long saved names must fit even in English; the pseudo-locale sweep only compares
      the extra space pseudo text takes. Use synthetic fixtures only. */

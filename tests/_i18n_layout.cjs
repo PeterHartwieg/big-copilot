@@ -1,5 +1,5 @@
 // Shared browser fixture for the independent translation layout suites.
-const {before, after} = require('node:test');
+const {after} = require('node:test');
 const assert = require('node:assert/strict');
 const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
@@ -28,7 +28,7 @@ function pseudo(en){
 
 function layoutFixture(){
   let browser, TABLE, PAYLOAD;
-  before(async () => {
+  async function start(){
     const cat = spawnSync(process.env.PYTHON || 'python', [path.join('tools', 'i18n.py'), 'extract'],
       {cwd: ROOT, maxBuffer: 16 * 1024 * 1024});
     assert.equal(cat.status, 0, cat.stderr.toString());
@@ -44,7 +44,8 @@ sys.stdout.buffer.write(json.dumps(_wire_msgs(fixture()["payload"]), ensure_asci
     PAYLOAD = JSON.parse(fix.stdout.toString('utf8'));
     const {chromium} = require('playwright');
     browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
-  });
+    return {browser, TABLE, PAYLOAD};
+  }
   after(async () => { await browser?.close(); });
 
   /* Serve the assembled page and tables; pseudo text can stand in for German. */
@@ -70,7 +71,7 @@ sys.stdout.buffer.write(json.dumps(_wire_msgs(fixture()["payload"]), ensure_asci
     return {page, errors, fetched};
   }
 
-  return {site, get browser(){ return browser; }, get TABLE(){ return TABLE; }, get PAYLOAD(){ return PAYLOAD; }};
+  return {site, start};
 }
 
 module.exports = {layoutFixture};

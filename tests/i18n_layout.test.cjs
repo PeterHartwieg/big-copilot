@@ -116,7 +116,7 @@ const {layoutFixture} = require('./_i18n_layout.cjs');
 const fixture = layoutFixture();
 const {site} = fixture;
 let browser, TABLE, PAYLOAD;
-before(() => { ({browser, TABLE, PAYLOAD} = fixture); });
+before(async () => { ({browser, TABLE, PAYLOAD} = await fixture.start()); });
 
 test('?ui=de reaches the board: Python\'s messages in the table, and their English still read', async t => {
   const {page, errors, fetched} = await site(t, {ui: 'de'});
