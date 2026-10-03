@@ -465,7 +465,7 @@ for(const lang of ['en', 'pseudo', 'de', 'es', 'fr', 'ko', 'pt', 'ru', 'tr']){
       assert.equal(await page.evaluate(() => tt('gr.os.step.what', 'What')), expected['gr.os.step.what']);
     }
     await expansionSeed(page);
-    const widths = lang === 'en' || lang === 'pseudo' ? [360, 375, 640, 700, 768, 1024, 1101, 1200, 1279] : lang === 'ru' ? [360, 375, 1101, 1150] : [360, 375];
+    const widths = lang === 'en' || lang === 'pseudo' ? [360, 375, 600, 640, 700, 768, 1024, 1101, 1200, 1279] : lang === 'ru' ? [360, 375, 1101, 1150] : [360, 375];
     for(const width of widths) await t.test(`${width}px`, async () => {
       await page.setViewportSize({width, height: 900});
       // Let the board's resize handlers reposition the sidebar and hoisted
