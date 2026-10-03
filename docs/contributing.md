@@ -74,8 +74,8 @@ Focused commands also assemble first:
 - `npm test` runs all Node suites; `npm test -- tests/map.test.cjs` selects a suite
   (multiple filenames and quoted `*` filename patterns are accepted). Focused
   `npm test` accepts filenames/patterns, not raw Node test flags.
-  `npm test -- --shard=1/4` reproduces one CI shard using Node's native file
-  sharding over the complete, sorted suite list. The four shards cover every
+  `npm test -- --shard=1/8` reproduces one CI shard using Node's native file
+  sharding over the complete, sorted suite list. The eight shards cover every
   file once, including newly added suites. Sharding cannot be combined with
   focused filenames; `npm test` and `npm run verify` still run the full list.
 - `npm run test:python` runs Python discovery;
@@ -90,11 +90,16 @@ Focused commands also assemble first:
 - `npm run verify:assemble` assembles only; `npm run verify:check` checks the
   existing assembly without rebuilding it.
 
-CI uses GitHub-hosted Ubuntu runners: four Node shards (concurrency 2 each),
-the optimized hosted-page suites and Worker dry-run in a fifth Node lane,
-and independent Python and assembly-freshness jobs. All lanes run in parallel;
-the stable `Node suites` check requires every Node lane to succeed, and a failed
-lane does not cancel its siblings. Browser installation needs only Chromium's
+CI uses GitHub-hosted Ubuntu runners: eight Node shards (concurrency 2 each)
+and a Python job. Shard 6 also runs the optimized hosted-page suites and Worker
+dry-run; the Python runner first checks assembly and freshness. At most nine
+runners are active per workflow, leaving room for two runs within 20 slots.
+The small aggregate jobs start after their dependencies release their runners.
+The stable `Node suites` check requires every Node lane to succeed, and the
+freshness check reports its own outcome separately from the Python tests.
+A failed lane does not cancel its siblings. The translation layout sweep is split into
+board/shell, planner breakpoints, and planner languages so no one file serializes
+all of that coverage. Browser installation needs only Chromium's
 headless shell. CI additionally requires assembly to leave no committed changes
 or untracked files. Local verification does not require
 a clean working tree. Worktrees can reuse installed dependencies by setting

@@ -1671,6 +1671,10 @@ tbody tr.pc-addrow:hover{background:none}
 .pc-pop-h b,.pc-pop-h span{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
 .pc-pop-h span{cursor:help;border-bottom:1px dotted var(--ink-3)}
 .pc-opt{display:grid;grid-template-columns:minmax(0,1fr) 56px 34px;align-items:center;gap:12px;width:100%;min-height:44px;padding:6px 10px;border:0;border-radius:8px;background:none;color:var(--ink);text-align:left;font:inherit;cursor:pointer;transition:background .12s}
+.pc-custom .pc-opt{grid-template-columns:minmax(0,1fr)}
+.pc-opt[hidden],.pc-empty[hidden]{display:none}
+.pc-search{display:block;box-sizing:border-box;width:calc(100% - 20px);margin:4px 10px 8px;padding:8px;border:1px solid var(--rule);border-radius:6px;background:var(--surface);color:var(--ink);font:inherit}
+.pc-empty{margin:12px 10px;color:var(--ink-3)}
 .pc-opt:hover,.pc-opt:focus-visible{background:var(--surface);outline:none}
 .pc-opt span b{display:block;font:500 13.5px/1.25 Archivo,sans-serif}
 .pc-opt span small{display:block;margin-top:2px;font:400 11.5px/1.3 "IBM Plex Mono",monospace;color:var(--ink-3)}

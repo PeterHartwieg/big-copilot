@@ -980,6 +980,23 @@ one of these products, but scaling by it too (× the product's ratio over the ma
 products' average) did no better, a median 0.63 with the same spread, so the default stays
 main rate × weight.
 
+**Custom setup.** Choose Custom setup in the Range picker to combine any factory
+recipes, regardless of shop type. A new factory starts empty; for a factory you run,
+it starts with all its known product lines and their current machine counts. Add product
+searches all recipes by product or workstation. Every selected line can be removed or
+set to zero machines. Removing a line takes it out of this plan's scope; zero keeps it
+selected with no planned output. For an existing factory, the estimates assume those
+machines stop, but the setup checklist does not track stopping them. Other lines at an
+existing factory are left in place. At least one machine is needed to continue the flow.
+
+The same five steps price the combined machines, shared ingredients, storage and staff.
+Shop demand sums measured sales across all shop types, multiplying each type's product
+average by the number of shops actually selling it. It never invents sales for an
+unmeasured product. Supplies shows the weekly demand, not a count of interchangeable
+shops; savings and export surplus are estimated only for measured products. Machines
+still run 24 hours a day, seven days a week. Each saved custom plan keeps its own
+selected products and counts (including zero) in `ba_open_factory_v1:<character>`.
+
 ### Does the model match the factories you already run?
 
 It does, to within a rounding error. Take the ingredient draw the supply section already
@@ -1040,8 +1057,8 @@ a price list.
 
 ### The flow: five steps, for a new factory or one you run
 
-Plan a factory is one view with two pickers above five steps: **Shops** (the business
-type the factory supplies) and **For** (**New factory**, then each factory you run). The
+Plan a factory is one view with two pickers above five steps: **Range** (the business
+type the factory supplies, or **Custom setup**) and **For** (**New factory**, then each factory you run). The
 steps are What · Where · Investment · Until production · Running. There is no break-even
 and no payback figure for a factory: it is a cost centre of its chain, and its saving
 shows in the shops' results.
