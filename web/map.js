@@ -643,6 +643,16 @@ class CityMapView {
   }
   wireFinder(){
     if(!this.panel) return;
+    if(!this.filterGuard){
+      this.filterGuard = true;
+      ["click", "input", "change", "keydown"].forEach(type => this.root.addEventListener(type, e => {
+        if(type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+        if(premises() || e.target.closest('[data-od-retry]')) return;
+        if(e.target.closest('.filters, .list') || (this.fs.on && e.target.closest('.srch'))){
+          odNeed("premises"); e.preventDefault(); e.stopImmediatePropagation();
+        }
+      }, true));
+    }
     const changed = () => { this.showAll = false; this.saveFinder(); this.update(); };
     const tog = this.root.querySelector('[data-f="tog"]');
     if(tog) tog.onclick = () => {
@@ -742,6 +752,7 @@ class CityMapView {
      a second click on the column you are already sorted by puts the list back
      in the order the category ranks by. */
   sortBy(key){
+    if(!premises()) return;
     this.fs.sort = this.fs.sort === key ? this.sortKeys()[0] : key;
     // The category's own order is nobody's choice; any other column is.
     this.fs.sortPicked = this.fs.sort !== this.sortKeys()[0];
@@ -773,6 +784,7 @@ class CityMapView {
     this.fs.on = false;   // a new load opens the plain map; only the filters are stored
   }
   saveFinder(){
+    if(!premises()) return;
     // A plan's finder stores nothing: its filters last as long as the view.
     if(this.planning) return;
     const store = this.finderStore(); if(!store) return;
@@ -1597,6 +1609,9 @@ class CityMapView {
   update(){
     if(!this.svg) return;
     this.stale = false;
+    // Preserve the drawn answers and their scroll while this company's next
+    // premises load. Failed sections and another company show the wait/error.
+    if(this.panel && this.fs.on && !odNeed("premises") && !odError("premises") && odSameScope(this.finderDrawnScope, odScope())) return;
     // A view built before a save was open has no finder controls; the first
     // payload that carries premises brings them in.
     if(this.panel && premises() && !this.root.querySelector('.places .filters')) this.build();
@@ -1652,6 +1667,7 @@ class CityMapView {
       this.list.scrollTop=listScroll;
     }
     this.fillCard(); this.paintView();
+    this.finderDrawnScope = premises() && this.finderOn() ? odBoardScope || odScope() : null;
   }
   /* The card beside the picked footprint: name, one identity line, three mono
      numbers, the findings as dot + verb + amount, and the arrow to the site. */
@@ -1789,9 +1805,12 @@ class CityMapView {
     this.buildToken++;
   }
   resetCharacter(){
+    const finding = this.fs.on && !premises() && odOnDemand();
     this.selected=null; this.query=''; this.hot=null; this.onSettled=null;
     this.fsCharacter = undefined; this.showAll = false;
     this.fs = this.planning ? this.planState(this.planning.preset) : finderDefaults();
+    this.loadFinder();
+    if(!this.planning) this.fs.on = finding;
     this.savedUsed = null; this.closeNaming();
     if(this.orb) this.orb.size = 170;
     if(this.svg){ if(this.search) this.search.value=''; this.layers = {mine:true, own:true, home:true, fnd:true, all:false};
@@ -1821,6 +1840,7 @@ function openFinder(preset = {}, focus = false){
   showPage("map");
   showCityMap();
   const view = cityMapPage;
+  view.finderRestore = null;
   // A Growth cell's question starts at the top of its answers, whatever the
   // list was scrolled to before; on a narrow map the whole panel scrolls.
   const toTop = () => view.root.querySelectorAll('.places, .places .list').forEach(el => { el.scrollTop = 0; });
@@ -1862,13 +1882,16 @@ function showFinder(mode = "push"){
      two questions asked from Demand keep their own answers. A new visit
      keeps the filters on screen, and they become its own. */
   const kept = mode !== "push" ? finderEntryState() : null;
+  const restore = view.finderRestore = {};
+  const scope = odBoardScope || odScope();
   if(kept){
-    view.ready.then(ok => {
-      if(!ok) return;
+    odThen("premises", () => view.ready.then(ok => {
+      if(!ok || view.finderRestore !== restore || !odSameScope(scope, odScope())) return;
+      if(!odReady("premises")) return showFinder(mode);
       view.fs = {...view.fs, ...view.savedFilters({filters: kept}), on: true};
       view.clampSort(); view.showAll = false;
       view.update();
-    });
+    }), "finder-restore");
   } else finderStateRemember(view);
   finderPickRestore(view, mode !== "push");
 }

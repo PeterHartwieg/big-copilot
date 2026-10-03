@@ -390,7 +390,8 @@ the plans from `build.sections`, not `build.core`.
 Today asks only for `staffing`. Its supply card, proposed-change details, finding
 state pills and supply counts read core `plan` immediately, as does supply search.
 A Demand popover asks for `openStore` on click, waits, and offers Open a store here
-once the section confirms the type. It refreshes only while the same cell is open.
+once the section confirms the type. It refreshes only while the same cell is open,
+restoring the focused action if the keyboard is still inside the popover.
 
 | Section | Keys | Needs | Asked for by |
 | --- | --- | --- | --- |
@@ -399,7 +400,7 @@ once the section confirms the type. It refreshes only while the same cell is ope
 | factoryStaffing | `factoryStaffing` | officeStaffing | Supply › Production's staffing block; a factory's site panel |
 | hiring | `hiring`, `candidates` | factoryStaffing | Staff needs; Schedules; site staffing writes; Open a store and Plan a factory's staff rows; hire and schedule dialogs; an applied hire's first progress check |
 | premises | `premises` | (none) | Find a location, including search and the Map toggle; Open a store, Plan a factory and Demand popovers through openStore's dependency |
-| products | `products` | (none) | Products & prices; Wiki's company strips |
+| products | `products` | (none) | Products & prices; search intent; Wiki's product slots |
 | openStore | `openStore` | premises | Open a store; Plan a factory's location, investment and financing; Demand popovers |
 | openFactory | `openFactory` | (none) | Plan a factory's costs and opening requirements |
 | goals | `goals` | (none) | Milestones |
@@ -432,7 +433,11 @@ private; the processed `plan.catalogue` ships in core. The global `itemName` rea
 the plan's own labels first, then the game-name map. `RECIPE_BY` is rebuilt when
 the factory planner draws; section arrival does not rebuild it or invalidate
 Supply's recipe memos. The search index's product entries and premises entries
-fill in as those sections arrive; missing product counts are omitted. Payroll
+fill in as those sections arrive; missing product counts are omitted. Focusing a search
+control or opening the palette asks for products, and arrival rebuilds the open index.
+The Schedules entry chooses its first site from the current staffing section when ready,
+never from an older card. Wiki draws core demand, site counts and guide slots immediately;
+only product slots wait. Payroll
 headcounts and the first-hire check use core `staff.total`. Today's contracted-cost
 tile reads core `staff.dailyCost` immediately.
 The name-localisation walkers already accept missing keys and run again on each arriving
@@ -501,7 +506,10 @@ page's inactivity cutoff (`LOAD_TIMEOUT_MS`) hears a long section through these 
   (`pgJudged`), redraws the page on screen (`renderCalm()`), plans a write dialog that
   was waiting (`odDialog()`, which a failure and a Try again call too), and runs what
   `odThen()` held: a click that opens a write review before the board has its section
-  (`hrReview()`) opens it once it arrives, and is dropped if it fails.
+  (`hrReview()`) opens it once it arrives, and is dropped if it fails. All held callbacks
+  belong to the company and source that asked: same-company refreshes ask again, while a
+  change of company or file, folder or game-link source drops them. Finder history filters
+  are restored through this path after premises arrives, so a cold reload keeps its question.
 
 A board whose source has no `section()` (the CLI's page, the watch server) gets every
 section in the payload.
@@ -518,7 +526,9 @@ section in the payload.
   hire record asks for `hiring` with `odNeed()` for its first judgment. A record already
   judged `partly` or `unseen` rechecks only when this board already holds hiring
   (`odReady()`), and never requests it on its own. This avoids running every planning
-  stage on each game-link rebuild for hires the save cannot yet confirm.
+  stage on each game-link rebuild for hires the save cannot yet confirm. Such a record
+  can age out after `PG_KEEP_DAYS` (14 game days) unjudged unless a page that asks for
+  hiring is opened.
 - A `stale` refusal (the worker has started a newer build) is no failure: the section stays
   loading, held work keeps waiting, and the newer board asks again as it arrives
   (`odThensAsk()`, which also plans a waiting dialog again). If that build fails, the
@@ -534,7 +544,18 @@ section in the payload.
   until `hiring` is on the board, and the people who could come from other sites only
   after (`spRowLess()`), so the count can drop once a staffing page has been opened.
 - Sections are not kept across builds: each new board asks again (a bounded cache is a
-  later phase of #238).
+  later phase of #238). On a same-company, same-source refresh, a row on screen that
+  previously drew with its declared sections keeps its DOM while the new sections load.
+  `odDrawn` records successful draws; `odKeepRow()` leaves a waiting row in `pageStale`
+  and requests its sections. `odArrived()`/`odRedraw()` redraw it on arrival. This includes
+  an open Staff needs page, Today's staffing card, Products, Milestones and both planners.
+  Finder results (including plan maps) and site scheduling blocks follow the same rule,
+  preserving their content and scroll position. First visits, changed companies/sources
+  and failed sections draw the wait or error. Retained controls that read sections wait
+  for the current board too: board event capture gates section-dependent handlers, and
+  finder chips, filters and results ignore input and never save filters without premises.
+  `gwConfirm`, progress checks and `odReady` always read the current board; retained DOM
+  is never cached payload data.
 
 **Adding a feature.** Decide whether it is core or a section. Core is for what the warnings
 need (plus the documented cheap map layers); anything computed on load needs that reason,

@@ -385,6 +385,7 @@ var boardSeq = 0;
 function takeData(raw){
   const old = D;
   D = localiseNames(raw);
+  odBoard(old);
   boardSeq++;
   if(typeof sbBoard === "function" && old && old !== raw) sbBoard(old);
   if(typeof pgBoard === "function") pgBoard();
@@ -510,13 +511,42 @@ function odSourceFailed(why){
   odThens = odThens.filter(t => odState(t.name) !== "error");
   odRedraw();
 }
-/* Work waiting for a section (a click that opens a write review): run once
-   the board has it, whichever board that is (odArrived()). One held per
-   `key`: a second click replaces the first. */
+/* Held work belongs to this company and source, across its refreshes only.
+   Source.identity() also identifies file/folder choices without a game link. */
+const odSource = () => typeof SOURCE.identity === "function" ? SOURCE.identity() : (gwLink() || {}).source;
+const odScope = () => ({source: odSource(), character: D?.meta?.character, save: D?.meta?.save});
+const odSameScope = (a, b) => !!a && !!b && a.source === b.source && a.character === b.character && a.save === b.save;
+let odBoardScope = null;
+const odDrawn = new Set();
+function odBoard(old){
+  const scope = odScope();
+  if(!old || !odSameScope(odBoardScope, scope)){
+    odDrawn.clear();
+    odSiteDrawn = null;
+  }
+  odBoardScope = scope;
+  odThens = odThens.filter(t => odSameScope(t.scope, scope));
+}
+const odError = name => odChain(name).some(n => odState(n) === "error");
+/* Keep a successfully drawn row while this company's new sections load.
+   This retains DOM only: every reader still uses the current board. */
+function odKeepRow(row, shown){
+  const missing = (row[3] || []).filter(n => !odReady(n));
+  if(!odDrawn.has(row) || !row[0].split(" ").includes(shown) || !missing.length || missing.some(odError)) return false;
+  missing.forEach(odNeed);
+  pageStale.add(row);
+  return true;
+}
+function odRowDrawn(row){
+  if((row[3] || []).every(odReady)) odDrawn.add(row); else odDrawn.delete(row);
+}
+/* One held per key: a second click replaces the first. */
 let odThens = [];
 function odThen(name, run, key = run){
+  // A different source may have been selected before its board arrives.
+  if(odBoardScope && !odSameScope(odBoardScope, odScope())) return;
   if(odNeed(name)) return run();
-  odThens = odThens.filter(t => t.key !== key).concat([{name, run, key}]);
+  odThens = odThens.filter(t => t.key !== key).concat([{name, run, key, scope: odScope()}]);
 }
 /* The sections the rows of `view` declare (PAGE_DRAWS' fourth element),
    asked for as the view opens (drawStale()) and as a board arrives on it
@@ -561,9 +591,10 @@ function odArrived(){
   hrSiteMemo = null;
   pgJudged = -1;
   odRedraw();
+  odThens = odThens.filter(t => odSameScope(t.scope, odScope()));
   const ready = odThens.filter(t => odReady(t.name));
   odThens = odThens.filter(t => !odReady(t.name));
-  ready.forEach(t => { try{ t.run(); }catch(e){ console.error(e); } });
+  ready.forEach(t => { if(odSameScope(t.scope, odScope())) try{ t.run(); }catch(e){ console.error(e); } });
 }
 /* A write dialog that waits for a section (gwConfirm()) paints again: it
    plans once the section is there, and says so while it fails or loads.
@@ -576,6 +607,7 @@ function odDialog(){
 /* Work left waiting when a board arrives asks that board for its section,
    and so does a write dialog that waits (it plans again, odDialog()). */
 function odThensAsk(){
+  odThens = odThens.filter(t => odSameScope(t.scope, odScope()));
   [...new Set(odThens.map(t => t.name))].forEach(odNeed);
   odDialog();
 }
@@ -622,6 +654,21 @@ if(typeof document !== "undefined" && typeof document.addEventListener === "func
   const b = e.target && e.target.closest ? e.target.closest("[data-od-retry]") : null;
   if(b) odRetry(b.getAttribute("data-od-retry"));
 });
+/* Retained controls must not read missing sections as empty. Capture before
+   direct or delegated handlers; retry buttons must remain usable on errors. */
+const OD_ACTION_SECTIONS = [
+  ["#secOpen, #osCtl", ["openStore"]],
+  ["#secPlan, #secIngredients, #secPlanFlow, #ofCtl, #planPicker, #planFor, #pcPop", ["openFactory", "openStore"]],
+  ["#secStaff, #secSchedules", ["hiring"]],
+  ["#secProducts", ["products"]], ["#secGoals", ["goals"]],
+  ["#secProduction", ["factoryStaffing"]],
+];
+if(typeof document !== "undefined" && typeof document.addEventListener === "function")
+  ["click", "change", "input"].forEach(type => document.addEventListener(type, e => {
+    if(!e.target?.closest || e.target.closest("[data-od-retry]")) return;
+    const needs = OD_ACTION_SECTIONS.filter(([sel]) => e.target.closest(sel)).flatMap(([, names]) => names);
+    if(needs.filter(n => !odNeed(n)).length){ e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true));
 /* Names sort in the language they are shown in; English keeps the order it
    always had. */
 let gnCollator = null;
@@ -6996,6 +7043,7 @@ function spPayback(b){
   return `<p class="sp-read sp-pay" data-tip="${attr(paybackTip(row))}" tabindex="0">${
     tt("sp.payback.line", "Payback: {what}", {what: paybackSentence(o, row)})}</p>`;
 }
+let odSiteDrawn = null;
 function drawSite(){
   const sec = $("secDetail");
   spViewCache = null;
@@ -7012,6 +7060,8 @@ function drawSite(){
      does turn up in both lists is a business: that is the panel with something
      to say. */
   const home = !b && siteOpen ? spHome(siteKey) : null;
+  const siteSection = b && (b.status === "office" ? "officeStaffing" : "staffing");
+  const keptSchedule = b && odSiteDrawn === b.key && !odReady(siteSection) && !odError(siteSection) ? $("sp-sched") : null;
   if(home){
     sec.hidden = false;
     paintSiteUp(true);
@@ -7492,7 +7542,7 @@ function drawSite(){
     </section>` : ""}
     ${/* Only a shop is planned: an office bills hours rather than serving a
           queue, and a depot, a factory and a home have no row at all. */""}
-    ${sp && !(fresh && !people.length) ? spSchedSummary(b) : ""}
+    ${sp && !(fresh && !people.length) ? (keptSchedule ? '<div id="sp-sched"></div>' : spSchedSummary(b)) : ""}
     <div class="duo sec"${fresh && !people.length && !shelves.length ? ` style="display:none"` : ` style="grid-template-columns:1fr 2fr"`}>
       <section class="rv" data-block="crew" id="sp-crew">
         ${sechead(tt("sp.crew.title", "Crew"), {icon: spAny ? "crew" : null, why: roleTip || null, quiet: crewQuiet})}
@@ -7522,6 +7572,8 @@ function drawSite(){
           : `<p class="quiet" style="margin:0">${tt("sp.week.none", "Not enough trading history here yet.")}</p>`}</div>
       </section>
     </div>`}`}`;
+  if(keptSchedule) $("sp-sched")?.replaceWith(keptSchedule);
+  odSiteDrawn = sp && odReady(siteSection) ? b.key : keptSchedule ? b.key : null;
   spPruneHits($("sitePanel"));
   /* A depot's and a factory's page carry the sizing switch (supplyFact). */
   if($("spSizing")) szSwitch("spSizing");
@@ -17529,10 +17581,11 @@ function renderAll(){
   const shown = viewOf(page);
   PAGE_DRAWS.forEach(row => {
     if(here !== null && row[0] && !row[0].split(" ").includes(here)){ pageStale.add(row); return; }
+    if(odKeepRow(row, shown)) return;
     pageStale.delete(row);
     odHidden = !!row[0] && !row[0].split(" ").includes(shown);
     odWanted = false;
-    try{ row[1](); staleDraws.delete(row); if(odWanted) pageStale.add(row); }
+    try{ row[1](); odRowDrawn(row); staleDraws.delete(row); if(odWanted) pageStale.add(row); }
     catch(e){ pageStale.add(row); staleDraws.set(row, e && e.message || String(e)); console.error(e); }
     finally{ odHidden = false; odWanted = false; }
   });
@@ -18064,10 +18117,11 @@ function drawStale(pageId){
      hidden: it asks for no section yet (odNeed()). */
   const hidden = pageId !== page;
   due.forEach(row => {
+    if(!hidden && odKeepRow(row, view)) return;
     pageStale.delete(row);
     odHidden = hidden && !!row[0];
     odWanted = false;
-    try{ row[1](); staleDraws.delete(row); if(odWanted) pageStale.add(row); }
+    try{ row[1](); odRowDrawn(row); staleDraws.delete(row); if(odWanted) pageStale.add(row); }
     catch(e){ pageStale.add(row); staleDraws.set(row, e && e.message || String(e)); console.error(e); }
     finally{ odHidden = false; odWanted = false; }
   });
@@ -19581,8 +19635,12 @@ function ssPrices(slug){
   const href = t && typeof wikiTypeHref === "function" ? wikiTypeHref(t.slug, "prices") : "";
   if(href) ssHash(href); else showPage("wiki");
 }
-/* The site Optimize staffing would open, as its card names it. */
-const ssStaffingSite = () => ($("optimizeStaffingCard") || {dataset: {}}).dataset.site || "";
+/* The site Optimize staffing would choose from this board's ready plans. */
+const ssStaffingSite = () => {
+  if(!odReady("staffing")) return "";
+  const done = (D.staffing || []).filter(r => !r.failed && r.demandDataComplete);
+  return (done.length ? spPickRoster(done, () => 0).key : spBestRoster()?.row.key) || "";
+};
 /* Ring one tile or row a palette entry landed on, the way the Roster rings. */
 function ssRing(el){
   if(!el) return;
@@ -20288,6 +20346,7 @@ if($("sdHead") && $("sdHead").after) $("sdHead").after(ssField, ssFieldBtn);
 featureDiscovery.refresh();
 ssField.addEventListener("click", () => ssOpen());
 ssFieldBtn.addEventListener("click", () => ssOpen());
+[ssField, ssFieldBtn].forEach(el => el.addEventListener("focus", () => { if(hasData()) odNeed("products"); }));
 /* Whichever of the two is showing. */
 const ssMastControl = () => [ssField, ssFieldBtn].find(el => el.isConnected && el.getClientRects().length) || null;
 /* The sidebar gives the field its own row, full width, so nothing is fitted
@@ -20370,6 +20429,7 @@ function ssChrome(){
 let ssIndex = [], ssRows = [], ssWhole = {}, ssReturn = null, ssWikiWait = null, ssPointer = null;
 const ssIsOpen = () => !ssPal.hidden;
 function ssOpen(text = ""){
+  if(hasData()) odNeed("products");
   if(ssIsOpen()){ ssInput.focus(); return; }
   ssReturn = document.activeElement;
   ssWhole = {};
@@ -20404,6 +20464,7 @@ function ssOpen(text = ""){
    open rebuilds anyway. renderAll() calls this. */
 function ssDataChanged(){
   if(!ssIsOpen()) return;
+  odNeed("products");
   ssIndex = ssBuild();
   ssRender(true);
 }
@@ -21462,6 +21523,7 @@ function demCellPop(cell, focus = true){
   const ready = odNeed("openStore"), plan = ready && !!osType(slug);
   const fact = (lab, v) => `<div><span class="os-lab">${lab}</span><b>${v}</b></div>`;
   demPop.setAttribute("aria-label", tt("gr.pop.aria", "{type} in {hood}", {type, hood: hoodName(hood)}));
+  const focusedAction = demPop.contains(document.activeElement) ? document.activeElement.dataset.demGo : null;
   demPop.innerHTML = `<h4>${spEsc(tt("gr.pop.title", "{type} · {hood}", {type, hood: hoodName(hood)}))}</h4>
     <div class="fx">${fact(tt("gr.pop.demand", "Demand"), c ? c.demand : "–")}${fact(tt("gr.pop.rivals", "Sellers"), c ? c.providers || 0 : "–")}${
       fact(tt("gr.pop.rent", "To rent"), odReady("premises") ? rent : "—")}</div>
@@ -21473,6 +21535,7 @@ function demCellPop(cell, focus = true){
   hideTip();
   demPopPlace();
   if(focus) (demPop.querySelector("[data-dem-go]") || demPop).focus({preventScroll: true});
+  else if(focusedAction) demPop.querySelector(`[data-dem-go="${CSS.escape(focusedAction)}"]`)?.focus({preventScroll: true});
 }
 function demPopPlace(){
   if(!demPop || demPop.hidden || !demPopCell) return;
@@ -21874,7 +21937,7 @@ function pcPopClose(restore){
   if(btn) btn.setAttribute("aria-expanded", "false");
   if(restore && btn && btn.isConnected) btn.focus({preventScroll: true});
 }
-function wirePlan(){ bindPlan(); planDraw(); }
+function wirePlan(){ bindPlan(); if(odReady("openFactory") && odReady("openStore")) planDraw(); }
 
 /* site detail: the panel answers the pointer -------------------------------------
    A block reads out on its own line whatever inside it carries data-read, a
@@ -24604,7 +24667,7 @@ function startWatching(){
     /* Another source, with no new board yet: an undo's gate closes again. */
     /* A section left loading for the build just cancelled will not come for
        this board either: it says so (odSourceFailed()), and a new board asks anew. */
-    linkChanged: () => { if(gwOpen && gwOpen._gwGate) gwOpen._gwGate(); odSourceFailed(tt("app.reader.superseded", "Save selection changed")); },
+    linkChanged: () => { odThens = odThens.filter(t => odSameScope(t.scope, odScope())); if(gwOpen && gwOpen._gwGate) gwOpen._gwGate(); odSourceFailed(tt("app.reader.superseded", "Save selection changed")); },
     /* The game's clock moved with no new board: the marketing gates follow it. */
     linkClock: () => gwMkTick(),
     lost(){

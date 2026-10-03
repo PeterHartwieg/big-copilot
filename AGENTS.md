@@ -28,16 +28,7 @@ Everything else:
   `section()` and `materialize_all()` in `ba_dashboard.py`; `browser_section()` and the
   worker's `section` message; `OD_SECTIONS`, `odNeed()` and `odWaitHtml()` in the board
   script. The rules, and what a new feature declares, are in `docs/architecture.md`,
-  "Sections". Shop → office → factory planning keeps a copied bench and week state per
-  stage; hiring reads those sections. Today asks only for shop plans; Map asks for none,
-  and the finder asks for premises. Page rows and routes declare their dependencies.
-  Navigation intent may prefetch light sections, never factory staffing or hiring.
-  `ownedBuildings` and `homes` stay core because the map's layers read them and they cost
-  nothing. `staff` also stays core: Today's fixed-cost tile reads the payroll, and
-  its summary costs nothing. `plan` stays core: Today reads its recipes and item names
-  (`factoryView`, `sbDeps`, the supply strip and finding pills), and every page reads
-  `itemName`; it costs about 4 ms and 65 KB on the largest measured save. An applied
-  hire check asks for hiring; partly/unseen checks only read it if ready.
+  "Sections", including dependency declarations, refresh behavior and the core rationale.
 - save parser: `ba_save.py`
 - web build: `build_web.py`; deploy: `npm run deploy` (`tools/deploy.mjs`), which assembles
   `web/` and runs `wrangler deploy`

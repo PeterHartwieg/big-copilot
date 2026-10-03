@@ -43,10 +43,11 @@ print(json.dumps(ba_dashboard.extract(load_save(path), Names(save_fixtures.data_
 });
 after(async () => { await browser?.close(); });
 
-async function open(t, {hash = "", releaseShops = true, savedFactory = false} = {}) {
+async function open(t, {hash = "", releaseShops = true, savedFactory = false, kept = null} = {}) {
   const context = await browser.newContext({viewport: {width: 1280, height: 1000}, reducedMotion: 'reduce'});
   t.after(() => context.close());
-  await context.addInitScript(({payload, keys, needs, savedFactory}) => {
+  await context.addInitScript(({payload, keys, needs, savedFactory, kept}) => {
+    if(kept) history.replaceState({nxFs: kept}, '', location.href);
     if(savedFactory){
       const building = payload.premises.buildings.find(b => b.type === 'warehouse');
       building.status = 'vacant';
@@ -94,7 +95,7 @@ async function open(t, {hash = "", releaseShops = true, savedFactory = false} = 
       window.held = window.held.filter(f => f.section !== name);
       all.forEach(f => f()); return all.length;
     };
-  }, {payload, keys: SECTION_KEYS, needs: SECTION_NEEDS, savedFactory});
+  }, {payload, keys: SECTION_KEYS, needs: SECTION_NEEDS, savedFactory, kept});
   await context.route('https://**', (route) => route.abort());
   await context.route(ORIGIN + '/**', (route) => {
     const file = path.join(web, decodeURIComponent(new URL(route.request().url()).pathname.slice(1)) || 'index.html');
@@ -125,6 +126,143 @@ async function read(page, n) {
   await page.waitForFunction(() => document.body.classList.contains('has-board'));
 }
 const asked = (page) => page.evaluate(() => window.asked.map(a => a.name));
+
+// A live refresh from the same source, using the board's watch path drawers.
+async function nextBoard(page, other = false){
+  await page.evaluate(other => {
+    const old = D;
+    const core = {...D[GN_SRC], meta: {...D.meta, day: D.meta.day + 1}};
+    Object.values(OD_SECTIONS).flatMap(s => s.keys).forEach(k => delete core[k]);
+    if(other) core.meta.character += '-other';
+    window.lastGen++;
+    Object.defineProperty(core, Symbol.for('bigcopilot.build'), {value: window.lastGen});
+    const same = sameCompany(old, core);
+    takeData(core); renderCalm(same);
+  }, other);
+}
+
+test('a cold finder reload applies the history question after premises arrive', async t => {
+  const building = payload.premises.buildings.find(b => b.type === 'retail');
+  const demand = payload.premises.demand[building.hood].find(d => d.category === 'retail');
+  const kept = {cat: 'retail', type: demand.slug, hoods: [building.hood], layouts: [building.layout || building.size], show: 'rent'};
+  const page = await open(t, {hash: '#expansion/finder', kept});
+  await page.reload();
+  await read(page, 2);
+  await page.locator('#cityMapPage .list .od-wait').waitFor();
+  assert.deepEqual(await page.evaluate(() => history.state.nxFs), kept, 'loading never overwrites the question');
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => cityMapPage.fs.type !== '');
+  const filters = await page.evaluate(() => finderPick(cityMapPage.fs));
+  for(const key of ['cat', 'type', 'hoods', 'layouts']) assert.deepEqual(filters[key], kept[key], key);
+});
+
+test('same-company refresh keeps section rows and scroll, arrival redraws, another company waits', async t => {
+  const page = await open(t);
+  for(const [route, selector] of [
+    ['businesses/prices', '#secProducts'], ['businesses/milestones', '#secGoals'],
+    ['staffing/needs', '#secStaff'], ['staffing/schedules', '#secSchedules'],
+    ['expansion/open', '#osBody'], ['expansion/factory', '#ofBody'],
+    ['overview', '#optimizeStaffingCard'], ['supply/production', '#secProduction'],
+  ]){
+    await page.evaluate(route => openRoute(route), route);
+    await page.evaluate(() => window.release());
+    await page.waitForFunction(selector => !document.querySelector(`${selector} .od-wait`), selector);
+    await page.evaluate(selector => {
+      const el = document.querySelector(selector);
+      el.closest('.page').style.minHeight = '5000px';
+      el.closest('.page').querySelectorAll('section').forEach(s => s.classList.add('measured'));
+      window.scrollTo(0, 200);
+      window.keptChild = selector === '#optimizeStaffingCard' ? el.querySelector('.what').firstChild : el.firstElementChild;
+    }, selector);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await page.evaluate(() => { window.keptScroll = window.scrollY; });
+    await nextBoard(page);
+    assert.equal(await page.evaluate(() => keptChild.isConnected), true, route);
+    assert.equal(await page.evaluate(() => window.scrollY), await page.evaluate(() => keptScroll), route);
+    await page.evaluate(() => window.release());
+    await page.waitForFunction(() => !keptChild.isConnected);
+    await nextBoard(page, true);
+    assert.ok(await page.locator(`${selector} .od-wait`).count(), `${route}: other company waits`);
+    await page.evaluate(() => window.release());
+  }
+});
+
+test('the drawn finder keeps its list and scroll, ignores filters while loading and redraws on arrival', async t => {
+  const page = await open(t, {hash: '#expansion/finder'});
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => !!cityMapPage.finderDrawnScope);
+  await page.evaluate(async () => { await cityMapPage.ready; await loadFloorPlans(); });
+  await page.evaluate(() => {
+    const list = cityMapPage.list;
+    list.style.height = '50px'; list.style.flex = 'none'; list.style.overflow = 'auto';
+    list.scrollTop = 30;
+    window.keptScroll = list.scrollTop; window.keptChild = list.firstElementChild;
+    window.filtersBefore = JSON.stringify(cityMapPage.fs);
+    window.storageBefore = localStorage.getItem(cityMapPage.finderStore());
+  });
+  assert.ok(await page.evaluate(() => keptScroll > 0), 'the finder list is scrolled');
+  await nextBoard(page);
+  assert.equal(await page.evaluate(() => keptChild.isConnected), true);
+  assert.equal(await page.evaluate(() => cityMapPage.list.scrollTop), await page.evaluate(() => keptScroll));
+  await page.locator('#cityMapPage .fchip.hd').first().click();
+  await page.locator('#cityMapPage .fchip.cat').first().click();
+  assert.equal(await page.evaluate(() => JSON.stringify(cityMapPage.fs)), await page.evaluate(() => filtersBefore));
+  assert.equal(await page.evaluate(() => localStorage.getItem(cityMapPage.finderStore())), await page.evaluate(() => storageBefore));
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => !keptChild.isConnected);
+  assert.equal(await page.evaluate(() => cityMapPage.list.scrollTop), await page.evaluate(() => keptScroll));
+  await nextBoard(page, true);
+  await page.locator('#cityMapPage .list .od-wait').waitFor();
+});
+
+test('search intent requests sold products and arrival rebuilds the open index', async t => {
+  const page = await open(t, {hash: '#map'});
+  await page.locator('#ssField').focus();
+  assert.deepEqual(await asked(page), ['products']);
+  const product = payload.products.find(p => p.slug === 'ba:itemname_cheapgift');
+  await page.evaluate(item => ssOpen(item), product.item);
+  assert.equal(await page.evaluate(slug => ssIndex.some(e => e.id === `product:${slug}`), product.slug), false);
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(slug => ssIndex.some(e => e.id === `product:${slug}`), product.slug);
+});
+
+test('a refresh keeps the store plan map and gates its retained controls on current facts', async t => {
+  const page = await open(t, {hash: '#expansion/open'});
+  await page.evaluate(() => osStart('ba:businesstype_liquorstore'));
+  await page.evaluate(() => window.release());
+  await page.locator('#osFinderMap svg.map-canvas').waitFor();
+  await page.evaluate(() => {
+    window.keptMap = document.querySelector('#osFinderMap svg');
+    window.planBefore = JSON.stringify(osPlan()); window.stepBefore = osStep;
+    window.storeBefore = localStorage.getItem(osStore());
+  });
+  await nextBoard(page);
+  assert.equal(await page.evaluate(() => keptMap.isConnected), true);
+  await page.evaluate(() => document.querySelector('[data-os-step="what"]').click());
+  assert.equal(await page.evaluate(() => osStep), await page.evaluate(() => stepBefore));
+  assert.equal(await page.evaluate(() => JSON.stringify(osPlan())), await page.evaluate(() => planBefore));
+  assert.equal(await page.evaluate(() => localStorage.getItem(osStore())), await page.evaluate(() => storeBefore));
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => odReady('openStore'));
+  assert.equal(await page.evaluate(() => keptMap.isConnected), true, 'the plan map is reused after arrival too');
+});
+
+test('an open site keeps its scheduling block during refresh and shows a section failure', async t => {
+  const page = await open(t);
+  await page.evaluate(() => openSite(D.businesses.find(b => b.status === 'retail').key));
+  await page.locator('#sp-sched').waitFor();
+  await page.evaluate(() => { window.keptBlock = document.querySelector('#sp-sched'); });
+  await nextBoard(page);
+  assert.equal(await page.evaluate(() => keptBlock.isConnected), true);
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => !keptBlock.isConnected);
+  await page.evaluate(() => { window.keptBlock = document.querySelector('#sp-sched'); });
+  await nextBoard(page);
+  assert.equal(await page.evaluate(() => keptBlock.isConnected), true);
+  await page.evaluate(() => odFailed(['staffing'], odGen(), new Error('shop failure')));
+  await page.locator('#sitePanel .od-wait.err').waitFor();
+  assert.equal(await page.evaluate(() => keptBlock.isConnected), false);
+});
 
 test('Standards uses core readings without asking for staffing or hiring', async t => {
   const page = await open(t, {hash: '#businesses/standards'});
@@ -349,10 +487,24 @@ test('a cold Demand popover requests store facts and refreshes its action and re
   assert.deepEqual(await asked(page), ['openStore']);
   assert.equal(await pop.locator('[data-dem-go="open"]').count(), 0);
   assert.ok((await pop.textContent()).includes('—'));
+  await pop.locator('[data-dem-go="find"]').focus();
   await page.evaluate(() => window.release());
   await pop.locator('[data-dem-go="open"]').waitFor();
   assert.equal(await pop.locator('.od-wait').count(), 0);
   assert.ok(!(await pop.textContent()).includes('—'));
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.demGo), 'find');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => route === 'expansion/finder');
+});
+
+test('Demand arrival leaves keyboard focus outside the popover alone', async t => {
+  const page = await open(t, {hash: '#expansion/demand'});
+  await page.evaluate(() => document.querySelector('.heat .cell[data-slug="ba:businesstype_liquorstore"]').click());
+  await page.locator('#demCellPop .od-wait').waitFor();
+  await page.locator('#ssField').focus();
+  await page.evaluate(() => window.release());
+  await page.locator('#demCellPop [data-dem-go="open"]').waitFor();
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'ssField');
 });
 
 test('Products, Milestones and expansion pages show waits until their facts arrive', async t => {

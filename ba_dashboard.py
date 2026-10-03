@@ -2121,14 +2121,15 @@ def _take_hires(rows) -> dict:
 
 def _planning_world(build: Build, previous: str | None = None) -> dict:
     """Return the planning world with a copied bench and weeks, sharing read-only people."""
-    if previous is None:
-        if "world" not in build.shared:
-            build.shared["world"] = _plan_world(build.save, build.shared["staff"])
-        world = build.shared["world"]
-    else:
-        world = build.shared["planning"][previous]
-    return {"people": world["people"], "bench": list(world["bench"]),
-            "state": {pid: _copy_state(week) for pid, week in world["state"].items()}}
+    with _collector_paused():
+        if previous is None:
+            if "world" not in build.shared:
+                build.shared["world"] = _plan_world(build.save, build.shared["staff"])
+            world = build.shared["world"]
+        else:
+            world = build.shared["planning"][previous]
+        return {"people": world["people"], "bench": list(world["bench"]),
+                "state": {pid: _copy_state(week) for pid, week in world["state"].items()}}
 
 
 def _staffing_section(build: Build) -> dict:

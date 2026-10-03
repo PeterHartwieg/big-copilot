@@ -43,9 +43,66 @@ function board(core = {}) {
   take(Object.assign({meta: {day: 3}, names: {}, businesses: [], supply: {factories: {sites: []}},
     staffing: [], officeStaffing: [], plan: {}}, core), 5);
   const run = code => vm.runInContext(code, context);
-  return {context, asked, take, run};
+  return {context, asked, take, run, source};
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
+
+test('held planner, hire and finder actions are dropped on another company or source', () => {
+  for(const change of ['company', 'source']){
+    const b = board({meta: {character: 'A', save: 'A', day: 3}});
+    let source = 1;
+    b.source.identity = () => source;
+    b.take({meta: {character: 'A', save: 'A'}, names: {}, businesses: [],
+      supply: {factories: {sites: []}}, staffing: [], officeStaffing: []}, 5);
+    b.run(`osStart('shop', 'hood'); ofPreset({type: 'shop'}); hrReview({scope: 'all'});
+      globalThis.ran = 0; odThen('premises', () => ran++, 'finder')`);
+    assert.ok(b.run('odThens.length') >= 4);
+    if(change === 'source') source++;
+    b.take({meta: {character: change === 'company' ? 'B' : 'A', save: change === 'company' ? 'B' : 'A'},
+      names: {}, businesses: [], supply: {factories: {sites: []}}, staffing: [], officeStaffing: []}, 6);
+    const asked = b.asked.length;
+    b.run('odThensAsk()');
+    assert.equal(b.asked.length, asked, 'no requests for the previous selection');
+    assert.equal(b.run('odThens.length'), 0);
+    b.run(`D.premises = {}; D.openStore = {}; D.openFactory = {}; D.factoryStaffing = {}; D.hiring = {}; D.candidates = []; odArrived()`);
+    assert.equal(b.run('ran'), 0);
+    assert.equal(b.run('osCur'), null);
+    assert.equal(b.run('ofCur'), null);
+  }
+});
+
+test('a held action on an old board after source selection changes cannot belong to the new source', () => {
+  const b = board();
+  b.source.identity = () => 2; // source changed, its board has not arrived yet
+  b.run(`globalThis.ran = 0; odThen('premises', () => ran++)`);
+  assert.equal(b.run('odThens.length'), 0);
+  assert.equal(b.asked.length, 0);
+  b.take({meta: {day: 4}, names: {}, businesses: [], supply: {factories: {sites: []}}, premises: {}}, 6);
+  b.run('odArrived()');
+  assert.equal(b.run('ran'), 0);
+});
+
+test('a retained row keeps waiting only on its own company, and failure draws the error', () => {
+  const b = board({meta: {character: 'A', save: 'A'}, products: []});
+  b.run(`globalThis.row = PAGE_DRAWS.find(r => r[0] === 'company/products' && r[3].length); odRowDrawn(row)`);
+  const core = who => ({meta: {character: who, save: who}, names: {}, businesses: [], supply: {factories: {sites: []}}});
+  b.take(core('A'), 6);
+  assert.equal(b.run(`odKeepRow(row, 'company/products')`), true);
+  assert.equal(b.run('pageStale.has(row)'), true);
+  b.run(`odAsked.set('products', {gen: 6, state: 'error', error: 'boom'})`);
+  assert.equal(b.run(`odKeepRow(row, 'company/products')`), false);
+  b.take(core('B'), 7);
+  assert.equal(b.run(`odKeepRow(row, 'company/products')`), false);
+});
+
+test('the Schedules search site comes from current staffing, never an old card', () => {
+  const b = board({staffing: [{key: 'new', name: 'New shop', demandDataComplete: true}]});
+  b.run(`$('optimizeStaffingCard').dataset = {site: 'old'}`);
+  assert.equal(b.run('ssStaffingSite()'), 'new');
+  b.run('delete D.staffing');
+  assert.equal(b.run('ssStaffingSite()'), '');
+  assert.equal(b.asked.length, 0);
+});
 
 test('a section is asked for once a board, with its generation, and not by a hidden draw', () => {
   const b = board();
@@ -410,7 +467,7 @@ test('Today and shell supply readers use core recipes without a section request'
 
 test('Demand popover asks for store facts and redraws the still-open cell on arrival', async () => {
   const b = board({market: {hoods: ['hood'], types: [{slug: 'shop', cells: [{demand: 30}]}]}});
-  b.run(`demPop = {setAttribute(){}, querySelector(){ return null; }, focus(){}};
+  b.run(`demPop = {contains(){ return false; }, setAttribute(){}, querySelector(){ return null; }, focus(){}};
     demPopPlace = () => {}; hideTip = () => {};
     globalThis.__cell = {isConnected: true, dataset: {slug: "shop", hood: "hood"}, setAttribute(){}};
     demCellPop(__cell)`);
@@ -429,7 +486,7 @@ test('Demand popover asks for store facts and redraws the still-open cell on arr
 
 test('a closed Demand popover stays closed when store facts arrive', async () => {
   const b = board({market: {hoods: ['hood'], types: [{slug: 'shop', cells: [{demand: 30}]}]}});
-  b.run(`demPop = {setAttribute(){}, querySelector(){ return null; }, focus(){}};
+  b.run(`demPop = {contains(){ return false; }, setAttribute(){}, querySelector(){ return null; }, focus(){}};
     demPopPlace = () => {}; hideTip = () => {};
     globalThis.__cell = {isConnected: true, dataset: {slug: "shop", hood: "hood"}, setAttribute(){}};
     demCellPop(__cell); demPopClose(false)`);

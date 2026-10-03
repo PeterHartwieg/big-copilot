@@ -1251,17 +1251,21 @@ test('a translated sentence cannot become markup, and keeps only its <b>', async
 });
 
 
-test('the company strip waits for products while the planner control uses core plan', async () => {
+test('the company strip draws core slots while products wait and the planner uses core plan', async () => {
   const w = wiki();
   await w.load('wiki/businesstypes-giftshop');
   const asked = [];
   const slot = element('wikiPlanSlot');
   w.context.$ = id => id === 'wikiRoot' ? w.root : id === 'wikiPlanSlot' ? slot : null;
-  w.context.D = {businesses: [], names: {}, market: {}, plan: {catalogue: {"ba:businesstype_giftshop": {}}}};
+  w.context.D = {businesses: [{name: "My gifts", typeSlug: "ba:businesstype_giftshop"}], names: {}, market: {rows: [{slug: "ba:itemname_cheapgift", cells: [{demand: 77, hood: "ba:neighborhood_midtown"}]}]}, plan: {catalogue: {"ba:businesstype_giftshop": {}}}};
   w.context.odNeed = name => { asked.push(name); return false; };
   w.context.odReady = () => false;
   assert.match(w.call('wikiYours({key: "ba:itemname_cheapgift"})'), /Waiting for products/);
   assert.ok(asked.includes('products'));
+  assert.match(w.call('wikiYours({key: "ba:itemname_cheapgift"})'), /77 in Midtown/);
+  assert.match(w.call('wikiYours({key: "ba:businesstype_giftshop"})'), /1 site/);
+  assert.match(w.call('wikiGuideOwn({BUSINESS: {nameSrc: "ba:businesstype_giftshop"}}, [])').join(""), /Your shops/);
+  asked.length = 1;
   w.call('wikiPlanControl()');
   assert.deepEqual(asked, ['products']);
   assert.match(slot.innerHTML, /data-wiki-plan/);

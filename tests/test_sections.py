@@ -245,6 +245,29 @@ class Sections(unittest.TestCase):
                 fresh = ba_dashboard.section(self.build(), name)
                 self.assertEqual(json.dumps(retried), json.dumps(fresh))
 
+    def test_cross_family_orders_keep_every_section_and_core_identical(self):
+        ordered = self.build()
+        ba_dashboard.materialize_all(ordered)
+        names = list(ba_dashboard.SECTIONS)
+        orders = [names[::-1],
+                  ["openStore", "staffing", "hiring", "goals", "products",
+                   "openFactory", "premises", "factoryStaffing", "officeStaffing"]]
+        import random
+        shuffled = names[:]
+        random.Random(238).shuffle(shuffled)
+        orders.append(shuffled)
+        for order in orders:
+            with self.subTest(order=order):
+                build = self.build()
+                core = json.dumps(build.core)
+                for name in order:
+                    ba_dashboard.section(build, name)
+                    self.assertEqual(json.dumps(build.core), core)
+                self.assertEqual(json.dumps(build.core), json.dumps(ordered.core))
+                for name in names:
+                    self.assertEqual(json.dumps(build.sections[name]),
+                                     json.dumps(ordered.sections[name]), name)
+
     def test_failed_hiring_keeps_completed_plans_and_private_hires_for_retry(self):
         build = self.build()
         ba_dashboard.section(build, "factoryStaffing")
