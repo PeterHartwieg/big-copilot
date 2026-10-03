@@ -90,11 +90,14 @@ Focused commands also assemble first:
 - `npm run verify:assemble` assembles only; `npm run verify:check` checks the
   existing assembly without rebuilding it.
 
-CI uses GitHub-hosted Ubuntu runners: eight Node shards (concurrency 2 each),
-the optimized hosted-page suites and Worker dry-run in a ninth Node lane,
-and independent Python and assembly-freshness jobs. All lanes run in parallel;
-the stable `Node suites` check requires every Node lane to succeed, and a failed
-lane does not cancel its siblings. The translation layout sweep is split into
+CI uses GitHub-hosted Ubuntu runners: eight Node shards (concurrency 2 each)
+and a Python job. Shard 6 also runs the optimized hosted-page suites and Worker
+dry-run; the Python runner first checks assembly and freshness. At most nine
+runners are active per workflow, leaving room for two runs within 20 slots.
+The small aggregate jobs start after their dependencies release their runners.
+The stable `Node suites` check requires every Node lane to succeed, and the
+freshness check reports its own outcome separately from the Python tests.
+A failed lane does not cancel its siblings. The translation layout sweep is split into
 board/shell, planner breakpoints, and planner languages so no one file serializes
 all of that coverage. Browser installation needs only Chromium's
 headless shell. CI additionally requires assembly to leave no committed changes

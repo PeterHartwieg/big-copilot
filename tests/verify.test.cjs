@@ -137,7 +137,9 @@ test('the CI matrix shards execute every discovered file once and propagate a re
     // One real failure must fail exactly the shard that contains this file.
     (name === 'c' ? `throw new Error('intentional shard failure');\n` : '') + '});\n');
   const workflow = fs.readFileSync(path.join(__dirname,'../.github/workflows/tests.yml'),'utf8');
-  const shards = [...workflow.matchAll(/'(\d+\/\d+)'/g)].map(match=>match[1]);
+  const matrix = /^        suite: \[([^\]\n]+)\]/m.exec(workflow);
+  assert.ok(matrix, 'the workflow has a static suite matrix');
+  const shards = [...matrix[1].matchAll(/'(\d+\/\d+)'/g)].map(match=>match[1]);
   assert.deepEqual(shards,['1/8','2/8','3/8','4/8','5/8','6/8','7/8','8/8']);
   const statuses=[];
   // Exercise a fresh CLI invocation; Node suppresses --test inside a test child.
@@ -163,6 +165,43 @@ test('CLI propagates a real failing assembly and never starts later stages in a 
   assert.equal(result.status,17, result.stderr);
   assert.equal(fs.readFileSync(path.join(root,'stages.log'),'utf8'),'--assemble');
   assert.doesNotMatch(result.stdout,/--test|--dry-run|--check|unittest/);
+});
+
+test('two CI runs fit within eighteen runner slots, including the aggregate checks', () => {
+  const workflow = fs.readFileSync(path.join(__dirname,'../.github/workflows/tests.yml'),'utf8');
+  const source = workflow.split(/^jobs:\n/m)[1];
+  assert.ok(source, 'the workflow has jobs');
+  // Read this workflow's static jobs, scalar/list dependencies and flat suite
+  // matrix. Reject an unfamiliar matrix instead of undercounting its runners.
+  const jobs = [...source.matchAll(/^  ([\w-]+):\n([\s\S]*?)(?=^  [\w-]+:\n|(?![\s\S]))/gm)].map(([,id,body]) => {
+    assert.match(body, /^    runs-on:/m, `${id}: reusable workflows need their own runner accounting`);
+    const block = /^      matrix:\n((?: {8,}.+\n)+)/m.exec(body);
+    const matrix = block && /^        suite: \[([^\]\n]+)\]\n$/.exec(block[1]);
+    assert.ok(!/^      matrix:/m.test(body) || matrix, `${id}: uncounted matrix`);
+    const needs = /^    needs: (.+)$/m.exec(body)?.[1];
+    return {id, body, slots: matrix ? matrix[1].split(',').length : 1,
+      needs: needs ? needs.replace(/[\[\]'" ]/g,'').split(',') : []};
+  });
+  assert.ok(jobs.length);
+  for(const job of jobs) for(const need of job.needs) assert.ok(jobs.some(j => j.id === need), need);
+  let peak = 0;
+  // Enumerate dependency-valid completion states; every ready job may run.
+  for(let mask = 0; mask < 2 ** jobs.length; mask++){
+    const done = new Set(jobs.filter((_,i) => mask & (1 << i)).map(j => j.id));
+    if(jobs.some(j => done.has(j.id) && j.needs.some(n => !done.has(n)))) continue;
+    const ready = jobs.filter(j => !done.has(j.id) && j.needs.every(n => done.has(n)));
+    peak = Math.max(peak, ready.reduce((sum,j) => sum + j.slots, 0));
+  }
+  assert.ok(peak < 10, `${peak} concurrent runners per run would use ${peak * 2} for two runs`);
+  const python = jobs.find(j => j.id === 'python').body;
+  const freshness = jobs.find(j => j.id === 'web-fresh').body;
+  assert.match(python, /freshness: \$\{\{ steps\.freshness\.outcome \}\}/);
+  for(const stage of ['verify:assemble', 'verify:check', 'test:python']) assert.ok(python.includes(`npm run ${stage}`), stage);
+  assert.match(freshness, /needs\.python\.outputs\.freshness/);
+  const node = jobs.find(j => j.id === 'node-tests').body;
+  for(const stage of ['test:optimized', 'check:worker']){
+    assert.ok(node.includes(`if: matrix.suite == '6/8'\n        run: npm run ${stage}`), stage);
+  }
 });
 
 test('standalone Worker check needs no Python and preserves the environment', async t => {
