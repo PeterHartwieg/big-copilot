@@ -803,6 +803,7 @@ class CityMapView {
     this.fs = {...this.fs, on:true, show:'rent', layouts:[], minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, ...preset};
     // It also lands on the column the category ranks by, never on a stale sort.
     this.fs.sort = this.fs.cat === 'warehouse' ? 'm2' : 'score'; this.fs.sortPicked = false;
+    finderStateRemember(this);
     this.saveFinder();
     this.selected = null; this.showAll = false;  // back to the 80-row cap
     finderPickRemember(this);
@@ -1611,7 +1612,17 @@ class CityMapView {
     this.stale = false;
     // Preserve the drawn answers and their scroll while this company's next
     // premises load. Failed sections and another company show the wait/error.
-    if(this.panel && this.fs.on && !odNeed("premises") && !odError("premises") && odSameScope(this.finderDrawnScope, odScope())) return;
+    if(this.panel && this.fs.on && !odNeed("premises") && !odError("premises") && odSameScope(this.finderDrawnScope, odScope())){
+      this.businesses = mapBusinesses();
+      if(this.businesses.has(this.selected)){
+        this.findings = mapFindings();
+        this.owned = new Map((D?.ownedBuildings || []).map(b=>[b.key,b]));
+        this.homes = new Map((D?.homes || []).map(h=>[h.key,h]));
+        this.paths.forEach((path, key) => path.classList.toggle('sel', key === this.selected));
+        this.fillCard();
+      }
+      return;
+    }
     // A view built before a save was open has no finder controls; the first
     // payload that carries premises brings them in.
     if(this.panel && premises() && !this.root.querySelector('.places .filters')) this.build();
@@ -1759,13 +1770,13 @@ class CityMapView {
     card.style.transform = `translate(${left.toFixed(1)}px,${top.toFixed(1)}px)`;
   }
   async select(key, focus=true, fresh=false){
-    // Retained footprints and rows cannot select from the previous board's facts.
-    if(this.finderOn() && !premises()) return;
+    // Finder results wait for premises; own businesses are in the current core.
+    if(this.finderOn() && !premises() && !mapBusinesses().has(key)) return;
     this.selected=key;this.freshSelection=fresh;
     finderPickRemember(this);
     if(!await this.ready) return;
     if(this.selected!==key) return; // A newer selection or character superseded this request.
-    if(this.finderOn() && !premises()) return;
+    if(this.finderOn() && !premises() && !mapBusinesses().has(key)) return;
     // A dialog that was just reopened has no layout yet; a cached rect from
     // its closed state is zero. Measure afresh and wait a frame if needed.
     this.rect = null;

@@ -361,6 +361,37 @@ test('Undo in a done write dialog still sends its write while the next board wai
   assert.deepEqual(await page.evaluate(() => reviewWrites.at(-1)), {kind: 'undo', body: {kind: 'hire'}, dryRun: false});
 });
 
+test('Pick more and Done site rows pass the guard while hiring reloads', async t => {
+  const page = await open(t, {hash: '#staffing/needs'});
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => odReady('hiring'));
+  await page.evaluate(() => {
+    SOURCE.write = async () => ({body: {ok: true}});
+    gwConfirm({kind: 'hire', icon: 'hire', title: 'Review', needs: ['hiring'], body: () => ({}),
+      applyLabel: () => 'Apply', verdict: () => 'Ready', done: () => 'Done',
+      draw: () => '<div class="hr-dsites"><button data-hr-site="shop">Site</button></div><button data-hr-more disabled>Pick more</button>'});
+    hrLast = {req: {}, chain: {}};
+    window.siteDraws = 0;
+    hrReviewSites = () => { siteDraws++; return '<div class="hr-dsites"><button data-hr-site="shop">Site</button></div>'; };
+    window.moreReviews = [];
+    hrReview = o => moreReviews.push(o);
+    hrUi.more = {only: {'shop|role': 1}, board: D};
+  });
+  await page.locator('.gw-dlg[data-phase="ready"]').waitFor();
+  await page.locator('.gw-dlg [data-gw-b="apply"]').click();
+  await page.locator('.gw-dlg[data-phase="done"]').waitFor();
+  await nextBoard(page);
+  assert.equal(await page.evaluate(() => odReady('hiring')), false);
+  await page.locator('.gw-dlg [data-hr-site]').click();
+  assert.equal(await page.evaluate(() => siteDraws), 1);
+  await page.locator('.gw-dlg [data-hr-more]').click();
+  assert.deepEqual(await page.evaluate(() => moreReviews), []);
+  assert.equal(await page.evaluate(() => odThens.some(t => t.key === 'hrReview')), true);
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => moreReviews.length === 1);
+  assert.deepEqual(await page.evaluate(() => moreReviews), [{only: {'shop|role': 1}}]);
+});
+
 test('the capture guard allows text selection, scrolling keys and plain navigation, while gating activation', async t => {
   const page = await open(t, {hash: '#staffing/needs'});
   await page.evaluate(() => window.release());
@@ -368,7 +399,7 @@ test('the capture guard allows text selection, scrolling keys and plain navigati
   await nextBoard(page);
   const events = await page.evaluate(() => {
     const host = document.querySelector('#secStaff');
-    host.insertAdjacentHTML('beforeend', '<p id="guardText">Select this text</p><button id="guardButton">Change</button><a id="guardNav" href="#wiki/test" data-tip="Guide">Guide</a><a id="guardAction" href="#" data-hr-open="role">Change picks</a>');
+    host.insertAdjacentHTML('beforeend', '<p id="guardText">Select this text</p><input id="guardInput"><textarea id="guardTextarea"></textarea><input id="guardCheck" type="checkbox"><button id="guardButton">Change</button><a id="guardNav" href="#wiki/test" data-tip="Guide">Guide</a><a id="guardAction" href="#" data-hr-open="role">Change picks</a>');
     const fire = (id, type, key) => {
       const event = type === 'keydown' ? new KeyboardEvent(type, {key, bubbles: true, cancelable: true})
         : new MouseEvent(type, {bubbles: true, cancelable: true});
@@ -383,10 +414,13 @@ test('the capture guard allows text selection, scrolling keys and plain navigati
     return {selection: fire('guardText', 'mousedown'), arrow: fire('guardButton', 'keydown', 'ArrowDown'),
       textSpace: fire('guardText', 'keydown', ' '), navEnter: fire('guardNav', 'keydown', 'Enter'), navClick,
       enter: fire('guardButton', 'keydown', 'Enter'), space: fire('guardButton', 'keydown', ' '),
-      action: fire('guardAction', 'keydown', 'Enter')};
+      action: fire('guardAction', 'keydown', 'Enter'), inputSpace: fire('guardInput', 'keydown', ' '),
+      inputEnter: fire('guardInput', 'keydown', 'Enter'), textareaSpace: fire('guardTextarea', 'keydown', ' '),
+      textareaEnter: fire('guardTextarea', 'keydown', 'Enter'), checkboxSpace: fire('guardCheck', 'keydown', ' ')};
   });
   assert.deepEqual(events, {selection: false, arrow: false, textSpace: false, navEnter: false, navClick: true,
-    enter: true, space: true, action: true});
+    enter: true, space: true, action: true, inputSpace: false, inputEnter: false,
+    textareaSpace: false, textareaEnter: false, checkboxSpace: true});
 });
 
 for(const action of ['staff', 'all']){
@@ -420,6 +454,88 @@ for(const action of ['staff', 'all']){
   });
 }
 
+for(const action of ['site', 'all']){
+  for(const change of ['company', 'source', 'refresh']){
+    test(`waiting ${action} hire review keeps its scope across ${change}`, async t => {
+      const page = await open(t, {hash: '#map'});
+      await page.evaluate(action => {
+        window.reviewSource = 1;
+        SOURCE.identity = () => reviewSource;
+        odBoard(D);
+        window.reviewWrites = 0; window.reviewReads = 0;
+        SOURCE.write = async () => { reviewWrites++; return {body: {ok: true}}; };
+        const model = hrModel;
+        hrModel = (...args) => { reviewReads++; return model(...args); };
+        hrReview(action === 'site' ? {scope: 'site', site: D.businesses[0].key} : {scope: 'all'});
+      }, action);
+      await page.locator('.gw-dlg .od-wait').waitFor();
+      assert.equal(await page.evaluate(() => reviewReads), 0);
+      if(change === 'source') await page.evaluate(() => { reviewSource++; });
+      await nextBoard(page, change === 'company');
+      if(change !== 'refresh') await page.locator('.gw-dlg').waitFor({state: 'detached'});
+      else assert.equal(await page.locator('.gw-dlg[open]').count(), 1);
+      await page.evaluate(() => { odNeed('hiring'); window.release(); });
+      await page.waitForFunction(() => odReady('hiring'));
+      if(change === 'refresh'){
+        assert.ok(await page.evaluate(() => reviewReads) > 0);
+        assert.equal(await page.locator('.gw-dlg[open]').count(), 1);
+      } else {
+        assert.equal(await page.evaluate(() => reviewReads), 0, 'no planning against another company/source');
+        assert.equal(await page.evaluate(() => reviewWrites), 0, 'no dry run for another company/source');
+        assert.equal(await page.locator('.gw-dlg').count(), 0);
+      }
+    });
+  }
+}
+
+test('guarded Staff selects cannot open or change via pointer or keyboard', async t => {
+  const page = await open(t, {hash: '#staffing/needs'});
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => odReady('hiring'));
+  await nextBoard(page);
+  await page.evaluate(() => {
+    document.querySelector('#secStaff').insertAdjacentHTML('beforeend',
+      '<div class="hs-sel"><select id="guardSelect"><option value="a">A</option><option value="b">B</option></select></div>');
+    hrSelOpen(document.getElementById('guardSelect'));
+  });
+  assert.equal(await page.locator('#hsSelPop').count(), 0, 'direct opener uses the same guard');
+  await page.locator('#guardSelect').click();
+  assert.equal(await page.locator('#hsSelPop').count(), 0);
+  for(const key of ['Alt+ArrowDown', 'F4', 'ArrowDown', 'b', 'Enter', 'Space']){
+    await page.locator('#guardSelect').press(key);
+    assert.equal(await page.locator('#hsSelPop').count(), 0, key);
+    assert.equal(await page.locator('#guardSelect').inputValue(), 'a', key);
+  }
+});
+
+for(const state of ['loading', 'failed']){
+  test(`own business footprints remain selectable while premises is ${state}`, async t => {
+    const page = await open(t, {hash: '#expansion/finder'});
+    await page.evaluate(() => window.release());
+    await page.waitForFunction(() => !!cityMapPage.finderDrawnScope);
+    await page.evaluate(async () => { await cityMapPage.ready; });
+    await nextBoard(page);
+    const own = await page.evaluate(state => {
+      if(state === 'failed'){
+        odAsked.set('premises', {gen: odGen(), state: 'error', error: 'Unavailable'});
+        cityMapPage.update();
+      }
+      const view = cityMapPage;
+      const key = D.businesses.find(b => view.paths.has(b.key)).key;
+      const path = view.paths.get(key);
+      const e = {button: 0, pointerId: 17, clientX: 100, clientY: 100, target: path, preventDefault(){}};
+      view.svg.setPointerCapture = () => {};
+      view.svg.onpointerdown(e); view.svg.onpointerup({...e, type: 'pointerup'});
+      return {key, name: D.businesses.find(b => b.key === key).name};
+    }, state);
+    await page.waitForFunction(key => cityMapPage.selected === key, own.key);
+    await page.locator('#cityMapPage .site.in').waitFor();
+    assert.ok((await page.locator('#cityMapPage .site').innerText()).includes(own.name));
+    assert.equal(await page.evaluate(key => cityMapPage.paths.get(key).classList.contains('sel'), own.key), true);
+    assert.equal(await page.evaluate(() => odReady('premises')), false);
+  });
+}
+
 test('retained finder footprints cannot move stale card content, and Close dismisses during refresh', async t => {
   const page = await open(t, {hash: '#expansion/finder', ...finderHistoryQuestion()});
   await page.evaluate(() => window.release());
@@ -433,7 +549,7 @@ test('retained finder footprints cannot move stale card content, and Close dismi
   await page.locator('#cityMapPage .site.in').waitFor();
   await nextBoard(page);
   await page.evaluate(() => {
-    const view = cityMapPage, path = [...view.paths].find(([key]) => key !== pickedBefore)[1];
+    const view = cityMapPage, path = [...view.paths].find(([key]) => key !== pickedBefore && !mapBusinesses().has(key))[1];
     const e = {button: 0, pointerId: 17, clientX: 100, clientY: 100, target: path, preventDefault(){}};
     // Exercise the footprint's pointer handlers without native pointer capture.
     view.svg.setPointerCapture = () => {};
@@ -738,12 +854,13 @@ test('a cold type preset survives reload and keeps its own Back and Forward hist
   assert.deepEqual(await page.evaluate(() => finderPick(cityMapPage.fs)), second);
 });
 
-test('a cold push finder visit records history synchronously even when left before premises', async t => {
+for(const preset of [false, true]) test(`a cold ${preset ? 'warehouse preset' : 'push'} finder visit records history synchronously even when left before premises`, async t => {
   const page = await open(t, {hash: '#map'});
-  const first = await page.evaluate(() => {
-    openRoute('expansion/finder');
+  const first = await page.evaluate(preset => {
+    if(preset) ssBuild().find(v => v.id === 'finder:warehouse').go();
+    else openRoute('expansion/finder');
     return {filters: finderPick(cityMapPage.fs), kept: history.state.nxFs};
-  });
+  }, preset);
   assert.deepEqual(first.kept, first.filters);
   await page.evaluate(() => {
     openRoute('map'); openRoute('expansion/finder', {preset: {cat: 'office', type: ''}});
@@ -766,11 +883,12 @@ for(const change of ['visit', 'company']){
     });
     if(change === 'visit') await page.evaluate(() => openRoute('overview'));
     else await nextBoard(page, true);
+    const historyAfterChange = await page.evaluate(() => history.state);
     await page.evaluate(() => odNeed('premises'));
     await page.evaluate(() => window.release());
     await page.waitForFunction(() => odReady('premises'));
     assert.equal(await page.evaluate(key => localStorage.getItem(key), oldStore), null);
-    assert.notEqual(await page.evaluate(() => history.state?.nxFs?.cat), 'warehouse');
+    assert.deepEqual(await page.evaluate(() => history.state), historyAfterChange, 'arrival does not rewrite the changed visit');
   });
 }
 

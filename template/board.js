@@ -671,14 +671,25 @@ function odActionNeeds(target){
     needs.push(...el.dataset.odNeeds.split(" ").filter(Boolean));
   return [...new Set(needs)];
 }
+/* Pass actions that wait for their own data, close/retry, or read only a
+   completed result; plain navigation also needs no section. */
+function odActionBlocked(target){
+  if(!target?.closest || target.closest('[data-od-retry], [data-od-close], [data-hr-staff], [data-hr-all], [data-hr-more], .gw-dlg[data-phase="done"] [data-hr-site]')) return false;
+  const link = target.closest("a[href^='#']");
+  if(link && ![...link.attributes].some(a => a.name.startsWith("data-") && !["data-tip", "data-tt", "data-tt-title"].includes(a.name))) return false;
+  return odActionNeeds(target).filter(n => !odNeed(n)).length > 0;
+}
 if(typeof document !== "undefined" && typeof document.addEventListener === "function")
-  ["click", "change", "input", "keydown"].forEach(type => document.addEventListener(type, e => {
-    if(!e.target?.closest || e.target.closest("[data-od-retry], [data-od-close], [data-hr-staff], [data-hr-all]")) return;
-    const link = e.target.closest("a[href^='#']");
-    if(link && ![...link.attributes].some(a => a.name.startsWith("data-") && !["data-tip", "data-tt", "data-tt-title"].includes(a.name))) return;
-    if(type === "keydown" && ((e.key !== "Enter" && e.key !== " ")
-      || !e.target.closest("button, input, select, textarea, a, [role='button'], [role='option'], [tabindex]"))) return;
-    if(odActionNeeds(e.target).filter(n => !odNeed(n)).length){ e.preventDefault(); e.stopImmediatePropagation(); }
+  ["click", "mousedown", "change", "input", "keydown"].forEach(type => document.addEventListener(type, e => {
+    if(!e.target?.closest) return;
+    const select = e.target.closest(".hs-sel")?.querySelector("select") || e.target.closest("select");
+    if(type === "mousedown" && !select) return;
+    if(type === "keydown"){
+      if(e.target.closest('textarea, [contenteditable], input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"])')) return;
+      if(select ? ["Tab", "Escape"].includes(e.key) : ((e.key !== "Enter" && e.key !== " ")
+        || !e.target.closest("button, input, a, [role='button'], [role='option'], [tabindex]"))) return;
+    }
+    if(odActionBlocked(select || e.target)){ e.preventDefault(); e.stopImmediatePropagation(); }
   }, true));
 /* Names sort in the language they are shown in; English keeps the order it
    always had. */
@@ -15585,7 +15596,7 @@ function hrPopPlace(anchor, pop){
 let hrSel = null;  // {select, at, key, root}: the select whose list is open, the option lit
 const hrSelFine = () => !window.matchMedia || window.matchMedia("(pointer: fine)").matches;
 function hrSelOpen(select){
-  if(!select || select.disabled) return;
+  if(!select || select.disabled || odActionBlocked(select)) return;
   hrPopClose();
   let pop = $("hsSelPop");
   if(!pop){
@@ -16253,6 +16264,8 @@ const hrChainNote = n => gwCall("info", "roster", `${tt("co.hire.chain.later", {
    onDone, onFailed and more, for Quick hire's hold. */
 function hrReview(o = {}, hooks = {}){
   /* Open at once; gwConfirm's waiting state holds every planning read. */
+  const scope = odScope();
+  if(odBoardScope && !odSameScope(odBoardScope, scope)) return;
   o = Object.assign({scope: "all"}, o);
   let pick = o.mode || null;
   let planned = false;
@@ -16290,7 +16303,7 @@ function hrReview(o = {}, hooks = {}){
   let written = [];  // the progress records of the apply (pgHireDone())
   let applied = null;  // the action as applied, for its Undo
   gwConfirm({
-    kind: "hire", icon: "hire", needs: ["hiring"],
+    kind: "hire", icon: "hire", needs: ["hiring"], scope,
     title: () => {
       if(!planned && odReady("hiring")) build();
       return o.only ? tt("co.hire.title.more", "Pick more")
@@ -23317,6 +23330,8 @@ function gwFailed(dlg, spec, res, retry, recheck){
                                when the game approved afresh in an open
                                dialog, which asks the game again)
      onUndo()                  optional: heard once its undo went through
+     scope                     optional: company/source captured at opening;
+                               a pending plan closes when that scope changes
    The dialog dry-runs as it opens, offers Apply only when the game would take
    every row, and after an apply offers Undo until the next write of the kind. */
 function gwConfirm(spec){
@@ -23327,6 +23342,12 @@ function gwConfirm(spec){
   const stays = () => gwUndoStays(spec.kind);
   const cancel = [tt("nav.dlg.cancel", "Cancel"), () => dlg.close(), {kind: "ghost", close: true}];
   const left = [cancel];
+  const current = () => {
+    if(!spec.scope || odSameScope(spec.scope, odScope())) return true;
+    dlg._odWait = null;
+    dlg.close();
+    return false;
+  };
   let applying = false;  // one apply per go: a second click must not send a second write
   let judged = "";       // the body the answer on screen judged, as sent
   let whose = "";        // and the game it judged it for
@@ -23339,6 +23360,7 @@ function gwConfirm(spec){
      worked out, Apply stays off, and the section's arrival plans it again
      (odArrived()). */
   const waiting = () => {
+    if(!current()) return true;
     const missing = (spec.needs || []).filter(n => !odNeed(n));
     dlg._odWait = missing.length ? () => plan() : null;
     if(!missing.length) return false;
@@ -23365,6 +23387,7 @@ function gwConfirm(spec){
      drawing stays where it is while the wire asks, `from` being the control;
      `undone`, the undo just made, said once above the fresh answer. */
   const plan = async (o = {}) => {
+    if(!current()) return;
     const mine = ++seq;
     judged = "";
     gwHead(dlg, title(), where());
