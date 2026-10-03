@@ -9,15 +9,15 @@ time it shows a plan. Like ba_demand_curves.json, the result is committed and
 the site ships it: UnityPy (with Pillow, which it installs) and the installed
 game are owner-side only, and nothing ba_dashboard.py imports needs either.
 
-Which plans: one for each layout that ba_buildings.json gives a retail, office
-or warehouse building (FLOOR_PLAN_KINDS in ba_dashboard.py). A layout is size
-code plus version ("C2"); the game picks the interior by exactly that pair, so
+Which plans: one for each layout that ba_buildings.json gives a retail, office,
+warehouse, cinema or theatre building (FLOOR_PLAN_KINDS in ba_dashboard.py). A
+layout is size code plus version ("C2"); the game picks the interior by exactly that pair, so
 an office C2 and a shop C2 share one plan. Run make_buildings.py --versions
 first when the table has no versions yet.
 
 Where the shells are: every layout is its own Addressables bundle,
 
-    <game>/Big Ambitions_Data/StreamingAssets/aa/StandaloneWindows64/
+    <game>/.../StreamingAssets/aa/<platform>/
         buildingstructures_assets_assets/prefabs/buildingstructures/<x>/
             buildingstructure<size><version>.prefab_<hash>.bundle
 
@@ -77,7 +77,7 @@ PX = 24  # pixels a metre
 MARGIN = 0.5  # metres of margin round the outline
 DOOR_LEAF_TOP = 2.8  # metres: a door mesh lower than this is a leaf, not the opening
 # Kept in step with FLOOR_PLAN_KINDS in ba_dashboard.py (a test checks).
-KINDS = ("retail", "office", "warehouse")
+KINDS = ("retail", "office", "warehouse", "cinema", "theater")
 
 # class ids in the drawing, in paint order; 0 is nothing drawn
 FLOOR, BAY, WALL, WINDOW, DOOR = 1, 2, 3, 4, 5
@@ -86,9 +86,19 @@ PATH_CLASS = {FLOOR: "f", BAY: "b", WALL: "w", WINDOW: "n", DOOR: "d"}
 
 def _structures_dir() -> str:
     sys.path.insert(0, HERE)
-    from make_demand_curves import BUNDLE_DIR, _game_root
+    from ba_save import find_game_locale
 
-    return os.path.join(_game_root(), BUNDLE_DIR)
+    locale = find_game_locale()
+    if not locale:
+        raise SystemExit("could not find the installed game; set BA_LOCALE to its locale/en.json")
+    # Other owner-side generators still assume Windows; this one resolves
+    # beside the installed locale on Windows, macOS and Linux alike.
+    aa = os.path.join(os.path.dirname(os.path.dirname(locale)), "aa")
+    for platform in ("StandaloneWindows64", "StandaloneOSX", "StandaloneLinux64"):
+        bundles = os.path.join(aa, platform)
+        if os.path.isdir(os.path.join(bundles, "buildingstructures_assets_assets")):
+            return bundles
+    raise SystemExit(f"no building structure bundles under {aa}")
 
 
 # --------------------------------------------------------------------------
@@ -137,14 +147,18 @@ def _category(path: str) -> str | None:
         return None
     if "loading dock" in p:
         return "bay"
-    if "door" in p or "entrance" in p:
+    # IndoorWalls/OutdoorWalls are grouping names, not door modules.
+    if "door" in p.replace("indoor", "").replace("outdoor", "") or "entrance" in p:
         return "door"
     if "window" in p or "glass" in p:
         return "window"
-    if "floor" in p:
-        return "floor"
-    if any(k in p for k in ("wall", "perimeter", "partition", "facade", "corner", "inside")):
-        return "wall"
+    # Start with the mesh's own module: a wall below SecondFloor is still
+    # a wall. Dirt/WallGrid child meshes inherit their nearest named module.
+    for part in reversed(p.split("/")):
+        if "floor" in part:
+            return "floor"
+        if any(k in part for k in ("wall", "perimeter", "partition", "facade", "corner", "inside")):
+            return "wall"
     return None  # anything unnamed is left out rather than guessed at
 
 
@@ -192,7 +206,7 @@ def triangles(env, name: str) -> dict:
 # --------------------------------------------------------------------------
 # the drawing: one class a pixel, then rectangles
 # --------------------------------------------------------------------------
-def draw(tris: dict) -> tuple[list[bytearray], int, int]:
+def draw(tris: dict, *, raised_floors: bool = False) -> tuple[list[bytearray], int, int]:
     """The plan from above as rows of class ids, PX pixels a metre."""
     outline = [p for cat in ("floor", "wall") for tri in tris.get(cat, []) for p in tri]
     if not outline:
@@ -206,7 +220,7 @@ def draw(tris: dict) -> tuple[list[bytearray], int, int]:
     pen = ImageDraw.Draw(img)
     for cat, cls in (("floor", FLOOR), ("bay", BAY), ("wall", WALL), ("window", WINDOW), ("door", DOOR)):
         for tri in tris.get(cat, []):
-            if cat == "floor" and max(p[1] for p in tri) > 0.5:
+            if cat == "floor" and not raised_floors and max(p[1] for p in tri) > 0.5:
                 continue  # a raised tile (a stair, a stage), not the floor
             pen.polygon([((p[0] - x0) * PX, (z1 - p[2]) * PX) for p in tri], fill=cls)
     raw = img.tobytes()
@@ -260,16 +274,16 @@ def rect_path(mask: list[bytearray], w: int, h: int) -> str:
     return "".join(f"M{x} {y}h{rw}v{rh}h-{rw}z" for x, y, rw, rh in rects)
 
 
-def plan(tris: dict) -> dict:
-    grid, w, h = draw(tris)
+def plan(tris: dict, *, vehicle_bays: bool = False, raised_floors: bool = False) -> dict:
+    grid, w, h = draw(tris, raised_floors=raised_floors)
     empty = [bytearray(1 if v == 0 else 0 for v in row) for row in grid]
     masks = {cls: [bytearray(1 if v == cls else 0 for v in row) for row in grid] for cls in PATH_CLASS}
     # Floor is the whole inside; every other class paints over it.
     masks[FLOOR] = [bytearray(1 if v else 0 for v in row) for row in grid]
-    # A hole with no floor that never reaches the edge, bigger than a door gap,
-    # is where a vehicle stands.
+    # Only warehouses have vehicle bays. An enclosed floor gap in another
+    # building (such as an auditorium) is not a place for a vehicle.
     holes = [c for c in components(empty, w, h)
-             if len(c) > PX * PX and all(0 < x < w - 1 and 0 < y < h - 1 for x, y in c)]
+             if vehicle_bays and len(c) > PX * PX and all(0 < x < w - 1 and 0 < y < h - 1 for x, y in c)]
     for c in holes:
         for x, y in c:
             masks[BAY][y][x] = 1
@@ -320,11 +334,15 @@ def main() -> None:
         if found:
             bundles[found.group(1).upper()] = path
     plans = {}
+    auditoriums = set(kinds["cinema"]) | set(kinds["theater"])
     for code in wanted:
         if code not in bundles:
             raise SystemExit(f"no building structure bundle for layout {code} under {base}")
         env = UnityPy.load(bundles[code], *art, *shared)
-        plans[code] = plan(triangles(env, code))
+        # Auditoriums use stepped floors; draw them too, rather than showing
+        # their raised seating areas as holes in the building.
+        plans[code] = plan(triangles(env, code), vehicle_bays=code in kinds["warehouse"],
+                           raised_floors=code in auditoriums)
         p = plans[code]
         print(f"{code}: {p['w'] / PX:.1f} x {p['h'] / PX:.1f} m, {p['doors']} doors, {p['bays']} bays, "
               f"{sum(len(v) for v in p['paths'].values()) // 1024} KB")
