@@ -11,8 +11,7 @@ game are owner-side only, and nothing ba_dashboard.py imports needs either.
 
 Which plans: one for each layout that ba_buildings.json gives a retail, office,
 warehouse, cinema or theatre building (FLOOR_PLAN_KINDS in ba_dashboard.py). A
-layout is size
-code plus version ("C2"); the game picks the interior by exactly that pair, so
+layout is size code plus version ("C2"); the game picks the interior by exactly that pair, so
 an office C2 and a shop C2 share one plan. Run make_buildings.py --versions
 first when the table has no versions yet.
 
