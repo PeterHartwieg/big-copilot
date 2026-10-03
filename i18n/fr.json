@@ -2418,6 +2418,7 @@
  "nav.more.utils": "Utilitaires",
  "nav.new": "Nouv",
  "nav.od.dlg.hint": "Appliquer attend la fin de ce calcul.",
+ "nav.od.dlg.title": "Appliquer attend les chiffres du tableau de bord actualisé",
  "nav.od.factoryStaffing": "Calcul du personnel des usines…",
  "nav.od.failed": "Calcul impossible : {why}",
  "nav.od.goals": "Calcul des étapes…",

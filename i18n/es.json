@@ -2418,6 +2418,7 @@
  "nav.more.utils": "Utilidades",
  "nav.new": "Nvo.",
  "nav.od.dlg.hint": "Aplicar espera a que esto se calcule.",
+ "nav.od.dlg.title": "Aplicar espera los números del panel actualizado",
  "nav.od.factoryStaffing": "Calculando el personal de las fábricas…",
  "nav.od.failed": "No se pudo calcular: {why}",
  "nav.od.goals": "Calculando los hitos…",

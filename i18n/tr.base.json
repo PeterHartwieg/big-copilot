@@ -2132,6 +2132,7 @@
  "nav.more.utils": "Utilities",
  "nav.new": "New",
  "nav.od.dlg.hint": "Apply waits until this is worked out.",
+ "nav.od.dlg.title": "Apply waits for the new board's numbers",
  "nav.od.factoryStaffing": "Working out factory staffing…",
  "nav.od.failed": "Could not work this out: {why}",
  "nav.od.goals": "Working out milestones…",

@@ -2132,6 +2132,7 @@
  "nav.more.utils": "Araçlar",
  "nav.new": "Yeni",
  "nav.od.dlg.hint": "Uygula, bu hesaplanana kadar bekler.",
+ "nav.od.dlg.title": "Uygula, yenilenen panelin sayılarını bekliyor",
  "nav.od.factoryStaffing": "Fabrika personeli hesaplanıyor…",
  "nav.od.failed": "Hesaplanamadı: {why}",
  "nav.od.goals": "Kilometre taşları hesaplanıyor…",

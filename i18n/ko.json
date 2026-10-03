@@ -1983,6 +1983,7 @@
  "nav.more.utils": "도구",
  "nav.new": "새로",
  "nav.od.dlg.hint": "계산이 끝나야 적용할 수 있어요.",
+ "nav.od.dlg.title": "새로 불러온 대시보드의 수치가 나올 때까지 적용할 수 없어요",
  "nav.od.factoryStaffing": "공장 인력을 계산하는 중…",
  "nav.od.failed": "계산하지 못했어요: {why}",
  "nav.od.goals": "목표 계산 중…",

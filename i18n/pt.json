@@ -2418,6 +2418,7 @@
  "nav.more.utils": "Utilitários",
  "nav.new": "Novo",
  "nav.od.dlg.hint": "Aplicar espera até isto ser calculado.",
+ "nav.od.dlg.title": "Aplicar espera os números do painel atualizado",
  "nav.od.factoryStaffing": "Calculando o pessoal das fábricas…",
  "nav.od.failed": "Não foi possível calcular: {why}",
  "nav.od.goals": "Calculando os marcos…",

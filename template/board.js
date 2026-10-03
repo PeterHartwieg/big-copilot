@@ -23364,7 +23364,10 @@ function gwConfirm(spec){
   let last = null;       // that answer
   let seq = 0;           // the newest dry run: an older one's late answer is dropped
   let allowed = false;   // the game approved this browser for the dry run under way
-  const view = gwApprovalView(dlg, () => { allowed = true; asking(); });
+  const view = mine => {
+    const show = gwApprovalView(dlg, () => { allowed = true; asking(); });
+    return (state, info) => { if(mine === seq && current()) show(state, info); };
+  };
   /* A write is judged and sent only on a board that has every section it
      reads (`spec.needs`, odNeed()): until then the dialog says it is being
      worked out, Apply stays off, and the section's arrival plans it again
@@ -23375,9 +23378,19 @@ function gwConfirm(spec){
        completed sections cannot plan a write for the new source. */
     const rereading = spec.scope && odBoardScope && !odSameScope(odBoardScope, odScope());
     const missing = (spec.needs || []).filter(n => rereading || !odNeed(n));
-    dlg._odWait = missing.length ? () => plan() : null;
+    const soft = dlg.dataset.phase === "ready" || (dlg.dataset.phase === "asking" && dlg._gwSoft);
+    dlg._odWait = missing.length ? () => plan({soft}) : null;
     if(!missing.length) return false;
     judged = "";
+    /* Keep a judged answer readable through refreshes, including another
+       refresh while it is being replanned in place. */
+    if(soft){
+      quietly();
+      dlg.querySelector(".gw-verdict").innerHTML = `${gwWire("ask")}<span><b>${odWords(missing[0])}</b></span>`;
+      const go = dlg.querySelector('.gw-foot [data-gw-b="apply"]');
+      if(go) go.title = tt("nav.od.dlg.title", "Apply waits for the new board's numbers");
+      return true;
+    }
     gwPaint(dlg, {phase: "asking", wire: "ask", say: `<b>${odWords(missing[0])}</b>`, meta: "",
       body: odWaitHtml(missing[0]), hint: tt("nav.od.dlg.hint", "Apply waits until this is worked out."),
       buttons: [...left, [spec.applyLabel(null), null, {kind: "go", icon: "right", disabled: true, key: "apply"}]]});
@@ -23416,7 +23429,7 @@ function gwConfirm(spec){
     /* A write with nothing for the game to do answers here (spec.local). */
     const here = spec.local ? spec.local(body, true) : null;
     const res = here ? {status: 200, error: null, body: here}
-      : await SOURCE.write(spec.kind, body, {dryRun: true, approval: view, asked: typeof o.asked === "string" ? o.asked : ""});
+      : await SOURCE.write(spec.kind, body, {dryRun: true, approval: view(mine), asked: typeof o.asked === "string" ? o.asked : ""});
     if(!dlg.open || mine !== seq) return;
     /* "Allowed." is said once: a Try again after this does not say it again. */
     if(res.error){ allowed = false; return gwFailed(dlg, spec, res, () => plan(), () => plan()); }
@@ -23428,6 +23441,7 @@ function gwConfirm(spec){
     /* A dry run that would change nothing is said in one line, and Apply
        stays off: never an Apply that does nothing (`spec.idle`). */
     const idle = answer.ok && spec.idle ? spec.idle(answer) : "";
+    const top = dlg._gwSoft ? dlg.querySelector(".gw-body").scrollTop : null;
     gwPaint(dlg, {phase: "ready", wire: answer.ok ? "ok" : "no", say: idle ? `<b>${idle}</b>` : spec.verdict(answer), meta: spec.meta ? spec.meta(answer) : gwNow(),
       body: idle ? "" : (answer.ok || spec.inline ? "" : gwRefusals(spec, answer)) + spec.draw(answer, "ready"),
       hint: idle ? "" : answer.ok ? spec.hint || "" : spec.refusedHint ? spec.refusedHint(answer) : tt("nav.dlg.unchanged", "Nothing was changed."),
@@ -23446,6 +23460,7 @@ function gwConfirm(spec){
        render and every tick of the game's clock): an agency may have opened. */
     dlg._gwIdle = idle ? {at: spec.idleAt ? spec.idleAt() : "", now: spec.idleAt || null, ask: () => plan({soft: true})} : null;
     if(spec.bind) spec.bind(dlg, from => plan({soft: true, from}));
+    if(top !== null) dlg.querySelector(".gw-body").scrollTop = top;
   };
   /* The game asked again from a dialog that shows its answer: the answer on
      screen stays until the new one replaces it; the wire asks, Apply waits,
@@ -23476,7 +23491,7 @@ function gwConfirm(spec){
     gwPaint(dlg, {phase: "applying", wire: "ask", say: `<b>${spec.applying}</b>`, body: spec.draw(last || {}, "applying"),
       buttons: ["|", [tt("nav.dlg.applying", "Applying"), null, {kind: "go", busy: true, disabled: true}]]});
     const local = spec.local ? spec.local(JSON.parse(judged), false) : null;
-    const res = local ? {status: 200, error: null, body: local} : await SOURCE.write(spec.kind, JSON.parse(judged), {dryRun: false, approval: view});
+    const res = local ? {status: 200, error: null, body: local} : await SOURCE.write(spec.kind, JSON.parse(judged), {dryRun: false, approval: view(seq)});
     if(res.error){
       /* No answer: whether the game holds it is unknown, and so is what an
          undo would restore. */
@@ -23561,7 +23576,7 @@ function gwConfirm(spec){
      dry run still in flight. Completed writes keep their result and Undo. */
   dlg._odBoard = () => {
     if(applying || ["applying", "done", "undone"].includes(dlg.dataset.phase)) return;
-    if((spec.needs || []).some(n => !odReady(n))) plan();
+    if((spec.needs || []).some(n => !odReady(n))) plan({soft: true});
   };
   plan();
 }

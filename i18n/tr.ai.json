@@ -2132,6 +2132,7 @@
  "nav.more.utils": "claude-sonnet-5",
  "nav.new": "claude-sonnet-5",
  "nav.od.dlg.hint": "claude-opus-5-5",
+ "nav.od.dlg.title": "gpt-6.1-sol",
  "nav.od.factoryStaffing": "claude-opus-5-5",
  "nav.od.failed": "claude-opus-5-5",
  "nav.od.goals": "gpt-6",

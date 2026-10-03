@@ -2225,6 +2225,7 @@
  "nav.more.utils": "Werkzeuge",
  "nav.new": "Neu",
  "nav.od.dlg.hint": "Übernehmen wartet, bis das berechnet ist.",
+ "nav.od.dlg.title": "Übernehmen wartet auf die Zahlen des neu geladenen Dashboards",
  "nav.od.factoryStaffing": "Fabrikpersonal wird berechnet…",
  "nav.od.failed": "Konnte nicht berechnet werden: {why}",
  "nav.od.goals": "Meilensteine werden berechnet…",
