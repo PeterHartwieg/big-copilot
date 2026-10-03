@@ -1467,6 +1467,7 @@
  "gr.of.depot.title": "Un dépôt",
  "gr.of.depot.without": "<b>Pas encore de dépôt.</b> Ce plan n’en prévoit pas : les marchandises de l’usine n’atteindront les magasins que lorsqu’un dépôt les prendra en charge.",
  "gr.of.export.calculations": "Calculs d’exportation",
+ "gr.of.export.drop": "Exporter {n:,} par semaine fait baisser cet indice de {d} par semaine, soit un quart de la quantité divisé par le plafond hebdomadaire de l’importateur de {mo:,} ; il ne descend jamais sous 0,5.",
  "gr.of.export.fall": "À ce volume, l’indice de prix baisse de {d} par semaine, jusqu’à un minimum de 0,5.",
  "gr.of.export.head": "{n:,} {name} par semaine de plus que les besoins de vos magasins, pour une valeur à l’export de {w}.",
  "gr.of.export.how": "Un quai paie aujourd’hui {each} par unité : prix de gros {w} × indice de prix de {name} {i} × prix publics {m} × prix à l’export {e}.",

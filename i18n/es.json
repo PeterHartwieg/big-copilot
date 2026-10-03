@@ -1467,6 +1467,7 @@
  "gr.of.depot.title": "Un depósito",
  "gr.of.depot.without": "<b>Todavía no hay depósito.</b> Este plan no lo incluye: las mercancías de la fábrica solo llegarán a las tiendas cuando un depósito las reciba.",
  "gr.of.export.calculations": "Cálculos de exportación",
+ "gr.of.export.drop": "Exportar {n:,} por semana reduce ese índice en {d} por semana, un cuarto de lo exportado dividido entre el límite semanal del importador ({mo:,}); nunca baja de 0,5.",
  "gr.of.export.fall": "Con este volumen, el índice de precios baja {d} por semana, hasta un mínimo de 0,5.",
  "gr.of.export.head": "{n:,} {name} semanales más de lo que necesitan tus tiendas, con un valor de exportación de {w}.",
  "gr.of.export.how": "Un muelle paga hoy {each} por unidad: precio mayorista {w} × índice de precios de {name} {i} × precios públicos {m} × precio de exportación {e}.",

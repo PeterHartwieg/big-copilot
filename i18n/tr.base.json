@@ -1266,6 +1266,7 @@
  "gr.of.depot.title": "A depot",
  "gr.of.depot.without": "<b>No depot yet.</b> This plan leaves it out: the factory's goods reach the shops only once a depot takes them.",
  "gr.of.export.calculations": "Export calculations",
+ "gr.of.export.drop": "Exporting {n:,} a week pulls that index down by {d} a week, a quarter of it over the importer's weekly cap of {mo:,}; it never falls below 0.5.",
  "gr.of.export.fall": "At this volume, the price index falls by {d} a week, to a minimum of 0.5.",
  "gr.of.export.head": "{n:,} {name} a week more than your shops take, worth {w} as an export.",
  "gr.of.export.how": "A pier pays {each} each today: wholesale {w} × {name}'s price index {i} × public prices {m} × export price {e}.",

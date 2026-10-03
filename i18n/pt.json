@@ -1467,6 +1467,7 @@
  "gr.of.depot.title": "Um depósito",
  "gr.of.depot.without": "<b>Ainda não há depósito.</b> Este plano não o inclui: as mercadorias da fábrica só chegarão às lojas quando um depósito as receber.",
  "gr.of.export.calculations": "Cálculos de exportação",
+ "gr.of.export.drop": "Exportar {n:,} por semana reduz esse índice em {d} por semana, um quarto do exportado dividido pelo limite semanal do importador de {mo:,}; ele nunca fica abaixo de 0,5.",
  "gr.of.export.fall": "Neste volume, o índice de preços cai {d} por semana, até o mínimo de 0,5.",
  "gr.of.export.head": "{n:,} {name} por semana além do necessário para suas lojas, no valor de {w} para exportação.",
  "gr.of.export.how": "Um píer paga {each} por unidade hoje: atacado {w} × índice de preços de {name} {i} × preços ao público {m} × preço de exportação {e}.",
