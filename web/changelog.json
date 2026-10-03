@@ -1,5 +1,11 @@
 [
   {
+    "pr": 257,
+    "date": "2026-10-03",
+    "title": "Plan a factory with any mix of products",
+    "summary": "Custom setup in Plan a factory lets you combine any factory products and choose the machine count for each. Search by product or workstation, then follow the five steps with the combined ingredients, storage, staffing and investment. A new factory starts empty; one you run starts from its current machines. Each saved plan keeps its own selection. Demand combines measured sales across your shops, with no guessed demand for products you have not sold."
+  },
+  {
     "pr": 241,
     "date": "2026-10-02",
     "title": "Report a bug from the page, with your save",

@@ -471,3 +471,166 @@ test('a factory with nothing to change still links to its plan from Production\'
   assert.match(r.flat, /class="sb-flat"[\s\S]*data-of-goto="x"/);
   assert.match(r.src, /return sbFlat\([\s\S]*?, "", planLink\);/, 'the compact factory row is given the plan link');
 });
+
+/* A second synthetic recipe crosses the shop-type boundary and shares an input.
+   It is not offered by any type's Add product picker. */
+const CUSTOM_PRODUCT = 'ba:itemname_cheapgift';
+async function customBoard(t, viewport){
+  const page = await board(t);
+  if(viewport) await page.setViewportSize(viewport);
+  await page.evaluate(() => {
+    D.plan.recipes.push({slug: 'ba:itemname_cheapgift', item: 'Cheap Gift', workstation: 'bottledgoods', out: 10,
+      ingredients: [{slug: 'ba:itemname_water', item: 'Water', per: 5}]});
+    D.openFactory.products['ba:itemname_cheapgift'] = {w: 10, i: 1, bx: 20, mo: 10000};
+    drawPlan();
+  });
+  return page;
+}
+async function addCustom(page, slug){
+  await page.locator('#planBody [data-pc-toggle]').click();
+  await page.locator(`#pcPop [data-pc-pick="${slug}"]`).click();
+}
+const customRows = page => page.$$eval('#planBody tr.line', rs => Object.fromEntries(rs.map(r => [r.dataset.slug, +r.dataset.m])));
+
+test('custom setups combine recipes across shop types, sharing ingredient and investment totals', async t => {
+  const page = await customBoard(t);
+  await page.locator('[data-of-for="new"]').click();
+  await page.locator('#ofCustomPick').click();
+  assert.deepEqual(await customRows(page), {});
+  assert.equal(await page.locator('#ofBody .ff-next').count(), 0, 'an empty range cannot proceed');
+  await addCustom(page, BEER);
+  await addCustom(page, CUSTOM_PRODUCT);
+  await page.locator(`#planBody [data-slug="${BEER}"] [data-d="1"]`).click();
+  assert.deepEqual(await customRows(page), {[BEER]: 2, [CUSTOM_PRODUCT]: 1});
+  assert.equal(await page.locator('#vMade').innerText(), '10,080');
+  assert.equal(await page.locator('#vRaw').innerText(), '9,240', 'shared water is counted once at its combined usage');
+  const facts = await page.evaluate(() => ({raw: ofRawWeek(ofCounts()), lines: ofLines(), counts: ofPlan().counts}));
+  assert.equal(facts.raw['ba:itemname_water'], 9240);
+  assert.equal(facts.lines.find(l => l.slug === BEER).want, 321.4 * 7);
+  assert.equal(facts.lines.find(l => l.slug === CUSTOM_PRODUCT).want, 85.7 * 7);
+  await page.locator('#ofBody .ff-next [data-of-step="where"]').click();
+  await page.evaluate(() => ofPick(premises().buildings.find(b => b.type === 'warehouse' && b.status === 'vacant').key));
+  const inv = await page.evaluate(() => ofInvestment(ofPlan()));
+  assert.deepEqual(inv.adds, {[BEER]: 2, [CUSTOM_PRODUCT]: 1});
+  assert.ok(inv.furniture > 0);
+  await page.locator('#ofBody [data-of-step="until"]').click();
+  assert.equal(await page.evaluate(() => ofStep), 'until');
+});
+
+test('custom selections, zero counts and removals belong to each saved plan and survive reload', async t => {
+  const page = await board(t);
+  await page.locator('[data-of-for="new"]').click();
+  await page.locator('#ofCustomPick').click();
+  await addCustom(page, BEER);
+  const first = await page.evaluate(() => ofCur);
+  await page.locator(`#planBody [data-slug="${BEER}"] [data-d="-1"]`).click();
+  await page.locator('[data-of-plan]').selectOption('');
+  assert.deepEqual(await customRows(page), {});
+  await addCustom(page, BEER);
+  assert.equal(await page.locator('[data-of-size].on').getAttribute('data-of-size'), 'custom');
+  await page.locator(`#planBody [data-slug="${BEER}"] [data-d="1"]`).click();
+  const second = await page.evaluate(() => ofCur);
+  assert.notEqual(first, second);
+  await page.locator('[data-of-plan]').selectOption(first);
+  assert.deepEqual(await customRows(page), {[BEER]: 0});
+  await page.reload();
+  assert.deepEqual(await customRows(page), {[BEER]: 0});
+  await page.locator(`[data-pc-x="${BEER}"]`).click();
+  await page.reload();
+  assert.deepEqual(await customRows(page), {});
+  assert.deepEqual(await page.evaluate(() => ofPlan().counts), {});
+  await page.locator('[data-of-plan]').selectOption(second);
+  assert.deepEqual(await customRows(page), {[BEER]: 2});
+  await page.locator(`#planTypes [data-id="${LIQ}"]`).click();
+  assert.equal(await page.evaluate(() => planType), LIQ, 'shop-type planning still opens normally');
+  assert.equal(await page.locator('[data-of-size].on').getAttribute('data-of-size'), 'peak');
+  await page.locator('[data-of-plan]').selectOption(second);
+  assert.deepEqual(await customRows(page), {[BEER]: 2});
+});
+
+test('custom demand sums only measured sellers across types and excludes unknown products from surplus', async t => {
+  const page = await customBoard(t);
+  await page.evaluate(() => {
+    D.plan.own = {
+      a: {shops: 4, perDay: {'ba:itemname_beer': 30}, stocked: {'ba:itemname_beer': 2}},
+      b: {shops: 3, perDay: {'ba:itemname_beer': 20}, sellers: {'ba:itemname_beer': 1}}
+    };
+    drawPlan();
+  });
+  await page.locator('[data-of-for="new"]').click();
+  await page.locator('#ofCustomPick').click();
+  await addCustom(page, BEER);
+  await addCustom(page, CUSTOM_PRODUCT);
+  const lines = await page.evaluate(() => ofLines());
+  assert.equal(lines.find(l => l.slug === BEER).want, 560, '(30 × 2 + 20 × 1) × 7');
+  assert.equal(lines.find(l => l.slug === CUSTOM_PRODUCT).want, 0);
+  assert.match(await page.locator(`#planBody [data-slug="${CUSTOM_PRODUCT}"] .covers`).innerText(), /No measured sales/);
+  assert.match(await page.locator('#vMadeTile').getAttribute('data-tip'), /3,640 is surplus/);
+  assert.equal(await page.locator('#planBody [data-pc-rate]').count(), 0, 'no invented per-shop rate for a mixed range');
+});
+
+test('custom setup on an owned factory starts with every known line and prices only additions', async t => {
+  const page = await customBoard(t);
+  await page.locator('#ofCustomPick').click();
+  const now = await page.evaluate(() => ofNow(planTarget));
+  assert.deepEqual(await customRows(page), now);
+  await addCustom(page, CUSTOM_PRODUCT);
+  let inv = await page.evaluate(() => ofInvestment(ofPlan()));
+  assert.equal(inv.adds[BEER], 0);
+  assert.equal(inv.adds[CUSTOM_PRODUCT], 1);
+  assert.equal(inv.deposit, 0);
+  await page.locator(`[data-pc-x="${CUSTOM_PRODUCT}"]`).click();
+  inv = await page.evaluate(() => ofInvestment(ofPlan()));
+  assert.equal(inv.adds[BEER], 0);
+  assert.equal(inv.adds[CUSTOM_PRODUCT], undefined);
+  await page.locator('[data-of-for="new"]').click();
+  assert.equal(await page.evaluate(() => planType), 'custom');
+  assert.deepEqual(await customRows(page), {});
+  await addCustom(page, BEER);
+  assert.equal(await page.locator('[data-of-size].on').getAttribute('data-of-size'), 'custom');
+  await page.locator(`[data-of-for="${BREWERY}"]`).click();
+  assert.equal(await page.evaluate(() => planType), 'custom');
+  assert.deepEqual(await customRows(page), now);
+  assert.equal(await page.locator('[data-of-size].on').getAttribute('data-of-size'), 'custom');
+});
+
+test('custom product search is usable on a phone and Escape restores focus', async t => {
+  const page = await customBoard(t, {width: 390, height: 700});
+  await page.locator('[data-of-for="new"]').click();
+  await page.locator('#ofCustomPick').click();
+  await page.locator('[data-pc-toggle]').click();
+  const search = page.locator('#pcPop input[type="search"]');
+  assert.equal(await search.evaluate(el => el === document.activeElement), true);
+  await search.fill('gift');
+  assert.equal(await page.locator('#pcPop .pc-opt:visible').count(), 1);
+  assert.equal(await page.locator('#pcPop .pc-w').count(), 0, 'shop weights do not apply');
+  const box = await page.locator('#pcPop').boundingBox();
+  assert.ok(box.x >= 0 && box.x + box.width <= 390 && box.y >= 0 && box.y + box.height <= 700);
+  await search.fill('no such product');
+  assert.equal(await page.locator('#pcPop .pc-opt:visible').count(), 0);
+  assert.equal(await page.locator('#pcPop .pc-empty').isVisible(), true);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#pcPop').isVisible(), false);
+  assert.equal(await page.locator('[data-pc-toggle]').evaluate(el => el === document.activeElement), true);
+});
+
+test('editing only an existing factory’s machine count saves its custom setup', async t => {
+  const page = await board(t);
+  await page.locator('#ofCustomPick').click();
+  const count = (await customRows(page))[BEER];
+  await page.locator(`#planBody [data-slug="${BEER}"] [data-d="1"]`).click();
+  assert.ok(await page.evaluate(() => ofCur));
+  await page.reload();
+  assert.equal(await page.evaluate(() => planType), 'custom');
+  assert.deepEqual(await customRows(page), {[BEER]: count + 1});
+  const saved = await page.evaluate(() => ofCur);
+  await page.locator('[data-of-plan]').selectOption('');
+  assert.deepEqual(await customRows(page), {[BEER]: count}, 'an owned factory’s new plan starts from its current machines');
+  assert.equal(await page.locator('[data-of-size].on').getAttribute('data-of-size'), 'custom');
+  await page.locator('[data-of-plan]').selectOption(saved);
+  assert.deepEqual(await customRows(page), {[BEER]: count + 1}, 'the saved plan keeps its proposed change');
+  await page.locator(`[data-pc-x="${BEER}"]`).click();
+  await page.reload();
+  assert.deepEqual(await customRows(page), {});
+  assert.equal(await page.locator('#ingBody tr').count(), 0, 'the empty range leaves no stale ingredient rows');
+});

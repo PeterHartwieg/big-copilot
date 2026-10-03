@@ -12538,6 +12538,35 @@ function wireOpenStore(){
    The arithmetic itself (machines × rate × 24 h × 7 d, the ingredient sums,
    the surplus) lives in planDraw() with the other wiring. */
 let planType = null, planCounts = {};
+const OF_CUSTOM = "custom";
+const ofCustom = () => planType === OF_CUSTOM;
+const ofTypeName = type => type === OF_CUSTOM ? tt("gr.of.custom", "Custom setup") : osTypeName(type);
+/* A custom range belongs to its saved plan, not to the per-shop-type extras.
+   Counts also retain selected lines at zero. The catalogue itself stays untouched. */
+function ofCustomEntry(){
+  return {type: ofTypeName(OF_CUSTOM), products: [], extra: Object.keys(RECIPE_BY)
+    .sort((a, b) => gnCompare(itemName(a), itemName(b))).map(slug => [slug, 1])};
+}
+/* Sum measured sales across shop types, once per type. The custom table uses
+   one company-wide total instead of pretending a mixed range supplies one kind
+   of shop. Products without sales get no invented demand. */
+function ofCustomDemand(){
+  const perDay = {};
+  Object.values((D.plan || {}).own || {}).forEach(own => {
+    const shops = (own.shops ?? own.sites) || 0;
+    Object.entries(own.perDay || {}).forEach(([slug, rate]) => {
+      const sellers = Math.min(shops, (own.stocked || {})[slug] ?? (own.sellers || {})[slug] ?? shops);
+      if(rate > 0 && sellers > 0) perDay[slug] = (perDay[slug] || 0) + rate * sellers;
+    });
+  });
+  return {shops: 1, perDay};
+}
+function ofPlanShops(){
+  const products = new Set(ofLines().filter(l => l.m > 0).map(l => l.slug));
+  return (D.businesses || []).filter(b => b.status !== "vacant" && (ofCustom()
+    ? !!((D.plan || {}).catalogue || {})[b.typeSlug] && (b.lines || []).some(l => products.has(l.slug))
+    : b.typeSlug === planType));
+}
 
 const RECIPE_BY = {};
 function indexPlan(){
@@ -12642,6 +12671,7 @@ function planExtraKeep(){
 }
 /* The added products of a type that its list still offers, in the list's order. */
 function planAdded(type){
+  if(type === OF_CUSTOM) return ofCustomEntry().extra.map(([slug]) => slug).filter(slug => Object.hasOwn(planCounts, slug));
   const mine = planExtraAll()[type] || {};
   return (((D.plan.catalogue || {})[type] || {}).extra || []).map(([slug]) => slug).filter(slug => slug in mine);
 }
@@ -12692,7 +12722,7 @@ function drawPlan(){
   const act = document.activeElement;
   const typing = act && act.matches && act.matches("[data-pc-rate]")
     ? {slug: act.dataset.pcRate, from: act.selectionStart, to: act.selectionEnd, text: act.value} : null;
-  const types = planTypes();
+  const types = [...planTypes(), ...(Object.keys(RECIPE_BY).length ? [OF_CUSTOM] : [])];
   if(!types.length){
     $("planNote").textContent = tt("gr.plan.noCatalogue", "No product catalogue in this save.");
     $("planPicker").innerHTML = ""; $("planBody").innerHTML = ""; $("ingBody").innerHTML = "";
@@ -12711,24 +12741,31 @@ function drawPlan(){
   const kept = ofPlan();
   if(kept && (kept.type !== planType || (kept.site || "new") !== planTarget)){ ofCur = null; ofStep = "what"; ofSave(); }
   else if(kept) planCounts = {...kept.counts, ...planCounts};
-  const cat = D.plan.catalogue, own = (D.plan.own || {})[planType];
+  const cat = {...D.plan.catalogue, [OF_CUSTOM]: ofCustomEntry()}, own = ofCustom() ? ofCustomDemand() : (D.plan.own || {})[planType];
   const added = planAdded(planType);
   const weightOf = Object.fromEntries((cat[planType].extra || []).map(([s, w]) => [s, w]));
   planSeed = ofSeed(planType, added);
   const shops = own ? (own.shops ?? own.sites) || 0 : 0;
   const perShop = defaultRate(planType) || 0;
-  const pick = k => { planType = k; planCounts = {}; drawPlan(); };
+  const pick = k => {
+    planType = k; planCounts = k === OF_CUSTOM && ofIsOwned() ? ofNow(planTarget) : {};
+    ofSizeMode = k === OF_CUSTOM ? "custom" : "auto";
+    drawPlan();
+  };
 
   /* The types the player runs are the segments, as on the canvas; every other
      type the city sells is one select away. */
   const owned = types.filter(k => (D.plan.own || {})[k]);
-  const others = types.filter(k => !owned.includes(k));
-  $("planPicker").innerHTML = `<span class="os-lab">${tt("gr.of.shops", "Shops")}</span>` + (owned.length ? `<span class="seg" id="planTypes"></span>` : "") + (others.length
+  const others = types.filter(k => k !== OF_CUSTOM && !owned.includes(k));
+  $("planPicker").innerHTML = `<span class="os-lab">${tt("gr.of.range", "Range")}</span>` + (owned.length ? `<span class="seg" id="planTypes"></span>` : "") + (others.length
     ? `<span class="field" style="margin:0"><select id="planPick" aria-label="${attr(tt("gr.plan.pickAria", "Another business type"))}">
         <option value="" ${others.includes(planType) ? "" : "selected"} disabled>${tt("gr.plan.pickOther", "Another type…")}</option>${
         others.map(k => `<option value="${attr(k)}" ${k === planType ? "selected" : ""}>${cat[k].type} · ${cat[k].products.length}</option>`).join("")}
-      </select></span>` : "") + xlGuideLink(planType, tt("gr.guide2", "Wiki page"));
-  if(owned.length) seg($("planTypes"), owned.map(k => [k, cat[k].type]), () => planType, k => { planType = k; planCounts = {}; }, drawPlan);
+      </select></span>` : "") + (types.includes(OF_CUSTOM) ? `<nav class="ff-kind"><button type="button" id="ofCustomPick" class="${ofCustom() ? "on" : ""}" aria-pressed="${ofCustom()}">${ofTypeName(OF_CUSTOM)}</button></nav>` : "")
+    + (ofCustom() ? "" : xlGuideLink(planType, tt("gr.guide2", "Wiki page")));
+  const customPick = $("ofCustomPick");
+  if(customPick) customPick.onclick = () => { if(!ofCustom()) pick(OF_CUSTOM); };
+  if(owned.length) seg($("planTypes"), owned.map(k => [k, cat[k].type]), () => planType, k => { planType = k; planCounts = {}; ofSizeMode = "auto"; }, drawPlan);
   const sel = $("planPick");
   if(sel) sel.onchange = e => pick(e.target.value);
 
@@ -12769,6 +12806,7 @@ function drawPlan(){
      them, else the default. With no shop of the type, nothing to type, as for
      the main lines. */
   const extraRate = slug => {
+    if(ofCustom()) return {rate: own.perDay[slug] || 0, typed: false};
     const measured = ((own || {}).perDay || {})[slug];
     const sellers = Math.min(shops, (((own || {}).sellers || {})[slug]) ?? shops);
     if(measured && sellers >= shops) return {rate: Math.max(1, Math.round(measured)), typed: false};
@@ -13009,10 +13047,10 @@ function ofSave(){
   try{ localStorage.setItem(ofStore(), JSON.stringify({plans: ofPlans, current: ofCur})); }catch(e){}
 }
 const ofPlan = () => ofPlans.find(p => p.id === ofCur) || null;
-/* "auto" until the player picks: as the factory runs it now, or a new
-   factory's peak day (ofSeed()). */
+/* "auto" until the player picks: custom ranges keep their chosen counts;
+   shop ranges use the factory's current counts or a new factory's peak day. */
 const ofSize = () => { const plan = ofPlan(); const m = plan ? plan.size : ofSizeMode;
-  return m === "auto" ? (ofIsOwned() ? "now" : "peak") : m; };
+  return m === "auto" ? (ofCustom() ? "custom" : ofIsOwned() ? "now" : "peak") : m; };
 /* The factories the player runs: the For picker's segments, in the order the
    businesses come. */
 function ofOwned(){
@@ -13043,6 +13081,7 @@ function ofNow(key){
    making nothing of the type, and a new factory, start as the planner always
    has (factoryCounts()). */
 function ofSeed(type, added){
+  if(type === OF_CUSTOM) return {};
   const products = [...(((D.plan.catalogue || {})[type] || {}).products || []), ...added];
   if(ofIsOwned()){
     const now = ofNow(planTarget);
@@ -13298,7 +13337,7 @@ function ofCtlHtml(plan){
 const ofNames = names => names.length > 2 ? tt("gr.os.why.more", "{items} +{n}", {items: names.slice(0, 2).join(", "), n: names.length - 2}) : names.join(", ");
 function ofPlanName(p){
   const made = Object.entries(p.counts || {}).filter(([, m]) => m > 0).map(([slug]) => itemName(slug));
-  const what = made.length ? ofNames(made) : osTypeName(p.type);
+  const what = made.length ? ofNames(made) : ofTypeName(p.type);
   const b = p.site ? ofBuilding(p.site) || (D.businesses || []).find(x => x.key === p.site) : ofBuilding(p.key);
   return b ? tt("gr.of.plan.name", "{what} · {address}", {what, address: b.address}) : what;
 }
@@ -13317,7 +13356,7 @@ function ofStripHtml(plan){
   const owned = ofIsOwned(), lines = ofLines(), made = lines.filter(l => l.m > 0);
   const cell = (lab, body, cls = "") => `<div${cls ? ` class="${cls}"` : ""}><span class="os-lab">${lab}</span>${body}</div>`;
   const ws = made.reduce((n, l) => n + l.m, 0);
-  const typeName = osTypeName(planType);
+  const typeName = ofTypeName(planType);
   let make;
   if(owned){
     const now = ofNow(planTarget);
@@ -13328,6 +13367,7 @@ function ofStripHtml(plan){
   } else make = made.length ? `<b>${spEsc(ofNames(made.map(l => tt("gr.of.strip.line", "{name} ×{n}", {name: l.name, n: l.m}))))}</b><small>${
       tt("gr.of.strip.ws", {one: "{n} workstation · for your {type} shops", other: "{n} workstations · for your {type} shops"}, {n: ws, type: spEsc(typeName)})}</small>`
     : `<b class="dim">${tt("gr.of.strip.none", "No machines yet")}</b><small>${tt("gr.of.strip.shops", "for your {type} shops", {type: spEsc(typeName)})}</small>`;
+  if(ofCustom()) make = `<b>${made.length ? spEsc(ofNames(made.map(l => tt("gr.of.strip.line", "{name} ×{n}", {name: l.name, n: l.m})))) : tt("gr.of.strip.none", "No machines yet")}</b><small>${ofTypeName(OF_CUSTOM)}</small>`;
   const home = owned ? ofTargetBuilding() : null, b = owned ? null : plan && ofBuilding(plan.key);
   const where = owned ? `<b translate="no">${spEsc(home ? home.address : planTarget)}</b><small>${tt("gr.of.strip.yours", "yours · nothing to rent")}</small>`
     : b ? `<b translate="no">${spEsc(b.address)}</b><small>${tt("gr.os.strip.where", "{hood} · {layout} · {m2} m² · rent {rent}/day",
@@ -13356,6 +13396,7 @@ function ofStartHtml(plan){
       ({now: tt("gr.of.size.now", "As now"), peak: tt("gr.of.size.peak", "Peak day"), average: tt("gr.of.size.average", "Average day"), custom: tt("gr.of.size.custom", "Custom")})[k]}</button>`).join("")}</nav>${
     mode === "custom" && lines.some(l => l.m > 0 && ofSized(l, "peak") !== l.m) ? `<span class="os-dim">${tt("gr.of.size.hint", "peak day: {lines}",
       {lines: spEsc(ofNames(lines.filter(l => l.m > 0).map(l => tt("gr.of.strip.line", "{name} ×{n}", {name: l.name, n: ofSized(l, "peak")}))))})}</span>` : ""}</div>`;
+  if(ofCustom()) return `<p class="os-dim ff-lead">${tt("gr.of.custom.note", "Choose any factory products and set their machines. Demand uses measured sales across all your shops; products without sales have no demand estimate.")}</p>` + seg;
   if(owned || plan || !sized) return seg;
   const kits = ofFacts().kits || {}, items = ofFacts().items || {};
   const kitPrice = st => (kits[st] || []).reduce((s, [item]) => s + ((items[item] || {}).p || 0), 0);
@@ -13411,7 +13452,7 @@ function ofWhatHtml(plan){
 function ofFlowHtml(plan){
   const owned = ofIsOwned(), b = owned ? ofTargetBuilding() : plan && ofBuilding(plan.key);
   const depots = (D.businesses || []).filter(x => x.typeSlug === OF_DEPOT && x.status !== "vacant");
-  const shops = (D.businesses || []).filter(x => x.typeSlug === planType && x.status !== "vacant");
+  const shops = ofPlanShops();
   if(!shops.length) return "";
   const node = (cls, ico, title, sub, named) => `<div class="ff-node ${cls}"><span class="ic">${ofIcon(ico)}</span><span><b${named ? ` translate="no"` : ""}>${title}</b><small>${sub}</small></span></div>`;
   const fac = node(owned ? "" : "new", "factory", spEsc(b ? b.address : tt("gr.of.flow.newFactory", "A new factory")),
@@ -13433,9 +13474,10 @@ function ofPlansHtml(){
   if(!ofPlans.length) return "";
   const rows = ofPlans.map(p => {
     const at = OF_STEPS.indexOf(p.step), b = p.site ? ofBuilding(p.site) || (D.businesses || []).find(x => x.key === p.site) : ofBuilding(p.key);
-    const sub = p.site ? tt("gr.of.plans.yours", "{address} · yours · for {type} shops", {address: b ? b.address : p.site, type: osTypeName(p.type)})
-      : b ? tt("gr.of.plans.at", "{address} · {hood} · for {type} shops", {address: b.address, hood: hoodName(b.hood), type: osTypeName(p.type)})
-      : tt("gr.of.plans.none", "no location yet · for {type} shops", {type: osTypeName(p.type)});
+    const sub = p.type === OF_CUSTOM ? (b ? tt("gr.of.custom.at", "{address} · Custom setup", {address: b.address}) : tt("gr.of.custom.noLocation", "No location yet · Custom setup"))
+      : p.site ? tt("gr.of.plans.yours", "{address} · yours · for {type} shops", {address: b ? b.address : p.site, type: ofTypeName(p.type)})
+      : b ? tt("gr.of.plans.at", "{address} · {hood} · for {type} shops", {address: b.address, hood: hoodName(b.hood), type: ofTypeName(p.type)})
+      : tt("gr.of.plans.none", "no location yet · for {type} shops", {type: ofTypeName(p.type)});
     return `<div class="os-plan"><button type="button" class="os-plango" data-of-open="${attr(p.id)}"><span><b>${spEsc(ofPlanName(p))}</b><small>${spEsc(sub)}</small></span>
       <span><span class="os-lab">${ofStepLabel(p.step)}</span><span class="os-meter" style="--w:${Math.round((at + 1) / OF_STEPS.length * 100)}%"><i></i></span></span>
       <span class="v">${p.inv != null ? fmt(p.inv) : `<span class="os-dim">–</span>`}</span>${icon("chev")}</button>
@@ -13779,11 +13821,12 @@ function ofUntilRows(plan){
     /* What each shop stocks is its own product lines (the goods graph leaves
        out a shop with no route and little stock). */
     const made = lines.map(l => l.slug);
-    const need = (D.businesses || []).filter(x => x.typeSlug === planType && x.status !== "vacant")
+    const need = ofPlanShops()
       .flatMap(x => { const has = new Set((x.lines || []).map(l => l.slug)); return made.filter(sl => has.has(sl)).map(sl => `${x.key}|${sl}`); });
     const served = there && need.length > 0 && need.every(k => delivered.has(k));
     goods.push(osCk("route", served ? "done" : "todo", `${tt("gr.of.ck.depotRoute", "Deliveries to the shops")} ${ofHand()}`,
       served ? tt("gr.of.ck.depotRoute.done", "<span class=\"ok\">Every shop gets every product the factory makes</span>")
+        : ofCustom() ? tt("gr.of.custom.deliveries", "The depot’s delivery plan to the shops stocking these products")
         : tt("gr.of.ck.depotRoute.todo", "The depot's delivery plan to your {type} shops", {type: spEsc(osTypeName(planType))}),
       served ? "" : osIngame(tt("gr.of.ck.depotRoute.ingame", "<b>BizMan › Logistics</b>: give a Logistics Manager the depot's plan to your shops."))));
   }
@@ -13996,7 +14039,7 @@ function ofAfterLines(){
 }
 /* A stepper moved a line: the sizing is the player's own now. */
 function ofStepped(){
-  const plan = ofPlan();
+  const plan = ofCustom() ? ofEnsure() : ofPlan();
   if(plan) plan.size = "custom"; else ofSizeMode = "custom";
 }
 /* For a factory the player runs, each line says the change: +2, or as now. */
@@ -14015,6 +14058,7 @@ function ofDeltas(){
 }
 /* Lines sized to the peak day, an average day, or as the factory runs them. */
 function ofSizeTo(mode){
+  if(ofCustom()) ofEnsure();
   const lines = ofLines(), now = ofIsOwned() ? ofNow(planTarget) : {};
   if(mode !== "custom") lines.forEach(l => { planCounts[l.slug] = mode === "now" ? now[l.slug] || 0 : ofSized(l, mode); });
   const plan = ofPlan();
@@ -14044,7 +14088,7 @@ function ofOpen(id){
   ofCur = ofPlans.some(p => p.id === id) ? id : null;
   const plan = ofPlan();
   if(plan){ planType = plan.type; planTarget = plan.site || "new"; planCounts = {...plan.counts}; ofStep = plan.step; }
-  else { planCounts = {}; ofStep = "what"; ofSizeMode = "auto"; }
+  else { planCounts = ofCustom() && ofIsOwned() ? ofNow(planTarget) : {}; ofStep = "what"; ofSizeMode = "auto"; }
   ofSave();
   drawPlan();
 }
@@ -14062,12 +14106,13 @@ function ofPreset(o = {}){
   if(o.type && o.type !== planType){ planType = o.type; planCounts = {}; ofSizeMode = "auto"; }
   if(o.target && o.target !== planTarget){ planTarget = o.target; planCounts = {}; ofSizeMode = "auto"; }
   /* A factory named with no type opens on what it makes most, unless it makes the type on screen. */
-  if(o.target && o.target !== "new" && !o.type && D.plan){
+  if(o.target && o.target !== "new" && !o.type && D.plan && !ofCustom()){
     const now = ofNow(o.target), made = (((D.plan.catalogue || {})[planType] || {}).products || []).some(p => now[p]);
     const best = made ? null : ofBestType(o.target);
     if(best){ planType = best; planCounts = {}; }
   }
   if(plan && (plan.type !== planType || (plan.site || "new") !== (planTarget || "new"))){ ofCur = null; ofStep = "what"; planCounts = {}; ofSave(); }
+  if(ofCustom() && o.target && !ofPlan()) planCounts = o.target === "new" ? {} : ofNow(o.target);
   /* The view may stand drawn from an earlier visit: it follows the preset now. */
   if(hasData() && D.plan && $("ofCtl")) drawPlan();
 }
@@ -14084,7 +14129,8 @@ function wireOpenFactory(){
   on("click", "[data-of-for]", el => {
     if(planTarget === el.dataset.ofFor) return;
     planTarget = el.dataset.ofFor; ofCur = null; ofStep = "what"; planCounts = {}; ofSizeMode = "auto";
-    if(ofIsOwned()){
+    if(ofCustom()) planCounts = ofIsOwned() ? ofNow(planTarget) : {};
+    else if(ofIsOwned()){
       const now = ofNow(planTarget), made = (((D.plan.catalogue || {})[planType] || {}).products || []).some(p => now[p]);
       const best = made ? null : ofBestType(planTarget);
       if(best) planType = best;
@@ -21689,7 +21735,7 @@ function showGrowthRow(slug){
 
 /* plan a chain: every line runs 24/7; step a line's machines and everything follows */
 function planDraw(){
-  const lines = $$("tr.line[data-m][data-rate]"); if(!lines.length) return;
+  const lines = $$("tr.line[data-m][data-rate]"); if(!lines.length){ if(ofCustom() && $("ingBody")) $("ingBody").innerHTML = ""; return; }
   const host = lines[0].closest("table");
   const perShopWeek = host ? (+host.dataset.pershop || 0) * 7 : 0, shopsOwned = host ? (+host.dataset.shops || 0) : 0;
   /* How many shops a line supplies is judged on a shop's busiest day: the
@@ -21712,14 +21758,14 @@ function planDraw(){
     /* The line runs flat out; what the shops do not take is exported, and a
        line under what they take is short. */
     const surplus = wk - lineWant;
-    if(surplus > 0) exportWeek += surplus;
+    if(surplus > 0 && (!ofCustom() || lineWant > 0)) exportWeek += surplus;
     const set = (sel, v) => { const n = q(sel, tr); if(n) n.textContent = v; };
     set(".step b", m); set(".made", fmtN(wk));
     const covers = linePeak ? wk / 7 / linePeak : null;
     /* A typed rate's field sits in the same cell; only the figure above it is
        rewritten, so typing keeps the caret where it is. */
     const coversEl = q(".covers .pc-cov", tr) || q(".covers", tr);
-    if(coversEl) coversEl.innerHTML = (covers === null ? "—"
+    if(coversEl) coversEl.innerHTML = (ofCustom() ? (lineWant ? "" : tt("gr.of.custom.unmeasured", "No measured sales")) : covers === null ? "—"
         : covers === 1 ? tt("gr.line.coversOne", "{n:.1f} shop", {n: covers}) : tt("gr.line.covers", "{n:.1f} shops", {n: covers}))
       + (lineWant ? `<span class="sub">${tt("gr.line.take", "shops take {n:,}", {n: Math.round(lineWant)})} · ${surplus >= 0
           ? chipHtml("ok", `+${fmtN(surplus)}`, tt("gr.line.surplusTip", "Surplus a week, for export"))
@@ -21777,9 +21823,11 @@ function planDraw(){
      sentence of its own; a line short of the shelves is red in its Supplies
      cell (declutter E8). */
   const madeTile = $("vMadeTile");
-  if(madeTile) madeTile.dataset.tip = takeWeek
-    ? tt("gr.made.tip", "The shops take {take:,} units a week across the range; {surplus:,} is surplus for export",
+  if(madeTile) madeTile.dataset.tip = ofCustom() && takeWeek
+    ? tt("gr.of.custom.measured", "Your shops take {take:,} units a week; {surplus:,} is surplus from products with measured sales. Products without measured sales are excluded from the surplus estimate.", {take: Math.round(takeWeek), surplus: Math.round(exportWeek)})
+    : takeWeek ? tt("gr.made.tip", "The shops take {take:,} units a week across the range; {surplus:,} is surplus for export",
       {take: Math.round(takeWeek), surplus: Math.round(exportWeek)})
+    : ofCustom() ? tt("gr.of.custom.noDemand", "No measured shop sales for these products; export surplus cannot be estimated.")
     : shopsOwned ? tt("gr.made.unknown", {one: "Demand is unknown: the {n} shop sells services or goods this planner cannot measure, so shop coverage and export surplus cannot be estimated",
       other: "Demand is unknown: the {n} shops sell services or goods this planner cannot measure, so shop coverage and export surplus cannot be estimated"}, {n: shopsOwned})
     : tt("gr.made.none", "Nothing measured yet: all {n:,} units a week are surplus for export until the shops exist", {n: Math.round(made)});
@@ -21874,11 +21922,19 @@ const bindPlan = once(() => {
   on("click", "#pcPop [data-pc-pick]", (o, e) => {
     e.preventDefault();
     if(o.getAttribute("aria-disabled") === "true") return;
-    const all = planExtraAll();
-    (all[planType] || (all[planType] = {}))[o.dataset.pcPick] = null;
-    planExtraKeep();
+    if(ofCustom()){
+      if(!RECIPE_BY[o.dataset.pcPick]) return;
+      planCounts[o.dataset.pcPick] = ofIsOwned() ? ofNow(planTarget)[o.dataset.pcPick] || 1 : 1;
+      const plan = ofPlan();
+      if(plan) plan.counts = {...planCounts};
+    }else{
+      const all = planExtraAll();
+      (all[planType] || (all[planType] = {}))[o.dataset.pcPick] = null;
+      planExtraKeep();
+    }
     pcPopClose(false);
     drawPlan();
+    if(ofCustom()){ ofEnsure(); ofSave(); ofDraw(); }
     /* Focus stays with the range: the Add product button while there is more
        to add, else the new line's own remove button. */
     const back = q("#planBody [data-pc-toggle]") || $$("#planBody [data-pc-x]").find(x => x.dataset.pcX === o.dataset.pcPick);
@@ -21886,10 +21942,17 @@ const bindPlan = once(() => {
   });
   on("click", "[data-pc-x]", (x, e) => {
     e.preventDefault();
-    const mine = planExtraAll()[planType];
-    if(mine) delete mine[x.dataset.pcX];
-    delete planCounts[x.dataset.pcX];
-    planExtraKeep();
+    if(ofCustom()){
+      const plan = ofEnsure();
+      delete planCounts[x.dataset.pcX];
+      if(plan) plan.counts = {...planCounts};
+      ofSave();
+    }else{
+      const mine = planExtraAll()[planType];
+      if(mine) delete mine[x.dataset.pcX];
+      delete planCounts[x.dataset.pcX];
+      planExtraKeep();
+    }
     hideTip();
     drawPlan();
     const back = q("#planBody [data-pc-toggle]");
@@ -21910,7 +21973,7 @@ const bindPlan = once(() => {
    the way #alertPop is, since a section's paint containment would clip it.
    Escape and a press outside close it. */
 function pcPopOpen(btn){
-  const entry = ((D.plan || {}).catalogue || {})[planType];
+  const entry = ofCustom() ? ofCustomEntry() : ((D.plan || {}).catalogue || {})[planType];
   if(!entry) return;
   if(!pcPop){
     pcPop = document.createElement("div");
@@ -21935,24 +21998,42 @@ function pcPopOpen(btn){
   if(pcPopFor && pcPopFor !== btn) pcPopFor.setAttribute("aria-expanded", "false");
   pcPopFor = btn;
   const added = new Set(planAdded(planType)), ws = D.plan.workstations || {};
-  const head = tt("gr.plan.alsoSells", "{type} also sells", {type: entry.type});
+  const head = ofCustom() ? tt("gr.of.custom.products", "Factory products") : tt("gr.plan.alsoSells", "{type} also sells", {type: entry.type});
   pcPop.setAttribute("aria-label", head);
-  pcPop.innerHTML = `<div class="pc-pop-h"><b>${spEsc(head)}</b><span tabindex="0" data-tip="${
+  pcPop.classList.toggle("pc-custom", ofCustom());
+  pcPop.innerHTML = `<div class="pc-pop-h"><b>${spEsc(head)}</b>${ofCustom() ? "" : `<span tabindex="0" data-tip="${
       attr(tt("gr.plan.weightTip", "The game's own weight for each at a {type}; a main product is 100%", {type: entry.type}))}">${
-      tt("gr.plan.weight", "Weight")}</span></div>` + (entry.extra || []).map(([slug, w]) => {
+      tt("gr.plan.weight", "Weight")}</span>`}</div>` + (entry.extra || []).map(([slug, w]) => {
     const on = added.has(slug), r = RECIPE_BY[slug], pct = Math.round(w * 100);
     const where = r ? (ws[r.workstation] || {}).name || r.workstation : tt("gr.plan.boughtIn", "bought in");
     return `<button type="button" class="pc-opt${on ? " on" : ""}" data-pc-pick="${attr(slug)}"${on ? ` aria-disabled="true"` : ""}>` +
       `<span><b>${spEsc(itemName(slug))}${on ? `<svg class="pc-tick" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>` : ""}</b><small>${spEsc(where)}</small></span>` +
-      `<span class="pc-w" aria-hidden="true"><i style="--w:${pct}%"></i></span><em>${pct}%</em></button>`;
+      (ofCustom() ? "" : `<span class="pc-w" aria-hidden="true"><i style="--w:${pct}%"></i></span><em>${pct}%</em>`) + `</button>`;
   }).join("");
+  if(ofCustom()){
+    const search = document.createElement("input");
+    search.type = "search"; search.className = "pc-search";
+    search.placeholder = tt("gr.of.custom.search", "Find a product or workstation");
+    search.setAttribute("aria-label", tt("gr.of.custom.search", "Find a product or workstation"));
+    pcPop.querySelector(".pc-pop-h").after(search);
+    const empty = document.createElement("p");
+    empty.className = "pc-empty"; empty.hidden = true;
+    empty.textContent = tt("gr.of.custom.noMatches", "No matching products.");
+    pcPop.appendChild(empty);
+    search.oninput = () => {
+      const term = search.value.trim().toLocaleLowerCase();
+      pcPop.querySelectorAll(".pc-opt").forEach(el => { el.hidden = !el.textContent.toLocaleLowerCase().includes(term); });
+      empty.hidden = !!pcPop.querySelector(".pc-opt:not([hidden])");
+      pcPopPlace();
+    };
+  }
   pcPop.hidden = false;
   pcPop.scrollTop = 0;
   btn.setAttribute("aria-expanded", "true");
   hideTip();
   pcPopPlace();
   wireTips();
-  (pcPop.querySelector(".pc-opt:not(.on)") || pcPop.querySelector(".pc-opt") || pcPop).focus({preventScroll: true});
+  (pcPop.querySelector(".pc-search") || pcPop.querySelector(".pc-opt:not(.on)") || pcPop.querySelector(".pc-opt") || pcPop).focus({preventScroll: true});
 }
 function pcPopPlace(){
   if(!pcPop || pcPop.hidden || !pcPopFor) return;
