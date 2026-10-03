@@ -6,5 +6,4 @@ const path = require('node:path');
 
 test('temporary CI probe: newly discovered suites receive the assembled site', () => {
   assert.ok(fs.existsSync(path.join(__dirname, '../web/index.html')));
-  assert.fail('Intentional CI probe: this shard and the Node suites aggregate must fail');
 });
