@@ -399,7 +399,7 @@ test('the capture guard allows text selection, scrolling keys and plain navigati
   await nextBoard(page);
   const events = await page.evaluate(() => {
     const host = document.querySelector('#secStaff');
-    host.insertAdjacentHTML('beforeend', '<p id="guardText">Select this text</p><input id="guardInput"><textarea id="guardTextarea"></textarea><input id="guardCheck" type="checkbox"><button id="guardButton">Change</button><a id="guardNav" href="#wiki/test" data-tip="Guide">Guide</a><a id="guardAction" href="#" data-hr-open="role">Change picks</a>');
+    host.insertAdjacentHTML('beforeend', '<p id="guardText">Select this text</p><input id="guardInput"><textarea id="guardTextarea"></textarea><input id="guardCheck" type="checkbox"><button id="guardButton">Change</button><button id="guardEditable" contenteditable="true">Edit</button><button id="guardUneditable" contenteditable="false">Change</button><a id="guardNav" href="#wiki/test" data-tip="Guide">Guide</a><a id="guardAction" href="#" data-hr-open="role">Change picks</a>');
     const fire = (id, type, key) => {
       const event = type === 'keydown' ? new KeyboardEvent(type, {key, bubbles: true, cancelable: true})
         : new MouseEvent(type, {bubbles: true, cancelable: true});
@@ -416,11 +416,12 @@ test('the capture guard allows text selection, scrolling keys and plain navigati
       enter: fire('guardButton', 'keydown', 'Enter'), space: fire('guardButton', 'keydown', ' '),
       action: fire('guardAction', 'keydown', 'Enter'), inputSpace: fire('guardInput', 'keydown', ' '),
       inputEnter: fire('guardInput', 'keydown', 'Enter'), textareaSpace: fire('guardTextarea', 'keydown', ' '),
-      textareaEnter: fire('guardTextarea', 'keydown', 'Enter'), checkboxSpace: fire('guardCheck', 'keydown', ' ')};
+      textareaEnter: fire('guardTextarea', 'keydown', 'Enter'), editableSpace: fire('guardEditable', 'keydown', ' '),
+      uneditableSpace: fire('guardUneditable', 'keydown', ' '), checkboxSpace: fire('guardCheck', 'keydown', ' ')};
   });
   assert.deepEqual(events, {selection: false, arrow: false, textSpace: false, navEnter: false, navClick: true,
     enter: true, space: true, action: true, inputSpace: false, inputEnter: false,
-    textareaSpace: false, textareaEnter: false, checkboxSpace: true});
+    textareaSpace: false, textareaEnter: false, editableSpace: false, uneditableSpace: true, checkboxSpace: true});
 });
 
 for(const action of ['staff', 'all']){
@@ -451,6 +452,65 @@ for(const action of ['staff', 'all']){
     await page.evaluate(() => window.release());
     await page.waitForFunction(() => odReady('hiring'));
     assert.equal(await page.locator('.gw-dlg').count(), 0, 'closing a waiting review cancels it');
+  });
+}
+
+for(const action of ['site', 'all', 'quick']){
+  test(`${action} hire stays usable between supersede and the next board without holding old picks`, async t => {
+    const page = await open(t, {hash: '#staffing/needs'});
+    await page.evaluate(() => window.release());
+    await page.waitForFunction(() => odReady('hiring'));
+    await page.evaluate(action => {
+      const b = document.createElement('button');
+      if(action === 'quick') b.dataset.hqGo = '';
+      else {
+        b.dataset.gw = 'hire';
+        if(action === 'site') b.dataset.hrStaff = D.businesses[0].key; else b.dataset.hrAll = '';
+      }
+      b.id = 'supersededHire'; b.textContent = 'Hire';
+      document.querySelector('#secStaff').appendChild(b);
+      window.reviewWrites = 0; window.oldReview = hrLast;
+      SOURCE.write = async () => { reviewWrites++; return {body: {ok: true}}; };
+      window.holdBuilds = true;
+    }, action);
+    await read(page, 2); // The real app's supersede() runs, but no board answers.
+    assert.equal(await page.evaluate(() => odSameScope(odBoardScope, odScope())), false);
+    for(let click = 0; click < 2; click++){
+      await page.evaluate(() => document.getElementById('supersededHire').click());
+      await page.locator('.gw-dlg .od-wait').waitFor();
+      if(action === 'quick') assert.equal(await page.evaluate(() => hrUi.quickHold), false, 'no old picks held while waiting');
+      assert.equal(await page.evaluate(() => hrLast === oldReview), true, 'no planning against the superseded board');
+      assert.equal(await page.evaluate(() => reviewWrites), 0);
+      if(!click){
+        await page.locator('.gw-dlg [data-gw-close]').click();
+        await page.locator('.gw-dlg').waitFor({state: 'detached'});
+      }
+    }
+    await nextBoard(page, true);
+    await page.locator('.gw-dlg').waitFor({state: 'detached'});
+    if(action === 'quick') assert.equal(await page.evaluate(() => hrUi.quickHold), false);
+  });
+}
+
+for(const change of ['company', 'source']){
+  test(`a ready write review closes as soon as another ${change}'s board arrives`, async t => {
+    const page = await open(t, {hash: '#staffing/needs'});
+    await page.evaluate(() => window.release());
+    await page.waitForFunction(() => odReady('hiring'));
+    await page.evaluate(() => {
+      window.reviewWrites = 0;
+      SOURCE.write = async () => { reviewWrites++; return {body: {ok: true}}; };
+      gwConfirm({kind: 'hire', icon: 'hire', title: 'Review', needs: ['hiring'], scope: odScope(),
+        body: () => ({}), applyLabel: () => 'Apply', verdict: () => 'Ready', draw: () => '<p>Old plan</p>'});
+    });
+    await page.locator('.gw-dlg[data-phase="ready"]').waitFor();
+    if(change === 'source'){
+      await page.evaluate(() => { window.holdBuilds = true; });
+      await read(page, 2);
+    }
+    await nextBoard(page, change === 'company');
+    await page.locator('.gw-dlg').waitFor({state: 'detached'});
+    assert.equal(await page.evaluate(() => reviewWrites), 1, 'no further dry run or apply');
   });
 }
 

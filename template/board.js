@@ -602,6 +602,7 @@ function odArrived(){
    failure or a Try again reaches it. */
 function odDialog(){
   const dlg = gwOpen;
+  if(dlg && dlg.open && typeof dlg._odCurrent === "function" && !dlg._odCurrent()) return;
   if(dlg && dlg.open && typeof dlg._odWait === "function"){ const again = dlg._odWait; dlg._odWait = null; again(); }
 }
 /* Work left waiting when a board arrives asks that board for its section,
@@ -685,7 +686,7 @@ if(typeof document !== "undefined" && typeof document.addEventListener === "func
     const select = e.target.closest(".hs-sel")?.querySelector("select") || e.target.closest("select");
     if(type === "mousedown" && !select) return;
     if(type === "keydown"){
-      if(e.target.closest('textarea, [contenteditable], input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"])')) return;
+      if(e.target.closest('textarea, [contenteditable]:not([contenteditable="false"]), input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"])')) return;
       if(select ? ["Tab", "Escape"].includes(e.key) : ((e.key !== "Enter" && e.key !== " ")
         || !e.target.closest("button, input, a, [role='button'], [role='option'], [tabindex]"))) return;
     }
@@ -15892,7 +15893,7 @@ function hrQuickReview(){
      says "Hiring…" and is off until that write ends. */
   if(hrUi.quickPending) return;
   const token = ++hrQuickSeq;
-  hrUi.quickHold = token;
+  hrUi.quickHold = false;
   let dlg = null;
   const release = () => {
     if(hrUi.quickHold === token) hrUi.quickHold = false;
@@ -15905,7 +15906,9 @@ function hrQuickReview(){
       if(b) b.focus({preventScroll: true});
     }
   };
-  hrReview({scope: "quick"}, {
+  const opened = hrReview({scope: "quick"}, {
+    /* Waiting for a new board holds no picks from the old one. */
+    onPlan: () => { hrUi.quickHold = token; },
     /* Who the game hired is staff now (hrReview()); the form starts again,
        and a confirm closed while it applied ends its hold here. */
     onDone: () => {
@@ -15920,6 +15923,7 @@ function hrQuickReview(){
       if(el) el.focus({preventScroll: true});
     }},
   });
+  if(!opened){ release(); return; }
   dlg = gwOpen;
   if(dlg){
     /* Closed, however: the held weeks go back to Open places, unless the
@@ -16261,15 +16265,16 @@ const hrChainNote = n => gwCall("info", "roster", `${tt("co.hire.chain.later", {
   tt("co.hire.chain.update", "A newer Big Copilot Link does it all in one step, with Undo.")}`);
 /* The action's review and confirm. `o`: {scope: "all" | "site" | "quick",
    site (a key), only (Pick more), mode (the one to open on)}; `hooks`:
-   onDone, onFailed and more, for Quick hire's hold. */
+   onPlan, onDone, onFailed and more, for Quick hire's hold.
+   Returns whether the review opened. */
 function hrReview(o = {}, hooks = {}){
   /* Open at once; gwConfirm's waiting state holds every planning read. */
   const scope = odScope();
-  if(odBoardScope && !odSameScope(odBoardScope, scope)) return;
   o = Object.assign({scope: "all"}, o);
   let pick = o.mode || null;
   let planned = false;
   const build = () => {
+    if(hooks.onPlan) hooks.onPlan();
     const m = hrModel();
     const reqs = {};
     HR_MODES.forEach(k => { reqs[k] = hrAction(o, k, m); });
@@ -16305,7 +16310,7 @@ function hrReview(o = {}, hooks = {}){
   gwConfirm({
     kind: "hire", icon: "hire", needs: ["hiring"], scope,
     title: () => {
-      if(!planned && odReady("hiring")) build();
+      if(!planned && (!odBoardScope || odSameScope(odBoardScope, scope)) && odReady("hiring")) build();
       return o.only ? tt("co.hire.title.more", "Pick more")
       : o.scope === "site" ? tt("co.hire.title.site", "Staff {site}", {site: siteB() ? shortName(siteB()) : tt("co.hire.thissite", "this site")})
       : o.scope === "quick" ? tt("co.hire.title.quick", "Quick hire: {role}", {role: (planned && gameName(hrLast.m.quick.q.skill)) || tt("co.hire.arole", "a role")})
@@ -16578,6 +16583,7 @@ function hrReview(o = {}, hooks = {}){
     more: hooks.more || null,
   });
   if(gwOpen) gwOpen.classList.add("hr-wide");
+  return !!(gwOpen && gwOpen.open);
 }
 /* The people a replaced week gives fewer hours than the game has them on now,
    by the site's plan (`fewer`), for the sites the dry run says it rewrites
@@ -23348,6 +23354,7 @@ function gwConfirm(spec){
     dlg.close();
     return false;
   };
+  dlg._odCurrent = current;
   let applying = false;  // one apply per go: a second click must not send a second write
   let judged = "";       // the body the answer on screen judged, as sent
   let whose = "";        // and the game it judged it for
@@ -23361,7 +23368,10 @@ function gwConfirm(spec){
      (odArrived()). */
   const waiting = () => {
     if(!current()) return true;
-    const missing = (spec.needs || []).filter(n => !odNeed(n));
+    /* The old board can stay clickable after a source selection. Its
+       completed sections cannot plan a write for the new source. */
+    const rereading = spec.scope && odBoardScope && !odSameScope(odBoardScope, odScope());
+    const missing = (spec.needs || []).filter(n => rereading || !odNeed(n));
     dlg._odWait = missing.length ? () => plan() : null;
     if(!missing.length) return false;
     judged = "";
