@@ -659,7 +659,7 @@ if(typeof document !== "undefined" && typeof document.addEventListener === "func
 const OD_ACTION_SECTIONS = [
   ["#secOpen, #osCtl", ["openStore"]],
   ["#secPlan, #secIngredients, #secPlanFlow, #ofCtl, #planPicker, #planFor", ["openFactory", "openStore"]],
-  ["#secStaff, #secSchedules, [data-hr-staff], [data-hr-all], [data-gw=\"schedule\"]", ["hiring"]],
+  ["#secStaff, #secSchedules, [data-gw=\"schedule\"]", ["hiring"]],
   ["#secProducts", ["products"]], ["#secGoals", ["goals"]],
   ["#secProduction", ["factoryStaffing"]],
 ];
@@ -672,9 +672,12 @@ function odActionNeeds(target){
   return [...new Set(needs)];
 }
 if(typeof document !== "undefined" && typeof document.addEventListener === "function")
-  ["click", "change", "input", "mousedown", "keydown"].forEach(type => document.addEventListener(type, e => {
-    if(!e.target?.closest || e.target.closest("[data-od-retry], [data-od-close]")) return;
-    if(type === "keydown" && (e.key === "Escape" || e.key === "Tab")) return;
+  ["click", "change", "input", "keydown"].forEach(type => document.addEventListener(type, e => {
+    if(!e.target?.closest || e.target.closest("[data-od-retry], [data-od-close], [data-hr-staff], [data-hr-all]")) return;
+    const link = e.target.closest("a[href^='#']");
+    if(link && ![...link.attributes].some(a => a.name.startsWith("data-") && !["data-tip", "data-tt", "data-tt-title"].includes(a.name))) return;
+    if(type === "keydown" && ((e.key !== "Enter" && e.key !== " ")
+      || !e.target.closest("button, input, select, textarea, a, [role='button'], [role='option'], [tabindex]"))) return;
     if(odActionNeeds(e.target).filter(n => !odNeed(n)).length){ e.preventDefault(); e.stopImmediatePropagation(); }
   }, true));
 /* Names sort in the language they are shown in; English keeps the order it
@@ -16249,11 +16252,10 @@ const hrChainNote = n => gwCall("info", "roster", `${tt("co.hire.chain.later", {
    site (a key), only (Pick more), mode (the one to open on)}; `hooks`:
    onDone, onFailed and more, for Quick hire's hold. */
 function hrReview(o = {}, hooks = {}){
-  /* The review plans from the Staff page's key: a click before the board has
-     it opens the review once it arrives (odThen()). */
-  if(!odReady("hiring")) return odThen("hiring", () => hrReview(o, hooks), "hrReview");
+  /* Open at once; gwConfirm's waiting state holds every planning read. */
   o = Object.assign({scope: "all"}, o);
   let pick = o.mode || null;
+  let planned = false;
   const build = () => {
     const m = hrModel();
     const reqs = {};
@@ -16261,9 +16263,9 @@ function hrReview(o = {}, hooks = {}){
     const modes = hrModesOf(o, reqs);
     const mode = modes.includes(pick) ? pick : modes[0] || "both";
     hrLast = {m, req: reqs[mode], o, modes, mode, one: reqs[mode].one, answer: null, chain: {}};
+    planned = true;
     return hrLast;
   };
-  build();
   const counts = () => {
     const r = hrLast.req, b = r.body;
     return {hire: b.hires.length, move: b.moves.length, weeks: r.weeks, sites: b.sites.length + r.rest.length};
@@ -16289,11 +16291,14 @@ function hrReview(o = {}, hooks = {}){
   let applied = null;  // the action as applied, for its Undo
   gwConfirm({
     kind: "hire", icon: "hire", needs: ["hiring"],
-    title: () => o.only ? tt("co.hire.title.more", "Pick more")
+    title: () => {
+      if(!planned && odReady("hiring")) build();
+      return o.only ? tt("co.hire.title.more", "Pick more")
       : o.scope === "site" ? tt("co.hire.title.site", "Staff {site}", {site: siteB() ? shortName(siteB()) : tt("co.hire.thissite", "this site")})
-      : o.scope === "quick" ? tt("co.hire.title.quick", "Quick hire: {role}", {role: gameName(hrLast.m.quick.q.skill) || tt("co.hire.arole", "a role")})
-      : tt("co.hire.title.all", "Staff all sites"),
-    where: () => siteB() ? gwWhere(siteB()) : `<span>${tt("co.hire.where.all", {one: "{n} site", other: "{n} sites"}, {n: counts().sites})}</span>`,
+      : o.scope === "quick" ? tt("co.hire.title.quick", "Quick hire: {role}", {role: (planned && gameName(hrLast.m.quick.q.skill)) || tt("co.hire.arole", "a role")})
+      : tt("co.hire.title.all", "Staff all sites");
+    },
+    where: () => !planned ? "" : siteB() ? gwWhere(siteB()) : `<span>${tt("co.hire.where.all", {one: "{n} site", other: "{n} sites"}, {n: counts().sites})}</span>`,
     /* Asked first on every dry run and apply: the action is planned afresh
        from the board on screen and the pick, then judged. */
     nothing: () => {
@@ -16483,6 +16488,7 @@ function hrReview(o = {}, hooks = {}){
     },
     /* The verb says which of the three it does. */
     applyLabel: () => {
+      if(!planned) return tt("co.hire.go.both", "Hire and schedule");
       const c = counts(), mode = hrLast.mode;
       if(mode === "week") return tt("co.hire.go.week", {one: "Write {n} week", other: "Write {n} weeks"}, {n: c.weeks});
       if(mode === "hire") return c.move ? tt("co.hire.go.hiremove", "Hire {h}, reassign {m}", {h: c.hire, m: c.move}) : tt("co.hire.go.hire", "Hire {n}", {n: c.hire});
@@ -23317,7 +23323,7 @@ function gwConfirm(spec){
   const title = () => typeof spec.title === "function" ? spec.title() : spec.title;
   const where = () => typeof spec.where === "function" ? spec.where() : spec.where || "";
   const dlg = gwDialog(spec.icon, title(), where());
-  dlg.dataset.odNeeds = (spec.needs || []).join(" ");
+  dlg.querySelector(".gw-body").dataset.odNeeds = (spec.needs || []).join(" ");
   const stays = () => gwUndoStays(spec.kind);
   const cancel = [tt("nav.dlg.cancel", "Cancel"), () => dlg.close(), {kind: "ghost", close: true}];
   const left = [cancel];

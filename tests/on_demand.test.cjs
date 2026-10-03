@@ -47,16 +47,16 @@ function board(core = {}) {
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
-test('held planner, hire and finder actions are dropped on another company or source', () => {
+test('held planner and finder actions are dropped on another company or source', () => {
   for(const change of ['company', 'source']){
     const b = board({meta: {character: 'A', save: 'A', day: 3}});
     let source = 1;
     b.source.identity = () => source;
     b.take({meta: {character: 'A', save: 'A'}, names: {}, businesses: [],
       supply: {factories: {sites: []}}, staffing: [], officeStaffing: []}, 5);
-    b.run(`osStart('shop', 'hood'); ofPreset({type: 'shop'}); hrReview({scope: 'all'});
+    b.run(`osStart('shop', 'hood'); ofPreset({type: 'shop'});
       globalThis.ran = 0; odThen('premises', () => ran++, 'finder')`);
-    assert.ok(b.run('odThens.length') >= 4);
+    assert.ok(b.run('odThens.length') >= 3);
     if(change === 'source') source++;
     b.take({meta: {character: change === 'company' ? 'B' : 'A', save: change === 'company' ? 'B' : 'A'},
       names: {}, businesses: [], supply: {factories: {sites: []}}, staffing: [], officeStaffing: []}, 6);

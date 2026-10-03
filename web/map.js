@@ -1759,10 +1759,13 @@ class CityMapView {
     card.style.transform = `translate(${left.toFixed(1)}px,${top.toFixed(1)}px)`;
   }
   async select(key, focus=true, fresh=false){
+    // Retained footprints and rows cannot select from the previous board's facts.
+    if(this.finderOn() && !premises()) return;
     this.selected=key;this.freshSelection=fresh;
     finderPickRemember(this);
     if(!await this.ready) return;
     if(this.selected!==key) return; // A newer selection or character superseded this request.
+    if(this.finderOn() && !premises()) return;
     // A dialog that was just reopened has no layout yet; a cached rect from
     // its closed state is zero. Measure afresh and wait a frame if needed.
     this.rect = null;
@@ -1794,6 +1797,9 @@ class CityMapView {
     if(!this.selected) return;
     this.selected = null; this.onSettled = null;
     finderPickRemember(this);
+    // update() may retain the results while premises load; Close still dismisses.
+    if(this.card){ this.card.hidden = true; this.card.classList.remove('in'); }
+    this.paths?.forEach(path => path.classList.remove('sel'));
     this.update();
   }
   /* Let go of a view whose host has left the page: nothing refreshes or
@@ -1846,6 +1852,7 @@ function openFinder(preset = {}, focus = false){
   const toTop = () => view.root.querySelectorAll('.places, .places .list').forEach(el => { el.scrollTop = 0; });
   if(focus) toTop();
   view.setFinder(preset);
+  finderPickRestore(view, false);
   if(focus) view.ready.then(ok => {
     // The player may have left while the map loaded; the focus stays where they went.
     if(!ok || page !== "map") return;
@@ -1882,6 +1889,7 @@ function showFinder(mode = "push"){
      two questions asked from Demand keep their own answers. A new visit
      keeps the filters on screen, and they become its own. */
   const kept = mode !== "push" ? finderEntryState() : null;
+  if(mode === "push"){ finderStateRemember(view); finderPickRemember(view); }
   finderPickRestore(view, mode !== "push", kept);
 }
 /* The filters of a visit to Find a location, kept on its history entry
@@ -1936,7 +1944,7 @@ function finderPickRestore(view, replay, kept = null){
       view.clampSort(); view.showAll = false;
       view.update();
     }
-    if(!replay){ finderStateRemember(view); finderPickRemember(view); return; }
+    if(!replay){ view.saveFinder(); finderPickRemember(view); return; }
     if(key === view.selected) return;
     if(key && view.rows().some(r => r.key === key)){ view.select(key, false); return; }
     if(view.selected) view.deselect();

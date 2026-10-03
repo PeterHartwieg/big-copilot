@@ -336,8 +336,119 @@ test('a retained write review gates its declared readers and keeps Cancel usable
   await page.locator('.gw-dlg [data-test-review-mode]').click();
   await page.locator('.gw-dlg [data-gw-b="apply"]').click();
   assert.deepEqual(await page.evaluate(() => [reviewReads, reviewWrites]), before, 'neither controls nor Apply read missing hiring');
+  await page.locator('.gw-dlg .gw-body .od-wait').waitFor();
   await page.locator('.gw-dlg .gw-foot [data-od-close]').click();
   await page.locator('.gw-dlg').waitFor({state: 'detached'});
+});
+
+test('Undo in a done write dialog still sends its write while the next board waits for hiring', async t => {
+  const page = await open(t, {hash: '#staffing/needs'});
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => odReady('hiring'));
+  await page.evaluate(() => {
+    window.reviewWrites = [];
+    SOURCE.write = async (kind, body, o) => { reviewWrites.push({kind, body, dryRun: o.dryRun}); return {body: {ok: true}}; };
+    gwConfirm({kind: 'hire', icon: 'hire', title: 'Review', needs: ['hiring'], body: () => ({}),
+      applyLabel: () => 'Apply', verdict: () => 'Ready', draw: () => '', done: () => 'Done'});
+  });
+  await page.locator('.gw-dlg[data-phase="ready"]').waitFor();
+  await page.locator('.gw-dlg [data-gw-b="apply"]').click();
+  await page.locator('.gw-dlg[data-phase="done"]').waitFor();
+  await nextBoard(page);
+  assert.equal(await page.evaluate(() => odReady('hiring')), false);
+  await page.locator('.gw-dlg [data-gw-b="undo"]').click();
+  await page.locator('.gw-dlg[data-phase="undone"]').waitFor();
+  assert.deepEqual(await page.evaluate(() => reviewWrites.at(-1)), {kind: 'undo', body: {kind: 'hire'}, dryRun: false});
+});
+
+test('the capture guard allows text selection, scrolling keys and plain navigation, while gating activation', async t => {
+  const page = await open(t, {hash: '#staffing/needs'});
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => odReady('hiring'));
+  await nextBoard(page);
+  const events = await page.evaluate(() => {
+    const host = document.querySelector('#secStaff');
+    host.insertAdjacentHTML('beforeend', '<p id="guardText">Select this text</p><button id="guardButton">Change</button><a id="guardNav" href="#wiki/test" data-tip="Guide">Guide</a><a id="guardAction" href="#" data-hr-open="role">Change picks</a>');
+    const fire = (id, type, key) => {
+      const event = type === 'keydown' ? new KeyboardEvent(type, {key, bubbles: true, cancelable: true})
+        : new MouseEvent(type, {bubbles: true, cancelable: true});
+      document.getElementById(id).dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    // Keep a permitted click from navigating after the capture guard has run.
+    const nav = document.getElementById('guardNav');
+    let navClick = false;
+    nav.onclick = e => { navClick = !e.defaultPrevented; e.preventDefault(); };
+    fire('guardNav', 'click');
+    return {selection: fire('guardText', 'mousedown'), arrow: fire('guardButton', 'keydown', 'ArrowDown'),
+      textSpace: fire('guardText', 'keydown', ' '), navEnter: fire('guardNav', 'keydown', 'Enter'), navClick,
+      enter: fire('guardButton', 'keydown', 'Enter'), space: fire('guardButton', 'keydown', ' '),
+      action: fire('guardAction', 'keydown', 'Enter')};
+  });
+  assert.deepEqual(events, {selection: false, arrow: false, textSpace: false, navEnter: false, navClick: true,
+    enter: true, space: true, action: true});
+});
+
+for(const action of ['staff', 'all']){
+  test(`retained Staff ${action} opens a waiting review while hiring reloads`, async t => {
+    const page = await open(t, {hash: '#staffing/needs'});
+    await page.evaluate(() => window.release());
+    await page.waitForFunction(() => odReady('hiring'));
+    await page.evaluate(action => {
+      const b = document.createElement('button');
+      b.dataset.gw = 'hire';
+      if(action === 'staff') b.dataset.hrStaff = D.businesses[0].key; else b.dataset.hrAll = '';
+      b.id = 'retainedStaff'; b.textContent = 'Staff';
+      document.querySelector('#secStaff').appendChild(b);
+      window.reviewWrites = 0; SOURCE.write = async () => { reviewWrites++; return {body: {ok: true}}; };
+    }, action);
+    await nextBoard(page);
+    await page.evaluate(() => {
+      window.modelReads = 0; window.originalHrModel = hrModel;
+      hrModel = (...args) => { if(!odReady('hiring')) modelReads++; return originalHrModel(...args); };
+    });
+    await page.evaluate(() => document.querySelector('#retainedStaff').click());
+    assert.equal(await page.locator('.gw-dlg').count(), 1, 'the click opens the review immediately');
+    await page.locator('.gw-dlg .od-wait').waitFor();
+    assert.equal(await page.evaluate(() => modelReads), 0);
+    assert.equal(await page.evaluate(() => reviewWrites), 0);
+    await page.locator('.gw-dlg .gw-foot [data-od-close]').click();
+    await page.locator('.gw-dlg').waitFor({state: 'detached'});
+    await page.evaluate(() => window.release());
+    await page.waitForFunction(() => odReady('hiring'));
+    assert.equal(await page.locator('.gw-dlg').count(), 0, 'closing a waiting review cancels it');
+  });
+}
+
+test('retained finder footprints cannot move stale card content, and Close dismisses during refresh', async t => {
+  const page = await open(t, {hash: '#expansion/finder', ...finderHistoryQuestion()});
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => !!cityMapPage.finderDrawnScope);
+  await page.evaluate(async () => { await cityMapPage.ready; await loadFloorPlans(); });
+  await page.evaluate(async () => {
+    await cityMapPage.select(cityMapPage.matches[0].key, false);
+    window.pickedBefore = cityMapPage.selected;
+    window.cardBefore = cityMapPage.card.innerHTML;
+  });
+  await page.locator('#cityMapPage .site.in').waitFor();
+  await nextBoard(page);
+  await page.evaluate(() => {
+    const view = cityMapPage, path = [...view.paths].find(([key]) => key !== pickedBefore)[1];
+    const e = {button: 0, pointerId: 17, clientX: 100, clientY: 100, target: path, preventDefault(){}};
+    // Exercise the footprint's pointer handlers without native pointer capture.
+    view.svg.setPointerCapture = () => {};
+    view.svg.onpointerdown(e); view.svg.onpointerup({...e, type: 'pointerup'});
+  });
+  assert.equal(await page.evaluate(() => cityMapPage.selected), await page.evaluate(() => pickedBefore));
+  assert.equal(await page.evaluate(() => history.state.nxPick), await page.evaluate(() => pickedBefore));
+  assert.equal(await page.evaluate(() => cityMapPage.card.innerHTML), await page.evaluate(() => cardBefore));
+  await page.locator('#cityMapPage .site [data-action="close"]').click();
+  assert.equal(await page.evaluate(() => cityMapPage.card.hidden), true);
+  assert.equal(await page.evaluate(() => cityMapPage.selected), null);
+  assert.equal(await page.evaluate(() => history.state.nxPick || null), null);
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => odReady('premises'));
+  assert.equal(await page.locator('#cityMapPage .site.in').count(), 0);
 });
 
 test('the drawn finder keeps its list and scroll, ignores filters while loading and redraws on arrival', async t => {
@@ -567,13 +678,19 @@ test('the cold Map finder toggle asks for premises and opens the finder', async 
   assert.equal(await page.locator('#cityMapPage .places .od-wait').count(), 0);
 });
 
-test('cold search and Where should I open next preserve their finder presets', async t => {
-  for(const entry of ['search', 'question', 'type', 'warehouse']){
+test('cold search, Demand and Today persist their finder questions on arrival', async t => {
+  for(const entry of ['search', 'question', 'type', 'warehouse', 'demand', 'today']){
     const page = await open(t, {hash: '#map'});
     const preset = await page.evaluate(entry => {
       if(entry === 'search') SS_VIEWS.find(v => v.id === 'finder').go();
       else if(entry === 'question') SS_QUESTIONS.find(v => v.id === 'open').go();
       else if(entry === 'warehouse') ssBuild().find(v => v.id === 'finder:warehouse').go();
+      else if(entry === 'today'){ openRoute('overview'); document.querySelector('#findLocationCard').click(); }
+      else if(entry === 'demand'){
+        openRoute('expansion/demand');
+        document.querySelector('.heat .cell[data-slug="ba:businesstype_liquorstore"]').click();
+        document.querySelector('#demCellPop [data-dem-go="find"]').click();
+      }
       else {
         const row = D.market.types.find(r => r.cells.some(Boolean));
         ssBuild().find(v => v.id === `finder:${row.slug}`).go();
@@ -581,14 +698,81 @@ test('cold search and Where should I open next preserve their finder presets', a
       return {...cityMapPage.fs};
     }, entry);
     await page.locator('#cityMapPage .places .od-wait').waitFor();
-    assert.deepEqual(await asked(page), ['premises'], entry);
+    assert.ok((await asked(page)).includes(entry === 'demand' ? 'openStore' : 'premises'), entry);
     assert.equal(await page.evaluate(() => route), 'expansion/finder');
     await page.evaluate(() => window.release());
     await page.locator('#cityMapPage .filters').waitFor();
     assert.equal(await page.evaluate(() => cityMapPage.fs.cat), preset.cat, entry);
     assert.equal(await page.evaluate(() => cityMapPage.fs.type), preset.type, entry);
+    const filters = await page.evaluate(() => finderPick(cityMapPage.fs));
+    assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem(cityMapPage.finderStore()))), filters, entry);
+    assert.deepEqual(await page.evaluate(() => history.state.nxFs), filters, entry);
   }
 });
+
+test('a cold type preset survives reload and keeps its own Back and Forward history question', async t => {
+  const page = await open(t, {hash: '#map'});
+  await page.evaluate(() => ssBuild().find(v => v.id === 'finder:warehouse').go());
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => history.state?.nxFs?.cat === 'warehouse');
+  const first = await page.evaluate(() => history.state.nxFs);
+  await page.reload();
+  await read(page, 2);
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => cityMapPage.fs.cat === 'warehouse' && odReady('premises'));
+  assert.deepEqual(await page.evaluate(() => finderPick(cityMapPage.fs)), first);
+  await page.evaluate(() => {
+    openRoute('map'); openRoute('expansion/finder', {preset: {cat: 'office', type: ''}});
+  });
+  await page.waitForFunction(() => history.state?.nxFs?.cat === 'office');
+  const second = await page.evaluate(() => history.state.nxFs);
+  await page.goBack();
+  await page.waitForFunction(() => route === 'map');
+  await page.goBack();
+  await page.waitForFunction(() => cityMapPage.fs.cat === 'warehouse');
+  assert.deepEqual(await page.evaluate(() => finderPick(cityMapPage.fs)), first);
+  await page.goForward();
+  await page.waitForFunction(() => route === 'map');
+  await page.goForward();
+  await page.waitForFunction(() => cityMapPage.fs.cat === 'office');
+  assert.deepEqual(await page.evaluate(() => finderPick(cityMapPage.fs)), second);
+});
+
+test('a cold push finder visit records history synchronously even when left before premises', async t => {
+  const page = await open(t, {hash: '#map'});
+  const first = await page.evaluate(() => {
+    openRoute('expansion/finder');
+    return {filters: finderPick(cityMapPage.fs), kept: history.state.nxFs};
+  });
+  assert.deepEqual(first.kept, first.filters);
+  await page.evaluate(() => {
+    openRoute('map'); openRoute('expansion/finder', {preset: {cat: 'office', type: ''}});
+    window.release();
+  });
+  await page.waitForFunction(() => history.state?.nxFs?.cat === 'office');
+  await page.goBack();
+  await page.waitForFunction(() => route === 'map');
+  await page.goBack();
+  await page.waitForFunction(cat => route === 'expansion/finder' && cityMapPage.fs.cat === cat, first.kept.cat);
+  assert.deepEqual(await page.evaluate(() => finderPick(cityMapPage.fs)), first.filters);
+});
+
+for(const change of ['visit', 'company']){
+  test(`a cold preset never persists after its ${change} changes`, async t => {
+    const page = await open(t, {hash: '#map'});
+    const oldStore = await page.evaluate(() => {
+      openRoute('expansion/finder', {preset: {cat: 'warehouse', type: ''}});
+      return cityMapPage.finderStore();
+    });
+    if(change === 'visit') await page.evaluate(() => openRoute('overview'));
+    else await nextBoard(page, true);
+    await page.evaluate(() => odNeed('premises'));
+    await page.evaluate(() => window.release());
+    await page.waitForFunction(() => odReady('premises'));
+    assert.equal(await page.evaluate(key => localStorage.getItem(key), oldStore), null);
+    assert.notEqual(await page.evaluate(() => history.state?.nxFs?.cat), 'warehouse');
+  });
+}
 
 test('cold factory Investment preserves a saved plan until location and financing facts arrive, then Where works', async t => {
   const page = await open(t, {hash: '#expansion/factory', savedFactory: true});
