@@ -152,8 +152,8 @@ sys.stdout.buffer.write(json.dumps(_wire_msgs(fixture()["payload"]), ensure_asci
 });
 after(async () => { await browser?.close(); });
 
-/* web/index.html served from web/, the pseudo table standing in for German. */
-async function site(t, {ui = '', width = 1280, payload = PAYLOAD} = {}){
+/* Serve the assembled page and tables; pseudo text can stand in for German. */
+async function site(t, {ui = '', width = 1280, payload = PAYLOAD, pseudoTable = true} = {}){
   const context = await browser.newContext({viewport: {width, height: 900}, locale: 'en-US', reducedMotion: 'reduce'});
   t.after(() => context.close());
   const page = await context.newPage();
@@ -164,13 +164,13 @@ async function site(t, {ui = '', width = 1280, payload = PAYLOAD} = {}){
     if(url.hostname !== 'i18n.test') return route.abort();
     const name = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname);
     if(name.startsWith('/i18n/')) fetched.push(url.pathname + url.search);
-    if(name === '/i18n/de.json') return route.fulfill({contentType: 'application/json', body: JSON.stringify(TABLE)});
+    if(pseudoTable && name === '/i18n/de.json') return route.fulfill({contentType: 'application/json', body: JSON.stringify(TABLE)});
     const file = path.join(WEB, name);
     if(!fs.existsSync(file)) return route.fulfill({status: 404, body: ''});
     return route.fulfill({path: file});
   });
   await page.goto(`http://i18n.test/${ui ? `?ui=${ui}` : ''}`);
-  if(ui) await page.waitForFunction(() => ttLang === 'de');
+  if(ui) await page.waitForFunction(lang => ttLang === lang, ui);
   await page.evaluate(raw => { document.body.classList.add('has-board'); takeData(raw); boot(); }, payload);
   return {page, errors, fetched};
 }
@@ -336,6 +336,125 @@ test('the pseudo-locale fits at every width, on every page, view and site panel'
     assert.deepEqual(xx.errors, [], `${width}px`);
   }
 });
+
+
+/* Long saved names must fit even in English; the sweep above only compares
+   the extra space pseudo text takes. Use synthetic fixtures only. */
+function expansionStress(){
+  const payload = structuredClone(PAYLOAD);
+  const snapshot = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/payload_snapshot/data_day47_history.json'), 'utf8'));
+  payload.plan.catalogue = snapshot.plan.catalogue;
+  payload.plan.own = snapshot.plan.own;
+  const address = '123 International Manufacturing Supercalifragilisticexpialidociousboulevard';
+  const shop = payload.premises.buildings.find(b => b.type === 'retail');
+  shop.address = address + ' Retail';
+  const business = payload.businesses.find(b => b.key === shop.key);
+  business.address = shop.address;
+  business.opened = 12;
+  const depot = payload.businesses.find(b => b.typeSlug === 'ba:businesstype_warehouse');
+  const factory = {...structuredClone(depot), key: 'mobile-factory', name: 'Mobile factory',
+    address: address + ' Factory', type: 'Factory', typeSlug: 'ba:businesstype_factory'};
+  payload.supply.factories.sites.push({s: payload.businesses.length, name: factory.name,
+    lines: [], unnamed: [], needs: [], machines: 0, targets: {}, arrivals: {}});
+  payload.businesses.push(factory);
+  const warehouse = payload.premises.buildings.find(b => b.key === depot.key);
+  payload.premises.buildings.push({...structuredClone(warehouse), key: factory.key,
+    address: factory.address, occupant: {name: factory.name, type: factory.type, typeSlug: factory.typeSlug}});
+  return payload;
+}
+
+async function expansionSeed(page){
+  await page.evaluate(() => {
+    const shop = premises().buildings.find(b => b.type === 'retail');
+    const type = D.businesses.find(b => b.key === shop.key).typeSlug;
+    localStorage.setItem(osStore(), JSON.stringify({plans: [{id: 'mobile-store', type,
+      key: shop.key, hood: shop.hood, step: 'what', opened: 12}], current: 'mobile-store'}));
+    osPlansFor = null; osLoad();
+    const factory = ofOwned()[0];
+    const counts = {'ba:itemname_cheapgift': 2};
+    const plans = [
+      {id: 'mobile-new', type, key: factory.key, counts, step: 'what'},
+      {id: 'mobile-owned', type, site: factory.key, counts, step: 'what'}];
+    localStorage.setItem(ofStore(), JSON.stringify({plans, current: 'mobile-new'}));
+    ofPlansFor = null; ofLoad();
+    drawOpenStore(); drawPlan();
+  });
+}
+
+async function expansionWidth(page, label, failures){
+  // Measure the whole page, including controls hoisted outside the section.
+  await page.evaluate(async () => {
+    document.querySelectorAll('section').forEach(s => s.classList.add('measured'));
+    window.scrollTo(0, 0);
+    await document.fonts.ready;
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+  const got = await page.evaluate(() => {
+    const root = document.documentElement, width = root.clientWidth;
+    const right = el => {
+      const edges = [el.getBoundingClientRect().right];
+      if(getComputedStyle(el).overflowX !== 'visible') return edges[0];
+      // A long word can extend beyond its parent's otherwise fitting box.
+      for(const node of el.childNodes) if(node.nodeType === Node.TEXT_NODE){
+        const range = document.createRange(); range.selectNodeContents(node);
+        edges.push(range.getBoundingClientRect().right);
+      }
+      return Math.max(...edges);
+    };
+    const past = [...document.querySelectorAll('body *')].filter(el => {
+      if(!el.getClientRects().length || right(el) <= width + 1) return false;
+      for(let parent = el.parentElement; parent && parent !== document.body; parent = parent.parentElement){
+        if(getComputedStyle(parent).overflowX !== 'visible') return false;
+      }
+      return true;
+    }).map(el => `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : '.' + (el.getAttribute('class') || '').split(' ').join('.')} right=${Math.round(right(el))} in .${el.parentElement.getAttribute('class') || ''} "${el.textContent.trim().slice(0, 50)}"`);
+    return {width, scroll: root.scrollWidth, past};
+  });
+  if(got.scroll > got.width + 1) failures.push(`${label}: scrollWidth ${got.scroll} > clientWidth ${got.width}; ${got.past.join(', ')}`);
+}
+
+for(const lang of ['en', 'pseudo', 'de', 'es', 'fr', 'ko', 'pt', 'ru', 'tr']){
+  test(`Expansion fits phones with long plans and factory addresses: ${lang}`, async t => {
+    for(const width of [360, 375]) await t.test(`${width}px`, async t => {
+      const ui = lang === 'en' ? '' : lang === 'pseudo' ? 'de' : lang;
+      const {page, errors, fetched} = await site(t, {ui, width, payload: expansionStress(), pseudoTable: lang === 'pseudo'});
+      assert.equal(await page.evaluate(() => ttLang), ui || 'en');
+      if(ui){
+        assert.ok(fetched.some(p => p.startsWith(`/i18n/${ui}.json?`)), 'the requested table was fetched');
+        const expected = lang === 'pseudo' ? TABLE : JSON.parse(fs.readFileSync(path.join(WEB, 'i18n', `${ui}.json`), 'utf8'));
+        assert.equal(await page.evaluate(() => tt('gr.os.step.what', 'What')), expected['gr.os.step.what']);
+      }
+      const failures = [];
+      await expansionSeed(page);
+      await page.evaluate(() => openRoute('expansion/open'));
+      assert.ok((await page.locator('[data-os-plan] option').last().textContent()).length > 60, 'the saved store plan has a long name');
+      for(const step of ['what', 'where', 'investment', 'breakeven', 'opening', 'open']){
+        assert.equal(await page.evaluate(step => osStepReady(step, osPlan()), step), true, `${step} is reachable`);
+        await page.locator(`#osCtl [data-os-step="${step}"]`).click();
+        assert.equal(await page.evaluate(() => osStep), step);
+        if(step === 'what') assert.ok(await page.locator('#osBody .os-plans').isVisible(), 'Your plans is shown');
+        if(step === 'where') await page.locator('#osFinderMap .map-canvas').waitFor();
+        await expansionWidth(page, `${lang} ${width}px open/${step}`, failures);
+      }
+      await page.evaluate(() => openRoute('expansion/factory'));
+      assert.ok((await page.locator('[data-of-plan] option').last().textContent()).length > 60);
+      for(const id of ['mobile-new', 'mobile-owned']){
+        await page.locator('[data-of-plan]').selectOption(id);
+        assert.equal(await page.evaluate(() => ofTarget()), id === 'mobile-new' ? 'new' : 'mobile-factory');
+        for(const step of ['what', 'where', 'investment', 'until', 'running']){
+          if(id === 'mobile-owned' && step === 'where') continue; // Already rented.
+          assert.equal(await page.evaluate(step => ofStepReady(step), step), true, `${id}/${step} is reachable`);
+          await page.locator(`#ofCtl [data-of-step="${step}"]`).click();
+          assert.equal(await page.evaluate(() => ofStep), step);
+          if(step === 'what') assert.ok(await page.locator('#ofBody .os-plans').isVisible(), 'factory plans are shown');
+          await expansionWidth(page, `${lang} ${width}px factory/${id}/${step}`, failures);
+        }
+      }
+      assert.deepEqual(errors, []);
+      assert.deepEqual(failures, [], failures.join('\n'));
+    });
+  });
+}
 
 /* The landing and the shell around the board, as a player reaches them:
    app.js with a stand-in for the reader, the folder handle and IndexedDB
