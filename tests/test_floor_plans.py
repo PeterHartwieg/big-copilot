@@ -5,6 +5,7 @@ read the committed result: every layout the table gives a finder kind has a
 plan, every plan is only rectangles inside its own box, and the file stays
 small enough to fetch on the first plan the finder shows.
 """
+import ast
 import json
 import os
 import re
@@ -38,6 +39,36 @@ class FloorPlans(unittest.TestCase):
                 for code in codes:
                     self.assertIn(code, PLANS["plans"])
         self.assertEqual(build_web.floor_plan_gaps(), [])
+
+    def test_venue_mesh_groups_do_not_turn_walls_into_doors_or_floors(self):
+        # Exercise the pure classifier without installing owner-only UnityPy/Pillow.
+        tree = ast.parse((ROOT / "make_floor_plans.py").read_text(encoding="utf-8"))
+        classify = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_category")
+        scope = {}
+        exec(compile(ast.Module(body=[classify], type_ignores=[]), "make_floor_plans.py", "exec"), scope)
+        category = scope["_category"]
+        cases = {
+            "BuildingStructureR3/IndoorWalls/Inside 1x4.5_2Height": "wall",
+            "BuildingStructureR3/SecondFloor/IndoorWalls/Inside 1x4.5 (122)": "wall",
+            "BuildingStructureR3/SecondFloor/IndoorWalls/Inside 1x4.5/WallGrid": "wall",
+            "BuildingStructureR3/IndoorWalls/Inside Double Door 2x4.5/WallGrid": "door",
+            "BuildingStructureS3/Room6/Floor/StairsFloor 1x1 Variant/Dirt": "floor",
+            "BuildingStructureR3/SecondFloor/Floors/Floor 1x1/Dirt": "floor",
+            "BuildingStructureR3/OutdoorWalls/Perimeter 1x4.5": "wall",
+            "BuildingStructureR3/Roof/Inside Double Door": None,
+        }
+        for path, expected in cases.items():
+            with self.subTest(path=path):
+                self.assertEqual(category(path), expected)
+
+    def test_cinema_and_theatre_layouts_are_available(self):
+        self.assertEqual(PLANS["kinds"]["cinema"], ["S1", "S2", "S3"])
+        self.assertEqual(PLANS["kinds"]["theater"], ["R1", "R2", "R3"])
+        from ba_dashboard import _layout
+        for row in TABLE:
+            if row["t"] in ("cinema", "theater"):
+                with self.subTest(address=(row["n"], row["s"])):
+                    self.assertIn(_layout(row), PLANS["plans"])
 
     def test_a_plan_is_rectangles_inside_its_box(self):
         for code, plan in PLANS["plans"].items():

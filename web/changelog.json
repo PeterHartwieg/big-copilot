@@ -6,6 +6,12 @@
     "summary": "A cinema held below its building capacity by installed equipment now names the screens, projection booths, ticket kiosks or concessions stand registers that limit it. Its hours show a warning with advice to add the limiting equipment and staff any new employee stations. A cinema at its actual building capacity keeps the neutral reading."
   },
   {
+    "pr": 259,
+    "date": "2026-10-03",
+    "title": "Cinema and theatre floor plans in the finder",
+    "summary": "The finder now shows all six cinema and theatre layouts, including their stepped seating areas. Filter cinemas and theatres by layout and open a building to see its plan before choosing where to rent."
+  },
+  {
     "pr": 257,
     "date": "2026-10-03",
     "title": "Plan a factory with any mix of products",

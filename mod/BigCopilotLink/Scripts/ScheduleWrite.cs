@@ -18,7 +18,6 @@ namespace BigCopilotLink
     public static class ScheduleWrite
     {
         private const string HeadquartersType = "ba:businesstype_headquarters";
-        private const string TheaterType = "ba:businesstype_theater";
         private const string CinemaType = "ba:businesstype_cinema";
         private const string CinemaScreen = "ba:itemname_screencinema";
 
@@ -560,13 +559,11 @@ namespace BigCopilotLink
         private sealed class Site
         {
             public readonly Address Address;
-            public readonly bool Theater;
             public readonly Dictionary<string, BigAmbitions.Items.ItemInstance> Stations;
 
             public Site(BuildingRegistration reg)
             {
                 Address = WriteService.GameAddress(reg);
-                Theater = reg.businessTypeName == TheaterType;
                 Stations = Workstations(reg);
             }
         }
@@ -598,9 +595,9 @@ namespace BigCopilotLink
             }
             if (employee == null || !WriteService.SameAddress(assigned, site.Address)) return "not_assigned";
 
-            // A theater's actors work the stage, not an item: the game keeps a ""
-            // station for them (ScheduleHelper.FetchWorkstations).
-            if (string.IsNullOrEmpty(itemInstanceId)) return site.Theater ? null : "no_station";
+            // Every shift needs a station. A theater's empty row holds the
+            // stage licensing fee, not working hours; actors use the Dressing Room.
+            if (string.IsNullOrEmpty(itemInstanceId)) return "no_station";
 
             BigAmbitions.Items.ItemInstance station;
             if (!site.Stations.TryGetValue(itemInstanceId, out station)) return "no_station";
