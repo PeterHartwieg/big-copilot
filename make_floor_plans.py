@@ -9,15 +9,16 @@ time it shows a plan. Like ba_demand_curves.json, the result is committed and
 the site ships it: UnityPy (with Pillow, which it installs) and the installed
 game are owner-side only, and nothing ba_dashboard.py imports needs either.
 
-Which plans: one for each layout that ba_buildings.json gives a retail, office
-warehouse, cinema or theatre building (FLOOR_PLAN_KINDS in ba_dashboard.py). A layout is size
+Which plans: one for each layout that ba_buildings.json gives a retail, office,
+warehouse, cinema or theatre building (FLOOR_PLAN_KINDS in ba_dashboard.py). A
+layout is size
 code plus version ("C2"); the game picks the interior by exactly that pair, so
 an office C2 and a shop C2 share one plan. Run make_buildings.py --versions
 first when the table has no versions yet.
 
 Where the shells are: every layout is its own Addressables bundle,
 
-    <game>/Big Ambitions_Data/StreamingAssets/aa/StandaloneWindows64/
+    <game>/.../StreamingAssets/aa/<platform>/
         buildingstructures_assets_assets/prefabs/buildingstructures/<x>/
             buildingstructure<size><version>.prefab_<hash>.bundle
 
@@ -91,7 +92,8 @@ def _structures_dir() -> str:
     locale = find_game_locale()
     if not locale:
         raise SystemExit("could not find the installed game; set BA_LOCALE to its locale/en.json")
-    # Resolve beside the installed locale on Windows, macOS and Linux alike.
+    # Other owner-side generators still assume Windows; this one resolves
+    # beside the installed locale on Windows, macOS and Linux alike.
     aa = os.path.join(os.path.dirname(os.path.dirname(locale)), "aa")
     for platform in ("StandaloneWindows64", "StandaloneOSX", "StandaloneLinux64"):
         bundles = os.path.join(aa, platform)
@@ -146,14 +148,18 @@ def _category(path: str) -> str | None:
         return None
     if "loading dock" in p:
         return "bay"
-    if "door" in p or "entrance" in p:
+    # IndoorWalls/OutdoorWalls are grouping names, not door modules.
+    if "door" in p.replace("indoor", "").replace("outdoor", "") or "entrance" in p:
         return "door"
     if "window" in p or "glass" in p:
         return "window"
-    if "floor" in p:
-        return "floor"
-    if any(k in p for k in ("wall", "perimeter", "partition", "facade", "corner", "inside")):
-        return "wall"
+    # Start with the mesh's own module: a wall below SecondFloor is still
+    # a wall. Dirt/WallGrid child meshes inherit their nearest named module.
+    for part in reversed(p.split("/")):
+        if "floor" in part:
+            return "floor"
+        if any(k in part for k in ("wall", "perimeter", "partition", "facade", "corner", "inside")):
+            return "wall"
     return None  # anything unnamed is left out rather than guessed at
 
 
@@ -329,6 +335,7 @@ def main() -> None:
         if found:
             bundles[found.group(1).upper()] = path
     plans = {}
+    auditoriums = set(kinds["cinema"]) | set(kinds["theater"])
     for code in wanted:
         if code not in bundles:
             raise SystemExit(f"no building structure bundle for layout {code} under {base}")
@@ -336,7 +343,7 @@ def main() -> None:
         # Auditoriums use stepped floors; draw them too, rather than showing
         # their raised seating areas as holes in the building.
         plans[code] = plan(triangles(env, code), vehicle_bays=code in kinds["warehouse"],
-                           raised_floors=code in kinds["cinema"] + kinds["theater"])
+                           raised_floors=code in auditoriums)
         p = plans[code]
         print(f"{code}: {p['w'] / PX:.1f} x {p['h'] / PX:.1f} m, {p['doors']} doors, {p['bays']} bays, "
               f"{sum(len(v) for v in p['paths'].values()) // 1024} KB")
