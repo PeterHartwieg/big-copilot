@@ -1,5 +1,11 @@
 [
   {
+    "pr": 259,
+    "date": "2026-10-03",
+    "title": "Cinema and theatre floor plans in the finder",
+    "summary": "The finder now shows all six cinema and theatre layouts, including their stepped seating areas. Filter theatres by layout and open a building to see its plan before choosing where to rent."
+  },
+  {
     "pr": 257,
     "date": "2026-10-03",
     "title": "Plan a factory with any mix of products",
