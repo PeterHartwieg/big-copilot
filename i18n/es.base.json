@@ -1903,6 +1903,8 @@
  "map.fit.none": "No demand reading for this category here.",
  "map.fplan.from": "from the plan",
  "map.fplan.go": "Plan here",
+ "map.fr.phone.cap": "Building capacity: {n}",
+ "map.fr.phone.rent": "Rent: {n}",
  "map.head.finder": "Premises ranked for the business you want to open, with rent, deposit and floor plan.",
  "map.head.map": "Your businesses, the buildings you own and the homes you rent, on the game's map.",
  "map.kind.cinema": "Cinema",

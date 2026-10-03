@@ -115,6 +115,7 @@
 /* A ranked row's second line is why it is where it is, so it never waits for a
    hover the way a plain map row's address does. */
 .place.fr .nm small{max-height:none;opacity:1;margin-top:1px;white-space:nowrap}
+.place.fr .fr-phone-fact{display:none}
 .place.fr .v{font-family:"IBM Plex Mono",monospace;font-size:12px;text-align:right;color:var(--ink-2);white-space:nowrap}
 .place.fr .v.sc{color:var(--ink);font-weight:500}
 /* The shaded columns read like the market grid: the stronger the number, the
@@ -298,9 +299,10 @@ body.map-modal-open{overflow:hidden}
  .map-dialog .stage{height:60dvh}
 }
 /* On a phone the fixed columns would leave the address nothing. Traffic,
-   demand, floor area and cap step aside — they are still on the card, and the
-   score is the reason the row is where it is. */
+   demand and floor area step aside. Capacity (factory rent when planning)
+   moves below the address; the score keeps its column. */
 @media(max-width:600px){
+ .place.fr .fr-phone-fact{display:block;margin-top:2px;font-size:10px;line-height:1.4;white-space:normal;overflow-wrap:anywhere;color:var(--ink-2)}
  .fhead:not(.sale),.place.fr:not(.sale){grid-template-columns:28px 24px 1fr 42px 56px}
  .fhead:not(.sale):not(.wh) span:nth-child(n+5):nth-child(-n+8),
  .place.fr:not(.sale):not(.wh) > :nth-child(n+5):nth-child(-n+8),

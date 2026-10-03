@@ -1075,6 +1075,15 @@ class CityMapView {
       .map(s => { const loc = this.assets.byKey.get(s.key); return {...s, region:loc?.region, bounds:loc?.bounds}; });
   }
   saleKind(s){ return (this.sites?.get(s.key)?.type ?? s.type) === this.fs.cat; }
+  /* The phone keeps its address column: its hidden capacity (or factory
+     rent) gets a separate line rather than taking another fixed column. */
+  finderPhoneFact(b, fac = false){
+    if(!b || (!fac && b.cap == null)) return '';
+    const n = fac ? (b.rent != null ? fmt(b.rent) : '—') : capText(b.cap);
+    const line = fac ? tt("map.fr.phone.rent", "Rent: {n}", {n})
+      : tt("map.fr.phone.cap", "Building capacity: {n}", {n});
+    return `<span class="fr-phone-fact">${ssEsc(line)}</span>`;
+  }
   finderList(rows){
     // A warehouse ranks by floor area already, so its list has no second m²
     // column and keeps the narrower grid (class wh).
@@ -1113,13 +1122,13 @@ class CityMapView {
         : `<span class="v sc sh"${lead(f.score, SHADE_LEAD)}>${f.score ?? '—'}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v sh"${byDemand(f.demand, SHADE_SIDE)}>${f.demand ?? '—'}</span><span class="v m2">${num(b.m2)}</span>`;
       // The dot says what taking this place would mean: an empty floor to rent
       // or a rival to buy out.
-      return `<button type="button" class="place fr${grid}${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${ssEsc(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood">${ssEsc(hoodTag(b.hood))}</span><span class="nm">${ssEsc(b.address)}<small>${this.layoutTag(b)}${ssEsc(sub)}</small></span>${numbers}${fac ? `<span class="v cap">${b.rent != null ? ssEsc(fmt(b.rent)) : '—'}</span>` : `<span class="v cap">${ssEsc(capText(b.cap))}</span>`}<span class="v dep" data-tip="${attr(depositNote(b))}">${b.deposit != null ? ssEsc(fmt(b.deposit)) : '—'}</span></button>`;
+      return `<button type="button" class="place fr${grid}${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${ssEsc(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood">${ssEsc(hoodTag(b.hood))}</span><span class="nm">${ssEsc(b.address)}<small>${this.layoutTag(b)}${ssEsc(sub)}</small>${this.finderPhoneFact(b, fac)}</span>${numbers}${fac ? `<span class="v cap">${b.rent != null ? ssEsc(fmt(b.rent)) : '—'}</span>` : `<span class="v cap">${ssEsc(capText(b.cap))}</span>`}<span class="v dep" data-tip="${attr(depositNote(b))}">${b.deposit != null ? ssEsc(fmt(b.deposit)) : '—'}</span></button>`;
     }).join('');
   }
   saleList(rows){
     return `<div class="fhead sale"><span></span><span>${ssEsc(tt("map.col.address", "Address"))}</span><span>${ssEsc(tt("map.col.type", "Type"))}</span><span>${
       ssEsc(tt("map.unit.m2", "m²"))}</span><span>${ssEsc(tt("map.col.price", "Price"))}</span></div>`
-      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${ssEsc(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood">${ssEsc(hoodTag(s.hood))}</span><span class="nm">${ssEsc(s.address)}<small>${this.layoutTag(s)}${ssEsc(hoodName(s.hood))}</small></span><span class="v t">${ssEsc(typeLabel(s.type))}</span><span class="v">${num(s.m2)}</span><span class="v">${ssEsc(askingPrice(s.price))}</span></button>`).join('');
+      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${ssEsc(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood">${ssEsc(hoodTag(s.hood))}</span><span class="nm">${ssEsc(s.address)}<small>${this.layoutTag(s)}${ssEsc(hoodName(s.hood))}</small>${this.finderPhoneFact(this.sites?.get(s.key))}</span><span class="v t">${ssEsc(typeLabel(s.type))}</span><span class="v">${num(s.m2)}</span><span class="v">${ssEsc(askingPrice(s.price))}</span></button>`).join('');
   }
   /* The facts every address carries, finder on or off: what the place is, what
      it would cost and whether it is free. */
