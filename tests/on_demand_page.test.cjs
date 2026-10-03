@@ -84,6 +84,8 @@ async function open(t, {hash = "", releaseShops = true, savedFactory = false, ke
             this.onmessage({data: {id: msg.id, kind: 'section', data: JSON.stringify({generation: msg.gen, sections})}});
           };
           release.section = msg.name;
+          // window.failSection(name): Python fails on the section instead.
+          release.fail = () => this.onmessage({data: {kind: 'failed', id: msg.id, error: 'boom', trace: 'Traceback: boom', bytes: null}});
           window.held.push(release);
         }
       }
@@ -94,6 +96,11 @@ async function open(t, {hash = "", releaseShops = true, savedFactory = false, ke
       const all = window.held.filter(f => f.section === name);
       window.held = window.held.filter(f => f.section !== name);
       all.forEach(f => f()); return all.length;
+    };
+    window.failSection = name => {
+      const all = window.held.filter(f => f.section === name);
+      window.held = window.held.filter(f => f.section !== name);
+      all.forEach(f => f.fail()); return all.length;
     };
   }, {payload, keys: SECTION_KEYS, needs: SECTION_NEEDS, savedFactory, kept, pick});
   await context.route('https://**', (route) => route.abort());
@@ -374,6 +381,37 @@ for(const kind of ['schedule', 'hire']){
     assert.equal(after.writes.length, 2);
     assert.equal(after.writes[1].body.day, after.day, 'the new dry run uses the refreshed board');
     assert.equal(after.writes[1].dryRun, true, 'no apply was sent');
+    await page.locator('.gw-dlg .gw-foot [data-od-close]').click();
+    await page.locator('.gw-dlg').waitFor({state: 'detached'});
+  });
+}
+
+for(const kind of ['schedule', 'hire']){
+  test(`a ready ${kind} review shows a refreshed section's failure with Try again`, async t => {
+    const page = await open(t, {hash: '#staffing/needs'});
+    await page.waitForFunction(() => window.held.some(f => f.section === 'hiring'));
+    await page.evaluate(() => window.release());
+    await page.waitForFunction(() => odReady('hiring'));
+    await page.evaluate(kind => {
+      SOURCE.write = async () => ({body: {ok: true}});
+      gwConfirm({kind, icon: 'staff', title: 'Review', needs: ['hiring'], scope: odScope(),
+        body: () => ({day: D.meta.day}), applyLabel: () => 'Write the week', verdict: () => 'Ready',
+        draw: () => '<p>Planned week</p>'});
+    }, kind);
+    await page.locator('.gw-dlg[data-phase="ready"]').waitFor();
+    await nextBoard(page);
+    await page.waitForFunction(() => window.held.some(f => f.section === 'hiring'));
+    assert.match(await page.locator('.gw-dlg .gw-verdict').innerText(), /Working out staff needs/);
+    await page.evaluate(() => window.failSection('hiring'));
+    await page.waitForFunction(() => odState('hiring') === 'error');
+    const retry = page.locator('.gw-dlg [data-od-retry]');
+    await retry.waitFor();
+    assert.equal(await page.locator('.gw-dlg [data-gw-b="apply"]').isDisabled(), true, 'nothing is written on a failed section');
+    await retry.click();
+    await page.waitForFunction(() => window.held.some(f => f.section === 'hiring'));
+    await page.evaluate(() => window.release());
+    await page.locator('.gw-dlg[data-phase="ready"]').waitFor();
+    assert.equal(await page.locator('.gw-dlg [data-gw-b="apply"]').isEnabled(), true, 'Try again plans the review again');
     await page.locator('.gw-dlg .gw-foot [data-od-close]').click();
     await page.locator('.gw-dlg').waitFor({state: 'detached'});
   });

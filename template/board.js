@@ -23383,8 +23383,9 @@ function gwConfirm(spec){
     if(!missing.length) return false;
     judged = "";
     /* Keep a judged answer readable through refreshes, including another
-       refresh while it is being replanned in place. */
-    if(soft){
+       refresh while it is being replanned in place. A section that failed
+       takes the full paint instead, which shows the error and Try again. */
+    if(soft && !missing.some(odError)){
       quietly();
       dlg.querySelector(".gw-verdict").innerHTML = `${gwWire("ask")}<span><b>${odWords(missing[0])}</b></span>`;
       const go = dlg.querySelector('.gw-foot [data-gw-b="apply"]');
