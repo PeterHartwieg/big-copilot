@@ -4797,7 +4797,7 @@ const spRoleToken = (kind, skill) => `${kind}:${String(skill || "").replace(/\s+
 const SP_CELL_ORDER = {staff: 0, post: 1};
 const spCellLimit = (g, wd, h) => {
   const staffed = g.staffed[wd][h];
-  if(g.door && g.door <= staffed) return "door";
+  if(g.door && g.door <= staffed) return g.cinemaCapacity ? "furniture" : "door";
   const at = (g.roles || []).filter(r => r.staffed[wd][h] === staffed);
   if(!at.length) return spRoleToken(staffed < g.counters ? "staff" : "post", "");
   return [...new Set(at.map(r =>
@@ -4811,7 +4811,7 @@ const spCellLimit = (g, wd, h) => {
    staffing and registers" -- is about the hours where both held at once, so it
    asks for both and the grid lights the overlap alone. */
 const spLimitShow = n => (n.heldBy || []).map(([kind, role]) =>
-  kind === "door" ? "door" : spRoleToken(kind, role)).join(" ");
+  kind === "door" || kind === "furniture" ? kind : spRoleToken(kind, role)).join(" ");
 /* the roster ------------------------------------------------------------------
    docs/dashboard-reference.md's `staffing` row: the week the player would
    otherwise drag out by hand in BizMan, drawn on the hour grid's own 24

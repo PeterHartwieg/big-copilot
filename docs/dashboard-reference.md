@@ -469,9 +469,13 @@ grid and three lines meet.
   that number and each of the type's required furniture, summed per requirement whether
   anyone works it or not (`BusinessHelper.UpdateCustomerCapacity`). A cinema with one
   screen and one projection booth reads 25 until it has more of both, which is why a fresh
-  S3 cinema at 15 Third Avenue reads 25 and the fitted-out one 100. The board does not yet
-  tell the two apart: an hour held at 25 there shows as "at building capacity" like one held
-  at the layout's own number, though another screen and projection booth would lift it.
+  S3 cinema at 15 Third Avenue reads 25 and the fitted-out one 100. The board distinguishes a
+  cinema's furniture limit when all four capacity-bearing
+  requirements are installed and their minimum matches the saved capacity below the known
+  layout capacity. It names every tied requirement (screens, projection booths, ticket
+  kiosks or concessions stand registers), with advice to add furniture and staff any new
+  employee stations. Unknown layouts, incomplete setups and unexplained capacity readings
+  keep the existing neutral reading instead of guessed advice.
 
 Effective capacity is the smallest of these, and the useful finding is *which* one binds.
 Every hour at 95% or more of it is an hour at the ceiling; the grid outlines those in red (in a neutral grey where the building's own capacity held the hour),
@@ -571,7 +575,9 @@ hour is judged on its own staffing, and each role on the schedule that was on fo
 building capacity is at or below the site's staffed capacity the building is the limit. That is
 not raised as a finding: plenty of well-run sites sit at their building's capacity, and
 there is nothing to fix, so it shows on the site page only, as a neutral hour chip ("at
-building capacity") and neutral rings on its hours in the grid. Otherwise every role standing at the site's own minimum is named, and only those: a
+building capacity") and neutral rings on its hours in the grid. A cinema with a verified
+furniture limit below its layout instead gets a finding and warning rings for those hours;
+a lower staffing limit still takes precedence. Otherwise every role standing at the site's own minimum is named, and only those: a
 site with more than one role serves nobody until all of them are manned, but hiring into a
 role already faster than the slowest one buys nothing. A role at the minimum with stations
 standing empty is short of people; one with every station manned is short of stations. A
