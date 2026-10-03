@@ -10202,7 +10202,7 @@ function sbcRow(d, r){
     <span class="sbc-where">${sbcWhere(r)}</span>
     <span class="sbc-st">${pgPill(st, pgOf(r.key))}</span></div>`;
 }
-/* The head of Changes: how far along the list is, the truck on its road,
+/* The head of Changes: how far along the list is,
    Copy remaining and the imports the game link can apply. */
 function sbPaintChangesTop(d){
   const top = $("sbcTop");
@@ -10214,11 +10214,8 @@ function sbPaintChangesTop(d){
   const rows = d.rows.filter(r => sbInScope("changes", r.site));
   const done = rows.filter(r => pgDone(d, r)).length, total = rows.length;
   const left = rows.filter(r => !pgDone(d, r)).length;
-  const p = total ? done / total : 1;
-  top.style.setProperty("--p", p.toFixed(3));
-  top.classList.toggle("done", !!total && done === total);
-  const road = q(".sb-road", top);
-  if(road) road.setAttribute("aria-label", tt("sb.cw.road", "{done} of {n} changes recorded or applied", {done, n: total}));
+  const progress = q(".sbc-progress", top);
+  if(progress) progress.textContent = tt("sb.cw.road", "{done} of {n} changes recorded or applied", {done, n: total});
   const clear = $("secChanges") && q("[data-sbc-clear]", $("secChanges"));
   if(clear) clear.disabled = !d.marks.size;
   const copy = q("[data-sb-copy=remaining]", top);
@@ -10278,7 +10275,7 @@ function drawChangesView(){
   const remaining = orderChecklistText(left, tt("sb.ck.copy.title", "Big Copilot · {save} · day {day}", {save: D.meta.save, day: D.meta.day}), sizing);
   sbFill(sec, `${sbToolbar("changes", {kinds: ["shops", "warehouses", "factories"], basis})}
     <div class="sbc-wrap"><div class="sbc-top" id="sbcTop">
-      <span class="sb-road" role="img"><i></i><span class="trk">${spIcon("truck")}</span><span class="home">${spIcon("pin") || icon("pin")}</span></span>
+      <span class="sbc-progress" role="status"></span>
       <span class="sbc-acts"><button type="button" class="nx-btn pri sm" data-sb-copy="remaining">${icon("copy")}<span>${tt("sb.strip.copy", "Copy remaining")}</span></button>${apply}</span>
     </div>
     <p class="sb-copystatus" role="status"></p>
@@ -12865,7 +12862,7 @@ function drawPlan(){
         {station: station.name || r.workstation, kit: kit.length ? kit.join(" + ") : tt("gr.line.oneMachine", "one machine"), n: r.out * HOURS}))}">${
         tt("gr.line.rated", "{n:,}/h rated · {station}", {n: r.out, station: station.name || r.workstation})}</span></td>
       <td class="l"><span class="step"><a href="#" data-d="-1" aria-label="${attr(tt("gr.line.fewer", "one machine fewer"))}">−</a><b>${machinesOn(slug)}</b><a href="#" data-d="1" aria-label="${attr(tt("gr.line.more", "one machine more"))}">+</a><span class="machines"></span></span></td>
-      <td class="made"></td><td class="covers">${rateField ? `<span class="pc-cov"></span>${rateField}` : ""}</td><td class="l"><span class="ing"></span></td><td class="saves"></td></tr>`;
+      <td class="made"></td><td class="covers">${rateField ? `<span class="pc-cov"></span>${rateField}` : ""}</td><td class="l"><details class="pc-ingredients"><summary>${tt("gr.line.inputs", {one: "{n} ingredient", other: "{n} ingredients"}, {n: r.ingredients.length})}</summary><span class="ing"></span></details></td><td class="saves"></td></tr>`;
   });
   /* The range's last row: what else the type sells, one click from a line. */
   const offered = (cat[planType].extra || []).length;
@@ -13389,23 +13386,25 @@ function ofWhatHtml(plan){
     return `<div class="ff-short"><span class="mk" aria-hidden="true"></span>${spIcon("alert")}<span class="t">${tt("gr.of.short.title", "{name} stays short", {name: spEsc(l.name)})}<small>${said} ${rest}</small></span>
       <span class="a">${num(-Math.round(l.want - l.made))}<small>${tt("gr.of.short.week", "a week")}</small></span></div>`;
   }).join("");
-  const g = ofG();
+  const g = ofG(), exportHow = [];
   /* Only against shops that are measured: with none, nothing is surplus yet. */
   const exports = on.filter(l => l.want > 0 && l.made > l.want + 0.5 && ofProd(l.slug)).map(l => {
     const p = ofProd(l.slug), n = Math.round(l.made - l.want), each = ofExportPrice(l.slug);
     const drop = p.mo ? 0.25 * n / p.mo : null;
-    return `<div class="ff-note">${spIcon("crate")}<span><b>${tt("gr.of.export.head", "{n:,} {name} a week more than your shops take, worth {w} as an export.", {n, name: spEsc(l.name), w: fmt(n * each)})}</b>
-      ${tt("gr.of.export.how", "A pier pays {each} each today: wholesale {w} × {name}'s price index {i} × public prices {m} × export price {e}.",
-        {each: `$${num(Math.round(each * 100) / 100)}`, w: `$${num(p.w)}`, name: spEsc(l.name), i: num(Math.round((p.i || 1) * 100) / 100), m: num(g.prices || 1), e: num(g.export || 0)})}
+    exportHow.push(`<p><b>${spEsc(l.name)}</b> · ${tt("gr.of.export.how", "A pier pays {each} each today: wholesale {w} × {name}'s price index {i} × public prices {m} × export price {e}.",
+      {each: `$${num(Math.round(each * 100) / 100)}`, w: `$${num(p.w)}`, name: spEsc(l.name), i: num(Math.round((p.i || 1) * 100) / 100), m: num(g.prices || 1), e: num(g.export || 0)})}
       ${drop != null ? tt("gr.of.export.drop", "Exporting {n:,} a week pulls that index down by {d} a week, a quarter of it over the importer's weekly cap of {mo:,}; it never falls below 0.5.",
-        {n, d: num(Math.round(drop * 1000) / 1000), mo: p.mo}) : ""}</span></div>`;
+        {n, d: num(Math.round(drop * 1000) / 1000), mo: p.mo}) : ""}</p>`);
+    return `<div class="ff-note">${spIcon("crate")}<span><b>${tt("gr.of.export.head", "{n:,} {name} a week more than your shops take, worth {w} as an export.", {n, name: spEsc(l.name), w: fmt(n * each)})}</b>
+      ${drop != null ? tt("gr.of.export.fall", "At this volume, the price index falls by {d} a week, to a minimum of 0.5.", {d: num(Math.round(drop * 1000) / 1000)}) : ""}</span></div>`;
   }).join("");
   const saved = `<p class="ff-saves">${ofAgentLine()}</p>`;
   const depot = !ofIsOwned() && ofNoDepot() ? `<div class="ff-note warn">${spIcon("crate")}<span>${ofWantsDepot(plan)
       ? tt("gr.of.depot.adds", "<b>No depot yet.</b> To supply your shops, the factory needs a depot, so this plan adds one: a warehouse building, pallet shelves to receive, a van and a driver, and a Logistics Manager for its delivery plan.")
       : tt("gr.of.depot.without", "<b>No depot yet.</b> This plan leaves it out: the factory's goods reach the shops only once a depot takes them.")}</span>
       <button type="button" class="os-btn" data-of-depot>${ofWantsDepot(plan) ? tt("gr.of.depot.drop", "Without a depot") : tt("gr.of.depot.add", "With a depot")}</button></div>` : "";
-  return saved + short + exports + depot + ofFlowHtml(plan);
+  const calculations = exportHow.length ? `<details class="ff-export-how"><summary>${tt("gr.of.export.calculations", "Export calculations")}</summary>${exportHow.join("")}</details>` : "";
+  return saved + short + exports + calculations + depot + ofFlowHtml(plan);
 }
 /* The chain as a strip: the factory, the depot, the shops it supplies. */
 function ofFlowHtml(plan){
@@ -15319,18 +15318,15 @@ function hrFindHtml(m){
    button, then what keeps it off. */
 function hrOrderHtml(m, t){
   const l = gwLink(), old = !!l && !(l.writes || []).includes("hire");
-  const groups = hrGroups(m).filter(g => !g.x.off);
-  const routes = groups.map(g => `${g.x.from ? spEsc(hrSiteName(g.x.from)) : tt("co.hire.order.bench", "unassigned")} → ${spEsc(hrSiteName(g.x.to))}`);
   const byRole = m.roles.map(r => [r, r.picked.length]).filter(([, n]) => n);
   const short = m.roles.filter(r => r.short);
   /* The weeks it writes: every site a hire or reassign reaches, and every
      planned site whose week is not the plan's yet. */
   const weeks = hrRequest(m, {mode: "both", one: true}).weeks;
   const items = [
-    t.move ? `<li><span>${tt("co.hire.tile.move", "Reassign")}</span><b>${hrNum(t.move)}</b><small>${routes.slice(0, 2).join(" · ")}${
-      routes.length > 2 ? ` · ${tt("co.hire.order.more", "{n} more", {n: routes.length - 2})}` : ""}</small></li>` : "",
+    t.move ? `<li><span>${tt("co.hire.tile.move", "Reassign")}</span><b>${hrNum(t.move)}</b></li>` : "",
     `<li><span>${tt("co.hire.tile.hire", "Hire")}</span><b>${hrNum(t.hire)}</b>${byRole.length ? `<small>${byRole.map(([r, n]) => `${hrNum(n)} ${hrRoles(r.skill, n)}`).join(" · ")}</small>` : ""}</li>`,
-    weeks ? `<li><span>${tt("co.hire.tile.weeks", "Weeks")}</span><b>${hrNum(weeks)}</b></li>` : "",
+    weeks ? `<li><span>${tt("co.hire.tile.weeks", "Site schedules")}</span><b>${hrNum(weeks)}</b></li>` : "",
     short.length ? `<li class="short"><span>${tt("co.hire.order.short", "Stays open")}</span><b>${hrNum(t.short)}</b></li>` : "",
   ].join("");
   const n = t.hire + t.move + weeks;
@@ -15341,8 +15337,8 @@ function hrOrderHtml(m, t){
   /* Not linked, no data-gw: nothing on the board is a write while it reads a save. */
   const btn = `<button type="button" class="hs-cta wide" data-hs-review${l ? ` data-gw="hire"` : ""}${off ? ` aria-disabled="true"` : ""} aria-label="${
     attr(why ? tt("nav.dlg.offlabel", "{name}: {why}", {name: label, why}) : label)}">${off && n ? gwSvg("plug") : ""}<span>${label}</span>${off ? "" : gwSvg("right")}</button>`;
-  const under = !l ? `<div class="hs-gate"><b>${tt("co.hire.gate.link", "Link the game to hire")}</b><ol><li>${tt("co.hire.gate.sub", "Subscribe to Big Copilot Link (Steam Workshop)")}</li><li>${
-      tt("co.hire.gate.load", "Load this company in the game")}</li><li>${tt("co.hire.gate.from", "Link from the start screen")}</li></ol></div>`
+  const under = !l ? `<details class="hs-gate"><summary>${tt("co.hire.gate.link", "Link the game to hire")}</summary><ol><li>${tt("co.hire.gate.sub", "Subscribe to Big Copilot Link (Steam Workshop)")}</li><li>${
+      tt("co.hire.gate.load", "Load this company in the game")}</li><li>${tt("co.hire.gate.from", "Link from the start screen")}</li></ol></details>`
     : old ? `<div class="hs-gate warn"><b>${tt("co.hire.gate.old", "Update Big Copilot Link to 0.3.0")}</b><span>${l.mod ? `${tt("co.hire.gate.have", "You have {v}.", {v: spEsc(l.mod)})} ` : ""}${
       tt("co.hire.gate.restart", "Restart the game, then link again.")}</span></div>`
     : n ? `<p class="hs-note">${tt("co.hire.order.picked", "Picked for you. You confirm next.")}</p>` : "";
@@ -15427,7 +15423,7 @@ const hrKey = el => {
 function hrWhy(m, slug, S, wk){
   const kind = hrKind(slug);
   if(kind === "schedule") return "the plan's hours break it";
-  if(kind === "company") return hrDemandAt(m, slug, S, wk) === "warn" ? "add them to an HR plan that offers it" : "not offered";
+  if(kind === "company") return hrDemandAt(m, slug, S, wk) === "warn" ? tt("co.hire.require.hrplan", "assign an HR plan") : "not offered";
   if(kind === "station"){
     if(hrDemandAt(m, slug, S, wk) === "no") return "none at any site";
     if(hrDeskAnywhere(slug, S)) return wk && wk.w ? "not at this desk" : "met at a desk here: seat them there";
@@ -16411,7 +16407,7 @@ function hrReview(o = {}, hooks = {}){
         /* An older mod's weeks after the call count once written. */
         const ch = chainTally(), weeks = c.weeks - (ch.all - ch.done);
         return `${gwTiles([[tt("co.hire.tile.hired", "Hired"), null, hrNum(hired)], [tt("co.hire.tile.moved", "Reassigned"), null, hrNum(moved)],
-            ...(mode === "hire" ? [] : [[tt("co.hire.tile.weeks", "Weeks"), null, hrNum(weeks)]]),
+            ...(mode === "hire" ? [] : [[tt("co.hire.tile.weeks", "Site schedules"), null, hrNum(weeks)]]),
             [tt("co.hire.tile.wages", "Added wages"), null, `+${fmt(bill)}<small class="hr-u">${tt("co.hire.perday", "/day")}</small>`]])}
           ${mode === "hire" ? "" : `<p class="gw-lead">${tt("co.hire.starts", "Everyone starts on their hours from the next hour in the game.")}</p>`}${sites}${goneCall}${emptyCall}${more}${first}
           ${gapText ? gwCall("warn", "alert", `${gapText}. ${gapWhy ? `${gapWhy} ` : ""}${tt("co.hire.gap.stays", "It stays on the Staff page until someone matches.")}`) : ""}${shortCall}
@@ -16468,7 +16464,7 @@ function hrReview(o = {}, hooks = {}){
         "<b>{name}</b>: {h} h of the office default left out, more than their week can take",
         {name: spEsc(x.name || tt("sp.gw.someone.cap", "Someone")), h: x.hours})))).join("");
       return `${hrModeHtml(hrLast.modes, mode)}${blocked}${gwTiles([[tt("co.hire.tile.hire", "Hire"), null, hrNum(c.hire)], [tt("co.hire.tile.move", "Reassign"), null, hrNum(c.move)],
-          ...(mode === "hire" ? [] : [[tt("co.hire.tile.weeks", "Weeks"), null, hrNum(c.weeks)]]),
+          ...(mode === "hire" ? [] : [[tt("co.hire.tile.weeks", "Site schedules"), null, hrNum(c.weeks)]]),
           [tt("co.hire.tile.wages", "Added wages"), null, `+${fmt(bill)}<small class="hr-u">${tt("co.hire.perday", "/day")}</small>`]])}
         <p class="gw-lead">${tt("co.hire.lead", "Who goes where. Open a site to see each person and the days they work.")}</p>
         ${sites}${goneCall}${zero}${fewerCall}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", tt("sp.gw.left.head", "<b>No hours here after this</b>"))}<div class="gw-pills">${left.join("")}</div></div>` : ""}
@@ -17093,13 +17089,12 @@ function drawStandards(){
   if(!host || !hasData()) return;
   const cards = `<div class="nx-lead">${STD_SUBJECTS.map(sj => {
       const rows = nxFindings(sj.kinds), sites = nxSites(rows);
+      if(!rows.length) return "";
       const names = todayList(sites.slice(0, 3).map(b => spEsc(shortName(b))));
       const more = sites.length > 3 ? tt("co.std.more", "{names} and {n} more", {names, n: sites.length - 3}) : names;
       return `<button type="button" class="nx-card" data-std="${sj.id}"${sites.length ? ` data-site="${attr(sites[0].key)}"` : ""}><b>${spIcon(sj.icon)}${spEsc(sj.label)}</b>`
-        + `<span class="n ${rows.length ? "warn" : "ok"}">${num(rows.length)}</span><small>${rows.length
-          ? tt("co.std.at2", "at {sites}", {sites: more})
-          : tt("co.std.none", "Nothing flagged")}</small></button>`;
-    }).join("")}</div>`;
+        + `<span class="n warn">${num(rows.length)}</span><small>${tt("co.std.at2", "at {sites}", {sites: more})}</small></button>`;
+    }).join("") || `<p class="quiet">${tt("co.std.none", "Nothing flagged")}</p>`}</div>`;
   /* In linked mode, marketing for every shop and office at once. */
   const mk = gwMkAll("mix") + gwMkAll("setup", true);
   host.innerHTML = sechead(tt("co.std.title", "Standards"), {sr: true}) + cards + (mk ? `<div class="gw-acts gw-panel bz-mk">${mk}</div>` : "") + stdTable();
@@ -17227,7 +17222,9 @@ function drawPriceShops(){
     bzPriceLit = (busy || sites[0]).key;
   }
   const b = sites.find(x => x.key === bzPriceLit);
-  const chips = `<div class="bz-chips" data-view-ctl="businesses/prices" role="group" aria-label="${attr(tt("co.prices.at", "Prices at"))}">${
+  const chips = sites.length > 8 ? `<label class="bz-price-select" data-view-ctl="businesses/prices"><span>${tt("co.prices.at", "Prices at")}</span><select data-price-select>${
+    sites.map(x => `<option value="${attr(x.key)}"${x.key === bzPriceLit ? " selected" : ""}>${spEsc(shortName(x))}</option>`).join("")}</select></label>`
+    : `<div class="bz-chips" data-view-ctl="businesses/prices" role="group" aria-label="${attr(tt("co.prices.at", "Prices at"))}">${
     sites.map(x => `<button type="button" class="bz-chip" data-price-pick="${attr(x.key)}" aria-pressed="${x.key === bzPriceLit}">${hoodHtml(x)}<span>${spEsc(shortName(x))}</span></button>`).join("")}</div>`;
   ctlRelease(host);
   host.innerHTML = chips + bzPriceTable(b);
@@ -17821,7 +17818,10 @@ const ROUTES = {
   "overview": {needs: ["staffing"], host: ["today"]},
   /* The portfolio is one table on two views: Standards shows its
      Operations comparison, and Results gets back the view it had before. */
-  "businesses/results": {needs: [], host: ["company", "results"], enter(){ if(typeof view !== "undefined" && routeStdWas !== null){
+  "businesses/results": {needs: [], host: ["company", "results"], enter(){
+    const more = $("portMore"), label = $("portMoreLabel");
+    if(more) more.open = true; if(label) label.hidden = true;
+    if(typeof view !== "undefined" && routeStdWas !== null){
     if(view === "ops") view = routeStdWas;
     routeStdWas = null; sortKey = null; if(hasData()) drawPortfolio(); } }},
   /* The shop whose prices are on screen: a task's or the reader's, kept on
@@ -17834,7 +17834,10 @@ const ROUTES = {
     if(typeof wireAll === "function") wireAll();
   }},
   /* The portfolio's Operations comparison is the Standards view's body. */
-  "businesses/standards": {needs: [], host: ["company", "standards"], enter(){ if(typeof view !== "undefined" && view !== "ops"){
+  "businesses/standards": {needs: [], host: ["company", "standards"], enter(){
+    const more = $("portMore"), label = $("portMoreLabel");
+    if(more) more.open = false; if(label) label.hidden = false;
+    if(typeof view !== "undefined" && view !== "ops"){
     routeStdWas = view; view = "ops"; sortKey = null; if(hasData()) drawPortfolio(); } }},
   "businesses/milestones": {needs: ["goals"], host: ["company", "milestones"]},
   /* Supply's five views. Back, Forward and a reload give a view back its
@@ -20929,7 +20932,7 @@ const wireAdapters = once(() => {
     if(!sj) return;
     /* Promotion is the comparison right below; the others open the first
        business that needs them, on its Standards block. */
-    if(sj.id === "promotion" || !btn.dataset.site){ settleScroll($("secPortfolio")); return; }
+    if(sj.id === "promotion" || !btn.dataset.site){ $("portMore").open = true; settleScroll($("secPortfolio")); return; }
     routeOpenSite(btn.dataset.site, sj.block, "businesses/standards");
   });
   on("click", "[data-price-site]", (btn, e) => { e.preventDefault(); routeOpenSite(btn.dataset.priceSite, "#sp-shelves", "businesses/prices"); });
@@ -20940,6 +20943,12 @@ const wireAdapters = once(() => {
     ctlHoist();
     const again = q(`[data-price-pick="${CSS.escape(bzPriceLit)}"]`);
     if(again) again.focus({preventScroll: true});
+  });
+  on("change", "[data-price-select]", sel => {
+    bzPriceLit = sel.value;
+    drawPriceShops(); bzPriceKeep(); wireAll();
+    ctlHoist();
+    q("[data-price-select]")?.focus({preventScroll: true});
   });
   /* A business in Standards' comparison opens on its own Satisfaction block,
      under Standards. A modified click is the browser's (a new tab). */
