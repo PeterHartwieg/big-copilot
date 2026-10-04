@@ -21,6 +21,7 @@ const vm = require('node:vm');
 
 const ROOT = path.join(__dirname, '..');
 const SOURCE = fs.readFileSync(path.join(ROOT, 'template', 'open-store-model.js'), 'utf8') + '\n'
+  + fs.readFileSync(path.join(ROOT, 'template', 'open-factory-model.js'), 'utf8') + '\n'
   + fs.readFileSync(path.join(ROOT, 'template', 'board.js'), 'utf8');
 const I18N = fs.readFileSync(path.join(ROOT, 'web', 'i18n.js'), 'utf8');
 

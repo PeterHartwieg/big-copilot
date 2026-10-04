@@ -9,7 +9,7 @@ Cloudflare Worker API adds the community features.
 
 The board's main files are `ba_dashboard.py` (the Python), `template/board.html` (the page
 `render()` fills in: markup, CSS and the small head scripts) and `template/board.js` (the
-board script), with Open a store arithmetic in `template/open-store-model.js`.
+board script), with planner arithmetic in `template/open-store-model.js` and `template/open-factory-model.js`.
 Find each part by its anchor, never by line number — the files are long and
 the numbers drift.
 
@@ -19,6 +19,7 @@ the numbers drift.
 | The board's HTML and CSS | `template/board.html`, read on the first `render()` by `load_template()` |
 | The board script | `template/board.js`, which `load_template()` splices into `/*__BOARD_SCRIPT__*/`, the body of the page's last `<script>` block, before any other placeholder is filled. A branch from before the split that conflicts in `board.html` is resolved by `tools/split_board_script.py --resolve` (`docs/architecture.md`, "Template placeholders") |
 | Open a store calculations | `template/open-store-model.js`: an explicit-input calculation module, embedded before the board script by `load_template()` and imported directly by its arithmetic tests and `check_profit_model.py` |
+| Plan a factory calculations | `template/open-factory-model.js`: explicit-input prices, storage, investment and running costs; the board owns plan selection and persistence |
 | Where `web/map.js` and `web/wiki.js` are spliced in | `/*__MAP_SCRIPT__*/`, `/*__WIKI_SCRIPT__*/` in `template/board.js` |
 | CLI, save catalogue and watch server | `def main(` and the functions around it, in `ba_dashboard.py` |
 
@@ -169,6 +170,7 @@ stale one fails them.
 | `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`. Premises extraction is `tests/test_premises.py`. `tests/test_payload_snapshot.py` compares whole `extract()` payloads with `tests/fixtures/payload_snapshot/`; after an intended change regenerate them with `python tests/test_payload_snapshot.py --update` and review the diff. A change meant to leave the payload alone also runs `python tools/payload_diff.py dump research/<name>` on main and on the branch and `compare`s the two (owner only: it reads every save on the machine) |
 | `template/board.html` or `template/board.js` (the board's markup, CSS or script) | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs` |
 | `template/open-store-model.js` (Open a store arithmetic) | `npm run verify`; its direct arithmetic tests are `tests/open_store_model.test.cjs`, and its board integration uses `tests/open_store.test.cjs` and `tests/finder_plan.test.cjs`. Compare `python check_profit_model.py <save-root>` before and after locally when owner saves are available; never commit its private outputs |
+| `template/open-factory-model.js` (Plan a factory arithmetic) | `npm run verify`; direct arithmetic: `tests/open_factory_model.test.cjs`, browser flow and persistence: `tests/open_factory.test.cjs` |
 | `tools/verify.mjs`, npm verification scripts or the CI stage wiring | `npm test -- tests/verify.test.cjs`, then `npm run verify` |
 | `web/app.js`, `web/worker.js`, `web/update.js` | `node --test tests/*.test.cjs` |
 | `build_web.py` `BANNER` or `BEFORE_SCRIPT` (landing screen, news strip) | `python build_web.py --assemble` first, since the Node tests and `tests.test_privacy_promises` read the built page; then `node --test tests/news.test.cjs tests/release.test.cjs tests/update.test.cjs` and `python -m unittest tests.test_privacy_promises tests.test_footer` |
@@ -226,7 +228,9 @@ and never attach one to an issue.
   fails on a column-0 name declared twice across them, `template/board.html`'s inline
   scripts and the site's scripts.
   `template/open-store-model.js` is embedded ahead of the board and exposes only the
-  `OpenStoreModel` namespace; keep its arithmetic independent of board globals and the DOM.
+  `OpenStoreModel` namespace; `template/open-factory-model.js` follows it and exposes
+  `OpenFactoryModel`, reusing its vendor grouping. Keep their arithmetic independent of
+  board globals, persistence and the DOM.
 - `section{content-visibility:auto}` clips absolutely positioned children, so a popover
   rendered inside a section is cut off. Hang it off `<body>` with `position:fixed` and
   place it against its anchor, the way `#tip` and `#alertPop` do. The
@@ -263,7 +267,8 @@ and never attach one to an issue.
   `PY_CODE` and `PY_DATA` in `build_web.py`; the worker names each one itself, and
   `tests/test_web_fresh.py` fails when the two disagree. Read a file lazily, inside a function, as
   `load_buildings()`, `load_demand_curves()` and `load_template()` (through `render()`) do.
-  `template/board.html`, `template/board.js` and `template/open-store-model.js` are not among the fetched files: the worker
+  `template/board.html`, `template/board.js`, `template/open-store-model.js` and
+  `template/open-factory-model.js` are not among the fetched files: the worker
   never renders.
 
 ## Where to read more

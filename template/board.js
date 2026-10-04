@@ -13040,8 +13040,8 @@ function drawPlan(){
 
    Python sends the facts (_open_factory(): prices, the workstations' kits,
    storage, vehicles, what each warehouse and factory holds); the arithmetic
-   runs here, as for Open a store, whose parts (the os- classes, osStores(),
-   osLoan()) it reuses. No break-even and no payback: a factory is a cost
+   runs in open-factory-model.js, sharing vendor grouping with OpenStoreModel.
+   This flow reuses the store UI (the os- classes) and osLoan() for financing. No break-even and no payback: a factory is a cost
    centre of its chain. The investment is the one-off, upfront cost (machines
    and shelves at list price, the installation firm's fee or the furniture
    delivery, the deposit, the truck); raw material, wages and rent are the
@@ -13053,12 +13053,6 @@ const OF_MAX_PLANS = 12;
 /* The board's staffing rule for a factory: a worker for every 50
    machine-hours a week, rounded up. */
 const OF_WORKER_HOURS = 50;
-/* Storage (NOTES.md, decision 16): a week of raw material, since a plain
-   import contract delivers once a week, and two days of output, which ships
-   daily. */
-const OF_RAW_DAYS = 7, OF_OUT_DAYS = 2;
-/* A depot the plan adds receives on this many pallet shelves. */
-const OF_DEPOT_SHELVES = 8;
 const OF_FACTORY = "ba:businesstype_factory", OF_DEPOT = "ba:businesstype_warehouse";
 /* A warehouse building's parking: one vehicle in an H, two in the rest. */
 const ofSlots = b => b && b.size === "H" ? 1 : 2;
@@ -13104,7 +13098,7 @@ function ofLoad(){
 function ofSave(){
   if(!odReady("openFactory") || !odReady("openStore")) return;
   const plan = ofPlan();
-  if(plan) plan.step = ofStep;
+  if(plan){ plan.step = ofStep; ofSyncInvestment(plan); }
   try{ localStorage.setItem(ofStore(), JSON.stringify({plans: ofPlans, current: ofCur})); }catch(e){}
 }
 const ofPlan = () => ofPlans.find(p => p.id === ofCur) || null;
@@ -13209,34 +13203,22 @@ const ofSized = (l, mode) => l.rate && (mode === "peak" ? l.peakDay : l.avgDay) 
    price, with no discount (ProductMarketHelper.GetProductExportPrice). */
 /* By the recipe's name, or the one the city trades it under (rawtomato is
    tomato in every warehouse: the factory view's aliases). */
-function ofProd(slug){
-  const P = ofFacts().products || {};
-  if(P[slug]) return P[slug];
-  const alias = ((D.supply || {}).factories || {}).aliases || {};
-  const from = Object.keys(alias).find(k => alias[k] === slug && P[k]);
-  return from ? P[from] : null;
+/* Explicit payload inputs; arithmetic and vendor grouping live in the model. */
+function ofCore(){
+  return OpenFactoryModel.create({facts: ofFacts(), recipes: RECIPE_BY,
+    aliases: ((D.supply || {}).factories || {}).aliases || {},
+    sources: (D.plan || {}).sources || {}, hours: HOURS});
 }
-const ofDiscount = () => 1 - 0.25 * Math.max(0, Math.min(100, ofG().agent ?? 100)) / 100;
-const ofWholesale = slug => { const p = ofProd(slug); return p ? (p.w || 0) * (p.i || 1) * (ofG().prices || 1) : 0; };
-const ofImportPrice = slug => ofWholesale(slug) * ofDiscount();
-const ofExportPrice = slug => ofWholesale(slug) * (ofG().export || 0);
-/* The raw material one unit made eats, at import prices. */
-const ofRawUnit = slug => { const r = RECIPE_BY[slug];
-  return r && r.out ? r.ingredients.reduce((s, i) => s + i.per * ofImportPrice(i.slug), 0) / r.out : 0; };
-/* SkillData.baseHourlyWage × (1 + 1.05^skill / 100) × the game's salary
-   multiplier, at skill 100, as the store flow plans its staff. */
-const ofHourly = skill => ((ofFacts().skills || {})[`ba:skill_${skill}`] || 0) * (1 + Math.pow(1.05, 100) / 100) * (ofG().wages || 0);
-/* What a line saves a week: the imports it replaces, less the raw material
-   its machines eat running flat out. The surplus is valued apart, as an export. */
-const ofSaves = l => Math.min(l.made, l.want) * ofImportPrice(l.slug) - l.made * ofRawUnit(l.slug);
-/* A week of raw material for these machines, per ingredient. */
-function ofRawWeek(counts){
-  const out = {};
-  Object.entries(counts).forEach(([slug, m]) => { const r = RECIPE_BY[slug];
-    if(r && m > 0) r.ingredients.forEach(i => { out[i.slug] = (out[i.slug] || 0) + m * i.per * HOURS * 7; }); });
-  return out;
-}
-const ofRawCost = counts => Object.entries(ofRawWeek(counts)).reduce((s, [slug, n]) => s + n * ofImportPrice(slug), 0);
+const ofProd = slug => ofCore().product(slug);
+const ofDiscount = () => ofCore().discount();
+const ofWholesale = slug => ofCore().wholesale(slug);
+const ofImportPrice = slug => ofCore().importPrice(slug);
+const ofExportPrice = slug => ofCore().exportPrice(slug);
+const ofRawUnit = slug => ofCore().rawUnit(slug);
+const ofHourly = skill => ofCore().hourly(skill);
+const ofSaves = line => ofCore().saves(line);
+const ofRawWeek = counts => ofCore().rawWeek(counts);
+const ofRawCost = counts => ofCore().rawCost(counts);
 /* The agent the prices are discounted for, in one sentence. */
 function ofAgentLine(){
   const g = ofG(), pct = Math.round((1 - ofDiscount()) * 100);
@@ -13251,78 +13233,38 @@ function ofAgentLine(){
    shelves, the installation firm's fee on the floor or a delivery per store,
    the deposit and the truck. A factory the player runs adds only the new
    machines and the shelves its new plan needs beyond those standing there. */
-function ofKit(counts){
-  const kits = ofFacts().kits || {}, out = new Map();
-  Object.entries(counts).forEach(([slug, m]) => { const r = RECIPE_BY[slug];
-    if(r && m > 0) (kits[r.workstation] || []).forEach(([item]) => out.set(item, (out.get(item) || 0) + m)); });
-  return out;
-}
-/* Boxes for a week of each ingredient and two days of each product. A box
-   holds the item's own box size (Item.boxSize); an item with none is not counted. */
-function ofBoxes(counts){
-  const box = slug => (ofProd(slug) || {}).bx || 0, need = new Map();
-  const add = (slug, n) => need.set(slug, (need.get(slug) || 0) + n);
-  Object.entries(counts).forEach(([slug, m]) => { const r = RECIPE_BY[slug];
-    if(!r || !(m > 0)) return;
-    add(slug, m * r.out * HOURS * OF_OUT_DAYS);
-    r.ingredients.forEach(i => add(i.slug, m * i.per * HOURS * OF_RAW_DAYS)); });
-  let boxes = 0;
-  need.forEach((n, slug) => { if(box(slug)) boxes += Math.ceil(n / box(slug)); });
-  return boxes;
-}
+const ofKit = counts => ofCore().kit(counts);
+const ofBoxes = counts => ofCore().boxes(counts);
 const ofBuilding = key => key && typeof premises === "function" && premises() ? premises().buildings.find(b => b.key === key) || null : null;
 /* The company has no depot: the factory's output has nowhere to go to the
    shops, so a new factory's plan adds one unless the player says not to. */
 const ofNoDepot = () => !(D.businesses || []).some(b => b.typeSlug === OF_DEPOT && b.status !== "vacant");
 /* Once costed, the depot is the plan's (plan.depotKey): its rows and cost
    stay through its setup, after the company has a depot. */
-const ofWantsDepot = plan => !ofIsOwned() && !(plan && plan.depot === false) && (ofNoDepot() || !!(plan && plan.depotKey));
+const ofWantsDepot = (plan, owned = ofIsOwned()) => !owned && !(plan && plan.depot === false) && (ofNoDepot() || !!(plan && plan.depotKey));
 /* The depot beside the factory: the cheapest warehouse to rent in its
    neighbourhood, else the cheapest anywhere. */
-function ofDepotPick(b){
-  const free = (premises() ? premises().buildings : []).filter(x => x.type === "warehouse" && x.status === "vacant" && (!b || x.key !== b.key) && x.rent != null);
-  const near = free.filter(x => b && x.hood === b.hood);
-  return (near.length ? near : free).slice().sort((x, y) => x.rent - y.rent || x.key.localeCompare(y.key))[0] || null;
+function ofDepotChoice(plan, building, owned){
+  if(!ofWantsDepot(plan, owned)) return null;
+  return ofCore().selectDepot({building, buildings: (premises() || {}).buildings || [],
+    rememberedKey: plan && plan.depotKey});
 }
-function ofInvestment(plan){
-  const F = ofFacts(), g = ofG(), owned = ofIsOwned(), items = F.items || {};
-  if(!F.kits) return null;
-  const b = owned ? ofBuilding(planTarget) : plan && ofBuilding(plan.key);
-  if(!b) return null;
-  const lines = ofLines(), counts = Object.fromEntries(lines.map(l => [l.slug, l.m]));
-  const now = owned ? ofNow(planTarget) : {};
-  const adds = owned ? Object.fromEntries(lines.map(l => [l.slug, Math.max(0, l.m - (now[l.slug] || 0))])) : counts;
-  /* A factory you run stores for every line it keeps after the change, its
-     other types' included, against the shelves standing there. */
-  const shelf = F.shelf || {}, cc = shelf.cc || 60, boxes = ofBoxes(owned ? {...now, ...counts} : counts);
-  const placed = owned ? (((F.sites || {})[planTarget] || {}).shelves || 0) : 0;
-  const shelves = Math.max(0, Math.ceil(boxes / cc) - placed);
-  const out = {lines: [...ofKit(adds)].map(([item, qty]) => [item, qty, "ws"])};
-  if(shelves && shelf.item) out.lines.push([shelf.item, shelves, "shelf"]);
-  const price = item => (items[item] || {}).p || 0;
-  const furniture = out.lines.reduce((s, [item, qty]) => s + qty * price(item), 0);
-  const stores = osStores(out, items);
-  const delivery = furniture ? stores.length * (g.delivery || 0) : 0;
-  const fee = (g.installFee || 0) * (b.m2 || 0);
-  const truck = owned ? 0 : ((F.vehicles || {}).truck || {}).p || 0;
-  const deposit = owned ? 0 : b.deposit || 0;
-  let depot = null;
-  if(ofWantsDepot(plan)){
-    /* The remembered depot, while it is not the factory's own building and
-       still free to rent or the player's own; else one picked afresh. */
-    const kept = plan && plan.depotKey && plan.depotKey !== b.key ? ofBuilding(plan.depotKey) : null;
-    const at = (kept && (kept.status === "vacant" || kept.status === "mine") ? kept : null) || ofDepotPick(b), van = ((F.vehicles || {}).van || {}).p || 0;
-    if(plan && at && plan.depotKey !== at.key){ plan.depotKey = at.key; ofSave(); }
-    if(at){
-      const racks = OF_DEPOT_SHELVES * (shelf.p || 0);
-      depot = {b: at, deposit: at.deposit || 0, shelves: OF_DEPOT_SHELVES, racks, van, delivery: g.delivery || 0,
-        total: (at.deposit || 0) + racks + van + (g.delivery || 0)};
-    }
-  }
-  const extra = truck + deposit + (depot ? depot.total : 0);
-  return {b, out, stores, furniture, delivery, fee, truck, deposit, depot, boxes, shelves, placed,
-    items: out.lines.reduce((n, l) => n + l[1], 0), adds,
-    self: furniture + delivery + extra, firm: fee + furniture + extra};
+function ofInvestment(plan, {counts = ofCounts(), target = planTarget} = {}){
+  const owned = !!target && target !== "new", building = ofBuilding(owned ? target : plan && plan.key);
+  return ofCore().investment({counts, building, owned,
+    current: owned ? ofNow(target) : {}, depot: ofDepotChoice(plan, building, owned)});
+}
+/* A planner input or a fresh save changed: adopt the calculated depot and
+   investment explicitly before persisting. Reading or drawing costs is pure. */
+function ofSyncInvestment(plan){
+  /* A save can precede redraw (switching plans or removing a product). Use
+     this plan's inputs, never rows still showing the previous selection. */
+  const target = plan.site || "new";
+  if(target !== "new" && !ofOwned().some(f => f.key === target)) return;
+  const inv = ofInvestment(plan, {counts: plan.counts || {}, target});
+  if(!inv) return;
+  if(inv.depot) plan.depotKey = inv.depot.b.key;
+  if(inv.items || target === "new") plan.inv = Math.round(inv[ofMode(plan)]);
 }
 /* Self-installation unless the player picks the firm (NOTES.md, decision 5). */
 let ofModeNow = "self";
@@ -13333,35 +13275,13 @@ const ofMode = plan => (plan && plan.mode) || ofModeNow;
    Purchasing Agent or a Logistics Manager the plan has to hire at
    headquarters -- and the rent. A factory the player runs counts only what
    the change adds: the extra raw material and the new workers' wages. */
-function ofHq(plan){
-  const hq = ofFacts().hq || {}, need = ofIngredientsUncontracted().length > 0;
-  const managers = Math.max(0, 1 + (ofWantsDepot(plan) ? 1 : 0) - Math.max(0, (hq.managers || 0) - (hq.managed || 0)));
-  const agents = need && (hq.agents || 0) <= (hq.contracts || 0) ? 1 : 0;
-  return {managers, agents};
-}
+const ofHq = plan => ofCore().hq(ofCounts(), ofWantsDepot(plan));
 function ofRunning(plan, inv){
-  const g = ofG(), lines = ofLines(), counts = Object.fromEntries(lines.map(l => [l.slug, l.m]));
-  const machines = lines.reduce((n, l) => n + l.m, 0);
-  if(ofIsOwned()){
-    const all = ofNow(planTarget), now = Object.fromEntries(lines.map(l => [l.slug, all[l.slug] || 0]));
-    const was = lines.reduce((n, l) => n + now[l.slug], 0);
-    const raw = ofRawCost(counts) - ofRawCost(now), workers = Math.max(0, machines - was) * 168 * ofHourly("factoryworker");
-    return {raw, wages: workers, rent: 0, workers, driver: 0, hq: 0, total: raw + workers};
-  }
-  const hq = ofHq(plan), b = inv ? inv.b : plan && ofBuilding(plan.key);
-  const raw = ofRawCost(counts), workers = machines * 168 * ofHourly("factoryworker");
-  const drivers = 1 + (inv && inv.depot ? 1 : 0);
-  const driver = drivers * (g.driverHours || 5.7) * 7 * ofHourly("deliverydriver");
-  const office = (hq.agents * ofHourly("purchasingagent") + hq.managers * ofHourly("logisticsmanager")) * (g.hqHours || 40);
-  const rent = ((b && b.rent) || 0) * 7 + (inv && inv.depot ? (inv.depot.b.rent || 0) * 7 : 0);
-  return {raw, wages: workers + driver + office, rent, workers, driver, hq: office, total: raw + workers + driver + office + rent};
+  const owned = ofIsOwned();
+  return ofCore().running({counts: ofCounts(), owned, current: owned ? ofNow(planTarget) : {},
+    building: ofBuilding(plan && plan.key), wantsDepot: ofWantsDepot(plan)}, inv);
 }
-/* The ingredients the plan's lines eat that no active import contract brings. */
-function ofIngredientsUncontracted(){
-  const view = factoryView(), alias = view.aliases || {}, sources = (D.plan || {}).sources || {};
-  const counts = Object.fromEntries(ofLines().map(l => [l.slug, l.m]));
-  return Object.keys(ofRawWeek(counts)).filter(slug => { const s = sources[alias[slug] || slug] || sources[slug]; return !(s && s.active); });
-}
+const ofIngredientsUncontracted = () => ofCore().uncontracted(ofCounts());
 
 /* --- the view ------------------------------------------------------------------ */
 const ofStepLabel = s => ({what: tt("gr.of.step.what", "What"), where: tt("gr.of.step.where", "Where"),
@@ -13592,7 +13512,6 @@ function ofInvestHtml(plan){
     <span>${tt("gr.os.inv.itemsLab", "Items")}</span><b>${fmt(inv.furniture)}</b></div></div>`;
   if(!inv.items && owned) return tool + `<p class="quiet os-gap">${tt("gr.of.inv.nothing", "Nothing to buy: the plan adds no machine and no shelf.")}</p>`;
   const body = mode === "self" ? ofSelfHtml(inv) : ofFirmHtml(inv);
-  if(plan){ plan.inv = Math.round(inv[mode]); ofSave(); }
   return tool + body + (owned ? "" : ofFinHtml(plan, inv))
     + `<div class="ff-next"><button type="button" class="os-cta" data-of-step="until">${ofStepLabel("until")}${icon("go")}</button></div>`;
 }
@@ -14091,7 +14010,12 @@ function ofDraw(){
 function ofAfterLines(){
   if(!$("ofCtl") || !hasData() || !Object.keys(RECIPE_BY).length) return;
   const plan = ofPlan();
-  if(plan && plan.type === planType){ plan.counts = ofCounts(); ofSave(); }
+  if(plan && plan.type === planType){
+    const before = JSON.stringify(plan), counts = ofCounts();
+    if(JSON.stringify(plan.counts) !== JSON.stringify(counts)) plan.counts = counts;
+    ofSyncInvestment(plan);
+    if(JSON.stringify(plan) !== before) ofSave();
+  }
   if(ofStep !== "what") return;
   $("ofStrip").innerHTML = ofStripHtml(plan);
   $("ofStart").innerHTML = ofStartHtml(plan);
@@ -21822,7 +21746,12 @@ function showGrowthRow(slug){
 
 /* plan a chain: every line runs 24/7; step a line's machines and everything follows */
 function planDraw(){
-  const lines = $$("tr.line[data-m][data-rate]"); if(!lines.length){ if(ofCustom() && $("ingBody")) $("ingBody").innerHTML = ""; return; }
+  const lines = $$("tr.line[data-m][data-rate]");
+  if(!lines.length){
+    if(ofCustom() && $("ingBody")) $("ingBody").innerHTML = "";
+    ofAfterLines();
+    return;
+  }
   const host = lines[0].closest("table");
   const perShopWeek = host ? (+host.dataset.pershop || 0) * 7 : 0, shopsOwned = host ? (+host.dataset.shops || 0) : 0;
   /* How many shops a line supplies is judged on a shop's busiest day: the
