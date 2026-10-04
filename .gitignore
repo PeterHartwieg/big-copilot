@@ -1,5 +1,6 @@
 # Save games and anything generated from them
 *.hsg
+*.bcsave
 market_history.json
 dashboard.html
 
@@ -58,8 +59,12 @@ mockup/*/project/
 /web/wiki/
 /web/i18n/
 /web/py/ba_save.py
+/web/py/ba_facts.py
 /web/py/ba_dashboard.py
 /web/py/ba_buildings.json
 /web/py/ba_demand_curves.json
 /web/py/ba_item_prices.json
 /web/py/ba_store_rules.json
+
+/web/translations/
+/web/translate/

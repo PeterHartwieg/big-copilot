@@ -149,6 +149,11 @@ class Extraction(unittest.TestCase):
 
     def plan(self, campaigns, status="retail", building=None, hood=LOWER, contacts=(INTERNET, BILLBOARDS), promo=None):
         agencies = d._marketing_agencies(_city(contacts))
+        actual = building or self.building
+        if promo is None and actual.get("m") and actual.get("t") in d.MARKETING_REACH and hood in d.MARKETING_STRENGTH:
+            marketing, total = d.marketing_score(60, [c["marketingTypeName"] for c in campaigns if c["enabled"]],
+                                                  actual["m"], actual["t"], hood)
+            promo = {"trafficIndex": 60, "marketing": marketing, "total": total}
         return d._marketing(_Save(), {"marketingCampaigns": campaigns}, building or self.building,
                             status, hood, promo or self.promo, agencies)
 

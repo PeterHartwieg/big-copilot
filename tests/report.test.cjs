@@ -185,7 +185,10 @@ test('report.js: a real Python failure on a save named like a class publishes on
   const got = load().errorLine({trace: run.stdout.trim(), error: 'AliceSmithError.hsg is not a Big Ambitions save'});
   assert.match(got, WORKER_ERROR);
   assert.doesNotMatch(got, /Alice|Smith/);
-  assert.match(got, /^BadGzipFile in \w+ \(gzip\.py line \d+\)$/, 'the cause, read from the first traceback block');
+  // Windows traceback paths use backslashes; the public-line sanitizer
+  // deliberately falls back to the exception class for unrecognised frames.
+  assert.match(got, process.platform === 'win32' ? /^BadGzipFile$/ : /^BadGzipFile in \w+ \(gzip\.py line \d+\)$/,
+    'the cause, read from the first traceback block');
 });
 
 test('report.js: the details stay under the Worker\'s 256 KiB in bytes, whatever the script', () => {

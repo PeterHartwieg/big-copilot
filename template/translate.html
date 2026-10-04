@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title data-tt="comm.tr.pageTitle">Translations · Big Copilot</title>
+<script>try{var trTheme=localStorage.getItem("ba_dash_theme");if(trTheme==="light"||trTheme==="dark")document.documentElement.setAttribute("data-theme",trTheme);}catch(e){}</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="__TRANSLATE_CSS__">
+<script>window.LEDGER_BUILD="__STAMP__";</script>
+<script>__I18N_SCRIPT__</script>
+</head>
+<body>
+<div class="tr-wrap">
+<header class="tr-head"><a class="tr-brand" href="/" aria-label="Big Copilot">Big Copilot<span class="tr-dot" aria-hidden="true"></span></a><a href="/" data-tt="comm.tr.back">Dashboard</a></header>
+<main id="translationApp">
+<div class="tr-heading"><h1 data-tt="comm.tr.title">Translations</h1><label class="tr-sr" for="trLanguage" data-tt="comm.tr.language">Translation language</label><select id="trLanguage">__LANG_OPTIONS__</select></div>
+<div class="tr-tools"><label class="tr-sr" for="trSearch" data-tt="comm.tr.searchLabel">Search phrases</label><input id="trSearch" type="search" placeholder="Search phrases…" data-tt-placeholder="comm.tr.searchPlaceholder" autocomplete="off"><label class="tr-sr" for="trFilter" data-tt="comm.tr.filterLabel">Filter translations</label><select id="trFilter"><option value="all" data-tt="comm.tr.all">All phrases</option><option value="missing" data-tt="comm.tr.missingFilter">Untranslated</option><option value="draft" data-tt="comm.tr.draftFilter">Drafts</option><option value="community" data-tt="comm.tr.communityFilter">Community</option></select><label class="tr-sr" for="trArea" data-tt="comm.tr.areaLabel">Page or area</label><select id="trArea"><option value="" data-tt="comm.tr.allAreas">All areas</option></select><span id="trCount" class="tr-count"></span></div>
+<div id="trNotice" class="tr-notice" role="status" aria-live="polite"></div>
+<div class="tr-table"><div class="tr-columns" aria-hidden="true"><span data-tt="comm.tr.english">English</span><span id="trTargetHeading"></span><span data-tt="comm.tr.votes">Votes</span><span></span></div><div id="trRows" aria-busy="true"></div></div>
+<nav class="tr-paging" aria-label="Translation pages" data-tt-aria-label="comm.tr.pages"><button id="trPrev" type="button" data-tt="comm.tr.previous" disabled>Previous</button><span id="trPage" class="tr-count"></span><button id="trNext" type="button" data-tt="comm.tr.next" disabled>Next</button></nav>
+<p id="trStatus" class="tr-status" role="status" aria-live="polite"></p>
+<footer class="tr-bottom"><details><summary data-tt="comm.tr.how">How voting works</summary><p data-tt="comm.tr.rules">Suggest wording or vote for the version you prefer.</p><p data-tt="comm.tr.ruleVotes">Your suggestion starts with one vote; the most votes wins, and ties keep the current wording.</p><p data-tt="comm.tr.ruleAccount">One choice per phrase and connection. No account needed.</p></details></footer>
+</main>
+</div>
+<script src="__TRANSLATE_SCRIPT__" defer></script>
+</body>
+</html>

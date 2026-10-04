@@ -58,7 +58,7 @@ SOURCE_DIR = os.path.join(ROOT, "i18n")
 # Beside <lang>.json and <lang>.base.json: the machine-drafted keys awaiting review.
 AI_SUFFIX = ".ai.json"
 # The scripts a page runs, beside the board script in template/board.js.
-JS_FILES = ("web/i18n.js", "web/app.js", "web/update.js", "web/community.js", "web/report.js", "web/map.js", "web/wiki.js")
+JS_FILES = ("web/i18n.js", "web/app.js", "web/update.js", "web/community.js", "web/report.js", "web/map.js", "web/wiki.js", "web/translate.js")
 # A key is <area>.<thing>[.<part>]; the area names the page, and the pull
 # request that owns it (docs/architecture.md, "UI text").
 AREAS = ("nav", "land", "app", "foot", "today", "f", "co", "sp", "sb", "gr", "map", "wiki", "comm",
@@ -72,7 +72,7 @@ SPECS = re.compile(r",|\$|\$c|day|,?\.\df")
 # CLDR plural categories of the languages Big Copilot is translated into.
 PLURALS = {"en": ("one", "other"), "de": ("one", "other"), "pt": ("one", "many", "other"),
            "fr": ("one", "many", "other"), "es": ("one", "many", "other"), "ru": ("one", "few", "many", "other"),
-           "ko": ("other",), "tr": ("one", "other")}
+           "ko": ("other",), "tr": ("one", "other"), "it": ("one", "many", "other")}
 ATTRS = ("data-tt-title", "data-tt-aria-label", "data-tt-placeholder", "data-tt-tip")
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 
@@ -404,6 +404,10 @@ def calls() -> list[dict]:
     # with its own file's line numbers.
     with open(os.path.join(ROOT, "template", "board.html"), encoding="utf-8") as fh:
         found += markup_calls(fh.read(), "template/board.html")
+    translate = os.path.join(ROOT, "template", "translate.html")
+    if os.path.isfile(translate):
+        with open(translate, encoding="utf-8") as fh:
+            found += markup_calls(fh.read(), "template/translate.html")
     with open(os.path.join(ROOT, "template", "board.js"), encoding="utf-8") as fh:
         found += js_calls(fh.read(), "template/board.js")
     found += markup_calls(build_web.BANNER, "build_web.py", _file_line("build_web.py", "BANNER = "))

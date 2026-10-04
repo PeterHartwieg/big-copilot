@@ -906,7 +906,7 @@ test('Set the cheapest mix opens the site panel\'s marketing write for the plan\
   const sent = await page.evaluate(() => window.__writes[0]);
   assert.equal(sent.kind, 'marketing');
   assert.equal(sent.dryRun, true);
-  assert.deepEqual(sent.body.sites, [{address: {street: 'ba:street_broadwaystreet', number: 9}, on: ['SmallInternet'], was: []}]);
+  assert.deepEqual(sent.body.sites, [{address: {street: 'ba:street_broadwaystreet', number: 9}, on: ['SmallInternet'], was: [], prediction: {dailyCost: 100, marketing: 40, total: 100}}]);
   assert.equal(await dlg.locator('h2').innerText(), en('sp.gw.mk.title'));
   assert.match(await dlg.innerText(), textRe('nav.dlg.refuse.nocontact.rule', {agency: 'CityAds'}, {}));
 });

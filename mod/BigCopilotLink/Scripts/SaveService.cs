@@ -84,9 +84,14 @@ namespace BigCopilotLink
         /// <summary>ISO-8601 UTC, or null before the first refresh.</summary>
         public readonly string RefreshedAtUtcIso;
 
-        public Snapshot(byte[] bytes, string stamp, int day, string refreshedAtUtcIso)
+        public readonly string Facts;
+        public readonly string Character;
+
+        public Snapshot(byte[] bytes, string stamp, int day, string refreshedAtUtcIso, string facts = null, string character = null)
         {
             Bytes = bytes;
+            Facts = facts;
+            Character = character ?? "";
             Stamp = stamp;
             Day = day;
             RefreshedAtUtcIso = refreshedAtUtcIso;
@@ -395,6 +400,10 @@ namespace BigCopilotLink
             var day = TimeHelper.CurrentDay;
             var hour = TimeHelper.CurrentHour;
 
+            string facts;
+            try { facts = BuildingFacts.Capture(instance); }
+            catch (Exception e) { return FailedStart("capturing building facts failed: " + e.Message, trigger == "retry"); }
+            var character = instance.characterId;
             _busy = true;
             _lastRefreshStarted = DateTime.UtcNow;
             // Whatever asked, this refresh answers it: a retry left set here would buy a
@@ -416,7 +425,7 @@ namespace BigCopilotLink
                 // competes with the frame.
                 try
                 {
-                    var worker = new Thread(delegate () { SerializeAndCompressOnWorkerThread(instance, day, hour, trigger); });
+                    var worker = new Thread(delegate () { SerializeAndCompressOnWorkerThread(instance, day, hour, trigger, facts, character); });
                     worker.Name = "BigCopilotLink.Serialize";
                     worker.IsBackground = true;
                     worker.Priority = ThreadPriority.BelowNormal;
@@ -450,7 +459,7 @@ namespace BigCopilotLink
             try
             {
                 LinkMod.LogInfo("serialized in " + clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + " ms on the main thread (" + trigger + ")");
-                var compressor = new Thread(delegate () { CompressAndPublishOnWorkerThread(raw, day, hour, false, fallbackRun, wasRetry); });
+                var compressor = new Thread(delegate () { CompressAndPublishOnWorkerThread(raw, day, hour, false, fallbackRun, wasRetry, facts, character); });
                 compressor.Name = "BigCopilotLink.Compress";
                 compressor.IsBackground = true;
                 compressor.Priority = ThreadPriority.BelowNormal;
@@ -558,7 +567,7 @@ namespace BigCopilotLink
         /// OdinSerializer throw: that is caught, the previous bytes stay, and the main
         /// thread is told so it can retry or fall back.
         /// </summary>
-        private void SerializeAndCompressOnWorkerThread(GameInstance instance, int day, int hour, string trigger)
+        private void SerializeAndCompressOnWorkerThread(GameInstance instance, int day, int hour, string trigger, string facts, string character)
         {
             byte[] raw;
             var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -577,7 +586,7 @@ namespace BigCopilotLink
             // The city may have unloaded during the walk; the gzip is the longer half
             // of the job and its result would be thrown away at the publish.
             if (_cleared) return;
-            CompressAndPublishOnWorkerThread(raw, day, hour, true, false, trigger == "retry");
+            CompressAndPublishOnWorkerThread(raw, day, hour, true, false, trigger == "retry", facts, character);
         }
 
         /// <summary>Main thread only, through the dispatcher.</summary>
@@ -605,13 +614,14 @@ namespace BigCopilotLink
         /// walk produced, with the game's own stateless call, and hands the result
         /// back.
         /// </summary>
-        private void CompressAndPublishOnWorkerThread(byte[] raw, int day, int hour, bool fromWorker, bool fallbackRun, bool wasRetry)
+        private void CompressAndPublishOnWorkerThread(byte[] raw, int day, int hour, bool fromWorker, bool fallbackRun, bool wasRetry, string facts, string character)
         {
             try
             {
                 var gz = SaveGameSerializationHelper.CompressBytes(raw);
                 if (gz == null) throw new InvalidOperationException("CompressBytes returned null");
 
+                var hash = BuildingFacts.Hash(gz);
                 var now = DateTime.UtcNow;
                 var unixSeconds = (long)(now - UnixEpoch).TotalSeconds;
                 var iso = now.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
@@ -621,6 +631,22 @@ namespace BigCopilotLink
                 MainThreadDispatcher.Enqueue(delegate
                 {
                     if (_cleared) return;
+                    try
+                    {
+                        if (BuildingFacts.Capture(SaveGameManager.Current) != facts)
+                        {
+                            _busy = false;
+                            _retryPending = true;
+                            return;
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        LinkMod.LogWarn("building facts changed during refresh: " + e.Message);
+                        _busy = false;
+                        _retryPending = true;
+                        return;
+                    }
                     // The stamp is opaque, but two refreshes must never share one: an
                     // apply's refresh and a quick undo's can land in the same second,
                     // and a page waiting for the stamp to move would wait out its
@@ -635,7 +661,7 @@ namespace BigCopilotLink
                     // One reference swap publishes everything at once, so a reader can
                     // never pair new bytes with an old stamp. A city unloaded meanwhile
                     // (Clear ran) gets nothing: the bytes would outlive the game.
-                    _current = new Snapshot(gz, stamp, day, iso);
+                    _current = new Snapshot(gz, stamp, day, iso, BuildingFacts.Bind(facts, stamp, hash), character);
                     _busy = false;
                     // Any published refresh ends the failure streak: "two in a row"
                     // means two failed walks with nothing served between them. A

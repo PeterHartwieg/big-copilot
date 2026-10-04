@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CHECK_INPUTS = tuple(dict.fromkeys(
     build_web.STAMP_INPUTS
     + build_web.PY_COPIED + tuple(f"web/py/{name}" for name in build_web.PY_COPIED)
-    + ("web/version.json", "web/index.html", "web/update.js")
+    + ("web/version.json", "web/index.html", "web/update.js", "web/translate/index.html")
 ))
 
 # What a standalone `python build_web.py --check` reads on top of those: the

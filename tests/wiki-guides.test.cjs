@@ -29,7 +29,7 @@ const I18N = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8
 /* The board's escaping and count helpers wiki.js calls (ssEsc, spEsc, hrNum),
    read from template/board.js rather than copied, so the wiki is tested with
    the real ones. Each is one statement, up to its first ";" at a line end. */
-const BOARD = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.js'), 'utf8');
+const BOARD = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.js'), 'utf8').replace(/\r\n/g, '\n');
 const BOARD_HELPERS = ['const ssEsc = ', 'const spEsc = ', 'const hrNum = ', 'const hoodKeyOf = '].map(anchor => {
   const i = at(BOARD, anchor);
   return BOARD.slice(i, BOARD.indexOf(';\n', i) + 2);

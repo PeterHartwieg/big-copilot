@@ -19,12 +19,15 @@ const TT_EMBED = /*__UI_TABLE__*/null;
    Language and keeps the choice under TT_KEY. The board script's GN_KEY is
    the same key: one choice sets the page's words and the game's names. */
 const TT_SITE = /*__TT_SITE__*/false;
+/* Pinned by the hosted build: a cache-busting URL alone cannot keep an old
+   open page's source contract when static assets are replaced on deployment. */
+const TT_CATALOGUES = /*__TT_CATALOGUES__*/null;
 const TT_KEY = "ba_dash_names";
 /* The languages Big Copilot's own text comes in, English first. */
-const TT_LANGS = ["en", "de", "pt", "fr", "es", "ru", "ko", "tr"];
+const TT_LANGS = ["en", "de", "pt", "fr", "es", "ru", "ko", "tr", "it"];
 /* Numbers follow the UI language: English is always en-US. */
 const TT_NUM_LOCALES = {en: "en-US", de: "de-DE", pt: "pt-BR", fr: "fr-FR", es: "es-ES", ru: "ru-RU", ko: "ko-KR",
-                        tr: "tr-TR"};
+                        tr: "tr-TR", it: "it-IT"};
 /* A placeholder: {name} or {name:spec}; single braces, as SUMMARIES writes them. */
 const TT_SPEC = /\{(\w+)(?::([^{}]+))?\}/g;
 /* A game name inside a sentence (tok() in Python), for a page without the
@@ -251,13 +254,15 @@ function ttOnChange(fn){ if(typeof fn === "function") ttListeners.push(fn); }
    pseudo-locale "xx"; it is English for numbers and <html lang>. */
 function ttSetTable(lang, table){
   ttLang = lang || "en";
+  // Keep the requested language even when an empty bundle renders English.
+  // The picker must still cancel that language's pending community overlay.
+  ttWant = ttLang;
   /* A table with no keys is no translation: English, numbers included, so
      "$1.234" never stands beside an English sentence (as cli_ui_table()). */
   ttTable = ttLang !== "en" && table && typeof table === "object" && Object.keys(table).length ? table : null;
   if(!ttTable) ttLang = "en";
-  ttWant = ttLang;
   setUiLocale(ttLang);
-  ttWhenDom(() => tApply());
+  ttWhenDom(() => { tApply(); ttContributionLinks(); });
   ttListeners.slice().forEach(fn => { try{ fn(ttLang); }catch(e){ console.error(e); } });
 }
 /* A language's table, fetched once beside the page with the build stamp (a
@@ -266,11 +271,60 @@ const ttTables = new Map();
 function ttLoad(lang){
   if(ttTables.has(lang)) return ttTables.get(lang);
   const v = encodeURIComponent((typeof window !== "undefined" && window.LEDGER_BUILD) || "");
-  const got = fetch(`i18n/${encodeURIComponent(lang)}.json${v ? `?v=${v}` : ""}`)
+  const got = fetch(`${TT_SITE ? "/" : ""}i18n/${encodeURIComponent(lang)}.json${v ? `?v=${v}` : ""}`)
     .then(r => { if(!r.ok) throw new Error(`i18n/${lang}.json: ${r.status}`); return r.json(); });
   ttTables.set(lang, got);
   got.catch(() => ttTables.delete(lang));
   return got;
+}
+/* Community text remains plain text: quotes and apostrophes are valid;
+   markup, encoded markup and malformed placeholders are not. Validate again
+   at the rendering boundary, even though the API validates submissions. */
+function ttCommunityValid(text, rule){
+  if(typeof text !== "string" || !text.trim() || !rule || [...text].length > Math.min(rule.maxLength || 2000, 2000)) return false;
+  if(/[<>\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(text)
+    || /&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;)/i.test(text)
+    || /[{}]/.test(text.replace(TT_SPEC, ""))) return false;
+  const tokens = new Set([...text.matchAll(TT_SPEC)].map(m => `${m[1]}:${m[2] || ""}`));
+  return Array.isArray(rule.allowed) && Array.isArray(rule.required)
+    && [...tokens].every(t => rule.allowed.includes(t))
+    && rule.required.every(group => Array.isArray(group) && group.some(t => tokens.has(t)));
+}
+function ttCommunityMerge(lang, bundled, manifest, overlay){
+  if(manifest?.schemaVersion !== 1 || manifest.lang !== lang || overlay?.schemaVersion !== 1 || overlay.lang !== lang) return bundled;
+  const merged = {...bundled};
+  for(const [key, row] of Object.entries(overlay.translations || {})){
+    const entry = ttOwn(manifest.entries, key) ? manifest.entries[key] : null;
+    if(entry && row && row.sourceVersion === entry.sourceVersion && ttCommunityValid(row.text, entry.validation)) merged[key] = row.text;
+  }
+  return merged;
+}
+/* This request contains a language only. Never send the board or a save.
+   It is deliberately separate from bundled loading: an unavailable API must
+   not delay the language switch or prevent an offline fallback. */
+async function ttLoadCommunity(lang, bundled, seq){
+  if(!TT_SITE || lang === "en") return;
+  const v = encodeURIComponent((typeof window !== "undefined" && window.LEDGER_BUILD) || "");
+  const read = async url => { const r = await fetch(url); if(!r.ok) throw new Error("translation overlay unavailable"); return r.json(); };
+  try{
+    const [manifest, overlay] = await Promise.all([
+      read(`/translations/${encodeURIComponent(lang)}.manifest.json${v ? `?v=${v}` : ""}`),
+      read(`/api/translations/overlay?lang=${encodeURIComponent(lang)}`)
+    ]);
+    if(seq !== ttSeq || !TT_CATALOGUES?.[lang] || manifest.revision !== TT_CATALOGUES[lang]) return;
+    const merged = ttCommunityMerge(lang, bundled, manifest, overlay);
+    if(Object.keys(merged).some(key => merged[key] !== bundled?.[key])) ttSetTable(lang, merged);
+  }catch(e){ /* Bundled wording stays usable when the API or manifest is unavailable. */ }
+}
+/* Every entry point follows the selected language, including an Italian
+   selection whose bundled UI table is initially empty. No save text enters
+   these URLs. */
+function ttContributionLinks(){
+  if(!TT_SITE || typeof document === "undefined") return;
+  let lang = ttLang;
+  try{ if(typeof gnLang === "string") lang = gnLang; }catch(e){}
+  if(!ttKnown(lang)) lang = "en";
+  document.querySelectorAll("[data-translate-link]").forEach(a => a.setAttribute("href", `/translate/${lang === "en" ? "" : `?lang=${encodeURIComponent(lang)}`}`));
 }
 /* Switch the UI language. A table that will not load leaves the page as it
    was and resolves false. */
@@ -284,6 +338,7 @@ async function setUiLang(lang){
   }
   if(seq !== ttSeq) return false;
   ttSetTable(lang, table);
+  ttLoadCommunity(lang, table || {}, seq);
   return true;
 }
 /* The language kept from the footer's picker on an earlier visit, on the

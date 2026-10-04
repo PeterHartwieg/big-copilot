@@ -23,6 +23,12 @@
 /index.html
   Cache-Control: no-cache
 
+/translate/*
+  Cache-Control: no-cache
+
+/translations/*
+  Cache-Control: no-cache
+
 # Pyodide's files sit under a versioned folder and never change in place.
 /pyodide/*
   Cache-Control: public, max-age=31536000, immutable

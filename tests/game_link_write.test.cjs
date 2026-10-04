@@ -711,15 +711,26 @@ test('one Apply click asks the game once: the dry run after it uses the approval
 test('the game\'s approval: after 30 s the dialog asks whether the game can be seen, and its clock runs on', async (t) => {
   const page = await linked(t, {clock: true});
   await configure({pairDelay: 60});
+  // This scenario tests the dialog's elapsed time. Keep the status reply in
+  // the browser's clock domain: advancing virtual seconds can otherwise
+  // abort a real HTTP poll before the mock gets any wall-clock time to answer.
+  await page.evaluate(base => {
+    const realFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => String(input?.url || input).startsWith(base + '/pair/status?')
+      ? Promise.resolve(new Response(JSON.stringify({state: 'pending'}), {headers: {'Content-Type': 'application/json'}}))
+      : realFetch(input, init);
+  }, mockUrl);
   await button(page, GIFTS).click();
   await pair(page).getByText(WAITING).waitFor();
   const cancel = pair(page).locator('.gw-foot').getByRole('button', {name: en("nav.dlg.cancel")});
   await cancel.focus();
   // Freeze after setup so assertion polling cannot hide a late prompt.
   await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
-  await page.clock.fastForward(20000);
+  // Run every interval tick: fastForward skips recurring callbacks and models
+  // a suspended tab, not the continuously visible approval clock tested here.
+  await page.clock.runFor(20000);
   assert.equal(await pair(page).getByText(en("nav.dlg.say.still")).isVisible(), false);
-  await page.clock.fastForward(11000);
+  await page.clock.runFor(11000);
   assert.equal(await pair(page).getByText(en("nav.dlg.say.still")).isVisible(), true);
   assert.equal(await pair(page).getByText(en("nav.dlg.quiet.lead")).isVisible(), true);
   // The keyboard stays on Cancel through the repaint.
@@ -727,7 +738,7 @@ test('the game\'s approval: after 30 s the dialog asks whether the game can be s
   const meta = pair(page).locator('.gw-meta');
   const before = await meta.textContent();
   // The clock keeps going without waiting another real second.
-  await page.clock.fastForward(1000);
+  await page.clock.runFor(1000);
   assert.notEqual(await meta.textContent(), before, 'the clock keeps going');
   await cancel.click();
 });

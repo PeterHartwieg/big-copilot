@@ -48,6 +48,11 @@ const REPORT_SWEEP_AFTER_MS = 60 * 60 * 1000;
 // A bug report has a budget of its own, needs no D1 but the R2 bucket and the
 // GitHub token, and reads its own multipart body.
 const routes = {
+  "/api/translations": { operation: "translations", method: "GET", write: false, handler: translations },
+  "/api/translations/entry": { operation: "translations", method: "GET", write: false, handler: translations },
+  "/api/translations/overlay": { operation: "translations", method: "GET", write: false, handler: translations },
+  "/api/translations/suggest": { operation: "translations", method: "POST", write: true, handler: translations, maxBodyBytes: 16384 },
+  "/api/translations/vote": { operation: "translations", method: "POST", write: true, handler: translations },
   "/api/community/presence": { operation: "presence", method: "POST", write: true, handler: presence, limiter: "PRESENCE_LIMITER" },
   "/api/community/vote": { operation: "vote", method: "POST", write: true, handler: vote },
   "/api/community/features": { operation: "features", method: "GET", write: false, handler: features },
@@ -72,11 +77,15 @@ export default {
     // A bug report folder whose issue never opened goes at the next run that finds
     // it over an hour old, so within two days, whatever stopped the request
     // (docs/community-features.md, "Bug reports").
-    // The two cleanups run side by side and each is awaited to its end, so one
+    // The cleanups run side by side and each is awaited to its end, so one
     // failing never cuts the other short.
     const db = env.COMMUNITY_DB;
     const results = await Promise.allSettled([
       env.REPORTS ? sweepReports(env.REPORTS) : null,
+      db && env.ASSETS ? (async () => {
+        const { cleanupTranslationVotes } = await import("./translations.mjs");
+        return cleanupTranslationVotes(env);
+      })() : null,
       // The privacy notice promises both: presence rows go within two days, and a
       // poll's vote hashes go once its feature leaves features.json.
       db ? (async () => db.batch([
@@ -96,7 +105,7 @@ export default {
 function reportFailure({ operation, category }) {
   console.error({
     event: "community_api_failure",
-    operation: ["presence", "vote", "features", "report"].includes(operation) ? operation : "request",
+    operation: ["presence", "vote", "features", "report", "translations"].includes(operation) ? operation : "request",
     category: ["configuration", "limiter", "database", "storage", "github"].includes(category) ? category : "unexpected",
   });
 }
@@ -125,7 +134,7 @@ async function handleApi(request, env, diagnostic, ctx) {
   if (!success) return json({ error: "Too many requests" }, 429, { "retry-after": "60" });
   let body = null;
   if (route.write) {
-    body = await readJson(request, origin);
+    body = await readJson(request, origin, route.maxBodyBytes);
     if (body instanceof Response) return body;
     if (body === null) return json({ error: "Invalid request" }, 400);
   }
@@ -505,11 +514,11 @@ function clientIp(request) {
 
 // Rejects cross-origin writes, wrong content types, oversized bodies and
 // malformed JSON before any database access. Returns a value, null, or a 413.
-async function readJson(request, origin) {
+async function readJson(request, origin, maxBytes = MAX_BODY_BYTES) {
   if (request.headers.get("Origin") !== origin) return null;
   const type = (request.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
   if (type !== "application/json" || !request.body) return null;
-  const raw = await readCapped(request.body, MAX_BODY_BYTES);
+  const raw = await readCapped(request.body, maxBytes);
   if (!raw) return json({ error: "Request too large" }, 413);
   try {
     return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw));
@@ -548,4 +557,10 @@ async function readCapped(body, limit) {
 function singleString(data, key) {
   if (typeof data !== "object" || data === null || Array.isArray(data)) return null;
   return Object.keys(data).length === 1 && typeof data[key] === "string" ? data[key] : null;
+}
+
+// Loaded only for this route; the feature/presence service stays independent.
+async function translations(...args) {
+  const { handleTranslations } = await import("./translations.mjs");
+  return handleTranslations(...args);
 }

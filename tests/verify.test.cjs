@@ -136,7 +136,7 @@ test('the CI matrix shards execute every discovered file once and propagate a re
     `require('node:fs').appendFileSync('executed.txt', '${name}\\n');\n` +
     // One real failure must fail exactly the shard that contains this file.
     (name === 'c' ? `throw new Error('intentional shard failure');\n` : '') + '});\n');
-  const workflow = fs.readFileSync(path.join(__dirname,'../.github/workflows/tests.yml'),'utf8');
+  const workflow = fs.readFileSync(path.join(__dirname,'../.github/workflows/tests.yml'),'utf8').replace(/\r\n/g, '\n');
   const matrix = /^        suite: \[([^\]\n]+)\]/m.exec(workflow);
   assert.ok(matrix, 'the workflow has a static suite matrix');
   const shards = [...matrix[1].matchAll(/'(\d+\/\d+)'/g)].map(match=>match[1]);
@@ -168,7 +168,7 @@ test('CLI propagates a real failing assembly and never starts later stages in a 
 });
 
 test('two CI runs fit within eighteen runner slots, including the aggregate checks', () => {
-  const workflow = fs.readFileSync(path.join(__dirname,'../.github/workflows/tests.yml'),'utf8');
+  const workflow = fs.readFileSync(path.join(__dirname,'../.github/workflows/tests.yml'),'utf8').replace(/\r\n/g, '\n');
   const source = workflow.split(/^jobs:\n/m)[1];
   assert.ok(source, 'the workflow has jobs');
   // Read this workflow's static jobs, scalar/list dependencies and flat suite

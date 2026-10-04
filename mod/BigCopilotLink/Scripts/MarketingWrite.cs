@@ -45,6 +45,9 @@ namespace BigCopilotLink
 
         public sealed class Site
         {
+            public double? ExpectedCost;
+            public int? ExpectedMarketing;
+            public int? ExpectedPromotion;
             public WireAddress Address;
             public readonly HashSet<int> On = new HashSet<int>();
             public readonly HashSet<int> Was = new HashSet<int>();
@@ -135,6 +138,19 @@ namespace BigCopilotLink
                 var site = new Site { Address = WriteService.ParseAddress(obj, "address", path) };
                 ParseTypes(obj, "on", path, site.On);
                 ParseTypes(obj, "was", path, site.Was);
+                var prediction = JsonReader.Get(obj, "prediction");
+                if (prediction != null)
+                {
+                    var expected = JsonReader.Obj(prediction, path + ".prediction");
+                    var cost = JsonReader.Num(expected, "dailyCost", path + ".prediction");
+                    var marketing = JsonReader.Num(expected, "marketing", path + ".prediction");
+                    var promotion = JsonReader.Num(expected, "total", path + ".prediction");
+                    if (cost < 0 || !JsonReader.IsWhole(marketing, 0, 100) || !JsonReader.IsWhole(promotion, 0, 100))
+                        throw new BadRequestException(path + ".prediction has invalid values");
+                    site.ExpectedCost = cost;
+                    site.ExpectedMarketing = (int)marketing;
+                    site.ExpectedPromotion = (int)promotion;
+                }
                 if (!seen.Add(site.Address.Street + "|" + site.Address.Number))
                     throw new BadRequestException(path + ".address repeats a site");
                 req.Sites.Add(site);
@@ -179,6 +195,11 @@ namespace BigCopilotLink
                 }
                 row.Error = CheckSite(row, site, agencies);
                 if (row.Error == null) row.Error = Plan(row, site.On, agencies, checks);
+                // Recheck on both dry run and apply, before touching any site.
+                if (row.Error == null && site.ExpectedCost.HasValue &&
+                    (Math.Abs(Math.Round((double)row.AfterCost, 2) - site.ExpectedCost.Value) > 0.005 ||
+                     row.AfterPromotion == null || row.AfterPromotion[1] != site.ExpectedMarketing.Value ||
+                     row.AfterPromotion[2] != site.ExpectedPromotion.Value)) row.Error = "changed";
                 if (row.Error != null) failed = true;
             }
 

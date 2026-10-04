@@ -121,17 +121,17 @@ class GameLinkAgainstMock(unittest.TestCase):
 
     def test_schema_mismatch_names_the_version_needed_and_passes(self):
         """GL-7 in #110: an outage the next poll can end, as the contract's step 5 has it."""
-        self.mock.schema = 2
+        self.mock.schema = 99
         with self.assertRaises(ba_dashboard.LinkMismatch) as caught:
             self.game.poll()
         self.assertIsInstance(caught.exception, ba_dashboard.LinkUnavailable, "the watch loop's outage")
-        self.assertIn("version 2", str(caught.exception))
-        self.assertIn("version 1", str(caught.exception))
+        self.assertIn("version 99", str(caught.exception))
+        self.assertIn("needs version 2", str(caught.exception))
         self.mock.schema = 1
         self.assertEqual(self.game.poll(), self.game.path, "a mod put right is read as ever")
 
     def test_a_one_shot_run_still_stops_on_a_mismatch(self):
-        self.mock.schema = 2
+        self.mock.schema = 99
         with self.assertRaises(ba_dashboard.LinkMismatch):
             self.game.wait_for_save(seconds=5)
 

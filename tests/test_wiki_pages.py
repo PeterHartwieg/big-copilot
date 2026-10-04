@@ -263,7 +263,7 @@ class Check(unittest.TestCase):
     def test_build_web_check_reports_the_pages(self):
         with tempfile.TemporaryDirectory() as tmp:
             for rel in ("web/wiki-data.json", *build_web.STAMP_INPUTS, "web/version.json",
-                        "web/index.html", "web/update.js", *build_web.PY_COPIED,
+                        "web/index.html", "web/translate/index.html", "web/update.js", *build_web.PY_COPIED,
                         *(f"web/py/{name}" for name in build_web.PY_COPIED)):
                 target = Path(tmp, rel)
                 target.parent.mkdir(parents=True, exist_ok=True)
