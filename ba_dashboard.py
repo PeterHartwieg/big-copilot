@@ -13677,12 +13677,6 @@ def _office_need(grid: dict, skill: str, runs: dict) -> tuple:
                                  for wd, day in enumerate(grid["customers"])]
     need = _need_curve(measured, rates={skill: [OFFICE_POST_RATE] * len(grid["stations"])})
     entry = need[skill]
-    evidence = grid.get("evidence")
-    if evidence and not evidence["lower"] and not evidence["learned"] and not evidence.get("session"):
-        for wd in range(7):
-            for h in range(24):
-                entry["need"][wd][h] = max(sum(h in days[wd] for days in runs.values()),
-                    math.ceil(grid["staffed"][wd][h] / OFFICE_POST_RATE))
     opened = grid["open"] if any(grid["open"]) else ALL_DAY_OPEN
     demand_based = "evidence" in grid or any(entry["basis"][wd][h] != "none"
                        for wd in range(7) for a, z in opened[wd] for h in range(a, z))
@@ -13692,12 +13686,13 @@ def _office_need(grid: dict, skill: str, runs: dict) -> tuple:
             if h not in hours:
                 entry["need"][wd][h] = 0
                 entry["basis"][wd][h] = "closed"
-            elif entry["basis"][wd][h] == "none" and "evidence" not in grid:
+            elif entry["basis"][wd][h] == "none":
                 default = sum(h in days[wd] for days in runs.values())
                 current = math.ceil(grid["staffed"][wd][h] / OFFICE_POST_RATE)
                 entry["need"][wd][h] = min(len(grid["stations"]),
-                                           max(default, current) if demand_based else default)
-                entry["basis"][wd][h] = "office"
+                                           max(entry["need"][wd][h], default, current) if demand_based else default)
+                if "evidence" not in grid:
+                    entry["basis"][wd][h] = "office"
     if not demand_based:
         entry["stations"] = runs
     return need, demand_based
@@ -15458,8 +15453,8 @@ def _staff_evidence_need(grid, rates=None):
                         fallback = evidence.get("fallback", {}).get("None")
                     capacity = fallback[wd][h] if fallback else 0
                     n = max(_fill_stations(value, station_rates), _fill_stations(capacity, station_rates))
-                    if not evidence["lower"] and not any(any(day) for day in fallback or []):
-                        n = len(station_rates)  # a genuinely new business
+                    if not grid.get("office") and not evidence["lower"] and not any(any(day) for day in fallback or []):
+                        n = len(station_rates)  # new shops; offices use their default below
                 if cell in targets:
                     value, case = targets[cell]["capacity"], "trial"
                     n = _fill_stations(value, station_rates)

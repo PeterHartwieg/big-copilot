@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from ba_dashboard import (History, _staff_evidence_ingest, _staff_evidence_need,
-                          _staff_measurement_action)
+                          _staff_measurement_action, _office_need, _office_runs)
 from test_office_demand import plan
 
 
@@ -78,6 +78,34 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(self.grid['evidence']['session']['phase'], 'pending')
         self.assertEqual(self.need()['need'][1][8], 2)
         self.assertFalse(self.grid['evidence']['learned'])
+
+    def test_partial_office_history_keeps_default_for_each_unknown_hour(self):
+        self.grid['open'] = [[[8, 10]] for _ in range(7)]
+        self.grid['staffed'] = self.grid['roles'][0]['staffed']
+        for wd in range(7):
+            self.grid['staffed'][wd][9] = 0
+            self.grid['effective'][wd][9] = 0
+        self.records(14, value=1)
+        self.ingest()
+        runs, _ = _office_runs(4, self.grid['open'], self.grid['door'])
+        need, _ = _office_need(self.grid, 'lawyer', runs)
+        self.assertEqual(need['lawyer']['basis'][1][9], 'none')
+        self.assertEqual(need['lawyer']['need'][1][9], 4)
+        # Only an explicit confirmed measurement may turn that hour into zero.
+        self.grid['evidence']['learned']['1:9'] = {'value': 0, 'stale': False}
+        need, _ = _office_need(self.grid, 'lawyer', runs)
+        self.assertEqual(need['lawyer']['need'][1][9], 0)
+
+    def test_unstaffed_new_office_uses_its_default_not_every_computer_all_week(self):
+        self.capacity(0)
+        self.grid['staffed'] = self.grid['roles'][0]['staffed']
+        self.records(14, missing=True)
+        self.ingest()
+        runs, _ = _office_runs(4, self.grid['open'], self.grid['door'])
+        need, _ = _office_need(self.grid, 'lawyer', runs)
+        for wd in range(7):
+            self.assertEqual(need['lawyer']['need'][wd][8],
+                             sum(8 in days[wd] for days in runs.values()))
         with self.assertRaises(ValueError):
             self.action('confirm')
 
