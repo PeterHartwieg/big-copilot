@@ -1064,6 +1064,9 @@ for(const mode of ['self', 'firm']) test(`an untouched default loan for an exist
   await goOpen(page);
   const recorded = await page.locator('.os-roiloan .os-finfacts > div').first().locator('b').innerText();
   assert.equal(money(recorded), displayed, 'after-opening loan matches the untouched field');
+  await page.evaluate(() => { delete osPlan().snap; drawOpenStore(); });
+  const legacy = await page.locator('.os-roiloan .os-finfacts > div').first().locator('b').innerText();
+  assert.equal(money(legacy), displayed, 'the legacy investment-only fallback uses remaining cash too');
 });
 
 for(const alreadyHeld of [false, true]) test(`historical investment retains the deposit through renting, reload and opening (${alreadyHeld ? 'existing lease' : 'new lease'})`, async t => {

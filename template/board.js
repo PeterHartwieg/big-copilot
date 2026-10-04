@@ -12283,9 +12283,11 @@ function osPlanned(plan){
   const b = osBuilding(plan.key);
   const inv = b && osInvestment(plan, {...b, status: "vacant"});
   if(!inv) return {snap: null, live: true};
+  const needed = osInvestment(plan, b);
+  const cash = {firm: Math.round(needed.firm), self: Math.round(needed.self)};
   const parts = {};
   OS_SNAP_INV.forEach(k => parts[k] = Math.round(inv[k] || 0));
-  return {snap: {inv: parts, profit: null, days: null, curve: null}, live: true};
+  return {snap: {inv: parts, cash, profit: null, days: null, curve: null}, live: true};
 }
 /* The payback outcome in the mode Results and the site's page show. */
 const osNowOf = row => row ? row[paybackMode()] || null : null;
