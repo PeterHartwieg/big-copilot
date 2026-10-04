@@ -93,7 +93,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `hourFindings` | `_hour_findings()` | `drawSite` |
 | `staffing` | Section `staffing`: `_staffing_section()`, which creates the planning world (`_plan_world()`: `_plan_people()` once, one week per person, one bench) and keeps the state shops leave for `officeStaffing`; `_staffing()`, with `_plan_site()`, `_need_curve()`, `_initial_customers()`, `_arrival_ceiling()`, `_cut_run()`, `_bridge_troughs()`, the placer `_place_week()` (hires as placeholder people, `_place_hires()`; the week of somebody already working there kept where a plan would cut them short on a partial week, `_worse_off()` and `_pin_weeks()`), `_current_roster()`, `_index_table()`, `_shift_row()` | `drawOptimizeStaffing` for the Next-moves card; `drawSchedules` through `spRosterBlock`; `drawSite` through `spSchedSummary` and `spSpareIds`; the hiring helpers |
 | `factoryStaffing` | Section `factoryStaffing`: `_factory_staffing()`, once per sizing (`{cap, dem}`), with `_factory_site_plan()`, `_factory_run_start()` and the shop placer `_place_week()`, drawing on the unassigned factory workers the shops and offices left; its hours come from each factory line's `needHours`, `hoursNow` and `_posts` (the machines' ids, set by `_line_hours()` in `_factories()` on each line and on each unnamed line with a recipe, and taken off the payload by `build_core()` through `_take_posts()`, by the line's place in its list, into `build.private["posts"]`) | `drawFactoryStaffing`, through `drawProductionView` (it asks for the section); `sbFactoryPart` (reads it when there); `spSpareIds` for a factory; `hrPlanRow`; `pgPeopleSites` |
-| `officeStaffing` | Section `officeStaffing`: `_office_staffing()`, with `_office_site_plan()`, `_office_runs()` (Peter's office default) and the shop placer `_place_week()`, drawing on the unassigned people no shop plan counts on (the bench `_staffing()` leaves in `_plan_world()`) | `drawSchedules` through `spOfficeRoster`; `drawSite` through `spSchedSummary` and `spSpareIds`; `hrPlanRow`, `gwOfficeRow` and the hiring helpers |
+| `officeStaffing` | Section `officeStaffing`: `_office_staffing()`, with `_office_site_plan()`, `_office_need()` (customer history, with `_office_runs()` as fallback) and the shop placer `_place_week()`, drawing on the unassigned people no shop plan counts on (the bench `_staffing()` leaves in `_plan_world()`) | `drawSchedules` through `spOfficeRoster`; `drawSite` through `spSchedSummary` and `spSpareIds`; `hrPlanRow`, `gwOfficeRow` and the hiring helpers |
 | `candidates` | Section `hiring`: `_candidates()`, with `_character()` and `_skill_rows()` | the Staff page; `gwWho` |
 | `hiring` | Section `hiring` (after `factoryStaffing`): `_hiring()`, which reads each plan row's private `_hire` (`_hire_fields()`: `hireWeeks`, the placeholder hires' weeks from `_place_hires()`, each with its `band` from `_hire_band()` -- `full` at 30 hours or more, `part` from 10, `short` under -- and `shortHires`, the weeks under 10 hours as `{skill, hours}`; `spare`, `bench`) for `staffing`, `staffing[].fullCover`, `staffing[].openCover`, `factoryStaffing` and `officeStaffing` from `build.private["hires"]`, which `_take_hires()` filled as each plan was made; `accepts` from `ASSIGN_SKILLS`, `facts` from `_site_facts()`, `stations` from `_station_facts()` (the desk and chair demands each station meets), `company` from `_company_facts()`, `recruiting` from `_recruiting()` | the Staff page (`drawStaffPage` asks for the section); the site panel's Staffing block (`spRosterBlock`, through `spRowLess` and `hrFromCall`) and its writes (`gwRosterButtons`, `gwStaffButton`); Open a store's and Plan a factory's staff rows (`osCkStaff`, `osStaffAct`, `ofCkStaff`, `ofRunHtml`); the hire and schedule write dialogs (`gwConfirm` `needs`); `pgPeopleSites` |
 | `plan` | Core: `_plan()` (Today reads its recipes and item names, and every page reads `itemName`; about 4 ms and 65 KB on the largest measured save); its `prices`, `priceFrom` and `priceDay` from `_ingredient_prices()`; each `catalogue` entry's `extra`, what the type can additionally sell as `[[slug, weight], ...]`, from `_plan_extra()` over `ba_store_rules.json` (`types[kind].i`, weight under 1); `own[kind].sellers`, how many of the type's shops sell each of those extras | `drawPlan`, `planDraw`, `indexPlan`, `factoryView`, `factoryCounts`, `planTypes`, `defaultRate`, `itemName`, `sbDeps`, `ofPreset`, the `of*` planner adapters, Add product's `planAdded` and `pcPopOpen`; `web/wiki.js` `wikiCanPlan` |
@@ -209,17 +209,52 @@ it); `needDay`, the uncapped figure Demand sizing works from plus the margin; an
 null where no demand can be read. `supply.factories.sites[]` counts `running` machines (a recipe and
 somebody posted) beside the placed ones (`machines`).
 
-An `officeStaffing` row is one office planned by Peter's office default (25 Sep 2026,
-`_office_runs()`): `round(3 * door / 50)` computers (at least 1, at most all; `door` the
-building's `customerCapacity`) staffed around the clock every day, every computer 08-22
-on weekdays, half of them (rounded up, the always-on ones counting) 08-22 on weekends,
-all clipped to the hours the office opens in the save. One role, the type's
-professional skill (`ASSIGN_SKILLS[type][0]`), one station per computer. The row is
-`{key, name, typeSlug, skill, label, alwaysOn, computers,
-staffedComputers, open, openAllHours: false, stations, people, roles, need, shifts,
-headcount, shortHours, shortDays, placed, bench, slack, cost, addPeople, current}`, the
-shop row's shape where the two share a field; an office the placer falls over on is
-`{key, name, typeSlug, failed: true}`, and an office with no computer has no row.
+Shop and office plans share persistent demand evidence. `build_core()` calls
+`_staff_evidence_ingest()` before `History.write()` and attaches a detached private
+`evidence` view to the planning grids. Neither those observations nor their context
+snapshots ship in `hours`; lazy sections never mutate history. `_need_curve()` uses
+`_staff_evidence_need()` for these grids. Legacy direct callers can still supply an
+already-measured grid.
+
+`History` keeps versioned `staffingEvidence.sites` per character, keyed by address
+and checked against creation day, business type and registration ID. The active
+record holds the game clock, at most 42 completed daily reports, current context,
+initial fallback capacity, compact learned weekday/hour cells and at most one
+measurement session. Rewinds, changed overlapping reports, business replacement
+or missing overlap reset confidence. Renaming and staffing changes preserve learned
+demand. Demand-affecting changes mark it stale. Backfill does not advance sessions.
+Concurrent writers reject conflicting evidence updates instead of merging sessions.
+
+Imported reports are lower bounds; missing reports are unknown. A deliberate session
+has `pending`, `active`, `ready`, `confirmed` or `stopped` phase. Start proposes current
+spare capacity, or one additional station of a unique limiting role, within installed,
+building, next-role and known arrival limits. A reread with sufficient actual capacity
+activates the session from the following game day. Two completed occurrences per
+weekday/hour are required within 28 days. Matching context supports continuity but
+cannot prove it: the player confirms that staffing and stock stayed available before
+any unconstrained result becomes learned demand. All samples must have headroom;
+constrained results remain uncertain. Applying, undoing or previewing a schedule is
+never a demand observation. Changed active context stops the session.
+
+Both row types carry `demandBased: true` and `demandEvidence` (persistence availability,
+phase, target/sample counts, confirmed-cell count and stale flag). Their `basis` values
+are `confirmed`, `lower`, `trial`, `none` and `closed`. Unknown cells retain baseline
+coverage and positive served-customer floors; new sites use their initial staffing
+fallback. The office fallback is `_office_runs()`: proportionally three computers
+around the clock for capacity 50, all on weekdays 08–22, half on weekends, clipped to
+opening hours. Office professional hours use one computer per customer per hour.
+
+Office demand writes replace computer hours and retain other duties. `_place_week()`
+accepts fixed duties explicitly: placement, pins, weekly limits, minimum hours and
+spare-person accounting use the complete week, while writes replace only planned
+duties. Unreadable office schedules are excluded from batch schedule writes; assignments
+may proceed with a named warning. Opening hours and the existing review/undo flow stay.
+
+`browser_staff_measurement()` validates the held generation; the browser worker's
+`staff-measurement` message and the local watcher's JSON `/staff-measurement` endpoint
+record start/confirm/stop actions and rebuild. A static exported board shows the state
+but cannot record a session. Storage failure is visible and history forgetting clears
+learning along with the other local history.
 
 `candidates` is one row per offer in `CandidateEmployeeInstances` (an older save's
 `hired`/`declined` rows left out), best first: top skill `level` descending, then `wage`,

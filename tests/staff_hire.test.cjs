@@ -3304,12 +3304,18 @@ test('without a mod that hires, the full count stands and the note points at MyE
 });
 
 test('an outgoing-only site with nothing of its own to schedule still offers Staff this site', async (t) => {
-  const d = giftsOpen();
-  Object.assign(d.staffing.find(r => r.key === C), {shifts: []});
-  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
-  const block = await siteBlock(page, C);
-  assert.match(await block.textContent(), enRe("sp.roster.none"));
-  assert.equal(await block.locator('[data-gw="hire"][data-hr-staff]').count(), 1);
+  for (const demandBased of [false, true]) {
+    const d = giftsOpen();
+    // Both an absent proposal and an explicit zero-demand plan offer one
+    // staffing action when somebody can move out of the site.
+    const row = d.staffing.find(r => r.key === C);
+    Object.assign(row, {shifts: [], demandBased});
+    if (!demandBased) delete row.demandEvidence;
+    const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+    const block = await siteBlock(page, C);
+    assert.match(await block.textContent(), enRe("sp.roster.none"));
+    assert.equal(await block.locator('[data-gw="hire"][data-hr-staff]').count(), 1);
+  }
 });
 
 test('an open week says why nobody free takes it: a spare elsewhere and the candidates ask for more', async (t) => {
