@@ -47,7 +47,7 @@
   const STORE = "handles";
   const $ = (id) => document.getElementById(id);
   const PICK_KEY = "ledger_pick";
-  const isSave = (f) => f && /\.hsg$/i.test(f.name);
+  const isSave = (f) => f && /\.(hsg|bcsave)$/i.test(f.name);
   const isMeta = (f) => f && /\.hsg\.meta$/i.test(f.name);
   const isLocale = (f) => f && /\.json$/i.test(f.name);
   const canHandle = typeof window.showDirectoryPicker === "function";
@@ -424,7 +424,7 @@
   const isAutosave = (file) => /^recover/i.test(file.name);
   const fileWords = (file) => {
     const when = fmtTime(file.lastModified);
-    const base = file.name.replace(/\.hsg$/i, "");
+    const base = file.name.replace(/\.(hsg|bcsave)$/i, "");
     return isAutosave(file)
       ? tt("app.file.autosave", "autosave from {when}", {when})
       : base.toLowerCase() === company.toLowerCase()
@@ -597,9 +597,10 @@
       fb.className = "lg-btn";
       if (lb) lb.className = "lg-btn";
       sp.className = "lg-btn lg-pick";
+      $("snapshotExport").className = "lg-btn";
       controlsHome = "board";
       labelControls();
-      $("menuSourceSlot").append(savePicker, fb, ...(lb ? [lb] : []), sp);
+      $("menuSourceSlot").append(savePicker, fb, ...(lb ? [lb] : []), sp, $("snapshotExport"));
       $("watchBtn").addEventListener("click", toggleWatch);
       syncWatchBtn();
       $("menuChipSlot").append($("localeChip"), $("localeReset"));
@@ -732,9 +733,10 @@
   // any caller read, the watcher's included. linkHealth moves only with new
   // bytes, so a mod updated under an open tab shows here first: writes go
   // only while the two agree (linkSpeaks()).
-  const LINK_SCHEMA = 1;
+  const LINK_SCHEMA = 2;
   let linkSchema = LINK_SCHEMA;
-  const linkSpeaks = () => linkSchema === LINK_SCHEMA;
+  const linkVersionKnown = v => v === 1 || v === LINK_SCHEMA;
+  const linkSpeaks = () => linkVersionKnown(linkSchema);
   let linkGone = false;   // the watcher has said the game went away
   let linkNotReady = 0;   // /health answers in a row that were never health, any caller
   // The watcher's own notes about the port, recognised on screen: it says one
@@ -949,7 +951,7 @@
   // crossed into another hour the board hears of it (linkClock), so an
   // agency's opening is seen without new bytes.
   function tickClock(body) {
-    if (!linkHealth || body.schemaVersion !== LINK_SCHEMA) return;
+    if (!linkHealth || !linkVersionKnown(body.schemaVersion)) return;
     if ((body.character || "") !== (linkHealth.character || "") || (body.company || "") !== (linkHealth.company || "")) return;
     const day = Number(body.day), hour = Number(body.hour);
     if (!Number.isFinite(day) || !Number.isFinite(hour)) return;
@@ -966,7 +968,7 @@
   // False when the mod speaks this page's version; otherwise the bad state
   // is on screen and the caller returns. A not-ready answer is not judged.
   function wrongVersion(health, gen) {
-    if (health === NOT_READY || health.schemaVersion === LINK_SCHEMA) return false;
+    if (health === NOT_READY || linkVersionKnown(health.schemaVersion)) return false;
     finishAttempt(gen);
     if (health.schemaVersion == null) {
       // A JSON object with no version in it is not the mod's health at all.
@@ -1056,14 +1058,36 @@
         note("bad", why, () => tt("app.link.loadsave", "Load a save in the game, then click Update."), true);
         return;
       } else {
-        const bytes = res.bytes;
+        let bytes = res.bytes;
+        let extension = "hsg";
+        const snapshotStamp = res.headers.get("X-Game-Link-Stamp") || health.stamp;
+        const snapshotCharacter = res.headers.get("X-Game-Link-Character") || health.character;
+        if ((health.features || []).includes("building-facts.v1")) {
+          try {
+            const reply = await linkFetch(`/facts?stamp=${encodeURIComponent(snapshotStamp)}`, {read: true});
+            if (gen !== sourceGen) return;
+            if (!reply.ok) throw new Error(tt("app.facts.retry", "The game changed while reading its building values. Click Update to try again."));
+            if (reply.bytes.byteLength > 8 * 1024 * 1024) throw new Error(tt("app.facts.mismatch", "The building values do not match this save. Update the game link and try again."));
+            const facts = JSON.parse(new TextDecoder().decode(reply.bytes));
+            const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map(n => n.toString(16).padStart(2, "0")).join("");
+            if (facts.schemaVersion !== 1 || facts.model !== "building-values-v1" ||
+                facts.stamp !== snapshotStamp || facts.character !== snapshotCharacter || facts.saveSha256 !== hash)
+              throw new Error(tt("app.facts.mismatch", "The building values do not match this save. Update the game link and try again."));
+            const raw = new Uint8Array(bytes);
+            let binary = "";
+            for (let i = 0; i < raw.length; i += 32768) binary += String.fromCharCode(...raw.subarray(i, i + 32768));
+            bytes = new TextEncoder().encode(JSON.stringify({format: "big-copilot-save", version: 1, save: btoa(binary), facts}));
+            extension = "bcsave";
+          } catch (err) { linkDown(gen, err); return; }
+          if (gen !== sourceGen) return;
+        }
         // linkHealth now, not after the build: the strip's line while the
         // bytes are read should be the day they carry.
         linkHealth = health;
         linkNow = null;
-        const file = new File([bytes], `${health.character}-live.hsg`,
+        const file = new File([bytes], `${snapshotCharacter}-live.${extension}`,
           {lastModified: Date.parse(health.refreshedAt) || Date.now()});
-        file.linkStamp = res.headers.get("X-Game-Link-Stamp") || health.stamp;
+        file.linkStamp = snapshotStamp;
         // buildFrom() takes the stamp only once the board has taken the bytes;
         // a build that failed keeps its own reason, and the stamp behind the
         // board, so the next check reads the same bytes again.
@@ -1677,7 +1701,7 @@
       }
       return;
     }
-    if (health.schemaVersion !== LINK_SCHEMA) {
+    if (!linkVersionKnown(health.schemaVersion)) {
       // A JSON object that is not this page's health: another program on the
       // port, or a mod of another version. Said while no such note is up,
       // under the board that stays; Update gives the full refusal.
@@ -1847,7 +1871,7 @@
     if (pick.name && !fellBack) {
       const named = saves.find((e) => e.file.name === pick.name);
       if (named) return {file: named.file, dir: named.dir, fellBack: ""};
-      const name = pick.name.replace(/\.hsg$/i, "");
+      const name = pick.name.replace(/\.(hsg|bcsave)$/i, "");
       fellBack = () => tt("app.pick.gone.save", "Could not find the save named {name}; showing the newest save instead.", {name});
     }
     const best = saves.reduce((a, b) => (b.file.lastModified > a.file.lastModified ? b : a));
@@ -1992,7 +2016,7 @@
     return info;
   }
   const saveLabel = (name, info) => {
-    const base = name.replace(/\.hsg$/i, "");
+    const base = name.replace(/\.(hsg|bcsave)$/i, "");
     const auto = info ? info.autosave : /^recover/i.test(base);
     const what = auto ? tt("app.pick.autosave", "Autosave {n}", {n: base.replace(/^recover\s*#?/i, "")}) : base;
     return info && info.day != null ? tt("app.pick.day", "{save} · day {day}", {save: what, day: info.day}) : what;
@@ -2040,7 +2064,7 @@
       moved = () => tt("app.pick.moved.folder", "Could not find the chosen character's folder; following the newest save anywhere instead.");
       setPick("", "");
     } else if (pick.name && !pool.some((s) => s.file.name === pick.name)) {
-      const name = pick.name.replace(/\.hsg$/i, "");
+      const name = pick.name.replace(/\.(hsg|bcsave)$/i, "");
       if (home) {
         moved = () => tt("app.pick.moved.character", "Could not find the save named {name}; following {character}'s newest save instead.", {name, character: characterOf(home)});
         setPick(pick.dir, "");
@@ -2287,6 +2311,8 @@
   }
   function syncWatchBtn() {
     paintStrip();
+    const exportButton = $("snapshotExport");
+    if (exportButton) exportButton.hidden = !(lastGood && lastGood === lastFile && /\.bcsave$/i.test(lastGood.name));
     const b = $("watchBtn");
     if (!b) return;
     b.hidden = !((canHandle && dirHandle) || linkUrl);
@@ -2857,6 +2883,16 @@
       // still gives its button the badge.
       if (typeof featureDiscovery !== "undefined") featureDiscovery.visit("game-link");
       linkToGame();
+    });
+    $("snapshotExport")?.addEventListener("click", async () => {
+      const file = lastGood;
+      if (!file || file !== lastFile || !/\.bcsave$/i.test(file.name)) return;
+      const held = await readerHeld(false);
+      if (!held?.bytes || lastGood !== file || lastFile !== file || held.name !== file.name) return;
+      const url = URL.createObjectURL(new Blob([held.bytes], {type: "application/octet-stream"}));
+      const a = document.createElement("a");
+      a.href = url; a.download = file.name; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     });
     $("recoverBtn").addEventListener("click", () => (fileAgain() ? $("savePick").click() : pickFolder()));
     $("reloadBtn").addEventListener("click", () => location.reload());

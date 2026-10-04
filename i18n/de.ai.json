@@ -1,4 +1,7 @@
 {
+ "app.facts.export": "gpt-6",
+ "app.facts.mismatch": "gpt-6",
+ "app.facts.retry": "gpt-6",
  "app.link.askagain": "claude-opus-5-5",
  "app.link.recent": "claude-opus-5-5",
  "app.menu.src.file": "gpt-6-sol",
@@ -1886,6 +1889,7 @@
  "sp.mk.type.mediuminternet": "claude-opus-5-5",
  "sp.mk.type.smallbillboard": "gpt-6-sol",
  "sp.mk.type.smallinternet": "claude-opus-5-5",
+ "sp.mk.unavailable": "gpt-6",
  "sp.mk.why.none": "claude-opus-5-5",
  "sp.mk.why.open": "gpt-6-sol",
  "sp.mk.why.open.day": "gpt-6-sol",

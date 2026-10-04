@@ -30,8 +30,8 @@ const OpenStoreModel = (() => {
     /* The outfit for the building's layout: its lines and furniture total. */
     /* The key an outfit is kept by: the layout, or a cinema's or theatre's size
        (Python's plan_layout()). */
-    const osLayout = b => (b && (b.layout || ((osFacts().venues || {})[b.key] || [])[0] || b.size)) || "";
-    const osOutfit = (plan, b) => { const t = plan && osType(plan.type); return t && b ? (t.layouts || {})[osLayout(b)] || null : null; };
+    const osLayout = b => b?.layoutKnown === false ? "" : (b && (b.layout || ((osFacts().venues || {})[b.key] || [])[0] || b.size)) || "";
+    const osOutfit = (plan, b) => { const t = plan && osType(plan.type); return t && b ? (b.layoutKnown === false ? null : (t.layouts || {})[b.key] || (t.layouts || {})[osLayout(b)] || null) : null; };
     /* The interior score the neighbourhood asks for (Midtown's 50), and the
        cheapest walls and floors that reach it in this layout. */
     const osDecor = b => { const need = b && ((osFacts().hoods || {})[b.hood] || {}).interior;
@@ -120,7 +120,7 @@ const OpenStoreModel = (() => {
        staffing assistant): the shop's own figure where it is known, else the
        layout's, else the building's capacity (a current game) or the floor. */
     function osInitial(t, b, o){
-      const known = o.initial ?? (t.initial || {})[osLayout(b)];
+      const known = o.initial ?? (t.initial || {})[b.key] ?? (t.initial || {})[osLayout(b)];
       if(known > 0) return known;
       return (osFacts().game || {}).capInitial || t.model === "office" ? osCap(b) : (b.m2 || 0);
     }
@@ -128,7 +128,7 @@ const OpenStoreModel = (() => {
        its traffic plus the share of the floor the campaigns cover times the
        neighbourhood's marketing strength, never above 100. */
     const osPromo = (b, h, o) => o.promoTotal ?? Math.min(100, Math.round((b.traffic || 0)
-      + Math.round(Math.min((o.reach || 0) / (b.m2 || 1), 1) * 100) * h.strength));
+      + Math.round(Math.min((o.reach || 0) * (b.marketingRules?.reachMultiplier ?? 1) / (b.m2 || 1), 1) * 100) * (b.marketingRules?.strength ?? h.strength)));
     /* A store of the type already at the building (premises set up before the
        plan picked them) is a seller already of what it offers for sale, as the
        game counts providers (cachedAvailableProducts): which items, or null. */
@@ -139,7 +139,7 @@ const OpenStoreModel = (() => {
     }
     function osModel(slug, b, o = {}){
       const F = osFacts(), t = osType(slug), g = F.game || {}, h = (F.hoods || {})[b.hood];
-      if(!t || !h) return null;
+      if(!t || !h || b.factsUnavailable) return null;
       if(o.existing === undefined){ const provides = osProvides(slug, b); if(provides) o = {...o, existing: provides}; }
       if(t.model === "office") return osOfficeModel(slug, t, b, h, o);
       if(t.model !== "retail") return null;

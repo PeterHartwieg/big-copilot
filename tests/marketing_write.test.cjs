@@ -123,8 +123,8 @@ async function answering(page, {errors = {}, total = {}, entries = {}, waiting =
     const key = a => `${a.street}#${a.number}`;
     window.mkAnswer = async (kind, body, o) => {
       if (kind === 'undo') return {status: 200, error: null, body: {ok: true, kind: 'marketing', undo: true, rows: []}};
-      const rows = body.sites.map(s => ({address: s.address, business: key(s.address), on: s.on, dailyCost: 0,
-        promotion: {trafficIndex: 60, marketing: 57, total: total[key(s.address)] ?? 100},
+      const rows = body.sites.map(s => ({address: s.address, business: key(s.address), on: s.on, dailyCost: s.prediction.dailyCost,
+        promotion: {trafficIndex: 60, marketing: s.prediction.marketing, total: total[key(s.address)] ?? s.prediction.total},
         turnedOn: [], turnedOff: [], campaigns: [], error: errors[key(s.address)] || null,
         ...(entries[key(s.address)] ? {entriesAdded: entries[key(s.address)], waiting: waiting[key(s.address)] || []} : {})}));
       return {status: 200, error: null, body: {ok: !rows.some(r => r.error), kind: 'marketing', dryRun: !!o.dryRun, contactsAdded: [], rows}};
@@ -151,7 +151,7 @@ test('a shop: the cheapest mix, a dry run, Apply and Undo', async (t) => {
   assert.equal(await row.locator('.c').innerText(), en('sp.gw.mk.costs', {a:500, b:600}));
   assert.equal(await row.getAttribute('data-read'), en("sp.gw.mk.read", {"a":90,"b":100}), 'the read-out adds what the row does not show');
   assert.deepEqual(await writes(page), [{kind: 'marketing', dryRun: true,
-    body: {sites: [{address: addr(G), on: ['SmallInternet', 'SmallBillboard'], was: ['LargeInternet']}]}}]);
+    body: {sites: [{address: addr(G), on: ['SmallInternet', 'SmallBillboard'], was: ['LargeInternet'], prediction: {dailyCost: 600, marketing: 57, total: 100}}]}}]);
   await dlg.locator('[data-gw-b="apply"]').click();
   await phase(page, 'done');
   const sent = await writes(page);
@@ -165,13 +165,14 @@ test('a shop: the cheapest mix, a dry run, Apply and Undo', async (t) => {
   assert.match(await dlg.innerText(), enRe("sp.gw.mk.undone"));
 });
 
-test('the game\'s own reckoning is said where it is not the plan\'s', async (t) => {
+test('a different game prediction refuses the plan before apply', async (t) => {
   const page = await board(t);
   await answering(page, {total: {[G]: 97}});
   await openSite(page, G);
   await page.locator('#sp-pull [data-gw="marketing"]').click();
   await phase(page, 'ready');
-  assert.match(await page.locator('dialog.gw-dlg .gw-mkrow .gw-mk').innerText(), enRe("sp.gw.mk.game", {"p":97}));
+  assert.equal(await page.locator('dialog.gw-dlg [data-gw-b="apply"]').count(), 0);
+  assert.match(await page.locator('dialog.gw-dlg .gw-why').innerText(), enRe("nav.dlg.refuse.changed.rule"));
 });
 
 test('without the link, or with an older mod, the line says what to switch in BizMan', async (t) => {
@@ -186,6 +187,15 @@ test('without the link, or with an older mod, the line says what to switch in Bi
   assert.equal(await btn.getAttribute('aria-disabled'), 'true');
   assert.equal(await btn.getAttribute('data-tip'), en("nav.dlg.mod.marketing"));
   assert.equal(await old.locator('#sp-pull .spmk-hand').count(), 1);
+});
+
+test('an unsupported campaign model explains why planning is unavailable', async t => {
+  const data = JSON.parse(payload);
+  data.businesses.find(b => b.key === G).marketingPlan = {unavailable: true, on: null};
+  const page = await board(t, {data: JSON.stringify(data)});
+  await openSite(page, G);
+  assert.match(await page.locator('#sp-pull').innerText(), enRe('sp.mk.unavailable'));
+  assert.equal(await page.locator('#sp-pull [data-gw="marketing"]').count(), 0);
 });
 
 test('a site on plan: running, and Set up only while a switch is missing', async (t) => {

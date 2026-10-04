@@ -6,6 +6,7 @@ For setup, see the [README](../README.md). File paths below are relative to the 
 
 | File | What it does |
 | --- | --- |
+| `ba_facts.py` | Validates portable `.bcsave` snapshots and resolves runtime building values and supported renovation save records. |
 | `ba_save.py` | Reads the `.hsg` format, being gzip around an Easy Save 3 binary stream. The format notes are in the module docstring. |
 | `ba_dashboard.py` | Pulls the numbers out of a parsed save and renders the HTML from `template/board.html` and `template/board.js`. |
 | `template/board.html` | The board's markup and CSS, with the placeholders `render()` fills in. |

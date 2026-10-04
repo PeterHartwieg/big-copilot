@@ -6,7 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'web/worker.js'), 'utf8');
-const files = ['ba_save.py', 'ba_dashboard.py', 'gametext.json', 'ba_buildings.json',
+const files = ['ba_save.py', 'ba_dashboard.py', 'ba_facts.py', 'gametext.json', 'ba_buildings.json',
   'ba_demand_curves.json', 'ba_item_prices.json', 'ba_store_rules.json'];
 const deferred = () => {
   let resolve, reject;
@@ -37,6 +37,7 @@ async function startup(stamp = 'audit') {
       assert.equal(typeof py.progress, 'function', 'the callback is registered before the import');
       assert.equal(writes.get('/ba_save.py'), 'ba_save.py');
       assert.equal(writes.get('/ba_dashboard.py'), 'ba_dashboard.py');
+      assert.equal(writes.get('/ba_facts.py'), 'ba_facts.py');
       py.imported = true;
     },
   };
@@ -102,7 +103,7 @@ test('partial downloads report progress only after consuming a body or taking an
   assert.ok(s.py.imported);
 });
 
-test('all seven downloads overlap runtime startup and imports wait for every body', async () => {
+test('all downloads overlap runtime startup and imports wait for every body', async () => {
   const s = await startup();
   assert.deepEqual([...s.requests.keys()], files);
   assert.equal(s.writes.size, 0, 'no filesystem writes before the runtime exists');
@@ -120,14 +121,14 @@ test('all seven downloads overlap runtime startup and imports wait for every bod
   body.resolve('ba_store_rules.json');
   await flush();
   assert.ok(s.py.imported);
-  assert.equal(s.writes.size, 7);
+  assert.equal(s.writes.size, files.length);
   assert.equal(s.writes.get('/data/ba_store_rules.json'), 'ba_store_rules.json');
   assert.ok(s.messages.some(m => m.stage === 'ready'));
 });
 
 test('unstamped builds bypass cache and optional HTTP failures still boot', async () => {
   const s = await startup('');
-  assert.equal(s.requests.size, 7);
+  assert.equal(s.requests.size, files.length);
   for (const [name, req] of s.requests) {
     assert.equal(req.url, `py/${name}?v=dev`);
     assert.equal(req.options.cache, 'no-store');
@@ -136,11 +137,11 @@ test('unstamped builds bypass cache and optional HTTP failures still boot', asyn
   s.runtime.resolve(s.py);
   await flush();
   assert.ok(s.py.imported);
-  assert.equal(s.writes.size, 2);
+  assert.equal(s.writes.size, 3);
   assert.ok(s.messages.some(m => m.stage === 'ready'));
 });
 
-for (const name of ['ba_save.py', 'ba_dashboard.py']) {
+for (const name of ['ba_save.py', 'ba_dashboard.py', 'ba_facts.py']) {
   test(`a failed required ${name} reports startup failure before runtime finishes`, async () => {
     const s = await startup();
     assert.ok(s.requests.has(name));

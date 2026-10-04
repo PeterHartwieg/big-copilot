@@ -22702,6 +22702,7 @@ function gwMkHand(b){
 }
 function spMkLine(b){
   const p = b.marketingPlan;
+  if(p?.unavailable) return `<div class="spmk"><p>${tt("sp.mk.unavailable", "Campaign planning is unavailable because the model does not match this save. Refresh from the game or check for a dashboard update.")}</p></div>`;
   if(!p) return "";
   /* No agency is a phone contact yet: the plan waits on a first visit. */
   if(!p.on) return p.visit.length ? `<div class="spmk"><p>${tt("sp.mk.novisit2", "Visit {agencies} once to book campaigns.", {agencies: gwMkVisit(p.visit)})}</p></div>` : "";
@@ -22765,7 +22766,7 @@ function gwMarketing(keys, mode){
   const out = new Set();  // sites left out
   const many = keys.length > 1;
   const setup = mode === "setup";
-  const site = k => (D.businesses || []).find(b => b.key === k && b.marketingPlan);
+  const site = k => (D.businesses || []).find(b => b.key === k && b.marketingPlan && !b.marketingPlan.unavailable);
   const kept = () => keys.filter(k => !out.has(k)).map(site).filter(Boolean);
   /* The plans the game last judged, so the drawing stays with its answer
      while the board reads the game again after an apply. */
@@ -22890,7 +22891,18 @@ function gwMarketing(keys, mode){
     body: () => {
       const sites = kept();
       judged = new Map(sites.map(b => [b.key, b.marketingPlan]));
-      return {sites: sites.map(b => ({address: gwAddress(b.key), on: b.marketingPlan.on.slice(), was: b.marketingPlan.was.slice()}))};
+      return {sites: sites.map(b => ({address: gwAddress(b.key), on: b.marketingPlan.on.slice(), was: b.marketingPlan.was.slice(),
+        prediction: {dailyCost: b.marketingPlan.costPlan, marketing: b.marketingPlan.marketingPlan, total: b.marketingPlan.promotionPlan}}))};
+    },
+    learn: answer => {
+      for(const r of answer.rows || []){
+        const p = judged.get(gwKeyOf(r.address));
+        if(!r.error && p && (!Number.isFinite(r.dailyCost) || Math.abs(r.dailyCost - p.costPlan) > 0.005 || !r.promotion ||
+            r.promotion.marketing !== p.marketingPlan || r.promotion.total !== p.promotionPlan)){
+          r.error = "changed";
+          answer.ok = false;
+        }
+      }
     },
     idle,
     idleAt: () => { const c = gwMkClock(); return c ? `${c.day}|${c.hour}` : ""; },

@@ -427,7 +427,7 @@ details.help[open] summary::after{content:"\2013"}
   <div class="row rv" id="entryRow">
     <button type="button" class="btn" id="folderBtn" title="Choose the folder named Big Ambitions inside SaveGames. The page looks through every company folder in it and takes the newest save." data-tt-title="land.folder.title">__ICON_FOLDER__Choose the folder</button>
     <button type="button" class="btn" id="linkBtn" data-visit-feature="game-link" title="Read the running game through the Big Copilot Link mod from the Steam Workshop. No folder needed; the board follows the game as you play." data-tt-title="land.link.title">__ICON_LINK__Link to the game<span class="feature-new" data-new-feature="game-link" hidden>New</span></button>
-    <label class="link lg-pick" id="savePickLabel" role="button" tabindex="0" title="Choose one specific .hsg file instead" data-tt-title="land.onefile.title"><span id="savePickText">or one save file</span><input type="file" id="savePick" accept=".hsg"></label>
+    <label class="link lg-pick" id="savePickLabel" role="button" tabindex="0" title="Choose one specific .hsg file instead" data-tt-title="land.onefile.title"><span id="savePickText">or one save file</span><input type="file" id="savePick" accept=".hsg,.bcsave"></label>
   </div>
   <div class="save-location rv" id="saveLocation">
     <label for="savePlatform"><span data-tt="land.where.label">Save folder</span> <select id="savePlatform" aria-label="Operating system for save folder help" data-tt-aria-label="land.where.select"><option value="windows">Windows</option><option value="mac">macOS</option><option value="other" selected data-tt="land.where.other">Other / unknown</option></select></label>
@@ -444,6 +444,7 @@ details.help[open] summary::after{content:"\2013"}
         <button type="button" class="btn2 primary" id="reloadBtn" hidden data-tt="app.strip.reload">Reload app</button>
         <button type="button" class="btn2" id="reportBtn" hidden aria-haspopup="dialog" data-tt="app.strip.report">Report a bug</button>
         <button type="button" class="btn2" id="updateBtn" disabled title="Read the newest save from the chosen folder again">Update</button>
+        <button type="button" class="btn2" id="snapshotExport" hidden data-tt="app.facts.export">Download snapshot</button>
       </div>
     </div>
     <p class="quiet lg-note" id="srcNote" hidden></p>
@@ -503,7 +504,7 @@ details.help[open] summary::after{content:"\2013"}
 # order it lists them (downloads run together): the code, without which the worker never becomes
 # ready, and the data, written only when its fetch succeeds. The worker names
 # each file itself; tests/test_web_fresh.py holds it to these two lists.
-PY_CODE = ("ba_save.py", "ba_dashboard.py")
+PY_CODE = ("ba_save.py", "ba_dashboard.py", "ba_facts.py")
 PY_DATA = ("gametext.json", "ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json", "ba_store_rules.json")
 # The ones copied into web/py/ from the top of the checkout. gametext.json is
 # written there from the installed game instead (main()).

@@ -2,7 +2,7 @@
 
     python tools/game_link_mock.py "<path to a .hsg>" [--port 8322]
 
-Speaks the contract in docs/game-link-api.md (schema 1) so the web app and the
+Speaks the contract in docs/game-link-api.md (schema 2, with schema 1 compatibility) so the web app and the
 local watcher can be developed and tested without the game or Unity. POST
 /refresh and a change of the file's modification time both re-read the file
 and issue a new stamp, so pointing it at the game's own autosave folder gives a
@@ -88,7 +88,7 @@ import ba_save  # noqa: E402
 import ba_dashboard  # noqa: E402
 from ba_dashboard import ASSIGN_SKILLS, STATION_SKILLS, _uniform_gaps, money, schedule_entries, shift_print  # noqa: E402
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_PORT = 8322
 REFRESH_WINDOW = 15  # the mod's window for its automatic refreshes; --throttle's retryAfter
 REQUEST_WINDOW = 3  # a POST /refresh waits this long since the last refresh, as the mod from 0.4.0
@@ -110,7 +110,7 @@ LOCALE_KEYS = frozenset({"ok", "cancel", "close", "yes", "no", "back"})
 MAX_BODY = 256 * 1024
 MAX_HIRE_BODY = 2 * 1024 * 1024  # a hire carries every touched site's full week
 DRAIN_LIMIT = 4 * 1024 * 1024  # the most of a refused body read off the wire
-ENDPOINTS = (["/health", "/save", "/refresh"] + [f"/write/{k}" for k in (*WRITE_KINDS, "undo")]
+ENDPOINTS = (["/health", "/save", "/facts", "/refresh"] + [f"/write/{k}" for k in (*WRITE_KINDS, "undo")]
              + ["/pair/request", "/pair/status"])
 # The refusal --refuse-write refused answers per kind when it names no rule.
 REFUSED_DEFAULT = {"uniforms": "no_locker", "imports": "locked", "schedule": "screen_open", "hire": "screen_open",
@@ -215,6 +215,7 @@ class Link:
         self.refuse_write, self.busy_writes = refuse_write, busy_writes
         self.lock = threading.Lock()
         self.data = b""
+        self.facts = None
         self.stamp = ""
         self.refreshed_at = None
         self.last_refresh = 0.0
@@ -274,8 +275,10 @@ class Link:
         try:
             with open(self.path, "rb") as fh:
                 data = fh.read()
+            import ba_facts
+            data, facts = ba_facts.unpack(data) if data.lstrip().startswith(b'{') else (data, None)
             mtime = os.path.getmtime(self.path)
-        except OSError:
+        except (OSError, ValueError):
             with self.lock:
                 self.busy = False
             return 409, {"error": "cannot_save", "reason": "saving"}
@@ -287,6 +290,12 @@ class Link:
             seconds = max(int(time.time()), self._last_seconds + 1)
             self._last_seconds = seconds
             self.stamp = f"{self.day}-{self.hour}-{seconds}"
+            self.facts = dict(facts, stamp=self.stamp) if facts else None
+            if facts:
+                self.character, self.build = facts["character"], facts["build"]
+            self.features = [f for f in self.features if f != "building-facts.v1"]
+            if facts:
+                self.features.append("building-facts.v1")
             self.refreshed_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             self.last_refresh = now
             self.busy = False
@@ -647,12 +656,11 @@ class Link:
         return _uniform_gaps(save, reg, crew, None)
 
     # marketing ------------------------------------------------------------------
-    @staticmethod
-    def _marketing_types() -> tuple:
+    def _marketing_types(self) -> tuple:
         """(name, $ a day, reach) per Entities.MarketingTypeName id: the board's
         own table, read when a marketing write first needs it."""
         from ba_dashboard import MARKETING_TYPES
-        return MARKETING_TYPES
+        return tuple((r["name"], r["price"], r["reach"]) for r in self.facts["marketingTypes"]) if self.facts and self.facts.get("marketingTypes") else MARKETING_TYPES
 
     def _campaigns(self, save, reg, address) -> list:
         """The site's campaigns as {type, agency, enabled}: what an apply left,
@@ -678,12 +686,17 @@ class Link:
         reg = self._registration(save, agency)
         if reg and reg.get("BusinessName"):
             return reg["BusinessName"]
-        return next((name for where, name, _ in MARKETING_AGENCIES if where == agency), "")
+        return next((name for where, name, _ in self._agencies() if where == agency), "")
 
-    @staticmethod
-    def _agency_for(kind: int):
+    def _agencies(self):
+        if not self.facts:
+            return MARKETING_AGENCIES
+        names = [t[0] for t in self._marketing_types()]
+        return [((a["street"], a["number"]), "", tuple(names.index(t) for t in a["types"])) for a in self.facts["agencies"]]
+
+    def _agency_for(self, kind: int):
         """The first agency that sells this type, as the game's walk finds it."""
-        return next((where for where, _name, kinds in MARKETING_AGENCIES if kind in kinds), None)
+        return next((where for where, _name, kinds in self._agencies() if kind in kinds), None)
 
     @staticmethod
     def _open_at(save, reg, day: int, hour: int) -> bool:
@@ -732,11 +745,11 @@ class Link:
         from ba_dashboard import hood_key, load_buildings, marketing_score
         held = self.promotions.get(address) or save.deref(reg.get("promotion")) or {}
         traffic = held.get("trafficIndex", 0) or 0
-        building = load_buildings().get(address)
+        building = load_buildings(save).get(address)
         if building is None:
             return None
         try:
-            marketing, total = marketing_score(traffic, on, building.get("m"), building.get("t"), hood_key(building))
+            marketing, total = marketing_score(traffic, on, building.get("m"), building.get("t"), hood_key(building), building.get("marketingRules"))
         except (KeyError, TypeError):
             return None
         return {"trafficIndex": traffic, "marketing": marketing, "total": total}
@@ -823,7 +836,14 @@ class Link:
             if address in seen:
                 raise BadRequest("sites[] names a site twice")
             seen.add(address)
-            parsed.append((address, type_ids(site.get("on"), "sites[].on"), type_ids(site.get("was"), "sites[].was")))
+            prediction = site.get("prediction")
+            if prediction is not None:
+                if (not isinstance(prediction, dict) or
+                    any(type(prediction.get(k)) not in (int, float) or not math.isfinite(prediction[k]) or prediction[k] < 0
+                        for k in ("dailyCost", "marketing", "total")) or
+                    any(prediction[k] > 100 or int(prediction[k]) != prediction[k] for k in ("marketing", "total"))):
+                    raise BadRequest("sites[].prediction has invalid values")
+            parsed.append((address, type_ids(site.get("on"), "sites[].on"), type_ids(site.get("was"), "sites[].was"), prediction))
 
         contacts, cache = self._contact_addresses(save), {}
 
@@ -831,7 +851,7 @@ class Link:
             return self._agency_check(save, agency, contacts, cache)["error"] is None
 
         rows, plans = [], []
-        for address, on, was in parsed:
+        for address, on, was, prediction in parsed:
             if other_save:
                 rows.append(self._marketing_blank(address, error="changed"))  # another company's building
                 continue
@@ -841,7 +861,7 @@ class Link:
                 continue
             before = self._campaigns(save, reg, address)
             running = {c["type"] for c in before if c["enabled"]}
-            building = load_buildings().get(address)
+            building = load_buildings(save).get(address)
             error = None
             if running != was:
                 error = "changed"
@@ -863,7 +883,7 @@ class Link:
             for kind in range(len(names)):
                 mine = [c for c in after if c["type"] == kind]
                 if not mine:
-                    sellers = [where for where, _name, kinds in MARKETING_AGENCIES if kind in kinds]
+                    sellers = [where for where, _name, kinds in self._agencies() if kind in kinds]
                     agency = next((a for a in sellers if usable(a)), None)
                     if agency is None and kind in on:
                         agency = sellers[0]
@@ -893,6 +913,11 @@ class Link:
             promotion = self._promotion(save, reg, address, on)
             rows.append(dict(self._marketing_row(save, reg, address, before, after, added, promotion_after=promotion),
                              waiting=waiting))
+            row = rows[-1]
+            if prediction is not None and (abs(row["dailyCost"] - prediction["dailyCost"]) > 0.005 or
+                    promotion is None or any(promotion[k] != prediction[k] for k in ("marketing", "total"))):
+                rows[-1] = self._refused_row(save, reg, address, before, "changed")
+                continue
             # What undo restores: each campaign whose flag the write switched.
             flips = [{"type": c["type"], "agency": c["agency"], "before": bool(w), "after": c["enabled"]}
                      for c, w in zip(after, was_on) if bool(w) != c["enabled"]]
@@ -1999,6 +2024,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._json(*self.link.pair_status((query.get("id") or [None])[0]))
         elif route == "/save":
             self._save()
+        elif route == "/facts":
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            with self.link.lock:
+                if self.link.facts is None:
+                    self._json(404, {"error": "not_found"})
+                elif query.get("stamp") != [self.link.stamp]:
+                    self._json(409, {"error": "stamp_mismatch"})
+                else:
+                    self._json(200, self.link.facts)
         elif route == "/debug/writes":
             with self.link.lock:
                 self._json(200, {"writes": self.link.applied})

@@ -176,7 +176,7 @@ namespace BigCopilotLink
             {
                 // A HEAD answer carries no body, or a kept-alive client reads the
                 // leftover bytes as its next status line. 405 on the known paths.
-                var known = path == "" || path == "/health" || path == "/save" || path == "/refresh" ||
+                var known = path == "" || path == "/health" || path == "/save" || path == "/facts" || path == "/refresh" ||
                             path == "/pair/request" || path == "/pair/status" || WriteKind(path) != null;
                 WriteNoBody(context, known ? 405 : 404);
                 return;
@@ -189,6 +189,14 @@ namespace BigCopilotLink
                     if (method != "GET") { WriteJson(context, 405, "{\"error\":\"method_not_allowed\"}"); return; }
                     _health.MarkHealthPolled();
                     WriteJson(context, 200, HealthJson(_approvals.IsApproved(request)));
+                    return;
+
+                case "/facts":
+                    if (method != "GET") { WriteJson(context, 405, "{\"error\":\"method_not_allowed\"}"); return; }
+                    var factsSnapshot = _saves.Current;
+                    if (factsSnapshot.IsEmpty) { WriteJson(context, 503, "{\"error\":\"no_save_yet\"}"); return; }
+                    if (request.QueryString["stamp"] != factsSnapshot.Stamp) { WriteJson(context, 409, "{\"error\":\"stamp_mismatch\"}"); return; }
+                    WriteJson(context, 200, factsSnapshot.Facts);
                     return;
 
                 case "/save":
@@ -325,6 +333,7 @@ namespace BigCopilotLink
             // Additive in 0.4.0: what a kind can do beyond its first contract.
             w.BeginArray("features");
             foreach (var feature in WriteService.Features) w.Value(feature);
+            w.Value("building-facts.v1");
             w.EndArray();
             w.Prop("paired", paired);
             w.EndObject();
@@ -351,7 +360,7 @@ namespace BigCopilotLink
             response.AddHeader("ETag", etag);
             response.AddHeader("X-Game-Link-Stamp", stamp);
             response.AddHeader("X-Game-Link-Day", day.ToString(CultureInfo.InvariantCulture));
-            response.AddHeader("X-Game-Link-Character", _health.Character);
+            response.AddHeader("X-Game-Link-Character", snap.Character);
             response.AddHeader("Cache-Control", "no-store");
 
             var ifNoneMatch = context.Request.Headers["If-None-Match"];
