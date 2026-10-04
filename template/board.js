@@ -5192,26 +5192,57 @@ const spCoverOnly = row => !row.demandBased && !(row.shifts || []).some(s => !s.
 const spRosterNow = row => spCoverOnly(row)
   ? spRosterCounts(row).nowCover : spRosterCounts(row).now;
 
+/* Role hues from SkillData.associatedColorGradient.key0 in the installed game's
+   defaultlocalgroup_assets_skills bundle (2026-10-04). Keep text in the theme's
+   ink; these colors identify roles, while dashed/checked bars still show status. */
+const SP_SKILL_COLORS = {
+  "ba:skill_actor": "#e754e7",
+  "ba:skill_cleaning": "#28bfaa",
+  "ba:skill_customerservice": "#f1a12f",
+  "ba:skill_deliverydriver": "#985811",
+  "ba:skill_dj": "#e754e7",
+  "ba:skill_eventplanner": "#ed7118",
+  "ba:skill_factoryworker": "#a26347",
+  "ba:skill_graphicdesigner": "#9d46e0",
+  "ba:skill_gymtrainer": "#4981c8",
+  "ba:skill_hairstylist": "#de3c1b",
+  "ba:skill_headhunter": "#d04aa0",
+  "ba:skill_hrmanager": "#393cff",
+  "ba:skill_lawyer": "#788fa2",
+  "ba:skill_logisticsmanager": "#ff9a67",
+  "ba:skill_pricingmanager": "#d1a824",
+  "ba:skill_programmer": "#40a2c6",
+  "ba:skill_projectionist": "#e754e7",
+  "ba:skill_purchasingagent": "#3b8337",
+  "ba:skill_securityguard": "#99a7a8",
+  "ba:skill_stagecrew": "#4981c8",
+  "ba:skill_travelagent": "#7b5251",
+};
+const spSkillColor = skill => SP_SKILL_COLORS[skill] || "var(--ink-3)";
+/* Cleaning has one stable code, independent of the translated furniture name.
+   Customer Service can then keep CS in the headcount line. */
+const spScheduleCode = (label, skill) => skill === "ba:skill_cleaning" ? "CL" : roleCode(label);
+/* Sort display indices only: plan/current entries and tick ids refer to the
+   original station indices. Preserve the game's order within each group. */
+const spStationOrder = stations => stations.map((_, i) => i).sort((a, b) =>
+  Number(stations[b].skill === "ba:skill_cleaning") - Number(stations[a].skill === "ba:skill_cleaning"));
+
 /* Two letters and a number for a station, the way the player picks it out of
    BizMan's list: the initials of its name, numbered only where more than one
    station shares them. */
 function spStationCodes(stations){
   const total = {}, seen = {};
-  stations.forEach(s => { const c = roleCode(s.name || "??"); total[c] = (total[c] || 0) + 1; });
+  stations.forEach(s => { const c = spScheduleCode(s.name || "??", s.skill); total[c] = (total[c] || 0) + 1; });
   return stations.map(s => {
-    const c = roleCode(s.name || "??");
+    const c = spScheduleCode(s.name || "??", s.skill);
     seen[c] = (seen[c] || 0) + 1;
     return total[c] > 1 ? `${c}${seen[c]}` : c;
   });
 }
-/* The same for a set of names that have to stay apart rather than be numbered:
-   "Customer Service" and "Cleaning Station" are both CS, and two identical
-   codes on the headcount line would say the shop has two of one role. Where
-   the initials collide, the first three letters of the first word are used
-   instead. */
-function spNameCodes(labels){
-  const short = labels.map(l => roleCode(l));
-  return labels.map((l, k) => short.some((c, j) => j !== k && c === short[k])
+/* Keep other colliding role labels distinct without changing cleaning's code. */
+function spNameCodes(labels, skills = []){
+  const short = labels.map((l, k) => spScheduleCode(l, skills[k]));
+  return labels.map((l, k) => skills[k] !== "ba:skill_cleaning" && short.some((c, j) => j !== k && c === short[k])
     ? (String(l).trim().split(/\s+/)[0] || "??").slice(0, 3).toUpperCase()
     : short[k]);
 }
@@ -5646,7 +5677,7 @@ function spDesks(grid){
 function spRosterNone(row, pick, key){
   const stations = (row && row.stations) || [];
   const codes = spStationCodes(stations);
-  const rows = stations.map((st, k) => `<div class="sp-grow"><span class="lab">${spEsc(codes[k])}</span></div>`).join("");
+  const rows = spStationOrder(stations).map(k => `<div class="sp-grow sp-skill" style="--sp-skill:${spSkillColor(stations[k].skill)}"><span class="lab" tabindex="0" data-tip="${attr(stations[k].name || "?")}">${spEsc(codes[k])}</span></div>`).join("");
   const failed = !!(row && row.failed);
   /* A shop with no cover station and nothing measured still has its demand
      test to offer, so the pick sits here too and the section carries its site. */
@@ -5732,14 +5763,15 @@ function spRosterDay(c, wd, on){
       run = null;
     }
   }
-  c.stations.forEach((st, si) => {
+  spStationOrder(c.stations).forEach(si => {
+    const st = c.stations[si];
     const kind = spStationKind(c.row, st);
     /* The lane is labelled with two letters and a number, which says nothing
        on its own, so the station's own name is on the label both ways: as a
        tooltip under the pointer and in the read-out for a keyboard. */
     const what = st.rate ? tt("sp.station.serves", "{name} · serves {n} an hour", {name: spEsc(st.name || "?"), n: st.rate})
       : tt("sp.station.cover", "{name} · covered every open hour", {name: spEsc(st.name || "?")});
-    out += `<div class="sp-grow${slots.length ? "" : " sp-shut"}"><span class="lab" tabindex="0" data-tip="${
+    out += `<div class="sp-grow sp-skill${slots.length ? "" : " sp-shut"}" style="--sp-skill:${spSkillColor(st.skill)}"><span class="lab" tabindex="0" data-tip="${
       attr(what)}" data-read="${attr(what)}">${spEsc(c.codes[si])}</span>${shutMarks}`;
     /* The schedule as it stands, behind the plan: one block a fragment, so
        the toggle shows what typing this week actually replaces. */
@@ -5803,8 +5835,9 @@ function spRosterCount(c){
   /* A serving role names itself; cleaning and security are not roles in the
      payload, so they are named by the furniture they cover. */
   const labelOf = skill => spSkillLabel(c.row, c.stations, skill);
-  const skills = Object.keys(c.row.headcount || {});
-  const codes = spNameCodes(skills.map(labelOf));
+  const skills = Object.keys(c.row.headcount || {}).sort((a, b) =>
+    Number(b === "ba:skill_cleaning") - Number(a === "ba:skill_cleaning"));
+  const codes = spNameCodes(skills.map(labelOf), skills);
   let out = skills.map((skill, si) => {
     const h = c.row.headcount[skill] || {};
     const label = labelOf(skill);
@@ -5851,7 +5884,7 @@ function spRosterCount(c){
         ? ` · ${nobodyNow
           ? tt("sp.hc.newhours", "<b>{n} h a week of new wages</b>, the hours the hires would work: nobody covers this locker today", {n: h.hireHours})
           : tt("sp.hc.newhours.more", "<b>{n} h a week of new wages</b>, the hours the hires would work", {n: h.hireHours})}` : ""}`;
-    return `<span${isNew ? ` class="sp-new"` : ""} tabindex="0" data-tip="${attr(spEsc(label))}" data-read="${
+    return `<span class="sp-skill${isNew ? " sp-new" : ""}" style="--sp-skill:${spSkillColor(skill)}" tabindex="0" data-tip="${attr(spEsc(label))}" data-read="${
       attr(read)}"><span class="sp-code">${
       spEsc(codes[si])}</span><span class="sp-dots">${dots(have)}${dots(bench, "sp-bench")}${
       dots(h.hire, "sp-hire")}</span>${words}${isNew ? ` · <b>${tt("sp.hc.newshort", "+{n} h/wk", {n: h.hireHours})}</b>` : ""}</span>`;
