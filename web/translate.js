@@ -95,7 +95,9 @@
   function voteButton(e,c, suffix) {
     const b=button(c.voted?tt('comm.tr.yourVote','Your vote'):tt('comm.tr.voteThis','Vote for this'),'tr-vote',()=>mutate(e,'vote',{candidateId:c.id}),e.key+':vote:'+suffix);
     b.append(node('span','tr-vote-count',formatNumber(c.votes || 0)));
-    b.setAttribute('aria-label',c.voted?tt('comm.tr.yourVoteFor','Your vote: {text}',{text:c.text}):tt('comm.tr.voteFor','Vote for {text}',{text:c.text}));
+    b.setAttribute('aria-label',c.voted
+      ?tt('comm.tr.yourVoteForCount',{one:'Your vote: {text} · {n} vote',other:'Your vote: {text} · {n} votes'},{text:c.text,n:c.votes||0})
+      :tt('comm.tr.voteForCount',{one:'Vote for {text} · {n} vote',other:'Vote for {text} · {n} votes'},{text:c.text,n:c.votes||0}));
     b.setAttribute('aria-pressed',String(!!c.voted));b.disabled=pending.has(entryKey(e));return b;
   }
   function row(e) {

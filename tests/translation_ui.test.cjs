@@ -74,9 +74,11 @@ test('alternatives are independently discoverable without editing or voting, and
   assert.equal(await page.locator('textarea').count(),0);
   assert.deepEqual(state.writes,[],'viewing alternatives neither approves nor submits');
   assert.equal(await row.locator('.tr-alt .tr-vote').innerText(),'Vote for this\n0');
+  assert.equal(await row.locator('.tr-alt .tr-vote').getAttribute('aria-label'),'Vote for Collaboratori · 0 votes');
   await row.locator('.tr-alt .tr-vote').click();await page.getByText('Vote saved.',{exact:true}).waitFor();
   assert.equal(state.writes[0].candidateId,'other');
   assert.match(await row.locator('.tr-row .tr-vote').innerText(),/^Your vote/);
+  assert.equal(await row.locator('.tr-row .tr-vote').getAttribute('aria-label'),'Your vote: Collaboratori · 1 vote');
   assert.equal(await page.locator('textarea').count(),0,'voting does not open an editor');
   await row.locator('.tr-alt .tr-vote').click();
   await row.locator('.tr-target').getByText('Personale',{exact:true}).waitFor();
