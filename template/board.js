@@ -17641,15 +17641,16 @@ function drawDifficulty(hadFocus = null){
 /* Everything the board draws from the numbers. A live refresh of the same
    company (renderCalm(), with calmLazy set) draws only the page and view on
    screen, plus everything outside the pages; the rest is marked out of date
-   (PAGE_DRAWS, pageStale) and drawn as it is opened (drawStale()). Every
-   other caller -- the first boot, another company or save -- draws it all. */
+   (PAGE_DRAWS, pageStale) and drawn as it is opened (drawStale()). The
+   first boot also draws only its resolved view; another company or save
+   redraws every row to clear the previous company's markup. */
 let calmLazy = false;
-function renderAll(){
+function renderAll(initial = false){
   /* Every write's progress, judged on this board if it is a later one. */
   try{ pgEvaluate(); }catch(e){ console.error(e); }
   /* Asked before drawMast() and drawFooter() replace the difficulty chips. */
   const diffFocus = fvChipFocus();
-  const here = calmLazy ? viewOf(page) : null;
+  const here = calmLazy || initial ? viewOf(page) : null;
   indexTrends();
   /* Painted back straight after the fresh dot, so a row that throws below
      cannot leave it green, and again once the rows that drew have cleared
@@ -24756,13 +24757,37 @@ function bootShell(){
   wireNav(); wireCoin(); wireSphere(); wireTips();
 }
 function boot(){
-  // The first render precedes restoring the hash. It may paint waits, but
-  // only the view actually opened below asks; a Map deep link never plans Today.
-  odBooting = true;
-  try{ renderAll(); }finally{ odBooting = false; }
-  Object.keys(SUBS).forEach(id => showSub(id, sub[id]));
   const h = location.hash.slice(1);
-  if(SEC_PAGE[h]?.[1]) showSub(...SEC_PAGE[h]);
+  const r = routeResolve(h) || (h ? null : routeResolve(remembered(ROUTE_KEY) || "")
+    || ROUTE_ALIASES[remembered(PAGE_KEY)] || null);
+  /* Select the host before any page draws. Route entry, history, map/wiki
+     visits and site restoration still run through the ordinary navigation
+     below, after shared chrome and the active view exist. */
+  if(!shellOnly){
+    const fallback = pageFromHash(h) || remembered(PAGE_KEY) || "today";
+    const host = SITE_HASH.test(h) ? ["company", "results"]
+      : r ? ROUTES[r].host : PAGE_ALIASES[h] || SEC_PAGE[h]
+        || PAGE_ALIASES[fallback] || [fallback];
+    page = PAGES.some(p => p.id === host[0]) ? host[0] : "today";
+    if(host[1] && SUBS[page]) sub[page] = host[1];
+  }
+  odBooting = true;
+  try{
+    /* Set the visibility of every remembered view before drawing, without
+       visiting it or running a hidden view's arrival hooks. */
+    Object.entries(SUBS).forEach(([id, sv]) => {
+      document.querySelectorAll(`#${sv.host} [data-sub]`).forEach(el => {
+        el.hidden = !String(el.dataset.sub || "").split(" ").includes(sub[id]);
+      });
+      paintSubNav(id);
+    });
+    renderAll(true);
+  }finally{ odBooting = false; }
+  if(!shellOnly){
+    const sv = SUBS[page];
+    if(sv && sv.shown) sv.shown(sub[page]);
+    if(page === "growth" && sub.growth === "plan" && typeof ofIngShow === "function") ofIngShow();
+  }
   if(shellOnly){
     /* A save arriving while the wiki is open: the numbers fill in behind it and
        the reader stays on the page being read. */
@@ -24779,7 +24804,6 @@ function boot(){
      over whole, so the view that replaced it is the one that opens — not
      whichever view of its new page was last used. */
   if(!openSiteHash(h, "replace")){
-    const r = routeResolve(h) || (h ? null : routeResolve(remembered(ROUTE_KEY) || ""));
     if(r) openRoute(r, {historyMode: "replace", scroll: false, into: ROUTE_ALIAS_INTO[h]});
     else showPage(PAGE_ALIASES[h] ? h : pageFromHash(h) || remembered(PAGE_KEY) || "today", false, "replace");
   }

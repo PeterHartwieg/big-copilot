@@ -72,7 +72,7 @@ after(async () => { await browser?.close(); });
 
 // The board after its first delivery. The window is tall enough to hold a
 // page whole, so every block on it arrives at once rather than on scroll.
-async function board(t) {
+async function board(t, {hash = "", saved = {}, shell = false, eager = false, instrument = false, data = payload} = {}) {
   const context = await browser.newContext({viewport: {width: 1280, height: 2400}});
   t.after(() => context.close());
   const page = await context.newPage();
@@ -82,9 +82,25 @@ async function board(t) {
   await context.route('https://**', route => route.abort());
   await context.route('https://calm.test/', route =>
     route.fulfill({contentType: 'text/html; charset=utf-8', body: html}));
-  await page.goto('https://calm.test/', {waitUntil: 'load'});
+  await context.addInitScript(saved => {
+    for (const [key, value] of Object.entries(saved)) localStorage.setItem(key, value);
+  }, saved);
+  await page.goto('https://calm.test/' + hash, {waitUntil: 'load'});
+  await page.evaluate(({shell, eager, instrument}) => {
+    if(shell) BigCopilotBoard.browseWiki();
+    window.initialDraws = [];
+    if(instrument) PAGE_DRAWS.forEach(row => {
+      const draw = row[1];
+      row[1] = () => { initialDraws.push(row[0]); return draw(); };
+    });
+    if(eager){ const draw = renderAll; renderAll = () => draw(false); }
+  }, {shell, eager, instrument});
   await page.evaluate(() => { document.body.classList.add('has-board'); });
-  await deliver(page);
+  await page.evaluate(p => {
+    const start = performance.now();
+    window.calmWatch.changed(JSON.parse(p));
+    window.initialWorkMs = performance.now() - start;
+  }, data);
   return page;
 }
 // What the source does when the save moves on: a fresh copy of the numbers.
@@ -573,4 +589,87 @@ test('a refresh with the search palette open does not make its lit row hop again
     return {lit, relit: ssPal.querySelectorAll('.ss-q2.on').length, before, now, later: hopping()};
   }, payload);
   assert.deepEqual(hop, {lit: 1, relit: 1, before: 0, now: 0, later: 0});
+});
+
+
+// Instrument the real registry, rather than a stubbed render: no hidden view
+// may build markup before its first navigation, including remembered routes.
+for(const [hash, saved, view, shell] of [
+  ["", {}, "today"], ["#map", {}, "map"], ["#wiki", {}, "wiki"],
+  ["#wiki/guide-prices", {}, "wiki"], ["", {}, "wiki", true],
+  ["", {ba_dash_route: "staffing/payroll"}, "staffing/payroll"],
+  ["#payroll", {}, "staffing/payroll"], ["#secProducts", {}, "company/products"],
+  ["#secFlow", {}, "supply/flow"], ["#secMarket", {}, "growth/market"],
+  ["#site/missing-99", {}, "company/results"],
+  ["", {ba_dash_page: "payroll"}, "staffing/payroll"],
+  ["", {ba_dash_page: "supply", ba_dash_supply: "imports"}, "supply/imports"],
+  ["", {ba_dash_page: "staffing", ba_dash_staffing: "needs"}, "staffing/needs"],
+  ["", {ba_dash_page: "staffing", ba_dash_staffing: "payroll"}, "staffing/payroll"],
+  ["#site/secondavenue-10", {}, "company/results"],
+  ...["businesses/results", "businesses/standards", "businesses/prices", "businesses/milestones",
+    "supply/changes", "supply/imports", "supply/deliveries", "supply/production", "supply/flow",
+    "staffing/needs", "staffing/schedules", "expansion/demand", "expansion/open", "expansion/factory"]
+    .map(id => ["#" + id, {}, ({"businesses/results": "company/results", "businesses/standards": "company/standards",
+      "businesses/prices": "company/products", "businesses/milestones": "company/milestones",
+      "expansion/demand": "growth/market", "expansion/open": "growth/open", "expansion/factory": "growth/plan"})[id] || id]),
+]) test(`first boot defers hidden draws: ${hash || JSON.stringify(saved)}${shell ? " wiki shell" : ""}`, async t => {
+  const page = await board(t, {hash, saved, shell, instrument: true});
+  const state = await page.evaluate(() => ({view: viewOf(page), calls: initialDraws.slice(),
+    stale: PAGE_DRAWS.filter(row => row[0] && !row[0].split(" ").includes(viewOf(page)))
+      .every(row => pageStale.has(row))}));
+  assert.equal(state.view, view);
+  assert.ok(state.calls.every(tag => !tag || tag.split(" ").includes(view)), JSON.stringify(state.calls));
+  assert.equal(state.stale, true);
+  // Every subsequent first visit draws its rows on the current payload, and
+  // reads exactly as a full render of the same state would read.
+  if(hash === "#map"){
+    await page.evaluate(() => { ssOpen(); });
+    assert.ok(await page.evaluate(() => ssIndex.some(row => row.g === "sites") && ssIndex.some(row => row.g === "kinds")),
+      'search indexes exist without relying on initial hidden draws');
+    await page.evaluate(() => ssClose());
+    const views = await page.evaluate(() => [...new Set(PAGE_DRAWS.flatMap(row => row[0].split(" ")).filter(Boolean))]);
+    for(const id of views.filter(id => id !== "wiki")){
+      const visit = await board(t, {hash: '#map'});
+      await visit.evaluate(id => {
+        const [p, v] = id.split("/");
+        showPage(p, false); if(v) showSub(p, v);
+      }, id);
+      const read = () => visit.evaluate(() => {
+        document.querySelectorAll('.sec').forEach(el => el.classList.add('measured'));
+        return document.querySelector('.page:not([hidden])').innerText;
+      });
+      const shown = await read();
+      await visit.evaluate(() => renderAll());
+      assert.equal(shown, await read(), `first visit ${id}`);
+      await visit.context().close();
+    }
+  }
+});
+
+
+test('synthetic startup reports synchronous main-thread work and draw count', async t => {
+  const data = JSON.parse(payload), originals = data.businesses.slice();
+  // The real synthetic fixture's business shape, expanded to 60 businesses.
+  // Preserve all its original supply/staff indexes; extra shops belong to
+  // independent chains and have no new private/game-derived fields.
+  while(data.businesses.length < 60){
+    const i = data.businesses.length, b = structuredClone(originals[i % originals.length]);
+    b.key = `synthetic:${i}`; b.name = `Synthetic business ${i}`;
+    data.businesses.push(b);
+    const c = structuredClone(data.chains[0]);
+    c.name = b.name; c.sites = [b.key]; data.chains.push(c);
+  }
+  const samples = {deferred: [], eager: []}, counts = {};
+  for(let round = 0; round < 5; round++) for(const eager of [false, true]){
+    const page = await board(t, {hash: '#map', data: JSON.stringify(data), eager, instrument: true});
+    const sample = await page.evaluate(() => ({ms: initialWorkMs, draws: initialDraws.length}));
+    const key = eager ? 'eager' : 'deferred';
+    samples[key].push(sample.ms); counts[key] = sample.draws;
+    await page.context().close();
+  }
+  const median = rows => rows.slice().sort((a,b) => a-b)[Math.floor(rows.length / 2)];
+  assert.ok(counts.deferred < counts.eager);
+  t.diagnostic(JSON.stringify({syntheticBusinesses: data.businesses.length, route: '#map',
+    samples: 5, registryDrawCalls: counts,
+    synchronousDeliveryMedianMs: Object.fromEntries(Object.entries(samples).map(([k,v]) => [k, +median(v).toFixed(2)]))}));
 });
