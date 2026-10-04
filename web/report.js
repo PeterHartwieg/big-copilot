@@ -16,7 +16,8 @@
  *     whole traceback and three settings (language, theme, platform) go to
  *     private storage; nothing else is read from browser storage;
  *   - with "Attach my save" ticked, the save's bytes as the page read them go
- *     to private storage. Both boxes start unticked on every open.
+ *     to private storage. Save attachment starts ticked on every open;
+ *     technical details start unticked. Nothing is sent until Send.
  *
  * Everything is rendered with textContent; the issue's address is shown only
  * when it is this repository's. Names declared here start br; the whole file is
@@ -266,8 +267,9 @@
   function brSaveHint() {
     const s = brEls.save;
     const ready = brKnown.bytes;
-    s.input.disabled = brBusy || !!brSent || !ready;
-    if (!ready) s.input.checked = false;
+    // Keep opt-out available while the reader prepares the default attachment.
+    s.input.disabled = brBusy || !!brSent || ready === null;
+    if (ready === null) s.input.checked = false;
     s.hint.textContent = ready === undefined ? tt("br.save.wait", "Getting the save ready…")
       : ready ? tt("br.save.hint", "The save is kept privately for 30 days and never published.")
       : tt("br.save.none", "No save is held on this page, so none can be attached.");
@@ -336,7 +338,7 @@
     brBusy = false;
     brKnown = {bytes: undefined, build: undefined};
     const e = brEls;
-    e.save.input.checked = false;
+    e.save.input.checked = true;
     e.details.input.checked = false;
     e.preview.open = false;
     e.err.hidden = !brCtx.error;
