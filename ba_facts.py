@@ -64,7 +64,9 @@ def validate(facts, raw=None, stamp=None, character=None):
         for field in ("type", "size", "neighbourhood"):
             if not isinstance(row.get(field), str) or not row[field]:
                 raise ValueError("Incomplete building identity")
-        if type(row.get("version")) is not int or row["version"] < 0:
+        # The game uses -1 for residential buildings without a numbered layout.
+        # Link captures those too, even when the player owns only retail sites.
+        if type(row.get("version")) is not int or row["version"] < -1:
             raise ValueError("Invalid building version")
         for field in ("area", "propertyArea", "traffic"):
             if not number(row.get(field)):

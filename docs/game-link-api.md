@@ -44,6 +44,8 @@ all six supported enum values, in id order 0–5. `area` is the simulation area 
 BuildingSizeData; `propertyArea` is the building's `totalSqm`, which renovations
 can preserve. `capacity` is the building maximum, distinct from the registration's
 equipment-limited `customerCapacity`. Zero is a real maximum; null or -1 is unknown.
+`version` preserves the game's integer layout version, including the valid `-1`
+sentinel used by residential buildings without a numbered layout.
 Building registrations also contribute `effectiveCapacity`, `rent`, `marketingNow`
 and `promotionNow` when available to the capture's consistency comparison.
 
