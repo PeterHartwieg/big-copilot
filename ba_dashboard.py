@@ -165,8 +165,9 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
                           f'lang="{code}" translate="no">{html_escape(GAME_NAME_LANGS[code])}</li>'
                           for code in order)
         code, word = next(iter(GAME_NAME_LANGS.items()))
-        note = (f'<a class="gn-note" data-gn-note href="{TRANSLATING_URL}" target="_blank" rel="noopener" hidden>'
+        note = (f'<a class="gn-note" data-gn-note data-translate-link href="/translate/" target="_blank" rel="noopener" hidden>'
                 f'<span data-tt="foot.lang.drafted">Machine-translated. Help check it</span></a>')
+        note += '<a class="gn-note" data-translate-link href="/translate/" target="_blank" rel="noopener" data-tt="foot.lang.contribute">Help translate</a>'
         names = (f'<div class="sf-col sf-gn">\n        <h2 class="sf-head" id="{head}" data-tt="foot.lang.head">Language</h2>\n'
                  f'        <div class="gn-pick" data-gn-pick data-value="{code}" data-drafted="{" ".join(UI_LANGS_DRAFTED)}">'
                  f'<button type="button" class="gn-btn" id="{head}Btn" aria-haspopup="listbox" aria-expanded="false" '
@@ -508,7 +509,7 @@ GAME_NAME_LANGS = {
 # i18n/<lang>.json each; tests/test_game_names.py holds the three together).
 # The footer's Language list shows them first, as "Whole page"; every other
 # entry of GAME_NAME_LANGS changes only the game's names.
-UI_LANGS = ("en", "de", "es", "fr", "pt", "ru", "ko", "tr")
+UI_LANGS = ("en", "de", "es", "fr", "it", "pt", "ru", "ko", "tr")
 # The ones still mostly machine-drafted (i18n/<lang>.ai.json): the footer says
 # so under the picker, with a link to help check them.
 UI_LANGS_DRAFTED = ("es", "fr", "pt", "ru", "ko", "tr")

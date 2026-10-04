@@ -666,6 +666,14 @@ it is invalidated by the next build. A private part a section needs goes on
 
 ## UI text
 
+The hosted [community translation page](community-translations.md) is built from
+`template/translate.html`, `web/translate.js` and `web/translate.css`. Generated
+per-language catalogues and validation manifests live under `web/translations/`;
+`tools/translation_catalogue.py` extracts them from the existing call sites. The
+hosted loader overlays source-matched community wording; local CLI exports keep
+using the bundled files. The translation page is a standalone site route, not a
+board `PAGES` entry or an on-demand save section.
+
 Big Copilot's own words can be shown in another language; German is the first. The
 game's names are a separate layer (above), and the two meet only where a sentence holds a
 name; the footer's Language sets both.
@@ -833,6 +841,8 @@ and the detail after `: ` or `; `.
 | `i18n/de.ai.json` | Only while machine drafts await review: `"key": "model"` for every key `python tools/i18n.py import-draft de <file> --model <id>` took in and no native speaker has checked yet. `reviewed de <key …>` (or `--all`) accepts the key and drops its line, as does `accept` for a key a person has fixed; the file goes when the last one does. Drafts ship like any translation; `status` counts them and never fails on them, and `draft-sheet de --review` lists them with their context for the reviewer |
 | `web/i18n/de.json` | Assembled by `python build_web.py --assemble` (`tools/i18n.py ship`) and not committed: `i18n/de.json` minus orphans, placeholder mismatches (a placeholder its calls do not pass; see [Python's sentences](#pythons-sentences)) and stale keys (whose English changed since `de.base.json` recorded it, or was never recorded), which show English until redone and `accept`ed. In `STAMP_INPUTS`, and compared by `--check` |
 | `tools/i18n.py` | `extract` (the English catalogue, read off the call sites: a JS lexer over the scripts, an HTML parser over the markup, `ast` over `msg(`), `extract --params` (the params each key's calls pass), `status [--strict]`, `ship`, `accept`, `glossary`, `draft-sheet [--review]`, `import-draft`, `reviewed` |
+| `tools/translation_catalogue.py` | Community catalogues, per-key source versions, compiled placeholder validation and validated overlay export/import |
+| `web/translations/<lang>.json`, `web/translations/<lang>.manifest.json` | Generated public contribution catalogue and compact runtime validation manifest; assembled, not committed |
 
 No English catalogue is committed: it would conflict on every English edit. `extract` builds
 it on demand and fails on a key with two English defaults, or a call whose key or English is
@@ -977,10 +987,14 @@ the navigation (`PAGES` tests for `showWikiRoute`). `web/map.js` and `web/map.cs
 opened directly: delete either and `render()` raises.
 
 `build_web.py` has a second, private set of tokens — `__STAMP__`, `__RELEASE__`,
-`__UPDATE_SCRIPT__`, `__BUILD__`, `__ICON_FOLDER__`, `__ICON_LINK__`, `__ICON_MORE__`
+`__UPDATE_SCRIPT__`, `__BUILD__`, `__ICON_FOLDER__`, `__ICON_LINK__`, `__ICON_MORE__`,
+`__TRANSLATE_CSS__`, `__TRANSLATE_SCRIPT__`, `__LANG_OPTIONS__`, `__TT_SITE__`,
+`__TT_CATALOGUES__`
 (`tests/test_doc_registries.py` holds this list to `build_web.py`). Those are substituted
 inside `BANNER` and `BEFORE_SCRIPT` before either string reaches
-`render()`, so they never appear in the template. `BANNER` also carries the template's own
+`render()`, while the translation-page tokens fill `template/translate.html` and its
+embedded language loader. `__TT_CATALOGUES__` pins the catalogue revisions in both
+hosted pages after rendering. `BANNER` also carries the template's own
 `<!--__FOOTER__-->`, which `build_web.py` fills with `footer_html(landing=True, site=True)`.
 
 ## Assembly order of `web/index.html`

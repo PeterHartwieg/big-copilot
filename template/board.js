@@ -793,6 +793,7 @@ async function gnSwitch(lang){
 /* "Machine-translated. Help check it" under every picker, while the page's
    words are in a language still mostly machine-drafted (its data-drafted). */
 function gnNote(){
+  if(typeof ttContributionLinks === "function") ttContributionLinks();
   const ui = typeof ttLang === "string" ? ttLang : "en";
   gnPickers().forEach(p => {
     const note = p.parentNode && p.parentNode.querySelector("[data-gn-note]");
@@ -21237,7 +21238,11 @@ function pxHelpHtml(){
     `<div class="px-acts"><button type="button" class="nx-btn sm" data-bug-report aria-haspopup="dialog">${spEsc(words(report))}</button></div>`) : "";
   const ballot = vote && !vote.hidden ? "" : pxRow("ballot", tt("nav.px.help.vote.title", "Feature requests"), "",
     `<p class="px-note">${tt("nav.px.help.vote.off", "The ballot is on bigcopilot.com, where the board can reach the community server.")}</p>`);
-  return bug + find + ballot;
+  const translation = out("[data-translate-link]").find(a => !a.hasAttribute("data-gn-note"));
+  const translate = translation ? pxRow("translate", tt("foot.lang.contribute", "Help translate"),
+    tt("comm.translate.help", "Find wording in your language, suggest a translation, and vote for the clearest version."),
+    `<div class="px-acts">${link(translation)}</div>`) : "";
+  return bug + find + ballot + translate;
 }
 function pxOpen(which, from = null, focusRow = null){
   nxMenuClose(false);

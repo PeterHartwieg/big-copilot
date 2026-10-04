@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 
 from ba_dashboard import (
@@ -37,6 +38,7 @@ from tools.build_wiki_data import (
     validate_public as validate_wiki, write_public_wiki,
 )
 from tools import i18n as ui_text
+from tools import translation_catalogue
 from tools import wiki_pages
 from tools.wiki_data import SourceError
 from tools.extract_wiki import game_data_dir
@@ -545,6 +547,9 @@ STAMP_INPUTS = (
     "tools/optimize_web.mjs", "package-lock.json",
     # The bug report form, which web/app.js loads on demand with the stamp.
     "web/report.js", "web/report.css",
+    "tools/i18n.py", "tools/translation_catalogue.py", "template/translate.html",
+    "web/translate.js", "web/translate.css",
+    *(f"web/translations/{lang}{suffix}.json" for lang in ui_text.languages() for suffix in ("", ".manifest")),
 )
 
 
@@ -631,6 +636,35 @@ def release_json(release: dict) -> str:
     return json.dumps(release, ensure_ascii=False, separators=(",", ":"))
 
 
+def translation_revisions(root: str = HERE) -> str:
+    """Pin the source contract to the page, even across a later deployment."""
+    revisions = {}
+    for lang in ui_text.languages():
+        try:
+            revisions[lang] = json.loads(read_text(os.path.join(root, "web", "translations", f"{lang}.manifest.json")))["revision"]
+        except (OSError, ValueError, KeyError, TypeError):
+            # check() reports missing/stale generated files without crashing.
+            # No pin means fail closed until assembly repairs the file.
+            continue
+    return json.dumps(revisions, separators=(",", ":"))
+
+
+def translation_page_html(release: dict, root: str = HERE) -> str:
+    """Standalone community translation page, carrying the hosted text loader."""
+    from html import escape
+    source = read_text(os.path.join(root, "template", "translate.html"))
+    source = re.sub(r'<link[^>]+href="https://fonts\.(?:googleapis|gstatic)\.com[^>]*>\n?', '', source)
+    source = source.replace('<link rel="stylesheet" href="__TRANSLATE_CSS__">', '<link rel="stylesheet" href="/fonts/fonts.css?v=__STAMP__">\n<link rel="stylesheet" href="__TRANSLATE_CSS__">')
+    runtime = (read_text(os.path.join(root, "web", "i18n.js"))
+               .replace("/*__TT_SITE__*/false", "/*__TT_SITE__*/true")
+               .replace("/*__TT_CATALOGUES__*/null", translation_revisions(root)))
+    options = "".join(f'<option value="{lang}">{escape(GAME_NAME_LANGS.get(lang, lang))}</option>' for lang in ui_text.languages())
+    return (source.replace("__TRANSLATE_CSS__", f'/translate.css?v={release["version"]}')
+            .replace("__TRANSLATE_SCRIPT__", f'/translate.js?v={release["version"]}')
+            .replace("__LANG_OPTIONS__", options).replace("__STAMP__", release["version"])
+            .replace("__I18N_SCRIPT__", runtime))
+
+
 def page_html(release: dict, root: str = HERE) -> str:
     """web/index.html for one release: the same string the build writes.
 
@@ -667,7 +701,8 @@ def page_html(release: dict, root: str = HERE) -> str:
     # visitor's IP address reaches Google; the privacy notice relies on that.
     if GOOGLE_FONTS not in page:
         raise SystemExit("the board template's Google Fonts links changed; update GOOGLE_FONTS in build_web.py")
-    return page.replace(GOOGLE_FONTS, '<link rel="stylesheet" href="fonts/fonts.css?v=' + release["version"] + '">')
+    return (page.replace(GOOGLE_FONTS, '<link rel="stylesheet" href="fonts/fonts.css?v=' + release["version"] + '">')
+            .replace("/*__TT_CATALOGUES__*/null", translation_revisions(root)))
 
 
 def check(root: str = HERE) -> list[str]:
@@ -707,6 +742,9 @@ def check(root: str = HERE) -> list[str]:
     # compared; one that is missing or stale also leaves the stamp unreadable
     # or wrong, so it is all that is said.
     missing += ui_text.ship(check=True, root=root)
+    catalogue_stale = translation_catalogue.ship(check=True, root=root)
+    stale.extend(catalogue_stale)
+    missing += [path for path in catalogue_stale if not os.path.isfile(os.path.join(root, path))]
     if missing:
         return stale + missing
     # The hand-written articles travel into wiki-data.json as they stand, so an
@@ -725,6 +763,8 @@ def check(root: str = HERE) -> list[str]:
         stale.append("web/version.json")
     if differs("web/index.html", page_html(release, root)):
         stale.append("web/index.html")
+    if differs("web/translate/index.html", translation_page_html(release, root)):
+        stale.append("web/translate/index.html")
     # The static wiki pages, the sitemap and robots.txt, from the committed
     # wiki-data.json: a missing, edited or orphaned page is stale.
     stale.extend("web/" + rel for rel in wiki_pages.check(os.path.join(root, "web")))
@@ -806,11 +846,16 @@ def assemble(root: str = HERE) -> None:
         shutil.copyfile(os.path.join(root, name), os.path.join(web, "py", name))
     # Big Copilot's own text in other languages, from i18n/ (tools/i18n.py).
     ui_text.ship(root=root)
+    translation_catalogue.ship(root=root)
     print(f"web/i18n/: {', '.join(ui_text.languages(root)) or 'no'} UI tables")
     # Everything the stamp reads is now in place, so the page and version.json
     # describe the folder as it stands.
     release = release_info(root)
     page = page_html(release, root)
+    translate_dir = os.path.join(web, "translate")
+    os.makedirs(translate_dir, exist_ok=True)
+    with open(os.path.join(translate_dir, "index.html"), "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(translation_page_html(release, root))
     out = os.path.join(web, "index.html")
     with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(page)
