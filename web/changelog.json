@@ -1,5 +1,11 @@
 [
   {
+    "pr": 285,
+    "date": "2026-10-04",
+    "title": "Plan expansion in buildings you already rent",
+    "summary": "Business and factory expansion plans now suggest empty buildings you already rent alongside new rentals. Already rented locations need no second deposit, and a factory's starter depot can use an empty rented warehouse too."
+  },
+  {
     "pr": 283,
     "date": "2026-10-04",
     "title": "Help translate Big Copilot",
