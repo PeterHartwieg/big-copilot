@@ -11363,10 +11363,12 @@ def _fill_by_exchange(shifts: list, pool: list, state: dict, rostered: set,
     clock = lambda s: (s["wd"], s["from"], s["to"], str(s["station"]))  # noqa: E731
     # Who on the roster could take each entry off its giver, by the entry's shape, and
     # everybody's entries in clock order. Neither depends on the line being
-    # filled, only on the weeks, and the weeks only move when a line is placed:
-    # a line nobody could be swapped onto leaves both standing for the next
-    # one. Both are dropped the moment a line is placed.
+    # filled, only on the weeks. A swap invalidates the takers' availability,
+    # but changes just two people's entries: keep everybody else's index.
     takers, by_person = {}, None
+    # Preserve the original stable clock order even when an entry is moved
+    # into another person's list after an equal-clock entry already there.
+    order = {id(s): (clock(s), i) for i, s in enumerate(shifts)}
     # And who on the roster `_may_take()` passes at all, by slot shape, which no
     # swap changes.
     answers = {} if answers is None else answers
@@ -11441,7 +11443,14 @@ def _fill_by_exchange(shifts: list, pool: list, state: dict, rostered: set,
                     continue
                 _hand_over(given, giver, taker, state, shifts)
                 _take_over(hole, giver, state)
-                takers, by_person = {}, None
+                mine = by_person[giver["id"]]
+                theirs = by_person[taker["id"]]
+                mine.remove((given, shape))
+                mine.append((hole, _slot_shape(hole)))
+                theirs.append((given, shape))
+                mine.sort(key=lambda entry: order[id(entry[0])])
+                theirs.sort(key=lambda entry: order[id(entry[0])])
+                takers = {}
                 failed = set()
                 placed = True
                 placed_count += 1
