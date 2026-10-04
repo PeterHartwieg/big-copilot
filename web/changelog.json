@@ -1,5 +1,29 @@
 [
   {
+    "pr": 262,
+    "date": "2026-10-03",
+    "title": "Plan a factory in all seven UI languages",
+    "summary": "Plan a factory, custom product setups, recent production findings and the bug-report form now have text in German, Spanish, French, Korean, Portuguese, Russian and Turkish. The latest cinema capacity advice and staffing labels are included too. These translations are machine drafts and remain open for native-language review."
+  },
+  {
+    "pr": 261,
+    "date": "2026-10-03",
+    "title": "See what holds back a cinema",
+    "summary": "A cinema held below its building capacity by installed equipment now names the screens, projection booths, ticket kiosks or concessions stand registers that limit it. Its hours show a warning with advice to add the limiting equipment and staff any new employee stations. A cinema at its actual building capacity keeps the neutral reading."
+  },
+  {
+    "pr": 259,
+    "date": "2026-10-03",
+    "title": "Cinema and theatre floor plans in the finder",
+    "summary": "The finder now shows all six cinema and theatre layouts, including their stepped seating areas. Filter cinemas and theatres by layout and open a building to see its plan before choosing where to rent."
+  },
+  {
+    "pr": 257,
+    "date": "2026-10-03",
+    "title": "Plan a factory with any mix of products",
+    "summary": "Custom setup in Plan a factory lets you combine any factory products and choose the machine count for each. Search by product or workstation, then follow the five steps with the combined ingredients, storage, staffing and investment. A new factory starts empty; one you run starts from its current machines. Each saved plan keeps its own selection. Demand combines measured sales across your shops, with no guessed demand for products you have not sold."
+  },
+  {
     "pr": 241,
     "date": "2026-10-02",
     "title": "Report a bug from the page, with your save",

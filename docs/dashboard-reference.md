@@ -475,9 +475,15 @@ grid and three lines meet.
   that number and each of the type's required furniture, summed per requirement whether
   anyone works it or not (`BusinessHelper.UpdateCustomerCapacity`). A cinema with one
   screen and one projection booth reads 25 until it has more of both, which is why a fresh
-  S3 cinema at 15 Third Avenue reads 25 and the fitted-out one 100. The board does not yet
-  tell the two apart: an hour held at 25 there shows as "at building capacity" like one held
-  at the layout's own number, though another screen and projection booth would lift it.
+  S3 cinema at 15 Third Avenue reads 25 and the fitted-out one 100. The board distinguishes a
+  cinema's furniture limit when all four capacity-bearing
+  requirements are installed and their minimum matches the saved capacity below the known
+  layout capacity, the employee stations meet their placement requirements, and no stocked
+  display has an equal or lower product capacity. It names every tied requirement (screens, projection booths, ticket
+  kiosks or concessions stand registers), with advice to add furniture and staff any new
+  employee stations. Unknown layouts, incomplete setups and unexplained capacity readings
+  and limits tied with product displays keep the existing neutral reading instead of guessed
+  advice. A tied staffing shortfall is named alongside the equipment.
 
 Effective capacity is the smallest of these, and the useful finding is *which* one binds.
 Every hour at 95% or more of it is an hour at the ceiling; the grid outlines those in red (in a neutral grey where the building's own capacity held the hour),
@@ -583,7 +589,9 @@ hour is judged on its own staffing, and each role on the schedule that was on fo
 building capacity is at or below the site's staffed capacity the building is the limit. That is
 not raised as a finding: plenty of well-run sites sit at their building's capacity, and
 there is nothing to fix, so it shows on the site page only, as a neutral hour chip ("at
-building capacity") and neutral rings on its hours in the grid. Otherwise every role standing at the site's own minimum is named, and only those: a
+building capacity") and neutral rings on its hours in the grid. A cinema with a verified
+furniture limit below its layout instead gets a finding and warning rings for those hours;
+a lower staffing limit still takes precedence, and a tied shortfall is named alongside. Otherwise every role standing at the site's own minimum is named, and only those: a
 site with more than one role serves nobody until all of them are manned, but hiring into a
 role already faster than the slowest one buys nothing. A role at the minimum with stations
 standing empty is short of people; one with every station manned is short of stations. A
@@ -937,6 +945,23 @@ one of these products, but scaling by it too (× the product's ratio over the ma
 products' average) did no better, a median 0.63 with the same spread, so the default stays
 main rate × weight.
 
+**Custom setup.** Choose Custom setup in the Range picker to combine any factory
+recipes, regardless of shop type. A new factory starts empty; for a factory you run,
+it starts with all its known product lines and their current machine counts. Add product
+searches all recipes by product or workstation. Every selected line can be removed or
+set to zero machines. Removing a line takes it out of this plan's scope; zero keeps it
+selected with no planned output. For an existing factory, the estimates assume those
+machines stop, but the setup checklist does not track stopping them. Other lines at an
+existing factory are left in place. At least one machine is needed to continue the flow.
+
+The same five steps price the combined machines, shared ingredients, storage and staff.
+Shop demand sums measured sales across all shop types, multiplying each type's product
+average by the number of shops actually selling it. It never invents sales for an
+unmeasured product. Supplies shows the weekly demand, not a count of interchangeable
+shops; savings and export surplus are estimated only for measured products. Machines
+still run 24 hours a day, seven days a week. Each saved custom plan keeps its own
+selected products and counts (including zero) in `ba_open_factory_v1:<character>`.
+
 ### Does the model match the factories you already run?
 
 It does, to within a rounding error. Take the ingredient draw the supply section already
@@ -997,8 +1022,8 @@ a price list.
 
 ### The flow: five steps, for a new factory or one you run
 
-Plan a factory is one view with two pickers above five steps: **Shops** (the business
-type the factory supplies) and **For** (**New factory**, then each factory you run). The
+Plan a factory is one view with two pickers above five steps: **Range** (the business
+type the factory supplies, or **Custom setup**) and **For** (**New factory**, then each factory you run). The
 steps are What · Where · Investment · Until production · Running. There is no break-even
 and no payback figure for a factory: it is a cost centre of its chain, and its saving
 shows in the shops' results.

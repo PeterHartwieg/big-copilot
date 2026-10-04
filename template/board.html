@@ -952,13 +952,13 @@ html:has(dialog:modal){overflow:hidden}
 #pageSupply .sb-t tr.sb-selrow td{background:color-mix(in srgb,var(--accent) 7%,transparent)}
 #pageSupply .sb-t tr.sb-selrow td.sb-tk{box-shadow:inset 3px 0 0 var(--accent)}
 
-/* Changes: the truck's road, then the changes by view */
-#pageSupply .sbc-top{--p:0;display:flex;flex-wrap:wrap;align-items:center;gap:14px 22px;margin-top:16px;padding:16px 18px 16px 22px;border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface)}
+/* Changes: completion count, then the changes by view */
+#pageSupply .sbc-top{display:flex;flex-wrap:wrap;align-items:center;gap:14px 22px;margin-top:16px;padding:16px 18px 16px 22px;border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface)}
 #pageSupply .sbc-n{display:grid;grid-template-columns:auto auto;align-items:baseline;column-gap:8px;font-family:"IBM Plex Mono",monospace;min-width:110px}
 #pageSupply .sbc-n b{font-size:30px;font-weight:500;line-height:1;letter-spacing:-.02em}
 #pageSupply .sbc-n span{font-size:13px;color:var(--ink-3)}
 #pageSupply .sbc-n small{grid-column:1/-1;margin-top:4px;font:400 12px/1.2 Archivo,sans-serif;color:var(--ink-3)}
-#pageSupply .sbc-top .sb-road{flex:1 1 220px}
+#pageSupply .sbc-progress{flex:1 1 220px;font-size:13px;color:var(--ink-2)}
 #pageSupply .sbc-acts{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 #pageSupply .sbc-acts .nx-btn small{font:500 11px/1 "IBM Plex Mono",monospace;opacity:.8}
 #pageSupply .sbc-acts .nx-btn:disabled{opacity:.45;cursor:default}
@@ -993,8 +993,6 @@ html:has(dialog:modal){overflow:hidden}
 #pageSupply .sbc-row.sb-done .sbc-chg,#pageSupply .sbc-row.applied .sbc-chg,#pageSupply .sbc-row.confirmed .sbc-chg{opacity:.55}
 #pageSupply .sbc-row.sb-just .sb-tick{animation:pop .4s cubic-bezier(.34,1.56,.64,1)}
 #pageSupply .sbc-settled .sbc-row{cursor:default}
-#pageSupply .sbc-top:hover .sb-road .trk svg{animation:sp-drive .45s ease-in-out infinite}
-#pageSupply .sbc-top.done .sb-road .trk,#pageSupply .sbc-top.done .sb-road .home{color:var(--accent)}
 
 /* Imports: the card that reviews one line */
 #pageSupply .sbi-card{position:relative;margin-top:18px;border:1px solid var(--rule-soft);border-radius:14px;background:var(--surface);overflow:hidden}
@@ -1134,15 +1132,6 @@ html:has(dialog:modal){overflow:hidden}
   #pageSupply .sbp-tiles{grid-template-columns:minmax(0,1fr)}
   #pageSupply .sbp-tile{border-right:0;border-bottom:1px solid var(--rule-soft)}
 }
-@media (prefers-reduced-motion:reduce){#pageSupply .sbc-top:hover .sb-road .trk svg{animation:none}}
-/* the truck on its road, on Changes */
-#pageSupply .sb-road{position:relative;flex:1;min-width:120px;height:26px}
-#pageSupply .sb-road::before{content:"";position:absolute;left:0;right:22px;top:17px;border-top:2px dashed var(--rule)}
-#pageSupply .sb-road>i{position:absolute;left:0;top:17px;height:2px;background:var(--accent);border-radius:2px;width:calc((100% - 22px) * var(--p));transition:width .7s cubic-bezier(.2,.7,.2,1)}
-#pageSupply .sb-road .trk{position:absolute;top:2px;left:calc((100% - 22px) * var(--p) - 10px);color:var(--ink);transition:left .7s cubic-bezier(.34,1.56,.64,1)}
-#pageSupply .sb-road .trk svg,#pageSupply .sb-road .home svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-#pageSupply .sb-road .home{position:absolute;right:0;top:3px;color:var(--ink-3)}
-#pageSupply .sb-road .home svg{width:18px;height:18px}
 
 /* the one line that says what the tab found */
 #pageSupply .sb-verdict{display:flex;align-items:baseline;gap:10px;margin:22px 0 14px;font-size:13.5px;color:var(--ink-2);flex-wrap:wrap}
@@ -1460,7 +1449,6 @@ html:has(dialog:modal){overflow:hidden}
   #pageSupply .sb-tabs a{justify-content:center;padding:9px 4px;font-size:12px;gap:6px}
   #pageSupply .sb-tray{flex-wrap:wrap;gap:10px 12px;padding:10px 12px}
   #pageSupply .sb-tray .lab,#pageSupply .sb-tray .why,#pageSupply .sb-tray .btn2 small{display:none}
-  #pageSupply .sb-road{flex:1 1 100%;order:3}
   #pageSupply .sb-tray .btn2{margin-left:auto}
   #pageSupply .sb-obj>summary{grid-template-columns:auto minmax(0,1fr) 28px;gap:10px 12px}
   #pageSupply .sb-obj .sb-stats{grid-column:2/4;grid-row:2;gap:18px;justify-content:flex-start}
@@ -1683,6 +1671,10 @@ tbody tr.pc-addrow:hover{background:none}
 .pc-pop-h b,.pc-pop-h span{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
 .pc-pop-h span{cursor:help;border-bottom:1px dotted var(--ink-3)}
 .pc-opt{display:grid;grid-template-columns:minmax(0,1fr) 56px 34px;align-items:center;gap:12px;width:100%;min-height:44px;padding:6px 10px;border:0;border-radius:8px;background:none;color:var(--ink);text-align:left;font:inherit;cursor:pointer;transition:background .12s}
+.pc-custom .pc-opt{grid-template-columns:minmax(0,1fr)}
+.pc-opt[hidden],.pc-empty[hidden]{display:none}
+.pc-search{display:block;box-sizing:border-box;width:calc(100% - 20px);margin:4px 10px 8px;padding:8px;border:1px solid var(--rule);border-radius:6px;background:var(--surface);color:var(--ink);font:inherit}
+.pc-empty{margin:12px 10px;color:var(--ink-3)}
 .pc-opt:hover,.pc-opt:focus-visible{background:var(--surface);outline:none}
 .pc-opt span b{display:block;font:500 13.5px/1.25 Archivo,sans-serif}
 .pc-opt span small{display:block;margin-top:2px;font:400 11.5px/1.3 "IBM Plex Mono",monospace;color:var(--ink-3)}
@@ -3257,6 +3249,9 @@ button.nx-card{appearance:none}
 #pageCompany .bz-mbar i{position:absolute;left:0;top:0;bottom:0;width:var(--v);border-radius:3px;background:var(--accent)}
 #pageCompany .bz-miles .c{text-align:right;margin-left:0}
 @media (max-width:600px){#pageCompany .bz-miles .bz-mile{grid-template-columns:22px minmax(0,1fr) 70px}#pageCompany .bz-mbar{grid-column:2/-1;grid-row:2}}
+.bz-price-select{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink-2);max-width:100%}
+.bz-price-select select{font:500 13px Archivo,sans-serif;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:8px 12px;max-width:360px;min-width:0}
+#portMoreLabel{cursor:pointer;font-size:14px;color:var(--ink-2);padding:10px 0}
 .bz-chips{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 22px}
 .bz-lab{margin-right:6px;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
 .bz-chip{display:inline-flex;align-items:center;gap:8px;min-height:34px;padding:0 12px 0 6px;border-radius:9px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font:500 13px/1.2 Archivo,sans-serif;cursor:pointer;max-width:100%}
@@ -3320,6 +3315,9 @@ button.nx-card{appearance:none}
 .hs-ol li.short span,.hs-ol li.short b{color:var(--warn)}
 .hs-sum{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:baseline;padding-top:14px;border-top:1px solid var(--rule-soft);font-size:13px;color:var(--ink-2)}
 .hs-sum b{font:500 18px/1.2 "IBM Plex Mono",monospace;color:var(--ink);text-align:right}
+.hs-gate summary{cursor:pointer;font-weight:600;color:var(--ink)}
+details.hs-gate{display:block}
+details.hs-gate[open] summary{margin-bottom:8px}
 .hs-gate{display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:10px;border:1px dashed var(--rule);font-size:13px;color:var(--ink-2);line-height:1.5}
 .hs-gate b{color:var(--ink);font-weight:600}
 .hs-gate ol{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
@@ -4111,6 +4109,9 @@ body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
 .ff-short .t small{display:block;margin-top:3px;font-size:12.5px;font-weight:400;color:var(--ink-3)}
 .ff-short .a{font:500 13.5px/1.2 "IBM Plex Mono",monospace;text-align:right;color:var(--warn)}
 .ff-short .a small{display:block;font-size:10.5px;color:var(--ink-3);letter-spacing:.04em;text-transform:uppercase}
+.ff-export-how{margin-top:12px;font-size:13px;line-height:1.5;color:var(--ink-2)}
+.ff-export-how summary,.pc-ingredients summary{cursor:pointer;color:var(--ink-2)}
+.ff-export-how p{margin:12px 0}
 .ff-note{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:12px;align-items:center;margin-top:16px;padding:13px 16px;border-radius:12px;border:1px solid var(--rule);background:var(--surface);font-size:13px;line-height:1.45;color:var(--ink-2)}
 .ff-note>span{min-width:0;overflow-wrap:anywhere}
 .ff-note>svg{width:18px;height:18px;stroke:var(--info);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
@@ -4452,8 +4453,11 @@ a.sb-plan:hover em{color:var(--ink);text-decoration:underline}
     <section class="sec rv" id="secStandards" data-sub="standards"></section>
 
     <section class="sec rv" id="secPortfolio" data-sub="results standards">
-      <div id="portHead"></div>
-      <div style="overflow-x:auto"><table id="portfolio"></table></div>
+      <details id="portMore" open>
+        <summary id="portMoreLabel" hidden data-tt="co.std.operations">Operations comparison</summary>
+        <div id="portHead"></div>
+        <div style="overflow-x:auto"><table id="portfolio"></table></div>
+      </details>
     </section>
 
     <section class="sec rv" id="secDetail" data-sub="results" hidden><div id="sitePanel"></div></section>

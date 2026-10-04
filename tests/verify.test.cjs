@@ -103,6 +103,58 @@ test('CLI reports invalid override with nonzero exit', () => {
   assert.equal(result.status,1); assert.match(result.stderr,/PYTHON override is invalid/);
 });
 
+test('Node shards preserve assembly, concurrency and the complete suite list', async t => {
+  const {verify} = await runner; const root = fixture(t); const calls = [];
+  assert.equal(verify(['node','--shard=2/4'],{root,spawn:fakeSpawn(calls),log:()=>{}}),0);
+  assert.deepEqual(calls.map(c=>c.args),[
+    ['build_web.py','--assemble'],
+    ['--test','--test-concurrency=2','--test-shard=2/4',path.join('tests','a.test.cjs'),path.join('tests','z.test.cjs')],
+  ]);
+  for (const args of [
+    ['node','--shard=0/4'], ['node','--shard=5/4'], ['node','--shard=1/0'],
+    ['node','--shard=1.5/4'], ['node','--shard=1/4oops'], ['node','--shard'],
+    ['node','--shard=1/9007199254740992'],
+    ['node','--shard=1/4','tests/a.test.cjs'], ['node','--shard=1/4','--shard=2/4'],
+    ['all','--shard=1/4'], ['optimized','--shard=1/4'],
+  ]) {
+    const rejected=[];
+    assert.throws(()=>verify(args,{root,spawn:fakeSpawn(rejected),log:()=>{}}),/shard|extra arguments/);
+    assert.equal(rejected.length,0,JSON.stringify(args));
+  }
+  const failed=[];
+  assert.equal(verify(['node','--shard=2/4'],{root,spawn:fakeSpawn(failed,2),log:()=>{}}),7);
+});
+
+test('the CI matrix shards execute every discovered file once and propagate a real failure', t => {
+  const root = fixture(t);
+  fs.mkdirSync(path.join(root,'tools'));
+  fs.copyFileSync(path.join(__dirname,'../tools/verify.mjs'),path.join(root,'tools','verify.mjs'));
+  fs.writeFileSync(path.join(root,'build_web.py'),'# Synthetic successful assembly.\n');
+  const names = ['a','b','c','d','e','f','g','h','z'];
+  for (const name of names) fs.writeFileSync(path.join(root,'tests',`${name}.test.cjs`),
+    `require('node:test')('${name}', () => {\n` +
+    `require('node:fs').appendFileSync('executed.txt', '${name}\\n');\n` +
+    // One real failure must fail exactly the shard that contains this file.
+    (name === 'c' ? `throw new Error('intentional shard failure');\n` : '') + '});\n');
+  const workflow = fs.readFileSync(path.join(__dirname,'../.github/workflows/tests.yml'),'utf8');
+  const matrix = /^        suite: \[([^\]\n]+)\]/m.exec(workflow);
+  assert.ok(matrix, 'the workflow has a static suite matrix');
+  const shards = [...matrix[1].matchAll(/'(\d+\/\d+)'/g)].map(match=>match[1]);
+  assert.deepEqual(shards,['1/8','2/8','3/8','4/8','5/8','6/8','7/8','8/8']);
+  const statuses=[];
+  // Exercise a fresh CLI invocation; Node suppresses --test inside a test child.
+  const env={...process.env};
+  delete env.NODE_TEST_CONTEXT;
+  for (const shard of shards) {
+    const result = spawnSync(process.execPath,[path.join(root,'tools','verify.mjs'),'node',`--shard=${shard}`],{cwd:root,encoding:'utf8',env});
+    assert.ifError(result.error);
+    assert.ok([0,1].includes(result.status),result.stderr);
+    statuses.push(result.status);
+  }
+  assert.deepEqual(statuses.slice().sort(),[0,0,0,0,0,0,0,1]);
+  assert.deepEqual(fs.readFileSync(path.join(root,'executed.txt'),'utf8').trim().split(/\r?\n/).sort(),names);
+});
+
 test('CLI propagates a real failing assembly and never starts later stages in a spaced path', async t => {
   const root = fixture(t);
   fs.mkdirSync(path.join(root,'tools'));
@@ -113,6 +165,43 @@ test('CLI propagates a real failing assembly and never starts later stages in a 
   assert.equal(result.status,17, result.stderr);
   assert.equal(fs.readFileSync(path.join(root,'stages.log'),'utf8'),'--assemble');
   assert.doesNotMatch(result.stdout,/--test|--dry-run|--check|unittest/);
+});
+
+test('two CI runs fit within eighteen runner slots, including the aggregate checks', () => {
+  const workflow = fs.readFileSync(path.join(__dirname,'../.github/workflows/tests.yml'),'utf8');
+  const source = workflow.split(/^jobs:\n/m)[1];
+  assert.ok(source, 'the workflow has jobs');
+  // Read this workflow's static jobs, scalar/list dependencies and flat suite
+  // matrix. Reject an unfamiliar matrix instead of undercounting its runners.
+  const jobs = [...source.matchAll(/^  ([\w-]+):\n([\s\S]*?)(?=^  [\w-]+:\n|(?![\s\S]))/gm)].map(([,id,body]) => {
+    assert.match(body, /^    runs-on:/m, `${id}: reusable workflows need their own runner accounting`);
+    const block = /^      matrix:\n((?: {8,}.+\n)+)/m.exec(body);
+    const matrix = block && /^        suite: \[([^\]\n]+)\]\n$/.exec(block[1]);
+    assert.ok(!/^      matrix:/m.test(body) || matrix, `${id}: uncounted matrix`);
+    const needs = /^    needs: (.+)$/m.exec(body)?.[1];
+    return {id, body, slots: matrix ? matrix[1].split(',').length : 1,
+      needs: needs ? needs.replace(/[\[\]'" ]/g,'').split(',') : []};
+  });
+  assert.ok(jobs.length);
+  for(const job of jobs) for(const need of job.needs) assert.ok(jobs.some(j => j.id === need), need);
+  let peak = 0;
+  // Enumerate dependency-valid completion states; every ready job may run.
+  for(let mask = 0; mask < 2 ** jobs.length; mask++){
+    const done = new Set(jobs.filter((_,i) => mask & (1 << i)).map(j => j.id));
+    if(jobs.some(j => done.has(j.id) && j.needs.some(n => !done.has(n)))) continue;
+    const ready = jobs.filter(j => !done.has(j.id) && j.needs.every(n => done.has(n)));
+    peak = Math.max(peak, ready.reduce((sum,j) => sum + j.slots, 0));
+  }
+  assert.ok(peak < 10, `${peak} concurrent runners per run would use ${peak * 2} for two runs`);
+  const python = jobs.find(j => j.id === 'python').body;
+  const freshness = jobs.find(j => j.id === 'web-fresh').body;
+  assert.match(python, /freshness: \$\{\{ steps\.freshness\.outcome \}\}/);
+  for(const stage of ['verify:assemble', 'verify:check', 'test:python']) assert.ok(python.includes(`npm run ${stage}`), stage);
+  assert.match(freshness, /needs\.python\.outputs\.freshness/);
+  const node = jobs.find(j => j.id === 'node-tests').body;
+  for(const stage of ['test:optimized', 'check:worker']){
+    assert.ok(node.includes(`if: matrix.suite == '6/8'\n        run: npm run ${stage}`), stage);
+  }
 });
 
 test('standalone Worker check needs no Python and preserves the environment', async t => {

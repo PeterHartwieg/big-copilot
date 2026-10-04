@@ -19,6 +19,8 @@ jobs:
   python:
     name: Python suite
     runs-on: ubuntu-latest
+    outputs:
+      freshness: ${{ steps.freshness.outcome }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -28,12 +30,26 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+      # Share this runner with the short freshness checks. Keep their own
+      # outcome so the stable freshness check does not depend on Python tests.
+      - name: Verify assembly and freshness
+        id: freshness
+        run: |
+          npm run verify:assemble
+          git diff --exit-code --stat
+          test -z "$(git status --porcelain)" || { git status --porcelain; exit 1; }
+          npm run verify:check
       # The site under web/ is not committed; several suites read it.
       - run: npm run test:python
 
-  node:
-    name: Node suites
+  node-tests:
+    name: Node (${{ matrix.suite }})
     runs-on: ubuntu-latest
+    strategy:
+      # Collect all failures instead of cancelling the other suites.
+      fail-fast: false
+      matrix:
+        suite: ['1/8', '2/8', '3/8', '4/8', '5/8', '6/8', '7/8', '8/8']
     steps:
       - uses: actions/checkout@v7
       # Some suites write fixture saves and serve the game-link mock with Python.
@@ -49,32 +65,40 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-      - run: npx playwright install --with-deps chromium
+          key: playwright-shell-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps --only-shell chromium
       # The site under web/ is not committed; several suites serve or read it.
       # npm test assembles first and includes the community suites.
-      - run: npm test
+      - name: Test Node shard
+        run: npm test -- --shard=${{ matrix.suite }}
+      # This lighter shard has room for the hosted-page and bundle checks.
       - name: Test the optimized hosted page
+        if: matrix.suite == '6/8'
         run: npm run test:optimized
-      - run: npm run check:worker
+      - name: Check the Worker bundle
+        if: matrix.suite == '6/8'
+        run: npm run check:worker
+
+  # Preserve the existing check name for branch rules. A failed, cancelled or
+  # skipped matrix must never turn this aggregate check green.
+  node:
+    name: Node suites
+    runs-on: ubuntu-latest
+    needs: node-tests
+    if: always()
+    steps:
+      - name: Require every Node lane
+        env:
+          RESULT: ${{ needs.node-tests.result }}
+        run: test "$RESULT" = success
 
   web-fresh:
     name: web/ assembles from its sources
     runs-on: ubuntu-latest
+    needs: python
+    if: always()
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-      # Needs no installed game. Assembling must leave every committed file as it
-      # is (a stale web/wiki-data.json article shows up here) and write nothing
-      # .gitignore does not cover; --check then holds the result to the sources.
-      - run: npm run verify:assemble
-      - name: Assembling changed no committed file and left nothing untracked
-        run: |
-          git diff --exit-code --stat
-          test -z "$(git status --porcelain)" || { git status --porcelain; exit 1; }
-      - run: npm run verify:check
+      - name: Require assembly and freshness checks
+        env:
+          RESULT: ${{ needs.python.outputs.freshness }}
+        run: test "$RESULT" = success

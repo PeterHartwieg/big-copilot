@@ -795,8 +795,11 @@ test('not linked: everything works from the save, the button is off with how to 
   assert.equal((await review.textContent()).trim(), en("co.hire.title.all"));
   assert.equal(await page.locator('[data-gw]').count(), 0, 'no write button while reading a save');
   const gate = page.locator('#hsOrder .hs-gate');
-  assert.match(await gate.locator('b').textContent(), enRe("co.hire.gate.link", {} , {"anchor":"full"}));
+  assert.match(await gate.locator('summary').textContent(), enRe("co.hire.gate.link", {} , {"anchor":"full"}));
   assert.equal(await gate.locator('li').count(), 3);
+  assert.equal(await gate.getAttribute('open'), null);
+  await gate.locator('summary').click();
+  assert.equal(await gate.locator('ol').isVisible(), true);
   assert.equal(await page.locator('#hsOrder .hs-note').count(), 0);
   assert.match(await page.locator('#hsOpen .hs-facts2').textContent(), /^15 candidates · 2 expire within 24 h \(as of the save\)$/);
   await review.dispatchEvent('click');
@@ -1414,7 +1417,7 @@ test('an insurance tier some HR plan offers warns that a hire has to be added to
     const S = {site: {stations: {}, name: 'Law'}, planned: true};
     return [hrDemandAt({sites: [S]}, GOLD, S, null), hrWhy({sites: [S]}, GOLD, S, null)];
   });
-  assert.deepEqual(out, ['warn', 'add them to an HR plan that offers it']);
+  assert.deepEqual(out, ['warn', en('co.hire.require.hrplan')]);
 });
 
 test('a Staff select opens the page\'s own option list, by mouse and by keyboard', async (t) => {

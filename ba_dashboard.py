@@ -1895,7 +1895,7 @@ def _premises_demand(market: dict) -> dict:
 # interior (BuildingSizeInfo(size, version)); the type is not part of it, so an
 # office C2 is the same shell as a shop C2. make_floor_plans.py draws one plan
 # for each layout these kinds use.
-FLOOR_PLAN_KINDS = ("retail", "office", "warehouse")
+FLOOR_PLAN_KINDS = ("retail", "office", "warehouse", "cinema", "theater")
 
 
 def _layout(row: dict) -> str | None:
@@ -8463,6 +8463,70 @@ def _service_wages(staff: list, status_of: dict) -> dict:
     return wages
 
 
+def _cinema_capacity(save: Save, building: dict, names: Names | None) -> dict | None:
+    """A cinema's known furniture limit below its layout's building capacity.
+
+    BusinessHelper.UpdateCustomerCapacity takes the minimum across the layout
+    and the requirement groups (ItemHelper.GetItemsSortedByCapacity). Match the
+    saved number before attributing it: missing item requirements can make the
+    game's capacity smaller than the simple installed-furniture count.
+    """
+    if building.get("businessTypeName") != "ba:businesstype_cinema":
+        return None
+    row = load_buildings().get(_address_of(building, strict=True), {})
+    if row.get("t") != "cinema":
+        return None
+    ceiling = _size_cap(row, _door_caps(names) if names else FALLBACK_CAPS)
+    current = building.get("customerCapacity") or 0
+    if not ceiling or not 0 < current < ceiling:
+        return None
+    items = list(_item_instances(save, building.get("itemInstances")))
+    counts = collections.Counter(item.get("itemName") for item in items)
+    rules = load_store_rules()
+    furniture = rules.get("furniture") or {}
+    groups = (("kiosk", "ba:itemname_ticketkiosk"), ("screen", "ba:itemname_screencinema"),
+              ("projection", "ba:itemname_boothprojection"),
+              ("concessions", "ba:itemname_concessionsstandregister"))
+    # Keep the known labels in step with the game's required capacity groups.
+    requirements = (rules.get("types", {}).get("ba:businesstype_cinema") or {}).get("rq", ())
+    required = {slug for req in requirements
+                for slug in req.get("i", ()) if furniture.get(slug, {}).get("c")}
+    if required != {slug for _, slug in groups}:
+        return None
+    by_id = {item.get("id"): item for item in items if item.get("id") is not None}
+    for item in items:
+        if item.get("itemName") not in required:
+            continue
+        facts = furniture[item["itemName"]]
+        # The concessions register must actually stand on a suitable counter.
+        # Missing counter attachment makes the simple counts unsafe.
+        parent = by_id.get(item.get("parentId"), {})
+        if any(parent.get("itemName") not in group for group in facts.get("m", ())):
+            return None
+    # Stocked displays form another limit per product. This diagnosis names
+    # required equipment only, so do not offer incomplete advice if a product
+    # display ties it (or contradicts it by being lower).
+    available = set(save.items(building.get("cachedAvailableProducts")))
+    displays = collections.Counter()
+    for item in items:
+        facts = furniture.get(item.get("itemName"), {})
+        if item.get("itemName") in required or "shelf" not in facts.get("x", ()):
+            continue
+        cargo = save.items(item.get("cargoInstances"))
+        product = cargo[0].get("itemName") if len(cargo) == 1 else None
+        if product in available and facts.get("c"):
+            displays[product] += facts["c"]
+    if any(cap <= current for cap in displays.values()):
+        return None
+    capacities = [(key, counts[slug] * (furniture.get(slug, {}).get("c") or 0))
+                  for key, slug in groups]
+    # An incomplete setup or an unexplained saved capacity needs a different
+    # diagnosis. Do not guess that another screen alone would resolve it.
+    if not all(cap for _, cap in capacities) or min(cap for _, cap in capacities) != current:
+        return None
+    return {"building": ceiling, "limits": [key for key, cap in capacities if cap == current]}
+
+
 def _hourly(
     save: Save,
     buildings: list,
@@ -8721,6 +8785,9 @@ def _hourly(
                 (c for row in customers for c in row if c is not None), default=0
             ),
         }
+        cinema_capacity = _cinema_capacity(save, b, names)
+        if cinema_capacity:
+            entry["cinemaCapacity"] = cinema_capacity
         entry["capHours"] = len(_capped_cells(entry))
         if stray:
             entry["unstaffable"] = _unstaffable_rows(
@@ -14317,7 +14384,7 @@ def _role_words(role: dict, office: bool) -> dict:
     }
 
 
-KIND_ORDER = {"the building": 0, "staffing": 1, "registers": 2}
+KIND_ORDER = {"the building": 0, "cinema furniture": 1, "staffing": 2, "registers": 3}
 
 
 def _limit_order(limit: tuple) -> tuple:
@@ -14360,7 +14427,12 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
         by_limit = collections.defaultdict(lambda: collections.defaultdict(set))
         for wd, hour in sorted(_capped_cells(grid)):
             if door and door <= grid["staffed"][wd][hour]:
-                by_limit[(("the building", None),)][wd].add(hour)
+                limit = "cinema furniture" if grid.get("cinemaCapacity") else "the building"
+                tied = [(limit, None)]
+                if limit == "cinema furniture" and door == grid["staffed"][wd][hour]:
+                    tied.extend(("staffing", _role_key(r)) for r in roles.values()
+                                if r["staffed"][wd][hour] == door < r["counters"])
+                by_limit[tuple(sorted(tied, key=_limit_order))][wd].add(hour)
                 continue
             site_staffed = grid["staffed"][wd][hour]
             # A role holding the minimum is short of people where it has
@@ -14413,13 +14485,35 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
             }
             # What held those hours, as data: the page lights the grid's cells
             # and draws the chip's icons by it, never by the words. ["door"]
-            # for the building, else a ["staff" or "post", role key] per role.
+            # for the building, ["furniture"] for cinema equipment, else a
+            # ["staff" or "post", role key] per role.
             finding["heldBy"] = [
                 ["door"] if kind == "the building"
+                else ["furniture"] if kind == "cinema furniture"
                 else ["staff" if kind == "staffing" else "post", skill]
                 for kind, skill in limits
             ]
-            if limits[0][0] == "the building":
+            if limits[0][0] == "cinema furniture":
+                words = {
+                    "kiosk": msg("sp.py.cinema.kiosks", "ticket kiosks"),
+                    "screen": msg("sp.py.cinema.screens", "cinema screens"),
+                    "projection": msg("sp.py.cinema.booths", "projection booths"),
+                    "concessions": msg("sp.py.cinema.registers", "concessions stand registers"),
+                }
+                items = [words[key] for key in grid["cinemaCapacity"]["limits"]]
+                finding["limit"] = msg("sp.py.cinema.limit", "capacity of the {items}",
+                                       items=_sp_list(items, " and "))
+                finding["fix"] = msg("sp.py.cinema.more", "more {items}, with the employee stations staffed",
+                                     items=_sp_list(items, " and "))
+                finding["limits"] = 1
+                finding["noun"] = msg("sp.py.cinema.capacity", "available cinema capacity")
+                staff_words = [_role_words(roles[skill], office)["staffing"]
+                               for kind, skill in limits if kind == "staffing"]
+                if staff_words:
+                    finding["limit"] = _sp_list([finding["limit"], *[w[0] for w in staff_words]], " and ")
+                    finding["fix"] = _sp_list([finding["fix"], *[w[1] for w in staff_words]], " and ")
+                    finding["limits"] += len(staff_words)
+            elif limits[0][0] == "the building":
                 # The building's capacity comes with the lease, and the board
                 # has no advice for it: the finding names the ceiling and what
                 # goes through it, and no fix. _alerts() raises no line for it;
@@ -16939,10 +17033,10 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
 
 def plan_layout(row: dict) -> str | None:
     """What a plan's outfit is kept by: a building's layout (size and version,
-    a premises row's `layout` or a ba_buildings.json row). A cinema or a
-    theatre has no floor plan, so no `layout`, but each version seats its own
-    crowd (S1 150, S3 100): its size and version from the building table.
-    The board reads the same key (osLayout(), from `venues`)."""
+    a premises row's `layout` or a ba_buildings.json row). Older payload rows
+    without a layout fall back to the building table, preserving a venue's
+    version-specific capacity (S1 150, S3 100). The board reads the same key
+    (osLayout(), from `venues`)."""
     if "layout" in row or "size" in row:
         if row.get("layout"):
             return row["layout"]
