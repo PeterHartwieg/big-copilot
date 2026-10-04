@@ -16,6 +16,12 @@ const SOURCE = window.LEDGER_SOURCE || {
                          body: JSON.stringify({rid, slug: slug || null})});
     return SOURCE.data();
   },
+  staffingMeasurement: async (key, action) => {
+    const res = await fetch("staff-measurement", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({key, action, character: D.meta.character, day: D.meta.day})});
+    if(!res.ok) throw new Error(tt("sp.evidence.failed", "The measurement could not be saved. Read the business again and retry."));
+    return SOURCE.data();
+  },
   /* The save on disk only changes when the game writes one, so this polls a
      cheap stamp and pulls fresh numbers only when that stamp moves. */
   watch(h){
@@ -5172,7 +5178,7 @@ function spRosterCounts(row){
    clear, what the numbers compare, whether a day may be pasted -- has to be
    the careful one. A serving shift is the one that carries no kind; see
    _shift_row(). */
-const spCoverOnly = row => !(row.shifts || []).some(s => !s.k);
+const spCoverOnly = row => !row.demandBased && !(row.shifts || []).some(s => !s.k);
 /* What a plan is honestly measured against: the whole schedule where it
    replaces the whole schedule, the cover shifts alone where cover is all of
    it. */
@@ -5209,8 +5215,11 @@ const spStationKind = (row, st) => ((row.headcount || {})[st.skill] || {}).kind 
 /* One hour of the need strip: how many stations the measured hours ask for,
    and the least certain basis among the roles asking. An hour nobody has a
    reading for is not drawn at all -- an unknown is never a zero. */
-const SP_BASIS_CLASS = {censored: "sp-cens", scaled: "sp-scaled", measured: ""};
+const SP_BASIS_CLASS = {lower: "sp-cens", trial: "sp-scaled", confirmed: "", closed: "", censored: "sp-cens", scaled: "sp-scaled", measured: ""};
 const SP_BASIS_READ = {
+  get lower(){ return " · " + tt("sp.basis.lower", "served-customer lower bound; historical staffing is unknown"); },
+  get trial(){ return " · " + tt("sp.basis.trial", "temporary measurement capacity, not learned demand"); },
+  get confirmed(){ return " · " + tt("sp.basis.confirmed", "demand measured during a period you confirmed"); },
   get censored(){ return " · " + tt("sp.basis.censored", "<b>measured at the ceiling</b>: the hour was full, so this is a floor, not a target"); },
   get scaled(){ return " · " + tt("sp.basis.scaled", "<b>scaled from the best measured day</b> through the game's day curve; this weekday rests on under two weeks"); },
   get measured(){ return " · " + tt("sp.basis.measured", "measured"); },
@@ -5639,10 +5648,12 @@ function spRosterNone(row, pick, key){
       ? tt("sp.roster.failed.why", "This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.")
       : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling counts everyone who may walk in, not the customers a shop like this serves, so nothing is suggested from it.")})}
     ${pick || ""}
+    ${spDemandEvidence(row)}
+    ${row && row.demandBased && key ? gwRosterButtons(key) : ""}
     ${spRosterStray((key && spRosterRow(key)) || row)}
     <div class="chartbox sp-gantt sp-empty">${rows}</div>
     <div class="sp-read">${failed ? tt("sp.roster.failed", "Plan unavailable") : tt("sp.roster.none", "Nothing to schedule")}</div>
-    ${key && gwLink() ? gwStaffButton(key, true) : ""}
+    ${key && gwLink() && !(row && row.demandBased) ? gwStaffButton(key, true) : ""}
   </section>`;
 }
 
@@ -6141,7 +6152,7 @@ function spPlanPick(base, full){
   const ownFull = openHours * (base.roles || []).reduce((n, r) => n + (r.stations || []).length, 0);
   /* With the demand plan on screen there is nothing to switch to: the
      hand-over says so only beside the full cover it hands over from. */
-  const done = !full ? ""
+  const done = base.demandEvidence || !full ? ""
     : base.demandDataComplete
     ? `<span class="sp-handover" data-tip="${attr(tt("sp.pick.done.tip", "Read from the days since the shop's first customer, as they were staffed. An hour with no customers files no report and counts as none."))}">${spI("tick")}<span>${
       tt("sp.pick.done", "<b>Demand data complete:</b> {switch}", {switch:
@@ -6160,28 +6171,66 @@ function spPlanPick(base, full){
     full ? ` class="sp-on" aria-current="true"` : ""}>${tt("sp.pick.full", "Full cover 24/7")}</a></span>${done}</div>`;
 }
 
-/* An office's Staffing: Peter's office default (officeStaffing) against the
+/* An office's Staffing: demand or the office default (officeStaffing) against the
    week in the game, and its write -- the same review, confirm and undo as a
    shop's, which never changes the office's opening hours. The hour grid of
    the week is the Staff page's and the game's; here it is the numbers. */
+function spDemandEvidence(row){
+  const e = row && row.demandEvidence;
+  if(!e) return "";
+  const running = ["pending", "active", "ready"].includes(e.phase);
+  const status = e.phase === "pending" ? tt("sp.evidence.pending", "Measurement proposed. Apply the week, then read the game again to begin.")
+    : e.phase === "active" ? tt("sp.evidence.active", "Measuring from completed trading days. Keep staffing, opening hours, prices and stock availability unchanged.")
+    : e.phase === "ready" ? tt("sp.evidence.ready", "Two occurrences of every tested hour are available. Confirm only if the scheduled staff worked and products stayed available throughout the period.")
+    : e.phase === "stopped" ? tt("sp.evidence.stopped", "Measurement stopped because conditions changed, time ran out, or you stopped it. No lower demand was learned.")
+    : e.phase === "confirmed" ? tt("sp.evidence.confirmed", "Measurement reviewed. Hours with spare capacity retain their demand estimate; hours still at capacity remain uncertain.")
+    : tt("sp.evidence.unknown", "Past customer counts are lower bounds: their staffing and stock context is unknown. Existing coverage is kept until demand is measured.");
+  const button = (action, label) => `<button type="button" class="nx-btn sm" data-demand-action="${action}" data-demand-site="${attr(row.key)}">${label}${action === "start" ? `<span class="feature-new" data-new-feature="staffing-demand" hidden>${tt("nav.new", "New")}</span>` : ""}</button>`;
+  return `<div class="sp-demand-evidence"><p class="quiet">${status}</p>${e.stale ? `<p class="quiet">${tt("sp.evidence.stale", "Conditions changed since the previous measurement. Measure again before reducing coverage.")}</p>` : ""}${
+    (!e.persistent || (SOURCE.historyPersistent && !SOURCE.historyPersistent())) ? `<p class="quiet">${tt("sp.evidence.temporary", "Demand learning is unavailable without saved company history.")}</p>`
+    : !LIVE ? `<p class="quiet">${tt("sp.evidence.live", "Open the browser tool or local live board to record a demand measurement.")}</p>`
+    : `<p class="quiet">${tt("sp.evidence.how", "A measurement uses current spare capacity, or proposes one extra station where a single role limits service. An unstaffed hour starts with one station of each required role. Each tested hour needs two completed occurrences within 28 game days.")}</p>${
+      running ? (e.phase === "ready" ? button("confirm", tt("sp.evidence.accept", "Staffing and stock stayed available — use measurement")) : "") + button("stop", tt("sp.evidence.stop", "Stop measurement"))
+      : button("start", tt("sp.evidence.start", "Plan demand measurement"))}`}
+    <p class="quiet" data-demand-error role="status"></p></div>`;
+}
+function wireDemandEvidence(){
+  featureDiscovery.refresh();
+  document.querySelectorAll("[data-demand-action]").forEach(button => {
+    button.onclick = async () => {
+      const box = button.closest(".sp-demand-evidence"), error = box.querySelector("[data-demand-error]");
+      box.querySelectorAll("button").forEach(b => { b.disabled = true; });
+      try{
+        const data = await SOURCE.staffingMeasurement(button.dataset.demandSite, button.dataset.demandAction, odGen());
+        featureDiscovery.visit("staffing-demand");
+        if(button.dataset.demandAction === "start") spPlanWrite(button.dataset.demandSite, "demand");
+        if(data){ takeData(data); renderCalm(); }
+      }catch(err){
+        error.textContent = err.message || String(err);
+        box.querySelectorAll("button").forEach(b => { b.disabled = false; });
+      }
+    };
+  });
+}
 function spOfficeRoster(b){
   if(!odNeed("officeStaffing")) return odWaitHtml("officeStaffing");
   const row = gwOfficeRow(b.key);
   /* No office default to add: Staff this site still, where people move in or out. */
-  if(!row || !(row.shifts || []).length){
+  if(!row || (!row.demandBased && !(row.shifts || []).length)){
     const staff = gwLink() ? gwStaffButton(b.key, true) : "";
     return staff ? `<section class="sec rv" data-block="roster" id="sp-roster" data-site="${attr(b.key)}">
     ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster"})}${staff}</section>` : "";
   }
   const comp = gwOfficeComputers(row);
-  /* Now, and after the write adds what it can: it never takes an entry away. */
-  const now = ((row.current || {}).list || []).filter(s => comp.has(s.s)), after = now.concat(gwRosterWeek(row).added);
+  /* The demand plan replaces computer hours; the fallback only adds. */
+  const now = ((row.current || {}).list || []).filter(s => comp.has(s.s)), after = row.demandBased ? (row.shifts || []).filter(s => comp.has(s.s) && !spNobody(s.p)) : now.concat(gwRosterWeek(row).added);
   const people = list => new Set(list.map(s => s.p).filter(p => p !== null && p !== undefined)).size;
   const open = (row.shifts || []).filter(s => spNobody(s.p));
   const facts = [[tt("sp.off.hours", "Hours / week"), gwHours(now), gwHours(after)], [tt("sp.off.people", "People"), people(now), people(after)]];
   return `<section class="sec rv" data-block="roster" id="sp-roster" data-site="${attr(b.key)}">
-    ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", quiet: tt("sp.off.quiet", "the office default: {n} always on, every computer on weekdays 8 to 22", {n: row.alwaysOn || 0})})}
-    <p class="quiet">${tt("sp.off.after", "Computers now → after adding the office default where they are free")}</p>
+    ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", quiet: row.demandBased ? tt("sp.off.demand", "Customer demand by weekday and hour") : tt("sp.off.quiet", "the office default: {n} always on, every computer on weekdays 8 to 22", {n: row.alwaysOn || 0})})}
+    <p class="quiet">${row.demandBased ? tt("sp.off.demand.after", "Computers now → demand plan; cleaning and other duties stay as they are.") : tt("sp.off.after", "Computers now → after adding the office default where they are free")}</p>
+    ${spDemandEvidence(row)}
     <div class="sp-offroster">${facts.map(([k, a, z]) => `<div><span>${k}</span><b>${a === z ? z : `<s>${a}</s> → ${z}`}</b></div>`).join("")}${
       open.length ? `<div><span>${tt("sp.off.open", "Waiting on a hire")}</span><b>${tt("sp.off.openh", "{n} h", {n: gwHours(open)})}</b></div>` : ""}</div>
     ${gwLink() ? gwRosterButtons(b.key) : `<p class="quiet">${tt("sp.off.link", "Link the game to write this week from here.")}</p>`}
@@ -6369,7 +6418,7 @@ function spRosterBlock(b){
   return `<section class="sec rv" data-block="roster" id="sp-roster" data-readzone data-site="${
     attr(row.key)}" data-ticks="${attr(spTickKey(row))}" data-tickable="${c.tickable.length}">
     ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster",
-      why: `${c.full
+      why: base.demandEvidence ? tt("sp.evidence.why", "Customer reports do not record past staffing. Demand reductions use a measurement period you confirm, and schedule changes alone never become new demand evidence.") : `${c.full
         ? tt("sp.roster.why.full", "A demand test: every station staffed every hour of every day, so no customer is turned away by an empty station and the count that comes back is the demand. The demand data is complete 9 days after the shop's first customer, closed days included; then switch to the demand plan, which is cut from what those days measured. An hour the shop is shut, or no one comes, counts as no customers.")
         : tt("sp.roster.why.demand", "A week to copy into BizMan › Schedule, one day at a time.")} ${
         tt("sp.roster.why.entries", "One entry is one person at one station for a run of hours. Nobody is given more than the 12 hours a day the game allows, and nobody is put inside a window they asked to keep free. Tick an entry once it is in the game. The ticks stay in this browser and change nothing in the save.")}${c.full ? ""
@@ -6377,6 +6426,7 @@ function spRosterBlock(b){
     ${/* Which shop it is about rides in the heading: the Optimize staffing
           card lands here with the shop's own heading scrolled off the top. */""}
     ${pick}
+    ${spDemandEvidence(base)}
     ${spRosterStray(base)}
     ${c.full || row.variant === "open" ? "" : spUnmeasuredLine(row)}
     ${c.cover ? spRosterNew(c, counts) : ""}
@@ -14821,7 +14871,9 @@ function hrWeek(S, fill, away, arriving, lost, o = {}){
     if(!row.full && spCoverOnly(row)) now.filter(s => !s.k).forEach(s => kept.add(s));
   } else {
     const owned = new Set((row.shifts || []).map(s => s.s));
-    now.filter(s => !owned.has(s.s) && !((row.stations || [])[s.s] || {}).skill).forEach(s => kept.add(s));
+    now.filter(s => row.demandBased && S.site.kind === "office"
+      ? s.k || !gwOfficeComputers(row).has(s.s)
+      : !owned.has(s.s) && !((row.stations || [])[s.s] || {}).skill).forEach(s => kept.add(s));
   }
   /* The site's own people with hours here now and no entry in this week, whom
      the call does not move away. The plan staffs its hours with the fewest
@@ -15045,7 +15097,7 @@ const hrSendable = days => days.every(({shifts}) => shifts.every(s => Number.isI
    it hires. */
 function hrSiteWeek(S, fill, away, arriving, inbound, additive){
   const lost = {hours: 0};
-  if(S.site.kind === "office" && !inbound){
+  if(S.site.kind === "office" && !(S.row || {}).demandBased && !inbound){
     const base = gwOfficeRow(S.key);
     if(!base) return {days: [], lost, changes: false};
     const gone = s => away.has(((base.people || [])[s.p] || {}).id);
@@ -15146,7 +15198,7 @@ function hrRequest(m, o = {}){
     }
   }
   const sources = new Set(moves.filter(x => x.from).map(x => gwKeyOf(x.from)));
-  const sites = [], rest = [];
+  const sites = [], rest = [], unreadableSites = [];
   m.sites.forEach(S => {
     const at = touched.get(S.key);
     const weekly = mode !== "hire" && S.planned && !!S.row;
@@ -15158,6 +15210,13 @@ function hrRequest(m, o = {}){
     if(!weekly){ sites.push({address, expect: null, days: null}); return; }
     const wk = hrSiteWeek(S, at ? at.fill : [], away, arriving, !!(at && at.inbound), !!(at && at.additive && !inScope(S)));
     if(!at && !wk.changes) return;
+    const unreadableOffice = S.site.kind === "office" && S.row.demandBased
+      && gwRosterWeek(Object.assign({}, S.row, {office: true})).unreadable;
+    if(unreadableOffice){
+      unreadableSites.push(S);
+      if(at) sites.push({address, expect: null, days: null});
+      return;
+    }
     const expect = S.b && typeof S.b.shiftPrint === "string" ? S.b.shiftPrint : null;
     /* A week this board cannot compare with the game's is not written unless
        somebody arrives there (and then the review asks for a new read); nor
@@ -15184,7 +15243,7 @@ function hrRequest(m, o = {}){
     if(open.length) gaps.set(S.key, open);
   });
   const shown = m.sites.filter(S => touched.has(S.key) || gaps.has(S.key));
-  return {body: {sites, hires, moves}, names, touched, rest, zero, gaps, shown, mode, one, out, inScope, quick: !!Q, only: !!only,
+  return {body: {sites, hires, moves}, names, touched, rest, unreadableSites, zero, gaps, shown, mode, one, out, inScope, quick: !!Q, only: !!only,
           weeks: sites.filter(s => s.days).length + rest.length};
 }
 /* --- drawing -------------------------------------------------------------- */
@@ -16197,7 +16256,7 @@ function hrReviewSites(req, phase, gone, status){
       : S.variant === "full" ? tt("co.hire.plan.full", "full cover 24/7: opens every day 0 to 24")
       : S.variant === "open" ? (S.row && S.row.complete ? tt("co.hire.plan.open", "every station, the hours it opens")
         : tt("co.hire.plan.unread", "every station where nothing is measured yet"))
-      : S.site.kind === "office" && !at.inbound ? tt("co.hire.plan.office", "the office default, added where free")
+      : S.site.kind === "office" && !(S.row || {}).demandBased && !at.inbound ? tt("co.hire.plan.office", "the office default, added where free")
       : tt("co.hire.plan.board", "hours from the board's plan");
     /* Each site's own outcome once the action has run. */
     const said = phase !== "done" || (!weekly && !people) ? null : at.rest ? st[S.key] || "wait" : "done";
@@ -16529,6 +16588,7 @@ function hrReview(o = {}, hooks = {}){
         <p class="gw-lead">${tt("co.hire.lead", "Who goes where. Open a site to see each person and the days they work.")}</p>
         ${sites}${goneCall}${zero}${fewerCall}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", tt("sp.gw.left.head", "<b>No hours here after this</b>"))}<div class="gw-pills">${left.join("")}</div></div>` : ""}
         ${gapText ? gwCall("warn", "alert", `${gapText}.${gapWhy ? ` ${gapWhy}` : ""}`) : ""}${shortCall}${chain}
+        ${(req.unreadableSites || []).map(S => gwCall("warn", "alert", tt("sp.evidence.unreadable", "{site}: the current schedule contains unreadable entries. Hires and assignments can proceed, but this office's schedule will stay unchanged; repair its entries in BizMan before applying staffing.", {site: spEsc(hrSiteName(S))}))).join("")}
         ${gwCheckLines(checked)}${officeLeft}
         ${warned.length ? gwCall("info", "info", tt("co.hire.warned", {one: "{n} person asks for something their site does not meet (marked orange in Change picks). They are hired anyway.",
           other: "{n} people ask for something their site does not meet (marked orange in Change picks). They are hired anyway."}, {n: warned.length})) : ""}`;
@@ -16655,7 +16715,7 @@ function hrFewer(m, req, rewritten){
     ...(req.rest || []).map(r => [r.S.key, r.body.days])]);
   const away = new Set(req.body.moves.map(x => x.employeeId));
   const sum = (map, id, h) => map.set(id, (map.get(id) || 0) + h);
-  return m.sites.filter(S => keys.has(S.key) && !(S.site.kind === "office" && !((req.touched.get(S.key) || {}).inbound)))
+  return m.sites.filter(S => keys.has(S.key) && !(S.site.kind === "office" && !(S.row || {}).demandBased && !((req.touched.get(S.key) || {}).inbound)))
     .flatMap(S => {
       const row = S.row || {};
       /* A row that does not carry the game's week: the plan's own figures. */
@@ -17376,6 +17436,7 @@ function schedStatus(b){
   if(b.status === "office"){
     /* The office default where it plans the office (spOfficeRoster()). */
     const o = gwOfficeRow(b.key);
+    if(o && o.demandBased) return tt("co.sched.office.demand", "Office: staffing follows customer demand");
     return o && (o.shifts || []).length && o.computers
       ? tt("co.sched.office.plan", {one: "Office default: {s} of {n} computer staffed", other: "Office default: {s} of {n} computers staffed"},
         {n: o.computers, s: o.staffedComputers || 0})
@@ -24254,16 +24315,16 @@ const GW_HQ = "ba:businesstype_headquarters";
 function gwRosterPlan(key){
   const b = (D.businesses || []).find(x => x.key === key);
   if(!b || b.typeSlug === GW_HQ) return null;
-  /* An office: Peter's office default (officeStaffing), which never opens it. */
+  /* An office: its demand plan or default, keeping its opening hours. */
   if(b.status === "office"){
     const office = gwOfficeRow(key);
-    return office && (office.shifts || []).length ? spRowLess(office) : null;
+    return office && (office.demandBased || (office.shifts || []).length) ? spRowLess(office) : null;
   }
   if(b.status !== "retail") return null;
   const base = spRosterRow(key);
   if(!base || base.failed) return null;
   const row = spShownRow(base);
-  return (row.shifts || []).length ? spRowLess(row) : null;
+  return row.demandBased || (row.shifts || []).length ? spRowLess(row) : null;
 }
 /* --- every week a write sends, checked per person ------------------------
    The game takes whatever week the mod hands it, and the mod checks overlap,
@@ -24402,7 +24463,7 @@ function gwRosterWeek(row){
     days.get(s.d).push({f: s.f, t: s.t, employeeId: who.id, itemInstanceId: st.id});
     return true;
   };
-  if(row.office){
+  if(row.office && !row.demandBased){
     /* An office's write adds, like Quick hire: every entry at the office
        stays as it stands, and the office default's entries for the office's
        own people go in only where that computer and that person are free
@@ -24433,6 +24494,14 @@ function gwRosterWeek(row){
       if(put(s)){ sent++; added.push(s); busy.push({d: s.d, f: s.f, t: s.t, p: s.p, s: s.s}); weekOf(s.p).push(entry(s)); }
     });
   } else (row.shifts || []).forEach(s => { if(!spNobody(s.p) && !bench.has(s.p) && put(s)) sent++; });
+  if(row.office && row.demandBased){
+    unreadable += Number(row.unrepresentable) || 0;
+    const computers = gwOfficeComputers(row);
+    ((row.current || {}).list || []).forEach(s => {
+      if(s.k || !computers.has(s.s)){ if(put(s)) kept++; else unreadable++; }
+      else if(!spHasId(((row.stations || [])[s.s] || {}).id) || !spHasId(((row.people || [])[s.p] || {}).id)) unreadable++;
+    });
+  }
   if(!row.office && !row.full && spCoverOnly(row))
     ((row.current || {}).list || []).filter(s => !s.k).forEach(s => { if(put(s)) kept++; });
   return {days: [...days].sort((a, b) => a[0] - b[0]).map(([d, shifts]) => ({d, shifts})), sent, kept, unreadable, added, dropped,
@@ -24442,7 +24511,7 @@ function gwRosterWeek(row){
    open around the clock where the plan wants that). */
 function gwRosterMatches(row, week){
   /* An office's write only adds: written once there is nothing left to add. */
-  if(row.office) return week.sent === 0;
+  if(row.office && !row.demandBased) return week.sent === 0;
   const line = (d, s) => [d, s.f, s.t, s.employeeId, s.itemInstanceId].join("|");
   const want = week.days.flatMap(({d, shifts}) => shifts.map(s => line(d, s))).sort();
   const have = ((row.current || {}).list || []).map(s => {
@@ -24486,7 +24555,7 @@ function gwRosterButtons(key){
   const staff = gwStaffButton(key);
   const one = gwButton("schedule", tt("sp.gw.sch.one", "Write this schedule to the game"), `data-gw-sites="${attr(JSON.stringify([key]))}"`,
     row.office && gwRosterWeek(row).unreadable ? tt("sp.gw.sch.office.unreadable", "An entry here can't be read; change it in the game first")
-      : gwRosterWeek(row).sent ? "" : row.office ? (gwRosterWeek(row).dropped ? tt("sp.gw.sch.office.full", "Nothing more fits: the rest of the office default is more than its staff's weeks can take")
+      : (row.demandBased && !(row.shifts || []).length) || gwRosterWeek(row).sent ? "" : row.office && !row.demandBased ? (gwRosterWeek(row).dropped ? tt("sp.gw.sch.office.full", "Nothing more fits: the rest of the office default is more than its staff's weeks can take")
         : tt("sp.gw.sch.office.written", "Every entry the office default can add is in the game"))
       : tt("sp.gw.sch.blocked", "Every entry in this plan waits on somebody who does not work here yet: add them first"), {icon: "hire", alt: !!staff});
   /* Every planned site at once: Staff all sites, the one action (spares
@@ -24604,10 +24673,10 @@ function gwSchedule(key){
           /* Nobody to add, and somebody to come from another site: the hours wait on them. */
           : row.fromOthers ? gwLiftCall("warn", "hire", gwFromWait(add.hoursUncovered, row.fromOthers)) : "");
       const whole = tt("sp.gw.plan.whole", "replaces the whole week");
-      const which = row.office ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.office", "Office default")}</span><span class="gw-only">${tt("sp.gw.plan.adds", "adds to the week")}</span>`
+      const which = row.office && !row.demandBased ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.office", "Office default")}</span><span class="gw-only">${tt("sp.gw.plan.adds", "adds to the week")}</span>`
         : row.full ? `<span class="gw-plan full">${gwSvg("sun")}${tt("sp.pick.full", "Full cover 24/7")}</span><span class="gw-only">${tt("sp.gw.plan.every", "every station, every hour")}</span>`
         : row.variant === "open" ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.pick.open", "Open hours")}</span><span class="gw-only">${whole}</span>`
-        : spCoverOnly(row) ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.cover", "Cleaning and security")}</span><span class="gw-only">${whole}</span>`
+        : !row.office && spCoverOnly(row) ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.cover", "Cleaning and security")}</span><span class="gw-only">${whole}</span>`
         : `<span class="gw-plan">${gwSvg("roster")}${tt("sp.pick.demand", "Demand plan")}</span><span class="gw-only">${whole}</span>`;
       const kept = week.kept && !row.office ? gwCall("info", "info", tt("sp.gw.sch.kept", {
         one: "The {n} serving entry in the game stays as it stands: this plan covers cleaning and security only.",
@@ -24633,7 +24702,7 @@ function gwSchedule(key){
         roleOf(p.employeeId) ? `<small>${roleOf(p.employeeId)}</small>` : ""}</span>`);
       /* An office's write adds: the hours and the people it adds them for. */
       let adds = "";
-      if(row.office){
+      if(row.office && !row.demandBased){
         const had = new Set(now.map(s => `${s.d}|${s.f}|${s.t}|${((row.people || [])[s.p] || {}).id}|${((row.stations || [])[s.s] || {}).id}`));
         const added = week.days.flatMap(({d, shifts}) => shifts.map(s => Object.assign({d}, s)))
           .filter(s => !had.has(`${s.d}|${s.f}|${s.t}|${s.employeeId}|${s.itemInstanceId}`));
@@ -24734,7 +24803,7 @@ function wireAll(){
   wireChart(); wirePortfolio(); wireSiteReads();
   /* The planner's own handlers: Staffing › Schedules carries it, whether or
      not a business's page has been drawn in this visit. */
-  wireRoster();
+  wireRoster(); wireDemandEvidence();
   wireFlow(); bindSupply();
   wireHeat(); wirePlan(); wireOpenStore(); wireOpenFactory();
   wireReveal(); wireWrites(); wireStaff();

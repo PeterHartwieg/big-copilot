@@ -193,7 +193,10 @@ class PayloadSnapshotTests(unittest.TestCase):
         self.assertIn(("1 Pier", "ba:street_pier#1"),
                       [(s["where"], s["siteKey"]) for s in day40["market"]["shortages"]])
         self.assertTrue(day40["supply"]["factories"]["sites"] and day40["supply"]["imports"])
-        self.assertTrue(day40["alerts"] and day40["staffing"] and day40["hourFindings"])
+        self.assertTrue(day40["alerts"] and day40["staffing"])
+        # Imported reports cannot diagnose historical staffing constraints.
+        self.assertEqual(day40["hourFindings"], [])
+        self.assertTrue(all(r.get("demandEvidence") for r in day40["staffing"]))
         self.assertTrue(day40["factoryStaffing"]["cap"] and day40["factoryStaffing"]["dem"])
         self.assertTrue(day40["plan"]["prices"])
         self.assertTrue(day40["trends"] and all(t["ready"] for t in day40["trends"]))

@@ -876,6 +876,18 @@ class CinemaGridTests(MsgAsserts, unittest.TestCase):
         self.assertEqual(grid["staffed"][MONDAY][10], 50)
         self.assertEqual(grid["effective"][MONDAY][10], 25)
 
+    def test_imported_history_keeps_equipment_warning_without_staffing_claims(self):
+        grid = self.known_cinema(screens=1, booths=2, projectionists=1, door=25)
+        grid["evidence"] = {}
+        for wd in range(7):
+            grid["staffed"][wd] = [0] * 24
+            grid["effective"][wd] = [0] * 24
+        [finding] = self.findings(grid)
+        self.assertEqual(finding["heldBy"], [["furniture"]])
+        self.assertEqual(finding["cap"], 25)
+        self.assertHasMsg(finding["fix"], "sp.py.cinema.screens")
+        self.assertNoMsg(finding["fix"], "sp.py.fix.role.staff")
+
     def test_furniture_does_not_replace_a_lower_staffing_limit(self):
         grid = self.known_cinema(screens=2, booths=2, projectionists=1, door=50)
         [finding] = self.findings(grid)
