@@ -5677,7 +5677,7 @@ function spDesks(grid){
 function spRosterNone(row, pick, key){
   const stations = (row && row.stations) || [];
   const codes = spStationCodes(stations);
-  const rows = spStationOrder(stations).map(k => `<div class="sp-grow sp-skill" style="--sp-skill:${spSkillColor(stations[k].skill)}"><span class="lab" tabindex="0" data-tip="${attr(spEsc(stations[k].name || "?"))}">${spEsc(codes[k])}</span></div>`).join("");
+  const rows = spStationOrder(stations).map(k => `<div class="sp-grow sp-skill" style="--sp-skill:${spSkillColor(stations[k].skill)}"><span class="lab" tabindex="0" data-tip="${attr(stations[k].name || "?")}">${spEsc(codes[k])}</span></div>`).join("");
   const failed = !!(row && row.failed);
   /* A shop with no cover station and nothing measured still has its demand
      test to offer, so the pick sits here too and the section carries its site. */

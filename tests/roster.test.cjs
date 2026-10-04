@@ -961,7 +961,11 @@ test('an unmeasured need strip is empty, and the note above it says why', async 
 });
 
 test('a shop with nothing at all to schedule gets the empty state', async () => {
-  const page = await shop('cover', row => { row.shifts = []; });
+  const stationName = 'Cleaning & <supplies> "station"';
+  const page = await shop('cover', row => {
+    row.shifts = [];
+    row.stations.find(st => st.skill === 'ba:skill_cleaning').name = stationName;
+  });
   try {
     assert.equal(await page.locator('#sp-roster .sp-shift').count(), 0);
     assert.equal(await page.locator('#sp-roster .sp-read').innerText(), en('sp.roster.none'));
@@ -970,6 +974,13 @@ test('a shop with nothing at all to schedule gets the empty state', async () => 
       enRe('sp.roster.none.why'));
     assert.equal(await page.locator('#sp-roster .sp-gantt .sp-grow').count(), 3,
       'the stations are still named');
+    const cleaning = page.locator('#sp-roster .sp-gantt .lab').first();
+    assert.equal(await cleaning.textContent(), 'CL', 'cleaning leads the empty grid too');
+    assert.equal(await cleaning.getAttribute('data-tip'), stationName, 'tooltip keeps literal punctuation');
+    await page.evaluate(() => openRoute('staffing/schedules', {pick: D.businesses[0].key}));
+    await cleaning.focus();
+    assert.equal(await page.locator('#tip').textContent(), stationName);
+    assert.equal(await page.locator('#tip').locator('*').count(), 0, 'station name stays text');
   } finally { await page.close(); }
 });
 
