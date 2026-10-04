@@ -1454,9 +1454,12 @@ test('a cost centre\'s row is no payback; a plan kept before its figures were co
   await openedPlan(page);
   await traded(page, {daily: Array(16).fill(500), state: 'togo', extra: {days: 300}});
   await goOpen(page);
-  await page.evaluate(() => { delete osPlan().snap; drawOpenStore(); });
+  await page.evaluate(() => { delete osPlan().snap; osBuilding(osPlan().key).status = 'mine'; drawOpenStore(); });
   assert.match(await page.locator('#osBody').innerText(), enRe('gr.os.roi.live2'));
   assert.deepEqual((await pvsa(page)).map(r => r[0].split(' ')[0]), ['gr.os.roi.furn', 'gr.os.inv.fee', 'gr.os.inv.deposit', 'gr.os.inv.total'].map(k => en(k).split(' ')[0]));
+  const deposit = await pvRow(page, en('gr.os.inv.deposit'));
+  assert.equal(deposit[1], deposit[2], 'legacy plans compare the full deposit too');
+  assert.equal(deposit[3], '–');
   // A store that has a vehicle of its own since: a row of its own, no plan figure.
   await page.evaluate(site => { const c = D.payback.sites[site].cost; c.vehicles = 98000; c.firm += 98000; drawOpenStore(); }, SITE);
   const vehicles = await pvRow(page, en('gr.os.roi.vehicles'));

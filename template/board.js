@@ -12271,7 +12271,8 @@ let osSnapSeen = new Map(), osSnapFor = null;
 /* The plan's side of step 6: the kept figures, else the investment alone. */
 function osPlanned(plan){
   if(plan.snap) return {snap: plan.snap, live: false};
-  const inv = osInvestment(plan, osBuilding(plan.key));
+  const b = osBuilding(plan.key);
+  const inv = b && osInvestment(plan, {...b, status: "vacant"});
   if(!inv) return {snap: null, live: true};
   const parts = {};
   OS_SNAP_INV.forEach(k => parts[k] = Math.round(inv[k] || 0));
