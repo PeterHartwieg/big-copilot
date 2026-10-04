@@ -382,6 +382,7 @@ test('the depot is picked again when the factory moves onto it, or a rival takes
     /* A rival rents the remembered depot before the player does; a third warehouse is free. */
     premises().buildings.push({...premises().buildings.find(b => b.key === depot), key: 'ba:street_twentyfifthstreet#8', address: '8 25th Street', status: 'vacant', rent: 500});
     premises().buildings.find(b => b.key === ofPlan().depotKey).status = 'rival';
+    drawPlan(); // reconcile the changed premises before showing the refreshed plan
     const taken = ofInvestment(ofPlan());
     return {after, rival: taken.depot && taken.depot.b.key, depotKey: ofPlan().depotKey};
   }, first);
@@ -633,4 +634,137 @@ test('editing only an existing factory’s machine count saves its custom setup'
   await page.reload();
   assert.deepEqual(await customRows(page), {});
   assert.equal(await page.locator('#ingBody tr').count(), 0, 'the empty range leaves no stale ingredient rows');
+});
+
+/* Calculation reads never select/persist a depot; planner transitions do. */
+test('investment calculations and redraws leave a settled plan and its storage untouched', async t => {
+  const page = await board(t);
+  await depotPlan(page);
+  const result = await page.evaluate(() => {
+    const plan = ofPlan(), before = JSON.stringify(plan), saved = localStorage.getItem(ofStore());
+    const set = Storage.prototype.setItem;
+    let writes = 0;
+    Storage.prototype.setItem = function(key, value){ if(key === ofStore()) writes++; return set.call(this, key, value); };
+    try{
+      const inv = ofInvestment(plan);
+      ofRunning(plan, inv);
+      ofInvestHtml(plan);
+      ofDraw();
+      drawPlan();
+      return {before, after: JSON.stringify(plan), saved, stored: localStorage.getItem(ofStore()), writes};
+    }finally{ Storage.prototype.setItem = set; }
+  });
+  assert.equal(result.after, result.before);
+  assert.equal(result.stored, result.saved);
+  assert.equal(result.writes, 0);
+});
+
+for(const empty of [false, true]) test(`a refreshed depot choice is persisted and restored for an ${empty ? 'empty' : 'active'} plan`, async t => {
+  const page = await board(t);
+  const first = await depotPlan(page);
+  if(empty) await page.evaluate(() => {
+    ofPlan().type = planType = 'custom';
+    ofPlan().counts = planCounts = {};
+    drawPlan();
+  });
+  const result = await page.evaluate(({depot}) => {
+    const plan = ofPlan(), before = JSON.stringify(plan);
+    const old = premises().buildings.find(b => b.key === depot);
+    old.status = 'rival';
+    premises().buildings.push({...old, key: 'replacement', status: 'vacant', rent: 50});
+    const predicted = ofInvestment(plan).depot.b.key;
+    const afterRead = JSON.stringify(plan);
+    const set = Storage.prototype.setItem;
+    let writes = 0;
+    Storage.prototype.setItem = function(key, value){ if(key === ofStore()) writes++; return set.call(this, key, value); };
+    try{
+      drawPlan(); // updated save/premises are reconciled after the lines are ready
+      const saved = JSON.parse(localStorage.getItem(ofStore()));
+      const persisted = saved.plans.find(p => p.id === plan.id).depotKey;
+      // Restore through the same path as reopening this character's saved plans.
+      ofPlansFor = null;
+      drawPlan();
+      return {before, afterRead, predicted, persisted, restored: ofPlan().depotKey, writes};
+    }finally{ Storage.prototype.setItem = set; }
+  }, first);
+  assert.equal(result.afterRead, result.before, 'cost preview does not mutate the plan');
+  assert.equal(result.predicted, 'replacement');
+  assert.equal(result.persisted, result.predicted);
+  assert.equal(result.restored, result.persisted);
+  assert.equal(result.writes, 1, 'only the actual depot change writes storage');
+});
+
+for(const empty of [true, false]) test(`switching to an ${empty ? 'empty' : 'unchanged'} owned plan never saves the previous plan's investment`, async t => {
+  const page = await board(t);
+  const result = await page.evaluate(empty => {
+    const site = planTarget;
+    D.openFactory.sites[site].shelves = 1000; // no extra storage needed
+    const now = ofNow(site), slug = Object.keys(now)[0];
+    const source = ofEnsure();
+    source.type = planType = 'custom';
+    source.counts = {[slug]: now[slug] + 4};
+    planCounts = {...source.counts};
+    drawPlan();
+    const target = {...source, id: 'switch-target', counts: empty ? {} : {...now}, inv: 123};
+    ofPlans.push(target);
+    const set = Storage.prototype.setItem, writes = [];
+    Storage.prototype.setItem = function(key, value){
+      if(key === ofStore()) writes.push(JSON.parse(value).plans.find(p => p.id === target.id).inv);
+      return set.call(this, key, value);
+    };
+    try{
+      ofOpen(target.id);
+      const inv = ofInvestment(target);
+      return {writes, stored: JSON.parse(localStorage.getItem(ofStore())).plans.find(p => p.id === target.id),
+        counts: ofCounts(), items: inv.items, investment: inv.self};
+    }finally{ Storage.prototype.setItem = set; }
+  }, empty);
+  assert.equal(result.items, 0);
+  assert.equal(result.investment, 0);
+  assert.ok(result.writes.length > 0);
+  assert.ok(result.writes.every(n => n === 123), 'no transient save can cost the previous rows against the selected plan');
+  assert.equal(result.stored.inv, 123, 'an owned plan with nothing to buy preserves its earlier investment');
+  assert.deepEqual(result.stored.counts, result.counts);
+  if(empty) assert.deepEqual(result.counts, {});
+});
+
+test('removing the last custom product saves the empty new factory cost before redraw and after reload', async t => {
+  const page = await board(t);
+  const before = await page.evaluate(() => {
+    ofOpen(null);
+    planType = 'custom'; planTarget = 'new'; planCounts = {'ba:itemname_beer': 1};
+    drawPlan();
+    const plan = ofEnsure();
+    plan.key = premises().buildings.find(b => b.type === 'warehouse').key;
+    plan.depot = false;
+    ofSave(); drawPlan();
+    return plan.inv;
+  });
+  await page.locator(`[data-pc-x="${BEER}"]`).click();
+  const read = () => page.evaluate(() => ({counts: ofPlan().counts, inv: ofPlan().inv,
+    expected: Math.round(ofInvestment(ofPlan()).self),
+    stored: JSON.parse(localStorage.getItem(ofStore())).plans.find(p => p.id === ofCur).inv}));
+  const removed = await read();
+  assert.deepEqual(removed.counts, {});
+  assert.ok(removed.inv < before);
+  assert.equal(removed.inv, removed.expected);
+  assert.equal(removed.stored, removed.expected);
+  await page.reload();
+  assert.deepEqual(await read(), removed);
+});
+
+test('opening a plan for a factory no longer owned preserves its saved investment', async t => {
+  const page = await board(t);
+  const result = await page.evaluate(() => {
+    const plan = ofEnsure();
+    plan.inv = 123;
+    const site = plan.site;
+    D.businesses = D.businesses.filter(b => b.key !== site);
+    ofOpen(plan.id);
+    return {current: ofCur, investment: plan.inv,
+      stored: JSON.parse(localStorage.getItem(ofStore())).plans.find(p => p.id === plan.id).inv};
+  });
+  assert.equal(result.current, null, 'the old plan is detached');
+  assert.equal(result.investment, 123);
+  assert.equal(result.stored, 123);
 });

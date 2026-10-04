@@ -823,13 +823,13 @@ without its `.git`) or inside any other git work tree.
 ## Template placeholders
 
 The board's page is `template/board.html`, a file of its own beside `ba_dashboard.py`, and
-its script is `template/board.js` beside it. The self-contained calculation core is
-`template/open-store-model.js`. `render()` reads these files through
+its script is `template/board.js` beside it. The calculation cores are
+`template/open-store-model.js` and `template/open-factory-model.js`. `render()` reads these files through
 `load_template()`, once per process and never at import time: the Pyodide worker imports
 `ba_dashboard` without the files and never renders. `load_template()` first splices
-`open-store-model.js` followed by `board.js` into the line `/*__BOARD_SCRIPT__*/`, the whole body of the page's last
+`open-store-model.js`, `open-factory-model.js`, then `board.js` into the line `/*__BOARD_SCRIPT__*/`, the whole body of the page's last
 `<script>` block, so `render()` sees the page as one string and fills the placeholders in
-the page in the same order as when it was one file. All three sources are in
+the page in the same order as when it was one file. All four sources are in
 `build_web.STAMP_INPUTS`, so an edit to any changes the build stamp. The calculation
 source stays inline in the existing script block for both standalone `file://` output
 and the hosted build, requiring neither npm nor a network import for Python rendering.
@@ -845,6 +845,25 @@ plan persistence, finder integration, rendering and game-link writes. Shared gam
 are defined only in the module. `tests/open_store_model.test.cjs` imports it directly
 for arithmetic tests and retains board integration checks for plans and charts;
 `check_profit_model.py` requires the same API in Node instead of slicing board source.
+
+`OpenFactoryModel.create({facts, recipes, aliases, sources, hours})` is the Plan a
+factory arithmetic boundary. It takes the `openFactory` facts, the recipes keyed by
+product slug, ingredient aliases, active import sources and production hours per day.
+Investment and running-cost calls take explicit machine counts, the building, existing
+machines and whether the factory is owned. Depot selection returns a building without
+changing a plan; investment takes that selected building. Pricing, ingredient quantities,
+box/storage sizing, kits and headquarters hiring also live in this module. It reuses
+`OpenStoreModel` for deterministic vendor grouping; CommonJS imports the dependency,
+and Python embeds both sources in order. Neither model reads the board or persists state.
+
+The board's `of*` adapters read the current payload and planner rows. `ofSave()` adopts
+investment/depot choices from that saved plan’s counts and target on a user action,
+including before its rows are drawn; plans for factories no longer owned are left alone.
+`ofAfterLines()` reconciles changed counts and
+facts after a stepper or save refresh and persists only when the plan changed. Investment
+calculation and HTML rendering do not save. Direct arithmetic coverage lives in
+`tests/open_factory_model.test.cjs`; `tests/open_factory.test.cjs` covers transitions,
+restoration, read-only redraws and the surrounding five-step flow in the browser.
 
 `tools/split_board_script.py` made the original two-file split. Its split/join helpers
 remain historical migration tools: they refuse an assembled page containing the
