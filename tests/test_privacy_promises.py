@@ -20,8 +20,8 @@ FETCHED = re.compile(
     r"""|url\(["']?(https?:)?//""",
     re.I,
 )
-PAGES = ("index.html", "impressum.html", "privacy.html")
-SCRIPTS = ("app.js", "worker.js", "community.js", "map.js", "wiki.js", "update.js", "report.js")
+PAGES = ("index.html", "impressum.html", "privacy.html", "translate/index.html")
+SCRIPTS = ("app.js", "worker.js", "community.js", "map.js", "wiki.js", "update.js", "report.js", "translate.js")
 PYODIDE_FILES = ("pyodide.mjs", "pyodide.asm.mjs", "pyodide.asm.wasm", "python_stdlib.zip", "pyodide-lock.json")
 
 
@@ -119,7 +119,7 @@ class PrivacyPromises(unittest.TestCase):
                     self.assertIsNotNone(re.fullmatch(
                         r'\s*console\.error\(\{\s*'
                         r'event: "community_api_failure",\s*'
-                        r'operation: \["presence", "vote", "features", "report"\]\.includes\(operation\) '
+                        r'operation: \["presence", "vote", "features", "report", "translations"\]\.includes\(operation\) '
                         r'\? operation : "request",\s*'
                         r'category: \["configuration", "limiter", "database", "storage", "github"\]\.includes\(category\) '
                         r'\? category : "unexpected",\s*'

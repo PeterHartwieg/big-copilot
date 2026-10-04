@@ -38,7 +38,7 @@ function seamSource(){
 const LANGS = ['en', 'cs', 'da', 'de', 'es', 'fr', 'it', 'lt', 'hu', 'nl', 'pl', 'pt', 'ro', 'fi', 'tr',
   'el', 'ru', 'uk', 'ja', 'ko', 'zh-cn', 'zh-tw'];
 /* The footer's list: the languages the whole page comes in, then the rest. */
-const PAGE_LANGS = ['en', 'de', 'es', 'fr', 'pt', 'tr', 'ru', 'ko'];
+const PAGE_LANGS = ['en', 'de', 'es', 'fr', 'it', 'pt', 'tr', 'ru', 'ko'];
 const LIST = [...PAGE_LANGS, ...LANGS.filter(l => !PAGE_LANGS.includes(l))];
 function seam({table = null, lang = 'de'} = {}){
   const opts = LANGS.map(value => ({dataset: {value}, textContent: value, getAttribute: () => value}));
@@ -363,7 +363,7 @@ test('the picker is a listbox button: every choice listed, the current one marke
   // Each group names its options, so a screen reader says which group a language is in.
   assert.deepEqual(await pop.locator('[role="group"]').evaluateAll(els => els.map(e => [
     document.getElementById(e.getAttribute('aria-labelledby')).textContent, e.querySelectorAll('[role="option"]').length])),
-    [[en('foot.lang.page'), 8], [en('foot.lang.names'), 14]]);
+    [[en('foot.lang.page'), PAGE_LANGS.length], [en('foot.lang.names'), LANGS.length - PAGE_LANGS.length]]);
   assert.deepEqual(rows.find(r => r[0] === 'ja'), ['ja', 'ja', '日本語']);
   assert.deepEqual(await pop.locator('[aria-selected="true"]').evaluateAll(els => els.map(e => e.dataset.value)), ['en']);
   // 22 rows scroll inside a list that stays within the window.

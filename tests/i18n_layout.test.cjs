@@ -557,6 +557,37 @@ test('the landing\'s sentences with markup are the markup\'s English when no tab
   assert.deepEqual(errors, []);
 });
 
+test('plain community landing help preserves the trusted Workshop link with a safe localized label', async t => {
+  const {page, errors} = await shell(t);
+  const wording = 'Collega il gioco con la mod Big Copilot Link del Workshop.';
+  const label = 'Scarica "Big Copilot" & mod';
+  const trusted = await page.locator('#modLink').getAttribute('href');
+  assert.equal(trusted, 'https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395');
+  await page.evaluate(({wording, label}) => ttSetTable('it', {
+    'land.help.linked': wording, 'app.strip.mod': label,
+  }), {wording, label});
+  const link = page.locator('#lgHelpLinked a');
+  await link.waitFor({state: 'attached'});
+  assert.equal(await link.count(), 1);
+  assert.equal(await link.getAttribute('href'), trusted);
+  assert.equal(await link.getAttribute('target'), '_blank');
+  assert.equal(await link.getAttribute('rel'), 'noopener');
+  assert.equal(await link.textContent(), label);
+  assert.equal(await link.locator('*').count(), 0, 'localized action label is written as text');
+  assert.equal(await page.locator('#lgHelpLinked').textContent(), wording + ' ' + label);
+  // A second redraw replaces the paragraph without multiplying its action.
+  await page.evaluate(({wording, label}) => ttSetTable('it', {
+    'land.help.linked': wording, 'app.strip.mod': label,
+  }), {wording, label});
+  assert.equal(await link.count(), 1);
+  // Bundled rich wording retains its original anchor and formatting.
+  await page.evaluate(() => ttSetTable('en', null));
+  assert.equal(await link.count(), 1);
+  assert.equal(await link.textContent(), 'Big Copilot Link mod');
+  assert.equal(await page.locator('#lgHelpLinked b').count(), 2);
+  assert.deepEqual(errors, []);
+});
+
 /* The fixture board has no market and no catalogue, so the Growth page is
    swept again on the day-47 payload snapshot: its market has hype, a
    shortage and movers, its plan a recipe, a contract and a price. The game's

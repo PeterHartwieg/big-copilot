@@ -106,6 +106,18 @@
     const about = {build, mb: "6"};
     if (build) fill("lgHelpAutosave", tt("land.help.autosave", "The game autosaves every five minutes. Your browser may call folder access an \"upload\" or ask to \"let this site view files\"; the save stays on your computer. Checked on game build {build}; the Python runtime the page needs is about {mb} MB, fetched once and cached.", richParams(about)), about);
     fill("lgHelpLinked", tt("land.help.linked", "<b>Linked to the game.</b> With the <a>Big Copilot Link mod</a> from the Steam Workshop enabled, click <b>Link to the game</b> and the board reads the running game itself. Chrome and Edge ask once to allow the site to reach your computer; the data still never leaves it."));
+    // Community wording is plain text, so it may omit the authored <a>.
+    // Keep the existing Workshop action available using its trusted markup URL
+    // and already-localized label; candidate text never supplies a link.
+    const linked = $("lgHelpLinked"), mod = $("modLink");
+    if (linked && mod && !linked.querySelector("a")) {
+      const link = document.createElement("a");
+      link.setAttribute("href", mod.getAttribute("href"));
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.textContent = mod.textContent;
+      linked.append(document.createTextNode(" "), link);
+    }
     fill("localeOther", tt("land.gametext.find", "To find your game's <code>en.json</code>, open Steam → Manage → Browse local files. On macOS, search that folder for <code>en.json</code>; use Show Package Contents if the game files are inside an app bundle."));
   }
 

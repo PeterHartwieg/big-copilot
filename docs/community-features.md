@@ -1,5 +1,9 @@
 # Community features
 
+Community translation suggestions and votes use the same Worker and D1 binding
+with separate tables and routes. Their phrase search, selection, moderation and
+retention rules are in [Community translations](community-translations.md).
+
 The hosted dashboard shows an approximate online count and lets visitors vote on
 the ideas in `server/features.json`. The ballot is empty for now: every idea on it
 has shipped and left it (Find a location on 15 September 2026, Optimize staffing on

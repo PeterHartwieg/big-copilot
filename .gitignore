@@ -63,3 +63,6 @@ mockup/*/project/
 /web/py/ba_demand_curves.json
 /web/py/ba_item_prices.json
 /web/py/ba_store_rules.json
+
+/web/translations/
+/web/translate/
