@@ -66,13 +66,14 @@ const OpenFactoryModel = ((storeModel) => {
       need.forEach((n, slug) => { if(box(slug)) boxes += Math.ceil(n / box(slug)); });
       return boxes;
     }
-    /* Keep a remembered depot while free or owned, unless it is the factory.
-       Otherwise choose the cheapest vacant warehouse nearby, then city-wide. */
+    /* Keep an empty warehouse or the depot already opened for this plan.
+       Otherwise choose an available warehouse nearby, then city-wide. */
     function selectDepot({building, buildings = [], rememberedKey = null}){
       const kept = rememberedKey && (!building || rememberedKey !== building.key)
         ? buildings.find(b => b.key === rememberedKey) : null;
-      if(kept && (kept.status === "vacant" || kept.status === "mine")) return kept;
-      const free = buildings.filter(b => b.type === "warehouse" && b.status === "vacant"
+      if(kept && kept.type === "warehouse" && (storeModel.availablePremises(kept)
+        || (kept.status === "mine" && kept.occupant?.typeSlug === "ba:businesstype_warehouse"))) return kept;
+      const free = buildings.filter(b => b.type === "warehouse" && storeModel.availablePremises(b)
         && (!building || b.key !== building.key) && b.rent != null);
       const near = free.filter(b => building && b.hood === building.hood);
       return (near.length ? near : free).slice().sort((a, b) => a.rent - b.rent || a.key.localeCompare(b.key))[0] || null;
@@ -95,13 +96,14 @@ const OpenFactoryModel = ((storeModel) => {
       const delivery = furniture ? stores.length * (g.delivery || 0) : 0;
       const fee = (g.installFee || 0) * (b.m2 || 0);
       const truck = owned ? 0 : ((F.vehicles || {}).truck || {}).p || 0;
-      const deposit = owned ? 0 : b.deposit || 0;
+      const deposit = owned ? 0 : storeModel.leaseDeposit(b) || 0;
       let depot = null;
       if(!owned && at){
         const van = ((F.vehicles || {}).van || {}).p || 0;
         const racks = OF_DEPOT_SHELVES * (shelf.p || 0);
-        depot = {b: at, deposit: at.deposit || 0, shelves: OF_DEPOT_SHELVES, racks, van, delivery: g.delivery || 0,
-          total: (at.deposit || 0) + racks + van + (g.delivery || 0)};
+        const depotDeposit = storeModel.leaseDeposit(at) || 0;
+        depot = {b: at, deposit: depotDeposit, shelves: OF_DEPOT_SHELVES, racks, van, delivery: g.delivery || 0,
+          total: depotDeposit + racks + van + (g.delivery || 0)};
       }
       const extra = truck + deposit + (depot ? depot.total : 0);
       return {b, out, stores, furniture, delivery, fee, truck, deposit, depot, boxes, shelves, placed,

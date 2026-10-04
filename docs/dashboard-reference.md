@@ -1047,7 +1047,11 @@ shows in the shops' results.
   its neighbourhood, eight pallet shelves, a Vord Courier D500 and its driver.
 - **Where** is Find a location in plan mode on warehouse buildings, every size and
   neighbourhood, ranked by rent, cheapest first, with each building's floor, its parking
-  (an H one vehicle, I to Q two), rent and deposit. Size is your call: the finder's own
+  (an H one vehicle, I to Q two), rent and deposit. Empty warehouses you already rent
+  are included and labelled **Already rented**. They need no additional rental deposit;
+  their rent remains a running cost. The starter depot can use an empty rented warehouse
+  too, but cannot use the factory's own address or another business's premises.
+  Size is your call: the finder's own
   Size filter is empty by default and nothing judges whether the machines fit. Distance
   costs nothing in the game and is not counted. A factory you run has its Where ticked:
   "4 22nd Street · yours".
@@ -1103,8 +1107,14 @@ browser. Start one from the neighbourhoods with the most demand for a type you d
 there, from the grid of types, or from a Demand cell's **Open a store here**. The board
 never suggests opening a store on its own.
 
-**Where** is Find a location, fixed to the plan's type. It lists buildings to rent;
-**Plan here** on a building's card picks it.
+**Where** is Find a location, fixed to the plan's type. **Plan here** on a building's card
+picks it. The suggestions include empty buildings you already rent, labelled
+**Already rented**, alongside new rentals. Both use the same demand and foot-traffic ranking.
+Buildings containing a business are excluded from these suggestions. An existing lease
+adds no new rental deposit to the investment; running rent and the store setup still count.
+The forecast and financing cover setup still to pay for. After opening, the saved
+plan and actual payback compare total setup investment, including the earlier deposit;
+renting a building therefore does not erase its deposit from the plan's history.
 
 **The investment** is a 100% outfitted store in that building:
 

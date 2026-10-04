@@ -11604,8 +11604,8 @@ function osFirmHtml(b, out, inv){
       rows.push(`<tr><td class="l">${spEsc(osItemName(item))}</td><td class="w">${osTag(group, why)}</td><td>${qty}</td><td>${fmt(each)}</td><td>${fmt(each * qty)}</td></tr>`);
     });
   });
-  rows.push(grp(tt("gr.os.inv.deposit", "Deposit"), tt("gr.os.inv.deposit.note", "refunded when the lease ends"), inv.deposit));
-  rows.push(`<tr><td class="l">${tt("gr.os.inv.deposit.est", "Estimated deposit")}<span class="sub">${tt("gr.os.inv.deposit.estSub", "about 60 days of rent, with the building's own fittings")}</span></td><td class="w"></td><td></td><td></td><td>${fmt(inv.deposit)}</td></tr>`);
+  rows.push(grp(tt("gr.os.inv.deposit", "Deposit"), b.status === "mine" ? depositNote(b) : tt("gr.os.inv.deposit.note", "refunded when the lease ends"), inv.deposit));
+  if(b.status !== "mine") rows.push(`<tr><td class="l">${tt("gr.os.inv.deposit.est", "Estimated deposit")}<span class="sub">${tt("gr.os.inv.deposit.estSub", "about 60 days of rent, with the building's own fittings")}</span></td><td class="w"></td><td></td><td></td><td>${fmt(inv.deposit)}</td></tr>`);
   return `<table class="os-inv"><thead><tr><th class="l">${tt("gr.os.inv.col.item", "Item")}</th><th class="l">${tt("gr.os.inv.col.why", "Why")}</th>
     <th>${tt("gr.os.inv.col.qty", "Qty")}</th><th>${tt("gr.os.inv.col.each", "Each")}</th><th>${tt("gr.os.inv.col.total", "Total")}</th></tr></thead>
     <tbody>${rows.join("")}</tbody><tfoot><tr><td class="l">${tt("gr.os.inv.total", "Investment")}</td><td></td><td></td><td></td><td>${fmt(inv.firm)}</td></tr></tfoot></table>`;
@@ -11631,7 +11631,7 @@ function osSelfHtml(b, out, inv){
     <table><tbody>${decor.floors ? `<tr><td class="l">${tt("gr.os.self.floors", "{n} floor tiles at {p}", {n: num(decor.floors), p: fmt(decor.floorPrice)})}</td><td class="w">${interior}</td><td>${fmt(decor.floors * decor.floorPrice)}</td></tr>` : ""}${
       decor.walls ? `<tr><td class="l">${tt("gr.os.self.wallslots", "{n} wall slots at {p}", {n: num(decor.walls), p: fmt(decor.wallPrice)})}</td><td class="w">${interior}</td><td>${fmt(decor.walls * decor.wallPrice)}</td></tr>` : ""}</tbody></table></div>` : "";
   const dep = `<div class="os-store"><div class="os-sh"><span class="k p">${osIcon("key")}</span><span><b>${tt("gr.os.inv.deposit", "Deposit")}</b><small>${
-    tt("gr.os.self.deposit.est", "estimated: about 60 days of rent, with the building's own fittings · refunded when the lease ends")}</small></span><span class="t">${fmt(inv.deposit)}</span></div></div>`;
+    b.status === "mine" ? depositNote(b) : tt("gr.os.self.deposit.est", "estimated: about 60 days of rent, with the building's own fittings · refunded when the lease ends")}</small></span><span class="t">${fmt(inv.deposit)}</span></div></div>`;
   const legend = stores.map((s, i) => `<div><i>${osLetter(i)}</i><span>${spEsc((vendors[s.key] || {}).n || s.key)}</span><b>${fmt(storeTotal(s))}</b></div>`).join("")
     + `<div><i class="n">${tt("gr.os.map.new", "NEW")}</i><span>${spEsc(b.address)}</span><b></b></div>`;
   const note = unsold.length ? `<p class="quiet os-gap">${tt("gr.os.self.unsold", "No store the game's help names sells these: {items}.", {items: unsold.map(l => osItemName(l[0])).join(", ")})}</p>` : "";
@@ -11708,7 +11708,7 @@ function osBreakHtml(plan){
         always: osOfficeStaffed(osCap(b), osCap(b), 1, 3)})
     : tt("gr.os.be.assume2", "Open 24/7, the type's whole range at the highest price every customer in {hood} accepts, satisfaction {sat}, the best marketing: {mix}. Sold {units} units to {n} customers a day. The first five days earn less while satisfaction and new staff settle, and the days to break even count that.",
       {hood: hoodName(b.hood), sat: osSatisfaction(plan.type), mix, units: num(Math.round(m.lines.reduce((s, l) => s + l.units, 0))), n: num(Math.round(m.customers))});
-  return `<div class="os-be">
+  return `${b.status === "mine" ? `<p class="os-note">${tt("gr.os.be.depositBasis", "This forecast covers the setup still to pay for. After opening, the comparison includes the earlier rental deposit in both planned and actual investment.")}</p>` : ""}<div class="os-be">
   <div class="os-card"><div class="os-big">${big(mode)}${big(other, true)}</div>${osChart(est, mode)}</div>
   <div class="os-card"><h3>${tt("gr.os.be.profit", "Expected profit a day")}</h3>
     <div class="os-sites">${detail}<div class="os-site avg"><span><b>${tt("gr.os.be.estimate", "The game's rules")}</b><small>${
@@ -12162,7 +12162,10 @@ const OS_MID = (OS_LOW + OS_HIGH) / 2;
    the steady profit a day, the days to break even in each mode, and the first
    OS_SNAP_DAYS days one by one (the ramp and a first seller's hype). */
 function osSnapOf(plan, b){
-  const est = osEstimate(plan, b);
+  /* Step 6 compares total setup with the game's payback, which includes the
+     historical deposit. The live investment/financing steps instead show
+     cash still needed. Renting must not erase the deposit from this record. */
+  const est = osEstimate(plan, {...b, status: "vacant"});
   if(!est || !est.inv) return null;
   const inv = {};
   OS_SNAP_INV.forEach(k => inv[k] = Math.round(est.inv[k] || 0));
@@ -12472,6 +12475,7 @@ function osRoiHtml(plan){
       pct == null ? "" : `<span class="os-meter" style="--w:${pct.toFixed(1)}%"><i></i></span>`)}${
     kpi(tt("gr.os.strip.beLab", "Break even"), be.v, be.sub, be.word ? " os-word" : "")}</div>`;
   const notes = [];
+  if(snap) notes.push(tt("gr.os.roi.depositBasis", "Investment and break-even comparisons include the rental deposit, including deposits paid before this plan."));
   if(live) notes.push(tt("gr.os.roi.live2", "This plan was made before its figures were kept, so the plan column has the investment only."));
   if(!whole) notes.push(row.rolled
     ? tt("gr.os.roi.rolled", "The save's record no longer reaches the opening, and the days between were not kept, so the days since are not drawn.")
@@ -13489,7 +13493,7 @@ function ofShowFinder(){
 function ofWhereHtml(){
   const fact = (lab, b, s) => `<div><span class="os-lab">${lab}</span><b>${b}</b><small>${s}</small></div>`;
   return `<div class="ff-facts">${fact(tt("gr.of.where.building", "Building"), tt("gr.of.where.warehouse", "Warehouse"), tt("gr.of.where.warehouse.sub", "every factory rents one"))}${
-    fact(tt("gr.of.where.deposit", "Deposit"), tt("gr.of.where.days", "~90 days"), tt("gr.of.where.days.sub", "of rent, as for a depot"))}${
+    fact(tt("gr.of.where.deposit", "Deposit"), tt("gr.of.where.days", "~90 days"), tt("gr.of.where.days.newLease", "for a new lease; none if already rented"))}${
     fact(tt("gr.of.where.vehicles", "Vehicles"), tt("gr.of.where.slots", "H 1 · I–Q 2"), tt("gr.of.where.slots.sub", "one parking slot per truck"))}${
     fact(tt("gr.of.where.not", "Not counted"), tt("gr.of.where.distance", "distance"), tt("gr.of.where.distance.sub", "deliveries cost nothing by distance"))}</div>`;
 }
@@ -13524,6 +13528,9 @@ function ofInvestHtml(plan){
 const ofWhy = (kind, inv) => kind === "shelf"
   ? `<span class="os-tag req">${tt("gr.of.why.shelf", {one: "{n} box: a week in, two days out", other: "{n} boxes: a week in, two days out"}, {n: inv.boxes})}</span>`
   : `<span class="os-tag req">${tt("gr.of.why.ws", "Workstation")}</span>`;
+const ofDepotNote = b => tt("gr.of.depot.sub", "beside the factory: {address}, {hood}, {layout}",
+  {address: spEsc(b.address), hood: hoodName(b.hood), layout: osLayout(b)})
+  + (b.status === "mine" ? ` · ${depositNote(b)}` : "");
 function ofSelfHtml(inv){
   const F = ofFacts(), items = F.items || {}, vendors = F.vendors || {}, fee = ofG().delivery || 0, owned = ofIsOwned();
   const storeTotal = s => s.lines.reduce((t, k) => t + inv.out.lines[k][1] * ((items[inv.out.lines[k][0]] || {}).p || 0), 0) + fee;
@@ -13542,7 +13549,7 @@ function ofSelfHtml(inv){
   const dep = inv.deposit ? `<div class="os-store"><div class="os-sh"><span class="k p">${osIcon("key")}</span><span><b>${tt("gr.os.inv.deposit", "Deposit")}</b><small>${
     tt("gr.of.self.deposit", "about 90 days of rent ({rent}/day) with the building's own fittings · refunded when the lease ends", {rent: fmt(inv.b.rent || 0)})}</small></span><span class="t">${fmt(inv.deposit)}</span></div></div>` : "";
   const depot = inv.depot ? `<div class="os-store"><div class="os-sh"><span class="k p">${spIcon("crate")}</span><span><b>${tt("gr.of.depot.title", "A depot")}</b><small>${
-      tt("gr.of.depot.sub", "beside the factory: {address}, {hood}, {layout}", {address: spEsc(inv.depot.b.address), hood: hoodName(inv.depot.b.hood), layout: osLayout(inv.depot.b)})}</small></span><span class="t">${fmt(inv.depot.total)}</span></div>
+      ofDepotNote(inv.depot.b)}</small></span><span class="t">${fmt(inv.depot.total)}</span></div>
     <table><tbody><tr><td class="l">${tt("gr.os.inv.deposit", "Deposit")}</td><td class="w"></td><td>${fmt(inv.depot.deposit)}</td></tr>
       <tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: inv.depot.shelves, item: osItemName((F.shelf || {}).item || "")})}</td><td class="w"><span class="os-tag req">${tt("gr.of.why.receive", "Receives deliveries")}</span></td><td>${fmt(inv.depot.racks)}</td></tr>
       <tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: 1, item: spEsc(van.name || "")})}</td><td class="w"><span class="os-tag req">${tt("gr.of.why.van", "One vehicle")}</span></td><td>${fmt(inv.depot.van)}</td></tr>
@@ -13576,7 +13583,7 @@ function ofFirmHtml(inv){
       tt("gr.of.why.truck", "One vehicle to deliver")}</span></td><td>1</td><td>${fmt(inv.truck)}</td><td>${fmt(inv.truck)}</td></tr>`);
   if(inv.deposit) rows.push(grp(tt("gr.os.inv.deposit", "Deposit"), tt("gr.os.inv.deposit.note", "refunded when the lease ends"), inv.deposit),
     `<tr><td class="l">${tt("gr.of.firm.deposit", "About 90 days of rent")}<span class="sub">${tt("gr.of.firm.deposit.sub", "{rent}/day, with the building's own fittings", {rent: fmt(inv.b.rent || 0)})}</span></td><td class="w"></td><td></td><td></td><td>${fmt(inv.deposit)}</td></tr>`);
-  if(inv.depot) rows.push(grp(tt("gr.of.depot.title", "A depot"), tt("gr.of.depot.sub", "beside the factory: {address}, {hood}, {layout}", {address: spEsc(inv.depot.b.address), hood: hoodName(inv.depot.b.hood), layout: osLayout(inv.depot.b)}), inv.depot.total));
+  if(inv.depot) rows.push(grp(tt("gr.of.depot.title", "A depot"), ofDepotNote(inv.depot.b), inv.depot.total));
   const callout = !owned && inv.fee > inv.furniture ? `<div class="ff-callout">${spIcon("alert")}<span>${tt("gr.of.firm.callout", "<b>The fee alone is {fee}</b>, more than the machines: a factory floor is {m2} m². Self-installation saves {w} here.",
       {fee: fmt(inv.fee), m2: num(inv.b.m2 || 0), w: fmt(inv.firm - inv.self)})}</span></div>`
     : owned ? `<div class="ff-callout">${spIcon("alert")}<span>${tt("gr.of.firm.again", "<b>The firm prices the whole floor again</b>: {fee} for {m2} m², on top of the new machines.", {fee: fmt(inv.fee), m2: num(inv.b.m2 || 0)})}</span></div>` : "";
@@ -13791,10 +13798,14 @@ function ofUntilRows(plan){
       && (x.key === inv.depot.b.key || (plan && plan.made != null && (x.opened ?? -1) >= plan.made)));
     const dAddr = spEsc(inv.depot.b.address), van = spEsc(((F.vehicles || {}).van || {}).name || "");
     const there = depots.length > 0;
+    const rented = inv.depot.b.status === "mine";
     site_.push(osCk("crate", there ? "done" : "todo", `${tt("gr.of.ck.depot", "The depot")} ${ofHand()}`,
       there ? tt("gr.of.ck.depot.done", "<span class=\"ok\">{name} is rented and set up as a depot</span>", {name: spEsc(depots[0].name)})
+        : rented ? tt("gr.of.ck.depot.rented", "{address} · Already rented · set up a warehouse with {n} pallet shelves", {address: dAddr, n: inv.depot.shelves})
         : tt("gr.of.ck.depot.todo", "{address} · not rented yet · {n} pallet shelves to receive on", {address: dAddr, n: inv.depot.shelves}),
-      there ? "" : osIngame(tt("gr.of.ck.depot.ingame", "Rent {address} and set it up as a warehouse, with {n} pallet shelves.", {address: dAddr, n: inv.depot.shelves}))));
+      there ? "" : osIngame(rented
+        ? tt("gr.of.ck.depot.setup", "Set up {address} as a warehouse, with {n} pallet shelves.", {address: dAddr, n: inv.depot.shelves})
+        : tt("gr.of.ck.depot.ingame", "Rent {address} and set it up as a warehouse, with {n} pallet shelves.", {address: dAddr, n: inv.depot.shelves}))));
     const dv = there ? ((F.sites || {})[depots[0].key] || {}).vehicles || [] : [];
     site_.push(osCk("truck", dv.some(v => v[1]) ? "done" : "todo", `${tt("gr.of.ck.depotVan", "The depot's van and driver")} ${ofHand()}`,
       dv.some(v => v[1]) ? tt("gr.of.ck.depotVan.done", "<span class=\"ok\">A driven vehicle is parked at the depot</span>")
@@ -21627,7 +21638,7 @@ function demCellPop(cell, focus = true){
   const M = D.market || {}, at = (M.hoods || []).indexOf(hood);
   const row = [...(M.types || []), ...(M.offices || [])].find(r => r.slug === slug);
   const c = row && at >= 0 ? row.cells[at] : null;
-  const rent = ((D.premises || {}).buildings || []).filter(b => b.type === go.cat && b.hood === hood && b.status === "vacant").length;
+  const rent = ((D.premises || {}).buildings || []).filter(b => b.type === go.cat && b.hood === hood && OpenStoreModel.availablePremises(b)).length;
   const type = demTypeName(slug, hood);
   const ready = odNeed("openStore"), plan = ready && !!osType(slug);
   const fact = (lab, v) => `<div><span class="os-lab">${lab}</span><b>${v}</b></div>`;
@@ -21635,7 +21646,7 @@ function demCellPop(cell, focus = true){
   const focusedAction = demPop.contains(document.activeElement) ? document.activeElement.dataset.demGo : null;
   demPop.innerHTML = `<h4>${spEsc(tt("gr.pop.title", "{type} · {hood}", {type, hood: hoodName(hood)}))}</h4>
     <div class="fx">${fact(tt("gr.pop.demand", "Demand"), c ? c.demand : "–")}${fact(tt("gr.pop.rivals", "Sellers"), c ? c.providers || 0 : "–")}${
-      fact(tt("gr.pop.rent", "To rent"), odReady("premises") ? rent : "—")}</div>
+      fact(tt("gr.pop.available", "Available"), odReady("premises") ? rent : "—")}</div>
     ${ready ? "" : odWaitHtml("openStore", true)}
     <div class="acts">${plan ? `<button type="button" class="os-cta" data-dem-go="open" data-od-needs="openStore">${osIcon("store")}${tt("gr.pop.open", "Open a store here")}</button>` : ""}
       <button type="button" class="os-btn" data-dem-go="find">${icon("pin")}${tt("gr.pop.find", "Find a location")}</button></div>`;

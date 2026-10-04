@@ -58,6 +58,30 @@ async function planned(page){
   await page.waitForFunction(() => osStep === 'investment');
 }
 
+test('an empty rented shop is suggested and its investment has no second deposit', async t => {
+  const page = await board(t);
+  const before = await page.evaluate(({key, type}) => {
+    const b = osBuilding(key), inv = osInvestment({type}, b);
+    b.status = 'mine'; b.occupant = null;
+    return {deposit: inv.deposit, self: inv.self, firm: inv.firm, rent: b.rent};
+  }, {key: SITE, type: LIQ});
+  await page.locator(`#osBody .os-type[data-os-new="${LIQ}"]`).click();
+  const row = page.locator(`#osFinderMap .place[data-pick="${SITE}"]`);
+  await row.waitFor();
+  assert.match(await row.innerText(), /Already rented/);
+  assert.equal(await row.locator('.dep').innerText(), '$0');
+  await row.click();
+  await page.locator('#osFinderMap .site [data-action="plan"]').click();
+  await page.waitForFunction(() => osStep === 'investment');
+  const after = await page.evaluate(() => ({inv: osInvestment(osPlan(), osBuilding(osPlan().key)),
+    rent: osBuilding(osPlan().key).rent}));
+  assert.equal(after.inv.deposit, 0);
+  assert.equal(after.inv.self, before.self - before.deposit);
+  assert.equal(after.inv.firm, before.firm - before.deposit);
+  assert.equal(after.rent, before.rent);
+  assert.match(await page.locator('#osBody').innerText(), /no additional rental deposit/);
+});
+
 test('the view is Expansion\'s, New until opened, and starts on What with its six steps', async t => {
   const page = await board(t, {hash: '#expansion/demand'});
   const tab = page.locator('#localNav a[data-route="expansion/open"]');
@@ -1017,6 +1041,34 @@ const tiles = page => page.$$eval('#osBody .os-roi .kpi', ks => ks.map(k => k.in
 const pvsa = page => page.$$eval('#osBody .os-pvsa tbody tr', trs => trs.map(tr => [...tr.cells].map(td => td.innerText.replace(/\s+/g, ' ').trim())));
 const pvRow = async (page, name) => (await pvsa(page)).find(x => x[0].startsWith(name));
 const goOpen = async page => { await page.locator('#osCtl [data-os-step="open"]').click(); await page.waitForFunction(() => osStep === 'open'); };
+
+for(const alreadyHeld of [false, true]) test(`historical investment retains the deposit through renting, reload and opening (${alreadyHeld ? 'existing lease' : 'new lease'})`, async t => {
+  const page = await board(t);
+  const expected = await page.evaluate(({key, type, held}) => {
+    const b = osBuilding(key), estimate = osEstimate({type}, b);
+    if(held){ b.status = 'mine'; b.occupant = null; }
+    return {deposit: estimate.inv.deposit, firm: estimate.inv.firm, days: estimate.days};
+  }, {key: SITE, type: LIQ, held: alreadyHeld});
+  await planned(page);
+  const result = await page.evaluate(() => {
+    const p = osPlan(), b = osBuilding(p.key);
+    b.status = 'mine'; b.occupant = null;
+    osSnapTake(p); osSave();
+    osPlansFor = null; osLoad();
+    return {snap: osPlan().snap, remaining: osInvestment(osPlan(), b)};
+  });
+  assert.equal(result.remaining.deposit, 0, 'no second deposit to fund');
+  assert.equal(result.snap.inv.deposit, expected.deposit, 'historical investment includes the deposit');
+  assert.equal(result.snap.inv.firm, Math.round(expected.firm));
+  assert.deepEqual(result.snap.days, expected.days, 'historical payback uses the same total investment');
+  await opened(page, {opened: OPENED}, FULL);
+  await traded(page, {daily: [500], state: 'togo', extra: {days: 30}});
+  await goOpen(page);
+  const deposit = await pvRow(page, en('gr.os.inv.deposit'));
+  assert.equal(deposit[1], deposit[2]);
+  assert.equal(deposit[3], '–', 'the prior deposit is not an overrun');
+  assert.match(await page.locator('#osBody').innerText(), /including deposits paid before this plan/);
+});
 
 test('once the planned store stands at the address the plan keeps what it said and its opening day, and the Open step unlocks', async t => {
   const page = await board(t);

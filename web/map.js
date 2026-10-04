@@ -163,7 +163,7 @@ const hoodTag = hood => hoodCode(null, hood);
 const FINDER_SHOWS = ["rent", "takeover", "sale"];
 function finderShowName(k){
   switch(k){
-    case "rent": return tt("map.show.rent", "To rent");
+    case "rent": return tt("map.show.available", "Available");
     case "takeover": return tt("map.show.takeover", "To take over");
     case "sale": return tt("map.show.sale", "For sale");
     default: return undefined;
@@ -171,7 +171,7 @@ function finderShowName(k){
 }
 function finderShowTip(k){
   switch(k){
-    case "rent": return tt("map.show.rent.tip", "Buildings the save marks as available for rent.");
+    case "rent": return tt("map.show.available.tip", "Buildings available for rent and empty buildings you already rent.");
     case "takeover": return tt("map.show.takeover.tip", "Rival businesses you can make an offer to in-game; the price is not in the save. Game services like banks and wholesalers are not for sale.");
     default: return tt("map.show.sale.tip", "Whole buildings the game offers for sale, cheapest first. Buying one is an investment, not an opening, so it is not scored.");
   }
@@ -186,7 +186,8 @@ const askingPrice = n => n == null ? "—"
    not always have them. */
 const mapUnnamed = () => tt("map.unnamed", "unnamed");
 const mapBusiness = () => tt("map.business", "business");
-const finderStatus = b => b.status === "vacant" ? tt("map.status.vacant", "Vacant · for rent")
+const finderStatus = b => OpenStoreModel.emptyLease(b) ? tt("map.status.rentedEmpty", "Already rented · empty")
+  : b.status === "vacant" ? tt("map.status.vacant", "Vacant · for rent")
   : b.status === "rival" ? tt("map.status.rival", "Rival: {name} · {type}", {name: b.occupant?.name || mapUnnamed(), type: b.occupant?.type || mapBusiness()})
   // A bank or a wholesaler is the game's own: occupied, but never for sale.
   : b.status === "service" ? tt("map.status.service", "Game service · {name} · {type}", {name: b.occupant?.name || mapUnnamed(), type: b.occupant?.type || mapBusiness()})
@@ -221,6 +222,7 @@ function rentNote(){
    every time, so the note names the multiple rather than this building's sum;
    a warehouse is its own, steeper, one. */
 function depositNote(b){
+  if(b.status === "mine") return tt("map.deposit.paid", "Already rented: no additional rental deposit.");
   if(b.deposit == null) return tt("map.deposit.none", "No deposit estimate for this building.");
   const factors = premises()?.rent?.deposit?.factors || {};
   const days = b.type === "warehouse" ? factors.warehouse : factors.lease;
@@ -1037,11 +1039,11 @@ class CityMapView {
     return keys.length - (keys.includes(self) ? 1 : 0);
   }
   saleView(){ return this.fs.show === 'sale'; }
-  /* A place you could actually take: an empty floor when the list is premises
-     to rent, a rival business when it is businesses to take over. A game
+  /* Available premises include empty floors already leased by the player;
+     a takeover still requires a rival business. A game
      service is occupied by the game itself and is neither. */
   candidate(b){
-    return this.fs.show === 'rent' ? b.status === 'vacant'
+    return this.fs.show === 'rent' ? OpenStoreModel.availablePremises(b)
       : this.fs.show === 'takeover' ? b.status === 'rival' : false;
   }
   finderRows(){
@@ -1059,7 +1061,7 @@ class CityMapView {
       out.push({key:b.key, address:b.address, hood:b.hood, bld:b, f:this.fitFor(b), region:loc?.region, bounds:loc?.bounds});
     }
     const value = r => fs.sort === 'traffic' ? r.bld.traffic : fs.sort === 'demand' ? r.f.demand
-      : fs.sort === 'cap' ? r.bld.cap : fs.sort === 'deposit' ? r.bld.deposit
+      : fs.sort === 'cap' ? r.bld.cap : fs.sort === 'deposit' ? OpenStoreModel.leaseDeposit(r.bld)
       : fs.sort === 'rent' ? r.bld.rent : fs.sort === 'm2' ? r.bld.m2 : r.f.score;
     // Every column reads best-first: the most of anything good, but the least
     // money up front, since the deposit decides whether a player can sign at all.
@@ -1127,7 +1129,7 @@ class CityMapView {
       // else to say names its neighbourhood in full, as a for-sale row does.
       const what = b.status === 'rival' && b.occupant ? `${b.occupant.name} · ${b.occupant.type}${company ? ` · ${company}` : ''}`
         : f.fit && !fs.type ? tt("map.list.bestfit", "best fit: {type}", {type: f.fit}) : hoodName(b.hood);
-      const sub = what + (f.rivals != null ? ` · ${tt("map.list.rivals", {one: "{n} rival", other: "{n} rivals"}, {n: f.rivals})}` : '');
+      const sub = (OpenStoreModel.emptyLease(b) ? tt("map.list.rentedEmpty", "Already rented · empty · {detail}", {detail: what}) : what) + (f.rivals != null ? ` · ${tt("map.list.rivals", {one: "{n} rival", other: "{n} rivals"}, {n: f.rivals})}` : '');
       // Floor area is not shaded, like the cap: bigger is not better for every business.
       const numbers = fac
         ? `<span class="v">${num(b.m2)}</span><span class="v">${b.size === 'H' ? 1 : 2}</span><span class="v"></span>`
@@ -1136,7 +1138,7 @@ class CityMapView {
         : `<span class="v sc sh"${lead(f.score, SHADE_LEAD)}>${f.score ?? '—'}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v sh"${byDemand(f.demand, SHADE_SIDE)}>${f.demand ?? '—'}</span><span class="v m2">${num(b.m2)}</span>`;
       // The dot says what taking this place would mean: an empty floor to rent
       // or a rival to buy out.
-      return `<button type="button" class="place fr${grid}${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${ssEsc(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood"${hoodColorAttr(b.hood)}>${ssEsc(hoodTag(b.hood))}</span><span class="nm">${ssEsc(b.address)}<small>${this.layoutTag(b)}${ssEsc(sub)}</small>${this.finderPhoneFact(b, fac)}</span>${numbers}${fac ? `<span class="v cap">${b.rent != null ? ssEsc(fmt(b.rent)) : '—'}</span>` : `<span class="v cap">${ssEsc(capText(b.cap))}</span>`}<span class="v dep" data-tip="${attr(depositNote(b))}">${b.deposit != null ? ssEsc(fmt(b.deposit)) : '—'}</span></button>`;
+      return `<button type="button" class="place fr${grid}${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${ssEsc(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood"${hoodColorAttr(b.hood)}>${ssEsc(hoodTag(b.hood))}</span><span class="nm">${ssEsc(b.address)}<small>${this.layoutTag(b)}${ssEsc(sub)}</small>${this.finderPhoneFact(b, fac)}</span>${numbers}${fac ? `<span class="v cap">${b.rent != null ? ssEsc(fmt(b.rent)) : '—'}</span>` : `<span class="v cap">${ssEsc(capText(b.cap))}</span>`}<span class="v dep" data-tip="${attr(depositNote(b))}">${OpenStoreModel.leaseDeposit(b) != null ? ssEsc(fmt(OpenStoreModel.leaseDeposit(b))) : '—'}</span></button>`;
     }).join('');
   }
   saleList(rows){
@@ -1268,7 +1270,7 @@ class CityMapView {
     // A game service is occupied but never on offer, so it counts for nothing.
     const counts = {rent:0, takeover:0};
     P.buildings.forEach(b => { if(b.type !== this.fs.cat) return;
-      if(b.status === 'vacant') counts.rent++; else if(b.status === 'rival') counts.takeover++; });
+      if(OpenStoreModel.availablePremises(b)) counts.rent++; else if(b.status === 'rival') counts.takeover++; });
     this.root.querySelectorAll('.fchip.hd').forEach(chip => mark(chip, this.hoodOn(chip.dataset.h)));
     this.root.querySelectorAll('.fchip.num').forEach(box => {
       const input = box.querySelector('input'), v = String(this.fs[input.dataset.f] || 0);

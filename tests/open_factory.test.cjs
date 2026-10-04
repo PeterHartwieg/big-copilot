@@ -105,6 +105,34 @@ test('a new factory: the start table, then Where ranks warehouse buildings by re
   assert.equal(await page.locator('#ofBody .ff-facts > div').count(), 4);
 });
 
+test('a new factory can select an empty rented warehouse without paying its deposit again', async t => {
+  const page = await board(t);
+  const key = await page.evaluate(() => {
+    const b = premises().buildings.find(b => b.type === 'warehouse' && b.status === 'vacant');
+    b.status = 'mine'; b.occupant = null; return b.key;
+  });
+  await page.locator('#planFor [data-of-for="new"]').click();
+  await page.locator('#ofBody .ff-next [data-of-step="where"]').click();
+  const row = page.locator(`#ofFinderMap .place[data-pick="${key}"]`);
+  await row.waitFor();
+  assert.match(await row.innerText(), /Already rented/);
+  assert.equal(await row.locator('.dep').innerText(), '$0');
+  const suggested = await page.$$eval('#ofFinderMap .place.fr', rows => rows.map(r => r.dataset.pick));
+  assert.ok(!suggested.includes(BREWERY), 'the running factory is not an empty location');
+  await row.click();
+  await page.locator('#ofFinderMap .site [data-action="plan"]').click();
+  await page.waitForFunction(() => ofStep === 'investment');
+  const r = await page.evaluate(() => {
+    const inv = ofInvestment(ofPlan()); return {inv, run: ofRunning(ofPlan(), inv), target: planTarget};
+  });
+  assert.equal(r.target, 'new', 'renting an empty warehouse does not make it a running factory');
+  assert.equal(r.inv.b.key, key);
+  assert.equal(r.inv.deposit, 0);
+  assert.ok(r.inv.furniture > 0);
+  assert.ok(r.inv.truck > 0);
+  assert.ok(r.run.rent >= r.inv.b.rent * 7);
+});
+
 test('a new factory\'s investment is one-off and upfront; the running costs stay apart', async t => {
   const page = await board(t);
   await page.locator('#planFor [data-of-for="new"]').click();
@@ -346,6 +374,23 @@ async function depotPlan(page){
     return {factory: free[0].key, depot: ofPlan().depotKey};
   });
 }
+
+test('an already rented starter depot needs setup, with its lease acknowledged in both investment modes', async t => {
+  const page = await board(t);
+  const {depot} = await depotPlan(page);
+  const result = await page.evaluate(key => {
+    const b = premises().buildings.find(b => b.key === key);
+    b.status = 'mine'; b.occupant = null;
+    const plan = ofPlan();
+    const row = ofUntilRows(plan).flatMap(g => g[1]).find(r => /^The depot </.test(r.title));
+    return {row, self: ofSelfHtml(ofInvestment(plan)), firm: ofFirmHtml(ofInvestment(plan))};
+  }, depot);
+  assert.equal(result.row.state, 'todo', 'renting alone does not finish warehouse setup');
+  assert.match(JSON.stringify(result.row), /Already rented/);
+  assert.doesNotMatch(JSON.stringify(result.row), /not rented yet|Rent .*set it up/);
+  assert.match(result.self, /Already rented/);
+  assert.match(result.firm, /Already rented/);
+});
 
 test('deliveries to the shops tick only from the depot, and only for what a shop stocks', async t => {
   const page = await board(t);
