@@ -210,9 +210,15 @@ the map.
     Staffing shows (the open-hours plan, every station every open hour nothing has read
     yet, for a shop nobody works at yet or whose demand data is not complete; its
     opening hours never change), a factory's in the sizing the Supply
-    switch shows, an office's by the office default. Each hire week is a week one new
+    switch shows, an office's by customer demand where measured and the office default otherwise. Each hire week is a week one new
     person could work under the game's rules (12 hours a day, 50 a week),
     so the count is people, not hours divided by 40.
+  - *Shop and office demand*: customer reports do not include historical staffing or
+    stock availability. Imported counts remain lower bounds. A deliberate measurement
+    records demand locally for this company and business; changing the schedule alone
+    never changes that estimate. Offices use one computer per customer per hour.
+    Demand plans can reduce professional hours while preserving cleaning, other duties
+    and opening hours. See the measurement workflow below.
   - *The office default*: three computers staffed around the clock in a building with a
     building capacity of 50, proportionally fewer in smaller ones (at least one); every
     computer 08-22 on weekdays; half the computers 08-22 on weekends, the round-the-clock
@@ -261,8 +267,8 @@ the map.
     time, the hours band (at most 50 without one), an exact four or five days, free
     weekends, the hours kept free and no cleaning. Whatever is still broken is named in the
     confirm, one line a break; nothing is refused for it. Somebody the write leaves with no
-    hours at all is no break: they stay on as spare, named once in a plain note. An office's write, which adds the office default to the week as it
-    stands, leaves out an entry that would break one and names the hours it left out.
+    hours at all is no break: they stay on as spare, named once in a plain note. An office without usable demand history adds the office default to the week as it
+    stands, leaving out an entry that would break one and names the hours it left out.
 
   *Payroll* names two wage figures:
   "Wages a day" is every hourly wage times its assigned weekly hours over seven,
@@ -572,6 +578,16 @@ per weekday gives +0.96 for this alignment, against +0.60 for the next best rota
 
 ### The two findings
 
+Current extraction with shared demand evidence suppresses these historical-capacity
+findings: imported customer counts cannot establish which staffing was present. The
+rules below describe the legacy measured-grid calculation retained for direct callers;
+they are not inferred from a newly imported save. The staffing measurement workflow
+below supplies qualified demand for current plans.
+
+Verified cinema equipment limits remain visible when reported customers reach that
+capacity. This compares observations with known installed equipment only; it does not
+infer a historical staffing shortfall or recommend reducing employee hours.
+
 **At the ceiling.** Hours at 95% of effective capacity, with the binding limit named. Each
 hour is judged on its own staffing, and each role on the schedule that was on for it. Where the
 building capacity is at or below the site's staffed capacity the building is the limit. That is
@@ -623,29 +639,18 @@ part of the wave away, until the wave's end date.
 The *Staffing* block on a shop's page draws this. What the `staffing` key holds, per retail
 site, and why each part is honest:
 
-**The need curve.** Per role, per weekday, per open hour, how many of that role's stations
-the hour actually wants, with the basis it was worked out on. `measured` is the customers
-who came, on a weekday with two weeks behind it, in an hour that did not run into a
-ceiling. `censored` is an hour that came within 95% of what was available: the real demand
-is unknown and above it, so the estimate is what the **site** served that hour — its
-effective capacity, which is its slowest role with the building capacity already applied — plus one
-more of *this* role's stations, then held down by this role's stations installed, the door
-cap and the arrival ceiling, and never dropped below what was measured. Starting from the
-role's own staffed capacity would ask a fast role to grow because a slow one held the hour
-back: a gym whose trainers can serve forty an hour but whose single register lets twenty
-through is short of registers, not of boards.
-`scaled` is a thin weekday read off the best measured one through the game's own day
-curve. `none` is a site too new to say anything about — and a site whose every weekday is
-thin gets no serving hours at all, rather than a guess.
+**The need curve.** Shops and offices share one evidence model, per weekday and hour.
+`confirmed` means demand measured during a period the player confirmed; `lower` means
+customers served under unknown historical staffing/stock conditions; `trial` is temporary
+measurement capacity, not demand. `none` is unknown and `closed` gets no planned work.
+Unknown hours retain the coverage observed when this business first entered local
+history, plus any positive served-customer floor. New businesses keep an initial staffing
+fallback. Missing historical reports are never assumed to be zero from today's schedule.
 
-**Only a measured hour is a target.** The board never presents a censored hour as a number
-to aim at, and never prints the arrival ceiling as demand: the ceiling is the game's own
-arrivals formula, and an arrival is lost when the hour's staffed stations are full and buys
-nothing when the shop holds nothing they want. For a game started at build 2847 or later,
-which is every new game, it is sized off the building's customer capacity; an older game
-sizes it off the square metres times the highest sales ratio, in the game's own item data,
-among the primary products on the shelves. It is carried to bound a censored hour from
-above, and for nothing else.
+Demand is kept per company and business in local history. Renaming preserves it; replacing
+a business, rewinding the game or conflicting historical reports resets confidence.
+Changed prices, promotion or product mix make previous measurements stale. Applying a lean
+schedule and serving exactly its capacity does not by itself erase learned demand.
 
 **The entries.** Each role's stations are manned from the largest throughput down, the hours
 they are wanted are joined into runs, and each run is cut into the fewest entries of at most
@@ -776,77 +781,33 @@ working at the site, so those hours stay empty in the game until they are added.
 agrees with the plan by construction: `assign` is the plan's `bench` and `hire` its
 `headcount.hire`.
 
-**The demand test.** A shop with no measured weeks gets a demand plan of cleaning and
-security alone, because nothing is known about its queues. `fullCover` is the other plan
-for every retail site, and the way to find out: every station of every role staffed every
-hour of every day, 168 hours a week each, for two weeks, so no customer is turned away by an
-empty station and the hours that come back are the demand. It is a different need curve
-put through the same placer with every rule above unchanged (twelve-hour entries, the
-12-hour day, the 50-hour ceiling, day counts, blackout windows, one business per person, no
-server on cleaning, the fewest people first) and the same people: the site's staff, the
-unassigned bench and hires. Every site's demand plan is placed first; then every
-full-cover plan, against the unassigned staff the demand plans left, each taking whom it
-uses off a shared copy, plus whoever its own site's demand plan took. The sites where the
-test is the live choice go first (fewer than two measured weeks on a weekday it opens and
-no complete data, or already running the 24/7 test: open 0 to 24 with every station on), then the rest, in site order within each, so a fully measured shop's full cover that
-nobody follows cannot take the people a new shop's test needs. So no unassigned person is promised to two shops by the plans a player follows. It
-carries the same keys as the demand plan except `need` and `basis`, which would say every
-station every hour and which the page reads off `roles` instead, plus `open` (0 to 24 every day, the hours it
-assumes), `openAllHours: true`, `openNow` (whether the shop already opens that long, because
-an hour it is shut is an hour the test never measures), `inGame`, `daysMeasured` and `daysNeeded`. On a shop with no
-serving station the two plans are the same week, and the page offers no choice.
+**Measuring demand.** Choose *Plan demand measurement* in a shop's or office's Staffing
+block. The proposal uses current spare capacity; where historical served counts reach
+current capacity, it proposes one additional station of the single limiting role. An unstaffed hour starts with one station of each missing required role. It does
+not expand beyond installed stations, building capacity, another role's capacity or a
+known arrival ceiling. Tied limiting roles need coordinated changes in the game before a
+useful measurement can be proposed. The existing Full cover 24/7 choice remains an explicit
+coverage option, but neither business age nor that choice establishes demand by itself.
 
-**When the demand data is complete.** The count starts at the shop's first customer, not
-at the day it was rented, so it is not the *Open N days* figure beside it; wherever the
-payload carries it, the page shows the progress (*Demand data: 7 of 9 days*) rather than
-a date. The game files an hour report only for an hour the
-shop was open and served somebody: none for an hour it was shut, and none for an hour
-nobody came. The data is complete when at least 9 finished days have passed since the
-shop's first customer (`DEMAND_RUN_DAYS`, Peter, 23 September 2026): the first open day is the
-earliest day in `orderHistory` with a report, and today, being unfinished, is left out. Not
-nine in a row and not around the clock: a nightclub shut every Monday completes on its
-ninth day like any other shop. The order history keeps about sixteen days, so a shop older
-than that is complete. A window with no report at all is not complete, whatever the shop's
-age: a shop fitted out and left shut, or one nobody visits, has measured nothing, and a
-plan of no customers anywhere would be a guess. The count is read from the days as they were staffed, whoever was
-on; there is no clock tying it to when full cover started. `fullCover.daysMeasured` is the
-days so far and `fullCover.daysNeeded` the 9, and the full-cover view shows them as its
-progress line: *Demand data: 5 of 9 days.*
+Apply the proposed week through the normal review or enter it manually, then read the save
+again. Only a reread with sufficient actual coverage starts the period, from the next game
+day. Keep staffing, opening hours, prices, promotion and stock availability unchanged.
+Two completed occurrences of every tested weekday/hour are needed within 28 game days.
+Rereads and today's unfinished reports do not add samples. Changed context, undo or the
+deadline stops the measurement; no automatic extra hire or repeated expansion follows.
 
-A shop with complete data gets the whole demand plan. The demand plan calls a weekday with
-fewer than two weeks of reports (`HOUR_WEEKS_THIN`) thin and reads it off the best measured
-weekday through the game's day curve, and reads an hour with no report off another weekday
-the same way. For a shop with complete data no weekday is thin, and an hour with no report
-counts as no customers: the shop was shut then, or empty, so no serving station is staffed
-for it (cleaning and security cover every open hour as before). A weekday it never opened
-is no demand all day. And an hour is averaged over the days the shop was open on that
-weekday, a missing hour counting as none: the board's customer grid averages over the
-reports filed, so a quiet day drops out and the busy days alone set the figure (3 one
-Tuesday at 03:00 and nobody the next reads 3 there, 1.5 here). An open day is a finished
-day in `orderHistory` (the game keeps an entry for every day, reports or not) on a weekday
-the current schedule opens, from the first day the shop served anybody; a day nobody came
-all day is an entry with no report and a day of none. A weekday with no finished open day
-yet is none too, so today's unfinished day never sets it. This is the
-demand plan's copy only; the board-wide customer counts keep that upward bias. Where the
-schedule opens hours with no report on file, `unmeasured` lists them per weekday and the
-Staffing block says so in one line, worded as what is known (*No customers on file: Fri
-0-1, 7-8. Counted as none.*: an hour with no report was empty or shut), with the hours
-marked on the need strip. A weekday's runs stay inside the day (*Mon 0-2, 22-24*); only
-hours that hold every day run across midnight (*every day 22-2*). A shop without complete data keeps the two-week gate as it was.
+Once ready, confirm only if staff worked and products remained available throughout the
+period. Save snapshots cannot verify what happened between them. Only hours with spare
+capacity in every sample become learned demand; the target is their average served count.
+A missing hourly report may count as zero only inside this confirmed completed trading
+period and an existing daily report. Still-constrained hours remain lower bounds and need
+a separately requested measurement. Confirmed zero can remove professional hours; retained
+duties still count toward employee requirements and the 50-hour weekly limit.
 
-`fullCover.inGame` is whether the schedule in the game staffs every serving station every
-hour the shop is open, whatever its hours are. Nothing less inside them counts, because an
-hour a register stands empty is an hour whose customers the schedule turned away.
-`demandDataComplete` is the hand-over, and it needs all three: the data is complete, the
-game covers the shop's own hours in full now, and the demand plan asks for fewer serving
-hours than full cover of those same hours (every serving station, every hour the schedule
-opens now). The 24/7 full-cover plan is not the measure, or every shop shut some hour would
-seem to save the hours it is shut. There is no
-age condition. The full-cover plan itself still opens 0 to 24 unless the player keeps
-shorter hours. Where the data is complete and there is no hand-over, the full-cover view
-says why in one line instead of the progress: the demand plan also needs every station
-every hour (keep this staffing), or the game does not staff every station every open hour
-(the data is complete as staffed, and an empty station may have turned customers away).
+History is local to the browser or `market_history.json` for the CLI. The browser tool and
+local live board can record measurements; exported static HTML only displays them. Forgetting
+history loses learning. Missing company identity or unavailable storage prevents persistent
+learning. Imported historical saves and backfill never activate or complete measurements.
 
 ### The rules every planned week keeps
 

@@ -223,3 +223,17 @@ test('a section Python cannot work out fails like a build, with its last line', 
   assert.match(reply.trace, /SaveShapeError: the board hit a bug/);
   assert.equal(reply.bytes, null);
 });
+
+test('measurement actions use held history and invalidate queued sections like a rebuild', async () => {
+  const w = worker();
+  await w.send(build(1, '{"names":[]}'));
+  const section = w.send({kind: 'section', id: 2, name: 'hiring', gen: 1});
+  const action = w.send({kind: 'staff-measurement', id: 3, key: 'shop', action: 'start', gen: 1, history: 'stale'});
+  await Promise.all([section, action]);
+  assert.equal(w.posted.find(m => m.id === 2).stale, true);
+  assert.equal(w.posted.find(m => m.id === 3).kind, 'built');
+  assert.ok(w.calls.some(c => c.includes('browser_staff_measurement("/data/market_history.json", "shop", "start", 1)')));
+  assert.equal(w.files.get(HIST), '{"names":[]}');
+  await w.send({kind: 'section', id: 4, name: 'hiring', gen: 1});
+  assert.equal(w.posted.find(m => m.id === 4).stale, true);
+});

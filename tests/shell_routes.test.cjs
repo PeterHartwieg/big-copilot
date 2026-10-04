@@ -275,6 +275,9 @@ test('a filtered list is never an empty one with its rows folded away', async t 
 
 test('a finding below the line comes back as itself, not as gone', async t => {
   const page = await board(t);
+  // Imported counts no longer prove a staffing bottleneck. The fixture's
+  // remaining below-threshold finding is a demand wave, disabled by default.
+  await page.evaluate(() => { alertGroupPrefs.hype = true; drawAlerts(); });
   await page.locator('#alertMinor [data-td-toggle="below"]').click();
   const row = page.locator('#alertMinor .find').first();
   const id = await row.getAttribute('data-id');

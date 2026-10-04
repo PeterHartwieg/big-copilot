@@ -1,5 +1,11 @@
 [
   {
+    "pr": 263,
+    "date": "2026-10-04",
+    "title": "Measure staffing demand in shops and offices",
+    "summary": "Staffing now remembers demand separately for each company and business. Plan a temporary measurement using spare capacity or one extra station where it can help, then confirm that staffing and stock stayed available. Confirmed demand stays stable when you change the schedule. Office plans preserve cleaning and other duties, and account for employee weekly limits. Missing customer reports remain unknown rather than being treated as zero demand."
+  },
+  {
     "pr": 262,
     "date": "2026-10-03",
     "title": "Plan a factory in all seven UI languages",

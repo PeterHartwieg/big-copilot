@@ -2367,9 +2367,11 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     all_grids = _hourly(
         save, buildings, businesses, stations, _office_posts(names), crew_skill, names
     )
-    grids = [grid for grid in all_grids if grid["reported"]]
+    _staff_evidence_ingest(history, save, businesses, buildings, all_grids, names)
+    grids = [{k: v for k, v in grid.items() if k not in ("evidence", "arrivalCeiling")}
+             for grid in all_grids if grid["reported"]]
     service_wage = _service_wages(staff, {b["key"]: b["status"] for b in businesses})
-    hour_findings = _hour_findings(grids, businesses, service_wage)
+    hour_findings = _hour_findings([g for g in all_grids if g["reported"]], businesses, service_wage)
     # The market's catalogue is the plan's alone; it never ships.
     build.private["catalogue"] = market.pop("catalogue")
     plan = _plan(
@@ -2391,7 +2393,9 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     if root.get("NetWorth") is not None:
         entry["netWorth"] = money(root["NetWorth"])
     ledger = history.ledger(character, day, entry)
-    history.write()
+    if not history.write():
+        for grid in all_grids:
+            grid["evidence"]["persistent"] = False
     gate = max(profit_avg7 * MATERIAL_SHARE, MATERIAL_FLOOR)
     factories = supply.get("factories", {})
     build.private["posts"] = _take_posts(factories)
@@ -8977,6 +8981,8 @@ def _need_curve(
     "basis": [[case]]}}. Only a measured cell may be stated as a target;
     everything else has to be qualified, and `basis` is what qualifies it.
     """
+    if "evidence" in grid:
+        return _staff_evidence_need(grid, rates)
     capped = _capped_cells(grid)
     customers, door = grid["customers"], grid["door"]
     # The weekday a thin day is scaled from: the best measured one, most weeks
@@ -10731,7 +10737,7 @@ def _worse_off(person: dict, entry: dict, before: tuple, now: dict) -> bool:
     return want is not None and abs(days - want) > abs(len(now["days"]) - want)
 
 
-def _pin_weeks(ids: list, now: dict, stations: dict, open_hours: list, by_id: dict) -> list:
+def _pin_weeks(ids: list, now: dict, stations: dict, open_hours: list, by_id: dict, base=None) -> list:
     """The weeks kept as they are, as shift rows, as much of each as is legal.
 
     Only on a station the plan staffs a role of (`stations`: {id: (skill,
@@ -10745,7 +10751,7 @@ def _pin_weeks(ids: list, now: dict, stations: dict, open_hours: list, by_id: di
     out = []
     for pid in sorted(ids, key=str):
         person = by_id[pid]
-        week = _fresh_state()
+        week = _copy_state(base[pid]) if base and pid in base else _fresh_state()
         for row in sorted(now[pid]["rows"], key=lambda r: (r["wd"], r["from"], r["to"],
                                                          str(r["station"]))):
             if row["station"] not in stations:
@@ -12162,7 +12168,7 @@ def _open_is_full(site: dict) -> bool:
     placements start from copies of one week with one pool, so the second is
     the first again; _staffing() copies it (_copy_week()) instead.
     """
-    return site["run"] >= DEMAND_RUN_DAYS and _open_all_hours(site["grid"]["open"])
+    return "evidence" not in site["grid"] and site["run"] >= DEMAND_RUN_DAYS and _open_all_hours(site["grid"]["open"])
 
 
 def _copy_week(week: dict) -> dict:
@@ -12197,6 +12203,8 @@ def _open_need(site: dict) -> dict:
     before anything is measured (Peter, 26 September 2026). Hours the shop is
     shut are left out by the placer either way.
     """
+    if "evidence" in site["grid"]:
+        return site["need"]
     if site["run"] >= DEMAND_RUN_DAYS:
         return _full_need(site["grid"])
     return _open_floor(site["need"], site["grid"])
@@ -12790,7 +12798,7 @@ def _serving_hours(shifts: list) -> int:
 
 
 def _place_week(grid, need, slots_open, cover_posts, pool, people, business, bench, state,
-                groups=None, current=None, hires=True) -> dict:
+                groups=None, current=None, hires=True, fixed=None) -> dict:
     """One week of shifts for one site, from one need curve: the placer itself.
 
     Everything after the need curve, in the scope's order: a. per-station cover
@@ -12902,6 +12910,16 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
         )
         for person in pool
     }
+    # Fixed duties belong to this site's complete week, but are never replaced
+    # by the planner. Capture the outside-site baseline before reserving them.
+    fixed = fixed or []
+    for row in fixed:
+        entry = state.get(row["employee"])
+        if entry is not None:
+            entry["hours"] += row["to"] - row["from"]
+            entry["busy"][row["wd"]].update(range(row["from"], row["to"]))
+            entry["days"].add(row["wd"])
+            entry["stations"].add((row["station"], row["wd"]))
     # What the rank knows about this site. `rostered` is who it has put on a
     # shift, carried across both passes so the cleaning and security cover goes
     # to people already serving the queue here rather than to two more names.
@@ -12934,12 +12952,13 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     # Only the hours on stations this plan owns: a factory's delivery driver
     # entries, say, are no part of the week it plans or writes.
     owned = {s["id"] for s in grid["stations"]} | {post["id"] for post in cover_posts}
-    now = _weeks_now([row for row in current or () if row["station"] in owned], pool)
+    now = _weeks_now([row for row in current or () if row["station"] in owned] + fixed, pool)
     planned_roles = {(slot["skill"], slot["kind"]) for slot in slots + cover_slots}
+    fixed_people = {row["employee"] for row in fixed}
     protected = [
         person for person in pool
         if person["id"] in now and (person["band"] or person["days"] is not None)
-        and any(_usable(person, skill, kind) for skill, kind in planned_roles)
+        and (person["id"] in fixed_people or any(_usable(person, skill, kind) for skill, kind in planned_roles))
     ]
     start = {pid: _copy_state(state[pid]) for pid in before} if protected else None
     pins, kept, allowed = [], [], {}
@@ -12962,12 +12981,17 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
         kept += worse
         role_of = {s["id"]: _station_role(s) for s in grid["stations"]}
         staffed_roles = {role_of.get(slot["station"]) for slot in slots}
+        # Zero professional demand is not a spare person when fixed duties
+        # remain. Their existing professional week may still be needed to keep
+        # a minimum-hours/day demand that the combined current week meets.
+        staffed_roles.update(role_of[row["station"]] for pid in kept if pid in fixed_people
+                             for row in now[pid]["rows"] if row["station"] in role_of)
         stations_ok = {s["id"]: (s["skill"], "serve") for s in grid["stations"]
                        if _station_role(s) in staffed_roles}
         stations_ok.update({slot["station"]: (slot["skill"], slot["kind"])
                             for slot in cover_slots})
         by_id = {person["id"]: person for person in pool}
-        pins = _pin_weeks(kept, now, stations_ok, open_hours, by_id)
+        pins = _pin_weeks(kept, now, stations_ok, open_hours, by_id, start)
 
     # e. The lines nobody here may work: offered again with hires in the pool
     # and the week settled for them, only where there are such lines, so a
@@ -12985,7 +13009,7 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     # One pass over the shifts, not one per person: the bench is every
     # unassigned employee in the save, and this runs once per site.
     worked = {
-        shift["employee"] for shift in shifts if shift["employee"] is not None
+        shift["employee"] for shift in shifts + fixed if shift["employee"] is not None
     }
     mine_now = {
         person["id"]
@@ -13063,7 +13087,7 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
         # Only the hours and days this site gave them: a bench member may have
         # been offered around, and another site's week is not this one's.
         hours_here = mine["hours"] - before[person["id"]][0]
-        days_here = len(mine["days"]) - before[person["id"]][1]
+        days_here = len({r["wd"] for r in shifts + fixed if r["employee"] == person["id"]})
         # Whether this plan could have used them at all. A site with no measured
         # hour plans its cleaning and security cover and nothing else, so a
         # cashier left with no week there is short because the board cannot read
@@ -13359,8 +13383,8 @@ def _plan_site(
     for station in grid["stations"]:
         rates[_station_role(station)].append(station["rate"])
     run = _days_open(save, building)
-    daily = _open_day_average(save, building, grid["open"]) if run >= DEMAND_RUN_DAYS else None
-    need = _need_curve(_run_measured(grid, run, daily), day=curve.get("d"), ceiling=ceiling,
+    daily = _open_day_average(save, building, grid["open"]) if run >= DEMAND_RUN_DAYS and "evidence" not in grid else None
+    need = _need_curve(grid if "evidence" in grid else _run_measured(grid, run, daily), day=curve.get("d"), ceiling=ceiling,
                        rates=dict(rates))
 
     # A locker or cleaning station this business type takes nobody for is
@@ -13458,6 +13482,7 @@ def _finish_site(site, full, names, people, opened=None) -> dict:
             for role in grid["roles"]
         ],
         "ceiling": site["ceiling"],
+        **_staff_measurement_view(grid),
         # Stations here this business type takes nobody for, which no plan
         # staffs (_hourly(), _plan_site()): the Staffing block names them.
         **({"unstaffable": site["unstaffable"]} if site["unstaffable"] else {}),
@@ -13491,18 +13516,18 @@ def _finish_site(site, full, names, people, opened=None) -> dict:
         **({"openCover": {
             key: value
             for key, value in _plan_fields(opened, table, names, people, cost).items()
-            if key not in ("need", "basis")
+            if "evidence" in grid or key not in ("need", "basis")
         } | {"open": grid["open"], "openAllHours": False,
-             "complete": site["run"] >= DEMAND_RUN_DAYS}} if opened else {}),
+             "complete": "evidence" not in grid and site["run"] >= DEMAND_RUN_DAYS}} if opened else {}),
         # The hand-over: the demand data is complete while the game runs full
         # cover, and the demand plan would change something. See
         # _demand_data_complete().
-        "demandDataComplete": _demand_data_complete(
+        "demandDataComplete": "evidence" not in grid and _demand_data_complete(
             site["run"], week, grid, in_game),
         # Hours the schedule opens with no report behind them, per weekday, on
         # a shop whose demand plan counts them as no customers. See
         # _unmeasured(); empty lists everywhere else.
-        "unmeasured": _unmeasured(grid, site["run"]),
+        "unmeasured": ([[] for _ in range(7)] if "evidence" in grid else _unmeasured(grid, site["run"])),
         "current": {
             "shifts": current["shifts"],
             "fragments": current["fragments"],
@@ -13634,13 +13659,52 @@ def _office_runs(computers: int, open_hours: list, door: int) -> tuple:
     return runs, always
 
 
+def _office_need(grid: dict, skill: str, runs: dict) -> tuple:
+    """Measured workstation need, with the office default for unread hours.
+
+    Offices bill one customer per professional-hour. Reuse the shop's capped
+    hour estimate (one more workstation, bounded by installed computers and
+    building capacity). A zero with nobody working is not measured demand.
+    Do not scale another weekday into an unread one: keep the default there,
+    or the current staffing if higher, until that hour has evidence of its own.
+    """
+    measured = dict(grid, roles=[dict(grid["roles"][0], key=skill, skill=skill)])
+    if "evidence" not in grid:
+        # Low-level callers can supply measured grids directly. A zero with no
+        # capacity is still never a demand measurement; positive counts survive.
+        measured["customers"] = [[v if v or grid["effective"][wd][h] > 0 else None
+                                  for h, v in enumerate(day)]
+                                 for wd, day in enumerate(grid["customers"])]
+    need = _need_curve(measured, rates={skill: [OFFICE_POST_RATE] * len(grid["stations"])})
+    entry = need[skill]
+    opened = grid["open"] if any(grid["open"]) else ALL_DAY_OPEN
+    demand_based = "evidence" in grid or any(entry["basis"][wd][h] != "none"
+                       for wd in range(7) for a, z in opened[wd] for h in range(a, z))
+    for wd in range(7):
+        hours = {h for a, z in opened[wd] for h in range(a, z)}
+        for h in range(24):
+            if h not in hours:
+                entry["need"][wd][h] = 0
+                entry["basis"][wd][h] = "closed"
+            elif entry["basis"][wd][h] == "none":
+                default = sum(h in days[wd] for days in runs.values())
+                current = math.ceil(grid["staffed"][wd][h] / OFFICE_POST_RATE)
+                entry["need"][wd][h] = min(len(grid["stations"]),
+                                           max(entry["need"][wd][h], default, current) if demand_based else default)
+                if "evidence" not in grid:
+                    entry["basis"][wd][h] = "office"
+    if not demand_based:
+        entry["stations"] = runs
+    return need, demand_based
+
+
 def _office_staffing(save: Save, names, businesses: list, grids: list, staff: list,
                      world: dict | None = None) -> list:
-    """A week for every office by Peter's office default, one row per office.
+    """A week for every office from customer history, with the office default as fallback.
 
     The shop placer (_place_week) over a synthetic grid, as a factory's is: one
     role, the office's professional skill (its type's first accepted skill),
-    one station per computer, the hours _office_runs() gives each. The pool is
+    one station per computer, the hours _office_need() calls for. The pool is
     the office's own staff with that skill, then the unassigned people no
     shop's plan counts on (`world`'s bench, which _staffing() has already
     taken its own off), handed out in office order the way _staffing() hands
@@ -13713,17 +13777,31 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
     ]
     runs, always = _office_runs(len(stations), grid["open"], grid["door"])
     slots_open = grid["open"] if any(grid["open"]) else ALL_DAY_OPEN
-    need = {skill: {
-        "need": [[sum(1 for days in runs.values() if hour in days[wd]) for hour in range(24)]
-                 for wd in range(7)],
-        "basis": [["office"] * 24 for _ in range(7)],
-        "stations": runs,
-    }}
+    need, demand_based = _office_need(grid, skill, runs)
     fake = {"roles": [{"skill": skill, "label": label}], "stations": stations}
     usable_bench = [p for p in bench if _usable(p, skill, "serve")]
     current = _current_roster(save, building, {s["id"]: s for s in stations})
+    # Other duties survive the write. Reserve their hours before assigning a
+    # professional who also works one of those duties, so the plan cannot
+    # overlap them or spend their weekly allowance twice.
+    owned = {s["id"] for s in stations}
+    retained = [r for r in current["list"] if r["station"] not in owned or r["kind"] != "serve"]
     week = _place_week(fake, need, slots_open, [], pool, people, business, usable_bench,
-                       state, groups=_station_groups(save, building), current=current["list"])
+                       state, groups=_station_groups(save, building),
+                       current=[r for r in current["list"] if r not in retained] if demand_based else current["list"],
+                       fixed=retained if demand_based else None)
+    if demand_based:
+        retained_people = {r["employee"] for r in retained}
+        worked = {r["employee"] for r in week["shifts"]} | retained_people
+        week["spareIds"] = _in_order(p["id"] for p in pool if p["addr"] and p["id"] not in worked)
+        week["spareSkills"] = {pid: [skill] for pid in week["spareIds"]}
+        # Measured zero is a real plan, including who is now spare. The shared
+        # placer has no headcount row when there are no slots at all.
+        head = week["headcount"].setdefault(skill, {
+            "kind": "serve", "needed": 0, "min": 0, "max": 0,
+            "have": sum(bool(p["addr"]) for p in pool), "hire": 0, "hireHours": 0})
+        head["spare"] = len(week["spareIds"])
+        week["weekly"] += _current_cost({"list": retained}, {pid: p["wage"] for pid, p in people.items()})
     bad = _unrepresentable(save, building)
     lists = (week["shifts"], week["shortHours"], week["shortDays"], week["placed"],
              week["bench"])
@@ -13735,7 +13813,8 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
     }
     cost = {"current": money(_current_cost(current, wage_of)), "currentCover": 0.0}
     fields = _plan_fields(week, table, names, people, cost)
-    fields.pop("basis", None)
+    if not demand_based:
+        fields.pop("basis", None)
     row = {
         "key": business["key"],
         "name": business["name"],
@@ -13744,12 +13823,14 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
         "label": label,
         # Computers staffed around the clock by the office default.
         "alwaysOn": always,
+        **_staff_measurement_view(grid),
+        **({"demandBased": True} if demand_based else {}),
         # Shifts in the game's week _current_roster() drops or clamps (no
         # hours, reversed, outside 0-24): the page cannot send them back as
-        # they are, so an office write, which keeps every entry, is refused.
+        # they are, so an office write is refused.
         **({"unrepresentable": bad} if bad else {}),
         "computers": len(stations),
-        "staffedComputers": len(runs),
+        "staffedComputers": max((max(day) for day in need[skill]["need"]), default=0),
         # The hours the plan staffs against: the office's own (around the
         # clock where the save holds none). The write never changes them
         # (`openAllHours` false).
@@ -14319,6 +14400,9 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
     by_key = {b["key"]: b for b in businesses}
     out = []
     for grid in grids:
+        uncertain = "evidence" in grid
+        if uncertain and not grid.get("cinemaCapacity"):
+            continue  # historical counts cannot diagnose current staffing
         business = by_key[grid["key"]]
         basket = grid["basket"] or 0
         door = grid["door"]
@@ -14337,7 +14421,14 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
         # both short of Hair Stylists on one hour is two people to hire, not one.
         roles = {_role_key(role): role for role in grid["roles"]}
         by_limit = collections.defaultdict(lambda: collections.defaultdict(set))
-        for wd, hour in sorted(_capped_cells(grid)):
+        if uncertain:
+            # Equipment capacity is known independently of employee schedules.
+            # Preserve its warning without inferring any historical staff tie.
+            for wd, hours in enumerate(grid["customers"]):
+                for hour, seen in enumerate(hours):
+                    if door and seen is not None and seen >= door * AT_CAP:
+                        by_limit[(("cinema furniture", None),)][wd].add(hour)
+        for wd, hour in (() if uncertain else sorted(_capped_cells(grid))):
             if door and door <= grid["staffed"][wd][hour]:
                 limit = "cinema furniture" if grid.get("cinemaCapacity") else "the building"
                 tied = [(limit, None)]
@@ -14377,7 +14468,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
         ):
             capped = {wd: sorted(hours) for wd, hours in by_limit[limits].items()}
             cells = [(wd, h) for wd in sorted(capped) for h in capped[wd]]
-            ceilings = [grid["effective"][wd][h] for wd, h in cells]
+            ceilings = [door if uncertain else grid["effective"][wd][h] for wd, h in cells]
             finding = {
                 "kind": "cap",
                 "key": grid["key"],
@@ -14453,6 +14544,9 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                     else _sp_list([_sp_station_noun(w) or _sp_counters(office) for w, _ in said], " and ")
                 )
             out.append(finding)
+
+        if uncertain:
+            continue  # no retrospective overstaffing claim from imported counts
 
         # Overstaffing is a property of the roster that was on, so each role is
         # read on its own: a gym's spare trainer-hours are real even on an hour
@@ -15129,6 +15223,358 @@ def _prune_days(store: dict, keep: int, day: int | None = None) -> None:
         del store[old]
 
 
+# Shared shop/office demand evidence. Reports never acquire today's capacity
+# retrospectively. Only an explicitly requested and subsequently confirmed
+# measurement can establish demand; imported counts remain lower bounds.
+STAFF_EVIDENCE_VERSION = 1
+STAFF_EVIDENCE_DAYS = 42
+
+
+def _staff_digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"),
+                                    default=str).encode()).hexdigest()[:24]
+
+
+def _staff_reports(save, building, day):
+    reports = {}
+    for entry in save.items(building.get("orderHistory")):
+        number = entry.get("dayNumber")
+        if not isinstance(number, int) or not max(day - STAFF_EVIDENCE_DAYS, building.get("creationDay") or 0) <= number < day:
+            continue
+        hours = {}
+        for row in save.items(entry.get("hourReports")):
+            hour, customers = row.get("hour"), row.get("customers")
+            if (isinstance(hour, int) and 0 <= hour < 24 and
+                    isinstance(customers, (int, float)) and math.isfinite(customers) and customers >= 0):
+                hours[str(hour)] = customers
+        reports[str(number)] = hours
+    return reports
+
+
+def _staff_context(save, business, building, grid):
+    # Employee assignments are deliberately outside the demand fingerprint.
+    # A schedule change must not erase what a measurement established.
+    products = set(save.items(building.get("cachedAvailableProducts")))
+    products.update(p.get("itemName") for p in save.items(building.get("retailPrices")) if p.get("itemName"))
+    hood = business.get("neighbourhood")
+    market = sorted((entry.get("itemName"), value.get("demand"))
+        for entry in save.items(save.root.get("productMarketEntries")) if entry.get("itemName") in products
+        for value in save.items(entry.get("demandValues")) if value.get("neighborhood") == hood)
+    events = sorted((e.get("itemName"), e.get("startDay"), e.get("durationInDays"))
+        for e in save.items(save.root.get("marketEvents"))
+        if e.get("type") == HYPE_EVENT and e.get("itemName") in products
+        and e.get("neighbourhood") == hood and _market_event_active(e, save.root.get("Day") or 0))
+    demand = {"type": business["typeSlug"], "promotion": business.get("promotion"),
+              "products": save.items(building.get("cachedAvailableProducts")),
+              "prices": save.items(building.get("retailPrices")), "market": market, "hype": events,
+              "difficulty": _difficulty(save), "build": save.root.get("buildNumberAtLastSave")}
+    return {"demand": _staff_digest(demand), "open": grid["open"],
+            "effective": grid["effective"],
+            "roles": {str(_role_key(r)): r["staffed"] for r in grid["roles"]},
+            "installed": {str(_role_key(r)): r["counters"] for r in grid["roles"]},
+            "door": grid["door"]}
+
+
+def _staff_record_valid(record):
+    def number(v):
+        return isinstance(v, (int, float)) and math.isfinite(v) and v >= 0
+
+    def matrix(v):
+        return isinstance(v, list) and len(v) == 7 and all(
+            isinstance(row, list) and len(row) == 24 and all(number(n) for n in row) for row in v)
+
+    try:
+        if not (isinstance(record, dict) and number(record["clock"]) and
+                isinstance(record["identity"], str) and isinstance(record["reports"], dict) and
+                isinstance(record["learned"], dict) and matrix(record["context"]["effective"])):
+            return False
+        for d, hours in record["reports"].items():
+            int(d)
+            if not isinstance(hours, dict) or any(not 0 <= int(h) < 24 or not number(v) for h, v in hours.items()):
+                return False
+        for k, cell in {**record["learned"], **record.get("bounds", {})}.items():
+            wd, h = map(int, k.split(":"))
+            if not (0 <= wd < 7 and 0 <= h < 24 and number(cell["value"]) and number(cell["day"])):
+                return False
+        if not all(matrix(v) for v in record.get("fallback", {}).values()):
+            return False
+        session = record.get("session")
+        if session and session.get("phase") in ("pending", "active", "ready"):
+            if not number(session["deadline"]) or not session["targets"] or len(session["open"]) != 7:
+                return False
+            for k, target in session["targets"].items():
+                wd, h = map(int, k.split(":"))
+                if not (0 <= wd < 7 and 0 <= h < 24 and number(target["capacity"])):
+                    return False
+            if session["phase"] != "pending" and not matrix(session["context"]["effective"]):
+                return False
+            if not all(matrix(v) for v in session.get("baseline", {}).values()):
+                return False
+            if not all(number(v) for v in session["samples"].values()):
+                return False
+        return True
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return False
+
+
+def _staff_evidence_ingest(history, save, businesses, buildings, grids, names=None):
+    """Ingest once per core build. Lazy planning reads the detached grid view.
+
+    One active timeline per company; rewinds/conflicting overlap reset it.
+    This deliberately loses confidence instead of joining alternate saves.
+    Context equality is supporting evidence only: the player confirms continuity
+    at completion, including stock availability in shops.
+    """
+    character, day = save.root.get("characterId"), save.root.get("Day")
+    persistent = bool(character and history.path and history.writable and isinstance(day, int)
+                      and not save.root.get("_staffingBackfill"))
+    book = history._for(character) if persistent else {}
+    store = book.get("staffingEvidence", {})
+    if not isinstance(store, dict) or store.get("version") != STAFF_EVIDENCE_VERSION:
+        store = {"version": STAFF_EVIDENCE_VERSION, "sites": {}}
+    if not isinstance(store.get("sites"), dict):
+        store["sites"] = {}
+    book["staffingEvidence"] = store
+    by_site = {site_key(_address_of(b)): b for b in buildings}
+    by_key = {b["key"]: b for b in businesses}
+    clock = (day or 0) * 24 + (save.root.get("Hour") or 0) + (save.root.get("Minute") or 0) / 60
+    live = set()
+    for grid in grids:
+        key = grid["key"]
+        if grid.get("office") and not any(grid["open"]):
+            grid["open"] = [[list(slot) for slot in day] for day in ALL_DAY_OPEN]
+        business, building = by_key[key], by_site[key]
+        identity = _staff_digest([key, building.get("creationDay"), business["typeSlug"], building.get("id")])
+        live.add(key)
+        context = _staff_context(save, business, building, grid)
+        if not grid.get("office"):
+            premises = load_buildings().get(_address_of(building)) or {}
+            initial = _initial_customers(save.root.get("buildNumberAtStart"),
+                _size_cap(premises, _door_caps(names or Names({}))), business["typeSlug"],
+                premises.get("m") or 0, save.items(building.get("cachedAvailableProducts")))
+            grid["arrivalCeiling"] = _arrival_ceiling(business["typeSlug"], initial,
+                business.get("promotion") or 0,
+                (save.deref(save.root.get("gameVariables")) or {}).get("baseCustomerPromotionMultiplier", 0.55),
+                grid["door"])
+        reports = _staff_reports(save, building, day) if isinstance(day, int) else {}
+        old = store["sites"].get(key)
+        good = persistent and _staff_record_valid(old) and old.get("identity") == identity
+        if good:
+            overlap = set(reports) & set(old["reports"])
+            conflict = any(reports[d] != old["reports"][d] for d in overlap)
+            discontinuous = clock > old["clock"] and old["reports"] and not overlap
+            good = clock >= old["clock"] and not conflict and not discontinuous
+        record = old if good else {"identity": identity, "reports": {}, "learned": {}, "bounds": {},
+                                    "context": context, "fallback": context["roles"], "clock": clock, "session": None}
+        # A demand change marks estimates stale. They remain visible as prior
+        # evidence but cannot silently establish demand in the new conditions.
+        if record["context"].get("demand") != context["demand"]:
+            record["bounds"] = {}
+            for cell in record["learned"].values():
+                cell["stale"] = True
+        session = record.get("session")
+        if isinstance(session, dict) and session.get("phase") in ("pending", "active", "ready"):
+            if (record["context"].get("demand") != context["demand"] or
+                    context["open"] != session["open"] or day > session["deadline"]):
+                session["phase"] = "stopped"
+            elif session["phase"] == "pending":
+                if all(context["effective"][int(k.split(':')[0])][int(k.split(':')[1])] >= t["capacity"]
+                       for k, t in session["targets"].items()):
+                    session.update(phase="active", start=day + 1, context=context, samples={})
+            elif context != session["context"]:
+                session["phase"] = "stopped"
+            else:
+                for d, hours in reports.items():
+                    if int(d) < session["start"]:
+                        continue
+                    for cell in session["targets"]:
+                        wd, hour = map(int, cell.split(':'))
+                        if int(d) % 7 == wd:
+                            # Provisional zero only inside a completed daily
+                            # record; it is never learned before confirmation.
+                            session["samples"][f"{d}:{hour}"] = hours.get(str(hour), 0)
+                if all(sum(int(k.split(':')[0]) % 7 == int(cell.split(':')[0]) and
+                           k.split(':')[1] == cell.split(':')[1] for k in session["samples"]) >= 2
+                       for cell in session["targets"]):
+                    session["phase"] = "ready"
+        record["reports"].update(reports)
+        record["reports"] = {d: v for d, v in record["reports"].items()
+                             if day - STAFF_EVIDENCE_DAYS <= int(d) < day} if isinstance(day, int) else {}
+        record.update(context=context, clock=clock)
+        store["sites"][key] = record
+        cells = {}
+        for d, hours in record["reports"].items():
+            for h, count in hours.items():
+                cell = f"{int(d) % 7}:{h}"
+                cells.setdefault(cell, []).append(count)
+        lower = {k: round(sum(v) / len(v), 1) for k, v in cells.items() if any(v)}
+        for cell, bound in record.get("bounds", {}).items():
+            lower[cell] = max(lower.get(cell, 0), bound["value"])
+        for cell, learned in record["learned"].items():
+            wd, h = map(int, cell.split(":"))
+            newer = [hours[str(h)] for d, hours in reports.items()
+                     if int(d) > learned["day"] and int(d) % 7 == wd and str(h) in hours]
+            if newer and sum(newer) / len(newer) > learned["value"]:
+                learned["stale"] = True
+        # Read-only view; no planner mutates the persisted object.
+        grid["evidence"] = json.loads(json.dumps({"lower": lower, "fallback": record.get("fallback", context["roles"]), "learned": record["learned"],
+            "session": session, "persistent": persistent, "identity": identity}))
+        grid["capHours"] = 0  # old counts cannot diagnose today's bottleneck
+    store["sites"] = {k: v for k, v in store["sites"].items() if k in live}
+
+
+def _staff_evidence_need(grid, rates=None):
+    """Learned demand, uncertain served counts, or explicit trial capacity.
+
+    Unknown demand never adds a station automatically. Its conservative
+    fallback covers installed stations until a deliberate measurement exists.
+    """
+    evidence = grid["evidence"]
+    trial = evidence.get("session") or {}
+    targets = trial.get("targets", {}) if trial.get("phase") in ("pending", "active", "ready") else {}
+    out = {}
+    for role in grid["roles"]:
+        station_rates = _role_rates(role, rates)
+        demand, need, basis = [], [], []
+        for wd in range(7):
+            ds, ns, bs = [], [], []
+            for h in range(24):
+                cell = f"{wd}:{h}"
+                learned = evidence["learned"].get(cell) or {}
+                lower = evidence["lower"].get(cell, 0)
+                if learned and not learned.get("stale"):
+                    value, case = learned["value"], "confirmed"
+                    n = _fill_stations(value, station_rates)
+                else:
+                    value, case = max(lower, learned.get("value", 0)), "lower" if lower else "none"
+                    fallback = evidence.get("fallback", {}).get(str(_role_key(role)))
+                    # Office grids use None until their profession is assigned.
+                    if fallback is None and grid.get("office"):
+                        fallback = evidence.get("fallback", {}).get("None")
+                    capacity = fallback[wd][h] if fallback else 0
+                    n = max(_fill_stations(value, station_rates), _fill_stations(capacity, station_rates))
+                    if not grid.get("office") and not evidence["lower"] and not any(any(day) for day in fallback or []):
+                        n = len(station_rates)  # new shops; offices use their default below
+                if cell in targets:
+                    value, case = targets[cell]["capacity"], "trial"
+                    n = _fill_stations(value, station_rates)
+                    baseline = trial.get("baseline", {}).get(str(_role_key(role)))
+                    if baseline is None and grid.get("office"):
+                        baseline = trial.get("baseline", {}).get("None")
+                    if baseline:
+                        n = max(n, _fill_stations(baseline[wd][h], station_rates))
+                if not any(a <= h < z for a, z in grid["open"][wd]):
+                    n, case = 0, "closed"
+                ds.append(value); ns.append(n); bs.append(case)
+            demand.append(ds); need.append(ns); basis.append(bs)
+        out[_role_key(role)] = {"demand": demand, "need": need, "basis": basis}
+    return out
+
+
+def _staff_measurement_view(grid):
+    evidence = grid.get("evidence")
+    if evidence is None:
+        return {}
+    session = evidence.get("session") or {}
+    return {"demandBased": True, "demandEvidence": {"persistent": evidence["persistent"],
+        "phase": session.get("phase", "unknown"), "cells": len(session.get("targets", {})),
+        "samples": len(session.get("samples", {})), "confirmed": len(evidence["learned"]),
+        "stale": any(c.get("stale") for c in evidence["learned"].values())}}
+
+
+def _staff_measurement_action(history, character, key, action, grid, day):
+    """User action only. A proposal cannot confirm its own results."""
+    if not character or not history.path or not history.writable:
+        raise ValueError("Demand measurement needs a saved company history")
+    store = history._for(character).get("staffingEvidence", {}).get("sites", {})
+    record = store.get(key)
+    if not _staff_record_valid(record) or record.get("identity") != grid.get("evidence", {}).get("identity"):
+        raise ValueError("Read this business again before measuring demand")
+    session = record.get("session") or {}
+    if action == "stop":
+        session["phase"] = "stopped"
+        record["session"] = session
+    elif action == "confirm":
+        if session.get("phase") != "ready":
+            raise ValueError("Two completed occurrences of every measured hour are needed")
+        for cell, target in session["targets"].items():
+            wd, hour = map(int, cell.split(':'))
+            values = [(k, v) for k, v in session["samples"].items()
+                      if int(k.split(':')[0]) % 7 == wd and int(k.split(':')[1]) == hour]
+            # Every sample needs headroom. One still-constrained occurrence
+            # makes the result a lower bound, never permission to cut staffing.
+            if values and all(v < target["capacity"] * AT_CAP for _, v in values):
+                record.setdefault("bounds", {}).pop(cell, None)
+                record["learned"][cell] = {"value": round(sum(v for _, v in values) / len(values), 1),
+                    "day": day, "observations": [k for k, _ in values], "stale": False}
+            elif values:
+                record.setdefault("bounds", {})[cell] = {
+                    "value": max(target["capacity"], sum(v for _, v in values) / len(values)),
+                    "day": day, "observations": [k for k, _ in values]}
+        session["phase"] = "confirmed"
+    elif action == "start":
+        if session.get("phase") in ("pending", "active", "ready"):
+            raise ValueError("A measurement is already in progress")
+        targets = {}
+        context = record["context"]
+        for wd in range(7):
+            for h in range(24):
+                if not any(a <= h < z for a, z in grid["open"][wd]):
+                    continue
+                capacity = grid["effective"][wd][h]
+                if capacity <= 0:
+                    # An explicit new measurement can restart an hour after
+                    # confirmed zero. Restore one station of each missing role;
+                    # do not treat an unstaffed zero as fresh demand evidence.
+                    bounds = []
+                    for role in grid["roles"]:
+                        rates = [s["rate"] for s in grid["stations"]
+                                 if _station_role(s) == _role_key(role)]
+                        bounds.append(role["staffed"][wd][h] or max(rates, default=0))
+                    if grid["door"]:
+                        bounds.append(grid["door"])
+                    if grid.get("arrivalCeiling"):
+                        bounds.append(grid["arrivalCeiling"][wd][h])
+                    capacity = min(bounds, default=0)
+                    if capacity > 0:
+                        targets[f"{wd}:{h}"] = {"capacity": capacity}
+                    continue
+                cell = f"{wd}:{h}"
+                seen = (grid.get("evidence", {}).get("lower") or {}).get(cell, 0)
+                limiting = [r for r in grid["roles"] if r["staffed"][wd][h] <= capacity]
+                # When the current schedule has slack, measure it as it is.
+                # Otherwise propose one station of the unique limiting role.
+                if seen >= capacity * AT_CAP:
+                    if len(limiting) != 1:
+                        continue
+                    role = limiting[0]
+                    rates = sorted([s["rate"] for s in grid["stations"]
+                                    if _station_role(s) == _role_key(role)], reverse=True)
+                    occupied = _fill_stations(capacity, rates)
+                    if occupied >= len(rates):
+                        continue
+                    bounds = [role["counters"], sum(rates[:occupied + 1])]
+                    bounds += [r["staffed"][wd][h] for r in grid["roles"] if r is not role]
+                    if grid["door"]:
+                        bounds.append(grid["door"])
+                    if grid.get("arrivalCeiling"):
+                        bounds.append(grid["arrivalCeiling"][wd][h])
+                    expanded = min(bounds)
+                    if expanded <= capacity:
+                        continue
+                    capacity = expanded
+                targets[cell] = {"capacity": capacity}
+        if not targets:
+            raise ValueError("No open staffed hours have room for a useful demand measurement")
+        record["session"] = {"phase": "pending", "targets": targets, "open": context["open"],
+                             "baseline": context["roles"],
+                             "deadline": day + 28, "samples": {}}
+    else:
+        raise ValueError("Unknown demand measurement action")
+    if not history.write():
+        raise ValueError("Demand measurement history could not be saved")
+
+
 class History:
     """The on-disk record the save itself does not keep.
 
@@ -15151,6 +15597,7 @@ class History:
         # one day's snapshot and weeks of history lost with it.
         self.writable = True
         self.book = self._load()
+        self._staff_original = {k: _staff_digest(v.get("staffingEvidence")) for k, v in self.book.items() if isinstance(v, dict)}
         self._touched = set()  # (character, rid) names this instance changed
 
     def _load(self) -> dict:
@@ -15279,8 +15726,16 @@ class History:
         disk = self._load()
         if not self.writable:
             return False
+        evidence_conflict = False
         for character, ours in self.book.items():
             theirs = disk.get(character, {})
+            if (_staff_digest(theirs.get("staffingEvidence")) !=
+                    self._staff_original.get(character, _staff_digest(None))):
+                if "staffingEvidence" in theirs:
+                    ours["staffingEvidence"] = theirs["staffingEvidence"]
+                else:
+                    ours.pop("staffingEvidence", None)
+                evidence_conflict = True
             names = dict(theirs.get("lineNames", {}))
             mine = ours.get("lineNames", {})
             for rid in list(names) + list(mine):
@@ -15300,7 +15755,8 @@ class History:
             with open(tmp, "w", encoding="utf-8") as fh:
                 json.dump({"characters": self.book}, fh, separators=(",", ":"))
             os.replace(tmp, self.path)
-            return True
+            self._staff_original = {k: _staff_digest(v.get("staffingEvidence")) for k, v in self.book.items()}
+            return not evidence_conflict
         except OSError:
             try:
                 os.remove(tmp)
@@ -20080,6 +20536,17 @@ def _section_chain(name: str) -> set:
     return out
 
 
+def browser_staff_measurement(history_path: str, key: str, action: str, generation) -> None:
+    build = _BROWSER_BUILD["build"]
+    if build is None or build.generation != generation:
+        raise StaleBuild("Read the current save before measuring demand")
+    grid = next((g for g in build.shared["all_grids"] if g["key"] == key), None)
+    if grid is None:
+        raise ValueError("This business has no staffing data")
+    _staff_measurement_action(History(history_path), build.save.root.get("characterId"),
+                              key, action, grid, build.save.root.get("Day"))
+
+
 def browser_name(history_path: str, rid: str, slug: str | None) -> None:
     """A factory line the player named in the browser; the next build follows."""
     try:
@@ -20112,6 +20579,7 @@ def backfill_history(target: str, history_path: str, names: Names) -> int:
     for path in saves:
         try:
             save = load_save(path)
+            save.root["_staffingBackfill"] = True
             extract(save, names, history_path)
             print(f"  day {save.root['Day']:>4}  {os.path.basename(path)}", flush=True)
             recorded += 1
@@ -20367,6 +20835,23 @@ class Board:
                 self._fingerprint = None
             self._refresh(settle=False)
 
+    def measure_staffing(self, key, action, character, day):
+        with self.build:
+            if not self.source:
+                raise ValueError("Read a save first")
+            save = load_save(self.source)
+            if save.root.get("characterId") != character or save.root.get("Day") != day:
+                raise ValueError("Read the current save before measuring demand")
+            build = safe_build(save, self.names, self.history)
+            grid = next((g for g in build.shared["all_grids"] if g["key"] == key), None)
+            if grid is None:
+                raise ValueError("This business has no staffing data")
+            _staff_measurement_action(History(self.history), character, key, action, grid, day)
+            with self.lock:
+                self.revision += 1
+                self._fingerprint = None
+            self._refresh(settle=False)
+
     def refresh(self, settle: bool = True) -> bool:
         """Rebuild if a newer save has appeared. True if anything changed."""
         with self.build:
@@ -20522,7 +21007,7 @@ class BoardHandler(http.server.BaseHTTPRequestHandler):
         if not self._this_host():
             return
         route = self.path.split("?")[0].rstrip("/")
-        if route != "/name":
+        if route not in ("/name", "/staff-measurement"):
             self.send_error(404)
             return
         # JSON only: a page elsewhere can send a form or text/plain POST
@@ -20544,13 +21029,22 @@ class BoardHandler(http.server.BaseHTTPRequestHandler):
             return
         try:
             body = json.loads(self.rfile.read(length) or b"{}")
-            rid, slug = str(body["rid"]), body.get("slug") or None
+            if route == "/name":
+                rid, slug = str(body["rid"]), body.get("slug") or None
+            else:
+                key, action = str(body["key"]), str(body["action"])
         except (ValueError, KeyError, TypeError):
             self.send_error(400)
             return
         try:
-            self.board.name_line(rid, slug)
+            if route == "/name":
+                self.board.name_line(rid, slug)
+            else:
+                self.board.measure_staffing(key, action, body.get("character"), body.get("day"))
         except Exception as exc:  # the board keeps serving the last build
+            if route != "/name":
+                self.send_error(409, str(exc))
+                return
             print(f"  naming a line failed -- {exc}", flush=True)
         self.send_response(204)
         self.send_header("Content-Length", "0")

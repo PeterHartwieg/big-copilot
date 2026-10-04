@@ -364,7 +364,7 @@
           // build or name still waiting here brings a board that asks again;
           // with none (it was cancelled, and its board dropped), the board on
           // screen gets no section from this worker: an error, as `gone` is.
-          const coming = [...pending.values()].some((q) => (q.kind === "build" || q.kind === "name") && q.gen === sourceGen);
+          const coming = [...pending.values()].some((q) => (q.kind === "build" || q.kind === "name" || q.kind === "staff-measurement") && q.gen === sourceGen);
           if (msg.stale && coming) throw staleSection();
           if (msg.stale || msg.gone) throw failure(() => tt("app.reader.section.gone", "The reader could not read the save again: Update to try once more"));
           const got = JSON.parse(msg.data);
@@ -2496,6 +2496,11 @@
     // history goes with it: the worker names against the copy it holds, so
     // names asked for together all keep theirs (worker.js).
     name: (rid, slug) => ask({kind: "name", rid, slug: slug || null}),
+    historyPersistent: () => historyHeld === null,
+    staffingMeasurement: (key, action, gen) => {
+      if(historyHeld !== null) return Promise.reject(new Error(tt("app.store.history", "Could not remember history.")));
+      return ask({kind: "staff-measurement", key, action, gen});
+    },
     // One section of the build `gen` (the board's), computed on demand from
     // the build the worker holds: resolves to {generation, sections}, or
     // rejects stale (err.stale) once a newer build has been asked for.
