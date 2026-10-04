@@ -14405,7 +14405,8 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
     by_key = {b["key"]: b for b in businesses}
     out = []
     for grid in grids:
-        if "evidence" in grid:
+        uncertain = "evidence" in grid
+        if uncertain and not grid.get("cinemaCapacity"):
             continue  # historical counts cannot diagnose current staffing
         business = by_key[grid["key"]]
         basket = grid["basket"] or 0
@@ -14425,7 +14426,14 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
         # both short of Hair Stylists on one hour is two people to hire, not one.
         roles = {_role_key(role): role for role in grid["roles"]}
         by_limit = collections.defaultdict(lambda: collections.defaultdict(set))
-        for wd, hour in sorted(_capped_cells(grid)):
+        if uncertain:
+            # Equipment capacity is known independently of employee schedules.
+            # Preserve its warning without inferring any historical staff tie.
+            for wd, hours in enumerate(grid["customers"]):
+                for hour, seen in enumerate(hours):
+                    if door and seen is not None and seen >= door * AT_CAP:
+                        by_limit[(("cinema furniture", None),)][wd].add(hour)
+        for wd, hour in (() if uncertain else sorted(_capped_cells(grid))):
             if door and door <= grid["staffed"][wd][hour]:
                 limit = "cinema furniture" if grid.get("cinemaCapacity") else "the building"
                 tied = [(limit, None)]
@@ -14465,7 +14473,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
         ):
             capped = {wd: sorted(hours) for wd, hours in by_limit[limits].items()}
             cells = [(wd, h) for wd in sorted(capped) for h in capped[wd]]
-            ceilings = [grid["effective"][wd][h] for wd, h in cells]
+            ceilings = [door if uncertain else grid["effective"][wd][h] for wd, h in cells]
             finding = {
                 "kind": "cap",
                 "key": grid["key"],
@@ -14541,6 +14549,9 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
                     else _sp_list([_sp_station_noun(w) or _sp_counters(office) for w, _ in said], " and ")
                 )
             out.append(finding)
+
+        if uncertain:
+            continue  # no retrospective overstaffing claim from imported counts
 
         # Overstaffing is a property of the roster that was on, so each role is
         # read on its own: a gym's spare trainer-hours are real even on an hour

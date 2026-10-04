@@ -584,6 +584,10 @@ rules below describe the legacy measured-grid calculation retained for direct ca
 they are not inferred from a newly imported save. The staffing measurement workflow
 below supplies qualified demand for current plans.
 
+Verified cinema equipment limits remain visible when reported customers reach that
+capacity. This compares observations with known installed equipment only; it does not
+infer a historical staffing shortfall or recommend reducing employee hours.
+
 **At the ceiling.** Hours at 95% of effective capacity, with the binding limit named. Each
 hour is judged on its own staffing, and each role on the schedule that was on for it. Where the
 building capacity is at or below the site's staffed capacity the building is the limit. That is

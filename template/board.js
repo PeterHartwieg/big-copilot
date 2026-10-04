@@ -6185,7 +6185,7 @@ function spDemandEvidence(row){
     : e.phase === "stopped" ? tt("sp.evidence.stopped", "Measurement stopped because conditions changed, time ran out, or you stopped it. No lower demand was learned.")
     : e.phase === "confirmed" ? tt("sp.evidence.confirmed", "Measurement reviewed. Hours with spare capacity retain their demand estimate; hours still at capacity remain uncertain.")
     : tt("sp.evidence.unknown", "Past customer counts are lower bounds: their staffing and stock context is unknown. Existing coverage is kept until demand is measured.");
-  const button = (action, label) => `<button type="button" class="nx-btn sm" data-demand-action="${action}" data-demand-site="${attr(row.key)}">${label}</button>`;
+  const button = (action, label) => `<button type="button" class="nx-btn sm" data-demand-action="${action}" data-demand-site="${attr(row.key)}">${label}${action === "start" ? `<span class="feature-new" data-new-feature="staffing-demand" hidden>${tt("nav.new", "New")}</span>` : ""}</button>`;
   return `<div class="sp-demand-evidence"><p class="quiet">${status}</p>${e.stale ? `<p class="quiet">${tt("sp.evidence.stale", "Conditions changed since the previous measurement. Measure again before reducing coverage.")}</p>` : ""}${
     (!e.persistent || (SOURCE.historyPersistent && !SOURCE.historyPersistent())) ? `<p class="quiet">${tt("sp.evidence.temporary", "Demand learning is unavailable without saved company history.")}</p>`
     : !LIVE ? `<p class="quiet">${tt("sp.evidence.live", "Open the browser tool or local live board to record a demand measurement.")}</p>`
@@ -6195,12 +6195,14 @@ function spDemandEvidence(row){
     <p class="quiet" data-demand-error role="status"></p></div>`;
 }
 function wireDemandEvidence(){
+  featureDiscovery.refresh();
   document.querySelectorAll("[data-demand-action]").forEach(button => {
     button.onclick = async () => {
       const box = button.closest(".sp-demand-evidence"), error = box.querySelector("[data-demand-error]");
       box.querySelectorAll("button").forEach(b => { b.disabled = true; });
       try{
         const data = await SOURCE.staffingMeasurement(button.dataset.demandSite, button.dataset.demandAction, odGen());
+        featureDiscovery.visit("staffing-demand");
         if(button.dataset.demandAction === "start") spPlanWrite(button.dataset.demandSite, "demand");
         if(data){ takeData(data); renderCalm(); }
       }catch(err){
