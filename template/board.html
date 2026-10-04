@@ -2121,7 +2121,9 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-shift .sp-lbl{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sp-shift small{margin-left:auto;flex:none;padding-left:6px;font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
 .sp-shift .sp-i svg{width:12px;height:12px}
-.sp-shift.sp-clean,.sp-shift.sp-security{background:var(--raised);border-color:var(--rule)}
+/* Match the game's role hues without sacrificing theme text contrast. */
+.sp-skill .sp-shift{background:color-mix(in srgb,var(--sp-skill) 16%,var(--surface));border-color:color-mix(in srgb,var(--sp-skill) 60%,var(--rule));border-left:3px solid var(--sp-skill)}
+.sp-grow.sp-skill .lab{border-left:3px solid var(--sp-skill);padding-left:5px;color:var(--ink-2)}
 .sp-shift.sp-hire{background:none;border:1px dashed var(--warn);color:var(--warn);cursor:default}
 .sp-shift.sp-hire small{color:var(--warn)}
 .sp-shift .sp-pin{color:var(--warn)}
@@ -2147,6 +2149,7 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 .sp-hc{display:flex;flex-wrap:wrap;gap:10px 26px;align-items:center;margin-top:16px;padding-top:14px;border-top:1px solid var(--rule-soft)}
 .sp-hc>span{display:inline-flex;align-items:center;gap:9px;font:500 12px/1 "IBM Plex Mono",monospace;color:var(--ink-2);cursor:default}
 .sp-hc .sp-code{width:26px;height:26px;flex:none;border-radius:50%;background:var(--raised);display:grid;place-items:center;font:600 9.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
+.sp-hc .sp-skill .sp-code{background:color-mix(in srgb,var(--sp-skill) 16%,var(--surface));box-shadow:inset 0 0 0 2px var(--sp-skill);color:var(--ink)}
 .sp-hc .sp-dots{padding:0;gap:4px}
 .sp-hc .sp-i{color:var(--ink-3)}
 .sp-dot.sp-bench{background:none;box-shadow:inset 0 0 0 1.5px var(--ink-2);position:relative}

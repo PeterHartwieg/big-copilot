@@ -569,8 +569,7 @@ test('a security locker nobody staffs is shown as new spending, in hours it can 
     // The hires' weeks' own hours (eight twelve-hour lines), not 30 a hire.
     assert.match(await guard.innerText(), enRe('sp.hc.newshort', {n: 96}));
     assert.match(await guard.getAttribute('data-read'), enRe('sp.hc.newhours'));
-    // "Customer Service" and "Cleaning station" are both CS: the codes on the
-    // line have to stay apart or the shop looks like it has two of one role.
+    // Customer Service keeps CS; cleaning consistently uses CL.
     const codes = await page.$$eval('#sp-roster .sp-hc .sp-code', cs => cs.map(c => c.textContent));
     assert.equal(new Set(codes).size, codes.length, codes.join(','));
   } finally { await page.close(); }
@@ -622,9 +621,8 @@ test('a bench member is counted off every role they hold, not just the first', a
         e.querySelector('.sp-code').textContent,
         e.querySelectorAll('.sp-dot').length,
         e.querySelectorAll('.sp-dot.sp-bench').length]));
-    const cleaning = rows.find(r => r[0] === 'CLE');
-    // 'Cleaning station' and 'Customer Service' both code to CS, so those two
-    // take the three-letter fallback; the locker keeps its initials.
+    const cleaning = rows.find(r => r[0] === 'CL');
+    // Cleaning uses CL beside Customer Service's CS; the locker keeps SG.
     const security = rows.find(r => r[0] === 'SG');
     assert.deepEqual(cleaning.slice(1), [4, 1], 'have 2, one of them the bench, plus 2 to hire');
     assert.deepEqual(security.slice(1), [4, 1], 'have 2, the same bench member, plus 2 to hire');
@@ -946,7 +944,9 @@ test('an unmeasured need strip is empty, and the note above it says why', async 
     assert.match(await note.innerText(), enRe('sp.new.label.new'));
     assert.match(await note.innerText(), textRe('sp.new.cover.until'));
     assert.equal(await page.locator(mon + '.sp-grow').count(), 4, 'the strip and three stations');
-    assert.equal(await page.locator(mon + '.sp-grow:nth-child(2) .sp-shift').count(), 0);
+    const serving = page.locator(mon + '.sp-grow').filter({has: page.locator('.lab', {hasText: /^CR1$/})});
+    assert.equal(await serving.count(), 1);
+    assert.equal(await serving.locator('.sp-shift').count(), 0);
     // _staffing() writes 0 alongside every `none`, so this cannot arrive from a
     // save; the strip refuses a number it has no basis for even so, because a
     // drawn bar is a claim the shop was measured.
@@ -2309,5 +2309,49 @@ test('a shop nobody works at any more is on its open-hours plan, and the need ro
     const cells = await page.locator(mon + '.sp-need').evaluateAll(n => n.map(x => [x.style.getPropertyValue('--n'), x.dataset.read]));
     assert.ok(cells.length > 0);
     assert.ok(cells.every(([n, read]) => n === String(out.regs) && enRe('sp.basis.openall').test(read)), JSON.stringify(cells[0]));
+  } finally { await page.close(); }
+});
+
+
+test('cleaning leads every day with matching CL labels and game role colors, without moving assignments', async () => {
+  const page = await shop('full');
+  try {
+    const result = await page.evaluate(() => {
+      const row = D.staffing[0];
+      const before = JSON.stringify(row);
+      const codes = spStationCodes(row.stations);
+      const order = spStationOrder(row.stations);
+      return {
+        unchanged: before === JSON.stringify(row),
+        days: [...document.querySelectorAll('#sp-roster .sp-day')].map(day => ({
+          wd: Number(day.dataset.d),
+          lanes: [...day.querySelectorAll('.sp-grow.sp-skill')].map(el => ({
+            code: el.querySelector('.lab').textContent,
+            color: el.style.getPropertyValue('--sp-skill'),
+            ticks: [...el.querySelectorAll('[data-tick]')].map(b => b.dataset.tick).sort(),
+            hires: [...el.querySelectorAll('.sp-hire')].every(b => getComputedStyle(b).borderTopStyle === 'dashed'),
+          })),
+        })),
+        expected: HOUR_ROWS.map(wd => ({wd, lanes: order.map(si => ({
+          code: codes[si], color: spSkillColor(row.stations[si].skill),
+          ticks: row.shifts.filter(s => s.d === wd && s.s === si && spTickable(row, s)).map(s => spTickId(row, s)).sort(),
+          hires: true,
+        }))})),
+        counts: [...document.querySelectorAll('#sp-roster .sp-hc .sp-code')].map(e => e.textContent),
+        translated: spStationCodes([
+          {name: 'Reinigungsstation', skill: 'ba:skill_cleaning'},
+          {name: 'Cash register', skill: 'ba:skill_customerservice'},
+          {name: 'Reinigungsstation', skill: 'ba:skill_cleaning'},
+        ]),
+        fallback: spSkillColor('unknown'),
+      };
+    });
+    assert.equal(result.unchanged, true);
+    assert.deepEqual(result.days, result.expected);
+    assert.ok(result.days.every(d => d.lanes[0].code === 'CL' && d.lanes[0].color === '#28bfaa'));
+    assert.equal(result.counts[0], 'CL');
+    assert.ok(result.counts.includes('CS'));
+    assert.deepEqual(result.translated, ['CL1', 'CR', 'CL2']);
+    assert.equal(result.fallback, 'var(--ink-3)');
   } finally { await page.close(); }
 });
