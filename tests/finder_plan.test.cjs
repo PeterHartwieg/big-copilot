@@ -139,22 +139,22 @@ test('a plan finder opens on the plan: its type fixed, its neighbourhood, premis
     assert.equal(await page.locator('#planHost .fsaved').count(), 0);
     assert.equal(await page.locator('#planHost .fplan-type').textContent(), 'Clothing Store');
     assert.equal(await page.locator('#planHost .fplan-note').textContent(), en('map.fplan.from'));
-    // Only premises to rent are a new store.
+    // Available premises include new rentals and empty existing leases.
     assert.deepEqual(await page.$$eval('#planHost .fchip.show', c => c.map(x => [x.dataset.show, x.classList.contains('on')])), [['rent', true]]);
     // The plan's neighbourhood alone, scored on the plan's type.
-    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    assert.deepEqual(await rowKeys(page), [HK[0], HK[2]]);
     assert.deepEqual(await page.$$eval('#planHost .fchip.hd', c => c.map(x => [x.dataset.h, x.classList.contains('on')])),
       [[HK_HOOD, true], [MT_HOOD, false]]);
     // The neighbourhoods, the sort and the limits stay the reader's to change.
     await page.locator(`#planHost .fchip.hd[data-h="${MT_HOOD}"]`).click();
-    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
-    assert.deepEqual(await page.$$eval('#planHost .place.fr .v.sc', v => v.map(x => x.textContent)), ['46', '25', '10']);
+    assert.deepEqual(await rowKeys(page), [HK[0], HK[2], MT[0], MT[1]]);
+    assert.deepEqual(await page.$$eval('#planHost .place.fr .v.sc', v => v.map(x => x.textContent)), ['46', '39', '25', '10']);
     await page.locator('#planHost .fhead [data-s="traffic"]').click();
-    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], HK[2], MT[1]]);
     await page.locator('#planHost .fhead [data-s="m2"]').click();
-    assert.deepEqual(await rowKeys(page), [MT[0], HK[0], MT[1]]);
+    assert.deepEqual(await rowKeys(page), [MT[0], HK[0], HK[2], MT[1]]);
     await page.locator('#planHost input[data-f="minTraffic"]').fill('30');
-    assert.deepEqual(await rowKeys(page), [MT[0], HK[0]]);
+    assert.deepEqual(await rowKeys(page), [MT[0], HK[0], HK[2]]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -195,8 +195,14 @@ test('a picked row opens its card with the plan\'s button, which hands the build
       await go.click();
     }
     assert.deepEqual(await page.evaluate(() => window.__planned), [MT[0], HK[2], HK[3]]);
-    // Not in the list, which is premises to rent.
-    assert.equal(await page.locator(`#planHost .place[data-pick="${HK[2]}"], #planHost .place[data-pick="${HK[3]}"]`).count(), 0);
+    // Only the empty lease joins the suggestions; the registered store remains map-only.
+    assert.equal(await page.locator(`#planHost .place[data-pick="${HK[2]}"]`).count(), 1);
+    assert.equal(await page.locator(`#planHost .place[data-pick="${HK[3]}"]`).count(), 0);
+    const rentedRow = page.locator(`#planHost .place[data-pick="${HK[2]}"]`);
+    assert.match(await rentedRow.innerText(), /Already rented/);
+    assert.equal(await rentedRow.locator(".dep").innerText(), "$0");
+    await page.locator("#planHost .fhead [data-s=deposit]").click();
+    assert.equal((await rowKeys(page))[0], HK[2]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -207,25 +213,25 @@ test('planFor asks the plan\'s new question from the top; the same question keep
     await page.locator(`#planHost .place[data-pick="${HK[0]}"]`).click();
     await page.locator('#planHost .site.in').waitFor();
     await page.locator('#planHost input[data-f="minM2"]').fill('200');
-    assert.deepEqual(await rowKeys(page), [HK[0], MT[0]]);
+    assert.deepEqual(await rowKeys(page), [HK[0], HK[2], MT[0]]);
     // The same plan drawn again: its filters and pick stay.
     await page.evaluate(() => window.__plan.planFor({cat: 'retail', type: 'ba:businesstype_clothingstore', hoods: null}));
     await page.evaluate(() => window.__plan.ready);
     assert.equal(await page.evaluate(() => window.__plan.selected), HK[0]);
-    assert.deepEqual(await rowKeys(page), [HK[0], MT[0]]);
+    assert.deepEqual(await rowKeys(page), [HK[0], HK[2], MT[0]]);
     // Another type: nothing picked, no limits left over, ranked for the new type.
     await page.evaluate(coffee => window.__plan.planFor({cat: 'retail', type: coffee, hoods: null}), COFFEE);
     await page.waitForFunction(() => document.querySelector('#planHost .fplan-type').textContent === 'Coffee Shop');
     assert.equal(await page.evaluate(() => window.__plan.selected), null);
     assert.equal(await page.locator('#planHost .site').isVisible(), false);
-    assert.deepEqual(await rowKeys(page), [MT[0], HK[0], MT[1]]);
-    assert.deepEqual(await page.$$eval('#planHost .place.fr .v.sc', v => v.map(x => x.textContent)), ['45', '24', '18']);
+    assert.deepEqual(await rowKeys(page), [MT[0], HK[0], HK[2], MT[1]]);
+    assert.deepEqual(await page.$$eval('#planHost .place.fr .v.sc', v => v.map(x => x.textContent)), ['45', '24', '20', '18']);
     assert.equal(await page.locator('#planHost input[data-f="minM2"]').inputValue(), '0');
     assert.equal(await page.locator('#planHost .places .list').evaluate(l => l.scrollTop), 0);
     // An office plan lists offices.
     await page.evaluate(law => window.__plan.planFor({cat: 'office', type: law, hoods: null}), LAW);
     await page.waitForFunction(() => document.querySelector('#planHost .fplan-type').textContent === 'Law Firm');
-    assert.deepEqual(await rowKeys(page), [HK[4]]);
+    assert.deepEqual(await rowKeys(page), [HK[6], HK[4]]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -237,7 +243,7 @@ test('a plan finder stores nothing and never touches the history entry', async (
   try{
     // The character's stored filters are the City map's, not the plan's.
     assert.equal(await page.locator('#planHost .fplan-type').textContent(), 'Clothing Store');
-    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    assert.deepEqual(await rowKeys(page), [HK[0], HK[2]]);
     assert.equal(await page.locator('#planHost input[data-f="minM2"]').inputValue(), '0');
     await page.locator(`#planHost .fchip.hd[data-h="${MT_HOOD}"]`).click();
     await page.locator('#planHost .fhead [data-s="cap"]').click();
@@ -266,7 +272,7 @@ test('the City map page\'s finder and a plan\'s finder never see each other', as
     await page.locator('#cityMapPage .place.fr').first().waitFor();
     // The page opens on its own defaults, not on the plan's question.
     assert.deepEqual(await page.evaluate(() => [cityMapPage.fs.cat, cityMapPage.fs.type, cityMapPage.fs.hoods]), ['retail', '', null]);
-    assert.deepEqual(await page.$$eval('#cityMapPage .place.fr', r => r.map(x => x.dataset.pick)), [HK[0], MT[0], MT[1]]);
+    assert.deepEqual(await page.$$eval('#cityMapPage .place.fr', r => r.map(x => x.dataset.pick)), [HK[0], MT[0], HK[2], MT[1]]);
     assert.equal(await page.locator('#cityMapPage .fplan-type').count(), 0);
     assert.equal(await page.locator('#cityMapPage .fplan-go').count(), 1);
     await page.locator('#cityMapPage .fchip.cat[data-cat="office"]').click();
@@ -280,7 +286,7 @@ test('the City map page\'s finder and a plan\'s finder never see each other', as
     assert.deepEqual(await page.evaluate(() => [window.__plan.fs.cat, window.__plan.fs.type, window.__plan.fs.hoods, window.__plan.fs.on]),
       ['retail', CLOTHES, [HK_HOOD], true]);
     await page.evaluate(() => { document.getElementById('planHost').style.display = ''; window.__plan.planFor(window.__plan.planning.preset); return window.__plan.ready; });
-    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    assert.deepEqual(await rowKeys(page), [HK[0], HK[2]]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -294,7 +300,7 @@ test('a new character keeps the plan\'s question; a plan whose host is gone is l
     await page.waitForFunction(() => window.__plan.selected === null);
     assert.deepEqual(await page.evaluate(() => [window.__plan.fs.cat, window.__plan.fs.type, window.__plan.fs.hoods, window.__plan.fs.on]),
       ['retail', CLOTHES, [HK_HOOD], true]);
-    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    assert.deepEqual(await rowKeys(page), [HK[0], HK[2]]);
     // The board drew the host away: the next refresh drops the view.
     await page.evaluate(() => { document.getElementById('planHost').remove(); refreshCityMaps(); });
     assert.equal(await page.evaluate(() => mapViews.has(window.__plan)), false);

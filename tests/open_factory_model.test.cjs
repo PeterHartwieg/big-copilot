@@ -58,6 +58,20 @@ test('a selected depot adds eight shelves, van, deposit and one delivery', () =>
   assert.equal(inv.firm, 12900);
 });
 
+test('empty rented factory and depot premises waive deposits but keep equipment and running rent', () => {
+  const model = create(frozen(fixture()));
+  const input = frozen({counts: {beer: 2}, building: {...factory, status: 'mine', occupant: null},
+    depot: {...depot, status: 'mine', occupant: null}});
+  const inv = model.investment(input);
+  assert.equal(inv.deposit, 0);
+  assert.equal(inv.depot.deposit, 0);
+  assert.equal(inv.self, 12600 - factory.deposit - depot.deposit);
+  assert.equal(inv.firm, 12900 - factory.deposit - depot.deposit);
+  assert.equal(inv.truck, 4000);
+  assert.equal(inv.depot.van, 2000);
+  assert.equal(model.running(input, inv).rent, (factory.rent + depot.rent) * 7);
+});
+
 test('owned factories buy only added machines and storage, retaining other product ranges', () => {
   const model = create(frozen(fixture()));
   const inv = model.investment(frozen({counts: {beer: 2}, building: factory, owned: true, current: {beer: 1, cider: 2}, depot}));
@@ -144,6 +158,9 @@ test('depot choice is deterministic, keeps owned premises, and replaces invalid 
   assert.equal(model.selectDepot({building: factory, buildings, rememberedKey: factory.key}).key, 'a');
   const owned = frozen([{...a, status: 'mine'}, b]);
   assert.equal(model.selectDepot({building: factory, buildings: owned, rememberedKey: 'a'}).key, 'a');
+  assert.equal(model.selectDepot({building: factory, buildings: owned}).key, 'a');
+  const occupied = frozen([{...a, status: 'mine', occupant: {typeSlug: 'ba:businesstype_factory'}}, b]);
+  assert.equal(model.selectDepot({building: factory, buildings: occupied, rememberedKey: 'a'}).key, 'b');
   const rival = frozen([{...a, status: 'rival'}, far]);
   assert.equal(model.selectDepot({building: factory, buildings: rival, rememberedKey: 'a'}).key, 'far');
   assert.equal(model.selectDepot({building: factory, buildings: []}), null);

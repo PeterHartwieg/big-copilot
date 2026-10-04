@@ -235,8 +235,24 @@ test('investment uses layout, decoration and deterministic vendor order without 
   assert.deepEqual(api.stores(facts.types.T.layouts.C1), [{key: 'a', lines: [0, 1]}, {key: 'c', lines: [2]}]);
   assert.deepEqual(api.investment({type: 'T'}, {...SHOP, deposit: 50}),
     {furniture: 1000, fee: 500, deposit: 50, stores: 2, delivery: 200, decor: 200, firm: 1550, self: 1450, items: 6});
+  assert.deepEqual(api.investment({type: 'T'}, {...SHOP, status: 'mine', occupant: null, deposit: 50}),
+    {furniture: 1000, fee: 500, deposit: 0, stores: 2, delivery: 200, decor: 200, firm: 1500, self: 1400, items: 6});
   assert.equal(api.investment({type: 'missing'}, SHOP), null);
   assert.equal(api.model('missing', SHOP), null);
+});
+
+test('availability follows the lease and occupant, not ownership of the real estate', () => {
+  const b = {status: 'mine', occupant: null, deposit: 500, owner: 'city'};
+  assert.equal(OpenStoreModel.availablePremises(b), true);
+  assert.equal(OpenStoreModel.leaseDeposit(b), 0);
+  b.occupant = {typeSlug: 'ba:businesstype_clothingstore'};
+  assert.equal(OpenStoreModel.availablePremises(b), false);
+  b.status = 'vacant'; b.occupant = null; b.owner = 'you';
+  assert.equal(OpenStoreModel.availablePremises(b), true);
+  assert.equal(OpenStoreModel.leaseDeposit(b), 500);
+  for(const status of ['rival', 'service', 'unavailable']){
+    assert.equal(OpenStoreModel.availablePremises({...b, status}), false);
+  }
 });
 
 test('office billing, staffed-hour wages and own-shop calibration use explicit inputs', () => {

@@ -588,13 +588,16 @@ test('Demand popover asks for store facts and redraws the still-open cell on arr
   assert.match(b.run('demPop.innerHTML'), /data-dem-go="find"/);
   assert.deepEqual(b.asked.map(a => a.name), ['openStore']);
   assert.match(b.run('demPop.innerHTML'), /od-wait/);
-  assert.match(b.run('demPop.innerHTML'), /To rent<\/span><b>—/);
+  assert.match(b.run('demPop.innerHTML'), /Available<\/span><b>—/);
   b.asked[0].resolve({sections: {openStore: {openStore: {types: {shop: {}}}},
-    premises: {premises: {demand: {hood: [{slug: 'shop', category: 'retail'}]}, buildings: []}}}});
+    premises: {premises: {demand: {hood: [{slug: 'shop', category: 'retail'}]}, buildings: [
+      {hood: 'hood', type: 'retail', status: 'mine', occupant: null},
+      {hood: 'hood', type: 'retail', status: 'mine', occupant: {typeSlug: 'shop'}},
+    ]}}}});
   await tick();
   assert.match(b.run('demPop.innerHTML'), /data-dem-go="open"/);
   assert.doesNotMatch(b.run('demPop.innerHTML'), /od-wait/);
-  assert.match(b.run('demPop.innerHTML'), /To rent<\/span><b>0/);
+  assert.match(b.run('demPop.innerHTML'), /Available<\/span><b>1/);
 });
 
 test('a closed Demand popover stays closed when store facts arrive', async () => {

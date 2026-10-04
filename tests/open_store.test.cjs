@@ -58,6 +58,36 @@ async function planned(page){
   await page.waitForFunction(() => osStep === 'investment');
 }
 
+test('an empty rented shop is suggested and its investment has no second deposit', async t => {
+  const page = await board(t);
+  const before = await page.evaluate(({key, type}) => {
+    const b = osBuilding(key), inv = osInvestment({type}, b);
+    b.status = 'mine'; b.occupant = null;
+    return {deposit: inv.deposit, self: inv.self, firm: inv.firm, rent: b.rent};
+  }, {key: SITE, type: LIQ});
+  await page.locator(`#osBody .os-type[data-os-new="${LIQ}"]`).click();
+  const row = page.locator(`#osFinderMap .place[data-pick="${SITE}"]`);
+  await row.waitFor();
+  assert.match(await row.innerText(), /Already rented/);
+  assert.equal(await row.locator('.dep').innerText(), '$0');
+  await row.click();
+  await page.locator('#osFinderMap .site [data-action="plan"]').click();
+  await page.waitForFunction(() => osStep === 'investment');
+  const after = await page.evaluate(() => ({inv: osInvestment(osPlan(), osBuilding(osPlan().key)),
+    rent: osBuilding(osPlan().key).rent}));
+  assert.equal(after.inv.deposit, 0);
+  assert.equal(after.inv.self, before.self - before.deposit);
+  assert.equal(after.inv.firm, before.firm - before.deposit);
+  assert.equal(after.rent, before.rent);
+  assert.match(await page.locator('#osBody').innerText(), /no additional rental deposit/);
+  for(const mode of ['self', 'firm']){
+    await page.locator(`[data-os-mode="${mode}"]`).click();
+    assert.match(await page.locator('#osStrip').innerText(), /Already rented/);
+    assert.doesNotMatch(await page.locator('#osStrip').innerText(), /deposit included/);
+    if(mode === 'self') assert.doesNotMatch(await page.locator('#osBody .os-total small').innerText(), /deposit/);
+  }
+});
+
 test('the view is Expansion\'s, New until opened, and starts on What with its six steps', async t => {
   const page = await board(t, {hash: '#expansion/demand'});
   const tab = page.locator('#localNav a[data-route="expansion/open"]');
@@ -1018,6 +1048,55 @@ const pvsa = page => page.$$eval('#osBody .os-pvsa tbody tr', trs => trs.map(tr 
 const pvRow = async (page, name) => (await pvsa(page)).find(x => x[0].startsWith(name));
 const goOpen = async page => { await page.locator('#osCtl [data-os-step="open"]').click(); await page.waitForFunction(() => osStep === 'open'); };
 
+for(const mode of ['self', 'firm']) test(`an untouched default loan for an existing lease survives reload and opening (${mode})`, async t => {
+  const page = await board(t);
+  await page.evaluate(key => { const b = osBuilding(key); b.status = 'mine'; b.occupant = null; }, SITE);
+  await planned(page);
+  await page.locator(`[data-os-mode="${mode}"]`).click();
+  await page.locator('#osCtl [data-os-step="breakeven"]').click();
+  await page.locator('#osFin [data-os-fin-on]').check();
+  const displayed = +(await page.locator('[data-os-fin-amount]').inputValue());
+  assert.ok(displayed > 0);
+  await page.evaluate(() => { osPlansFor = null; osLoad(); drawOpenStore(); });
+  assert.equal(+(await page.locator('[data-os-fin-amount]').inputValue()), displayed);
+  await opened(page, {opened: OPENED}, FULL);
+  await traded(page, {daily: [500], state: 'togo', extra: {days: 30}});
+  await goOpen(page);
+  const recorded = await page.locator('.os-roiloan .os-finfacts > div').first().locator('b').innerText();
+  assert.equal(money(recorded), displayed, 'after-opening loan matches the untouched field');
+  await page.evaluate(() => { delete osPlan().snap; drawOpenStore(); });
+  const legacy = await page.locator('.os-roiloan .os-finfacts > div').first().locator('b').innerText();
+  assert.equal(money(legacy), displayed, 'the legacy investment-only fallback uses remaining cash too');
+});
+
+for(const alreadyHeld of [false, true]) test(`historical investment retains the deposit through renting, reload and opening (${alreadyHeld ? 'existing lease' : 'new lease'})`, async t => {
+  const page = await board(t);
+  const expected = await page.evaluate(({key, type, held}) => {
+    const b = osBuilding(key), estimate = osEstimate({type}, b);
+    if(held){ b.status = 'mine'; b.occupant = null; }
+    return {deposit: estimate.inv.deposit, firm: estimate.inv.firm, days: estimate.days};
+  }, {key: SITE, type: LIQ, held: alreadyHeld});
+  await planned(page);
+  const result = await page.evaluate(() => {
+    const p = osPlan(), b = osBuilding(p.key);
+    b.status = 'mine'; b.occupant = null;
+    osSnapTake(p); osSave();
+    osPlansFor = null; osLoad();
+    return {snap: osPlan().snap, remaining: osInvestment(osPlan(), b)};
+  });
+  assert.equal(result.remaining.deposit, 0, 'no second deposit to fund');
+  assert.equal(result.snap.inv.deposit, expected.deposit, 'historical investment includes the deposit');
+  assert.equal(result.snap.inv.firm, Math.round(expected.firm));
+  assert.deepEqual(result.snap.days, expected.days, 'historical payback uses the same total investment');
+  await opened(page, {opened: OPENED}, FULL);
+  await traded(page, {daily: [500], state: 'togo', extra: {days: 30}});
+  await goOpen(page);
+  const deposit = await pvRow(page, en('gr.os.inv.deposit'));
+  assert.equal(deposit[1], deposit[2]);
+  assert.equal(deposit[3], '–', 'the prior deposit is not an overrun');
+  assert.match(await page.locator('#osBody').innerText(), /including deposits paid before this plan/);
+});
+
 test('once the planned store stands at the address the plan keeps what it said and its opening day, and the Open step unlocks', async t => {
   const page = await board(t);
   await planned(page);
@@ -1402,9 +1481,12 @@ test('a cost centre\'s row is no payback; a plan kept before its figures were co
   await openedPlan(page);
   await traded(page, {daily: Array(16).fill(500), state: 'togo', extra: {days: 300}});
   await goOpen(page);
-  await page.evaluate(() => { delete osPlan().snap; drawOpenStore(); });
+  await page.evaluate(() => { delete osPlan().snap; osBuilding(osPlan().key).status = 'mine'; drawOpenStore(); });
   assert.match(await page.locator('#osBody').innerText(), enRe('gr.os.roi.live2'));
   assert.deepEqual((await pvsa(page)).map(r => r[0].split(' ')[0]), ['gr.os.roi.furn', 'gr.os.inv.fee', 'gr.os.inv.deposit', 'gr.os.inv.total'].map(k => en(k).split(' ')[0]));
+  const deposit = await pvRow(page, en('gr.os.inv.deposit'));
+  assert.equal(deposit[1], deposit[2], 'legacy plans compare the full deposit too');
+  assert.equal(deposit[3], '–');
   // A store that has a vehicle of its own since: a row of its own, no plan figure.
   await page.evaluate(site => { const c = D.payback.sites[site].cost; c.vehicles = 98000; c.firm += 98000; drawOpenStore(); }, SITE);
   const vehicles = await pvRow(page, en('gr.os.roi.vehicles'));

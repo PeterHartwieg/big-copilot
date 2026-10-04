@@ -149,6 +149,21 @@ async function pick(page, key){
 const rowKeys = page => page.$$eval('#cityMapPage .place.fr', rows => rows.map(r => r.dataset.pick));
 const facts = page => page.$$eval('#cityMapPage .site .facts span', s => s.map(x => x.textContent));
 
+test('ordinary map facts retain deposit estimates and unknown deposits for player premises', async () => {
+  const {page} = await fixture();
+  try{
+    await openMap(page);
+    for(const deposit of [840, null]){
+      await page.evaluate(({key, deposit}) => {
+        const b = premises().buildings.find(b => b.key === key);
+        Object.assign(b, {status: 'mine', deposit, occupant: {name: 'Existing shop', type: 'Coffee Shop'}});
+        cityMapPage.select(key);
+      }, {key: HK[0], deposit});
+      assert.ok((await facts(page)).includes(en('map.fact.deposit') + (deposit === null ? '—' : '$840')));
+    }
+  } finally { await page.close(); }
+});
+
 test('any address carries its facts: what it is, what it costs and whether it is free', async () => {
   const {page, errors} = await fixture();
   try{
@@ -483,7 +498,7 @@ test('a saved search comes back in one click, for every character and after a re
     const mine = page.locator(`${saved} [data-saved="Small offices"]`);
     assert.equal(await mine.getAttribute('aria-pressed'), 'true');
     assert.equal(await page.evaluate(() => document.activeElement?.dataset.saved), 'Small offices');
-    assert.match(await mine.getAttribute('data-tip'), new RegExp('^' + [enRe('map.kind.office').source, enRe('map.show.rent').source, '.+', enRe('map.range.cap.min', {lo: 5}).source, enRe('map.saved.tip.sort', {sort: en('map.sortname.score')}).source].join(' \u00b7 ') + '$'));
+    assert.match(await mine.getAttribute('data-tip'), new RegExp('^' + [enRe('map.kind.office').source, enRe('map.show.available').source, '.+', enRe('map.range.cap.min', {lo: 5}).source, enRe('map.saved.tip.sort', {sort: en('map.sortname.score')}).source].join(' \u00b7 ') + '$'));
     // Any change to the filters, and the chip is no longer what is on screen.
     await page.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
     assert.equal(await mine.getAttribute('aria-pressed'), 'false');
@@ -988,7 +1003,7 @@ test('a preset lands on the column its category ranks by, not on the last sort',
     assert.equal(await page.evaluate(() => cityMapPage.showAll), false);  // the +N expansion does not survive a preset
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
     assert.equal(await page.locator('#cityMapPage .fhead span.on.up').count(), 0);  // highest first
-    assert.equal(await page.locator('#cityMapPage .fchip.show.on').textContent(), en('map.show.rent') + '3');
+    assert.equal(await page.locator('#cityMapPage .fchip.show.on').textContent(), en('map.show.available') + '3');
     assert.equal(await page.locator('#cityMapPage .fchip.num input[data-f="minTraffic"]').inputValue(), '0');
     assert.equal(await page.locator('#cityMapPage .fchip.num input[data-f="maxCap"]').inputValue(), '0');
     assert.equal(await page.locator('#cityMapPage .fchip.num input[data-f="minM2"]').inputValue(), '0');
@@ -1094,9 +1109,9 @@ test('the Show row is one choice, and picking one drops the others', async () =>
   try{
     await openMap(page); await turnOn(page);
     assert.deepEqual(await page.$$eval('#cityMapPage .fchip.show', c => c.map(x => x.textContent)),
-      [en('map.show.rent') + '3', en('map.show.takeover') + '2', 'For sale2']);
+      [en('map.show.available') + '3', en('map.show.takeover') + '2', 'For sale2']);
     assert.equal(await chosen().count(), 1);
-    assert.match(await chosen().textContent(), enRe('map.show.rent', {}, {anchor: 'start'}));
+    assert.match(await chosen().textContent(), enRe('map.show.available', {}, {anchor: 'start'}));
     await page.locator('#cityMapPage .fchip.show[data-show="takeover"]').click();
     assert.equal(await chosen().count(), 1);
     assert.match(await chosen().textContent(), enRe('map.show.takeover', {}, {anchor: 'start'}));
@@ -1507,7 +1522,7 @@ test('a Growth cell opens its popover, whose Find a location opens the finder on
     // payload it offers the finder alone. Esc closes it, back on the cell.
     const pop = page.locator('#demCellPop');
     assert.equal(await pop.isVisible(), true);
-    assert.match(await pop.innerText(), new RegExp("Clothing Store \u00b7 Hell's Kitchen[\\s\\S]*" + [enRe('gr.pop.demand').source, enRe('gr.pop.rivals').source, enRe('map.show.rent').source].join('[\\s\\S]*'), 'i'));
+    assert.match(await pop.innerText(), new RegExp("Clothing Store \u00b7 Hell's Kitchen[\\s\\S]*" + [enRe('gr.pop.demand').source, enRe('gr.pop.rivals').source, enRe('map.show.available').source].join('[\\s\\S]*'), 'i'));
     assert.equal(await pop.locator('[data-dem-go="open"]').count(), 0);
     assert.equal(await clothes.getAttribute('aria-expanded'), 'true');
     assert.equal(await page.evaluate(() => document.activeElement?.dataset.demGo), 'find');

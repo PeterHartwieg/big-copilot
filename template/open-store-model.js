@@ -5,6 +5,10 @@ const OpenStoreModel = (() => {
   const OS_OFFICE = {always: 3, fullDoor: 50, day: [8, 22]};
   const OS_RAMP = [0.55, 0.92, 0.94, 0.97, 0.99];
   const OS_HYPE = {demand: 20, days: 14, idle: 21};
+  // Premises status describes the lease; occupant describes the business in it.
+  const emptyLease = b => !!b && b.status === "mine" && !b.occupant;
+  const availablePremises = b => !!b && (b.status === "vacant" || emptyLease(b));
+  const leaseDeposit = b => b?.status === "mine" ? 0 : b?.deposit;
 
   /**
    * Bind calculation inputs for one payload; this function does not mutate them.
@@ -44,7 +48,7 @@ const OpenStoreModel = (() => {
     function osInvestment(plan, b){
       const out = osOutfit(plan, b);
       if(!out || !b) return null;
-      const deposit = b.deposit || 0, decor = osDecor(b);
+      const deposit = leaseDeposit(b) || 0, decor = osDecor(b);
       const stores = osStores(out).length;
       const delivery = stores * ((osFacts().game || {}).delivery || 0);
       return {furniture: out.furniture, fee: out.fee, deposit, stores, delivery, decor: decor ? decor.cost : 0,
@@ -389,6 +393,6 @@ const OpenStoreModel = (() => {
       loanDays: osLoanDays,
     };
   }
-  return {create, OFFICE: OS_OFFICE, RAMP: OS_RAMP, HYPE: OS_HYPE};
+  return {create, emptyLease, availablePremises, leaseDeposit, OFFICE: OS_OFFICE, RAMP: OS_RAMP, HYPE: OS_HYPE};
 })();
 if(typeof module !== "undefined" && module.exports) module.exports = OpenStoreModel;
