@@ -38,10 +38,8 @@ Local vanilla regression check, 4 October 2026:
 - The game and Link were not running. This validates save-based local/browser use,
   not the new collector inside the game; SDK build/runtime validation remains separate.
 
-Release note draft (add to `web/changelog.json` with the actual PR number and merge
-date when released): **Use renovated and modded building values** — Big Copilot reads
-Alcware renovations from saves and uses current building and marketing values through
-the updated Game Link. Download a snapshot to retain those values for later use.
+Release note: `web/changelog.json`, PR #282. Live facts and portable snapshots
+require Game Link 0.5; deploying the dashboard does not publish its Workshop binary.
 
 ## Finding
 
