@@ -97,6 +97,27 @@ test('ties keep incumbent; vote switching moves exactly one vote; bundled can wi
   assert.deepEqual((await json(await fetchApi('/api/translations/overlay?lang=it'))).translations,{});
 });
 
+test('new bundled drafts preserve existing community choices, alternatives and votes',async()=>{
+  const user=ip();
+  cats.it.entries[0].text=null;
+  const before=await json(await suggest('Salve {n}',user));
+  const choice=before.selectedId;
+  cats.it.entries[0].text='Ciao {n}';
+  cats.it.revision='catalogue-with-italian-drafts';
+  await fetchApi('/__scheduled');
+  const after=await json(await entry(user));
+  assert.equal(after.selectedId,choice);
+  assert.equal(selected(after).text,'Salve {n}');
+  assert.equal(selected(after).votes,1);
+  assert.equal(selected(after).voted,true);
+  assert.equal(after.candidates.find(c=>c.id==='bundled').votes,0);
+  assert.ok(after.candidates.some(c=>c.text==='Hello {n}'),'previous wording remains available');
+  const overlay=await json(await fetchApi('/api/translations/overlay?lang=it'));
+  assert.deepEqual(overlay.translations.greeting,{text:'Salve {n}',sourceVersion:V1});
+  const votes=(await db.prepare('SELECT COUNT(*) n FROM translation_votes').first()).n;
+  assert.equal(votes,1);
+});
+
 test('simultaneous duplicate suggestions collapse; simultaneous switches preserve tally and winner',async()=>{
   const user=ip();
   const results=await Promise.all(Array.from({length:8},()=>suggest('Salve {n}',user)));

@@ -2,13 +2,15 @@
 
 Open [Translations](https://bigcopilot.com/translate/) and choose your language.
 You can contribute without an account, Python, GitHub or a save file.
-Italian is also open for contributions, with English shown where wording is missing.
+Italian wording is supplied as machine drafts and is open for review.
 
 1. Search for the wording you saw, in English or your language. Numbers in a
    displayed sentence can differ from the translation's placeholders.
-2. Vote for wording that reads well, or choose **Correct** to suggest another version.
-   An untranslated phrase offers **Translate** instead.
-3. Submit the wording. A suggestion includes your vote; the version with the most
+2. Choose **View alternatives (N)** to compare the other versions. Opening them does
+   not cast a vote. Each version has **Vote for this**; **Your vote** marks your choice.
+3. Choose **Suggest a change** to edit the current wording, or **Translate** for an
+   untranslated phrase.
+4. Submit the wording. A suggestion includes your vote; the version with the most
    votes is selected. Ties keep the current version.
 
 A single contribution is enough to improve a phrase. You can change your vote,

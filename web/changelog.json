@@ -1,5 +1,11 @@
 [
   {
+    "pr": 289,
+    "date": "2026-10-04",
+    "title": "Use Big Copilot in Italian",
+    "summary": "Italian now includes a complete set of machine-drafted interface translations. Choose Italiano under Language to use them, and help improve the wording through the community translation page. Community-selected wording takes precedence over these drafts."
+  },
+  {
     "pr": 285,
     "date": "2026-10-04",
     "title": "Plan expansion in buildings you already rent",
