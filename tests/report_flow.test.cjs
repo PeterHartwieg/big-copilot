@@ -94,7 +94,7 @@ async function partsOf(post) {
   return out;
 }
 
-test('a failed read offers the form, which sends the failed save and the traceback only when ticked', async (t) => {
+test('a failed read attaches the save by default and the traceback only when ticked', async (t) => {
   const {page, posts} = await setup(t);
   await failRead(page);
   await page.locator('#reportBtn').click();
@@ -102,11 +102,10 @@ test('a failed read offers the form, which sends the failed save and the traceba
   await dialog.waitFor();
   assert.equal(await page.locator('#brTitle').innerText(), en('br.title'));
   assert.equal(await page.locator('#brPublic').innerText(), en('br.text.public'));
-  assert.equal(await page.locator('#brSave').isChecked(), false);
+  assert.equal(await page.locator('#brSave').isChecked(), true);
   assert.equal(await page.locator('#brDetails').isChecked(), false);
   await page.waitForFunction(() => !document.getElementById('brSave').disabled);
   await page.locator('#brText').fill('The board stopped while reading.');
-  await page.locator('#brSave').check();
   await page.locator('#brDetails').check();
   // The preview shows the public part, the game build the reader found included.
   await page.locator('.br-preview summary').click();
@@ -141,6 +140,7 @@ test('unticked boxes send the text alone, and a 503 points to the Discord channe
   await page.locator('#reportBtn').click();
   await page.locator('.br-dialog[open]').waitFor();
   await page.locator('#brText').fill('It broke.');
+  await page.locator('#brSave').uncheck();
   await page.locator('.br-foot .primary').click();
   const away = page.locator('.br-status a');
   await away.waitFor();
@@ -162,6 +162,7 @@ test('the footer opens the form on the landing, where no save can be attached', 
   await page.waitForFunction(() => document.getElementById('brSaveHint').textContent.length > 0
     && !/…/.test(document.getElementById('brSaveHint').textContent));
   assert.equal(await page.locator('#brSave').isDisabled(), true);
+  assert.equal(await page.locator('#brSave').isChecked(), false);
   assert.equal(await page.locator('#brSaveHint').innerText(), en('br.save.none'));
   assert.equal(await page.locator('.br-err').isHidden(), true, 'no error to show');
   // An empty text is not sent.
@@ -183,6 +184,42 @@ test('the footer opens the form on the landing, where no save can be attached', 
   assert.equal(await control.evaluate((el) => el === document.activeElement), true);
 });
 
+test('a delayed save is included by default and never overrides an opt-out', async (t) => {
+  for (const optOut of [false, true]) {
+    const {page, posts} = await setup(t);
+    await failRead(page);
+    await page.locator('#reportBtn').click();
+    await page.locator('.br-dialog[open]').waitFor();
+    // close() queues its cleanup event; let that finish before opening directly.
+    await page.evaluate(() => new Promise(resolve => {
+      const dialog = document.querySelector('.br-dialog');
+      dialog.addEventListener('close', resolve, {once: true});
+      dialog.close();
+    }));
+    await page.evaluate(() => {
+      BigCopilotReport.open({source: 'link', gameBuild: 3682,
+        bytes: () => new Promise(resolve => { fixture.resolveSave = resolve; })});
+    });
+    assert.equal(await page.locator('#brSave').isChecked(), true);
+    assert.equal(await page.locator('#brSave').isEnabled(), true);
+    assert.equal(await page.locator('#brDetails').isChecked(), false);
+    if (optOut) await page.locator('#brSave').uncheck();
+    assert.equal(posts.length, 0, 'opening the form does not send a report');
+    await page.locator('#brText').fill('A delayed game snapshot.');
+    await page.locator('.br-foot .primary').click();
+    if (!optOut) assert.equal(posts.length, 0, 'Send waits for the selected save');
+    await page.evaluate(() => fixture.resolveSave(new Uint8Array([1, 2, 3]).buffer));
+    await page.locator('.br-status a').waitFor();
+    const parts = await partsOf(posts[0]);
+    if (optOut) assert.deepEqual(Object.keys(parts), ['report']);
+    else assert.deepEqual(parts.save, Buffer.from([1, 2, 3]));
+    assert.equal(parts.details, undefined);
+    await page.locator('.br-foot .btn2:not(.primary)').click();
+    await page.locator('#reportBtn').click();
+    assert.equal(await page.locator('#brSave').isChecked(), true, 'a new report restores the default');
+  }
+});
+
 test('on a working board the footer and Help & feedback attach the board\'s save from the reader', async (t) => {
   const {page, posts} = await setup(t);
   await page.setInputFiles('#savePick', {name: SAVE_NAME, mimeType: 'application/octet-stream', buffer: SAVE});
@@ -198,7 +235,7 @@ test('on a working board the footer and Help & feedback attach the board\'s save
   await page.locator('.br-dialog[open]').waitFor();
   await page.waitForFunction(() => !document.getElementById('brSave').disabled);
   await page.locator('#brText').fill('A wrong number.');
-  await page.locator('#brSave').check();
+  assert.equal(await page.locator('#brSave').isChecked(), true);
   await page.locator('.br-foot .primary').click();
   await page.locator('.br-status a').waitFor();
   const parts = await partsOf(posts[0]);
@@ -241,6 +278,7 @@ test('a send in flight keeps the form open and sends only what it was sent with'
   await page.locator('.br-dialog[open]').waitFor();
   await page.waitForFunction(() => !document.getElementById('brSave').disabled);
   await page.locator('#brText').fill('First.');
+  await page.locator('#brSave').uncheck();
   await page.locator('.br-foot .primary').click();
   // While it is out, neither Cancel nor Escape closes the form.
   assert.equal(await page.locator('.br-foot .btn2:not(.primary)').isDisabled(), true);

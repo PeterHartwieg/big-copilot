@@ -69,6 +69,11 @@ the CLI's `dashboard.html` keeps the plain Discord link. The form posts
   board could not draw, `web/worker.js` copies the save it holds (`held`). The Worker stores them as they came, with no gzip
   check, and never decompresses them.
 
+"Attach my save" starts ticked each time the form opens; the player can untick it
+before sending, including while the save is being prepared. If no save is available,
+the box is unticked and disabled. Technical details still start unticked. Opening
+the form does not send either attachment.
+
 The Worker refuses a body whose `Content-Length` is over 8 MB, or missing, before
 reading it, and holds the stream to the same cap. It writes `report.json` (the public
 facts, without the text), `details.json` and `save.hsg` to the `REPORTS` bucket under a
