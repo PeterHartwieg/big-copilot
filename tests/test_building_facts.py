@@ -88,6 +88,33 @@ class BuildingFacts(unittest.TestCase):
         with self.assertRaises(ValueError): f.validate(self.facts, stamp="later")
         with self.assertRaises(ValueError): f.unpack(b'{"format":"big-copilot-save","version":1,"save":"!"}')
 
+    def test_live_city_accepts_residential_version_sentinel(self):
+        # Link captures the whole city, including homes without a numbered layout.
+        # Include every version in the shipped catalogue, not only owned shops.
+        for key, row in d.load_buildings().items():
+            if key == GIFTS:
+                continue
+            item = copy.deepcopy(self.facts["buildings"][0])
+            item.update(street=key[0], number=key[1], type="ba:buildingtype_" + row["t"],
+                        size="ba:buildingsize_" + row["z"].lower(), version=row["v"])
+            self.facts["buildings"].append(item)
+        homes = [r for r in self.facts["buildings"] if r["version"] == -1]
+        self.assertTrue(homes, "The city fixture must exercise the game's -1 sentinel")
+        save = self.load()
+        table = d.load_buildings(save)
+        for home in homes:
+            row = table[home["street"], home["number"]]
+            self.assertEqual(row["v"], -1)
+            self.assertIsNone(d._layout(row))
+        self.assertTrue(d.extract(save, Names(data_names()), None)["businesses"])
+
+    def test_invalid_building_versions_still_reject_portable_saves(self):
+        for version in (-2, "-1", None, True, 1.5):
+            with self.subTest(version=version):
+                self.facts["buildings"][0]["version"] = version
+                with self.assertRaisesRegex(ValueError, "Invalid building version"):
+                    f.pack(self.raw, self.facts)
+
     def test_alcware_versions_use_layout_area_not_property_area(self):
         base = {GIFTS: {"t": "retail", "z": "A", "v": 0, "m": 75},
                 ("other", 1): {"t": "retail", "z": "C", "v": 2, "m": 225}}
