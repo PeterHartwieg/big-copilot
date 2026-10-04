@@ -21,6 +21,22 @@ folder is a drop-in mod for the official
 not build in this repo, only inside the SDK's Unity project through the in-editor
 Mod Builder.
 
+Schema 2 also serves `/facts?stamp=...`: runtime building area, layout, customer
+capacity, marketing rules and agencies, paired with the exact `/save` bytes by a
+SHA-256 hash. The dashboard can download these together as a `.bcsave` snapshot for
+later use. Capacity and area changes made by other mods use the same path as changed
+game definitions. The collector uses game getters and never loads another mod's DLL.
+
+Build in the SDK and verify `/health` advertises schema 2 and `building-facts.v1`.
+Peter's local regression check covers a normal city; the original reporter will
+test an Alcware-renovated shop. For the in-game test, compare area, customer capacity
+and campaign prediction with BizMan. Renovate while a refresh is running and verify
+a stale pair is never published. Test dry run and Apply after changing campaign
+prices or building area: both must refuse a stale prediction. These Unity/in-game
+checks cannot be performed by this repository's tests. The local save/browser checks
+are recorded in [`docs/building-facts-compatibility.md`](../../docs/building-facts-compatibility.md);
+they do not validate the new collector inside the game.
+
 ## What it shares, and with whom
 
 - **Loopback only.** The listener binds `http://127.0.0.1:<port>/` and nothing else.

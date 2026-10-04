@@ -109,7 +109,10 @@ test('a share is shown with its decimals: 64.0% satisfied is 64, and 64.5% is 64
 
 test('a promotion finding lands on Businesses › Standards, and Results gets its own portfolio back', async t => {
   const page = await board(t);
-  await page.evaluate(() => { ovShowAll = true; drawAlerts(); });
+  await page.evaluate(() => {
+    D.alerts.push({id:'promotion-route', group:'promotion', level:'info', site:'Test shop', text:'Campaigns can improve promotion', siteKey:D.businesses[0].key});
+    ovShowAll = true; drawAlerts();
+  });
   await page.locator('#alerts .find[data-kind="promotion"] .ov-act').click();
   const w = await where(page);
   assert.deepEqual([w.route, w.page, w.lit], ['businesses/standards', 'company', 'businesses/standards']);
@@ -265,7 +268,9 @@ test('a filtered list is never an empty one with its rows folded away', async t 
   const page = await board(t);
   await page.locator('#alertHead .sev[data-kind="crit"]').click();
   const shown = await page.$$eval('#alerts .find', rows => rows.filter(r => r.getClientRects().length).length);
-  assert.ok(shown >= 13, `every warning the filter keeps shows (${shown})`);
+  const kept = await page.locator('#alerts .find:not(.crit)').count();
+  assert.ok(kept > 8, 'the fixture has more findings than the folded list');
+  assert.equal(shown, kept, 'every finding retained by the filter is visible');
   assert.equal(await page.locator('#ovMore').isHidden(), true);
   // The filters are switches in full-strength text, off drawn as an outline.
   const off = await page.locator('#alertHead .sev[data-kind="crit"]').evaluate(b =>

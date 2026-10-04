@@ -42,6 +42,22 @@ const RETAIL = {
 const SHOP = {hood: 'H', cap: 20, m2: 100, traffic: 20, layout: 'C1', rent: 50, key: 'k'};
 const HOUR = [[[10, 11]], [], [], [], [], [], []];
 
+test('runtime values and per-address outfits override shared layout assumptions', () => {
+  const facts = structuredClone(RETAIL);
+  const t = facts.types.T;
+  t.initial = {C1: 20, k: 90};
+  t.layouts = {C1: {furniture: 100}, k: {furniture: 200}};
+  const m = model(facts);
+  assert.equal(m.osInitial(t, SHOP, {}), 90);
+  assert.equal(m.osInitial(t, {...SHOP, key: 'other'}, {}), 20);
+  assert.equal(m.osOutfit({type: 'T'}, SHOP).furniture, 200);
+  const modified = {...SHOP, marketingRules: {reachMultiplier: 2, strength: 0.5}};
+  assert.equal(m.osPromo(modified, facts.hoods.H, {reach: 40}), 60);
+  assert.equal(m.osOutfit({type: 'T'}, {...SHOP, layoutKnown: false}), null);
+  assert.equal(m.osLayout({...SHOP, layoutKnown: false}), '');
+  assert.equal(m.osModel('T', {...SHOP, factsUnavailable: true}), null);
+});
+
 test('the retail model, worked by hand for one product and one open hour', () => {
   const m = model(RETAIL).osModel('T', SHOP, {sat: 50, open: HOUR});
   // Promotion 20 (traffic, no marketing): 0.5 + 0.75 x 0.2 = 0.65; a current

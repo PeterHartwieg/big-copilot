@@ -5,9 +5,78 @@ two clients: the web app at bigcopilot.com (`web/app.js`) and the local watcher
 (`ba_dashboard.py --watch --game`). `tools/game_link_mock.py` serves the same contract
 from a save file on disk, so the clients can be developed and tested without the game.
 
-Schema version **1**. Bump it on any breaking change and update the mod, the mock, the
+Schema version **2**. Current clients also accept version 1 (without runtime facts).
+Version 2 adds the paired building-facts snapshot and marketing prediction guard below.
+Bump it on any breaking change and update the mod, the mock, the
 two clients and this file in the same commit. A client refuses a mod whose
 `schemaVersion` it does not know and says which version it needs.
+
+## Building facts (schema 2)
+
+`health.features` advertises `building-facts.v1`. Read `/save`, retain its
+`X-Game-Link-Stamp` and `X-Game-Link-Character`, then GET `/facts?stamp=<stamp>`.
+The endpoint uses the same origin policy as `/save`; it is read-only and needs no
+pairing. It returns 503 before the first snapshot, 409 `stamp_mismatch` if a newer
+refresh has replaced it, or this JSON shape:
+
+```json
+{
+  "schemaVersion": 1,
+  "model": "building-values-v1",
+  "character": "example-character",
+  "build": 3682,
+  "stamp": "opaque-refresh-stamp",
+  "saveSha256": "64 lowercase hexadecimal characters",
+  "buildings": [{
+    "street": "ba:street_example", "number": 1,
+    "type": "ba:buildingtype_retail", "size": "ba:buildingsize_c", "version": 0,
+    "neighbourhood": "ba:neighborhood_industrycity",
+    "area": 225, "propertyArea": 75, "capacity": 90, "traffic": 50,
+    "marketing": {"reachMultiplier": 1, "strength": 1}
+  }],
+  "marketingTypes": [{"id": 0, "name": "SmallInternet", "price": 100, "reach": 20}],
+  "agencies": [{"street": "ba:street_example", "number": 2, "types": ["SmallInternet"]}]
+}
+```
+
+The example abbreviates the city and campaign list. A real `marketingTypes` has
+all six supported enum values, in id order 0–5. `area` is the simulation area from
+BuildingSizeData; `propertyArea` is the building's `totalSqm`, which renovations
+can preserve. `capacity` is the building maximum, distinct from the registration's
+equipment-limited `customerCapacity`. Zero is a real maximum; null or -1 is unknown.
+Building registrations also contribute `effectiveCapacity`, `rent`, `marketingNow`
+and `promotionNow` when available to the capture's consistency comparison.
+
+The mod reads runtime definitions and getters on the main thread before serializing,
+then repeats that capture before publishing. A changed capture is discarded and
+retried. Facts, compressed save bytes, character, stamp and SHA-256 are published
+as one immutable Snapshot. HTTP workers only read that snapshot. Clients verify
+stamp, character and hash before accepting it, then validate build and character
+against the parsed save. An unsuccessful refresh leaves the last good board intact.
+The mock serves facts when its input is a portable snapshot; otherwise it retains
+the ordinary save-only behavior.
+
+Portable `.bcsave` files contain UTF-8 JSON:
+`{"format":"big-copilot-save","version":1,"save":"<base64 gzip hsg>","facts":{...}}`.
+This is a dashboard export, not a file to load in the game. The browser's Download
+snapshot button, restore/cache and local watcher preserve the whole package.
+There is no inferred pairing by filename or address. Ordinary `.hsg` remains supported.
+The facts document is bounded to 8 MiB and 10,000 buildings/agencies; malformed,
+duplicate, nonfinite or unsupported metadata is rejected rather than silently dropped.
+
+Each `/write/marketing` site can add
+`"prediction":{"dailyCost":600,"marketing":53,"total":100}`.
+Schema 2 validates the expected daily cost (within half a cent) and exact marketing
+and promotion scores against the live plan on **both** dry run and apply. A mismatch
+returns the existing `changed` refusal before any site is mutated. Old callers may
+omit it. Current clients also compare dry-run answers, so a schema 1 mod can refuse
+a visibly different prediction before Apply; only schema 2 enforces the second check.
+
+This model supports changed building values, the existing six campaigns' prices and
+reach, multipliers, and agency availability. It does not claim compatibility with an
+arbitrary replacement simulation algorithm or a new campaign enum. Those need a new
+model version. The dashboard withholds campaign planning if its current calculation
+disagrees with the promotion in the save. Unknown layout geometry has no floor plan.
 
 ## Where the mod listens
 

@@ -468,34 +468,6 @@
    "text": "⟦ba:itemname_beer|Beer⟧ machine at list position 1 is staffed 84 of 168 hours; nobody on it Mon-Sun 0-8, 20-24; 300 a day not made",
    "unit": "",
    "worth": null
-  },
-  {
-   "group": "promotion",
-   "i18n": {
-    "text": [
-     "f.promotion.visit",
-     {
-      "agencies": {
-       "m": [
-        "f.list.last",
-        {
-         "a": "CityAds",
-         "b": "McCain's eMarketing"
-        },
-        "CityAds, McCain's eMarketing"
-       ]
-      },
-      "sites": "HART. Gifts"
-     }
-    ]
-   },
-   "id": "e03ef5477e",
-   "level": "info",
-   "site": "HART. Gifts",
-   "siteKey": "ba:street_broadwaystreet#19",
-   "text": "Visit CityAds, McCain's eMarketing once: no campaign can be set at HART. Gifts before that",
-   "unit": "",
-   "worth": null
   }
  ],
  "alertsDemand": {
@@ -824,34 +796,6 @@
     "text": "⟦ba:itemname_umbrella|Umbrella⟧ is on no distribution plan: 30 left at 21/day",
     "unit": "",
     "worth": null
-   },
-   {
-    "group": "promotion",
-    "i18n": {
-     "text": [
-      "f.promotion.visit",
-      {
-       "agencies": {
-        "m": [
-         "f.list.last",
-         {
-          "a": "CityAds",
-          "b": "McCain's eMarketing"
-         },
-         "CityAds, McCain's eMarketing"
-        ]
-       },
-       "sites": "HART. Gifts"
-      }
-     ]
-    },
-    "id": "e03ef5477e",
-    "level": "info",
-    "site": "HART. Gifts",
-    "siteKey": "ba:street_broadwaystreet#19",
-    "text": "Visit CityAds, McCain's eMarketing once: no campaign can be set at HART. Gifts before that",
-    "unit": "",
-    "worth": null
    }
   ],
   "minor": {
@@ -996,11 +940,9 @@
     "setupAgencies": [],
     "setupTypes": [],
     "target": null,
-    "visit": [
-     "ba:street_secondavenue#5",
-     "ba:street_thirdavenue#17"
-    ],
-    "visitRaises": true,
+    "unavailable": true,
+    "visit": [],
+    "visitRaises": false,
     "was": []
    },
    "missingAmenities": [
@@ -1326,11 +1268,9 @@
     "setupAgencies": [],
     "setupTypes": [],
     "target": null,
-    "visit": [
-     "ba:street_secondavenue#5",
-     "ba:street_thirdavenue#17"
-    ],
-    "visitRaises": true,
+    "unavailable": true,
+    "visit": [],
+    "visitRaises": false,
     "was": []
    },
    "missingAmenities": [

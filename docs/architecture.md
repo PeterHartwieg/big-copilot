@@ -1556,7 +1556,7 @@ the unstamped `dev` build):
 `build_web.py` names them once, as `PY_CODE` and `PY_DATA`, and `tests/test_web_fresh.py`
 fails when the worker's fetches differ from those lists:
 
-- `ba_save.py` and `ba_dashboard.py` — a failed fetch throws and the worker never becomes
+- `ba_save.py`, `ba_facts.py` and `ba_dashboard.py` — a failed fetch throws and the worker never becomes
   ready.
 - `gametext.json`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json` and
   `ba_store_rules.json` —
@@ -1649,3 +1649,26 @@ fitted district rates) and say so in their own provenance lines. `build_web.py` 
 `write_public_wiki` before stamping, so the site always ships the payload its pages were
 built against. Details:
 [wiki-data-pipeline.md](wiki-data-pipeline.md).
+
+
+## Runtime building values
+
+`ba_facts.py` validates and resolves building values per parsed `Save`.
+`load_buildings(save)` returns that detached table; `load_buildings()` remains the
+unchanged bundled baseline. The live schema, pairing and portable file format are
+in [Game link API](game-link-api.md#building-facts-schema-2). Plain saves can resolve
+Alcware Retail Expansion RCR3/4/5 renovation records from `modData`; no mod binary
+is loaded or executed. Unsupported renovation formats suppress affected estimates.
+
+Core extraction and deferred sections share that Save and table. Premises optionally
+carry `factsSource`, `layoutKnown`, `factsUnavailable`, and `marketingRules` (reach
+multiplier and neighborhood strength). Unknown geometry emits no layout code.
+`openStore.types[slug].layouts` and `.initial` may carry address keys overriding the
+layout entry for different values in the same geometry; its `campaigns` comes from
+the paired runtime catalogue. Staffing history includes the resolved building
+revision in its demand context so a renovation cannot reuse the previous estimate.
+
+`marketingPlan.unavailable` with `on: null` means the current promotion does not
+match the supported model or the required facts are unavailable. No campaign write
+or agency-visit advice is offered. The saved promotion and equipment-limited
+capacity remain observations, independent of the model's building maximum.
