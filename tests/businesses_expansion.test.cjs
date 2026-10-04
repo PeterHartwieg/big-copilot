@@ -587,3 +587,63 @@ test('Plan a factory says nothing its table already says; Demand has no trend-hi
     assert.match(await page.locator('#secPayroll .pay-off li small').first().innerText(), enRe('co.pay.off.row2', {b: /\$[\d,.k]+/, r: /\$[\d,.k]+/}, {anchor: 'full'}));
   }
 });
+
+test('Payroll shows wage differences before optional role detail and keeps that detail open on refresh', async t => {
+  const page = await board(t, {hash: '#staffing/payroll'});
+  await page.evaluate(() => {
+    D.businesses[0].wages = (D.businesses[0].staffCost || 0) + 1000;
+    drawPayroll(); wireAll(); ctlHoist();
+  });
+  const detail = page.locator('#secPayroll .pay-roles');
+  const roles = page.locator('#secPayroll .roles');
+  assert.equal(await roles.isVisible(), false);
+  assert.equal(await page.locator('#secPayroll .pay-off').isVisible(), true);
+  await detail.locator('summary').click();
+  assert.equal(await roles.isVisible(), true);
+  const before = await roles.innerText();
+  await page.evaluate(() => { drawPayroll(); wireAll(); ctlHoist(); });
+  assert.equal(await roles.isVisible(), true);
+  assert.equal(await roles.innerText(), before);
+  const order = await page.evaluate(() => document.querySelector('.pay-off').compareDocumentPosition(document.querySelector('.pay-roles')));
+  assert.ok(order & 4, 'wage comparison precedes the role breakdown');
+});
+
+test('Staff needs removes only empty demands and brings active demands back on refresh', async t => {
+  const page = await board(t, {hash: '#staffing/needs'});
+  const saved = await page.evaluate(() => {
+    const findings = [D.alerts, D.minor];
+    D.alerts = []; D.minor = {rows: []}; drawNeeds();
+    return findings;
+  });
+  assert.equal(await page.locator('#nxDemands').count(), 0);
+  assert.equal(await page.locator('#secNeeds').isVisible(), false);
+  assert.equal(await page.locator('#secStaff .hs-head').isVisible(), true);
+  await page.evaluate(([alerts, minor]) => {
+    D.alerts = [...alerts, {id: 'wave2-demand', group: 'jobdemand', site: D.businesses[0].name,
+      siteKey: D.businesses[0].key, level: 'warn', text: 'A candidate-specific demand'}];
+    D.minor = minor; drawNeeds(); wireAll();
+  }, saved);
+  assert.equal(await page.locator('#nxDemands').isVisible(), true);
+  assert.equal(await page.locator('[data-need-open="wave2-demand"]').isVisible(), true);
+});
+
+test('Resolve staff demands lands on hiring when empty and on demands when they return', async t => {
+  const page = await board(t);
+  const link = page.locator('a').filter({has: page.locator('[data-ov-count="demands"]')});
+  await page.evaluate(() => { D.alerts = []; D.minor = {rows: []}; drawNeeds(); drawTools(); });
+  assert.equal(await link.getAttribute('data-ov-into'), '#secStaff');
+  await link.click();
+  await page.waitForFunction(() => route === 'staffing/needs' && document.querySelector('#secStaff').getBoundingClientRect().top >= -1
+    && document.querySelector('#secStaff').getBoundingClientRect().top < innerHeight / 2);
+  assert.equal(await page.locator('#nxDemands').count(), 0);
+  await page.evaluate(() => {
+    // Minor findings still get a demands panel even when the overview count is zero.
+    D.minor = {rows: [{id: 'wave2-minor-demand', group: 'jobdemand', site: D.businesses[0].name,
+      siteKey: D.businesses[0].key, level: 'warn', text: 'A candidate-specific demand'}]};
+    drawNeeds(); drawTools(); openRoute('overview');
+  });
+  assert.equal(await link.getAttribute('data-ov-into'), '#nxDemands');
+  await link.click();
+  await page.waitForFunction(() => route === 'staffing/needs' && document.querySelector('#nxDemands').getBoundingClientRect().top >= -1
+    && document.querySelector('#nxDemands').getBoundingClientRect().top < innerHeight / 2);
+});

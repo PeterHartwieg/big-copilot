@@ -482,6 +482,7 @@
  "co.pay.off.title2": "어제 임금과 오늘 기준 금액이 다른 사업장",
  "co.pay.out": "결근 {n}명",
  "co.pay.out.tip": "오늘 결근",
+ "co.pay.roles": "직무별 직원",
  "co.pay.tile.booked": "어제 장부 기록",
  "co.pay.tile.booked.none": "아직 명세서 없음",
  "co.pay.tile.diff": "차이",
