@@ -16973,7 +16973,111 @@ def works_in(facts: dict, kind: str) -> bool:
     return (not only or kind in only) and kind not in (facts.get("no") or ())
 
 
-def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=None) -> list:
+class _OutfitCatalogue:
+    """Catalogue indexes scoped to one planner invocation, never to a save.
+
+    Flags follow price-table order; displays follow furniture-table order.
+    Type decisions are reused across layouts, while quantities and copied
+    shelving remain local to outfit_lines().
+    """
+    def __init__(self, rules, prices):
+        self.furniture = rules.get("furniture") or {}
+        self.table = prices.get("items") or {}
+        self.flag_items = {}
+        self.displays = collections.defaultdict(list)
+        self.flag_queries = {}
+        self.types = {}
+        for name, row in self.table.items():
+            bits = int(row.get("t") or 0)
+            while bits > 0:
+                bit = bits & -bits
+                self.flag_items.setdefault(bit, []).append(name)
+                bits -= bit
+        for name, facts in self.furniture.items():
+            if (facts.get("c") or 0) > 0:
+                for product in dict.fromkeys(facts.get("h") or ()):
+                    self.displays[product].append(name)
+
+    def flagged(self, mask):
+        # Requirements can ask for a union of flags; retain table order.
+        if mask > 0 and mask & (mask - 1) == 0:
+            return self.flag_items.get(mask, ())
+        if mask not in self.flag_queries:
+            self.flag_queries[mask] = [n for n, row in self.table.items()
+                                       if int(row.get("t") or 0) & mask]
+        return self.flag_queries[mask]
+
+    def for_type(self, slug):
+        if slug not in self.types:
+            self.types[slug] = _OutfitType(self, slug)
+        return self.types[slug]
+
+
+class _OutfitType:
+    def __init__(self, catalogue, slug):
+        self.catalogue = catalogue
+        self.kind = slug.removeprefix("ba:businesstype_")
+        self.sold_cache = {}
+        self.mount_cache = {}
+        self.cost_cache = {}
+
+    def price(self, name):
+        return float((self.catalogue.table.get(name) or {}).get("p") or 0)
+
+    def flags(self, name):
+        return int((self.catalogue.table.get(name) or {}).get("t") or 0)
+
+    def facts(self, name):
+        return self.catalogue.furniture.get(name) or {}
+
+    def sold(self, name, typed=True):
+        """On sale, and made for this type where the item says what it is for
+        (the designer's categories): a liquor store gets no cinema register.
+        Those tags only sort the catalogue (FurnitureTagMatcher), never where
+        a piece may stand, so an item that answers a customer demand (a
+        speaker, a sink) is any the stores sell: `typed` False. Where the game
+        itself limits a piece to some types, it is that (works_in())."""
+        key = (name, typed)
+        if key in self.sold_cache:
+            return self.sold_cache[key]
+        fits = self.facts(name).get("bt")
+        result = (self.price(name) > 0 and bool(self.facts(name).get("v")) and works_in(self.facts(name), self.kind)
+                and (not typed or not fits or self.kind in fits))
+        self.sold_cache[key] = result
+        return result
+
+    def mounts(self, name):
+        """What a station has to be attached to: the cheapest sold piece of
+        each placement requirement's group (a desk and a chair for a
+        computer). A table written before the groups is one group."""
+        if name in self.mount_cache:
+            return self.mount_cache[name]
+        groups = self.facts(name).get("m") or []
+        if groups and not isinstance(groups[0], list):
+            groups = [groups]
+        out = []
+        for group in groups:
+            under = [m for m in group if self.sold(m)]
+            # Where the designer made pieces for this type, one of those; else
+            # one the station's own store sells, bought with it on the same
+            # delivery (a computer's chair from the computer shop, not the
+            # beach towel that also seats and costs least).
+            stores = set(self.facts(name).get("v") or ())
+            under = ([m for m in under if self.kind in (self.facts(m).get("bt") or ())]
+                     or [m for m in under if stores & set(self.facts(m).get("v") or ())] or under)
+            if under:
+                out.append(min(under, key=lambda m: (self.price(m), m)))
+        self.mount_cache[name] = tuple(out)
+        return self.mount_cache[name]
+
+    def unit_cost(self, name):
+        if name not in self.cost_cache:
+            self.cost_cache[name] = self.price(name) + sum(self.price(under) for under in self.mounts(name))
+        return self.cost_cache[name]
+
+
+
+def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=None, *, _catalogue=None) -> list:
     """What a 100% outfitted store of a type holds, as shopping-list lines.
 
     Each line is {"item", "qty", "group", "why"}: `group` is "req" (the
@@ -16998,55 +17102,14 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
     """
     t = (rules.get("types") or {}).get(type_slug) or {}
     furniture = rules.get("furniture") or {}
-    table = prices.get("items") or {}
     products = rules.get("products") or {}
     cap = int(cap or 0)
 
-    def price(name):
-        return float((table.get(name) or {}).get("p") or 0)
-
-    def flags(name):
-        return int((table.get(name) or {}).get("t") or 0)
-
-    def facts(name):
-        return furniture.get(name) or {}
-
-    kind = type_slug.removeprefix("ba:businesstype_")
-
-    def sold(name, typed=True):
-        """On sale, and made for this type where the item says what it is for
-        (the designer's categories): a liquor store gets no cinema register.
-        Those tags only sort the catalogue (FurnitureTagMatcher), never where
-        a piece may stand, so an item that answers a customer demand (a
-        speaker, a sink) is any the stores sell: `typed` False. Where the game
-        itself limits a piece to some types, it is that (works_in())."""
-        fits = facts(name).get("bt")
-        return (price(name) > 0 and bool(facts(name).get("v")) and works_in(facts(name), kind)
-                and (not typed or not fits or kind in fits))
-
-    def mounts(name):
-        """What a station has to be attached to: the cheapest sold piece of
-        each placement requirement's group (a desk and a chair for a
-        computer). A table written before the groups is one group."""
-        groups = facts(name).get("m") or []
-        if groups and not isinstance(groups[0], list):
-            groups = [groups]
-        out = []
-        for group in groups:
-            under = [m for m in group if sold(m)]
-            # Where the designer made pieces for this type, one of those; else
-            # one the station's own store sells, bought with it on the same
-            # delivery (a computer's chair from the computer shop, not the
-            # beach towel that also seats and costs least).
-            stores = set(facts(name).get("v") or ())
-            under = ([m for m in under if kind in (facts(m).get("bt") or ())]
-                     or [m for m in under if stores & set(facts(m).get("v") or ())] or under)
-            if under:
-                out.append(min(under, key=lambda m: (price(m), m)))
-        return out
-
-    def unit_cost(name):
-        return price(name) + sum(price(under) for under in mounts(name))
+    catalogue = _catalogue or _OutfitCatalogue(rules, prices)
+    type_facts = catalogue.for_type(type_slug)
+    flags, facts = type_facts.flags, type_facts.facts
+    sold, mounts, unit_cost = type_facts.sold, type_facts.mounts, type_facts.unit_cost
+    kind = type_facts.kind
 
     def cheapest(names, typed=True):
         names = [n for n in names if sold(n, typed)]
@@ -17089,7 +17152,7 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
                 shelf_products.extend(n for n in req["i"] if n in products)
                 continue
         elif req.get("t"):
-            names = [n for n, row in table.items() if flags(n) & req["t"] and n in furniture]
+            names = [n for n in catalogue.flagged(req["t"]) if n in furniture]
         else:
             continue
         name = req.get("n") or ""
@@ -17110,11 +17173,11 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
 
     for demand in demands:
         if demand == "music" and not has(lambda n: flags(n) & MUSIC_FLAG):
-            add(cheapest([n for n in furniture if flags(n) & MUSIC_FLAG], False), 1, "dem", demand)
+            add(cheapest([n for n in catalogue.flagged(MUSIC_FLAG) if n in furniture], False), 1, "dem", demand)
         elif demand == "seating" and not has(lambda n: flags(n) & SEATING_FLAG):
-            add(cheapest([n for n in furniture if flags(n) & SEATING_FLAG], False), 1, "dem", demand)
+            add(cheapest([n for n in catalogue.flagged(SEATING_FLAG) if n in furniture], False), 1, "dem", demand)
         elif demand == "sink" and not has(lambda n: flags(n) & SINK_FLAG):
-            add(cheapest([n for n in furniture if flags(n) & SINK_FLAG], False), 1, "dem", demand)
+            add(cheapest([n for n in catalogue.flagged(SINK_FLAG) if n in furniture], False), 1, "dem", demand)
         elif demand == "employeeuniforms" and not has(lambda n: "uniform" in (facts(n).get("x") or ())):
             add(cheapest([n for n in furniture if "uniform" in (facts(n).get("x") or ())], False), 1, "dem", demand)
         elif demand in ("toilet", "toiletprivacy") and not has(lambda n: flags(n) & TOILET_FLAG):
@@ -17122,7 +17185,7 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
             # carries the privacy tag. A plain toilet beside it could be the
             # one found first and fail the privacy demand.
             private = "toiletprivacy" in demands
-            pool = [n for n in furniture if flags(n) & TOILET_FLAG
+            pool = [n for n in catalogue.flagged(TOILET_FLAG) if n in furniture
                     and (not private or "privacy" in (facts(n).get("x") or ()))]
             add(cheapest(pool, False), 1, "dem", "toilet+privacy" if private and "toilet" in demands else demand)
         elif demand == "workoutvariety":
@@ -17160,7 +17223,7 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
         row = products.get(p) or {}
         if p in covered or row.get("s") or row.get("k") or p in (t.get("f"), t.get("fw")):
             continue  # shown already, or a service, a ticket or an entrance fee: no shelf
-        shows = [n for n, f in furniture.items() if p in (f.get("h") or ()) and (f.get("c") or 0) > 0]
+        shows = catalogue.displays.get(p, ())
         item, qty = sized(shows)
         if not item:
             continue
@@ -17615,6 +17678,7 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     if not rules.get("types"):
         return {}
     prices = load_item_prices()
+    catalogue = _OutfitCatalogue(rules, prices)
     root = save.root
     day = root["Day"]
     gv = save.deref(root.get("gameVariables")) or {}
@@ -17652,7 +17716,7 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
             copied = _copied_shelving(save, regs[source["key"]], slug, rules) if source else None
             # A venue's own version seats its own crowd (S1 150, S3 100).
             cap = venue_caps.get(layout, sample.get("cap")) if cat in ("cinema", "theater") else sample.get("cap")
-            lines = outfit_lines(slug, rules, prices, cap, sample.get("m2"), copied)
+            lines = outfit_lines(slug, rules, prices, cap, sample.get("m2"), copied, _catalogue=catalogue)
             cost = setup_cost(_setup_items(lines), [], sample.get("m2"), 0, prices)
             items_used.update(line["item"] for line in lines)
             layouts[layout] = {
