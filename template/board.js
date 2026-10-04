@@ -11432,7 +11432,9 @@ function osStripHtml(plan){
       {hood: hoodName(b.hood), layout: osLayout(b), m2: num(b.m2), rent: fmt(b.rent || 0)})}</small>`
     : `<b class="dim">${tt("gr.os.strip.nowhere", "Not picked yet")}</b><small>${tt("gr.os.strip.nowhere.sub", "{type}, {where}",
       {type: osTypeName(plan.type), where: plan.hood ? hoodName(plan.hood) : anyHood})}</small>`;
-  const invest = inv ? `<b class="m">${fmt(inv[mode])}</b><small>${mode === "self" ? tt("gr.os.strip.self", "Self-installation · deposit included")
+  const invest = inv ? `<b class="m">${fmt(inv[mode])}</b><small>${b.status === "mine"
+    ? mode === "self" ? tt("gr.os.strip.selfRented", "Self-installation · Already rented") : tt("gr.os.strip.firmRented", "Installation firm · Already rented")
+    : mode === "self" ? tt("gr.os.strip.self", "Self-installation · deposit included")
     : tt("gr.os.strip.firm", "Installation firm · deposit included")}</small>` : `<b class="dim">–</b><small>${tt("gr.os.strip.afterWhere", "after the location")}</small>`;
   /* After opening the tiles carry the numbers: the strip says what and where. */
   if(osStep === "open") return `<div class="os-pb os-pb2">${cell(tt("gr.os.strip.open", "Open"), what)}${cell(tt("gr.os.strip.whereLab", "Where"), where)}</div>`;
@@ -11670,7 +11672,10 @@ function osSelfHtml(b, out, inv){
     + `<div><i class="n">${tt("gr.os.map.new", "NEW")}</i><span>${spEsc(b.address)}</span><b></b></div>`;
   const note = unsold.length ? `<p class="quiet os-gap">${tt("gr.os.self.unsold", "No store the game's help names sells these: {items}.", {items: unsold.map(l => osItemName(l[0])).join(", ")})}</p>` : "";
   const pins = JSON.stringify([...stores.map((s, i) => [s.key, osLetter(i), "store"]), [b.key, tt("gr.os.map.new", "NEW"), "new"]]);
-  const sub = decor ? tt("gr.os.self.total.subWalls", "{n} items · {d} deliveries · walls and floors · deposit", {n: inv.items, d: stores.length})
+  const sub = b.status === "mine"
+    ? decor ? tt("gr.os.self.total.rentedWalls", "{n} items · {d} deliveries · walls and floors", {n: inv.items, d: stores.length})
+      : tt("gr.os.self.total.rented", "{n} items · {d} deliveries", {n: inv.items, d: stores.length})
+    : decor ? tt("gr.os.self.total.subWalls", "{n} items · {d} deliveries · walls and floors · deposit", {n: inv.items, d: stores.length})
     : tt("gr.os.self.total.sub", "{n} items · {d} deliveries · deposit", {n: inv.items, d: stores.length});
   return `<div class="os-self"><div>${cards}${paint}${dep}${note}
     <div class="os-total"><span>${tt("gr.os.inv.total", "Investment")}</span><small>${sub}</small><b>${fmt(inv.self)}</b></div></div>
@@ -12201,10 +12206,12 @@ function osSnapOf(plan, b){
      cash still needed. Renting must not erase the deposit from this record. */
   const est = osEstimate(plan, {...b, status: "vacant"});
   if(!est || !est.inv) return null;
+  const needed = osInvestment(plan, b);
+  const cash = {firm: Math.round(needed.firm), self: Math.round(needed.self)};
   const inv = {};
   OS_SNAP_INV.forEach(k => inv[k] = Math.round(est.inv[k] || 0));
-  if(est.none) return {inv, profit: null, days: null, curve: null};
-  return {inv, profit: Math.round(est.profit), days: est.days,
+  if(est.none) return {inv, cash, profit: null, days: null, curve: null};
+  return {inv, cash, profit: Math.round(est.profit), days: est.days,
     curve: Array.from({length: OS_SNAP_DAYS}, (_, k) => Math.round(est.day(k)))};
 }
 /* A stored snapshot, checked field by field as osLoad() checks the rest. */
@@ -12214,7 +12221,9 @@ function osSnapClean(s){
   const inv = {};
   OS_SNAP_INV.forEach(k => inv[k] = n(s.inv[k]));
   const range = d => d && typeof d === "object" ? {low: day(d.low), mid: day(d.mid), high: day(d.high)} : {low: null, mid: null, high: null};
-  return {inv, profit: Number.isFinite(s.profit) ? s.profit : null,
+  const cash = s.cash && [s.cash.firm, s.cash.self].every(v => Number.isFinite(v) && v >= 0)
+    ? {firm: s.cash.firm, self: s.cash.self} : null;
+  return {inv, cash, profit: Number.isFinite(s.profit) ? s.profit : null,
     days: s.days && typeof s.days === "object" ? {firm: range(s.days.firm), self: range(s.days.self)} : null,
     curve: Array.isArray(s.curve) ? s.curve.filter(Number.isFinite).slice(0, OS_SNAP_DAYS) : null};
 }
@@ -12452,7 +12461,8 @@ function osRoiTable(row, snap, planMode, o){
 function osRoiLoan(plan, snap, mode){
   const fin = plan.finance || {}, bank = osBank(fin.bank);
   if(!fin.on || !bank) return "";
-  const inv = snap ? snap.inv[mode] : 0, amount = fin.amount ?? Math.round(inv / 2), planned = osLoan(amount, bank);
+  const inv = snap ? (snap.cash?.[mode] ?? snap.inv[mode]) : 0;
+  const amount = fin.amount ?? Math.round(inv / 2), planned = osLoan(amount, bank);
   const cell = (lab, value, sub) => `<div><span class="os-lab">${lab}</span><b>${value}</b><small>${sub}</small></div>`;
   const plannedCell = cell(tt("gr.os.roi.loan.plan", "Planned"), fmt(amount), planned ? tt("gr.os.roi.loan.plan.sub", "{bank} · {r} repaid + {i} interest a day for {n} days",
     {bank: bank.name, r: fmt(planned.repay), i: fmt(planned.interest), n: num(planned.days)}) : spEsc(bank.name));

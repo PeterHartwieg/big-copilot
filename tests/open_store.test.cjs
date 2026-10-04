@@ -80,6 +80,12 @@ test('an empty rented shop is suggested and its investment has no second deposit
   assert.equal(after.inv.firm, before.firm - before.deposit);
   assert.equal(after.rent, before.rent);
   assert.match(await page.locator('#osBody').innerText(), /no additional rental deposit/);
+  for(const mode of ['self', 'firm']){
+    await page.locator(`[data-os-mode="${mode}"]`).click();
+    assert.match(await page.locator('#osStrip').innerText(), /Already rented/);
+    assert.doesNotMatch(await page.locator('#osStrip').innerText(), /deposit included/);
+    if(mode === 'self') assert.doesNotMatch(await page.locator('#osBody .os-total small').innerText(), /deposit/);
+  }
 });
 
 test('the view is Expansion\'s, New until opened, and starts on What with its six steps', async t => {
@@ -1041,6 +1047,24 @@ const tiles = page => page.$$eval('#osBody .os-roi .kpi', ks => ks.map(k => k.in
 const pvsa = page => page.$$eval('#osBody .os-pvsa tbody tr', trs => trs.map(tr => [...tr.cells].map(td => td.innerText.replace(/\s+/g, ' ').trim())));
 const pvRow = async (page, name) => (await pvsa(page)).find(x => x[0].startsWith(name));
 const goOpen = async page => { await page.locator('#osCtl [data-os-step="open"]').click(); await page.waitForFunction(() => osStep === 'open'); };
+
+for(const mode of ['self', 'firm']) test(`an untouched default loan for an existing lease survives reload and opening (${mode})`, async t => {
+  const page = await board(t);
+  await page.evaluate(key => { const b = osBuilding(key); b.status = 'mine'; b.occupant = null; }, SITE);
+  await planned(page);
+  await page.locator(`[data-os-mode="${mode}"]`).click();
+  await page.locator('#osCtl [data-os-step="breakeven"]').click();
+  await page.locator('#osFin [data-os-fin-on]').check();
+  const displayed = +(await page.locator('[data-os-fin-amount]').inputValue());
+  assert.ok(displayed > 0);
+  await page.evaluate(() => { osPlansFor = null; osLoad(); drawOpenStore(); });
+  assert.equal(+(await page.locator('[data-os-fin-amount]').inputValue()), displayed);
+  await opened(page, {opened: OPENED}, FULL);
+  await traded(page, {daily: [500], state: 'togo', extra: {days: 30}});
+  await goOpen(page);
+  const recorded = await page.locator('.os-roiloan .os-finfacts > div').first().locator('b').innerText();
+  assert.equal(money(recorded), displayed, 'after-opening loan matches the untouched field');
+});
 
 for(const alreadyHeld of [false, true]) test(`historical investment retains the deposit through renting, reload and opening (${alreadyHeld ? 'existing lease' : 'new lease'})`, async t => {
   const page = await board(t);
