@@ -190,7 +190,12 @@ test('a delayed save is included by default and never overrides an opt-out', asy
     await failRead(page);
     await page.locator('#reportBtn').click();
     await page.locator('.br-dialog[open]').waitFor();
-    await page.keyboard.press('Escape');
+    // close() queues its cleanup event; let that finish before opening directly.
+    await page.evaluate(() => new Promise(resolve => {
+      const dialog = document.querySelector('.br-dialog');
+      dialog.addEventListener('close', resolve, {once: true});
+      dialog.close();
+    }));
     await page.evaluate(() => {
       BigCopilotReport.open({source: 'link', gameBuild: 3682,
         bytes: () => new Promise(resolve => { fixture.resolveSave = resolve; })});
