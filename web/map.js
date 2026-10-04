@@ -612,7 +612,7 @@ class CityMapView {
     const kinds = FINDER_CATS.map(c =>
       `<button type="button" class="fchip cat" data-cat="${c}" aria-pressed="false" data-mw="${mapWordKey("cat", c)}">${ssEsc(mapKindName(c))}</button>`).join('');
     const hoods = this.hoodList().map(h =>
-      `<button type="button" class="fchip hd" data-h="${attr(h)}" aria-pressed="true" data-tip="${attr(hoodName(h))}">${ssEsc(hoodTag(h))}</button>`).join('');
+      `<button type="button" class="fchip hd"${hoodColorAttr(h)} data-h="${attr(h)}" aria-pressed="true" data-tip="${attr(hoodName(h))}">${ssEsc(hoodTag(h))}</button>`).join('');
     const numChip = (f, aria, unit = false) => `<label class="fchip num" data-mw="${f.startsWith("min") ? "min" : "max"}">${
       ssEsc(f.startsWith("min") ? MAP_WORDS.min : MAP_WORDS.max)}<input type="number" min="0" data-f="${f}" value="0" aria-label="${attr(MAP_WORDS[aria])}" data-mw-aria="${aria}">${
       unit ? `<b data-mw="m2">${ssEsc(MAP_WORDS.m2)}</b>` : ""}</label>`;
@@ -1136,13 +1136,13 @@ class CityMapView {
         : `<span class="v sc sh"${lead(f.score, SHADE_LEAD)}>${f.score ?? '—'}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v sh"${byDemand(f.demand, SHADE_SIDE)}>${f.demand ?? '—'}</span><span class="v m2">${num(b.m2)}</span>`;
       // The dot says what taking this place would mean: an empty floor to rent
       // or a rival to buy out.
-      return `<button type="button" class="place fr${grid}${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${ssEsc(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood">${ssEsc(hoodTag(b.hood))}</span><span class="nm">${ssEsc(b.address)}<small>${this.layoutTag(b)}${ssEsc(sub)}</small>${this.finderPhoneFact(b, fac)}</span>${numbers}${fac ? `<span class="v cap">${b.rent != null ? ssEsc(fmt(b.rent)) : '—'}</span>` : `<span class="v cap">${ssEsc(capText(b.cap))}</span>`}<span class="v dep" data-tip="${attr(depositNote(b))}">${b.deposit != null ? ssEsc(fmt(b.deposit)) : '—'}</span></button>`;
+      return `<button type="button" class="place fr${grid}${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${ssEsc(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood"${hoodColorAttr(b.hood)}>${ssEsc(hoodTag(b.hood))}</span><span class="nm">${ssEsc(b.address)}<small>${this.layoutTag(b)}${ssEsc(sub)}</small>${this.finderPhoneFact(b, fac)}</span>${numbers}${fac ? `<span class="v cap">${b.rent != null ? ssEsc(fmt(b.rent)) : '—'}</span>` : `<span class="v cap">${ssEsc(capText(b.cap))}</span>`}<span class="v dep" data-tip="${attr(depositNote(b))}">${b.deposit != null ? ssEsc(fmt(b.deposit)) : '—'}</span></button>`;
     }).join('');
   }
   saleList(rows){
     return `<div class="fhead sale"><span></span><span>${ssEsc(tt("map.col.address", "Address"))}</span><span>${ssEsc(tt("map.col.type", "Type"))}</span><span>${
       ssEsc(tt("map.unit.m2", "m²"))}</span><span>${ssEsc(tt("map.col.price", "Price"))}</span></div>`
-      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${ssEsc(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood">${ssEsc(hoodTag(s.hood))}</span><span class="nm">${ssEsc(s.address)}<small>${this.layoutTag(s)}${ssEsc(hoodName(s.hood))}</small>${this.finderPhoneFact(this.sites?.get(s.key))}</span><span class="v t">${ssEsc(typeLabel(s.type))}</span><span class="v">${num(s.m2)}</span><span class="v">${ssEsc(askingPrice(s.price))}</span></button>`).join('');
+      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${ssEsc(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood"${hoodColorAttr(s.hood)}>${ssEsc(hoodTag(s.hood))}</span><span class="nm">${ssEsc(s.address)}<small>${this.layoutTag(s)}${ssEsc(hoodName(s.hood))}</small>${this.finderPhoneFact(this.sites?.get(s.key))}</span><span class="v t">${ssEsc(typeLabel(s.type))}</span><span class="v">${num(s.m2)}</span><span class="v">${ssEsc(askingPrice(s.price))}</span></button>`).join('');
   }
   /* The facts every address carries, finder on or off: what the place is, what
      it would cost and whether it is free. */
@@ -1703,7 +1703,7 @@ class CityMapView {
       : home ? ssEsc(tt("map.card.home", "Home")) + (loc?.hood ? ` · ${ssEsc(hoodName(loc.hood))}` : '')
       // The title is already the address; a bare location adds its neighbourhood.
       : ssEsc((loc?.hood && hoodName(loc.hood)) || loc?.address || '');
-    card.querySelector('.sub').innerHTML = `<span class="hood">${ssEsc(hoodCode(b, loc?.hood || b?.neighbourhood))}</span><span>${sub}${!loc ? ` · ${ssEsc(tt("map.card.nopos", "no map position"))}` : ''}</span>`;
+    card.querySelector('.sub').innerHTML = `<span class="hood"${hoodColorAttr(loc?.hood || b?.neighbourhood)}>${ssEsc(hoodCode(b, loc?.hood || b?.neighbourhood))}</span><span>${sub}${!loc ? ` · ${ssEsc(tt("map.card.nopos", "no map position"))}` : ''}</span>`;
     const stat = (v, lab) => `<div class="num"><b class="mono">${v}</b><span>${ssEsc(lab)}</span></div>`;
     const perDay = tt("map.stat.rent", "rent / day");
     card.querySelector('.nums').innerHTML = trading

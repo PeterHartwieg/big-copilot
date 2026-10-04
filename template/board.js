@@ -1107,7 +1107,13 @@ const chipHtml = (kind, text, tip) =>
 /* The neighbourhood pill: the player's [XX] prefix, or the code the building
    table gives the address. With neither, no pill. */
 /* The code is the player's own [prefix] where there is one: text, never markup. */
-const hoodHtml = b => b && b.code ? `<span class="hood">${spEsc(b.code)}</span>` : "";
+/* Colour follows the actual district, never the player's editable initials.
+   Unknown districts keep the neutral fill; keys and old English names work. */
+const hoodColorAttr = hood => {
+  const key = hoodKeyOf(hood);
+  return key ? ` data-hood-color="${attr(key)}"` : "";
+};
+const hoodHtml = b => b && b.code ? `<span class="hood"${hoodColorAttr(b.neighbourhood || b.hood)}>${spEsc(b.code)}</span>` : "";
 /* $3.57M, $751k, $98: the compact money the tiles and axes use. */
 const money = compact;
 /* A segmented control, the .seg of the design: options are [id, label] pairs,
@@ -1535,8 +1541,8 @@ function drawFlow(){
     const flag = bad.length ? ["badd", flowCountText(bad)] : watch.length ? ["warnd", flowCountText(watch)] : null;
     boxes.push(`<g class="node" data-id="${attr(node.id)}">
       <rect x="${x}" y="${y}" width="${NODE_W}" height="${NODE_H}" rx="7"></rect>${hood
-        ? `<rect x="${x + 10}" y="${y + 13}" width="24" height="18" rx="3" fill="var(--raised)" stroke="var(--rule)"></rect>
-           <text x="${x + 22}" y="${y + 26}" text-anchor="middle" class="s" style="font-weight:600;fill:var(--ink-2)">${spEsc(hood)}</text>` : ""}
+        ? `<rect x="${x + 10}" y="${y + 13}" width="24" height="18" rx="3"${hoodColorAttr(node.hood)} style="fill:var(--hood-fill,var(--raised))" stroke="var(--rule)"></rect>
+           <text x="${x + 22}" y="${y + 26}" text-anchor="middle" class="s" style="font-weight:600;fill:var(--ink)">${spEsc(hood)}</text>` : ""}
       <text x="${tx}" y="${y + 19}">${attr(shortText(node.name, hood ? 19 : 24))}</text>
       <text class="s" x="${tx}" y="${y + 34}">${node.stock ? tt("sb.flow.held", "{n:,} held", {n: node.stock})
         : `${attr(shortText(flowSub(node), hood ? 21 : 26, true))}<title>${attr(flowSub(node))}</title>`}</text></g>`);
@@ -1915,7 +1921,7 @@ function flowPipeProblem(links, node, only){
 function fcCard(id, node, o = {}){
   const flag = o.flag !== undefined ? o.flag : flowFlag(node);
   const sub = o.sub !== undefined ? o.sub : node.stock ? spEsc(tt("sb.flow.held", "{n:,} held", {n: node.stock})) : spEsc(flowSub(node));
-  const top = `<span class="sb-fc-top">${fcIcon(node.kind)}${node.tag ? `<span class="hood">${spEsc(node.tag)}</span>` : ""}${
+  const top = `<span class="sb-fc-top">${fcIcon(node.kind)}${node.tag ? `<span class="hood"${hoodColorAttr(node.hood)}>${spEsc(node.tag)}</span>` : ""}${
     flag && flag.lvl && o.dot !== false ? `<span class="sb-fc-d ${flag.lvl}" aria-hidden="true"></span>` : ""}</span>`;
   const inner = `${top}<span class="sb-fc-nm">${spEsc(flowBaseName(node))}</span><span class="sb-fc-sub">${sub}</span>${
     flag && flag.words ? `<span class="sb-fc-fl ${flag.lvl}">${spEsc(flag.words)}</span>` : ""}`;
@@ -1939,7 +1945,7 @@ function fcRows(gid, shops, headL, headR, perDayOf){
     shops.map(n => {
       const f = flowFlag(n), day = perDayOf ? perDayOf(n) : null;
       const held = spEsc(tt("sb.flow.held", "{n:,} held", {n: n.stock || 0}));
-      return `<button type="button" class="sb-fc-r" data-fc-id="${attr(n.id)}"><span>${n.tag ? `<span class="hood">${spEsc(n.tag)}</span>` : ""}</span>
+      return `<button type="button" class="sb-fc-r" data-fc-id="${attr(n.id)}"><span>${n.tag ? `<span class="hood"${hoodColorAttr(n.hood)}>${spEsc(n.tag)}</span>` : ""}</span>
         <span class="sb-fc-nm2"><span>${spEsc(flowBaseName(n))}</span>${f.words ? `<small class="${f.lvl}">${spEsc(f.words)}</small>` : ""}</span>
         <span class="sb-fc-v">${day !== null ? `${spEsc(tt("sb.flow.chain.perDay", "{n:,} a day", {n: day}))}<small>${held}</small>` : held}</span>
         <span class="sb-fc-d ${f.lvl}" aria-hidden="true"></span></button>`;
@@ -7065,7 +7071,7 @@ function spHomePanel(home){
     + spTile(tt("sp.home.perm2", "Per m²"), m === null || !rent ? "—" : `${tt("sp.home.perm2.v", "${x:.2f}", {x: rent / m})}<small>${tt("sp.perday", "/day")}</small>`);
   return `${siteCrumbs(home.key, home.address, false)}
     <div class="sitehead rv">
-      ${code ? `<span class="bullet">${spEsc(code)}</span>` : ""}
+      ${code ? `<span class="bullet"${hoodColorAttr(home.hood)}>${spEsc(code)}</span>` : ""}
       <div><h2>${spEsc(home.address)}${mapButton(home.key, home.address)}</h2><span class="sub">${tt("sp.home.kind", "Home")}${
         home.hood ? ` · ${spEsc(hoodName(home.hood))}` : ""}</span></div>
     </div>
@@ -7586,7 +7592,7 @@ function drawSite(){
   }
   $("sitePanel").innerHTML = `${siteCrumbs(b.key, shortName(b), true)}
     <div class="sitehead rv">
-      ${b.code ? `<span class="bullet">${spEsc(b.code)}</span>` : ""}
+      ${b.code ? `<span class="bullet"${hoodColorAttr(b.neighbourhood)}>${spEsc(b.code)}</span>` : ""}
       <div><h2>${spEsc(baseName(b))}${mapButton(b.key,b.name)}${headMarks}</h2><span class="sub">${sub}${depot ? mapButton(depot.key,depot.name) : ""}</span></div>
       ${spActs(b, kind)}
     </div>
@@ -11143,7 +11149,7 @@ function drawMarket(){
           : tt("gr.note.sortLow", "Sorted by demand in {hood}, lowest first", {hood: hoodName(h)}))
         : tt("gr.head.tip", "{hood}: click to sort by demand here", {hood: hoodName(h)}))}"><span class="mk-long"${gnLangAttr()}>${shortHood(hoodName(h))}</span>${
         h === marketSortHood ? `<span class="mk-dir" aria-hidden="true">${marketSortDir < 0 ? "↓" : "↑"}</span>` : ""}${
-        HOOD_TAGS[h] ? `<span class="mk-tag">${HOOD_TAGS[h]}</span>` : ""}</div>`).join("")
+        HOOD_TAGS[h] ? `<span class="mk-tag"${hoodColorAttr(h)}>${HOOD_TAGS[h]}</span>` : ""}</div>`).join("")
       + shown.map((r, i) => types ? typeRow(r, i, m.hoods) : productRow(r, i, m.hoods, m.trendDays)).join("")
       + (offices.length ? `<div class="band">${tt("gr.band.title", "Offices")}<small>${
         tt("gr.band.note", "customers served online · each cell is the demand for its hourly fee")}</small></div>`
@@ -11449,7 +11455,7 @@ function osWhatHtml(){
   const runs = slug => ((F.types || {})[slug] || {}).run || 0;
   const demandRows = top.map(r => `<tr><td class="l"><b>${spEsc(osTypeName(r.slug))}</b><span class="sub">${runs(r.slug)
       ? tt("gr.os.what.run", {one: "You run {n} elsewhere", other: "You run {n} elsewhere"}, {n: runs(r.slug)}) : tt("gr.os.what.none", "You run none")}</span></td>
-    <td class="l"><span class="hood">${spEsc(HOOD_TAGS[r.hood] || "")}</span> <span class="os-dim">${spEsc(hoodName(r.hood))}</span></td>
+    <td class="l"><span class="hood"${hoodColorAttr(r.hood)}>${spEsc(HOOD_TAGS[r.hood] || "")}</span> <span class="os-dim">${spEsc(hoodName(r.hood))}</span></td>
     <td><span class="sc" style="${shade(r.demand)}">${r.demand}</span></td><td>${r.rivals}</td>
     <td class="go"><button type="button" data-os-new="${attr(r.slug)}" data-os-hood="${attr(r.hood)}" aria-label="${attr(tt("gr.os.what.go",
       "Plan a {type} in {hood}", {type: osTypeName(r.slug), hood: hoodName(r.hood)}))}">${icon("chev")}</button></td></tr>`).join("");
@@ -11721,7 +11727,7 @@ function osOwnHtml(plan, own){
   const byKey = new Map((D.businesses || []).map(b => [b.key, b]));
   const top = Math.max(...own.rows.map(r => Math.max(r.actual, r.model)), 1);
   const rows = own.rows.map(r => { const b = byKey.get(r.key) || {};
-    return `<div class="os-site"><span><b>${spEsc(b.address || r.key)}</b><small><span class="hood">${spEsc(HOOD_TAGS[r.hood] || "")}</span> ${spEsc(r.layout || "")}</small></span>
+    return `<div class="os-site"><span><b>${spEsc(b.address || r.key)}</b><small><span class="hood"${hoodColorAttr(r.hood)}>${spEsc(HOOD_TAGS[r.hood] || "")}</span> ${spEsc(r.layout || "")}</small></span>
       <span class="bar"><i style="width:${Math.max(2, r.actual / top * 100).toFixed(0)}%"></i></span><span class="v">${fmt(r.actual)}</span><span class="v os-dim">${Math.round(r.ratio * 100)}%</span></div>`; }).join("");
   return `<div class="os-card os-ownc"><h3>${tt("gr.os.own.title", {one: "Your shop of this type, by the same rules", other: "Your shops of this type, by the same rules"}, {n: own.rows.length})}</h3>
     <p class="quiet">${tt("gr.os.own.note", "Profit a day over their last two weeks, goods at import prices, beside the rules' figure for each one's own building, hours and marketing.")}</p>
@@ -20232,7 +20238,7 @@ function ssBuild(){
           : inputs.length ? tt("nav.search.site.eats", "{type} · {address} · eats {inputs}", {type: b.type, address: b.address || "",
               inputs: inputs.reduce((x, y) => tt("nav.search.and", "{a} and {b}", {a: x, b: y}))})
           : tt("nav.search.site.line", "{type} · {address}", {type: b.type, address: b.address || ""}),
-        ic: "building", hood: b.code || "", kw: [b.address, b.neighbourhood && hoodName(b.neighbourhood), b.type, b.name, ...inputs,
+        ic: "building", hood: b.code || "", hoodKey: b.neighbourhood, kw: [b.address, b.neighbourhood && hoodName(b.neighbourhood), b.type, b.name, ...inputs,
           ...ssEnglish([b.neighbourhood, b.typeSlug, ...(eatSlugs[i] || [])])].filter(Boolean),
         dot: ssWorst(siteRows[b.key] || []), map: b.key, mapLabel: b.name, land: b.name, href: siteHref(b.key),
         go: () => ssOpenSite(b.key)}));
@@ -20658,7 +20664,7 @@ function ssRow(item, qq){
      reader sees what matched. */
   if(where === "kw" && !line.toLowerCase().includes(syn.toLowerCase())) line += ` · ${syn}`;
   const sub = where === "p" || where === "kw" ? ssMark(line, qq, true) : ssEsc(line);
-  const ic = e.hood ? `<span class="ic hood" aria-hidden="true">${ssEsc(e.hood)}</span>` : `<span class="ic" aria-hidden="true">${ssSvg(e.ic)}</span>`;
+  const ic = e.hood ? `<span class="ic hood"${hoodColorAttr(e.hoodKey)} aria-hidden="true">${ssEsc(e.hood)}</span>` : `<span class="ic" aria-hidden="true">${ssSvg(e.ic)}</span>`;
   let side = "";
   if(e.tag || e.dot) side += `<span class="ss-tag">${e.dot ? `<i class="ss-dot ${e.dot}"></i>` : ""}${ssEsc(e.tag)}</span>`;
   if(e.map && typeof mapButton === "function") side += mapButton(e.map, e.mapLabel || e.t);
