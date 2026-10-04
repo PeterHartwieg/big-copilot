@@ -157,10 +157,13 @@ class DeliveryLogTests(unittest.TestCase):
 
     def test_a_first_fill_is_no_draw(self):
         c = self.company()
+        c.log[DEPOT].pop(0)
+        c.ship(15, HUB, DEPOT, {SODA: 200})
         log = _DeliveryLog(c.save(), 20)
         self.assertEqual(log.first_fill(key(DEPOT), SODA), (15, 150.0))
-        # The first fill left the hub on day 15, outside the hub's own rounds
-        # here, so the hub's outflow over the plan is the rounds alone.
+        # The hub's outflow includes the first fill; subtract its excess over
+        # an ordinary round so only the recurring draw remains.
+        self.assertEqual(log.shipped_per_day(key(HUB), SODA, {}), 80.0)
         edges = {key(HUB): [(key(DEPOT), SODA, 200)]}
         self.assertEqual(log.shipped_per_day(key(HUB), SODA, edges), 50.0)
 
