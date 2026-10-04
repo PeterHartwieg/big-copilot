@@ -71,8 +71,8 @@ jobs:
       # npm test assembles first and includes the community suites.
       - name: Test Node shard
         run: npm test -- --shard=${{ matrix.suite }}
-      # This lighter shard has room for the hosted-page and bundle checks.
-      - name: Test the optimized hosted page
+      # Keep the short deployment smoke and bundle check on one existing runner.
+      - name: Smoke test the optimized hosted page
         if: matrix.suite == '6/8'
         run: npm run test:optimized
       - name: Check the Worker bundle

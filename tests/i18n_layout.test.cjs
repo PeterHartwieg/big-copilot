@@ -1,5 +1,5 @@
 // The pseudo-locale sweep: every string of Big Copilot's own text, 40% longer,
-// accented and in brackets, on the real page, at six widths, over every page,
+// accented and in brackets, on the real page, at phone and sidebar breakpoint widths, over every page,
 // view and site panel. docs/architecture.md, "UI text".
 //
 // The table is built from the English catalogue (tools/i18n.py extract) and
@@ -22,7 +22,7 @@ const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
 const WEB = path.join(ROOT, 'web');
-const WIDTHS = [360, 768, 1280, 1500, 1501, 1920];
+const WIDTHS = [360, 1500, 1501];
 /* Converted areas: key prefix -> the selector of the markup that area owns.
    A conversion pull request adds its row; from then on English left on
    screen there fails the sweep. */

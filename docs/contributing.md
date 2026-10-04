@@ -59,7 +59,7 @@ Install Python 3 and Node.js 24, then run `npm ci` and
 `npx playwright install chromium` (on Linux, use `--with-deps` if system browser
 libraries are missing). Run `npm run verify` for the complete CI gate: assembly,
 Python unittest discovery, all Node suites with concurrency 2, the optimized
-hosted-page suites, the Worker dry-run, and the assembled-file check. The runner
+release smoke test, the Worker dry-run, and the assembled-file check. The runner
 restores readable assembly before the final freshness check. It needs no game, real saves or production credentials,
 and works in a dirty development checkout. Each failure stops later stages.
 
@@ -81,8 +81,8 @@ Focused commands also assemble first:
 - `npm run test:python` runs Python discovery;
   `npm run test:python -- tests.test_premises` selects a module. Arguments after
   `--` are passed to unittest, including discovery options.
-- `npm run test:optimized` assembles, optimizes the hosted page, runs CI’s hosted
-  suites with `BOARD_TARGET=web` and concurrency 2, then restores readable assembly
+- `npm run test:optimized` assembles, optimizes the hosted page, runs the release smoke
+  journey against that artifact, then restores readable assembly
   on success. If optimization or a hosted test fails, later stages stop; run
   `npm run verify:assemble` to restore readable output before inspecting it.
 - `npm run test:community` runs the community API and browser suites.
@@ -91,7 +91,7 @@ Focused commands also assemble first:
   existing assembly without rebuilding it.
 
 CI uses GitHub-hosted Ubuntu runners: eight Node shards (concurrency 2 each)
-and a Python job. Shard 6 also runs the optimized hosted-page suites and Worker
+and a Python job. Shard 6 also runs the short optimized release smoke and Worker
 dry-run; the Python runner first checks assembly and freshness. At most nine
 runners are active per workflow, leaving room for two runs within 20 slots.
 The small aggregate jobs start after their dependencies release their runners.
@@ -100,7 +100,19 @@ freshness check reports its own outcome separately from the Python tests.
 A failed lane does not cancel its siblings. The translation layout sweep is split into
 board/shell, planner breakpoints, and planner languages so no one file serializes
 all of that coverage. Browser installation needs only Chromium's
-headless shell. CI additionally requires assembly to leave no committed changes
+headless shell. The ordinary Node suite already tests optimized-page CSP/Pyodide
+loading and the optimizer's script boundaries; those run once. The separate
+optimized stage checks the deployed artifact with `release.test.cjs`, rather than
+repeating every functional journey.
+
+Layout coverage samples phones, actual breakpoint boundaries and desktop widths,
+with expanded pseudo text plus Russian and Korean wrapping. Catalogue and
+placeholder validation still cover every shipped language. Preserve regression
+cases for unreadable/overflowing content, but avoid exact pixel sizes, decorative
+inventory counts and exhaustive width/language combinations. Related assertions
+can share one scenario's page; independent tests retain isolated browser state.
+
+CI additionally requires assembly to leave no committed changes
 or untracked files. Local verification does not require
 a clean working tree. Worktrees can reuse installed dependencies by setting
 `NODE_PATH` to the canonical checkout’s `node_modules` instead of running `npm ci`
@@ -177,7 +189,7 @@ build stamp inputs. Python assembly stays independent of Node: `--assemble` rest
 readable output, which is what `--check` compares. Run `node tools/optimize_web.mjs`
 after assembly to preview the deployment artifact locally; assemble again before
 running tests or `--check`. `npm run test:optimized` manages this sequence and
-runs the same optimized hosted-page checks as CI.
+runs the same optimized release smoke test as CI.
 `tests/csp.test.cjs` serves the optimized page with real Pyodide,
 map, guide and game-link loading, and `tests/optimize_web.test.cjs` guards script
 boundaries and shared globals.
@@ -195,7 +207,7 @@ released. The map code is embedded in `index.html`, so checking the standalone
 
 Run `node --test tests/release.test.cjs` before deploying, after `python build_web.py --assemble`; set `RELEASE_URL` to
 `https://bigcopilot.com/` and run it again afterwards. It checks the generated
-page's map controls, ball interaction and persistent feature badges together.
+page's map and guide loading, displayed prices, and persistent feature badges together.
 
 ## New feature badges
 

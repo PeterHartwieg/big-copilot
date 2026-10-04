@@ -1,4 +1,4 @@
-// English and expanded pseudo text cover every planner breakpoint.
+// Sample planner breakpoints and stress long content; retain focused overflow regressions.
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {expansionTests} = require('./_i18n_expansion.cjs');
@@ -40,55 +40,3 @@ test('the containing-box check catches each long-name overflow whatever the font
   }
   assert.deepEqual(errors, []);
 });
-
-test('factory desktop pickers share a row and phone CTAs keep their sizes', async t => {
-  const payload = expansionStress();
-  // Keep the populated planning fixture, with ordinary saved addresses.
-  for(const b of [...payload.businesses, ...payload.premises.buildings]){
-    if(b.address?.startsWith('123 International')) b.address = b.key === 'mobile-factory' ? '12 Factory Road' : '10 Retail Road';
-  }
-  // The names fixture has no demand readings; add one synthetic cell to
-  // exercise the actual Growth popover button.
-  const shop = payload.premises.buildings.find(b => b.type === 'retail');
-  const business = payload.businesses.find(b => b.key === shop.key);
-  payload.premises.demand[shop.hood] = [{slug: business.typeSlug, type: business.type, category: 'retail', demand: 60, rivals: 1}];
-  payload.market.hoods = [shop.hood];
-  payload.market.types = [{slug: business.typeSlug, type: business.type, products: 1, mine: true,
-    cells: [{hood: shop.hood, demand: 60, providers: 1, count: 1, here: true}]}];
-  const {page, errors} = await site(t, {width: 1280, payload});
-  await expansionSeed(page);
-  await page.evaluate(() => openRoute('expansion/factory'));
-  const placement = await page.evaluate(() => {
-    const shops = document.querySelector('#viewCtl #planPicker').getBoundingClientRect();
-    const target = document.querySelector('#viewCtl .ff-for').getBoundingClientRect();
-    return {shops: shops.toJSON(), target: target.toJSON()};
-  });
-  assert.ok(placement.target.left >= placement.shops.right, 'For stays to the right of Shops at 1280px');
-  assert.ok(Math.abs(placement.target.y + placement.target.height / 2 - placement.shops.y - placement.shops.height / 2) <= 1,
-    'For and Shops stay on the same row at 1280px');
-  await page.setViewportSize({width: 360, height: 900});
-  await page.locator('#ofCtl [data-of-step="what"]').click();
-  assert.equal(await page.locator('#ofBody .ff-next .os-cta').evaluate(el => el.getBoundingClientRect().height), 40);
-  await page.locator('#ofCtl [data-of-step="investment"]').click();
-  await page.locator('[data-of-mode="self"]').click();
-  const emptyRows = await page.locator('#ofBody .os-store td.w:empty').evaluateAll(cells => cells.map(cell => {
-    const row = cell.parentElement, style = getComputedStyle(row);
-    // The price spans both rows: its stretched box includes an unwanted
-    // gap. Compare the item box and the price's single text line instead.
-    const content = Math.max(row.querySelector('td.l').getBoundingClientRect().height,
-      parseFloat(getComputedStyle(row.lastElementChild).lineHeight));
-    return {height: row.getBoundingClientRect().height, expected: content + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom) + parseFloat(style.borderBottomWidth)};
-  }));
-  assert.ok(emptyRows.length, 'supplier cards include rows without an explanation');
-  assert.ok(emptyRows.every(row => Math.abs(row.height - row.expected) <= 1), 'empty explanations add no row gap');
-  await page.evaluate(() => {
-    openRoute('expansion/demand');
-    const cell = [...document.querySelectorAll('#secMarket .cell[data-slug]')].find(el => osType(el.dataset.slug));
-    if(!cell) throw new Error('the fixture needs a plannable Demand cell');
-    demCellPop(cell);
-  });
-  assert.equal(await page.locator('#demCellPop .os-cta').evaluate(el => el.getBoundingClientRect().height), 40);
-  assert.equal(await page.locator('#demCellPop .os-btn').evaluate(el => el.getBoundingClientRect().height), 34);
-  assert.deepEqual(errors, []);
-});
-

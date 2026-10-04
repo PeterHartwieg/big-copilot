@@ -5,7 +5,7 @@ const {en} = require('./_i18n.cjs');
 const path = require('node:path');
 const {chromium} = require('playwright');
 
-test('release preserves the redesigned map, interactive ball and dismissible badges', async () => {
+test('the deployed page opens the map and wiki and remembers dismissed badges', async () => {
   const browser = await chromium.launch({headless:true, channel:process.env.PLAYWRIGHT_CHANNEL});
   try {
     const page = await browser.newPage({viewport:{width:1440,height:1000}});
@@ -25,14 +25,9 @@ test('release preserves the redesigned map, interactive ball and dismissible bad
       });
     }
     await page.goto(base);
-    // Twelve: the landing's footer and the board's each carry a Changelog, a
-    // voting and a game-link badge, the references (City map, Wiki) add
-    // two, the Link button one, Plan a factory (factory-flow) one, and
-    // the masthead's search control two (the field and its icon form; the
-    // stylesheet shows one). The copies share an id, so the counts below still
-    // go to zero together once the feature has been opened.
-    assert.equal(await page.locator('[data-new-feature]:not([hidden])').count(),12);
-    assert.equal(await page.locator('[data-new-feature="factory-flow"]:not([hidden])').count(),1);
+    assert.equal(await page.locator('#linkBtn').isVisible(), true);
+    // A dismissal must start with a badge that was actually shown.
+    assert.equal(await page.locator('#linkBtn [data-new-feature="game-link"]').isVisible(), true);
     // Linking reaches no game here; using the entry point is what counts.
     await page.locator('#linkBtn').click();
     assert.equal(await page.locator('[data-new-feature="game-link"]:not([hidden])').count(),0);
@@ -57,15 +52,11 @@ test('release preserves the redesigned map, interactive ball and dismissible bad
     assert.equal(await page.locator('[data-new-feature="factory-flow"]:not([hidden])').count(),0);
     await page.locator('#navRefs a[data-id="map"]').click();
     await page.evaluate(() => cityMapPage.ready);
-    assert.equal(await page.locator('#cityMapPage .lay').count(),5);
     assert.equal(await page.locator('#cityMapPage .lay[data-l="home"]').count(),1);
     // The plain map has no side panel: the list belongs to Find a location.
     assert.equal(await page.locator('#cityMapPage .places').count(),1);
     assert.equal(await page.locator('#cityMapPage .places').isVisible(),false);
-    assert.equal(await page.locator('#cityMapPage .layer .ball').count(),1);
     assert.equal(await page.locator('[data-new-feature="map"]:not([hidden])').count(),0);
-    await page.locator('#cityMapPage .layer .ball').click();
-    await page.waitForFunction(() => document.querySelectorAll('body > .coin').length > 0);
     await page.locator('#navRefs a[data-id="wiki"]').click();
     await page.getByRole('searchbox', {name: en('wiki.search.aria')}).waitFor();
     assert.equal(await page.locator('[data-new-feature="wiki"]:not([hidden])').count(),0);
@@ -83,7 +74,10 @@ test('release preserves the redesigned map, interactive ball and dismissible bad
     await page.evaluate(() => window.BigCopilotWiki.route('wiki/topic%2Fhow-rent-works'));
     await page.getByRole('heading', {name:'How rent works'}).waitFor();
     await page.reload();
-    assert.equal(await page.locator('[data-new-feature]:not([hidden])').count(),0);
+    for (const feature of ['game-link', 'community-voting', 'board-search', 'factory-flow',
+      'map', 'wiki', 'changelog', 'wiki-topic-how-rent-works']) {
+      assert.equal(await page.locator(`[data-new-feature="${feature}"]:not([hidden])`).count(), 0);
+    }
     assert.deepEqual(errors,[]);
   } finally {
     await browser.close();

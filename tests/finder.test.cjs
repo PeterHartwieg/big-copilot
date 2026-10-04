@@ -199,6 +199,10 @@ test('the switch is in the map window; every filter lives in the panel', async (
     assert.equal(await page.locator('#cityMapPage .filters').isVisible(), false);
     assert.equal(await page.locator('#cityMapPage .places').isVisible(), false);
     await turnOn(page);
+    const selected = await page.$$eval('#cityMapPage .filters .fchip.on', chips =>
+      chips.map(c => c.dataset.cat || c.dataset.show || c.dataset.h).sort());
+    assert.deepEqual(selected, [HK_HOOD, MT_HOOD, 'rent', 'retail'].sort());
+    assert.equal(await page.locator('#cityMapPage .fsel select').inputValue(), '');
     assert.equal(await page.locator(chip).getAttribute('aria-pressed'), 'true');
     assert.equal(await page.locator('#cityMapPage .places').isVisible(), true);
     // The plain map's whole header steps aside; the filters sit in the panel,
@@ -224,30 +228,6 @@ test('the switch is in the map window; every filter lives in the panel', async (
     assert.equal(await page.locator('#cityMapPage .places').isVisible(), false);
     assert.equal(await page.locator('#cityMapPage [data-stage].panel').count(), 0);
     assert.equal(await page.locator('#cityMapPage .location.fp.cand').count(), 0);
-    assert.deepEqual(errors, []);
-  } finally { await page.close(); }
-});
-
-test('the defaults are visibly chosen on first open, and nothing is ever dimmed', async () => {
-  const {page, errors} = await fixture();
-  try{
-    await openMap(page); await turnOn(page);
-    const state = await page.$$eval('#cityMapPage .filters .fchip', chips =>
-      chips.map(c => ({what: c.dataset.cat || c.dataset.show || c.dataset.h || c.querySelector('input')?.dataset.f,
-        on: c.classList.contains('on'), opacity: getComputedStyle(c).opacity})));
-    const on = state.filter(s => s.on).map(s => s.what).sort();
-    assert.deepEqual(on, [HK_HOOD, MT_HOOD, 'rent', 'retail'].sort());
-    // "Any type" is the default, so the type picker reads as unchosen.
-    assert.equal(await page.locator('#cityMapPage .fsel.on').count(), 0);
-    assert.equal(await page.locator('#cityMapPage .fsel select').inputValue(), '');
-    // Outlined is "not chosen", filled is "chosen"; no control is ever faded.
-    assert.deepEqual([...new Set(state.map(s => s.opacity))], ['1']);
-    assert.deepEqual([...new Set(await page.$$eval('#cityMapPage .filters .fchip, #cityMapPage .fsel select',
-      c => c.map(x => getComputedStyle(x).borderTopWidth)))], ['1px']);
-    // The picker hides the native caret and draws the board's own chevron.
-    assert.equal(await page.locator('#cityMapPage .fsel select').evaluate(s => getComputedStyle(s).appearance), 'none');
-    assert.equal(await page.locator('#cityMapPage .fsel .fchev svg').count(), 1);
-    assert.equal(await page.locator('#cityMapPage .fsel select').evaluate(s => s.offsetHeight), 26);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -1045,6 +1025,12 @@ test('the money column is what signing costs, with the rent behind it', async ()
       'Estimated deposit, about 63 days of rent; est. rent $140/day.');
     await page.locator('#cityMapPage .fhead [data-s="deposit"]').click();
     assert.deepEqual(await rowKeys(page), [MT[1], HK[0], MT[0]]);
+    assert.match(await page.locator('#cityMapPage .filters .why').getAttribute('data-tip'),
+      new RegExp(enRe('map.rent.check', {n: 3, p: 0.3}).source + ' ' + enRe('map.rent.deposits', {n: 6, p: 0.4}).source));
+    // No lease of your own, nothing to check it against.
+    await page.evaluate(() => { D.premises.rent.check = {leases: 0, worst: 0}; refreshCityMaps(); });
+    assert.match(await page.locator('#cityMapPage .filters .why').getAttribute('data-tip'),
+      enRe('map.rent.nocheck', {}, {}));
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -1061,20 +1047,6 @@ test('a payload with no deposits says so rather than inventing one', async () =>
     await pick(page, HK[0]);
     assert.deepEqual((await facts(page)).slice(-1), [en('map.fact.deposit') + '—']);
     assert.doesNotMatch(await page.locator('#cityMapPage .filters .why').getAttribute('data-tip'), enRe('map.rent.deposits', {}, {}));
-    assert.deepEqual(errors, []);
-  } finally { await page.close(); }
-});
-
-test('the rent tooltip reports how the estimate did against your own leases', async () => {
-  const {page, errors} = await fixture();
-  try{
-    await openMap(page); await turnOn(page);
-    assert.match(await page.locator('#cityMapPage .filters .why').getAttribute('data-tip'),
-      new RegExp(enRe('map.rent.check', {n: 3, p: 0.3}).source + ' ' + enRe('map.rent.deposits', {n: 6, p: 0.4}).source));
-    // No lease of your own, nothing to check it against.
-    await page.evaluate(() => { D.premises.rent.check = {leases: 0, worst: 0}; refreshCityMaps(); });
-    assert.match(await page.locator('#cityMapPage .filters .why').getAttribute('data-tip'),
-      enRe('map.rent.nocheck', {}, {}));
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
