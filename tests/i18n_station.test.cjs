@@ -7,9 +7,9 @@ const vm = require('node:vm');
 const {spawnSync} = require('node:child_process');
 const {loadBoard} = require('./_board.cjs');
 const root = path.join(__dirname, '..');
-// These established catalogues promise complete station grammar. Italian is
-// community-led and may be empty or partial, so its fallback is checked below.
-const completeLangs = ['de', 'es', 'fr', 'ko', 'pt', 'ru', 'tr'];
+// Bundled catalogues promise complete station grammar. Empty and partial
+// community catalogues still exercise the fallback separately below.
+const completeLangs = ['de', 'es', 'fr', 'it', 'ko', 'pt', 'ru', 'tr'];
 const langs = completeLangs.map(lang => `${lang}.json`);
 const supportedFiles = fs.readdirSync(path.join(root, 'i18n')).filter(f => /^[a-z]{2}\.json$/.test(f));
 const boardKeys = ['sp.hour.role', 'sp.hours.what.noun', 'sp.idle.part'];
@@ -21,7 +21,7 @@ const role = {stationKey, stationCount: 3, noun: 'projection booths', many: 'pro
   one: 'projection booth', posts: [[2]], staffed: [[20]]};
 
 test('every complete language uses game-name placeholders for station words', () => {
-  for(const file of [...langs, 'it.json'])assert.ok(supportedFiles.includes(file), `${file}: supported catalogue exists`);
+  for(const file of langs)assert.ok(supportedFiles.includes(file), `${file}: supported catalogue exists`);
   for(const file of langs){
     const table = JSON.parse(fs.readFileSync(path.join(root, 'i18n', file)));
     for(const key of [...boardKeys, ...pythonKeys]){
@@ -132,7 +132,6 @@ test('English role, header and idle sentences remain exactly unchanged', () => {
 
 test('empty and partial Italian keep English station fallbacks while community wording uses available game labels', () => {
   const c = loadBoard();
-  const bundled = JSON.parse(fs.readFileSync(path.join(root, 'web/i18n/it.json')));
   const names = JSON.parse(fs.readFileSync(path.join(root, 'web/names/it.json')));
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'web/translations/it.manifest.json')));
   assert.ok(names[stationKey], 'Italian game station label exists independently of UI translations');
@@ -141,18 +140,16 @@ test('empty and partial Italian keep English station fallbacks while community w
   const englishRead = '2 of 3 projection booths · 20/h';
   const englishHeader = '3 projection booths, 30 an hour between them';
   const englishIdle = '2 projection booths 09–10';
-  for(const table of [{}, bundled]){
-    c.ttSetTable('it', table);
-    assert.equal(c.roleRead(role, 0, 0), englishRead);
-    assert.equal(c.spHoursWhat({roles: [role], counters: 30}), englishHeader);
-    assert.equal(c.spIdleParts([{staff: 2, noun: role.noun, when: '09–10'}], 'counters'), englishIdle);
-  }
+  c.ttSetTable('it', {});
+  assert.equal(c.roleRead(role, 0, 0), englishRead);
+  assert.equal(c.spHoursWhat({roles: [role], counters: 30}), englishHeader);
+  assert.equal(c.spIdleParts([{staff: 2, noun: role.noun, when: '09–10'}], 'counters'), englishIdle);
   // One synthetic contribution exercises the real overlay validator and merge;
   // missing station sentences still use their original English grammar.
   const key = 'sp.hour.role', entry = manifest.entries[key];
   assert.ok(entry, 'station message is present in the contribution manifest');
   const wording = '{noun_name}: {n} su {of} · {rate}/h';
-  const partial = c.ttCommunityMerge('it', bundled, manifest, {schemaVersion: 1, lang: 'it',
+  const partial = c.ttCommunityMerge('it', {}, manifest, {schemaVersion: 1, lang: 'it',
     translations: {[key]: {sourceVersion: entry.sourceVersion, text: wording}}});
   assert.equal(partial[key], wording, 'valid community wording is accepted');
   c.ttSetTable('it', partial);

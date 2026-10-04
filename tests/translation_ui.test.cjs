@@ -64,6 +64,50 @@ async function setup(t,options={}){
 }
 const rows=page=>page.locator('.tr-group');
 const open=async(page,key)=>{await page.locator(`[data-key="${key}"] .tr-edit`).click();await page.locator('textarea').waitFor();await page.locator('.tr-primary:not(:disabled)').waitFor();};
+test('alternatives are independently discoverable without editing or voting, and votes can move',async t=>{
+  const community={'nav.staffing':{sourceVersion:'v-nav.staffing',selectedId:'bundled',candidates:[{id:'bundled',text:'Personale',votes:0,voted:false},{id:'other',text:'Collaboratori',votes:0,voted:false}]}};
+  const {page,state}=await setup(t,{community});
+  state.data['itnav.staffing']=structuredClone(community['nav.staffing']);
+  const row=page.locator('[data-key="nav.staffing"]');
+  await row.getByRole('button',{name:'View alternatives (1)',exact:true}).click();
+  await row.locator('.tr-alt').waitFor();
+  assert.equal(await page.locator('textarea').count(),0);
+  assert.deepEqual(state.writes,[],'viewing alternatives neither approves nor submits');
+  assert.equal(await row.locator('.tr-alt .tr-vote').innerText(),'Vote for this\n0');
+  await row.locator('.tr-alt .tr-vote').click();await page.getByText('Vote saved.',{exact:true}).waitFor();
+  assert.equal(state.writes[0].candidateId,'other');
+  assert.match(await row.locator('.tr-row .tr-vote').innerText(),/^Your vote/);
+  assert.equal(await page.locator('textarea').count(),0,'voting does not open an editor');
+  await row.locator('.tr-alt .tr-vote').click();
+  await row.locator('.tr-target').getByText('Personale',{exact:true}).waitFor();
+  assert.equal(state.writes[1].candidateId,'bundled');
+  await row.getByRole('button',{name:'Suggest a change',exact:true}).click();
+  assert.equal(await page.locator('textarea').inputValue(),'Personale');
+  await page.locator('textarea').fill('Bozza conservata');
+  await row.getByRole('button',{name:'View alternatives (1)',exact:true}).click();
+  assert.equal(await page.locator('textarea').count(),0);
+  // Escape from inside the alternatives panel restores focus to its opener.
+  await row.locator('.tr-alt .tr-vote').press('Escape');
+  assert.equal(await row.locator('.tr-alternatives').getAttribute('aria-expanded'),'false');
+  assert.equal(await row.locator('.tr-alternatives').evaluate(e=>document.activeElement===e),true);
+  await row.getByRole('button',{name:'Suggest a change',exact:true}).click();
+  assert.equal(await page.locator('textarea').inputValue(),'Bozza conservata');
+  assert.equal(state.writes.length,2);
+  if(process.env.TRANSLATION_ACTIONS_DESKTOP_SCREENSHOT)await page.screenshot({path:process.env.TRANSLATION_ACTIONS_DESKTOP_SCREENSHOT,fullPage:false});
+});
+test('empty alternatives explain their state and separate controls fit a phone',async t=>{
+  const {page,state}=await setup(t,{width:375});
+  const row=page.locator('[data-key="nav.staffing"]');
+  await row.getByRole('button',{name:'View alternatives',exact:true}).click();
+  await row.getByText('No alternatives yet. You can suggest new wording.',{exact:true}).waitFor();
+  assert.equal(await row.locator('.tr-alternatives').innerText(),'View alternatives (0)');
+  assert.equal(await page.locator('textarea').count(),0);assert.equal(state.writes.length,0);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  await row.getByRole('button',{name:'Suggest a change',exact:true}).click();
+  await page.locator('.tr-primary:not(:disabled)').waitFor();
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  if(process.env.TRANSLATION_ACTIONS_SCREENSHOT)await page.screenshot({path:process.env.TRANSLATION_ACTIONS_SCREENSHOT,fullPage:false});
+});
 test('bounded rows, accent-insensitive rendered search and shareable source links',async t=>{
   const {page}=await setup(t);
   await rows(page).first().waitFor();assert.equal(await rows(page).count(),40);
@@ -86,7 +130,7 @@ test('source-versioned suggestions start with a vote and safe text; validation p
   await page.getByText('Suggestion saved with your vote.',{exact:true}).waitFor();
   assert.deepEqual(state.writes[0],{lang:'it',key:'sp.pull.traffic',sourceVersion:'v-sp.pull.traffic',text:'Il passaggio dell’edificio {n}'});
   assert.equal(await rows(page).locator('.tr-row .tr-vote').getAttribute('aria-pressed'),'true');
-  assert.equal(await rows(page).locator('.tr-row .tr-vote').innerText(),'↑ 1');
+  assert.equal(await rows(page).locator('.tr-row .tr-vote-count').innerText(),'1');
   await rows(page).locator('.tr-alt .tr-vote').click();await page.getByText('Vote saved.',{exact:true}).waitFor();
   assert.equal(state.writes[1].candidateId,'bundled');
 });
@@ -162,7 +206,7 @@ test('a delayed entry read cannot overwrite a successful vote',async t=>{
   const {page}=await setup(t,{query:'?lang=it&key=nav.staffing',holdEntry:hold,onEntry:started});await entryStarted;
   await page.locator('.tr-row .tr-vote').click();await page.getByText('Vote saved.',{exact:true}).waitFor();
   const response=page.waitForResponse(url=>new URL(url.url()).pathname==='/api/translations/entry');release();await response;
-  assert.equal(await page.locator('.tr-row .tr-vote').innerText(),'↑ 1');assert.equal(await page.locator('.tr-row .tr-vote').getAttribute('aria-pressed'),'true');
+  assert.equal(await page.locator('.tr-row .tr-vote-count').innerText(),'1');assert.equal(await page.locator('.tr-row .tr-vote').getAttribute('aria-pressed'),'true');
 });
 test('candidate cap errors direct contributors to existing wording and preserve the draft',async t=>{
   const {page,state}=await setup(t,{query:'?lang=it&key=nav.staffing'});await page.locator('.tr-primary:not(:disabled)').waitFor();
@@ -181,7 +225,8 @@ test('closing a distant direct-linked phrase keeps it visible and focused even w
   await open(page,key);assert.equal(await page.locator('textarea').inputValue(),'Passaggio conservato {n}');
   await page.getByRole('button',{name:'Cancel',exact:true}).click();assert.equal(await rows(page).count(),1);
   assert.equal(await page.locator(`[data-key="${key}"] .tr-edit`).evaluate(e=>document.activeElement===e),true);
-  await open(page,key);assert.equal(await page.locator('textarea').inputValue(),'','Cancel discards the draft while preserving linked context');
+  const bundled=actual.find(e=>e.key===key).text.replace(/<\/?[a-z][^>]*>/gi,'');
+  await open(page,key);assert.equal(await page.locator('textarea').inputValue(),bundled,'Cancel restores bundled wording while preserving linked context');
 });
 
 test('rendered searches retain clock and currency anchors without matching every placeholder-only phrase',async t=>{
@@ -226,7 +271,7 @@ test('an old language visit cannot overwrite a fresh read after returning to tha
   await page.locator('#trLanguage').selectOption('it');await page.locator('.tr-target').getByText('Squadra aggiornata',{exact:true}).waitFor();
   const oldResponse=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/translations/entry'&&new URL(r.url()).searchParams.get('lang')==='it');release();await oldResponse;
   assert.equal(await page.locator('.tr-row .tr-target span').innerText(),'Squadra aggiornata');
-  assert.equal(await page.locator('.tr-row .tr-vote').innerText(),'↑ 4');
+  assert.equal(await page.locator('.tr-row .tr-vote-count').innerText(),'4');
 });
 
 test('an in-flight suggestion survives a language round trip and refreshes the returned entry',async t=>{
@@ -264,7 +309,7 @@ test('delayed actual community summaries cannot undo closing, search, or filter 
     if(action==='cancel')await page.getByRole('button',{name:'Cancel',exact:true}).click();
     else if(action==='search')await page.locator('#trSearch').fill('Foot traffic 24');
     else if(action==='area')await page.locator('#trArea').selectOption('sp');
-    else await page.locator('#trFilter').selectOption('missing');
+    else await page.locator('#trFilter').selectOption('draft');
     assert.equal(await page.locator('textarea').count(),0,action+' closes the editor');
     const response=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/translations');release();await response;
     // A subsequent task flushes the response handler and any optional entry

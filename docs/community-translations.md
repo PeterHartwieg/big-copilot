@@ -19,6 +19,11 @@ opening the contribution page never uploads a save or reads its company data.
 
 ## Contributions and votes
 
+- **Suggest a change** opens the current wording for editing; **Translate** does
+  the same for an untranslated phrase. **View alternatives (N)** separately opens
+  the other versions without editing or voting. The count appears once community
+  data is available. Each version has a **Vote for this** button with its vote count;
+  **Your vote** identifies the connection's choice after its details have loaded.
 - A suggestion includes its contributor's vote. The first contribution can replace
   a bundled draft, which starts with zero community votes.
 - One active choice is recorded per connection, target language, phrase and English
