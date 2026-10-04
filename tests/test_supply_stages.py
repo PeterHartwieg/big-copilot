@@ -10,9 +10,11 @@ takes and returns, and the stages, composed by hand, to what _supply() ships.
 import collections
 import copy
 import unittest
+from unittest.mock import patch
 
 from ba_dashboard import (FLAT_WEEK, SUPPLY_MARGIN, WEEKDAYS, _demand_ends, _DeliveryLog, _DemandSizing,
                           _supply_depot_rows, _supply_imports, _supply_leaves, _supply_plans,
+                          _supply_draw, _supply_factory_flow, _supply_idle, _supply_reconcile,
                           _supply_shop_rows, _supply_walk, _supply_wholesale, Names, site_key)
 from test_supply_facts import BEER, SODA, Company, tx
 
@@ -301,6 +303,104 @@ class ComposedStagesTests(unittest.TestCase):
         self.assertEqual(copy.deepcopy((walked, imports, drops, edges, held)), inputs)
         self.assertEqual(_supply_shop_rows(businesses, index, targets, wholesale, no_peak), shipped["shops"])
 
+
+
+class RemainingStagesTests(unittest.TestCase):
+    def inputs(self, c):
+        businesses = c.businesses()
+        index = index_of(businesses)
+        sold = {b["key"]: {l["slug"]: l["rate"] for l in b["lines"]} for b in businesses}
+        held = {b["key"]: {l["slug"]: l["units"] for l in b["lines"]} for b in businesses}
+        edges, targets = _supply_plans(c.save(), businesses)
+        return businesses, index, sold, held, edges, targets
+
+    def test_graph_draw_memo_is_per_build_and_stops_cycles_and_foreign_sites(self):
+        edges = {"hub": [("shop", SODA, 40), ("foreign", SODA, 80)],
+                 "shop": [("hub", SODA, 40)]}
+        draw = _supply_draw({"hub": 0, "shop": 1}, edges, {("shop", SODA): (12, 15)})
+        self.assertEqual(draw("hub", SODA), 12)
+        self.assertEqual(draw("foreign", SODA), 0)
+        again = _supply_draw({"hub": 0, "shop": 1}, edges, {("shop", SODA): (30, 35)})
+        self.assertEqual(again("hub", SODA), 30)
+        self.assertEqual(draw("hub", SODA), 12)
+
+    def test_factory_callback_walks_each_mode_and_keeps_state_with_its_build(self):
+        c = ComposedStagesTests().company()
+        businesses, index, sold, held, edges, targets = self.inputs(c)
+        imports, configured, _next = _supply_imports(c.save(), Names({}), c.day)
+        history = object()
+        calls = []
+        def factory_stub(save, names, sites, recipes, flow, received_history, character):
+            self.assertIs(received_history, history)
+            self.assertEqual(character, "synthetic")
+            flow["demandMade"](lambda _s, _i: False, lambda _s, _i: 0)
+            calls.append(flow["walk"]({"cap": {}, "dem": {}}, {"cap": {}, "dem": {}}, set()))
+            return {"sites": []}
+        kwargs = dict(index=index, edges=edges, leaves=_supply_leaves(businesses, index, sold, targets),
+                      held=held, sold=sold, sold_week=sold, target_at=targets, imports=imports,
+                      configured=configured, wholesale={}, log=_DeliveryLog(c.save(), c.day),
+                      day=c.day, left_today=0.5, beat=lambda _b: FLAT_WEEK, peak_of=no_peak,
+                      recipes={}, history=history, character="synthetic")
+        before = copy.deepcopy((edges, imports, held, sold))
+        with patch("ba_dashboard._factories", side_effect=factory_stub):
+            first = _supply_factory_flow(c.save(), Names({}), businesses, **kwargs)
+            second = _supply_factory_flow(c.save(), Names({}), businesses, **kwargs)
+        self.assertEqual(set(first["walked"]), {"cap", "dem"})
+        self.assertEqual(first["import_rows"][0]["perDay"], 90)
+        self.assertEqual(first, second)
+        self.assertIsNot(first["walked"], second["walked"])
+        first["weekly_use"].clear()
+        self.assertTrue(second["weekly_use"])
+        self.assertEqual(calls, [{"routed": {}, "routeOnly": {}}] * 2)
+        self.assertEqual(before, (edges, imports, held, sold))
+
+    def test_idle_reports_unfed_sites_and_filters_dead_imports_without_mutating_inputs(self):
+        c = Company()
+        c.site(HUB, "Idle depot")
+        c.shop(SHOP_A, "Unfed shop")
+        c.hold(HUB, SODA, 1000)
+        c.hold(SHOP_A, SODA, 10, 20)
+        c.contract(HUB, SODA, 100)
+        businesses, index, sold, held, edges, targets = self.inputs(c)
+        imports, _configured, _next = _supply_imports(c.save(), Names({}), c.day)
+        factories = {"sites": []}
+        before = copy.deepcopy((businesses, factories, imports, edges, held))
+        idle = _supply_idle(businesses, index=index, factories=factories, edges=edges,
+                            target_at=targets, wholesale={}, imports=imports, held=held,
+                            sold=sold, sold_week=sold, log=_DeliveryLog(c.save(), c.day), peak_of=no_peak)
+        self.assertEqual(idle["still"], {(index[key(HUB)], SODA)})
+        self.assertEqual(idle["facts"][(key(HUB), SODA)]["cap"]["idle"], "notRouted")
+        self.assertEqual(idle["extra"][(key(SHOP_A), SODA)]["via"], index[key(HUB)])
+        self.assertEqual(before, (businesses, factories, imports, edges, held))
+        shipped = c.run()
+        self.assertEqual(idle["rows"], shipped["idle"])
+        self.assertEqual(shipped["imports"], [])
+        self.assertEqual(shipped["importsDem"], [])
+
+    def test_reconciliation_copies_mode_verdicts_and_removes_private_factory_state(self):
+        c = Company()
+        c.factory(FACTORY, "Factory")
+        businesses, index, sold, held, edges, targets = self.inputs(c)
+        need = {"slug": SODA, "target": 10, "importSite": None}
+        factories = {"sites": [{"s": 0, "needs": [need]}], "_ramp": {"private": True}}
+        facts = {"0": {SODA: {"role": "input", "st": "low", "why": "target", "lvl": "warn",
+                  "cad": "daily", "setTo": 80, "via": 1,
+                  "import": {"st": "paused", "lvl": "warn"},
+                  "dem": {"st": "ok", "lvl": "ok", "import": {"st": "paused", "lvl": "info"}}}}}
+        with patch("ba_dashboard._supply_facts", return_value=facts) as build:
+            result = _supply_reconcile(Names({}), businesses, index=index, factories=factories,
+                target_at=targets, import_rows=[], import_rows_dem=[], peak_of=no_peak,
+                wholesale={}, idle_facts={}, extra={}, log=_DeliveryLog(c.save(), c.day),
+                walked={}, made_now={}, held=held, edges=edges, imports={}, made_day={},
+                made_at=set(), unread=set(), shop_rows=[])
+        self.assertIs(result, facts)
+        self.assertNotIn("_ramp", factories)
+        self.assertEqual((need["status"], need["raiseTarget"], need["via"]), ("low", 80, 1))
+        self.assertTrue(need["ownPaused"])
+        self.assertEqual(need["dem"], {"status": "ok", "level": "ok", "ownPaused": False})
+        sourced = build.call_args.args[0]["sourced"]
+        self.assertTrue(sourced("foreign", SODA))
+        self.assertFalse(sourced(key(FACTORY), SODA))
 
 if __name__ == "__main__":
     unittest.main()

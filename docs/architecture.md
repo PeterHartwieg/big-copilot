@@ -393,9 +393,9 @@ the help's own words needs the English.
 ## Supply stages
 
 `_supply()` builds the `supply` key in four stages. Each stage is a module-level function
-or a small class in the supply part of `ba_dashboard.py`, under a banner
-`# --- supply, stage N`. A stage takes what it reads as arguments and returns what it
-makes. `_supply()` runs them in order and passes each result on, and no stage reads
+or a small class in the supply part of `ba_dashboard.py`; the coordinator helpers sit
+beside `_supply()`. A stage takes what it reads as arguments and returns what it
+makes, with presentation reconciliation explicitly updating its supplied rows. `_supply()` runs them in order and passes each result on, and no stage reads
 anything from a later one.
 
 | Stage | Code | Reads | Returns |
@@ -404,39 +404,51 @@ anything from a later one.
 | | `_supply_imports()` | the import partnerships | `imports` per (depot, item), contracts in the game's delivery order; `configured`, the lines at zero; `next_day` |
 | | `_supply_wholesale()` | the repeating wholesale contracts, the company's sites, the time of day | `wholesale` per (shop, item) |
 | | `_DeliveryLog` | each site's delivery log | the log's tables, frozen; measured rates, `first_fill()`, `round_gap()`, `rounds_today` |
-| 2. The network's ends | `_supply_leaves()`, `_customer_driven()` | the businesses' sales, `target_at`, `edges` | `leaves`, a day of each shelf's need, with `SUPPLY_MARGIN` added here only; whether a holding ends up on a shop floor |
+| 2. The network's ends | `_supply_leaves()`, `_customer_driven()`, `_supply_draw()` | the businesses' sales, `target_at`, `edges` | `leaves`, a day of each shelf's need, with `SUPPLY_MARGIN` added here only; whether a holding ends up on a shop floor |
 | 3. Sizing | `_supply_walk()` | `edges`, `leaves`, the factory lines' draw and output in one sizing mode, the wholesale deliveries, the imports' active contracts | one node per (site, item) in that mode |
 | | `_demand_ends()`, `_DemandSizing` | stages 1 and 2 | what the ends draw down the plans in Demand sizing (`demand()`), and how far a sender is held down (`levels()`) |
 | | `_supply_depot_rows()` | one mode's walk, its factory lines' draw and output, stage 1's tables | the import rows of that mode, and a week of each line's draw |
+| | `_supply_factory_flow()` | stages 1 and 2, the factory recipes and history, weekday profiles | `factories`, both modes' walks and import rows, capacity output, unknown output, and weekly draw |
+| | `_supply_idle()` | factories, plans, holdings, sales, delivery log and imports | idle rows and mode verdicts, unfed sites and their supplying depot, dead import pairs, factory output pairs |
 | 4. Presentation and findings | `_supply_shop_rows()`, `_supply_graph()`; `_supply_facts()` with `_supply_status()` | the rows and walks above, `factories` | `shops`, `graph`, `facts` |
+| | `_supply_reconcile()` | canonical fact inputs from stages 1–3, shop and factory rows | `facts`; adds missing shelf rows and copies each fact's verdict onto factory needs |
 
 The boundaries:
 
 - Stage 1 reads the save, plus what each business holds (`_supply_plans()`) and which
   sites are the company's (`_supply_wholesale()`). Stage 2 reads stage 1 and the
   businesses. Neither sizes anything.
-- `_factories()` sits inside stage 3, and the dependency runs both ways: the walk needs
-  what the factory lines make and eat, and the factory verdicts need what the routes
-  bring. `_supply()` hands `_factories()` the `flow` dict. Through it `_factories()` calls
-  `_DemandSizing.set_made()` before it sizes a line, `demand()` while it does, and then
-  `walk()`. `walk()` runs `_supply_walk()` and `_supply_depot_rows()` once per mode and
-  fills in `_supply()`'s own tables (`walked`, `made_now`, `eats_now`, `weekly_use` and
-  the two lists of import rows), which the later code reads. That is why `walk()` is
-  still a closure in `_supply()`.
-- `history` reaches `_factories()` only. No stage reads or writes it.
+- `_supply_draw()` returns the graph-link draw callback. Its recursive memo belongs to
+  one build and follows shelf draw through plans, stopping cycles and foreign sites.
+- `_supply_factory_flow()` coordinates the two-way stage 3 dependency: the walk needs
+  what factory lines make and eat, while factory verdicts need what routes bring.
+  It hands `_factories()` the `flow` dict. Through it `_factories()` calls
+  `_DemandSizing.set_made()` before sizing a line, `demand()` while sizing, and then
+  the coordinator's `walk()` callback. That callback runs `_supply_walk()` and
+  `_supply_depot_rows()` once per mode and fills tables private to that coordinator
+  invocation. The coordinator returns those tables explicitly to `_supply()`.
+  `history` reaches `_factories()` only; the other stages never read or write it.
+- `_supply_idle()` owns `plan_draw()`, factory input/output lookup, unfed-site lookup
+  and both modes' idle verdicts. It reads its inputs without changing them and returns
+  the dead import pairs so `_supply()` can filter both import row lists before facts.
+- `_supply_reconcile()` owns `sourced()` and the context passed to `_supply_facts()`.
+  It adds missing shelf rows and updates the supplied factory needs in place: status,
+  mode differences, paused imports and suggested targets. It removes the private
+  `_ramp` table after facts have read it. These presentation rows belong to this build.
 - Order is kept: every stage iterates in the order the code had before it was split out,
   and a set that decides the order of anything in the payload goes through `_in_order()`.
 - `_DemandSizing` keeps memos, `drawn` and `levels_at`, which `set_made()` clears.
   `_supply_walk()` keeps none between calls.
 
-Still inside `_supply()`, for later steps of issue #265: `draw()` (a shop's draw followed
-down the plans, for the graph's links), the `walk()` callback and the tables it fills, the
-idle-stock findings (`plan_draw()`, `unfed_by_item`, `idle_by`), `sourced()` and the
-context `_supply_facts()` gets, and the loop that copies each fact's verdict onto the
-factory view's rows.
+`_supply()` now prepares common sales, holdings and weekday profiles, invokes the
+stages, filters dead import rows and assembles the unchanged payload. The deeper
+route walk, Demand sizing and factory arithmetic remain unchanged; these boundaries
+do not introduce a second model or a general stage framework.
 
-`tests/test_supply_stages.py` tests each stage on its own, and checks that the stages
-composed by hand give the same import and shop rows as `_supply()`.
+`tests/test_supply_stages.py` tests each stage on synthetic inputs, including callback
+coordination and isolation across builds, idle-stock reconciliation, graph draw cycles,
+and copying canonical mode verdicts onto factory rows. It also checks that stages
+composed by hand give the same import, shop and idle rows as `_supply()`.
 
 ## Sections
 

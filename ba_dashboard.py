@@ -6264,67 +6264,8 @@ def _supply_graph(save: Save, names: Names, businesses: list, index: dict, *, ed
     return graph
 
 
-def _supply(
-    save: Save,
-    names: Names,
-    businesses: list,
-    day: int,
-    rhythm: dict,
-    recipes: dict | None = None,
-    history: "History | None" = None,
-    character: str = "default",
-) -> dict:
-    """How the goods actually move: a daily top-up round, and a weekly import.
-
-    The logistics manager refills every shop to a per-item target each morning,
-    so a shop only runs dry if it sells more in a day than that target. Imports
-    land once a week, so a warehouse only runs dry if its holding cannot cover
-    the daily draw until the next delivery. Those are the two questions worth
-    asking, plus: what is piling up and never moving?
-    """
-    index = {b["key"]: i for i, b in enumerate(businesses)}
-    # What each shelf sells a trading day (_business); a hand-built business
-    # without it sells at its calendar rate.
-    sold = {b["key"]: {l["slug"]: l.get("tradeRate", l["rate"]) for l in b["lines"]}
-            for b in businesses}
-    held = {b["key"]: {l["slug"]: l["units"] for l in b["lines"]} for b in businesses}
-    # What each shelf sells a week, as a day: the trading-day rate over the
-    # days the shop traded in the last week (_business's weekSold). Every
-    # weekly figure reads this; a daily top-up reads the trading-day rate.
-    sold_week = {b["key"]: {l["slug"]: _week_sold(b, l) / 7 for l in b["lines"]} for b in businesses}
-
-    # Most of today is already spent. A save taken at 23:00 on a Saturday has one
-    # hour of Saturday's selling left in it, not a whole day of it, and charging
-    # the full day would report a warehouse running dry that is in fact fine.
-    # Everything that walks forward from now starts with this fraction.
-    left_today = max(0.0, (24 - save.root["Hour"] - int(save.root["Minute"]) / 60) / 24)
-    spent_today = 1 - left_today
-
-    # A flat daily average under-provisions a Saturday and over-provisions a
-    # Wednesday, so every consumption figure below is read through the weekday
-    # profile of the site doing the consuming.
-    chain_beat = rhythm.get("customers") or rhythm.get("revenue")
-
-    def beat(business: dict) -> dict:
-        profile = business.get("rhythm") or chain_beat
-        if not profile:
-            return {wd: 1.0 for wd in range(7)}
-        by_name = {p["day"]: p["index"] / 100 for p in profile}
-        return {wd: by_name.get(WEEKDAYS[wd], 1.0) for wd in range(7)}
-
-    def peak_of(business: dict):
-        profile = business.get("rhythm") or chain_beat
-        if not profile:
-            return 1.0, None
-        top = max(profile, key=lambda p: p["index"])
-        return top["index"] / 100, top["day"]
-
-    # The save's facts and the network's ends: supply stages 1 and 2, above.
-    # Each stage takes what it reads as arguments and returns what it makes.
-    edges, target_at = _supply_plans(save, businesses)
-    wholesale = _supply_wholesale(save, index, day, spent_today)
-    leaves = _supply_leaves(businesses, index, sold_week, target_at)
-
+def _supply_draw(index: dict, edges: dict, leaves: dict):
+    """Graph-link draw callback, with a memo owned by this supply build."""
     drawn = {}
 
     def draw(key: str, item: str, seen: frozenset = frozenset()) -> float:
@@ -6341,24 +6282,19 @@ def _supply(
         drawn[(key, item)] = total
         return total
 
-    log = _DeliveryLog(save, day)
-    imports, configured, next_day = _supply_imports(save, names, day)
+    return draw
 
-    days_to_import = (next_day - day) if next_day is not None else None
-    # The delivery lands at the start of its day, so the stock has to reach it
-    # from now — the rest of today plus the whole days in between.
-    hours_to_import = (
-        max(days_to_import - spent_today, 0.0) if days_to_import is not None else None
-    )
 
-    # --- 1. shops: does a day of selling outrun the morning top-up?
-    shop_rows = _supply_shop_rows(businesses, index, target_at, wholesale, peak_of)
+def _supply_factory_flow(save: Save, names: Names, businesses: list, *, index: dict,
+                         edges: dict, leaves: dict, held: dict, sold: dict, sold_week: dict,
+                         target_at: dict, imports: dict, configured: dict, wholesale: dict,
+                         log, day: int, left_today: float, beat, peak_of,
+                         recipes: dict, history, character: str) -> dict:
+    """Coordinate factory sizing and its route callback within one build.
 
-    # --- 2. depots: does the holding reach the next delivery?
-    # Worked out once the factories' lines are known: _factories() calls
-    # walk() back as soon as it has them. What each line needs and what each
-    # route brings come from the plans, the imports and the machines
-    # (_supply_walk()), never from the delivery log.
+    The callback owns its walk tables; history is passed only to _factories().
+    Factory lines are known before either sizing mode walks the routes.
+    """
     import_rows, import_rows_dem = [], []  # the rows in 24/7 and in Demand sizing
     weekly_use = {}  # (depot, item) -> a week of the draw the 24/7 rows judge
     walked = {}  # sizing mode -> {(site, item): node}, from _supply_walk()
@@ -6456,6 +6392,15 @@ def _supply(
     }
     factories = _factories(save, names, businesses, recipes or {}, flow, history, character)
 
+    return {"factories": factories, "walked": walked, "made_day": made_day,
+            "unread": unread, "made_now": made_now, "weekly_use": weekly_use,
+            "import_rows": import_rows, "import_rows_dem": import_rows_dem}
+
+
+def _supply_idle(businesses: list, *, index: dict, factories: dict, edges: dict,
+                 target_at: dict, wholesale: dict, imports: dict, held: dict,
+                 sold: dict, sold_week: dict, log, peak_of) -> dict:
+    """Judge idle stock in both sizing modes, without changing route or factory rows."""
     # --- 3b. anything just sitting there
     # Stock is idle when it is IDLE_WEEKS or more of what draws on it, and not
     # moving when nothing does. What draws on it depends on where it sits: a
@@ -6645,9 +6590,6 @@ def _supply(
     # reaches the import, so Before the import leaves it to Idle stock.
     still = {(index[key], item) for (key, item), by_mode in idle_by.items()
              if (by_mode.get("cap") or {}).get("dead")}
-    import_rows = [r for r in import_rows if (r["s"], r["slug"]) not in still]
-    import_rows_dem = [r for r in import_rows_dem if (r["s"], r["slug"]) not in still]
-
     # What the facts carry: the idle verdict in each mode, and, for stock no
     # plan sends on while own sites sell or need it, the sites it could feed
     # (`unfed`), each of which names the depot holding the most of it (`via`).
@@ -6668,6 +6610,21 @@ def _supply(
     for (s, item), (_units, depot) in via.items():
         extra[(businesses[s]["key"], item)]["via"] = depot
 
+    return {"rows": idle_rows, "facts": dict(idle_facts), "extra": dict(extra),
+            "still": still, "made_at": made_at}
+
+
+def _supply_reconcile(names: Names, businesses: list, *, index: dict, factories: dict,
+                      target_at: dict, import_rows: list, import_rows_dem: list,
+                      peak_of, wholesale: dict, idle_facts: dict, extra: dict, log,
+                      walked: dict, made_now: dict, held: dict, edges: dict,
+                      imports: dict, made_day: dict, made_at: set, unread: set,
+                      shop_rows: list) -> dict:
+    """Build canonical facts and copy their verdicts onto owned presentation rows.
+
+    Adds missing shelf rows and updates factory needs in place, including removal
+    of the private _ramp table. Route and idle inputs are read only.
+    """
     # --- 3c. one fact per (site, item), with one status word, read by every
     # view of the board and by the findings (_supply_facts)
     def sourced(key: str, item: str) -> bool:
@@ -6746,6 +6703,116 @@ def _supply(
                     ("setTo", "setTo")) if field in dem}
             if paused_dem != paused_cap:
                 row.setdefault("dem", {})["ownPaused"] = paused_dem
+
+    return facts
+
+
+def _supply(
+    save: Save,
+    names: Names,
+    businesses: list,
+    day: int,
+    rhythm: dict,
+    recipes: dict | None = None,
+    history: "History | None" = None,
+    character: str = "default",
+) -> dict:
+    """How the goods actually move: a daily top-up round, and a weekly import.
+
+    The logistics manager refills every shop to a per-item target each morning,
+    so a shop only runs dry if it sells more in a day than that target. Imports
+    land once a week, so a warehouse only runs dry if its holding cannot cover
+    the daily draw until the next delivery. Those are the two questions worth
+    asking, plus: what is piling up and never moving?
+    """
+    index = {b["key"]: i for i, b in enumerate(businesses)}
+    # What each shelf sells a trading day (_business); a hand-built business
+    # without it sells at its calendar rate.
+    sold = {b["key"]: {l["slug"]: l.get("tradeRate", l["rate"]) for l in b["lines"]}
+            for b in businesses}
+    held = {b["key"]: {l["slug"]: l["units"] for l in b["lines"]} for b in businesses}
+    # What each shelf sells a week, as a day: the trading-day rate over the
+    # days the shop traded in the last week (_business's weekSold). Every
+    # weekly figure reads this; a daily top-up reads the trading-day rate.
+    sold_week = {b["key"]: {l["slug"]: _week_sold(b, l) / 7 for l in b["lines"]} for b in businesses}
+
+    # Most of today is already spent. A save taken at 23:00 on a Saturday has one
+    # hour of Saturday's selling left in it, not a whole day of it, and charging
+    # the full day would report a warehouse running dry that is in fact fine.
+    # Everything that walks forward from now starts with this fraction.
+    left_today = max(0.0, (24 - save.root["Hour"] - int(save.root["Minute"]) / 60) / 24)
+    spent_today = 1 - left_today
+
+    # A flat daily average under-provisions a Saturday and over-provisions a
+    # Wednesday, so every consumption figure below is read through the weekday
+    # profile of the site doing the consuming.
+    chain_beat = rhythm.get("customers") or rhythm.get("revenue")
+
+    def beat(business: dict) -> dict:
+        profile = business.get("rhythm") or chain_beat
+        if not profile:
+            return {wd: 1.0 for wd in range(7)}
+        by_name = {p["day"]: p["index"] / 100 for p in profile}
+        return {wd: by_name.get(WEEKDAYS[wd], 1.0) for wd in range(7)}
+
+    def peak_of(business: dict):
+        profile = business.get("rhythm") or chain_beat
+        if not profile:
+            return 1.0, None
+        top = max(profile, key=lambda p: p["index"])
+        return top["index"] / 100, top["day"]
+
+    # The save's facts and the network's ends: supply stages 1 and 2, above.
+    # Each stage takes what it reads as arguments and returns what it makes.
+    edges, target_at = _supply_plans(save, businesses)
+    wholesale = _supply_wholesale(save, index, day, spent_today)
+    leaves = _supply_leaves(businesses, index, sold_week, target_at)
+
+    draw = _supply_draw(index, edges, leaves)
+
+    log = _DeliveryLog(save, day)
+    imports, configured, next_day = _supply_imports(save, names, day)
+
+    days_to_import = (next_day - day) if next_day is not None else None
+    # The delivery lands at the start of its day, so the stock has to reach it
+    # from now — the rest of today plus the whole days in between.
+    hours_to_import = (
+        max(days_to_import - spent_today, 0.0) if days_to_import is not None else None
+    )
+
+    # --- 1. shops: does a day of selling outrun the morning top-up?
+    shop_rows = _supply_shop_rows(businesses, index, target_at, wholesale, peak_of)
+
+    # --- 2. depots: does the holding reach the next delivery?
+    # Worked out once the factories' lines are known: _factories() calls
+    # walk() back as soon as it has them. What each line needs and what each
+    # route brings come from the plans, the imports and the machines
+    # (_supply_walk()), never from the delivery log.
+    sized = _supply_factory_flow(
+        save, names, businesses, index=index, edges=edges, leaves=leaves, held=held,
+        sold=sold, sold_week=sold_week, target_at=target_at, imports=imports,
+        configured=configured, wholesale=wholesale, log=log, day=day, left_today=left_today,
+        beat=beat, peak_of=peak_of, recipes=recipes or {}, history=history, character=character)
+    factories, walked = sized["factories"], sized["walked"]
+    made_day, unread, made_now = sized["made_day"], sized["unread"], sized["made_now"]
+    weekly_use = sized["weekly_use"]
+    import_rows, import_rows_dem = sized["import_rows"], sized["import_rows_dem"]
+
+    idle = _supply_idle(
+        businesses, index=index, factories=factories, edges=edges, target_at=target_at,
+        wholesale=wholesale, imports=imports, held=held, sold=sold, sold_week=sold_week,
+        log=log, peak_of=peak_of)
+    idle_rows, idle_facts, extra = idle["rows"], idle["facts"], idle["extra"]
+    still, made_at = idle["still"], idle["made_at"]
+    import_rows = [r for r in import_rows if (r["s"], r["slug"]) not in still]
+    import_rows_dem = [r for r in import_rows_dem if (r["s"], r["slug"]) not in still]
+
+    facts = _supply_reconcile(
+        names, businesses, index=index, factories=factories, target_at=target_at,
+        import_rows=import_rows, import_rows_dem=import_rows_dem, peak_of=peak_of,
+        wholesale=wholesale, idle_facts=idle_facts, extra=extra, log=log, walked=walked,
+        made_now=made_now, held=held, edges=edges, imports=imports, made_day=made_day,
+        made_at=made_at, unread=unread, shop_rows=shop_rows)
 
     # --- 4. the chain as a graph, with what each node holds against what it needs
     graph = _supply_graph(
