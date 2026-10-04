@@ -417,6 +417,76 @@ class BenchTest(unittest.TestCase):
         self.assertEqual([p["id"] for p in world["bench"]], ["w07"])
 
 
+class AvailabilityReuseTests(unittest.TestCase):
+    """Shared machine hours reuse availability, but never a person's changing week."""
+
+    def uncached(self, lines, people):
+        take_slot = ba_dashboard._take_slot
+
+        def without_room(slot, pool, state, shifts, here, room=None):
+            return take_slot(slot, pool, state, shifts, here)
+
+        with unittest.mock.patch.object(ba_dashboard, "_take_slot", without_room):
+            return hand_rows(lines, people)
+
+    def test_complete_plans_match_without_reusing_availability(self):
+        full = "ba:jobdemand_fulltime"
+        part = "ba:jobdemand_parttime"
+        five = "ba:jobdemand_fivedaysweek"
+        four = "ba:jobdemand_fourdaysweek"
+        weekend = "ba:jobdemand_freeweekends"
+        evening = "ba:jobdemand_noevenings"
+        cases = [
+            # Many equal shapes, with the fewest-covering count trials.
+            ([("beer", 8, 24, 16, 24)], People().add(32, demands=(full,))),
+            # Day ceilings, overlapping hours and weekly ceilings all change
+            # as somebody receives a slot; cover both differing line shapes
+            # and the cap/demand plans' different run starts.
+            ([("beer", 3, 24, 17, 24), ("water", 2, 16, 12, 0)],
+             People().add(5, demands=(full, five)).add(4, demands=(part, four))
+             .add(5, demands=(full, weekend)).add(4, demands=(full, NOMORNINGS))
+             .add(4, demands=(full, evening))),
+            # A constrained pool leaves hiring lines and requires repairs.
+            ([("beer", 4, 24, 12, 24)],
+             People().add(3, demands=(full, four, NOMORNINGS))
+             .add(2, demands=(part, weekend))),
+            # A different fill after the first may draw people off the bench.
+            ([("beer", 3, 24, 8, 24)],
+             People().add(4, demands=(full,)).add(8, demands=(full,), addr=None)),
+            # A line left idle in the demand plan.
+            ([("beer", 2, 24, 24, 24), ("water", 1, 8, 0, 8)], People().add(10)),
+            # Identical sizings copy one completed plan.
+            ([("beer", 2, 24, 24, 24), ("water", 1, 8, 8, 8)],
+             People().add(10, demands=(full,))),
+        ]
+        for lines, people in cases:
+            with self.subTest(lines=lines, workers=len(people.staff)):
+                expected = self.uncached(lines, people)
+                actual = hand_rows(lines, people)
+                self.assertEqual(actual, expected)
+                for rows in actual.values():
+                    self.assertTrue(rows)
+                    self.assertTrue(all(row.get("shifts") and not row.get("failed")
+                                        for row in rows))
+                # A fresh invocation must never inherit the previous fills'
+                # room answers (including their failed count trials).
+                self.assertEqual(hand_rows(lines, people), expected)
+
+    def test_shared_shapes_reduce_room_checks_with_identical_output(self):
+        lines = [("beer", 8, 24, 16, 24)]
+        people = People().add(32, demands=("ba:jobdemand_fulltime",))
+        has_room = ba_dashboard._has_room
+        with unittest.mock.patch.object(ba_dashboard, "_has_room", wraps=has_room) as checks:
+            expected = self.uncached(lines, people)
+            before = checks.call_count
+        with unittest.mock.patch.object(ba_dashboard, "_has_room", wraps=has_room) as checks:
+            actual = hand_rows(lines, people)
+            after = checks.call_count
+        self.assertEqual(actual, expected)
+        # Count work, not wall time: stable on slower machines and Pyodide.
+        self.assertLess(after, before / 2)
+
+
 class SameHoursBothSizingsTest(unittest.TestCase):
     """Both sizings asking every line for the same hours is one week, placed once."""
 

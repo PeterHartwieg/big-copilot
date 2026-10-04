@@ -11158,7 +11158,7 @@ def _by_fewest_eligible(slots: list, allowed: dict, state: dict) -> list:
     return [row[-1] for row in counted]
 
 
-def _best_for(slot: dict, pool: list, state: dict, here: dict):
+def _best_for(slot: dict, pool: list, state: dict, here: dict, room=None):
     """The person _placement_rank() puts first among those with room, or None.
 
     The rank's first two keys sort everybody into three tiers -- a real person
@@ -11170,19 +11170,34 @@ def _best_for(slot: dict, pool: list, state: dict, here: dict):
     Among hires it is the first with room, in the order they were opened:
     first fit, so N hires hold whatever the old packer's first fit held with
     N, and the repair passes level their weeks afterwards (_place_hires()).
+
+    `room` optionally keeps availability by shape during _fill_week() alone;
+    _take_slot() invalidates the person whose week it changes. Ranks still
+    read the live week and this slot's station every time.
     """
     rostered = here["rostered"]
+    answers = room.setdefault(_slot_shape(slot), {}) if room is not None else None
     tiers = ([], [], [])
     for person in pool:
         tiers[2 if person.get("hire") else 0 if person["id"] in rostered else 1].append(person)
     for tier in tiers[:2]:
-        able = [person for person in tier if _has_room(person, state[person["id"]], slot)]
+        if answers is None:
+            able = [person for person in tier if _has_room(person, state[person["id"]], slot)]
+        else:
+            able = []
+            for person in tier:
+                pid = person["id"]
+                fits = answers.get(pid)
+                if fits is None:
+                    fits = answers[pid] = _has_room(person, state[pid], slot)
+                if fits:
+                    able.append(person)
         if able:
             return min(able, key=lambda p: _placement_rank(p, state[p["id"]], slot, here))
     return next((hire for hire in tiers[2] if _has_room(hire, state[hire["id"]], slot)), None)
 
 
-def _take_slot(slot: dict, pool: list, state: dict, shifts: list, here: dict) -> bool:
+def _take_slot(slot: dict, pool: list, state: dict, shifts: list, here: dict, room=None) -> bool:
     """Give one slot to the best eligible person, or report that nobody is.
 
     `pool` is everybody `_may_take()` already passes for this slot, in pool
@@ -11194,7 +11209,7 @@ def _take_slot(slot: dict, pool: list, state: dict, shifts: list, here: dict) ->
     read back off `state`, because a bench member offered around carries the
     hours of whichever site took them, and those are not this site's roster.
     """
-    person = _best_for(slot, pool, state, here)
+    person = _best_for(slot, pool, state, here, room)
     if person is None:
         return False
     here["rostered"].add(person["id"])
@@ -11203,6 +11218,9 @@ def _take_slot(slot: dict, pool: list, state: dict, shifts: list, here: dict) ->
     mine["busy"][slot["wd"]].update(range(slot["from"], slot["to"]))
     mine["days"].add(slot["wd"])
     mine["stations"].add((slot["station"], slot["wd"]))
+    if room is not None:
+        for answers in room.values():
+            answers.pop(person["id"], None)
     shifts.append(
         {
             "wd": slot["wd"],
@@ -11959,9 +11977,14 @@ def _fill_week(slots: list, cover_slots: list, pool: list, state: dict, here: di
         if shape not in allowed:
             allowed[shape] = [person for person in pool if _may_take(person, slot)]
     shifts = []
+    # Machines or counters share a slot shape. Only the person just given
+    # hours changes availability, so _take_slot() drops that person's answers
+    # across all shapes. Keep this cache inside this fill: repairs and the
+    # next trial can change anybody's week without going through _take_slot().
+    room = {}
     for group in (slots, cover_slots):
         for slot in _by_fewest_eligible(group, allowed, state):
-            if not _take_slot(slot, allowed[_slot_shape(slot)], state, shifts, here):
+            if not _take_slot(slot, allowed[_slot_shape(slot)], state, shifts, here, room):
                 # A slot nobody here may legally work is still a line of the
                 # week: it is the one the player has to hire for, and leaving
                 # it out of `shifts` left the page with a headcount saying
