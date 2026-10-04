@@ -8,11 +8,10 @@ import { createRequire } from 'node:module';
 
 export const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const NODE_CONCURRENCY = 2;
-// The hosted artifact coverage shared by CI and the full local gate.
-export const OPTIMIZED_NODE_SUITES = [
-  'businesses_expansion', 'shell_routes', 'game_names', 'i18n_runtime', 'news',
-  'update', 'theme', 'release', 'csp', 'optimize_web',
-].map(name => path.join('tests', `${name}.test.cjs`));
+// One smoke journey against the actual deployment transform. The ordinary Node
+// suite already runs CSP/Pyodide against optimizePage() and checks the optimizer
+// itself; repeating those or every functional browser suite adds no useful gate.
+export const OPTIMIZED_NODE_SUITES = ['release'].map(name => path.join('tests', `${name}.test.cjs`));
 
 export function selectPython(env = process.env, spawn = spawnSync) {
   const explicit = Object.hasOwn(env, 'PYTHON');

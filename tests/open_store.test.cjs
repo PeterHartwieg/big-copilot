@@ -316,7 +316,7 @@ test('a redraw of every page (a language switch) keeps Plan a factory\'s Ingredi
   assert.equal(await page.evaluate(() => $('secIngredients').hidden), onFactory, 'Plan a factory shows it as before');
 });
 
-test('the Until opening step opens with a plan\'s building; Open stays for payback', async t => {
+test('an unbuilt store opens its checklist with every task pending and links to logistics', async t => {
   const page = await board(t);
   await planned(page);
   assert.equal(await page.locator('#osCtl [data-os-step="opening"]').isDisabled(), false);
@@ -325,25 +325,11 @@ test('the Until opening step opens with a plan\'s building; Open stays for payba
   assert.equal(await page.locator('#osCtl [data-os-step="open"]').isDisabled(), true);
   assert.match(await page.locator('#osCtl [data-os-step="open"]').getAttribute('data-tip'), textRe('gr.os.step.payback', {}, {}));
   assert.equal(await page.locator('#osBody .os-prog h2').textContent(), en('gr.os.ck.title'));
-});
-
-test('before the business exists every row is a to-do, and only logistics has a button', async t => {
-  const page = await board(t);
-  await until(page);
   const r = await rows(page);
   assert.deepEqual(r.map(x => [x.title, x.state]), [[en('gr.os.ck.lease'), 'todo'], [en('gr.os.ck.furn'), 'todo'], [en('gr.os.ck.staff'), 'todo'],
     [en('gr.os.ck.uni'), 'todo'], [en('gr.os.ck.dem'), 'todo'], [en('gr.os.ck.mk'), 'todo'], [en('gr.os.ck.log'), 'todo']]);
   assert.deepEqual(r.map(x => x.act), ['', '', '', '', '', '', en('gr.os.ck.log.go')]);
   assert.match(await page.locator('#osBody .os-prog').innerText(), textRe('gr.os.ck.count', {n: 0, of: 7}, {}));
-  /* Into Plan a factory's step 1, on the store's type and a new factory (#172). */
-  await page.locator('#osBody [data-of-goto="new"]').first().click();
-  await page.waitForFunction(() => route === 'expansion/factory');
-  assert.deepEqual(await page.evaluate(() => [planType, planTarget, ofStep]), [LIQ, 'new', 'what']);
-});
-
-test('no row reads done before a business exists, whatever the type asks for', async t => {
-  const page = await board(t);
-  await until(page);
   const states = await page.evaluate(() => {
     const T = osFacts().types, plain = Object.keys(T).find(k => !T[k].demands.some(d => d[0] === 'employeeuniforms')), office = Object.keys(T).find(k => T[k].model === 'office');
     return [plain, office].filter(Boolean).map(type => { const plan = {type, key: 'ba:street_nowhere#1'}, uni = osCkUniforms(plan, null);
@@ -351,20 +337,13 @@ test('no row reads done before a business exists, whatever the type asks for', a
   });
   assert.ok(states.length >= 1);
   for (const s of states) assert.deepEqual(s.slice(1), ['todo', 'todo', 'todo', 'todo', 'todo'], s[0]);
+  /* Into Plan a factory's step 1, on the store's type and a new factory (#172). */
+  await page.locator('#osBody [data-of-goto="new"]').first().click();
+  await page.waitForFunction(() => route === 'expansion/factory');
+  assert.deepEqual(await page.evaluate(() => [planType, planTarget, ofStep]), [LIQ, 'new', 'what']);
 });
 
-test('the rows tick themselves from the save once a business stands at the address', async t => {
-  const page = await board(t);
-  await until(page);
-  await opened(page, {staff: 3, campaigns: running('SmallInternet'), stationShifts: 5}, FULL);
-  await hiring(page, {...HIRES, weeks: []});
-  await routed(page, await wanted(page));
-  const r = await rows(page);
-  assert.deepEqual(r.map(x => x.state), ['done', 'done', 'done', 'done', 'done', 'done', 'done']);
-  assert.match(await page.locator('#osBody .os-prog').innerText(), textRe('gr.os.ck.count', {n: 7, of: 7}, {}));
-});
-
-test('a half-done store shows what is missing', async t => {
+test('a half-done store shows missing work and completes when the save catches up', async t => {
   const page = await board(t);
   await until(page);
   await opened(page, {staff: 2, stationShifts: 3, uniformGaps: ['Customer Service', 'Cleaning'], missingAmenities: ['ba:customerdemand_music'],
@@ -379,6 +358,17 @@ test('a half-done store shows what is missing', async t => {
   assert.equal(r[4].state, 'part');
   assert.equal(r[6].state, 'part');
   assert.match(r[6].sub, textRe('gr.os.ck.log.part', {}, {}));
+  // A later save completes the same store; no second browser boot is needed.
+  await page.evaluate(({site, built, campaigns}) => {
+    Object.assign(D.businesses.find(b => b.key === site), {staff: 3, stationShifts: 5,
+      campaigns, uniformGaps: [], missingAmenities: [],
+      amenities: {bathroom: true, interior: true, music: true, sink: true, toiletprivacy: true}});
+    D.openStore.built[site] = built;
+  }, {site: SITE, built: FULL, campaigns: running('SmallInternet')});
+  await hiring(page, {...HIRES, weeks: []});
+  await routed(page, await wanted(page));
+  assert.deepEqual((await rows(page)).map(x => x.state), ['done', 'done', 'done', 'done', 'done', 'done', 'done']);
+  assert.match(await page.locator('#osBody .os-prog').innerText(), textRe('gr.os.ck.count', {n: 7, of: 7}, {}));
 });
 
 test('staff never ticks without opening hours or verified cover', async t => {
@@ -728,7 +718,7 @@ test('nobody to hire says to ask a headhunter', async t => {
   assert.equal(await page.locator('#osBody [data-os-write="hire"]').count(), 0);
 });
 
-test('without the game link every write is an instruction in the game, under a link strip', async t => {
+test('store instructions become buttons only for writes the linked mod supports', async t => {
   const page = await board(t);
   await until(page);
   await opened(page, {staff: 1, stationShifts: 2, uniformGaps: ['Customer Service']}, FULL);
@@ -737,6 +727,15 @@ test('without the game link every write is an instruction in the game, under a l
   assert.equal(await page.locator('#osBody .os-ck .os-ingame', {hasNotText: textRe('gr.os.ck.staff.headhunter', {}, {})}).count(), 3);
   assert.match(await page.locator('#osBody .os-gate').innerText(), textRe('gr.os.ck.gate', {}, {}));
   assert.equal(await page.locator('#osBody [data-os-howlink]').count(), 1);
+  await linked(page);
+  assert.equal(await page.locator('#osBody .os-ck .os-ingame', {hasNotText: textRe('gr.os.ck.staff.headhunter', {}, {})}).count(), 0);
+  assert.equal(await page.locator('#osBody .os-gate').count(), 0);
+  assert.deepEqual(await page.$$eval('#osBody [data-os-write]', bs => bs.map(b => [b.dataset.osWrite, b.innerText.trim()])),
+    [['hire', en('sp.gw.staff')], ['uniforms', en('gr.os.ck.uni.assign')], ['marketing', en('sp.gw.mk.title')]]);
+  await linked(page, {...LINK, writes: ['hire', 'uniforms']});
+  assert.deepEqual(await page.$$eval('#osBody [data-os-write]', bs => bs.map(b => b.dataset.osWrite)), ['hire', 'uniforms']);
+  assert.equal(await page.locator('#osBody .os-ck .os-ingame', {hasNotText: textRe('gr.os.ck.staff.headhunter', {}, {})}).count(), 1);
+  assert.equal(await page.locator('#osBody .os-gate').count(), 0);
 });
 
 test('How to link opens the game link\'s page, and says where to look when the footer link is missing', async t => {
@@ -746,29 +745,6 @@ test('How to link opens the game link\'s page, and says where to look when the f
   await page.evaluate(() => { const a = document.querySelector('a[data-visit-feature="game-link"]'); if(a) a.remove(); });
   await page.locator('#osBody [data-os-howlink]').click();
   assert.match(await page.locator('#osBody .os-gate').innerText(), textRe('gr.os.ck.gate.hint', {}, {}));
-});
-
-test('with the game link the same rows carry buttons', async t => {
-  const page = await board(t);
-  await until(page);
-  await opened(page, {staff: 1, stationShifts: 2, uniformGaps: ['Customer Service']}, FULL);
-  await hiring(page);
-  await linked(page);
-  assert.equal(await page.locator('#osBody .os-ck .os-ingame', {hasNotText: textRe('gr.os.ck.staff.headhunter', {}, {})}).count(), 0);
-  assert.equal(await page.locator('#osBody .os-gate').count(), 0);
-  assert.deepEqual(await page.$$eval('#osBody [data-os-write]', bs => bs.map(b => [b.dataset.osWrite, b.innerText.trim()])),
-    [['hire', en('sp.gw.staff')], ['uniforms', en('gr.os.ck.uni.assign')], ['marketing', en('sp.gw.mk.title')]]);
-});
-
-test('a write the mod lacks turns only its own button into the instruction', async t => {
-  const page = await board(t);
-  await until(page);
-  await opened(page, {staff: 1, stationShifts: 2, uniformGaps: ['Customer Service']}, FULL);
-  await hiring(page);
-  await linked(page, {...LINK, writes: ['hire', 'uniforms']});
-  assert.deepEqual(await page.$$eval('#osBody [data-os-write]', bs => bs.map(b => b.dataset.osWrite)), ['hire', 'uniforms']);
-  assert.equal(await page.locator('#osBody .os-ck .os-ingame', {hasNotText: textRe('gr.os.ck.staff.headhunter', {}, {})}).count(), 1);
-  assert.equal(await page.locator('#osBody .os-gate').count(), 0);
 });
 
 test('uniforms wait for hours: staff with no station shifts is a to-do, and only shifts and no gaps make it done', async t => {

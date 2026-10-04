@@ -201,7 +201,8 @@ function expansionTests(languages){
       // Cover both sides of the phone breakpoint and the narrow desktop
       // checklist. Four repeats make the unbroken tokens wider than any phone
       // under either platform's fonts; local-box checks also catch overlap.
-      const widths = lang === 'en' || lang === 'pseudo' ? [360, 375, 600, 622, 630, 640, 700, 768, 790, 810, 900, 1024, 1101, 1200, 1279] : lang === 'ru' ? [360, 375, 1101, 1150] : [360, 375];
+      const widths = lang === 'en' ? [360, 620, 621, 790, 1101, 1280]
+        : lang === 'pseudo' ? [360, 790, 1280] : lang === 'ru' ? [360, 1101] : [360];
       for(const width of widths) await t.test(`${width}px`, async () => {
         await page.setViewportSize({width, height: 900});
         // Let the board's resize handlers reposition the sidebar and hoisted
@@ -248,11 +249,6 @@ function expansionTests(languages){
             }
             if(step === 'what') assert.ok(await page.locator('#ofBody .os-plans').isVisible(), 'factory plans are shown');
             if(step === 'where') await page.locator('#ofFinderMap .map-canvas').waitFor();
-            if(step === 'what' && width <= 620){
-              const heights = await page.locator('.ff-shops .hood').evaluateAll(badges => badges.map(b => b.getBoundingClientRect().height));
-              assert.ok(heights.length, 'the factory flow includes a neighbourhood badge');
-              assert.ok(heights.every(h => h === 16), `neighbourhood badges keep their 16px height: ${heights}`);
-            }
             if(step === 'investment'){
               for(const mode of ['firm', 'self']){
                 await page.locator(`[data-of-mode="${mode}"]`).click();

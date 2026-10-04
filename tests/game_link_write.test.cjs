@@ -95,7 +95,7 @@ beforeEach(async () => {
 // the fixture's by default. The mock's player answers a new request after a
 // quarter of a second.
 async function linked(t, {writes = ['uniforms', 'imports', 'schedule'], approved = false, stored = null, link = true,
-                          data = payload, viewport = {width: 1280, height: 1000}} = {}) {
+                          data = payload, viewport = {width: 1280, height: 1000}, clock = false} = {}) {
   await configure({reset: true, refuseWrite: null, busyWrites: 0, writes, pairDelay: 0.25, pairCooldowns: [0],
                    tokens: approved ? {[TOKEN]: ORIGIN} : {}});
   const code = approved ? {link: mockUrl, token: TOKEN} : stored;
@@ -132,6 +132,7 @@ async function linked(t, {writes = ['uniforms', 'imports', 'schedule'], approved
     return route.fulfill({contentType: TYPES[path.extname(file)] || 'application/octet-stream', body: fs.readFileSync(file)});
   });
   const page = await context.newPage();
+  if (clock) await page.clock.install();
   const errors = [];
   page.on('pageerror', (err) => errors.push(err.message));
   t.after(() => assert.deepEqual(errors, [], 'no script error on the page'));
@@ -708,23 +709,25 @@ test('one Apply click asks the game once: the dry run after it uses the approval
 });
 
 test('the game\'s approval: after 30 s the dialog asks whether the game can be seen, and its clock runs on', async (t) => {
-  const page = await linked(t);
+  const page = await linked(t, {clock: true});
   await configure({pairDelay: 60});
   await button(page, GIFTS).click();
   await pair(page).getByText(WAITING).waitFor();
   const cancel = pair(page).locator('.gw-foot').getByRole('button', {name: en("nav.dlg.cancel")});
   await cancel.focus();
-  await pair(page).getByText(en("nav.dlg.say.still")).waitFor({timeout: 40000});
-  await pair(page).getByText(en("nav.dlg.quiet.lead")).waitFor();
+  // Freeze after setup so assertion polling cannot hide a late prompt.
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+  await page.clock.fastForward(20000);
+  assert.equal(await pair(page).getByText(en("nav.dlg.say.still")).isVisible(), false);
+  await page.clock.fastForward(11000);
+  assert.equal(await pair(page).getByText(en("nav.dlg.say.still")).isVisible(), true);
+  assert.equal(await pair(page).getByText(en("nav.dlg.quiet.lead")).isVisible(), true);
   // The keyboard stays on Cancel through the repaint.
   assert.equal(await page.evaluate(() => document.activeElement.dataset.gwB), en('nav.dlg.cancel'));
   const meta = pair(page).locator('.gw-meta');
   const before = await meta.textContent();
-  // The clock keeps going: the line changes from what it said.
-  await page.waitForFunction((was) => {
-    const m = document.querySelector('dialog.gw-dlg[data-phase="approval"] .gw-meta');
-    return m && m.textContent !== was;
-  }, before);
+  // The clock keeps going without waiting another real second.
+  await page.clock.fastForward(1000);
   assert.notEqual(await meta.textContent(), before, 'the clock keeps going');
   await cancel.click();
 });

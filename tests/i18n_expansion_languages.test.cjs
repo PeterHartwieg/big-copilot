@@ -1,3 +1,4 @@
-// Every shipped translation covers the phone widths, plus Russian desktop wrapping.
+// Representative real fonts alongside the pseudo-locale: Korean phone and Russian desktop wrapping.
+// Catalogue/placeholder tests continue to cover every shipped language.
 const {expansionTests} = require('./_i18n_expansion.cjs');
-expansionTests(['de', 'es', 'fr', 'ko', 'pt', 'ru', 'tr']);
+expansionTests(['ko', 'ru']);
