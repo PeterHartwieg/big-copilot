@@ -106,8 +106,4 @@ The database migration must be applied before deploying the new Worker. Developm
 and QA use local D1 and the nonproduction values in `.dev.vars.example`; never reuse
 production bindings or upload a real save to validate this feature.
 
-Pending release note (add the actual PR number and merge date when releasing):
-
-> Help translate Big Copilot from your browser. Find wording in English or your
-> language, suggest a correction or vote for an existing version. A single
-> contribution can improve the wording. Italian is open for contributions too.
+Released with [PR #283](https://github.com/PeterHartwieg/big-copilot/pull/283).
