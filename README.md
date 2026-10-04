@@ -234,3 +234,18 @@ and the source-file map.
 ## Licence
 
 [MIT](LICENSE). Not affiliated with Hovgaard Games.
+
+
+### Renovated buildings and other mods
+
+Ordinary `.hsg` imports understand Alcware Retail Expansion's RCR3/4/5 renovation
+records. Big Copilot Link 0.5.0 supplies current building area, layout, capacity,
+campaign prices and reach, and marketing multipliers directly from the loaded game.
+This also supports other mods or game updates that change those values using the
+same game model. Mods that replace the calculation itself need separate support.
+
+When linked, **Download snapshot** saves a `.bcsave` containing the save and its
+matching building values. Open it later through the normal file picker or CLI to
+keep those values. This file is for Big Copilot, not for loading in the game.
+Campaign planning is withheld when its calculation disagrees with the save; unknown
+floor plans remain unavailable.

@@ -53,6 +53,7 @@ import os
 import re
 import struct
 import sys
+import ba_facts
 
 # Tags that introduce a *named* property. The same tag + 1 introduces the same
 # kind of value without a name (collection elements, tuple/struct components).
@@ -290,6 +291,7 @@ class Save:
         self.root = root
         self.refs = refs
         self.path = path
+        self.facts = None
 
     def deref(self, value):
         """Follow back-references until a real object (or None) is reached."""
@@ -320,8 +322,13 @@ class Save:
 
 
 def load_save(path: str) -> Save:
-    with gzip.open(path, "rb") as fh:
-        data = fh.read()
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    try:
+        raw, facts = ba_facts.unpack(raw)
+    except ValueError as exc:
+        raise SaveFormatError(str(exc)) from exc
+    data = gzip.decompress(raw)
     r = _Reader(data)
     if r.u8() != 0x02:
         raise SaveFormatError("not an Easy Save 3 stream")
@@ -338,13 +345,24 @@ def load_save(path: str) -> Save:
             gc.enable()
     if r.p != len(data):
         raise SaveFormatError(f"stopped at {r.p:#x} of {len(data):#x}")
-    return Save(root, r.refs, path)
+    save = Save(root, r.refs, path)
+    if facts is not None:
+        if facts["character"] != root.get("characterId"):
+            raise SaveFormatError("Building facts belong to a different character")
+        try:
+            ba_facts.validate(facts, character=root.get("characterId"))
+        except ValueError as exc:
+            raise SaveFormatError(str(exc)) from exc
+        if facts.get("build") != root.get("buildNumberAtLastSave"):
+            raise SaveFormatError("Building facts belong to a different game build")
+        save.facts = facts
+    return save
 
 
 def newest_save(folder: str) -> str:
     """The most recently written .hsg in a save folder."""
     candidates = [
-        os.path.join(folder, n) for n in os.listdir(folder) if n.endswith(".hsg")
+        os.path.join(folder, n) for n in os.listdir(folder) if n.lower().endswith((".hsg", ".bcsave"))
     ]
     if not candidates:
         raise FileNotFoundError(f"no .hsg files in {folder}")

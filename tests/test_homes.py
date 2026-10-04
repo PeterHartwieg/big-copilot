@@ -45,7 +45,7 @@ class HomesTests(unittest.TestCase):
         with patch('ba_dashboard.load_buildings', return_value={}) as lookup:
             _homes([{'StreetName': 'ba:street_tenthstreet', 'StreetNumber': 2}],
                    {('ba:street_tenthstreet', 2)}, Names({}))
-        lookup.assert_called_once_with()
+        lookup.assert_called_once_with(None)
 
     def test_no_residences(self):
         self.assertEqual(homes([{'StreetName': 'ba:street_fifthavenue', 'StreetNumber': 57}], set(), Names({})), [])

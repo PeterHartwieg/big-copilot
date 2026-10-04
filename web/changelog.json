@@ -6,6 +6,12 @@
     "summary": "Find wording in English or your language, suggest a correction or vote for an existing version from your browser. A single contribution can improve the wording, with no account needed. Italian is open for contributions too."
   },
   {
+    "pr": 282,
+    "date": "2026-10-04",
+    "title": "Account for renovated building sizes",
+    "summary": "Supported Alcware renovation records now supply the building size used by the dashboard and campaign planner. Campaign advice pauses when its calculation does not match the save. The dashboard also supports current building and marketing values from Game Link 0.5, with downloadable snapshots that retain those values; this path requires the updated Link mod."
+  },
+  {
     "pr": 263,
     "date": "2026-10-04",
     "title": "Measure staffing demand in shops and offices",

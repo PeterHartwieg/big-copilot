@@ -70,7 +70,7 @@ const ready = (async () => {
       return runtime;
     })(),
     (async () => {
-      const code = ["ba_save.py", "ba_dashboard.py"].map(async file => {
+      const code = ["ba_save.py", "ba_dashboard.py", "ba_facts.py"].map(async file => {
         const res = await fetch(`py/${file}?v=${stamp}`, {cache});
         if (!res.ok) throw new Error(`could not load ${file}: ${res.status}`);
         return [`/${file}`, await res.text()];

@@ -117,7 +117,7 @@ class MockContract(unittest.TestCase):
         status, _, body = call(self.url + "/nothing")
         self.assertEqual(status, 404)
         self.assertEqual(json.loads(body)["endpoints"], [
-            "/health", "/save", "/refresh", "/write/uniforms", "/write/imports", "/write/schedule", "/write/hire",
+            "/health", "/save", "/facts", "/refresh", "/write/uniforms", "/write/imports", "/write/schedule", "/write/hire",
             "/write/marketing", "/write/undo",
             "/pair/request", "/pair/status"])
         self.assertEqual(call(self.url + "/refresh")[0], 405)
@@ -1587,6 +1587,22 @@ class MockMarketing(MarketingMock):
     """POST /write/marketing: the cheapest mix set through agencies that are phone
     contacts and open now, every site set up with their switches, and the enabled
     flags undone (docs/game-link-api.md)."""
+
+    def test_prediction_is_checked_on_dry_run_and_again_on_apply(self):
+        site = self.site()
+        site["prediction"] = {"dailyCost": 600, "marketing": 18, "total": 87}
+        status, answer = self.post("marketing", {"dryRun": True, "sites": [site]})
+        self.assertTrue(answer["ok"])
+        # A value change after preview must fail the same unchanged body.
+        from unittest.mock import patch
+        with patch.object(self.link, "_promotion", return_value={"trafficIndex": 74, "marketing": 10, "total": 81}):
+            status, answer = self.post("marketing", {"sites": [site]})
+            self.assertEqual((status, answer["error"]), (409, "changed"))
+        self.assertEqual(self.link.campaigns, {})
+        site["prediction"]["dailyCost"] = 500
+        status, answer = self.post("marketing", {"dryRun": True, "sites": [site]})
+        self.assertFalse(answer["ok"])
+        self.assertEqual(answer["rows"][0]["error"], "changed")
 
     def test_health_and_the_endpoint_list_name_marketing(self):
         self.assertIn("marketing", json.loads(call(self.url + "/health")[2])["writes"])

@@ -584,13 +584,18 @@ def _load_data(name: str, shape, empty, catch: tuple) -> dict:
 _buildings = None
 
 
-def load_buildings() -> dict:
+def load_buildings(save=None) -> dict:
     """ba_buildings.json as {(street slug, number): row}, read once.
 
     Row keys are single letters to keep the file small: s street slug, n number,
     h neighbourhood, t building type, z size code, m square metres, x traffic,
     v building version (absent from a table made before versions were read).
     """
+    if save is not None:
+        import ba_facts
+        if not hasattr(save, "_resolved_buildings"):
+            save._resolved_buildings = ba_facts.resolve(save, load_buildings())
+        return save._resolved_buildings
     global _buildings
     if _buildings is None:
         # No AttributeError here, unlike the other tables: a malformed row raises.
@@ -984,7 +989,7 @@ def _f32(x: float) -> float:
     return struct.unpack("f", struct.pack("f", x))[0]
 
 
-def marketing_score(traffic, on_ids, sqm, type_slug, neighbourhood) -> tuple[int, int]:
+def marketing_score(traffic, on_ids, sqm, type_slug, neighbourhood, rules=None) -> tuple[int, int]:
     """(marketing, promotion total) the game gives a site running `on_ids`.
 
     BuildingRegistration.GetMarketingEfficiency and BusinessHelper.UpdatePromotion:
@@ -999,17 +1004,19 @@ def marketing_score(traffic, on_ids, sqm, type_slug, neighbourhood) -> tuple[int
     unknown neighbourhood, raises KeyError rather than guess.
     """
     building = _marketing_building(type_slug)
-    if building is None:
+    if building is None and rules is None:
         raise KeyError(type_slug)
-    strength = _f32(MARKETING_STRENGTH[neighbourhood])
-    reach = sum(MARKETING_TYPES[i][2] for i in set(on_ids))
-    share = _f32(_f32(reach * _f32(MARKETING_REACH[building])) / sqm) if sqm else 0.0
+    strength = _f32(rules["strength"] if rules else MARKETING_STRENGTH[neighbourhood])
+    types = [(r["name"], r["price"], r["reach"]) for r in rules["types"]] if rules else MARKETING_TYPES
+    reach = sum(types[i][2] for i in set(on_ids))
+    multiplier = rules["reachMultiplier"] if rules else MARKETING_REACH[building]
+    share = _f32(_f32(reach * _f32(multiplier)) / sqm) if sqm else 0.0
     marketing = round(_f32(min(1.0, share) * 100))
     total = min(PROMOTION_CAP, round(_f32(traffic + _f32(marketing * strength))))
     return marketing, total
 
 
-def marketing_plan(traffic, was_ids, sqm, type_slug, neighbourhood, free_ids=None) -> dict:
+def marketing_plan(traffic, was_ids, sqm, type_slug, neighbourhood, free_ids=None, rules=None) -> dict:
     """The cheapest mix of campaigns for one site, from all 64.
 
     The cheapest mix that brings promotion to 100; when none can, the cheapest
@@ -1021,6 +1028,7 @@ def marketing_plan(traffic, was_ids, sqm, type_slug, neighbourhood, free_ids=Non
     (_marketing()). They hold every type running now, so a type outside them
     is one the plan leaves off; one running outside them would stay on.
     """
+    types = [(r["name"], r["price"], r["reach"]) for r in rules["types"]] if rules else MARKETING_TYPES
     was = frozenset(was_ids)
     free = MARKETING_ALL if free_ids is None else frozenset(free_ids)
     fixed = was - free
@@ -1029,22 +1037,22 @@ def marketing_plan(traffic, was_ids, sqm, type_slug, neighbourhood, free_ids=Non
         on = frozenset(i for i in MARKETING_ALL if mask >> i & 1)
         if on - free != fixed:
             continue
-        marketing, total = marketing_score(traffic, on, sqm, type_slug, neighbourhood)
-        cost = sum(MARKETING_TYPES[i][1] for i in on)
+        marketing, total = marketing_score(traffic, on, sqm, type_slug, neighbourhood, rules)
+        cost = sum(types[i][1] for i in on)
         mixes.append((on, cost, marketing, total, mask))
     full = [m for m in mixes if m[3] >= PROMOTION_CAP]
     if not full:
         best = max(m[2] for m in mixes)
         full = [m for m in mixes if m[2] >= best]
     on, cost, marketing, total, _mask = min(full, key=lambda m: (m[1], len(m[0]), m[0] != was, m[4]))
-    now_marketing, now_total = marketing_score(traffic, was, sqm, type_slug, neighbourhood)
+    now_marketing, now_total = marketing_score(traffic, was, sqm, type_slug, neighbourhood, rules)
     return {
         "on": sorted(on),
         "cost": cost,
         "marketing": marketing,
         "promotion": total,
         "target": "promotion" if total >= PROMOTION_CAP else "marketing",
-        "costNow": sum(MARKETING_TYPES[i][1] for i in was),
+        "costNow": sum(types[i][1] for i in was),
         "modelNow": [now_marketing, now_total],
     }
 
@@ -1698,6 +1706,8 @@ def _size_cap(row: dict, caps: dict):
     letter's. None for a type or size the table does not know, and for a row
     of a split letter with no version, which could be any of its layouts.
     """
+    if "layoutCapacity" in row:
+        return row["layoutCapacity"]
     kind = caps.get(row.get("t"), {})
     if row.get("z") and row.get("v") is not None:
         exact = kind.get(f"{row['z']}{row['v']}")
@@ -1901,7 +1911,7 @@ FLOOR_PLAN_KINDS = ("retail", "office", "warehouse", "cinema", "theater")
 
 def _layout(row: dict) -> str | None:
     """A building's layout code, or None when it has no plan or no version."""
-    if row.get("t") not in FLOOR_PLAN_KINDS or row.get("v") is None:
+    if row.get("layoutKnown") is False or row.get("t") not in FLOOR_PLAN_KINDS or row.get("v") is None:
         return None
     return f"{row['z']}{row['v']}"
 
@@ -1913,7 +1923,7 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
     some saves are registered but missing from the table; they are dropped
     rather than guessed at.
     """
-    table = load_buildings()
+    table = load_buildings(save)
     caps = _door_caps(names)
     rivals = _rival_numbers(save)
     bought = {
@@ -1951,7 +1961,12 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
                 "type": row["t"],
                 "size": row["z"],
                 "layout": _layout(row),
+                **({"layoutKnown": row["layoutKnown"]} if "layoutKnown" in row else {}),
                 "m2": row["m"],
+                **({"factsSource": row["factsSource"]} if "factsSource" in row else {}),
+                **({"factsUnavailable": True} if row.get("factsUnavailable") else {}),
+                **({"marketingRules": {k: row["marketingRules"][k] for k in ("reachMultiplier", "strength")}}
+                   if row.get("marketingRules") else {}),
                 "traffic": row["x"],
                 "cap": _size_cap(row, caps),
                 "rent": rent,
@@ -1983,7 +1998,12 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
                 "type": row["t"],
                 "size": row["z"],
                 "layout": _layout(row),
+                **({"layoutKnown": row["layoutKnown"]} if "layoutKnown" in row else {}),
                 "m2": row["m"],
+                **({"factsSource": row["factsSource"]} if "factsSource" in row else {}),
+                **({"factsUnavailable": True} if row.get("factsUnavailable") else {}),
+                **({"marketingRules": {k: row["marketingRules"][k] for k in ("reachMultiplier", "strength")}}
+                   if row.get("marketingRules") else {}),
                 "price": int(round(entry.get("buildingPrice") or 0)),
             }
         )
@@ -2464,7 +2484,7 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         # The map's layers and home site panel read these on every draw;
         # they cost nothing (under 1 ms and 1 KB), so Map needs no section.
         "ownedBuildings": _owned_buildings(save, names),
-        "homes": _homes(buildings, residential, names),
+        "homes": _homes(buildings, residential, names, save),
         # Today's fixed-cost tile reads the payroll; it costs nothing.
         "staff": _staff_summary(staff, businesses),
         "loans": loans,
@@ -2605,7 +2625,7 @@ def _residential_addresses(save: Save, summaries: list, buildings: list = ()) ->
     yet, so a rented building the building table calls residential is a home
     too: nobody can run a business in one.
     """
-    table = load_buildings() if buildings else {}
+    table = load_buildings(save) if buildings else {}
     out = {
         _address_of(b, strict=True) for b in buildings
         if (table.get(_address_of(b, strict=True)) or {}).get("t") == "residential"
@@ -3045,7 +3065,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
 
     # The city is fixed, so the building table knows the neighbourhood from the
     # address alone; the name prefix only covers an address it does not list.
-    building = load_buildings().get(addr)
+    building = load_buildings(save).get(addr)
     neighbourhood = hood_key(building) if building else NEIGHBOURHOODS.get(tag, "")
 
     orders = save.items(b["orderHistory"])
@@ -3358,15 +3378,20 @@ def _marketing_agencies(save, names=None) -> list:
             for r in save.items(root.get("BuildingRegistrations")) if isinstance(r, dict)}
     day, hour = root.get("Day") or 0, int(root.get("Hour") or 0)
     out = []
-    for addr, (name, kinds) in MARKETING_AGENCIES.items():
+    sources = [(addr, name, [MARKETING_TYPES[k][0] for k in kinds])
+               for addr, (name, kinds) in MARKETING_AGENCIES.items()]
+    facts = getattr(save, "facts", None)
+    if facts:
+        sources = [((a["street"], a["number"]), "", a["types"]) for a in facts["agencies"]]
+    for addr, name, kinds in sources:
         reg = regs.get(addr) or {}
         hours, closed = _open_hours(save, reg), bool(reg.get("temporarilyClosed"))
         out.append({
             "key": site_key(addr),
-            "name": reg.get("BusinessName") or name,
+            "name": reg.get("BusinessName") or name or f"{house_number(addr[1])} {_plain(addr[0].removeprefix('ba:street_'))}",
             "address": f"{house_number(addr[1])} {names.street(addr[0]) if names else _plain(addr[0].removeprefix('ba:street_'))}",
             "contact": addr in contacts,
-            "types": [MARKETING_TYPES[k][0] for k in kinds],
+            "types": kinds,
             "hours": hours,
             "closed": closed,
             "open": open_at(hours, closed, day, hour),
@@ -3400,9 +3425,11 @@ def _marketing(save, b, building, status, neighbourhood, promo, agencies=None) -
     BizMan does not show its switch yet.
     """
     campaigns = []
+    unknown_campaign = False
     for c in save.items(b.get("marketingCampaigns")):
         kind = c.get("marketingTypeName")
         if not isinstance(kind, int) or not 0 <= kind < len(MARKETING_TYPES):
+            unknown_campaign = True
             continue
         campaigns.append({"type": MARKETING_TYPES[kind][0],
                           "agency": site_key(save.address(c.get("agencyAddress"))),
@@ -3410,8 +3437,10 @@ def _marketing(save, b, building, status, neighbourhood, promo, agencies=None) -
     if status not in ("retail", "office") or not building:
         return campaigns, None
     sqm, kind = building.get("m"), building.get("t")
-    if not sqm or kind not in MARKETING_REACH or neighbourhood not in MARKETING_STRENGTH:
-        return campaigns, None
+    rules = building.get("marketingRules")
+    if not sqm or (not rules and (kind not in MARKETING_REACH or neighbourhood not in MARKETING_STRENGTH)):
+        return campaigns, ({"unavailable": True, "on": None, "needsSetup": False, "visit": [],
+                            "costPlan": None, "costNow": None} if building.get("factsUnavailable") else None)
     if agencies is None:
         agencies = _marketing_agencies(save)
     was = {MARKETING_IDS[c["type"]] for c in campaigns if c["enabled"]}
@@ -3426,8 +3455,11 @@ def _marketing(save, b, building, status, neighbourhood, promo, agencies=None) -
     new_ok = {t for t, a in seller.items() if a in contact}
     free = entered | new_ok
     traffic = promo.get("trafficIndex", 0) or 0
-    best = marketing_plan(traffic, was, sqm, kind, neighbourhood)
-    plan = marketing_plan(traffic, was, sqm, kind, neighbourhood, free)
+    best = marketing_plan(traffic, was, sqm, kind, neighbourhood, rules=rules)
+    plan = marketing_plan(traffic, was, sqm, kind, neighbourhood, free, rules)
+    unavailable = bool(unknown_campaign or building.get("factsUnavailable") or
+        best["modelNow"] != [promo.get("marketing", 0), promo.get("total", 0)] or
+        (rules and [r["name"] for r in rules["types"]] != [r[0] for r in MARKETING_TYPES]))
     # With no switch to flip and no agency to book through, a site that needs
     # a change has no plan.
     if not free and set(best["on"]) != was:
@@ -3435,9 +3467,12 @@ def _marketing(save, b, building, status, neighbourhood, promo, agencies=None) -
     better = plan is None or (best["promotion"], -best["cost"]) > (plan["promotion"], -plan["cost"])
     visit = sorted({seller[t] for t in set(best["on"]) - free if t in seller}) if better else []
     setup = new_ok - entered
+    if unavailable:
+        plan, visit, setup = None, [], set()
     fresh = set(plan["on"]) - entered if plan else set()
     name = lambda ids: [MARKETING_TYPES[i][0] for i in sorted(ids)]  # noqa: E731
     return campaigns, {
+        **({"unavailable": True} if unavailable else {}),
         "on": name(plan["on"]) if plan else None,
         "was": name(was),
         "costNow": best["costNow"],
@@ -3707,7 +3742,7 @@ def _owned_buildings(save: Save, names: Names) -> list[dict]:
     return result
 
 
-def _homes(buildings: list, residential: set, names: Names) -> list[dict]:
+def _homes(buildings: list, residential: set, names: Names, save=None) -> list[dict]:
     """Rented homes: registrations the save bills as residences, never businesses.
 
     Size and neighbourhood come from the static building table, read here and
@@ -3715,7 +3750,7 @@ def _homes(buildings: list, residential: set, names: Names) -> list[dict]:
     until the worker has written it. An address the table does not carry gets
     None for both, never a zero — the flat has a size, it is just not known.
     """
-    table = load_buildings()
+    table = load_buildings(save)
     result = []
     for b in buildings:
         addr = _address_of(b, strict=True)
@@ -3758,7 +3793,7 @@ def _goals(save: Save, names: Names, businesses: list) -> dict:
         "typesRun": len({b["typeSlug"] for b in businesses if b["status"] in ("retail", "office")}),
         "typesTotal": len(_openable_types(names)),
         "buildingsOwned": len(save.items(save.root.get("realEstate"))),
-        "buildingsTotal": len(load_buildings()),
+        "buildingsTotal": len(load_buildings(save)),
         "goalsDone": len(goals_done),
         "goalsTotal": None,
     }
@@ -8676,7 +8711,7 @@ def _cinema_capacity(save: Save, building: dict, names: Names | None) -> dict | 
     """
     if building.get("businessTypeName") != "ba:businesstype_cinema":
         return None
-    row = load_buildings().get(_address_of(building, strict=True), {})
+    row = load_buildings(save).get(_address_of(building, strict=True), {})
     if row.get("t") != "cinema":
         return None
     ceiling = _size_cap(row, _door_caps(names) if names else FALLBACK_CAPS)
@@ -12237,7 +12272,7 @@ def _staffing(
     bench = list(world["bench"])
     everyone_on_bench = list(bench)
     curves = load_demand_curves()
-    table = load_buildings()
+    table = load_buildings(save)
     caps = _door_caps(names)
 
     # One week per person for the whole save, not one per site. A person
@@ -14974,7 +15009,7 @@ def _wiki_market_prices(save, day):
         if e and e.get("itemName") and e.get("type") in (3, 4) and _market_event_active(e, day)
     }
     prices = {}
-    buildings = load_buildings()
+    buildings = load_buildings(save)
     for b in save.items(save.root.get("BuildingRegistrations")):
         if not b or b.get("temporarilyClosed") or not b.get("BusinessName"):
             continue
@@ -15199,7 +15234,7 @@ def _market(
     types = _type_demand(shops, by_item_hood, hoods, names, mine_types, stores)
     # Where the city has no office building at all, the game keeps no reading
     # for a fee either, and the grid can say why the cell is empty.
-    office_hoods = {hood_key(r) for r in load_buildings().values() if r.get("t") == "office"}
+    office_hoods = {hood_key(r) for r in load_buildings(save).values() if r.get("t") == "office"}
     return {
         "hoods": hoods,
         "rows": rows,
@@ -15503,6 +15538,9 @@ def _staff_context(save, business, building, grid):
               "products": save.items(building.get("cachedAvailableProducts")),
               "prices": save.items(building.get("retailPrices")), "market": market, "hype": events,
               "difficulty": _difficulty(save), "build": save.root.get("buildNumberAtLastSave")}
+    revision = load_buildings(save).get(_address_of(building), {}).get("factsRevision")
+    if revision:
+        demand["buildingFacts"] = revision
     return {"demand": _staff_digest(demand), "open": grid["open"],
             "effective": grid["effective"],
             "roles": {str(_role_key(r)): r["staffed"] for r in grid["roles"]},
@@ -15583,7 +15621,7 @@ def _staff_evidence_ingest(history, save, businesses, buildings, grids, names=No
         live.add(key)
         context = _staff_context(save, business, building, grid)
         if not grid.get("office"):
-            premises = load_buildings().get(_address_of(building)) or {}
+            premises = load_buildings(save).get(_address_of(building)) or {}
             initial = _initial_customers(save.root.get("buildNumberAtStart"),
                 _size_cap(premises, _door_caps(names or Names({}))), business["typeSlug"],
                 premises.get("m") or 0, save.items(building.get("cachedAvailableProducts")))
@@ -16515,7 +16553,7 @@ def _site_setup(save: Save, registration: dict, addr, prices: dict, vehicles: fl
         for slot in save.items((save.deref(design) or {}).get("materials")):
             if isinstance(slot, dict) and slot.get("MaterialID"):
                 materials.append(slot["MaterialID"])
-    building = load_buildings().get(addr) or {}
+    building = load_buildings(save).get(addr) or {}
     return setup_cost(items, materials, building.get("m"), registration.get("lastDeposit"), prices, vehicles)
 
 
@@ -17341,6 +17379,8 @@ def plan_layout(row: dict) -> str | None:
     without a layout fall back to the building table, preserving a venue's
     version-specific capacity (S1 150, S3 100). The board reads the same key
     (osLayout(), from `venues`)."""
+    if row.get("layoutKnown") is False:
+        return None
     if "layout" in row or "size" in row:
         if row.get("layout"):
             return row["layout"]
@@ -17360,8 +17400,8 @@ def _venue_caps(names: Names) -> dict:
             if section in ("cinema", "theater")}
 
 
-def _building_row(reg: dict) -> dict:
-    return load_buildings().get(_address_of(reg)) or {}
+def _building_row(reg: dict, save=None) -> dict:
+    return load_buildings(save).get(_address_of(reg)) or {}
 
 
 def _cheapest_cover(need: int, pieces: dict) -> list:
@@ -17395,7 +17435,7 @@ def _setup_items(lines: list) -> list:
 def _layout_slots(save: Save, regs: list, prices: dict) -> dict:
     """{layout: (elements, floor slots, wall slots)}: LAYOUT_SLOTS, with each
     layout the player rents read off its own interiorDesigns."""
-    table = load_buildings()
+    table = load_buildings(save)
     materials = prices.get("materials") or {}
     out = dict(LAYOUT_SLOTS)
     for reg in regs:
@@ -17536,7 +17576,7 @@ def _opened_stores(save: Save, regs: dict, businesses: list, types: dict, rules:
         available = {n for n in save.items(reg.get("cachedAvailableProducts")) if isinstance(n, str)}
         out[b["key"]] = {
             "placed": sum(placed.values()),
-            "req": required_placed(placed, b["typeSlug"], rules, prices, _building_row(reg).get("m"), available,
+            "req": required_placed(placed, b["typeSlug"], rules, prices, _building_row(reg, save).get("m"), available,
                                    _stocked_products(save, reg, rules.get("furniture") or {})),
             "seating": any(int((table.get(n) or {}).get("t") or 0) & SEATING_FLAG for n in placed),
             "sells": sorted(available),
@@ -17559,7 +17599,7 @@ def _store_market(save: Save, rules: dict, items: set, mpm: float, agent: int) -
     anyone sold it there (NeighborhoodDemand.lastDaySold), which a first
     seller's hype waits on.
     """
-    table = load_buildings()
+    table = load_buildings(save)
     products = rules.get("products") or {}
     idx, sellers, last_sold = {}, {}, {}
     for entry in save.items(save.root.get("productMarketEntries")):
@@ -17628,7 +17668,7 @@ def _own_shops(save: Save, regs: dict, businesses: list, grids: list, stmt_histo
     in its first days, is each window day's distance from that first sale, so
     the board holds it to its ramp (osDayProfit()).
     """
-    table = load_buildings()
+    table = load_buildings(save)
     hours = {g["key"]: g.get("open") for g in grids}
     # An office bills one client an hour per staffed computer, so its own
     # staffing bounds what it can earn; a shop's stations are the model's.
@@ -17792,7 +17832,6 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     buildings = premises.get("buildings") or []
 
     types, items_used, product_items, models = {}, set(), set(), {}
-    venue_caps = _venue_caps(names)
     slots = _layout_slots(save, regs_list, prices)
     build_at_start = root.get("buildNumberAtStart")
     for slug, t in sorted((rules.get("types") or {}).items()):
@@ -17810,12 +17849,12 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
                                  and b["status"] in ("vacant", "rival", "mine")}):
             sample = next(b for b in buildings if b["type"] == cat and plan_layout(b) == layout)
             source = None
-            same = [b for b in own if b["key"] in regs and plan_layout(_building_row(regs[b["key"]])) == layout]
+            same = [b for b in own if b["key"] in regs and plan_layout(_building_row(regs[b["key"]], save)) == layout]
             if same:
                 source = max(same, key=lambda b: (sum(s["profit"] for s in (b.get("series") or [])[-7:]), b["key"]))
             copied = _copied_shelving(save, regs[source["key"]], slug, rules) if source else None
             # A venue's own version seats its own crowd (S1 150, S3 100).
-            cap = venue_caps.get(layout, sample.get("cap")) if cat in ("cinema", "theater") else sample.get("cap")
+            cap = sample.get("cap")
             lines = outfit_lines(slug, rules, prices, cap, sample.get("m2"), copied, _catalogue=catalogue)
             cost = setup_cost(_setup_items(lines), [], sample.get("m2"), 0, prices)
             items_used.update(line["item"] for line in lines)
@@ -17828,6 +17867,21 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
             # The shop fully stocked with the type's range, as the plan has it.
             initial[layout] = round(_plan_initial(build_at_start, model, cap, slug,
                                                   sample.get("m2"), [p for p, _i in sells]), 4)
+            # Same geometry need not mean the same capacity or area after a mod.
+            # Only differing configurations need their own outfit/arrival entry.
+            for candidate in buildings:
+                if candidate["type"] != cat or plan_layout(candidate) != layout:
+                    continue
+                if (candidate.get("cap"), candidate.get("m2")) == (cap, sample.get("m2")):
+                    continue
+                key = candidate["key"]
+                specific = outfit_lines(slug, rules, prices, candidate.get("cap"), candidate.get("m2"), copied, _catalogue=catalogue)
+                cost = setup_cost(_setup_items(specific), [], candidate.get("m2"), 0, prices)
+                items_used.update(line["item"] for line in specific)
+                layouts[key] = {"lines": [[line["item"], line["qty"], line["group"], line["why"]] for line in specific],
+                                "furniture": cost["furniture"], "fee": cost["fee"], "from": source["key"] if source else None}
+                initial[key] = round(_plan_initial(build_at_start, model, candidate.get("cap"), slug,
+                                                   candidate.get("m2"), [p for p, _i in sells]), 4)
         if not layouts:
             continue
         product_items.update(p for p, _i in sells)
@@ -17904,9 +17958,10 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
         "own": _own_shops(save, regs, businesses, grids, stmt_history, market, caps, day, models),
         "sales": _own_sales(save, regs, businesses, market, day),
         "built": _opened_stores(save, regs, businesses, types, rules, prices),
-        "campaigns": [list(c) for c in MARKETING_CAMPAIGNS],
+        "campaigns": ([[r["name"].lower(), r["price"], r["reach"]] for r in save.facts["marketingTypes"]]
+                      if getattr(save, "facts", None) and save.facts.get("marketingTypes") else [list(c) for c in MARKETING_CAMPAIGNS]),
         # Each cinema and theatre: its size and version, and what that seats.
-        "venues": {b["key"]: [plan_layout(b), venue_caps.get(plan_layout(b))]
+        "venues": {b["key"]: [plan_layout(b), b.get("cap")]
                    for b in buildings if b["type"] in ("cinema", "theater") and plan_layout(b)},
         "finance": _finance_facts(save, daily, rules),
     }
@@ -20528,7 +20583,7 @@ def newest_under(target: str) -> str:
         os.path.join(f, n)
         for f in folders
         for n in os.listdir(f)
-        if n.endswith(".hsg")
+        if n.lower().endswith((".hsg", ".bcsave"))
     ]
     if not saves:
         raise SystemExit(f"no .hsg saves under {target}")
@@ -20573,14 +20628,14 @@ def catalogue(root: str) -> list[dict]:
     for folder in folders:
         saves = []
         for n in os.listdir(folder):
-            if not n.lower().endswith(".hsg"):
+            if not n.lower().endswith((".hsg", ".bcsave")):
                 continue
             path = os.path.join(folder, n)
             meta = read_save_meta(path)
             saves.append(
                 {
                     "path": path,
-                    "name": n[:-4],
+                    "name": os.path.splitext(n)[0],
                     "day": meta.get("day"),
                     "autosave": meta.get("autosave", n.lower().startswith("recover")),
                     "character": meta.get("character", ""),
@@ -20871,7 +20926,7 @@ def backfill_history(target: str, history_path: str, names: Names) -> int:
     """
     folder = os.path.dirname(newest_under(target)) or "."  # a bare filename has none
     saves = sorted(
-        os.path.join(folder, n) for n in os.listdir(folder) if n.endswith(".hsg")
+        os.path.join(folder, n) for n in os.listdir(folder) if n.lower().endswith((".hsg", ".bcsave"))
     )
     print(f"Seeding demand history from {len(saves)} saves in {os.path.basename(folder)}")
     recorded = 0
@@ -20952,7 +21007,7 @@ class GameLink:
     while a city is loaded, so the watch loop reports it once and carries on.
     """
 
-    SCHEMA = 1  # the schema version this client speaks; see the contract
+    SCHEMA = 2  # the schema version this client speaks; see the contract
     TIMEOUT = 5
 
     def __init__(self, url: str, out_dir: str):
@@ -21026,7 +21081,7 @@ class GameLink:
             return None
         self.not_ready = 0
         version = health.get("schemaVersion")
-        if version != self.SCHEMA:
+        if version not in (1, self.SCHEMA):
             raise LinkMismatch(
                 f"the Big Copilot Link mod speaks schema version {version}; this "
                 f"board needs version {self.SCHEMA}. Update the mod or the board"
@@ -21038,8 +21093,27 @@ class GameLink:
         status, res_headers, data = self._call("/save", headers=headers)
         if status != 200:  # 503 no_save_yet, or a race the next poll settles
             return None
-        with open(self.path, "wb") as fh:
+        facts_enabled = "building-facts.v1" in health.get("features", [])
+        if facts_enabled:
+            import ba_facts
+            actual_stamp = res_headers.get("X-Game-Link-Stamp") or stamp
+            actual_character = res_headers.get("X-Game-Link-Character") or health.get("character")
+            code, _, body = self._call("/facts?stamp=" + urllib.parse.quote(actual_stamp, safe=""))
+            if code == 409:
+                return None
+            if code != 200:
+                raise LinkUnavailable("The game could not provide matching building facts")
+            try:
+                facts = ba_facts.validate(json.loads(body), data, actual_stamp, actual_character)
+                data = ba_facts.pack(data, facts)
+            except ValueError as exc:
+                raise LinkUnavailable(str(exc)) from exc
+        destination = os.path.splitext(self.path)[0] + (".bcsave" if facts_enabled else ".hsg")
+        pending = destination + ".tmp"
+        with open(pending, "wb") as fh:
             fh.write(data)
+        os.replace(pending, destination)
+        self.path = destination
         self.stamp = res_headers.get("X-Game-Link-Stamp") or stamp
         self.character = res_headers.get("X-Game-Link-Character") or health.get("character") or ""
         self.company = health.get("company") or ""

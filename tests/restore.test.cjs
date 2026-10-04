@@ -128,6 +128,33 @@ const hasBoard = page => page.locator('body').evaluate(el => el.classList.contai
 const text = page => page.locator('#srcStatus').innerText();
 const settle = page => page.evaluate(() => new Promise(resolve => setTimeout(resolve, 0)));
 
+test('a portable import offers Download snapshot in the visible More menu', async t => {
+  const page = await setup(t, {missing:true});
+  await page.waitForFunction(() => fixture.calls.includes('lookup'));
+  await page.evaluate(() => fixture.worker.emit({kind:'progress', stage:'ready'}));
+  const bytes = Buffer.from('{"format":"big-copilot-save","save":"fixture","facts":{"stamp":"paired"}}');
+  await page.locator('#savePick').setInputFiles({name:'portable.bcsave', mimeType:'application/octet-stream', buffer:bytes});
+  await messages(page);
+  await page.evaluate(() => fixture.complete());
+  assert.equal(await hasBoard(page), true);
+  assert.equal(await page.locator('#srcStrip').isVisible(), false);
+  await page.locator('#menuBtn').click();
+  assert.equal(await page.locator('#menuSourceSlot #snapshotExport').isVisible(), true);
+  const downloaded = page.waitForEvent('download');
+  await page.locator('#snapshotExport').click();
+  await page.waitForFunction(() => fixture.worker.messages.some(m => m.kind === 'held'));
+  await page.evaluate(() => {
+    const request = fixture.worker.messages.find(m => m.kind === 'held');
+    const save = fixture.worker.messages[0];
+    fixture.worker.emit({kind:'held', id:request.id, name:save.name, bytes:save.bytes});
+  });
+  const download = await downloaded;
+  assert.equal(download.suggestedFilename(), 'portable.bcsave');
+  const chunks = [];
+  for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+  assert.deepEqual(Buffer.concat(chunks), bytes);
+});
+
 test('loading is prominent until data arrives, including runtime ready; remembered page and controls survive', async t => {
   const page = await setup(t, {width:390});
   await messages(page);

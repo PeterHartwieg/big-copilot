@@ -31,6 +31,8 @@ Everything else:
   script. The rules, and what a new feature declares, are in `docs/architecture.md`,
   "Sections", including dependency declarations, refresh behavior and the core rationale.
 - save parser: `ba_save.py`
+- runtime building facts, portable `.bcsave` snapshots and the Alcware renovation adapter:
+  `ba_facts.py`; the table is resolved per Save through `load_buildings(save)`
 - web build: `build_web.py`; deploy: `npm run deploy` (`tools/deploy.mjs`), which assembles
   `web/` and runs `wrangler deploy`
 - landing screen markup and CSS, the news strip included: `BANNER` in `build_web.py`;
