@@ -581,14 +581,16 @@ page's inactivity cutoff (`LOAD_TIMEOUT_MS`) hears a long section through these 
 - `odNeed(name)` is the one way to ask: true when the board holds the section; otherwise it
   asks `LEDGER_SOURCE.section(name, generation)` once for this board (with what it needs)
   and returns false. Call it from what draws on screen, never from a count.
-  `renderAll()` sets `odHidden` while it draws a row of a view that is not on screen: an
+  First boot defers hidden rows entirely. When a changed company or save redraws every
+  row, `renderAll()` sets `odHidden` while it draws a view that is not on screen: an
   `odNeed()` there asks nothing and leaves the row out of date (`pageStale`), so it asks when
   its view opens (`drawStale()`).
 - A `PAGE_DRAWS` row's fourth element names the sections the row reads (Staffing ›
   Schedules and Staff needs: `hiring`; Supply › Production: `factoryStaffing`; Today: `staffing`).
   `odWantView()` asks for them as the view opens (`drawStale()`) and as a board arrives on
-  it (`renderAll()`). The first boot paints with `odBooting` set until its URL or
-  remembered route has been restored, so it never requests Today from a Map deep link.
+  it (`renderAll()`). First boot resolves the URL or remembered route's host before
+  drawing. It paints with `odBooting` set until ordinary navigation restores the route,
+  so it never requests Today from a Map deep link.
   A block whose need depends on the site (the site panel) asks from its
   draw instead.
 - `odState(name)` is `ready`, `loading`, `error` or `missing`; `odWaitHtml(name, small)` draws
@@ -1178,8 +1180,11 @@ Outside the pages, `drawMast` and `drawFooter` own the sidebar's name and clock 
 works through `PAGE_DRAWS` for the rest, one row per draw function, tagged with the views
 (`"today"`, `"staffing/payroll"`) whose markup it writes, or `""` for a row drawn on every
 refresh; `drawShellCounts()` is one, so the critical count on the Overview's link follows a
-refresh made on another page. `PAGE_ALIASES` keeps old hashes such as `#results` working after a page became a
-view.
+refresh made on another page. First boot resolves its active view before drawing,
+including remembered routes, legacy hashes, site links and an already open wiki.
+It draws that view and shared chrome, marking hidden rows in `pageStale` for their
+first navigation. Trend and search indexes are initialized independently of hidden
+page draws. `PAGE_ALIASES` keeps old hashes such as `#results` working after a page became a view.
 
 A live refresh of the same company enters through `renderCalm()`, which also runs the
 entrance animations the rebuild started to their end, so nothing slides in again. Only the
@@ -1189,8 +1194,8 @@ only the rows tagged for the view on screen, plus the `""` rows, and marks the r
 `pageStale`; `drawStale()`, called from `showPage()` and `showSub()`, draws them as their
 view opens. A row that throws there stays in `pageStale` and is tried again on the next
 visit; the page still opens, the other rows due on it still draw, and the Live dot shows
-Stale until that row draws or the next board arrives. The first boot and another company
-or save draw every row.
+Stale until that row draws or the next board arrives. Another company or save draws
+every row so hidden markup cannot retain the previous company's content.
 
 Adding a page means: a `div.page` in the markup, an entry in `PAGES` (with `newFeature` if
 it deserves a badge — see [contributing.md](contributing.md)) and in `ICON`, a `SEC_PAGE`
