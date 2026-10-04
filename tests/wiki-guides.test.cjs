@@ -30,10 +30,10 @@ const I18N = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8
    read from template/board.js rather than copied, so the wiki is tested with
    the real ones. Each is one statement, up to its first ";" at a line end. */
 const BOARD = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.js'), 'utf8');
-const BOARD_HELPERS = ['const ssEsc = ', 'const spEsc = ', 'const hrNum = '].map(anchor => {
+const BOARD_HELPERS = ['const ssEsc = ', 'const spEsc = ', 'const hrNum = ', 'const hoodKeyOf = '].map(anchor => {
   const i = at(BOARD, anchor);
   return BOARD.slice(i, BOARD.indexOf(';\n', i) + 2);
-}).join('');
+}).join('') + BOARD.slice(at(BOARD, 'const hoodColorAttr = '), at(BOARD, 'const hoodHtml = '));
 /* The board's neighbourhood tables, as render() writes them in: keyed by the
    game's key, the words looked up only to be shown. */
 const HOOD_EN = {midtown: 'Midtown', hellskitchen: "Hell's Kitchen", murrayhill: 'Murray Hill',
@@ -324,7 +324,7 @@ function wiki({data = DATA, save = null} = {}) {
     showSub(id, view){ drawn.push(['sub', id, view]); },
     drawPlan(){ drawn.push(['plan', context.planType]); },
     wireTips(){}, wireReveal(){}, hideTip(){},
-    HOOD_TAGS, hoodName,
+    HOOD_TAGS, hoodName, HOOD_NAMES: Object.fromEntries(Object.entries(HOOD_EN).map(([id, name]) => [`ba:neighborhood_${id}`, name])),
     requestAnimationFrame(){}, cancelAnimationFrame(){}, setTimeout(){},
     history: {replaceState(){}},
     matchMedia: () => ({matches: false, addEventListener(){}}),

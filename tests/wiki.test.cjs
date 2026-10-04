@@ -31,10 +31,10 @@ const I18N = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8
    read from template/board.js rather than copied, so the wiki is tested with
    the real ones. Each is one statement, up to its first ";" at a line end. */
 const BOARD = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.js'), 'utf8');
-const BOARD_HELPERS = ['const ssEsc = ', 'const spEsc = ', 'const hrNum = '].map(anchor => {
+const BOARD_HELPERS = ['const ssEsc = ', 'const spEsc = ', 'const hrNum = ', 'const hoodKeyOf = '].map(anchor => {
   const i = at(BOARD, anchor);
   return BOARD.slice(i, BOARD.indexOf(';\n', i) + 2);
-}).join('');
+}).join('') + BOARD.slice(at(BOARD, 'const hoodColorAttr = '), at(BOARD, 'const hoodHtml = '));
 /* The board's neighbourhood tables, as render() writes them in: keyed by the
    game's key, the words looked up only to be shown. */
 const HOOD_EN = {midtown: 'Midtown', hellskitchen: "Hell's Kitchen", murrayhill: 'Murray Hill',
@@ -248,7 +248,7 @@ function wiki({data = DATA, fetchImpl, save = null, seen = {}} = {}) {
     wireTips(){}, wireReveal(){},
     hideTip(){ tipsDropped.push(1); },
     // The board's own neighbourhood tags, as render() writes them in.
-    HOOD_TAGS, hoodName,
+    HOOD_TAGS, hoodName, HOOD_NAMES: Object.fromEntries(Object.entries(HOOD_EN).map(([id, name]) => [`ba:neighborhood_${id}`, name])),
     requestAnimationFrame(){}, cancelAnimationFrame(){}, setTimeout(){},
     history: {replaceState(){}},
     matchMedia: () => ({matches: false, addEventListener(){}}),
@@ -895,7 +895,7 @@ test('a place wears the board\'s own two letters and keeps its house number', as
   const w = wiki();
   const html = await w.load('wiki/businesstypes-giftshop');
   // The Hamptons is HA everywhere else on the board, and so it is here.
-  assert.match(html, /<span class="hood" data-tip="The Hamptons">HA<\/span>/);
+  assert.match(html, /<span class="hood" data-hood-color="ba:neighborhood_thehamptons" data-tip="The Hamptons">HA<\/span>/);
   assert.doesNotMatch(html, />TH</, 'not initials of our own invention');
   // 4 Pier and 9 Pier are different buildings: the number is the address.
   assert.match(html, /Bluestone Imports<b>4 Pier<\/b>/);

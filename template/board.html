@@ -353,9 +353,19 @@ a.kpi.td-go:hover .td-go-ic{color:var(--accent);transform:translateX(3px)}
 .find .site{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden}
 .hood{
   display:inline-grid;place-items:center;min-width:24px;height:20px;padding:0 4px;border-radius:4px;
-  background:var(--raised);border:1px solid var(--rule);font:600 10px/1 "IBM Plex Mono",monospace;
-  letter-spacing:.06em;color:var(--ink-2);flex:none;
+  background:var(--hood-fill,var(--raised));border:1px solid var(--rule);font:600 10px/1 "IBM Plex Mono",monospace;
+  letter-spacing:.06em;color:var(--ink);flex:none;
 }
+/* Installed game's Neighborhood.cityMapZoneColor, rounded to RGBA bytes.
+   Keep each map overlay's alpha: 100/255, or 106/255 for Midtown. */
+[data-hood-color="ba:neighborhood_garmentdistrict"]{--hood-fill:#5bcc5064}
+[data-hood-color="ba:neighborhood_hellskitchen"]{--hood-fill:#5169d964}
+[data-hood-color="ba:neighborhood_industrycity"]{--hood-fill:#ff7c1c64}
+[data-hood-color="ba:neighborhood_lowermanhattan"]{--hood-fill:#5dcdee64}
+[data-hood-color="ba:neighborhood_midtown"]{--hood-fill:#ee5de26a}
+[data-hood-color="ba:neighborhood_murrayhill"]{--hood-fill:#e5595964}
+[data-hood-color="ba:neighborhood_thehamptons"]{--hood-fill:#ddad3e64}
+
 .find .what{font-weight:600;font-size:14px;color:var(--ink)}
 .find button.what{appearance:none;-webkit-appearance:none;background:none;border:0;padding:0;margin:0;font-family:inherit;line-height:inherit;letter-spacing:inherit;text-align:left;cursor:pointer}
 .find button.what:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
@@ -630,7 +640,7 @@ html:has(dialog:modal){overflow:hidden}
 .gw-shop:hover .gw-minis i{animation:sp-hop .45s ease-in-out;animation-delay:calc(var(--k)*40ms)}
 .gw-shop .c{font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3);min-width:24px;text-align:right}
 .gw-shop.bad .nm{color:var(--neg)}
-.gw-shop.bad .nm .hood{border-color:color-mix(in srgb,var(--neg) 50%,transparent);color:var(--neg)}
+.gw-shop.bad .nm .hood{border-color:color-mix(in srgb,var(--neg) 50%,transparent);color:var(--ink)}
 .gw-shop .gw-why{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:0 0 4px 30px;font-size:12.5px;line-height:1.45;color:var(--ink-2)}
 .gw-shop .gw-why b{color:var(--ink);font-weight:600}
 .gw-shop.out{opacity:.45}
@@ -1578,7 +1588,7 @@ g[data-series].off{opacity:0}
 .heat{display:grid;grid-template-columns:200px repeat(7,minmax(0,1fr));gap:4px;align-items:center}
 .heat .h{font:500 10px/1.3 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);text-align:center;padding-bottom:6px;transition:color .15s;min-width:0;overflow-wrap:anywhere}
 .heat .h.hl{color:var(--ink)}
-.heat .mk-tag{display:none}
+.heat .mk-tag{display:none;place-items:center;min-width:24px;height:20px;padding:0 4px;border-radius:4px;background:var(--hood-fill,var(--raised));border:1px solid var(--rule);color:var(--ink)}
 .heat .r{font-size:13px;font-weight:500;padding-right:12px;transition:color .15s}
 .heat .r.hl{color:var(--accent)}
 .heat .r small{display:block;font-size:11px;color:var(--ink-3);font-weight:400}
@@ -1722,7 +1732,7 @@ tbody tr.pc-addrow:hover{background:none}
 
 /* site detail -------------------------------------------------------------- */
 .sitehead{display:flex;align-items:center;gap:16px;margin-top:32px}
-.bullet{width:40px;height:40px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font:600 12px/1 "IBM Plex Mono",monospace;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.bullet{width:40px;height:40px;border-radius:50%;background:var(--hood-fill,var(--raised));color:var(--ink);display:grid;place-items:center;font:600 12px/1 "IBM Plex Mono",monospace;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
 .sitehead:hover .bullet{transform:rotate(-12deg) scale(1.08)}
 .sitehead h2{margin:0;font-size:22px;font-weight:600;letter-spacing:-.02em}
 #sitePanel .sp-acts{margin-left:auto;display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
@@ -2389,9 +2399,9 @@ body.ss-open{overflow:hidden}
 .ss-row.on{background:var(--raised)}
 .ss-row .ic{width:30px;height:30px;border-radius:8px;background:var(--raised);display:grid;place-items:center;color:var(--ink-2);transition:transform .3s cubic-bezier(.34,1.56,.64,1),color .2s,background .2s}
 .ss-row .ic svg{width:15px;height:15px}
-.ss-row .ic.hood{font:600 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;border:1px solid var(--rule);height:24px;border-radius:5px}
+.ss-row .ic.hood{color:var(--ink);background:var(--hood-fill,var(--raised));font:600 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;border:1px solid var(--rule);height:24px;border-radius:5px}
 .ss-row.on .ic{color:var(--accent);background:var(--surface);transform:rotate(-8deg) scale(1.06)}
-.ss-row.on .ic.hood{transform:none;color:var(--ink)}
+.ss-row.on .ic.hood{background:var(--hood-fill,var(--surface));transform:none;color:var(--ink)}
 .ss-row .t{display:block;font-size:14px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ss-row .p{display:block;margin-top:2px;font:400 11.5px/1.3 "IBM Plex Mono",monospace;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ss-row mark{background:var(--accent-soft);color:var(--accent);border-radius:3px;padding:0 1px;margin:0 -1px}
@@ -2715,7 +2725,7 @@ body:has(#changelogDialog[open]){overflow:hidden}
   .heat .h{min-width:0;font-size:8px;letter-spacing:0;overflow-wrap:anywhere;overflow:hidden}
   .heat .h.mk-tagged{font-size:10px;letter-spacing:.04em}
   .heat .h.mk-tagged .mk-long{display:none}
-  .heat .h.mk-tagged .mk-tag{display:inline}
+  .heat .h.mk-tagged .mk-tag{display:inline-grid}
   .heat .r{min-width:0;padding-right:6px;font-size:12px;line-height:1.25;overflow-wrap:anywhere}
   .heat .r .mk-name{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}
   .heat .r small{font-size:10px}

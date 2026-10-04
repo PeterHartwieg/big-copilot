@@ -38,6 +38,7 @@
 .fchip b{font-weight:400;color:var(--ink-3)}
 .fchip.on b{color:var(--ink-2)}
 .fchip.hd{padding:0 8px;letter-spacing:.08em}
+.fchip.hd.on{background:var(--hood-fill,var(--raised))}
 /* The switch sits in the map window, in the same button the zoom controls use;
    the accent marks it pressed, the way a layer chip marks itself on. */
 .fswitch{position:absolute;left:16px;top:16px;z-index:5}

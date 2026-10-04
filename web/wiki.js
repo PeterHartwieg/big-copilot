@@ -1885,7 +1885,7 @@ function wikiGuidePlaces(g){
        own invention: The Hamptons is HA here as it is everywhere else. */
     const code = (typeof HOOD_TAGS === "object" && HOOD_TAGS[sup.hood]) || "";
     return `<div class="wk-place">
-      ${code ? `<span class="hood" data-tip="${attr(hoodName(sup.hood))}">${ssEsc(code)}</span>` : `<span></span>`}
+      ${code ? `<span class="hood"${hoodColorAttr(sup.hood)} data-tip="${attr(hoodName(sup.hood))}">${ssEsc(code)}</span>` : `<span></span>`}
       <span class="wk-nm">${ssEsc(sup.name)}${sup.flag ? `<i class="wk-flag" data-tip="${attr(sup.flag)}"></i>` : ""}
         <small class="wk-addr" data-addr="${attr(sup.street)}"${mapId} data-tip="${attr(`${sup.hood ? hoodName(sup.hood) : ""}${facts ? ` · ${facts}` : ""}`)}">${ssEsc(sup.street)}</small></span>
       <span class="wk-role">${ssEsc([...roles[key]].map(wikiRoleWord).join(" · "))}</span></div>`;
