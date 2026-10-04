@@ -533,6 +533,7 @@
  "co.pay.people_other": "{n} Personen",
  "co.pay.quiet.links": "Löhne nach Rolle; wen du einstellen solltest, steht unter Personalbedarf",
  "co.pay.rate": "{w:$}/Tag zu heutigen Löhnen",
+ "co.pay.roles": "Mitarbeiter nach Rolle",
  "co.pay.tile.booked": "Gestern verbucht",
  "co.pay.tile.booked.none": "noch keine Abrechnung",
  "co.pay.tile.booked.s": "gestrige Abrechnungen",

@@ -506,6 +506,7 @@
  "co.pay.off.title2": "Sites whose wages yesterday differ from today's rates",
  "co.pay.out": "{n} out",
  "co.pay.out.tip": "Absent today",
+ "co.pay.roles": "Staff by role",
  "co.pay.tile.booked": "Booked yesterday",
  "co.pay.tile.booked.none": "no statement yet",
  "co.pay.tile.diff": "Difference",

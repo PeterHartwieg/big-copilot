@@ -533,6 +533,7 @@
  "co.pay.people_other": "{n} people",
  "co.pay.quiet.links": "wages by role; whom to hire is on Staff needs",
  "co.pay.rate": "{w:$}/day at today's rates",
+ "co.pay.roles": "Staff by role",
  "co.pay.tile.booked": "Booked yesterday",
  "co.pay.tile.booked.none": "no statement yet",
  "co.pay.tile.booked.s": "yesterday's statements",

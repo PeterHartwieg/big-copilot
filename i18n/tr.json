@@ -506,6 +506,7 @@
  "co.pay.off.title2": "Dünkü maaşları bugünün oranlarından farklı olan yerler",
  "co.pay.out": "{n} yok",
  "co.pay.out.tip": "Bugün yok",
+ "co.pay.roles": "Göreve göre çalışanlar",
  "co.pay.tile.booked": "Dün kaydedilen",
  "co.pay.tile.booked.none": "henüz bir hesap özeti yok",
  "co.pay.tile.diff": "Fark",

@@ -1044,3 +1044,40 @@ test('a target finding across two shops lands on the shop holding most', async (
     assert.deepEqual(got, {site: en("f.target.site", {n: 2}), tab: "deliveries", at: "Shop b:ba:itemname_beer"});
   } finally { await page.close(); }
 });
+
+test('Imports omits an order-only gauge but retains draw and supplier-limit comparisons', async () => {
+  const page = await board(fixture());
+  try {
+    const scales = await page.evaluate(() => {
+      const row = {inGame: 100, value: 150};
+      return [sbiScale(row, null, null), sbiScale(row, 0, null), sbiScale(row, null, 200)];
+    });
+    assert.equal(scales[0], '');
+    assert.match(scales[1], /sbi-m-draw/);
+    assert.match(scales[2], /sbi-m-cap/);
+  } finally { await page.close(); }
+});
+
+test('Factory staffing removes matching strips but keeps changed and unknown hours plus the typing instructions', async () => {
+  const data = fixture();
+  const line = data.factoryStaffing.cap[0].lines[0];
+  data.factoryStaffing.cap[0].lines = [
+    {...line, item: 'Matching', hoursNow: line.hours},
+    {...line, item: 'Changed', hoursNow: line.hours - 1},
+    {...line, item: 'Unknown', hoursNow: null},
+  ];
+  const page = await board(data, {tab: 'production'});
+  try {
+    const rows = page.locator('#sbStaff .sb-sln');
+    assert.equal(await rows.nth(0).locator('.sb-day').count(), 0);
+    assert.equal(await rows.nth(1).locator('.sb-day').count(), 1);
+    assert.equal(await rows.nth(2).locator('.sb-day').count(), 1);
+    const positions = await rows.locator('.hrs > :last-child').evaluateAll(els => els.map(el => el.getBoundingClientRect().left));
+    assert.equal(positions[0], positions[1], 'matching hours align with changed hours');
+    assert.equal(positions[1], positions[2], 'unknown hours keep the same alignment');
+    for(let i = 0; i < 3; i++) {
+      assert.equal(await rows.nth(i).locator('.sb-shift').count(), line.cuts.length);
+      assert.match(await rows.nth(i).innerText(), enRe('sb.staff.machines', {n: line.machines}));
+    }
+  } finally { await page.close(); }
+});

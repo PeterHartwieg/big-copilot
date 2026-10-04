@@ -401,6 +401,7 @@
  "co.pay.out": "gpt-6-sol",
  "co.pay.out.tip": "gpt-6-sol",
  "co.pay.quiet.links": "gpt-6-sol",
+ "co.pay.roles": "codex",
  "co.pay.tile.booked": "gpt-6-sol",
  "co.pay.tile.booked.none": "gpt-6-sol",
  "co.pay.tile.booked.s": "gpt-6-sol",

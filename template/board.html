@@ -864,6 +864,9 @@ html:has(dialog:modal){overflow:hidden}
 #pageStaffing .pay-tile b{font:500 22px/1 "IBM Plex Mono",monospace}
 #pageStaffing .pay-tile.warn b{color:var(--warn)}
 #pageStaffing .pay-tile small{font-size:12px;color:var(--ink-3)}
+#pageStaffing #secNeeds:empty{display:none}
+#pageStaffing .pay-roles{margin-top:22px}
+#pageStaffing .pay-roles>summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
 #pageStaffing .pay-off{margin-top:22px}
 #pageStaffing .pay-off h3{margin:0 0 8px;font-size:14px}
 #pageStaffing .pay-off ul{list-style:none;margin:0;padding:0}
@@ -1296,7 +1299,8 @@ html:has(dialog:modal){overflow:hidden}
 #pageSupply .sb-wage small{margin-top:4px;font-size:10.5px;color:var(--ink-3)}
 #pageSupply .sb-sfh .go{justify-self:end;white-space:nowrap}
 #pageSupply .sb-sln{display:grid;grid-template-columns:230px 250px minmax(0,1fr);gap:18px;align-items:center;padding:7px 0 3px 22px;font-size:12.5px;color:var(--ink-2)}
-#pageSupply .sb-sln .hrs{display:flex;align-items:center;gap:10px;font:500 12px/1 "IBM Plex Mono",monospace}
+#pageSupply .sb-sln .hrs{display:grid;grid-template-columns:143px auto;align-items:center;gap:10px;font:500 12px/1 "IBM Plex Mono",monospace}
+#pageSupply .sb-sln .hrs>:last-child{grid-column:2}
 #pageSupply .sb-sln .hrs b{font-weight:500;color:var(--ink)}
 #pageSupply .sb-sln .shifts{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 #pageSupply .sb-shift{display:inline-flex;align-items:baseline;gap:6px;padding:3px 9px;border-radius:6px;border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);background:var(--accent-soft);font:500 12px/1.4 "IBM Plex Mono",monospace;color:var(--ink)}

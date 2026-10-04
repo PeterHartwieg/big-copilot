@@ -564,6 +564,7 @@
  "co.pay.out": "{n} absents",
  "co.pay.out.tip": "Absent aujourd’hui",
  "co.pay.quiet.links": "salaires par rôle ; qui embaucher : Besoins en personnel",
+ "co.pay.roles": "Personnel par fonction",
  "co.pay.tile.booked": "Comptabilisé hier",
  "co.pay.tile.booked.none": "aucun relevé pour l’instant",
  "co.pay.tile.booked.s": "relevés d’hier",

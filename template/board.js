@@ -7591,23 +7591,22 @@ function drawSite(){
         ${products}${shelfMore}
       </section>
     </div>
-    ${fresh && !b.series.length && !b.rhythm ? "" : `<div class="duo sec">
-      <section class="rv" data-block="profit" id="sp-profit"${sp ? ` data-readzone` : ""}>
+    ${!b.series.length && !b.rhythm ? "" : `<div class="duo sec"${!b.series.length || !b.rhythm ? ' style="grid-template-columns:1fr"' : ""}>
+      ${b.series.length ? `<section class="rv" data-block="profit" id="sp-profit"${sp ? ` data-readzone` : ""}>
         ${sechead(tt("sp.profit.title", "Profit, last {n} days", {n: b.series.length}), {icon: sp ? "profit" : null, aside: sp && ready ? trendChip : null})}
         <div class="chartbox">${miniChart(b.series, "profit", "var(--accent)", sp ? profitChart : {})}${
           sp ? `<div class="sp-read sp-readout">${profitRead || "&nbsp;"}</div>` : ""}</div>
-      </section>
-      <section class="rv" data-block="week" id="sp-week">
+      </section>` : ""}
+      ${b.rhythm ? `<section class="rv" data-block="week" id="sp-week">
         ${sechead(tt("sp.week.title", "Its week"), {icon: sp ? "week" : null})}
-        <div class="chartbox" style="padding-bottom:16px">${b.rhythm
+        <div class="chartbox" style="padding-bottom:16px">${
           /* Named, like the company's By weekday, so the two stop reading as
              two answers to one question: this is this site's revenue alone. */
-          ? `<div class="fv-top"><span class="fv-basis" style="--fv-s:var(--info)"><span class="dot"></span>${
+          `<div class="fv-top"><span class="fv-basis" style="--fv-s:var(--info)"><span class="dot"></span>${
               b.status === "retail" ? tt("sp.week.basis.shop", {one: "<b>This shop’s revenue</b> · {n} week", other: "<b>This shop’s revenue</b> · {n} weeks"}, {n: weeksOf(b.rhythm)})
               : b.status === "office" ? tt("sp.week.basis.office", {one: "<b>This office’s revenue</b> · {n} week", other: "<b>This office’s revenue</b> · {n} weeks"}, {n: weeksOf(b.rhythm)})
-              : tt("sp.week.basis.site", {one: "<b>This site’s revenue</b> · {n} week", other: "<b>This site’s revenue</b> · {n} weeks"}, {n: weeksOf(b.rhythm)})}</span></div>${weekHtml(b.rhythm, todayName)}`
-          : `<p class="quiet" style="margin:0">${tt("sp.week.none", "Not enough trading history here yet.")}</p>`}</div>
-      </section>
+              : tt("sp.week.basis.site", {one: "<b>This site’s revenue</b> · {n} week", other: "<b>This site’s revenue</b> · {n} weeks"}, {n: weeksOf(b.rhythm)})}</span></div>${weekHtml(b.rhythm, todayName)}`}</div>
+      </section>` : ""}
     </div>`}`}`;
   if(keptSchedule) $("sp-sched")?.replaceWith(keptSchedule);
   odSiteDrawn = sp && odReady(siteSection) ? b.key : keptSchedule ? b.key : null;
@@ -10373,6 +10372,7 @@ function sbiRail(cover, arrive){
 /* The scale under the lead amount: today's order, the plan, what went out a
    week and the cap an importer named, where the board knows each. */
 function sbiScale(r, draw, cap){
+  if(!Number.isFinite(draw) && !Number.isFinite(cap)) return "";
   const marks = [[tt("sb.card.scale.now", "order now"), r.inGame, "now"], [tt("sb.card.scale.plan", "planned"), r.value, "plan"],
     [tt("sb.card.scale.draw", "today's draw"), draw, "draw"], [tt("sb.card.scale.cap", "importer cap"), cap, "cap"]].filter(m => Number.isFinite(m[1]));
   if(marks.length < 2) return "";
@@ -10710,7 +10710,7 @@ function drawFactoryStaffing(keep = () => true){
       tt("sb.staff.wages", "a day in wages")}</small></span>` : "<span></span>";
     const lines = (r.lines || []).map(l => {
       const chips = (l.cuts || []).map(([a, z]) => `<span class="sb-shift">${h(a)}–${h(z)}<small>${tt("sb.unit.nh", "{n} h", {n: z - a})}</small></span>`).join("");
-      return `<div class="sb-sln"><span class="nm">${spEsc(l.item)}</span><span class="hrs">${sbDayStrip(l.hoursNow, l.hours,
+      return `<div class="sb-sln"><span class="nm">${spEsc(l.item)}</span><span class="hrs">${Number.isFinite(l.hoursNow) && l.hoursNow === l.hours ? "" : sbDayStrip(l.hoursNow, l.hours,
         tt("sb.staff.line.tip", "{now} h staffed, {need} h needed, from {from}:00", {now: l.hoursNow ?? 0, need: l.hours, from: h(l.from || 0)}), l.from || 0)}${
         Number.isFinite(l.hoursNow) && l.hoursNow !== l.hours ? sbChg(l.hoursNow, l.hours, tt("sb.unit.h", "h")) : `<b>${tt("sb.unit.nh", "{n} h", {n: l.hours})}</b>`}</span><span class="shifts">${chips}${
         l.machines > 1 ? `<small class="sb-per">× ${tt("sb.staff.machines", {one: "{n} machine", other: "{n} machines"}, {n: l.machines})}</small>` : ""}</span></div>`;
@@ -16738,6 +16738,7 @@ const payrollOff = () => (D.businesses || [])
   .sort((a, z) => Math.abs(z[1]) - Math.abs(a[1]));
 function drawPayroll(){
   const st = D.staff;
+  const rolesOpen = q(".pay-roles", $("secPayroll"))?.open;
   const trouble = [[n => tt("co.pay.unhappy", "{n} unhappy", {n}), st.unhappy, tt("co.pay.unhappy.tip", "Satisfaction below 70%")],
                    [n => tt("co.pay.out", "{n} out", {n}), st.absent, tt("co.pay.out.tip", "Absent today")],
                    [n => tt("co.pay.complaining", "{n} complaining", {n}), st.complaining,
@@ -16765,12 +16766,12 @@ function drawPayroll(){
     aside: st.total ? chipHtml(st.avgSatisfaction >= 70 ? "ok tr" : "warn tr", `${st.avgSatisfaction}%`,
         tt("co.pay.avg.tip", "Average satisfaction across {n} staff", {n: st.total}))
       + trouble.map(([l, v, tip]) => chipHtml("warn tr", l(v), tip)).join("") : "",
-  }) + tiles + (st.total ? `<div class="roles">${st.roles.map(r => `<div class="role rv">
+  }) + tiles + sites + (st.total ? `<details class="pay-roles"${rolesOpen ? " open" : ""}><summary>${tt("co.pay.roles", "Staff by role")}</summary><div class="roles">${st.roles.map(r => `<div class="role rv">
       <span>${r.role}</span>
       <span class="tr"><i style="width:${(r.count / max * 100).toFixed(0)}%"></i></span>
       <span class="c">${r.cost != null
         ? `<span>${r.count}</span><b>${money(r.cost)}</b>`
-        : r.count}</span></div>`).join("")}</div>` : `<p class="quiet">${tt("co.pay.empty", "No staff hired yet.")}</p>`) + sites;
+        : r.count}</span></div>`).join("")}</div></details>` : `<p class="quiet">${tt("co.pay.empty", "No staff hired yet.")}</p>`);
 }
 
 /* The career totals as a checklist, and the running totals under it. The
@@ -17127,6 +17128,8 @@ function drawTools(){
   if(!factories.length) set("production", 0, "q", tt("today.task.noFactory", "no factory yet"));
   else set("production", lines.filter(a => ["feed", "unnamed", "unset"].includes(a.group) || (a.group === "staff" && ovAtFactory(a))).length);
   set("demands", count(["jobdemand", "companydemand"]), "b");
+  const demandsLink = q('[data-ov-count="demands"]')?.closest("a");
+  if(demandsLink) demandsLink.dataset.ovInto = nxFindings(["jobdemand", "companydemand"]).length ? "#nxDemands" : "#secStaff";
   set("standards", count(["satisfaction", "promotion", "uniform", "bathroom", "toiletprivacy", "sink", "music", "interior"]));
   set("hire", 0);
 }
@@ -17480,14 +17483,14 @@ function drawNeeds(){
     return `<p class="nd-pg">${pgPill(state, hire)}<span><b>${tt("co.needs.pg.last", "Last from here: {h} hired, {m} moved", {h: x.hired || 0, m: x.moved || 0})}</b>${
       x.skipped ? ` · ${tt("co.needs.pg.skipped", "{n} skipped", {n: x.skipped})}` : ""} · ${words} ${tt("co.needs.pg.noundo", "No undo.")}</span></p>`;
   })();
-  host.innerHTML = `${sechead(tt("co.needs.title", "Staff needs"), {sr: true})}${hireLine}
-    <div class="nd-card" id="nxDemands"><h3>${spIcon("alert")}${tt("co.needs.demands.title", "Unmet demands")}<small>${demands.length}</small></h3>`
-    + (demands.length ? `<div class="nx-list">${demands.map(a => {
+  host.innerHTML = (hireLine || demands.length ? `${sechead(tt("co.needs.title", "Staff needs"), {sr: true})}${hireLine}` : "")
+    + (demands.length ? `<div class="nd-card" id="nxDemands"><h3>${spIcon("alert")}${tt("co.needs.demands.title", "Unmet demands")}<small>${demands.length}</small></h3>`
+    + `<div class="nx-list">${demands.map(a => {
       const b = alertSite(a), {what} = splitFinding(a);
       return `<div class="nx-row"><span class="nm">${b ? `${hoodHtml(b)}<span>${spEsc(shortName(b))}</span>` : `${spIcon("building")}<span>${
         tt("co.needs.company", "Company-wide")}</span>`}</span><span class="st">${spEsc(what)}</span><span class="ac"><button type="button" class="nx-btn sm" data-need-open="${attr(a.id)}">${
         tt("co.needs.crew", "Open crew")}${icon("go")}</button></span></div>`;
-    }).join("")}</div>` : `<p class="quiet">${tt("co.needs.demands.none", "No staff demands in this save.")}</p>`) + `</div>`;
+    }).join("")}</div></div>` : "");
 }
 
 function drawFooter(){

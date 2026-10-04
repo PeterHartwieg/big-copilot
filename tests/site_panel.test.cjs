@@ -1849,3 +1849,23 @@ test('a factory page carries the sizing switch, and its inputs follow it', async
       ['dem', 'dem', 'dem', null]);
   } finally { await page.close(); }
 });
+
+test('site history omits empty charts and expands the available chart across its row', async () => {
+  const page = await site();
+  try {
+    assert.equal(await page.locator('#sp-profit, #sp-week').count(), 0);
+    await page.evaluate(series => { D.businesses[0].series = series; drawSite(); }, fortnight(20));
+    assert.equal(await page.locator('#sp-profit').count(), 1);
+    assert.equal(await page.locator('#sp-week').count(), 0);
+    assert.equal(await page.locator('#sp-profit').evaluate(el => el.parentElement.style.gridTemplateColumns), '1fr');
+    await page.evaluate(() => {
+      D.businesses[0].rhythm = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map(day => ({day, short: day.slice(0,3), index:100, n:2}));
+      drawSite();
+    });
+    assert.equal(await page.locator('#sp-week .fv-basis').count(), 1);
+    assert.equal(await page.locator('#sp-profit').evaluate(el => el.parentElement.style.gridTemplateColumns), '');
+    await page.evaluate(() => { D.businesses[0].series = []; drawSite(); });
+    assert.equal(await page.locator('#sp-profit').count(), 0);
+    assert.equal(await page.locator('#sp-week').evaluate(el => el.parentElement.style.gridTemplateColumns), '1fr');
+  } finally { await page.close(); }
+});
