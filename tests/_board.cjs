@@ -21,9 +21,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const {execFileSync} = require('node:child_process');
+const {selectPython} = require('../tools/verify.mjs');
 
 const ROOT = path.join(__dirname, '..');
-const SECTION_META = execFileSync(process.env.PYTHON || 'python',
+const SECTION_META = execFileSync(selectPython(),
   ['-c', 'import json, ba_dashboard; print(json.dumps(ba_dashboard.section_metadata()))'],
   {cwd: ROOT, encoding: 'utf8'}).trim();
 const SOURCE = fs.readFileSync(path.join(ROOT, 'template', 'open-store-model.js'), 'utf8') + '\n'
