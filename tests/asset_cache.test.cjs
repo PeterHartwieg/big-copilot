@@ -340,7 +340,12 @@ for (const legacyWorker of [true,false]) {
 for(const broken of ['missingBoard','badIntegrity','uninitializedBoard']) {
   test(`${broken} hosted board script fails safely for save, restored source and no-save navigation`,async t=>{
     const ctx=await context(t);
-    await ctx.addInitScript(()=>localStorage.setItem('ledger_link','http://127.0.0.1:18232'));
+    await ctx.addInitScript(()=>{
+      if (!sessionStorage.getItem('asset-failure-link-seeded')) {
+        localStorage.setItem('ledger_link','http://127.0.0.1:18232');
+        sessionStorage.setItem('asset-failure-link-seeded','1');
+      }
+    });
     active=broken; phase=broken;
     const page=await ctx.newPage(), requests=[];
     page.on('request',request=>requests.push(request.url()));
@@ -372,10 +377,29 @@ for (const broken of ['missingStyle','badStyleIntegrity']) {
   test(`a ${broken} hosted stylesheet keeps styled reload recovery and refuses every board entry`,async t=>{
     const ctx=await context(t),page=await ctx.newPage(),requests=[];
     page.on('request',request=>requests.push(request.url()));
-    await ctx.addInitScript(()=>localStorage.setItem('ledger_link','http://127.0.0.1:18232'));
+    await ctx.addInitScript(()=>{
+      if (!sessionStorage.getItem('asset-failure-link-seeded')) {
+        localStorage.setItem('ledger_link','http://127.0.0.1:18232');
+        sessionStorage.setItem('asset-failure-link-seeded','1');
+      }
+      window.assetFailureBoardCalls=[];
+      let board;
+      // Observe real board entry/render functions before DOMContentLoaded can
+      // open a cold wiki route. No production code or browser events are stubbed.
+      Object.defineProperty(window,'BigCopilotBoard',{configurable:true,get:()=>board,set(value){
+        board=value;
+        for(const name of ['bootShell','showPage']) {
+          const original=window[name];
+          window[name]=function(...args){window.assetFailureBoardCalls.push(name);return original.apply(this,args);};
+        }
+        const original=value.browseWiki;
+        value.browseWiki=function(...args){window.assetFailureBoardCalls.push('browseWiki');return original.apply(this,args);};
+      }});
+    });
     active=broken; phase=broken;
     await page.goto(base+'/#wiki');
     assert.equal(await page.evaluate(()=>typeof BigCopilotBoard), 'object', 'the board script loaded successfully');
+    assert.deepEqual(await page.evaluate(()=>window.assetFailureBoardCalls),[],'cold wiki route must not boot or render the failed board');
     assert.match(await page.locator('#srcStatus').textContent(),/could not finish/);
     assert.equal(await page.evaluate(()=>window.LEDGER_ASSET_FAILURE),true,'head handler caught stylesheet failure before the shell loaded');
     assert.equal(await page.locator('#reloadBtn').isVisible(),true);
@@ -386,9 +410,11 @@ for (const broken of ['missingStyle','badStyleIntegrity']) {
     assert.equal(colors.foreground,'rgb(233, 236, 230)');
     assert.equal(colors.button,'rgb(67, 192, 122)');
     await page.locator('#savePick').setInputFiles(save);
-    await page.evaluate(()=>{location.hash='#map';});
-    await page.evaluate(()=>{location.hash='#wiki';});
+    for(const hash of ['#map','#wiki']) await page.evaluate(hash=>new Promise(resolve=>{
+      window.addEventListener('hashchange',()=>resolve(),{once:true}); location.hash=hash;
+    }),hash);
     await page.locator('#lgWikiLink').click();
+    assert.deepEqual(await page.evaluate(()=>window.assetFailureBoardCalls),[],'hash events and wiki button must not reach board navigation');
     assert.equal(await page.locator('body').evaluate(e=>e.classList.contains('has-board')),false);
     assert.equal(await page.locator('#srcProg').isVisible(),false);
     assert.ok(!requests.some(url=>url.includes('/worker.js') || url.includes('/pyodide/') || url.includes(':18232/')));

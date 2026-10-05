@@ -19034,6 +19034,8 @@ function wikiVisit(entered = false){
   if(typeof showWikiRoute === "function") showWikiRoute(location.hash.slice(1), entered);
 }
 window.addEventListener("hashchange", () => {
+  // A hosted board whose JS/CSS failed must stay in the shell's reload state.
+  if(window.LEDGER_ASSET_FAILURE) return;
   const h = location.hash.slice(1);
   /* With no save open only the wiki has anything behind it; the rest would be
      empty chrome, so the nav's own lock holds for a typed hash too. */

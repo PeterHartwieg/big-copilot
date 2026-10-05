@@ -2778,6 +2778,7 @@
   }
   const wikiHash = () => /^#wiki(\/|$)/.test(location.hash);
   function openWiki() {
+    if (!boardReady()) return;
     const board = window.BigCopilotBoard;
     if (!board || !board.browseWiki || !board.browseWiki()) return;
     // The board paints its own navigation first, so entering finds a page.
