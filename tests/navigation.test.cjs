@@ -12,7 +12,7 @@ const {between} = require('./_slice.cjs');
 /* The boot slice starts at the shell, so the no-save path comes with it. */
 const BOOT = between(source, 'let shellOnly = false;', '/* A page written with its numbers');
 
-function board({saved = {}, data = {}} = {}) {
+function board({saved = {}, data = {}, extraView = null} = {}) {
   if (data) require('./_payload_contract.cjs').assertPayloadShape(data, 'navigation');
   const entries = ['#today'], states = [null];
   let position = 0;
@@ -61,7 +61,10 @@ function board({saved = {}, data = {}} = {}) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8'), context);
   /* The guarded localStorage helpers, declared near the top of the script. */
   vm.runInContext(between(source, '/* localStorage, every access guarded', 'const el = '), context);
-  vm.runInContext(between(source, 'const SEC_PAGE =', '/* The business a finding'), context);
+  let identities = between(source, 'const VIEW_META =', '/* The business a finding').replace(/\r\n/g, '\n');
+  if(extraView) identities = identities.replace('];\nconst viewMetaForRoute',
+    `{...${JSON.stringify(extraView)}, label: () => "Example"},\n];\nconst viewMetaForRoute`);
+  vm.runInContext(identities, context);
   vm.runInContext(between(markup, 'const featureDiscovery =', '/* --- changelog dialog'), context);
   vm.runInContext(between(source, 'const PAGES =', '/* --- which kinds of finding'), context);
   /* The crumb row above a site's head, and its clicks. */
@@ -96,6 +99,47 @@ function board({saved = {}, data = {}} = {}) {
     from(){return vm.runInContext('siteFrom', context);},
   };
 }
+
+test('a new canonical view derives its common tables without sibling table edits', () => {
+  const b = board({extraView: {route: 'businesses/example', host: ['company', 'example'],
+    needs: [], section: 'secExample'}});
+  const derived = vm.runInContext(`({route: ROUTES["businesses/example"],
+    section: SEC_PAGE.secExample, item: SUBS.company.items.find(i => i[0] === "example"),
+    areas: AREAS.find(a => a.id === "businesses").views,
+    defaultRoute: HOST_ROUTES["company/example"], label: routeViewLabel("businesses/example")})`, b.context);
+  const result = JSON.parse(JSON.stringify(derived));
+  assert.deepEqual(result.route, {host: ['company', 'example'], needs: []});
+  assert.deepEqual(result.section, ['company', 'example']);
+  assert.equal(result.item[0], 'example');
+  assert.equal(result.item[2], 'secExample');
+  assert.ok(result.areas.includes('example'));
+  assert.equal(result.defaultRoute, 'businesses/example');
+  assert.equal(result.label, 'Example');
+});
+
+test('shared view identity supplies navigation, primary sections, route hosts and labels', () => {
+  const b = board();
+  const result = vm.runInContext(`VIEW_META.map(v => ({
+    route: v.route, host: v.host, needs: v.needs,
+    actualHost: ROUTES[v.route].host, actualNeeds: ROUTES[v.route].needs,
+    label: v.label(), actualLabel: routeViewLabel(v.route),
+    sectionHost: v.section ? SEC_PAGE[v.section] : null,
+    item: v.section ? SUBS[v.host[0]].items.find(i => i[0] === v.host[1]) : null,
+    defaultRoute: HOST_ROUTES[v.host.join("/")], defaultHost: v.defaultHost,
+  }))`, b.context);
+  for (const v of JSON.parse(JSON.stringify(result))) {
+    assert.deepEqual(v.actualHost, v.host, v.route);
+    assert.deepEqual(v.actualNeeds, v.needs, v.route);
+    assert.equal(v.actualLabel, v.label, v.route);
+    if (v.sectionHost) {
+      assert.deepEqual(v.sectionHost, v.host, v.route);
+      assert.equal(v.item[0], v.host[1], v.route);
+    }
+    if (v.defaultHost !== false) assert.equal(v.defaultRoute, v.route);
+  }
+  assert.equal(vm.runInContext('HOST_ROUTES.map', b.context), 'map',
+    'the finder shares Map without changing its default route');
+});
 
 /* The redesign's sidebar (docs/architecture.md, "The sidebar"): five destinations,
    then the two references, then the foot's ···. The pages behind them are

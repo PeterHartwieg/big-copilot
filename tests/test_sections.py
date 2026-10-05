@@ -54,18 +54,27 @@ class Registry(unittest.TestCase):
                 self.assertIn(need, ba_dashboard.SECTIONS, f"{name} needs an unknown section")
         self.assertEqual(len(set(ba_dashboard.PAYLOAD_KEYS)), len(ba_dashboard.PAYLOAD_KEYS))
 
-    def test_the_board_s_table_mirrors_python_s(self):
-        with open(os.path.join(ROOT, "template", "board.js"), encoding="utf-8") as fh:
-            source = fh.read()
-        block = re.search(r"^const OD_SECTIONS = \{\n(.*?)^\};", source, re.S | re.M)
-        self.assertIsNotNone(block, "OD_SECTIONS in template/board.js")
-        board = {}
-        for name, keys, needs in re.findall(
-                r'^\s+(\w+): \{keys: \[([^\]]*)\], needs: \[([^\]]*)\]\},?$', block.group(1), re.M):
-            board[name] = (re.findall(r'"(\w+)"', keys), re.findall(r'"(\w+)"', needs))
-        python = {name: (list(spec["keys"]), list(spec["needs"]))
-                  for name, spec in ba_dashboard.SECTIONS.items()}
-        self.assertEqual(board, python)
+    def test_render_generates_section_metadata_for_both_front_doors(self):
+        expected = ba_dashboard.section_metadata()
+        for site in (False, True):
+            with self.subTest(site=site):
+                page = ba_dashboard.render(None, site=site)
+                block = re.search(r"const OD_SECTIONS = (\{[^\n]+\});", page)
+                self.assertIsNotNone(block)
+                self.assertEqual(json.loads(block.group(1)), expected)
+                self.assertNotIn("/*__SECTION_META__*/", page)
+        self.assertEqual(expected, {name: {"keys": list(spec["keys"]),
+                                          "needs": list(spec["needs"])}
+                                    for name, spec in ba_dashboard.SECTIONS.items()})
+
+    def test_new_registry_entry_is_rendered_without_a_browser_edit(self):
+        spec = {"keys": ("example", "other"), "needs": ("products",),
+                "produce": lambda _: {}, "words": "Example"}
+        with unittest.mock.patch.dict(ba_dashboard.SECTIONS, example=spec):
+            page = ba_dashboard.render(None)
+        block = re.search(r"const OD_SECTIONS = (\{[^\n]+\});", page)
+        self.assertEqual(json.loads(block.group(1))["example"],
+                         {"keys": ["example", "other"], "needs": ["products"]})
 
     def test_no_warning_reads_a_section(self):
         # The core is everything the warnings need: the alert keys are core.
