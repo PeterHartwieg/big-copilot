@@ -2548,6 +2548,9 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
 .sf-card:hover .sf-beat{animation:sfbeat .7s ease-in-out infinite}
 .sf-card:hover .sf-nudge{animation:sfnudge .7s ease-in-out infinite}
 .sf-card-head{display:flex;align-items:flex-start;gap:14px;flex-grow:1;min-width:0}
+/* Dashboard cards wrap their action before squeezing the text beside it. */
+.sf-compact .sf-card{flex-wrap:wrap}
+.sf-compact .sf-card-head{flex:1 1 280px;min-width:min(100%,280px)}
 .sf-badge{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;
   background:var(--accent-soft);color:var(--accent);flex-shrink:0}
 .sf-card-copy{display:flex;flex-direction:column;gap:5px;min-width:0}
@@ -2655,6 +2658,7 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
   /* The 320px basis is a width while the cards sit in a row. Once they stack it
      becomes their height, which left a third of each card empty. */
   .sf-card{flex:0 0 auto;flex-direction:column;align-items:stretch;gap:16px}
+  .sf-compact .sf-card-head{flex-basis:auto}
   .sf-cta{width:100%}
   /* The nav keeps a box of its own rather than display:contents, which can
      drop the landmark from the accessibility tree; the switch sits under it. */

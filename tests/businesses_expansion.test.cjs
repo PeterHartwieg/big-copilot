@@ -696,4 +696,27 @@ test('board footer keeps support prominent while other links open by keyboard an
   await summary.focus(); await page.keyboard.press('Enter');
   assert.equal(await footer.locator('.sf-support').evaluate(el=>el.open),false);
   assert.ok(await support.locator('a[href*="paypal"]').isVisible());
+  // Synthetic hosted availability exercises both cards and the local-only footer.
+  const vote=footer.locator('[data-vote-card]');
+  for(const showVote of [true,false]) {
+    await vote.evaluate((el,visible)=>{el.hidden=!visible;},showVote);
+    for(const width of [320,390,641,700,800,900,950,1100,1101,1200,1280,1600]) {
+      await page.setViewportSize({width,height:900});
+      for(const card of showVote?[vote,support]:[support]) {
+        const layout=await card.evaluate(el=>{
+          const copy=el.querySelector('.sf-card-copy').getBoundingClientRect();
+          const head=el.querySelector('.sf-card-head').getBoundingClientRect();
+          const action=el.querySelector('.sf-cta').getBoundingClientRect();
+          const box=el.getBoundingClientRect();
+          return {copyWidth:copy.width,headRight:head.right,headBottom:head.bottom,
+            actionLeft:action.left,actionTop:action.top,left:box.left,right:box.right,height:box.height};
+        });
+        assert.ok(layout.copyWidth>=(width<=390?170:220),`readable text column ${layout.copyWidth}px at ${width}px, vote ${showVote}`);
+        assert.ok(layout.actionLeft>=layout.headRight-1 || layout.actionTop>=layout.headBottom-1,
+          `action does not overlap the header at ${width}px`);
+        if(width<=390) assert.ok(layout.height<260,`phone card avoids an empty vertical flex basis at ${width}px`);
+        assert.ok(layout.left>=-1 && layout.right<=width+1,`card fits at ${width}px`);
+      }
+    }
+  }
 });
