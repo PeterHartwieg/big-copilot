@@ -113,7 +113,7 @@ test('adding a product gives it a line, a typed rate reworks Supplies, and its r
     assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.dataset.pcRate), ITEM + 'umbrella');
     assert.deepEqual(JSON.parse(await page.evaluate(key => localStorage.getItem(key), KEY)), {[FLORIST]: {[ITEM + 'umbrella']: 40}});
     // The Made tile sums each line's own take: two flowers at 4,200 and the umbrella at 1,120.
-    assert.match(await page.getAttribute('#vMadeTile', 'data-tip'), /^The shops take 9,520 units a week/);
+    assert.match(await page.getAttribute('#vFootMade', 'data-tip'), /^The shops take 9,520 units a week/);
 
     // A main line still sells at the type's own rate.
     assert.match(await line(page, ITEM + 'cheapflower').locator('.covers .sub').textContent(), /shops take 4,200/);
