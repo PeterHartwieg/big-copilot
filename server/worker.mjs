@@ -75,7 +75,7 @@ export default {
   },
   async scheduled(_controller, env) {
     // A bug report folder whose issue never opened goes at the next run that finds
-    // it over an hour old, so within two days, whatever stopped the request
+    // it over an hour old, with bounded progress across runs, whatever stopped the request
     // (docs/community-features.md, "Bug reports").
     // The cleanups run side by side and each is awaited to its end, so one
     // failing never cuts the other short.
@@ -453,50 +453,94 @@ async function retried(task) {
 // could not clean up after (a delete that kept failing, or the Worker stopped
 // mid-request). An hour is far beyond any request; the 30-day lifecycle rule
 // stays the last net.
+const REPORT_SWEEP_CHECKPOINT = "_bigcopilot-report-sweep-v1.json";
+const REPORT_SWEEP_CALLS = 192;
+
 async function sweepReports(bucket, now = Date.now()) {
-  // R2 lists keys lexicographically, so a folder is complete only when the
-  // next folder begins (or listing ends). Keep its facts across page boundaries,
-  // not every report's keys. Validation and deletion retain bounded pages,
-  // even if that folder itself is large.
-  let folder = null;
-  const finish = async () => {
-    if (!folder || folder.issue || now - folder.newest <= REPORT_SWEEP_AFTER_MS) return;
-    const prefix = `${folder.name}/`;
-    const changed = (object) => object.key === `${prefix}issue.json`
-      || (new Date(object.uploaded).getTime() || now) > folder.newest;
-    // Revalidate the whole folder before deleting: a late attachment or issue
-    // marker must not be swept merely because it was absent from the first pass.
-    let cursor;
-    do {
-      const page = await bucket.list({ prefix, cursor, limit: 1000 });
-      if (page.objects.some(changed)) return;
-      cursor = page.truncated ? page.cursor : undefined;
-    } while (cursor);
-    cursor = undefined;
-    do {
-      const page = await bucket.list({ prefix, cursor, limit: 1000 });
-      // R2 has no atomic folder deletion. Recheck protection before each batch
-      // and never include an issue marker or newer object in a delete request.
-      if (page.objects.some(changed) || await bucket.head(`${prefix}issue.json`)) return;
-      if (page.objects.length) await bucket.delete(page.objects.map((object) => object.key));
-      cursor = page.truncated ? page.cursor : undefined;
-    } while (cursor);
-  };
-  let cursor;
-  do {
-    const page = await bucket.list({ cursor, limit: 1000 });
-    for (const object of page.objects) {
+  // Reserve the last call for a checkpoint, including on a failed operation.
+  let remaining = REPORT_SWEEP_CALLS - 2;
+  const saved = await bucket.get(REPORT_SWEEP_CHECKPOINT);
+  let state = { version: 1, after: "", folder: null, phase: "scan", cursor: null, end: false };
+  if (saved && saved.size <= 8192) {
+    const candidate = await saved.json();
+    if (candidate.version === 1 && typeof candidate.after === "string"
+        && candidate.after.length <= 1024 && ["scan", "validate", "delete"].includes(candidate.phase)
+        && (candidate.cursor === null || (typeof candidate.cursor === "string" && candidate.cursor.length <= 4096))
+        && typeof candidate.end === "boolean"
+        && (candidate.phase === "scan" || candidate.folder)
+        && (!candidate.folder || (typeof candidate.folder.name === "string"
+          && candidate.folder.name.length > 0 && candidate.folder.name.length <= 1024
+          && !candidate.folder.name.includes("/") && typeof candidate.folder.issue === "boolean"
+          && Number.isFinite(candidate.folder.newest)))) state = candidate;
+  }
+  const call = async (method, ...args) => { remaining--; return bucket[method](...args); };
+  const finish = () => { state.folder = null; state.phase = "scan"; state.cursor = null; };
+  let page = null, index = 0;
+  try {
+    while (remaining >= 3) {
+      if (state.phase !== "scan") {
+        const prefix = `${state.folder.name}/`;
+        const changed = object => object.key === `${prefix}issue.json`
+          || (new Date(object.uploaded).getTime() || now) > state.folder.newest;
+        const part = await call("list", { prefix, cursor: state.cursor || undefined, limit: 1000 });
+        if (part.objects.some(changed)) { finish(); continue; }
+        if (state.phase === "delete") {
+          // No atomic folder deletion: check late markers before every batch,
+          // and never delete markers or objects newer than the accepted snapshot.
+          if (await call("head", `${prefix}issue.json`)) { finish(); continue; }
+          if (part.objects.length) await call("delete", part.objects.map(object => object.key));
+        }
+        state.cursor = part.truncated ? part.cursor : null;
+        if (!part.truncated) {
+          if (state.phase === "validate") state.phase = "delete";
+          else finish();
+        }
+        continue;
+      }
+      if (state.end) {
+        // Start a new cycle next invocation. New keys behind the checkpoint
+        // are visited then; retained folders cannot starve later folders.
+        state.after = ""; state.end = false; state.cursor = null;
+        break;
+      }
+      if (!page) {
+        page = await call("list", { ...(state.cursor ? { cursor: state.cursor }
+          : { startAfter: state.after || undefined }), limit: 1000 });
+        index = 0;
+      }
+      if (index === page.objects.length) {
+        state.cursor = page.truncated ? page.cursor : null;
+        if (!page.truncated) {
+          state.end = true;
+          if (state.folder && !state.folder.issue && now - state.folder.newest > REPORT_SWEEP_AFTER_MS)
+            state.phase = "validate";
+          else finish();
+        }
+        page = null;
+        continue;
+      }
+      const object = page.objects[index];
       const cut = object.key.indexOf("/");
-      if (cut < 1) continue;
-      const name = object.key.slice(0, cut);
-      if (folder && folder.name !== name) await finish();
-      if (!folder || folder.name !== name) folder = { name, issue: false, newest: 0 };
-      folder.issue = folder.issue || object.key.slice(cut + 1) === "issue.json";
-      folder.newest = Math.max(folder.newest, new Date(object.uploaded).getTime() || now);
+      const name = cut < 1 ? null : object.key.slice(0, cut);
+      if (name && state.folder && state.folder.name !== name) {
+        if (!state.folder.issue && now - state.folder.newest > REPORT_SWEEP_AFTER_MS) {
+          state.phase = "validate"; state.cursor = null;
+        } else finish();
+        continue;
+      }
+      state.after = object.key;
+      state.cursor = null;
+      index++;
+      if (!name) continue;
+      if (!state.folder) state.folder = { name, issue: false, newest: 0 };
+      state.folder.issue ||= object.key.slice(cut + 1) === "issue.json";
+      state.folder.newest = Math.max(state.folder.newest, new Date(object.uploaded).getTime() || now);
     }
-    cursor = page.truncated ? page.cursor : undefined;
-  } while (cursor);
-  await finish();
+  } finally {
+    await bucket.put(REPORT_SWEEP_CHECKPOINT, JSON.stringify(state), {
+      httpMetadata: { contentType: "application/json" },
+    });
+  }
 }
 
 function json(data, status = 200, headers = {}) {

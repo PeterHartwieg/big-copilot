@@ -503,21 +503,28 @@ test('sweep: the daily cron removes folders whose issue never opened, and only t
 function sweepBucket(stored, {pageSize = 2, deleted = [], onList, onDelete} = {}) {
   const objects = new Map(stored.map(([key, at]) => [key, {key, uploaded: new Date(at)}]));
   const calls = [], batches = [];
+  let checkpoint = null, operations = 0;
   return {
     objects, calls, batches,
+    get operations() { return operations; },
+    get checkpoint() { return checkpoint && JSON.parse(checkpoint); },
+    async get() { operations++; return checkpoint === null ? null : {size: checkpoint.length, json: async () => JSON.parse(checkpoint)}; },
+    async put(key, value) { operations++; checkpoint = value; },
     async list(options = {}) {
+      operations++;
       calls.push({...options});
       if (onList) await onList(options, calls.length);
       assert.equal(options.limit, 1000);
-      const after = options.cursor ? Buffer.from(options.cursor, 'base64').toString() : '';
+      const after = options.cursor ? Buffer.from(options.cursor, 'base64').toString() : options.startAfter || '';
       const remaining = [...objects.values()].filter(o => o.key.startsWith(options.prefix || '') && o.key > after)
         .sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
       const page = remaining.slice(0, pageSize);
       const truncated = remaining.length > page.length;
       return {objects: page, truncated, ...(truncated ? {cursor: Buffer.from(page.at(-1).key).toString('base64')} : {})};
     },
-    async head(key) { return objects.get(key) || null; },
+    async head(key) { operations++; return objects.get(key) || null; },
     async delete(keys) {
+      operations++;
       assert.ok(keys.length > 0 && keys.length <= 1000);
       batches.push([...keys]);
       if (onDelete) await onDelete(keys, batches.length);
@@ -635,4 +642,58 @@ test('sweep: a fresh object appearing after validation is not included in a dele
   await worker.scheduled({}, {REPORTS: bucket});
   assert.ok(bucket.objects.has('a/3'));
   assert.ok(bucket.batches.every(keys => !keys.includes('a/3')));
+});
+
+
+test('sweep: fixed call budget resumes orphan backlog without restarting', async () => {
+  const old = Date.now() - 5 * 3600000;
+  const rows = Array.from({length: 500}, (_, i) => [`r${String(i).padStart(4, '0')}/save.hsg`, old]);
+  const bucket = sweepBucket(rows, {pageSize: 1000});
+  const {worker} = vmWorker(created);
+  let runs = 0;
+  while (bucket.objects.size && runs < 20) {
+    const before = bucket.operations, size = bucket.objects.size;
+    await worker.scheduled({}, {REPORTS: bucket});
+    assert.ok(bucket.operations - before <= 192, 'all R2 operations include checkpoint storage');
+    assert.ok(bucket.objects.size < size, 'every invocation advances orphan cleanup');
+    runs++;
+  }
+  assert.equal(bucket.objects.size, 0);
+  assert.ok(runs > 1);
+});
+
+test('sweep: retained backlog and a giant folder resume through bounded invocations', async () => {
+  const old = Date.now() - 5 * 3600000;
+  const rows = Array.from({length: 250}, (_, i) => [`a${String(i).padStart(4, '0')}/issue.json`, old]);
+  rows.push(...Array.from({length: 250}, (_, i) => [`z/${String(i).padStart(4, '0')}`, old]));
+  const bucket = sweepBucket(rows, {pageSize: 1});
+  const {worker} = vmWorker(created);
+  for (let run = 0; run < 20 && bucket.objects.size > 250; run++) {
+    const before = bucket.operations;
+    await worker.scheduled({}, {REPORTS: bucket});
+    assert.ok(bucket.operations - before <= 192);
+  }
+  assert.equal(bucket.objects.size, 250, 'later giant orphan cannot be starved by retained folders');
+  assert.ok([...bucket.objects.keys()].every(key => key.endsWith('/issue.json')));
+  // An object inserted behind the scan position is reached on the next cycle.
+  bucket.objects.set('000/new.hsg', {key: '000/new.hsg', uploaded: new Date(old)});
+  for (let run = 0; run < 8 && bucket.objects.has('000/new.hsg'); run++)
+    await worker.scheduled({}, {REPORTS: bucket});
+  assert.ok(!bucket.objects.has('000/new.hsg'));
+});
+
+
+test('sweep: a marker arriving during a paused validation protects the entire folder', async () => {
+  const old = Date.now() - 5 * 3600000;
+  const rows = Array.from({length: 250}, (_, i) => [`a/${String(i).padStart(4, '0')}`, old]);
+  const bucket = sweepBucket(rows, {pageSize: 1});
+  const {worker} = vmWorker(created);
+  for (let run = 0; run < 5 && bucket.checkpoint?.phase !== 'validate'; run++)
+    await worker.scheduled({}, {REPORTS: bucket});
+  assert.equal(bucket.checkpoint.phase, 'validate');
+  bucket.objects.set('a/issue.json', {key: 'a/issue.json', uploaded: new Date()});
+  bucket.objects.set('a/fresh.hsg', {key: 'a/fresh.hsg', uploaded: new Date()});
+  for (let run = 0; run < 6; run++) await worker.scheduled({}, {REPORTS: bucket});
+  assert.equal(bucket.objects.size, 252);
+  assert.equal(bucket.batches.length, 0);
 });

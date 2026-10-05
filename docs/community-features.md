@@ -84,8 +84,12 @@ open it writes `issue.json` (number and address) into the folder. If GitHub fail
 Worker deletes the folder (three tries) and answers 503, and the form points to the
 Discord support channel. The writes, the issue and the cleanup run under
 `ctx.waitUntil()`, so a closed tab does not stop them halfway. Whatever still slips
-through, the daily cron (`scheduled()`, `sweepReports()`) deletes every folder older than
-an hour that has no `issue.json`, and the 30-day lifecycle rule is the last net. The
+through, the daily cron (`scheduled()`, `sweepReports()`) visits folders older than
+an hour that have no `issue.json`. The
+sweep uses at most 192 R2 calls per invocation, including a small root checkpoint
+(`_bigcopilot-report-sweep-v1.json`) in the same bucket. Subsequent runs resume
+through retained folders and large orphan backlogs; cleanup can span multiple daily
+runs. The 30-day bucket lifecycle remains the final retention limit. The
 sweep carries one folder's newest timestamp and issue marker across list pages, then
 rechecks the complete candidate folder and deletes it in batches of at most 1,000
 keys. Newer uploads stop cleanup, and each batch checks for an issue marker again;
