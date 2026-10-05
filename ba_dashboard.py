@@ -2165,9 +2165,10 @@ class PlanningCache:
                 del self.entries[key]
                 self.bytes = remaining
             while self.entries and (len(self.entries) >= self.max_entries or self.bytes + size > self.max_bytes):
-                old_size = next(iter(self.entries.values()))[1]
+                old_key = next(iter(self.entries))
+                old_size = self.entries[old_key][1]
                 remaining = self.bytes - old_size
-                self.entries.popitem(last=False)
+                del self.entries[old_key]
                 self.bytes = remaining
             # Prepare allocating arithmetic before publishing. Each preceding
             # eviction also prepares its count before removing the entry.

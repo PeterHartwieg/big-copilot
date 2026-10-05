@@ -351,5 +351,24 @@ class PlanningCacheTests(unittest.TestCase):
         self.assertFalse(cache.entries)
         self.assertEqual(cache.bytes, 0)
 
+    def test_lru_eviction_avoids_popitem_allocation_after_removal(self):
+        class AllocationFailingPop(board.collections.OrderedDict):
+            def popitem(self, last=True):
+                super().popitem(last=last)
+                raise MemoryError('return tuple after removal')
+
+        cache = board.PlanningCache(max_entries=2)
+        cache.put('oldest', {'rows': [1]})
+        cache.put('recent', {'rows': [2]})
+        cache.get('oldest')
+        cache.entries = AllocationFailingPop(cache.entries)
+        cache.put('new', {'rows': [3]})
+        self.assertEqual(list(cache.entries), ['oldest', 'new'])
+        self.assertEqual(cache.bytes, sum(board._planning_size(value) for value, _ in cache.entries.values()))
+        cache.put('oldest', {'rows': [4, 5]})
+        self.assertEqual(list(cache.entries), ['new', 'oldest'])
+        self.assertEqual(cache.get('oldest'), {'rows': [4, 5]})
+        self.assertEqual(cache.bytes, sum(board._planning_size(value) for value, _ in cache.entries.values()))
+
 if __name__ == '__main__':
     unittest.main()
