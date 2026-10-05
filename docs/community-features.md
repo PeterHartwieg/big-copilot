@@ -86,7 +86,7 @@ Discord support channel. The writes, the issue and the cleanup run under
 `ctx.waitUntil()`, so a closed tab does not stop them halfway. Whatever still slips
 through, the daily cron (`scheduled()`, `sweepReports()`) deletes every folder older than
 an hour that has no `issue.json`, and the 30-day lifecycle rule is the last net. The
-sweep carries one folder’s newest timestamp and issue marker across list pages, then
+sweep carries one folder's newest timestamp and issue marker across list pages, then
 rechecks the complete candidate folder and deletes it in batches of at most 1,000
 keys. Newer uploads stop cleanup, and each batch checks for an issue marker again;
 issue markers are never deleted. R2 cannot make folder deletion atomic, so a later
