@@ -6,8 +6,8 @@
 // recordingDocument()'s document (below). A test that needs real events or
 // layout runs in the browser, and one that drives its own stubbed DOM
 // (tests/navigation.test.cjs) still slices (tests/_slice.cjs).
-// Section metadata comes from the assembled page, as on either front door.
-// Run assembly before using this helper (the standard npm runners do so).
+// Section metadata comes from Python's authored registry, as on either front
+// door; do not depend on the readable/optimized state of the assembled HTML.
 // What it does not provide: render() fills no other placeholder, so there is no
 // map.js or wiki.js, and D, GN_EMBED and HOOD_NAMES keep their defaults (null,
 // null, {}): set them with vm.runInContext. The stub answers `then` with itself,
@@ -20,12 +20,16 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const {execFileSync} = require('node:child_process');
 
 const ROOT = path.join(__dirname, '..');
+const SECTION_META = execFileSync(process.env.PYTHON || 'python',
+  ['-c', 'import json, ba_dashboard; print(json.dumps(ba_dashboard.section_metadata()))'],
+  {cwd: ROOT, encoding: 'utf8'}).trim();
 const SOURCE = fs.readFileSync(path.join(ROOT, 'template', 'open-store-model.js'), 'utf8') + '\n'
   + fs.readFileSync(path.join(ROOT, 'template', 'open-factory-model.js'), 'utf8') + '\n'
   + fs.readFileSync(path.join(ROOT, 'template', 'board.js'), 'utf8').replace('/*__SECTION_META__*/{}',
-    fs.readFileSync(path.join(ROOT, 'web', 'index.html'), 'utf8').match(/const OD_SECTIONS = (\{[^\n]+\});/)[1]);
+    SECTION_META);
 const I18N = fs.readFileSync(path.join(ROOT, 'web', 'i18n.js'), 'utf8');
 
 const inert = new Proxy(function(){}, {
