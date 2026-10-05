@@ -1455,11 +1455,32 @@ test('Where to find them: a role places stay open in, how many and where people 
   }, [LAW, CS]);
   // How many stay open, and that there are no candidates, is the table's to say (declutter T5, T7).
   assert.deepEqual(text, [
-    'Lawyer a Headhunter at your headquarters recruiting Lawyer, or a Recruitment Agency',
+    'Lawyer',
     'Customer Service 2 more left out by your filters your Headhunter is recruiting Customer Service: wait for more candidates, or a Recruitment Agency',
   ]);
   // Nothing short, nothing said.
   assert.equal(await page.evaluate(() => hrFindHtml({roles: []})), '');
+});
+
+test('shared recruitment advice appears once while role-specific exclusions stay visible', async t => {
+  const page = await board(t);
+  const got = await page.evaluate(([LAW, CS]) => {
+    D.hiring.recruiting = {};
+    const html = hrFindHtml({roles: [
+      {skill: LAW, short: 2, pool: [], pass: 0},
+      {skill: CS, short: 1, pool: [{}, {}], pass: 0},
+    ]});
+    const el = document.createElement('div'); el.innerHTML = html;
+    return {advice: [...el.querySelectorAll('.hs-find-advice')].map(p => p.textContent),
+      rows: [...el.querySelectorAll('li')].map(li => li.textContent)};
+  }, [LAW, CS]);
+  assert.equal(got.advice.length, 1);
+  assert.match(got.advice[0], /Lawyer and Customer Service: a/);
+  assert.match(got.advice[0], /headquarters recruiting each role, or a Recruitment Agency/);
+  assert.match(got.rows[1], /2 candidates, all left out by your filters/);
+  const single=await page.evaluate(LAW=>hrFindHtml({roles:[{skill:LAW,short:1,pool:[],pass:0}]}),LAW);
+  assert.match(single,/headquarters recruiting that role, or a/);
+  assert.doesNotMatch(single,/each role/);
 });
 
 test('a shop with no hour read is hired for the hours it opens, and the write never opens it', async (t) => {
@@ -3301,7 +3322,8 @@ test('before "hire N", the people elsewhere who fit come first, in every hiring 
 test('without a mod that hires, the full count stands and the note points at MyEmployees', async (t) => {
   const page = await board(t, {link: {writes: ['uniforms', 'imports', 'schedule'], day: 34, hour: 14}, data: giftsHiring()});
   const text = await (await siteBlock(page, G)).textContent();
-  assert.match(text, enRe('sp.ba.tohire', {n:2}));
+  assert.doesNotMatch(text, enRe('sp.ba.tohire'));
+  assert.match(text, enRe('sp.step.add', {n:2}));
   assert.match(text, textRe('co.hire.elsewhere.hand', {n:1}));
   assert.doesNotMatch(text, textRe("co.hire.elsewhere"));
 });
@@ -3512,4 +3534,19 @@ test('a hire week in a role the site takes nobody for is never planned or sent',
   assert.deepEqual(m.weeks.find(([key]) => key === G), [G, 'demand', ['move:SPARE1', 'hire:c2']]);
   assert.ok(!m.roles.some(r => r.skill === 'ba:skill_gymtrainer'));
   assert.ok(!(await request(page)).hires.some(h => h.candidateId === 'g1'));
+});
+
+test('hire count stays visible when the add prerequisite assigns only or states a different hire total', async t => {
+  for(const kind of ['assign','different']) {
+    const d=JSON.parse(giftsHiring());
+    const row=d.staffing.find(r=>r.key===G);
+    row.addPeople=kind==='assign'
+      ? {assign:[{p:0,name:'Sam',skill:CS}],hire:[],people:1,hoursUncovered:60}
+      : {assign:[],hire:[{skill:CS,role:'Customer Service',people:1}],people:1,hoursUncovered:60};
+    const page=await board(t,{link:null,data:JSON.stringify(d)});
+    const block=await siteBlock(page,G);
+    assert.equal(await block.locator('.sp-add').count(),1);
+    assert.match(await block.textContent(),enRe('sp.ba.tohire',{n:2}));
+    await page.close();
+  }
 });

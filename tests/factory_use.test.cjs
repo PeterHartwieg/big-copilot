@@ -206,3 +206,67 @@ test('an order short and a production short on one line are two separate statuse
     assert.deepEqual(chips, [MORE1, ORDER]);
   } finally { await page.close(); }
 });
+
+test('factory staffing repeats line hours only when the main line does not show identical figures', async () => {
+  const page = await board(fixture());
+  try {
+    const got = await page.evaluate(() => {
+      const line = {slug:'bread', item:'Bread', hoursNow:8, hours:12, from:0, machines:1, cuts:[[0,12]]};
+      D.factoryStaffing = {[sizing]:[{s:1, name:'Factory', headcount:{have:1}, delta:{}, lines:[line]}]};
+      const main = {s:1, slug:'bread', hoursNow:8, needHours:{[sizing]:12}, objectKey:'production|test', objectOpen:true};
+      const read = shown => {
+        const box=document.createElement('div'); box.innerHTML=drawFactoryStaffing(()=>true,shown);
+        return {hours:box.querySelector('.sb-sln .hrs').textContent.trim(), hidden:box.querySelector('.sb-sln .hrs').hidden, blocks:box.querySelector('.shifts').textContent.trim(), context:box.querySelector('.sb-hc').textContent.trim()};
+      };
+      return {same:read([main]), hidden:read([]), changed:read([{...main,hoursNow:7}]), unnamed:read([{...main,unnamed:true}]), collapsed:read([{...main,objectOpen:false}]), proposed:read([{...main,chk:[{kind:'Factory run hours',proposed:10}]}])};
+    });
+    assert.equal(got.same.hidden,true);
+    for(const state of ['hidden','changed','unnamed','collapsed','proposed']) {assert.match(got[state].hours,/12/);assert.equal(got[state].hidden,false);}
+    for(const state of Object.values(got)) {assert.match(state.blocks,/12/);assert.ok(state.context);}
+  } finally {await page.close();}
+});
+
+test('closing and reopening the factory details restores and suppresses only its echoed staffing hours', async () => {
+  const page=await board(fixture());
+  try {
+    const result=await page.evaluate(() => {
+      const line={slug:'bread',item:'Bread',hoursNow:8,hours:12,from:0,machines:1,cuts:[[0,12]]};
+      D.factoryStaffing={[sizing]:[{s:1,name:'Factory',headcount:{have:1},delta:{},lines:[line]}]};
+      const host=document.createElement('div');
+      host.innerHTML='<details data-sb-obj="production|test" open><summary>Factory</summary><div>Main line</div></details>'+drawFactoryStaffing(()=>true,[{s:1,slug:'bread',hoursNow:8,needHours:{[sizing]:12},objectKey:'production|test',objectOpen:true}]);
+      document.body.append(host);
+      const details=host.querySelector('details'), hours=host.querySelector('.hrs');
+      const initial=hours.hidden;
+      details.open=false;details.dispatchEvent(new Event('toggle'));
+      const closed=hours.hidden;
+      details.open=true;details.dispatchEvent(new Event('toggle'));
+      return {initial,closed,reopened:hours.hidden};
+    });
+    assert.deepEqual(result,{initial:true,closed:false,reopened:true});
+  } finally {await page.close();}
+});
+
+test('mixed factory staffing rows align entries on desktop without an empty hours row on mobile', async () => {
+  const page=await board(fixture());
+  try {
+    await page.evaluate(() => {
+      const lines=[{slug:'bread',item:'Bread',hoursNow:8,hours:12,from:0,machines:1,cuts:[[0,12]]},
+        {slug:'beer',item:'Beer',hoursNow:8,hours:12,from:0,machines:1,cuts:[[0,12]]}];
+      D.factoryStaffing={[sizing]:[{s:1,name:'Factory',headcount:{have:1},delta:{},lines}]};
+      document.querySelector('#secProduction').innerHTML=drawFactoryStaffing(()=>true,[{s:1,slug:'bread',hoursNow:8,needHours:{[sizing]:12},objectKey:'production|test',objectOpen:true}]);
+    });
+    const rects=()=>page.$$eval('.sb-sln',rows=>rows.map(row=>{
+      const shifts=row.querySelector('.shifts').getBoundingClientRect(),name=row.querySelector('.nm').getBoundingClientRect();
+      return {x:shifts.x,width:shifts.width,y:shifts.y,nameBottom:name.bottom,hoursDisplay:getComputedStyle(row.querySelector('.hrs')).display};
+    }));
+    const wide=await rects();
+    assert.equal(wide[0].x,wide[1].x);assert.equal(wide[0].width,wide[1].width);
+    assert.equal(wide[0].hoursDisplay,'grid');
+    await page.setViewportSize({width:560,height:1000});
+    const narrow=await rects();
+    assert.equal(narrow[0].hoursDisplay,'none');
+    const gap=narrow[0].y-narrow[0].nameBottom;
+    assert.ok(gap>=0 && gap<=9,'only the normal grid gap remains, without overlap');
+    assert.equal(narrow[0].x,narrow[1].x);assert.equal(narrow[0].width,narrow[1].width);
+  } finally {await page.close();}
+});

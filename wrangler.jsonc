@@ -77,10 +77,10 @@
     "required": ["COMMUNITY_IP_SECRET", "GITHUB_REPORT_TOKEN"]
   },
   // Daily cleanup of presence rows older than 24 hours, of votes for polls
-  // no longer in server/features.json, and of bug report folders whose issue
-  // never opened.
+  // no longer in server/features.json. Bounded report cleanup runs every minute
+  // to preserve the two-day orphan retention promise across large backlogs.
   "triggers": {
-    "crons": ["17 3 * * *"]
+    "crons": ["17 3 * * *", "* * * * *"]
   },
   // No per-request invocation logs or traces (URL, method, country): the
   // privacy notice promises none. Errors and console output from the Worker

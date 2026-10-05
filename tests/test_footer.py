@@ -13,6 +13,24 @@ from ba_dashboard import VERIFIED_BUILD, footer_html, render
 
 
 class Footer(unittest.TestCase):
+    def test_the_board_footer_groups_promotion_in_a_disclosure(self):
+        for site in (False, True):
+            board = footer_html(site=site)
+            self.assertIn('sitefoot sf-compact', board)
+            self.assertIn('<details class="sf-support">', board)
+            self.assertIn('data-theme-set="auto"', board)
+            self.assertIn('data-changelog', board)
+            self.assertIn('data-sf-feedback', board)
+            self.assertIn('data-vote-card hidden', board)
+            self.assertNotIn('sf-rule', board)
+            for label in ('Donate via PayPal', 'YouTube', 'Discord', 'Source code', 'Game link mod'):
+                self.assertIn(label, board)
+        landing = footer_html(landing=True, site=True)
+        self.assertIn('sf-rule', landing)
+        self.assertIn('sf-cards', landing)
+        self.assertNotIn('sf-compact', landing)
+        self.assertNotIn('sf-support', landing)
+
     def test_only_the_site_carries_the_legal_links(self):
         site = footer_html(site=True)
         self.assertIn('href="impressum.html"', site)
