@@ -958,14 +958,15 @@ commit of each side that is already split, and merges both files three ways with
 staged; otherwise the conflict markers are left for a human. Taking either side's
 `board.html` and splitting it again loses the other side's edits.
 
-The template carries seventeen tokens besides the slot, some in `board.html` and some in
-`board.js`. All seventeen are substituted by `render()`, but the text for three of them is
+The template carries eighteen tokens besides the slot, some in `board.html` and some in
+`board.js`. All eighteen are substituted by `render()`, but the text for three of them is
 supplied by the caller.
 
 | Token | Filled with |
 | --- | --- |
 | `__TITLE__` | `render()`: `<save name> · Big Copilot`, HTML-escaped because the save name is the player's own text; plain `Big Copilot` when there is no data |
 | `/*__DATA__*/null` | `render()`: the `extract()` payload as JSON with `</` escaped, or `null` for the browser build |
+| `/*__SECTION_META__*/{}` | `render()`, from `section_metadata()`: public keys and dependencies derived from Python `SECTIONS`, shared by hosted and CLI output |
 | `/*__LIVE__*/false` | `render()`: `true` when called with `live=True` |
 | `<!--__BANNER__-->` | `render()`'s `banner=` argument. `build_web.py` passes its `BANNER` (the landing screen); the local page passes nothing |
 | `<!--__BEFORE_SCRIPT__-->` | `render()`'s `before_script=` argument. `page_html()` passes a filled-in `BEFORE_SCRIPT`; the local page passes nothing |

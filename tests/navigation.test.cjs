@@ -62,8 +62,8 @@ function board({saved = {}, data = {}, extraView = null} = {}) {
   /* The guarded localStorage helpers, declared near the top of the script. */
   vm.runInContext(between(source, '/* localStorage, every access guarded', 'const el = '), context);
   let identities = between(source, 'const VIEW_META =', '/* The business a finding').replace(/\r\n/g, '\n');
-  if(extraView) identities = identities.replace('];\nconst viewMetaForHost',
-    `{...${JSON.stringify(extraView)}, label: () => "Example"},\n];\nconst viewMetaForHost`);
+  if(extraView) identities = identities.replace('];\nconst viewMetaForRoute',
+    `{...${JSON.stringify(extraView)}, label: () => "Example"},\n];\nconst viewMetaForRoute`);
   vm.runInContext(identities, context);
   vm.runInContext(between(markup, 'const featureDiscovery =', '/* --- changelog dialog'), context);
   vm.runInContext(between(source, 'const PAGES =', '/* --- which kinds of finding'), context);

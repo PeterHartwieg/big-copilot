@@ -3129,8 +3129,6 @@ const VIEW_META = [
   {route: "map", host: ["map"], needs: [], label: () => tt("nav.ref.map", "City map")},
   {route: "wiki", host: ["wiki"], needs: ["products"], label: () => tt("nav.ref.wiki2", "Wiki")},
 ];
-const viewMetaForHost = (host, view) => VIEW_META.find(v => v.defaultHost !== false
-  && v.host[0] === host && v.host[1] === view);
 const viewMetaForRoute = id => VIEW_META.find(v => v.route === id);
 /* Registry: "A view or a page" (primary rows from VIEW_META; secondary/legacy rows below). */
 const SEC_PAGE = {
