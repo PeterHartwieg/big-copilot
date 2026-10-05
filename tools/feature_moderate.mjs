@@ -6,7 +6,8 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 import path from 'node:path';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HELP = `Usage: node tools/feature_moderate.mjs <command> [--remote]
-  list [--limit 50]          Requests, aliases, state and public vote counts
+  list [--limit 50] [--before <list_cursor>]
+                            Requests, aliases, state and public vote counts
   hide <request-id>          Hide text and immediately delete its vote hashes
   restore <request-id>       Restore hidden text; voting starts afresh
   retire <request-id>        Close shipped/declined requests and delete vote hashes
@@ -15,6 +16,7 @@ const HELP = `Usage: node tools/feature_moderate.mjs <command> [--remote]
 Defaults to local D1; --remote explicitly selects production.
 IDs include request- and all 64 hexadecimal characters. Curated polls cannot merge.
 Merged aliases follow the surviving request. Restore does not revive retired ideas.
+To continue a list, pass the last row's list_cursor as --before.
 `;
 const key = value => {
   if (!/^request-[a-f0-9]{64}$/.test(value || '')) throw new Error('Supply a full visitor request id.');
@@ -28,15 +30,25 @@ export function moderationCommand(args) {
   let sql;
   if (action === 'list') {
     let limit = 50;
-    if (options.length) {
-      if (options.length !== 2 || options[0] !== '--limit' || !/^\d+$/.test(options[1]) || +options[1] < 1 || +options[1] > 100)
-        throw new Error('List limit must be 1–100.');
-      limit = +options[1];
+    let before = '', seen = new Set();
+    while (options.length) {
+      const option = options.shift(), value = options.shift();
+      if (seen.has(option)) throw new Error('Repeated list option.');
+      seen.add(option);
+      if (option === '--limit') {
+        if (!/^\d+$/.test(value || '') || +value < 1 || +value > 100) throw new Error('List limit must be 1–100.');
+        limit = +value;
+      } else if (option === '--before') {
+        const cursor = /^(0|[1-9][0-9]*):(request-[a-f0-9]{64})$/.exec(value || '');
+        if (!cursor || !Number.isSafeInteger(+cursor[1])) throw new Error('Use the last row’s list_cursor.');
+        before = `WHERE (r.created_at,r.id) < (${cursor[1]},'${key(cursor[2])}')`;
+      } else throw new Error('Unexpected list option.');
     }
     sql = `SELECT 'request-' || r.id AS id,r.title,r.description,r.state,
       CASE WHEN r.canonical_id IS NOT NULL THEN 'request-' || r.canonical_id END AS canonical_id,
-      r.created_at,(SELECT COUNT(*) FROM feature_request_votes v WHERE v.request_id = COALESCE(r.canonical_id,r.id)) AS votes
-      FROM feature_requests r ORDER BY r.created_at DESC,r.id DESC LIMIT ${limit}`;
+      r.created_at,r.created_at || ':request-' || r.id AS list_cursor,
+      (SELECT COUNT(*) FROM feature_request_votes v WHERE v.request_id = COALESCE(r.canonical_id,r.id)) AS votes
+      FROM feature_requests r ${before} ORDER BY r.created_at DESC,r.id DESC LIMIT ${limit}`;
   } else {
     const id = key(options.shift());
     if (action === 'merge') {

@@ -86,11 +86,17 @@ an explicit `--remote` for production. There is no public moderation route:
 
 ```sh
 node tools/feature_moderate.mjs list --limit 50
+node tools/feature_moderate.mjs list --limit 50 --before <last-row-list_cursor>
 node tools/feature_moderate.mjs hide request-<64-hex-id>
 node tools/feature_moderate.mjs restore request-<64-hex-id>
 node tools/feature_moderate.mjs retire request-<64-hex-id>
 node tools/feature_moderate.mjs merge request-<source-id> request-<target-id>
 ```
+
+List returns at most 100 records, including active, hidden and historical requests.
+Continue with the last row's `list_cursor` (creation timestamp and stable ID) as
+`--before`; records are ordered newest first, with IDs breaking timestamp ties.
+The cursor is exclusive, so later insertions do not shift subsequent pages.
 
 Hide removes inappropriate text from the public list; retire closes shipped or
 declined ideas. Both immediately delete vote hashes while retaining text and

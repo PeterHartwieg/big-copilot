@@ -308,7 +308,7 @@
       pendingVotes.add(pending); pending.finally(() => pendingVotes.delete(pending));
     });
     details.append(summary, form);
-    suggestion = {details, summary, summaryLabel, badge, form, titleLabel, descriptionLabel, titleInput, descriptionInput, notice, submit, feedback, busy: false};
+    suggestion = {details, summary, summaryLabel, badge, form, titleLabel, descriptionLabel, titleInput, descriptionInput, notice, submit, feedback, busy: false, failure: false};
     dialogText = {title, intro, close, privacy};
     labelDialog();
     body.append(statusEl, cardsEl, moreEl, details, privacy);
@@ -332,7 +332,7 @@
     dialog.showModal();
     dialog.scrollTop = 0;
     if (typeof featureDiscovery !== "undefined") featureDiscovery.visit("community-voting");
-    suggestion.details.open = false;
+    suggestion.details.open = !!suggestion.failure;
     loadFeatures();  // every open is a fresh read
   }
 
@@ -441,7 +441,7 @@
       suggestion.feedback.textContent = tt("comm.suggest.invalid", "Enter a title up to 100 characters and a description up to 1,000 characters.");
       return;
     }
-    suggestion.busy = true;
+    suggestion.busy = true; suggestion.failure = false;
     [suggestion.titleInput, suggestion.descriptionInput, suggestion.submit].forEach(control => { control.disabled = true; });
     suggestion.feedback.textContent = tt("comm.suggest.sending", "Publishing…");
     const seq = loadSeq;
@@ -456,6 +456,7 @@
       }
       const data = await res.json(), feature = parseFeature(data && data.feature);
       if (!feature || !/^request-[a-f0-9]{64}$/.test(feature.id)) throw new Error("Invalid suggestion response");
+      suggestion.failure = false;
       suggestion.form.reset(); suggestion.feedback.textContent = "";
       if (seq === loadSeq && dialog.open) {
         const existing = rows.find(row => row.id === feature.id);
@@ -465,6 +466,8 @@
         suggestion.summary.focus();
       }
     } catch (error) {
+      suggestion.failure = true;
+      suggestion.details.open = true;
       suggestion.feedback.textContent = failureText || tt("comm.suggest.error", "Could not publish this idea. Check the text and try again; retrying will not add another vote.");
     } finally {
       suggestion.busy = false;

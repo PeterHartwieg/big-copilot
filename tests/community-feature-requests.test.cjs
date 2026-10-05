@@ -136,6 +136,25 @@ test('requests: operator commands stay local by default and reject curated merge
 });
 
 
+test('requests: operator keyset pages reach older active and hidden requests beyond 100',async () => {
+  const records=Array.from({length:137},(_,i)=>({id:i.toString(16).padStart(64,'0'),created:Math.floor(i/7),state:i%2?'hidden':'active'}));
+  await db.batch(records.map(row=>db.prepare('INSERT INTO feature_requests(id,title,description,created_at,state) VALUES(?1,?2,?3,?4,?5)')
+    .bind(row.id,'Synthetic '+row.id,'Example.',row.created,row.state)));
+  const first=await all(moderationCommand(['list','--limit','100']).sql);
+  assert.equal(first.length,100);
+  // A new arrival must not move an older record between continuation pages.
+  await db.prepare('INSERT INTO feature_requests(id,title,description,created_at) VALUES(?1,?2,?3,?4)')
+    .bind('f'.repeat(64),'New arrival','Example.',99).run();
+  const second=await all(moderationCommand(['list','--before',first.at(-1).list_cursor,'--limit','100']).sql);
+  assert.equal(second.length,37);
+  assert.deepEqual([...first,...second].map(row=>row.id),records.toReversed().map(row=>'request-'+row.id));
+  assert.ok(second.some(row=>row.state==='hidden')); assert.ok(second.some(row=>row.state==='active'));
+  assert.deepEqual(await all(moderationCommand(['list','--before',second.at(-1).list_cursor]).sql),[]);
+  for (const cursor of ['1:x',"1:request-"+'a'.repeat(64)+"';DELETE",'9007199254740992:request-'+'a'.repeat(64)])
+    assert.throws(()=>moderationCommand(['list','--before',cursor]));
+  await moderate('restore',second.find(row=>row.state==='hidden').id);
+});
+
 test('requests: a failed submission transaction rolls back text and vote together',async () => {
   await db.prepare("CREATE TRIGGER synthetic_vote_failure BEFORE INSERT ON feature_request_votes BEGIN SELECT RAISE(ABORT,'synthetic failure'); END;").run();
   try {

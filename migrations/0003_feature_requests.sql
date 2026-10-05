@@ -10,6 +10,7 @@ CREATE TABLE feature_requests (
 );
 CREATE INDEX feature_requests_public_idx ON feature_requests(state, id);
 CREATE INDEX feature_requests_alias_idx ON feature_requests(canonical_id);
+CREATE INDEX feature_requests_moderation_idx ON feature_requests(created_at, id);
 CREATE TABLE feature_request_votes (
   request_id TEXT NOT NULL REFERENCES feature_requests(id),
   voter_hash TEXT NOT NULL,

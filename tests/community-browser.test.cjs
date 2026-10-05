@@ -468,3 +468,32 @@ test('visitor requests: reopening during publication waits for mutation and merg
   assert.equal(await dialog.getByText('Surviving idea',{exact:true}).count(),1);
   assert.equal(await dialog.locator('.community-vote').isDisabled(),true);
 });
+
+
+test('visitor requests: a held publication failure stays visible after reopen and list refresh',async t => {
+  const {page,state}=await setup(t); state.features=[];
+  const dialog=await openVotes(page);
+  await dialog.getByText(en('comm.empty'),{exact:true}).waitFor();
+  let release; state.holdSuggest=new Promise(resolve=>{release=resolve;}); t.after(()=>release());
+  state.failSuggest=true;
+  await dialog.locator('summary').click();
+  await dialog.locator('#communitySuggestionTitle').fill('Retry after reopen');
+  await dialog.locator('#communitySuggestionDescription').fill('Text stays available.');
+  const sent=page.waitForRequest('**/api/community/suggest');
+  await dialog.locator('form button[type=submit]').click(); await sent;
+  await page.keyboard.press('Escape'); await openVotes(page);
+  release();
+  await dialog.getByText(en('comm.empty'),{exact:true}).waitFor();
+  assert.equal(state.reads,2);
+  assert.equal(await dialog.getByText(/Could not publish this idea/).isVisible(),true);
+  assert.equal(await dialog.locator('#communitySuggestionTitle').inputValue(),'Retry after reopen');
+  assert.equal(await dialog.locator('#communitySuggestionDescription').inputValue(),'Text stays available.');
+  assert.equal(await dialog.locator('form button[type=submit]').isEnabled(),true);
+  await page.keyboard.press('Escape'); await openVotes(page);
+  await dialog.getByText(en('comm.empty'),{exact:true}).waitFor();
+  assert.equal(await dialog.getByText(/Could not publish this idea/).isVisible(),true);
+  state.failSuggest=false; state.holdSuggest=null;
+  await dialog.locator('form button[type=submit]').click();
+  await dialog.getByText('Retry after reopen',{exact:true}).waitFor();
+  assert.deepEqual(state.suggestions[0],state.suggestions[1]);
+});
