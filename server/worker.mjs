@@ -454,7 +454,34 @@ async function retried(task) {
 // mid-request). An hour is far beyond any request; the 30-day lifecycle rule
 // stays the last net.
 async function sweepReports(bucket, now = Date.now()) {
-  const folders = new Map();
+  // R2 lists keys lexicographically, so a folder is complete only when the
+  // next folder begins (or listing ends). Keep its facts across page boundaries,
+  // not every report's keys. Validation and deletion retain bounded pages,
+  // even if that folder itself is large.
+  let folder = null;
+  const finish = async () => {
+    if (!folder || folder.issue || now - folder.newest <= REPORT_SWEEP_AFTER_MS) return;
+    const prefix = `${folder.name}/`;
+    const changed = (object) => object.key === `${prefix}issue.json`
+      || (new Date(object.uploaded).getTime() || now) > folder.newest;
+    // Revalidate the whole folder before deleting: a late attachment or issue
+    // marker must not be swept merely because it was absent from the first pass.
+    let cursor;
+    do {
+      const page = await bucket.list({ prefix, cursor, limit: 1000 });
+      if (page.objects.some(changed)) return;
+      cursor = page.truncated ? page.cursor : undefined;
+    } while (cursor);
+    cursor = undefined;
+    do {
+      const page = await bucket.list({ prefix, cursor, limit: 1000 });
+      // R2 has no atomic folder deletion. Recheck protection before each batch
+      // and never include an issue marker or newer object in a delete request.
+      if (page.objects.some(changed) || await bucket.head(`${prefix}issue.json`)) return;
+      if (page.objects.length) await bucket.delete(page.objects.map((object) => object.key));
+      cursor = page.truncated ? page.cursor : undefined;
+    } while (cursor);
+  };
   let cursor;
   do {
     const page = await bucket.list({ cursor, limit: 1000 });
@@ -462,17 +489,14 @@ async function sweepReports(bucket, now = Date.now()) {
       const cut = object.key.indexOf("/");
       if (cut < 1) continue;
       const name = object.key.slice(0, cut);
-      const folder = folders.get(name) || { keys: [], issue: false, newest: 0 };
-      folder.keys.push(object.key);
+      if (folder && folder.name !== name) await finish();
+      if (!folder || folder.name !== name) folder = { name, issue: false, newest: 0 };
       folder.issue = folder.issue || object.key.slice(cut + 1) === "issue.json";
       folder.newest = Math.max(folder.newest, new Date(object.uploaded).getTime() || now);
-      folders.set(name, folder);
     }
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor);
-  const stale = [...folders.values()].filter((f) => !f.issue && now - f.newest > REPORT_SWEEP_AFTER_MS)
-    .flatMap((f) => f.keys);
-  for (let i = 0; i < stale.length; i += 1000) await bucket.delete(stale.slice(i, i + 1000));
+  await finish();
 }
 
 function json(data, status = 200, headers = {}) {

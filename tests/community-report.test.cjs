@@ -484,22 +484,155 @@ test('sweep: the daily cron removes folders whose issue never opened, and only t
     ['2026-10-02-c/report.json', now - 60 * 1000], ['2026-10-02-c/save.hsg', now - 60 * 1000],
   ];
   const deleted = [];
-  const bucket = {
-    // Two pages, as a large bucket answers.
-    list: async ({cursor}) => {
-      const from = cursor ? Number(cursor) : 0;
-      const page = stored.slice(from, from + 4).map(([key, at]) => ({key, uploaded: new Date(at)}));
-      return {objects: page, truncated: from + 4 < stored.length, cursor: String(from + 4)};
-    },
-    delete: async (keys) => { deleted.push(...keys); },
-  };
+  const bucket = sweepBucket(stored, {pageSize: 4, deleted});
   const {worker} = vmWorker(created);
   await worker.scheduled({}, {REPORTS: bucket});
   assert.deepEqual(deleted.sort(), ['2026-10-01-b/report.json', '2026-10-01-b/save.hsg']);
   // A failing D1 cleanup still waits for the sweep to finish, then fails the run.
   deleted.length = 0;
-  const slow = Object.assign({}, bucket, {list: async (opts) => { await new Promise((r) => setTimeout(r, 30)); return bucket.list(opts); }});
+  const again = sweepBucket(stored, {pageSize: 4, deleted});
+  const slow = {...again, list: async (opts) => { await new Promise((r) => setTimeout(r, 30)); return again.list(opts); }};
   const db = {prepare: () => ({bind() { return this; }}), batch: async () => { throw new Error('d1 down'); }};
   await assert.rejects(worker.scheduled({}, {REPORTS: slow, COMMUNITY_DB: db}), /d1 down/);
   assert.deepEqual(deleted.sort(), ['2026-10-01-b/report.json', '2026-10-01-b/save.hsg']);
+});
+
+
+// An opaque continuation token names the last returned key, not an array
+// offset: deletions between pages must not make the synthetic R2 skip objects.
+function sweepBucket(stored, {pageSize = 2, deleted = [], onList, onDelete} = {}) {
+  const objects = new Map(stored.map(([key, at]) => [key, {key, uploaded: new Date(at)}]));
+  const calls = [], batches = [];
+  return {
+    objects, calls, batches,
+    async list(options = {}) {
+      calls.push({...options});
+      if (onList) await onList(options, calls.length);
+      assert.equal(options.limit, 1000);
+      const after = options.cursor ? Buffer.from(options.cursor, 'base64').toString() : '';
+      const remaining = [...objects.values()].filter(o => o.key.startsWith(options.prefix || '') && o.key > after)
+        .sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+      const page = remaining.slice(0, pageSize);
+      const truncated = remaining.length > page.length;
+      return {objects: page, truncated, ...(truncated ? {cursor: Buffer.from(page.at(-1).key).toString('base64')} : {})};
+    },
+    async head(key) { return objects.get(key) || null; },
+    async delete(keys) {
+      assert.ok(keys.length > 0 && keys.length <= 1000);
+      batches.push([...keys]);
+      if (onDelete) await onDelete(keys, batches.length);
+      for (const key of keys) { objects.delete(key); deleted.push(key); }
+    },
+  };
+}
+
+test('sweep: complete folder facts survive short pages, late markers and a recent last object', async () => {
+  const now = Date.now(), hour = 3600000, old = now - 5 * hour;
+  const rows = [
+    ['a/details.json', old], ['a/report.json', old], ['a/save.hsg', old],
+    ['b/aaa.json', old], ['b/issue.json', old], ['b/save.hsg', old],
+    ['c/details.json', old], ['c/report.json', old], ['c/save.hsg', now - 1000],
+    ['d/report.json', old], ['d/save.hsg', old], ['standalone', old],
+  ];
+  const bucket = sweepBucket(rows, {pageSize: 1});
+  const {worker} = vmWorker(created);
+  await worker.scheduled({}, {REPORTS: bucket});
+  assert.deepEqual([...bucket.objects.keys()].sort(), rows.map(([key]) => key).filter(key => !key.startsWith('a/') && !key.startsWith('d/')).sort());
+  assert.ok(bucket.calls.some(call => call.prefix === 'a/'));
+  assert.ok(!bucket.calls.some(call => call.prefix === 'b/' || call.prefix === 'c/'), 'protected folders never enter the deletion pass');
+});
+
+test('sweep: deletion is bounded and starts before the whole bucket has been accumulated', async () => {
+  const old = Date.now() - 5 * 3600000;
+  const rows = Array.from({length: 2105}, (_, i) => ['a/' + String(i).padStart(5, '0'), old]);
+  rows.push(['b/report.json', old], ['c/issue.json', old], ['c/save.hsg', old]);
+  const retained = Array.from({length: 2000}, (_, i) => ['z' + String(i).padStart(5, '0') + '/issue.json', old]);
+  rows.push(...retained);
+  let bucket;
+  bucket = sweepBucket(rows, {pageSize: 1000, onDelete: () => {
+    assert.equal(bucket.calls.filter(call => !call.prefix).length, 3, 'deletion begins before listing the remaining thousands of folders');
+  }});
+  const {worker} = vmWorker(created);
+  await worker.scheduled({}, {REPORTS: bucket});
+  assert.deepEqual([...bucket.objects.keys()].sort(), ['c/issue.json', 'c/save.hsg', ...retained.map(([key]) => key)]);
+  assert.deepEqual(bucket.batches.map(keys => keys.length), [1000, 1000, 105, 1]);
+});
+
+test('sweep: an interrupted folder scan deletes none of that folder and a retry sees its marker', async () => {
+  const old = Date.now() - 5 * 3600000;
+  let fail = true;
+  const bucket = sweepBucket([['a/aaa.json', old], ['a/issue.json', old], ['a/save.hsg', old]], {
+    pageSize: 1, onList: options => { if (fail && options.cursor) throw new Error('list down'); },
+  });
+  const {worker} = vmWorker(created);
+  await assert.rejects(worker.scheduled({}, {REPORTS: bucket}), /list down/);
+  assert.equal(bucket.batches.length, 0);
+  fail = false;
+  await worker.scheduled({}, {REPORTS: bucket});
+  assert.equal(bucket.objects.size, 3);
+  assert.equal(bucket.batches.length, 0);
+});
+
+test('sweep: after a partial delete failure the next cron finishes only unmarked stale folders', async () => {
+  const old = Date.now() - 5 * 3600000;
+  let fail = true;
+  const bucket = sweepBucket([['a/1', old], ['a/2', old], ['a/3', old], ['b/issue.json', old], ['b/save.hsg', old]], {
+    pageSize: 1, onDelete: (_keys, number) => { if (fail && number === 2) throw new Error('delete down'); },
+  });
+  const {worker} = vmWorker(created);
+  await assert.rejects(worker.scheduled({}, {REPORTS: bucket}), /delete down/);
+  assert.deepEqual([...bucket.objects.keys()].sort(), ['a/2', 'a/3', 'b/issue.json', 'b/save.hsg']);
+  fail = false;
+  await worker.scheduled({}, {REPORTS: bucket});
+  assert.deepEqual([...bucket.objects.keys()].sort(), ['b/issue.json', 'b/save.hsg']);
+});
+
+
+test('sweep: fresh attachments and new issue markers between passes protect the folder', async () => {
+  for (const added of ['save.hsg', 'issue.json']) {
+    const old = Date.now() - 5 * 3600000;
+    let bucket, mutated = false;
+    bucket = sweepBucket([['a/report.json', old], ['b/issue.json', old]], {
+      pageSize: 1, onList: options => {
+        if (options.prefix === 'a/' && !mutated) {
+          mutated = true;
+          bucket.objects.set('a/' + added, {key: 'a/' + added, uploaded: new Date()});
+        }
+      },
+    });
+    const {worker} = vmWorker(created);
+    await worker.scheduled({}, {REPORTS: bucket});
+    assert.equal(mutated, true);
+    assert.ok(bucket.objects.has('a/report.json'));
+    assert.ok(bucket.objects.has('a/' + added));
+    assert.equal(bucket.batches.length, 0);
+  }
+});
+
+test('sweep: a marker appearing after validation protects subsequent batches and is never deleted', async () => {
+  const old = Date.now() - 5 * 3600000;
+  let bucket;
+  bucket = sweepBucket([['a/1', old], ['a/2', old], ['a/3', old], ['b/issue.json', old]], {
+    pageSize: 1, onDelete: (_keys, number) => {
+      if (number === 1) bucket.objects.set('a/issue.json', {key: 'a/issue.json', uploaded: new Date()});
+    },
+  });
+  const {worker} = vmWorker(created);
+  await worker.scheduled({}, {REPORTS: bucket});
+  assert.deepEqual([...bucket.objects.keys()].sort(), ['a/2', 'a/3', 'a/issue.json', 'b/issue.json']);
+  assert.equal(bucket.batches.length, 1);
+});
+
+test('sweep: a fresh object appearing after validation is not included in a delete batch', async () => {
+  const old = Date.now() - 5 * 3600000;
+  let bucket;
+  bucket = sweepBucket([['a/1', old], ['a/2', old], ['b/issue.json', old]], {
+    pageSize: 1, onDelete: (_keys, number) => {
+      if (number === 1) bucket.objects.set('a/3', {key: 'a/3', uploaded: new Date()});
+    },
+  });
+  const {worker} = vmWorker(created);
+  await worker.scheduled({}, {REPORTS: bucket});
+  assert.ok(bucket.objects.has('a/3'));
+  assert.ok(bucket.batches.every(keys => !keys.includes('a/3')));
 });
