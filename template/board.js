@@ -410,17 +410,7 @@ function takeData(raw){
    English payload and localised as the board was (odTake()), never taken in
    as a new board: no history, no board count, no progress-check turn of its
    own. A section is asked for once per board; a newer board asks again. */
-const OD_SECTIONS = {
-  staffing: {keys: ["staffing"], needs: []},
-  officeStaffing: {keys: ["officeStaffing"], needs: ["staffing"]},
-  factoryStaffing: {keys: ["factoryStaffing"], needs: ["officeStaffing"]},
-  hiring: {keys: ["hiring", "candidates"], needs: ["factoryStaffing"]},
-  premises: {keys: ["premises"], needs: []},
-  products: {keys: ["products"], needs: []},
-  openStore: {keys: ["openStore"], needs: ["premises"]},
-  openFactory: {keys: ["openFactory"], needs: []},
-  goals: {keys: ["goals"], needs: []},
-};
+const OD_SECTIONS = /*__SECTION_META__*/{};
 /* The build's generation, which web/app.js puts on the data it hands over. */
 const OD_GEN = Symbol.for("bigcopilot.build");
 /* Each section asked for on this board: {gen, state: "loading" | "error", error}. */
@@ -3111,31 +3101,55 @@ const ALERT_SITE_PICK = findingKindsWith("sitePick");
 /* Which page, and which view on it, each section lives on. A finding's link
    opens that page first, then scrolls; the reader never lands on a hidden
    section. */
-/* Registry: "A view or a page" (docs/architecture.md, Registries). A new view
-   needs its section markup (class "sec rv", an id starting sec, and data-sub),
-   SUBS, SEC_PAGE, PAGE_DRAWS and SS_VIEWS; for its route also ROUTES, AREAS
-   (the area's views) and routeViewLabel(), and HOST_ROUTES if a host view shows
-   it by default. The checklist has the only-if rows. */
+/* Registry: "A view or a page" (docs/architecture.md, Registries). Author
+   shared identity in VIEW_META; navigation labels/items, primary SEC_PAGE
+   rows, area views, route identity and HOST_ROUTES derive from it. Keep
+   markup, draw rows, search entries, aliases and route hooks explicit. */
+/* Shared canonical view identity: host, primary section, lazy dependencies
+   and translated navigation label. Route hooks, legacy aliases, secondary
+   sections, draw rows and search entries retain their distinct behavior. */
+const VIEW_META = [
+  {route: "overview", host: ["today"], needs: ["staffing"], label: () => tt("nav.area.overview", "Overview")},
+  {route: "businesses/results", host: ["company", "results"], needs: [], section: "secDaily", label: () => tt("nav.view.results", "Results")},
+  {route: "businesses/prices", host: ["company", "products"], needs: ["products"], section: "secProducts", label: () => tt("nav.view.prices", "Products & prices")},
+  {route: "businesses/standards", host: ["company", "standards"], needs: [], section: "secStandards", label: () => tt("nav.view.standards", "Standards")},
+  {route: "businesses/milestones", host: ["company", "milestones"], needs: ["goals"], section: "secGoals", label: () => tt("nav.view.milestones", "Milestones")},
+  {route: "supply/changes", host: ["supply", "changes"], needs: [], section: "secChanges", label: () => tt("nav.view.changes", "Changes")},
+  {route: "supply/imports", host: ["supply", "imports"], needs: [], section: "secImports", label: () => tt("nav.view.imports", "Imports")},
+  {route: "supply/deliveries", host: ["supply", "deliveries"], needs: [], section: "secDeliveries", label: () => tt("nav.view.deliveries", "Deliveries")},
+  {route: "supply/production", host: ["supply", "production"], needs: ["factoryStaffing"], section: "secProduction", label: () => tt("nav.view.production", "Production")},
+  {route: "supply/flow", host: ["supply", "flow"], needs: [], section: "secFlow", label: () => tt("nav.view.flow", "Goods flow")},
+  {route: "staffing/schedules", host: ["staffing", "schedules"], needs: ["hiring"], section: "secSchedules", label: () => tt("nav.view.schedules", "Schedules")},
+  {route: "staffing/needs", host: ["staffing", "needs"], needs: ["hiring"], section: "secStaff", label: () => tt("nav.view.needs", "Staff needs")},
+  {route: "staffing/payroll", host: ["staffing", "payroll"], needs: [], section: "secPayroll", label: () => tt("nav.view.payroll", "Payroll")},
+  {route: "expansion/demand", host: ["growth", "market"], needs: [], section: "secMarket", label: () => tt("nav.view.demand", "Demand")},
+  {route: "expansion/finder", host: ["map"], needs: ["premises"], defaultHost: false, label: () => tt("nav.view.finder", "Find a location")},
+  {route: "expansion/open", host: ["growth", "open"], needs: ["openStore"], section: "secOpen", label: () => tt("nav.view.open", "Open a store")},
+  {route: "expansion/factory", host: ["growth", "plan"], needs: ["openFactory", "openStore"], section: "secPlan", label: () => tt("nav.view.factory", "Plan a factory")},
+  {route: "map", host: ["map"], needs: [], label: () => tt("nav.ref.map", "City map")},
+  {route: "wiki", host: ["wiki"], needs: ["products"], label: () => tt("nav.ref.wiki2", "Wiki")},
+];
+const viewMetaForHost = (host, view) => VIEW_META.find(v => v.defaultHost !== false
+  && v.host[0] === host && v.host[1] === view);
+const viewMetaForRoute = id => VIEW_META.find(v => v.route === id);
+/* Registry: "A view or a page" (primary rows from VIEW_META; secondary/legacy rows below). */
 const SEC_PAGE = {
+  ...Object.fromEntries(VIEW_META.filter(v => v.section).map(v => [v.section, v.host])),
   alertSection:["today"], secMoves:["today"],
   /* secRhythm was Weekly rhythm, folded into Daily result's By weekday: an
      old link to it still opens Results, and reveal() lands it on the chart. */
-  secDaily:["company","results"], secRhythm:["company","results"],
+  secRhythm:["company","results"],
   secPortfolio:["company","results"], secDetail:["company","results"],
-  secChanges:["supply","changes"], secImports:["supply","imports"], secDeliveries:["supply","deliveries"],
-  secProduction:["supply","production"], secFlow:["supply","flow"],
   /* The R13 tabs, and Supply's Orders and Checks before them: an old link
      opens the view that took their place. */
   secShops:["supply","deliveries"], secWarehouses:["supply","imports"], secFactories:["supply","production"],
   secLogistics:["supply","imports"], secStock:["supply","deliveries"], sbStrip:["supply","changes"],
-  secMarket:["growth","market"], secOpen:["growth","open"], secPlan:["growth","plan"], secIngredients:["growth","plan"], secPlanFlow:["growth","plan"],  // changed for growth: no secExpand
-  secProducts:["company","products"], secPrices:["company","products"], secStandards:["company","standards"],
-  secGoals:["company","milestones"],
+  secIngredients:["growth","plan"], secPlanFlow:["growth","plan"],
+  secPrices:["company","products"],
   /* Staffing: the schedules, the staff needs (main's Staff page, issue #89,
      is their hiring half) and Payroll, which moved from Company. The old
      #secPayroll link opens Payroll; #secStaff opens Staff needs. */
-  secSchedules:["staffing","schedules"], secNeeds:["staffing","needs"], secStaff:["staffing","needs"],
-  secPayroll:["staffing","payroll"],
+  secNeeds:["staffing","needs"],
 };
 /* Sections that have gone, and the section that took their place. */
 /* Registry: "A view or a page" (only if: see the checklist). */
@@ -17843,35 +17857,26 @@ const PAGE_ALIASES = {results: ["company", "results"]};
    pages do with numbers asks first. */
 const hasData = () => typeof D !== "undefined" && !!D;
 /* The views of each page. */
-/* Registry: "A view or a page" (docs/architecture.md, Registries). A new view
-   needs its section markup (class "sec rv", an id starting sec, and data-sub),
-   SUBS, SEC_PAGE, PAGE_DRAWS and SS_VIEWS; for its route also ROUTES, AREAS
-   (the area's views) and routeViewLabel(), and HOST_ROUTES if a host view shows
-   it by default. The checklist has the only-if rows. */
+/* Registry: "A view or a page" (docs/architecture.md, Registries). Author
+   shared identity in VIEW_META; navigation labels/items, primary SEC_PAGE
+   rows, area views, route identity and HOST_ROUTES derive from it. Keep
+   markup, draw rows, search entries, aliases and route hooks explicit. */
+const navItems = host => VIEW_META.filter(v => v.host[0] === host && v.section)
+  .map(v => navView(v.host[1], v.label, v.section));
+/* Registry: "A view or a page" (navigation items from VIEW_META; host settings below). */
 const SUBS = {
   company: {host:"pageCompany", nav:"companyNav", key:"ba_dash_company", start:"results",
-            items:[navView("results", () => tt("nav.view.results", "Results"), "secDaily"),
-                   navView("products", () => tt("nav.view.prices", "Products & prices"), "secProducts"),
-                   navView("standards", () => tt("nav.view.standards", "Standards"), "secStandards"),
-                   navView("milestones", () => tt("nav.view.milestones", "Milestones"), "secGoals")]},
+            items:navItems("company")},
   /* Supply's five task views (chunk 2 of the redesign); shops, warehouses
      and factories are each view's scope (sbScope). The goods-flow picture
      follows Goods flow (sbShown()). */
   supply: {host:"pageSupply", nav:"supplyNav", key:"ba_dash_supply", start:"changes",
-           items:[navView("changes", () => tt("nav.view.changes", "Changes"), "secChanges"),
-                  navView("imports", () => tt("nav.view.imports", "Imports"), "secImports"),
-                  navView("deliveries", () => tt("nav.view.deliveries", "Deliveries"), "secDeliveries"),
-                  navView("production", () => tt("nav.view.production", "Production"), "secProduction"),
-                  navView("flow", () => tt("nav.view.flow", "Goods flow"), "secFlow")],
+           items:navItems("supply"),
            shown: k => { if(typeof sbShown === "function") sbShown(k); }},
   staffing: {host:"pageStaffing", nav:"staffingNav", key:"ba_dash_staffing", start:"schedules",
-             items:[navView("schedules", () => tt("nav.view.schedules", "Schedules"), "secSchedules"),
-                    navView("needs", () => tt("nav.view.needs", "Staff needs"), "secStaff"),
-                    navView("payroll", () => tt("nav.view.payroll", "Payroll"), "secPayroll")]},
+             items:navItems("staffing")},
   growth: {host:"pageGrowth", nav:"growthNav", key:"ba_dash_growth", start:"market",
-           items:[navView("market", () => tt("nav.view.demand", "Demand"), "secMarket"),
-                  navView("open", () => tt("nav.view.open", "Open a store"), "secOpen"),
-                  navView("plan", () => tt("nav.view.factory", "Plan a factory"), "secPlan")]},
+           items:navItems("growth")},
 };
 const PAGE_KEY = "ba_dash_page";
 let page = "today";
@@ -17910,28 +17915,26 @@ Object.entries(SUBS).forEach(([id, sv]) => {
 const AREAS = [
   {id:"overview", icon:"today", get label(){ return tt("nav.area.overview", "Overview"); }},
   {id:"businesses", icon:"company", get label(){ return tt("nav.area.businesses", "Businesses"); },
-   views:["results", "prices", "standards", "milestones"], start:"results"},
+   views:VIEW_META.filter(v => v.route.startsWith("businesses/")).map(v => v.route.split("/")[1]), start:"results"},
   {id:"supply", icon:"supply", get label(){ return tt("nav.area.supply", "Supply"); },
-   views:["changes", "imports", "deliveries", "production", "flow"], start:"changes"},
+   views:VIEW_META.filter(v => v.route.startsWith("supply/")).map(v => v.route.split("/")[1]), start:"changes"},
   {id:"staffing", icon:"people", get label(){ return tt("nav.area.staffing", "Staffing"); },
-   views:["schedules", "needs", "payroll"], start:"schedules"},
+   views:VIEW_META.filter(v => v.route.startsWith("staffing/")).map(v => v.route.split("/")[1]), start:"schedules"},
   {id:"expansion", icon:"growth", get label(){ return tt("nav.area.expansion", "Expansion"); },
-   views:["demand", "finder", "open", "factory"], start:"demand"},
+   views:VIEW_META.filter(v => v.route.startsWith("expansion/")).map(v => v.route.split("/")[1]), start:"demand"},
 ];
 const REFS = [
   {id:"map", icon:"map", newFeature:"map", get label(){ return tt("nav.ref.map", "City map"); }},
   ...(typeof showWikiRoute === "function" ? [{id:"wiki", icon:"wiki", newFeature:"wiki", get label(){ return tt("nav.ref.wiki2", "Wiki"); }}] : []),
 ];
-/* Registry: "A view or a page" (docs/architecture.md, Registries). A new view
-   needs its section markup (class "sec rv", an id starting sec, and data-sub),
-   SUBS, SEC_PAGE, PAGE_DRAWS and SS_VIEWS; for its route also ROUTES, AREAS
-   (the area's views) and routeViewLabel(), and HOST_ROUTES if a host view shows
-   it by default. The checklist has the only-if rows. */
-const ROUTES = {
-  "overview": {needs: ["staffing"], host: ["today"]},
+/* Registry: "A view or a page" (docs/architecture.md, Registries). Author
+   shared identity in VIEW_META; navigation labels/items, primary SEC_PAGE
+   rows, area views, route identity and HOST_ROUTES derive from it. Keep
+   markup, draw rows, search entries, aliases and route hooks explicit. */
+const ROUTE_BEHAVIOR = {
   /* The portfolio is one table on two views: Standards shows its
      Operations comparison, and Results gets back the view it had before. */
-  "businesses/results": {needs: [], host: ["company", "results"], enter(){
+  "businesses/results": {enter(){
     const more = $("portMore"), label = $("portMoreLabel");
     if(more) more.open = true; if(label) label.hidden = true;
     if(typeof view !== "undefined" && routeStdWas !== null){
@@ -17939,7 +17942,7 @@ const ROUTES = {
     routeStdWas = null; sortKey = null; if(hasData()) drawPortfolio(); } }},
   /* The shop whose prices are on screen: a task's or the reader's, kept on
      the history entry (nxPrice), so Back, Forward and a reload give it back. */
-  "businesses/prices": {needs: ["products"], host: ["company", "products"], after(o){
+  "businesses/prices": {after(o){
     if(typeof drawPriceShops !== "function" || !hasData()) return;
     const kept = o.historyMode && o.historyMode !== "push" ? (routeState().nxPrice || {}).pick : null;
     if(o.pick || kept) bzPriceLit = o.pick || kept;
@@ -17947,22 +17950,21 @@ const ROUTES = {
     if(typeof wireAll === "function") wireAll();
   }},
   /* The portfolio's Operations comparison is the Standards view's body. */
-  "businesses/standards": {needs: [], host: ["company", "standards"], enter(){
+  "businesses/standards": {enter(){
     const more = $("portMore"), label = $("portMoreLabel");
     if(more) more.open = false; if(label) label.hidden = false;
     if(typeof view !== "undefined" && view !== "ops"){
     routeStdWas = view; view = "ops"; sortKey = null; if(hasData()) drawPortfolio(); } }},
-  "businesses/milestones": {needs: ["goals"], host: ["company", "milestones"]},
   /* Supply's five views. Back, Forward and a reload give a view back its
      scope, Needs a change / Everything, the reviewed import and the followed
      site from the entry (nxSb); a new visit keeps what this visit last had. */
-  "supply/changes": {needs: [], host: ["supply", "changes"], enter: routeSupplyEnter, after: routeSupplyAfter},
-  "supply/imports": {needs: [], host: ["supply", "imports"], enter: routeSupplyEnter, after: routeSupplyAfter},
-  "supply/deliveries": {needs: [], host: ["supply", "deliveries"], enter: routeSupplyEnter, after: routeSupplyAfter},
-  "supply/production": {needs: ["factoryStaffing"], host: ["supply", "production"], enter: routeSupplyEnter, after: routeSupplyAfter},
-  "supply/flow": {needs: [], host: ["supply", "flow"], enter: routeSupplyEnter, after: routeSupplyAfter},
+  "supply/changes": {enter: routeSupplyEnter, after: routeSupplyAfter},
+  "supply/imports": {enter: routeSupplyEnter, after: routeSupplyAfter},
+  "supply/deliveries": {enter: routeSupplyEnter, after: routeSupplyAfter},
+  "supply/production": {enter: routeSupplyEnter, after: routeSupplyAfter},
+  "supply/flow": {enter: routeSupplyEnter, after: routeSupplyAfter},
   /* A task or the search may name the shop; the list lights it. */
-  "staffing/schedules": {needs: ["hiring"], host: ["staffing", "schedules"], after(o){
+  "staffing/schedules": {after(o){
     if(typeof schedPick !== "function") return;
     const was = o.historyMode && o.historyMode !== "push" ? routeState().nxSch || {} : {};
     const kept = was.pick || null;
@@ -17973,49 +17975,44 @@ const ROUTES = {
     if(typeof wireAll === "function") wireAll();
     if(o.into === "#sp-roster" && typeof settleScroll === "function") settleScroll($("sp-roster") || $("schDetail"));
   }},
-  "staffing/needs": {needs: ["hiring"], host: ["staffing", "needs"]},
-  "staffing/payroll": {needs: [], host: ["staffing", "payroll"]},
   /* Back from Find a location (or a reload) comes back to the cell that
      asked, kept on the entry (nxDem): its row ringed and the cell focused. */
-  "expansion/demand": {needs: [], host: ["growth", "market"], after(o){
+  "expansion/demand": {after(o){
     const kept = o.historyMode && o.historyMode !== "push" ? routeState().nxDem : null;
     if(kept && typeof demArrive === "function" && hasData()) demArrive(kept);
   }},
   /* The finder is a mode of the City map's page (web/map.js). */
   /* A task or a Demand cell asks a question (a preset); Back, Forward, a
      reload or the area's own row come back to the finder as it was left. */
-  "expansion/finder": {needs: ["premises"], host: ["map"], after(o){
+  "expansion/finder": {after(o){
     if(o.preset && typeof openFinder === "function") openFinder(o.preset, !!o.focus);
     else if(typeof showFinder === "function") showFinder(o.historyMode || "push");
     if(typeof cityMapPage !== "undefined" && cityMapPage) cityMapPage.ready.then(() => drawFinderCtx()); }},
   /* A Demand cell's "Open a store here" starts a plan for its type and
      neighbourhood (o.osType, o.osHood); any visit marks the view's New badge seen. */
-  "expansion/open": {needs: ["openStore"], host: ["growth", "open"], after(o){
+  "expansion/open": {after(o){
     featureDiscovery.visit("open-store");
     if(o.osType && typeof osStart === "function" && hasData()) osStart(o.osType, o.osHood || null);
   }},
   /* Any visit marks the view's New badge seen (the factory flow, #172). */
-  "expansion/factory": {needs: ["openFactory", "openStore"], host: ["growth", "plan"], after(){ featureDiscovery.visit("factory-flow"); }},
+  "expansion/factory": {after(){ featureDiscovery.visit("factory-flow"); }},
   /* The map as the reader left it: with the finder on, that is Find a
      location, and the address says so (routeFor()). */
   /* The City map is the plain map: reached with the finder on (the
      masthead, Back from Find a location) it switches the finder off. Find a
      location is its own route, and Back moves between the two. */
-  "map": {needs: [], host: ["map"], after(){
+  "map": {after(){
     if(routeFinderOn()){ cityMapPage.fs.on = false; cityMapPage.deselect(); cityMapPage.saveFinder(); cityMapPage.update(); }
     routeSync(); if(typeof drawFinderCtx === "function") drawFinderCtx(); }},
-  "wiki": {needs: ["products"], host: ["wiki"]},
 };
+/* Registry: "A view or a page" (identity from VIEW_META; hooks from ROUTE_BEHAVIOR). */
+const ROUTES = Object.fromEntries(VIEW_META.map(v => [v.route,
+  {host: v.host, needs: v.needs, ...ROUTE_BEHAVIOR[v.route]}]));
 /* The route a host page and view shows when nothing more precise was asked
    for: a finding, a search or the reader's own click on a scope tab. */
 /* Registry: "A view or a page" (only if: see the checklist). */
-const HOST_ROUTES = {today: "overview", map: "map", wiki: "wiki",
-  "company/results": "businesses/results", "company/products": "businesses/prices",
-  "company/standards": "businesses/standards", "company/milestones": "businesses/milestones",
-  "supply/changes": "supply/changes", "supply/imports": "supply/imports", "supply/deliveries": "supply/deliveries",
-  "supply/production": "supply/production", "supply/flow": "supply/flow",
-  "staffing/schedules": "staffing/schedules", "staffing/needs": "staffing/needs", "staffing/payroll": "staffing/payroll",
-  "growth/market": "expansion/demand", "growth/open": "expansion/open", "growth/plan": "expansion/factory"};
+const HOST_ROUTES = Object.fromEntries(VIEW_META.filter(v => v.defaultHost !== false)
+  .map(v => [v.host.join("/"), v.route]));
 const ROUTE_KEY = "ba_dash_route";
 /* The portfolio's view before Standards switched it to Operations. */
 let routeStdWas = null;
@@ -18036,29 +18033,10 @@ const areaLast = {};
 const routeArea = id => id === "overview" || id === "map" || id === "wiki" ? id : String(id).split("/")[0];
 /* The words of each view, for the area's row, a crumb and the arrival strip. */
 function routeViewLabel(id){
-  switch(id){
-    case "overview": return tt("nav.area.overview", "Overview");
-    case "businesses/results": return tt("nav.view.results", "Results");
-    case "businesses/prices": return tt("nav.view.prices", "Products & prices");
-    case "businesses/standards": return tt("nav.view.standards", "Standards");
-    case "businesses/milestones": return tt("nav.view.milestones", "Milestones");
-    case "supply/changes": return tt("nav.view.changes", "Changes");
-    case "supply/imports": return tt("nav.view.imports", "Imports");
-    case "supply/deliveries": return tt("nav.view.deliveries", "Deliveries");
-    case "supply/production": return tt("nav.view.production", "Production");
-    case "supply/flow": return tt("nav.view.flow", "Goods flow");
-    case "staffing/schedules": return tt("nav.view.schedules", "Schedules");
-    case "staffing/needs": return tt("nav.view.needs", "Staff needs");
-    case "staffing/payroll": return tt("nav.view.payroll", "Payroll");
-    case "expansion/demand": return tt("nav.view.demand", "Demand");
-    case "expansion/finder": return tt("nav.view.finder", "Find a location");
-    case "expansion/open": return tt("nav.view.open", "Open a store");
-    case "expansion/factory": return tt("nav.view.factory", "Plan a factory");
-    case "map": return tt("nav.ref.map", "City map");
-    case "wiki": return tt("nav.ref.wiki2", "Wiki");
-    default: return id;
-  }
+  const v = viewMetaForRoute(id);
+  return v ? v.label() : id;
 }
+
 /* "Supply › Imports": where a route is, in the words on screen. */
 function routePath(id){
   const a = AREAS.find(x => x.id === routeArea(id));
@@ -18201,11 +18179,10 @@ function drawWikiSections(){
   if(odHidden || page !== "wiki"){ odWanted = true; return; }
   wikiVisit();
 }
-/* Registry: "A view or a page" (docs/architecture.md, Registries). A new view
-   needs its section markup (class "sec rv", an id starting sec, and data-sub),
-   SUBS, SEC_PAGE, PAGE_DRAWS and SS_VIEWS; for its route also ROUTES, AREAS
-   (the area's views) and routeViewLabel(), and HOST_ROUTES if a host view shows
-   it by default. The checklist has the only-if rows. */
+/* Registry: "A view or a page" (docs/architecture.md, Registries). Author
+   shared identity in VIEW_META; navigation labels/items, primary SEC_PAGE
+   rows, area views, route identity and HOST_ROUTES derive from it. Keep
+   markup, draw rows, search entries, aliases and route hooks explicit. */
 const PAGE_DRAWS = [
   ["today", () => drawKpis(), null, []], ["today", () => drawAlerts(), null, []], ["today", () => drawTools(), null, []],
   ["company/results", () => drawChart(), null, []], ["company/results", () => drawFinance(), null, []], ["company/results company/standards", () => drawPortfolio(), null, []],
@@ -20078,11 +20055,10 @@ const ssWorst = rows => rows.map(r => SS_SEV[r.level] || "opp")
    hand, next to what they name: `need` is false for what works without a save,
    and `each`, where one view answers for several things, gives one entry per
    thing (its own id, line and go) in place of the view's single one. */
-/* Registry: "A view or a page" (docs/architecture.md, Registries). A new view
-   needs its section markup (class "sec rv", an id starting sec, and data-sub),
-   SUBS, SEC_PAGE, PAGE_DRAWS and SS_VIEWS; for its route also ROUTES, AREAS
-   (the area's views) and routeViewLabel(), and HOST_ROUTES if a host view shows
-   it by default. The checklist has the only-if rows. */
+/* Registry: "A view or a page" (docs/architecture.md, Registries). Author
+   shared identity in VIEW_META; navigation labels/items, primary SEC_PAGE
+   rows, area views, route identity and HOST_ROUTES derive from it. Keep
+   markup, draw rows, search entries, aliases and route hooks explicit. */
 const SS_VIEWS = [
   {id: "alerts", get t(){ return tt("nav.search.alerts.title", "Needs attention"); },
    get p(){ return tt("nav.search.alerts.line", "Overview"); }, ic: "today", syn: ["problems", "alerts", "warnings", "findings", "to do", "today"],
@@ -21963,7 +21939,7 @@ function planDraw(){
           tt("gr.ing.pausedNTip", "Also sits on paused contracts; never counted as ordered"))}` : ""}</td>` +
       `<td class="chg">${gap === null ? "—"
         : ordered === null ? chipHtml("warn", `+${fmtN(gap)}`, tt("gr.ing.newTip", "No contract yet, so this is the whole order to place"))
-        : Math.abs(gap) < 1 ? "" 
+        : Math.abs(gap) < 1 ? ""
         : gap > 0 ? chipHtml("warn", `+${num(Math.ceil(gap))}`)
         : chipHtml("dim", num(Math.floor(gap)))}</td>` +
       `<td class="cash">${value === null ? `<span class="quiet">${tt("gr.ing.noPrice", "no price")}</span>` : fmt(value)}</td></tr>`;

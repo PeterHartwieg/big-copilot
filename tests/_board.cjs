@@ -6,7 +6,9 @@
 // recordingDocument()'s document (below). A test that needs real events or
 // layout runs in the browser, and one that drives its own stubbed DOM
 // (tests/navigation.test.cjs) still slices (tests/_slice.cjs).
-// What it does not provide: render() fills no placeholder, so there is no
+// Section metadata comes from the assembled page, as on either front door.
+// Run assembly before using this helper (the standard npm runners do so).
+// What it does not provide: render() fills no other placeholder, so there is no
 // map.js or wiki.js, and D, GN_EMBED and HOOD_NAMES keep their defaults (null,
 // null, {}): set them with vm.runInContext. The stub answers `then` with itself,
 // so awaiting anything that reaches it never settles, and `instanceof` against
@@ -22,7 +24,8 @@ const vm = require('node:vm');
 const ROOT = path.join(__dirname, '..');
 const SOURCE = fs.readFileSync(path.join(ROOT, 'template', 'open-store-model.js'), 'utf8') + '\n'
   + fs.readFileSync(path.join(ROOT, 'template', 'open-factory-model.js'), 'utf8') + '\n'
-  + fs.readFileSync(path.join(ROOT, 'template', 'board.js'), 'utf8');
+  + fs.readFileSync(path.join(ROOT, 'template', 'board.js'), 'utf8').replace('/*__SECTION_META__*/{}',
+    fs.readFileSync(path.join(ROOT, 'web', 'index.html'), 'utf8').match(/const OD_SECTIONS = (\{[^\n]+\});/)[1]);
 const I18N = fs.readFileSync(path.join(ROOT, 'web', 'i18n.js'), 'utf8');
 
 const inert = new Proxy(function(){}, {
