@@ -5,7 +5,7 @@
 // web/ -- web/worker.js is the existing in-browser Python worker.
 
 import FEATURES from "./features.json";
-import {isRequestId, listRequests, voteRequest, suggestRequest, cleanupRequestVotes} from "./feature_requests.mjs";
+import {isRequestId, listRequests, voteRequest, suggestRequest, cleanupRequestVotes, cleanupRequestText} from "./feature_requests.mjs";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Pseudo IPv4 "overwrite headers" mode fills CF-Connecting-IP with a 240.0.0.0/4
@@ -45,7 +45,7 @@ const REPORT_SWEEP_AFTER_MS = 60 * 60 * 1000;
 
 // Presence has its own, tighter limiter: a real tab sends one heartbeat every five
 // minutes, so a loop of fresh browser ids cannot inflate the online count on the
-// budget meant for voting. Every other community route shares COMMUNITY_LIMITER.
+// budget meant for voting. Suggestions have a small separate budget; other routes share COMMUNITY_LIMITER.
 // A bug report has a budget of its own, needs no D1 but the R2 bucket and the
 // GitHub token, and reads its own multipart body.
 const routes = {
@@ -56,7 +56,7 @@ const routes = {
   "/api/translations/vote": { operation: "translations", method: "POST", write: true, handler: translations },
   "/api/community/presence": { operation: "presence", method: "POST", write: true, handler: presence, limiter: "PRESENCE_LIMITER" },
   "/api/community/vote": { operation: "vote", method: "POST", write: true, handler: vote },
-  "/api/community/suggest": { operation: "features", method: "POST", write: true, handler: suggest, maxBodyBytes: 8192 },
+  "/api/community/suggest": { operation: "features", method: "POST", write: true, handler: suggest, maxBodyBytes: 8192, limiter: "SUGGEST_LIMITER" },
   "/api/community/features": { operation: "features", method: "GET", write: false, handler: features },
   "/api/report": {
     operation: "report", method: "POST", write: false, handler: report, limiter: "REPORT_LIMITER",
@@ -99,6 +99,7 @@ export default {
           ? db.prepare(`DELETE FROM community_votes WHERE feature_id NOT IN (${FEATURES.map((_, i) => `?${i + 1}`).join(", ")})`).bind(...FEATURES.map((f) => f.id))
           : db.prepare("DELETE FROM community_votes"),
         cleanupRequestVotes(db),
+        cleanupRequestText(db, Math.floor(Date.now() / 1000)),
       ]))() : null,
     ]);
     const failed = results.find((r) => r.status === "rejected");

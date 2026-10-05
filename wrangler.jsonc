@@ -40,9 +40,15 @@
   // IPs never reach D1 or responses. Not a global enforcement promise. Presence
   // heartbeats have their own budget (a real tab sends one every five minutes);
   // bug reports have a small one of their own, a burst guard and not a daily
-  // cap (it counts per minute and per Cloudflare location); every other route
+  // cap (it counts per minute and per Cloudflare location); visitor suggestions
+  // also have a separate small budget. Every other route
   // shares COMMUNITY_LIMITER.
   "ratelimits": [
+    {
+      "name": "SUGGEST_LIMITER",
+      "namespace_id": "1004",
+      "simple": { "limit": 3, "period": 60 }
+    },
     {
       "name": "COMMUNITY_LIMITER",
       "namespace_id": "1001",

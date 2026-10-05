@@ -43,3 +43,6 @@ body:has(.community-dialog[open]){overflow:hidden}
 .community-suggestion-notice{margin:0 0 5px;color:var(--ink-2);font-size:12px;line-height:1.6}
 .community-suggestion .btn2{align-self:flex-start}
 .community-suggestion :is(input,textarea,summary):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+/* A field under 16px makes a phone browser zoom on focus. */
+@media(max-width:640px){.community-suggestion :is(input,textarea){font-size:16px}}

@@ -6,11 +6,11 @@ const path = require('node:path');
 const {pathToFileURL} = require('node:url');
 const {Miniflare,convertV4MiniflareOptions} = require('miniflare');
 const ROOT = path.resolve(__dirname,'..');
-let mf,db,moderationCommand,workerScript,ipSeq = 1;
+let mf,db,moderationCommand,moderationOutcome,workerScript,ipSeq = 1;
 const ip = () => `10.77.${Math.floor(++ipSeq/250)}.${ipSeq%250+1}`;
 const migrations = ['0001_community.sql','0003_feature_requests.sql'];
 before(async () => {
-  ({moderationCommand} = await import(pathToFileURL(path.join(ROOT,'tools/feature_moderate.mjs'))));
+  ({moderationCommand,moderationOutcome} = await import(pathToFileURL(path.join(ROOT,'tools/feature_moderate.mjs'))));
   const built = await require('esbuild').build({stdin:{resolveDir:ROOT,contents:`
     import worker from './server/worker.mjs';
     export default {...worker, async fetch(request,env,ctx) {
@@ -23,7 +23,8 @@ before(async () => {
   mf = new Miniflare(convertV4MiniflareOptions({modules:true,script:built.outputFiles[0].text,
     compatibilityDate:'2026-09-01',d1Databases:['COMMUNITY_DB'],
     bindings:{COMMUNITY_IP_SECRET:'synthetic-request-secret'},
-    ratelimits:{COMMUNITY_LIMITER:{namespace_id:'1001',simple:{limit:120,period:60}}}}));
+    // Database concurrency tests isolate SQL behavior; rate limiting has its own worker below.
+    ratelimits:{COMMUNITY_LIMITER:{namespace_id:'1001',simple:{limit:120,period:60}},SUGGEST_LIMITER:{namespace_id:'1004',simple:{limit:10000,period:60}}}}));
   await mf.ready; db = await mf.getD1Database('COMMUNITY_DB');
   for (const file of migrations) {
     const raw = fs.readFileSync(path.join(ROOT,'migrations',file),'utf8');
@@ -155,6 +156,86 @@ test('requests: operator keyset pages reach older active and hidden requests bey
   await moderate('restore',second.find(row=>row.state==='hidden').id);
 });
 
+test('requests: operator mutations use exact IDs and report unmatched alias/missing states',async () => {
+  const alias=await suggest('Listed alias','Synthetic.'),survivor=await suggest('Public survivor','Synthetic.'),other=await suggest('Other public idea','Synthetic.');
+  await moderate('merge',alias.id,survivor.id);
+  const before=await all('SELECT * FROM feature_request_votes ORDER BY request_id,voter_hash');
+  for (const args of [['hide',alias.id],['retire',alias.id],['restore',alias.id],['merge',alias.id,other.id]]) {
+    const command=moderationCommand(args), rows=await all(command.sql), states=await all(command.inspectSql);
+    const outcome=moderationOutcome(command,rows,states);
+    assert.equal(outcome.exitCode,1); assert.deepEqual(outcome.unchanged,[{id:alias.id,state:'merged'}]);
+    assert.deepEqual(await all('SELECT * FROM feature_request_votes ORDER BY request_id,voter_hash'),before);
+  }
+  await assert.rejects(moderate('merge',other.id,alias.id),/merge requires/);
+  const missing='request-'+'e'.repeat(64),command=moderationCommand(['hide',alias.id,other.id,missing]);
+  const outcome=moderationOutcome(command,await all(command.sql),await all(command.inspectSql));
+  assert.equal(outcome.exitCode,1); assert.equal(outcome.changed[0].id,other.id);
+  assert.deepEqual(outcome.unchanged,[{id:alias.id,state:'merged'},{id:missing,state:'missing'}]);
+  assert.equal((await send('vote',{featureId:survivor.id})).status,200);
+});
+
+test('requests: CLI captures Wrangler JSON and exits nonzero with unmatched state',() => {
+  const os=require('node:os'), {spawnSync}=require('node:child_process');
+  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'synthetic-feature-moderation-'));
+  const fixture=path.join(directory,'wrangler-fixture.mjs'),id='a'.repeat(64);
+  // Only the Wrangler subprocess is stubbed. The real CLI parses the JSON,
+  // builds its inspection query, prints requested IDs/states and chooses exit status.
+  fs.writeFileSync(fixture,`import childProcess from 'node:child_process';
+    import {syncBuiltinESMExports} from 'node:module';
+    let calls=0;
+    childProcess.spawnSync=(_exe,args)=>{
+      if(!args.includes('--local') || args.includes('--remote')) throw Error('fixture must stay local');
+      return {status:0,stderr:'',stdout:JSON.stringify([{success:true,results:++calls===1?[]:[{id:'${id}',state:'merged'}]}])};
+    }; syncBuiltinESMExports();`);
+  try {
+    const result=spawnSync(process.execPath,['--import',pathToFileURL(fixture).href,path.join(ROOT,'tools/feature_moderate.mjs'),'hide','request-'+id],
+      {cwd:ROOT,encoding:'utf8',env:process.env});
+    assert.equal(result.status,1,result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout).unchanged,[{id:'request-'+id,state:'merged'}]);
+    assert.match(result.stderr,/No change/);
+  } finally { fs.unlinkSync(fixture); fs.rmdirSync(directory); }
+});
+
+test('requests: atomic active cap allows duplicate retries and bulk moderation frees capacity',async () => {
+  const first=await suggest('At capacity','Synthetic.');
+  await db.batch(Array.from({length:998},(_,i)=>db.prepare('INSERT INTO feature_requests(id,title,description,created_at,state_changed_at) VALUES(?1,?2,?3,?4,?4)')
+    .bind(i.toString(16).padStart(64,'0'),'Capacity '+i,'Synthetic.',Math.floor(Date.now()/1000))));
+  const attempts=await Promise.all(Array.from({length:8},(_,i)=>send('suggest',{title:'Contender '+i,description:'Synthetic.'})));
+  assert.equal(attempts.filter(res=>res.status===200).length,1);
+  for (const res of attempts.filter(res=>res.status!==200)) {assert.equal(res.status,503);assert.equal((await res.json()).error,'Request list full');}
+  assert.equal((await all("SELECT COUNT(*) AS n FROM feature_requests WHERE state='active'"))[0].n,1000);
+  assert.equal((await send('suggest',{title:'At capacity',description:'Synthetic.'})).status,200);
+  await moderate('hide',first.id,'request-'+'0'.repeat(64));
+  assert.equal((await all("SELECT COUNT(*) AS n FROM feature_requests WHERE state='hidden'"))[0].n,2);
+  assert.equal((await send('suggest',{title:'Space after moderation',description:'Synthetic.'})).status,200);
+  await moderate('restore',first.id);
+  await assert.rejects(moderate('restore','request-'+'0'.repeat(64)),/active request limit/);
+  assert.throws(()=>moderationCommand(['hide',...Array(101).fill(first.id)]));
+});
+
+test('requests: purge cascades aliases and votes but alias-only purge preserves survivor',async () => {
+  const a=await suggest('Erase alias','Synthetic.'),b=await suggest('Keep survivor','Synthetic.'),c=await suggest('Another alias','Synthetic.');
+  await moderate('merge',a.id,b.id); await moderate('merge',c.id,b.id);
+  await moderate('purge',a.id);
+  assert.equal((await all('SELECT * FROM feature_requests')).length,2);
+  assert.equal((await send('vote',{featureId:b.id})).status,200);
+  await moderate('purge',b.id);
+  assert.deepEqual(await all('SELECT * FROM feature_requests'),[]);
+  assert.deepEqual(await all('SELECT * FROM feature_request_votes'),[]);
+  assert.equal((await suggest('Erase alias','Synthetic.')).votes,1);
+});
+
+test('requests: daily text retention ages closure and preserves active or recently closed records',async () => {
+  const active=await suggest('Remain active','Synthetic.'),hidden=await suggest('Closed hidden','Synthetic.'),retired=await suggest('Closed retired','Synthetic.'),merged=await suggest('Closed alias','Synthetic.'),recent=await suggest('Recent closure','Synthetic.');
+  await moderate('hide',hidden.id); await moderate('retire',retired.id); await moderate('merge',merged.id,active.id); await moderate('hide',recent.id);
+  const now=Math.floor(Date.now()/1000);
+  assert.ok((await all("SELECT state_changed_at FROM feature_requests WHERE id='"+recent.id.slice(8)+"'"))[0].state_changed_at>=now-5);
+  await db.batch([active,hidden,retired,merged].map(row=>db.prepare('UPDATE feature_requests SET created_at=?1,state_changed_at=?1 WHERE id=?2').bind(now-30*86400,row.id.slice(8))));
+  assert.equal((await mf.dispatchFetch('https://requests.example/__schedule')).status,200);
+  assert.deepEqual((await all('SELECT id FROM feature_requests ORDER BY id')).map(row=>row.id),[active.id.slice(8),recent.id.slice(8)].sort());
+  assert.equal((await send('vote',{featureId:active.id})).status,200);
+});
+
 test('requests: a failed submission transaction rolls back text and vote together',async () => {
   await db.prepare("CREATE TRIGGER synthetic_vote_failure BEFORE INSERT ON feature_request_votes BEGIN SELECT RAISE(ABORT,'synthetic failure'); END;").run();
   try {
@@ -174,10 +255,10 @@ test('requests: opposing concurrent merges cannot create an alias cycle or doubl
 });
 
 
-test('requests: the shared connection limiter refuses submissions before another database write',async () => {
+test('requests: the dedicated connection limiter refuses submissions before another database write',async () => {
   const limited=new Miniflare(convertV4MiniflareOptions({modules:true,script:workerScript,compatibilityDate:'2026-09-01',
     d1Databases:['COMMUNITY_DB'],bindings:{COMMUNITY_IP_SECRET:'synthetic-limited-secret'},
-    ratelimits:{COMMUNITY_LIMITER:{namespace_id:'1001',simple:{limit:1,period:60}}}}));
+    ratelimits:{COMMUNITY_LIMITER:{namespace_id:'1001',simple:{limit:120,period:60}},SUGGEST_LIMITER:{namespace_id:'1004',simple:{limit:1,period:60}}}}));
   try {
     await limited.ready; const database=await limited.getD1Database('COMMUNITY_DB');
     for(const file of migrations) for(const statement of fs.readFileSync(path.join(ROOT,'migrations',file),'utf8')

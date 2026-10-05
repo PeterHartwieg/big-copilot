@@ -88,22 +88,48 @@ an explicit `--remote` for production. There is no public moderation route:
 node tools/feature_moderate.mjs list --limit 50
 node tools/feature_moderate.mjs list --limit 50 --before <last-row-list_cursor>
 node tools/feature_moderate.mjs hide request-<64-hex-id>
+node tools/feature_moderate.mjs hide request-<first-id> request-<second-id>
 node tools/feature_moderate.mjs restore request-<64-hex-id>
 node tools/feature_moderate.mjs retire request-<64-hex-id>
 node tools/feature_moderate.mjs merge request-<source-id> request-<target-id>
+node tools/feature_moderate.mjs purge request-<64-hex-id>
 ```
 
 List returns at most 100 records, including active, hidden and historical requests.
 Continue with the last row's `list_cursor` (creation timestamp and stable ID) as
 `--before`; records are ordered newest first, with IDs breaking timestamp ties.
-The cursor is exclusive, so later insertions do not shift subsequent pages.
+All operator mutations use the exact listed ID. A merged alias cannot hide,
+retire, restore or merge its surviving idea; use that idea's own ID. Mutations
+report changed and unchanged IDs with their current state; unmatched IDs produce
+a nonzero exit status, including partially matched bulk commands.
+The cursor is exclusive, so later insertions do not shift subsequent pages. Bulk
+hide accepts up to 100 validated visitor IDs in one atomic UPDATE.
+
+Publishing has a separate best-effort limit of three requests per minute per IP
+at each Cloudflare location (`SUGGEST_LIMITER`, namespace 1004). The database also
+atomically caps active requests at 1,000 across all connections. A full list
+returns 503 with `Request list full`; voting and duplicate submission retries
+still work at capacity. Rate limits return 429 with `Retry-After: 60`. Both messages
+keep the typed text available for retry. Curated polls do not consume this cap.
+Restoration also checks the active cap; operators must free space first when full.
 
 Hide removes inappropriate text from the public list; retire closes shipped or
 declined ideas. Both immediately delete vote hashes while retaining text and
-history for moderation. Restore republishes only hidden text and starts voting
+history temporarily for moderation. Restore republishes only hidden text and starts voting
 with no retained votes; it cannot revive a retired idea. Daily cleanup additionally
 removes any inactive request vote records, preserving all active stored requests
 and curated options, so the published one-day closed-poll retention is unchanged.
+Active public ideas remain until moderated. Daily cleanup removes hidden, retired
+and merged records within 30 days of the state change, starting at age 29 days to
+allow for the daily schedule. Removing a canonical record also erases its aliases
+and votes. Removing an old merged alias leaves its active survivor intact.
+
+`purge` immediately and permanently deletes the exact requested record, its
+aliases and votes, for example when text accidentally contains private data.
+Purging a merged alias does not purge its survivor. Purge and scheduled removal
+end that record's retry identity: the same text can then be submitted as a fresh
+idea and starts fresh votes. Restore is available only before hidden text is
+removed. There is no public deletion endpoint.
 
 Merge requires two distinct active visitor requests. A single database UPDATE and
 SQLite triggers atomically union their votes, remove source vote rows and flatten
@@ -208,8 +234,9 @@ The browser Python worker is still `web/worker.js`. The server entry point is
 API requests; the existing assets continue to be served directly. D1 holds the
 presence, curated votes, visitor requests and request votes. Cloudflare rate-limit bindings limit requests per IP at
 each edge location: heartbeats have their own budget of 20 a minute
-(`PRESENCE_LIMITER`), since a real tab sends one every five minutes. Listing,
-votes and suggestions share 120 a minute (`COMMUNITY_LIMITER`). Neither is a global identity or
+(`PRESENCE_LIMITER`), since a real tab sends one every five minutes. Listing
+and votes share 120 a minute (`COMMUNITY_LIMITER`); publishing suggestions has its
+own three-a-minute budget. Neither is a global identity or
 fraud-prevention guarantee.
 
 Install the pinned development dependencies with `npm ci`. For local development:

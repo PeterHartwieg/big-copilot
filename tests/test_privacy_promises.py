@@ -152,11 +152,17 @@ class PrivacyPromises(unittest.TestCase):
         self.assertIn("suggested titles and descriptions appear publicly", notice)
         self.assertIn("shared only across visitor feature requests", notice)
         self.assertIn("Restoring hidden text starts voting afresh", notice)
+        self.assertIn("within 30 days", notice)
+        self.assertIn("permanently erase", notice)
         worker = (ROOT / "server" / "worker.mjs").read_text(encoding="utf-8")
         self.assertIn("cleanupRequestVotes(db)", worker)
+        self.assertIn("cleanupRequestText(db,", worker)
         migration = (ROOT / "migrations" / "0003_feature_requests.sql").read_text(encoding="utf-8")
         self.assertIn("WHEN NEW.state IN ('hidden','retired')", migration)
         self.assertIn("DELETE FROM feature_request_votes WHERE request_id = NEW.id", migration)
+        self.assertIn("ON DELETE CASCADE", migration)
+        module = (ROOT / "server" / "feature_requests.mjs").read_text(encoding="utf-8")
+        self.assertIn("now - 29 * 86400", module)
 
 
 if __name__ == "__main__":

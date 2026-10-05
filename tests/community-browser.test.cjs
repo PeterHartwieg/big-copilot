@@ -12,7 +12,7 @@ after(async () => { await browser?.close(); });
 async function setup(t, options = {}) {
   const context = await browser.newContext({viewport:{width:options.width || 1280, height:900}, reducedMotion:'reduce'});
   t.after(() => context.close());
-  const state = {heartbeats:[], reads:0, votes:[], count:40, failPresence:false, failVotes:false, holdPresence:null,holdVote:null, suggestions:[],failSuggest:false,holdSuggest:null,pageSize:null,voteCanonical:null,
+  const state = {heartbeats:[], reads:0, votes:[], count:40, failPresence:false, failVotes:false, holdPresence:null,holdVote:null, suggestions:[],failSuggest:false,holdSuggest:null,pageSize:null,voteCanonical:null,fullSuggestions:false,
     features:[
       {id:'optimize-staffing',title:'Optimize staffing',description:'Shifts from the hour grid.',votes:0,voted:false},
       {id:'find-a-location',title:'Find a location',description:'Compare available buildings.',votes:0,voted:false},
@@ -25,6 +25,7 @@ async function setup(t, options = {}) {
       terminate(){}
     };
     if(options.blockStorage) Object.defineProperty(window, 'localStorage', {get(){throw Error('Storage blocked');}});
+    if(options.seenVoting && location.hostname === 'community.test') localStorage.setItem('ba_dash_feature_seen:community-voting','1');
     if(options.fullStorage) Storage.prototype.setItem = function(){throw Error('Quota exceeded');};
     if(options.legacyState && location.hostname === 'community.test') localStorage.setItem('ba_community_state', JSON.stringify({browserId:'00000000-0000-4000-8000-000000000000',nextDue:Date.now()+300000}));
   }, options);
@@ -54,6 +55,7 @@ async function setup(t, options = {}) {
       const body = request.postDataJSON(); state.suggestions.push(body);
       if(state.holdSuggest) await state.holdSuggest;
       if(state.failSuggest) return json({error:'Unavailable'},503);
+      if(state.fullSuggestions) return json({error:'Request list full'},503);
       let feature = state.features.find(feature => feature.title === body.title && feature.description === body.description);
       if(!feature) { feature = {id:'request-'+'a'.repeat(64),...body,votes:1,voted:true}; state.features.push(feature); }
       return json({feature});
@@ -323,9 +325,8 @@ test('voting fetches on demand, prevents duplicates and uses the mutation result
   await openVotes(page);
   await page.waitForFunction(() => document.querySelectorAll('dialog[open] button.community-vote[disabled]').length === 2);
   assert.equal(state.reads,2);
-  // The landing's footer and the board's both carry the badge under one id, so
-  // voting has to clear every copy, not just the one on screen.
-  assert.equal(await page.locator('[data-new-feature="community-voting"]:not([hidden])').count(),0);
+  // Opening voting alone does not dismiss discovery of the suggestion form.
+  assert.equal(await page.locator('[data-community-open] [data-new-feature="feature-requests"]:not([hidden])').count(),2);
 });
 
 test('voting errors have a user-triggered retry and feature text is rendered as text', async t => {
@@ -417,7 +418,7 @@ test('visitor requests: empty ballot publishes from the collapsed form and retri
   await dialog.getByText('Synthetic new idea',{exact:true}).waitFor();
   assert.equal(state.features.length,1);
   await page.reload(); await openVotes(page);
-  assert.equal(await page.locator('[data-new-feature="feature-requests"]').isVisible(),false);
+  assert.equal(await dialog.locator('[data-new-feature="feature-requests"]').isVisible(),false);
 });
 
 test('visitor requests: more ideas precede the form and mobile keyboard entry remains usable',async t => {
@@ -427,12 +428,21 @@ test('visitor requests: more ideas precede the form and mobile keyboard entry re
   const dialog=await openVotes(page);
   await dialog.getByText('Idea 0',{exact:true}).waitFor();
   assert.equal(await dialog.locator('.community-card').count(),2);
-  await dialog.locator('.community-more').click(); await dialog.getByText('Idea 3',{exact:true}).waitFor();
-  await dialog.locator('.community-more').click(); await dialog.getByText('Idea 4',{exact:true}).waitFor();
+  await dialog.locator('.community-more').focus(); await page.keyboard.press('Enter'); await dialog.getByText('Idea 3',{exact:true}).waitFor();
+  assert.equal(await dialog.locator('.community-card').nth(2).locator('button').evaluate(el=>el===document.activeElement),true);
+  state.failVotes=true;
+  await dialog.locator('.community-more').focus(); await page.keyboard.press('Enter');
+  await dialog.locator('.community-retry').waitFor();
+  assert.match(await dialog.locator('.community-status').first().textContent(),/Could not load the features/);
+  assert.equal(await dialog.locator('.community-more').evaluate(el=>el===document.activeElement),true);
+  state.failVotes=false;
+  await page.keyboard.press('Enter'); await dialog.getByText('Idea 4',{exact:true}).waitFor();
+  assert.equal(await dialog.locator('.community-card').nth(4).locator('button').evaluate(el=>el===document.activeElement),true);
   assert.equal(await dialog.locator('.community-card').count(),5);
   assert.equal(await dialog.locator('.community-more').isVisible(),false);
   await dialog.locator('summary').focus(); await page.keyboard.press('Enter'); await page.keyboard.press('Tab');
   assert.equal(await dialog.locator('#communitySuggestionTitle').evaluate(el=>el===document.activeElement),true);
+  assert.equal(await dialog.locator('#communitySuggestionTitle').evaluate(el=>getComputedStyle(el).fontSize),'16px');
   for(const theme of ['dark','light']) {
     await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true);
@@ -470,6 +480,30 @@ test('visitor requests: reopening during publication waits for mutation and merg
 });
 
 
+test('visitor requests: returning visitors see one footer badge until the form is visited',async t => {
+  const {page}=await setup(t,{seenVoting:true});
+  const entries=page.locator('[data-community-open]');
+  assert.equal(await entries.count(),2);
+  assert.equal(await entries.locator('[data-new-feature="feature-requests"]:not([hidden])').count(),2);
+  assert.equal(await entries.locator('[data-new-feature]').count(),2,'no doubled New labels');
+  const dialog=await openVotes(page);
+  await dialog.locator('summary').click();
+  await page.waitForFunction(()=>[...document.querySelectorAll('[data-new-feature="feature-requests"]')].every(el=>el.hidden));
+  await page.reload();
+  assert.equal(await page.locator('[data-new-feature="feature-requests"]:not([hidden])').count(),0);
+});
+
+test('visitor requests: a full queue keeps typed text and keyboard retry guidance',async t => {
+  const {page,state}=await setup(t); state.fullSuggestions=true;
+  const dialog=await openVotes(page); await dialog.locator('summary').click();
+  await dialog.locator('#communitySuggestionTitle').fill('Capacity retry');
+  await dialog.locator('#communitySuggestionDescription').fill('Synthetic.');
+  await dialog.locator('form button[type=submit]').focus(); await page.keyboard.press('Enter');
+  await dialog.getByText(/The idea list is full/).waitFor();
+  assert.equal(await dialog.locator('form button[type=submit]').evaluate(el=>el===document.activeElement),true);
+  assert.equal(await dialog.locator('#communitySuggestionTitle').inputValue(),'Capacity retry');
+});
+
 test('visitor requests: a held publication failure stays visible after reopen and list refresh',async t => {
   const {page,state}=await setup(t); state.features=[];
   const dialog=await openVotes(page);
@@ -489,6 +523,7 @@ test('visitor requests: a held publication failure stays visible after reopen an
   assert.equal(await dialog.locator('#communitySuggestionTitle').inputValue(),'Retry after reopen');
   assert.equal(await dialog.locator('#communitySuggestionDescription').inputValue(),'Text stays available.');
   assert.equal(await dialog.locator('form button[type=submit]').isEnabled(),true);
+  assert.equal(await dialog.locator('form button[type=submit]').evaluate(el=>el===document.activeElement),true);
   await page.keyboard.press('Escape'); await openVotes(page);
   await dialog.getByText(en('comm.empty'),{exact:true}).waitFor();
   assert.equal(await dialog.getByText(/Could not publish this idea/).isVisible(),true);

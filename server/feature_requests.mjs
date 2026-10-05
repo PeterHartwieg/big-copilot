@@ -3,6 +3,7 @@
 const PREFIX = 'request-';
 const ID = /^request-[a-f0-9]{64}$/;
 const PAGE_SIZE = 25;
+const MAX_ACTIVE = 1000;
 const resolve = `SELECT live.id FROM feature_requests original JOIN feature_requests live
   ON live.id = COALESCE(original.canonical_id, original.id) WHERE original.id = ?1 AND live.state = 'active'`;
 const selectOne = `SELECT r.id, r.title, r.description, COUNT(v.voter_hash) AS votes,
@@ -53,15 +54,22 @@ export async function suggestRequest(db, body, hash, now, diagnostic = {}) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(
     title.toLowerCase() + '\0' + description.toLowerCase()));
   const id = [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
-  const [, , result] = await db.batch([
-    db.prepare('INSERT INTO feature_requests(id,title,description,created_at) VALUES(?1,?2,?3,?4) ON CONFLICT DO NOTHING')
-      .bind(id, title, description, now),
+  const [, , result, original] = await db.batch([
+    db.prepare(`INSERT INTO feature_requests(id,title,description,created_at,state_changed_at)
+      SELECT ?1,?2,?3,?4,?4 WHERE (SELECT COUNT(*) FROM feature_requests WHERE state = 'active') < ?5
+      ON CONFLICT DO NOTHING`).bind(id, title, description, now, MAX_ACTIVE),
     db.prepare(insertVote).bind(id, hash, now), db.prepare(selectOne).bind(id, hash),
+    db.prepare("SELECT id FROM feature_requests WHERE id = ?1").bind(id),
   ]);
   diagnostic.category = "unexpected";
   return result.results[0] ? {status: 200, body: {feature: feature(result.results[0])}}
-    : {status: 409, body: {error: 'Feature is unavailable'}};
+    : original.results.length ? {status: 409, body: {error: 'Feature is unavailable'}}
+    : {status: 503, body: {error: 'Request list full'}};
 }
+
+// Daily cleanup starts at 29 days so closed text is removed within 30 days.
+export const cleanupRequestText = (db, now) => db.prepare(`DELETE FROM feature_requests
+  WHERE state IN ('hidden','retired','merged') AND state_changed_at <= ?1`).bind(now - 29 * 86400);
 
 export const cleanupRequestVotes = db => db.prepare(`DELETE FROM feature_request_votes
   WHERE request_id NOT IN (SELECT id FROM feature_requests WHERE state = 'active')`);

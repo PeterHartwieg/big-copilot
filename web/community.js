@@ -339,6 +339,8 @@
   async function loadFeatures(more = false) {
     more = more === true;
     if (more && !nextAfter) return;
+    const pageFocus = more && document.activeElement === moreEl;
+    const previousIds = new Set(rows.map(row=>row.id));
     const seq = more ? loadSeq : ++loadSeq;
     setStatus(tt("comm.loading", "Loading features…"));
     if (!more) { cardsEl.replaceChildren(); rows = []; nextAfter = null; moreEl.hidden = true; }
@@ -356,11 +358,16 @@
     } catch (e) { list = null; }
     if (seq !== loadSeq || !dialog.open) return;
     moreEl.disabled = false;
-    if (list === null) return errorState(tt("comm.error", "Could not load the features."));
+    if (list === null) {
+      errorState(tt("comm.error", "Could not load the features."));
+      if (pageFocus) moreEl.focus();
+      return;
+    }
     nextAfter = continuation; moreEl.hidden = !nextAfter;
     if (!list.length && !rows.length) { setStatus(tt("comm.empty", "No features are open for voting right now.")); return; }
     setStatus("");
     renderCards(list);
+    if (pageFocus) (rows.find(row=>!previousIds.has(row.id) && !row.button.disabled)?.button || suggestion.summary).focus();
   }
 
   function renderCards(list) {
@@ -451,6 +458,7 @@
       if (!res.ok) {
         if (res.status === 400) failureText = tt("comm.suggest.text.error", "Use plain text within the title and description limits, without markup or control characters.");
         else if (res.status === 409) failureText = tt("comm.suggest.closed", "That idea is no longer open for voting. Please support another idea.");
+        else if (res.status === 503 && (await res.json().catch(() => null))?.error === "Request list full") failureText = tt("comm.suggest.full", "The idea list is full. Please vote on an existing idea and try again after moderation; your text is kept here.");
         else if (res.status === 429) failureText = tt("comm.suggest.limit", "Too many requests. Wait a minute and try again; your text is kept here.");
         throw new Error("HTTP " + res.status);
       }
@@ -472,6 +480,7 @@
     } finally {
       suggestion.busy = false;
       [suggestion.titleInput, suggestion.descriptionInput, suggestion.submit].forEach(control => { control.disabled = false; });
+      if (suggestion.failure && dialog.open) suggestion.submit.focus();
     }
   }
 
@@ -490,6 +499,20 @@
     try { localStorage.removeItem(LEGACY_STORE_KEY); } catch (e) {}
     syncVoteCard(true);
     buildDialog();
+    // Reuse the footer badges so returning visitors see the new suggestion entry
+    // without displaying two New labels on the same button.
+    document.querySelectorAll('[data-community-open]').forEach(button => {
+      if (button.hasAttribute('data-tt')) {
+        const label = document.createElement('span');
+        label.dataset.tt = button.getAttribute('data-tt'); label.textContent = button.textContent;
+        button.removeAttribute('data-tt'); button.replaceChildren(label);
+      }
+      let badge = button.querySelector('[data-new-feature]');
+      if (!badge) { badge = document.createElement('span'); badge.className = 'feature-new'; button.append(badge); }
+      badge.dataset.newFeature = 'feature-requests'; badge.textContent = tt('nav.new', 'New');
+      badge.dataset.tt = 'nav.new';
+      badge.hidden = typeof featureDiscovery !== 'undefined';
+    });
     document.addEventListener("click", (event) => {
       const button = event.target.closest("[data-community-open]");
       if (button) openDialog(button);
@@ -499,7 +522,7 @@
     window.addEventListener("online", onWake);
     document.addEventListener("visibilitychange", onWake);
     if (typeof featureDiscovery !== "undefined") featureDiscovery.refresh();
-    else document.querySelectorAll('[data-new-feature="community-voting"]').forEach((badge) => { badge.hidden = false; });
+    else document.querySelectorAll('[data-new-feature="feature-requests"]').forEach((badge) => { badge.hidden = false; });
     if (document.body.classList.contains("has-board")) start();
     // A change of UI language: the dialog's words, the open list's buttons and
     // the online line are written again.
