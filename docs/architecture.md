@@ -1116,6 +1116,9 @@ wrapper). A resource error on the marked board script uses the shell's reload
 recovery. The shell also requires the board's registered handlers before reader
 startup or entering a board, including restore, manual save and no-save browsing;
 a missing or SRI-rejected script cannot report an empty board as up to date.
+Board registration and Python reader health are separate: a healthy board can
+browse its no-save wiki after reader startup fails, while save/worker operations
+remain stopped and the reload control remains available.
 The stylesheet's current `url()` references are all embedded SVG data URLs, so
 extraction changes no relative resource base. Small boot/release/i18n scripts
 stay inline. `hostedPage()` returns the

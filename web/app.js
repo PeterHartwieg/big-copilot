@@ -353,14 +353,14 @@
     if (event.target?.tagName === "SCRIPT" && event.target.hasAttribute("data-board-asset")) failReader(readerAssetsFailure());
   }, true);
   function boardReady() {
-    if (readerError) return false;
     if (handlers && typeof handlers.changed === "function") return true;
-    failReader(readerAssetsFailure());
+    if (!readerError) failReader(readerAssetsFailure());
     return false;
   }
 
   // The page pins the worker and all its Python/data before a later deploy.
   function startWorker() {
+    if (readerError) return;
     const assets = window.LEDGER_ASSETS || null;
     // An old stamped page can receive this newer app.js from its mutable URL.
     // Only genuinely unstamped development pages may use the null manifest.
@@ -1771,7 +1771,7 @@
 
   /* --- building ----------------------------------------------------------- */
   async function buildFrom(file, dir, gen) {
-    if (!boardReady()) return;
+    if (readerError || !boardReady()) return;
     if (gen === undefined) gen = sourceGen;
     if (!startAttempt(gen)) return;
     // A build asked for while one runs is not lost: the latest request, a

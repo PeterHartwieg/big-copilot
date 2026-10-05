@@ -112,6 +112,7 @@ with patch("builtins.open", changed):
   variants.uninitializedBoard.assets.delete(boardUrl);
   variants.uninitializedBoard.assets.set(unsupportedUrl,unsupported);
   variants.oldBytes={...variants.a,oldBytes:true};
+  variants.failedRuntime={...variants.a,failedRuntime:true};
   const oldWorker=fs.readFileSync(path.join(root,'tests/fixtures/legacy_worker_53497965.js'));
   // Changes in metadata do not alter the coarse hosted JS/CSS blocks.
   for (const version of ['unrelated','python','data'])
@@ -134,6 +135,10 @@ with patch("builtins.open", changed):
     const headers = {};
     for (const rule of rules) if (rule.pattern.endsWith('*') ? pathname.startsWith(rule.pattern.slice(0,-1)) : pathname === rule.pattern)
       Object.assign(headers, rule.headers);
+    if(current.failedRuntime && pathname.startsWith('/pyodide/')) {
+      logs.push({phase,url:req.url,status:503,body:0});
+      res.writeHead(503,{...headers,'Cache-Control':'no-store'}); return res.end();
+    }
     let bytes;
     if (pathname.startsWith('/api/')) bytes = Buffer.from('{}');
     else if (pathname === '/legacy-bootstrap') bytes=Buffer.from('<!doctype html><html><body>Synthetic legacy startup</body></html>');
@@ -393,4 +398,22 @@ test('actual pre-manifest worker starting across deploy with a partial old cache
   assert.equal(data.digest,variants.data.manifest.files['ba_item_prices.json'].sha256,
     'uncached old stamped data URL serves the current B bytes: this historical caller has no digest check');
   await page.evaluate(()=>window.legacyWorker.terminate());
+});
+
+test('a registered board still opens its no-save wiki after Python startup fails',async t=>{
+  const ctx=await context(t),page=await ctx.newPage(),errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  active='failedRuntime'; phase='failed-reader-wiki';
+  await page.goto(base);
+  await page.waitForFunction(()=>document.getElementById('srcStatus').textContent.includes('could not finish'));
+  assert.ok(traffic(phase).some(row=>row.url.includes('/pyodide/') && row.status===503));
+  assert.equal(await page.locator('body').evaluate(e=>e.classList.contains('has-board')),false);
+  await page.locator('#savePick').setInputFiles(save);
+  assert.equal(await page.locator('body').evaluate(e=>e.classList.contains('has-board')),false);
+  assert.equal(await page.locator('#srcProg').isVisible(),false);
+  await page.locator('#lgWikiLink').click();
+  await page.waitForFunction(()=>document.body.classList.contains('has-board') && !!document.querySelector('#wikiRoot .wk-cat'));
+  assert.equal(await page.evaluate(()=>hasData()),false,'wiki browsing does not require a successful Python build');
+  assert.equal(await page.locator('#reloadBtn').isVisible(),true);
+  assert.deepEqual(errors,[]);
 });
