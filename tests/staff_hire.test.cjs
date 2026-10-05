@@ -239,6 +239,49 @@ const cyWednesday = (data = payload) => {
 // Adds candidates to the payload.
 const withCands = (...more) => { const d = JSON.parse(payload); d.candidates.push(...more); return JSON.stringify(d); };
 
+test('hiring pools and Quick hire exclude a candidates secondary profession', async (t) => {
+  const hair = 'ba:skill_hairstylist';
+  const d = JSON.parse(payload);
+  d.candidates = [cand('stylist', 'Hair specialist', [[hair, 90], [CS, 80]], 10),
+                  cand('cashier', 'Cash specialist', [[CS, 50]], 20)];
+  const page = await board(t, {data: JSON.stringify(d)});
+  await page.locator('#hsOpen [data-hr-min]').selectOption('0');
+  const got = await page.evaluate(skill => {
+    const m = hrModel(), r = m.roles.find(r => r.skill === skill);
+    hrUi.quick.skill = skill;
+    hrUi.quick.site = m.sites.find(S => S.key === 'ba:street_secondavenue#10').key;
+    hrUi.quick.n = 1;
+    const Q = hrQuickModel(hrModel());
+    return {pool: r.pool.map(c => c.id), picked: r.picked.map(c => c.id),
+            quickPool: hrPopPool(m, 'quick').map(c => c.id),
+            matches: Q.matches.map(c => c.id), picks: Q.picks.map(p => p.c.id),
+            secondaryLevel: hrLevel(m.cands.find(c => c.id === 'stylist'), skill),
+            savedSkills: m.cands.find(c => c.id === 'stylist').skills};
+  }, CS);
+  for(const field of ['pool', 'picked', 'quickPool', 'matches', 'picks'])
+    assert.deepEqual(got[field], ['cashier'], field);
+  assert.equal(got.secondaryLevel, null);
+  assert.deepEqual(got.savedSkills, [{skill: hair, level: 90}, {skill: CS, level: 80}]);
+});
+
+test('a gap explanation ignores unassigned staff with only a secondary matching skill', async (t) => {
+  const page = await board(t);
+  const got = await page.evaluate(skill => {
+    const demand = 'ba:jobdemand_fulltime', other = 'ba:skill_hairstylist';
+    D.hiring.bench = ['secondary'];
+    D.hiring.people.secondary = {name: 'Stylist', skills: [{skill: other, level: 90}, {skill, level: 80}], demands: []};
+    const candidate = {id: 'primary', skill, demands: [demand]};
+    const x = {w: {skill, hours: 24, days: 2, band: 'part', slots: []}};
+    const m = {moves: [], sites: [], used: new Set(), roles: [{skill, pool: [candidate], passes: () => true}]};
+    const excluded = hrGapWhy(m, x);
+    D.hiring.people.secondary.skills = [{skill, level: 90}, {skill: other, level: 80}];
+    const included = hrGapWhy(m, x);
+    return {excluded, included};
+  }, CS);
+  assert.deepEqual(got.excluded, {demand: 'ba:jobdemand_fulltime'});
+  assert.equal(got.included, null, 'a primary cashier with no hours demand really can take the week');
+});
+
 test('netting: the bench a plan counts on, then spare people, then hires, best first', async (t) => {
   const page = await board(t);
   const m = await model(page);
@@ -384,6 +427,9 @@ test('a demand the site does not meet warns and still picks', async (t) => {
   // Nobody better than Dario (coffee machine: not at Gifts, at Bare) and
   // Edda (gold insurance: not offered) for Gifts.
   d.candidates = d.candidates.filter(c => !['c1', 'c2', 'c3'].includes(c.id));
+  // This availability fixture needs another primary cashier, rather than a cleaner's secondary skill.
+  Object.assign(d.candidates.find(c => c.id === 'c8'), {skill: CS, level: 40,
+    skills: [{skill: CS, level: 40}, {skill: CLEAN, level: 30}]});
   d.hiring.bench = []; d.hiring.sites[1].plans.demand.spare = [];
   const page = await board(t, {data: JSON.stringify(d)});
   const m = await model(page);
@@ -453,10 +499,10 @@ test('Change picks lists the next best, all of them, and the left out', async (t
   const page = await board(t, {data: withCands(...more, cand('pt', 'Pia Tall', [[CS, 99]], 10, {demands: [PT]}))});
   await page.locator(`[data-hr-open="${CS}"]`).click();
   const sheet = page.locator('#hsSheet');
-  assert.match(await sheet.locator('.hs-grp').nth(1).textContent(), /Next best17 more/);
+  assert.match(await sheet.locator('.hs-grp').nth(1).textContent(), /Next best16 more/);
   assert.equal(await sheet.locator('table').nth(1).locator('tbody tr').count(), 10);
   await sheet.locator('[data-hs-all]').click();
-  assert.equal(await sheet.locator('table').nth(1).locator('tbody tr').count(), 17);
+  assert.equal(await sheet.locator('table').nth(1).locator('tbody tr').count(), 16);
   // Pia asks for Part-time, left out by default for a shop role.
   const out = sheet.locator('[data-hs-out]');
   assert.equal(await out.textContent(), 'Show the 1 left out');
@@ -573,17 +619,21 @@ test('a factory that only sends a spare is rewritten without them', async (t) =>
     [{d: 1, shifts: [{f: 0, t: 12, employeeId: 'FW2', itemInstanceId: 'MACH-2'}]}]);
 });
 
-test('a spare is reassigned in the role they are spare in, not their best skill', async (t) => {
+test('a spare is reassigned only in their primary profession despite secondary spare-role metadata', async (t) => {
   const d = JSON.parse(payload);
-  // Sam cleans better than he serves, but Corner has him spare as a cashier.
+  // Old spare-role metadata cannot qualify a primary cleaner for cashier work.
   d.hiring.people.SPARE1.skills = [{skill: CLEAN, level: 90}, {skill: CS, level: 66}];
   d.hiring.sites[1].plans.demand.spareSkills = {SPARE1: [CS]};
   const page = await board(t, {data: JSON.stringify(d)});
   const m = await model(page);
-  assert.deepEqual(m.moves[1], {id: 'SPARE1', from: C, to: G, fixed: false, off: false});
-  assert.equal(await page.evaluate(() => hrModel().moves[1].p.level), 66);
-  // The line sits under Customer Service.
-  assert.match(await page.locator(`#hsOpen tr[data-hr-role="${CS}"] + tr.hs-subrow`).textContent(), /Reassign 1/);
+  assert.ok(!m.moves.some(x => x.id === 'SPARE1'));
+  const fallback = await page.evaluate(key => {
+    const m = hrModel(), from = m.sites.find(S => S.key === key), to = m.sites[0];
+    const week = to.weeks.find(x => x.w.skill === 'ba:skill_customerservice');
+    const p = hrPerson('SPARE1', from.row);
+    return hrOutWeek(m, {id: 'SPARE1', p, from, to, week, skill: 'ba:skill_customerservice'}, new Set());
+  }, C);
+  assert.deepEqual(fallback, {why: 'none'});
 });
 
 test('nobody in training is reassigned or assigned, and their planned hours stay empty', async (t) => {

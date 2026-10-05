@@ -163,16 +163,20 @@ class FullCoverRulesTest(unittest.TestCase):
         self.assertTrue(by_person)
         for eid, shifts in by_person.items():
             person = people[eid]
-            skills = {x["name"] for x in person["characterData"]["skills"]["$items"]}
+            primary = max(person["characterData"]["skills"]["$items"],
+                          key=lambda skill: skill["value"])["name"]
             worked = sum(hours(s) for s in shifts)
             self.assertLessEqual(worked, FULL_TIME[1], f"{eid}: nobody over 50 hours")
             per_day = collections.Counter()
             for s in shifts:
                 per_day[s["d"]] += hours(s)
             self.assertLessEqual(max(per_day.values()), SHIFT_CAP, f"{eid}: over 12 hours in a day")
-            if SERVICE in skills:
+            if primary == SERVICE:
                 self.assertFalse([s for s in shifts if kind(s) == "clean"],
                                  f"{eid}: a server is never put on cleaning")
+            if primary == CLEANING:
+                self.assertTrue(all(kind(s) == "clean" for s in shifts),
+                                f"{eid}: secondary Customer Service cannot qualify a cleaner")
             rules = [JOB_DEMANDS[d] for d in person["demands"]["$items"] if d in JOB_DEMANDS]
             days = {s["d"] for s in shifts}
             for rule, setting, _priority in rules:

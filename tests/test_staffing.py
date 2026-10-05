@@ -986,7 +986,8 @@ class CoverTest(unittest.TestCase):
         # put on a cleaning station: a crew that all served would leave every
         # cleaning line with nobody on it, and `staffed()` below would be empty
         # while the hours still added up.
-        people = [employee(f"p{i}", [SERVICE, GUARD]) for i in range(8)]
+        people = [employee(f"p{i}", [SERVICE]) for i in range(4)]
+        people += [employee(f"g{i}", [GUARD]) for i in range(4)]
         people += [employee(f"c{i}", [CLEANING]) for i in range(6)]
         row = plan(items, people, FLAT, opens=((8, 20),))
         for duty in ("clean", "security"):
@@ -1389,6 +1390,156 @@ class MultiRoleTest(unittest.TestCase):
         self.assertIn(1, served)
         # One pool of Hair Stylists, not one per queue.
         self.assertEqual(list(row["headcount"]), [stylist])
+
+
+class SkillPreferenceTest(unittest.TestCase):
+    """Staffing uses each employee's primary profession only."""
+
+    STYLIST = "ba:skill_hairstylist"
+    CHAIR = "ba:itemname_hairdresserchair"
+    WASH = "ba:itemname_hairdresserheadwash"
+
+    def salon(self, cashier=True, service=True, legacy=False, wrong_stations=False,
+              cashier_hair=True):
+        names = Names(dict(LABELS.locale, **{
+            self.STYLIST: "Hair Stylist", self.CHAIR: "Hairdresser Chair",
+            self.WASH: "Hairdresser Head Wash",
+            f"help_{self.CHAIR}_content":
+                "is a special *employee station*\n\n* [x](fees-haircuttingfee)\n",
+            f"help_{self.WASH}_content":
+                "is a special *employee station*\n\n* [x](fees-hairshampooingfee)\n",
+        }))
+        people = []
+        for pid, hair, customer in [("a_stylist", 100, 1), ("b_stylist", 100, 1)] + (
+                [("z_cashier", 1, 100)] if cashier else []):
+            person = employee(pid, [], demands=(FULLTIME,))
+            person["characterData"]["skills"]["$items"] = [
+                {"name": self.STYLIST, "value": hair},
+            ] + ([{"name": SERVICE, "value": customer}] if service else [])
+            if pid == "z_cashier" and not cashier_hair:
+                person["characterData"]["skills"]["$items"] = [
+                    s for s in person["characterData"]["skills"]["$items"]
+                    if s["name"] != self.STYLIST]
+            if legacy:
+                person.update(person.pop("characterData"))
+            people.append(person)
+        old = [{"wd": day, "employeeId": pid, "itemInstanceId": station,
+                "startingHour": 8, "endingHour": 14, "type": 1}
+               for day in range(7)
+               for pid, station in (("a_stylist", 1), ("z_cashier", 2), ("b_stylist", 3))
+               ] if wrong_stations else []
+        reg = registration([(1, REGISTER), (2, self.CHAIR), (3, self.WASH)],
+                           {h: 4 for h in range(8, 14)}, opens=((8, 14),), shifts=old)
+        save = Save({"EmployeeInstances": {"$items": people},
+                     "BuildingRegistrations": {"$items": [dict(reg, RentedByPlayer=True)]}},
+                    {}, "synthetic.hsg")
+        sites = [dict(business(), typeSlug="ba:businesstype_hairdresser")]
+        _, staff = _staff(save, names)
+        stations = {REGISTER: (SERVICE, 20), self.CHAIR: (self.STYLIST, 5),
+                    self.WASH: (self.STYLIST, 10)}
+        grids = _hourly(save, [reg], sites, stations, set(),
+                        {p["id"]: p["skill"] for p in staff}, names)
+        [row] = _staffing(save, names, sites, grids, staff, 0.55)
+        return row
+
+    def test_specialists_work_the_register_and_both_hair_stations(self):
+        for legacy in (False, True):
+            with self.subTest(legacy=legacy):
+                row = self.salon(legacy=legacy)
+                for shifts in (row["shifts"], row["openCover"]["shifts"]):
+                    covered = collections.Counter()
+                    for s in shifts:
+                        station = where(row, s)
+                        self.assertIsNotNone(s["p"])
+                        if station == 1:
+                            self.assertEqual(who(row, s), "z_cashier")
+                        else:
+                            self.assertIn(who(row, s), ("a_stylist", "b_stylist"))
+                        covered[station] += hours(s)
+                    self.assertEqual(covered, {1: 42, 2: 42, 3: 42})
+                self.assertEqual(row["shortHours"], [])
+                self.assertEqual(row["headcount"][self.STYLIST]["needed"], 84)
+
+    def test_a_dedicated_cashier_and_stylists_cover_all_three_plan_variants(self):
+        for cashier_hair in (False, True):
+            with self.subTest(cashier_hair=cashier_hair):
+                row = self.salon(cashier_hair=cashier_hair)
+                for variant in (row, row["openCover"], row["fullCover"]):
+                    covered, worked = collections.Counter(), collections.Counter()
+                    for s in variant["shifts"]:
+                        station = where(row, s)
+                        covered[station] += hours(s)
+                        if s["p"] is not None:
+                            self.assertEqual(who(row, s) == "z_cashier", station == 1)
+                            worked[station] += hours(s)
+                    wanted = 168 if variant is row["fullCover"] else 42
+                    self.assertEqual(covered, {1: wanted, 2: wanted, 3: wanted})
+                    self.assertEqual(set(worked), {1, 2, 3})
+
+    def test_secondary_customer_service_never_fills_a_missing_cashier(self):
+        row = self.salon(cashier=False)
+        self.assertFalse(any(where(row, s) == 1 for s in staffed(row)))
+        self.assertEqual({where(row, s) for s in staffed(row)}, {2, 3})
+        self.assertTrue(any(where(row, s) == 1 for s in open_lines(row)))
+
+    def test_stylists_without_customer_service_never_work_registers(self):
+        row = self.salon(cashier=False, service=False)
+        self.assertFalse(any(where(row, s) == 1 for s in staffed(row)))
+        self.assertEqual({where(row, s) for s in staffed(row)}, {2, 3})
+
+    def test_specialization_corrects_existing_wrong_salon_stations(self):
+        row = self.salon(wrong_stations=True)
+        for s in staffed(row):
+            self.assertEqual(who(row, s) == "z_cashier", where(row, s) == 1)
+        self.assertEqual({where(row, s) for s in staffed(row)}, {1, 2, 3})
+        self.assertEqual(row["shortHours"], [])
+
+    def test_a_stronger_bench_member_does_not_displace_assigned_staff(self):
+        own = employee("a_here", [SERVICE], wage=10, demands=(FULLTIME,))
+        bench = employee("z_bench", [SERVICE], wage=30, here=False, demands=(FULLTIME,))
+        own["characterData"]["skills"]["$items"][0]["value"] = 10
+        bench["characterData"]["skills"]["$items"][0]["value"] = 100
+        row = plan([(1, REGISTER)], [own, bench], {h: 4 for h in range(8, 14)},
+                   opens=((8, 14),))
+        self.assertEqual({who(row, s) for s in staffed(row)}, {"a_here"})
+        self.assertEqual(sum(hours(s) for s in staffed(row)), 42)
+        self.assertEqual(row["bench"], [])
+        self.assertEqual(row["shortHours"], [])
+
+    def test_same_skill_workers_keep_their_stations_despite_different_levels(self):
+        old = [{"wd": day, "employeeId": pid, "itemInstanceId": station,
+                "startingHour": 8, "endingHour": 14, "type": 1}
+               for day in range(7) for pid, station in (("a_low", 1), ("z_high", 2))]
+        for extra in (None, CLEANING, "ba:skill_lawyer"):
+            with self.subTest(extra_skill=extra):
+                people = [employee("a_low", [SERVICE], demands=(FULLTIME,)),
+                          employee("z_high", [SERVICE], demands=(FULLTIME,))]
+                for person, level in zip(people, (60, 61)):
+                    person["characterData"]["skills"]["$items"][0]["value"] = level
+                if extra:
+                    people[0]["characterData"]["skills"]["$items"].append(
+                        {"name": extra, "value": 59})
+                items = [(1, REGISTER), (2, REGISTER)]
+                if extra == CLEANING:
+                    items.append((3, CLEAN_STATION))
+                row = plan(items, people, {h: 30 for h in range(8, 14)},
+                           opens=((8, 14),), shifts=old)
+                actual = collections.Counter()
+                for s in staffed(row):
+                    actual[(who(row, s), where(row, s))] += hours(s)
+                self.assertEqual(actual, {("a_low", 1): 42, ("z_high", 2): 42})
+                self.assertEqual(row["shortHours"], [])
+
+    def test_equal_levels_keep_the_first_saved_skill_as_primary(self):
+        for skills, expected in (([SERVICE, self.STYLIST], SERVICE),
+                                 ([self.STYLIST, SERVICE], self.STYLIST)):
+            with self.subTest(skills=skills):
+                person = employee("tie", skills)
+                save = Save({"EmployeeInstances": {"$items": [person]}}, {}, "synthetic.hsg")
+                _, staff = _staff(save, LABELS)
+                self.assertEqual(staff[0]["skill"], expected)
+                planned = ba_dashboard._plan_people(save, staff)["tie"]
+                self.assertEqual(planned["skills"], {expected})
 
 
 class HeadWashTest(unittest.TestCase):
@@ -1934,13 +2085,12 @@ class OneBusinessEachTest(unittest.TestCase):
             self.assertEqual(worked[full.upper()], 48, ids)
 
     def test_the_site_s_only_guard_is_not_spent_on_a_register(self):
-        """The scarcer skill is admitted first, or its station becomes hires.
+        """The guard's primary profession stays available for security coverage.
 
-        Two full-timers and two stations, and only one of them can clean. Put
-        that person on the register and the cleaning station is a week of hiring
-        lines -- and which way it fell used to be decided by the employee id.
+        Two full-timers and two stations: the guard's secondary Customer Service
+        skill must not make their security coverage depend on employee id.
         """
-        for skills in (([SERVICE, GUARD], [SERVICE]), ([SERVICE], [SERVICE, GUARD])):
+        for skills in (([GUARD, SERVICE], [SERVICE]), ([SERVICE], [GUARD, SERVICE])):
             row = plan([(1, REGISTER), (9, LOCKER)], [
                 employee("p0", skills[0], demands=("ba:jobdemand_fulltime",)),
                 employee("p1", skills[1], demands=("ba:jobdemand_fulltime",)),
@@ -1960,7 +2110,7 @@ class OneBusinessEachTest(unittest.TestCase):
         self.assertNotIn("FREE", self.hours_of(row))
 
     def test_the_residue_is_not_left_on_whoever_was_rostered_last(self):
-        """A register and a cleaning station, 08-20, seven days: 168 hours.
+        """Two registers, 08-20, seven days: 168 hours.
 
         Filling one person at a time hands out 48, 48, 48 and 24, and that 24 is
         a full-time demand failed for six hours. It is the same 14 lines with two
@@ -1971,7 +2121,7 @@ class OneBusinessEachTest(unittest.TestCase):
             for i in range(6)
         ]
         row = plan(
-            [(1, REGISTER), (9, LOCKER)], people, FLAT, opens=((8, 20),)
+            [(1, REGISTER), (2, REGISTER)], people, {h: 30 for h in range(24)}, opens=((8, 20),)
         )
         worked = self.hours_of(row)
         self.assertEqual(sorted(worked.values()), [36, 36, 48, 48])
@@ -1996,36 +2146,19 @@ class OneBusinessEachTest(unittest.TestCase):
         self.assertEqual(
             [r["hours"] for r in row["shortHours"] if r["hours"]], [8])
 
-    def test_the_cover_stations_go_to_a_name_already_on_the_roster(self):
-        """A cleaning station is not a reason to owe another person a week.
-
-        The doors open twice: 08-12, when the customers come, and 14-20, when
-        they do not. So the serving shift is the morning and the cleaning station
-        wants both slots, and the afternoon is hours the morning's server is free
-        to work. The cover pass has to offer it to them rather than to a new
-        name -- which is what carrying `rostered` across the two passes buys, and
-        what this asserts: the same person serves the morning and cleans the
-        afternoon.
-        """
-        # Three people who could each do both jobs, where the site has work for
-        # two. Whoever the serving pass starts with, the cover pass has to come
-        # back to the two names already on the roster rather than reach for the
-        # third -- which every key below `rostered` would do, the third being
-        # the emptiest week and the cheapest wage on offer.
-        people = [
-            employee("p0", [SERVICE, GUARD], wage=30.0),
-            employee("p1", [SERVICE, GUARD], wage=20.0),
-            employee("spare", [SERVICE, GUARD], wage=10.0),
-        ]
-        row = plan(
-            [(1, REGISTER), (9, LOCKER)],
-            people,
-            {h: 15 if 8 <= h < 12 else 0 for h in range(24)},
-            opens=((8, 12), (14, 18)),
-        )
-        afternoon = [s for s in staffed(row) if s["f"] >= 14]
-        self.assertTrue(afternoon, "the cleaning station wants the second slot")
-        self.assertEqual(len(self.hours_of(row)), 2, "two names, not three")
+    def test_security_cover_does_not_use_a_servers_secondary_skill(self):
+        """Separate professions need separate people even in disjoint opening slots."""
+        people = [employee("server", [SERVICE, GUARD], wage=10.0),
+                  employee("guard", [GUARD], wage=20.0)]
+        row = plan([(1, REGISTER), (9, LOCKER)], people,
+                   {h: 15 if 8 <= h < 12 else 0 for h in range(24)},
+                   opens=((8, 12), (14, 18)))
+        serving = [s for s in staffed(row) if kind(s) == "serve"]
+        security = [s for s in staffed(row) if kind(s) == "security"]
+        self.assertEqual({who(row, s) for s in serving}, {"server"})
+        self.assertEqual({who(row, s) for s in security}, {"guard"})
+        self.assertTrue(any(s["f"] >= 14 for s in security))
+        self.assertEqual(sum(hours(s) for s in row["shifts"] if kind(s) == "security"), 56)
 
 
 class DayCountTest(unittest.TestCase):
@@ -2444,9 +2577,9 @@ class ExchangeTest(unittest.TestCase):
             employee("p06", [SERVICE], wage=22.0,
                      demands=("ba:jobdemand_fulltime", "ba:jobdemand_fivedaysweek",
                               "ba:jobdemand_noevenings")),
-            employee("p07", [CLEANING, SERVICE], wage=31.0,
+            employee("p07", [SERVICE, CLEANING], wage=31.0,
                      demands=("ba:jobdemand_fourdaysweek", "ba:jobdemand_freeweekends")),
-            employee("p10", [CLEANING, SERVICE], wage=28.0,
+            employee("p10", [SERVICE, CLEANING], wage=28.0,
                      demands=("ba:jobdemand_fulltime",)),
         ], {0: 2, 1: 3, 2: 0, 3: 0, 4: 2, 5: 4, 6: 4, 7: 5, 8: 5, 9: 11, 10: 9,
             11: 7, 12: 10, 13: 12, 14: 10, 15: 11, 16: 7, 17: 12, 18: 3, 19: 5,
@@ -2495,39 +2628,27 @@ class ExchangeTest(unittest.TestCase):
                          {"P00": 50, "P01": 30, "P02": 40})
 
     def test_a_donor_is_not_stripped_of_the_only_day_they_work(self):
-        """A day count is a demand too, so the hours pass may not take the last
-        shift somebody has on a day their contract needs.
-
-        Two opening slots, four days, a crew of part-timers and full-timers with
-        day counts between them: dropping the guard moves a whole shift off
-        somebody whose four days then become three.
-        """
-        row = plan([(1, REGISTER), (9, LOCKER)], [
-            employee("p00", [SERVICE], wage=10.0, demands=("ba:jobdemand_parttime",)),
-            employee("p01", [CLEANING, GUARD], wage=21.0,
-                     demands=("ba:jobdemand_parttime", "ba:jobdemand_fourdaysweek")),
-            employee("p02", [SERVICE], wage=18.0,
-                     demands=("ba:jobdemand_fulltime", "ba:jobdemand_nomornings")),
-            employee("p03", [CLEANING], wage=23.0,
-                     demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
-            employee("p04", [SERVICE, CLEANING, GUARD], wage=13.0,
-                     demands=("ba:jobdemand_fulltime", "ba:jobdemand_fourdaysweek")),
-            employee("p05", [SERVICE, CLEANING, GUARD], wage=18.0,
-                     demands=("ba:jobdemand_fulltime", "ba:jobdemand_nocleaning")),
-            employee("b0", [SERVICE], wage=23.0, here=False,
-                     demands=("ba:jobdemand_parttime", "ba:jobdemand_fourdaysweek")),
-            employee("b1", [SERVICE], wage=21.0, here=False,
-                     demands=("ba:jobdemand_fulltime", "ba:jobdemand_freeweekends")),
-        ], {h: max(1, int(12 * (1 - abs(h - 14) / 14))) for h in range(24)},
-            opens=((8, 12), (14, 18)), open_days=(0, 1, 2, 6))
-        # P01 and the bench member hold four-day contracts and work exactly four
-        # days; the guard is what stops the hours pass taking one of those days
-        # away to settle somebody else's week.
-        week = self.weeks(row)
-        self.assertEqual(len(week["P01"]["days"]), 4)
-        self.assertEqual(len(week["B0"]["days"]), 4)
-        self.assertEqual({who: mine["hours"] for who, mine in week.items()},
-                         {"B0": 28, "P01": 28, "P02": 4, "P04": 4})
+        """An hours repair takes pieces rather than breaking a donor's four-day demand."""
+        employees = [employee("donor", [SERVICE], demands=(PARTTIME, FOUR_DAYS)),
+                     employee("taker", [SERVICE], demands=(FULLTIME,))]
+        save = Save({"EmployeeInstances": {"$items": employees}}, {}, "synthetic.hsg")
+        _, staff = _staff(save, LABELS)
+        people = ba_dashboard._plan_people(save, staff)
+        pool = list(people.values())
+        state = {pid: ba_dashboard._fresh_state() for pid in people}
+        shifts = []
+        for pid, days, length in (("donor", range(4), 7), ("taker", range(4, 7), 8)):
+            for day in days:
+                row = dict(wd=day, station=1, skill=SERVICE, kind="serve",
+                           **{"from": 8, "to": 8 + length}, employee=pid,
+                           name=pid.upper(), hours=length, fromBench=False)
+                shifts.append(row)
+                ba_dashboard._take_over(row, people[pid], state)
+        ba_dashboard._top_up_short(shifts, pool, state, set(people))
+        self.assertEqual(len(state["donor"]["days"]), 4)
+        self.assertEqual(state["taker"]["hours"], 30)
+        self.assertEqual(state["donor"]["hours"], 22)
+        self.assertTrue(all(state["donor"]["busy"][day] for day in range(4)))
 
     def test_the_bench_is_listed_under_the_roles_it_would_really_work(self):
         """`have` counts a bench member per role, and the page takes them off it.

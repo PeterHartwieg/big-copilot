@@ -9691,7 +9691,11 @@ def _plan_people(save: Save, staff: list) -> dict:
         out[person["id"]] = {
             "id": person["id"],
             "name": person["name"],
-            "skills": set(person["skills"] or ()),
+            # Scheduling uses the primary (highest-level) skill only. Hair
+            # chairs and head washes both require Hair Stylist, so one skill
+            # still qualifies the same employee for both station types. Keep
+            # all saved skills in the public staff row for uniform checks.
+            "skills": {person["skill"]} if person["skill"] else set(),
             "wage": person["wage"] or 0.0,
             "addr": person["addr"],
             "demands": held,
@@ -12929,7 +12933,7 @@ def _factory_staffing(save: Save, names, businesses: list, factories: dict, staf
         workers = [
             p for p in staff
             if p["addr"] and site_key(p["addr"]) == business["key"]
-            and FACTORY_SKILL in (p["skills"] or ())
+            and p["skill"] == FACTORY_SKILL
         ]
         wage_day = money(sum(p["daily"] for p in workers) / len(workers)) if workers else 0.0
         drawn = set()

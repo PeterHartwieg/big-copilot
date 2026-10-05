@@ -320,7 +320,7 @@ const realHiring = (page, {noHours = false, candidates = true, demand = false} =
   const base = D.hiring.sites.find(s => s.kind === 'shop' && s.plans.open && (s.plans.open.hireWeeks || []).length);
   const plans = noHours ? {} : demand ? {demand: {bench: [], fewer: [], hireWeeks: [], spare: [], spareSkills: {}}} : {open: base.plans.open};
   D.hiring.sites.unshift(Object.assign({}, base, {key: site, name: 'Liquor', new: !demand, plans}, noHours ? {noHours: true} : {}));
-  D.candidates = candidates && !noHours && !demand ? base.plans.open.hireWeeks.map((w, i) => ({id: `cand${i}`, name: `Candidate ${i}`, wage: 12, hoursLeft: 40, skills: [{skill: w.skill, level: 70}], demands: []})) : [];
+  D.candidates = candidates && !noHours && !demand ? base.plans.open.hireWeeks.map((w, i) => ({id: `cand${i}`, name: `Candidate ${i}`, wage: 12, hoursLeft: 40, skill: w.skill, level: 70, skills: [{skill: w.skill, level: 70}], demands: []})) : [];
   hrSiteMemo = null;
   drawOpenStore();
   return base.plans.open.hireWeeks.length;

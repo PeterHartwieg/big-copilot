@@ -82,6 +82,7 @@ class People:
             pid = f"w{len(self.staff):02d}"
             self.save_rows.append({"id": pid, "demands": list(demands)})
             self.staff.append({"id": pid, "name": pid.upper(), "skills": list(skills),
+                               "skill": skills[0] if skills else None,
                                "wage": daily * 7 / 42, "hours": 42, "daily": daily, "addr": addr})
         return self
 
@@ -191,6 +192,15 @@ class RosterTests(unittest.TestCase):
         self.assertEqual(row["headcount"]["have"], 7)
         self.assertEqual({p["id"] for p in row["people"]} & {"w07", "w08", "w09", "w10", "w11"},
                          set())
+
+    def test_secondary_factory_skill_does_not_count_for_staffing_or_hire_wages(self):
+        people = People().add(3, daily=211.0).add(
+            1, daily=900.0, skills=("ba:skill_cleaning", WORKER))
+        [row] = hand_rows([("beer", 2, 24, 24, 24)], people)["cap"]
+        self.assertEqual(row["headcount"]["have"], 3)
+        self.assertNotIn("w03", {p["id"] for p in row["people"]})
+        self.assertEqual(row["wageDay"], 211.0)
+        self.assertEqual(row["delta"]["perDay"], row["headcount"]["hire"] * 211.0)
 
     def test_both_sizings_come_through_extract_shapes(self):
         c = rostered_chain([24])

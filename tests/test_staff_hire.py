@@ -117,6 +117,21 @@ def info(hours=71, headhunter="hh1", board=False, agency=None):
 
 
 class CandidatesTest(unittest.TestCase):
+    def test_primary_skill_matches_employees_before_rounding(self):
+        for layout in (new_layout, old_layout):
+            for skills, primary in (([(SERVICE, 60.2), (CLEANING, 60.4)], CLEANING),
+                                    ([(SERVICE, 60.4), (CLEANING, 60.4)], SERVICE)):
+                with self.subTest(layout=layout.__name__, skills=skills):
+                    person = layout("c1", "Ada", skills)
+                    save = save_of({"CandidateEmployeeInstances": {"$items": [person]},
+                                    "EmployeeInstances": {"$items": [person]}})
+                    [candidate] = _candidates(save)
+                    _, [employee] = _staff(save, Names({}))
+                    self.assertEqual(candidate["skill"], primary)
+                    self.assertEqual(employee["skill"], primary)
+                    self.assertEqual(len(candidate["skills"]), 2)
+                    self.assertEqual(len(employee["skills"]), 2)
+
     def test_both_layouts_give_the_same_row(self):
         rows = []
         for build in (new_layout, old_layout):

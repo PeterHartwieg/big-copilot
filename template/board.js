@@ -14416,8 +14416,9 @@ function hrTicks(){
   return hrUi;
 }
 
-/* A candidate's level in a skill, or null when they have none of it. */
+/* Only a candidate's primary profession qualifies them for hiring work. */
 const hrLevel = (c, skill) => {
+  if(c.skill !== skill) return null;
   const s = (c.skills || []).find(x => x && x.skill === skill);
   return s ? Number(s.level) || 0 : c.skill === skill ? Number(c.level) || 0 : null;
 };
@@ -14575,9 +14576,9 @@ function hrModel(){
     moves.push({id, p, from: null, to: S, week: null, skill: p.skill || null, fixed: true, group: `bench|${S.key}`});
   }));
   /* 2. Spare people, and the unassigned nobody plans on, into another site's
-     week in the role they are spare in (the unassigned: their best skill);
-     the sites' spares in list order, then the rest. Someone spare in two
-     roles tries the one they are better at first. Their schedule demands
+     week in their primary profession; the sites' spares in list order,
+     then the rest. Secondary spare-role metadata cannot qualify them for
+     another profession. Their schedule demands
      are a hard filter (Peter, 28 September 2026): only a week that meets
      them all, at the first site in list order that has one, and there the
      one at a desk that meets their desk demands first. Nobody is moved into
@@ -14591,7 +14592,8 @@ function hrModel(){
     if(moved.has(id) || training(id)) return;
     const p = hrPerson(id, from && from.row);
     const best = p.skill ? [p.skill] : [];
-    const roles = from ? ((from.plan.spareSkills || {})[id] || best) : best;
+    const roles = (from ? ((from.plan.spareSkills || {})[id] || best) : best)
+      .filter(skill => skill === p.skill);
     const level = k => { const x = (p.skills || []).find(y => y && y.skill === k); return x ? Number(x.level) || 0 : k === p.skill ? Number(p.level) || 0 : -1; };
     const ordered = roles.slice().sort((a, b) => level(b) - level(a));
     for(const skill of ordered){
@@ -14780,8 +14782,8 @@ const hrFitsFree = x => {
 };
 /* Where one site's action can send its own spare `x` (a move of the page's
    model, or one it made for a spare the model did not move): the model's own
-   week first; then, as hrModel() picks, the roles they are spare in, the one
-   they are best at first, and in each the first site in list order with an
+   week first; then, as hrModel() picks, their primary profession and the
+   first site in list order with an
    open week that meets their schedule demands, lies inside its opening hours
    and on hours free there (every site but theirs is outside that action's
    scope), a desk that meets their desk demands first. {x: the move with that
@@ -14791,9 +14793,11 @@ function hrOutWeek(m, x, taken){
   const p = x.p || {};
   const level = k => { const v = (p.skills || []).find(y => y && y.skill === k); return v ? Number(v.level) || 0 : k === p.skill ? Number(p.level) || 0 : -1; };
   const roles = (((x.from.plan.spareSkills || {})[x.id]) || (x.skill ? [x.skill] : [])).slice()
+    .filter(skill => skill === p.skill)
     .sort((a, b) => level(b) - level(a) || String(a).localeCompare(String(b)));
   let why = null;
   const at = y => {
+    if(y.w.skill !== p.skill) return null;
     const lv = level(y.w.skill);
     const mv = Object.assign({}, x, {to: y.S, week: y, skill: y.w.skill, group: `${x.from.key}|${y.S.key}|${y.w.skill}`,
       p: Object.assign({}, p, {skill: y.w.skill, level: lv >= 0 ? lv : undefined})});
@@ -14949,12 +14953,12 @@ function hrGapWhy(m, x){
   (m.sites || []).forEach(S => (S.plan.spare || []).forEach(id => {
     if(S === x.S || moved.has(id) || training(id)) return;
     const q = hrPerson(id, S.row), roles = ((S.plan.spareSkills || {})[id]) || [q.skill];
-    if(roles.includes(skill)) free.push(q);
+    if(q.skill === skill && roles.includes(skill)) free.push(q);
   }));
   (H.bench || []).forEach(id => {
     if(moved.has(id) || training(id)) return;
     const q = hrPerson(id, null);
-    if((q.skills || []).some(v => v && v.skill === skill)) free.push(q);
+    if(q.skill === skill) free.push(q);
   });
   if(!free.length || free.some(c => !hrFails(c, x).length)) return null;
   const count = new Map();
