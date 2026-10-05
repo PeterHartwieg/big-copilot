@@ -86,8 +86,9 @@ async function setup(t, options = {}) {
     if(options.savedLanguageBeforeInit && name==='community.js') body+='\nwindow.communityListenerReady = true;';
     if(options.savedLanguageBeforeInit && name==='index.html') {
       body=body.replace(/(<script src="community\.js[^\"]*"><\/script>)/,'$1<script src="/community-timing-gate.js"></script>');
-      if(options.fallbackVoteMarkup) body=body.replace(/(<button[^>]*class="sf-link sf-btn"[^>]*data-community-open[^>]*)>.*?<\/button>/,
-        '$1 data-tt="foot.vote.cta">Vote on features</button>');
+      if(options.fallbackVoteMarkup) body=body.replace(/(<footer class="sitefoot sf-compact">)([\s\S]*?)(<\/footer>)/,(_all,start,contents,end)=>
+        start+contents.replace(/<span class="feature-new" data-new-feature="community-voting"[^>]*>New<\/span>/,'')
+          .replace(/class="sf-cta sf-fill" data-community-open/,'class="sf-link sf-btn" data-community-open')+end);
     }
     return route.fulfill({contentType:name.endsWith('.html') ? 'text/html' : name.endsWith('.css') ? 'text/css' : name.endsWith('.json') ? 'application/json' : 'application/javascript',body});
   });
@@ -506,7 +507,7 @@ test('visitor requests: returning visitors see one footer badge until the form i
   assert.equal(await entries.locator('[data-new-feature]').count(),2,'no doubled New labels');
   const landingBadge=page.locator('#landing [data-vote-card] [data-new-feature="feature-requests"]');
   assert.equal(await page.locator('#landing [data-community-open] [data-new-feature]').count(),0,'filled CTA carries no badge');
-  assert.equal(await page.locator('.wrap [data-community-open] [data-new-feature="feature-requests"]').count(),1);
+  assert.equal(await page.locator('.wrap [data-vote-card] .sf-card-title [data-new-feature="feature-requests"]').count(),1);
   for (const theme of ['dark','light']) {
     await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
     assert.equal(await landingBadge.isVisible(),true);
@@ -536,10 +537,10 @@ test('visitor requests: a saved table loaded before init restores footer labels 
     const cards=page.locator('[data-vote-card]'),badges=cards.locator('[data-new-feature="feature-requests"]');
     assert.deepEqual(await badges.allTextContents(),['Neu','Neu']);
     assert.equal(await cards.locator('[data-new-feature]').count(),2);
-    assert.deepEqual(await page.locator('[data-community-open]').allTextContents(),['Über Features abstimmen','Über Features abstimmenNeu']);
+    assert.deepEqual(await page.locator('[data-community-open]').allTextContents(),['Über Features abstimmen',fallbackVoteMarkup?'Über Features abstimmenNeu':'Über Features abstimmen']);
     await page.evaluate(()=>ttSetTable('en',null));
     assert.deepEqual(await badges.allTextContents(),['New','New']);
-    assert.deepEqual(await page.locator('[data-community-open]').allTextContents(),['Vote on features','Vote on featuresNew']);
+    assert.deepEqual(await page.locator('[data-community-open]').allTextContents(),['Vote on features',fallbackVoteMarkup?'Vote on featuresNew':'Vote on features']);
     await page.locator('#landing [data-community-open]').click();
     await page.locator('.community-dialog summary').click();
     await page.waitForFunction(()=>[...document.querySelectorAll('[data-new-feature="feature-requests"]')].every(el=>el.hidden));

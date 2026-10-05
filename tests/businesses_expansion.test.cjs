@@ -675,7 +675,7 @@ test('Resolve staff demands lands on hiring when empty and on demands when they 
     && document.querySelector('#nxDemands').getBoundingClientRect().top < innerHeight / 2);
 });
 
-test('compact board footer opens support by keyboard while theme and primary links stay reachable', async t => {
+test('board footer keeps support prominent while other links open by keyboard and settings stay reachable', async t => {
   const page=await board(t);
   const footer=page.locator('footer.sf-compact');
   const summary=footer.locator('.sf-support summary');
@@ -683,13 +683,17 @@ test('compact board footer opens support by keyboard while theme and primary lin
   assert.ok((await summary.boundingBox()).height>=44,'mobile support disclosure has a touch target');
   assert.equal(await summary.evaluate(el=>getComputedStyle(el).display),'list-item','native disclosure marker remains');
   assert.equal(await footer.locator('.sf-support').evaluate(el=>el.open),false);
+  const support=footer.locator('.sf-cards .sf-card').last();
+  assert.ok(await support.locator('a[href*="paypal"]').isVisible(),'donation is visible before opening other links');
+  assert.ok((await support.boundingBox()).height>=100,'support remains a substantial card on mobile');
   await summary.focus(); await page.keyboard.press('Enter');
   assert.equal(await footer.locator('.sf-support').evaluate(el=>el.open),true);
-  assert.ok(await footer.locator('a[href*="paypal"]').isVisible());
+  assert.ok(await footer.locator('.sf-support a').first().isVisible());
   await footer.locator('[data-theme-set="light"]').click();
   assert.equal(await page.locator('html').getAttribute('data-theme'),'light');
   assert.ok(await footer.locator('[data-changelog]').count());
   assert.ok(await footer.locator('[data-sf-feedback]').count());
   await summary.focus(); await page.keyboard.press('Enter');
   assert.equal(await footer.locator('.sf-support').evaluate(el=>el.open),false);
+  assert.ok(await support.locator('a[href*="paypal"]').isVisible());
 });
