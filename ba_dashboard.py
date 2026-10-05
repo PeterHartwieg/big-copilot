@@ -193,6 +193,41 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
     # attribute: Help & feedback on the board copies it (pxHelpHtml()).
     report = ('<button type="button" class="sf-link sf-btn" data-bug-report aria-haspopup="dialog">'
               '<span data-tt="foot.report">Report a bug</span></button>\n        ' if site else "")
+    theme = f'''<div class="sf-col sf-theme">
+        <h2 class="sf-head" id="themeHead{'L' if landing else ''}" data-tt="foot.theme.head">Theme</h2>
+        <div class="sf-seg" role="group" aria-labelledby="themeHead{'L' if landing else ''}">
+          <button type="button" class="sf-segbtn" data-theme-set="auto" aria-pressed="false"><span class="sf-sr" data-tt="foot.theme.auto">Match system</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20.5h6M12 16.5v4"/></svg></button>
+          <button type="button" class="sf-segbtn" data-theme-set="light" aria-pressed="false"><span class="sf-sr" data-tt="foot.theme.light">Light</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="3.8"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg></button>
+          <button type="button" class="sf-segbtn" data-theme-set="dark" aria-pressed="false"><span class="sf-sr" data-tt="foot.theme.dark">Dark</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.2 8.2 0 1 0 10.2 10.2z"/></svg></button>
+        </div>
+      </div>'''
+    if not landing:
+        return f'''<footer class="sitefoot sf-compact">
+  <div class="sf-in">
+    <div class="sf-compact-top">
+      <nav class="sf-compact-nav" aria-label="About Big Copilot" data-tt-aria-label="foot.nav.label">
+        <button type="button" class="sf-link sf-btn" data-changelog aria-haspopup="dialog"><span data-tt="foot.changelog">Changelog</span><span class="feature-new" data-new-feature="changelog" data-tt="nav.new" hidden>New</span></button>
+        {_sf_out(WORKSHOP_URL, "Game link mod", title="Big Copilot Link on the Steam Workshop: the board reads the game you are playing.", feature="game-link", key="foot.mod")}
+        {report}{_sf_out(FEEDBACK_URL, "Bugs and feedback", title="The Discord's support channel: a save that will not build, a wrong number, or something the board should show, all welcome.", key="foot.feedback", attrs=" data-sf-feedback")}
+        {_sf_out(REPO_URL, "Source code", title="MIT-licensed", key="foot.source")}
+        <div class="sf-card" data-vote-card hidden><button type="button" class="sf-link sf-btn" data-community-open aria-haspopup="dialog"><span data-tt="foot.vote.cta">Vote on features</span><span class="feature-new" data-new-feature="community-voting" data-tt="nav.new" hidden>New</span></button></div>
+      </nav>
+      <div class="sf-compact-settings">{names}{theme}</div>
+    </div>
+    <details class="sf-support">
+      <summary data-tt="foot.support.title">Support the project</summary>
+      <div class="sf-support-links">
+        <a class="sf-link" href="{DONATE_URL}" target="_blank" rel="noopener" data-tt="foot.support.cta">Donate via PayPal</a>
+        {_sf_out(YOUTUBE_URL, "YouTube")}{_sf_out(SUBREDDIT_URL, "r/bigambitions")}{_sf_out(DISCORD_URL, "Discord")}
+        {_sf_out(GAME_URL, "Steam store page", key="foot.steam")}{_sf_out(GAME_MAKER_URL, GAME_MAKER)}
+      </div>
+    </details>
+    <div class="sf-base">
+      <div class="sf-who"><span class="sf-mark" translate="no"><span class="sf-dot"></span>Big Copilot</span><span class="sf-said" data-tt="foot.fanmade">{COLOPHON}</span></div>
+      <div class="sf-legal">{legal}{file_slot}{build}</div>
+    </div>
+  </div>
+</footer>'''
     return f'''<footer class="sitefoot{" sf-landing rv" if landing else ""}">
   <div class="sf-in">
     <div class="sf-rule"><span class="sf-orb"></span></div>
@@ -251,14 +286,7 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
       <!-- Marked by attribute rather than id, and wired by the board script for
            whichever copies are in the page: the landing's footer and the board's
            are both here until the board replaces the landing. -->
-      {names}<div class="sf-col sf-theme">
-        <h2 class="sf-head" id="themeHead{'L' if landing else ''}" data-tt="foot.theme.head">Theme</h2>
-        <div class="sf-seg" role="group" aria-labelledby="themeHead{'L' if landing else ''}">
-          <button type="button" class="sf-segbtn" data-theme-set="auto" aria-pressed="false"><span class="sf-sr" data-tt="foot.theme.auto">Match system</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20.5h6M12 16.5v4"/></svg></button>
-          <button type="button" class="sf-segbtn" data-theme-set="light" aria-pressed="false"><span class="sf-sr" data-tt="foot.theme.light">Light</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="3.8"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg></button>
-          <button type="button" class="sf-segbtn" data-theme-set="dark" aria-pressed="false"><span class="sf-sr" data-tt="foot.theme.dark">Dark</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.2 8.2 0 1 0 10.2 10.2z"/></svg></button>
-        </div>
-      </div>
+      {names}{theme}
     </div>
     <div class="sf-base">
       <div class="sf-who">

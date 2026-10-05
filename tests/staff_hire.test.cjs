@@ -1455,11 +1455,29 @@ test('Where to find them: a role places stay open in, how many and where people 
   }, [LAW, CS]);
   // How many stay open, and that there are no candidates, is the table's to say (declutter T5, T7).
   assert.deepEqual(text, [
-    'Lawyer a Headhunter at your headquarters recruiting Lawyer, or a Recruitment Agency',
+    'Lawyer',
     'Customer Service 2 more left out by your filters your Headhunter is recruiting Customer Service: wait for more candidates, or a Recruitment Agency',
   ]);
   // Nothing short, nothing said.
   assert.equal(await page.evaluate(() => hrFindHtml({roles: []})), '');
+});
+
+test('shared recruitment advice appears once while role-specific exclusions stay visible', async t => {
+  const page = await board(t);
+  const got = await page.evaluate(([LAW, CS]) => {
+    D.hiring.recruiting = {};
+    const html = hrFindHtml({roles: [
+      {skill: LAW, short: 2, pool: [], pass: 0},
+      {skill: CS, short: 1, pool: [{}, {}], pass: 0},
+    ]});
+    const el = document.createElement('div'); el.innerHTML = html;
+    return {advice: [...el.querySelectorAll('.hs-find-advice')].map(p => p.textContent),
+      rows: [...el.querySelectorAll('li')].map(li => li.textContent)};
+  }, [LAW, CS]);
+  assert.equal(got.advice.length, 1);
+  assert.match(got.advice[0], /Lawyer, Customer Service/);
+  assert.match(got.advice[0], /headquarters.*Recruitment Agency/);
+  assert.match(got.rows[1], /2 candidates, all left out by your filters/);
 });
 
 test('a shop with no hour read is hired for the hours it opens, and the write never opens it', async (t) => {
@@ -3301,7 +3319,8 @@ test('before "hire N", the people elsewhere who fit come first, in every hiring 
 test('without a mod that hires, the full count stands and the note points at MyEmployees', async (t) => {
   const page = await board(t, {link: {writes: ['uniforms', 'imports', 'schedule'], day: 34, hour: 14}, data: giftsHiring()});
   const text = await (await siteBlock(page, G)).textContent();
-  assert.match(text, enRe('sp.ba.tohire', {n:2}));
+  assert.doesNotMatch(text, enRe('sp.ba.tohire'));
+  assert.match(text, enRe('sp.step.add', {n:2}));
   assert.match(text, textRe('co.hire.elsewhere.hand', {n:1}));
   assert.doesNotMatch(text, textRe("co.hire.elsewhere"));
 });

@@ -548,7 +548,7 @@ test('custom setups combine recipes across shop types, sharing ingredient and in
   await addCustom(page, CUSTOM_PRODUCT);
   await page.locator(`#planBody [data-slug="${BEER}"] [data-d="1"]`).click();
   assert.deepEqual(await customRows(page), {[BEER]: 2, [CUSTOM_PRODUCT]: 1});
-  assert.equal(await page.locator('#vMade').innerText(), '10,080');
+  assert.equal(await page.locator('#vFootMade').innerText(), '10,080');
   assert.equal(await page.locator('#vRaw').innerText(), '9,240', 'shared water is counted once at its combined usage');
   const facts = await page.evaluate(() => ({raw: ofRawWeek(ofCounts()), lines: ofLines(), counts: ofPlan().counts}));
   assert.equal(facts.raw['ba:itemname_water'], 9240);
@@ -611,7 +611,7 @@ test('custom demand sums only measured sellers across types and excludes unknown
   assert.equal(lines.find(l => l.slug === BEER).want, 560, '(30 × 2 + 20 × 1) × 7');
   assert.equal(lines.find(l => l.slug === CUSTOM_PRODUCT).want, 0);
   assert.match(await page.locator(`#planBody [data-slug="${CUSTOM_PRODUCT}"] .covers`).innerText(), /No measured sales/);
-  assert.match(await page.locator('#vMadeTile').getAttribute('data-tip'), /3,640 is surplus/);
+  assert.match(await page.locator('#vFootMade').getAttribute('data-tip'), /3,640 is surplus/);
   assert.equal(await page.locator('#planBody [data-pc-rate]').count(), 0, 'no invented per-shop rate for a mixed range');
 });
 

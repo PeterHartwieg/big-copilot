@@ -1641,7 +1641,6 @@ g[data-series].off{opacity:0}
 .shops{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 14px}
 .shops i{width:12px;height:12px;border-radius:3px;background:var(--rule);transition:background .2s}
 .shops i.on{background:var(--ink-2)}
-.planstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}
 /* Ingredients: the "used by" cell keeps to two names and an ellipsis so the
    order columns stay on screen at 1180px; the full list is on hover. The cash
    column only exists once one ingredient has a price. */
@@ -1650,10 +1649,6 @@ g[data-series].off{opacity:0}
 /* Beside the sidebar a 1280 px window leaves it about 950 px: the names wrap,
    the heads never do, and a longer language scrolls the table in its box. */
 .ingtable td:first-child{white-space:normal}
-.planstat{padding:14px 16px;border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft)}
-.planstat .lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
-.planstat .v{font-family:"IBM Plex Mono",monospace;font-size:24px;font-weight:500;margin-top:8px;letter-spacing:-.02em}
-.planstat .v small{font-size:12px;color:var(--ink-3);margin-left:4px;letter-spacing:0}
 
 .step{display:inline-flex;align-items:center;gap:6px}
 .step a{width:24px;height:24px;border-radius:6px;border:1px solid var(--rule);display:grid;place-items:center;color:var(--ink-2);text-decoration:none;font:500 14px/1 "IBM Plex Mono",monospace;transition:all .15s}
@@ -2518,6 +2513,22 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
    Prefixed sf- throughout: the canvas's own .door/.cta/.seg/.mono are the kind
    of bare names this stylesheet has collided over before. */
 .sitefoot{margin-top:64px}
+/* The board keeps settings and useful links close; promotion is a disclosure. */
+.sf-compact{border-top:1px solid var(--rule);padding-top:16px}
+.sf-compact-top{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:14px 24px}
+.sf-compact-nav,.sf-support-links{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.sf-compact .sf-link,.sf-compact .sf-btn{font-size:12px}
+.sf-compact-settings{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:flex-start;margin-left:auto}
+.sf-compact .sf-col{gap:5px}
+.sf-compact .sf-head{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.sf-compact .gn-note{font-size:10px;max-width:210px}
+.sf-compact .sf-card{flex:0 0 auto;border:0;background:none;padding:0;margin:0;transform:none}
+.sf-support{margin-top:14px;font-size:12px;color:var(--ink-2)}
+.sf-support summary{cursor:pointer;width:fit-content}
+.sf-support-links{padding:12px 0 0}
+.sf-compact .sf-base{margin-top:14px;padding-top:12px;gap:8px 16px}
+.sf-compact .sf-said{font-size:10px}
+@media(max-width:560px){.sf-compact-settings{margin-left:0;width:100%}.sf-compact-top{gap:14px}}
 .sf-landing{align-self:stretch;width:100%;margin-top:40px}
 /* No cap on the board: .wrap already sets the page's measure, and a narrower
    footer would leave the hairline and the orb floating inside the sections
@@ -2735,7 +2746,6 @@ body:has(#changelogDialog[open]){overflow:hidden}
   .heat .r .mk-plan{white-space:normal}
   .heat .cell .rv2{left:2px;right:2px;gap:1px;justify-content:flex-end;overflow:hidden}
   .heat .cell .rv2 i{width:2px;height:2px}
-  .planstats{grid-template-columns:minmax(0,1fr);gap:10px}
   #planBody .scrollx > table, #ingTable{display:block;overflow-x:auto;max-width:100%}
 }
 /* Today's figures are sized by their own length (--n, set by drawKpis()):
@@ -3252,7 +3262,10 @@ button.nx-card{appearance:none}
 #pageCompany .bz-unibox{display:inline-flex;align-items:center;flex-wrap:wrap;gap:6px 10px}
 #pageCompany .bz-unibox .gw-btn{margin:0}
 #pageCompany .bz-warn{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--warn)}
+.bz-history{display:flex;flex-wrap:wrap;gap:4px 14px;margin:12px 0 0;color:var(--ink-3);font-size:12px}
+.hs-find-advice{margin:10px 0 0;font-size:13px;line-height:1.4;color:var(--ink-3)}
 #pageCompany .bz-fins{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface);overflow:hidden}
+#secFinance .bz-fins{grid-template-columns:repeat(2,minmax(0,1fr))}
 #pageCompany .bz-fin{display:flex;flex-direction:column;gap:6px;padding:16px 18px;min-width:0}
 #pageCompany .bz-fin + .bz-fin{border-left:1px solid var(--rule-soft)}
 #pageCompany .bz-fin .lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}

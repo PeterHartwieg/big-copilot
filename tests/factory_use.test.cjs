@@ -206,3 +206,22 @@ test('an order short and a production short on one line are two separate statuse
     assert.deepEqual(chips, [MORE1, ORDER]);
   } finally { await page.close(); }
 });
+
+test('factory staffing repeats line hours only when the main line does not show identical figures', async () => {
+  const page = await board(fixture());
+  try {
+    const got = await page.evaluate(() => {
+      const line = {slug:'bread', item:'Bread', hoursNow:8, hours:12, from:0, machines:1, cuts:[[0,12]]};
+      D.factoryStaffing = {[sizing]:[{s:1, name:'Factory', headcount:{have:1}, delta:{}, lines:[line]}]};
+      const main = {s:1, slug:'bread', hoursNow:8, needHours:{[sizing]:12}};
+      const read = shown => {
+        const box=document.createElement('div'); box.innerHTML=drawFactoryStaffing(()=>true,shown);
+        return {hours:box.querySelector('.sb-sln .hrs').textContent.trim(), blocks:box.querySelector('.shifts').textContent.trim(), context:box.querySelector('.sb-hc').textContent.trim()};
+      };
+      return {same:read([main]), hidden:read([]), changed:read([{...main,hoursNow:7}]), unnamed:read([{...main,unnamed:true}])};
+    });
+    assert.equal(got.same.hours,'');
+    for(const state of ['hidden','changed','unnamed']) assert.match(got[state].hours,/12/);
+    for(const state of Object.values(got)) {assert.match(state.blocks,/12/);assert.ok(state.context);}
+  } finally {await page.close();}
+});
