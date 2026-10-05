@@ -21,6 +21,8 @@ const raw = fs.readFileSync(path.join(ROOT,'migrations/0002_translations.sql'),'
 async function migrate(target) {
   for (const stmt of raw.match(/CREATE TABLE[\s\S]*?;|CREATE INDEX[\s\S]*?;|CREATE TRIGGER[\s\S]*?END;/g)) await target.prepare(stmt).run();
   for (const stmt of fs.readFileSync(path.join(ROOT,'migrations/0001_community.sql'),'utf8').replace(/--[^\n]*/g,'').split(';').filter(x=>x.trim())) await target.prepare(stmt).run();
+  const requests = fs.readFileSync(path.join(ROOT,'migrations/0003_feature_requests.sql'),'utf8');
+  for (const stmt of requests.match(/CREATE TABLE[\s\S]*?;|CREATE INDEX[\s\S]*?;|CREATE TRIGGER[\s\S]*?END;/g)) await target.prepare(stmt).run();
 }
 function options() {
   return {modules:true, script, compatibilityDate:'2026-09-01', d1Databases:['COMMUNITY_DB'],

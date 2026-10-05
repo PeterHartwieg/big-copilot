@@ -1,5 +1,11 @@
 [
   {
+    "pr": 298,
+    "date": "2026-10-05",
+    "title": "Suggest features from the voting list",
+    "summary": "Submit a public idea from the voting dialog, with no account or save needed. Suggestions include your vote and let other visitors support them; votes help prioritise work without promising delivery."
+  },
+  {
     "pr": 289,
     "date": "2026-10-04",
     "title": "Use Big Copilot in Italian",

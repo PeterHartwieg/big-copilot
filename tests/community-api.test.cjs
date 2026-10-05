@@ -111,6 +111,7 @@ function baseOptions() {
     ratelimits: {
       COMMUNITY_LIMITER: { namespace_id: '1001', simple: { limit: 120, period: 60 } },
       PRESENCE_LIMITER: { namespace_id: '1002', simple: { limit: 20, period: 60 } },
+      SUGGEST_LIMITER: { namespace_id: '1004', simple: { limit: 3, period: 60 } },
     },
     serviceBindings: {
       ASSETS: async () => new Response('static fixture'),
@@ -131,6 +132,8 @@ async function applyMigration(target) {
     .filter((stmt) => stmt.length > 0);
   assert.ok(statements.length > 0, 'migrations/0001_community.sql contained no statements');
   for (const stmt of statements) await target.prepare(stmt).run();
+  const requests = fs.readFileSync(path.join(ROOT,'migrations/0003_feature_requests.sql'),'utf8');
+  for (const stmt of requests.match(/CREATE TABLE[\s\S]*?;|CREATE INDEX[\s\S]*?;|CREATE TRIGGER[\s\S]*?END;/g)) await target.prepare(stmt).run();
 }
 
 function originFor(name) {
@@ -898,8 +901,9 @@ test('rate limit: presence has its own budget, so a heartbeat loop stops early a
       .map(([, name, ns, limit, period]) => [name, { ns, limit: Number(limit), period: Number(period) }]),
   );
   // REPORT_LIMITER is the bug report route's; community-report.test.cjs drives it.
-  assert.deepEqual(Object.keys(limiters).sort(), ['COMMUNITY_LIMITER', 'PRESENCE_LIMITER', 'REPORT_LIMITER']);
-  assert.equal(new Set(Object.values(limiters).map((l) => l.ns)).size, 3, 'separate namespaces');
+  assert.deepEqual(Object.keys(limiters).sort(), ['COMMUNITY_LIMITER', 'PRESENCE_LIMITER', 'REPORT_LIMITER', 'SUGGEST_LIMITER']);
+  assert.equal(new Set(Object.values(limiters).map((l) => l.ns)).size, 4, 'separate namespaces');
+  assert.equal(limiters.SUGGEST_LIMITER.limit,3);
   delete limiters.REPORT_LIMITER;
   assert.equal(limiters.PRESENCE_LIMITER.period, 60);
   assert.ok(limiters.PRESENCE_LIMITER.limit >= 10 && limiters.PRESENCE_LIMITER.limit <= 20,
@@ -946,6 +950,7 @@ function diagnosticWorker({ cacheFails = false } = {}) {
   const events = [];
   const source = fs.readFileSync(WORKER_PATH, 'utf8')
     .replace('import FEATURES from "./features.json";', `const FEATURES = ${JSON.stringify(BALLOT)};`)
+    .replace(/import .* from \"\.\/feature_requests\.mjs\";/, fs.readFileSync(path.join(ROOT,'server/feature_requests.mjs'),'utf8').replace(/^export /gm,''))
     .replace('export default {', 'globalThis.worker = {');
   const context = {
     Request: globalThis.Request, Response: globalThis.Response, URL, TextEncoder, TextDecoder,

@@ -391,6 +391,7 @@ function vmWorker(fetchImpl) {
   const events = [];
   const source = fs.readFileSync(WORKER_PATH, 'utf8')
     .replace('import FEATURES from "./features.json";', 'const FEATURES = [];')
+    .replace(/import .* from \"\.\/feature_requests\.mjs\";/, fs.readFileSync(path.join(ROOT,'server/feature_requests.mjs'),'utf8').replace(/^export /gm,''))
     .replace('export default {', 'globalThis.worker = {');
   const context = {
     Request, Response, FormData, Blob, File, URL, TextEncoder, TextDecoder, AbortSignal, setTimeout,

@@ -33,7 +33,9 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
     assert.equal(await page.locator('[data-new-feature="game-link"]:not([hidden])').count(),0);
     await page.locator('#landing [data-community-open]').click();
     assert.equal(await page.locator('.community-dialog').evaluate(d => d.open),true);
-    assert.equal(await page.locator('[data-new-feature="community-voting"]:not([hidden])').count(),0);
+    assert.equal(await page.locator('[data-vote-card] [data-new-feature="feature-requests"]:not([hidden])').count(),2);
+    await page.locator('.community-dialog summary').click();
+    await page.waitForFunction(()=>[...document.querySelectorAll('[data-new-feature="feature-requests"]')].every(el=>el.hidden));
     await page.keyboard.press('Escape');
     await page.locator('#landing [data-changelog]').click();
     assert.equal(await page.locator('#changelogDialog').evaluate(d => d.open),true);
@@ -74,7 +76,7 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
     await page.evaluate(() => window.BigCopilotWiki.route('wiki/topic%2Fhow-rent-works'));
     await page.getByRole('heading', {name:'How rent works'}).waitFor();
     await page.reload();
-    for (const feature of ['game-link', 'community-voting', 'board-search', 'factory-flow',
+    for (const feature of ['game-link', 'community-voting', 'feature-requests', 'board-search', 'factory-flow',
       'map', 'wiki', 'changelog', 'wiki-topic-how-rent-works']) {
       assert.equal(await page.locator(`[data-new-feature="${feature}"]:not([hidden])`).count(), 0);
     }
