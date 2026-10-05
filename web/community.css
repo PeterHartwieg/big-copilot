@@ -33,3 +33,13 @@ body:has(.community-dialog[open]){overflow:hidden}
 .community-privacy{margin:14px 0 0;padding-top:14px;border-top:1px solid var(--rule-soft);color:var(--ink-3);font-size:11.5px;line-height:1.6}
 .community-dialog button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 @media(max-width:640px){.community-head{padding:20px}.community-body{padding:14px 20px 20px}}
+.community-more{margin-top:12px}
+.community-suggestion{margin-top:18px;border-top:1px solid var(--rule-soft);padding-top:14px}
+.community-suggestion summary{cursor:pointer;font-size:13px;font-weight:600}
+.community-suggestion form{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.community-suggestion label{font-size:12px;color:var(--ink-2)}
+.community-suggestion input,.community-suggestion textarea{box-sizing:border-box;width:100%;min-width:0;padding:9px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--ground);color:var(--ink);font:inherit;font-size:13px}
+.community-suggestion textarea{resize:vertical;min-height:96px}
+.community-suggestion-notice{margin:0 0 5px;color:var(--ink-2);font-size:12px;line-height:1.6}
+.community-suggestion .btn2{align-self:flex-start}
+.community-suggestion :is(input,textarea,summary):focus-visible{outline:2px solid var(--accent);outline-offset:3px}

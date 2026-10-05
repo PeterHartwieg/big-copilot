@@ -183,7 +183,8 @@
 
   /* --- the voting dialog --------------------------------------------------- */
 
-  let dialog = null, statusEl = null, cardsEl = null;
+  let dialog = null, statusEl = null, cardsEl = null, moreEl = null;
+  let nextAfter = null, suggestion = null;
   let rows = [];
   let loadSeq = 0;   // bumped per open; a late reply from an older open is dropped
   let opener = null;
@@ -223,6 +224,15 @@
     if (!dialogText) return;
     dialogText.title.textContent = tt("comm.title", "Vote on upcoming features");
     dialogText.intro.textContent = tt("comm.intro", "Help choose what comes next. One vote per IP address for each feature. People sharing a connection may share a vote; votes are advisory.");
+    if (suggestion) {
+      suggestion.summaryLabel.textContent = tt("comm.suggest", "Suggest a feature");
+      suggestion.badge.textContent = tt("nav.new", "New");
+      suggestion.titleLabel.textContent = tt("comm.suggest.title", "Title (up to 100 characters)");
+      suggestion.descriptionLabel.textContent = tt("comm.suggest.description", "Description (up to 1,000 characters)");
+      suggestion.notice.textContent = tt("comm.suggest.public", "Your title and description will appear publicly and include your vote. Do not include saves, company data or contact details.");
+      suggestion.submit.textContent = tt("comm.suggest.submit", "Publish idea and vote");
+      moreEl.textContent = tt("comm.more", "Show more ideas");
+    }
     dialogText.close.textContent = tt("comm.close", "Close");
     dialogText.privacy.textContent = tt("comm.privacy", "The online count sends a random ID that is new on every page load. Votes use a protected hash of your IP address. Your save and company data stay on your computer.");
   }
@@ -264,9 +274,44 @@
     });
     const privacy = document.createElement("p");
     privacy.className = "community-privacy";
+    moreEl = document.createElement("button");
+    moreEl.type = "button"; moreEl.className = "btn2 community-more"; moreEl.hidden = true;
+    moreEl.addEventListener("click", () => loadFeatures(true));
+    const details = document.createElement("details"); details.className = "community-suggestion";
+    const summary = document.createElement("summary");
+    const summaryLabel = document.createElement("span");
+    const badge = document.createElement("span");
+    badge.className = "feature-new"; badge.dataset.newFeature = "feature-requests";
+    badge.hidden = typeof featureDiscovery !== "undefined";
+    summary.append(summaryLabel, badge);
+    details.addEventListener("toggle", () => {
+      if (!details.open) return;
+      if (typeof featureDiscovery !== "undefined") featureDiscovery.visit("feature-requests");
+      else badge.hidden = true;
+    });
+    const form = document.createElement("form");
+    const titleLabel = document.createElement("label"), descriptionLabel = document.createElement("label");
+    const titleInput = document.createElement("input"), descriptionInput = document.createElement("textarea");
+    titleInput.id = "communitySuggestionTitle"; titleInput.required = true; titleInput.maxLength = 200;
+    descriptionInput.id = "communitySuggestionDescription"; descriptionInput.required = true; descriptionInput.maxLength = 2000;
+    descriptionInput.rows = 4;
+    titleLabel.htmlFor = titleInput.id; descriptionLabel.htmlFor = descriptionInput.id;
+    const notice = document.createElement("p"); notice.className = "community-suggestion-notice";
+    notice.id = "communitySuggestionNotice";
+    titleInput.setAttribute("aria-describedby", notice.id); descriptionInput.setAttribute("aria-describedby", notice.id);
+    const submit = document.createElement("button"); submit.type = "submit"; submit.className = "btn2";
+    const feedback = document.createElement("p"); feedback.className = "community-status";
+    feedback.setAttribute("role", "status"); feedback.setAttribute("aria-live", "polite");
+    form.append(notice, titleLabel, titleInput, descriptionLabel, descriptionInput, submit, feedback);
+    form.addEventListener("submit", event => {
+      event.preventDefault(); const pending = suggestFeature();
+      pendingVotes.add(pending); pending.finally(() => pendingVotes.delete(pending));
+    });
+    details.append(summary, form);
+    suggestion = {details, summary, summaryLabel, badge, form, titleLabel, descriptionLabel, titleInput, descriptionInput, notice, submit, feedback, busy: false};
     dialogText = {title, intro, close, privacy};
     labelDialog();
-    body.append(statusEl, cardsEl, privacy);
+    body.append(statusEl, cardsEl, moreEl, details, privacy);
     dialog.append(head, body);
     // Backdrop click, taken the way the changelog dialog takes it.
     dialog.addEventListener("click", (event) => {
@@ -287,32 +332,40 @@
     dialog.showModal();
     dialog.scrollTop = 0;
     if (typeof featureDiscovery !== "undefined") featureDiscovery.visit("community-voting");
+    suggestion.details.open = false;
     loadFeatures();  // every open is a fresh read
   }
 
-  async function loadFeatures() {
-    const seq = ++loadSeq;
+  async function loadFeatures(more = false) {
+    more = more === true;
+    if (more && !nextAfter) return;
+    const seq = more ? loadSeq : ++loadSeq;
     setStatus(tt("comm.loading", "Loading features…"));
-    cardsEl.replaceChildren();
-    let list = null;
+    if (!more) { cardsEl.replaceChildren(); rows = []; nextAfter = null; moreEl.hidden = true; }
+    moreEl.disabled = true;
+    let list = null, continuation = null;
     try {
       // Reopening during a vote waits for its result before the on-open read.
       await Promise.allSettled([...pendingVotes]);
       if (seq !== loadSeq || !dialog.open) return;
-      const res = await fetch(API + "/features", {cache: "no-store"});
+      const res = await fetch(API + "/features" + (more ? "?after=" + encodeURIComponent(nextAfter) : ""), {cache: "no-store"});
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json().catch(() => null);
+      continuation = data && typeof data.nextAfter === "string" ? data.nextAfter : null;
       list = data && Array.isArray(data.features) ? data.features.map(parseFeature).filter(Boolean) : null;
     } catch (e) { list = null; }
     if (seq !== loadSeq || !dialog.open) return;
+    moreEl.disabled = false;
     if (list === null) return errorState(tt("comm.error", "Could not load the features."));
-    if (!list.length) { setStatus(tt("comm.empty", "No features are open for voting right now.")); return; }
+    nextAfter = continuation; moreEl.hidden = !nextAfter;
+    if (!list.length && !rows.length) { setStatus(tt("comm.empty", "No features are open for voting right now.")); return; }
     setStatus("");
     renderCards(list);
   }
 
   function renderCards(list) {
-    rows = list.map((feature) => {
+    for (const feature of list) {
+      if (rows.some(row => row.id === feature.id)) continue;
       const card = document.createElement("div");
       card.className = "community-card";
       const top = document.createElement("div");
@@ -330,10 +383,10 @@
       button.dataset.featureId = feature.id;
       card.append(top, detail, button);
       cardsEl.appendChild(card);
-      const row = Object.assign({}, feature, {button, votesEl: votes});
+      const row = Object.assign({}, feature, {button, votesEl: votes, card, heading, detail});
       paintRow(row);
-      return row;
-    });
+      rows.push(row);
+    }
   }
 
   function paintRow(row) {
@@ -360,11 +413,15 @@
       const data = await res.json().catch(() => null);
       const feature = parseFeature(data && data.feature);
       // The reply carries the fresh count, so the whole list is not re-fetched.
-      if (!feature || feature.id !== featureId) throw new Error("Invalid vote response");
+      if (!feature || (feature.id !== featureId && !(featureId.startsWith("request-") && /^request-[a-f0-9]{64}$/.test(feature.id))))
+        throw new Error("Invalid vote response");
       if (seq === loadSeq && dialog.open) {
-        row.votes = feature.votes;
-        row.voted = feature.voted;
-        paintRow(row);
+        const existing = rows.find(item => item.id === feature.id && item !== row);
+        const target = existing || row;
+        if (existing) { row.card.remove(); rows = rows.filter(item => item !== row); }
+        Object.assign(target, feature); target.button.dataset.featureId = feature.id;
+        target.heading.textContent = feature.title; target.detail.textContent = feature.description;
+        paintRow(target);
         setStatus("");
       }
     } catch (e) {
@@ -374,6 +431,44 @@
     if (seq === loadSeq && dialog.open && !row.voted) {
       row.button.disabled = false;
       row.button.textContent = tt("comm.vote", "Vote");
+    }
+  }
+
+  async function suggestFeature() {
+    if (suggestion.busy) return;
+    const title = suggestion.titleInput.value.trim(), description = suggestion.descriptionInput.value.trim();
+    if (!title || !description || [...title].length > 100 || [...description].length > 1000) {
+      suggestion.feedback.textContent = tt("comm.suggest.invalid", "Enter a title up to 100 characters and a description up to 1,000 characters.");
+      return;
+    }
+    suggestion.busy = true;
+    [suggestion.titleInput, suggestion.descriptionInput, suggestion.submit].forEach(control => { control.disabled = true; });
+    suggestion.feedback.textContent = tt("comm.suggest.sending", "Publishing…");
+    const seq = loadSeq;
+    let failureText = null;
+    try {
+      const res = await fetch(API + "/suggest", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({title, description})});
+      if (!res.ok) {
+        if (res.status === 400) failureText = tt("comm.suggest.text.error", "Use plain text within the title and description limits, without markup or control characters.");
+        else if (res.status === 409) failureText = tt("comm.suggest.closed", "That idea is no longer open for voting. Please support another idea.");
+        else if (res.status === 429) failureText = tt("comm.suggest.limit", "Too many requests. Wait a minute and try again; your text is kept here.");
+        throw new Error("HTTP " + res.status);
+      }
+      const data = await res.json(), feature = parseFeature(data && data.feature);
+      if (!feature || !/^request-[a-f0-9]{64}$/.test(feature.id)) throw new Error("Invalid suggestion response");
+      suggestion.form.reset(); suggestion.feedback.textContent = "";
+      if (seq === loadSeq && dialog.open) {
+        const existing = rows.find(row => row.id === feature.id);
+        if (existing) { Object.assign(existing, feature); paintRow(existing); } else renderCards([feature]);
+        suggestion.details.open = false;
+        setStatus(tt("comm.suggest.success", "Your idea is public. Your vote is included; votes help prioritise work and are not a delivery promise."));
+        suggestion.summary.focus();
+      }
+    } catch (error) {
+      suggestion.feedback.textContent = failureText || tt("comm.suggest.error", "Could not publish this idea. Check the text and try again; retrying will not add another vote.");
+    } finally {
+      suggestion.busy = false;
+      [suggestion.titleInput, suggestion.descriptionInput, suggestion.submit].forEach(control => { control.disabled = false; });
     }
   }
 

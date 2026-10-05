@@ -5,12 +5,12 @@ with separate tables and routes. Their phrase search, selection, moderation and
 retention rules are in [Community translations](community-translations.md).
 
 The hosted dashboard shows an approximate online count and lets visitors vote on
-the ideas in `server/features.json`. The ballot is empty for now: every idea on it
+curated ideas in `server/features.json` and visitor requests stored in D1. The curated ballot is empty for now: every idea on it
 has shipped and left it (Find a location on 15 September 2026, Optimize staffing on
 20 September 2026, Supply chain for factories not running 24/7 with Supply by
 object's Demand sizing, Multilingual support as the footer's Language on 27
 September 2026, and Time to break even as the Payback column of Businesses ›
-Results on 28 September 2026). The vote dialog says so when the list is empty. The
+Results on 28 September 2026). The vote dialog offers a small suggestion form even when the list is empty. The
 count means
 dashboard tabs seen in the last ten minutes, not verified people or players
 currently in the game. Votes help prioritise work; they are not release promises.
@@ -35,10 +35,12 @@ per connection IP. Duplicate submissions are safe. Shared networks may share a
 vote, and changing IP addresses can permit another vote. The online count uses a
 random per-page-load ID independently of the voting identity.
 
-Save bytes, company names, character IDs and calculations never enter the community
-API's requests. The bug report form is separate and sends a save only when the player
-attaches one (see Bug reports below). The voting database holds feature-specific HMACs of connection IPs, not
-raw IPs. These hashes are pseudonymous identifiers, not a claim of anonymity.
+The voting dialog does not read save bytes, company names, character IDs or
+calculations. Visitors submit only the public suggestion text they type. The bug
+report form is separate and sends a save only when the player
+attaches one (see Bug reports below). Curated votes hold feature-specific HMACs of connection IPs. Visitor request
+votes use a separate HMAC shared only within request voting, so duplicate support
+can be deduplicated when two visitor requests merge. Neither stores raw IPs. These hashes are pseudonymous identifiers, not a claim of anonymity.
 Presence rows hold only the tab's ID and last-seen time. Daily cleanup deletes
 rows not seen for 24 hours, so stale records can remain for approximately 48 hours.
 The same cleanup deletes the votes of every feature no longer in
@@ -46,6 +48,65 @@ The same cleanup deletes the votes of every feature no longer in
 privacy notice promises both. Cloudflare still processes the connection IP in
 handling network requests. Worker invocation logs are switched off in
 `wrangler.jsonc`, so no request URL or country is kept either.
+
+## Visitor feature requests
+
+The existing voting dialog lists ideas before its collapsed **Suggest a feature**
+form. Submission needs a title (1–100 Unicode characters) and a description
+(1–1,000), both plain text. The form says that both are immediately public and
+include the contributor's vote; it asks for no account, save or contact details.
+Votes remain advisory. Requests persist across deployments in the existing D1
+binding. Apply `migrations/0003_feature_requests.sql` before deploying the routes.
+
+`POST /api/community/suggest` accepts only `title` and `description`, with an
+8 KiB envelope limit, the existing same-origin checks and connection limiter.
+The API normalizes Unicode, whitespace and case for a content-derived stable ID;
+identical retries cannot create another request or another connection vote. The
+first accepted title and description remain unchanged. Markup, direction controls,
+unwanted control characters, empty or overlong text are rejected. The browser
+renders public text with `textContent`.
+
+`GET /api/community/features` includes curated options and up to 25 active visitor
+requests, ordered by stable ID. `nextAfter` continues the stored list with
+`?after=<request-id>`; the dialog's **Show more ideas** control follows it. The
+bounded page uses one grouped database query, rather than one query per visitor
+request. New or moderated ideas are refreshed on reopening the dialog.
+
+Request voting has a separate `request-vote` HMAC scope shared only among visitor
+requests. Curated polls retain their existing per-feature hashes. This distinction
+permits an exact union of visitor support: a connection that voted for both
+originals counts once after a merge. **Merges between curated options and visitor
+requests are unsupported** because existing curated hashes cannot establish the
+same connection across different polls. No raw IP or submitter identity is stored
+with request text; public responses contain only text, IDs, counts and whether the
+requesting connection has voted.
+
+Operator commands use the existing Wrangler login, default to local D1, and need
+an explicit `--remote` for production. There is no public moderation route:
+
+```sh
+node tools/feature_moderate.mjs list --limit 50
+node tools/feature_moderate.mjs hide request-<64-hex-id>
+node tools/feature_moderate.mjs restore request-<64-hex-id>
+node tools/feature_moderate.mjs retire request-<64-hex-id>
+node tools/feature_moderate.mjs merge request-<source-id> request-<target-id>
+```
+
+Hide removes inappropriate text from the public list; retire closes shipped or
+declined ideas. Both immediately delete vote hashes while retaining text and
+history for moderation. Restore republishes only hidden text and starts voting
+with no retained votes; it cannot revive a retired idea. Daily cleanup additionally
+removes any inactive request vote records, preserving all active stored requests
+and curated options, so the published one-day closed-poll retention is unchanged.
+
+Merge requires two distinct active visitor requests. A single database UPDATE and
+SQLite triggers atomically union their votes, remove source vote rows and flatten
+all previous aliases to the surviving target. Text history is retained. API
+submission and voting batches resolve aliases and require the canonical request
+to be active within the same transaction. Retrying an old source ID follows the
+survivor, including merge chains; hidden or retired canonical content cannot be
+revived by submission or vote retries. Concurrent submission, voting and operator
+merges cannot silently sum overlapping votes or publish hidden text.
 
 ## Bug reports
 
@@ -139,10 +200,10 @@ never put a real token in `.dev.vars`. The tests replace GitHub with a stub
 The browser Python worker is still `web/worker.js`. The server entry point is
 `server/worker.mjs`, outside the publicly served `web/` directory. It handles only
 API requests; the existing assets continue to be served directly. D1 holds the
-presence and vote tables. Cloudflare rate-limit bindings limit requests per IP at
+presence, curated votes, visitor requests and request votes. Cloudflare rate-limit bindings limit requests per IP at
 each edge location: heartbeats have their own budget of 20 a minute
-(`PRESENCE_LIMITER`), since a real tab sends one every five minutes, and the listing
-and votes share 120 a minute (`COMMUNITY_LIMITER`). Neither is a global identity or
+(`PRESENCE_LIMITER`), since a real tab sends one every five minutes. Listing,
+votes and suggestions share 120 a minute (`COMMUNITY_LIMITER`). Neither is a global identity or
 fraud-prevention guarantee.
 
 Install the pinned development dependencies with `npm ci`. For local development:

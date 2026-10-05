@@ -12,7 +12,7 @@ after(async () => { await browser?.close(); });
 async function setup(t, options = {}) {
   const context = await browser.newContext({viewport:{width:options.width || 1280, height:900}, reducedMotion:'reduce'});
   t.after(() => context.close());
-  const state = {heartbeats:[], reads:0, votes:[], count:40, failPresence:false, failVotes:false, holdPresence:null,holdVote:null,
+  const state = {heartbeats:[], reads:0, votes:[], count:40, failPresence:false, failVotes:false, holdPresence:null,holdVote:null, suggestions:[],failSuggest:false,holdSuggest:null,pageSize:null,voteCanonical:null,
     features:[
       {id:'optimize-staffing',title:'Optimize staffing',description:'Shifts from the hour grid.',votes:0,voted:false},
       {id:'find-a-location',title:'Find a location',description:'Compare available buildings.',votes:0,voted:false},
@@ -45,13 +45,24 @@ async function setup(t, options = {}) {
     if(url.pathname === '/api/community/features') {
       state.reads++;
       if(state.failVotes) return json({error:'Unavailable'},503);
-      return json({features:state.features});
+      const after = url.searchParams.get('after');
+      const start = after ? state.features.findIndex(feature => feature.id === after) + 1 : 0;
+      const page = state.pageSize ? state.features.slice(start,start+state.pageSize) : state.features;
+      return json({features:page,nextAfter:state.pageSize && start+page.length < state.features.length ? page.at(-1).id : null});
+    }
+    if(url.pathname === '/api/community/suggest') {
+      const body = request.postDataJSON(); state.suggestions.push(body);
+      if(state.holdSuggest) await state.holdSuggest;
+      if(state.failSuggest) return json({error:'Unavailable'},503);
+      let feature = state.features.find(feature => feature.title === body.title && feature.description === body.description);
+      if(!feature) { feature = {id:'request-'+'a'.repeat(64),...body,votes:1,voted:true}; state.features.push(feature); }
+      return json({feature});
     }
     if(url.pathname === '/api/community/vote') {
       const body = request.postDataJSON(); state.votes.push(body);
       if(state.holdVote) await state.holdVote;
       if(state.failVotes) return json({error:'Unavailable'},503);
-      const feature = state.features.find(f => f.id === body.featureId);
+      const feature = state.features.find(f => f.id === (state.voteCanonical || body.featureId));
       if(!feature.voted) feature.votes++;
       feature.voted = true;
       return json({feature});
@@ -377,4 +388,83 @@ test('community dialog fits mobile in both themes and the keyboard stays in the 
     assert.equal(await dialog.evaluate(el => el.contains(document.activeElement)),true);
   }
   if(process.env.COMMUNITY_SCREENSHOT) await page.screenshot({path:process.env.COMMUNITY_SCREENSHOT});
+});
+
+
+test('visitor requests: empty ballot publishes from the collapsed form and retries keep text',async t => {
+  const {page,state}=await setup(t); state.features=[];
+  const dialog=await openVotes(page);
+  await dialog.getByText(en('comm.empty'),{exact:true}).waitFor();
+  assert.equal(await dialog.locator('details').getAttribute('open'),null);
+  const badge=dialog.locator('[data-new-feature="feature-requests"]');
+  assert.equal(await badge.isVisible(),true);
+  await dialog.locator('summary').click();
+  await page.waitForFunction(()=>document.querySelector('[data-new-feature="feature-requests"]').hidden);
+  await dialog.locator('#communitySuggestionTitle').fill('Synthetic new idea');
+  await dialog.locator('#communitySuggestionDescription').fill('An example without private information.');
+  state.failSuggest=true;
+  await dialog.locator('form button[type=submit]').click();
+  await dialog.getByText(/Could not publish this idea/).waitFor();
+  assert.equal(await dialog.locator('#communitySuggestionTitle').inputValue(),'Synthetic new idea');
+  state.failSuggest=false;
+  await dialog.locator('form button[type=submit]').click();
+  await dialog.getByText('Synthetic new idea',{exact:true}).waitFor();
+  await dialog.getByText(/Your idea is public/).waitFor();
+  assert.equal(await dialog.locator('.community-card').count(),1);
+  assert.equal(await dialog.locator('.community-vote').isDisabled(),true);
+  assert.deepEqual(state.suggestions[0],state.suggestions[1]);
+  await page.keyboard.press('Escape'); await openVotes(page);
+  await dialog.getByText('Synthetic new idea',{exact:true}).waitFor();
+  assert.equal(state.features.length,1);
+  await page.reload(); await openVotes(page);
+  assert.equal(await page.locator('[data-new-feature="feature-requests"]').isVisible(),false);
+});
+
+test('visitor requests: more ideas precede the form and mobile keyboard entry remains usable',async t => {
+  const {page,state}=await setup(t,{width:390});
+  state.features=Array.from({length:5},(_,i)=>({id:'request-'+String(i).padStart(64,'0'),title:'Idea '+i,description:'Synthetic.',votes:0,voted:false}));
+  state.pageSize=2;
+  const dialog=await openVotes(page);
+  await dialog.getByText('Idea 0',{exact:true}).waitFor();
+  assert.equal(await dialog.locator('.community-card').count(),2);
+  await dialog.locator('.community-more').click(); await dialog.getByText('Idea 3',{exact:true}).waitFor();
+  await dialog.locator('.community-more').click(); await dialog.getByText('Idea 4',{exact:true}).waitFor();
+  assert.equal(await dialog.locator('.community-card').count(),5);
+  assert.equal(await dialog.locator('.community-more').isVisible(),false);
+  await dialog.locator('summary').focus(); await page.keyboard.press('Enter'); await page.keyboard.press('Tab');
+  assert.equal(await dialog.locator('#communitySuggestionTitle').evaluate(el=>el===document.activeElement),true);
+  for(const theme of ['dark','light']) {
+    await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true);
+    assert.equal(await dialog.evaluate(el=>el.contains(document.activeElement)),true);
+    if(process.env.FEATURE_REQUEST_SCREENSHOT && theme==='light') await page.screenshot({path:process.env.FEATURE_REQUEST_SCREENSHOT});
+  }
+});
+
+
+test('visitor requests: reopening during publication waits for mutation and merged votes update survivor',async t => {
+  const {page,state}=await setup(t); state.features=[];
+  const dialog=await openVotes(page);
+  await dialog.getByText(en('comm.empty'),{exact:true}).waitFor();
+  let release; state.holdSuggest=new Promise(resolve=>{release=resolve;}); t.after(()=>release());
+  await dialog.locator('summary').click();
+  await dialog.locator('#communitySuggestionTitle').fill('Pending idea');
+  await dialog.locator('#communitySuggestionDescription').fill('Synthetic.');
+  const sent=page.waitForRequest('**/api/community/suggest');
+  await dialog.locator('form button[type=submit]').click(); await sent;
+  assert.equal(await dialog.locator('form button[type=submit]').isDisabled(),true);
+  await page.keyboard.press('Escape'); await openVotes(page);
+  assert.equal(state.reads,1);
+  release(); await dialog.getByText('Pending idea',{exact:true}).waitFor();
+  assert.equal(state.reads,2);
+  await page.keyboard.press('Escape');
+  const source='request-'+'b'.repeat(64),target='request-'+'c'.repeat(64);
+  state.features=[{id:source,title:'Before merge',description:'Synthetic.',votes:1,voted:false},
+    {id:target,title:'Surviving idea',description:'Synthetic.',votes:1,voted:false}];
+  await openVotes(page); await dialog.getByText('Before merge',{exact:true}).waitFor();
+  state.voteCanonical=target;
+  await dialog.locator('button[data-feature-id="'+source+'"]').click();
+  await page.waitForFunction(()=>document.querySelectorAll('.community-card').length===1);
+  assert.equal(await dialog.getByText('Surviving idea',{exact:true}).count(),1);
+  assert.equal(await dialog.locator('.community-vote').isDisabled(),true);
 });

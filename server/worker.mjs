@@ -5,6 +5,7 @@
 // web/ -- web/worker.js is the existing in-browser Python worker.
 
 import FEATURES from "./features.json";
+import {isRequestId, listRequests, voteRequest, suggestRequest, cleanupRequestVotes} from "./feature_requests.mjs";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Pseudo IPv4 "overwrite headers" mode fills CF-Connecting-IP with a 240.0.0.0/4
@@ -55,6 +56,7 @@ const routes = {
   "/api/translations/vote": { operation: "translations", method: "POST", write: true, handler: translations },
   "/api/community/presence": { operation: "presence", method: "POST", write: true, handler: presence, limiter: "PRESENCE_LIMITER" },
   "/api/community/vote": { operation: "vote", method: "POST", write: true, handler: vote },
+  "/api/community/suggest": { operation: "features", method: "POST", write: true, handler: suggest, maxBodyBytes: 8192 },
   "/api/community/features": { operation: "features", method: "GET", write: false, handler: features },
   "/api/report": {
     operation: "report", method: "POST", write: false, handler: report, limiter: "REPORT_LIMITER",
@@ -89,13 +91,14 @@ export default {
         return cleanupTranslationVotes(env);
       })() : null,
       // The privacy notice promises both: presence rows go within two days, and a
-      // poll's vote hashes go once its feature leaves features.json.
+      // poll's vote hashes go once its curated option or stored request closes.
       db ? (async () => db.batch([
         db.prepare("DELETE FROM community_presence WHERE last_seen <= ?1")
           .bind(Math.floor(Date.now() / 1000) - 24 * 60 * 60),
         FEATURES.length
           ? db.prepare(`DELETE FROM community_votes WHERE feature_id NOT IN (${FEATURES.map((_, i) => `?${i + 1}`).join(", ")})`).bind(...FEATURES.map((f) => f.id))
           : db.prepare("DELETE FROM community_votes"),
+        cleanupRequestVotes(db),
       ]))() : null,
     ]);
     const failed = results.find((r) => r.status === "rejected");
@@ -195,6 +198,12 @@ async function presence(request, env, body, _ip, _sign, diagnostic) {
 
 async function vote(_request, env, body, ip, sign, diagnostic) {
   const featureId = singleString(body, "featureId");
+  if (isRequestId(featureId)) {
+    diagnostic.category = "database";
+    const result = await voteRequest(env.COMMUNITY_DB, featureId, await sign(`request-vote:${ip}`), Math.floor(Date.now() / 1000), diagnostic);
+    diagnostic.category = "unexpected";
+    return json(result.body, result.status);
+  }
   const feature = FEATURES.find((f) => f.id === featureId);
   if (!feature) return json({ error: "Unknown feature" }, 400);
   const db = env.COMMUNITY_DB;
@@ -212,8 +221,20 @@ async function vote(_request, env, body, ip, sign, diagnostic) {
   return json({ feature: { ...feature, votes: total.results[0].n, voted: true } });
 }
 
-async function features(_request, env, _body, ip, sign, diagnostic) {
-  if (!FEATURES.length) return json({ features: [] });
+async function suggest(_request, env, body, ip, sign, diagnostic) {
+  diagnostic.category = "database";
+  const result = await suggestRequest(env.COMMUNITY_DB, body, await sign(`request-vote:${ip}`), Math.floor(Date.now() / 1000), diagnostic);
+  diagnostic.category = "unexpected";
+  return json(result.body, result.status);
+}
+
+async function features(request, env, _body, ip, sign, diagnostic) {
+  const after = new URL(request.url).searchParams.get("after") || "";
+  if (after && !isRequestId(after)) return json({error: "Invalid request"}, 400);
+  diagnostic.category = "database";
+  const visitor = await listRequests(env.COMMUNITY_DB, await sign(`request-vote:${ip}`), after, diagnostic);
+  diagnostic.category = "unexpected";
+  if (after || !FEATURES.length) return json(visitor.body);
   const db = env.COMMUNITY_DB;
   const statements = [];
   for (const feature of FEATURES) {
@@ -229,11 +250,12 @@ async function features(_request, env, _body, ip, sign, diagnostic) {
   const results = await db.batch(statements);
   diagnostic.category = "unexpected";
   return json({
-    features: FEATURES.map((feature, i) => ({
+    features: [...FEATURES.map((feature, i) => ({
       ...feature,
       votes: results[2 * i].results[0].n,
       voted: results[2 * i + 1].results[0].n > 0,
-    })),
+    })), ...visitor.body.features],
+    nextAfter: visitor.body.nextAfter,
   });
 }
 

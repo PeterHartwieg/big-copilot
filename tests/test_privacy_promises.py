@@ -147,6 +147,17 @@ class PrivacyPromises(unittest.TestCase):
         self.assertIn("24 * 60 * 60", handler)
         self.assertIn("DELETE FROM community_votes WHERE feature_id NOT IN", handler)
 
+    def test_feature_request_text_and_scoped_votes_match_the_notice(self):
+        notice = (ROOT / "web" / "privacy.html").read_text(encoding="utf-8")
+        self.assertIn("suggested titles and descriptions appear publicly", notice)
+        self.assertIn("shared only across visitor feature requests", notice)
+        self.assertIn("Restoring hidden text starts voting afresh", notice)
+        worker = (ROOT / "server" / "worker.mjs").read_text(encoding="utf-8")
+        self.assertIn("cleanupRequestVotes(db)", worker)
+        migration = (ROOT / "migrations" / "0003_feature_requests.sql").read_text(encoding="utf-8")
+        self.assertIn("WHEN NEW.state IN ('hidden','retired')", migration)
+        self.assertIn("DELETE FROM feature_request_votes WHERE request_id = NEW.id", migration)
+
 
 if __name__ == "__main__":
     unittest.main()

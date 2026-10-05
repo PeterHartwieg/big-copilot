@@ -131,6 +131,8 @@ async function applyMigration(target) {
     .filter((stmt) => stmt.length > 0);
   assert.ok(statements.length > 0, 'migrations/0001_community.sql contained no statements');
   for (const stmt of statements) await target.prepare(stmt).run();
+  const requests = fs.readFileSync(path.join(ROOT,'migrations/0003_feature_requests.sql'),'utf8');
+  for (const stmt of requests.match(/CREATE TABLE[\s\S]*?;|CREATE INDEX[\s\S]*?;|CREATE TRIGGER[\s\S]*?END;/g)) await target.prepare(stmt).run();
 }
 
 function originFor(name) {
@@ -946,6 +948,7 @@ function diagnosticWorker({ cacheFails = false } = {}) {
   const events = [];
   const source = fs.readFileSync(WORKER_PATH, 'utf8')
     .replace('import FEATURES from "./features.json";', `const FEATURES = ${JSON.stringify(BALLOT)};`)
+    .replace(/import .* from \"\.\/feature_requests\.mjs\";/, fs.readFileSync(path.join(ROOT,'server/feature_requests.mjs'),'utf8').replace(/^export /gm,''))
     .replace('export default {', 'globalThis.worker = {');
   const context = {
     Request: globalThis.Request, Response: globalThis.Response, URL, TextEncoder, TextDecoder,
