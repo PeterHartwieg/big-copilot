@@ -2051,6 +2051,177 @@ PAYLOAD_KEYS = (
 )
 
 
+
+# Three planning stages only: locale, effective tables and the predecessor world
+# are inputs too. Bump this when placement semantics or capsule shape changes.
+PLANNING_CACHE_VERSION = 1
+_PLANNING_CACHE_RULES = (
+    "ALL_DAY_OPEN", "ASSIGN_SKILLS", "AT_CAP", "CAPPED_INITIAL_BUILD",
+    "CAP_CATEGORIES", "CLEANING_SHIFT", "COVER_STATIONS", "DEMAND_RUN_DAYS",
+    "DEMAND_SCOPE", "FACTORY_RUN_START", "FACTORY_SKILL", "FALLBACK_CAPS",
+    "FULL_TIME", "HIRE_ID", "HIRE_ORDERS", "HIRE_PACKINGS", "HOUR_WEEKS_THIN",
+    "JOB_DEMANDS", "MIN_SPLIT", "OFFICE_ALWAYS_ON", "OFFICE_DAY",
+    "OFFICE_FULL_DOOR", "OFFICE_POST_RATE", "OFFICE_WEEKEND", "PART_TIME_FLOOR",
+    "SERVICE_SKILL", "SHIFT_CAP", "SIZING_MODES", "SLACK_SHARE",
+    "STEP_DOWN_MISSES", "WEEKDAYS", "WEEKEND_FIRST", "WEEKEND_WEEKDAYS",
+)
+
+
+def _planning_typed(value):
+    """Canonical values, retaining key types, list order and Msg parameters."""
+    if isinstance(value, Msg):
+        return ["msg", str(value), _planning_typed(value.key), _planning_typed(value.p)]
+    if value is None:
+        return ["none"]
+    if isinstance(value, bool):
+        return ["bool", value]
+    if isinstance(value, int):
+        return ["int", str(value)]
+    if isinstance(value, float):
+        return ["float", value.hex()]
+    if isinstance(value, str):
+        return ["str", value]
+    if isinstance(value, (list, tuple)):
+        return ["tuple" if isinstance(value, tuple) else "list", [_planning_typed(x) for x in value]]
+    if isinstance(value, (set, frozenset)):
+        return ["set", sorted((_planning_typed(x) for x in value), key=_planning_encoded)]
+    if isinstance(value, dict):
+        pairs = [[_planning_typed(k), _planning_typed(v)] for k, v in value.items()]
+        return ["dict", sorted(pairs, key=lambda pair: _planning_encoded(pair[0]))]
+    raise TypeError(f"unsupported planning cache input: {type(value).__name__}")
+
+
+def _planning_encoded(value):
+    return json.dumps(value, ensure_ascii=True, separators=(",", ":"))
+
+
+def _planning_bytes(value):
+    return _planning_encoded(_planning_typed(value)).encode("ascii")
+
+
+class PlanningCache:
+    """Bounded private capsules; never hold a Save, Build or caller-owned rows."""
+
+    def __init__(self, max_entries=6, max_bytes=16 * 1024 * 1024):
+        self.max_entries = max(0, max_entries)
+        self.max_bytes = max(0, max_bytes)
+        self.entries = collections.OrderedDict()
+        self.bytes = 0
+
+    def get(self, key):
+        if key not in self.entries:
+            return None
+        capsule, _ = self.entries[key]
+        self.entries.move_to_end(key)
+        return copy.deepcopy(capsule)
+
+    def put(self, key, capsule):
+        # Serialize before publishing: unsupported or oversized entries bypass.
+        try:
+            size = len(_planning_bytes(capsule))
+        except TypeError:
+            return
+        if not self.max_entries or size > self.max_bytes:
+            return
+        stored = copy.deepcopy(capsule)
+        if key in self.entries:
+            self.bytes -= self.entries.pop(key)[1]
+        while self.entries and (len(self.entries) >= self.max_entries or self.bytes + size > self.max_bytes):
+            _, (_, old_size) = self.entries.popitem(last=False)
+            self.bytes -= old_size
+        self.entries[key] = (stored, size)
+        self.bytes += size
+
+
+def _planning_raw_inputs(save):
+    """Transitive raw reads of the three producers and their schedule helpers.
+
+    Keep whole registrations/employees conservatively, including their reachable
+    referenced records. Unreachable recruitment/financial records are excluded.
+    Day remains an input to open-day averaging; cash and clock do not.
+    """
+    roots = {k: save.root.get(k) for k in
+             ("BuildingRegistrations", "EmployeeInstances", "Day", "buildNumberAtStart")}
+    refs = {}
+    def visit(value):
+        if isinstance(value, dict):
+            if len(value) == 1 and "$ref" in value:
+                rid = value["$ref"]
+                if rid not in refs:
+                    refs[rid] = save.refs.get(rid)
+                    visit(refs[rid])
+            else:
+                for item in value.values():
+                    visit(item)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                visit(item)
+    visit(roots)
+    return {"roots": roots, "refs": refs}
+
+
+def _planning_rule(value):
+    # A few placer rules include module-level lambdas alongside numeric knobs.
+    # Fingerprint their code/constants as well; ordinary algorithms still require
+    # the explicit cache version bump. No function object enters a capsule.
+    if callable(value):
+        code = value.__code__
+        return {"ruleCode": code.co_code.hex(), "constants": code.co_consts,
+                "names": code.co_names}
+    if isinstance(value, tuple):
+        return tuple(_planning_rule(x) for x in value)
+    if isinstance(value, list):
+        return [_planning_rule(x) for x in value]
+    if isinstance(value, dict):
+        return {k: _planning_rule(v) for k, v in value.items()}
+    return value
+
+
+def _planning_key(build, stage, world):
+    shared = build.shared
+    inputs = {k: shared[k] for k in ("businesses", "all_grids", "staff")}
+    if stage == "staffing":
+        inputs["base_promotion"] = shared["base_promotion"]
+    if stage == "factoryStaffing":
+        inputs.update(factories=shared["factories"], posts=build.private["posts"])
+    value = {"version": PLANNING_CACHE_VERSION, "stage": stage,
+             "character": build.save.root.get("characterId"),
+             "build": build.save.root.get("buildNumberAtLastSave"),
+             "raw": _planning_raw_inputs(build.save), "inputs": inputs,
+             "locale": build.names.locale, "buildings": load_buildings(build.save),
+             "curves": load_demand_curves(), "world": world,
+             "rules": {k: _planning_rule(globals()[k]) for k in _PLANNING_CACHE_RULES}}
+    return stage, hashlib.sha256(_planning_bytes(value)).hexdigest()
+
+
+def _planning_failed(value):
+    if isinstance(value, dict):
+        return value.get("failed") is True or any(_planning_failed(x) for x in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(_planning_failed(x) for x in value)
+    return False
+
+
+def _cached_planning(build, stage, world, produce):
+    """Cache before _take_hires; each restore binds private hires to NEW rows."""
+    cache = build.planning_cache
+    if cache is None:
+        return produce(world), world
+    # The capsule and preceding stage are never mutated by this placement.
+    world = copy.deepcopy(world)
+    try:
+        key = _planning_key(build, stage, world)
+    except TypeError:
+        return produce(world), world
+    capsule = cache.get(key)
+    if capsule is not None:
+        return capsule["rows"], capsule["world"]
+    rows = produce(world)
+    if not _planning_failed(rows):
+        build._planning_pending[stage] = (key, copy.deepcopy({"rows": rows, "world": world}))
+    return rows, world
+
+
 class Build:
     """One save's build: the core payload, and what its sections are computed from.
 
@@ -2065,19 +2236,21 @@ class Build:
     `generation` is the worker's number for the build (browser_build()).
     """
 
-    def __init__(self, save: Save, names: Names, generation=None):
+    def __init__(self, save: Save, names: Names, generation=None, planning_cache=None):
         self.save = save
         self.names = names
         self.generation = generation
+        self.planning_cache = planning_cache
+        self._planning_pending = {}
         self.core: dict = {}
         self.shared: dict = {}
         self.private: dict = {}
         self.sections: dict = {}
 
 
-def extract(save: Save, names: Names, history_path: str | None = None) -> dict:
+def extract(save: Save, names: Names, history_path: str | None = None, *, planning_cache=None) -> dict:
     """The whole payload: the core and every section (materialize_all())."""
-    return materialize_all(build_core(save, names, history_path))
+    return materialize_all(build_core(save, names, history_path, planning_cache=planning_cache))
 
 
 def materialize_all(build: Build) -> dict:
@@ -2105,8 +2278,16 @@ def section(build: Build, name: str) -> dict:
         for need in spec["needs"]:
             section(build, need)
         _progress(spec["words"], force=True)
-        values = spec["produce"](build)
-        build.sections[name] = _wire_msgs({key: values[key] for key in spec["keys"]})
+        try:
+            values = spec["produce"](build)
+            wired = _wire_msgs({key: values[key] for key in spec["keys"]})
+        except Exception:
+            build._planning_pending.pop(name, None)
+            raise
+        build.sections[name] = wired
+        pending = build._planning_pending.pop(name, None)
+        if pending is not None:
+            build.planning_cache.put(*pending)
     return build.sections[name]
 
 
@@ -2158,8 +2339,9 @@ def _staffing_section(build: Build) -> dict:
     shared = build.shared
     world = _planning_world(build)
     with _collector_paused():
-        rows = _staffing(build.save, build.names, shared["businesses"], shared["all_grids"],
-                         shared["staff"], shared["base_promotion"], world)
+        rows, world = _cached_planning(build, "staffing", world, lambda current:
+            _staffing(build.save, build.names, shared["businesses"], shared["all_grids"],
+                      shared["staff"], shared["base_promotion"], current))
     build.private["hires"].update(_take_hires(rows))
     shared["planning"]["staffing"] = world
     return {"staffing": rows}
@@ -2170,8 +2352,9 @@ def _office_staffing_section(build: Build) -> dict:
     shared = build.shared
     world = _planning_world(build, "staffing")
     with _collector_paused():
-        rows = _office_staffing(build.save, build.names, shared["businesses"],
-                                shared["all_grids"], shared["staff"], world)
+        rows, world = _cached_planning(build, "officeStaffing", world, lambda current:
+            _office_staffing(build.save, build.names, shared["businesses"],
+                             shared["all_grids"], shared["staff"], current))
     build.private["hires"].update(_take_hires(rows))
     shared["planning"]["officeStaffing"] = world
     return {"officeStaffing": rows}
@@ -2182,10 +2365,9 @@ def _factory_staffing_section(build: Build) -> dict:
     shared = build.shared
     world = _planning_world(build, "officeStaffing")
     with _collector_paused():
-        factory = _factory_staffing(
-            build.save, build.names, shared["businesses"], shared["factories"], shared["staff"],
-            world=world, posts=build.private["posts"],
-        )
+        factory, world = _cached_planning(build, "factoryStaffing", world, lambda current:
+            _factory_staffing(build.save, build.names, shared["businesses"], shared["factories"], shared["staff"],
+                              world=current, posts=build.private["posts"]))
     build.private["hires"].update(_take_hires(
         row for mode in SIZING_MODES for row in factory.get(mode, [])))
     shared["planning"]["factoryStaffing"] = world
@@ -2302,7 +2484,7 @@ def _progress(detail: str = "", force: bool = False) -> None:
 
 
 def build_core(save: Save, names: Names, history_path: str | None = None,
-               generation=None) -> Build:
+               generation=None, *, planning_cache=None) -> Build:
     """The core of one build: every key the warnings need, the history recorded.
 
     The rest of the payload is SECTIONS, computed from what this keeps on the
@@ -2315,7 +2497,7 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     largest measured save. Page-only producers have no history
     side effects and leave the core whole.
     """
-    build = Build(save, names, generation)
+    build = Build(save, names, generation, planning_cache)
     root = save.root
     day = root["Day"]
 
@@ -20763,9 +20945,9 @@ def safe_extract(save: Save, names: Names, history_path: str | None) -> dict:
     return _safely(save, lambda: extract(save, names, history_path))
 
 
-def safe_build(save: Save, names: Names, history_path: str | None, generation=None) -> Build:
+def safe_build(save: Save, names: Names, history_path: str | None, generation=None, *, planning_cache=None) -> Build:
     """build_core(), its failures said as safe_extract() says them."""
-    return _safely(save, lambda: build_core(save, names, history_path, generation))
+    return _safely(save, lambda: build_core(save, names, history_path, generation, planning_cache=planning_cache))
 
 
 def safe_section(build: Build, name: str) -> dict:
@@ -20816,6 +20998,7 @@ def _raised_at(exc: BaseException) -> str:
 # The build the worker holds for browser_section(): its latest, or None once
 # a new one has started (the old save's memory goes first).
 _BROWSER_BUILD = {"build": None}
+_BROWSER_PLANNING_CACHE = PlanningCache()
 
 
 class StaleBuild(Exception):
@@ -20855,7 +21038,7 @@ def browser_build(
             f"{os.path.basename(save_path)} is not a Big Ambitions save this board can "
             f"read ({type(exc).__name__}: {exc})"
         ) from exc
-    build = safe_build(save, names, history_path, generation)
+    build = safe_build(save, names, history_path, generation, planning_cache=_BROWSER_PLANNING_CACHE)
     character = save.root.get("characterId") or "default"
     # The page keeps this file in localStorage, a few MB for the whole site:
     # sixty days of demand for every character ever opened would fill it.

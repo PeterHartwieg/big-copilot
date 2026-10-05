@@ -644,8 +644,10 @@ section in the payload.
   card counts the shop plan's own hires
   until `hiring` is on the board, and the people who could come from other sites only
   after (`spRowLess()`), so the count can drop once a staffing page has been opened.
-- Sections are not kept across builds: each new board asks again (a bounded cache is a
-  later phase of #238). On a same-company, same-source refresh, a row on screen that
+- Each new board still asks for its sections with its current generation. Python can
+  reuse the three planning calculations through the bounded cache described below;
+  hiring and candidates always run against the current save. On a same-company,
+  same-source refresh, a row on screen that
   previously drew with its declared sections keeps its DOM while the new sections load.
   `odDrawn` records successful draws; `odKeepRow()` leaves a waiting row in `pageStale`
   and requests its sections. `odArrived()`/`odRedraw()` redraw it on arrival. This includes
@@ -657,6 +659,44 @@ section in the payload.
   finder chips, filters and results ignore input and never save filters without premises.
   `gwConfirm`, progress checks and `odReady` always read the current board; retained DOM
   is never cached payload data.
+
+**Planning cache across builds (#238 phase 3).** `PlanningCache` retains only successful
+`staffing`, `officeStaffing` and `factoryStaffing` capsules, before `_take_hires()` removes
+private data. A capsule contains raw rows (including every shop cover alternative and
+both factory sizing modes) and the resulting world: people, ordered bench and week state.
+A hit deep-copies both together, preserving their relationships, then rebinds private hires
+to the new rows' identities. Neither caller mutation nor a later placement can modify a
+stored capsule. Exceptions and any nested `failed: true` row bypass insertion.
+
+The browser owns one Python-process cache across builds. It keeps at most six capsules
+and 16 MiB of canonical serialized capsule bytes in a shared LRU; oversized capsules
+bypass caching. No Save, Build, object IDs, source paths or disk/localStorage state are
+retained. This byte budget measures canonical content, not Python allocator overhead.
+`build_core(..., planning_cache=cache)` and `extract(..., planning_cache=cache)` provide
+explicit reuse for other callers; the existing CLI/watch path does not retain a cache.
+Normal builds without injection remain uncached. Import creates no file dependency.
+
+Keys use SHA-256 over typed canonical values: mappings/sets sort by typed values, lists
+and tuples retain their type and order, and Msg values include English, catalogue key and
+params. Namespace includes stage, `PLANNING_CACHE_VERSION`, character and game build.
+Inputs conservatively retain whole businesses, grids (measurement evidence and persistence
+included), staff, effective Names locale/help pages, resolved building facts, demand curves,
+placer rule constants and the complete predecessor world. Shops additionally include base
+promotion; factories include their lines and private post identities. Direct raw planner
+reads are BuildingRegistrations, EmployeeInstances, Day (open-day averaging) and
+buildNumberAtStart, plus every record reachable through their `$ref` graph. Unreachable
+records and core-only cash/clock fields are excluded. These conservative registration and
+business projections may miss after an irrelevant stock/financial field changes; they
+favor correctness over broad reuse. A cash-only change demonstrably reuses placements.
+Changes to ordinary algorithm semantics require a version bump; callable rule code and
+constant knobs are also fingerprinted. No cache key uses generation, mtime, repr, id or hash.
+
+Dependencies and generation authority remain unchanged: shops precede offices, which
+precede factories, and hiring consumes their newly restored private data. Cache hits never
+publish an old transport envelope; a failed browser build leaves no current Build. Tests in
+`tests/test_section_cache.py` cover cold/hit equality, mutation isolation, invalidation,
+reference traversal, failures and boundedness. The reporting player's original Pyodide
+performance target remains unverified by synthetic native benchmarks.
 
 **Adding a feature.** Decide whether it is core or a section. Core is for what the warnings
 need (plus the documented cheap map layers); anything computed on load needs that reason,
