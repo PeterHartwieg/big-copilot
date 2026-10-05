@@ -95,12 +95,18 @@ test('optimizer CLI checks LF assembly bytes through Python stdout on every plat
   fs.mkdirSync(path.join(root,'tools')); fs.mkdirSync(path.join(root,'web'));
   const cli=path.join(root,'tools/optimize_web.mjs');
   fs.copyFileSync(path.join(__dirname,'../tools/optimize_web.mjs'),cli);
+  // Match an ordinary npm ci checkout: the copied CLI has local esbuild and
+  // must not depend on a developer's ambient NODE_PATH in either child.
+  fs.mkdirSync(path.join(root,'node_modules'));
+  fs.symlinkSync(path.dirname(require.resolve('esbuild/package.json')),path.join(root,'node_modules/esbuild'),
+    process.platform==='win32' ? 'junction' : 'dir');
+  const childEnv={...process.env}; delete childEnv.NODE_PATH;
   const raw='<style>\n:root{--fixture:"'+ 'fixture'.repeat(10000)+'"}\n</style>\n<script>globalThis.answer = 3;</script>\n';
   fs.writeFileSync(path.join(root,'web/index.html'),raw);
   fs.writeFileSync(path.join(root,'build_web.py'),
     'HTML = '+JSON.stringify(raw)+'\ndef release_info(): return {}\ndef page_html(release): return HTML\n');
   for(const args of [[],['--check']]) {
-    const result=spawnSync(process.execPath,[cli,...args],{cwd:root,encoding:'utf8'});
+    const result=spawnSync(process.execPath,[cli,...args],{cwd:root,encoding:'utf8',env:childEnv});
     assert.equal(result.status,0,result.error?.message || result.stderr);
   }
 });
@@ -120,7 +126,7 @@ test('hosted assets hash shipped bytes, preserve classic order and ignore unrela
   assert.deepEqual(checkOptimized(root, raw), []);
   assert.deepEqual([...hostedPage(raw.replace('release = "a"', 'release = "b"')).assets.keys()], [...output.assets.keys()]);
   const context = vm.createContext({});
-  for (const [, src, inline] of output.html.matchAll(/<script(?: src="([^"]+)" integrity="[^"]+")?>([\s\S]*?)<\/script>/g))
+  for (const [, src, inline] of output.html.matchAll(/<script(?: src="([^"]+)" integrity="[^"]+" data-board-asset)?>([\s\S]*?)<\/script>/g))
     vm.runInContext(src ? output.assets.get(src).toString() : inline, context);
   assert.equal(context.answer, 80000);
   for (const [url, bytes] of output.assets) {

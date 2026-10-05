@@ -16,6 +16,7 @@ const types = {'.html':'text/html', '.js':'text/javascript', '.mjs':'text/javasc
   '.json':'application/json', '.wasm':'application/wasm', '.zip':'application/zip', '.woff2':'font/woff2',
   '.py':'text/plain', '.svg':'image/svg+xml'};
 let browser, server, base, dir, save, variants, active, phase, logs = [];
+let legacyHold, legacyRequestArrived;
 
 before(async () => {
   const {optimizeWeb, checkOptimized} = await import('../tools/optimize_web.mjs');
@@ -98,6 +99,20 @@ with patch("builtins.open", changed):
     python:variant('python-change', 'ba_dashboard.py'), data:variant('data-change', 'ba_item_prices.json'),
     board:variant('board-change', null, true), worker:variant('worker-change', 'worker.js'),
     legacy:variant('previous-stamped-page', null, false, true)};
+  const boardUrl=[...variants.a.assets.keys()].find(url=>/^\/assets\/board-.+\.js$/.test(url));
+  variants.missingBoard={...variants.a,assets:new Map(variants.a.assets)};
+  variants.missingBoard.assets.delete(boardUrl);
+  variants.badIntegrity={...variants.a,assets:new Map(variants.a.assets)};
+  variants.badIntegrity.assets.set(boardUrl,Buffer.concat([variants.a.assets.get(boardUrl),Buffer.from('\n// altered hosted body\n')]));
+  const unsupported=Buffer.from('globalThis.assetCacheFixture = 1;'),unsupportedHash=hash(unsupported);
+  const unsupportedUrl=`/assets/board-${unsupportedHash}.js`;
+  variants.uninitializedBoard={...variants.a,assets:new Map(variants.a.assets),html:Buffer.from(variants.a.html.toString().replace(
+    /<script src="assets\/board-[a-f0-9]{64}\.js" integrity="[^"]+" data-board-asset>/,
+    `<script src="${unsupportedUrl.slice(1)}" integrity="sha256-${createHash('sha256').update(unsupported).digest('base64')}" data-board-asset>`))};
+  variants.uninitializedBoard.assets.delete(boardUrl);
+  variants.uninitializedBoard.assets.set(unsupportedUrl,unsupported);
+  variants.oldBytes={...variants.a,oldBytes:true};
+  const oldWorker=fs.readFileSync(path.join(root,'tests/fixtures/legacy_worker_53497965.js'));
   // Changes in metadata do not alter the coarse hosted JS/CSS blocks.
   for (const version of ['unrelated','python','data'])
     assert.deepEqual([...variants[version].assets.keys()].filter(u=>u.includes('/board-')),
@@ -108,16 +123,33 @@ with patch("builtins.open", changed):
     if (!/^\s/.test(line)) {rules.push({pattern:line.trim(), headers:{}}); continue;}
     const at = line.indexOf(':'); rules.at(-1).headers[line.slice(0,at).trim()] = line.slice(at+1).trim();
   }
-  server = http.createServer((req, res) => {
-    const url = new URL(req.url, 'http://x'), pathname = decodeURIComponent(url.pathname), current = variants[active];
+  server = http.createServer(async (req, res) => {
+    const url = new URL(req.url, 'http://x'), pathname = decodeURIComponent(url.pathname);
+    let current = variants[active];
+    if(current.oldBytes && pathname.startsWith('/py/') && legacyHold) {
+      legacyRequestArrived?.();
+      await legacyHold;
+      current=variants[active];
+    }
     const headers = {};
     for (const rule of rules) if (rule.pattern.endsWith('*') ? pathname.startsWith(rule.pattern.slice(0,-1)) : pathname === rule.pattern)
       Object.assign(headers, rule.headers);
     let bytes;
     if (pathname.startsWith('/api/')) bytes = Buffer.from('{}');
+    else if (pathname === '/legacy-bootstrap') bytes=Buffer.from('<!doctype html><html><body>Synthetic legacy startup</body></html>');
     else if (pathname === '/' || pathname === '/index.html') bytes = current.html;
     else if (pathname === '/version.json') bytes = Buffer.from(JSON.stringify(current.release));
     else if (pathname.startsWith('/assets/')) bytes = current.assets.get(pathname);
+    else if(pathname.startsWith('/py/')) {
+      const entry=current.manifest.files[pathname.split('/').at(-1)];
+      if(entry) bytes=current.assets.get('/'+entry.url);
+      // Reproduce the actual pre-migration policy when priming old bytes;
+      // new no-store headers cannot invalidate responses already cached.
+      if(current.oldBytes) headers['Cache-Control']='public, max-age=31536000, immutable';
+    }
+    else if(pathname==='/worker.js' && current.oldBytes) {
+      bytes=oldWorker;
+    }
     else {
       const file = path.resolve(web, '.' + pathname);
       if (file.startsWith(web + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()) bytes = fs.readFileSync(file);
@@ -288,3 +320,77 @@ for (const legacyWorker of [true,false]) {
     }
   });
 }
+
+for(const broken of ['missingBoard','badIntegrity','uninitializedBoard']) {
+  test(`${broken} hosted board script fails safely for save, restored source and no-save navigation`,async t=>{
+    const ctx=await context(t);
+    await ctx.addInitScript(()=>localStorage.setItem('ledger_link','http://127.0.0.1:18232'));
+    active=broken; phase=broken;
+    const page=await ctx.newPage(), requests=[];
+    page.on('request',request=>requests.push(request.url()));
+    await page.goto(base+'/#wiki');
+    await page.waitForFunction(()=>document.getElementById('srcStatus').textContent.includes('could not finish'));
+    assert.match(await page.locator('#srcMeta').textContent(),/Reload/i);
+    assert.equal(await page.locator('#reloadBtn').isVisible(),true);
+    assert.equal(await page.locator('#srcProg').isVisible(),false);
+    assert.equal(await page.locator('body').evaluate(e=>e.classList.contains('has-board')),false);
+    await page.locator('#savePick').setInputFiles(save);
+    await page.evaluate(()=>{location.hash='#map';});
+    await page.evaluate(()=>{location.hash='#wiki';});
+    assert.equal(await page.locator('#lgWikiLink').count(),0,'a missing board cannot expose its no-save browser');
+    assert.equal(await page.locator('body').evaluate(e=>e.classList.contains('has-board')),false);
+    assert.equal(await page.locator('#srcProg').isVisible(),false);
+    assert.ok(!requests.some(url=>url.includes('/worker.js') || url.includes('/pyodide/') || url.includes(':18232/')));
+    assert.ok(traffic(broken).some(row=>/^\/assets\/board-.+\.js$/.test(row.url) && row.status===(broken==='missingBoard' ? 404 : 200)));
+    // A current release supplies a fresh content path even if a corrupted old
+    // response remains in the browser cache. The reload control stays wired.
+    active='board'; phase=broken+'-reload';
+    await page.evaluate(()=>localStorage.removeItem('ledger_link'));
+    await Promise.all([page.waitForNavigation(),page.locator('#reloadBtn').click()]);
+    await page.locator('#savePick').setInputFiles(save);
+    await page.waitForFunction(()=>document.body.classList.contains('has-board') && hasData());
+  });
+}
+
+test('actual pre-manifest worker starting across deploy with a partial old cache exposes the documented migration window',async t=>{
+  const ctx=await context(t),page=await ctx.newPage();
+  active='oldBytes'; phase='legacy-bytes-prime';
+  await page.goto(base+'/legacy-bootstrap');
+  const primed=await page.evaluate(async()=>{
+    const results=[];
+    for(const url of ['py/ba_save.py','py/ba_dashboard.py']) {
+      const response=await fetch('/'+url+'?v=legacy-A');
+      results.push([url,response.status,(await response.arrayBuffer()).byteLength]);
+    }
+    return results;
+  });
+  assert.ok(primed.every(row=>row[1]===200 && row[2]>0));
+  let release;
+  legacyHold=new Promise(resolve=>{release=resolve;});
+  const requested=new Promise(resolve=>{legacyRequestArrived=resolve;});
+  t.after(()=>{release(); legacyHold=null; legacyRequestArrived=null;});
+  phase='legacy-bytes-start';
+  await page.evaluate(()=>{
+    window.legacyReady=new Promise((resolve,reject)=>{
+      const worker=new Worker('/worker.js?v=legacy-A',{type:'module'});
+      window.legacyWorker=worker;
+      worker.onmessage=({data})=>{
+        if(data.kind==='startup-failed') reject(new Error(data.error));
+        if(data.kind==='progress' && data.stage==='ready') resolve();
+      };
+      worker.onerror=event=>reject(new Error(event.message));
+    });
+  });
+  await requested;
+  assert.ok(traffic('legacy-bytes-start').some(row=>row.url==='/worker.js?v=legacy-A' && row.status===200));
+  active='data'; phase='legacy-bytes-after-deploy'; release();
+  await page.evaluate(()=>window.legacyReady);
+  const rows=traffic('legacy-bytes-after-deploy');
+  assert.equal([...traffic('legacy-bytes-start'),...rows].filter(row=>row.url.startsWith('/py/ba_save.py') || row.url.startsWith('/py/ba_dashboard.py')).length,0,
+    'actual running worker A reused its cached code despite the new no-store headers');
+  const data=rows.find(row=>row.url==='/py/ba_item_prices.json?v=legacy-A');
+  assert.equal(data?.status,200);
+  assert.equal(data.digest,variants.data.manifest.files['ba_item_prices.json'].sha256,
+    'uncached old stamped data URL serves the current B bytes: this historical caller has no digest check');
+  await page.evaluate(()=>window.legacyWorker.terminate());
+});

@@ -58,7 +58,7 @@ export function hostedPage(raw) {
     const integrity = `sha256-${digest.toString('base64')}`;
     assets.set(url, bytes);
     const replacement = tag === 'script'
-      ? `<script src="${url}" integrity="${integrity}"></script>`
+      ? `<script src="${url}" integrity="${integrity}" data-board-asset></script>`
       : `<link rel="stylesheet" href="${url}" integrity="${integrity}">`;
     html = html.slice(0, largest.index) + replacement + html.slice(largest.index + largest[0].length);
   }

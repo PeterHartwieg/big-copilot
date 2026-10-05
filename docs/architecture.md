@@ -1015,7 +1015,8 @@ What `page_html()` produces, top of the file down:
    template, so the page runs in standards mode.
 2. The head `page_html()` builds, in this order: the viewport tag, `window.LEDGER_BUILD`
    (the stamp, set here rather than in `BEFORE_SCRIPT` because `web/i18n.js`, in the
-   template's head, fetches a UI table with it) and the `web/community.css` link stamped
+   template's head, fetches a UI table with it), `window.LEDGER_ASSETS` (the pinned
+   worker and Python/data manifest), and the `web/community.css` link stamped
    with the release version. There is no analytics
    script, and Cloudflare's automatic Web Analytics injection is switched off for the
    domain, because the privacy notice says the site runs none. `page_html()` then swaps the
@@ -1058,7 +1059,13 @@ minifies its inline JavaScript with esbuild before uploading, then externalizes 
 the largest board/model/map/wiki classic script and stylesheet into
 `web/assets/board-<sha256>.js` and `.css`. The digest names the exact emitted bytes;
 both tags carry SRI and keep their original position (no async/defer or module
-wrapper). Small boot/release/i18n scripts stay inline. `hostedPage()` returns the
+wrapper). A resource error on the marked board script uses the shell's reload
+recovery. The shell also requires the board's registered handlers before reader
+startup or entering a board, including restore, manual save and no-save browsing;
+a missing or SRI-rejected script cannot report an empty board as up to date.
+The stylesheet's current `url()` references are all embedded SVG data URLs, so
+extraction changes no relative resource base. Small boot/release/i18n scripts
+stay inline. `hostedPage()` returns the
 HTML and files; `optimizeWeb()` writes the actual set and `--check` compares it
 against raw assembly, including missing/modified JS/CSS and worker manifests.
 The deploy and optimized verification stages check that set before using it. It
@@ -1623,6 +1630,18 @@ can start its coherent old release, and an already installed worker continues
 using it. If any removed old path is absent from that browser's cache, startup
 fails cleanly and asks for reload instead of combining releases. Gradual
 deployments remain unsupported for the broader mutable stamped assets.
+
+These coherence guarantees apply to pages and workers using the pinned protocol.
+There is one historical migration window: a pre-manifest worker already fetched
+and cached before deployment can still run its old code and fetch mutable
+`py/<file>?v=<old-stamp>` paths. A partial old dependency cache can therefore
+combine cached A code with uncached B data. New no-store headers cannot invalidate
+already cached immutable responses or retrofit digest checks into that worker.
+The immediate legacy URL failure covers old callers receiving the **new** worker;
+it does not repair already cached or running old worker code. Such an old page
+must reload onto the pinned protocol to obtain these guarantees.
+`tests/fixtures/legacy_worker_53497965.js` preserves the actual previous worker
+bytes, and `tests/asset_cache.test.cjs` exercises its partial-cache rollout window.
 
 Runtime completion and each consumed/validated body or development HTTP
 fallback emit progress before the join, keeping the pending-save inactivity

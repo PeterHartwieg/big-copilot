@@ -344,6 +344,20 @@
     state("bad", () => tt("app.reader.failed", "The reader could not finish loading"), errWords(err));
     if (handlers) handlers.stale(err.message);
   }
+  function readerAssetsFailure() {
+    return failure(() => tt("app.reader.assets", "The reader files could not be loaded. Reload the app to update."));
+  }
+  // The hosted board's resource can be removed by a deploy or rejected by
+  // integrity checking. Its shell must remain usable to reload either way.
+  window.addEventListener("error", (event) => {
+    if (event.target?.tagName === "SCRIPT" && event.target.hasAttribute("data-board-asset")) failReader(readerAssetsFailure());
+  }, true);
+  function boardReady() {
+    if (readerError) return false;
+    if (handlers && typeof handlers.changed === "function") return true;
+    failReader(readerAssetsFailure());
+    return false;
+  }
 
   // The page pins the worker and all its Python/data before a later deploy.
   function startWorker() {
@@ -351,7 +365,7 @@
     // An old stamped page can receive this newer app.js from its mutable URL.
     // Only genuinely unstamped development pages may use the null manifest.
     if (!assets && window.LEDGER_BUILD && window.LEDGER_BUILD !== "dev") {
-      failReader(failure(() => tt("app.reader.assets", "The reader files could not be loaded. Reload the app to update.")));
+      failReader(readerAssetsFailure());
       return;
     }
     try { worker = new Worker(assets ? assets.worker.url : "worker.js", {type: "module"}); }
@@ -419,7 +433,7 @@
     };
     worker.onerror = (e) => {
       e.preventDefault();
-      failReader(assets ? failure(() => tt("app.reader.assets", "The reader files could not be loaded. Reload the app to update."))
+      failReader(assets ? readerAssetsFailure()
         : e.message ? new Error(e.message) : failure(() => tt("app.reader.stopped", "The reader stopped unexpectedly.")));
     };
     worker.onmessageerror = () => failReader(failure(() => tt("app.reader.unreadable", "The reader returned an unreadable response.")));
@@ -718,6 +732,7 @@
     $("menuBtn").setAttribute("aria-expanded", "false");
   }
   function enterBoard() {
+    if (!boardReady()) return;
     if (onBoard()) return;
     const focusLeaves = $("landing").contains(document.activeElement);
     document.body.classList.add("has-board");
@@ -1756,6 +1771,7 @@
 
   /* --- building ----------------------------------------------------------- */
   async function buildFrom(file, dir, gen) {
+    if (!boardReady()) return;
     if (gen === undefined) gen = sourceGen;
     if (!startAttempt(gen)) return;
     // A build asked for while one runs is not lost: the latest request, a
@@ -2806,7 +2822,7 @@
     wireSaveLocation();
     dropForeignLocale();
     localeState();
-    startWorker();
+    if (boardReady()) startWorker();
     labelSnapshot();
 
     // Entries from a folder (an <input webkitdirectory>, or a folder walked
