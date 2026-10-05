@@ -1218,10 +1218,11 @@ Stale until that row draws or the next board arrives. Another company or save dr
 every row so hidden markup cannot retain the previous company's content.
 
 Adding a page means: a `div.page` in the markup, an entry in `PAGES` (with `newFeature` if
-it deserves a badge — see [contributing.md](contributing.md)) and in `ICON`, a `SEC_PAGE`
-row for each of its sections, an `SS_VIEWS` entry so search finds it, and a `PAGE_DRAWS`
-row for its draw function. A new view needs its `VIEW_META` record, which generates its
-`SUBS` item as well. The full checklist,
+it deserves a badge — see [contributing.md](contributing.md)) and in `ICON`, an `SS_VIEWS`
+entry so search finds it, and a `PAGE_DRAWS` row for its draw function. Author a new
+canonical view in `VIEW_META`: it generates its navigation item, primary `SEC_PAGE`
+row, area view, route identity, label and default host route. Only secondary/legacy
+section rows are added directly to `SEC_PAGE`; route hooks stay in `ROUTE_BEHAVIOR`. The full checklist,
 with the test that guards each table, is under [Registries](#registries). Tag the row with every
 view whose DOM it writes; if other code reads state it computes from another page, tag it
 `""` so it is drawn on every refresh. A wrong tag shows old numbers until the next full
@@ -1492,7 +1493,7 @@ all three.
 | `const ROUTE_ALIASES =` (board script) | *Only when* an old page or view name becomes a route | `tests/navigation.test.cjs`, "the old #payroll hash, #secPayroll and a remembered Payroll open Staffing › Payroll" and "the #staff hash, #secStaff and a remembered Staff open Staffing › Staff needs" |
 | `const SS_VIEWS = [` (board script) | `{id, t, p, ic, syn, go}`, so search can open it | `tests/search.test.cjs`, "the index holds every group …" |
 | `function showPage(` (board script) | *Only if* the page loads or draws when shown, as the Map does | none |
-| `const SB_VIEWS =`, `const SB_SEC =` (board script) | *Only for* a new Supply view: its section, keyed by the view id. Also its `supply` item in `SUBS`, its route in `ROUTES` and `HOST_ROUTES`, its drawer in `drawSupplyView()`'s dispatch map (a missing view draws Changes) and its `PAGE_DRAWS` row; `sbViewOf()`, which puts a kind of change on a view, and the view-keyed objects in `sbData()` (`byView`), `sbUpdateStrip()` (`sbLeft`), `sbMode` and `sbScope` | `tests/navigation.test.cjs`, "Supply is five task views …"; `tests/import_routes.test.cjs`; `tests/progress.test.cjs` |
+| `const SB_VIEWS =`, `const SB_SEC =` (board script) | *Only for* a new Supply view: its section, keyed by the view id. Also its single `VIEW_META` record (which generates navigation, primary section, area, route identity, label and default host), any distinct `ROUTE_BEHAVIOR` hooks, and its drawer in `drawSupplyView()`'s dispatch map (a missing view draws Changes) and its `PAGE_DRAWS` row; `sbViewOf()`, which puts a kind of change on a view, and the view-keyed objects in `sbData()` (`byView`), `sbUpdateStrip()` (`sbLeft`), `sbMode` and `sbScope` | `tests/navigation.test.cjs`, "Supply is five task views …"; `tests/import_routes.test.cjs`; `tests/progress.test.cjs` |
 | `const PAGE_ALIASES =`, `const SEC_MOVED =` (board script) | *Only when* renaming or moving an old page or section | `tests/navigation.test.cjs` |
 | `const quietRender =` in `tests/search.test.cjs` | *Only if* the view adds a draw function: the function, in the list the test stubs | that test |
 | The `later()` change in `const MOVED =` in `tests/calm_refresh.test.cjs` | *Only if* the view should prove it redraws on a refresh: the fixture save is `tests/es3_fixture.py`'s `link_company()`, whose lists are often empty (`"Loans": []`), so `later()` has to add the data the view shows | `tests/calm_refresh.test.cjs` |
