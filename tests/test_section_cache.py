@@ -249,7 +249,7 @@ class PlanningCacheTests(unittest.TestCase):
         self.assertEqual(cache.bytes, before)
         self.assertIsNone(cache.get(('shop', 'huge')))
         capsule = {'rows': [123456]}
-        budget = board._planning_size(capsule)
+        budget = board._planning_size(copy.deepcopy(capsule))
         small = board.PlanningCache(max_entries=10, max_bytes=budget)
         small.put('first', capsule)
         self.assertIsNotNone(small.get('first'))
@@ -302,5 +302,54 @@ class PlanningCacheTests(unittest.TestCase):
         self.assertEqual(board._planning_typed({'b': 2, 'a': 1}), board._planning_typed({'a': 1, 'b': 2}))
         self.assertNotEqual(board._planning_typed({'1': 2}), board._planning_typed({1: 2}))
         self.assertNotEqual(board._planning_typed({1}), board._planning_typed(frozenset({1})))
+    def test_budget_counts_actual_retained_copy_allocations(self):
+        capsule = {'rows': [123456]}
+        copied_size = board._planning_size(copy.deepcopy(capsule))
+        cache = board.PlanningCache(max_bytes=copied_size)
+        cache.put('first', capsule)
+        cache.put('second', capsule)
+        retained = sum(board._planning_size(value) for value, _ in cache.entries.values())
+        self.assertEqual(cache.bytes, retained)
+        self.assertLessEqual(retained, cache.max_bytes)
+        self.assertEqual(len(cache.entries), 1)
+        too_small = board.PlanningCache(max_bytes=copied_size - 1)
+        too_small.put('oversized-copy', capsule)
+        self.assertFalse(too_small.entries)
+        self.assertEqual(too_small.bytes, 0)
+
+    def test_publication_arithmetic_failure_keeps_evictions_accounted(self):
+        class FailingAddition(int):
+            def __add__(self, other):
+                raise MemoryError('new byte counter')
+            def __sub__(self, other):
+                return FailingAddition(int(self) - other)
+
+        cache = board.PlanningCache(max_entries=1)
+        cache.put('old', {'rows': [1]})
+        cache.bytes = FailingAddition(cache.bytes)
+        cache.put('new', {'rows': [2]})
+        self.assertFalse(cache.entries)
+        self.assertEqual(cache.bytes, 0)
+        cache.bytes = int(cache.bytes)
+        cache.put('retry', {'rows': [2]})
+        self.assertIsNotNone(cache.get('retry'))
+        self.assertEqual(cache.bytes, sum(board._planning_size(value) for value, _ in cache.entries.values()))
+
+    def test_publication_mapping_failure_does_not_increase_counter(self):
+        class FailingPublication(board.collections.OrderedDict):
+            fail = False
+            def __setitem__(self, key, value):
+                if self.fail:
+                    raise MemoryError('entry allocation')
+                super().__setitem__(key, value)
+
+        cache = board.PlanningCache(max_entries=1)
+        cache.put('old', {'rows': [1]})
+        cache.entries = FailingPublication(cache.entries)
+        cache.entries.fail = True
+        cache.put('new', {'rows': [2]})
+        self.assertFalse(cache.entries)
+        self.assertEqual(cache.bytes, 0)
+
 if __name__ == '__main__':
     unittest.main()

@@ -2154,19 +2154,29 @@ class PlanningCache:
     def put(self, key, capsule, *, owned=False):
         """Publish a capsule; owned=True transfers an already-private stage copy."""
         try:
-            size = _planning_size(capsule)
-            if not self.max_entries or size > self.max_bytes:
+            if not self.max_entries or not self.max_bytes:
                 return
             stored = capsule if owned else copy.deepcopy(capsule)
+            size = _planning_size(stored)
+            if size > self.max_bytes:
+                return
+            if key in self.entries:
+                remaining = self.bytes - self.entries[key][1]
+                del self.entries[key]
+                self.bytes = remaining
+            while self.entries and (len(self.entries) >= self.max_entries or self.bytes + size > self.max_bytes):
+                old_size = next(iter(self.entries.values()))[1]
+                remaining = self.bytes - old_size
+                self.entries.popitem(last=False)
+                self.bytes = remaining
+            # Prepare allocating arithmetic before publishing. Each preceding
+            # eviction also prepares its count before removing the entry.
+            resulting_bytes = self.bytes + size
+            self.entries[key] = (stored, size)
+            self.bytes = resulting_bytes
         except (TypeError, MemoryError):
             return
-        if key in self.entries:
-            self.bytes -= self.entries.pop(key)[1]
-        while self.entries and (len(self.entries) >= self.max_entries or self.bytes + size > self.max_bytes):
-            _, (_, old_size) = self.entries.popitem(last=False)
-            self.bytes -= old_size
-        self.entries[key] = (stored, size)
-        self.bytes += size
+
 
 
 def _planning_raw_inputs(save):
