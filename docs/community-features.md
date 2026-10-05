@@ -84,19 +84,28 @@ open it writes `issue.json` (number and address) into the folder. If GitHub fail
 Worker deletes the folder (three tries) and answers 503, and the form points to the
 Discord support channel. The writes, the issue and the cleanup run under
 `ctx.waitUntil()`, so a closed tab does not stop them halfway. Whatever still slips
-through, the daily cron (`scheduled()`, `sweepReports()`) visits folders older than
-an hour that have no `issue.json`. The
-sweep uses at most 192 R2 calls per invocation, including a small root checkpoint
-(`_bigcopilot-report-sweep-v1.json`) in the same bucket. Subsequent runs resume
-through retained folders and large orphan backlogs; cleanup can span multiple daily
-runs. The 30-day bucket lifecycle remains the final retention limit. The
+through, the report cron (`scheduled()`, `sweepReports()`) runs every minute and
+visits folders older than an hour that have no `issue.json`. The sweep uses at
+most 192 R2 calls per invocation, including a small root checkpoint
+(`_bigcopilot-report-sweep-v1.json`) in the same bucket. Conditional ETag writes
+elect one sweep owner when cron events overlap; a crashed run releases ownership
+after 16 minutes, and an old owner cannot overwrite a newer checkpoint.
+Subsequent runs resume through retained folders and large orphan backlogs in
+bounded minute intervals. A synthetic 2,400-folder backlog clears within an hour
+once eligible. With full 1,000-key list pages and ordinary small reports, the
+budget supports roughly 47 orphan folders per minute (about 67,000 a day);
+very large folders and service failures reduce that throughput. The published
+two-day cleanup window is unchanged; unlimited uploads cannot have a finite
+processing guarantee under platform limits. A separate daily cron retains the
+presence and voting cleanup. The 30-day bucket lifecycle remains the final net.
+The
 sweep carries one folder's newest timestamp and issue marker across list pages, then
 rechecks the complete candidate folder and deletes it in batches of at most 1,000
 keys. Newer uploads stop cleanup, and each batch checks for an issue marker again;
 issue markers are never deleted. R2 cannot make folder deletion atomic, so a later
 write or failure may leave a partially cleaned folder for the next run. If
 GitHub created the issue but its answer never arrived, the issue names a folder that is
-already gone; that direction is accepted. With nothing attached the Worker writes
+already gone; that direction is accepted. With nothing attached the report request writes
 nothing to R2.
 
 `REPORT_LIMITER` allows three reports a minute per IP at each Cloudflare location: a

@@ -503,13 +503,18 @@ test('sweep: the daily cron removes folders whose issue never opened, and only t
 function sweepBucket(stored, {pageSize = 2, deleted = [], onList, onDelete, checkpoint: initialCheckpoint = null} = {}) {
   const objects = new Map(stored.map(([key, at]) => [key, {key, uploaded: new Date(at)}]));
   const calls = [], batches = [];
-  let checkpoint = initialCheckpoint, operations = 0;
+  let checkpoint = initialCheckpoint, operations = 0, etag = "initial";
   return {
     objects, calls, batches,
     get operations() { return operations; },
     get checkpoint() { return checkpoint && JSON.parse(checkpoint); },
-    async get() { operations++; return checkpoint === null ? null : {size: checkpoint.length, json: async () => JSON.parse(checkpoint)}; },
-    async put(key, value) { operations++; checkpoint = value; },
+    async get() { operations++; const raw = checkpoint; return raw === null ? null : {size: raw.length, etag, json: async () => JSON.parse(raw)}; },
+    async put(key, value, options = {}) {
+      operations++;
+      if ((options.onlyIf?.etagMatches && options.onlyIf.etagMatches !== etag)
+          || (options.onlyIf?.etagDoesNotMatch === '*' && checkpoint !== null)) return null;
+      checkpoint = value; etag = String(operations); return {etag};
+    },
     async list(options = {}) {
       operations++;
       calls.push({...options});
@@ -569,7 +574,7 @@ test('sweep: an interrupted folder scan deletes none of that folder and a retry 
   const old = Date.now() - 5 * 3600000;
   let fail = true;
   const bucket = sweepBucket([['a/aaa.json', old], ['a/issue.json', old], ['a/save.hsg', old]], {
-    pageSize: 1, onList: options => { if (fail && options.cursor) throw new Error('list down'); },
+    pageSize: 1, onList: options => { if (fail && (options.cursor || options.startAfter)) throw new Error('list down'); },
   });
   const {worker} = vmWorker(created);
   await assert.rejects(worker.scheduled({}, {REPORTS: bucket}), /list down/);
@@ -706,11 +711,133 @@ test('sweep: invalid JSON, null and unsupported checkpoints are repaired without
     const bucket = sweepBucket([['a/save.hsg', old]], {checkpoint});
     await worker.scheduled({}, {REPORTS: bucket});
     assert.equal(bucket.objects.size, 0);
-    assert.equal(bucket.checkpoint.version, 1);
+    assert.equal(bucket.checkpoint.version, 2);
     assert.ok(bucket.operations <= 192);
   }
   const bucket = sweepBucket([['a/save.hsg', old]]);
   bucket.get = async () => { throw new Error('checkpoint service down'); };
   await assert.rejects(worker.scheduled({}, {REPORTS: bucket}), /checkpoint service down/);
   assert.equal(bucket.objects.size, 1);
+});
+
+
+test('sweep: minute scheduling clears a large backlog inside the existing two-day window', async () => {
+  const config = fs.readFileSync(path.join(ROOT, 'wrangler.jsonc'), 'utf8');
+  assert.match(config, /"crons": \["17 3 \* \* \*", "\* \* \* \* \*"\]/);
+  const old = Date.now() - 3600001;
+  const rows = Array.from({length: 2400}, (_, i) => [`r${String(i).padStart(4, '0')}/save.hsg`, old]);
+  const bucket = sweepBucket(rows, {pageSize: 1000});
+  const {worker} = vmWorker(created);
+  let minutes = 0, dailyCalls = 0;
+  const db = {prepare() { dailyCalls++; throw new Error('daily cleanup on minute tick'); }};
+  while (bucket.objects.size && minutes < 60) {
+    const before = bucket.operations;
+    await worker.scheduled({cron: '* * * * *'}, {REPORTS: bucket, COMMUNITY_DB: db});
+    assert.ok(bucket.operations - before <= 192);
+    minutes++;
+  }
+  assert.equal(bucket.objects.size, 0, '2,400 stale orphans clear within an hour after becoming eligible');
+  assert.equal(dailyCalls, 0, 'minute sweeps do not multiply D1 daily cleanup');
+  const before = bucket.operations;
+  await worker.scheduled({cron: '17 3 * * *'}, {REPORTS: bucket});
+  assert.equal(bucket.operations, before, 'daily tick cannot overlap the report-only minute sweep');
+});
+
+test('sweep: rejected persisted cursors resume giant folder progress from the last key', async () => {
+  const old = Date.now() - 5 * 3600000;
+  const rows = Array.from({length: 250}, (_, i) => [`a/${String(i).padStart(4, '0')}`, old]);
+  const checkpoint = JSON.stringify({version: 2, after: 'a/0249', folder: {name: 'a', newest: old, issue: false},
+    phase: 'validate', partAfter: 'a/0000', cursor: 'expired', end: true});
+  const bucket = sweepBucket(rows, {pageSize: 1, checkpoint, onList: options => {
+    if (options.cursor) throw new Error('invalid cursor');
+  }});
+  const {worker} = vmWorker(created);
+  for (let run = 0; run < 10 && bucket.objects.size; run++) {
+    const before = bucket.operations;
+    await worker.scheduled({}, {REPORTS: bucket});
+    assert.ok(bucket.operations - before <= 192);
+  }
+  assert.equal(bucket.objects.size, 0);
+  assert.equal(bucket.calls.filter(call => call.cursor).length, 1, 'opaque rejection is not persisted into every future run');
+});
+
+test('sweep: late marker and fresh upload protect a paused deletion remainder', async () => {
+  const old = Date.now() - 5 * 3600000;
+  const rows = Array.from({length: 250}, (_, i) => [`a/${String(i).padStart(4, '0')}`, old]);
+  const bucket = sweepBucket(rows, {pageSize: 1});
+  const {worker} = vmWorker(created);
+  for (let run = 0; run < 10 && bucket.checkpoint?.phase !== 'delete'; run++)
+    await worker.scheduled({}, {REPORTS: bucket});
+  assert.equal(bucket.checkpoint.phase, 'delete');
+  const retained = bucket.objects.size;
+  bucket.objects.set('a/issue.json', {key: 'a/issue.json', uploaded: new Date()});
+  bucket.objects.set('a/fresh.hsg', {key: 'a/fresh.hsg', uploaded: new Date()});
+  for (let run = 0; run < 8; run++) await worker.scheduled({}, {REPORTS: bucket});
+  assert.equal(bucket.objects.size, retained + 2);
+});
+
+
+test('sweep: overlapping minute events elect one checkpoint owner and release the lease', async () => {
+  const old = Date.now() - 5 * 3600000;
+  let release, entered;
+  const paused = new Promise(resolve => { release = resolve; });
+  const started = new Promise(resolve => { entered = resolve; });
+  let first = true;
+  const bucket = sweepBucket([['a/save.hsg', old]], {onList: async () => {
+    if (first) { first = false; entered(); await paused; }
+  }});
+  const {worker} = vmWorker(created);
+  const run = worker.scheduled({cron: '* * * * *'}, {REPORTS: bucket});
+  await started;
+  const before = bucket.operations;
+  await worker.scheduled({cron: '* * * * *'}, {REPORTS: bucket});
+  assert.equal(bucket.operations - before, 1, 'active lease only reads checkpoint');
+  assert.equal(bucket.batches.length, 0);
+  release(); await run;
+  assert.equal(bucket.objects.size, 0);
+  assert.equal(bucket.checkpoint.leaseUntil, 0);
+});
+
+
+test('sweep: simultaneous lease acquisition uses atomic conditional writes', async () => {
+  const old = Date.now() - 5 * 3600000;
+  const bucket = sweepBucket([['a/save.hsg', old]]);
+  const {worker} = vmWorker(created);
+  await Promise.all([worker.scheduled({cron: '* * * * *'}, {REPORTS: bucket}),
+    worker.scheduled({cron: '* * * * *'}, {REPORTS: bucket})]);
+  assert.deepEqual(bucket.batches, [['a/save.hsg']]);
+  assert.equal(bucket.checkpoint.leaseUntil, 0);
+});
+
+
+test('sweep: real R2 binding supports conditional checkpoint election and stable-key listing', async () => {
+  const key = '_synthetic-sweep-checkpoint';
+  const first = await bucket.put(key, 'one', {onlyIf: {etagDoesNotMatch: '*'}});
+  assert.ok(first);
+  assert.equal(await bucket.put(key, 'two', {onlyIf: {etagDoesNotMatch: '*'}}), null);
+  assert.equal(await bucket.put(key, 'two', {onlyIf: {etagMatches: 'wrong'}}), null);
+  const second = await bucket.put(key, 'two', {onlyIf: {etagMatches: first.etag}});
+  assert.ok(second);
+  await bucket.put('a/1', 'synthetic'); await bucket.put('a/2', 'synthetic');
+  const page = await bucket.list({prefix: 'a/', startAfter: 'a/1'});
+  assert.deepEqual(page.objects.map(object => object.key), ['a/2']);
+});
+
+
+test('sweep: expired ownership and oversized checkpoint bodies recover without stalling', async () => {
+  const old = Date.now() - 5 * 3600000;
+  const checkpoint = JSON.stringify({version: 2, after: '', folder: null, phase: 'scan',
+    cursor: null, partAfter: '', end: false, leaseUntil: Date.now() - 1});
+  const {worker} = vmWorker(created);
+  const expired = sweepBucket([['a/save.hsg', old]], {checkpoint});
+  await worker.scheduled({}, {REPORTS: expired});
+  assert.equal(expired.objects.size, 0);
+  let cancelled = false;
+  const oversized = sweepBucket([['a/save.hsg', old]]);
+  oversized.get = async () => ({size: 8193, etag: 'initial',
+    body: {cancel: async () => { cancelled = true; }},
+    json: async () => { throw new Error('oversized body must not be parsed'); }});
+  await worker.scheduled({}, {REPORTS: oversized});
+  assert.ok(cancelled);
+  assert.equal(oversized.objects.size, 0);
 });

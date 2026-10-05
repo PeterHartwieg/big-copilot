@@ -73,15 +73,17 @@ export default {
       return json({ error: "Service unavailable" }, 503);
     }
   },
-  async scheduled(_controller, env) {
+  async scheduled(controller, env) {
     // A bug report folder whose issue never opened goes at the next run that finds
     // it over an hour old, with bounded progress across runs, whatever stopped the request
     // (docs/community-features.md, "Bug reports").
     // The cleanups run side by side and each is awaited to its end, so one
     // failing never cuts the other short.
-    const db = env.COMMUNITY_DB;
+    const reportTick = controller.cron === "* * * * *";
+    const dailyTick = controller.cron !== "* * * * *";
+    const db = dailyTick ? env.COMMUNITY_DB : null;
     const results = await Promise.allSettled([
-      env.REPORTS ? sweepReports(env.REPORTS) : null,
+      env.REPORTS && (reportTick || !controller.cron) ? sweepReports(env.REPORTS) : null,
       db && env.ASSETS ? (async () => {
         const { cleanupTranslationVotes } = await import("./translations.mjs");
         return cleanupTranslationVotes(env);
@@ -448,25 +450,30 @@ async function retried(task) {
   return false;
 }
 
-// The daily cron's part for bug reports: every folder without issue.json whose
+// The minute cron's part for bug reports: every folder without issue.json whose
 // newest object is over an hour old lost its issue to a failure the request
 // could not clean up after (a delete that kept failing, or the Worker stopped
 // mid-request). An hour is far beyond any request; the 30-day lifecycle rule
 // stays the last net.
 const REPORT_SWEEP_CHECKPOINT = "_bigcopilot-report-sweep-v1.json";
 const REPORT_SWEEP_CALLS = 192;
+// Longer than the 15-minute scheduled invocation wall limit: a stopped run
+// cannot keep the next checkpoint owner out indefinitely.
+const REPORT_SWEEP_LEASE_MS = 16 * 60 * 1000;
 
 async function sweepReports(bucket, now = Date.now()) {
   // Reserve the last call for a checkpoint, including on a failed operation.
-  let remaining = REPORT_SWEEP_CALLS - 2;
+  let remaining = REPORT_SWEEP_CALLS - 3;
   const saved = await bucket.get(REPORT_SWEEP_CHECKPOINT);
-  let state = { version: 1, after: "", folder: null, phase: "scan", cursor: null, end: false };
+  let state = { version: 2, after: "", folder: null, phase: "scan", cursor: null, partAfter: "", end: false };
+  if (saved && saved.size > 8192 && saved.body) await saved.body.cancel();
   if (saved && saved.size <= 8192) {
     let candidate;
     try { candidate = await saved.json(); } catch { /* Repair invalid JSON below. */ }
-    if (candidate && candidate.version === 1 && typeof candidate.after === "string"
+    if (candidate && candidate.version === 2 && typeof candidate.after === "string"
         && candidate.after.length <= 1024 && ["scan", "validate", "delete"].includes(candidate.phase)
         && (candidate.cursor === null || (typeof candidate.cursor === "string" && candidate.cursor.length <= 4096))
+        && typeof candidate.partAfter === "string" && candidate.partAfter.length <= 1024
         && typeof candidate.end === "boolean"
         && (candidate.phase === "scan" || candidate.folder)
         && (!candidate.folder || (typeof candidate.folder.name === "string"
@@ -474,16 +481,37 @@ async function sweepReports(bucket, now = Date.now()) {
           && !candidate.folder.name.includes("/") && typeof candidate.folder.issue === "boolean"
           && Number.isFinite(candidate.folder.newest)))) state = candidate;
   }
+  if (Number.isFinite(state.leaseUntil) && state.leaseUntil > now
+      && state.leaseUntil <= now + REPORT_SWEEP_LEASE_MS) return;
+  // R2 conditional writes elect one checkpoint owner even when minute events
+  // overlap. A crashed owner's lease expires; the final ETag fence prevents an
+  // old owner from overwriting progress committed by a replacement.
+  state.leaseUntil = now + REPORT_SWEEP_LEASE_MS;
+  const lease = await bucket.put(REPORT_SWEEP_CHECKPOINT, JSON.stringify(state), {
+    onlyIf: saved ? {etagMatches: saved.etag} : {etagDoesNotMatch: "*"},
+    httpMetadata: {contentType: "application/json"},
+  });
+  if (!lease) return;
   const call = async (method, ...args) => { remaining--; return bucket[method](...args); };
-  const finish = () => { state.folder = null; state.phase = "scan"; state.cursor = null; };
+  const finish = () => { state.folder = null; state.phase = "scan"; state.cursor = null; state.partAfter = ""; };
   let page = null, index = 0;
   try {
-    while (remaining >= 3) {
+    while (remaining >= 4) {
       if (state.phase !== "scan") {
         const prefix = `${state.folder.name}/`;
         const changed = object => object.key === `${prefix}issue.json`
           || (new Date(object.uploaded).getTime() || now) > state.folder.newest;
-        const part = await call("list", { prefix, cursor: state.cursor || undefined, limit: 1000 });
+        let part;
+        try {
+          part = await call("list", { prefix, ...(state.cursor ? {cursor: state.cursor}
+            : {startAfter: state.partAfter || undefined}), limit: 1000 });
+        } catch (error) {
+          if (!state.cursor) throw error;
+          // Only empty truncated pages need an opaque cursor. If one expires,
+          // resume from the last returned key instead of retrying it forever.
+          state.cursor = null;
+          part = await call("list", { prefix, startAfter: state.partAfter || undefined, limit: 1000 });
+        }
         if (part.objects.some(changed)) { finish(); continue; }
         if (state.phase === "delete") {
           // No atomic folder deletion: check late markers before every batch,
@@ -491,9 +519,10 @@ async function sweepReports(bucket, now = Date.now()) {
           if (await call("head", `${prefix}issue.json`)) { finish(); continue; }
           if (part.objects.length) await call("delete", part.objects.map(object => object.key));
         }
-        state.cursor = part.truncated ? part.cursor : null;
+        if (part.objects.length) state.partAfter = part.objects.at(-1).key;
+        state.cursor = part.truncated && !part.objects.length ? part.cursor : null;
         if (!part.truncated) {
-          if (state.phase === "validate") state.phase = "delete";
+          if (state.phase === "validate") { state.phase = "delete"; state.partAfter = ""; }
           else finish();
         }
         continue;
@@ -505,12 +534,18 @@ async function sweepReports(bucket, now = Date.now()) {
         break;
       }
       if (!page) {
-        page = await call("list", { ...(state.cursor ? { cursor: state.cursor }
-          : { startAfter: state.after || undefined }), limit: 1000 });
+        try {
+          page = await call("list", { ...(state.cursor ? { cursor: state.cursor }
+            : { startAfter: state.after || undefined }), limit: 1000 });
+        } catch (error) {
+          if (!state.cursor) throw error;
+          state.cursor = null;
+          page = await call("list", { startAfter: state.after || undefined, limit: 1000 });
+        }
         index = 0;
       }
       if (index === page.objects.length) {
-        state.cursor = page.truncated ? page.cursor : null;
+        state.cursor = page.truncated && !page.objects.length ? page.cursor : null;
         if (!page.truncated) {
           state.end = true;
           if (state.folder && !state.folder.issue && now - state.folder.newest > REPORT_SWEEP_AFTER_MS)
@@ -538,7 +573,9 @@ async function sweepReports(bucket, now = Date.now()) {
       state.folder.newest = Math.max(state.folder.newest, new Date(object.uploaded).getTime() || now);
     }
   } finally {
+    state.leaseUntil = 0;
     await bucket.put(REPORT_SWEEP_CHECKPOINT, JSON.stringify(state), {
+      onlyIf: {etagMatches: lease.etag},
       httpMetadata: { contentType: "application/json" },
     });
   }
