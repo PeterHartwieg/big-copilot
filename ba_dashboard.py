@@ -21038,7 +21038,10 @@ def browser_build(
             f"{os.path.basename(save_path)} is not a Big Ambitions save this board can "
             f"read ({type(exc).__name__}: {exc})"
         ) from exc
-    build = safe_build(save, names, history_path, generation, planning_cache=_BROWSER_PLANNING_CACHE)
+    build = safe_build(save, names, history_path, generation)
+    # Core does no placement; attach the browser-owned cache only after it has
+    # succeeded, before any on-demand section can run.
+    build.planning_cache = _BROWSER_PLANNING_CACHE
     character = save.root.get("characterId") or "default"
     # The page keeps this file in localStorage, a few MB for the whole site:
     # sixty days of demand for every character ever opened would fill it.
