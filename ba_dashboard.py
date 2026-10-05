@@ -201,37 +201,7 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
           <button type="button" class="sf-segbtn" data-theme-set="dark" aria-pressed="false"><span class="sf-sr" data-tt="foot.theme.dark">Dark</span><svg class="sf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.2 8.2 0 1 0 10.2 10.2z"/></svg></button>
         </div>
       </div>'''
-    if not landing:
-        return f'''<footer class="sitefoot sf-compact">
-  <div class="sf-in">
-    <div class="sf-compact-top">
-      <nav class="sf-compact-nav" aria-label="About Big Copilot" data-tt-aria-label="foot.nav.label">
-        <button type="button" class="sf-link sf-btn" data-changelog aria-haspopup="dialog"><span data-tt="foot.changelog">Changelog</span><span class="feature-new" data-new-feature="changelog" data-tt="nav.new" hidden>New</span></button>
-        {_sf_out(WORKSHOP_URL, "Game link mod", title="Big Copilot Link on the Steam Workshop: the board reads the game you are playing.", feature="game-link", key="foot.mod")}
-        {report}{_sf_out(FEEDBACK_URL, "Bugs and feedback", title="The Discord's support channel: a save that will not build, a wrong number, or something the board should show, all welcome.", key="foot.feedback", attrs=" data-sf-feedback")}
-        {_sf_out(REPO_URL, "Source code", title="MIT-licensed", key="foot.source")}
-        <div class="sf-card" data-vote-card hidden><button type="button" class="sf-link sf-btn" data-community-open aria-haspopup="dialog"><span data-tt="foot.vote.cta">Vote on features</span><span class="feature-new" data-new-feature="community-voting" data-tt="nav.new" hidden>New</span></button></div>
-      </nav>
-      <div class="sf-compact-settings">{names}{theme}</div>
-    </div>
-    <details class="sf-support">
-      <summary data-tt="foot.support.title">Support the project</summary>
-      <div class="sf-support-links">
-        <a class="sf-link" href="{DONATE_URL}" target="_blank" rel="noopener" data-tt="foot.support.cta">Donate via PayPal</a>
-        {_sf_out(YOUTUBE_URL, "YouTube")}{_sf_out(SUBREDDIT_URL, "r/bigambitions")}{_sf_out(DISCORD_URL, "Discord")}
-        {_sf_out(GAME_URL, "Steam store page", key="foot.steam")}{_sf_out(GAME_MAKER_URL, GAME_MAKER)}
-      </div>
-    </details>
-    <div class="sf-base">
-      <div class="sf-who"><span class="sf-mark" translate="no"><span class="sf-dot"></span>Big Copilot</span><span class="sf-said" data-tt="foot.fanmade">{COLOPHON}</span></div>
-      <div class="sf-legal">{legal}{file_slot}{build}</div>
-    </div>
-  </div>
-</footer>'''
-    return f'''<footer class="sitefoot{" sf-landing rv" if landing else ""}">
-  <div class="sf-in">
-    <div class="sf-rule"><span class="sf-orb"></span></div>
-    <div class="sf-cards">
+    cards = f'''    <div class="sf-cards">
       <!-- Ships hidden, and only community.js reveals it. The CLI's
            dashboard.html never loads that file, so there the card simply stays
            hidden; a copy served from web/ with no /api/community behind it gets
@@ -262,6 +232,37 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
         <a class="sf-cta sf-line" href="{DONATE_URL}" target="_blank" rel="noopener"><svg class="sf-ic sf-beat" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg><span data-tt="foot.support.cta">Donate via PayPal</span></a>
       </div>
     </div>
+'''
+    if not landing:
+        return f'''<footer class="sitefoot sf-compact">
+  <div class="sf-in">
+{cards}
+    <div class="sf-compact-top">
+      <nav class="sf-compact-nav" aria-label="About Big Copilot" data-tt-aria-label="foot.nav.label">
+        <button type="button" class="sf-link sf-btn" data-changelog aria-haspopup="dialog"><span data-tt="foot.changelog">Changelog</span><span class="feature-new" data-new-feature="changelog" data-tt="nav.new" hidden>New</span></button>
+        {_sf_out(WORKSHOP_URL, "Game link mod", title="Big Copilot Link on the Steam Workshop: the board reads the game you are playing.", feature="game-link", key="foot.mod")}
+        {report}{_sf_out(FEEDBACK_URL, "Bugs and feedback", title="The Discord's support channel: a save that will not build, a wrong number, or something the board should show, all welcome.", key="foot.feedback", attrs=" data-sf-feedback")}
+        {_sf_out(REPO_URL, "Source code", title="MIT-licensed", key="foot.source")}
+      </nav>
+      <div class="sf-compact-settings">{names}{theme}</div>
+    </div>
+    <details class="sf-support">
+      <summary data-tt="foot.follow">Follow</summary>
+      <div class="sf-support-links">
+        {_sf_out(YOUTUBE_URL, "YouTube")}{_sf_out(SUBREDDIT_URL, "r/bigambitions")}{_sf_out(DISCORD_URL, "Discord")}
+        {_sf_out(GAME_URL, "Steam store page", key="foot.steam")}{_sf_out(GAME_MAKER_URL, GAME_MAKER)}
+      </div>
+    </details>
+    <div class="sf-base">
+      <div class="sf-who"><span class="sf-mark" translate="no"><span class="sf-dot"></span>Big Copilot</span><span class="sf-said" data-tt="foot.fanmade">{COLOPHON}</span></div>
+      <div class="sf-legal">{legal}{file_slot}{build}</div>
+    </div>
+  </div>
+</footer>'''
+    return f'''<footer class="sitefoot{" sf-landing rv" if landing else ""}">
+  <div class="sf-in">
+    <div class="sf-rule"><span class="sf-orb"></span></div>
+{cards}
     <div class="sf-cols">
       <nav class="sf-nav" aria-label="About Big Copilot" data-tt-aria-label="foot.nav.label">
       <div class="sf-col">

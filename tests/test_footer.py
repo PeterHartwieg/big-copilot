@@ -13,7 +13,7 @@ from ba_dashboard import VERIFIED_BUILD, footer_html, render
 
 
 class Footer(unittest.TestCase):
-    def test_the_board_footer_groups_promotion_in_a_disclosure(self):
+    def test_the_board_restores_prominent_cards_without_expanding_its_other_links(self):
         for site in (False, True):
             board = footer_html(site=site)
             self.assertIn('sitefoot sf-compact', board)
@@ -22,6 +22,12 @@ class Footer(unittest.TestCase):
             self.assertIn('data-changelog', board)
             self.assertIn('data-sf-feedback', board)
             self.assertIn('data-vote-card hidden', board)
+            self.assertIn('sf-cards', board)
+            self.assertIn('sf-card-head', board)
+            self.assertIn('class="sf-cta sf-fill" data-community-open', board)
+            self.assertIn('class="sf-cta sf-line"', board)
+            self.assertEqual(board.count('Donate via PayPal'), 1)
+            self.assertIn('<summary data-tt="foot.follow">Follow</summary>', board)
             self.assertNotIn('sf-rule', board)
             for label in ('Donate via PayPal', 'YouTube', 'Discord', 'Source code', 'Game link mod'):
                 self.assertIn(label, board)
