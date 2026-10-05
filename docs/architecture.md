@@ -572,8 +572,11 @@ progress while it works (`set_progress()`, the worker's `say` through the
 `big_copilot_worker` module): no JavaScript timer can fire during `runPython`, and the
 page's inactivity cutoff (`LOAD_TIMEOUT_MS`) hears a long section through these messages.
 
-**The board.** `OD_SECTIONS` in the board script mirrors `SECTIONS`
-(`tests/test_sections.py` holds the two together).
+**The board.** `OD_SECTIONS` in the board script is generated from `SECTIONS` by
+`section_metadata()` during `render()` (the `/*__SECTION_META__*/{}` slot), for
+both hosted and CLI pages. It carries only keys and dependency lists; producers
+and progress words remain Python-only. `tests/test_sections.py` verifies both
+rendered targets and a new registry entry without any browser-table edit.
 
 - `odReady(name)` is a pure read: the board holds the section's keys, and its needs'. On
   a source with no `section()` (`odOnDemand()` false) it is always true: such a source sent
@@ -658,8 +661,8 @@ section in the payload.
 **Adding a feature.** Decide whether it is core or a section. Core is for what the warnings
 need (plus the documented cheap map layers); anything computed on load needs that reason,
 written beside it. A section declares its
-keys, its needs, its producer and its words in `SECTIONS` and `OD_SECTIONS`; its readers
-ask with `odNeed()` and draw `odWaitHtml()`; it has no side effect on the core (no write to
+keys, its needs, its producer and its words in `SECTIONS`; `OD_SECTIONS` is generated,
+never edited. Its readers ask with `odNeed()` and draw `odWaitHtml()`; it has no side effect on the core (no write to
 an object the core already sent, no history), which `tests/test_sections.py` checks; and
 it is invalidated by the next build. A private part a section needs goes on
 `build.private`, never on a payload object.
@@ -902,7 +905,9 @@ its script is `template/board.js` beside it. The calculation cores are
 `ba_dashboard` without the files and never renders. `load_template()` first splices
 `open-store-model.js`, `open-factory-model.js`, then `board.js` into the line `/*__BOARD_SCRIPT__*/`, the whole body of the page's last
 `<script>` block, so `render()` sees the page as one string and fills the placeholders in
-the page in the same order as when it was one file. All four sources are in
+the page in the same order as when it was one file. The board's `/*__SECTION_META__*/{}`
+slot receives only `section_metadata()` keys/dependencies on each `render()`; it is
+not a second authored section registry. All four sources are in
 `build_web.STAMP_INPUTS`, so an edit to any changes the build stamp. The calculation
 source stays inline in the existing script block for both standalone `file://` output
 and the hosted build, requiring neither npm nor a network import for Python rendering.
@@ -953,14 +958,15 @@ commit of each side that is already split, and merges both files three ways with
 staged; otherwise the conflict markers are left for a human. Taking either side's
 `board.html` and splitting it again loses the other side's edits.
 
-The template carries seventeen tokens besides the slot, some in `board.html` and some in
-`board.js`. All seventeen are substituted by `render()`, but the text for three of them is
+The template carries eighteen tokens besides the slot, some in `board.html` and some in
+`board.js`. All eighteen are substituted by `render()`, but the text for three of them is
 supplied by the caller.
 
 | Token | Filled with |
 | --- | --- |
 | `__TITLE__` | `render()`: `<save name> · Big Copilot`, HTML-escaped because the save name is the player's own text; plain `Big Copilot` when there is no data |
 | `/*__DATA__*/null` | `render()`: the `extract()` payload as JSON with `</` escaped, or `null` for the browser build |
+| `/*__SECTION_META__*/{}` | `render()`, from `section_metadata()`: public keys and dependencies derived from Python `SECTIONS`, shared by hosted and CLI output |
 | `/*__LIVE__*/false` | `render()`: `true` when called with `live=True` |
 | `<!--__BANNER__-->` | `render()`'s `banner=` argument. `build_web.py` passes its `BANNER` (the landing screen); the local page passes nothing |
 | `<!--__BEFORE_SCRIPT__-->` | `render()`'s `before_script=` argument. `page_html()` passes a filled-in `BEFORE_SCRIPT`; the local page passes nothing |
@@ -1212,9 +1218,11 @@ Stale until that row draws or the next board arrives. Another company or save dr
 every row so hidden markup cannot retain the previous company's content.
 
 Adding a page means: a `div.page` in the markup, an entry in `PAGES` (with `newFeature` if
-it deserves a badge — see [contributing.md](contributing.md)) and in `ICON`, a `SEC_PAGE`
-row for each of its sections, an `SS_VIEWS` entry so search finds it, and a `PAGE_DRAWS`
-row for its draw function. A new view needs its `SUBS` item as well. The full checklist,
+it deserves a badge — see [contributing.md](contributing.md)) and in `ICON`, an `SS_VIEWS`
+entry so search finds it, and a `PAGE_DRAWS` row for its draw function. Author a new
+canonical view in `VIEW_META`: it generates its navigation item, primary `SEC_PAGE`
+row, area view, route identity, label and default host route. Only secondary/legacy
+section rows are added directly to `SEC_PAGE`; route hooks stay in `ROUTE_BEHAVIOR`. The full checklist,
 with the test that guards each table, is under [Registries](#registries). Tag the row with every
 view whose DOM it writes; if other code reads state it computes from another page, tag it
 `""` so it is drawn on every refresh. A wrong tag shows old numbers until the next full
@@ -1424,8 +1432,10 @@ too.
 
 ## Registries
 
-A registry is a table kept by hand that a new thing has to be added to. Nothing generates
-them, and a missing row often fails quietly: a finding that goes nowhere when clicked, a
+A registry records where a new thing belongs. Section metadata is authored in Python
+`SECTIONS` and generated for the browser; shared view identity is authored in `VIEW_META`
+and derives the common navigation tables. Behavior-specific entries stay explicit.
+A missing authored row often fails quietly: a finding that goes nowhere when clicked, a
 view search cannot find. Each checklist below names the anchor to grep, what goes in it,
 and the test that covers the table ("none" means no test reads it). A few tables are held
 to each other or to this document, so a missing row fails with its name: the finding-kind
@@ -1476,14 +1486,14 @@ all three.
 | The markup (`template/board.html`): `<div class="page" id="page…">` for a page, or `<section class="sec rv" id="sec…" data-sub="…">` inside its page for a view; a page with views also gets its `<nav class="seg" id="…Nav">` | The host element | the navigation tests, indirectly |
 | `const PAGES = [` (board script) | *Only for a page*: `{id, label, host, newFeature?}` | `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, then City map and Wiki" |
 | `const ICON = {` (board script) | *Only for a page*: its nav icon, keyed by page id | none |
-| `const SUBS = {` (board script) | *Only for a view*: its `[id, label, section]` item; a new page with views needs the whole entry | `tests/navigation.test.cjs`, "Businesses carries Results, Products & prices, Standards and Milestones; Staffing its three views" and "every view in SUBS has its SEC_PAGE row and a PAGE_DRAWS tag" |
-| `const SEC_PAGE = {` (board script) | `secX: [page, view]` for every section. Without it `reveal()`, the sub-nav and `pageFromHash()` fail | `tests/navigation.test.cjs`, "every view in SUBS has its SEC_PAGE row …" and "every Company section deep link opens the view that holds it"; `tests/alert_kinds.test.cjs`, "the supply kinds land on the Supply view of their route" |
+| `const SUBS = {` (board script; items generated by `navItems()` from `VIEW_META`) | *Only for a new host with views*: its DOM host/nav ids, storage key, default view and optional shown hook. Do not add individual items; `VIEW_META` generates them | `tests/navigation.test.cjs`, "Businesses carries Results, Products & prices, Standards and Milestones; Staffing its three views" and "every view in SUBS has its SEC_PAGE row and a PAGE_DRAWS tag" |
+| `const VIEW_META = [` and `const SEC_PAGE = {` (board script) | One canonical `{route, host, needs, section?, label}` record in `VIEW_META`. `label` is a callback around `tt()`, so language changes remain live. Its primary section generates a `SEC_PAGE` row; add only secondary and legacy `secX: [page, view]` rows explicitly. Without it `reveal()`, the sub-nav and `pageFromHash()` fail | `tests/navigation.test.cjs`, "every view in SUBS has its SEC_PAGE row …" and "every Company section deep link opens the view that holds it"; `tests/alert_kinds.test.cjs`, "the supply kinds land on the Supply view of their route" |
 | `const PAGE_DRAWS = [` (board script) | `["page/view", () => drawX(), null, ["section"]]`, tagged with every view whose markup it writes | `tests/calm_refresh.test.cjs`, "a refresh on Today draws Today …"; `tests/navigation.test.cjs`, "every PAGE_DRAWS tag names a real page or view" and the SUBS test above |
-| `const ROUTES = {`, `const AREAS = [`, `routeViewLabel(` (board script) | *For a route*: `{host: [page, view?], scopes?, enter?, after?, into?}`, its view id in its area's `views`, and its words and its `needs` sections; `HOST_ROUTES` names it when a host view shows it by default | `tests/shell_routes.test.cjs`, "every finding kind names a real route, and every route is a view of its area"; `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, then City map and Wiki" |
+| `const ROUTE_BEHAVIOR = {`, `const ROUTES =`, `const AREAS = [`, `routeViewLabel(` (board script) | *For a route*: shared host, label, lazy `needs` and area view order come from `VIEW_META`; `ROUTE_BEHAVIOR` holds only distinct `enter`, `after`, `into` or other hooks. `HOST_ROUTES` is derived; set `defaultHost: false` for a second mode sharing a host (the finder on Map). Area defaults stay explicit | `tests/shell_routes.test.cjs`, "every finding kind names a real route, and every route is a view of its area"; `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, then City map and Wiki" |
 | `const ROUTE_ALIASES =` (board script) | *Only when* an old page or view name becomes a route | `tests/navigation.test.cjs`, "the old #payroll hash, #secPayroll and a remembered Payroll open Staffing › Payroll" and "the #staff hash, #secStaff and a remembered Staff open Staffing › Staff needs" |
 | `const SS_VIEWS = [` (board script) | `{id, t, p, ic, syn, go}`, so search can open it | `tests/search.test.cjs`, "the index holds every group …" |
 | `function showPage(` (board script) | *Only if* the page loads or draws when shown, as the Map does | none |
-| `const SB_VIEWS =`, `const SB_SEC =` (board script) | *Only for* a new Supply view: its section, keyed by the view id. Also its `supply` item in `SUBS`, its route in `ROUTES` and `HOST_ROUTES`, its drawer in `drawSupplyView()`'s dispatch map (a missing view draws Changes) and its `PAGE_DRAWS` row; `sbViewOf()`, which puts a kind of change on a view, and the view-keyed objects in `sbData()` (`byView`), `sbUpdateStrip()` (`sbLeft`), `sbMode` and `sbScope` | `tests/navigation.test.cjs`, "Supply is five task views …"; `tests/import_routes.test.cjs`; `tests/progress.test.cjs` |
+| `const SB_VIEWS =`, `const SB_SEC =` (board script) | *Only for* a new Supply view: its section, keyed by the view id. Also its single `VIEW_META` record (which generates navigation, primary section, area, route identity, label and default host), any distinct `ROUTE_BEHAVIOR` hooks, and its drawer in `drawSupplyView()`'s dispatch map (a missing view draws Changes) and its `PAGE_DRAWS` row; `sbViewOf()`, which puts a kind of change on a view, and the view-keyed objects in `sbData()` (`byView`), `sbUpdateStrip()` (`sbLeft`), `sbMode` and `sbScope` | `tests/navigation.test.cjs`, "Supply is five task views …"; `tests/import_routes.test.cjs`; `tests/progress.test.cjs` |
 | `const PAGE_ALIASES =`, `const SEC_MOVED =` (board script) | *Only when* renaming or moving an old page or section | `tests/navigation.test.cjs` |
 | `const quietRender =` in `tests/search.test.cjs` | *Only if* the view adds a draw function: the function, in the list the test stubs | that test |
 | The `later()` change in `const MOVED =` in `tests/calm_refresh.test.cjs` | *Only if* the view should prove it redraws on a refresh: the fixture save is `tests/es3_fixture.py`'s `link_company()`, whose lists are often empty (`"Loans": []`), so `later()` has to add the data the view shows | `tests/calm_refresh.test.cjs` |
@@ -1497,7 +1507,7 @@ Nothing between `extract()` and the board filters keys: `render()`, the watch se
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
-| `PAYLOAD_KEYS`, and the `core = _wire_msgs({` at the end of `def build_core(` or a section's producer in `SECTIONS` (with `OD_SECTIONS` in the board script) | `"key": _producer(...)`. It must be JSON-serialisable, with any set ordered through `_in_order()`. Core only with a documented reason: the warnings need it, or the cheap map layers | JSON-serialisability: `tests/test_supply_facts.py`, "test_the_payload_carries_the_facts_and_both_passes_of_findings"; the key's place: `tests/test_sections.py` |
+| `PAYLOAD_KEYS`, and the `core = _wire_msgs({` at the end of `def build_core(` or a section's producer in `SECTIONS` (which generates `OD_SECTIONS` in both HTML targets) | `"key": _producer(...)`. It must be JSON-serialisable, with any set ordered through `_in_order()`. Core only with a documented reason: the warnings need it, or the cheap map layers | JSON-serialisability: `tests/test_supply_facts.py`, "test_the_payload_carries_the_facts_and_both_passes_of_findings"; the key's place: `tests/test_sections.py` |
 | The payload table in [The payload contract](#the-payload-contract) | A row that follows the reader convention | `tests/test_doc_registries.py`, "test_the_payload_table_has_a_row_for_every_key_extract_returns" (the key column only) |
 | The reader, `D.<key>`, in the board script, `web/map.js` or `web/wiki.js` | A reader that survives a missing key (fall back to an empty value), because many Node tests build a partial `D`. A section's reader asks for it with `odNeed()` and never takes a missing key for an empty one | indirect; `tests/on_demand.test.cjs` |
 | `class History:` and the `history.ledger(` / `history.write()` lines in `extract()` | *Only if* the value has to persist between saves | none |
