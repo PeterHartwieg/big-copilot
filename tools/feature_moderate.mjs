@@ -122,15 +122,22 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
         try { states = execute(command.args.map((arg,i)=>i===command.args.indexOf('--command')+1?command.inspectSql:arg)); }
         catch (error) { inspectionError = error.message; }
         const outcome = moderationOutcome(command,rows,states);
-        if (rejection) { outcome.rejection = rejection; outcome.exitCode = 1; }
+        if (rejection) {
+          outcome.mutationError = rejection; outcome.exitCode = 1;
+          // Transport/output failures can follow a committed write. Inspection
+          // establishes current state, not whether this invocation changed it.
+          outcome.unconfirmed = outcome.unchanged;
+          delete outcome.unchanged;
+        }
         if (inspectionError) {
           outcome.inspectionError = inspectionError; outcome.exitCode = 1;
-          outcome.unchanged.forEach(row=>{ row.state = 'unknown'; });
+          (outcome.unconfirmed || outcome.unchanged).forEach(row=>{ row.state = 'unknown'; });
           if (outcome.target) outcome.target.state = 'unknown';
         }
         console.log(JSON.stringify(outcome,null,2));
         process.exitCode = outcome.exitCode;
-        if (outcome.unchanged.length) console.error('No change for the requested IDs listed as unchanged.');
+        if (outcome.unconfirmed) console.error('Mutation outcome unconfirmed for the requested IDs; current states do not establish rollback.');
+        else if (outcome.unchanged.length) console.error('No change for the requested IDs listed as unchanged.');
       }
     }
   } catch (error) { console.error(error.message); console.error(HELP); process.exitCode = 1; }

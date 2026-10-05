@@ -205,6 +205,7 @@ test('requests: CLI reports rejected merge targets and capacity restore with exa
     {args:['merge','request-'+source,'request-'+target],states:[{id:source,state:'active'},{id:target,state:'merged'}],target:'merged',reason:'merge requires two distinct active visitor requests'},
     {args:['restore','request-'+source],states:[{id:source,state:'hidden'}],reason:'active request limit reached'},
     {args:['hide','request-'+source],mutationRows:[{id:source,state:'hidden'}],inspectionFailure:true},
+    {args:['hide','request-'+source],states:[{id:source,state:'hidden'}],outputFailure:true},
   ];
   try {
     for (const scenario of scenarios) {
@@ -212,7 +213,9 @@ test('requests: CLI reports rejected merge targets and capacity restore with exa
         import {syncBuiltinESMExports} from 'node:module'; let calls=0;
         childProcess.spawnSync=(_exe,args)=>{
           if(!args.includes('--local') || args.includes('--remote')) throw Error('fixture must stay local');
-          if(++calls===1) return ${JSON.stringify(scenario.mutationRows
+          if(++calls===1) return ${JSON.stringify(scenario.outputFailure
+            ? {status:0,stderr:'',stdout:'Truncated mutation JSON'}
+            : scenario.mutationRows
             ? {status:0,stderr:'',stdout:JSON.stringify([{success:true,results:scenario.mutationRows}])}
             : {status:1,stderr:'',stdout:scenario.reason})};
           if(${!!scenario.inspectionFailure}) return {status:1,stderr:'',stdout:'Inspection unavailable'};
@@ -228,8 +231,12 @@ test('requests: CLI reports rejected merge targets and capacity restore with exa
         assert.equal(outcome.inspectionError,'Inspection unavailable');
         continue;
       }
-      assert.equal(outcome.rejection,scenario.reason); assert.deepEqual(outcome.changed,[]);
-      assert.deepEqual(outcome.unchanged,[{id:'request-'+source,state:scenario.states[0].state}]);
+      assert.equal(typeof outcome.mutationError,'string'); assert.deepEqual(outcome.changed,[]);
+      if (!scenario.outputFailure) assert.equal(outcome.mutationError,scenario.reason);
+      assert.deepEqual(outcome.unconfirmed,[{id:'request-'+source,state:scenario.states[0].state}]);
+      assert.equal(Object.hasOwn(outcome,'unchanged'),false);
+      assert.doesNotMatch(result.stderr,/No change/);
+      assert.match(result.stderr,/outcome unconfirmed/);
       if(scenario.target) assert.deepEqual(outcome.target,{id:'request-'+target,state:scenario.target});
     }
   } finally { fs.unlinkSync(fixture); fs.rmdirSync(directory); }
