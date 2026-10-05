@@ -719,6 +719,16 @@ on the schedule with room for it, both moves tested against every rule, and the 
 or above their hours floor and day count. The week with those swaps is kept only if it
 leaves nobody short of hours or days whom the week without them would not.
 
+**Scheduling uses the employee's primary skill only.** This is their highest-level
+skill, as shown in the employee list; equal levels keep the save's skill order.
+Secondary skills do not qualify them for other work, even when that work would
+otherwise need a hire. A Hair Stylist therefore works hairdresser chairs and head
+washes, which both require Hair Stylist, while each station type keeps its own
+demand calculation. A secondary Customer Service skill does not make them a cashier.
+Hiring recommendations use the same primary-skill rule for candidates and available staff.
+Existing station continuity and employment demands keep their usual priorities
+within the work the employee is qualified to do.
+
 **Everybody scheduled gets a full week, because nobody works two businesses.** An employee is
 assigned to one building, so the thirty hours full time asks for have to come from that site
 or from nowhere. The plan therefore fills a week one person at a time — nobody new is

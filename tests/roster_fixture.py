@@ -15,7 +15,8 @@ Twelve sites, each a state the block has to draw:
 full     a measured shop: two counters, a cleaning station and a security
          locker, and a schedule already in the game as two-hour scraps. One
          guard cannot cover the locker's whole week, so half of it is lines
-         nobody can be given; the bench member holds two skills; and there are
+         nobody can be given; two part-time bench members cover their own
+         primary professions; and there are
          more full-timers than two counters can find thirty hours each for, so
          several are left short.
 cover    a shop that has never reported an hour: no serving shifts can be cut
@@ -112,11 +113,14 @@ def full_row():
         employee("free2", [SERVICE], demands=("ba:jobdemand_freeweekends",)),
         # Somebody the plan has to work around rather than refuse.
         employee("noaft", [SERVICE], demands=("ba:jobdemand_noafternoons",)),
-        # Two skills, and on the bench: `have` counts them under both, so the
-        # page has to take them off both. Cleaning and Security, because a
-        # customer service employee is never put on a cleaning station and a
-        # bench member who could not be used would not be drawn at all.
-        employee("bench", [CLEANING, GUARD], here=False),
+        # Each primary profession has one part-time bench member. Their
+        # 24-hour weeks preserve the six staffed lines per cover role that
+        # the UI tests exercise; secondary Guard must not count this cleaner
+        # as somebody available for security too.
+        employee("bench", [CLEANING, GUARD], here=False,
+                 demands=("ba:jobdemand_parttime",)),
+        employee("benchguard", [GUARD], here=False,
+                 demands=("ba:jobdemand_parttime",)),
         employee("clean1", [CLEANING]),
         employee("guard1", [GUARD]),
         # Somebody whose contract asks for four days, and more full-timers

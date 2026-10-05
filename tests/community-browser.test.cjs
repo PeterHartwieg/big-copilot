@@ -336,7 +336,10 @@ test('voting fetches on demand, prevents duplicates and uses the mutation result
   await dialog.getByRole('button',{name:en('comm.voted'),exact:true}).waitFor();
   assert.equal(state.votes.length,1); assert.equal(state.reads,1);
   assert.equal(await dialog.getByRole('button',{name:en('comm.voted'),exact:true}).isDisabled(),true);
-  await dialog.getByRole('button',{name:en('comm.vote'),exact:true}).click();
+  await Promise.all([
+    page.waitForResponse('**/api/community/vote'),
+    dialog.getByRole('button',{name:en('comm.vote'),exact:true}).click(),
+  ]);
   assert.equal(state.votes.length,2,'each feature has its own vote');
   await page.keyboard.press('Escape');
   await page.getByRole('button',{name:en('foot.vote.cta')}).waitFor();

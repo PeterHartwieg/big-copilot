@@ -174,7 +174,8 @@ test('the planner writes the hiring lines the block draws', () => {
   const open = ROWS.full.shifts.filter(s => s.p === null);
   // Nobody may be given more than full time's 50 hours: the guard covers four
   // of the locker's twelve-hour lines, CLEAN1 four of the cleaning station's,
-  // and the bench member, who holds both skills, two of each. Eight lines of
+  // and the two part-time bench members cover two lines of their primary
+  // professions each. Eight lines of
   // each are left to hires, two hires a role.
   assert.equal(open.length, 16, 'the cover nobody left here may work');
   assert.deepEqual(
@@ -418,7 +419,7 @@ test('a shift bar wears its kind, its pin and the bench mark', async () => {
 test('a line nobody can be given is a dashed anticipated hire, and cannot be ticked', async () => {
   const page = await shop('full');
   try {
-    const hire = page.locator(mon + '.sp-shift.sp-hire').first();
+    const hire = page.locator('#sp-roster .sp-shift.sp-hire').first();
     assert.equal(await hire.evaluate(el => el.tagName), 'SPAN', 'nothing to type yet');
     // It is part of the week, drawn in its own hours, and carries no name
     // because there is nobody on it yet.
@@ -459,7 +460,7 @@ test('the tile, the ring and the card all size the same week', async () => {
     const posts = await page.evaluate(() => spPlanPosts(D.staffing[0]));
     assert.ok(shown.includes(String(hours[0]) + 'h' + hours[1] + 'h'), shown);
     assert.doesNotMatch(await tile.innerText(), enRe('sp.ba.tohire'));
-    assert.match(await page.locator('#sp-roster .sp-add').innerText(), enRe('sp.step.add', {n: 5}));
+    assert.match(await page.locator('#sp-roster .sp-add').innerText(), enRe('sp.step.add', {n: 6}));
     assert.equal(await tile.locator('.sp-v s, .v s').first().innerText(),
       `${hours[0]} h`, 'struck through');
     assert.match(await tile.getAttribute('data-read'), enRe('sp.ba.hours', {h: hours[1], entries: en('sp.n.entries', {n: 26}), was: hours[0], wasEntries: en('sp.n.entries', {n: 42})}));
@@ -609,14 +610,14 @@ test('a plan with nothing in it still names the station it left out', async () =
   } finally { await page.close(); }
 });
 
-test('a bench member is counted off every role they hold, not just the first', async () => {
-  // BENCH holds cleaning and security, and `headcount.have` counts them under
-  // both. Taking them off under one showed them as somebody already here under
-  // the other. (Not customer service: a customer service employee is never put
-  // on a cleaning station, so that pair is no longer two usable roles.)
+test('bench members count only under their primary professions', async () => {
+  // BENCH has a secondary Guard skill, but only BENCHGUARD covers security.
+  // Each role has its own bench marker and no phantom assigned employee.
   const page = await shop('full');
   try {
-    assert.deepEqual(ROWS.full.bench[0].skills.length, 2);
+    assert.deepEqual(ROWS.full.bench.map(b => b.skills),
+      [['ba:skill_cleaning'], ['ba:skill_securityguard']]);
+    assert.equal(ROWS.full.headcount['ba:skill_securityguard'].have, 2);
     const rows = await page.$$eval('#sp-roster .sp-hc > span',
       els => els.filter(e => e.querySelector('.sp-code')).map(e => [
         e.querySelector('.sp-code').textContent,
@@ -626,7 +627,7 @@ test('a bench member is counted off every role they hold, not just the first', a
     // Cleaning uses CL beside Customer Service's CS; the locker keeps SG.
     const security = rows.find(r => r[0] === 'SG');
     assert.deepEqual(cleaning.slice(1), [4, 1], 'have 2, one of them the bench, plus 2 to hire');
-    assert.deepEqual(security.slice(1), [4, 1], 'have 2, the same bench member, plus 2 to hire');
+    assert.deepEqual(security.slice(1), [4, 1], 'have 2, the dedicated bench guard, plus 2 to hire');
   } finally { await page.close(); }
 });
 
@@ -847,7 +848,7 @@ test('a line whose station or person the save does not name cannot be ticked', a
   // hours are real and worth typing; they just carry no tick.
   for(const [what, edit] of [
     ['station', row => { row.stations[0].id = null; }],
-    ['person', row => { row.people[3].id = ''; }],
+    ['person', row => { row.people[row.shifts.find(s => s.p !== null).p].id = ''; }],
   ]){
     const page = await shop('full', edit);
     try {
