@@ -310,12 +310,12 @@ async function fileReport(env, parts, facts, diagnostic) {
   diagnostic.category = "unexpected";
   if (!issue) {
     // A folder that could not be removed is a storage failure: it now sits in
-    // R2 without an issue until the bucket's 30-day lifecycle rule deletes it.
+    // R2 without an issue for the report sweep; the 30-day lifecycle is the last net.
     const cleaned = await removeReport(env.REPORTS, written);
     reportFailure({ operation: "report", category: cleaned ? "github" : "storage" });
     return json({ error: "Service unavailable" }, 503);
   }
-  // The folder now has its issue: say so in it, so the daily sweep keeps it.
+  // The folder now has its issue: say so in it, so the report sweep keeps it.
   // Should even that write fail, the sweep removes a save whose issue exists,
   // never the other way round.
   if (folder) {
@@ -433,7 +433,7 @@ async function openIssue(token, title, body) {
 }
 
 // True when nothing of the report is left in R2. A delete that still fails is
-// caught by the daily sweep.
+// caught by the report sweep.
 async function removeReport(bucket, keys) {
   return !keys.length || retried(() => bucket.delete(keys));
 }

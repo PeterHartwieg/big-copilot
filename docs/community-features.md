@@ -208,7 +208,7 @@ Categories identify the boundary that failed:
 - `limiter`: the rate-limit binding call failed. A normal denied request is quiet.
 - `database`: D1 statement preparation, binding, or batch execution failed.
 - `storage`: a bug report's R2 write failed, or its folder could not be deleted after
-  GitHub failed (the daily sweep then deletes it), or `issue.json` could not be written.
+  GitHub failed (the report sweep then deletes it), or `issue.json` could not be written.
 - `github`: GitHub did not open the issue; the report's folder was deleted.
 - `unexpected`: a failure outside those boundaries, including response processing.
 
