@@ -462,8 +462,9 @@ async function sweepReports(bucket, now = Date.now()) {
   const saved = await bucket.get(REPORT_SWEEP_CHECKPOINT);
   let state = { version: 1, after: "", folder: null, phase: "scan", cursor: null, end: false };
   if (saved && saved.size <= 8192) {
-    const candidate = await saved.json();
-    if (candidate.version === 1 && typeof candidate.after === "string"
+    let candidate;
+    try { candidate = await saved.json(); } catch { /* Repair invalid JSON below. */ }
+    if (candidate && candidate.version === 1 && typeof candidate.after === "string"
         && candidate.after.length <= 1024 && ["scan", "validate", "delete"].includes(candidate.phase)
         && (candidate.cursor === null || (typeof candidate.cursor === "string" && candidate.cursor.length <= 4096))
         && typeof candidate.end === "boolean"

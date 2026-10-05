@@ -500,10 +500,10 @@ test('sweep: the daily cron removes folders whose issue never opened, and only t
 
 // An opaque continuation token names the last returned key, not an array
 // offset: deletions between pages must not make the synthetic R2 skip objects.
-function sweepBucket(stored, {pageSize = 2, deleted = [], onList, onDelete} = {}) {
+function sweepBucket(stored, {pageSize = 2, deleted = [], onList, onDelete, checkpoint: initialCheckpoint = null} = {}) {
   const objects = new Map(stored.map(([key, at]) => [key, {key, uploaded: new Date(at)}]));
   const calls = [], batches = [];
-  let checkpoint = null, operations = 0;
+  let checkpoint = initialCheckpoint, operations = 0;
   return {
     objects, calls, batches,
     get operations() { return operations; },
@@ -696,4 +696,21 @@ test('sweep: a marker arriving during a paused validation protects the entire fo
   for (let run = 0; run < 6; run++) await worker.scheduled({}, {REPORTS: bucket});
   assert.equal(bucket.objects.size, 252);
   assert.equal(bucket.batches.length, 0);
+});
+
+
+test('sweep: invalid JSON, null and unsupported checkpoints are repaired without blocking cleanup', async () => {
+  const old = Date.now() - 5 * 3600000;
+  const {worker} = vmWorker(created);
+  for (const checkpoint of ['{bad json', 'null', '{"version":999}']) {
+    const bucket = sweepBucket([['a/save.hsg', old]], {checkpoint});
+    await worker.scheduled({}, {REPORTS: bucket});
+    assert.equal(bucket.objects.size, 0);
+    assert.equal(bucket.checkpoint.version, 1);
+    assert.ok(bucket.operations <= 192);
+  }
+  const bucket = sweepBucket([['a/save.hsg', old]]);
+  bucket.get = async () => { throw new Error('checkpoint service down'); };
+  await assert.rejects(worker.scheduled({}, {REPORTS: bucket}), /checkpoint service down/);
+  assert.equal(bucket.objects.size, 1);
 });
