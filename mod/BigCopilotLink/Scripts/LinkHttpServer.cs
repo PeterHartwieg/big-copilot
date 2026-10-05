@@ -529,6 +529,8 @@ namespace BigCopilotLink
             response.StatusCode = status;
             response.ContentType = "application/json";
             response.ContentEncoding = Encoding.UTF8;
+            // Admission and dispatcher/write/approval refusals share the same hint.
+            if (status == 503 && json == "{\"error\":\"busy\"}") response.AddHeader("Retry-After", "1");
             // A cached /health would hide a moved stamp from both clients.
             response.AddHeader("Cache-Control", "no-store");
             response.ContentLength64 = bytes.Length;

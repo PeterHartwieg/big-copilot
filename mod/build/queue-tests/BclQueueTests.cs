@@ -272,6 +272,19 @@ public static class BclQueueTests
                 Check(Request(server.Url + "health").Status == 200, "old-generation saturation leaves reserved readers responsive");
             }
             finally { outstanding.SetValue(null, 0); }
+            for (var i = 0; i < MainThreadDispatcher.ExternalCapacity; i++)
+                Check(MainThreadDispatcher.Enqueue(() => { }), "fill actual dispatcher before HTTP refusal");
+            try
+            {
+                foreach (var endpoint in new[] { "refresh", "pair/request" })
+                {
+                    var refused = Request(server.Url + endpoint, "POST");
+                    Check(refused.Status == 503 && refused.Body == "{\"error\":\"busy\"}" && refused.Retry == "1"
+                        && refused.Cors == "https://bigcopilot.com", "dispatcher-full " + endpoint + " has readable retry hint");
+                    Wait(() => (int)Field(fresh, "WorkRequests") == 0, "dispatcher refusal releases HTTP admission");
+                }
+            }
+            finally { Drain(); }
             var malformed = Request(server.Url + "write/unknown", "POST");
             Check(malformed.Status == 404, "handler refusal still finishes request");
             Wait(() => (int)Field(fresh, "WorkRequests") == 0, "refused handler releases admission");
