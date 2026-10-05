@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -9,7 +10,7 @@ using System.Threading.Tasks;
 namespace BigCopilotLink
 {
     /// <summary>
-    /// Loopback-only HTTP listener: one accept thread, each request handled on a pool
+    /// Loopback-only HTTP listener: one accept thread, bounded work handled on a pool
     /// thread, serving the contract in docs/game-link-api.md. Handlers touch nothing
     /// but the volatile fields of HealthState and the immutable Snapshot — never
     /// Unity, never the game. What has to reach the game, POST /refresh and the
@@ -25,7 +26,7 @@ namespace BigCopilotLink
         private const int MainThreadWaitMs = 3000;
 
         private const string ExposeHeaders =
-            "ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character";
+            "ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character, Retry-After";
 
         /// <summary>
         /// The board itself, and any local page: the watcher and a build_web.py
@@ -50,9 +51,26 @@ namespace BigCopilotLink
         private readonly HealthState _health;
         private readonly WriteService _writes;
         private readonly ApprovalService _approvals;
-        private HttpListener _listener;
-        private Thread _thread;
-        private volatile bool _running;
+        public const int WorkRequestCapacity = 8;
+        public const int ReadRequestCapacity = 4;
+        private const int ReadWorkers = 2;
+        private ListenerSession _session;
+        // Pending old-generation pool callbacks still count after stop/restart.
+        private static int OutstandingWorkRequests;
+
+        // Every listener generation owns its counters, socket and cancellation.
+        // Old handlers cannot spend or release a restarted listener's permits.
+        private sealed class ListenerSession
+        {
+            public HttpListener Listener;
+            public Thread Acceptor;
+            public readonly Thread[] Readers = new Thread[ReadWorkers];
+            public readonly BlockingCollection<HttpListenerContext> ReadQueue = new BlockingCollection<HttpListenerContext>(ReadRequestCapacity);
+            public readonly CancellationTokenSource Stop = new CancellationTokenSource();
+            public volatile bool Running;
+            public int WorkRequests;
+            public int ReadRequests;
+        }
 
         public LinkHttpServer(int port, SaveService saves, HealthState health, WriteService writes, ApprovalService approvals)
         {
@@ -73,78 +91,139 @@ namespace BigCopilotLink
         /// <summary>Throws when the port is taken; the caller logs and stays idle.</summary>
         public void Start()
         {
-            _listener = new HttpListener();
-            _listener.Prefixes.Add(Url); // loopback only, by design
-            _listener.Start();
-            _running = true;
-            _thread = new Thread(Loop) { Name = "BigCopilotLink.Http", IsBackground = true };
-            _thread.Start();
+            if (_session != null && _session.Running) return;
+            var session = new ListenerSession { Listener = new HttpListener() };
+            session.Listener.Prefixes.Add(Url);
+            session.Listener.Start();
+            session.Running = true;
+            _session = session;
+            try
+            {
+                // Dedicated readers keep health/save off the pool threads waiting
+                // for writes, pairing or refresh work on the Unity main thread.
+                for (var i = 0; i < ReadWorkers; i++)
+                {
+                    session.Readers[i] = new Thread(() => ReadLoop(session)) { Name = "BigCopilotLink.Read", IsBackground = true };
+                    session.Readers[i].Start();
+                }
+                session.Acceptor = new Thread(() => Loop(session)) { Name = "BigCopilotLink.Http", IsBackground = true };
+                session.Acceptor.Start();
+            }
+            catch { Stop(); throw; }
         }
 
         public void Stop()
         {
-            _running = false;
-            try
-            {
-                if (_listener != null)
-                {
-                    _listener.Stop();
-                    _listener.Close();
-                }
-            }
-            catch (Exception)
-            {
-                // Already shutting down; nothing useful to do.
-            }
-            if (_thread != null) _thread.Join(1000);
-            // Handlers in flight are not waited for: Stop() runs on the main thread,
-            // which a /refresh handler may itself be waiting on, and there is nothing
-            // to protect. The closed listener ends their requests, a /save holds its
-            // own reference to an immutable Snapshot, and a late enqueue is refused.
-            _listener = null;
-            _thread = null;
+            var session = _session;
+            _session = null;
+            if (session == null) return;
+            session.Running = false;
+            session.Stop.Cancel();
+            session.ReadQueue.CompleteAdding();
+            try { session.Listener.Stop(); session.Listener.Close(); }
+            catch (Exception) { }
+            if (session.Acceptor != null && session.Acceptor.IsAlive) session.Acceptor.Join(1000);
+            // Do not wait for handlers on the main thread: a running write must
+            // finish with its real result, and pending work was cancelled above.
         }
 
-        private void Loop()
+        private static bool Admit(ref int count, int capacity)
         {
-            while (_running)
+            while (true)
+            {
+                var current = Volatile.Read(ref count);
+                if (current >= capacity) return false;
+                if (Interlocked.CompareExchange(ref count, current + 1, current) == current) return true;
+            }
+        }
+
+        private void Loop(ListenerSession session)
+        {
+            while (session.Running)
             {
                 HttpListenerContext context;
+                try { context = session.Listener.GetContext(); }
+                catch (Exception) { break; }
+                string method;
+                try { method = context.Request.HttpMethod; }
+                catch (Exception) { TryAbort(context); continue; }
+                // Preflight never waits behind admitted work: the browser must be
+                // able to read the eventual 503 and Retry-After on its POST.
+                if (method == "OPTIONS")
+                {
+                    try { WritePreflight(context, ApplyCors(context.Request, context.Response)); }
+                    catch (Exception) { TryAbort(context); }
+                    continue;
+                }
+                var read = method == "GET" || method == "HEAD";
+                if (read)
+                {
+                    if (!Admit(ref session.ReadRequests, ReadRequestCapacity)) { RejectBusy(context); continue; }
+                    var queued = false;
+                    try { queued = session.Running && session.ReadQueue.TryAdd(context); }
+                    catch (InvalidOperationException) { }
+                    finally
+                    {
+                        if (!queued) { Interlocked.Decrement(ref session.ReadRequests); TryAbort(context); }
+                    }
+                    continue;
+                }
+                if (!Admit(ref OutstandingWorkRequests, WorkRequestCapacity)) { RejectBusy(context); continue; }
+                Interlocked.Increment(ref session.WorkRequests);
+                var accepted = false;
                 try
                 {
-                    context = _listener.GetContext();
+                    accepted = ThreadPool.QueueUserWorkItem(_ => Process(context, session, false));
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
-                    break; // listener stopped or disposed — normal shutdown path
+                    if (session.Running) LinkMod.LogWarn("could not queue a request: " + e.GetType().Name);
                 }
-
-                // Each request on its own pool thread: a /refresh waits up to
-                // three seconds for the main thread, and a second caller must
-                // not queue behind it past its own five-second timeout. Handlers
-                // touch only volatile fields, the immutable Snapshot and the
-                // dispatcher, so they may run side by side. Only loopback can
-                // reach this port, and the compress has its own thread, so a
-                // flood of callers costs pool threads and nothing else.
-                var queued = ThreadPool.QueueUserWorkItem(delegate
+                finally
                 {
-                    try
-                    {
-                        Handle(context);
-                    }
-                    catch (Exception e)
-                    {
-                        // A listener closed under a handler (city unload, a port
-                        // change) is the normal end of that request, not an error.
-                        if (_running) LinkMod.LogError("request failed: " + e);
-                        TryAbort(context);
-                    }
-                });
-                if (!queued) TryAbort(context);
+                    if (!accepted) { Interlocked.Decrement(ref session.WorkRequests); Interlocked.Decrement(ref OutstandingWorkRequests); TryAbort(context); }
+                }
             }
         }
 
-        private void Handle(HttpListenerContext context)
+        private void ReadLoop(ListenerSession session)
+        {
+            foreach (var context in session.ReadQueue.GetConsumingEnumerable()) Process(context, session, true);
+        }
+
+        private void Process(HttpListenerContext context, ListenerSession session, bool read)
+        {
+            try
+            {
+                if (session.Running) Handle(context, session.Stop.Token);
+                else TryAbort(context);
+            }
+            catch (Exception e)
+            {
+                if (session.Running) LinkMod.LogError("request failed: " + e);
+                TryAbort(context);
+            }
+            finally
+            {
+                if (read) Interlocked.Decrement(ref session.ReadRequests);
+                else { Interlocked.Decrement(ref session.WorkRequests); Interlocked.Decrement(ref OutstandingWorkRequests); }
+            }
+        }
+
+        private static void RejectBusy(HttpListenerContext context)
+        {
+            try
+            {
+                var allowed = ApplyCors(context.Request, context.Response);
+                var forbidden = !allowed && !string.IsNullOrEmpty(context.Request.Headers["Origin"]);
+                context.Response.AddHeader("Retry-After", "1");
+                if (context.Request.HttpMethod == "HEAD") WriteNoBody(context, forbidden ? 403 : 503);
+                else WriteJson(context, forbidden ? 403 : 503, forbidden ? "{\"error\":\"origin_not_allowed\"}" : "{\"error\":\"busy\"}");
+            }
+            catch (Exception) { TryAbort(context); }
+        }
+
+        private void Handle(HttpListenerContext context, CancellationToken cancellation)
         {
             var request = context.Request;
             var url = request.Url;
@@ -206,12 +285,12 @@ namespace BigCopilotLink
 
                 case "/refresh":
                     if (method != "POST") { WriteJson(context, 405, "{\"error\":\"method_not_allowed\"}"); return; }
-                    HandleRefresh(context);
+                    HandleRefresh(context, cancellation);
                     return;
 
                 case "/pair/request":
                     if (method != "POST") { WriteJson(context, 405, "{\"error\":\"method_not_allowed\"}"); return; }
-                    var paired = _approvals.HandleRequest(request);
+                    var paired = _approvals.HandleRequest(request, cancellation);
                     WriteJson(context, paired.Status, paired.Json);
                     return;
 
@@ -229,7 +308,7 @@ namespace BigCopilotLink
                         return;
                     }
                     if (method != "POST") { WriteJson(context, 405, "{\"error\":\"method_not_allowed\"}"); return; }
-                    var answer = _writes.Handle(request, kind);
+                    var answer = _writes.Handle(request, kind, cancellation);
                     WriteJson(context, answer.Status, answer.Json);
                     return;
             }
@@ -377,7 +456,7 @@ namespace BigCopilotLink
             response.OutputStream.Close();
         }
 
-        private void HandleRefresh(HttpListenerContext context)
+        private void HandleRefresh(HttpListenerContext context, CancellationToken cancellation)
         {
             var stampBefore = _saves.Current.Stamp;
             var saves = _saves;
@@ -385,7 +464,7 @@ namespace BigCopilotLink
             RefreshResult result;
             try
             {
-                var task = MainThreadDispatcher.RunOnMainThread(() => saves.TryStartRefresh("request"));
+                var task = MainThreadDispatcher.RunOnMainThread(() => saves.TryStartRefresh("request"), cancellation);
                 if (task.Wait(MainThreadWaitMs))
                 {
                     result = task.Result;
@@ -403,7 +482,9 @@ namespace BigCopilotLink
             }
             catch (Exception e)
             {
-                // A faulted task: no city is loaded (the dispatcher refused the work).
+                if (e.GetBaseException() is DispatcherBusyException)
+                { WriteJson(context, 503, "{\"error\":\"busy\"}"); return; }
+                // A faulted task: no city/listener is available.
                 LinkMod.LogError("refresh request failed on the main thread: " + e);
                 WriteJson(context, 503, "{\"error\":\"main_thread_unavailable\"}");
                 return;
