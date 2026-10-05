@@ -59,7 +59,7 @@ export function hostedPage(raw) {
     assets.set(url, bytes);
     const replacement = tag === 'script'
       ? `<script src="${url}" integrity="${integrity}" data-board-asset></script>`
-      : `<link rel="stylesheet" href="${url}" integrity="${integrity}">`;
+      : `<link rel="stylesheet" href="${url}" integrity="${integrity}" data-board-asset>`;
     html = html.slice(0, largest.index) + replacement + html.slice(largest.index + largest[0].length);
   }
   return {html, assets};

@@ -47,7 +47,7 @@ with patch("builtins.open", changed):
   const made = spawnSync(process.env.PYTHON || 'python', [path.join(root, 'tests/es3_fixture.py'), save,
     path.join(dir, 'payload.json')], {cwd: root});
   assert.equal(made.status, 0, made.stderr?.toString());
-  function variant(version, changed, board = false, legacy = false) {
+  function variant(version, changed, board = false, legacy = false, style = false) {
     const manifest = structuredClone(pinned), assets = new Map();
     for (const [name, entry] of Object.entries(manifest.files)) {
       let bytes = fs.readFileSync(path.join(web, entry.url));
@@ -79,6 +79,11 @@ with patch("builtins.open", changed):
       const at = page.lastIndexOf('</script>');
       page = page.slice(0, at) + '\nglobalThis.assetCacheFixture = 1;\n' + page.slice(at);
     }
+    if (style) {
+      const block = [...page.matchAll(/<style>([\s\S]*?)<\/style>/g)].reduce((a,b)=>a[1].length>b[1].length?a:b);
+      const at = block.index + block[0].lastIndexOf('</style>');
+      page = page.slice(0, at) + '\n/* synthetic stylesheet change */\n' + page.slice(at);
+    }
     // Write and serve the actual optimizer outputs, then independently check
     // the emitted set. No inline-only shortcut can pass this journey.
     const site = path.join(dir, version);
@@ -99,6 +104,12 @@ with patch("builtins.open", changed):
     python:variant('python-change', 'ba_dashboard.py'), data:variant('data-change', 'ba_item_prices.json'),
     board:variant('board-change', null, true), worker:variant('worker-change', 'worker.js'),
     legacy:variant('previous-stamped-page', null, false, true)};
+  variants.style=variant('style-change', null, false, false, true);
+  const styleUrl=[...variants.a.assets.keys()].find(url=>/^\/assets\/board-.+\.css$/.test(url));
+  variants.missingStyle={...variants.a,assets:new Map(variants.a.assets)};
+  variants.missingStyle.assets.delete(styleUrl);
+  variants.badStyleIntegrity={...variants.a,assets:new Map(variants.a.assets)};
+  variants.badStyleIntegrity.assets.set(styleUrl,Buffer.concat([variants.a.assets.get(styleUrl),Buffer.from('\n/* altered stylesheet body */\n')]));
   const boardUrl=[...variants.a.assets.keys()].find(url=>/^\/assets\/board-.+\.js$/.test(url));
   variants.missingBoard={...variants.a,assets:new Map(variants.a.assets)};
   variants.missingBoard.assets.delete(boardUrl);
@@ -354,6 +365,41 @@ for(const broken of ['missingBoard','badIntegrity','uninitializedBoard']) {
     await Promise.all([page.waitForNavigation(),page.locator('#reloadBtn').click()]);
     await page.locator('#savePick').setInputFiles(save);
     await page.waitForFunction(()=>document.body.classList.contains('has-board') && hasData());
+  });
+}
+
+for (const broken of ['missingStyle','badStyleIntegrity']) {
+  test(`a ${broken} hosted stylesheet keeps styled reload recovery and refuses every board entry`,async t=>{
+    const ctx=await context(t),page=await ctx.newPage(),requests=[];
+    page.on('request',request=>requests.push(request.url()));
+    await ctx.addInitScript(()=>localStorage.setItem('ledger_link','http://127.0.0.1:18232'));
+    active=broken; phase=broken;
+    await page.goto(base+'/#wiki');
+    assert.equal(await page.evaluate(()=>typeof BigCopilotBoard), 'object', 'the board script loaded successfully');
+    assert.match(await page.locator('#srcStatus').textContent(),/could not finish/);
+    assert.equal(await page.evaluate(()=>window.LEDGER_ASSET_FAILURE),true,'head handler caught stylesheet failure before the shell loaded');
+    assert.equal(await page.locator('#reloadBtn').isVisible(),true);
+    assert.equal(await page.locator('#srcProg').isVisible(),false);
+    const colors=await page.evaluate(()=>({background:getComputedStyle(document.body).backgroundColor,
+      foreground:getComputedStyle(document.body).color,button:getComputedStyle(document.getElementById('reloadBtn')).backgroundColor}));
+    assert.equal(colors.background,'rgb(13, 16, 15)');
+    assert.equal(colors.foreground,'rgb(233, 236, 230)');
+    assert.equal(colors.button,'rgb(67, 192, 122)');
+    await page.locator('#savePick').setInputFiles(save);
+    await page.evaluate(()=>{location.hash='#map';});
+    await page.evaluate(()=>{location.hash='#wiki';});
+    await page.locator('#lgWikiLink').click();
+    assert.equal(await page.locator('body').evaluate(e=>e.classList.contains('has-board')),false);
+    assert.equal(await page.locator('#srcProg').isVisible(),false);
+    assert.ok(!requests.some(url=>url.includes('/worker.js') || url.includes('/pyodide/') || url.includes(':18232/')));
+    assert.ok(traffic(broken).some(row=>/^\/assets\/board-.+\.css$/.test(row.url) && row.status===(broken==='missingStyle'?404:200)));
+    // A new style content path recovers even if the rejected response is cached.
+    active='style'; phase=broken+'-reload';
+    await page.evaluate(()=>localStorage.removeItem('ledger_link'));
+    await Promise.all([page.waitForNavigation(),page.locator('#reloadBtn').click()]);
+    await page.locator('#savePick').setInputFiles(save);
+    await page.waitForFunction(()=>document.body.classList.contains('has-board') && hasData());
+    assert.equal(await page.evaluate(()=>window.LEDGER_ASSET_FAILURE),false);
   });
 }
 

@@ -347,12 +347,19 @@
   function readerAssetsFailure() {
     return failure(() => tt("app.reader.assets", "The reader files could not be loaded. Reload the app to update."));
   }
-  // The hosted board's resource can be removed by a deploy or rejected by
-  // integrity checking. Its shell must remain usable to reload either way.
+  // The head records hosted JS/CSS failures even before this shell loads.
+  // Also observe later failures while keeping the recovery state idempotent.
+  window.addEventListener("ledger-asset-failure", () => {
+    if (!readerError) failReader(readerAssetsFailure());
+  });
   window.addEventListener("error", (event) => {
-    if (event.target?.tagName === "SCRIPT" && event.target.hasAttribute("data-board-asset")) failReader(readerAssetsFailure());
+    if (!readerError && (event.target?.tagName === "SCRIPT" || event.target?.tagName === "LINK") && event.target.hasAttribute("data-board-asset")) failReader(readerAssetsFailure());
   }, true);
   function boardReady() {
+    if (window.LEDGER_ASSET_FAILURE) {
+      if (!readerError) failReader(readerAssetsFailure());
+      return false;
+    }
     if (handlers && typeof handlers.changed === "function") return true;
     if (!readerError) failReader(readerAssetsFailure());
     return false;

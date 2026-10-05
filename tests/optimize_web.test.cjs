@@ -123,6 +123,7 @@ test('hosted assets hash shipped bytes, preserve classic order and ignore unrela
   fs.writeFileSync(path.join(root, 'web/index.html'), raw);
   const output = optimizeWeb(root);
   assert.equal(output.assets.size, 2);
+  assert.match(output.html, /<link rel="stylesheet" href="assets\/board-[a-f0-9]{64}\.css" integrity="sha256-[^"]+" data-board-asset>/);
   assert.deepEqual(checkOptimized(root, raw), []);
   assert.deepEqual([...hostedPage(raw.replace('release = "a"', 'release = "b"')).assets.keys()], [...output.assets.keys()]);
   const context = vm.createContext({});

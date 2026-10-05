@@ -156,6 +156,12 @@ ICON_MORE = '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.4"></circle><c
 
 BANNER = r"""<style>
 [hidden]{display:none!important}
+/* Recovery must remain readable when the hosted board stylesheet fails. */
+html.reader-asset-failed{color-scheme:dark;--ground:#0d100f;--surface:#151917;--raised:#1c211e;--ink:#e9ece6;--ink-2:#9aa39d;--ink-3:#6b756f;--rule:#262c28;--rule-soft:#1e2320;--accent:#43c07a;--accent-soft:#43c07a26;--on-accent:#08130d;--neg:#ff6257}
+html.reader-asset-failed body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.5 system-ui,sans-serif}
+html.reader-asset-failed #reloadBtn{padding:8px 12px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:var(--on-accent);font:inherit;cursor:pointer}
+html.reader-asset-failed #reloadBtn:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+html.reader-asset-failed .sd-app{display:none!important}
 body.has-board .landing{display:none}
 body:not(.has-board) .wrap,body:not(.has-board) .sd-app{display:none}
 button.btn,button.btn2,button.ibtn{font-family:inherit;line-height:inherit}
@@ -716,6 +722,17 @@ def page_html(release: dict, root: str = HERE) -> str:
     head += '<script>window.LEDGER_BUILD = "' + release["version"] + '";</script>' + chr(10)
     manifest, _ = worker_assets(root)
     head += '<script>window.LEDGER_ASSETS = ' + release_json(manifest).replace("<", "\\u003c") + ';</script>' + chr(10)
+    # Hosted CSS can fail before app.js runs. Record either board resource's
+    # failure here, ahead of all styles, then let the shell show reload recovery.
+    head += '''<script>window.LEDGER_ASSET_FAILURE = false;
+window.addEventListener("error", function(event) {
+  const resource = event.target;
+  if ((resource?.tagName === "SCRIPT" || resource?.tagName === "LINK") && resource.hasAttribute("data-board-asset")) {
+    window.LEDGER_ASSET_FAILURE = true;
+    document.documentElement.classList.add("reader-asset-failed");
+    window.dispatchEvent(new Event("ledger-asset-failure"));
+  }
+}, true);</script>''' + chr(10)
     head += '<link rel="stylesheet" href="community.css?v=' + release["version"] + '">' + chr(10)
     with open(os.path.join(root, "web", "update.js"), encoding="utf-8") as fh:
         update_script = fh.read()

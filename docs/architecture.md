@@ -1069,7 +1069,8 @@ What `page_html()` produces, top of the file down:
 2. The head `page_html()` builds, in this order: the viewport tag, `window.LEDGER_BUILD`
    (the stamp, set here rather than in `BEFORE_SCRIPT` because `web/i18n.js`, in the
    template's head, fetches a UI table with it), `window.LEDGER_ASSETS` (the pinned
-   worker and Python/data manifest), and the `web/community.css` link stamped
+   worker and Python/data manifest), the early board resource failure handler,
+   and the `web/community.css` link stamped
    with the release version. There is no analytics
    script, and Cloudflare's automatic Web Analytics injection is switched off for the
    domain, because the privacy notice says the site runs none. `page_html()` then swaps the
@@ -1665,6 +1666,13 @@ also fails through the usual reader error and reload controls if its old mutable
 The broad `LEDGER_BUILD`, release stamp and `version.json` still control update
 notifications and the other assets; unrelated edits change that stamp without
 changing these content paths.
+
+The optimizer marks both external board JS and CSS with `data-board-asset`.
+A head error handler records HTTP or SRI rejection before `app.js` loads;
+the shell refuses worker startup, save restores and board entry when either
+resource failed. Small inline landing recovery styles keep the reload control
+readable without the board stylesheet. A registered, styled board can still
+open its no-save wiki when only Python startup failed.
 
 The worker validates the schema, all eight descriptors and its own path before
 boot. All eight files download concurrently with runtime startup. Successful
