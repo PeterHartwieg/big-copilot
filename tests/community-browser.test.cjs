@@ -26,6 +26,7 @@ async function setup(t, options = {}) {
     };
     if(options.blockStorage) Object.defineProperty(window, 'localStorage', {get(){throw Error('Storage blocked');}});
     if(options.seenVoting && location.hostname === 'community.test') localStorage.setItem('ba_dash_feature_seen:community-voting','1');
+    if(options.savedLanguageBeforeInit && location.hostname === 'community.test') localStorage.setItem('ba_dash_names','de');
     if(options.fullStorage) Storage.prototype.setItem = function(){throw Error('Quota exceeded');};
     if(options.legacyState && location.hostname === 'community.test') localStorage.setItem('ba_community_state', JSON.stringify({browserId:'00000000-0000-4000-8000-000000000000',nextDue:Date.now()+300000}));
   }, options);
@@ -37,6 +38,16 @@ async function setup(t, options = {}) {
     const url = new URL(request.url());
     if(url.hostname !== 'community.test') return route.abort();
     const json = (body, status = 200) => route.fulfill({status, contentType:'application/json',body:JSON.stringify(body)});
+    if(options.savedLanguageBeforeInit && url.pathname==='/i18n/de.json') {
+      // The real saved-language fetch completes after community's DOM listener
+      // is registered, while a later parser-blocking script holds DOMContentLoaded.
+      await request.frame().page().waitForFunction(()=>window.communityListenerReady===true);
+      return json({'nav.new':'Neu','foot.vote.cta':'Über Features abstimmen','foot.vote.title':'Über nächste Ideen abstimmen'});
+    }
+    if(options.savedLanguageBeforeInit && url.pathname==='/community-timing-gate.js') {
+      await request.frame().page().waitForFunction(()=>ttLang==='de' && ttTable?.['nav.new']==='Neu');
+      return route.fulfill({contentType:'application/javascript',body:'window.tableReadyBeforeCommunityInit = document.readyState === "loading";'});
+    }
     if(url.pathname === '/api/community/presence') {
       state.heartbeats.push(request.postDataJSON());
       if(state.holdPresence) await state.holdPresence;
@@ -71,7 +82,14 @@ async function setup(t, options = {}) {
     }
     const name = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
     if(!['index.html','app.js','community.js','community.css','version.json'].includes(name)) return route.abort();
-    return route.fulfill({contentType:name.endsWith('.html') ? 'text/html' : name.endsWith('.css') ? 'text/css' : name.endsWith('.json') ? 'application/json' : 'application/javascript',body:fs.readFileSync(path.join(web,name),'utf8')});
+    let body=fs.readFileSync(path.join(web,name),'utf8');
+    if(options.savedLanguageBeforeInit && name==='community.js') body+='\nwindow.communityListenerReady = true;';
+    if(options.savedLanguageBeforeInit && name==='index.html') {
+      body=body.replace(/(<script src="community\.js[^\"]*"><\/script>)/,'$1<script src="/community-timing-gate.js"></script>');
+      if(options.fallbackVoteMarkup) body=body.replace(/(<button[^>]*class="sf-link sf-btn"[^>]*data-community-open[^>]*)>.*?<\/button>/,
+        '$1 data-tt="foot.vote.cta">Vote on features</button>');
+    }
+    return route.fulfill({contentType:name.endsWith('.html') ? 'text/html' : name.endsWith('.css') ? 'text/css' : name.endsWith('.json') ? 'application/json' : 'application/javascript',body});
   });
   async function newPage() {
     const page = await context.newPage();
@@ -509,6 +527,24 @@ test('visitor requests: returning visitors see one footer badge until the form i
   await page.waitForFunction(()=>[...document.querySelectorAll('[data-new-feature="feature-requests"]')].every(el=>el.hidden));
   await page.reload();
   assert.equal(await page.locator('[data-new-feature="feature-requests"]:not([hidden])').count(),0);
+});
+
+test('visitor requests: a saved table loaded before init restores footer labels and badges to English',async t => {
+  for (const fallbackVoteMarkup of [false,true]) {
+    const {page}=await setup(t,{savedLanguageBeforeInit:true,fallbackVoteMarkup,seenVoting:true});
+    assert.equal(await page.evaluate(()=>window.tableReadyBeforeCommunityInit),true);
+    const cards=page.locator('[data-vote-card]'),badges=cards.locator('[data-new-feature="feature-requests"]');
+    assert.deepEqual(await badges.allTextContents(),['Neu','Neu']);
+    assert.equal(await cards.locator('[data-new-feature]').count(),2);
+    assert.deepEqual(await page.locator('[data-community-open]').allTextContents(),['Über Features abstimmen','Über Features abstimmenNeu']);
+    await page.evaluate(()=>ttSetTable('en',null));
+    assert.deepEqual(await badges.allTextContents(),['New','New']);
+    assert.deepEqual(await page.locator('[data-community-open]').allTextContents(),['Vote on features','Vote on featuresNew']);
+    await page.locator('#landing [data-community-open]').click();
+    await page.locator('.community-dialog summary').click();
+    await page.waitForFunction(()=>[...document.querySelectorAll('[data-new-feature="feature-requests"]')].every(el=>el.hidden));
+    assert.equal(await badges.count(),2);
+  }
 });
 
 test('visitor requests: a full queue keeps typed text and keyboard retry guidance',async t => {

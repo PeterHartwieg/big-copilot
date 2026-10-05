@@ -506,13 +506,16 @@
       if (!badge) {
         if (button.hasAttribute('data-tt')) {
           const label = document.createElement('span');
-          label.dataset.tt = button.getAttribute('data-tt'); label.textContent = button.textContent;
+          label.dataset.tt = button.getAttribute('data-tt'); label.textContent = 'Vote on features';
           button.removeAttribute('data-tt'); button.replaceChildren(label);
         }
-        badge = document.createElement('span'); badge.className = 'feature-new'; button.append(badge);
+        badge = document.createElement('span'); badge.className = 'feature-new'; badge.textContent = 'New'; button.append(badge);
       }
-      badge.dataset.newFeature = 'feature-requests'; badge.textContent = tt('nav.new', 'New');
+      // Static text may already be translated; keep its existing English snapshot.
+      // New nodes start in English before tApply captures and translates them.
+      badge.dataset.newFeature = 'feature-requests';
       badge.dataset.tt = 'nav.new';
+      if (typeof tApply === 'function') { tApply(button); tApply(badge); }
       badge.hidden = typeof featureDiscovery !== 'undefined';
     });
     document.addEventListener("click", (event) => {
