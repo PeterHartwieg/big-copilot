@@ -6498,13 +6498,9 @@ function spRosterBlock(b){
             {people: tt("sp.n.people", {one: "{n} person", other: "{n} people"}, {n: posts}), entries: entries(counts.hire)})}` : ""}${
         keptWords}`)}"><span class="lab">${c.cover ? tt("sp.ba.lab.cover", "Cover hours / week") : tt("sp.ba.lab", "Hours / week")}</span><div class="v">${
         spI("list")}${spWas(againstHours, planHours)}${planHours}<small style="font-size:12px;color:var(--ink-3)"> h</small>${
-        /* The hours are the week; the blocks beside them are the dragging,
-           and on a cover week re-cut from the same hours they are the whole
-           of what the plan saves -- so they keep their own strike rather than
-           living in the read-out alone. */
-        counts.staffed ? `<small style="font-size:12px;color:var(--ink-3)">${
-          against === counts.staffed ? "" : `<s>${against}</s> `}${
-          entries(counts.staffed)}</small>` : ""}${counts.hire && posts
+        counts.staffed && against !== counts.staffed
+          ? `<small style="font-size:12px;color:var(--ink-3)"><s>${against}</s> ${entries(counts.staffed)}</small>` : ""}${
+        counts.hire && posts && !(addStep && (add.hire || []).reduce((n, h) => n + (h.people || 0), 0) === posts)
           ? `<small style="font-size:12px;color:var(--warn)">${tt("sp.ba.tohire", "+{n} to hire", {n: posts})}</small>` : ""}</div></div>
       <div tabindex="0" data-read="${attr(`${costKnown
         ? c.cover
@@ -9574,7 +9570,12 @@ function bindSupply(){
   on("click", "#pageSupply [data-sbc-settled]", (b, e) => { e.preventDefault(); pgClearSettled(); sbStamp++; drawSupplyStrip(); sbAgain("changes"); });
   document.addEventListener("toggle", e => {
     const el = e.target;
-    if(el && el.matches && el.matches("details[data-sb-obj]")) sbOpenObj.set(el.dataset.sbObj, el.open);
+    if(el && el.matches && el.matches("details[data-sb-obj]")) {
+      sbOpenObj.set(el.dataset.sbObj, el.open);
+      document.querySelectorAll("[data-sb-hours-for]").forEach(hours => {
+        if(hours.dataset.sbHoursFor === el.dataset.sbObj) hours.hidden = el.open;
+      });
+    }
   }, true);
 }
 /* A view's sorting, its Set to boxes and its recipe pickers, wired after it
@@ -10117,7 +10118,7 @@ function sbInputRow(d, r, site){
    hours (Production), `o.inputs` the daily top-ups into them (Production and
    Deliveries), `o.imports` a factory's own imports (Imports). */
 function sbFactoryPart(d, claimed, ctx, view, o){
-  const f = d.f;
+  const f = d.f, drawnLines = [];
   const all = sbWhich === "all";
   const g = D.supply.graph || {nodes: [], links: []};
   const sent = (D.supply.factories || {}).sites || [];
@@ -10165,6 +10166,10 @@ function sbFactoryPart(d, claimed, ctx, view, o){
         : o.inputs ? sbInputs(inputs.length)
         : tt("sb.fac.imports.n", {one: "{n} import", other: "{n} imports"}, {n: imports.length}), "", planLink);
     const shownLines = whole ? lines : lines.filter(r => r.keep);
+    const objectKey = `${view}|${b ? b.key : "none"}`;
+    const defaultOpen = left > 0 || keep.some(r => (r.fact && r.fact.lvl === "critical") || (r.prod && r.prod.lvl === "critical"));
+    const objectOpen = !!arrivedHere || (sbOpenObj.has(objectKey) ? sbOpenObj.get(objectKey) : defaultOpen || sbWhich === "all");
+    if(o.lines) drawnLines.push(...shownLines.map(r => ({...r, objectKey, objectOpen})));
     const shownInputs = whole ? inputs : inputs.filter(r => r.keep);
     const shownImports = whole ? imports : imports.filter(r => r.keep);
     /* A table's first header names it (Line, Factory input): no title over
@@ -10203,7 +10208,7 @@ function sbFactoryPart(d, claimed, ctx, view, o){
     const short = worst ? " " + sbStatus(sbProdFact(worst), lackTip, lackTip, tt("sb.fac.machines.chip",
       {one: "{n} line short of machines", other: "{n} lines short of machines"}, {n: lacking.length})) : "";
     return sbObject(view, s, {icon: "gear", how, stats: stats + short, left,
-      open: left > 0 || keep.some(r => (r.fact && r.fact.lvl === "critical") || (r.prod && r.prod.lvl === "critical")), body});
+      open: defaultOpen, body});
   });
   const lineN = szTally(everyLine.filter(r => r.fact), r => r.fact);
   const hoursShort = everyLine.filter(r => r.fact && r.fact.st === "short" && r.fact.why === "hours").length;
@@ -10242,7 +10247,7 @@ function sbFactoryPart(d, claimed, ctx, view, o){
     {one: "<b>{n} shop downstream has traded under a week</b>: {shops}. Their use is a straight line through the days they have traded, so the figures below <b>may still be ramping</b>.",
      other: "<b>{n} shops downstream have traded under a week</b>: {shops}. Their use is a straight line through the days they have traded, so the figures below <b>may still be ramping</b>."},
     {n: names.length, shops: sbList(names)})}</span></div>` : "";
-  return {blocks: blocks.join(""), verdict, calm, ramp, every, keptAll, everyLine, everyInput};
+  return {blocks: blocks.join(""), verdict, calm, ramp, every, keptAll, everyLine, everyInput, drawnLines};
 }
 
 /* --- the five views -------------------------------------------------------- */
@@ -10713,10 +10718,10 @@ function drawProductionView(){
   const fac = sbFactoryPart(d, claimed, ctx, "production", {lines: true, inputs: true});
   const sites = d.f.sites.filter(s => sbInScope("production", s.s));
   const every = fac.every.filter(r => r.slug);
-  const tail = fac.blocks + sbOthers(d, "production", claimed) + drawFactoryStaffing(r => sbInScope("production", r.s));
+  const tail = fac.blocks + sbOthers(d, "production", claimed) + drawFactoryStaffing(r => sbInScope("production", r.s), fac.drawnLines);
   const basis = sbBasisDiffers(sbProdTiles(sites) + fac.ramp + tail, () => {
     const o = sbData(), got = new Set(), f = sbFactoryPart(o, got, sbImportCtx(o), "production", {lines: true, inputs: true});
-    return sbProdTiles(sites) + f.ramp + f.blocks + sbOthers(o, "production", got) + drawFactoryStaffing(r => sbInScope("production", r.s));
+    return sbProdTiles(sites) + f.ramp + f.blocks + sbOthers(o, "production", got) + drawFactoryStaffing(r => sbInScope("production", r.s), f.drawnLines);
   });
   sbFill(sec, sbToolbar("production", {kinds: ["factories"], basis})
     + sbProdTiles(sites) + sbVerdict("production", fac.verdict, fac.calm) + fac.ramp + tail);
@@ -10782,7 +10787,7 @@ function drawFlowPanel(){
    factory workers counted from its machine-hours a week. Python builds it for
    both sizings (factoryStaffing); this reads the one on screen. */
 const SB_STAFF_WHY = () => tt("sb.staff.why", "The same rules as a shop's Staffing: one person per machine per hour, one schedule entry per person at a time, 12 hours the longest entry. A line needs its machines × the hours it must run: 24 when planned for full production, else the hours shop demand plus the chain margin takes. Each run is cut into entries of at most 12 hours, placed around the workers' own demands. A factory is given the fewest of its own factory workers that cover the week: its machine-hours a week ÷ 50, rounded up, and one more while an entry stays open; the rest could go. Only factory workers already at that factory count. Too few hours is a change to type; fewer workers is a suggestion.");
-function drawFactoryStaffing(keep = () => true){
+function drawFactoryStaffing(keep = () => true, drawnLines = []){
   if(!odNeed("factoryStaffing")){
     const any = ((((D.supply || {}).factories || {}).sites) || []).some(s => keep({s: s.s, key: ((D.businesses || [])[s.s] || {}).key}));
     return any ? `<div class="sb-staff" id="sbStaff">${sechead(tt("sb.staff.title.plan", "Factory staffing for this plan"), {icon: "crew", why: SB_STAFF_WHY()})}${odWaitHtml("factoryStaffing")}</div>` : "";
@@ -10812,7 +10817,12 @@ function drawFactoryStaffing(keep = () => true){
       tt("sb.staff.wages", "a day in wages")}</small></span>` : "<span></span>";
     const lines = (r.lines || []).map(l => {
       const chips = (l.cuts || []).map(([a, z]) => `<span class="sb-shift">${h(a)}–${h(z)}<small>${tt("sb.unit.nh", "{n} h", {n: z - a})}</small></span>`).join("");
-      return `<div class="sb-sln"><span class="nm">${spEsc(l.item)}</span><span class="hrs">${Number.isFinite(l.hoursNow) && l.hoursNow === l.hours ? "" : sbDayStrip(l.hoursNow, l.hours,
+      const echoed = drawnLines.find(x => !x.unnamed && x.s === r.s && x.slug === l.slug
+        && Number.isFinite(x.hoursNow) && x.hoursNow === l.hoursNow && (x.needHours || {})[sizing] === l.hours
+        && (!(x.chk || []).some(c => c.kind === "Factory run hours")
+          || (x.chk || []).find(c => c.kind === "Factory run hours").proposed === l.hours));
+      const hidden = echoed && echoed.objectOpen;
+      return `<div class="sb-sln"><span class="nm">${spEsc(l.item)}</span><span class="hrs"${echoed ? ` data-sb-hours-for="${attr(echoed.objectKey)}"` : ""}${hidden ? " hidden" : ""}>${Number.isFinite(l.hoursNow) && l.hoursNow === l.hours ? "" : sbDayStrip(l.hoursNow, l.hours,
         tt("sb.staff.line.tip", "{now} h staffed, {need} h needed, from {from}:00", {now: l.hoursNow ?? 0, need: l.hours, from: h(l.from || 0)}), l.from || 0)}${
         Number.isFinite(l.hoursNow) && l.hoursNow !== l.hours ? sbChg(l.hoursNow, l.hours, tt("sb.unit.h", "h")) : `<b>${tt("sb.unit.nh", "{n} h", {n: l.hours})}</b>`}</span><span class="shifts">${chips}${
         l.machines > 1 ? `<small class="sb-per">× ${tt("sb.staff.machines", {one: "{n} machine", other: "{n} machines"}, {n: l.machines})}</small>` : ""}</span></div>`;
@@ -13067,21 +13077,16 @@ function drawPlan(){
       <thead><tr><th>${tt("gr.col.product", "Product")}</th><th class="l" colspan="4"></th></tr></thead>
       <tbody>${lines.join("")}</tbody>
     </table></div>` : `
-    <div class="planstats">
-      <div class="planstat"><span class="lab">${tt("gr.stat.machines", "Machines")}</span><div class="v" id="vMachines"></div></div>
-      <div class="planstat" id="vMadeTile"><span class="lab">${tt("gr.stat.made", "Made / week")}</span><div class="v"><span id="vMade"></span><small>${tt("gr.stat.units", "units")}</small></div></div>
-      <div class="planstat"><span class="lab">${tt("gr.stat.raw", "Raw material / week")}</span><div class="v"><span id="vRaw"></span><small>${tt("gr.stat.import", "units to import")}</small></div></div>
-    </div>
     <div class="scrollx"><table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length + added.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
       <thead><tr><th>${tt("gr.col.product", "Product")}</th><th class="l">${tt("gr.col.machines", "Machines")}</th><th>${tt("gr.col.made", "Made / week")}</th><th>${
         tt("gr.col.supplies", "Supplies")}</th><th class="l">${tt("gr.col.raw", "Raw material / week")}</th><th class="saves" data-tip="${
         attr(tt("gr.col.saves.tip", "What a line saves against imports: the imports it replaces, less the raw material its machines eat, both at import prices"))}">${tt("gr.col.saves", "Saves / week")}</th></tr></thead>
       <tbody>${lines.join("")}</tbody>
-      <tfoot class="pl-foot"><tr><td class="l" id="vFootWs"></td><td></td><td id="vFootMade"></td><td></td><td id="vFootRaw"></td><td class="saves" id="vFootSaves"></td></tr></tfoot>
+      <tfoot class="pl-foot"><tr><td class="l" id="vFootWs"></td><td></td><td id="vFootMade"></td><td></td><td id="vFootRaw"><span id="vRaw"></span> <small>${tt("gr.stat.import", "units to import")}</small><div id="vFootRawCost"></div></td><td class="saves" id="vFootSaves"></td></tr></tfoot>
     </table></div>
     <p class="quiet" id="vKit" style="margin:12px 0 0"></p>`;
   /* No sentence under the table (Peter's testing, A14): each row's Supplies
-     cell says what the shops take and what is over, and the Made tile's tip
+     cell says what the shops take and what is over, and the Made total's tip
      sums it, or says why it cannot be measured. */
   const forHost = $("planFor");
   if(forHost) forHost.innerHTML = ofForHtml();
@@ -14273,7 +14278,7 @@ function drawProducts(){
   const more = all.length > TOP
     ? `<a class="link" href="#" id="productsToggle" aria-expanded="${showAllProducts}">${
         showAllProducts ? tt("co.prod.top", "top {n} only", {n: TOP}) : tt("co.prod.all", "all {n}", {n: all.length})}</a>`
-    : `<span class="quiet">${tt("co.prod.all", "all {n}", {n: all.length})}</span>`;
+    : "";
   $("secProducts").innerHTML = sechead(tt("co.prod.title2", "Sales across the company"), {
     why: tt("co.prod.why", "Revenue and units are a day's, averaged over the last seven days and summed over every store that sells the line; units a week is the last seven days, and stores is how many carry it.")
       + " " + (showPeak
@@ -15427,10 +15432,13 @@ function hrFindHtml(m){
       : out ? `${hrNum(out)} more left out by your filters` : "";
     const n = recruiting[r.skill] || 0, hh = hrRole("ba:skill_headhunter");
     const where = n ? `${n === 1 ? `your ${hh} is` : `${hrNum(n)} of your ${hh}s are`} recruiting ${hrRole(r.skill)}: wait for more candidates, or a ${spEsc(agency)}`
-      : `a ${hh} at your headquarters recruiting ${hrRole(r.skill)}, or a ${spEsc(agency)}`;
-    return `<li><b>${hrRole(r.skill)}</b>${have ? `<span>${have}</span>` : ""}<span class="to">${hrSvg("chev")}${where}</span></li>`;
+      : "";
+    return `<li><b>${hrRole(r.skill)}</b>${have ? `<span>${have}</span>` : ""}${where ? `<span class="to">${hrSvg("chev")}${where}</span>` : ""}</li>`;
   }).join("");
-  return `<div class="hs-find"><h4 class="nx-sr">Where to find them</h4><ul>${rows}</ul></div>`;
+  const genericRoles = short.filter(r => !recruiting[r.skill]).map(r => hrRole(r.skill));
+  const generic = genericRoles.length
+    ? `<p class="hs-find-advice">${genericRoles.length > 1 ? `${genericRoles.slice(0, -1).join(", ")} and ${genericRoles.at(-1)}` : genericRoles[0]}: a ${hrRole("ba:skill_headhunter")} at your headquarters recruiting ${genericRoles.length > 1 ? "each role" : "that role"}, or a ${spEsc(agency)}.</p>` : "";
+  return `<div class="hs-find"><h4 class="nx-sr">Where to find them</h4><ul>${rows}</ul>${generic}</div>`;
 }
 /* "When you hire": what Staff all sites does, in numbers (the reassigns,
    the hires, the weeks it writes, the places that stay open), then the
@@ -17313,8 +17321,8 @@ function drawFinance(){
   const tile = (lab, v, sub, cls = "") => `<div class="bz-fin"><span class="lab">${lab}</span><span class="v${cls ? " " + cls : ""}">${v}</span><span class="sub">${sub}</span></div>`;
   host.innerHTML = `<div class="sechead"><h2>${tt("co.fin.title", "Company finances")}</h2></div>
     <div class="bz-fins">${tile(tt("co.fin.cash", "Cash on hand"), fmt(k.cash || 0), cashSub)}${
-      tile(tt("co.fin.owed", "Owed on loans"), loans.length ? fmt(k.debt || 0) : "—", owedSub, k.debt > 0 ? "warn" : "")}${
-      tile(tt("co.fin.hist", "History since"), histV, histSub)}</div>
+      tile(tt("co.fin.owed", "Owed on loans"), loans.length ? fmt(k.debt || 0) : "—", owedSub, k.debt > 0 ? "warn" : "")}</div>
+    <p class="bz-history"><span>${tt("co.fin.hist", "History since")} ${histV}</span><span>${histSub}</span></p>
     ${web ? `<p class="bz-foot">${tt("co.fin.prefs", "History controls: {link}.", {link: `<a class="link" href="#" data-open-prefs="history">${tt("nav.more.prefs2", "Preferences")}</a>`})}</p>` : ""}`;
 }
 
@@ -19337,7 +19345,7 @@ buildAlertSettingsPanel();
                           rings a type's row (.mk-arrive).
      tr.line[data-m][data-rate][data-ing="Name:factor,…"][data-kit][data-slug][data-max]
                           with .step a[data-d=-1|1], .step b, .machines, .made,
-                          .covers, .ing; totals in #vMachines #vMade #vRaw
+                          .covers, .ing; totals in #vFootWs #vFootMade #vRaw
                           #vKit; ingredient rows go into #ingBody, the total
                           into #ingFoot, and "nothing to import" into
                           #ingNote. The nearest ancestor with data-pershop
@@ -21873,15 +21881,15 @@ function planDraw(){
   const boughtOwn = boughtRows.filter(tr => tr.dataset.pershop !== undefined);
   takeWeek += Math.max(0, products - lines.length - boughtOwn.length) * wantWeek
     + boughtOwn.reduce((a, tr) => a + (+tr.dataset.pershop || 0) * 7 * shopsOwned, 0);
-  put("vMachines", machines); put("vMade", fmtN(made)); put("vRaw", fmtN(raw));
+  put("vRaw", fmtN(raw));
   /* The table's total row: workstations, made, raw material at import prices and the saving. */
   put("vFootWs", tt("gr.foot.ws", {one: "{n} workstation", other: "{n} workstations"}, {n: machines}));
-  put("vFootMade", fmtN(made)); put("vFootRaw", raws ? fmt(raws) : "");
+  put("vFootMade", fmtN(made)); put("vFootRawCost", raws ? fmt(raws) : "");
   put("vFootSaves", savesAny ? fmt(saves) : "");
-  /* What the shops take of that sits behind the Made tile, not in a tile or a
+  /* What the shops take of that sits behind the Made total, not in a tile or a
      sentence of its own; a line short of the shelves is red in its Supplies
      cell (declutter E8). */
-  const madeTile = $("vMadeTile");
+  const madeTile = $("vFootMade");
   if(madeTile) madeTile.dataset.tip = ofCustom() && takeWeek
     ? tt("gr.of.custom.measured", "Your shops take {take:,} units a week; {surplus:,} is surplus from products with measured sales. Products without measured sales are excluded from the surplus estimate.", {take: Math.round(takeWeek), surplus: Math.round(exportWeek)})
     : takeWeek ? tt("gr.made.tip", "The shops take {take:,} units a week across the range; {surplus:,} is surplus for export",

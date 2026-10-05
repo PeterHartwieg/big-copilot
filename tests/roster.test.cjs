@@ -457,8 +457,9 @@ test('the tile, the ring and the card all size the same week', async () => {
     });
     const shown = (await tile.innerText()).replace(/\s+/g, '').trim();
     const posts = await page.evaluate(() => spPlanPosts(D.staffing[0]));
-    assert.ok(shown.includes(String(hours[0]) + 'h' + hours[1] + 'h42' + en('sp.n.entries', {n: 26}).replace(/\s+/g, '')), shown);
-    assert.ok(shown.endsWith(en('sp.ba.tohire', {n: posts}).replace(/\s+/g, '')), shown);
+    assert.ok(shown.includes(String(hours[0]) + 'h' + hours[1] + 'h'), shown);
+    assert.doesNotMatch(await tile.innerText(), enRe('sp.ba.tohire'));
+    assert.match(await page.locator('#sp-roster .sp-add').innerText(), enRe('sp.step.add', {n: 5}));
     assert.equal(await tile.locator('.sp-v s, .v s').first().innerText(),
       `${hours[0]} h`, 'struck through');
     assert.match(await tile.getAttribute('data-read'), enRe('sp.ba.hours', {h: hours[1], entries: en('sp.n.entries', {n: 26}), was: hours[0], wasEntries: en('sp.n.entries', {n: 42})}));
@@ -682,7 +683,7 @@ test('the now/plan toggle swaps the plan for the fragments the game holds', asyn
     // neither: 42 blocks today, struck through, against 26 to drag in.
     const tile = (await page.locator('#sp-roster .sp-ba > div').first().innerText())
       .replace(/\s+/g, '');
-    assert.ok(tile.includes('42' + en('sp.n.entries', {n: 26}).replace(/\s+/g, '')), tile);
+    assert.match(await page.locator('#sp-roster .sp-ba > div').first().getAttribute('data-read'), enRe('sp.ba.hours', {entries: en('sp.n.entries', {n:26}), wasEntries: en('sp.n.entries', {n:42})}));
     assert.match(await page.locator('#sp-roster .sp-nowplan a.sp-on').innerText(), enRe('sp.view.now'));
   } finally { await page.close(); }
 });
@@ -855,7 +856,7 @@ test('a line whose station or person the save does not name cannot be ticked', a
         const drawn = $$('.sp-shift', sec).length;
         const ticky = $$('button.sp-shift', sec).length;
         return [drawn, ticky, +sec.dataset.tickable,
-          q('.sp-ba > div', sec).innerText.replace(/\s+/g, ''),
+          q('.sp-ba > div', sec).dataset.read,
           JSON.stringify(spRosterCounts(D.staffing[0]))];
       });
       const [drawn, ticky, tickable, tile, counts] = state;
@@ -865,7 +866,7 @@ test('a line whose station or person the save does not name cannot be ticked', a
       /* The week is the lines with somebody on them; the ring is the narrower
          set the board can mark, and the line beside it says so. */
       assert.ok(staffed > tickable, `${what}: a line to type that cannot be ticked`);
-      assert.ok(tile.includes('42' + en('sp.n.entries', {n: staffed}).replace(/\s+/g, '')), `${what}: ${tile}`);
+      assert.match(tile, enRe('sp.ba.hours', {entries: en('sp.n.entries', {n: staffed}), wasEntries: en('sp.n.entries', {n:42})}), what);
       assert.equal(JSON.parse(counts).hire, 16, `${what}: the hires are unchanged`);
       // And the card sizes the same week the block does.
       const badge = await page.evaluate(() => {
@@ -928,7 +929,7 @@ test('an unmeasured shop with cover to type gets the whole block, not the empty 
     // The head says what the week asks for; the read-out waits for an entry
     // to be pointed at, and the role strip leaves the hires to the head (declutter T3).
     assert.equal((await page.locator('#sp-roster .sp-read.sp-readout').innerText()).trim(), '');
-    assert.match(await page.locator('#sp-roster').innerText(), enRe('sp.ba.tohire', {n: 2}));
+    assert.match(await page.locator('#sp-roster .sp-add').innerText(), enRe('sp.step.add', {n: 2}));
     assert.doesNotMatch(await page.locator('#sp-roster .sp-hc').innerText(), enRe('sp.ba.tohire'));
     assert.equal(await page.locator('#sp-roster .sp-hc .sp-new').count(), 0);
   } finally { await page.close(); }
@@ -1272,7 +1273,7 @@ test('the tiles on a cover-only plan compare cover with cover', async () => {
     assert.equal(await tiles.nth(0).locator('.lab').innerText(), en('sp.ba.lab.cover'));
     // 28 cleaning blocks in the game against 12 to drag in, not the 56 the
     // whole schedule holds.
-    assert.equal(await tiles.nth(0).locator('.v small s').innerText(), '28');
+    assert.equal(await tiles.nth(0).locator('.v small s').innerText(), '28', 'changed entry count remains visible even when the hours are unchanged');
     const read = await tiles.nth(0).getAttribute('data-read');
     assert.match(read, enRe('sp.ba.hours.cover.frag', {}, {anchor: 'start'}));
     // The scraps counted are the ones on the side the plan replaces: 28
@@ -1294,7 +1295,7 @@ test('a measured shop still compares the whole schedule', async () => {
     const tile = page.locator('#sp-roster .sp-ba > div').first();
     assert.equal(await tile.locator('.lab').innerText(), en('sp.ba.lab'));
     const counts = await page.evaluate(() => spRosterCounts(D.staffing[0]));
-    assert.equal(await tile.locator('.v small s').innerText(), String(counts.now));
+    assert.match(await tile.getAttribute('data-read'), enRe('sp.ba.hours', {wasEntries: en('sp.n.entries', {n:counts.now})}));
     assert.match(await tile.getAttribute('data-read'), enRe('sp.ba.hours', {}, {anchor: 'start'}));
     assert.doesNotMatch(await tile.getAttribute('data-read'), enRe('sp.ba.kept'));
   } finally { await page.close(); }
@@ -1401,7 +1402,8 @@ test('an unfilled line is named as a line, and priced as nothing it can price', 
     assert.ok(hire > 0);
     const posts = await page.evaluate(() => spPlanPosts(D.staffing[0]));
     assert.ok(posts > 0);
-    assert.match(await tiles.nth(0).innerText(), enRe('sp.ba.tohire', {n: posts}));
+    assert.doesNotMatch(await tiles.nth(0).innerText(), enRe('sp.ba.tohire'));
+    assert.match(await page.locator('#sp-roster .sp-add').innerText(), enRe('sp.step.add', {n: posts}));
     // The plan prices nobody, so it quotes nothing rather than a confident $0.
     assert.match(await tiles.nth(1).locator('.v').innerText(), /\u2014$/);
     assert.equal(await tiles.nth(1).locator('.v s').innerText(), '$1k');
@@ -1479,8 +1481,7 @@ test('lines the board cannot mark are still lines to enter, everywhere it counts
     assert.doesNotMatch(note, textRe('sp.care.hire.head'));
     // The tile counts the same week, and its saving is a real one.
     const tile = page.locator('#sp-roster .sp-ba > div').first();
-    assert.match(await tile.innerText(), new RegExp(String(counts.nowCover) + ' ' + enRe('sp.n.entries', {n: counts.staffed}).source));
-    assert.equal(await tile.locator('.v small s').innerText(), String(counts.nowCover));
+    assert.match(await tile.getAttribute('data-read'), enRe('sp.ba.hours.cover.frag', {wasEntries: en('sp.n.entries', {n:counts.nowCover}), entries: en('sp.n.entries', {n:counts.staffed})}));
     // None of its lines is one the board can tick.
     assert.equal(await page.locator('#sp-roster').getAttribute('data-tickable'), '0');
   } finally { await page.close(); }

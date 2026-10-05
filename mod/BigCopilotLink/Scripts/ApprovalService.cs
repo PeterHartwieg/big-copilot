@@ -187,7 +187,7 @@ namespace BigCopilotLink
 
         // ---- POST /pair/request (HTTP thread, then the main thread) -----------------
 
-        public WriteAnswer HandleRequest(HttpListenerRequest request)
+        public WriteAnswer HandleRequest(HttpListenerRequest request, CancellationToken cancellation = default(CancellationToken))
         {
             var origin = OriginOf(request);
             // A page off the allowlist could not read the answer, but it could still put
@@ -219,7 +219,7 @@ namespace BigCopilotLink
                 {
                     if (Interlocked.CompareExchange(ref state, 1, 0) != 0) return default(WriteAnswer);
                     return StartOnMainThread(origin, name);
-                });
+                }, cancellation);
                 if (!task.Wait(MainThreadWaitMs))
                 {
                     if (Interlocked.CompareExchange(ref state, 2, 0) == 0) return WriteAnswer.Error(503, "busy");
@@ -228,6 +228,8 @@ namespace BigCopilotLink
             }
             catch (Exception e)
             {
+                Interlocked.CompareExchange(ref state, 2, 0);
+                if (e.GetBaseException() is DispatcherBusyException) return WriteAnswer.Error(503, "busy");
                 LinkMod.LogWarn("a pairing request could not reach the main thread: " + e.GetType().Name);
                 return WriteAnswer.Error(503, "main_thread_unavailable");
             }
