@@ -67,22 +67,49 @@ const keys = page => page.evaluate(() => ({
 test('Results carries Company finances: cash beside profit, the loans and what they cost, how far back history reaches', async t => {
   const page = await board(t, {hash: '#businesses/results'});
   const tiles = await page.$$eval('#secFinance .bz-fin', els => els.map(e => e.innerText.replace(/\s+/g, ' ')));
-  assert.equal(tiles.length, 3);
+  assert.equal(tiles.length, 2);
+  const history = (await page.locator("#secFinance .bz-history").innerText()).replace(/\s+/g, " ");
   assert.match(tiles[0], new RegExp(enRe('co.fin.cash').source + ' \\$25,560', 'i'));
   assert.match(tiles[1], new RegExp(enRe('co.fin.owed').source + ' \\$29,900 ' + enRe('co.fin.owed.sub', {n: 1, interest: 40, pays: 300}).source, 'i'));
-  assert.match(tiles[2], new RegExp(enRe('co.fin.hist').source + ' ' + enRe('co.fin.hist.v', {d: 26}).source + ' ' + enRe('co.fin.hist.daily', {n: 21}).source, 'i'));
+  assert.match(history, new RegExp(enRe('co.fin.hist').source + ' ' + enRe('co.fin.hist.v', {d: 26}).source + ' ' + enRe('co.fin.hist.daily', {n: 21}).source, 'i'));
   // The cash line is a comparison with a day, not where cash history starts (round 1, S4).
-  assert.match(tiles[2], enRe('co.fin.hist.cash2', {d: 40}));
+  assert.match(history, enRe('co.fin.hist.cash2', {d: 40}));
   // Pins the wording: cash comparison must not imply cash history starts on that day.
-  assert.doesNotMatch(tiles[2], /watched from/);
+  assert.doesNotMatch(history, /watched from/);
   // The chart's head, its window switch and "?", stands in the row beside the views (declutter round 2).
   assert.match(await page.locator('#viewCtl [data-view-ctl="businesses/results"] h2').textContent(), enRe('co.daily.title2'));
   assert.equal(await page.locator('#viewCtl #chartTools').count(), 1);
   // Where the history is kept is Preferences' to say, and Payroll is a tab of
   // its own: no clause and no link repeat them here (declutter BV1, BV4).
   // Pins the wording: history storage instructions belong only in Preferences.
-  assert.doesNotMatch(tiles[2], /market_history\.json|kept in this browser/);
+  assert.doesNotMatch(history, /market_history\.json|kept in this browser/);
   assert.equal(await page.locator('#secFinance a[data-ov-route="staffing/payroll"]').count(), 0);
+});
+
+test('finance history stays available without cash history or completed days', async t => {
+  const page = await board(t, {hash: '#businesses/results'});
+  await page.evaluate(() => { D.daily = []; D.cashFlow = null; drawFinance(); });
+  assert.equal(await page.locator('#secFinance .bz-fin').count(), 2);
+  assert.match(await page.locator('#secFinance .bz-history').innerText(), enRe('co.fin.hist.nodaily'));
+  assert.match(await page.locator('#secFinance .bz-fins').innerText(), enRe('co.fin.cash.none2'));
+});
+
+test('product counts appear only as a working longer-list toggle', async t => {
+  const page = await board(t, {hash: '#businesses/prices'});
+  for(const n of [0, 1, 14, 15]) {
+    await page.evaluate(n => {
+      const sample = D.products[0] || window.__productSample;
+      window.__productSample = sample;
+      D.products = Array.from({length:n}, (_, i) => ({...sample, slug: `declutter-${i}`, name: `Product ${i}`}));
+      showAllProducts = false; drawProducts();
+    }, n);
+    assert.equal(await page.locator('#productsToggle').count(), n > 14 ? 1 : 0);
+    assert.equal(await page.locator('#secProducts table tbody tr').count(), Math.min(n, 14));
+    if(n > 14) {
+      await page.locator('#productsToggle').click();
+      assert.equal(await page.locator('#secProducts table tbody tr').count(), 15);
+    }
+  }
 });
 
 test('Standards compares every shop and office: satisfaction against the 80 line, promotion, amenity lamps, uniforms', async t => {
@@ -646,4 +673,23 @@ test('Resolve staff demands lands on hiring when empty and on demands when they 
   await link.click();
   await page.waitForFunction(() => route === 'staffing/needs' && document.querySelector('#nxDemands').getBoundingClientRect().top >= -1
     && document.querySelector('#nxDemands').getBoundingClientRect().top < innerHeight / 2);
+});
+
+test('compact board footer opens support by keyboard while theme and primary links stay reachable', async t => {
+  const page=await board(t);
+  const footer=page.locator('footer.sf-compact');
+  const summary=footer.locator('.sf-support summary');
+  await page.setViewportSize({width:560,height:900});
+  assert.ok((await summary.boundingBox()).height>=44,'mobile support disclosure has a touch target');
+  assert.equal(await summary.evaluate(el=>getComputedStyle(el).display),'list-item','native disclosure marker remains');
+  assert.equal(await footer.locator('.sf-support').evaluate(el=>el.open),false);
+  await summary.focus(); await page.keyboard.press('Enter');
+  assert.equal(await footer.locator('.sf-support').evaluate(el=>el.open),true);
+  assert.ok(await footer.locator('a[href*="paypal"]').isVisible());
+  await footer.locator('[data-theme-set="light"]').click();
+  assert.equal(await page.locator('html').getAttribute('data-theme'),'light');
+  assert.ok(await footer.locator('[data-changelog]').count());
+  assert.ok(await footer.locator('[data-sf-feedback]').count());
+  await summary.focus(); await page.keyboard.press('Enter');
+  assert.equal(await footer.locator('.sf-support').evaluate(el=>el.open),false);
 });
