@@ -326,7 +326,7 @@ test('voting fetches on demand, prevents duplicates and uses the mutation result
   await page.waitForFunction(() => document.querySelectorAll('dialog[open] button.community-vote[disabled]').length === 2);
   assert.equal(state.reads,2);
   // Opening voting alone does not dismiss discovery of the suggestion form.
-  assert.equal(await page.locator('[data-community-open] [data-new-feature="feature-requests"]:not([hidden])').count(),2);
+  assert.equal(await page.locator('[data-vote-card] [data-new-feature="feature-requests"]:not([hidden])').count(),2);
 });
 
 test('voting errors have a user-triggered retry and feature text is rendered as text', async t => {
@@ -482,10 +482,28 @@ test('visitor requests: reopening during publication waits for mutation and merg
 
 test('visitor requests: returning visitors see one footer badge until the form is visited',async t => {
   const {page}=await setup(t,{seenVoting:true});
-  const entries=page.locator('[data-community-open]');
+  const entries=page.locator('[data-vote-card]');
   assert.equal(await entries.count(),2);
   assert.equal(await entries.locator('[data-new-feature="feature-requests"]:not([hidden])').count(),2);
   assert.equal(await entries.locator('[data-new-feature]').count(),2,'no doubled New labels');
+  const landingBadge=page.locator('#landing [data-vote-card] [data-new-feature="feature-requests"]');
+  assert.equal(await page.locator('#landing [data-community-open] [data-new-feature]').count(),0,'filled CTA carries no badge');
+  assert.equal(await page.locator('.wrap [data-community-open] [data-new-feature="feature-requests"]').count(),1);
+  for (const theme of ['dark','light']) {
+    await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
+    assert.equal(await landingBadge.isVisible(),true);
+    const contrast=await landingBadge.evaluate(badge=>{
+      const rgb=value=>value.match(/[\d.]+/g).map(Number);
+      let background=[255,255,255], layers=[];
+      for(let node=badge;node;node=node.parentElement) layers.push(rgb(getComputedStyle(node).backgroundColor));
+      for(const layer of layers.reverse()) background=background.map((v,i)=>layer[i]*(layer[3]??1)+v*(1-(layer[3]??1)));
+      const luminance=values=>values.slice(0,3).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4)
+        .reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+      const a=luminance(rgb(getComputedStyle(badge).color)),b=luminance(background);
+      return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);
+    });
+    assert.ok(contrast>=4.5,`${theme} landing badge contrast ${contrast}`);
+  }
   const dialog=await openVotes(page);
   await dialog.locator('summary').click();
   await page.waitForFunction(()=>[...document.querySelectorAll('[data-new-feature="feature-requests"]')].every(el=>el.hidden));

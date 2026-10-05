@@ -33,7 +33,7 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
     assert.equal(await page.locator('[data-new-feature="game-link"]:not([hidden])').count(),0);
     await page.locator('#landing [data-community-open]').click();
     assert.equal(await page.locator('.community-dialog').evaluate(d => d.open),true);
-    assert.equal(await page.locator('[data-community-open] [data-new-feature="feature-requests"]:not([hidden])').count(),2);
+    assert.equal(await page.locator('[data-vote-card] [data-new-feature="feature-requests"]:not([hidden])').count(),2);
     await page.locator('.community-dialog summary').click();
     await page.waitForFunction(()=>[...document.querySelectorAll('[data-new-feature="feature-requests"]')].every(el=>el.hidden));
     await page.keyboard.press('Escape');

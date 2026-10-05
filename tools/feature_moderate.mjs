@@ -110,11 +110,24 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
           throw new Error('Unexpected Wrangler JSON result.');
         return parsed.flatMap(result=>result.results);
       };
-      const rows = execute(command.args);
+      let rows = [], rejection = null;
+      try { rows = execute(command.args); }
+      catch (error) {
+        if (!command.requested.length) throw error;
+        rejection = error.message;
+      }
       if (!command.requested.length) console.log(JSON.stringify(rows,null,2));
       else {
-        const states = execute(command.args.map((arg,i)=>i===command.args.indexOf('--command')+1?command.inspectSql:arg));
+        let states = [], inspectionError = null;
+        try { states = execute(command.args.map((arg,i)=>i===command.args.indexOf('--command')+1?command.inspectSql:arg)); }
+        catch (error) { inspectionError = error.message; }
         const outcome = moderationOutcome(command,rows,states);
+        if (rejection) { outcome.rejection = rejection; outcome.exitCode = 1; }
+        if (inspectionError) {
+          outcome.inspectionError = inspectionError; outcome.exitCode = 1;
+          outcome.unchanged.forEach(row=>{ row.state = 'unknown'; });
+          if (outcome.target) outcome.target.state = 'unknown';
+        }
         console.log(JSON.stringify(outcome,null,2));
         process.exitCode = outcome.exitCode;
         if (outcome.unchanged.length) console.error('No change for the requested IDs listed as unchanged.');

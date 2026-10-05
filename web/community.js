@@ -500,15 +500,17 @@
     syncVoteCard(true);
     buildDialog();
     // Reuse the footer badges so returning visitors see the new suggestion entry
-    // without displaying two New labels on the same button.
+    // without doubling a card's title badge or putting accent text on its filled CTA.
     document.querySelectorAll('[data-community-open]').forEach(button => {
-      if (button.hasAttribute('data-tt')) {
-        const label = document.createElement('span');
-        label.dataset.tt = button.getAttribute('data-tt'); label.textContent = button.textContent;
-        button.removeAttribute('data-tt'); button.replaceChildren(label);
+      let badge = button.closest('[data-vote-card]')?.querySelector('[data-new-feature]') || button.querySelector('[data-new-feature]');
+      if (!badge) {
+        if (button.hasAttribute('data-tt')) {
+          const label = document.createElement('span');
+          label.dataset.tt = button.getAttribute('data-tt'); label.textContent = button.textContent;
+          button.removeAttribute('data-tt'); button.replaceChildren(label);
+        }
+        badge = document.createElement('span'); badge.className = 'feature-new'; button.append(badge);
       }
-      let badge = button.querySelector('[data-new-feature]');
-      if (!badge) { badge = document.createElement('span'); badge.className = 'feature-new'; button.append(badge); }
       badge.dataset.newFeature = 'feature-requests'; badge.textContent = tt('nav.new', 'New');
       badge.dataset.tt = 'nav.new';
       badge.hidden = typeof featureDiscovery !== 'undefined';

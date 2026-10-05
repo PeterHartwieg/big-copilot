@@ -196,6 +196,45 @@ test('requests: CLI captures Wrangler JSON and exits nonzero with unmatched stat
   } finally { fs.unlinkSync(fixture); fs.rmdirSync(directory); }
 });
 
+test('requests: CLI reports rejected merge targets and capacity restore with exact states',() => {
+  const os=require('node:os'), {spawnSync}=require('node:child_process');
+  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'synthetic-feature-rejection-'));
+  const fixture=path.join(directory,'wrangler-fixture.mjs'),source='a'.repeat(64),target='b'.repeat(64);
+  const scenarios=[
+    {args:['merge','request-'+source,'request-'+target],states:[{id:source,state:'active'}],target:'missing',reason:'merge requires two distinct active visitor requests'},
+    {args:['merge','request-'+source,'request-'+target],states:[{id:source,state:'active'},{id:target,state:'merged'}],target:'merged',reason:'merge requires two distinct active visitor requests'},
+    {args:['restore','request-'+source],states:[{id:source,state:'hidden'}],reason:'active request limit reached'},
+    {args:['hide','request-'+source],mutationRows:[{id:source,state:'hidden'}],inspectionFailure:true},
+  ];
+  try {
+    for (const scenario of scenarios) {
+      fs.writeFileSync(fixture,`import childProcess from 'node:child_process';
+        import {syncBuiltinESMExports} from 'node:module'; let calls=0;
+        childProcess.spawnSync=(_exe,args)=>{
+          if(!args.includes('--local') || args.includes('--remote')) throw Error('fixture must stay local');
+          if(++calls===1) return ${JSON.stringify(scenario.mutationRows
+            ? {status:0,stderr:'',stdout:JSON.stringify([{success:true,results:scenario.mutationRows}])}
+            : {status:1,stderr:'',stdout:scenario.reason})};
+          if(${!!scenario.inspectionFailure}) return {status:1,stderr:'',stdout:'Inspection unavailable'};
+          return {status:0,stderr:'',stdout:JSON.stringify([{success:true,results:${JSON.stringify(scenario.states)}}])};
+        }; syncBuiltinESMExports();`);
+      const result=spawnSync(process.execPath,['--import',pathToFileURL(fixture).href,path.join(ROOT,'tools/feature_moderate.mjs'),...scenario.args],
+        {cwd:ROOT,encoding:'utf8',env:process.env});
+      assert.equal(result.status,1,result.stderr);
+      const outcome=JSON.parse(result.stdout);
+      if (scenario.mutationRows) {
+        assert.deepEqual(outcome.changed,[{id:'request-'+source,state:'hidden'}]);
+        assert.deepEqual(outcome.unchanged,[]);
+        assert.equal(outcome.inspectionError,'Inspection unavailable');
+        continue;
+      }
+      assert.equal(outcome.rejection,scenario.reason); assert.deepEqual(outcome.changed,[]);
+      assert.deepEqual(outcome.unchanged,[{id:'request-'+source,state:scenario.states[0].state}]);
+      if(scenario.target) assert.deepEqual(outcome.target,{id:'request-'+target,state:scenario.target});
+    }
+  } finally { fs.unlinkSync(fixture); fs.rmdirSync(directory); }
+});
+
 test('requests: atomic active cap allows duplicate retries and bulk moderation frees capacity',async () => {
   const first=await suggest('At capacity','Synthetic.');
   await db.batch(Array.from({length:998},(_,i)=>db.prepare('INSERT INTO feature_requests(id,title,description,created_at,state_changed_at) VALUES(?1,?2,?3,?4,?4)')
