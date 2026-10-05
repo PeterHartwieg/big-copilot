@@ -47,6 +47,7 @@ test('full gate order, bounded portable enumeration and child environment', asyn
     ['build_web.py', '--assemble'], ['-m', 'unittest', 'discover', '-s', 'tests'],
     ['--test', '--test-concurrency=2', path.join('tests','a.test.cjs'), path.join('tests','z.test.cjs')],
     [path.join(root,'tools','optimize_web.mjs')],
+    [path.join(root,'tools','optimize_web.mjs'), '--check'],
     ['--test', '--test-concurrency=2', ...OPTIMIZED_NODE_SUITES],
     ['build_web.py', '--assemble'],
     [path.join(root,'node_modules','wrangler','bin','wrangler.js'), 'deploy', '--dry-run'],
@@ -57,7 +58,7 @@ test('full gate order, bounded portable enumeration and child environment', asyn
     assert.equal(call.options.env.PLAYWRIGHT_CHANNEL, 'chrome');
     assert.equal(call.options.cwd, root); assert.equal(call.options.shell, undefined);
   }
-  assert.equal(calls[4].options.env.BOARD_TARGET,'web');
+  assert.equal(calls[5].options.env.BOARD_TARGET,'web');
   assert.equal(calls[2].options.env.BOARD_TARGET,undefined);
   assert.equal(calls[6].options.env.BOARD_TARGET,undefined);
   assert.equal(fs.readFileSync(path.join(root,'unrelated.txt'),'utf8'), 'preserve this dirty file');
@@ -65,7 +66,7 @@ test('full gate order, bounded portable enumeration and child environment', asyn
 
 test('each failure stops later stages; spawn errors and signals fail safely', async t => {
   const {verify} = await runner; const root = fixture(t);
-  for (let stage = 1; stage <= 8; stage++) {
+  for (let stage = 1; stage <= 9; stage++) {
     const calls = [];
     assert.equal(verify([], {root, spawn: fakeSpawn(calls,stage), log: () => {}}), 7);
     assert.equal(calls.length, stage);
@@ -237,13 +238,14 @@ test('optimized stage shares hosted coverage and restores readable assembly', as
   assert.equal(verify(['optimized'],{root,env:{BOARD_TARGET:'local',PLAYWRIGHT_CHANNEL:'chrome'},spawn:fakeSpawn(calls),log:()=>{}}),0);
   assert.deepEqual(calls.map(call=>call.args),[
     ['build_web.py','--assemble'], [path.join(root,'tools','optimize_web.mjs')],
+    [path.join(root,'tools','optimize_web.mjs'), '--check'],
     ['--test','--test-concurrency=2',...OPTIMIZED_NODE_SUITES], ['build_web.py','--assemble'],
   ]);
-  assert.equal(calls[2].options.env.BOARD_TARGET,'web');
+  assert.equal(calls[3].options.env.BOARD_TARGET,'web');
   assert.equal(calls[1].options.env.BOARD_TARGET,'local');
-  assert.equal(calls[3].options.env.BOARD_TARGET,'local');
-  assert.equal(calls[2].options.env.PYTHON,'/Python path/python3');
-  assert.equal(calls[2].options.env.PLAYWRIGHT_CHANNEL,'chrome');
+  assert.equal(calls[4].options.env.BOARD_TARGET,'local');
+  assert.equal(calls[3].options.env.PYTHON,'/Python path/python3');
+  assert.equal(calls[3].options.env.PLAYWRIGHT_CHANNEL,'chrome');
   const failed=[];
   assert.equal(verify(['optimized'],{root,spawn:fakeSpawn(failed,3),log:()=>{}}),7);
   assert.equal(failed.length,3);

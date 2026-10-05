@@ -345,9 +345,16 @@
     if (handlers) handlers.stale(err.message);
   }
 
-  // The build stamp on the URL means a deploy is never served a stale worker.
+  // The page pins the worker and all its Python/data before a later deploy.
   function startWorker() {
-    try { worker = new Worker("worker.js?v=" + (window.LEDGER_BUILD || "dev"), {type: "module"}); }
+    const assets = window.LEDGER_ASSETS || null;
+    // An old stamped page can receive this newer app.js from its mutable URL.
+    // Only genuinely unstamped development pages may use the null manifest.
+    if (!assets && window.LEDGER_BUILD && window.LEDGER_BUILD !== "dev") {
+      failReader(failure(() => tt("app.reader.assets", "The reader files could not be loaded. Reload the app to update.")));
+      return;
+    }
+    try { worker = new Worker(assets ? assets.worker.url : "worker.js", {type: "module"}); }
     catch (err) { failReader(err); return; }
     worker.onmessage = (e) => {
       const msg = e.data;
@@ -410,8 +417,14 @@
         p.reject(err);
       }
     };
-    worker.onerror = (e) => { e.preventDefault(); failReader(e.message ? new Error(e.message) : failure(() => tt("app.reader.stopped", "The reader stopped unexpectedly."))); };
+    worker.onerror = (e) => {
+      e.preventDefault();
+      failReader(assets ? failure(() => tt("app.reader.assets", "The reader files could not be loaded. Reload the app to update."))
+        : e.message ? new Error(e.message) : failure(() => tt("app.reader.stopped", "The reader stopped unexpectedly.")));
+    };
     worker.onmessageerror = () => failReader(failure(() => tt("app.reader.unreadable", "The reader returned an unreadable response.")));
+    try { worker.postMessage({kind: "init", assets}); }
+    catch (err) { failReader(err); }
   }
 
   function ask(msg, transfer, gen = sourceGen) {

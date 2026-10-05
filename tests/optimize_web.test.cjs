@@ -7,8 +7,8 @@ const os = require('node:os');
 const {gzipSync} = require('node:zlib');
 const {spawnSync} = require('node:child_process');
 const {chromium} = require('playwright');
-let optimizePage, optimizeWeb;
-before(async () => { ({optimizePage, optimizeWeb} = await import('../tools/optimize_web.mjs')); });
+let optimizePage, optimizeWeb, hostedPage, checkOptimized;
+before(async () => { ({optimizePage, optimizeWeb, hostedPage, checkOptimized} = await import('../tools/optimize_web.mjs')); });
 
 test('inline blocks retain their shared global functions and values', () => {
   const input = '<script>const value = 7; function fromBoard() { return value; }</script>'
@@ -87,4 +87,80 @@ test('optimizer CLI finds esbuild through NODE_PATH without local node_modules',
   assert.equal(fs.readFileSync(file, 'utf8'), optimizePage(input));
   assert.match(result.stdout, /optimized web\/index.html/);
   assert.equal(fs.existsSync(path.join(root, 'node_modules')), false);
+});
+
+test('optimizer CLI checks LF assembly bytes through Python stdout on every platform', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'optimized CLI bytes '));
+  t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  fs.mkdirSync(path.join(root,'tools')); fs.mkdirSync(path.join(root,'web'));
+  const cli=path.join(root,'tools/optimize_web.mjs');
+  fs.copyFileSync(path.join(__dirname,'../tools/optimize_web.mjs'),cli);
+  const raw='<style>\n:root{--fixture:"'+ 'fixture'.repeat(10000)+'"}\n</style>\n<script>globalThis.answer = 3;</script>\n';
+  fs.writeFileSync(path.join(root,'web/index.html'),raw);
+  fs.writeFileSync(path.join(root,'build_web.py'),
+    'HTML = '+JSON.stringify(raw)+'\ndef release_info(): return {}\ndef page_html(release): return HTML\n');
+  for(const args of [[],['--check']]) {
+    const result=spawnSync(process.execPath,[cli,...args],{cwd:root,encoding:'utf8'});
+    assert.equal(result.status,0,result.error?.message || result.stderr);
+  }
+});
+
+test('hosted assets hash shipped bytes, preserve classic order and ignore unrelated releases', t => {
+  const {createHash} = require('node:crypto');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hosted-assets-'));
+  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+  fs.mkdirSync(path.join(root, 'web'));
+  const block = 'const sharedBoardValue = "' + 'board'.repeat(16000) + '";';
+  const style = ':root{--test:"' + 'css'.repeat(24000) + '"}';
+  const raw = '<style>' + style + '</style><script>globalThis.release = "a";</script>'
+    + '<script>' + block + '</script><script>globalThis.answer = sharedBoardValue.length;</script>';
+  fs.writeFileSync(path.join(root, 'web/index.html'), raw);
+  const output = optimizeWeb(root);
+  assert.equal(output.assets.size, 2);
+  assert.deepEqual(checkOptimized(root, raw), []);
+  assert.deepEqual([...hostedPage(raw.replace('release = "a"', 'release = "b"')).assets.keys()], [...output.assets.keys()]);
+  const context = vm.createContext({});
+  for (const [, src, inline] of output.html.matchAll(/<script(?: src="([^"]+)" integrity="[^"]+")?>([\s\S]*?)<\/script>/g))
+    vm.runInContext(src ? output.assets.get(src).toString() : inline, context);
+  assert.equal(context.answer, 80000);
+  for (const [url, bytes] of output.assets) {
+    const digest = createHash('sha256').update(bytes).digest();
+    assert.ok(url.includes(digest.toString('hex')));
+    assert.ok(output.html.includes(`integrity="sha256-${digest.toString('base64')}"`));
+    const target = path.join(root, 'web', url);
+    fs.unlinkSync(target);
+    assert.ok(checkOptimized(root, raw).includes('web/' + url), 'missing asset fails');
+    fs.writeFileSync(target, Buffer.concat([bytes, Buffer.from('changed')]));
+    assert.ok(checkOptimized(root, raw).includes('web/' + url), 'modified asset fails');
+    fs.writeFileSync(target, bytes);
+  }
+  assert.ok(checkOptimized(root, raw.replace('board'.repeat(16000), 'other'.repeat(16000))).length,
+    'a changed script cannot pass an older artifact set');
+});
+
+test('optimized checks cover missing and modified pinned metadata and dependencies', t => {
+  const {createHash} = require('node:crypto');
+  const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'optimized-manifest-'));
+  t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  fs.mkdirSync(path.join(root,'web'));
+  const worker=Buffer.from('worker bytes'), code=Buffer.from('python bytes');
+  const manifest={schema:1,worker:{url:`assets/${hash(worker)}/worker.js`,sha256:hash(worker)},
+    files:{'ba_dashboard.py':{url:`assets/${hash(code)}/ba_dashboard.py`,sha256:hash(code)}}};
+  const metadata=Buffer.from(JSON.stringify(manifest)+'\n');
+  const url=`assets/manifest-${hash(metadata)}.json`;
+  const raw='<script>window.LEDGER_ASSETS = '+JSON.stringify(manifest)+';</script>';
+  const outputs=new Map([[url,metadata],[manifest.worker.url,worker],[manifest.files['ba_dashboard.py'].url,code]]);
+  fs.writeFileSync(path.join(root,'web/index.html'),raw);
+  for(const [name,bytes] of outputs){
+    const target=path.join(root,'web',name); fs.mkdirSync(path.dirname(target),{recursive:true}); fs.writeFileSync(target,bytes);
+  }
+  optimizeWeb(root);
+  assert.deepEqual(checkOptimized(root,raw),[]);
+  for(const [name,bytes] of outputs){
+    const target=path.join(root,'web',name);
+    fs.unlinkSync(target); assert.ok(checkOptimized(root,raw).includes('web/'+name));
+    fs.writeFileSync(target,'stale release'); assert.ok(checkOptimized(root,raw).includes('web/'+name));
+    fs.writeFileSync(target,bytes);
+  }
 });

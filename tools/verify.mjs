@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 export const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const NODE_CONCURRENCY = 2;
 // One smoke journey against the actual deployment transform. The ordinary Node
-// suite already runs CSP/Pyodide against optimizePage() and checks the optimizer
+// suite already runs CSP/Pyodide against the emitted hosted asset set and checks the optimizer
 // itself; repeating those or every functional browser suite adds no useful gate.
 export const OPTIMIZED_NODE_SUITES = ['release'].map(name => path.join('tests', `${name}.test.cjs`));
 
@@ -74,6 +74,7 @@ export function verify(args = [], { root = ROOT, env = process.env, spawn = spaw
   if (['all', 'optimized'].includes(stage)) {
     // Load esbuild only in this child; assemble/Python CI jobs need no npm install.
     commands.push([process.execPath, [path.join(root, 'tools', 'optimize_web.mjs')]]);
+    commands.push([process.execPath, [path.join(root, 'tools', 'optimize_web.mjs'), '--check']]);
     commands.push([process.execPath, ['--test', `--test-concurrency=${NODE_CONCURRENCY}`, ...OPTIMIZED_NODE_SUITES], { BOARD_TARGET: 'web' }]);
   }
   // Freshness compares readable Python output, not the deployment transform.

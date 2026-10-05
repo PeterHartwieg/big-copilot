@@ -1,6 +1,6 @@
 /* The board's Python, run inside the browser.
  *
- * Boots Pyodide once, copies the two Python files into its virtual filesystem,
+ * Boots Pyodide once, copies the Python code into its virtual filesystem,
  * and then answers these messages from the page:
  *   build   - here is a save (bytes, name, modification time), the locale text
  *             and the history text: parse it and send back the core of the
@@ -26,17 +26,19 @@
  * new version's folder there; docs/architecture.md lists the files.
  */
 const PYODIDE_VERSION = "314.0.6";
-const PYODIDE_URL = new URL(`pyodide/v${PYODIDE_VERSION}/`, self.location.href).href;
+// The immutable copy lives two directories below the site root. The hand-
+// authored worker remains usable at worker.js for an unstamped local dev page.
+const PINNED_WORKER = /\/assets\/[a-f0-9]{64}\/worker\.js$/.test(new URL(self.location.href).pathname);
+const SITE_URL = new URL(PINNED_WORKER ? "../../" : "./", self.location.href);
+const PYODIDE_URL = new URL(`pyodide/v${PYODIDE_VERSION}/`, SITE_URL).href;
+const CODE_FILES = ["ba_save.py", "ba_dashboard.py", "ba_facts.py"];
+const DATA_FILES = ["gametext.json", "ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json", "ba_store_rules.json"];
 
 const SAVE_DIR = "/save";
 const DATA_DIR = "/data";
 const HISTORY = `${DATA_DIR}/market_history.json`;
 const LOCALE = `${DATA_DIR}/en.json`;
 const NAMES = `${DATA_DIR}/gametext.json`;  // game text shipped with the page
-const BUILDINGS = `${DATA_DIR}/ba_buildings.json`;  // the fixed city map
-const CURVES = `${DATA_DIR}/ba_demand_curves.json`;  // the game's arrival curves
-const PRICES = `${DATA_DIR}/ba_item_prices.json`;  // furniture and material prices
-const RULES = `${DATA_DIR}/ba_store_rules.json`;  // what a store sells and needs
 
 let py = null;
 let lastSave = null; // {name, mtime} of the save currently in the filesystem
@@ -47,16 +49,51 @@ let boards = 0; // builds and names asked for so far: a section waits behind non
 
 const say = (stage, detail) => postMessage({kind: "progress", stage, detail: detail || ""});
 
+let initialize;
+const initialized = new Promise(resolve => { initialize = resolve; });
+function assetFailure(detail) {
+  return new Error(`The app files are unavailable or changed. Reload the app to update. (${detail})`);
+}
+function pinnedAssets(manifest) {
+  if (!manifest && !PINNED_WORKER) return null; // explicit development mode only
+  if (!manifest || manifest.schema !== 1 || !manifest.files || !manifest.worker) throw assetFailure("invalid manifest");
+  const valid = (entry, name) => entry && /^[a-f0-9]{64}$/.test(entry.sha256)
+    && entry.url === `assets/${entry.sha256}/${name}`;
+  if (!valid(manifest.worker, "worker.js")
+      || new URL(manifest.worker.url, SITE_URL).href !== self.location.href) throw assetFailure("worker identity");
+  for (const file of [...CODE_FILES, ...DATA_FILES]) {
+    if (!valid(manifest.files[file], file)) throw assetFailure(file + " manifest");
+  }
+  return manifest.files;
+}
+
 const ready = (async () => {
+  // Before content pins, deployed callers used ?v= and sent no init. A later
+  // mutable worker response must fail immediately, never wait or mix releases.
+  if (!PINNED_WORKER && new URL(self.location.href).searchParams.has("v")) throw assetFailure("reader protocol");
+  const assets = pinnedAssets(await initialized);
   say("runtime", "Loading the Python runtime (about 6 MB the first time)");
-  // The page passes its build stamp on this worker's URL; the Python files
-  // are fetched with the same stamp so a deploy never mixes old and new.
-  const stamp = new URL(self.location.href).searchParams.get("v") || "dev";
-  // A stamped URL never changes content (web/_headers caches /py/* for a year),
-  // so the browser may keep it; an unstamped dev build always refetches.
-  const cache = stamp === "dev" ? "no-store" : "default";
+  const cache = assets ? "default" : "no-store";
+  const download = async (name, path, optional = false) => {
+    const entry = assets && assets[name];
+    const res = await fetch(new URL(entry ? entry.url : `py/${name}`, SITE_URL).href, {cache});
+    if (!res.ok) {
+      // A missing pinned table means a release cannot be completed. Only
+      // local development keeps the historical optional-table HTTP fallback.
+      if (entry) throw assetFailure(`${name}: ${res.status}`);
+      if (optional) return null;
+      throw new Error(`could not load ${name}: ${res.status}`);
+    }
+    const bytes = await res.arrayBuffer();
+    if (entry) {
+      const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
+        value => value.toString(16).padStart(2, "0")).join("");
+      if (digest !== entry.sha256) throw assetFailure(name + " digest");
+    }
+    return [path, new TextDecoder().decode(bytes)];
+  };
   // Runtime and board files are independent. Start every download now and
-  // consume response bodies before joining, instead of paying seven network
+  // consume response bodies before joining, instead of paying eight network
   // round trips after the runtime finishes. Promise.all observes both branches
   // immediately, including a download that fails while WebAssembly starts.
   const [runtime, files] = await Promise.all([
@@ -70,23 +107,9 @@ const ready = (async () => {
       return runtime;
     })(),
     (async () => {
-      const code = ["ba_save.py", "ba_dashboard.py", "ba_facts.py"].map(async file => {
-        const res = await fetch(`py/${file}?v=${stamp}`, {cache});
-        if (!res.ok) throw new Error(`could not load ${file}: ${res.status}`);
-        return [`/${file}`, await res.text()];
-      });
-      // An optional table's HTTP failure keeps the existing Python fallback.
-      const optional = async (path, response) => {
-        const res = await response;
-        return res.ok ? [path, await res.text()] : null;
-      };
       return Promise.all([
-        ...code,
-        optional(NAMES, fetch(`py/gametext.json?v=${stamp}`, {cache})),
-        optional(BUILDINGS, fetch(`py/ba_buildings.json?v=${stamp}`, {cache})),
-        optional(CURVES, fetch(`py/ba_demand_curves.json?v=${stamp}`, {cache})),
-        optional(PRICES, fetch(`py/ba_item_prices.json?v=${stamp}`, {cache})),
-        optional(RULES, fetch(`py/ba_store_rules.json?v=${stamp}`, {cache})),
+        ...CODE_FILES.map(file => download(file, `/${file}`)),
+        ...DATA_FILES.map(file => download(file, `${DATA_DIR}/${file}`, true)),
       ].map(async task => {
         const file = await task;
         // Each consumed body (or optional HTTP fallback) is real progress,
@@ -181,6 +204,10 @@ const waiting = () => new Promise(resolve => {
 
 onmessage = (e) => {
   const msg = e.data;
+  if (msg.kind === "init") {
+    if (initialize) { initialize(msg.assets); initialize = null; }
+    return; // the page's manifest is pinned once for this worker's lifetime
+  }
   // A section asked for before this build or name is for an older board.
   if (msg.kind === "build" || msg.kind === "name" || msg.kind === "staff-measurement") boards++;
   const behind = boards;

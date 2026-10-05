@@ -36,7 +36,14 @@
 /fonts/*
   Cache-Control: public, max-age=604800
 
-# The worker fetches every file here with the build stamp (py/<file>?v=<stamp>),
-# and all five are stamp inputs, so a changed file always has a new URL.
-/py/*
+# Worker/Python/data and optimized hosted JS/CSS paths name their exact SHA-256
+# bytes. Missing old paths fail instead of serving a newer release's content.
+/assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+# Fixed paths remain for local development and are never immutable.
+/py/*
+  Cache-Control: no-store
+
+/worker.js
+  Cache-Control: no-store

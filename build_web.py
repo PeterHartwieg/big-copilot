@@ -23,6 +23,7 @@ web/ that no longer match the sources, so a review catches a forgotten rebuild.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -610,8 +611,35 @@ def read_text(path: str) -> str:
         return fh.read().replace("\r\n", "\n")
 
 
-# app.js is fetched with the build stamp, and hands the same stamp to the
-# worker, which hands it to the Python files: one deploy, one version. The
+def worker_assets(root: str = HERE) -> tuple[dict, dict[str, bytes]]:
+    """Pin the exact LF bytes of the worker and its dependencies to the page.
+
+    The inline manifest is the authority for this page, never a later fetch
+    of a mutable manifest. Paths carry full SHA-256 digests; a deployment that
+    drops an older path returns 404 rather than newer bytes under its name.
+    """
+    outputs = {}
+
+    def asset(name: str, source: str) -> dict:
+        data = read_text(os.path.join(root, source)).encode("utf-8")
+        digest = hashlib.sha256(data).hexdigest()
+        url = f"assets/{digest}/{name}"
+        outputs["web/" + url] = data
+        return {"url": url, "sha256": digest}
+
+    manifest = {
+        "schema": 1,
+        "worker": asset("worker.js", "web/worker.js"),
+        "files": {name: asset(name, name if name in PY_COPIED else "web/py/" + name)
+                  for name in PY_CODE + PY_DATA},
+    }
+    data = (release_json(manifest) + "\n").encode("utf-8")
+    outputs[f"web/assets/manifest-{hashlib.sha256(data).hexdigest()}.json"] = data
+    return manifest, outputs
+
+
+# app.js is fetched with the build stamp, and starts the worker named by the
+# page's pinned manifest. The broad stamp still drives update detection. The
 # stamp itself is set in the head (page_html()), because web/i18n.js runs there
 # and fetches the UI language's table with it.
 BEFORE_SCRIPT = (
@@ -686,6 +714,8 @@ def page_html(release: dict, root: str = HERE) -> str:
     # The stamp comes first, ahead of the template's head scripts: web/i18n.js
     # runs there and fetches a language's table with it.
     head += '<script>window.LEDGER_BUILD = "' + release["version"] + '";</script>' + chr(10)
+    manifest, _ = worker_assets(root)
+    head += '<script>window.LEDGER_ASSETS = ' + release_json(manifest).replace("<", "\\u003c") + ';</script>' + chr(10)
     head += '<link rel="stylesheet" href="community.css?v=' + release["version"] + '">' + chr(10)
     with open(os.path.join(root, "web", "update.js"), encoding="utf-8") as fh:
         update_script = fh.read()
@@ -734,6 +764,15 @@ def check(root: str = HERE) -> list[str]:
         copied = "web/py/" + name
         if differs(copied, read_text(os.path.join(root, name))):
             stale.append(copied)
+    _, assets = worker_assets(root)
+    for path, expected in assets.items():
+        try:
+            with open(os.path.join(root, path), "rb") as fh:
+                actual = fh.read()
+        except FileNotFoundError:
+            actual = None
+        if actual != expected:
+            stale.append(path)
     # The name tables are committed and not rebuilt here, like gametext.json;
     # one that is missing leaves nothing to stamp, so it is all that is said.
     missing = [f"{NAMES_DIR}/{code}.json" for code in NAME_LANGS
@@ -843,7 +882,20 @@ def assemble(root: str = HERE) -> None:
     # make_item_prices.py and make_store_rules.py have to have been run, since
     # the worker hands them to Python as data.
     for name in PY_COPIED:
-        shutil.copyfile(os.path.join(root, name), os.path.join(web, "py", name))
+        with open(os.path.join(web, "py", name), "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(read_text(os.path.join(root, name)))
+    # Emit only this assembly's assets. No retention promise: an uncached old
+    # tab must reload when a removed dependency is needed. Hosted optimization
+    # adds its JS/CSS here afterwards, without changing raw assembly/check.
+    assets_dir = os.path.join(web, "assets")
+    if os.path.isdir(assets_dir):
+        shutil.rmtree(assets_dir)
+    _, assets = worker_assets(root)
+    for path, data in assets.items():
+        out = os.path.join(root, path)
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        with open(out, "wb") as fh:
+            fh.write(data)
     # Big Copilot's own text in other languages, from i18n/ (tools/i18n.py).
     ui_text.ship(root=root)
     translation_catalogue.ship(root=root)

@@ -46,20 +46,35 @@ function headersFor(pathname, rules) {
 let server, base, mock, mockUrl, browser, dir, save;
 
 before(async () => {
-  const {optimizePage} = await import('../tools/optimize_web.mjs');
-  const optimizedHtml = optimizePage(fs.readFileSync(path.join(web, 'index.html'), 'utf8'));
+  const {optimizeWeb} = await import('../tools/optimize_web.mjs');
+  const rawHtml = fs.readFileSync(path.join(web, 'index.html'), 'utf8');
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'csp-'));
+  // A real emitted deployment asset set, isolated from the raw assembly used
+  // by other Node suites. Serve the actual external JS/CSS, not an inline-only
+  // optimizePage shortcut. Python/worker files remain the pinned assembly.
+  const hosted = path.join(dir, 'hosted');
+  fs.mkdirSync(path.join(hosted, 'web'), {recursive: true});
+  fs.copyFileSync(path.join(web, 'index.html'), path.join(hosted, 'web/index.html'));
+  optimizeWeb(hosted);
   save = path.join(dir, 'csp.hsg');
   const made = spawnSync(PYTHON, [path.join(root, 'tests', 'es3_fixture.py'), save, path.join(dir, 'payload.json')], {cwd: root});
   assert.equal(made.status, 0, made.stderr?.toString());
   const rules = headerRules();
   server = http.createServer((req, res) => {
     const pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    if (pathname === '/raw') {
+      res.writeHead(200, {'Content-Type':'text/html', ...headersFor(pathname,rules)});
+      return res.end(rawHtml);
+    }
+    const emitted = path.join(hosted, 'web', pathname === '/' ? 'index.html' : pathname.slice(1));
+    if (emitted.startsWith(path.join(hosted, 'web')) && fs.existsSync(emitted) && fs.statSync(emitted).isFile()) {
+      res.writeHead(200, {'Content-Type': TYPES[path.extname(emitted)] || 'application/octet-stream', ...headersFor(pathname, rules)});
+      return fs.createReadStream(emitted).pipe(res);
+    }
     let file = path.join(web, pathname === '/' ? 'index.html' : pathname.slice(1));
     if (file.startsWith(web) && fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
     if (!file.startsWith(web) || !fs.existsSync(file)) { res.writeHead(404, headersFor(pathname, rules)); return res.end(); }
     res.writeHead(200, {'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', ...headersFor(pathname, rules)});
-    if (file === path.join(web, 'index.html')) return res.end(optimizedHtml);
     fs.createReadStream(file).pipe(res);
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -99,9 +114,9 @@ async function watched(t) {
   return {page, found};
 }
 
-test('the board boots Pyodide and draws its pages under the CSP', async (t) => {
+for (const [mode, route] of [['raw','/raw'], ['optimized','/']]) test(`${mode} board boots Pyodide and draws its pages under the CSP`, async (t) => {
   const {page, found} = await watched(t);
-  const res = await page.goto(base + '/');
+  const res = await page.goto(base + route);
   assert.match(res.headers()['content-security-policy'] || '', /frame-ancestors 'none'/, 'the server applies web/_headers');
   await page.locator('#savePick').setInputFiles(save);
   await until(page, found, () => document.body.classList.contains('has-board'));
