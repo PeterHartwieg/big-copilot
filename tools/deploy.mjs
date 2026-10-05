@@ -72,8 +72,11 @@ if (run(py, ['build_web.py', '--check']) !== 0) stop('python build_web.py --chec
 // Check the reproducible Python output first; minification only changes the
 // ignored deployment artifact, and every deploy assembles it afresh.
 try {
-  const { optimizeWeb } = await import('./optimize_web.mjs');
+  const { optimizeWeb, checkOptimized } = await import('./optimize_web.mjs');
+  const raw = (await import('node:fs')).readFileSync(path.join(ROOT, 'web', 'index.html'), 'utf8');
   optimizeWeb(ROOT);
+  const stale = checkOptimized(ROOT, raw);
+  if (stale.length) stop(`optimized assets differ: ${stale.join(', ')}`);
 } catch (err) {
   stop(`page optimization failed: ${err.message}; ensure dependencies are installed with npm ci`);
 }

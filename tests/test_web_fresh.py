@@ -9,6 +9,7 @@ itself, and assembles a copy with every route to the game shut.
 """
 from pathlib import Path
 import json
+import hashlib
 import re
 import subprocess
 import sys
@@ -23,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # The stamped assets, plus the copies and generated files check() compares.
 CHECK_INPUTS = tuple(dict.fromkeys(
     build_web.STAMP_INPUTS
+    + tuple(build_web.worker_assets()[1])
     + build_web.PY_COPIED + tuple(f"web/py/{name}" for name in build_web.PY_COPIED)
     + ("web/version.json", "web/index.html", "web/update.js", "web/translate/index.html")
 ))
@@ -35,7 +37,7 @@ CLI_INPUTS = tuple(dict.fromkeys(
        "web/wiki.js", "web/wiki.css", "web/wiki-data.json", "web/sitemap.xml", "web/robots.txt")
 ))
 # The translations under i18n/ are the source of web/i18n/, which --check rebuilds.
-CLI_TREES = ("tools/*.py", "tools/wiki_sample.json", "web/py/*", "web/maps/*", "web/wiki/**/*", "i18n/*.json")
+CLI_TREES = ("tools/*.py", "tools/wiki_sample.json", "web/py/*", "web/assets/**/*", "web/maps/*", "web/wiki/**/*", "i18n/*.json")
 
 
 def place(root, name, data):
@@ -121,21 +123,86 @@ class WebFresh(unittest.TestCase):
             self.assertEqual(build_web.stamp(lf), build_web.stamp(crlf))
             self.assertNotEqual(build_web.stamp(lf), build_web.stamp(svg_crlf))
 
-    def test_worker_fetches_the_py_files_and_each_is_stamped(self):
-        # web/worker.js names the files itself; it has to name these, in this
-        # order. web/_headers caches /py/* for a year, so each is a stamp input
-        # (the code through its source, which check() holds the copy to).
+    def test_worker_fetches_the_manifest_files_and_each_is_a_stamp_input(self):
         worker = (ROOT / "web/worker.js").read_text(encoding="utf-8")
-        code = re.search(r"const code = \[([^\]]*)\]\.map\(", worker)
-        self.assertIsNotNone(code, "web/worker.js no longer maps the code downloads")
-        self.assertEqual(tuple(re.findall(r'"([^"]+)"', code.group(1))), build_web.PY_CODE)
-        # Every other py/ fetch is a data file, and carries the stamp.
-        self.assertEqual(tuple(re.findall(r"fetch\(`py/([^?`$]+)", worker)), build_web.PY_DATA)
-        self.assertEqual(len(re.findall(r"fetch\(`py/[^?`$]+\?v=\$\{stamp\}`", worker)), len(build_web.PY_DATA))
+        for group, expected in (("CODE_FILES", build_web.PY_CODE), ("DATA_FILES", build_web.PY_DATA)):
+            listed = re.search(r"const " + group + r" = \[([^\]]*)\]", worker)
+            self.assertIsNotNone(listed)
+            self.assertEqual(tuple(re.findall(r'"([^"]+)"', listed.group(1))), expected)
         for name in build_web.PY_CODE:
             self.assertIn(name, build_web.STAMP_INPUTS)
         for name in build_web.PY_DATA:
             self.assertIn(f"web/py/{name}", build_web.STAMP_INPUTS)
+
+    def test_manifest_hashes_exact_emitted_bytes_and_is_pinned_in_the_page(self):
+        manifest, outputs = build_web.worker_assets()
+        self.assertEqual(set(manifest["files"]), set(build_web.PY_CODE + build_web.PY_DATA))
+        for entry in (manifest["worker"], *manifest["files"].values()):
+            data = outputs["web/" + entry["url"]]
+            self.assertNotIn(b"\r\n", data)
+            self.assertEqual(hashlib.sha256(data).hexdigest(), entry["sha256"])
+            self.assertEqual((ROOT / "web" / entry["url"]).read_bytes(), data)
+        html = (ROOT / "web/index.html").read_text(encoding="utf-8")
+        embedded = re.search(r"window\.LEDGER_ASSETS = (.+?);</script>", html)
+        self.assertEqual(json.loads(embedded.group(1)), manifest)
+
+    def test_unrelated_release_changes_leave_content_urls_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            copy_inputs(tmp, CHECK_INPUTS)
+            before = build_web.worker_assets(tmp)[0]
+            version = build_web.stamp(tmp)
+            report = Path(tmp, "web/report.js")
+            report.write_bytes(report.read_bytes() + b"\n// unrelated edit\n")
+            self.assertNotEqual(build_web.stamp(tmp), version)
+            self.assertEqual(build_web.worker_assets(tmp)[0], before)
+            for name in ("ba_dashboard.py", "ba_store_rules.json"):
+                source = Path(tmp, name)
+                original = source.read_bytes()
+                source.write_bytes(original + b"\n")
+                changed = build_web.worker_assets(tmp)[0]
+                self.assertNotEqual(changed["files"][name], before["files"][name])
+                self.assertEqual(changed["worker"], before["worker"])
+                for other in before["files"]:
+                    if other != name:
+                        self.assertEqual(changed["files"][other], before["files"][other])
+                source.write_bytes(original)
+
+    def test_missing_modified_and_crlf_content_assets_are_stale(self):
+        assets = build_web.worker_assets()[1]
+        # The loop handles all descriptors alike. Exercise code, data, worker
+        # and metadata without repeating the full page/wiki freshness build
+        # for every table; worker startup covers every individual digest.
+        for entry in (name for name in assets if name.endswith(("worker.js", "ba_dashboard.py", "ba_item_prices.json")) or "/manifest-" in name):
+            with self.subTest(asset=entry), tempfile.TemporaryDirectory() as tmp:
+                copy_inputs(tmp, CHECK_INPUTS)
+                asset = Path(tmp, entry)
+                original = asset.read_bytes()
+                asset.unlink()
+                self.assertIn(entry, build_web.check(tmp))
+                asset.write_bytes(original + b"modified")
+                self.assertIn(entry, build_web.check(tmp))
+                asset.write_bytes(original)
+                self.assertNotIn(entry, build_web.check(tmp))
+                if b"\n" in original:
+                    asset.write_bytes(original.replace(b"\n", b"\r\n"))
+                    self.assertIn(entry, build_web.check(tmp))
+
+    def test_manifest_identity_ignores_checkout_line_endings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            copy_inputs(tmp, CHECK_INPUTS)
+            for source in (*build_web.PY_COPIED, "web/py/gametext.json", "web/worker.js"):
+                file = Path(tmp, source)
+                file.write_bytes(file.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+            self.assertEqual(build_web.worker_assets(tmp), build_web.worker_assets())
+
+    def test_standalone_render_keeps_board_code_and_styles_embedded(self):
+        standalone = build_web.render(None, live=True)
+        self.assertNotIn("assets/", standalone)
+        self.assertNotIn("LEDGER_ASSETS", standalone)
+        scripts = re.findall(r"<script>(.*?)</script>", standalone, re.S)
+        styles = re.findall(r"<style>(.*?)</style>", standalone, re.S)
+        self.assertTrue(any(len(code) > 100000 for code in scripts))
+        self.assertTrue(any(len(code) > 100000 for code in styles))
 
     def test_stamp_tracks_compiler_changes_without_unrelated_dependency_cache_busts(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(build_web, "STAMP_INPUTS", ("package-lock.json",)):

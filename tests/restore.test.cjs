@@ -89,7 +89,7 @@ async function setup(t, options = {}) {
         if (options.workerConstructorFails) throw new Error('Worker blocked');
         fixture.worker = this; this.messages = [];
       }
-      postMessage(msg){ this.messages.push(msg); }
+      postMessage(msg){ if (msg.kind !== "init") this.messages.push(msg); }
       terminate(){ this.terminated = true; }
       emit(data){ this.onmessage({data}); }
     };

@@ -329,7 +329,7 @@ async function shell(t, {ui = '', width = 1280, remembered = false, permission =
       }, put(){}})};
     }};
     window.indexedDB.open = () => { const req = {}; setTimeout(() => { req.result = db; req.onsuccess?.(); }); return req; };
-    window.Worker = class { constructor(){ window.reader = this; this.messages = []; } postMessage(m){ this.messages.push(m); } terminate(){} };
+    window.Worker = class { constructor(){ window.reader = this; this.messages = []; } postMessage(m){ if (m.kind !== "init") this.messages.push(m); } terminate(){} };
   }, {remembered, permission, held});
   const page = await context.newPage();
   const errors = [];

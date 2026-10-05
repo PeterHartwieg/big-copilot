@@ -21,7 +21,7 @@ async function setup(t, options = {}) {
     window.showDirectoryPicker = undefined;
     window.Worker = class {
       constructor(){ window.saveWorker = this; this.messages = []; }
-      postMessage(msg){ this.messages.push(msg); }
+      postMessage(msg){ if (msg.kind !== "init") this.messages.push(msg); }
       terminate(){}
     };
     if(options.blockStorage) Object.defineProperty(window, 'localStorage', {get(){throw Error('Storage blocked');}});

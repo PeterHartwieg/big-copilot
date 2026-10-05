@@ -54,6 +54,7 @@ mockup/*/project/
 # assets and floor plans) stay committed.
 /web/index.html
 /web/version.json
+/web/assets/
 /web/sitemap.xml
 /web/robots.txt
 /web/wiki/

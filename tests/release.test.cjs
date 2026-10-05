@@ -20,7 +20,7 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
         const url = new URL(route.request().url());
         if(url.hostname === 'release.test' && url.pathname === '/api/community/features') return route.fulfill({contentType:'application/json',body:JSON.stringify({features:[]})});
         const name = url.pathname === '/' ? '/index.html' : url.pathname;
-        if(url.hostname !== 'release.test' || !files.has(name)) return route.abort();
+        if(url.hostname !== 'release.test' || !(files.has(name) || /^\/assets\/(?:board-[a-f0-9]{64}\.(?:js|css)|[a-f0-9]{64}\/worker\.js)$/.test(name))) return route.abort();
         return route.fulfill({path:path.join(__dirname,'../web',name)});
       });
     }
