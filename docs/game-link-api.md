@@ -915,6 +915,28 @@ restores whichever write came last.
 0.4.0 adds `/write/marketing`.
 Methods other than the ones above answer `405`.
 
+## Overload and pending work
+
+The mod admits at most eight outstanding work requests and four read requests.
+Two dedicated readers serve `/health`, `/save` and the other reads independently
+of work requests waiting for the game's main thread. When admission or the
+32-item external main-thread queue is full, an allowed origin receives
+`503 {"error":"busy"}` with `Retry-After: 1` and readable CORS headers. An
+unapproved origin still receives 403 on actual requests (its preflight receives
+204 without CORS permission). HEAD refusals have no body; OPTIONS
+preflights remain available even when both admission pools are full.
+
+The dispatcher runs at most eight queued actions per frame, checking a two
+millisecond budget between actions. An individual game operation cannot be
+interrupted midway. Frame and interval callbacks still run, and save completion,
+post-write refresh and listener restart each have a reserved, coalesced internal
+slot that external requests cannot consume.
+
+Stopping the listener or unloading the city cancels pending work. A withdrawn
+write or approval request cannot execute later or in a different city. An already
+started write returns its actual result, preserving the existing withdrawal
+contract; overload does not turn a completed write into a false refusal.
+
 ## CORS and the browser
 
 The web app runs on `https://bigcopilot.com` and fetches `http://127.0.0.1:<port>`.
@@ -927,7 +949,7 @@ carries:
 ```
 Access-Control-Allow-Origin: <that origin>
 Vary: Origin
-Access-Control-Expose-Headers: ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character
+Access-Control-Expose-Headers: ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character, Retry-After
 ```
 
 A preflight `OPTIONS` answers `204` with those headers plus:

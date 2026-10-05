@@ -1,0 +1,7 @@
+{
+  "name": "BclQueueTests.Editor",
+  "references": ["BigCopilotLink"],
+  "includePlatforms": ["Editor"],
+  "defineConstraints": ["BA_GAME_DLLS_IMPORTED"],
+  "autoReferenced": false
+}

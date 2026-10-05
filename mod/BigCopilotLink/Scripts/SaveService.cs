@@ -148,6 +148,7 @@ namespace BigCopilotLink
         private volatile bool _busy;
         // Set by Clear(): a compress that finishes after unload publishes nothing.
         private volatile bool _cleared;
+        private int _dispatcherSession;
 
         // Main thread only.
         private readonly DateTime _loadedAtUtc = DateTime.UtcNow;
@@ -404,6 +405,7 @@ namespace BigCopilotLink
             try { facts = BuildingFacts.Capture(instance); }
             catch (Exception e) { return FailedStart("capturing building facts failed: " + e.Message, trigger == "retry"); }
             var character = instance.characterId;
+            _dispatcherSession = MainThreadDispatcher.Session;
             _busy = true;
             _lastRefreshStarted = DateTime.UtcNow;
             // Whatever asked, this refresh answers it: a retry left set here would buy a
@@ -580,7 +582,7 @@ namespace BigCopilotLink
             {
                 LinkMod.LogWarn("background serialize failed (" + trigger + "): " + e.GetType().Name + ": " + e.Message);
                 // Counters and the retry flag are the main thread's, like the publish.
-                MainThreadDispatcher.Enqueue(delegate { OnBackgroundFailure(); });
+                MainThreadDispatcher.EnqueueInternal(InternalWork.SaveCompletion, delegate { OnBackgroundFailure(); }, _dispatcherSession);
                 return;
             }
             // The city may have unloaded during the walk; the gzip is the longer half
@@ -628,7 +630,7 @@ namespace BigCopilotLink
 
                 // A refused enqueue means the city unloaded: Clear() already reset
                 // Busy and dropped the bytes, so there is nothing left to publish.
-                MainThreadDispatcher.Enqueue(delegate
+                MainThreadDispatcher.EnqueueInternal(InternalWork.SaveCompletion, delegate
                 {
                     if (_cleared) return;
                     try
@@ -678,7 +680,7 @@ namespace BigCopilotLink
                         _fallbackRuns = 0;
                         LinkMod.LogInfo("trying the worker thread again after " + FallbackRunsBeforeReprobe.ToString(CultureInfo.InvariantCulture) + " fallback refreshes.");
                     }
-                });
+                }, _dispatcherSession);
             }
             catch (Exception e)
             {
@@ -686,7 +688,7 @@ namespace BigCopilotLink
                 // The flag is the main thread's to write, like the publish; the bytes
                 // are lost, so the pump retries once the window lifts, unless this
                 // was the retry: a gzip that fails twice waits for the floor.
-                MainThreadDispatcher.Enqueue(delegate { _busy = false; _retryPending = !wasRetry; });
+                MainThreadDispatcher.EnqueueInternal(InternalWork.SaveCompletion, delegate { _busy = false; _retryPending = !wasRetry; }, _dispatcherSession);
             }
         }
     }
