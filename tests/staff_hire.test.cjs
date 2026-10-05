@@ -1475,8 +1475,8 @@ test('shared recruitment advice appears once while role-specific exclusions stay
       rows: [...el.querySelectorAll('li')].map(li => li.textContent)};
   }, [LAW, CS]);
   assert.equal(got.advice.length, 1);
-  assert.match(got.advice[0], /Lawyer, Customer Service/);
-  assert.match(got.advice[0], /headquarters.*Recruitment Agency/);
+  assert.match(got.advice[0], /Lawyer and Customer Service: a/);
+  assert.match(got.advice[0], /headquarters recruiting each role, or a Recruitment Agency/);
   assert.match(got.rows[1], /2 candidates, all left out by your filters/);
 });
 
@@ -3531,4 +3531,19 @@ test('a hire week in a role the site takes nobody for is never planned or sent',
   assert.deepEqual(m.weeks.find(([key]) => key === G), [G, 'demand', ['move:SPARE1', 'hire:c2']]);
   assert.ok(!m.roles.some(r => r.skill === 'ba:skill_gymtrainer'));
   assert.ok(!(await request(page)).hires.some(h => h.candidateId === 'g1'));
+});
+
+test('hire count stays visible when the add prerequisite assigns only or states a different hire total', async t => {
+  for(const kind of ['assign','different']) {
+    const d=JSON.parse(giftsHiring());
+    const row=d.staffing.find(r=>r.key===G);
+    row.addPeople=kind==='assign'
+      ? {assign:[{p:0,name:'Sam',skill:CS}],hire:[],people:1,hoursUncovered:60}
+      : {assign:[],hire:[{skill:CS,role:'Customer Service',people:1}],people:1,hoursUncovered:60};
+    const page=await board(t,{link:null,data:JSON.stringify(d)});
+    const block=await siteBlock(page,G);
+    assert.equal(await block.locator('.sp-add').count(),1);
+    assert.match(await block.textContent(),enRe('sp.ba.tohire',{n:2}));
+    await page.close();
+  }
 });

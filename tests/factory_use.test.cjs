@@ -213,15 +213,35 @@ test('factory staffing repeats line hours only when the main line does not show 
     const got = await page.evaluate(() => {
       const line = {slug:'bread', item:'Bread', hoursNow:8, hours:12, from:0, machines:1, cuts:[[0,12]]};
       D.factoryStaffing = {[sizing]:[{s:1, name:'Factory', headcount:{have:1}, delta:{}, lines:[line]}]};
-      const main = {s:1, slug:'bread', hoursNow:8, needHours:{[sizing]:12}};
+      const main = {s:1, slug:'bread', hoursNow:8, needHours:{[sizing]:12}, objectKey:'production|test', objectOpen:true};
       const read = shown => {
         const box=document.createElement('div'); box.innerHTML=drawFactoryStaffing(()=>true,shown);
-        return {hours:box.querySelector('.sb-sln .hrs').textContent.trim(), blocks:box.querySelector('.shifts').textContent.trim(), context:box.querySelector('.sb-hc').textContent.trim()};
+        return {hours:box.querySelector('.sb-sln .hrs').textContent.trim(), hidden:box.querySelector('.sb-sln .hrs').hidden, blocks:box.querySelector('.shifts').textContent.trim(), context:box.querySelector('.sb-hc').textContent.trim()};
       };
-      return {same:read([main]), hidden:read([]), changed:read([{...main,hoursNow:7}]), unnamed:read([{...main,unnamed:true}])};
+      return {same:read([main]), hidden:read([]), changed:read([{...main,hoursNow:7}]), unnamed:read([{...main,unnamed:true}]), collapsed:read([{...main,objectOpen:false}]), proposed:read([{...main,chk:[{kind:'Factory run hours',proposed:10}]}])};
     });
-    assert.equal(got.same.hours,'');
-    for(const state of ['hidden','changed','unnamed']) assert.match(got[state].hours,/12/);
+    assert.equal(got.same.hidden,true);
+    for(const state of ['hidden','changed','unnamed','collapsed','proposed']) {assert.match(got[state].hours,/12/);assert.equal(got[state].hidden,false);}
     for(const state of Object.values(got)) {assert.match(state.blocks,/12/);assert.ok(state.context);}
+  } finally {await page.close();}
+});
+
+test('closing and reopening the factory details restores and suppresses only its echoed staffing hours', async () => {
+  const page=await board(fixture());
+  try {
+    const result=await page.evaluate(() => {
+      const line={slug:'bread',item:'Bread',hoursNow:8,hours:12,from:0,machines:1,cuts:[[0,12]]};
+      D.factoryStaffing={[sizing]:[{s:1,name:'Factory',headcount:{have:1},delta:{},lines:[line]}]};
+      const host=document.createElement('div');
+      host.innerHTML='<details data-sb-obj="production|test" open><summary>Factory</summary><div>Main line</div></details>'+drawFactoryStaffing(()=>true,[{s:1,slug:'bread',hoursNow:8,needHours:{[sizing]:12},objectKey:'production|test',objectOpen:true}]);
+      document.body.append(host);
+      const details=host.querySelector('details'), hours=host.querySelector('.hrs');
+      const initial=hours.hidden;
+      details.open=false;details.dispatchEvent(new Event('toggle'));
+      const closed=hours.hidden;
+      details.open=true;details.dispatchEvent(new Event('toggle'));
+      return {initial,closed,reopened:hours.hidden};
+    });
+    assert.deepEqual(result,{initial:true,closed:false,reopened:true});
   } finally {await page.close();}
 });

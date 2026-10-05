@@ -6486,7 +6486,7 @@ function spRosterBlock(b){
             {people: tt("sp.n.people", {one: "{n} person", other: "{n} people"}, {n: posts}), entries: entries(counts.hire)})}` : ""}${
         keptWords}`)}"><span class="lab">${c.cover ? tt("sp.ba.lab.cover", "Cover hours / week") : tt("sp.ba.lab", "Hours / week")}</span><div class="v">${
         spI("list")}${spWas(againstHours, planHours)}${planHours}<small style="font-size:12px;color:var(--ink-3)"> h</small>${
-        counts.hire && posts && !addStep
+        counts.hire && posts && !(addStep && (add.hire || []).reduce((n, h) => n + (h.people || 0), 0) === posts)
           ? `<small style="font-size:12px;color:var(--warn)">${tt("sp.ba.tohire", "+{n} to hire", {n: posts})}</small>` : ""}</div></div>
       <div tabindex="0" data-read="${attr(`${costKnown
         ? c.cover
@@ -9556,7 +9556,12 @@ function bindSupply(){
   on("click", "#pageSupply [data-sbc-settled]", (b, e) => { e.preventDefault(); pgClearSettled(); sbStamp++; drawSupplyStrip(); sbAgain("changes"); });
   document.addEventListener("toggle", e => {
     const el = e.target;
-    if(el && el.matches && el.matches("details[data-sb-obj]")) sbOpenObj.set(el.dataset.sbObj, el.open);
+    if(el && el.matches && el.matches("details[data-sb-obj]")) {
+      sbOpenObj.set(el.dataset.sbObj, el.open);
+      document.querySelectorAll("[data-sb-hours-for]").forEach(hours => {
+        if(hours.dataset.sbHoursFor === el.dataset.sbObj) hours.hidden = el.open;
+      });
+    }
   }, true);
 }
 /* A view's sorting, its Set to boxes and its recipe pickers, wired after it
@@ -10147,7 +10152,10 @@ function sbFactoryPart(d, claimed, ctx, view, o){
         : o.inputs ? sbInputs(inputs.length)
         : tt("sb.fac.imports.n", {one: "{n} import", other: "{n} imports"}, {n: imports.length}), "", planLink);
     const shownLines = whole ? lines : lines.filter(r => r.keep);
-    if(o.lines) drawnLines.push(...shownLines);
+    const objectKey = `${view}|${b ? b.key : "none"}`;
+    const defaultOpen = left > 0 || keep.some(r => (r.fact && r.fact.lvl === "critical") || (r.prod && r.prod.lvl === "critical"));
+    const objectOpen = !!arrivedHere || (sbOpenObj.has(objectKey) ? sbOpenObj.get(objectKey) : defaultOpen || sbWhich === "all");
+    if(o.lines) drawnLines.push(...shownLines.map(r => ({...r, objectKey, objectOpen})));
     const shownInputs = whole ? inputs : inputs.filter(r => r.keep);
     const shownImports = whole ? imports : imports.filter(r => r.keep);
     /* A table's first header names it (Line, Factory input): no title over
@@ -10186,7 +10194,7 @@ function sbFactoryPart(d, claimed, ctx, view, o){
     const short = worst ? " " + sbStatus(sbProdFact(worst), lackTip, lackTip, tt("sb.fac.machines.chip",
       {one: "{n} line short of machines", other: "{n} lines short of machines"}, {n: lacking.length})) : "";
     return sbObject(view, s, {icon: "gear", how, stats: stats + short, left,
-      open: left > 0 || keep.some(r => (r.fact && r.fact.lvl === "critical") || (r.prod && r.prod.lvl === "critical")), body});
+      open: defaultOpen, body});
   });
   const lineN = szTally(everyLine.filter(r => r.fact), r => r.fact);
   const hoursShort = everyLine.filter(r => r.fact && r.fact.st === "short" && r.fact.why === "hours").length;
@@ -10795,11 +10803,14 @@ function drawFactoryStaffing(keep = () => true, drawnLines = []){
       tt("sb.staff.wages", "a day in wages")}</small></span>` : "<span></span>";
     const lines = (r.lines || []).map(l => {
       const chips = (l.cuts || []).map(([a, z]) => `<span class="sb-shift">${h(a)}–${h(z)}<small>${tt("sb.unit.nh", "{n} h", {n: z - a})}</small></span>`).join("");
-      const echoed = drawnLines.some(x => !x.unnamed && x.s === r.s && x.slug === l.slug
-        && x.hoursNow === l.hoursNow && (x.needHours || {})[sizing] === l.hours);
-      return `<div class="sb-sln"><span class="nm">${spEsc(l.item)}</span><span class="hrs">${echoed ? "" : `${Number.isFinite(l.hoursNow) && l.hoursNow === l.hours ? "" : sbDayStrip(l.hoursNow, l.hours,
+      const echoed = drawnLines.find(x => !x.unnamed && x.s === r.s && x.slug === l.slug
+        && Number.isFinite(x.hoursNow) && x.hoursNow === l.hoursNow && (x.needHours || {})[sizing] === l.hours
+        && (!(x.chk || []).some(c => c.kind === "Factory run hours")
+          || (x.chk || []).find(c => c.kind === "Factory run hours").proposed === l.hours));
+      const hidden = echoed && echoed.objectOpen;
+      return `<div class="sb-sln"><span class="nm">${spEsc(l.item)}</span><span class="hrs"${echoed ? ` data-sb-hours-for="${attr(echoed.objectKey)}"` : ""}${hidden ? " hidden" : ""}>${Number.isFinite(l.hoursNow) && l.hoursNow === l.hours ? "" : sbDayStrip(l.hoursNow, l.hours,
         tt("sb.staff.line.tip", "{now} h staffed, {need} h needed, from {from}:00", {now: l.hoursNow ?? 0, need: l.hours, from: h(l.from || 0)}), l.from || 0)}${
-        Number.isFinite(l.hoursNow) && l.hoursNow !== l.hours ? sbChg(l.hoursNow, l.hours, tt("sb.unit.h", "h")) : `<b>${tt("sb.unit.nh", "{n} h", {n: l.hours})}</b>`}`}</span><span class="shifts">${chips}${
+        Number.isFinite(l.hoursNow) && l.hoursNow !== l.hours ? sbChg(l.hoursNow, l.hours, tt("sb.unit.h", "h")) : `<b>${tt("sb.unit.nh", "{n} h", {n: l.hours})}</b>`}</span><span class="shifts">${chips}${
         l.machines > 1 ? `<small class="sb-per">× ${tt("sb.staff.machines", {one: "{n} machine", other: "{n} machines"}, {n: l.machines})}</small>` : ""}</span></div>`;
     }).join("");
     return `<div class="sb-sfac"><div class="sb-sfh"><span>${name}</span><span class="sb-hc">${
@@ -15412,7 +15423,7 @@ function hrFindHtml(m){
   }).join("");
   const genericRoles = short.filter(r => !recruiting[r.skill]).map(r => hrRole(r.skill));
   const generic = genericRoles.length
-    ? `<p class="hs-find-advice">a ${hrRole("ba:skill_headhunter")} at your headquarters recruiting ${genericRoles.join(", ")}, or a ${spEsc(agency)}</p>` : "";
+    ? `<p class="hs-find-advice">${genericRoles.length > 1 ? `${genericRoles.slice(0, -1).join(", ")} and ${genericRoles.at(-1)}` : genericRoles[0]}: a ${hrRole("ba:skill_headhunter")} at your headquarters recruiting each role, or a ${spEsc(agency)}.</p>` : "";
   return `<div class="hs-find"><h4 class="nx-sr">Where to find them</h4><ul>${rows}</ul>${generic}</div>`;
 }
 /* "When you hire": what Staff all sites does, in numbers (the reassigns,
