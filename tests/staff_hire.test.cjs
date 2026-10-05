@@ -1478,6 +1478,9 @@ test('shared recruitment advice appears once while role-specific exclusions stay
   assert.match(got.advice[0], /Lawyer and Customer Service: a/);
   assert.match(got.advice[0], /headquarters recruiting each role, or a Recruitment Agency/);
   assert.match(got.rows[1], /2 candidates, all left out by your filters/);
+  const single=await page.evaluate(LAW=>hrFindHtml({roles:[{skill:LAW,short:1,pool:[],pass:0}]}),LAW);
+  assert.match(single,/headquarters recruiting that role, or a/);
+  assert.doesNotMatch(single,/each role/);
 });
 
 test('a shop with no hour read is hired for the hours it opens, and the write never opens it', async (t) => {

@@ -679,6 +679,9 @@ test('compact board footer opens support by keyboard while theme and primary lin
   const page=await board(t);
   const footer=page.locator('footer.sf-compact');
   const summary=footer.locator('.sf-support summary');
+  await page.setViewportSize({width:560,height:900});
+  assert.ok((await summary.boundingBox()).height>=44,'mobile support disclosure has a touch target');
+  assert.equal(await summary.evaluate(el=>getComputedStyle(el).display),'list-item','native disclosure marker remains');
   assert.equal(await footer.locator('.sf-support').evaluate(el=>el.open),false);
   await summary.focus(); await page.keyboard.press('Enter');
   assert.equal(await footer.locator('.sf-support').evaluate(el=>el.open),true);

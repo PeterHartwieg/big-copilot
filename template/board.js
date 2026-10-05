@@ -6486,6 +6486,8 @@ function spRosterBlock(b){
             {people: tt("sp.n.people", {one: "{n} person", other: "{n} people"}, {n: posts}), entries: entries(counts.hire)})}` : ""}${
         keptWords}`)}"><span class="lab">${c.cover ? tt("sp.ba.lab.cover", "Cover hours / week") : tt("sp.ba.lab", "Hours / week")}</span><div class="v">${
         spI("list")}${spWas(againstHours, planHours)}${planHours}<small style="font-size:12px;color:var(--ink-3)"> h</small>${
+        counts.staffed && against !== counts.staffed
+          ? `<small style="font-size:12px;color:var(--ink-3)"><s>${against}</s> ${entries(counts.staffed)}</small>` : ""}${
         counts.hire && posts && !(addStep && (add.hire || []).reduce((n, h) => n + (h.people || 0), 0) === posts)
           ? `<small style="font-size:12px;color:var(--warn)">${tt("sp.ba.tohire", "+{n} to hire", {n: posts})}</small>` : ""}</div></div>
       <div tabindex="0" data-read="${attr(`${costKnown
@@ -15423,7 +15425,7 @@ function hrFindHtml(m){
   }).join("");
   const genericRoles = short.filter(r => !recruiting[r.skill]).map(r => hrRole(r.skill));
   const generic = genericRoles.length
-    ? `<p class="hs-find-advice">${genericRoles.length > 1 ? `${genericRoles.slice(0, -1).join(", ")} and ${genericRoles.at(-1)}` : genericRoles[0]}: a ${hrRole("ba:skill_headhunter")} at your headquarters recruiting each role, or a ${spEsc(agency)}.</p>` : "";
+    ? `<p class="hs-find-advice">${genericRoles.length > 1 ? `${genericRoles.slice(0, -1).join(", ")} and ${genericRoles.at(-1)}` : genericRoles[0]}: a ${hrRole("ba:skill_headhunter")} at your headquarters recruiting ${genericRoles.length > 1 ? "each role" : "that role"}, or a ${spEsc(agency)}.</p>` : "";
   return `<div class="hs-find"><h4 class="nx-sr">Where to find them</h4><ul>${rows}</ul>${generic}</div>`;
 }
 /* "When you hire": what Staff all sites does, in numbers (the reassigns,

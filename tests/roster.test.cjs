@@ -1273,7 +1273,7 @@ test('the tiles on a cover-only plan compare cover with cover', async () => {
     assert.equal(await tiles.nth(0).locator('.lab').innerText(), en('sp.ba.lab.cover'));
     // 28 cleaning blocks in the game against 12 to drag in, not the 56 the
     // whole schedule holds.
-    assert.equal(await tiles.nth(0).locator('.v small s').count(), 0, 'entry count is in the read-out');
+    assert.equal(await tiles.nth(0).locator('.v small s').innerText(), '28', 'changed entry count remains visible even when the hours are unchanged');
     const read = await tiles.nth(0).getAttribute('data-read');
     assert.match(read, enRe('sp.ba.hours.cover.frag', {}, {anchor: 'start'}));
     // The scraps counted are the ones on the side the plan replaces: 28

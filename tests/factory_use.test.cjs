@@ -245,3 +245,27 @@ test('closing and reopening the factory details restores and suppresses only its
     assert.deepEqual(result,{initial:true,closed:false,reopened:true});
   } finally {await page.close();}
 });
+
+test('mixed factory staffing rows align entries on desktop without an empty hours row on mobile', async () => {
+  const page=await board(fixture());
+  try {
+    await page.evaluate(() => {
+      const lines=[{slug:'bread',item:'Bread',hoursNow:8,hours:12,from:0,machines:1,cuts:[[0,12]]},
+        {slug:'beer',item:'Beer',hoursNow:8,hours:12,from:0,machines:1,cuts:[[0,12]]}];
+      D.factoryStaffing={[sizing]:[{s:1,name:'Factory',headcount:{have:1},delta:{},lines}]};
+      document.querySelector('#secProduction').innerHTML=drawFactoryStaffing(()=>true,[{s:1,slug:'bread',hoursNow:8,needHours:{[sizing]:12},objectKey:'production|test',objectOpen:true}]);
+    });
+    const rects=()=>page.$$eval('.sb-sln',rows=>rows.map(row=>{
+      const shifts=row.querySelector('.shifts').getBoundingClientRect(),name=row.querySelector('.nm').getBoundingClientRect();
+      return {x:shifts.x,width:shifts.width,y:shifts.y,nameBottom:name.bottom,hoursDisplay:getComputedStyle(row.querySelector('.hrs')).display};
+    }));
+    const wide=await rects();
+    assert.equal(wide[0].x,wide[1].x);assert.equal(wide[0].width,wide[1].width);
+    assert.equal(wide[0].hoursDisplay,'grid');
+    await page.setViewportSize({width:560,height:1000});
+    const narrow=await rects();
+    assert.equal(narrow[0].hoursDisplay,'none');
+    assert.ok(narrow[0].y-narrow[0].nameBottom<=9,'only the normal grid gap remains');
+    assert.equal(narrow[0].x,narrow[1].x);assert.equal(narrow[0].width,narrow[1].width);
+  } finally {await page.close();}
+});

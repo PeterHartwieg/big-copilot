@@ -1310,6 +1310,8 @@ html:has(dialog:modal){overflow:hidden}
 #pageSupply .sb-sfh .go{justify-self:end;white-space:nowrap}
 #pageSupply .sb-sln{display:grid;grid-template-columns:230px 250px minmax(0,1fr);gap:18px;align-items:center;padding:7px 0 3px 22px;font-size:12.5px;color:var(--ink-2)}
 #pageSupply .sb-sln .hrs{display:grid;grid-template-columns:143px auto;align-items:center;gap:10px;font:500 12px/1 "IBM Plex Mono",monospace}
+/* Retain the desktop hours column so mixed rows keep their entries aligned. */
+#pageSupply .sb-sln .hrs[hidden]{display:grid!important;visibility:hidden}
 #pageSupply .sb-sln .hrs>:last-child{grid-column:2}
 #pageSupply .sb-sln .hrs b{font-weight:500;color:var(--ink)}
 #pageSupply .sb-sln .shifts{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
@@ -1471,6 +1473,7 @@ html:has(dialog:modal){overflow:hidden}
   #pageSupply .sb-obj .tog{grid-column:3;grid-row:1}
   #pageSupply .sb-obj>.body{padding-left:0}
   #pageSupply .sb-sfh,#pageSupply .sb-sln{grid-template-columns:minmax(0,1fr);gap:8px;padding-left:0}
+  #pageSupply .sb-sln .hrs[hidden]{display:none!important}
   #pageSupply .sb-sfh .go,#pageSupply .sb-wage{justify-self:start;align-items:flex-start}
 }
 
@@ -2529,7 +2532,7 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
 .sf-support-links{padding:12px 0 0}
 .sf-compact .sf-base{margin-top:14px;padding-top:12px;gap:8px 16px}
 .sf-compact .sf-said{font-size:10px}
-@media(max-width:560px){.sf-compact-settings{margin-left:0;width:100%}.sf-compact-top{gap:14px}}
+@media(max-width:560px){.sf-support summary{min-height:44px;box-sizing:border-box;padding:12px 0}.sf-compact-settings{margin-left:0;width:100%}.sf-compact-top{gap:14px}}
 .sf-landing{align-self:stretch;width:100%;margin-top:40px}
 /* No cap on the board: .wrap already sets the page's measure, and a narrower
    footer would leave the hairline and the orb floating inside the sections
