@@ -2054,7 +2054,7 @@ PAYLOAD_KEYS = (
 
 # Three planning stages only: locale, effective tables and the predecessor world
 # are inputs too. Bump this when placement semantics or capsule shape changes.
-PLANNING_CACHE_VERSION = 1
+PLANNING_CACHE_VERSION = 2
 _PLANNING_CACHE_RULES = (
     "ALL_DAY_OPEN", "ASSIGN_SKILLS", "AT_CAP", "CAPPED_INITIAL_BUILD",
     "CAP_CATEGORIES", "CLEANING_SHIFT", "COVER_STATIONS", "DEMAND_RUN_DAYS",
@@ -2084,8 +2084,11 @@ def _planning_typed(value):
     if isinstance(value, (list, tuple)):
         return ["tuple" if isinstance(value, tuple) else "list", [_planning_typed(x) for x in value]]
     if isinstance(value, (set, frozenset)):
-        return ["set", sorted((_planning_typed(x) for x in value), key=_planning_encoded)]
+        return ["frozenset" if isinstance(value, frozenset) else "set",
+                sorted((_planning_typed(x) for x in value), key=_planning_encoded)]
     if isinstance(value, dict):
+        if all(type(k) is str for k in value):
+            return ["strdict", {k: _planning_typed(value[k]) for k in sorted(value)}]
         pairs = [[_planning_typed(k), _planning_typed(v)] for k, v in value.items()]
         return ["dict", sorted(pairs, key=lambda pair: _planning_encoded(pair[0]))]
     raise TypeError(f"unsupported planning cache input: {type(value).__name__}")
@@ -2099,12 +2102,42 @@ def _planning_bytes(value):
     return _planning_encoded(_planning_typed(value)).encode("ascii")
 
 
+def _planning_size(value):
+    """Conservative deep Python object bytes, without serializing the capsule.
+
+    Count shared objects once within a capsule, and include Msg metadata. Strings
+    shared by separate capsules are counted again, favoring a conservative bound.
+    Object IDs are only local traversal markers, never dependency keys or storage.
+    """
+    total = 0
+    seen = set()
+    stack = [value]
+    while stack:
+        value = stack.pop()
+        marker = id(value)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        total += sys.getsizeof(value)
+        if isinstance(value, Msg):
+            stack.append(value.__dict__)
+        elif isinstance(value, dict):
+            stack.extend(value.keys())
+            stack.extend(value.values())
+        elif isinstance(value, (list, tuple, set, frozenset)):
+            stack.extend(value)
+        elif value is not None and not isinstance(value, (str, int, float, bool)):
+            raise TypeError(f"unsupported planning capsule: {type(value).__name__}")
+    return total
+
+
 class PlanningCache:
     """Bounded private capsules; never hold a Save, Build or caller-owned rows."""
 
-    def __init__(self, max_entries=6, max_bytes=16 * 1024 * 1024):
+    def __init__(self, max_entries=6, max_bytes=16 * 1024 * 1024, min_compute_seconds=0.25):
         self.max_entries = max(0, max_entries)
         self.max_bytes = max(0, max_bytes)
+        self.min_compute_seconds = max(0, min_compute_seconds)
         self.entries = collections.OrderedDict()
         self.bytes = 0
 
@@ -2115,15 +2148,18 @@ class PlanningCache:
         self.entries.move_to_end(key)
         return copy.deepcopy(capsule)
 
-    def put(self, key, capsule):
-        # Serialize before publishing: unsupported or oversized entries bypass.
+    def has_stage(self, stage, namespace):
+        return any(len(key) == 3 and key[:2] == (stage, namespace) for key in self.entries)
+
+    def put(self, key, capsule, *, owned=False):
+        """Publish a capsule; owned=True transfers an already-private stage copy."""
         try:
-            size = len(_planning_bytes(capsule))
-        except TypeError:
+            size = _planning_size(capsule)
+            if not self.max_entries or size > self.max_bytes:
+                return
+            stored = capsule if owned else copy.deepcopy(capsule)
+        except (TypeError, MemoryError):
             return
-        if not self.max_entries or size > self.max_bytes:
-            return
-        stored = copy.deepcopy(capsule)
         if key in self.entries:
             self.bytes -= self.entries.pop(key)[1]
         while self.entries and (len(self.entries) >= self.max_entries or self.bytes + size > self.max_bytes):
@@ -2177,9 +2213,33 @@ def _planning_rule(value):
     return value
 
 
+def _planning_namespace(build):
+    return hashlib.sha256(_planning_bytes(
+        [PLANNING_CACHE_VERSION, build.save.root.get("characterId")])).hexdigest()
+
+
+def _planning_invariant(build):
+    """Accepted Build inputs are fixed; fingerprint their common parts once."""
+    if build._planning_invariant is None:
+        shared = build.shared
+        pieces = (
+            _planning_raw_inputs(build.save), build.names.locale,
+            load_buildings(build.save), load_demand_curves(),
+            {k: _planning_rule(globals()[k]) for k in _PLANNING_CACHE_RULES},
+            {k: shared[k] for k in ("businesses", "all_grids", "staff")},
+        )
+        digest = hashlib.sha256()
+        for piece in pieces:
+            encoded = _planning_bytes(piece)
+            digest.update(len(encoded).to_bytes(8, "big"))
+            digest.update(encoded)
+        build._planning_invariant = digest.hexdigest()
+    return build._planning_invariant
+
+
 def _planning_key(build, stage, world):
     shared = build.shared
-    inputs = {k: shared[k] for k in ("businesses", "all_grids", "staff")}
+    inputs = {}
     if stage == "staffing":
         inputs["base_promotion"] = shared["base_promotion"]
     if stage == "factoryStaffing":
@@ -2187,11 +2247,8 @@ def _planning_key(build, stage, world):
     value = {"version": PLANNING_CACHE_VERSION, "stage": stage,
              "character": build.save.root.get("characterId"),
              "build": build.save.root.get("buildNumberAtLastSave"),
-             "raw": _planning_raw_inputs(build.save), "inputs": inputs,
-             "locale": build.names.locale, "buildings": load_buildings(build.save),
-             "curves": load_demand_curves(), "world": world,
-             "rules": {k: _planning_rule(globals()[k]) for k in _PLANNING_CACHE_RULES}}
-    return stage, hashlib.sha256(_planning_bytes(value)).hexdigest()
+             "invariant": _planning_invariant(build), "inputs": inputs, "world": world}
+    return stage, _planning_namespace(build), hashlib.sha256(_planning_bytes(value)).hexdigest()
 
 
 def _planning_failed(value):
@@ -2203,22 +2260,49 @@ def _planning_failed(value):
 
 
 def _cached_planning(build, stage, world, produce):
-    """Cache before _take_hires; each restore binds private hires to NEW rows."""
+    """Cache before _take_hires; each restore binds private hires to NEW rows.
+
+    An unadmitted stage runs its normal scratch world first, without copying or
+    hashing. Only measured expensive work pays for first insertion. Its original
+    input still lives in the immutable predecessor, before the producer's wrapper
+    commits this stage. Planners read people and mutate only scratch bench/weeks.
+    """
     cache = build.planning_cache
-    if cache is None:
+    if cache is None or not cache.max_entries or not cache.max_bytes:
         return produce(world), world
-    # The capsule and preceding stage are never mutated by this placement.
-    world = copy.deepcopy(world)
+    namespace = _planning_namespace(build)
+    if cache.min_compute_seconds and not cache.has_stage(stage, namespace):
+        started = time.perf_counter()
+        rows = produce(world)
+        elapsed = time.perf_counter() - started
+        if elapsed < cache.min_compute_seconds or _planning_failed(rows):
+            return rows, world
+        previous = {"staffing": None, "officeStaffing": "staffing",
+                    "factoryStaffing": "officeStaffing"}[stage]
+        try:
+            key = _planning_key(build, stage, _planning_world(build, previous))
+        except (TypeError, MemoryError):
+            return rows, world
+    else:
+        try:
+            key = _planning_key(build, stage, world)
+            capsule = cache.get(key)
+        except (TypeError, MemoryError):
+            return produce(world), world
+        if capsule is not None:
+            return capsule["rows"], capsule["world"]
+        try:
+            world = copy.deepcopy(world)
+        except MemoryError:
+            return produce(world), world
+        started = time.perf_counter()
+        rows = produce(world)
+        if time.perf_counter() - started < cache.min_compute_seconds or _planning_failed(rows):
+            return rows, world
     try:
-        key = _planning_key(build, stage, world)
-    except TypeError:
-        return produce(world), world
-    capsule = cache.get(key)
-    if capsule is not None:
-        return capsule["rows"], capsule["world"]
-    rows = produce(world)
-    if not _planning_failed(rows):
         build._planning_pending[stage] = (key, copy.deepcopy({"rows": rows, "world": world}))
+    except MemoryError:
+        pass  # Cache allocation must not fail a successfully computed stage.
     return rows, world
 
 
@@ -2242,6 +2326,7 @@ class Build:
         self.generation = generation
         self.planning_cache = planning_cache
         self._planning_pending = {}
+        self._planning_invariant = None
         self.core: dict = {}
         self.shared: dict = {}
         self.private: dict = {}
@@ -2287,7 +2372,10 @@ def section(build: Build, name: str) -> dict:
         build.sections[name] = wired
         pending = build._planning_pending.pop(name, None)
         if pending is not None:
-            build.planning_cache.put(*pending)
+            try:
+                build.planning_cache.put(*pending, owned=True)
+            except MemoryError:
+                pass  # An optimization cannot fail a section already computed.
     return build.sections[name]
 
 

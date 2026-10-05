@@ -18,7 +18,7 @@ class PlanningCacheTests(unittest.TestCase):
         self.path = os.path.join(self.tmp.name, 'synthetic.hsg')
         save_fixtures.write_data_save(self.path, save_fixtures.DAY)
         self.names = save_fixtures.data_names()
-        self.cache = board.PlanningCache()
+        self.cache = board.PlanningCache(min_compute_seconds=0)
 
     def build(self, cache=True):
         return board.build_core(load_save(self.path), Names(dict(self.names)), planning_cache=self.cache if cache else None)
@@ -90,10 +90,14 @@ class PlanningCacheTests(unittest.TestCase):
                 self.assertNotEqual(board._planning_key(other, 'staffing', other_world), key)
         with patch.object(board, 'PLANNING_CACHE_VERSION', board.PLANNING_CACHE_VERSION + 1):
             self.assertNotEqual(board._planning_key(build, 'staffing', world), key)
+        other = self.build()
+        other_world = board._planning_world(other)
         with patch.object(board, 'load_buildings', return_value={'different': 'facts'}):
-            self.assertNotEqual(board._planning_key(build, 'staffing', world), key)
+            self.assertNotEqual(board._planning_key(other, 'staffing', other_world), key)
+        other = self.build()
+        other_world = board._planning_world(other)
         with patch.object(board, 'load_demand_curves', return_value={'different': 'curves'}):
-            self.assertNotEqual(board._planning_key(build, 'staffing', world), key)
+            self.assertNotEqual(board._planning_key(other, 'staffing', other_world), key)
 
     def test_reachable_reference_contents_invalidate_unreachable_do_not(self):
         build = self.build()
@@ -103,9 +107,11 @@ class PlanningCacheTests(unittest.TestCase):
         raw = board._planning_raw_inputs(build.save)
         self.assertTrue(raw['refs'])
         key = board._planning_key(build, 'staffing', world)
-        rid = next(iter(raw['refs']))
-        build.save.refs[rid] = dict(build.save.refs[rid], cacheSynthetic='changed')
-        self.assertNotEqual(board._planning_key(build, 'staffing', world), key)
+        other = self.build()
+        other_world = board._planning_world(other)
+        other.save.refs[999999] = dict(other.save.root['EmployeeInstances'], cacheSynthetic='changed')
+        other.save.root['EmployeeInstances'] = {'$ref':999999}
+        self.assertNotEqual(board._planning_key(other, 'staffing', other_world), key)
         build = self.build()
         world = board._planning_world(build)
         build.save.refs[999999] = build.save.root['EmployeeInstances']
@@ -149,7 +155,7 @@ class PlanningCacheTests(unittest.TestCase):
                 with patch.object(board, '_staffing', wraps=board._staffing) as shop:
                     board.section(build, 'staffing')
                     self.assertEqual(shop.call_count, 1)
-                self.cache = board.PlanningCache()
+                self.cache = board.PlanningCache(min_compute_seconds=0)
 
     def test_typed_keys_preserve_order_sets_and_msg_metadata(self):
         digest = board._planning_bytes
@@ -242,10 +248,59 @@ class PlanningCacheTests(unittest.TestCase):
         cache.put(('shop', 'huge'), {'rows': ['x' * 3000]})
         self.assertEqual(cache.bytes, before)
         self.assertIsNone(cache.get(('shop', 'huge')))
-        small = board.PlanningCache(max_entries=10, max_bytes=120)
-        for n in range(10):
-            small.put(('stage', str(n)), {'rows': [n]})
-        self.assertLessEqual(small.bytes, 120)
-        self.assertLess(len(small.entries), 10)
+        capsule = {'rows': [123456]}
+        budget = board._planning_size(capsule)
+        small = board.PlanningCache(max_entries=10, max_bytes=budget)
+        small.put('first', capsule)
+        self.assertIsNotNone(small.get('first'))
+        small.put('second', capsule)
+        self.assertIsNone(small.get('first'))
+        self.assertIsNotNone(small.get('second'))
+        self.assertEqual(len(small.entries), 1)
+        self.assertLessEqual(small.bytes, budget)
+
+    def test_cheap_admission_skips_fingerprint_and_capsule_copy(self):
+        self.cache = board.PlanningCache()
+        expected = board.section(self.build(cache=False), 'staffing')
+        with patch.object(board, '_planning_key', side_effect=AssertionError('cheap plan hashed')), patch.object(board.time, 'perf_counter', side_effect=[0, .001, 0, .001]), patch.object(board, '_staffing', wraps=board._staffing) as producer:
+            for _ in range(2):
+                build = self.build()
+                self.assertEqual(board.section(build, 'staffing'), expected)
+                self.assertIsNone(build._planning_invariant)
+            self.assertEqual(producer.call_count, 2)
+        self.assertFalse(self.cache.entries)
+
+    def test_expensive_admission_reuses_result_and_restores_world(self):
+        self.cache = board.PlanningCache()
+        first = self.build()
+        with patch.object(board.time, 'perf_counter', side_effect=[0, 1]):
+            expected = board.section(first, 'staffing')
+        self.assertEqual(len(self.cache.entries), 1)
+        second = self.build()
+        with patch.object(board, '_staffing', side_effect=AssertionError('admitted plan recomputed')):
+            self.assertEqual(board.section(second, 'staffing'), expected)
+        self.assertEqual(second.shared['planning'], first.shared['planning'])
+        self.assertEqual(sorted(second.private['hires'].values(), key=str), sorted(first.private['hires'].values(), key=str))
+
+    def test_common_fingerprint_is_computed_once_per_accepted_build(self):
+        with patch.object(board, '_planning_raw_inputs', wraps=board._planning_raw_inputs) as inputs:
+            self.plans(self.build())
+            self.assertEqual(inputs.call_count, 1)
+            self.plans(self.build())
+            self.assertEqual(inputs.call_count, 2)
+
+    def test_publication_memory_error_preserves_successful_section(self):
+        expected = board.section(self.build(cache=False), 'staffing')
+        first = self.build()
+        with patch.object(self.cache, 'put', side_effect=MemoryError):
+            self.assertEqual(board.section(first, 'staffing'), expected)
+        self.assertFalse(self.cache.entries)
+        self.assertEqual(board.section(self.build(), 'staffing'), expected)
+        self.assertEqual(len(self.cache.entries), 1)
+
+    def test_typed_mapping_optimization_preserves_distinctions(self):
+        self.assertEqual(board._planning_typed({'b': 2, 'a': 1}), board._planning_typed({'a': 1, 'b': 2}))
+        self.assertNotEqual(board._planning_typed({'1': 2}), board._planning_typed({1: 2}))
+        self.assertNotEqual(board._planning_typed({1}), board._planning_typed(frozenset({1})))
 if __name__ == '__main__':
     unittest.main()

@@ -669,12 +669,23 @@ to the new rows' identities. Neither caller mutation nor a later placement can m
 stored capsule. Exceptions and any nested `failed: true` row bypass insertion.
 
 The browser owns one Python-process cache across builds. It keeps at most six capsules
-and 16 MiB of canonical serialized capsule bytes in a shared LRU; oversized capsules
-bypass caching. No Save, Build, object IDs, source paths or disk/localStorage state are
-retained. This byte budget measures canonical content, not Python allocator overhead.
+and 16 MiB of conservatively counted Python object bytes in a shared LRU; oversized
+capsules bypass caching. Shared objects count once within a capsule and again across
+capsules; the budget is not an exact process-memory measurement. No Save, Build, object IDs, source paths or disk/localStorage state are
+retained. Allocation failures while copying or publishing cache data bypass the optimization
+without failing a successfully computed section.
 `build_core(..., planning_cache=cache)` and `extract(..., planning_cache=cache)` provide
 explicit reuse for other callers; the existing CLI/watch path does not retain a cache.
 Normal builds without injection remain uncached. Import creates no file dependency.
+
+The default cache admits a stage only after its measured computation takes at least
+250 ms. Cheap stages remain fresh and bypass fingerprinting and capsule copies entirely
+when no capsule exists for that stage and company. This threshold controls admission,
+not execution time. An admitted stage checks its semantic key on subsequent builds.
+Tests explicitly use a zero threshold to exercise cache correctness independent of machine
+speed. Shared invariant inputs are fingerprinted once per accepted Build; stage inputs
+and predecessor worlds retain their separate fingerprints. Accepted Build inputs are
+immutable, and each new Build computes its own invariant digest.
 
 Keys use SHA-256 over typed canonical values: mappings/sets sort by typed values, lists
 and tuples retain their type and order, and Msg values include English, catalogue key and
@@ -687,7 +698,9 @@ reads are BuildingRegistrations, EmployeeInstances, Day (open-day averaging) and
 buildNumberAtStart, plus every record reachable through their `$ref` graph. Unreachable
 records and core-only cash/clock fields are excluded. These conservative registration and
 business projections may miss after an irrelevant stock/financial field changes; they
-favor correctness over broad reuse. A cash-only change demonstrably reuses placements.
+favor correctness over broad reuse. Repeated unchanged saves in the same worker can hit;
+Day and order-history changes can miss during ordinary autosaves. The synthetic cash-only
+case demonstrates an excluded field, rather than promising reuse on every live refresh.
 Changes to ordinary algorithm semantics require a version bump; callable rule code and
 constant knobs are also fingerprinted. No cache key uses generation, mtime, repr, id or hash.
 
