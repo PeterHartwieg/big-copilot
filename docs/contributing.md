@@ -82,7 +82,8 @@ Focused commands also assemble first:
 - `npm run test:python` runs Python discovery;
   `npm run test:python -- tests.test_premises` selects a module. Arguments after
   `--` are passed to unittest, including discovery options.
-- `npm run test:optimized` assembles, optimizes the hosted page, runs the release smoke
+- `npm run test:optimized` assembles, optimizes the hosted page, checks its actual
+  emitted assets with `node tools/optimize_web.mjs --check`, runs the release smoke
   journey against that artifact, then restores readable assembly
   on success. If optimization or a hosted test fails, later stages stop; run
   `npm run verify:assemble` to restore readable output before inspecting it.
@@ -182,7 +183,10 @@ modified, staged or untracked file, runs `git fetch origin`
 and stops unless `git merge-base --is-ancestor origin/main HEAD` passes, runs
 `python build_web.py --assemble` and stops if that changed a committed file, runs
 `python build_web.py --check`, minifies the generated page's inline JavaScript
-through `tools/optimize_web.mjs`, and then runs `wrangler deploy --config wrangler.jsonc`.
+through `tools/optimize_web.mjs`, externalizes its largest classic board script and
+stylesheet as `web/assets/board-<sha256>.js` and `.css` with SRI, checks the emitted
+HTML and content assets with `checkOptimized`, and then runs
+`wrangler deploy --config wrangler.jsonc`.
 The transform uses the existing esbuild dependency, preserves shared global names
 and escapes inline script terminators; blocks with HTML comment openers keep their
 original escaping. Its source and esbuild’s lock entry in `package-lock.json` are
@@ -190,7 +194,7 @@ build stamp inputs. Python assembly stays independent of Node: `--assemble` rest
 readable output, which is what `--check` compares. Run `node tools/optimize_web.mjs`
 after assembly to preview the deployment artifact locally; assemble again before
 running tests or `--check`. `npm run test:optimized` manages this sequence and
-runs the same optimized release smoke test as CI.
+runs the emitted-asset check and the same optimized release smoke test as CI.
 `tests/csp.test.cjs` serves the optimized page with real Pyodide,
 map, guide and game-link loading, and `tests/optimize_web.test.cjs` guards script
 boundaries and shared globals.

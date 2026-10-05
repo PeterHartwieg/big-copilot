@@ -19,9 +19,11 @@ async function fixture(width = 1280, theme = 'dark') {
   await page.evaluate(theme => {
     document.documentElement.dataset.theme = theme;
     window.buildRequests = [];
+    window.drawnSaves = [];
     // Exercise the real import/menu wiring without starting the Python reader.
     window.Worker = class {
       postMessage(message) {
+        if (message.kind === 'init') return;
         window.buildRequests.push(message.name);
         queueMicrotask(() => this.onmessage({data:{id:message.id, kind:'built', history:'{}', data:JSON.stringify({meta:{save:'Harbor & Co'}})}}));
       }
@@ -30,8 +32,15 @@ async function fixture(width = 1280, theme = 'dark') {
   // The page's tt() loads first, as it does in the built page's head.
   await page.addScriptTag({path:path.join(root, 'web/i18n.js')});
   await page.addScriptTag({path:path.join(root, 'web/app.js')});
-  await page.evaluate(() => window.dispatchEvent(new Event('DOMContentLoaded')));
+  await page.evaluate(() => {
+    // The real board registers before DOMContentLoaded. This focused fixture
+    // supplies that rendering seam while exercising the actual picker shell.
+    LEDGER_SOURCE.watch({changed(data){drawnSaves.push(data.meta.save);}, stale(){}, lost(){}});
+    window.dispatchEvent(new Event('DOMContentLoaded'));
+  });
   await loadFiles(page);
+  assert.equal(await page.locator('#reloadBtn').isVisible(),false,'registered fixture board starts normally');
+  assert.deepEqual(await page.evaluate(()=>drawnSaves),['Harbor & Co'],'the shell delivers the first build to its board');
   // On a phone ··· is in the sidebar's drawer: open it, as Map & more does
   // (the board script, which wires that button, is not on this page).
   if (width <= 560) await page.evaluate(() => document.body.classList.add('sd-open'));

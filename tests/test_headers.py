@@ -75,28 +75,11 @@ class Headers(unittest.TestCase):
         self.assertEqual(self.rules["/version.json"].get("cache-control"), "no-store")
         self.assertEqual(self.rules["/"].get("cache-control"), "no-cache")
 
-    def test_python_files_are_cached_only_because_every_fetch_is_stamped(self):
-        self.assertIn("immutable", self.rules["/py/*"].get("cache-control", ""))
-        # Every web/py file is a stamp input, so new content means a new URL.
-        import build_web  # noqa: E402  (the repo root is on sys.path under unittest discover)
-        for path in sorted((WEB / "py").iterdir()):
-            if path.is_file():
-                with self.subTest(file=path.name):
-                    source = f"web/py/{path.name}"
-                    copied_from = path.name if path.suffix == ".py" else None
-                    self.assertTrue(source in build_web.STAMP_INPUTS or copied_from in build_web.STAMP_INPUTS,
-                                    f"{source} is cached immutable but is not a stamp input")
-        # Every fetch of py/ in the shipped scripts carries the stamp.
-        for name in ("app.js", "worker.js", "map.js", "wiki.js", "community.js", "update.js", "i18n.js"):
-            text = (WEB / name).read_text(encoding="utf-8")
-            fetches = re.findall(r"""fetch\(\s*[`'"]py/[^`'"]*[`'"]""", text)
-            if name == "worker.js":
-                # The two modules in a loop, then the five data files: a
-                # pattern that stopped matching would pass the check vacuously.
-                self.assertEqual(len(fetches), 6, f"worker.js py/ fetches: {fetches}")
-            for fetch in fetches:
-                with self.subTest(script=name, fetch=fetch):
-                    self.assertIn("?v=${stamp}", fetch)
+    def test_only_content_and_runtime_paths_are_immutable(self):
+        self.assertIn("immutable", self.rules["/assets/*"].get("cache-control", ""))
+        self.assertIn("immutable", self.rules["/pyodide/*"].get("cache-control", ""))
+        self.assertEqual(self.rules["/py/*"].get("cache-control"), "no-store")
+        self.assertEqual(self.rules["/worker.js"].get("cache-control"), "no-store")
 
 
 if __name__ == "__main__":

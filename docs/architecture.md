@@ -1068,7 +1068,9 @@ What `page_html()` produces, top of the file down:
    template, so the page runs in standards mode.
 2. The head `page_html()` builds, in this order: the viewport tag, `window.LEDGER_BUILD`
    (the stamp, set here rather than in `BEFORE_SCRIPT` because `web/i18n.js`, in the
-   template's head, fetches a UI table with it) and the `web/community.css` link stamped
+   template's head, fetches a UI table with it), `window.LEDGER_ASSETS` (the pinned
+   worker and Python/data manifest), the early board resource failure handler,
+   and the `web/community.css` link stamped
    with the release version. There is no analytics
    script, and Cloudflare's automatic Web Analytics injection is switched off for the
    domain, because the privacy notice says the site runs none. `page_html()` then swaps the
@@ -1107,8 +1109,24 @@ to LF for everything except the `.svg` background, so a Windows checkout is not 
 itself.
 
 Deployment checks that readable assembly first, then `tools/optimize_web.mjs`
-minifies its inline JavaScript with esbuild before uploading. It preserves the
-classic scripts' global names and order and leaves markup and CSS as assembled.
+minifies its inline JavaScript with esbuild before uploading, then externalizes only
+the largest board/model/map/wiki classic script and stylesheet into
+`web/assets/board-<sha256>.js` and `.css`. The digest names the exact emitted bytes;
+both tags carry SRI and keep their original position (no async/defer or module
+wrapper). A resource error on the marked board script uses the shell's reload
+recovery. The shell also requires the board's registered handlers before reader
+startup or entering a board, including restore, manual save and no-save browsing;
+a missing or SRI-rejected script cannot report an empty board as up to date.
+Board registration and Python reader health are separate: a healthy board can
+browse its no-save wiki after reader startup fails, while save/worker operations
+remain stopped and the reload control remains available.
+The stylesheet's current `url()` references are all embedded SVG data URLs, so
+extraction changes no relative resource base. Small boot/release/i18n scripts
+stay inline. `hostedPage()` returns the
+HTML and files; `optimizeWeb()` writes the actual set and `--check` compares it
+against raw assembly, including missing/modified JS/CSS and worker manifests.
+The deploy and optimized verification stages check that set before using it. It
+preserves the classic scripts' global names and order and the stylesheet bytes.
 The optimizer and esbuild’s lock entry are stamp inputs. Reassemble before
 running `--check` on a locally optimized page. See [contributing.md](contributing.md),
 "Deployment baseline", for the deployment sequence.
@@ -1625,35 +1643,81 @@ because a deploy from a checkout that lacks them would remove them from the site
 files from `https://cdn.jsdelivr.net/pyodide/v<version>/full/` into a new version folder,
 change `PYODIDE_VERSION` in `web/worker.js`, and delete the old folder.
 
-Everything else it fetches is same-origin, from `web/py/`, carrying the page's build stamp.
-Because every one of those files is a stamp input, `web/_headers` caches `/py/*` as
-immutable and the worker fetches with the browser's default cache (`no-store` only for
-the unstamped `dev` build):
+The eight board dependencies are listed in `PY_CODE` and `PY_DATA` in
+`build_web.py` and checked against `CODE_FILES`/`DATA_FILES` in the worker:
 
-`build_web.py` names them once, as `PY_CODE` and `PY_DATA`, and `tests/test_web_fresh.py`
-fails when the worker's fetches differ from those lists:
+- `ba_save.py`, `ba_facts.py` and `ba_dashboard.py` — required code.
+- `gametext.json`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json`
+  and `ba_store_rules.json` — game data tables.
 
-- `ba_save.py`, `ba_facts.py` and `ba_dashboard.py` — a failed fetch throws and the worker never becomes
-  ready.
-- `gametext.json`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json` and
-  `ba_store_rules.json` —
-  written into the virtual filesystem only when the fetch succeeds, so a build missing one
-  still boots and degrades instead: without the curves the board states no arrival ceiling,
-  and every number it does state still comes off the measured hour grid; without the prices
-  furniture counts at what the save says was paid, and walls and floors at nothing; without
-  the store rules the store planner has no game data to plan a new store with.
+Assembly writes each dependency and the worker itself to
+`web/assets/<full-sha256>/<filename>`, hashing the exact LF-normalized bytes.
+`worker_assets()` produces schema 1 metadata (`worker` and `files`, each with
+`url` and `sha256`) and an audit copy at `assets/manifest-<sha256>.json`.
+The complete metadata is embedded as `window.LEDGER_ASSETS` in each page;
+**no mutable manifest is fetched**. `web/app.js` creates that immutable worker,
+sets its event handlers and sends one `init` message carrying the page's
+manifest before any save requests. A second initialization is ignored, so a
+working reader keeps its already installed release when deployments change.
+Pre-manifest callers that start mutable `worker.js?v=...` without initialization
+receive an immediate reload failure. A stamped page without `LEDGER_ASSETS`
+also fails through the usual reader error and reload controls if its old mutable
+`app.js` URL serves the newer script; it cannot select development fallback.
+The broad `LEDGER_BUILD`, release stamp and `version.json` still control update
+notifications and the other assets; unrelated edits change that stamp without
+changing these content paths.
 
-All seven board files download concurrently with the runtime. Startup joins the
-runtime and all response bodies through `Promise.all`, creates `/save` and `/data`,
-writes the successful downloads, then imports Python. A failed required fetch or
-runtime load is observed immediately even while the other branch is still pending;
-startup reports the failure through the existing `startup-failed` message.
-Runtime completion and each consumed body or optional HTTP fallback emit progress
-before the join, keeping the pending-save inactivity timer informed.
-`tests/worker_startup.test.cjs` checks ordering, progress, cache policy and error paths.
+The optimizer marks both external board JS and CSS with `data-board-asset`.
+A head error handler records HTTP or SRI rejection before `app.js` loads;
+the shell refuses worker startup, save restores and board entry when either
+resource failed. Small inline landing recovery styles keep the reload control
+readable without the board stylesheet. A registered, styled board can still
+open its no-save wiki when only Python startup failed.
 
-Gradual (percentage) deployments are unsupported for that reason: while two versions serve
-side by side, a `/py/` file from the old one could be cached immutably under the new stamp.
+The worker validates the schema, all eight descriptors and its own path before
+boot. All eight files download concurrently with runtime startup. Successful
+bodies are checked with SHA-256 before **any** files are installed in the virtual
+filesystem or Python is imported. A missing pinned path, an HTTP failure or a
+bad digest is a hard release failure, including for data tables. The reader
+reports a reload instruction through `startup-failed`; a missing worker script
+also tells the player to reload. No partial release reaches Python. The
+unstamped local-development worker at `worker.js` accepts null metadata, uses
+`no-store` downloads from `py/` and keeps the historical optional-table HTTP
+fallbacks (missing curves mean no arrival ceiling, missing prices fall back to
+save prices, missing rules mean no new-store planning).
+
+`web/_headers` caches `/assets/*` immutably, with `no-store` on mutable `/py/*`
+and `/worker.js`. Assembly clears the generated assets directory and writes the
+current set; the deployment optimizer adds its two hosted files afterwards.
+There is no server retention promise. An old tab with complete cached assets
+can start its coherent old release, and an already installed worker continues
+using it. If any removed old path is absent from that browser's cache, startup
+fails cleanly and asks for reload instead of combining releases. Gradual
+deployments remain unsupported for the broader mutable stamped assets.
+
+These coherence guarantees apply to pages and workers using the pinned protocol.
+There is one historical migration window: a pre-manifest worker already fetched
+and cached before deployment can still run its old code and fetch mutable
+`py/<file>?v=<old-stamp>` paths. A partial old dependency cache can therefore
+combine cached A code with uncached B data. New no-store headers cannot invalidate
+already cached immutable responses or retrofit digest checks into that worker.
+The immediate legacy URL failure covers old callers receiving the **new** worker;
+it does not repair already cached or running old worker code. Such an old page
+must reload onto the pinned protocol to obtain these guarantees.
+`tests/fixtures/legacy_worker_53497965.js` preserves the actual previous worker
+bytes, and `tests/asset_cache.test.cjs` exercises its partial-cache rollout window.
+
+Runtime completion and each consumed/validated body or development HTTP
+fallback emit progress before the join, keeping the pending-save inactivity
+timer informed. Startup joins all branches with `Promise.all`, creates `/save`
+and `/data`, writes the successful downloads and then imports Python. Runtime
+or fetch failure is observed immediately while other work may be pending.
+`tests/worker_startup.test.cjs` checks ordering, progress, initialization,
+cache policy, digest failures, pinned missing files and development fallbacks.
+`tests/asset_cache.test.cjs` measures real Edge/Pyodide cold/warm/change body
+reuse with synthetic fixtures and exercises partial old caches across deploys.
+Raw `--assemble`/`--check` and standalone CLI exports keep scripts/styles inline;
+the content addressing/extraction never changes planner or payload arithmetic.
 
 On top of those, the worker writes at runtime: the save bytes under `/save`, the player's
 optional `en.json` and the history JSON under `/data`, and Python itself writes a

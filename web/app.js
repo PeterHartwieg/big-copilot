@@ -344,10 +344,38 @@
     state("bad", () => tt("app.reader.failed", "The reader could not finish loading"), errWords(err));
     if (handlers) handlers.stale(err.message);
   }
+  function readerAssetsFailure() {
+    return failure(() => tt("app.reader.assets", "The reader files could not be loaded. Reload the app to update."));
+  }
+  // The head records hosted JS/CSS failures even before this shell loads.
+  // Also observe later failures while keeping the recovery state idempotent.
+  window.addEventListener("ledger-asset-failure", () => {
+    if (!readerError) failReader(readerAssetsFailure());
+  });
+  window.addEventListener("error", (event) => {
+    if (!readerError && (event.target?.tagName === "SCRIPT" || event.target?.tagName === "LINK") && event.target.hasAttribute("data-board-asset")) failReader(readerAssetsFailure());
+  }, true);
+  function boardReady() {
+    if (window.LEDGER_ASSET_FAILURE) {
+      if (!readerError) failReader(readerAssetsFailure());
+      return false;
+    }
+    if (handlers && typeof handlers.changed === "function") return true;
+    if (!readerError) failReader(readerAssetsFailure());
+    return false;
+  }
 
-  // The build stamp on the URL means a deploy is never served a stale worker.
+  // The page pins the worker and all its Python/data before a later deploy.
   function startWorker() {
-    try { worker = new Worker("worker.js?v=" + (window.LEDGER_BUILD || "dev"), {type: "module"}); }
+    if (readerError) return;
+    const assets = window.LEDGER_ASSETS || null;
+    // An old stamped page can receive this newer app.js from its mutable URL.
+    // Only genuinely unstamped development pages may use the null manifest.
+    if (!assets && window.LEDGER_BUILD && window.LEDGER_BUILD !== "dev") {
+      failReader(readerAssetsFailure());
+      return;
+    }
+    try { worker = new Worker(assets ? assets.worker.url : "worker.js", {type: "module"}); }
     catch (err) { failReader(err); return; }
     worker.onmessage = (e) => {
       const msg = e.data;
@@ -410,8 +438,14 @@
         p.reject(err);
       }
     };
-    worker.onerror = (e) => { e.preventDefault(); failReader(e.message ? new Error(e.message) : failure(() => tt("app.reader.stopped", "The reader stopped unexpectedly."))); };
+    worker.onerror = (e) => {
+      e.preventDefault();
+      failReader(assets ? readerAssetsFailure()
+        : e.message ? new Error(e.message) : failure(() => tt("app.reader.stopped", "The reader stopped unexpectedly.")));
+    };
     worker.onmessageerror = () => failReader(failure(() => tt("app.reader.unreadable", "The reader returned an unreadable response.")));
+    try { worker.postMessage({kind: "init", assets}); }
+    catch (err) { failReader(err); }
   }
 
   function ask(msg, transfer, gen = sourceGen) {
@@ -705,6 +739,7 @@
     $("menuBtn").setAttribute("aria-expanded", "false");
   }
   function enterBoard() {
+    if (!boardReady()) return;
     if (onBoard()) return;
     const focusLeaves = $("landing").contains(document.activeElement);
     document.body.classList.add("has-board");
@@ -1743,6 +1778,7 @@
 
   /* --- building ----------------------------------------------------------- */
   async function buildFrom(file, dir, gen) {
+    if (readerError || !boardReady()) return;
     if (gen === undefined) gen = sourceGen;
     if (!startAttempt(gen)) return;
     // A build asked for while one runs is not lost: the latest request, a
@@ -2742,6 +2778,7 @@
   }
   const wikiHash = () => /^#wiki(\/|$)/.test(location.hash);
   function openWiki() {
+    if (!boardReady()) return;
     const board = window.BigCopilotBoard;
     if (!board || !board.browseWiki || !board.browseWiki()) return;
     // The board paints its own navigation first, so entering finds a page.
@@ -2793,7 +2830,7 @@
     wireSaveLocation();
     dropForeignLocale();
     localeState();
-    startWorker();
+    if (boardReady()) startWorker();
     labelSnapshot();
 
     // Entries from a folder (an <input webkitdirectory>, or a folder walked
