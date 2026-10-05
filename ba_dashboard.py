@@ -2291,6 +2291,16 @@ SECTIONS = {
 }
 
 
+def section_metadata() -> dict:
+    """Public section keys/dependencies for both HTML front doors.
+
+    Producers and progress wording stay Python-only. Preserve registry and
+    dependency order; the browser uses it for planning and readiness checks.
+    """
+    return {name: {"keys": list(spec["keys"]), "needs": list(spec["needs"])}
+            for name, spec in SECTIONS.items()}
+
+
 # The browser worker's progress callback (set_progress()): say(stage, detail).
 # None outside the browser. A JavaScript timer cannot fire while Python runs,
 # so the page's inactivity clock (LOAD_TIMEOUT_MS in web/app.js) hears from a
@@ -20539,6 +20549,7 @@ def render(
         # The payload goes in last, through DATA_SLOT, so no placeholder's
         # .replace() below runs over the save's own text.
         load_template().replace("/*__DATA__*/null", DATA_SLOT)
+        .replace("/*__SECTION_META__*/{}", script_json(json.dumps(section_metadata(), separators=(",", ":"))), 1)
         .replace("/*__MAP_CSS__*/", map_css)
         .replace("/*__MAP_SCRIPT__*/", map_script)
         .replace("/*__MAP_PAYLOAD__*/", map_payload)
