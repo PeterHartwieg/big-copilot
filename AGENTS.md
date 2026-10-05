@@ -265,8 +265,9 @@ and never attach one to an issue.
   functions read a built defaultdict by key, freeze it with `_frozen()` and read it with
   `.get()`.
 - The Pyodide worker's virtual filesystem holds only the files `web/worker.js` fetches from
-  `web/py/` and the few it writes at runtime (`docs/architecture.md`, "Pyodide"), so
-  `ba_dashboard` must not open any other file at import time. The seven fetched files are
+  the page's content-addressed `web/assets/` manifest (`web/py/` in unstamped development)
+  and the few it writes at runtime (`docs/architecture.md`, "Pyodide"), so
+  `ba_dashboard` must not open any other file at import time. The eight fetched files are
   `PY_CODE` and `PY_DATA` in `build_web.py`; the worker names each one itself, and
   `tests/test_web_fresh.py` fails when the two disagree. Read a file lazily, inside a function, as
   `load_buildings()`, `load_demand_curves()` and `load_template()` (through `render()`) do.
