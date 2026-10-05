@@ -265,7 +265,8 @@ test('mixed factory staffing rows align entries on desktop without an empty hour
     await page.setViewportSize({width:560,height:1000});
     const narrow=await rects();
     assert.equal(narrow[0].hoursDisplay,'none');
-    assert.ok(narrow[0].y-narrow[0].nameBottom<=9,'only the normal grid gap remains');
+    const gap=narrow[0].y-narrow[0].nameBottom;
+    assert.ok(gap>=0 && gap<=9,'only the normal grid gap remains, without overlap');
     assert.equal(narrow[0].x,narrow[1].x);assert.equal(narrow[0].width,narrow[1].width);
   } finally {await page.close();}
 });
