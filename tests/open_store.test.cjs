@@ -1511,3 +1511,82 @@ test('a real _payback() row from a payload snapshot draws in step 6', async t =>
   assert.match(k[3], new RegExp(real.firm.days.toLocaleString('en-US') + ' ' + enRe('gr.os.roi.togo', {n: real.firm.days}).source));
   assert.equal(await page.locator('#osBody svg.os-chart .os-dbar').count(), Math.min(real.days.length, 9999));
 });
+
+
+// Adapter checks live in the real browser; calculation-only tests import the model.
+test('a repeated store question resumes its plan and a full list preserves selected buildings', async t => {
+  const page = await board(t);
+  const result = await page.evaluate(([type, hood]) => {
+    osPlans = []; osCur = null;
+    const first = osNew(type, hood);
+    const repeated = osNew(type, hood);
+    const elsewhere = osNew(type, 'elsewhere');
+    osPlans = Array.from({length: 12}, (_, i) => ({id: 'p' + i, type, hood: null,
+      key: 'b' + i, finance: {}, step: 'investment'}));
+    const before = JSON.stringify(osPlans);
+    const full = osNew(type, hood);
+    const intact = JSON.stringify(osPlans) === before;
+    osPlans[5].key = null;
+    const made = osNew(type, hood);
+    return {first: first.id, repeated: repeated.id, elsewhere: elsewhere.id, full,
+      intact, count: osPlans.length, displaced: osPlans.some(p => p.id === 'p5'), finance: made.finance};
+  }, [LIQ, MID]);
+  assert.equal(result.repeated, result.first);
+  assert.notEqual(result.elsewhere, result.first);
+  assert.equal(result.full, null);
+  assert.equal(result.intact, true);
+  assert.equal(result.count, 12);
+  assert.equal(result.displaced, false);
+  assert.equal(result.finance.amount, null);
+});
+
+test('venues retain investment and explain why profit cannot be estimated', async t => {
+  const page = await board(t);
+  const result = await page.evaluate(() => {
+    D.openStore.types.C = {cat: 'cinema', model: null, products: [],
+      layouts: {S: {lines: [], furniture: 1000, fee: 500}}};
+    const b = {key: 'venue', hood: 'H', size: 'S', layout: null, deposit: 100, m2: 900, cap: 100};
+    premises().buildings.push(b);
+    const plan = {type: 'C', key: b.key, mode: 'firm'};
+    const est = osEstimate(plan, b);
+    document.querySelector('#osBody').innerHTML = osBreakHtml(plan);
+    return {firm: est.inv.firm, none: est.none, text: document.querySelector('#osBody').textContent};
+  });
+  assert.equal(result.firm, 1600);
+  assert.match(result.none, enRe('gr.os.none.venue'));
+  assert.match(result.text, enRe('gr.os.none.venue'));
+});
+
+test('quick payback renders investment labels on opposite chart edges', async t => {
+  const page = await board(t);
+  const labels = await page.evaluate(() => {
+    const m = {revenue: 12000, cogs: 2000, wages: 500, rent: 200, marketing: 300, profit: 9000};
+    const est = {profit: m.profit, inv: {firm: 12000, self: 10000}, day: k => osDayProfit(m, null, k)};
+    document.querySelector('#osBody').innerHTML = osChart(est, 'firm');
+    return ['w', 'i'].map(cls => {
+      const label = document.querySelector('#osBody svg text.lbl.' + cls);
+      return label && {anchor: label.getAttribute('text-anchor'), text: label.textContent};
+    });
+  });
+  assert.ok(labels.every(Boolean), 'both investment labels rendered');
+  assert.notEqual(labels[0].anchor === 'end', labels[1].anchor === 'end');
+});
+
+test('an estimate reuses its calculation API for repeated simulated days', async t => {
+  const page = await board(t);
+  await planned(page);
+  const result = await page.evaluate(() => {
+    const originalCreate = OpenStoreModel.create;
+    let creates = 0;
+    OpenStoreModel.create = inputs => { creates++; return originalCreate(inputs); };
+    try {
+      const plan = osPlan(), estimate = osEstimate(plan, osBuilding(plan.key));
+      const before = creates;
+      const values = Array.from({length: 20000}, (_, k) => estimate.day(k));
+      return {before, after: creates, finite: values.every(Number.isFinite)};
+    } finally { OpenStoreModel.create = originalCreate; }
+  });
+  assert.ok(result.before > 0);
+  assert.equal(result.after, result.before);
+  assert.equal(result.finite, true);
+});
