@@ -18158,6 +18158,41 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     types, items_used, product_items, models = {}, set(), set(), {}
     slots = _layout_slots(save, regs_list, prices)
     build_at_start = root.get("buildNumberAtStart")
+    # The city indexed once, not rescanned per type and layout (issue #310):
+    # per building type, the layouts a vacant, rival or own building of it
+    # has; per (type, layout), its buildings in premises order, the first the
+    # layout's sample.
+    offered, by_layout = {}, {}
+    for b in buildings:
+        layout = plan_layout(b)
+        if not layout:
+            continue
+        by_layout.setdefault((b["type"], layout), []).append(b)
+        if b["status"] in ("vacant", "rival", "mine"):
+            offered.setdefault(b["type"], set()).add(layout)
+    # One outfit and its setup cost per (type, capacity, area, copied
+    # shelving) in this invocation. Since #282 a building's capacity and area
+    # can be its own, so the key is the numbers, not the layout. Nothing is
+    # kept across invocations: the catalogue is read afresh each time.
+    outfits = {}
+
+    def outfit(slug, cap, m2, copied, shelves):
+        key = (slug, cap, m2, shelves)
+        if key not in outfits:
+            lines = outfit_lines(slug, rules, prices, cap, m2, copied, _catalogue=catalogue)
+            outfits[key] = (lines, setup_cost(_setup_items(lines), [], m2, 0, prices))
+        return outfits[key]
+
+    def plan_entry(lines, cost, source):
+        items_used.update(line["item"] for line in lines)
+        return {
+            "lines": [[line["item"], line["qty"], line["group"],
+                       list(line["why"]) if isinstance(line["why"], list) else line["why"]] for line in lines],
+            "furniture": cost["furniture"],
+            "fee": cost["fee"],
+            "from": source["key"] if source else None,
+        }
+
     for slug, t in sorted((rules.get("types") or {}).items()):
         cat = t.get("b")
         if not t.get("c") or slug not in RETAIL_TYPES | OFFICE_TYPES or cat not in PLAN_KINDS:
@@ -18169,41 +18204,29 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
         sells = [[p, round(impact, 4)] for p, impact in t.get("i") or ()]
         own = [b for b in businesses if b.get("typeSlug") == slug and b.get("status") != "vacant"]
         layouts, initial = {}, {}
-        for layout in _in_order({plan_layout(b) for b in buildings if b["type"] == cat and plan_layout(b)
-                                 and b["status"] in ("vacant", "rival", "mine")}):
-            sample = next(b for b in buildings if b["type"] == cat and plan_layout(b) == layout)
+        for layout in _in_order(offered.get(cat, ())):
+            same_layout = by_layout[(cat, layout)]
+            sample = same_layout[0]
             source = None
             same = [b for b in own if b["key"] in regs and plan_layout(_building_row(regs[b["key"]], save)) == layout]
             if same:
                 source = max(same, key=lambda b: (sum(s["profit"] for s in (b.get("series") or [])[-7:]), b["key"]))
             copied = _copied_shelving(save, regs[source["key"]], slug, rules) if source else None
+            shelves = tuple((item, qty, tuple(held)) for item, qty, held in copied or ())
             # A venue's own version seats its own crowd (S1 150, S3 100).
             cap = sample.get("cap")
-            lines = outfit_lines(slug, rules, prices, cap, sample.get("m2"), copied, _catalogue=catalogue)
-            cost = setup_cost(_setup_items(lines), [], sample.get("m2"), 0, prices)
-            items_used.update(line["item"] for line in lines)
-            layouts[layout] = {
-                "lines": [[line["item"], line["qty"], line["group"], line["why"]] for line in lines],
-                "furniture": cost["furniture"],
-                "fee": cost["fee"],
-                "from": source["key"] if source else None,
-            }
+            layouts[layout] = plan_entry(*outfit(slug, cap, sample.get("m2"), copied, shelves), source)
             # The shop fully stocked with the type's range, as the plan has it.
             initial[layout] = round(_plan_initial(build_at_start, model, cap, slug,
                                                   sample.get("m2"), [p for p, _i in sells]), 4)
             # Same geometry need not mean the same capacity or area after a mod.
             # Only differing configurations need their own outfit/arrival entry.
-            for candidate in buildings:
-                if candidate["type"] != cat or plan_layout(candidate) != layout:
-                    continue
+            for candidate in same_layout:
                 if (candidate.get("cap"), candidate.get("m2")) == (cap, sample.get("m2")):
                     continue
                 key = candidate["key"]
-                specific = outfit_lines(slug, rules, prices, candidate.get("cap"), candidate.get("m2"), copied, _catalogue=catalogue)
-                cost = setup_cost(_setup_items(specific), [], candidate.get("m2"), 0, prices)
-                items_used.update(line["item"] for line in specific)
-                layouts[key] = {"lines": [[line["item"], line["qty"], line["group"], line["why"]] for line in specific],
-                                "furniture": cost["furniture"], "fee": cost["fee"], "from": source["key"] if source else None}
+                layouts[key] = plan_entry(*outfit(slug, candidate.get("cap"), candidate.get("m2"), copied, shelves),
+                                          source)
                 initial[key] = round(_plan_initial(build_at_start, model, candidate.get("cap"), slug,
                                                    candidate.get("m2"), [p for p, _i in sells]), 4)
         if not layouts:
