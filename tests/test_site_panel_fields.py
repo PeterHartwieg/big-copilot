@@ -12,7 +12,7 @@ import unittest
 from tests.i18n_check import MsgAsserts, list_items, msg_param
 
 sys.path.insert(0, os.path.dirname(__file__))
-import es3_fixture  # noqa: E402
+from tests import es3_fixture  # noqa: E402
 from ba_dashboard import (  # noqa: E402
     AMENITY_DEMANDS, NEW_SITE_DAYS, OFFICE_TYPES, RETAIL_TYPES, _alert_id, _alerts,
     _business, _staff, extract, site_key,

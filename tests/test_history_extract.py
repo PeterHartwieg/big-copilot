@@ -31,7 +31,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.dirname(HERE))
 
 import ba_dashboard  # noqa: E402
-import save_fixtures as fx  # noqa: E402
+from tests import save_fixtures as fx  # noqa: E402
 from ba_save import Names, load_save  # noqa: E402
 
 N, LATER, BETWEEN = fx.DAY, fx.DAY + 7, fx.DAY + 4

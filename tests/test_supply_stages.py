@@ -16,7 +16,7 @@ from ba_dashboard import (FLAT_WEEK, SUPPLY_MARGIN, WEEKDAYS, _demand_ends, _Del
                           _supply_depot_rows, _supply_imports, _supply_leaves, _supply_plans,
                           _supply_draw, _supply_factory_flow, _supply_idle, _supply_reconcile,
                           _supply_shop_rows, _supply_walk, _supply_wholesale, Names, site_key)
-from test_supply_facts import BEER, SODA, Company, tx
+from tests.test_supply_facts import BEER, SODA, Company, tx
 
 HUB, FACTORY, DEPOT = ("pier_road", 1), ("mill_lane", 2), ("dock_street", 3)
 SHOP_A, SHOP_B = ("main_street", 4), ("high_street", 5)

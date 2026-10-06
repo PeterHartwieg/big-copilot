@@ -26,6 +26,10 @@ opening the contribution page never uploads a save or reads its company data.
   **Your vote** identifies the connection's choice after its details have loaded.
 - A suggestion includes its contributor's vote. The first contribution can replace
   a bundled draft, which starts with zero community votes.
+- Suggestions have their own best-effort budget of ten a minute per IP at each
+  Cloudflare location (`TRANSLATION_SUGGEST_LIMITER`, namespace 1005), since each
+  one stores a candidate. Past it the API answers 429 with `Retry-After: 60`.
+  Votes share the general 120-a-minute budget.
 - One active choice is recorded per connection, target language, phrase and English
   source version. Choosing another candidate moves that vote. Retrying the same
   request or submitting identical wording does not create another vote.
@@ -70,6 +74,16 @@ manifest replaced by a later deployment rather than trusting its cache-busting U
 Unavailable or mismatched community data leaves the bundled translation or English
 fallback in place. Community selections appear on a subsequent language load;
 contributing does not reload or interrupt an open save.
+
+The Worker caches each overlay by language, translation revision and build stamp.
+Every vote, suggestion, moderation action and vote cleanup moves the revision, and
+a deployment that replaces a catalogue moves the stamp, so neither change can be
+answered from an old entry. A browser reuses its copy for up to a minute and then
+revalidates with the `ETag` (`"<format>-<revision>-<stamp>"`). A new selection can
+therefore take a minute to reach a visitor who loaded the language just before it.
+The Worker's code is not part of the build stamp: a change that makes the overlay
+answer differently for the same revision and catalogue bumps `OVERLAY_FORMAT` in
+`server/translations.mjs`, which retires both the cached entries and browser tags.
 
 The local CLI remains offline. Exporting accepted community wording into `i18n/`
 makes it available in subsequent bundled builds. Import must validate the English

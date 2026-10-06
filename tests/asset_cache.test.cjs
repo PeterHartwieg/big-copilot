@@ -82,7 +82,8 @@ with patch("builtins.open", changed):
     if (style) {
       const block = [...page.matchAll(/<style>([\s\S]*?)<\/style>/g)].reduce((a,b)=>a[1].length>b[1].length?a:b);
       const at = block.index + block[0].lastIndexOf('</style>');
-      page = page.slice(0, at) + '\n/* synthetic stylesheet change */\n' + page.slice(at);
+      // A rule, not a comment: the optimizer minifies CSS and drops comments.
+      page = page.slice(0, at) + '\n.asset-cache-fixture{order:1}\n' + page.slice(at);
     }
     // Write and serve the actual optimizer outputs, then independently check
     // the emitted set. No inline-only shortcut can pass this journey.
@@ -106,6 +107,8 @@ with patch("builtins.open", changed):
     legacy:variant('previous-stamped-page', null, false, true)};
   variants.style=variant('style-change', null, false, false, true);
   const styleUrl=[...variants.a.assets.keys()].find(url=>/^\/assets\/board-.+\.css$/.test(url));
+  // Recovery below needs a new stylesheet path; the same one would wait forever.
+  assert.notEqual([...variants.style.assets.keys()].find(url=>/^\/assets\/board-.+\.css$/.test(url)),styleUrl);
   variants.missingStyle={...variants.a,assets:new Map(variants.a.assets)};
   variants.missingStyle.assets.delete(styleUrl);
   variants.badStyleIntegrity={...variants.a,assets:new Map(variants.a.assets)};

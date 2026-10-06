@@ -8,12 +8,12 @@ import unittest
 from tests.i18n_check import MsgAsserts, matches, msg_param
 from unittest.mock import patch
 
-import test_import_routes as fixtures
+from tests import test_import_routes as fixtures
 from ba_dashboard import (_alerts, _import_drop, _import_level, _import_notes, _import_pass,
                           _level_for, _raise_import, _scheduled_import_gap, _smart_words, _supply,
                           site_key)
-from test_import_routes import contract
-from test_recipe_identity import WATER
+from tests.test_import_routes import contract
+from tests.test_recipe_identity import WATER
 
 
 def smart(amount, **options):

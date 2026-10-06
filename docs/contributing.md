@@ -182,11 +182,13 @@ also accepts a branch that contains origin/main. It refuses a working tree with 
 modified, staged or untracked file, runs `git fetch origin`
 and stops unless `git merge-base --is-ancestor origin/main HEAD` passes, runs
 `python build_web.py --assemble` and stops if that changed a committed file, runs
-`python build_web.py --check`, minifies the generated page's inline JavaScript
+`python build_web.py --check`, minifies the generated page's inline JavaScript and CSS
 through `tools/optimize_web.mjs`, externalizes its largest classic board script and
 stylesheet as `web/assets/board-<sha256>.js` and `.css` with SRI, checks the emitted
 HTML and content assets with `checkOptimized`, and then runs
 `wrangler deploy --config wrangler.jsonc`.
+Whether wrangler succeeds or fails, it then runs `python build_web.py --assemble` again,
+so a deploy leaves the readable page in `web/` and `--check` clean, also after Ctrl-C stops wrangler.
 The transform uses the existing esbuild dependency, preserves shared global names
 and escapes inline script terminators; blocks with HTML comment openers keep their
 original escaping. Its source and esbuild’s lock entry in `package-lock.json` are

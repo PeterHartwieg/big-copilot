@@ -17,7 +17,7 @@ from ba_dashboard import (
     Names, _feed_notes, _idle_notes, _deepest_use, _import_catch_up,
     _scheduled_import_gap, _supply, site_key,
 )
-from test_recipe_identity import BEER, RID, WATER, SaveStub
+from tests.test_recipe_identity import BEER, RID, WATER, SaveStub
 
 BAG = "ba:itemname_paperbag"
 DAY = 10  # the save's day; days 3 to 9 are the log's window

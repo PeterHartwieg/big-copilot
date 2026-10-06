@@ -8,6 +8,17 @@ const LANG = /^[a-z]{2}(?:-[A-Za-z]{2,8})?$/;
 const VERSION = /^[a-f0-9]{64}$/;
 const TOKEN = /\{(\w+)(?::([^{}]+))?\}/g;
 const ENTITY = /&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;)/i;
+// The overlay changes only when translation_revisions.revision moves (every vote,
+// suggestion, moderation action and vote cleanup bumps it in the same transaction)
+// or a deployment replaces the catalogue, which changes the build stamp in
+// /version.json. caches.default keeps each (language, revision, stamp) overlay;
+// the path is a cache key only, not a routable endpoint. Worker code is not in the
+// stamp, so bump OVERLAY_FORMAT when overlay() would answer differently for the same
+// revision and catalogue; it is in both the cache key and the browser's ETag.
+const OVERLAY_FORMAT = 'v1';
+const OVERLAY_EDGE_TTL = 24 * 60 * 60;
+const OVERLAY_BROWSER_TTL = 60;
+const STAMP = /^[\w.-]{1,64}$/;
 
 function reply(data, status = 200, isPublic = false) {
   return new Response(JSON.stringify(data), { status, headers: {
@@ -89,7 +100,7 @@ async function entryReply(db, lang, entry, voterHash, prefix = []) {
     selectedId: wireId(state.results[0]?.selected_id), pinned: Boolean(state.results[0]?.pinned_id), candidates });
 }
 
-export async function handleTranslations(request, env, body, ip, sign, diagnostic) {
+export async function handleTranslations(request, env, body, ip, sign, diagnostic, ctx) {
   const url = new URL(request.url);
   const operation = url.pathname.split('/').at(-1);
   const writing = request.method === 'POST';
@@ -97,12 +108,13 @@ export async function handleTranslations(request, env, body, ip, sign, diagnosti
     return error('invalid_request', 'Send only the language, entry, source version and translation or vote.');
   }
   const lang = writing ? body.lang : url.searchParams.get('lang');
+  if (operation === 'overlay') return cachedOverlay(request, env, ctx, lang, diagnostic);
   const cat = await catalogue(request, env, lang);
   if (!cat) return error('unknown_language', 'This language is not available.', 404);
   const db = env.COMMUNITY_DB;
-  if (operation === 'translations' || operation === 'overlay') {
+  if (operation === 'translations') {
     diagnostic.category = 'database';
-    return operation === 'overlay' ? overlay(db, lang, cat) : summary(db, lang, cat, url.searchParams.get('cursor') || '');
+    return summary(db, lang, cat, url.searchParams.get('cursor') || '');
   }
   const key = writing ? body.key : url.searchParams.get('key');
   const version = writing ? body.sourceVersion : url.searchParams.get('sourceVersion');
@@ -198,7 +210,75 @@ async function overlay(db, lang, cat) {
       translations[row.key] = { text: row.text, sourceVersion: row.source_version };
     }
   }
-  return reply({ schemaVersion: 1, lang, revision: revision.results[0]?.revision || 0, translations }, 200, true);
+  return { schemaVersion: 1, lang, revision: revision.results[0]?.revision || 0, translations };
+}
+
+// The deployment's build stamp, or null when it cannot be read; the overlay is
+// then computed without the cache, as before caching existed.
+async function buildStamp(request, env) {
+  try {
+    const response = await env.ASSETS.fetch(new Request(new URL('/version.json', request.url)));
+    if (!response.ok) {
+      await response.body?.cancel();
+      return null;
+    }
+    const version = JSON.parse(await response.text())?.version;
+    return typeof version === 'string' && STAMP.test(version) ? version : null;
+  } catch {
+    return null;
+  }
+}
+
+function overlayReply(request, body, revision, stamp) {
+  const headers = {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': `public, max-age=${OVERLAY_BROWSER_TTL}`,
+    'x-content-type-options': 'nosniff',
+  };
+  // The format and the stamp are part of the tag: a deployment can change the
+  // overlay without a vote, and a 304 must never keep an older body.
+  const tag = stamp ? `"${OVERLAY_FORMAT}-${revision}-${stamp}"` : null;
+  if (tag) {
+    headers.etag = tag;
+    const wanted = (request.headers.get('if-none-match') || '').split(',').map(value => value.trim().replace(/^W\//, ''));
+    if (wanted.includes(tag) || wanted.includes('*')) return new Response(null, { status: 304, headers });
+  }
+  return new Response(body, { headers });
+}
+
+// One primary-key read decides whether the cached overlay is current. Only a miss
+// fetches and parses the catalogue and runs the json_each() join.
+async function cachedOverlay(request, env, ctx, lang, diagnostic) {
+  if (!LANG.test(lang || '')) return error('unknown_language', 'This language is not available.', 404);
+  const db = env.COMMUNITY_DB;
+  diagnostic.category = 'database';
+  const [stamp, current] = await Promise.all([buildStamp(request, env), revisionQuery(db).bind(lang).first()]);
+  const cacheKey = revision => new URL(`/api/translations/_overlay/${OVERLAY_FORMAT}/${lang}/${revision}/${stamp}`, request.url).toString();
+  if (stamp) {
+    let hit = null;
+    try { hit = await caches.default.match(cacheKey(current?.revision || 0)); } catch { hit = null; }
+    if (hit) {
+      const response = overlayReply(request, hit.body, current?.revision || 0, stamp);
+      if (response.status === 304) await hit.body?.cancel();
+      return response;
+    }
+  }
+  const cat = await catalogue(request, env, lang);
+  if (!cat) return error('unknown_language', 'This language is not available.', 404);
+  const data = await overlay(db, lang, cat);
+  const body = JSON.stringify(data);
+  if (stamp) {
+    // Keyed on the revision read in the same transaction as the rows, so a vote
+    // landing between the lookup above and this batch cannot mislabel the body.
+    const stored = new Response(body, { headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': `public, max-age=${OVERLAY_EDGE_TTL}`,
+    } });
+    const put = Promise.resolve().then(() => caches.default.put(cacheKey(data.revision), stored)).catch(() => {});
+    if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(put);
+    else await put;
+  }
+  return overlayReply(request, body, data.revision, stamp);
 }
 
 export async function cleanupTranslationVotes(env) {

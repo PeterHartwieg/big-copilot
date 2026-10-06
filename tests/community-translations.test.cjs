@@ -15,7 +15,9 @@ const BASE = {schemaVersion:1, lang:'it', revision:'catalogue-1', entries:[
   {key:'aliases', en:'Sell {item} for {w:$}', text:'Vendi {item} per {w:$}', drafted:true, area:'Board', context:'Synthetic alias', sourceVersion:V1,
     validation:{allowed:['item:', 'item_name:', 'w:$'], required:[['item:', 'item_name:'], ['w:$']], maxLength:2000}},
 ]};
-let cats, mf, db, script, ipSeq = 1;
+// stamp stands in for web/version.json's build stamp; each test is its own
+// deployment, so overlays cached by an earlier test never answer a later one.
+let cats, mf, db, script, ipSeq = 1, stamp = null, stampSeq = 0, assetReads = {};
 const ip = () => `10.98.${Math.floor(++ipSeq / 250)}.${ipSeq % 250 + 1}`;
 const raw = fs.readFileSync(path.join(ROOT,'migrations/0002_translations.sql'),'utf8');
 async function migrate(target) {
@@ -24,12 +26,22 @@ async function migrate(target) {
   const requests = fs.readFileSync(path.join(ROOT,'migrations/0003_feature_requests.sql'),'utf8');
   for (const stmt of requests.match(/CREATE TABLE[\s\S]*?;|CREATE INDEX[\s\S]*?;|CREATE TRIGGER[\s\S]*?END;/g)) await target.prepare(stmt).run();
 }
+// wrangler.jsonc is the source of truth for the translation suggestion budget.
+function limiterFromConfig(name) {
+  const config = fs.readFileSync(path.join(ROOT,'wrangler.jsonc'),'utf8');
+  const m = new RegExp(`"name":\\s*"${name}",\\s*"namespace_id":\\s*"(\\d+)",\\s*"simple":\\s*\\{\\s*"limit":\\s*(\\d+),\\s*"period":\\s*(\\d+)`).exec(config);
+  assert.ok(m,`wrangler.jsonc declares ${name}`);
+  return {namespace_id:m[1], simple:{limit:Number(m[2]), period:Number(m[3])}};
+}
 function options() {
   return {modules:true, script, compatibilityDate:'2026-09-01', d1Databases:['COMMUNITY_DB'],
     bindings:{COMMUNITY_IP_SECRET:'synthetic-translation-secret'},
-    ratelimits:{COMMUNITY_LIMITER:{namespace_id:'1001',simple:{limit:120,period:60}}},
+    ratelimits:{COMMUNITY_LIMITER:{namespace_id:'1001',simple:{limit:120,period:60}},
+      TRANSLATION_SUGGEST_LIMITER:limiterFromConfig('TRANSLATION_SUGGEST_LIMITER')},
     serviceBindings:{ASSETS:async request => {
       const pathname = new URL(request.url).pathname;
+      assetReads[pathname] = (assetReads[pathname] || 0) + 1;
+      if (pathname === '/version.json') return stamp ? Response.json({version:stamp, latest:null}) : new Response('missing',{status:404});
       const lang = /^\/translations\/([^/]+)\.json$/.exec(pathname)?.[1];
       return lang ? cats[lang] ? Response.json(cats[lang]) : new Response('missing',{status:404}) : new Response('static fixture');
     }}};
@@ -65,6 +77,7 @@ before(async()=>{
 });
 beforeEach(async()=>{
   cats={it:structuredClone(BASE),de:{...structuredClone(BASE),lang:'de'}};
+  stamp=`stamp-${++stampSeq}`; assetReads={};
   await db.prepare('DELETE FROM translation_votes').run();
   await db.prepare('DELETE FROM translation_candidates').run();
   await db.prepare('DELETE FROM translation_entries').run();
@@ -259,6 +272,35 @@ test('text length is code points and JSON body allows a legitimate 2000-characte
   await json(await suggest('😀'.repeat(2001),ip(),'plain'),400);
 });
 
+test('suggestions have their own budget: 429 after it, no candidate written, votes still accepted',async()=>{
+  const {limit,period}=limiterFromConfig('TRANSLATION_SUGGEST_LIMITER').simple;
+  // Miniflare's simulated limiter counts in wall-clock-aligned windows, so a run
+  // that straddles a window boundary starts a fresh budget halfway and proves
+  // nothing: discard it and run again on a fresh connection.
+  const windowOf=()=>Math.floor(Date.now()/(period*1000));
+  let run=null;
+  for(let tries=1;!run;tries++) {
+    await db.prepare('DELETE FROM translation_votes').run();
+    await db.prepare('DELETE FROM translation_candidates').run();
+    const start=windowOf(),user=ip(),statuses=[];
+    let firstId=null;
+    for(let i=0;i<=limit;i++) {
+      const response=await suggest(`Variante ${tries}.${i} {n}`,user),payload=await response.json();
+      statuses.push(response.status);
+      if(response.status===200) firstId??=payload.selectedId;
+      else assert.equal(response.headers.get('retry-after'),'60');
+    }
+    const candidates=(await db.prepare('SELECT COUNT(*) n FROM translation_candidates').first()).n;
+    const voteStatus=(await vote(firstId,user)).status;
+    if(windowOf()===start) run={statuses,candidates,voteStatus};
+    else assert.ok(tries<3,'three runs in a row straddled a limiter window');
+  }
+  assert.deepEqual(run.statuses,[...Array(limit).fill(200),429]);
+  // The bundled text plus one row per accepted suggestion; the refused one wrote nothing.
+  assert.equal(run.candidates,limit+1);
+  assert.equal(run.voteStatus,200,'votes stay on the shared budget');
+});
+
 test('database/configuration failures yield generic JSON and preserve static delivery',async()=>{
   for(const missing of ['tables','db','secret']) {
     const config=options(); if(missing==='db') delete config.d1Databases;
@@ -311,4 +353,103 @@ test('overlay excludes unsafe or placeholder-invalid legacy text even if externa
   const data=await json(await suggest('Salve {n}'));
   await db.prepare('UPDATE translation_candidates SET text=? WHERE id=?').bind('<script>alert(1)</script> {n}',data.selectedId).run();
   assert.deepEqual((await json(await fetchApi('/api/translations/overlay?lang=it'))).translations,{});
+});
+
+const overlayOf = (lang='it', headers={}) => fetchApi('/api/translations/overlay?lang='+lang,{headers});
+const catalogueReads = lang => assetReads[`/translations/${lang}.json`] || 0;
+
+test('overlay is cached per language, revision and build stamp; a repeat costs no catalogue read',async()=>{
+  await json(await suggest('Salve {n}',ip()));
+  const revision=(await db.prepare("SELECT revision FROM translation_revisions WHERE lang='it'").first()).revision;
+  const reads=catalogueReads('it');
+  const first=await overlayOf();
+  assert.equal(first.headers.get('cache-control'),'public, max-age=60');
+  assert.equal(first.headers.get('etag'),`"v1-${revision}-${stamp}"`);
+  const body=await json(first);
+  assert.equal(body.revision,revision); assert.deepEqual(body.translations.greeting,{text:'Salve {n}',sourceVersion:V1});
+  assert.equal(catalogueReads('it'),reads+1,'a miss computes from the catalogue');
+  // A database change that bypasses the revision triggers is invisible to a
+  // cached revision, which proves the second answer came from the cache.
+  await db.prepare("UPDATE translation_candidates SET text='Ciao ciao {n}' WHERE text='Salve {n}'").run();
+  const again=await overlayOf();
+  assert.equal(again.headers.get('etag'),`"v1-${revision}-${stamp}"`);
+  assert.deepEqual(await json(again),body);
+  assert.equal(catalogueReads('it'),reads+1,'a hit reads no catalogue');
+  const unchanged=await overlayOf('it',{'If-None-Match':`W/"v1-${revision}-${stamp}", "other"`});
+  assert.equal(unchanged.status,304); assert.equal(await unchanged.text(),'');
+  assert.equal(unchanged.headers.get('etag'),`"v1-${revision}-${stamp}"`);
+  stamp=`${stamp}-next`; // a deployment
+  const deployed=await overlayOf('it',{'If-None-Match':`"v1-${revision}-${stamp.slice(0,-5)}"`});
+  assert.equal(deployed.status,200,'a new build stamp never revalidates an old overlay');
+  assert.deepEqual((await json(deployed)).translations.greeting,{text:'Ciao ciao {n}',sourceVersion:V1});
+  assert.equal(catalogueReads('it'),reads+2);
+});
+
+test('cached overlays never cross languages at the same revision number',async()=>{
+  await json(await suggest('Salve {n}',ip()));
+  await json(await suggest('Hallo {n}',ip(),'greeting',V1,'de'));
+  const revisions=(await db.prepare('SELECT lang, revision FROM translation_revisions ORDER BY lang').all()).results;
+  assert.equal(revisions.length,2); assert.equal(revisions[0].revision,revisions[1].revision,'both languages share one revision number');
+  const reads=catalogueReads('it')+catalogueReads('de');
+  for(let pass=0;pass<2;pass++) {
+    const it=await overlayOf('it'),de=await overlayOf('de');
+    assert.notEqual(it.headers.get('etag'),null);
+    const [itBody,deBody]=[await json(it),await json(de)];
+    assert.equal(itBody.lang,'it'); assert.deepEqual(itBody.translations.greeting,{text:'Salve {n}',sourceVersion:V1});
+    assert.equal(deBody.lang,'de'); assert.deepEqual(deBody.translations.greeting,{text:'Hallo {n}',sourceVersion:V1});
+  }
+  assert.equal(catalogueReads('it')+catalogueReads('de'),reads+2,'one miss per language, then hits');
+  await json(await fetchApi('/api/translations/overlay?lang=xx'),404);
+});
+
+test('a vote or a moderation action moves the revision and replaces the cached overlay',async()=>{
+  const {moderationCommand}=await import(pathToFileURL(path.join(ROOT,'tools/translation_moderate.mjs')));
+  let data=await json(await suggest('Salve {n}',ip())); const idA=data.selectedId;
+  data=await json(await suggest('Buongiorno {n}',ip())); const idB=data.candidates.find(c=>c.text==='Buongiorno {n}').id;
+  const before=await overlayOf(); const tag=before.headers.get('etag');
+  const initial=await json(before); assert.equal(initial.translations.greeting.text,'Salve {n}');
+  await json(await vote(idB,ip()));
+  const voted=await overlayOf('it',{'If-None-Match':tag});
+  assert.equal(voted.status,200,'the old tag no longer matches'); assert.notEqual(voted.headers.get('etag'),tag);
+  const afterVote=await json(voted); assert.ok(afterVote.revision>initial.revision);
+  assert.equal(afterVote.translations.greeting.text,'Buongiorno {n}');
+  await db.prepare(moderationCommand(['hide',idB]).sql).run();
+  const hidden=await json(await overlayOf());
+  assert.ok(hidden.revision>afterVote.revision); assert.equal(hidden.translations.greeting.text,'Salve {n}');
+  await db.prepare(moderationCommand(['hide',idA]).sql).run();
+  assert.deepEqual((await json(await overlayOf())).translations,{});
+});
+
+test('without a readable build stamp the overlay is computed every time and carries no tag',async()=>{
+  stamp=null;
+  await json(await suggest('Salve {n}',ip()));
+  const reads=catalogueReads('it');
+  for(let i=0;i<2;i++) {
+    const response=await overlayOf();
+    assert.equal(response.headers.get('etag'),null);
+    assert.equal(response.headers.get('cache-control'),'public, max-age=60');
+    assert.deepEqual((await json(response)).translations.greeting,{text:'Salve {n}',sourceVersion:V1});
+  }
+  assert.equal(catalogueReads('it'),reads+2);
+});
+
+test('a Worker deploy that bumps OVERLAY_FORMAT never revalidates a browser copy from the old format',async()=>{
+  const source=fs.readFileSync(path.join(ROOT,'server/translations.mjs'),'utf8');
+  assert.match(source,/^const OVERLAY_FORMAT = 'v1';$/m);
+  const bumped=(await require('esbuild').build({stdin:{resolveDir:ROOT,contents:"import worker from './server/worker.mjs'; export default worker;"},
+    bundle:true,write:false,format:'esm',platform:'browser',target:'es2022',plugins:[{name:'overlay-format',setup(build){
+      build.onLoad({filter:/translations\.mjs$/},()=>({loader:'js',contents:source.replace("const OVERLAY_FORMAT = 'v1';","const OVERLAY_FORMAT = 'v2';")}));
+    }}]})).outputFiles[0].text;
+  // Same build stamp, same (empty) revision: only the Worker code differs.
+  const old=await overlayOf(); const tag=old.headers.get('etag'); await json(old);
+  assert.equal(tag,`"v1-0-${stamp}"`);
+  assert.equal((await overlayOf('it',{'If-None-Match':tag})).status,304);
+  const scoped=new Miniflare(convertV4MiniflareOptions({...options(),script:bumped}));
+  try {
+    await scoped.ready; await migrate(await scoped.getD1Database('COMMUNITY_DB'));
+    const response=await fetchApi('/api/translations/overlay?lang=it',{instance:scoped,headers:{'If-None-Match':tag}});
+    assert.equal(response.status,200,'the old tag no longer matches');
+    assert.equal(response.headers.get('etag'),`"v2-0-${stamp}"`);
+    assert.deepEqual((await json(response)).translations,{});
+  } finally {await scoped.dispose();}
 });

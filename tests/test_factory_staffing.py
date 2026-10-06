@@ -18,7 +18,7 @@ import unittest.mock
 import ba_dashboard
 from ba_dashboard import (SHIFT_CAP, SUPPLY_MARGIN, _factory_run_start, _factory_staffing,
                           _line_hours, site_key)
-from test_supply_facts import (FACTORY, HUB, RID, SHOP_A, BEER, WATER, Company, beer_chain)
+from tests.test_supply_facts import (FACTORY, HUB, RID, SHOP_A, BEER, WATER, Company, beer_chain)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WORKER = "ba:skill_factoryworker"

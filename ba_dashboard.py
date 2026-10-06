@@ -16,7 +16,6 @@ reads the running game itself through the Big Copilot Link mod
 
 from __future__ import annotations
 
-import argparse
 import collections
 import contextlib
 import copy
@@ -25,25 +24,36 @@ import decimal
 import fractions
 import gc
 import hashlib
-import http.client
-import http.server
 import itertools
 import json
 import math
 import numbers
 import os
 import re
-import statistics
 import struct
 import sys
 import threading
 import time
-import traceback
-import urllib.error
-import urllib.parse
-import urllib.request
-import webbrowser
 from html import escape as html_escape
+
+# What only the CLI, the watch server and the game link use. The Pyodide
+# worker never calls any of it, and importing it there costs over half a
+# second of every start, so it is left out in the browser. Imported at module
+# level, not inside the functions, so tests can patch ba_dashboard.http.server
+# and ba_dashboard.urllib.request.
+if sys.platform != "emscripten":
+    import argparse
+    import http.client
+    import http.server
+    import traceback
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+    import webbrowser
+
+    _RequestHandler = http.server.BaseHTTPRequestHandler
+else:
+    _RequestHandler = object  # BoardHandler is never served in the browser
 
 from ba_save import (
     Names, NotEnglishText, Save, _plain, bundled_locale, english_text, house_number, load_best_locale,
@@ -1556,7 +1566,11 @@ def _weekday_profile(points: list, last: int | None = None, end: int | None = No
     means = {wd: sum(v) / len(v) for wd, v in indexed.items()}
     signal = max(means.values()) - min(means.values())
     errors = [
-        statistics.stdev(v) / math.sqrt(len(v)) for v in indexed.values() if len(v) > 1
+        # The sample standard deviation, as statistics.stdev() gives it
+        # (importing statistics costs a quarter of a second in the browser).
+        math.sqrt(sum((x - means[wd]) ** 2 for x in v) / (len(v) - 1)) / math.sqrt(len(v))
+        for wd, v in indexed.items()
+        if len(v) > 1
     ]
     noise = sum(errors) / len(errors) if errors else 0.0
     thinnest = min(len(v) for v in indexed.values())
@@ -7197,12 +7211,17 @@ def _supply(
         # delivers: a stock target above zero, or a repeating contract, whatever
         # the shop's sales rate. shops[] holds a row only for a selling line.
         "routed": sorted(
-            [index[shop], item]
-            for shop, item in (
-                {k for k, (amount, _src) in target_at.items() if amount > 0}
-                | set(wholesale)
-            )
-            if shop in index
+            (
+                [index[shop], item]
+                for shop, item in (
+                    {k for k, (amount, _src) in target_at.items() if amount > 0}
+                    | set(wholesale)
+                )
+                if shop in index
+            ),
+            # A product with no name sorts after the named ones on its shop,
+            # rather than comparing None with a str.
+            key=lambda r: (r[0], r[1] is None, r[1] or ""),
         ),
         "imports": import_rows,
         # The same rows walked in Demand sizing (the page's supplyImports()).
@@ -16030,8 +16049,23 @@ def _staff_evidence_need(grid, rates=None):
     trial = evidence.get("session") or {}
     targets = trial.get("targets", {}) if trial.get("phase") in ("pending", "active", "ready") else {}
     out = {}
+    office = grid.get("office")
     for role in grid["roles"]:
         station_rates = _role_rates(role, rates)
+        # What does not change from hour to hour, read once per role (#311).
+        role_key = str(_role_key(role))
+        fallback = evidence.get("fallback", {}).get(role_key)
+        # Office grids use None until their profession is assigned.
+        if fallback is None and office:
+            fallback = evidence.get("fallback", {}).get("None")
+        # A session's baseline is read only while it has cells to measure.
+        baseline = None
+        if targets:
+            baseline = trial.get("baseline", {}).get(role_key)
+            if baseline is None and office:
+                baseline = trial.get("baseline", {}).get("None")
+        # A new shop: nothing measured and no installed stations to cover.
+        unmeasured = not office and not evidence["lower"] and not any(any(day) for day in fallback or [])
         demand, need, basis = [], [], []
         for wd in range(7):
             ds, ns, bs = [], [], []
@@ -16044,20 +16078,13 @@ def _staff_evidence_need(grid, rates=None):
                     n = _fill_stations(value, station_rates)
                 else:
                     value, case = max(lower, learned.get("value", 0)), "lower" if lower else "none"
-                    fallback = evidence.get("fallback", {}).get(str(_role_key(role)))
-                    # Office grids use None until their profession is assigned.
-                    if fallback is None and grid.get("office"):
-                        fallback = evidence.get("fallback", {}).get("None")
                     capacity = fallback[wd][h] if fallback else 0
                     n = max(_fill_stations(value, station_rates), _fill_stations(capacity, station_rates))
-                    if not grid.get("office") and not evidence["lower"] and not any(any(day) for day in fallback or []):
+                    if unmeasured:
                         n = len(station_rates)  # new shops; offices use their default below
                 if cell in targets:
                     value, case = targets[cell]["capacity"], "trial"
                     n = _fill_stations(value, station_rates)
-                    baseline = trial.get("baseline", {}).get(str(_role_key(role)))
-                    if baseline is None and grid.get("office"):
-                        baseline = trial.get("baseline", {}).get("None")
                     if baseline:
                         n = max(n, _fill_stations(baseline[wd][h], station_rates))
                 if not any(a <= h < z for a, z in grid["open"][wd]):
@@ -18158,6 +18185,41 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     types, items_used, product_items, models = {}, set(), set(), {}
     slots = _layout_slots(save, regs_list, prices)
     build_at_start = root.get("buildNumberAtStart")
+    # The city indexed once, not rescanned per type and layout (issue #310):
+    # per building type, the layouts a vacant, rival or own building of it
+    # has; per (type, layout), its buildings in premises order, the first the
+    # layout's sample.
+    offered, by_layout = {}, {}
+    for b in buildings:
+        layout = plan_layout(b)
+        if not layout:
+            continue
+        by_layout.setdefault((b["type"], layout), []).append(b)
+        if b["status"] in ("vacant", "rival", "mine"):
+            offered.setdefault(b["type"], set()).add(layout)
+    # One outfit and its setup cost per (type, capacity, area, copied
+    # shelving) in this invocation. Since #282 a building's capacity and area
+    # can be its own, so the key is the numbers, not the layout. Nothing is
+    # kept across invocations: the catalogue is read afresh each time.
+    outfits = {}
+
+    def outfit(slug, cap, m2, copied):
+        key = (slug, cap, m2, tuple((item, qty, tuple(held)) for item, qty, held in copied or ()))
+        if key not in outfits:
+            lines = outfit_lines(slug, rules, prices, cap, m2, copied, _catalogue=catalogue)
+            outfits[key] = (lines, setup_cost(_setup_items(lines), [], m2, 0, prices))
+        return outfits[key]
+
+    def plan_entry(lines, cost, source):
+        items_used.update(line["item"] for line in lines)
+        return {
+            "lines": [[line["item"], line["qty"], line["group"],
+                       list(line["why"]) if isinstance(line["why"], list) else line["why"]] for line in lines],
+            "furniture": cost["furniture"],
+            "fee": cost["fee"],
+            "from": source["key"] if source else None,
+        }
+
     for slug, t in sorted((rules.get("types") or {}).items()):
         cat = t.get("b")
         if not t.get("c") or slug not in RETAIL_TYPES | OFFICE_TYPES or cat not in PLAN_KINDS:
@@ -18169,9 +18231,9 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
         sells = [[p, round(impact, 4)] for p, impact in t.get("i") or ()]
         own = [b for b in businesses if b.get("typeSlug") == slug and b.get("status") != "vacant"]
         layouts, initial = {}, {}
-        for layout in _in_order({plan_layout(b) for b in buildings if b["type"] == cat and plan_layout(b)
-                                 and b["status"] in ("vacant", "rival", "mine")}):
-            sample = next(b for b in buildings if b["type"] == cat and plan_layout(b) == layout)
+        for layout in _in_order(offered.get(cat, ())):
+            same_layout = by_layout[(cat, layout)]
+            sample = same_layout[0]
             source = None
             same = [b for b in own if b["key"] in regs and plan_layout(_building_row(regs[b["key"]], save)) == layout]
             if same:
@@ -18179,31 +18241,17 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
             copied = _copied_shelving(save, regs[source["key"]], slug, rules) if source else None
             # A venue's own version seats its own crowd (S1 150, S3 100).
             cap = sample.get("cap")
-            lines = outfit_lines(slug, rules, prices, cap, sample.get("m2"), copied, _catalogue=catalogue)
-            cost = setup_cost(_setup_items(lines), [], sample.get("m2"), 0, prices)
-            items_used.update(line["item"] for line in lines)
-            layouts[layout] = {
-                "lines": [[line["item"], line["qty"], line["group"], line["why"]] for line in lines],
-                "furniture": cost["furniture"],
-                "fee": cost["fee"],
-                "from": source["key"] if source else None,
-            }
+            layouts[layout] = plan_entry(*outfit(slug, cap, sample.get("m2"), copied), source)
             # The shop fully stocked with the type's range, as the plan has it.
             initial[layout] = round(_plan_initial(build_at_start, model, cap, slug,
                                                   sample.get("m2"), [p for p, _i in sells]), 4)
             # Same geometry need not mean the same capacity or area after a mod.
             # Only differing configurations need their own outfit/arrival entry.
-            for candidate in buildings:
-                if candidate["type"] != cat or plan_layout(candidate) != layout:
-                    continue
+            for candidate in same_layout:
                 if (candidate.get("cap"), candidate.get("m2")) == (cap, sample.get("m2")):
                     continue
                 key = candidate["key"]
-                specific = outfit_lines(slug, rules, prices, candidate.get("cap"), candidate.get("m2"), copied, _catalogue=catalogue)
-                cost = setup_cost(_setup_items(specific), [], candidate.get("m2"), 0, prices)
-                items_used.update(line["item"] for line in specific)
-                layouts[key] = {"lines": [[line["item"], line["qty"], line["group"], line["why"]] for line in specific],
-                                "furniture": cost["furniture"], "fee": cost["fee"], "from": source["key"] if source else None}
+                layouts[key] = plan_entry(*outfit(slug, candidate.get("cap"), candidate.get("m2"), copied), source)
                 initial[key] = round(_plan_initial(build_at_start, model, candidate.get("cap"), slug,
                                                    candidate.get("m2"), [p for p, _i in sells]), 4)
         if not layouts:
@@ -18966,7 +19014,9 @@ def _msg_list(items: list):
     """Several names or phrases as one list, "a, b, c", that stays a message:
     a nested "{a}, {b}" per comma, the last pair under a key of its own
     (f.list.last), so a translation can join that one with its "and". One item
-    is itself."""
+    is itself, none is ""."""
+    if not items:
+        return ""
     if len(items) == 1:
         return items[0]
     if len(items) == 2:
@@ -21643,7 +21693,7 @@ class Board:
         self.stamp = json.dumps(body).encode("utf-8")
 
 
-class BoardHandler(http.server.BaseHTTPRequestHandler):
+class BoardHandler(_RequestHandler):
     protocol_version = "HTTP/1.1"
     board: Board = None
     NAME_MAX_BYTES = 16 * 1024  # a {rid, slug} is a few dozen bytes

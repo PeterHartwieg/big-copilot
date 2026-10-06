@@ -9,11 +9,11 @@ import unittest
 from tests.i18n_check import MsgAsserts
 from unittest.mock import patch
 
-import es3_fixture
+from tests import es3_fixture
 from ba_dashboard import (SPECIAL_RIVAL_NAMES, _hourly, _products, _residential_addresses,
                           _rival_names, _serves, extract)
 from ba_save import Names, Save, load_save
-from test_office_staffing import LAWYER, MONDAY, REGISTER, SERVICE, SHOP, building, shift, site
+from tests.test_office_staffing import LAWYER, MONDAY, REGISTER, SERVICE, SHOP, building, shift, site
 
 FLAT = ("ba:street_tenthstreet", 2)
 TABLE = {FLAT: {"s": FLAT[0], "n": FLAT[1], "h": "greenwichvillage", "t": "residential",
@@ -102,7 +102,7 @@ class SlowSellerTests(unittest.TestCase):
     """EX-6: one $100 sale in seven days is $100 a unit, not a rounded rate's."""
 
     def test_one_sale_a_week_prices_at_what_it_sold_for(self):
-        from test_supply_facts import ROSE, business
+        from tests.test_supply_facts import ROSE, business
         orders = [{"dayNumber": d, "totalCustomers": 1 if d == 5 else 0,
                    "itemSales": {"$items": [{"itemName": ROSE, "amountSold": 1, "totalPrice": 100}]
                                  if d == 5 else []}} for d in range(1, 8)]

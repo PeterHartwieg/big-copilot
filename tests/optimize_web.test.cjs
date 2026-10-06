@@ -52,9 +52,55 @@ test('the assembled page shrinks while markup, styles and external script order 
   assert.equal(built.status, 0, built.error?.message || built.stderr);
   const input = built.stdout;
   const result = optimizePage(input);
-  const withoutCode = html => html.replace(/<script>([\s\S]*?)<\/script>/g, '<script></script>');
+  const withoutCode = html => html.replace(/<script>([\s\S]*?)<\/script>/g, '<script></script>')
+    .replace(/<style>([\s\S]*?)<\/style>/g, '<style></style>');
   assert.equal(withoutCode(result), withoutCode(input));
   assert.ok(gzipSync(result).length < gzipSync(input).length * 0.8, 'at least 20% smaller compressed HTML');
+  const styles = html => [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map(match => match[1]);
+  const board = styles(input).reduce((a, b) => a.length > b.length ? a : b);
+  const minified = styles(result)[styles(input).indexOf(board)];
+  assert.ok(gzipSync(minified).length < gzipSync(board).length * 0.85, 'the board stylesheet is at least 15% smaller compressed');
+  const uncommented = board.replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const feature of ['@container', ':has(', 'color-mix(', '@media', '@supports', '@keyframes', '!important'])
+    assert.equal(minified.split(feature).length, uncommented.split(feature).length, feature);
+});
+
+test('style blocks lose comments and whitespace; modern CSS and rule order pass through', () => {
+  const css = `
+/* a comment that goes */
+:root { color-scheme: light dark; --ink: light-dark(#111111, #eeeeee); }
+.card { container-type: inline-size; }
+@container (min-width: 400px) {
+  .card .v { font-size: 2rem; }
+}
+.row:has(> .open) { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.first { color: red; }
+.first { margin: 0; }
+`;
+  const result = optimizePage('<p>kept</p><style>' + css + '</style><style media="print">/* kept */</style>');
+  const minified = /^<p>kept<\/p><style>([^<]*)<\/style><style media="print">\/\* kept \*\/<\/style>$/.exec(result)?.[1];
+  assert.ok(minified, result);
+  assert.ok(!minified.includes('/*') && !minified.includes('\n'), minified);
+  assert.ok(minified.length < css.length * 0.85);
+  for (const kept of ['light-dark(#111111, #eeeeee)', '@container (min-width: 400px)', '.row:has(>.open)',
+    'color-mix(in srgb,var(--ink) 12%,transparent)'])
+    assert.ok(minified.includes(kept), `${kept} in ${minified}`);
+  // Two rules for one selector stay two, in their order: the cascade is untouched.
+  assert.ok(/\.first\{color:red\}\.first\{margin:0\}/.test(minified), minified);
+  // The stylesheet hostedPage() takes out of the shell is the minified one.
+  const big = css + `.filler{--pad:"${'x'.repeat(70000)}"}`;
+  const hosted = hostedPage('<style>' + big + '</style>');
+  const [[url, bytes]] = [...hosted.assets];
+  assert.match(url, /^assets\/board-[a-f0-9]{64}\.css$/);
+  assert.ok(!bytes.toString().includes('/*') && bytes.toString().includes('light-dark(#111111, #eeeeee)'));
+  assert.equal(`<style>${bytes}</style>`, optimizePage('<style>' + big + '</style>'));
+});
+
+test('CSS the minifier would have to guess at stops the optimizer', () => {
+  // esbuild drops this whole @media block; a typo'd property is a warning too.
+  for (const [css, said] of [['@media (min-width:1px {.a{color:red}}', /Expected "\)"/],
+    ['.a{colr:red}', /"colr" is not a known CSS property/]])
+    assert.throws(() => optimizePage('<style>' + css + '</style>'), said);
 });
 
 test('a later script compilation failure leaves the deployment artifact intact', t => {

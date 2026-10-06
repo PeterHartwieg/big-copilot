@@ -17,7 +17,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.dirname(HERE))
 
-from es3_fixture import (  # noqa: E402
+from tests.es3_fixture import (  # noqa: E402
     Byte, Enum, Float32, Instance, NullInstance, Packed, Ref, Shared, Unnamed, encode,
 )
 from ba_save import STRING_CACHE_CHARS, load_save  # noqa: E402

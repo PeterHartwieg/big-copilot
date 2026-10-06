@@ -18,7 +18,7 @@ import unittest
 
 import ba_dashboard
 from ba_dashboard import Msg, _alerts, _wire_msgs, msg, plain, tok
-from test_site_panel_fields import stub
+from tests.test_site_panel_fields import stub
 from tests import roster_fixture, cinema_fixture
 from tests.game_names_fixture import fixture as game_names_fixture
 from tests.es3_fixture import link_payload, write_link_save
@@ -231,6 +231,13 @@ class MsgIsTheEnglish(unittest.TestCase):
         m = msg("f.staff.none", "No staff assigned")
         for edited in (m + ".", m.replace("No", "No"), m.upper(), f"{m}"):
             self.assertIs(type(edited), str)
+
+    def test_a_list_of_none_one_or_more_items(self):
+        # An empty list is "" (as _sp_list() has it), not an IndexError.
+        self.assertEqual(ba_dashboard._msg_list([]), "")
+        self.assertEqual(ba_dashboard._msg_list(["a"]), "a")
+        self.assertEqual(ba_dashboard._msg_list(["a", "b"]), "a, b")
+        self.assertEqual(ba_dashboard._msg_list(["a", "b", "c"]), "a, b, c")
 
     def test_a_message_survives_a_copy_and_a_pickle(self):
         m = msg("f.loss", "Lost {w:$} yesterday", w=12.0)

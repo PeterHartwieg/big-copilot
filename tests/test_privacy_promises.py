@@ -5,6 +5,7 @@ so nothing the site loads may come from another host: the fonts and the
 Pyodide runtime are served from web/. It also says the Worker keeps no access
 logs. A change that breaks one of these has to change the notice too.
 """
+import json
 from pathlib import Path
 import re
 import unittest
@@ -96,6 +97,16 @@ class PrivacyPromises(unittest.TestCase):
         config = (ROOT / "wrangler.jsonc").read_text(encoding="utf-8")
         self.assertRegex(config, r'"invocation_logs"\s*:\s*false')
         self.assertRegex(config, r'"traces"\s*:\s*\{\s*"enabled"\s*:\s*false\s*\}')
+
+    def test_worker_keeps_every_failure_event(self):
+        # Head sampling keeps or drops every log line of a request, so a rate
+        # below 1 loses that share of the failure events the operator reads.
+        text = (ROOT / "wrangler.jsonc").read_text(encoding="utf-8")
+        # wrangler.jsonc has whole-line // comments only.
+        observability = json.loads(re.sub(r"(?m)^\s*//.*$", "", text))["observability"]
+        self.assertEqual(observability["head_sampling_rate"], 1)
+        for name in ("logs", "traces"):
+            self.assertGreaterEqual(observability.get(name, {}).get("head_sampling_rate", 1), 1, name)
 
     def test_worker_code_logs_only_bounded_failure_events(self):
         # "We keep no access logs ourselves." Only the reviewed diagnostic

@@ -11,14 +11,15 @@ before. None of it reads the delivery log: every save here has an empty one.
 import json
 import subprocess
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from tests.i18n_check import MsgAsserts
 
 from ba_dashboard import (plain, RECIPE_ITEMS, SUMMARIES, WEEKDAYS, History, Names, _alerts,
                           _factories, _import_notes, _supply, _supply_facts, site_key)
-from test_recipe_identity import BEER, RID, WATER
-from test_recipe_identity import SaveStub as FactoryStub
+from tests.test_recipe_identity import BEER, RID, WATER
+from tests.test_recipe_identity import SaveStub as FactoryStub
 
 DAY = 10  # the save's day
 FACTORY, DEPOT, SHOP = ("factory", 0), ("depot", 1), ("shop", 2)
@@ -374,6 +375,22 @@ class RoutedSupplyTests(MsgAsserts, unittest.TestCase):
                       business(DEPOT, "D", "warehouse", "support", 2700, 0),
                       business(SHOP, "S", "supermarket", "retail", 500, DRAW)]
         _supply(SaveStub(plans, [], machines=1), Names({}), businesses, DAY, {}, recipes)
+
+    def test_a_target_with_no_item_name_sorts_after_the_named_ones(self):
+        # Real saves hold stock targets with no item name. Beside a named
+        # target on the same shop, the routed list once compared None with a
+        # str and raised TypeError out of _supply().
+        named = plan
+
+        def with_unnamed(source, dest, amount):
+            p = named(source, dest, amount)
+            if dest == SHOP:
+                p["destinations"][0]["stockTargets"].append({"itemName": None, "targetAmount": 10})
+            return p
+
+        with mock.patch(f"{__name__}.plan", with_unnamed):
+            supply, _ = depot_supply(1.0, [])
+        self.assertEqual(supply["routed"], [[1, FOOD], [2, FOOD], [2, None]])
 
     def test_a_depot_fed_only_by_imports_reads_as_before(self):
         """No route into the depot: the whole draw is the import's, and a 5,000

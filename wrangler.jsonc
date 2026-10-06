@@ -41,8 +41,9 @@
   // heartbeats have their own budget (a real tab sends one every five minutes);
   // bug reports have a small one of their own, a burst guard and not a daily
   // cap (it counts per minute and per Cloudflare location); visitor suggestions
-  // also have a separate small budget. Every other route
-  // shares COMMUNITY_LIMITER.
+  // also have a separate small budget, and so do translation suggestions, since
+  // each accepted one stores a candidate of up to 2,000 characters. Every other
+  // route, translation votes included, shares COMMUNITY_LIMITER.
   "ratelimits": [
     {
       "name": "SUGGEST_LIMITER",
@@ -63,6 +64,11 @@
       "name": "REPORT_LIMITER",
       "namespace_id": "1003",
       "simple": { "limit": 3, "period": 60 }
+    },
+    {
+      "name": "TRANSLATION_SUGGEST_LIMITER",
+      "namespace_id": "1005",
+      "simple": { "limit": 10, "period": 60 }
     }
   ],
   // Bug reports (POST /api/report): the save and the private details, each
@@ -89,11 +95,13 @@
     "crons": ["17 3 * * *", "* * * * *"]
   },
   // No per-request invocation logs or traces (URL, method, country): the
-  // privacy notice promises none. Errors and console output from the Worker
-  // are still kept.
+  // privacy notice promises none. The Worker's own console output, which is
+  // only the bounded failure event, is kept for every request: head sampling
+  // keeps or drops all of a request's log lines, so a rate below 1 would lose
+  // some failure events (docs/community-features.md, "Failure diagnostics").
   "observability": {
     "enabled": true,
-    "head_sampling_rate": 0.1,
+    "head_sampling_rate": 1,
     "logs": { "invocation_logs": false },
     "traces": { "enabled": false }
   }
