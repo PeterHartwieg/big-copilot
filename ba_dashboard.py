@@ -20763,7 +20763,10 @@ def render(
         payload, title = "null", "Big Copilot"
     else:
         payload = script_json(json.dumps(data, separators=(",", ":")))
-        title = f"{data['meta']['save']} · Big Copilot"
+        # A NUL is never a real character of a save name, and the title goes
+        # in ahead of the NUL-wrapped slots below, so it becomes U+FFFD there.
+        # The payload keeps the name as saved (json.dumps() escapes a NUL).
+        title = f"{data['meta']['save']} · Big Copilot".replace("\x00", "\ufffd")
     # UI source stays shared between the local HTML and browser build. Static
     # exports embed geography so opening a file needs no local server or fetch.
     asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
