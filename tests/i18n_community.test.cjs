@@ -38,14 +38,16 @@ test('local loader never requests community data', async () => {
   assert.deepEqual(calls,['i18n/it.json']);
 });
 test('late overlays cannot overwrite a newer language choice', async () => {
-  let resolve;const pending=new Promise(r=>resolve=r);
+  let resolve;const pending=new Promise(r=>resolve=r);const calls=[];
   const {run}=load(true,async url => {
+    calls.push(url);
     if(url.startsWith('/i18n/'))return {ok:true,json:async()=>({'comm.good':'Bundled {n}'})};
     if(url.startsWith('/translations/'))return {ok:true,json:async()=>({schemaVersion:1,lang:'it',entries:{'comm.good':{sourceVersion:'good',validation:rule}}})};
     await pending;return {ok:true,json:async()=>({schemaVersion:1,lang:'it',translations:{'comm.good':{text:'Comunità {n}',sourceVersion:'good'}}})};
   });
   await run('setUiLang("it")');await run('setUiLang("en")');resolve();await new Promise(r=>setImmediate(r));
   assert.equal(run('ttLang'),'en');
+  assert(!calls.some(url=>url.startsWith('/translations/')),'the discarded language never requests its manifest');
 });
 test('an empty Italian bundle adopts a current community overlay after bundled fallback', async () => {
   const {run}=load(true,async url => {
@@ -107,4 +109,10 @@ test('the manifest is fetched only when the overlay has a row', async () => {
   const rows=await loadWith({'comm.good':{text:'Comunità {n}',sourceVersion:'good'}});
   assert.deepEqual(rows.calls.filter(url=>!url.startsWith('/i18n/')),['/api/translations/overlay?lang=it','/translations/it.manifest.json']);
   assert.equal(rows.run('tt("comm.good","English {n}",{n:2})'),'Comunità 2');
+  // Rows still pass ttCommunityMerge(): a stale or marked-up row is dropped.
+  for(const row of [{text:'Vecchio {n}',sourceVersion:'stale'},{text:'<b>{n}</b>',sourceVersion:'good'}]){
+    const rejected=await loadWith({'comm.good':row});
+    assert(rejected.calls.includes('/translations/it.manifest.json'));
+    assert.equal(rejected.run('tt("comm.good","English {n}",{n:2})'),'Bundled 2',row.text);
+  }
 });
