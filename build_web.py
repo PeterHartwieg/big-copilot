@@ -797,8 +797,11 @@ def check(root: str = HERE) -> list[str]:
     # The UI tables are rebuilt from i18n/ without the game, so they are
     # compared; one that is missing or stale also leaves the stamp unreadable
     # or wrong, so it is all that is said.
-    missing += ui_text.ship(check=True, root=root)
-    catalogue_stale = translation_catalogue.ship(check=True, root=root)
+    # One scan of the call sites serves both: it tokenises every script.
+    found = ui_text.calls()
+    english, params = ui_text.catalogue(found), ui_text.passed(found)
+    missing += ui_text.ship(check=True, root=root, english=english, params=params)
+    catalogue_stale = translation_catalogue.ship(check=True, root=root, found=found, english=english, params=params)
     stale.extend(catalogue_stale)
     missing += [path for path in catalogue_stale if not os.path.isfile(os.path.join(root, path))]
     if missing:
@@ -914,8 +917,10 @@ def assemble(root: str = HERE) -> None:
         with open(out, "wb") as fh:
             fh.write(data)
     # Big Copilot's own text in other languages, from i18n/ (tools/i18n.py).
-    ui_text.ship(root=root)
-    translation_catalogue.ship(root=root)
+    found = ui_text.calls()
+    english, params = ui_text.catalogue(found), ui_text.passed(found)
+    ui_text.ship(root=root, english=english, params=params)
+    translation_catalogue.ship(root=root, found=found, english=english, params=params)
     print(f"web/i18n/: {', '.join(ui_text.languages(root)) or 'no'} UI tables")
     # Everything the stamp reads is now in place, so the page and version.json
     # describe the folder as it stands.
