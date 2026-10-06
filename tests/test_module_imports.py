@@ -3,8 +3,15 @@
 `discover -s tests` puts tests/ on sys.path, so a bare `import es3_fixture` passes
 there and fails when unittest is handed `tests.test_company_fixes` (#333). This
 imports each `tests.test_*` module in a fresh interpreter whose path holds only
-the repository root, the way `python -m unittest tests.<name>` starts.
+the repository root, the way `python -m unittest tests.<name>` starts, and
+reads every file under tests/ for an import statement that names a sibling
+without `tests.`, which an import cannot see when it sits inside a function.
+
+Some modules still put tests/ on sys.path. No import statement needs it now;
+the subprocess scripts in test_staffing and test_staff_hire and the Node suites'
+`python -c` snippets set their own paths.
 """
+import ast
 import json
 import os
 import subprocess
@@ -51,6 +58,26 @@ class ModuleImportTest(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stderr)
         failures = json.loads(run.stdout.strip().splitlines()[-1])
         self.assertEqual(failures, {}, "\n\n".join(f"tests.{k}:\n{v}" for k, v in failures.items()))
+
+    def test_no_import_statement_names_a_sibling_bare(self):
+        # Import statements only: the subprocess scripts inside string literals
+        # set their own path and are not read.
+        siblings = {f[:-3] for f in os.listdir(HERE) if f.endswith(".py")}
+        bare = []
+        for name in sorted(os.listdir(HERE)):
+            if not name.endswith(".py"):
+                continue
+            with open(os.path.join(HERE, name), encoding="utf-8-sig") as fh:
+                tree = ast.parse(fh.read(), name)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    named = [alias.name.split(".")[0] for alias in node.names]
+                elif isinstance(node, ast.ImportFrom) and not node.level and node.module:
+                    named = [node.module.split(".")[0]]
+                else:
+                    continue
+                bare += [f"tests/{name}:{node.lineno}: {mod}" for mod in named if mod in siblings]
+        self.assertEqual(bare, [], "import these through tests. (from tests import x)")
 
 
 if __name__ == "__main__":
