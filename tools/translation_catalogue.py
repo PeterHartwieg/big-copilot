@@ -70,7 +70,9 @@ def valid_text(text, rule):
 def sources(found=None, english=None, params=None):
     """What every language's catalogue reads off the call sites: the English,
     where each key is used, and passed()'s params. One scan serves them all;
-    `english` and `params`, when the caller has them, are reused as given."""
+    `english` and `params`, when the caller has them, are reused as given.
+    Every language's catalogue shares these objects, down to the `where`
+    lists its entries carry, so they are read-only."""
     found = i18n.calls() if found is None else found
     return {'english': i18n.catalogue(found) if english is None else english,
             'locations': i18n.catalogue(found, where=True),
@@ -80,9 +82,11 @@ def sources(found=None, english=None, params=None):
 def catalogue(lang, found=None, root=ROOT, inputs=None):
     """One language's public catalogue. `inputs` is sources()'s, so a caller
     building every language computes them once; without it they come from
-    `found`, or from a fresh scan of the call sites."""
+    `found`, or from a fresh scan of the call sites. Give one of the two."""
     if lang not in i18n.PLURALS or lang == 'en':
         raise i18n.CatalogueError(f'unsupported translation language: {lang}')
+    if found is not None and inputs is not None:
+        raise ValueError('catalogue() takes found or inputs, not both')
     inputs = sources(found) if inputs is None else inputs
     english, locations, params = inputs['english'], inputs['locations'], inputs['params']
     bundled = i18n.shipped(lang, english, str(root), params)
