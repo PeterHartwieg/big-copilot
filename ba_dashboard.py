@@ -16036,12 +16036,14 @@ def _staff_evidence_need(grid, rates=None):
         # What does not change from hour to hour, read once per role (#311).
         role_key = str(_role_key(role))
         fallback = evidence.get("fallback", {}).get(role_key)
-        baseline = trial.get("baseline", {}).get(role_key)
         # Office grids use None until their profession is assigned.
-        if office:
-            if fallback is None:
-                fallback = evidence.get("fallback", {}).get("None")
-            if baseline is None:
+        if fallback is None and office:
+            fallback = evidence.get("fallback", {}).get("None")
+        # A session's baseline is read only while it has cells to measure.
+        baseline = None
+        if targets:
+            baseline = trial.get("baseline", {}).get(role_key)
+            if baseline is None and office:
                 baseline = trial.get("baseline", {}).get("None")
         # A new shop: nothing measured and no installed stations to cover.
         unmeasured = not office and not evidence["lower"] and not any(any(day) for day in fallback or [])
