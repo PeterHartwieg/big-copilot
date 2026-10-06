@@ -86,3 +86,25 @@ test('the actual picker cancels pending Italian overlay when its empty bundle fa
   assert.equal(run('ttLang'),'en');assert.equal(run('ttWant'),'en');
   assert.equal(run('tt("comm.good","English {n}",{n:2})'),'English 2');
 });
+
+test('the manifest is fetched only when the overlay has a row', async () => {
+  const manifest={schemaVersion:1,lang:'it',revision:'catalogue',entries:{'comm.good':{sourceVersion:'good',validation:rule}}};
+  async function loadWith(translations){
+    const calls=[];
+    const {run}=load(true,async url => {
+      calls.push(url);
+      const data=url.startsWith('/i18n/')?{'comm.good':'Bundled {n}'}:url.startsWith('/translations/')?manifest:
+        {schemaVersion:1,lang:'it',revision:3,translations};
+      return {ok:true,json:async()=>data};
+    });
+    await run('setUiLang("it")');await new Promise(r=>setImmediate(r));
+    return {calls,run};
+  }
+  const empty=await loadWith({});
+  assert(empty.calls.includes('/api/translations/overlay?lang=it'));
+  assert.equal(empty.calls.filter(url=>url.startsWith('/translations/')).length,0,empty.calls.join(' '));
+  assert.equal(empty.run('tt("comm.good","English {n}",{n:2})'),'Bundled 2');
+  const rows=await loadWith({'comm.good':{text:'Comunità {n}',sourceVersion:'good'}});
+  assert.deepEqual(rows.calls.filter(url=>!url.startsWith('/i18n/')),['/api/translations/overlay?lang=it','/translations/it.manifest.json']);
+  assert.equal(rows.run('tt("comm.good","English {n}",{n:2})'),'Comunità 2');
+});
