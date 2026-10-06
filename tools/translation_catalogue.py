@@ -80,10 +80,10 @@ def keeps_placeholders(text, rule):
 def check_contracts(data):
     """Refuse a catalogue whose contract its own English or bundled text breaks.
 
-    Such a contract is dead: the API answers invalid_translation for every
-    wording and the overlay drops every selection. The placeholder rule is
-    checked, not the plain-text one: English and bundled wording may carry
-    markup the community API does not accept."""
+    Such a contract makes the natural wording impossible: the API answers
+    invalid_translation for it, and the overlay drops a selected text that
+    breaks it. Only the placeholder rule is checked, not the plain-text one:
+    English and bundled wording may carry markup the community API refuses."""
     dead = [entry['key'] for entry in data['entries']
             if not keeps_placeholders(entry['en'], entry['validation'])
             or (entry['text'] is not None and not keeps_placeholders(entry['text'], entry['validation']))]
