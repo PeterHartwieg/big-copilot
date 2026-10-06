@@ -1693,7 +1693,15 @@ There is no server retention promise. An old tab with complete cached assets
 can start its coherent old release, and an already installed worker continues
 using it. If any removed old path is absent from that browser's cache, startup
 fails cleanly and asks for reload instead of combining releases. Gradual
-deployments remain unsupported for the broader mutable stamped assets.
+deployments remain unsupported for the broader stamped assets.
+
+Those broader assets (`app.js`, `community.js` and `.css`, `report.js` and `.css`,
+`i18n/`, `names/`, `maps/` and `wiki-data.json`) are also cached immutably, but
+their URLs name a release, not bytes. Every request carries `?v=<build stamp>`
+(the map background `?v=<its SHA-256>`), and each file is a stamp input, so new
+bytes arrive under a new URL. An old stamp requested after a deploy gets the new
+bytes. `tests/test_headers.py` holds each request to the stamp and each file to
+`STAMP_INPUTS`. `/translations/*` revalidates and `/version.json` is `no-store`.
 
 These coherence guarantees apply to pages and workers using the pinned protocol.
 There is one historical migration window: a pre-manifest worker already fetched
