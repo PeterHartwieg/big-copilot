@@ -183,6 +183,14 @@ test('i18n/ holds German, as flat JSON of strings beside its base', () => {
 function mismatches(lang, table, base, passed = {}){
   const cats = new Intl.PluralRules(lang).resolvedOptions().pluralCategories;
   const bad = [];
+  /* The base keys by group (the key without its plural suffix), built once:
+     filtering every base key for every table key is millions of replaces. */
+  const baseGroups = new Map();
+  for(const b of Object.keys(base)){
+    const g = b.replace(SUFFIX, '');
+    if(!baseGroups.has(g)) baseGroups.set(g, []);
+    baseGroups.get(g).push(b);
+  }
   const groups = new Map();
   for(const k of Object.keys(table)){
     const m = SUFFIX.exec(k);
@@ -198,7 +206,7 @@ function mismatches(lang, table, base, passed = {}){
     const m = SUFFIX.exec(k);
     const given = passed[m ? k.replace(SUFFIX, '') : k];
     if(Array.isArray(given)){
-      const printed = new Set(Object.keys(base).filter(b => m ? b.replace(SUFFIX, '') === k.replace(SUFFIX, '') : b === k)
+      const printed = new Set((m ? baseGroups.get(k.replace(SUFFIX, '')) || [] : Object.hasOwn(base, k) ? [k] : [])
         .flatMap(b => [...fields(base[b])]));
       const names = new Set([...printed].map(f => f.split(':')[0]));
       const used = new Set([...fields(v)].map(f => f.split(':')[0]));
@@ -218,7 +226,7 @@ function mismatches(lang, table, base, passed = {}){
       continue;
     }
     const g = k.replace(SUFFIX, '');
-    const forms = Object.keys(base).filter(b => b.replace(SUFFIX, '') === g && SUFFIX.test(b));
+    const forms = (baseGroups.get(g) || []).filter(b => SUFFIX.test(b));
     if(!forms.length) continue;
     const all = new Set(forms.flatMap(b => [...fields(base[b])]));
     if(m[1] === 'other' ? !same(fields(v), all) : !within(fields(v), all))
