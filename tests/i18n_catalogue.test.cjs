@@ -179,7 +179,9 @@ test('i18n/ holds German, as flat JSON of strings beside its base', () => {
 /* The rule the check applies, over a translation and its base. `passed` is
    `extract --params`: where a key's calls pass params that can be read, a
    translation may use any of them (a game name's token the English does not
-   print) and leave any out, keeping the English's spec for those it prints. */
+   print) and leave any out, keeping the English's spec for those it prints.
+   A plural form may use any placeholder of its family but has to keep only
+   those of its own English, its base: "Un {kind}" beside "{n} {kinds}". */
 function mismatches(lang, table, base, passed = {}){
   const cats = new Intl.PluralRules(lang).resolvedOptions().pluralCategories;
   const bad = [];
@@ -209,6 +211,7 @@ function mismatches(lang, table, base, passed = {}){
       const printed = new Set((m ? baseGroups.get(k.replace(SUFFIX, '')) || [] : Object.hasOwn(base, k) ? [k] : [])
         .flatMap(b => [...fields(base[b])]));
       const names = new Set([...printed].map(f => f.split(':')[0]));
+      const own = m && Object.hasOwn(base, k) ? new Set([...fields(base[k])].map(f => f.split(':')[0])) : names;
       const used = new Set([...fields(v)].map(f => f.split(':')[0]));
       if(![...fields(v)].every(f => given.includes(f.split(':')[0]) && (!names.has(f.split(':')[0]) || printed.has(f))))
         bad.push(`${k}: placeholders its calls do not pass, or a spec unlike the English`);
@@ -216,7 +219,7 @@ function mismatches(lang, table, base, passed = {}){
          English word (X_name for X, station_name for stations), and a `one` or
          `zero` form may leave out {n}. */
       const namesIt = (token, p) => token.endsWith('_name') && [p, p.endsWith('s') ? p.slice(0, -1) : p].includes(token.slice(0, -5));
-      const dropped = [...names].filter(p => !used.has(p) && !(p === 'n' && m && ['one', 'zero'].includes(m[1]))
+      const dropped = [...own].filter(p => !used.has(p) && !(p === 'n' && m && ['one', 'zero'].includes(m[1]))
         && ![...used].some(t => !names.has(t) && namesIt(t, p)));
       if(dropped.length) bad.push(`${k}: leaves out ${dropped.join(', ')}`);
       continue;
@@ -229,7 +232,8 @@ function mismatches(lang, table, base, passed = {}){
     const forms = (baseGroups.get(g) || []).filter(b => SUFFIX.test(b));
     if(!forms.length) continue;
     const all = new Set(forms.flatMap(b => [...fields(base[b])]));
-    if(m[1] === 'other' ? !same(fields(v), all) : !within(fields(v), all))
+    const own = Object.hasOwn(base, k) ? fields(base[k]) : all;
+    if(!within(fields(v), all) || (m[1] === 'other' && !within(own, fields(v))))
       bad.push(`${k}: placeholders differ from the English`);
   }
   return bad;
@@ -284,6 +288,18 @@ test('the check itself catches a wrong placeholder, a missing plural form and a 
   assert.deepEqual(mismatches('pl', pl, more, passes), []);
   assert.equal(mismatches('pl', {...pl, 'sp.py.l_few': 'kilka sklepów'}, more, passes).length, 1);
   assert.equal(mismatches('pl', {...pl, 'sp.py.l_many': 'wiele sklepów'}, more, passes).length, 1);
+  // A plural form keeps its own English's words, not its siblings': "{n} {kind}"
+  // beside "{n} {kinds}" needs a kind in `one` and a kinds in `many` and `other`.
+  const kinds = {'co.chain.kind_one': '{n} {kind}', 'co.chain.kind_many': '{n} {kinds}', 'co.chain.kind_other': '{n} {kinds}'};
+  const kindsIt = {'co.chain.kind_one': 'Un {kind}', 'co.chain.kind_many': '{n} {kinds}', 'co.chain.kind_other': '{n} {kinds}'};
+  const kindParams = {'co.chain.kind': ['n', 'kind', 'kinds', 'kind_name']};
+  for(const given of [kindParams, {}]){
+    assert.deepEqual(mismatches('it', kindsIt, kinds, given), [], JSON.stringify(given));
+    assert.deepEqual(mismatches('it', {...kindsIt, 'co.chain.kind_one': '{n} {kind} {kinds}'}, kinds, given), []);
+    assert.equal(mismatches('it', {...kindsIt, 'co.chain.kind_other': '{n} articoli'}, kinds, given).length, 1);
+  }
+  assert.equal(mismatches('it', {...kindsIt, 'co.chain.kind_one': 'Un articolo'}, kinds, kindParams).length, 1);
+  assert.deepEqual(mismatches('it', {...kindsIt, 'co.chain.kind_other': '{n} × {kind_name}'}, kinds, kindParams), []);
   // The build's fits() draws the same line.
   const out = python(`
 import json

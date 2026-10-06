@@ -55,7 +55,10 @@ cannot be read. Feature-poll cleanup never touches translation tables.
 English remains in its existing `tt()` and `msg()` call sites. Assembly extracts a
 catalogue for each supported target language, including Italian, and preserves the
 runtime's placeholder and plural rules. Catalogue output is generated and ignored
-by Git. A source version includes the phrase's English and validation contract;
+by Git. A plural form's contract requires the placeholders of its own English form,
+and assembly stops when a contract's placeholder rule would reject its own English or
+bundled wording.
+A source version includes the phrase's English and validation contract;
 the whole-catalogue revision also changes with bundled wording and review metadata.
 
 The API validates contributions against its own generated catalogue, not metadata

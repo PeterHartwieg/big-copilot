@@ -30,14 +30,19 @@ def digest(value):
 
 
 def validation(key, english, lang, params):
-    """Compile fits() into exact tokens and required alternative groups."""
+    """Compile fits() into exact tokens and required alternative groups.
+
+    A plural form may use any placeholder of its family, but it must keep only
+    those of its own English (the form of its category, else `other`): "{n}
+    {kind}" beside "{n} {kinds}" cannot need both a kind and a kinds token."""
     _, tokens = i18n._english_for(key, english)
+    own = i18n.fields(i18n._english_text(key, english))
     base = i18n._base_key(key)
     plural = base != key and base not in english
     category = key[len(base) + 1:] if plural else None
     given = params.get(base if plural else key)
     if given is None:
-        required = [[t] for t in sorted(tokens)] if not plural or category == 'other' else []
+        required = [[t] for t in sorted(own)] if not plural or category == 'other' else []
         return {'allowed': sorted(tokens), 'required': required, 'maxLength': MAX_LENGTH}
     specs = {}
     for token in tokens:
@@ -45,7 +50,7 @@ def validation(key, english, lang, params):
         specs.setdefault(name, set()).add(spec)
     allowed = sorted(f'{name}:{spec}' for name in given for spec in specs.get(name, FORMATS))
     required = []
-    for name in sorted(specs):
+    for name in sorted({token.split(':', 1)[0] for token in own}):
         if name == 'n' and category in ('one', 'zero'):
             continue
         alternatives = [token for token in allowed if token.split(':', 1)[0] == name or
@@ -63,8 +68,28 @@ def valid_text(text, rule):
         return False
     if re.search(r'[{}]', i18n.FIELD.sub('', text)):
         return False
+    return keeps_placeholders(text, rule)
+
+
+def keeps_placeholders(text, rule):
+    """The placeholder half of valid_text(): only allowed tokens, one of each required group."""
     tokens = i18n.fields(text)
     return tokens <= set(rule['allowed']) and all(tokens.intersection(group) for group in rule['required'])
+
+
+def check_contracts(data):
+    """Refuse a catalogue whose contract its own English or bundled text breaks.
+
+    Such a contract makes the natural wording impossible: the API answers
+    invalid_translation for it, and the overlay drops a selected text that
+    breaks it. Only the placeholder rule is checked, not the plain-text one:
+    English and bundled wording may carry markup the community API refuses."""
+    dead = [entry['key'] for entry in data['entries']
+            if not keeps_placeholders(entry['en'], entry['validation'])
+            or (entry['text'] is not None and not keeps_placeholders(entry['text'], entry['validation']))]
+    if dead:
+        raise i18n.CatalogueError(f'{data["lang"]}: {len(dead)} translation contracts reject their own English '
+                                  f'or bundled text: {", ".join(dead[:10])}')
 
 
 def sources(found=None, english=None, params=None):
@@ -111,6 +136,7 @@ def catalogue(lang, found=None, root=ROOT, inputs=None):
                         'area': area, 'context': AREA_NAMES.get(area, area), 'where': where,
                         'sourceVersion': source_version, 'validation': rule})
     data = {'schemaVersion': 1, 'lang': lang, 'entries': entries}
+    check_contracts(data)
     # Line numbers are navigation hints, not source or content revisions.
     data['revision'] = digest({**data, 'entries': [{k:v for k,v in e.items() if k != 'where'} for e in entries]})
     return data

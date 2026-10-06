@@ -561,14 +561,19 @@ def fits(key: str, text: str, english: dict, lang: str, params: dict | None = No
     station_name for stations: _names_it()) and a `one` or `zero` plural
     form may leave out {n} ("ein Laden"); `few`, `many` and `other` may not.
     Otherwise every placeholder of a plain key, no more and no fewer, and a
-    plural form uses no placeholder its English lacks (`other` all of them).
-    Either way a plural form names a category the language has."""
+    plural form uses no placeholder its family's English lacks (`other` all of
+    its own). A plural form only has to keep the placeholders of its own
+    English (its category's form, else `other`): "{n} {kind}" beside "{n}
+    {kinds}" needs a kind, not a kinds. Either way a plural form names a
+    category the language has; translation_catalogue.validation() compiles
+    the same rule for the community API."""
     en, names = _english_for(key, english)
     if en is None:
         return False
     got = fields(text)
     m = PLURAL_SUFFIX.search(key)
     plural = bool(m) and _base_key(key) not in english
+    own = fields(_english_text(key, english)) if plural else names
     if plural and m.group(1) not in PLURALS.get(lang, PLURALS["en"]):
         return False
     given = (params or {}).get(_base_key(key) if plural else key)
@@ -583,7 +588,7 @@ def fits(key: str, text: str, english: dict, lang: str, params: dict | None = No
             if name not in given or (name in specs and spec not in specs[name]):
                 return False
             used.add(name)
-        for name in specs:
+        for name in {f.split(":", 1)[0] for f in own}:
             if name in used or (name == "n" and plural and m.group(1) in ("one", "zero")):
                 continue
             if not any(_names_it(token, name) for token in used - set(specs)):
@@ -591,7 +596,7 @@ def fits(key: str, text: str, english: dict, lang: str, params: dict | None = No
         return True
     if not plural:
         return got == names
-    return got <= names if m.group(1) != "other" else got == names
+    return got <= names and (m.group(1) != "other" or own <= got)
 
 
 def load(lang: str, root: str = ROOT) -> tuple[dict, dict]:

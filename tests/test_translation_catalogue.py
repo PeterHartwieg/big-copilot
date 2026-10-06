@@ -41,6 +41,65 @@ class TranslationCatalogue(unittest.TestCase):
                     self.assertEqual(tc.valid_text(text, entry['validation']),
                                      i18n.fits(entry['key'], text, en, lang, params), (lang, entry['key'], text))
 
+    def test_plural_forms_require_only_their_own_english_placeholders(self):
+        # "{n} {kind}" beside "{n} {kinds}": a form must not need both words.
+        for params in ({'n', 'kind', 'kinds', 'kind_name'}, None):
+            found = self.found({'one': '{n} {kind}', 'other': '{n} {kinds}'}, params)
+            if params is None:
+                found[0]['params'] = None
+            en = i18n.catalogue(found)
+            for lang in ('it', 'ru', 'ko', 'de'):
+                for entry in tc.catalogue(lang, found)['entries']:
+                    own = i18n._english_text(entry['key'], en)
+                    self.assertEqual(entry['en'], own)
+                    self.assertTrue(tc.valid_text(own, entry['validation']), (params, lang, entry['key']))
+            if params is not None:
+                rules = {e['key']: e['validation'] for e in tc.catalogue('it', found)['entries']}
+                self.assertTrue(tc.valid_text('Un {kind}', rules['comm.test_one']))
+                self.assertTrue(tc.valid_text('{n} × {kind_name}', rules['comm.test_other']))
+                self.assertFalse(tc.valid_text('{n} articoli', rules['comm.test_other']), 'a form still keeps its own word')
+                self.assertFalse(tc.valid_text('{kinds}', rules['comm.test_other']), 'and its count')
+
+    def test_a_dead_contract_fails_the_build(self):
+        data = tc.catalogue('it', self.found())
+        entry = data['entries'][0]
+        entry['validation'] = {**entry['validation'], 'required': [['missing:']]}
+        with self.assertRaisesRegex(i18n.CatalogueError, entry['key']):
+            tc.check_contracts(data)
+        data = tc.catalogue('it', self.found())
+        data['entries'][0]['text'] = 'Un negozio'
+        with self.assertRaisesRegex(i18n.CatalogueError, 'bundled text'):
+            tc.check_contracts(data)
+
+    def test_every_assembled_entry_accepts_its_own_english_and_bundled_text(self):
+        # The API answers invalid_translation for any wording on a key whose
+        # contract its own English breaks, so walk the shipped catalogues.
+        folder = Path(__file__).resolve().parents[1] / 'web' / 'translations'
+        markup = re.compile(r'[<>]|&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;)', re.I)
+        for lang in i18n.languages():
+            entries = json.loads((folder / f'{lang}.json').read_text(encoding='utf-8'))['entries']
+            self.assertGreater(len(entries), 1000, lang)
+            dead = [e['key'] for e in entries if not tc.keeps_placeholders(e['en'], e['validation'])
+                    or (e['text'] is not None and not tc.keeps_placeholders(e['text'], e['validation']))]
+            self.assertEqual(dead, [], lang)
+            # Markup is the plain-text rule's business; everything else passes whole.
+            plain = [e['key'] for e in entries if not markup.search(e['en']) and not tc.valid_text(e['en'], e['validation'])]
+            self.assertEqual(plain, [], lang)
+
+    def test_contract_agrees_with_fits_when_forms_use_different_words(self):
+        # An accepted community text must also survive shipped(), which filters by fits().
+        for params in ({'n', 'kind', 'kinds', 'kind_name'}, None):
+            found = self.found({'one': '{n} {kind}', 'other': '{n} {kinds}'}, params)
+            if params is None:
+                found[0]['params'] = None
+            en, passed = i18n.catalogue(found), i18n.passed(found)
+            for lang in ('it', 'ru', 'ko'):
+                for entry in tc.catalogue(lang, found)['entries']:
+                    for text in ('Un {kind}', '{n} {kind}', '{n} {kinds}', '{n} {kind} {kinds}', '{n} × {kind_name}',
+                                 '{n} articoli', '{kinds}', '{n:$} {kinds}', '{n} {kind_name:$}'):
+                        self.assertEqual(tc.valid_text(text, entry['validation']),
+                                         i18n.fits(entry['key'], text, en, lang, passed), (params, lang, entry['key'], text))
+
     def test_unknown_params_contract_matches(self):
         found = self.found()
         found[0]['params'] = None
