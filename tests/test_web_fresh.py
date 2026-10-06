@@ -280,6 +280,8 @@ class CommandLine(SharedCopy):
         standalone(root)
 
     def test_command_line_reports_a_stale_copy(self):
+        # unittest runs a class's tests in name order, so this runs after the
+        # assemble test: its "up to date" also shows that test left nothing behind.
         tmp = self.root
         fresh = run_check(tmp)
         self.assertEqual(fresh.returncode, 0, fresh.stdout + fresh.stderr)
@@ -316,7 +318,7 @@ class CommandLine(SharedCopy):
                      *(f"web/py/{name}" for name in build_web.PY_COPIED))
         # What assemble() deletes or writes, put back for the other tests.
         with kept(tmp, *assembled, "web/translate/index.html", "web/wiki-data.json", "tools/wiki_topics.json",
-                  trees=("web/i18n", "web/wiki", "web/assets")), \
+                  trees=("web/i18n", "web/translations", "web/wiki", "web/assets")), \
                 mock.patch("ba_save.load_game_locale", no_game), \
                 mock.patch("ba_save.find_game_locale", no_game), \
                 mock.patch("build_web.load_game_locale", no_game), \
