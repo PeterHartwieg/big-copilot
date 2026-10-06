@@ -20757,6 +20757,11 @@ def _condense(found: list, gate: float) -> dict:
 # Where the payload waits while render() fills the other placeholders: a NUL
 # pair, which no asset carries and json.dumps() always escapes.
 DATA_SLOT = "\x00__DATA__\x00"
+# Where the wiki and the map wait the same way. They go in near the end, after
+# the title, so a save named "/*__MAP_PAYLOAD__*/" must not hold the marker
+# their count-1 .replace() finds first.
+WIKI_SLOT = "\x00__WIKI_PAYLOAD__\x00"
+MAP_SLOT = "\x00__MAP_PAYLOAD__\x00"
 
 
 def script_json(text: str) -> str:
@@ -20808,7 +20813,10 @@ def render(
         payload, title = "null", "Big Copilot"
     else:
         payload = script_json(json.dumps(data, separators=(",", ":")))
-        title = f"{data['meta']['save']} · Big Copilot"
+        # A NUL is never a real character of a save name, and the title goes
+        # in ahead of the NUL-wrapped slots below, so it becomes U+FFFD there.
+        # The payload keeps the name as saved (json.dumps() escapes a NUL).
+        title = f"{data['meta']['save']} · Big Copilot".replace("\x00", "\ufffd")
     # UI source stays shared between the local HTML and browser build. Static
     # exports embed geography so opening a file needs no local server or fetch.
     asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
@@ -20882,16 +20890,22 @@ def render(
     # The <html> start tag is optional and the page never closed one, so this
     # only names the language of the element the parser makes anyway.
     return "<!doctype html>" + chr(10) + '<html lang="en">' + chr(10) + '<meta charset="utf-8">' + chr(10) + head + (
-        # The payload goes in last, through DATA_SLOT, so no placeholder's
-        # .replace() below runs over the save's own text.
+        # The small placeholders first and the big ones last, so the wiki
+        # (1.5 MB) and the map (11.5 MB in an export) are not copied again by
+        # every .replace() after them. They wait in WIKI_SLOT and MAP_SLOT, so
+        # a marker in the save's name (the title) is not taken for theirs. The
+        # language table still follows both, at the head's marker ahead of
+        # them, so no placeholder runs over the table, and the payload comes
+        # last, through DATA_SLOT, so no placeholder's .replace() runs over
+        # the save's own text.
         load_template().replace("/*__DATA__*/null", DATA_SLOT)
+        .replace("/*__WIKI_PAYLOAD__*/", WIKI_SLOT, 1)
+        .replace("/*__MAP_PAYLOAD__*/", MAP_SLOT, 1)
         .replace("/*__SECTION_META__*/{}", script_json(json.dumps(section_metadata(), separators=(",", ":"))), 1)
         .replace("/*__MAP_CSS__*/", map_css)
         .replace("/*__MAP_SCRIPT__*/", map_script)
-        .replace("/*__MAP_PAYLOAD__*/", map_payload)
         .replace("/*__WIKI_CSS__*/", wiki_css)
         .replace("/*__WIKI_SCRIPT__*/", wiki_script)
-        .replace("/*__WIKI_PAYLOAD__*/", wiki_payload)
         # One table of neighbourhood tags, written once here, so a wiki address
         # wears the same two letters a business does.
         .replace("/*__HOOD_TAGS__*/{}", json.dumps(HOOD_TAG, separators=(",", ":")))
@@ -20905,6 +20919,8 @@ def render(
         .replace("<!--__FOOTER__-->", footer_html(site=site))
         .replace("<!--__BANNER__-->", banner)
         .replace("<!--__BEFORE_SCRIPT__-->", before_script)
+        .replace(WIKI_SLOT, wiki_payload, 1)
+        .replace(MAP_SLOT, map_payload, 1)
         .replace("/*__I18N_SCRIPT__*/", i18n_script, 1)
         .replace(DATA_SLOT, payload, 1)
     )

@@ -340,6 +340,28 @@ class PageTests(unittest.TestCase):
         self.assertEqual(page.count("function tt(key, en, params)"), 1)
         self.assertIn('"save":"Co /*__I18N_SCRIPT__*/"', page)
 
+    def test_a_payload_marker_in_the_save_name_stays_in_the_title(self):
+        # The wiki and the map go in after the title, each at its first
+        # marker: a save named after either marker keeps it as written, and
+        # both payloads still land in the board's script.
+        # A name that holds the slots render() parks them in, NULs and all,
+        # reads them with U+FFFD in the title and keeps them in the payload.
+        markers = "Co /*__MAP_PAYLOAD__*/ /*__WIKI_PAYLOAD__*/"
+        slots = "Co " + ba_dashboard.MAP_SLOT + ba_dashboard.WIKI_SLOT + ba_dashboard.DATA_SLOT
+        for name, shown in ((markers, markers), (slots, slots.replace("\x00", "\ufffd"))):
+            payload = fixtures()["es3"]
+            payload["meta"]["save"] = name
+            page = ba_dashboard.render(payload)
+            # assertTrue, not assertIn: a failure would print the whole 15 MB page.
+            self.assertTrue(f"<title>{shown} · Big Copilot</title>" in page, "the title lost the save's name")
+            self.assertTrue(json.dumps(name)[1:-1] in page, "the payload lost the save's name")
+            board = page.index("let D = ")
+            for slot in ("window.BIG_COPILOT_WIKI=", "window.BIG_COPILOT_MAP="):
+                self.assertEqual(page.count(slot), 1)
+                self.assertLess(page.index("</title>"), page.index(slot))
+                self.assertLess(page.index(slot), board)
+            self.assertFalse("\x00" in page, "a slot was left unfilled")
+
     def test_cli_ui_table_is_none_for_english_and_an_empty_table(self):
         self.assertIsNone(ba_dashboard.cli_ui_table(None))
         self.assertIsNone(ba_dashboard.cli_ui_table("en"))
