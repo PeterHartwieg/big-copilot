@@ -97,6 +97,12 @@ class PrivacyPromises(unittest.TestCase):
         self.assertRegex(config, r'"invocation_logs"\s*:\s*false')
         self.assertRegex(config, r'"traces"\s*:\s*\{\s*"enabled"\s*:\s*false\s*\}')
 
+    def test_worker_keeps_every_failure_event(self):
+        # Head sampling keeps or drops every log line of a request, so a rate
+        # below 1 loses that share of the failure events the operator reads.
+        config = (ROOT / "wrangler.jsonc").read_text(encoding="utf-8")
+        self.assertRegex(config, r'"head_sampling_rate"\s*:\s*1(\.0+)?\s*,')
+
     def test_worker_code_logs_only_bounded_failure_events(self):
         # "We keep no access logs ourselves." Only the reviewed diagnostic
         # helper may print: three fields, each a literal or a fixed allowlist.

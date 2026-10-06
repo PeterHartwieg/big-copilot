@@ -89,11 +89,13 @@
     "crons": ["17 3 * * *", "* * * * *"]
   },
   // No per-request invocation logs or traces (URL, method, country): the
-  // privacy notice promises none. Errors and console output from the Worker
-  // are still kept.
+  // privacy notice promises none. The Worker's own console output, which is
+  // only the bounded failure event, is kept for every request: head sampling
+  // keeps or drops all of a request's log lines, so a rate below 1 would lose
+  // most failure events (docs/community-features.md, "Failure diagnostics").
   "observability": {
     "enabled": true,
-    "head_sampling_rate": 0.1,
+    "head_sampling_rate": 1,
     "logs": { "invocation_logs": false },
     "traces": { "enabled": false }
   }
