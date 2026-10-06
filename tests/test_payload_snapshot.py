@@ -29,8 +29,8 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, ROOT)
 
 import ba_dashboard  # noqa: E402
-import es3_fixture  # noqa: E402
-import save_fixtures  # noqa: E402
+from tests import es3_fixture  # noqa: E402
+from tests import save_fixtures  # noqa: E402
 from ba_save import Names, load_save  # noqa: E402
 
 SNAPSHOTS = os.path.join(HERE, "fixtures", "payload_snapshot")

@@ -18,7 +18,7 @@ import unittest
 
 import ba_dashboard
 from ba_dashboard import Msg, _alerts, _wire_msgs, msg, plain, tok
-from test_site_panel_fields import stub
+from tests.test_site_panel_fields import stub
 from tests import roster_fixture, cinema_fixture
 from tests.game_names_fixture import fixture as game_names_fixture
 from tests.es3_fixture import link_payload, write_link_save

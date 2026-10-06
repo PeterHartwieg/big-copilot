@@ -3,7 +3,7 @@ import unittest
 
 from ba_dashboard import _hiring, _hourly, _office_staffing, _staff
 from ba_save import Names
-from test_staff_hire import COMPUTER, LAW, LAWYER, STREET, lawyer, office_registration, save_of, site_key
+from tests.test_staff_hire import COMPUTER, LAW, LAWYER, STREET, lawyer, office_registration, save_of, site_key
 
 
 def plan(customers=1, staffed=4, history=True, missing=(), closed=False, support=False, door=50, days=14, closed_day=None):

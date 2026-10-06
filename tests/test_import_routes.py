@@ -1,10 +1,11 @@
 """Supply regressions for GitHub #17 and #18, using portable save fixtures."""
+import sys
 import unittest
 from tests.i18n_check import MsgAsserts
 from unittest.mock import patch
 
 from ba_dashboard import Names, _import_notes, _scheduled_import_gap, _supply, site_key
-from test_recipe_identity import BEER, WATER, RID, SaveStub
+from tests.test_recipe_identity import BEER, WATER, RID, SaveStub
 
 
 def contract(amount, *, last=0, active=True, destination=("depot", 1), pier=1):
@@ -356,7 +357,7 @@ class ImportRoutesTests(MsgAsserts, unittest.TestCase):
         self.assertEqual(need["warehouseNeed"], 840)
 
     def test_staggered_deliveries_preserve_stock_cover_for_cross_row_ranking(self):
-        import test_import_routes as fixtures
+        fixtures = sys.modules[__name__]
         real_supply = _supply
         def supply(save, names, businesses, *args, **kwargs):
             businesses[1]["lines"][0].update(units=4800)
@@ -373,7 +374,7 @@ class ImportRoutesTests(MsgAsserts, unittest.TestCase):
         self.assertEqual(row["coverFit"], "ok")
 
     def test_measured_warehouse_draw_marks_zero_order_as_short(self):
-        import test_import_routes as fixtures
+        fixtures = sys.modules[__name__]
         real_supply = _supply
         def supply(save, names, businesses, *args, **kwargs):
             businesses[1]["lines"][0].update(units=20000)
@@ -407,7 +408,7 @@ class ImportRoutesTests(MsgAsserts, unittest.TestCase):
         self.assertEqual(data["supply"]["factories"]["depots"][0][WATER]["pausedWeekly"], 2000)
 
     def test_staggered_deliveries_do_not_hide_gap_after_small_first_drop(self):
-        import test_import_routes as fixtures
+        fixtures = sys.modules[__name__]
         real_init, real_supply = SaveStub.__init__, _supply
         def init(save, *args, **kwargs):
             real_init(save, *args, **kwargs)

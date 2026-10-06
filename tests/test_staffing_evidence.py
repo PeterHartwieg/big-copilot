@@ -7,7 +7,7 @@ from pathlib import Path
 
 from ba_dashboard import (History, _staff_evidence_ingest, _staff_evidence_need,
                           _staff_measurement_action, _office_need, _office_runs)
-from test_office_demand import plan
+from tests.test_office_demand import plan
 
 
 class EvidenceTests(unittest.TestCase):

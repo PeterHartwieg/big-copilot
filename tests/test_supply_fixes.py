@@ -7,9 +7,9 @@ import unittest
 from tests.i18n_check import MsgAsserts, find_msg
 
 from ba_dashboard import DELIVERY_LOG_SIZE, RECIPE_ITEMS, Names, _ingredient_prices, plain, site_key
-from test_supply_facts import (BEER, DISTRIB, FACTORY, HUB, RECIPES, RID, SHOP_A, SODA, WATER,
-                               Company, Stub, tx)
-import test_supply_facts
+from tests.test_supply_facts import (BEER, DISTRIB, FACTORY, HUB, RECIPES, RID, SHOP_A, SODA, WATER,
+                                     Company, Stub, tx)
+from tests import test_supply_facts
 
 # A second line eating water, beside Beer, at the same workstation.
 RID2, ALE = next((rid, item) for rid, item in sorted(RECIPE_ITEMS.items(), key=str) if item != BEER)

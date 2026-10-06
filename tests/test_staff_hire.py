@@ -31,8 +31,8 @@ from ba_dashboard import (
 from ba_save import Names, Save
 
 import ba_dashboard
-import test_staffing as ts
-from test_factory_staffing import FACTORY as FACTORY_ADDR, Bare, People, hand_factory, hand_rows
+from tests import test_staffing as ts
+from tests.test_factory_staffing import FACTORY as FACTORY_ADDR, Bare, People, hand_factory, hand_rows
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HERE = os.path.dirname(os.path.abspath(__file__))

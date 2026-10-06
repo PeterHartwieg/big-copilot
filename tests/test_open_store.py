@@ -21,7 +21,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.dirname(HERE))
 
 import ba_dashboard  # noqa: E402
-import save_fixtures  # noqa: E402
+from tests import save_fixtures  # noqa: E402
 from ba_dashboard import (  # noqa: E402
     CAPPED_INITIAL_BUILD, _plan_initial, decor_route, demand_with, optimal_providers, outfit_lines,
 )
