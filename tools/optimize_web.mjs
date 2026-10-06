@@ -9,6 +9,28 @@ import {spawnSync} from 'node:child_process';
 const {transformSync} = createRequire(import.meta.url)('esbuild');
 
 export function optimizePage(html) {
+  return optimizeScripts(optimizeStyles(html));
+}
+
+// Plain <style> blocks through esbuild's CSS minifier: comments and
+// whitespace go, rules keep their order. No target, so nothing is lowered:
+// @container, :has(), color-mix() and light-dark() pass through as written.
+function optimizeStyles(html) {
+  return html.replace(/<style>([\s\S]*?)<\/style>/g, (_tag, css) => {
+    const result = transformSync(css, {loader: 'css', minify: true, charset: 'utf8', logLevel: 'silent'});
+    // esbuild recovers from broken CSS by guessing, and may drop a rule or a
+    // whole @media block. Stop the deploy and name the fault instead.
+    if (result.warnings.length) {
+      throw new Error('CSS the minifier would change: ' + result.warnings.map(w =>
+        `${w.text} (line ${w.location?.line} of a <style> block: ${w.location?.lineText.trim()})`).join('; '));
+    }
+    // A decoded escape must not close the element early; keep that block as written.
+    if (/<\/style/i.test(result.code)) return _tag;
+    return `<style>${result.code.trimEnd()}</style>`;
+  });
+}
+
+function optimizeScripts(html) {
   // render() emits plain classic script blocks. Leave external scripts and
   // other script types alone. Do not wrap blocks or rename identifiers: they
   // share the board's global scope and call each other's functions by name.
