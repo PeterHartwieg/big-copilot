@@ -7211,12 +7211,17 @@ def _supply(
         # delivers: a stock target above zero, or a repeating contract, whatever
         # the shop's sales rate. shops[] holds a row only for a selling line.
         "routed": sorted(
-            [index[shop], item]
-            for shop, item in (
-                {k for k, (amount, _src) in target_at.items() if amount > 0}
-                | set(wholesale)
-            )
-            if shop in index
+            (
+                [index[shop], item]
+                for shop, item in (
+                    {k for k, (amount, _src) in target_at.items() if amount > 0}
+                    | set(wholesale)
+                )
+                if shop in index
+            ),
+            # A product with no name sorts after the named ones on its shop,
+            # rather than comparing None with a str.
+            key=lambda r: (r[0], r[1] is None, r[1] or ""),
         ),
         "imports": import_rows,
         # The same rows walked in Demand sizing (the page's supplyImports()).
@@ -18980,7 +18985,9 @@ def _msg_list(items: list):
     """Several names or phrases as one list, "a, b, c", that stays a message:
     a nested "{a}, {b}" per comma, the last pair under a key of its own
     (f.list.last), so a translation can join that one with its "and". One item
-    is itself."""
+    is itself, none is ""."""
+    if not items:
+        return ""
     if len(items) == 1:
         return items[0]
     if len(items) == 2:
