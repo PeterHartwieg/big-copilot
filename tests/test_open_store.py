@@ -9,12 +9,14 @@ hand-made rule and price tables, and tests/save_fixtures.py's trading company
 for the payload end to end. Never a real save.
 """
 import collections
+import copy
 import json
 import math
 import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -456,6 +458,62 @@ class PayloadTests(unittest.TestCase):
                 self.assertIn(key, row)
             self.assertGreaterEqual(row["days"], 3)
 
+
+
+class OutfitMemoTests(unittest.TestCase):
+    """_open_store() works each distinct outfit out once per invocation
+    (issue #310): one outfit_lines() call per (type, capacity, area, copied
+    shelving), whatever the number of buildings or layouts that share it."""
+
+    def test_one_outfit_per_distinct_capacity_area_and_shelving_each_entry_its_own_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "memo.hsg")
+            save_fixtures.write_data_save(path, save_fixtures.DAY)
+            build = ba_dashboard.build_core(load_save(path), Names(save_fixtures.data_names()), None)
+            ba_dashboard.section(build, "premises")
+        own = ba_dashboard.site_key(save_fixtures.LIQUOR)  # the player's liquor store, a C2
+        products = [p for p, _impact in ba_dashboard.load_store_rules()["types"][SHOP]["i"]]
+        display = next(name for name, facts in ba_dashboard.load_store_rules()["furniture"].items()
+                       if set(facts.get("h") or ()) & set(products))
+        held = sorted(set(ba_dashboard.load_store_rules()["furniture"][display]["h"]) & set(products))
+        shelving = [(display, 3, held)]
+
+        def row(key, layout, cap, m2, status="vacant"):
+            return {"key": key, "type": "retail", "layout": layout, "cap": cap, "m2": m2, "status": status}
+        # Two C2s with their own capacity and area per address (#282), the
+        # same numbers twice; a C1 with the C2 sample's numbers, which copies
+        # no shelving, since the player's liquor store is a C2.
+        build.sections["premises"]["premises"]["buildings"] = [
+            row(own, "C2", 30, 225, "mine"),
+            row("ba:street_memo#1", "C2", 45, 300),
+            row("ba:street_memo#2", "C2", 45, 300),
+            row("ba:street_memo#3", "C1", 30, 225),
+            row("ba:street_memo#4", "C1", 45, 300),
+        ]
+        with mock.patch.object(ba_dashboard, "_copied_shelving", return_value=shelving), \
+                mock.patch.object(ba_dashboard, "outfit_lines", wraps=ba_dashboard.outfit_lines) as spy:
+            facts = ba_dashboard._open_store_section(build)["openStore"]
+        computed = collections.Counter(
+            (call.args[3], call.args[4], tuple((i, q, tuple(h)) for i, q, h in call.args[5] or ()))
+            for call in spy.call_args_list if call.args[0] == SHOP)
+        copied = ((display, 3, tuple(held)),)
+        self.assertEqual(computed, {(30, 225, copied): 1, (45, 300, copied): 1, (30, 225, ()): 1, (45, 300, ()): 1})
+
+        layouts = facts["types"][SHOP]["layouts"]
+        self.assertEqual(set(layouts), {"C2", "C1", "ba:street_memo#1", "ba:street_memo#2", "ba:street_memo#4"})
+        self.assertEqual((layouts["C2"]["from"], layouts["C1"]["from"]), (own, None))
+        self.assertNotEqual(layouts["C2"]["lines"], layouts["C1"]["lines"])
+        # The same outfit twice: equal lines, never the same objects.
+        first, second = layouts["ba:street_memo#1"]["lines"], layouts["ba:street_memo#2"]["lines"]
+        self.assertEqual(first, second)
+        self.assertIsNot(first, second)
+        self.assertTrue(any(isinstance(line[3], list) for line in first))  # a display's products
+        before = copy.deepcopy(second)
+        for line in first:
+            line[1] += 1
+            if isinstance(line[3], list):
+                line[3].append("changed")
+        self.assertEqual(second, before)
 
 
 class OwnShopCapTests(unittest.TestCase):
