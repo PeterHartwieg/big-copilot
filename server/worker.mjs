@@ -45,14 +45,15 @@ const REPORT_SWEEP_AFTER_MS = 60 * 60 * 1000;
 
 // Presence has its own, tighter limiter: a real tab sends one heartbeat every five
 // minutes, so a loop of fresh browser ids cannot inflate the online count on the
-// budget meant for voting. Suggestions have a small separate budget; other routes share COMMUNITY_LIMITER.
+// budget meant for voting. Feature suggestions and translation suggestions each have a
+// small separate budget; other routes, translation votes included, share COMMUNITY_LIMITER.
 // A bug report has a budget of its own, needs no D1 but the R2 bucket and the
 // GitHub token, and reads its own multipart body.
 const routes = {
   "/api/translations": { operation: "translations", method: "GET", write: false, handler: translations },
   "/api/translations/entry": { operation: "translations", method: "GET", write: false, handler: translations },
   "/api/translations/overlay": { operation: "translations", method: "GET", write: false, handler: translations },
-  "/api/translations/suggest": { operation: "translations", method: "POST", write: true, handler: translations, maxBodyBytes: 16384 },
+  "/api/translations/suggest": { operation: "translations", method: "POST", write: true, handler: translations, maxBodyBytes: 16384, limiter: "TRANSLATION_SUGGEST_LIMITER" },
   "/api/translations/vote": { operation: "translations", method: "POST", write: true, handler: translations },
   "/api/community/presence": { operation: "presence", method: "POST", write: true, handler: presence, limiter: "PRESENCE_LIMITER" },
   "/api/community/vote": { operation: "vote", method: "POST", write: true, handler: vote },

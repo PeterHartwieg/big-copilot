@@ -112,6 +112,7 @@ function baseOptions() {
       COMMUNITY_LIMITER: { namespace_id: '1001', simple: { limit: 120, period: 60 } },
       PRESENCE_LIMITER: { namespace_id: '1002', simple: { limit: 20, period: 60 } },
       SUGGEST_LIMITER: { namespace_id: '1004', simple: { limit: 3, period: 60 } },
+      TRANSLATION_SUGGEST_LIMITER: { namespace_id: '1005', simple: { limit: 10, period: 60 } },
     },
     serviceBindings: {
       ASSETS: async () => new Response('static fixture'),
@@ -901,9 +902,12 @@ test('rate limit: presence has its own budget, so a heartbeat loop stops early a
       .map(([, name, ns, limit, period]) => [name, { ns, limit: Number(limit), period: Number(period) }]),
   );
   // REPORT_LIMITER is the bug report route's; community-report.test.cjs drives it.
-  assert.deepEqual(Object.keys(limiters).sort(), ['COMMUNITY_LIMITER', 'PRESENCE_LIMITER', 'REPORT_LIMITER', 'SUGGEST_LIMITER']);
-  assert.equal(new Set(Object.values(limiters).map((l) => l.ns)).size, 4, 'separate namespaces');
+  assert.deepEqual(Object.keys(limiters).sort(),
+    ['COMMUNITY_LIMITER', 'PRESENCE_LIMITER', 'REPORT_LIMITER', 'SUGGEST_LIMITER', 'TRANSLATION_SUGGEST_LIMITER']);
+  assert.equal(new Set(Object.values(limiters).map((l) => l.ns)).size, 5, 'separate namespaces');
   assert.equal(limiters.SUGGEST_LIMITER.limit,3);
+  // community-translations.test.cjs drives the translation suggestion budget.
+  assert.equal(limiters.TRANSLATION_SUGGEST_LIMITER.limit, 10);
   delete limiters.REPORT_LIMITER;
   assert.equal(limiters.PRESENCE_LIMITER.period, 60);
   assert.ok(limiters.PRESENCE_LIMITER.limit >= 10 && limiters.PRESENCE_LIMITER.limit <= 20,
