@@ -18176,8 +18176,8 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     # kept across invocations: the catalogue is read afresh each time.
     outfits = {}
 
-    def outfit(slug, cap, m2, copied, shelves):
-        key = (slug, cap, m2, shelves)
+    def outfit(slug, cap, m2, copied):
+        key = (slug, cap, m2, tuple((item, qty, tuple(held)) for item, qty, held in copied or ()))
         if key not in outfits:
             lines = outfit_lines(slug, rules, prices, cap, m2, copied, _catalogue=catalogue)
             outfits[key] = (lines, setup_cost(_setup_items(lines), [], m2, 0, prices))
@@ -18212,10 +18212,9 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
             if same:
                 source = max(same, key=lambda b: (sum(s["profit"] for s in (b.get("series") or [])[-7:]), b["key"]))
             copied = _copied_shelving(save, regs[source["key"]], slug, rules) if source else None
-            shelves = tuple((item, qty, tuple(held)) for item, qty, held in copied or ())
             # A venue's own version seats its own crowd (S1 150, S3 100).
             cap = sample.get("cap")
-            layouts[layout] = plan_entry(*outfit(slug, cap, sample.get("m2"), copied, shelves), source)
+            layouts[layout] = plan_entry(*outfit(slug, cap, sample.get("m2"), copied), source)
             # The shop fully stocked with the type's range, as the plan has it.
             initial[layout] = round(_plan_initial(build_at_start, model, cap, slug,
                                                   sample.get("m2"), [p for p, _i in sells]), 4)
@@ -18225,8 +18224,7 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
                 if (candidate.get("cap"), candidate.get("m2")) == (cap, sample.get("m2")):
                     continue
                 key = candidate["key"]
-                layouts[key] = plan_entry(*outfit(slug, candidate.get("cap"), candidate.get("m2"), copied, shelves),
-                                          source)
+                layouts[key] = plan_entry(*outfit(slug, candidate.get("cap"), candidate.get("m2"), copied), source)
                 initial[key] = round(_plan_initial(build_at_start, model, candidate.get("cap"), slug,
                                                    candidate.get("m2"), [p for p, _i in sells]), 4)
         if not layouts:
