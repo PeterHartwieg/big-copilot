@@ -38,14 +38,16 @@ test('local loader never requests community data', async () => {
   assert.deepEqual(calls,['i18n/it.json']);
 });
 test('late overlays cannot overwrite a newer language choice', async () => {
-  let resolve;const pending=new Promise(r=>resolve=r);
+  let resolve;const pending=new Promise(r=>resolve=r);const calls=[];
   const {run}=load(true,async url => {
+    calls.push(url);
     if(url.startsWith('/i18n/'))return {ok:true,json:async()=>({'comm.good':'Bundled {n}'})};
     if(url.startsWith('/translations/'))return {ok:true,json:async()=>({schemaVersion:1,lang:'it',entries:{'comm.good':{sourceVersion:'good',validation:rule}}})};
     await pending;return {ok:true,json:async()=>({schemaVersion:1,lang:'it',translations:{'comm.good':{text:'Comunità {n}',sourceVersion:'good'}}})};
   });
   await run('setUiLang("it")');await run('setUiLang("en")');resolve();await new Promise(r=>setImmediate(r));
   assert.equal(run('ttLang'),'en');
+  assert(!calls.some(url=>url.startsWith('/translations/')),'the discarded language never requests its manifest');
 });
 test('an empty Italian bundle adopts a current community overlay after bundled fallback', async () => {
   const {run}=load(true,async url => {
@@ -85,4 +87,32 @@ test('the actual picker cancels pending Italian overlay when its empty bundle fa
   await run('gnSwitch("en")');release();await new Promise(resolve=>setImmediate(resolve));
   assert.equal(run('ttLang'),'en');assert.equal(run('ttWant'),'en');
   assert.equal(run('tt("comm.good","English {n}",{n:2})'),'English 2');
+});
+
+test('the manifest is fetched only when the overlay has a row', async () => {
+  const manifest={schemaVersion:1,lang:'it',revision:'catalogue',entries:{'comm.good':{sourceVersion:'good',validation:rule}}};
+  async function loadWith(translations){
+    const calls=[];
+    const {run}=load(true,async url => {
+      calls.push(url);
+      const data=url.startsWith('/i18n/')?{'comm.good':'Bundled {n}'}:url.startsWith('/translations/')?manifest:
+        {schemaVersion:1,lang:'it',revision:3,translations};
+      return {ok:true,json:async()=>data};
+    });
+    await run('setUiLang("it")');await new Promise(r=>setImmediate(r));
+    return {calls,run};
+  }
+  const empty=await loadWith({});
+  assert(empty.calls.includes('/api/translations/overlay?lang=it'));
+  assert.equal(empty.calls.filter(url=>url.startsWith('/translations/')).length,0,empty.calls.join(' '));
+  assert.equal(empty.run('tt("comm.good","English {n}",{n:2})'),'Bundled 2');
+  const rows=await loadWith({'comm.good':{text:'Comunità {n}',sourceVersion:'good'}});
+  assert.deepEqual(rows.calls.filter(url=>!url.startsWith('/i18n/')),['/api/translations/overlay?lang=it','/translations/it.manifest.json']);
+  assert.equal(rows.run('tt("comm.good","English {n}",{n:2})'),'Comunità 2');
+  // Rows still pass ttCommunityMerge(): a stale or marked-up row is dropped.
+  for(const row of [{text:'Vecchio {n}',sourceVersion:'stale'},{text:'<b>{n}</b>',sourceVersion:'good'}]){
+    const rejected=await loadWith({'comm.good':row});
+    assert(rejected.calls.includes('/translations/it.manifest.json'));
+    assert.equal(rejected.run('tt("comm.good","English {n}",{n:2})'),'Bundled 2',row.text);
+  }
 });

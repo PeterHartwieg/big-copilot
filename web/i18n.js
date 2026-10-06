@@ -301,16 +301,17 @@ function ttCommunityMerge(lang, bundled, manifest, overlay){
 }
 /* This request contains a language only. Never send the board or a save.
    It is deliberately separate from bundled loading: an unavailable API must
-   not delay the language switch or prevent an offline fallback. */
+   not delay the language switch or prevent an offline fallback. The manifest
+   only validates the overlay's rows and is several times the size of the
+   bundled table, so it is fetched only when the overlay has a row. */
 async function ttLoadCommunity(lang, bundled, seq){
   if(!TT_SITE || lang === "en") return;
   const v = encodeURIComponent((typeof window !== "undefined" && window.LEDGER_BUILD) || "");
   const read = async url => { const r = await fetch(url); if(!r.ok) throw new Error("translation overlay unavailable"); return r.json(); };
   try{
-    const [manifest, overlay] = await Promise.all([
-      read(`/translations/${encodeURIComponent(lang)}.manifest.json${v ? `?v=${v}` : ""}`),
-      read(`/api/translations/overlay?lang=${encodeURIComponent(lang)}`)
-    ]);
+    const overlay = await read(`/api/translations/overlay?lang=${encodeURIComponent(lang)}`);
+    if(seq !== ttSeq || !Object.keys(overlay?.translations || {}).length) return;
+    const manifest = await read(`/translations/${encodeURIComponent(lang)}.manifest.json${v ? `?v=${v}` : ""}`);
     if(seq !== ttSeq || !TT_CATALOGUES?.[lang] || manifest.revision !== TT_CATALOGUES[lang]) return;
     const merged = ttCommunityMerge(lang, bundled, manifest, overlay);
     if(Object.keys(merged).some(key => merged[key] !== bundled?.[key])) ttSetTable(lang, merged);
