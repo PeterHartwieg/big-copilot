@@ -196,7 +196,11 @@ class Headers(unittest.TestCase):
         for line in reversed(before):
             assigned = re.match(r"\s*(?:const|let|var)\s+" + value + r"\s*=\s*(.*)$", line)
             if assigned:
-                return "window.LEDGER_BUILD" in assigned.group(1)
+                # The identifier must be code: drop string literals, then
+                # comments, so "window.LEDGER_BUILD" in quotes is a constant.
+                code = re.sub(r"""(["'`])(?:\\.|(?!\1)[^\\])*\1""", '""', assigned.group(1))
+                code = re.sub(r"//.*$|/\*.*?\*/", "", code)
+                return re.search(r"\bwindow\.LEDGER_BUILD\b", code) is not None
         return False
 
 if __name__ == "__main__":
