@@ -16,7 +16,6 @@ reads the running game itself through the Big Copilot Link mod
 
 from __future__ import annotations
 
-import argparse
 import collections
 import contextlib
 import copy
@@ -25,25 +24,36 @@ import decimal
 import fractions
 import gc
 import hashlib
-import http.client
-import http.server
 import itertools
 import json
 import math
 import numbers
 import os
 import re
-import statistics
 import struct
 import sys
 import threading
 import time
-import traceback
-import urllib.error
-import urllib.parse
-import urllib.request
-import webbrowser
 from html import escape as html_escape
+
+# What only the CLI, the watch server and the game link use. The Pyodide
+# worker never calls any of it, and importing it there costs over half a
+# second of every start, so it is left out in the browser. Imported at module
+# level, not inside the functions, so tests can patch ba_dashboard.http.server
+# and ba_dashboard.urllib.request.
+if sys.platform != "emscripten":
+    import argparse
+    import http.client
+    import http.server
+    import traceback
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+    import webbrowser
+
+    _RequestHandler = http.server.BaseHTTPRequestHandler
+else:
+    _RequestHandler = object  # BoardHandler is never served in the browser
 
 from ba_save import (
     Names, NotEnglishText, Save, _plain, bundled_locale, english_text, house_number, load_best_locale,
@@ -1556,7 +1566,11 @@ def _weekday_profile(points: list, last: int | None = None, end: int | None = No
     means = {wd: sum(v) / len(v) for wd, v in indexed.items()}
     signal = max(means.values()) - min(means.values())
     errors = [
-        statistics.stdev(v) / math.sqrt(len(v)) for v in indexed.values() if len(v) > 1
+        # The sample standard deviation, as statistics.stdev() gives it
+        # (importing statistics costs a quarter of a second in the browser).
+        math.sqrt(sum((x - means[wd]) ** 2 for x in v) / (len(v) - 1)) / math.sqrt(len(v))
+        for wd, v in indexed.items()
+        if len(v) > 1
     ]
     noise = sum(errors) / len(errors) if errors else 0.0
     thinnest = min(len(v) for v in indexed.values())
@@ -21643,7 +21657,7 @@ class Board:
         self.stamp = json.dumps(body).encode("utf-8")
 
 
-class BoardHandler(http.server.BaseHTTPRequestHandler):
+class BoardHandler(_RequestHandler):
     protocol_version = "HTTP/1.1"
     board: Board = None
     NAME_MAX_BYTES = 16 * 1024  # a {rid, slug} is a few dozen bytes
