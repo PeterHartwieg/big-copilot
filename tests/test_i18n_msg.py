@@ -232,6 +232,13 @@ class MsgIsTheEnglish(unittest.TestCase):
         for edited in (m + ".", m.replace("No", "No"), m.upper(), f"{m}"):
             self.assertIs(type(edited), str)
 
+    def test_a_list_of_none_one_or_more_items(self):
+        # An empty list is "" (as _sp_list() has it), not a RecursionError.
+        self.assertEqual(ba_dashboard._msg_list([]), "")
+        self.assertEqual(ba_dashboard._msg_list(["a"]), "a")
+        self.assertEqual(ba_dashboard._msg_list(["a", "b"]), "a, b")
+        self.assertEqual(ba_dashboard._msg_list(["a", "b", "c"]), "a, b, c")
+
     def test_a_message_survives_a_copy_and_a_pickle(self):
         m = msg("f.loss", "Lost {w:$} yesterday", w=12.0)
         for twin in (copy.deepcopy(m), copy.copy(m), pickle.loads(pickle.dumps(m))):
