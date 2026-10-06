@@ -240,4 +240,19 @@ class EvidenceTests(unittest.TestCase):
         self.assertFalse(self.grid['evidence']['learned'])
 
 
+    def test_a_stopped_sessions_baseline_is_never_read(self):
+        """Validation checks a baseline only while a session measures, so a
+        stopped one may hold anything there; planning ignores it (#311)."""
+        self.ingest(); self.action('start'); self.action('stop'); self.ingest()
+        before = self.need()
+        h = History(self.path)
+        h.book['company-a']['staffingEvidence']['sites'][self.business['key']]['session']['baseline'] = None
+        self.assertTrue(h.write())
+        self.ingest()
+        session = self.grid['evidence']['session']
+        self.assertEqual(session['phase'], 'stopped')
+        self.assertIn('baseline', session)
+        self.assertIsNone(session['baseline'])
+        self.assertEqual(self.need(), before)
+
 if __name__ == '__main__': unittest.main()
