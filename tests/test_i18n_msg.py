@@ -233,7 +233,7 @@ class MsgIsTheEnglish(unittest.TestCase):
             self.assertIs(type(edited), str)
 
     def test_a_list_of_none_one_or_more_items(self):
-        # An empty list is "" (as _sp_list() has it), not a RecursionError.
+        # An empty list is "" (as _sp_list() has it), not an IndexError.
         self.assertEqual(ba_dashboard._msg_list([]), "")
         self.assertEqual(ba_dashboard._msg_list(["a"]), "a")
         self.assertEqual(ba_dashboard._msg_list(["a", "b"]), "a, b")
