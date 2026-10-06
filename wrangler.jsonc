@@ -92,7 +92,7 @@
   // privacy notice promises none. The Worker's own console output, which is
   // only the bounded failure event, is kept for every request: head sampling
   // keeps or drops all of a request's log lines, so a rate below 1 would lose
-  // most failure events (docs/community-features.md, "Failure diagnostics").
+  // some failure events (docs/community-features.md, "Failure diagnostics").
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,
