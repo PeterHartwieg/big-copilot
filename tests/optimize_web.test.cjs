@@ -60,8 +60,9 @@ test('the assembled page shrinks while markup, styles and external script order 
   const board = styles(input).reduce((a, b) => a.length > b.length ? a : b);
   const minified = styles(result)[styles(input).indexOf(board)];
   assert.ok(gzipSync(minified).length < gzipSync(board).length * 0.85, 'the board stylesheet is at least 15% smaller compressed');
-  for (const feature of ['@container', ':has(', 'color-mix(', '@media', '@keyframes', '!important'])
-    assert.equal(minified.split(feature).length, board.split(feature).length, feature);
+  const uncommented = board.replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const feature of ['@container', ':has(', 'color-mix(', '@media', '@supports', '@keyframes', '!important'])
+    assert.equal(minified.split(feature).length, uncommented.split(feature).length, feature);
 });
 
 test('style blocks lose comments and whitespace; modern CSS and rule order pass through', () => {
@@ -93,6 +94,13 @@ test('style blocks lose comments and whitespace; modern CSS and rule order pass 
   assert.match(url, /^assets\/board-[a-f0-9]{64}\.css$/);
   assert.ok(!bytes.toString().includes('/*') && bytes.toString().includes('light-dark(#111111, #eeeeee)'));
   assert.equal(`<style>${bytes}</style>`, optimizePage('<style>' + big + '</style>'));
+});
+
+test('CSS the minifier would have to guess at stops the optimizer', () => {
+  // esbuild drops this whole @media block; a typo'd property is a warning too.
+  for (const [css, said] of [['@media (min-width:1px {.a{color:red}}', /Expected "\)"/],
+    ['.a{colr:red}', /"colr" is not a known CSS property/]])
+    assert.throws(() => optimizePage('<style>' + css + '</style>'), said);
 });
 
 test('a later script compilation failure leaves the deployment artifact intact', t => {

@@ -18,6 +18,12 @@ export function optimizePage(html) {
 function optimizeStyles(html) {
   return html.replace(/<style>([\s\S]*?)<\/style>/g, (_tag, css) => {
     const result = transformSync(css, {loader: 'css', minify: true, charset: 'utf8', logLevel: 'silent'});
+    // esbuild recovers from broken CSS by guessing, and may drop a rule or a
+    // whole @media block. Stop the deploy and name the fault instead.
+    if (result.warnings.length) {
+      throw new Error('CSS the minifier would change: ' + result.warnings.map(w =>
+        `${w.text} (line ${w.location?.line} of a <style> block: ${w.location?.lineText.trim()})`).join('; '));
+    }
     // A decoded escape must not close the element early; keep that block as written.
     if (/<\/style/i.test(result.code)) return _tag;
     return `<style>${result.code.trimEnd()}</style>`;
