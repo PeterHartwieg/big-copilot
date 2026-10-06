@@ -187,6 +187,8 @@ through `tools/optimize_web.mjs`, externalizes its largest classic board script 
 stylesheet as `web/assets/board-<sha256>.js` and `.css` with SRI, checks the emitted
 HTML and content assets with `checkOptimized`, and then runs
 `wrangler deploy --config wrangler.jsonc`.
+Whether wrangler succeeds or fails, it then runs `python build_web.py --assemble` again,
+so a deploy leaves the readable page in `web/` and `--check` clean, also after Ctrl-C stops wrangler.
 The transform uses the existing esbuild dependency, preserves shared global names
 and escapes inline script terminators; blocks with HTML comment openers keep their
 original escaping. Its source and esbuild’s lock entry in `package-lock.json` are
