@@ -6,7 +6,11 @@ holds the assembled folder, and the committed game-derived files it reads, to
 the sources without the installed game. This suite runs that check over the
 repository, over a doctored copy of it, and once through the command line
 itself, and assembles a copy with every route to the game shut.
+
+Each class makes its copy once. A test that doctors it puts the original bytes
+back through kept(), so the next test starts from the same copy.
 """
+from contextlib import contextmanager
 from pathlib import Path
 import json
 import hashlib
@@ -63,6 +67,45 @@ def standalone(root):
                 place(root, source.relative_to(ROOT).as_posix(), source.read_bytes())
 
 
+@contextmanager
+def kept(root, *names, trees=()):
+    """Put names, and every file under trees, back as they were once the block ends.
+
+    A file the block deletes comes back; one it adds under a tree is removed.
+    """
+    paths = [Path(root, name) for name in names]
+    for tree in trees:
+        paths += [path for path in Path(root, tree).rglob("*") if path.is_file()]
+    saved = {path: path.read_bytes() if path.is_file() else None for path in paths}
+    try:
+        yield
+    finally:
+        for tree in trees:
+            for path in Path(root, tree).rglob("*"):
+                if path.is_file() and path not in saved:
+                    path.unlink()
+        for path, data in saved.items():
+            if data is None:
+                path.unlink(missing_ok=True)
+            else:
+                place(root, path.relative_to(root), data)
+
+
+class SharedCopy(unittest.TestCase):
+    """One copy of the repository per class, made by fill(root) before its tests."""
+
+    @staticmethod
+    def fill(root):
+        raise NotImplementedError
+
+    @classmethod
+    def setUpClass(cls):
+        folder = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(folder.cleanup)
+        cls.root = folder.name
+        cls.fill(cls.root)
+
+
 def run_check(root):
     """`python build_web.py --check` against a copy, with nothing of ours in it."""
     return subprocess.run(
@@ -75,34 +118,6 @@ class WebFresh(unittest.TestCase):
     def test_repository_is_fresh(self):
         stale = build_web.check()
         self.assertEqual(stale, [], f"run python build_web.py --assemble: {', '.join(stale)}")
-
-    def test_stale_copy_is_reported(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            copy_inputs(tmp, CHECK_INPUTS)
-            copy = Path(tmp, "web/py/ba_dashboard.py")
-            copy.write_bytes(copy.read_bytes() + b"\n# stale\n")
-            self.assertIn("web/py/ba_dashboard.py", build_web.check(tmp))
-
-    def test_stale_wiki_generator_is_reported(self):
-        # Nothing the page fetches changes when the generator does, so only the
-        # stamp can tell that web/wiki-data.json needs rebuilding.
-        for authored in ("tools/wiki_sample.json", "tools/wiki_topics.json"):
-            with self.subTest(authored=authored), tempfile.TemporaryDirectory() as tmp:
-                copy_inputs(tmp, CHECK_INPUTS)
-                edited = Path(tmp, authored)
-                edited.write_bytes(edited.read_bytes() + b"\n")
-                self.assertIn("web/version.json", build_web.check(tmp))
-
-    def test_an_edited_article_names_the_wiki_payload(self):
-        # Not only the stamp: the payload that carries the articles is named.
-        with tempfile.TemporaryDirectory() as tmp:
-            copy_inputs(tmp, CHECK_INPUTS)
-            edited = Path(tmp, "tools/wiki_topics.json")
-            edited.write_text(edited.read_text(encoding="utf-8").replace(
-                "0.02482", "0.02483", 1), encoding="utf-8")
-            stale = build_web.check(tmp)
-            self.assertIn("web/wiki-data.json", stale)
-            self.assertIn("web/version.json", stale)
 
     def test_stamp_ignores_line_endings(self):
         with tempfile.TemporaryDirectory() as lf, tempfile.TemporaryDirectory() as crlf, \
@@ -146,55 +161,6 @@ class WebFresh(unittest.TestCase):
         embedded = re.search(r"window\.LEDGER_ASSETS = (.+?);</script>", html)
         self.assertEqual(json.loads(embedded.group(1)), manifest)
 
-    def test_unrelated_release_changes_leave_content_urls_unchanged(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            copy_inputs(tmp, CHECK_INPUTS)
-            before = build_web.worker_assets(tmp)[0]
-            version = build_web.stamp(tmp)
-            report = Path(tmp, "web/report.js")
-            report.write_bytes(report.read_bytes() + b"\n// unrelated edit\n")
-            self.assertNotEqual(build_web.stamp(tmp), version)
-            self.assertEqual(build_web.worker_assets(tmp)[0], before)
-            for name in ("ba_dashboard.py", "ba_store_rules.json"):
-                source = Path(tmp, name)
-                original = source.read_bytes()
-                source.write_bytes(original + b"\n")
-                changed = build_web.worker_assets(tmp)[0]
-                self.assertNotEqual(changed["files"][name], before["files"][name])
-                self.assertEqual(changed["worker"], before["worker"])
-                for other in before["files"]:
-                    if other != name:
-                        self.assertEqual(changed["files"][other], before["files"][other])
-                source.write_bytes(original)
-
-    def test_missing_modified_and_crlf_content_assets_are_stale(self):
-        assets = build_web.worker_assets()[1]
-        # The loop handles all descriptors alike. Exercise code, data, worker
-        # and metadata without repeating the full page/wiki freshness build
-        # for every table; worker startup covers every individual digest.
-        for entry in (name for name in assets if name.endswith(("worker.js", "ba_dashboard.py", "ba_item_prices.json")) or "/manifest-" in name):
-            with self.subTest(asset=entry), tempfile.TemporaryDirectory() as tmp:
-                copy_inputs(tmp, CHECK_INPUTS)
-                asset = Path(tmp, entry)
-                original = asset.read_bytes()
-                asset.unlink()
-                self.assertIn(entry, build_web.check(tmp))
-                asset.write_bytes(original + b"modified")
-                self.assertIn(entry, build_web.check(tmp))
-                asset.write_bytes(original)
-                self.assertNotIn(entry, build_web.check(tmp))
-                if b"\n" in original:
-                    asset.write_bytes(original.replace(b"\n", b"\r\n"))
-                    self.assertIn(entry, build_web.check(tmp))
-
-    def test_manifest_identity_ignores_checkout_line_endings(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            copy_inputs(tmp, CHECK_INPUTS)
-            for source in (*build_web.PY_COPIED, "web/py/gametext.json", "web/worker.js"):
-                file = Path(tmp, source)
-                file.write_bytes(file.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
-            self.assertEqual(build_web.worker_assets(tmp), build_web.worker_assets())
-
     def test_standalone_render_keeps_board_code_and_styles_embedded(self):
         standalone = build_web.render(None, live=True)
         self.assertNotIn("assets/", standalone)
@@ -219,12 +185,106 @@ class WebFresh(unittest.TestCase):
             write()
             self.assertNotEqual(build_web.stamp(tmp), original)
 
+
+class CheckedCopy(SharedCopy):
+    """build_web.check() and friends over one copy of what check() reads."""
+
+    @staticmethod
+    def fill(root):
+        copy_inputs(root, CHECK_INPUTS)
+
+    def test_stale_copy_is_reported(self):
+        tmp = self.root
+        with kept(tmp, "web/py/ba_dashboard.py"):
+            copy = Path(tmp, "web/py/ba_dashboard.py")
+            copy.write_bytes(copy.read_bytes() + b"\n# stale\n")
+            self.assertIn("web/py/ba_dashboard.py", build_web.check(tmp))
+
+    def test_stale_wiki_generator_is_reported(self):
+        # Nothing the page fetches changes when the generator does, so only the
+        # stamp can tell that web/wiki-data.json needs rebuilding.
+        tmp = self.root
+        for authored in ("tools/wiki_sample.json", "tools/wiki_topics.json"):
+            with self.subTest(authored=authored), kept(tmp, authored):
+                edited = Path(tmp, authored)
+                edited.write_bytes(edited.read_bytes() + b"\n")
+                self.assertIn("web/version.json", build_web.check(tmp))
+
+    def test_an_edited_article_names_the_wiki_payload(self):
+        # Not only the stamp: the payload that carries the articles is named.
+        tmp = self.root
+        with kept(tmp, "tools/wiki_topics.json"):
+            edited = Path(tmp, "tools/wiki_topics.json")
+            edited.write_text(edited.read_text(encoding="utf-8").replace(
+                "0.02482", "0.02483", 1), encoding="utf-8")
+            stale = build_web.check(tmp)
+            self.assertIn("web/wiki-data.json", stale)
+            self.assertIn("web/version.json", stale)
+
+    def test_unrelated_release_changes_leave_content_urls_unchanged(self):
+        tmp = self.root
+        with kept(tmp, "web/report.js", "ba_dashboard.py", "ba_store_rules.json"):
+            before = build_web.worker_assets(tmp)[0]
+            version = build_web.stamp(tmp)
+            report = Path(tmp, "web/report.js")
+            report.write_bytes(report.read_bytes() + b"\n// unrelated edit\n")
+            self.assertNotEqual(build_web.stamp(tmp), version)
+            self.assertEqual(build_web.worker_assets(tmp)[0], before)
+            for name in ("ba_dashboard.py", "ba_store_rules.json"):
+                source = Path(tmp, name)
+                original = source.read_bytes()
+                source.write_bytes(original + b"\n")
+                changed = build_web.worker_assets(tmp)[0]
+                self.assertNotEqual(changed["files"][name], before["files"][name])
+                self.assertEqual(changed["worker"], before["worker"])
+                for other in before["files"]:
+                    if other != name:
+                        self.assertEqual(changed["files"][other], before["files"][other])
+                source.write_bytes(original)
+
+    def test_missing_modified_and_crlf_content_assets_are_stale(self):
+        tmp = self.root
+        assets = build_web.worker_assets()[1]
+        # The loop handles all descriptors alike. Exercise code, data, worker
+        # and metadata without repeating the full page/wiki freshness build
+        # for every table; worker startup covers every individual digest.
+        for entry in (name for name in assets if name.endswith(("worker.js", "ba_dashboard.py", "ba_item_prices.json")) or "/manifest-" in name):
+            with self.subTest(asset=entry), kept(tmp, entry):
+                asset = Path(tmp, entry)
+                original = asset.read_bytes()
+                asset.unlink()
+                self.assertIn(entry, build_web.check(tmp))
+                asset.write_bytes(original + b"modified")
+                self.assertIn(entry, build_web.check(tmp))
+                asset.write_bytes(original)
+                self.assertNotIn(entry, build_web.check(tmp))
+                if b"\n" in original:
+                    asset.write_bytes(original.replace(b"\n", b"\r\n"))
+                    self.assertIn(entry, build_web.check(tmp))
+
+    def test_manifest_identity_ignores_checkout_line_endings(self):
+        tmp = self.root
+        sources = (*build_web.PY_COPIED, "web/py/gametext.json", "web/worker.js")
+        with kept(tmp, *sources):
+            for source in sources:
+                file = Path(tmp, source)
+                file.write_bytes(file.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+            self.assertEqual(build_web.worker_assets(tmp), build_web.worker_assets())
+
+
+class CommandLine(SharedCopy):
+    """`python build_web.py --check` and assemble() over one standalone copy."""
+
+    @staticmethod
+    def fill(root):
+        standalone(root)
+
     def test_command_line_reports_a_stale_copy(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            standalone(tmp)
-            fresh = run_check(tmp)
-            self.assertEqual(fresh.returncode, 0, fresh.stdout + fresh.stderr)
-            self.assertIn("web/ is up to date", fresh.stdout)
+        tmp = self.root
+        fresh = run_check(tmp)
+        self.assertEqual(fresh.returncode, 0, fresh.stdout + fresh.stderr)
+        self.assertIn("web/ is up to date", fresh.stdout)
+        with kept(tmp, "web/py/ba_dashboard.py"):
             copy = Path(tmp, "web/py/ba_dashboard.py")
             copy.write_bytes(copy.read_bytes() + b"\n# stale\n")
             stale = run_check(tmp)
@@ -234,10 +294,10 @@ class WebFresh(unittest.TestCase):
     def test_command_line_reports_an_edited_template(self):
         # render() reads the board markup, script and calculation core, so an
         # edit to any changes the page and, through STAMP_INPUTS, the stamp.
+        tmp = self.root
         for name, before in (("board.html", b"<title>"), ("board.js", b"let D = "), ("open-store-model.js", b"const OpenStoreModel = "),
                              ("open-factory-model.js", b"const OpenFactoryModel = ")):
-            with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
-                standalone(tmp)
+            with self.subTest(name=name), kept(tmp, f"template/{name}"):
                 board = Path(tmp, "template", name)
                 board.write_bytes(board.read_bytes().replace(before, before + b"x", 1))
                 stale = run_check(tmp)
@@ -251,16 +311,18 @@ class WebFresh(unittest.TestCase):
         def no_game(*_args, **_kwargs):
             raise AssertionError("assemble() looked for the installed game")
 
+        tmp = self.root
         assembled = ("web/index.html", "web/version.json", "web/sitemap.xml", "web/robots.txt",
                      *(f"web/py/{name}" for name in build_web.PY_COPIED))
-        with tempfile.TemporaryDirectory() as tmp, \
+        # What assemble() deletes or writes, put back for the other tests.
+        with kept(tmp, *assembled, "web/translate/index.html", "web/wiki-data.json", "tools/wiki_topics.json",
+                  trees=("web/i18n", "web/wiki", "web/assets")), \
                 mock.patch("ba_save.load_game_locale", no_game), \
                 mock.patch("ba_save.find_game_locale", no_game), \
                 mock.patch("build_web.load_game_locale", no_game), \
                 mock.patch("build_web.game_data_dir", no_game), \
                 mock.patch("build_web.write_public_wiki", no_game), \
                 mock.patch("builtins.print"):
-            standalone(tmp)
             for name in assembled:
                 Path(tmp, name).unlink()
             for tree in ("web/i18n", "web/wiki"):
