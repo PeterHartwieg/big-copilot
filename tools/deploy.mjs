@@ -87,7 +87,11 @@ export async function deploy(args = [], {
   // Check the reproducible Python output first; minification only changes the
   // ignored deployment artifact. From here on web/ holds the minified page and
   // web/assets/board-*, so assemble again however the deploy ends: --check and
-  // the tests compare the readable page.
+  // the tests compare the readable page. Ctrl-C reaches the whole process
+  // group; with Node's default handler this script would die before the
+  // finally, so a no-op handler lets wrangler stop and the restore run.
+  const interrupted = () => {};
+  process.on('SIGINT', interrupted);
   try {
     try {
       await optimize(root);
@@ -103,6 +107,7 @@ export async function deploy(args = [], {
       console.error('deploy: re-assembling the readable page failed; web/ still holds the minified page, '
         + 'so run python build_web.py --assemble before --check or the tests');
     }
+    process.off('SIGINT', interrupted);
   }
 }
 

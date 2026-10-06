@@ -79,3 +79,24 @@ test('a stop before optimizing leaves the assembled page as it is', async t => {
   await assert.rejects(run, err => err instanceof DeployStop && /reports stale files/.test(err.message));
   assert.deepEqual(calls, ['fetch', 'merge-base', '--assemble', '--check']);
 });
+
+test('Ctrl-C during the deploy cannot end the script before the restore', async t => {
+  const {deploy} = await deployer;
+  const root = fixture(t);
+  const before = process.listenerCount('SIGINT');
+  const seen = [];
+  const spawn = (command, args) => {
+    if (args[0] === '--version') return {status: 0};
+    if (command === 'git' && args[0] === 'status') return {status: 0, stdout: ''};
+    if (path.basename(args[0]) === 'wrangler.js') {
+      seen.push(['wrangler', process.listenerCount('SIGINT')]);
+      return {status: null, signal: 'SIGINT'};
+    }
+    if (args[1] === '--assemble') seen.push(['--assemble', process.listenerCount('SIGINT')]);
+    return {status: 0};
+  };
+  assert.equal(await deploy([], {root, env: {PYTHON: 'python-test'}, spawn, log: () => {}, optimize: async () => {}}), 1);
+  // A handler of its own while wrangler and the restore run; none left after.
+  assert.deepEqual(seen, [['--assemble', before], ['wrangler', before + 1], ['--assemble', before + 1]]);
+  assert.equal(process.listenerCount('SIGINT'), before);
+});
