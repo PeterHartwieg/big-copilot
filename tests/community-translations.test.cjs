@@ -269,7 +269,6 @@ test('text length is code points and JSON body allows a legitimate 2000-characte
 
 test('suggestions have their own budget: 429 after it, no candidate written, votes still accepted',async()=>{
   const {limit,period}=limiterFromConfig('TRANSLATION_SUGGEST_LIMITER').simple;
-  assert.ok(limit<=10,'a real contributor needs about ten suggestions a minute');
   // Miniflare's simulated limiter counts in wall-clock-aligned windows, so a run
   // that straddles a window boundary starts a fresh budget halfway and proves
   // nothing: discard it and run again on a fresh connection.

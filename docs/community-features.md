@@ -238,7 +238,7 @@ each edge location: heartbeats have their own budget of 20 a minute
 and votes share 120 a minute (`COMMUNITY_LIMITER`); publishing suggestions has its
 own three-a-minute budget (`SUGGEST_LIMITER`), and translation suggestions have ten
 a minute (`TRANSLATION_SUGGEST_LIMITER`). Translation votes stay on the shared
-budget. Neither is a global identity or
+budget. None of these is a global identity or
 fraud-prevention guarantee.
 
 Install the pinned development dependencies with `npm ci`. For local development:
