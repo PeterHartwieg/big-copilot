@@ -41,8 +41,9 @@
   // heartbeats have their own budget (a real tab sends one every five minutes);
   // bug reports have a small one of their own, a burst guard and not a daily
   // cap (it counts per minute and per Cloudflare location); visitor suggestions
-  // also have a separate small budget. Every other route
-  // shares COMMUNITY_LIMITER.
+  // also have a separate small budget, and so do translation suggestions, since
+  // each accepted one stores a candidate of up to 2,000 characters. Every other
+  // route, translation votes included, shares COMMUNITY_LIMITER.
   "ratelimits": [
     {
       "name": "SUGGEST_LIMITER",
@@ -63,6 +64,11 @@
       "name": "REPORT_LIMITER",
       "namespace_id": "1003",
       "simple": { "limit": 3, "period": 60 }
+    },
+    {
+      "name": "TRANSLATION_SUGGEST_LIMITER",
+      "namespace_id": "1005",
+      "simple": { "limit": 10, "period": 60 }
     }
   ],
   // Bug reports (POST /api/report): the save and the private details, each

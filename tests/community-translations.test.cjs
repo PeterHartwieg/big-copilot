@@ -24,10 +24,18 @@ async function migrate(target) {
   const requests = fs.readFileSync(path.join(ROOT,'migrations/0003_feature_requests.sql'),'utf8');
   for (const stmt of requests.match(/CREATE TABLE[\s\S]*?;|CREATE INDEX[\s\S]*?;|CREATE TRIGGER[\s\S]*?END;/g)) await target.prepare(stmt).run();
 }
+// wrangler.jsonc is the source of truth for the translation suggestion budget.
+function limiterFromConfig(name) {
+  const config = fs.readFileSync(path.join(ROOT,'wrangler.jsonc'),'utf8');
+  const m = new RegExp(`"name":\\s*"${name}",\\s*"namespace_id":\\s*"(\\d+)",\\s*"simple":\\s*\\{\\s*"limit":\\s*(\\d+),\\s*"period":\\s*(\\d+)`).exec(config);
+  assert.ok(m,`wrangler.jsonc declares ${name}`);
+  return {namespace_id:m[1], simple:{limit:Number(m[2]), period:Number(m[3])}};
+}
 function options() {
   return {modules:true, script, compatibilityDate:'2026-09-01', d1Databases:['COMMUNITY_DB'],
     bindings:{COMMUNITY_IP_SECRET:'synthetic-translation-secret'},
-    ratelimits:{COMMUNITY_LIMITER:{namespace_id:'1001',simple:{limit:120,period:60}}},
+    ratelimits:{COMMUNITY_LIMITER:{namespace_id:'1001',simple:{limit:120,period:60}},
+      TRANSLATION_SUGGEST_LIMITER:limiterFromConfig('TRANSLATION_SUGGEST_LIMITER')},
     serviceBindings:{ASSETS:async request => {
       const pathname = new URL(request.url).pathname;
       const lang = /^\/translations\/([^/]+)\.json$/.exec(pathname)?.[1];
@@ -257,6 +265,36 @@ test('text length is code points and JSON body allows a legitimate 2000-characte
   const data=await json(await suggest('😀'.repeat(2000),ip(),'plain'));
   assert.equal([...selected(data).text].length,2000);
   await json(await suggest('😀'.repeat(2001),ip(),'plain'),400);
+});
+
+test('suggestions have their own budget: 429 after it, no candidate written, votes still accepted',async()=>{
+  const {limit,period}=limiterFromConfig('TRANSLATION_SUGGEST_LIMITER').simple;
+  assert.ok(limit<=10,'a real contributor needs about ten suggestions a minute');
+  // Miniflare's simulated limiter counts in wall-clock-aligned windows, so a run
+  // that straddles a window boundary starts a fresh budget halfway and proves
+  // nothing: discard it and run again on a fresh connection.
+  const windowOf=()=>Math.floor(Date.now()/(period*1000));
+  let run=null;
+  for(let tries=1;!run;tries++) {
+    await db.prepare('DELETE FROM translation_votes').run();
+    await db.prepare('DELETE FROM translation_candidates').run();
+    const start=windowOf(),user=ip(),statuses=[];
+    let firstId=null;
+    for(let i=0;i<=limit;i++) {
+      const response=await suggest(`Variante ${tries}.${i} {n}`,user),payload=await response.json();
+      statuses.push(response.status);
+      if(response.status===200) firstId??=payload.selectedId;
+      else assert.equal(response.headers.get('retry-after'),'60');
+    }
+    const candidates=(await db.prepare('SELECT COUNT(*) n FROM translation_candidates').first()).n;
+    const voteStatus=(await vote(firstId,user)).status;
+    if(windowOf()===start) run={statuses,candidates,voteStatus};
+    else assert.ok(tries<3,'three runs in a row straddled a limiter window');
+  }
+  assert.deepEqual(run.statuses,[...Array(limit).fill(200),429]);
+  // The bundled text plus one row per accepted suggestion; the refused one wrote nothing.
+  assert.equal(run.candidates,limit+1);
+  assert.equal(run.voteStatus,200,'votes stay on the shared budget');
 });
 
 test('database/configuration failures yield generic JSON and preserve static delivery',async()=>{

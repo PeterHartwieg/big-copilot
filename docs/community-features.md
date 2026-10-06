@@ -236,7 +236,9 @@ presence, curated votes, visitor requests and request votes. Cloudflare rate-lim
 each edge location: heartbeats have their own budget of 20 a minute
 (`PRESENCE_LIMITER`), since a real tab sends one every five minutes. Listing
 and votes share 120 a minute (`COMMUNITY_LIMITER`); publishing suggestions has its
-own three-a-minute budget. Neither is a global identity or
+own three-a-minute budget (`SUGGEST_LIMITER`), and translation suggestions have ten
+a minute (`TRANSLATION_SUGGEST_LIMITER`). Translation votes stay on the shared
+budget. Neither is a global identity or
 fraud-prevention guarantee.
 
 Install the pinned development dependencies with `npm ci`. For local development:
