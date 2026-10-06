@@ -10,7 +10,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
 sys.path.insert(0, os.path.dirname(__file__))
-import es3_fixture  # noqa: E402
+from tests import es3_fixture  # noqa: E402
 import game_link_mock  # noqa: E402
 from ba_dashboard import shift_print  # noqa: E402
 

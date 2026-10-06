@@ -787,7 +787,7 @@ class ExtractTests(unittest.TestCase):
 
     def test_the_payload_carries_the_facts_and_both_passes_of_findings(self):
         import tempfile
-        import es3_fixture
+        from tests import es3_fixture
         from ba_dashboard import extract
         from ba_save import load_save
         with tempfile.TemporaryDirectory() as folder:

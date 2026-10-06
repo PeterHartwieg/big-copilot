@@ -17,8 +17,8 @@ from tests.i18n_check import MsgAsserts
 
 from ba_dashboard import (plain, RECIPE_ITEMS, SUMMARIES, WEEKDAYS, History, Names, _alerts,
                           _factories, _import_notes, _supply, _supply_facts, site_key)
-from test_recipe_identity import BEER, RID, WATER
-from test_recipe_identity import SaveStub as FactoryStub
+from tests.test_recipe_identity import BEER, RID, WATER
+from tests.test_recipe_identity import SaveStub as FactoryStub
 
 DAY = 10  # the save's day
 FACTORY, DEPOT, SHOP = ("factory", 0), ("depot", 1), ("shop", 2)

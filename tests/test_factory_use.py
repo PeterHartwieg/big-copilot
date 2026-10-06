@@ -13,8 +13,8 @@ import math
 import unittest
 
 from ba_dashboard import RECIPE_ITEMS, SUPPLY_MARGIN, Names, _line_use, _supply, site_key
-from test_factory_staffing import line_of, rostered_chain
-from test_supply_facts import BEER, FACTORY, RECIPES, RID, SHOP_A, WATER, Company, beer_chain
+from tests.test_factory_staffing import line_of, rostered_chain
+from tests.test_supply_facts import BEER, FACTORY, RECIPES, RID, SHOP_A, WATER, Company, beer_chain
 
 MALTINGS = ("upper_road", 7)
 

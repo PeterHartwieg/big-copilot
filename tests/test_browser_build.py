@@ -21,8 +21,8 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.dirname(HERE))
 
 import ba_dashboard  # noqa: E402
-import es3_fixture  # noqa: E402
-import save_fixtures  # noqa: E402
+from tests import es3_fixture  # noqa: E402
+from tests import save_fixtures  # noqa: E402
 
 UNKNOWN_RID = "UNKNOWNrecipeAAAAAAAAA=="  # a recipe id no table names
 BEER = "ba:itemname_beer"

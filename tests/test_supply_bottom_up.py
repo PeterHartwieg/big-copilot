@@ -17,7 +17,7 @@ import unittest
 from tests.i18n_check import MsgAsserts, msg_param
 
 from ba_dashboard import plain, Names, RECIPE_ITEMS, WEEKDAYS, _deepest_use, _idle_notes, _import_notes, _order_says, _shelf_notes, _supply, _supply_fact
-from test_supply_facts import BEER, RECIPES, WATER, Company
+from tests.test_supply_facts import BEER, RECIPES, WATER, Company
 
 WH, BREWERY, SHOP, CAFE = ("wh_road", 1), ("brew_lane", 2), ("main_street", 3), ("bean_street", 4)
 FACT_FIELDS = ("st", "why", "lvl", "cad", "use", "need", "have", "setTo")

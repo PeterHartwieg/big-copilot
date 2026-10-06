@@ -16,8 +16,8 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.dirname(HERE))
-import save_fixtures as f  # noqa: E402
-from es3_fixture import encode  # noqa: E402
+from tests import save_fixtures as f  # noqa: E402
+from tests.es3_fixture import encode  # noqa: E402
 
 # Each name carries an element no board draws (<bc-xss>), a handler that would
 # run, an ampersand, and one of the two ways out of the inlined <script>.

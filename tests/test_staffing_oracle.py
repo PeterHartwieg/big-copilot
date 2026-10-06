@@ -49,9 +49,9 @@ import ba_dashboard  # noqa: E402
 from ba_dashboard import JOB_DEMANDS, SERVICE_SKILL, SHIFT_CAP, FULL_TIME  # noqa: E402
 from ba_save import Names, Save, load_save  # noqa: E402
 
-import test_staffing as ts  # noqa: E402
-from test_staffing import (CLEAN_STATION, CLEANING, FIVE_DAYS, FLAT, FOUR_DAYS, FULLTIME,  # noqa: E402
-                           GUARD, LOCKER, PARTTIME, REGISTER, SERVICE, employee)
+from tests import test_staffing as ts  # noqa: E402
+from tests.test_staffing import (CLEAN_STATION, CLEANING, FIVE_DAYS, FLAT, FOUR_DAYS, FULLTIME,  # noqa: E402
+                                 GUARD, LOCKER, PARTTIME, REGISTER, SERVICE, employee)
 
 COVER = {"ba:skill_cleaning": "clean", "ba:skill_securityguard": "security"}
 WEEKEND = (6, 0)
@@ -498,7 +498,7 @@ class OracleSweepTest(unittest.TestCase):
                                      (stylists, kw, variant))
 
     def test_offices(self):
-        from test_staff_hire import office_rows, lawyer
+        from tests.test_staff_hire import office_rows, lawyer
         rng = random.Random(3)
         for n in range(12):
             crew = []
@@ -517,7 +517,7 @@ class OracleSweepTest(unittest.TestCase):
                 self.assertEqual(office_cover(row), [], n)
 
     def test_factories(self):
-        from test_factory_staffing import People, hand_rows
+        from tests.test_factory_staffing import People, hand_rows
         rng = random.Random(8)
         for n in range(15):
             lines = [(f"l{i}", rng.randint(1, 4), rng.choice([24, 16, 12]),
@@ -637,7 +637,7 @@ def random_offices(seed: int, upto: int):
     Yields each office's rows in turn, the n-th after the n before it, as
     they share one generator.
     """
-    from test_staff_hire import office_rows, lawyer
+    from tests.test_staff_hire import office_rows, lawyer
     rng = random.Random(100 + seed)
     for n in range(upto):
         crew = []
@@ -1042,8 +1042,8 @@ class OracleSnapshotTest(unittest.TestCase):
     """The payload snapshot fixtures' plans, through extract() as the board gets them."""
 
     def payloads(self):
-        import es3_fixture
-        import save_fixtures
+        from tests import es3_fixture
+        from tests import save_fixtures
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "payload.hsg")
             es3_fixture.write_link_save(path)

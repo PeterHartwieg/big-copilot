@@ -22,10 +22,10 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, ROOT)
 
 import ba_dashboard  # noqa: E402
-import es3_fixture  # noqa: E402
-import save_fixtures  # noqa: E402
+from tests import es3_fixture  # noqa: E402
+from tests import save_fixtures  # noqa: E402
 from ba_save import Names, load_save  # noqa: E402
-from test_payload_snapshot import normalise  # noqa: E402
+from tests.test_payload_snapshot import normalise  # noqa: E402
 
 PRIVATE = ("_posts", "_hire", "_took")
 
@@ -311,7 +311,7 @@ class Sections(unittest.TestCase):
 
 
     def test_an_office_stage_ticks_inside_its_placer(self):
-        from test_staff_hire import office_registration, lawyer, save_of, STREET, COMPUTER
+        from tests.test_staff_hire import office_registration, lawyer, save_of, STREET, COMPUTER
         reg = office_registration(1, [[[8, 20]] for _ in range(7)])
         save = save_of({"EmployeeInstances": {"$items": [lawyer("p1", here=False)]},
                         "BuildingRegistrations": {"$items": [reg]}})

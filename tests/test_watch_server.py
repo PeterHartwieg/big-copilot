@@ -26,7 +26,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.dirname(HERE))
 
 import ba_dashboard  # noqa: E402
-import es3_fixture  # noqa: E402
+from tests import es3_fixture  # noqa: E402
 
 DEADLINE = 120.0  # seconds to wait for the poll thread to see a change; never reached when it works
 

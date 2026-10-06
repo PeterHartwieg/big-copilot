@@ -616,7 +616,7 @@ class ExtractTest(unittest.TestCase):
         import tempfile
 
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        from save_fixtures import data_names, write_data_save
+        from tests.save_fixtures import data_names, write_data_save
         from ba_save import load_save
 
         with tempfile.TemporaryDirectory() as tmp:
