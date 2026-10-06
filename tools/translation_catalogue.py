@@ -67,11 +67,24 @@ def valid_text(text, rule):
     return tokens <= set(rule['allowed']) and all(tokens.intersection(group) for group in rule['required'])
 
 
-def catalogue(lang, found=None, root=ROOT):
+def sources(found=None, english=None, params=None):
+    """What every language's catalogue reads off the call sites: the English,
+    where each key is used, and passed()'s params. One scan serves them all;
+    `english` and `params`, when the caller has them, are reused as given."""
+    found = i18n.calls() if found is None else found
+    return {'english': i18n.catalogue(found) if english is None else english,
+            'locations': i18n.catalogue(found, where=True),
+            'params': i18n.passed(found) if params is None else params}
+
+
+def catalogue(lang, found=None, root=ROOT, inputs=None):
+    """One language's public catalogue. `inputs` is sources()'s, so a caller
+    building every language computes them once; without it they come from
+    `found`, or from a fresh scan of the call sites."""
     if lang not in i18n.PLURALS or lang == 'en':
         raise i18n.CatalogueError(f'unsupported translation language: {lang}')
-    found = i18n.calls() if found is None else found
-    english, locations, params = i18n.catalogue(found), i18n.catalogue(found, where=True), i18n.passed(found)
+    inputs = sources(found) if inputs is None else inputs
+    english, locations, params = inputs['english'], inputs['locations'], inputs['params']
     bundled = i18n.shipped(lang, english, str(root), params)
     marks = i18n.drafted(lang, str(root))
     keys = set()
@@ -99,12 +112,17 @@ def catalogue(lang, found=None, root=ROOT):
     return data
 
 
-def ship(check=False, root=ROOT):
+def ship(check=False, root=ROOT, found=None, english=None, params=None):
+    """Write web/translations/ for every language, or with check=True return
+    the paths that differ. `found` is i18n.calls()'s and `english` and
+    `params` are i18n.catalogue()'s and i18n.passed()'s over it; a caller that
+    has them already (build_web.check() and assemble()) passes them, else they
+    are read off the sources here."""
     root = Path(root)
-    found = i18n.calls()
+    inputs = sources(found, english, params)
     expected = {}
     for lang in i18n.languages():
-        data = catalogue(lang, found)
+        data = catalogue(lang, inputs=inputs)
         expected[f'{lang}.json'] = data
         expected[f'{lang}.manifest.json'] = {'schemaVersion': 1, 'lang': lang, 'revision': data['revision'],
             'entries': {e['key']: {'sourceVersion': e['sourceVersion'], 'validation': e['validation']} for e in data['entries']}}
