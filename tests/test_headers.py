@@ -6,12 +6,35 @@ the site loads or fetches may come from another host, except the game link on
 the player's own loopback. tests/csp.test.cjs boots Pyodide and the link under
 the same policy in a browser; this file only reads the text.
 """
+from fnmatch import fnmatch
 from pathlib import Path
 import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web"
+
+# Cached immutable only because every request names the release: the files are
+# stamp inputs, and every fetch carries ?v=<build stamp> (the map background
+# ?v=<its SHA-256>). _headers cannot see the query string.
+STAMPED_RULES = ("/app.js", "/community.js", "/community.css", "/report.js", "/report.css",
+                 "/i18n/*", "/names/*", "/maps/*", "/wiki-data.json")
+STAMPED_PATH = r"(?:app\.js|community\.(?:js|css)|report\.(?:js|css)|i18n/|names/|maps/|wiki-data\.json)"
+# A string or template literal that starts with one of those paths, after an
+# optional leading slash or ${...} prefix.
+STAMPED_LITERAL = re.compile(r"""[`'"](?:\$\{[^}]*\})?/?""" + STAMPED_PATH)
+# The scripts that can request them, and how many requests each makes at least,
+# so a pattern that stopped matching cannot pass the check vacuously.
+STAMPED_FETCHERS = {
+    "web/app.js": 2,          # report.css and report.js, on demand
+    "web/i18n.js": 1,         # ttLoad(): i18n/<lang>.json
+    "web/map.js": 3,          # locations.json, the background, floor-plans.json
+    "web/wiki.js": 1,         # WIKI_URL
+    "template/board.js": 1,   # gnLoad(): names/<lang>.json
+    "web/community.js": 0,
+    "web/report.js": 0,
+    "web/update.js": 0,
+}
 
 
 def rules() -> dict[str, dict[str, str]]:
@@ -80,6 +103,70 @@ class Headers(unittest.TestCase):
         self.assertIn("immutable", self.rules["/pyodide/*"].get("cache-control", ""))
         self.assertEqual(self.rules["/py/*"].get("cache-control"), "no-store")
         self.assertEqual(self.rules["/worker.js"].get("cache-control"), "no-store")
+
+    def test_stamped_paths_are_immutable_and_translations_revalidate(self):
+        for pattern in STAMPED_RULES:
+            with self.subTest(pattern=pattern):
+                self.assertEqual(self.rules.get(pattern, {}).get("cache-control"),
+                                 "public, max-age=31536000, immutable")
+        self.assertEqual(self.rules["/translations/*"].get("cache-control"), "no-cache")
+
+    def test_every_stamped_file_is_a_stamp_input(self):
+        # New bytes must mean a new stamp, or a year-long cache serves the old ones.
+        import build_web  # noqa: E402  (the repo root is on sys.path under unittest discover)
+        ignored = [line.strip() for line in (WEB / ".assetsignore").read_text(encoding="utf-8").splitlines()
+                   if line.strip() and not line.startswith("#")]
+        files = [WEB / rule.strip("/") for rule in STAMPED_RULES if not rule.endswith("*")]
+        for rule in STAMPED_RULES:
+            if rule.endswith("/*"):
+                folder = WEB / rule[1:-2]
+                files += sorted(p for p in folder.rglob("*") if p.is_file()) if folder.is_dir() else []
+        langs = [lang for lang in build_web.ui_text.languages() if lang != "en"]
+        self.assertTrue(langs and any(p.parent.name == "i18n" for p in files),
+                        "web/i18n/ is missing: run python3 build_web.py --assemble")
+        for path in files:
+            served = path.relative_to(WEB).as_posix()
+            if any(fnmatch(served, pattern) for pattern in ignored):
+                continue  # never deployed (maps/full-map.*)
+            with self.subTest(file=served):
+                self.assertIn(f"web/{served}", build_web.STAMP_INPUTS,
+                              f"/{served} is cached immutable but is not a stamp input")
+
+    def test_every_request_for_a_stamped_path_carries_the_stamp(self):
+        for name, at_least in STAMPED_FETCHERS.items():
+            text = (ROOT / name).read_text(encoding="utf-8")
+            requests = []
+            for line in text.splitlines():
+                if line.lstrip().startswith(("//", "/*", "*")):
+                    continue
+                for match in STAMPED_LITERAL.finditer(line):
+                    # An error message names the file; it requests nothing.
+                    if line[:match.start()].endswith("Error("):
+                        continue
+                    const = re.match(r"\s*const (\w+) = [`'\"][^`'\"]*[`'\"];\s*$", line)
+                    if const:
+                        # A path kept in a constant: every use takes the stamp.
+                        uses = re.findall(r"\$\{" + const.group(1) + r"\}(.{0,5})", text)
+                        self.assertTrue(uses, f"{name}: {const.group(1)} is never requested")
+                        requests += [(f"${{{const.group(1)}}}{rest}", rest) for rest in uses]
+                        continue
+                    requests.append((line.strip(), line[match.start():]))
+            self.assertGreaterEqual(len(requests), at_least, f"{name}: stamped requests found: {requests}")
+            for where, rest in requests:
+                with self.subTest(script=name, request=where):
+                    self.assertRegex(rest, r"\?v=\$\{", "a stamped path requested without ?v=<stamp>")
+            if requests:
+                self.assertRegex(text, r"LEDGER_BUILD|imageHash", f"{name} stamps nothing")
+        # The built page loads app.js, community.js and community.css with its own stamp.
+        page = WEB / "index.html"
+        self.assertTrue(page.is_file(), "web/index.html is missing: run python3 build_web.py --assemble")
+        html = page.read_text(encoding="utf-8")
+        build = re.search(r'window\.LEDGER_BUILD = "([0-9a-f]+)"', html).group(1)
+        refs = re.findall(r'(?:src|href)="(/?' + STAMPED_PATH + r'[^"]*)"', html)
+        self.assertGreaterEqual(len(refs), 3, refs)
+        for ref in refs:
+            with self.subTest(page_ref=ref):
+                self.assertTrue(ref.endswith(f"?v={build}"), f"{ref} does not carry the page's stamp {build}")
 
 
 if __name__ == "__main__":
