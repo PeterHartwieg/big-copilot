@@ -135,8 +135,9 @@ class Headers(unittest.TestCase):
     def test_every_request_for_a_stamped_path_carries_the_stamp(self):
         for name, at_least in STAMPED_FETCHERS.items():
             text = (ROOT / name).read_text(encoding="utf-8")
-            requests = []
-            for line in text.splitlines():
+            lines = text.splitlines()
+            requests = []  # (where, the text from the path on, the lines before it)
+            for at, line in enumerate(lines):
                 if line.lstrip().startswith(("//", "/*", "*")):
                     continue
                 for match in STAMPED_LITERAL.finditer(line):
@@ -146,28 +147,57 @@ class Headers(unittest.TestCase):
                     const = re.match(r"\s*const (\w+) = [`'\"][^`'\"]*[`'\"];\s*$", line)
                     if const:
                         # A path kept in a constant: every use takes the stamp.
-                        uses = re.findall(r"\$\{" + const.group(1) + r"\}(.{0,5})", text)
+                        uses = [(n, use) for n, use in enumerate(lines) if "${" + const.group(1) + "}" in use]
                         self.assertTrue(uses, f"{name}: {const.group(1)} is never requested")
-                        requests += [(f"${{{const.group(1)}}}{rest}", rest) for rest in uses]
+                        requests += [(use.strip(), use[use.index("${" + const.group(1) + "}"):], lines[:n])
+                                     for n, use in uses]
                         continue
-                    requests.append((line.strip(), line[match.start():]))
+                    requests.append((line.strip(), line[match.start():], lines[:at]))
             self.assertGreaterEqual(len(requests), at_least, f"{name}: stamped requests found: {requests}")
-            for where, rest in requests:
+            for where, rest, before in requests:
                 with self.subTest(script=name, request=where):
-                    self.assertRegex(rest, r"\?v=\$\{", "a stamped path requested without ?v=<stamp>")
-            if requests:
-                self.assertRegex(text, r"LEDGER_BUILD|imageHash", f"{name} stamps nothing")
-        # The built page loads app.js, community.js and community.css with its own stamp.
-        page = WEB / "index.html"
-        self.assertTrue(page.is_file(), "web/index.html is missing: run python3 build_web.py --assemble")
-        html = page.read_text(encoding="utf-8")
-        build = re.search(r'window\.LEDGER_BUILD = "([0-9a-f]+)"', html).group(1)
-        refs = re.findall(r'(?:src|href)="(/?' + STAMPED_PATH + r'[^"]*)"', html)
-        self.assertGreaterEqual(len(refs), 3, refs)
-        for ref in refs:
-            with self.subTest(page_ref=ref):
-                self.assertTrue(ref.endswith(f"?v={build}"), f"{ref} does not carry the page's stamp {build}")
+                    self.assertTrue(self.names_the_release(rest, before),
+                                    "a stamped path requested without ?v=<build stamp> or ?v=<content hash>")
+        # Each hosted page sets the stamp before any of its scripts fetches, and
+        # loads app.js, community.js and community.css with that same stamp.
+        pages = [WEB / "index.html", WEB / "translate" / "index.html"]
+        for page in pages:
+            with self.subTest(page=page.relative_to(WEB).as_posix()):
+                self.assertTrue(page.is_file(), f"{page} is missing: run python3 build_web.py --assemble")
+                html = page.read_text(encoding="utf-8")
+                stamp = re.search(r'<script>window\.LEDGER_BUILD\s*=\s*"([0-9a-f]{10})";</script>', html)
+                self.assertTrue(stamp, "the page does not set window.LEDGER_BUILD to a build stamp")
+                first_fetcher = min((m.start() for m in re.finditer(r"<script[^>]*>", html)
+                                     if " src=" in m.group(0) or "fetch(" in html[m.end():html.find("</script>", m.end())]),
+                                    default=len(html))
+                self.assertLess(stamp.start(), first_fetcher, "a script runs before window.LEDGER_BUILD is set")
+                refs = re.findall(r'(?:src|href)="(/?' + STAMPED_PATH + r'[^"]*)"', html)
+                if page.parent == WEB:
+                    self.assertGreaterEqual(len(refs), 3, refs)
+                for ref in refs:
+                    self.assertTrue(ref.endswith(f"?v={stamp.group(1)}"), f"{ref} does not carry the page's stamp")
 
+    @staticmethod
+    def names_the_release(rest: str, before: list[str]) -> bool:
+        """Whether the ?v= in a request comes from the build stamp or the file's hash.
+
+        The value must read window.LEDGER_BUILD, or a variable assigned from it
+        (the nearest assignment above), or the map's imageHash. A constant such
+        as ${"1"} survives a release, so a year-long cache would keep old bytes.
+        """
+        query = re.search(r"\?v=\$\{([^}]*)\}", rest)
+        if not query:
+            return False
+        value = query.group(1).strip()
+        if re.fullmatch(r"(?:window\.)?LEDGER_BUILD(?:\s*\|\|\s*\"\w*\")?|\w+\.imageHash", value):
+            return True
+        if not re.fullmatch(r"\w+", value):
+            return False
+        for line in reversed(before):
+            assigned = re.match(r"\s*(?:const|let|var)\s+" + value + r"\s*=\s*(.*)$", line)
+            if assigned:
+                return "window.LEDGER_BUILD" in assigned.group(1)
+        return False
 
 if __name__ == "__main__":
     unittest.main()

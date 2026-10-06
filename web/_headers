@@ -46,7 +46,9 @@
 # always arrive under a new URL. _headers cannot see the query, so the bare
 # paths are immutable too; the page never requests one. tests/test_headers.py
 # holds each fetch to its stamp. Unlike /assets/*, these URLs name a release,
-# not bytes: an old stamp fetched after a deploy gets the new bytes.
+# not bytes: an old stamp fetched after a deploy gets the new bytes. Under
+# wrangler dev, re-assemble after editing one of these files: the stamp only
+# moves with assembly, and until then the browser keeps its cached copy.
 /app.js
   Cache-Control: public, max-age=31536000, immutable
 
