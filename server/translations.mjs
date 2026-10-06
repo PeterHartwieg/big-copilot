@@ -12,8 +12,9 @@ const ENTITY = /&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;)/i;
 // suggestion, moderation action and vote cleanup bumps it in the same transaction)
 // or a deployment replaces the catalogue, which changes the build stamp in
 // /version.json. caches.default keeps each (language, revision, stamp) overlay;
-// the path is a cache key only, not a routable endpoint. Bump OVERLAY_FORMAT when
-// overlay() would answer differently for the same revision and catalogue.
+// the path is a cache key only, not a routable endpoint. Worker code is not in the
+// stamp, so bump OVERLAY_FORMAT when overlay() would answer differently for the same
+// revision and catalogue; it is in both the cache key and the browser's ETag.
 const OVERLAY_FORMAT = 'v1';
 const OVERLAY_EDGE_TTL = 24 * 60 * 60;
 const OVERLAY_BROWSER_TTL = 60;
@@ -234,8 +235,9 @@ function overlayReply(request, body, revision, stamp) {
     'cache-control': `public, max-age=${OVERLAY_BROWSER_TTL}`,
     'x-content-type-options': 'nosniff',
   };
-  // The stamp is part of the tag: a deployment can change the overlay without a vote.
-  const tag = stamp ? `"${revision}-${stamp}"` : null;
+  // The format and the stamp are part of the tag: a deployment can change the
+  // overlay without a vote, and a 304 must never keep an older body.
+  const tag = stamp ? `"${OVERLAY_FORMAT}-${revision}-${stamp}"` : null;
   if (tag) {
     headers.etag = tag;
     const wanted = (request.headers.get('if-none-match') || '').split(',').map(value => value.trim().replace(/^W\//, ''));

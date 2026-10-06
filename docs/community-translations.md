@@ -72,8 +72,11 @@ The Worker caches each overlay by language, translation revision and build stamp
 Every vote, suggestion, moderation action and vote cleanup moves the revision, and
 a deployment that replaces a catalogue moves the stamp, so neither change can be
 answered from an old entry. A browser reuses its copy for up to a minute and then
-revalidates with the `ETag` (`"<revision>-<stamp>"`). A new selection can therefore
-take a minute to reach a visitor who loaded the language just before it.
+revalidates with the `ETag` (`"<format>-<revision>-<stamp>"`). A new selection can
+therefore take a minute to reach a visitor who loaded the language just before it.
+The Worker's code is not part of the build stamp: a change that makes the overlay
+answer differently for the same revision and catalogue bumps `OVERLAY_FORMAT` in
+`server/translations.mjs`, which retires both the cached entries and browser tags.
 
 The local CLI remains offline. Exporting accepted community wording into `i18n/`
 makes it available in subsequent bundled builds. Import must validate the English

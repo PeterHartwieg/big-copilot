@@ -327,7 +327,7 @@ test('overlay is cached per language, revision and build stamp; a repeat costs n
   const reads=catalogueReads('it');
   const first=await overlayOf();
   assert.equal(first.headers.get('cache-control'),'public, max-age=60');
-  assert.equal(first.headers.get('etag'),`"${revision}-${stamp}"`);
+  assert.equal(first.headers.get('etag'),`"v1-${revision}-${stamp}"`);
   const body=await json(first);
   assert.equal(body.revision,revision); assert.deepEqual(body.translations.greeting,{text:'Salve {n}',sourceVersion:V1});
   assert.equal(catalogueReads('it'),reads+1,'a miss computes from the catalogue');
@@ -335,14 +335,14 @@ test('overlay is cached per language, revision and build stamp; a repeat costs n
   // cached revision, which proves the second answer came from the cache.
   await db.prepare("UPDATE translation_candidates SET text='Ciao ciao {n}' WHERE text='Salve {n}'").run();
   const again=await overlayOf();
-  assert.equal(again.headers.get('etag'),`"${revision}-${stamp}"`);
+  assert.equal(again.headers.get('etag'),`"v1-${revision}-${stamp}"`);
   assert.deepEqual(await json(again),body);
   assert.equal(catalogueReads('it'),reads+1,'a hit reads no catalogue');
-  const unchanged=await overlayOf('it',{'If-None-Match':`W/"${revision}-${stamp}", "other"`});
+  const unchanged=await overlayOf('it',{'If-None-Match':`W/"v1-${revision}-${stamp}", "other"`});
   assert.equal(unchanged.status,304); assert.equal(await unchanged.text(),'');
-  assert.equal(unchanged.headers.get('etag'),`"${revision}-${stamp}"`);
+  assert.equal(unchanged.headers.get('etag'),`"v1-${revision}-${stamp}"`);
   stamp=`${stamp}-next`; // a deployment
-  const deployed=await overlayOf('it',{'If-None-Match':`"${revision}-${stamp.slice(0,-5)}"`});
+  const deployed=await overlayOf('it',{'If-None-Match':`"v1-${revision}-${stamp.slice(0,-5)}"`});
   assert.equal(deployed.status,200,'a new build stamp never revalidates an old overlay');
   assert.deepEqual((await json(deployed)).translations.greeting,{text:'Ciao ciao {n}',sourceVersion:V1});
   assert.equal(catalogueReads('it'),reads+2);
@@ -394,4 +394,25 @@ test('without a readable build stamp the overlay is computed every time and carr
     assert.deepEqual((await json(response)).translations.greeting,{text:'Salve {n}',sourceVersion:V1});
   }
   assert.equal(catalogueReads('it'),reads+2);
+});
+
+test('a Worker deploy that bumps OVERLAY_FORMAT never revalidates a browser copy from the old format',async()=>{
+  const source=fs.readFileSync(path.join(ROOT,'server/translations.mjs'),'utf8');
+  assert.match(source,/^const OVERLAY_FORMAT = 'v1';$/m);
+  const bumped=(await require('esbuild').build({stdin:{resolveDir:ROOT,contents:"import worker from './server/worker.mjs'; export default worker;"},
+    bundle:true,write:false,format:'esm',platform:'browser',target:'es2022',plugins:[{name:'overlay-format',setup(build){
+      build.onLoad({filter:/translations\.mjs$/},()=>({loader:'js',contents:source.replace("const OVERLAY_FORMAT = 'v1';","const OVERLAY_FORMAT = 'v2';")}));
+    }}]})).outputFiles[0].text;
+  // Same build stamp, same (empty) revision: only the Worker code differs.
+  const old=await overlayOf(); const tag=old.headers.get('etag'); await json(old);
+  assert.equal(tag,`"v1-0-${stamp}"`);
+  assert.equal((await overlayOf('it',{'If-None-Match':tag})).status,304);
+  const scoped=new Miniflare(convertV4MiniflareOptions({...options(),script:bumped}));
+  try {
+    await scoped.ready; await migrate(await scoped.getD1Database('COMMUNITY_DB'));
+    const response=await fetchApi('/api/translations/overlay?lang=it',{instance:scoped,headers:{'If-None-Match':tag}});
+    assert.equal(response.status,200,'the old tag no longer matches');
+    assert.equal(response.headers.get('etag'),`"v2-0-${stamp}"`);
+    assert.deepEqual((await json(response)).translations,{});
+  } finally {await scoped.dispose();}
 });
