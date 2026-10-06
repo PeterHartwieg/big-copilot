@@ -20832,16 +20832,18 @@ def render(
     # The <html> start tag is optional and the page never closed one, so this
     # only names the language of the element the parser makes anyway.
     return "<!doctype html>" + chr(10) + '<html lang="en">' + chr(10) + '<meta charset="utf-8">' + chr(10) + head + (
-        # The payload goes in last, through DATA_SLOT, so no placeholder's
-        # .replace() below runs over the save's own text.
+        # The small placeholders first and the big ones last, so the wiki
+        # (1.5 MB) and the map (11.5 MB in an export) are not copied again by
+        # every .replace() after them. The language table still follows both,
+        # at the head's marker ahead of them, so no placeholder runs over the
+        # table, and the payload comes last, through DATA_SLOT, so no
+        # placeholder's .replace() runs over the save's own text.
         load_template().replace("/*__DATA__*/null", DATA_SLOT)
         .replace("/*__SECTION_META__*/{}", script_json(json.dumps(section_metadata(), separators=(",", ":"))), 1)
         .replace("/*__MAP_CSS__*/", map_css)
         .replace("/*__MAP_SCRIPT__*/", map_script)
-        .replace("/*__MAP_PAYLOAD__*/", map_payload)
         .replace("/*__WIKI_CSS__*/", wiki_css)
         .replace("/*__WIKI_SCRIPT__*/", wiki_script)
-        .replace("/*__WIKI_PAYLOAD__*/", wiki_payload)
         # One table of neighbourhood tags, written once here, so a wiki address
         # wears the same two letters a business does.
         .replace("/*__HOOD_TAGS__*/{}", json.dumps(HOOD_TAG, separators=(",", ":")))
@@ -20855,6 +20857,8 @@ def render(
         .replace("<!--__FOOTER__-->", footer_html(site=site))
         .replace("<!--__BANNER__-->", banner)
         .replace("<!--__BEFORE_SCRIPT__-->", before_script)
+        .replace("/*__WIKI_PAYLOAD__*/", wiki_payload, 1)
+        .replace("/*__MAP_PAYLOAD__*/", map_payload, 1)
         .replace("/*__I18N_SCRIPT__*/", i18n_script, 1)
         .replace(DATA_SLOT, payload, 1)
     )
