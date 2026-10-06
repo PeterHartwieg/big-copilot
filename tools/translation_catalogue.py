@@ -34,9 +34,7 @@ def validation(key, english, lang, params):
 
     A plural form may use any placeholder of its family, but it must keep only
     those of its own English (the form of its category, else `other`): "{n}
-    {kind}" beside "{n} {kinds}" cannot need both a kind and a kinds token.
-    fits() asks a form for every name of its family, so for such a family it
-    is stricter than this contract; it only filters bundled drafts."""
+    {kind}" beside "{n} {kinds}" cannot need both a kind and a kinds token."""
     _, tokens = i18n._english_for(key, english)
     own = i18n.fields(i18n._english_text(key, english))
     base = i18n._base_key(key)

@@ -86,6 +86,20 @@ class TranslationCatalogue(unittest.TestCase):
             plain = [e['key'] for e in entries if not markup.search(e['en']) and not tc.valid_text(e['en'], e['validation'])]
             self.assertEqual(plain, [], lang)
 
+    def test_contract_agrees_with_fits_when_forms_use_different_words(self):
+        # An accepted community text must also survive shipped(), which filters by fits().
+        for params in ({'n', 'kind', 'kinds', 'kind_name'}, None):
+            found = self.found({'one': '{n} {kind}', 'other': '{n} {kinds}'}, params)
+            if params is None:
+                found[0]['params'] = None
+            en, passed = i18n.catalogue(found), i18n.passed(found)
+            for lang in ('it', 'ru', 'ko'):
+                for entry in tc.catalogue(lang, found)['entries']:
+                    for text in ('Un {kind}', '{n} {kind}', '{n} {kinds}', '{n} {kind} {kinds}', '{n} × {kind_name}',
+                                 '{n} articoli', '{kinds}', '{n:$} {kinds}', '{n} {kind_name:$}'):
+                        self.assertEqual(tc.valid_text(text, entry['validation']),
+                                         i18n.fits(entry['key'], text, en, lang, passed), (params, lang, entry['key'], text))
+
     def test_unknown_params_contract_matches(self):
         found = self.found()
         found[0]['params'] = None
