@@ -16049,8 +16049,23 @@ def _staff_evidence_need(grid, rates=None):
     trial = evidence.get("session") or {}
     targets = trial.get("targets", {}) if trial.get("phase") in ("pending", "active", "ready") else {}
     out = {}
+    office = grid.get("office")
     for role in grid["roles"]:
         station_rates = _role_rates(role, rates)
+        # What does not change from hour to hour, read once per role (#311).
+        role_key = str(_role_key(role))
+        fallback = evidence.get("fallback", {}).get(role_key)
+        # Office grids use None until their profession is assigned.
+        if fallback is None and office:
+            fallback = evidence.get("fallback", {}).get("None")
+        # A session's baseline is read only while it has cells to measure.
+        baseline = None
+        if targets:
+            baseline = trial.get("baseline", {}).get(role_key)
+            if baseline is None and office:
+                baseline = trial.get("baseline", {}).get("None")
+        # A new shop: nothing measured and no installed stations to cover.
+        unmeasured = not office and not evidence["lower"] and not any(any(day) for day in fallback or [])
         demand, need, basis = [], [], []
         for wd in range(7):
             ds, ns, bs = [], [], []
@@ -16063,20 +16078,13 @@ def _staff_evidence_need(grid, rates=None):
                     n = _fill_stations(value, station_rates)
                 else:
                     value, case = max(lower, learned.get("value", 0)), "lower" if lower else "none"
-                    fallback = evidence.get("fallback", {}).get(str(_role_key(role)))
-                    # Office grids use None until their profession is assigned.
-                    if fallback is None and grid.get("office"):
-                        fallback = evidence.get("fallback", {}).get("None")
                     capacity = fallback[wd][h] if fallback else 0
                     n = max(_fill_stations(value, station_rates), _fill_stations(capacity, station_rates))
-                    if not grid.get("office") and not evidence["lower"] and not any(any(day) for day in fallback or []):
+                    if unmeasured:
                         n = len(station_rates)  # new shops; offices use their default below
                 if cell in targets:
                     value, case = targets[cell]["capacity"], "trial"
                     n = _fill_stations(value, station_rates)
-                    baseline = trial.get("baseline", {}).get(str(_role_key(role)))
-                    if baseline is None and grid.get("office"):
-                        baseline = trial.get("baseline", {}).get("None")
                     if baseline:
                         n = max(n, _fill_stations(baseline[wd][h], station_rates))
                 if not any(a <= h < z for a, z in grid["open"][wd]):
