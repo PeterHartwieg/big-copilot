@@ -13482,8 +13482,8 @@ def _blackout_cuts(week: dict, pool: list) -> dict:
     where they fall inside one of that skill's lines. Empty when nobody of
     a skill with an open line has a blackout, which most sites are.
     """
-    open_skills = {s["skill"] for s in week["shifts"] if s["employee"] is None}
-    if not open_skills:
+    open_roles = {(s["skill"], s["kind"]) for s in week["shifts"] if s["employee"] is None}
+    if not open_roles:
         return {}
     cuts, useful = collections.defaultdict(set), {}
     for person in pool:
@@ -13491,7 +13491,9 @@ def _blackout_cuts(week: dict, pool: list) -> dict:
         # fourth by the same window, where four 7-hour days would fit.
         if not person["blackouts"]:
             continue
-        for skill in open_skills & person["skills"]:
+        # Only a role the plan would ever give them (_usable()): a cashier who
+        # also holds Cleaning is never put on a cleaning station.
+        for skill in {skill for skill, kind in open_roles if _usable(person, skill, kind)}:
             for low, high in person["blackouts"]:
                 cuts[skill].update((low, high))
     # Only an edge inside one of the role's lines cuts anything: a window that
