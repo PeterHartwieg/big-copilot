@@ -13458,7 +13458,7 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     if not cuts:
         return week
     best = None
-    for snap in (True, False):
+    for snap in (True, False) if _snap_matters(week, cuts) else (True,):
         trial = {pid: _copy_state(entry) for pid, entry in kept.items()}
         other = _place_cut_week(*args, trial, cuts=cuts, snap=snap, **kwargs)
         if _week_rank(other) < _week_rank(best[0] if best else week):
@@ -13501,6 +13501,27 @@ def _blackout_cuts(week: dict, pool: list) -> dict:
                 useful.setdefault(shift["skill"], set()).update(inside)
     return useful
 
+
+
+def _snap_matters(week: dict, cuts: dict) -> bool:
+    """Whether _cut_at() cuts any of the week's runs differently with `snap` and without.
+
+    Only an edge within MIN_SPLIT of the end of a run moves; where none is,
+    both cuts are the same lines and the week need not be placed twice. The
+    runs are the station-days' hours in the plain week, which the cuts do not
+    change.
+    """
+    hours = collections.defaultdict(set)
+    for shift in week["shifts"]:
+        if shift["skill"] in cuts:
+            hours[(shift["skill"], shift["station"], shift["wd"])].update(
+                range(shift["from"], shift["to"]))
+    return any(
+        start < point < end and min(point - start, end - point) < MIN_SPLIT
+        for (skill, _station, _wd), held in hours.items()
+        for start, end in _runs(held)
+        for point in cuts[skill]
+    )
 
 def _week_rank(week: dict) -> tuple:
     """How a week compares with another of the same site: lower is better.

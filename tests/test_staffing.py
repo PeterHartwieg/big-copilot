@@ -984,6 +984,27 @@ class HeadcountTest(unittest.TestCase):
             if row["people"][s["p"]]["name"].startswith("D"):
                 self.assertTrue(4 <= s["f"] and s["t"] <= 22, s)
 
+    def test_a_cut_no_edge_moves_in_is_placed_once(self):
+        """No mornings (06-10) inside a day open around the clock: neither edge
+        is near a run's end, so moving edges and dropping them cut the same
+        lines and the re-cut week is placed once, not twice."""
+        calls = []
+        real = ba_dashboard._place_cut_week
+
+        def counting(*a, **k):
+            calls.append((k.get("cuts"), k.get("snap")))
+            return real(*a, **k)
+
+        people = [employee(f"m{i}", [SERVICE],
+                           demands=("ba:jobdemand_fulltime", "ba:jobdemand_nomornings"))
+                  for i in range(4)]
+        people.append(employee("a0", [SERVICE], demands=("ba:jobdemand_fulltime",)))
+        with unittest.mock.patch.object(ba_dashboard, "_place_cut_week", counting):
+            plan([(1, REGISTER)], people, {h: 1 for h in range(24)})
+        recut = [snap for cut, snap in calls if cut]
+        self.assertTrue(recut, calls)
+        self.assertNotIn(False, recut, calls)
+
     def test_a_plain_cut_is_kept_where_a_re_cut_hires_nobody_fewer(self):
         """The re-cut is only kept when it is better: with nobody to hire the
         lines stay the plain 0-12 and 12-24."""
@@ -2387,9 +2408,7 @@ class ExchangeTest(unittest.TestCase):
                                              "ba:jobdemand_fourdaysweek")),
         ], FLAT, opens=((8, 20),))
         self.assert_no_short_week(row, {"G1": 30, "G2": 30})
-        for who, week in self.weeks(row).items():
-            if who == "G2":
-                self.assertEqual(len(week["days"]), 4)
+        self.assertNotIn("G2", self.weeks(row))
         self.assertEqual(sum(h["hire"] for h in row["headcount"].values()), 1)
 
     def test_one_role_s_failed_cut_leaves_another_s_alone(self):
