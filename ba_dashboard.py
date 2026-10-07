@@ -13464,21 +13464,32 @@ def _blackout_cuts(week: dict, pool: list) -> dict:
     """The extra cut points per skill that might let a week's idle people work.
 
     For each skill with an entry nobody holds: the edges of the blackout
-    windows of the people the week gives no hours who hold that skill. Empty
-    when nobody idle has a blackout, which is every site the plain cut serves.
+    windows of the people the week gives no hours who hold that skill, kept
+    where they fall inside one of that skill's lines. Empty when nobody idle
+    has a blackout, which is every site the plain cut serves.
     """
     open_skills = {s["skill"] for s in week["shifts"] if s["employee"] is None}
     if not open_skills:
         return {}
     worked = {s["employee"] for s in week["shifts"] if s["employee"] is not None}
-    cuts = collections.defaultdict(set)
+    cuts, useful = collections.defaultdict(set), {}
     for person in pool:
         if person["id"] in worked or not person["blackouts"]:
             continue
         for skill in open_skills & person["skills"]:
             for low, high in person["blackouts"]:
                 cuts[skill].update((low, high))
-    return {skill: points for skill, points in cuts.items() if points}
+    # Only an edge inside one of the role's lines cuts anything: a window that
+    # starts or ends where the lines already do would place the week twice
+    # for the same answer.
+    for shift in week["shifts"]:
+        points = cuts.get(shift["skill"])
+        if points:
+            inside = {p for p in points if shift["from"] < p < shift["to"]}
+            if inside:
+                cuts[shift["skill"]] = points - inside
+                useful.setdefault(shift["skill"], set()).update(inside)
+    return useful
 
 
 def _week_rank(week: dict) -> tuple:

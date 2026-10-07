@@ -941,11 +941,24 @@ class HeadcountTest(unittest.TestCase):
         plan, which cannot put anybody on the hours their contracts shut out,
         uses none of them. Three spare, and a hire, and the page has to say so.
         """
-        row = plan([(1, REGISTER)], [
-            employee(f"p{i}", [SERVICE],
-                     demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings"))
-            for i in range(3)
-        ], {h: 1 for h in range(24)}, opens=((18, 22),))
+        calls = []
+        real = ba_dashboard._place_cut_week
+
+        def counting(*a, **k):
+            calls.append((list(map(list, a[2][0])), k.get("cuts")))
+            return real(*a, **k)
+
+        with unittest.mock.patch.object(ba_dashboard, "_place_cut_week", counting):
+            row = plan([(1, REGISTER)], [
+                employee(f"p{i}", [SERVICE],
+                         demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings"))
+                for i in range(3)
+            ], {h: 1 for h in range(24)}, opens=((18, 22),))
+        # The window's edges are the 18-22 line's own, so no week cut against
+        # those hours is placed twice; only full cover, open 0-24, is cut again.
+        evening = [cut for opened, cut in calls if opened == [[18, 22]]]
+        self.assertTrue(evening, calls)
+        self.assertEqual(set(map(repr, evening)), {"None"}, calls)
         counts = row["headcount"][SERVICE]
         self.assertEqual((counts["have"], counts["min"]), (3, 1))
         self.assertEqual((counts["spare"], counts["hire"]), (3, 1))
