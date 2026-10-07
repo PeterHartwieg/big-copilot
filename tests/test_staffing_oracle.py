@@ -758,8 +758,9 @@ class HireCountTest(unittest.TestCase):
     def test_round_four_s_counts(self):
         """Seed 133, planned again from a week of its own at half the
         customers, hires 6 on its demand plan, and the twelfth of the offices
-        of Random(119) 8: 7 and 10 while the swaps were asked only of deals
-        that left six lines or fewer."""
+        of Random(119) 7: 7 and 10 while the swaps were asked only of deals
+        that left six lines or fewer, and 8 before the blackout re-cut
+        (_place_week(), issue #409)."""
         sc = scenario(random.Random(1133))
         row, _ = plan_with(sc)
         week = current_from(row, row, random.Random(133))
@@ -768,7 +769,7 @@ class HireCountTest(unittest.TestCase):
         for n, rows in random_offices(19, 12):
             if n == 11:
                 self.assertEqual([sum(h["hire"] for h in row["headcount"].values())
-                                  for row in rows], [8])
+                                  for row in rows], [7])
 
     def office_hires(self, seed, n):
         for index, rows in random_offices(seed, n + 1):

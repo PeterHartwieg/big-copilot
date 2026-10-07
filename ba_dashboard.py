@@ -9668,6 +9668,30 @@ def _cut_run(start: int, end: int) -> list:
     return out
 
 
+
+def _cut_at(start: int, end: int, points=None, snap: bool = True) -> list:
+    """_cut_run(), after first splitting the run at any of `points` inside it.
+
+    `points` are the edges of blackout windows (_blackout_cuts()). No piece is
+    cut under MIN_SPLIT, so with `snap` an edge that close to the run's end
+    moves to MIN_SPLIT from it, which keeps the pieces on the far side of it
+    clear of the window: a run of 0 to 24 cut at 4 and 22 is 0-4, 4-12, 12-20
+    and 20-24, two of which someone with no nights may work, where 0-12 and
+    12-24 has none. Without `snap` the edge is dropped (0-4, 4-14, 14-24):
+    fewer pieces, which some weeks place better.
+    """
+    inner = []
+    near = (lambda p: min(max(p, start + MIN_SPLIT), end - MIN_SPLIT)) if snap else (lambda p: p)
+    for point in sorted({near(p) for p in points or () if start < p < end}):
+        # A two-hour scrap is not worth typing.
+        if point - (inner[-1] if inner else start) >= MIN_SPLIT and end - point >= MIN_SPLIT:
+            inner.append(point)
+    out, at = [], start
+    for point in inner + [end]:
+        out.extend(_cut_run(at, point))
+        at = point
+    return out
+
 def _runs(hours) -> list:
     """Contiguous [start, end) runs over a set of hours."""
     out = []
@@ -13412,6 +13436,97 @@ def _serving_hours(shifts: list) -> int:
 
 def _place_week(grid, need, slots_open, cover_posts, pool, people, business, bench, state,
                 groups=None, current=None, hires=True, fixed=None) -> dict:
+    """One week of shifts for one site: _place_cut_week(), cut again where that helps.
+
+    The plain cut (_cut_run()) halves a 24-hour day into 0-12 and 12-24, and both
+    halves touch the night. Someone whose contract says no nights can take
+    neither, so a salon open around the clock left eleven such hair stylists on
+    no hours and hired thirteen more for the hours they could have worked
+    (issue #409). Where the plain week leaves an entry open in a role whose
+    idle people are kept off it by a blackout window, the week is placed once
+    more with that role's runs also cut at those windows' edges
+    (_cut_at(), once with edges near a run's end moved and once with them
+    dropped), and the best re-cut week is kept only when it hires fewer people,
+    then leaves fewer hours open, then breaks fewer demands, then has fewer
+    lines. Everywhere else the week is the plain one, line for line.
+    """
+    args = (grid, need, slots_open, cover_posts, pool, people, business, bench)
+    kwargs = {"groups": groups, "current": current, "hires": hires, "fixed": fixed}
+    kept = {pid: _copy_state(entry) for pid, entry in state.items()}
+    week = _place_cut_week(*args, state, **kwargs)
+    week.pop("snapMoved")
+    cuts = _blackout_cuts(week, pool)
+    if not cuts:
+        return week
+    best = None
+    for snap in (True, False):
+        trial = {pid: _copy_state(entry) for pid, entry in kept.items()}
+        other = _place_cut_week(*args, trial, cuts=cuts, snap=snap, **kwargs)
+        moved = other.pop("snapMoved")
+        if _week_rank(other) < _week_rank(best[0] if best else week):
+            best = (other, trial)
+        if not moved:
+            break  # no edge moved: dropping them cuts the very same lines
+    if best is None:
+        return week
+    state.clear()
+    state.update(best[1])
+    return best[0]
+
+
+def _blackout_cuts(week: dict, pool: list) -> dict:
+    """The extra cut points per skill that might let more of a week's people work.
+
+    For each skill with an entry nobody holds: the edges of the blackout
+    windows of the people here who hold that skill, worked or idle, kept
+    where they fall inside one of that skill's lines. Empty when nobody of
+    a skill with an open line has a blackout, which most sites are.
+    """
+    open_roles = {(s["skill"], s["kind"]) for s in week["shifts"] if s["employee"] is None}
+    if not open_roles:
+        return {}
+    cuts, useful = collections.defaultdict(set), {}
+    for person in pool:
+        # Idle or not: a part-timer on three 9-hour days is kept off a
+        # fourth by the same window, where four 7-hour days would fit.
+        if not person["blackouts"]:
+            continue
+        # Only a role the plan would ever give them (_usable()): a cashier who
+        # also holds Cleaning is never put on a cleaning station.
+        for skill in {skill for skill, kind in open_roles if _usable(person, skill, kind)}:
+            for low, high in person["blackouts"]:
+                cuts[skill].update((low, high))
+    # Only an edge inside one of the role's lines cuts anything: a window that
+    # starts or ends where the lines already do would place the week twice
+    # for the same answer.
+    for shift in week["shifts"]:
+        points = cuts.get(shift["skill"])
+        if points:
+            inside = {p for p in points if shift["from"] < p < shift["to"]}
+            if inside:
+                cuts[shift["skill"]] = points - inside
+                useful.setdefault(shift["skill"], set()).update(inside)
+    return useful
+
+
+
+def _week_rank(week: dict) -> tuple:
+    """How a week compares with another of the same site: lower is better.
+
+    Peter's order: fewest people hired, then fewest hours left open, then fewest
+    broken demands, then fewest lines to type.
+    """
+    return (
+        sum(entry["hire"] for entry in week["headcount"].values()),
+        sum(s["to"] - s["from"] for s in week["shifts"] if s["employee"] is None),
+        len(week["shortHours"]) + len(week["shortDays"]),
+        len(week["shifts"]),
+    )
+
+
+def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business, bench, state,
+                    groups=None, current=None, hires=True, fixed=None, cuts=None,
+                    snap=True) -> dict:
     """One week of shifts for one site, from one need curve: the placer itself.
 
     Everything after the need curve, in the scope's order: a. per-station cover
@@ -13425,7 +13540,9 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     person already working here whom the plan would leave worse off keeps it
     (_worse_off(), _pin_weeks()). `hires` false leaves the lines nobody here
     may work open with no hire weeks, for a caller that only asks whether a
-    pool covers the week.
+    pool covers the week. `cuts` is extra cut points per skill
+    (_blackout_cuts()), and `snap` how _cut_at() treats an edge near a run's
+    end; only _place_week() passes them.
     """
     # The one step every plan repeats: a long build says it is alive from here.
     _progress()
@@ -13461,6 +13578,18 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
         wanted, role_wages, budget, slots_open
     )
 
+    # Whether `snap` moved an edge anywhere, so _place_week() knows if the
+    # trial with edges dropped would cut any different lines.
+    snap_moved = False
+
+    def cut(start, end, skill):
+        nonlocal snap_moved
+        points = (cuts or {}).get(skill)
+        pieces = _cut_at(start, end, points, snap)
+        if points and snap and not snap_moved:
+            snap_moved = pieces != _cut_at(start, end, points, False)
+        return pieces
+
     slots = []
     for role in grid["roles"]:
         skill, role_key = role["skill"], _role_key(role)
@@ -13469,7 +13598,7 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
             post = posts[index]
             for wd in range(7):
                 for start, end in _runs(days[wd]):
-                    for cut_start, cut_end in _cut_run(start, end):
+                    for cut_start, cut_end in cut(start, end, skill):
                         slots.append(
                             {
                                 "wd": wd,
@@ -13489,7 +13618,7 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
         kind, skill = COVER_STATIONS[post["slug"]]
         for wd in range(7):
             for start, end in _runs(open_hours[wd]):
-                for cut_start, cut_end in _cut_run(start, end):
+                for cut_start, cut_end in cut(start, end, skill):
                     cover_slots.append(
                         {
                             "wd": wd,
@@ -13792,6 +13921,8 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
         "spareIds": spare_ids,
         "spareSkills": spare_skills,
         "fewer": fewer,
+        # Taken off by _place_week(): whether `snap` changed any cut.
+        "snapMoved": snap_moved,
     }
 
 
