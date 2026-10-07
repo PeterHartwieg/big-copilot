@@ -976,7 +976,7 @@ class HeadcountTest(unittest.TestCase):
                    for i in range(2)]
         row = plan([(1, REGISTER)], people, {h: 1 for h in range(24)})
         counts = row["headcount"][SERVICE]
-        self.assertEqual((counts["spare"], counts["hire"]), (0, 1))
+        self.assertEqual((counts["spare"], counts["hire"]), (0, 0))
         self.assertEqual(len({s["p"] for s in staffed(row)}), 4)
         self.assertEqual(row["shortHours"], [])
         self.assertEqual(row["shortDays"], [])
@@ -2378,7 +2378,9 @@ class ExchangeTest(unittest.TestCase):
         The pieces go out a line at a time, and after four afternoons that
         guard may take no more: four days cut, 24 h each, three for a hire,
         two full-time guards under 30. The role's pass is all or nothing, so
-        it is undone: both spare and two hires, as the owner accepts."""
+        it is undone. The blackout re-cut (_place_week(), issue #409) then
+        finds a better week: the no-evenings guard on the mornings and one
+        hire, the four-day guard spare."""
         row = plan([(9, LOCKER)], [
             employee("g1", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings")),
             employee("g2", [GUARD], demands=("ba:jobdemand_fulltime", "ba:jobdemand_nomornings",
@@ -2388,7 +2390,7 @@ class ExchangeTest(unittest.TestCase):
         for who, week in self.weeks(row).items():
             if who == "G2":
                 self.assertEqual(len(week["days"]), 4)
-        self.assertEqual(sum(h["hire"] for h in row["headcount"].values()), 2)
+        self.assertEqual(sum(h["hire"] for h in row["headcount"].values()), 1)
 
     def test_one_role_s_failed_cut_leaves_another_s_alone(self):
         """Round 8: a cleaning station and a locker, both 08-20, each with one

@@ -9669,16 +9669,21 @@ def _cut_run(start: int, end: int) -> list:
 
 
 
-def _cut_at(start: int, end: int, points=None) -> list:
+def _cut_at(start: int, end: int, points=None, snap: bool = True) -> list:
     """_cut_run(), after first splitting the run at any of `points` inside it.
 
-    `points` are the edges of blackout windows (_blackout_cuts()): a run of
-    0 to 24 cut at 4 and 22 is 0-4, 4-13, 13-22 and 22-24, two of which
-    someone with no nights may work, where 0-12 and 12-24 has none.
+    `points` are the edges of blackout windows (_blackout_cuts()). No piece is
+    cut under MIN_SPLIT, so with `snap` an edge that close to the run's end
+    moves to MIN_SPLIT from it, which keeps the pieces on the far side of it
+    clear of the window: a run of 0 to 24 cut at 4 and 22 is 0-4, 4-12, 12-20
+    and 20-24, two of which someone with no nights may work, where 0-12 and
+    12-24 has none. Without `snap` the edge is dropped (0-4, 4-14, 14-24):
+    fewer pieces, which some weeks place better.
     """
     inner = []
-    for point in sorted(points or ()):
-        # No piece under MIN_SPLIT: a two-hour scrap is not worth typing.
+    near = (lambda p: min(max(p, start + MIN_SPLIT), end - MIN_SPLIT)) if snap else (lambda p: p)
+    for point in sorted({near(p) for p in points or () if start < p < end}):
+        # A two-hour scrap is not worth typing.
         if point - (inner[-1] if inner else start) >= MIN_SPLIT and end - point >= MIN_SPLIT:
             inner.append(point)
     out, at = [], start
@@ -13440,7 +13445,8 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     (issue #409). Where the plain week leaves an entry open in a role whose
     idle people are kept off it by a blackout window, the week is placed once
     more with that role's runs also cut at those windows' edges
-    (_cut_at()), and the re-cut week is kept only when it hires fewer people,
+    (_cut_at(), once with edges near a run's end moved and once with them
+    dropped), and the best re-cut week is kept only when it hires fewer people,
     then leaves fewer hours open, then breaks fewer demands, then has fewer
     lines. Everywhere else the week is the plain one, line for line.
     """
@@ -13451,13 +13457,17 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     cuts = _blackout_cuts(week, pool)
     if not cuts:
         return week
-    trial = {pid: _copy_state(entry) for pid, entry in kept.items()}
-    other = _place_cut_week(*args, trial, cuts=cuts, **kwargs)
-    if _week_rank(other) >= _week_rank(week):
+    best = None
+    for snap in (True, False):
+        trial = {pid: _copy_state(entry) for pid, entry in kept.items()}
+        other = _place_cut_week(*args, trial, cuts=cuts, snap=snap, **kwargs)
+        if _week_rank(other) < _week_rank(best[0] if best else week):
+            best = (other, trial)
+    if best is None:
         return week
     state.clear()
-    state.update(trial)
-    return other
+    state.update(best[1])
+    return best[0]
 
 
 def _blackout_cuts(week: dict, pool: list) -> dict:
@@ -13507,7 +13517,8 @@ def _week_rank(week: dict) -> tuple:
 
 
 def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business, bench, state,
-                    groups=None, current=None, hires=True, fixed=None, cuts=None) -> dict:
+                    groups=None, current=None, hires=True, fixed=None, cuts=None,
+                    snap=True) -> dict:
     """One week of shifts for one site, from one need curve: the placer itself.
 
     Everything after the need curve, in the scope's order: a. per-station cover
@@ -13522,7 +13533,8 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
     (_worse_off(), _pin_weeks()). `hires` false leaves the lines nobody here
     may work open with no hire weeks, for a caller that only asks whether a
     pool covers the week. `cuts` is extra cut points per skill
-    (_blackout_cuts()), which only _place_week() passes.
+    (_blackout_cuts()), and `snap` how _cut_at() treats an edge near a run's
+    end; only _place_week() passes them.
     """
     # The one step every plan repeats: a long build says it is alive from here.
     _progress()
@@ -13566,7 +13578,7 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
             post = posts[index]
             for wd in range(7):
                 for start, end in _runs(days[wd]):
-                    for cut_start, cut_end in _cut_at(start, end, (cuts or {}).get(skill)):
+                    for cut_start, cut_end in _cut_at(start, end, (cuts or {}).get(skill), snap):
                         slots.append(
                             {
                                 "wd": wd,
@@ -13586,7 +13598,7 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
         kind, skill = COVER_STATIONS[post["slug"]]
         for wd in range(7):
             for start, end in _runs(open_hours[wd]):
-                for cut_start, cut_end in _cut_at(start, end, (cuts or {}).get(skill)):
+                for cut_start, cut_end in _cut_at(start, end, (cuts or {}).get(skill), snap):
                     cover_slots.append(
                         {
                             "wd": wd,
