@@ -936,21 +936,51 @@ class HeadcountTest(unittest.TestCase):
     def test_spare_is_counted_off_the_plan_not_off_the_arithmetic(self):
         """`have - min` is not the same number, and this is a shop that shows it.
 
-        Three full-timers who work no evenings, one register around the clock.
-        168 station-hours want four people, so `min` is 4 and `have - min` is
-        nothing at all -- while the plan, which cannot put anybody on the hours
-        their contracts shut out, uses two of the three and leaves the third with
-        no week. One spare, and the page has to say so.
+        Three full-timers who work no evenings, one register open 18-22 only.
+        28 station-hours want one person, so `have - min` is two -- while the
+        plan, which cannot put anybody on the hours their contracts shut out,
+        uses none of them. Three spare, and a hire, and the page has to say so.
         """
         row = plan([(1, REGISTER)], [
             employee(f"p{i}", [SERVICE],
                      demands=("ba:jobdemand_fulltime", "ba:jobdemand_noevenings"))
             for i in range(3)
-        ], {h: 1 for h in range(24)})
+        ], {h: 1 for h in range(24)}, opens=((18, 22),))
         counts = row["headcount"][SERVICE]
-        self.assertEqual((counts["have"], counts["min"]), (3, 4))
-        self.assertEqual(counts["spare"], 1)
-        self.assertEqual(len({s["p"] for s in staffed(row)}), 2)
+        self.assertEqual((counts["have"], counts["min"]), (3, 1))
+        self.assertEqual((counts["spare"], counts["hire"]), (3, 1))
+        self.assertEqual(staffed(row), [])
+
+    def test_no_nights_staff_are_used_before_anybody_is_hired(self):
+        """Issue #409: a salon open around the clock, eleven hair stylists with
+        no nights on no hours and thirteen to hire. 0-12 and 12-24 both touch
+        the night, so the day is cut again at the window's edge (_cut_at())
+        and the no-nights people take the daytime lines."""
+        people = [employee(f"n{i}", [SERVICE], demands=("ba:jobdemand_fulltime",))
+                  for i in range(2)]
+        people += [employee(f"d{i}", [SERVICE],
+                            demands=("ba:jobdemand_fulltime", "ba:jobdemand_nonights"))
+                   for i in range(2)]
+        row = plan([(1, REGISTER)], people, {h: 1 for h in range(24)})
+        counts = row["headcount"][SERVICE]
+        self.assertEqual((counts["spare"], counts["hire"]), (0, 1))
+        self.assertEqual(len({s["p"] for s in staffed(row)}), 4)
+        self.assertEqual(row["shortHours"], [])
+        self.assertEqual(row["shortDays"], [])
+        for s in staffed(row):
+            if row["people"][s["p"]]["name"].startswith("D"):
+                self.assertTrue(4 <= s["f"] and s["t"] <= 22, s)
+
+    def test_a_plain_cut_is_kept_where_a_re_cut_hires_nobody_fewer(self):
+        """The re-cut is only kept when it is better: with nobody to hire the
+        lines stay the plain 0-12 and 12-24."""
+        people = [employee(f"n{i}", [SERVICE], demands=("ba:jobdemand_fulltime",))
+                  for i in range(4)]
+        people.append(employee("d0", [SERVICE],
+                               demands=("ba:jobdemand_fulltime", "ba:jobdemand_nonights")))
+        row = plan([(1, REGISTER)], people, {h: 1 for h in range(24)})
+        self.assertEqual(row["headcount"][SERVICE]["hire"], 0)
+        self.assertEqual({(s["f"], s["t"]) for s in row["shifts"]}, {(0, 12), (12, 24)})
 
     def test_security_hiring_is_marked_as_its_own_kind_of_spending(self):
         """A locker nobody staffs asks for real new money, not another shift."""

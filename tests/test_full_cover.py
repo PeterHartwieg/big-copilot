@@ -966,15 +966,18 @@ class ExchangeKeepsDemandsTest(unittest.TestCase):
         # which is the order he asked for; this is about the swaps alone.
         no_hires = unittest.mock.patch.object(ba_dashboard, "_place_hires",
                                               lambda shifts, *a, **k: (shifts, {}))
+        # And without the blackout re-cut (_place_week()), which either run
+        # may take on its own and so compare two different cuts.
+        plain = unittest.mock.patch.object(ba_dashboard, "_blackout_cuts", lambda *a: {})
         for seed in (2, 4):
             rng = random.Random(seed)
             for _ in range(120):
                 sc = self.scenario(rng)
                 args = (sc["items"], sc["employees"], sc["hourly"])
                 kw = dict(opens=sc["opens"], weeks=sc["weeks"])
-                with no_hires:
+                with no_hires, plain:
                     row = plan(*args, **kw)
-                with no_hires, unittest.mock.patch.object(ba_dashboard, "_fill_by_exchange",
+                with no_hires, plain, unittest.mock.patch.object(ba_dashboard, "_fill_by_exchange",
                                                           lambda *a, **k: 0):
                     base = plan(*args, **kw)
                 for which in (lambda r: r, lambda r: r["fullCover"]):
