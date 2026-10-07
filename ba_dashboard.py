@@ -13475,20 +13475,21 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
 
 
 def _blackout_cuts(week: dict, pool: list) -> dict:
-    """The extra cut points per skill that might let a week's idle people work.
+    """The extra cut points per skill that might let more of a week's people work.
 
     For each skill with an entry nobody holds: the edges of the blackout
-    windows of the people the week gives no hours who hold that skill, kept
-    where they fall inside one of that skill's lines. Empty when nobody idle
-    has a blackout, which is every site the plain cut serves.
+    windows of the people here who hold that skill, worked or idle, kept
+    where they fall inside one of that skill's lines. Empty when nobody of
+    a skill with an open line has a blackout, which most sites are.
     """
     open_skills = {s["skill"] for s in week["shifts"] if s["employee"] is None}
     if not open_skills:
         return {}
-    worked = {s["employee"] for s in week["shifts"] if s["employee"] is not None}
     cuts, useful = collections.defaultdict(set), {}
     for person in pool:
-        if person["id"] in worked or not person["blackouts"]:
+        # Idle or not: a part-timer on three 9-hour days is kept off a
+        # fourth by the same window, where four 7-hour days would fit.
+        if not person["blackouts"]:
             continue
         for skill in open_skills & person["skills"]:
             for low, high in person["blackouts"]:

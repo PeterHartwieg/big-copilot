@@ -1005,6 +1005,18 @@ class HeadcountTest(unittest.TestCase):
         self.assertTrue(recut, calls)
         self.assertNotIn(False, recut, calls)
 
+    def test_a_worked_person_s_window_is_cut_around_too(self):
+        """PR #410 review: a lone part-time, four-day, no-nights cashier on a
+        register open 03-21 works three 12-21 days under the plain cut and
+        cannot take a fourth; cut at the window's edge they work four days
+        and one fewer person is hired."""
+        row = plan([(1, REGISTER)], [
+            employee("p", [SERVICE], demands=("ba:jobdemand_parttime", "ba:jobdemand_fourdaysweek",
+                                              "ba:jobdemand_nonights")),
+        ], {h: 1 for h in range(24)}, opens=((3, 21),))
+        self.assertEqual(row["headcount"][SERVICE]["hire"], 2)
+        self.assertEqual(row["shortDays"], [])
+
     def test_a_plain_cut_is_kept_where_a_re_cut_hires_nobody_fewer(self):
         """The re-cut is only kept when it is better: with nobody to hire the
         lines stay the plain 0-12 and 12-24."""
