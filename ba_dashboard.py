@@ -13454,15 +13454,19 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     kwargs = {"groups": groups, "current": current, "hires": hires, "fixed": fixed}
     kept = {pid: _copy_state(entry) for pid, entry in state.items()}
     week = _place_cut_week(*args, state, **kwargs)
+    week.pop("snapMoved")
     cuts = _blackout_cuts(week, pool)
     if not cuts:
         return week
     best = None
-    for snap in (True, False) if _snap_matters(week, cuts) else (True,):
+    for snap in (True, False):
         trial = {pid: _copy_state(entry) for pid, entry in kept.items()}
         other = _place_cut_week(*args, trial, cuts=cuts, snap=snap, **kwargs)
+        moved = other.pop("snapMoved")
         if _week_rank(other) < _week_rank(best[0] if best else week):
             best = (other, trial)
+        if not moved:
+            break  # no edge moved: dropping them cuts the very same lines
     if best is None:
         return week
     state.clear()
@@ -13502,26 +13506,6 @@ def _blackout_cuts(week: dict, pool: list) -> dict:
     return useful
 
 
-
-def _snap_matters(week: dict, cuts: dict) -> bool:
-    """Whether _cut_at() cuts any of the week's runs differently with `snap` and without.
-
-    Only an edge within MIN_SPLIT of the end of a run moves; where none is,
-    both cuts are the same lines and the week need not be placed twice. The
-    runs are the station-days' hours in the plain week, which the cuts do not
-    change.
-    """
-    hours = collections.defaultdict(set)
-    for shift in week["shifts"]:
-        if shift["skill"] in cuts:
-            hours[(shift["skill"], shift["station"], shift["wd"])].update(
-                range(shift["from"], shift["to"]))
-    return any(
-        start < point < end and min(point - start, end - point) < MIN_SPLIT
-        for (skill, _station, _wd), held in hours.items()
-        for start, end in _runs(held)
-        for point in cuts[skill]
-    )
 
 def _week_rank(week: dict) -> tuple:
     """How a week compares with another of the same site: lower is better.
@@ -13591,6 +13575,18 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
         wanted, role_wages, budget, slots_open
     )
 
+    # Whether `snap` moved an edge anywhere, so _place_week() knows if the
+    # trial with edges dropped would cut any different lines.
+    snap_moved = False
+
+    def cut(start, end, skill):
+        nonlocal snap_moved
+        points = (cuts or {}).get(skill)
+        pieces = _cut_at(start, end, points, snap)
+        if points and snap and not snap_moved:
+            snap_moved = pieces != _cut_at(start, end, points, False)
+        return pieces
+
     slots = []
     for role in grid["roles"]:
         skill, role_key = role["skill"], _role_key(role)
@@ -13599,7 +13595,7 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
             post = posts[index]
             for wd in range(7):
                 for start, end in _runs(days[wd]):
-                    for cut_start, cut_end in _cut_at(start, end, (cuts or {}).get(skill), snap):
+                    for cut_start, cut_end in cut(start, end, skill):
                         slots.append(
                             {
                                 "wd": wd,
@@ -13619,7 +13615,7 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
         kind, skill = COVER_STATIONS[post["slug"]]
         for wd in range(7):
             for start, end in _runs(open_hours[wd]):
-                for cut_start, cut_end in _cut_at(start, end, (cuts or {}).get(skill), snap):
+                for cut_start, cut_end in cut(start, end, skill):
                     cover_slots.append(
                         {
                             "wd": wd,
@@ -13922,6 +13918,8 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
         "spareIds": spare_ids,
         "spareSkills": spare_skills,
         "fewer": fewer,
+        # Taken off by _place_week(): whether `snap` changed any cut.
+        "snapMoved": snap_moved,
     }
 
 
