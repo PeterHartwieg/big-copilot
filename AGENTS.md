@@ -199,7 +199,7 @@ stale one fails them.
 installed game. `python build_web.py --assemble` writes everything `--check` compares, also
 without the game. It keeps `web/py/gametext.json`, `web/names/` and the game's part of
 `web/wiki-data.json` as committed, so a change to what shapes those — the wiki generator
-(`tools/build_wiki_data.py`, `tools/wiki_data.py`, `tools/extract_wiki.py`,
+(`tools/build_wiki_data.py`, `tools/wiki_data.py`, `tools/wiki_paths.py`,
 `tools/wiki_sample.json`), `ships()` in `build_web.py`, or the name-table code in
 `ba_dashboard.py` — still needs the full `python build_web.py` with the game.
 
@@ -287,7 +287,7 @@ and never attach one to an issue.
 - Releasing, deploying, adding a feature badge, writing a changelog entry or exporting map
   assets → `docs/contributing.md`
 - Working out what a number on the board means → `docs/dashboard-reference.md`
-- Touching the wiki build or its catalogue → `docs/wiki-data-pipeline.md`
+- Touching the wiki build → `docs/wiki-data-pipeline.md`
 - Touching presence, voting or the feature list → `docs/community-features.md`
 - Adding or translating text on the page, or converting an area to `tt()`/`msg()` →
   `docs/architecture.md`, "UI text"

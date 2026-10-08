@@ -100,7 +100,7 @@ def main() -> None:
         old = json.loads(json.dumps(old, ensure_ascii=False)
                          .replace(f"buildid {a}", f"buildid {b}"))
     for side in (old, new):
-        for guide in [side.get("sample") or {}, *(side.get("guides") or {}).values()]:
+        for guide in (side.get("guides") or {}).values():
             guide.pop("SOURCES", None)
     total += compare("page", by_id(old["pages"], "id"), by_id(new["pages"], "id"), detail=True)
     total += compare("category", by_id(old["categories"], "id"),

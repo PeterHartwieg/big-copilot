@@ -1,9 +1,9 @@
-"""Regression tests for the wiki extractor (tools/wiki_data.py).
+"""Regression tests for the wiki parser and source paths (tools/wiki_data.py).
 
 The fixtures are synthetic: a small locale and help structure written into a
 temporary directory, carrying the shapes the real game files use. Nothing here
 reads a private save or the installed game, so the tests hold wherever they
-run, and every claim the extractor makes about a source is checked against
+run, and every claim the parser makes about a source is checked against
 text this file wrote itself.
 
     python -m unittest tests.test_wiki_extract
@@ -24,7 +24,7 @@ sys.path.insert(
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ba_save
-import extract_wiki
+import wiki_paths
 import wiki_data
 
 
@@ -189,12 +189,10 @@ class FixtureCase(unittest.TestCase):
 
     # helpers
     def extract(self, locale=None):
-        """A full catalogue from the fixture directory, raw help included."""
+        """Parsed records from the fixture directory."""
         return wiki_data.build_catalogue(
             wiki_data.load_locale(self.locale_path() if locale is None else locale),
             help_pages=wiki_data.load_help_structure(self.structure_path())[0],
-            source_files={"locale/en.json": wiki_data.file_meta(self.locale_path())},
-            build_metadata=wiki_data._unknown_build(),
         )
 
     def locale_path(self):
@@ -245,21 +243,6 @@ class FixtureCase(unittest.TestCase):
         with open(path, "w", encoding="utf-8") as fh:
             json.dump({"ba:itemname_gymcovercharge": "Gym Cover Charge"}, fh)
         return path
-
-    def quiet(self):
-        """Both CLI streams, so the suite's own output stays readable."""
-        import contextlib
-        import io
-
-        @contextlib.contextmanager
-        def both():
-            with contextlib.redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(
-                io.StringIO()
-            ) as err:
-                yield err
-
-        return both()
-
 
 # --- parsing: requirements, ranges and recipes ---------------------------
 
@@ -359,7 +342,7 @@ class ParsingTests(FixtureCase):
         locale["help_recipes_ghostrecipe_content"] = (
             "**Ghost Recipe** can be manufactured in a [Factory](businesstypes-factory)."
         )
-        catalogue = wiki_data.build_catalogue(locale, with_raw=False)
+        catalogue = wiki_data.build_catalogue(locale)
         self.assertNotIn("recipe/ghostrecipe", [r["id"] for r in catalogue["records"]])
 
     def test_workstation_records_carry_machines_assembly_and_recipes(self):
@@ -374,23 +357,6 @@ class ParsingTests(FixtureCase):
         self.assertEqual(
             [ref["slug"] for ref in station["recipes"]], ["recipe/cheapgiftrecipe"]
         )
-
-    def test_selection_pulls_the_records_a_business_talks_about(self):
-        catalogue = wiki_data.build_catalogue(
-            wiki_data.load_locale(self.locale_path()), businesses=["giftshop"]
-        )
-        ids = [r["id"] for r in catalogue["records"]]
-        self.assertIn("businesstype/giftshop", ids)
-        self.assertIn("item/cheapgift", ids)
-        self.assertIn("recipe/cheapgiftrecipe", ids)
-        self.assertIn("workstation/consumergoods", ids)
-        self.assertNotIn("item/haircuttingfee", ids, "an unselected business's fee stays out")
-
-    def test_an_unknown_business_slug_fails_loudly(self):
-        with self.assertRaisesRegex(wiki_data.SourceError, "no help page"):
-            wiki_data.build_catalogue(
-                wiki_data.load_locale(self.locale_path()), businesses=["giftshopx"]
-            )
 
     def test_a_locale_without_business_help_is_not_an_empty_catalogue(self):
         with self.assertRaisesRegex(wiki_data.SourceError, "no help_ba:businesstype"):
@@ -413,16 +379,6 @@ class ProvenanceTests(FixtureCase):
         ):
             self.assertIn(key, gift["sources"])
 
-    def test_catalogue_metadata_carries_hashes_schema_and_kind(self):
-        catalogue = self.extract()
-        self.assertEqual(catalogue["schema"], "ba-wiki-catalogue")
-        self.assertEqual(catalogue["schemaVersion"], 1)
-        self.assertEqual(catalogue["source"]["kind"], "game-help")
-        self.assertTrue(catalogue["generated"].endswith("Z"))
-        meta = catalogue["source"]["files"]["locale/en.json"]
-        self.assertEqual(len(meta["sha256"]), 64)
-        self.assertGreater(meta["bytes"], 0)
-
     def test_helpstructure_parse_is_recorded_with_its_repairs(self):
         _, info = wiki_data.load_help_structure(self.structure_path())
         self.assertEqual(info["parseMode"], "lenient")
@@ -437,12 +393,6 @@ class ProvenanceTests(FixtureCase):
     def test_a_broken_helpstructure_fails_rather_than_lying(self):
         with self.assertRaisesRegex(wiki_data.SourceError, "will not parse"):
             wiki_data.load_help_structure(self.write("broken.json", '{"unbalanced": [}'))
-
-    def test_build_metadata_is_null_until_it_is_observed(self):
-        unknown = wiki_data._unknown_build()
-        self.assertIsNone(unknown["steamBuildId"])
-        self.assertIsNone(unknown["saveBuildNumber"])
-        self.assertTrue(unknown["note"])
 
     def test_a_steam_manifest_gives_its_build_id_and_says_where_from(self):
         manifest = self.write("appmanifest_1331550.acf", '"AppState"\n{\n"appid" "1331550"\n\t"buildid"\t\t"4242"\n}\n')
@@ -465,9 +415,9 @@ class ProvenanceTests(FixtureCase):
     def test_manifest_discovery_selects_only_big_ambitions(self):
         data_dir = os.path.join(self._tmp.name, "steamapps", "common", "Big Ambitions", "Big Ambitions_Data")
         self.write("steamapps/appmanifest_1.acf", '"appid" "1"')
-        self.assertIsNone(extract_wiki.find_steam_manifest(data_dir))
+        self.assertIsNone(wiki_paths.find_steam_manifest(data_dir))
         expected = self.write("steamapps/appmanifest_1331550.acf", '"appid" "1331550"')
-        self.assertEqual(extract_wiki.find_steam_manifest(data_dir), os.path.abspath(expected))
+        self.assertEqual(wiki_paths.find_steam_manifest(data_dir), os.path.abspath(expected))
 
     def test_manifest_discovery_survives_the_macos_app_bundle(self):
         # Inside a .app the data directory sits four levels below steamapps, not
@@ -477,7 +427,7 @@ class ProvenanceTests(FixtureCase):
             "Big Ambitions.app", "Contents", "Resources", "Data",
         )
         expected = self.write("steamapps/appmanifest_1331550.acf", '"appid" "1331550"')
-        self.assertEqual(extract_wiki.find_steam_manifest(data_dir), os.path.abspath(expected))
+        self.assertEqual(wiki_paths.find_steam_manifest(data_dir), os.path.abspath(expected))
 
     def test_a_copy_outside_common_does_not_borrow_the_build_id(self):
         # Built under its own root so the answer cannot depend on where the
@@ -485,7 +435,7 @@ class ProvenanceTests(FixtureCase):
         self.write("steamapps/appmanifest_1331550.acf", '"appid" "1331550"')
         stray = os.path.join(self._tmp.name, "steamapps", "backups", "Big Ambitions_Data")
         os.makedirs(stray, exist_ok=True)
-        self.assertIsNone(extract_wiki.find_steam_manifest(stray))
+        self.assertIsNone(wiki_paths.find_steam_manifest(stray))
 
     def test_a_library_at_a_drive_or_share_root_is_still_found(self):
         # At S:\ or \nas\steamapps the basename is empty, so a library there
@@ -496,13 +446,13 @@ class ProvenanceTests(FixtureCase):
         expected = os.path.join(root, "appmanifest_1331550.acf")
         with open(expected, "w", encoding="utf-8") as fh:
             fh.write('"appid" "1331550"')
-        self.assertEqual(extract_wiki.find_steam_manifest(data_dir), expected)
+        self.assertEqual(wiki_paths.find_steam_manifest(data_dir), expected)
 
     def test_a_path_reaching_the_install_through_dotdot_is_accepted(self):
         through = os.path.join(self.game, "locale", os.pardir, "locale", "en.json")
-        expected = extract_wiki.game_data_dir(self.locale_path())
+        expected = wiki_paths.game_data_dir(self.locale_path())
         self.assertIsNotNone(expected)
-        self.assertEqual(extract_wiki.game_data_dir(through), expected)
+        self.assertEqual(wiki_paths.game_data_dir(through), expected)
 
     def test_a_ba_locale_outside_the_install_is_refused(self):
         # BA_LOCALE can name an en.json anywhere, but helpstructure.json is only
@@ -511,30 +461,7 @@ class ProvenanceTests(FixtureCase):
         loose = self.loose_locale()
         with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", ()),                 mock.patch.dict(os.environ, {"BA_LOCALE": loose}, clear=True):
             with self.assertRaisesRegex(wiki_data.SourceError, "StreamingAssets"):
-                extract_wiki.default_paths(None)
-
-    def test_a_loose_ba_locale_reports_cleanly_instead_of_crashing(self):
-        loose = self.loose_locale()
-        import contextlib
-        import io
-        err = io.StringIO()
-        with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", ()),                 mock.patch.dict(os.environ, {"BA_LOCALE": loose}, clear=True):
-            with contextlib.redirect_stderr(err):
-                code = extract_wiki.main(["--list"])
-        self.assertEqual(code, 2)
-        self.assertTrue(err.getvalue().startswith("error: "), err.getvalue())
-
-    def test_explicit_sources_do_not_need_the_detected_install(self):
-        # Naming both sources makes the install irrelevant, so the gate on it
-        # must not refuse the run.
-        loose = self.loose_locale()
-        with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", ()),                 mock.patch.dict(os.environ, {"BA_LOCALE": loose}, clear=True):
-            with self.quiet():
-                code = extract_wiki.main([
-                    "--list", "--locale", self.locale_path(),
-                    "--help-structure", self.structure_path(),
-                ])
-        self.assertEqual(code, 0)
+                wiki_paths.default_paths(None)
 
     def test_no_game_anywhere_says_so(self):
         # default_paths' own refusal, which nothing reached: build_web has its
@@ -545,7 +472,7 @@ class ProvenanceTests(FixtureCase):
         # is what makes this fail if that dead branch comes back.
         with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", ()),                 mock.patch.object(ba_save, "DEFAULT_LOCALE", self.locale_path()),                 mock.patch.dict(os.environ, {}, clear=True):
             with self.assertRaisesRegex(wiki_data.SourceError, "no game text found"):
-                extract_wiki.default_paths(None)
+                wiki_paths.default_paths(None)
 
     def test_a_short_name_for_the_install_is_accepted(self):
         # The realpath half of game_layout. Judging the spelling refuses this,
@@ -562,9 +489,9 @@ class ProvenanceTests(FixtureCase):
         self.assertTrue(os.path.isfile(short))
         # Both sides being None would satisfy an equality on its own, so the
         # expected answer is named outright.
-        expected = extract_wiki.game_data_dir(self.locale_path())
+        expected = wiki_paths.game_data_dir(self.locale_path())
         self.assertIsNotNone(expected)
-        self.assertEqual(extract_wiki.game_data_dir(short), expected)
+        self.assertEqual(wiki_paths.game_data_dir(short), expected)
 
     def test_a_locale_folder_linked_out_of_an_install_stays_inside_it(self):
         # game_layout's literal half. The target is deliberately NOT named
@@ -577,8 +504,8 @@ class ProvenanceTests(FixtureCase):
         install = os.path.join(self._tmp.name, "other", "Big Ambitions_Data", "StreamingAssets")
         via = os.path.join(self.link_dir(os.path.join(install, "locale"), modded), "en.json")
         self.assertTrue(os.path.isfile(via))
-        self.assertIsNone(extract_wiki.game_data_dir(os.path.realpath(via)))
-        self.assertEqual(extract_wiki.game_data_dir(via), os.path.dirname(install))
+        self.assertIsNone(wiki_paths.game_data_dir(os.path.realpath(via)))
+        self.assertEqual(wiki_paths.game_data_dir(via), os.path.dirname(install))
 
     def test_the_two_directories_always_belong_together(self):
         # helpstructure.json is read beside the locale folder. Deriving the
@@ -597,7 +524,7 @@ class ProvenanceTests(FixtureCase):
         via = os.path.join(self.link_dir(os.path.join(self._tmp.name, "away", "locale"),
                                          b_locale), "en.json")
         with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", (via,)),                 mock.patch.dict(os.environ, {}, clear=True):
-            paths = extract_wiki.default_paths(None)
+            paths = wiki_paths.default_paths(None)
         self.assertTrue(os.path.isfile(paths["help_structure"]), paths["help_structure"])
         self.assertEqual(os.path.realpath(paths["help_structure"]), os.path.realpath(structure))
 
@@ -605,31 +532,7 @@ class ProvenanceTests(FixtureCase):
         # StreamingAssets alone is not enough: helpstructure.json is found by
         # stepping out of locale/, so a sibling folder would mislocate it.
         beside = os.path.join(os.path.dirname(self.game), "StreamingAssets", "other", "en.json")
-        self.assertIsNone(extract_wiki.game_data_dir(beside))
-
-    def test_only_the_locale_is_needed_when_it_is_given(self):
-        # The help structure is a bonus and the data dir only feeds the build
-        # id, so naming the locale is enough even with no install to detect.
-        with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", ()),                 mock.patch.dict(os.environ, {}, clear=True):
-            with self.quiet():
-                code = extract_wiki.main(["--list", "--locale", self.locale_path()])
-        self.assertEqual(code, 0)
-
-    def test_a_locale_only_extract_runs_without_an_install(self):
-        # --list returns before the catalogue is built, so it would not notice
-        # data_dir being None reaching build_catalogue.
-        out = os.path.join(self._tmp.name, "catalogue.json")
-        with mock.patch.object(ba_save, "_LOCALE_CANDIDATES", ()),                 mock.patch.dict(os.environ, {}, clear=True):
-            with self.quiet():
-                code = extract_wiki.main([
-                    "--locale", self.locale_path(), "--business", "giftshop", "--out", out,
-                ])
-        self.assertEqual(code, 0)
-        with open(out, encoding="utf-8") as fh:
-            catalogue = json.load(fh)
-        build = catalogue["source"]["buildMetadata"]
-        self.assertIsNone(build["steamBuildId"])
-        self.assertIn("Not observed", build["note"])
+        self.assertIsNone(wiki_paths.game_data_dir(beside))
 
     def test_an_install_linked_into_another_is_filed_under_its_own(self):
         # game_layout's resolved half, and why it goes first: install A's
@@ -644,23 +547,14 @@ class ProvenanceTests(FixtureCase):
         via = os.path.join(self.link_dir(os.path.join(a_streaming, "locale"), b_locale), "en.json")
         self.assertTrue(os.path.isfile(via))
         b_data = os.path.realpath(os.path.dirname(os.path.dirname(b_locale)))
-        self.assertEqual(extract_wiki.game_data_dir(via), b_data)
+        self.assertEqual(wiki_paths.game_data_dir(via), b_data)
 
     def test_a_ba_locale_inside_an_install_resolves(self):
         # macOS may expose the temp root through the /var -> /private/var alias.
         self.game = os.path.realpath(self.game)
         with mock.patch.dict(os.environ, {"BA_LOCALE": self.locale_path()}, clear=True):
-            paths = extract_wiki.default_paths(None)
-        self.assertEqual(paths, extract_wiki.default_paths(self.game))
-
-
-    def test_raw_help_travels_separately_from_the_facts(self):
-        catalogue = self.extract()
-        raw = catalogue["raw"]["help"]["help_ba:businesstype_giftshop_content"]
-        self.assertEqual(raw, GIFT_HELP)
-        self.assertNotIn("raw", wiki_data.build_catalogue(
-            wiki_data.load_locale(self.locale_path()), with_raw=False
-        ))
+            paths = wiki_paths.default_paths(None)
+        self.assertEqual(paths, wiki_paths.default_paths(self.game))
 
 
 # --- malformed sources ---------------------------------------------------
@@ -681,171 +575,13 @@ class MalformedSourceTests(FixtureCase):
         with self.assertRaisesRegex(wiki_data.SourceError, "expected an object"):
             wiki_data.load_locale(path)
 
-    def test_the_cli_reports_a_bad_source_and_writes_nothing(self):
-        self.write(os.path.join("StreamingAssets", "empty", "keep"), "")
-        out = os.path.join(self._tmp.name, "out.json")
-        with self.quiet() as stderr:
-            code = extract_wiki.main(
-                ["--data-dir", os.path.join(self.game, "empty"), "--out", out]
-            )
-        self.assertEqual(code, 2)
-        self.assertIn("error", stderr.getvalue())
-        self.assertFalse(os.path.exists(out))
-
-    def test_the_cli_warns_and_continues_when_the_help_structure_is_unreadable(self):
-        self.write(os.path.join("StreamingAssets", "helpstructure.json"), '{"unbalanced": [}')
-        out = os.path.join(self._tmp.name, "out.json")
-        with self.quiet() as stderr:
-            code = extract_wiki.main(
-                ["--data-dir", self.game, "--out", out, "--no-steam-lookup"]
-            )
-        self.assertEqual(code, 0)
-        self.assertIn("helpstructure", stderr.getvalue())
-        with open(out, encoding="utf-8") as fh:
-            catalogue = json.load(fh)
-        self.assertFalse(catalogue["helpStructure"]["used"])
-        self.assertTrue(catalogue["helpStructure"]["error"])
-
-    def test_the_cli_writes_nothing_when_the_locale_is_missing(self):
-        out = os.path.join(self._tmp.name, "out.json")
-        with self.quiet():
-            code = extract_wiki.main(
-                [
-                    "--data-dir",
-                    os.path.join(self._tmp.name, "nowhere"),
-                    "--out",
-                    out,
-                    "--no-steam-lookup",
-                ]
-            )
-        self.assertEqual(code, 2)
-        self.assertFalse(os.path.exists(out))
+# --- source paths -------------------------------------------------------
 
 
-# --- output: validation, atomicity, comparison ---------------------------
-
-
-class OutputTests(FixtureCase):
-    def setUp(self):
-        super().setUp()
-        self.catalogue = self.extract()
-        self.out = os.path.join(self._tmp.name, "catalogue.json")
-
+class PathTests(FixtureCase):
     def test_documented_data_directory_and_streaming_assets_resolve_equally(self):
-        self.assertEqual(extract_wiki.default_paths(self._tmp.name), extract_wiki.default_paths(self.game))
-        with self.quiet():
-            code = extract_wiki.main(["--data-dir", self._tmp.name, "--out", self.out, "--no-steam-lookup"])
-        self.assertEqual(code, 0)
-        self.assertGreater(len(wiki_data.load_catalogue(self.out)["records"]), 0)
-
-    def test_failed_comparison_does_not_overwrite_existing_output(self):
-        wiki_data.write_catalogue(self.out, self.catalogue)
-        before = self.read(self.out)
-        with self.quiet():
-            code = extract_wiki.main(["--data-dir", self.game, "--out", self.out, "--compare", self.out + ".missing"])
-        self.assertEqual(code, 2)
-        self.assertEqual(self.read(self.out), before)
-
-    def test_output_is_stable_apart_from_the_extraction_time(self):
-        first = self.extract()
-        second = self.extract()
-        first.pop("generated"), second.pop("generated")
-        self.assertEqual(first, second)
-
-    def test_writing_replaces_the_previous_catalogue_in_one_move(self):
-        wiki_data.write_catalogue(self.out, self.catalogue)
-        before = self.read(self.out)
-        wiki_data.write_catalogue(
-            self.out, dict(self.catalogue, generated="2099-01-01T00:00:00Z")
-        )
-        after = self.read(self.out)
-        self.assertIn("2099-01-01", after)
-        self.assertNotEqual(after, before)
-
-    def test_a_failed_validation_leaves_the_previous_output_standing(self):
-        wiki_data.write_catalogue(self.out, self.catalogue)
-        before = self.read(self.out)
-        with self.assertRaisesRegex(wiki_data.SourceError, "counts.records"):
-            wiki_data.write_catalogue(
-                self.out, dict(self.catalogue, records=self.catalogue["records"][:-1])
-            )
-        self.assertEqual(self.read(self.out), before)
-        self.assertEqual([p for p in os.listdir(self._tmp.name) if p.startswith(".wiki-")], [])
-
-    def test_validation_rejects_a_record_without_sources(self):
-        record = dict(self.catalogue["records"][0], sources=[])
-        with self.assertRaisesRegex(wiki_data.SourceError, "no sources"):
-            wiki_data.write_catalogue(self.out, dict(self.catalogue, records=[record]))
-
-    def test_validation_rejects_duplicate_ids_and_a_wrong_schema_version(self):
-        doubled = [self.catalogue["records"][0]] * 2
-        with self.assertRaisesRegex(wiki_data.SourceError, "duplicate record id"):
-            wiki_data.validate_catalogue(dict(self.catalogue, records=doubled))
-        with self.assertRaisesRegex(wiki_data.SourceError, "schemaVersion"):
-            wiki_data.validate_catalogue(dict(self.catalogue, schemaVersion=99))
-        with self.assertRaisesRegex(wiki_data.SourceError, "kind"):
-            wiki_data.validate_catalogue(
-                dict(self.catalogue, source=dict(self.catalogue["source"], kind="guessed"))
-            )
-
-    def test_comparison_reports_added_removed_and_changed(self):
-        old = [
-            {"id": "item/kept", "type": "item", "name": "Kept"},
-            {"id": "item/gone", "type": "item", "name": "Gone"},
-            {"id": "item/moved", "type": "item", "name": "Old name", "capacities": 1},
-        ]
-        new = [
-            {"id": "item/kept", "type": "item", "name": "Kept"},
-            {"id": "item/moved", "type": "item", "name": "New name", "capacities": 1},
-            {"id": "item/fresh", "type": "item", "name": "Fresh"},
-        ]
-        diff = wiki_data.diff_records(old, new)
-        self.assertEqual(diff["added"], ["item/fresh"])
-        self.assertEqual(diff["removed"], ["item/gone"])
-        self.assertEqual(diff["changed"], [{"id": "item/moved", "fields": ["name"]}])
-
-    def test_comparison_ignores_the_extraction_time(self):
-        old = [{"id": "item/a", "type": "item"}]
-        new = [{"id": "item/a", "type": "item", "generated": "2099-01-01T00:00:00Z"}]
-        self.assertEqual(wiki_data.diff_records(old, new)["changed"], [])
-
-    def test_the_cli_compares_against_a_previous_catalogue(self):
-        self.check_cli_comparison(os.path.join(self._tmp.name, "previous.json"))
-
-    def test_the_cli_compares_before_replacing_the_same_catalogue(self):
-        self.check_cli_comparison(self.out)
-
-    def check_cli_comparison(self, previous):
-        import contextlib
-        import io
-
-        with self.quiet():
-            self.assertEqual(
-                extract_wiki.main(["--data-dir", self.game, "--out", previous, "--all"]), 0
-            )
-        # A new item only becomes a record once its help page arrives too.
-        locale = dict(
-            LOCALE,
-            **{
-                "ba:itemname_newgift": "Gift (New)",
-                "help_ba:itemname_newgift_content": (
-                    "**Gift (New)** is a type of product primarily sold from "
-                    "[Gift Shops](businesstypes-giftshop).\n\n"
-                    "The product can be purchased from any "
-                    "[wholesale location](wholesalers-locations)."
-                ),
-            },
-        )
-        with open(self.locale_path(), "w", encoding="utf-8") as fh:
-            fh.write(json.dumps(locale, ensure_ascii=False))
-        err, out = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(out):
-            code = extract_wiki.main(
-                ["--data-dir", self.game, "--out", self.out, "--all", "--compare", previous]
-            )
-        self.assertEqual(code, 0)
-        self.assertIn("1 added", out.getvalue())
-        self.assertIn("+ item/newgift", out.getvalue())
+        self.assertEqual(wiki_paths.default_paths(self._tmp.name),
+                         wiki_paths.default_paths(self.game))
 
 
 if __name__ == "__main__":

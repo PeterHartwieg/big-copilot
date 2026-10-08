@@ -1,20 +1,7 @@
-"""Game help text as a wiki catalogue: the facts the game itself states.
+"""Parse documented game facts for the public wiki.
 
-`ba_dashboard.py` parses the handful of help pages the board needs every time
-it loads a save. This module reads the same files once and writes them out as
-records instead, so a wiki can be built from the game's own words. The raw help
-text travels beside the parsed facts on purpose: a page the parser only half
-understood is then still visible as the game wrote it, rather than silently
-reduced to whatever happened to match.
-
-Everything here is standard library only, and nothing is read from or imported
-from the dashboard: importing a 9,000-line template to lift six regexes out of
-it would couple two things that change for different reasons. `ba_save` is
-imported lazily by the CLI to locate the game's own `en.json` only.
-
-Every number comes from a match in the game's text, never from a default, and
-anything the text does not state is recorded as missing. The help can lag the
-running game, so these records are documented game facts, not runtime truth.
+Every number comes from the game help text. Missing facts stay unknown; the
+help can lag the running game, so these records are not runtime observations.
 """
 
 from __future__ import annotations
@@ -23,10 +10,7 @@ import hashlib
 import json
 import os
 import re
-from datetime import datetime, timezone
 
-SCHEMA = "ba-wiki-catalogue"
-SCHEMA_VERSION = 1
 
 # The locale keys each kind of record is built from.
 _BUSINESS_HELP_RE = re.compile(r"^help_(ba:businesstype_[a-z0-9_]+)_content$")
@@ -108,32 +92,12 @@ def sha256_hex(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def modified_utc(path: str) -> str | None:
-    """The file's own mtime, as observed metadata; never a build number."""
-    try:
-        return datetime.fromtimestamp(os.path.getmtime(path), timezone.utc).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
-    except OSError:
-        return None
-
-
-def file_meta(path: str) -> dict:
-    data = read_source(path)
-    return {
-        "path": os.path.abspath(path),
-        "sha256": sha256_hex(data),
-        "bytes": len(data),
-        "modified": modified_utc(path),
-    }
-
-
 def load_locale(path: str) -> dict[str, str]:
     """The locale file as {key: text}. Strict JSON, and loud about failure.
 
     `ba_save.load_locale` returns {} when the file cannot be read, which is the
     right behaviour for a dashboard that can still show a save. Here an empty
-    catalogue is exactly the silent failure this extractor must not produce.
+    wiki is exactly the silent failure this parser must not produce.
     """
     data = read_source(path)
     try:
@@ -195,7 +159,7 @@ def load_help_structure(path: str) -> tuple[list, dict]:
 
     Returns (pages, info). `pages` is a flat [{category, slug, prefix}] list;
     `info` records the parse mode and what the repair had to do, so the
-    catalogue says honestly which of the two parsers produced it.
+    source metadata says which of the two parsers produced it.
     """
     raw = read_source(path)
     text = raw.decode("utf-8-sig")
@@ -304,22 +268,6 @@ def bullets_of(section_list: list[dict], *needles: str) -> list[str]:
         if all(needle in key for needle in needles):
             return section["bullets"]
     return []
-
-
-def inline_of(section_list: list[dict], *needles: str) -> str:
-    for section in section_list:
-        key = key_of(section["label"])
-        if all(needle in key for needle in needles):
-            return section["inline"]
-    return ""
-
-
-def label_of(section_list: list[dict], *needles: str) -> str | None:
-    for section in section_list:
-        key = key_of(section["label"])
-        if all(needle in key for needle in needles):
-            return section["label"]
-    return None
 
 
 def prose_text(prose: list[str]) -> str:
@@ -599,7 +547,7 @@ def extract_recipe(
 
     None when the page states no rated output: the dashboard skips those too,
     and a recipe without a rate cannot be told apart from a page the parser
-    misread. The raw text still travels with the catalogue either way.
+    misread. The original help page remains available either way.
     """
     prose, sections_ = sections(text)
     unparsed: list[dict] = []
@@ -773,15 +721,9 @@ def _dedupe(refs: list[dict]) -> list[dict]:
 def build_catalogue(
     locale: dict[str, str],
     *,
-    businesses: list[str] | None = None,
     help_pages: list[dict] | None = None,
-    source_files: dict[str, dict] | None = None,
-    build_metadata: dict | None = None,
-    with_raw: bool = True,
 ) -> dict:
-    """The catalogue: records for the selected businesses and everything they
-    reference, each with the keys it was read from, and the raw help beside
-    them. With `businesses=None` the whole catalogue is extracted."""
+    """Parse every business, item, recipe and workstation help page."""
     names = {
         key: text
         for key, text in locale.items()
@@ -798,104 +740,54 @@ def build_catalogue(
             if page.get("prefix") == prefix and page.get("slug")
         ]
 
-    selected = _select_businesses(locale, businesses)
+    selected = {m.group(1): text for key, text in locale.items()
+                if (m := _BUSINESS_HELP_RE.match(key))}
+    if not selected:
+        raise SourceError("no help_ba:businesstype_*_content pages in the locale; "
+                          "is this the game's own en.json?")
     records: list[dict] = []
-    raw_help: dict[str, str] = {}
 
     for slug, text in selected.items():
         help_key = "help_%s_content" % slug
-        raw_help[help_key] = text
         records.append(extract_business(slug, text, names, slugs_for(help_key)))
 
-    # Each hop is walked after the records it follows from are in: an item's
-    # recipes are only known once the items are read, and a recipe's
-    # workstation once the recipes are. With every business selected nothing
-    # is filtered, which here is an empty wanted set rather than a flag.
-    unfiltered = businesses is None
-    wanted_items = set() if unfiltered else _referenced(records)[0]
     item_keys = {
         m.group(1): text
         for key, text in locale.items()
-        if (m := _ITEM_HELP_RE.match(key)) and (not wanted_items or m.group(1) in wanted_items)
+        if (m := _ITEM_HELP_RE.match(key))
     }
     for slug, text in sorted(item_keys.items()):
         help_key = "help_ba:itemname_%s_content" % slug
-        raw_help[help_key] = text
         records.append(extract_item(slug, text, names, slugs_for(help_key)))
 
-    wanted_recipes = set() if unfiltered else _referenced(records)[1]
     recipe_keys = {
         m.group(1): text
         for key, text in locale.items()
-        if (m := _RECIPE_HELP_RE.match(key)) and (not wanted_recipes or "recipe/" + m.group(1) in wanted_recipes)
+        if (m := _RECIPE_HELP_RE.match(key))
     }
     for slug, text in sorted(recipe_keys.items()):
         help_key = "help_recipes_%s_content" % slug
         record = extract_recipe(slug, text, names, slugs_for(help_key))
         if record:
-            raw_help[help_key] = text
             records.append(record)
 
-    wanted_stations = set() if unfiltered else _referenced(records)[2]
     station_keys = {
         m.group(1): text
         for key, text in locale.items()
         if (m := _WORKSTATION_HELP_RE.match(key))
-        and (not wanted_stations or m.group(1) in wanted_stations)
     }
     for slug, text in sorted(station_keys.items()):
         help_key = "help_factory_workstation_%s_content" % slug
-        raw_help[help_key] = text
         records.append(extract_workstation(slug, text, names, slugs_for(help_key)))
 
     records.sort(key=lambda record: (record["type"], record["id"]))
-    counts: dict[str, int] = {}
-    for record in records:
-        counts[record["type"]] = counts.get(record["type"], 0) + 1
-
-    catalogue = {
-        "schema": SCHEMA,
-        "schemaVersion": SCHEMA_VERSION,
-        "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "source": {
-            "kind": "game-help",
-            "files": source_files or {},
-            "buildMetadata": build_metadata or _unknown_build(),
-        },
-        "helpStructure": {
-            "used": bool(help_pages),
-            "categories": len({p.get("category") for p in (help_pages or []) if p.get("category")}),
-            "pages": len(help_pages or []),
-        },
-        "locale": {
-            "entries": len(locale),
-            "helpContentEntries": sum(1 for key in locale if key.endswith("_content")),
-        },
-        "counts": dict(sorted(counts.items())) | {"records": len(records)},
+    return {
         "unparsed": [
             {"record": record["id"], **issue}
             for record in records
             for issue in record["unparsed"]
         ],
         "records": records,
-    }
-    if with_raw:
-        catalogue["raw"] = {"help": dict(sorted(raw_help.items()))}
-    return catalogue
-
-
-def _unknown_build() -> dict:
-    """Build metadata that was not observed, stated as exactly that."""
-    return {
-        "steamBuildId": None,
-        "steamBuildIdSource": None,
-        "saveBuildNumber": None,
-        "saveBuildNumberSource": None,
-        "note": (
-            "Not observed by this extraction. A Steam build id comes from the "
-            "game's appmanifest, a save build number from buildNumberAtLastSave "
-            "in a .hsg file; neither is read here, and neither is guessed."
-        ),
     }
 
 
@@ -918,184 +810,3 @@ def steam_build_id(manifest_path: str) -> dict:
             "build number the dashboard reports from a save."
         ),
     }
-
-
-def _select_businesses(locale: dict[str, str], wanted: list[str] | None) -> dict[str, str]:
-    """The business help pages to extract, failing loudly on an unknown slug.
-
-    A slug is accepted whole (`ba:businesstype_giftshop`) or as its tail
-    (`giftshop`), which is how the help's own link names it.
-    """
-    available = {
-        m.group(1): text
-        for key, text in locale.items()
-        if (m := _BUSINESS_HELP_RE.match(key))
-    }
-    if not available:
-        raise SourceError(
-            "no help_ba:businesstype_*_content pages in the locale; "
-            "is this the game's own en.json?"
-        )
-    if wanted is None:
-        return available
-    chosen = {}
-    for name in wanted:
-        matches = [
-            slug
-            for slug in available
-            if slug == name or slug.removeprefix("ba:businesstype_") == name
-        ]
-        if not matches:
-            raise SourceError(
-                "no help page for business type %r; known: %s"
-                % (name, ", ".join(sorted(available)))
-            )
-        chosen[matches[0]] = available[matches[0]]
-    return {slug: chosen[slug] for slug in sorted(chosen)}
-
-
-def _referenced(records: list[dict]) -> tuple[set[str], set[str], set[str]]:
-    """The items, recipes and workstations the selected records talk about."""
-    items: set[str] = set()
-    recipes: set[str] = set()
-    stations: set[str] = set()
-
-    def walk(value) -> None:
-        if isinstance(value, dict):
-            slug = value.get("slug")
-            if isinstance(slug, str):
-                if slug.startswith("ba:itemname_"):
-                    items.add(slug)
-                    # A workstation is named as the furniture it is assembled
-                    # from; its own pages are keyed without that suffix.
-                    if slug.endswith("workstation"):
-                        stations.add(
-                            slug.removeprefix("ba:itemname_").removesuffix("workstation")
-                        )
-                elif slug.startswith("recipe/"):
-                    recipes.add(slug)
-                elif slug.startswith("workstation/"):
-                    stations.add(slug.removeprefix("workstation/"))
-            for key, child in value.items():
-                if key == "suppliers":
-                    continue
-                walk(child)
-        elif isinstance(value, list):
-            for child in value:
-                walk(child)
-
-    for record in records:
-        walk(record)
-    return items, recipes, stations
-
-
-# --- validation, writing, comparing ------------------------------------
-
-
-def validate_catalogue_text(text: str) -> dict:
-    """Parse a serialised catalogue and check the promises the schema makes.
-
-    Runs before any output file is touched: a catalogue that fails here never
-    replaces the previous one.
-    """
-    try:
-        catalogue = json.loads(text)
-    except ValueError as exc:
-        raise SourceError(f"serialised catalogue is not valid JSON: {exc}") from exc
-    validate_catalogue(catalogue)
-    return catalogue
-
-
-def validate_catalogue(catalogue: dict) -> None:
-    if catalogue.get("schema") != SCHEMA:
-        raise SourceError(f"schema is {catalogue.get('schema')!r}, expected {SCHEMA!r}")
-    if catalogue.get("schemaVersion") != SCHEMA_VERSION:
-        raise SourceError(
-            f"schemaVersion is {catalogue.get('schemaVersion')!r}, expected {SCHEMA_VERSION!r}"
-        )
-    if not catalogue.get("generated"):
-        raise SourceError("catalogue has no extraction timestamp")
-    source = catalogue.get("source") or {}
-    if source.get("kind") != "game-help":
-        raise SourceError(f"source kind is {source.get('kind')!r}, expected 'game-help'")
-    for name, meta in (source.get("files") or {}).items():
-        if not meta.get("sha256"):
-            raise SourceError(f"source file {name} has no sha256")
-    records = catalogue.get("records")
-    if not isinstance(records, list) or not records:
-        raise SourceError("catalogue has no records")
-    seen = set()
-    for record in records:
-        for field in ("id", "type", "slug", "sources"):
-            if not record.get(field):
-                raise SourceError(f"record {record.get('id')!r} has no {field}")
-        if record["id"] in seen:
-            raise SourceError(f"duplicate record id {record['id']!r}")
-        seen.add(record["id"])
-        if not isinstance(record["sources"], list):
-            raise SourceError(f"record {record['id']} sources is not a list")
-    counted = catalogue.get("counts", {}).get("records")
-    if counted != len(records):
-        raise SourceError(f"counts.records says {counted}, catalogue holds {len(records)}")
-
-
-def write_catalogue(path: str, catalogue: dict) -> str:
-    """Serialise, validate, then replace the output in one move.
-
-    The temporary file lives beside the target so the swap is a rename, which
-    is atomic on the systems this runs on; a failed validation leaves the
-    previous catalogue standing.
-    """
-    import tempfile
-
-    text = json.dumps(catalogue, ensure_ascii=False, indent=2) + "\n"
-    validate_catalogue_text(text)
-    directory = os.path.dirname(os.path.abspath(path)) or "."
-    os.makedirs(directory, exist_ok=True)
-    handle, temporary = tempfile.mkstemp(dir=directory, prefix=".wiki-", suffix=".tmp")
-    try:
-        with os.fdopen(handle, "w", encoding="utf-8", newline="\n") as fh:
-            fh.write(text)
-        os.replace(temporary, path)
-    except BaseException:
-        try:
-            os.unlink(temporary)
-        except OSError:
-            pass
-        raise
-    return text
-
-
-def diff_records(old: list[dict], new: list[dict]) -> dict:
-    """Added, removed and changed records between two catalogues.
-
-    Records are matched on `id`, so a re-selection or a re-ordering does not
-    read as churn. Metadata keys that only describe when a catalogue was
-    written are excluded before comparing.
-    """
-    volatile = {"generated"}
-    strip = lambda record: {k: v for k, v in record.items() if k not in volatile}
-    before = {record["id"]: strip(record) for record in old}
-    after = {record["id"]: strip(record) for record in new}
-    changed = []
-    for record_id in sorted(set(before) & set(after)):
-        if before[record_id] == after[record_id]:
-            continue
-        fields = sorted(
-            key
-            for key in set(before[record_id]) | set(after[record_id])
-            if before[record_id].get(key) != after[record_id].get(key)
-        )
-        changed.append({"id": record_id, "fields": fields})
-    return {
-        "added": sorted(set(after) - set(before)),
-        "removed": sorted(set(before) - set(after)),
-        "changed": changed,
-    }
-
-
-def load_catalogue(path: str) -> dict:
-    catalogue = json.loads(read_source(path).decode("utf-8-sig"))
-    if catalogue.get("schema") != SCHEMA:
-        raise SourceError(f"{path} is not a {SCHEMA} catalogue")
-    return catalogue

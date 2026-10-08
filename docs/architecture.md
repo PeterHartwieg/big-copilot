@@ -1800,7 +1800,7 @@ double entry, whose second prefix is unreachable through that slug), and a page 
 the locale does not carry, since a record with no body would be an empty page rather than a
 fact. The order of those two tests matters: a slug is only recorded as seen once it has been
 emitted, so a later entry for a slug whose earlier one had no content is kept, not counted a
-duplicate. Alongside the pages the payload carries the worked example, a guide per
+duplicate. Alongside the pages the payload carries a guide per
 customer-facing business type, and the `topics`.
 
 For the game-read pages and the `wiki_sample.json` fill, no number is invented: what the game

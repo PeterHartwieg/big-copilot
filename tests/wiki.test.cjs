@@ -5,7 +5,7 @@
    the real source rather than a copy of it.
 
    The fixture is the shape agreed for web/wiki-data.json: schemaVersion 1,
-   categories, pages, and the verified sample the authored page is drawn from.
+   categories, pages, and the verified guide the authored page is drawn from.
    It is written here, so these tests hold with or without the real file.
 
     node --test tests/wiki.test.cjs
@@ -80,7 +80,7 @@ const HARVEST = 'ba:street_pier#9';
 const DEPOT = 'ba:street_twentyfifthstreet#2';
 const ANDERSON = 'ba:street_fifthavenue#16';
 
-const SAMPLE = {
+const GIFT_GUIDE = {
   SOURCES: {extracted: '2026-09-03', files: [{path: 'Big Ambitions_Data/StreamingAssets/locale/en.json', note: '6,036 keys.'}],
     build: [{label: 'Steam app / depot build', value: 'app 1331550, buildid 25231854',
       where: 'steamapps/appmanifest_1331550.acf', certain: true,
@@ -183,7 +183,7 @@ const DATA = {
     {id: 'products-giftwrap', title: '<img src=x onerror="alert(1)">Gift Wrap',
       body: 'Sold by [Gift Shops](businesstypes-giftshop) and <b>nobody</b> else.\n\nSee [Exercise](common_exercise).'},
   ],
-  sample: SAMPLE,
+  guides: {'businesstypes-giftshop': GIFT_GUIDE},
   // The hand-authored articles, in the shape tools/wiki_topics.json writes:
   // written beside the payload rather than read from the game's help, so each
   // one closes with the line saying what it was checked against.
@@ -668,10 +668,10 @@ test('every way the help writes an address resolves to one building key', () => 
     assert.equal(w.call(`wikiAddressKey(${JSON.stringify(junk)})`), null, junk);
 });
 
-test('the keys the sample resolves to are real buildings on the shipped map', () => {
+test('the keys the guide resolves to are real buildings on the shipped map', () => {
   const w = wiki();
   const known = new Set(LOCATIONS.buildings.map(b => b.key));
-  for (const supplier of Object.values(SAMPLE.SUPPLIERS)) {
+  for (const supplier of Object.values(GIFT_GUIDE.SUPPLIERS)) {
     const key = w.call(`wikiAddressKey(${JSON.stringify(supplier.street)})`);
     assert.ok(key, `${supplier.name} has no key`);
     assert.ok(known.has(key), `${supplier.name} (${supplier.street}) resolved to ${key}, which is not on the map`);
@@ -743,8 +743,8 @@ test('every address the shipped catalogue links to is a building on the map', {s
   });
   assert.deepEqual(unresolved, [], 'an address that resolves to nothing would be a pin that goes nowhere');
   assert.ok(raw.size > 20, 'and the corpus really does carry addresses');
-  // The extraction resolves the sample's suppliers itself; the two agree.
-  for (const [key, supplier] of Object.entries(real.sample.SUPPLIERS))
+  // The extraction resolves the guide's suppliers itself; the two agree.
+  for (const [key, supplier] of Object.entries(real.guides['businesstypes-giftshop'].SUPPLIERS))
     assert.equal(w.call(`wikiAddressKey(${JSON.stringify(supplier.street)})`), key, supplier.name);
 });
 
@@ -777,9 +777,9 @@ test('the page claims help, and claims a second file only for what was read in o
   // Pins the wording: agreement within one help file is not an independent check.
   assert.doesNotMatch(html, /checked both ways/);
 
-  const bare = wiki({data: {...DATA, sample: {...SAMPLE,
-    FIXTURES: Object.fromEntries(Object.entries(SAMPLE.FIXTURES).map(([k, f]) => [k, {...f, observed: null}])),
-    PRODUCTS: Object.fromEntries(Object.entries(SAMPLE.PRODUCTS).map(([k, p]) => [k, {...p, crosscheck: null}]))}}});
+  const bare = wiki({data: {...DATA, guides: {'businesstypes-giftshop': {...GIFT_GUIDE,
+    FIXTURES: Object.fromEntries(Object.entries(GIFT_GUIDE.FIXTURES).map(([k, f]) => [k, {...f, observed: null}])),
+    PRODUCTS: Object.fromEntries(Object.entries(GIFT_GUIDE.PRODUCTS).map(([k, p]) => [k, {...p, crosscheck: null}]))}}}});
   const plain = await bare.load('wiki/businesstypes-giftshop');
   assert.doesNotMatch(plain, htmlRe('wiki.guide.chip.counted', {}, {}), 'nothing counted, nothing claimed');
   assert.doesNotMatch(plain, enRe('wiki.graph.both'));
@@ -815,8 +815,8 @@ test('the checklist fills a square only where the business page itself requires 
 
   // Where the extraction states the requirements itself, that list wins over
   // the page text this reader would otherwise parse.
-  const told = wiki({data: {...DATA, sample: {...SAMPLE, BUSINESS: {...SAMPLE.BUSINESS,
-    requirements: ['A Cash Register', {name: 'Rounded Shelf'}]}}}});
+  const told = wiki({data: {...DATA, guides: {'businesstypes-giftshop': {...GIFT_GUIDE, BUSINESS: {...GIFT_GUIDE.BUSINESS,
+    requirements: ['A Cash Register', {name: 'Rounded Shelf'}]}}}}});
   const html3 = await told.load('wiki/businesstypes-giftshop');
   assert.match(row(html3, 'businesstypes-giftshop:req-cashregister'), /^<div class="wk-item req"/);
   assert.match(row(html3, 'businesstypes-giftshop:req-roundedshelf'), /^<div class="wk-item req"/);
@@ -850,8 +850,8 @@ test('wholesale is three states, and only one of them is a claim', async () => {
   assert.doesNotMatch(html, /products? cannot|cannot be ordered|cannot buy/,
     'an absence in the help is never written up as a prohibition');
 
-  const unsure = wiki({data: {...DATA, sample: {...SAMPLE, PRODUCTS: {...SAMPLE.PRODUCTS,
-    expensivegift: {...SAMPLE.PRODUCTS.expensivegift, wholesale: null}}}}});
+  const unsure = wiki({data: {...DATA, guides: {'businesstypes-giftshop': {...GIFT_GUIDE, PRODUCTS: {...GIFT_GUIDE.PRODUCTS,
+    expensivegift: {...GIFT_GUIDE.PRODUCTS.expensivegift, wholesale: null}}}}}});
   const html2 = await unsure.load('wiki/businesstypes-giftshop');
   assert.match(html2, enRe('wiki.card.wholesale.unknown'));
   assert.doesNotMatch(html2, enRe('wiki.card.wholesale.none'), 'unknown never becomes a no');
@@ -860,10 +860,10 @@ test('wholesale is three states, and only one of them is a claim', async () => {
 });
 
 test('a recipe with no stated rate shows no rate, and no day figure derived from one', async () => {
-  const w = wiki({data: {...DATA, sample: {...SAMPLE, RECIPES: {cheapgiftrecipe: {
-    ...SAMPLE.RECIPES.cheapgiftrecipe,
+  const w = wiki({data: {...DATA, guides: {'businesstypes-giftshop': {...GIFT_GUIDE, RECIPES: {cheapgiftrecipe: {
+    ...GIFT_GUIDE.RECIPES.cheapgiftrecipe,
     inputs: [{item: 'Clay', per: null, from: [HARVEST]}],
-    out: {item: 'Gift (Cheap)', per: null}}}}}});
+    out: {item: 'Gift (Cheap)', per: null}}}}}}});
   const html = await w.load('wiki/businesstypes-giftshop');
   assert.match(html, new RegExp(htmlRe('wiki.recipe.noRate').source, ''));
   assert.doesNotMatch(html, /0<small>\/h<\/small>/, 'no invented zero');
@@ -873,8 +873,8 @@ test('a recipe with no stated rate shows no rate, and no day figure derived from
 });
 
 test('a fixture with no stated capacity shows none, rather than an empty number', async () => {
-  const w = wiki({data: {...DATA, sample: {...SAMPLE, FIXTURES: {...SAMPLE.FIXTURES,
-    roundedshelf: {...SAMPLE.FIXTURES.roundedshelf, capacity: [], customers: null}}}}});
+  const w = wiki({data: {...DATA, guides: {'businesstypes-giftshop': {...GIFT_GUIDE, FIXTURES: {...GIFT_GUIDE.FIXTURES,
+    roundedshelf: {...GIFT_GUIDE.FIXTURES.roundedshelf, capacity: [], customers: null}}}}}});
   const html = await w.load('wiki/businesstypes-giftshop');
   const shelf = row(html, 'businesstypes-giftshop:fix-roundedshelf');
   assert.match(shelf, /Rounded Shelf/);
@@ -884,8 +884,8 @@ test('a fixture with no stated capacity shows none, rather than an empty number'
   // What the shipped shops hold was still counted, so that much is still said.
   assert.match(html, htmlRe('wiki.fix.observed', {}, {}));
 
-  const silent = wiki({data: {...DATA, sample: {...SAMPLE, FIXTURES: {...SAMPLE.FIXTURES,
-    roundedshelf: {name: 'Rounded Shelf', sells: ['cheapgift'], vendors: [PEDERSON]}}}}});
+  const silent = wiki({data: {...DATA, guides: {'businesstypes-giftshop': {...GIFT_GUIDE, FIXTURES: {...GIFT_GUIDE.FIXTURES,
+    roundedshelf: {name: 'Rounded Shelf', sells: ['cheapgift'], vendors: [PEDERSON]}}}}}});
   const bare = await silent.load('wiki/businesstypes-giftshop');
   assert.match(bare, htmlRe('wiki.fix.none', {}, {}));
   assert.doesNotMatch(bare, /null|undefined|NaN/);
@@ -902,8 +902,8 @@ test('a place wears the board\'s own two letters and keeps its house number', as
   assert.doesNotMatch(html, /<b>Pier<\/b>/);
   assert.match(html, /data-map-id="ba:street_pier#4"/, 'and the pin goes to that one');
 
-  const nowhere = wiki({data: {...DATA, sample: {...SAMPLE, SUPPLIERS: Object.fromEntries(
-    Object.entries(SAMPLE.SUPPLIERS).map(([k, s]) => [k, {...s, hood: 'Somewhere Else'}]))}}});
+  const nowhere = wiki({data: {...DATA, guides: {'businesstypes-giftshop': {...GIFT_GUIDE, SUPPLIERS: Object.fromEntries(
+    Object.entries(GIFT_GUIDE.SUPPLIERS).map(([k, s]) => [k, {...s, hood: 'Somewhere Else'}]))}}}});
   const html2 = await nowhere.load('wiki/businesstypes-giftshop');
   assert.doesNotMatch(html2, /class="hood"/, 'a neighbourhood the board does not name wears no pill');
 });
@@ -915,8 +915,8 @@ test('the weekly-limit note is the extraction\'s own, not lore typed into the pa
   assert.doesNotMatch(html, /Sunday 20:00/, 'nothing the extraction did not say');
 
   // Detailed gap notes stay under Source, with readable names instead of keys.
-  const keyed = wiki({data: {...DATA, sample: {...SAMPLE, GAPS: [{what: 'Weekly delivery limits',
-    detail: 'help_wholesalers_weeklylimits_content says every wholesaler caps each item per week.'}]}}});
+  const keyed = wiki({data: {...DATA, guides: {'businesstypes-giftshop': {...GIFT_GUIDE, GAPS: [{what: 'Weekly delivery limits',
+    detail: 'help_wholesalers_weeklylimits_content says every wholesaler caps each item per week.'}]}}}});
   const html3 = await keyed.load('wiki/businesstypes-giftshop');
   const where = html3.slice(html3.indexOf('<h2>' + en('wiki.copy.suppliersTitle') + '</h2>'), html3.indexOf('<h2>' + en('wiki.yours.title') + '</h2>'));
   assert.doesNotMatch(where, /help_wholesalers|caps each item per week/);
@@ -924,7 +924,7 @@ test('the weekly-limit note is the extraction\'s own, not lore typed into the pa
   assert.doesNotMatch(source, /help_wholesalers/);
   assert.match(source, /the help's own page says every wholesaler caps each item per week/);
 
-  const quiet = wiki({data: {...DATA, sample: {...SAMPLE, GAPS: []}}});
+  const quiet = wiki({data: {...DATA, guides: {'businesstypes-giftshop': {...GIFT_GUIDE, GAPS: []}}}});
   const html2 = await quiet.load('wiki/businesstypes-giftshop');
   assert.doesNotMatch(html2, /Monday 08:00/, 'no gap recorded, no claim made');
 });
@@ -961,7 +961,7 @@ test('the stamp dates the game files and names a build only as a save build, in 
   assert.match(html2, new RegExp('data-tip="[^"]*' + htmlRe('wiki.stamp.build.said', {build: 3675}).source));
 });
 
-test('a page the sample does not cover is a reader, not the authored layout', async () => {
+test('a page the guide does not cover is a reader, not the authored layout', async () => {
   const w = wiki();
   const html = await w.load('wiki/products-cheapgift');
   assert.doesNotMatch(html, new RegExp("<h2>" + htmlRe('wiki.copy.setupTitle').source + "<\\/h2>", ''));
@@ -969,14 +969,17 @@ test('a page the sample does not cover is a reader, not the authored layout', as
   assert.match(html, /Gift \(Cheap\)/);
   assert.match(html, /href="#wiki\/businesstypes-giftshop"/, 'its links reach the pages that exist');
   assert.match(html, enRe('wiki.src.title'));
+  // With no guide of its own, its source list is the Gift Shop guide's.
+  assert.match(html, /<ul class="wk-files"><li><b>[^<]+<\/b><span>[^<]+<\/span><\/li><\/ul>/);
+  assert.match(html, /<code>Steam app \/ depot build<\/code><span>app 1331550, buildid 25231854<\/span>/);
 });
 
 test('the relation graph wires products to fixtures and to their supply', async () => {
   const w = wiki();
   await w.load('wiki/businesstypes-giftshop');
   const model = w.call(`wikiGraphModel([
-    {key:"cheapgift", ...wikiData.sample.PRODUCTS.cheapgift},
-    {key:"expensivegift", ...wikiData.sample.PRODUCTS.expensivegift}])`);
+    {key:"cheapgift", ...wikiData.guides['businesstypes-giftshop'].PRODUCTS.cheapgift},
+    {key:"expensivegift", ...wikiData.guides['businesstypes-giftshop'].PRODUCTS.expensivegift}])`);
   const edges = model.edges.map(e => e.join('|'));
   assert.ok(edges.includes('p:cheapgift|f:roundedshelf|on'), 'a product sits on its fixture');
   assert.ok(edges.includes(`p:cheapgift|s:${BLUESTONE}|hop`), 'and reaches its importer behind the shelves');

@@ -47,7 +47,7 @@ from tools import i18n as ui_text
 from tools import translation_catalogue
 from tools import wiki_pages
 from tools.wiki_data import SourceError
-from tools.extract_wiki import game_data_dir
+from tools.wiki_paths import game_data_dir
 
 # The game text shipped with the page: the display names of items, business
 # types, neighbourhoods, stations and skills, and the few help pages the
@@ -541,7 +541,7 @@ STAMP_INPUTS = (
     # prices and the store rules came later and sit further down: the order is the stamp.
     *PY_CODE, *_PY_DATA_SHIPPED[:3],
     "web/wiki.js", "web/wiki.css", "web/wiki-data.json",
-    "tools/build_wiki_data.py", "tools/wiki_data.py", "tools/extract_wiki.py", "tools/wiki_sample.json",
+    "tools/build_wiki_data.py", "tools/wiki_data.py", "tools/wiki_paths.py", "tools/wiki_sample.json",
     "tools/wiki_topics.json", "web/fonts/fonts.css", "web/maps/floor-plans.json",
     *(f"{NAMES_DIR}/{code}.json" for code in NAME_LANGS),
     # Big Copilot's own text: tt() (inlined in the page) and each language's

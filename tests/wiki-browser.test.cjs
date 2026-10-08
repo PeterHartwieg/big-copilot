@@ -361,9 +361,11 @@ test('phone layouts fit in dark and light, with a single row of nav icons', asyn
    out of the records it does carry so every address, fixture and recipe on it
    is real. The extraction will supply the real ones; this is the shape. */
 function addGuides(data) {
-  const s = data.sample;
+  // The Gift Shop's own headings (COPY) and stations stay on the Gift Shop.
+  const {COPY, WORKSTATIONS, ...s} = data.guides['businesstypes-giftshop'];
   const product = (key, over) => ({...s.PRODUCTS[key], ...over});
   data.guides = {
+    ...data.guides,
     'businesstypes-florist': {
       ...s,
       PRODUCTS: {
@@ -432,7 +434,7 @@ test('a wide range is chosen one product at a time, and the cards keep them all'
    the guide. This is the shape the mobile jump was found on. */
 function addTallGuides(data) {
   addGuides(data);
-  const s = data.sample;
+  const s = data.guides['businesstypes-giftshop'];
   const guide = data.guides['businesstypes-supermarket'];
   const base = s.RECIPES[s.PRODUCTS.cheapgift.recipe];
   guide.RECIPES = {...s.RECIPES};
@@ -447,7 +449,7 @@ function addTallGuides(data) {
    to expand: the office and the larger shops all carry one. */
 function addLongEquipment(data) {
   addGuides(data);
-  const s = data.sample;
+  const s = data.guides['businesstypes-giftshop'];
   const guide = data.guides['businesstypes-florist'];
   const spare = s.FIXTURES.storageshelf;
   guide.FIXTURES = {...s.FIXTURES};
@@ -671,7 +673,7 @@ test('a capacity longer than any the payload carries still folds inside its card
   ];
   for(const width of [320, 1440]) {
     const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop', width, changeData:data=>{
-      const guide = (data.guides || {})['businesstypes-giftshop'] || data.sample;
+      const guide = data.guides['businesstypes-giftshop'];
       const product = guide.PRODUCTS.cheapgift;
       const key = product.fixtures[0];
       guide.FIXTURES[key].capacity = rows;
@@ -696,7 +698,7 @@ test('a capacity longer than any the payload carries still folds inside its card
    record the route actually reads, so that is the one the test unsettles. */
 test('unknown recipe output and wholesale availability stay unknown', async t => {
   const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop',changeData:data=>{
-    const guide = (data.guides || {})['businesstypes-giftshop'] || data.sample;
+    const guide = data.guides['businesstypes-giftshop'];
     guide.PRODUCTS.cheapgift.wholesale = null;
     const recipe = guide.RECIPES[(guide.PRODUCTS.cheapgift.recipes || [])[0]
       || guide.PRODUCTS.cheapgift.recipe];
@@ -752,17 +754,6 @@ test('save pricing is readable at desktop and phone widths and clears with the s
   }
 });
 
-test('a payload with no guides falls back to the sample it does carry', async t => {
-  const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop',changeData:data=>{
-    delete data.guides;
-    data.sample.PRODUCTS.cheapgift.wholesale = null;
-  }});
-  await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
-  await page.getByRole('heading', {name:en('wiki.ui.setupTitle'),exact:true,level:2}).waitFor();
-  const card = page.locator('.wk-card').filter({has:page.getByRole('heading',{name:'Gift (Cheap)',exact:true})});
-  assert.match(await card.innerText(), enRe('wiki.card.wholesale.unknown'));
-  assert.deepEqual(errors, []);
-});
 
 /* A live refresh (a new save, every 30 s while watching) draws the same guide
    again: what the reader opened, closed and focused stays as it was. */
