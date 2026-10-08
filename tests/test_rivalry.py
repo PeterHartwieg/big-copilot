@@ -137,6 +137,12 @@ class TrustedHistoryTests(unittest.TestCase):
         self.assertEqual(self.trusted([(d, d * 10) for d in range(9, 2, -1)] + [(10, 100)]),
                          ({9: 90.0, 10: 100.0}, True))
 
+    def test_fill_pruned_by_day_keeps_its_first_entry(self):
+        # Filled on day 7, then RunDaily on day 8 removed day 1 (older than
+        # six days back), not the list's first entry.
+        self.assertEqual(self.trusted([(d, d * 10) for d in range(7, 1, -1)] + [(8, 80)]),
+                         ({7: 70.0, 8: 80.0}, True))
+
     def test_descending_trusts_only_first(self):
         self.assertEqual(self.trusted([(9, 90), (8, 80), (7, 70)]), ({9: 90.0}, True))
 
@@ -177,6 +183,13 @@ class BackfillTests(unittest.TestCase):
             with self.subTest(values=values):
                 got = bd._rivalry_backfill(RivalSave([state("a", values)]), {}, 4, {"a": 1})
                 self.assertNotIn(3, got)
+
+    def test_rival_with_no_history_yet_is_absent_beside_rivals_with_one(self):
+        # A rival added today has no RunDaily entry yet: it was not in the city.
+        save = RivalSave([state("a", [(d, 25) for d in range(3, 10)]), state("new")])
+        got = bd._rivalry_backfill(save, {}, 9, {"a": 1, "new": 2})
+        self.assertEqual(list(got), list(range(3, 9)))
+        self.assertEqual({got[d]["rank"] for d in got}, {2})
 
     def test_day_one_never_backfilled(self):
         got = bd._rivalry_backfill(RivalSave([state("a", [(1, 0), (2, 0), (3, 0)])]), {}, 3, {"a": 1})

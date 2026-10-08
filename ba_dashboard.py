@@ -2113,6 +2113,8 @@ def _rival_building_type(reg: dict, table: dict) -> str | None:
     kind = reg.get("businessTypeName")
     if kind in OFFICE_TYPES:
         return "office"
+    if kind == "ba:businesstype_cinema":
+        return "cinema"
     return "retail" if kind in RETAIL_TYPES else None
 
 
@@ -2163,6 +2165,10 @@ def _trusted_rival_history(save: Save, state: dict) -> tuple[dict, bool]:
     sorts the whole list newest first. Such a newest-first run is the mark of a
     fill: its first entry (the day it was opened) is real, the rest of it may
     be invented, and whatever RunDaily appended after it is real again.
+    RunDaily prunes by day (everything older than six days back), never by
+    position, so the newest-first run loses its oldest days first and its
+    first entry, the day of the fill, stays real for as long as it is kept.
+    RunDaily writes every rival in rivalStates, defeated ones included.
     """
     entries = []
     for entry in save.items(state.get("weeklyIncomeHistory")):
@@ -2212,12 +2218,14 @@ def _rivalry_backfill(save: Save, profits: dict, day: int, numbers: dict) -> dic
         for rival, (trusted, filled) in rivals_seen:
             if past in trusted:
                 rivals[rival] = trusted[past]
-            elif filled or not trusted or min(trusted) < past:
+            elif filled or (trusted and min(trusted) < past):
                 known = False
                 break
-            # Otherwise the rival's record starts after this day: it was not
-            # in the city yet.
-        if known:
+            # Otherwise the rival's record starts after this day, or it has
+            # none yet: it was not in the city then.
+        # A day no rival has a figure for is a save with no record at all, not
+        # a city without rivals.
+        if known and rivals:
             out[past] = _rival_standing(_player_weekly_income(profits, past), rivals, numbers)
     return out
 
@@ -2225,7 +2233,7 @@ def _rivalry_backfill(save: Save, profits: dict, day: int, numbers: dict) -> dic
 def _rivalry_record(standing: dict, source: str) -> dict:
     """What the history keeps of one day's standing."""
     return {"rank": standing["rank"], "tied": standing["tied"], "first": standing["first"],
-            "you": standing["you"], "top": standing["top"], "gap": standing["gap"], "src": source}
+            "gap": standing["gap"], "src": source}
 
 
 def _rivalry(save: Save, summaries: list, history, character: str, day: int) -> dict | None:
@@ -16667,7 +16675,7 @@ class History:
         ``character`` becomes the most recent; only the ``characters`` most
         recently built are kept, each with its last ``days`` demand snapshots.
         The trend compares with about a week back, so two weeks of snapshots
-        lose nothing the board shows; the ledger is small and keeps its 60.
+        lose nothing the board shows; the ledger and the rivalry record are small and keep their 60.
         ``day`` is the save just built: an older save of ``character`` keeps
         its own two weeks up to that day, as well as the later days on record.
         """

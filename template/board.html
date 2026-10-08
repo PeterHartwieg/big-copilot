@@ -3017,12 +3017,12 @@ body.no-save .nx-tabs{display:none}
   background:linear-gradient(var(--rule-soft),var(--rule-soft)) calc(25% - 5.5px) 4px/1px calc(100% - 18px) no-repeat,linear-gradient(var(--rule-soft),var(--rule-soft)) 50% 4px/1px calc(100% - 18px) no-repeat,linear-gradient(var(--rule-soft),var(--rule-soft)) calc(75% + 5.5px) 4px/1px calc(100% - 18px) no-repeat}
 #kpis .kpi{background:none;border:0;border-radius:0;padding:4px 0 14px;gap:6px}
 @media (max-width:1040px){#kpis.kpis{background:linear-gradient(var(--rule-soft),var(--rule-soft)) 50% 4px/1px calc(100% - 18px) no-repeat}}
-/* With the Rivals leaderboard (rvKpiTile()) the strip holds five figures, its
+/* With the Rivals leaderboard (rlKpiTile()) the strip holds five figures, its
    rules at the same gap centres; narrower, four pair up and the fifth takes a
    row of its own, under a rule. */
 #kpis.kpis.ov-k5{grid-template-columns:repeat(5,minmax(0,1fr));
   background:linear-gradient(var(--rule-soft),var(--rule-soft)) calc(20% - 6.6px) 4px/1px calc(100% - 18px) no-repeat,linear-gradient(var(--rule-soft),var(--rule-soft)) calc(40% - 2.2px) 4px/1px calc(100% - 18px) no-repeat,linear-gradient(var(--rule-soft),var(--rule-soft)) calc(60% + 2.2px) 4px/1px calc(100% - 18px) no-repeat,linear-gradient(var(--rule-soft),var(--rule-soft)) calc(80% + 6.6px) 4px/1px calc(100% - 18px) no-repeat}
-@media (max-width:1300px){
+@media (max-width:1100px){
   #kpis.kpis.ov-k5{grid-template-columns:repeat(2,minmax(0,1fr));background:none}
   #kpis.ov-k5 .kpi:nth-child(2n)::after{content:"";position:absolute;left:-11px;top:4px;bottom:14px;width:1px;background:var(--rule-soft)}
   #kpis.ov-k5 .kpi:nth-child(5){grid-column:1/-1;border-top:1px solid var(--rule-soft);padding-top:12px}
@@ -3294,15 +3294,15 @@ button.nx-card{appearance:none}
 #pageCompany .bz-mbar.none{background:none}
 #pageCompany .bz-mbar i{position:absolute;left:0;top:0;bottom:0;width:var(--v);border-radius:3px;background:var(--accent)}
 #pageCompany .bz-miles .c{text-align:right;margin-left:0}
-/* Milestones' Rivals leaderboard (rvGoalsHtml()): the last days as a row of
+/* Milestones' Rivals leaderboard (rlGoalsHtml()): the last days as a row of
    cells under the three figures, accent for first place. */
-#pageCompany .rv-strip{display:flex;align-items:center;gap:12px;margin-top:12px}
-#pageCompany .rv-cap{flex:none;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
-#pageCompany .rv-days{display:flex;gap:4px;flex:1;min-width:0}
-#pageCompany .rv-days i{flex:1 1 0;max-width:26px;height:12px;border-radius:3px;background:var(--raised)}
-#pageCompany .rv-days i.on{background:var(--accent)}
-#pageCompany .rv-days i.tie{background:var(--warn)}
-#pageCompany .rv-days i.unk{background:none;box-shadow:inset 0 0 0 1px var(--rule)}
+#pageCompany .rl-strip{display:flex;align-items:center;gap:12px;margin-top:12px}
+#pageCompany .rl-cap{flex:none;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+#pageCompany .rl-days{display:flex;gap:4px;flex:1;min-width:0}
+#pageCompany .rl-days i{flex:1 1 0;max-width:26px;height:12px;border-radius:3px;background:var(--raised)}
+#pageCompany .rl-days i.on{background:var(--accent)}
+#pageCompany .rl-days i.tie{background:var(--warn)}
+#pageCompany .rl-days i.unk{background:none;box-shadow:inset 0 0 0 1px var(--rule)}
 @media (max-width:600px){#pageCompany .bz-miles .bz-mile{grid-template-columns:22px minmax(0,1fr) 70px}#pageCompany .bz-mbar{grid-column:2/-1;grid-row:2}}
 .bz-price-select{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink-2);max-width:100%}
 .bz-price-select select{font:500 13px Archivo,sans-serif;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:8px 12px;max-width:360px;min-width:0}

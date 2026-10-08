@@ -106,7 +106,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `minor` | `_alerts()`, its `minor`, sized 24/7 | `alertLines()` |
 | `alertsDemand` | `_alerts(..., "dem")`, a second pass over the same `supply.facts` with factory lines sized on demand: `{lines, minor}`, the shape of `alerts` and `minor` | `alertLines()`, when the sizing switch reads Demand |
 | `goals` | Section `goals`: `_goals()` | `drawGoals` |
-| `rivalry` | `_rivalry()`, from `_rival_weekly_incomes()`, `_player_weekly_income()` and `_rivalry_backfill()`; the days in first place are counted over `History.rivalry()`, the history's `rivalry` record. `null` when the save lists no rivals | `rvShown`, `drawKpis` (through `rvKpiTile`), `rvGoalsHtml` (from `drawGoals`) |
+| `rivalry` | `_rivalry()`, from `_rival_weekly_incomes()`, `_player_weekly_income()` and `_rivalry_backfill()`; the days in first place are counted over `History.rivalry()`, the history's `rivalry` record. `null` when the save lists no rivals | `rlShown`, `drawKpis` (through `rlKpiTile`), `rlGoalsHtml` (from `drawGoals`) |
 
 Four indirect routes an agent would otherwise miss:
 
@@ -1210,7 +1210,7 @@ Company's views (Businesses):
 | Results | `secDaily` (Company results; its By weekday option, `drawWeekday`, replaced the Weekly rhythm section; an old `#secRhythm` link lands here through `SEC_MOVED`), `secFinance` (Company finances), `secPortfolio`, `secDetail` | `drawChart`, `drawFinance`, `drawPortfolio`, `drawSitePicker` + `drawSite`. A business's page (`drawSite`) carries its findings, tiles and blocks, a Schedule summary (`spSchedSummary()`, `#sp-sched`; the planner is Staffing › Schedules') and, in its head, the ways to its planners (`spActs()`, `data-site-go`) |
 | Products & prices (`products`) | `secPrices`, `secProducts` | `drawPriceShops` (a chip a shop or office, `data-price-pick`; the picked one's prices beside the market's lowest in its neighbourhood, `bzPriceTable()`; kept on the entry as `nxPrice`), `drawProducts` (Sales across the company) |
 | Standards | `secStandards`, then `secPortfolio` (its `data-sub` is `results standards`) switched to Operations | `drawStandards` (the four subjects, then `stdTable()`: every shop and office, satisfaction, promotion, amenity lamps, uniforms with the write and its progress), `drawPortfolio` |
-| Milestones | `secGoals` | `drawGoals` (Career goals with bars, Career totals, and the Rivals leaderboard from `rvGoalsHtml()` unless Preferences hide it); the difficulty is not here but a chip at the end of the clock's last line at 1501 px and over (`drawMast`) and, at 1500 px and under, the footer stamp (`drawFooter`, `#footDiff`), built by `fvDiffChip()`, with a body-level popover (`#fvDiffPop`) from `drawDifficulty()` |
+| Milestones | `secGoals` | `drawGoals` (Career goals with bars, Career totals, and the Rivals leaderboard from `rlGoalsHtml()` unless Preferences hide it); the difficulty is not here but a chip at the end of the clock's last line at 1501 px and over (`drawMast`) and, at 1500 px and under, the footer stamp (`drawFooter`, `#footDiff`), built by `fvDiffChip()`, with a body-level popover (`#fvDiffPop`) from `drawDifficulty()` |
 
 Staffing's views:
 

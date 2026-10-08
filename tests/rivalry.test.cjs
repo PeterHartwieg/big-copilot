@@ -115,7 +115,7 @@ test('an unnamed rival uses the stable numbered company label', () => {
 
 test('absent, null and hidden rivalry leave four Overview tiles and no Milestones block', () => {
   for(const b of [board(null), board(null, false, true), board(rivalry(), true)]){
-    assert.doesNotMatch(b.goals(), /rv-fins|rv-strip/);
+    assert.doesNotMatch(b.goals(), /rl-fins|rl-strip/);
     const html = b.kpis();
     assert.equal([...html.matchAll(/data-kpi="/g)].length, 4);
     assert.doesNotMatch(html, /data-kpi="rivals"/);
@@ -131,7 +131,7 @@ test('visible rivalry is the fifth tile and the layout resets when it is hidden'
   b.storage.set('ba_rivalry_hidden', '1');
   assert.equal([...b.kpis().matchAll(/data-kpi="/g)].length, 4);
   assert.equal(b.classes.has('ov-k5'), false);
-  assert.doesNotMatch(b.goals(), /rv-fins/);
+  assert.doesNotMatch(b.goals(), /rl-fins/);
 });
 
 test('the preferences button toggles persistent visibility and refreshes both views', () => {
@@ -146,11 +146,11 @@ test('the preferences button toggles persistent visibility and refreshes both vi
   assert.match(b.context.pxPrefsHtml(), new RegExp('data-px-do="rivalry">' + enRe('nav.px.rv.hide').source));
   click(event);
   assert.equal(b.storage.get('ba_rivalry_hidden'), '1');
-  assert.doesNotMatch(b.element('secGoals').innerHTML, /rv-fins/);
+  assert.doesNotMatch(b.element('secGoals').innerHTML, /rl-fins/);
   assert.equal(b.classes.has('ov-k5'), false);
   assert.match(b.context.pxPrefsHtml(), new RegExp('data-px-do="rivalry">' + enRe('nav.px.rv.show').source));
   click(event);
   assert.equal(b.storage.get('ba_rivalry_hidden'), '0');
-  assert.match(b.element('secGoals').innerHTML, /rv-fins/);
+  assert.match(b.element('secGoals').innerHTML, /rl-fins/);
   assert.equal(b.classes.has('ov-k5'), true);
 });

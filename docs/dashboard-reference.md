@@ -2293,7 +2293,7 @@ To start with a populated history instead of an empty one:
 python ba_dashboard.py --backfill
 ```
 
-That reads every other save in the same character's folder and merges both records in.
+That reads every other save in the same character's folder and merges the records in.
 It only ever adds; nothing is deleted, and re-running is harmless. This is a local-run
 option; the browser page has no equivalent yet.
 

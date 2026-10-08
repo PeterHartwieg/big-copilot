@@ -2807,7 +2807,7 @@ function drawKpis(){
            : tt("today.kpi.worth.none", "no history yet")},
   ];
   /* The Rivals leaderboard is a fifth figure, unless Preferences hide it. */
-  if(rvShown()) tiles.push(rvKpiTile(D.rivalry));
+  if(rlShown()) tiles.push(rlKpiTile(D.rivalry));
   $("kpis").classList.toggle("ov-k5", tiles.length === 5);
   /* The tiles are rebuilt on every render; the entrance plays only the first time. */
   const seen = !!q("#kpis .kpi.in");
@@ -16856,18 +16856,18 @@ function drawPayroll(){
    and Milestones as a block; Preferences › Rivals leaderboard hides both. A
    tie at the top is not a first place: the game's sort may list either side
    first. */
-const RV_HIDE_KEY = "ba_rivalry_hidden";
-const rvShown = () => !!(typeof D !== "undefined" && D && D.rivalry) && remembered(RV_HIDE_KEY) !== "1";
+const RL_HIDE_KEY = "ba_rivalry_hidden";
+const rlShown = () => !!(typeof D !== "undefined" && D && D.rivalry) && remembered(RL_HIDE_KEY) !== "1";
 /* The best rival by name where the save gives one, else by its stable number
    (as the map's cards do). Text, never markup. */
-const rvRivalName = r => r.rival?.name || (r.rival?.number != null
-  ? tt("co.rv.rival.n", "Rival company {n}", {n: r.rival.number}) : tt("co.rv.rival", "the best rival"));
-const rvTiedFirst = r => r.rank === 1 && r.tied > 0;
+const rlRivalName = r => r.rival?.name || (r.rival?.number != null
+  ? tt("co.rv.rival.n", "Rival company {n}", {n: r.rival.number}) : tt("co.rv.rival", "The best rival"));
+const rlTiedFirst = r => r.rank === 1 && r.tied > 0;
 /* The Overview's figure: the rank, the lead or the shortfall, and the days
    at the top, "≥" when the run reaches a day nothing on record can tell. */
-function rvKpiTile(r){
-  const name = rvRivalName(r);
-  const chip = rvTiedFirst(r)
+function rlKpiTile(r){
+  const name = rlRivalName(r);
+  const chip = rlTiedFirst(r)
     ? chipHtml("warn", tt("today.kpi.rv.tied", "tied"), tt("today.kpi.rv.tied.tip",
         {one: "Level with {n} rival on weekly income: the game may list either of you first", other: "Level with {n} rivals on weekly income: the game may list any of you first"}, {n: r.tied}))
     : r.first ? chipHtml("ok", `▲ ${compact(r.gap)}`, tt("today.kpi.rv.lead.tip", "{w:$} more weekly income than {rival}, in second place", {w: r.gap, rival: name}))
@@ -16880,14 +16880,16 @@ function rvKpiTile(r){
 }
 /* Milestones' block: three figures and the last fifteen days, one cell a day:
    first, level at the top, behind, or not on record. */
-function rvGoalsHtml(){
-  if(!rvShown()) return "";
-  const r = D.rivalry, name = spEsc(rvRivalName(r));
+function rlGoalsHtml(){
+  if(!rlShown()) return "";
+  const r = D.rivalry, name = spEsc(rlRivalName(r));
   const tile = (lab, v, sub) => `<div class="bz-fin"><span class="lab">${lab}</span><span class="v">${v}</span>${sub ? `<span class="sub">${sub}</span>` : ""}</div>`;
   const rank = tile(tt("co.rv.rank.lab", "Your rank"), tt("co.rv.rank.v", "#{n} of {of}", {n: r.rank, of: r.of}),
-    rvTiedFirst(r) ? tt("co.rv.rank.tied", {one: "Level with {n} rival: not a safe first place", other: "Level with {n} rivals: not a safe first place"}, {n: r.tied})
+    rlTiedFirst(r) ? tt("co.rv.rank.tied", {one: "Level with {n} rival: not a safe first place", other: "Level with {n} rivals: not a safe first place"}, {n: r.tied})
       : tt("co.rv.rank.you", "Weekly income {w:$}", {w: r.you}));
-  const gap = r.gap >= 0
+  const gap = rlTiedFirst(r)
+    ? tile(tt("co.rv.level.lab", "Level at the top"), fmt(Math.abs(r.gap)), tt("co.rv.level.sub", "{rival}, {w:$} a week", {rival: name, w: r.top}))
+    : r.gap >= 0
     ? tile(tt("co.rv.lead.lab", "Lead over second place"), fmt(r.gap), tt("co.rv.lead.sub", "{rival}, {w:$} a week", {rival: name, w: r.top}))
     : tile(tt("co.rv.behind.lab", "Behind first place"), fmt(-r.gap), tt("co.rv.behind.sub", "{rival}, {w:$} a week", {rival: name, w: r.top}));
   const run = tile(tt("co.rv.run.lab", "Days in first place"),
@@ -16903,8 +16905,8 @@ function rvGoalsHtml(){
       : tt("co.rv.day.off", "Day {d}: #{n}, {w:$} behind", {d: d.day, n: d.rank, w: -d.gap});
     return `<i class="${kind}" data-tip="${attr(tip)}"></i>`;
   };
-  return `<h3 class="bz-h">${tt("co.rv.title", "Rivals leaderboard")}</h3><div class="bz-fins rv-fins">${rank}${gap}${run}</div>`
-    + (days.length ? `<div class="rv-strip"><span class="rv-cap">${tt("co.rv.strip", {one: "Last {n} day", other: "Last {n} days"}, {n: days.length})}</span><span class="rv-days" role="img" aria-label="${
+  return `<h3 class="bz-h">${tt("co.rv.title", "Rivals leaderboard")}</h3><div class="bz-fins rl-fins">${rank}${gap}${run}</div>`
+    + (days.length ? `<div class="rl-strip"><span class="rl-cap">${tt("co.rv.strip", {one: "Last {n} day", other: "Last {n} days"}, {n: days.length})}</span><span class="rl-days" role="img" aria-label="${
       attr(tt("co.rv.strip.label", "First place on {n} of the last {m} days", {n: firsts, m: days.length}))}">${days.map(cell).join("")}</span></div>` : "");
 }
 
@@ -16943,7 +16945,7 @@ function drawGoals(){
       tile(tt("co.goals.tax.lab", "Taxes paid"), fmt(g.taxesPaid || 0), "")}${
       tile(tt("co.goals.buildings.lab", "Buildings owned"), count(g.buildingsOwned),
         `<a class="link" href="#map" data-ov-route="map">${tt("co.goals.buildings.map", "on the City map")}</a>`)}</div>`
-    + rvGoalsHtml();
+    + rlGoalsHtml();
 }
 
 /* The difficulty, as one chip and a popover with every setting that differs
@@ -21291,7 +21293,7 @@ window.addEventListener("resize", () => nxMenuClose(false));
    made in a sheet is the same choice made anywhere else. Escape, the close
    button and the scrim close it, and the keyboard goes back to the control
    that opened it. The Rivals leaderboard row is the exception: a switch of
-   its own (RV_HIDE_KEY), since no other control decides it. */
+   its own (RL_HIDE_KEY), since no other control decides it. */
 let pxWhich = null, pxFrom = null;
 const pxScrim = document.createElement("div");
 pxScrim.className = "px-scrim"; pxScrim.hidden = true;
@@ -21324,11 +21326,11 @@ function pxPrefsHtml(){
     diff ? `<div class="px-acts">${diff}<span class="px-state">${tt("nav.px.ctx.diff", "Difficulty settings compared with the game's Normal preset")}</span></div>`
       : `<p class="px-note">${tt("nav.px.ctx.none", "Open a save to see the difficulty it is played on.")}</p>`);
   /* The one setting of the sheet's own: whether the Rivals leaderboard shows
-     (rvShown()), kept in this browser. */
-  const rvOn = remembered(RV_HIDE_KEY) !== "1";
+     (rlShown()), kept in this browser. */
+  const rlOn = remembered(RL_HIDE_KEY) !== "1";
   const rivalry = pxRow("rivalry", tt("nav.px.rv.title", "Rivals leaderboard"), tt("nav.px.rv.lead", "Your place among the rivals by weekly income: a figure on the Overview and a block on Milestones."),
-    `<div class="px-acts"><button type="button" class="nx-btn sm" data-px-do="rivalry">${rvOn ? tt("nav.px.rv.hide", "Hide it") : tt("nav.px.rv.show", "Show it")}</button><span class="px-state">${
-      rvOn ? tt("nav.px.rv.on", "Shown") : tt("nav.px.rv.off", "Hidden")}</span></div>`);
+    `<div class="px-acts"><button type="button" class="nx-btn sm" data-px-do="rivalry">${rlOn ? tt("nav.px.rv.hide", "Hide it") : tt("nav.px.rv.show", "Show it")}</button><span class="px-state">${
+      rlOn ? tt("nav.px.rv.on", "Shown") : tt("nav.px.rv.off", "Hidden")}</span></div>`);
   const cli = pxRow("cli", tt("nav.px.cli.title", "Local board"), "",
     `<pre class="px-code">python ba_dashboard.py --watch     ${tt("nav.px.cli.watch", "# follow the save folder")}\npython ba_dashboard.py --game      ${tt("nav.px.cli.game", "# read the running game")}\npython ba_dashboard.py --backfill  ${tt("nav.px.cli.backfill", "# rebuild history from old saves")}</pre>`);
   return gametext + history + checks + context + rivalry + cli;
@@ -21431,7 +21433,7 @@ pxSheet.addEventListener("click", e => {
   if(what === "locale"){ const c = $("localeChip"); if(c) c.click(); }
   else if(what === "localeReset"){ const r = $("localeReset"); if(r) r.click(); pxOpen(pxWhich, pxFrom, "gametext"); }
   else if(what === "rivalry"){
-    remember(RV_HIDE_KEY, remembered(RV_HIDE_KEY) === "1" ? "0" : "1");
+    remember(RL_HIDE_KEY, remembered(RL_HIDE_KEY) === "1" ? "0" : "1");
     if(hasData() && D.kpi) drawKpis();
     if(odReady("goals")) drawGoals();
     pxOpen(pxWhich, pxFrom, "rivalry");
