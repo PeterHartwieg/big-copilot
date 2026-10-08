@@ -215,6 +215,9 @@ class Sections(unittest.TestCase):
 
     def test_core_is_exactly_the_issue_list_and_cheap_map_layers_payroll_and_recipes(self):
         expected = "meta kpi names skillNames businesses daily loans supply rhythm market chains trends hypeExposure hours hourFindings marketingAgencies alerts minor alertsDemand payback cashFlow ledgerDays ownedBuildings homes staff plan".split()
+        # The Rivals leaderboard writes the history its run in first place is
+        # counted from, as cashFlow's ledger does (#414).
+        expected.append("rivalry")
         self.assertEqual(set(self.build().core), set(expected))
 
     def test_later_planning_first_equals_each_stage_in_order(self):

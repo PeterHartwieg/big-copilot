@@ -562,7 +562,7 @@ test('the game\'s approval: approved, but the one answer with the token was lost
   assert.equal(await kept(page), null);
 });
 test('cancelling the wait sends nothing more, and the next ask picks the open question up', async (t) => {
-  const page = await linked(t);
+  const page = await linked(t, {clock: true});
   await configure({pairDelay: 60});
   const sent = [];
   page.on('request', (req) => sent.push(new URL(req.url()).pathname));
@@ -571,7 +571,12 @@ test('cancelling the wait sends nothing more, and the next ask picks the open qu
   await pair(page).getByRole('button', {name: en("nav.dlg.cancel")}).click();
   await dialog(page).getByText(en("nav.dlg.say.notapproved"), {exact: true}).waitFor();
   const at = sent.length;
-  await page.waitForTimeout(2500);
+  // A negative check: run three virtual seconds, past the one-second
+  // pair-status poll, so any timer left behind by the Cancel fires. A request
+  // reaches the 'request' listener a moment after it is sent, so give the
+  // events a short real settle before looking.
+  await page.clock.runFor(3000);
+  await page.waitForTimeout(300);
   assert.deepEqual(sent.slice(at).filter((p) => p.startsWith('/write/') || p.startsWith('/pair/')), [],
     'no write and no further look at the request');
   assert.equal((await applied()).length, 0);

@@ -158,6 +158,39 @@ test('the Portfolio total meets Today\'s profit through the company costs', asyn
   } finally { await page.close(); }
 });
 
+test('the Portfolio itemises real estate and salary income outside sites', async () => {
+  const page = await today(1440);
+  try {
+    const read = async (realEstate, salary) => page.evaluate(([realEstate, salary]) => {
+      const last = D.daily[D.daily.length - 1];
+      Object.assign(last, {realEstate, salary, profit: last.business - 1500 + realEstate + salary});
+      const t = document.createElement('table');
+      t.innerHTML = `<tfoot>${outsideRows(10)}</tfoot>`;
+      return {
+        rows: [...t.querySelectorAll('tr')].map(tr => [...tr.cells].map(c => c.textContent.trim()).join('|')),
+        tips: [...t.querySelectorAll('[data-tip]')].map(c => c.dataset.tip),
+      };
+    }, [realEstate, salary]);
+    const result = await read(2950, 250);
+    assert.deepEqual(result.rows, [
+      en('co.outside.costs') + '|-$1,500||',
+      en('co.outside.realestate') + '|$2,950||',
+      en('co.outside.salary') + '|$250||',
+      en('co.outside.profit') + '|$13,200||',
+    ]);
+    assert.doesNotMatch(result.tips[0], enRe('co.outside.other'));
+    assert.equal(result.tips[1], en('co.outside.realestate.tip', {day: 29}));
+    assert.equal(result.tips[2], en('co.outside.salary.tip', {day: 29}));
+    // Income can cancel the costs without hiding any of the itemised rows.
+    assert.deepEqual((await read(1250, 250)).rows, [
+      en('co.outside.costs') + '|-$1,500||',
+      en('co.outside.realestate') + '|$1,250||',
+      en('co.outside.salary') + '|$250||',
+      en('co.outside.profit') + '|$11,500||',
+    ]);
+  } finally { await page.close(); }
+});
+
 test('at 390 px the Overview folds its figures into one line, pairs them when opened, stacks its tool panels and never scrolls sideways', async () => {
   const page = await today(390);
   try {
