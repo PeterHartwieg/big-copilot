@@ -45,6 +45,24 @@ test('Node lanes are balanced on the schedule node --test really runs', async ()
   assert.deepEqual(assignShards(['a','b'], {a:5, b:5}, 2, 2), [['a'], ['b']]);
 });
 
+test('a Node lane is chosen with the real worker count, a Python lane with one', async t => {
+  const {verify} = await runner; const root = fixture(t);
+  const w = {z:100, a:30, b:30, c:30, d:30, e:30, f:30, g:30, h:30};
+  for (const name of Object.keys(w)) fs.writeFileSync(path.join(root,'tests',`${name}.test.cjs`),'');
+  const node = Object.fromEntries(Object.entries(w).map(([name, seconds]) => [`tests/${name}.test.cjs`, seconds]));
+  fs.writeFileSync(path.join(root,'tests','shard-weights.json'),JSON.stringify({node, python:w}));
+  const calls=[];
+  assert.equal(verify(['node','--shard=1/2'],{root,spawn:fakeSpawn(calls),log:()=>{}}),0);
+  // Two workers: z gets one light neighbour (100 s), not two (130 s).
+  assert.deepEqual(calls[1].args.filter(arg => arg.endsWith('.test.cjs')),['tests/g.test.cjs','tests/z.test.cjs']);
+  const python=[];
+  const spawn=(command,args,options)=> args[0] === 'tools/python_shard.py' && args[1] === '--list'
+    ? {status:0,stdout:JSON.stringify(Object.keys(w))} : fakeSpawn(python)(command,args,options);
+  assert.equal(verify(['python','--shard=1/2'],{root,spawn,log:()=>{}}),0);
+  // One module at a time: plain sums.
+  assert.deepEqual(python[1].args,['tools/python_shard.py','e','g','z']);
+});
+
 test('Python lanes cover discovered modules and forward only the selected module names', async t => {
   const {verify,assignShards} = await runner;
   const root = fixture(t);
