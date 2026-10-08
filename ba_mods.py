@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import struct
 
 import ba_facts
@@ -47,6 +48,10 @@ SEASONS = ("spring", "summer", "autumn", "winter")
 _CALENDAR_FIELDS = {"ACS1": 6, "ACS2": 7, "ACS3": 8, "ACS4": 11, "ACS5": 14}
 # The on/off fields Decode insists are "0" or "1" where the version has them.
 _CALENDAR_FLAGS = (2, 3, 6, 7, 8, 9, 11, 12)
+# Storm frequency and drying time, 0 to 2 (SeasonState.Validate).
+_CALENDAR_LEVELS = (10, 13)
+# What Int32.Parse with the invariant culture takes (Python's int() also takes "1_5").
+_INT = re.compile(r"\s*[+-]?\d+\s*")
 _ITEM = "ba:itemname_"
 # Spring, Summer, Autumn, Winter.
 _FACTOR_ROWS = {
@@ -88,6 +93,11 @@ def calendar(value) -> dict | None:
     if _CALENDAR_FIELDS.get(parts[0]) != len(parts):
         return None
     if any(parts[i] not in ("0", "1") for i in _CALENDAR_FLAGS if i < len(parts)):
+        return None
+    ints = [1, 4] + [i for i in _CALENDAR_LEVELS if i < len(parts)]
+    if not all(_INT.fullmatch(parts[i]) for i in ints) or "_" in parts[5]:
+        return None
+    if any(not 0 <= int(parts[i]) <= 2 for i in _CALENDAR_LEVELS if i < len(parts)):
         return None
     try:
         length, anchor_day, anchor_phase = int(parts[1]), int(parts[4]), float(parts[5])

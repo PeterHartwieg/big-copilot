@@ -512,7 +512,8 @@ fixed-cost tile reads the payroll; `_staff_summary()` costs nothing (under 1 ms
 and 3 KB on the largest measured save). `plan` stays core because Today reads its
 recipes and item names (`factoryView`, `sbDeps`, the supply strip and finding
 pills), and every page reads `itemName`. It costs about 4 ms and 65 KB on the
-largest measured save. Map asks for no section.
+largest measured save. `mods`, on a modded save only, stays core because the masthead
+draws it on the first frame; it is a few small fields. Map asks for no section.
 
 The extraction's staff list, all hour grids, statements, buildings, recipes, stations,
 market and supply objects stay on `build.shared` for deferred producers. The producers

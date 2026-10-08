@@ -57,11 +57,11 @@ test('retail records distinguish unreadable, one and multiple buildings', () => 
   const unreadable = flagParts({retailExpansion: {renovated: null}});
   assert.equal(unreadable.text, 'MODDED: RETAIL EXPANSION');
   assert.match(unreadable.tip, /its records could not be read/);
-  assert.match(unreadable.tip, /capacity and floor area are unknown/);
+  assert.match(unreadable.tip, /capacity or floor area are left out/);
   const one = flagParts({retailExpansion: {renovated: 1}});
-  assert.match(one.tip, /1 renovated building; its capacity and floor area/);
+  assert.match(one.tip, /1 renovated building; its building capacity and floor area/);
   assert.doesNotMatch(one.tip, /1 renovated buildings/);
-  assert.match(flagParts({retailExpansion: {renovated: 2}}).tip, /2 renovated buildings; their capacity/);
+  assert.match(flagParts({retailExpansion: {renovated: 2}}).tip, /2 renovated buildings; their building capacity/);
 });
 
 test('hostile rival values are escaped in both text and tooltip attribute', () => {

@@ -2684,7 +2684,7 @@ function mdFlag(m){
   const se = m.seasons;
   if(se){
     const name = mdSeasonName(se.season);
-    parts.push(tt("nav.mast.mods.season", "{season} DAY {d}/{n}", {season: name.toLocaleUpperCase(), d: se.day, n: se.length}));
+    parts.push(tt("nav.mast.mods.season", "{season} DAY {d}/{n}", {season: name.toLocaleUpperCase(typeof ttLang === "string" ? ttLang : undefined), d: se.day, n: se.length}));
     tips.push(se.demand
       ? tt("nav.mast.mods.season.tip", {one: "Alcware Seasons: {season}, day {d} of {len}, {n} day left. Open a store uses this season's sales ratio for the 27 products the mod changes.",
           other: "Alcware Seasons: {season}, day {d} of {len}, {n} days left. Open a store uses this season's sales ratio for the 27 products the mod changes."},
@@ -2701,9 +2701,9 @@ function mdFlag(m){
     parts.push(tt("nav.mast.mods.retail", "RETAIL EXPANSION"));
     const n = m.retailExpansion.renovated;
     tips.push(n == null
-      ? tt("nav.mast.mods.retail.bad", "Retail Expansion: its records could not be read, so renovated buildings' capacity and floor area are unknown.")
-      : tt("nav.mast.mods.retail.tip", {one: "Retail Expansion: {n} renovated building; its capacity and floor area come from the mod's records.",
-          other: "Retail Expansion: {n} renovated buildings; their capacity and floor area come from the mod's records."}, {n}));
+      ? tt("nav.mast.mods.retail.bad", "Retail Expansion: its records could not be read, so estimates that need a building's capacity or floor area are left out.")
+      : tt("nav.mast.mods.retail.tip", {one: "Retail Expansion: {n} renovated building; its building capacity and floor area come from the mod's records.",
+          other: "Retail Expansion: {n} renovated buildings; their building capacity and floor area come from the mod's records."}, {n}));
   }
   if(!parts.length) return "";
   return `<span class="flag md-flag" data-tip="${attr(tips.join(" "))}">${

@@ -214,13 +214,21 @@ class RemainingOdinTags(unittest.TestCase):
                                     "v": Unnamed(ExternalReferenceByString("x"))})),
             b"\x02\x2e"
             + b"\x23" + key("d")
-            + bytes.fromhex("39300000 00000000 00000000 00000380")
+            + bytes.fromhex("00000380 00000000 39300000 00000000")
             + b"\x29" + key("g")
             + bytes.fromhex("33221100 5544 7766 8899 aabbccddeeff")
             + b"\x32" + key("s") + key("x") + b"\x33" + key("x") + b"\x05",
         )
         self.assertEqual(Decimal(0x112233445566778899AABBCC, 2).encode(),
-                         bytes.fromhex("ccbbaa99 88776655 44332211 00000200"))
+                         bytes.fromhex("00000200 44332211 ccbbaa99 88776655"))
+        # 1.5m as .NET lays it out in memory (flags, hi, lo, mid), written by hand
+        # rather than through the fixture.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "decimal.hsg")
+            with open(path, "wb") as fh:
+                fh.write(gzip.compress(b".#" + key("d")
+                                       + bytes.fromhex("00000100 00000000 0f000000 00000000") + b""))
+            self.assertEqual(load_save(path).root["d"], 1.5)
 
     def test_non_value_markers_do_not_become_properties(self):
         markers = {0x05, 0x06, 0x07, 0x08, 0x2E, 0x2F, 0x30, 0x31}

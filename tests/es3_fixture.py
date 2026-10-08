@@ -98,7 +98,8 @@ class Long(_Marker):
 
 
 class Decimal(_Marker):
-    """A signed integer coefficient and scale, in decimal.GetBits word order."""
+    """A signed integer coefficient and scale, as Odin writes a decimal: its
+    memory, the words flags, hi, lo, mid (not decimal.GetBits order)."""
     tag = 0x23
 
     def __init__(self, coefficient: int, scale: int = 0):
@@ -107,8 +108,8 @@ class Decimal(_Marker):
     def encode(self) -> bytes:
         coefficient = abs(self.coefficient)
         flags = self.scale << 16 | (0x80000000 if self.coefficient < 0 else 0)
-        return struct.pack("<IIII", coefficient & 0xFFFFFFFF,
-                           (coefficient >> 32) & 0xFFFFFFFF, coefficient >> 64, flags)
+        return struct.pack("<IIII", flags, coefficient >> 64, coefficient & 0xFFFFFFFF,
+                           (coefficient >> 32) & 0xFFFFFFFF)
 
 
 class Char(_Marker):

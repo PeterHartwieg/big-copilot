@@ -34,7 +34,7 @@ Value tags::
     0x1d enum                int64
     0x1f float
     0x21 double
-    0x23 decimal             four int32 words: lo, mid, hi, flags; read as float
+    0x23 decimal             its memory, four uint32: flags, hi, lo, mid; read as float
     0x25 char                one UTF-16 code unit
     0x27 string
     0x29 guid                .NET Guid.ToByteArray order
@@ -206,8 +206,8 @@ class _Reader:
             self.p += size
             return value
         if tag == 0x23:
-            # decimal.GetBits order; unsigned words preserve all 96 mantissa bits.
-            lo, mid, hi, flags = struct.unpack_from("<IIII", self.d, self.p)
+            # Odin copies the decimal's memory: flags, hi, lo, mid (not GetBits order).
+            flags, hi, lo, mid = struct.unpack_from("<IIII", self.d, self.p)
             self.p += 16
             value = (lo | mid << 32 | hi << 64) / 10 ** ((flags >> 16) & 0xFF)
             return -value if flags & 0x80000000 else value
