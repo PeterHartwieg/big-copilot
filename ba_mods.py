@@ -51,7 +51,7 @@ _CALENDAR_FLAGS = (2, 3, 6, 7, 8, 9, 11, 12)
 # Storm frequency and drying time, 0 to 2 (SeasonState.Validate).
 _CALENDAR_LEVELS = (10, 13)
 # What Int32.Parse with the invariant culture takes (Python's int() also takes "1_5").
-_INT = re.compile(r"\s*[+-]?\d+\s*")
+_INT = re.compile(r"[\t-\r ]*[+-]?[0-9]+[\t-\r ]*")
 _ITEM = "ba:itemname_"
 # Spring, Summer, Autumn, Winter.
 _FACTOR_ROWS = {

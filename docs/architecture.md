@@ -1676,8 +1676,8 @@ resource failed. Small inline landing recovery styles keep the reload control
 readable without the board stylesheet. A registered, styled board can still
 open its no-save wiki when only Python startup failed.
 
-The worker validates the schema, all eight descriptors and its own path before
-boot. All eight files download concurrently with runtime startup. Successful
+The worker validates the schema, every descriptor in the manifest and its own path before
+boot. All the files download concurrently with runtime startup. Successful
 bodies are checked with SHA-256 before **any** files are installed in the virtual
 filesystem or Python is imported. A missing pinned path, an HTTP failure or a
 bad digest is a hard release failure, including for data tables. The reader

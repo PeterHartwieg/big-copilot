@@ -90,7 +90,8 @@ class CalendarTests(unittest.TestCase):
                     bad[flag] = "2"
                     invalid.append("|".join(bad))
         for index, values in ((1, ("0", "-1", "abc", "1.5")),
-                              (4, ("abc", "1.5")), (5, ("4", "nan", "inf", "-inf", "-0.5", "abc"))):
+                              (4, ("abc", "1.5")), (5, ("4", "nan", "inf", "-inf", "-0.5", "abc", "0_5")),
+                              (1, ("1_5", "١٥", " 15")), (10, ("3", "-1", "1.0", "a")), (13, ("3",))):
             for value in values:
                 fields = DEFAULT.split("|")
                 fields[index] = value
@@ -98,6 +99,11 @@ class CalendarTests(unittest.TestCase):
         for value in invalid:
             with self.subTest(value=value):
                 self.assertIsNone(mods.calendar(value))
+        # Int32.Parse takes surrounding ASCII white space and a sign.
+        for value in (" 15 ", "+15"):
+            fields = DEFAULT.split("|")
+            fields[1] = value
+            self.assertEqual(mods.calendar("|".join(fields))["length"], 15)
 
 
 class SalesTests(unittest.TestCase):
