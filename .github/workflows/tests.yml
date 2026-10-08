@@ -68,9 +68,18 @@ jobs:
           key: playwright-shell-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
       # No --with-deps: its apt-get cost every lane 13-20 s and once stalled a
       # lane 16 min on the Ubuntu mirror (#336). The runner image already has
-      # the libraries and fonts the headless shell and the i18n layout suites
-      # need; a missing library fails the browser launch loudly.
+      # the libraries the headless shell needs (a missing one fails the browser
+      # launch loudly), but no font that draws Korean, which the i18n expansion
+      # suite measures with real glyphs. Install just that font, with bounded
+      # attempts, and check it is there.
       - run: npx playwright install --only-shell chromium
+      - name: Install a Korean font
+        run: |
+          for attempt in 1 2 3; do
+            timeout 120 sudo apt-get install -y --no-install-recommends fonts-wqy-zenhei && break
+            timeout 120 sudo apt-get update -qq || true
+          done
+          fc-list :lang=ko | grep -q . || { echo "no Korean font installed"; exit 1; }
       # The site under web/ is not committed; several suites serve or read it.
       # npm test assembles first and includes the community suites.
       - name: Test Node shard

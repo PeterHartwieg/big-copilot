@@ -581,7 +581,6 @@ test('cancelling the wait sends nothing more, and the next ask picks the open qu
     'no write and no further look at the request');
   assert.equal((await applied()).length, 0);
   // The game's question is still open: asking again waits on it, not a second one.
-  await page.clock.resume();
   await dialog(page).locator('[data-gw-again]').click();
   await pair(page).getByText(en("nav.dlg.waiting.open")).waitFor();
   await configure({pairDelay: 0});
