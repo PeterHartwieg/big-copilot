@@ -5,10 +5,10 @@ in the `ba_dashboard.py` template) match the approved canvas:
 https://claude.ai/code/artifact/0544aaed-beda-410d-9cb1-5b70bc7c838c
 
 The spec is `mockup/map-revamp/build_map_canvas.py`: `CSS` is the stylesheet, `SCRIPT` the
-behaviour, `map_markup()` the markup. Read it first. Ignore `MapSplit.dc.html` and
-`big-copilot-map.html`. To see an artboard at full size, strip `<x-dc>`/`<helmet>`, stub
-`class DCLogic{}`, call `new Component().componentDidMount()` on load, serve with
-`web-test`; delete the test page afterwards.
+behaviour, `map_markup()` the markup. Read it first. Ignore `MapSplit.dc.html`. To see
+an artboard at full size, strip `<x-dc>`/`<helmet>`, stub `class DCLogic{}`, call
+`new Component().componentDidMount()` on load, serve with `web-test`; delete the test page
+afterwards.
 
 ## Rules
 
