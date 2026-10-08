@@ -249,7 +249,7 @@ test('cold, warm and changed releases reuse exact content bodies in a real brows
   }
   const bodies = label => traffic(label).filter(row=>row.body>0);
   const py = rows => rows.filter(row=>/\/(?:ba_[\w]+\.py|[\w]+\.json)$/.test(new URL(row.url,base).pathname) && row.url.startsWith('/assets/'));
-  assert.equal(py(bodies('cold-a')).length, 8);
+  assert.equal(py(bodies('cold-a')).length, 9);
   for (const label of ['warm-a','unrelated','warm-unrelated']) {
     assert.equal(traffic(label).filter(row=>row.url.startsWith('/assets/')).length, 0, 'immutable assets never revalidate');
     assert.equal(traffic(label).filter(row=>row.url.startsWith('/pyodide/')).length, 0);

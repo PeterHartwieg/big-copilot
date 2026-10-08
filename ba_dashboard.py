@@ -59,7 +59,12 @@ from ba_save import (
     Names, NotEnglishText, Save, _plain, bundled_locale, english_text, house_number, load_best_locale,
     load_locale, load_save,
 )
-import ba_mods
+try:
+    import ba_mods
+except ImportError:
+    # A worker from before ba_mods.py (a tab left open across a deploy) does not
+    # fetch it; the board then reads every save as a vanilla one.
+    ba_mods = None
 
 SAVE_ROOT = os.path.join(
     os.environ.get("USERPROFILE", ""),
@@ -2856,7 +2861,7 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         "alertsDemand": {"lines": alerts_demand["lines"], "minor": alerts_demand["minor"]},
     })
     # The mod adapters in use and their inputs (ba_mods.py); none on a vanilla save.
-    mods = ba_mods.detect(save)
+    mods = ba_mods.detect(save) if ba_mods else {}
     if mods:
         core["mods"] = mods
     build.core = {key: core[key] for key in PAYLOAD_KEYS if key in core}
@@ -18141,14 +18146,14 @@ def _store_market(save: Save, rules: dict, items: set, mpm: float, agent: int) -
     discount = 1 - 0.25 * max(0, min(100, agent)) / 100
     # Alcware Seasons rescales 27 products' sales ratio each game day
     # (ba_mods.sales_ratio()); without its calendar the ratio is the game's.
-    calendar, today = ba_mods.seasons(save), save.root.get("Day") or 0
+    calendar, today = ba_mods.seasons(save) if ba_mods else None, save.root.get("Day") or 0
     hoods = _in_order({h for (_n, h) in sellers} | {h for (_n, h) in lowest})
     out = {}
     for name in _in_order(items):
         row = products.get(name) or {}
         out[name] = {
             "p": row.get("p") or 0,
-            "r": ba_mods.sales_ratio(row.get("r") or 0, name, calendar, today),
+            "r": ba_mods.sales_ratio(row.get("r") or 0, name, calendar, today) if calendar else row.get("r") or 0,
             "d": row.get("d") or 0,
             "s": row.get("s") or 0,
             "opt": optimal_providers(row.get("p") or 0),
