@@ -37,7 +37,7 @@ SLIDER_RE = re.compile(rb"main_menu_custom_game_selling_multiplier\x00")
 def default_data_dir() -> str:
     """The installed game's Big Ambitions_Data folder, or exit with how to name it."""
     from ba_save import find_game_locale
-    from extract_wiki import game_data_dir
+    from wiki_paths import game_data_dir
 
     locale = find_game_locale()
     data_dir = game_data_dir(locale) if locale else None

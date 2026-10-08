@@ -35,9 +35,9 @@ class WikiReview(FixtureCase):
         locale['ba:itemname_newshelf'] = 'New Shelf'
         locale['help_ba:itemname_newshelf_content'] = '**New Shelf** can be used to sell:\n\n* [Gift (Cheap)](products-cheapgift)'
         self.write_locale(locale)
-        sample = self.sample()
-        self.assertIn('newshelf', sample['FIXTURES'])
-        self.assertIn('newshelf', sample['PRODUCTS']['cheapgift']['fixtures'])
+        guide = self.guide()
+        self.assertIn('newshelf', guide['FIXTURES'])
+        self.assertIn('newshelf', guide['PRODUCTS']['cheapgift']['fixtures'])
 
     def test_wrong_shape_optional_layout_is_a_gap(self):
         self.write('StreamingAssets/BusinessLayouts/GiftShop/M1/GiftShopRivals.json', '[]')
@@ -47,4 +47,4 @@ class WikiReview(FixtureCase):
         locale = dict(LOCALE)
         locale['help_wholesalers_locations_content'] = 'No product list is available.'
         self.write_locale(locale)
-        self.assertIsNone(self.sample()['PRODUCTS']['cheapgift']['wholesale'])
+        self.assertIsNone(self.guide()['PRODUCTS']['cheapgift']['wholesale'])

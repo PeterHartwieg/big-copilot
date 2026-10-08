@@ -199,7 +199,7 @@ stale one fails them.
 installed game. `python build_web.py --assemble` writes everything `--check` compares, also
 without the game. It keeps `web/py/gametext.json`, `web/names/` and the game's part of
 `web/wiki-data.json` as committed, so a change to what shapes those — the wiki generator
-(`tools/build_wiki_data.py`, `tools/wiki_data.py`, `tools/extract_wiki.py`,
+(`tools/build_wiki_data.py`, `tools/wiki_data.py`, `tools/wiki_paths.py`,
 `tools/wiki_sample.json`), `ships()` in `build_web.py`, or the name-table code in
 `ba_dashboard.py` — still needs the full `python build_web.py` with the game.
 

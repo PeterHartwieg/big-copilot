@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ba_dashboard
 import build_wiki_data as build
-import extract_wiki
+import wiki_paths
 import wiki_data
 
 
@@ -316,8 +316,8 @@ class FixtureCase(unittest.TestCase):
         return ["--data-dir", self.root, "--out", out,
                 "--buildings", os.path.join(self.root, "ba_buildings.json")]
 
-    def sample(self):
-        return self.build()["sample"]
+    def guide(self):
+        return self.build()["guides"]["businesstypes-giftshop"]
 
     def page(self, payload, page_id):
         return next(page for page in payload["pages"] if page["id"] == page_id)
@@ -344,10 +344,11 @@ class FixtureCase(unittest.TestCase):
 
 
 class ContractTests(FixtureCase):
-    def test_the_payload_carries_pages_categories_sample_and_provenance(self):
+    def test_the_payload_carries_pages_categories_guides_and_provenance(self):
         payload = self.build()
         self.assertEqual(payload["schemaVersion"], 1)
-        for field in ("categories", "pages", "sample", "provenance"):
+        self.assertNotIn("sample", payload)
+        for field in ("categories", "pages", "guides", "topics", "provenance"):
             self.assertIn(field, payload)
 
     def test_categories_carry_their_pages_and_honest_counts(self):
@@ -394,43 +395,21 @@ class ContractTests(FixtureCase):
              "importers-bluestone"},
         )
 
-    def test_the_sample_keeps_the_window_wiki_shapes(self):
-        sample = self.sample()
-        for field in ("SOURCES", "CATEGORIES", "SUPPLIERS", "WHOLESALERS", "FIXTURES",
-                      "PRODUCTS", "RECIPES", "WORKSTATION", "BUSINESS", "RETAIL_SIZES", "GAPS"):
-            self.assertIn(field, sample)
-        self.assertEqual(
-            set(sample["FIXTURES"]["roundedshelf"]),
-            {"name", "src", "sells", "capacity", "customers", "vendors", "observed",
-             "station", "needs", "mount"},
-        )
-        self.assertEqual(
-            set(sample["PRODUCTS"]["cheapgift"]),
-            {"name", "slug", "src", "rank", "alsoSoldBy", "alsoSoldByKeys", "fixtures", "wholesale",
-             "importers", "recipe", "crosscheck"},
-        )
-        self.assertEqual(
-            set(sample["RECIPES"]["cheapgiftrecipe"]),
-            {"name", "src", "workstation", "inputs", "out"},
-        )
-        self.assertEqual(
-            set(sample["BUSINESS"]),
-            {"slug", "name", "nameSrc", "src", "building", "serving", "skills", "skillKeys",
-             "hiring", "primary", "extras", "requirements"},
-        )
-        self.assertEqual(
-            set(sample["BUSINESS"]["requirements"]),
-            {"src", "furniture", "furnitureSlugs", "atLeastOneProduct", "raw", "note"},
-        )
-        for row in sample["SOURCES"]["files"]:
-            self.assertEqual(set(row), {"path", "bytes", "sha256", "mtime", "note"})
-
     def test_the_workstation_vendor_is_named_where_its_machines_are_sold(self):
-        self.assertEqual(self.sample()["WORKSTATION"]["vendor"], "ba:street_fourthavenue#16")
+        self.assertEqual(self.guide()["WORKSTATION"]["vendor"], "ba:street_fourthavenue#16")
 
-    def test_a_new_primary_product_gains_a_sample_entry(self):
-        # A build that adds a fourth core product must not narrow the sample:
-        # the UI maps BUSINESS.primary through sample.PRODUCTS.
+    def test_the_gift_shop_guide_keeps_compatibility_fields(self):
+        guide = self.guide()
+        self.assertIn("WORKSTATION", guide)
+        self.assertIn("extras", guide["BUSINESS"])
+        self.assertIsInstance(guide["BUSINESS"]["hiring"], str)
+        self.assertEqual(guide["SOURCES"]["extracted"], guide["SOURCES"]["sourceDate"])
+        for field in ("src", "furniture", "furnitureSlugs", "raw"):
+            self.assertIn(field, guide["BUSINESS"]["requirements"])
+
+    def test_a_new_primary_product_gains_a_guide_entry(self):
+        # A build that adds a fourth core product must not narrow the guide:
+        # the UI maps BUSINESS.primary through guide.PRODUCTS.
         fourth = CHEAPGIFT_HELP.replace("Gift (Cheap)", "Bouquet").replace(
             "* [Gift (Cheap) Recipe](recipes-cheapgiftrecipe)", "")
         self.write_locale(dict(LOCALE, **{
@@ -440,11 +419,11 @@ class ContractTests(FixtureCase):
                 "* [Gift (Cheap)](products-cheapgift)",
                 "* [Gift (Cheap)](products-cheapgift)\n* [Bouquet](products-bouquet)"),
         }))
-        sample = self.sample()
-        self.assertEqual(sample["BUSINESS"]["primary"],
+        guide = self.guide()
+        self.assertEqual(guide["BUSINESS"]["primary"],
                          ["cheapgift", "bouquet"])
-        self.assertEqual(sample["PRODUCTS"]["bouquet"]["rank"], "primary")
-        self.assertEqual(sample["PRODUCTS"]["bouquet"]["fixtures"], ["roundedshelf"])
+        self.assertEqual(guide["PRODUCTS"]["bouquet"]["rank"], "primary")
+        self.assertEqual(guide["PRODUCTS"]["bouquet"]["fixtures"], ["roundedshelf"])
 
     def test_a_primary_product_without_a_help_page_is_a_stated_gap(self):
         self.write_locale(dict(LOCALE, **{
@@ -452,15 +431,15 @@ class ContractTests(FixtureCase):
                 "* [Gift (Cheap)](products-cheapgift)",
                 "* [Gift (Cheap)](products-cheapgift)\n* [Bouquet](products-bouquet)"),
         }))
-        sample = self.sample()
-        self.assertIsNone(sample["PRODUCTS"]["bouquet"]["name"])
-        label = build.wording()["gaps"]["missingProducts"]["what"]
-        gaps = {gap["what"]: gap["detail"] for gap in sample["GAPS"]}
+        guide = self.guide()
+        self.assertIsNone(guide["PRODUCTS"]["bouquet"]["name"])
+        label = build.wording()["guideGaps"]["rangeItems"]["what"]
+        gaps = {gap["what"]: gap["detail"] for gap in guide["GAPS"]}
         self.assertIn(label, gaps)
         self.assertIn("bouquet", gaps[label])
 
     def test_the_business_requirements_come_from_its_own_page(self):
-        requirements = self.sample()["BUSINESS"]["requirements"]
+        requirements = self.guide()["BUSINESS"]["requirements"]
         self.assertEqual(requirements["furnitureSlugs"],
                          ["stackofshoppingbaskets"])
         self.assertIs(requirements["atLeastOneProduct"], True)
@@ -480,28 +459,28 @@ class ContractTests(FixtureCase):
                 "* [Rounded Shelf](furniture-roundedshelf)"
                 "\n* [Storage Shelf](furniture-storageshelf)"),
         }))
-        product = self.sample()["PRODUCTS"]["cheapgift"]
+        product = self.guide()["PRODUCTS"]["cheapgift"]
         self.assertEqual(product["fixtures"], ["roundedshelf", "storageshelf"])
         self.assertIn("furniture page lists it for sale: Rounded Shelf", product["crosscheck"])
         self.assertIn("The two lists disagree", product["crosscheck"])
         self.assertIn("Storage Shelf does not list it back", product["crosscheck"])
 
     def test_agreeing_directions_are_stated_without_a_disclaimer(self):
-        crosscheck = self.sample()["PRODUCTS"]["cheapgift"]["crosscheck"]
+        crosscheck = self.guide()["PRODUCTS"]["cheapgift"]["crosscheck"]
         self.assertIn("Its own page names it in Rounded Shelf", crosscheck)
         self.assertNotIn("The two lists disagree", crosscheck)
 
-    def test_sample_cross_references_resolve_inside_the_payload(self):
-        sample = self.sample()
-        self.assertIn(sample["BUSINESS"]["hiring"], sample["SUPPLIERS"])
-        self.assertIn(sample["WORKSTATION"]["vendor"], sample["SUPPLIERS"])
-        for fixture in sample["FIXTURES"].values():
+    def test_guide_cross_references_resolve_inside_the_payload(self):
+        guide = self.guide()
+        self.assertIn(guide["BUSINESS"]["hiring"], guide["SUPPLIERS"])
+        self.assertIn(guide["WORKSTATION"]["vendor"], guide["SUPPLIERS"])
+        for fixture in guide["FIXTURES"].values():
             for key in fixture["vendors"]:
-                self.assertIn(key, sample["SUPPLIERS"])
-        for recipe in sample["RECIPES"].values():
+                self.assertIn(key, guide["SUPPLIERS"])
+        for recipe in guide["RECIPES"].values():
             for ingredient in recipe["inputs"]:
                 for key in ingredient["from"]:
-                    self.assertIn(key, sample["SUPPLIERS"])
+                    self.assertIn(key, guide["SUPPLIERS"])
 
     def test_provenance_hashes_its_sources_and_states_the_save_build_is_unknown(self):
         payload = self.build()
@@ -524,23 +503,23 @@ class FactsFollowSourceTests(FixtureCase):
         self.write_locale(locale)
         return self.build()
 
-    def test_a_capacity_change_moves_the_sample_and_the_page(self):
+    def test_a_capacity_change_moves_the_guide_and_the_page(self):
         payload = self.refreshed(
             ROUNDED_SHELF_HELP.replace("Gifts: 300", "Gifts: 555"),
             "help_ba:itemname_roundedshelf_content",
             ROUNDED_SHELF_HELP.replace("Gifts: 300", "Gifts: 555"),
         )
-        capacity = payload["sample"]["FIXTURES"]["roundedshelf"]["capacity"]
+        capacity = payload["guides"]["businesstypes-giftshop"]["FIXTURES"]["roundedshelf"]["capacity"]
         self.assertEqual(capacity[0]["value"], 555)
         self.assertIn("Gifts: 555", self.page(payload, "furniture-roundedshelf")["body"])
 
-    def test_a_new_rate_changes_the_recipe_sample(self):
+    def test_a_new_rate_changes_the_recipe_guide(self):
         payload = self.refreshed(
             RECIPE_HELP.replace("* 100 [Gift (Cheap)]", "* 250 [Gift (Cheap)]"),
             "help_recipes_cheapgiftrecipe_content",
             RECIPE_HELP.replace("* 100 [Gift (Cheap)]", "* 250 [Gift (Cheap)]"),
         )
-        self.assertEqual(payload["sample"]["RECIPES"]["cheapgiftrecipe"]["out"]["per"], 250)
+        self.assertEqual(payload["guides"]["businesstypes-giftshop"]["RECIPES"]["cheapgiftrecipe"]["out"]["per"], 250)
 
     def test_silent_help_against_a_named_product_is_unknown(self):
         # The help stops claiming the product is wholesaled, but the wholesaler
@@ -556,7 +535,7 @@ class FactsFollowSourceTests(FixtureCase):
                 "",
             ),
         )
-        product = payload["sample"]["PRODUCTS"]["cheapgift"]
+        product = payload["guides"]["businesstypes-giftshop"]["PRODUCTS"]["cheapgift"]
         self.assertIsNone(product["wholesale"])
         self.assertIn("Named on the wholesaler product list", product["crosscheck"])
 
@@ -573,7 +552,7 @@ class FactsFollowSourceTests(FixtureCase):
             "help_wholesalers_locations_content":
                 SIZES_HELP.replace("* [Gift (Cheap)](products-cheapgift)\n", ""),
         }))
-        product = self.sample()["PRODUCTS"]["cheapgift"]
+        product = self.guide()["PRODUCTS"]["cheapgift"]
         self.assertIs(product["wholesale"], False)
         self.assertIn("Absent from the wholesaler product list", product["crosscheck"])
 
@@ -583,7 +562,7 @@ class FactsFollowSourceTests(FixtureCase):
         locale = dict(LOCALE, importertypename_bluestone="BlueStone Imports")
         self.write_locale(locale)
         payload = self.build()
-        self.assertEqual(payload["sample"]["SUPPLIERS"]["ba:street_pier#4"]["name"],
+        self.assertEqual(payload["guides"]["businesstypes-giftshop"]["SUPPLIERS"]["ba:street_pier#4"]["name"],
                          "BlueStone Imports")
         self.assertEqual(self.page(payload, "importers-bluestone")["title"],
                          "BlueStone Imports")
@@ -594,54 +573,53 @@ class FactsFollowSourceTests(FixtureCase):
             json.dumps({"buildNumber": 4000, "Items": [
                 {"itemName": "ba:itemname_roundedshelf"} for _ in range(7)]}),
         )
-        fixture = self.sample()["FIXTURES"]["roundedshelf"]
+        fixture = self.guide()["FIXTURES"]["roundedshelf"]
         self.assertEqual(fixture["observed"], "7 in GiftShopRivals (M1).")
 
     def test_addresses_are_placed_by_the_building_table(self):
-        supplier = self.sample()["SUPPLIERS"]["ba:street_fifthavenue#13"]
+        supplier = self.guide()["SUPPLIERS"]["ba:street_fifthavenue#13"]
         self.assertEqual(supplier["street"], "13 Fifth Avenue")
         self.assertEqual(supplier["hood"], "ba:neighborhood_garmentdistrict")
         self.assertEqual(supplier["size"], "M")
         self.assertEqual(supplier["area"], 1000)
         self.assertEqual(supplier["traffic"], 45)
 
-    def test_supplier_keys_are_the_canonical_building_keys(self):
-        self.assertEqual(
-            sorted(self.sample()["SUPPLIERS"]),
-            ["ba:street_fifthavenue#13", "ba:street_fifthavenue#16",
-             "ba:street_fourthavenue#16", "ba:street_pier#4",
-             "ba:street_pier#9", "ba:street_twelfthstreet#13"],
-        )
-
     def test_importers_are_named_as_their_own_page_names_them(self):
         # The product page links `4 pier` with its own spelling; the importer's
         # page and its `importertypename_*` key carry the game's spelling.
-        supplier = self.sample()["SUPPLIERS"]["ba:street_pier#4"]
+        supplier = self.guide()["SUPPLIERS"]["ba:street_pier#4"]
         self.assertEqual(supplier["name"], "Bluestone Imports")
         self.assertEqual(supplier["kind"], "Importer (retail goods)")
 
+    def test_supplier_keys_are_the_canonical_building_keys(self):
+        self.assertEqual(
+            sorted(self.guide()["SUPPLIERS"]),
+            ["ba:street_fifthavenue#13", "ba:street_fifthavenue#16",
+             "ba:street_fourthavenue#16", "ba:street_pier#4", "ba:street_pier#9"],
+        )
+
     def test_mention_counts_are_distinct_pages(self):
-        self.assertEqual(self.sample()["SUPPLIERS"]["ba:street_fifthavenue#13"]["mentions"], 2)
+        self.assertEqual(self.guide()["SUPPLIERS"]["ba:street_fifthavenue#13"]["mentions"], 2)
 
     def test_a_pier_split_across_neighbourhoods_says_so(self):
-        suppliers = self.sample()["SUPPLIERS"]
+        suppliers = self.guide()["SUPPLIERS"]
         self.assertIn("Murray Hill", suppliers["ba:street_pier#4"]["flag"])
         self.assertIn("Lower Manhattan", suppliers["ba:street_pier#4"]["flag"])
         self.assertNotIn("flag", suppliers["ba:street_fifthavenue#13"])
 
     def test_retail_sizes_come_from_the_building_type_page(self):
         self.assertEqual(
-            self.sample()["RETAIL_SIZES"],
+            self.guide()["RETAIL_SIZES"],
             [{"code": "A1", "area": 75, "customers": 15},
              {"code": "M1", "area": 1000, "customers": 75}],
         )
 
-    def test_the_worked_example_reads_the_game_and_not_itself(self):
-        sample = self.sample()
-        self.assertEqual(sample["BUSINESS"]["serving"], "Self-serving")
-        self.assertEqual(sample["BUSINESS"]["building"], "Retail")
-        self.assertEqual(sample["BUSINESS"]["primary"], ["cheapgift"])
-        self.assertEqual(sample["RECIPES"]["cheapgiftrecipe"]["inputs"],
+    def test_the_guide_reads_the_game_and_not_itself(self):
+        guide = self.guide()
+        self.assertEqual(guide["BUSINESS"]["serving"], "Self-serving")
+        self.assertEqual(guide["BUSINESS"]["building"], "Retail")
+        self.assertEqual(guide["BUSINESS"]["primary"], ["cheapgift"])
+        self.assertEqual(guide["RECIPES"]["cheapgiftrecipe"]["inputs"],
                          [{"item": "Clay", "slug": "ba:itemname_clay", "per": 50, "from": ["ba:street_pier#9"]}])
 
 
@@ -650,7 +628,7 @@ class FactsFollowSourceTests(FixtureCase):
 
 class GapTests(FixtureCase):
     def gaps(self):
-        return {gap["what"] for gap in self.sample()["GAPS"]}
+        return {gap["what"] for gap in self.guide()["GAPS"]}
 
     def gap_label(self, key):
         # the labels are authored wording; the tests follow the file, not a copy
@@ -664,15 +642,15 @@ class GapTests(FixtureCase):
 
     def test_help_links_that_name_no_page_are_counted(self):
         def tally():
-            detail = {gap["what"]: gap["detail"] for gap in self.sample()["GAPS"]}
+            detail = {gap["what"]: gap["detail"] for gap in self.guide()["GAPS"]}
             match = re.search(r"(\d+) links across (\d+) distinct targets",
                               detail.get("Help links that point at no page", ""))
             return match and (int(match.group(1)), int(match.group(2)))
 
         before = tally()
         self.write_locale(dict(LOCALE, **{
-            "help_general_energy_content":
-                "Energy is [somewhere](general-nowhere) and [elsewhere](general-elsewhere)."}))
+            "help_ba:businesstype_giftshop_content":
+                GIFT_HELP + "Energy is [somewhere](general-nowhere) and [elsewhere](general-elsewhere)."}))
         links, targets = tally()
         self.assertEqual((links - before[0], targets - before[1]), (2, 2))
 
@@ -682,13 +660,13 @@ class GapTests(FixtureCase):
                 WEEKLY_HELP + "* [Gift (Cheap)](products-cheapgift) is capped at 200\n"}))
         self.assertNotIn("Weekly delivery limits", self.gaps())
 
-    def test_the_price_gap_is_about_the_sample_not_the_whole_locale(self):
-        details = {gap["what"]: gap["detail"] for gap in self.sample()["GAPS"]}
+    def test_the_price_gap_is_about_the_guide_not_the_whole_locale(self):
+        details = {gap["what"]: gap["detail"] for gap in self.guide()["GAPS"]}
         detail = details[self.gap_label("prices")]
         self.assertIn("contain no prices", detail)
         self.assertIn("No other help page contains a money figure either.", detail)
 
-    def test_a_price_on_a_sample_page_removes_the_price_gap(self):
+    def test_a_price_on_a_guide_page_removes_the_price_gap(self):
         self.write_locale(dict(LOCALE, **{
             "help_ba:itemname_roundedshelf_content":
                 ROUNDED_SHELF_HELP + "\nStore price: $2,400.\n"}))
@@ -701,22 +679,22 @@ class GapTests(FixtureCase):
                 ROUNDED_SHELF_HELP + "\nNo price is listed for this furniture.\n"}))
         self.assertIn(self.gap_label("prices"), self.gaps())
 
-    def test_a_price_outside_the_sample_is_reported_not_claimed(self):
-        # A vehicle spec sheet carries a figure; the sample neither reads that
+    def test_a_price_outside_the_guide_is_reported_not_claimed(self):
+        # A vehicle spec sheet carries a figure; the guide neither reads that
         # page nor claims the locale is free of prices.
         self.write_locale(dict(LOCALE, **{
             "ba:itemname_van": "Van",
             "help_ba:itemname_van_content": "**Van** Total Price: $72,500\n"}))
-        details = {gap["what"]: gap["detail"] for gap in self.sample()["GAPS"]}
+        details = {gap["what"]: gap["detail"] for gap in self.guide()["GAPS"]}
         detail = details[self.gap_label("prices")]
         self.assertIn("A money figure appears on 1 other help page.", detail)
         self.assertNotIn("No other help page contains a money figure either.", detail)
 
-    def test_the_sample_says_what_it_covers(self):
-        self.assertIn(self.gap_label("sampleCoverage"), self.gaps())
+    def test_the_guide_says_what_it_covers(self):
+        self.assertIn(self.gap_label("guideCoverage"), self.gaps())
 
     def test_the_rate_gap_is_about_help_and_names_the_assumption(self):
-        details = {gap["what"]: gap["detail"] for gap in self.sample()["GAPS"]}
+        details = {gap["what"]: gap["detail"] for gap in self.guide()["GAPS"]}
         detail = details["Rated rate is a ceiling, not a measurement"]
         self.assertIn("The help states that ceiling and nothing more", detail)
         self.assertIn("times 24", detail)
@@ -725,15 +703,15 @@ class GapTests(FixtureCase):
         self.assertNotIn("measured factory draw", detail)
 
     def test_the_build_gap_names_three_different_builds(self):
-        details = {gap["what"]: gap["detail"] for gap in self.sample()["GAPS"]}
-        detail = details["Three different build numbers"]
-        self.assertIn("depot build id", detail)
+        details = {gap["what"]: gap["detail"] for gap in self.guide()["GAPS"]}
+        detail = details["Source build numbers"]
+        self.assertIn("installed Steam build", detail)
         self.assertIn("authored at builds 3521", detail)
-        self.assertIn("the one a save carries, is not in this payload", detail)
+        self.assertIn("A save's build number is not included", detail)
         self.assertNotIn("no game build number", detail)
 
     def test_the_save_build_row_does_not_cite_dashboard_checks(self):
-        row = next(row for row in self.sample()["SOURCES"]["build"]
+        row = next(row for row in self.guide()["SOURCES"]["build"]
                    if "Save build" in row["label"])
         self.assertIsNone(row["value"])
         self.assertFalse(row["certain"])
@@ -747,9 +725,9 @@ class GapTests(FixtureCase):
 
     def test_a_broken_wording_file_fails_validation(self):
         wording = json.loads(self.read(build.WORDING_PATH))
-        wording["gaps"]["sampleCoverage"]["detail"] = (
-            "The sample is one business, the pages are all of them. {unfilled}")
-        broken = os.path.join(self.root, "wiki_sample_broken.json")
+        wording["gaps"]["guideCoverage"]["detail"] = (
+            "The guide is one business, the pages are all of them. {unfilled}")
+        broken = os.path.join(self.root, "wiki_wording_broken.json")
         with open(broken, "w", encoding="utf-8") as fh:
             json.dump(wording, fh)
         original = build.WORDING_PATH
@@ -768,7 +746,7 @@ class SourceTests(FixtureCase):
     def test_a_missing_building_table_leaves_suppliers_unplaced_and_reported(self):
         os.unlink(os.path.join(self.root, "ba_buildings.json"))
         payload = self.build()
-        supplier = payload["sample"]["SUPPLIERS"]["ba:street_fifthavenue#13"]
+        supplier = payload["guides"]["businesstypes-giftshop"]["SUPPLIERS"]["ba:street_fifthavenue#13"]
         self.assertIsNone(supplier["hood"])
         self.assertIsNone(supplier["traffic"])
         self.assertIn("no building", payload["provenance"]["issues"]["suppliers"][0]["reason"])
@@ -778,12 +756,12 @@ class SourceTests(FixtureCase):
             self.root,
             "StreamingAssets/BusinessLayouts/GiftShop/M1/GiftShopRivals.json"))
         payload = self.build()
-        self.assertIsNone(payload["sample"]["FIXTURES"]["roundedshelf"]["observed"])
+        self.assertIsNone(payload["guides"]["businesstypes-giftshop"]["FIXTURES"]["roundedshelf"]["observed"])
         self.assertIn("not readable", payload["provenance"]["issues"]["layouts"][0]["reason"])
 
     def test_a_missing_steam_manifest_leaves_the_build_row_unknown(self):
         payload = self.build()
-        row = next(row for row in payload["sample"]["SOURCES"]["build"]
+        row = next(row for row in payload["guides"]["businesstypes-giftshop"]["SOURCES"]["build"]
                    if row["label"].startswith("Steam"))
         self.assertIsNone(row["value"])
         self.assertIsNone(payload["provenance"]["steam"]["buildId"])
@@ -809,7 +787,7 @@ class SourceTests(FixtureCase):
         self.write("ba_buildings.json", "{not json")
         payload = self.build()
         self.assertIsNone(payload["provenance"]["sources"]["buildings"])
-        self.assertIsNone(payload["sample"]["SUPPLIERS"]["ba:street_pier#4"]["hood"])
+        self.assertIsNone(payload["guides"]["businesstypes-giftshop"]["SUPPLIERS"]["ba:street_pier#4"]["hood"])
 
     def test_optional_source_failures_name_no_path_on_this_machine(self):
         # A corrupt table and an unreadable layout are both recorded, and the
@@ -838,8 +816,8 @@ class SourceTests(FixtureCase):
     def test_a_streaming_assets_path_resolves_to_the_same_sources(self):
         direct = os.path.join(self.root, "StreamingAssets")
         self.assertEqual(
-            extract_wiki.default_paths(self.root)["locale"],
-            extract_wiki.default_paths(direct)["locale"],
+            wiki_paths.default_paths(self.root)["locale"],
+            wiki_paths.default_paths(direct)["locale"],
         )
 
 
@@ -891,7 +869,7 @@ class DeterminismTests(FixtureCase):
     def test_no_source_row_carries_a_file_time(self):
         # The hash says whether a file changed; its mtime only churns the payload.
         payload = self.build()
-        rows = list(payload["sample"]["SOURCES"]["files"])
+        rows = list(payload["guides"]["businesstypes-giftshop"]["SOURCES"]["files"])
         sources = payload["provenance"]["sources"]
         rows += [sources["locale"], sources["helpStructure"], *sources["layouts"]]
         for row in rows:
@@ -910,8 +888,8 @@ class DeterminismTests(FixtureCase):
         expected = datetime.fromtimestamp(newest, timezone.utc).strftime("%Y-%m-%d")
         self.assertEqual(provenance["sourceDate"], expected)  # the sources' own mtime
         self.assertNotIn("extracted", provenance)
-        # the sample keeps the mockup's key and adds the clearly named one
-        sources = payload["sample"]["SOURCES"]
+        # the guide keeps the mockup's key and adds the clearly named one
+        sources = payload["guides"]["businesstypes-giftshop"]["SOURCES"]
         self.assertEqual(sources["sourceDate"], sources["extracted"])
         self.assertIn("not the moment", provenance["notes"]["sourceDate"])
 
@@ -970,7 +948,7 @@ class WriteTests(FixtureCase):
         self._date_sources(datetime(2026, 9, 20, 12, tzinfo=timezone.utc))
         payload = json.loads(self.write_payload(out))
         self.assertEqual(payload["provenance"]["sourceDate"], "2026-09-20")
-        self.assertEqual(payload["sample"]["SOURCES"]["sourceDate"], "2026-09-20")
+        self.assertEqual(payload["guides"]["businesstypes-giftshop"]["SOURCES"]["sourceDate"], "2026-09-20")
         self.assertEqual(json.loads(self.read(out)), payload)
 
     def test_the_cli_writes_the_payload_and_reports_it(self):

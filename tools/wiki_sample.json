@@ -4,7 +4,7 @@
     "Only words live here: every number, name, address, rate and hash is read",
     "from the game's own files at build time. Slots in braces are filled in by",
     "the builder; a slot the builder cannot fill leaves the sentence out rather",
-    "than guessing. organised by the section of sample each entry serves."
+    "than guessing. Organised by the guide section each entry serves."
   ],
   "sourceNotes": {
     "locale": "{entries} locale keys. Guide facts and original help text are read from this file.",
@@ -84,10 +84,6 @@
     "pricesElsewhereOne": "A money figure appears on {count} other help page.",
     "pricesElsewhereMany": "Money figures appear on {count} other help pages.",
     "pricesNowhereElse": "No other help page contains a money figure either.",
-    "missingProducts": {
-      "what": "Missing product details",
-      "detail": "The business lists {products}, but their matching help pages are missing from this build. Their details remain unknown."
-    },
     "weeklyLimits": {
       "what": "Weekly delivery limits",
       "detail": "help_wholesalers_weeklylimits_content says every importer and wholesaler caps each item per week and that the cap resets Monday 08:00, but never gives a number for any item."
@@ -108,10 +104,6 @@
       "what": "Malformed markdown and inconsistent names in the source",
       "detail": "{oddBoldClause} Supplier names are spelled more than one way for the same address: {spelled}."
     },
-    "buildNumber": {
-      "what": "Three different build numbers",
-      "detail": "Steam's depot build id for this install is {steam}. The shipped layouts counted for placement were authored at builds {layouts}. Both are install facts; the third number, the one a save carries, is not in this payload because no save was read - and neither install number stands in for it."
-    },
     "guideBuildNumber": {
       "what": "Source build numbers",
       "detail": "The installed Steam build is {steam}. {layoutClause} A save's build number is not included because this payload is built without reading a save."
@@ -122,16 +114,16 @@
       "what": "A wholesale 'no' is an absence, not a rule",
       "detail": "{productsClause} the wholesaler product list, so the wholesale flag is false. That is two help pages agreeing, not a game rule: the help may simply not mention it."
     },
-    "sampleCoverage": {
+    "guideCoverage": {
       "what": "Guide coverage",
       "detail": "Visual guides cover customer-facing businesses. Other Wiki pages remain available in the original help reader."
     }
   },
   "provenanceNotes": {
-    "sourceDate": "sourceDate is the newest file modification date among the game help and counted layouts, not the moment this payload was built. An unchanged install therefore rebuilds byte-identical output; the sample's SOURCES block repeats it as sourceDate, and keeps the older extracted key with the same value for shapes written against the mockup.",
+    "sourceDate": "sourceDate is the newest file modification date among the game help and counted layouts, not the moment this payload was built. An unchanged install therefore rebuilds byte-identical output; each guide's SOURCES block repeats it as sourceDate, and keeps the older extracted key with the same value for shapes written against the mockup.",
     "determinism": "Built from the game files named in sources. No run timestamp is written, so an unchanged install builds byte-identical output.",
     "privacy": "Source paths are game-relative. No absolute path, user name or save data travels in this file.",
-    "unparsed": "{count} statements in the help could not be read into a field; they remain in the page text verbatim and are listed per record in the catalogue the extractor writes.",
+    "unparsed": "{count} statements in the help could not be read into a field; they remain in the page text verbatim.",
     "requirements": "BUSINESS.requirements reads the business page's own requirement list. Its wording is kept in raw: the help says these are needed for the business to function, but not that the list is the complete set of rules the game enforces."
   },
   "guideUi": {
@@ -183,7 +175,6 @@
     "fullDayHint": "Maximum hourly output multiplied by 24. This assumes uninterrupted production at full speed.",
     "secondaryRecipeHint": "Recipes for products this business can sell alongside its primary range.",
     "equipmentSourceHint": "Listed by the equipment help. Its requirements apply when you use that equipment or offer the associated product.",
-    "linkedRequirementsHint": "Required when using this equipment or offering this service.",
     "linkedRequirementsHint": "These requirements apply when using the named equipment or offering the named service.",
     "servicesHint": "Each service lists the equipment, skills and consumables named by its help page.",
     "alsoCarried": "Secondary product",

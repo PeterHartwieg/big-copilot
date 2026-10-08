@@ -1,52 +1,26 @@
 # Wiki data pipeline
 
-How the game's own help text becomes the catalogue of documented facts the
-board's Wiki reads, and what those facts are and are not.
-
-Status: first increment. The extractor runs and its output is verified, and
-`tools/build_wiki_data.py` builds the public payload the wiki tab ships (see
-[The public payload](#the-public-payload)). This document is about the data
-and its provenance; the original content design is
-[archive/wiki-content-design.md](archive/wiki-content-design.md).
+`tools/build_wiki_data.py` builds the Wiki's pages, business guides and source
+metadata from the installed game's help. Hand-written topics travel alongside
+them. This document describes the inputs, output and limits.
 
 ## What it reads
 
-Only files the game ships, never a save and never the dashboard's own
-inferences:
+Game files, the building table and authored wording, never a save:
 
 | Source | Path | What it provides |
 | --- | --- | --- |
 | Locale | `<Big Ambitions_Data>/StreamingAssets/locale/en.json` | Every help page's text and every name, keyed `ba:businesstype_*`, `ba:itemname_*`, `recipes_*`, `help_factory_workstation_*` |
 | Help structure | `<Big Ambitions_Data>/StreamingAssets/helpstructure.json` | The help menu's table of contents: `pageLocalizorKeyPrefix` → page `slug` |
+| Layouts | `<Big Ambitions_Data>/StreamingAssets/BusinessLayouts/GiftShop/` | Observed furniture placements and layout build numbers |
+| Buildings | `ba_buildings.json` | Supplier addresses, neighbourhoods and building facts |
+| Wording and topics | `tools/wiki_sample.json`, `tools/wiki_topics.json` | Guide labels, notes and hand-written articles |
 
 `helpstructure.json` is hand-edited and fails a strict JSON parse on trailing
 commas. `wiki_data.load_help_structure` repairs exactly that — a string-aware
-scan that drops trailing commas — and records in the catalogue that the parse
+scan that drops trailing commas — and records in provenance that the parse
 was lenient and what was dropped. Anything it still cannot parse is an error,
 never `eval` and never an empty success.
-
-## What it writes
-
-One JSON catalogue. `tools/wiki_data.py` validates the shape before anything
-is written:
-
-```text
-schema "ba-wiki-catalogue", schemaVersion 1, generated <UTC>
-source:   kind "game-help", per-file sha256 and size
-build:    steamBuildId / saveBuildNumber, null unless observed
-records:  businesstype / item / recipe / workstation
-unparsed: help text the parser could not honestly turn into a field
-raw.help: the untouched help text, keyed by locale key (--no-raw omits it)
-```
-
-Records link to each other by slug (`ba:itemname_cheapgift`, `recipe/x`),
-every record carries the locale keys it was read from, and `counts` summarises
-the record types. Writing is atomic: the text is validated first, then moved
-into place, so a failed run leaves the previous catalogue standing.
-
-Sample output from the current game install is under `research/wiki-data/`,
-which is gitignored — it is exploratory, and no game asset is copied into
-`web/` or published.
 
 ## What the facts are not
 
@@ -60,77 +34,34 @@ running game does.
 - **Nothing numeric is invented.** If a rate, capacity or requirement is not in
   the text, the field is absent or `null`. Wording the parser cannot resolve
   (a requirement stated in prose, alternatives joined by "or") is listed under
-  `unparsed` with the verbatim text instead of being guessed.
+  internal `unparsed` records instead of being guessed; the original page
+  preserves that wording.
 - **Build metadata is only what was observed.** The Steam `buildid` comes from
   `appmanifest_1331550.acf` when that file is readable and identifies Big Ambitions; the save's
   `buildNumberAtLastSave` is a different number and is not available to the
-  extractor at all, so it is `null` with an explanatory note. Both are `null`
-  rather than the dashboard's `MIN_BUILD`/`VERIFIED_BUILD` constants, which are
-  code, not observations.
+  builder at all, so it is `null` with an explanatory note. Unknown values never
+  use the dashboard's `MIN_BUILD`/`VERIFIED_BUILD` constants, which are code,
+  not observations.
 - **Raw help is preserved separately** from the parsed facts, so a half-
   understood page can always be read as the game wrote it.
 
-## Limits of the first increment
+## Parsing limits
 
 - Recipe help that states no rated output produces no record — the same choice
-  the dashboard makes — and the gap is not currently itemised beyond `counts`.
+  the dashboard makes. Guides report the missing rate and leave it unknown.
 - Item pages the game links inconsistently ("used in the following recipes"
   sometimes links products) are handled by accepting both link kinds and
   recording the field honestly; they are not reconciled against save data.
 - Business types whose help states no primary range (factory, headquarters,
-  warehouse) appear in `unparsed` with the reason. That is expected; those
+  warehouse) appear in internal `unparsed` records with the reason. That is expected; those
   businesses do not sell a product range.
-- Locale coverage is whatever `en.json` has. Other locales are accepted by
-  `--locale` but untested.
-
-## Commands
-
-Run from the repository root. With no `--data-dir`, the extractor reads the
-Steam install `ba_save.find_game_locale()` detects, or the one `BA_LOCALE`
-names. Either way the path has to be the game's own
-`<game>/.../StreamingAssets/locale/en.json`: the extractor reads
-`helpstructure.json` beside the locale folder, so an `en.json` copied
-somewhere else is refused rather than half-read.
-
-```sh
-# What can be extracted
-python tools/extract_wiki.py --list
-
-# One business type and everything it references (default)
-python tools/extract_wiki.py --business giftshop --out research/wiki-data/gift-shop.json
-
-# The whole catalogue
-python tools/extract_wiki.py --all --out research/wiki-data/catalogue.json
-
-# Diff a fresh run against the previous one
-python tools/extract_wiki.py --all --out research/wiki-data/catalogue.json \
-    --compare research/wiki-data/catalogue.json
-
-# Explicit sources, e.g. a second machine or a copied install
-python tools/extract_wiki.py --data-dir "/path/to/Big Ambitions_Data" \
-    --locale /path/to/en.json --help-structure /path/to/helpstructure.json
-
-# Smaller output, or a known appmanifest instead of a lookup
-python tools/extract_wiki.py --business giftshop --no-raw --steam-manifest appmanifest_1331550.acf
-```
-
-A bad source — missing, non-JSON, or not an object — exits with code 2, prints
-`error: …` on stderr, and writes nothing. An unreadable `helpstructure.json`
-warns and continues, recording `helpStructure: {used: false, error: …}` in the
-output.
+- Locale coverage comes from the installed English `en.json`.
 
 ## Tests
 
-```sh
-python -m unittest tests.test_wiki_extract tests.test_wiki_build tests.test_wiki_review tests.test_wiki_guides
-```
-
-Synthetic fixtures only: the suite writes its own locale and help structure
-into a temporary directory and covers parsing (ranges, requirements, recipes,
-capacities, workstations), provenance (per-record sources, file hashes, parse
-mode, unknown build metadata, raw help), malformed sources (clear failure, no
-output written, previous output preserved), and change detection. No test
-depends on a private save or the installed game.
+`python -m unittest discover -s tests -p "test_wiki*.py"` covers parsing,
+guide behaviour, source metadata, malformed inputs, deterministic writes and
+static pages. Fixtures are synthetic; no test needs a save or installed game.
 
 ## The public payload
 
@@ -147,24 +78,10 @@ The contract (`schemaVersion: 1`):
   `body` the help text as the game wrote it (markdown-ish, links and all). A
   slug listed twice keeps its first entry; the second is named in provenance.
 - `guides` — visual guides keyed by `businesstypes-*` page ID for the 21
-  customer-facing businesses. Each uses the existing sample shape and includes
+  customer-facing businesses. Each includes
   its primary and secondary products, equipment, suppliers and recipes.
   `BUSINESS.primary` and `BUSINESS.secondary` contain short product IDs;
   `extras` retains the secondary product names for older consumers.
-- `topics` — hand-authored articles, sorted by slug, carried through from
-  `tools/wiki_topics.json` exactly as written. This is the one part of the
-  payload the game does not write: an article covers something the help never
-  states, so each carries `slug`, `title`, `lede`, `sections` (a `heading`, its
-  `paragraphs`, and at most one `table` of `columns` and `rows`) and a
-  `provenance` line naming what it was checked against and when.
-  `validate_topics` refuses a missing provenance line, a duplicate slug, a
-  section with no paragraphs, and a table row that does not fit its columns;
-  nothing here is derived, filled in or dropped. `provenance.counts.topics`
-  counts them, and the wiki renders them under the Big Copilot badge. Nothing
-  rebuilds an article when the game patches, so each is reviewed by hand
-  ([Hand-written topics](#hand-written-topics)).
-- `sample` — the Gift Shop compatibility entry. Older payloads containing only
-  this entry still work with the reader.
 
   `PRODUCTS` distinguishes physical goods from fees. Fee cards carry source
   wording for collection requirements, preserving alternatives and conditions.
@@ -188,14 +105,26 @@ The contract (`schemaVersion: 1`):
 
   Each guide's `GAPS` combines missing-data notices with applicable source limits.
   Price and source-quality checks use the pages that guide reads; recipe limits
-  appear only where recipes are shown. The legacy sample's gaps remain independent.
+  appear only where recipes are shown.
 
   Authored copy lives in `tools/wiki_sample.json`: `guideUi` supplies shared
   labels, `guideGaps` supplies missing-data messages, and `guides` contains
   business summaries and notes. Each summary
   and note has source conditions; it is included only while those literal
   excerpts still appear in the named help pages. Review the wording whenever
-  related game content changes. Facts continue to come from the extractor.
+  related game content changes. Facts continue to come from the builder.
+- `topics` — hand-authored articles, sorted by slug, carried through from
+  `tools/wiki_topics.json` exactly as written. This is the one part of the
+  payload the game does not write: an article covers something the help never
+  states, so each carries `slug`, `title`, `lede`, `sections` (a `heading`, its
+  `paragraphs`, and at most one `table` of `columns` and `rows`) and a
+  `provenance` line naming what it was checked against and when.
+  `validate_topics` refuses a missing provenance line, a duplicate slug, a
+  section with no paragraphs, and a table row that does not fit its columns;
+  nothing here is derived, filled in or dropped. `provenance.counts.topics`
+  counts them, and the wiki renders them under the Big Copilot badge. Nothing
+  rebuilds an article when the game patches, so each is reviewed by hand
+  ([Hand-written topics](#hand-written-topics)).
 - `provenance` — schema name, source paths as game-relative names with SHA256
   and byte counts, Steam app and depot build, the sources' newest file
   modification time as `sourceDate`, duplicates, links that point at no page,
@@ -211,18 +140,18 @@ game key (an item, a business type) carries it as `key`, which is what the
 page's "Yours" strip matches the open save on; the title is only words.
 
 What the payload deliberately does not carry, each as a gap that is only
-written while its check still holds: prices for the sample (the pages the
-sample reads carry no money figure — what other pages hold is reported as
+written while its check still holds: prices for a guide (the pages the
+guide reads carry no money figure — what other pages hold is reported as
 measured, not claimed away), weekly delivery limit numbers (the help states the
 caps exist and never gives one), and the save build number (an install shows
 Steam's depot build id and the builds its shipped layouts were authored at;
 neither is the number a save carries, and no save was read). A patch that
-prices the sample's goods or numbers the limits removes its own gap from the
+prices a guide's goods or numbers the limits removes its own gap from the
 next build. A wording slot the builder cannot fill is a build failure, not a
 literal `{count}` in the shipped file.
 
 The output is deterministic: sorted iteration, no run timestamp, `sourceDate`
-is the newest mtime of the game help and counted layouts rather than the moment this ran (the sample's
+is the newest mtime of the game help and counted layouts rather than the moment this ran (each guide's
 SOURCES block repeats it as `sourceDate` and keeps the mockup's `extracted` key
 with the same value), each source row records its hash and size with a null `mtime`
 (Steam touches unchanged files, and the hash already says whether the bytes moved), and
@@ -232,6 +161,10 @@ changing it on a later day), it keeps the standing file and its date. Source pat
 rejects any build that would leak an absolute path, a user name or save data.
 
 ### Commands
+
+With no `--data-dir`, the builder uses `ba_save.find_game_locale()` or
+`BA_LOCALE`. The locale must be inside the game install at
+`<game>/.../StreamingAssets/locale/en.json`, beside `helpstructure.json`.
 
 ```sh
 # Rebuild the shipped payload (build_web.py does this too)

@@ -370,7 +370,7 @@ class ReviewRegressionTests(GuideCase):
     def test_common_source_limits_are_visible_on_guides(self):
         guide = self.guide("salon")
         headings = {row["what"] for row in guide["GAPS"]}
-        for kind in ("prices", "ratedRate", "sampleCoverage"):
+        for kind in ("prices", "ratedRate", "guideCoverage"):
             self.assertIn(build.wording()["gaps"][kind]["what"], headings)
 
     def test_prices_gap_uses_the_current_guide_sources(self):
@@ -763,11 +763,8 @@ class IsolationTests(GuideCase):
         self.write("ba_buildings.json", json.dumps(
             BUILDINGS + [dict(BUILDINGS[-1], n=17)]))
         payload = self.build()
-        everything = set(payload["sample"]["SUPPLIERS"])
         giftshop = set(payload["guides"]["businesstypes-giftshop"]["SUPPLIERS"])
         salon = set(payload["guides"]["businesstypes-salon"]["SUPPLIERS"])
-        self.assertTrue(giftshop < everything)
-        self.assertTrue(salon < everything)
         self.assertIn("ba:street_fourthavenue#17", salon)
         self.assertNotIn("ba:street_fourthavenue#17", giftshop)
 
@@ -882,14 +879,6 @@ class DeterminismTests(GuideCase):
         first = build.serialise(self.build())
         second = build.serialise(self.build())
         self.assertEqual(first, second)
-
-    def test_the_guides_do_not_disturb_the_sample(self):
-        sample = self.build()["sample"]
-        self.assertEqual(sample["BUSINESS"]["primary"], ["cheapgift"])
-        self.assertEqual(sorted(sample["PRODUCTS"]),
-                         ["cheapgift", "expensivegift", "umbrella"])
-        self.assertEqual(sample["RECIPES"]["cheapgiftrecipe"]["inputs"],
-                         [{"item": "Clay", "slug": "ba:itemname_clay", "per": 50, "from": ["ba:street_pier#9"]}])
 
     def test_the_payload_survives_its_own_validator(self):
         payload = json.loads(build.serialise(self.build()))

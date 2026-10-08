@@ -395,13 +395,15 @@ test('each business is drawn from its own guide, and never from another one\'s',
 
   // And the payload itself is untouched by the visit: a guide is read, never
   // written over the one the build shipped first.
-  assert.equal(w.call('wikiData.sample'), null);
+  assert.equal(w.call('Object.hasOwn(wikiData, "sample")'), false);
   assert.equal(w.call('Object.keys(wikiData.guides).length'), 5);
 });
 
 test('a page with no guide behind it is still the reader', async () => {
   const w = wiki();
   const html = await w.load('wiki/products-coffee');
+  assert.deepEqual(JSON.parse(w.call('JSON.stringify(wikiG())')), {});
+  assert.equal(w.call('wikiGuideFor("businesstypes-unknown")'), null);
   assert.deepEqual(headings(html), [en('wiki.yours.title')]);
   assert.match(html, /class="wk-read rv"/);
   assert.doesNotMatch(html, new RegExp("<h2>" + htmlRe('wiki.copy.setupTitle').source + "<\\/h2>", ''));

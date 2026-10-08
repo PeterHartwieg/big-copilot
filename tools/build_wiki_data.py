@@ -2,10 +2,10 @@
 
     python tools/build_wiki_data.py --out web/wiki-data.json
 
-Reads the same sources as the catalogue extractor - the shipped locale, the
+Reads the shipped locale, the
 help menu's table of contents, Big Copilot's building table, and the shipped
 business layouts - and writes one JSON file the site can serve: every help page
-as a page record, the worked example the wiki page renders, and a guide per
+as a page record and a guide per
 customer-facing business type. Nothing in it comes from a save, and no number
 is invented here: capacities, rates, addresses and names are read from the game
 text on every build, and what the game does not state is `null`, never a value
@@ -33,7 +33,7 @@ from collections import Counter
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import extract_wiki  # noqa: E402  (path normalisation and Steam manifest lookup)
+import wiki_paths  # noqa: E402  (path normalisation and Steam manifest lookup)
 import wiki_data  # noqa: E402
 
 SCHEMA = "ba-wiki-public"
@@ -45,19 +45,6 @@ WORDING_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wiki_sa
 TOPICS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wiki_topics.json")
 DEFAULT_OUT = os.path.join("web", "wiki-data.json")
 
-# The worked example the wiki page renders. The selection is authored - this is
-# the Gift Shop page's cast - and every value under it is read from the game.
-SAMPLE_BUSINESS = "giftshop"
-SAMPLE_FIXTURES = (
-    "roundedshelf",
-    "productpanel",
-    "stackofshoppingbaskets",
-    "cashregister",
-    "checkoutcounterleft",
-    "checkoutcounterright",
-    "storageshelf",
-)
-SAMPLE_PRODUCTS = ("cheapgift", "expensivegift", "umbrella")
 RETAIL_SIZES_PAGE = "building_types"
 WHOLESALER_PAGE = "wholesalers_locations"
 
@@ -66,9 +53,7 @@ WHOLESALER_PAGE = "wholesalers_locations"
 # its guide without a list here being edited.
 GUIDE_EXCLUDED = ("factory", "headquarters", "warehouse")
 
-# The keys a guide carries. The first eleven are the sample's own, so a reader
-# written against the sample reads a guide; WORKSTATIONS and COPY are the two
-# the sample has no need of (one station vs. many, shared strings).
+# The keys each business guide carries, including compatibility fields.
 GUIDE_FIELDS = ("BUSINESS", "PRODUCTS", "RECIPES", "WORKSTATIONS", "WORKSTATION",
                 "FIXTURES", "SUPPLIERS", "WHOLESALERS", "RETAIL_SIZES", "CATEGORIES",
                 "SOURCES", "GAPS", "COPY")
@@ -124,7 +109,7 @@ GUIDE_GAP_KINDS = ("rangeItems", "feeKind", "feeRequirements", "recipePages",
 # Shipped layouts the placement counts come from: (label, path under
 # StreamingAssets). A layout shows where the game's own shop puts things; it
 # says nothing about what a layout must contain, and the wording keeps to that.
-SAMPLE_LAYOUTS = (
+SHIPPED_LAYOUTS = (
     ("GiftShopRivals", "BusinessLayouts/GiftShop/M1/GiftShopRivals.json"),
     ("GolfAreaGiftShop", "BusinessLayouts/GiftShop/D3/GolfAreaGiftShop.json"),
     ("TennisAreaGiftShop", "BusinessLayouts/GiftShop/D3/TennisAreaGiftShop.json"),
@@ -150,7 +135,7 @@ _SUFFIXES = {
     "tur": "hamptonsturnpike",
 }
 
-# The links the help uses, as the catalogue extractor parses them; sharing its
+# The links the help uses, as wiki_data parses them; sharing its
 # pattern keeps a link the game rewrites a miss in both places, not one.
 _LINK_RE = wiki_data._LINK_RE
 _ADDRESS_KINDS = ("address", "location")
@@ -576,12 +561,12 @@ def wholesaler_products(locale: dict[str, str]) -> list[str]:
 def layout_counts(streaming_dir: str | None) -> tuple[list[dict], list[dict]]:
     """Placed-item counts per shipped layout, with the layout's own build number.
 
-    A layout is evidence of placement only, which is the only claim the sample
+    A layout is evidence of placement only, which is the only claim the guide
     makes from it. A layout that is missing or unreadable is recorded as a gap;
     the counts the other layouts still support are kept.
     """
     counted, issues = [], []
-    for label, relative in SAMPLE_LAYOUTS:
+    for label, relative in SHIPPED_LAYOUTS:
         path = os.path.join(streaming_dir, relative.replace("/", os.sep)) if streaming_dir else None
         try:
             data = json.loads(wiki_data.read_source(path).decode("utf-8-sig"))
@@ -726,317 +711,7 @@ def fixture_crosscheck(named: list[str], holders: list[str], name_of, on_list: b
     return " ".join(sentences) + disagreement
 
 
-# --- the worked example --------------------------------------------------
-
-
-class Sample:
-    """The Gift Shop page's cast, each value read from the catalogue records.
-
-    The sections cross-reference each other: a fixture names the suppliers that
-    sell it, a product names the fixtures that hold it, a recipe names the
-    importers its ingredients come from. Pages touched along the way are
-    recorded, so each category can say how much of it the worked example
-    actually covers.
-    """
-
-    def __init__(self, locale, records, suppliers, layouts, wholesale_slugs, slugs_by_prefix,
-                 importer_pages=None):
-        self.locale = locale
-        self.records = {record["slug"]: record for record in records}
-        self.suppliers = suppliers
-        self.layouts = layouts
-        self.wholesale_slugs = set(wholesale_slugs)
-        self.slugs_by_prefix = slugs_by_prefix
-        self.importer_pages = importer_pages or {}
-        self.touched: set[str] = set()
-        self._recipes: dict | None = None
-        self._product_slugs: list[str] | None = None
-
-    # -- helpers
-    def touch(self, prefix: str) -> None:
-        self.touched.add(prefix)
-
-    def page_slug(self, prefix: str) -> str | None:
-        self.touch(prefix)
-        return self.slugs_by_prefix.get(prefix)
-
-    def supplier_key(self, raw: str | None) -> str | None:
-        """A help address as a supplier key, or None when it cannot be placed."""
-        address = parse_address(raw or "")
-        if not address:
-            return None
-        key = site_key(address)
-        prefix = self.importer_pages.get(key)
-        if prefix:  # the importer's own page is part of what the sample leans on
-            self.touch(prefix)
-        return key
-
-    def name_of(self, slug: str | None) -> str | None:
-        return self.locale.get(slug) if slug else None
-
-    def product_slugs(self) -> list[str]:
-        """The products the sample describes, from this build's own primary list.
-
-        The Gift Shop page names its primary products, so the sample follows it
-        rather than a list frozen when the sample was written: a build that adds
-        a fourth core product gains a fourth entry here instead of a silently
-        narrower sample. The authored extras keep their places at the end.
-        """
-        if self._product_slugs is None:
-            business = self.records.get("ba:businesstype_" + SAMPLE_BUSINESS) or {}
-            slugs = [ref["slug"].removeprefix("ba:itemname_")
-                     for ref in (business.get("products") or {}).get("primary") or []]
-            for slug in SAMPLE_PRODUCTS:
-                if slug not in slugs:
-                    slugs.append(slug)
-            self._product_slugs = slugs
-        return self._product_slugs
-
-    # -- sections
-    def fixture_slugs(self) -> list[str]:
-        """Keep the authored setup pieces plus current product relationships."""
-        slugs = set(SAMPLE_FIXTURES)
-        products = {"ba:itemname_" + slug for slug in self.product_slugs()}
-        for prefix in products:
-            slugs.update(ref["slug"].removeprefix("ba:itemname_")
-                         for ref in (self.records.get(prefix) or {}).get("furniture") or [])
-        for record in self.records.values():
-            if any(ref["slug"] in products for ref in record.get("sells") or []):
-                slugs.add(record["slug"].removeprefix("ba:itemname_"))
-        return list(SAMPLE_FIXTURES) + sorted(slugs - set(SAMPLE_FIXTURES))
-
-    def fixtures(self) -> dict:
-        out = {}
-        for slug in self.fixture_slugs():
-            prefix = "ba:itemname_" + slug
-            record = self.records.get(prefix)
-            text = self.locale.get("help_%s_content" % prefix, "")
-            needs, mounts = fixture_needs_mounts(text, self.touch)
-            self.page_slug(prefix)
-            out[slug] = {
-                "name": self.name_of(prefix),
-                "src": "help_%s_content" % prefix,
-                "sells": [ref["slug"].removeprefix("ba:itemname_")
-                          for ref in (record or {}).get("sells") or []],
-                "capacity": fixture_capacity(prefix, record, self.locale),
-                "customers": ((record or {}).get("capacities") or {}).get("customer"),
-                "vendors": [key for key in (
-                    self.supplier_key(ref.get("address"))
-                    for ref in (record or {}).get("suppliers", {}).get("purchasableFrom") or []
-                ) if key],
-                "observed": observed_text(self.layouts, slug),
-                "station": fixture_station(text),
-                "needs": [ref["name"] for ref in needs] or None,
-                "mount": _join_or([ref["name"] for ref in mounts]),
-            }
-        return out
-
-    def products(self) -> dict:
-        business = self.records.get("ba:businesstype_" + SAMPLE_BUSINESS) or {}
-        primary = {ref["slug"] for ref in (business.get("products") or {}).get("primary") or []}
-        out = {}
-        for slug in self.product_slugs():
-            prefix = "ba:itemname_" + slug
-            record = self.records.get(prefix)
-            self.page_slug(prefix)
-            if record is None:
-                # The page is gone from the help: an empty product, not a stale one.
-                out[slug] = {
-                    "name": self.name_of(prefix), "slug": prefix, "rank": None,
-                    "src": "help_%s_content" % prefix, "alsoSoldBy": [], "fixtures": [],
-                    "wholesale": None, "importers": [], "recipe": None, "crosscheck": None,
-                }
-                continue
-            # Two help directions describe where a product sits: the product's
-            # own page names furniture, and each furniture page lists what it
-            # sells. fixture_crosscheck reports them side by side.
-            named = [ref["slug"] for ref in record.get("furniture") or []]
-            holders = sorted(
-                other["slug"] for other in self.records.values()
-                if other.get("type") == "item"
-                and any(ref["slug"] == prefix for ref in other.get("sells") or [])
-            )
-            page_wholesale = bool(record["suppliers"]["wholesale"])
-            list_wholesale = slug in self.wholesale_slugs
-            wholesale = page_wholesale if page_wholesale == list_wholesale else None
-            recipes = sorted(ref["slug"] for ref in record["recipes"]["makes"])
-            for other in holders:
-                self.touch(other)
-            for ref in record["soldFrom"]["otherBusinesses"]:
-                self.touch(ref.get("slug") or "")
-            out[slug] = {
-                "name": record["name"],
-                "slug": prefix,
-                "src": "help_%s_content" % prefix,
-                "rank": "primary" if prefix in primary else "additional",
-                "alsoSoldBy": [ref["name"] for ref in record["soldFrom"]["otherBusinesses"]],
-                "alsoSoldByKeys": [ref.get("slug") for ref in record["soldFrom"]["otherBusinesses"]],
-                "fixtures": sorted({other.removeprefix("ba:itemname_") for other in named + holders}),
-                "wholesale": wholesale,
-                "importers": [key for key in (
-                    self.supplier_key(ref.get("address"))
-                    for ref in record["suppliers"]["importers"]
-                ) if key],
-                "recipe": recipes[0].removeprefix("recipe/") if recipes else None,
-                "crosscheck": fixture_crosscheck(
-                    [other.removeprefix("ba:itemname_") for other in named],
-                    [other.removeprefix("ba:itemname_") for other in holders],
-                    self.name_of,
-                    slug in self.wholesale_slugs,
-                ),
-            }
-        return out
-
-    def recipes(self) -> dict:
-        if self._recipes is not None:
-            return self._recipes
-        out: dict = {}
-        for slug in self.product_slugs():
-            record = self.records.get("ba:itemname_" + slug) or {}
-            for ref in (record.get("recipes") or {}).get("makes") or []:
-                tail = ref["slug"].removeprefix("recipe/")
-                recipe = self.records.get(tail)
-                if recipe is None or tail in out:
-                    continue
-                self.page_slug("recipes_" + tail)
-                ingredients = []
-                for ingredient in recipe["ingredients"]:
-                    self.touch(ingredient["slug"])
-                    ingredients.append({
-                        "item": ingredient["name"],
-                        "slug": ingredient["slug"],
-                        "per": ingredient["perHour"],
-                        "from": [key for key in (
-                            self.supplier_key(source.get("address"))
-                            for source in (self.records.get(ingredient["slug"]) or {}).get(
-                                "suppliers", {}).get("importers") or []
-                        ) if key],
-                    })
-                out[tail] = {
-                    "name": recipe["name"],
-                    "src": "help_recipes_%s_content" % tail,
-                    "workstation": (recipe.get("workstation") or {}).get("name"),
-                    "inputs": ingredients,
-                    "out": {"item": recipe["output"]["name"], "slug": recipe["output"].get("slug"),
-                            "per": recipe["output"]["perHour"]},
-                }
-        self._recipes = out
-        return out
-
-    def workstation(self) -> dict:
-        """The workstation the sample's recipes run on, with its machines."""
-        stations = set()
-        for tail in self.recipes():
-            record = self.records.get(tail) or {}
-            slug = (record.get("workstation") or {}).get("slug")
-            if slug:
-                stations.add(slug)
-        if len(stations) != 1:
-            return {}
-        # `ba:itemname_consumergoodsworkstation` names the workstation item; its
-        # own help page is keyed without that Workstation suffix.
-        station_slug = next(iter(stations)).removeprefix("ba:itemname_").removesuffix("workstation")
-        record = self.records.get(station_slug)
-        if record is None:
-            return {}
-        self.page_slug("factory_workstation_" + station_slug)
-        machines = [ref["slug"] for ref in record.get("machines") or []]
-        machines += [ref["slug"] for ref in record.get("assemblyMachines") or []]
-        vendors = Counter()
-        for slug in machines:
-            self.touch(slug)
-            for ref in (self.records.get(slug) or {}).get("suppliers", {}).get("purchasableFrom") or []:
-                key = self.supplier_key(ref.get("address"))
-                if key:
-                    vendors[key] += 1
-        vendor = sorted(vendors.items(), key=lambda item: (-item[1], item[0]))[0][0] if vendors else None
-        return {
-            "name": self.locale.get("factory_workstation_" + station_slug) or record.get("name"),
-            "src": "help_factory_workstation_%s_content" % station_slug,
-            "assembly": next((ref["name"] for ref in record.get("assemblyMachines") or []), None),
-            "production": [ref["name"] for ref in record.get("machines") or []],
-            "vendor": vendor,
-            "runs": [ref["name"] for ref in record.get("recipes") or []],
-        }
-
-    def business(self) -> dict:
-        prefix = "ba:businesstype_" + SAMPLE_BUSINESS
-        record = self.records.get(prefix) or {}
-        text = self.locale.get("help_%s_content" % prefix, "")
-        blob = wiki_data.prose_text(wiki_data.sections(text)[0])
-        wordings = wording()
-        building = next((label for needle, label in wordings["buildingWords"].items()
-                         if needle in blob.lower()), None)
-        serving = next((label for needle, label in wordings["servingWords"].items()
-                        if needle in blob), None)
-        for ref in record.get("skills") or []:
-            self.touch(ref.get("slug") or "")
-        return {
-            "slug": self.page_slug(prefix),
-            "name": self.name_of(prefix),
-            "nameSrc": prefix,
-            "src": "help_%s_content" % prefix,
-            "building": building,
-            "serving": serving,
-            "skills": [ref["name"] for ref in record.get("skills") or []],
-            # The game's key for each skill, index for index, so the page can
-            # name it in the language the player picked.
-            "skillKeys": [ref.get("slug") for ref in record.get("skills") or []],
-            "hiring": self.recruiter(record),
-            "primary": [ref["slug"].removeprefix("ba:itemname_")
-                        for ref in (record.get("products") or {}).get("primary") or []],
-            "extras": [ref["name"] for ref in (record.get("products") or {}).get("additional") or []],
-            "requirements": self.requirements(prefix),
-        }
-
-    def requirements(self, prefix: str) -> dict:
-        """The business page's own requirement list, with its wording kept.
-
-        The list is the help's claim about what the business needs to function:
-        the linked furniture, and a bullet saying a product is needed without
-        naming one. Whether this is the complete rule set the game enforces is
-        not something help text can establish, so the note travels with it and
-        the bullets are kept verbatim for the UI to show.
-        """
-        text = self.locale.get("help_%s_content" % prefix, "")
-        _, sections = wiki_data.sections(text)
-        bullets = wiki_data.bullets_of(sections, "requires the following furniture")
-        refs, loose = wiki_data.parse_bullets(bullets, ("furniture",))
-        for ref in refs:
-            self.touch(ref.get("slug") or "")
-        # a bullet the parser cannot turn into a link is still a requirement the
-        # help states in words ("At least one product to sell")
-        # a bullet the parser cannot turn into a link is still a requirement the
-        # help states in words ("At least one product to sell"); the bullets are
-        # kept as written, so the wording the game shipped is the evidence
-        return {
-            "src": "help_%s_content" % prefix,
-            "furniture": [ref["name"] for ref in refs],
-            "furnitureSlugs": [ref["slug"].removeprefix("ba:itemname_") for ref in refs],
-            "atLeastOneProduct": any(_AT_LEAST_ONE_RE.search(line) for line in bullets) or None,
-            "raw": list(bullets),
-            "note": wording()["provenanceNotes"]["requirements"],
-        }
-
-    def recruiter(self, business: dict) -> str | None:
-        """The recruitment address the business's own skill pages send you to."""
-        found: Counter = Counter()
-        for ref in business.get("skills") or []:
-            text = self.locale.get("help_%s_content" % (ref.get("slug") or ""), "")
-            _, sections = wiki_data.sections(text)
-            for match in _LINK_RE.finditer(text):
-                if match.group(2) not in _ADDRESS_KINDS:
-                    continue
-                if not context_label(sections, match).startswith("they can be hired"):
-                    continue
-                key = self.supplier_key(match.group(3))
-                if key:
-                    found[key] += 1
-        return next(iter(found)) if len(found) == 1 else None
-
-    def retail_sizes(self) -> list[dict]:
-        """The retail rows of the building-type page: code, area, door limit."""
-        return retail_rows(self.locale, self.touch)
+# --- list wording --------------------------------------------------------
 
 
 def _join_or(names: list[str]) -> str | None:
@@ -1152,7 +827,7 @@ def dropped_copy(wording_data: dict, locale: dict[str, str], shorts) -> list[dic
 
 
 class Guide:
-    """One business type's guide: the sample's shapes, read for this business.
+    """One business type's guide, read from its own help pages.
 
     A guide is built from the business's own help page and the pages that page
     names - nothing is carried over from another business's guide. Its range is
@@ -1387,7 +1062,7 @@ class Guide:
         by_skill = self.recruiters()
         found = [key for key in dict.fromkeys(
             key for keys in by_skill.values() for key in keys)]
-        # one agency stays a string for the sample's shape; several become the
+        # one agency stays a string for the guide's shape; several become the
         # list the reader needs, with the per-skill split kept beside it
         hiring = found[0] if len(found) == 1 else (found or None)
         business = {
@@ -1656,7 +1331,7 @@ class Guide:
         return out
 
     def legacy_workstation(self, stations: dict) -> dict:
-        """The sample's single-workstation shape, only where one station is true."""
+        """The guide's single-workstation shape, only where one station is true."""
         if len(stations) != 1:
             return {}
         only = next(iter(stations.values()))
@@ -1751,7 +1426,7 @@ class Guide:
             "SUPPLIERS": self.suppliers(),
             "WHOLESALERS": self.wholesalers(),
             "RETAIL_SIZES": self.retail_sizes(),
-            "CATEGORIES": _sample_categories(self.categories, self),
+            "CATEGORIES": _guide_categories(self.categories, self),
             "SOURCES": self.sources_for(self.short),
             "GAPS": self.gaps(),
             "COPY": dict(self.ui),
@@ -1811,13 +1486,13 @@ def build_guides(locale, records, suppliers, holders, layouts, wholesalers, whol
 # --- gaps ----------------------------------------------------------------
 
 
-def build_gaps(locale: dict[str, str], pages: list[dict], help_pages: list[dict],
-               records: list[dict], sample: dict, layouts: list[dict],
-               steam: dict, suppliers: dict, touched: set[str], *, scoped: bool = False) -> list[dict]:
+def build_gaps(locale: dict[str, str], help_pages: list[dict],
+               records: list[dict], guide: dict, layouts: list[dict],
+               steam: dict, suppliers: dict, touched: set[str]) -> list[dict]:
     """What this payload cannot say, each kept only while its check still holds.
 
     A gap is a claim about a limit, so it is verified the same way a fact is:
-    the price gap is only written while the sample's own pages really carry no
+    the price gap is only written while the guide's own pages really carry no
     money figure, the size-code gap only while a code really is listed twice.
     A limit the game lifts disappears from this list rather than lingering as
     stale honesty.
@@ -1832,17 +1507,17 @@ def build_gaps(locale: dict[str, str], pages: list[dict], help_pages: list[dict]
     content = [(key, text) for key, text in locale.items()
                if isinstance(text, str) and key.endswith("_content")]
     touched_keys = {"help_%s_content" % prefix for prefix in touched}
-    scoped_locale = {key: text for key, text in content if key in touched_keys} if scoped else locale
+    scoped_locale = {key: text for key, text in content if key in touched_keys}
 
-    # The gap is about this sample, not about the whole locale: the pages the
-    # sample reads carry no money figure, which is why it can state no price.
+    # The gap is about this guide, not about the whole locale: the pages the
+    # guide reads carry no money figure, which is why it can state no price.
     # A page that only mentions the word price does not close it - the claim is
     # about figures - and what the rest of the locale holds is reported as
     # measured, not as a claim about every file the game ships.
-    sample_pages = [text for prefix, text in (
+    guide_pages = [text for prefix, text in (
         (prefix, locale.get("help_%s_content" % prefix, "")) for prefix in sorted(touched)
     ) if text]
-    if sample_pages and not any(_MONEY_FIGURE_RE.search(text) for text in sample_pages):
+    if guide_pages and not any(_MONEY_FIGURE_RE.search(text) for text in guide_pages):
         priced_elsewhere = sum(1 for _, text in content if _MONEY_FIGURE_RE.search(text))
         if not priced_elsewhere:
             elsewhere = templates["pricesNowhereElse"]
@@ -1850,24 +1525,24 @@ def build_gaps(locale: dict[str, str], pages: list[dict], help_pages: list[dict]
             elsewhere = templates["pricesElsewhereOne"].format(count=1)
         else:
             elsewhere = templates["pricesElsewhereMany"].format(count=priced_elsewhere)
-        add("prices", pages=len(sample_pages), elsewhere=elsewhere)
+        add("prices", pages=len(guide_pages), elsewhere=elsewhere)
 
     limits = locale.get("help_wholesalers_weeklylimits_content", "")
     without_times = re.sub(r"\b\d{1,2}:\d{2}\b|\(\d+ [AP]M\)", "", limits)
     has_orders = any(p.get("kind") != "fee" and (p.get("importers") or p.get("wholesale"))
-                     for p in sample["PRODUCTS"].values())
-    if limits and not re.search(r"\d", without_times) and (not scoped or has_orders):
+                     for p in guide["PRODUCTS"].values())
+    if limits and not re.search(r"\d", without_times) and has_orders:
         add("weeklyLimits")
 
     recipe_texts = [locale.get("help_recipes_%s_content" % record["slug"], "")
                     for record in records if record.get("type") == "recipe"
-                    and (not scoped or record["slug"] in sample["RECIPES"])]
+                    and record["slug"] in guide["RECIPES"]]
     if recipe_texts and all("max production rate per hour" in text.lower() for text in recipe_texts):
         add("ratedRate")
 
     sizes = _sizes_by_section(locale)
     repeated = sorted(code for code, places in sizes.items() if len(places) > 1)
-    if repeated and (not scoped or sample.get("RETAIL_SIZES")):
+    if repeated and guide.get("RETAIL_SIZES"):
         rows = "; ".join(
             "%s is %s" % (code, " and ".join(
                 "%s customers as %s" % (count, label) for count, label in sizes[code]))
@@ -1879,8 +1554,7 @@ def build_gaps(locale: dict[str, str], pages: list[dict], help_pages: list[dict]
         top = ", ".join("%s (%d)" % row for row in dangling.most_common(5))
         add("danglingLinks", count=sum(dangling.values()), slugs=len(dangling), top=top)
 
-    odd_bold = sum(1 for text in scoped_locale.values() if text.count("**") % 2) if scoped \
-        else sum(1 for page in pages if page["body"].count("**") % 2)
+    odd_bold = sum(1 for text in scoped_locale.values() if text.count("**") % 2)
     spelled = _multi_spelled(scoped_locale, suppliers)
     if odd_bold or spelled:
         add("sourceQuirks", oddBoldClause=_bold_clause(odd_bold), spelled=spelled)
@@ -1888,37 +1562,10 @@ def build_gaps(locale: dict[str, str], pages: list[dict], help_pages: list[dict]
     # Three build numbers, only two of them visible from an install. The gap
     # stands whichever of the two are known, because the third never is.
     layout_builds = sorted({str(layout["build"]) for layout in layouts if layout["build"]})
-    if scoped:
-        layout_clause = templates["guideBuildLayouts"].format(layouts=", ".join(layout_builds)) \
-            if layout_builds else templates["guideBuildNoLayouts"]
-        add("guideBuildNumber", steam=steam.get("steamLabel") or "unknown", layoutClause=layout_clause)
-    else:
-        add("buildNumber", steam=steam.get("steamLabel") or "unknown",
-            layouts=", ".join(layout_builds) or "none")
-
-    # A primary product this build's help no longer describes: the sample entry
-    # exists (the UI maps BUSINESS.primary through it) and holds nulls.
-    shop = next((record for record in records
-                 if record["slug"] == "ba:businesstype_" + SAMPLE_BUSINESS), None)
-    missing = sorted(
-        ref["slug"].removeprefix("ba:itemname_")
-        for ref in ((shop or {}).get("products") or {}).get("primary") or []
-        if "ba:itemname_" + ref["slug"].removeprefix("ba:itemname_")
-        not in {record["slug"] for record in records}
-    )
-    if missing and not scoped:
-        names = ", ".join(filter(None, (
-            locale.get("ba:itemname_" + slug) for slug in missing))) or ", ".join(missing)
-        add("missingProducts", products=names)
-
-    soft = sorted(sample["PRODUCTS"][slug]["name"] for slug in sample["PRODUCTS"]
-                  if sample["PRODUCTS"][slug]["wholesale"] is False)
-    if soft and not scoped:
-        add("wholesaleNegative",
-            productsClause=_list_clause(soft, "states no wholesale purchase and is absent from",
-                                        "state no wholesale purchase and are absent from"))
-
-    add("sampleCoverage")
+    layout_clause = templates["guideBuildLayouts"].format(layouts=", ".join(layout_builds)) \
+        if layout_builds else templates["guideBuildNoLayouts"]
+    add("guideBuildNumber", steam=steam.get("steamLabel") or "unknown", layoutClause=layout_clause)
+    add("guideCoverage")
     return gaps
 
 
@@ -2107,39 +1754,6 @@ def validate_public(payload: dict) -> None:
         if page["id"] not in seen:
             raise wiki_data.SourceError("page %s is not in any category" % page["id"])
 
-    sample = payload.get("sample") or {}
-    for field in ("SOURCES", "CATEGORIES", "SUPPLIERS", "WHOLESALERS", "FIXTURES", "PRODUCTS",
-                  "RECIPES", "WORKSTATION", "BUSINESS", "RETAIL_SIZES", "GAPS"):
-        if field not in sample:
-            raise wiki_data.SourceError("sample has no %s" % field)
-    suppliers = sample["SUPPLIERS"]
-    if not isinstance(suppliers, dict) or not suppliers:
-        raise wiki_data.SourceError("sample has no suppliers")
-    for name, group in (("FIXTURES", sample["FIXTURES"]), ("PRODUCTS", sample["PRODUCTS"]),
-                        ("RECIPES", sample["RECIPES"])):
-        if not isinstance(group, dict):
-            raise wiki_data.SourceError("sample %s is not an object" % name)
-    # Everything the sample points at must resolve inside the same payload.
-    for fixture in sample["FIXTURES"].values():
-        for key in fixture["vendors"]:
-            if key not in suppliers:
-                raise wiki_data.SourceError("fixture names unknown supplier %s" % key)
-    for product in sample["PRODUCTS"].values():
-        for key in product["importers"]:
-            if key not in suppliers:
-                raise wiki_data.SourceError("product names unknown supplier %s" % key)
-    for recipe in sample["RECIPES"].values():
-        for ingredient in recipe["inputs"]:
-            for key in ingredient["from"]:
-                if key not in suppliers:
-                    raise wiki_data.SourceError("recipe names unknown supplier %s" % key)
-    station = sample["WORKSTATION"]
-    if station and station["vendor"] and station["vendor"] not in suppliers:
-        raise wiki_data.SourceError("workstation names unknown supplier %s" % station["vendor"])
-    business = sample["BUSINESS"]
-    if business["hiring"] and business["hiring"] not in suppliers:
-        raise wiki_data.SourceError("business names unknown supplier %s" % business["hiring"])
-
     provenance = payload.get("provenance") or {}
     sources = provenance.get("sources") or {}
     for name in ("locale", "helpStructure"):
@@ -2153,14 +1767,6 @@ def validate_public(payload: dict) -> None:
     # builder never filled would ship as a literal "{count}" for the UI to
     # render. Page bodies are excluded: game text may carry braces of its own.
     authored = []
-    for row in (sample["SOURCES"].get("files") or []):
-        authored.append(("source note for %s" % row.get("path"), row.get("note")))
-    for row in (sample["SOURCES"].get("build") or []):
-        authored.extend(("build row %s" % row.get("label"), row.get(field))
-                        for field in ("where", "caveat"))
-    for gap in sample["GAPS"]:
-        authored.extend((("gap %s" % gap.get("what"), gap.get("what")),
-                         ("gap %s" % gap.get("what"), gap.get("detail"))))
     for key, note in (provenance.get("notes") or {}).items():
         authored.append(("note %s" % key, note))
     for label, text in authored:
@@ -2168,11 +1774,6 @@ def validate_public(payload: dict) -> None:
         if match:
             raise wiki_data.SourceError("unresolved wording slot %s in %s"
                                         % (match.group(0), label))
-    requirements = business.get("requirements") or {}
-    for field in ("src", "furniture", "furnitureSlugs", "raw"):
-        if field not in requirements:
-            raise wiki_data.SourceError("sample BUSINESS has no requirements %s" % field)
-
     guides = payload.get("guides")
     if not isinstance(guides, dict) or not guides:
         raise wiki_data.SourceError("payload has no guides")
@@ -2183,6 +1784,18 @@ def validate_public(payload: dict) -> None:
         for field in GUIDE_FIELDS:
             if field not in guide:
                 raise wiki_data.SourceError("guide %s has no %s" % (key, field))
+        authored = []
+        for row in guide["SOURCES"].get("files") or []:
+            authored.append(row.get("note"))
+        for row in guide["SOURCES"].get("build") or []:
+            authored.extend(row.get(field) for field in ("where", "caveat"))
+        for gap in guide["GAPS"]:
+            authored.extend((gap.get("what"), gap.get("detail")))
+        for text in authored:
+            match = _PLACEHOLDER_RE.search(text or "")
+            if match:
+                raise wiki_data.SourceError("unresolved wording slot %s in guide %s"
+                                            % (match.group(0), key))
         guide_business = guide["BUSINESS"]
         short = (guide_business.get("nameSrc") or "").removeprefix("ba:businesstype_")
         products, recipes = guide["PRODUCTS"], guide["RECIPES"]
@@ -2327,13 +1940,13 @@ def validate_topics(rows) -> None:
 
 
 def build_public_wiki(data_dir: str | None = None, buildings_path: str | None = None) -> dict:
-    """The public payload: pages, categories, the worked example, provenance.
+    """The public payload: pages, categories, guides, topics and provenance.
 
     `data_dir` is the Big Ambitions_Data directory. `buildings_path` points at
     a ba_buildings.json other than the checkout's, which is how the tests feed
     in a table of their own.
     """
-    paths = extract_wiki.default_paths(data_dir)
+    paths = wiki_paths.default_paths(data_dir)
     streaming_dir = paths["streaming_dir"]
 
     locale = wiki_data.load_locale(paths["locale"])
@@ -2342,7 +1955,7 @@ def build_public_wiki(data_dir: str | None = None, buildings_path: str | None = 
         raise wiki_data.SourceError("helpstructure.json lists no pages; the menu cannot be built")
 
     buildings, buildings_meta, buildings_issue = load_buildings(buildings_path=buildings_path)
-    catalogue = wiki_data.build_catalogue(locale, businesses=None, help_pages=help_pages, with_raw=False)
+    catalogue = wiki_data.build_catalogue(locale, help_pages=help_pages)
     records = catalogue["records"]
 
     pages, duplicates, without_content = build_pages(help_pages, locale)
@@ -2360,29 +1973,8 @@ def build_public_wiki(data_dir: str | None = None, buildings_path: str | None = 
     wholesalers = collect_wholesalers(locale, buildings)
     wholesale_slugs = wholesaler_products(locale)
 
-    sample_builder = Sample(locale, records, suppliers, layouts, wholesale_slugs, slugs_by_prefix,
-                            importer_pages)
-    sample_builder.touch(WHOLESALER_PAGE)  # the wholesalers block is read off its page
-    sample = {
-        "SOURCES": {},
-        "CATEGORIES": [],
-        "SUPPLIERS": suppliers,
-        "WHOLESALERS": wholesalers,
-        "FIXTURES": sample_builder.fixtures(),
-        "PRODUCTS": sample_builder.products(),
-        "RECIPES": sample_builder.recipes(),
-        "WORKSTATION": sample_builder.workstation(),
-        "BUSINESS": sample_builder.business(),
-        "RETAIL_SIZES": sample_builder.retail_sizes(),
-        "GAPS": [],
-    }
-
     steam, extracted = _steam_and_date(paths, layouts)
     layout_metas = [_layout_meta(streaming_dir, layout) for layout in layouts]
-    sample["SOURCES"] = _sources(paths, locale, structure_info, help_pages, layout_metas,
-                                 buildings_meta, steam)
-    sample["CATEGORIES"] = _sample_categories(categories, sample_builder)
-
     def sources_for(short: str) -> dict:
         """A guide's sources: the shared files, plus only its own layouts."""
         owned = [meta for meta in layout_metas
@@ -2391,8 +1983,8 @@ def build_public_wiki(data_dir: str | None = None, buildings_path: str | None = 
 
     ui, copy_issues = guide_ui(wording())
     def common_gaps(builder, guide):
-        return build_gaps(locale, pages, help_pages, records, guide, builder.layouts, steam,
-                          guide["SUPPLIERS"], builder.touched, scoped=True)
+        return build_gaps(locale, help_pages, records, guide, builder.layouts, steam,
+                          guide["SUPPLIERS"], builder.touched)
 
     guides = build_guides(locale, records, suppliers, holders_by_product(records), layouts,
                           wholesalers, wholesale_slugs, slugs_by_prefix, importer_pages,
@@ -2413,13 +2005,10 @@ def build_public_wiki(data_dir: str | None = None, buildings_path: str | None = 
     if copy_issues:
         provenance["issues"]["copy"] = copy_issues
 
-    sample["GAPS"] = build_gaps(locale, pages, help_pages, records, sample, layouts, steam,
-                                suppliers, sample_builder.touched)
     payload = {
         "schemaVersion": SCHEMA_VERSION,
         "categories": categories,
         "pages": pages,
-        "sample": sample,
         "guides": guides,
         "topics": topics(),
         "provenance": provenance,
@@ -2443,7 +2032,7 @@ def _steam_and_date(paths, layouts) -> tuple[dict, str | None]:
         "source": None,
         "saveBuildNumber": None,
     }
-    manifest = extract_wiki.find_steam_manifest(paths["data_dir"])
+    manifest = wiki_paths.find_steam_manifest(paths["data_dir"])
     if manifest:
         try:
             observed = wiki_data.steam_build_id(manifest)
@@ -2481,7 +2070,7 @@ def _source_date(paths, layouts=()) -> str | None:
 
 
 def _sources(paths, locale, structure_info, help_pages, layout_metas, buildings_meta, steam) -> dict:
-    """The sample's SOURCES block, in the shape the wiki page renders."""
+    """The guide's SOURCES block, in the shape the wiki page renders."""
     notes = wording()["sourceNotes"]
     files = [
         dict(
@@ -2500,7 +2089,7 @@ def _sources(paths, locale, structure_info, help_pages, layout_metas, buildings_
         ),
     ]
     for meta in layout_metas:
-        # the sample's file rows keep the five keys the wiki page renders; the
+        # the guide's file rows keep the five keys the wiki page renders; the
         # layout's build and item count travel in the note and in provenance
         files.append({
             "path": meta["path"],
@@ -2527,7 +2116,7 @@ def _sources(paths, locale, structure_info, help_pages, layout_metas, buildings_
 
 
 def _build_rows(steam: dict) -> list[dict]:
-    """The build rows the sample states, each only what was observed."""
+    """The build rows a guide states, each only what was observed."""
     rows = []
     for key, value in (
         ("product", steam.get("product")),
@@ -2566,10 +2155,10 @@ def _layout_meta(streaming_dir, layout) -> dict:
     return meta
 
 
-def _sample_categories(categories: list[dict], sample: "Sample") -> list[dict]:
-    """The sample's CATEGORIES block: how much of each group the example covers."""
-    covered = {page_id for page_id in (sample.slugs_by_prefix.get(prefix)
-                                       for prefix in sample.touched) if page_id}
+def _guide_categories(categories: list[dict], guide: "Guide") -> list[dict]:
+    """The guide's CATEGORIES block: how much of each group the guide reads."""
+    covered = {page_id for page_id in (guide.slugs_by_prefix.get(prefix)
+                                       for prefix in guide.touched) if page_id}
     return [
         {
             "key": category["id"],
@@ -2675,9 +2264,8 @@ def main(argv: list[str] | None = None) -> int:
     payload = json.loads(text)
     provenance = payload["provenance"]
     print(
-        "wrote %s (%d KB): %d categories, %d pages, %d suppliers"
-        % (args.out, len(text) // 1024, len(payload["categories"]), len(payload["pages"]),
-           len(payload["sample"]["SUPPLIERS"]))
+        "wrote %s (%d KB): %d categories, %d pages"
+        % (args.out, len(text) // 1024, len(payload["categories"]), len(payload["pages"]))
     )
     print(
         "sources: %s; source date %s"

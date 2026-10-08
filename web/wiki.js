@@ -178,7 +178,7 @@ function wikiRich(text, params){
 
 /* --- the catalogue ------------------------------------------------------ */
 /* Shape, as agreed with the extraction: schemaVersion 1, categories, pages
-   (id, categoryId, title, body) and the verified sample the authored page is
+   (id, categoryId, title, body) and the business guides the page is
    drawn from. Anything else in the file is left alone. */
 function wikiIndex(raw){
   const pages = Array.isArray(raw.pages) ? raw.pages.filter(p => p && p.id) : [];
@@ -225,10 +225,7 @@ function wikiIndex(raw){
        out loud rather than papered over. */
     has: id => byId.has(String(id)),
     held: id => counts.get(String(id)) || 0,
-    sample: raw.sample && typeof raw.sample === "object" ? raw.sample : null,
-    /* One guide per business the extraction could describe end to end, keyed by
-       the same page id the reader routes on. A build that carries only the one
-       worked example still has it under sample, and that is the fallback. */
+    /* One guide per business, keyed by the page id the reader routes on. */
     guides: raw.guides && typeof raw.guides === "object" ? raw.guides : {},
     provenance: raw.provenance && typeof raw.provenance === "object" ? raw.provenance : {},
   };
@@ -682,7 +679,7 @@ function wikiMissing(line){
 /* Where a page's words come from, and what the extraction could not close.
    Keys and file names live behind this disclosure, never in the reading. */
 function wikiSource(page){
-  const sources = (wikiActive || wikiData.sample || {}).SOURCES || {};
+  const sources = (wikiActive || {}).SOURCES || {};
   const files = Array.isArray((wikiData.provenance || {}).files) ? wikiData.provenance.files
     : Array.isArray(sources.files) ? sources.files : [];
   const build = Array.isArray(sources.build) ? sources.build : [];
@@ -718,8 +715,7 @@ function wikiSource(page){
    so no chip says it on the page (declutter M2). */
 function wikiStamp(){
   const p = wikiData.provenance || {};
-  const sample = wikiData.sample || {};
-  const when = p.sourceDate || p.extracted || (sample.SOURCES || {}).sourceDate || (sample.SOURCES || {}).extracted || "";
+  const when = p.sourceDate || p.extracted || "";
   const claimed = p.saveBuildNumber ?? p.gameBuild;
   const build = typeof claimed === "number" || typeof claimed === "string" ? claimed : null;
   const bits = [];
@@ -794,8 +790,7 @@ function wikiYours(article, extra){
 
    A guide carries only its own business's records — its products, its fixtures,
    its recipes, and the suppliers those name — so nothing from the business that
-   was extracted first can leak onto another's page. The first one is still
-   carried as `sample`, and is the fallback for a build that has only it.
+   was extracted first can leak onto another's page.
 
    Every claim here is the game's help unless the extraction carried other
    evidence with it, and the page says which is which rather than wearing one
@@ -804,11 +799,10 @@ function wikiGuideFor(id){
   const key = String(id ?? "");
   const guide = ((wikiData && wikiData.guides) || {})[key];
   if(guide && guide.BUSINESS) return guide;
-  const s = wikiData && wikiData.sample;
-  return s && s.BUSINESS && String(s.BUSINESS.slug) === key ? s : null;
+  return null;
 }
 /* The guide whose page is on screen, for the pieces that run after the draw. */
-const wikiG = () => wikiActive || (wikiData && wikiData.sample) || {};
+const wikiG = () => wikiActive || {};
 const wikiSup = (key, g) => ((g || wikiG()).SUPPLIERS || {})[key] || null;
 const wikiFix = (key, g) => ((g || wikiG()).FIXTURES || {})[key] || null;
 const wikiProd = (key, g) => ((g || wikiG()).PRODUCTS || {})[key] || null;
