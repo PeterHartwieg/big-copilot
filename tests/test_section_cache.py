@@ -27,6 +27,12 @@ class PlanningCacheTests(unittest.TestCase):
         board.section(build, 'hiring')
         return {name: build.sections[name] for name in ('staffing', 'officeStaffing', 'factoryStaffing', 'hiring')}
 
+    def stable_payload(self, payload):
+        self.assertIn('generated', payload['meta'])
+        stable = copy.deepcopy(payload)
+        stable['meta']['generated'] = '<generated>'
+        return stable
+
     def test_hit_restores_all_worlds_private_hires_and_complete_payload(self):
         producers = ('_staffing', '_office_staffing', '_factory_staffing')
         with patch.object(board, '_staffing', wraps=board._staffing) as shop, patch.object(board, '_office_staffing', wraps=board._office_staffing) as office, patch.object(board, '_factory_staffing', wraps=board._factory_staffing) as factory:
@@ -34,7 +40,7 @@ class PlanningCacheTests(unittest.TestCase):
             expected = board.materialize_all(first)
             second = self.build()
             got = board.materialize_all(second)
-            self.assertEqual(got, expected)
+            self.assertEqual(self.stable_payload(got), self.stable_payload(expected))
             self.assertEqual([shop.call_count, office.call_count, factory.call_count], [1, 1, 1])
             self.assertEqual(second.shared['planning'], first.shared['planning'])
             self.assertEqual(sorted(second.private['hires'].values(), key=str), sorted(first.private['hires'].values(), key=str))
@@ -169,7 +175,7 @@ class PlanningCacheTests(unittest.TestCase):
             build = self.build()
             for name in order:
                 board.section(build, name)
-            self.assertEqual(board.materialize_all(build), expected)
+            self.assertEqual(self.stable_payload(board.materialize_all(build)), self.stable_payload(expected))
 
     def test_factory_posts_and_predecessor_state_change_its_key(self):
         build = self.build()
