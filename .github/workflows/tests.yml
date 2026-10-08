@@ -84,10 +84,13 @@ jobs:
               (cd "$RUNNER_TEMP" && timeout 120 apt-get download fonts-wqy-zenhei) && break
               timeout 120 sudo apt-get update -qq || true
             done
+            ls "$RUNNER_TEMP"/fonts-wqy-zenhei_*.deb > /dev/null || { echo "font download failed"; exit 1; }
             dpkg-deb -x "$RUNNER_TEMP"/fonts-wqy-zenhei_*.deb "$RUNNER_TEMP/wqy"
             mkdir -p ~/.local/share/fonts/wqy
             find "$RUNNER_TEMP/wqy" -name '*.tt[cf]' -exec cp {} ~/.local/share/fonts/wqy/ \;
           fi
+          # The cached folder itself must hold the font, never only the image.
+          ls ~/.local/share/fonts/wqy/*.tt[cf] > /dev/null || { echo "no font in the cached folder"; exit 1; }
           fc-cache -f ~/.local/share/fonts > /dev/null
           fc-list :lang=ko | grep -q . || { echo "no Korean font installed"; exit 1; }
       # The site under web/ is not committed; several suites serve or read it.

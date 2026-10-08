@@ -20,7 +20,9 @@ test('LPT assigns every suite exactly once, spreads heavy files and is determini
   assert.deepEqual(lanes,assignShards(files,{...weights,new:80},3));
   assert.deepEqual(lanes,assignShards(files,{a:100,b:90,c:80,d:2,e:1},3));
   assert.deepEqual(assignShards(['d','c','b','a'],{},2),[['a','c'],['b','d']]);
-  assert.deepEqual(assignShards(['a','b','new'],{a:2,b:4},2),[['b'],['a','new']]);
+  assert.deepEqual(assignShards(['a','b','new'],{a:2,b:4},2),[['b'],['new','a']]);
+  // Within a lane the heaviest file comes first, so it starts at once.
+  assert.deepEqual(assignShards(['a','big','c'],{a:1,big:9,c:2},1),[['big','c','a']]);
   assert.throws(()=>assignShards(files,weights,0),/invalid shard/);
 });
 

@@ -60,7 +60,9 @@ export function assignShards(files, weights, total) {
     lanes[lane].push(file);
     sums[lane] += weight(file);
   }
-  return lanes.map(lane => lane.sort(compare));
+  // Heaviest first within a lane: node --test starts files in this order, so
+  // a giant suite starts at once instead of after its lighter neighbours.
+  return lanes;
 }
 
 export function shardWeights(root = ROOT) {
