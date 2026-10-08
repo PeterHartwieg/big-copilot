@@ -686,7 +686,7 @@ def worker_assets(root: str = HERE) -> tuple[dict, dict[str, bytes]]:
     outputs = {}
 
     def asset(name: str, source: str) -> dict:
-        text = shipped_text(root, name) if name in PY_COPIED else read_text(os.path.join(root, source))
+        text = shipped_text(root, source)
         data = text.encode("utf-8")
         digest = hashlib.sha256(data).hexdigest()
         url = f"assets/{digest}/{name}"
