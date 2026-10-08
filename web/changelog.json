@@ -1,5 +1,11 @@
 [
   {
+    "pr": 428,
+    "date": "2026-10-08",
+    "title": "Play with Alcware Seasons and other mods",
+    "summary": "A modded save now says which mods the board reads in a line under the clock: Economy Expansion, Retail Expansion, a Dynamic Rivals rival count, and the Alcware Seasons season with its days left. With Seasons, Open a store predicts sales at this season's demand for the 27 products the mod changes."
+  },
+  {
     "pr": 298,
     "date": "2026-10-05",
     "title": "Suggest features from the voting list",
