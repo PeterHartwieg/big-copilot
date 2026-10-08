@@ -513,7 +513,7 @@ details.help[open] summary::after{content:"\2013"}
 # order it lists them (downloads run together): the code, without which the worker never becomes
 # ready, and the data, written only when its fetch succeeds. The worker names
 # each file itself; tests/test_web_fresh.py holds it to these two lists.
-PY_CODE = ("ba_save.py", "ba_dashboard.py", "ba_facts.py")
+PY_CODE = ("ba_save.py", "ba_dashboard.py", "ba_facts.py", "ba_mods.py")
 PY_DATA = ("gametext.json", "ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json", "ba_store_rules.json")
 # The ones copied into web/py/ from the top of the checkout. gametext.json is
 # written there from the installed game instead (main()).

@@ -22,14 +22,28 @@ Value tags::
     0x01 class instance      header + int32 reference id
     0x03 struct instance     header, no reference id
     0x09 back-reference      int32 id of an already-written instance
+    0x0b external index      int32, skipped as None
+    0x0d external guid       16 bytes, skipped as None
+    0x0f sbyte
     0x11 byte
+    0x13 short               int16
+    0x15 ushort              uint16
     0x17 int32
+    0x19 uint32
+    0x1b int64
     0x1d enum                int64
     0x1f float
     0x21 double
+    0x23 decimal             four int32 words: lo, mid, hi, flags; read as float
+    0x25 char                one UTF-16 code unit
     0x27 string
+    0x29 guid                .NET Guid.ToByteArray order
     0x2b bool                one byte
     0x2d null
+    0x32 external string     Odin string, skipped as None (unnamed is 0x33)
+
+Non-value markers 0x05-0x08 and 0x2e-0x31 keep their structural roles;
+0x31 is EndOfStream, not a named property.
 
 An instance header is one of::
 
@@ -53,12 +67,15 @@ import os
 import re
 import struct
 import sys
+import uuid
+import warnings
 import ba_facts
 
 # Tags that introduce a *named* property. The same tag + 1 introduces the same
 # kind of value without a name (collection elements, tuple/struct components).
 PROP_TAGS = frozenset(
-    {0x01, 0x03, 0x09, 0x11, 0x17, 0x1D, 0x1F, 0x21, 0x27, 0x2B, 0x2D}
+    {0x01, 0x03, 0x09, 0x0B, 0x0D, 0x0F, 0x11, 0x13, 0x15, 0x17,
+     0x19, 0x1B, 0x1D, 0x1F, 0x21, 0x23, 0x25, 0x27, 0x29, 0x2B, 0x2D, 0x32}
 )
 
 END_OBJECT = 0x05
@@ -93,6 +110,7 @@ class _Reader:
         self.p = 0
         self.type_slots: dict[int, str] = {}
         self.refs: dict[int, dict] = {}
+        self.external_refs = 0
         # Property keys and type names repeat hundreds of thousands of times;
         # decoding each occurrence was half the parse. Short strings are decoded
         # once and looked up by their raw bytes thereafter.
@@ -179,6 +197,38 @@ class _Reader:
         if tag == 0x21:
             # Real-estate purchasePrice; a float loses whole dollars past ~16M.
             return self.f64()
+        # Remaining Odin primitives follow every existing branch so the common
+        # values above keep their measured order.
+        if tag in (0x0F, 0x13, 0x15, 0x19, 0x1B):
+            fmt, size = {0x0F: ("<b", 1), 0x13: ("<h", 2), 0x15: ("<H", 2),
+                         0x19: ("<I", 4), 0x1B: ("<q", 8)}[tag]
+            value = struct.unpack_from(fmt, self.d, self.p)[0]
+            self.p += size
+            return value
+        if tag == 0x23:
+            # decimal.GetBits order; unsigned words preserve all 96 mantissa bits.
+            lo, mid, hi, flags = struct.unpack_from("<IIII", self.d, self.p)
+            self.p += 16
+            value = (lo | mid << 32 | hi << 64) / 10 ** ((flags >> 16) & 0xFF)
+            return -value if flags & 0x80000000 else value
+        if tag == 0x25:
+            value = chr(struct.unpack_from("<H", self.d, self.p)[0])
+            self.p += 2
+            return value
+        if tag == 0x29:
+            raw = struct.unpack_from("<16s", self.d, self.p)[0]
+            self.p += 16
+            return str(uuid.UUID(bytes_le=raw))
+        if tag in (0x0B, 0x0D, 0x32):
+            if tag == 0x0B:
+                self.i32()
+            elif tag == 0x0D:
+                struct.unpack_from("<16s", self.d, self.p)
+                self.p += 16
+            else:
+                self.string()
+            self.external_refs += 1
+            return None
         raise SaveFormatError(self._where(f"value tag {tag:#04x}"))
 
     def instance(self, with_ref_id: bool):
@@ -356,6 +406,8 @@ def load_save(path: str) -> Save:
         if facts.get("build") != root.get("buildNumberAtLastSave"):
             raise SaveFormatError("Building facts belong to a different game build")
         save.facts = facts
+    if r.external_refs:
+        warnings.warn(f"Skipped {r.external_refs} external references in save", stacklevel=2)
     return save
 
 

@@ -9,7 +9,7 @@ const hash = text => createHash('sha256').update(text).digest('hex');
 const buffer = text => new TextEncoder().encode(text).buffer;
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'web/worker.js'), 'utf8');
-const files = ['ba_save.py', 'ba_dashboard.py', 'ba_facts.py', 'gametext.json', 'ba_buildings.json',
+const files = ['ba_save.py', 'ba_dashboard.py', 'ba_facts.py', 'ba_mods.py', 'gametext.json', 'ba_buildings.json',
   'ba_demand_curves.json', 'ba_item_prices.json', 'ba_store_rules.json'];
 const deferred = () => {
   let resolve, reject;
@@ -59,6 +59,7 @@ async function startup(stamp = 'audit', configure = manifest => manifest) {
       assert.equal(writes.get('/ba_save.py'), 'ba_save.py');
       assert.equal(writes.get('/ba_dashboard.py'), 'ba_dashboard.py');
       assert.equal(writes.get('/ba_facts.py'), 'ba_facts.py');
+      assert.equal(writes.get('/ba_mods.py'), 'ba_mods.py');
       py.imported = true;
     },
   };
@@ -162,11 +163,11 @@ test('unstamped builds bypass cache and optional HTTP failures still boot', asyn
   s.runtime.resolve(s.py);
   await flush();
   assert.ok(s.py.imported);
-  assert.equal(s.writes.size, 3);
+  assert.equal(s.writes.size, 4);
   assert.ok(s.messages.some(m => m.stage === 'ready'));
 });
 
-for (const name of ['ba_save.py', 'ba_dashboard.py', 'ba_facts.py']) {
+for (const name of ['ba_save.py', 'ba_dashboard.py', 'ba_facts.py', 'ba_mods.py']) {
   test(`a failed required ${name} reports startup failure before runtime finishes`, async () => {
     const s = await startup();
     assert.ok(s.requests.has(name));

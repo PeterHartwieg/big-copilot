@@ -2666,6 +2666,50 @@ function navShortDay(i){
     default: return tt("nav.wd.sun", "Sun");
   }
 }
+/* A modded save names the mods the board adapts to (D.mods, ba_mods.py):
+   one flag on the clock's flags line, its sentences in the tip. A vanilla
+   save has no D.mods and no flag. */
+function mdSeasonName(id){
+  return ({spring: tt("nav.mast.mods.spring", "Spring"), summer: tt("nav.mast.mods.summer", "Summer"),
+    autumn: tt("nav.mast.mods.autumn", "Autumn"), winter: tt("nav.mast.mods.winter", "Winter")})[id] || id;
+}
+function mdFlag(m){
+  if(!m || typeof m !== "object") return "";
+  const parts = [], tips = [];
+  if(m.economyExpansion){
+    parts.push(tt("nav.mast.mods.ee", "ECONOMY EXPANSION"));
+    tips.push(tt("nav.mast.mods.ee.tip", "Economy Expansion is running (it last settled on day {d}). Rent, deposits and running costs for buildings you have not rented are still the game's own here.",
+      {d: m.economyExpansion.settled}));
+  }
+  const se = m.seasons;
+  if(se){
+    const name = mdSeasonName(se.season);
+    parts.push(tt("nav.mast.mods.season", "{season} DAY {d}/{n}", {season: name.toLocaleUpperCase(), d: se.day, n: se.length}));
+    tips.push(se.demand
+      ? tt("nav.mast.mods.season.tip", {one: "Alcware Seasons: {season}, day {d} of {len}, {n} day left. Open a store uses this season's sales ratio for the 27 products the mod changes.",
+          other: "Alcware Seasons: {season}, day {d} of {len}, {n} days left. Open a store uses this season's sales ratio for the 27 products the mod changes."},
+          {season: name, d: se.day, len: se.length, n: se.left})
+      : tt("nav.mast.mods.season.off", {one: "Alcware Seasons: {season}, day {d} of {len}, {n} day left. Its seasonal demand is switched off, so sales follow the game's own ratios.",
+          other: "Alcware Seasons: {season}, day {d} of {len}, {n} days left. Its seasonal demand is switched off, so sales follow the game's own ratios."},
+          {season: name, d: se.day, len: se.length, n: se.left}));
+  }
+  if(m.rivals){
+    parts.push(tt("nav.mast.mods.rivals", "{n} RIVALS", {n: m.rivals}));
+    tips.push(tt("nav.mast.mods.rivals.tip", "This save holds {n} rival companies; the game has 19 (Dynamic Rivals).", {n: m.rivals}));
+  }
+  if(m.retailExpansion){
+    parts.push(tt("nav.mast.mods.retail", "RETAIL EXPANSION"));
+    const n = m.retailExpansion.renovated;
+    tips.push(n == null
+      ? tt("nav.mast.mods.retail.bad", "Retail Expansion: its records could not be read, so renovated buildings' capacity and floor area are unknown.")
+      : tt("nav.mast.mods.retail.tip", {one: "Retail Expansion: {n} renovated building; its capacity and floor area come from the mod's records.",
+          other: "Retail Expansion: {n} renovated buildings; their capacity and floor area come from the mod's records."}, {n}));
+  }
+  if(!parts.length) return "";
+  return `<span class="flag md-flag" data-tip="${attr(tips.join(" "))}">${
+    attr(tt("nav.mast.mods.text", "MODDED: {list}", {list: parts.join(" · ")}))}</span>`;
+}
+
 function drawMast(){
   const m = D.meta, k = D.kpi;
   /* The save name is the player's own text: set it as text, never as markup.
@@ -2693,6 +2737,8 @@ function drawMast(){
   if(m.verifiedBuild && m.build > m.verifiedBuild)
     flags.push(`<span class="flag" data-tip="${attr(tt("nav.mast.unchecked.tip", "This board was checked on build {v}; a newer game may have changed what the save records", {v: m.verifiedBuild}))}">${
       tt("nav.mast.unchecked.text", "BUILD {b} UNCHECKED", {b: m.build})}</span>`);
+  const modded = mdFlag(D.mods);
+  if(modded) flags.push(modded);
   /* Live and well is the dot alone; Stale and Not live say so (declutter S9). */
   if(LIVE) flags.push(`<span class="live" id="live"><b></b><em></em></span>`);
   const clock = $("clock");

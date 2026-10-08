@@ -76,7 +76,8 @@ class PayloadTableTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "registry.hsg")
             es3_fixture.write_link_save(path)
-            return set(ba_dashboard.extract(load_save(path), Names({}), None))
+            # A key only some saves carry (a modded save's `mods`) is documented too.
+            return set(ba_dashboard.extract(load_save(path), Names({}), None)) | ba_dashboard.OPTIONAL_KEYS
 
     def test_the_payload_table_has_a_row_for_every_key_extract_returns(self):
         doc, code = self.doc_keys(), self.payload_keys()

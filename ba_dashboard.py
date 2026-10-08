@@ -59,6 +59,7 @@ from ba_save import (
     Names, NotEnglishText, Save, _plain, bundled_locale, english_text, house_number, load_best_locale,
     load_locale, load_save,
 )
+import ba_mods
 
 SAVE_ROOT = os.path.join(
     os.environ.get("USERPROFILE", ""),
@@ -2085,13 +2086,16 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
 # one back in this order, so the CLI's page and the watch server's data.json
 # are what one build with every section computed gives.
 PAYLOAD_KEYS = (
-    "meta", "kpi", "daily", "businesses", "ownedBuildings", "homes", "products", "staff",
+    "meta", "mods", "kpi", "daily", "businesses", "ownedBuildings", "homes", "products", "staff",
     "loans", "supply", "rhythm", "market", "premises", "chains", "payback", "openStore",
     "openFactory", "trends", "hypeExposure", "hours", "hourFindings", "staffing",
     "factoryStaffing", "officeStaffing", "candidates", "hiring", "plan", "names",
     "skillNames", "marketingAgencies", "cashFlow", "ledgerDays", "alerts", "minor",
     "alertsDemand", "goals",
 )
+# Keys only some saves carry: `mods` is there only for a save a mod adapter
+# reads (ba_mods.detect()), so a vanilla save's payload is what it was.
+OPTIONAL_KEYS = frozenset({"mods"})
 
 
 
@@ -2403,7 +2407,7 @@ def materialize_all(build: Build) -> dict:
     values = dict(build.core)
     for name in SECTIONS:
         values.update(build.sections[name])
-    return {key: values[key] for key in PAYLOAD_KEYS}
+    return {key: values[key] for key in PAYLOAD_KEYS if key in values or key not in OPTIONAL_KEYS}
 
 
 def section(build: Build, name: str) -> dict:
@@ -2851,6 +2855,10 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         "minor": alerts["minor"],
         "alertsDemand": {"lines": alerts_demand["lines"], "minor": alerts_demand["minor"]},
     })
+    # The mod adapters in use and their inputs (ba_mods.py); none on a vanilla save.
+    mods = ba_mods.detect(save)
+    if mods:
+        core["mods"] = mods
     build.core = {key: core[key] for key in PAYLOAD_KEYS if key in core}
     return build
 
@@ -18131,13 +18139,16 @@ def _store_market(save: Save, rules: dict, items: set, mpm: float, agent: int) -
         if reg.get("businessOwnerRivalId"):
             rival_sells.update((name, hood) for name in stocked)
     discount = 1 - 0.25 * max(0, min(100, agent)) / 100
+    # Alcware Seasons rescales 27 products' sales ratio each game day
+    # (ba_mods.sales_ratio()); without its calendar the ratio is the game's.
+    calendar, today = ba_mods.seasons(save), save.root.get("Day") or 0
     hoods = _in_order({h for (_n, h) in sellers} | {h for (_n, h) in lowest})
     out = {}
     for name in _in_order(items):
         row = products.get(name) or {}
         out[name] = {
             "p": row.get("p") or 0,
-            "r": row.get("r") or 0,
+            "r": ba_mods.sales_ratio(row.get("r") or 0, name, calendar, today),
             "d": row.get("d") or 0,
             "s": row.get("s") or 0,
             "opt": optimal_providers(row.get("p") or 0),

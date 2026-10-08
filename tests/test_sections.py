@@ -105,8 +105,10 @@ class Sections(unittest.TestCase):
         build = self.build()
         sections = {key for spec in ba_dashboard.SECTIONS.values() for key in spec["keys"]}
         self.assertEqual(set(build.core) & sections, set())
+        # The fixture is a vanilla save, so it carries no optional key (`mods`).
         self.assertEqual(list(build.core),
-                         [k for k in ba_dashboard.PAYLOAD_KEYS if k not in sections])
+                         [k for k in ba_dashboard.PAYLOAD_KEYS
+                          if k not in sections and k not in ba_dashboard.OPTIONAL_KEYS])
         self.assertEqual(list(private_fields(build.core)), [])
         # The private parts are kept on the Build instead.
         self.assertNotIn("world", build.shared, "planning world is deferred too")
@@ -145,7 +147,7 @@ class Sections(unittest.TestCase):
         ba_dashboard.section(build, "hiring")
         self.assertEqual(set(build.sections), {"staffing", "officeStaffing", "factoryStaffing", "hiring"})
         again = normalise(ba_dashboard.materialize_all(build))
-        self.assertEqual(list(again), list(ba_dashboard.PAYLOAD_KEYS))
+        self.assertEqual(list(again), [k for k in ba_dashboard.PAYLOAD_KEYS if k not in ba_dashboard.OPTIONAL_KEYS])
         self.assertEqual(json.dumps(again), json.dumps(whole))
         for name in ba_dashboard.SECTIONS:
             self.assertEqual(list(private_fields(build.sections[name])), [], name)

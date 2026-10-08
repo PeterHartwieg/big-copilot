@@ -25,8 +25,9 @@ import subprocess
 import sys
 import tempfile
 
+import ba_mods
 from ba_save import load_locale, load_save, newest_save
-from ba_dashboard import MIN_BUILD, OWN_PROFIT_DAYS, Names, extract
+from ba_dashboard import MIN_BUILD, OWN_PROFIT_DAYS, Names, extract, load_store_rules
 from check_saves import SAVE_ROOT
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -77,6 +78,20 @@ def modded(save, path: str) -> bool:
     return any(not any(h in w for h in HARMLESS_MODS) for w in words)
 
 
+def seasonal_window(open_store: dict, cal: dict, day: int) -> None:
+    """Open a store prices with today's sales ratios, but the shops' days it is
+    held to ran under their own days' ratios: on an Alcware Seasons save each
+    product the mod rescales gets the mean of its ratio over the
+    OWN_PROFIT_DAYS finished days before `day` (_own_shops()'s window), so a
+    season change inside the window does not read as a model error."""
+    products = load_store_rules().get("products") or {}
+    days = range(day - OWN_PROFIT_DAYS, day)
+    for name, row in ((open_store or {}).get("market") or {}).items():
+        if name in ba_mods.SEASON_FACTORS:
+            base = (products.get(name) or {}).get("r") or 0
+            row["r"] = round(sum(ba_mods.sales_ratio(base, name, cal, d) for d in days) / len(days), 6)
+
+
 def stats(values: list) -> dict:
     v = sorted(values)
     n = len(v)
@@ -113,6 +128,9 @@ def collect(root: str) -> tuple[int, list]:
                 continue
             payload = extract(save, names, None)
             out = {k: payload.get(k) for k in ("openStore", "businesses", "premises", "meta", "names")}
+            cal = ba_mods.seasons(save)
+            if cal:
+                seasonal_window(out["openStore"], cal, save.root.get("Day") or 0)
             out["who"] = folder.name[:8]
             out["modded"] = modded(save, path)
             file = os.path.join(scratch, f"{len(files)}.json")
