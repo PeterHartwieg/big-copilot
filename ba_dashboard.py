@@ -17701,7 +17701,8 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
     """What a 100% outfitted store of a type holds, as shopping-list lines.
 
     Each line is {"item", "qty", "group", "why"}: `group` is "req" (the
-    type's requirements, one each), "cap" (the more of a capacity station it
+    type's requirements, one each, and the scale a self-service shop showing
+    produce needs), "cap" (the more of a capacity station it
     takes for its customers an hour to cover the building's `cap`), "dem" (one
     item per customer demand the type makes) or "shelf" (the displays), and
     `why` what the line answers: a requirement's name, a demand, or the
