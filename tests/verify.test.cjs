@@ -20,10 +20,29 @@ test('LPT assigns every suite exactly once, spreads heavy files and is determini
   assert.deepEqual(lanes,assignShards(files,{...weights,new:80},3));
   assert.deepEqual(lanes,assignShards(files,{a:100,b:90,c:80,d:2,e:1},3));
   assert.deepEqual(assignShards(['d','c','b','a'],{},2),[['a','c'],['b','d']]);
-  assert.deepEqual(assignShards(['a','b','new'],{a:2,b:4},2),[['b'],['new','a']]);
-  // Within a lane the heaviest file comes first, so it starts at once.
-  assert.deepEqual(assignShards(['a','big','c'],{a:1,big:9,c:2},1),[['big','c','a']]);
-  assert.throws(()=>assignShards(files,weights,0),/invalid shard/);
+  assert.deepEqual(assignShards(['a','b','new'],{a:2,b:4},2),[['b'],['a','new']]);
+});
+
+test('Node lanes are balanced on the schedule node --test really runs', async () => {
+  const {assignShards, laneSeconds} = await runner;
+  // node --test sorts a lane's files by name and starts each on the first free
+  // of two workers: z (100 s) waits behind a and b, then runs on worker one.
+  const w = {z:100, a:30, b:30, c:30, d:30, e:30, f:30, g:30, h:30};
+  const weight = file => w[file];
+  assert.equal(laneSeconds(['z','a','b'], weight, 2), 130);
+  assert.equal(laneSeconds(['z','a','b'], weight, 1), 160);
+  const files = Object.keys(w);
+  // Balancing plain sums gives z two lighter neighbours that start first:
+  // lanes of 130 s and 90 s. Balancing the schedule gives 100 s and 120 s.
+  const lanes = assignShards(files, w, 2, 2);
+  assert.deepEqual(lanes, [['g','z'], ['a','b','c','d','e','f','h']]);
+  assert.deepEqual(lanes.map(lane => laneSeconds(lane, weight, 2)), [100, 120]);
+  assert.ok(Math.max(...assignShards(files, w, 2, 1).map(lane => laneSeconds(lane, weight, 2))) > 120);
+  assert.throws(() => assignShards(files, w, 2, 0), /invalid shard slots/);
+  assert.throws(() => assignShards(files, w, 0, 2), /invalid shard total/);
+  // Two equal files on two workers cost one file's time on either lane; they
+  // still spread instead of both landing on the first.
+  assert.deepEqual(assignShards(['a','b'], {a:5, b:5}, 2, 2), [['a'], ['b']]);
 });
 
 test('Python lanes cover discovered modules and forward only the selected module names', async t => {

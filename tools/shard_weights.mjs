@@ -9,7 +9,7 @@
 import { spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { ROOT, assignShards } from './verify.mjs';
+import { ROOT, NODE_CONCURRENCY, assignShards, laneSeconds, weightOf } from './verify.mjs';
 
 export function parseWeights(logs) {
   const weights = { node: {}, python: {} };
@@ -43,9 +43,12 @@ function main(run) {
   for (const kind of ['node', 'python']) {
     const total = lanes(kind);
     if (!Object.keys(weights[kind]).length || !total) throw new Error(`no ${kind} lanes or weights in run ${run}`);
-    const assigned = assignShards(Object.keys(weights[kind]), weights[kind], total);
-    console.log(`${kind}: ${Object.keys(weights[kind]).length} suites; predicted seconds for ${total} lanes ` +
-      JSON.stringify(assigned.map(lane => Math.round(lane.reduce((sum, suite) => sum + weights[kind][suite], 0)))));
+    const slots = kind === 'node' ? NODE_CONCURRENCY : 1;
+    const suites = Object.keys(weights[kind]);
+    const weight = weightOf(suites, weights[kind]);
+    const assigned = assignShards(suites, weights[kind], total, slots);
+    console.log(`${kind}: ${suites.length} suites; predicted seconds for ${total} lanes ` +
+      JSON.stringify(assigned.map(lane => Math.round(laneSeconds(lane, weight, slots)))));
   }
   writeFileSync(path.join(ROOT, 'tests', 'shard-weights.json'), JSON.stringify(weights, null, 1) + '\n');
 }

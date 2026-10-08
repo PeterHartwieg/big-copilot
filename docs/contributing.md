@@ -77,7 +77,8 @@ Focused commands also assemble first:
   `npm test` accepts filenames/patterns, not raw Node test flags.
   `npm test -- --shard=1/6` reproduces one CI lane. The lanes split the complete
   suite list by the seconds in `tests/shard-weights.json` (`assignShards()` in
-  `tools/verify.mjs`, longest first onto the lightest lane), so every file runs
+  `tools/verify.mjs`: longest first, onto the lane that would finish soonest as
+  `node --test` really runs it, name order on two workers), so every file runs
   once, and a new suite with no weight yet counts as the median. Sharding cannot
   be combined with focused filenames; `npm test` and `npm run verify` still run
   the full list.

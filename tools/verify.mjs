@@ -43,26 +43,51 @@ export function nodeFiles(root, requested = []) {
   }))];
 }
 
-// Longest-processing-time first; equal weights use filename order and equal
-// lane totals use lane index. Stale weights cannot affect the median fallback.
-export function assignShards(files, weights, total) {
-  if (!Number.isSafeInteger(total) || total < 1) throw new Error('invalid shard total');
+const byName = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+
+// A lane's seconds as it really runs: node --test sorts its files by name and
+// starts each on the first of `slots` workers to come free. With one slot (the
+// Python lanes) this is the plain sum.
+export function laneSeconds(files, weight, slots = 1) {
+  const workers = Array(slots).fill(0);
+  for (const file of [...files].sort(byName)) {
+    let free = 0;
+    for (let i = 1; i < slots; i++) if (workers[i] < workers[free]) free = i;
+    workers[free] += weight(file);
+  }
+  return Math.max(...workers);
+}
+
+// The weight lookup assignShards() uses: a suite with no weight counts as the
+// median, and stale weights cannot move that median.
+export function weightOf(files, weights) {
   const known = files.map(file => weights[file]).filter(value => Number.isFinite(value) && value > 0).sort((a, b) => a - b);
   const middle = Math.floor(known.length / 2);
   const fallback = known.length ? (known.length % 2 ? known[middle] : (known[middle - 1] + known[middle]) / 2) : 1;
-  const weight = file => Number.isFinite(weights[file]) && weights[file] > 0 ? weights[file] : fallback;
-  const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+  return file => Number.isFinite(weights[file]) && weights[file] > 0 ? weights[file] : fallback;
+}
+
+// Heaviest suite first, each onto the lane whose laneSeconds() stays lowest;
+// ties go to the lane with less work in total, then the lower index (with two
+// workers a second file often leaves a lane's seconds unchanged). Equal
+// weights go in name order. Modelling the name-ordered schedule matters: a
+// giant suite that sorts late waits behind its lighter neighbours.
+export function assignShards(files, weights, total, slots = 1) {
+  if (!Number.isSafeInteger(total) || total < 1) throw new Error('invalid shard total');
+  if (!Number.isSafeInteger(slots) || slots < 1) throw new Error('invalid shard slots');
+  const weight = weightOf(files, weights);
   const lanes = Array.from({ length: total }, () => []);
   const sums = Array(total).fill(0);
-  for (const file of [...new Set(files)].sort((a, b) => weight(b) - weight(a) || compare(a, b))) {
-    let lane = 0;
-    for (let i = 1; i < total; i++) if (sums[i] < sums[lane]) lane = i;
-    lanes[lane].push(file);
-    sums[lane] += weight(file);
+  for (const file of [...new Set(files)].sort((a, b) => weight(b) - weight(a) || byName(a, b))) {
+    let best = 0, bestSeconds = Infinity;
+    for (let i = 0; i < total; i++) {
+      const seconds = laneSeconds([...lanes[i], file], weight, slots);
+      if (seconds < bestSeconds || (seconds === bestSeconds && sums[i] < sums[best])) { best = i; bestSeconds = seconds; }
+    }
+    lanes[best].push(file);
+    sums[best] += weight(file);
   }
-  // Heaviest first within a lane: node --test starts files in this order, so
-  // a giant suite starts at once instead of after its lighter neighbours.
-  return lanes;
+  return lanes.map(lane => lane.sort(byName));
 }
 
 export function shardWeights(root = ROOT) {
@@ -113,7 +138,7 @@ export function verify(args = [], { root = ROOT, env = process.env, spawn = spaw
       assembled = true;
     }
     const suites = stage === 'node' ? files : pythonModules(root, python, childEnv, spawn);
-    const selected = assignShards(suites, weights[stage] || {}, shard.total)[shard.index];
+    const selected = assignShards(suites, weights[stage] || {}, shard.total, stage === 'node' ? NODE_CONCURRENCY : 1)[shard.index];
     if (!selected.length) throw new Error(`${stage} shard is empty; use no more lanes than discovered suites`);
     log(`${stage} shard ${shard.index + 1}/${shard.total}: ${selected.join(', ')}`);
     if (stage === 'node') files = selected; else modules = selected;
