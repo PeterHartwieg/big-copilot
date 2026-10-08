@@ -1,8 +1,8 @@
 // Node test reporter for sharded lanes: one "shard-weight node <file> <seconds>"
-// line per test file at the end. Each file's own summary carries its duration,
-// hooks and tests a helper defines included (a test's own event names the file
-// that called test(), which may be a helper). tools/shard_weights.mjs reads
-// these lines back from a CI run's logs.
+// line per test file at the end, from each file's own summary: its tests and
+// hooks, tests a helper defines included (a test's own event names the file
+// that called test(), which may be a helper), but not loading the module.
+// tools/shard_weights.mjs reads these lines back from a CI run's logs.
 import path from 'node:path';
 
 export default async function* shardTimes(source) {

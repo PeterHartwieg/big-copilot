@@ -67,15 +67,28 @@ jobs:
       # lane 16 min on the Ubuntu mirror (#336). The runner image already has
       # the libraries the headless shell needs (a missing one fails the browser
       # launch loudly), but no font that draws Korean, which the i18n expansion
-      # suite measures with real glyphs. Install just that font, with bounded
-      # attempts, and check it is there.
+      # suite measures with real glyphs. That one font file is cached in the
+      # user font folder, so a lane touches the mirror only on a cache miss
+      # (one apt-get install took 67 s); the step checks the font is there.
       - run: npx playwright install --only-shell chromium
+      - name: Cache the Korean font
+        id: korean-font
+        uses: actions/cache@v6
+        with:
+          path: ~/.local/share/fonts/wqy
+          key: font-wqy-zenhei-${{ runner.os }}-1
       - name: Install a Korean font
         run: |
-          for attempt in 1 2 3; do
-            timeout 120 sudo apt-get install -y --no-install-recommends fonts-wqy-zenhei && break
-            timeout 120 sudo apt-get update -qq || true
-          done
+          if [ "${{ steps.korean-font.outputs.cache-hit }}" != 'true' ]; then
+            for attempt in 1 2 3; do
+              (cd "$RUNNER_TEMP" && timeout 120 apt-get download fonts-wqy-zenhei) && break
+              timeout 120 sudo apt-get update -qq || true
+            done
+            dpkg-deb -x "$RUNNER_TEMP"/fonts-wqy-zenhei_*.deb "$RUNNER_TEMP/wqy"
+            mkdir -p ~/.local/share/fonts/wqy
+            find "$RUNNER_TEMP/wqy" -name '*.tt[cf]' -exec cp {} ~/.local/share/fonts/wqy/ \;
+          fi
+          fc-cache -f ~/.local/share/fonts > /dev/null
           fc-list :lang=ko | grep -q . || { echo "no Korean font installed"; exit 1; }
       # The site under web/ is not committed; several suites serve or read it.
       # npm test assembles first and includes the community suites.

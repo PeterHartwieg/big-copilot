@@ -260,7 +260,7 @@ test('the CI matrix shards execute every discovered file once and propagate a re
     timed.push(...[...result.stdout.matchAll(/^shard-weight node (\S+) \d+\.\d\r?$/gm)].map(m => m[1]));
   }
   assert.deepEqual(statuses.slice().sort(),[0,0,0,0,0,1]);
-  // Every file reports its seconds once, the failing one included.
+  // Every file reports its seconds once, one with a failing test included.
   assert.deepEqual(timed.sort(),names.map(name => `tests/${name}.test.cjs`));
   assert.deepEqual(fs.readFileSync(path.join(root,'executed.txt'),'utf8').trim().split(/\r?\n/).sort(),names);
 });
