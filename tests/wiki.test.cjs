@@ -969,6 +969,9 @@ test('a page the guide does not cover is a reader, not the authored layout', asy
   assert.match(html, /Gift \(Cheap\)/);
   assert.match(html, /href="#wiki\/businesstypes-giftshop"/, 'its links reach the pages that exist');
   assert.match(html, enRe('wiki.src.title'));
+  // With no guide of its own, its source list is the Gift Shop guide's.
+  assert.match(html, /<ul class="wk-files"><li><b>[^<]+<\/b><span>[^<]+<\/span><\/li><\/ul>/);
+  assert.match(html, /<code>Steam app \/ depot build<\/code><span>app 1331550, buildid 25231854<\/span>/);
 });
 
 test('the relation graph wires products to fixtures and to their supply', async () => {

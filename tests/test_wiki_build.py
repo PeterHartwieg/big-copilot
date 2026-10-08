@@ -702,7 +702,7 @@ class GapTests(FixtureCase):
         self.assertNotIn("game files", detail)
         self.assertNotIn("measured factory draw", detail)
 
-    def test_the_build_gap_names_three_different_builds(self):
+    def test_the_build_gap_names_the_source_builds(self):
         details = {gap["what"]: gap["detail"] for gap in self.guide()["GAPS"]}
         detail = details["Source build numbers"]
         self.assertIn("installed Steam build", detail)

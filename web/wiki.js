@@ -679,7 +679,9 @@ function wikiMissing(line){
 /* Where a page's words come from, and what the extraction could not close.
    Keys and file names live behind this disclosure, never in the reading. */
 function wikiSource(page){
-  const sources = (wikiActive || {}).SOURCES || {};
+  /* A page with no guide behind it borrows the Gift Shop guide's list: the
+     same game files and build rows, as it always has. */
+  const sources = (wikiActive || wikiGuideFor("businesstypes-giftshop") || {}).SOURCES || {};
   const files = Array.isArray((wikiData.provenance || {}).files) ? wikiData.provenance.files
     : Array.isArray(sources.files) ? sources.files : [];
   const build = Array.isArray(sources.build) ? sources.build : [];

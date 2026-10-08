@@ -42,8 +42,8 @@ running game does.
   builder at all, so it is `null` with an explanatory note. Unknown values never
   use the dashboard's `MIN_BUILD`/`VERIFIED_BUILD` constants, which are code,
   not observations.
-- **Raw help is preserved separately** from the parsed facts, so a half-
-  understood page can always be read as the game wrote it.
+- **Raw help ships as written**: each page's `body` in `pages[]` is the game's
+  own text, so a half-understood page can always be read as the game wrote it.
 
 ## Parsing limits
 
@@ -65,7 +65,7 @@ static pages. Fixtures are synthetic; no test needs a save or installed game.
 
 ## The public payload
 
-`tools/build_wiki_data.py` turns the extraction into what the wiki tab ships:
+`tools/build_wiki_data.py` builds what the wiki tab ships:
 `web/wiki-data.json`, built by `build_public_wiki(data_dir)` and written by
 `write_public_wiki(path, data_dir)` — the latter is what `build_web.py` calls
 before stamping, so the payload's hash is part of the page's build stamp.

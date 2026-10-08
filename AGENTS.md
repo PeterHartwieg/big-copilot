@@ -287,7 +287,7 @@ and never attach one to an issue.
 - Releasing, deploying, adding a feature badge, writing a changelog entry or exporting map
   assets → `docs/contributing.md`
 - Working out what a number on the board means → `docs/dashboard-reference.md`
-- Touching the wiki build or its catalogue → `docs/wiki-data-pipeline.md`
+- Touching the wiki build → `docs/wiki-data-pipeline.md`
 - Touching presence, voting or the feature list → `docs/community-features.md`
 - Adding or translating text on the page, or converting an area to `tt()`/`msg()` →
   `docs/architecture.md`, "UI text"
