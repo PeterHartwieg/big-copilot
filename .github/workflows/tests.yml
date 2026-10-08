@@ -16,11 +16,17 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Python and Node lanes take their suites from tests/shard-weights.json
+  # (tools/verify.mjs assignShards; refresh with tools/shard_weights.mjs).
+  # Six Node lanes, two Python lanes and freshness: nine runners per run, so
+  # two runs fit in the 20 GitHub-hosted slots.
   python:
-    name: Python suite
+    name: Python (${{ matrix.shard }})
     runs-on: ubuntu-latest
-    outputs:
-      freshness: ${{ steps.freshness.outcome }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/2', '2/2']
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -30,17 +36,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      # Share this runner with the short freshness checks. Keep their own
-      # outcome so the stable freshness check does not depend on Python tests.
-      - name: Verify assembly and freshness
-        id: freshness
-        run: |
-          npm run verify:assemble
-          git diff --exit-code --stat
-          test -z "$(git status --porcelain)" || { git status --porcelain; exit 1; }
-          npm run verify:check
       # The site under web/ is not committed; several suites read it.
-      - run: npm run test:python
+      - run: npm run test:python -- --shard=${{ matrix.shard }}
 
   node-tests:
     name: Node (${{ matrix.suite }})
@@ -49,7 +46,7 @@ jobs:
       # Collect all failures instead of cancelling the other suites.
       fail-fast: false
       matrix:
-        suite: ['1/8', '2/8', '3/8', '4/8', '5/8', '6/8', '7/8', '8/8']
+        suite: ['1/6', '2/6', '3/6', '4/6', '5/6', '6/6']
     steps:
       - uses: actions/checkout@v7
       # Some suites write fixture saves and serve the game-link mock with Python.
@@ -86,10 +83,10 @@ jobs:
         run: npm test -- --shard=${{ matrix.suite }}
       # Keep the short deployment smoke and bundle check on one existing runner.
       - name: Smoke test the optimized hosted page
-        if: matrix.suite == '6/8'
+        if: matrix.suite == '6/6'
         run: npm run test:optimized
       - name: Check the Worker bundle
-        if: matrix.suite == '6/8'
+        if: matrix.suite == '6/6'
         run: npm run check:worker
 
   # Preserve the existing check name for branch rules. A failed, cancelled or
@@ -105,13 +102,32 @@ jobs:
           RESULT: ${{ needs.node-tests.result }}
         run: test "$RESULT" = success
 
-  web-fresh:
-    name: web/ assembles from its sources
+  python-suite:
+    name: Python suite
     runs-on: ubuntu-latest
     needs: python
     if: always()
     steps:
-      - name: Require assembly and freshness checks
+      - name: Require every Python lane
         env:
-          RESULT: ${{ needs.python.outputs.freshness }}
+          RESULT: ${{ needs.python.result }}
         run: test "$RESULT" = success
+
+  # Its own runner, so the stable freshness check never depends on the tests.
+  web-fresh:
+    name: web/ assembles from its sources
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Verify assembly and freshness
+        run: |
+          npm run verify:assemble
+          git diff --exit-code --stat
+          test -z "$(git status --porcelain)" || { git status --porcelain; exit 1; }
+          npm run verify:check

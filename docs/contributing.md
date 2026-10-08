@@ -75,13 +75,20 @@ Focused commands also assemble first:
 - `npm test` runs all Node suites; `npm test -- tests/map.test.cjs` selects a suite
   (multiple filenames and quoted `*` filename patterns are accepted). Focused
   `npm test` accepts filenames/patterns, not raw Node test flags.
-  `npm test -- --shard=1/8` reproduces one CI shard using Node's native file
-  sharding over the complete, sorted suite list. The eight shards cover every
-  file once, including newly added suites. Sharding cannot be combined with
-  focused filenames; `npm test` and `npm run verify` still run the full list.
+  `npm test -- --shard=1/6` reproduces one CI lane. The lanes split the complete
+  suite list by the seconds in `tests/shard-weights.json` (`assignShards()` in
+  `tools/verify.mjs`, longest first onto the lightest lane), so every file runs
+  once, and a new suite with no weight yet counts as the median. Sharding cannot
+  be combined with focused filenames; `npm test` and `npm run verify` still run
+  the full list.
 - `npm run test:python` runs Python discovery;
   `npm run test:python -- tests.test_premises` selects a module. Arguments after
   `--` are passed to unittest, including discovery options.
+  `npm run test:python -- --shard=1/2` runs one CI lane: the discovered modules,
+  split the same way (`tools/python_shard.py`).
+- `node tools/shard_weights.mjs <run id>` refreshes `tests/shard-weights.json`
+  from a green CI run: every lane prints a `shard-weight` line per suite. Refresh
+  after adding or growing a slow suite and review the predicted lane sums.
 - `npm run test:optimized` assembles, optimizes the hosted page, checks its actual
   emitted assets with `node tools/optimize_web.mjs --check`, runs the release smoke
   journey against that artifact, then restores readable assembly
@@ -92,13 +99,13 @@ Focused commands also assemble first:
 - `npm run verify:assemble` assembles only; `npm run verify:check` checks the
   existing assembly without rebuilding it.
 
-CI uses GitHub-hosted Ubuntu runners: eight Node shards (concurrency 2 each)
-and a Python job. Shard 6 also runs the short optimized release smoke and Worker
-dry-run; the Python runner first checks assembly and freshness. At most nine
+CI uses GitHub-hosted Ubuntu runners: six Node lanes (concurrency 2 each), two
+Python lanes and a freshness job that checks assembly on its own runner. Node lane
+6 also runs the short optimized release smoke and Worker dry-run. At most nine
 runners are active per workflow, leaving room for two runs within 20 slots.
 The small aggregate jobs start after their dependencies release their runners.
-The stable `Node suites` check requires every Node lane to succeed, and the
-freshness check reports its own outcome separately from the Python tests.
+The stable `Node suites` and `Python suite` checks require every lane of their
+kind to succeed, and the freshness check never depends on the tests.
 A failed lane does not cancel its siblings. The translation layout sweep is split into
 board/shell, planner breakpoints, and planner languages so no one file serializes
 all of that coverage. Browser installation needs only Chromium's
