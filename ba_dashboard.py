@@ -61,9 +61,11 @@ from ba_save import (
 )
 try:
     import ba_mods
-except ImportError:
+except ModuleNotFoundError as exc:
     # A worker from before ba_mods.py (a tab left open across a deploy) does not
     # fetch it; the board then reads every save as a vanilla one.
+    if exc.name != "ba_mods":
+        raise
     ba_mods = None
 
 SAVE_ROOT = os.path.join(
