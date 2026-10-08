@@ -12,6 +12,7 @@ import os
 import sys
 import tempfile
 import unittest
+import warnings
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -19,8 +20,10 @@ sys.path.insert(0, os.path.dirname(HERE))
 
 from tests.es3_fixture import (  # noqa: E402
     Byte, Enum, Float32, Instance, NullInstance, Packed, Ref, Shared, Unnamed, encode,
+    SByte, Short, UShort, UInt, Long, Decimal, Char, Guid,
+    ExternalReferenceByIndex, ExternalReferenceByGuid, ExternalReferenceByString,
 )
-from ba_save import STRING_CACHE_CHARS, load_save  # noqa: E402
+from ba_save import PROP_TAGS, STRING_CACHE_CHARS, SaveFormatError, load_save  # noqa: E402
 
 BIG_ENUM = 2**40 + 3  # needs all eight bytes of the int64
 
@@ -146,6 +149,98 @@ class EveryTagRoundTrip(unittest.TestCase):
             + (4).to_bytes(4, "little") + (5).to_bytes(4, "little") + b"\x05"
             + b"\x05",
         )
+
+
+class RemainingOdinTags(unittest.TestCase):
+    GUID = "00112233-4455-6677-8899-aabbccddeeff"
+
+    def load(self, root):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "tags.hsg")
+            with open(path, "wb") as fh:
+                fh.write(encode(root))
+            return load_save(path).root
+
+    def test_named_collection_and_unnamed_body_primitives(self):
+        cases = [
+            (SByte(-128), -128), (SByte(127), 127),
+            (Short(-32768), -32768), (Short(32767), 32767),
+            (UShort(65535), 65535), (UInt(2**32 - 1), 2**32 - 1),
+            (Long(-2**63), -2**63), (Long(2**63 - 1), 2**63 - 1),
+            (Decimal(12345, 3), 12.345), (Decimal(-98765, 4), -9.8765),
+            # Exercise every coefficient word, including their high bits.
+            (Decimal(2**96 - 1, 28), (2**96 - 1) / 10**28),
+            (Char("界"), "界"), (Char("\ud800"), "\ud800"),
+            (Guid(self.GUID), self.GUID),
+        ]
+        for marker, expected in cases:
+            with self.subTest(tag=marker.tag, expected=expected):
+                got = self.load({"value": marker, "after": 42, "items": [marker, 43],
+                                 "body": {"values": Unnamed(marker, 44)}})
+                self.assertEqual(got, {"value": expected, "after": 42,
+                                       "items": {"$items": [expected, 43]},
+                                       "body": {"$vals": [expected, 44]}})
+                self.assertIsInstance(got["value"], type(expected))
+
+    def test_external_references_are_skipped_with_one_warning(self):
+        refs = [ExternalReferenceByIndex(-1), ExternalReferenceByGuid(self.GUID),
+                ExternalReferenceByString("外部"), ExternalReferenceByString(None)]
+        root = {"items": [*refs, 43], "body": {"values": Unnamed(*refs, 44)}}
+        for n, ref in enumerate(refs):
+            root[f"ref{n}"] = ref
+            root[f"after{n}"] = n
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            got = self.load(root)
+        self.assertEqual(len(caught), 1)
+        self.assertIn("Skipped 12 external references", str(caught[0].message))
+        self.assertEqual(got["items"], {"$items": [None, None, None, None, 43]})
+        self.assertEqual(got["body"], {"$vals": [None, None, None, None, 44]})
+        for n in range(len(refs)):
+            self.assertIsNone(got[f"ref{n}"])
+            self.assertEqual(got[f"after{n}"], n)
+
+    def test_no_external_references_means_no_warning(self):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            self.load({"value": Long(7), "enum": Enum(-1)})
+        self.assertEqual(caught, [])
+
+    def test_wire_bytes_pin_decimal_words_guid_order_and_string_tags(self):
+        key = lambda k: b"\x01\x01\x00\x00\x00" + k.encode("utf-16-le")
+        self.assertEqual(
+            gzip.decompress(encode({"d": Decimal(-12345, 3), "g": Guid(self.GUID),
+                                    "s": ExternalReferenceByString("x"),
+                                    "v": Unnamed(ExternalReferenceByString("x"))})),
+            b"\x02\x2e"
+            + b"\x23" + key("d")
+            + bytes.fromhex("00000380 00000000 39300000 00000000")
+            + b"\x29" + key("g")
+            + bytes.fromhex("33221100 5544 7766 8899 aabbccddeeff")
+            + b"\x32" + key("s") + key("x") + b"\x33" + key("x") + b"\x05",
+        )
+        self.assertEqual(Decimal(0x112233445566778899AABBCC, 2).encode(),
+                         bytes.fromhex("00000200 44332211 ccbbaa99 88776655"))
+        # 1.5m as .NET lays it out in memory (flags, hi, lo, mid), written by hand
+        # rather than through the fixture.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "decimal.hsg")
+            with open(path, "wb") as fh:
+                fh.write(gzip.compress(b".#" + key("d")
+                                       + bytes.fromhex("00000100 00000000 0f000000 00000000") + b""))
+            self.assertEqual(load_save(path).root["d"], 1.5)
+
+    def test_non_value_markers_do_not_become_properties(self):
+        markers = {0x05, 0x06, 0x07, 0x08, 0x2E, 0x2F, 0x30, 0x31}
+        self.assertTrue(PROP_TAGS.isdisjoint(markers))
+        # 0x2e is also the unnamed null (0x2d + 1), which it has always been.
+        self.assertTrue({tag + 1 for tag in PROP_TAGS}.isdisjoint(markers - {0x2E}))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "end.hsg")
+            with open(path, "wb") as fh:
+                fh.write(gzip.compress(b"\x02\x2e\x31\x05"))
+            with self.assertRaisesRegex(SaveFormatError, "body tag 0x31"):
+                load_save(path)
 
 
 class PropertyKeys(unittest.TestCase):

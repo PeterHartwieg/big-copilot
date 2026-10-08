@@ -47,6 +47,123 @@ class _Marker:
         raise NotImplementedError
 
 
+class SByte(_Marker):
+    tag = 0x0F
+
+    def __init__(self, value: int):
+        self.value = value
+
+    def encode(self) -> bytes:
+        return struct.pack("<b", self.value)
+
+
+class Short(_Marker):
+    tag = 0x13
+
+    def __init__(self, value: int):
+        self.value = value
+
+    def encode(self) -> bytes:
+        return struct.pack("<h", self.value)
+
+
+class UShort(_Marker):
+    tag = 0x15
+
+    def __init__(self, value: int):
+        self.value = value
+
+    def encode(self) -> bytes:
+        return struct.pack("<H", self.value)
+
+
+class UInt(_Marker):
+    tag = 0x19
+
+    def __init__(self, value: int):
+        self.value = value
+
+    def encode(self) -> bytes:
+        return struct.pack("<I", self.value)
+
+
+class Long(_Marker):
+    tag = 0x1B
+
+    def __init__(self, value: int):
+        self.value = value
+
+    def encode(self) -> bytes:
+        return struct.pack("<q", self.value)
+
+
+class Decimal(_Marker):
+    """A signed integer coefficient and scale, as Odin writes a decimal: its
+    memory, the words flags, hi, lo, mid (not decimal.GetBits order)."""
+    tag = 0x23
+
+    def __init__(self, coefficient: int, scale: int = 0):
+        self.coefficient, self.scale = coefficient, scale
+
+    def encode(self) -> bytes:
+        coefficient = abs(self.coefficient)
+        flags = self.scale << 16 | (0x80000000 if self.coefficient < 0 else 0)
+        return struct.pack("<IIII", flags, coefficient >> 64, coefficient & 0xFFFFFFFF,
+                           (coefficient >> 32) & 0xFFFFFFFF)
+
+
+class Char(_Marker):
+    tag = 0x25
+
+    def __init__(self, value: str):
+        self.value = value
+
+    def encode(self) -> bytes:
+        return struct.pack("<H", ord(self.value))
+
+
+class Guid(_Marker):
+    tag = 0x29
+
+    def __init__(self, value: str):
+        self.value = value
+
+    def encode(self) -> bytes:
+        import uuid
+        return uuid.UUID(self.value).bytes_le
+
+
+class ExternalReferenceByIndex(_Marker):
+    tag = 0x0B
+
+    def __init__(self, value: int):
+        self.value = value
+
+    def encode(self) -> bytes:
+        return struct.pack("<i", self.value)
+
+
+class ExternalReferenceByGuid(_Marker):
+    tag = 0x0D
+
+    def __init__(self, value: str):
+        self.value = value
+
+    def encode(self) -> bytes:
+        import uuid
+        return uuid.UUID(self.value).bytes_le
+
+
+class ExternalReferenceByString(_Marker):
+    tag = 0x32
+
+    def __init__(self, value: str | None):
+        self.value = value
+
+    def encode(self) -> bytes:
+        return _string(self.value)
+
+
 class Byte(_Marker):
     """0x11: one unsigned byte; ba_save reads it back as an int."""
     tag = 0x11

@@ -25,8 +25,9 @@ import subprocess
 import sys
 import tempfile
 
+import ba_mods
 from ba_save import load_locale, load_save, newest_save
-from ba_dashboard import MIN_BUILD, OWN_PROFIT_DAYS, Names, extract
+from ba_dashboard import MIN_BUILD, OWN_PROFIT_DAYS, Names, extract, load_store_rules
 from check_saves import SAVE_ROOT
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -45,7 +46,9 @@ for(const file of process.argv.slice(3)){
     const r = modelAPI.ownRatio(slug);
     if(!r) continue;
     const model = ((P.openStore.types || {})[slug] || {}).model;
-    r.rows.forEach(x => rows.push({save: P.who, modded: P.modded, type: slug.replace('ba:businesstype_', ''), model, key: x.key,
+    // A Seasons save comes once per window length; each shop is read from the copy
+    // priced over the days it was measured on (seasonal_window()).
+    r.rows.filter(x => !P.window || x.days === P.window).forEach(x => rows.push({save: P.who, modded: P.modded, type: slug.replace('ba:businesstype_', ''), model, key: x.key,
       actual: x.actual, predicted: x.model, ratio: x.ratio, days: x.days}));
   }
 }
@@ -77,6 +80,21 @@ def modded(save, path: str) -> bool:
     return any(not any(h in w for h in HARMLESS_MODS) for w in words)
 
 
+def seasonal_window(open_store: dict, cal: dict, day: int, window: int = OWN_PROFIT_DAYS) -> None:
+    """Open a store prices with today's sales ratios, but a shop's measured days
+    ran under their own days' ratios: on an Alcware Seasons save each product
+    the mod rescales gets the mean of its ratio over the `window` finished days
+    before `day` (_own_shops() measures a shop's last finished days, up to
+    OWN_PROFIT_DAYS), so a season change inside the window does not read as a
+    model error."""
+    products = load_store_rules().get("products") or {}
+    days = range(day - window, day)
+    for name, row in ((open_store or {}).get("market") or {}).items():
+        if name in ba_mods.SEASON_FACTORS:
+            base = (products.get(name) or {}).get("r") or 0
+            row["r"] = round(sum(ba_mods.sales_ratio(base, name, cal, d) for d in days) / len(days), 6)
+
+
 def stats(values: list) -> dict:
     v = sorted(values)
     n = len(v)
@@ -100,7 +118,7 @@ def collect(root: str) -> tuple[int, list]:
     names = Names(load_locale())
     scratch = tempfile.mkdtemp(prefix="profit_model_")
     try:
-        files = []
+        files, saves = [], 0
         for folder in sorted(os.scandir(root), key=lambda e: e.name):
             if not folder.is_dir():
                 continue
@@ -113,12 +131,21 @@ def collect(root: str) -> tuple[int, list]:
                 continue
             payload = extract(save, names, None)
             out = {k: payload.get(k) for k in ("openStore", "businesses", "premises", "meta", "names")}
+            saves += 1
             out["who"] = folder.name[:8]
             out["modded"] = modded(save, path)
-            file = os.path.join(scratch, f"{len(files)}.json")
-            with open(file, "w", encoding="utf-8") as fh:
-                json.dump(out, fh, separators=(",", ":"))
-            files.append(file)
+            # A shop measured over n days is priced at those days' mean ratio:
+            # one copy per window length (_own_shops() needs at least 3 days).
+            cal = ba_mods.seasons(save)
+            for window in range(3, OWN_PROFIT_DAYS + 1) if cal else (None,):
+                copy = out
+                if window:
+                    copy = {**out, "openStore": json.loads(json.dumps(out["openStore"])), "window": window}
+                    seasonal_window(copy["openStore"], cal, save.root.get("Day") or 0, window)
+                file = os.path.join(scratch, f"{len(files)}.json")
+                with open(file, "w", encoding="utf-8") as fh:
+                    json.dump(copy, fh, separators=(",", ":"))
+                files.append(file)
         if not files:
             return 0, []
         runner = os.path.join(scratch, "run.cjs")
@@ -127,7 +154,7 @@ def collect(root: str) -> tuple[int, list]:
         done = subprocess.run(["node", runner, MODEL, *files], capture_output=True, text=True, encoding="utf-8")
         if done.returncode:
             raise SystemExit(done.stderr)
-        return len(files), json.loads(done.stdout)
+        return saves, json.loads(done.stdout)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
 

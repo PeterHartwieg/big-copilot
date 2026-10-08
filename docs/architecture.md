@@ -71,6 +71,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | Key | Produced by | Read by |
 | --- | --- | --- |
 | `meta` | `extract()` inline, with `_city_date()` and `_difficulty()` | `drawMast`, `drawWeekday`, `drawSite`, `sbData`, `drawSupplyStrip`, `drawProductionView`, `drawFooter`, `fvOpenDiff`, `drawDifficulty`; `web/map.js` `refreshCityMaps`; `web/wiki.js` `wikiGuidePrices` |
+| `mods` | `ba_mods.detect()`, added at the end of `build_core()`; only on a save a mod adapter reads (`OPTIONAL_KEYS`), absent on a vanilla save | `drawMast` (through `mdFlag()`) |
 | `kpi` | `build_core()` inline, with `_net_worth()` | `drawMast`, `drawKpis`, `hrReview/firstHire`, `SS_VIEWS.payroll.live` |
 | `daily` | `_daily_series()`, plus the rolling `profit7` added in `extract()` | `drawChart`, `drawKpis`, `drawKpis/hist` |
 | `businesses` | `_business()` per rented non-residential building; each site's `campaigns` and `marketingPlan` from `_marketing()`, with `marketing_plan()` and `marketing_score()` over `MARKETING_TYPES`, `MARKETING_STRENGTH` and `MARKETING_REACH`, planning with the types the site already has a switch for (flipped at any time) and those sold by agencies that are phone contacts, `agencies` naming the ones a new switch needs (`marketingPlan` is None but for a shop or an office; its `on` is None when the site has no switch, no agency is a contact and a change is needed); `_alerts()` reads it for the `promotion` findings | `drawPortfolio`, `drawSitePicker`, `openSite`, `siteKeys`, `drawSite`, `drawWeekday`, `supplyChecklistRows` and its locals `lineOf`, `held`, `label`, `factoryView/held`, `alertSite`, `nameUses`, Supply's views (`drawImportsView`, `drawDeliveriesView`, `drawProductionView`, `drawChangesView`) through their parts `sbShopsPart`, `sbDepotPart`, `sbFactoryPart` and row helpers (`sbObject`, `sbDepotRow`, `sbLineRow`, `sbInputRow`, `sbTabOf`), the Imports card `sbImportCard`, and `drawFactoryStaffing`, the marketing write's `gwMkSites` (with `spMkLine` and `gwMarketing` reading each site's `marketingPlan`); `web/map.js` `mapBusinesses`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn`, `wikiGuidePrices` |
@@ -513,7 +514,8 @@ fixed-cost tile reads the payroll; `_staff_summary()` costs nothing (under 1 ms
 and 3 KB on the largest measured save). `plan` stays core because Today reads its
 recipes and item names (`factoryView`, `sbDeps`, the supply strip and finding
 pills), and every page reads `itemName`. It costs about 4 ms and 65 KB on the
-largest measured save. Map asks for no section.
+largest measured save. `mods`, on a modded save only, stays core because the masthead
+draws it on the first frame; it is a few small fields. Map asks for no section.
 
 The extraction's staff list, all hour grids, statements, buildings, recipes, stations,
 market and supply objects stay on `build.shared` for deferred producers. The producers
@@ -1580,7 +1582,7 @@ Nothing between `extract()` and the board filters keys: `render()`, the watch se
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
-| `PAYLOAD_KEYS`, and the `core = _wire_msgs({` at the end of `def build_core(` or a section's producer in `SECTIONS` (which generates `OD_SECTIONS` in both HTML targets) | `"key": _producer(...)`. It must be JSON-serialisable, with any set ordered through `_in_order()`. Core only with a documented reason: the warnings need it, or the cheap map layers | JSON-serialisability: `tests/test_supply_facts.py`, "test_the_payload_carries_the_facts_and_both_passes_of_findings"; the key's place: `tests/test_sections.py` |
+| `PAYLOAD_KEYS`, and the `core = _wire_msgs({` at the end of `def build_core(` or a section's producer in `SECTIONS` (which generates `OD_SECTIONS` in both HTML targets) | `"key": _producer(...)`. It must be JSON-serialisable, with any set ordered through `_in_order()`. Core only with a documented reason: the warnings need it, or the cheap map layers. A key only some saves carry (`mods`) also goes in `OPTIONAL_KEYS`, and is set on `core` only when it has something to say | JSON-serialisability: `tests/test_supply_facts.py`, "test_the_payload_carries_the_facts_and_both_passes_of_findings"; the key's place: `tests/test_sections.py` |
 | The payload table in [The payload contract](#the-payload-contract) | A row that follows the reader convention | `tests/test_doc_registries.py`, "test_the_payload_table_has_a_row_for_every_key_extract_returns" (the key column only) |
 | The reader, `D.<key>`, in the board script, `web/map.js` or `web/wiki.js` | A reader that survives a missing key (fall back to an empty value), because many Node tests build a partial `D`. A section's reader asks for it with `odNeed()` and never takes a missing key for an empty one | indirect; `tests/on_demand.test.cjs` |
 | `class History:` and the `history.ledger(` / `history.write()` lines in `extract()` | *Only if* the value has to persist between saves | none |
@@ -1645,10 +1647,10 @@ because a deploy from a checkout that lacks them would remove them from the site
 files from `https://cdn.jsdelivr.net/pyodide/v<version>/full/` into a new version folder,
 change `PYODIDE_VERSION` in `web/worker.js`, and delete the old folder.
 
-The eight board dependencies are listed in `PY_CODE` and `PY_DATA` in
+The nine board dependencies are listed in `PY_CODE` and `PY_DATA` in
 `build_web.py` and checked against `CODE_FILES`/`DATA_FILES` in the worker:
 
-- `ba_save.py`, `ba_facts.py` and `ba_dashboard.py` — required code.
+- `ba_save.py`, `ba_facts.py`, `ba_mods.py` and `ba_dashboard.py` — required code.
 - `gametext.json`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json`
   and `ba_store_rules.json` — game data tables.
 
@@ -1676,8 +1678,8 @@ resource failed. Small inline landing recovery styles keep the reload control
 readable without the board stylesheet. A registered, styled board can still
 open its no-save wiki when only Python startup failed.
 
-The worker validates the schema, all eight descriptors and its own path before
-boot. All eight files download concurrently with runtime startup. Successful
+The worker validates the schema, every descriptor in the manifest and its own path before
+boot. All the files download concurrently with runtime startup. Successful
 bodies are checked with SHA-256 before **any** files are installed in the virtual
 filesystem or Python is imported. A missing pinned path, an HTTP failure or a
 bad digest is a hard release failure, including for data tables. The reader
@@ -1810,6 +1812,14 @@ unchanged bundled baseline. The live schema, pairing and portable file format ar
 in [Game link API](game-link-api.md#building-facts-schema-2). Plain saves can resolve
 Alcware Retail Expansion RCR3/4/5 renovation records from `modData`; no mod binary
 is loaded or executed. Unsupported renovation formats suppress affected estimates.
+
+`ba_mods.py` reads the other mods' data the same way, from the save alone: which
+adapters a save needs (`detect()`, the `mods` payload key and the masthead's modded
+flag) and the Alcware Seasons calendar, whose per-product factors, copied from the
+mod's DLL with its version, rescale the sales ratio Open a store uses
+(`_store_market()`) and `check_profit_model.py` measures against. Each adapter
+switches on only when the save carries that mod's data; `tools/payload_diff.py` on
+vanilla saves shows no difference.
 
 Core extraction and deferred sections share that Save and table. Premises optionally
 carry `factsSource`, `layoutKnown`, `factsUnavailable`, and `marketingRules` (reach
