@@ -3952,12 +3952,15 @@ def _daily_series(save: Save, summaries: list) -> list:
                 "theft": money(theft),
                 "loans": money(-s.get("totalLoanExpenses", 0)),
                 # The company's own costs, which no site's statement carries:
-                # with the loans they are the gap between `business` (the
-                # Portfolio total) and `profit`. The game books residential
-                # expenses as a positive number and the rest as negative ones.
+                # with the loans, less the real estate and salary income below,
+                # they are the gap between `business` (the Portfolio total) and
+                # `profit`. The game books residential expenses as a positive
+                # number and the rest as negative ones; both incomes are positive.
                 "insurance": money(-s.get("totalHealthInsuranceExpenses", 0)),
                 "homes": money(s.get("totalResidentialExpenses", 0)),
                 "parking": money(-s.get("parkingFees", 0)),
+                "realEstate": money(s.get("totalRealEstate", 0)),
+                "salary": money(s.get("salaryIncome", 0)),
             }
         )
     return out

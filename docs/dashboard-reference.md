@@ -133,7 +133,8 @@ the map.
     beside yesterday's takings. Every column sorts. Click a chain to open it, then a
     site to open its detail. Under the sites' total, *Company costs outside sites* (loan
     payments, health insurance, homes, parking; itemised on hover) leads to *Company
-    profit*, the figure on the Overview's Profit tile.
+    profit*, the figure on the Overview's Profit tile. Real estate income and salary
+    income, when there is any, get their own rows before *Company profit*.
   - *Business detail*: nothing until a site is opened from the portfolio or a finding;
     then that site alone, with its profit history, cost breakdown, crew and shelves, and
     an hour-by-hour grid comparing historical customers with capacity from the
