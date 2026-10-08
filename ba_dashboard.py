@@ -2113,8 +2113,8 @@ def _rival_building_type(reg: dict, table: dict) -> str | None:
     kind = reg.get("businessTypeName")
     if kind in OFFICE_TYPES:
         return "office"
-    if kind == "ba:businesstype_cinema":
-        return "cinema"
+    if kind in VENUE_TYPES:
+        return VENUE_TYPES[kind]
     return "retail" if kind in RETAIL_TYPES else None
 
 

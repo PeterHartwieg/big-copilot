@@ -80,6 +80,8 @@ test('behind shows the shortfall and leader name in both views', () => {
 test('a tie at the top is unsafe first place and displays a tied Overview chip', () => {
   const b = board(rivalry({tied: 1, first: false, gap: 0, streak: 0}));
   assert.match(b.goals(), enRe('co.rv.rank.tied', {n: 1}));
+  assert.match(b.goals(), enRe('co.rv.level.lab'));
+  assert.doesNotMatch(b.goals(), enRe('co.rv.lead.lab'));
   assert.match(b.kpis(), enRe('today.kpi.rv.tied'));
   assert.match(b.kpis(), enRe('today.kpi.rv.tied.tip', {n: 1}));
 });
@@ -110,7 +112,7 @@ test('an unnamed rival uses the stable numbered company label', () => {
   const b = board(rivalry({rival: {number: 7, name: null}}));
   const name = en('co.rv.rival.n', {n: 7});
   assert.match(b.goals(), enRe('co.rv.lead.sub', {rival: name, w: 10000}));
-  assert.match(b.kpis(), enRe('today.kpi.rv.lead.tip', {rival: name, w: 2000}));
+  assert.match(b.kpis(), enRe('today.kpi.rv.lead.tip2', {rival: name, w: 2000}));
 });
 
 test('absent, null and hidden rivalry leave four Overview tiles and no Milestones block', () => {

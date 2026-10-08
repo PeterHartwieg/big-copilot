@@ -16870,7 +16870,7 @@ function rlKpiTile(r){
   const chip = rlTiedFirst(r)
     ? chipHtml("warn", tt("today.kpi.rv.tied", "tied"), tt("today.kpi.rv.tied.tip",
         {one: "Level with {n} rival on weekly income: the game may list either of you first", other: "Level with {n} rivals on weekly income: the game may list any of you first"}, {n: r.tied}))
-    : r.first ? chipHtml("ok", `▲ ${compact(r.gap)}`, tt("today.kpi.rv.lead.tip", "{w:$} more weekly income than {rival}, in second place", {w: r.gap, rival: name}))
+    : r.first ? chipHtml("ok", `▲ ${compact(r.gap)}`, tt("today.kpi.rv.lead.tip2", "{rival} is second, {w:$} behind you in weekly income", {w: r.gap, rival: name}))
     : chipHtml("bad", `▼ ${compact(-r.gap)}`, tt("today.kpi.rv.behind.tip", "{rival} leads with {w:$} more weekly income", {w: -r.gap, rival: name}));
   return {id: "rivals", l: tt("today.kpi.rv", "Rivals leaderboard"), v: tt("today.kpi.rv.rank", "#{n}", {n: r.rank}), chip,
     sub: !r.first ? tt("today.kpi.rv.of", "of {n}", {n: r.of})

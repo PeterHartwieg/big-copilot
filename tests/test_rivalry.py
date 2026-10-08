@@ -41,7 +41,7 @@ def site(number, incomes, rival="a", **extra):
 
 def record(first=True, gap=100):
     return {"rank": 1 if first else 2, "tied": 0, "first": first,
-            "you": 700, "top": 700 - gap, "gap": gap, "src": "live"}
+            "gap": gap, "src": "live"}
 
 
 class WeeklyIncomeTests(unittest.TestCase):
@@ -86,6 +86,12 @@ class WeeklyIncomeTests(unittest.TestCase):
         self.assertEqual(bd._rival_building_type(regs[0], {}), "office")
         self.assertEqual(bd._rival_building_type(regs[1], {}), "retail")
         self.assertIsNone(bd._rival_building_type(regs[2], {}))
+        # A venue the table cannot place keeps its own type, so a missing
+        # dailyIncomes list on it does not zero the rival.
+        for kind, venue in (("ba:businesstype_cinema", "cinema"), ("ba:businesstype_theater", "theater")):
+            self.assertEqual(bd._rival_building_type(site(4, None, businessTypeName=kind), {}), venue)
+            self.assertEqual(self.incomes([site(1, [20], businessTypeName=office),
+                                           site(4, None, businessTypeName=kind)], {})["a"], 20)
 
     def test_table_type_takes_precedence_over_business_type(self):
         reg = site(1, [9999], businessTypeName=sorted(bd.RETAIL_TYPES)[0])

@@ -2275,7 +2275,7 @@ Three records live side by side under each character:
 | --- | --- | --- |
 | `days` | a demand snapshot per game day | the market trend, compared against roughly a week back |
 | `ledger` | cash, net worth and that day's profit | net worth week on week, and cash against profit |
-| `rivalry` | your rank on the Rivals leaderboard, your weekly income, the best rival's and the gap | the days in a row in first place |
+| `rivalry` | your rank on the Rivals leaderboard, whether you were first or level at the top, and the gap to the best rival | the days in a row in first place |
 
 All three are keyed by the game day, so rebuilding twice on the same day updates the entry
 rather than adding a second one. The watcher rebuilds on every new save, so this fills
@@ -2316,7 +2316,7 @@ Businesses › Milestones. Preferences › Rivals leaderboard hides both.
   you: the game's sort can then list either of you first, so being level at the top is not
   counted as first place.
 - **The gap** is your lead over the best rival when you are first, otherwise how far the
-  leader is ahead of you. The rival is named where the save gives a name; otherwise it is
+  leader is ahead of you; level at the top reads as such, not as a lead. The rival is named where the save gives a name; otherwise it is
   "Rival company" and its number, as on the City map.
 - **Days in first place** counts back from today over the board's own record (the
   `rivalry` record under [What the save does not remember](#what-the-save-does-not-remember)).
@@ -2325,7 +2325,8 @@ Businesses › Milestones. Preferences › Rivals leaderboard hides both.
   the save makes the count "at least" (≥) that many days. A day is also left out when a
   rival's figure for it may not be real: opening a rival in the game's Rivals app with less
   than a week of history makes up the missing days with random figures, and the board
-  does not trust those.
+  does not trust those. A rival with no record yet was not in the city then; a day no
+  rival has a figure for is never filled in.
 
 The game writes its own copy of your weekly income for the leaderboard chart before some
 mods have booked the day, so the board always recomputes yours from the statements.
