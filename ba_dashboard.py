@@ -17701,7 +17701,8 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
     """What a 100% outfitted store of a type holds, as shopping-list lines.
 
     Each line is {"item", "qty", "group", "why"}: `group` is "req" (the
-    type's requirements, one each), "cap" (the more of a capacity station it
+    type's requirements, one each, and the scale a self-service shop showing
+    produce needs), "cap" (the more of a capacity station it
     takes for its customers an hour to cover the building's `cap`), "dem" (one
     item per customer demand the type makes) or "shelf" (the displays), and
     `why` what the line answers: a requirement's name, a demand, or the
@@ -17852,6 +17853,13 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
         got[1].append(p)
     for item, (qty, held_products) in shelves.items():
         add(item, qty, "shelf", held_products)
+    # A self-service customer weighs fruit and vegetables at a scale and leaves
+    # them on the shelf without one (Item.requiresWeighing), so a supermarket
+    # showing produce needs a scale, on the cabinet it stands on.
+    if t.get("ss") and not has(lambda n: "scale" in (facts(n).get("x") or ())) and any(
+            (products.get(p) or {}).get("wg")
+            for line in lines if line["group"] == "shelf" and isinstance(line["why"], list) for p in line["why"]):
+        add(cheapest([n for n in furniture if "scale" in (facts(n).get("x") or ())], False), 1, "req", "scale")
     return lines
 
 
@@ -18016,6 +18024,12 @@ def required_placed(placed: collections.Counter, type_slug: str, rules: dict, pr
         # A piece the type cannot use is no help, though the game's own opening
         # check counts it (works_in()).
         out.append([req.get("n") or "", need, sum(placed[n] for n in names if n in placed and works_in(furniture.get(n) or {}, kind))])
+    # Produce a self-service shop shows or offers sells only beside a scale
+    # (outfit_lines()); a fruit and vegetable store has it among its own.
+    produce = {p for p, row in (rules.get("products") or {}).items() if row.get("wg")}
+    if t.get("ss") and not any(row[0] == "scale" for row in out) and (
+            holding(sells & produce) or produce & sells & (offered | on_display)):
+        out.append(["scale", 1, sum(n for name, n in placed.items() if "scale" in ((furniture.get(name) or {}).get("x") or ()))])
     return out
 
 
