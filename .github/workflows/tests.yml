@@ -62,11 +62,19 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Cache Playwright browsers
+        id: playwright-cache
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-shell-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
-      - run: npx playwright install --with-deps --only-shell chromium
+      - run: npx playwright install --only-shell chromium
+      # apt only on a cache miss: with --with-deps every lane spent 13-20 s in
+      # apt-get and one stalled 16 min on the Ubuntu mirror (#336). The runner
+      # image already carries what the headless shell needs; a missing library
+      # fails the browser launch loudly rather than passing quietly.
+      - name: Install Playwright OS dependencies on cache miss
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install-deps chromium
       # The site under web/ is not committed; several suites serve or read it.
       # npm test assembles first and includes the community suites.
       - name: Test Node shard
