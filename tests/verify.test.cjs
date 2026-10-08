@@ -6,10 +6,148 @@ const path = require('node:path');
 const {spawnSync} = require('node:child_process');
 const runner = import('../tools/verify.mjs');
 
+test('LPT assigns every suite exactly once, spreads heavy files and is deterministic', async () => {
+  const {assignShards} = await runner;
+  const files = ['a', 'b', 'c', 'd', 'e', 'new'];
+  const weights = {a: 100, b: 90, c: 80, d: 2, e: 1, deleted: 10000};
+  const lanes = assignShards(files, weights, 3);
+  assert.deepEqual(lanes.flat().sort(),files.slice().sort());
+  assert.equal(new Set(lanes.flat()).size,files.length);
+  assert.deepEqual(assignShards(files.slice().reverse(),weights,3),lanes);
+  for (const heavy of ['a','b','c']) assert.equal(lanes.filter(lane => lane.some(file => file === heavy)).length,1);
+  assert.ok(lanes.every(lane => lane.filter(file => ['a','b','c'].includes(file)).length === 1));
+  // The unknown suite gets the median (80), and stale entries are ignored.
+  assert.deepEqual(lanes,assignShards(files,{...weights,new:80},3));
+  assert.deepEqual(lanes,assignShards(files,{a:100,b:90,c:80,d:2,e:1},3));
+  assert.deepEqual(assignShards(['d','c','b','a'],{},2),[['a','c'],['b','d']]);
+  assert.deepEqual(assignShards(['a','b','new'],{a:2,b:4},2),[['b'],['a','new']]);
+});
+
+test('Node lanes are balanced on the schedule node --test really runs', async () => {
+  const {assignShards, laneSeconds} = await runner;
+  // node --test sorts a lane's files by name and starts each on the first free
+  // of two workers: z (100 s) waits behind a and b, then runs on worker one.
+  const w = {z:100, a:30, b:30, c:30, d:30, e:30, f:30, g:30, h:30};
+  const weight = file => w[file];
+  assert.equal(laneSeconds(['z','a','b'], weight, 2), 130);
+  assert.equal(laneSeconds(['z','a','b'], weight, 1), 160);
+  const files = Object.keys(w);
+  // Balancing plain sums gives z two lighter neighbours that start first:
+  // lanes of 130 s and 90 s. Balancing the schedule gives 100 s and 120 s.
+  const lanes = assignShards(files, w, 2, 2);
+  assert.deepEqual(lanes, [['g','z'], ['a','b','c','d','e','f','h']]);
+  assert.deepEqual(lanes.map(lane => laneSeconds(lane, weight, 2)), [100, 120]);
+  assert.ok(Math.max(...assignShards(files, w, 2, 1).map(lane => laneSeconds(lane, weight, 2))) > 120);
+  assert.throws(() => assignShards(files, w, 2, 0), /invalid shard slots/);
+  assert.throws(() => assignShards(files, w, 0, 2), /invalid shard total/);
+  // Two equal files on two workers cost one file's time on either lane; they
+  // still spread instead of both landing on the first.
+  assert.deepEqual(assignShards(['a','b'], {a:5, b:5}, 2, 2), [['a'], ['b']]);
+});
+
+test('a Node lane is chosen with the real worker count, a Python lane with one', async t => {
+  const {verify} = await runner; const root = fixture(t);
+  const w = {z:100, a:30, b:30, c:30, d:30, e:30, f:30, g:30, h:30};
+  for (const name of Object.keys(w)) fs.writeFileSync(path.join(root,'tests',`${name}.test.cjs`),'');
+  const node = Object.fromEntries(Object.entries(w).map(([name, seconds]) => [`tests/${name}.test.cjs`, seconds]));
+  fs.writeFileSync(path.join(root,'tests','shard-weights.json'),JSON.stringify({node, python:w}));
+  const calls=[];
+  assert.equal(verify(['node','--shard=1/2'],{root,spawn:fakeSpawn(calls),log:()=>{}}),0);
+  // Two workers: z gets one light neighbour (100 s), not two (130 s).
+  assert.deepEqual(calls[1].args.filter(arg => arg.endsWith('.test.cjs')),['tests/g.test.cjs','tests/z.test.cjs']);
+  const python=[];
+  const spawn=(command,args,options)=> args[0] === 'tools/python_shard.py' && args[1] === '--list'
+    ? {status:0,stdout:JSON.stringify(Object.keys(w))} : fakeSpawn(python)(command,args,options);
+  assert.equal(verify(['python','--shard=1/2'],{root,spawn,log:()=>{}}),0);
+  // One module at a time: plain sums.
+  assert.deepEqual(python[1].args,['tools/python_shard.py','e','g','z']);
+});
+
+test('Python lanes cover discovered modules and forward only the selected module names', async t => {
+  const {verify,assignShards} = await runner;
+  const root = fixture(t);
+  const modules = ['test_a','test_b','test_c','nested.test_d'];
+  const weights = {test_a:20,test_b:10,test_c:1};
+  fs.writeFileSync(path.join(root,'tests','shard-weights.json'),JSON.stringify({node:{},python:weights}));
+  const executed=[];
+  for (let lane=1;lane<=2;lane++) {
+    const calls=[];
+    const spawn=(command,args,options)=> args[0] === 'tools/python_shard.py' && args[1] === '--list'
+      ? {status:0,stdout:JSON.stringify(modules)} : fakeSpawn(calls)(command,args,options);
+    assert.equal(verify(['python',`--shard=${lane}/2`],{root,spawn,log:()=>{}}),0);
+    assert.deepEqual(calls[0].args,['build_web.py','--assemble']);
+    assert.deepEqual(calls[1].args,['tools/python_shard.py',...assignShards(modules,weights,2)[lane-1]]);
+    executed.push(...calls[1].args.slice(1));
+  }
+  assert.deepEqual(executed.sort(),modules.sort());
+  for(const args of [['python','--shard=0/2'],['python','--shard=3/2'],['python','--shard=1/2','test_a']]) {
+    assert.throws(()=>verify(args,{root,spawn:fakeSpawn([]),log:()=>{}}),/shard/);
+  }
+  assert.throws(()=>verify(['python','--shard=1/2'],{root,log:()=>{},spawn:(command,args)=>
+    args[0] === '-c' ? {status:0,stdout:'python'} : args[0] === 'build_web.py' ? {status:0}
+      : {status:1,stderr:'import failure'}}),/Python discovery failed.*import failure/);
+  const failed=[];
+  assert.equal(verify(['python','--shard=1/2'],{root,spawn:fakeSpawn(failed,1),log:()=>{}}),7);
+  assert.equal(failed.length,1,'failed assembly stops before discovery');
+  assert.throws(()=>verify(['python','--shard=2/2'],{root,log:()=>{},spawn:(command,args)=>
+    args[0] === '-c' ? {status:0,stdout:'python'} : args[1] === '--list' ? {status:0,stdout:'["test_a"]'}
+      : {status:0}}),/shard is empty/);
+});
+
+test('Python runner preserves discovery names/sys.path and rejects unknown or empty selections', async t => {
+  const {selectPython} = await runner;
+  const python = selectPython();
+  const root = fixture(t);
+  fs.mkdirSync(path.join(root,'tools'));
+  fs.copyFileSync(path.join(__dirname,'../tools/python_shard.py'),path.join(root,'tools/python_shard.py'));
+  fs.writeFileSync(path.join(root,'root_helper.py'),'VALUE = 42\n');
+  fs.writeFileSync(path.join(root,'tests','helper.py'),'VALUE = 7\n');
+  for (const name of ['a','b','c']) fs.writeFileSync(path.join(root,'tests',`test_${name}.py`),
+    `import unittest, root_helper, helper\nclass Sample(unittest.TestCase):\n def test_value(self):\n  self.assertEqual(root_helper.VALUE,42)\n  self.assertEqual(helper.VALUE,7)\n`);
+  const run = args=>spawnSync(python,args,{cwd:root,encoding:'utf8'});
+  assert.deepEqual(JSON.parse(run(['tools/python_shard.py','--list']).stdout),['test_a','test_b','test_c']);
+  const selected=run(['tools/python_shard.py','test_a','test_c']);
+  assert.equal(selected.status,0,selected.stderr);
+  assert.match(selected.stderr,/Ran 2 tests/);
+  // Each selected module reports its seconds for tools/shard_weights.mjs.
+  assert.deepEqual([...selected.stderr.matchAll(/^shard-weight python (\w+) \d+\.\d\r?$/gm)].map(m => m[1]),['test_a','test_c']);
+  const full=run(['-m','unittest','discover','-s','tests']);
+  assert.equal(full.status,0,full.stderr);
+  assert.match(full.stderr,/Ran 3 tests/);
+  for(const modules of [[],['missing'],['tests.test_a']]) {
+    const result=run(['tools/python_shard.py',...modules]);
+    assert.equal(result.status,1);
+    assert.match(result.stderr,/Invalid Python shard/);
+  }
+  fs.writeFileSync(path.join(root,'tests','test_broken.py'),'raise RuntimeError("import failed")\n');
+  assert.equal(run(['tools/python_shard.py','--list']).status,1);
+  fs.rmSync(path.join(root,'tests','test_broken.py'));
+  fs.writeFileSync(path.join(root,'tests','test_failure.py'),'import unittest\nclass Failure(unittest.TestCase):\n def test_fail(self):\n  self.fail("intentional")\n');
+  assert.equal(run(['tools/python_shard.py','test_failure']).status,1);
+});
+
+test('weights are read back from lane logs, last value per suite, sorted', async () => {
+  const {parseWeights} = await import('../tools/shard_weights.mjs');
+  const logs = ['✔ some test (12ms)', 'shard-weight node tests/z.test.cjs 4.5', 'shard-weight python test_b 2.0',
+    'shard-weight node tests/a.test.cjs 120.25', 'noise shard-weight node tests/x.test.cjs 9', 'shard-weight python test_a 0.4  '].join('\n');
+  assert.deepEqual(parseWeights(logs), {node: {'tests/a.test.cjs': 120.25, 'tests/z.test.cjs': 4.5}, python: {test_a: 0.4, test_b: 2}});
+  assert.deepEqual(Object.keys(parseWeights(logs).node), ['tests/a.test.cjs', 'tests/z.test.cjs']);
+});
+
+test('committed weights name only existing suites', async () => {
+  const {nodeFiles, shardWeights, ROOT} = await runner;
+  const weights = shardWeights(ROOT);
+  const files = new Set(nodeFiles(ROOT));
+  for (const file of Object.keys(weights.node)) assert.ok(files.has(file), `stale Node weight: ${file}`);
+  for (const module of Object.keys(weights.python)) assert.ok(fs.existsSync(path.join(ROOT, 'tests', `${module}.py`)), `stale Python weight: ${module}`);
+  for (const value of [...Object.values(weights.node), ...Object.values(weights.python)]) assert.ok(Number.isFinite(value) && value > 0);
+});
+
 function fixture(t) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'verify with spaces ')));
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));
   fs.mkdirSync(path.join(root, 'tests'));
+  fs.writeFileSync(path.join(root, 'tests', 'shard-weights.json'), JSON.stringify({node: {}, python: {}}));
   for (const name of ['z.test.cjs', 'a.test.cjs', '_helper.cjs']) fs.writeFileSync(path.join(root, 'tests', name), '');
   fs.mkdirSync(path.join(root, 'node_modules', 'wrangler', 'bin'), {recursive: true});
   fs.writeFileSync(path.join(root, 'node_modules', 'wrangler', 'package.json'), JSON.stringify({bin: {wrangler: './bin/wrangler.js'}}));
@@ -45,7 +183,7 @@ test('full gate order, bounded portable enumeration and child environment', asyn
   assert.equal(verify([], {root, env: {PLAYWRIGHT_CHANNEL: 'chrome'}, spawn: fakeSpawn(calls), log: () => {}}), 0);
   assert.deepEqual(calls.map(c => c.args), [
     ['build_web.py', '--assemble'], ['-m', 'unittest', 'discover', '-s', 'tests'],
-    ['--test', '--test-concurrency=2', path.join('tests','a.test.cjs'), path.join('tests','z.test.cjs')],
+    ['--test', '--test-concurrency=2', 'tests/a.test.cjs', 'tests/z.test.cjs'],
     [path.join(root,'tools','optimize_web.mjs')],
     [path.join(root,'tools','optimize_web.mjs'), '--check'],
     ['--test', '--test-concurrency=2', ...OPTIMIZED_NODE_SUITES],
@@ -81,10 +219,10 @@ test('each failure stops later stages; spawn errors and signals fail safely', as
 test('focused stages assemble only when needed and forward unittest arguments', async t => {
   const {verify} = await runner; const root = fixture(t);
   for (const [args, expected] of [
-    [['node','tests/z.test.cjs'], [['build_web.py','--assemble'], ['--test','--test-concurrency=2',path.join('tests','z.test.cjs')]]],
+    [['node','tests/z.test.cjs'], [['build_web.py','--assemble'], ['--test','--test-concurrency=2','tests/z.test.cjs']]],
     [['python','tests.test_premises'], [['build_web.py','--assemble'],['-m','unittest','tests.test_premises']]],
     [['check'], [['build_web.py','--check']]],
-    [['node','tests/*.test.cjs','tests/z.test.cjs'], [['build_web.py','--assemble'], ['--test','--test-concurrency=2',path.join('tests','a.test.cjs'),path.join('tests','z.test.cjs')]]],
+    [['node','tests/*.test.cjs','tests/z.test.cjs'], [['build_web.py','--assemble'], ['--test','--test-concurrency=2','tests/a.test.cjs','tests/z.test.cjs']]],
   ]) {
     const calls=[]; assert.equal(verify(args,{root,spawn:fakeSpawn(calls),log:()=>{}}),0);
     assert.deepEqual(calls.map(c=>c.args),expected);
@@ -104,17 +242,21 @@ test('CLI reports invalid override with nonzero exit', () => {
   assert.equal(result.status,1); assert.match(result.stderr,/PYTHON override is invalid/);
 });
 
-test('Node shards preserve assembly, concurrency and the complete suite list', async t => {
-  const {verify} = await runner; const root = fixture(t); const calls = [];
-  assert.equal(verify(['node','--shard=2/4'],{root,spawn:fakeSpawn(calls),log:()=>{}}),0);
+test('Node shards preserve assembly and concurrency, passing only chosen files', async t => {
+  const {verify, SHARD_REPORTERS} = await runner; const root = fixture(t); const calls = [];
+  assert.equal(verify(['node','--shard=2/2'],{root,spawn:fakeSpawn(calls),log:()=>{}}),0);
   assert.deepEqual(calls.map(c=>c.args),[
     ['build_web.py','--assemble'],
-    ['--test','--test-concurrency=2','--test-shard=2/4',path.join('tests','a.test.cjs'),path.join('tests','z.test.cjs')],
+    ['--test','--test-concurrency=2',...SHARD_REPORTERS,'tests/z.test.cjs'],
   ]);
+  // The spec output stays, and each lane also reports its files' seconds.
+  assert.deepEqual(SHARD_REPORTERS.filter(a => a.startsWith('--test-reporter=')).map(a => a.endsWith('/tools/shard_times.mjs') ? 'times' : a),
+    ['--test-reporter=spec', 'times']);
   for (const args of [
     ['node','--shard=0/4'], ['node','--shard=5/4'], ['node','--shard=1/0'],
     ['node','--shard=1.5/4'], ['node','--shard=1/4oops'], ['node','--shard'],
     ['node','--shard=1/9007199254740992'],
+    ['node','--shard=3/4'],
     ['node','--shard=1/4','tests/a.test.cjs'], ['node','--shard=1/4','--shard=2/4'],
     ['all','--shard=1/4'], ['optimized','--shard=1/4'],
   ]) {
@@ -123,26 +265,29 @@ test('Node shards preserve assembly, concurrency and the complete suite list', a
     assert.equal(rejected.length,0,JSON.stringify(args));
   }
   const failed=[];
-  assert.equal(verify(['node','--shard=2/4'],{root,spawn:fakeSpawn(failed,2),log:()=>{}}),7);
+  assert.equal(verify(['node','--shard=2/2'],{root,spawn:fakeSpawn(failed,2),log:()=>{}}),7);
 });
 
 test('the CI matrix shards execute every discovered file once and propagate a real failure', t => {
   const root = fixture(t);
   fs.mkdirSync(path.join(root,'tools'));
-  fs.copyFileSync(path.join(__dirname,'../tools/verify.mjs'),path.join(root,'tools','verify.mjs'));
+  for (const file of ['verify.mjs','shard_times.mjs']) fs.copyFileSync(path.join(__dirname,'../tools',file),path.join(root,'tools',file));
   fs.writeFileSync(path.join(root,'build_web.py'),'# Synthetic successful assembly.\n');
   const names = ['a','b','c','d','e','f','g','h','z'];
   for (const name of names) fs.writeFileSync(path.join(root,'tests',`${name}.test.cjs`),
     `require('node:test')('${name}', () => {\n` +
     `require('node:fs').appendFileSync('executed.txt', '${name}\\n');\n` +
     // One real failure must fail exactly the shard that contains this file.
-    (name === 'c' ? `throw new Error('intentional shard failure');\n` : '') + '});\n');
+    (name === 'c' ? `throw new Error('intentional shard failure');\n` : '') + '});\n' +
+    // A test a helper defines is timed under the file that runs it.
+    (name === 'h' ? `require('./_defines.cjs')();\n` : ''));
+  fs.writeFileSync(path.join(root,'tests','_defines.cjs'),`module.exports = () => require('node:test')('from a helper', () => {});\n`);
   const workflow = fs.readFileSync(path.join(__dirname,'../.github/workflows/tests.yml'),'utf8').replace(/\r\n/g, '\n');
   const matrix = /^        suite: \[([^\]\n]+)\]/m.exec(workflow);
   assert.ok(matrix, 'the workflow has a static suite matrix');
   const shards = [...matrix[1].matchAll(/'(\d+\/\d+)'/g)].map(match=>match[1]);
-  assert.deepEqual(shards,['1/8','2/8','3/8','4/8','5/8','6/8','7/8','8/8']);
-  const statuses=[];
+  assert.deepEqual(shards,['1/6','2/6','3/6','4/6','5/6','6/6']);
+  const statuses=[], timed=[];
   // Exercise a fresh CLI invocation; Node suppresses --test inside a test child.
   const env={...process.env};
   delete env.NODE_TEST_CONTEXT;
@@ -151,8 +296,11 @@ test('the CI matrix shards execute every discovered file once and propagate a re
     assert.ifError(result.error);
     assert.ok([0,1].includes(result.status),result.stderr);
     statuses.push(result.status);
+    timed.push(...[...result.stdout.matchAll(/^shard-weight node (\S+) \d+\.\d\r?$/gm)].map(m => m[1]));
   }
-  assert.deepEqual(statuses.slice().sort(),[0,0,0,0,0,0,0,1]);
+  assert.deepEqual(statuses.slice().sort(),[0,0,0,0,0,1]);
+  // Every file reports its seconds once, one with a failing test included.
+  assert.deepEqual(timed.sort(),names.map(name => `tests/${name}.test.cjs`));
   assert.deepEqual(fs.readFileSync(path.join(root,'executed.txt'),'utf8').trim().split(/\r?\n/).sort(),names);
 });
 
@@ -177,7 +325,7 @@ test('two CI runs fit within eighteen runner slots, including the aggregate chec
   const jobs = [...source.matchAll(/^  ([\w-]+):\n([\s\S]*?)(?=^  [\w-]+:\n|(?![\s\S]))/gm)].map(([,id,body]) => {
     assert.match(body, /^    runs-on:/m, `${id}: reusable workflows need their own runner accounting`);
     const block = /^      matrix:\n((?: {8,}.+\n)+)/m.exec(body);
-    const matrix = block && /^        suite: \[([^\]\n]+)\]\n$/.exec(block[1]);
+    const matrix = block && /^        (?:suite|shard): \[([^\]\n]+)\]\n$/.exec(block[1]);
     assert.ok(!/^      matrix:/m.test(body) || matrix, `${id}: uncounted matrix`);
     const needs = /^    needs: (.+)$/m.exec(body)?.[1];
     return {id, body, slots: matrix ? matrix[1].split(',').length : 1,
@@ -196,12 +344,22 @@ test('two CI runs fit within eighteen runner slots, including the aggregate chec
   assert.ok(peak < 10, `${peak} concurrent runners per run would use ${peak * 2} for two runs`);
   const python = jobs.find(j => j.id === 'python').body;
   const freshness = jobs.find(j => j.id === 'web-fresh').body;
-  assert.match(python, /freshness: \$\{\{ steps\.freshness\.outcome \}\}/);
-  for(const stage of ['verify:assemble', 'verify:check', 'test:python']) assert.ok(python.includes(`npm run ${stage}`), stage);
-  assert.match(freshness, /needs\.python\.outputs\.freshness/);
+  assert.match(python, /shard: \['1\/2', '2\/2'\]/);
+  assert.match(python, /npm run test:python -- --shard=\$\{\{ matrix.shard \}\}/);
+  assert.doesNotMatch(python, /freshness|verify:check/);
+  for(const stage of ['verify:assemble', 'verify:check']) assert.ok(freshness.includes(`npm run ${stage}`), stage);
+  assert.deepEqual(jobs.find(j => j.id === 'web-fresh').needs,[]);
+  for (const [id, dependency, name] of [['python-suite','python','Python suite'],['node','node-tests','Node suites']]) {
+    const job = jobs.find(j => j.id === id);
+    assert.deepEqual(job.needs,[dependency]);
+    assert.ok(job.body.includes(`name: ${name}\n`));
+    assert.match(job.body,/if: always\(\)/);
+    assert.ok(job.body.includes(`RESULT: \$\{\{ needs.${dependency}.result \}\}`));
+    assert.ok(job.body.includes('run: test "$RESULT" = success'));
+  }
   const node = jobs.find(j => j.id === 'node-tests').body;
   for(const stage of ['test:optimized', 'check:worker']){
-    assert.ok(node.includes(`if: matrix.suite == '6/8'\n        run: npm run ${stage}`), stage);
+    assert.ok(node.includes(`if: matrix.suite == '6/6'\n        run: npm run ${stage}`), stage);
   }
 });
 
