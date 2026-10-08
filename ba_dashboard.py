@@ -21566,8 +21566,9 @@ def _safely(save: Save, work):
 
 def _raised_at(exc: BaseException) -> str:
     """", in fn, line N": the innermost frame of the board's own code (this file
-    or ba_save.py) that ``exc`` passed through; web/py/ holds the same files,
-    so the line is the source's at that release."""
+    or ba_save.py) that ``exc`` passed through; the worker's copy has no
+    comments and empty docstrings but keeps every line, so the line is the
+    source's at that release."""
     where = ""
     tb = exc.__traceback__
     while tb is not None:
