@@ -4336,8 +4336,7 @@ function outsideRows(span){
   if(Math.abs(costs) < 1 && Math.abs(realEstate) < 1 && Math.abs(salary) < 1) return "";
   const parts = [["loans", last.loans], ["insurance", last.insurance],
                  ["homes", last.homes], ["parking", last.parking]].filter(([, n]) => n >= 1);
-  const other = costs - ((last.loans || 0) + (last.insurance || 0)
-    + (last.homes || 0) + (last.parking || 0));
+  const other = costs - parts.reduce((s, [, n]) => s + n, 0);
   if(Math.abs(other) >= 1) parts.push(["other", other]);
   const part = (id, w) => id === "loans" ? tt("co.outside.loans", "loans {w:$}", {w})
     : id === "insurance" ? tt("co.outside.insurance", "health insurance {w:$}", {w})
@@ -4352,9 +4351,9 @@ function outsideRows(span){
   const day = last.day;
   return (Math.abs(costs) >= 1 ? row(tt("co.outside.costs", "Company costs outside sites"), -costs, "", tip) : "")
     + (Math.abs(realEstate) >= 1 ? row(tt("co.outside.realestate", "Real estate income"), realEstate, "",
-      tt("co.outside.realestate.tip", "Day {day}: rent from the real estate you own. It goes to the company, no site books it.", {day})) : "")
+      tt("co.outside.realestate.tip", "Day {day}: rent from the real estate you own, booked to the company, not to a site", {day})) : "")
     + (Math.abs(salary) >= 1 ? row(tt("co.outside.salary", "Salary income"), salary, "",
-      tt("co.outside.salary.tip", "Day {day}: your pay from a job. It goes to the company, no site books it.", {day})) : "")
+      tt("co.outside.salary.tip", "Day {day}: your pay from a job, booked to the company, not to a site", {day})) : "")
     + row(tt("co.outside.profit", "Company profit"), last.profit, " td-net",
       tt("co.outside.profit.tip", "The same figure as the Overview's Profit yesterday"));
 }
