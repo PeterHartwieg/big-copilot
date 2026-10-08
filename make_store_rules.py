@@ -62,6 +62,8 @@ where noted):
     {"products": {"<item>": {"w": wholesale price, "p": market price,
                              "r": productSalesRatio, "d": 1 demanded product,
                              "s": 1 service, "k": 1 ticket,
+                             "wg": 1 sold only where a weighing scale stands
+                                   (Item.requiresWeighing; omitted when 0),
                              "l": [neighbourhoods] (omitted when empty),
                              "bx": units a box holds (Item.boxSize),
                              "mo": maxOrderAmountPerImporter (both left out
@@ -81,6 +83,9 @@ where noted):
      "types": {"<business type>": {"b": building type, "c": 1 player can create,
                                    "i": [[item, impact], ...], "a": maxAmountPerProduct,
                                    "n": 1 accepts customers without orders,
+                                   "ss": 1 self-service customers (customerType 2; omitted
+                                         otherwise), the ones that weigh a "wg" product
+                                         at a scale and leave it without one,
                                    "f": entrance fee item, "fw": weekend fee item,
                                    "dm": [[demand, weight], ...],
                                    "rq": [{"n", "i", "t", "sq", "mx", "any", "lic"}],
@@ -128,6 +133,7 @@ from make_item_prices import _price  # noqa: E402
 from build_wiki_data import parse_address, site_key, street_label  # noqa: E402
 
 SERVICE = 4  # Item.type bit for a product sold as a service
+SELF_SERVICE = 2  # BusinessType.customerType of the shops whose customers serve themselves
 TICKET = "ba:itemtag_isticket"
 # The furniture tags the planner counts, by the short name it reads them under.
 SHORT_TAGS = {
@@ -307,6 +313,8 @@ def _products(items: dict, types: list, goods: set = frozenset()) -> dict:
             "s": 1 if int(tree.get("type") or 0) & SERVICE else 0,
             "k": 1 if TICKET in (tree.get("tags") or []) else 0,
         }
+        if tree.get("requiresWeighing"):
+            row["wg"] = 1
         hoods = list(tree.get("limitDemandToNeighbourhoods") or [])
         if hoods:
             row["l"] = hoods
@@ -357,6 +365,8 @@ def _types(types: list, requirements: dict) -> dict:
             "a": _round(tree.get("maxAmountPerProduct")),
             "n": 1 if tree.get("acceptCustomersWithoutOrderEntries") else 0,
         }
+        if tree.get("customerType") == SELF_SERVICE:
+            row["ss"] = 1
         if tree.get("hasEntranceFee") and tree.get("defaultEntranceFee"):
             row["f"] = tree["defaultEntranceFee"]
         if tree.get("hasWeekendOnlyEntranceFee") and tree.get("weekendOnlyEntranceFee"):

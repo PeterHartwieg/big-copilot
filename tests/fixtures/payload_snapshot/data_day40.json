@@ -15118,7 +15118,7 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 33750.0,
+      "furniture": 34470.0,
       "lines": [
        [
         "ba:itemname_checkoutcounterleft",
@@ -15194,13 +15194,25 @@
          "ba:itemname_pear",
          "ba:itemname_tomato"
         ]
+       ],
+       [
+        "ba:itemname_standingdigitalscale",
+        1,
+        "req",
+        "scale"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
        ]
       ]
      },
      "C2": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 33750.0,
+      "furniture": 34470.0,
       "lines": [
        [
         "ba:itemname_checkoutcounterleft",
@@ -15276,13 +15288,25 @@
          "ba:itemname_pear",
          "ba:itemname_tomato"
         ]
+       ],
+       [
+        "ba:itemname_standingdigitalscale",
+        1,
+        "req",
+        "scale"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
        ]
       ]
      },
      "M1": {
       "fee": 586000.0,
       "from": null,
-      "furniture": 73030.0,
+      "furniture": 73750.0,
       "lines": [
        [
         "ba:itemname_cashregister",
@@ -15382,6 +15406,18 @@
          "ba:itemname_pear",
          "ba:itemname_tomato"
         ]
+       ],
+       [
+        "ba:itemname_standingdigitalscale",
+        1,
+        "req",
+        "scale"
+       ],
+       [
+        "ba:itemname_counter1",
+        1,
+        "req",
+        "mount"
        ]
       ]
      }

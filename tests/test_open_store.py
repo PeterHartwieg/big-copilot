@@ -252,6 +252,72 @@ class RequiredPlacedTests(unittest.TestCase):
         rules = {"types": {SHOP: {**RULES["types"][SHOP], "rq": [{"n": "paidlicensingfees", "lic": 1}]}}}
         self.assertEqual(ba_dashboard.required_placed(collections.Counter(), SHOP, rules, PRICES, 100), [])
 
+    def test_a_self_service_shop_with_produce_lacks_a_scale_until_one_stands(self):
+        rows = lambda placed, available=None, rules=produce_rules(): {r[0]: r[1:] for r in ba_dashboard.required_placed(
+            collections.Counter(placed), SHOP, rules, produce_prices(), 100, available)}
+        self.assertNotIn("scale", rows({"ba:itemname_fridge": 1}))
+        self.assertEqual(rows({"ba:itemname_pallet": 2})["scale"], [1, 0])
+        self.assertEqual(rows({}, {"ba:itemname_apple"})["scale"], [1, 0])
+        self.assertEqual(rows({"ba:itemname_pallet": 2, "ba:itemname_scale": 1})["scale"], [1, 1])
+        counter = produce_rules()
+        del counter["types"][SHOP]["ss"]
+        self.assertNotIn("scale", rows({"ba:itemname_pallet": 2}, None, counter))
+
+
+def produce_rules():
+    """RULES with apples on a pallet that need weighing, a scale on a cabinet,
+    and the shop's customers serving themselves."""
+    rules = json.loads(json.dumps(RULES))
+    rules["types"][SHOP]["ss"] = 1
+    rules["types"][SHOP]["i"].append(["ba:itemname_apple", 0.7])
+    rules["products"]["ba:itemname_apple"] = {"p": 3, "wg": 1}
+    rules["furniture"].update({
+        "ba:itemname_pallet": {"c": 40, "h": ["ba:itemname_apple"], "v": VENDOR},
+        # Made for fruit and vegetable stores only, yet it weighs in any shop.
+        "ba:itemname_scale": {"c": 15, "x": ["scale"], "bt": ["fruitandvegetablestore"], "m": [["ba:itemname_cabinet"]], "v": VENDOR},
+        "ba:itemname_cabinet": {"v": VENDOR},
+    })
+    return rules
+
+
+def produce_prices():
+    return {"items": {**PRICES["items"], "ba:itemname_pallet": {"p": 300}, "ba:itemname_scale": {"p": 500},
+                      "ba:itemname_cabinet": {"p": 220}}}
+
+
+class ProduceScaleTests(unittest.TestCase):
+    """Self-service customers weigh fruit and vegetables (Item.requiresWeighing)
+    and leave them without a scale: issue #423, a supermarket plan with fruit
+    pallets and no scale."""
+
+    def lines(self, rules, copied=None):
+        return [(l["item"], l["qty"], l["group"], l["why"]) for l in outfit_lines(SHOP, rules, produce_prices(), 30, 225, copied)]
+
+    def test_a_self_service_shop_showing_produce_gets_one_scale_on_its_cabinet(self):
+        got = self.lines(produce_rules())
+        self.assertIn(("ba:itemname_scale", 1, "req", "scale"), got)
+        self.assertIn(("ba:itemname_cabinet", 1, "req", "mount"), got)
+        self.assertEqual(sum(qty for item, qty, _g, _w in got if item == "ba:itemname_scale"), 1)
+
+    def test_produce_on_the_players_own_copied_shelving_needs_it_too(self):
+        got = self.lines(produce_rules(), copied=[("ba:itemname_pallet", 4, ["ba:itemname_apple"])])
+        self.assertIn(("ba:itemname_scale", 1, "req", "scale"), got)
+
+    def test_no_scale_without_produce_for_counter_service_or_where_one_is_planned(self):
+        plain = produce_rules()
+        plain["products"]["ba:itemname_apple"].pop("wg")
+        counter = produce_rules()
+        del counter["types"][SHOP]["ss"]
+        own = produce_rules()
+        own["types"][SHOP]["rq"].append({"n": "scale", "i": ["ba:itemname_scale"]})
+        own["furniture"]["ba:itemname_scale"].pop("bt")   # a fruit and vegetable store's own
+        for rules in (plain, counter):
+            self.assertFalse(any(item == "ba:itemname_scale" for item, *_rest in self.lines(rules)))
+        # The type's own requirement sizes its scales to the building (30 an
+        # hour at 15 each); the produce rule adds none beside them.
+        self.assertEqual([l for l in self.lines(own) if l[0] == "ba:itemname_scale"],
+                         [("ba:itemname_scale", 1, "req", "scale"), ("ba:itemname_scale", 1, "cap", "scale")])
+
 
 class DemandTests(unittest.TestCase):
     def test_a_new_seller_moves_demand_down_a_step_past_the_room_the_price_leaves(self):
