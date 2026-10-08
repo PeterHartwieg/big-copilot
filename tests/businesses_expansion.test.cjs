@@ -281,7 +281,7 @@ test('Milestones: the career goals with their bars, and the totals', async t => 
   const page = await board(t, {hash: '#businesses/milestones'});
   const rows = await page.$$eval('#secGoals .bz-mile', els => els.map(e => e.innerText.replace(/\s+/g, ' ').trim()));
   assert.deepEqual(rows, [en('co.goals.types') + ' 2 / 2', en('co.goals.rivals') + ' 0 / 1', en('co.goals.personal') + ' ' + en('co.goals.done', {n: 1}), en('co.goals.diplomas') + ' 1 / 2']);
-  assert.match(await page.locator('#secGoals .bz-fins').innerText(), new RegExp(enRe('co.goals.goods.lab').source + '\\s+52,800[\\s\\S]*' + enRe('co.goals.tax.lab').source + '\\s+\\$5,200[\\s\\S]*' + enRe('co.goals.buildings.lab').source + '\\s+1', 'i'));
+  assert.match(await page.locator('#secGoals .bz-fins:not(.rl-fins)').innerText(), new RegExp(enRe('co.goals.goods.lab').source + '\\s+52,800[\\s\\S]*' + enRe('co.goals.tax.lab').source + '\\s+\\$5,200[\\s\\S]*' + enRe('co.goals.buildings.lab').source + '\\s+1', 'i'));
 });
 
 test('a business\'s page summarises its week and links to the one planner; the ways to its planners keep it picked and lead back', async t => {
@@ -534,7 +534,7 @@ test('Preferences is a sheet: the checks panel over it, Escape in order, and the
   assert.equal(await page.evaluate(() => document.activeElement.id), 'pxTitle');
   const rows = await page.$$eval('#pxSheet .px-row', rs => rs.map(r => r.dataset.px));
   // Theme and language live in the footer only (declutter X5).
-  assert.deepEqual(rows, [...(WEB ? ['gametext'] : []), 'history', 'checks', 'context', 'cli']);
+  assert.deepEqual(rows, [...(WEB ? ['gametext'] : []), 'history', 'checks', 'context', 'rivalry', 'cli']);
   assert.equal(await page.locator('#pxSheet [data-theme-set], #pxSheet .gn-pick').count(), 0);
   // Customize checks opens the checks panel above the sheet.
   await page.locator('#pxKinds').click();

@@ -16552,6 +16552,72 @@
    "index": 92
   }
  },
+ "rivalry": {
+  "days": [
+   {
+    "day": 26
+   },
+   {
+    "day": 27
+   },
+   {
+    "day": 28
+   },
+   {
+    "day": 29
+   },
+   {
+    "day": 30
+   },
+   {
+    "day": 31
+   },
+   {
+    "day": 32
+   },
+   {
+    "day": 33
+   },
+   {
+    "day": 34
+   },
+   {
+    "day": 35
+   },
+   {
+    "day": 36
+   },
+   {
+    "day": 37
+   },
+   {
+    "day": 38
+   },
+   {
+    "day": 39
+   },
+   {
+    "day": 40,
+    "first": false,
+    "gap": -3985.0,
+    "rank": 2,
+    "tied": 0
+   }
+  ],
+  "first": false,
+  "gap": -3985.0,
+  "of": 2,
+  "rank": 2,
+  "rival": {
+   "name": "Corner Holdings",
+   "number": 1
+  },
+  "streak": 0,
+  "streakAtLeast": false,
+  "tied": 0,
+  "top": 0.0,
+  "you": -3985.0
+ },
  "skillNames": {
   "ba:skill_actor": "Actor",
   "ba:skill_cleaning": "Cleaning",

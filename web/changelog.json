@@ -1,5 +1,11 @@
 [
   {
+    "pr": 429,
+    "date": "2026-10-08",
+    "title": "Track your place on the Rivals leaderboard",
+    "summary": "See your rank among the rivals by weekly income, how far you lead or trail the best rival, and how many days in a row you have held first place. It appears as a figure on the Overview and a block on Milestones, worked out from your save without opening the game's Rivals app. Hide it under Preferences if you do not need it."
+  },
+  {
     "pr": 298,
     "date": "2026-10-05",
     "title": "Suggest features from the voting list",

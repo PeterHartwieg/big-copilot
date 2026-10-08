@@ -203,7 +203,8 @@ the map.
     bill. Set the machines per line and get the delivery that keeps them fed, plus what
     the shops absorb and what is left over to export.
 - **Staffing › Schedules, Payroll, Staff needs**, and **Businesses › Products & prices,
-  Milestones**: the week of hours per business, the wages, and the career checklist.
+  Milestones**: the week of hours per business, the wages, and the career checklist
+  with the Rivals leaderboard (see [The Rivals leaderboard](#the-rivals-leaderboard)).
   Staff needs adds up, per role, the people each shop,
   office and factory still needs, then fills them: spare people moved between sites
   first, then the headhunters' candidates. Its numbers:
@@ -2269,14 +2270,15 @@ one) and the 60 days of ledger, for the 8 characters opened most recently. Openi
 save of a character reads only the days up to its own; the later days stay on record for
 when the newer save is opened again.
 
-Two records live side by side under each character:
+Three records live side by side under each character:
 
 | Record | What it holds | What it is for |
 | --- | --- | --- |
 | `days` | a demand snapshot per game day | the market trend, compared against roughly a week back |
 | `ledger` | cash, net worth and that day's profit | net worth week on week, and cash against profit |
+| `rivalry` | your rank on the Rivals leaderboard, whether you were first or level at the top, and the gap to the best rival | the days in a row in first place |
 
-Both are keyed by the game day, so rebuilding twice on the same day updates the entry
+All three are keyed by the game day, so rebuilding twice on the same day updates the entry
 rather than adding a second one. The watcher rebuilds on every new save, so this fills
 itself in as you play.
 
@@ -2292,9 +2294,44 @@ To start with a populated history instead of an empty one:
 python ba_dashboard.py --backfill
 ```
 
-That reads every other save in the same character's folder and merges both records in.
+That reads every other save in the same character's folder and merges the records in.
 It only ever adds; nothing is deleted, and re-running is harmless. This is a local-run
 option; the browser page has no equivalent yet.
+
+## The Rivals leaderboard
+
+The game's Rivals app ranks every rival company and you by weekly income, highest first.
+The board works out the same ranking from the save, so it can show it without the game
+open: as a fifth figure on the Overview, and as a block under Career totals on
+Businesses › Milestones. Preferences › Rivals leaderboard hides both.
+
+- **Your weekly income** is the profit of the seven days before today, from the daily
+  statements, a day with no statement counting as nothing. It includes everything the
+  statements book: sites, real estate, homes, loans, parking, wages, insurance and fees.
+- **A rival's weekly income** is the last seven days of daily income of every business it
+  owns in a retail, office, cinema or theater building (the building types the game lets
+  a rival own). If any of its shops or offices has no daily income on record at all, the
+  game counts the rival as 0.
+- **Rank** is one plus the number of rivals ahead of you. Defeated rivals keep their place
+  in the list, as they do in the game. A rival within a dollar of you is **level** with
+  you: the game's sort can then list either of you first, so being level at the top is not
+  counted as first place.
+- **The gap** is your lead over the best rival when you are first, otherwise how far the
+  leader is ahead of you; level at the top reads as such, not as a lead. The rival is
+  named where the save gives a name; otherwise it is "Rival company" and its number, as on
+  the City map.
+- **Days in first place** counts back from today over the board's own record (the
+  `rivalry` record under [What the save does not remember](#what-the-save-does-not-remember)).
+  The first time a save is opened, the past week is filled in from the save itself: each
+  rival's own week of weekly incomes, and your statements. A day neither on record nor in
+  the save makes the count "at least" (≥) that many days. A day is also left out when a
+  rival's figure for it may not be real: opening a rival in the game's Rivals app with less
+  than a week of history makes up the missing days with random figures, and the board
+  does not trust those. A rival with no record yet was not in the city then; a day no
+  rival has a figure for is never filled in.
+
+The game writes its own copy of your weekly income for the leaderboard chart before some
+mods have booked the day, so the board always recomputes yours from the statements.
 
 ## Reading the numbers
 

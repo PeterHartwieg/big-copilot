@@ -2078,6 +2078,202 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
     }
 
 
+# ------------------------------------------------------------------ rivalry
+# The Rivals leaderboard as the game ranks it (issue #414), read against build
+# 3682's IL: RivalLeaderboard.Load() makes one row per rival in rivalStates plus
+# the player, sorts them by weekly income, highest first, and numbers them by
+# position. Defeated rivals keep their place in the order (they show no rank of
+# their own), so they count here too.
+#
+# A rival's weekly income (RivalData.WeeklyIncome) is the last seven entries of
+# dailyIncomes summed over every business it owns in a building type tagged
+# canbeownedbyrival -- retail, office, cinema and theater in the
+# defaultlocalgroup_assets_buildingtypes bundle at build 3682 -- and 0 when any
+# retail or office one among them has no dailyIncomes list at all.
+RIVAL_BUILDING_TYPES = frozenset({"retail", "office", "cinema", "theater"})
+RIVAL_NULL_TYPES = frozenset({"retail", "office"})
+RIVAL_WINDOW = 7  # days in a weekly income, the player's and a rival's alike
+# Closer than this is a tie. List.Sort is not stable, so a tie can put either
+# side first, and the game sums in single precision: a dollar either way is
+# the same place on the board's terms.
+RIVALRY_TIE = 1.0
+# Days of the record the page draws as a strip, enough to see a run of fifteen.
+RIVALRY_STRIP = 15
+
+
+def _rival_building_type(reg: dict, table: dict) -> str | None:
+    """The building type of a registration, as the building table names it.
+
+    A registration the table does not place falls back on its business type:
+    an office type is an office, a cinema or theater its own venue type,
+    any other trading type retail.
+    """
+    row = table.get(_address_of(reg))
+    if row:
+        return row.get("t")
+    kind = reg.get("businessTypeName")
+    if kind in OFFICE_TYPES:
+        return "office"
+    if kind in VENUE_TYPES:
+        return VENUE_TYPES[kind]
+    return "retail" if kind in RETAIL_TYPES else None
+
+
+def _rival_weekly_incomes(save: Save) -> dict:
+    """{rival id: weekly income} for every company in rivalStates, as the game
+    reckons it today (RivalData.WeeklyIncome)."""
+    table = load_buildings(save)
+    owned = collections.defaultdict(list)
+    for reg in save.items(save.root.get("BuildingRegistrations")):
+        rival = reg.get("businessOwnerRivalId")
+        # RefreshRivals() drops the owner of a building the player rents.
+        if not rival or reg.get("RentedByPlayer"):
+            continue
+        kind = _rival_building_type(reg, table)
+        if kind in RIVAL_BUILDING_TYPES:
+            owned[rival].append((kind, reg.get("dailyIncomes")))
+    weekly = {}
+    for state in save.items(save.root.get("rivalStates")):
+        rival = state.get("rivalId")
+        if not rival:
+            continue
+        sites = owned.get(rival, [])
+        if any(kind in RIVAL_NULL_TYPES and incomes is None for kind, incomes in sites):
+            weekly[rival] = 0.0
+            continue
+        weekly[rival] = float(sum(
+            sum(v or 0 for v in save.items(incomes)[-RIVAL_WINDOW:]) for _kind, incomes in sites
+        ))
+    return weekly
+
+
+def _player_weekly_income(profits: dict, day: int) -> float:
+    """The player's weekly income on the leaderboard on `day`: totalProfit
+    summed over the seven days before it, a day with no statement counting as
+    nothing (FinancialSummaryHelper.GetLastFinancialSummaries). Recomputed from
+    the statements rather than read from playerWeeklyIncomeHistory, which the
+    game writes before mods that settle the day on onNewDay have booked it."""
+    return float(sum(profits.get(day - back, 0) for back in range(1, RIVAL_WINDOW + 1)))
+
+
+def _trusted_rival_history(save: Save, state: dict) -> tuple[dict, bool]:
+    """({day: weekly income} the game's RunDaily wrote, whether the list was
+    ever filled in) for one rival.
+
+    RunDaily appends one entry a day, so its entries run in day order. Opening
+    a rival in the game's Rivals app with fewer than seven entries fills the
+    missing days of the week with random figures within 20% of today's and
+    sorts the whole list newest first. Such a newest-first run is the mark of a
+    fill: its first entry (the day it was opened) is real, the rest of it may
+    be invented, and whatever RunDaily appended after it is real again.
+    RunDaily prunes by day (everything older than six days back), never by
+    position, so the newest-first run loses its oldest days first and its
+    first entry, the day of the fill, stays real for as long as it is kept.
+    RunDaily writes every rival in rivalStates, defeated ones included.
+    """
+    entries = []
+    for entry in save.items(state.get("weeklyIncomeHistory")):
+        day, value = entry.get("m_Item1"), entry.get("m_Item2")
+        if isinstance(day, int) and isinstance(value, (int, float)):
+            entries.append((day, float(value)))
+    filled = 0
+    while filled + 1 < len(entries) and entries[filled + 1][0] < entries[filled][0]:
+        filled += 1
+    trusted = entries[:1] + entries[filled + 1:] if filled else entries
+    return dict(trusted), bool(filled)
+
+
+def _rival_standing(you: float, rivals: dict, numbers: dict) -> dict:
+    """The player's place among `rivals` ({rival id: weekly income}): rank,
+    rivals level with the player, and the best rival with the gap to it
+    (positive when the player leads)."""
+    above = sum(1 for v in rivals.values() if v - you >= RIVALRY_TIE)
+    tied = sum(1 for v in rivals.values() if abs(v - you) < RIVALRY_TIE)
+    best = min(rivals, key=lambda r: (-rivals[r], numbers.get(r, 0), r)) if rivals else None
+    top = rivals[best] if best else 0.0
+    return {
+        "rank": 1 + above,
+        "tied": tied,
+        "first": above == 0 and tied == 0,
+        "you": money(you),
+        "top": money(top),
+        "gap": money(you - top),
+        "best": best,
+    }
+
+
+def _rivalry_backfill(save: Save, profits: dict, day: int, numbers: dict) -> dict:
+    """{day: standing} for the days of the past week the save can still tell.
+
+    Each rival's own record keeps a week of weekly incomes; the player's are
+    recomputed from the statements. A day is left out when a rival's figure
+    for it may be one the Rivals app invented, or when a rival has no figure
+    for it and its record does not show it arrived later.
+    """
+    rivals_seen = [(state["rivalId"], _trusted_rival_history(save, state))
+                   for state in save.items(save.root.get("rivalStates")) if state.get("rivalId")]
+    out = {}
+    # Day 1 has no RunDaily behind it, and no statement before it.
+    for past in range(max(2, day - RIVAL_WINDOW + 1), day):
+        rivals, known = {}, True
+        for rival, (trusted, filled) in rivals_seen:
+            if past in trusted:
+                rivals[rival] = trusted[past]
+            elif filled or (trusted and min(trusted) < past):
+                known = False
+                break
+            # Otherwise the rival's record starts after this day, or it has
+            # none yet: it was not in the city then.
+        # A day no rival has a figure for is a save with no record at all, not
+        # a city without rivals.
+        if known and rivals:
+            out[past] = _rival_standing(_player_weekly_income(profits, past), rivals, numbers)
+    return out
+
+
+def _rivalry_record(standing: dict, source: str) -> dict:
+    """What the history keeps of one day's standing."""
+    return {"rank": standing["rank"], "tied": standing["tied"], "first": standing["first"],
+            "gap": standing["gap"], "src": source}
+
+
+def _rivalry(save: Save, summaries: list, history, character: str, day: int) -> dict | None:
+    """The player on the Rivals leaderboard today, the days in a row at the top
+    and the recent record, kept in the history so the run can outlast the
+    week the save remembers (History.rivalry())."""
+    weekly = _rival_weekly_incomes(save)
+    if not weekly:
+        return None
+    numbers = _rival_numbers(save)
+    profits = {s["dayNumber"]: s.get("totalProfit") or 0 for s in summaries}
+    today = _rival_standing(_player_weekly_income(profits, day), weekly, numbers)
+    earlier = {d: _rivalry_record(s, "save")
+               for d, s in _rivalry_backfill(save, profits, day, numbers).items()}
+    record = {r["day"]: r for r in history.rivalry(character, day, _rivalry_record(today, "live"), earlier)}
+    # Days in first place running back from today; the run is "at least" this
+    # long when it reaches a day nothing on record can tell.
+    streak, at_least = 0, False
+    while True:
+        rec = record.get(day - streak)
+        if rec is None:
+            at_least = streak > 0 and day - streak >= 2
+            break
+        if not rec.get("first"):
+            break
+        streak += 1
+    best = today.pop("best")
+    number = numbers.get(best)
+    return {
+        **today,
+        "of": len(weekly) + 1,
+        "rival": {"number": number, "name": _rival_names(save, numbers).get(number)},
+        "streak": streak,
+        "streakAtLeast": at_least,
+        "days": [{"day": d, **({k: record[d][k] for k in ("rank", "tied", "first", "gap")} if d in record else {})}
+                 for d in range(max(1, day - RIVALRY_STRIP + 1), day + 1)],
+    }
+
+
 # ---------------------------------------------------------------- extraction
 # The payload's top-level keys, in the order the page has always been sent
 # them. Each is the core's (computed on every build) or one section's
@@ -2090,7 +2286,7 @@ PAYLOAD_KEYS = (
     "openFactory", "trends", "hypeExposure", "hours", "hourFindings", "staffing",
     "factoryStaffing", "officeStaffing", "candidates", "hiring", "plan", "names",
     "skillNames", "marketingAgencies", "cashFlow", "ledgerDays", "alerts", "minor",
-    "alertsDemand", "goals",
+    "alertsDemand", "goals", "rivalry",
 )
 
 
@@ -2748,6 +2944,8 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     if root.get("NetWorth") is not None:
         entry["netWorth"] = money(root["NetWorth"])
     ledger = history.ledger(character, day, entry)
+    # Before history.write(): the run in first place outlasts the save's week.
+    rivalry = _rivalry(save, summaries, history, character, day)
     if not history.write():
         for grid in all_grids:
             grid["evidence"]["persistent"] = False
@@ -2847,6 +3045,9 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         "marketingAgencies": agencies,
         "cashFlow": _cash_flow(ledger, daily, day),
         "ledgerDays": len(ledger),
+        # The Rivals leaderboard (_rivalry()): core because it writes the
+        # history its days-in-first-place run is counted from.
+        "rivalry": rivalry,
         "alerts": alerts["lines"],
         "minor": alerts["minor"],
         "alertsDemand": {"lines": alerts_demand["lines"], "minor": alerts_demand["minor"]},
@@ -16424,6 +16625,24 @@ class History:
         # when that later save is opened again, but never read as today's run.
         return [dict(store[d], day=int(d)) for d in sorted(store, key=int) if int(d) <= day]
 
+    def rivalry(self, character: str, day: int, today: dict, earlier: dict) -> list:
+        """Record today's place on the Rivals leaderboard, and the earlier days
+        the save can still tell (``earlier``, {day: record}) where nothing is
+        on record yet; hand back the run up to today, oldest first.
+
+        Kept beside the ledger rather than in it: a day filled in from the
+        save has no cash of its own. A day already on record keeps what it
+        holds, since the board saw it then.
+        """
+        store = self._for(character).get("rivalry")
+        if not isinstance(store, dict):
+            store = self._for(character)["rivalry"] = {}
+        for past, record in earlier.items():
+            store.setdefault(str(past), record)
+        store[str(day)] = today
+        _prune_days(store, HISTORY_DAYS, day)
+        return [dict(store[d], day=int(d)) for d in sorted(store, key=int) if int(d) <= day]
+
     def payback(self, character: str) -> dict:
         """What the statements forget after 61 days, kept for _payback(): per
         site key, {"opened", "bill", "firm": [day, investment], "self": [...]},
@@ -16460,7 +16679,7 @@ class History:
         ``character`` becomes the most recent; only the ``characters`` most
         recently built are kept, each with its last ``days`` demand snapshots.
         The trend compares with about a week back, so two weeks of snapshots
-        lose nothing the board shows; the ledger is small and keeps its 60.
+        lose nothing the board shows; the ledger and the rivalry record are small and keep their 60.
         ``day`` is the save just built: an older save of ``character`` keeps
         its own two weeks up to that day, as well as the later days on record.
         """
