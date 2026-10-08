@@ -4323,20 +4323,23 @@ function chainRow(c, v){
 
 const SORT_ICON = `<svg class="sort" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"></path></svg>`;
 
-/* The sites' profits add up to more than the company made: loan payments,
+/* The sites' profits differ from what the company made: loan payments,
    health insurance, the player's homes and parking are booked to the company,
-   not to any site. Two lines under the total say so, and end on the figure
-   Today's Profit tile shows. Read off the last finished day, whose `business`
-   is the sites' sum. */
+   not to any site, and so are real estate income and the player's salary.
+   Lines under the total say so, the costs on one and each income on its own,
+   and end on the figure Today's Profit tile shows. Read off the last finished
+   day, whose `business` is the sites' sum. */
 function outsideRows(span){
   const days = D.daily || [];
   const last = days[days.length - 1];
   if(!last) return "";
-  const outside = (last.business || 0) - last.profit;
-  if(Math.abs(outside) < 1) return "";
+  const realEstate = last.realEstate || 0, salary = last.salary || 0;
+  const income = realEstate + salary;
+  const costs = (last.business || 0) - last.profit + income;
+  if(Math.abs(costs) < 1 && Math.abs(realEstate) < 1 && Math.abs(salary) < 1) return "";
   const parts = [["loans", last.loans], ["insurance", last.insurance],
                  ["homes", last.homes], ["parking", last.parking]].filter(([, n]) => n >= 1);
-  const other = outside - parts.reduce((s, [, n]) => s + n, 0);
+  const other = costs - parts.reduce((s, [, n]) => s + n, 0);
   if(Math.abs(other) >= 1) parts.push(["other", other]);
   const part = (id, w) => id === "loans" ? tt("co.outside.loans", "loans {w:$}", {w})
     : id === "insurance" ? tt("co.outside.insurance", "health insurance {w:$}", {w})
@@ -4348,7 +4351,12 @@ function outsideRows(span){
   /* The profit column is the third from the end, before Margin and Payback. */
   const row = (label, n, cls, t) => `<tr class="td-outside${cls}"><td class="l" colspan="${span - 3}"${
     t ? ` data-tip="${attr(t)}" tabindex="0"` : ""}>${label}</td><td><span class="${sign(n)}">${fmt(n)}</span></td><td></td><td></td></tr>`;
-  return row(tt("co.outside.costs", "Company costs outside sites"), -outside, "", tip)
+  const day = last.day;
+  return (Math.abs(costs) >= 1 ? row(tt("co.outside.costs", "Company costs outside sites"), -costs, "", tip) : "")
+    + (Math.abs(realEstate) >= 1 ? row(tt("co.outside.realestate", "Real estate income"), realEstate, "",
+      tt("co.outside.realestate.tip", "Day {day}: rent from the real estate you own, booked to the company, not to a site", {day})) : "")
+    + (Math.abs(salary) >= 1 ? row(tt("co.outside.salary", "Salary income"), salary, "",
+      tt("co.outside.salary.tip", "Day {day}: your pay from a job, booked to the company, not to a site", {day})) : "")
     + row(tt("co.outside.profit", "Company profit"), last.profit, " td-net",
       tt("co.outside.profit.tip", "The same figure as the Overview's Profit yesterday"));
 }
