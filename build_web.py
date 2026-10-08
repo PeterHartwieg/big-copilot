@@ -6,8 +6,9 @@
 
 Writes web/index.html from the same template the local server uses, with the
 landing screen above the board and the worker data source wired in ahead of
-the board's script, and copies the Python files and data tables (PY_COPIED)
-into web/py/ for the worker to fetch. It also writes the static wiki pages under web/wiki/,
+the board's script, and ships the Python files and data tables (PY_COPIED)
+into web/py/ for the worker to fetch, ba_dashboard.py without comments or
+docstrings but with every line where it was (strip_copy()). It also writes the static wiki pages under web/wiki/,
 web/sitemap.xml and web/robots.txt from web/wiki-data.json (tools/wiki_pages.py).
 web/app.js and web/worker.js are kept by hand. Nothing else
 is needed: the folder is a static site.
@@ -23,11 +24,15 @@ web/ that no longer match the sources, so a review catches a forgotten rebuild.
 from __future__ import annotations
 
 import argparse
+import ast
+import functools
 import hashlib
+import io
 import json
 import os
 import re
 import shutil
+import tokenize
 
 from ba_dashboard import (
     FLOOR_PLAN_KINDS, GAME_NAME_LANGS, NAME_COVERAGE, NAME_PREFIXES, VERIFIED_BUILD, footer_html,
@@ -515,9 +520,11 @@ details.help[open] summary::after{content:"\2013"}
 # each file itself; tests/test_web_fresh.py holds it to these two lists.
 PY_CODE = ("ba_save.py", "ba_dashboard.py", "ba_facts.py", "ba_mods.py")
 PY_DATA = ("gametext.json", "ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json", "ba_store_rules.json")
-# The ones copied into web/py/ from the top of the checkout. gametext.json is
+# The ones shipped into web/py/ from the top of the checkout. gametext.json is
 # written there from the installed game instead (main()).
 PY_COPIED = tuple(name for name in PY_CODE + PY_DATA if name != "gametext.json")
+# Strip comments and docstring contents only from these, preserving source lines.
+STRIPPED = ("ba_dashboard.py",)
 _PY_DATA_SHIPPED = tuple(f"web/py/{name}" for name in PY_DATA)
 
 # Everything the page fetches, together with the build inputs that shape it:
@@ -617,6 +624,58 @@ def read_text(path: str) -> str:
         return fh.read().replace("\r\n", "\n")
 
 
+@functools.lru_cache(maxsize=4)
+def strip_copy(text: str) -> str:
+    """LF text without its comments and with every docstring emptied, each line where it was.
+
+    The worker's copy of ba_dashboard.py: Pyodide compiles it on every page load,
+    and tracebacks and _raised_at() still name the source's lines."""
+    lines = text.split("\n")
+    starts = [0]
+    for line in lines[:-1]:
+        starts.append(starts[-1] + len(line) + 1)
+
+    def offset(lineno: int, byte_column: int) -> int:
+        # AST columns count UTF-8 bytes; tokenize columns count characters.
+        column = len(lines[lineno - 1].encode("utf-8")[:byte_column].decode("utf-8"))
+        return starts[lineno - 1] + column
+
+    edits = []
+    for node in ast.walk(ast.parse(text)):
+        if not isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if not node.body:
+            continue
+        expr = node.body[0]
+        if (isinstance(expr, ast.Expr) and isinstance(expr.value, ast.Constant)
+                and isinstance(expr.value.value, str)):
+            edits.append((offset(expr.lineno, expr.col_offset),
+                          offset(expr.end_lineno, expr.end_col_offset),
+                          '"""' + "\n" * (expr.end_lineno - expr.lineno) + '"""'))
+    # Spans are disjoint. Joining slices avoids repeatedly copying a large file.
+    chunks = []
+    cursor = 0
+    for start, end, replacement in sorted(edits):
+        chunks.extend((text[cursor:start], replacement))
+        cursor = end
+    chunks.append(text[cursor:])
+    stripped = "".join(chunks)
+    lines = stripped.split("\n")
+    # Retokenize after replacing docstrings: comments inside a concatenated
+    # docstring's expression have already gone, and suffix columns may change.
+    for token in tokenize.generate_tokens(io.StringIO(stripped).readline):
+        if token.type == tokenize.COMMENT:
+            row, column = token.start
+            lines[row - 1] = lines[row - 1][:column].rstrip()
+    return "\n".join(lines)
+
+
+def shipped_text(root: str, name: str) -> str:
+    """The LF text shipped for a checkout file, including its worker transform."""
+    text = read_text(os.path.join(root, name))
+    return strip_copy(text) if name in STRIPPED else text
+
+
 def worker_assets(root: str = HERE) -> tuple[dict, dict[str, bytes]]:
     """Pin the exact LF bytes of the worker and its dependencies to the page.
 
@@ -627,7 +686,8 @@ def worker_assets(root: str = HERE) -> tuple[dict, dict[str, bytes]]:
     outputs = {}
 
     def asset(name: str, source: str) -> dict:
-        data = read_text(os.path.join(root, source)).encode("utf-8")
+        text = shipped_text(root, name) if name in PY_COPIED else read_text(os.path.join(root, source))
+        data = text.encode("utf-8")
         digest = hashlib.sha256(data).hexdigest()
         url = f"assets/{digest}/{name}"
         outputs["web/" + url] = data
@@ -753,7 +813,7 @@ window.addEventListener("error", function(event) {
 
 
 def check(root: str = HERE) -> list[str]:
-    """The paths under web/ that no longer match the sources, forward-slashed.
+    """The paths under web/ that no longer match the shipped sources, forward-slashed.
 
     Writes nothing and never reads the installed game: the committed
     gametext.json and wiki-data.json feed the stamp as they stand. Line endings
@@ -779,7 +839,7 @@ def check(root: str = HERE) -> list[str]:
 
     for name in PY_COPIED:
         copied = "web/py/" + name
-        if differs(copied, read_text(os.path.join(root, name))):
+        if differs(copied, shipped_text(root, name)):
             stale.append(copied)
     _, assets = worker_assets(root)
     for path, expected in assets.items():
@@ -903,7 +963,7 @@ def assemble(root: str = HERE) -> None:
     # the worker hands them to Python as data.
     for name in PY_COPIED:
         with open(os.path.join(web, "py", name), "w", encoding="utf-8", newline="\n") as fh:
-            fh.write(read_text(os.path.join(root, name)))
+            fh.write(shipped_text(root, name))
     # Emit only this assembly's assets. No retention promise: an uncached old
     # tab must reload when a removed dependency is needed. Hosted optimization
     # adds its JS/CSS here afterwards, without changing raw assembly/check.

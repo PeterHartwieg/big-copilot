@@ -152,6 +152,16 @@ class WebFresh(unittest.TestCase):
     def test_manifest_hashes_exact_emitted_bytes_and_is_pinned_in_the_page(self):
         manifest, outputs = build_web.worker_assets()
         self.assertEqual(set(manifest["files"]), set(build_web.PY_CODE + build_web.PY_DATA))
+        dashboard = build_web.strip_copy(build_web.read_text(str(ROOT / "ba_dashboard.py"))).encode("utf-8")
+        entry = manifest["files"]["ba_dashboard.py"]
+        self.assertEqual(entry["sha256"], hashlib.sha256(dashboard).hexdigest())
+        self.assertEqual(outputs["web/" + entry["url"]], dashboard)
+        for name in build_web.PY_COPIED:
+            self.assertEqual(build_web.read_text(str(ROOT / "web/py" / name)),
+                             build_web.shipped_text(str(ROOT), name), name)
+            if name not in build_web.STRIPPED:
+                self.assertEqual(build_web.shipped_text(str(ROOT), name),
+                                 build_web.read_text(str(ROOT / name)), name)
         for entry in (manifest["worker"], *manifest["files"].values()):
             data = outputs["web/" + entry["url"]]
             self.assertNotIn(b"\r\n", data)
@@ -198,6 +208,12 @@ class CheckedCopy(SharedCopy):
         with kept(tmp, "web/py/ba_dashboard.py"):
             copy = Path(tmp, "web/py/ba_dashboard.py")
             copy.write_bytes(copy.read_bytes() + b"\n# stale\n")
+            self.assertIn("web/py/ba_dashboard.py", build_web.check(tmp))
+
+    def test_unstripped_dashboard_copy_is_reported_stale(self):
+        tmp = self.root
+        with kept(tmp, "web/py/ba_dashboard.py"):
+            place(tmp, "web/py/ba_dashboard.py", Path(tmp, "ba_dashboard.py").read_bytes())
             self.assertIn("web/py/ba_dashboard.py", build_web.check(tmp))
 
     def test_stale_wiki_generator_is_reported(self):
@@ -333,8 +349,11 @@ class CommandLine(SharedCopy):
             build_web.assemble(tmp)
             self.assertEqual(build_web.check(tmp), [])
             for name in assembled:
+                expected = (build_web.shipped_text(tmp, name.removeprefix("web/py/")).encode("utf-8")
+                            if name.startswith("web/py/") else
+                            (ROOT / name).read_bytes().replace(b"\r\n", b"\n"))
                 self.assertEqual(Path(tmp, name).read_bytes().replace(b"\r\n", b"\n"),
-                                 (ROOT / name).read_bytes().replace(b"\r\n", b"\n"), name)
+                                 expected, name)
             # An edited article reaches the wiki payload too, as check() expects.
             topics = Path(tmp, "tools/wiki_topics.json")
             topics.write_text(topics.read_text(encoding="utf-8").replace(

@@ -1088,7 +1088,9 @@ What `page_html()` produces, top of the file down:
 5. The board script, `template/board.js`, in the last `<script>` block of the template.
 
 Before any of that, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`,
-`ba_dashboard.py`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json` and `ba_store_rules.json` into `web/py/`, and
+`ba_dashboard.py`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json` and
+`ba_store_rules.json` into `web/py/`, stripping comments and docstring contents only
+from `ba_dashboard.py` while preserving its lines, and
 writes `web/py/gametext.json` and `web/names/<lang>.json` (`write_name_tables()`) from the installed locale — everything `stamp()` hashes has to be in place before
 `release_info()` runs. `main()` then writes `web/index.html` and `web/version.json`.
 
@@ -1653,6 +1655,12 @@ The nine board dependencies are listed in `PY_CODE` and `PY_DATA` in
 - `ba_save.py`, `ba_facts.py`, `ba_mods.py` and `ba_dashboard.py` — required code.
 - `gametext.json`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json`
   and `ba_store_rules.json` — game data tables.
+
+`ba_dashboard.py` ships as `strip_copy()` of the source: comments removed and docstrings
+emptied, every line where it was. The virtual filesystem is new on each page load, so
+Python compiles the module every time, and a third of the source is comments and
+docstrings. Because no line moves, tracebacks and `_raised_at()` name the source's line
+at that release. The CLI runs the source itself; the other code files ship verbatim.
 
 Assembly writes each dependency and the worker itself to
 `web/assets/<full-sha256>/<filename>`, hashing the exact LF-normalized bytes.
