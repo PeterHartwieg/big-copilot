@@ -2316,8 +2316,9 @@ Businesses › Milestones. Preferences › Rivals leaderboard hides both.
   you: the game's sort can then list either of you first, so being level at the top is not
   counted as first place.
 - **The gap** is your lead over the best rival when you are first, otherwise how far the
-  leader is ahead of you; level at the top reads as such, not as a lead. The rival is named where the save gives a name; otherwise it is
-  "Rival company" and its number, as on the City map.
+  leader is ahead of you; level at the top reads as such, not as a lead. The rival is
+  named where the save gives a name; otherwise it is "Rival company" and its number, as on
+  the City map.
 - **Days in first place** counts back from today over the board's own record (the
   `rivalry` record under [What the save does not remember](#what-the-save-does-not-remember)).
   The first time a save is opened, the past week is filled in from the save itself: each

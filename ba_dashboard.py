@@ -2105,7 +2105,8 @@ def _rival_building_type(reg: dict, table: dict) -> str | None:
     """The building type of a registration, as the building table names it.
 
     A registration the table does not place falls back on its business type:
-    an office type is an office, any other trading type retail.
+    an office type is an office, a cinema or theater its own venue type,
+    any other trading type retail.
     """
     row = table.get(_address_of(reg))
     if row:
