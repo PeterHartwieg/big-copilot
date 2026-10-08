@@ -1,6 +1,5 @@
 {
  "node": {
-  "tests/_i18n_expansion.cjs": 24.6,
   "tests/alert_kinds.test.cjs": 1.2,
   "tests/asset_cache.test.cjs": 95.4,
   "tests/building_facts.test.cjs": 0.1,
@@ -28,7 +27,8 @@
   "tests/hostile_names.test.cjs": 5.1,
   "tests/i18n_catalogue.test.cjs": 6.5,
   "tests/i18n_community.test.cjs": 0.1,
-  "tests/i18n_expansion_breakpoints.test.cjs": 2.4,
+  "tests/i18n_expansion_breakpoints.test.cjs": 19.9,
+  "tests/i18n_expansion_languages.test.cjs": 7.1,
   "tests/i18n_helpers.test.cjs": 0.1,
   "tests/i18n_layout.test.cjs": 48.7,
   "tests/i18n_runtime.test.cjs": 0.2,

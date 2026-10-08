@@ -239,7 +239,10 @@ test('the CI matrix shards execute every discovered file once and propagate a re
     `require('node:test')('${name}', () => {\n` +
     `require('node:fs').appendFileSync('executed.txt', '${name}\\n');\n` +
     // One real failure must fail exactly the shard that contains this file.
-    (name === 'c' ? `throw new Error('intentional shard failure');\n` : '') + '});\n');
+    (name === 'c' ? `throw new Error('intentional shard failure');\n` : '') + '});\n' +
+    // A test a helper defines is timed under the file that runs it.
+    (name === 'h' ? `require('./_defines.cjs')();\n` : ''));
+  fs.writeFileSync(path.join(root,'tests','_defines.cjs'),`module.exports = () => require('node:test')('from a helper', () => {});\n`);
   const workflow = fs.readFileSync(path.join(__dirname,'../.github/workflows/tests.yml'),'utf8').replace(/\r\n/g, '\n');
   const matrix = /^        suite: \[([^\]\n]+)\]/m.exec(workflow);
   assert.ok(matrix, 'the workflow has a static suite matrix');
@@ -254,7 +257,7 @@ test('the CI matrix shards execute every discovered file once and propagate a re
     assert.ifError(result.error);
     assert.ok([0,1].includes(result.status),result.stderr);
     statuses.push(result.status);
-    timed.push(...[...result.stdout.matchAll(/^shard-weight node (tests\/\w+\.test\.cjs) \d+\.\d$/gm)].map(m => m[1]));
+    timed.push(...[...result.stdout.matchAll(/^shard-weight node (\S+) \d+\.\d\r?$/gm)].map(m => m[1]));
   }
   assert.deepEqual(statuses.slice().sort(),[0,0,0,0,0,1]);
   // Every file reports its seconds once, the failing one included.
