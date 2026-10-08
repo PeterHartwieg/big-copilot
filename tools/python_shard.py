@@ -1,8 +1,9 @@
 """Filter ordinary unittest discovery by module, preserving its import names/path.
 
 At the end it prints one "shard-weight python <module> <seconds>" line per
-module (wall time from its first test to the next module's, class and module
-fixtures included); tools/shard_weights.mjs reads them back from CI logs.
+module: the wall time of its own suite, its class and module set-up included
+(the last teardown of a module runs as the next module starts).
+tools/shard_weights.mjs reads them back from CI logs.
 """
 import contextlib
 import json
@@ -12,23 +13,30 @@ import time
 import unittest
 
 
-class TimedResult(unittest.TextTestResult):
-    """Records when each module's first test starts; tests run grouped by module."""
-    starts = []
+class TimedSuite(unittest.TestSuite):
+    """One module's tests; adds the wall time of running them to `seconds`."""
 
-    def startTest(self, test):
+    def __init__(self, module, tests, seconds):
+        super().__init__(tests)
+        self.module, self.seconds = module, seconds
+
+    def run(self, result, debug=False):
+        start = time.perf_counter()
+        try:
+            return super().run(result, debug)
+        finally:
+            self.seconds[self.module] = self.seconds.get(self.module, 0) + time.perf_counter() - start
+
+
+def by_module(tests, seconds):
+    """Consecutive tests of one module as one TimedSuite, in discovery order."""
+    groups = []
+    for test in tests:
         module = test.__class__.__module__
-        if not self.starts or self.starts[-1][0] != module:
-            self.starts.append((module, time.perf_counter()))
-        super().startTest(test)
-
-
-def module_seconds(starts, end):
-    seconds = {}
-    for i, (module, start) in enumerate(starts):
-        stop = starts[i + 1][1] if i + 1 < len(starts) else end
-        seconds[module] = seconds.get(module, 0) + stop - start
-    return seconds
+        if not groups or groups[-1][0] != module:
+            groups.append((module, []))
+        groups[-1][1].append(test)
+    return unittest.TestSuite(TimedSuite(module, group, seconds) for module, group in groups)
 
 
 def cases(suite):
@@ -59,13 +67,14 @@ def main():
     if not requested or missing:
         print(f'Invalid Python shard: empty selection or undiscovered modules: {sorted(missing)}', file=sys.stderr)
         return 1
-    selected = unittest.TestSuite(test for test in discovered if test.__class__.__module__ in requested)
+    seconds = {}
+    selected = by_module([test for test in discovered if test.__class__.__module__ in requested], seconds)
     if not selected.countTestCases():
         print('Python shard selected zero tests', file=sys.stderr)
         return 1
-    result = unittest.TextTestRunner(resultclass=TimedResult).run(selected)
-    for module, seconds in sorted(module_seconds(TimedResult.starts, time.perf_counter()).items()):
-        print(f'shard-weight python {module} {max(seconds, 0.1):.1f}', file=sys.stderr)
+    result = unittest.TextTestRunner().run(selected)
+    for module, spent in sorted(seconds.items()):
+        print(f'shard-weight python {module} {max(spent, 0.1):.1f}', file=sys.stderr)
     return 0 if result.wasSuccessful() else 1
 
 

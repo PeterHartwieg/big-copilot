@@ -38,11 +38,14 @@ function main(run) {
   const logs = jobs.map(job => gh(['api', `repos/{owner}/{repo}/actions/jobs/${job.id}/logs`])).join('\n');
   // Strip the runner's timestamp prefix so each weight line starts the line.
   const weights = parseWeights(logs.replace(/^\S+Z /gm, ''));
-  for (const [kind, total] of [['node', 8], ['python', 2]]) {
-    if (!Object.keys(weights[kind]).length) throw new Error(`no ${kind} weights in run ${run}`);
-    const lanes = assignShards(Object.keys(weights[kind]), weights[kind], total);
-    console.log(`${kind}: ${Object.keys(weights[kind]).length} suites; predicted lane seconds ` +
-      JSON.stringify(lanes.map(lane => Math.round(lane.reduce((sum, suite) => sum + weights[kind][suite], 0)))));
+  // Predict for the lane counts this run used: "Node (i/N)", "Python (i/N)".
+  const lanes = kind => Number(/\/(\d+)\)$/.exec(jobs.find(job => job.name.startsWith(kind === 'node' ? 'Node (' : 'Python ('))?.name || '')?.[1]);
+  for (const kind of ['node', 'python']) {
+    const total = lanes(kind);
+    if (!Object.keys(weights[kind]).length || !total) throw new Error(`no ${kind} lanes or weights in run ${run}`);
+    const assigned = assignShards(Object.keys(weights[kind]), weights[kind], total);
+    console.log(`${kind}: ${Object.keys(weights[kind]).length} suites; predicted seconds for ${total} lanes ` +
+      JSON.stringify(assigned.map(lane => Math.round(lane.reduce((sum, suite) => sum + weights[kind][suite], 0)))));
   }
   writeFileSync(path.join(ROOT, 'tests', 'shard-weights.json'), JSON.stringify(weights, null, 1) + '\n');
 }
