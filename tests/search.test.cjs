@@ -628,9 +628,8 @@ test('a landing still waiting for its page is dropped when the reader goes elsew
     await page.evaluate(() => { ssAsk('prices'); showPage('supply'); });
     // The landing is over, dropped or (the old bug) landed after its wait.
     await page.waitForFunction(() => ssPending === null, null, {polling: 50});
-    // Run every 100 ms retry past the old forty-retry deadline; fastForward
-    // would skip recurring callbacks rather than cover the whole wait.
-    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+    // A negative check: nothing may land later either, so run five virtual
+    // seconds, past the old forty 100 ms retries, firing every timer on the way.
     await page.clock.runFor(5000);
     assert.equal(await page.evaluate(() => page), 'supply');
     assert.equal(await page.locator('.ss-asked').count(), 0);

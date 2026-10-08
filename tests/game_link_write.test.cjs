@@ -575,7 +575,6 @@ test('cancelling the wait sends nothing more, and the next ask picks the open qu
   // pair-status poll, so any timer left behind by the Cancel fires. A request
   // reaches the 'request' listener a moment after it is sent, so give the
   // events a short real settle before looking.
-  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
   await page.clock.runFor(3000);
   await page.waitForTimeout(300);
   assert.deepEqual(sent.slice(at).filter((p) => p.startsWith('/write/') || p.startsWith('/pair/')), [],
