@@ -210,7 +210,8 @@ the map.
   first, then the headhunters' candidates. Its numbers:
   - *Needs* are the hire weeks of the plan each site follows: a shop's the plan its
     Staffing shows (the open-hours plan, every station every open hour nothing has read
-    yet, for a shop nobody works at yet or whose demand data is not complete; its
+    yet, for a shop nobody works at yet or whose demand data is not complete; every
+    station every hour it opens where the player picked *Every open hour*; its
     opening hours never change), a factory's in the sizing the Supply
     switch shows, an office's by customer demand where measured and the office default otherwise. Each hire week is a week one new
     person could work under the game's rules (12 hours a day, 50 a week),
@@ -1526,9 +1527,12 @@ and dims the rest; clicking scrolls there.
   a player arriving from the *Optimize staffing* card knows what they are looking at and
   that the ticks change nothing in the save.
 
-  Under the heading, a two-way pick between the site's two plans: *Cover only* (or *Demand
+  Under the heading, a pick between the site's plans: *Cover only* (or *Demand
   plan* on a shop measured enough to cut serving hours) and *Full cover 24/7*, the demand
-  test. The first is the default; the pick is remembered per shop in this browser, and each
+  test. A staffed shop with complete demand data and not already open around the clock
+  has a third between them, *Every open hour* (issue #436): every station of every role,
+  every hour the shop opens now, whatever the demand, and never an hour longer; it is the
+  open-hours plan (`openCover`) of a shop with complete data. The first is the default; the pick is remembered per shop in this browser, and each
   plan keeps its own ticks, both per company. The test's view says in one line what it is for
   and how far it has got (*Demand data: 5 of 9 days*), draws every
   station every hour, and puts *Open every day 0 to 24* first among its steps on a shop that

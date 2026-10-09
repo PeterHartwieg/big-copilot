@@ -63,6 +63,9 @@ newshop  a shop five days old, open 8 to 20, with two registers, a cleaning
 partday  open 8 to 22 and busy every open hour, both registers staffed all of
          it in the game, twelve days in: complete data, and its demand plan is
          its full cover already, so there is nothing to switch to.
+lunch    open 8 to 22, twelve days in and busy only at lunch: complete data,
+         a demand plan that staffs the registers less than every open hour,
+         so every station every hour it opens (issue #436) is a third week.
 handover a shop whose schedule in the game staffs both registers every
          hour of every day, with two reports for every hour of every weekday:
          the demand data is complete.
@@ -355,6 +358,21 @@ def partday_row():
                 opens=((8, 22),), days=12)
 
 
+def lunch_row():
+    """Complete data on a shop busy only at lunch, open 8 to 22."""
+    people = [employee(f"s{i}", [SERVICE]) for i in range(8)]
+    people += [employee(f"c{i}", [CLEANING]) for i in range(4)]
+    items = [(1, REGISTER), (2, REGISTER), (8, CLEAN_STATION)]
+    week = [
+        {"wd": wd, "employeeId": f"s{(k + wd) % 8}", "itemInstanceId": post,
+         "startingHour": 8, "endingHour": 22, "type": 1}
+        for wd in range(7)
+        for k, post in enumerate((1, 2))
+    ]
+    busy = {h: 40 if 11 <= h < 14 else 1 for h in range(8, 22)}
+    return plan(items, people, busy, shifts=week, opens=((8, 22),), days=12)
+
+
 def rows():
     return {
         "full": full_row(),
@@ -368,6 +386,7 @@ def rows():
         "weekend": weekend_row(),
         "newshop": newshop_row(),
         "partday": partday_row(),
+        "lunch": lunch_row(),
         "handover": handover_row(),
     }
 
