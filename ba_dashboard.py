@@ -16293,7 +16293,7 @@ def _staff_evidence_ingest(history, save, businesses, buildings, grids, names=No
     One active timeline per company; rewinds/conflicting overlap reset it.
     This deliberately loses confidence instead of joining alternate saves.
     Context equality is supporting evidence only: the player confirms continuity
-    at completion, including stock availability in shops.
+    at completion. Shops leave at once: they plan from their own reports.
     """
     character, day = save.root.get("characterId"), save.root.get("Day")
     persistent = bool(character and history.path and history.writable and isinstance(day, int)

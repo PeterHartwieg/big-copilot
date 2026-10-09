@@ -235,7 +235,7 @@ Concurrent writers reject conflicting evidence updates instead of merging sessio
 Imported reports are lower bounds; missing reports are unknown. A deliberate session
 has `pending`, `active`, `ready`, `confirmed` or `stopped` phase. Start proposes current
 spare capacity, or one additional station of a unique limiting role, within installed,
-building, next-role and known arrival limits. A reread with sufficient actual capacity
+building and next-role limits. A reread with sufficient actual capacity
 activates the session from the following game day. Two completed occurrences per
 weekday/hour are required within 28 days. Matching context supports continuity but
 cannot prove it: the player confirms that staffing and stock stayed available before
