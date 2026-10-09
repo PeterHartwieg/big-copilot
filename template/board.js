@@ -494,6 +494,7 @@ function odFailed(chain, gen, err){
   }
   chain.forEach(n => { const a = odAsked.get(n); if(a && a.gen === gen) odAsked.set(n, {gen, state: "error", error}); });
   if(gen !== odGen()) return;
+  odDropHeld(chain);
   /* What waited on it is not done: it is said where it is drawn instead. */
   odThens = odThens.filter(t => t.keepOnError || !chain.includes(t.name));
   odRedraw();
@@ -504,6 +505,7 @@ function odSourceFailed(why){
   let any = false;
   odAsked.forEach((a, n) => { if(a.gen === odGen() && a.state === "loading" && a.stale){ odAsked.set(n, {gen: a.gen, state: "error", error: why || a.stale}); any = true; } });
   if(!any) return;
+  odDropHeld(null);
   odThens = odThens.filter(t => t.keepOnError || odState(t.name) !== "error");
   odRedraw();
 }
@@ -522,6 +524,9 @@ function odBoard(old){
   }
   odBoardScope = scope;
   odThens = odThens.filter(t => odSameScope(t.scope, scope));
+  /* Another company's board drops a held press at once: coming back to the
+     first before its sections arrive must not revive it (odHold()). */
+  if(odHeldAct && !odSameScope(odHeldAct.scope, scope)) odHeldAct = null;
   const dlg = gwOpen;
   if(dlg && dlg.open && typeof dlg._odBoard === "function") dlg._odBoard();
 }
@@ -594,6 +599,7 @@ function odArrived(){
   const ready = odThens.filter(t => odReady(t.name));
   odThens = odThens.filter(t => !odReady(t.name));
   ready.forEach(t => { if(odSameScope(t.scope, odScope())) try{ t.run(); }catch(e){ console.error(e); } });
+  try{ odReplayHeld(); }catch(e){ console.error(e); }
 }
 /* A write dialog that waits for a section (gwConfirm()) paints again: it
    plans once the section is there, and says so while it fails or loads.
@@ -689,8 +695,109 @@ if(typeof document !== "undefined" && typeof document.addEventListener === "func
       if(select ? ["Tab", "Escape"].includes(e.key) : ((e.key !== "Enter" && e.key !== " ")
         || !e.target.closest("button, input, a, [role='button'], [role='option'], [tabindex]"))) return;
     }
-    if(odActionBlocked(select || e.target)){ e.preventDefault(); e.stopImmediatePropagation(); }
+    if(odActionBlocked(select || e.target)){
+      e.preventDefault(); e.stopImmediatePropagation();
+      /* A pointer press is held for the fresh markup, not dropped (issue #435). */
+      if(type === "click" && !select) try{ odHold(e.target); }catch(err){ odHeldAct = null; console.error(err); }
+      /* A key or a choice not held still supersedes a press held before it;
+         a modifier alone (Shift on the way to Shift+Tab) chooses nothing. */
+      else if(type !== "mousedown" && !odModifierOnly(e)) odHeldAct = null;
+    } else if(type === "click" || (type === "keydown" && !odModifierOnly(e))) odHeldAct = null;  // a later press supersedes it
   }, true));
+/* A pointer press on a retained control, held while its sections load (issue
+   #435): it was swallowed silently, so on a linked board, which reads the game
+   every half minute, staffing buttons seemed to do nothing until a refresh.
+   The page now says it is updating (odPaintUpdating()), and once the sections
+   arrive and the page is drawn again, the same control in the fresh markup is
+   pressed (odReplayHeld()). The same control: the data- attributes of the
+   control and of every ancestor up to the nearest one with an id, that id
+   included -- so a shop's block names its shop -- or the control's words where
+   it has no attributes, matching exactly one element both when held and when
+   replayed. Anything else drops the press, as the guard always did: a control
+   that is gone, ambiguous, off or behind another dialog; another company or
+   source; a section that failed; a page or view left; a later press; or one
+   older than OD_REPLAY_MS, because a click is meant for now: one game read
+   (app.js WATCH_MS), since hiring alone takes about 6 s in CPython on a 7.8 MB
+   save and several times that under Pyodide. Keys are not
+   held: their activation differs by control (Space scrolls past a link), and
+   a click is the one thing replay can repeat faithfully. */
+const OD_REPLAY_MS = 30000;
+const odModifierOnly = e => e.type === "keydown" && ["Shift", "Control", "Alt", "Meta", "AltGraph", "CapsLock"].includes(e.key);
+let odHeldAct = null;
+/* Attributes that say how a control looks or reads, not which it is: the
+   words of its tip, or numbers that move with each read. */
+const OD_KEY_SKIP = new Set(["data-tip", "data-tt", "data-tt-title", "data-tt-aria-label", "data-read"]);
+const odKeyAttrs = el => [...el.attributes].filter(a => a.name.startsWith("data-") && !OD_KEY_SKIP.has(a.name))
+  .map(a => `[${a.name}="${CSS.escape(a.value)}"]`).join("");
+function odReplayKey(target){
+  const act = target.closest("button, a, input, label, [role='button'], [role='tab'], [role='option']");
+  if(!act) return null;
+  const own = act.id ? `#${CSS.escape(act.id)}` : act.tagName.toLowerCase() + odKeyAttrs(act);
+  /* A list option's id is its place in the list (hsSelOpt3): its words say which it is. */
+  const words = (!act.id && own === act.tagName.toLowerCase()) || act.matches("[role='option']") ? act.textContent.trim() : null;
+  if(words === "") return null;
+  const chain = [own];
+  for(let el = act.parentElement; el && el !== document.body; el = el.parentElement){
+    if(el.id){ chain.unshift(`#${CSS.escape(el.id)}${odKeyAttrs(el)}`); break; }
+    const at = odKeyAttrs(el);
+    if(at) chain.unshift(`*${at}`);
+  }
+  const key = {sel: chain.join(" "), words};
+  return odKeyMatch(key) === act ? key : null;
+}
+/* The one element a key names, or null where none or several do. */
+function odKeyMatch(key){
+  const all = [...document.querySelectorAll(key.sel)].filter(el => key.words === null || el.textContent.trim() === key.words);
+  return all.length === 1 ? all[0] : null;
+}
+function odHold(target){
+  const key = odReplayKey(target);
+  odHeldAct = key ? Object.assign(key, {needs: odActionNeeds(target), scope: odScope(), view: viewOf(page), at: Date.now()}) : null;
+  odPaintUpdating();
+}
+/* A failed or superseded section takes a press waiting on it with it: Try
+   again must not revive a press from before the failure. */
+function odDropHeld(names){
+  if(odHeldAct && (!names || odHeldAct.needs.some(n => odChain(n).some(c => names.includes(c))))) odHeldAct = null;
+}
+/* Leaving the view drops it, so coming back (Back, then Forward) cannot
+   revive a press the reader walked away from. Checked once the move is done. */
+function odLeftView(){
+  if(typeof queueMicrotask === "function") queueMicrotask(() => { if(odHeldAct && viewOf(page) !== odHeldAct.view) odHeldAct = null; });
+}
+function odReplayHeld(){
+  const h = odHeldAct;
+  if(!h) return;
+  if(!odSameScope(h.scope, odScope()) || viewOf(page) !== h.view || Date.now() - h.at > OD_REPLAY_MS || h.needs.some(odError)){ odHeldAct = null; return; }
+  if(!h.needs.every(odReady)) return;
+  odHeldAct = null;
+  const el = odKeyMatch(h);
+  if(!el || el.disabled || el.getAttribute("aria-disabled") === "true" || el.closest("[hidden], [inert]")) return;
+  const modal = [...document.querySelectorAll("dialog[open]")].find(d => d.matches(":modal"));
+  if(modal && !modal.contains(el)) return;
+  el.click();
+}
+/* Every guarded host whose sections are being worked out says so: busy for
+   assistive technology, and a thin moving bar and a waiting cursor on screen
+   (board.html, .od-updating). Painted after every render, and as a press is
+   held. It clears only the busy mark it set (odBusyMine, kept off the markup
+   so no replay key carries it): a write dialog's own dry run marks its body
+   busy too. */
+const odBusyMine = new WeakSet();
+function odPaintUpdating(){
+  if(typeof document === "undefined" || !document.querySelectorAll) return;
+  const loading = names => !!D && names.some(n => odChain(n).some(c => odState(c) === "loading"));
+  const hosts = new Map();
+  OD_ACTION_SECTIONS.forEach(([sel, names]) => document.querySelectorAll(sel).forEach(el => hosts.set(el, names)));
+  document.querySelectorAll("[data-od-needs]").forEach(el => hosts.set(el, el.dataset.odNeeds.split(" ").filter(Boolean)));
+  document.querySelectorAll(".od-updating").forEach(el => { if(!hosts.has(el)) hosts.set(el, []); });
+  hosts.forEach((names, el) => {
+    const on = loading(names);
+    el.classList.toggle("od-updating", on);
+    if(on && !el.hasAttribute("aria-busy")){ el.setAttribute("aria-busy", "true"); odBusyMine.add(el); }
+    else if(!on && odBusyMine.has(el)){ el.removeAttribute("aria-busy"); odBusyMine.delete(el); }
+  });
+}
 /* Names sort in the language they are shown in; English keeps the order it
    always had. */
 let gnCollator = null;
@@ -8930,7 +9037,10 @@ function sbTick(d, rows, label){
   if(st === "applied" || st === "confirmed")
     return `<span class="sb-tick sb-pg ${st}" role="img" aria-label="${attr(tt("sb.tick.state", "{what}: {state}", {what: label,
       state: st === "applied" ? tt("sb.st.applied", "Applied · awaiting refresh") : tt("sb.st.confirmed", "Confirmed")}))}">${st === "applied" ? pgLinkIcon() : spIcon("tick")}</span>`;
-  return `<button type="button" class="sb-tick" data-sb-keys="${rows.map(r => r.i).join(" ")}" aria-pressed="${sbDone(d, rows)}" aria-label="${
+  /* data-sb-ids: the rows' own keys beside their places (data-sb-keys, which
+     sbToggle() reads), so a press held through a refresh (odHold()) cannot
+     land on a row that moved into this one's place. */
+  return `<button type="button" class="sb-tick" data-sb-keys="${rows.map(r => r.i).join(" ")}" data-sb-ids="${attr(rows.map(r => r.key).join(" "))}" aria-pressed="${sbDone(d, rows)}" aria-label="${
     attr(tt("sb.tick.label.mine", "{what}: marked by you", {what: label}))}" data-tip="${attr(tt("sb.tick.tip.mine", "Mark it once you have set it in the game: a note for you, kept on this device"))}">${spIcon("tick")}</button>`;
 }
 /* What a tick is for, in its accessible name: the product and where. */
@@ -17909,6 +18019,7 @@ function renderAll(initial = false){
     finally{ odHidden = false; odWanted = false; }
   });
   if(typeof odWantView === "function"){ odWantView(shown); odThensAsk(); }
+  if(typeof odPaintUpdating === "function") odPaintUpdating();
   if(typing) typing();
   if(marked || staleDraws.size) paintStale();
   drawFooter();
@@ -18430,6 +18541,7 @@ function paintSubNav(pageId){
   if(pageId === "supply" && page === "supply") paintLocal();
 }
 function showSub(pageId, id){
+  if(typeof odLeftView === "function") odLeftView();
   const sv = SUBS[pageId];
   if(!sv || !sv.items.some(([k]) => k === id)) return;
   /* A site's page lives on Results; any other Company view takes it down. */
@@ -18469,6 +18581,7 @@ function routeSync(){
    site's page is on it, and the ways onto Company that mean the portfolio (the
    nav, a hash, a section) take the site down themselves. */
 function showPage(id, scroll = true, historyMode = "push"){
+  if(typeof odLeftView === "function") odLeftView();
   /* Deferred finder restoration belongs to the visit that opened it. Any
      navigation ends that visit; showFinder() creates the next one's token. */
   if(typeof cityMapPage !== "undefined" && cityMapPage){

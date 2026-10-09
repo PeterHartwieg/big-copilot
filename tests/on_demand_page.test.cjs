@@ -512,6 +512,175 @@ test('Pick more and Done site rows pass the guard while hiring reloads', async t
   assert.deepEqual(await page.evaluate(() => moreReviews), [{only: {'shop|role': 1}}]);
 });
 
+/* Schedules with hiring ready, a day tab not on, and a count of its handler's
+   runs: the press the tests below hold. */
+async function heldTab(t){
+  const page = await open(t, {hash: '#staffing/schedules'});
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => odReady('hiring'));
+  await page.waitForFunction(() => document.querySelectorAll('#secSchedules .sp-daytabs a[data-day]').length > 1);
+  const day = await page.evaluate(() => [...document.querySelectorAll('#secSchedules .sp-daytabs a[data-day]')]
+    .find(a => !a.classList.contains('sp-on')).dataset.day);
+  await page.evaluate(() => {
+    window.tabRuns = 0;
+    document.addEventListener('click', e => { if(e.target.closest('#secSchedules .sp-daytabs a')) window.tabRuns++; });
+  });
+  return {page, tab: `#secSchedules .sp-daytabs a[data-day="${day}"]`};
+}
+const isOn = (page, tab) => page.evaluate(sel => document.querySelector(sel).classList.contains('sp-on'), tab);
+
+test('a press held by the guard while hiring reloads says so, then goes through once it arrives (#435)', async t => {
+  // A linked board reads the game every half minute; the press on a retained
+  // Schedules control was swallowed without a sign, so buttons seemed dead.
+  const {page, tab} = await heldTab(t);
+  await nextBoard(page);
+  assert.equal(await page.evaluate(() => odReady('hiring')), false);
+  // The retained page says it is being worked out again.
+  assert.deepEqual(await page.evaluate(() => {
+    const s = document.querySelector('#secSchedules');
+    return [s.classList.contains('od-updating'), s.getAttribute('aria-busy')];
+  }), [true, 'true']);
+  await page.locator(tab).click();
+  // Held, not run on the board without its sections.
+  assert.equal(await isOn(page, tab), false);
+  assert.equal(await page.evaluate(() => [!!odHeldAct, tabRuns]).then(([h, n]) => h && n === 0), true);
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(sel => document.querySelector(sel)?.classList.contains('sp-on'), tab);
+  assert.equal(await page.evaluate(() => tabRuns), 1, 'replayed exactly once');
+  assert.deepEqual(await page.evaluate(() => {
+    const s = document.querySelector('#secSchedules');
+    return [!!odHeldAct, s.classList.contains('od-updating'), s.hasAttribute('aria-busy')];
+  }), [false, false, false]);
+});
+
+test('a held press is dropped when it is too old, or when another company’s board arrives', async t => {
+  const {page, tab} = await heldTab(t);
+  const settle = async () => {
+    await page.waitForFunction(() => odReady('hiring'));
+    await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+  };
+  // Too old.
+  await nextBoard(page);
+  await page.locator(tab).click();
+  await page.evaluate(() => { odHeldAct.at -= OD_REPLAY_MS + 1; window.release(); });
+  await settle();
+  assert.equal(await isOn(page, tab), false, 'too old');
+  assert.equal(await page.evaluate(() => odHeldAct), null);
+  // Another company's board arrives while the press is held: dropped at
+  // once, so coming back to the first company before hiring cannot revive it.
+  await nextBoard(page);
+  await page.locator(tab).click();
+  assert.equal(await page.evaluate(() => !!odHeldAct), true);
+  await nextBoard(page, true);
+  assert.equal(await page.evaluate(() => odHeldAct), null, 'dropped as another company arrives');
+  await page.evaluate(() => {
+    // Back to the first company, its sections still to come.
+    const core = {...D[GN_SRC], meta: {...D.meta, character: D.meta.character.replace(/-other$/, '')}};
+    Object.values(OD_SECTIONS).flatMap(s => s.keys).forEach(k => delete core[k]);
+    window.lastGen++;
+    Object.defineProperty(core, Symbol.for('bigcopilot.build'), {value: window.lastGen});
+    takeData(core); renderCalm(false);
+  });
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => odReady('hiring'));
+  await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+  assert.equal(await page.evaluate(() => tabRuns), 0, 'not revived on the way back');
+  await page.close();
+});
+
+test('a held press does not survive a failed section and Try again, nor a later press', async t => {
+  const {page, tab} = await heldTab(t);
+  await nextBoard(page);
+  await page.locator(tab).click();
+  assert.equal(await page.evaluate(() => !!odHeldAct), true);
+  await page.evaluate(() => window.held.forEach(f => f.fail()));
+  await page.waitForFunction(() => odError('hiring'));
+  assert.equal(await page.evaluate(() => odHeldAct), null, 'a failure drops it');
+  await page.evaluate(() => { window.held = []; odRetry('hiring'); });
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => odReady('hiring'));
+  assert.equal(await page.evaluate(() => tabRuns), 0, 'Try again does not revive it');
+  // A later press that passes the guard supersedes a held one.
+  await nextBoard(page);
+  await page.locator(tab).click();
+  assert.equal(await page.evaluate(() => !!odHeldAct), true);
+  await page.evaluate(() => document.querySelector('#live, h1, body').dispatchEvent(new MouseEvent('click', {bubbles: true})));
+  assert.equal(await page.evaluate(() => odHeldAct), null, 'a later press');
+});
+
+test('a held press on the Schedules shop picker, whose host the painter marks, picks that shop once hiring arrives', async t => {
+  // Round 2: the painter's mark on #secSchedules leaked into the key, so the
+  // shop picker's press was dropped after all.
+  const page = await open(t, {hash: '#staffing/schedules'});
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => odReady('hiring'));
+  const key = await page.evaluate(() => {
+    const picks = [...document.querySelectorAll('#secSchedules [data-sched-pick]')];
+    return (picks.find(b => b.getAttribute('aria-pressed') !== 'true') || {}).dataset?.schedPick || null;
+  });
+  assert.ok(key, 'a second shop to pick');
+  await page.evaluate(() => {
+    window.pickRuns = 0;
+    document.addEventListener('click', e => { if(e.target.closest('[data-sched-pick]')) window.pickRuns++; });
+  });
+  await nextBoard(page);
+  const sel = `#secSchedules [data-sched-pick="${key}"]`;
+  await page.locator(sel).click();
+  assert.equal(await page.evaluate(() => document.querySelector('#secSchedules').classList.contains('od-updating')), true);
+  assert.doesNotMatch(await page.evaluate(() => odHeldAct.sel), /od-busy/);
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(s => document.querySelector(s)?.getAttribute('aria-pressed') === 'true', sel);
+  assert.equal(await page.evaluate(() => pickRuns), 1);
+});
+
+test('a held press is dropped when its view is left, even if the reader comes back before hiring arrives', async t => {
+  const {page, tab} = await heldTab(t);
+  await nextBoard(page);
+  await page.locator(tab).click();
+  assert.equal(await page.evaluate(() => !!odHeldAct), true);
+  await page.evaluate(() => openRoute('staffing/payroll'));
+  await page.evaluate(() => openRoute('staffing/schedules'));
+  assert.equal(await page.evaluate(() => odHeldAct), null);
+  await page.evaluate(() => window.release());
+  await page.waitForFunction(() => odReady('hiring'));
+  assert.equal(await page.evaluate(() => tabRuns), 0);
+});
+
+test('keys are not held, and the painter keeps a busy mark it did not set', async t => {
+  const {page, tab} = await heldTab(t);
+  await nextBoard(page);
+  await page.locator(tab).focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await page.evaluate(() => odHeldAct), null);
+  // A blocked key on another control supersedes a press held before it.
+  await page.locator(tab).click();
+  assert.equal(await page.evaluate(() => !!odHeldAct), true);
+  await page.locator('#secSchedules .sp-daytabs a[data-day]:not(.sp-on)').last().focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await page.evaluate(() => odHeldAct), null, 'a later key');
+  // A modifier alone on a guarded select chooses nothing: the press stays held.
+  await page.locator(tab).click();
+  assert.equal(await page.evaluate(() => {
+    const sel = document.createElement('select');
+    sel.id = 'heldModSelect'; sel.innerHTML = '<option>a</option><option>b</option>';
+    document.querySelector('#secSchedules').append(sel);
+    ['Shift', 'Control', 'Alt'].forEach(key => sel.dispatchEvent(new KeyboardEvent('keydown', {key, bubbles: true, cancelable: true})));
+    return !!odHeldAct;
+  }), true, 'a modifier alone');
+  await page.evaluate(() => document.querySelector('#heldModSelect').dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowDown', bubbles: true, cancelable: true})));
+  assert.equal(await page.evaluate(() => odHeldAct), null, 'a choice key');
+  await page.evaluate(() => {
+    const b = document.createElement('div');
+    b.id = 'ownBusy'; b.dataset.odNeeds = 'hiring'; b.setAttribute('aria-busy', 'true');
+    document.body.append(b);
+    window.release();
+  });
+  await page.waitForFunction(() => odReady('hiring'));
+  await page.evaluate(() => odPaintUpdating());
+  assert.equal(await page.evaluate(() => document.querySelector('#ownBusy').getAttribute('aria-busy')), 'true');
+  assert.equal(await page.evaluate(() => tabRuns), 0);
+});
+
 test('the capture guard allows text selection, scrolling keys and plain navigation, while gating activation', async t => {
   const page = await open(t, {hash: '#staffing/needs'});
   await page.evaluate(() => window.release());
