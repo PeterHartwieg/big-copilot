@@ -1,4 +1,4 @@
-"""Prospective shop and office demand evidence; all input is synthetic."""
+"""Prospective office demand evidence; all input is synthetic."""
 import copy
 import json
 import tempfile
@@ -60,18 +60,27 @@ class EvidenceTests(unittest.TestCase):
         self.ingest(30)
         self.assertEqual(self.grid['evidence']['session']['phase'], 'ready')
 
-    def test_schedule_changes_never_reinterpret_old_reports_for_shops_or_offices(self):
-        for office in (True, False):
-            with self.subTest(office=office):
-                self.grid['office'] = office
-                self.ingest()
-                before = copy.deepcopy(self.need())
-                for n in (2, 0, 1):
-                    self.capacity(n)
-                    self.ingest()
-                    self.assertEqual(self.need(), before)
-                self.assertEqual(self.need()['basis'][1][8], 'lower')
-                self.assertEqual(self.need()['demand'][1][8], 1)
+    def test_schedule_changes_never_reinterpret_old_reports_for_offices(self):
+        self.ingest()
+        before = copy.deepcopy(self.need())
+        for n in (2, 0, 1):
+            self.capacity(n)
+            self.ingest()
+            self.assertEqual(self.need(), before)
+        self.assertEqual(self.need()['basis'][1][8], 'lower')
+        self.assertEqual(self.need()['demand'][1][8], 1)
+
+    def test_a_shop_reads_its_own_reports_with_no_measurement(self):
+        # Shops plan from their customer reports as they are; no evidence is
+        # kept for them and there is no measurement to start.
+        self.grid['office'] = False
+        history = self.ingest()
+        self.assertNotIn('evidence', self.grid)
+        self.assertTrue(self.grid['countsOnly'])
+        self.assertEqual(self.grid['capHours'], 0)
+        self.assertNotIn(self.business['key'],
+                         history._for('company-a')['staffingEvidence']['sites'])
+        with self.assertRaises(ValueError): self.action('start')
 
     def test_proposal_and_failed_apply_cannot_learn(self):
         self.ingest(); self.action('start'); self.ingest()
@@ -168,17 +177,6 @@ class EvidenceTests(unittest.TestCase):
         self.assertNotEqual(self.need()['basis'][1][8], 'trial')
         self.action('start'); self.ingest()
         self.assertEqual(self.grid['evidence']['session']['targets']['1:8']['capacity'], 3)
-
-    def test_probe_keeps_coverage_of_nonlimiting_roles(self):
-        self.grid['office'] = False
-        self.grid['roles'].append(dict(skill='cash', stationCount=4, counters=4,
-                                       staffed=[[4] * 24 for _ in range(7)]))
-        self.grid['stations'] += [dict(id=f'c{i}', skill='cash', rate=1) for i in range(4)]
-        self.ingest(); self.action('start'); self.ingest()
-        needs = _staff_evidence_need(self.grid)
-        self.assertEqual(needs['lawyer']['need'][1][8], 2)
-        self.assertEqual(needs['cash']['need'][1][8], 4)
-
 
     def test_new_tenant_does_not_import_previous_business_reports(self):
         self.building['creationDay'] = 29
