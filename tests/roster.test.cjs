@@ -2326,6 +2326,73 @@ test('a shop nobody works at any more is on its open-hours plan, and the need ro
 });
 
 
+test('a staffed shop with complete data offers every station every open hour as a third plan', async () => {
+  // Issue #436: "fill the plan with employees instead of going based on
+  // demand", without opening the shop around the clock. The open-hours plan
+  // of a shop with complete data is that week (_open_need()).
+  const page = await shop('lunch', null, null, {noOpenPlan: false});
+  try {
+    assert.equal(ROWS.lunch.openCover.complete, true);
+    assert.equal(ROWS.lunch.fullCover.openNow, false);
+    assert.deepEqual(await pickText(page),
+      [[en('sp.pick.demand'), true], [en('sp.pick.openall'), false], [en('sp.pick.full'), false]]);
+    await page.evaluate(() => q('#sp-roster [data-plan="open"]').click());
+    assert.deepEqual(await pickText(page),
+      [[en('sp.pick.demand'), false], [en('sp.pick.openall'), true], [en('sp.pick.full'), false]]);
+    const out = await page.evaluate(k => {
+      const row = gwRosterPlan(k), base = spRosterRow(k);
+      const same = a => JSON.stringify(row.shifts) === JSON.stringify(a);
+      return {on: spPlanOf(base), variant: row.variant, full: row.full, open: row.openAllHours,
+        // A third week: neither the demand plan's nor full cover's.
+        shifts: same(base.openCover.shifts) && !same(base.shifts) && !same(base.fullCover.shifts),
+        ticks: spTickKey(row), stored: localStorage.getItem('ba_dash_plan:roster-fixture:' + k)};
+    }, KEY);
+    assert.deepEqual(out, {on: 'open', variant: 'open', full: false, open: false, shifts: true,
+      ticks: 'open:roster-fixture:' + KEY, stored: 'open'});
+    assert.match(await page.locator(mon + '.sp-needrow .lab').getAttribute('data-read'), enRe('sp.need.openall'));
+    // The hours' own words: a staffed shop, so not "while nobody works here yet".
+    const reads = await page.locator(mon + '.sp-need').evaluateAll(n => n.map(x => x.dataset.read));
+    assert.equal(reads.length, 14, 'open 8 to 22');
+    assert.ok(reads.every(r => enRe('sp.basis.openpick').test(r) && !enRe('sp.basis.openall').test(r)), reads[0]);
+    // The pick survives the next draw, and going back forgets it.
+    await page.evaluate(() => drawShop());
+    assert.deepEqual((await pickText(page)).map(([, on]) => on), [false, true, false]);
+    await page.evaluate(() => q('#sp-roster .sp-plans [data-plan="demand"]').click());
+    assert.deepEqual((await pickText(page)).map(([, on]) => on), [true, false, false]);
+    assert.equal(await page.evaluate(k => localStorage.getItem('ba_dash_plan:roster-fixture:' + k), KEY), null);
+  } finally { await page.close(); }
+});
+
+test('a shop whose demand plan already staffs every open hour offers no third plan', async () => {
+  // partday: busy every hour it opens, so the open-hours week is the demand plan's.
+  const page = await shop('partday', null, null, {noOpenPlan: false});
+  try {
+    assert.equal(ROWS.partday.openCover.complete, true);
+    assert.deepEqual((await pickText(page)).map(([label]) => label), [en('sp.pick.demand'), en('sp.pick.full')]);
+  } finally { await page.close(); }
+});
+
+test('a stored pick of every open hour is read back by a fresh page', async () => {
+  const page = await shop('lunch', null,
+    `localStorage.setItem('ba_dash_plan:roster-fixture:${KEY}', 'open')`, {noOpenPlan: false});
+  try {
+    assert.deepEqual((await pickText(page)).map(([, on]) => on), [false, true, false]);
+    assert.equal(await page.evaluate(k => spPlanOf(spRosterRow(k)), KEY), 'open');
+  } finally { await page.close(); }
+});
+
+test('a shop already open around the clock offers no third plan, the same week as full cover', async () => {
+  // _open_is_full(): on a shop open 0 to 24 every day the open-hours plan is
+  // a copy of full cover, so a third button would offer the same week twice.
+  const page = await shop('full', null, null, {noOpenPlan: false});
+  try {
+    assert.equal(ROWS.full.fullCover.openNow, true);
+    assert.deepEqual((await pickText(page)).map(([label]) => label), [en('sp.pick.demand'), en('sp.pick.full')]);
+    // A pick stored for it falls back to the demand plan.
+    assert.equal(await page.evaluate(k => { spPlanWrite(k, 'open'); return spPlanOf(spRosterRow(k)); }, KEY), 'demand');
+  } finally { await page.close(); }
+});
+
 test('cleaning leads every day with matching CL labels and game role colors, without moving assignments', async () => {
   const page = await shop('full');
   try {

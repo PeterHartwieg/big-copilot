@@ -5047,8 +5047,10 @@ const spTyped = (row, shifts, ticks) => (shifts || []).reduce(
 /* --- the two plans ----------------------------------------------------------
    Every retail row carries two plans from the same placer: the demand plan,
    cut from the measured hours, and `fullCover`, every station staffed every
-   hour as a two-week demand test. The block shows one at a time, the demand
-   plan unless the player picked the other for this site, and remembers the
+   hour as a two-week demand test; a shop with complete data offers its
+   `openCover` as a third, every station every hour it opens (spOffersOpen()).
+   The block shows one at a time, the demand
+   plan unless the player picked another for this site, and remembers the
    pick in this browser, per company: every character plays the same map, so
    an address alone would carry one company's pick into another's. Storage can
    be missing or refuse, and a board with no character id keeps nothing; the
@@ -5063,18 +5065,21 @@ const spPlanRead = key => {
   const at = spPlanKey(key);
   if(spPlanMem[at]) return spPlanMem[at];
   if(!spCharacter()) return "demand";
-  try { return localStorage.getItem(SP_PLAN_STORE + at) === "full" ? "full" : "demand"; }
+  try {
+    const had = localStorage.getItem(SP_PLAN_STORE + at);
+    return had === "full" || had === "open" ? had : "demand";
+  }
   catch(e){ return "demand"; }
 };
 const spPlanWrite = (key, which) => {
   const at = spPlanKey(key);
-  spPlanMem[at] = which === "full" ? "full" : "demand";
+  spPlanMem[at] = which === "full" || which === "open" ? which : "demand";
   hrStale();
   /* Staffing › Schedules summarises the plan shown (spShownRow()). */
   nxSchedStale();
   if(!spCharacter()) return;
   try {
-    if(which === "full") localStorage.setItem(SP_PLAN_STORE + at, "full");
+    if(which === "full" || which === "open") localStorage.setItem(SP_PLAN_STORE + at, which);
     else localStorage.removeItem(SP_PLAN_STORE + at);
   } catch(e){ /* spPlanMem holds the pick for as long as the page is open */ }
 };
@@ -5110,15 +5115,26 @@ const spOpenFirst = base => {
   const b = (D.businesses || []).find(x => x.key === base.key);
   return !!b && !b.staff;
 };
+/* A third choice beside the demand plan and full cover (issue #436): every
+   station every hour the shop opens now, whatever the demand, and never an
+   hour longer. It is the open-hours plan of a shop with complete data
+   (_open_need()), offered where that plan is not already the first choice,
+   and not where it would repeat another plan's week: a shop already open 0
+   to 24 every day, where it is full cover's (_open_is_full()), or one whose
+   demand plan already serves as many hours, where it is the demand plan's. */
+const spServingHours = shifts => (shifts || []).filter(s => !s.k).reduce((n, s) => n + s.t - s.f, 0);
+const spOffersOpen = base => !!(base && !base.failed && (base.openCover || {}).complete
+  && (base.openCover.shifts || []).length && !(base.fullCover || {}).openNow && !spOpenFirst(base)
+  && spServingHours(base.openCover.shifts) > spServingHours(base.shifts));
 /* The plan a shop is on: "full" where the reader picked the 24/7 test and the
    shop offers it, "open" where the other choice is the open-hours plan
-   (spOpenFirst()), else "demand"; null with no plan. The shop's Staffing
+   (spOpenFirst()) or the reader picked it (spOffersOpen()), else "demand"; null with no plan. The shop's Staffing
    block, its write, Staffing › Schedules, the Staff page (hrVariant()) and
    Staff with no hours (hrIdleHtml()) all read this one, so none of them
    describes or writes a different week. */
 const spPlanOf = base => !base || base.failed ? null
   : spOffersFull(base) && spPlanRead(base.key) === "full" ? "full"
-  : spOpenFirst(base) ? "open" : "demand";
+  : spOpenFirst(base) || spOffersOpen(base) && spPlanRead(base.key) === "open" ? "open" : "demand";
 /* The open-hours plan's own need, which the payload leaves out as it does
    full cover's (_open_need()): with complete data every station of every
    role the hours the shop opens; without, the demand plan's need, with
@@ -5128,6 +5144,8 @@ const spPlanOf = base => !base || base.failed ? null
    was needed. */
 const spOpenNeed = row => {
   const need = {}, basis = {}, complete = !!(row.openCover || {}).complete;
+  /* Picked beside the demand plan on a staffed shop rather than its first choice. */
+  const picked = spOffersOpen(row);
   (row.roles || []).forEach(r => {
     const key = spRoleKey(r), n = (r.stations || []).length;
     need[key] = [...Array(7)].map((_, wd) => [...Array(24)].map((_, h) => {
@@ -5137,7 +5155,7 @@ const spOpenNeed = row => {
     }));
     basis[key] = [...Array(7)].map((_, wd) => [...Array(24)].map((_, h) => {
       const read = ((((row.basis || {})[key] || [])[wd] || [])[h]) || "none";
-      return (complete || read === "none") && spOpenAt((row.open || [])[wd], h) ? (complete ? "openall" : "open") : read;
+      return (complete || read === "none") && spOpenAt((row.open || [])[wd], h) ? (picked ? "openpick" : complete ? "openall" : "open") : read;
     }));
   });
   return {need, basis};
@@ -5188,9 +5206,12 @@ const spShownRow = base => {
 };
 /* The ticks of each plan are kept apart: an entry ticked on one is not an
    entry typed for the other. The full-cover ticks are kept per company as
-   well, and not at all on a board with no character id; the demand plan's
-   keep the key they have always had. */
-const spTickKey = row => !row.full ? row.key
+   well, and not at all on a board with no character id; so are the picked
+   open-hours plan's (spOffersOpen()). The demand plan's, and the open-hours
+   plan's where it is the first choice, keep the key they have always had. */
+const spTickKey = row => row.variant === "open" && spOffersOpen(spRosterRow(row.key))
+  ? (spCharacter() ? `open:${spCharacter()}:${row.key}` : "")
+  : !row.full ? row.key
   : spCharacter() ? `full:${spCharacter()}:${row.key}` : "";
 /* Who the player has to add before the plan can be filled, as one sentence:
    "assign ANA, BEN (unassigned) and hire 2 Customer Service". The planner uses
@@ -5333,6 +5354,9 @@ const SP_BASIS_READ = {
   get full(){ return " · " + tt("sp.basis.full", "<b>full cover</b>: every station, every hour, to measure demand"); },
   get open(){ return " · " + tt("sp.basis.open", "<b>every station</b>: no customers read for this hour yet"); },
   get openall(){ return " · " + tt("sp.basis.openall", "<b>every station</b>, every hour the shop opens, while nobody works here yet"); },
+  /* The same week picked on a staffed shop (spOffersOpen()), where "nobody
+     works here yet" is not true. */
+  get openpick(){ return " · " + tt("sp.basis.openpick", "<b>every station</b>, every hour the shop opens, whatever the demand"); },
 };
 function spNeedAt(row, wd, h){
   let n = 0, basis = null;
@@ -6275,9 +6299,12 @@ function spPlanPick(base, full){
       ? `<span class="sp-pickwhy">${tt("sp.pick.asstaffed", "Demand data complete, as staffed: an empty station may have turned customers away.")}</span>`
     : `<span class="sp-pickwhy">${tt("sp.pick.run", "Run it until {n} days after the shop's first customer, then switch to the demand plan.", {n: needed})}${
       Number.isFinite(measured) ? ` <b class="sp-progress">${tt("sp.pick.progress", "Demand data: {n} of {of} days.", {n: Math.min(measured, needed), of: needed})}</b>` : ""}</span>`;
-  return `<div class="sp-pick"><span class="seg sp-plans" role="group" aria-label="${attr(tt("sp.pick.plan", "Plan"))}"><a href="#" data-plan="demand"${
-    full ? "" : ` class="sp-on" aria-current="true"`}>${first}</a><a href="#" data-plan="full"${
-    full ? ` class="sp-on" aria-current="true"` : ""}>${tt("sp.pick.full", "Full cover 24/7")}</a></span>${done}</div>`;
+  const on = full ? "full" : spPlanOf(base) === "open" && spOffersOpen(base) ? "open" : "demand";
+  const seg = (plan, label) => `<a href="#" data-plan="${plan}"${
+    on === plan ? ` class="sp-on" aria-current="true"` : ""}>${label}</a>`;
+  return `<div class="sp-pick"><span class="seg sp-plans" role="group" aria-label="${attr(tt("sp.pick.plan", "Plan"))}">${
+    seg("demand", first)}${spOffersOpen(base) ? seg("open", tt("sp.pick.openall", "Every open hour")) : ""}${
+    seg("full", tt("sp.pick.full", "Full cover 24/7"))}</span>${done}</div>`;
 }
 
 /* An office's Staffing: demand or the office default (officeStaffing) against the
@@ -24808,7 +24835,8 @@ function gwSchedule(key){
       const whole = tt("sp.gw.plan.whole", "replaces the whole week");
       const which = row.office && !row.demandBased ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.office", "Office default")}</span><span class="gw-only">${tt("sp.gw.plan.adds", "adds to the week")}</span>`
         : row.full ? `<span class="gw-plan full">${gwSvg("sun")}${tt("sp.pick.full", "Full cover 24/7")}</span><span class="gw-only">${tt("sp.gw.plan.every", "every station, every hour")}</span>`
-        : row.variant === "open" ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.pick.open", "Open hours")}</span><span class="gw-only">${whole}</span>`
+        : row.variant === "open" ? `<span class="gw-plan">${gwSvg("roster")}${spOffersOpen(spRosterRow(row.key))
+          ? tt("sp.pick.openall", "Every open hour") : tt("sp.pick.open", "Open hours")}</span><span class="gw-only">${whole}</span>`
         : !row.office && spCoverOnly(row) ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.cover", "Cleaning and security")}</span><span class="gw-only">${whole}</span>`
         : `<span class="gw-plan">${gwSvg("roster")}${tt("sp.pick.demand", "Demand plan")}</span><span class="gw-only">${whole}</span>`;
       const kept = week.kept && !row.office ? gwCall("info", "info", tt("sp.gw.sch.kept", {
