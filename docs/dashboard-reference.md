@@ -1529,8 +1529,9 @@ and dims the rest; clicking scrolls there.
 
   Under the heading, a pick between the site's plans: *Cover only* (or *Demand
   plan* on a shop measured enough to cut serving hours) and *Full cover 24/7*, the demand
-  test. A staffed shop with complete demand data and not already open around the clock
-  has a third between them, *Every open hour* (issue #436): every station of every role,
+  test. A staffed shop with complete demand data, not already open around the clock, whose
+  demand plan serves fewer hours than every station every open hour would, has a third
+  between them, *Every open hour* (issue #436): every station of every role,
   every hour the shop opens now, whatever the demand, and never an hour longer; it is the
   open-hours plan (`openCover`) of a shop with complete data. The first is the default; the pick is remembered per shop in this browser, and each
   plan keeps its own ticks, both per company. The test's view says in one line what it is for
