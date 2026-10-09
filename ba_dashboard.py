@@ -2930,7 +2930,7 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         save, buildings, businesses, stations, _office_posts(names), crew_skill, names
     )
     _staff_evidence_ingest(history, save, businesses, buildings, all_grids, names)
-    grids = [{k: v for k, v in grid.items() if k not in ("evidence", "arrivalCeiling")}
+    grids = [{k: v for k, v in grid.items() if k not in ("evidence", "countsOnly")}
              for grid in all_grids if grid["reported"]]
     service_wage = _service_wages(staff, {b["key"]: b["status"] for b in businesses})
     hour_findings = _hour_findings([g for g in all_grids if g["reported"]], businesses, service_wage)
@@ -2959,7 +2959,8 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     rivalry = _rivalry(save, summaries, history, character, day)
     if not history.write():
         for grid in all_grids:
-            grid["evidence"]["persistent"] = False
+            if "evidence" in grid:
+                grid["evidence"]["persistent"] = False
     gate = max(profit_avg7 * MATERIAL_SHARE, MATERIAL_FLOOR)
     factories = supply.get("factories", {})
     build.private["posts"] = _take_posts(factories)
@@ -15363,7 +15364,7 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
     by_key = {b["key"]: b for b in businesses}
     out = []
     for grid in grids:
-        uncertain = "evidence" in grid
+        uncertain = "evidence" in grid or grid.get("countsOnly")
         if uncertain and not grid.get("cinemaCapacity"):
             continue  # historical counts cannot diagnose current staffing
         business = by_key[grid["key"]]
@@ -16186,9 +16187,12 @@ def _prune_days(store: dict, keep: int, day: int | None = None) -> None:
         del store[old]
 
 
-# Shared shop/office demand evidence. Reports never acquire today's capacity
+# Office demand evidence. Reports never acquire today's capacity
 # retrospectively. Only an explicitly requested and subsequently confirmed
 # measurement can establish demand; imported counts remain lower bounds.
+# Shops are not part of it: their demand plan is read from their own reports
+# (_need_curve(), _run_measured()), with no measurement to start (Peter,
+# 9 October 2026).
 STAFF_EVIDENCE_VERSION = 1
 STAFF_EVIDENCE_DAYS = 42
 
@@ -16307,21 +16311,18 @@ def _staff_evidence_ingest(history, save, businesses, buildings, grids, names=No
     live = set()
     for grid in grids:
         key = grid["key"]
-        if grid.get("office") and not any(grid["open"]):
+        if not grid.get("office"):
+            # Old counts still cannot name today's bottleneck, so a shop's
+            # hour findings stay off (_hour_findings()); its plan reads them.
+            grid["capHours"] = 0
+            grid["countsOnly"] = True
+            continue
+        if not any(grid["open"]):
             grid["open"] = [[list(slot) for slot in day] for day in ALL_DAY_OPEN]
         business, building = by_key[key], by_site[key]
         identity = _staff_digest([key, building.get("creationDay"), business["typeSlug"], building.get("id")])
         live.add(key)
         context = _staff_context(save, business, building, grid)
-        if not grid.get("office"):
-            premises = load_buildings(save).get(_address_of(building)) or {}
-            initial = _initial_customers(save.root.get("buildNumberAtStart"),
-                _size_cap(premises, _door_caps(names or Names({}))), business["typeSlug"],
-                premises.get("m") or 0, save.items(building.get("cachedAvailableProducts")))
-            grid["arrivalCeiling"] = _arrival_ceiling(business["typeSlug"], initial,
-                business.get("promotion") or 0,
-                (save.deref(save.root.get("gameVariables")) or {}).get("baseCustomerPromotionMultiplier", 0.55),
-                grid["door"])
         reports = _staff_reports(save, building, day) if isinstance(day, int) else {}
         old = store["sites"].get(key)
         good = persistent and _staff_record_valid(old) and old.get("identity") == identity
@@ -16507,8 +16508,6 @@ def _staff_measurement_action(history, character, key, action, grid, day):
                         bounds.append(role["staffed"][wd][h] or max(rates, default=0))
                     if grid["door"]:
                         bounds.append(grid["door"])
-                    if grid.get("arrivalCeiling"):
-                        bounds.append(grid["arrivalCeiling"][wd][h])
                     capacity = min(bounds, default=0)
                     if capacity > 0:
                         targets[f"{wd}:{h}"] = {"capacity": capacity}
@@ -16531,8 +16530,6 @@ def _staff_measurement_action(history, character, key, action, grid, day):
                     bounds += [r["staffed"][wd][h] for r in grid["roles"] if r is not role]
                     if grid["door"]:
                         bounds.append(grid["door"])
-                    if grid.get("arrivalCeiling"):
-                        bounds.append(grid["arrivalCeiling"][wd][h])
                     expanded = min(bounds)
                     if expanded <= capacity:
                         continue

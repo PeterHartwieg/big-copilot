@@ -212,11 +212,15 @@ it); `needDay`, the uncapped figure Demand sizing works from plus the margin; an
 null where no demand can be read. `supply.factories.sites[]` counts `running` machines (a recipe and
 somebody posted) beside the placed ones (`machines`).
 
-Shop and office plans share persistent demand evidence. `build_core()` calls
+Office plans keep persistent demand evidence. `build_core()` calls
 `_staff_evidence_ingest()` before `History.write()` and attaches a detached private
-`evidence` view to the planning grids. Neither those observations nor their context
+`evidence` view to the office planning grids. Shop grids get none: a shop's demand plan
+is read from its own reports by `_need_curve()` over `_run_measured()`, with the full-cover
+test and its hand-over, and there is no measurement to start (Peter, 9 October 2026).
+The ingest marks a shop grid `countsOnly` and zeroes its `capHours`, so `_hour_findings()`
+still raises no historical-capacity finding for it; only the cinema equipment limit stays. Neither those observations nor their context
 snapshots ship in `hours`; lazy sections never mutate history. `_need_curve()` uses
-`_staff_evidence_need()` for these grids. Legacy direct callers can still supply an
+`_staff_evidence_need()` for the office grids. Legacy direct callers can still supply an
 already-measured grid.
 
 `History` keeps versioned `staffingEvidence.sites` per character, keyed by address
@@ -239,10 +243,10 @@ any unconstrained result becomes learned demand. All samples must have headroom;
 constrained results remain uncertain. Applying, undoing or previewing a schedule is
 never a demand observation. Changed active context stops the session.
 
-Both row types carry `demandBased: true` and `demandEvidence` (persistence availability,
+Office rows carry `demandBased: true` and `demandEvidence` (persistence availability,
 phase, target/sample counts, confirmed-cell count and stale flag). Their `basis` values
 are `confirmed`, `lower`, `trial`, `none` and `closed`. Unknown cells retain baseline
-coverage and positive served-customer floors; new sites use their initial staffing
+coverage and positive served-customer floors; new offices use their initial staffing
 fallback. The office fallback is `_office_runs()`: proportionally three computers
 around the clock for capacity 50, all on weekdays 08–22, half on weekends, clipped to
 opening hours. Office professional hours use one computer per customer per hour.

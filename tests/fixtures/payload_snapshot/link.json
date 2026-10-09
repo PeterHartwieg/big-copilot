@@ -6906,16 +6906,7 @@
     "security": 0,
     "shifts": 0
    },
-   "demandBased": true,
    "demandDataComplete": false,
-   "demandEvidence": {
-    "cells": 0,
-    "confirmed": 0,
-    "persistent": false,
-    "phase": "unknown",
-    "samples": 0,
-    "stale": false
-   },
    "fullCover": {
     "addPeople": {
      "assign": [],
@@ -7198,16 +7189,7 @@
     "security": 0,
     "shifts": 1
    },
-   "demandBased": true,
    "demandDataComplete": false,
-   "demandEvidence": {
-    "cells": 0,
-    "confirmed": 0,
-    "persistent": false,
-    "phase": "unknown",
-    "samples": 0,
-    "stale": false
-   },
    "fullCover": {
     "addPeople": {
      "assign": [],
@@ -7508,16 +7490,7 @@
     "security": 0,
     "shifts": 2
    },
-   "demandBased": true,
    "demandDataComplete": false,
-   "demandEvidence": {
-    "cells": 0,
-    "confirmed": 0,
-    "persistent": false,
-    "phase": "unknown",
-    "samples": 0,
-    "stale": false
-   },
    "fullCover": {
     "addPeople": {
      "assign": [],

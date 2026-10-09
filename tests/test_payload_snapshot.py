@@ -196,7 +196,9 @@ class PayloadSnapshotTests(unittest.TestCase):
         self.assertTrue(day40["alerts"] and day40["staffing"])
         # Imported reports cannot diagnose historical staffing constraints.
         self.assertEqual(day40["hourFindings"], [])
-        self.assertTrue(all(r.get("demandEvidence") for r in day40["staffing"]))
+        # Shops plan from those reports as they are, with no measurement.
+        self.assertFalse(any(r.get("demandEvidence") for r in day40["staffing"]))
+        self.assertIn("measured", json.dumps([r.get("basis") for r in day40["staffing"]]))
         self.assertTrue(day40["factoryStaffing"]["cap"] and day40["factoryStaffing"]["dem"])
         self.assertTrue(day40["plan"]["prices"])
         self.assertTrue(day40["trends"] and all(t["ready"] for t in day40["trends"]))
