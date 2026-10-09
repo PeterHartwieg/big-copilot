@@ -699,7 +699,10 @@ if(typeof document !== "undefined" && typeof document.addEventListener === "func
       e.preventDefault(); e.stopImmediatePropagation();
       /* A pointer press is held for the fresh markup, not dropped (issue #435). */
       if(type === "click" && !select) try{ odHold(e.target); }catch(err){ odHeldAct = null; console.error(err); }
-    } else if(type === "click" || type === "keydown") odHeldAct = null;  // a later press supersedes it
+      /* A key or a choice not held still supersedes a press held before it;
+         a modifier alone (Shift on the way to Shift+Tab) chooses nothing. */
+      else if(type !== "mousedown" && !odModifierOnly(e)) odHeldAct = null;
+    } else if(type === "click" || (type === "keydown" && !odModifierOnly(e))) odHeldAct = null;  // a later press supersedes it
   }, true));
 /* A pointer press on a retained control, held while its sections load (issue
    #435): it was swallowed silently, so on a linked board, which reads the game
@@ -719,6 +722,7 @@ if(typeof document !== "undefined" && typeof document.addEventListener === "func
    held: their activation differs by control (Space scrolls past a link), and
    a click is the one thing replay can repeat faithfully. */
 const OD_REPLAY_MS = 30000;
+const odModifierOnly = e => e.type === "keydown" && ["Shift", "Control", "Alt", "Meta", "AltGraph", "CapsLock"].includes(e.key);
 let odHeldAct = null;
 /* Attributes that say how a control looks or reads, not which it is: the
    words of its tip, or numbers that move with each read. */
@@ -9033,7 +9037,10 @@ function sbTick(d, rows, label){
   if(st === "applied" || st === "confirmed")
     return `<span class="sb-tick sb-pg ${st}" role="img" aria-label="${attr(tt("sb.tick.state", "{what}: {state}", {what: label,
       state: st === "applied" ? tt("sb.st.applied", "Applied · awaiting refresh") : tt("sb.st.confirmed", "Confirmed")}))}">${st === "applied" ? pgLinkIcon() : spIcon("tick")}</span>`;
-  return `<button type="button" class="sb-tick" data-sb-keys="${rows.map(r => r.i).join(" ")}" aria-pressed="${sbDone(d, rows)}" aria-label="${
+  /* data-sb-ids: the rows' own keys beside their places (data-sb-keys, which
+     sbToggle() reads), so a press held through a refresh (odHold()) cannot
+     land on a row that moved into this one's place. */
+  return `<button type="button" class="sb-tick" data-sb-keys="${rows.map(r => r.i).join(" ")}" data-sb-ids="${attr(rows.map(r => r.key).join(" "))}" aria-pressed="${sbDone(d, rows)}" aria-label="${
     attr(tt("sb.tick.label.mine", "{what}: marked by you", {what: label}))}" data-tip="${attr(tt("sb.tick.tip.mine", "Mark it once you have set it in the game: a note for you, kept on this device"))}">${spIcon("tick")}</button>`;
 }
 /* What a tick is for, in its accessible name: the product and where. */

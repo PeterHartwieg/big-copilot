@@ -652,6 +652,23 @@ test('keys are not held, and the painter keeps a busy mark it did not set', asyn
   await page.locator(tab).focus();
   await page.keyboard.press('Enter');
   assert.equal(await page.evaluate(() => odHeldAct), null);
+  // A blocked key on another control supersedes a press held before it.
+  await page.locator(tab).click();
+  assert.equal(await page.evaluate(() => !!odHeldAct), true);
+  await page.locator('#secSchedules .sp-daytabs a[data-day]:not(.sp-on)').last().focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await page.evaluate(() => odHeldAct), null, 'a later key');
+  // A modifier alone on a guarded select chooses nothing: the press stays held.
+  await page.locator(tab).click();
+  assert.equal(await page.evaluate(() => {
+    const sel = document.createElement('select');
+    sel.id = 'heldModSelect'; sel.innerHTML = '<option>a</option><option>b</option>';
+    document.querySelector('#secSchedules').append(sel);
+    ['Shift', 'Control', 'Alt'].forEach(key => sel.dispatchEvent(new KeyboardEvent('keydown', {key, bubbles: true, cancelable: true})));
+    return !!odHeldAct;
+  }), true, 'a modifier alone');
+  await page.evaluate(() => document.querySelector('#heldModSelect').dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowDown', bubbles: true, cancelable: true})));
+  assert.equal(await page.evaluate(() => odHeldAct), null, 'a choice key');
   await page.evaluate(() => {
     const b = document.createElement('div');
     b.id = 'ownBusy'; b.dataset.odNeeds = 'hiring'; b.setAttribute('aria-busy', 'true');
