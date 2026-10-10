@@ -1,5 +1,11 @@
 [
   {
+    "pr": 443,
+    "date": "2026-10-10",
+    "title": "See a new factory's inputs before you build it",
+    "summary": "Plan a factory now lists the Ingredients for a factory you have not built yet: each input per day and per week, with cash where the company already pays a price, following the machines you plan. The checklist's Raw material contract row names each input with its weekly amount, so the import contracts can be set up before the factory opens."
+  },
+  {
     "pr": 440,
     "date": "2026-10-10",
     "title": "Staff one factory from Production",

@@ -1651,6 +1651,8 @@ g[data-series].off{opacity:0}
    column only exists once one ingredient has a price. */
 .ingtable .usedby{display:block;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2);font-family:Archivo,sans-serif}
 .ingtable.nocash .cash,.ingtable.nochange .chg{display:none}
+/* A factory not yet built (#442): no contracts to compare, so no order columns. */
+.ingtable.ingnew .ord,.ingtable.ingnew .chg{display:none}
 /* Beside the sidebar a 1280 px window leaves it about 950 px: the names wrap,
    the heads never do, and a longer language scrolls the table in its box. */
 .ingtable td:first-child{white-space:normal}
@@ -4485,10 +4487,11 @@ section.od-updating{background-image:linear-gradient(90deg,transparent,var(--acc
     </section>
     <section class="sec rv" id="secIngredients" data-sub="plan">
       <div class="sechead"><h2 data-tt="gr.ing.title">Ingredients</h2>
-        <span class="why" data-tt-tip="gr.ing.why" data-tip="What the machines above eat, added up across every line that shares an ingredient. Per day and per week are this range's own figures. Company target is the order for the whole company once the plan runs: never less than a week of this range, and beyond that what the range adds over what your factories already eat, on top of every contract already active, rounded up to the hundred the logistics manager takes. You type that target across your importer contracts in the game yourself; the board never guesses a split per warehouse. Hover an ingredient for what is on order today, and Used by for every line that eats it. A cash column appears once the company already buys one of these ingredients, at the price it last paid." tabindex="0"><i>?</i></span></div>
+        <span class="why" data-tt-tip="gr.ing.why" data-tip="What the machines above eat, added up across every line that shares an ingredient. Per day and per week are this range's own figures. Company target is the order for the whole company once the plan runs: never less than a week of this range, and beyond that what the range adds over what your factories already eat, on top of every contract already active, rounded up to the hundred the logistics manager takes. You type that target across your importer contracts in the game yourself; the board never guesses a split per warehouse. Hover an ingredient for what is on order today, and Used by for every line that eats it. A cash column appears once the company already buys one of these ingredients, at the price it last paid." tabindex="0"><i>?</i></span>
+        <span class="why ing-whynew" data-tt-tip="gr.ing.whyNew" data-tip="What the planned machines eat, added up across every line that shares an ingredient: the amounts to put on import contracts before the factory runs. A cash column appears once the company already buys one of these ingredients, at the price it last paid." tabindex="0" hidden><i>?</i></span></div>
       <div class="scrollx"><table class="ingtable" id="ingTable">
-        <thead><tr><th data-tt="gr.ing.col.name">Ingredient</th><th class="l" data-tt="gr.ing.col.usedBy">Used by</th><th data-tt="gr.ing.col.day">Per day</th><th data-tt="gr.ing.col.week">Per week</th><th data-tt="gr.ing.col.target" data-tt-tip="gr.ing.col.target.tip" data-tip="Company-wide: you type each one across your importer contracts in the game; the board adds them up and never guesses a split per warehouse.">Company target</th>
-          <th data-tt="gr.ing.col.onOrder" data-tt-tip="gr.ing.col.onOrder.tip" data-tip="Active contracts only. For Smart Delivery, a week at most: the most its stock levels supply in a week.">On order now</th><th class="chg" data-tt="gr.ing.col.change">Change</th><th class="cash" data-tt="gr.ing.col.cash">Cash / week</th></tr></thead>
+        <thead><tr><th data-tt="gr.ing.col.name">Ingredient</th><th class="l" data-tt="gr.ing.col.usedBy">Used by</th><th data-tt="gr.ing.col.day">Per day</th><th data-tt="gr.ing.col.week">Per week</th><th class="ord" data-tt="gr.ing.col.target" data-tt-tip="gr.ing.col.target.tip" data-tip="Company-wide: you type each one across your importer contracts in the game; the board adds them up and never guesses a split per warehouse.">Company target</th>
+          <th class="ord" data-tt="gr.ing.col.onOrder" data-tt-tip="gr.ing.col.onOrder.tip" data-tip="Active contracts only. For Smart Delivery, a week at most: the most its stock levels supply in a week.">On order now</th><th class="chg" data-tt="gr.ing.col.change">Change</th><th class="cash" data-tt="gr.ing.col.cash">Cash / week</th></tr></thead>
         <tbody id="ingBody"></tbody>
         <tfoot id="ingFoot"></tfoot>
       </table></div>
