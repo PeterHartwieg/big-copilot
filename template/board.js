@@ -13282,9 +13282,10 @@ function drawPlan(){
   /* Hidden also while another Expansion view is on screen: a redraw of every
      page (renderCalm(), a language switch) must not show it under that view. */
   const ing = $("secIngredients");
-  /* The order-ahead table belongs to a factory the player runs, in step 1. */
+  /* The order-ahead table belongs to step 1, for a factory the player runs
+     or a new one (#442). */
   ofIngNone = none;
-  if(ing) ing.hidden = none || !String(ing.dataset.sub || "").split(" ").includes(sub.growth) || ofStep !== "what" || !ofIsOwned();
+  if(ing) ing.hidden = none || !String(ing.dataset.sub || "").split(" ").includes(sub.growth) || ofStep !== "what";
   /* The table scrolls inside its own box on a narrow window (.scrollx). */
   $("planBody").innerHTML = none ? `
     <div class="scrollx"><table data-pershop="${perShop}" data-shops="${shops}" data-peak="${D.plan.peak || 1}" data-products="${cat[planType].products.length + added.length}" data-ingmeta="${attr(JSON.stringify(meta))}">
@@ -14035,13 +14036,17 @@ function ofUntilRows(plan){
       quick + ingame, roles.length < 2 ? 50 : 0));
   }
   /* Goods in and out */
-  const needIn = Object.keys(ofRawWeek(Object.fromEntries(adds.map(l => [l.slug, owned ? l.m - (now[l.slug] || 0) : l.m]))));
+  const rawWeek = ofRawWeek(Object.fromEntries(adds.map(l => [l.slug, owned ? l.m - (now[l.slug] || 0) : l.m])));
+  const needIn = Object.keys(rawWeek);
   const bare = needIn.filter(slug => { const s = src(slug); return !(s && s.active); });
   const names = list => spEsc(ofNames(list.map(itemName)));
+  /* A new factory's contracts are set up before it runs, so they carry the week's amounts (#442). */
+  const contractNames = list => owned ? names(list)
+    : spEsc(ofNames(list.map(slug => tt("gr.of.ck.contract.amount", "{name} ×{n:,} / week", {name: itemName(slug), n: Math.ceil(rawWeek[slug])}))));
   goods.push(osCk("crate", bare.length ? "todo" : "done", `${owned ? tt("gr.of.ck.contract.new", "New ingredients on a contract") : tt("gr.of.ck.contract", "Raw material contract")} ${ofHand()}`,
-    bare.length ? tt("gr.of.ck.contract.todo", "<span class=\"w\">No import contract brings {items} yet</span>", {items: names(bare)})
+    bare.length ? tt("gr.of.ck.contract.todo", "<span class=\"w\">No import contract brings {items} yet</span>", {items: contractNames(bare)})
       : tt("gr.of.ck.contract.done", "<span class=\"ok\">Every ingredient is on an import contract</span>"),
-    bare.length ? osIngame(tt("gr.of.ck.contract.ingame", "Go to an importer with your Purchasing Agent and add {items} to a contract, delivered to {address} or to your depot.", {items: names(bare), address})) : ""));
+    bare.length ? osIngame(tt("gr.of.ck.contract.ingame", "Go to an importer with your Purchasing Agent and add {items} to a contract, delivered to {address} or to your depot.", {items: contractNames(bare), address})) : ""));
   const eatsAll = new Set(lines.flatMap(l => l.ingredients.flatMap(i => [i.slug, (view.aliases || {})[i.slug] || i.slug])));
   const needs = site ? (site.needs || []).filter(n => eatsAll.has(n.slug)) : [];
   const shortIn = needs.filter(n => n.perWeek > 0 && (n.arrives || 0) < n.perWeek * 0.95);
@@ -14243,12 +14248,12 @@ function ofRunHtml(plan){
     <p class="os-dim ff-lead">${tt("gr.of.run.note2", "A day. Left is what the save's delivery log saw go, its last seven days; staffed hours allow is an estimate from the line's rate and its staffed hours.")}</p></section></div>${whyHtml}`;
 }
 
-/* Ingredients (the order-ahead table) belong to step 1 for a factory the
-   player runs; the view's sweep (showSub()) shows every section of the view. */
+/* Ingredients (the order-ahead table) belong to step 1; the view's sweep
+   (showSub()) shows every section of the view. */
 let ofIngNone = false;
 function ofIngShow(){
   const ing = $("secIngredients");
-  if(ing && (ofIngNone || ofStep !== "what" || !ofIsOwned())) ing.hidden = true;
+  if(ing && (ofIngNone || ofStep !== "what")) ing.hidden = true;
 }
 /* Each finished day the save's delivery log covers: what left the factory,
    the piers' part of it lighter, against the plan's day as a dashed line
@@ -22235,8 +22240,8 @@ function planDraw(){
         tt("gr.ing.pausedTip", "Every contract for it is paused; none of it counts as ordered"))}` : ""}</td>` +
       `<td class="l"><span class="usedby" data-tip="${attr(tt("gr.ing.usedBy", "Used by {list}", {list: grList(r.by)}))}">${
         r.by.length > 2 ? tt("gr.list.plus", "{list} +{n}", {list: grCutList(r.by.slice(0, 2).map(spEsc)), n: r.by.length - 2}) : grList(r.by.map(spEsc))}</span></td>` +
-      `<td>${fmtN(r.week / 7)}</td><td class="wk">${fmtN(r.week)}</td><td><span class="set">${fmtN(o.target)}</span></td>` +
-      `<td>${ordered === null ? `<span class="quiet">${tt("gr.ing.notOrdered", "not ordered")}</span>` : num(ordered)
+      `<td>${fmtN(r.week / 7)}</td><td class="wk">${fmtN(r.week)}</td><td class="ord"><span class="set">${fmtN(o.target)}</span></td>` +
+      `<td class="ord">${ordered === null ? `<span class="quiet">${tt("gr.ing.notOrdered", "not ordered")}</span>` : num(ordered)
         }${ordered !== null && i.smart && i.active ? ` <span class="sub plan-smart" data-tip="${attr(tt("gr.ing.smartTip", "Smart Delivery keeps a stock level at each depot; this is the most those levels supply in a week, which the target is compared with. Hover the ingredient for each depot's level"))}">${
           tt("gr.ing.smart.short", "Smart")}</span>` : ""
         }${i.paused ? ` ${chipHtml("warn", tt("gr.ing.pausedN", "paused {n:,}", {n: Math.round(i.paused)}),
@@ -22253,8 +22258,13 @@ function planDraw(){
     if(table) table.classList.toggle("nocash", !priced);
     /* A column with nothing to change in it is not shown. */
     if(table) table.classList.toggle("nochange", !changes);
+    /* A factory not yet built has no contracts to compare against: the order
+       columns go, and the amounts are what the new contracts need (#442). */
+    const newSite = !ofIsOwned();
+    if(table) table.classList.toggle("ingnew", newSite);
+    $$("#secIngredients .sechead .why").forEach(w => { w.hidden = w.classList.contains("ing-whynew") !== newSite; });
     const foot = $("ingFoot");
-    if(foot) foot.innerHTML = total ? `<tr><td class="l">${tt("gr.ing.total", "Total")}</td><td></td><td>${fmtN(raw / 7)}</td><td>${fmtN(raw)}</td><td>${fmtN(targetSum)}</td><td></td><td class="chg"></td><td class="cash">${cash ? fmt(cash) : ""}</td></tr>` : "";
+    if(foot) foot.innerHTML = total ? `<tr><td class="l">${tt("gr.ing.total", "Total")}</td><td></td><td>${fmtN(raw / 7)}</td><td>${fmtN(raw)}</td><td class="ord">${fmtN(targetSum)}</td><td class="ord"></td><td class="chg"></td><td class="cash">${cash ? fmt(cash) : ""}</td></tr>` : "";
     /* The Total row is the week's cost; where the prices come from is the
        Cash / week head's tip, not a sentence under the table (A14). */
     const cashHead = table && q("th.cash", table);
