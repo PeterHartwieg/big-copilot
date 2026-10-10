@@ -1288,7 +1288,7 @@
  "gr.ing.total": "Total",
  "gr.ing.usedBy": "Usado por {list}",
  "gr.ing.why": "Soma do consumo das máquinas acima em todas as linhas que usam o mesmo ingrediente. Os valores por dia e por semana são desta faixa. A meta da empresa é o pedido total após executar o plano: nunca menos que uma semana desta faixa, mais o que ela acrescenta ao consumo atual das suas fábricas e a todos os contratos ativos, arredondado para a centena usada pelo Gerente de Logística. Você distribui a meta entre seus contratos de importação no jogo; o painel não presume quanto vai para cada armazém. Passe o cursor sobre um ingrediente para ver os pedidos de hoje, ou sobre Usado por para ver as linhas que o consomem. A coluna de dinheiro aparece quando a empresa já compra um desses ingredientes, pelo último preço pago.",
- "gr.ing.whyNew": "O que as máquinas planejadas consomem, somado em todas as linhas que compartilham um ingrediente: as quantidades a colocar em contratos de importação antes de a fábrica funcionar. A coluna de dinheiro aparece quando a empresa já compra um desses ingredientes, pelo último preço pago.",
+ "gr.ing.whyNew": "Consumo das máquinas planejadas, somado em todas as linhas que usam o mesmo ingrediente: as quantidades a incluir nos contratos de importação antes de colocar a fábrica em funcionamento. A coluna de dinheiro aparece quando a empresa já compra um desses ingredientes, pelo último preço pago.",
  "gr.kit.bought": "Nada nesta faixa é fabricado; tudo é comprado.",
  "gr.kit.buy": "Máquinas a comprar: {list} · {n} no total",
  "gr.kit.none": "Nenhuma máquina definida; nada será produzido.",

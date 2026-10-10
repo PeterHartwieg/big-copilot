@@ -1288,7 +1288,7 @@
  "gr.ing.total": "Total",
  "gr.ing.usedBy": "Utilisé par {list}",
  "gr.ing.why": "Total consommé par les machines ci-dessus, pour toutes les lignes qui partagent un ingrédient. Les valeurs par jour et par semaine concernent cette gamme. La cible de l'entreprise est la commande totale une fois le plan lancé : au moins une semaine de besoins de cette gamme, puis ses besoins supplémentaires par rapport à la consommation actuelle de vos usines, en plus des contrats actifs. Elle est arrondie à la centaine supérieure acceptée par le responsable logistique. Saisissez vous-même cette cible dans vos contrats d'importation du jeu ; le tableau ne la répartit pas entre les entrepôts. Survolez un ingrédient pour voir les commandes actuelles, ou « Utilisé par » pour voir chaque ligne qui le consomme. La colonne Trésorerie apparaît dès que l'entreprise achète déjà un de ces ingrédients, au dernier prix payé.",
- "gr.ing.whyNew": "Total consommé par les machines prévues, pour toutes les lignes qui partagent un ingrédient : les quantités à mettre sur des contrats d’importation avant que l’usine tourne. La colonne Trésorerie apparaît dès que l'entreprise achète déjà un de ces ingrédients, au dernier prix payé.",
+ "gr.ing.whyNew": "Total consommé par les machines prévues, pour toutes les lignes qui partagent un ingrédient : les quantités à inscrire dans les contrats d’importation avant de lancer l’usine. La colonne Trésorerie apparaît dès que l’entreprise achète déjà un de ces ingrédients, au dernier prix payé.",
  "gr.kit.bought": "Rien dans cette gamme n'est fabriqué : tout est acheté.",
  "gr.kit.buy": "Machines à acheter : {list} · {n} au total",
  "gr.kit.none": "Aucune machine prévue : rien n'est fabriqué.",
