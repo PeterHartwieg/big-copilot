@@ -60,6 +60,8 @@ test('the view opens on the factory the player runs, five steps, Where ticked as
   assert.equal(s[1][2], true, 'Where is not a step for a factory already rented');
   assert.match(await page.locator('#ofCtl [data-of-step="where"]').innerText(), /yours/);
   assert.equal(await page.locator('#secIngredients').isVisible(), true);
+  assert.equal(await page.locator('#ingTable th.ord').first().isVisible(), true, 'the order columns, against the contracts the factory runs on');
+  assert.equal(await page.locator('#secIngredients .why:not(.ing-whynew)').isVisible(), true);
   assert.equal(await page.locator('#planBody tr.line').count() > 0, true, 'the planner is step 1');
   assert.match((await strip(page))[3], /Running costs added/i);
   /* The For picker: New factory, then the brewery. */
@@ -93,7 +95,7 @@ test('a new factory: the start table, then Where ranks warehouse buildings by re
   const page = await board(t);
   await page.locator('#planFor [data-of-for="new"]').click();
   assert.equal(await page.evaluate(() => planTarget), 'new');
-  assert.equal(await page.locator('#secIngredients').isVisible(), false, 'Ingredients belong to a factory you run');
+  assert.equal(await page.locator('#secIngredients').isVisible(), true, 'a new factory lists its inputs too (#442)');
   assert.ok(await page.locator('#ofStart .ff-make tbody tr').count() > 0, 'what the shops buy that a factory can make');
   await page.locator('#ofBody .ff-next [data-of-step="where"]').click();
   await page.locator('#ofFinderMap .place.fr').first().waitFor();
@@ -103,6 +105,56 @@ test('a new factory: the start table, then Where ranks warehouse buildings by re
   assert.deepEqual(rents, [...rents].sort((a, b) => a - b), 'ranked by rent');
   assert.equal(await page.locator('#ofFinderMap .fhead.fpw [data-s="rent"].on').count(), 1);
   assert.equal(await page.locator('#ofBody .ff-facts > div').count(), 4);
+});
+
+test('a new factory lists what its machines eat, and its contract row carries a week of each (#442)', async t => {
+  const page = await board(t);
+  /* Beer brewed from three inputs, so the contract row has more than two to name. */
+  await page.evaluate(b => {
+    D.plan.recipes.find(r => r.slug === b).ingredients.push({slug: 'ba:itemname_hops', item: 'Hops', per: 0.5}, {slug: 'ba:itemname_malt', item: 'Malt', per: 0.25});
+    Object.assign(D.plan.items, {'ba:itemname_hops': 'Hops', 'ba:itemname_malt': 'Malt'});
+  }, BEER);
+  await page.locator('#planFor [data-of-for="new"]').click();
+  const ing = () => page.evaluate(() => ({
+    rows: Object.fromEntries([...document.querySelectorAll('#ingBody tr')].map(tr => [tr.dataset.name, tr.querySelector('.wk').textContent])),
+    raw: Object.fromEntries(Object.entries(ofRawWeek(ofCounts())).map(([sl, n]) => [itemName(sl), num(Math.round(n))]))}));
+  const before = await ing();
+  assert.ok(Object.keys(before.rows).length > 0, 'one row per input');
+  assert.deepEqual(before.rows, before.raw, 'a week of each input, at the machines planned');
+  assert.equal(await page.locator('#ingTable th.ord').first().isVisible(), false, 'no contracts to compare: no order columns');
+  assert.equal(await page.locator('#ingTable th.chg').isVisible(), false);
+  assert.equal(await page.locator('#secIngredients .why.ing-whynew').isVisible(), true, 'the ? speaks of contracts still to set up');
+  await page.locator(`#planBody tr.line[data-slug="${BEER}"] .step a[data-d="1"]`).click();
+  const after = await ing();
+  assert.deepEqual(after.rows, after.raw, 'the amounts follow the machines');
+  assert.notDeepEqual(after.rows, before.rows);
+  /* No contract brings any input yet: the row names each with its week. */
+  const r = await page.evaluate(() => {
+    Object.values(D.plan.sources || {}).forEach(s => { s.active = false; });
+    const goods = ofUntilRows(ofPlan()).find(g => g[1].some(c => c.icon === 'crate'))[1];
+    const row = goods.find(c => /contract/i.test(c.title));
+    return {sub: row.sub, act: row.act,
+      want: Object.entries(ofRawWeek(ofCounts())).map(([sl, n]) => `${itemName(sl)} ×${num(Math.round(n))} / week`)};
+  });
+  assert.ok(r.want.length >= 3, 'a plan with three inputs or more');
+  for(const w of r.want.slice(0, 2)) assert.ok(r.sub.includes(w), `${w} in ${r.sub}`);
+  for(const w of r.want) assert.ok(r.act.includes(w), `the in-game step lists ${w} in full`);
+  /* Each amount reads as the table's week does. */
+  const rows = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('#ingBody tr')].map(tr => [tr.dataset.name, tr.querySelector('.wk').textContent])));
+  for(const [name, wk] of Object.entries(rows)) assert.ok(r.act.includes(`${name} ×${wk} / week`), `${name} as in the table`);
+  /* The factory the player runs keeps names only on its new-ingredients row. */
+  await page.locator(`#planFor [data-of-for="${BREWERY}"]`).click();
+  assert.equal(await page.locator('#ingTable th.ord').first().isVisible(), true, 'the order columns come back');
+  assert.equal(await page.locator('#secIngredients .why:not(.ing-whynew)').isVisible(), true);
+  assert.equal(await page.locator('#secIngredients .why.ing-whynew').isVisible(), false);
+  await page.locator(`#planBody tr.line[data-slug="${BEER}"] .step a[data-d="1"]`).click();
+  const owned = await page.evaluate(() => {
+    Object.values(D.plan.sources || {}).forEach(s => { s.active = false; });
+    const row = ofUntilRows(ofPlan()).flatMap(g => g[1]).find(c => /contract/i.test(c.title));
+    return row.sub;
+  });
+  assert.match(owned, /No import contract brings/);
+  assert.doesNotMatch(owned, /\/ week/);
 });
 
 test('a new factory can select an empty rented warehouse without paying its deposit again', async t => {
