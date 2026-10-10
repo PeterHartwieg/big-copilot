@@ -1,5 +1,11 @@
 [
   {
+    "pr": 440,
+    "date": "2026-10-10",
+    "title": "Staff one factory from Production",
+    "summary": "With the game linked, each factory in Supply › Production's factory staffing has a Staff this site button. It hires and reassigns the factory workers that factory needs and writes its week into the game, with Undo, the way a shop's Staffing already could."
+  },
+  {
     "pr": 437,
     "date": "2026-10-09",
     "title": "Staff every station every hour your shop opens",
