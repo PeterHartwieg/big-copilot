@@ -14041,12 +14041,14 @@ function ofUntilRows(plan){
   const bare = needIn.filter(slug => { const s = src(slug); return !(s && s.active); });
   const names = list => spEsc(ofNames(list.map(itemName)));
   /* A new factory's contracts are set up before it runs, so they carry the week's amounts (#442). */
-  const contractNames = list => owned ? names(list)
-    : spEsc(ofNames(list.map(slug => tt("gr.of.ck.contract.amount", "{name} ×{n:,} / week", {name: itemName(slug), n: Math.ceil(rawWeek[slug])}))));
+  const amounts = list => list.map(slug => tt("gr.of.ck.contract.amount", "{name} ×{n:,} / week", {name: itemName(slug), n: Math.round(rawWeek[slug])}));
+  const contractNames = list => owned ? names(list) : spEsc(ofNames(amounts(list)));
+  /* The in-game step lists every input in full: it is what the player types into the contract. */
+  const contractAll = list => owned ? names(list) : spEsc(grList(amounts(list)));
   goods.push(osCk("crate", bare.length ? "todo" : "done", `${owned ? tt("gr.of.ck.contract.new", "New ingredients on a contract") : tt("gr.of.ck.contract", "Raw material contract")} ${ofHand()}`,
     bare.length ? tt("gr.of.ck.contract.todo", "<span class=\"w\">No import contract brings {items} yet</span>", {items: contractNames(bare)})
       : tt("gr.of.ck.contract.done", "<span class=\"ok\">Every ingredient is on an import contract</span>"),
-    bare.length ? osIngame(tt("gr.of.ck.contract.ingame", "Go to an importer with your Purchasing Agent and add {items} to a contract, delivered to {address} or to your depot.", {items: contractNames(bare), address})) : ""));
+    bare.length ? osIngame(tt("gr.of.ck.contract.ingame", "Go to an importer with your Purchasing Agent and add {items} to a contract, delivered to {address} or to your depot.", {items: contractAll(bare), address})) : ""));
   const eatsAll = new Set(lines.flatMap(l => l.ingredients.flatMap(i => [i.slug, (view.aliases || {})[i.slug] || i.slug])));
   const needs = site ? (site.needs || []).filter(n => eatsAll.has(n.slug)) : [];
   const shortIn = needs.filter(n => n.perWeek > 0 && (n.arrives || 0) < n.perWeek * 0.95);

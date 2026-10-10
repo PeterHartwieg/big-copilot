@@ -109,6 +109,11 @@ test('a new factory: the start table, then Where ranks warehouse buildings by re
 
 test('a new factory lists what its machines eat, and its contract row carries a week of each (#442)', async t => {
   const page = await board(t);
+  /* Beer brewed from three inputs, so the contract row has more than two to name. */
+  await page.evaluate(b => {
+    D.plan.recipes.find(r => r.slug === b).ingredients.push({slug: 'ba:itemname_hops', item: 'Hops', per: 0.5}, {slug: 'ba:itemname_malt', item: 'Malt', per: 0.25});
+    Object.assign(D.plan.items, {'ba:itemname_hops': 'Hops', 'ba:itemname_malt': 'Malt'});
+  }, BEER);
   await page.locator('#planFor [data-of-for="new"]').click();
   const ing = () => page.evaluate(() => ({
     rows: Object.fromEntries([...document.querySelectorAll('#ingBody tr')].map(tr => [tr.dataset.name, tr.querySelector('.wk').textContent])),
@@ -129,12 +134,19 @@ test('a new factory lists what its machines eat, and its contract row carries a 
     const goods = ofUntilRows(ofPlan()).find(g => g[1].some(c => c.icon === 'crate'))[1];
     const row = goods.find(c => /contract/i.test(c.title));
     return {sub: row.sub, act: row.act,
-      want: Object.entries(ofRawWeek(ofCounts())).map(([sl, n]) => `${itemName(sl)} ×${num(Math.ceil(n))} / week`)};
+      want: Object.entries(ofRawWeek(ofCounts())).map(([sl, n]) => `${itemName(sl)} ×${num(Math.round(n))} / week`)};
   });
-  assert.ok(r.want.length > 0);
-  for(const w of r.want.slice(0, 2)){ assert.ok(r.sub.includes(w), `${w} in ${r.sub}`); assert.ok(r.act.includes(w)); }
+  assert.ok(r.want.length >= 3, 'a plan with three inputs or more');
+  for(const w of r.want.slice(0, 2)) assert.ok(r.sub.includes(w), `${w} in ${r.sub}`);
+  for(const w of r.want) assert.ok(r.act.includes(w), `the in-game step lists ${w} in full`);
+  /* Each amount reads as the table's week does. */
+  const rows = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('#ingBody tr')].map(tr => [tr.dataset.name, tr.querySelector('.wk').textContent])));
+  for(const [name, wk] of Object.entries(rows)) assert.ok(r.act.includes(`${name} ×${wk} / week`), `${name} as in the table`);
   /* The factory the player runs keeps names only on its new-ingredients row. */
   await page.locator(`#planFor [data-of-for="${BREWERY}"]`).click();
+  assert.equal(await page.locator('#ingTable th.ord').first().isVisible(), true, 'the order columns come back');
+  assert.equal(await page.locator('#secIngredients .why:not(.ing-whynew)').isVisible(), true);
+  assert.equal(await page.locator('#secIngredients .why.ing-whynew').isVisible(), false);
   await page.locator(`#planBody tr.line[data-slug="${BEER}"] .step a[data-d="1"]`).click();
   const owned = await page.evaluate(() => {
     Object.values(D.plan.sources || {}).forEach(s => { s.active = false; });
