@@ -18097,6 +18097,59 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
     return lines
 
 
+CLEANING_STATION = "ba:itemname_cleaningstation"
+SECURITY_LOCKER = "ba:itemname_securityguardlocker"
+SECURITY_CAMERAS = ("ba:itemname_securitycamera", "ba:itemname_securitycameraroof")
+
+
+def outfit_optional(type_slug: str, rules: dict, prices: dict, lines: list, *, _catalogue=None) -> list:
+    """What a store of a type can stand beside its outfit (`lines`, from
+    outfit_lines()) without needing it to open, as lines of group "opt":
+    a Cleaning station where the type takes one ("cleaning"), a Security guard
+    locker and the cheapest camera where the type can be robbed ("security"),
+    and one display for each product the type can additionally sell that no
+    shelf of the outfit holds yet (`why` its products, the heaviest by the
+    game's weight first, _plan_extra()). The cleaning and security pieces are
+    the ones made for the type, left out where the outfit holds them already;
+    a display is the cheapest that works in it (works_in()), wherever the
+    designer files it, even one the outfit's own shelves use. The board adds
+    these only when the reader asks for optional items.
+    """
+    catalogue = _catalogue or _OutfitCatalogue(rules, prices)
+    type_facts = catalogue.for_type(type_slug)
+    sold, mounts, unit_cost = type_facts.sold, type_facts.mounts, type_facts.unit_cost
+    held = {line["item"] for line in lines}
+    out = []
+
+    def add(item, qty, why):
+        out.append({"item": item, "qty": int(qty), "group": "opt", "why": why})
+        for under in mounts(item):
+            out.append({"item": under, "qty": int(qty), "group": "opt", "why": "mount"})
+
+    if sold(CLEANING_STATION) and CLEANING_STATION not in held:
+        add(CLEANING_STATION, 1, "cleaning")
+    if sold(SECURITY_LOCKER):
+        if SECURITY_LOCKER not in held:
+            add(SECURITY_LOCKER, 1, "security")
+        cameras = [n for n in SECURITY_CAMERAS if sold(n)]
+        if cameras and not held & set(SECURITY_CAMERAS):
+            add(min(cameras, key=lambda n: (unit_cost(n), n)), 1, "security")
+
+    products = rules.get("products") or {}
+    shelved = {p for line in lines if isinstance(line["why"], list) for p in line["why"]}
+    shelves = {}
+    for product, _weight in _plan_extra(type_slug, shelved, rules):
+        row = products.get(product) or {}
+        if row.get("s") or row.get("k"):
+            continue  # a service or a ticket: no shelf
+        shows = [n for n in catalogue.displays.get(product, ()) if sold(n, False)]
+        if shows:
+            shelves.setdefault(min(shows, key=lambda n: (unit_cost(n), n)), []).append(product)
+    for item, held_products in shelves.items():
+        add(item, len(held_products), held_products)
+    return out
+
+
 def plan_layout(row: dict) -> str | None:
     """What a plan's outfit is kept by: a building's layout (size and version,
     a premises row's `layout` or a ba_buildings.json row). Older payload rows
@@ -18589,17 +18642,23 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
         key = (slug, cap, m2, tuple((item, qty, tuple(held)) for item, qty, held in copied or ()))
         if key not in outfits:
             lines = outfit_lines(slug, rules, prices, cap, m2, copied, _catalogue=catalogue)
-            outfits[key] = (lines, setup_cost(_setup_items(lines), [], m2, 0, prices))
+            opt = outfit_optional(slug, rules, prices, lines, _catalogue=catalogue)
+            outfits[key] = (lines, setup_cost(_setup_items(lines), [], m2, 0, prices), opt,
+                            setup_cost(_setup_items(opt), [], 0, 0, prices)["furniture"])
         return outfits[key]
 
-    def plan_entry(lines, cost, source):
-        items_used.update(line["item"] for line in lines)
+    def plan_entry(lines, cost, opt, opt_cost, source):
+        items_used.update(line["item"] for line in lines + opt)
+        listed = lambda rows: [[line["item"], line["qty"], line["group"],
+                                list(line["why"]) if isinstance(line["why"], list) else line["why"]] for line in rows]
         return {
-            "lines": [[line["item"], line["qty"], line["group"],
-                       list(line["why"]) if isinstance(line["why"], list) else line["why"]] for line in lines],
+            "lines": listed(lines),
             "furniture": cost["furniture"],
             "fee": cost["fee"],
             "from": source["key"] if source else None,
+            # Optional items (outfit_optional()), counted only when the
+            # reader includes them: their lines and their furniture total.
+            **({"opt": listed(opt), "optFurniture": opt_cost} if opt else {}),
         }
 
     for slug, t in sorted((rules.get("types") or {}).items()):
@@ -19115,7 +19174,7 @@ def _ingredient_prices(save: Save, names: Names, supply: dict, businesses: list)
     }
 
 
-def _plan_extra(kind: str, taken: set) -> list:
+def _plan_extra(kind: str, taken: set, rules: dict | None = None) -> list:
     """What a type can additionally sell, as [[slug, weight], ...], heaviest first.
 
     The game's own product list for the type (ba_store_rules.json, `types[kind].i`)
@@ -19123,9 +19182,9 @@ def _plan_extra(kind: str, taken: set) -> list:
     extras its shelves also take. A product already in the type's range, or a
     service, is left out. Equal weights keep the game's order. Read lazily
     through load_store_rules(), never at import (the browser worker writes the
-    file first).
+    file first), unless the caller passes the `rules` it already holds.
     """
-    listed = (load_store_rules()["types"].get(kind) or {}).get("i") or []
+    listed = (((rules or load_store_rules()).get("types") or {}).get(kind) or {}).get("i") or []
     extra = [[slug, weight] for slug, weight in listed
              if isinstance(weight, (int, float)) and 0 < weight < 1 and slug not in taken]
     return sorted(extra, key=lambda pair: -pair[1])
