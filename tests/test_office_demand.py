@@ -1,7 +1,10 @@
 """Office demand plans use synthetic customer history and preserve other duties."""
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
-from ba_dashboard import _hiring, _hourly, _office_staffing, _staff
+from ba_dashboard import ALL_DAY_OPEN, History, _counts_only, _hiring, _hourly, _office_staffing, _staff
 from ba_save import Names
 from tests.test_staff_hire import COMPUTER, LAW, LAWYER, STREET, lawyer, office_registration, save_of, site_key
 
@@ -94,12 +97,45 @@ class OfficeDemandTests(unittest.TestCase):
         self.assertNotIn('demandBased', row)
         self.assertEqual(row['need'][LAWYER][1][10], 4)
 
-    def test_unread_hour_keeps_current_staffing_even_above_weekend_default(self):
+    def test_staffed_hour_with_no_report_is_measured_zero_once_data_is_complete(self):
+        # As a shop's: an open, staffed hour that filed no report had nobody in.
         row, _, _ = plan(missing=(10,))
-        self.assertEqual(row['basis'][LAWYER][0][10], 'office')
-        self.assertEqual(row['need'][LAWYER][0][10], 4)
+        self.assertEqual(row['basis'][LAWYER][0][10], 'measured')
+        self.assertEqual(row['need'][LAWYER][0][10], 0)
         self.assertEqual(row['need'][LAWYER][0][11], 1)
         self.assertEqual(row['need'][LAWYER][1][7], 0)
+
+    def test_unread_hour_keeps_current_staffing_before_data_is_complete(self):
+        row, _, _ = plan(missing=(10,), days=8, customers=4)
+        self.assertEqual(row['basis'][LAWYER][0][10], 'office')
+        self.assertEqual(row['need'][LAWYER][0][10], 4)
+
+    def test_unstaffed_hour_keeps_the_default_rather_than_measured_zero(self):
+        # Nobody at a computer files no customers; that zero is not demand.
+        _, save, business = plan(customers=1, staffed=4)
+        reg = save.items(save.root['BuildingRegistrations'])[0]
+        for scheduled in save.items(reg['scheduleDays']):
+            for shift in save.items(scheduled['workShifts']):
+                shift['startingHour'] = 9
+        for day in save.items(reg['orderHistory']):
+            day['hourReports']['$items'] = [r for r in day['hourReports']['$items'] if r['hour'] != 8]
+        _, staff = _staff(save, Names({}))
+        grids = _hourly(save, [reg], [business], {}, {COMPUTER},
+                        {p['id']: p['skill'] for p in staff}, Names({}))
+        [row] = _office_staffing(save, Names({}), [business], grids, staff)
+        self.assertEqual(row['basis'][LAWYER][1][8], 'office')
+        self.assertGreater(row['need'][LAWYER][1][8], 0)
+        self.assertEqual(row['basis'][LAWYER][1][9], 'measured')
+
+    def test_every_hour_staff_limited_never_plans_the_old_headcount(self):
+        # Office customers are the professionals at a computer, one for one,
+        # so a fully used hour says nothing of the demand above it: the shop's
+        # censored estimate adds a computer there rather than keeping the week.
+        row, _, _ = plan(customers=2, staffed=2)
+        cells = [(wd, h) for wd in range(7) for h in range(8, 16)]
+        self.assertTrue(all(row['basis'][LAWYER][wd][h] == 'censored' for wd, h in cells))
+        self.assertTrue(all(row['need'][LAWYER][wd][h] == 3 for wd, h in cells))
+        self.assertNotIn('demandEvidence', row)
 
     def test_other_duties_do_not_make_their_worker_spare(self):
         row, _, _ = plan(customers=0, support=True)
@@ -109,8 +145,28 @@ class OfficeDemandTests(unittest.TestCase):
         self.assertTrue(any(s.get('k') for s in row['current']['list']))
 
 
-if __name__ == '__main__':
-    unittest.main()
+class CountsOnlyTests(unittest.TestCase):
+    def test_shops_and_offices_are_read_from_their_counts_alone(self):
+        shop = dict(office=False, open=[[[8, 16]]] * 7, capHours=5)
+        office = dict(office=True, open=[[] for _ in range(7)], capHours=5)
+        _counts_only([shop, office])
+        for grid in (shop, office):
+            self.assertTrue(grid['countsOnly'])
+            self.assertEqual(grid['capHours'], 0)
+        self.assertEqual(shop['open'], [[[8, 16]]] * 7)
+        self.assertEqual(office['open'], ALL_DAY_OPEN)
+
+    def test_old_measurement_records_leave_the_history_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / 'history.json')
+            Path(path).write_text(json.dumps({'characters': {'company-a': {
+                'staffingEvidence': {'version': 1, 'sites': {'x': {}}},
+                'lineNames': {'r1': 'ba:itemname_x'}}}}), encoding='utf-8')
+            self.assertTrue(History(path).write())
+            book = json.loads(Path(path).read_text(encoding='utf-8'))['characters']['company-a']
+            self.assertNotIn('staffingEvidence', book)
+            self.assertEqual(book['lineNames'], {'r1': 'ba:itemname_x'})
+
 
 class RetainedDutyTests(unittest.TestCase):
     def rerun(self, save, business):
@@ -165,3 +221,7 @@ class RetainedDutyTests(unittest.TestCase):
             slots = [h for s in all_hours if s['d'] == d for h in range(s['f'], s['t'])]
             self.assertLessEqual(len(slots), 12)
             self.assertEqual(len(slots), len(set(slots)))
+
+
+if __name__ == '__main__':
+    unittest.main()

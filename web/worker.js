@@ -209,7 +209,7 @@ onmessage = (e) => {
     return; // the page's manifest is pinned once for this worker's lifetime
   }
   // A section asked for before this build or name is for an older board.
-  if (msg.kind === "build" || msg.kind === "name" || msg.kind === "staff-measurement") boards++;
+  if (msg.kind === "build" || msg.kind === "name") boards++;
   const behind = boards;
   queue = queue.then(async () => {
     try {
@@ -250,11 +250,6 @@ onmessage = (e) => {
         if (setAside) py.FS.unlink(HISTORY + ".bad");  // said once, not on every build
         postMessage({kind: "built", id: msg.id, gen: msg.id, data, history: setAside ? "" : history,
                      ms: Math.round(performance.now() - t)});
-      } else if (msg.kind === "staff-measurement") {
-        if (!lastSave) throw new Error("no save loaded yet");
-        py.runPython(`ba_dashboard.browser_staff_measurement(${JSON.stringify(HISTORY)}, ${JSON.stringify(msg.key)}, ${JSON.stringify(msg.action)}, ${JSON.stringify(msg.gen)})`);
-        const data = build(`${SAVE_DIR}/${lastSave.name}`, msg.id);
-        postMessage({kind: "built", id: msg.id, gen: msg.id, data, history: heldHistory(), ms: 0});
       } else if (msg.kind === "name") {
         if (!lastSave) throw new Error("no save loaded yet");
         // The history is the page's only on a build. A name adds to the one

@@ -62,14 +62,13 @@ test('office without history keeps its additive write', () => {
   delete r.demandBased;
   assert.deepEqual(plain(c.gwRosterWeek(r).days[0].shifts.map(x => [x.f, x.t])), [[8, 18], [8, 12]]);
 });
-test('confirmed zero shop demand clears serving hours instead of preserving cover-only work', () => {
+test('zero shop demand clears serving hours instead of preserving cover-only work', () => {
   const c = loadBoard(), r = row();
-  r.office = false; r.shifts = []; r.demandEvidence = {persistent: true, phase: 'confirmed'};
+  r.office = false; r.shifts = [];
   c.payload = {businesses: [{key: r.key, status: 'retail'}], staffing: [r]};
   vm.runInContext('D = payload', c);
   assert.ok(c.gwRosterPlan(r.key));
   assert.deepEqual(plain(c.gwRosterWeek(r).days), []);
-  assert.match(c.spDemandEvidence(r), /Measurement reviewed/);
 });
 test('an unreadable office does not block another site in Staff all sites', () => {
   const c = loadBoard(), bad = row(), good = row();
@@ -82,13 +81,4 @@ test('an unreadable office does not block another site in Staff all sites', () =
   const req = c.hrRequest({sites, moves: [], overs: [], roles: []}, {mode: 'week', one: true});
   assert.deepEqual(plain(req.body.sites.map(s => s.address.number)), [11]);
   assert.equal(req.unreadableSites[0].key, bad.key);
-});
-test('measurement view distinguishes pending, ready and unavailable history', () => {
-  const c = loadBoard(), r = row();
-  r.demandEvidence = {persistent: true, phase: 'pending'};
-  assert.match(c.spDemandEvidence(r), /Apply the week/);
-  r.demandEvidence.phase = 'ready';
-  assert.match(c.spDemandEvidence(r), /Confirm only if/);
-  r.demandEvidence.persistent = false;
-  assert.match(c.spDemandEvidence(r), /unavailable without saved company history/);
 });

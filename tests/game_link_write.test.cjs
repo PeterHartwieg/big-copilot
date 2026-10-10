@@ -2077,7 +2077,6 @@ test('schedule: a cover-only plan keeps the serving entries in the game', async 
   // This fixture deliberately represents the legacy cover-only contract;
   // confirmed-zero demand plans instead replace serving entries (office_demand.test.cjs).
   gifts.demandBased = false;
-  delete gifts.demandEvidence;
   gifts.shifts = [{d: 3, s: 0, f: 0, t: 12, p: 0, k: 'clean'}];
   Object.assign(gifts, {bench: [], addPeople: {assign: [], hire: [], people: 0, hoursUncovered: 0}});
   const page = await linked(t, {approved: true, data: JSON.stringify(data)});
