@@ -12508,8 +12508,8 @@ const osBank = id => { const banks = (osFacts().finance || {}).banks || [];
   return banks.find(x => x.id === id) || banks.find(x => x.id === "VantanderBankSettings") || banks[0] || null; };
 /* Every plan, on every draw: its store's opening day and paid-back mark
    (osReconcile()), and its figures while its address is empty, taken again
-   only when the board or the plan's building changed. Saved only when
-   something changed. */
+   only when the board, the plan's building or the optional-items switch
+   changed. Saved only when something changed. */
 function osMarkPlans(){
   let changed = osReconcile();
   if(osSnapFor !== D){ osSnapSeen = new Map(); osSnapFor = D; }
