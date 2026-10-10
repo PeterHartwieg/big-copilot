@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ba_dashboard import ALL_DAY_OPEN, History, _counts_only, _hiring, _hourly, _office_staffing, _staff
+from ba_dashboard import ALL_DAY_OPEN, History, _counts_only, _hourly, _office_staffing, _staff
 from ba_save import Names
 from tests.test_staff_hire import COMPUTER, LAW, LAWYER, STREET, lawyer, office_registration, save_of, site_key
 
@@ -42,16 +42,22 @@ def plan(customers=1, staffed=4, history=True, missing=(), closed=False, support
 
 
 class OfficeDemandTests(unittest.TestCase):
-    def test_measured_demand_reduces_workstation_hours_and_hiring(self):
-        row, save, business = plan()
+    def test_customers_below_todays_staffing_keep_it(self):
+        # An hour report holds no staffing, and an office's customers are the
+        # staffing that was on: 1 an hour under today's 4 may be a week run on
+        # one computer, so the plan never cuts below today's staffing.
+        row, _, _ = plan()
         self.assertTrue(row['demandBased'])
-        self.assertEqual(row['need'][LAWYER][1][10], 1)
+        self.assertEqual(row['need'][LAWYER][1][10], 4)
         self.assertEqual(row['basis'][LAWYER][1][10], 'measured')
-        self.assertEqual(sum(s['t'] - s['f'] for s in row['shifts']), 56)
-        self.assertEqual(row['staffedComputers'], 1)
-        self.assertEqual(row['addPeople']['people'], 0)
-        hiring = _hiring(save, [business], [], {}, [row])
-        self.assertFalse(hiring['sites'][0]['plans']['office']['hireWeeks'])
+        self.assertEqual(sum(s['t'] - s['f'] for s in row['shifts']), 224)
+        self.assertEqual(row['staffedComputers'], 4)
+
+    def test_a_computer_just_added_is_not_planned_away(self):
+        # Two weeks of 2 an hour, then a third computer staffed: 2 is under 95%
+        # of 3, but the reports came from two computers, so the third stays.
+        row, _, _ = plan(customers=2, staffed=3)
+        self.assertEqual(row['need'][LAWYER][1][10], 3)
 
     def test_staff_limited_sales_allow_another_computer(self):
         row, _, _ = plan(customers=1, staffed=1)
@@ -80,12 +86,12 @@ class OfficeDemandTests(unittest.TestCase):
         self.assertEqual(row['need'][LAWYER][1], [0] * 24)
         self.assertFalse(any(s['d'] == 1 for s in row['shifts']))
 
-    def test_zero_customers_with_staff_is_measured_zero(self):
+    def test_zero_customers_with_staff_now_keeps_that_staffing(self):
         row, _, _ = plan(customers=0)
         self.assertTrue(row['demandBased'])
-        self.assertEqual(row['shifts'], [])
-        self.assertEqual(row['staffedComputers'], 0)
-        self.assertEqual(len(row['_hire']['spare']), 4)
+        self.assertEqual(sum(s['t'] - s['f'] for s in row['shifts']), 224)
+        self.assertEqual(row['staffedComputers'], 4)
+        self.assertEqual(row['_hire']['spare'], [])
 
     def test_zero_customers_without_staff_uses_default(self):
         row, _, _ = plan(customers=0, staffed=0)
@@ -97,12 +103,15 @@ class OfficeDemandTests(unittest.TestCase):
         self.assertNotIn('demandBased', row)
         self.assertEqual(row['need'][LAWYER][1][10], 4)
 
-    def test_staffed_hour_with_no_report_is_measured_zero_once_data_is_complete(self):
-        # As a shop's: an open, staffed hour that filed no report had nobody in.
-        row, _, _ = plan(missing=(10,))
-        self.assertEqual(row['basis'][LAWYER][0][10], 'measured')
-        self.assertEqual(row['need'][LAWYER][0][10], 0)
-        self.assertEqual(row['need'][LAWYER][0][11], 1)
+    def test_staffed_hour_with_no_report_is_no_reading_once_data_is_complete(self):
+        # Unlike a shop's, an hour with no report on file is not a measured
+        # zero: the office may only now be staffed then (its hours extended,
+        # or the office default applied), so it keeps the default or today's.
+        row, _, _ = plan(customers=2, staffed=3, missing=(12, 13, 14, 15))
+        self.assertEqual(row['basis'][LAWYER][1][12], 'office')
+        self.assertEqual(row['need'][LAWYER][1][12], 4)
+        self.assertEqual(row['basis'][LAWYER][1][11], 'measured')
+        self.assertEqual(row['need'][LAWYER][1][11], 3)
         self.assertEqual(row['need'][LAWYER][1][7], 0)
 
     def test_unread_hour_keeps_current_staffing_before_data_is_complete(self):
@@ -140,8 +149,6 @@ class OfficeDemandTests(unittest.TestCase):
     def test_other_duties_do_not_make_their_worker_spare(self):
         row, _, _ = plan(customers=0, support=True)
         self.assertNotIn('l0', row['_hire']['spare'])
-        self.assertEqual(len(row['_hire']['spare']), 3)
-        self.assertEqual(row['cost']['weekly'], 560)
         self.assertTrue(any(s.get('k') for s in row['current']['list']))
 
 

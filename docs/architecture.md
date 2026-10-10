@@ -219,11 +219,14 @@ raises no historical-capacity finding for either; only the cinema equipment limi
 `countsOnly` does not ship in `hours`. A shop's plan is `_need_curve()` over
 `_run_measured()`, with the full-cover test and its hand-over. An office's is
 `_office_need()`: the same two over the office's own `_days_open()` and
-`_open_day_average()`, with one computer per customer per hour. An hour that used every
-staffed computer (within 95%) is `censored` and gets one more computer, bounded by the computers
-installed and the building capacity; a zero with nobody at a computer is no reading, and
-an unread open hour keeps the office default or the current staffing, whichever is
-higher. An office with no reading anywhere gets the office default, `_office_runs()`:
+`_open_day_average()`, with one computer per customer per hour. An hour whose customers
+came within 95% of the computers staffed now is `censored` and gets one more computer,
+bounded by the computers installed and the building capacity. A read hour is never
+planned below the computers staffed now: an hour report holds no staffing, and an
+office's customers are the staffing that was on, so fewer customers than today's
+computers may only mean fewer computers then. An hour with no report on file, or a zero
+with nobody at a computer now, is no reading, and an unread open hour keeps the office
+default or the current staffing, whichever is higher. An office with no reading anywhere gets the office default, `_office_runs()`:
 proportionally three computers around the clock for capacity 50, all on weekdays 08–22,
 half on weekends, clipped to opening hours. Office rows with a reading carry
 `demandBased: true` and `basis` values `measured`, `censored`, `office` and `closed`.
