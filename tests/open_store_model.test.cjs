@@ -183,6 +183,24 @@ test('investment uses layout, decoration and deterministic vendor order without 
   assert.equal(api.model('missing', SHOP), null);
 });
 
+test('optional items join the outfit, its stores and the investment only when included', () => {
+  const facts = JSON.parse(JSON.stringify(RETAIL));
+  facts.game.delivery = 100;
+  facts.types.T.layouts.C1 = {furniture: 1000, fee: 500, lines: [['A', 2]], opt: [['O', 1, 'opt', 'cleaning']], optFurniture: 40};
+  facts.items = {A: {v: ['a']}, O: {v: ['o']}};
+  const off = OpenStoreModel.create({facts}), on = OpenStoreModel.create({facts, optional: true});
+  assert.deepEqual(off.outfit({type: 'T'}, SHOP).lines, [['A', 2]]);
+  assert.deepEqual(on.outfit({type: 'T'}, SHOP).lines, [['A', 2], ['O', 1, 'opt', 'cleaning']]);
+  assert.deepEqual(off.investment({type: 'T'}, {...SHOP, deposit: 50}),
+    {furniture: 1000, fee: 500, deposit: 50, stores: 1, delivery: 100, decor: 0, firm: 1550, self: 1150, items: 2});
+  assert.deepEqual(on.investment({type: 'T'}, {...SHOP, deposit: 50}),
+    {furniture: 1040, fee: 500, deposit: 50, stores: 2, delivery: 200, decor: 0, firm: 1590, self: 1290, items: 3});
+  assert.equal(facts.types.T.layouts.C1.lines.length, 1, 'the payload is not changed');
+  // A layout without optional items is the same either way.
+  delete facts.types.T.layouts.C1.opt;
+  assert.deepEqual(OpenStoreModel.create({facts, optional: true}).outfit({type: 'T'}, SHOP), facts.types.T.layouts.C1);
+});
+
 test('availability follows the lease and occupant, not ownership of the real estate', () => {
   const b = {status: 'mine', occupant: null, deposit: 500, owner: 'city'};
   assert.equal(OpenStoreModel.availablePremises(b), true);

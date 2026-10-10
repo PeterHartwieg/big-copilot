@@ -163,6 +163,54 @@ test('Plan here opens the investment: one table by reason for the firm, a list b
   assert.equal(await page.evaluate(() => [osPlan().mode, paybackMode()].join()), 'self,self');
 });
 
+test('Include optional items: off by default and as before; on, its group counts in both totals and the break even, kept per viewer', async t => {
+  const page = await board(t);
+  await planned(page);
+  const now = () => page.evaluate(() => { const p = osPlan(), b = osBuilding(p.key); return {inv: osInvestment(p, b), out: osOutfit(p, b)}; });
+  const off = await now();
+  const opt = off.out.opt;
+  // A liquor store takes a Cleaning station and can be robbed: the locker and a camera.
+  assert.deepEqual(opt.filter(l => !Array.isArray(l[3])).map(l => [l[0], l[3]]), [['ba:itemname_cleaningstation', 'cleaning'],
+    ['ba:itemname_securityguardlocker', 'security'], ['ba:itemname_securitycamera', 'security']]);
+  assert.equal(off.out.lines.some(l => l[2] === 'opt'), false);
+  assert.equal(await page.locator('#osBody [data-os-opt]').isChecked(), false);
+  assert.equal(await page.locator('#osBody .os-inv tr.grp', {hasText: en('gr.os.grp.opt')}).count(), 0);
+  assert.match(await page.locator('#osBody .os-optbar').innerText(), textRe('gr.os.opt.off', {}, {}));
+
+  await page.locator('#osBody [data-os-opt]').check();
+  await page.waitForFunction(() => osOptional() === true);
+  const on = await now();
+  assert.equal(on.inv.furniture, off.inv.furniture + off.out.optFurniture);
+  assert.equal(on.inv.firm, off.inv.firm + off.out.optFurniture);
+  assert.equal(on.inv.items, off.inv.items + opt.reduce((n, l) => n + l[1], 0));
+  assert.equal(await page.locator('#osBody .os-inv tr.grp', {hasText: en('gr.os.grp.opt')}).count(), 1);
+  assert.equal(await page.locator('#osBody .os-inv .os-tag.opt').count(), opt.length);
+  assert.equal(money(await page.locator('#osBody .os-inv tfoot td').last().textContent()), Math.round(on.inv.firm));
+  assert.match(await page.locator('#osBody .os-optbar').innerText(), textRe('gr.os.opt.on', {}, {}));
+  assert.equal(await page.evaluate(() => localStorage.getItem('ba_dash_os_optional')), '1');
+  // Self-installation buys them too, each tagged optional.
+  await page.locator('#osBody [data-os-mode="self"]').click();
+  assert.equal(money(await page.locator('#osBody .os-total b').textContent()), Math.round(on.inv.self));
+  assert.equal(on.inv.self, off.inv.self + off.out.optFurniture + on.inv.delivery - off.inv.delivery);
+  assert.equal(await page.locator('#osBody .os-store .os-tag.opt').count(), opt.length);
+  // The break even counts them, and says so.
+  await page.locator('#osCtl [data-os-step="breakeven"]').click();
+  await page.waitForFunction(() => osStep === 'breakeven');
+  assert.ok((await page.locator('#osBody .os-note').allInnerTexts()).includes(en('gr.os.be.opt')));
+  assert.equal(await page.evaluate(() => { const p = osPlan(); return osEstimate(p, osBuilding(p.key)).inv.self; }), on.inv.self);
+
+  // Kept across a reload, and off again is the list as it was.
+  await page.reload({waitUntil: 'load'});
+  await page.waitForFunction(() => typeof hasData === 'function' && hasData());
+  assert.equal(await page.evaluate(() => osOptional()), true);
+  await page.evaluate(site => { premises().buildings.find(b => b.key === site).status = 'vacant'; }, SITE);
+  await page.locator('#osCtl [data-os-step="investment"]').click();
+  await page.waitForFunction(() => osStep === 'investment');
+  await page.locator('#osBody [data-os-opt]').uncheck();
+  await page.waitForFunction(() => osOptional() === false);
+  assert.deepEqual((await now()).inv, off.inv);
+});
+
 test('Break even shows both install modes from the game\'s rules, a range, tax, your own shop and a loan', async t => {
   const page = await board(t);
   await planned(page);

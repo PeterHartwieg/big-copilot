@@ -17,6 +17,8 @@ const OpenStoreModel = (() => {
    *   game rules, market, hoods, own shops, sales, campaigns and finance.
    * @param {Object} [inputs.company] Relevant company state: businesses
    *   ({key,typeSlug,rent} rows) and day (current game day for demand waves).
+   * @param {boolean} [inputs.optional] Whether outfits include their optional
+   *   items (a layout's `opt` lines and `optFurniture`).
    * @returns {Object} Calculations accepting a type slug, building
    *   ({key,hood,layout,size,cap,m2,traffic,rent,deposit}), plan ({type}),
    *   or options ({reach,cost,promoTotal,open,sat,existing,initial,staffed,
@@ -26,16 +28,20 @@ const OpenStoreModel = (() => {
    *   `existing`/`provides` may be an item predicate; day callbacks use day 0
    *   for opening. Loan results retain integer interest/repayment rounding.
    */
-  function create({facts = {}, company = {}} = {}){
+  function create({facts = {}, company = {}, optional = false} = {}){
     const osFacts = () => facts;
     const osType = slug => (osFacts().types || {})[slug] || null;
     const osCap = b => { const v = b && (osFacts().venues || {})[b.key];
       return v && v[1] ? v[1] : (b && b.cap) || 0; };
-    /* The outfit for the building's layout: its lines and furniture total. */
+    /* The outfit for the building's layout: its lines and furniture total,
+       with its optional items (group "opt") when they are included. */
     /* The key an outfit is kept by: the layout, or a cinema's or theatre's size
        (Python's plan_layout()). */
     const osLayout = b => b?.layoutKnown === false ? "" : (b && (b.layout || ((osFacts().venues || {})[b.key] || [])[0] || b.size)) || "";
-    const osOutfit = (plan, b) => { const t = plan && osType(plan.type); return t && b ? (b.layoutKnown === false ? null : (t.layouts || {})[b.key] || (t.layouts || {})[osLayout(b)] || null) : null; };
+    const osOutfit = (plan, b) => { const t = plan && osType(plan.type);
+      const out = t && b ? (b.layoutKnown === false ? null : (t.layouts || {})[b.key] || (t.layouts || {})[osLayout(b)] || null) : null;
+      return out && optional && (out.opt || []).length
+        ? {...out, lines: [...out.lines, ...out.opt], furniture: out.furniture + (out.optFurniture || 0)} : out; };
     /* The interior score the neighbourhood asks for (Midtown's 50), and the
        cheapest walls and floors that reach it in this layout. */
     const osDecor = b => { const need = b && ((osFacts().hoods || {})[b.hood] || {}).interior;

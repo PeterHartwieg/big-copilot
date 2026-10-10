@@ -2303,6 +2303,15 @@
      "ba:street_seventhavenue#13"
     ]
    },
+   "ba:itemname_cleaningstation": {
+    "p": 100.0,
+    "v": [
+     "ba:street_eleventhstreet#16",
+     "ba:street_fifthavenue#13",
+     "ba:street_fourthavenue#16",
+     "ba:street_seventhavenue#13"
+    ]
+   },
    "ba:itemname_clothingrack": {
     "p": 490.0,
     "v": [
@@ -2523,6 +2532,20 @@
     "p": 4000.0,
     "v": [
      "ba:street_fourthavenue#16"
+    ]
+   },
+   "ba:itemname_securitycamera": {
+    "p": 2500.0,
+    "v": [
+     "ba:street_eleventhstreet#16",
+     "ba:street_seventhavenue#13"
+    ]
+   },
+   "ba:itemname_securityguardlocker": {
+    "p": 2000.0,
+    "v": [
+     "ba:street_eleventhstreet#16",
+     "ba:street_seventhavenue#13"
     ]
    },
    "ba:itemname_singlebookshelf": {
@@ -3364,7 +3387,53 @@
          "ba:itemname_limitededitionbook"
         ]
        ]
-      ]
+      ],
+      "opt": [
+       [
+        "ba:itemname_cleaningstation",
+        1,
+        "opt",
+        "cleaning"
+       ],
+       [
+        "ba:itemname_securityguardlocker",
+        1,
+        "opt",
+        "security"
+       ],
+       [
+        "ba:itemname_securitycamera",
+        1,
+        "opt",
+        "security"
+       ],
+       [
+        "ba:itemname_productpanel",
+        2,
+        "opt",
+        [
+         "ba:itemname_umbrella",
+         "ba:itemname_cheapgift"
+        ]
+       ],
+       [
+        "ba:itemname_productdisplaytable",
+        1,
+        "opt",
+        [
+         "ba:itemname_earbuds01"
+        ]
+       ],
+       [
+        "ba:itemname_productdisplaystandtiered",
+        1,
+        "opt",
+        [
+         "ba:itemname_cheapflower"
+        ]
+       ]
+      ],
+      "optFurniture": 9300.0
      }
     },
     "model": "retail",
@@ -3551,7 +3620,37 @@
          "ba:itemname_modernexpensivefemaleclothing"
         ]
        ]
-      ]
+      ],
+      "opt": [
+       [
+        "ba:itemname_cleaningstation",
+        1,
+        "opt",
+        "cleaning"
+       ],
+       [
+        "ba:itemname_securityguardlocker",
+        1,
+        "opt",
+        "security"
+       ],
+       [
+        "ba:itemname_securitycamera",
+        1,
+        "opt",
+        "security"
+       ],
+       [
+        "ba:itemname_jewelryfloorshowcase",
+        2,
+        "opt",
+        [
+         "ba:itemname_cheapjewelry",
+         "ba:itemname_expensivejewelry"
+        ]
+       ]
+      ],
+      "optFurniture": 22400.0
      }
     },
     "model": "retail",
@@ -3774,7 +3873,39 @@
          "ba:itemname_icecream"
         ]
        ]
-      ]
+      ],
+      "opt": [
+       [
+        "ba:itemname_cleaningstation",
+        1,
+        "opt",
+        "cleaning"
+       ],
+       [
+        "ba:itemname_saladbar",
+        1,
+        "opt",
+        [
+         "ba:itemname_salad"
+        ]
+       ],
+       [
+        "ba:itemname_woodenproductcrate",
+        2,
+        "opt",
+        [
+         "ba:itemname_apple",
+         "ba:itemname_banana"
+        ]
+       ],
+       [
+        "ba:itemname_counter1",
+        2,
+        "opt",
+        "mount"
+       ]
+      ],
+      "optFurniture": 5340.0
      }
     },
     "model": "retail",
@@ -3947,7 +4078,37 @@
          "ba:itemname_headphones01"
         ]
        ]
-      ]
+      ],
+      "opt": [
+       [
+        "ba:itemname_cleaningstation",
+        1,
+        "opt",
+        "cleaning"
+       ],
+       [
+        "ba:itemname_securityguardlocker",
+        1,
+        "opt",
+        "security"
+       ],
+       [
+        "ba:itemname_securitycamera",
+        1,
+        "opt",
+        "security"
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        2,
+        "opt",
+        [
+         "ba:itemname_sodacan",
+         "ba:itemname_energydrink"
+        ]
+       ]
+      ],
+      "optFurniture": 6350.0
      }
     },
     "model": "retail",
@@ -4294,7 +4455,31 @@
          "ba:itemname_sodacan"
         ]
        ]
-      ]
+      ],
+      "opt": [
+       [
+        "ba:itemname_cleaningstation",
+        1,
+        "opt",
+        "cleaning"
+       ],
+       [
+        "ba:itemname_woodenproductcrate",
+        2,
+        "opt",
+        [
+         "ba:itemname_apple",
+         "ba:itemname_banana"
+        ]
+       ],
+       [
+        "ba:itemname_counter1",
+        2,
+        "opt",
+        "mount"
+       ]
+      ],
+      "optFurniture": 1340.0
      }
     },
     "model": "retail",
@@ -4453,7 +4638,54 @@
          "ba:itemname_expensiveflower"
         ]
        ]
-      ]
+      ],
+      "opt": [
+       [
+        "ba:itemname_cleaningstation",
+        1,
+        "opt",
+        "cleaning"
+       ],
+       [
+        "ba:itemname_securityguardlocker",
+        1,
+        "opt",
+        "security"
+       ],
+       [
+        "ba:itemname_securitycamera",
+        1,
+        "opt",
+        "security"
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        2,
+        "opt",
+        [
+         "ba:itemname_sodacan",
+         "ba:itemname_energydrink"
+        ]
+       ],
+       [
+        "ba:itemname_productpanel",
+        2,
+        "opt",
+        [
+         "ba:itemname_umbrella",
+         "ba:itemname_cheapgift"
+        ]
+       ],
+       [
+        "ba:itemname_roundedshelf",
+        1,
+        "opt",
+        [
+         "ba:itemname_expensivegift"
+        ]
+       ]
+      ],
+      "optFurniture": 8550.0
      }
     },
     "model": "retail",
@@ -4644,7 +4876,36 @@
         "shelf",
         "mount"
        ]
-      ]
+      ],
+      "opt": [
+       [
+        "ba:itemname_cleaningstation",
+        1,
+        "opt",
+        "cleaning"
+       ],
+       [
+        "ba:itemname_securityguardlocker",
+        1,
+        "opt",
+        "security"
+       ],
+       [
+        "ba:itemname_securitycamera",
+        1,
+        "opt",
+        "security"
+       ],
+       [
+        "ba:itemname_saladbar",
+        1,
+        "opt",
+        [
+         "ba:itemname_salad"
+        ]
+       ]
+      ],
+      "optFurniture": 8600.0
      }
     },
     "model": "retail",
@@ -4827,7 +5088,39 @@
          "ba:itemname_energydrink"
         ]
        ]
-      ]
+      ],
+      "opt": [
+       [
+        "ba:itemname_cleaningstation",
+        1,
+        "opt",
+        "cleaning"
+       ],
+       [
+        "ba:itemname_securityguardlocker",
+        1,
+        "opt",
+        "security"
+       ],
+       [
+        "ba:itemname_securitycamera",
+        1,
+        "opt",
+        "security"
+       ],
+       [
+        "ba:itemname_productdisplaytable",
+        4,
+        "opt",
+        [
+         "ba:itemname_smartwatch1",
+         "ba:itemname_smartwatch2",
+         "ba:itemname_headphones01",
+         "ba:itemname_earbuds01"
+        ]
+       ]
+      ],
+      "optFurniture": 17600.0
      }
     },
     "model": "retail",
@@ -5167,7 +5460,16 @@
         "dem",
         "sink"
        ]
-      ]
+      ],
+      "opt": [
+       [
+        "ba:itemname_cleaningstation",
+        1,
+        "opt",
+        "cleaning"
+       ]
+      ],
+      "optFurniture": 100.0
      }
     },
     "model": "retail",
@@ -5334,7 +5636,16 @@
          "ba:itemname_haircareproduct"
         ]
        ]
-      ]
+      ],
+      "opt": [
+       [
+        "ba:itemname_cleaningstation",
+        1,
+        "opt",
+        "cleaning"
+       ]
+      ],
+      "optFurniture": 100.0
      }
     },
     "model": "retail",
@@ -5483,7 +5794,37 @@
          "ba:itemname_expensivejewelry"
         ]
        ]
-      ]
+      ],
+      "opt": [
+       [
+        "ba:itemname_cleaningstation",
+        1,
+        "opt",
+        "cleaning"
+       ],
+       [
+        "ba:itemname_securityguardlocker",
+        1,
+        "opt",
+        "security"
+       ],
+       [
+        "ba:itemname_securitycamera",
+        1,
+        "opt",
+        "security"
+       ],
+       [
+        "ba:itemname_productdisplaytable",
+        2,
+        "opt",
+        [
+         "ba:itemname_smartwatch1",
+         "ba:itemname_smartwatch2"
+        ]
+       ]
+      ],
+      "optFurniture": 11100.0
      }
     },
     "model": "retail",
@@ -5759,7 +6100,37 @@
          "ba:itemname_cigarette"
         ]
        ]
-      ]
+      ],
+      "opt": [
+       [
+        "ba:itemname_cleaningstation",
+        1,
+        "opt",
+        "cleaning"
+       ],
+       [
+        "ba:itemname_securityguardlocker",
+        1,
+        "opt",
+        "security"
+       ],
+       [
+        "ba:itemname_securitycamera",
+        1,
+        "opt",
+        "security"
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        2,
+        "opt",
+        [
+         "ba:itemname_sodacan",
+         "ba:itemname_energydrink"
+        ]
+       ]
+      ],
+      "optFurniture": 6350.0
      }
     },
     "model": "retail",
@@ -5933,7 +6304,25 @@
          "ba:itemname_whisky"
         ]
        ]
-      ]
+      ],
+      "opt": [
+       [
+        "ba:itemname_cleaningstation",
+        1,
+        "opt",
+        "cleaning"
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        2,
+        "opt",
+        [
+         "ba:itemname_energydrink",
+         "ba:itemname_sodacan"
+        ]
+       ]
+      ],
+      "optFurniture": 1850.0
      }
     },
     "model": "retail",
@@ -6140,7 +6529,46 @@
         "req",
         "mount"
        ]
-      ]
+      ],
+      "opt": [
+       [
+        "ba:itemname_cleaningstation",
+        1,
+        "opt",
+        "cleaning"
+       ],
+       [
+        "ba:itemname_securityguardlocker",
+        1,
+        "opt",
+        "security"
+       ],
+       [
+        "ba:itemname_securitycamera",
+        1,
+        "opt",
+        "security"
+       ],
+       [
+        "ba:itemname_wineshelf",
+        1,
+        "opt",
+        [
+         "ba:itemname_bottleofwine"
+        ]
+       ],
+       [
+        "ba:itemname_bakeryshowcase",
+        3,
+        "opt",
+        [
+         "ba:itemname_croissant",
+         "ba:itemname_cupcake",
+         "ba:itemname_donut"
+        ]
+       ]
+      ],
+      "optFurniture": 8855.0
      }
     },
     "model": "retail",

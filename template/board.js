@@ -11569,7 +11569,14 @@ function osSetMode(mode){
 /* --- what the plan stands on ---------------------------------------------- */
 /* Calculation adapters: current payload in, arithmetic in open-store-model.js.
    Persistence, rendering and the marketing cache remain board responsibilities. */
-const osCore = () => OpenStoreModel.create({facts: osFacts(), company: {businesses: (D && D.businesses) || [], day: ((D && D.meta) || {}).day}});
+/* Whether outfits include their optional items (a Cleaning station, security,
+   displays for what the type can also sell): the reader's switch on the
+   shopping list, off unless chosen, kept per viewer. */
+const OS_OPT_KEY = "ba_dash_os_optional";
+let osOptOn = null;
+const osOptional = () => osOptOn === null ? (osOptOn = remembered(OS_OPT_KEY) === "1") : osOptOn;
+function osSetOptional(on){ osOptOn = !!on; remember(OS_OPT_KEY, on ? "1" : "0"); }
+const osCore = () => OpenStoreModel.create({facts: osFacts(), company: {businesses: (D && D.businesses) || [], day: ((D && D.meta) || {}).day}, optional: osOptional()});
 const osType = (...args) => osCore().type(...args);
 const osCap = (...args) => osCore().cap(...args);
 const osLayout = (...args) => osCore().layout(...args);
@@ -11820,7 +11827,7 @@ function osPick(key){
 /* A display that holds many products names two and counts the rest; its tag's
    tip names them all (osTag()). */
 function osWhy(group, why){
-  if(group === "shelf"){
+  if(group === "shelf" || group === "opt" && Array.isArray(why)){
     if(!Array.isArray(why) || !why.length) return tt("gr.os.why.stock", "Stock");
     const names = why.map(osItemName);
     return names.length > 2 ? tt("gr.os.why.more", "{items} +{n}", {items: names.slice(0, 2).join(", "), n: names.length - 2}) : names.join(", ");
@@ -11828,31 +11835,40 @@ function osWhy(group, why){
   if(why === "mount") return tt("gr.os.why.mount", "Stands on it");
   if(group === "cap") return why === "seats" ? tt("gr.os.why.seats", "Seats") : tt("gr.os.why.cap", "Capacity");
   if(group === "req") return why === "pointofsales" ? tt("gr.os.why.pos", "Point of sale") : tt("gr.os.why.req", "Required");
+  if(group === "opt") return why === "cleaning" ? tt("gr.os.why.cleaning", "Cleaning") : tt("gr.os.why.security", "Security");
   return ({music: tt("gr.os.why.music", "Music"), seating: tt("gr.os.why.seating", "Seating"), sink: tt("gr.os.why.sink", "Sink"),
     toilet: tt("gr.os.why.toilet", "Toilet"), toiletprivacy: tt("gr.os.why.privacy", "Privacy"), "toilet+privacy": tt("gr.os.why.toiletPrivacy", "Toilet, privacy"),
     employeeuniforms: tt("gr.os.why.uniforms", "Uniforms"), seats: tt("gr.os.why.seats", "Seats"), workoutvariety: tt("gr.os.why.workout", "Workout variety")})[why] || String(why);
 }
-const osTag = (group, why) => `<span class="os-tag ${group === "req" ? "req" : group === "dem" ? "dem" : group === "cap" ? "cap" : ""}"${
-  group === "shelf" && Array.isArray(why) && why.length > 2 ? ` data-tip="${attr(why.map(osItemName).join(", "))}" tabindex="0"` : ""}>${spEsc(osWhy(group, why))}</span>`;
+/* An optional item's tag is dashed, its tip saying so. */
+const osTag = (group, why) => `<span class="os-tag ${group === "req" ? "req" : group === "dem" ? "dem" : group === "cap" ? "cap" : group === "opt" ? "opt" : ""}"${
+  group === "opt" ? ` data-tip="${attr(Array.isArray(why) ? tt("gr.os.why.optAlso", "Optional: it can also sell {items}", {items: why.map(osItemName).join(", ")})
+    : tt("gr.os.why.opt", "Optional: not needed to open"))}" tabindex="0"`
+  : group === "shelf" && Array.isArray(why) && why.length > 2 ? ` data-tip="${attr(why.map(osItemName).join(", "))}" tabindex="0"` : ""}>${spEsc(osWhy(group, why))}</span>`;
 function osToolbar(plan, inv, out){
   const mode = osMode(plan);
   return `<div class="os-toolbar"><nav class="os-seg big" aria-label="${attr(tt("gr.os.inv.mode", "Interior"))}">
     <button type="button" class="${mode === "firm" ? "on" : ""}" data-os-mode="firm" aria-pressed="${mode === "firm"}">${tt("gr.os.inv.firm", "Installation firm")} <b>${fmt(inv.firm)}</b></button>
     <button type="button" class="${mode === "self" ? "on" : ""}" data-os-mode="self" aria-pressed="${mode === "self"}">${tt("gr.os.inv.self", "Self-installation")} <b>${fmt(inv.self)}</b></button></nav>
     <div class="aside"><span>${tt("gr.os.inv.outfitted", "100% outfitted")}</span><b>${tt("gr.os.inv.items", {one: "{n} item", other: "{n} items"}, {n: inv.items})}</b>
-    <span>${tt("gr.os.inv.itemsLab", "Items")}</span><b>${fmt(out.furniture)}</b></div></div>`;
+    <span>${tt("gr.os.inv.itemsLab", "Items")}</span><b>${fmt(out.furniture)}</b></div></div>
+    ${(out.opt || []).length ? `<div class="os-optbar"><label class="os-switch"><input type="checkbox" data-os-opt${osOptional() ? " checked" : ""}><span>${tt("gr.os.opt.switch", "Include optional items")}</span></label>
+    <span class="quiet">${osOptional() ? tt("gr.os.opt.on", "Optional items count in the investment, the shopping list and the break-even estimate.")
+      : tt("gr.os.opt.off", "A Cleaning station, security and displays for what the type can also sell.")}</span></div>` : ""}`;
 }
 function osGroupNote(group, b, out){
   const h = (osFacts().hoods || {})[b.hood] || {};
   if(group === "req") return tt("gr.os.grp.req.note", "what the type needs to open");
   if(group === "dem") return tt("gr.os.grp.dem.note", "{hood}: each customer asks with a {n}% chance times the demand's weight", {hood: hoodName(b.hood), n: Math.round((h.demands || 0) * 100)});
   if(group === "cap") return tt("gr.os.grp.cap.note", "stations for {n} customers an hour", {n: osCap(b)});
+  if(group === "opt") return tt("gr.os.grp.opt.note", "not needed to open");
   const from = out.from && (D.businesses || []).find(x => x.key === out.from);
   return from ? tt("gr.os.grp.shelf.copied", "as at {address}, same layout {layout}", {address: from.address, layout: osLayout(b)})
     : tt("gr.os.grp.shelf.note", "per product, enough for {n} customers an hour", {n: osCap(b)});
 }
 const OS_GROUPS = [["req", () => tt("gr.os.grp.req", "Required to open")], ["dem", () => tt("gr.os.grp.dem", "Customer demands")],
-  ["cap", () => tt("gr.os.grp.cap", "Building capacity")], ["shelf", () => tt("gr.os.grp.shelf", "Shelves and displays")]];
+  ["cap", () => tt("gr.os.grp.cap", "Building capacity")], ["shelf", () => tt("gr.os.grp.shelf", "Shelves and displays")],
+  ["opt", () => tt("gr.os.grp.opt", "Optional items")]];
 function osInvestHtml(plan){
   const b = osBuilding(plan.key), out = osOutfit(plan, b), inv = osInvestment(plan, b);
   if(!b || !out || !inv) return `<p class="quiet os-gap">${tt("gr.os.inv.none", "No outfit is known for this building's layout.")}</p>`;
@@ -11966,6 +11982,7 @@ function osBreakHtml(plan){
   ].join("");
   const lines = [
     `<p class="os-note">${tt("gr.os.be.mid", "About {w} a day if it is priced, stocked and staffed as planned.", {w: osMidMoney(p * OS_LOW, p * OS_HIGH)})}</p>`,
+    ((osOutfit(plan, b) || {}).lines || []).some(l => l[2] === "opt") ? `<p class="os-note">${tt("gr.os.be.opt", "The investment includes the optional items.")}</p>` : "",
     /* The same basis as the line above: the range's middle, less the tax. */
     tax ? `<p class="os-note">${tt("gr.os.be.tax", "After {n}% tax: {w} a day.", {n: tax, w: osMidMoney(p * OS_LOW * (1 - tax / 100), p * OS_HIGH * (1 - tax / 100))})}</p>` : "",
     own ? `<p class="os-note">${tt("gr.os.be.own", {one: "Your shop of this type earns {pct}% of its estimate.",
@@ -12873,6 +12890,7 @@ function wireOpenStore(){
     else { osLinkHint = true; drawOpenStore(); }
   });
   on("click", "[data-os-mode]", el => { osSetMode(el.dataset.osMode); drawOpenStore(); });
+  on("change", "[data-os-opt]", el => { osSetOptional(el.checked); drawOpenStore(); });
   on("change", "[data-os-fin-on]", el => { const plan = osPlan(); if(!plan) return; plan.finance = {...(plan.finance || {}), on: el.checked}; osSave(); drawOpenStore(); });
   on("click", "[data-os-bank]", el => { const plan = osPlan(); if(!plan) return; plan.finance = {...(plan.finance || {}), bank: el.dataset.osBank}; osSave(); drawOpenStore(); });
   on("input", "[data-os-fin-amount], [data-os-fin-range]", el => osFinUpdate(el.value));

@@ -1218,6 +1218,16 @@ renting a building therefore does not erase its deposit from the plan's history.
 - the deposit, as the finder estimates it: about 60 days of rent, with the building's own
   fittings.
 
+**Include optional items**, a switch on the shopping list that is off unless the reader
+turns it on (kept per browser), adds what a store does not need to open, as its own group
+with dashed tags: a Cleaning station for the 14 types that take one, a Security guard locker
+and the cheapest camera for the 9 types that can be robbed (the pieces made for the type),
+and one display for each product the type can additionally sell that no shelf of the
+outfit holds yet, by the game's weight, the cheapest display that works in the type
+wherever the designer files it. Turned on, those items count in both install modes'
+totals, the self-installation stores and map, and break even (`outfit_optional()`, the
+layout's `opt` lines and `optFurniture`).
+
 The **installation firm** charges 586 a square metre on top of every item at its default
 price, and lays the walls and floors free. **Self-installation** is the items, $250 a
 delivery per furniture store (the list is grouped by store, the fewest stores that sell

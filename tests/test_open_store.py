@@ -202,6 +202,95 @@ class OutfitTests(unittest.TestCase):
                           ("ba:itemname_trampoline", "dem")])
 
 
+def optional_rules():
+    """The liquor store with what it may stand beside its outfit: a Cleaning
+    station, the security kit, and a gift it can additionally sell."""
+    rules = copy.deepcopy(RULES)
+    rules["types"][SHOP]["i"].append(["ba:itemname_cheapgift", 0.25])
+    rules["types"][SHOP]["i"].append(["ba:itemname_cigar", 0.5])
+    rules["products"]["ba:itemname_cheapgift"] = {"p": 5}
+    rules["products"]["ba:itemname_cigar"] = {"p": 9}
+    rules["furniture"].update({
+        "ba:itemname_cleaningstation": {"v": VENDOR, "bt": ["liquorstore", "gym"]},
+        "ba:itemname_securityguardlocker": {"v": VENDOR, "bt": ["liquorstore"]},
+        "ba:itemname_securitycamera": {"v": VENDOR, "bt": ["liquorstore"]},
+        "ba:itemname_securitycameraroof": {"v": VENDOR, "bt": ["liquorstore"]},
+        # Filed under gift shops, yet it works anywhere: the shop takes it.
+        "ba:itemname_giftpanel": {"c": 10, "h": ["ba:itemname_cheapgift"], "v": VENDOR, "bt": ["giftshop"]},
+        # Cheaper, but the game will not let it work in a liquor store.
+        "ba:itemname_gifttable": {"c": 10, "h": ["ba:itemname_cheapgift"], "v": VENDOR, "no": ["liquorstore"]},
+        "ba:itemname_humidor": {"c": 5, "h": ["ba:itemname_cigar"], "v": VENDOR, "bt": ["liquorstore"]},
+    })
+    prices = copy.deepcopy(PRICES)
+    prices["items"].update({
+        "ba:itemname_cleaningstation": {"p": 100}, "ba:itemname_securityguardlocker": {"p": 2000},
+        "ba:itemname_securitycamera": {"p": 2500}, "ba:itemname_securitycameraroof": {"p": 2700},
+        "ba:itemname_giftpanel": {"p": 300}, "ba:itemname_gifttable": {"p": 50}, "ba:itemname_humidor": {"p": 700},
+    })
+    return rules, prices
+
+
+class OptionalItemsTests(unittest.TestCase):
+    """Optional items (issue #441): outfit_optional() beside outfit_lines(),
+    which never lists them."""
+
+    def optional(self, slug=SHOP, cap=30):
+        rules, prices = optional_rules()
+        lines = outfit_lines(slug, rules, prices, cap, 225)
+        return lines, ba_dashboard.outfit_optional(slug, rules, prices, lines)
+
+    def test_the_outfit_itself_never_lists_an_optional_item(self):
+        rules, prices = optional_rules()
+        lines, opt = self.optional()
+        self.assertNotIn("opt", {line["group"] for line in lines})
+        self.assertFalse({line["item"] for line in lines} & {line["item"] for line in opt})
+        # The extra product's humidor is typed for the shop, so the outfit shelves the cigar already.
+        self.assertIn("ba:itemname_humidor", {line["item"] for line in lines})
+
+    def test_a_cleaning_station_the_locker_and_the_cheapest_camera_where_the_type_takes_them(self):
+        _lines, opt = self.optional()
+        got = [(line["item"], line["qty"], line["why"]) for line in opt if line["why"] in ("cleaning", "security")]
+        self.assertEqual(got, [("ba:itemname_cleaningstation", 1, "cleaning"),
+                               ("ba:itemname_securityguardlocker", 1, "security"),
+                               ("ba:itemname_securitycamera", 1, "security")])
+        self.assertTrue(all(line["group"] == "opt" for line in opt))
+
+    def test_a_type_that_is_not_robbed_gets_no_security(self):
+        rules, prices = optional_rules()
+        for name in ("ba:itemname_securityguardlocker", "ba:itemname_securitycamera", "ba:itemname_securitycameraroof"):
+            rules["furniture"][name]["bt"] = ["giftshop"]
+        rules["furniture"]["ba:itemname_cleaningstation"]["bt"] = ["gym"]
+        lines = outfit_lines(SHOP, rules, prices, 30, 225)
+        opt = ba_dashboard.outfit_optional(SHOP, rules, prices, lines)
+        self.assertEqual([line["why"] for line in opt], [["ba:itemname_cheapgift"]])
+
+    def test_each_extra_no_shelf_holds_gets_its_cheapest_display_that_works_in_the_type(self):
+        _lines, opt = self.optional()
+        shelves = [(line["item"], line["qty"], line["why"]) for line in opt if isinstance(line["why"], list)]
+        # Not the cheaper gift table (it does not work here), and nothing for the
+        # cigar or the soda the outfit's own shelves already hold.
+        self.assertEqual(shelves, [("ba:itemname_giftpanel", 1, ["ba:itemname_cheapgift"])])
+
+    def test_the_payload_carries_optional_lines_and_their_total_beside_the_outfit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "payload.hsg")
+            save_fixtures.write_data_save(path, save_fixtures.DAY)
+            facts = ba_dashboard.extract(load_save(path), Names(save_fixtures.data_names()), None)["openStore"]
+        prices = ba_dashboard.load_item_prices()["items"]
+        seen = 0
+        for slug, t in facts["types"].items():
+            for outfit in t["layouts"].values():
+                self.assertNotIn("opt", {line[2] for line in outfit["lines"]}, slug)
+                if "opt" not in outfit:
+                    continue
+                seen += 1
+                self.assertTrue(outfit["opt"], slug)
+                self.assertTrue(all(line[2] == "opt" for line in outfit["opt"]), slug)
+                self.assertAlmostEqual(outfit["optFurniture"], sum(prices[item]["p"] * qty for item, qty, *_ in outfit["opt"]), 2)
+                self.assertTrue(all(line[0] in facts["items"] for line in outfit["opt"]), slug)
+        self.assertGreater(seen, 0)
+
+
 class RequiredPlacedTests(unittest.TestCase):
     def rows(self, placed, sqm=150):
         return {r[0]: r[1:] for r in ba_dashboard.required_placed(collections.Counter(placed), SHOP, RULES, PRICES, sqm)}
