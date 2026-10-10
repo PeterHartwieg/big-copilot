@@ -9586,13 +9586,16 @@ function sbToolbar(view, o = {}){
    what its factories make the two agree on most views, and a switch that
    changes nothing is not shown. What the other build leaves behind is put back. */
 const sbText = html => String(html).replace(/<[^>]*>/g, " ").replace(/&[a-z0-9#]+;/gi, " ").replace(/\s+/g, " ").trim();
+/* True while sbBasisDiffers() builds the other sizing, for work whose result
+   the comparison never reads (drawFactoryStaffing()'s button reasons). */
+let sbOtherBasis = false;
 function sbBasisDiffers(here, build){
   if(!szMatters()) return false;
   const keep = [sbSel, sbSelOff, sbDrawing, sbWhich];
   let there;
-  try{ there = szWith(sizing === "dem" ? "cap" : "dem", build); }
+  try{ sbOtherBasis = true; there = szWith(sizing === "dem" ? "cap" : "dem", build); }
   catch(e){ return true; }
-  finally{ [sbSel, sbSelOff, sbDrawing, sbWhich] = keep; }
+  finally{ sbOtherBasis = false; [sbSel, sbSelOff, sbDrawing, sbWhich] = keep; }
   return sbText(here) !== sbText(there);
 }
 /* The one svg#flow sits in Goods flow while that view is on screen, and waits
@@ -10988,6 +10991,14 @@ function drawFactoryStaffing(keep = () => true, drawnLines = []){
   }
   const rows = (((D.factoryStaffing || {})[sizing]) || []).filter(keep);
   if(!rows.length) return "";
+  /* Staff this site, a factory at a time, as a shop's Staffing offers it:
+     the Staff page's action scoped to the factory, which hires, moves and
+     writes its week. Only where the linked mod hires. Opening Production
+     does not start the Staff page's plan (odPrefetchSections()); the click
+     does, and the dialog waits for it. Once the plan is on the board, a
+     factory with nothing to do says why on the button. The other sizing's
+     build for sbBasisDiffers() skips that: it never reads the reason. */
+  const hire = hrCanHire(), known = hire && !sbOtherBasis && odReady("hiring");
   const h = x => String(x % 24 === 0 && x ? 24 : x % 24).padStart(2, "0");
   let workers = 0, perDay = 0;
   const facs = rows.map(r => {
@@ -11021,9 +11032,19 @@ function drawFactoryStaffing(keep = () => true, drawnLines = []){
         Number.isFinite(l.hoursNow) && l.hoursNow !== l.hours ? sbChg(l.hoursNow, l.hours, tt("sb.unit.h", "h")) : `<b>${tt("sb.unit.nh", "{n} h", {n: l.hours})}</b>`}</span><span class="shifts">${chips}${
         l.machines > 1 ? `<small class="sb-per">× ${tt("sb.staff.machines", {one: "{n} machine", other: "{n} machines"}, {n: l.machines})}</small>` : ""}</span></div>`;
     }).join("");
+    /* Shown on every factory, so it is found: one with nothing to hire, move
+       or write says so on the button rather than leaving the row bare. Open
+       places nobody free fits are not "has its people". */
+    /* The request osStaffWork() makes, made once for both answers. */
+    const req = known ? hrRequest(hrMemoModel(), {mode: "both", site: r.key, one: true}) : null;
+    const why = !req || req.body.hires.length + req.body.moves.length + req.weeks ? ""
+      : req.gaps.has(r.key)
+        ? tt("sb.staff.nobody", "Nothing to do now: nobody free fits this factory's open hours")
+        : tt("sb.staff.nothing", "Nothing to change: this factory has its people and the game already holds its week");
+    const staff = hire ? `<div class="gw-acts gw-panel">${gwButton("hire", tt("sp.gw.staff", "Staff this site"), `data-hr-staff="${attr(r.key)}"`, why)}</div>` : "";
     return `<div class="sb-sfac"><div class="sb-sfh"><span>${name}</span><span class="sb-hc">${
       tt("sb.staff.have", {one: "{hours:,} machine-hours a week; you have {have} factory worker", other: "{hours:,} machine-hours a week; you have {have} factory workers"},
-        {n: hc.have ?? 0, hours: hc.needed ?? 0, have: `<b>${hc.have ?? 0}</b>`})}${chip}${small}${unnamedNote}</span>${wage}${go}</div>${lines}</div>`;
+        {n: hc.have ?? 0, hours: hc.needed ?? 0, have: `<b>${hc.have ?? 0}</b>`})}${chip}${small}${unnamedNote}</span>${wage}${go}</div>${staff}${lines}</div>`;
   });
   // The totals only add something over two factories or more.
   const tot = rows.length > 1 && (workers || perDay) ? `<div class="sb-stot"><span>${tt("sb.staff.tot.all", "All factories:")}</span>${workers ? `<b class="${workers > 0 ? "up" : "dn"}">${workers > 0
@@ -11031,7 +11052,6 @@ function drawFactoryStaffing(keep = () => true, drawnLines = []){
       : tt("sb.staff.tot.workers.dn", {one: "−{n} factory worker", other: "−{n} factory workers"}, {n: -workers})}</b>` : ""}${
     perDay ? `<b class="${perDay > 0 ? "up" : "dn"}">${perDay > 0 ? tt("sb.staff.tot.perDay.up", "+{w:$} a day", {w: perDay})
       : tt("sb.staff.tot.perDay.dn", "−{w:$} a day", {w: -perDay})}</b>` : ""}</div>` : "";
-  /* No button writes these, and none says it does not (Peter's testing, A4). */
   return `<div class="sb-staff" id="sbStaff">${sechead(tt("sb.staff.title.plan", "Factory staffing for this plan"), {icon: "crew", why: SB_STAFF_WHY()})}${facs.join("")}${tot}</div>`;
 }
 /* A typed figure is kept on commit (Enter, or leaving the box) and redraws the
