@@ -11854,8 +11854,14 @@ function osToolbar(plan, inv, out){
     <span>${tt("gr.os.inv.itemsLab", "Items")}</span><b>${fmt(out.furniture)}</b></div></div>
     ${(out.opt || []).length ? `<div class="os-optbar"><label class="os-switch"><input type="checkbox" data-os-opt${osOptional() ? " checked" : ""}><span>${tt("gr.os.opt.switch", "Include optional items")}</span></label>
     <span class="quiet">${osOptional() ? tt("gr.os.opt.on", "Optional items count in the investment, the shopping list and the break-even estimate.")
-      : tt("gr.os.opt.off", "A Cleaning station, security and displays for what the type can also sell.")}</span></div>` : ""}`;
+      : tt("gr.os.opt.adds", "Adds what the store does not need to open: {items}.", {items: osOptKinds(out.opt).join(", ")})}</span></div>` : ""}`;
 }
+/* The kinds of optional item an outfit holds, as the switch's caption names them. */
+const osOptKinds = opt => [
+  opt.some(l => l[3] === "cleaning") ? tt("gr.os.opt.kind.cleaning", "a Cleaning station") : "",
+  opt.some(l => l[3] === "security") ? tt("gr.os.opt.kind.security", "security") : "",
+  opt.some(l => Array.isArray(l[3])) ? tt("gr.os.opt.kind.also", "displays for what it can also sell") : "",
+].filter(Boolean);
 function osGroupNote(group, b, out){
   const h = (osFacts().hoods || {})[b.hood] || {};
   if(group === "req") return tt("gr.os.grp.req.note", "what the type needs to open");
@@ -12508,8 +12514,9 @@ function osMarkPlans(){
   let changed = osReconcile();
   if(osSnapFor !== D){ osSnapSeen = new Map(); osSnapFor = D; }
   osPlans.forEach(p => {
-    /* The inputs a snapshot rests on: the board read and the plan's type and building. */
-    const seen = `${p.type}|${p.key}`;
+    /* The inputs a snapshot rests on: the board read, the plan's type and
+       building, and whether optional items are included. */
+    const seen = `${p.type}|${p.key}|${osOptional()}`;
     if(osSnapSeen.get(p.id) === seen) return;
     osSnapSeen.set(p.id, seen);
     if(osSnapTake(p)) changed = true;

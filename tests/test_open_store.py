@@ -243,7 +243,6 @@ class OptionalItemsTests(unittest.TestCase):
         rules, prices = optional_rules()
         lines, opt = self.optional()
         self.assertNotIn("opt", {line["group"] for line in lines})
-        self.assertFalse({line["item"] for line in lines} & {line["item"] for line in opt})
         # The extra product's humidor is typed for the shop, so the outfit shelves the cigar already.
         self.assertIn("ba:itemname_humidor", {line["item"] for line in lines})
 

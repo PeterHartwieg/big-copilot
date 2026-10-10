@@ -3,7 +3,7 @@
     "pr": 443,
     "date": "2026-10-10",
     "title": "Add optional items to a new store's shopping list",
-    "summary": "Open a store's investment step has an Include optional items switch. Turned on, the shopping list adds a Cleaning station, a security guard locker and camera for the shop types that can be robbed, and displays for the products the type can also sell. Those items then count in the investment and the break-even estimate."
+    "summary": "Open a store's investment step has an Include optional items switch. Turned on, the shopping list adds a Cleaning station where the type takes one, a Security guard locker and camera for the shop types that can be robbed, and displays for the products the type can also sell. Those items then count in the investment and the break-even estimate."
   },
   {
     "pr": 440,

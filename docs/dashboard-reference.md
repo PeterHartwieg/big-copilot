@@ -1220,8 +1220,8 @@ renting a building therefore does not erase its deposit from the plan's history.
 
 **Include optional items**, a switch on the shopping list that is off unless the reader
 turns it on (kept per browser), adds what a store does not need to open, as its own group
-with dashed tags: a Cleaning station for the 14 types that take one, a Security guard locker
-and the cheapest camera for the 9 types that can be robbed (the pieces made for the type),
+with dashed tags: a Cleaning station for the types that take one, a Security guard locker
+and the cheapest camera for the types that can be robbed (the pieces made for the type),
 and one display for each product the type can additionally sell that no shelf of the
 outfit holds yet, by the game's weight, the cheapest display that works in the type
 wherever the designer files it. Turned on, those items count in both install modes'

@@ -175,7 +175,10 @@ test('Include optional items: off by default and as before; on, its group counts
   assert.equal(off.out.lines.some(l => l[2] === 'opt'), false);
   assert.equal(await page.locator('#osBody [data-os-opt]').isChecked(), false);
   assert.equal(await page.locator('#osBody .os-inv tr.grp', {hasText: en('gr.os.grp.opt')}).count(), 0);
-  assert.match(await page.locator('#osBody .os-optbar').innerText(), textRe('gr.os.opt.off', {}, {}));
+  // The caption names the kinds this store gets: a liquor store all three.
+  assert.equal(await page.locator('#osBody .os-optbar .quiet').innerText(), en('gr.os.opt.adds',
+    {items: [en('gr.os.opt.kind.cleaning'), en('gr.os.opt.kind.security'), en('gr.os.opt.kind.also')].join(', ')}));
+  assert.deepEqual(await page.evaluate(() => osOptKinds([['x', 1, 'opt', 'cleaning']])), [en('gr.os.opt.kind.cleaning')]);
 
   await page.locator('#osBody [data-os-opt]').check();
   await page.waitForFunction(() => osOptional() === true);
@@ -209,6 +212,31 @@ test('Include optional items: off by default and as before; on, its group counts
   await page.locator('#osBody [data-os-opt]').uncheck();
   await page.waitForFunction(() => osOptional() === false);
   assert.deepEqual((await now()).inv, off.inv);
+});
+
+test('the plan\'s kept figures follow the optional switch until the store opens, then stay as they were', async t => {
+  const page = await board(t);
+  await planned(page);
+  const firm = () => page.evaluate(() => osPlan().snap.inv.firm);
+  const days = () => page.evaluate(() => JSON.stringify(osPlan().snap.days));
+  const off = await firm(), offDays = await days();
+  const extra = await page.evaluate(() => { const p = osPlan(), b = osBuilding(p.key); return osOutfit(p, b).optFurniture; });
+  assert.ok(extra > 0);
+  await page.locator('#osBody [data-os-opt]').check();
+  await page.waitForFunction(() => osOptional() === true);
+  assert.equal(await firm(), Math.round(off + extra));
+  assert.notEqual(await days(), offDays, 'break even moves with the investment');
+  await page.locator('#osBody [data-os-opt]').uncheck();
+  await page.waitForFunction(() => osOptional() === false);
+  assert.equal(await firm(), off);
+  assert.equal(await days(), offDays);
+  // On when the store opens: that figure is kept, whatever the switch says later.
+  await page.locator('#osBody [data-os-opt]').check();
+  await page.waitForFunction(() => osOptional() === true);
+  await opened(page, {opened: OPENED}, FULL);
+  assert.equal(await firm(), Math.round(off + extra));
+  await page.evaluate(() => { osSetOptional(false); drawOpenStore(); });
+  assert.equal(await firm(), Math.round(off + extra), 'frozen once the store opened');
 });
 
 test('Break even shows both install modes from the game\'s rules, a range, tax, your own shop and a loan', async t => {
