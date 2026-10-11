@@ -79,20 +79,30 @@ async function board(data){
   await page.route('https://**', route => route.abort());
   await page.route('http://board.test/**', route => route.fulfill({contentType: 'text/html', body: html}));
   await page.goto('http://board.test/');
-  await page.evaluate(data => {
-    /* The R8 fixture is a supply payload, not a whole board: the Supply
-       views are drawn, as tests/import_routes.test.cjs draws them. */
-    takeData(data);
-    document.body.classList.add('has-board');
-    document.querySelectorAll('.page').forEach(el => { el.hidden = el.id !== 'pageSupply'; });
-    document.querySelectorAll('#pageSupply section').forEach(el => { el.hidden = false; el.classList.add('measured'); });
-    page = 'supply'; route = 'supply/roles'; sub.supply = 'roles';
-    drawSupplyStrip(); drawRolesView(); drawImportsView(); drawFlowView(); paintLocal(); wireAll();
-  }, data);
+  await seed(page, data);
   page.errors = errors;
   return page;
 }
+/* The R8 fixture is a supply payload, not a whole board: the Supply views
+   are drawn, as tests/import_routes.test.cjs draws them. */
+const seed = (page, data) => page.evaluate(data => {
+  takeData(data);
+  document.body.classList.add('has-board');
+  document.querySelectorAll('.page').forEach(el => { el.hidden = el.id !== 'pageSupply'; });
+  document.querySelectorAll('#pageSupply section').forEach(el => { el.hidden = false; el.classList.add('measured'); });
+  page = 'supply'; route = 'supply/roles'; sub.supply = 'roles';
+  drawSupplyStrip(); drawRolesView(); drawImportsView(); drawFlowView(); paintLocal(); wireAll();
+}, data);
 const fixture = () => { const d = JSON.parse(fs.readFileSync(FIXTURE, 'utf8')); d.supply.roles = roles(); return d; };
+/* The fixture with one Deliveries finding at the Cake Shop Downtown, which is
+   five stops of Rosa's plan. */
+function withShopFinding(){
+  const d = fixture();
+  d.alerts.push({level: 'warn', site: '[DT] Cake Shop Downtown', siteKey: 'shop#3', group: 'outruns', text: 'Soda outsells its top-up',
+    worth: null, unit: '', id: 'outruns-soda', always: false, ev: {slug: 'soda'}});
+  d.supply.roles.agents[0].products.push({slug: 'sugar', item: 'Sugar', s: 0, key: 'hub#1', amount: 100, last: 0});
+  return d;
+}
 const rowText = (page, id) => page.$eval(`#secRoles tr[data-sr-row="${id}"]`, el => el.innerText.replace(/\s+/g, ' ').trim());
 
 test('Plans & contracts is second under Supply, and its count is its own flags', async () => {
@@ -211,6 +221,17 @@ test("a factory stop carries Production's findings; a row with findings of two v
   } finally { await page.close(); }
 });
 
+test('a finding at a site that is several stops of one plan, or several lines of one contract, counts once', async () => {
+  const page = await board(withShopFinding());
+  try {
+    assert.match(await rowText(page, 'm:P1'), /1 in Deliveries/);
+    assert.doesNotMatch(await rowText(page, 'm:P1'), /[2-9] in Deliveries/);
+    // Mara's contract lists the hub's sugar twice; its paused import is one finding.
+    const chips = await page.$$eval('#secRoles tr[data-sr-row="a:C1"] td.st [data-sr-land]', as => as.map(a => a.textContent));
+    assert.deepEqual(chips, ['1 in Imports', '1 in Production']);
+  } finally { await page.close(); }
+});
+
 test('a one-time contract buys once; Goods flow is offered only for a site it draws', async () => {
   const page = await board(fixture());
   try {
@@ -231,7 +252,12 @@ test('a one-time contract buys once; Goods flow is offered only for a site it dr
 test('a reload of a landing on a stop past the first 8 shows the whole list, the stop opened and lit', async () => {
   const page = await board(fixture());
   try {
-    await page.evaluate(() => { sbRestore({who: D.meta.character || '', arrive: {view: 'roles', key: null, slug: null, crumb: 'from Goods flow'}, lit: {row: 'm:P1', stop: 9}}); drawRolesView(); });
+    // Land through the way in, then reload: the history entry gives it back.
+    await page.evaluate(() => srLand('m:P1', 9, 'from Goods flow'));
+    assert.deepEqual(await page.evaluate(() => history.state.nxSb.lit), {row: 'm:P1', stop: 9});
+    await page.reload();
+    await seed(page, fixture());
+    await page.evaluate(() => openRoute('supply/roles', {historyMode: 'pop'}));
     const stop = '#secRoles tr[data-sr-stop="m:P1:9"]';
     assert.deepEqual(await page.$eval(stop, el => [el.classList.contains('sr-hide'), el.classList.contains('sr-lit'), el.classList.contains('sr-dopen')]),
       [false, true, true]);

@@ -11111,7 +11111,8 @@ function srManagerRow(m){
   const dests = m.dests || [], n = dests.length, over = n > (m.reach || 0);
   const cap = gap ? srDash : `<span class="sr-cap"><span>${n}</span>${over ? "" : `<small>${tt("sb.roles.reach", "vehicles reach {n}", {n: m.reach || 0})}</small>`}</span>`;
   const products = gap ? srDash : num(dests.reduce((t, d) => t + (d.targets || []).length, 0));
-  const finds = gap ? [] : dests.flatMap(srStopFinds);
+  /* A site that is several stops of one plan counts each finding once. */
+  const finds = gap ? [] : [...new Set(dests.flatMap(srStopFinds))];
   return `<tr class="sr-row${open ? " sr-opened" : ""}${gap ? " sr-gap" : " sr-opens"}${lit ? " sr-lit" : ""}" data-sr-row="${attr(id)}"${lit ? " data-sb-at" : ""}>
     <td class="l who">${who}</td><td class="l site">${src}</td><td>${cap}</td><td>${products}</td><td class="l to">${gap ? srDash : srDeliversTo(dests)}</td>
     <td class="l st">${srManagerFlags(m).join("")}${srCountChips(finds)}</td><td class="tg">${gap ? "" : srTog}</td></tr>${gap ? "" : srManagerDetail(m, id)}`;
@@ -11168,7 +11169,7 @@ function srAgentRow(a){
   (a.products || []).forEach(p => { if(p.key) by.set(p.key, {s: p.s, where: p.where, n: ((by.get(p.key) || {}).n || 0) + 1}); });
   const named = [...by].map(([k, v]) => { const b = srSite(v.s); return `${spEsc(b ? shortName(b) : v.where || "—")} <em>×${v.n}</em>`; });
   const to = named.length ? named.slice(0, 3).join(" · ") + (named.length > 3 ? ` <em>+${named.length - 3}</em>` : "") : srDash;
-  const finds = (a.products || []).flatMap(srProductFinds);
+  const finds = [...new Set((a.products || []).flatMap(srProductFinds))];
   return `<tr class="sr-row sr-opens${open ? " sr-opened" : ""}${a.who ? "" : " sr-gap"}${lit ? " sr-lit" : ""}" data-sr-row="${attr(id)}"${lit ? " data-sb-at" : ""}>
     <td class="l who">${who}</td><td class="l site">${srImporterHtml(a)}</td><td class="l dl">${srDeliveryCell(a)}</td><td class="l">${srDelivers(a) ? srDay(a.next) : srDash}</td>
     <td>${(a.products || []).length}</td><td class="l to">${to}</td><td class="l st">${flags}${srCountChips(finds)}</td><td class="tg">${srTog}</td></tr>${srAgentDetail(a, id)}`;

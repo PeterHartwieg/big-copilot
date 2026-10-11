@@ -5699,7 +5699,9 @@ def _supply_roles(save: Save, names: Names, businesses: list, factories: dict) -
         if not src and not save.items(plan.get("destinations")):
             # A plan the game holds with no pick-up site and no stop: the
             # manager has nothing to run, as one on no plan.
-            managers.append({"plan": plan.get("id"), "who": who, "id": pid, "skill": skill, "idle": True})
+            # With nobody on it either, there is nothing to show.
+            if pid:
+                managers.append({"plan": plan.get("id"), "who": who, "id": pid, "skill": skill, "idle": True})
             continue
         key = site_key(src)
         sources.add(key)
@@ -5725,7 +5727,7 @@ def _supply_roles(save: Save, names: Names, businesses: list, factories: dict) -
             dests.append(row)
         vehicles = vehicles_at(key)
         managers.append({"plan": plan.get("id"), "who": who, "id": pid, "skill": skill, "s": index.get(key), "key": key,
-                         "where": names.addr(src), "factory": bool(plan.get("isFactory")), "vehicles": vehicles,
+                         "where": names.addr(src) if src else None, "factory": bool(plan.get("isFactory")), "vehicles": vehicles,
                          "reach": 2 * sum(v["reach"] for v in vehicles), "dests": dests})
 
     # The sites no plan picks up from, where that leaves goods standing: a

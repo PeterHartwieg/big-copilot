@@ -88,6 +88,9 @@ def supply_company():
         # A plan the game holds with no pick-up site and no stop (a real save has one).
         {"id": "m-null-plan", "assignedEmployeeId": "manager-nullplan", "isFactory": False,
          "targetAddress": None, "destinations": []},
+        # ...and one with nobody on it either: nothing to show.
+        {"id": "ghost-plan", "assignedEmployeeId": None, "isFactory": False,
+         "targetAddress": None, "destinations": []},
     ]
 
     def contract(cid, agent, pier, products, **flags):
@@ -237,6 +240,8 @@ class SupplyRoles(unittest.TestCase):
         self.assertEqual(row["who"], "Nell Null")
         self.assertEqual(sum(1 for r in self.roles["managers"] if r.get("id") == "manager-nullplan"), 1,
                          "listed once: not again as a manager on no plan")
+        self.assertFalse(any(r.get("plan") == "ghost-plan" for r in self.roles["managers"]),
+                         "a plan with no site, no stop and no manager is not shown")
         hub = next(r for r in self.roles["managers"] if r.get("plan") == "z-warehouse-plan")
         self.assertEqual(hub["where"], "4 Eighth Avenue")
 
