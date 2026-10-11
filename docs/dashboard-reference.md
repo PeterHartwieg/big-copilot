@@ -218,8 +218,8 @@ the map.
     so the count is people, not hours divided by 40.
   - *Office demand*: read from the office's own reports, as a shop's is (*The need
     curve* below), with no measurement to start. Offices use one computer per customer
-    per hour. Demand plans add computers where hours are full and never plan below
-    today's staffing (up to the building capacity), preserving cleaning, other duties and opening hours. See *An
+    per hour. Demand plans add computers where hours are full, and cut an hour only when
+    its two latest reports both came two or more under today's computers, preserving cleaning, other duties and opening hours. See *An
     office's demand plan* below.
   - *The office default*: three computers staffed around the clock in a building with a
     building capacity of 50, proportionally fewer in smaller ones (at least one); every
@@ -880,12 +880,17 @@ reading of its own. Because each customer is one professional at one computer, a
 customers came within 95% of the computers staffed now says only that the computers were
 full: it is `censored`, and the plan asks for one computer more there, never more than
 the computers installed or the building capacity, so an office held back by its staffing
-grows a computer at a time rather than being planned at the staffing it had. The plan
-never asks for fewer computers than are staffed now (up to the building capacity) in an
-hour it has a reading for: the
-game's hour reports keep the customers and nothing of the staffing that was on, and in an
-office the customers are that staffing, so 2 an hour under today's 3 computers may only
-mean two computers were on when they came. An hour with no report on file has no reading
+grows a computer at a time rather than being planned at the staffing it had. Otherwise
+the plan keeps the computers staffed now (up to the building capacity) in an hour it has a
+reading for: the game's hour reports keep the customers and nothing of the staffing that
+was on, and in an office the customers are that staffing, so 2 an hour under today's 3
+computers may only mean two computers were on when they came, before the plan's last step
+up. It cuts an hour only when that hour's two latest reports, one from each of the last
+two weeks it filed one, both came two or more under the computers staffed now: then it
+asks for the higher of the two plus one spare computer, so 20 computers serving 10 and 10
+become 11. A reading one under is never a cut, a single report is never a cut, and since
+the plan grows by one computer at a time it never undoes its own growth. A player who adds
+two or more computers by hand may see an hour cut once and then grow back. An hour with no report on file has no reading
 (the office may only now be staffed then), and neither has a zero with nobody at a
 computer now: such an hour keeps the office default or the computers staffed now (up to
 the building capacity), whichever is more, and so does any open hour with no reading. An office with no reading at all gets the office default. Cleaning and other

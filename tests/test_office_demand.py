@@ -9,7 +9,10 @@ from ba_save import Names
 from tests.test_staff_hire import COMPUTER, LAW, LAWYER, STREET, lawyer, office_registration, save_of, site_key
 
 
-def plan(customers=1, staffed=4, history=True, missing=(), closed=False, support=False, door=50, days=14, closed_day=None):
+def plan(customers=1, staffed=4, history=True, missing=(), closed=False, support=False, door=50, days=14, closed_day=None,
+         computers=4):
+    # `customers` is one count for every report, or a function of the day number.
+    count = customers if callable(customers) else (lambda day: customers)
     opens = [[] if closed else [[8, 16]] for _ in range(7)]
     employees = [lawyer(f'l{i}') for i in range(staffed)]
     for employee in employees:
@@ -19,7 +22,7 @@ def plan(customers=1, staffed=4, history=True, missing=(), closed=False, support
               for wd in range(7) for i in range(staffed)]
     if closed_day is not None:
         opens[closed_day] = []
-    reg = office_registration(4, opens, shifts=shifts)
+    reg = office_registration(computers, opens, shifts=shifts)
     reg['customerCapacity'] = door
     if support:
         reg['itemInstances']['$items'].append({'$v': {'id': 'clean', 'itemName': 'ba:itemname_cleaningstation'}})
@@ -28,7 +31,7 @@ def plan(customers=1, staffed=4, history=True, missing=(), closed=False, support
     if history:
         reg['orderHistory'] = {'$items': [
             {'dayNumber': day, 'hourReports': {'$items': [
-                {'hour': h, 'customers': customers} for h in range(8, 16) if h not in missing]}}
+                {'hour': h, 'customers': count(day)} for h in range(8, 16) if h not in missing]}}
             for day in range(1, days + 1)]}
     save = save_of({'EmployeeInstances': {'$items': employees},
                     'BuildingRegistrations': {'$items': [reg]}})
@@ -42,16 +45,47 @@ def plan(customers=1, staffed=4, history=True, missing=(), closed=False, support
 
 
 class OfficeDemandTests(unittest.TestCase):
-    def test_customers_below_todays_staffing_keep_it(self):
-        # An hour report holds no staffing, and an office's customers are the
-        # staffing that was on: 1 an hour under today's 4 may be a week run on
-        # one computer, so the plan never cuts below today's staffing.
+    def test_two_readings_well_under_todays_staffing_cut_to_them_plus_one(self):
+        # 1 an hour in both of the latest weeks under today's 4: three under,
+        # past what the plan's own one-computer steps can explain, so the plan
+        # is the higher reading plus one spare computer.
         row, _, _ = plan()
         self.assertTrue(row['demandBased'])
-        self.assertEqual(row['need'][LAWYER][1][10], 4)
+        self.assertEqual(row['need'][LAWYER][1][10], 2)
         self.assertEqual(row['basis'][LAWYER][1][10], 'measured')
-        self.assertEqual(sum(s['t'] - s['f'] for s in row['shifts']), 224)
-        self.assertEqual(row['staffedComputers'], 4)
+
+    def test_twenty_staffed_for_ten_cuts_to_eleven(self):
+        row, _, _ = plan(customers=10, staffed=20, computers=24)
+        self.assertEqual(row['need'][LAWYER][1][10], 11)
+
+    def test_one_under_todays_staffing_never_cuts(self):
+        # 10 under today's 11 may be the week before the plan's own step up.
+        row, _, _ = plan(customers=10, staffed=11, computers=24)
+        self.assertEqual(row['need'][LAWYER][1][10], 11)
+
+    def test_only_one_of_the_two_readings_low_keeps_todays_staffing(self):
+        # The older week read 10, the latest 19, under today's 20: no cut.
+        row, _, _ = plan(customers=lambda day: 19 if day > 7 else 10, staffed=20, computers=24)
+        self.assertEqual(row['need'][LAWYER][1][10], 20)
+
+    def test_a_single_report_never_cuts(self):
+        # Only the latest week filed a report for this weekday: no cut.
+        _, save, business = plan(customers=10, staffed=20, computers=24)
+        reg = save.items(save.root['BuildingRegistrations'])[0]
+        for day in save.items(reg['orderHistory']):
+            if day['dayNumber'] % 7 == 1 and day['dayNumber'] <= 7:
+                day['hourReports']['$items'] = []
+        _, staff = _staff(save, Names({}))
+        grids = _hourly(save, [reg], [business], {}, {COMPUTER},
+                        {p['id']: p['skill'] for p in staff}, Names({}))
+        [row] = _office_staffing(save, Names({}), [business], grids, staff)
+        self.assertEqual(row['need'][LAWYER][1][10], 20)
+        self.assertEqual(row['need'][LAWYER][2][10], 11)
+
+    def test_a_full_hour_still_grows_by_one(self):
+        row, _, _ = plan(customers=20, staffed=20, computers=24)
+        self.assertEqual(row['basis'][LAWYER][1][10], 'censored')
+        self.assertEqual(row['need'][LAWYER][1][10], 21)
 
     def test_a_computer_just_added_is_not_planned_away(self):
         # Two weeks of 2 an hour, then a third computer staffed: 2 is under 95%
@@ -98,12 +132,10 @@ class OfficeDemandTests(unittest.TestCase):
         self.assertEqual(row['need'][LAWYER][1], [0] * 24)
         self.assertFalse(any(s['d'] == 1 for s in row['shifts']))
 
-    def test_zero_customers_with_staff_now_keeps_that_staffing(self):
+    def test_zero_customers_with_staff_now_keeps_one_spare_computer(self):
         row, _, _ = plan(customers=0)
         self.assertTrue(row['demandBased'])
-        self.assertEqual(sum(s['t'] - s['f'] for s in row['shifts']), 224)
-        self.assertEqual(row['staffedComputers'], 4)
-        self.assertEqual(row['_hire']['spare'], [])
+        self.assertEqual(sum(s['t'] - s['f'] for s in row['shifts']), 56)
 
     def test_zero_customers_without_staff_uses_default(self):
         row, _, _ = plan(customers=0, staffed=0)

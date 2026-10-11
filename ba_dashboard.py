@@ -14614,7 +14614,37 @@ def _office_runs(computers: int, open_hours: list, door: int) -> tuple:
     return runs, always
 
 
-def _office_need(grid: dict, skill: str, runs: dict, run: int = 0, daily: list | None = None) -> tuple:
+def _office_recent(save: Save, building: dict) -> list:
+    """The two latest customer reports of every weekday-hour, latest first.
+
+    One per finished day, so one per week: [weekday][hour] -> [customers, ...],
+    at most two, an hour nobody filed a report for left out. _office_need()
+    cuts an office's hour only on both of them.
+    """
+    today = save.root.get("Day")
+    recent = [[[] for _ in range(24)] for _ in range(7)]
+    days = sorted(
+        (entry for entry in save.items(building.get("orderHistory"))
+         if entry.get("dayNumber") is not None and (today is None or entry["dayNumber"] < today)),
+        key=lambda entry: entry["dayNumber"], reverse=True)
+    for entry in days:
+        wd = entry["dayNumber"] % 7
+        for report in save.items(entry.get("hourReports")):
+            hour = report.get("hour")
+            if hour is not None and 0 <= hour < 24 and len(recent[wd][hour]) < 2:
+                recent[wd][hour].append(report.get("customers", 0) or 0)
+    return recent
+
+
+# An office hour is cut only when both of its latest readings sit this far
+# under today's computers. The plan adds one computer at a time, so a reading
+# one under today's may be from before its own last step up; two under cannot
+# be, and the cut can never undo the plan's growth (Peter, 11 October 2026).
+OFFICE_CUT_GAP = 2
+
+
+def _office_need(grid: dict, skill: str, runs: dict, run: int = 0, daily: list | None = None,
+                 recent: list | None = None) -> tuple:
     """Measured workstation need, with the office default for unread hours.
 
     A shop's demand plan, read the same way from the office's own reports
@@ -14629,8 +14659,12 @@ def _office_need(grid: dict, skill: str, runs: dict, run: int = 0, daily: list |
     zero with nobody working is not measured demand either. And a read hour is
     never planned below the computers staffed now (up to the building
     capacity): an hour report holds the customers and nothing of the staffing
-    that was on, and in an office the customers are that staffing, so customers below today's staffing may only
-    say the hour was staffed less when they came. Do not scale another weekday
+    that was on, and in an office the customers are that staffing, so customers
+    below today's staffing may only say the hour was staffed less when they
+    came. Unless both of the hour's two latest reports (`recent`, from
+    _office_recent()) are OFFICE_CUT_GAP or more under today's computers: then
+    the plan is the higher of them plus one spare computer. Fewer than two
+    reports never cut, and a full hour still grows by one. Do not scale another weekday
     into an unread one: keep the default there, or the current staffing (up
     to the building capacity) if higher, until that hour has a reading of its own.
     """
@@ -14660,7 +14694,11 @@ def _office_need(grid: dict, skill: str, runs: dict, run: int = 0, daily: list |
                                            max(entry["need"][wd][h], default, current) if demand_based else default)
                 entry["basis"][wd][h] = "office"
             else:
-                entry["need"][wd][h] = min(len(grid["stations"]), max(entry["need"][wd][h], current))
+                latest = [math.ceil(c / OFFICE_POST_RATE) for c in recent[wd][h]] if recent else []
+                cut = (entry["basis"][wd][h] == "measured" and len(latest) == 2
+                       and max(latest) <= current - OFFICE_CUT_GAP)
+                entry["need"][wd][h] = min(len(grid["stations"]),
+                                           max(latest) + 1 if cut else max(entry["need"][wd][h], current))
     if not demand_based:
         entry["stations"] = runs
     return need, demand_based
@@ -14747,7 +14785,7 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
     slots_open = grid["open"] if any(grid["open"]) else ALL_DAY_OPEN
     run = _days_open(save, building)
     daily = _open_day_average(save, building, slots_open) if run >= DEMAND_RUN_DAYS else None
-    need, demand_based = _office_need(grid, skill, runs, run, daily)
+    need, demand_based = _office_need(grid, skill, runs, run, daily, _office_recent(save, building))
     fake = {"roles": [{"skill": skill, "label": label}], "stations": stations}
     usable_bench = [p for p in bench if _usable(p, skill, "serve")]
     current = _current_roster(save, building, {s["id"]: s for s in stations})
