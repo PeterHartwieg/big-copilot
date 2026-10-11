@@ -8897,7 +8897,9 @@ function sbRestore(x){
     set.clear(); sr[k].forEach(id => { if(typeof id === "string") set.add(id); });
   });
   srLit = x.lit && typeof x.lit.row === "string" ? {row: x.lit.row, stop: Number.isInteger(x.lit.stop) ? x.lit.stop : null} : null;
-  if(srLit){
+  /* An entry from before the opened rows were kept opens the landing's row
+     and stop; a newer one already says what the reader left open or closed. */
+  if(srLit && !sr){
     srOpen.add(srLit.row);
     if(srLit.stop !== null){ srOpen.add(`${srLit.row}:${srLit.stop}`); if(srLit.stop >= SR_DESTS) srAll.add(srLit.row); }
   }

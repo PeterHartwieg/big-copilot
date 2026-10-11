@@ -312,6 +312,35 @@ test('a reload of a landing on a stop past the first 8 shows the whole list, the
   } finally { await page.close(); }
 });
 
+test('what the reader closed after a landing stays closed through a reload; the light stays', async () => {
+  const page = await board(fixture());
+  const reload = async () => {
+    await page.reload();
+    await seed(page, fixture());
+    await page.evaluate(() => openRoute('supply/roles', {historyMode: 'pop'}));
+  };
+  const state = sel => page.$eval(sel, el => ['sr-hide', 'sr-lit', 'sr-dopen', 'sr-opened'].filter(c => el.classList.contains(c)));
+  try {
+    await page.evaluate(() => srLand('m:P1', 2, 'from Goods flow'));
+    // The landed stop closed by hand: still lit, no longer open.
+    await page.click('#secRoles tr[data-sr-stop="m:P1:2"]');
+    await reload();
+    assert.deepEqual(await state('#secRoles tr[data-sr-stop="m:P1:2"]'), ['sr-lit']);
+    assert.deepEqual(await state('#secRoles tr[data-sr-of="m:P1:2"]'), ['sr-hide']);
+    // Another stop opened by hand stays open.
+    await page.click('#secRoles tr[data-sr-stop="m:P1:4"]');
+    await reload();
+    assert.deepEqual(await state('#secRoles tr[data-sr-stop="m:P1:4"]'), ['sr-dopen']);
+    // The landed row closed by hand stays closed.
+    await page.click('#secRoles tr[data-sr-row="m:P1"]');
+    await reload();
+    assert.deepEqual(await state('#secRoles tr[data-sr-of="m:P1"]'), ['sr-hide']);
+    // An entry from before the opened rows were kept still opens its landing.
+    await page.evaluate(() => { srOpen.clear(); srAll.clear(); sbRestore({who: D.meta.character || '', arrive: {view: 'roles', key: null, slug: null, crumb: 'x'}, lit: {row: 'm:P2', stop: 1}}); drawRolesView(); });
+    assert.deepEqual(await state('#secRoles tr[data-sr-stop="m:P2:1"]'), ['sr-lit', 'sr-dopen']);
+  } finally { await page.close(); }
+});
+
 /* A whole board: tests/test_supply_roles.py's synthetic company, extracted
    by Python, for the ways in that sit on full pages (a site's page, the
    heads of Imports and Deliveries). */
