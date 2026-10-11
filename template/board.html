@@ -3892,6 +3892,12 @@ body.sd-rail .fv-footdiff{display:inline-flex}
 /* The views at the top of the page wrap before their controls do, and the
    controls keep to the right on a line of their own when they must. */
 body.sd-rail .nx-ctl{margin-left:auto;flex-basis:auto;justify-content:flex-end}
+/* Folded, the views beside the controls take tighter pills, so Supply's six
+   views and Imports' scope, mode and basis still share one line at 1440 px. */
+body.sd-rail .nx-localrow .nx-local{gap:2px}
+body.sd-rail .nx-localrow .nx-local a{padding:0 8px;gap:5px}
+body.sd-rail .nx-localrow .nx-ctl .sbv-bar{gap:10px}
+body.sd-rail .nx-localrow .nx-ctl .sbv-mode a{padding:7px 10px}
 /* ----- the phone: a drawer from the bar's Map & more ----- */
 .sd-scrim{display:none}
 @media (max-width:560px){

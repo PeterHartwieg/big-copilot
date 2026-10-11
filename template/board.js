@@ -7829,7 +7829,7 @@ function drawSite(){
       </section>
       <section class="rv" data-block="shelves" id="sp-shelves">
         ${office ? sechead(tt("sp.fees.title", "Fees"), {icon: sp ? "fees" : null})
-          : sechead(tt("sp.shelf.title", "Shelves"), {icon: sp ? "shelves" : null})}
+          : sechead(tt("sp.shelf.title", "Shelves"), {icon: sp ? "shelves" : null, aside: srFillLinks(b.key)})}
         ${products}${shelfMore}
       </section>
     </div>
@@ -11265,6 +11265,14 @@ function srStopLink(srcKey, destKey, html){
   const m = srPlanFrom(srcKey);
   const k = m ? (m.dests || []).findIndex(d => d.key === destKey) : -1;
   return k >= 0 ? srGo(html, srRowId(m), k, tt("sb.roles.go.stop", "{who}'s plan, stop {k} · Plans & contracts", {who: m.who || "—", k: k + 1})) : html;
+}
+/* The plans that fill a site, each a link to its stop there: a shop's Shelves head. */
+function srFillLinks(key){
+  return (srRoles().managers || []).filter(m => !m.gap && !m.idle).flatMap(m => {
+    const k = (m.dests || []).findIndex(d => d.key === key);
+    return k < 0 ? [] : [srGo(spEsc(tt("sp.feeds.plan", "{who}'s plan · {t} ›", {who: m.who || "—", t: srWhen(m)})), srRowId(m), k,
+      tt("sb.roles.go.stop", "{who}'s plan, stop {k} · Plans & contracts", {who: m.who || "—", k: k + 1}))];
+  }).join(" ");
 }
 function srPlanLink(srcKey){
   const m = srPlanFrom(srcKey);

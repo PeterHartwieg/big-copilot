@@ -190,6 +190,28 @@ test("Goods flow names who delivers the followed site; a line lands on that row,
   } finally { await page.close(); }
 });
 
+test("a shop's page names the plans that fill it; a link lands on its stop, lit, with the crumb back", async () => {
+  const page = await board(fixture());
+  try {
+    // The Cake Shop Downtown is stop 1, 3, 5 and 7 of Rosa's plan: its first stop.
+    const html = await page.evaluate(() => srFillLinks('shop#3'));
+    assert.match(html, /Rosa Duvall's plan · 02:00 ›/);
+    assert.match(html, /data-sr-go="\[&quot;m:P1&quot;,0\]"/);
+    assert.equal(await page.evaluate(() => srFillLinks('gym#5')), '', 'a site no plan fills says nothing');
+    // Clicked from the site's page (inside #pageCompany), as the Shelves head holds it.
+    await page.evaluate(html => {
+      const host = document.createElement('div');
+      host.id = 'srTestHead'; host.innerHTML = html;
+      document.getElementById('pageCompany').appendChild(host);
+    }, html);
+    await page.evaluate(() => document.querySelector('#srTestHead [data-sr-go]').click());
+    assert.equal(await page.evaluate(() => route), 'supply/roles');
+    assert.equal(await page.$eval('#secRoles tr[data-sr-stop="m:P1:0"]', el => el.classList.contains('sr-lit')), true);
+    assert.equal(await page.$eval('#secRoles tr[data-sr-of="m:P1:0"]', el => el.classList.contains('sr-hide')), false, 'the stop is opened');
+    assert.match(await page.$eval('#secRoles .sb-crumb', el => el.textContent), new RegExp(en('sb.crumb.fromSite')));
+  } finally { await page.close(); }
+});
+
 test('the empty state names where the game sets plans and contracts', async () => {
   const data = fixture();
   data.supply.roles = {managers: [], agents: []};
