@@ -7303,7 +7303,7 @@
     "mine": false,
     "siteKey": "ba:street_pier#1",
     "slug": "ba:itemname_water",
-    "where": "1 Pier"
+    "where": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧"
    }
   ],
   "trackedDays": 1,
@@ -7565,6 +7565,14 @@
   "ba:businesstype_giftshop": "Gift Shop",
   "ba:businesstype_liquorstore": "Liquor Store",
   "ba:businesstype_warehouse": "Warehouse",
+  "ba:importertypename_aquaticbay": "Aquatic Bay Cargo",
+  "ba:importertypename_bluestone": "Bluestone Imports",
+  "ba:importertypename_globalharvest": "Global Harvest Traders",
+  "ba:importertypename_jetcargo": "Jet Cargo Imports",
+  "ba:importertypename_lunartide": "Lunar Tide Shipments",
+  "ba:importertypename_maritimefreight": "Maritime Freight Line",
+  "ba:importertypename_seaside": "Seaside Internationals",
+  "ba:importertypename_unitedocean": "United Ocean Import",
   "ba:itemname_beer": "Beer",
   "ba:itemname_bottlingmachine": "Bottling Machine",
   "ba:itemname_cashregister": "Cash Register",
@@ -17485,7 +17493,7 @@
     "contracts": [
      {
       "active": true,
-      "from": "1 Pier",
+      "from": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧",
       "ordered": 3000,
       "smart": false,
       "warehouse": "4 Eighth Avenue"
@@ -17503,7 +17511,7 @@
       "weekly": 3000
      }
     ],
-    "from": "1 Pier",
+    "from": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧",
     "ordered": 3000,
     "paused": 0,
     "smart": false,
@@ -21075,7 +21083,7 @@
         "amount": 3000,
         "group": 0,
         "id": "IMPORTwater",
-        "importer": "1 Pier",
+        "importer": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧",
         "lastWeek": 3000,
         "order": 0,
         "product": 0,
@@ -21699,7 +21707,7 @@
      "items": [],
      "kind": "import",
      "low": 0,
-     "name": "1 Pier",
+     "name": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧",
      "short": 0,
      "site": null,
      "stock": 0,
@@ -21726,7 +21734,7 @@
       "amount": 3000,
       "group": 0,
       "id": "IMPORTwater",
-      "importer": "1 Pier",
+      "importer": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧",
       "lastWeek": 3000,
       "order": 0,
       "product": 0,
@@ -21741,7 +21749,7 @@
     "daysOnHand": 1.2,
     "due": 4.0,
     "dueNeed": 4800,
-    "from": "1 Pier",
+    "from": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧",
     "importPerDay": 1200,
     "item": "Water",
     "lastWeek": 3000,
@@ -21793,7 +21801,7 @@
       "amount": 3000,
       "group": 0,
       "id": "IMPORTwater",
-      "importer": "1 Pier",
+      "importer": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧",
       "lastWeek": 3000,
       "order": 0,
       "product": 0,
@@ -21808,7 +21816,7 @@
     "daysOnHand": 5.0,
     "due": 4.0,
     "dueNeed": 1212,
-    "from": "1 Pier",
+    "from": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧",
     "importPerDay": 303,
     "item": "Water",
     "lastWeek": 3000,
@@ -21850,6 +21858,96 @@
   "margin": 0.15,
   "nextImportDay": 43,
   "nextImportWeekday": "Monday",
+  "roles": {
+   "agents": [
+    {
+     "active": true,
+     "contract": "IMPORTwater",
+     "id": null,
+     "importer": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧",
+     "importerKey": "ba:importertypename_jetcargo",
+     "next": 43,
+     "pier": "1 Pier",
+     "pierKey": "ba:street_pier#1",
+     "products": [
+      {
+       "amount": 3000,
+       "item": "Water",
+       "key": "ba:street_eighthavenue#4",
+       "last": 3000,
+       "s": 2,
+       "slug": "ba:itemname_water"
+      }
+     ],
+     "repeating": true,
+     "skill": null,
+     "smart": false,
+     "urgent": false,
+     "who": null
+    }
+   ],
+   "managers": [
+    {
+     "dests": [
+      {
+       "key": "ba:street_eighthavenue#8",
+       "kind": "fac",
+       "name": "HART. Brewery",
+       "s": 3,
+       "targets": [
+        {
+         "amount": 800,
+         "item": "Water",
+         "slug": "ba:itemname_water"
+        }
+       ]
+      }
+     ],
+     "factory": false,
+     "id": null,
+     "key": "ba:street_eighthavenue#4",
+     "plan": null,
+     "reach": 0,
+     "s": 2,
+     "skill": null,
+     "vehicles": [
+      {
+       "driver": null,
+       "name": "Freighttruckt 1",
+       "reach": 0,
+       "type": "ba:vehicletype_freighttruckt1"
+      }
+     ],
+     "who": null
+    },
+    {
+     "dests": [
+      {
+       "key": "ba:street_eighthstreet#5",
+       "kind": "shop",
+       "name": "HART. Spirits",
+       "s": 0,
+       "targets": [
+        {
+         "amount": 600,
+         "item": "Beer",
+         "slug": "ba:itemname_beer"
+        }
+       ]
+      }
+     ],
+     "factory": true,
+     "id": null,
+     "key": "ba:street_eighthavenue#8",
+     "plan": null,
+     "reach": 0,
+     "s": 3,
+     "skill": null,
+     "vehicles": [],
+     "who": null
+    }
+   ]
+  },
   "roundTo": 10,
   "routed": [
    [
