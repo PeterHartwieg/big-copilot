@@ -8875,7 +8875,9 @@ const sbIndexOf = key => { const s = key && hasData() ? (D.businesses || []).fin
 const sbSnap = () => ({who: hasData() ? D.meta.character || "" : "", scope: {...sbScope}, mode: {...sbMode},
   sel: sbSel ? {key: sbKeyOf(sbSel.s), slug: sbSel.slug} : null,
   arrive: sbArrive ? {view: sbArrive.view, key: sbKeyOf(sbArrive.s), slug: sbArrive.slug, crumb: sbArrive.crumb} : null,
-  table: sbTableView, pick: flowPickId, lit: srLit});
+  table: sbTableView, pick: flowPickId, lit: srLit,
+  /* Plans & contracts: the rows and stops opened, the lists shown whole, the rows toggled by hand. */
+  sr: {open: [...srOpen], all: [...srAll], touched: [...srTouched]}});
 function sbRestore(x){
   if(!x || typeof x !== "object") return;
   /* Another company's entry keeps nothing of its own here. */
@@ -8889,6 +8891,11 @@ function sbRestore(x){
   sbArrive = a && (at !== null || a.key === null) ? {view: a.view, s: at, slug: a.slug ?? null, crumb: a.crumb || ""} : null;
   if(SB_VIEWS.includes(x.table)) sbTableView = x.table;
   flowPickId = typeof x.pick === "string" ? x.pick : null;
+  const sr = x.sr && typeof x.sr === "object" ? x.sr : null;
+  [[srOpen, "open"], [srAll, "all"], [srTouched, "touched"]].forEach(([set, k]) => {
+    if(!sr || !Array.isArray(sr[k])) return;
+    set.clear(); sr[k].forEach(id => { if(typeof id === "string") set.add(id); });
+  });
   srLit = x.lit && typeof x.lit.row === "string" ? {row: x.lit.row, stop: Number.isInteger(x.lit.stop) ? x.lit.stop : null} : null;
   if(srLit){
     srOpen.add(srLit.row);
@@ -8900,6 +8907,7 @@ function sbForget(){
   Object.keys(sbScope).forEach(k => { sbScope[k] = "all"; });
   sbSel = null; sbSelOff = false; sbArrive = null;
   flowPickId = null;
+  srOpen.clear(); srAll.clear(); srTouched.clear(); srLit = null;
 }
 /* A new board (takeData()): another company's forgets the views' state; the
    same company's keeps the reviewed line and the landing on their sites, by
@@ -9659,6 +9667,7 @@ function bindSupply(){
     const open = !srOpen.has(id);
     if(open) srOpen.add(id); else srOpen.delete(id);
     det.classList.toggle("sr-hide", !open); tr.classList.toggle("sr-opened", open);
+    sbKeep();
   });
   on("click", "#pageSupply tr[data-sr-stop]", (tr, e) => {
     if(e.target.closest("a, button, select, input, .map-shortcut")) return;
@@ -9667,6 +9676,7 @@ function bindSupply(){
     const open = !srOpen.has(id);
     if(open) srOpen.add(id); else srOpen.delete(id);
     t.classList.toggle("sr-hide", !open); tr.classList.toggle("sr-dopen", open);
+    sbKeep();
   });
   on("click", "#pageSupply [data-sr-all]", (b, e) => {
     e.preventDefault();
@@ -9674,6 +9684,7 @@ function bindSupply(){
     srAll.add(id);
     if(det) $$("tbody > tr.sr-hide", det).forEach(r => { if(!r.matches("[data-sr-of]")) r.classList.remove("sr-hide"); });
     const more = b.closest(".sr-more"); if(more) more.remove();
+    sbKeep();
   });
   /* A finding chip here: its row on the view that owns it. */
   on("click", "#pageSupply [data-sr-land]", (a, e) => {

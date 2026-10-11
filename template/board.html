@@ -1194,7 +1194,7 @@ tr.sr-dopen .sr-dtog{transform:rotate(90deg)}
 #pageSupply .sr-tt th,#pageSupply .sr-tt td{padding:6px 10px;font-size:12.5px}
 #pageSupply .sr-tt thead th{font-size:9.5px}
 #pageSupply .sr-tt td.l:first-child{min-width:170px}
-.sr-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:40px}
+#pageSupply .sr-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:40px}
 /* Two columns side by side: headers wrap and the product column gives way, so a Status column fits in each. */
 #pageSupply .sr-cols .sr-tt th{white-space:normal;vertical-align:bottom}
 #pageSupply .sr-cols .sr-tt td.l:first-child{min-width:0}
@@ -1226,7 +1226,7 @@ tr.sr-dopen .sr-dtog{transform:rotate(90deg)}
 .sr-who b{color:var(--ink);font-weight:600}
 .sr-who button.link{text-align:left}
 .sr-by{margin-left:6px;font-size:12px}
-@media (max-width:760px){.sr-cols{grid-template-columns:minmax(0,1fr)}.sr-veh .go{margin-left:0}}
+@media (max-width:760px){#pageSupply .sr-cols{grid-template-columns:minmax(0,1fr)}#pageSupply .sr-veh .go{margin-left:0}}
 .sbf-fixes{list-style:none;margin:0;padding:0}
 .sbf-fixes li{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:7px 0;border-bottom:1px solid var(--rule-soft);font-size:13px}
 .sbf-fixes li .sbc-st{margin-left:auto}

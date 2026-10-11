@@ -263,6 +263,14 @@ test('a company with one plan sees it opened, until the reader closes it', async
     await page.click('#secRoles tr[data-sr-row="m:P2"]');
     await page.evaluate(() => drawRolesView());
     assert.equal(await page.$eval('#secRoles tr[data-sr-row="m:P2"]', el => el.classList.contains('sr-opened')), false, 'a redraw keeps it closed');
+    // So does a reload: the history entry keeps what the reader opened and closed.
+    await page.reload();
+    await seed(page, d);
+    await page.evaluate(() => openRoute('supply/roles', {historyMode: 'pop'}));
+    assert.equal(await page.$eval('#secRoles tr[data-sr-row="m:P2"]', el => el.classList.contains('sr-opened')), false, 'a reload keeps it closed');
+    // Another company's board forgets it.
+    await page.evaluate(() => { sbForget(); drawRolesView(); });
+    assert.equal(await page.$eval('#secRoles tr[data-sr-row="m:P2"]', el => el.classList.contains('sr-opened')), true);
   } finally { await page.close(); }
   // Two plans: none opens by itself.
   const two = await board(fixture());
