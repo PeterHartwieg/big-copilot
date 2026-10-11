@@ -14639,7 +14639,9 @@ def _office_recent(save: Save, building: dict) -> list:
 # An office hour is cut only when both of its latest readings sit this far
 # under today's computers. The plan adds one computer at a time, so a reading
 # one under today's may be from before its own last step up; two under cannot
-# be, and the cut can never undo the plan's growth (Peter, 11 October 2026).
+# be (Peter, 11 October 2026). From 20 computers an hour a reading one under is
+# already full (AT_CAP), so the cut also asks that the readings were not full
+# one computer down: otherwise it would undo the step that reading caused.
 OFFICE_CUT_GAP = 2
 
 
@@ -14662,8 +14664,9 @@ def _office_need(grid: dict, skill: str, runs: dict, run: int = 0, daily: list |
     that was on, and in an office the customers are that staffing, so customers
     below today's staffing may only say the hour was staffed less when they
     came. Unless both of the hour's two latest reports (`recent`, from
-    _office_recent()) are OFFICE_CUT_GAP or more under today's computers: then
-    the plan is the higher of them plus one spare computer. Fewer than two
+    _office_recent()) are OFFICE_CUT_GAP or more under today's computers, and
+    under AT_CAP of one computer fewer: then the plan is the higher of them
+    plus one spare computer. Fewer than two
     reports never cut, and a full hour still grows by one. Do not scale another weekday
     into an unread one: keep the default there, or the current staffing (up
     to the building capacity) if higher, until that hour has a reading of its own.
@@ -14696,7 +14699,8 @@ def _office_need(grid: dict, skill: str, runs: dict, run: int = 0, daily: list |
             else:
                 latest = [math.ceil(c / OFFICE_POST_RATE) for c in recent[wd][h]] if recent else []
                 cut = (entry["basis"][wd][h] == "measured" and len(latest) == 2
-                       and max(latest) <= current - OFFICE_CUT_GAP)
+                       and max(latest) <= current - OFFICE_CUT_GAP
+                       and max(latest) < AT_CAP * (current - 1))
                 entry["need"][wd][h] = min(len(grid["stations"]),
                                            max(latest) + 1 if cut else max(entry["need"][wd][h], current))
     if not demand_based:

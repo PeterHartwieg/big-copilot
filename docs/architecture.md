@@ -226,10 +226,11 @@ at no fewer than the computers staffed now, up to the building capacity: an hour
 holds no staffing, and an office's customers are the staffing that was on, so fewer
 customers than today's computers may only mean fewer computers then. The exception is
 an hour whose two latest reports (`_office_recent()`, one per week) both sit
-`OFFICE_CUT_GAP` (2) or more under today's computers: it is planned at the higher of
-them plus one. The plan only ever adds one computer at a time, so a reading one under
-today's may predate its own last step and never cuts; two under cannot, so the cut and
-the growth cannot undo each other. Fewer than two reports never cut. A player who adds
+`OFFICE_CUT_GAP` (2) or more under today's computers, and under 95% (`AT_CAP`) of one
+computer fewer: it is planned at the higher of them plus one. The plan only ever adds
+one computer at a time, so a reading one under today's may predate its own last step
+and never cuts; two under cannot, and from 20 computers, where 95% already counts a
+reading one under as full, the second test keeps the cut from undoing that step. Fewer than two reports never cut. A player who adds
 two or more computers by hand may see one cut before the hour grows back. An hour with no report on file, or a zero
 with nobody at a computer now, is no reading, and an unread open hour keeps the office
 default or the current staffing up to the building capacity, whichever is higher. An office with no reading anywhere gets the office default, `_office_runs()`:

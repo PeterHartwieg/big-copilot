@@ -82,6 +82,17 @@ class OfficeDemandTests(unittest.TestCase):
         self.assertEqual(row['need'][LAWYER][1][10], 20)
         self.assertEqual(row['need'][LAWYER][2][10], 11)
 
+    def test_a_large_office_never_cuts_its_own_step_up(self):
+        # From 20 computers a reading one under is full (95%) and grew the
+        # hour; 19 and 19 under today's 21 must not cut it back to 20.
+        row, _, _ = plan(customers=19, staffed=21, computers=24)
+        self.assertEqual(row['need'][LAWYER][1][10], 21)
+        # 38 at 41: full at 38, 39 and 40, so the plan settles at 41.
+        row, _, _ = plan(customers=38, staffed=41, computers=50)
+        self.assertEqual(row['need'][LAWYER][1][10], 41)
+        row, _, _ = plan(customers=38, staffed=40, computers=50)
+        self.assertEqual(row['need'][LAWYER][1][10], 41)
+
     def test_a_full_hour_still_grows_by_one(self):
         row, _, _ = plan(customers=20, staffed=20, computers=24)
         self.assertEqual(row['basis'][LAWYER][1][10], 'censored')
