@@ -8440,7 +8440,8 @@
        "key": "ba:street_pier#9",
        "last": 0,
        "s": 3,
-       "slug": "ba:itemname_paperbag"
+       "slug": "ba:itemname_paperbag",
+       "where": "9 Pier"
       }
      ],
      "repeating": true,
@@ -8465,7 +8466,8 @@
        "key": "ba:street_pier#9",
        "last": 0,
        "s": 3,
-       "slug": "ba:itemname_paperbag"
+       "slug": "ba:itemname_paperbag",
+       "where": "9 Pier"
       }
      ],
      "repeating": false,
@@ -8490,7 +8492,8 @@
        "key": "ba:street_pier#9",
        "last": 0,
        "s": 3,
-       "slug": "ba:itemname_candle"
+       "slug": "ba:itemname_candle",
+       "where": "9 Pier"
       }
      ],
      "repeating": false,

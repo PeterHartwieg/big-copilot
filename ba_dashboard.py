@@ -4593,7 +4593,7 @@ def _raise_import(supply: dict, need) -> int:
 def _level_name(contracts: list, importer, order):
     """How the page names the contract holding a level: its importer, and,
     where that importer has several contracts on the line, which of them
-    ("1 Pier, its 2nd of 2 contracts here").
+    ("Jet Cargo Imports, its 2nd of 2 contracts here").
 
     `contracts` is every contract on the line, paused and zero ones too, in
     delivery order, each with its `importer` and its `order` in
@@ -5595,14 +5595,17 @@ def _supply_imports(save: Save, names: Names, day: int) -> tuple:
 # on 11 Oct 2026. A slot counts only with both a vehicle and a driver
 # (VehicleSlot.DestinationsThatCanDeliver), and a plan's vehicle limit is twice
 # the sum (LogisticsManagerPlan.GetMaxPossibleDestinations): past it the game
-# warns "The extra delivery locations will not receive deliveries". A type not
-# listed reaches none.
+# warns "The extra delivery locations will not receive deliveries". Every type
+# the bundle lists is here, those that reach none (the limo, the Petrolls
+# Fanton, the Mersaidi MGA GT, a scooter, a hand truck, a flatbed) at 0.
 VEHICLE_DESTINATIONS = {
     "ba:vehicletype_freighttruckt1": 4, "ba:vehicletype_deliverytruck": 3, "ba:vehicletype_vordv150": 2,
     "ba:vehicletype_mersaididash": 2, "ba:vehicletype_umcnunavut": 2, "ba:vehicletype_umcdesert": 2,
     "ba:vehicletype_umcdesertdeliveryjob": 2, "ba:vehicletype_anselmoaf90": 1, "ba:vehicletype_vordpony": 1,
     "ba:vehicletype_bima320": 1, "ba:vehicletype_vordtiaravic": 1, "ba:vehicletype_mersaidis500": 1,
     "ba:vehicletype_missamvillian": 1, "ba:vehicletype_honzamimic": 1, "ba:vehicletype_ferdinand112": 1,
+    "ba:vehicletype_limo": 0, "ba:vehicletype_petrollsfanton": 0, "ba:vehicletype_mersaidimgagt": 0,
+    "ba:vehicletype_electricscooter": 0, "ba:vehicletype_handtruck": 0, "ba:vehicletype_flatbed": 0,
 }
 LOGISTICS_SKILL = "ba:skill_logisticsmanager"
 PURCHASING_SKILL = "ba:skill_purchasingagent"
@@ -5614,7 +5617,8 @@ def _supply_roles(save: Save, names: Names, businesses: list, factories: dict) -
     game's order, before _supply_plans() picks one target per line.
 
     `managers`: one row per plan (`plan` its id; `who`, `id`, `skill` of the manager; `s`
-    and `key` its pick-up site, `factory`; `vehicles` at that site, each
+    and `key` its pick-up site, `where` its address for a site not the
+    company's, `factory`; `vehicles` at that site, each
     `{type, name, driver, reach}`, `reach` the plan's vehicle limit, 2 x the
     slots' reach; `dests` in delivery order, each `{s, key, kind, name,
     targets}`, `kind` shop, wh, fac, pier (an export, named by its importer;
@@ -5623,7 +5627,9 @@ def _supply_roles(save: Save, names: Names, businesses: list, factories: dict) -
     factory whose make another of the company's sites holds or sells
     (`gap: "factory"`, `needed` those products), and a warehouse holding
     stock (`gap: "warehouse"`, `holds` its units). Then every Logistics
-    Manager on no plan (`idle`).
+    Manager on no plan (`idle`); a plan with no pick-up site and no stop is
+    one of those, with its `plan` id. A manager being replaced still shows on
+    the plan: the game's "not assigned" is checked for agents only.
 
     `agents`: one row per contract (`contract` its id; `who`, `id`, `skill`, None for all three
     where the agent is gone or being replaced: the game then cancels the
@@ -5631,7 +5637,7 @@ def _supply_roles(save: Save, names: Names, businesses: list, factories: dict) -
     `importerKey`, `pier` its address for a tip and `pierKey` its site key
     (the Goods flow node is "import:" + it); `smart`, `repeating`,
     `urgent`, `active`, `next` the next delivery day; `products` each `{slug,
-    item, s, key, amount, last}`, a product with no designated warehouse
+    item, s, key, where, amount, last}` (`where` the warehouse's address), a product with no designated warehouse
     included with `s` and `key` None). Then every Purchasing Agent on no
     contract (`idle`).
     """
@@ -5649,9 +5655,9 @@ def _supply_roles(save: Save, names: Names, businesses: list, factories: dict) -
             "gone": bool(e.get("isBeingReplaced") or e.get("isReplaced")),
         }
 
-    def person(pid, skill):
+    def person(pid, skill, replaced_counts=False):
         p = people.get(pid) if isinstance(pid, str) else None
-        if not p or p["gone"]:
+        if not p or (replaced_counts and p["gone"]):
             return None, None, None
         level = p["skills"].get(skill)
         return p["name"], pid, int(round(level)) if level is not None else None
@@ -5690,6 +5696,11 @@ def _supply_roles(save: Save, names: Names, businesses: list, factories: dict) -
         if pid:
             planned.add(pid)
         src = save.address(plan.get("targetAddress"))
+        if not src and not save.items(plan.get("destinations")):
+            # A plan the game holds with no pick-up site and no stop: the
+            # manager has nothing to run, as one on no plan.
+            managers.append({"plan": plan.get("id"), "who": who, "id": pid, "skill": skill, "idle": True})
+            continue
         key = site_key(src)
         sources.add(key)
         dests = []
@@ -5714,7 +5725,7 @@ def _supply_roles(save: Save, names: Names, businesses: list, factories: dict) -
             dests.append(row)
         vehicles = vehicles_at(key)
         managers.append({"plan": plan.get("id"), "who": who, "id": pid, "skill": skill, "s": index.get(key), "key": key,
-                         "factory": bool(plan.get("isFactory")), "vehicles": vehicles,
+                         "where": names.addr(src), "factory": bool(plan.get("isFactory")), "vehicles": vehicles,
                          "reach": 2 * sum(v["reach"] for v in vehicles), "dests": dests})
 
     # The sites no plan picks up from, where that leaves goods standing: a
@@ -5748,7 +5759,7 @@ def _supply_roles(save: Save, names: Names, businesses: list, factories: dict) -
     for partnership in save.items(root.get("importPartnerships")):
         if not isinstance(partnership, dict):
             continue
-        who, pid, skill = person(partnership.get("employeeInstanceId"), PURCHASING_SKILL)
+        who, pid, skill = person(partnership.get("employeeInstanceId"), PURCHASING_SKILL, replaced_counts=True)
         if pid:
             contracted.add(pid)
         pier = save.address(partnership.get("importAddress"))
@@ -5756,9 +5767,11 @@ def _supply_roles(save: Save, names: Names, businesses: list, factories: dict) -
         for product in save.items(partnership.get("products")):
             if not isinstance(product, dict):
                 continue
-            wkey = site_key(save.address(product.get("assignedWarehouse")))
+            where = save.address(product.get("assignedWarehouse"))
+            wkey = site_key(where)
             products.append({"slug": product.get("itemName"), "item": names.label(product.get("itemName")),
                              "s": index.get(wkey) if wkey else None, "key": wkey or None,
+                             "where": names.addr(where) if wkey else None,
                              "amount": product.get("amount") or 0,
                              "last": product.get("amountOrderedLastWeek") or 0})
         due = partnership.get("nextDeliveryDay")

@@ -8890,7 +8890,10 @@ function sbRestore(x){
   if(SB_VIEWS.includes(x.table)) sbTableView = x.table;
   flowPickId = typeof x.pick === "string" ? x.pick : null;
   srLit = x.lit && typeof x.lit.row === "string" ? {row: x.lit.row, stop: Number.isInteger(x.lit.stop) ? x.lit.stop : null} : null;
-  if(srLit){ srOpen.add(srLit.row); if(srLit.stop !== null) srOpen.add(`${srLit.row}:${srLit.stop}`); }
+  if(srLit){
+    srOpen.add(srLit.row);
+    if(srLit.stop !== null){ srOpen.add(`${srLit.row}:${srLit.stop}`); if(srLit.stop >= SR_DESTS) srAll.add(srLit.row); }
+  }
 }
 /* Every view back to its first state: another company's board. */
 function sbForget(){
@@ -10971,7 +10974,7 @@ function srManagerFlags(m){
     tt("sb.roles.flag.planNoManager.tip", "The plan has nobody to run it")));
   const n = (m.dests || []).length;
   if(!n) out.push(srChip("warn", tt("sb.roles.flag.noDests", "No destinations"), tt("sb.roles.flag.noDests.tip", "The plan delivers nowhere")));
-  if(n > (m.reach || 0)) out.push(srChip("warn", tt("sb.roles.flag.over", "{n} stops · vehicles reach {r}", {n, r: m.reach || 0}),
+  if(n > (m.reach || 0)) out.push(srChip("warn", tt("sb.roles.flag.over", {one: "{n} stop · vehicles reach {r}", other: "{n} stops · vehicles reach {r}"}, {n, r: m.reach || 0}),
     tt("sb.roles.flag.over.tip", "The game: “Your current warehouse vehicles and drivers cannot support this many deliveries. The extra delivery locations will not receive deliveries.”")));
   const empty = (m.dests || []).filter(x => !(x.targets || []).length).length;
   if(empty) out.push(srChip("warn", tt("sb.roles.flag.emptyStops", {one: "Stop with no products", other: "{n} stops with no products"}, {n: empty}),
@@ -10994,15 +10997,21 @@ function srCount(){
   return (r.managers || []).reduce((t, m) => t + srManagerFlags(m).length, 0) + (r.agents || []).reduce((t, a) => t + srAgentFlags(a).length, 0);
 }
 /* A destination's findings and a contract product's, from the views that own them. */
-const srStopFinds = d => srFinds(d.key, new Set((d.targets || []).map(t => t.slug)), SR_DELIVERY_ROUTES);
+const srStopFinds = d => srFinds(d.key, new Set((d.targets || []).map(t => t.slug)),
+  d.kind === "fac" ? [...SR_DELIVERY_ROUTES, "supply/production"] : SR_DELIVERY_ROUTES);
 const srProductFinds = p => srFinds(p.key, new Set([p.slug]), SR_IMPORT_ROUTES);
-function srCountChip(finds, view){
-  if(!finds.length) return "";
-  const text = view === "imports" ? tt("sb.roles.inImports", "{n} in Imports", {n: finds.length})
-    : view === "production" ? tt("sb.roles.inProduction", "{n} in Production", {n: finds.length})
-    : tt("sb.roles.inDeliveries", "{n} in Deliveries", {n: finds.length});
-  const a = finds[0], b = D.businesses.findIndex(x => x.key === a.siteKey);
-  return srLandChip(text, tt("sb.roles.finds.tip", "Findings on these rows: open the first"), view, b < 0 ? null : b, a.ev && a.ev.slug);
+/* The findings of a row, one count chip per view that owns some of them,
+   each landing on the first of its own. */
+function srCountChips(finds){
+  const views = [...new Set(finds.map(srViewOf))];
+  return views.map(view => {
+    const own = finds.filter(a => srViewOf(a) === view), n = own.length;
+    const text = view === "imports" ? tt("sb.roles.inImports", "{n} in Imports", {n})
+      : view === "production" ? tt("sb.roles.inProduction", "{n} in Production", {n})
+      : tt("sb.roles.inDeliveries", "{n} in Deliveries", {n});
+    const a = own[0], b = D.businesses.findIndex(x => x.key === a.siteKey);
+    return srLandChip(text, tt("sb.roles.finds.tip", "Findings on these rows: open the first"), view, b < 0 ? null : b, a.ev && a.ev.slug);
+  }).join("");
 }
 const srFindChip = (a, withItem) => {
   const s = D.businesses.findIndex(x => x.key === a.siteKey);
@@ -11056,16 +11065,19 @@ function srTargetLine(d){
   const parts = t.slice(0, k).map(x => `${spEsc(x.item)}<b>${num(x.amount)}</b>`).join(" · ");
   return t.length > k ? tt("sb.roles.more", "{list} +{n}", {list: parts, n: t.length - k}) : parts;
 }
-const srFollow = (id, label) => `<a class="link" href="#supply/flow" data-sb-toflow data-sb-follow="${attr(id)}">${spIcon("route")}${label}</a>`;
+/* Goods flow follows only a site its picture draws: an export pier, or an
+   importer with no running contract, is no node there. */
+const srFlowable = id => !!id && hasData() && !!D.supply && (((D.supply.graph || {}).nodes) || []).some(n => n.id === id);
+const srFollow = (id, label) => srFlowable(id) ? `<a class="link" href="#supply/flow" data-sb-toflow data-sb-follow="${attr(id)}">${spIcon("route")}${label}</a>` : "";
 function srManagerDetail(m, id){
   const all = srAll.has(id), dests = m.dests || [];
   const src = srSite(m.s);
   const veh = (m.vehicles || []).map(v => v.driver
     ? `<span class="v">${spIcon("truck")}${spEsc(v.name)} · ${spEsc(v.driver)}<b>${2 * v.reach}</b></span>`
     : `<span class="v off" data-tip="${attr(tt("sb.roles.noDriver.tip", "No driver: it reaches no location"))}">${spIcon("truck")}${spEsc(v.name)} · ${tt("sb.roles.noDriver", "No driver")}<b>0</b></span>`).join("");
-  const line = `<div class="sr-veh"><span>${tt("sb.roles.vehiclesAt", "Vehicles at {site}", {site: spEsc(src ? shortName(src) : m.key || "")})}</span>${
+  const line = `<div class="sr-veh"><span>${tt("sb.roles.vehiclesAt", "Vehicles at {site}", {site: spEsc(src ? shortName(src) : m.where || "")})}</span>${
     veh || `<span>${tt("sb.roles.noVehicle", "no vehicle")}</span>`}<span class="eq">= ${tt("sb.roles.reach", "vehicles reach {n}", {n: `<b>${m.reach || 0}</b>`})}</span>${
-    m.key ? `<span class="go">${srFollow(m.key, tt("sb.roles.follow", "Follow in Goods flow"))}</span>` : ""}</div>`;
+    srFlowable(m.key) ? `<span class="go">${srFollow(m.key, tt("sb.roles.follow", "Follow in Goods flow"))}</span>` : ""}</div>`;
   const amount = m.factory ? tt("sb.roles.col.upTo", "Deliver up to") : tt("sb.roles.col.minStock", "Minimum stock amount");
   const rows = dests.map((d, k) => {
     const sid = `${id}:${k}`, open = srOpen.has(sid), hide = !all && k >= SR_DESTS;
@@ -11080,7 +11092,7 @@ function srManagerDetail(m, id){
     const follow = d.kind === "pier" ? `import:${d.key}` : d.key;
     return `<tr class="sr-dr${open ? " sr-dopen" : ""}${hide ? " sr-hide" : ""}${lit ? " sr-lit" : ""}" data-sr-stop="${attr(sid)}"${lit ? " data-sb-at" : ""}><td class="no">${k + 1}</td>
       <td class="l nm"><span class="sr-dtog">${spIcon("chev")}</span>${name}${tag}</td><td>${(d.targets || []).length}</td><td class="l tl">${srTargetLine(d)}</td>
-      <td class="l st">${flags}</td><td class="ln"><a class="sr-flow" href="#supply/flow" data-sb-toflow data-sb-follow="${attr(follow)}" data-tip="${attr(tt("sb.roles.follow.tip", "Follow it in Goods flow"))}" aria-label="${attr(tt("sb.roles.follow", "Follow in Goods flow"))}">${spIcon("route")}</a></td></tr>${
+      <td class="l st">${flags}</td><td class="ln">${srFlowable(follow) ? `<a class="sr-flow" href="#supply/flow" data-sb-toflow data-sb-follow="${attr(follow)}" data-tip="${attr(tt("sb.roles.follow.tip", "Follow it in Goods flow"))}" aria-label="${attr(tt("sb.roles.follow", "Follow in Goods flow"))}">${spIcon("route")}</a>` : ""}</td></tr>${
       (d.targets || []).length ? `<tr class="sr-tgrow${open ? "" : " sr-hide"}" data-sr-of="${attr(sid)}"><td colspan="6">${srTargets(m, d)}</td></tr>` : ""}`;
   }).join("");
   const more = !all && dests.length > SR_DESTS ? `<p class="sr-more"><button type="button" data-sr-all="${attr(id)}">${
@@ -11095,14 +11107,14 @@ function srManagerRow(m){
   const id = srRowId(m), gap = !!(m.idle || m.gap), open = !gap && srOpen.has(id);
   const lit = srLit && srLit.row === id && srLit.stop === null;
   const who = m.who ? `<b>${spEsc(m.who)}</b>${srSkill(m.skill)}` : "<b>—</b>";
-  const src = m.idle ? srDash : srSiteHtml(m.s, m.key);
+  const src = m.idle ? srDash : srSiteHtml(m.s, m.where);
   const dests = m.dests || [], n = dests.length, over = n > (m.reach || 0);
   const cap = gap ? srDash : `<span class="sr-cap"><span>${n}</span>${over ? "" : `<small>${tt("sb.roles.reach", "vehicles reach {n}", {n: m.reach || 0})}</small>`}</span>`;
   const products = gap ? srDash : num(dests.reduce((t, d) => t + (d.targets || []).length, 0));
   const finds = gap ? [] : dests.flatMap(srStopFinds);
-  return `<tr class="sr-row${open ? " sr-opened" : ""}${gap ? " sr-gap" : ""}${lit ? " sr-lit" : ""}" data-sr-row="${attr(id)}"${lit ? " data-sb-at" : ""}>
+  return `<tr class="sr-row${open ? " sr-opened" : ""}${gap ? " sr-gap" : " sr-opens"}${lit ? " sr-lit" : ""}" data-sr-row="${attr(id)}"${lit ? " data-sb-at" : ""}>
     <td class="l who">${who}</td><td class="l site">${src}</td><td>${cap}</td><td>${products}</td><td class="l to">${gap ? srDash : srDeliversTo(dests)}</td>
-    <td class="l st">${srManagerFlags(m).join("")}${srCountChip(finds, "deliveries")}</td><td class="tg">${gap ? "" : srTog}</td></tr>${gap ? "" : srManagerDetail(m, id)}`;
+    <td class="l st">${srManagerFlags(m).join("")}${srCountChips(finds)}</td><td class="tg">${gap ? "" : srTog}</td></tr>${gap ? "" : srManagerDetail(m, id)}`;
 }
 function srManagersTable(rows){
   const part = (label, list) => list.length ? `<tr class="sr-part"><td colspan="7">${label}</td></tr>${list.map(srManagerRow).join("")}` : "";
@@ -11124,7 +11136,7 @@ function srAgentDetail(a, id){
   const when = srDelivers(a) ? tt("sb.roles.nextLine", "next delivery {day} 08:00 · order by {by} 20:00", {day: srDay(a.next), by: srDay(a.next - 1)})
     : tt("sb.roles.noneComing", "no delivery coming");
   const line = `<div class="sr-veh"><span class="v">${spIcon("ship")}${spEsc(a.importer || a.pier || "")}</span><span>${when}</span>${
-    a.pierKey ? `<span class="go">${srFollow(`import:${a.pierKey}`, tt("sb.roles.follow", "Follow in Goods flow"))}</span>` : ""}</div>`;
+    srFlowable(`import:${a.pierKey}`) ? `<span class="go">${srFollow(`import:${a.pierKey}`, tt("sb.roles.follow", "Follow in Goods flow"))}</span>` : ""}</div>`;
   let prev;
   const rows = products.map((p, k) => {
     const hide = !all && k >= SR_PRODUCTS;
@@ -11134,15 +11146,15 @@ function srAgentDetail(a, id){
     const flags = [!p.key ? srChip("warn", tt("sb.roles.flag.noWarehouseOne", "No designated warehouse"), tt("sb.roles.flag.noWarehouseOne.tip", "Nothing is delivered for it")) : "",
       ...finds.map(f => srFindChip(f, false))].join("");
     const f = Number.isInteger(p.s) ? supplyFact(p.s, p.slug) : null;
-    const to = !p.key ? srDash : same ? "" : srSiteHtml(p.s, p.key);
+    const to = !p.key ? srDash : same ? "" : srSiteHtml(p.s, p.where);
     const go = Number.isInteger(p.s) ? `<a class="link" href="#supply/imports" data-sr-land="${attr(JSON.stringify(["imports", p.s, p.slug]))}">${tt("sb.roles.toImports", "Imports ›")}</a>` : "";
     return `<tr${hide ? ' class="sr-hide"' : ""}><td class="l">${spEsc(p.item)}</td><td class="l nm">${to}</td><td>${num(p.amount)} <span class="sb-unit">${
-      a.smart ? tt("sb.unit.stock", "in stock") : tt("sb.unit.week", "a week")}</span></td><td>${num(p.last)}</td><td>${p.key ? srN(szWeekOf(f, null)) : srDash}</td><td class="l st">${flags}</td><td class="ln">${go}</td></tr>`;
+      !a.repeating ? tt("sb.unit.once", "once") : a.smart ? tt("sb.unit.stock", "in stock") : tt("sb.unit.week", "a week")}</span></td><td>${num(p.last)}</td><td>${p.key ? srN(szWeekOf(f, null)) : srDash}</td><td class="l st">${flags}</td><td class="ln">${go}</td></tr>`;
   }).join("");
   const more = !all && products.length > SR_PRODUCTS ? `<p class="sr-more"><button type="button" data-sr-all="${attr(id)}">${
     tt("sb.roles.showAllProducts", "Show all {n} products", {n: products.length})}</button><span>${tt("sb.roles.nMore", "{n} more", {n: products.length - SR_PRODUCTS})}</span></p>` : "";
   const table = products.length ? `<div class="scrollx"><table class="sr-dt"><thead><tr><th class="l">${tt("sb.col.product", "Product")}</th><th class="l">${
-    tt("sb.roles.col.warehouse", "Designated warehouse")}</th><th>${a.smart ? tt("sb.roles.col.target", "# target") : tt("sb.roles.col.weekly", "Amount a week")}</th><th>${
+    tt("sb.roles.col.warehouse", "Designated warehouse")}</th><th>${!a.repeating ? tt("sb.roles.col.toBuy", "# to buy") : a.smart ? tt("sb.roles.col.target", "# target") : tt("sb.roles.col.weekly", "Amount a week")}</th><th>${
     tt("sb.roles.col.previous", "Previous")}</th><th>${tt("sb.roles.col.usesWeek", "Uses / week")}</th><th class="l">${tt("sb.col.status", "Status")}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${more}` : "";
   return `<tr class="sr-detail${srOpen.has(id) ? "" : " sr-hide"}" data-sr-of="${attr(id)}"><td colspan="8"><div class="sr-det">${line}${table}</div></td></tr>`;
 }
@@ -11153,14 +11165,13 @@ function srAgentRow(a){
   const flags = srAgentFlags(a).join("");
   if(a.idle) return `<tr class="sr-row sr-gap${lit ? " sr-lit" : ""}" data-sr-row="${attr(id)}"${lit ? " data-sb-at" : ""}><td class="l who">${who}</td><td class="l">${srDash}</td><td class="l">${srDash}</td><td class="l">${srDash}</td><td>${srDash}</td><td class="l to">${srDash}</td><td class="l st">${flags}</td><td class="tg"></td></tr>`;
   const by = new Map();
-  (a.products || []).forEach(p => { if(p.key) by.set(p.key, {s: p.s, n: ((by.get(p.key) || {}).n || 0) + 1}); });
-  const named = [...by].map(([k, v]) => { const b = srSite(v.s); return `${spEsc(b ? shortName(b) : k)} <em>×${v.n}</em>`; });
+  (a.products || []).forEach(p => { if(p.key) by.set(p.key, {s: p.s, where: p.where, n: ((by.get(p.key) || {}).n || 0) + 1}); });
+  const named = [...by].map(([k, v]) => { const b = srSite(v.s); return `${spEsc(b ? shortName(b) : v.where || "—")} <em>×${v.n}</em>`; });
   const to = named.length ? named.slice(0, 3).join(" · ") + (named.length > 3 ? ` <em>+${named.length - 3}</em>` : "") : srDash;
   const finds = (a.products || []).flatMap(srProductFinds);
-  const view = finds.length && finds.every(f => srViewOf(f) === "production") ? "production" : "imports";
-  return `<tr class="sr-row${open ? " sr-opened" : ""}${a.who ? "" : " sr-gap"}${lit ? " sr-lit" : ""}" data-sr-row="${attr(id)}"${lit ? " data-sb-at" : ""}>
+  return `<tr class="sr-row sr-opens${open ? " sr-opened" : ""}${a.who ? "" : " sr-gap"}${lit ? " sr-lit" : ""}" data-sr-row="${attr(id)}"${lit ? " data-sb-at" : ""}>
     <td class="l who">${who}</td><td class="l site">${srImporterHtml(a)}</td><td class="l dl">${srDeliveryCell(a)}</td><td class="l">${srDelivers(a) ? srDay(a.next) : srDash}</td>
-    <td>${(a.products || []).length}</td><td class="l to">${to}</td><td class="l st">${flags}${srCountChip(finds, view)}</td><td class="tg">${srTog}</td></tr>${srAgentDetail(a, id)}`;
+    <td>${(a.products || []).length}</td><td class="l to">${to}</td><td class="l st">${flags}${srCountChips(finds)}</td><td class="tg">${srTog}</td></tr>${srAgentDetail(a, id)}`;
 }
 function srAgentsTable(rows){
   return `<div class="scrollx"><table class="sb-t sr-t"><thead><tr><th class="l">${tt("sb.roles.col.agent", "Purchasing Agent")}</th><th class="l">${tt("sb.roles.col.importer", "Importer")}</th><th class="l">${
@@ -11195,13 +11206,13 @@ function drawRolesView(){
       tt("sb.roles.n.dests", {one: "{b} destination", other: "{b} destinations"}, {n: dests, b: `<b>${num(dests)}</b>`}),
       tt("sb.roles.n.products", {one: "{b} product", other: "{b} products"}, {n: targets, b: `<b>${num(targets)}</b>`})])
     + (managers.length ? srManagersTable(managers) : `<p class="quiet">${tt("sb.roles.noneInScope", "Nothing in this scope.")}</p>`)
-    : srEmpty("truck", tt("sb.roles.empty.managers", "No Logistics Manager yet"), tt("sb.roles.empty.managers.how", "Delivery plans: {where}", {where: "<b>BizMan › Logistics Managers</b>"}));
+    : srEmpty("truck", tt("sb.roles.empty.managers", "No Logistics Manager yet"), tt("sb.roles.empty.managers.how", "Delivery plans: <b>BizMan › Logistics Managers</b>"));
   const pa = (r.agents || []).length ? srHead("ship", tt("sb.roles.agents", "Purchasing Agents"), [
       tt("sb.roles.n.agents", {one: "{b} agent", other: "{b} agents"}, {n: agents.filter(a => a.who).length, b: `<b>${agents.filter(a => a.who).length}</b>`}),
       tt("sb.roles.n.contracts", {one: "{b} contract", other: "{b} contracts"}, {n: contracts.length, b: `<b>${contracts.length}</b>`}),
       tt("sb.roles.n.products", {one: "{b} product", other: "{b} products"}, {n: products, b: `<b>${num(products)}</b>`})])
     + (agents.length ? srAgentsTable(agents) : `<p class="quiet">${tt("sb.roles.noneInScope", "Nothing in this scope.")}</p>`)
-    : srEmpty("ship", tt("sb.roles.empty.agents", "No Purchasing Agent yet"), tt("sb.roles.empty.agents.how", "Import contracts: {where}", {where: "<b>BizMan › Purchasing Agents</b>"}));
+    : srEmpty("ship", tt("sb.roles.empty.agents", "No Purchasing Agent yet"), tt("sb.roles.empty.agents.how", "Import contracts: <b>BizMan › Purchasing Agents</b>"));
   const bar = none ? "" : sbToolbar("roles", {kinds: ["warehouses", "factories"]});
   sbFill(sec, bar + sbVerdict("roles", "", true) + (none ? `<div class="sr-empty">${lm}${pa}</div>` : lm + pa));
   if(sub.supply === "roles") sbPlaceFlow();
@@ -11234,7 +11245,7 @@ function srFeeding(key){
     if(d.key !== key) return;
     const src = srSite(m.s);
     out.push({row: srRowId(m), stop: k, when: tt("sb.roles.daily", "daily {t}", {t: srWhen(m)}),
-      what: tt("sb.roles.by.plan", "{who} · {site}, stop {k} of {n}", {who: `<b>${spEsc(m.who || "—")}</b>`, site: spEsc(src ? shortName(src) : m.key), k: k + 1, n: m.dests.length})});
+      what: tt("sb.roles.by.plan", "{who} · {site}, stop {k} of {n}", {who: `<b>${spEsc(m.who || "—")}</b>`, site: spEsc(src ? shortName(src) : m.where || "—"), k: k + 1, n: m.dests.length})});
   }));
   return out;
 }
@@ -11246,7 +11257,7 @@ function srFlowCards(key){
   const cards = [];
   if(by.length) cards.push(`<div class="sbf-card"><h3>${spIcon("truck")}${tt("sb.roles.deliveredBy", "Delivered by")}</h3><ul class="sr-who">${by.map(li).join("")}</ul></div>`);
   if(plan) cards.push(`<div class="sbf-card"><h3>${spIcon("route")}${tt("sb.roles.sends", "Sends")}</h3><ul class="sr-who">${li({row: srRowId(plan), stop: null,
-    when: tt("sb.roles.daily", "daily {t}", {t: srWhen(plan)}), what: tt("sb.roles.sends.line", "{who} · {n} destinations, {t} products",
+    when: tt("sb.roles.daily", "daily {t}", {t: srWhen(plan)}), what: tt("sb.roles.sends.line", {one: "{who} · {n} destination, {t} products", other: "{who} · {n} destinations, {t} products"},
       {who: `<b>${spEsc(plan.who || "—")}</b>`, n: (plan.dests || []).length, t: num((plan.dests || []).reduce((u, d) => u + (d.targets || []).length, 0))})})}</ul></div>`);
   return cards.join("");
 }

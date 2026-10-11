@@ -42,6 +42,8 @@ def supply_company():
         employee("manager-wh", "Wendy West", LOGISTICS, 81.6),
         employee("manager-factory", "Faye Fields", LOGISTICS, 73.2),
         employee("manager-idle", "Mina Moss", LOGISTICS, 68.0),
+        # Being replaced: the save still shows her on her plan.
+        employee("manager-nullplan", "Nell Null", LOGISTICS, 70.0, isBeingReplaced=True),
         employee("driver", "Drew Dale", "ba:skill_driver", 90.0),
         employee("agent", "Ari Ash", PURCHASING, 86.2),
         employee("agent-idle", "Iris Ivy", PURCHASING, 64.0),
@@ -83,6 +85,9 @@ def supply_company():
          "targetAddress": address(*fixture.BREWERY), "destinations": [
              destination(fixture.HUB, [(fixture.BEER, 700)]),
              destination(("ba:street_pier", 3), [(fixture.BEER, 120)])]},
+        # A plan the game holds with no pick-up site and no stop (a real save has one).
+        {"id": "m-null-plan", "assignedEmployeeId": "manager-nullplan", "isFactory": False,
+         "targetAddress": None, "destinations": []},
     ]
 
     def contract(cid, agent, pier, products, **flags):
@@ -120,7 +125,7 @@ class SupplyRoles(unittest.TestCase):
 
     def test_plans_destinations_and_targets_keep_game_order(self):
         """Raw plans retain empty stops and target order instead of sorting or merging."""
-        plans = [r for r in self.roles["managers"] if "plan" in r]
+        plans = [r for r in self.roles["managers"] if "plan" in r and not r.get("idle")]
         self.assertEqual([r["plan"] for r in plans], ["z-warehouse-plan", "a-factory-plan"])
         self.assertEqual([(r["who"], r["id"], r["skill"], r["factory"]) for r in plans], [
             ("Wendy West", "manager-wh", 82, False),
@@ -195,6 +200,7 @@ class SupplyRoles(unittest.TestCase):
     def test_unassigned_role_holders_are_idle(self):
         """Role holders without a plan or contract appear once, after assigned rows."""
         self.assertEqual([r for r in self.roles["managers"] if r.get("idle")], [
+            {"plan": "m-null-plan", "who": "Nell Null", "id": "manager-nullplan", "skill": 70, "idle": True},
             {"who": "Mina Moss", "id": "manager-idle", "skill": 68, "idle": True}])
         self.assertEqual([r for r in self.roles["agents"] if r.get("idle")], [
             {"who": "Iris Ivy", "id": "agent-idle", "skill": 64, "idle": True}])
@@ -217,9 +223,22 @@ class SupplyRoles(unittest.TestCase):
                          (fixture.WATER, 3000, 2500, dashboard.site_key(fixture.HUB)))
         self.assertEqual(self.payload["businesses"][water["s"]]["key"], water["key"])
         self.assertEqual(unassigned, {"slug": fixture.UMBRELLA, "item": "Umbrella",
-                                      "amount": 12, "last": 7, "s": None, "key": None})
+                                      "amount": 12, "last": 7, "s": None, "key": None, "where": None})
+        self.assertEqual(water["where"], "4 Eighth Avenue")
         self.assertEqual((contracts[0]["importerKey"], contracts[0]["pier"], contracts[0]["pierKey"]),
                          ("ba:importertypename_unitedocean", "3 Pier", "ba:street_pier#3"))
+
+    def test_a_plan_with_no_pick_up_site_and_no_stop_is_a_manager_with_no_plan(self):
+        """Its manager lands under No plan, keeping the plan's id; being replaced
+        does not unassign a manager (the game's "not assigned" is an agent's)."""
+        row = next(r for r in self.roles["managers"] if r.get("plan") == "m-null-plan")
+        self.assertTrue(row["idle"])
+        self.assertNotIn("dests", row)
+        self.assertEqual(row["who"], "Nell Null")
+        self.assertEqual(sum(1 for r in self.roles["managers"] if r.get("id") == "manager-nullplan"), 1,
+                         "listed once: not again as a manager on no plan")
+        hub = next(r for r in self.roles["managers"] if r.get("plan") == "z-warehouse-plan")
+        self.assertEqual(hub["where"], "4 Eighth Avenue")
 
     def test_missing_and_replaced_agents_have_no_assignment(self):
         """A missing or being-replaced agent clears all three person fields."""

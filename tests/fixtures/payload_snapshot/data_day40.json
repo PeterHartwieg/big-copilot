@@ -21876,7 +21876,8 @@
        "key": "ba:street_eighthavenue#4",
        "last": 3000,
        "s": 2,
-       "slug": "ba:itemname_water"
+       "slug": "ba:itemname_water",
+       "where": "4 Eighth Avenue"
       }
      ],
      "repeating": true,
@@ -21918,6 +21919,7 @@
        "type": "ba:vehicletype_freighttruckt1"
       }
      ],
+     "where": "4 Eighth Avenue",
      "who": null
     },
     {
@@ -21944,6 +21946,7 @@
      "s": 3,
      "skill": null,
      "vehicles": [],
+     "where": "8 Eighth Avenue",
      "who": null
     }
    ]
