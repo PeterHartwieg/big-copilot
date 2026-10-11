@@ -35,7 +35,7 @@ import shutil
 import tokenize
 
 from ba_dashboard import (
-    FLOOR_PLAN_KINDS, GAME_NAME_LANGS, NAME_COVERAGE, NAME_PREFIXES, VERIFIED_BUILD, footer_html,
+    FLOOR_PLAN_KINDS, GAME_NAME_LANGS, IMPORTER_TEXT, NAME_COVERAGE, NAME_PREFIXES, VERIFIED_BUILD, footer_html,
     name_coverage, name_table, render,
 )
 from ba_save import NotEnglishText, bundled_locale, load_game_locale, load_locale, locale_search_paths
@@ -61,6 +61,8 @@ from tools.wiki_paths import game_data_dir
 def ships(key: str, text: str) -> bool:
     """Whether one locale entry travels with the page."""
     if key.startswith(NAME_PREFIXES) or key.startswith("recipes_"):
+        return True
+    if key.startswith(IMPORTER_TEXT):  # the importers' names, which the payload's `names` carries too
         return True
     if key.startswith("help_factory_workstation_"):
         return True

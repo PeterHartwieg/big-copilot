@@ -310,11 +310,11 @@ test('the Results chart is drawn once its container is on screen, and only then'
   assert.ok(b.charts() > after, 'coming back redraws the chart that measured nothing while hidden');
 });
 
-test('Supply is five task views; shops, warehouses and factories are their scope', () => {
+test('Supply is six task views, Plans & contracts second; shops, warehouses and factories are their scope', () => {
   const b = board();
   const items = vm.runInContext('SUBS.supply.items', b.context);
   assert.deepEqual([...items].map(([k, label, anchor]) => [k, label, anchor]),
-    [['changes', en("nav.view.changes"), 'secChanges'], ['imports', en("nav.view.imports"), 'secImports'], ['deliveries', en("nav.view.deliveries"), 'secDeliveries'],
+    [['changes', en("nav.view.changes"), 'secChanges'], ['roles', en("nav.view.roles"), 'secRoles'], ['imports', en("nav.view.imports"), 'secImports'], ['deliveries', en("nav.view.deliveries"), 'secDeliveries'],
      ['production', en("nav.view.production"), 'secProduction'], ['flow', en("nav.view.flow"), 'secFlow']]);
   b.context.showSub('supply', 'production');
   assert.match(b.$('supplyNav').innerHTML, /href="#secProduction" data-id="production" class="on">/);

@@ -522,19 +522,72 @@ NAME_PREFIXES = (
 )
 
 
+# The importers, by their pier's number: the game names each by its building's
+# business name (SpecialService.businessName), which its text carries as
+# `importertypename_<id>` with no `ba:` head (pier 5 is the Casino Boat, no
+# importer). Checked against the installed game's help pages, which link each
+# importer's page to its pier (tools/build_wiki_data.py,
+# canonical_importer_names()), on 11 Oct 2026. The payload and the name tables
+# carry the key as `ba:importertypename_<id>` (IMPORTER_HEAD), so a token and
+# the page's name swap treat it like any other game name; the English here is
+# the fallback for a text that lacks the key.
+IMPORTER_TEXT = "importertypename_"
+IMPORTER_HEAD = "ba:" + IMPORTER_TEXT
+IMPORTERS = {
+    1: ("jetcargo", "Jet Cargo Imports"), 2: ("seaside", "Seaside Internationals"),
+    3: ("unitedocean", "United Ocean Import"), 4: ("bluestone", "Bluestone Imports"),
+    6: ("lunartide", "Lunar Tide Shipments"), 7: ("maritimefreight", "Maritime Freight Line"),
+    8: ("aquaticbay", "Aquatic Bay Cargo"), 9: ("globalharvest", "Global Harvest Traders"),
+}
+PIER_STREET = "ba:street_pier"
+
+
+def _name_text(locale: dict) -> dict:
+    """{payload key: name} for every display name a locale holds, descriptions
+    left out: the NAME_PREFIXES keys as they are, and the importers' names
+    under IMPORTER_HEAD."""
+    out = {k: v for k, v in locale.items()
+           if isinstance(k, str) and k.startswith(NAME_PREFIXES) and not k.endswith("_description")
+           and isinstance(v, str) and v}
+    out.update({"ba:" + k: v for k, v in locale.items()
+                if isinstance(k, str) and k.startswith(IMPORTER_TEXT) and isinstance(v, str) and v})
+    return out
+
+
+def importer_key(address) -> str | None:
+    """The game key of the importer at a pier address, or None for any other place."""
+    if not address or address[0] != PIER_STREET:
+        return None
+    try:
+        known = IMPORTERS.get(int(address[1]))
+    except (TypeError, ValueError):
+        return None
+    return IMPORTER_HEAD + known[0] if known else None
+
+
+def _importer_name(names, address) -> str:
+    """How the board names an importer: the game's own name for it, as a token
+    so the page writes it in the player's language; a pier the table does not
+    know keeps its address."""
+    key = importer_key(address)
+    if not key:
+        return names.addr(address)
+    english = names.locale.get(key[3:]) or IMPORTERS[int(address[1])][1]
+    return tok(key, english)
+
+
 def _game_names(names) -> dict:
     """{key: name} for every display name in the text, descriptions left out.
 
     A neighbourhood the text does not name (no game text at all) still gets
-    its English name, since the page reads every neighbourhood by key.
+    its English name, since the page reads every neighbourhood by key, and so
+    does an importer.
     """
-    out = {
-        k: v
-        for k, v in sorted(names.locale.items())
-        if k.startswith(NAME_PREFIXES) and not k.endswith("_description") and v
-    }
+    out = dict(sorted(_name_text(names.locale).items()))
     for key, label in HOOD_LABEL.items():
         out.setdefault(key, label)
+    for ident, label in IMPORTERS.values():
+        out.setdefault(IMPORTER_HEAD + ident, label)
     return out
 
 
@@ -568,14 +621,13 @@ NAME_COVERAGE = 0.5
 
 def _name_keys(english: dict[str, str]) -> list[str]:
     """The keys of the English text that the payload's `names` carries."""
-    return sorted(k for k, v in english.items()
-                  if k.startswith(NAME_PREFIXES) and not k.endswith("_description") and v)
+    return sorted(_name_text(english))
 
 
 def name_coverage(english: dict[str, str], other: dict[str, str]) -> float:
     """The share of the English name keys that another language's text names."""
-    keys = _name_keys(english)
-    named = sum(1 for k in keys if isinstance(other.get(k), str) and other[k].strip())
+    keys, theirs = _name_keys(english), _name_text(other)
+    named = sum(1 for k in keys if theirs.get(k, "").strip())
     return named / len(keys) if keys else 0.0
 
 
@@ -586,8 +638,9 @@ def name_table(english: dict[str, str], other: dict[str, str]) -> dict[str, str]
     differently: a key left out reads as English, which is also what the page
     does for a key the language has no word for.
     """
-    return {k: other[k] for k in _name_keys(english)
-            if isinstance(other.get(k), str) and other[k].strip() and other[k] != english[k]}
+    ours, theirs = _name_text(english), _name_text(other)
+    return {k: theirs[k] for k in sorted(ours)
+            if theirs.get(k, "").strip() and theirs[k] != ours[k]}
 
 
 def hood_key(row: dict | None) -> str | None:
@@ -2897,6 +2950,10 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     character = root.get("characterId") or "default"
     rhythm = _chain_rhythm(save, buildings, daily, day)
     supply = _supply(save, names, businesses, day, rhythm, recipes, history, character)
+    # Supply > Plans & contracts: the plans and contracts as the game holds
+    # them. Core because Supply's nav badge counts their flags on every
+    # board, and it is a few small lists.
+    supply["roles"] = _supply_roles(save, names, businesses, supply.get("factories"))
     _order_says(businesses, supply)
     market = _market(save, names, businesses, day, history, character)
 
@@ -4536,7 +4593,7 @@ def _raise_import(supply: dict, need) -> int:
 def _level_name(contracts: list, importer, order):
     """How the page names the contract holding a level: its importer, and,
     where that importer has several contracts on the line, which of them
-    ("1 Pier, its 2nd of 2 contracts here").
+    ("Jet Cargo Imports, its 2nd of 2 contracts here").
 
     `contracts` is every contract on the line, paused and zero ones too, in
     delivery order, each with its `importer` and its `order` in
@@ -5446,7 +5503,7 @@ def _supply_imports(save: Save, names: Names, day: int) -> tuple:
         smart = bool(partnership.get("isTarget"))
         importer = save.address(partnership.get("importAddress"))
         rank = ranks[order]
-        who = names.addr(importer)
+        who = _importer_name(names, importer)
         if active and arrives >= day:
             next_day = arrives if next_day is None else min(next_day, arrives)
         for place, product in enumerate(save.items(partnership["products"])):
@@ -5530,6 +5587,217 @@ def _supply_imports(save: Save, names: Names, day: int) -> tuple:
         for line, contracts in contracts_at.items() if line not in imports
     }
     return imports, configured, next_day
+
+
+# How many delivery locations one vehicle in a warehouse's or a factory's
+# parking reaches: VehicleType.destinationsThatCanDeliver, read out of the
+# installed game's vehicle-type bundle (defaultlocalgroup_assets_vehicletypes)
+# on 11 Oct 2026. A slot counts only with both a vehicle and a driver
+# (VehicleSlot.DestinationsThatCanDeliver), and a plan's vehicle limit is twice
+# the sum (LogisticsManagerPlan.GetMaxPossibleDestinations): past it the game
+# warns "The extra delivery locations will not receive deliveries". Every type
+# the bundle lists is here, those that reach none (the limo, the Petrolls
+# Fanton, the Mersaidi MGA GT, a scooter, a hand truck, a flatbed) at 0.
+VEHICLE_DESTINATIONS = {
+    "ba:vehicletype_freighttruckt1": 4, "ba:vehicletype_deliverytruck": 3, "ba:vehicletype_vordv150": 2,
+    "ba:vehicletype_mersaididash": 2, "ba:vehicletype_umcnunavut": 2, "ba:vehicletype_umcdesert": 2,
+    "ba:vehicletype_umcdesertdeliveryjob": 2, "ba:vehicletype_anselmoaf90": 1, "ba:vehicletype_vordpony": 1,
+    "ba:vehicletype_bima320": 1, "ba:vehicletype_vordtiaravic": 1, "ba:vehicletype_mersaidis500": 1,
+    "ba:vehicletype_missamvillian": 1, "ba:vehicletype_honzamimic": 1, "ba:vehicletype_ferdinand112": 1,
+    "ba:vehicletype_limo": 0, "ba:vehicletype_petrollsfanton": 0, "ba:vehicletype_mersaidimgagt": 0,
+    "ba:vehicletype_electricscooter": 0, "ba:vehicletype_handtruck": 0, "ba:vehicletype_flatbed": 0,
+}
+LOGISTICS_SKILL = "ba:skill_logisticsmanager"
+PURCHASING_SKILL = "ba:skill_purchasingagent"
+
+
+def _supply_roles(save: Save, names: Names, businesses: list, factories: dict) -> dict:
+    """Supply › Plans & contracts: every Logistics Manager's delivery plan and
+    every Purchasing Agent's import contract, as the game holds them, in the
+    game's order, before _supply_plans() picks one target per line.
+
+    `managers`: one row per plan (`plan` its id; `who`, `id`, `skill` of the manager; `s`
+    and `key` its pick-up site, `where` its address for a site not the
+    company's, `factory`; `vehicles` at that site, each
+    `{type, name, driver, reach}`, `reach` the plan's vehicle limit, 2 x the
+    slots' reach; `dests` in delivery order, each `{s, key, kind, name,
+    targets}`, `kind` shop, wh, fac, pier (an export, named by its importer;
+    `pier` its address) or other, `targets` the stock targets as set, in the
+    game's order). Then the sites no plan picks up from that need one: a
+    factory whose make another of the company's sites holds or sells
+    (`gap: "factory"`, `needed` those products), and a warehouse holding
+    stock (`gap: "warehouse"`, `holds` its units). Then every Logistics
+    Manager on no plan (`idle`); a plan with no pick-up site and no stop is
+    one of those, with its `plan` id. A manager being replaced still shows on
+    the plan: the game's "not assigned" is checked for agents only.
+
+    `agents`: one row per contract (`contract` its id; `who`, `id`, `skill`, None for all three
+    where the agent is gone or being replaced: the game then cancels the
+    order; `importer` the game's name for the importer as a token,
+    `importerKey`, `pier` its address for a tip and `pierKey` its site key
+    (the Goods flow node is "import:" + it); `smart`, `repeating`,
+    `urgent`, `active`, `next` the next delivery day; `products` each `{slug,
+    item, s, key, where, amount, last}` (`where` the warehouse's address), a product with no designated warehouse
+    included with `s` and `key` None). Then every Purchasing Agent on no
+    contract (`idle`).
+    """
+    root = save.root
+    index = {b["key"]: s for s, b in enumerate(businesses)}
+    people = {}
+    for e in save.items(root.get("EmployeeInstances")):
+        if not isinstance(e, dict) or not isinstance(e.get("id"), str):
+            continue
+        char = _character(save, e)
+        people[e["id"]] = {
+            "name": char["name"] if char["name"] is not None else "?",
+            "skills": {sk["skill"]: sk["level"] for sk in char["skills"]},
+            "top": max(char["skills"], key=lambda sk: sk["level"], default={}).get("skill"),
+            "gone": bool(e.get("isBeingReplaced") or e.get("isReplaced")),
+        }
+
+    def person(pid, skill, replaced_counts=False):
+        p = people.get(pid) if isinstance(pid, str) else None
+        if not p or (replaced_counts and p["gone"]):
+            return None, None, None
+        level = p["skills"].get(skill)
+        return p["name"], pid, int(round(level)) if level is not None else None
+
+    regs = {}
+    for reg in save.items(root.get("BuildingRegistrations")):
+        if isinstance(reg, dict) and reg.get("RentedByPlayer"):
+            regs[site_key(_address_of(reg, strict=True))] = reg
+    instances = {v.get("id"): v for v in save.items(root.get("VehicleInstances")) if isinstance(v, dict)}
+
+    def vehicles_at(key):
+        out = []
+        for slot in save.items((regs.get(key) or {}).get("vehicleSlots")):
+            vid = slot.get("vehicleInstanceId") if isinstance(slot, dict) else None
+            if not vid or vid not in instances:
+                continue
+            kind = _vehicle_type(instances[vid])
+            did = slot.get("employeeDriverId")
+            driver = people.get(did) if isinstance(did, str) else None
+            out.append({"type": kind, "name": names.label(kind) if kind else "?",
+                        "driver": driver["name"] if driver else None,
+                        "reach": VEHICLE_DESTINATIONS.get(kind, 0) if driver else 0})
+        return out
+
+    def kind_of(address, key):
+        if key in index:
+            slug = businesses[index[key]].get("typeSlug")
+            return {"ba:businesstype_warehouse": "wh", "ba:businesstype_factory": "fac"}.get(slug, "shop")
+        return "pier" if address and address[0] == PIER_STREET else "other"
+
+    managers, planned, sources = [], set(), set()
+    for plan in save.items(root.get("logisticsManagerPlans")):
+        if not isinstance(plan, dict):
+            continue
+        who, pid, skill = person(plan.get("assignedEmployeeId"), LOGISTICS_SKILL)
+        if pid:
+            planned.add(pid)
+        src = save.address(plan.get("targetAddress"))
+        if not src and not save.items(plan.get("destinations")):
+            # A plan the game holds with no pick-up site and no stop: the
+            # manager has nothing to run, as one on no plan.
+            # With nobody on it either, there is nothing to show.
+            if pid:
+                managers.append({"plan": plan.get("id"), "who": who, "id": pid, "skill": skill, "idle": True})
+            continue
+        key = site_key(src)
+        sources.add(key)
+        dests = []
+        for dest in save.items(plan.get("destinations")):
+            if not isinstance(dest, dict):
+                continue
+            where = save.address(dest.get("deliveryTargetAddress"))
+            dkey = site_key(where)
+            kind = kind_of(where, dkey)
+            if kind == "pier":
+                name = _importer_name(names, where)
+            elif dkey in index:
+                name = businesses[index[dkey]]["name"]
+            else:
+                name = names.addr(where)
+            row = {"s": index.get(dkey), "key": dkey, "kind": kind, "name": name,
+                   "targets": [{"slug": t.get("itemName"), "item": names.label(t.get("itemName")),
+                                "amount": t.get("targetAmount") or 0}
+                               for t in save.items(dest.get("stockTargets")) if isinstance(t, dict)]}
+            if kind == "pier":
+                row["pier"] = names.addr(where)
+            dests.append(row)
+        vehicles = vehicles_at(key)
+        managers.append({"plan": plan.get("id"), "who": who, "id": pid, "skill": skill, "s": index.get(key), "key": key,
+                         "where": names.addr(src) if src else None, "factory": bool(plan.get("isFactory")), "vehicles": vehicles,
+                         "reach": 2 * sum(v["reach"] for v in vehicles), "dests": dests})
+
+    # The sites no plan picks up from, where that leaves goods standing: a
+    # factory whose make another site of the company holds or sells, and a
+    # warehouse with stock on its shelves.
+    held = collections.defaultdict(set)
+    for s, b in enumerate(businesses):
+        for line in b.get("lines") or ():
+            if line.get("slug"):
+                held[line["slug"]].add(s)
+    makes = collections.defaultdict(set)
+    for site in (factories or {}).get("sites") or ():
+        for line in site.get("lines") or ():
+            if line.get("slug") and site.get("s") is not None:
+                makes[site["s"]].add(line["slug"])
+    for s, b in enumerate(businesses):
+        if b["key"] in sources:
+            continue
+        if b.get("typeSlug") == "ba:businesstype_factory":
+            wanted = [slug for slug in _in_order(makes.get(s, ())) if held.get(slug, set()) - {s}]
+            if wanted:
+                managers.append({"who": None, "id": None, "skill": None, "s": s, "key": b["key"],
+                                 "factory": True, "gap": "factory", "needed": wanted})
+        elif b.get("typeSlug") == "ba:businesstype_warehouse":
+            units = sum(line.get("units") or 0 for line in b.get("lines") or ())
+            if units > 0:
+                managers.append({"who": None, "id": None, "skill": None, "s": s, "key": b["key"],
+                                 "factory": False, "gap": "warehouse", "holds": units})
+
+    agents, contracted = [], set()
+    for partnership in save.items(root.get("importPartnerships")):
+        if not isinstance(partnership, dict):
+            continue
+        who, pid, skill = person(partnership.get("employeeInstanceId"), PURCHASING_SKILL, replaced_counts=True)
+        if pid:
+            contracted.add(pid)
+        pier = save.address(partnership.get("importAddress"))
+        products = []
+        for product in save.items(partnership.get("products")):
+            if not isinstance(product, dict):
+                continue
+            where = save.address(product.get("assignedWarehouse"))
+            wkey = site_key(where)
+            products.append({"slug": product.get("itemName"), "item": names.label(product.get("itemName")),
+                             "s": index.get(wkey) if wkey else None, "key": wkey or None,
+                             "where": names.addr(where) if wkey else None,
+                             "amount": product.get("amount") or 0,
+                             "last": product.get("amountOrderedLastWeek") or 0})
+        due = partnership.get("nextDeliveryDay")
+        agents.append({"contract": partnership.get("id"), "who": who, "id": pid, "skill": skill,
+                       "importer": _importer_name(names, pier), "importerKey": importer_key(pier),
+                       "pier": names.addr(pier), "pierKey": site_key(pier),
+                       "smart": bool(partnership.get("isTarget")),
+                       "repeating": bool(partnership.get("isRepeatingOrder")),
+                       "urgent": bool(partnership.get("isUrgentOrder")),
+                       "active": bool(partnership.get("isActive")),
+                       "next": due if isinstance(due, int) and not isinstance(due, bool) else None,
+                       "products": products})
+
+    # The people with the role and nothing to run, in the save's order.
+    for pid, p in people.items():
+        if p["gone"]:
+            continue
+        if p["top"] == LOGISTICS_SKILL and pid not in planned:
+            managers.append({"who": p["name"], "id": pid, "skill": int(round(p["skills"][LOGISTICS_SKILL])),
+                             "idle": True})
+        if p["top"] == PURCHASING_SKILL and pid not in contracted:
+            agents.append({"who": p["name"], "id": pid, "skill": int(round(p["skills"][PURCHASING_SKILL])),
+                           "idle": True})
+    return {"managers": managers, "agents": agents}
 
 
 class _DeliveryLog:
@@ -6545,7 +6813,7 @@ def _supply_graph(save: Save, names: Names, businesses: list, index: dict, *, ed
         arrives = partnership.get("nextDeliveryDay") or 0
         node(
             source_key,
-            names.addr(source),
+            _importer_name(names, source),
             "import",
             "",
             "",
@@ -15824,7 +16092,8 @@ def _market(
                     "item": names.label(item),
                     "slug": item,
                     "kind": SUPPLIER_EVENTS[event["type"]],
-                    "where": names.addr(save.address(event.get("address")))
+                    # An importer by the game's name for it, not its pier.
+                    "where": _importer_name(names, save.address(event.get("address")))
                     if event.get("address")
                     else names.label(event.get("neighbourhood"), "-"),
                     # The neighbourhood `where` names, by key; None for an address.
@@ -19026,7 +19295,7 @@ def _plan(
     ranks = _import_ranks(save, partnerships)
     sources, drops = {}, collections.defaultdict(lambda: {"active": [], "paused": []})
     for order, partnership in enumerate(partnerships):
-        who = names.addr(save.address(partnership.get("importAddress")))
+        who = _importer_name(names, save.address(partnership.get("importAddress")))
         active = bool(partnership.get("isActive"))
         smart = bool(partnership.get("isTarget"))
         for product in save.items(partnership["products"]):

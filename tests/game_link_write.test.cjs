@@ -1277,7 +1277,7 @@ test('imports: the Set to figure is written, and undone', async (t) => {
   const line = dialog(page).locator('.gw-line', {hasText: 'Paperbag'});
   assert.equal(await line.count(), 1);
   assert.match(await line.locator('.gw-num').textContent(), new RegExp('^' + enRe('sp.gw.tile.from').source + ' 3,800 ' + enRe('sp.gw.tile.to').source + ' 4,200' + enRe('sb.unit.stock').source + '$'));
-  assert.deepEqual(await line.locator('.gw-imp').allTextContents(), ['1. 11 Pier', '2. 2 Pier' + en('sb.gw.stopped') + en('sb.gw.noAgent')]);
+  assert.deepEqual(await line.locator('.gw-imp').allTextContents(), ['1. 1Jet Cargo Imports', '2. Seaside Internationals' + en('sb.gw.stopped') + en('sb.gw.noAgent')]);
   assert.match(await dialog(page).locator('.gw-verdict').textContent(), enRe("sb.gw.takes.one"));
   // The board the link reads after the write holds what it wrote.
   await page.evaluate(() => {
@@ -1475,7 +1475,7 @@ test('imports: inside the lock window the dry run refuses, in the game\'s words'
   const refusal = dialog(page).locator('.gw-no');
   await refusal.waitFor();
   assert.equal(await refusal.locator('.rule').textContent(), en('nav.dlg.refuse.locked.rule') + '.');
-  assert.deepEqual(await refusal.locator('.gw-chip').allTextContents(), ['1 Pier · Paperbag']);
+  assert.deepEqual(await refusal.locator('.gw-chip').allTextContents(), ['Jet Cargo Imports · Paperbag']);
   assert.equal(await refusal.locator('.fix').textContent(), en("nav.dlg.refuse.locked.day", {"day":36}));
   assert.equal(await refusal.locator('.gw-lock .cells i.x').count(), 12, 'the window drawn, Sunday 20:00 to Monday 08:00');
   assert.equal(await dialog(page).locator('.gw-line.dim').count(), 1, 'the line waits with it');
@@ -1647,16 +1647,16 @@ test('imports: the ranked list is the game\'s order, read only, and a write send
   const list = importRow(page, 'Paperbag').locator('.imp-contracts');
   // textContent: a section off screen skips its rendering, and innerText with it.
   assert.match(await list.textContent(),
-    /1\. 1 Pier · keeps 3,800 in stock.*2\. 2 Pier · 0 a week · paused/);
+    /1\. Jet Cargo Imports · keeps 3,800 in stock.*2\. Seaside Internationals · 0 a week · paused/);
   assert.match(await list.getAttribute('data-tip'), enRe("sb.imp.order"));
   // The contract whose level the box sets stands out.
-  assert.equal(await list.locator('.imp-lvl').textContent(), '1. 1 Pier \u00b7 ' + en('sb.imp.keeps', {n:3800}));
+  assert.equal(await list.locator('.imp-lvl').textContent(), '1. Jet Cargo Imports \u00b7 ' + en('sb.imp.keeps', {n:3800}));
   assert.equal(await list.locator('button').count(), 0);
   await setTo(page, 'Paperbag', 4200);
   await applyImports(page).click();
   // A Smart Delivery write sets the level alone; it says the plain contract stays.
   await dialog(page).locator('.gw-line', {hasText: 'Paperbag'})
-    .getByText(en("sb.gw.plain", {"list":"2 Pier","n":1})).waitFor();
+    .getByText(en("sb.gw.plain", {"list":"Seaside Internationals","n":1})).waitFor();
   await dialog(page).locator('[data-gw-b="apply"]').click();
   await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}, {cap: true})})).waitFor();
   assert.equal('order' in (await applied())[0].body, false);
@@ -1694,17 +1694,17 @@ test('imports: a stopped contract is started, with its next delivery against cas
   assert.equal(await candle.locator('.gw-lvl u.cap').textContent(), en('sb.gw.cap', {n:400}));
   assert.equal(await dialog(page).locator('[data-gw-b="apply"]').isEnabled(), true);
   await dialog(page).getByRole('button', {name: en("nav.dlg.cancel")}).click();
-  // The capped dialog is gone before the next one opens: its own "3 Pier is
+  // The capped dialog is gone before the next one opens: its own "United Ocean Import is
   // stopped." line (at 400, $1,000) must not pass for the new one's.
   await dialog(page).waitFor({state: 'detached'});
   await configure({importTerms: {CONTRACTthree: {unitPrice: 2.5, cap: 1000}}});
   await applyImports(page).click();
-  const restart = dialog(page).locator('.gw-line', {hasText: 'Candle'}).locator('.gw-call', {hasText: '3 Pier is stopped.'});
+  const restart = dialog(page).locator('.gw-line', {hasText: 'Candle'}).locator('.gw-call', {hasText: 'United Ocean Import is stopped.'});
   // The game's answer to the full 600: its bill, not a stale capped one.
   await restart.filter({hasText: textRe("sb.gw.bill", {next:en("sb.gw.next.day", {day:36}), total:1500})}).waitFor();
   assert.match(await restart.textContent(), new RegExp(textRe('sb.gw.stoppedRow').source + '.*' + textRe('sb.gw.bill.of', {next:en('sb.gw.next.day', {day:36}), total:1500, cash:10000}).source));
   assert.equal(await dialog(page).getByText(textRe("sb.gw.unc.bold")).count(), 0);
-  assert.equal(await dialog(page).locator('.gw-imp.stopped', {hasText: '3 Pier'}).count(), 1);
+  assert.equal(await dialog(page).locator('.gw-imp.stopped', {hasText: 'United Ocean Import'}).count(), 1);
   await dialog(page).locator('[data-gw-b="apply"]').click();
   await dialog(page).getByText(en("sb.gw.done", {parts:en("sb.gw.done.set", {n:1}, {cap: true}) + ", " + en("sb.gw.done.started", {n:1})})).waitFor();
   assert.deepEqual((await applied())[0].body.contracts, [{id: 'CONTRACTthree', activate: true,

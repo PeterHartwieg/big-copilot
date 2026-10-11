@@ -77,9 +77,11 @@ class NamesTableTests(unittest.TestCase):
         self.assertNotIn("help_ba:itemname_paperbag_content", out)
 
     def test_a_board_without_game_text_still_names_its_neighbourhoods(self):
+        """And its importers: the seven neighbourhoods and the eight importers."""
         out = _game_names(Names({}))
         self.assertEqual(out["ba:neighborhood_midtown"], "Midtown")
-        self.assertEqual(len(out), 7)
+        self.assertEqual(out["ba:importertypename_jetcargo"], "Jet Cargo Imports")
+        self.assertEqual(len(out), 7 + 8)
 
     def test_the_game_text_wins_over_the_fallback(self):
         out = _game_names(Names({"ba:neighborhood_thehamptons": "Les Hamptons"}))

@@ -16,8 +16,8 @@ from pathlib import Path
 
 import build_web
 from ba_dashboard import (
-    GAME_NAME_LANGS, NAME_COVERAGE, NAME_PREFIXES, UI_LANGS, UI_LANGS_DRAFTED, cli_names, footer_html, name_coverage,
-    name_table, render,
+    GAME_NAME_LANGS, NAME_COVERAGE, NAME_PREFIXES, UI_LANGS, UI_LANGS_DRAFTED, _name_text, cli_names, footer_html,
+    name_coverage, name_table, render,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -100,7 +100,9 @@ class Build(unittest.TestCase):
 
     def test_the_committed_tables_hold_names_and_nothing_else(self):
         english = json.loads((ROOT / "web" / "py" / "gametext.json").read_text(encoding="utf-8"))
-        keys = {k for k in english if k.startswith(NAME_PREFIXES) and not k.endswith("_description")}
+        # The name keys, and the importers' under their ba: key (_name_text()).
+        keys = set(_name_text(english))
+        self.assertTrue({k for k in english if k.startswith(NAME_PREFIXES) and not k.endswith("_description") and english[k]} <= keys)
         for code in build_web.NAME_LANGS:
             with self.subTest(code):
                 table = json.loads((ROOT / "web" / "names" / f"{code}.json").read_text(encoding="utf-8"))

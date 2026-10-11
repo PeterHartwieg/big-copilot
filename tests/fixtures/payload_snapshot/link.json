@@ -1938,6 +1938,14 @@
   "worth": 0.0
  },
  "names": {
+  "ba:importertypename_aquaticbay": "Aquatic Bay Cargo",
+  "ba:importertypename_bluestone": "Bluestone Imports",
+  "ba:importertypename_globalharvest": "Global Harvest Traders",
+  "ba:importertypename_jetcargo": "Jet Cargo Imports",
+  "ba:importertypename_lunartide": "Lunar Tide Shipments",
+  "ba:importertypename_maritimefreight": "Maritime Freight Line",
+  "ba:importertypename_seaside": "Seaside Internationals",
+  "ba:importertypename_unitedocean": "United Ocean Import",
   "ba:neighborhood_garmentdistrict": "Garment District",
   "ba:neighborhood_hellskitchen": "Hell's Kitchen",
   "ba:neighborhood_industrycity": "Industry City",
@@ -7049,7 +7057,7 @@
     "contracts": [
      {
       "active": false,
-      "from": "3 Pier",
+      "from": "⟦ba:importertypename_unitedocean|United Ocean Import⟧",
       "ordered": 500,
       "smart": false,
       "warehouse": "9 Pier"
@@ -7067,7 +7075,7 @@
       "weekly": 500
      }
     ],
-    "from": "3 Pier",
+    "from": "⟦ba:importertypename_unitedocean|United Ocean Import⟧",
     "ordered": 0,
     "paused": 500,
     "smart": false,
@@ -7078,14 +7086,14 @@
     "contracts": [
      {
       "active": true,
-      "from": "1 Pier",
+      "from": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧",
       "ordered": 3800,
       "smart": true,
       "warehouse": "9 Pier"
      },
      {
       "active": false,
-      "from": "2 Pier",
+      "from": "⟦ba:importertypename_seaside|Seaside Internationals⟧",
       "ordered": 0,
       "smart": false,
       "warehouse": "9 Pier"
@@ -7093,9 +7101,9 @@
     ],
     "depots": [
      {
-      "importer": "1 Pier",
+      "importer": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧",
       "level": 3800,
-      "name": "1 Pier",
+      "name": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧",
       "plainAfter": 0,
       "plainBefore": 0,
       "smart": true,
@@ -7103,7 +7111,7 @@
       "weekly": 3800
      }
     ],
-    "from": "1 Pier, 2 Pier",
+    "from": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧, ⟦ba:importertypename_seaside|Seaside Internationals⟧",
     "ordered": 3800,
     "paused": 0,
     "smart": true,
@@ -8206,7 +8214,7 @@
         "amount": 500,
         "group": 2,
         "id": "CONTRACTthree",
-        "importer": "3 Pier",
+        "importer": "⟦ba:importertypename_unitedocean|United Ocean Import⟧",
         "lastWeek": 0,
         "order": 2,
         "product": 0,
@@ -8244,7 +8252,7 @@
         "amount": 3800,
         "group": 0,
         "id": "CONTRACTone",
-        "importer": "1 Pier",
+        "importer": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧",
         "lastWeek": 0,
         "order": 0,
         "product": 0,
@@ -8257,7 +8265,7 @@
         "amount": 0,
         "group": 1,
         "id": "CONTRACTtwo",
-        "importer": "2 Pier",
+        "importer": "⟦ba:importertypename_seaside|Seaside Internationals⟧",
         "lastWeek": 0,
         "order": 1,
         "product": 0,
@@ -8269,8 +8277,8 @@
       "drawWeek": 0,
       "levelAt": 0,
       "levelId": "CONTRACTone",
-      "levelImporter": "1 Pier",
-      "levelName": "1 Pier",
+      "levelImporter": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧",
+      "levelName": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧",
       "pass": [
        {
         "amount": 3800,
@@ -8380,7 +8388,7 @@
      "items": [],
      "kind": "import",
      "low": 0,
-     "name": "1 Pier",
+     "name": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧",
      "short": 0,
      "site": null,
      "stock": 0,
@@ -8395,7 +8403,7 @@
      "items": [],
      "kind": "import",
      "low": 0,
-     "name": "3 Pier",
+     "name": "⟦ba:importertypename_unitedocean|United Ocean Import⟧",
      "short": 0,
      "site": null,
      "stock": 0,
@@ -8414,6 +8422,89 @@
   "margin": 0.15,
   "nextImportDay": 36,
   "nextImportWeekday": "Monday",
+  "roles": {
+   "agents": [
+    {
+     "active": true,
+     "contract": "CONTRACTone",
+     "id": null,
+     "importer": "⟦ba:importertypename_jetcargo|Jet Cargo Imports⟧",
+     "importerKey": "ba:importertypename_jetcargo",
+     "next": 36,
+     "pier": "1 Pier",
+     "pierKey": "ba:street_pier#1",
+     "products": [
+      {
+       "amount": 3800,
+       "item": "Paperbag",
+       "key": "ba:street_pier#9",
+       "last": 0,
+       "s": 3,
+       "slug": "ba:itemname_paperbag",
+       "where": "9 Pier"
+      }
+     ],
+     "repeating": true,
+     "skill": null,
+     "smart": true,
+     "urgent": false,
+     "who": null
+    },
+    {
+     "active": false,
+     "contract": "CONTRACTtwo",
+     "id": null,
+     "importer": "⟦ba:importertypename_seaside|Seaside Internationals⟧",
+     "importerKey": "ba:importertypename_seaside",
+     "next": 29,
+     "pier": "2 Pier",
+     "pierKey": "ba:street_pier#2",
+     "products": [
+      {
+       "amount": 0,
+       "item": "Paperbag",
+       "key": "ba:street_pier#9",
+       "last": 0,
+       "s": 3,
+       "slug": "ba:itemname_paperbag",
+       "where": "9 Pier"
+      }
+     ],
+     "repeating": false,
+     "skill": null,
+     "smart": false,
+     "urgent": false,
+     "who": null
+    },
+    {
+     "active": false,
+     "contract": "CONTRACTthree",
+     "id": null,
+     "importer": "⟦ba:importertypename_unitedocean|United Ocean Import⟧",
+     "importerKey": "ba:importertypename_unitedocean",
+     "next": 29,
+     "pier": "3 Pier",
+     "pierKey": "ba:street_pier#3",
+     "products": [
+      {
+       "amount": 500,
+       "item": "Candle",
+       "key": "ba:street_pier#9",
+       "last": 0,
+       "s": 3,
+       "slug": "ba:itemname_candle",
+       "where": "9 Pier"
+      }
+     ],
+     "repeating": false,
+     "skill": null,
+     "smart": false,
+     "urgent": false,
+     "who": null
+    }
+   ],
+   "managers": []
+  },
   "roundTo": 10,
   "routed": [],
   "shops": [],

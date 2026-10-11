@@ -698,7 +698,7 @@ test("the full sidebar holds the open area's views; the page starts with the vie
   assert.equal(s.inSide, true);
   assert.equal(s.under, 'supply');
   assert.deepEqual(await page.locator('#localNav a[data-route]').evaluateAll(as => as.map(a => a.dataset.route)),
-    ['supply/changes', 'supply/imports', 'supply/deliveries', 'supply/production', 'supply/flow']);
+    ['supply/changes', 'supply/roles', 'supply/imports', 'supply/deliveries', 'supply/production', 'supply/flow']);
   assert.equal(await page.locator('#nav > a[data-id="businesses"] .sd-cv').isVisible(), true);
   assert.equal(await page.locator('#nav > a[data-id="supply"] .sd-cv').isVisible(), false);
   // The top of the page: the scope, the mode and the basis, and no row of views.
