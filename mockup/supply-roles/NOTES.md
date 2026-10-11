@@ -175,6 +175,36 @@ The port follows these, not the canvas, where they differ.
 10. **Drop "Not seated" entirely** (the flag, the `seated` payload fields). This view is about
     orders and logistics, not people.
 
+## Game checks before the port (gpt-6.1-sol, 11 Oct 2026, installed en.json + BigAmbitions.dll IL + asset bundles)
+
+- **Amount header depends on the plan's source, not on the stop kind.**
+  `LogisticsManagerPlanUI.LoadProducts` branches on `isFactory`: a warehouse plan's stops say
+  `bizman_logisticsmanagers_min_stock_amount` "Minimum stock amount"; a factory plan's stops (a
+  warehouse **or** a pier export) say `bizman_logisticsmanagers_deliver_up_to` "Deliver up to".
+  The canvas's "Minimum stock amount" on a factory plan's warehouse stop is wrong; the port
+  follows the game. The game's second column is "Runs out in" (warehouse plan) or "Export Price"
+  (factory plan → export); the board keeps its own On hand / Sells / Uses columns.
+  A pier export is a destination whose registration's `businessTypeName` is
+  `ba:businesstype_importexport`.
+- **Vehicle limit.** `VehicleSlot.DestinationsThatCanDeliver` is 0 without both a vehicle and a
+  driver, else the vehicle type's `destinationsThatCanDeliver`; V = their sum.
+  `LogisticsManagerPlan.GetMaxPossibleDestinations` = **2 × V** and is the vehicle limit: over it
+  the game warns `bizman_logisticsmanager_max_capacity_exceeded_confirm` ("Your current warehouse
+  vehicles and drivers cannot support this many deliveries. The extra delivery locations will not
+  receive deliveries"). The skill limit is `V + floor(V × skill / 100)`
+  (`CalculateMaxDestinations`, warning `bizman_logisticsmanager_lower_skill_confirm`); per answer
+  9 it is not claimed. So "vehicles reach N" uses N = 2 × V, not V as drawn.
+- **Importer names.** The game shows the pier building's `SpecialService.businessName`
+  (`BuildingHelper.GetBuildingRegistration`, `PurchasingAgentsPlanList.SetUpPlanEntry`). By pier:
+  1 JetCargo Imports, 2 SeaSide Internationals, 3 United Ocean Import, 4 BlueStone Imports,
+  6 Lunar Tide Shipments, 7 Maritime Freight Line, 8 Aquatic Bay Cargo, 9 Global Harvest Traders
+  (5 is the Casino Boat). en.json carries the same names as `importertypename_*` keys (spelled
+  "Jet Cargo Imports", "Seaside Internationals", "Bluestone Imports"), which the other locales
+  translate; the board uses those keys so the name follows the player's language.
+- Other strings: `not_assigned` "Logistics Manager not assigned", `no_driver` "No driver",
+  `no_products` "No products available to deliver to this location.", `destination_number`
+  "Destination #{number}".
+
 ## Open questions for Peter (answered above)
 
 Drawn defaults carry a dashed `Qn` marker on the canvas.
