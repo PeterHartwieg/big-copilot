@@ -169,8 +169,9 @@ the map.
     designated warehouse, and a Purchasing Agent with no contract. These are the view's
     count; a finding of Deliveries, Imports or Production shows on its row and links there.
     Goods flow's followed site lists who delivers it and what its own plan sends, and the
-    heads of Imports, Deliveries and Production, a warehouse's or factory's Feeds and a
-    shop's Shelves (the plan that fills it, on its stop) link back here.
+    heads of Imports, Deliveries and Production, a warehouse's Feeds, a factory's Lines and
+    a shop's Shelves (the plan that fills it, on its stop) link back here. A company with
+    one plan sees it opened.
   - *Imports*: a card reviewing one import line, then every depot's and factory's import
     lines. The card holds the weekly order (or Smart Delivery stock) apart from a one-time
     catch-up bought by hand before the next delivery, the figure's box with the basis it was

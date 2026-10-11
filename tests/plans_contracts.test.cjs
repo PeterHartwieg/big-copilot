@@ -232,6 +232,45 @@ test('a finding at a site that is several stops of one plan, or several lines of
   } finally { await page.close(); }
 });
 
+test('a stop past 12 targets takes two columns in the game order, a Status column in each when a finding needs one', async () => {
+  const d = withShopFinding();
+  const many = ['soda', ...Array.from({length: 13}, (_, k) => `item${String(k).padStart(2, '0')}`)];
+  d.supply.roles.managers[0].dests[0].targets = many.map((slug, k) => target(slug, 1000 - k));
+  const page = await board(d);
+  try {
+    await page.click('#secRoles tr[data-sr-row="m:P1"]');
+    await page.click('#secRoles tr[data-sr-stop="m:P1:0"]');
+    const cols = '#secRoles tr[data-sr-of="m:P1:0"] .sr-cols';
+    assert.equal(await page.locator(`${cols} table.sr-tt`).count(), 2);
+    const items = await page.$$eval(`${cols} table.sr-tt tbody td:first-child`, tds => tds.map(t => t.textContent));
+    assert.deepEqual(items, many.map(x => x[0].toUpperCase() + x.slice(1)), 'down the first column, on down the second');
+    const heads = await page.$$eval(`${cols} table.sr-tt`, ts => ts.map(t => [...t.querySelectorAll('thead th')].map(h => h.textContent).pop()));
+    assert.deepEqual(heads, ['Status', 'Status']);
+    assert.match(await page.$eval(`${cols} table.sr-tt tbody tr`, el => el.innerText), new RegExp(en('nav.kind.outruns.label')));
+    // Both columns sit inside the opened stop, none spilling past it.
+    const [box, ...tables] = await page.$$eval(`${cols}, ${cols} table.sr-tt`, els => els.map(e => e.getBoundingClientRect().right));
+    tables.forEach(r => assert.ok(r <= box + 1, `a column ends inside: ${r} <= ${box}`));
+  } finally { await page.close(); }
+});
+
+test('a company with one plan sees it opened, until the reader closes it', async () => {
+  const d = fixture();
+  d.supply.roles.managers = d.supply.roles.managers.filter(m => m.plan === 'P2' || m.idle);
+  const page = await board(d);
+  try {
+    assert.equal(await page.$eval('#secRoles tr[data-sr-row="m:P2"]', el => el.classList.contains('sr-opened')), true);
+    assert.equal(await page.$eval('#secRoles tr[data-sr-of="m:P2"]', el => el.classList.contains('sr-hide')), false);
+    await page.click('#secRoles tr[data-sr-row="m:P2"]');
+    await page.evaluate(() => drawRolesView());
+    assert.equal(await page.$eval('#secRoles tr[data-sr-row="m:P2"]', el => el.classList.contains('sr-opened')), false, 'a redraw keeps it closed');
+  } finally { await page.close(); }
+  // Two plans: none opens by itself.
+  const two = await board(fixture());
+  try {
+    assert.equal(await two.locator('#secRoles tr.sr-row.sr-opened').count(), 0);
+  } finally { await two.close(); }
+});
+
 test('a one-time contract buys once; Goods flow is offered only for a site it draws', async () => {
   const page = await board(fixture());
   try {
@@ -310,6 +349,20 @@ test("a shop's page names the plans that fill it; a link lands on its stop, lit,
     // The plan with no pick-up site sits under No plan; no raw site key reaches the screen.
     assert.match(await page.$eval('#secRoles tr[data-sr-row="m:m-null-plan"]', el => el.innerText), /Nell Null/);
     assert.doesNotMatch(await page.$eval('#secRoles', el => el.innerText), /ba:street_/);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test("a factory's page names the plan that picks up from it, landing on that row with the crumb back", async () => {
+  const page = await wholeBoard(extracted());
+  try {
+    await page.evaluate(() => openSite('ba:street_eighthavenue#8'));
+    const head = '#sp-lines .sechead .aside';
+    assert.match(await page.$eval(head, el => el.textContent), /Faye Fields's plan · 08:00 ›/);
+    await page.click(`${head} [data-sr-go]`);
+    assert.equal(await page.evaluate(() => route), 'supply/roles');
+    assert.deepEqual(await page.$eval('#secRoles tr[data-sr-row="m:a-factory-plan"]', el => [el.classList.contains('sr-lit'), el.classList.contains('sr-opened')]), [true, true]);
+    assert.match(await page.$eval('#secRoles .sb-crumb', el => el.textContent), new RegExp(en('sb.crumb.fromSite')));
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });

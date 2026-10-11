@@ -7716,7 +7716,7 @@ function drawSite(){
     </section>
     <div class="duo sec"${feedRows.length ? ` style="grid-template-columns:1fr 1fr"` : ` style="grid-template-columns:1fr"`}>${feedRows.length ? `
       <section class="rv" data-block="feeds" id="sp-feeds">
-        ${sechead(tt("sp.feeds.title", "Feeds"), {icon: "pipe", aside: srPlanFrom(b.key) ? srGo(spEsc(tt("sp.feeds.plan", "{who}'s plan · {t} ›", {who: srPlanFrom(b.key).who || "—", t: srWhen(srPlanFrom(b.key))})), srRowId(srPlanFrom(b.key)), null, tt("sb.roles.go.plan", "Open it on Plans & contracts")) : ""})}
+        ${sechead(tt("sp.feeds.title", "Feeds"), {icon: "pipe", aside: srOwnPlan(b.key)})}
         <div class="sp-feeds">${feedRows.map(r => {
           const site = D.businesses[r.s];
           return `<div class="sp-feed">${hoodHtml(site)}<span>${spEsc(shortName(site))}</span><span class="sp-tr"><i style="--w:${
@@ -7752,7 +7752,7 @@ function drawSite(){
       ${spTile(tt("sp.tile.cost", "Cost / day"), costs.length ? fmt(spend) : "—", spCostBar(costs, null))}
     </div>
     <section class="sec rv" data-block="lines" id="sp-lines" data-readzone>
-      ${sechead(tt("sp.lines.title", "Lines"), {icon: "gear", why: `${tt("sp.lines.why", "A machine runs only while someone is scheduled on it. The fill of each square is the share of the week it is staffed.")}${
+      ${sechead(tt("sp.lines.title", "Lines"), {icon: "gear", aside: srOwnPlan(b.key), why: `${tt("sp.lines.why", "A machine runs only while someone is scheduled on it. The fill of each square is the share of the week it is staffed.")}${
         blind ? ` ${tt("sp.lines.why.blind", "A machine running a recipe the board cannot name is in none of the totals; name it here and it joins them.")}` : ""}${
         lines.length || unnamed.length ? "" : ` ${tt("sp.lines.why.none", "No machine could be read at this site.")}`}`})}
       ${lines.length || unnamed.length ? `<div class="scrollx">${spLines(site)}</div>`
@@ -9655,6 +9655,7 @@ function bindSupply(){
     if(e.target.closest("a, button, select, input, .map-shortcut")) return;
     const id = tr.dataset.srRow, det = q(`#pageSupply tr[data-sr-of="${CSS.escape(id)}"]`);
     if(!det) return;
+    srTouched.add(id);
     const open = !srOpen.has(id);
     if(open) srOpen.add(id); else srOpen.delete(id);
     det.classList.toggle("sr-hide", !open); tr.classList.toggle("sr-opened", open);
@@ -10941,6 +10942,9 @@ function drawProductionView(){
 const SR_DESTS = 8, SR_PRODUCTS = 10;
 /* The rows and stops opened, the lists shown whole, and the row a link landed on. */
 const srOpen = new Set(), srAll = new Set();
+/* The rows the reader opened or closed by hand: a lone plan opens by itself
+   only until then. */
+const srTouched = new Set();
 let srLit = null;
 const srRoles = () => (hasData() && D.supply && D.supply.roles) || {managers: [], agents: []};
 const srRowId = r => r.plan ? `m:${r.plan}` : r.contract ? `a:${r.contract}` : r.gap ? `g:${r.key}` : `i:${r.id || ""}`;
@@ -11050,8 +11054,9 @@ function srTargets(m, d){
   const head = end ? `<thead><tr><th class="l">${tt("sb.col.product", "Product")}</th><th>${amount}</th></tr></thead>`
     : `<thead><tr><th class="l">${tt("sb.col.product", "Product")}</th><th>${amount}</th><th>${tt("sb.col.onHand", "On hand")}</th><th>${rate}</th>${
       finds.length ? `<th class="l">${tt("sb.col.status", "Status")}</th>` : ""}</tr></thead>`;
-  /* Two columns only where no Status column needs the room. */
-  if(rows.length > 12 && !finds.length){
+  /* One column up to 12, two above, in the game's order down the first and
+     on down the second; each column carries the Status column when one is needed. */
+  if(rows.length > 12){
     const half = Math.ceil(rows.length / 2);
     return `<div class="sr-cols"><table class="sr-tt">${head}<tbody>${rows.slice(0, half).join("")}</tbody></table><table class="sr-tt">${head}<tbody>${rows.slice(half).join("")}</tbody></table></div>`;
   }
@@ -11199,6 +11204,8 @@ function drawRolesView(){
   const managers = (r.managers || []).filter(m => srInScope(m, false)), agents = (r.agents || []).filter(a => srInScope(a, true));
   const none = !(r.managers || []).length && !(r.agents || []).length;
   const plans = managers.filter(m => !m.idle && !m.gap);
+  /* A company with one plan sees it opened (the canvas's D2). */
+  if((r.managers || []).filter(m => !m.idle && !m.gap).length === 1 && plans.length === 1 && !srTouched.has(srRowId(plans[0]))) srOpen.add(srRowId(plans[0]));
   const people = managers.filter(m => m.who).length, dests = plans.reduce((t, m) => t + (m.dests || []).length, 0);
   const targets = plans.reduce((t, m) => t + (m.dests || []).reduce((u, d) => u + (d.targets || []).length, 0), 0);
   const contracts = agents.filter(a => !a.idle), products = contracts.reduce((t, a) => t + (a.products || []).length, 0);
@@ -11277,6 +11284,13 @@ function srStopLink(srcKey, destKey, html){
   const m = srPlanFrom(srcKey);
   const k = m ? (m.dests || []).findIndex(d => d.key === destKey) : -1;
   return k >= 0 ? srGo(html, srRowId(m), k, tt("sb.roles.go.stop", "{who}'s plan, stop {k} · Plans & contracts", {who: m.who || "—", k: k + 1})) : html;
+}
+/* The plan a site sends with, as a link: a warehouse's Feeds head and a
+   factory's Lines head on its page. */
+function srOwnPlan(key){
+  const m = srPlanFrom(key);
+  return m ? srGo(spEsc(tt("sp.feeds.plan", "{who}'s plan · {t} ›", {who: m.who || "—", t: srWhen(m)})), srRowId(m), null,
+    tt("sb.roles.go.plan", "Open it on Plans & contracts")) : "";
 }
 /* The plans that fill a site, each a link to its stop there: a shop's Shelves head. */
 function srFillLinks(key){

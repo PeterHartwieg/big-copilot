@@ -1195,6 +1195,10 @@ tr.sr-dopen .sr-dtog{transform:rotate(90deg)}
 #pageSupply .sr-tt thead th{font-size:9.5px}
 #pageSupply .sr-tt td.l:first-child{min-width:170px}
 .sr-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:40px}
+/* Two columns side by side: headers wrap and the product column gives way, so a Status column fits in each. */
+#pageSupply .sr-cols .sr-tt th{white-space:normal;vertical-align:bottom}
+#pageSupply .sr-cols .sr-tt td.l:first-child{min-width:0}
+#pageSupply .sr-cols .sr-tt td.st .sb-v{white-space:normal}
 .sr-more{display:flex;gap:14px;align-items:center;margin:10px 0 0 4px;font-size:12.5px;color:var(--ink-3)}
 .sr-more button{border:0;background:none;padding:0;color:var(--ink-2);font:500 12.5px/1 Archivo,sans-serif;cursor:pointer;border-bottom:1px solid var(--rule)}
 .sr-more button:hover{color:var(--ink);border-color:var(--ink-3)}
