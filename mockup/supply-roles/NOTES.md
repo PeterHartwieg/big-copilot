@@ -153,7 +153,29 @@ Deliveries' "each morning from Harbor Depot" links the plan; the site page's Fee
 "Rosa Duvall's plan · 02:00 ›". Each lands here with the row lit and opened, the stop opened,
 and the `sb-crumb` back ("from Goods flow ×").
 
-## Open questions for Peter
+## Peter's answers (11 Oct 2026): these override the drawn defaults
+
+The port follows these, not the canvas, where they differ.
+
+1. Name **Plans & contracts**. Yes.
+2. **Second** in the Supply list, after Changes. Yes.
+3. Importers are named by **the game's own importer name** (Jet Cargo …), never by pier or
+   address, everywhere on the board: this view, the existing Imports view and anywhere else that
+   names an importer by pier today. "The address is not really something people know." The
+   pier/address may stay as a quiet secondary detail only where it helps find the place (a
+   tooltip). Decision 9 and the `agents[].pier` row above change accordingly.
+4. A contract with no agent is **flagged as delivering nothing**. Confirmed.
+5. **Flag** a warehouse that holds stock but has no plan (was: silent).
+6. Wages are **left out**.
+7. Rows keep the **game's order**.
+8. A destination's stock targets keep the **game's order**, not sorted by amount (decision 4
+   changes).
+9. The manager-skill limit on destinations is **not claimed**. Show only the vehicle limit,
+   worded as such.
+10. **Drop "Not seated" entirely** (the flag, the `seated` payload fields). This view is about
+    orders and logistics, not people.
+
+## Open questions for Peter (answered above)
 
 Drawn defaults carry a dashed `Qn` marker on the canvas.
 
