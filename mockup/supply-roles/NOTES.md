@@ -9,166 +9,168 @@ stylesheet from `template/board.html`; new classes are `sr-` (unused on the boar
 
 Peter, 10 Oct 2026: every Logistics Manager's and Purchasing Agent's configuration in one view.
 All names are invented (company BRIGHTWELL); the shape follows three real saves: 12 managers
-(5 factory plans), 0–16 destinations, 8 contracts of 13–18 products, 122 product lines.
+(5 factory plans, two with a pier export stop), 0–16 destinations, 8 contracts of 14–18
+products, 122 product lines. The board's day is 333, a Thursday (day 1 is a Monday).
+
+Round 2 (11 Oct 2026) applied the Opus review of round 1; its decisions are folded in below.
 
 ## Artboards
 
-- **A · Main**: the view, every row closed. Two groups: Logistics Managers (warehouse plans,
-  then factory plans), Purchasing Agents.
-- **B1 · OpenManager**: Rosa Duvall's 16-destination plan opened (8 shown, "Show all 16"),
-  stop 3 opened to its 10 stock targets.
-- **B2 · OpenAgent**: Mara Okafor's 18-product contract opened (10 shown, "Show all 18").
-- **C · Problems**: every flag at once; Thread Depot's plan opened at the vehicle cut.
-- **D1 · Empty**, **D2 · Small** (1 manager, opened by default; 2 agents, one a one-off).
+- **A · Main**: the view, every row closed, with the open-question markers (dashed blue `Qn`
+  chips: a drawn default that is still open).
+- **B1 · OpenManager**: a 16-destination plan opened (8 shown, "Show all 16"), stop 4 opened: a
+  second-tier warehouse with 26 minimum stock amounts, all listed in two columns.
+- **B2 · OpenAgent**: an 18-product contract opened (10 shown, "Show all 18").
+- **C · Problems**: every role-level flag at once; Thread Depot's plan opened.
+- **D1 · Empty**, **D2 · Small** (1 manager, opened by default; 2 agents, one a finished
+  one-time delivery).
 - **E · Links**: links out (site page, map, Goods flow, Deliveries/Imports rows) and in (Goods
-  flow card, Imports/Deliveries heads, site page Feeds, the arrival with its crumb). New links
+  flow cards, Imports/Deliveries heads, site page Feeds, the arrival with its crumb). New links
   are outlined green.
 
 All artboards are interactive (rows and stops open, Show all) and have the `dark` Tweak.
 
 ## Decisions
 
-1. **A new Supply view, second in the list**: Changes · **Plans & contracts** · Imports ·
-   Deliveries · Production · Goods flow. Route `supply/roles`, section `secRoles`. The local nav
-   badge counts flags (as the other views count changes).
-2. **Two tables, one row per role**, never one block per site: 20 rows compare at a glance.
-   Rows keep game order (plan list order, contract list order). Managers are split by source
-   kind with a part row that carries the time: "From warehouses · daily 02:00", "From factories
-   · daily 08:00". So no time column. Managers with no plan go under a "No plan" part.
-3. **Details on demand**: a row opens in place to its list. A plan: the vehicles line, then the
-   destinations in delivery order, 8 shown, "Show all N". A stop opens to its stock targets
-   table (Product · Stock target · On hand · Sells / day · Status); over 8 targets it splits into
-   two side-by-side columns. A contract: the importer line, then its products, 10 shown. In a
-   contract, "To" is printed only when it changes from the row above.
-4. **The closed row is numbers**: destinations as "13 of 16" over a cell strip (one cell per
-   location the vehicles reach, red past it), stock-target count, where it delivers summarised
-   by brand with ×count (shops) or by name (depots), and status chips. A clean row's status
-   cell is empty.
-5. **A single manager opens by default** (small company). Nothing else opens by itself.
-6. **Toolbar**: the scope select only (whole company, all warehouses, all factories, one site),
-   as the other Supply views. A site keeps the plans and contracts that touch it as source or
-   destination. No "Needs a change / Everything" switch: the view is the overview. Hidden in
-   the empty state.
-7. **Empty state**: two dashed cards, "No Logistics Manager yet" / "No Purchasing Agent yet",
-   one line each on where the game sets them.
+1. **A new Supply view**, second (default, Q2): Changes · **Plans & contracts** (default, Q1) ·
+   Imports · Deliveries · Production · Goods flow. Route `supply/roles`, section `secRoles`.
+2. **Nav badge counts only the new role-level flags** (table below). Existing Imports/Deliveries
+   findings show on the rows but are counted on their own views.
+3. **Two tables, one row per role**, in game order (default, Q7). Managers split by source kind
+   with a part row carrying the time ("From warehouses · daily 02:00", "From factories · daily
+   08:00"), so no time column. Managers with no plan go under a "No plan" part.
+4. **Details on demand**: a row opens in place. A plan: the vehicles line, then the stops in
+   delivery order, 8 shown, "Show all N". An opened stop lists **every** minimum stock amount
+   (real stops reach 33): one column up to 12, two columns above. Sorted by amount (default, Q8).
+   A Status column appears only when the stop has a finding. A contract: the importer line (next
+   delivery and the order deadline), then its products, 10 shown, "Designated warehouse" printed
+   only when it changes from the row above.
+5. **Destinations and vehicles**: the cell shows the stop count with "vehicles reach N" under it.
+   The game caps destinations by skill AND vehicles; the skill table and which stops get cut are
+   unverified, so the board never claims a stop gets nothing. Over the reach: one chip only,
+   "10 stops · vehicles reach 8", no cut line, no per-stop mark. Skill limit not drawn (default, Q9).
+6. **Skill shown only where it differs** from the rest (all 100% here; "skill 85%", "skill 80% ·
+   −20% on prices"). No wage (default, Q6).
+7. **Pier exports**: a factory plan stop at a pier is tagged "export" and its table has one figure,
+   "Deliver up to". Delivers-to reads "10 Pier export".
+8. **Next delivery per contract**, from `nextDeliveryDay`: "Day 337 · Mon"; opened: "next delivery
+   Day 337 · Mon 08:00 · order by Day 336 · Sun 20:00" (the deadline's weekday from day − 1). Paused,
+   finished or with no agent: "—" and "no delivery coming".
+9. **Importer kinds**: one kind per contract. Retail importers (3, 4, 6, 8 Pier) deliver to
+   depots; raw-goods importers (1, 2, 5, 9 Pier) to factories. Importers are named by pier
+   (default, Q3).
+10. **Toolbar**: the scope select only, as the other Supply views. Hidden in the empty state.
+11. **Empty state**: "No Logistics Manager yet · Delivery plans: BizMan › Logistics Managers" and
+    "No Purchasing Agent yet · Import contracts: BizMan › Purchasing Agents".
+12. **No restating**: no Smart Delivery explanation, no time on the vehicles line, no repeated skill.
 
 ## Data per field
 
 New payload key: **`supply.roles`** = `{managers: [...], agents: [...]}`. Built from the save,
-before `_supply_plans()` merges competing targets. Fields marked *existing* are read from keys
-the payload already has.
+before `_supply_plans()` merges competing targets. *existing* = read from keys the payload
+already has.
 
 | On screen | Save field | Payload |
 | --- | --- | --- |
-| Manager name, skill | `logisticsManagerPlans[].assignedEmployeeId` → `EmployeeInstances[]` (name, `ba:skill_logisticsmanager`) | new `managers[].who`, `.skill` |
-| From | plan `targetAddress` (the pick-up site), `isFactory` | new `managers[].src` (site key), `.factory` |
-| Daily at | fixed by the game: warehouse 02:00, factory 08:00 | constant in the board |
-| Destinations, in order | plan `destinations[].deliveryTargetAddress` | new `managers[].dests[].site` |
-| Stock targets | `destinations[].stockTargets[]` (`itemName`, `targetAmount`), as set | new `managers[].dests[].targets` |
-| On hand, sells / day of a target | | *existing* `supply.shops` rows |
-| Vehicles, locations | source building `vehicleSlots[]` (`vehicleInstanceId`, `employeeDriverId`) + vehicle type | new `managers[].vehicles[]` `{type, driver}`; table `VEHICLE_LOCATIONS`; *existing* `openFactory.sites` has type + has-driver for factories/depots only |
+| Manager name, skill | `logisticsManagerPlans[].assignedEmployeeId` → `EmployeeInstances[]` (`ba:skill_logisticsmanager`) | new `managers[].who`, `.skill` |
+| From | plan `targetAddress` (pick-up site), `isFactory` | new `managers[].src`, `.factory` |
+| Daily at | fixed: warehouse 02:00, factory 08:00 | constant |
+| Destinations, in order | `destinations[].deliveryTargetAddress` (shop, warehouse or pier) | new `managers[].dests[].site`, `.kind` (`shop`/`wh`/`pier`) |
+| Minimum stock amount / Deliver up to | `destinations[].stockTargets[]` (`itemName`, `targetAmount`), as set | new `managers[].dests[].targets` |
+| On hand, sells / day (shop), uses / day (depot) | | *existing* `supply.shops` / `supply.routed` rows |
+| Vehicles, locations | source building `vehicleSlots[]` (`vehicleInstanceId`, `employeeDriverId`) + type | new `managers[].vehicles[]` `{type, driver}`; table `VEHICLE_LOCATIONS` (*existing* `openFactory.sites` covers factories/depots only) |
+| Not seated | the employee's workstation seat (field to confirm, Q10) | new `managers[].seated`, `agents[].seated` |
 | Idle manager | `Entities.LogisticsManager` employee in no plan | new `managers[]` with `src: null` |
-| Site with no manager | warehouse/factory that is no plan's source | new `managers[]` with `who: null` |
-| Agent name, skill, discount | `importPartnerships[].employeeInstanceId` → `EmployeeInstances[]`; discount 25% × skill/100 | new `agents[].who`, `.skill` |
-| Importer | `importAddress` | new `agents[].pier` (the board's `names.addr`, "3 Pier") |
-| Smart Delivery / weekly amount, one-off, urgent | `isTarget`, `isRepeatingOrder`, `isUrgentOrder` | new `agents[].smart`, `.repeating`, `.urgent` |
-| Paused | `isActive` false | new `agents[].active` (*existing* per line in `supply.imports.contracts`) |
-| Next delivery | `nextDeliveryDay` | new `agents[].next` |
-| Products, To, amount, last week | `products[]` `itemName`, `assignedWarehouse`, `amount`, `amountOrderedLastWeek` | new `agents[].products[]`, **including those with no warehouse** (today `_supply_imports()` drops them) |
-| Uses / week of a product | | *existing* `supply.imports` row |
+| Factory with no manager | factory that is no plan's source | new `managers[]` with `who: null` |
+| Agent name, skill, discount | `importPartnerships[].employeeInstanceId` → `EmployeeInstances[]`; 25% × skill/100 | new `agents[].who`, `.skill` |
+| Importer | `importAddress` | new `agents[].pier` (`names.addr`, "3 Pier") |
+| Delivery | `isTarget`, `isRepeatingOrder`, `isUrgentOrder`, `isActive` | new `agents[].smart`, `.repeating`, `.urgent`, `.active` |
+| Next delivery | `nextDeliveryDay` (weekday = `(day − 1) % 7` from Monday) | new `agents[].next` |
+| Products | `products[]` `itemName`, `assignedWarehouse`, `amount`, `amountOrderedLastWeek` | new `agents[].products[]`, including those with no warehouse (today `_supply_imports()` drops them) |
+| Uses / week | | *existing* `supply.imports` row |
 | Idle agent | `Entities.PurchasingAgent` employee on no contract | new `agents[]` with `pier: null` |
-| Short chips | existing findings | *existing* finding rows (`shortfall`, `topup`, `outruns`, `order`/`feed`, `paused`), matched by site + item |
+| Finding chips | | *existing* findings, matched by site + item |
 
-## Flags and their rules
+## Flags
+
+Role-level flags (new; the only ones in the nav badge):
 
 | Chip | Where | Rule | Class |
 | --- | --- | --- | --- |
-| `N over vehicles` | manager row | destinations > reach; reach = Σ locations of the source's vehicles **with a driver** (Freight Truck T1 8, Vord Courier D500 6, Vord V150 4, Mersaidi Dash 4, UMC Nunavut 4) | bad |
-| `No delivery` + dashed cut "the vehicles reach N locations" | stops past reach | index ≥ reach, in delivery order | bad |
+| `N stops · vehicles reach R` | manager row | stops > R; R = Σ locations of the source's vehicles with a driver (Freight Truck T1 8, Vord Courier D500 6, Vord V150 4, Mersaidi Dash 4, UMC Nunavut 4). Tip quotes the game's capacity warning | warn |
 | `No destinations` | manager row | plan with 0 destinations | warn |
 | `No plan` | manager row | Logistics Manager employee in no plan | warn |
-| `No Logistics Manager` | row for the site | factory with lines and no plan: bad; warehouse holding stock and no plan: idle (blue) | bad / idle |
-| `No stock targets` | stop, and counted on the row | destination with an empty `stockTargets` | warn |
-| `<item> short` / `N short` | stop / manager row | an existing Deliveries finding on that destination and item; links to its row | bad |
-| `Paused` | agent row | `isActive` false; bad when the `paused` finding fires (still needed), else warn | bad / warn |
-| `No agent` | agent row | `employeeInstanceId` null, not found, or `isBeingReplaced`/`isReplaced` (as `ImportWrite.NoAgent()`) | bad |
-| `No warehouse` / `N with no warehouse` | product / agent row | `assignedWarehouse` empty | warn |
-| `No contract` | agent row | Purchasing Agent employee on no contract | warn |
-| `short` / `N short` | product / agent row | an existing Imports finding (`order`, `feed`, `shortfall`) on that depot and item | bad |
+| `Logistics Manager not assigned` (game text) | factory row | factory with no plan **and** something downstream needs its output (a depot or shop that sells what it makes). A warehouse with no plan stays silent (default, Q5) | bad |
+| `Not seated` | manager or agent row | not seated at a Computer Workstation ("Only seated … can be accessed") (default, Q10) | warn |
+| `Stop with no products` / `No products` | manager row / stop | destination with an empty `stockTargets` | warn |
+| `One-time delivery` | Delivery cell, not a flag | `isRepeatingOrder` false (game text); "delivered" under it when `isActive` is false | — |
+| `Purchasing Agent not assigned` (game text) | agent row | `employeeInstanceId` null, not found, or `isBeingReplaced`/`isReplaced` (`ImportWrite.NoAgent()`). The game cancels the order ("We couldn't find your Purchasing Agent …"), so Next delivery is "—" and the opened line says "no delivery coming" (default, Q4) | bad |
+| `N with no designated warehouse` / `No designated warehouse` | agent row / product | `assignedWarehouse` empty (game: "One or more products has no assigned designated warehouse") | warn |
+| `No contract` (game text) | agent row | Purchasing Agent employee on no contract | warn |
 
-Not drawn: the skill limit on destinations (the skill → count table is unknown); the column
-shows skill % only. A vehicle with no driver shows as a dashed "no driver 0" chip in the
-vehicles line.
+Paused (`isActive` false and `isRepeatingOrder` true) is not a role flag: the Delivery cell carries
+"paused" under the mode, Next delivery is "—", and when the existing `paused` finding fires (still
+needed) the row shows its chip "Import paused · in Imports", linked to Imports.
 
-## Wording
+Existing findings (not counted here): on a stop or product, the finding's own kind label
+("Outsells its top-up", "Depot top-up too low", "Top-up target too high", "Import shortfall",
+"Weekly order too small", "Factory inputs"), item first on a stop ("Frozen Food · outsells its
+top-up"); on the closed row one count chip, "2 in Deliveries" / "1 in Imports". Each links to
+its row there (`sbLand()`).
+
+## Wording (game text where the game has it)
 
 | Where | Text |
 | --- | --- |
 | Nav / view | Plans & contracts |
-| Group heads | Logistics Managers · 12 managers · 67 destinations · 572 stock targets; Purchasing Agents · 8 agents · 8 contracts · 122 products · Mon 08:00 arrival |
-| Manager columns | Logistics Manager · From · Destinations · Stock targets · Delivers to · Status |
-| Part rows | From warehouses · daily 02:00 / From factories · daily 08:00 / No plan |
-| Under a name | skill 100% / skill 100% · −25% on prices |
-| Destinations cell | 13 of 16 (tip: "13 destinations; the vehicles here reach 16 locations") |
-| Vehicles line | Vehicles at Harbor Depot · Freight Truck T1 · Kai Rasmus 8 · = 16 locations · daily 02:00 · Follow in Goods flow |
-| Stop columns | Destination, in delivery order · Stock targets · Tops up to · Status |
-| Agent columns | Purchasing Agent · Importer · Delivery · Products · To · Status |
-| Delivery cell | Smart Delivery / Weekly amount, sub "one-off" or "urgent" |
-| Contract line | 3 Pier Mon 08:00 · Smart Delivery tops each warehouse up to its level · order by Sunday 20:00 |
-| Product columns | Product · To · Keeps in stock (or Amount a week) · Arrived last week · Uses / week · Status |
-| Empty | No Logistics Manager yet · Delivery plans are set in BizMan › Logistics. / No Purchasing Agent yet · Import contracts are set at an importer. |
+| Group heads | Logistics Managers · 12 managers · 69 destinations · 593 products; Purchasing Agents · 8 agents · 8 contracts · 122 products |
+| Manager columns | Logistics Manager · From · Destinations · Products · Delivers to · Status |
+| Destinations cell | 13 / vehicles reach 16 |
+| Vehicles line | Vehicles at Harbor Depot · Freight Truck T1 · Kai Rasmus 8 · = 16 locations · Follow in Goods flow; a slot with no driver: "Vord Courier D500 · No driver 0" (game: "No driver") |
+| Stop columns | Destination, in delivery order · Products · Minimum stock amount · Status |
+| Opened stop | Product · Minimum stock amount (game) · On hand · Sells / day (shop) or Uses / day (warehouse); export: Product · Deliver up to (game) |
+| Agent columns | Purchasing Agent · Importer · Delivery · Next delivery · Products · To · Status |
+| Delivery cell | Smart Delivery (game) / Weekly amount / One-time delivery (game) |
+| Product columns | Product · Designated warehouse (game) · # target (game; Smart) or Amount a week · Previous (game) · Uses / week · Status |
+| Empty | No Logistics Manager yet · Delivery plans: BizMan › Logistics Managers / No Purchasing Agent yet · Import contracts: BizMan › Purchasing Agents |
 | Show all | Show all 16 destinations · 8 more / Show all 18 products · 8 more |
 
+Game strings checked in the installed en.json (`bizman_logisticsmanagers_*`,
+`bizman_purchasingagents_*`). "Minimum stock amount" vs "Deliver up to" per stop kind is read
+from the key layout ("Deliver up to" sits beside "Export Price"); confirm in the DLL at the port.
 No "roster", "shift", "post", "door cap".
 
 ## Cross-links
 
 Out: a site name → its site page; the map pin → City map; the route icon / "Follow in Goods
-flow" → `supply/flow` following that site (`flowPickId`); a short chip → `sbLand()` on the
-Deliveries or Imports row; "Imports ›" on a product (shown on hover) → `sbLand("imports", s, slug)`.
+flow" → `supply/flow` following that site (`flowPickId`); a finding chip → `sbLand()` on its
+Deliveries or Imports row; "Imports ›" on a product (on hover) → `sbLand("imports", s, slug)`.
 
-In (new): Goods flow's followed site gets a **Delivered by** card (and **Sends** for a depot or
-factory with its own plan) beside "Changes on its route"; Imports' depot head turns the pier
-names and "Rosa Duvall's plan" into links; Deliveries' "each morning from Harbor Depot" links
-the plan; the site page's Feeds head gets "Rosa Duvall's plan · 02:00 ›". Each lands here with
-the row lit and opened, the stop opened, and the `sb-crumb` back ("from Goods flow ×").
+In (new): Goods flow's followed site gets a **Delivered by** card listing every source (each
+contract and each plan stop that delivers to it; Harbor Depot: 3) and, for a depot or factory
+with its own plan, **Sends**; Imports' depot head links the pier names and the plan;
+Deliveries' "each morning from Harbor Depot" links the plan; the site page's Feeds head gets
+"Rosa Duvall's plan · 02:00 ›". Each lands here with the row lit and opened, the stop opened,
+and the `sb-crumb` back ("from Goods flow ×").
 
 ## Open questions for Peter
 
-1. View name: **Plans & contracts**? Alternatives: "Who moves what", "Logistics", "Managers &
-   agents".
-2. Position second, after Changes, or last after Goods flow?
-3. Importers named by pier ("3 Pier", as Imports does today) or by the game's importer name
-   (Jet Cargo, Seaside Internationals …), or both?
-4. Does a contract with no agent still deliver in the game? It is flagged bad on the
-   assumption it does not.
-5. A warehouse with stock and no plan: flag it (blue, as drawn) or leave it silent, since a
-   second-tier depot may only store?
-6. Show the wage per person, or keep that on Staffing › Payroll (drawn without)?
-7. Keep game order, or sort flagged rows first?
-8. Sort a stop's stock targets by target (drawn) or in the game's order?
+Drawn defaults carry a dashed `Qn` marker on the canvas.
 
-## Review round 1 (Opus 5.5, 10 Oct 2026): NOT yet applied to the canvas
-
-Paused here at Peter's request. Apply these in the next session before showing the canvas as final.
-
-- MUST: stock targets past row 12 are hidden with no way to show them (`target_table(show=12)`); real
-  stops have up to 33. Show all once a stop is open, or add "Show all N".
-- "Paused" must exclude finished one-offs: paused = `isActive` false and `isRepeatingOrder` true.
-- Draw each contract's real next delivery (`nextDeliveryDay`), not a constant "Mon 08:00".
-- Factory plans can deliver to piers (export). HubSpoke has 4 factory -> pier stops (targets 5,000-10,000).
-  Draw pier stops; they are exports, not shops.
-- The destination cap is skill AND vehicles (game help: skill, vehicle slots, vehicle type). The skill table
-  and which stops get cut are unverified: read them from the game DLL before porting, or soften "13 of 16" /
-  the dashed cut / "No delivery".
-- Empty state: the game menus are "Logistics Managers" and "Purchasing Agents", not "BizMan › Logistics".
-- Factory with no Logistics Manager: flag only when something downstream needs its output.
-- Nav badge: count only the new role-level flags, not the existing Imports/Deliveries findings.
-- Restating text: drop the Smart Delivery explanation (keep the Sunday 20:00 deadline), "· daily 02:00" on the
-  vehicles line, and one of the three marks for the over-capacity fault.
-- Depot stops: column "Uses / day", not "Sells / day".
-- Nits: "One-time delivery" not "one-off"; check the game's label for the target ("Minimum stock amount" /
-  "Deliver up to"); one importer kind per contract (retail vs factory raw goods); the Links "Delivered by" card
-  lists 3 of 5 sources; Day 333 is a Thursday, not Fri; keep each finding's own label instead of "<item> short";
-  unseated managers/agents ("Only seated ... can be accessed") unhandled; don't repeat "skill 100% · −25%" on
-  every row.
+1. View name: **Plans & contracts** (drawn)? Alternatives: "Who moves what", "Logistics",
+   "Managers & agents".
+2. Position: **second, after Changes** (drawn), or last after Goods flow?
+3. Importers named **by pier** ("3 Pier", as Imports does; drawn), by the game's importer name
+   (Jet Cargo …), or both?
+4. Does a contract with no agent still deliver? The game's own message says no ("We couldn't find
+   your Purchasing Agent … We've cancelled the order"), so it is **flagged bad with no delivery
+   coming** (drawn). Confirm.
+5. A warehouse holding stock with no plan: **silent** (drawn: nothing shown) or flag it? A
+   second-tier depot may only store. Unmarked on the canvas on purpose: nothing is drawn to mark.
+6. Wage per person: **left out** (drawn), on Staffing › Payroll.
+7. Row order: **game order** (drawn) or flagged rows first?
+8. A stop's minimum stock amounts: **sorted by amount** (drawn) or the game's order?
+9. The skill limit on destinations: read the skill table and the cut rule from the game DLL
+   before the port, or **leave it unclaimed** (drawn: only "vehicles reach N", no cut)?
+10. Not seated: **flagged** as "Not seated" (drawn) once the seat field is found in the save, or
+    dropped if the save does not carry it?

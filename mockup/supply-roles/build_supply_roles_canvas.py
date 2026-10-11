@@ -13,7 +13,8 @@ mockup/revamp CSS predates the sidebar (PR #169). Every class added here carries
 (unused on the board when this was written).
 
 Data shapes follow mockup/supply-roles/NOTES.md (checked against three real saves): 12 managers
-of which 5 run factory plans, 0-16 destinations each, 8 agents with 13-18 products each.
+of which 5 run factory plans (two with a pier export stop), 0-16 destinations each, 8 agents
+with 14-18 products each. Round 2 (11 Oct 2026) applied the review; see NOTES.md.
 
 Never hand-edit project/: change this and rerun. `--preview` also writes plain HTML copies into
 _preview/ (both themes) for screenshots; do not commit _preview/.
@@ -90,8 +91,6 @@ tr.sr-opened .sr-tog{transform:rotate(90deg);color:var(--ink)}
 .sr-cap i{display:flex;gap:2px}
 .sr-cap i b{width:5px;height:6px;border-radius:1px;background:var(--rule)}
 .sr-cap i b.on{background:var(--ink-3)}
-.sr-cap i b.over{background:var(--neg)}
-.sr-cap.over span{color:var(--neg)}
 
 /* the opened row */
 #pageSupply .sr-t tr.sr-detail > td{padding:0 0 18px;background:var(--surface);border-bottom:1px solid var(--rule)}
@@ -120,10 +119,6 @@ tr.sr-opened .sr-tog{transform:rotate(90deg);color:var(--ink)}
 #pageSupply .sr-dt td.tl em{font-style:normal;color:var(--ink-3)}
 #pageSupply .sr-dt td.ln{width:1%;white-space:nowrap}
 #pageSupply .sr-dt tr.sr-dr{cursor:pointer}
-#pageSupply .sr-dt tr.sr-cut td{padding:0;border-bottom:0;height:0}
-#pageSupply .sr-dt tr.sr-cut td div{position:relative;height:0;border-top:1.5px dashed var(--neg)}
-#pageSupply .sr-dt tr.sr-cut td span{position:absolute;right:10px;top:-9px;padding:2px 8px;border-radius:4px;background:var(--ground);font:500 10.5px/1.3 "IBM Plex Mono",monospace;color:var(--neg)}
-#pageSupply .sr-dt tr.sr-beyond td:not(.st){opacity:.45}
 #pageSupply tr.sr-hide{display:none}
 #pageSupply .sr-dt tr.sr-tgrow > td{padding:2px 10px 14px 36px;background:var(--ground)}
 #pageSupply .sr-dt tr.sr-tgrow:hover{background:none}
@@ -147,8 +142,15 @@ tr.sr-opened .sr-tog{transform:rotate(90deg);color:var(--ink)}
 tr:hover .sr-map,.sr-show .sr-map{opacity:1}
 .sr-map svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7}
 .sr-dash{color:var(--ink-3)}
+#pageSupply .sr-t .sb-v,#pageSupply .sr-dt .sb-v{white-space:normal}
+#pageSupply .sr-tt td.l:first-child{min-width:170px}
+.sr-cols{column-gap:40px}
+#pageSupply .sr-t td.dl{white-space:nowrap}
+.sr-cap small{display:block;font:400 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.sr-q{display:inline-grid;place-items:center;min-width:22px;height:16px;margin-left:6px;padding:0 4px;border-radius:8px;border:1px dashed var(--info);color:var(--info);font:600 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.02em;text-transform:none;vertical-align:1px;cursor:help}
+
 #pageSupply .sr-dt td.ln .link{opacity:0;transition:opacity .15s}
-#pageSupply .sr-dt tr:hover td.ln .link,.sr-show td.ln .link{opacity:1}
+#pageSupply .sr-dt tr:hover td.ln .link,#pageSupply .sr-dt tr.sr-show td.ln .link{opacity:1}
 .sr-bands .sbf-panel{align-items:start}
 #pageSupply .sr-t .sb-v,#pageSupply .sr-dt .sb-v{margin:2px 4px 2px 0}
 a.sb-v{text-decoration:none;cursor:pointer}
@@ -171,7 +173,7 @@ a.sb-v:hover{filter:brightness(1.15)}
 .sr-new{position:relative;border-radius:5px;box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 55%,transparent);padding:1px 3px}
 .sr-newnote{position:absolute;right:14px;top:-10px;padding:2px 8px;border-radius:4px;background:var(--accent);color:var(--on-accent,#08130d);font:600 9.5px/1.4 "IBM Plex Mono",monospace;letter-spacing:.1em;text-transform:uppercase}
 .sr-who{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;font-size:13px;color:var(--ink-2)}
-.sr-who li{display:grid;grid-template-columns:86px minmax(0,1fr);gap:10px;align-items:baseline}
+.sr-who li{display:grid;grid-template-columns:112px minmax(0,1fr);gap:10px;align-items:baseline}
 .sr-who li span:first-child{font:500 11.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
 .sr-who b{color:var(--ink);font-weight:600}
 .sr-sp{max-width:560px}
@@ -315,7 +317,14 @@ def hood_html(h: str) -> str:
 
 def site_html(d: dict, mapb: bool = True) -> str:
     m = f'<button type="button" class="sr-map" aria-label="Show on map" title="Show on map">{svg("map")}</button>' if mapb else ""
+    if d["kind"] == "pier":
+        return f'<span class="nm"><span class="sp-i" style="color:var(--ink-3)">{svg("ship")}</span><span>{d["short"]}</span>{m}</span>'
     return f'<span class="nm">{hood_html(d["hood"])}<a class="ss-sl" href="#" data-tip="Open its page">{d["short"]}</a>{m}</span>'
+
+
+def qmark(k: int) -> str:
+    """A drawn default that is still an open question (NOTES.md, Open questions)."""
+    return f'<span class="sr-q" data-tip="Default, open question {k}">Q{k}</span>'
 
 
 # --------------------------------------------------------------------------
@@ -328,20 +337,44 @@ for b, hoods in {"burger": ["MT", "MH", "HK", "LM", "GD", "TH", "IC"], "coffee":
     for h in hoods:
         SHOPS[f"{b}-{h}"] = shop(b, h)
 
+# Hamptons Depot is a second-tier warehouse: Harbor Depot's plan stocks it with what the
+# Hamptons shops sell, so one stop carries 26 minimum stock amounts (real stops reach 33).
+HAMPTONS_ITEMS = list(dict.fromkeys(BRANDS["burger"][2] + BRANDS["coffee"][2] + BRANDS["thread"][2] + BRANDS["gleam"][2]))
 
-def dest(key: str, short: list = None, empty: bool = False) -> dict:
-    """A destination with its stock targets. `short`: the products an existing finding calls short."""
-    d = dict(SHOPS[key]) if key in SHOPS else depot(key)
-    d["targets"] = [] if empty else targets_for(d)
-    d["shortp"] = short or []
+
+def finding(kind: str, item: str) -> dict:
+    """An existing Deliveries/Imports finding on a stop or product, by its kind's own label."""
+    return {"kind": kind, "item": item}
+
+
+KIND_LABEL = {"outruns": "Outsells its top-up", "topup": "Depot top-up too low", "target": "Top-up target too high",
+              "shortfall": "Import shortfall", "order": "Weekly order too small", "feed": "Factory inputs"}
+
+
+def dest(key: str, finds: list = None, empty: bool = False) -> dict:
+    """A destination with its minimum stock amounts, and the existing findings on it."""
+    if key in SHOPS:
+        d = dict(SHOPS[key])
+        d["targets"] = [] if empty else targets_for(d)
+    else:
+        d = depot(key)
+        d["items"] = HAMPTONS_ITEMS
+        d["targets"] = [(i, t * 6, h * 6, s * 6) for i, t, h, s in targets_for(d)]
+    d["finds"] = finds or []
     return d
 
 
-def fac_dest(fac: str, dep: str, short: list = None) -> dict:
+def fac_dest(fac: str, dep: str, finds: list = None) -> dict:
     d = depot(dep)
     d["targets"] = depot_targets(fac, d)
-    d["shortp"] = short or []
+    d["finds"] = finds or []
     return d
+
+
+def pier_dest(pier: str, items: list) -> dict:
+    """An export stop: a factory plan delivering to a pier (HubSpoke has four, 2-3 items, 5,000-10,000)."""
+    return {"name": pier, "short": pier, "hood": None, "type": "Pier", "kind": "pier", "finds": [],
+            "targets": [(i, t, None, None) for i, t in items]}
 
 
 def plan(who: str, src: dict, vehicles: list, dests: list, skill: int = 100) -> dict:
@@ -353,17 +386,17 @@ def full_company() -> tuple[list, list]:
     p = PEOPLE
     managers = [
         plan(p[0], depot("harbor"), [("T1", "Kai Rasmus"), ("T1", "Kofi Addo")],
-             [dest(k) for k in ["burger-MT", "burger-MH", "burger-HK", "burger-LM", "burger-GD", "burger-TH", "burger-IC",
-                                "coffee-MT", "coffee-MH", "coffee-HK", "coffee-LM", "coffee-GD", "coffee-TH",
-                                "market-MT", "market-MH", "market-HK"]]),
+             [dest(k) for k in ["burger-MT", "burger-MH", "burger-HK"]] + [dest("hamd")]
+             + [dest(k) for k in ["burger-LM", "burger-GD", "burger-TH", "coffee-MT", "coffee-MH", "coffee-HK", "coffee-LM",
+                                  "coffee-GD", "coffee-TH", "market-MT", "market-MH", "market-HK"]]),
         plan(p[1], depot("north"), [("T1", "Wren Sato"), ("T1", "Pia Navarro")],
-             [dest("market-LM"), dest("market-GD", short=["Frozen Food"]), dest("market-TH"), dest("market-IC"),
-              dest("volt-MT"), dest("volt-MH", short=["Energy Drink"]), dest("volt-HK"), dest("volt-LM"), dest("volt-GD"),
-              dest("volt-TH"), dest("volt-IC"), dest("gleam-MT"), dest("gleam-MH")]),
+             [dest("market-LM"), dest("market-GD", finds=[finding("outruns", "Frozen Food")]), dest("market-TH"), dest("market-IC"),
+              dest("volt-MT"), dest("volt-MH", finds=[finding("target", "Energy Drink")]), dest("volt-HK"), dest("volt-LM"),
+              dest("volt-GD"), dest("volt-TH"), dest("volt-IC"), dest("gleam-MT"), dest("gleam-MH")]),
         plan(p[2], depot("fresh"), [("T1", "Tove Lindahl")],
              [dest(k) for k in ["market-MT", "market-MH", "market-HK", "market-LM", "market-GD", "market-TH", "market-IC"]]),
         plan(p[3], depot("voltd"), [("T1", "Arne Basso")],
-             [dest(k) for k in ["volt-MT", "volt-MH", "volt-HK", "volt-LM", "volt-GD", "volt-TH", "volt-IC"]]),
+             [dest(k) for k in ["volt-MT", "volt-MH", "volt-HK", "volt-LM", "volt-GD", "volt-TH", "volt-IC"]], skill=85),
         plan(p[4], depot("threadd"), [("T1", "Mina Oduya"), ("D500", "Rafe Quill")],
              [dest(k) for k in ["thread-MT", "thread-MH", "thread-HK", "thread-LM", "thread-GD", "thread-TH", "thread-IC",
                                 "gleam-HK", "gleam-LM", "gleam-TH"]]),
@@ -372,34 +405,45 @@ def full_company() -> tuple[list, list]:
              [dest("thread-TH"), dest("gleam-TH"), dest("coffee-TH"), dest("burger-TH")]),
         plan(p[7], factory("bakery"), [("Dash", "Ivo Brenner")], [fac_dest("bakery", "harbor"), fac_dest("bakery", "north")]),
         plan(p[8], factory("bottling"), [("V150", "Sana Iqbal")], [fac_dest("bottling", "harbor"), fac_dest("bottling", "fresh")]),
-        plan(p[9], factory("voltp"), [("UMC", "Odile Faure")], [fac_dest("voltp", "voltd")]),
+        plan(p[9], factory("voltp"), [("UMC", "Odile Faure")],
+             [fac_dest("voltp", "voltd"), pier_dest("10 Pier", [("ZanaMan Phone", 10000), ("Arty Fish Phone", 8000), ("Noize Boss Earbuds", 5000)])]),
         plan(p[10], factory("textile"), [("Dash", "Teo Marsh")], [fac_dest("textile", "threadd")]),
-        plan(p[11], factory("jewel"), [("Dash", "Ruth Kell")], [fac_dest("jewel", "threadd"), fac_dest("jewel", "midd")]),
+        plan(p[11], factory("jewel"), [("Dash", "Ruth Kell")],
+             [fac_dest("jewel", "threadd"), fac_dest("jewel", "midd"), pier_dest("7 Pier", [("Jewelry (Expensive)", 6000), ("Jewelry (Cheap)", 5000)])]),
     ]
     return managers, agents_full()
 
 
 # --------------------------------------------------------------------------
-# the contracts: one Purchasing Agent each, one importer, products to depots
+# the contracts: one Purchasing Agent each, one importer, products to depots.
+# Four retail importers (3, 4, 6, 8 Pier) for depots, four raw-goods importers
+# (1, 2, 5, 9 Pier) for factories: one importer kind per contract.
 # --------------------------------------------------------------------------
 RETAIL = ["French Fries", "Salad", "Ice Cream", "Chicken Kabob Skewer", "Apple", "Banana", "Popcorn", "Cotton Candy", "Slushie",
           "Gift (Cheap)", "Fresh Food", "Frozen Food", "Carrot", "Lettuce", "Pear", "Tomato", "Bottle of Wine", "Umbrella"]
 FRESH = ["Fresh Food", "Frozen Food", "Ice Cream", "Apple", "Banana", "Carrot", "Lettuce", "Pear", "Tomato", "Bottle of Wine",
          "Salad", "French Fries", "Gift (Cheap)", "Gift (Expensive)", "Umbrella", "Paper Bag"]
+DAY = 333            # the board's day: (333 - 1) % 7 = 3, a Thursday
+WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
-def product(item: str, to: dict | None, smart: bool = True, short: bool = False, idle: bool = False) -> dict:
+def weekday(day: int) -> str:
+    return WEEKDAYS[(day - 1) % 7]
+
+
+def product(item: str, to: dict | None, smart: bool = True, finds: list = None) -> dict:
     uses = int(RNG.uniform(4, 60)) * 1000 if to and to["kind"] == "fac" else int(RNG.uniform(6, 90)) * 100
     level = int(round(uses * RNG.uniform(1.05, 1.4) / 100.0)) * 100
     last = int(uses * RNG.uniform(.85, 1.05))
-    if short:
+    if finds:
         level = int(uses * .82 / 100) * 100
-    return {"item": item, "to": to, "smart": smart, "amount": level, "last": last, "uses": uses, "short": short, "idle": idle}
+    return {"item": item, "to": to, "smart": smart, "amount": level, "last": last, "uses": uses, "finds": finds or []}
 
 
-def contract(who: str | None, pier: str, products: list, smart: bool = True, skill: int = 100, paused: bool = False,
-             tag: str = "") -> dict:
-    return {"who": who, "pier": pier, "products": products, "smart": smart, "skill": skill, "paused": paused, "tag": tag}
+def contract(who: str | None, pier: str, products: list, smart: bool = True, skill: int = 100, active: bool = True,
+             repeating: bool = True, next_day: int | None = 337, seated: bool = True) -> dict:
+    return {"who": who, "pier": pier, "products": products, "smart": smart, "skill": skill, "active": active,
+            "repeating": repeating, "next": next_day, "seated": seated}
 
 
 def agents_full() -> list:
@@ -408,25 +452,26 @@ def agents_full() -> list:
     H, N, F, V, T, HA, MD = depot("harbor"), depot("north"), depot("fresh"), depot("voltd"), depot("threadd"), depot("hamd"), depot("midd")
     B, BO, VP, TX, J = factory("bakery"), factory("bottling"), factory("voltp"), factory("textile"), factory("jewel")
     return [
-        contract(p[12], "3 Pier", [product(i, H) for i in RETAIL[:10]] + [product(i, N, short=(i == "Frozen Food")) for i in RETAIL[10:]]),
+        contract(p[12], "3 Pier", [product(i, H) for i in RETAIL[:10]]
+                 + [product(i, N, finds=[finding("shortfall", i)] if i == "Frozen Food" else None) for i in RETAIL[10:]]),
         contract(p[13], "4 Pier", [product(i, F) for i in FRESH]),
         contract(p[14], "6 Pier", [product(i, V) for i in ["Arty Fish Phone", "ZanaMan Phone", "Arty Fish Smartwatch", "Noize Boss Earbuds",
                                                          "Rhythm By Tre", "Paper Bag", "Energy Drink", "Umbrella"]]
-                 + [product(i, HA) for i in ["Ice Cream", "French Fries", "Salad", "Apple", "Banana", "Paper Bag"]]),
+                 + [product(i, HA) for i in ["Ice Cream", "French Fries", "Salad", "Apple", "Banana", "Paper Bag"]], skill=80),
         contract(p[15], "8 Pier", [product(i, T) for i in BRANDS["thread"][2]] + [product(i, MD) for i in ["Jewelry (Expensive)", "Arty Fish Smartwatch", "Paper Bag"]]
                  + [product(i, HA) for i in ["Jewelry (Cheap)", "Gift (Expensive)", "Umbrella"]]),
         contract(p[16], "1 Pier", [product(i, B) for i in ["Baking Mix", "Butter", "Dough", "Yeast", "Sugar", "Milk", "Ground Beef", "Raw Sausage", "Cheese"]]
-                 + [product(i, BO, short=(i == "Sugar")) for i in ["Water", "Sugar", "Cola Flavoring", "Carbon Dioxide", "Caffeine Extract",
-                                                                    "Flavor Syrup", "Ground Coffee Beans", "Tea Leaves"]]),
+                 + [product(i, BO, finds=[finding("feed", i)] if i == "Sugar" else None)
+                    for i in ["Water", "Sugar", "Cola Flavoring", "Carbon Dioxide", "Caffeine Extract", "Flavor Syrup", "Ground Coffee Beans", "Tea Leaves"]]),
         contract(p[17], "2 Pier", [product(i, VP) for i in ["Plastic", "Metal Wire", "Glass", "Battery", "Capacitors", "Resistors", "Transistors",
                                                           "Integrated Circuits", "Copper Clad Laminate", "Microphone", "Speaker", "Metal Band"]]
-                 + [product("Paper Bag", H), product("Paper Bag", N)]),
+                 + [product(i, J) for i in ["Plastic", "Metal Wire"]]),
         contract(p[18], "5 Pier", [product(i, TX) for i in ["Fabric (Cheap)", "Fabric (Expensive)", "Plastic", "Metal Wire", "Metal Band"]]
-                 + [product(i, J) for i in ["Uncut Gems (Cheap)", "Uncut Gems (Expensive)", "Metal Band", "Metal Wire", "Clay", "Glass"]]
-                 + [product("Paper Bag", x) for x in (T, MD, HA)]),
-        contract(p[19], "9 Pier", [product(i, F, smart=False) for i in ["Apple", "Banana", "Pear", "Carrot", "Lettuce", "Tomato", "Onion",
-                                                                      "Russet Potatoes", "Grapes"]]
-                 + [product(i, H, smart=False) for i in ["Onion", "Pepper", "Milk", "Russet Potatoes", "Vinaigrette"]], smart=False),
+                 + [product(i, J) for i in ["Uncut Gems (Cheap)", "Uncut Gems (Expensive)", "Metal Band", "Clay", "Glass"]]
+                 + [product(i, BO) for i in ["Lime Juice", "Caffeine Extract", "Hops", "Barley"]]),
+        contract(p[19], "9 Pier", [product(i, B, smart=False) for i in ["Onion", "Pepper", "Russet Potatoes", "Vinaigrette", "Milk", "Butter",
+                                                                      "Raw Sausage", "Ground Beef", "Cheese"]]
+                 + [product(i, BO, smart=False) for i in ["Grapes", "Hops", "Barley", "Juniper Berries", "Blue Agave"]], smart=False),
     ]
 
 
@@ -434,6 +479,8 @@ def agents_full() -> list:
 # rows
 # --------------------------------------------------------------------------
 def reach(pl: dict) -> int:
+    """Locations the source's vehicles reach: only a vehicle with a driver counts. The skill limit
+    is not drawn (the skill table is unknown: open question 9)."""
     return sum(VEHICLES[v][1] for v, drv in pl["veh"] if drv)
 
 
@@ -445,118 +492,126 @@ def chip(cls: str, text: str, tip: str = "", icon: str = "", href: bool = False)
     return f'<{tag} class="sb-v {cls}"{h}{t}>{i}{text}</{tag}>'
 
 
-def plan_flags(pl: dict) -> list[str]:
-    out = []
-    r, d = reach(pl), len(pl["dests"])
+def find_chip(f: dict, with_item: bool = True) -> str:
+    """An existing finding, by its kind's label; it belongs to Deliveries or Imports and links there."""
+    where = "Imports" if f["kind"] in ("shortfall", "order", "feed", "paused") else "Deliveries"
+    text = f'{f["item"]} · {KIND_LABEL[f["kind"]].lower()}' if with_item else KIND_LABEL[f["kind"]]
+    return chip("bad", text, f"Open the row in {where}", "down", href=True)
+
+
+def plan_role_flags(pl: dict) -> list[str]:
+    """The new role-level flags: these, and only these, count in the nav badge."""
     if pl.get("noplan"):
         return [chip("warn", "No plan", "A Logistics Manager at the headquarters with no delivery plan")]
     if pl.get("nomgr"):
-        return [chip("bad" if pl["src"]["kind"] == "fac" else "idle", "No Logistics Manager",
-                     "Nothing leaves this site: no delivery plan has it as its source")]
+        return [chip("bad", "Logistics Manager not assigned", "The game's words. Volt Depot needs what this factory makes")]
+    out = []
+    if not pl.get("seated", True):
+        out.append(chip("warn", "Not seated", "Only seated Logistics Managers can be accessed") + qmark(10))
+    r, d = reach(pl), len(pl["dests"])
     if d == 0:
         out.append(chip("warn", "No destinations", "The plan delivers nowhere"))
     if d > r:
-        out.append(chip("bad", f"{d - r} over vehicles", f"Vehicles here reach {r} locations; destinations {r + 1}–{d} get no delivery"))
+        out.append(chip("warn", f"{d} stops · vehicles reach {r}", "Your current warehouse vehicles and drivers cannot support this many deliveries (the game's words)"))
     empty = sum(1 for x in pl["dests"] if not x["targets"])
     if empty:
-        out.append(chip("warn", "No stock targets" if empty == 1 else f"{empty} with no stock targets", "A destination with nothing to top up"))
-    short = sum(1 for x in pl["dests"] if x["shortp"])
-    if short:
-        out.append(chip("bad", f"{short} short", "Destinations with a short line in Deliveries", "down", href=True))
+        out.append(chip("warn", "Stop with no products" if empty == 1 else f"{empty} stops with no products", "A destination with nothing set to deliver"))
     return out
 
 
-def cap_html(pl: dict) -> str:
+def plan_find_flags(pl: dict) -> list[str]:
+    k = sum(len(x.get("finds", [])) for x in pl["dests"])
+    return [chip("bad", f"{k} in Deliveries", "Existing findings on this plan's stops", "down", href=True)] if k else []
+
+
+def dest_cell(pl: dict) -> str:
     r, d = reach(pl), len(pl["dests"])
-    top = max(r, d)
-    cells = "".join(f'<b class="{"over" if k >= r else "on" if k < d else ""}"></b>' for k in range(top))
-    over = " over" if d > r else ""
-    return (f'<span class="sr-cap{over}" data-tip="{d} destinations; the vehicles here reach {r} locations">'
-            f'<span>{d}<small>of {r}</small></span><i>{cells}</i></span>')
-
-
-def to_list(names: list[str], k: int = 3) -> str:
-    if not names:
-        return '<span class="sr-dash">—</span>'
-    more = f' <em>+{len(names) - k}</em>' if len(names) > k else ""
-    return " · ".join(names[:k]) + more
+    sub = "" if d > r else f'<small>vehicles reach {r}</small>'
+    return f'<span class="sr-cap"><span>{d}</span>{sub}</span>'
 
 
 def to_summary(dests: list) -> str:
     """Where a plan delivers, by brand with a count (a shop's hood tag is in the opened list), depots by name."""
     by: dict = {}
     for x in dests:
-        key = x["short"].split(" · ")[0] if x["kind"] == "shop" else x["short"]
+        key = x["short"].split(" · ")[0] if x["kind"] == "shop" else (f'{x["short"]} <em>export</em>' if x["kind"] == "pier" else x["short"])
         by[key] = by.get(key, 0) + 1
     parts = [f'{k}{f" <em>×{c}</em>" if c > 1 else ""}' for k, c in by.items()]
     return " · ".join(parts) if parts else '<span class="sr-dash">—</span>'
 
 
-def short_label(d: dict) -> str:
-    """A shop's brand alone where the neighbourhood tag already says where it is."""
-    return d["short"].split(" · ")[0]
+def skill_sub(skill: int, usual: int = 100, agent: bool = False) -> str:
+    """Skill only where it differs from the rest (100%)."""
+    if skill == usual:
+        return ""
+    extra = f" · −{round(25 * skill / 100)}% on prices" if agent else ""
+    return f'<span class="sub">skill {skill}%{extra}</span>'
 
 
 def manager_row(pl: dict, i: int, opened: bool = False, lit: bool = False) -> str:
     gap = pl.get("noplan") or pl.get("nomgr")
     cls = "sr-row" + (" sr-opened" if opened else "") + (" sr-gap" if gap else "") + (" sr-lit" if lit else "")
-    who = ('<b>No Logistics Manager</b>' if pl.get("nomgr") else f'<b>{pl["who"]}</b><span class="sub">skill {pl["skill"]}%</span>')
+    who = ('<b>—</b>' if pl.get("nomgr") else f'<b>{pl["who"]}</b>{skill_sub(pl["skill"])}')
     src = '<span class="sr-dash">—</span>' if pl.get("noplan") else site_html(pl["src"])
     if gap:
-        dcell, tcell, tocell = '<span class="sr-dash">—</span>', '<span class="sr-dash">—</span>', '<span class="sr-dash">—</span>'
+        dcell = tcell = tocell = '<span class="sr-dash">—</span>'
     else:
-        dcell = cap_html(pl)
+        dcell = dest_cell(pl)
         tcell = n(sum(len(x["targets"]) for x in pl["dests"]))
         tocell = to_summary(pl["dests"])
     tog = "" if gap else f'<span class="sr-tog">{svg("chev")}</span>'
     return (f'<tr class="{cls}" data-sr="m{i}"><td class="l who">{who}</td><td class="l site">{src}</td>'
             f'<td>{dcell}</td><td>{tcell}</td><td class="l to">{tocell}</td>'
-            f'<td class="l st">{"".join(plan_flags(pl))}</td><td class="tg">{tog}</td></tr>')
+            f'<td class="l st">{"".join(plan_role_flags(pl) + plan_find_flags(pl))}</td><td class="tg">{tog}</td></tr>')
 
 
 def target_line(d: dict, k: int = 4) -> str:
     if not d["targets"]:
         return '<em>none set</em>'
+    k = 3 if any(len(t[0]) > 18 for t in d["targets"][:4]) else k
     parts = [f'{t[0]}<b>{n(t[1])}</b>' for t in d["targets"][:k]]
     more = f' <em>+{len(d["targets"]) - k}</em>' if len(d["targets"]) > k else ""
     return " · ".join(parts) + more
 
 
-def target_table(d: dict, show: int = 12) -> str:
+def target_table(d: dict) -> str:
+    """Every minimum stock amount of an opened stop, never cut (real stops reach 33). Sorted by amount (default, open question 8)."""
+    pier = d["kind"] == "pier"
+    shop_ = d["kind"] == "shop"
+    lab = "Deliver up to" if pier else "Minimum stock amount"
+    rate = "Sells / day" if shop_ else "Uses / day"
     rows = []
-    for k, (item, tgt, hand, sells) in enumerate(d["targets"]):
-        st = chip("bad", "short", "Runs dry before the next round · Deliveries", "down", href=True) if item in d["shortp"] else ""
-        hide = " sr-hide" if k >= show else ""
-        rows.append(f'<tr class="sr-t2{hide}"><td class="l">{item}</td><td>{n(tgt)}</td><td>{n(hand)}</td><td>{n(sells)}</td><td class="l st">{st}</td></tr>')
-    head = '<thead><tr><th class="l">Product</th><th>Stock target</th><th>On hand</th><th>Sells / day</th><th class="l">Status</th></tr></thead>'
-    if len(rows) > 8:
-        half = (len(rows) + 1) // 2
-        a, b = rows[:half], rows[half:]
-        tbl = (f'<div class="sr-cols"><table class="sr-tt">{head}<tbody>{"".join(a)}</tbody></table>'
-               f'<table class="sr-tt">{head}<tbody>{"".join(b)}</tbody></table></div>')
+    finds = {f["item"]: f for f in d.get("finds", [])}
+    for item, tgt, hand, sells in d["targets"]:
+        st = find_chip(finds[item], with_item=False) if item in finds else ""
+        if pier:
+            rows.append(f'<tr><td class="l">{item}</td><td>{n(tgt)}</td></tr>')
+        else:
+            stc = f'<td class="l st">{st}</td>' if finds else ""
+            rows.append(f'<tr><td class="l">{item}</td><td>{n(tgt)}</td><td>{n(hand)}</td><td>{n(sells)}</td>{stc}</tr>')
+    if pier:
+        head = f'<thead><tr><th class="l">Product</th><th>{lab}</th></tr></thead>'
     else:
-        tbl = f'<table class="sr-tt">{head}<tbody>{"".join(rows)}</tbody></table>'
-    return tbl
+        sth = '<th class="l">Status</th>' if finds else ""
+        head = (f'<thead><tr><th class="l">Product {qmark(8)}</th><th>{lab}</th><th>On hand</th><th>{rate}</th>{sth}</tr></thead>')
+    if len(rows) > 12:
+        half = (len(rows) + 1) // 2
+        return (f'<div class="sr-cols"><table class="sr-tt">{head}<tbody>{"".join(rows[:half])}</tbody></table>'
+                f'<table class="sr-tt">{head}<tbody>{"".join(rows[half:])}</tbody></table></div>')
+    return f'<table class="sr-tt"{" style=\"max-width:420px\"" if pier else ""}>{head}<tbody>{"".join(rows)}</tbody></table>'
 
 
 def dest_rows(pl: dict, show: int = 8, open_dest: int | None = None, show_all: bool = False) -> str:
-    r = reach(pl)
     rows = []
     for k, d in enumerate(pl["dests"]):
         hide = "" if show_all or k < show else " sr-hide"
-        beyond = k >= r
-        if k == r and len(pl["dests"]) > r:
-            rows.append(f'<tr class="sr-cut{hide}"><td colspan="7"><div><span>the vehicles reach {r} locations</span></div></td></tr>')
         flags = []
-        if beyond:
-            flags.append(chip("bad", "No delivery", f"Past the {r} locations the vehicles reach"))
         if not d["targets"]:
-            flags.append(chip("warn", "No stock targets", "Nothing set to top up here"))
-        for item in d["shortp"]:
-            flags.append(chip("bad", f"{item} short", "Runs dry before the next round · open in Deliveries", "down", href=True))
+            flags.append(chip("warn", "No products", "Nothing set to deliver here"))
+        flags += [find_chip(f) for f in d.get("finds", [])]
         is_open = open_dest == k
-        cls = "sr-dr" + (" sr-beyond" if beyond else "") + (" sr-dopen" if is_open else "") + hide
-        kind = "" if d["kind"] == "shop" else '<span class="sr-tag">warehouse</span>'
+        cls = "sr-dr" + (" sr-dopen" if is_open else "") + hide
+        kind = {"shop": "", "wh": '<span class="sr-tag">warehouse</span>', "pier": '<span class="sr-tag info">export</span>'}[d["kind"]]
         rows.append(f'<tr class="{cls}" data-srd="{k}"><td class="no">{k + 1}</td>'
                     f'<td class="l nm"><span class="sr-dtog">{svg("chev")}</span>{site_html(d)}{kind}</td>'
                     f'<td>{len(d["targets"])}</td><td class="l tl">{target_line(d)}</td>'
@@ -568,8 +623,8 @@ def dest_rows(pl: dict, show: int = 8, open_dest: int | None = None, show_all: b
     if not show_all and len(pl["dests"]) > show:
         more = (f'<p class="sr-more"><button type="button" data-sr-all>Show all {len(pl["dests"])} destinations</button>'
                 f'<span>{len(pl["dests"]) - show} more</span></p>')
-    head = ('<thead><tr><th class="no"></th><th class="l">Destination, in delivery order</th><th>Stock targets</th>'
-            '<th class="l">Tops up to</th><th class="l">Status</th><th></th></tr></thead>')
+    head = ('<thead><tr><th class="no"></th><th class="l">Destination, in delivery order</th><th>Products</th>'
+            '<th class="l">Minimum stock amount</th><th class="l">Status</th><th></th></tr></thead>')
     return f'<table class="sr-dt">{head}<tbody>{"".join(rows)}</tbody></table>{more}'
 
 
@@ -580,10 +635,9 @@ def vehicles_html(pl: dict) -> str:
         if drv:
             chips.append(f'<span class="v">{svg("truck")}{name} · {drv}<b>{loc}</b></span>')
         else:
-            chips.append(f'<span class="v off" data-tip="A vehicle with no driver delivers nowhere">{svg("truck")}{name} · no driver<b>0</b></span>')
-    when = "02:00" if pl["src"]["kind"] == "wh" else "08:00"
+            chips.append(f'<span class="v off" data-tip="No driver (the game\'s words): it reaches no location">{svg("truck")}{name} · No driver<b>0</b></span>')
     return (f'<div class="sr-veh"><span>Vehicles at {pl["src"]["short"]}</span>{"".join(chips)}'
-            f'<span class="eq">= <b>{reach(pl)}</b> locations</span><span>· daily {when}</span>'
+            f'<span class="eq">= <b>{reach(pl)}</b> locations {qmark(9)}</span>'
             f'<span class="go"><a class="link" href="#">{svg("route")}Follow in Goods flow</a></span></div>')
 
 
@@ -592,8 +646,8 @@ def manager_detail(pl: dict, i: int, open_dest: int | None = None, show_all: boo
             f'{dest_rows(pl, open_dest=open_dest, show_all=show_all)}</div></td></tr>')
 
 
-def managers_table(managers: list, opened: dict | None = None, lit: int | None = None) -> str:
-    """opened: {index: (open_dest, show_all)}"""
+def managers_table(managers: list, opened: dict | None = None, lit: int | None = None, marks: bool = False) -> str:
+    """opened: {index: (open_dest, show_all)}. marks: the open-question markers on the overview."""
     opened = opened or {}
     body = []
     parts = [("wh", "From warehouses · daily <b>02:00</b>"), ("fac", "From factories · daily <b>08:00</b>")]
@@ -601,7 +655,8 @@ def managers_table(managers: list, opened: dict | None = None, lit: int | None =
         rows = [(i, pl) for i, pl in enumerate(managers) if (pl["src"] or {}).get("kind") == kind]
         if not rows:
             continue
-        body.append(f'<tr class="sr-part"><td colspan="7">{label}</td></tr>')
+        q7 = qmark(7) if marks and kind == "wh" else ""
+        body.append(f'<tr class="sr-part"><td colspan="7">{label} {q7}</td></tr>')
         for i, pl in rows:
             body.append(manager_row(pl, i, opened=i in opened, lit=lit == i))
             if not (pl.get("noplan") or pl.get("nomgr")):
@@ -613,40 +668,67 @@ def managers_table(managers: list, opened: dict | None = None, lit: int | None =
         body.append('<tr class="sr-part"><td colspan="7">No plan</td></tr>')
         for i, pl in idle:
             body.append(manager_row(pl, i))
-    head = ('<thead><tr><th class="l">Logistics Manager</th><th class="l">From</th>'
-            '<th data-tip="Destinations on the plan, of the locations the vehicles at the source reach">Destinations</th>'
-            '<th>Stock targets</th><th class="l">Delivers to</th><th class="l">Status</th><th></th></tr></thead>')
+    q6 = qmark(6) if marks else ""
+    q9 = qmark(9) if marks else ""
+    head = (f'<thead><tr><th class="l">Logistics Manager {q6}</th><th class="l">From</th>'
+            f'<th>Destinations {q9}</th><th>Products</th><th class="l">Delivers to</th><th class="l">Status</th><th></th></tr></thead>')
     return f'<div class="scrollx"><table class="sb-t sr-t" data-sr-table="managers">{head}<tbody>{"".join(body)}</tbody></table></div>'
 
 
-def agent_flags(c: dict) -> list[str]:
+def agent_role_flags(c: dict) -> list[str]:
+    """The new role-level flags (counted in the nav badge)."""
     if c.get("idle"):
-        return [chip("warn", "No contract", "A Purchasing Agent at the headquarters with no import contract")]
+        return [chip("warn", "No contract", "The game's words: a Purchasing Agent with no import contract")]
     out = []
     if c["who"] is None:
-        out.append(chip("bad", "No agent", "No Purchasing Agent runs this contract"))
-    if c["paused"]:
-        out.append(chip("bad" if c.get("needed") else "warn", "Paused", "Paused while its products are still needed" if c.get("needed") else "Paused", "pause"))
+        out.append(chip("bad", "Purchasing Agent not assigned", "The game cancels the order: “We couldn't find your Purchasing Agent to deliver your imports”") + qmark(4))
+    if not c.get("seated", True):
+        out.append(chip("warn", "Not seated", "Only seated Purchasing Agents can be accessed") + qmark(10))
     nowh = sum(1 for p in c["products"] if p["to"] is None)
     if nowh:
-        out.append(chip("warn", f"{nowh} with no warehouse", "Products with no destination warehouse: nothing is delivered for them"))
-    short = sum(1 for p in c["products"] if p["short"])
-    if short:
-        out.append(chip("bad", f"{short} short", "Lines short in Imports", "down", href=True))
+        out.append(chip("warn", f"{nowh} with no designated warehouse", "One or more products has no assigned designated warehouse (the game's words)"))
     return out
+
+
+def agent_find_flags(c: dict) -> list[str]:
+    """Existing Imports findings: not counted in this view's badge. A paused contract whose products
+    are still needed is the existing `paused` finding, shown by its own label."""
+    out = []
+    if not c["active"] and c["repeating"] and c.get("needed"):
+        out.append(chip("bad", "Import paused · in Imports", "The existing finding: paused while its products are still needed", "pause", href=True))
+    k = sum(len(p["finds"]) for p in c["products"])
+    if k:
+        out.append(chip("bad", f"{k} in Imports", "Existing findings on this contract's products", "down", href=True))
+    return out
+
+
+def delivers(c: dict) -> bool:
+    """A delivery is coming: active, and an agent to run it (with none the game cancels the order)."""
+    return c["active"] and c["who"] is not None
+
+
+def next_cell(c: dict) -> str:
+    if not delivers(c):
+        return '<span class="sr-dash">—</span>'
+    return f'Day {c["next"]} · {weekday(c["next"])}'
+
+
+def delivery_cell(c: dict) -> str:
+    if not c["repeating"]:
+        return 'One-time delivery' + ('<span class="sub">delivered</span>' if not c["active"] else "")
+    paused = '<span class="sub">paused</span>' if not c["active"] else ""
+    return ("Smart Delivery" if c["smart"] else "Weekly amount") + paused
 
 
 def agent_row(c: dict, i: int, opened: bool = False, lit: bool = False) -> str:
     idle = c.get("idle")
     cls = "sr-row" + (" sr-opened" if opened else "") + (" sr-gap" if idle or c["who"] is None else "") + (" sr-lit" if lit else "")
-    disc = round(25 * c["skill"] / 100)
-    who = ('<b>No agent</b>' if c["who"] is None else f'<b>{c["who"]}</b><span class="sub">skill {c["skill"]}% · −{disc}% on prices</span>')
+    who = ('<b>—</b>' if c["who"] is None else f'<b>{c["who"]}</b>{skill_sub(c["skill"], agent=True)}')
+    dash = '<span class="sr-dash">—</span>'
     if idle:
-        return (f'<tr class="{cls}" data-sr="a{i}"><td class="l who">{who}</td><td class="l"><span class="sr-dash">—</span></td>'
-                f'<td class="l"><span class="sr-dash">—</span></td><td><span class="sr-dash">—</span></td><td class="l to"><span class="sr-dash">—</span></td>'
-                f'<td class="l st">{"".join(agent_flags(c))}</td><td class="tg"></td></tr>')
-    how = "Smart Delivery" if c["smart"] else "Weekly amount"
-    tag = f'<span class="sub">{c["tag"]}</span>' if c["tag"] else ""
+        return (f'<tr class="{cls}" data-sr="a{i}"><td class="l who">{who}</td><td class="l">{dash}</td><td class="l">{dash}</td>'
+                f'<td class="l">{dash}</td><td>{dash}</td><td class="l to">{dash}</td>'
+                f'<td class="l st">{"".join(agent_role_flags(c))}</td><td class="tg"></td></tr>')
     by: dict = {}
     for p in c["products"]:
         if p["to"]:
@@ -656,8 +738,8 @@ def agent_row(c: dict, i: int, opened: bool = False, lit: bool = False) -> str:
     to = " · ".join(f'{name} <em>×{k}</em>' for name, (d, k) in items[:3]) + (f' <em>+{len(items) - 3}</em>' if len(items) > 3 else "")
     pier = f'<span class="nm"><span class="sp-i" style="color:var(--ink-3)">{svg("ship")}</span>{c["pier"]}</span>'
     return (f'<tr class="{cls}" data-sr="a{i}"><td class="l who">{who}</td><td class="l site">{pier}</td>'
-            f'<td class="l">{how}{tag}</td><td>{len(c["products"])}</td><td class="l to">{to}</td>'
-            f'<td class="l st">{"".join(agent_flags(c))}</td><td class="tg"><span class="sr-tog">{svg("chev")}</span></td></tr>')
+            f'<td class="l dl">{delivery_cell(c)}</td><td class="l">{next_cell(c)}</td><td>{len(c["products"])}</td><td class="l to">{to}</td>'
+            f'<td class="l st">{"".join(agent_role_flags(c) + agent_find_flags(c))}</td><td class="tg"><span class="sr-tog">{svg("chev")}</span></td></tr>')
 
 
 def product_rows(c: dict, show: int = 10, show_all: bool = False) -> str:
@@ -667,36 +749,35 @@ def product_rows(c: dict, show: int = 10, show_all: bool = False) -> str:
         hide = "" if show_all or k < show else " sr-hide"
         flags = []
         if p["to"] is None:
-            flags.append(chip("warn", "No warehouse", "No destination warehouse: nothing is delivered"))
-        if p["short"]:
-            flags.append(chip("bad", "short", "The order does not bring the week it has to cover · open in Imports", "down", href=True))
+            flags.append(chip("warn", "No designated warehouse", "Nothing is delivered for it"))
+        flags += [find_chip(f, with_item=False) for f in p["finds"]]
         same = p["to"] is not None and p["to"] is prev
         to = "" if same else site_html(p["to"]) if p["to"] else '<span class="sr-dash">—</span>'
         prev = p["to"]
+        link = "" if not p["to"] else '<a class="link" href="#">Imports ›</a>'
         rows.append(f'<tr class="{hide.strip()}"><td class="l">{p["item"]}</td><td class="l nm">{to}</td>'
                     f'<td>{n(p["amount"])} <span class="sb-unit">{unit}</span></td><td>{n(p["last"])}</td><td>{n(p["uses"]) if p["to"] else "—"}</td>'
-                    f'<td class="l st">{"".join(flags)}</td>'
-                    f'<td class="ln">{"" if not p["to"] else "<a class=\"link\" href=\"#\">Imports ›</a>"}</td></tr>')
+                    f'<td class="l st">{"".join(flags)}</td><td class="ln">{link}</td></tr>')
     more = ""
     if not show_all and len(c["products"]) > show:
         more = (f'<p class="sr-more"><button type="button" data-sr-all>Show all {len(c["products"])} products</button>'
                 f'<span>{len(c["products"]) - show} more</span></p>')
-    lab = "Keeps in stock" if c["smart"] else "Amount a week"
-    head = (f'<thead><tr><th class="l">Product</th><th class="l">To</th><th>{lab}</th><th>Arrived last week</th>'
+    lab = "# target" if c["smart"] else "Amount a week"
+    head = (f'<thead><tr><th class="l">Product</th><th class="l">Designated warehouse</th><th>{lab}</th><th>Previous</th>'
             f'<th>Uses / week</th><th class="l">Status</th><th></th></tr></thead>')
     return f'<table class="sr-dt">{head}<tbody>{"".join(rows)}</tbody></table>{more}'
 
 
 def agent_detail(c: dict, i: int, show_all: bool = False) -> str:
-    when = "Smart Delivery tops each warehouse up to its level" if c["smart"] else "Each amount is delivered every week"
-    line = (f'<div class="sr-veh"><span class="v">{svg("ship")}{c["pier"]}<b>Mon 08:00</b></span>'
-            f'<span>{when} · order by Sunday 20:00</span>'
+    when = (f'next delivery Day {c["next"]} · {weekday(c["next"])} 08:00 · order by Day {c["next"] - 1} · {weekday(c["next"] - 1)} 20:00'
+            if delivers(c) else "no delivery coming")
+    line = (f'<div class="sr-veh"><span class="v">{svg("ship")}{c["pier"]}</span><span>{when}</span>'
             f'<span class="go"><a class="link" href="#">{svg("route")}Follow in Goods flow</a></span></div>')
-    return (f'<tr class="sr-detail" data-srx="a{i}"><td colspan="7"><div class="sr-det">{line}'
+    return (f'<tr class="sr-detail" data-srx="a{i}"><td colspan="8"><div class="sr-det">{line}'
             f'{product_rows(c, show_all=show_all)}</div></td></tr>')
 
 
-def agents_table(agents: list, opened: dict | None = None, lit: int | None = None) -> str:
+def agents_table(agents: list, opened: dict | None = None, lit: int | None = None, marks: bool = False) -> str:
     opened = opened or {}
     body = []
     for i, c in enumerate(agents):
@@ -704,8 +785,9 @@ def agents_table(agents: list, opened: dict | None = None, lit: int | None = Non
         if not c.get("idle"):
             det = agent_detail(c, i, opened.get(i, False))
             body.append(det if i in opened else det.replace('class="sr-detail"', 'class="sr-detail sr-hide"', 1))
-    head = ('<thead><tr><th class="l">Purchasing Agent</th><th class="l">Importer</th><th class="l">Delivery</th>'
-            '<th>Products</th><th class="l">To</th><th class="l">Status</th><th></th></tr></thead>')
+    q3 = qmark(3) if marks else ""
+    head = (f'<thead><tr><th class="l">Purchasing Agent</th><th class="l">Importer {q3}</th><th class="l">Delivery</th>'
+            '<th class="l">Next delivery</th><th>Products</th><th class="l">To</th><th class="l">Status</th><th></th></tr></thead>')
     return f'<div class="scrollx"><table class="sb-t sr-t" data-sr-table="agents">{head}<tbody>{"".join(body)}</tbody></table></div>'
 
 
@@ -718,15 +800,16 @@ def managers_group(managers: list, **kw) -> str:
     real = [m for m in managers if not m.get("nomgr")]
     d = sum(len(m["dests"]) for m in real)
     t = sum(len(x["targets"]) for m in real for x in m["dests"])
-    counts = [(str(len(real)), "manager" if len(real) == 1 else "managers"), (str(d), "destinations"), (n(t), "stock targets")]
+    counts = [(str(len(real)), "manager" if len(real) == 1 else "managers"), (str(d), "destinations"), (n(t), "products")]
     return group_head("truck", "Logistics Managers", counts) + managers_table(managers, **kw)
 
 
 def agents_group(agents: list, **kw) -> str:
     real = [a for a in agents if not a.get("idle")]
     p = sum(len(a["products"]) for a in real)
-    counts = [(str(len([a for a in agents if a.get("who")])), "agents"), (str(len(real)), "contracts"), (str(p), "products"),
-              ("Mon 08:00", "arrival")]
+    people = len([a for a in agents if a.get("who")])
+    counts = [(str(people), "agent" if people == 1 else "agents"), (str(len(real)), "contract" if len(real) == 1 else "contracts"),
+              (str(p), "products")]
     return group_head("ship", "Purchasing Agents", counts) + agents_table(agents, **kw)
 
 
@@ -736,11 +819,12 @@ def agents_group(agents: list, **kw) -> str:
 VIEW = "Plans &amp; contracts"
 
 
-def sidebar(badge: int = 0, current: str = "roles") -> str:
+def sidebar(badge: int = 0, current: str = "roles", marks: bool = False) -> str:
     views = [("changes", "Changes", 16), ("roles", VIEW, badge), ("imports", "Imports", 10), ("deliveries", "Deliveries", 6),
              ("production", "Production", 0), ("flow", "Goods flow", 0)]
+    qm = (qmark(1) + qmark(2)) if marks else ""
     local = "".join(f'<a href="#supply/{k}"{" class=\"on\" aria-current=\"page\"" if k == current else ""}>{lab}'
-                    f'{f"<small>{c}</small>" if c else ""}</a>' for k, lab, c in views)
+                    f'{qm if k == "roles" else ""}{f"<small>{c}</small>" if c else ""}</a>' for k, lab, c in views)
     return f"""<nav class="sd" id="mast" aria-label="Main">
   <div class="sd-in" id="sdIn">
     <div class="sd-head" id="sdHead">
@@ -749,7 +833,7 @@ def sidebar(badge: int = 0, current: str = "roles") -> str:
     <div class="sd-areas" id="nav"><a href="#overview"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"></path></svg><span>Overview</span></a><a href="#businesses"><svg viewBox="0 0 24 24">{I["building"]}</svg><span>Businesses</span><svg class="nx-i sd-cv" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a><a href="#supply" class="on sd-open" aria-current="page"><svg viewBox="0 0 24 24">{I["crate"]}</svg><span>Supply</span><svg class="nx-i sd-cv" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a><nav class="nx-local" id="localNav" aria-label="Supply views">{local}</nav><a href="#staffing"><svg viewBox="0 0 24 24">{I["crew"]}</svg><span>Staffing</span><svg class="nx-i sd-cv" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a><a href="#expansion"><svg viewBox="0 0 24 24"><path d="M4 18 10 12l4 4 6-7"></path><path d="M15 9h5v5"></path></svg><span>Expansion</span><svg class="nx-i sd-cv" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a></div>
     <div class="sd-refs" id="navRefs" role="group" aria-label="Reference"><a href="#map"><svg viewBox="0 0 24 24" aria-hidden="true">{I["map"]}</svg><span>City map</span></a><a href="#wiki"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"></path><path d="M4 20.5V5.5M20 18v3H6.5"></path><path d="M9 8h7M9 11.5h5"></path></svg><span>Wiki</span></a></div>
     <div class="sd-foot">
-      <div class="clock tr" id="clock"><b>Day 333<i>·</i>Fri 15:40</b><small>YEAR 2</small></div>
+      <div class="clock tr" id="clock"><b>Day {DAY}<i>·</i>{weekday(DAY)} 15:40</b><small>YEAR 1</small></div>
       <div class="sd-row" id="sdRow">
         <button type="button" class="sd-ib" aria-label="More"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="18" cy="12" r="1.4"></circle></svg></button>
         <button type="button" class="sd-ib sd-tog" aria-label="Collapse the sidebar"><svg class="nx-i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"></rect><path d="M9 4.5v15"></path></svg></button>
@@ -769,11 +853,12 @@ def toolbar(scope: str = "Whole company") -> str:
     </div></div></div>"""
 
 
-def page(body: str, badge: int = 0, scope: str = "Whole company", crumb: str = "", current: str = "roles", bar: bool = True) -> str:
+def page(body: str, badge: int = 0, scope: str = "Whole company", crumb: str = "", current: str = "roles", bar: bool = True,
+         marks: bool = False) -> str:
     cr = (f'<p class="sb-verdict"><span class="sb-crumb">{crumb}<button type="button" aria-label="Back to the view as it was">&times;</button></span></p>'
           if crumb else "")
     return f"""<div class="sd-app" id="sdApp" style="height:100%">
-{sidebar(badge, current)}
+{sidebar(badge, current, marks)}
 <div class="wrap">
   {toolbar(scope) if bar else ""}
   <div class="page" id="pageSupply"><section class="sec sb-view rv in" id="secRoles">{cr}{body}</section></div>
@@ -784,56 +869,61 @@ def page(body: str, badge: int = 0, scope: str = "Whole company", crumb: str = "
 # --------------------------------------------------------------------------
 # artboards
 # --------------------------------------------------------------------------
-def problems_of(managers: list, agents: list) -> int:
-    return sum(len(plan_flags(m)) for m in managers) + sum(len(agent_flags(a)) for a in agents)
+def badge_of(managers: list, agents: list) -> int:
+    """The nav badge: the new role-level flags only, never the existing findings."""
+    return sum(len(plan_role_flags(m)) for m in managers) + sum(len(agent_role_flags(a)) for a in agents)
 
 
 def board_main() -> str:
     m, a = full_company()
-    return page(managers_group(m) + agents_group(a), badge=problems_of(m, a))
+    return page(managers_group(m, marks=True) + agents_group(a, marks=True), badge=badge_of(m, a), marks=True)
 
 
 def board_open_manager() -> str:
     m, a = full_company()
-    return page(managers_group(m, opened={0: (2, False)}) + agents_group(a), badge=problems_of(m, a))
+    return page(managers_group(m, opened={0: (3, False)}) + agents_group(a), badge=badge_of(m, a))
 
 
 def board_open_agent() -> str:
     m, a = full_company()
-    return page(managers_group(m) + agents_group(a, opened={0: False}), badge=problems_of(m, a))
+    return page(managers_group(m) + agents_group(a, opened={0: False}), badge=badge_of(m, a))
 
 
 def problem_company() -> tuple[list, list]:
     m, a = full_company()
     RNG.seed(99)
-    # Thread Depot: the Vord Courier lost its driver, so 10 destinations on 8 locations
+    # Thread Depot: the Vord Courier lost its driver, so 10 stops on 8 locations
     m[4]["veh"] = [("T1", "Mina Oduya"), ("D500", None)]
-    m[4]["dests"][1]["shortp"] = ["Clothing (Modern Cheap Female)"]
+    m[4]["dests"][1]["finds"] = [finding("outruns", "Clothing (Modern Cheap Female)")]
     m[4]["dests"][4]["targets"] = []
     # Midtown Depot: a manager whose plan lists nobody
     m[5]["dests"] = []
-    # Volt Plant: its manager left; the factory's output stays put
+    # Hamptons Depot's manager is not seated at a Computer Workstation
+    m[6]["seated"] = False
+    # Volt Plant: its manager left; Volt Depot needs what it makes
     m[9] = {"who": None, "src": factory("voltp"), "veh": [("UMC", "Odile Faure")], "dests": [], "skill": 0, "nomgr": True}
     # a Logistics Manager on staff with no plan at all
     m.append({"who": "Yara Holm", "src": None, "veh": [], "dests": [], "skill": 100, "noplan": True})
     # contracts
-    a[2]["paused"], a[2]["needed"] = True, True
-    a[3]["who"] = None
+    a[2]["active"], a[2]["needed"] = False, True          # paused: isActive false, isRepeatingOrder true
+    a[3]["who"] = None                                     # no agent
+    a[7]["seated"] = False
     a[0]["products"][4]["to"] = None
     a[0]["products"][7]["to"] = None
-    a.append({"who": "Kofi Brandauer", "pier": "", "products": [], "smart": True, "skill": 100, "paused": False, "tag": "", "idle": True})
+    a.append({"who": "Kofi Brandauer", "pier": "", "products": [], "smart": True, "skill": 100, "active": True, "repeating": True,
+              "next": None, "idle": True})
     return m, a
 
 
 def board_problems() -> str:
     m, a = problem_company()
-    return page(managers_group(m, opened={4: (1, True)}) + agents_group(a), badge=problems_of(m, a))
+    return page(managers_group(m, opened={4: (1, True)}) + agents_group(a), badge=badge_of(m, a))
 
 
 def board_empty() -> str:
     body = f"""<div class="sr-empty">
-      <div>{svg("truck")}<div><h3>No Logistics Manager yet</h3><p>Delivery plans are set in <b>BizMan › Logistics</b>.</p></div></div>
-      <div>{svg("ship")}<div><h3>No Purchasing Agent yet</h3><p>Import contracts are set at an importer.</p></div></div>
+      <div>{svg("truck")}<div><h3>No Logistics Manager yet</h3><p>Delivery plans: <b>BizMan › Logistics Managers</b></p></div></div>
+      <div>{svg("ship")}<div><h3>No Purchasing Agent yet</h3><p>Import contracts: <b>BizMan › Purchasing Agents</b></p></div></div>
     </div>"""
     return page(body, bar=False)
 
@@ -844,9 +934,11 @@ def small_company() -> tuple[list, list]:
               [dest(k) for k in ["burger-MT", "burger-MH", "coffee-MT", "coffee-MH", "burger-HK", "coffee-HK"]])]
     RNG.seed(6)
     H = depot("harbor")
-    a = [contract("Mara Okafor", "3 Pier", [product(i, H) for i in ["Burger", "French Fries", "Hotdog", "Pizza", "Salad", "Ice Cream",
-                                                                  "Chicken Kabob Skewer", "Apple", "Banana", "Cup of Tea", "Croissant", "Cupcake", "Donut", "Cup of Coffee"]]),
-         contract("Jonas Lindqvist", "4 Pier", [product(i, H) for i in ["Soda Can", "Energy Drink"]], tag="one-off")]
+    a = [contract("Mara Okafor", "3 Pier", [product(i, H) for i in ["French Fries", "Salad", "Ice Cream", "Chicken Kabob Skewer", "Apple",
+                                                                 "Banana", "Popcorn", "Cotton Candy", "Slushie", "Gift (Cheap)",
+                                                                 "Umbrella", "Paper Bag", "Fresh Food", "Frozen Food"]]),
+         contract("Jonas Lindqvist", "4 Pier", [product(i, H, smart=False) for i in ["Soda Can", "Energy Drink"]], smart=False,
+                  active=False, repeating=False, next_day=None)]
     return m, a
 
 
@@ -869,15 +961,29 @@ def links_board() -> str:
            f'<td class="l nm"><span class="sr-dtog">{svg("chev")}</span><span class="nm">{hood_html(d3["hood"])}'
            f'<a class="ss-sl sr-new" href="#">{d3["short"]}</a><button type="button" class="sr-map sr-new" aria-label="Show on map">{svg("map")}</button></span></td>'
            f'<td>{len(d3["targets"])}</td><td class="l tl">{target_line(d3)}</td>'
-           f'<td class="l st"><a class="sb-v bad sr-new" href="#">{svg("down")}French Fries short</a></td>'
+           f'<td class="l st"><a class="sb-v bad sr-new" href="#">{svg("down")}French Fries · outsells its top-up</a></td>'
            f'<td class="ln"><a class="sr-flow sr-new" href="#">{svg("route")}</a></td></tr></tbody></table>'
-           f'<table class="sr-dt" style="margin-top:10px"><tbody><tr><td class="l">Frozen Food</td><td class="l nm">{site_html(depot("north"), False)}</td>'
+           f'<table class="sr-dt" style="margin-top:10px"><tbody><tr class="sr-show"><td class="l">Frozen Food</td><td class="l nm">{site_html(depot("north"), False)}</td>'
            f'<td>6,200 <span class="sb-unit">in stock</span></td><td>5,140</td><td>7,560</td>'
-           f'<td class="l st"><a class="sb-v bad sr-new" href="#">{svg("down")}short</a></td><td class="ln"><a class="link sr-new" href="#">Imports ›</a></td></tr></tbody></table>').replace('<tr><td class="l">Frozen Food', '<tr class="sr-show"><td class="l">Frozen Food')
+           f'<td class="l st"><a class="sb-v bad sr-new" href="#">{svg("down")}Import shortfall</a></td><td class="ln"><a class="link sr-new" href="#">Imports ›</a></td></tr></tbody></table>')
     out = ('Name: the site page. Map pin: the City map. Route icon: Goods flow, following that site. '
-           'A status chip: the row in Deliveries or Imports that says it, with a crumb back here.')
+           'A finding chip: its row in Deliveries or Imports, with a crumb back here.')
 
-    # 2. Goods flow: the followed site says who delivers it
+    # 2. Goods flow: the followed site says who delivers it, every source, from the data
+    def sources(key: str) -> list[str]:
+        lines = []
+        for c in a:
+            k = sum(1 for p in c["products"] if p["to"] and p["to"].get("key") == key)
+            if k:
+                lines.append(f'<li><span>Day {c["next"]} · {weekday(c["next"])}</span><span><a class="link" href="#"><b>{c["who"]}</b> · {c["pier"]}, {k} products</a></span></li>')
+        for x in m:
+            for s, d in enumerate(x["dests"]):
+                if d.get("key") == key and d["kind"] == "wh":
+                    when = "daily 02:00" if x["src"]["kind"] == "wh" else "daily 08:00"
+                    lines.append(f'<li><span>{when}</span><span><a class="link" href="#"><b>{x["who"]}</b> · {x["src"]["short"]}, stop {s + 1} of {len(x["dests"])}</a></span></li>')
+        return lines
+
+    harbor = sources("harbor")
     flow = f"""<div class="sbf-panel" style="margin-top:14px">
       <div class="sbf-card"><h3>{d3["short"]}<small>Fast Food Restaurant</small></h3>
         <table class="sb-t sbf-t"><thead><tr><th class="l">Product</th><th>On hand</th><th>Needs before refill</th><th>Refill brings</th></tr></thead>
@@ -887,25 +993,23 @@ def links_board() -> str:
         <ul class="sr-who"><li><span>daily 02:00</span><span><a class="link" href="#"><b>{pl["who"]}</b> · {pl["src"]["short"]}, stop 3 of {len(pl["dests"])}</a></span></li></ul></div>
     </div>
     <div class="sbf-panel">
-      <div class="sbf-card sr-new"><span class="sr-newnote">new · a warehouse followed</span><h3>{svg("truck")}Delivered by</h3>
-        <ul class="sr-who"><li><span>Mon 08:00</span><span><a class="link" href="#"><b>{a[0]["who"]}</b> · 3 Pier, 10 products</a></span></li>
-        <li><span>Mon 08:00</span><span><a class="link" href="#"><b>{a[7]["who"]}</b> · 9 Pier, 5 products</a></span></li>
-        <li><span>daily 08:00</span><span><a class="link" href="#"><b>{m[7]["who"]}</b> · Food Works, stop 1 of 2</a></span></li></ul></div>
+      <div class="sbf-card sr-new"><span class="sr-newnote">new · Harbor Depot followed</span><h3>{svg("truck")}Delivered by · {len(harbor)}</h3>
+        <ul class="sr-who">{"".join(harbor)}</ul></div>
       <div class="sbf-card sr-new"><span class="sr-newnote">new · its own plan</span><h3>{svg("route")}Sends</h3>
-        <ul class="sr-who"><li><span>daily 02:00</span><span><a class="link" href="#"><b>{pl["who"]}</b> · {len(pl["dests"])} destinations, {sum(len(x["targets"]) for x in pl["dests"])} stock targets</a></span></li></ul></div>
+        <ul class="sr-who"><li><span>daily 02:00</span><span><a class="link" href="#"><b>{pl["who"]}</b> · {len(pl["dests"])} destinations, {sum(len(x["targets"]) for x in pl["dests"])} products</a></span></li></ul></div>
     </div>"""
-    flow_t = 'A new card beside "Changes on its route". Each line opens this view on that plan or contract, the stop lit.'
+    flow_t = 'A new card beside "Changes on its route", listing every source of the followed site. Each line opens this view on that plan or contract.'
 
     # 3. Imports and Deliveries: the head of a site says who, as a link
     heads = f"""<details class="sb-obj" style="margin-top:6px"><summary><span class="ic">{svg("crate")}</span>
       <span class="who"><span class="nm">{hood_html("IC")}<a class="ss-sl" href="#">Harbor Depot</a></span><span class="how"><span>{spi("truck")}<em>weekly from
-      <a class="link sr-new" href="#" data-tip="Mara Okafor's contract · Plans &amp; contracts"><b>3 Pier</b></a>, <a class="link sr-new" href="#"><b>9 Pier</b></a>, Monday</em></span>
-      <span>{spi("route")}<em>feeds 16 sites · <a class="link sr-new" href="#">Rosa Duvall's plan</a></em></span></span></span>
+      <a class="link sr-new" href="#" data-tip="{a[0]["who"]}'s contract · Plans &amp; contracts"><b>3 Pier</b></a>, Monday</em></span>
+      <span>{spi("route")}<em>feeds 16 sites · <a class="link sr-new" href="#">{pl["who"]}'s plan</a></em></span></span></span>
       <span class="sb-stats"><span class="sb-stat"><span class="lab">On the floor</span><span class="v">412,880</span></span><span class="sb-stat"><span class="lab">Uses / week</span><span class="v">688,300</span></span></span>
       <span class="cnt red">2 changes to type</span><span class="tog">{svg("chev")}</span></summary></details>
       <details class="sb-obj"><summary><span class="ic">{svg("shelves")}</span>
-      <span class="who"><span class="nm">{hood_html("MT")}<a class="ss-sl" href="#">{d3["short"]}</a></span><span class="how"><span>{spi("truck")}<em>each morning from
-      <a class="link sr-new" href="#" data-tip="Rosa Duvall's plan, stop 3 · Plans &amp; contracts"><b>Harbor Depot</b></a></em></span></span></span>
+      <span class="who"><span class="nm">{hood_html("HK")}<a class="ss-sl" href="#">{d3["short"]}</a></span><span class="how"><span>{spi("truck")}<em>each morning from
+      <a class="link sr-new" href="#" data-tip="{pl["who"]}'s plan, stop 3 · Plans &amp; contracts"><b>Harbor Depot</b></a></em></span></span></span>
       <span class="sb-stats"><span class="sb-stat"><span class="lab">Sells / day</span><span class="v">1,180</span></span></span>
       <span class="tog">{svg("chev")}</span></summary></details>"""
     heads_t = 'Imports and Deliveries already name the source in each site\'s head. The names become links to the plan or contract.'
@@ -913,7 +1017,7 @@ def links_board() -> str:
     # 4. the site page: Feeds says whose plan
     sp = f"""<div class="sr-sp"><section id="sp-feeds" style="margin-top:12px">
       <div class="sechead"><span class="sp-ico">{svg("pipe")}</span><h2>Feeds</h2><div class="aside"><a class="link sr-new" href="#">{pl["who"]}'s plan · 02:00 ›</a></div></div>
-      <div class="sp-feeds">{"".join(f'<div class="sp-feed">{hood_html(x["hood"])}<span>{x["short"]}</span><span class="sp-tr"><i style="--w:{w}%"></i></span><span class="sp-rate">{n(r)}/day</span></div>' for x, w, r in [(pl["dests"][0], 100, 1460), (pl["dests"][13], 88, 1290), (pl["dests"][1], 71, 1040), (pl["dests"][7], 52, 760)])}</div>
+      <div class="sp-feeds">{"".join(f'<div class="sp-feed">{hood_html(x["hood"])}<span>{x["short"]}</span><span class="sp-tr"><i style="--w:{w}%"></i></span><span class="sp-rate">{n(r)}/day</span></div>' for x, w, r in [(pl["dests"][0], 100, 1460), (pl["dests"][14], 88, 1290), (pl["dests"][1], 71, 1040), (pl["dests"][7], 52, 760)])}</div>
     </section></div>"""
     sp_t = 'A warehouse or factory page: one link in the Feeds head. A shop\'s page links the plan that fills it the same way.'
 
@@ -996,21 +1100,21 @@ __BODY__
 W = 1440
 # file, title, builder, width, height
 BOARDS = [
-    ("Main.dc.html", "A · Plans & contracts, the whole company", board_main, W, 1600),
-    ("OpenManager.dc.html", "B1 · A manager opened: destinations, one stop's targets", board_open_manager, W, 2290),
-    ("OpenAgent.dc.html", "B2 · An agent opened: the contract's products", board_open_agent, W, 2120),
-    ("Problems.dc.html", "C · Problems flagged", board_problems, W, 2810),
+    ("Main.dc.html", "A · Plans & contracts, the whole company", board_main, W, 1500),
+    ("OpenManager.dc.html", "B1 · A manager opened: destinations, one stop's targets", board_open_manager, W, 2500),
+    ("OpenAgent.dc.html", "B2 · An agent opened: the contract's products", board_open_agent, W, 1980),
+    ("Problems.dc.html", "C · Problems flagged", board_problems, W, 2710),
     ("Empty.dc.html", "D1 · No roles yet", board_empty, W, 760),
     ("Small.dc.html", "D2 · Small company: one manager, two agents", board_small, W, 900),
-    ("Links.dc.html", "E · Links in and out", links_board, W, 2240),
+    ("Links.dc.html", "E · Links in and out", links_board, W, 2300),
 ]
 TIPS = {
-    "Main.dc.html": "Every Logistics Manager's delivery plan and every Purchasing Agent's import contract, one row each. Click a row to open it.",
-    "OpenManager.dc.html": "Rosa Duvall's plan opened: the vehicles at the source, the destinations in delivery order (8 of 16, Show all), stop 3 opened to its stock targets. Click any stop.",
-    "OpenAgent.dc.html": "Mara Okafor's contract opened: 18 products, where each goes, the Smart Delivery level, what arrived and what is used. 10 shown, Show all.",
-    "Problems.dc.html": "Every flag at once: 2 over vehicles (opened: the dashed line is where the trucks stop), no destinations, a destination with no stock targets, short stops, a factory with no manager, a manager with no plan; a paused contract, a contract with no agent, products with no warehouse, an agent with no contract.",
+    "Main.dc.html": "Every Logistics Manager's delivery plan and every Purchasing Agent's import contract, one row each. Click a row to open it. Dashed blue Q-marks: a drawn default that is still an open question (NOTES.md).",
+    "OpenManager.dc.html": "Rosa Duvall's plan opened: the vehicles at the source, the destinations in delivery order (8 of 16, Show all), stop 4 (a second-tier warehouse, 26 products) opened to every minimum stock amount. Click any stop.",
+    "OpenAgent.dc.html": "Mara Okafor's contract opened: 18 products, their designated warehouse, the Smart Delivery target, last week and use. 10 shown, Show all.",
+    "Problems.dc.html": "Every role-level flag at once (these alone count in the nav badge): stops over the vehicles' reach, no destinations, a stop with no products, not seated, a factory with no Logistics Manager while its depot needs it, a manager with no plan; a paused contract, a contract with no agent, products with no designated warehouse, an agent with no contract. Existing findings show as their own label and link to their view.",
     "Empty.dc.html": "No Logistics Manager and no Purchasing Agent on staff.",
-    "Small.dc.html": "One manager: the plan is open by default. Two agents, one a one-off order.",
+    "Small.dc.html": "One manager: the plan is open by default. Two agents, one a finished one-time delivery.",
     "Links.dc.html": "Green outlines are new links. Everything else is the shipped board.",
 }
 
@@ -1025,8 +1129,8 @@ def build(preview: bool = False) -> None:
     boards, order, notes = {}, [], {}
     x, y, col_h = 0, 0, 0
     layout = {"Main.dc.html": (0, 0), "OpenManager.dc.html": (W + 200, 0), "OpenAgent.dc.html": (2 * (W + 200), 0),
-              "Problems.dc.html": (0, 2700), "Empty.dc.html": (W + 200, 2700), "Small.dc.html": (W + 200, 2700 + 760 + 360),
-              "Links.dc.html": (2 * (W + 200), 2700)}
+              "Problems.dc.html": (0, 2900), "Empty.dc.html": (W + 200, 2900), "Small.dc.html": (W + 200, 2900 + 760 + 360),
+              "Links.dc.html": (2 * (W + 200), 2900)}
     for name_, title, builder, w, h in BOARDS:
         body = builder()
         props = {"dark": {"editor": "boolean", "default": True, "section": "Theme"}, "$preview": {"width": w, "height": h}}
