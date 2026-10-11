@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ba_dashboard import ALL_DAY_OPEN, History, _counts_only, _hourly, _office_staffing, _staff
+from ba_dashboard import ALL_DAY_OPEN, History, _counts_only, _hour_findings, _hourly, _office_staffing, _staff
 from ba_save import Names
 from tests.test_staff_hire import COMPUTER, LAW, LAWYER, STREET, lawyer, office_registration, save_of, site_key
 
@@ -73,6 +73,18 @@ class OfficeDemandTests(unittest.TestCase):
         row, _, _ = plan(customers=2, door=2)
         self.assertEqual(row['basis'][LAWYER][1][10], 'censored')
         self.assertEqual(row['need'][LAWYER][1][10], 2)
+
+    def test_building_capacity_below_todays_staffing_bounds_the_floor(self):
+        # Three computers staffed in a building that takes two customers an
+        # hour: the floor is today's staffing up to the building capacity.
+        row, _, _ = plan(customers=1, staffed=3, door=2)
+        self.assertEqual(row['basis'][LAWYER][1][10], 'measured')
+        self.assertEqual(row['need'][LAWYER][1][10], 2)
+        # The same floor for an hour with no report: on a weekend, where the
+        # office default staffs two, four staffed for three customers keep three.
+        row, _, _ = plan(customers=1, staffed=4, door=3, missing=(12,))
+        self.assertEqual(row['basis'][LAWYER][6][12], 'office')
+        self.assertEqual(row['need'][LAWYER][6][12], 3)
 
     def test_one_week_of_history_keeps_the_default(self):
         row, _, _ = plan(days=7)
@@ -162,6 +174,18 @@ class CountsOnlyTests(unittest.TestCase):
             self.assertEqual(grid['capHours'], 0)
         self.assertEqual(shop['open'], [[[8, 16]]] * 7)
         self.assertEqual(office['open'], ALL_DAY_OPEN)
+
+    def test_an_office_gets_no_hour_findings(self):
+        # 1 an hour under 4 computers would be overstaffed hours on today's
+        # staffing; an office's reports cannot say what was on, so none.
+        _, save, business = plan(customers=1, staffed=4)
+        _, staff = _staff(save, Names({}))
+        grids = _hourly(save, save.items(save.root['BuildingRegistrations']), [business], {}, {COMPUTER},
+                        {p['id']: p['skill'] for p in staff}, Names({}))
+        wages = {business['key']: {role['skill']: 100 for role in grids[0]['roles']}}
+        self.assertTrue(_hour_findings(grids, [business], wages))
+        _counts_only(grids)
+        self.assertEqual(_hour_findings(grids, [business], wages), [])
 
     def test_old_measurement_records_leave_the_history_file(self):
         with tempfile.TemporaryDirectory() as tmp:

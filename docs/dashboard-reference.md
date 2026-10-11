@@ -219,7 +219,7 @@ the map.
   - *Office demand*: read from the office's own reports, as a shop's is (*The need
     curve* below), with no measurement to start. Offices use one computer per customer
     per hour. Demand plans add computers where hours are full and never plan below
-    today's staffing, preserving cleaning, other duties and opening hours. See *An
+    today's staffing (up to the building capacity), preserving cleaning, other duties and opening hours. See *An
     office's demand plan* below.
   - *The office default*: three computers staffed around the clock in a building with a
     building capacity of 50, proportionally fewer in smaller ones (at least one); every
@@ -881,13 +881,14 @@ customers came within 95% of the computers staffed now says only that the comput
 full: it is `censored`, and the plan asks for one computer more there, never more than
 the computers installed or the building capacity, so an office held back by its staffing
 grows a computer at a time rather than being planned at the staffing it had. The plan
-never asks for fewer computers than are staffed now in an hour it has a reading for: the
+never asks for fewer computers than are staffed now (up to the building capacity) in an
+hour it has a reading for: the
 game's hour reports keep the customers and nothing of the staffing that was on, and in an
 office the customers are that staffing, so 2 an hour under today's 3 computers may only
 mean two computers were on when they came. An hour with no report on file has no reading
 (the office may only now be staffed then), and neither has a zero with nobody at a
-computer now: such an hour keeps the office default or the computers staffed now,
-whichever is more, and so does any open hour with no reading. An office with no reading at all gets the office default. Cleaning and other
+computer now: such an hour keeps the office default or the computers staffed now (up to
+the building capacity), whichever is more, and so does any open hour with no reading. An office with no reading at all gets the office default. Cleaning and other
 duties stay as they are and still count toward employee requirements and the 50-hour
 weekly limit. There is no full-cover test and no hand-over for an office, and no
 measurement to start: Peter asked for the shop's logic (10 October 2026), and the

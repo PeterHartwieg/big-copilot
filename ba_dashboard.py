@@ -14627,12 +14627,12 @@ def _office_need(grid: dict, skill: str, runs: dict, run: int = 0, daily: list |
     Three things differ from a shop. An hour with no report on file is no
     reading, not a measured zero: the office may only now be staffed then. A
     zero with nobody working is not measured demand either. And a read hour is
-    never planned below the computers staffed now: an hour report holds the
-    customers and nothing of the staffing that was on, and in an office the
-    customers are that staffing, so customers below today's staffing may only
+    never planned below the computers staffed now (up to the building
+    capacity): an hour report holds the customers and nothing of the staffing
+    that was on, and in an office the customers are that staffing, so customers below today's staffing may only
     say the hour was staffed less when they came. Do not scale another weekday
-    into an unread one: keep the default there, or the current staffing if
-    higher, until that hour has a reading of its own.
+    into an unread one: keep the default there, or the current staffing (up
+    to the building capacity) if higher, until that hour has a reading of its own.
     """
     measured = _run_measured(dict(grid, roles=[dict(grid["roles"][0], key=skill, skill=skill)]), run, daily)
     # A zero with no capacity is never a demand measurement; positive counts survive.
@@ -14648,7 +14648,9 @@ def _office_need(grid: dict, skill: str, runs: dict, run: int = 0, daily: list |
     for wd in range(7):
         hours = {h for a, z in opened[wd] for h in range(a, z)}
         for h in range(24):
-            current = math.ceil(grid["staffed"][wd][h] / OFFICE_POST_RATE)
+            # Today's computers, up to the building capacity: the floor for
+            # read and unread hours alike.
+            current = math.ceil(grid["effective"][wd][h] / OFFICE_POST_RATE)
             if h not in hours:
                 entry["need"][wd][h] = 0
                 entry["basis"][wd][h] = "closed"
@@ -14658,8 +14660,7 @@ def _office_need(grid: dict, skill: str, runs: dict, run: int = 0, daily: list |
                                            max(entry["need"][wd][h], default, current) if demand_based else default)
                 entry["basis"][wd][h] = "office"
             else:
-                staffed = math.ceil(grid["effective"][wd][h] / OFFICE_POST_RATE)
-                entry["need"][wd][h] = min(len(grid["stations"]), max(entry["need"][wd][h], staffed))
+                entry["need"][wd][h] = min(len(grid["stations"]), max(entry["need"][wd][h], current))
     if not demand_based:
         entry["stations"] = runs
     return need, demand_based
