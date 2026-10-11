@@ -175,6 +175,7 @@ const SP_ICON = {
   pinned: '<path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"></path>',
   tick: '<path d="M5 12.5l4.5 4.5L19 7"></path>',
   down: '<path d="M12 5v14M6 13l6 6 6-6"></path>',
+  ship: '<path d="M3 15l2 5h14l2-5z"></path><path d="M6 15V9h12v6M12 9V4M9 6h6"></path>',
   right: '<path d="M5 12h14M13 6l6 6-6 6"></path>',
 };
 const spIcon = name => SP_ICON[name] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SP_ICON[name]}</svg>` : "";
@@ -3265,6 +3266,7 @@ const VIEW_META = [
   {route: "businesses/standards", host: ["company", "standards"], needs: [], section: "secStandards", label: () => tt("nav.view.standards", "Standards")},
   {route: "businesses/milestones", host: ["company", "milestones"], needs: ["goals"], section: "secGoals", label: () => tt("nav.view.milestones", "Milestones")},
   {route: "supply/changes", host: ["supply", "changes"], needs: [], section: "secChanges", label: () => tt("nav.view.changes", "Changes")},
+  {route: "supply/roles", host: ["supply", "roles"], needs: [], section: "secRoles", label: () => tt("nav.view.roles", "Plans & contracts")},
   {route: "supply/imports", host: ["supply", "imports"], needs: [], section: "secImports", label: () => tt("nav.view.imports", "Imports")},
   {route: "supply/deliveries", host: ["supply", "deliveries"], needs: [], section: "secDeliveries", label: () => tt("nav.view.deliveries", "Deliveries")},
   {route: "supply/production", host: ["supply", "production"], needs: ["factoryStaffing"], section: "secProduction", label: () => tt("nav.view.production", "Production")},
@@ -7714,7 +7716,7 @@ function drawSite(){
     </section>
     <div class="duo sec"${feedRows.length ? ` style="grid-template-columns:1fr 1fr"` : ` style="grid-template-columns:1fr"`}>${feedRows.length ? `
       <section class="rv" data-block="feeds" id="sp-feeds">
-        ${sechead(tt("sp.feeds.title", "Feeds"), {icon: "pipe"})}
+        ${sechead(tt("sp.feeds.title", "Feeds"), {icon: "pipe", aside: srPlanFrom(b.key) ? srGo(spEsc(tt("sp.feeds.plan", "{who}'s plan · {t} ›", {who: srPlanFrom(b.key).who || "—", t: srWhen(srPlanFrom(b.key))})), srRowId(srPlanFrom(b.key)), null, tt("sb.roles.go.plan", "Open it on Plans & contracts")) : ""})}
         <div class="sp-feeds">${feedRows.map(r => {
           const site = D.businesses[r.s];
           return `<div class="sp-feed">${hoodHtml(site)}<span>${spEsc(shortName(site))}</span><span class="sp-tr"><i style="--w:${
@@ -8809,9 +8811,9 @@ function pgStateAt(siteKey, slug){
    of the one checklist (buildOrderChecklist); the views lay them out, and a
    row with a change carries its tick. */
 /* Registry: "A view or a page" (only if: see the checklist). */
-const SB_VIEWS = ["changes", "imports", "deliveries", "production", "flow"];
+const SB_VIEWS = ["changes", "roles", "imports", "deliveries", "production", "flow"];
 /* Registry: "A view or a page" (only if: see the checklist). */
-const SB_SEC = {changes: "secChanges", imports: "secImports", deliveries: "secDeliveries", production: "secProduction", flow: "secFlow"};
+const SB_SEC = {changes: "secChanges", roles: "secRoles", imports: "secImports", deliveries: "secDeliveries", production: "secProduction", flow: "secFlow"};
 /* The view each kind of change is typed on. A catch-up belongs to the import
    it bridges, or to the wholesale delivery; a factory's daily top-up and its
    run hours to Production, which plans the lines that eat them. */
@@ -8832,7 +8834,7 @@ function sbViewOf(r){
    entry (sbSnap(), nxSb), so Back, Forward and a reload find it again. */
 let sbWhich = "changes";
 const sbMode = {imports: "changes", deliveries: "changes", production: "changes"};
-const sbScope = {changes: "all", imports: "all", deliveries: "all", production: "all"};
+const sbScope = {changes: "all", roles: "all", imports: "all", deliveries: "all", production: "all"};
 let sbSel = null, sbSelOff = false;
 let sbArrive = null;
 /* The view Goods flow's Table goes back to. */
@@ -8873,7 +8875,7 @@ const sbIndexOf = key => { const s = key && hasData() ? (D.businesses || []).fin
 const sbSnap = () => ({who: hasData() ? D.meta.character || "" : "", scope: {...sbScope}, mode: {...sbMode},
   sel: sbSel ? {key: sbKeyOf(sbSel.s), slug: sbSel.slug} : null,
   arrive: sbArrive ? {view: sbArrive.view, key: sbKeyOf(sbArrive.s), slug: sbArrive.slug, crumb: sbArrive.crumb} : null,
-  table: sbTableView, pick: flowPickId});
+  table: sbTableView, pick: flowPickId, lit: srLit});
 function sbRestore(x){
   if(!x || typeof x !== "object") return;
   /* Another company's entry keeps nothing of its own here. */
@@ -8887,6 +8889,8 @@ function sbRestore(x){
   sbArrive = a && (at !== null || a.key === null) ? {view: a.view, s: at, slug: a.slug ?? null, crumb: a.crumb || ""} : null;
   if(SB_VIEWS.includes(x.table)) sbTableView = x.table;
   flowPickId = typeof x.pick === "string" ? x.pick : null;
+  srLit = x.lit && typeof x.lit.row === "string" ? {row: x.lit.row, stop: Number.isInteger(x.lit.stop) ? x.lit.stop : null} : null;
+  if(srLit){ srOpen.add(srLit.row); if(srLit.stop !== null) srOpen.add(`${srLit.row}:${srLit.stop}`); }
 }
 /* Every view back to its first state: another company's board. */
 function sbForget(){
@@ -9575,7 +9579,7 @@ function sbFill(sec, html){
   sec.innerHTML = html;
 }
 function drawSupplyView(view){
-  ({changes: drawChangesView, imports: drawImportsView, deliveries: drawDeliveriesView,
+  ({changes: drawChangesView, roles: drawRolesView, imports: drawImportsView, deliveries: drawDeliveriesView,
     production: drawProductionView, flow: drawFlowView}[view] || drawChangesView)();
 }
 /* After a view is drawn: the row a landing asked for may sit under
@@ -9643,7 +9647,46 @@ function bindSupply(){
     $$(`#pageSupply tr[data-kid="${CSS.escape(gid)}"]`).forEach(k => k.classList.toggle("sb-open", open));
   });
   on("click", "#pageSupply [data-sb-lines]", (a, e) => { e.preventDefault(); ssOpenSite(a.dataset.sbLines, "#sp-lines"); });
+  /* Plans & contracts: a row or a stop opens in place, Show all lists the rest. */
+  on("click", "#pageSupply tr[data-sr-row]", (tr, e) => {
+    if(e.target.closest("a, button, select, input, .map-shortcut")) return;
+    const id = tr.dataset.srRow, det = q(`#pageSupply tr[data-sr-of="${CSS.escape(id)}"]`);
+    if(!det) return;
+    const open = !srOpen.has(id);
+    if(open) srOpen.add(id); else srOpen.delete(id);
+    det.classList.toggle("sr-hide", !open); tr.classList.toggle("sr-opened", open);
+  });
+  on("click", "#pageSupply tr[data-sr-stop]", (tr, e) => {
+    if(e.target.closest("a, button, select, input, .map-shortcut")) return;
+    const id = tr.dataset.srStop, t = q(`#pageSupply tr[data-sr-of="${CSS.escape(id)}"]`);
+    if(!t) return;
+    const open = !srOpen.has(id);
+    if(open) srOpen.add(id); else srOpen.delete(id);
+    t.classList.toggle("sr-hide", !open); tr.classList.toggle("sr-dopen", open);
+  });
+  on("click", "#pageSupply [data-sr-all]", (b, e) => {
+    e.preventDefault();
+    const id = b.dataset.srAll, det = b.closest(".sr-det");
+    srAll.add(id);
+    if(det) $$("tbody > tr.sr-hide", det).forEach(r => { if(!r.matches("[data-sr-of]")) r.classList.remove("sr-hide"); });
+    const more = b.closest(".sr-more"); if(more) more.remove();
+  });
+  /* A finding chip here: its row on the view that owns it. */
+  on("click", "#pageSupply [data-sr-land]", (a, e) => {
+    if(e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    const [view, s, slug] = JSON.parse(a.dataset.srLand);
+    sbLand(view, s, slug, tt("sb.crumb.fromRoles", "from Plans & contracts"));
+  });
   on("click", "#pageSupply [data-sb-crumb]", (b, e) => { e.preventDefault(); const view = sbArrive ? sbArrive.view : sub.supply; sbArrive = null; sbAgain(view); });
+  on("click", "[data-sr-go]", (el, e) => {
+    if(e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    const [row, stop] = JSON.parse(el.dataset.srGo);
+    const from = el.closest("#secFlow") ? tt("sb.crumb.fromFlow", "from Goods flow") : el.closest("#secImports") ? tt("sb.crumb.fromImports", "from Imports")
+      : el.closest("#secDeliveries") ? tt("sb.crumb.fromDeliveries", "from Deliveries") : el.closest("#pageCompany") ? tt("sb.crumb.fromSite", "from its page") : "";
+    srLand(row, stop, from);
+  });
   on("click", "[data-sb-mode]", (a, e) => {
     e.preventDefault();
     const view = sub.supply;
@@ -10085,16 +10128,19 @@ function sbDepotPart(d, claimed, ctx, view, want){
     const left = rows.reduce((t, r) => t + r.chk.filter(c => !d.marks.has(c.key)).length, 0);
     const imp = d.importRows.find(x => x.s === s);
     const importers = imp ? [...new Set(imp.rows.flatMap(r => r.contracts.map(c => c.importer)).filter(Boolean))] : [];
-    const senders = [...new Set(rows.map(r => r.fact.from).filter(x => Number.isInteger(x) && D.businesses[x]).map(x => shortName(D.businesses[x])))];
+    const senders = [...new Set(rows.map(r => r.fact.from).filter(x => Number.isInteger(x) && D.businesses[x]))];
     const out = new Set(g.links.filter(l => l.from === b.key).map(l => l.to));
-    const firsts = sbList(importers.slice(0, 3).map(x => `<b>${spEsc(x)}</b>`));
+    const firsts = sbList(importers.slice(0, 3).map(x => srContractLink(x, b.key, `<b>${spEsc(x)}</b>`)));
+    const plan = srPlanLink(b.key);
     const who = importers.length > 3 ? tt("sb.list.more", "{list} and {n} more", {list: firsts, n: importers.length - 3}) : firsts;
     const how = [
       importers.length ? `<span>${spI("truck")}<em>${D.supply.nextImportWeekday
         ? tt("sb.wh.weeklyDay", "weekly from {who}, {day}", {who, day: sbDay(D.supply.nextImportWeekday)})
         : tt("sb.wh.weekly", "weekly from {who}", {who})}</em></span>` : "",
-      senders.length ? `<span>${spI("truck")}<em>${tt("sb.how.morning", "each morning from {from}", {from: sbAnd(senders.map(x => `<b>${spEsc(x)}</b>`))})}</em></span>` : "",
-      out.size ? `<span>${spI("right")}<em>${tt("sb.wh.feeds", {one: "feeds {n} site", other: "feeds {n} sites"}, {n: out.size})}</em></span>` : "",
+      senders.length ? `<span>${spI("truck")}<em>${tt("sb.how.morning", "each morning from {from}", {from: sbAnd(senders.map(x =>
+        srStopLink(D.businesses[x].key, b.key, `<b>${spEsc(shortName(D.businesses[x]))}</b>`)))})}</em></span>` : "",
+      out.size ? `<span>${spI("right")}<em>${tt("sb.wh.feeds", {one: "feeds {n} site", other: "feeds {n} sites"}, {n: out.size})}${plan ? ` · ${plan}` : ""}</em></span>`
+        : plan ? `<span>${spI("right")}<em>${plan}</em></span>` : "",
     ].filter(Boolean).join("");
     const floor = (b.lines || []).reduce((t, l) => t + (l.units || 0), 0);
     const weekUse = rows.reduce((t, r) => t + (r.week || 0), 0);
@@ -10334,10 +10380,13 @@ function sbFactoryPart(d, claimed, ctx, view, o){
       + (imports.length ? part(tt("sb.fac.imports.title", "Its own imports"), shownImports, imports,
         tt("sb.fac.imports.clear", {one: "{n} import, nothing to change", other: "{n} imports, nothing to change"}, {n: imports.length}),
         sbDepotTable(d, ctx, shownImports)) : "");
-    const from = [...new Set(inputs.map(r => r.from).filter(x => x !== null && x !== undefined && D.businesses[x]).map(x => shortName(D.businesses[x])))];
+    const from = [...new Set(inputs.map(r => r.from).filter(x => x !== null && x !== undefined && D.businesses[x]))];
+    const plan = b ? srPlanLink(b.key) : "";
     const to = [...new Set(g.links.filter(l => l.from === (b || {}).key).map(l => (g.nodes.find(n => n.id === l.to) || {}).name).filter(Boolean))];
     const firsts = sbList(to.slice(0, 3).map(x => spEsc(shortText(x, 40))));
-    const how = [from.length ? `<span>${spI("truck")}<em>${tt("sb.how.morning", "each morning from {from}", {from: sbAnd(from.map(x => `<b>${spEsc(x)}</b>`))})}</em></span>` : "",
+    const how = [from.length ? `<span>${spI("truck")}<em>${tt("sb.how.morning", "each morning from {from}", {from: sbAnd(from.map(x =>
+        b ? srStopLink(D.businesses[x].key, b.key, `<b>${spEsc(shortName(D.businesses[x]))}</b>`) : `<b>${spEsc(shortName(D.businesses[x]))}</b>`))})}</em></span>` : "",
+      plan ? `<span>${spI("route")}<em>${plan}</em></span>` : "",
       to.length ? `<span>${spI("right")}<em>${tt("sb.fac.shipsTo", "ships to {who}", {who: to.length > 3
         ? tt("sb.list.more", "{list} and {n} more", {list: firsts, n: to.length - 3}) : firsts})}</em></span>` : "",
       /* Production: Plan a factory for this factory (For = it). */
@@ -10877,6 +10926,351 @@ function drawProductionView(){
   sbWire(sec, [["factory-lines", SB_LINE_COLS], ["factory-inputs", SB_INPUT_COLS]], "production");
 }
 
+/* --- Plans & contracts: every Logistics Manager's plan, every Purchasing Agent's contract ---
+   The plans and contracts as the game holds them (supply.roles, from
+   _supply_roles() in Python), in the game's order: one row per role, a row
+   opening in place to its stops or products, a stop to its stock targets. The
+   role-level flags (srManagerFlags(), srAgentFlags()) are this view's own and
+   the only ones its count in the sidebar adds up; a finding that belongs to
+   Deliveries or Imports shows here as that kind's chip and links to its row
+   there. Rows are known by the plan's or contract's id (srRowId()), never by
+   their place in the list, so a refresh keeps what the reader opened. */
+const SR_DESTS = 8, SR_PRODUCTS = 10;
+/* The rows and stops opened, the lists shown whole, and the row a link landed on. */
+const srOpen = new Set(), srAll = new Set();
+let srLit = null;
+const srRoles = () => (hasData() && D.supply && D.supply.roles) || {managers: [], agents: []};
+const srRowId = r => r.plan ? `m:${r.plan}` : r.contract ? `a:${r.contract}` : r.gap ? `g:${r.key}` : `i:${r.id || ""}`;
+const srDash = '<span class="sr-dash">—</span>';
+/* A plan's daily round: warehouses at 02:00, factories at 08:00 (the game's help). */
+const srWhen = m => m.factory ? "08:00" : "02:00";
+const srChip = (cls, text, tip, icn) => `<span class="sb-v ${cls}"${tip ? ` data-tip="${attr(tip)}"` : ""}>${icn ? spIcon(icn) : ""}${text}</span>`;
+/* A finding that belongs to another view: its chip links to its row there. */
+const srLandChip = (text, tip, view, s, slug) => `<a class="sb-v bad" href="#supply/${view}" data-sr-land="${attr(JSON.stringify([view, s ?? null, slug ?? null]))}" data-tip="${attr(tip)}">${spIcon("down")}${text}</a>`;
+const srDay = d => tt("sb.roles.day", "Day {d} · {wd}", {d, wd: sbDayShort(WEEKDAY_NAMES[((d % 7) + 7) % 7])});
+const srSite = s => Number.isInteger(s) ? D.businesses[s] || null : null;
+const srSiteHtml = (s, name) => { const b = srSite(s); return b ? sbName(b) : `<span class="nm">${spEsc(name || "—")}</span>`; };
+const srImporterHtml = a => `<span class="nm" data-tip="${attr(a.pier || "")}"><span class="sp-i">${spIcon("ship")}</span>${spEsc(a.importer || a.pier || "—")}</span>`;
+/* The findings about one site's products that a view of Supply owns. */
+function srFinds(key, slugs, routes){
+  if(!key || !slugs.size || typeof alertLines !== "function") return [];
+  return alertLines().filter(a => !kindOff(a) && a.siteKey === key && a.ev && slugs.has(a.ev.slug)
+    && routes.includes(findingRoute(a).route));
+}
+const SR_DELIVERY_ROUTES = ["supply/deliveries"], SR_IMPORT_ROUTES = ["supply/imports", "supply/production"];
+const srViewOf = a => findingRoute(a).route.split("/")[1];
+/* A plan's flags: what keeps its deliveries from happening as set. */
+function srManagerFlags(m){
+  if(m.idle) return [srChip("warn", tt("sb.roles.flag.noPlan", "No plan"), tt("sb.roles.flag.noPlan.tip", "A Logistics Manager with no delivery plan"))];
+  if(m.gap === "factory") return [srChip("bad", tt("sb.roles.flag.notAssigned", "Logistics Manager not assigned"),
+    tt("sb.roles.flag.factoryGap.tip", "No delivery plan picks up from this factory, and your other sites hold or sell what it makes"))];
+  if(m.gap === "warehouse") return [srChip("warn", tt("sb.roles.flag.noRound", "No delivery plan"),
+    tt("sb.roles.flag.warehouseGap.tip", "Holds {n:,} units that no Logistics Manager's plan picks up", {n: m.holds || 0}))];
+  const out = [];
+  if(!m.who) out.push(srChip("bad", tt("sb.roles.flag.notAssigned", "Logistics Manager not assigned"),
+    tt("sb.roles.flag.planNoManager.tip", "The plan has nobody to run it")));
+  const n = (m.dests || []).length;
+  if(!n) out.push(srChip("warn", tt("sb.roles.flag.noDests", "No destinations"), tt("sb.roles.flag.noDests.tip", "The plan delivers nowhere")));
+  if(n > (m.reach || 0)) out.push(srChip("warn", tt("sb.roles.flag.over", "{n} stops · vehicles reach {r}", {n, r: m.reach || 0}),
+    tt("sb.roles.flag.over.tip", "The game: “Your current warehouse vehicles and drivers cannot support this many deliveries. The extra delivery locations will not receive deliveries.”")));
+  const empty = (m.dests || []).filter(x => !(x.targets || []).length).length;
+  if(empty) out.push(srChip("warn", tt("sb.roles.flag.emptyStops", {one: "Stop with no products", other: "{n} stops with no products"}, {n: empty}),
+    tt("sb.roles.flag.emptyStops.tip", "A destination with nothing set to deliver")));
+  return out;
+}
+function srAgentFlags(a){
+  if(a.idle) return [srChip("warn", tt("sb.roles.flag.noContract", "No contract"), tt("sb.roles.flag.noContract.tip", "A Purchasing Agent with no import contract"))];
+  const out = [];
+  if(!a.who) out.push(srChip("bad", tt("sb.roles.flag.noAgent", "Purchasing Agent not assigned"),
+    tt("sb.roles.flag.noAgent.tip", "The game cancels the order: “We couldn't find your Purchasing Agent to deliver your imports”")));
+  const none = (a.products || []).filter(p => !p.key).length;
+  if(none) out.push(srChip("warn", tt("sb.roles.flag.noWarehouse", {one: "{n} with no designated warehouse", other: "{n} with no designated warehouse"}, {n: none}),
+    tt("sb.roles.flag.noWarehouse.tip", "The game: “One or more products has no assigned designated warehouse”")));
+  return out;
+}
+/* The count beside Plans & contracts: its own flags, in the scope of the whole company. */
+function srCount(){
+  const r = srRoles();
+  return (r.managers || []).reduce((t, m) => t + srManagerFlags(m).length, 0) + (r.agents || []).reduce((t, a) => t + srAgentFlags(a).length, 0);
+}
+/* A destination's findings and a contract product's, from the views that own them. */
+const srStopFinds = d => srFinds(d.key, new Set((d.targets || []).map(t => t.slug)), SR_DELIVERY_ROUTES);
+const srProductFinds = p => srFinds(p.key, new Set([p.slug]), SR_IMPORT_ROUTES);
+function srCountChip(finds, view){
+  if(!finds.length) return "";
+  const text = view === "imports" ? tt("sb.roles.inImports", "{n} in Imports", {n: finds.length})
+    : view === "production" ? tt("sb.roles.inProduction", "{n} in Production", {n: finds.length})
+    : tt("sb.roles.inDeliveries", "{n} in Deliveries", {n: finds.length});
+  const a = finds[0], b = D.businesses.findIndex(x => x.key === a.siteKey);
+  return srLandChip(text, tt("sb.roles.finds.tip", "Findings on these rows: open the first"), view, b < 0 ? null : b, a.ev && a.ev.slug);
+}
+const srFindChip = (a, withItem) => {
+  const s = D.businesses.findIndex(x => x.key === a.siteKey);
+  const label = kindLabel(a.group);
+  const item = withItem && a.ev ? itemName(a.ev.slug) : "";
+  return srLandChip(item ? tt("sb.roles.find.item", "{item} · {kind}", {item: spEsc(item), kind: label}) : label,
+    tt("sb.roles.find.tip", "Open the row in {view}", {view: routeViewLabel(`supply/${srViewOf(a)}`)}), srViewOf(a), s < 0 ? null : s, a.ev && a.ev.slug);
+};
+/* Where a plan delivers, in a few words: each site once, a count where it recurs. */
+function srDeliversTo(dests){
+  const by = new Map();
+  (dests || []).forEach(x => {
+    const b = srSite(x.s);
+    const name = x.kind === "pier" ? tt("sb.roles.exportTo", "{importer} export", {importer: x.name}) : b ? baseName(b) : x.name;
+    by.set(name, (by.get(name) || 0) + 1);
+  });
+  const parts = [...by].map(([k, c]) => `${spEsc(k)}${c > 1 ? ` <em>×${c}</em>` : ""}`);
+  return parts.length ? parts.join(" · ") : srDash;
+}
+const srTog = `<span class="sr-tog">${spIcon("chev")}</span>`;
+const srOnHand = (s, slug) => { const b = srSite(s); const l = b && (b.lines || []).find(x => x.slug === slug); return l ? l.units : null; };
+const srN = v => Number.isFinite(v) ? num(Math.round(v)) : srDash;
+/* One stop's stock targets, every one, in the game's order: one column up to
+   12, two above. The amount's header is the game's for the plan's source. */
+function srTargets(m, d){
+  const end = d.kind === "pier" || d.kind === "other";
+  const amount = m.factory ? tt("sb.roles.col.upTo", "Deliver up to") : tt("sb.roles.col.minStock", "Minimum stock amount");
+  const finds = srStopFinds(d), by = new Map(finds.map(a => [a.ev.slug, a]));
+  const rows = (d.targets || []).map(t => {
+    const st = by.has(t.slug) ? `<td class="l st">${srFindChip(by.get(t.slug), false)}</td>` : finds.length ? '<td class="l st"></td>' : "";
+    if(end) return `<tr><td class="l">${spEsc(t.item)}</td><td>${num(t.amount)}</td></tr>`;
+    const f = Number.isInteger(d.s) ? supplyFact(d.s, t.slug) : null;
+    return `<tr><td class="l">${spEsc(t.item)}</td><td>${num(t.amount)}</td><td>${srN(srOnHand(d.s, t.slug))}</td><td>${srN(szDaily(f, null))}</td>${st}</tr>`;
+  });
+  const rate = d.kind === "shop" ? tt("sb.col.sells", "Sells / day") : tt("sb.roles.col.uses", "Uses / day");
+  const head = end ? `<thead><tr><th class="l">${tt("sb.col.product", "Product")}</th><th>${amount}</th></tr></thead>`
+    : `<thead><tr><th class="l">${tt("sb.col.product", "Product")}</th><th>${amount}</th><th>${tt("sb.col.onHand", "On hand")}</th><th>${rate}</th>${
+      finds.length ? `<th class="l">${tt("sb.col.status", "Status")}</th>` : ""}</tr></thead>`;
+  /* Two columns only where no Status column needs the room. */
+  if(rows.length > 12 && !finds.length){
+    const half = Math.ceil(rows.length / 2);
+    return `<div class="sr-cols"><table class="sr-tt">${head}<tbody>${rows.slice(0, half).join("")}</tbody></table><table class="sr-tt">${head}<tbody>${rows.slice(half).join("")}</tbody></table></div>`;
+  }
+  return `<table class="sr-tt${end ? " sr-narrow" : ""}">${head}<tbody>${rows.join("")}</tbody></table>`;
+}
+/* The first few targets of a stop, on its closed line. */
+function srTargetLine(d){
+  const t = d.targets || [];
+  if(!t.length) return `<em>${tt("sb.roles.noneSet", "none set")}</em>`;
+  const k = t.slice(0, 4).some(x => String(x.item).length > 18) ? 3 : 4;
+  const parts = t.slice(0, k).map(x => `${spEsc(x.item)}<b>${num(x.amount)}</b>`).join(" · ");
+  return t.length > k ? tt("sb.roles.more", "{list} +{n}", {list: parts, n: t.length - k}) : parts;
+}
+const srFollow = (id, label) => `<a class="link" href="#supply/flow" data-sb-toflow data-sb-follow="${attr(id)}">${spIcon("route")}${label}</a>`;
+function srManagerDetail(m, id){
+  const all = srAll.has(id), dests = m.dests || [];
+  const src = srSite(m.s);
+  const veh = (m.vehicles || []).map(v => v.driver
+    ? `<span class="v">${spIcon("truck")}${spEsc(v.name)} · ${spEsc(v.driver)}<b>${2 * v.reach}</b></span>`
+    : `<span class="v off" data-tip="${attr(tt("sb.roles.noDriver.tip", "No driver: it reaches no location"))}">${spIcon("truck")}${spEsc(v.name)} · ${tt("sb.roles.noDriver", "No driver")}<b>0</b></span>`).join("");
+  const line = `<div class="sr-veh"><span>${tt("sb.roles.vehiclesAt", "Vehicles at {site}", {site: spEsc(src ? shortName(src) : m.key || "")})}</span>${
+    veh || `<span>${tt("sb.roles.noVehicle", "no vehicle")}</span>`}<span class="eq">= ${tt("sb.roles.reach", "vehicles reach {n}", {n: `<b>${m.reach || 0}</b>`})}</span>${
+    m.key ? `<span class="go">${srFollow(m.key, tt("sb.roles.follow", "Follow in Goods flow"))}</span>` : ""}</div>`;
+  const amount = m.factory ? tt("sb.roles.col.upTo", "Deliver up to") : tt("sb.roles.col.minStock", "Minimum stock amount");
+  const rows = dests.map((d, k) => {
+    const sid = `${id}:${k}`, open = srOpen.has(sid), hide = !all && k >= SR_DESTS;
+    const lit = srLit && srLit.row === id && srLit.stop === k;
+    const finds = srStopFinds(d);
+    const flags = [!(d.targets || []).length ? srChip("warn", tt("sb.roles.flag.noProducts", "No products"), tt("sb.roles.flag.noProducts.tip", "The game: “No products available to deliver to this location.”")) : "",
+      ...finds.map(a => srFindChip(a, true))].join("");
+    const tag = d.kind === "wh" ? `<span class="sr-tag">${tt("sb.roles.tag.warehouse", "warehouse")}</span>`
+      : d.kind === "fac" ? `<span class="sr-tag">${tt("sb.roles.tag.factory", "factory")}</span>`
+      : d.kind === "pier" ? `<span class="sr-tag info">${tt("sb.roles.tag.export", "export")}</span>` : "";
+    const name = d.kind === "pier" ? `<span class="nm" data-tip="${attr(d.pier || "")}"><span class="sp-i">${spIcon("ship")}</span>${spEsc(d.name)}</span>` : srSiteHtml(d.s, d.name);
+    const follow = d.kind === "pier" ? `import:${d.key}` : d.key;
+    return `<tr class="sr-dr${open ? " sr-dopen" : ""}${hide ? " sr-hide" : ""}${lit ? " sr-lit" : ""}" data-sr-stop="${attr(sid)}"${lit ? " data-sb-at" : ""}><td class="no">${k + 1}</td>
+      <td class="l nm"><span class="sr-dtog">${spIcon("chev")}</span>${name}${tag}</td><td>${(d.targets || []).length}</td><td class="l tl">${srTargetLine(d)}</td>
+      <td class="l st">${flags}</td><td class="ln"><a class="sr-flow" href="#supply/flow" data-sb-toflow data-sb-follow="${attr(follow)}" data-tip="${attr(tt("sb.roles.follow.tip", "Follow it in Goods flow"))}" aria-label="${attr(tt("sb.roles.follow", "Follow in Goods flow"))}">${spIcon("route")}</a></td></tr>${
+      (d.targets || []).length ? `<tr class="sr-tgrow${open ? "" : " sr-hide"}" data-sr-of="${attr(sid)}"><td colspan="6">${srTargets(m, d)}</td></tr>` : ""}`;
+  }).join("");
+  const more = !all && dests.length > SR_DESTS ? `<p class="sr-more"><button type="button" data-sr-all="${attr(id)}">${
+    tt("sb.roles.showAllDests", "Show all {n} destinations", {n: dests.length})}</button><span>${tt("sb.roles.nMore", "{n} more", {n: dests.length - SR_DESTS})}</span></p>` : "";
+  const table = dests.length ? `<div class="scrollx"><table class="sr-dt"><thead><tr><th class="no"></th><th class="l">${tt("sb.roles.col.dest", "Destination, in delivery order")}</th><th>${
+    tt("sb.roles.col.products", "Products")}</th><th class="l">${amount}</th><th class="l">${tt("sb.col.status", "Status")}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${more}` : "";
+  return `<tr class="sr-detail${srOpen.has(id) ? "" : " sr-hide"}" data-sr-of="${attr(id)}"><td colspan="7"><div class="sr-det">${line}${table}</div></td></tr>`;
+}
+const srSkill = (skill, agent) => Number.isFinite(skill) && skill < 100
+  ? `<span class="sub">${agent ? tt("sb.roles.skillAgent", "skill {n}% · −{d}% on prices", {n: skill, d: Math.round(25 * skill / 100)}) : tt("sb.roles.skill", "skill {n}%", {n: skill})}</span>` : "";
+function srManagerRow(m){
+  const id = srRowId(m), gap = !!(m.idle || m.gap), open = !gap && srOpen.has(id);
+  const lit = srLit && srLit.row === id && srLit.stop === null;
+  const who = m.who ? `<b>${spEsc(m.who)}</b>${srSkill(m.skill)}` : "<b>—</b>";
+  const src = m.idle ? srDash : srSiteHtml(m.s, m.key);
+  const dests = m.dests || [], n = dests.length, over = n > (m.reach || 0);
+  const cap = gap ? srDash : `<span class="sr-cap"><span>${n}</span>${over ? "" : `<small>${tt("sb.roles.reach", "vehicles reach {n}", {n: m.reach || 0})}</small>`}</span>`;
+  const products = gap ? srDash : num(dests.reduce((t, d) => t + (d.targets || []).length, 0));
+  const finds = gap ? [] : dests.flatMap(srStopFinds);
+  return `<tr class="sr-row${open ? " sr-opened" : ""}${gap ? " sr-gap" : ""}${lit ? " sr-lit" : ""}" data-sr-row="${attr(id)}"${lit ? " data-sb-at" : ""}>
+    <td class="l who">${who}</td><td class="l site">${src}</td><td>${cap}</td><td>${products}</td><td class="l to">${gap ? srDash : srDeliversTo(dests)}</td>
+    <td class="l st">${srManagerFlags(m).join("")}${srCountChip(finds, "deliveries")}</td><td class="tg">${gap ? "" : srTog}</td></tr>${gap ? "" : srManagerDetail(m, id)}`;
+}
+function srManagersTable(rows){
+  const part = (label, list) => list.length ? `<tr class="sr-part"><td colspan="7">${label}</td></tr>${list.map(srManagerRow).join("")}` : "";
+  const wh = rows.filter(m => !m.idle && !m.factory), fac = rows.filter(m => !m.idle && m.factory), idle = rows.filter(m => m.idle);
+  return `<div class="scrollx"><table class="sb-t sr-t"><thead><tr><th class="l">${tt("sb.roles.col.manager", "Logistics Manager")}</th><th class="l">${tt("sb.roles.col.from", "From")}</th><th>${
+    tt("sb.roles.col.dests", "Destinations")}</th><th>${tt("sb.roles.col.products", "Products")}</th><th class="l">${tt("sb.roles.col.to", "Delivers to")}</th><th class="l">${
+    tt("sb.col.status", "Status")}</th><th></th></tr></thead><tbody>${
+    part(tt("sb.roles.part.wh", "From warehouses · daily {t}", {t: "<b>02:00</b>"}), wh)}${part(tt("sb.roles.part.fac", "From factories · daily {t}", {t: "<b>08:00</b>"}), fac)}${
+    part(tt("sb.roles.part.idle", "No plan"), idle)}</tbody></table></div>`;
+}
+/* A contract delivers only while it runs and has an agent: with none the game cancels the order. */
+const srDelivers = a => a.active && !!a.who && Number.isFinite(a.next);
+function srDeliveryCell(a){
+  if(!a.repeating) return `${tt("sb.roles.oneTime", "One-time delivery")}${a.active ? "" : `<span class="sub">${tt("sb.roles.delivered", "delivered")}</span>`}`;
+  return `${a.smart ? tt("sb.roles.smart", "Smart Delivery") : tt("sb.roles.weekly", "Weekly amount")}${a.active ? "" : `<span class="sub">${tt("sb.roles.paused", "paused")}</span>`}`;
+}
+function srAgentDetail(a, id){
+  const all = srAll.has(id), products = a.products || [];
+  const when = srDelivers(a) ? tt("sb.roles.nextLine", "next delivery {day} 08:00 · order by {by} 20:00", {day: srDay(a.next), by: srDay(a.next - 1)})
+    : tt("sb.roles.noneComing", "no delivery coming");
+  const line = `<div class="sr-veh"><span class="v">${spIcon("ship")}${spEsc(a.importer || a.pier || "")}</span><span>${when}</span>${
+    a.pierKey ? `<span class="go">${srFollow(`import:${a.pierKey}`, tt("sb.roles.follow", "Follow in Goods flow"))}</span>` : ""}</div>`;
+  let prev;
+  const rows = products.map((p, k) => {
+    const hide = !all && k >= SR_PRODUCTS;
+    const same = k > 0 && p.key && p.key === prev;
+    prev = p.key;
+    const finds = srProductFinds(p);
+    const flags = [!p.key ? srChip("warn", tt("sb.roles.flag.noWarehouseOne", "No designated warehouse"), tt("sb.roles.flag.noWarehouseOne.tip", "Nothing is delivered for it")) : "",
+      ...finds.map(f => srFindChip(f, false))].join("");
+    const f = Number.isInteger(p.s) ? supplyFact(p.s, p.slug) : null;
+    const to = !p.key ? srDash : same ? "" : srSiteHtml(p.s, p.key);
+    const go = Number.isInteger(p.s) ? `<a class="link" href="#supply/imports" data-sr-land="${attr(JSON.stringify(["imports", p.s, p.slug]))}">${tt("sb.roles.toImports", "Imports ›")}</a>` : "";
+    return `<tr${hide ? ' class="sr-hide"' : ""}><td class="l">${spEsc(p.item)}</td><td class="l nm">${to}</td><td>${num(p.amount)} <span class="sb-unit">${
+      a.smart ? tt("sb.unit.stock", "in stock") : tt("sb.unit.week", "a week")}</span></td><td>${num(p.last)}</td><td>${p.key ? srN(szWeekOf(f, null)) : srDash}</td><td class="l st">${flags}</td><td class="ln">${go}</td></tr>`;
+  }).join("");
+  const more = !all && products.length > SR_PRODUCTS ? `<p class="sr-more"><button type="button" data-sr-all="${attr(id)}">${
+    tt("sb.roles.showAllProducts", "Show all {n} products", {n: products.length})}</button><span>${tt("sb.roles.nMore", "{n} more", {n: products.length - SR_PRODUCTS})}</span></p>` : "";
+  const table = products.length ? `<div class="scrollx"><table class="sr-dt"><thead><tr><th class="l">${tt("sb.col.product", "Product")}</th><th class="l">${
+    tt("sb.roles.col.warehouse", "Designated warehouse")}</th><th>${a.smart ? tt("sb.roles.col.target", "# target") : tt("sb.roles.col.weekly", "Amount a week")}</th><th>${
+    tt("sb.roles.col.previous", "Previous")}</th><th>${tt("sb.roles.col.usesWeek", "Uses / week")}</th><th class="l">${tt("sb.col.status", "Status")}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${more}` : "";
+  return `<tr class="sr-detail${srOpen.has(id) ? "" : " sr-hide"}" data-sr-of="${attr(id)}"><td colspan="8"><div class="sr-det">${line}${table}</div></td></tr>`;
+}
+function srAgentRow(a){
+  const id = srRowId(a), open = !a.idle && srOpen.has(id);
+  const lit = srLit && srLit.row === id;
+  const who = a.who ? `<b>${spEsc(a.who)}</b>${srSkill(a.skill, true)}` : "<b>—</b>";
+  const flags = srAgentFlags(a).join("");
+  if(a.idle) return `<tr class="sr-row sr-gap${lit ? " sr-lit" : ""}" data-sr-row="${attr(id)}"${lit ? " data-sb-at" : ""}><td class="l who">${who}</td><td class="l">${srDash}</td><td class="l">${srDash}</td><td class="l">${srDash}</td><td>${srDash}</td><td class="l to">${srDash}</td><td class="l st">${flags}</td><td class="tg"></td></tr>`;
+  const by = new Map();
+  (a.products || []).forEach(p => { if(p.key) by.set(p.key, {s: p.s, n: ((by.get(p.key) || {}).n || 0) + 1}); });
+  const named = [...by].map(([k, v]) => { const b = srSite(v.s); return `${spEsc(b ? shortName(b) : k)} <em>×${v.n}</em>`; });
+  const to = named.length ? named.slice(0, 3).join(" · ") + (named.length > 3 ? ` <em>+${named.length - 3}</em>` : "") : srDash;
+  const finds = (a.products || []).flatMap(srProductFinds);
+  const view = finds.length && finds.every(f => srViewOf(f) === "production") ? "production" : "imports";
+  return `<tr class="sr-row${open ? " sr-opened" : ""}${a.who ? "" : " sr-gap"}${lit ? " sr-lit" : ""}" data-sr-row="${attr(id)}"${lit ? " data-sb-at" : ""}>
+    <td class="l who">${who}</td><td class="l site">${srImporterHtml(a)}</td><td class="l dl">${srDeliveryCell(a)}</td><td class="l">${srDelivers(a) ? srDay(a.next) : srDash}</td>
+    <td>${(a.products || []).length}</td><td class="l to">${to}</td><td class="l st">${flags}${srCountChip(finds, view)}</td><td class="tg">${srTog}</td></tr>${srAgentDetail(a, id)}`;
+}
+function srAgentsTable(rows){
+  return `<div class="scrollx"><table class="sb-t sr-t"><thead><tr><th class="l">${tt("sb.roles.col.agent", "Purchasing Agent")}</th><th class="l">${tt("sb.roles.col.importer", "Importer")}</th><th class="l">${
+    tt("sb.roles.col.delivery", "Delivery")}</th><th class="l">${tt("sb.roles.col.next", "Next delivery")}</th><th>${tt("sb.roles.col.products", "Products")}</th><th class="l">${
+    tt("sb.roles.col.toWarehouses", "To")}</th><th class="l">${tt("sb.col.status", "Status")}</th><th></th></tr></thead><tbody>${rows.map(srAgentRow).join("")}</tbody></table></div>`;
+}
+const srHead = (icn, title, counts) => `<div class="sr-gh"><h3>${spIcon(icn)}${title}</h3><span class="n">${counts.map(c => `<span>${c}</span>`).join("")}</span></div>`;
+const srEmpty = (icn, title, text) => `<div class="sr-none">${spIcon(icn)}<div><h3>${title}</h3><p>${text}</p></div></div>`;
+/* Whether a row is in the view's scope: a plan by its pick-up site, a
+   contract by any warehouse it delivers to. */
+function srInScope(r, agent){
+  if(sbScopeOf("roles") === "all") return true;
+  if(agent) return (r.products || []).some(p => Number.isInteger(p.s) && sbInScope("roles", p.s));
+  return Number.isInteger(r.s) && sbInScope("roles", r.s);
+}
+function drawRolesView(){
+  const sec = $("secRoles");
+  if(!sec || !hasData()) return;
+  if(!D.supply) return sbNoSupply(sec);
+  sbDrawing = "roles";
+  /* The light of a landing goes out with its crumb. */
+  if(!sbArrive || sbArrive.view !== "roles") srLit = null;
+  const r = srRoles();
+  const managers = (r.managers || []).filter(m => srInScope(m, false)), agents = (r.agents || []).filter(a => srInScope(a, true));
+  const none = !(r.managers || []).length && !(r.agents || []).length;
+  const plans = managers.filter(m => !m.idle && !m.gap);
+  const people = managers.filter(m => m.who).length, dests = plans.reduce((t, m) => t + (m.dests || []).length, 0);
+  const targets = plans.reduce((t, m) => t + (m.dests || []).reduce((u, d) => u + (d.targets || []).length, 0), 0);
+  const contracts = agents.filter(a => !a.idle), products = contracts.reduce((t, a) => t + (a.products || []).length, 0);
+  const lm = (r.managers || []).length ? srHead("truck", tt("sb.roles.managers", "Logistics Managers"), [
+      tt("sb.roles.n.managers", {one: "{b} manager", other: "{b} managers"}, {n: people, b: `<b>${people}</b>`}),
+      tt("sb.roles.n.dests", {one: "{b} destination", other: "{b} destinations"}, {n: dests, b: `<b>${num(dests)}</b>`}),
+      tt("sb.roles.n.products", {one: "{b} product", other: "{b} products"}, {n: targets, b: `<b>${num(targets)}</b>`})])
+    + (managers.length ? srManagersTable(managers) : `<p class="quiet">${tt("sb.roles.noneInScope", "Nothing in this scope.")}</p>`)
+    : srEmpty("truck", tt("sb.roles.empty.managers", "No Logistics Manager yet"), tt("sb.roles.empty.managers.how", "Delivery plans: {where}", {where: "<b>BizMan › Logistics Managers</b>"}));
+  const pa = (r.agents || []).length ? srHead("ship", tt("sb.roles.agents", "Purchasing Agents"), [
+      tt("sb.roles.n.agents", {one: "{b} agent", other: "{b} agents"}, {n: agents.filter(a => a.who).length, b: `<b>${agents.filter(a => a.who).length}</b>`}),
+      tt("sb.roles.n.contracts", {one: "{b} contract", other: "{b} contracts"}, {n: contracts.length, b: `<b>${contracts.length}</b>`}),
+      tt("sb.roles.n.products", {one: "{b} product", other: "{b} products"}, {n: products, b: `<b>${num(products)}</b>`})])
+    + (agents.length ? srAgentsTable(agents) : `<p class="quiet">${tt("sb.roles.noneInScope", "Nothing in this scope.")}</p>`)
+    : srEmpty("ship", tt("sb.roles.empty.agents", "No Purchasing Agent yet"), tt("sb.roles.empty.agents.how", "Import contracts: {where}", {where: "<b>BizMan › Purchasing Agents</b>"}));
+  const bar = none ? "" : sbToolbar("roles", {kinds: ["warehouses", "factories"]});
+  sbFill(sec, bar + sbVerdict("roles", "", true) + (none ? `<div class="sr-empty">${lm}${pa}</div>` : lm + pa));
+  if(sub.supply === "roles") sbPlaceFlow();
+}
+/* Land on Plans & contracts with one row lit and opened (and a stop of it),
+   and a crumb back, the way sbLand() lands on the other views. */
+function srLand(row, stop, crumb){
+  srLit = {row, stop: Number.isInteger(stop) ? stop : null};
+  srOpen.add(row);
+  if(srLit.stop !== null){ srOpen.add(`${row}:${srLit.stop}`); if(srLit.stop >= SR_DESTS) srAll.add(row); }
+  sbArrive = {view: "roles", s: null, slug: null, crumb: crumb || ""};
+  sbScope.roles = "all";
+  $$("#pageSupply [data-sb-at]").forEach(el => { el.removeAttribute("data-sb-at"); el.classList.remove("sb-arrived", "lit", "sr-lit"); });
+  $$("#pageSupply .sb-crumb").forEach(el => el.remove());
+  drawSupplyView("roles"); wireAll();
+  reveal("secRoles", "push", "#secRoles [data-sb-at]");
+  sbKeep();
+}
+/* The plans and contracts that bring goods to a site, and the plan that sends from it. */
+function srFeeding(key){
+  const r = srRoles(), out = [];
+  (r.agents || []).forEach(a => {
+    if(a.idle) return;
+    const n = (a.products || []).filter(p => p.key === key).length;
+    if(n) out.push({row: srRowId(a), stop: null, when: srDelivers(a) ? srDay(a.next) : tt("sb.roles.noneComingShort", "none coming"),
+      what: tt("sb.roles.by.contract", {one: "{who} · {importer}, {n} product", other: "{who} · {importer}, {n} products"},
+        {who: `<b>${spEsc(a.who || "—")}</b>`, importer: spEsc(a.importer || ""), n})});
+  });
+  (r.managers || []).forEach(m => (m.dests || []).forEach((d, k) => {
+    if(d.key !== key) return;
+    const src = srSite(m.s);
+    out.push({row: srRowId(m), stop: k, when: tt("sb.roles.daily", "daily {t}", {t: srWhen(m)}),
+      what: tt("sb.roles.by.plan", "{who} · {site}, stop {k} of {n}", {who: `<b>${spEsc(m.who || "—")}</b>`, site: spEsc(src ? shortName(src) : m.key), k: k + 1, n: m.dests.length})});
+  }));
+  return out;
+}
+const srPlanFrom = key => (srRoles().managers || []).find(m => m.key === key && !m.gap && !m.idle) || null;
+/* Goods flow's cards for the followed site: who delivers it, and what its own plan sends. */
+function srFlowCards(key){
+  const by = srFeeding(key), plan = srPlanFrom(key);
+  const li = x => `<li><span>${x.when}</span><span><button type="button" class="link" data-sr-go="${attr(JSON.stringify([x.row, x.stop]))}">${x.what}</button></span></li>`;
+  const cards = [];
+  if(by.length) cards.push(`<div class="sbf-card"><h3>${spIcon("truck")}${tt("sb.roles.deliveredBy", "Delivered by")}</h3><ul class="sr-who">${by.map(li).join("")}</ul></div>`);
+  if(plan) cards.push(`<div class="sbf-card"><h3>${spIcon("route")}${tt("sb.roles.sends", "Sends")}</h3><ul class="sr-who">${li({row: srRowId(plan), stop: null,
+    when: tt("sb.roles.daily", "daily {t}", {t: srWhen(plan)}), what: tt("sb.roles.sends.line", "{who} · {n} destinations, {t} products",
+      {who: `<b>${spEsc(plan.who || "—")}</b>`, n: (plan.dests || []).length, t: num((plan.dests || []).reduce((u, d) => u + (d.targets || []).length, 0))})})}</ul></div>`);
+  return cards.join("");
+}
+
+/* The ways into Plans & contracts from the other views' heads and a site's
+   page: the contract an importer runs to a depot, the plan stop that tops a
+   site up from a sender, and the plan a site sends with. Each a button that
+   lands on its row (data-sr-go, srLand()); with no such row, the words alone. */
+const srGo = (html, row, stop, tip) => row
+  ? `<button type="button" class="link sr-go" data-sr-go="${attr(JSON.stringify([row, Number.isInteger(stop) ? stop : null]))}"${tip ? ` data-tip="${attr(tip)}"` : ""}>${html}</button>` : html;
+function srContractLink(importer, key, html){
+  const a = (srRoles().agents || []).find(x => !x.idle && x.importer === importer && (x.products || []).some(p => p.key === key));
+  return a ? srGo(html, srRowId(a), null, tt("sb.roles.go.contract", "{who}'s contract · Plans & contracts", {who: a.who || "—"})) : html;
+}
+function srStopLink(srcKey, destKey, html){
+  const m = srPlanFrom(srcKey);
+  const k = m ? (m.dests || []).findIndex(d => d.key === destKey) : -1;
+  return k >= 0 ? srGo(html, srRowId(m), k, tt("sb.roles.go.stop", "{who}'s plan, stop {k} · Plans & contracts", {who: m.who || "—", k: k + 1})) : html;
+}
+function srPlanLink(srcKey){
+  const m = srPlanFrom(srcKey);
+  return m ? srGo(spEsc(tt("sb.roles.planOf", "{who}'s plan", {who: m.who || "—"})), srRowId(m), null, tt("sb.roles.go.plan", "Open it on Plans & contracts")) : "";
+}
+
 /* --- Goods flow: the chain as a picture, and the site it follows ------------ */
 function drawFlowView(){
   const sec = $("secFlow");
@@ -10926,7 +11320,8 @@ function drawFlowPanel(){
       const b = D.businesses[r.site];
       return `<li><button type="button" class="link" data-sb-go="${attr(JSON.stringify([r.view, r.site ?? null, r.slug ?? null]))}">${spEsc(r.item)}${b ? ` · ${spEsc(shortName(b))}` : ""}</button>${sbcChange(r)}<span class="sbc-st">${pgPill(r.review ? "review" : pgState(d, r), pgOf(r.key))}</span></li>`;
     }).join("")}</ul>` : `<p class="quiet">${tt("sb.flow.fixes.none", "No change on this site's route.")}</p>`}
-    <p class="sbf-leg">${tt("sb.flow.legend", "solid: the daily round · dashed: the weekly import · a red dot: short or no plan · amber: worth watching")}</p></div>`;
+    <p class="sbf-leg">${tt("sb.flow.legend", "solid: the daily round · dashed: the weekly import · a red dot: short or no plan · amber: worth watching")}</p></div>${
+    s >= 0 ? srFlowCards(D.businesses[s].key) : ""}`;
   if(chip) chip.textContent = node.name;
 }
 
@@ -18229,6 +18624,7 @@ const ROUTE_BEHAVIOR = {
      scope, Needs a change / Everything, the reviewed import and the followed
      site from the entry (nxSb); a new visit keeps what this visit last had. */
   "supply/changes": {enter: routeSupplyEnter, after: routeSupplyAfter},
+  "supply/roles": {enter: routeSupplyEnter, after(o){ routeSupplyAfter(o); featureDiscovery.visit("plans-contracts"); }},
   "supply/imports": {enter: routeSupplyEnter, after: routeSupplyAfter},
   "supply/deliveries": {enter: routeSupplyEnter, after: routeSupplyAfter},
   "supply/production": {enter: routeSupplyEnter, after: routeSupplyAfter},
@@ -18458,8 +18854,8 @@ const PAGE_DRAWS = [
   ["company/results", () => drawChart(), null, []], ["company/results", () => drawFinance(), null, []], ["company/results company/standards", () => drawPortfolio(), null, []],
   ["company/standards", () => drawStandards(), null, []],
   ["company/results", () => drawSitePicker(), null, []], ["", () => drawSite(), null, []],
-  ["today supply/changes supply/imports supply/deliveries supply/production supply/flow", () => drawSupplyStrip(), null, []],
-  ["supply/changes", () => drawChangesView(), null, []], ["supply/imports", () => drawImportsView(), null, []], ["supply/deliveries", () => drawDeliveriesView(), null, []],
+  ["today supply/changes supply/roles supply/imports supply/deliveries supply/production supply/flow", () => drawSupplyStrip(), null, []],
+  ["supply/changes", () => drawChangesView(), null, []], ["supply/roles", () => drawRolesView(), null, []], ["supply/imports", () => drawImportsView(), null, []], ["supply/deliveries", () => drawDeliveriesView(), null, []],
   ["supply/production", () => drawProductionView(), null, ["factoryStaffing"]], ["supply/flow", () => drawFlowView(), null, []], ["supply/flow", () => drawFlow(), null, []],
   ["growth/market", () => drawMovers(), null, []], ["growth/market", () => drawMarket(), null, []], ["growth/open", () => drawOpenStore(), null, ["openStore"]],
   ["growth/plan", () => drawPlan(), null, ["openFactory", "openStore"]],  // changed for growth: no drawExpansion()
@@ -18848,7 +19244,7 @@ function paintShell(){
 /* A view that is new carries the New badge in its area's row until it is
    opened (featureDiscovery); docs/contributing.md, "New feature badges". A var:
    paintLocal() runs before this line on load, as viewTips below does. */
-var VIEW_NEW = {"expansion/open": "open-store", "expansion/factory": "factory-flow"};
+var VIEW_NEW = {"supply/roles": "plans-contracts", "expansion/open": "open-store", "expansion/factory": "factory-flow"};
 function paintLocal(){
   const host = $("localNav");
   if(!host) return;
@@ -18926,6 +19322,7 @@ if(typeof MutationObserver !== "undefined"){
 function routeCount(id){
   if(!hasData()) return 0;
   if(id === "supply/changes") return typeof sbLeft !== "undefined" && sbLeft ? Object.values(sbLeft).reduce((s, n) => s + n, 0) : 0;
+  if(id === "supply/roles") return typeof srCount === "function" && D.supply ? srCount() : 0;
   if(/^supply\/(imports|deliveries|production)$/.test(id)) return typeof sbLeft !== "undefined" && sbLeft ? sbLeft[id.split("/")[1]] || 0 : 0;
   if(id === "staffing/needs" && typeof alertLines === "function")
     return alertLines().filter(a => (a.group === "jobdemand" || a.group === "companydemand") && !(typeof kindOff === "function" && kindOff(a))).length;
@@ -20403,6 +20800,10 @@ const SS_VIEWS = [
      return d.rows.length ? {p: n ? tt("nav.search.checklist.left", {one: "Supply › Changes · {n} change to type", other: "Supply › Changes · {n} changes to type"}, {n})
        : tt("nav.search.checklist.done", "Supply › Changes · all ticked")} : {}; },
    go: () => openRoute("supply/changes")},
+  {id: "roles", get t(){ return tt("nav.search.roles.title", "Plans & contracts"); },
+   get p(){ return tt("nav.search.roles.line", "Supply › Plans & contracts · every delivery plan and import contract"); }, ic: "truck",
+   syn: ["logistics manager", "purchasing agent", "delivery plan", "import contract", "managers", "agents", "who delivers", "vehicles", "drivers", "importers"],
+   go: () => openRoute("supply/roles")},
   {id: "imports", get t(){ return tt("nav.search.imports.title", "Imports"); },
    get p(){ return tt("nav.search.imports.line", "Supply › Imports · weekly contracts"); }, ic: "truck", syn: ["import", "importer", "contracts", "weekly order", "what should i import", "orders", "weekly imports", "import amounts"],
    go: () => openRoute("supply/imports")},

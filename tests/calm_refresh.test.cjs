@@ -607,7 +607,7 @@ for(const [hash, saved, view, shell] of [
   ["", {ba_dash_page: "staffing", ba_dash_staffing: "payroll"}, "staffing/payroll"],
   ["#site/secondavenue-10", {}, "company/results"],
   ...["businesses/results", "businesses/standards", "businesses/prices", "businesses/milestones",
-    "supply/changes", "supply/imports", "supply/deliveries", "supply/production", "supply/flow",
+    "supply/changes", "supply/roles", "supply/imports", "supply/deliveries", "supply/production", "supply/flow",
     "staffing/needs", "staffing/schedules", "expansion/demand", "expansion/open", "expansion/factory"]
     .map(id => ["#" + id, {}, ({"businesses/results": "company/results", "businesses/standards": "company/standards",
       "businesses/prices": "company/products", "businesses/milestones": "company/milestones",

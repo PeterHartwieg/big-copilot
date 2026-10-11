@@ -101,6 +101,7 @@ The board's words and the code's ids often differ, so grep the id, not the word.
 | At capacity, building capacity | finding kind `atcap`; the capacities are `_door_caps()` and `FALLBACK_CAPS` |
 | Milestones | `secGoals`, drawn by `drawGoals()` |
 | Staffing for factory lines | `drawFactoryStaffing()`, over the `factoryStaffing` payload key from `_factory_staffing()` |
+| Plans & contracts (Supply: every delivery plan and import contract) | `roles`: route `supply/roles`, `secRoles`, `drawRolesView()` and the `sr*` helpers in the board script, over `supply.roles` from `_supply_roles()`; an importer's name is `_importer_name()` |
 
 Words the board does not use, in UI text, wiki text and docs alike (code ids keep their
 names):

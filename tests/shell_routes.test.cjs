@@ -698,7 +698,7 @@ test("the full sidebar holds the open area's views; the page starts with the vie
   assert.equal(s.inSide, true);
   assert.equal(s.under, 'supply');
   assert.deepEqual(await page.locator('#localNav a[data-route]').evaluateAll(as => as.map(a => a.dataset.route)),
-    ['supply/changes', 'supply/imports', 'supply/deliveries', 'supply/production', 'supply/flow']);
+    ['supply/changes', 'supply/roles', 'supply/imports', 'supply/deliveries', 'supply/production', 'supply/flow']);
   assert.equal(await page.locator('#nav > a[data-id="businesses"] .sd-cv').isVisible(), true);
   assert.equal(await page.locator('#nav > a[data-id="supply"] .sd-cv').isVisible(), false);
   // The top of the page: the scope, the mode and the basis, and no row of views.
@@ -736,7 +736,9 @@ test("the full sidebar holds the open area's views; the page starts with the vie
 });
 
 test('the fold button makes the sidebar a rail and back, remembered on this device; the rail puts the views beside the controls', async t => {
-  const page = await board(t, {hash: '#supply/imports', width: 1440});
+  // 1600: since Plans & contracts, Supply's six views and Imports' controls
+  // (scope, mode, basis) take more than a 1440 px window's one line.
+  const page = await board(t, {hash: '#supply/imports', width: 1600});
   await page.locator('#viewCtl .sbv-bar').waitFor();
   const fold = page.locator('#sdToggle');
   assert.equal(await fold.getAttribute('aria-label'), en("nav.side.collapse"));
@@ -748,7 +750,7 @@ test('the fold button makes the sidebar a rail and back, remembered on this devi
   assert.equal(s.stored, 'rail');
   assert.equal(await fold.getAttribute('aria-label'), en("nav.side.expand"));
   assert.equal(await fold.getAttribute('aria-expanded'), 'false');
-  // The views are back at the top of the page, before the controls, on one line at 1440.
+  // The views are back at the top of the page, before the controls, on one line at 1600.
   assert.equal(s.inSide, false);
   assert.equal(s.rowViews, true);
   const boxes = await page.evaluate(() => ['localNav', 'viewCtl'].map(id => { const r = document.getElementById(id).getBoundingClientRect(); return [r.left, r.top, r.bottom]; }));

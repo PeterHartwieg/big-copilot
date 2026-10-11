@@ -1,5 +1,11 @@
 [
   {
+    "pr": 448,
+    "date": "2026-10-11",
+    "title": "See every delivery plan and import contract in one place",
+    "summary": "Supply has a new view, Plans & contracts: every Logistics Manager's delivery plan and every Purchasing Agent's import contract, one row each in the game's order. Open a plan for its stops and each stop's stock targets, or a contract for its products and designated warehouses. It flags what keeps goods from moving: more stops than the vehicles reach, a contract with no agent, products with no designated warehouse, a manager or agent with nothing to run, and a factory or warehouse no plan picks up from. Importers are now named by their own names everywhere on the board, in your language."
+  },
+  {
     "pr": 444,
     "date": "2026-10-10",
     "title": "Add optional items to a new store's shopping list",

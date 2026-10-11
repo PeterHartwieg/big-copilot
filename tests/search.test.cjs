@@ -913,7 +913,7 @@ test('profit: switching the portfolio to Operations takes the landing down', asy
 /* Everything renderAll() draws but the site panel and its picker, which the
    test board draws itself: a live refresh then runs as the app runs it. */
 const quietRender = page => page.evaluate(() => {
-  ['indexTrends', 'drawMast', 'drawKpis', 'drawAlerts', 'drawRhythm', 'drawSupplyStrip', 'drawChangesView', 'drawImportsView', 'drawDeliveriesView', 'drawProductionView', 'drawFlowView',
+  ['indexTrends', 'drawMast', 'drawKpis', 'drawAlerts', 'drawRhythm', 'drawSupplyStrip', 'drawChangesView', 'drawRolesView', 'drawImportsView', 'drawDeliveriesView', 'drawProductionView', 'drawFlowView',
    'drawFlow', 'drawMovers', 'drawMarket', 'drawOpenStore', 'drawPlan', 'drawProducts', 'drawStaff', 'drawGoals', 'drawFindLocation',
    'drawOptimizeStaffing', 'drawFooter', 'wireAll', 'refreshCityMaps'].forEach(name => { window[name] = () => {}; });
 });

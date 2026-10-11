@@ -23,7 +23,7 @@ time. From the top it holds the company name with the sphere, Search, the areas,
 references, and at its foot the game clock, Update (on the hosted page only) and one ···
 menu: the save source on the hosted page, then What's new, Preferences and Help &
 feedback. **Overview** is the daily check. **Businesses** (Results, Products & prices,
-Standards, Milestones), **Supply** (Changes, Imports, Deliveries, Production, Goods flow),
+Standards, Milestones), **Supply** (Changes, Plans & contracts, Imports, Deliveries, Production, Goods flow),
 **Staffing** (Schedules, Payroll, Staff needs) and **Expansion** (Demand, Find a location,
 Plan a factory) each list their views under them in the sidebar while they are open, each
 view with its count. The **City map** and the **Wiki** sit under the areas. The top of a
@@ -140,7 +140,7 @@ the map.
     an hour-by-hour grid comparing historical customers with capacity from the
     current schedule. A picker in its header moves between sites, support sites in
     their own group, and *close* puts it away.
-- **Supply**: the logistics round, five views by task: **Changes**, **Imports**,
+- **Supply**: the logistics round, six views by task: **Changes**, **Plans & contracts**, **Imports**,
   **Deliveries**, **Production** and **Goods flow**. Shops, warehouses and factories are each
   view's *Scope* (the whole company, every site of a kind, or one site). Each view opens on
   *Needs a change*, with *Everything* beside it; the planning basis switch sits in each.
@@ -152,6 +152,25 @@ the map.
     writes the import figures through the game link; *Clear my marks* clears your ticks.
     Marks are local to this browser and character, and clear when their setting or
     recommendation changes. Storage and transport limits are not modelled.
+  - *Plans & contracts*: every Logistics Manager's delivery plan and every Purchasing
+    Agent's import contract, one row each, in the game's order. A plan shows where it picks
+    up (warehouse plans run daily at 02:00, factory plans at 08:00), its stops in delivery
+    order with the vehicle limit ("vehicles reach N": twice what the site's vehicles with a
+    driver reach, the game's own limit; the skill limit is not claimed), and, opened, each
+    stop's stock targets in the game's order, headed "Minimum stock amount" on a warehouse's
+    plan and "Deliver up to" on a factory's (a pier stop is an export, named by its
+    importer). A contract shows its importer by the game's name, Smart Delivery, a weekly
+    amount or a one-time delivery, the next delivery day, and its products with their
+    designated warehouse. Flagged here: more stops than the vehicles reach, a plan with no
+    destinations, a stop with no products, a Logistics Manager with no plan, a factory no
+    plan picks up from while your other sites hold or sell what it makes ("Logistics Manager
+    not assigned"), a warehouse holding stock that no plan picks up from, a contract with no
+    agent (the game cancels its order, so no delivery is coming), products with no
+    designated warehouse, and a Purchasing Agent with no contract. These are the view's
+    count; a finding of Deliveries, Imports or Production shows on its row and links there.
+    Goods flow's followed site lists who delivers it and what its own plan sends, and the
+    heads of Imports, Deliveries and Production and a warehouse's or factory's Feeds link
+    back here.
   - *Imports*: a card reviewing one import line, then every depot's and factory's import
     lines. The card holds the weekly order (or Smart Delivery stock) apart from a one-time
     catch-up bought by hand before the next delivery, the figure's box with the basis it was
