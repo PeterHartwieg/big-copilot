@@ -216,13 +216,11 @@ the map.
     switch shows, an office's by customer demand where measured and the office default otherwise. Each hire week is a week one new
     person could work under the game's rules (12 hours a day, 50 a week),
     so the count is people, not hours divided by 40.
-  - *Office demand*: customer reports do not include historical staffing. Imported
-    counts remain lower bounds. A deliberate measurement records an office's demand
-    locally for this company and business; changing the schedule alone never changes that
-    estimate. Offices use one computer per customer per hour. Demand plans can reduce
-    professional hours while preserving cleaning, other duties and opening hours. See
-    *Measuring office demand* below. Shops have no measurement: their demand plan is read
-    from their own reports, as *The need curve* below describes.
+  - *Office demand*: read from the office's own reports, as a shop's is (*The need
+    curve* below), with no measurement to start. Offices use one computer per customer
+    per hour. Demand plans add computers where hours are full, and cut an hour only when
+    its two latest reports both came two or more under today's computers, preserving cleaning, other duties and opening hours. See *An
+    office's demand plan* below.
   - *The office default*: three computers staffed around the clock in a building with a
     building capacity of 50, proportionally fewer in smaller ones (at least one); every
     computer 08-22 on weekdays; half the computers 08-22 on weekends, the round-the-clock
@@ -584,8 +582,8 @@ per weekday gives +0.96 for this alignment, against +0.60 for the next best rota
 
 The board does not raise these two for a save it reads today: its customer counts cannot
 say which staffing was present when they were taken. The rules below describe the
-measured-grid calculation for direct callers. A shop's demand plan still reads those
-counts (*The need curve*, below). Verified cinema equipment limits remain visible when
+measured-grid calculation for direct callers. Shop and office demand plans still read
+those counts (*The need curve*, below). Verified cinema equipment limits remain visible when
 reported customers reach that capacity; that compares observations with known installed
 equipment only, and infers no historical staffing shortfall.
 
@@ -875,18 +873,35 @@ says why in one line instead of the progress: the demand plan also needs every s
 every hour (keep this staffing), or the game does not staff every station every open hour
 (the data is complete as staffed, and an empty station may have turned customers away).
 
-**Measuring office demand.** Choose *Plan demand measurement* in an office's Staffing
-block. The proposal uses current spare capacity; where historical served counts reach
-current capacity, it proposes one additional computer. An unstaffed hour starts with one.
-Apply the proposed week, then read the save again: only a reread with sufficient actual
-coverage starts the period, from the next game day. Keep staffing and opening hours
-unchanged. Two completed occurrences of every tested weekday/hour are needed within 28
-game days; changed context, undo or the deadline stops it. Once ready, confirm only if
-the staff worked throughout. Only hours with spare capacity in every sample become
-learned demand, at their average served count; still-constrained hours remain lower
-bounds. Confirmed zero can remove professional hours; retained duties still count toward
-employee requirements and the 50-hour weekly limit. History is local to the browser or
-`market_history.json` for the CLI, and forgetting it loses what was learned.
+**An office's demand plan.** The need curve above, over the office's own reports, one
+computer per customer per hour: nine finished days after its first customer complete the
+data, as a shop's, and before that a weekday with under two weeks of reports has no
+reading of its own. Because each customer is one professional at one computer, an hour whose
+customers came within 95% of the computers staffed now says only that the computers were
+full: it is `censored`, and the plan asks for one computer more there, never more than
+the computers installed or the building capacity, so an office held back by its staffing
+grows a computer at a time rather than being planned at the staffing it had. Otherwise
+the plan keeps the computers staffed now (up to the building capacity) in an hour it has a
+reading for: the game's hour reports keep the customers and nothing of the staffing that
+was on, and in an office the customers are that staffing, so 2 an hour under today's 3
+computers may only mean two computers were on when they came, before the plan's last step
+up. It cuts an hour only when that hour's two latest reports, one from each of the last
+two weeks it filed one, both came two or more under the computers staffed now: then it
+asks for the higher of the two plus one spare computer, so 20 computers serving 10 and 10
+become 11. A reading one under is never a cut, a single report is never a cut, and since
+the plan grows by one computer at a time it never undoes its own growth. From 20
+computers an hour, where a reading one under already counts as full, the readings must
+also be under 95% of one computer fewer, so 19 and 19 under 21 computers stay at 21. A
+player who adds two or more computers by hand may see an hour cut once and then grow
+back. An hour with no report on file has no reading (the office may only now be staffed
+then), and neither has a zero with nobody at a computer now: such an hour keeps the
+office default or the computers staffed now (up to the building capacity), whichever is
+more, and so does any open hour with no reading. An office with no reading at all gets
+the office default. Cleaning and other
+duties stay as they are and still count toward employee requirements and the 50-hour
+weekly limit. There is no full-cover test and no hand-over for an office, and no
+measurement to start: Peter asked for the shop's logic (10 October 2026), and the
+earlier measurement's record is dropped from local history on its next write.
 
 ### The rules every planned week keeps
 

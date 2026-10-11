@@ -3385,7 +3385,6 @@ test('an outgoing-only site with nothing of its own to schedule still offers Sta
     // staffing action when somebody can move out of the site.
     const row = d.staffing.find(r => r.key === C);
     Object.assign(row, {shifts: [], demandBased});
-    if (!demandBased) delete row.demandEvidence;
     const page = await board(t, {link: ONE, data: JSON.stringify(d)});
     const block = await siteBlock(page, C);
     assert.match(await block.textContent(), enRe("sp.roster.none"));

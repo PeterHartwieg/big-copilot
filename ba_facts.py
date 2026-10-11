@@ -19,11 +19,6 @@ MAX_ROWS = 10000
 CAMPAIGNS = ("SmallInternet", "MediumInternet", "LargeInternet", "SmallBillboard", "MediumBillboard", "LargeBillboard")
 
 
-def digest(value):
-    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"),
-                                     allow_nan=False).encode()).hexdigest()
-
-
 def number(value, minimum=0):
     return type(value) in (int, float) and math.isfinite(value) and minimum <= value <= 1e12
 
@@ -237,7 +232,4 @@ def resolve(save, baseline):
                     row["marketingRules"]["reachMultiplier"] = 0
             else:
                 row["factsUnavailable"] = True
-    for row in table.values():
-        if "factsSource" in row or row.get("factsUnavailable"):
-            row["factsRevision"] = digest(row)
     return table

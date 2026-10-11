@@ -212,56 +212,41 @@ it); `needDay`, the uncapped figure Demand sizing works from plus the margin; an
 null where no demand can be read. `supply.factories.sites[]` counts `running` machines (a recipe and
 somebody posted) beside the placed ones (`machines`).
 
-Office plans keep persistent demand evidence. `build_core()` calls
-`_staff_evidence_ingest()` before `History.write()` and attaches a detached private
-`evidence` view to the office planning grids. Shop grids get none: a shop's demand plan
-is read from its own reports by `_need_curve()` over `_run_measured()`, with the full-cover
-test and its hand-over, and there is no measurement to start (Peter, 9 October 2026).
-The ingest marks a shop grid `countsOnly` and zeroes its `capHours`, so `_hour_findings()`
-still raises no historical-capacity finding for it; only the cinema equipment limit stays. Neither those observations nor their context
-snapshots ship in `hours`; lazy sections never mutate history. `_need_curve()` uses
-`_staff_evidence_need()` for the office grids. Legacy direct callers can still supply an
-already-measured grid.
-
-`History` keeps versioned `staffingEvidence.sites` per character, keyed by address
-and checked against creation day, business type and registration ID. The active
-record holds the game clock, at most 42 completed daily reports, current context,
-initial fallback capacity, compact learned weekday/hour cells and at most one
-measurement session. Rewinds, changed overlapping reports, business replacement
-or missing overlap reset confidence. Renaming and staffing changes preserve learned
-demand. Demand-affecting changes mark it stale. Backfill does not advance sessions.
-Concurrent writers reject conflicting evidence updates instead of merging sessions.
-
-Imported reports are lower bounds; missing reports are unknown. A deliberate session
-has `pending`, `active`, `ready`, `confirmed` or `stopped` phase. Start proposes current
-spare capacity, or one additional station of a unique limiting role, within installed,
-building and next-role limits. A reread with sufficient actual capacity
-activates the session from the following game day. Two completed occurrences per
-weekday/hour are required within 28 days. Matching context supports continuity but
-cannot prove it: the player confirms that staffing and stock stayed available before
-any unconstrained result becomes learned demand. All samples must have headroom;
-constrained results remain uncertain. Applying, undoing or previewing a schedule is
-never a demand observation. Changed active context stops the session.
-
-Office rows carry `demandBased: true` and `demandEvidence` (persistence availability,
-phase, target/sample counts, confirmed-cell count and stale flag). Their `basis` values
-are `confirmed`, `lower`, `trial`, `none` and `closed`. Unknown cells retain baseline
-coverage and positive served-customer floors; new offices use their initial staffing
-fallback. The office fallback is `_office_runs()`: proportionally three computers
-around the clock for capacity 50, all on weekdays 08–22, half on weekends, clipped to
-opening hours. Office professional hours use one computer per customer per hour.
+Shop and office demand plans are read from their own reports, with no measurement to
+start (Peter, 9 and 10 October 2026). `build_core()` calls `_counts_only()`, which marks
+every shop and office grid `countsOnly` and zeroes its `capHours`, so `_hour_findings()`
+raises no historical-capacity finding for either; only the cinema equipment limit stays.
+`countsOnly` does not ship in `hours`. A shop's plan is `_need_curve()` over
+`_run_measured()`, with the full-cover test and its hand-over. An office's is
+`_office_need()`: the same two over the office's own `_days_open()` and
+`_open_day_average()`, with one computer per customer per hour. An hour whose customers
+came within 95% of the computers staffed now is `censored` and gets one more computer,
+bounded by the computers installed and the building capacity. A read hour is planned
+at no fewer than the computers staffed now, up to the building capacity: an hour report
+holds no staffing, and an office's customers are the staffing that was on, so fewer
+customers than today's computers may only mean fewer computers then. The exception is
+an hour whose two latest reports (`_office_recent()`, one per week) both sit
+`OFFICE_CUT_GAP` (2) or more under today's computers, and under 95% (`AT_CAP`) of one
+computer fewer: it is planned at the higher of them plus one. The plan only ever adds one
+computer at a time, so a reading one under today's may predate its own last step and
+never cuts; two under cannot, and from 20 computers, where 95% already counts a reading
+one under as full, the second test keeps the cut from undoing that step. Fewer than two
+reports never cut. A player who adds two or more computers by hand may see one cut before
+the hour grows back. An hour with no report on file, or a zero with nobody at a computer
+now, is no reading, and an unread open hour keeps the office default or the current
+staffing up to the building capacity, whichever is higher. An office with no reading
+anywhere gets the office default, `_office_runs()`:
+proportionally three computers around the clock for capacity 50, all on weekdays 08–22,
+half on weekends, clipped to opening hours. Office rows with a reading carry
+`demandBased: true` and `basis` values `measured`, `censored`, `office` and `closed`.
+`History.write()` drops the `staffingEvidence` record the retired office measurement kept,
+so an older history file loses it on its next write.
 
 Office demand writes replace computer hours and retain other duties. `_place_week()`
 accepts fixed duties explicitly: placement, pins, weekly limits, minimum hours and
 spare-person accounting use the complete week, while writes replace only planned
 duties. Unreadable office schedules are excluded from batch schedule writes; assignments
 may proceed with a named warning. Opening hours and the existing review/undo flow stay.
-
-`browser_staff_measurement()` validates the held generation; the browser worker's
-`staff-measurement` message and the local watcher's JSON `/staff-measurement` endpoint
-record start/confirm/stop actions and rebuild. A static exported board shows the state
-but cannot record a session. Storage failure is visible and history forgetting clears
-learning along with the other local history.
 
 `candidates` is one row per offer in `CandidateEmployeeInstances` (an older save's
 `hired`/`declined` rows left out), best first: top skill `level` descending, then `wage`,
@@ -698,7 +683,7 @@ immutable, and each new Build computes its own invariant digest.
 Keys use SHA-256 over typed canonical values: mappings/sets sort by typed values, lists
 and tuples retain their type and order, and Msg values include English, catalogue key and
 params. Namespace includes stage, `PLANNING_CACHE_VERSION`, character and game build.
-Inputs conservatively retain whole businesses, grids (measurement evidence and persistence
+Inputs conservatively retain whole businesses, grids (their `countsOnly` mark
 included), staff, effective Names locale/help pages, resolved building facts, demand curves,
 placer rule constants and the complete predecessor world. Shops additionally include base
 promotion; factories include their lines and private post identities. Direct raw planner

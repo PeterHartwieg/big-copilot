@@ -66,10 +66,6 @@ class BuildingFacts(unittest.TestCase):
         self.assertEqual(d.load_buildings(), baseline)
         plain = Save(self.root, {}, "plain.hsg")
         self.assertEqual(d.load_buildings(plain), baseline)
-        # Changed values at the same address cannot reuse the learned demand context.
-        before = row["factsRevision"]
-        self.facts["buildings"][0]["capacity"] = 120
-        self.assertNotEqual(d.load_buildings(self.load())[GIFTS]["factsRevision"], before)
 
     def test_mismatched_pairs_and_invalid_values_are_rejected(self):
         for field, value in (("saveSha256", "0" * 64), ("schemaVersion", 2), ("model", "new-formula"),

@@ -16,12 +16,6 @@ const SOURCE = window.LEDGER_SOURCE || {
                          body: JSON.stringify({rid, slug: slug || null})});
     return SOURCE.data();
   },
-  staffingMeasurement: async (key, action) => {
-    const res = await fetch("staff-measurement", {method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({key, action, character: D.meta.character, day: D.meta.day})});
-    if(!res.ok) throw new Error(tt("sp.evidence.failed", "The measurement could not be saved. Read the business again and retry."));
-    return SOURCE.data();
-  },
   /* The save on disk only changes when the game writes one, so this polls a
      cheap stamp and pulls fresh numbers only when that stamp moves. */
   watch(h){
@@ -5450,11 +5444,8 @@ const spStationKind = (row, st) => ((row.headcount || {})[st.skill] || {}).kind 
 /* One hour of the need strip: how many stations the measured hours ask for,
    and the least certain basis among the roles asking. An hour nobody has a
    reading for is not drawn at all -- an unknown is never a zero. */
-const SP_BASIS_CLASS = {lower: "sp-cens", trial: "sp-scaled", confirmed: "", closed: "", censored: "sp-cens", scaled: "sp-scaled", measured: ""};
+const SP_BASIS_CLASS = {closed: "", censored: "sp-cens", scaled: "sp-scaled", measured: ""};
 const SP_BASIS_READ = {
-  get lower(){ return " · " + tt("sp.basis.lower", "served-customer lower bound; historical staffing is unknown"); },
-  get trial(){ return " · " + tt("sp.basis.trial", "temporary measurement capacity, not learned demand"); },
-  get confirmed(){ return " · " + tt("sp.basis.confirmed", "demand measured during a period you confirmed"); },
   get censored(){ return " · " + tt("sp.basis.censored", "<b>measured at the ceiling</b>: the hour was full, so this is a floor, not a target"); },
   get scaled(){ return " · " + tt("sp.basis.scaled", "<b>scaled from the best measured day</b> through the game's day curve; this weekday rests on under two weeks"); },
   get measured(){ return " · " + tt("sp.basis.measured", "measured"); },
@@ -5886,7 +5877,6 @@ function spRosterNone(row, pick, key){
       ? tt("sp.roster.failed.why", "This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.")
       : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling counts everyone who may walk in, not the customers a shop like this serves, so nothing is suggested from it.")})}
     ${pick || ""}
-    ${spDemandEvidence(row)}
     ${row && row.demandBased && key ? gwRosterButtons(key) : ""}
     ${spRosterStray((key && spRosterRow(key)) || row)}
     <div class="chartbox sp-gantt sp-empty">${rows}</div>
@@ -6392,7 +6382,7 @@ function spPlanPick(base, full){
   const ownFull = openHours * (base.roles || []).reduce((n, r) => n + (r.stations || []).length, 0);
   /* With the demand plan on screen there is nothing to switch to: the
      hand-over says so only beside the full cover it hands over from. */
-  const done = base.demandEvidence || !full ? ""
+  const done = !full ? ""
     : base.demandDataComplete
     ? `<span class="sp-handover" data-tip="${attr(tt("sp.pick.done.tip", "Read from the days since the shop's first customer, as they were staffed. An hour with no customers files no report and counts as none."))}">${spI("tick")}<span>${
       tt("sp.pick.done", "<b>Demand data complete:</b> {switch}", {switch:
@@ -6418,43 +6408,6 @@ function spPlanPick(base, full){
    week in the game, and its write -- the same review, confirm and undo as a
    shop's, which never changes the office's opening hours. The hour grid of
    the week is the Staff page's and the game's; here it is the numbers. */
-function spDemandEvidence(row){
-  const e = row && row.demandEvidence;
-  if(!e) return "";
-  const running = ["pending", "active", "ready"].includes(e.phase);
-  const status = e.phase === "pending" ? tt("sp.evidence.pending", "Measurement proposed. Apply the week, then read the game again to begin.")
-    : e.phase === "active" ? tt("sp.evidence.active", "Measuring from completed trading days. Keep staffing, opening hours, prices and stock availability unchanged.")
-    : e.phase === "ready" ? tt("sp.evidence.ready", "Two occurrences of every tested hour are available. Confirm only if the scheduled staff worked and products stayed available throughout the period.")
-    : e.phase === "stopped" ? tt("sp.evidence.stopped", "Measurement stopped because conditions changed, time ran out, or you stopped it. No lower demand was learned.")
-    : e.phase === "confirmed" ? tt("sp.evidence.confirmed", "Measurement reviewed. Hours with spare capacity retain their demand estimate; hours still at capacity remain uncertain.")
-    : tt("sp.evidence.unknown", "Past customer counts are lower bounds: their staffing and stock context is unknown. Existing coverage is kept until demand is measured.");
-  const button = (action, label) => `<button type="button" class="nx-btn sm" data-demand-action="${action}" data-demand-site="${attr(row.key)}">${label}${action === "start" ? `<span class="feature-new" data-new-feature="staffing-demand" hidden>${tt("nav.new", "New")}</span>` : ""}</button>`;
-  return `<div class="sp-demand-evidence"><p class="quiet">${status}</p>${e.stale ? `<p class="quiet">${tt("sp.evidence.stale", "Conditions changed since the previous measurement. Measure again before reducing coverage.")}</p>` : ""}${
-    (!e.persistent || (SOURCE.historyPersistent && !SOURCE.historyPersistent())) ? `<p class="quiet">${tt("sp.evidence.temporary", "Demand learning is unavailable without saved company history.")}</p>`
-    : !LIVE ? `<p class="quiet">${tt("sp.evidence.live", "Open the browser tool or local live board to record a demand measurement.")}</p>`
-    : `<p class="quiet">${tt("sp.evidence.how", "A measurement uses current spare capacity, or proposes one extra station where a single role limits service. An unstaffed hour starts with one station of each required role. Each tested hour needs two completed occurrences within 28 game days.")}</p>${
-      running ? (e.phase === "ready" ? button("confirm", tt("sp.evidence.accept", "Staffing and stock stayed available — use measurement")) : "") + button("stop", tt("sp.evidence.stop", "Stop measurement"))
-      : button("start", tt("sp.evidence.start", "Plan demand measurement"))}`}
-    <p class="quiet" data-demand-error role="status"></p></div>`;
-}
-function wireDemandEvidence(){
-  featureDiscovery.refresh();
-  document.querySelectorAll("[data-demand-action]").forEach(button => {
-    button.onclick = async () => {
-      const box = button.closest(".sp-demand-evidence"), error = box.querySelector("[data-demand-error]");
-      box.querySelectorAll("button").forEach(b => { b.disabled = true; });
-      try{
-        const data = await SOURCE.staffingMeasurement(button.dataset.demandSite, button.dataset.demandAction, odGen());
-        featureDiscovery.visit("staffing-demand");
-        if(button.dataset.demandAction === "start") spPlanWrite(button.dataset.demandSite, "demand");
-        if(data){ takeData(data); renderCalm(); }
-      }catch(err){
-        error.textContent = err.message || String(err);
-        box.querySelectorAll("button").forEach(b => { b.disabled = false; });
-      }
-    };
-  });
-}
 function spOfficeRoster(b){
   if(!odNeed("officeStaffing")) return odWaitHtml("officeStaffing");
   const row = gwOfficeRow(b.key);
@@ -6473,7 +6426,6 @@ function spOfficeRoster(b){
   return `<section class="sec rv" data-block="roster" id="sp-roster" data-site="${attr(b.key)}">
     ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", quiet: row.demandBased ? tt("sp.off.demand", "Customer demand by weekday and hour") : tt("sp.off.quiet", "the office default: {n} always on, every computer on weekdays 8 to 22", {n: row.alwaysOn || 0})})}
     <p class="quiet">${row.demandBased ? tt("sp.off.demand.after", "Computers now → demand plan; cleaning and other duties stay as they are.") : tt("sp.off.after", "Computers now → after adding the office default where they are free")}</p>
-    ${spDemandEvidence(row)}
     <div class="sp-offroster">${facts.map(([k, a, z]) => `<div><span>${k}</span><b>${a === z ? z : `<s>${a}</s> → ${z}`}</b></div>`).join("")}${
       open.length ? `<div><span>${tt("sp.off.open", "Waiting on a hire")}</span><b>${tt("sp.off.openh", "{n} h", {n: gwHours(open)})}</b></div>` : ""}</div>
     ${gwLink() ? gwRosterButtons(b.key) : `<p class="quiet">${tt("sp.off.link", "Link the game to write this week from here.")}</p>`}
@@ -6661,7 +6613,7 @@ function spRosterBlock(b){
   return `<section class="sec rv" data-block="roster" id="sp-roster" data-readzone data-site="${
     attr(row.key)}" data-ticks="${attr(spTickKey(row))}" data-tickable="${c.tickable.length}">
     ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster",
-      why: base.demandEvidence ? tt("sp.evidence.why", "Customer reports do not record past staffing. Demand reductions use a measurement period you confirm, and schedule changes alone never become new demand evidence.") : `${c.full
+      why: `${c.full
         ? tt("sp.roster.why.full", "A demand test: every station staffed every hour of every day, so no customer is turned away by an empty station and the count that comes back is the demand. The demand data is complete 9 days after the shop's first customer, closed days included; then switch to the demand plan, which is cut from what those days measured. An hour the shop is shut, or no one comes, counts as no customers.")
         : tt("sp.roster.why.demand", "A week to copy into BizMan › Schedule, one day at a time.")} ${
         tt("sp.roster.why.entries", "One entry is one person at one station for a run of hours. Nobody is given more than the 12 hours a day the game allows, and nobody is put inside a window they asked to keep free. Tick an entry once it is in the game. The ticks stay in this browser and change nothing in the save.")}${c.full ? ""
@@ -6669,7 +6621,6 @@ function spRosterBlock(b){
     ${/* Which shop it is about rides in the heading: the Optimize staffing
           card lands here with the shop's own heading scrolled off the top. */""}
     ${pick}
-    ${spDemandEvidence(base)}
     ${spRosterStray(base)}
     ${c.full || row.variant === "open" ? "" : spUnmeasuredLine(row)}
     ${c.cover ? spRosterNew(c, counts) : ""}
@@ -25134,7 +25085,7 @@ function wireAll(){
   wireChart(); wirePortfolio(); wireSiteReads();
   /* The planner's own handlers: Staffing › Schedules carries it, whether or
      not a business's page has been drawn in this visit. */
-  wireRoster(); wireDemandEvidence();
+  wireRoster();
   wireFlow(); bindSupply();
   wireHeat(); wirePlan(); wireOpenStore(); wireOpenFactory();
   wireReveal(); wireWrites(); wireStaff();

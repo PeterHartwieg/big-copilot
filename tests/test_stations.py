@@ -878,7 +878,7 @@ class CinemaGridTests(MsgAsserts, unittest.TestCase):
 
     def test_imported_history_keeps_equipment_warning_without_staffing_claims(self):
         grid = self.known_cinema(screens=1, booths=2, projectionists=1, door=25)
-        grid["evidence"] = {}
+        grid["countsOnly"] = True
         for wd in range(7):
             grid["staffed"][wd] = [0] * 24
             grid["effective"][wd] = [0] * 24
