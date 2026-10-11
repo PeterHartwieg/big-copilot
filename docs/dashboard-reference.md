@@ -891,11 +891,13 @@ asks for the higher of the two plus one spare computer, so 20 computers serving 
 become 11. A reading one under is never a cut, a single report is never a cut, and since
 the plan grows by one computer at a time it never undoes its own growth. From 20
 computers an hour, where a reading one under already counts as full, the readings must
-also be under 95% of one computer fewer, so 19 and 19 under 21 computers stay at 21. A player who adds
-two or more computers by hand may see an hour cut once and then grow back. An hour with no report on file has no reading
-(the office may only now be staffed then), and neither has a zero with nobody at a
-computer now: such an hour keeps the office default or the computers staffed now (up to
-the building capacity), whichever is more, and so does any open hour with no reading. An office with no reading at all gets the office default. Cleaning and other
+also be under 95% of one computer fewer, so 19 and 19 under 21 computers stay at 21. A
+player who adds two or more computers by hand may see an hour cut once and then grow
+back. An hour with no report on file has no reading (the office may only now be staffed
+then), and neither has a zero with nobody at a computer now: such an hour keeps the
+office default or the computers staffed now (up to the building capacity), whichever is
+more, and so does any open hour with no reading. An office with no reading at all gets
+the office default. Cleaning and other
 duties stay as they are and still count toward employee requirements and the 50-hour
 weekly limit. There is no full-cover test and no hand-over for an office, and no
 measurement to start: Peter asked for the shop's logic (10 October 2026), and the

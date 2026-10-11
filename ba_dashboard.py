@@ -14666,10 +14666,10 @@ def _office_need(grid: dict, skill: str, runs: dict, run: int = 0, daily: list |
     came. Unless both of the hour's two latest reports (`recent`, from
     _office_recent()) are OFFICE_CUT_GAP or more under today's computers, and
     under AT_CAP of one computer fewer: then the plan is the higher of them
-    plus one spare computer. Fewer than two
-    reports never cut, and a full hour still grows by one. Do not scale another weekday
-    into an unread one: keep the default there, or the current staffing (up
-    to the building capacity) if higher, until that hour has a reading of its own.
+    plus one spare computer. Fewer than two reports never cut, and a full hour
+    still grows by one. Do not scale another weekday into an unread one: keep
+    the default there, or the current staffing (up to the building capacity) if
+    higher, until that hour has a reading of its own.
     """
     measured = _run_measured(dict(grid, roles=[dict(grid["roles"][0], key=skill, skill=skill)]), run, daily)
     # A zero with no capacity is never a demand measurement; positive counts survive.
