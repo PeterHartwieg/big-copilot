@@ -2025,13 +2025,18 @@ def _layout(row: dict) -> str | None:
     return f"{row['z']}{row['v']}"
 
 
-def _premises(save: Save, names: Names, market: dict) -> dict:
+def _premises(save: Save, names: Names, market: dict, estate: dict | None = None) -> dict:
     """Every building in the city, with what it would cost and what it holds.
 
     One row per registration the static table places. A couple of addresses in
     some saves are registered but missing from the table; they are dropped
-    rather than guessed at.
+    rather than guessed at. A listing's `payback` is the days its rent at the
+    best price, full, takes to repay the asking price (Real estate's rule, at
+    `estate`'s rent multiplier; 1 without one).
     """
+    mult = estate["mult"]["value"] if estate else 1
+    per_year = estate["perYear"] if estate else (
+        (save.deref(save.root.get("gameVariables")) or {}).get("daysPerYear") or 60)
     table = load_buildings(save)
     caps = _door_caps(names)
     rivals = _rival_numbers(save)
@@ -2114,6 +2119,9 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
                 **({"marketingRules": {k: row["marketingRules"][k] for k in ("reachMultiplier", "strength")}}
                    if row.get("marketingRules") else {}),
                 "price": int(round(entry.get("buildingPrice") or 0)),
+                "payback": None if _is_villa(row) or not row.get("q") else _estate_payback(
+                    entry.get("buildingPrice") or 0, _listing_income(row, mult), 0,
+                    _property_tax_day(row, row["q"], per_year)),
             }
         )
     for_sale.sort(key=lambda b: b["key"])
@@ -2141,6 +2149,478 @@ def _premises(save: Save, names: Names, market: dict) -> dict:
             },
         },
         "caps": caps,
+    }
+
+
+# --------------------------------------------------------------- real estate
+# Buildings the player owns outright, and buildings to buy (Real estate). The
+# rules are the game's own code, build 3682, read 12 Oct 2026 from
+# Buildings.Building, RealEstateHelper and TaxHelper, and the Addressables
+# NeighborhoodData and BuildingTypeData (research/real-estate-2026-10-12/rules.md):
+#
+#   market price per m2  = 20554 x type multiplier x neighbourhood multiplier x traffic factor
+#   market value         = the building's total m2 (ba_buildings.json `q`) x market price per m2
+#   market rent per m2   = market price per m2 x 0.00056, a day
+#   income a day         = price per m2 x total m2 x occupancy %, paid at midnight
+#
+# Priced a cent or more under market rent, nobody moves out and occupancy climbs
+# to full; at or over it, 7% of days lose 2-7 points. So the best price is the
+# highest cent strictly below market rent: the most income that stays full.
+REAL_ESTATE_BASE = 20554          # NeighborhoodData.baseBuildingPricePerSqm, every neighbourhood
+REAL_ESTATE_RENT = 0.00056        # NeighborhoodData.rentMultiplierPerSqmPrice, every neighbourhood
+# NeighborhoodData.realEstateMultiplier, by the neighbourhood id ba_buildings.json keeps.
+REAL_ESTATE_HOODS = {
+    "midtown": 2.2, "hellskitchen": 1.3, "murrayhill": 0.9, "garmentdistrict": 0.65,
+    "lowermanhattan": 0.55, "industrycity": 0.5, "thehamptons": 0.5,
+}
+# BuildingTypeData.buildingPriceMultiplier. Special buildings cannot be bought.
+REAL_ESTATE_TYPES = {
+    "retail": 1.0, "office": 0.75, "residential": 1.5, "warehouse": 0.5,
+    "cinema": 1.0, "theater": 1.0, "special": 0.0,
+}
+# The Hamptons villas (size T) earn no rent: the daily update skips them.
+VILLA_SIZE = "T"
+PROPERTY_TAX_PER_SQM = 3.5        # RealEstate.TaxesAmount per tax year, x type and neighbourhood multipliers
+AT_MARKET = 0.0001                # a price this close under market rent is at it (float32 slack)
+UNLISTED_OFFER = 1.01             # an unlisted building sells at 1.01 x market value
+# Just under market rent a day brings tenants with a 21% chance, +2..+7 points
+# (4.5 on average): the fill estimate's step.
+FILL_STEP = 0.21 * 4.5
+# A building is off its best price when the change gains this much a day, as a
+# share of what it earns now and in dollars, or when it is full at or above
+# market rent (the move-out risk).
+GAIN_SHARE, GAIN_FLOOR = 0.05, 100
+# Income tax (TaxCalculationHelper): only these building types are deducted
+# in full when bought (BusinessHelper.IsTaxDeductibleBusinessBuilding).
+TAX_DEDUCTIBLE_TYPES = frozenset({"retail", "office", "cinema", "theater", "warehouse"})
+TAX_THRESHOLD = 150_000           # PlayerShouldDoTaxes: under this in sales nothing is assessed
+# The running-cost rows of currentTaxPeriodDeductibleExpenses, whose period
+# total grows with the days; every other row (a boat, a vehicle, a building, a
+# one-off bill) counts once. Wages, rent, marketing, imports, fees, and
+# Economy Expansion's utilities.
+TAX_RECURRING_PREFIXES = ("tax_", "econoview_", "ba:transaction_", "oc:tax_expense_")
+# The shopping list's sum may sit this share of the target further from it to
+# save a building: a purchase is a trip in the game.
+TAX_PICK_SLACK = 0.002
+
+
+def _estate_market(row: dict) -> float | None:
+    """Market price per m2 for a building-table row, or None where it has no price."""
+    kind = REAL_ESTATE_TYPES.get(row.get("t"))
+    hood = REAL_ESTATE_HOODS.get(row.get("h"))
+    traffic = row.get("x")
+    if not kind or hood is None or traffic is None:
+        return None
+    if row.get("t") == "residential":
+        factor = 1 + max(30 - traffic, 0) / 100
+    else:
+        factor = 0.3 + traffic / 100
+    return REAL_ESTATE_BASE * kind * hood * factor
+
+
+def _best_price(market_rent: float) -> float:
+    """The highest cent strictly below `market_rent`, by more than AT_MARKET."""
+    return (math.ceil(round((market_rent - AT_MARKET) * 100, 6)) - 1) / 100
+
+
+def _property_tax_day(row: dict, sqm: float, per_year: int) -> float:
+    """RealEstate.TaxesAmount spread over the tax year's days."""
+    return (sqm * REAL_ESTATE_TYPES.get(row.get("t"), 0) * REAL_ESTATE_HOODS.get(row.get("h"), 0)
+            * PROPERTY_TAX_PER_SQM / (per_year or 60))
+
+
+def _is_villa(row: dict) -> bool:
+    return row.get("h") == "thehamptons" and row.get("z") == VILLA_SIZE
+
+
+def _fill_days(occupancy: float, ceiling: int = 100) -> int:
+    """About how many days a building just under market rent takes to fill."""
+    if occupancy >= ceiling:
+        return 0
+    return int(5 * round((ceiling - occupancy) / FILL_STEP / 5))
+
+
+def _listing_income(row: dict, mult: float) -> float:
+    """A building's rent a day at the best price, full, times the save's rent
+    multiplier; 0 for a villa or a building the table cannot price."""
+    price_sqm = _estate_market(row)
+    if _is_villa(row) or not price_sqm or not row.get("q"):
+        return 0.0
+    return _best_price(price_sqm * REAL_ESTATE_RENT) * row["q"] * mult
+
+
+def _estate_payback(price, income: float, saves: float, tax: float) -> int | None:
+    """Days for a purchase to pay for itself: rent at the best price, full, plus
+    any rent it ends, less property tax. None when it never does."""
+    net = income + saves - tax
+    return round(price / net) if price and net > 0 else None
+
+
+def _rent_multiplier(save: Save, owned: list, last: dict | None, mods: dict) -> dict:
+    """How the save's rent income relates to the game's formula.
+
+    Measured where possible: the last financial summary's realEstateStatements
+    against price x m2 x occupancy for every building that earned (the median).
+    Economy Expansion pays five times the formula (its income detour), and the
+    statements show it; without a statement to measure, its presence says x5.
+    Else 1.
+    """
+    ratios = []
+    for entry, _row, sqm, occ, _ceiling in owned:
+        paid = (last or {}).get(save.address(entry.get("address")))
+        formula = (entry.get("pricePerSqm") or 0) * sqm * occ / 100
+        if paid and formula > 0:
+            ratios.append(paid / formula)
+    if ratios:
+        ratios.sort()
+        mid = len(ratios) // 2
+        value = ratios[mid] if len(ratios) % 2 else (ratios[mid - 1] + ratios[mid]) / 2
+        return {"value": round(value, 3), "source": "measured", "buildings": len(ratios)}
+    if mods.get("economyExpansion"):
+        factor = getattr(ba_mods, "ECONOMY_RENT_FACTOR", 1) if ba_mods else 1
+        return {"value": float(factor), "source": "mod", "buildings": 0}
+    return {"value": 1.0, "source": "game", "buildings": 0}
+
+
+def _estate_owned(save: Save, names: Names, mods: dict) -> dict:
+    """The owned buildings' rent, best price, gain and history (Real estate › My buildings).
+
+    Core, because the sidebar's count and the rent finding read it; it is one
+    pass over the owned buildings and the 61 financial summaries. Returns
+    {rows, villas, mult, histFrom, histTo}; the rows are private until
+    _real_estate() ships them.
+    """
+    root = save.root
+    table = load_buildings(save)
+    per_year = (save.deref(root.get("gameVariables")) or {}).get("daysPerYear") or 60
+    rented = {_address_of(r): r for r in save.items(root.get("BuildingRegistrations")) if r.get("RentedByPlayer")}
+    summaries = sorted(save.items(root.get("financialSummaries")), key=lambda s: s.get("dayNumber") or 0)
+    paid_by_day = []
+    for summary in summaries:
+        day_paid = {}
+        for st in save.items(summary.get("realEstateStatements")):
+            addr = save.address(st.get("Address"))
+            if addr:
+                day_paid[addr] = (day_paid.get(addr) or 0) + (st.get("Amount") or 0)
+        paid_by_day.append((summary.get("dayNumber"), day_paid))
+    owned, villas = [], 0
+    for entry in save.items(root.get("realEstate")):
+        addr = save.address(entry.get("address"))
+        row = table.get(addr) if addr else None
+        if not row:
+            continue
+        if _is_villa(row):
+            villas += 1
+            continue
+        sqm = entry.get("totalSqm") or row.get("q") or 0
+        # MaxOccupancy: the player's own unit counts against it, once it is
+        # at least half the building (RoundToInt of unit over total).
+        unit = row.get("m") or 0
+        ceiling = 100 - (round(unit / sqm) if addr in rented and sqm else 0)
+        occ = min(round(entry.get("occupancy") or 0), ceiling)
+        owned.append((entry, row, sqm, occ, ceiling))
+    last = paid_by_day[-1][1] if paid_by_day else None
+    mult = _rent_multiplier(save, owned, last, mods)
+    k = mult["value"]
+    rows = []
+    for entry, row, sqm, occ, ceiling in owned:
+        addr = save.address(entry.get("address"))
+        price = entry.get("pricePerSqm") or 0
+        days = entry.get("daysUntilUpdatingPricePerSqm") or 0
+        pending = entry.get("pendingPricePerSqm") if days > 0 else None
+        # A pending price counts as set: the gain is measured from it.
+        holds = pending if pending is not None else price
+        market = _estate_market(row) * REAL_ESTATE_RENT
+        best = _best_price(market)
+        now = price * sqm * occ / 100 * k
+        at_holds = holds * sqm * occ / 100 * k
+        full = best * sqm * ceiling / 100 * k
+        # A building never repriced keeps the market rent it was bought at,
+        # which the game works out in single precision: within a tenth of a
+        # cent is at market.
+        over = holds >= market - AT_MARKET
+        # Under market a building fills on its own (nobody moves out), so only
+        # the cents up to the best price count; at or over market the whole
+        # move to the best price, full, counts.
+        gain = full - at_holds if over else (best - holds) * sqm * ceiling / 100 * k
+        tax = _property_tax_day(row, sqm, per_year)
+        paid = entry.get("purchasePrice")
+        risk = over and occ >= ceiling
+        flag = risk or (gain >= GAIN_FLOOR and gain >= GAIN_SHARE * now)
+        hist = []
+        for _day, day_paid in paid_by_day:
+            amount = day_paid.get(addr)
+            value = None
+            if amount is not None and price > 0 and sqm:
+                share = amount / (price * sqm * k) * 100
+                # Whole numbers while the price was today's; a day priced
+                # otherwise reads as a fraction and is left out.
+                if abs(share - round(share)) < 0.01 and 0 <= round(share) <= 100:
+                    value = int(round(share))
+            hist.append(value)
+        rows.append({
+            "key": site_key(addr), "address": names.addr(addr), "hood": hood_key(row),
+            "type": row.get("t"), "size": row.get("z"), "sqm": sqm,
+            "occ": occ, "max": ceiling,
+            "price": round(price, 2), "pending": round(pending, 2) if pending is not None else None,
+            "days": days if pending is not None else 0,
+            "market": round(market, 4), "best": best,
+            "now": money(now), "full": money(full), "gain": money(gain),
+            "payback": _estate_payback(paid, full, 0, tax),
+            "paid": money(paid) if paid is not None else None, "bought": entry.get("purchaseDay"),
+            "tax": money(tax), "fill": _fill_days(occ, ceiling),
+            "rented": addr in rented, "flag": flag, "risk": risk,
+            "hist": hist,
+        })
+    rows.sort(key=lambda r: (not r["flag"], r["risk"], -r["gain"], r["key"]))
+    return {
+        "rows": rows, "villas": villas, "mult": mult, "perYear": per_year,
+        "histFrom": paid_by_day[0][0] if paid_by_day else None,
+    }
+
+
+def _tax_period(save: Save) -> dict:
+    """This tax period's sales and deductions, so far and projected to tax day.
+
+    Tax is assessed at the midnight the day becomes a multiple of daysPerYear;
+    the period's sales are the business statements from its first day to the
+    day before, and its deductions every currentTaxPeriodDeductibleExpenses row
+    (the game takes their size). The projection scales the sales and the
+    running costs over the days still to come; a one-off purchase counts once.
+    """
+    root = save.root
+    gv = save.deref(root.get("gameVariables")) or {}
+    per_year = gv.get("daysPerYear") or 60
+    day = root.get("Day") or 0
+    tax_day = (day // per_year + 1) * per_year
+    start = tax_day - per_year + 1
+    regs = {_address_of(r): r for r in save.items(root.get("BuildingRegistrations"))}
+    sales = 0.0
+    for summary in save.items(root.get("financialSummaries")):
+        if not start <= (summary.get("dayNumber") or 0) <= tax_day:
+            continue
+        for st in save.items(summary.get("businessIncomeStatements")):
+            reg = regs.get(save.address(st.get("Address"))) or {}
+            if reg.get("RentedByPlayer") and reg.get("BusinessName"):
+                sales += st.get("TotalSales") or 0
+    gambling = max((root.get("CurrentTaxPeriodGamblingWinnings") or 0)
+                   - (root.get("CurrentTaxPeriodGamblingLosses") or 0), 0)
+    recurring = once = 0.0
+    for row in save.items(root.get("currentTaxPeriodDeductibleExpenses")):
+        amount = abs((row or {}).get("amount") or 0)
+        if str((row or {}).get("key") or "").startswith(TAX_RECURRING_PREFIXES):
+            recurring += amount
+        else:
+            once += amount
+    elapsed = day - start  # summaries written so far this period
+    if elapsed > 0:
+        sales_end = sales * (tax_day - start) / elapsed
+        deduct_end = once + recurring * per_year / elapsed
+    else:
+        sales_end, deduct_end = sales, once + recurring
+    return {
+        "day": day, "taxDay": tax_day, "start": start, "left": tax_day - day, "perYear": per_year,
+        "rate": gv.get("taxPercentage") or 0, "sales": sales, "salesEnd": sales_end,
+        "gambling": gambling, "deductions": recurring + once, "deductionsEnd": deduct_end,
+    }
+
+
+# The shopping list's search budget, in nodes: about 20 ms in CPython for a
+# thousand listings.
+TAX_PICK_NODES = 20_000
+
+
+def _tax_pick(items, target, slack):
+    """The (key, price) items whose prices sum closest to `target` from below:
+    (keys, total), the keys by price, highest first, then by key.
+
+    Among the subsets found, the fewest items whose total is within `slack` of
+    the best total wins, then the larger total. Every single item and the
+    best pair are found exactly (a two-pointer pass), a greedy fill seeds the
+    larger counts, and a depth-first search over prices, highest first, runs
+    to TAX_PICK_NODES nodes (exhaustive up to 16 items that fit), so it stays
+    quick in Pyodide whatever the listings.
+    """
+    if target == 0 or not items or slack >= target:
+        return [], 0
+    ordered = sorted((item for item in items if item[1] <= target),
+                     key=lambda item: (-item[1], item[0]))
+    n = len(ordered)
+    if not n:
+        return [], 0
+    prices = [price for _, price in ordered]
+    suffix = [0] * (n + 1)
+    for i in range(n - 1, -1, -1):
+        suffix[i] = suffix[i + 1] + prices[i]
+
+    if suffix[0] <= target:
+        # The largest k prices give the greatest possible total for that count.
+        threshold = suffix[0] - slack
+        total = 0
+        keys = []
+        for key, price in ordered:
+            if total >= threshold:
+                break
+            keys.append(key)
+            total += price
+        return keys, total
+
+    # Paths are linked tuples, so branching never copies a long shopping list.
+    totals = [-1] * (n + 1)
+    paths = [None] * (n + 1)
+    totals[0] = 0
+    totals[1] = prices[0]
+    paths[1] = (0, None)
+    best = prices[0]
+
+    left, right = 0, n - 1
+    while left < right:
+        total = prices[left] + prices[right]
+        if total > target:
+            left += 1
+        else:
+            if total > totals[2]:
+                totals[2] = total
+                paths[2] = (right, (left, None))
+                best = max(best, total)
+            right -= 1
+
+    total = count = 0
+    path = None
+    for i, price in enumerate(prices):
+        if total + price <= target:
+            total += price
+            count += 1
+            path = (i, path)
+            if total > totals[count]:
+                totals[count], paths[count] = total, path
+                best = max(best, total)
+
+    stack = [(0, 0, 0, None)]
+    remaining = (1 << (n + 1)) if n <= 16 else TAX_PICK_NODES
+    while stack and remaining:
+        i, total, count, path = stack.pop()
+        remaining -= 1
+        if i == n or total + suffix[i] < best - slack:
+            continue
+        stack.append((i + 1, total, count, path))
+        added = total + prices[i]
+        if added <= target:
+            next_count = count + 1
+            next_path = (i, path)
+            if added > totals[next_count]:
+                totals[next_count], paths[next_count] = added, next_path
+                best = max(best, added)
+            stack.append((i + 1, added, next_count, next_path))
+
+    threshold = best - slack
+    count = next(i for i, total in enumerate(totals) if total >= threshold)
+    indices = []
+    path = paths[count]
+    while path is not None:
+        i, path = path
+        indices.append(i)
+    indices.sort()
+    return [ordered[i][0] for i in indices], totals[count]
+
+
+def _tax_shelter(save: Save, period: dict, candidates: list) -> dict:
+    """Before tax day: deductible buildings to buy so the bill shrinks.
+
+    The target is the smaller of cash (end as near $0 as possible) and the
+    projected taxable base (past it a purchase saves nothing). The list is the
+    listed deductible buildings whose prices sum closest to it from below
+    (_tax_pick()). Nothing is listed when sales stay under the threshold.
+    """
+    cash = save.root.get("Money") or 0
+    base_now = max(0.0, period["sales"] + period["gambling"] - period["deductions"])
+    base = max(0.0, period["salesEnd"] + period["gambling"] - period["deductionsEnd"])
+    assessed = period["salesEnd"] + period["gambling"] >= TAX_THRESHOLD
+    target = int(max(0.0, min(cash, base))) if assessed else 0
+    pick, spend = _tax_pick(candidates, target, int(target * TAX_PICK_SLACK)) if target else ([], 0)
+    rate = period["rate"]
+    return {
+        "rate": rate, "taxDay": period["taxDay"], "left": period["left"], "perYear": period["perYear"],
+        "cash": money(cash),
+        "sales": money(period["sales"]), "salesEnd": money(period["salesEnd"]),
+        "gambling": money(period["gambling"]),
+        "deductions": money(period["deductions"]), "deductionsEnd": money(period["deductionsEnd"]),
+        "base": money(base_now), "baseEnd": money(base),
+        "threshold": TAX_THRESHOLD, "assessed": assessed,
+        "target": target, "bound": "cash" if cash <= base else "base",
+        "pick": pick, "spend": spend, "saves": money(spend * rate / 100),
+        "after": money(cash - spend),
+    }
+
+
+def _estate_buy(save: Save, names: Names, estate: dict) -> list:
+    """Buildings to buy: every listing plus every building the player rents in.
+
+    A listing at its asking price; a building rented in but not listed at the
+    game's offer rule, 1.01 x market value. Income is at the best price, full,
+    times the save's rent multiplier; `saves` is the rent a purchase ends.
+    """
+    root = save.root
+    table = load_buildings(save)
+    k, per_year = estate["mult"]["value"], estate["perYear"]
+    own = {save.address(e.get("address")) for e in save.items(root.get("realEstate"))}
+    rent = {}
+    for reg in save.items(root.get("BuildingRegistrations")):
+        if reg.get("RentedByPlayer") and (reg.get("RentPerDay") or 0) > 0:
+            rent[_address_of(reg)] = reg.get("RentPerDay")
+    listed = {}
+    for entry in save.items(root.get("buildingsForSale")):
+        addr = save.address(entry.get("address"))
+        if addr and addr not in own:
+            listed[addr] = entry.get("buildingPrice") or 0
+    rows = []
+    for addr in _in_order(set(listed) | (set(rent) - own)):
+        row = table.get(addr)
+        price_sqm = _estate_market(row) if row else None
+        if not price_sqm or not row.get("q"):
+            continue  # special buildings, and any the table cannot price
+        sqm = row["q"]
+        villa = _is_villa(row)
+        price = listed[addr] if addr in listed else sqm * price_sqm * UNLISTED_OFFER
+        income = _listing_income(row, k)
+        saves = rent.get(addr, 0)
+        tax = _property_tax_day(row, sqm, per_year)
+        rows.append({
+            "key": site_key(addr), "address": names.addr(addr), "hood": hood_key(row),
+            "type": row["t"], "size": row.get("z"), "sqm": sqm,
+            "price": int(round(price)), "listed": addr in listed,
+            "income": money(income), "saves": money(saves), "tax": money(tax),
+            "payback": None if villa else _estate_payback(price, income, saves, tax),
+            "deductible": row["t"] in TAX_DEDUCTIBLE_TYPES and not villa, "villa": villa,
+        })
+    return rows
+
+
+def _estate_counts(estate: dict) -> dict:
+    """The small numbers the sidebar reads on every board (core)."""
+    rows = [r for r in estate["rows"] if r["flag"]]
+    tax = estate.get("tax")
+    return {
+        "owned": len(estate["rows"]),
+        "flagged": len(rows),
+        "gain": money(sum(r["gain"] for r in rows)),
+        "taxEve": bool(tax and tax["left"] == 1 and tax["spend"] > 0),
+    }
+
+
+def _real_estate(save: Save, names: Names, estate: dict) -> dict:
+    """Real estate's two views: the buildings owned and the buildings to buy,
+    with the multiplier rent is paid at and the Before tax day plan."""
+    buy = estate.get("buy")
+    if buy is None:
+        buy = estate["buy"] = _estate_buy(save, names, estate)
+    tax = estate.get("tax")
+    if tax is None:
+        candidates = [(b["key"], b["price"]) for b in buy if b["listed"] and b["deductible"]]
+        tax = estate["tax"] = _tax_shelter(save, _tax_period(save), candidates)
+    return {
+        "owned": estate["rows"], "villas": estate["villas"], "mult": estate["mult"],
+        "histFrom": estate["histFrom"], "buy": buy, "tax": tax,
     }
 
 
@@ -2352,7 +2832,7 @@ PAYLOAD_KEYS = (
     "openFactory", "trends", "hypeExposure", "hours", "hourFindings", "staffing",
     "factoryStaffing", "officeStaffing", "candidates", "hiring", "plan", "names",
     "skillNames", "marketingAgencies", "cashFlow", "ledgerDays", "alerts", "minor",
-    "alertsDemand", "goals", "rivalry",
+    "alertsDemand", "goals", "rivalry", "realEstateCounts", "realEstate",
 )
 # Keys only some saves carry: `mods` is there only for a save a mod adapter
 # reads (ba_mods.detect()), so a vanilla save's payload is what it was.
@@ -2806,7 +3286,12 @@ def _products_section(build: Build) -> dict:
 
 def _premises_section(build: Build) -> dict:
     """Section premises: buildings for the location finder."""
-    return {"premises": _premises(build.save, build.names, build.shared["market"])}
+    return {"premises": _premises(build.save, build.names, build.shared["market"], build.shared["estate"])}
+
+
+def _real_estate_section(build: Build) -> dict:
+    """Section realEstate: owned buildings, buildings to buy and Before tax day."""
+    return {"realEstate": _real_estate(build.save, build.names, build.shared["estate"])}
 
 
 def _open_store_section(build: Build) -> dict:
@@ -2846,6 +3331,8 @@ SECTIONS = {
                   "produce": _open_store_section, "words": "Working out store plans"},
     "openFactory": {"keys": ("openFactory",), "needs": (),
                     "produce": _open_factory_section, "words": "Working out factory costs"},
+    "realEstate": {"keys": ("realEstate",), "needs": (),
+                   "produce": _real_estate_section, "words": "Working out real estate"},
     "goals": {"keys": ("goals",), "needs": (),
               "produce": lambda b: {"goals": _goals(b.save, b.names, b.shared["businesses"])},
               "words": "Working out milestones"},
@@ -3024,10 +3511,18 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     factories = supply.get("factories", {})
     build.private["posts"] = _take_posts(factories)
     build.private["hires"] = {}
+    # The mod adapters in use and their inputs (ba_mods.py); none on a vanilla save.
+    mods = ba_mods.detect(save) if ba_mods else {}
+    # Real estate's owned buildings: core, for the sidebar's count and the
+    # rent finding; the buy list and the tax plan wait for the page, but on
+    # the last day before tax day the count needs the plan too.
+    estate = _estate_owned(save, names, mods)
+    if _tax_period(save)["left"] == 1:
+        _real_estate(save, names, estate)
     build.shared.update(businesses=businesses, factories=factories, staff=staff,
                         buildings=buildings, residential=residential, all_grids=all_grids,
                         stmt_history=stmt_history, daily=daily, market=market, supply=supply,
-                        recipes=recipes, stations=stations, rhythm=rhythm, planning={},
+                        recipes=recipes, stations=stations, rhythm=rhythm, planning={}, estate=estate,
                         base_promotion=(save.deref(root.get("gameVariables")) or {}).get(
                             "baseCustomerPromotionMultiplier", 0.55))
     alerts = _alerts(
@@ -3122,9 +3617,10 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         "alerts": alerts["lines"],
         "minor": alerts["minor"],
         "alertsDemand": {"lines": alerts_demand["lines"], "minor": alerts_demand["minor"]},
+        # Real estate's sidebar numbers (_estate_counts()); the page itself is
+        # the realEstate section.
+        "realEstateCounts": _estate_counts(estate),
     })
-    # The mod adapters in use and their inputs (ba_mods.py); none on a vanilla save.
-    mods = ba_mods.detect(save) if ba_mods else {}
     if mods:
         core["mods"] = mods
     build.core = {key: core[key] for key in PAYLOAD_KEYS if key in core}

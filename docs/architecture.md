@@ -108,6 +108,8 @@ this column is where to look when you change a key's shape — not a complete ca
 | `alertsDemand` | `_alerts(..., "dem")`, a second pass over the same `supply.facts` with factory lines sized on demand: `{lines, minor}`, the shape of `alerts` and `minor` | `alertLines()`, when the sizing switch reads Demand |
 | `goals` | Section `goals`: `_goals()` | `drawGoals` |
 | `rivalry` | `_rivalry()`, from `_rival_weekly_incomes()`, `_player_weekly_income()` and `_rivalry_backfill()`; the days in first place are counted over `History.rivalry()`, the history's `rivalry` record. `null` when the save lists no rivals | `rlShown`, `drawKpis` (through `rlKpiTile`), `rlGoalsHtml` (from `drawGoals`) |
+| `realEstateCounts` | Core: `_estate_counts()` over `_estate_owned()` (kept on `build.shared["estate"]`), with the tax plan from `_real_estate()` on the last day before tax day: `{owned, flagged, gain, taxEve}` | none yet (Real estate's sidebar counts) |
+| `realEstate` | Section `realEstate`: `_real_estate()`, from `_estate_owned()` (owned rows with `_estate_market()`, `_best_price()`, `_property_tax_day()`, `_fill_days()`, `_estate_payback()`, and `_rent_multiplier()` over the last rent statements, `ba_mods.ECONOMY_RENT_FACTOR` its fallback), `_estate_buy()` (listings plus buildings rented in, `_listing_income()`), and `_tax_shelter()` over `_tax_period()` with `_tax_pick()`: `{owned, villas, mult, histFrom, buy, tax}`. `_premises()` reads the same multiplier for `forSale[].payback` | none yet (the Real estate page) |
 
 Four indirect routes an agent would otherwise miss:
 
@@ -491,6 +493,7 @@ restoring the focused action if the keyboard is still inside the popover.
 | openStore | `openStore` | premises | Open a store; Plan a factory's location, investment and financing; Demand popovers |
 | openFactory | `openFactory` | (none) | Plan a factory's costs and opening requirements |
 | goals | `goals` | (none) | Milestones |
+| realEstate | `realEstate` | (none) | Real estate's My buildings and Buy a building |
 
 The core contains the warnings' keys: `meta`, `kpi`, `names`, `skillNames`, `businesses`,
 `daily`, `loans`, `supply`, `rhythm`, `market`, `chains`, `trends`, `hypeExposure`, `hours`,
@@ -504,7 +507,11 @@ and 3 KB on the largest measured save). `plan` stays core because Today reads it
 recipes and item names (`factoryView`, `sbDeps`, the supply strip and finding
 pills), and every page reads `itemName`. It costs about 4 ms and 65 KB on the
 largest measured save. `mods`, on a modded save only, stays core because the masthead
-draws it on the first frame; it is a few small fields. Map asks for no section.
+draws it on the first frame; it is a few small fields. `realEstateCounts` stays core for the
+sidebar's Real estate counts: `_estate_owned()` is one pass over the owned buildings and the
+61 summaries (about 7 ms on the largest measured save), kept on `build.shared["estate"]` for
+the section; on the last day before tax day the core also works out the tax plan, which the
+section then reuses. Map asks for no section.
 
 The extraction's staff list, all hour grids, statements, buildings, recipes, stations,
 market and supply objects stay on `build.shared` for deferred producers. The producers

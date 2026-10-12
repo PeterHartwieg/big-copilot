@@ -7248,6 +7248,45 @@
   "rivals": 0
  },
  "products": [],
+ "realEstate": {
+  "buy": [],
+  "histFrom": null,
+  "mult": {
+   "buildings": 0,
+   "source": "game",
+   "value": 1.0
+  },
+  "owned": [],
+  "tax": {
+   "after": 10000.0,
+   "assessed": false,
+   "base": 0.0,
+   "baseEnd": 0.0,
+   "bound": "base",
+   "cash": 10000.0,
+   "deductions": 0.0,
+   "deductionsEnd": 0.0,
+   "gambling": 0.0,
+   "left": 26,
+   "perYear": 60,
+   "pick": [],
+   "rate": 0,
+   "sales": 0.0,
+   "salesEnd": 0.0,
+   "saves": 0.0,
+   "spend": 0,
+   "target": 0,
+   "taxDay": 60,
+   "threshold": 150000
+  },
+  "villas": 0
+ },
+ "realEstateCounts": {
+  "flagged": 0,
+  "gain": 0.0,
+  "owned": 0,
+  "taxEve": false
+ },
  "rhythm": {
   "basis": "revenue",
   "customers": null,

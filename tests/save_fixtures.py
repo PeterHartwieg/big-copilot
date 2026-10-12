@@ -40,6 +40,17 @@ FOR_SALE = ("ba:street_broadwaystreet", 11)
 BANK = ("ba:street_broadwaystreet", 1)
 PIER = ("ba:street_pier", 1)  # the importer
 
+# Real estate: buildings bought outright, each with a story (tests/test_real_estate.py).
+# The liquor store's own building is one too, repriced to 1.2 x market rent five
+# days ago and emptying.
+OWN_UNDER = ("ba:street_fifthavenue", 59)    # retail C, Lower Manhattan: under market, filling
+OWN_FULL = ("ba:street_fifthavenue", 23)     # retail C, Murray Hill: at market and full (move-out risk)
+OWN_PENDING = ("ba:street_tenthavenue", 1)   # retail A, Industry City: over market, best price pending
+VILLA = ("ba:street_oceancrestroad", 3)      # a Hamptons villa: no rent income
+VILLA_FOR_SALE = ("ba:street_easthamptonsway", 3)
+SHOP_FOR_SALE = ("ba:street_fifthavenue", 4)  # retail C, Garment District
+REPRICED = DAY - 5  # the day the liquor store's building went to 1.2 x market rent
+
 BEER, WATER = "ba:itemname_beer", "ba:itemname_water"
 GIFT, UMBRELLA, BAG = "ba:itemname_cheapgift", "ba:itemname_umbrella", "ba:itemname_paperbag"
 SODA = "ba:itemname_sodacan"
@@ -193,6 +204,7 @@ def _summary(d: int) -> dict:
         "dayNumber": d,
         "businessIncomeStatements": statements,
         "residentialStatements": [{"Address": address(*HOME)}],
+        "realEstateStatements": _estate_statements(d),
         "totalBusinessProfit": business,
         # The company's own costs: negative, but for the homes (see _daily_series).
         "totalLoanExpenses": -LOAN_PAYMENT, "totalHealthInsuranceExpenses": -30.0,
@@ -210,6 +222,62 @@ def _log(d: int) -> tuple[list, list]:
     brewery.append({"dayOfDelivery": d, "deliveryItems": [{"itemName": WATER, "amountDelivered": 400}]})
     brewery.append({"dayOfDelivery": d, "deliveryItems": [{"itemName": BEER, "amountDelivered": -250}]})
     return hub, brewery
+
+
+def _market_rent(type_mult: float, hood_mult: float, traffic: int) -> float:
+    """The game's market rent per m2 a day (rules.md): written out again here,
+    not imported, so the tests check the board's formula against a second copy."""
+    return 20554 * type_mult * hood_mult * (0.3 + traffic / 100) * 0.00056
+
+
+# Each owned building: (address, total m2, market rent, bought on, price paid),
+# and how its price and occupancy run day by day (_estate_day()).
+LIQUOR_RENT = _market_rent(1.0, 2.2, 10)
+ESTATE = {
+    LIQUOR: (5337, LIQUOR_RENT, 20, 250000.0),
+    OWN_UNDER: (1317, _market_rent(1.0, 0.55, 35), 12, 2900000.0),
+    OWN_FULL: (2849, _market_rent(1.0, 0.9, 48), 15, 12300000.0),
+    OWN_PENDING: (1006, _market_rent(1.0, 0.5, 50), 18, 4100000.0),
+}
+
+
+def _estate_day(addr, d: int) -> tuple[float, float]:
+    """(price per m2, occupancy %) an owned building holds on day `d`."""
+    rent = ESTATE[addr][1]
+    if addr == LIQUOR:  # just under market, steady, until repriced at 1.2x; then emptying
+        if d < REPRICED:
+            return round(rent - 0.005, 2), 80.0
+        return round(rent * 1.2, 2), 80.0 - 2 * (d - REPRICED)
+    if addr == OWN_UNDER:  # a few cents under market and filling a point a day
+        return 4.0, 40.0 + (d - (DAY - 21))
+    if addr == OWN_FULL:  # never repriced: the market rent it was bought at, full
+        return rent, 100.0
+    return round(rent * 1.2, 2), 50.0  # OWN_PENDING
+
+
+def _estate_statements(d: int, multiplier: float = 1.0) -> list:
+    """A day's realEstateStatements: what each owned building paid (no villa)."""
+    out = []
+    for addr, (sqm, _rent, bought, _paid) in ESTATE.items():
+        if d >= bought:
+            price, occ = _estate_day(addr, d)
+            out.append({"Address": address(*addr), "Amount": price * sqm * occ / 100 * multiplier})
+    return out
+
+
+def _estate(day: int) -> list:
+    """The save's realEstate on `day`: the state after the last midnight."""
+    out = []
+    for addr, (sqm, rent, bought, paid) in ESTATE.items():
+        price, occ = _estate_day(addr, day - 1)
+        pending = (round(rent - 0.005, 2), 4) if addr == OWN_PENDING else (0.0, 0)
+        out.append({"address": address(*addr), "purchaseDay": bought, "purchasePrice": paid,
+                    "totalSqm": sqm, "occupancy": occ, "pricePerSqm": price,
+                    "pendingPricePerSqm": pending[0], "daysUntilUpdatingPricePerSqm": pending[1]})
+    out.append({"address": address(*VILLA), "purchaseDay": 30, "purchasePrice": 23650000.0,
+                "totalSqm": 8496, "occupancy": 38.0, "pricePerSqm": 8.63,
+                "pendingPricePerSqm": 0.0, "daysUntilUpdatingPricePerSqm": 0})
+    return out
 
 
 def data_company(day: int = DAY) -> dict:
@@ -398,8 +466,16 @@ def data_company(day: int = DAY) -> dict:
         "rivalStates": [{"rivalId": RIVAL_ID}],
         "specialRivalStates": [{"rivalId": "yXNH9hTIv0KhI5OI8be0A==", "isDefeated": False,
                                 "sentMessageKeys": []}],
-        "realEstate": [{"address": address(*LIQUOR), "purchaseDay": 20, "purchasePrice": 250000.0}],
-        "buildingsForSale": [{"address": address(*FOR_SALE), "buildingPrice": 410000.0}],
+        "realEstate": _estate(day),
+        "buildingsForSale": [{"address": address(*FOR_SALE), "buildingPrice": 410000.0},
+                             {"address": address(*SHOP_FOR_SALE), "buildingPrice": 6500.0},
+                             {"address": address(*VILLA_FOR_SALE), "buildingPrice": 90000000.0}],
+        # This tax period's deductions: running costs, and a boat bought once.
+        "currentTaxPeriodDeductibleExpenses": [
+            {"key": "econoview_row_salaries", "amount": -14000.0 * (day - 1) / 39},
+            {"key": "tax_rent", "amount": -1200.0 * (day - 1) / 39},
+            {"key": "boattypename_SmallBoat", "amount": -8000.0},
+        ],
         "achievementsData": {"goodsProducedInFactories": 1200 * (day - OPENED), "taxesPaid": 5200.0},
         "PlayerDiplomas": [{"completed": True}, {"completed": False}],
         "completedPersonalGoals": ["GOALfirstshop"],

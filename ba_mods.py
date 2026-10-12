@@ -35,6 +35,12 @@ VANILLA_RIVALS = 19
 # the day's settlement still holds yesterday's, and one more day of slack
 # covers a save written around midnight.
 SETTLEMENT_SLACK = 2
+# Economy Expansion pays the player's real estate five times the game's rent
+# (its RealEstate.get_DailyIncome detour, below 2.25 x market rent, which the
+# game's price slider never reaches). The board measures the factor from the
+# save's rent statements and falls back on this one only without a statement
+# (EconomyExpansion.dll read 12 Oct 2026).
+ECONOMY_RENT_FACTOR = 5
 
 # --- Alcware Seasons -------------------------------------------------------
 # Copied from Alcware Seasons 0.4.1 (Workshop item 3803289067, its own notes

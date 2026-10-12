@@ -553,11 +553,13 @@ class ForSaleTests(unittest.TestCase):
         self.assertEqual(payload["forSale"], [
             {"key": "ba:street_fifthavenue#72", "address": "72 Fifth Avenue",
              "hood": "ba:neighborhood_lowermanhattan", "type": "residential", "size": "B",
-             "layout": None, "m2": 54, "price": 79850000},
+             "layout": None, "m2": 54, "price": 79850000, "payback": None},
             {"key": "ba:street_fifthavenue#8", "address": "8 Fifth Avenue",
              "hood": "ba:neighborhood_midtown", "type": "retail", "size": "M", "layout": "M1", "m2": 1000,
-             "price": 4250000},
+             "price": 4250000, "payback": None},
         ])
+        # Payback needs the building's total m2 (`q`), which this table leaves
+        # out; tests/test_real_estate.py checks the figure.
 
     def test_an_unmatched_listing_is_skipped(self):
         payload = premises(for_sale=[sale(("ba:street_nowhere", 3), 1000.0)])
