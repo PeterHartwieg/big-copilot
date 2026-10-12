@@ -905,7 +905,7 @@ copies it into `pricePerSqm` seven daily ticks later. The rules are in
 ```
 
 - `items` lists one entry of the game's `realEstate` (a building the player owns) per row;
-  one building twice is `400`. `pricePerSqm` is the asked price, $ a m² a day, a finite number
+  one building twice, or no item at all, is `400`. `pricePerSqm` is the asked price, $ a m² a day, a finite number
   above 0 (else `400`).
 - `expect` on an item is the compare-and-set: the building's `pricePerSqm` and
   `pendingPricePerSqm` as the page read them from the bytes (`0` for a building whose price was

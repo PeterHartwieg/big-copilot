@@ -96,6 +96,8 @@ namespace BigCopilotLink
             // before either applied, and the undo would record the first row's price.
             var seen = new HashSet<string>(StringComparer.Ordinal);
             var items = JsonReader.Arr(JsonReader.Get(root, "items"), "body.items");
+            // An empty call would set nothing and still replace the last write's undo.
+            if (items.Count == 0) throw new BadRequestException("body.items must name at least one building");
             for (var i = 0; i < items.Count; i++)
             {
                 var path = "body.items[" + i + "]";

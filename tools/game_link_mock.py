@@ -1043,8 +1043,8 @@ class Link:
 
     def _rent(self, save, body, dry):
         items = body.get("items")
-        if not isinstance(items, list):
-            raise BadRequest("items must be a list")
+        if not isinstance(items, list) or not items:
+            raise BadRequest("items must be a list of at least one building")
         parsed, seen = [], set()
         for item in items:
             if not isinstance(item, dict):
@@ -1081,7 +1081,7 @@ class Link:
                 error = "villa"
             elif market is None:
                 error = "not_owned"  # The mock cannot price a building unknown to its table.
-            after = dict(before) if before is not None and error != "not_owned" else None
+            after = dict(before) if before is not None and not other and error != "not_owned" else None
             clamped, set_price = False, False
             if error is None:
                 low, high = round(0.8 * market * 100) / 100, round(1.2 * market * 100) / 100
@@ -1100,7 +1100,7 @@ class Link:
         answer = {"ok": ok, "kind": "rent", "dryRun": dry, "day": self.day, "rows": rows}
         if not ok:
             error = "changed" if any(r["error"] == "changed" for r in rows) else "refused"
-            return (200, answer) if dry else (409, {"error": error, "rows": rows})
+            return (200, answer) if dry else (409, dict(answer, error=error))
         if not dry:
             for item in sets:
                 self.rents[item["address"]] = {"pendingPricePerSqm": item["newPending"], "daysUntilUpdatingPricePerSqm": 7}
