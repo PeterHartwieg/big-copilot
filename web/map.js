@@ -112,6 +112,7 @@ const hoodCode = (b, hood) => b?.code || (typeof HOOD_TAGS === "object" && HOOD_
   || hoodName(hood).split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
 const PANEL_W = 501;   // the finder's panel plus its margin
 const PICK_ZOOM = 2.6; // how far in a pick goes, relative to the whole city
+const CARD_GAP = 16;   // between the footprint and the site card; the tail spans it
 const GLIDE_MS = 700;
 
 /* find a location: a mode of the map page -------------------------------------
@@ -1750,14 +1751,16 @@ class CityMapView {
     const loc = this.assets.byKey.get(this.selected), r = this.stageRect();
     this.sizeCardPlan(r);
     if(!loc?.bounds){ // no geometry: the card sits in the free corner of the stage
-      card.classList.remove('flip'); card.style.transform = 'translate(16px,16px)'; return;
+      card.classList.remove('flip'); card.style.removeProperty('--tail-y'); card.style.transform = 'translate(16px,16px)'; return;
     }
-    const [x,y,w,h] = loc.bounds, p = this.proj(x + w/2, y + h/2);
+    // The card opens beside the footprint's edge, not its centre, so the tail
+    // touches the building however far the map is zoomed.
+    const [x,y,w,h] = loc.bounds, p = this.proj(x + w/2, y + h/2), lo = this.proj(x, y), hi = this.proj(x + w, y + h);
     const limit = r.width - (this.hasPanel() ? PANEL_W + 14 : 16);
-    const flip = p.x + 40 + card.offsetWidth > limit;
+    const flip = hi.x + CARD_GAP + card.offsetWidth > limit;
     card.classList.toggle('flip', flip);
     const cw = card.offsetWidth, ch = card.offsetHeight;
-    let left = flip ? p.x - 40 - cw : p.x + 40;
+    let left = flip ? lo.x - CARD_GAP - cw : hi.x + CARD_GAP;
     left = Math.max(12, Math.min(limit - cw, left)); // never under the panel, even after a drag
     let top = Math.max(12, Math.min(r.height - ch - 12, p.y - 34));
     // the zoom buttons keep their corner: a card that would cover them moves aside
@@ -1770,6 +1773,9 @@ class CityMapView {
       }
     }
     card.style.transform = `translate(${left.toFixed(1)}px,${top.toFixed(1)}px)`;
+    // A tall card is held inside the stage, so the tail slides down its edge to
+    // stay level with the building rather than sitting at the card's top.
+    card.style.setProperty('--tail-y', `${Math.max(10, Math.min(ch - 22, p.y - top - 6)).toFixed(1)}px`);
   }
   async select(key, focus=true, fresh=false){
     // Finder results wait for premises; own businesses are in the current core.
@@ -1790,12 +1796,16 @@ class CityMapView {
     const b=this.assets.byKey.get(key);
     this.card?.classList.remove('in');
     if(b?.bounds && focus){
-      // The camera glides in; the building lands left of the free area's middle
-      // so the card has room; the panel is never over it.
+      // The camera glides in; the building lands left of the free area's middle,
+      // and further left on a narrow stage, so the card fits to its right
+      // between the building and the zoom buttons and never has to move over
+      // the building; the panel is never over it.
       const r = this.stageRect(), [x,y,w,h]=b.bounds, cx = x+w/2, cy = y+h/2;
       const s = Math.max(this.scale(), this.cityScale() * PICK_ZOOM);
-      const free = this.freeWidth();
-      const box = [cx - (free*.44)/s, cy - (r.height/2)/s, r.width/s, r.height/s];
+      const free = this.freeWidth(), cw = (this.card && parseFloat(getComputedStyle(this.card).width)) || 290;
+      const zw = (this.root.querySelector('.zoomer')?.offsetWidth || 0) + 32;
+      const at = Math.max(24, Math.min(free*.44, free - zw - cw - CARD_GAP - (w*s)/2));
+      const box = [cx - at/s, cy - (r.height/2)/s, r.width/s, r.height/s];
       this.cancelGlide();
       this.onSettled = () => { if(this.selected === key) this.showCard(); };
       this.update();
