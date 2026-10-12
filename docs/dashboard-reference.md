@@ -2456,16 +2456,21 @@ nothing carried over, nothing at all when the period's sales stay under $150,000
 (`threshold`, `assessed`). A deductible building bought before that midnight cuts the bill
 by rate × its price, up to the taxable base.
 
-- `sales` is the period's business sales so far (the daily statements of your named
-  businesses: their average day times the days gone, which is their sum while the save,
-  which keeps 61 days, still holds the whole period), `deductions` the game's own list for
-  the period (`currentTaxPeriodDeductibleExpenses`), `gambling` the net winnings.
-  `salesEnd` and `deductionsEnd` project them to tax day: sales over the period's days up
-  to the one before tax day, running costs (wages, rent, marketing, imports, fees, the rows
-  keyed `tax_*`, `econoview_*`, `ba:transaction_*` and Economy Expansion's
-  `oc:tax_expense_*`) over its midnights, booked so far at day − first day + 1 of them;
-  anything else (a boat, a vehicle, a building, a deposit, a supplier's bill) counts once.
-  `base` and `baseEnd` are the taxable base so far and projected.
+- `sales` is the period's business sales so far: every business statement in the daily
+  summaries numbered from the period's first day, which is what the game sums at tax time
+  (it keeps daysPerYear + 2 summaries, so the whole period is there however long the year).
+  `deductions` is the game's own running list for the period
+  (`currentTaxPeriodDeductibleExpenses`, cleared at each tax day), `gambling` the net
+  winnings. `salesEnd` and `deductionsEnd` project them to tax day: sales add the
+  summaries' average day for each day still to come before it; running costs (wages, rent,
+  marketing, imports, fees, the rows keyed `tax_*`, `econoview_*`, `ba:transaction_*` and
+  Economy Expansion's `oc:tax_expense_*`) scale over the period's midnights, booked so far
+  at day − first day + 1 of them; anything else (a boat, a vehicle (`tax_vehicle`, the
+  purchase), a building, a deposit, a supplier's bill) counts once. `base` and `baseEnd`
+  are the taxable base so far and projected.
+- On tax day itself the new period has only just begun (its first summary comes tomorrow
+  and today's running costs were the old period's), so nothing is projected, assessed or
+  listed.
 - `target` is the smaller of your `cash` and `baseEnd` (`bound` says which); 0 when not
   assessed.
 - `pick` is the listed deductible buildings whose prices sum closest to the target from

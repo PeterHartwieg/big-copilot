@@ -53,10 +53,11 @@ SHOP_FOR_SALE = ("ba:street_fifthavenue", 4)  # retail C, Garment District
 REPRICED = DAY - 5  # the day the liquor store's building went to 1.2 x market rent
 # currentTaxPeriodDeductibleExpenses: running costs a day, booked at each
 # midnight of the period (DAY - 1 + 1 of them by DAY, the period starting on
-# day 1), and rows booked once, a boat, a wholesale bill and a deposit.
+# day 1), and rows booked once: a boat, a vehicle, a wholesale bill, a deposit.
 RECURRING = {"econoview_row_salaries": 350.0, "tax_rent": 30.0, "tax_import": 12.5,
              "ba:transaction_healthinsurance_label": 4.0}
-ONCE = {"boattypename_LuxuryYacht": 8000.0, "Metro Wholesale": 240.0, "9 7th Avenue": 480.0}
+ONCE = {"boattypename_LuxuryYacht": 8000.0, "tax_vehicle": 4000.0, "Metro Wholesale": 240.0,
+        "9 7th Avenue": 480.0}
 
 BEER, WATER = "ba:itemname_beer", "ba:itemname_water"
 GIFT, UMBRELLA, BAG = "ba:itemname_cheapgift", "ba:itemname_umbrella", "ba:itemname_paperbag"
@@ -267,7 +268,7 @@ def _estate_day(addr, d: int) -> tuple[float, float]:
             return round(rent - 0.005, 2), 80.0
         return round(rent * 1.2, 2), 80.0 - 2 * (d - REPRICED)
     if addr == OWN_UNDER:  # a few cents under market and filling a point a day
-        return 4.0, 40.0 + (d - (DAY - 21))
+        return 4.0, min(100.0, 40.0 + (d - (DAY - 21)))
     if addr == OWN_FULL:  # never repriced: the market rent it was bought at, full
         return rent, 100.0
     return round(rent * 1.2, 2), 50.0  # OWN_PENDING
@@ -298,9 +299,11 @@ def _estate(day: int) -> list:
     return out
 
 
-def data_company(day: int = DAY) -> dict:
+def data_company(day: int = DAY, per_year: int = 60) -> dict:
     """The company's save tree on `day` (a Friday by default). See the module doc."""
-    past = range(max(OPENED + 1, day - 21), day)        # financial summaries
+    # Financial summaries: the game keeps the ones numbered day - daysPerYear - 1 on
+    # (FinancialSummaryHelper.CleanupOldSummaries), so a whole tax period.
+    past = range(max(OPENED + 1, day - per_year - 1), day)
     orders = range(max(OPENED, day - 14), day)          # a fortnight of order history
     hub_log, brewery_log = [], []
     for d in range(max(OPENED + 1, day - 20), day):
@@ -430,7 +433,7 @@ def data_company(day: int = DAY) -> dict:
         "SaveGameName": "Payload Co", "characterId": CHARACTER, "buildNumberAtStart": 3671,
         "buildNumberAtLastSave": 3671 if day <= DAY else 3682,
         "Happiness": 60.0,
-        "gameVariables": {"daysPerYear": 60, "difficulty": 2, "startingMoney": 10000.0,
+        "gameVariables": {"daysPerYear": per_year, "difficulty": 2, "startingMoney": 10000.0,
                           "marketPriceMultiplier": 0.7, "employeeHourlySalaryMultiplier": 0.9,
                           "rivalsDifficultyMultiplier": 1.0, "taxPercentage": 5.0,
                           "baseCustomerPromotionMultiplier": 0.55},
@@ -489,7 +492,7 @@ def data_company(day: int = DAY) -> dict:
                              {"address": address(*SHOP_FOR_SALE), "buildingPrice": 6500.0},
                              {"address": address(*VILLA_FOR_SALE), "buildingPrice": 90000000.0}],
         # This tax period's deductions, under the keys real saves use: running
-        # costs (RECURRING, a day each midnight), and three rows booked once.
+        # costs (RECURRING, a day each midnight), and rows booked once (ONCE).
         "currentTaxPeriodDeductibleExpenses": [
             *({"key": k, "amount": -per_day * day} for k, per_day in RECURRING.items()),
             *({"key": k, "amount": -amount} for k, amount in ONCE.items()),

@@ -2201,15 +2201,26 @@ TAX_THRESHOLD = 150_000           # PlayerShouldDoTaxes: under this in sales not
 #
 # The keys real saves hold (build 3682, 12 Oct 2026, ten characters):
 # running costs econoview_row_salaries, tax_import, tax_marketing, tax_rent,
-# tax_vehicle, ba:transaction_licensingfee_label, _healthinsurance_label,
+# ba:transaction_licensingfee_label, _healthinsurance_label,
 # _replacementwage_label, _replacementfee_label, _privatedriver_label,
 # _employeetraining_label, _employeebonus_label, ba:transaction_taxiride and
-# _subwayride; once: boattypename_LuxuryYacht, an address ("9 7th Avenue",
+# _subwayride; once: tax_vehicle, boattypename_LuxuryYacht, an address ("9 7th Avenue",
 # deposits, buildings, renovations), a vendor ("Metro Wholesale", "Square
 # Appliances", "Stonegood Architecture"), a person, mods' own rows
 # ("foodtrucks:transaction_commissary_label"). A wholesale bill can recur,
 # but it is small next to the rest and there is no telling it apart.
+# tax_vehicle is a vehicle bought (ContractVehicleForSale.Purchase,
+# ShowcaseVehicleController.Purchase, VehicleDeliveryHelper), so once.
 TAX_RECURRING_PREFIXES = ("tax_", "econoview_", "ba:transaction_", "oc:tax_expense_")
+TAX_ONCE_KEYS = ("tax_vehicle",)
+
+
+def _recurring_deduction(key) -> bool:
+    """Whether a currentTaxPeriodDeductibleExpenses row is a running cost."""
+    key = str(key or "")
+    return key.startswith(TAX_RECURRING_PREFIXES) and not key.startswith(TAX_ONCE_KEYS)
+
+
 # The shopping list's sum may sit this share of the target further from it to
 # save a building: a purchase is a trip in the game.
 TAX_PICK_SLACK = 0.002
@@ -2426,55 +2437,64 @@ def _estate_owned(save: Save, names: Names, mods: dict) -> dict:
 def _tax_period(save: Save) -> dict:
     """This tax period's sales and deductions, so far and projected to tax day.
 
-    Tax is assessed at the midnight the day becomes a multiple of daysPerYear;
-    the period's sales are the business statements from its first day to the
-    day before, and its deductions every currentTaxPeriodDeductibleExpenses row
-    (the game takes their size). The projection scales the sales and the
-    running costs over the days still to come; a one-off purchase counts once.
-    Sales so far are the summaries' average day times the days gone, which is
-    their sum while the save still holds every day of the period.
+    Mirrors TaxHelper.GenerateTaxes at the midnight the day becomes a multiple
+    of daysPerYear (tax day): the sales are every businessIncomeStatement of
+    the financial summaries numbered tax day - daysPerYear + 1 to tax day
+    (GetBusinessIncome over GetBusinessSalesByAddress, whatever the business),
+    which by then run to the day before tax day; the deductions are the
+    period's running list, currentTaxPeriodDeductibleExpenses (the game takes
+    their size), which ResetCurrentTaxPeriod clears at each tax day. The game
+    keeps daysPerYear + 2 summaries (CleanupOldSummaries), so the whole period
+    is still there at tax time, whatever the year's length.
+
+    The projection adds the summaries' average day for each day still to come
+    and scales the running costs over the period's midnights; a one-off
+    purchase counts once. On tax day itself the new period has just begun:
+    nothing is projected (`fresh`).
     """
     root = save.root
     gv = save.deref(root.get("gameVariables")) or {}
     per_year = gv.get("daysPerYear") or 60
+    if not isinstance(per_year, int) or per_year < 1:
+        per_year = 60
     day = root.get("Day") or 0
+    if not isinstance(day, int) or day < 0:
+        day = 0
     tax_day = (day // per_year + 1) * per_year
     start = tax_day - per_year + 1
-    regs = {_address_of(r): r for r in save.items(root.get("BuildingRegistrations"))}
-    sales, covered = 0.0, set()
+    sales, held = 0.0, set()
     for summary in save.items(root.get("financialSummaries")):
-        if not start <= (summary.get("dayNumber") or 0) <= tax_day:
+        number = (summary or {}).get("dayNumber")
+        if not isinstance(number, int) or not start <= number <= tax_day:
             continue
-        covered.add(summary.get("dayNumber"))
+        held.add(number)
         for st in save.items(summary.get("businessIncomeStatements")):
-            reg = regs.get(save.address(st.get("Address"))) or {}
-            if reg.get("RentedByPlayer") and reg.get("BusinessName"):
-                sales += st.get("TotalSales") or 0
+            sales += (st or {}).get("TotalSales") or 0
     gambling = max((root.get("CurrentTaxPeriodGamblingWinnings") or 0)
                    - (root.get("CurrentTaxPeriodGamblingLosses") or 0), 0)
     recurring = once = 0.0
     for row in save.items(root.get("currentTaxPeriodDeductibleExpenses")):
         amount = abs((row or {}).get("amount") or 0)
-        if str((row or {}).get("key") or "").startswith(TAX_RECURRING_PREFIXES):
+        if _recurring_deduction((row or {}).get("key")):
             recurring += amount
         else:
             once += amount
-    # The save keeps 61 daily summaries, so in a long tax year the first days
-    # are gone: the days it holds stand for the period's average day. The
-    # period's sales are its first day to the day before tax day; so far, its
-    # first day to yesterday.
-    if covered:
-        per_day = sales / len(covered)
-        sales, sales_end = per_day * (day - start), per_day * (tax_day - start)
+    # The summaries the period has had so far are its first day to yesterday,
+    # the ones still to come today to the day before tax day; running costs
+    # are booked each midnight, today's the period's (day - start + 1)th and
+    # tax day's own its last.
+    fresh = day < start  # tax day: the period began at today's midnight, after its costs
+    midnights = day - start + 1
+    if fresh:
+        sales_end, deduct_end = sales, recurring + once
     else:
-        sales_end = 0.0
-    # Running costs are booked at each midnight: the one that began today was
-    # the period's (day - start + 1)th, and tax day's own is its last.
-    deduct_end = once + recurring * per_year / (day - start + 1)
+        sales_end = sales + (sales / len(held) * (tax_day - day) if held else 0.0)
+        deduct_end = once + recurring * per_year / midnights
     return {
         "day": day, "taxDay": tax_day, "start": start, "left": tax_day - day, "perYear": per_year,
         "rate": gv.get("taxPercentage") or 0, "sales": sales, "salesEnd": sales_end,
         "gambling": gambling, "deductions": recurring + once, "deductionsEnd": deduct_end,
+        "fresh": fresh,
     }
 
 
@@ -2491,8 +2511,8 @@ def _tax_pick(items, target, slack):
     the best total wins, then the larger total. Every single item and the
     best pair are found exactly (a two-pointer pass), a greedy fill seeds the
     larger counts, and a depth-first search over prices, highest first, runs
-    to TAX_PICK_NODES nodes (four times that for 16 items or fewer, which with
-    the pruning covers them all), so it stays
+    to TAX_PICK_NODES nodes (four times that for 16 items or fewer; 2^17 would
+    be a full search, and the tests hold 16-item cases to a brute force), so it stays
     quick in Pyodide whatever the listings.
     """
     if target == 0 or not items or slack >= target:
@@ -2589,7 +2609,7 @@ def _tax_shelter(save: Save, period: dict, candidates: list) -> dict:
     cash = save.root.get("Money") or 0
     base_now = max(0.0, period["sales"] + period["gambling"] - period["deductions"])
     base = max(0.0, period["salesEnd"] + period["gambling"] - period["deductionsEnd"])
-    assessed = period["salesEnd"] + period["gambling"] >= TAX_THRESHOLD
+    assessed = not period["fresh"] and period["salesEnd"] + period["gambling"] >= TAX_THRESHOLD
     target = int(max(0.0, min(cash, base))) if assessed else 0
     pick, spend = _tax_pick(candidates, target, int(target * TAX_PICK_SLACK)) if target else ([], 0)
     rate = period["rate"]
@@ -3351,7 +3371,11 @@ def _premises_section(build: Build) -> dict:
 
 def _real_estate_section(build: Build) -> dict:
     """Section realEstate: owned buildings, buildings to buy and Before tax day."""
-    return {"realEstate": _real_estate(build.save, build.names, build.shared["estate"])}
+    estate = build.shared["estate"]
+    if estate is None:  # the core's attempt failed: try again here, where a failure shows
+        estate = build.shared["estate"] = _estate_owned(
+            build.save, build.names, ba_mods.detect(build.save) if ba_mods else {})
+    return {"realEstate": _real_estate(build.save, build.names, estate)}
 
 
 def _open_store_section(build: Build) -> dict:
@@ -3576,9 +3600,15 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     # Real estate's owned buildings: core, for the sidebar's count and the
     # rent finding; the buy list and the tax plan wait for the page, but on
     # the last day before tax day the count needs the plan too.
-    estate = _estate_owned(save, names, mods)
-    if _tax_period(save)["left"] == 1:
-        _real_estate(save, names, estate)
+    # Never a reason for the board not to load: on a failure the sidebar counts
+    # nothing, and the section works it out again, so the page says what broke.
+    try:
+        estate = _estate_owned(save, names, mods)
+        if _tax_period(save)["left"] == 1:
+            _real_estate(save, names, estate)
+        estate_counts = _estate_counts(estate)
+    except Exception:
+        estate, estate_counts = None, {"owned": 0, "flagged": 0, "gain": 0.0, "taxEve": False}
     build.shared.update(businesses=businesses, factories=factories, staff=staff,
                         buildings=buildings, residential=residential, all_grids=all_grids,
                         stmt_history=stmt_history, daily=daily, market=market, supply=supply,
@@ -3679,7 +3709,7 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         "alertsDemand": {"lines": alerts_demand["lines"], "minor": alerts_demand["minor"]},
         # Real estate's sidebar numbers (_estate_counts()); the page itself is
         # the realEstate section.
-        "realEstateCounts": _estate_counts(estate),
+        "realEstateCounts": estate_counts,
     })
     if mods:
         core["mods"] = mods
