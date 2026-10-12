@@ -1251,7 +1251,8 @@ _ITEM_HELP_RE = re.compile(r"^help_(ba:itemname_[a-z0-9_]+)_content$")
 
 # "* 40 X [Cheese](products-cheese)" against "* 200 [Burger](products-burger)"
 _INGREDIENT_RE = re.compile(
-    r"^\*\s*([\d,]+)\s*X\s*\[([^\]]+)\]\(products-([a-z0-9_]+)\)", re.M
+    # Every recipe writes "150 X" but Hair Care Product's Water line, "150 x".
+    r"^\*\s*([\d,]+)\s*[Xx]\s*\[([^\]]+)\]\(products-([a-z0-9_]+)\)", re.M
 )
 _OUTPUT_RE = re.compile(r"^\*\s*([\d,]+)\s*\[([^\]]+)\]\(products-([a-z0-9_]+)\)", re.M)
 _WORKSTATION_RE = re.compile(r"\[([^\]]+)\]\(furniture-([a-z0-9_]+)workstation\)")
