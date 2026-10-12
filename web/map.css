@@ -169,7 +169,9 @@
 .stage.all .map-canvas .fp.home{stroke:#e9ece6;stroke-opacity:1}
 .map-canvas .fp.dim{fill-opacity:.06;stroke-opacity:.35}
 .map-canvas .fp.hot,.map-canvas .fp:hover{fill:#a2f8c4;fill-opacity:.4;stroke:#d9ffe8;stroke-width:2;vector-effect:non-scaling-stroke}
-.map-canvas .fp.sel{fill:#65e99b;fill-opacity:.45;stroke:#fff7cc;stroke-width:2.5;vector-effect:non-scaling-stroke}
+/* The picked footprint is magenta, a colour no layer uses, so it stands out
+   among the green candidates, the amber buy-outs and your own sites. */
+.stage .map-canvas path.fp.sel{fill:#ff4fd8;fill-opacity:.6;stroke:#ffd6f6;stroke-opacity:1;stroke-width:3;stroke-dasharray:none;vector-effect:non-scaling-stroke}
 .map-pips{pointer-events:none}
 .pip{display:none;stroke:#0d100f;stroke-width:1.5;vector-effect:non-scaling-stroke}
 .stage.zoomed .pip{display:inline}
@@ -261,7 +263,7 @@
 .fplan-note{font-size:11px;color:var(--ink-3)}
 .city-map .site .fplan-go{display:flex;width:max-content;margin:12px 0 0 auto}
 .city-map .site .fplan-go[hidden]{display:none}
-.city-map .site .tail{position:absolute;left:-7px;top:22px;width:12px;height:12px;background:var(--surface);border-left:1px solid var(--rule);border-bottom:1px solid var(--rule);transform:rotate(45deg)}
+.city-map .site .tail{position:absolute;left:-7px;top:var(--tail-y,22px);width:12px;height:12px;background:var(--surface);border-left:1px solid var(--rule);border-bottom:1px solid var(--rule);transform:rotate(45deg)}
 .city-map .site.flip .tail{left:auto;right:-7px;transform:rotate(-135deg)}
 
 .map-status{font-size:12px;color:var(--ink-2);line-height:1.5;margin:8px 0}
