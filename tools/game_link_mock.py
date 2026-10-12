@@ -547,6 +547,16 @@ class Link:
                 if rule == "locked":
                     # The mod's ReopenDay(): Monday 08:00, tomorrow on a Sunday.
                     row["reopens"] = {"day": self._imminent_monday(), "hour": 8}
+                if kind == "rent":
+                    # A refused row is the building as it stands (RentWrite.Answer):
+                    # nothing planned, null where there is no building to read.
+                    before = row.get("before")
+                    for key in ("pricePerSqm", "pendingPricePerSqm", "daysUntilUpdatingPricePerSqm"):
+                        row[key] = before[key] if before else None
+                    days = before["daysUntilUpdatingPricePerSqm"] if before else 0
+                    row.update(set=False, appliesOnDay=self.day + days if days > 0 else None)
+            if kind == "rent":  # the mod's refusal is its whole answer, with the error
+                return 409, dict(answer, ok=False, dryRun=False, error=error, rows=rows)
             return 409, {"error": error, "rows": rows}
         if error in ("changed", "refused") and kind == "undo":
             # As the mod's undo of that kind answers (UniformWrite, ImportWrite,

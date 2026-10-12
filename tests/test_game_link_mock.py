@@ -1722,6 +1722,16 @@ class RentWrite(LinkedMock):
         self.config({"refuseWrite": "refused"})
         status, answer = self.rent(dry=False)
         self.assertEqual((status, answer["error"], answer["rows"][0]["error"]), (409, "refused", "villa"))
+        # As the mod answers a refusal: the whole answer, nothing planned, the building as it stands.
+        self.assertEqual((answer["ok"], answer["kind"], answer["dryRun"], answer["day"]), (False, "rent", False, self.link.day))
+        row = answer["rows"][0]
+        self.assertFalse(row["set"])
+        fields = ("pricePerSqm", "pendingPricePerSqm", "daysUntilUpdatingPricePerSqm")
+        self.assertEqual([row[k] for k in fields], [row["before"][k] for k in fields])
+        days = row["before"]["daysUntilUpdatingPricePerSqm"]
+        self.assertEqual(row["appliesOnDay"], self.link.day + days if days else None)
+        status, answer = self.rent(self.item(BARE), dry=False)  # not owned: nothing to read
+        self.assertEqual([answer["rows"][0][k] for k in ("pricePerSqm", "appliesOnDay", "set")], [None, None, False])
         status, answer = self.post("undo", {"kind": "rent"})
         self.assertEqual((status, answer["error"], answer["rows"]), (409, "changed", [{"error": "changed"}]))
         self.config({"refuseWrite": None})
