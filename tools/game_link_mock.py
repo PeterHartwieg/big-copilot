@@ -554,9 +554,10 @@ class Link:
                     for key in ("pricePerSqm", "pendingPricePerSqm", "daysUntilUpdatingPricePerSqm"):
                         row[key] = before[key] if before else None
                     days = before["daysUntilUpdatingPricePerSqm"] if before else 0
-                    row.update(set=False, appliesOnDay=self.day + days if days > 0 else None)
-            if kind == "rent":  # the mod's refusal is its whole answer, with the error
-                return 409, dict(answer, ok=False, dryRun=False, error=error, rows=rows)
+                    row.update(set=False, clamped=False, appliesOnDay=self.day + days if days > 0 else None)
+            if kind == "rent":  # the mod's refusal is its whole answer, its error from the rows
+                top = "changed" if any(row.get("error") == "changed" for row in rows) else "refused"
+                return 409, dict(answer, ok=False, dryRun=False, error=top, rows=rows)
             return 409, {"error": error, "rows": rows}
         if error in ("changed", "refused") and kind == "undo":
             # As the mod's undo of that kind answers (UniformWrite, ImportWrite,

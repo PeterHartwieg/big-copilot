@@ -1726,6 +1726,7 @@ class RentWrite(LinkedMock):
         self.assertEqual((answer["ok"], answer["kind"], answer["dryRun"], answer["day"]), (False, "rent", False, self.link.day))
         row = answer["rows"][0]
         self.assertFalse(row["set"])
+        self.assertFalse(row["clamped"])
         fields = ("pricePerSqm", "pendingPricePerSqm", "daysUntilUpdatingPricePerSqm")
         self.assertEqual([row[k] for k in fields], [row["before"][k] for k in fields])
         days = row["before"]["daysUntilUpdatingPricePerSqm"]

@@ -953,8 +953,8 @@ opened again.
   `appliesOnDay` as now. On `not_owned` and on a row of another save there is no building to
   read: `before`, the after-fields, `appliesOnDay`, `totalSqm`, `marketRentPerSqm`, `min` and
   `max` are null.
-- An apply with any row error answers `409` with the write's whole answer (`ok` false, `dryRun`
-  false, `day`, the rows as refused rows) plus `error`: `changed` when any row's error is
+- An apply with any row error answers `409` with the write's whole answer (`ok` false, `kind`
+  `rent`, `dryRun` false, `day`, the rows as refused rows) plus `error`: `changed` when any row's error is
   `changed`, else `refused`. Nothing is written.
 - **An apply that sets nothing** (every item already pending at its price) answers `200` with a
   stamp, shows no notification, and leaves nothing to undo (an earlier rent write's undo is
