@@ -1751,7 +1751,7 @@ class CityMapView {
     const loc = this.assets.byKey.get(this.selected), r = this.stageRect();
     this.sizeCardPlan(r);
     if(!loc?.bounds){ // no geometry: the card sits in the free corner of the stage
-      card.classList.remove('flip'); card.style.transform = 'translate(16px,16px)'; return;
+      card.classList.remove('flip'); card.style.removeProperty('--tail-y'); card.style.transform = 'translate(16px,16px)'; return;
     }
     // The card opens beside the footprint's edge, not its centre, so the tail
     // touches the building however far the map is zoomed.

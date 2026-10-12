@@ -170,8 +170,9 @@
 .map-canvas .fp.dim{fill-opacity:.06;stroke-opacity:.35}
 .map-canvas .fp.hot,.map-canvas .fp:hover{fill:#a2f8c4;fill-opacity:.4;stroke:#d9ffe8;stroke-width:2;vector-effect:non-scaling-stroke}
 /* The picked footprint is magenta, a colour no layer uses, so it stands out
-   among the green candidates, the amber buy-outs and your own sites. */
-.stage .map-canvas path.fp.sel{fill:#ff4fd8;fill-opacity:.6;stroke:#ffd6f6;stroke-opacity:1;stroke-width:3;stroke-dasharray:none;vector-effect:non-scaling-stroke}
+   among the green candidates, the amber buy-outs and your own sites; it
+   outranks the finder's faded own sites and the All layer's outlines too. */
+.stage .map-canvas path.fp.sel,.stage.finder .map-canvas path.fp.sel,.stage.all .map-canvas path.fp.sel{fill:#ff4fd8;fill-opacity:.6;stroke:#ffd6f6;stroke-opacity:1;stroke-width:3;stroke-dasharray:none;vector-effect:non-scaling-stroke}
 .map-pips{pointer-events:none}
 .pip{display:none;stroke:#0d100f;stroke-width:1.5;vector-effect:non-scaling-stroke}
 .stage.zoomed .pip{display:inline}
