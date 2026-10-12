@@ -416,7 +416,7 @@ test('every row and route declares sections; Today asks only for shop plans and 
 
 test('new page-only draws wait without declaring missing data empty', () => {
   for(const [draw, key, host] of [['drawProducts', 'products', 'secProducts'],
-    ['drawGoals', 'goals', 'secGoals'],
+    ['drawGoals', 'goals', 'secGoals'], ['drawEstate', 'realEstate', 'secEstate'], ['drawEstateBuy', 'realEstate', 'secBuy'],
     ['drawOpenStore', 'openStore', 'osBody'], ['drawPlan', 'openFactory', 'ofBody']]){
     const b = board();
     b.run(`${draw}()`);

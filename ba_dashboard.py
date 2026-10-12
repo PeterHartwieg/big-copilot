@@ -2202,6 +2202,9 @@ TAX_RECURRING_PREFIXES = ("tax_", "econoview_", "ba:transaction_", "oc:tax_expen
 # The shopping list's sum may sit this share of the target further from it to
 # save a building: a purchase is a trip in the game.
 TAX_PICK_SLACK = 0.002
+# The tax-eve finding waits for a list that saves at least this share of cash,
+# or this many dollars, whichever is less.
+TAX_EVE_SHARE, TAX_EVE_FLOOR = 0.01, 10_000
 
 
 def _estate_market(row: dict) -> float | None:
@@ -2363,6 +2366,9 @@ def _estate_owned(save: Save, names: Names, mods: dict) -> dict:
             "type": row.get("t"), "size": row.get("z"), "sqm": sqm,
             "occ": occ, "max": ceiling,
             "price": round(price, 2), "pending": round(pending, 2) if pending is not None else None,
+            # The save's pendingPricePerSqm as it stands, also with no change
+            # waiting (0, or the last price set): the rent write's `expect`.
+            "pendingRaw": round(entry.get("pendingPricePerSqm") or 0, 2),
             "days": days if pending is not None else 0,
             "market": round(market, 4), "best": best,
             "now": money(now), "full": money(full), "gain": money(gain),
@@ -2596,16 +2602,68 @@ def _estate_buy(save: Save, names: Names, estate: dict) -> list:
     return rows
 
 
+def _tax_eve(tax: dict | None) -> bool:
+    """The last day before tax day, with a shopping list worth a trip: it saves
+    at least 1% of cash or TAX_EVE_FLOOR. The tax-eve finding and Buy a
+    building's sidebar count both ask this."""
+    if not tax or tax["left"] != 1 or tax["spend"] <= 0:
+        return False
+    return tax["saves"] >= min(TAX_EVE_SHARE * max(tax["cash"], 0), TAX_EVE_FLOOR)
+
+
 def _estate_counts(estate: dict) -> dict:
     """The small numbers the sidebar reads on every board (core)."""
     rows = [r for r in estate["rows"] if r["flag"]]
-    tax = estate.get("tax")
     return {
         "owned": len(estate["rows"]),
         "flagged": len(rows),
         "gain": money(sum(r["gain"] for r in rows)),
-        "taxEve": bool(tax and tax["left"] == 1 and tax["spend"] > 0),
+        "taxEve": _tax_eve(estate.get("tax")),
     }
+
+
+def _estate_notes(estate: dict | None) -> list:
+    """Real estate's two findings: the buildings priced off their best rent, as
+    one grouped line (an opportunity), and on the last day before tax day the
+    buildings to buy (a warning: it is gone tomorrow). Neither has a business
+    of its own; the board draws their place as Real estate."""
+    if not estate:
+        return []
+    out = []
+    rows = estate["rows"]
+    flagged = [r for r in rows if r["flag"]]
+    if flagged:
+        gain = sum(r["gain"] for r in flagged)
+        top = sorted(flagged, key=lambda r: (-r["gain"], r["key"]))[:3]
+        out.append(_finding(
+            "info", msg("f.site.estate", "Real estate"), "rentprice",
+            msg("f.rentprice", {"one": "{n} building priced off its best rent · +{w:$}/day",
+                                "other": "{n} buildings priced off their best rent · +{w:$}/day"},
+                n=len(flagged), w=gain),
+            worth=gain,
+            # The Overview's picture (rent now against at the best prices) and
+            # its Details (the three largest changes): the section that holds
+            # the rows is not loaded there.
+            ev={"now": money(sum(r["now"] for r in rows)), "n": len(flagged),
+                "top": [{"key": r["key"], "address": r["address"], "hood": r["hood"],
+                         "price": r["pending"] if r["pending"] is not None else r["price"],
+                         "best": r["best"], "gain": r["gain"]} for r in top]},
+        ))
+    tax = estate.get("tax")
+    if _tax_eve(tax):
+        n = len(tax["pick"])
+        out.append(_finding(
+            "warn", msg("f.site.buy", "Buy a building"), "taxeve",
+            msg("f.taxeve", {"one": "Tax day tomorrow: buy {n} building for {spend:$}, tax −{saves:$}. "
+                                    "Cash {cash:$}, {after:$} left after",
+                             "other": "Tax day tomorrow: buy {n} buildings for {spend:$}, tax −{saves:$}. "
+                                      "Cash {cash:$}, {after:$} left after"},
+                n=n, spend=tax["spend"], saves=tax["saves"], cash=tax["cash"], after=tax["after"]),
+            # Time-boxed: it is never counted away under the materiality gate.
+            always=True,
+            ev={"bound": tax["bound"], "day": tax["taxDay"]},
+        ))
+    return out
 
 
 def _real_estate(save: Save, names: Names, estate: dict) -> dict:
@@ -3526,13 +3584,13 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
                         base_promotion=(save.deref(root.get("gameVariables")) or {}).get(
                             "baseCustomerPromotionMultiplier", 0.55))
     alerts = _alerts(
-        businesses, supply, chains, trends, hype, hour_findings, grids, day, gate, agencies=agencies
+        businesses, supply, chains, trends, hype, hour_findings, grids, day, gate, agencies=agencies, estate=estate
     )
     # The same findings with factory lines sized on demand, for the board's
     # Demand switch: a second pass over the facts already built, not a second
     # supply model.
     alerts_demand = _alerts(
-        businesses, supply, chains, trends, hype, hour_findings, grids, day, gate, "dem", agencies=agencies
+        businesses, supply, chains, trends, hype, hour_findings, grids, day, gate, "dem", agencies=agencies, estate=estate
     )
 
     # Every sentence written with msg() carries its key and params to the page
@@ -19890,6 +19948,7 @@ ALERT_UNITS = {
     "idlestaff": msg("f.unit.wages", "/day wages"),
     "dead": msg("f.unit.tied", "/day tied up"),
     "target": msg("f.unit.excess", "/day excess"),
+    "rentprice": msg("f.unit.rent", "/day rent"),
 }
 
 
@@ -20040,6 +20099,7 @@ def _alerts(
     gate: float,
     mode: str = "cap",
     agencies: list = (),
+    estate: dict | None = None,
 ) -> dict:
     """Only things worth acting on, with a number and a deadline where one exists.
 
@@ -20049,7 +20109,9 @@ def _alerts(
     day's profit — or they are counted at the foot of the panel instead of read
     out. A site that cannot trade at all is never counted away.
     """
-    found = []
+    # Real estate first (_estate_owned()): the company-wide rent line leads the
+    # opportunities and, on tax eve, the buildings to buy lead the warnings.
+    found = _estate_notes(estate)
 
     def note(level, site, group, text, rank=0.0, subject="", worth=None, always=False,
              key=None, ev=None, named=None, amt=None):

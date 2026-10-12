@@ -174,11 +174,17 @@ function finderShowTip(k){
   switch(k){
     case "rent": return tt("map.show.available.tip", "Buildings available for rent and empty buildings you already rent.");
     case "takeover": return tt("map.show.takeover.tip", "Rival businesses you can make an offer to in-game; the price is not in the save. Game services like banks and wholesalers are not for sale.");
-    default: return tt("map.show.sale.tip", "Whole buildings the game offers for sale, cheapest first. Buying one is an investment, not an opening, so it is not scored.");
+    default: {
+      const intro = tt("map.show.sale.tip2", "Whole buildings for sale, with the rent they earn at the best price once full.");
+      const days = (premises()?.forSale || []).map(s => s.payback).filter(n => n != null).sort((a, b) => a - b);
+      if(!days.length) return intro;
+      const mid = Math.floor(days.length / 2), median = days.length % 2 ? days[mid] : (days[mid - 1] + days[mid]) / 2;
+      return intro + " " + tt("map.show.sale.tip.payback", "Payback is about {n:,} days for every one of them, so the list is cheapest first.", {n: Math.round(median / 50) * 50});
+    }
   }
 }
 const finderDefaults = () => ({on:false, cat:"retail", type:"", show:"rent",
-  hoods:null, layouts:[], minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, sort:"score", sortPicked:false});
+  hoods:null, layouts:[], minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, sort:"score", sortPicked:false, saleSort:"price"});
 /* Buildings run past a billion on a mature save, where the board's compact form
    would say "$5584.2M". An asking price gets its own scale. */
 const askingPrice = n => n == null ? "—"
@@ -248,7 +254,7 @@ const finderWhy = () => tt("map.finder.why", "Score = foot traffic × the neighb
    filters and the sort, never the switch. Eight fit the panel. */
 const FINDER_SAVED_KEY = "ba_finder_saved_v1";
 const FINDER_SAVED_MAX = 8;
-const finderPick = fs => Object.fromEntries(Object.keys(finderDefaults()).filter(k => k !== "on").map(k => [k, fs[k]]));
+const finderPick = fs => Object.fromEntries(Object.keys(finderDefaults()).filter(k => k !== "on").map(k => [k, k === "saleSort" ? (fs[k] === "payback" ? "payback" : "price") : fs[k]]));
 /* The list lives in memory, read from storage once and written back on every
    change, so a browser that refuses to store still keeps this session's
    searches. Another tab's changes arrive through the storage event. */
@@ -756,6 +762,11 @@ class CityMapView {
      in the order the category ranks by. */
   sortBy(key){
     if(!premises()) return;
+    if(this.saleView()){
+      this.fs.saleSort = key === "payback" && this.fs.saleSort !== key ? "payback" : "price";
+      this.showAll = false; this.saveFinder(); this.update();
+      return;
+    }
     this.fs.sort = this.fs.sort === key ? this.sortKeys()[0] : key;
     // The category's own order is nobody's choice; any other column is.
     this.fs.sortPicked = this.fs.sort !== this.sortKeys()[0];
@@ -784,6 +795,7 @@ class CityMapView {
       // the category's own order.
       if(typeof saved?.sortPicked !== "boolean") this.fs.sortPicked = this.fs.sort !== this.sortKeys()[0];
     }catch(e){}
+    this.fs.saleSort = this.fs.saleSort === "payback" ? "payback" : "price";
     this.fs.on = false;   // a new load opens the plain map; only the filters are stored
   }
   saveFinder(){
@@ -793,7 +805,7 @@ class CityMapView {
     const store = this.finderStore(); if(!store) return;
     // The switch lasts the session, not the storage: it stays on across pages,
     // and a new load opens the plain map with the filters where they were left.
-    const {on, ...filters} = this.fs;
+    const filters = finderPick(this.fs);
     rememberJson(store, filters);
     finderStateRemember(this);
   }
@@ -803,7 +815,7 @@ class CityMapView {
     // A preset is a fresh question, and Today's card advertises the vacant
     // count: it opens on vacant premises with no minimum in the way, whatever
     // the last visit left behind. Only the neighbourhoods come from the caller.
-    this.fs = {...this.fs, on:true, show:'rent', layouts:[], minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, ...preset};
+    this.fs = {...this.fs, on:true, show:'rent', saleSort:'price', layouts:[], minM2:0, maxM2:0, minCap:0, maxCap:0, minTraffic:0, ...preset};
     // It also lands on the column the category ranks by, never on a stale sort.
     this.fs.sort = this.fs.cat === 'warehouse' ? 'm2' : 'score'; this.fs.sortPicked = false;
     finderStateRemember(this);
@@ -873,9 +885,9 @@ class CityMapView {
      the sort included, since a search is saved with its sort. */
   savedKey(f){
     const {sortPicked, ...shown} = finderPick(f);
-    // For sale is always cheapest first: the sort it carries is not on screen,
-    // so two sale searches that read alike are alike.
-    if(shown.show === "sale") shown.sort = null;
+    // Each list carries only the sort its heads show.
+    if(shown.show === "sale") delete shown.sort;
+    else delete shown.saleSort;
     return JSON.stringify({...shown, hoods: shown.hoods ? shown.hoods.slice().sort() : null,
       layouts: (shown.layouts || []).slice().sort()});
   }
@@ -891,11 +903,10 @@ class CityMapView {
     const s = finderSaved().find(x => x.name === name); if(!s) return;
     this.savedUsed = s.name;
     const f = this.savedFilters(s);
-    // For sale is cheapest first, so a sale search has no sort to give: it is
-    // lit whatever the sort, and applying it leaves the sort as the player left it.
+    // A sale search restores its own order and leaves the ranked order alone.
     if(f.show === "sale"){ f.sort = this.fs.sort; f.sortPicked = this.fs.sortPicked; }
     this.fs = {...this.fs, ...f, on:true};
-    this.clampSort();
+    if(f.show !== "sale") this.clampSort();
     this.showAll = false; this.deselect(); this.saveFinder(); this.update();
   }
   /* A name already in the list replaces that search in place: the exact name if
@@ -938,8 +949,7 @@ class CityMapView {
       finderRange("m2", f.minM2, f.maxM2), finderRange("cap", f.minCap, f.maxCap),
       f.minTraffic ? tt("map.saved.tip.traffic", "traffic ≥ {n}", {n: f.minTraffic}) : "",
       f.layouts.length ? tt("map.saved.tip.layout", "layout {codes}", {codes: f.layouts.join(" ")}) : "",
-      // For sale is always cheapest first, so only a ranked list names its sort.
-      f.show === "sale" ? "" : tt("map.saved.tip.sort", "by {sort}", {sort: finderSortName(f.sort)})].filter(Boolean).join(" · ");
+      f.show === "sale" ? (f.saleSort === "payback" ? tt("map.saved.tip.payback", "by payback") : "") : tt("map.saved.tip.sort", "by {sort}", {sort: finderSortName(f.sort)})].filter(Boolean).join(" · ");
   }
   /* The name field is open while its label is shown; its value is the name. */
   naming(){ const f = this.root.querySelector('.fsaved .fname'); return !!f && !f.hidden; }
@@ -1088,7 +1098,8 @@ class CityMapView {
       const b = this.sites?.get(s.key);
       return finderFits(b?.traffic, fs.minTraffic, 0) && finderFits(s.m2, fs.minM2, fs.maxM2)
         && finderFits(b?.cap, fs.minCap, fs.maxCap);
-    }).sort((a, b) => a.price - b.price)
+    }).sort((a, b) => (fs.saleSort === "payback"
+      ? (a.payback ?? Infinity) - (b.payback ?? Infinity) : 0) || a.price - b.price)
       .map(s => { const loc = this.assets.byKey.get(s.key); return {...s, region:loc?.region, bounds:loc?.bounds}; });
   }
   saleKind(s){ return (this.sites?.get(s.key)?.type ?? s.type) === this.fs.cat; }
@@ -1144,8 +1155,8 @@ class CityMapView {
   }
   saleList(rows){
     return `<div class="fhead sale"><span></span><span>${ssEsc(tt("map.col.address", "Address"))}</span><span>${ssEsc(tt("map.col.type", "Type"))}</span><span>${
-      ssEsc(tt("map.unit.m2", "m²"))}</span><span>${ssEsc(tt("map.col.price", "Price"))}</span></div>`
-      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${ssEsc(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood"${hoodColorAttr(s.hood)}>${ssEsc(hoodTag(s.hood))}</span><span class="nm">${ssEsc(s.address)}<small>${this.layoutTag(s)}${ssEsc(hoodName(s.hood))}</small>${this.finderPhoneFact(this.sites?.get(s.key))}</span><span class="v t">${ssEsc(typeLabel(s.type))}</span><span class="v">${num(s.m2)}</span><span class="v">${ssEsc(askingPrice(s.price))}</span></button>`).join('');
+      ssEsc(tt("map.unit.m2", "m²"))}</span><span data-s="price" role="button" tabindex="0" class="${this.fs.saleSort !== 'payback' ? 'on' : ''}">${ssEsc(tt("map.col.price", "Price"))}</span><span data-s="payback" role="button" tabindex="0" class="${this.fs.saleSort === 'payback' ? 'on' : ''}" data-tip="${attr(tt("map.col.payback.tip", "The price over a day's rent at the best price, full, less property tax"))}">${ssEsc(tt("map.col.payback", "Payback"))}</span></div>`
+      + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${ssEsc(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood"${hoodColorAttr(s.hood)}>${ssEsc(hoodTag(s.hood))}</span><span class="nm">${ssEsc(s.address)}<small>${this.layoutTag(s)}${ssEsc(hoodName(s.hood))}</small>${this.finderPhoneFact(this.sites?.get(s.key))}</span><span class="v t">${ssEsc(typeLabel(s.type))}</span><span class="v">${num(s.m2)}</span><span class="v">${ssEsc(askingPrice(s.price))}</span><span class="v pb">${s.payback == null ? '—' : ssEsc(tt("map.payback.days", "{n} d", {n: num(s.payback)}))}</span></button>`).join('');
   }
   /* The facts every address carries, finder on or off: what the place is, what
      it would cost and whether it is free. */
@@ -1292,6 +1303,7 @@ class CityMapView {
     host.querySelectorAll('.flay').forEach(chip => mark(chip, this.fs.layouts.includes(chip.dataset.flay)));
     this.root.querySelectorAll('.fchip.show').forEach(chip => {
       const key = chip.dataset.show;
+      chip.dataset.tip = finderShowTip(key);
       chip.querySelector('b').textContent = key === 'sale'
         ? P.forSale.filter(s => this.saleKind(s)).length : counts[key];
       mark(chip, this.fs.show === key);

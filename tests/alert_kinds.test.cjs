@@ -352,13 +352,16 @@ const tableKeys = name => run(`Object.keys(${name})`);
 const NO_EVIDENCE = {
   // A vacant lease has no business, so there is no site panel to light.
   vacant: 'no site panel',
+  // Real estate's two findings are about the company's buildings, not a business.
+  rentprice: 'no site panel',
+  taxeve: 'no site panel',
 };
 /* ALERT_UNITS (Python) gives a unit only to the kinds whose worth is money;
    every other kind's worth is always None. A new kind goes in one list or
    the other, so the choice is made rather than forgotten. */
 const NOT_MONEY = ['staff', 'satisfaction', 'promotion', 'uniform', 'bathroom', 'toiletprivacy',
   'sink', 'music', 'interior', 'jobdemand', 'companydemand', 'unplanned', 'unsourced', 'outruns', 'paused',
-  'feed', 'unnamed', 'unset', 'shortfall', 'topup', 'wholesale', 'order', 'notrouted'];
+  'feed', 'unnamed', 'unset', 'shortfall', 'topup', 'wholesale', 'order', 'notrouted', 'taxeve'];
 
 const registryGaps = (name, keys, exempt = []) => {
   const missing = GROUP_IDS.filter(id => !keys.includes(id) && !exempt.includes(id));

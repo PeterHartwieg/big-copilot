@@ -424,6 +424,16 @@ What is on the list is what moves the number:
   of the two mix lines carries its own "Set the cheapest mix at N sites", over exactly its
   own sites; its *details ›* link lands on Businesses › Standards, whose "Set up all" keeps
   a new site, the set-up's first case.
+- **Rent price** (`rentprice`, an opportunity). One line for every building you own that is
+  off its best price ([Real estate](#real-estate), the flag), with the gain a day once full:
+  rent now against at the best prices as two bars, and the three largest changes in its
+  Details. It lands on Real estate › My buildings with those rows lit. The gain comes after
+  the game's 7-day wait and the weeks a building takes to fill.
+- **Before tax day** (`taxeve`, a warning). Only on the last day before tax day, when the
+  shopping list of Buy a building's Before tax day panel saves at least 1% of your cash or
+  $10,000 (whichever is less): how many buildings, what they cost, the tax they take off,
+  and the cash left after. It is never counted away under the line, since it is gone
+  tomorrow, and lands on the panel.
 
 ## The weekly rhythm
 
@@ -2467,7 +2477,31 @@ by rate × its price, up to the taxable base.
   `spend` is their sum, `saves` the tax it cuts, `after` the cash left.
 
 `realEstateCounts` is `{owned, flagged, gain, taxEve}`: the buildings off their best price
-and their gain a day, and whether today is the last day before tax day with a list to buy.
+and their gain a day, and whether today is the last day before tax day with a list worth
+buying (it saves at least 1% of cash or $10,000, the same rule as the finding).
+
+### On the board
+
+Real estate is the sidebar's sixth area, with two views (`drawEstate()`, `drawEstateBuy()`
+in the board script; the design is `mockup/real-estate`).
+
+- **My buildings** counts the buildings off their best price beside its name. The table is
+  the rows above: occupancy as a bar, the price with "+N% over market" when it is at or over
+  market rent (a pending price shows old → new and its days), the best price, the gain a
+  day, payback and, with the game link, **Set** per flagged row. Twelve rows, then Show all.
+  A row opens in place to its occupancy line (`hist`, then the 7-day wait and the fill to
+  full, dashed) and one line of facts. The control row carries **Set best prices** (every
+  flagged building) and what it is worth a day once full; on a modded save, the multiplier
+  ("Rent ×5") with where it came from. Both buttons write the price through the game link
+  (`POST /write/rent`, the rows' `pendingRaw` and price as its `expect`): the dialog lists
+  each change, old → new a m² and the gain a day; Undo puts every price back until the
+  game's next day. Without the link there is no write button: the best price is the figure
+  to type in BizMan.
+- **Buy a building** opens on the Before tax day panel when the period is assessed and the
+  list has a building in it: the countdown, spend → tax at the rate, the projected taxable
+  sales against your cash with the limit that bound, the cash left, and the buildings to
+  buy. Then every building for sale, cheapest first (or by Payback, where the buildings you
+  rent in lead), ten then Show all; a building past your cash is dimmed, never hidden.
 
 ## What the save does not remember
 

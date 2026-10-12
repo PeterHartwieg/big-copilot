@@ -468,6 +468,55 @@
    "text": "⟦ba:itemname_beer|Beer⟧ machine at list position 1 is staffed 84 of 168 hours; nobody on it Mon-Sun 0-8, 20-24; 300 a day not made",
    "unit": "",
    "worth": null
+  },
+  {
+   "ev": {
+    "n": 2,
+    "now": 66936.42,
+    "top": [
+     {
+      "address": "5 Eighth Street",
+      "best": 10.12,
+      "gain": 16400.6,
+      "hood": "ba:neighborhood_midtown",
+      "key": "ba:street_eighthstreet#5",
+      "price": 12.15
+     },
+     {
+      "address": "23 Fifth Avenue",
+      "best": 8.08,
+      "gain": -0.54,
+      "hood": "ba:neighborhood_murrayhill",
+      "key": "ba:street_fifthavenue#23",
+      "price": 8.08
+     }
+    ]
+   },
+   "group": "rentprice",
+   "i18n": {
+    "site": [
+     "f.site.estate",
+     {}
+    ],
+    "text": [
+     "f.rentprice",
+     {
+      "n": 2,
+      "w": 16400.059999999998
+     }
+    ],
+    "unit": [
+     "f.unit.rent",
+     {}
+    ]
+   },
+   "id": "8df195d0fd",
+   "level": "info",
+   "site": "Real estate",
+   "siteKey": null,
+   "text": "2 buildings priced off their best rent · +$16,400/day",
+   "unit": "/day rent",
+   "worth": 16400.06
   }
  ],
  "alertsDemand": {
@@ -796,6 +845,55 @@
     "text": "⟦ba:itemname_umbrella|Umbrella⟧ is on no distribution plan: 30 left at 21/day",
     "unit": "",
     "worth": null
+   },
+   {
+    "ev": {
+     "n": 2,
+     "now": 66936.42,
+     "top": [
+      {
+       "address": "5 Eighth Street",
+       "best": 10.12,
+       "gain": 16400.6,
+       "hood": "ba:neighborhood_midtown",
+       "key": "ba:street_eighthstreet#5",
+       "price": 12.15
+      },
+      {
+       "address": "23 Fifth Avenue",
+       "best": 8.08,
+       "gain": -0.54,
+       "hood": "ba:neighborhood_murrayhill",
+       "key": "ba:street_fifthavenue#23",
+       "price": 8.08
+      }
+     ]
+    },
+    "group": "rentprice",
+    "i18n": {
+     "site": [
+      "f.site.estate",
+      {}
+     ],
+     "text": [
+      "f.rentprice",
+      {
+       "n": 2,
+       "w": 16400.059999999998
+      }
+     ],
+     "unit": [
+      "f.unit.rent",
+      {}
+     ]
+    },
+    "id": "8df195d0fd",
+    "level": "info",
+    "site": "Real estate",
+    "siteKey": null,
+    "text": "2 buildings priced off their best rent · +$16,400/day",
+    "unit": "/day rent",
+    "worth": 16400.06
    }
   ],
   "minor": {
@@ -18169,6 +18267,7 @@
     "paid": 250000.0,
     "payback": 5,
     "pending": null,
+    "pendingRaw": 0,
     "price": 12.15,
     "rented": true,
     "risk": false,
@@ -18218,6 +18317,7 @@
     "paid": 12300000.0,
     "payback": 538,
     "pending": null,
+    "pendingRaw": 0,
     "price": 8.08,
     "rented": false,
     "risk": true,
@@ -18267,6 +18367,7 @@
     "paid": 2900000.0,
     "payback": 540,
     "pending": null,
+    "pendingRaw": 0,
     "price": 4.0,
     "rented": false,
     "risk": false,
@@ -18316,6 +18417,7 @@
     "paid": 4100000.0,
     "payback": 892,
     "pending": 4.6,
+    "pendingRaw": 4.6,
     "price": 5.52,
     "rented": false,
     "risk": false,

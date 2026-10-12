@@ -286,6 +286,80 @@ class BeforeTaxDay(unittest.TestCase):
         # The section reuses the plan the core worked out.
         self.assertIs(d.section(build, "realEstate")["realEstate"]["tax"], build.shared["estate"]["tax"])
 
+def eve_build():
+    """build_core() on the last day before tax day, with sales over the threshold
+    and listings that fit the cash."""
+    tree = F.data_company(59)
+    tree["Money"] = 1_000_000
+    for summary in tree["financialSummaries"]:
+        for st in summary["businessIncomeStatements"]:
+            st["TotalSales"] *= 100
+    tree["buildingsForSale"] = [{"address": address(*a), "buildingPrice": float(p)} for a, p in SHOP_LISTINGS]
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "eve.hsg")
+        with open(path, "wb") as fh:
+            fh.write(encode(tree))
+        return d.build_core(load_save(path), Names(F.data_names()))
+
+
+class Findings(unittest.TestCase):
+    """The rent finding (an opportunity, one grouped line) and the tax-eve
+    finding (a warning, the last day before tax day only)."""
+
+    @classmethod
+    def setUpClass(cls):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "estate.hsg")
+            with open(path, "wb") as fh:
+                fh.write(encode(F.data_company()))
+            cls.build = d.build_core(load_save(path), Names(F.data_names()))
+        cls.rows = cls.build.shared["estate"]["rows"]
+
+    def finding(self, core, group):
+        found = [a for a in core["alerts"] + core["minor"]["rows"] if a["group"] == group]
+        self.assertLessEqual(len(found), 1, group)
+        return found[0] if found else None
+
+    def test_the_rent_finding_is_one_line_for_every_flagged_building(self):
+        a = self.finding(self.build.core, "rentprice")
+        flagged = [r for r in self.rows if r["flag"]]
+        self.assertTrue(flagged)
+        self.assertEqual((a["level"], a["siteKey"]), ("info", None))
+        self.assertAlmostEqual(a["worth"], sum(r["gain"] for r in flagged), places=1)
+        self.assertEqual(a["ev"]["n"], len(flagged))
+        self.assertAlmostEqual(a["ev"]["now"], sum(r["now"] for r in self.rows), places=1)
+        gains = [t["gain"] for t in a["ev"]["top"]]
+        self.assertEqual(gains, sorted(gains, reverse=True))
+        self.assertLessEqual(len(gains), 3)
+        self.assertEqual(self.build.core["realEstateCounts"]["flagged"], len(flagged))
+
+    def test_the_rent_finding_leads_the_opportunities(self):
+        info = [a["group"] for a in self.build.core["alerts"] if a["level"] == "info"]
+        self.assertEqual(info[0], "rentprice")
+
+    def test_no_tax_eve_finding_before_the_last_day(self):
+        self.assertIsNone(self.finding(self.build.core, "taxeve"))
+
+    def test_the_tax_eve_finding_on_the_last_day(self):
+        build = eve_build()
+        a = self.finding(build.core, "taxeve")
+        tax = build.shared["estate"]["tax"]
+        self.assertEqual((a["level"], a["siteKey"], a["worth"]), ("warn", None, None))
+        self.assertEqual(a["ev"], {"bound": tax["bound"], "day": tax["taxDay"]})
+        params = a["i18n"]["text"][1]
+        self.assertEqual((params["n"], params["spend"]), (len(tax["pick"]), tax["spend"]))
+        self.assertAlmostEqual(params["saves"], tax["saves"], places=2)
+        # Time-boxed: never counted away under the materiality gate.
+        self.assertIn(a, build.core["alerts"])
+
+    def test_a_list_worth_less_than_a_trip_waits(self):
+        tax = {"left": 1, "spend": 5_000, "saves": 250.0, "cash": 1_000_000}
+        self.assertFalse(d._tax_eve(tax))
+        self.assertTrue(d._tax_eve(dict(tax, saves=10_000.0)))
+        self.assertTrue(d._tax_eve(dict(tax, cash=20_000, saves=250.0)))
+        self.assertFalse(d._tax_eve(dict(tax, left=2, saves=50_000.0)))
+
+
 
 if __name__ == "__main__":
     unittest.main()

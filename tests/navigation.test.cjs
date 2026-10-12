@@ -144,14 +144,14 @@ test('shared view identity supplies navigation, primary sections, route hosts an
 /* The redesign's sidebar (docs/architecture.md, "The sidebar"): five destinations,
    then the two references, then the foot's ···. The pages behind them are
    hosts, which keep their ids. */
-test('the sidebar is Overview, Businesses, Supply, Staffing, Expansion, then City map and Wiki', () => {
+test('the sidebar is Overview, Businesses, Supply, Staffing, Expansion, Real estate, then City map and Wiki', () => {
   const b = board();
   assert.deepEqual([...vm.runInContext('AREAS.map(a => a.label)', b.context)],
-    ["overview", "businesses", "supply", "staffing", "expansion"].map(k => en("nav.area." + k)));
+    ["overview", "businesses", "supply", "staffing", "expansion", "estate"].map(k => en("nav.area." + k)));
   assert.deepEqual([...vm.runInContext('REFS.map(r => r.label)', b.context)], [en("nav.ref.map"), en("nav.ref.wiki2")]);
   assert.ok(!vm.runInContext('PAGES.some(p => p.id === "results")', b.context),
     'Results is a view inside Businesses, not a page of its own');
-  for (const id of ['overview', 'businesses', 'supply', 'staffing', 'expansion'])
+  for (const id of ['overview', 'businesses', 'supply', 'staffing', 'expansion', 'estate'])
     assert.match(b.$('nav').innerHTML, new RegExp(`data-id="${id}"`));
   assert.match(b.$('navRefs').innerHTML, /data-id="map"/);
   assert.match(b.$('navRefs').innerHTML, /data-id="wiki"/);

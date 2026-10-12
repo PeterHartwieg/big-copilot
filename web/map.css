@@ -103,7 +103,7 @@
    ring, in the board's own accent. */
 .fhead span[data-s]:focus:not(:focus-visible){outline:none}
 .fhead span[data-s]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.fhead.sale{grid-template-columns:26px 1fr 66px 48px 76px}
+.fhead.sale{grid-template-columns:26px 1fr 58px 44px 66px 64px}
 .place.fr{grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 40px 52px;gap:0 5px;padding:9px 8px 9px 6px}
 /* A warehouse leads with its floor area, so it has one number column fewer. */
 .fhead.wh,.place.fr.wh{grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 52px}
@@ -123,7 +123,8 @@
    more of the accent behind it. What signing costs is left plain — a big
    deposit is not a good one. */
 .place.fr .v.sh{border-radius:4px;padding:4px 6px;margin:-4px 0;align-self:center}
-.place.fr.sale{grid-template-columns:26px 1fr 66px 48px 76px}
+.place.fr.sale{grid-template-columns:26px 1fr 58px 44px 66px 64px}
+.place.fr.sale .v.pb{color:var(--ink)}
 .place.fr.sale .v.t{text-align:left;font-family:inherit;font-size:11.5px;color:var(--ink-3)}
 .map-canvas .fp.cand{fill:#43c07a;fill-opacity:.2;stroke:#65e99b;stroke-width:1.2;vector-effect:non-scaling-stroke}
 .map-canvas .fp.cand.buy{fill:#e0b84a;fill-opacity:.18;stroke:#f2cf6b}
@@ -286,7 +287,7 @@ body.map-modal-open{overflow:hidden}
  .citymap.narrow .places .list{flex:none;overflow:visible}
  .fhead,.place.fr{grid-template-columns:26px 24px 1fr 38px 38px 38px 38px 38px 50px}
  .fhead.wh,.place.fr.wh{grid-template-columns:26px 24px 1fr 38px 38px 38px 38px 50px}
- .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 58px 42px 68px}
+ .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 50px 38px 62px 64px}
  /* A text field under 16px makes a phone browser zoom the page in on focus. */
  .fchip,.fdel{height:32px}
  .fdel{width:30px}
@@ -314,7 +315,8 @@ body.map-modal-open{overflow:hidden}
  .place.fr.wh > :nth-child(n+5):nth-child(-n+7){display:none}
  .fhead.wh.fpw,.place.fr.wh.fpw{grid-template-columns:28px 24px 1fr 42px 56px}
  .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 44px 70px}
- .fhead.sale span:nth-child(3),.place.fr.sale > :nth-child(3){display:none}
+ .fhead.sale span:nth-child(3),.place.fr.sale > :nth-child(3),
+ .fhead.sale span:nth-child(6),.place.fr.sale > :nth-child(6){display:none}
 }
 @media(pointer:coarse){.map-shortcut{min-width:32px;min-height:32px}.city-map .ibtn,.place{min-height:44px}}
 /* floor plans (issue #70): every class is lp- prefixed ----------------------------

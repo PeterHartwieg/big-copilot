@@ -62,7 +62,7 @@ JS_FILES = ("web/i18n.js", "web/app.js", "web/update.js", "web/community.js", "w
 # A key is <area>.<thing>[.<part>]; the area names the page, and the pull
 # request that owns it (docs/architecture.md, "UI text").
 AREAS = ("nav", "land", "app", "foot", "today", "f", "co", "sp", "sb", "gr", "map", "wiki", "comm",
-         "upd", "br", "day")
+         "upd", "br", "day", "re")
 KEY = re.compile(r"[a-z]+(\.[A-Za-z0-9_-]+)+")
 PLURAL_CATEGORIES = ("zero", "one", "two", "few", "many", "other")
 PLURAL_SUFFIX = re.compile(r"_(" + "|".join(PLURAL_CATEGORIES) + r")$")

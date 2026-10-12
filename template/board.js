@@ -126,6 +126,7 @@ const ICON = {
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>',
   refresh: '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v5h-5"></path></svg>',
   more: '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="18" cy="12" r="1.4"></circle></svg>',
+  estate: '<svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"></path><path d="M5.5 9.5V20h13V9.5"></path><path d="M10 20v-5.5h4V20"></path></svg>',
 };
 const icon = name => ICON[name] || "";
 /* The site panel's own drawings, on the same 24 grid: a section's head mark, a
@@ -637,6 +638,7 @@ function odWords(name){
     case "openStore": return tt("nav.od.openStore", "Working out store plans…");
     case "openFactory": return tt("nav.od.openFactory", "Working out factory costs…");
     case "goals": return tt("nav.od.goals", "Working out milestones…");
+    case "realEstate": return tt("nav.od.realEstate", "Working out real estate…");
     case "hiring": return tt("nav.od.hiring", "Working out staff needs…");
     default: return tt("nav.od.factoryStaffing", "Working out factory staffing…");
   }
@@ -3232,6 +3234,17 @@ const FINDING_KINDS = [
    evidence: {block: "shelves"},
    evidenceAt: {depot: "stock", factory: "lines"},
    syn: ["overstock"]},
+  /* Real estate (mockup/real-estate): neither has a business of its own, so
+     neither has a site panel to light (NO_EVIDENCE); the row's place is
+     Real estate, drawn by reFindSite(). */
+  {id:"rentprice", get label(){ return tt("nav.kind.rentprice.label", "Rent price"); }, get note(){ return tt("nav.kind.rentprice.note", "Buildings priced over market rent lose tenants; one cent under keeps them and fills to 100%. The gain comes after the game's 7-day wait and the weeks the buildings take to fill."); }, on:true,
+   link: {sec:"secEstate"},
+   route: {route: "estate/buildings", act: "rent"},
+   syn: ["real estate", "rent", "landlord", "tenants", "occupancy", "market rent"]},
+  {id:"taxeve", get label(){ return tt("nav.kind.taxeve.label", "Before tax day"); }, get note(){ return tt("nav.kind.taxeve.note", "Retail, office, cinema, theater and warehouse purchases are deducted in full from this year's taxable sales, until tax day's midnight."); }, on:true,
+   link: {sec:"secBuy"},
+   route: {route: "estate/buy", act: "taxeve"},
+   syn: ["tax", "taxes", "deduction", "tax day", "buy a building"]},
 ];
 /* The tables the board reads, each a view of FINDING_KINDS keyed by kind id:
    a kind without the field has no entry. Never add to them; add to the
@@ -3278,6 +3291,8 @@ const VIEW_META = [
   {route: "expansion/finder", host: ["map"], needs: ["premises"], defaultHost: false, label: () => tt("nav.view.finder", "Find a location")},
   {route: "expansion/open", host: ["growth", "open"], needs: ["openStore"], section: "secOpen", label: () => tt("nav.view.open", "Open a store")},
   {route: "expansion/factory", host: ["growth", "plan"], needs: ["openFactory", "openStore"], section: "secPlan", label: () => tt("nav.view.factory", "Plan a factory")},
+  {route: "estate/buildings", host: ["estate", "buildings"], needs: ["realEstate"], section: "secEstate", label: () => tt("nav.view.estate.buildings", "My buildings")},
+  {route: "estate/buy", host: ["estate", "buy"], needs: ["realEstate"], section: "secBuy", label: () => tt("nav.view.estate.buy", "Buy a building")},
   {route: "map", host: ["map"], needs: [], label: () => tt("nav.ref.map", "City map")},
   {route: "wiki", host: ["wiki"], needs: ["products"], label: () => tt("nav.ref.wiki2", "Wiki")},
 ];
@@ -3377,6 +3392,15 @@ function goToAlert(a){
   try{ alertLanding(a, link); } finally { routeNext = null; arrivalNext = null; }
 }
 function alertLanding(a, link){
+  /* Real estate's two findings: the view lit, under the finding's arrival. */
+  if(reIsFind(a)){
+    const kind = a.group === "taxeve" ? "tax" : "rent";
+    reLandOn(a, kind);
+    reveal(link.sec);
+    if(hasData()){ if(kind === "tax") drawEstateBuy(); else drawEstate(); wireAll(); }
+    if(reLand) reLand.fresh = false;
+    return;
+  }
   /* Nobody staffed at a shop or an office: its own schedule, on its page;
      only a factory machine's hours are on the Factories tab. */
   if((a.group === "staff" && !ovAtFactory(a)) || a.group === "idlestaff"){
@@ -3495,6 +3519,7 @@ function findingNameSpans(t){
 }
 const inFindingName = (spans, i) => spans.some(([f, e]) => i > f && i < e);
 function splitFinding(a){
+  if(a.group === "taxeve") return reTaxSplit(a);
   let t = String(a.text || "");
   if(a.site && t.startsWith(a.site)){
     t = t.slice(a.site.length).replace(/^[\s,:;-]+/, "").replace(/^(is|are)\s+/, "");
@@ -3649,6 +3674,8 @@ function ovActLabel(act){
     case "import": return tt("today.act.import", "Review import");
     case "input": return tt("today.act.input", "Review factory input");
     case "recipe": return tt("today.act.recipe", "Identify recipe");
+    case "rent": return tt("today.act.rent", "Review rent prices");
+    case "taxeve": return tt("today.act.taxeve", "Review the buildings");
     default: return tt("today.act.open", "Open");
   }
 }
@@ -3725,6 +3752,7 @@ function ovPos(a){
 /* The finding in a few words for the arrival strip: its item and place, and
    its kind. */
 function ovWhere(a){
+  if(reIsFind(a)) return reFindWhere(a);
   const b = alertSite(a);
   const site = b ? shortName(b) : String(a.site || "");
   const slug = (a.ev || {}).slug;
@@ -3884,6 +3912,12 @@ function ovPicture(a, b){
     case "unplanned":
       if(ok(p.units) && ok(p.rate) && p.rate > 0) return ovCover(p.units / p.rate);
       break;
+    case "rentprice": {
+      /* Rent now against at the best prices, company-wide. */
+      const now = (a.ev || {}).now;
+      if(ok(now) && ok(a.worth)) return ovBars([[tt("today.pic.rentNow", "Rent now a day"), now, ""], [tt("today.pic.rentBest", "At best prices"), now + a.worth, "w"]], fmt);
+      break;
+    }
   }
   if(OV_AMENITY[a.group] && b) return ovLamps(b);
   return "";
@@ -3893,6 +3927,7 @@ function ovPicture(a, b){
    kind is the sentence's tip; where it is fixed is the action's tip. Empty
    when there is none of that, and the row then has no Details. */
 function ovDetails(a, b, fr){
+  if(a.group === "rentprice") return reFindDetails(a);
   const links = [];
   if(routeArea(fr.route) === "supply" && fr.route !== "supply/production")
     links.push(`<a href="#supply/flow" data-ov-route="supply/flow"${b ? ` data-ov-follow="${attr(b.key)}"` : ""}>${icon("go")}${spEsc(tt("today.det.flow", "Follow the supply route"))}</a>`);
@@ -3953,11 +3988,11 @@ function findingRow(a, o = {}){
      whose finding it is to a screen reader, as the row shows it to the eye,
      through a hidden copy of the name (the name cell itself also holds the
      map button, whose own label would ride along). */
-  const site = !b ? spEsc(a.site) : `${hoodHtml(b)}${siteLink(b, b.code ? baseName(b) : shortName(b))}${mapButton(b.key,b.name)}`;
+  const site = reIsFind(a) ? reFindSite(a) : !b ? spEsc(a.site) : `${hoodHtml(b)}${siteLink(b, b.code ? baseName(b) : shortName(b))}${mapButton(b.key,b.name)}`;
   const n = ++ssFindSeq;
   const band = SEV_KIND[a.level] || "opp";
   const fr = findingRoute(a);
-  const pic = o.rich ? ovPicture(a, b) : "";
+  const pic = o.rich || a.group === "rentprice" ? ovPicture(a, b) : "";
   /* The figure column adds a number, never the sentence's own again. */
   const amt = ovEcho(findingAmount(a), `${what} ${more || ""}`) ? "" : findingAmount(a);
   const details = ovDetails(a, b, fr);
@@ -4126,7 +4161,7 @@ function drawAlerts(){
     bands[band].forEach(a => {
       const later = band !== "crit" && k++ >= OV_FIRST;
       if(later) folded[band]++;
-      html += findingRow(a, {rich: band === "crit", later, isNew: fresh.has(a.id)});
+      html += findingRow(a, {rich: band === "crit" || a.group === "taxeve", later, isNew: fresh.has(a.id)});
     });
   });
   /* An empty list is only healthy when nothing was filtered away: it says what
@@ -17584,6 +17619,367 @@ function drawGoals(){
     + rlGoalsHtml();
 }
 
+/* --- Real estate: My buildings and Buy a building ---------------------------
+   The sixth area (mockup/real-estate, the canvas; research plan of 12 Oct
+   2026). Both views read the realEstate section (_real_estate() in Python):
+   the buildings owned with their best price (the highest cent under market
+   rent: nobody moves out and the building fills), the buildings to buy, and
+   the Before tax day plan. The sidebar's counts read the core's
+   realEstateCounts, so they need no section. The rent write is gwRent(). */
+/* Rows opened in place (by key), Show all per view, the Buy sort, and the
+   finding a landing lights ({kind, id}: kept while its arrival strip is up). */
+const reOpen = new Set();
+const reAll = {buildings: false, buy: false};
+let reBuySort = "price";
+let reLand = null;
+const RE_FIRST = {buildings: 12, buy: 10};
+const RE_ICON = {
+  estate: '<path d="M3 11.5 12 4l9 7.5"></path><path d="M5.5 9.5V20h13V9.5"></path><path d="M10 20v-5.5h4V20"></path>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path>',
+  right: '<path d="M5 12h14M13 6l6 6-6 6"></path>',
+  chev: '<path d="M9 6l6 6-6 6"></path>',
+  alert: '<path d="M12 4l9 16H3z"></path><path d="M12 10v4.5M12 17.5v.01"></path>',
+  key: '<circle cx="8" cy="14" r="4"></circle><path d="M11 11l9-8M16 6.5l3 3"></path>',
+};
+function reSvg(name, cls){ return `<svg${cls ? ` class="${cls}"` : ""} viewBox="0 0 24 24" aria-hidden="true">${(typeof RE_ICON !== "undefined" && RE_ICON[name]) || ""}</svg>`; }
+function reP2(v){ return num(Number(v) || 0, {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+function reHood(hood){ return `<span class="hood"${hoodColorAttr(hood)}>${spEsc(HOOD_TAGS[hood] || "")}</span>`; }
+function reData(){ return hasData() && D.realEstate ? D.realEstate : null; }
+function reCounts(){ return (hasData() && D.realEstateCounts) || {owned: 0, flagged: 0, gain: 0, taxEve: false}; }
+/* The landing a finding left, while the reader is still on its arrival. */
+function reLanded(kind){
+  if(!reLand || reLand.kind !== kind) return false;
+  /* Drawn as the landing opens, before its arrival is written. */
+  if(reLand.fresh) return true;
+  const a = typeof routeArrival !== "undefined" ? routeArrival : null;
+  if(!a || a.finding !== reLand.id){ reLand = null; return false; }
+  return true;
+}
+/* A view's head when the section is not there yet, or there is nothing. */
+function reEmpty(title, text){
+  return `<div class="re-none">${reSvg("estate")}<div><h3>${title}</h3><p>${text}</p></div></div>`;
+}
+
+/* The two findings on the Overview. Neither is about a business: the row's
+   place is Real estate (or Buy a building) with the house, a way to the view. */
+function reIsFind(a){ return !!a && (a.group === "rentprice" || a.group === "taxeve"); }
+function reFindSite(a){
+  const buy = a.group === "taxeve", route = buy ? "estate/buy" : "estate/buildings";
+  return `<span class="re-sic">${reSvg("estate")}</span><a class="ss-sl" href="#${route}" data-ov-route="${route}">${
+    buy ? tt("nav.view.estate.buy", "Buy a building") : tt("nav.area.estate", "Real estate")}</a>`;
+}
+/* The tax-eve sentence, said in two lines: what to buy and what it saves,
+   then the cash it leaves. Python's own sentence stays its search text. */
+function reTaxSplit(a){
+  const p = ovParams(a), bound = (a.ev || {}).bound;
+  const o = {n: Number(p.n) || 0, spend: Number(p.spend) || 0, saves: Number(p.saves) || 0, cash: Number(p.cash) || 0, after: Number(p.after) || 0};
+  return {what: tt("re.find.tax", {one: "Tax day tomorrow: buy {n} building for {spend:$c}, tax −{saves:$c}", other: "Tax day tomorrow: buy {n} buildings for {spend:$c}, tax −{saves:$c}"}, o),
+    more: bound === "base" ? tt("re.find.tax.base", "cash {cash:$c} · {after:$} left after · past the taxable sales a purchase saves nothing", o)
+      : tt("re.find.tax.cash", "cash {cash:$c} · the limit · {after:$} left after", o)};
+}
+/* The arrival strip's words for each. */
+function reFindWhere(a){
+  const p = ovParams(a), n = Number(p.n) || 0;
+  return a.group === "taxeve" ? tt("re.arrive.tax", {one: "Tax day tomorrow: buy {n} building", other: "Tax day tomorrow: buy {n} buildings"}, {n})
+    : tt("re.arrive.rent", {one: "{n} building priced off its best rent", other: "{n} buildings priced off their best rent"}, {n});
+}
+/* The rent finding's Details: its three largest changes. */
+function reFindDetails(a){
+  const ev = a.ev || {}, top = ev.top || [];
+  if(!top.length) return "";
+  const rest = (ev.n || top.length) - top.length;
+  return `<div><span class="lab">${tt("re.find.largest", "Largest")}</span>${top.map(o => `<p class="ov-plan"><span class="sb-chg"><s>${reP2(o.price)}</s><span class="to">${reSvg("right")}</span><b>${reP2(o.best)}</b><small>${
+    tt("re.find.m2", "a m²")}</small></span> <span>${tt("re.find.row", "{address} · {w}/day", {address: spEsc(o.address), w: reGainText(o.gain || 0)})}</span></p>`).join("")}${
+    rest > 0 ? `<p class="ov-plan quiet">${tt("re.find.more", {one: "and {n} more", other: "and {n} more"}, {n: rest})}</p>` : ""}</div>`;
+}
+
+/* My buildings ------------------------------------------------------------ */
+/* The bulk write, what it is worth, and on a modded save the multiplier rent
+   is paid at: the view's control row, beside its tabs. */
+function reOwnedCtl(re){
+  const flagged = re.owned.filter(o => o.flag), gain = flagged.reduce((s, o) => s + (o.gain || 0), 0);
+  const btn = flagged.length ? gwButton("rent", tt("re.set.all", "Set best prices"), "data-gw-rent-all", "",
+    {count: flagged.length, name: tt("re.set.all.name", {one: "Set the best price at {n} building", other: "Set best prices at {n} buildings"}, {n: flagged.length})}) : "";
+  const worth = flagged.length ? `<span class="re-worth">${tt("re.worth", "{w} a day", {w: `${gain >= 0 ? "+" : ""}${fmt(gain)}`})}<small>${tt("re.worth.full", "once full")}</small></span>` : "";
+  const m = re.mult || {};
+  const k = Number(m.value) || 1;
+  let mod = "";
+  if(Math.abs(k - 1) >= 0.05){
+    const x = num(k, {maximumFractionDigits: 1});
+    const tip = m.source === "measured"
+      ? tt("re.mult.tip.measured", "Your rent income is {x} times what the game's own rules pay: a mod. Measured from yesterday's rent income at every building with a steady price.", {x})
+      : tt("re.mult.tip.mod", "Your rent income is {x} times what the game's own rules pay: the Economy Expansion mod. Measured once a building has a day of rent.", {x});
+    mod = `<span class="re-mod" data-tip="${attr(tip)}" tabindex="0"><b>${tt("re.mult", "Rent ×{x}", {x})}</b>${
+      m.source === "measured" ? tt("re.mult.measured", "measured from yesterday's income") : tt("re.mult.mod", "from the Economy Expansion mod")}</span>`;
+  }
+  return btn + worth + mod;
+}
+function reOccCell(o){
+  const w = Math.max(0, Math.min(100, Number(o.occ) || 0));
+  const full = o.occ >= (o.max || 100);
+  return `<span class="re-occ"><i><b class="${full ? "full" : ""}" style="width:${w}%"></b></i><span>${num(w)}%</span></span>`;
+}
+function rePriceCell(o){
+  if(o.pending !== null && o.pending !== undefined)
+    return `<span class="re-pend"><s>${reP2(o.price)}</s>${reSvg("right")}<b>${reP2(o.pending)}</b></span><span class="re-k dim">${
+      tt("re.pending.in", {one: "in {n} day", other: "in {n} days"}, {n: o.days})}</span>`;
+  const k = o.market ? o.price / o.market : 1;
+  return `${reP2(o.price)}${k >= 1.005 ? `<span class="re-k">${tt("re.over", "+{p}% over market", {p: Math.round((k - 1) * 100)})}</span>` : ""}`;
+}
+function reGainText(g){ return `${g > 0 ? "+" : ""}${fmt(g)}`; }
+function reGainCell(o){
+  const g = o.gain || 0;
+  if(o.risk){
+    const tip = tt("re.risk.tip", "At or above market rent while full: on 7% of days tenants move out. {best}, one cent under market, keeps it full.", {best: reP2(o.best)});
+    return `<span class="re-gain neg">${reGainText(g)}</span><span class="re-risk" data-tip="${attr(tip)}" tabindex="0">${reSvg("alert")}${tt("re.risk", "move-out risk")}</span>`;
+  }
+  if(o.pending !== null && o.pending !== undefined && !o.flag)
+    return `<span class="re-gain q">${Math.round(g) ? reGainText(g) : "—"}</span><span class="re-k dim">${tt("re.set.done", "set")}</span>`;
+  if(!o.flag) return `<span class="re-gain q">${Math.round(g) ? reGainText(g) : "—"}</span>`;
+  return `<span class="re-gain">${reGainText(g)}</span>`;
+}
+/* 61 days of occupancy to today, then, on its own scale, the wait and the fill
+   at the best price (dashed) to "full ≈ day N". A building already set or not
+   off its price shows no projection. */
+function reSpark(o, re){
+  const today = (D.meta || {}).day || 0;
+  const hist = (o.hist || []).slice();
+  hist.push(o.occ);
+  const past = hist.length;
+  const wait = o.pending !== null && o.pending !== undefined ? (o.days || 0) : 7;
+  const fut = (o.flag || (o.pending !== null && o.pending !== undefined)) && o.fill ? wait + o.fill : 0;
+  const W = 640, H = 104, top = 14, bot = 80, x0 = 6, xn = fut ? 400 : 590;
+  const x = i => x0 + i * (xn - x0) / Math.max(past - 1, 1);
+  const xf = d => xn + d * (590 - xn) / Math.max(fut, 1);
+  const y = v => bot - (bot - top) * v / 100;
+  /* A day priced otherwise reads as no value: the line breaks there. */
+  const runs = [];
+  hist.forEach((v, i) => {
+    if(v === null || v === undefined){ if(runs.length && runs[runs.length - 1].length) runs.push([]); return; }
+    if(!runs.length) runs.push([]);
+    runs[runs.length - 1].push([x(i), y(v)]);
+  });
+  const pts = r => r.map(([a, b]) => `${a.toFixed(1)},${b.toFixed(1)}`).join(" ");
+  const lines = runs.filter(r => r.length).map(r => `<polygon class="ar" points="${r[0][0].toFixed(1)},${bot} ${pts(r)} ${r[r.length - 1][0].toFixed(1)},${bot}"></polygon><polyline class="ln" points="${pts(r)}"></polyline>`).join("");
+  const nx = x(past - 1), ny = y(o.occ);
+  const first = re.histFrom ?? (today - past + 1);
+  let out = `<svg class="re-spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="${attr(tt("re.spark.label", "Occupancy, the last {n} days", {n: past}))}">`
+    + `<line class="full" x1="${x0}" x2="590" y1="${y(100).toFixed(1)}" y2="${y(100).toFixed(1)}"></line>`
+    + `<line class="ax" x1="${x0}" x2="590" y1="${bot}" y2="${bot}"></line>`
+    + `<text x="598" y="${(y(100) + 3).toFixed(1)}">100%</text><text x="598" y="${bot + 3}">0</text>` + lines;
+  if(fut){
+    const wx = xf(wait);
+    out += `<line class="sep" x1="${nx.toFixed(1)}" x2="${nx.toFixed(1)}" y1="${top - 6}" y2="${bot + 4}"></line>`
+      + `<line class="wl" x1="${nx.toFixed(1)}" x2="${wx.toFixed(1)}" y1="${ny.toFixed(1)}" y2="${ny.toFixed(1)}"></line>`
+      + `<polyline class="pj" points="${wx.toFixed(1)},${ny.toFixed(1)} ${xf(fut).toFixed(1)},${y(o.max || 100).toFixed(1)}"></polyline>`
+      + `<circle class="end" cx="${xf(fut).toFixed(1)}" cy="${y(o.max || 100).toFixed(1)}" r="3"></circle>`
+      + `<text class="w" x="${(nx + 4).toFixed(1)}" y="${bot + 16}">${spEsc(tt("re.spark.wait", {one: "{n}-day wait", other: "{n}-day wait"}, {n: wait}))}</text>`
+      + `<text class="a" x="${xf(fut).toFixed(1)}" y="${bot + 16}" text-anchor="end">${spEsc(tt("re.spark.full", "full ≈ day {d}", {d: today + fut}))}</text>`
+      + `<text x="${(nx - 4).toFixed(1)}" y="${bot + 16}" text-anchor="end">${spEsc(tt("re.spark.today", "today"))}</text>`;
+  } else out += `<text x="${nx.toFixed(1)}" y="${bot + 16}" text-anchor="end">${spEsc(tt("re.spark.today", "today"))}</text>`;
+  out += `<circle class="now" cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="3.2"></circle>`
+    + `<text x="${x0}" y="${bot + 16}">${spEsc(tt("re.spark.from", "day {d}", {d: first}))}</text>`
+    + `<text x="${(nx - 6).toFixed(1)}" y="${(ny - 8).toFixed(1)}" text-anchor="end" style="fill:var(--ink)">${num(o.occ)}%</text></svg>`;
+  return out;
+}
+/* One line of facts under the picture. */
+function reFacts(o){
+  const today = (D.meta || {}).day || 0;
+  const parts = [tt("re.fact.market", "Market rent {m} a m²", {m: `<b>${num(o.market, {minimumFractionDigits: 3, maximumFractionDigits: 3})}</b>`})];
+  if(o.paid !== null && o.paid !== undefined)
+    parts.push(o.bought !== null && o.bought !== undefined ? tt("re.fact.bought", "bought for {p} on day {d}", {p: `<b>${fmt(o.paid)}</b>`, d: o.bought})
+      : tt("re.fact.paid", "bought for {p}", {p: `<b>${fmt(o.paid)}</b>`}));
+  const pending = o.pending !== null && o.pending !== undefined;
+  if(pending) parts.push(tt("re.fact.pending", {one: "{p} applies in {n} day, on day {d}", other: "{p} applies in {n} days, on day {d}"},
+    {p: `<b>${reP2(o.pending)}</b>`, n: o.days, d: today + (o.days || 0)}));
+  const fills = o.fill ? tt("re.fact.fills", {one: "fills in about {n} day", other: "fills in about {n} days"}, {n: o.fill}) : "";
+  if(o.fill) parts.push(o.flag || pending ? tt("re.fact.fills.at", "{fills} at {p}", {fills: `<em>${fills}</em>`, p: reP2(pending ? o.pending : o.best)}) : fills);
+  else parts.push(tt("re.fact.full", "full"));
+  return `<p class="re-facts">${parts.join('<span class="sep">·</span>')}</p>`;
+}
+function reOwnedRow(o, re, lit, hide){
+  const open = reOpen.has(o.key);
+  const linked = !!gwLink();
+  const act = linked && o.flag ? gwButton("rent", tt("re.set.one", "Set"), `data-gw-rent="${attr(o.key)}"`, "",
+    {name: tt("re.set.one.name", "Set the best price at {address}", {address: o.address})}) : "";
+  const cls = ["re-row", open ? "re-opened" : "", lit ? "re-lit" : "", hide ? "re-hide" : ""].filter(Boolean).join(" ");
+  const sub = `${spEsc(hoodName(o.hood))} · ${spEsc(typeLabel(o.type))}`;
+  return `<tr class="${cls}" data-re-row="${attr(o.key)}"${lit ? " data-re-at" : ""}><td class="tg"><span class="re-tog">${reSvg("chev")}</span></td>`
+    + `<td class="l bd"><span class="re-bd">${reHood(o.hood)}<b>${spEsc(o.address)}</b>${mapButton(o.key, o.address)}</span><span class="re-sub">${sub}</span></td>`
+    + `<td>${num(o.sqm)}</td><td>${reOccCell(o)}</td><td>${rePriceCell(o)}</td><td>${fmt(o.now || 0)}</td>`
+    + `<td class="re-best">${reP2(o.best)}</td><td>${reGainCell(o)}</td>`
+    + `<td class="re-pb">${o.payback ? tt("re.days", "{n:,} d", {n: o.payback}) : "—"}</td><td class="act">${act}</td></tr>`
+    + `<tr class="re-det${open && !hide ? "" : " re-hide"}" data-re-of="${attr(o.key)}"><td colspan="10"><div class="re-dt"><div>${open ? reSpark(o, re) : ""}</div><div>${open ? reFacts(o) : ""}</div></div></td></tr>`;
+}
+function reOwnedTable(re, litAll){
+  const rows = re.owned;
+  const flagged = rows.filter(o => o.flag);
+  const first = litAll ? Math.max(RE_FIRST.buildings, flagged.length) : RE_FIRST.buildings;
+  const all = reAll.buildings || rows.length <= first;
+  const head = `<thead><tr><th></th><th class="l">${tt("re.col.building", "Building")}</th><th>${tt("re.col.m2", "m²")}</th><th>${tt("re.col.occ", "Occupancy")}</th>`
+    + `<th data-tip="${attr(tt("re.col.price.tip", "Rent a m² a day; a new price waits 7 days in the game"))}">${tt("re.col.price", "Price / m²")}</th><th>${tt("re.col.income", "Income / day")}</th>`
+    + `<th data-tip="${attr(tt("re.col.best.tip", "The highest cent under market rent: nobody moves out, and the building fills to 100%"))}">${tt("re.col.best", "Best price")}</th>`
+    + `<th class="on" data-dir="desc">${tt("re.col.gain", "Gain / day")}${SORT_ICON}</th>`
+    + `<th data-tip="${attr(tt("re.col.payback.tip", "The price you paid, over a day's rent at the best price, full, less property tax"))}">${tt("re.col.payback", "Payback")}</th><th></th></tr></thead>`;
+  const body = rows.map((o, i) => reOwnedRow(o, re, litAll && o.flag, !all && i >= first)).join("");
+  const sqm = rows.reduce((s, o) => s + (o.sqm || 0), 0);
+  const occ = sqm ? rows.reduce((s, o) => s + (o.occ || 0) * (o.sqm || 0), 0) / sqm : 0;
+  const now = rows.reduce((s, o) => s + (o.now || 0), 0), full = rows.reduce((s, o) => s + (o.full || 0), 0);
+  const gain = flagged.reduce((s, o) => s + (o.gain || 0), 0);
+  const villas = re.villas ? `<small>${tt("re.villas", {one: "+ {n} villa, no rent income", other: "+ {n} villas, no rent income"}, {n: re.villas})}</small>` : "";
+  const foot = `<tfoot><tr><td></td><td class="l">${tt("re.total.n", {one: "{n} building", other: "{n} buildings"}, {n: rows.length})}${villas}</td>`
+    + `<td>${num(sqm)}</td><td>${num(Math.round(occ))}%</td><td></td><td>${fmt(now)}<small>${tt("re.total.full", "full {w}", {w: fmt(full)})}</small></td><td></td>`
+    + `<td class="re-gain">${flagged.length ? reGainText(gain) : ""}</td><td></td><td></td></tr></tfoot>`;
+  const rest = rows.length - first, off = rows.slice(first).filter(o => o.flag).length;
+  const more = all ? "" : `<div class="re-more"><button type="button" data-re-all="buildings">${tt("re.all", "Show all {n:,}", {n: rows.length})}</button><span>${
+    off ? tt("re.more.off", {one: "{n} more, {k} of them off its best price", other: "{n} more, {k} of them off their best price"}, {n: rest, k: off})
+      : tt("re.more", {one: "{n} more", other: "{n} more"}, {n: rest})}</span></div>`;
+  return `<div class="scrollx"><table class="re-t">${head}<tbody>${body}</tbody>${foot}</table></div>${more}`;
+}
+function drawEstate(){
+  const sec = $("secEstate");
+  if(!sec) return;
+  if(!hasData()){ sec.innerHTML = ""; return; }
+  ctlRelease(sec);
+  if(!odNeed("realEstate")){ sec.innerHTML = sechead(tt("re.buildings.title", "My buildings"), {sr: true}) + odWaitHtml("realEstate"); return; }
+  const re = reData();
+  if(!re || !(re.owned || []).length){
+    sec.innerHTML = sechead(tt("re.buildings.title", "My buildings"), {sr: true}) + reEmpty(tt("re.none.title", "No buildings yet"),
+      re && re.villas ? tt("re.none.villas", {one: "You own {n} Hamptons villa, which earns no rent. Buildings for sale are under Buy a building.", other: "You own {n} Hamptons villas, which earn no rent. Buildings for sale are under Buy a building."}, {n: re.villas})
+        : tt("re.none.text", "Buildings you buy earn rent every day. The ones for sale are under Buy a building."));
+    return;
+  }
+  const lit = reLanded("rent");
+  sec.innerHTML = `<div class="re-ctl" data-view-ctl="estate/buildings">${reOwnedCtl(re)}</div>`
+    + sechead(tt("re.buildings.title", "My buildings"), {sr: true}) + reOwnedTable(re, lit);
+}
+
+/* Buy a building ----------------------------------------------------------- */
+const reMedian = xs => { const s = xs.slice().sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; };
+function reBuySorted(rows){
+  if(reBuySort === "payback")
+    /* The buildings you rent in lead: buying one also ends the rent you pay there. */
+    return rows.slice().sort((a, b) => ((b.saves > 0) - (a.saves > 0)) || ((a.payback == null) - (b.payback == null))
+      || ((a.payback || 0) - (b.payback || 0)) || (a.price - b.price));
+  return rows.slice().sort((a, b) => a.price - b.price || String(a.key).localeCompare(String(b.key)));
+}
+function reBuyCtl(re){
+  const pb = reMedian(re.buy.filter(x => x.payback).map(x => x.payback));
+  const seg = `<span class="seg" role="group" aria-label="${attr(tt("re.sort.label", "Sort by"))}" data-re-sort-seg><a href="#" data-re-sort="price"${reBuySort === "price" ? ` class="on"` : ""}>${
+    tt("re.sort.price", "Price")}</a><a href="#" data-re-sort="payback"${reBuySort === "payback" ? ` class="on"` : ""}>${tt("re.sort.payback", "Payback")}</a></span>`;
+  const head = pb ? `<span class="re-head">${tt("re.payback.all", "Every building pays back in about {d} at the best price",
+    {d: `<b>${tt("re.days.long", {one: "{n:,} day", other: "{n:,} days"}, {n: Math.round(pb / 50) * 50})}</b>`})}</span>` : "";
+  return seg + head;
+}
+function reTaxPanel(re, lit){
+  const t = re.tax;
+  if(!t || !t.assessed || !(t.baseEnd > 0) || !(t.pick || []).length) return "";
+  const picks = t.pick.map(k => re.buy.find(x => x.key === k)).filter(Boolean);
+  const hot = t.left <= 1;
+  const cd = `<span class="re-cd${hot ? " hot" : ""}">${reSvg("calendar")}${t.left === 1 ? tt("re.tax.tomorrow", "day {d} · tomorrow", {d: t.taxDay})
+    : tt("re.tax.in", {one: "day {d} · in {n} day", other: "day {d} · in {n} days"}, {d: t.taxDay, n: t.left})}</span>`;
+  const tip = tt("re.tax.tip", "A retail, office, cinema, theater or warehouse building bought before the day-{d} midnight is deducted in full from this year's taxable sales. Sales so far are scaled to the whole year; the figure firms up on the last day. Spending past the taxable sales saves nothing.", {d: t.taxDay});
+  const top = Math.max(t.baseEnd, t.cash, 1);
+  const pc = v => `${(100 * Math.max(0, v) / top).toFixed(2)}%`;
+  const cashBound = t.bound !== "base";
+  const meter = `<div class="re-meter"><div class="re-mbar"><i class="cash" style="width:${pc(t.cash)}"></i><i class="sp" style="width:${pc(t.spend)}"></i><u style="left:${pc(t.cash)}"></u></div><div class="re-mlab">`
+    + `<span class="${cashBound ? "lim" : ""}" style="left:0">${cashBound ? tt("re.tax.cash.limit", "your cash {w} · the limit", {w: `<b>${money(t.cash)}</b>`})
+      : tt("re.tax.cash", "your cash {w}", {w: `<b>${money(t.cash)}</b>`})}</span>`
+    + `<span class="r${cashBound ? "" : " lim"}">${cashBound ? tt("re.tax.base", "projected taxable sales {w}", {w: `<b>${money(t.baseEnd)}</b>`})
+      : tt("re.tax.base.limit", "projected taxable sales {w} · the limit", {w: `<b>${money(t.baseEnd)}</b>`})}</span></div></div>`;
+  const rows = picks.map(x => `<div class="re-pick"><div><span class="re-bd">${reHood(x.hood)}<b>${spEsc(x.address)}</b></span><span class="re-sub">${
+    spEsc(typeLabel(x.type))} · ${tt("re.m2", "{n:,} m²", {n: x.sqm})}</span></div><span class="p">${fmt(x.price)}</span>${mapButton(x.key, x.address)}</div>`).join("")
+    + `<div class="re-pick sum"><span>${tt("re.total.n", {one: "{n} building", other: "{n} buildings"}, {n: picks.length})}</span><span class="p">${fmt(t.spend)}</span><span></span></div>`;
+  return `<div class="re-tax${lit ? " re-litbox" : ""}" id="reTax"${lit ? " data-re-at" : ""}><div>`
+    + `<h3>${reSvg("calendar")}${tt("re.tax.title", "Before tax day")} ${cd}${why(tip)}</h3>`
+    + `<div class="re-eq"><span class="lab">${tt("re.tax.spend", "Spend")}</span><span class="v">${fmt(t.spend)}</span>${reSvg("right")}<span class="lab">${tt("re.tax.tax", "tax")}</span><span class="v g">${fmt(-t.saves)}</span><span class="lab">${tt("re.tax.rate", "at {p}%", {p: t.rate})}</span></div>`
+    + meter
+    + `<div class="re-left"><div><span class="lab">${tt("re.tax.left", "Cash left")}</span><span class="v">${fmt(t.after)}</span></div></div></div>`
+    + `<div class="re-picks"><div class="lab"><span>${tt("re.tax.buy", "Buy these")}</span><span>${tt("re.tax.price", "Price")}</span></div>${rows}</div></div>`;
+}
+function reBuyRow(x, cash, hide){
+  const dim = x.price > cash;
+  const sub = [spEsc(hoodName(x.hood)), spEsc(typeLabel(x.type)), tt("re.m2", "{n:,} m²", {n: x.sqm})]
+    .concat(x.listed ? [] : [tt("re.unlisted", "not listed, offer 1% over market value")]).join(" · ");
+  const biz = x.saves > 0 ? (D.businesses || []).find(b => b.key === x.key) : null;
+  const you = x.saves > 0 ? `<span class="re-you" data-tip="${attr(biz ? tt("re.you.tip", "You run {name} here: buying it ends the rent you pay", {name: shortName(biz)})
+    : tt("re.you.tip.any", "You rent here: buying it ends the rent you pay"))}">${reSvg("key")}${tt("re.you", "You rent here · saves {w}/day", {w: fmt(x.saves)})}</span>` : "";
+  const cls = [dim ? "re-dim" : "", hide ? "re-hide" : ""].filter(Boolean).join(" ");
+  return `<tr${cls ? ` class="${cls}"` : ""}${dim ? ` data-tip="${attr(tt("re.dim.tip", "{w} more than your cash", {w: fmt(x.price - cash)}))}"` : ""}>`
+    + `<td class="l bd"><span class="re-bd">${reHood(x.hood)}<b>${spEsc(x.address)}</b>${mapButton(x.key, x.address)}</span><span class="re-sub">${sub}</span>${you}</td>`
+    + `<td>${fmt(x.price)}</td><td>${x.villa ? `<span class="re-no">${tt("re.norent", "No rent income")}</span>` : fmt(x.income || 0)}</td>`
+    + `<td>${x.payback ? tt("re.days", "{n:,} d", {n: x.payback}) : "—"}</td></tr>`;
+}
+function reBuyTable(re){
+  const cash = re.tax && Number.isFinite(re.tax.cash) ? re.tax.cash : Infinity;
+  const rows = reBuySorted(re.buy);
+  const all = reAll.buy || rows.length <= RE_FIRST.buy;
+  const th = (k, label, tip) => `<th data-re-sort="${k}"${reBuySort === k ? ` class="on"` : ""}${tip ? ` data-tip="${attr(tip)}"` : ""} tabindex="0" role="button">${label}${reBuySort === k ? SORT_ICON : ""}</th>`;
+  const head = `<thead><tr><th class="l">${tt("re.col.building", "Building")}</th>${th("price", tt("re.col.price2", "Price"))}`
+    + `<th data-tip="${attr(tt("re.col.rent.tip", "A day's rent at the best price, once full"))}">${tt("re.col.rent", "Rent / day")}</th>`
+    + th("payback", tt("re.col.payback", "Payback"), tt("re.col.payback.buy.tip", "The price over a day's rent at the best price, full, plus any rent it saves you, less property tax")) + `</tr></thead>`;
+  const body = rows.map((x, i) => reBuyRow(x, cash, !all && i >= RE_FIRST.buy)).join("");
+  const within = rows.filter(x => x.price <= cash).length;
+  const more = all ? "" : `<div class="re-more"><button type="button" data-re-all="buy">${tt("re.all", "Show all {n:,}", {n: rows.length})}</button><span>${
+    tt("re.within", "{n:,} within your cash", {n: within})}</span></div>`;
+  return `<div class="scrollx"><table class="re-t re-bt">${head}<tbody>${body}</tbody></table></div>${more}`;
+}
+function drawEstateBuy(){
+  const sec = $("secBuy");
+  if(!sec) return;
+  if(!hasData()){ sec.innerHTML = ""; return; }
+  ctlRelease(sec);
+  if(!odNeed("realEstate")){ sec.innerHTML = sechead(tt("re.buy.title", "Buy a building"), {sr: true}) + odWaitHtml("realEstate"); return; }
+  const re = reData();
+  if(!re || !(re.buy || []).length){
+    sec.innerHTML = sechead(tt("re.buy.title", "Buy a building"), {sr: true}) + reEmpty(tt("re.buy.none.title", "Nothing for sale"),
+      tt("re.buy.none.text", "No building is for sale in the city right now, and you rent in none the game would sell."));
+    return;
+  }
+  const lit = reLanded("tax");
+  sec.innerHTML = `<div class="re-ctl" data-view-ctl="estate/buy">${reBuyCtl(re)}</div>`
+    + sechead(tt("re.buy.title", "Buy a building"), {sr: true}) + reTaxPanel(re, lit)
+    + `<div class="re-gh"><h3>${tt("re.forsale", "For sale")}</h3><span class="n">${num(re.buy.length)}</span></div>` + reBuyTable(re);
+}
+/* A finding's landing: the view, lit (every flagged row, or the tax panel),
+   under the arrival strip the finding's action set. */
+function reLandOn(a, kind){
+  reLand = {kind, id: a.id, fresh: true};
+  if(kind === "rent") reAll.buildings = false;
+  featureDiscovery.visit(kind === "tax" ? "real-estate-buy" : "real-estate-buildings");
+}
+/* Rows open in place, Show all lists the rest, the Buy sort switches by its
+   control or by a column head. Bound once, from wireAll(). */
+let reBound = false;
+function bindEstate(){
+  if(reBound) return;
+  reBound = true;
+  on("click", "#pageEstate tr[data-re-row]", (tr, e) => {
+    if(e.target.closest("a, button, select, input, .map-shortcut, [data-gw]")) return;
+    const key = tr.dataset.reRow, det = q(`#pageEstate tr[data-re-of="${CSS.escape(key)}"]`);
+    if(!det) return;
+    const open = !reOpen.has(key);
+    if(open) reOpen.add(key); else reOpen.delete(key);
+    const re = reData(), o = re && re.owned.find(x => x.key === key);
+    if(open && o){ const cells = det.querySelectorAll(".re-dt > div"); if(cells.length === 2){ cells[0].innerHTML = reSpark(o, re); cells[1].innerHTML = reFacts(o); } }
+    det.classList.toggle("re-hide", !open); tr.classList.toggle("re-opened", open);
+  });
+  on("click", "#pageEstate [data-re-all]", (b, e) => {
+    e.preventDefault();
+    const which = b.dataset.reAll;
+    reAll[which] = true;
+    if(which === "buy") drawEstateBuy(); else drawEstate();
+    wireAll();
+  });
+  const sortTo = k => {
+    if(k !== "price" && k !== "payback") return;
+    reBuySort = reBuySort === k && k !== "price" ? "price" : k;
+    drawEstateBuy(); wireAll();
+  };
+  on("click", "[data-re-sort]", (el, e) => { e.preventDefault(); sortTo(el.dataset.reSort); });
+  on("keydown", "#pageEstate th[data-re-sort]", (el, e) => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); sortTo(el.dataset.reSort); } });
+}
+
 /* The difficulty, as one chip and a popover with every setting that differs
    from the game's Normal preset. Normal is the yardstick rather than x1,
    because the presets are not x1: Normal's urgent wholesale fee is x0.2. The
@@ -18549,6 +18945,7 @@ const PAGES = [
   {id:"supply",  get label(){ return tt("nav.area.supply", "Supply"); },   host:"pageSupply"},
   {id:"staffing", get label(){ return tt("nav.area.staffing", "Staffing"); }, host:"pageStaffing"},
   {id:"growth",  get label(){ return tt("nav.area.expansion", "Expansion"); },   host:"pageGrowth"},
+  {id:"estate",  get label(){ return tt("nav.area.estate", "Real estate"); },   host:"pageEstate"},
   {id:"map", get label(){ return tt("nav.ref.map", "City map"); }, host:"pageMap", newFeature:"map"},
   /* A build without the wiki files carries no Game guide: an empty page is
      worse than no page at all. */
@@ -18589,6 +18986,9 @@ const SUBS = {
              items:navItems("staffing")},
   growth: {host:"pageGrowth", nav:"growthNav", key:"ba_dash_growth", start:"market",
            items:navItems("growth")},
+  /* Real estate's two views (mockup/real-estate). */
+  estate: {host:"pageEstate", nav:"estateNav", key:"ba_dash_estate", start:"buildings",
+           items:navItems("estate")},
 };
 const PAGE_KEY = "ba_dash_page";
 let page = "today";
@@ -18634,6 +19034,8 @@ const AREAS = [
    views:VIEW_META.filter(v => v.route.startsWith("staffing/")).map(v => v.route.split("/")[1]), start:"schedules"},
   {id:"expansion", icon:"growth", get label(){ return tt("nav.area.expansion", "Expansion"); },
    views:VIEW_META.filter(v => v.route.startsWith("expansion/")).map(v => v.route.split("/")[1]), start:"demand"},
+  {id:"estate", icon:"estate", get label(){ return tt("nav.area.estate", "Real estate"); },
+   views:VIEW_META.filter(v => v.route.startsWith("estate/")).map(v => v.route.split("/")[1]), start:"buildings"},
 ];
 const REFS = [
   {id:"map", icon:"map", newFeature:"map", get label(){ return tt("nav.ref.map", "City map"); }},
@@ -18709,6 +19111,9 @@ const ROUTE_BEHAVIOR = {
   }},
   /* Any visit marks the view's New badge seen (the factory flow, #172). */
   "expansion/factory": {after(){ featureDiscovery.visit("factory-flow"); }},
+  /* Real estate's views: each New until its first visit. */
+  "estate/buildings": {after(){ featureDiscovery.visit("real-estate-buildings"); }},
+  "estate/buy": {after(){ featureDiscovery.visit("real-estate-buy"); }},
   /* The map as the reader left it: with the finder on, that is Find a
      location, and the address says so (routeFor()). */
   /* The City map is the plain map: reached with the finder on (the
@@ -18906,6 +19311,7 @@ const PAGE_DRAWS = [
   ["supply/production", () => drawProductionView(), null, ["factoryStaffing"]], ["supply/flow", () => drawFlowView(), null, []], ["supply/flow", () => drawFlow(), null, []],
   ["growth/market", () => drawMovers(), null, []], ["growth/market", () => drawMarket(), null, []], ["growth/open", () => drawOpenStore(), null, ["openStore"]],
   ["growth/plan", () => drawPlan(), null, ["openFactory", "openStore"]],  // changed for growth: no drawExpansion()
+  ["estate/buildings", () => drawEstate(), null, ["realEstate"]], ["estate/buy", () => drawEstateBuy(), null, ["realEstate"]],
   ["company/products", () => drawPriceShops(), null, []], ["company/products", () => drawProducts(), null, ["products"]],
   // A third element names a row other code marks stale on its own (hrStale(), nxSchedStale());
   // a fourth, the sections it reads, asked for as its view opens (odWantView()).
@@ -19148,7 +19554,7 @@ function sdFootPaint(){
     if(tog.dataset) tog.dataset.tip = words;
   }
 }
-/* The phone's bar: the five places and Map & more, which opens the references
+/* The phone's bar: the six places and Map & more, which opens the references
    and the utilities. */
 function phoneNavHtml(){
   return AREAS.map(a => `<a href="#${a.id}" data-id="${a.id}">${icon(a.icon)}<span>${a.label}</span>${
@@ -19291,7 +19697,8 @@ function paintShell(){
 /* A view that is new carries the New badge in its area's row until it is
    opened (featureDiscovery); docs/contributing.md, "New feature badges". A var:
    paintLocal() runs before this line on load, as viewTips below does. */
-var VIEW_NEW = {"supply/roles": "plans-contracts", "expansion/open": "open-store", "expansion/factory": "factory-flow"};
+var VIEW_NEW = {"supply/roles": "plans-contracts", "expansion/open": "open-store", "expansion/factory": "factory-flow",
+  "estate/buildings": "real-estate-buildings", "estate/buy": "real-estate-buy"};
 function paintLocal(){
   const host = $("localNav");
   if(!host) return;
@@ -19370,6 +19777,10 @@ function routeCount(id){
   if(!hasData()) return 0;
   if(id === "supply/changes") return typeof sbLeft !== "undefined" && sbLeft ? Object.values(sbLeft).reduce((s, n) => s + n, 0) : 0;
   if(id === "supply/roles") return typeof srCount === "function" && D.supply ? srCount() : 0;
+  /* Real estate: the buildings off their best price (a pending one counts as
+     set), and Buy a building only on the last day before tax day. */
+  if(id === "estate/buildings") return reCounts().flagged || 0;
+  if(id === "estate/buy") return reCounts().taxEve ? 1 : 0;
   if(/^supply\/(imports|deliveries|production)$/.test(id)) return typeof sbLeft !== "undefined" && sbLeft ? sbLeft[id.split("/")[1]] || 0 : 0;
   if(id === "staffing/needs" && typeof alertLines === "function")
     return alertLines().filter(a => (a.group === "jobdemand" || a.group === "companydemand") && !(typeof kindOff === "function" && kindOff(a))).length;
@@ -20893,6 +21304,15 @@ const SS_VIEWS = [
   {id: "plan", get t(){ return tt("nav.search.plan.title", "Plan a factory"); },
    get p(){ return tt("nav.search.plan.line", "Expansion › Plan a factory"); }, ic: "growth", syn: ["new factory", "recipe plan", "expand", "plan a chain", "open a factory", "factory location", "add machines"],
    go: () => openRoute("expansion/factory")},
+  {id: "estate", get t(){ return tt("nav.search.estate.title", "My buildings"); },
+   get p(){ return tt("nav.search.estate.line", "Real estate › My buildings · rent prices and occupancy"); }, ic: "estate",
+   syn: ["real estate", "buildings", "rent price", "set rent", "landlord", "tenants", "occupancy", "property", "best price", "market rent"],
+   live: () => { const n = reCounts().flagged; return n ? {tag: tt("nav.search.estate.tag", {one: "{n} to set", other: "{n} to set"}, {n})} : {}; },
+   go: () => openRoute("estate/buildings")},
+  {id: "buy", get t(){ return tt("nav.search.buy.title", "Buy a building"); },
+   get p(){ return tt("nav.search.buy.line", "Real estate › Buy a building · price, payback and tax day"); }, ic: "estate",
+   syn: ["buy building", "purchase", "invest", "payback", "for sale", "tax", "taxes", "deduction", "tax day", "property"],
+   go: () => openRoute("estate/buy")},
   {id: "finder", get t(){ return tt("nav.search.finder.title", "Find a location"); },
    get p(){ return tt("nav.search.finder.line", "Expansion › Find a location"); }, ic: "pin", syn: ["rent", "premises", "building", "floor size", "m²", "vacant", "where should i open", "size"],
    live(){ const n = ((D.premises || {}).buildings || []).filter(b => b.type === "retail" && b.status === "vacant").length;
@@ -20936,6 +21356,8 @@ function ssKindLands(id){
   if(link.port) return tt("nav.search.kind.ops", "Businesses › Standards");
   if(link.sec === "secMarket") return tt("nav.search.kind.market", "Expansion › Demand");
   if(link.sec === "secPortfolio") return tt("nav.search.kind.portfolio", "Businesses › Results");
+  if(link.sec === "secEstate") return routePath("estate/buildings");
+  if(link.sec === "secBuy") return routePath("estate/buy");
   return tt("nav.search.kind.today", "Overview");
 }
 function ssKindGo(id){
@@ -23073,6 +23495,7 @@ function gwUpdateMod(kind){
   if(kind === "schedule") return tt("nav.dlg.mod.schedule", "Update the Big Copilot Link mod to write schedules from here");
   if(kind === "hire") return tt("nav.dlg.mod.hire", "Update the Big Copilot Link mod to hire and place staff from here");
   if(kind === "marketing") return tt("nav.dlg.mod.marketing", "Update the Big Copilot Link mod to set marketing from here");
+  if(kind === "rent") return tt("nav.dlg.mod.rent", "Update the Big Copilot Link mod to set rent from here (version 0.6.0 or later)");
   return tt("nav.dlg.mod.other", "Update the Big Copilot Link mod to {kind} from here", {kind});
 }
 /* How long an apply's Undo lasts, by the kind of write (no full stop). */
@@ -23082,6 +23505,7 @@ function gwUndoStays(kind){
   if(kind === "schedule") return tt("nav.dlg.stays.schedule", "Undo stays until your next schedule change");
   if(kind === "hire") return tt("nav.dlg.stays.hire", "Undo stays until your next staffing step, on this game day");
   if(kind === "marketing") return tt("nav.dlg.stays.marketing", "Undo stays until your next marketing change");
+  if(kind === "rent") return tt("nav.dlg.stays.rent", "Undo stays until your next rent change, on this game day");
   return tt("nav.dlg.stays.other", "Undo stays until your next {kind} change", {kind});
 }
 const gwUndoable = {};  // kind -> {spec, text, sub, character, at}: its last apply, until undone or replaced
@@ -23120,6 +23544,7 @@ const GW_P = {
   hire: '<circle cx="10" cy="8" r="3.5"></circle><path d="M3.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"></path>',
   phone: '<rect x="7" y="2.5" width="10" height="19" rx="2"></rect><path d="M11 18.5h2"></path>',
   magnet: '<path d="M6 4v8a6 6 0 0 0 12 0V4h-4v8a2 2 0 0 1-4 0V4zM6 8h4M14 8h4"></path>',
+  tag: '<path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1 1 0 0 1 0 1.4l-7.1 7.1a1 1 0 0 1-1.4 0z"></path><circle cx="8" cy="8" r="1.5"></circle>',
 };
 const gwSvg = (name, cls) => `<svg${cls ? ` class="${cls}"` : ""} viewBox="0 0 24 24" aria-hidden="true">${GW_P[name] || ""}</svg>`;
 const gwI = name => `<span class="gw-i">${gwSvg(name)}</span>`;
@@ -23737,6 +24162,145 @@ function gwMarketing(keys, mode){
   });
 }
 
+/* Rent (Real estate › My buildings): the best price at one building, or at
+   every building off its best price (`keys` null). Read from the realEstate
+   section, so the dialog waits for it; the game clamps a price to BizMan's
+   slider and holds it as pending for its seven-day wait, which the answer's
+   appliesOnDay names. Every building is set, or none: a refused one can be
+   left out, as with marketing. */
+function gwRent(keys){
+  /* The buildings are fixed as the dialog opens: the board read again after
+     the apply holds them pending, and no longer off their best price. */
+  const re0 = reData();
+  if(!re0) return;
+  keys = keys || re0.owned.filter(o => o.flag).map(o => o.key);
+  const many = keys.length > 1;
+  const out = new Set();  // buildings left out
+  const pool = () => {
+    const re = reData() || re0;
+    return keys.map(k => re.owned.find(o => o.key === k)).filter(Boolean);
+  };
+  const kept = () => pool().filter(o => !out.has(o.key));
+  /* The rows the game last judged, so the drawing stays with its answer
+     while the board reads the game again after an apply. */
+  let judged = new Map();
+  const plan = r => judged.get(gwKeyOf(r.address));
+  const setRows = answer => (answer.rows || []).filter(r => !r.error && r.set && plan(r));
+  const day = answer => {
+    const d = (answer.rows || []).map(r => Number(r.appliesOnDay)).find(Number.isFinite);
+    return Number.isFinite(d) ? d : (Number((D.meta || {}).day) || 0) + 7;
+  };
+  const first = pool()[0];
+  if(!first) return;
+  const refusal = r => {
+    const known = GW_REFUSE.rent[r.error] || GW_REFUSE.any[r.error];
+    return (typeof known === "function" ? known(r) : known) || {rule: tt("sp.gw.uni.refused", "The game refused this ({code})", {code: spEsc(r.error)}), fix: ""};
+  };
+  const where = o => `${reHood(o.hood)}<span>${spEsc(o.address)}</span>`;
+  /* What the game will hold: its own after-price where it answered one. */
+  const to = (r, p) => Number.isFinite(Number(r.pendingPricePerSqm)) && r.set ? Number(r.pendingPricePerSqm) : p.best;
+  const read = p => p.fill ? tt("re.gw.read", {one: "Occupancy {occ}% now · fills in about {n} day", other: "Occupancy {occ}% now · fills in about {n} days"}, {occ: p.occ, n: p.fill})
+    : tt("re.gw.read.full", "Full · keeps every tenant");
+  const row = (r, phase) => {
+    const p = plan(r), key = gwKeyOf(r.address);
+    if(!p) return "";
+    const back = phase === "undone";
+    const was = back ? to(r, p) : (p.pending ?? p.price), now = back ? (p.pending ?? p.price) : to(r, p);
+    const tick = phase === "done" && !r.error && r.set ? `<span class="re-tick">${gwSvg("tick")}</span>` : "";
+    const say = r.error ? refusal(r) : null;
+    const same = !r.error && r.set === false;
+    return `<div class="gw-shop gw-mkrow${r.error ? " bad" : ""}" tabindex="0" data-read="${attr(read(p))}"><div class="nm">${reHood(p.hood)}<span>${spEsc(p.address)}</span>${tick}</div>`
+      + `<span class="c re-plus">${same ? tt("re.gw.same", "already set") : tt("re.gw.gain", "{w}/day", {w: reGainText(p.gain || 0)})}</span>`
+      + `<span class="gw-mk">${tt("re.gw.change", "{change} a m²", {change: `<span class="re-gwk"><s>${reP2(was)}</s>${gwSvg("right")}<b>${reP2(now)}</b></span>`})}${
+        r.clamped ? ` · ${tt("re.gw.clamped", "the game's limit")}` : ""}</span>`
+      + (say ? `<div class="gw-why"><span><b>${say.rule}</b>.${say.fix ? ` ${say.fix}` : ""}</span>${
+        phase === "ready" && kept().length > 1 ? `<button type="button" class="gw-mini-b" data-gw-leave="${attr(key)}" aria-label="${
+        attr(tt("re.gw.leave.label", "Leave it out: {name}", {name: p.address}))}">${gwSvg("skip")}${tt("sp.gw.uni.leave", "Leave it out")}</button>` : ""}</div>` : "")
+      + `</div>`;
+  };
+  const outRow = o => `<div class="gw-shop out"><div class="nm">${reHood(o.hood)}<span>${spEsc(o.address)}</span></div><span class="gw-minis"></span><span class="c">${tt("sp.gw.uni.out", "out")}</span></div>`;
+  const title = () => many ? tt("re.gw.title.many", {one: "Set the best price at {n} building", other: "Set best prices at {n} buildings"}, {n: kept().length})
+    : tt("re.gw.title", "Set the best price");
+  gwConfirm({
+    kind: "rent", icon: "tag", needs: ["realEstate"], againLabel: tt("re.gw.again", "Set again"),
+    title,
+    where: () => !many ? where(first)
+      : out.size ? `<span>${tt("sp.gw.uni.leftout", "{names} left out", {names: [...out].map(k => spEsc((pool().find(o => o.key === k) || {address: k}).address)).join(", ")})}</span>` : "",
+    nothing: () => kept().length ? "" : tt("re.gw.nothing", "No building left to set."),
+    body: () => {
+      const list = kept();
+      judged = new Map(list.map(o => [o.key, o]));
+      return {items: list.map(o => ({address: gwAddress(o.key), pricePerSqm: o.best,
+        expect: {pricePerSqm: o.price, pendingPricePerSqm: o.pendingRaw ?? (o.pending ?? 0)}}))};
+    },
+    /* Every price is pending at its best already: nothing to send. */
+    idle: answer => (answer.rows || []).some(r => !r.error && r.set) ? "" : tt("re.gw.idle", "Nothing to change: every price is set already"),
+    verdict: answer => {
+      const rows = answer.rows || [], bad = rows.filter(r => r.error).length, n = setRows(answer).length;
+      if(bad) return many ? `<b>${tt("re.gw.refuses", "The game refuses {n} of {of} buildings", {n: bad, of: rows.length})}</b>`
+        : `<b>${tt("sp.gw.refuses", "The game refuses this")}</b>`;
+      return `<b>${tt("re.gw.will", {one: "The game will set {n} price", other: "The game will set {n} prices"}, {n})}</b>`;
+    },
+    inline: true,
+    draw: (answer, phase) => {
+      const rows = answer.rows || [];
+      const ok = rows.filter(r => !r.error && plan(r)), set = ok.filter(r => r.set);
+      const sum = f => set.reduce((s, r) => s + (f(plan(r)) || 0), 0);
+      const d = day(answer);
+      if(!many){
+        const r = rows[0] || {}, p = plan(r);
+        if(!p) return "";
+        const tally = phase === "ready" ? `<div class="gw-tally"><div><span class="gw-lab">${tt("re.gw.now1", "Now, a day")}</span><span class="gw-big dim">${fmt(p.now || 0)}</span></div>
+          <div><span class="gw-lab">${tt("re.gw.full1", "Full, a day")}</span><span class="gw-big">${fmt(p.full || 0)}</span></div>
+          <div><span class="gw-lab">${tt("re.gw.price1", "Price / m²")}</span><span class="gw-big dim re-gwp">${reP2(p.pending ?? p.price)} → ${reP2(to(r, p))}</span></div></div>` : "";
+        const note = phase === "ready" && !r.error ? gwCall("info", "clock", p.fill
+          ? tt("re.gw.wait1", {one: "The price applies after the game's <b>7-day wait</b>, on day {d}. The building then fills in about {n} day; nobody moves out at this price.",
+              other: "The price applies after the game's <b>7-day wait</b>, on day {d}. The building then fills in about {n} days; nobody moves out at this price."}, {d, n: p.fill})
+          : tt("re.gw.wait1.full", "The price applies after the game's <b>7-day wait</b>, on day {d}. The building stays full: nobody moves out at this price.", {d})) : "";
+        return tally + note + (r.error ? `<div class="gw-shops">${row(r, phase)}</div>` : "");
+      }
+      const tally = phase === "ready" ? `<div class="gw-tally"><div><span class="gw-lab">${tt("re.gw.now", "Rent now, a day")}</span><span class="gw-big dim">${fmt(sum(p => p.now))}</span></div>
+        <div><span class="gw-lab">${tt("re.gw.full", "Once full, a day")}</span><span class="gw-big">${fmt(sum(p => (p.now || 0) + (p.gain || 0)))}</span></div>
+        <div><span class="gw-lab">${tt("re.gw.n", "Buildings")}</span><span class="gw-big dim">${set.length}${rows.length > set.length ? `<small>+${rows.length - set.length}</small>` : ""}</span></div></div>` : "";
+      const note = phase === "ready" && set.length ? gwCall("info", "clock", tt("re.gw.wait", "Each price applies after the game's <b>7-day wait</b>, on day {d}. The buildings then fill over the weeks after; the gain is what they earn once full.", {d})) : "";
+      /* The largest gain first, as the view's button lists them. */
+      const order = rows.slice().sort((a, b) => ((plan(b) || {}).gain || 0) - ((plan(a) || {}).gain || 0));
+      return tally + note + `<div data-readzone><div class="gw-shops">${order.map(r => row(r, phase)).join("")}${
+        [...out].map(k => pool().find(o => o.key === k)).filter(Boolean).map(outRow).join("")}</div><div class="gw-read sp-readout">&nbsp;</div></div>`;
+    },
+    doneBody: (answer, spec) => {
+      const n = setRows(answer).length, d = day(answer);
+      const said = answer.undo ? spec.done(answer)
+        : n === 1 ? tt("re.gw.done.one", "<b>The price waits in the game.</b> It applies on day {d}; occupancy climbs from then.", {d})
+        : tt("re.gw.done.many", "<b>{n} prices wait in the game.</b> They apply on day {d}; occupancy climbs from then.", {n, d});
+      return gwBox("tick", "", said) + (many ? `<div class="gw-shops">${(answer.rows || []).filter(r => !r.error && r.set).map(r => row(r, "done")).join("")}</div>` : "");
+    },
+    refusedHint: () => many ? tt("re.gw.refusedmany", "Every price is set, or none: leave a refused building out, or refresh the board.") : tt("sp.gw.unchanged", "Nothing was changed."),
+    bind: (dlg, replan) => {
+      dlg.querySelectorAll("[data-gw-leave]").forEach(b => { b.onclick = () => {
+        if(b.classList.contains("gw-busy")) return;
+        out.add(b.dataset.gwLeave);
+        const r = b.closest(".gw-shop");
+        if(r) r.classList.add("out");
+        replan(b);
+      }; });
+    },
+    object: r => spEsc((plan(r) || {}).address || tt("re.gw.abuilding", "A building")),
+    applyLabel: answer => many ? tt("re.gw.apply", {one: "Set {n} price", other: "Set {n} prices"}, {n: answer ? setRows(answer).length || kept().length : kept().length})
+      : tt("re.gw.apply1", "Set the price"),
+    applying: tt("re.gw.applying", "Setting rent in the game…"),
+    undoHint: () => many ? tt("re.gw.undohint", "Undo puts back all {n} prices at once, until the game's next day.", {n: kept().length})
+      : tt("re.gw.undohint1", "Undo puts the price back, until the game's next day."),
+    changed: answer => setRows(answer).length > 0,
+    done: answer => {
+      const n = setRows(answer).length;
+      if(answer.undo) return n > 1 ? tt("re.gw.undone.many", "Undone: the prices are back as they were at {n} buildings.", {n})
+        : tt("re.gw.undone", "Undone: the price is back as it was.");
+      return tt("re.gw.toast", {one: "Best price set at {n} building · it applies on day {d}", other: "Best prices set at {n} buildings · they apply on day {d}"}, {n, d: day(answer)});
+    },
+  });
+}
+
 /* The agency a marketing refusal names: its own name, else the board's name
    for its address, else a plain word. */
 function gwMkAgencyOf(r){
@@ -23829,6 +24393,11 @@ const GW_REFUSE = {
     overlap_person: {get rule(){ return tt("nav.dlg.refuse.overlapperson.rule", "Someone would work two places at once"); }, get fix(){ return tt("nav.dlg.refuse.overlapperson.fix", "Refresh the board."); }},
     overlap_station: {get rule(){ return tt("nav.dlg.refuse.overlapstation.rule", "Two people would share one station"); }, get fix(){ return tt("nav.dlg.refuse.overlapstation.fix", "Refresh the board."); }},
   },
+};
+/* Rent (gwRent()): a building sold since, or a villa, which the game pays no rent. */
+GW_REFUSE.rent = {
+  not_owned: {get rule(){ return tt("re.gw.refuse.notowned.rule", "You no longer own this building"); }, get fix(){ return tt("re.gw.refuse.notowned.fix", "Refresh the board."); }},
+  villa: {get rule(){ return tt("re.gw.refuse.villa.rule", "A Hamptons villa: the game pays it no rent"); }, get fix(){ return tt("re.gw.refuse.villa.fix", "Leave it out."); }},
 };
 /* A hire's rows name their scope: a candidate hired, an employee moved, a
    site, or one shift of a site's week (the schedule's own codes). */
@@ -25521,6 +26090,7 @@ const bindWrites = once(() => {
     else if(kind === "hire") hrReview(btn.dataset.hrStaff ? {scope: "site", site: btn.dataset.hrStaff} : {});
     else if(kind === "marketing") gwMarketing(btn.hasAttribute("data-gw-mk-all")
       ? gwMkSites(btn.dataset.gwMode, btn.dataset.gwMkLine || null).map(b => b.key) : JSON.parse(btn.dataset.gwSites || "[]"), btn.dataset.gwMode);
+    else if(kind === "rent") gwRent(btn.hasAttribute("data-gw-rent-all") ? null : [btn.dataset.gwRent]);
   }, true);
 });
 function wireWrites(){ bindWrites(); gwToast(); gwReadBack(); }
@@ -25536,7 +26106,7 @@ function wireAll(){
   wireRoster();
   wireFlow(); bindSupply();
   wireHeat(); wirePlan(); wireOpenStore(); wireOpenFactory();
-  wireReveal(); wireWrites(); wireStaff();
+  wireReveal(); wireWrites(); wireStaff(); bindEstate();
 }
 
 /* The board with no numbers in it: the Wiki reads straight from the game's own
