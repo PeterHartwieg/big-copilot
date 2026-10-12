@@ -41,12 +41,14 @@ class Footer(unittest.TestCase):
         site = footer_html(site=True)
         self.assertIn('href="impressum.html"', site)
         self.assertIn('href="privacy.html"', site)
+        self.assertIn('href="supporters.html"', site)
         # The hrefs, not the words: both footers carry a comment that mentions
         # the privacy notice, and matching prose would pass for the wrong reason.
         for name, markup in (("board", footer_html()), ("landing", footer_html(landing=True))):
             with self.subTest(name):
                 self.assertNotIn('href="impressum.html"', markup)
                 self.assertNotIn('href="privacy.html"', markup)
+                self.assertNotIn('href="supporters.html"', markup)
                 self.assertNotIn("bigcopilot.com/impressum", markup)
 
     def test_a_cli_page_names_neither_legal_page(self):

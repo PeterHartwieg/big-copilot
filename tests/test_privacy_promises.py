@@ -21,7 +21,7 @@ FETCHED = re.compile(
     r"""|url\(["']?(https?:)?//""",
     re.I,
 )
-PAGES = ("index.html", "impressum.html", "privacy.html", "translate/index.html")
+PAGES = ("index.html", "impressum.html", "privacy.html", "supporters.html", "translate/index.html")
 SCRIPTS = ("app.js", "worker.js", "community.js", "map.js", "wiki.js", "update.js", "report.js", "translate.js")
 PYODIDE_FILES = ("pyodide.mjs", "pyodide.asm.mjs", "pyodide.asm.wasm", "python_stdlib.zip", "pyodide-lock.json")
 
