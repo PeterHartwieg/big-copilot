@@ -23,6 +23,10 @@
 /index.html
   Cache-Control: no-cache
 
+# Edited by hand whenever a donor answers, so never served stale.
+/supporters.json
+  Cache-Control: no-cache
+
 /translate/*
   Cache-Control: no-cache
 

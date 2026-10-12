@@ -225,6 +225,27 @@ Run `node --test tests/release.test.cjs` before deploying, after `python build_w
 `https://bigcopilot.com/` and run it again afterwards. It checks the generated
 page's map and guide loading, displayed prices, and persistent feature badges together.
 
+## Supporters list
+
+`/supporters` (`web/supporters.html`) lists donors in order of everything each has
+given, with no amounts. Its data, `web/supporters.json`, holds only that order and the
+names donors agreed to show; everyone else is `null`, shown as Anonymous. The privacy
+notice (section 8) promises exactly this, so never put an amount or an email in it.
+
+The amounts live in a private ledger outside the repository,
+`~/Documents/Big Copilot/donations.csv`, one row per PayPal payment
+(`date,email,paypal_name,amount_eur,thanked,listed_as`). When a donation arrives
+(Gmail: `from:paypal (Spende OR "Zahlung erhalten")`):
+
+1. Add a row.
+2. A new donor gets the thank-you email (`~/Documents/Big Copilot/thank-you-email.html`)
+   asking whether to stay Anonymous; fill in `thanked` with the date.
+3. When they answer, put the name they agreed to (first name and the initial of the
+   last name, or the nickname they chose) in `listed_as` on any of their rows, or
+   `anonymous` to take it back. No answer means Anonymous.
+4. `python tools/supporters.py` rewrites `web/supporters.json` and lists anyone not yet
+   thanked. Commit only that file and deploy; it gets no changelog entry.
+
 ## New feature badges
 
 New user-facing features get a small `New` badge on their navigation link or

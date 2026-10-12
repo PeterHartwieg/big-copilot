@@ -156,6 +156,10 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
     rather than two that 404. This is not the same split as ``landing``, which
     both site pages share.
     """
+    # The supporters page is a file under web/ like the legal pages, so only
+    # the site links it.
+    supporters = ('\n            <a class="sf-card-more" href="supporters.html" target="_blank" rel="noopener" '
+                  'data-tt="foot.support.list">See who keeps Big Copilot running</a>') if site else ""
     legal = ('<a href="impressum.html" target="_blank" rel="noopener" data-tt="foot.impressum">Impressum</a>'
              '<a href="privacy.html" target="_blank" rel="noopener" data-tt="foot.privacy">Privacy</a>') if site else ""
     # The landing shows its save-folder box itself, so no footer link leads to
@@ -244,7 +248,7 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
           <span class="sf-badge"><svg class="sf-ic sf-beat" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg></span>
           <div class="sf-card-copy">
             <span class="sf-card-title" data-tt="foot.support.title">Support the project</span>
-            <span class="sf-card-note" data-tt="foot.support.note">A small thank-you keeps this and future {GAME_NAME} projects going.</span>
+            <span class="sf-card-note" data-tt="foot.support.note">A small thank-you keeps this and future {GAME_NAME} projects going.</span>{supporters}
           </div>
         </div>
         <a class="sf-cta sf-line" href="{DONATE_URL}" target="_blank" rel="noopener"><svg class="sf-ic sf-beat" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg><span data-tt="foot.support.cta">Donate via PayPal</span></a>

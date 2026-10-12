@@ -69,6 +69,9 @@ Everything else:
   model against the player's own shops on every save on the machine
 - community API: `server/`, `migrations/`, `web/community.js`
 - bug report form: `web/report.js`, `web/report.css` (loaded by `web/app.js`), the route `POST /api/report` in `server/worker.mjs`; `docs/community-features.md`, "Bug reports"
+- supporters page: `web/supporters.html`, its list `web/supporters.json`, written by
+  `tools/supporters.py` (not part of the wiki pipeline) from a private ledger outside the
+  repo (`docs/contributing.md`, "Supporters list")
 - changelog: `web/changelog.json`
 - UI text in other languages: `tt()` and the loader in `web/i18n.js`, `msg()` in
   `ba_dashboard.py`, the catalogue tool `tools/i18n.py`, the translations in `i18n/`
