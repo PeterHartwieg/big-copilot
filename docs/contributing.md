@@ -241,8 +241,8 @@ The amounts live in a private ledger outside the repository,
 2. A new donor gets the thank-you email (`~/Documents/Big Copilot/thank-you-email.html`)
    asking whether to stay Anonymous; fill in `thanked` with the date.
 3. When they answer, put the name they agreed to (first name and the initial of the
-   last name) in `listed_as` on any of their rows, or `anonymous` to take it back.
-   No answer means Anonymous.
+   last name, or the nickname they chose) in `listed_as` on any of their rows, or
+   `anonymous` to take it back. No answer means Anonymous.
 4. `python tools/supporters.py` rewrites `web/supporters.json` and lists anyone not yet
    thanked. Commit only that file and deploy; it gets no changelog entry.
 

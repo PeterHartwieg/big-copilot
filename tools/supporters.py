@@ -9,9 +9,10 @@ The ledger is a CSV kept outside the repository, one row per PayPal payment:
 
 Donors are matched by email. A donor's place is the sum of their payments, most
 first; a tie goes to whoever gave first. ``listed_as`` is the name the donor
-agreed to show (first name and the initial of the last name); their latest
-non-empty one counts, and "anonymous" puts them back to Anonymous. Everyone
-else is written as null, which the page shows as Anonymous.
+agreed to show (first name and the initial of the last name, or a nickname of
+their choosing); their latest non-empty one counts, and "anonymous" puts them
+back to Anonymous. Everyone else is written as null, which the page shows as
+Anonymous.
 
 Only the order and the agreed names reach web/supporters.json, never an amount
 or an email: that file is public. ``--check`` fails when the file is out of date.
@@ -29,8 +30,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "web", "supporters.json")
 DEFAULT_CSV = os.path.join(os.path.expanduser("~"), "Documents", "Big Copilot", "donations.csv")
 ABOUT = ("Donors in order of everything each has given, most first; ties by who gave first. Never write amounts "
-         "here: this file is public. A name is first name plus the initial of the last name, and only with that "
-         "person's yes; null shows as Anonymous. Written by tools/supporters.py from the private ledger.")
+         "here: this file is public. A name is first name plus the initial of the last name, or a nickname the "
+         "donor chose, and only with that person's yes; null shows as Anonymous. Written by "
+         "tools/supporters.py from the private ledger.")
 
 
 def ranking(rows) -> list[str | None]:
