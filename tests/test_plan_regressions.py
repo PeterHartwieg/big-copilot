@@ -125,6 +125,12 @@ class PlannerRegressions(MsgAsserts, unittest.TestCase):
         self.assertIn(products[0], self.recipes)
         self.assertEqual(self.recipes[products[0]]["ingredients"][0]["slug"], ITEM + "haircareformula")
 
+    def test_a_lowercase_x_ingredient_is_read(self):
+        # The game writes Hair Care Product's Water line as "150 x", not "150 X".
+        ingredients = self.recipes[ITEM + "haircareproduct"]["ingredients"]
+        self.assertEqual([(i["slug"], i["per"]) for i in ingredients],
+                         [(ITEM + "haircareformula", 150), (ITEM + "water", 150)])
+
     def test_gym_fee_is_not_an_import_or_factory_product(self):
         products = self.plan()["catalogue"][GYM]["products"]
         self.assertNotIn(ITEM + "gymcovercharge", products)
