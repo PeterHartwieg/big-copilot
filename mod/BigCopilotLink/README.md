@@ -69,9 +69,9 @@ they do not validate the new collector inside the game.
   `HKEY_CURRENT_USER\Software\Hovgaard Games\Big Ambitions`, a plist on a Mac), where the
   SDK keeps mod options too. **Forget approved browsers** in the mod's options empties it.
 
-## What it changes (0.2.0 to 0.4.0)
+## What it changes (0.2.0 to 0.6.0)
 
-Six `POST` endpoints, all in [`docs/game-link-api.md`](../../docs/game-link-api.md)
+Seven `POST` endpoints, all in [`docs/game-link-api.md`](../../docs/game-link-api.md)
 under "Writes":
 
 | Endpoint | What it changes |
@@ -81,7 +81,8 @@ under "Writes":
 | `/write/schedule` | Replaces one business's seven days of shifts; with `openAllHours`, also opens every day 0 to 24. Never at a headquarters. |
 | `/write/hire` | From 0.3.0. Hires headhunter candidates into businesses, moves employees from one business to another, and writes the weeks of the businesses involved, in one call: what MyEmployees' "Assign business and hire" and "Assign business" do, then the schedule write for each week sent. A candidate who has left the game's list since the board read it is skipped, and their shifts are left empty; anything else refused refuses the whole call. From 0.4.0 the same call also writes the weeks of businesses nobody is hired into or moved to or from (reschedule-only sites, `features` `hire.reschedule`), so the board's whole staffing action is one call, and it can be undone (`hire.undo`). |
 | `/write/marketing` | From 0.4.0. Switches each business's marketing campaigns to the set the board sends, disabling the rest (never removing one), and sets the business up the way a call and a chat with each agency would: an entry for every campaign type the agency sells, the unused ones switched off, so BizMan's Marketing page shows every switch for that business from then on. A switch the business already has is turned on or off at any time, as the phone does. A new one is added only through an agency already in your phone's contacts (you visited it once) and only while it is open: a business whose plan needs a new switch no such agency sells is refused, naming the agency and, when closed, when it opens; set-up switches that cannot be added yet are listed as waiting. Never adds a contact or a chat message. A switched-off entry costs nothing. |
-| `/write/undo` | Puts back what the last write of a kind changed, in this city session, where the game still holds what that write left. From 0.4.0 also a hire call, all or nothing and only on the game day it was made: moves reversed, hires taken back quietly into the candidate list (never fired), every week and opened day as before. Before 0.4.0 a hire answers `no_undo`. |
+| `/write/rent` | From 0.6.0. Sets the rent price a m² of buildings you own, exactly as BizMan's Real estate page does: the new price waits seven days and then applies (`pendingPricePerSqm` and its counter; the current price is never written, occupancy is not touched). The price is held to BizMan's slider, 80% to 120% of the building's market rent, in whole cents. A price equal to the one already pending is left alone, so its seven days do not restart. Hamptons villas, buildings you do not own, and a price that moved since the board read it are refused. |
+| `/write/undo` | Puts back what the last write of a kind changed, in this city session, where the game still holds what that write left. From 0.4.0 also a hire call, all or nothing and only on the game day it was made: moves reversed, hires taken back quietly into the candidate list (never fired), every week and opened day as before. Before 0.4.0 a hire answers `no_undo`. From 0.6.0 also a rent write, only on the game day it was made (`rent.undo`). |
 
 - **Approving a browser.** Every write needs `Authorization: Bearer <token>`, a token
   the game gives a browser once you allow it. The first write from a browser asks in the
@@ -225,7 +226,7 @@ packager first; repository-only compilation does not replace that check.
    | ModId | `BigCopilotLink` |
    | DisplayName | `Big Copilot Link` |
    | Author | `Peter Hartwieg` |
-   | Version | `0.4.0` |
+   | Version | `0.6.0` |
    | Mod Assembly | drag `BigCopilotLink.asmdef` into the field |
    | Locales Folder | drag the `Locales` folder into the field; the option labels are keys in `Locales/en.json` |
 
@@ -265,7 +266,7 @@ Launch the game, enable **Big Copilot Link** in the Mods menu, load a save, then
 curl http://127.0.0.1:8322/health
 ```
 
-Expect `{"ok":true,"schemaVersion":1,"modVersion":"0.4.0","source":"game",…,"writes":["uniforms","imports","schedule","hire","marketing"],"features":["hire.reschedule","hire.undo"],"paired":false}` and a
+Expect `{"ok":true,"schemaVersion":2,"modVersion":"0.6.0","source":"game",…,"writes":["uniforms","imports","schedule","hire","marketing","rent"],"features":["hire.reschedule","hire.undo","rent.undo","building-facts.v1"],"paired":false}` and a
 `[BigCopilotLink] serving the game to Big Copilot on http://127.0.0.1:8322/` line in
 the player log (`%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\Player.log`;
 on a Mac, `~/Library/Logs/Hovgaard Games/Big Ambitions/Player.log`), then, a few
@@ -580,6 +581,42 @@ the record; the private `lastWorkedDay` is put back by reflection, and left as i
 that field is not found. The mod keeps one undo per city session: loading another save
 forgets it.
 
+### In-game checklist for 0.6.0
+
+#### Rent
+
+The rent write (`docs/game-link-api.md`, `POST /write/rent`). Built as above; `curl
+http://127.0.0.1:8322/health` answers `"modVersion":"0.6.0"`, `"writes"` includes `"rent"` and
+`"features"` includes `"rent.undo"`. After each apply, check the notification ("Big Copilot set
+new rent at 1 building"), that `/health`'s stamp moved, and that the board rebuilt from the new
+bytes. Have a save with a few owned buildings, one of them a Hamptons villa if possible.
+
+1. **One building.** From the board, set the best price at one building. Dry run: `min`, `max`
+   and `marketRentPerSqm` match BizMan → Real estate for that building (BizMan shows the slider's
+   ends and the average market price). Apply. Close and reopen BizMan's Real estate page: the
+   new price shows as the pending one with "7 days" left, the current price unchanged,
+   occupancy unchanged, no money moved.
+2. **Seven days later** (sleep through them): on day `appliesOnDay` the current price is the
+   new one, and that day's rent income uses it.
+3. **Clamp.** By hand, send a price far above the building's market rent (`curl` with the token,
+   or the board's dev console): the answer says `clamped` true and the pending price is `max`,
+   the same value the slider shows at its right end.
+4. **Same price again.** Send the pending price once more: the row says `set` false, the counter
+   is not restarted (still 6 the next day), and the undo of the earlier write is gone
+   (`nothing_to_undo`).
+5. **Undo.** A write then its undo on the same game day: the pending price and the days left are
+   back as before the write (a building that had no pending price shows the current price again
+   in BizMan, with no days left). Write again, wait until after midnight, undo: `changed`, nothing
+   put back.
+6. **Compare-and-set.** Dry run from the board, then move the slider in BizMan and apply there,
+   then Apply on the board: `changed`, and the board reads the game again.
+7. **Refusals.** A Hamptons villa answers `villa`; an address you do not own `not_owned`; a body
+   with another company in `expect` answers every row `changed`.
+8. **BizMan open.** With BizMan's Real estate page open on the building, apply: the page keeps
+   showing the old value until reopened (the game's own page does not refresh), and applying
+   from the page afterwards still works and overrides the board's price.
+9. **Save and reload.** The pending price and the counter persist.
+
 ## Publish to the Workshop
 
 The Workshop item is 3806322395, owned by Peter's Steam account; its page, art and
@@ -645,6 +682,7 @@ Read by reflection and confirmed by the Mac compile. Public unless noted.
 | `Entities.Warehouse.vehicleSlots` (`VehicleSlot.employeeDriverId`), static `Buildings.Office.Headquarters.PurchasingAgentHelper.GetAssignedPlanForPurchasingAgent(id)` | 0.4.0: who drives a delivery vehicle and who holds an import contract, before and after a move (`UnassignEmployeeFromAllWorkshifts` clears a driver's slot at a warehouse and `UnAssignWork` cuts a purchasing agent's contract), and the undo's refusals |
 | `TasksUI.InstantlyCompleteListOfTasks(IEnumerable<TodoTask>)`, `UIs.Instance.smartphoneUI.UpdateBadgeCount(AppName.MyEmployees, false)`, `MyEmployees.UpdateBadge()` | 0.4.0: an un-hired person's to-dos off the screen (it removes from `TodoTasks` only those it found on screen, so the mod removes the rest), and the badges `HireCandidate` updates |
 | `BuildingRegistration.marketingCampaigns` (`List<Entities.MarketingCampaign>`: `agencyAddress`, `marketingTypeName` (`Entities.MarketingTypeName`, 0 to 5), `enabled`), `promotion` (`Promotion`: `trafficIndex`, `marketing`, `total`), `GetDailyMarketingExpenses()`, `HasValidAddress`, `temporarilyClosed`, `scheduleDays` (`ScheduleDay`: `day`, `isOpen`, `openingHourSlots`); `Helpers.BusinessHelper.IsBusinessOpen(reg, -1)`; `TimeHelper.CurrentDay`, `TimeHelper.GetDayOfWeek(int)`; `Entities.MarketingTypeSettings.Get(type)` (`pricePerDay`, `sqmReach`); `Helpers.BuildingHelper.allBuildings`, `GetBuilding(Address)`; `Buildings.Building` (`SpecialService`, `StreetName`, `StreetNumber`, `BuildingType`, `BuildingSize`, `BuildingVersion`, `Neighbourhood`, `trafficIndex`); `Buildings.SpecialService` (`settings`, `businessName`); `Buildings.MarketingAgencySettings.marketingTypesAvailable`; `Buildings.BuildingTypeHelper.GetData(Building)` / `GetData(string)` (`BuildingTypeData.marketingReachMultiplier`, `HasTag(TagRef.Buildingtypetag.hasmarketingpromotion)`); `Buildings.BuildingSizeHelper.GetData` (`squareMeters`, `GetCustomerCapacity(type, version)`); `NeighborhoodHelper.GetData(name).marketingStrength`; `Helpers.BusinessHelper.UpdatePromotion(reg)`; `GameInstance.Contacts` (`Entities.Contact`: `streetName`, `streetNumber`); `GameEvent.Invoke("ba:gameevent_newmarketing")` | 0.4.0, marketing: what `BizManMarketing.UpdateCampaignEnabled` and `MarketingAgencyDialog.OnMarketingSettingsSet` do, a new entry only through an agency that is a phone contact (by address, as `Contact.Address` reads it) and open by the game's own `IsBusinessOpen` (existing entries are switched any time, as the phone does), the next opening worked out from the agency's `scheduleDays`, and the dry run's promotion worked out by `GetMarketingEfficiency`'s and `UpdatePromotion`'s own arithmetic. Read from build 3680's IL on 28 September 2026 and compiled against build 3682's DLLs with the system C# 5 compiler (`LinkMod.cs` stubbed); **unverified in game**: the 0.4.0 checklist |
+| `GameInstance.realEstate` (`List<Entities.RealEstate>`: `address` (`Address`: `streetName`, `streetNumber`), `pricePerSqm`, `pendingPricePerSqm`, `daysUntilUpdatingPricePerSqm`, `totalSqm`), `RealEstate.Building` (`BuildingHelper.GetBuilding(address)`); `Buildings.Building.GetBuildingDailyMarketRentPerSqm()`, `IsHamptonsHouse()` (`BuildingSize == "ba:buildingsize_t"`); `UnityEngine.Mathf.RoundToInt`, `Clamp` | 0.6.0, rent: what `RealEstateSettings.SetRentManagementData` (the slider's ends, `RoundToInt(m·0.8·100)/100` to `RoundToInt(m·1.2·100)/100`) and `ApplyNewRent` (`pendingPricePerSqm`, `daysUntilUpdatingPricePerSqm = 7`, nothing else) do; the building found as `RealEstateSettings.OnEnable` finds it (by address); a price equal to the pending one left alone as `ChangeNewRentValue` leaves Apply off. Read from build 3682's IL on 12 October 2026 and compiled the same day against the installed game's DLLs with the system C# 5 compiler (`LinkMod.cs` stubbed); **unverified in game**: the 0.6.0 checklist |
 
 The 0.3.0 rows were read from build 3682's IL and by reflection on 25 September 2026 and
 have not been compiled yet. The 0.4.0 rows were read from build 3682's IL, their

@@ -7,6 +7,7 @@ import time
 import unittest
 import urllib.error
 import urllib.request
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
 sys.path.insert(0, os.path.dirname(__file__))
@@ -118,7 +119,7 @@ class MockContract(unittest.TestCase):
         self.assertEqual(status, 404)
         self.assertEqual(json.loads(body)["endpoints"], [
             "/health", "/save", "/facts", "/refresh", "/write/uniforms", "/write/imports", "/write/schedule", "/write/hire",
-            "/write/marketing", "/write/undo",
+            "/write/marketing", "/write/rent", "/write/undo",
             "/pair/request", "/pair/status"])
         self.assertEqual(call(self.url + "/refresh")[0], 405)
         for method, route in (("HEAD", "/health"), ("PUT", "/save"), ("POST", "/"), ("DELETE", "/refresh"), ("TRACE", "/health")):
@@ -244,7 +245,7 @@ class MockWrites(LinkedMock):
 
     def test_health_lists_the_writes_and_says_paired_only_with_a_token_for_its_origin(self):
         health = json.loads(call(self.url + "/health")[2])
-        self.assertEqual(health["writes"], ["uniforms", "imports", "schedule", "hire", "marketing"])
+        self.assertEqual(health["writes"], ["uniforms", "imports", "schedule", "hire", "marketing", "rent"])
         self.assertIs(health["paired"], False)
         health = json.loads(call(self.url + "/health", headers={"Authorization": f"Bearer {TOKEN}"})[2])
         self.assertIs(health["paired"], True)
@@ -1211,11 +1212,11 @@ class MockHireOneAction(LinkedMock):
 
     def test_health_lists_the_features_and_config_changes_them(self):
         health = json.loads(call(self.url + "/health")[2])
-        self.assertEqual(health["features"], ["hire.reschedule", "hire.undo"])
+        self.assertEqual(health["features"], ["hire.reschedule", "hire.undo", "rent.undo"])
         self.assertEqual(self.link.configure({"features": []})["features"], [])
         self.assertEqual(json.loads(call(self.url + "/health")[2])["features"], [])
         self.link.configure({"reset": True})
-        self.assertEqual(json.loads(call(self.url + "/health")[2])["features"], ["hire.reschedule", "hire.undo"])
+        self.assertEqual(json.loads(call(self.url + "/health")[2])["features"], ["hire.reschedule", "hire.undo", "rent.undo"])
         # --features "" is a Link with none; a 0.1.0 mock lists neither key.
         older = game_link_mock.Link(self.path, character="abc", company="Mock Co", day=34, hour=14, cash=1.5,
                                     build=3680, schema=1, throttle=False, refuse=None, features=[])
@@ -1525,6 +1526,215 @@ def week(days=range(1, 8), start=8, end=17):
     """An agency's scheduleDays: open `days` (Monday 1 to Sunday 7) from start to end."""
     return [{"day": d, "isOpen": d in days, "openingHourSlots": [{"startingHour": start, "endingHour": end}],
              "workShifts": []} for d in range(1, 8)]
+
+
+class RentWrite(LinkedMock):
+    """Owned buildings in a synthetic save; pricing facts are the committed table."""
+
+    RETAIL = {"street": "ba:street_broadwaystreet", "number": 7}
+    VILLA = {"street": "ba:street_cottageroad", "number": 1}
+    UNKNOWN = {"street": "ba:street_mockunknown", "number": 1}
+    MARKET = 20554 * 1.0 * 2.2 * (0.3 + 15 / 100) * 0.00056
+    LOW = round(0.8 * MARKET * 100) / 100
+    HIGH = round(1.2 * MARKET * 100) / 100
+
+    def setUp(self):
+        company = es3_fixture.link_company()
+        company["realEstate"] = [
+            {"address": es3_fixture.address(a["street"], a["number"]),
+             "pricePerSqm": 10.0, "pendingPricePerSqm": self.LOW,
+             "daysUntilUpdatingPricePerSqm": 3, "totalSqm": 75}
+            for a in (self.RETAIL, self.VILLA, self.UNKNOWN)]
+        def write(path):
+            with open(path, "wb") as fh:
+                fh.write(es3_fixture.encode(company))
+        with patch.object(es3_fixture, "write_link_save", side_effect=write):
+            super().setUp()
+
+    def item(self, address=None, price=100, pending=None, current=10):
+        return {"address": address or self.RETAIL, "pricePerSqm": price,
+                "expect": {"pricePerSqm": current,
+                           "pendingPricePerSqm": self.LOW if pending is None else pending}}
+
+    def rent(self, *items, dry=True, **body):
+        return self.post("rent", dict(body, dryRun=dry, items=list(items or (self.item(),))))
+
+    def config(self, body):
+        status, _, raw = call(self.url + "/debug/config", "POST", {"Content-Type": "application/json"},
+                              json.dumps(body).encode())
+        self.assertEqual(status, 200, raw)
+
+    def test_health_and_endpoints(self):
+        health = json.loads(call(self.url + "/health")[2])
+        self.assertIn("rent", health["writes"])
+        self.assertIn("rent.undo", health["features"])
+        self.assertIn("/write/rent", json.loads(call(self.url + "/nothing")[2])["endpoints"])
+
+    def test_dry_run_clamps_and_reports_the_complete_row(self):
+        status, answer = self.rent()
+        self.assertEqual(status, 200)
+        self.assertEqual({k: answer[k] for k in ("ok", "kind", "dryRun", "day")},
+                         {"ok": True, "kind": "rent", "dryRun": True, "day": 34})
+        self.assertEqual(answer["rows"], [{
+            "address": self.RETAIL,
+            "before": {"pricePerSqm": 10.0, "pendingPricePerSqm": self.LOW,
+                       "daysUntilUpdatingPricePerSqm": 3},
+            "pricePerSqm": 10.0, "pendingPricePerSqm": self.HIGH, "daysUntilUpdatingPricePerSqm": 7,
+            "asked": 100, "clamped": True, "set": True, "appliesOnDay": 41,
+            "marketRentPerSqm": round(self.MARKET, 4), "min": self.LOW, "max": self.HIGH,
+            "totalSqm": 75, "error": None}])
+        self.assertEqual(self.link.rents, {})
+        _, answer = self.rent(self.item(price=0.1))
+        self.assertEqual(answer["rows"][0]["pendingPricePerSqm"], self.LOW)
+
+    def test_equal_pending_does_not_restart_or_leave_an_undo(self):
+        _, answer = self.rent(self.item(price=self.LOW))
+        row = answer["rows"][0]
+        self.assertFalse(row["set"])
+        self.assertFalse(row["clamped"])
+        self.assertEqual((row["daysUntilUpdatingPricePerSqm"], row["appliesOnDay"]), (3, 37))
+        self.rent(dry=False)
+        status, answer = self.rent(self.item(price=self.HIGH, pending=self.HIGH), dry=False)
+        self.assertEqual(status, 200)
+        self.assertFalse(answer["rows"][0]["set"])
+        self.assertEqual(self.post("undo", {"kind": "rent"}), (409, {"error": "nothing_to_undo"}))
+
+    def test_expect_mismatch_is_changed_before_villa(self):
+        for item in (self.item(current=11), self.item(pending=0), self.item(self.VILLA, current=11)):
+            with self.subTest(item=item):
+                _, answer = self.rent(item)
+                self.assertFalse(answer["ok"])
+                self.assertEqual(answer["rows"][0]["error"], "changed")
+                status, answer = self.rent(item, dry=False)
+                self.assertEqual((status, answer["error"]), (409, "changed"))
+        self.assertEqual(self.link.rents, {})
+
+    def test_not_owned_and_unknown_building(self):
+        for address in (BARE, self.UNKNOWN):
+            _, answer = self.rent(self.item(address))
+            row = answer["rows"][0]
+            self.assertEqual(row["error"], "not_owned")
+            self.assertIsNone(row["before"])
+            self.assertFalse(row["set"])
+            self.assertEqual([row[k] for k in ("marketRentPerSqm", "min", "max")], [None] * 3)
+            # No building to read: every field about it is null, as the mod answers.
+            self.assertEqual([row[k] for k in ("pricePerSqm", "pendingPricePerSqm", "daysUntilUpdatingPricePerSqm",
+                                               "appliesOnDay", "totalSqm")], [None] * 5)
+
+    def test_villa_refuses_the_whole_apply_and_changed_wins(self):
+        _, answer = self.rent(self.item(self.VILLA))
+        row = answer["rows"][0]
+        self.assertEqual(row["error"], "villa")
+        self.assertFalse(row["set"])
+        self.assertEqual(row["pendingPricePerSqm"], self.LOW)
+        status, answer = self.rent(self.item(), self.item(self.VILLA), dry=False)
+        self.assertEqual((status, answer["error"]), (409, "refused"))
+        status, answer = self.rent(self.item(current=11), self.item(self.VILLA), dry=False)
+        self.assertEqual((status, answer["error"]), (409, "changed"))
+        self.assertEqual(self.link.rents, {})
+        self.assertNotIn("rent", self.link.undo)
+
+    def test_other_save_precedes_ownership_and_has_no_market(self):
+        _, answer = self.rent(self.item(BARE), self.item(), expect={"company": "Other Co"})
+        for row in answer["rows"]:
+            self.assertEqual(row["error"], "changed")
+            self.assertIsNone(row["before"])
+            self.assertEqual([row[k] for k in ("marketRentPerSqm", "min", "max")], [None] * 3)
+        self.assertEqual(self.rent(dry=False, expect={"character": "other"})[0], 409)
+
+    def test_duplicate_address_is_bad_request(self):
+        self.assertEqual(self.rent(self.item(), self.item())[0], 400)
+
+    def test_invalid_prices_and_expect_are_bad_request(self):
+        for price in (0, -1, True, "10", None, float("nan"), float("inf")):
+            with self.subTest(price=price):
+                self.assertEqual(self.rent(self.item(price=price))[0], 400)
+        for expect in (None, [], {}, {"pricePerSqm": 10}, {"pendingPricePerSqm": 0},
+                       {"pricePerSqm": True, "pendingPricePerSqm": 0},
+                       {"pricePerSqm": 10, "pendingPricePerSqm": -1},
+                       {"pricePerSqm": 10, "pendingPricePerSqm": float("inf")}):
+            with self.subTest(expect=expect):
+                item = self.item()
+                item["expect"] = expect
+                self.assertEqual(self.rent(item)[0], 400)
+        for body in ({}, {"items": {}}, {"items": [None]}, {"items": [{"address": {}}]}):
+            self.assertEqual(self.post("rent", body)[0], 400)
+
+    def test_apply_overlay_and_undo_restore_the_previous_counter(self):
+        old_stamp = self.stamp()
+        status, answer = self.rent(dry=False)
+        self.assertEqual(status, 200)
+        self.assertEqual(answer["stamp"], old_stamp)
+        self.assertNotEqual(self.stamp(), old_stamp)
+        _, answer = self.rent(self.item(pending=self.HIGH, price=self.LOW))
+        self.assertEqual(answer["rows"][0]["before"]["pendingPricePerSqm"], self.HIGH)
+        status, answer = self.post("undo", {"kind": "rent", "dryRun": True})
+        self.assertEqual(status, 200)
+        self.assertTrue(answer["ok"])
+        self.assertEqual(self.link.rents[(self.RETAIL["street"], self.RETAIL["number"])]["pendingPricePerSqm"], self.HIGH)
+        status, answer = self.post("undo", {"kind": "rent"})
+        self.assertEqual(status, 200)
+        self.assertTrue(answer["undo"])
+        row = answer["rows"][0]
+        self.assertEqual(row["before"]["pendingPricePerSqm"], self.HIGH)
+        self.assertEqual((row["pendingPricePerSqm"], row["daysUntilUpdatingPricePerSqm"], row["asked"]),
+                         (self.LOW, 3, self.LOW))
+        self.assertTrue(row["set"])
+        self.assertFalse(row["clamped"])
+        self.assertEqual(self.post("undo", {"kind": "rent"}), (409, {"error": "nothing_to_undo"}))
+        self.assertTrue(self.rent()[1]["ok"])
+
+    def test_undo_after_day_change_refuses_and_keeps_the_record(self):
+        self.rent(dry=False)
+        self.config({"day": 35})
+        status, answer = self.post("undo", {"kind": "rent", "dryRun": True})
+        self.assertEqual(status, 200)
+        self.assertFalse(answer["ok"])
+        self.assertEqual(answer["rows"][0]["error"], "changed")
+        status, answer = self.post("undo", {"kind": "rent"})
+        self.assertEqual((status, answer["error"]), (409, "changed"))
+        self.assertIn("rent", self.link.undo)
+
+    def test_undo_checks_every_held_value(self):
+        address = (self.RETAIL["street"], self.RETAIL["number"])
+        for field, value in (("pendingPricePerSqm", 0), ("daysUntilUpdatingPricePerSqm", 6), ("pricePerSqm", 11)):
+            with self.subTest(field=field):
+                self.link.rents.clear()
+                self.rent(dry=False)
+                self.link.rents[address][field] = value
+                self.assertEqual(self.post("undo", {"kind": "rent"})[0], 409)
+
+    def test_forced_refusals_and_reset(self):
+        self.config({"refuseWrite": "refused"})
+        status, answer = self.rent(dry=False)
+        self.assertEqual((status, answer["error"], answer["rows"][0]["error"]), (409, "refused", "villa"))
+        status, answer = self.post("undo", {"kind": "rent"})
+        self.assertEqual((status, answer["error"], answer["rows"]), (409, "changed", [{"error": "changed"}]))
+        self.config({"refuseWrite": None})
+        self.rent(dry=False)
+        self.config({"reset": True})
+        self.assertEqual(self.link.rents, {})
+        self.assertEqual(self.link.undo, {})
+
+    def test_older_cli_features_leave_out_rent_and_disallow_undo(self):
+        # Exercise the CLI's default-writes rule, without launching another server.
+        with patch.object(sys, "argv", ["game_link_mock.py", self.path, "--features", ""]), \
+                patch.object(game_link_mock, "MockServer") as server, \
+                patch.object(game_link_mock.time, "sleep", side_effect=KeyboardInterrupt), \
+                patch("builtins.print"):
+            game_link_mock.main()
+        older = server.call_args.args[0]
+        self.assertNotIn("rent", older.health()["writes"])
+        self.assertNotIn("marketing", older.health()["writes"])
+        self.assertNotIn("rent.undo", older.health()["features"])
+        self.assertEqual(older.write("undo", {"kind": "rent"}), (409, {"error": "no_undo"}))
+        self.assertEqual(older.write("undo", {"kind": "rent", "dryRun": True}), (409, {"error": "no_undo"}))
+
+    def test_market_helper_residential_and_unknown_facts(self):
+        self.assertEqual(game_link_mock.market_rent_per_sqm({"t": "residential", "h": "thehamptons", "x": 20}),
+                         20554 * 1.5 * 0.5 * 1.1 * 0.00056)
+        for row in (None, {}, {"t": "unknown", "h": "midtown"}, {"t": "retail", "h": "unknown"}):
+            self.assertIsNone(game_link_mock.market_rent_per_sqm(row))
 
 
 class MarketingMock(LinkedMock):

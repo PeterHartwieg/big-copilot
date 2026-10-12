@@ -2128,7 +2128,7 @@ const sourceWrite = (page, kind, body, dryRun) =>
 test('hire: a dry run and an apply through the page, which then reads the game again, and one undo', async (t) => {
   const page = await linked(t, {writes: WRITES_WITH_HIRE, approved: true});
   // The board hears what the mod can do beyond its kinds.
-  assert.deepEqual(await page.evaluate(() => window.LEDGER_SOURCE.link().features), ['hire.reschedule', 'hire.undo']);
+  assert.deepEqual(await page.evaluate(() => window.LEDGER_SOURCE.link().features), ['hire.reschedule', 'hire.undo', 'rent.undo']);
   const dry = await sourceWrite(page, 'hire', hireBody(), true);
   assert.equal(dry.status, 200);
   assert.equal(dry.error, null);
@@ -2250,4 +2250,43 @@ test('Changes: the bulk import Apply follows the scope; a scope with no import l
   const one = await btn();
   assert.equal(one.depot, depot, 'one site: its own lines');
   await page.evaluate(() => { sbScope.changes = 'all'; drawChangesView(); wireAll(); });
+});
+
+/* --- rent (POST /write/rent, mod 0.6.0) ------------------------------------
+   The Real estate page's writes go through the same generic path
+   (LEDGER_SOURCE.write("rent", {items}) and write("undo", {kind: "rent"})). The
+   page sends the save it planned from as the same-save guard, as uniforms and
+   marketing do; the fixture owns no building, so every item is not_owned. */
+const RENT_ITEM = {address: {street: 'ba:street_secondavenue', number: 10}, pricePerSqm: 3.73,
+                   expect: {pricePerSqm: 3.74, pendingPricePerSqm: 0}};
+
+test('rent: the link names the kind and its undo; a write carries the same-save guard and its items as given', async (t) => {
+  const page = await linked(t, {writes: [...WRITES_WITH_HIRE, 'marketing', 'rent'], approved: true});
+  const link = await page.evaluate(() => window.LEDGER_SOURCE.link());
+  assert.ok(link.writes.includes('rent'));
+  assert.ok(link.features.includes('rent.undo'));
+  const sent = [];
+  page.on('request', (req) => {
+    if (req.url().endsWith('/write/rent') && req.method() === 'POST') sent.push(JSON.parse(req.postData()));
+  });
+  const dry = await sourceWrite(page, 'rent', {items: [RENT_ITEM]}, true);
+  assert.equal(dry.status, 200);
+  assert.equal(dry.error, null);
+  assert.equal(dry.body.kind, 'rent');
+  assert.equal(dry.body.ok, false);
+  assert.deepEqual(dry.body.rows.map((r) => [r.address, r.error, r.set]), [[RENT_ITEM.address, 'not_owned', false]]);
+  assert.deepEqual(sent, [{items: [RENT_ITEM], expect: {character: 'default', company: 'Link Co'}, dryRun: true}]);
+  // An apply is refused as the dry run said, and nothing is written.
+  const apply = await sourceWrite(page, 'rent', {items: [RENT_ITEM]}, false);
+  assert.equal(apply.status, 409);
+  assert.equal(apply.error, 'refused');
+  assert.equal((await applied()).length, 0);
+  // Nothing to undo yet.
+  const undo = await sourceWrite(page, 'undo', {kind: 'rent'}, false);
+  assert.deepEqual([undo.status, undo.error], [409, 'nothing_to_undo']);
+});
+
+test('rent: a mod without the kind leaves it out of the link', async (t) => {
+  const page = await linked(t, {writes: WRITES_WITH_HIRE, approved: true});
+  assert.equal((await page.evaluate(() => window.LEDGER_SOURCE.link().writes)).includes('rent'), false);
 });
