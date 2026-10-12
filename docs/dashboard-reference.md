@@ -2418,9 +2418,11 @@ it takes to fill at the best price, from today's occupancy; the 7-day wait comes
   A pending best price gains 0.
 - **Flag**: the gain is at least $100 a day and 5% of what it earns now, or the building is
   full at or above market rent (`risk`: the move-out risk; its gain is a little negative).
-- A price within a hundredth of a cent under market rent counts as at market: a building
-  never repriced keeps the market rent it was bought at, which the game works out in single
-  precision. The best price stays below that too.
+- "Under market" is the game's own comparison, price < market rent with both as the game
+  holds them: market rent is worked out as its Mono runtime does (single-precision fields
+  and constants, double arithmetic, single where a value is stored), so a building never
+  repriced, which keeps the market rent it was bought at, reads as at market, and the best
+  price is the highest cent the game sees under it.
 - **History** (`hist`, from day `realEstate.histFrom`): occupancy per day over the save's 61
   daily summaries, read back from each day's rent statement as amount ÷ (today's price × m²
   × multiplier). It is exact while the price was today's; a day under another price reads
@@ -2441,7 +2443,8 @@ out: `key`, `address`, `hood`, `type`, `size`, `sqm`, `price` (a listing's askin
 1.01 × market value), `listed`, `income` (a day at the best price, full, × the multiplier),
 `saves` (the rent a day buying it ends), `tax`, `payback` (price ÷ (income + saves − tax);
 `None` for a villa), `deductible` (retail, office, cinema, theater and warehouse purchases
-are deducted from income tax in full) and `villa`. The board sorts the rows. Payback is
+are deducted from income tax in full) and `villa`. The board sorts the rows.
+`premises.forSale[].payback` counts the rent a purchase ends too, by the same rule. Payback is
 nearly the same everywhere (about 1,800 days in vanilla), but a building you rent in pays
 back sooner. `premises.forSale` carries the same `payback` per listing for the finder.
 
@@ -2454,11 +2457,14 @@ nothing carried over, nothing at all when the period's sales stay under $150,000
 by rate × its price, up to the taxable base.
 
 - `sales` is the period's business sales so far (the daily statements of your named
-  businesses), `deductions` the game's own list for the period (`currentTaxPeriodDeductibleExpenses`),
-  `gambling` the net winnings. `salesEnd` and `deductionsEnd` project them to tax day: sales
-  and running costs (wages, rent, marketing, imports, fees, the rows keyed `tax_*`,
-  `econoview_*`, `ba:transaction_*` and Economy Expansion's `oc:tax_expense_*`) scale with
-  the days still to come; anything else (a boat, a vehicle, a building) counts once.
+  businesses: their average day times the days gone, which is their sum while the save,
+  which keeps 61 days, still holds the whole period), `deductions` the game's own list for
+  the period (`currentTaxPeriodDeductibleExpenses`), `gambling` the net winnings.
+  `salesEnd` and `deductionsEnd` project them to tax day: sales over the period's days up
+  to the one before tax day, running costs (wages, rent, marketing, imports, fees, the rows
+  keyed `tax_*`, `econoview_*`, `ba:transaction_*` and Economy Expansion's
+  `oc:tax_expense_*`) over its midnights, booked so far at day − first day + 1 of them;
+  anything else (a boat, a vehicle, a building, a deposit, a supplier's bill) counts once.
   `base` and `baseEnd` are the taxable base so far and projected.
 - `target` is the smaller of your `cash` and `baseEnd` (`bound` says which); 0 when not
   assessed.
