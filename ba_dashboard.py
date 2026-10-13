@@ -20737,7 +20737,9 @@ def _alerts(
         )
 
     # The supply findings that depend on the mode go in here, between the
-    # findings above and those below (by_mode()); note() now fills the second half.
+    # findings above and those below (by_mode()). note() appends to whatever
+    # `found` is bound to when it is called, so rebinding `found` here sends
+    # every note() below into the second half while `head` keeps the first.
     head, found = found, []
 
     # --- what the hour-by-hour grid says that a daily total cannot
