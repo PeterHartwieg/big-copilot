@@ -191,6 +191,61 @@ test('the Portfolio itemises real estate and salary income outside sites', async
   } finally { await page.close(); }
 });
 
+test('the Portfolio shows what a site booked before its business opened, so the rows add up', async () => {
+  const page = await today(1440);
+  try {
+    const result = await page.evaluate(() => {
+      // A lease that paid $132 rent yesterday and an earlier business that made
+      // $500 at another address, both under businesses set up today: their rows
+      // show none of it, the game's business profit does.
+      const a = D.businesses[0];
+      const b = {...a, key: a.key + '-2', name: a.name + ' Two', profit: 0};
+      D.businesses.push(b);
+      a.profitBefore = -132; b.profitBefore = 500;
+      const last = D.daily[D.daily.length - 1];
+      last.business += 368; last.profit += 368;
+      const t = document.createElement('table');
+      t.innerHTML = `<tfoot>${outsideRows(10)}</tfoot>`;
+      const rows = [...t.querySelectorAll('tr')];
+      return {names: [a.name, b.name], rows: rows.map(tr => [...tr.cells].map(c => c.textContent.trim()).join('|')),
+              tip: rows[0].querySelector('[data-tip]').dataset.tip};
+    });
+    assert.deepEqual(result.rows, [
+      en('co.outside.before') + '|$368||',
+      en('co.outside.costs') + '|-$1,500||',
+      en('co.outside.profit') + '|$10,368||',
+    ]);
+    assert.equal(result.tip, en('co.outside.before.tip', {day: 29, sites: [
+      en('co.outside.before.site', {site: result.names[0], w: -132}),
+      en('co.outside.before.site', {site: result.names[1], w: 500})].join(', ')}));
+  } finally { await page.close(); }
+});
+
+test('the Portfolio shows what sites given up that day booked, so the rows add up', async () => {
+  const page = await today(1440);
+  try {
+    const result = await page.evaluate(() => {
+      // Two sites gone today, one that made money yesterday and one that did not.
+      D.sitesGone = [{name: 'Old Gifts', profit: 900}, {name: '5 Pier', profit: -250}];
+      const last = D.daily[D.daily.length - 1];
+      last.business += 650; last.profit += 650;
+      const t = document.createElement('table');
+      t.innerHTML = `<tfoot>${outsideRows(10)}</tfoot>`;
+      const rows = [...t.querySelectorAll('tr')];
+      return {rows: rows.map(tr => [...tr.cells].map(c => c.textContent.trim()).join('|')),
+              tip: rows[0].querySelector('[data-tip]').dataset.tip};
+    });
+    assert.deepEqual(result.rows, [
+      en('co.outside.gone') + '|$650||',
+      en('co.outside.costs') + '|-$1,500||',
+      en('co.outside.profit') + '|$10,650||',
+    ]);
+    assert.equal(result.tip, en('co.outside.gone.tip', {day: 29, sites: [
+      en('co.outside.before.site', {site: 'Old Gifts', w: 900}),
+      en('co.outside.before.site', {site: '5 Pier', w: -250})].join(', ')}));
+  } finally { await page.close(); }
+});
+
 test('at 390 px the Overview folds its figures into one line, pairs them when opened, stacks its tool panels and never scrolls sideways', async () => {
   const page = await today(390);
   try {

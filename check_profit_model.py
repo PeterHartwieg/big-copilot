@@ -9,7 +9,7 @@ and the shared calculation module (template/open-store-model.js, run in Node)
 prices each of the player's trading shops and offices on its own building, hours, promotion and satisfaction. The ratio is
 what the shop really earned a day over its last finished days
 (_own_shops(), goods at import prices) against what the rules give it. Above 1
-means the model under-predicts. docs/open-a-store-scope.md, "Expected profit", has
+means the model under-predicts. docs/dashboard-reference.md, "Open a store", has
 the numbers this is held to; the range the board shows is the p25 to p90.
 
 Nothing is written but a scratch folder under the system temp directory, which is

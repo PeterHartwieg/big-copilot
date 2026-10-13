@@ -10,6 +10,7 @@ Cloudflare Worker API adds the community features.
 The board's main files are `ba_dashboard.py` (the Python), `template/board.html` (the page
 `render()` fills in: markup, CSS and the small head scripts) and `template/board.js` (the
 board script), with planner arithmetic in `template/open-store-model.js` and `template/open-factory-model.js`.
+The fifth file in `template/`, `translate.html`, is the translation page (below).
 Find each part by its anchor, never by line number — the files are long and
 the numbers drift.
 
@@ -17,7 +18,7 @@ the numbers drift.
 | --- | --- |
 | Extraction (save → numbers) | `def build_core(` (the core), `SECTIONS` (the sections) and the `_` helpers before `def render(`, in `ba_dashboard.py`; `def extract(` is both |
 | The board's HTML and CSS | `template/board.html`, read on the first `render()` by `load_template()` |
-| The board script | `template/board.js`, which `load_template()` splices into `/*__BOARD_SCRIPT__*/`, the body of the page's last `<script>` block, before any other placeholder is filled. A branch from before the split that conflicts in `board.html` is resolved by `tools/split_board_script.py --resolve` (`docs/architecture.md`, "Template placeholders") |
+| The board script | `template/board.js`, which `load_template()` splices into `/*__BOARD_SCRIPT__*/`, the body of the page's last `<script>` block, before any other placeholder is filled. A branch from before the split (1 Oct 2026), with the script still inline in `board.html`, needs the retired tool and its `--resolve` from history: `git show ecabe57c:tools/split_board_script.py` |
 | Open a store calculations | `template/open-store-model.js`: an explicit-input calculation module, embedded before the board script by `load_template()` and imported directly by its arithmetic tests and `check_profit_model.py` |
 | Plan a factory calculations | `template/open-factory-model.js`: explicit-input prices, storage, investment and running costs; the board owns plan selection and persistence |
 | Where `web/map.js` and `web/wiki.js` are spliced in | `/*__MAP_SCRIPT__*/`, `/*__WIKI_SCRIPT__*/` in `template/board.js` |
@@ -45,10 +46,16 @@ Everything else:
 - Pyodide worker: `web/worker.js`
 - update banner: `web/update.js`
 - map: `web/map.js`, `web/map.css`, with assets from `export_map.py`
-- wiki pipeline: the `.py` files directly in `tools/` (not `tools/game_update/`,
-  `tools/game_link_mock.py`, `tools/split_board_script.py`, `tools/payload_diff.py` or `tools/i18n.py`), with the authored wording in `tools/wiki_sample.json` and the
-  hand-written articles in `tools/wiki_topics.json`. `tools/` also holds the GLM launcher,
-  `tools/Invoke-ZaiClaude.ps1`, and the deploy script, `tools/deploy.mjs`; neither is anything to do with the wiki
+- wiki pipeline: `tools/build_wiki_data.py`, `tools/wiki_data.py` and `tools/wiki_paths.py`,
+  with the authored wording in `tools/wiki_sample.json` and the hand-written articles in
+  `tools/wiki_topics.json`. The rest of `tools/` is not the wiki: the translation page's
+  `translation_catalogue.py` and `translation_moderate.mjs`, the feature list's
+  `feature_moderate.mjs`, `supporters.py`, `i18n.py`, `payload_diff.py`,
+  `game_link_mock.py` and `game_update/`, the deploy script
+  `deploy.mjs`, the local CI gate `verify.mjs` with its sharding helpers
+  (`python_shard.py`, `shard_times.mjs`, `shard_weights.mjs`), the hosted page's optimizer
+  `optimize_web.mjs`, the measurement script `profile_store_planner.py`, and the GLM
+  launcher `Invoke-ZaiClaude.ps1`
 - static wiki pages for search engines (`/wiki/...`, the sitemap, robots.txt):
   `tools/wiki_pages.py`, from `web/wiki-data.json`
 - location finder: `web/map.js` hosts it as a mode of the Map page, over the `premises`
@@ -58,7 +65,7 @@ Everything else:
 - payback (investment and break-even day): `_payback()` and `setup_cost()` in
   `ba_dashboard.py`, the `payback` payload key, drawn as the Payback column of
   Businesses › Results and a line in the site panel; prices from `ba_item_prices.json`
-  (`make_item_prices.py`); the rules are in `docs/open-a-store-scope.md`
+  (`make_item_prices.py`); the rules are in `docs/dashboard-reference.md`, "Payback"
 - open a store (Expansion › Open a store: investment and break-even for a store not yet
   rented): the facts are `_open_store()` in `ba_dashboard.py` (the `openStore` payload key,
   over `ba_store_rules.json` from `make_store_rules.py`); the model and loan calculations are
@@ -68,6 +75,10 @@ Everything else:
   are in `docs/dashboard-reference.md`, "Open a store"; `check_profit_model.py` checks the
   model against the player's own shops on every save on the machine
 - community API: `server/`, `migrations/`, `web/community.js`
+- translation page (`/translate/`, community wording and votes): `template/translate.html`,
+  `web/translate.js`, `web/translate.css`; its catalogues come from
+  `tools/translation_catalogue.py`, moderation is `tools/translation_moderate.mjs`, the
+  tables are `migrations/0002_translations.sql`; `docs/community-translations.md`
 - bug report form: `web/report.js`, `web/report.css` (loaded by `web/app.js`), the route `POST /api/report` in `server/worker.mjs`; `docs/community-features.md`, "Bug reports"
 - supporters page: `web/supporters.html`, its list `web/supporters.json`, written by
   `tools/supporters.py` (not part of the wiki pipeline) from a private ledger outside the
@@ -84,7 +95,8 @@ Everything else:
 Searching:
 
 - A root `.ignore` hides the generated copies (`web/py/`, `web/index.html`, `web/wiki/`,
-  `web/wiki-data.json`) and the design canvases from `rg`. `rg -uu` searches them too.
+  `web/wiki-data.json`) and the 8 MB `web/maps/full-map.svg` from `rg`; `.gitignore` hides
+  the design canvases. `rg -uu` searches them too.
 - `rg -n --sort path "^# ---|^/\* (---|=====)|^</?style>" ba_dashboard.py template/` lists
   the section banners and sub-banners, a table of contents: the Python, then the board's
   CSS between `<style>` and `</style>`, then the board script.
@@ -132,9 +144,10 @@ side and running `--assemble`.
 
 | Generated file(s) | Regenerated by |
 | --- | --- |
-| `web/index.html`, `web/version.json`, `web/py/ba_dashboard.py`, `web/py/ba_save.py`, `web/py/ba_buildings.json`, `web/py/ba_demand_curves.json`, `web/py/ba_item_prices.json`, `web/py/ba_store_rules.json` | `python build_web.py --assemble`, which needs no game (`python build_web.py` writes them too); the `ba_dashboard.py` copy has no comments or docstrings but keeps every line; gitignored |
-| `web/assets/` | `python build_web.py --assemble` writes content-hashed worker, nine Python/data dependencies and manifest; `node tools/optimize_web.mjs` adds the hosted board JS/CSS after optimization; gitignored |
+| `web/index.html`, `web/version.json`, and in `web/py/` the files `PY_CODE` and `PY_DATA` in `build_web.py` name, all but `gametext.json` | `python build_web.py --assemble`, which needs no game (`python build_web.py` writes them too); the `ba_dashboard.py` copy has no comments or docstrings but keeps every line; gitignored |
+| `web/assets/` | `python build_web.py --assemble` writes the content-hashed worker, the Python and data files `PY_CODE` and `PY_DATA` name, and the manifest; `node tools/optimize_web.mjs` adds the hosted board JS/CSS after optimization; gitignored |
 | `web/i18n/<lang>.json` | `python build_web.py --assemble`, from `i18n/<lang>.json` (`python tools/i18n.py ship` alone); no game needed; gitignored |
+| `web/translations/<lang>.json`, `web/translations/<lang>.manifest.json`, `web/translate/index.html` | `python build_web.py --assemble`, the catalogues through `tools/translation_catalogue.py` and the page from `template/translate.html`; no game needed; gitignored |
 | `web/py/gametext.json`, `web/wiki-data.json` | `python build_web.py`, which needs the installed game. `--assemble` carries `tools/wiki_topics.json` (the hand-written articles) into the committed `web/wiki-data.json` without it |
 | `web/names/<lang>.json`, the game names in each other language the game ships | `python build_web.py`, which needs the installed game; the language list is `GAME_NAME_LANGS` in `ba_dashboard.py`, and the build stops when the game's `locale.json` disagrees with it |
 | `web/wiki/**/index.html`, `web/sitemap.xml`, `web/robots.txt` | `python build_web.py --assemble`, from the committed `web/wiki-data.json` through `tools/wiki_pages.py`; `python tools/wiki_pages.py` alone needs no game; gitignored |
@@ -178,23 +191,24 @@ stale one fails them.
 | `SECTIONS`, `build_core()`, `section()`, `materialize_all()`, `browser_section()`, the worker's `section` message or the board's `od*` functions (what is core and what is computed on demand) | `python -m unittest tests.test_sections tests.test_browser_build tests.test_payload_snapshot` and `node --test tests/on_demand.test.cjs tests/worker_history.test.cjs tests/worker_startup.test.cjs`; then the `tools/payload_diff.py` dump and compare below, since a payload with every section computed must not change |
 | `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`. Premises extraction is `tests/test_premises.py`. `tests/test_payload_snapshot.py` compares whole `extract()` payloads with `tests/fixtures/payload_snapshot/`; after an intended change regenerate them with `python tests/test_payload_snapshot.py --update` and review the diff. A change meant to leave the payload alone also runs `python tools/payload_diff.py dump research/<name>` on main and on the branch and `compare`s the two (owner only: it reads every save on the machine) |
 | `template/board.html` or `template/board.js` (the board's markup, CSS or script) | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs` |
-| `template/open-store-model.js` (Open a store arithmetic) | `npm run verify`; its direct arithmetic tests are `tests/open_store_model.test.cjs`, and its board integration uses `tests/open_store.test.cjs` and `tests/finder_plan.test.cjs`. Compare `python check_profit_model.py <save-root>` before and after locally when owner saves are available; never commit its private outputs |
+| `template/open-store-model.js` (Open a store arithmetic) | `npm run verify`; its direct arithmetic tests are `tests/open_store_model.test.cjs`, and its board integration uses `tests/open_store.test.cjs`, `tests/open_store_checklist.test.cjs`, `tests/open_store_opened.test.cjs` and `tests/finder_plan.test.cjs`. Compare `python check_profit_model.py <save-root>` before and after locally when owner saves are available; never commit its private outputs |
 | `template/open-factory-model.js` (Plan a factory arithmetic) | `npm run verify`; direct arithmetic: `tests/open_factory_model.test.cjs`, browser flow and persistence: `tests/open_factory.test.cjs` |
-| `tools/verify.mjs`, npm verification scripts or the CI stage wiring | `npm test -- tests/verify.test.cjs`, then `npm run verify` |
+| `tools/verify.mjs`, its sharding helpers, npm verification scripts or the CI stage wiring | `npm test -- tests/verify.test.cjs`, then `npm run verify` |
+| `tools/optimize_web.mjs` (the hosted page's optimized board JS and CSS) | `npm test -- tests/optimize_web.test.cjs tests/verify.test.cjs`, then `npm run test:optimized` |
 | `web/app.js`, `web/worker.js`, `web/update.js` | `node --test tests/*.test.cjs` |
 | `build_web.py` `BANNER` or `BEFORE_SCRIPT` (landing screen, news strip) | `python build_web.py --assemble` first, since the Node tests and `tests.test_privacy_promises` read the built page; then `node --test tests/news.test.cjs tests/release.test.cjs tests/update.test.cjs` and `python -m unittest tests.test_privacy_promises tests.test_footer` |
 | `web/changelog.json` | `python build_web.py --assemble`, then `python -m unittest tests.test_release_latest`: the file is a build stamp input |
 | A new finding kind, view, payload key, finder filter, footer link or news item | the matching checklist in the Registries section of `docs/architecture.md`, and the tests it names. `python -m unittest tests.test_doc_registries` holds the doc's payload table and private build tokens, and the finding groups, to the code; `node --test tests/alert_kinds.test.cjs tests/navigation.test.cjs` checks each `FINDING_KINDS` record and holds the view tables to each other |
-| `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs tests/finder_plan.test.cjs tests/global_names.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`. The finder lives in `web/map.js`; `tests/finder.test.cjs` also covers `drawFindLocation` in `template/board.js`, and `finderPreset`, through a Growth › Demand cell opening the finder |
-| `tools/*.py` (the wiki pipeline, not `tools/game_update/`, `tools/game_link_mock.py`, `tools/split_board_script.py`, `tools/payload_diff.py` or `tools/i18n.py`), `tools/wiki_sample.json`, `tools/wiki_topics.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` (the hand-written articles are `tests/test_wiki_build.py`) and `node --test tests/wiki*.test.cjs tests/global_names.test.cjs`, then `python build_web.py` with the installed game, which rebuilds `web/wiki-data.json` (an edit to `tools/wiki_topics.json` alone needs only `--assemble`) |
-| `server/`, `migrations/` | `npm run test:community` and `npm run check:worker` |
+| `web/map.js`, `web/map.css` | `node --test tests/map.test.cjs tests/finder.test.cjs tests/finder_saved.test.cjs tests/finder_layout.test.cjs tests/finder_plan.test.cjs tests/global_names.test.cjs` and `python -m unittest discover -s tests -p test_map_assets.py`. The finder lives in `web/map.js`; `tests/finder.test.cjs` also covers `drawFindLocation` in `template/board.js`, and `tests/finder_layout.test.cjs` covers `finderPreset`, through a Growth › Demand cell opening the finder |
+| The wiki pipeline (`tools/build_wiki_data.py`, `tools/wiki_data.py`, `tools/wiki_paths.py`, `tools/wiki_pages.py`), `tools/wiki_sample.json`, `tools/wiki_topics.json`, `web/wiki.js`, `web/wiki.css` | `python -m unittest discover -s tests -p "test_wiki*.py"` (the hand-written articles are `tests/test_wiki_build.py`) and `node --test tests/wiki*.test.cjs tests/global_names.test.cjs`, then `python build_web.py` with the installed game, which rebuilds `web/wiki-data.json` (an edit to `tools/wiki_topics.json` alone needs only `--assemble`) |
+| `server/`, `migrations/`, `tools/feature_moderate.mjs` | `npm run test:community` and `npm run check:worker` |
+| The translation page: `template/translate.html`, `web/translate.js`, `web/translate.css`, `tools/translation_catalogue.py`, `tools/translation_moderate.mjs` | `python build_web.py --assemble`, then `python -m unittest tests.test_translation_catalogue tests.test_catalogue_scan`, `node --test tests/translation_ui.test.cjs` and `npm run test:community` |
 | `web/community.js`, `web/community.css` | those two npm commands, after `python build_web.py --assemble` — both files are cache-busted by the build stamp |
 | `make_buildings.py`, `make_floor_plans.py` or what they write | `python -m unittest tests.test_floor_plans tests.test_premises`, then `python build_web.py` with the installed game: `ba_buildings.json` feeds `web/wiki-data.json` |
-| `_open_store()` and its helpers, `ba_store_rules.json`, or the board's `os*` functions (Open a store) | `python -m unittest tests.test_open_store` and `node --test tests/open_store.test.cjs tests/finder_plan.test.cjs`; after a change to the profit model, `python check_profit_model.py` and compare its numbers with `docs/dashboard-reference.md`, "Open a store" |
+| `_open_store()` and its helpers, `ba_store_rules.json`, or the board's `os*` functions (Open a store) | `python -m unittest tests.test_open_store` and `node --test tests/open_store.test.cjs tests/open_store_checklist.test.cjs tests/open_store_opened.test.cjs tests/finder_plan.test.cjs`; after a change to the profit model, `python check_profit_model.py` and compare its numbers with `docs/dashboard-reference.md`, "Open a store" |
 | `make_item_prices.py`, `ba_item_prices.json`, or the payback figures (`_payback()`, the Payback column, `spPayback()`) | `python -m unittest tests.test_payback` and `node --test tests/payback.test.cjs` |
 | Added or changed UI text (`tt()`, `data-tt*`, `msg()`), `web/i18n.js`, `tools/i18n.py`, `i18n/` | `python -m unittest discover -s tests -p "test_i18n*.py"` and `node --test tests/i18n_*.test.cjs tests/global_names.test.cjs`, plus the rows for the files the text is in |
 | `tools/Invoke-ZaiClaude.ps1` | `python -m unittest tests.test_agent_cli` |
-| `tools/split_board_script.py`, or the splice in `load_template()` | `python -m unittest tests.test_split_board_script` |
 | `tools/game_update/` | no tests: run the script you changed against the installed game (`docs/game-update.md`) |
 | `tools/game_link_mock.py`, `docs/game-link-api.md` | `python -m unittest tests.test_game_link_mock tests.test_watch_game` and `node --test tests/game_link.test.cjs`; a contract change bumps `schemaVersion` in the doc, the mock, the mod and both clients in one commit |
 | `mod/BigCopilotLink/` | nothing runs here: Peter builds it in the SDK's Unity project on the Mac (its README) and checks `curl http://127.0.0.1:8322/health` |
@@ -273,9 +287,10 @@ and never attach one to an issue.
 - The Pyodide worker's virtual filesystem holds only the files `web/worker.js` fetches from
   the page's content-addressed `web/assets/` manifest (`web/py/` in unstamped development)
   and the few it writes at runtime (`docs/architecture.md`, "Pyodide"), so
-  `ba_dashboard` must not open any other file at import time. The nine fetched files are
-  `PY_CODE` and `PY_DATA` in `build_web.py`; the worker names each one itself, and
-  `tests/test_web_fresh.py` fails when the two disagree. Read a file lazily, inside a function, as
+  `ba_dashboard` must not open any other file at import time. The fetched files are the
+  ones `PY_CODE` and `PY_DATA` in `build_web.py` name; the worker names each one itself,
+  `tests/test_web_fresh.py` fails when the two disagree, and `tests/worker_startup.test.cjs`
+  reads its list from the same tuples. Read a file lazily, inside a function, as
   `load_buildings()`, `load_demand_curves()` and `load_template()` (through `render()`) do.
   `template/board.html`, `template/board.js`, `template/open-store-model.js` and
   `template/open-factory-model.js` are not among the fetched files: the worker

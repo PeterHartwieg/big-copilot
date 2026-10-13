@@ -434,6 +434,13 @@ test('what is new in the Wiki is badged until the reader reaches it', async () =
   assert.doesNotMatch(await quiet.load('wiki'), /feature-new/);
 });
 
+test('a mark the board has retired is not drawn', async () => {
+  // The board's helper decides: past its window (or met) the mark stays off.
+  const w = wiki();
+  w.context.featureDiscovery = {isNew: () => false, visit(){}, refresh(){}};
+  assert.doesNotMatch(await w.load('wiki'), /feature-new/);
+});
+
 test('the board puts the marks down for the wiki when it is there to do it', async () => {
   const visited = [];
   const w = wiki();

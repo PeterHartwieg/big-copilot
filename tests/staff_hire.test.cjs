@@ -1237,7 +1237,6 @@ test('Part-time is left out by default for shop roles only', async (t) => {
   assert.match(await filter.textContent(), /^Leave out who asks for: Part-time/);
   // Shop roles only: the filter's tip, not a line under it (declutter T10).
   assert.equal(await filter.getAttribute('data-tip'), 'Part-time is left out for shop roles only.');
-  assert.equal(await page.locator('#hsOpen .hs-shops').count(), 0);
   // Quick hire takes the page's filters (declutter T9): Part-time left out at a shop, not at the office.
   const box = page.locator('#hsQuick');
   await box.locator('[data-hq-role]').selectOption(LAW);
@@ -1779,7 +1778,7 @@ test('an office write only adds: the week as it stands plus the planned entries 
     const same = Object.assign({}, plan, {current: {list: week.days.flatMap(({d, shifts}) => shifts.map(s => ({d, f: s.f, t: s.t,
       s: plan.stations.findIndex(x => x.id === s.itemInstanceId), p: plan.people.findIndex(x => x.id === s.employeeId)})))}});
     const again = gwRosterWeek(same);
-    return {flat, sent: week.sent, kept: week.kept, matches: gwRosterMatches(plan, week), after: gwRosterMatches(same, again), againSent: again.sent};
+    return {flat, sent: week.sent, kept: week.kept, againSent: again.sent};
   }, [O]);
   // Everything at the office stays; Lena's Monday is added; her Tuesday meets
   // Max on the same computer, so it is not.
@@ -1787,7 +1786,7 @@ test('an office write only adds: the week as it stands plus the planned entries 
     '0 8-22 LAWYER1@DESK-1',
     '1 8-12 CLEANER1@CLN-O', '1 8-20 LAWYER1@DESK-1',
     '2 10-14 LAWYER2@DESK-1']);
-  assert.deepEqual([out.sent, out.kept, out.matches, out.after, out.againSent], [1, 3, false, true, 0]);
+  assert.deepEqual([out.sent, out.kept, out.againSent], [1, 3, 0]);
   await page.evaluate(([O]) => {
     window.hrAnswer = async (kind, body, o) => ({status: 200, error: null, body: {ok: true, kind, dryRun: !!o.dryRun, stamp: 's',
       address: body.address, business: 'HART. Law', before: {shifts: 3, print: 'a'}, after: {shifts: 4, print: 'b'},

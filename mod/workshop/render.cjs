@@ -1,16 +1,17 @@
-// Renders art.html into the Workshop images: thumbnail.png (the preview the
-// in-game Mod Creator takes from the mod folder's root, 1 MB at most) and
-// how-it-works.png (an extra image added on the Workshop page).
+// Renders art.html into how-it-works.png, the extra image on the Workshop page.
 //   node mod/workshop/render.cjs
+// The live thumbnail.png (the preview the in-game Mod Creator takes from the
+// mod folder's root, 1 MB at most) is made by hand. art.html still holds the
+// older orb thumbnail; only `--thumbnail` renders it over thumbnail.png.
 const path = require("path");
 const fs = require("fs");
 const { pathToFileURL } = require("url");
 const { chromium } = require("playwright");
 
 const shots = [
-  { id: "thumb", file: "thumbnail.png", w: 1024, h: 1024 },
+  { id: "thumb", file: "thumbnail.png", w: 1024, h: 1024, optIn: "--thumbnail" },
   { id: "how", file: "how-it-works.png", w: 1920, h: 1080 },
-];
+].filter(s => !s.optIn || process.argv.includes(s.optIn));
 
 (async () => {
   const browser = await chromium.launch(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {});

@@ -433,8 +433,11 @@ details.help[open] summary::after{content:"\2013"}
   <p class="news-copy"><b class="news-tag" data-tt="upd.news.tag">New</b><span data-tt="upd.news.open-store">Plan your next store: Expansion › Open a store prices a fully outfitted store in the building you pick and estimates the days it takes to earn that back.</span><a id="newsLink" href="#expansion/open" data-tt="upd.news.open-store-go">Open a store</a></p>
   <button type="button" class="news-dismiss" id="newsDismiss" aria-label="Dismiss this news" title="Dismiss this news" data-tt-aria-label="upd.news.dismiss" data-tt-title="upd.news.dismiss"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
 </aside>
-<section class="landing" id="landing">
-  <div class="brand rv" id="lgBrand"><span class="wordmark">Big Copilot</span><span class="dot" id="lgDot"></span></div>
+<!-- Before a save loads, the landing is the page's main landmark and the
+     wordmark its h1; the board's own <main> is out of sight until then, and
+     app.js removes the landing when the board shows. -->
+<section class="landing" id="landing" role="main">
+  <div class="brand rv" id="lgBrand"><span class="wordmark" role="heading" aria-level="1">Big Copilot</span><span class="dot" id="lgDot"></span></div>
   <p class="rv" id="welcomeLede" data-tt="land.lede">Drop a Big Ambitions save. Everything is read in this tab and nothing leaves it.</p>
   <div class="drop rv" id="drop" title="Drop the folder named Big Ambitions inside SaveGames here. The page looks through every company folder in it and takes the newest save; a menu then lets you pick another character or save." data-tt-title="land.drop.title2">
     <div class="folder"><i class="tab"></i><i></i><span class="file"></span><i class="flap"></i></div>

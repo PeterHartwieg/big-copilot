@@ -69,7 +69,7 @@ class Registry(unittest.TestCase):
 
     def test_new_registry_entry_is_rendered_without_a_browser_edit(self):
         spec = {"keys": ("example", "other"), "needs": ("products",),
-                "produce": lambda _: {}, "words": "Example"}
+                "produce": lambda _: {}}
         with unittest.mock.patch.dict(ba_dashboard.SECTIONS, example=spec):
             page = ba_dashboard.render(None)
         block = re.search(r"const OD_SECTIONS = (\{[^\n]+\});", page)
@@ -181,10 +181,9 @@ class Sections(unittest.TestCase):
         heard.clear()
         ba_dashboard.section(build, "hiring")
         details = [detail for _stage, detail in heard]
-        self.assertIn("Working out factory staffing", details)
-        self.assertIn("Working out staff needs", details)
-        self.assertLess(details.index("Working out factory staffing"),
-                        details.index("Working out staff needs"))
+        self.assertIn("factoryStaffing", details)
+        self.assertIn("hiring", details)
+        self.assertLess(details.index("factoryStaffing"), details.index("hiring"))
 
     def test_hiring_keeps_saying_it_is_working(self):
         # Every site of the Staff page's key ticks the heartbeat: with no wait
@@ -195,7 +194,7 @@ class Sections(unittest.TestCase):
         ba_dashboard.set_progress(lambda stage, detail: heard.append(detail))
         with unittest.mock.patch.object(ba_dashboard, "PROGRESS_EVERY_S", 0):
             ba_dashboard.section(build, "hiring")
-        self.assertEqual(heard[0], "Working out staff needs")
+        self.assertEqual(heard[0], "hiring")
         self.assertGreater(len(heard), 1, "a heartbeat after the start")
 
     def test_a_failed_factory_section_leaves_the_pool_whole(self):
@@ -220,6 +219,8 @@ class Sections(unittest.TestCase):
         expected.append("rivalry")
         # Real estate's sidebar numbers: a few counts over the owned buildings.
         expected.append("realEstateCounts")
+        # The Portfolio footer's sites given up or sold that day, beside businesses.
+        expected.append("sitesGone")
         self.assertEqual(set(self.build().core), set(expected))
 
     def test_later_planning_first_equals_each_stage_in_order(self):

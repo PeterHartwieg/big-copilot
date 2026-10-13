@@ -2485,7 +2485,7 @@
   // web/report.js and web/report.css load on the first click of a Report a bug
   // control: #reportBtn in the strip after a failure, or any [data-bug-report]
   // (the footer's, and its copy in Help & feedback). What the form may know is
-  // handed over here; it decides what is sent (docs/bug-report-scope.md).
+  // handed over here; it decides what is sent (docs/community-features.md, "Bug reports").
   let reportLoad = null;
   function loadReport() {
     if (window.BigCopilotReport) return Promise.resolve(window.BigCopilotReport);

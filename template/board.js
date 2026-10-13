@@ -51,11 +51,16 @@ const fmt = n => (n<0?"-":"") + "$" + num(Math.round(Math.abs(n)));
    gnRedraw()). Never call a bare toLocaleString(): it follows the browser. */
 let NUM_LOCALE = typeof ttNumLocale === "function" ? ttNumLocale() : "en-US";
 const num = (n, opts) => Number(n).toLocaleString(NUM_LOCALE, opts);
+/* Compact money, "$1.25M" / "$120k" / "$75", in the UI's number locale
+   ("$1,25M" on a German board), as tt()'s {w:$c} writes it; never grouped. */
 const compact = n => {
-  const a = Math.abs(n), s = n<0?"-":"";
-  if(a>=1e6) return s+"$"+(a/1e6).toFixed(a>=1e7?1:2)+"M";
-  if(a>=1e3) return s+"$"+Math.round(a/1e3)+"k";
-  return s+"$"+Math.round(a);
+  const a = Math.abs(n), s = n<0?"-":"", plain = {useGrouping: false};
+  if(a>=1e6){
+    const d = a>=1e7?1:2;
+    return s+"$"+num(a/1e6, {minimumFractionDigits: d, maximumFractionDigits: d, useGrouping: false})+"M";
+  }
+  if(a>=1e3) return s+"$"+num(Math.round(a/1e3), plain)+"k";
+  return s+"$"+num(Math.round(a), plain);
 };
 /* localStorage, every access guarded: a private window or a full quota throws,
    and a choice that cannot be kept is simply not kept. A value that is not
@@ -1305,7 +1310,7 @@ const VIEWS = {
       [tt("co.col.marketing", "Marketing"), b=>fmt(-b.marketing), "", b=>b.marketing],
       [tt("co.col.theft", "Theft"), b=>b.theft?fmt(-b.theft):"—", "", b=>b.theft],
       [tt("co.col.profit", "Profit"), b=>`<span class="${sign(b.profit)}">${fmt(b.profit)}</span>`, "", b=>b.profit],
-      [tt("co.col.margin", "Margin"), b=>b.margin===null?"—":`${b.margin.toFixed(1)}%`, "", b=>b.margin??-999],
+      [tt("co.col.margin", "Margin"), b=>b.margin===null?"—":tt("co.pnl.margin.v", "{x:.1f}%", {x: b.margin}), "", b=>b.margin??-999],
       /* When the investment is earned back (paybackCell()); a cost centre's
          counts in its chain's row, not its own. */
       [tt("co.col.payback", "Payback"), b=>paybackCell(paybackSite(b.key)), "", b=>paybackRank(paybackSite(b.key))],
@@ -1317,7 +1322,7 @@ const VIEWS = {
                  fmt(-c.cogs), fmt(-c.wages), fmt(-c.rent),
                  fmt(-c.marketing), c.theft?fmt(-c.theft):"—",
                  `<b class="${sign(c.profit)}">${fmt(c.profit)}</b>`,
-                 c.margin===null?"—":`${c.margin.toFixed(1)}%`,
+                 c.margin===null?"—":tt("co.pnl.margin.v", "{x:.1f}%", {x: c.margin}),
                  paybackCell(paybackChain(c), true)],
     chainKey: (c, i) => i === 2 ? c.change ?? -999 : i === 10 ? paybackRank(paybackChain(c)) : VIEWS.pnl.cols[i][3](c),
     total: bs => ["", fmt(sum(bs,"revenue")), "", fmt(-sum(bs,"cogs")), fmt(-sum(bs,"wages")),
@@ -1334,7 +1339,7 @@ const VIEWS = {
       [tt("co.col.customers", "Customers"), b=>b.customers?num(b.customers):"—", "", b=>b.customers],
       // An office's customer is an hour billed, so its spend is per hour.
       [tt("co.col.basket", "Spend / visit"), b=>b.basket===null?"—":b.status==="office"
-        ? tt("co.ops.basket.hour", "${x:.2f}/hour", {x: b.basket}) : `$${b.basket.toFixed(2)}`, "", b=>b.basket??-1],
+        ? tt("co.ops.basket.hour", "${x:.2f}/hour", {x: b.basket}) : tt("co.ops.basket.visit", "${x:.2f}", {x: b.basket}), "", b=>b.basket??-1],
       // Satisfaction and promotion are the Standards table's own columns, above this one.
       [tt("co.col.traffic", "Foot traffic"), b=>b.customers?gauge(b.traffic):"—", "gauge", b=>b.traffic],
       [tt("co.col.marketing", "Marketing"), b=>b.customers?meter(b.marketingIndex):"—", "gauge", b=>b.marketingIndex],
@@ -2545,13 +2550,34 @@ function supplySorted(rows, cols, state){
     return (typeof x === "string" ? gnCompare(x, y) : (x > y) - (x < y)) * state.dir;
   });
 }
+/* A sortable column header, for every sortable table on the board: the
+   button inside lets the keyboard reach it and keeps the cell a column header,
+   and aria-sort says which way the column is sorted. `dir` is "asc", "desc",
+   or null for a column that sorts but is not sorted now; `attrs` carries the
+   table's own data attributes, which its click handler reads off the cell. */
+function sortTh(label, {cls = "", tip = "", attrs = "", dir = null} = {}){
+  return `<th class="${cls}"${tip ? ` data-tip="${attr(tip)}"` : ""}${attrs} aria-sort="${
+    dir === "desc" ? "descending" : dir === "asc" ? "ascending" : "none"}"${dir ? ` data-dir="${dir}"` : ""}>`
+    + `<button type="button" class="supply-sort">${label}${dir ? SORT_ICON : ""}</button></th>`;
+}
+/* Clicks on the th[data-i] headers under host sort by that column, through
+   sortBy(i). A table redrawn from the keyboard hands focus back to the header
+   it left; a redraw may replace the host itself, and `live` finds the one now
+   on screen. */
+function wireSortHeads(host, sortBy, redraw, live = () => host){
+  host.querySelectorAll("thead th[data-i]").forEach(th => th.onclick = () => {
+    const button = th.querySelector("button.supply-sort");
+    const at = document.activeElement === button ? [...host.querySelectorAll("button.supply-sort")].indexOf(button) : -1;
+    sortBy(+th.dataset.i);
+    redraw();
+    if(at >= 0) live().querySelectorAll("button.supply-sort")[at]?.focus({preventScroll: true});
+  });
+}
 function supplyHead(cols, state){
   return `<thead><tr>${cols.map(([label, key, cls, tip], i) => {
-    const on = !!key && state?.col === i, dir = on && state.dir < 0 ? "desc" : "asc";
-    const sort = key ? ` data-i="${i}" aria-sort="${on ? (dir === "desc" ? "descending" : "ascending") : "none"}"${
-      on ? ` data-dir="${dir}"` : ""}` : "";
-    return `<th class="${cls || ""}"${tip ? ` data-tip="${attr(tip)}"` : ""}${sort}>${key
-      ? `<button type="button" class="supply-sort">${label}${on ? SORT_ICON : ""}</button>` : label}</th>`;
+    if(!key) return `<th class="${cls || ""}"${tip ? ` data-tip="${attr(tip)}"` : ""}>${label}</th>`;
+    const on = state?.col === i;
+    return sortTh(label, {cls: cls || "", tip, attrs: ` data-i="${i}"`, dir: on ? (state.dir < 0 ? "desc" : "asc") : null});
   }).join("")}</tr></thead>`;
 }
 /* What order the rows are in, and the way back to the usual one. */
@@ -2567,15 +2593,10 @@ function supplySortNote(cols, state){
 /* The headers and the note under host share one order, kept in supplySort[id].
    A table redrawn from the keyboard hands focus back to the header it left. */
 function wireSupplySort(host, id, cols, redraw, live = () => host){
-  host.querySelectorAll("thead th[data-i]").forEach(th => th.onclick = () => {
-    const i = +th.dataset.i, s = supplySort[id];
+  wireSortHeads(host, i => {
+    const s = supplySort[id];
     supplySort[id] = s?.col === i ? {col: i, dir: -s.dir} : {col: i, dir: cols[i][2] === "l" ? 1 : -1};
-    const button = th.querySelector("button.supply-sort");
-    const at = document.activeElement === button ? [...host.querySelectorAll("button.supply-sort")].indexOf(button) : -1;
-    redraw();
-    /* A redraw may replace the host itself: `live` finds the one now on screen. */
-    if(at >= 0) live().querySelectorAll("button.supply-sort")[at]?.focus({preventScroll: true});
-  });
+  }, redraw, live);
   host.querySelectorAll("[data-usual]").forEach(a => a.onclick = e => {
     e.preventDefault();
     // Only a keyboard activation moves the focus: a click reports how many
@@ -3648,11 +3669,6 @@ function ovAtFactory(a){
      of its machines names the machine, and the site names its type. */
   return !!(a.ev && a.ev.slot !== undefined) || !!(b && b.typeSlug === "ba:businesstype_factory");
 }
-/* A shop's schedule summary; an office's Schedule action, which exists
-   whether or not the office default has hours. Today need not ask for it. */
-function nxStaffInto(b){
-  return b && b.status === "office" ? "#sitePanel .sp-acts" : "#sp-sched";
-}
 function ovActLabel(act){
   switch(act){
     case "readiness": return tt("today.act.readiness", "Open readiness");
@@ -4512,7 +4528,11 @@ const SORT_ICON = `<svg class="sort" viewBox="0 0 24 24"><path d="M12 19V5M6 11l
    not to any site, and so are real estate income and the player's salary.
    Lines under the total say so, the costs on one and each income on its own,
    and end on the figure Today's Profit tile shows. Read off the last finished
-   day, whose `business` is the sites' sum. */
+   day, whose `business` is the sites' sum. A site whose business opened today
+   shows none of yesterday's statement, which the game still counts in
+   `business` (the lease's rent while it stood empty, or an earlier business
+   there): `profitBefore` carries it onto a row of its own. So does a site
+   given up or sold that day, which has no row at all (`sitesGone`). */
 function outsideRows(span){
   const days = D.daily || [];
   const last = days[days.length - 1];
@@ -4520,7 +4540,12 @@ function outsideRows(span){
   const realEstate = last.realEstate || 0, salary = last.salary || 0;
   const income = realEstate + salary;
   const costs = (last.business || 0) - last.profit + income;
-  if(Math.abs(costs) < 1 && Math.abs(realEstate) < 1 && Math.abs(salary) < 1) return "";
+  const earlier = (D.businesses || []).filter(b => Math.abs(b.profitBefore || 0) >= 0.005);
+  const before = earlier.reduce((s, b) => s + b.profitBefore, 0);
+  const gone = D.sitesGone || [];
+  const goneSum = gone.reduce((s, g) => s + g.profit, 0);
+  if(Math.abs(costs) < 1 && Math.abs(realEstate) < 1 && Math.abs(salary) < 1 && Math.abs(before) < 1
+     && Math.abs(goneSum) < 1) return "";
   const parts = [["loans", last.loans], ["insurance", last.insurance],
                  ["homes", last.homes], ["parking", last.parking]].filter(([, n]) => n >= 1);
   const other = costs - parts.reduce((s, [, n]) => s + n, 0);
@@ -4536,7 +4561,13 @@ function outsideRows(span){
   const row = (label, n, cls, t) => `<tr class="td-outside${cls}"><td class="l" colspan="${span - 3}"${
     t ? ` data-tip="${attr(t)}" tabindex="0"` : ""}>${label}</td><td><span class="${sign(n)}">${fmt(n)}</span></td><td></td><td></td></tr>`;
   const day = last.day;
-  return (Math.abs(costs) >= 1 ? row(tt("co.outside.costs", "Company costs outside sites"), -costs, "", tip) : "")
+  const beforeTip = tt("co.outside.before.tip", "Day {day}: {sites}. Booked at the address before the business there now opened.",
+    {day, sites: earlier.map(b => tt("co.outside.before.site", "{site} {w:$}", {site: b.name, w: b.profitBefore})).join(", ")});
+  const goneTip = tt("co.outside.gone.tip", "Day {day}: {sites}. Booked at a site you no longer rent.",
+    {day, sites: gone.map(g => tt("co.outside.before.site", "{site} {w:$}", {site: g.name, w: g.profit})).join(", ")});
+  return (Math.abs(before) >= 1 ? row(tt("co.outside.before", "Before a site's business opened"), before, "", beforeTip) : "")
+    + (Math.abs(goneSum) >= 1 ? row(tt("co.outside.gone", "Sites you no longer rent"), goneSum, "", goneTip) : "")
+    + (Math.abs(costs) >= 1 ? row(tt("co.outside.costs", "Company costs outside sites"), -costs, "", tip) : "")
     + (Math.abs(realEstate) >= 1 ? row(tt("co.outside.realestate", "Real estate income"), realEstate, "",
       tt("co.outside.realestate.tip", "Day {day}: rent from the real estate you own, booked to the company, not to a site", {day})) : "")
     + (Math.abs(salary) >= 1 ? row(tt("co.outside.salary", "Salary income"), salary, "",
@@ -4584,18 +4615,14 @@ function drawPortfolio(){
     t.innerHTML = `<tbody><tr><td class="l quiet">${tt("co.port.empty", "No businesses in this save yet.")}</td></tr></tbody>`;
     return;
   }
-  t.innerHTML = `<thead><tr>${cols.map(([h,,cls,key],i) =>
-      `<th class="${cls||""}"${key ? ` data-i="${i}"` : ""}${i===sortKey?` data-dir="${sortDir<0?"desc":"asc"}"`:""}>${h}${
-        i===sortKey ? SORT_ICON : ""}</th>`).join("")}</tr></thead>
+  t.innerHTML = `<thead><tr>${cols.map(([h,,cls,key],i) => key
+      ? sortTh(h, {cls: cls || "", attrs: ` data-i="${i}"`, dir: i === sortKey ? (sortDir < 0 ? "desc" : "asc") : null})
+      : `<th class="${cls||""}">${h}</th>`).join("")}</tr></thead>
     <tbody>${body.join("")}</tbody>
     ${v.total ? `<tfoot><tr>${v.total(D.businesses).map((c,i) =>
       `<td class="${i?"":"l"}">${i===0?tt("co.port.total", {one: "{n} site", other: "{n} sites"}, {n: D.businesses.length}):c}</td>`).join("")}</tr>${
       view === "pnl" ? outsideRows(cols.length) : ""}</tfoot>` : ""}`;
-  t.querySelectorAll("thead th[data-i]").forEach(th => th.onclick = () => {
-    const i = +th.dataset.i;
-    if(sortKey===i) sortDir = -sortDir; else { sortKey=i; sortDir=-1; }
-    drawPortfolio();
-  });
+  wireSortHeads(t, i => { if(sortKey===i) sortDir = -sortDir; else { sortKey=i; sortDir=-1; } }, drawPortfolio);
   t.querySelectorAll("tr.kid").forEach(tr => tr.onclick = e => { if(!inSiteLink(e)) openSite(tr.dataset.key); });
   wirePortfolio(); wireTips();
 }
@@ -5545,7 +5572,7 @@ const SP_CHECK_NO = {get closed(){ return tt("sp.check.closed.no", "temporarily 
 const spCheckTip = (state, what) => state === "no" ? tt("sp.check.no", "missing: {what}", {what})
   : state === "unk" ? tt("sp.check.unk", "not checked yet: {what}", {what}) : what;
 const SP_CHECK_ICON = {closed: "door", staff: "person", prices: "tag", stock: "crate", shelves: "shelves", plan: "route"};
-/* Mirrors JOB_DEMAND_PRIORITY in the Python, which reads it off the game. */
+/* Mirrors _demand_priority() in the Python, which reads it off the game. */
 const SP_PRIORITY = {get 0(){ return tt("sp.pri.0", "nice to have"); }, get 1(){ return tt("sp.pri.1", "important"); },
   get 2(){ return tt("sp.pri.2", "critical"); }};
 /* Mirrors TREND_MIN_DAYS in the Python: two full weeks make a trend. */
@@ -7577,7 +7604,7 @@ function drawSite(){
     <table>
       <thead><tr><th>${tt("sp.fees.col.fee", "Fee")}</th><th>${tt("sp.fees.col.hours", "Hours billed / day")}</th><th>${tt("sp.shelf.col.revenue", "Revenue / day")}</th></tr></thead>
       <tbody>${shelves.map(l => `<tr data-el="${attr(spKeyTok(l.slug, l.item))}">
-          <td class="l">${spEsc(l.item)}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : tt("sp.shelf.noprice", "no price")}</span></td>
+          <td class="l">${spEsc(l.item)}<span class="sub">${l.price ? tt("sp.shelf.price", "${x:.2f}", {x: l.price}) : tt("sp.shelf.noprice", "no price")}</span></td>
           <td>${num(l.soldPerDay)}</td>
           <td>${fmt(l.revenue)}</td></tr>`).join("")}</tbody></table>` : `<p class="quiet">${tt("sp.fees.none", "Nothing billed here yet.")}</p>`)
     : shelves.length ? `
@@ -7599,7 +7626,7 @@ function drawSite(){
         /* The shelf's word, as Checks says it; a shelf Python did not judge has none. */
         const word = sp && supplyFact(siteTab, l.slug) && f.st !== "covered" ? ` ${szChip(f)}` : "";
         return `<tr data-el="${attr(spKeyTok(l.slug, l.item))}${over ? " outruns" : ""}">
-          <td class="l">${spEsc(l.item)}${word}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : tt("sp.shelf.noprice", "no price")}</span></td>
+          <td class="l">${spEsc(l.item)}${word}<span class="sub">${l.price ? tt("sp.shelf.price", "${x:.2f}", {x: l.price}) : tt("sp.shelf.noprice", "no price")}</span></td>
           <td>${num(l.soldPerDay)}</td>
           <td>${over && !deal ? `<span class="sp-red">${busiest}</span>` : busiest}</td>
           <td>${fmt(l.revenue)}</td>
@@ -9118,8 +9145,7 @@ function sbToggle(btn){
    read. Version 2 ({value, inGame}) had no basis: it is read once into
    version 3 with `basis: null`, which the page shows as Needs review and keeps
    out of a write until the player keeps or resets it (importSetting()); the
-   version 2 record is removed only once version 3 has been written and reads
-   back the same. Storage may be missing or refuse (a private window, a
+   version 2 record stays where it is (impSetMigrate()). Storage may be missing or refuse (a private window, a
    preview); every read and write is guarded, and without it the figures last
    as long as the page. No character id means nothing is written, so two
    unknown companies never share figures. */
@@ -9151,9 +9177,6 @@ function impSetEdits(){
   }
   return {key, edits: impSetMemo.get(key)};
 }
-/* Version 2 into version 3: written, read back, and only then the old record
-   goes. A write that fails, or reads back different, leaves version 2 where it
-   is for the next load. */
 /* The version 2 store is left where it is for a release or two: a rollback
    to the board before version 3 still finds the figures typed there. */
 function impSetMigrate(character, edits){
@@ -11858,7 +11881,7 @@ function drawMarket(){
 }
 
 /* --- Expansion › Open a store ------------------------------------------------
-   docs/open-a-store-scope.md, phase 2. A plan walks four steps: what to open
+   docs/dashboard-reference.md, "Open a store". A plan walks four steps: what to open
    (a type, or a Demand cell), where (Find a location, embedded and fixed to
    the type), the investment for a 100% outfitted store in that building in
    either install mode, and when it breaks even, with a loan if the reader
@@ -12010,31 +12033,19 @@ const osCap = (...args) => osCore().cap(...args);
 const osLayout = (...args) => osCore().layout(...args);
 const osOutfit = (...args) => osCore().outfit(...args);
 const osDecor = (...args) => osCore().decor(...args);
-const osUnits = (...args) => osCore().units(...args);
-const osDemandWith = (...args) => osCore().demandWith(...args);
-const osPromo = (...args) => osCore().promo(...args);
-const osDays = (...args) => osCore().days(...args);
 function osInvestment(plan, b){ return osCore().investment(...arguments); }
 function osStores(out, items = osFacts().items || {}){ return osCore().stores(...arguments); }
-function osPrice(item, hood){ return osCore().price(...arguments); }
-function osDemand(item, hood, existing){ return osCore().demand(...arguments); }
 function osSatisfaction(slug){ return osCore().satisfaction(...arguments); }
-function osInitial(t, b, o){ return osCore().initial(...arguments); }
 function osProvides(slug, b){ return osCore().provides(...arguments); }
 function osModel(slug, b, o = {}){ return osCore().model(...arguments); }
 function osOfficeStaffed(computers, cap, wd, hr){ return osCore().officeStaffed(...arguments); }
-function osOfficeModel(slug, t, b, h, o){ return osCore().officeModel(...arguments); }
 function osOwnRatio(slug){ return osCore().ownRatio(...arguments); }
 function osCannibal(slug, hood, provides){ return osCore().cannibal(...arguments); }
 function osHyped(slug, hood){ return osCore().hyped(...arguments); }
-function osDayProfit(m, mh, k){ return osCore().dayProfit(...arguments); }
 function osBreakDay(inv, day, factor = 1){ return osCore().breakDay(...arguments); }
 function osLoanLimit(bank){ return osCore().loanLimit(...arguments); }
 function osLoan(amount, bank){ return osCore().loan(...arguments); }
 function osLoanDays(own, profit, loan){ return osCore().loanDays(...arguments); }
-const OS_OFFICE = OpenStoreModel.OFFICE;
-const OS_RAMP = OpenStoreModel.RAMP;
-const OS_HYPE = OpenStoreModel.HYPE;
 const osBuilding = key => key && typeof premises === "function" && premises() ? premises().buildings.find(b => b.key === key) || null : null;
 const osTypeName = slug => gameName(slug) || String(slug || "").replace(/^ba:businesstype_/, "");
 const osItemName = item => gameName(item) || prettySlug(String(item || ""));
@@ -13796,8 +13807,6 @@ const OF_MAX_PLANS = 12;
    machine-hours a week, rounded up. */
 const OF_WORKER_HOURS = 50;
 const OF_FACTORY = "ba:businesstype_factory", OF_DEPOT = "ba:businesstype_warehouse";
-/* A warehouse building's parking: one vehicle in an H, two in the rest. */
-const ofSlots = b => b && b.size === "H" ? 1 : 2;
 let ofPlans = [], ofPlansFor = null, ofCur = null, ofStep = "what", ofFinder = null, ofSizeMode = "auto";
 /* What the plan is for: "new", or the key of a factory the player runs. */
 let planTarget = null;
@@ -17133,7 +17142,7 @@ function hrReview(o = {}, hooks = {}){
       const bytes = hrBodyBytes(hrLast.req.body);
       if(bytes > HR_MAX_BODY)
         return tt("co.hire.toolarge", "This is more than the game link takes in one go: the weeks of {n} sites come to {mb} MB, and the link takes 2 MB. Staff the sites one at a time from their Staffing, or narrow a role's filters so fewer sites are hired into.",
-          {n: c.sites, mb: (bytes / 1048576).toFixed(1)});
+          {n: c.sites, mb: num(bytes / 1048576, {minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false})});
       return "";
     },
     nothingSay: () => hrLast && hrBodyBytes(hrLast.req.body) > HR_MAX_BODY ? `<b>${tt("co.hire.toomuch", "Too much for one go")}</b>` : "",
@@ -17834,7 +17843,7 @@ function reOwnedTable(re, litAll){
   const head = `<thead><tr><th></th><th class="l">${tt("re.col.building", "Building")}</th><th>${tt("re.col.m2", "m²")}</th><th>${tt("re.col.occ", "Occupancy")}</th>`
     + `<th data-tip="${attr(tt("re.col.price.tip", "Rent a m² a day; a new price waits 7 days in the game"))}">${tt("re.col.price", "Price / m²")}</th><th>${tt("re.col.income", "Income / day")}</th>`
     + `<th data-tip="${attr(tt("re.col.best.tip", "The highest cent under market rent: nobody moves out, and the building fills to 100%"))}">${tt("re.col.best", "Best price")}</th>`
-    + `<th class="on" data-dir="desc">${tt("re.col.gain", "Gain / day")}${SORT_ICON}</th>`
+    + `<th class="on" data-dir="desc" aria-sort="descending">${tt("re.col.gain", "Gain / day")}${SORT_ICON}</th>`
     + `<th data-tip="${attr(tt("re.col.payback.tip", "The price you paid, over a day's rent at the best price, full, less property tax"))}">${tt("re.col.payback", "Payback")}</th><th></th></tr></thead>`;
   const body = rows.map((o, i) => reOwnedRow(o, re, litAll && o.flag, !all && i >= first)).join("");
   const sqm = rows.reduce((s, o) => s + (o.sqm || 0), 0);
@@ -17929,7 +17938,8 @@ function reBuyTable(re){
   const cash = re.tax && Number.isFinite(re.tax.cash) ? re.tax.cash : Infinity;
   const rows = reBuySorted(re.buy);
   const all = reAll.buy || rows.length <= RE_FIRST.buy;
-  const th = (k, label, tip) => `<th data-re-sort="${k}"${reBuySort === k ? ` class="on"` : ""}${tip ? ` data-tip="${attr(tip)}"` : ""} tabindex="0" role="button">${label}${reBuySort === k ? SORT_ICON : ""}</th>`;
+  /* Both sorts lead with the smallest: the cheapest, the soonest paid back. */
+  const th = (k, label, tip) => sortTh(label, {cls: reBuySort === k ? "on" : "", tip, attrs: ` data-re-sort="${k}"`, dir: reBuySort === k ? "asc" : null});
   const head = `<thead><tr><th class="l">${tt("re.col.building", "Building")}</th>${th("price", tt("re.col.price2", "Price"))}`
     + `<th data-tip="${attr(tt("re.col.rent.tip", "A day's rent at the best price, once full"))}">${tt("re.col.rent", "Rent / day")}</th>`
     + th("payback", tt("re.col.payback", "Payback"), tt("re.col.payback.buy.tip", "The price over a day's rent at the best price, full, plus any rent it saves you, less property tax")) + `</tr></thead>`;
@@ -17986,13 +17996,15 @@ function bindEstate(){
     if(which === "buy") drawEstateBuy(); else drawEstate();
     wireAll();
   });
-  const sortTo = k => {
+  /* A header sorted from the keyboard gets the focus back after the redraw. */
+  const sortTo = (k, el) => {
     if(k !== "price" && k !== "payback") return;
+    const kept = el.tagName === "TH" && el.contains(document.activeElement);
     reBuySort = reBuySort === k && k !== "price" ? "price" : k;
     drawEstateBuy(); wireAll();
+    if(kept) q(`#secBuy th[data-re-sort="${k}"] button`)?.focus({preventScroll: true});
   };
-  on("click", "[data-re-sort]", (el, e) => { e.preventDefault(); sortTo(el.dataset.reSort); });
-  on("keydown", "#pageEstate th[data-re-sort]", (el, e) => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); sortTo(el.dataset.reSort); } });
+  on("click", "[data-re-sort]", (el, e) => { e.preventDefault(); sortTo(el.dataset.reSort, el); });
 }
 
 /* The difficulty, as one chip and a popover with every setting that differs
@@ -19704,6 +19716,10 @@ function paintShell(){
     a.classList.toggle("on", on);
     if(on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
+  /* The page's one h1, for screen readers: the lit area and view already
+     show where the reader is. */
+  const h1 = $("pageTitle");
+  if(h1) h1.textContent = routePath(r);
   paintLocal();
   paintArrival();
   /* A place picked in the phone's drawer is where the reader is going. */
@@ -19785,7 +19801,7 @@ function ctlHoist(){
 }
 if(typeof MutationObserver !== "undefined"){
   const ctlWatch = new MutationObserver(() => ctlHoist());
-  document.querySelectorAll(".wrap > .page").forEach(p => ctlWatch.observe(p, {childList: true, subtree: true}));
+  document.querySelectorAll("#main > .page").forEach(p => ctlWatch.observe(p, {childList: true, subtree: true}));
 }
 /* The count beside a view in the area's row: what is still to do there. */
 function routeCount(id){
@@ -21643,8 +21659,6 @@ featureDiscovery.refresh();
 ssField.addEventListener("click", () => ssOpen());
 ssFieldBtn.addEventListener("click", () => ssOpen());
 [ssField, ssFieldBtn].forEach(el => el.addEventListener("focus", () => { if(hasData()) odNeed("products"); }));
-/* Whichever of the two is showing. */
-const ssMastControl = () => [ssField, ssFieldBtn].find(el => el.isConnected && el.getClientRects().length) || null;
 /* The sidebar gives the field its own row, full width, so nothing is fitted
    any more (the masthead's row shared it with the places and the sphere):
    what is left is the layout (sdLayout()) and the sphere's shelf, which
@@ -25854,19 +25868,6 @@ function gwRosterWeek(row){
   return {days: [...days].sort((a, b) => a[0] - b[0]).map(([d, shifts]) => ({d, shifts})), sent, kept, unreadable, added, dropped,
     leftOut: [...left].map(([p, hours]) => ({p, hours}))};
 }
-/* Whether the game's schedule already is this week, entry for entry (and
-   open around the clock where the plan wants that). */
-function gwRosterMatches(row, week){
-  /* An office's write only adds: written once there is nothing left to add. */
-  if(row.office && !row.demandBased) return week.sent === 0;
-  const line = (d, s) => [d, s.f, s.t, s.employeeId, s.itemInstanceId].join("|");
-  const want = week.days.flatMap(({d, shifts}) => shifts.map(s => line(d, s))).sort();
-  const have = ((row.current || {}).list || []).map(s => {
-    const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
-    return line(s.d, {f: s.f, t: s.t, employeeId: (who || {}).id, itemInstanceId: (st || {}).id});
-  }).sort();
-  return !(row.full && !row.openNow) && want.length === have.length && want.every((x, i) => x === have[i]);
-}
 /* An office row's computers: the stations of its one role, by index. */
 const gwOfficeComputers = row => new Set((row.roles || []).flatMap(r => r.stations || []));
 const gwOfficeRow = key => {
@@ -26307,7 +26308,7 @@ function startWatching(){
     lost(){
       const dot = $("live");
       /* "Not live" replaces a Stale mark: nothing repaints an off dot. */
-      if(dot){ dot.classList.remove("stale"); dot.title = ""; dot.classList.add("off"); dot.querySelector("em").textContent = "Not live"; }
+      if(dot){ dot.classList.remove("stale"); dot.title = ""; dot.classList.add("off"); dot.querySelector("em").textContent = tt("nav.notlive.word", "Not live"); }
     },
   });
 }

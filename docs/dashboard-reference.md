@@ -135,7 +135,13 @@ the map.
     site to open its detail. Under the sites' total, *Company costs outside sites* (loan
     payments, health insurance, homes, parking; itemised on hover) leads to *Company
     profit*, the figure on the Overview's Profit tile. Real estate income and salary
-    income, when there is any, get their own rows before *Company profit*.
+    income, when there is any, get their own rows before *Company profit*. A site whose
+    business opened today shows none of yesterday's statement, which the game still
+    counts in the company's figure (the lease's rent while it stood empty, or an earlier
+    business at the address); *Before a site's business opened* carries that amount,
+    naming the sites on hover. A site given up or sold that day has no row, yet its
+    statement is in the company's figure too: *Sites you no longer rent* carries it, so
+    the rows add up.
   - *Business detail*: nothing until a site is opened from the portfolio or a finding;
     then that site alone, with its profit history, cost breakdown, crew and shelves, and
     an hour-by-hour grid comparing historical customers with capacity from the
@@ -1468,6 +1474,57 @@ A plan stays in Your plans after its store opens, marked **Open** with the share
 (or **Closed**), and opens on step 6. Twelve plans that have not opened are the limit; opened
 plans are history, kept apart up to 24, the oldest paid-back one making room first.
 
+## Payback
+
+**Payback** (Businesses › Results, and a line on a shop's page) sets what a site cost to set
+up against the profit it has made since. The rules are the game's own, read from its code
+on 28 September 2026 and checked against six real installation bills to the coin.
+
+**The investment** is the furniture, the interior, the deposit and the site's own vehicles:
+
+- **Furniture**: what was paid for each item, or its default price where the save records
+  nothing, as the game values it. Stacked items count once each.
+- **Interior**, by install mode. The toggle on Businesses › Results is kept per character
+  and is the same one Open a store uses. The **installation firm** charges 586 a square
+  metre of the building on top of the items, and lays walls and floors free. While the
+  transaction log still holds the firm's real bill (about a week) the board uses that,
+  and remembers it afterwards; the real bill also credits a trade-in of what stood in the
+  building (its worth, stock included, times the difficulty's selling multiplier: Easy
+  0.8, Normal 0.75, Hard 0.5), which an estimate leaves out because it depends on what the
+  building held, not on the store. **Self-installation** adds each paid wall and floor slot
+  at its material's price.
+- **Deposit**: the one the lease paid. It counts although the game refunds it when the
+  lease ends.
+- **Vehicles**: the ones parked in the site's vehicle slots, at their type's price plus the
+  delivery where the purchase was delivered (a Freight Truck T1 is $98,000, $103,000
+  delivered). The delivery is read off the transaction log, which keeps about a week, and
+  remembered after that. A vehicle in no business's slot, such as your own car, counts
+  nowhere.
+
+**Profit so far** is the site's profit from its daily statements, which the game keeps for
+61 finished days, rent paid before the opening day included.
+
+**Break even** is the first day the running profit reaches the investment:
+
+- where the lease starts inside the record, the day itself: "Break even on day X, Y days
+  after opening";
+- where it starts before the record, "by day X at the latest" if the record alone reaches
+  it, since what the site earned before is unknown;
+- not reached yet: the days to go at recent profit, the average day over the last 14
+  finished days since the site first sold anything, closed days included because rent is
+  paid on those too; "Not paying back" when that average earns nothing. For a lease older
+  than the record, the whole payback period at that rate instead.
+
+Rent paid while a lease stood empty before the record began is not counted, so such a site
+can break even a day or two early on paper. A reached day is remembered in the board's
+history once the record moves past it, and stands while the investment moves by 1% or
+less; a larger change, such as a new truck, judges it again. The board also keeps a site's
+days from the opening in its history (see Open a store, "Past the record's reach").
+
+**Chains.** A shop fed by your own factories shows almost no cost of goods, so its own
+payback flatters it. A depot or a factory has no payback of its own; its investment, trucks
+included, counts in its chain's, so a chain's Invested and break-even day include them.
+
 ## The portfolio, by chain
 
 A shop, the depot that fills it and the factory behind that depot are one trading
@@ -1503,17 +1560,6 @@ export rather than counter sales.
 
 The week-on-week column is blank for a site open under two weeks, and for a chain where
 any of its earners is. A comparison that spans a shop's opening measures the opening.
-
-**Payback** (Businesses › Results, and a line on a shop's page) sets the investment against the
-profit so far. A site's investment is its furniture, the installation firm's fee (or its real
-bill while the save holds it) or the walls and floors for self-installation, the deposit, and
-its own vehicles: the ones parked in its vehicle slots, at their type's price plus the delivery
-where the purchase was delivered (a Freight Truck T1 is $98,000, $103,000 delivered). The
-delivery is read off the transaction log, which keeps about a week, and remembered after that.
-A vehicle in no business's slot, such as your own car, counts nowhere. A depot or a factory has
-no payback of its own; its investment, trucks included, counts in its chain's, so a chain's
-Invested and break-even day include them. A remembered break-even day stands while the
-investment moves by 1% or less; a larger change, such as a new truck, judges it again.
 
 ## Businesses: finances, prices and standards
 

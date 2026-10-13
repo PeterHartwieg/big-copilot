@@ -1,4 +1,4 @@
-"""Investment, profit so far and break-even (_payback(), docs/open-a-store-scope.md).
+"""Investment, profit so far and break-even (_payback(), docs/dashboard-reference.md, "Payback").
 
 The rules are the game's own: an installation firm charges 586 per square metre
 of the building on top of every item at its default price, and the walls and

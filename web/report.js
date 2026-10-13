@@ -1,4 +1,4 @@
-/* The bug report form, for the hosted site only (docs/bug-report-scope.md).
+/* The bug report form, for the hosted site only (docs/community-features.md, "Bug reports").
  *
  * web/app.js loads this file and web/report.css the first time the player
  * clicks Report a bug (the source strip after a failed read, the footer, or

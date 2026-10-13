@@ -175,6 +175,17 @@ class PrivacyPromises(unittest.TestCase):
         module = (ROOT / "server" / "feature_requests.mjs").read_text(encoding="utf-8")
         self.assertIn("now - 29 * 86400", module)
 
+    def test_community_wording_request_carries_only_the_language(self):
+        notice = (ROOT / "web" / "privacy.html").read_text(encoding="utf-8")
+        self.assertIn("The request carries only the language code.", notice)
+        loader = (ROOT / "web" / "i18n.js").read_text(encoding="utf-8")
+        loader = loader[loader.index("async function ttLoadCommunity("):]
+        loader = loader[:loader.index("\n}\n")]
+        # One API request, a plain GET whose URL holds the language and nothing else.
+        self.assertEqual(re.findall(r"/api/[^`]*", loader),
+                         ["/api/translations/overlay?lang=${encodeURIComponent(lang)}"])
+        self.assertEqual(re.findall(r"fetch\([^)]*\)", loader), ["fetch(url)"])
+
 
 if __name__ == "__main__":
     unittest.main()

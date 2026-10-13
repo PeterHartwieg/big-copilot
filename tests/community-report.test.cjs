@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * The bug report route, POST /api/report (docs/bug-report-scope.md).
+ * The bug report route, POST /api/report (docs/community-features.md, "Bug reports").
  *
  * Runs the real worker (server/worker.mjs) in Miniflare with an in-memory R2
  * bucket, the report limiter as wrangler.jsonc declares it, a stubbed ASSETS

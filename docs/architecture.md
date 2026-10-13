@@ -75,6 +75,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `kpi` | `build_core()` inline, with `_net_worth()` | `drawMast`, `drawKpis`, `hrReview/firstHire`, `SS_VIEWS.payroll.live` |
 | `daily` | `_daily_series()`, plus the rolling `profit7` added in `extract()` | `drawChart`, `drawKpis`, `drawKpis/hist` |
 | `businesses` | `_business()` per rented non-residential building; each site's `campaigns` and `marketingPlan` from `_marketing()`, with `marketing_plan()` and `marketing_score()` over `MARKETING_TYPES`, `MARKETING_STRENGTH` and `MARKETING_REACH`, planning with the types the site already has a switch for (flipped at any time) and those sold by agencies that are phone contacts, `agencies` naming the ones a new switch needs (`marketingPlan` is None but for a shop or an office; its `on` is None when the site has no switch, no agency is a contact and a change is needed); `_alerts()` reads it for the `promotion` findings | `drawPortfolio`, `drawSitePicker`, `openSite`, `siteKeys`, `drawSite`, `drawWeekday`, `supplyChecklistRows` and its locals `lineOf`, `held`, `label`, `factoryView/held`, `alertSite`, `nameUses`, Supply's views (`drawImportsView`, `drawDeliveriesView`, `drawProductionView`, `drawChangesView`) through their parts `sbShopsPart`, `sbDepotPart`, `sbFactoryPart` and row helpers (`sbObject`, `sbDepotRow`, `sbLineRow`, `sbInputRow`, `sbTabOf`), the Imports card `sbImportCard`, and `drawFactoryStaffing`, the marketing write's `gwMkSites` (with `spMkLine` and `gwMarketing` reading each site's `marketingPlan`); `web/map.js` `mapBusinesses`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn`, `wikiGuidePrices` |
+| `sitesGone` | Core: `_sites_gone()`, the last finished day's statements at addresses the player no longer rents (a lease given up or a business sold that day), `[{name, profit}]`; core beside `businesses` because the Portfolio's footer sums both | `outsideRows` |
 | `ownedBuildings` | Core: `_owned_buildings()`; cheap map layers (Sections) | `web/map.js` only: `CityMapView.update`, `openLocationMap` |
 | `homes` | Core: `_homes()` (cheap map layers; Sections), with `m` and `hood` from `load_buildings()` | `spHome`, `siteKeys`; `web/map.js` `CityMapView.update`, `openLocationMap` |
 | `products` | Section `products`: `_products()`, with `peak`/`swing`/`weeks` from `_product_rhythm()` | `drawProducts`, `SS_VIEWS.products.live`, `ssBuild`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn` |
@@ -86,7 +87,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `premises` | Section `premises`: `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `finderPreset`, `wireCards`; `web/map.js` `premises` |
 | `chains` | `_chains()` | `drawPortfolio`, `siteCrumbs` |
 | `payback` | `_payback()`, with `_site_setup()` and `setup_cost()` (the investment in both install modes, reusable for a store not yet rented; `vehicles` the site's own, from `_site_vehicles()` and `_vehicle_deliveries()`), `_install_bills()`, `_payback_row()`, `payback_outcome()` and `_payback_rate()`; `History.payback()` keeps the firm's bill, each vehicle's delivery and each reached break-even day after the save forgets them (an older save of the same character reads it and writes nothing). An outcome is `reached`, `latest`, `togo`, `never`, `unknown`, or `window` for a lease older than the statements: the whole payback period at recent profit, since what it earned before is unknown. `{sites: {key: …}, chains: {first site key: …}, recentDays}`; a trading site whose run from the opening is known also carries `days` (`[day, profit, sales]` from the opening) and `before` (the lease's cost before it); `_payback_trail()` keeps and extends those days in the history after the record stops reaching the opening, and a site whose kept days no longer meet the record says `rolled` | `paybackSite`, `paybackChain`, through `drawPortfolio`'s Payback column, `spPayback()` in `drawSite()` and `osRoiHtml()` (Open a store, step 6) |
-| `openStore` | Section `openStore`: `_open_store()`, in the "open a store" section after `_payback()`: `load_store_rules()` (`ba_store_rules.json`), `outfit_lines()` (a 100% outfitted store per type and layout, `setup_cost()` pricing it), `outfit_optional()` (the optional items beside it, a layout's `opt` and `optFurniture`), `decor_route()` (the cheapest walls and floors to each neighbourhood's interior score, kept per layout and score), `_layout_slots()`, `_copied_shelving()`, `_store_market()` (per product: import cost, sellers and rival prices per neighbourhood, `demand_with()`/`optimal_providers()`), `_plan_initial()` (the arrivals each hour starts from, `_initial_customers()` shared with the staffing assistant), `_own_shops()` (the player's shops as the model sees them, measured from each one's first day with sales; `k` for one still in its first days) and `_own_sales()` (what they sell), `_opened_stores()` (per business of a planned type: the furniture standing in it, which opening requirements it meets, `required_placed()`, and what it offers for sale, the game's provider count), `_finance_facts()` (banks, wealth with vehicles and boats, the tutorial's floor, and borrowing room). The facts only; the arithmetic the reader moves runs in the board. `{game, types, market, hoods, decor, items, vendors, own, sales, built, campaigns, finance}`, or `{}` when the store rules are missing | `drawOpenStore` (Expansion › Open a store), with `osModel()`/`osOfficeModel()`, `osBestModel()`, `osDayProfit()` (the first days' ramp and a first seller's hype), `osBreakDay()`, `osOwnRatio()`, `osCannibal()` and `osLoan()`; `demCellPop()` (a Demand cell's Open a store here) |
+| `openStore` | Section `openStore`: `_open_store()`, in the "open a store" section after `_payback()`: `load_store_rules()` (`ba_store_rules.json`), `outfit_lines()` (a 100% outfitted store per type and layout, `setup_cost()` pricing it), `outfit_optional()` (the optional items beside it, a layout's `opt` and `optFurniture`), `decor_route()` (the cheapest walls and floors to each neighbourhood's interior score, kept per layout and score), `_layout_slots()`, `_copied_shelving()`, `_store_market()` (per product: import cost, sellers and rival prices per neighbourhood, `optimal_providers()`; the demand step per seller is the model's `demandWith`), `_plan_initial()` (the arrivals each hour starts from, `_initial_customers()` shared with the staffing assistant), `_own_shops()` (the player's shops as the model sees them, measured from each one's first day with sales; `k` for one still in its first days) and `_own_sales()` (what they sell), `_opened_stores()` (per business of a planned type: the furniture standing in it, which opening requirements it meets, `required_placed()`, and what it offers for sale, the game's provider count), `_finance_facts()` (banks, wealth with vehicles and boats, the tutorial's floor, and borrowing room). The facts only; the arithmetic the reader moves runs in the board. `{game, types, market, hoods, decor, items, vendors, own, sales, built, campaigns, finance}`, or `{}` when the store rules are missing | `drawOpenStore` (Expansion › Open a store), with `osModel()` (offices through `osOfficeModel()` in `template/open-store-model.js`), `osBestModel()`, the model's `osDayProfit()` (the first days' ramp and a first seller's hype), `osBreakDay()`, `osOwnRatio()`, `osCannibal()` and `osLoan()`; `demCellPop()` (a Demand cell's Open a store here) |
 | `openFactory` | Section `openFactory`: `_open_factory()`, after `_open_store()`: per recipe product and ingredient its wholesale price, the save's import price index, box size (`bx`) and importer cap (`mo`) from `ba_store_rules.json` (an ingredient the help names one way and the city trades another is read under the name the rules know, by its label); `_factory_kits()` (each workstation's machines at list price); the Pallet Shelf and its box capacity; the factory's truck and a new depot's van with their dealer; who sells the machines; per warehouse and factory the player runs its pallet shelves, the products import contracts deliver to it and its vehicles, and for a factory `_factory_days()` (what left it each finished day by its delivery log, and the piers' part from its sales); at headquarters the purchasing agents against the import contracts and the logistics managers against the sites they manage. `{game, skills, products, kits, shelf, vehicles, items, vendors, sites, hq}`, or `{}` when the store rules are missing | `drawPlan` (Expansion › Plan a factory) through `ofDraw()`: `ofInvestment()` (one-off, upfront), `ofRunning()` (raw material, wages, rent a week), `ofUntilRows()`, `ofRunHtml()`; the loan through `osLoan()` over `openStore.finance` |
 | `trends` | `_site_trends()` | `indexTrends` |
 | `hypeExposure` | `_hype_exposure()`; `extract()` also passes the same list to `_alerts()`, where the `hype` findings come from | `spHypeRow` (a `const` arrow function, called from `spPull()` for the site panel's Promotion block) |
@@ -714,8 +715,8 @@ performance target remains unverified by synthetic native benchmarks.
 **Adding a feature.** Decide whether it is core or a section. Core is for what the warnings
 need (plus the documented cheap map layers); anything computed on load needs that reason,
 written beside it. A section declares its
-keys, its needs, its producer and its words in `SECTIONS`; `OD_SECTIONS` is generated,
-never edited. Its readers ask with `odNeed()` and draw `odWaitHtml()`; it has no side effect on the core (no write to
+keys, its needs and its producer in `SECTIONS`, and its words while it is worked out in
+`odWords()`; `OD_SECTIONS` is generated, never edited. Its readers ask with `odNeed()` and draw `odWaitHtml()`; it has no side effect on the core (no write to
 an object the core already sent, no history), which `tests/test_sections.py` checks; and
 it is invalidated by the next build. A private part a section needs goes on
 `build.private`, never on a payload object.
@@ -996,20 +997,8 @@ calculation and HTML rendering do not save. Direct arithmetic coverage lives in
 `tests/open_factory_model.test.cjs`; `tests/open_factory.test.cjs` covers transitions,
 restoration, read-only redraws and the surrounding five-step flow in the browser.
 
-`tools/split_board_script.py` made the original two-file split. Its split/join helpers
-remain historical migration tools: they refuse an assembled page containing the
-calculation module, or a board script depending on that module, before writing files.
-This prevents copying the core into `board.js` twice or producing an incomplete page.
-Use `load_template()`/`render()` for current multi-file assembly. `--resolve` still works
-with older inline branches and a current slotted page: it merges the board sources
-without joining the calculation module into either side. A branch from before it, with the script
-still inline, conflicts in `board.html` when it meets main, by merge or rebase. The one way
-to resolve that is `python tools/split_board_script.py --resolve`: it splits each of the
-three staged versions of `board.html` that is still inline, takes `board.js` from the
-commit of each side that is already split, and merges both files three ways with
-`git merge-file`, so both sides' markup, CSS and script edits survive. A clean result is
-staged; otherwise the conflict markers are left for a human. Taking either side's
-`board.html` and splitting it again loses the other side's edits.
+A branch from before the split (1 Oct 2026), with the script still inline in `board.html`,
+needs the retired split tool and its `--resolve` from history: `git show ecabe57c:tools/split_board_script.py`.
 
 The template carries eighteen tokens besides the slot, some in `board.html` and some in
 `board.js`. All eighteen are substituted by `render()`, but the text for three of them is
@@ -1083,10 +1072,9 @@ What `page_html()` produces, top of the file down:
    `window.LEDGER_RELEASE`, `update.js`, `app.js?v=<stamp>`, `community.js?v=<stamp>`.
 5. The board script, `template/board.js`, in the last `<script>` block of the template.
 
-Before any of that, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`,
-`ba_dashboard.py`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json` and
-`ba_store_rules.json` into `web/py/`, stripping comments and docstring contents only
-from `ba_dashboard.py` while preserving its lines, and
+Before any of that, `main()` refreshes `web/wiki-data.json`, copies the files `PY_CODE`
+and `PY_DATA` name (all but `gametext.json`: `PY_COPIED`) into `web/py/`, stripping
+comments and docstring contents only from `ba_dashboard.py` while preserving its lines, and
 writes `web/py/gametext.json` and `web/names/<lang>.json` (`write_name_tables()`) from the installed locale — everything `stamp()` hashes has to be in place before
 `release_info()` runs. `main()` then writes `web/index.html` and `web/version.json`.
 
@@ -1305,7 +1293,7 @@ Stale until that row draws or the next board arrives. Another company or save dr
 every row so hidden markup cannot retain the previous company's content.
 
 Adding a page means: a `div.page` in the markup, an entry in `PAGES` (with `newFeature` if
-it deserves a badge — see [contributing.md](contributing.md)) and in `ICON`, an `SS_VIEWS`
+it deserves a badge, dated in `NEW_SINCE` — see [contributing.md](contributing.md)) and in `ICON`, an `SS_VIEWS`
 entry so search finds it, and a `PAGE_DRAWS` row for its draw function. Author a new
 canonical view in `VIEW_META`: it generates its navigation item, primary `SEC_PAGE`
 row, area view, route identity, label and default host route. Only secondary/legacy
@@ -1571,7 +1559,7 @@ all three.
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
 | The markup (`template/board.html`): `<div class="page" id="page…">` for a page, or `<section class="sec rv" id="sec…" data-sub="…">` inside its page for a view; a page with views also gets its `<nav class="seg" id="…Nav">` | The host element | the navigation tests, indirectly |
-| `const PAGES = [` (board script) | *Only for a page*: `{id, label, host, newFeature?}` | `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, Real estate, then City map and Wiki" |
+| `const PAGES = [` (board script) | *Only for a page*: `{id, label, host, newFeature?}`; a `newFeature` id also gets its ship date in `NEW_SINCE` | `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, Real estate, then City map and Wiki"; `tests/feature_badges.test.cjs`, "every badge id has a ship date, and every date belongs to a badge" |
 | `const ICON = {` (board script) | *Only for a page*: its nav icon, keyed by page id | none |
 | `const SUBS = {` (board script; items generated by `navItems()` from `VIEW_META`) | *Only for a new host with views*: its DOM host/nav ids, storage key, default view and optional shown hook. Do not add individual items; `VIEW_META` generates them | `tests/navigation.test.cjs`, "Businesses carries Results, Products & prices, Standards and Milestones; Staffing its three views" and "every view in SUBS has its SEC_PAGE row and a PAGE_DRAWS tag" |
 | `const VIEW_META = [` and `const SEC_PAGE = {` (board script) | One canonical `{route, host, needs, section?, label}` record in `VIEW_META`. `label` is a callback around `tt()`, so language changes remain live. Its primary section generates a `SEC_PAGE` row; add only secondary and legacy `secX: [page, view]` rows explicitly. Without it `reveal()`, the sub-nav and `pageFromHash()` fail | `tests/navigation.test.cjs`, "every view in SUBS has its SEC_PAGE row …" and "every Company section deep link opens the view that holds it"; `tests/alert_kinds.test.cjs`, "the supply kinds land on the Supply view of their route" |
@@ -1601,13 +1589,14 @@ Nothing between `extract()` and the board filters keys: `render()`, the watch se
 
 ### A finder filter
 
-All in `web/map.js`, covered by `tests/finder.test.cjs`. `saveFinder()` and `loadFinder()`
-keep the filters per character in `localStorage`, under `finderStore()`'s
-`FINDER_KEY:<character>`. One thing is not stored: the on/off switch, `fs.on` (every load
-opens the plain map). The floor-plan layouts, `fs.layouts`, are stored with the rest by
-`saveFinder()`; a preset or a change of category clears them, and a saved search keeps them
-only where its kind has two or more layouts. Saved searches are a separate list under
-`FINDER_SAVED_KEY`.
+All in `web/map.js`, covered by `tests/finder.test.cjs`, with saved searches in
+`tests/finder_saved.test.cjs` and the Layout filter in `tests/finder_layout.test.cjs`.
+`saveFinder()` and `loadFinder()` keep the filters per character in `localStorage`, under
+`finderStore()`'s `FINDER_KEY:<character>`. One thing is not stored: the on/off switch,
+`fs.on` (every load opens the plain map). The floor-plan layouts, `fs.layouts`, are stored
+with the rest by `saveFinder()`; a preset or a change of category clears them, and a saved
+search keeps them only where its kind has two or more layouts. Saved searches are a separate
+list under `FINDER_SAVED_KEY`.
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
@@ -1620,8 +1609,8 @@ only where its kind has two or more layouts. Saved searches are a separate list 
 | `savedFilters(s){` | Validation of the stored value | "a saved search is read against this save …" |
 | `savedTip(s){` and `function finderRange(` | Its part of a saved search's summary | none for most filters |
 | `sortKeys(`, `function finderSortName(`, `finderList(`, and the grid columns in `web/map.css` | *Only if* it is also a sortable column | "the Cap column sits between m² and Upfront …" |
-| `def _premises(` in `ba_dashboard.py`, and the fixtures in `tests/finder.test.cjs` | *Only if* it needs a new field on each row | `tests/test_premises.py` (exact row dicts) |
-| `function ssFinder(` and the `openFinder({…})` callers (board script), and `function finderPreset(`, which turns a Growth › Demand cell into a preset for `openFinder(go, true)` | *Only if* a caller should preset it | `tests/search.test.cjs`; `tests/finder.test.cjs`, "a Growth cell opens the finder on its own type and neighbourhood" |
+| `def _premises(` in `ba_dashboard.py`, and the fixtures in `tests/_finder.cjs` | *Only if* it needs a new field on each row | `tests/test_premises.py` (exact row dicts) |
+| `function ssFinder(` and the `openFinder({…})` callers (board script), and `function finderPreset(`, which turns a Growth › Demand cell into a preset for `openFinder(go, true)` | *Only if* a caller should preset it | `tests/search.test.cjs`; `tests/finder_layout.test.cjs`, "a Growth cell opens the finder on its own type and neighbourhood" |
 
 A new filter is a user-facing change, so it also gets a `web/changelog.json` entry.
 
@@ -1632,7 +1621,7 @@ A new filter is a user-facing change, so it also gets a `web/changelog.json` ent
 | The URL constants (`REPO_URL =` to `GAME_MAKER_URL =`) | `NEW_URL = "…"`. Never put a URL in `web/*.js` | `tests/test_privacy_promises.py`, "test_scripts_fetch_only_from_this_site" |
 | `def footer_html(` | `{_sf_out(URL, "Label", icon, title=, feature=)}` in its column. One function fills both the board and the landing screen | `tests/test_footer.py`, "test_the_two_homes_do_not_share_an_id"; `tests/restore.test.cjs`, "the board footer offers the game, the channel and the Discord …" (exact link counts) |
 | Section 8, "External links and donations", in `web/privacy.html` | The provider's name in its list | none |
-| `feature=` on `_sf_out` | *Only for* a New badge; see [contributing.md](contributing.md) | none |
+| `feature=` on `_sf_out` | *Only for* a New badge, with its ship date in `NEW_SINCE`; see [contributing.md](contributing.md) | `tests/feature_badges.test.cjs`, "every badge id has a ship date, and every date belongs to a badge" |
 
 Then `python build_web.py --assemble`.
 
@@ -1659,12 +1648,10 @@ because a deploy from a checkout that lacks them would remove them from the site
 files from `https://cdn.jsdelivr.net/pyodide/v<version>/full/` into a new version folder,
 change `PYODIDE_VERSION` in `web/worker.js`, and delete the old folder.
 
-The nine board dependencies are listed in `PY_CODE` and `PY_DATA` in
-`build_web.py` and checked against `CODE_FILES`/`DATA_FILES` in the worker:
-
-- `ba_save.py`, `ba_facts.py`, `ba_mods.py` and `ba_dashboard.py` — required code.
-- `gametext.json`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json`
-  and `ba_store_rules.json` — game data tables.
+The board's dependencies are the files `PY_CODE` (the Python modules) and `PY_DATA`
+(the game data tables) name in `build_web.py`. `tests/test_web_fresh.py` checks them
+against `CODE_FILES`/`DATA_FILES` in the worker, and `tests/worker_startup.test.cjs`
+reads its list from the same two tuples.
 
 `ba_dashboard.py` ships as `strip_copy()` of the source: comments removed and docstrings
 emptied, every line where it was. The virtual filesystem is new on each page load, so

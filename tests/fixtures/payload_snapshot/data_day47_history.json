@@ -1076,6 +1076,7 @@
     }
    ],
    "profit": 759.0,
+   "profitBefore": 0.0,
    "promotion": 120.0,
    "quitWarnings": 1,
    "rent": 225.0,
@@ -1447,6 +1448,7 @@
     }
    ],
    "profit": 350.0,
+   "profitBefore": 0.0,
    "promotion": 80.0,
    "quitWarnings": 0,
    "rent": 100.0,
@@ -1756,6 +1758,7 @@
    "peakDay": null,
    "people": [],
    "profit": -460.0,
+   "profitBefore": 0.0,
    "promotion": 0,
    "quitWarnings": 0,
    "rent": 460.0,
@@ -2048,6 +2051,7 @@
     }
    ],
    "profit": -897.0,
+   "profitBefore": 0.0,
    "promotion": 0,
    "quitWarnings": 0,
    "rent": 445.0,
@@ -19547,6 +19551,7 @@
   "top": 0.0,
   "you": -3361.0
  },
+ "sitesGone": [],
  "skillNames": {
   "ba:skill_actor": "Actor",
   "ba:skill_cleaning": "Cleaning",
