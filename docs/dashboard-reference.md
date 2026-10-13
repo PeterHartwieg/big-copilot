@@ -808,6 +808,22 @@ week they have at the site, as much of it as the rules allow, and the rest of th
 placed around it. A cut that leaves them satisfied is made, and named in the Staff page's
 "fewer hours than now".
 
+**While a plan waits on somebody, nobody here is moved off the hours they cover** (issue
+#446). A schedule write sends only the entries of people already at the site; the ones a
+hire or an unassigned person is to work stay empty until the player adds them. So a plan
+that moved somebody off an hour they work now and gave that hour to a hire would, written
+before the hire comes, leave the hour with fewer people than the game has. Where a shop's
+plan, or an office's demand plan, would do that, the week is placed once more with
+everybody's entries as they stand kept wherever the plan still wants those hours covered
+(on another station of the same role if their own is not in the plan then, and only what
+the rules allow: an entry the plan would not give them, such as a 13-hour day or a server on
+cleaning, is not kept), and the rest of the week placed around them. If that week needs
+more people hired or assigned than the plain one, the plain week's dropped entries alone
+are tried instead; if that also needs more, or leaves no fewer hours short, the plain week
+stands, because the fewest people come first. The hours the plan wants (`need`) never change. An office's default
+plan adds entries and replaces none, so it is left as it was; factories are not written
+this way.
+
 **A week can change hands whole.** Which name the plan starts is decided before anybody has
 an hour, so a cheaper person with no hours demand can end up holding a week a full-timer
 beside them needed. Once the hours are settled that week is handed over entire where it fits

@@ -3940,7 +3940,7 @@
         "now": 84
        },
        {
-        "hours": 36.0,
+        "hours": 46.0,
         "id": "EMPben",
         "name": "Ben Ode",
         "now": 56
@@ -3960,88 +3960,37 @@
         "skill": "ba:skill_cleaning",
         "slots": [
          {
-          "d": 0,
-          "f": 12,
-          "shift": 2,
+          "d": 3,
+          "f": 0,
+          "shift": 21,
           "station": "CLEANliquor",
-          "t": 24
-         },
-         {
-          "d": 1,
-          "f": 12,
-          "shift": 6,
-          "station": "CLEANliquor",
-          "t": 24
-         },
-         {
-          "d": 2,
-          "f": 12,
-          "shift": 10,
-          "station": "CLEANliquor",
-          "t": 24
+          "t": 8
          },
          {
           "d": 3,
-          "f": 12,
-          "shift": 14,
-          "station": "CLEANliquor",
-          "t": 24
-         }
-        ]
-       },
-       {
-        "band": "full",
-        "days": 3,
-        "hours": 36,
-        "skill": "ba:skill_cleaning",
-        "slots": [
-         {
-          "d": 4,
-          "f": 0,
-          "shift": 16,
-          "station": "CLEANliquor",
-          "t": 12
-         },
-         {
-          "d": 5,
-          "f": 0,
-          "shift": 20,
-          "station": "CLEANliquor",
-          "t": 12
-         },
-         {
-          "d": 6,
-          "f": 0,
-          "shift": 24,
-          "station": "CLEANliquor",
-          "t": 12
-         }
-        ]
-       },
-       {
-        "band": "full",
-        "days": 3,
-        "hours": 36,
-        "skill": "ba:skill_cleaning",
-        "slots": [
-         {
-          "d": 4,
-          "f": 12,
-          "shift": 18,
-          "station": "CLEANliquor",
-          "t": 24
-         },
-         {
-          "d": 5,
-          "f": 12,
-          "shift": 22,
-          "station": "CLEANliquor",
-          "t": 24
-         },
-         {
-          "d": 6,
-          "f": 12,
+          "f": 20,
           "shift": 26,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 4,
+          "f": 0,
+          "shift": 29,
+          "station": "CLEANliquor",
+          "t": 12
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 35,
+          "station": "CLEANliquor",
+          "t": 12
+         },
+         {
+          "d": 6,
+          "f": 12,
+          "shift": 43,
           "station": "CLEANliquor",
           "t": 24
          }
@@ -4050,35 +3999,49 @@
        {
         "band": "full",
         "days": 4,
-        "hours": 48,
-        "skill": "ba:skill_customerservice",
+        "hours": 40,
+        "skill": "ba:skill_cleaning",
         "slots": [
          {
           "d": 0,
-          "f": 12,
-          "shift": 3,
-          "station": "REGliquor",
+          "f": 20,
+          "shift": 5,
+          "station": "CLEANliquor",
           "t": 24
          },
          {
-          "d": 3,
-          "f": 12,
-          "shift": 15,
-          "station": "REGliquor",
-          "t": 24
-         },
-         {
-          "d": 4,
-          "f": 12,
-          "shift": 19,
-          "station": "REGliquor",
-          "t": 24
-         },
-         {
-          "d": 5,
+          "d": 1,
           "f": 0,
-          "shift": 21,
-          "station": "REGliquor",
+          "shift": 7,
+          "station": "CLEANliquor",
+          "t": 8
+         },
+         {
+          "d": 1,
+          "f": 20,
+          "shift": 12,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 2,
+          "f": 0,
+          "shift": 14,
+          "station": "CLEANliquor",
+          "t": 8
+         },
+         {
+          "d": 2,
+          "f": 20,
+          "shift": 19,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 6,
+          "f": 0,
+          "shift": 40,
+          "station": "CLEANliquor",
           "t": 12
          }
         ]
@@ -4086,7 +4049,36 @@
        {
         "band": "full",
         "days": 3,
-        "hours": 36,
+        "hours": 32,
+        "skill": "ba:skill_cleaning",
+        "slots": [
+         {
+          "d": 0,
+          "f": 0,
+          "shift": 0,
+          "station": "CLEANliquor",
+          "t": 8
+         },
+         {
+          "d": 4,
+          "f": 12,
+          "shift": 31,
+          "station": "CLEANliquor",
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 12,
+          "shift": 37,
+          "station": "CLEANliquor",
+          "t": 24
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 4,
+        "hours": 40,
         "skill": "ba:skill_customerservice",
         "slots": [
          {
@@ -4097,16 +4089,87 @@
           "t": 12
          },
          {
-          "d": 5,
+          "d": 2,
+          "f": 0,
+          "shift": 15,
+          "station": "REGliquor",
+          "t": 8
+         },
+         {
+          "d": 3,
+          "f": 0,
+          "shift": 22,
+          "station": "REGliquor",
+          "t": 8
+         },
+         {
+          "d": 6,
+          "f": 0,
+          "shift": 41,
+          "station": "REGliquor",
+          "t": 12
+         }
+        ]
+       },
+       {
+        "band": "full",
+        "days": 5,
+        "hours": 34,
+        "skill": "ba:skill_customerservice",
+        "slots": [
+         {
+          "d": 0,
           "f": 12,
-          "shift": 23,
+          "shift": 3,
+          "station": "REGliquor",
+          "t": 14
+         },
+         {
+          "d": 0,
+          "f": 22,
+          "shift": 6,
           "station": "REGliquor",
           "t": 24
          },
          {
+          "d": 1,
+          "f": 0,
+          "shift": 8,
+          "station": "REGliquor",
+          "t": 8
+         },
+         {
+          "d": 1,
+          "f": 22,
+          "shift": 13,
+          "station": "REGliquor",
+          "t": 24
+         },
+         {
+          "d": 4,
+          "f": 0,
+          "shift": 28,
+          "station": "REGliquor",
+          "t": 8
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 34,
+          "station": "REGliquor",
+          "t": 8
+         },
+         {
           "d": 6,
           "f": 12,
-          "shift": 27,
+          "shift": 42,
+          "station": "REGliquor",
+          "t": 14
+         },
+         {
+          "d": 6,
+          "f": 22,
+          "shift": 45,
           "station": "REGliquor",
           "t": 24
          }
@@ -4277,7 +4340,7 @@
       "bench": [],
       "fewer": [
        {
-        "hours": 40.0,
+        "hours": 50.0,
         "id": "EMPdee",
         "name": "Dee Park",
         "now": 70
@@ -4285,18 +4348,11 @@
       ],
       "hireWeeks": [
        {
-        "band": "full",
-        "days": 3,
-        "hours": 30,
+        "band": "part",
+        "days": 2,
+        "hours": 20,
         "skill": "ba:skill_customerservice",
         "slots": [
-         {
-          "d": 0,
-          "f": 9,
-          "shift": 0,
-          "station": "REGgifts",
-          "t": 19
-         },
          {
           "d": 5,
           "f": 9,
@@ -4322,7 +4378,7 @@
       "bench": [],
       "fewer": [
        {
-        "hours": 36.0,
+        "hours": 50.0,
         "id": "EMPdee",
         "name": "Dee Park",
         "now": 70
@@ -4331,35 +4387,49 @@
       "hireWeeks": [
        {
         "band": "full",
-        "days": 4,
-        "hours": 48,
+        "days": 6,
+        "hours": 44,
         "skill": "ba:skill_customerservice",
         "slots": [
          {
-          "d": 0,
-          "f": 12,
-          "shift": 1,
-          "station": "REGgifts",
-          "t": 24
-         },
-         {
           "d": 1,
-          "f": 12,
-          "shift": 3,
-          "station": "REGgifts",
-          "t": 24
-         },
-         {
-          "d": 2,
-          "f": 12,
+          "f": 19,
           "shift": 5,
           "station": "REGgifts",
           "t": 24
          },
          {
+          "d": 2,
+          "f": 19,
+          "shift": 8,
+          "station": "REGgifts",
+          "t": 24
+         },
+         {
+          "d": 3,
+          "f": 19,
+          "shift": 11,
+          "station": "REGgifts",
+          "t": 24
+         },
+         {
+          "d": 4,
+          "f": 19,
+          "shift": 14,
+          "station": "REGgifts",
+          "t": 24
+         },
+         {
+          "d": 5,
+          "f": 0,
+          "shift": 15,
+          "station": "REGgifts",
+          "t": 12
+         },
+         {
           "d": 6,
           "f": 0,
-          "shift": 12,
+          "shift": 17,
           "station": "REGgifts",
           "t": 12
          }
@@ -4368,34 +4438,34 @@
        {
         "band": "full",
         "days": 4,
-        "hours": 48,
+        "hours": 38,
         "skill": "ba:skill_customerservice",
         "slots": [
          {
-          "d": 3,
-          "f": 12,
-          "shift": 7,
+          "d": 0,
+          "f": 19,
+          "shift": 2,
           "station": "REGgifts",
           "t": 24
          },
          {
-          "d": 4,
+          "d": 1,
           "f": 0,
-          "shift": 8,
+          "shift": 3,
           "station": "REGgifts",
-          "t": 12
+          "t": 9
          },
          {
           "d": 5,
-          "f": 0,
-          "shift": 10,
+          "f": 12,
+          "shift": 16,
           "station": "REGgifts",
-          "t": 12
+          "t": 24
          },
          {
           "d": 6,
           "f": 12,
-          "shift": 13,
+          "shift": 18,
           "station": "REGgifts",
           "t": 24
          }
@@ -4403,7 +4473,7 @@
        },
        {
         "band": "full",
-        "days": 3,
+        "days": 4,
         "hours": 36,
         "skill": "ba:skill_customerservice",
         "slots": [
@@ -4412,21 +4482,28 @@
           "f": 0,
           "shift": 0,
           "station": "REGgifts",
-          "t": 12
+          "t": 9
+         },
+         {
+          "d": 2,
+          "f": 0,
+          "shift": 6,
+          "station": "REGgifts",
+          "t": 9
+         },
+         {
+          "d": 3,
+          "f": 0,
+          "shift": 9,
+          "station": "REGgifts",
+          "t": 9
          },
          {
           "d": 4,
-          "f": 12,
-          "shift": 9,
+          "f": 0,
+          "shift": 12,
           "station": "REGgifts",
-          "t": 24
-         },
-         {
-          "d": 5,
-          "f": 12,
-          "shift": 11,
-          "station": "REGgifts",
-          "t": 24
+          "t": 9
          }
         ]
        }
@@ -4439,7 +4516,7 @@
       "bench": [],
       "fewer": [
        {
-        "hours": 40.0,
+        "hours": 50.0,
         "id": "EMPdee",
         "name": "Dee Park",
         "now": 70
@@ -4447,18 +4524,11 @@
       ],
       "hireWeeks": [
        {
-        "band": "full",
-        "days": 3,
-        "hours": 30,
+        "band": "part",
+        "days": 2,
+        "hours": 20,
         "skill": "ba:skill_customerservice",
         "slots": [
-         {
-          "d": 0,
-          "f": 9,
-          "shift": 0,
-          "station": "REGgifts",
-          "t": 19
-         },
          {
           "d": 5,
           "f": 9,
@@ -19636,7 +19706,7 @@
       "skill": "ba:skill_customerservice"
      }
     ],
-    "hoursUncovered": 30,
+    "hoursUncovered": 20,
     "people": 1
    },
    "basis": {
@@ -20013,7 +20083,7 @@
    "cost": {
     "current": 1260.0,
     "currentCover": 0.0,
-    "weekly": 720.0
+    "weekly": 900.0
    },
    "current": {
     "cleaning": 0,
@@ -20084,14 +20154,14 @@
        "skill": "ba:skill_customerservice"
       }
      ],
-     "hoursUncovered": 132,
+     "hoursUncovered": 118,
      "people": 3
     },
     "bench": [],
     "cost": {
      "current": 1260.0,
      "currentCover": 0.0,
-     "weekly": 648.0
+     "weekly": 900.0
     },
     "daysMeasured": 14,
     "daysNeeded": 9,
@@ -20099,7 +20169,7 @@
      "ba:skill_customerservice": {
       "have": 1,
       "hire": 3,
-      "hireHours": 132,
+      "hireHours": 118,
       "kind": "serve",
       "max": 5,
       "min": 4,
@@ -20161,11 +20231,18 @@
       "f": 0,
       "p": null,
       "s": 0,
-      "t": 12
+      "t": 9
      },
      {
       "d": 0,
-      "f": 12,
+      "f": 9,
+      "p": 0,
+      "s": 0,
+      "t": 19
+     },
+     {
+      "d": 0,
+      "f": 19,
       "p": null,
       "s": 0,
       "t": 24
@@ -20173,13 +20250,20 @@
      {
       "d": 1,
       "f": 0,
-      "p": 0,
+      "p": null,
       "s": 0,
-      "t": 12
+      "t": 9
      },
      {
       "d": 1,
-      "f": 12,
+      "f": 9,
+      "p": 0,
+      "s": 0,
+      "t": 19
+     },
+     {
+      "d": 1,
+      "f": 19,
       "p": null,
       "s": 0,
       "t": 24
@@ -20187,13 +20271,20 @@
      {
       "d": 2,
       "f": 0,
-      "p": 0,
+      "p": null,
       "s": 0,
-      "t": 12
+      "t": 9
      },
      {
       "d": 2,
-      "f": 12,
+      "f": 9,
+      "p": 0,
+      "s": 0,
+      "t": 19
+     },
+     {
+      "d": 2,
+      "f": 19,
       "p": null,
       "s": 0,
       "t": 24
@@ -20201,13 +20292,20 @@
      {
       "d": 3,
       "f": 0,
-      "p": 0,
+      "p": null,
       "s": 0,
-      "t": 12
+      "t": 9
      },
      {
       "d": 3,
-      "f": 12,
+      "f": 9,
+      "p": 0,
+      "s": 0,
+      "t": 19
+     },
+     {
+      "d": 3,
+      "f": 19,
       "p": null,
       "s": 0,
       "t": 24
@@ -20217,11 +20315,18 @@
       "f": 0,
       "p": null,
       "s": 0,
-      "t": 12
+      "t": 9
      },
      {
       "d": 4,
-      "f": 12,
+      "f": 9,
+      "p": 0,
+      "s": 0,
+      "t": 19
+     },
+     {
+      "d": 4,
+      "f": 19,
       "p": null,
       "s": 0,
       "t": 24
@@ -20267,7 +20372,7 @@
     "ba:skill_customerservice": {
      "have": 1,
      "hire": 1,
-     "hireHours": 30,
+     "hireHours": 20,
      "kind": "serve",
      "max": 2,
      "min": 2,
@@ -20522,7 +20627,7 @@
        "skill": "ba:skill_customerservice"
       }
      ],
-     "hoursUncovered": 30,
+     "hoursUncovered": 20,
      "people": 1
     },
     "bench": [],
@@ -20530,13 +20635,13 @@
     "cost": {
      "current": 1260.0,
      "currentCover": 0.0,
-     "weekly": 720.0
+     "weekly": 900.0
     },
     "headcount": {
      "ba:skill_customerservice": {
       "have": 1,
       "hire": 1,
-      "hireHours": 30,
+      "hireHours": 20,
       "kind": "serve",
       "max": 2,
       "min": 2,
@@ -20594,7 +20699,7 @@
      {
       "d": 0,
       "f": 9,
-      "p": null,
+      "p": 0,
       "s": 0,
       "t": 19
      },
@@ -20669,7 +20774,7 @@
     {
      "d": 0,
      "f": 9,
-     "p": null,
+     "p": 0,
      "s": 0,
      "t": 19
     },
@@ -21315,14 +21420,14 @@
        "skill": "ba:skill_customerservice"
       }
      ],
-     "hoursUncovered": 204,
+     "hoursUncovered": 194,
      "people": 5
     },
     "bench": [],
     "cost": {
      "current": 3192.0,
      "currentCover": 1176.0,
-     "weekly": 2184.0
+     "weekly": 2364.0
     },
     "daysMeasured": 14,
     "daysNeeded": 9,
@@ -21340,7 +21445,7 @@
      "ba:skill_customerservice": {
       "have": 2,
       "hire": 2,
-      "hireHours": 84,
+      "hireHours": 74,
       "kind": "serve",
       "max": 5,
       "min": 4,
@@ -21398,35 +21503,75 @@
     "placed": [
      {
       "demand": "ba:jobdemand_freeweekends",
-      "from": 12,
+      "from": 8,
       "label": "Free weekends",
       "p": 0,
-      "to": 24,
+      "to": 16,
       "wd": 1
      },
      {
       "demand": "ba:jobdemand_freeweekends",
-      "from": 0,
+      "from": 8,
       "label": "Free weekends",
       "p": 0,
-      "to": 12,
+      "to": 16,
       "wd": 2
      },
      {
       "demand": "ba:jobdemand_freeweekends",
-      "from": 0,
+      "from": 22,
       "label": "Free weekends",
       "p": 0,
-      "to": 12,
+      "to": 24,
+      "wd": 2
+     },
+     {
+      "demand": "ba:jobdemand_freeweekends",
+      "from": 8,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 16,
       "wd": 3
      },
      {
       "demand": "ba:jobdemand_freeweekends",
-      "from": 0,
+      "from": 22,
       "label": "Free weekends",
       "p": 0,
-      "to": 12,
+      "to": 24,
+      "wd": 3
+     },
+     {
+      "demand": "ba:jobdemand_freeweekends",
+      "from": 8,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 16,
       "wd": 4
+     },
+     {
+      "demand": "ba:jobdemand_freeweekends",
+      "from": 22,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 24,
+      "wd": 4
+     },
+     {
+      "demand": "ba:jobdemand_freeweekends",
+      "from": 8,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 16,
+      "wd": 5
+     },
+     {
+      "demand": "ba:jobdemand_freeweekends",
+      "from": 22,
+      "label": "Free weekends",
+      "p": 0,
+      "to": 24,
+      "wd": 5
      }
     ],
     "shifts": [
@@ -21434,9 +21579,9 @@
       "d": 0,
       "f": 0,
       "k": "clean",
-      "p": 2,
+      "p": null,
       "s": 1,
-      "t": 12
+      "t": 8
      },
      {
       "d": 0,
@@ -21447,7 +21592,29 @@
      },
      {
       "d": 0,
+      "f": 8,
+      "k": "clean",
+      "p": 2,
+      "s": 1,
+      "t": 20
+     },
+     {
+      "d": 0,
       "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 14
+     },
+     {
+      "d": 0,
+      "f": 14,
+      "p": 1,
+      "s": 0,
+      "t": 22
+     },
+     {
+      "d": 0,
+      "f": 20,
       "k": "clean",
       "p": null,
       "s": 1,
@@ -21455,7 +21622,7 @@
      },
      {
       "d": 0,
-      "f": 12,
+      "f": 22,
       "p": null,
       "s": 0,
       "t": 24
@@ -21463,21 +21630,43 @@
      {
       "d": 1,
       "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 8
+     },
+     {
+      "d": 1,
+      "f": 0,
+      "p": null,
+      "s": 0,
+      "t": 8
+     },
+     {
+      "d": 1,
+      "f": 8,
+      "p": 0,
+      "s": 0,
+      "t": 16
+     },
+     {
+      "d": 1,
+      "f": 8,
       "k": "clean",
       "p": 2,
       "s": 1,
-      "t": 12
+      "t": 20
      },
      {
       "d": 1,
-      "f": 0,
+      "f": 16,
       "p": 1,
       "s": 0,
-      "t": 12
+      "t": 22
      },
      {
       "d": 1,
-      "f": 12,
+      "f": 20,
       "k": "clean",
       "p": null,
       "s": 1,
@@ -21485,29 +21674,51 @@
      },
      {
       "d": 1,
-      "f": 12,
-      "p": 0,
+      "f": 22,
+      "p": null,
       "s": 0,
       "t": 24
      },
      {
       "d": 2,
       "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 8
+     },
+     {
+      "d": 2,
+      "f": 0,
+      "p": null,
+      "s": 0,
+      "t": 8
+     },
+     {
+      "d": 2,
+      "f": 8,
+      "p": 0,
+      "s": 0,
+      "t": 16
+     },
+     {
+      "d": 2,
+      "f": 8,
       "k": "clean",
       "p": 2,
       "s": 1,
-      "t": 12
+      "t": 20
      },
      {
       "d": 2,
-      "f": 0,
-      "p": 0,
+      "f": 16,
+      "p": 1,
       "s": 0,
-      "t": 12
+      "t": 22
      },
      {
       "d": 2,
-      "f": 12,
+      "f": 20,
       "k": "clean",
       "p": null,
       "s": 1,
@@ -21515,115 +21726,172 @@
      },
      {
       "d": 2,
-      "f": 12,
-      "p": 1,
+      "f": 22,
+      "p": 0,
       "s": 0,
       "t": 24
      },
      {
       "d": 3,
       "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 8
+     },
+     {
+      "d": 3,
+      "f": 0,
+      "p": null,
+      "s": 0,
+      "t": 8
+     },
+     {
+      "d": 3,
+      "f": 8,
+      "p": 0,
+      "s": 0,
+      "t": 16
+     },
+     {
+      "d": 3,
+      "f": 8,
       "k": "clean",
       "p": 2,
       "s": 1,
-      "t": 12
+      "t": 20
      },
      {
       "d": 3,
-      "f": 0,
-      "p": 0,
-      "s": 0,
-      "t": 12
-     },
-     {
-      "d": 3,
-      "f": 12,
-      "k": "clean",
-      "p": null,
-      "s": 1,
-      "t": 24
-     },
-     {
-      "d": 3,
-      "f": 12,
-      "p": null,
-      "s": 0,
-      "t": 24
-     },
-     {
-      "d": 4,
-      "f": 0,
-      "k": "clean",
-      "p": null,
-      "s": 1,
-      "t": 12
-     },
-     {
-      "d": 4,
-      "f": 0,
-      "p": 0,
-      "s": 0,
-      "t": 12
-     },
-     {
-      "d": 4,
-      "f": 12,
-      "k": "clean",
-      "p": null,
-      "s": 1,
-      "t": 24
-     },
-     {
-      "d": 4,
-      "f": 12,
-      "p": null,
-      "s": 0,
-      "t": 24
-     },
-     {
-      "d": 5,
-      "f": 0,
-      "k": "clean",
-      "p": null,
-      "s": 1,
-      "t": 12
-     },
-     {
-      "d": 5,
-      "f": 0,
-      "p": null,
-      "s": 0,
-      "t": 12
-     },
-     {
-      "d": 5,
-      "f": 12,
-      "k": "clean",
-      "p": null,
-      "s": 1,
-      "t": 24
-     },
-     {
-      "d": 5,
-      "f": 12,
-      "p": null,
-      "s": 0,
-      "t": 24
-     },
-     {
-      "d": 6,
-      "f": 0,
-      "k": "clean",
-      "p": null,
-      "s": 1,
-      "t": 12
-     },
-     {
-      "d": 6,
-      "f": 0,
+      "f": 16,
       "p": 1,
       "s": 0,
+      "t": 22
+     },
+     {
+      "d": 3,
+      "f": 20,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 24
+     },
+     {
+      "d": 3,
+      "f": 22,
+      "p": 0,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 4,
+      "f": 0,
+      "p": null,
+      "s": 0,
+      "t": 8
+     },
+     {
+      "d": 4,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 1,
       "t": 12
+     },
+     {
+      "d": 4,
+      "f": 8,
+      "p": 0,
+      "s": 0,
+      "t": 16
+     },
+     {
+      "d": 4,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 24
+     },
+     {
+      "d": 4,
+      "f": 16,
+      "p": 1,
+      "s": 0,
+      "t": 22
+     },
+     {
+      "d": 4,
+      "f": 22,
+      "p": 0,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 5,
+      "f": 0,
+      "p": null,
+      "s": 0,
+      "t": 8
+     },
+     {
+      "d": 5,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 12
+     },
+     {
+      "d": 5,
+      "f": 8,
+      "p": 0,
+      "s": 0,
+      "t": 16
+     },
+     {
+      "d": 5,
+      "f": 12,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 24
+     },
+     {
+      "d": 5,
+      "f": 16,
+      "p": 1,
+      "s": 0,
+      "t": 22
+     },
+     {
+      "d": 5,
+      "f": 22,
+      "p": 0,
+      "s": 0,
+      "t": 24
+     },
+     {
+      "d": 6,
+      "f": 0,
+      "k": "clean",
+      "p": null,
+      "s": 1,
+      "t": 12
+     },
+     {
+      "d": 6,
+      "f": 0,
+      "p": null,
+      "s": 0,
+      "t": 12
+     },
+     {
+      "d": 6,
+      "f": 12,
+      "p": null,
+      "s": 0,
+      "t": 14
      },
      {
       "d": 6,
@@ -21635,7 +21903,14 @@
      },
      {
       "d": 6,
-      "f": 12,
+      "f": 14,
+      "p": 1,
+      "s": 0,
+      "t": 22
+     },
+     {
+      "d": 6,
+      "f": 22,
       "p": null,
       "s": 0,
       "t": 24
