@@ -20264,7 +20264,7 @@ def _plan(
             continue
         sites[b["typeSlug"]] += 1
         for line in b["lines"]:
-            if line["price"] and line["rate"] > 0:
+            if line["price"] and line["rate"] > 0 and not line.get("retired"):
                 mine[b["typeSlug"]][line["slug"]].append(line["rate"])
     own = {}
     for kind, products in mine.items():
