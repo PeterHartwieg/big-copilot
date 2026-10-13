@@ -21,7 +21,7 @@ prices POST /debug/config names per contract ("importTerms"). The mock never
 rewrites the file: an apply is kept in memory, over the bytes, so a later write
 sees it, answers the state it left, and moves the stamp as /refresh does. Rent
 alone is also written into the bytes /save serves (_with_rents()), since the
-board reads pending prices from the save.
+board reads pending prices from the save, until a newer save file arrives.
 GET /debug/writes lists the applies; POST /debug/config changes the error
 switches while it runs, for the page's tests (and the game's day and hour, and
 those contract terms, the approval answer and the approved tokens).
@@ -339,6 +339,11 @@ class Link:
                 continue
             if mtime != self._mtime:
                 time.sleep(0.75)  # the game may still be writing
+                # A newer game save holds the rent as it stands: the applied
+                # rent (and its undo) is not laid over it.
+                with self.lock:
+                    self.rents = {}
+                    self.undo.pop("rent", None)
                 self.refresh(force=True)
 
     def health(self, paired: bool = False) -> dict:
@@ -443,7 +448,7 @@ class Link:
             return 200, answer
 
     # --- the save, as ba_save reads it ---------------------------------------
-    RENT_KEYS = {key: b"" + struct.pack("<i", len(key)) + key.encode("utf-16-le")
+    RENT_KEYS = {key: b"\x01" + struct.pack("<i", len(key)) + key.encode("utf-16-le")
                  for key in ("pendingPricePerSqm", "daysUntilUpdatingPricePerSqm")}
 
     def _with_rents(self, data: bytes) -> bytes:
@@ -470,6 +475,8 @@ class Link:
                     found.append(i + len(pat))
                     i = raw.find(pat, i + 1)
                 if len(found) != len(order):
+                    print(f"mock: rent not written into the save ({key} {len(found)} times for "
+                          f"{len(order)} buildings); serving it unpatched", file=sys.stderr)
                     return data  # not one per entry: leave the bytes alone
                 at[key] = found
             for n, address in enumerate(order):
@@ -486,7 +493,8 @@ class Link:
                     elif tag == 0x17:
                         raw[pos:pos + 4] = struct.pack("<i", int(value))
             return gzip.compress(bytes(raw))
-        except (OSError, EOFError, ValueError, IndexError, struct.error, ba_save.SaveFormatError):
+        except (OSError, EOFError, ValueError, IndexError, struct.error, ba_save.SaveFormatError) as exc:
+            print(f"mock: rent not written into the save ({exc!r}); serving it unpatched", file=sys.stderr)
             return data
 
     def _save(self) -> ba_save.Save:

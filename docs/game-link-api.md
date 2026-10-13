@@ -1153,7 +1153,8 @@ so `min` and `max` can differ from the game's by a cent at an exact half; a buil
 does not know answers `not_owned`, and a villa is size `T`. An apply's pending prices and
 counters are kept in memory and written into the save `/save` serves (the realEstate entries'
 `pendingPricePerSqm` and `daysUntilUpdatingPricePerSqm`, patched in place; an undo puts them back,
-a `/debug/config` reset reads the file afresh), so the board sees them as it would the game's next
+a `/debug/config` reset reads the file afresh, and a newer save file on disk drops them with
+their undo), so the board sees them as it would the game's next
 save; the other writes stay in memory only. The mock never counts them down, and its undo holds only while its
 `day` is the day of the write (standing in for the daily tick). With `features` lacking
 `rent.undo` the undo answers `409 no_undo`, and `--features ""` leaves `rent` out of the
