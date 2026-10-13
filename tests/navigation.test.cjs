@@ -4,93 +4,148 @@ const {en, enRe} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
-const source = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.js'), 'utf8');
-// The markup, and the page's earlier script that defines featureDiscovery.
+const {loadBoard} = require('./_board.cjs');
+// The markup, for where the sidebar's parts sit.
 const markup = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.html'), 'utf8');
 const {between} = require('./_slice.cjs');
 
-/* The boot slice starts at the shell, so the no-save path comes with it. */
-const BOOT = between(source, 'let shellOnly = false;', '/* A page written with its numbers');
+/* The opening tags in a piece of markup, each with its attributes and its text
+   up to the next closing tag of its name, so a test asks for an element by
+   what it carries rather than by the order its attributes are written in. */
+function tags(html){
+  const out = [];
+  for (const m of String(html).matchAll(/<([a-z][a-z0-9]*)((?:\s+[^\s=>]+(?:="[^"]*")?)*)\s*\/?>/gi)) {
+    const attrs = {};
+    for (const a of m[2].matchAll(/([^\s=>]+)(?:="([^"]*)")?/g)) attrs[a[1]] = a[2] ?? '';
+    const rest = html.slice(m.index + m[0].length);
+    const close = rest.indexOf(`</${m[1]}>`);
+    const text = (close < 0 ? '' : rest.slice(0, close)).replace(/<[^>]*>/g, '');
+    out.push({tag: m[1].toLowerCase(), attrs, text, at: m.index,
+      classes: (attrs.class || '').split(/\s+/).filter(Boolean)});
+  }
+  return out;
+}
+/* The first element whose attributes include every one of `want`. */
+function find(html, want){
+  return tags(html).find(t => Object.entries(want).every(([k, v]) => t.attrs[k] === v)) || null;
+}
 
+/* What the board touches that a test does not look at: every property and call
+   answers with itself, as tests/_board.cjs's stub does. */
+const inert = new Proxy(function(){}, {
+  get(_, key){
+    if (key === Symbol.toPrimitive) return () => 0;
+    if (key === Symbol.iterator) return function*(){};
+    if (key === 'length') return 0;
+    return inert;
+  },
+  apply: () => inert, construct: () => inert, set: () => true,
+});
+const classList = () => {
+  const set = new Set();
+  return {add: (...c) => c.forEach(x => set.add(x)), remove: (...c) => c.forEach(x => set.delete(x)),
+    contains: c => set.has(c), toggle(c, on = !set.has(c)){ if (on) set.add(c); else set.delete(c); return on; }};
+};
+/* An element that keeps what the board writes to it and the listeners it adds;
+   anything else answers as the inert stub. */
+function element(id){
+  const listeners = {};
+  const own = {id, hidden: false, innerHTML: '', textContent: '', dataset: {}, attributes: {}, children: [],
+    classList: classList(), style: {setProperty(){}},
+    addEventListener(type, fn){ (listeners[type] ||= []).push(fn); },
+    setAttribute(name, value){ own.attributes[name] = String(value); },
+    removeAttribute(name){ delete own.attributes[name]; },
+    getAttribute(name){ return own.attributes[name] ?? null; },
+    querySelector: () => element(null), querySelectorAll: () => [], contains: () => false, focus(){},
+    /* The listeners for `type` the board added, called with `e`. */
+    fire(type, e){ (listeners[type] || []).forEach(fn => fn(e)); },
+    click(e){ own.fire('click', e); },
+  };
+  return new Proxy(function(){}, {
+    get: (_, key) => key in own ? own[key] : inert[key],
+    set(_, key, value){ own[key] = value; return true; },
+    apply: () => inert,
+  });
+}
+
+/* The whole board script (tests/_board.cjs), on a document whose every id is
+   an element(), a history the test can walk, and the device storage `saved`. */
 function board({saved = {}, data = {}, extraView = null} = {}) {
   if (data) require('./_payload_contract.cjs').assertPayloadShape(data, 'navigation');
   const entries = ['#today'], states = [null];
   let position = 0;
-  const listeners = {}, captured = {};
+  const listeners = {}, captured = [];
   const elements = new Map();
   let chartDraws = 0, wikiVisits = 0, sitePanels = 0;
+  /* Every id the board looks up, in order: a test empties it and reads what
+     a navigation asked for. */
+  const lookups = [];
   const $ = id => {
-    if (!elements.has(id)) elements.set(id, {hidden:false, innerHTML:'', attributes:{}, addEventListener(type, fn){this[type] = fn;},
-      setAttribute(name, value){this.attributes[name] = String(value);}, removeAttribute(name){delete this.attributes[name];}});
+    lookups.push(id);
+    if (!elements.has(id)) elements.set(id, element(id));
     return elements.get(id);
   };
   const location = {hash:'#today'};
-  const context = vm.createContext({$, location, D: data,
-    history:{
-      get state(){return states[position];},
-      replaceState(state, __, hash){entries[position] = location.hash = hash; states[position] = state ?? null;},
-      pushState(state, __, hash){
-        entries.splice(++position); states.splice(position);
-        entries.push(location.hash = hash); states.push(state ?? null);
-      },
-      back(){move(-1);},
-    },
-    localStorage:{getItem(key){return saved[key] ?? null;}, setItem(key, value){saved[key] = String(value);}},
-    document:{querySelectorAll(){return [];}, body:{classList:{add(){}, remove(){}}},
-              addEventListener(type, fn, capture){if (capture) captured[type] = fn;}},
-    window:{scrollY:0, addEventListener(type, fn){listeners[type] = fn;}},
-    drawChart(){chartDraws++;}, wireReveal(){}, requestAnimationFrame(){}, inkHome(){}, icon(){return '';},
-    showCityMap(){}, showWikiRoute(){wikiVisits++;}, wireTips(){}, drawSite(){sitePanels++;},
-    odNeed(){return true;}, odReady(){return true;}, odThensAsk(){}, pgEvaluate(){},
-    drawPortfolio(){}, CSS:{escape: s => s}, shortName: b => b.name,
-    spEsc: s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
-    attr: s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'),
+  const own = {getElementById: $, querySelectorAll: () => [], querySelector: () => element(null),
+    body: element('body'), createElement: () => element(null), activeElement: null,
+    addEventListener(type, fn, capture){ if (type === 'click' && capture === true) captured.push(fn); }};
+  const document = new Proxy(function(){}, {
+    get: (_, key) => key in own ? own[key] : inert[key],
+    set(_, key, value){ own[key] = value; return true; },
+    apply: () => inert,
   });
-  /* The site state the board declares with its site panel, which no slice
-     below carries. */
-  vm.runInContext(`let siteKey = null, siteTab = -1, siteOpen = false, spFindsAll = false, spArrived = null;
-    const openChains = new Set();
-    const spHome = key => key === null ? null : (D.homes || []).find(h => h.key === key) || null;`, context);
+  const window = {scrollY: 0, innerWidth: 1440, scrollTo(){},
+    addEventListener(type, fn){ (listeners[type] ||= []).push(fn); }};
+  const history = {
+    get state(){return states[position];},
+    replaceState(state, __, hash){entries[position] = location.hash = hash; states[position] = state ?? null;},
+    pushState(state, __, hash){
+      entries.splice(++position); states.splice(position);
+      entries.push(location.hash = hash); states.push(state ?? null);
+    },
+    back(){move(-1);},
+  };
+  /* A view added to VIEW_META before the script runs. */
+  const edit = extraView && (source => source.replace(/\];\r?\nconst viewMetaForRoute/,
+    `{...${JSON.stringify(extraView)}, label: () => "Example"},\n];\nconst viewMetaForRoute`));
+  const context = loadBoard({document, window, location, history,
+    localStorage: {getItem(key){return saved[key] ?? null;}, setItem(key, value){saved[key] = String(value);}},
+    CSS: {escape: s => s},
+    /* web/map.js and web/wiki.js are spliced in on the page; these stand for
+       the two calls the shell makes into them. */
+    showCityMap(){}, showWikiRoute(){ wikiVisits++; },
+  }, {edit});
+  /* What a page draws is not the shell's: these draws, which need a whole
+     payload or a laid-out page, are counted or left out. */
+  Object.assign(context, {
+    drawChart(){ chartDraws++; }, drawSite(){ sitePanels++; },
+    renderAll(){}, drawPortfolio(){}, wireReveal(){}, wireTips(){},
+  });
+  /* The payload, as a board that is handed its numbers holds them. */
+  const setData = d => { context.__data = d; vm.runInContext('D = __data', context); };
+  setData(data);
   function move(delta){
     position = Math.max(0, Math.min(entries.length - 1, position + delta));
     location.hash = entries[position];
-    listeners.hashchange();
+    (listeners.hashchange || []).forEach(fn => fn());
   }
-  /* web/i18n.js runs ahead of the board script on the page: the tabs' labels
-     are read through its tt(). */
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8'), context);
-  /* The guarded localStorage helpers, declared near the top of the script. */
-  vm.runInContext(between(source, '/* localStorage, every access guarded', 'const el = '), context);
-  let identities = between(source, 'const VIEW_META =', '/* The business a finding').replace(/\r\n/g, '\n');
-  if(extraView) identities = identities.replace('];\nconst viewMetaForRoute',
-    `{...${JSON.stringify(extraView)}, label: () => "Example"},\n];\nconst viewMetaForRoute`);
-  vm.runInContext(identities, context);
-  vm.runInContext(between(markup, 'const featureDiscovery =', '/* --- changelog dialog'), context);
-  vm.runInContext(between(source, 'const PAGES =', '/* --- which kinds of finding'), context);
-  /* The crumb row above a site's head, and its clicks. */
-  vm.runInContext(between(source, 'const SS_BACK =', "/* The site's page stands on its own"), context);
-  let booted = false;
-  const load = () => {
-    if (booted) return;
-    booted = true;
-    context.renderAll = context.wireNav = context.wireCoin = context.wireSphere = () => {};
-    vm.runInContext(BOOT, context);
-  };
-  return {context, entries, states, $, charts(){return chartDraws;}, wikiVisits(){return wikiVisits;},
+  return {context, document, entries, states, $, lookups, setData,
+    data(){ return vm.runInContext('D', context); },
+    charts(){return chartDraws;}, wikiVisits(){return wikiVisits;},
     sitePanels(){return sitePanels;},
-    boot(){ load(); context.boot(); },
-    shell(){ load(); context.bootShell(); },
+    boot(){ context.boot(); },
+    shell(){ context.bootShell(); },
     move,
-    /* A plain or modified click caught by the board's capture listener. */
     /* A click on a place in the masthead: its link is what closest() finds. */
     nav(id, ref = 'nav'){
       $(ref).click({button: 0, preventDefault(){}, target:{closest: sel => sel.includes('a[data-id]') ? {dataset:{id}} : null}});
     },
+    /* A plain or modified click caught by the board's capture listeners. */
     click(href, mods = {}){
       const e = {button: 0, ...mods, prevented: false, stopped: false,
         target:{closest: sel => sel.includes('#site/') && href.startsWith('#site/') ? {getAttribute: () => href, closest: () => null} : null},
         preventDefault(){this.prevented = true;}, stopImmediatePropagation(){this.stopped = true;}};
-      captured.click(e);
+      for (const fn of captured) { if (e.stopped) break; fn(e); }
       return e;
     },
     page(){return vm.runInContext('page', context);},
@@ -152,15 +207,17 @@ test('the sidebar is Overview, Businesses, Supply, Staffing, Expansion, Real est
   assert.ok(!vm.runInContext('PAGES.some(p => p.id === "results")', b.context),
     'Results is a view inside Businesses, not a page of its own');
   for (const id of ['overview', 'businesses', 'supply', 'staffing', 'expansion', 'estate'])
-    assert.match(b.$('nav').innerHTML, new RegExp(`data-id="${id}"`));
-  assert.match(b.$('navRefs').innerHTML, /data-id="map"/);
-  assert.match(b.$('navRefs').innerHTML, /data-id="wiki"/);
+    assert.ok(find(b.$('nav').innerHTML, {'data-id': id}), id);
+  assert.ok(find(b.$('navRefs').innerHTML, {'data-id': 'map'}));
+  assert.ok(find(b.$('navRefs').innerHTML, {'data-id': 'wiki'}));
   // The utilities are the foot's ···, after the references, inside the sidebar.
   const side = between(markup, '<nav class="sd" id="mast"', '<div class="wrap">');
   assert.ok(side.indexOf('id="navRefs"') < side.indexOf('class="sd-foot"')
     && side.indexOf('class="sd-foot"') < side.indexOf('id="navMore"'), 'the utilities menu sits in the foot, after the references');
   assert.doesNotMatch(b.$('navRefs').innerHTML, /navMore/);
-  assert.match(b.$('phoneNav').innerHTML, /data-id="staffing"[\s\S]*id="phoneMore"/, 'a phone has all five places and Map & more');
+  const phone = b.$('phoneNav').innerHTML;
+  assert.ok(find(phone, {'data-id': 'staffing'}) && find(phone, {id: 'phoneMore'})
+    && find(phone, {'data-id': 'staffing'}).at < find(phone, {id: 'phoneMore'}).at, 'a phone has all five places and Map & more');
 });
 
 test('Businesses carries Results, Products & prices, Standards and Milestones; Staffing its three views', () => {
@@ -174,7 +231,9 @@ test('Businesses carries Results, Products & prices, Standards and Milestones; S
   assert.deepEqual([...staffing].map(([, , anchor]) => anchor), ['secSchedules', 'secStaff', 'secPayroll'],
     'Staff needs is anchored on the hiring page (issue #89)');
   b.context.showSub('staffing', 'payroll');
-  assert.match(b.$('staffingNav').innerHTML, /href="#secPayroll" data-id="payroll" class="on"/);
+  const payroll = find(b.$('staffingNav').innerHTML, {'data-id': 'payroll'});
+  assert.equal(payroll.attrs.href, '#secPayroll');
+  assert.ok(payroll.classes.includes('on'));
 });
 
 /* Main folded Payroll into its Company › Staff page (issue #89); the redesign
@@ -255,10 +314,9 @@ test('an old #secRhythm link lands on Daily result', () => {
   assert.equal(b.sub('company'), 'results');
   // Followed from the page, as a clicked link or a typed hash is.
   b.context.showPage('today');
-  const asked = [];
-  const $ = b.context.$;
-  b.context.$ = id => { asked.push(id); return $(id); };
+  b.lookups.length = 0;
   b.context.openHash('secRhythm', 'none');
+  const asked = [...b.lookups];
   assert.equal(b.page(), 'company');
   assert.equal(b.sub('company'), 'results');
   assert.ok(asked.includes('secDaily'), 'reveal() looks for the section that replaced it');
@@ -317,7 +375,9 @@ test('Supply is six task views, Plans & contracts second; shops, warehouses and 
     [['changes', en("nav.view.changes"), 'secChanges'], ['roles', en("nav.view.roles"), 'secRoles'], ['imports', en("nav.view.imports"), 'secImports'], ['deliveries', en("nav.view.deliveries"), 'secDeliveries'],
      ['production', en("nav.view.production"), 'secProduction'], ['flow', en("nav.view.flow"), 'secFlow']]);
   b.context.showSub('supply', 'production');
-  assert.match(b.$('supplyNav').innerHTML, /href="#secProduction" data-id="production" class="on">/);
+  const production = find(b.$('supplyNav').innerHTML, {'data-id': 'production'});
+  assert.equal(production.attrs.href, '#secProduction');
+  assert.ok(production.classes.includes('on'));
 });
 
 test('a Supply view remembered from before the redesign opens the view that took its place', () => {
@@ -381,7 +441,7 @@ for (const [pageId, view, anchor, nav] of [
 ]) test(`modified-click destination boots ${pageId}/${view}`, () => {
   const b = board();
   b.context.showSub(pageId, view);
-  assert.ok(b.$(nav).innerHTML.includes(`href="#${anchor}" data-id="${view}"`));
+  assert.equal((find(b.$(nav).innerHTML, {'data-id': view}) || {attrs: {}}).attrs.href, `#${anchor}`);
   let prevented = false;
   b.$(nav).click({ctrlKey:true, preventDefault(){prevented = true;}, target:{closest(){return {dataset:{id:view}};}}});
   assert.equal(prevented, false);
@@ -469,7 +529,7 @@ test('a save arriving while the wiki is open leaves the reader where they are', 
   b.move(0);
   assert.equal(b.page(), 'wiki');
   const entries = b.entries.length;
-  b.context.D = {};              // the first delivery
+  b.setData({});                 // the first delivery
   b.boot();
   assert.equal(b.page(), 'wiki', 'the numbers arrive behind the page being read');
   assert.equal(b.context.location.hash, '#wiki/businesstypes-giftshop');
@@ -567,7 +627,7 @@ test('a slug is the key alone, written readably', () => {
   assert.equal(b.context.siteSlugOf(''), '', 'a site with no key has no address');
   assert.equal(b.context.siteKeyOf(''), null, 'and an empty slug is no site');
   // A site whose key is the bare head is still reachable, at "%x".
-  b.context.D.businesses = [...b.context.D.businesses, {key: 'ba:street_', name: 'Bare', address: '', status: 'retail'}];
+  b.data().businesses = [...b.data().businesses, {key: 'ba:street_', name: 'Bare', address: '', status: 'retail'}];
   assert.equal(b.context.siteHref('ba:street_'), '#site/%x');
   assert.equal(b.context.siteBySlug('%X'), 'ba:street_');
 });
@@ -598,7 +658,7 @@ test('a site keeps its slug whatever else the save holds', () => {
   b.boot();
   const mine = () => b.context.siteHref(SHOP);
   const before = mine();
-  const D = b.context.D;
+  const D = b.data();
   D.businesses = [...D.businesses,
     {key: 'ba:street_fifthavenue#57b', name: 'Same address', address: '57 Fifth Avenue', status: 'retail'},
     {key: 'ba:street_elm#1', name: 'Its address is the other key', address: 'Fifthavenue 57', status: 'retail'}];
@@ -661,13 +721,25 @@ test('the crumb leads back where the reader came from, else to the portfolio', (
   b.boot();
   b.context.openSite(SHOP, false, 'a1');
   const html = b.context.siteCrumbs(SHOP, 'HART. Clothing', true);
-  assert.match(html, new RegExp('<a class="ss-crumb from" href="#today" data-ss="back">.*' + enRe("nav.from.overview").source + '</a>'));
-  assert.match(html, new RegExp('data-ss="portfolio">' + enRe("sp.crumb.portfolio").source + '</a><i>›</i><a href="#secPortfolio" data-ss="chain" data-chain="Clothing Stores">'));
-  assert.match(html, /<div class="ss-pick" id="sitePick">/);
+  const back = find(html, {'data-ss': 'back'});
+  assert.equal(back.tag, 'a');
+  assert.deepEqual(back.classes, ['ss-crumb', 'from']);
+  assert.equal(back.attrs.href, '#today');
+  assert.match(back.text, enRe("nav.from.overview"));
+  // The trail: the portfolio, then the chain the site is filed under.
+  const portfolio = find(html, {'data-ss': 'portfolio'}), chain = find(html, {'data-ss': 'chain'});
+  assert.match(portfolio.text, new RegExp('^' + enRe("sp.crumb.portfolio").source + '$'));
+  assert.equal(chain.attrs.href, '#secPortfolio');
+  assert.equal(chain.attrs['data-chain'], 'Clothing Stores');
+  assert.ok(portfolio.at < chain.at, 'the portfolio comes before the chain');
+  const pick = find(html, {id: 'sitePick'});
+  assert.equal(pick.tag, 'div');
+  assert.deepEqual(pick.classes, ['ss-pick']);
   // Clicking it is the browser's own Back.
   const nav = {};
-  b.context.q = () => nav;
+  b.document.querySelector = () => nav;
   b.context.wireSiteCrumbs();
+  b.document.querySelector = () => element(null);
   nav.onclick({button: 0, preventDefault(){}, target:{closest: () => ({dataset:{ss:'back'}, getAttribute: () => '#today'})}});
   assert.equal(b.page(), 'today');
   assert.equal(b.site(), null);
@@ -675,8 +747,12 @@ test('the crumb leads back where the reader came from, else to the portfolio', (
   // Without a finding the crumb is the portfolio, and a home is in no picker.
   b.context.openSite(FLAT);
   const home = b.context.siteCrumbs(FLAT, '13 Broadway Street', false);
-  assert.match(home, new RegExp('<a class="ss-crumb" href="#secPortfolio" data-ss="portfolio">.*' + enRe("sp.crumb.portfolio").source + '</a>'));
-  assert.doesNotMatch(home, /sitePick|data-ss="chain"/);
+  const homeBack = find(home, {'data-ss': 'portfolio'});
+  assert.equal(homeBack.tag, 'a');
+  assert.deepEqual(homeBack.classes, ['ss-crumb']);
+  assert.equal(homeBack.attrs.href, '#secPortfolio');
+  assert.match(homeBack.text, enRe("sp.crumb.portfolio"));
+  assert.ok(!find(home, {id: 'sitePick'}) && !find(home, {'data-ss': 'chain'}));
 });
 
 test("a site's name opens its page; a modified click is left to the browser", () => {
