@@ -2984,7 +2984,7 @@ PAYLOAD_KEYS = (
     "openFactory", "trends", "hypeExposure", "hours", "hourFindings", "staffing",
     "factoryStaffing", "officeStaffing", "candidates", "hiring", "plan", "names",
     "skillNames", "marketingAgencies", "cashFlow", "ledgerDays", "alerts", "minor",
-    "alertsDemand", "goals", "rivalry", "realEstateCounts", "realEstate",
+    "alertsDemand", "goals", "rivalry", "realEstateCounts", "realEstate", "sitesGone",
 )
 # Keys only some saves carry: `mods` is there only for a save a mod adapter
 # reads (ba_mods.detect()), so a vanilla save's payload is what it was.
@@ -3541,7 +3541,8 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     Build. History-recording producers, the warnings and everything they read
     stay eager. ownedBuildings and homes stay here because the map's layers and
     home site panel read them; staff stays because Today's fixed-cost tile reads
-    the payroll. All three cost nothing. plan stays core because Today reads its
+    the payroll. All three cost nothing. sitesGone stays beside businesses
+    because the Portfolio's footer sums both. plan stays core because Today reads its
     recipes and item names (factoryView, sbDeps, the supply strip and finding
     pills), and every page reads itemName; it costs about 4 ms and 65 KB on the
     largest measured save. Page-only producers have no history
@@ -3581,6 +3582,7 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         row["closed"] = bool(b.get("temporarilyClosed"))
         businesses.append(row)
     businesses.sort(key=lambda x: -x["profit"])
+    sites_gone = _sites_gone(save, names, latest, {_address_of(b, strict=True) for b in buildings}, residential)
     _job_demands(save, names, businesses)
 
     daily = _daily_series(save, summaries)
@@ -3748,6 +3750,8 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         },
         "daily": daily,
         "businesses": businesses,
+        # Core beside businesses: the Portfolio's footer reads both.
+        "sitesGone": sites_gone,
         # The map's layers and home site panel read these on every draw;
         # they cost nothing (under 1 ms and 1 KB), so Map needs no section.
         "ownedBuildings": _owned_buildings(save, names),
@@ -4330,9 +4334,13 @@ def shift_print(entries) -> str:
 def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencies=None) -> dict:
     # The address keeps its takings after a business closes: a statement from
     # before this business opened (or from a day it did not exist) is the old
-    # tenant's, not this one's.
+    # tenant's, not this one's. The game still counts it in the day's business
+    # profit (the lease's rent while it stood empty, or an earlier business
+    # there), so the row keeps it apart as `profitBefore` and the Portfolio's
+    # footer shows it, and the sites still add up to the company's figure.
     since = b.get("creationDay", 0)
-    st = latest.get(addr, {}) if not history or history[-1][0] >= since else {}
+    booked = latest.get(addr, {})
+    st = booked if not history or history[-1][0] >= since else {}
     name = b.get("BusinessName")
     tag = ""
     if name and name.startswith("[") and "]" in name:
@@ -4533,6 +4541,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
         "theft": money(st.get("Theft", 0)),
         "licensing": money(st.get("LicensingFees", 0)),
         "profit": profit,
+        "profitBefore": money(0 if st is booked else booked.get("TotalProfit", 0)),
         "margin": round(profit / revenue * 100, 1) if revenue else None,
         "satisfaction": {
             "overall": sat.get("overall", 0) if status in ("retail", "office") else None,
@@ -4867,6 +4876,27 @@ def _product_rhythm(save: Save, buildings: list) -> dict:
                 "weeks": _weeks(profile),
             }
     return out
+
+
+def _sites_gone(save: Save, names: Names, latest: dict, rented: set, residential: set) -> list:
+    """The last finished day's statements at sites the player no longer rents.
+
+    A lease given up or a business sold today has no Portfolio row, while the
+    game still counts its statement in the day's business profit. Each such
+    site, by its business name if the registration keeps one, else its
+    address, with that day's profit, so the Portfolio's footer can add up.
+    """
+    regs = {}
+    for b in save.items(save.root.get("BuildingRegistrations")):
+        addr = _address_of(b)
+        if all(addr):
+            regs[addr] = b
+    out = []
+    for addr in _in_order(set(latest) - rented - residential):
+        name = (regs.get(addr) or {}).get("BusinessName")
+        out.append({"name": name or names.addr(addr),
+                    "profit": money(latest[addr].get("TotalProfit", 0))})
+    return [g for g in out if g["profit"]]
 
 
 def _daily_series(save: Save, summaries: list) -> list:
