@@ -152,6 +152,32 @@ class OutfitTests(unittest.TestCase):
         music = [l["item"] for l in outfit_lines(SHOP, rules, prices, 30, 225) if l["why"] == "music"]
         self.assertEqual(music, ["ba:itemname_clubspeaker"])
 
+    def test_a_product_with_no_display_made_for_the_type_takes_any_that_works_in_it(self):
+        # Issue #497: every ice cream display is tagged for coffee shops and
+        # supermarkets, and a fast food restaurant sells ice cream all the same.
+        rules = json.loads(json.dumps(RULES))
+        rules["furniture"]["ba:itemname_shelf"]["bt"] = ["coffeeshop"]
+        rules["furniture"]["ba:itemname_cheapshelf"] = {"c": 25, "h": ["ba:itemname_whisky"], "v": VENDOR, "bt": ["cinema"],
+                                                        "o": ["cinema"]}
+        prices = {"items": {**PRICES["items"], "ba:itemname_cheapshelf": {"p": 10}}}
+        got = {(l["item"], l["group"]): l for l in outfit_lines(SHOP, rules, prices, 30, 225)}
+        self.assertEqual(got[("ba:itemname_shelf", "shelf")]["qty"], 2)
+        self.assertEqual(got[("ba:itemname_shelf", "shelf")]["why"], ["ba:itemname_whisky"])
+        # Never one the game keeps out of the type, however cheap.
+        self.assertNotIn(("ba:itemname_cheapshelf", "shelf"), got)
+        # An extra (weight under 1) is left to the optional items.
+        rules["types"][SHOP]["i"] = [["ba:itemname_beer", 1], ["ba:itemname_whisky", 0.5], ["ba:itemname_sodacan", 0.85]]
+        got = {(l["item"], l["group"]) for l in outfit_lines(SHOP, rules, prices, 30, 225)}
+        self.assertNotIn(("ba:itemname_shelf", "shelf"), got)
+        rules["types"][SHOP]["i"] = RULES["types"][SHOP]["i"]
+        # A display made for the type still wins over a cheaper one made for another.
+        rules["furniture"]["ba:itemname_shelf"]["bt"] = ["liquorstore"]
+        rules["furniture"]["ba:itemname_plainshelf"] = {"c": 25, "h": ["ba:itemname_whisky"], "v": VENDOR, "bt": ["florist"]}
+        prices["items"]["ba:itemname_plainshelf"] = {"p": 5}
+        got = {(l["item"], l["group"]) for l in outfit_lines(SHOP, rules, prices, 30, 225)}
+        self.assertIn(("ba:itemname_shelf", "shelf"), got)
+        self.assertNotIn(("ba:itemname_plainshelf", "shelf"), got)
+
     def test_a_cinema_seats_its_capacity_across_its_screens(self):
         cinema = "ba:businesstype_cinema"
         rules = {"types": {cinema: {"b": "cinema", "c": 1, "i": [], "dm": [],

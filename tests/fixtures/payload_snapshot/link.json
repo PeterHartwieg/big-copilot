@@ -4369,7 +4369,7 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 52922.0,
+      "furniture": 54722.0,
       "lines": [
        [
         "ba:itemname_cashregister",
@@ -4484,6 +4484,14 @@
         "shelf",
         [
          "ba:itemname_sodacan"
+        ]
+       ],
+       [
+        "ba:itemname_icecreamcounter",
+        1,
+        "shelf",
+        [
+         "ba:itemname_icecream"
         ]
        ]
       ],
@@ -5393,7 +5401,7 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 24205.0,
+      "furniture": 27705.0,
       "lines": [
        [
         "ba:itemname_fitball",
@@ -5490,6 +5498,15 @@
         1,
         "dem",
         "sink"
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        4,
+        "shelf",
+        [
+         "ba:itemname_energydrink",
+         "ba:itemname_sodacan"
+        ]
        ]
       ],
       "opt": [
