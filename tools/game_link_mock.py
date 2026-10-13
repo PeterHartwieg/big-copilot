@@ -19,7 +19,9 @@ assigned where, which stations exist. What the game alone knows (importer caps,
 prices, the Uniforms window's skill list) is not checked, except the caps and
 prices POST /debug/config names per contract ("importTerms"). The mock never
 rewrites the file: an apply is kept in memory, over the bytes, so a later write
-sees it, answers the state it left, and moves the stamp as /refresh does.
+sees it, answers the state it left, and moves the stamp as /refresh does. Rent
+alone is also written into the bytes /save serves (_with_rents()), since the
+board reads pending prices from the save.
 GET /debug/writes lists the applies; POST /debug/config changes the error
 switches while it runs, for the page's tests (and the game's day and hour, and
 those contract terms, the approval answer and the approved tokens).
@@ -84,6 +86,7 @@ import math
 import os
 import re
 import secrets
+import struct
 import sys
 import threading
 import time
@@ -308,7 +311,7 @@ class Link:
                 self.busy = False
             return 409, {"error": "cannot_save", "reason": "saving"}
         with self.lock:
-            self.data = data
+            self.data = self._with_rents(data)
             self._mtime = mtime
             # The contract's shape, kept distinct even inside one second: the
             # stamp is opaque, but two refreshes must never share one.
@@ -440,6 +443,52 @@ class Link:
             return 200, answer
 
     # --- the save, as ba_save reads it ---------------------------------------
+    RENT_KEYS = {key: b"" + struct.pack("<i", len(key)) + key.encode("utf-16-le")
+                 for key in ("pendingPricePerSqm", "daysUntilUpdatingPricePerSqm")}
+
+    def _with_rents(self, data: bytes) -> bytes:
+        """The save's bytes with every applied rent write in them, as the game
+        would write its next save: each realEstate entry's pendingPricePerSqm
+        and daysUntilUpdatingPricePerSqm, patched in place (a float, double or
+        int32 keeps its size). The other writes stay in memory only; rent shows
+        in /save because the board reads its pending prices from the bytes.
+        Entries are matched by order: the keys occur once per realEstate entry."""
+        rents = getattr(self, "rents", None)
+        if not rents or not data:
+            return data
+        try:
+            raw = bytearray(gzip.decompress(data))
+            reader = ba_save._Reader(bytes(raw))
+            if reader.u8() != 0x02:
+                return data
+            save = ba_save.Save(reader.instance(with_ref_id=True), reader.refs, self.path)
+            order = [save.address(e.get("address")) for e in save.items(save.root.get("realEstate"))]
+            at = {}
+            for key, pat in self.RENT_KEYS.items():
+                found, i = [], raw.find(pat)
+                while i >= 0:
+                    found.append(i + len(pat))
+                    i = raw.find(pat, i + 1)
+                if len(found) != len(order):
+                    return data  # not one per entry: leave the bytes alone
+                at[key] = found
+            for n, address in enumerate(order):
+                state = rents.get(address)
+                if not state:
+                    continue
+                for key, value in state.items():
+                    pos = at[key][n]
+                    tag = raw[pos - len(self.RENT_KEYS[key]) - 1]
+                    if tag == 0x1f:
+                        raw[pos:pos + 4] = struct.pack("<f", value)
+                    elif tag == 0x21:
+                        raw[pos:pos + 8] = struct.pack("<d", value)
+                    elif tag == 0x17:
+                        raw[pos:pos + 4] = struct.pack("<i", int(value))
+            return gzip.compress(bytes(raw))
+        except (OSError, EOFError, ValueError, IndexError, struct.error, ba_save.SaveFormatError):
+            return data
+
     def _save(self) -> ba_save.Save:
         """The bytes served now, parsed once per stamp. Bytes that do not parse
         read as an empty company: every address is then not_found."""
@@ -2063,6 +2112,8 @@ class Link:
     def configure(self, body: dict) -> dict:
         """POST /debug/config: the error switches, changed while the mock runs."""
         with self.lock:
+            # Rent writes are in the served bytes (_with_rents()): a reset reads them afresh.
+            patched = bool(body.get("reset")) and bool(self.rents)
             if body.get("reset"):  # forget every apply, as a reloaded city would
                 self.applied, self.undo, self.order = [], {}, None
                 self.uniforms, self.products, self.contracts, self.schedules = {}, {}, {}, {}
@@ -2119,8 +2170,11 @@ class Link:
                 self.agency_closed = {_address(a, "agencyClosed[]") for a in body["agencyClosed"] or ()}
             if "noContact" in body:  # agencies the phone's contacts do not hold, whatever the save says
                 self.no_contact = {_address(a, "noContact[]") for a in body["noContact"] or ()}
-            return {"refuseWrite": self.refuse_write, "busyWrites": self.busy_writes,
-                    "writes": self.writes, "features": self.features, "applied": len(self.applied)}
+            state = {"refuseWrite": self.refuse_write, "busyWrites": self.busy_writes,
+                     "writes": self.writes, "features": self.features, "applied": len(self.applied)}
+        if patched:
+            self.refresh(force=True)
+        return state
 
 
 class Handler(http.server.BaseHTTPRequestHandler):

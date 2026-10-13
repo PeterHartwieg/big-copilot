@@ -24222,12 +24222,17 @@ function gwRent(keys){
     const p = plan(r), key = gwKeyOf(r.address);
     if(!p) return "";
     const back = phase === "undone";
-    const was = back ? to(r, p) : (p.pending ?? p.price), now = back ? (p.pending ?? p.price) : to(r, p);
+    /* An undo's answer: from the price the write left (`before`) back to the
+       one it restored, each the price that holds (pending while its days run). */
+    const holds = s => s && Number.isFinite(Number(s.pendingPricePerSqm)) && Number(s.daysUntilUpdatingPricePerSqm) > 0
+      ? Number(s.pendingPricePerSqm) : s && Number.isFinite(Number(s.pricePerSqm)) ? Number(s.pricePerSqm) : null;
+    const was = back ? holds(r.before) ?? to(r, p) : (p.pending ?? p.price);
+    const now = back ? holds(r) ?? (p.pending ?? p.price) : to(r, p);
     const tick = phase === "done" && !r.error && r.set ? `<span class="re-tick">${gwSvg("tick")}</span>` : "";
     const say = r.error ? refusal(r) : null;
     const same = !r.error && r.set === false;
     return `<div class="gw-shop gw-mkrow${r.error ? " bad" : ""}" tabindex="0" data-read="${attr(read(p))}"><div class="nm">${reHood(p.hood)}<span>${spEsc(p.address)}</span>${tick}</div>`
-      + `<span class="c re-plus">${same ? tt("re.gw.same", "already set") : tt("re.gw.gain", "{w}/day", {w: reGainText(p.gain || 0)})}</span>`
+      + `<span class="c${back ? "" : " re-plus"}">${back ? tt("re.gw.putback", "put back") : same ? tt("re.gw.same", "already set") : tt("re.gw.gain", "{w}/day", {w: reGainText(p.gain || 0)})}</span>`
       + `<span class="gw-mk">${tt("re.gw.change", "{change} a m²", {change: `<span class="re-gwk"><s>${reP2(was)}</s>${gwSvg("right")}<b>${reP2(now)}</b></span>`})}${
         r.clamped ? ` · ${tt("re.gw.clamped", "the game's limit")}` : ""}</span>`
       + (say ? `<div class="gw-why"><span><b>${say.rule}</b>.${say.fix ? ` ${say.fix}` : ""}</span>${
@@ -24274,7 +24279,7 @@ function gwRent(keys){
           ? tt("re.gw.wait1", {one: "The price applies after the game's <b>7-day wait</b>, on day {d}. The building then fills in about {n} day; nobody moves out at this price.",
               other: "The price applies after the game's <b>7-day wait</b>, on day {d}. The building then fills in about {n} days; nobody moves out at this price."}, {d, n: p.fill})
           : tt("re.gw.wait1.full", "The price applies after the game's <b>7-day wait</b>, on day {d}. The building stays full: nobody moves out at this price.", {d})) : "";
-        return tally + note + (r.error ? `<div class="gw-shops">${row(r, phase)}</div>` : "");
+        return tally + note + (r.error || phase === "undone" ? `<div class="gw-shops">${row(r, phase)}</div>` : "");
       }
       const tally = phase === "ready" ? `<div class="gw-tally"><div><span class="gw-lab">${tt("re.gw.now", "Rent now, a day")}</span><span class="gw-big dim">${fmt(sum(p => p.now))}</span></div>
         <div><span class="gw-lab">${tt("re.gw.full", "Once full, a day")}</span><span class="gw-big">${fmt(sum(p => p.full))}</span></div>

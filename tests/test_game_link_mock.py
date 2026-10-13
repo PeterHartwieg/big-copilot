@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
 sys.path.insert(0, os.path.dirname(__file__))
 from tests import es3_fixture  # noqa: E402
 import game_link_mock  # noqa: E402
+import ba_save  # noqa: E402
 from ba_dashboard import shift_print  # noqa: E402
 
 
@@ -1599,6 +1600,32 @@ class RentWrite(LinkedMock):
         self.assertFalse(answer["rows"][0]["set"])
         self.assertEqual(self.post("undo", {"kind": "rent"}), (409, {"error": "nothing_to_undo"}))
 
+    def served(self):
+        """The served save's (price, pending, days) for the retail building."""
+        status, _, raw = call(self.url + "/save")
+        self.assertEqual(status, 200)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "served.hsg")
+            with open(path, "wb") as fh:
+                fh.write(raw)
+            save = ba_save.load_save(path)
+        key = (self.RETAIL["street"], self.RETAIL["number"])
+        entry = next(e for e in save.items(save.root.get("realEstate")) if save.address(e.get("address")) == key)
+        return (entry["pricePerSqm"], round(entry["pendingPricePerSqm"], 2), entry["daysUntilUpdatingPricePerSqm"])
+
+    def test_an_apply_is_in_the_served_save_and_its_undo_too(self):
+        # The board reads pending prices from the bytes: the next save carries them.
+        self.assertEqual(self.served(), (10.0, self.LOW, 3))
+        status, _ = self.rent(dry=False)
+        self.assertEqual(status, 200)
+        self.assertEqual(self.served(), (10.0, self.HIGH, 7))
+        status, _ = self.post("undo", {"kind": "rent"})
+        self.assertEqual(status, 200)
+        self.assertEqual(self.served(), (10.0, self.LOW, 3))
+        self.rent(dry=False)
+        self.config({"reset": True})
+        self.assertEqual(self.served(), (10.0, self.LOW, 3))
+
     def test_expect_mismatch_is_changed_before_villa(self):
         for item in (self.item(current=11), self.item(pending=0), self.item(self.VILLA, current=11)):
             with self.subTest(item=item):
@@ -1714,6 +1741,7 @@ class RentWrite(LinkedMock):
         for field, value in (("pendingPricePerSqm", 0), ("daysUntilUpdatingPricePerSqm", 6), ("pricePerSqm", 11)):
             with self.subTest(field=field):
                 self.link.rents.clear()
+                self.link.refresh(force=True)  # the served bytes carry an apply
                 self.rent(dry=False)
                 self.link.rents[address][field] = value
                 self.assertEqual(self.post("undo", {"kind": "rent"})[0], 409)

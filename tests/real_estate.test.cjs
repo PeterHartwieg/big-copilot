@@ -313,3 +313,26 @@ test("a pending price fills where the game says it is under market, and only the
   assert.equal(await w.locator('.re-spark .pj').count(), 0);
   assert.doesNotMatch(await w.innerText(), enRe('re.fact.fills', {n: twelfth.fill}));
 });
+
+test('an undo from the strip shows each price going back: from the one set to the one before', async (t) => {
+  const page = await linked(t);
+  await go(page, 'estate/buildings');
+  const over = owned(payload).find(o => o.key === OVER);
+  for (const open of [() => page.locator('#viewCtl [data-gw="rent"]').click(),
+                      () => page.locator(`#secEstate tr[data-re-row="${OVER}"] [data-gw="rent"]`).click()]) {
+    await configure({reset: true, tokens: {[TOKEN]: ORIGIN}, writes: ALL});
+    await open();
+    await page.locator('dialog.gw-dlg[data-phase="ready"]').waitFor();
+    await page.locator('dialog.gw-dlg [data-gw-b="apply"]').click();
+    await page.locator('dialog.gw-dlg[data-phase="done"]').waitFor();
+    await page.locator('dialog.gw-dlg [data-gw-close]').click();
+    await page.locator('#gwToast [data-gw-undo]').click();
+    await page.locator('dialog.gw-dlg[data-phase="undone"]').waitFor();
+    const row = page.locator('dialog.gw-dlg .gw-shop', {hasText: over.address});
+    const p2 = v => page.evaluate(x => reP2(x), v);
+    assert.equal(await row.locator('.re-gwk s').textContent(), await p2(over.best));
+    assert.equal(await row.locator('.re-gwk b').textContent(), await p2(over.price));
+    assert.equal(await row.locator('.c').textContent(), en('re.gw.putback'));
+    await page.locator('dialog.gw-dlg [data-gw-close]').click();
+  }
+});
