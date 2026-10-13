@@ -4281,7 +4281,7 @@
       "bench": [],
       "fewer": [
        {
-        "hours": 40.0,
+        "hours": 50.0,
         "id": "EMPdee",
         "name": "Dee Park",
         "now": 70
@@ -4289,18 +4289,11 @@
       ],
       "hireWeeks": [
        {
-        "band": "full",
-        "days": 3,
-        "hours": 30,
+        "band": "part",
+        "days": 2,
+        "hours": 20,
         "skill": "ba:skill_customerservice",
         "slots": [
-         {
-          "d": 0,
-          "f": 9,
-          "shift": 0,
-          "station": "REGgifts",
-          "t": 19
-         },
          {
           "d": 5,
           "f": 9,
@@ -4443,7 +4436,7 @@
       "bench": [],
       "fewer": [
        {
-        "hours": 40.0,
+        "hours": 50.0,
         "id": "EMPdee",
         "name": "Dee Park",
         "now": 70
@@ -4451,18 +4444,11 @@
       ],
       "hireWeeks": [
        {
-        "band": "full",
-        "days": 3,
-        "hours": 30,
+        "band": "part",
+        "days": 2,
+        "hours": 20,
         "skill": "ba:skill_customerservice",
         "slots": [
-         {
-          "d": 0,
-          "f": 9,
-          "shift": 0,
-          "station": "REGgifts",
-          "t": 19
-         },
          {
           "d": 5,
           "f": 9,
@@ -19660,7 +19646,7 @@
       "skill": "ba:skill_customerservice"
      }
     ],
-    "hoursUncovered": 30,
+    "hoursUncovered": 20,
     "people": 1
    },
    "basis": {
@@ -20037,7 +20023,7 @@
    "cost": {
     "current": 1260.0,
     "currentCover": 0.0,
-    "weekly": 720.0
+    "weekly": 900.0
    },
    "current": {
     "cleaning": 0,
@@ -20291,7 +20277,7 @@
     "ba:skill_customerservice": {
      "have": 1,
      "hire": 1,
-     "hireHours": 30,
+     "hireHours": 20,
      "kind": "serve",
      "max": 2,
      "min": 2,
@@ -20546,7 +20532,7 @@
        "skill": "ba:skill_customerservice"
       }
      ],
-     "hoursUncovered": 30,
+     "hoursUncovered": 20,
      "people": 1
     },
     "bench": [],
@@ -20554,13 +20540,13 @@
     "cost": {
      "current": 1260.0,
      "currentCover": 0.0,
-     "weekly": 720.0
+     "weekly": 900.0
     },
     "headcount": {
      "ba:skill_customerservice": {
       "have": 1,
       "hire": 1,
-      "hireHours": 30,
+      "hireHours": 20,
       "kind": "serve",
       "max": 2,
       "min": 2,
@@ -20618,7 +20604,7 @@
      {
       "d": 0,
       "f": 9,
-      "p": null,
+      "p": 0,
       "s": 0,
       "t": 19
      },
@@ -20693,7 +20679,7 @@
     {
      "d": 0,
      "f": 9,
-     "p": null,
+     "p": 0,
      "s": 0,
      "t": 19
     },
