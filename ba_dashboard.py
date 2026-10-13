@@ -4456,10 +4456,15 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
     # What customers can buy here now, by the game's own list. A shop taken
     # over and changed to another type keeps the old type's stock, prices and
     # last week of sales, none of which it can sell or reprice any more (issue
-    # #493). A product the list does not hold is `retired`: no shelf to plan.
-    # An empty list (a shop not scored yet) says nothing, and the paper bag and
-    # the issued tickets are never on it.
+    # #493). A product neither the list nor the type's own products hold is
+    # `retired`: no shelf to plan. The type's products keep a shelf the player
+    # has just stocked judged before the game lists it. An empty list (a shop
+    # not scored yet) says nothing, and the paper bag and the issued tickets
+    # are never on it.
     offered = {i for i in save.items(b.get("cachedAvailableProducts")) if isinstance(i, str)}
+    if offered:
+        own = ((load_store_rules().get("types") or {}).get(b.get("businessTypeName")) or {}).get("i") or ()
+        offered |= {p for p, _impact in own} | {PAPER_BAG} | ISSUED_ITEMS
 
     lines = []
     # Rows that tie on cover would otherwise reshuffle between runs and page loads.
@@ -4494,8 +4499,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
                 "soldPerDay": round(units_sold[item] / span),
                 "soldPerWeek": round(units_sold[item] / span * 7),
                 **({"issued": True} if item in ISSUED_ITEMS else {}),
-                **({"retired": True} if offered and item not in offered
-                    and item != PAPER_BAG and item not in ISSUED_ITEMS else {}),
+                **({"retired": True} if offered and item not in offered else {}),
                 # Unrounded, for _products() alone; build_core() takes them
                 # off the payload: a price from rounded units is no price.
                 "_sold": units_sold[item] / span,
@@ -8100,7 +8104,10 @@ def _supply_idle(businesses: list, *, index: dict, factories: dict, edges: dict,
         factor, _peak = peak_of(business)
         for line in business["lines"]:
             item, units = line["slug"], line["units"]
-            if units < IDLE_UNITS or (key, item) in made_at and (key, item) not in need_rows:
+            # Stock a converted shop cannot sell is no shelf, and a shop sends
+            # nothing on, so it is neither idle here nor a source for others.
+            if (units < IDLE_UNITS or line.get("retired")
+                    or (key, item) in made_at and (key, item) not in need_rows):
                 continue
             target, source = target_at.get((key, item), (0, None))
             supply = imports.get((key, item))
@@ -8326,14 +8333,16 @@ def _supply(
     """
     index = {b["key"]: i for i, b in enumerate(businesses)}
     # What each shelf sells a trading day (_business); a hand-built business
-    # without it sells at its calendar rate.
-    sold = {b["key"]: {l["slug"]: l.get("tradeRate", l["rate"]) for l in b["lines"]}
+    # without it sells at its calendar rate. A retired line's sales are from
+    # before the shop changed type, and size nothing.
+    sold = {b["key"]: {l["slug"]: l.get("tradeRate", l["rate"]) for l in b["lines"] if not l.get("retired")}
             for b in businesses}
     held = {b["key"]: {l["slug"]: l["units"] for l in b["lines"]} for b in businesses}
     # What each shelf sells a week, as a day: the trading-day rate over the
     # days the shop traded in the last week (_business's weekSold). Every
     # weekly figure reads this; a daily top-up reads the trading-day rate.
-    sold_week = {b["key"]: {l["slug"]: _week_sold(b, l) / 7 for l in b["lines"]} for b in businesses}
+    sold_week = {b["key"]: {l["slug"]: _week_sold(b, l) / 7 for l in b["lines"] if not l.get("retired")}
+                 for b in businesses}
 
     # Most of today is already spent. A save taken at 23:00 on a Saturday has one
     # hour of Saturday's selling left in it, not a whole day of it, and charging
@@ -17093,7 +17102,7 @@ def _market(
     sells = collections.defaultdict(set)
     for b in trading:
         for line in b["lines"]:
-            if line["price"]:
+            if line["price"] and not line.get("retired"):
                 sells[line["slug"]].add(b["neighbourhood"])
     makes = set()
     for plan in save.items(save.root["logisticsManagerPlans"]):

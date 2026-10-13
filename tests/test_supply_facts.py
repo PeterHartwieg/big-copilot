@@ -238,6 +238,11 @@ class RetiredLineTests(unittest.TestCase):
     def test_the_paper_bag_is_never_retired(self):
         self.assertNotIn("retired", self.lines([ROSE])["ba:itemname_paperbag"])
 
+    def test_a_product_the_type_sells_is_not_retired_before_the_game_lists_it(self):
+        # Just stocked, not yet on the list: the florist's own type sells it.
+        flower = "ba:itemname_cheapflower"
+        self.assertNotIn("retired", self.lines([ROSE], sold=(flower,))[flower])
+
     def test_an_empty_list_retires_nothing(self):
         self.assertFalse([l for l in self.lines([]).values() if l.get("retired")])
 
@@ -352,6 +357,17 @@ class ShelfTests(unittest.TestCase):
         self.assertNotIn(SODA, c.supply["facts"].get(str(c.index(SHOP_A)), {}))
         self.assertFalse([r for r in c.supply["shops"] if r["slug"] == SODA])
         self.assertFalse([f for f in c.findings() if f["siteKey"] == site_key(SHOP_A)])
+
+    def test_stock_a_converted_shop_cannot_sell_is_not_idle_nor_sent_on(self):
+        # A shop holding old-type soda beside one that sells soda on no plan:
+        # the old stock is no idle row and no source (via) for the other.
+        c = shelf_company(units=150, stock_at_hub=900)
+        c.shop(SHOP_B, "Converted Shop")
+        c.hold(SHOP_B, SODA, 1500, retired=True)
+        c.run()
+        self.assertFalse([r for r in c.supply["idle"] if r.get("slug") == SODA])
+        self.assertIsNone(c.fact(SHOP_A, SODA).get("via"))
+        self.assertEqual([f["group"] for f in c.findings()], ["unplanned"])
 
     def test_routed_lists_a_positive_stock_target_and_not_a_zero_one(self):
         c, _fact = self.verdict(target=120)
