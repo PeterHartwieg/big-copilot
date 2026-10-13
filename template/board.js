@@ -452,13 +452,37 @@ function odNeed(name){
   const a = odAsked.get(name);
   if(a && a.gen === gen) return false;  // asked already: loading, or failed (odRetry())
   const chain = odChain(name).filter(n => !odReady(n));
-  chain.forEach(n => { if(!odAsked.has(n) || odAsked.get(n).gen !== gen) odAsked.set(n, {gen, state: "loading"}); });
+  /* What the board already holds of this build is not sent again (#327), nor
+     what an earlier request of this build is still bringing (#474): the
+     worker answers in order, so that reply lands first. Should it fail, the
+     section is in error and odError() offers Try again for this one too.
+     Worked out before this request marks its own chain loading. */
+  const have = odChain(name).filter(n => odReady(n) || odInFlight(n, gen));
+  /* The entries this request starts, so its reply can tell what it lost. */
+  const mine = new Map();
+  chain.forEach(n => {
+    const held = odAsked.get(n);
+    if(held && held.gen === gen) return;
+    const entry = {gen, state: "loading"};
+    odAsked.set(n, entry);
+    mine.set(n, entry);
+  });
   let asked;
-  /* What the board already holds of this build is not sent again (#327). */
-  const have = odChain(name).filter(odReady);
   try{ asked = Promise.resolve(SOURCE.section(name, gen, have)); }catch(e){ asked = Promise.reject(e); }
-  asked.then(got => odTake(gen, got), err => odFailed(chain, gen, err));
+  asked.then(got => {
+    odTake(gen, got);
+    /* What this request alone was bringing and its reply left out would
+       otherwise wait for ever, later requests counting on it: an error. */
+    const lost = [...mine].filter(([n, m]) => odAsked.get(n) === m && !odReady(n)).map(([n]) => n);
+    if(lost.length && gen === odGen())
+      odFailed(lost, gen, new Error(tt("nav.od.notSent", "it was left out of the answer")));
+  }, err => odFailed(chain, gen, err));
   return false;
+}
+/* Asked for on board `gen` and on its way: loading, not refused as stale. */
+function odInFlight(name, gen){
+  const a = odAsked.get(name);
+  return !!a && a.gen === gen && a.state === "loading" && !a.stale;
 }
 /* Sections arriving for board `gen`: merged into the English payload (so a
    language switch, which localises from it, keeps them) and localised into
@@ -499,7 +523,7 @@ function odFailed(chain, gen, err){
   if(gen !== odGen()) return;
   odDropHeld(chain);
   /* What waited on it is not done: it is said where it is drawn instead. */
-  odThens = odThens.filter(t => t.keepOnError || !chain.includes(t.name));
+  odThens = odThens.filter(t => t.keepOnError || !odChain(t.name).some(c => chain.includes(c)));
   odRedraw();
 }
 /* The source could not read the save again (SOURCE.watch()'s stale(why)):
@@ -20878,6 +20902,9 @@ function wireSphere(){
     });
     return taken.length;
   };
+  /* For the tests: true once every ball on the shelf has settled, which is when
+     __consumeBalls and a wordmark click take effect. */
+  window.__sphereIdle = () => balls.length > 0 && !balls.some(b => b.busy);
   /* The board's own name: the web page's landing keeps its .wordmark in the
      page until the board replaces it. */
   const wordmark = $("title") || q('.wordmark');

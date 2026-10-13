@@ -16,22 +16,9 @@ before(async()=>{
 });
 after(async()=>{await browser?.close();await new Promise(resolve=>server?.close(resolve));});
 /* Waits out the newest ball's entrance. Spawn and the hook refuse while a ball
-   is busy, and busy clears only in the entrance's last frame (p >= 1). First
-   the ball stands where it rests, full size; the frame before the last is under
-   1 ms short of the end and may already round to that pose. Its step asked for
-   the last frame before this asks for one, so it runs first in any frame
-   stamped past now plus that 1 ms, and then the entrance is over (as in
-   map.test.cjs). Under reduced motion the pose and busy change together. */
+   is busy; the sphere says when none is (as in map.test.cjs). */
 async function entranceOver(page){
-  await page.waitForFunction(()=>{
-    const o=[...document.querySelectorAll('.orb')].pop();
-    return !!o&&/^translate\(-?0px, -?0px\) scale\(1\)$/.test(o.style.transform);
-  },null,{polling:50});
-  await page.evaluate(()=>new Promise(done=>{
-    const seen=performance.now();
-    const frame=t=>t>seen+1?done():requestAnimationFrame(frame);
-    requestAnimationFrame(frame);
-  }));
+  await page.waitForFunction(()=>window.__sphereIdle(),null,{polling:50});
 }
 async function fixture(reduced){
   // Wide enough for three balls: the shelf ends short of the search field.

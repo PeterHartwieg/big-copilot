@@ -29,6 +29,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const {Miniflare, convertV4MiniflareOptions, Response} = require('miniflare');
+const {migrate, vmWorkerSource} = require('./_community.cjs');
 
 const ROOT = path.join(__dirname, '..');
 const WORKER_PATH = path.join(ROOT, 'server', 'worker.mjs');
@@ -54,6 +55,7 @@ const nowSec = () => Math.floor(Date.now() / 1000);
 let mf = null; // shared instance for the standard configuration
 let db = null; // its D1 database
 let workerScript = '';
+let vmScript = ''; // the Worker as a classic script, for diagnosticWorker()
 let ipCounter = 0;
 
 /* ---------------------------------------------------------------- helpers */
@@ -118,23 +120,6 @@ function baseOptions() {
       ASSETS: async () => new Response('static fixture'),
     },
   };
-}
-
-/** Strip comments, then split the migration into single statements for D1. */
-async function applyMigration(target) {
-  const raw = fs.readFileSync(MIGRATION_PATH, 'utf8');
-  const noComments = raw
-    .split('\n')
-    .map((line) => line.replace(/--.*$/, ''))
-    .join('\n');
-  const statements = noComments
-    .split(';')
-    .map((stmt) => stmt.trim())
-    .filter((stmt) => stmt.length > 0);
-  assert.ok(statements.length > 0, 'migrations/0001_community.sql contained no statements');
-  for (const stmt of statements) await target.prepare(stmt).run();
-  const requests = fs.readFileSync(path.join(ROOT,'migrations/0003_feature_requests.sql'),'utf8');
-  for (const stmt of requests.match(/CREATE TABLE[\s\S]*?;|CREATE INDEX[\s\S]*?;|CREATE TRIGGER[\s\S]*?END;/g)) await target.prepare(stmt).run();
 }
 
 function originFor(name) {
@@ -248,10 +233,11 @@ before(async () => {
     `migrations/0001_community.sql not found - schema has not landed yet`,
   );
   workerScript = await bundleWorker();
+  vmScript = await vmWorkerSource(BALLOT);
   mf = new Miniflare(convertV4MiniflareOptions(baseOptions()));
   await mf.ready;
   db = await mf.getD1Database('COMMUNITY_DB');
-  await applyMigration(db);
+  await migrate(db);
 });
 
 beforeEach(async () => {
@@ -788,7 +774,7 @@ test('config: missing IP secret degrades the API to JSON 503 while static still 
   delete options.bindings.COMMUNITY_IP_SECRET;
 
   await withMiniflare(options, async (scoped) => {
-    await applyMigration(await scoped.getD1Database('COMMUNITY_DB'));
+    await migrate(await scoped.getD1Database('COMMUNITY_DB'));
     const origin = originFor('config-no-secret');
 
     await expectJSON(
@@ -948,14 +934,10 @@ test('rate limit: presence has its own budget, so a heartbeat loop stops early a
 
 /* ------------------------------------------ privacy-safe failure events */
 
-// Run the unchanged Worker source with synthetic Web API bindings so exceptions
+// Run the bundled Worker source with synthetic Web API bindings so exceptions
 // and console output can be inspected without runtime-generated access logs.
 function diagnosticWorker({ cacheFails = false } = {}) {
   const events = [];
-  const source = fs.readFileSync(WORKER_PATH, 'utf8')
-    .replace('import FEATURES from "./features.json";', `const FEATURES = ${JSON.stringify(BALLOT)};`)
-    .replace(/import .* from \"\.\/feature_requests\.mjs\";/, fs.readFileSync(path.join(ROOT,'server/feature_requests.mjs'),'utf8').replace(/^export /gm,''))
-    .replace('export default {', 'globalThis.worker = {');
   const context = {
     Request: globalThis.Request, Response: globalThis.Response, URL, TextEncoder, TextDecoder,
     crypto: crypto.webcrypto,
@@ -965,7 +947,7 @@ function diagnosticWorker({ cacheFails = false } = {}) {
       put: async () => { if (cacheFails) throw new Error(DIAGNOSTIC_SENTINEL); },
     } },
   };
-  require('node:vm').runInNewContext(source, context);
+  require('node:vm').runInNewContext(vmScript, context);
   return { worker: context.worker, events };
 }
 
