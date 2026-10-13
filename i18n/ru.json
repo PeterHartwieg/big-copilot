@@ -3069,6 +3069,7 @@
  "nav.od.failed": "Не удалось посчитать: {why}",
  "nav.od.goals": "Расчёт достижений…",
  "nav.od.hiring": "Считаем, кого нужно нанять…",
+ "nav.od.notSent": "его не было в ответе",
  "nav.od.officeStaffing": "Расчёт персонала офисов…",
  "nav.od.openFactory": "Расчёт затрат на фабрики…",
  "nav.od.openStore": "Расчёт планов магазинов…",

@@ -2840,6 +2840,7 @@
  "nav.od.failed": "Calcul impossible : {why}",
  "nav.od.goals": "Calcul des étapes…",
  "nav.od.hiring": "Calcul des besoins en personnel…",
+ "nav.od.notSent": "il manquait dans la réponse",
  "nav.od.officeStaffing": "Calcul du personnel des bureaux…",
  "nav.od.openFactory": "Calcul des coûts des usines…",
  "nav.od.openStore": "Calcul des plans de magasin…",

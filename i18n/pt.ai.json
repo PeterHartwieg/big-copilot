@@ -2674,6 +2674,7 @@
  "nav.od.failed": "claude-opus-5-5",
  "nav.od.goals": "gpt-6",
  "nav.od.hiring": "claude-opus-5-5",
+ "nav.od.notSent": "claude-opus-5-5",
  "nav.od.officeStaffing": "gpt-6",
  "nav.od.openFactory": "gpt-6",
  "nav.od.openStore": "gpt-6",

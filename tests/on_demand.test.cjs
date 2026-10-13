@@ -507,6 +507,127 @@ test('Staffing intent prefetches light planning stages without factory staffing 
   const b = board();
   b.run('delete D.staffing; delete D.officeStaffing; globalThis.document = {hidden: false}; odPrefetch("staffing/schedules"); odPrefetch("staffing/needs")');
   assert.deepEqual(b.asked.map(a => a.name), ['staffing', 'officeStaffing']);
+  // The second request counts on the first, still on its way (#474).
+  assert.deepEqual(b.asked.map(a => a.have), [[], ['staffing']]);
+});
+
+/* Sections of one chain, keyed as SECTIONS keys them, for a reply that sends
+   what was asked less what it lists in `have` (browser_section()). */
+const STAFF_CHAIN = {
+  staffing: {staffing: []},
+  officeStaffing: {officeStaffing: []},
+  factoryStaffing: {factoryStaffing: {cap: [], dem: []}},
+  hiring: {hiring: {sites: [], people: {}}, candidates: []},
+};
+const chainReply = (b, a) => {
+  const chain = JSON.parse(b.run(`JSON.stringify(odChain(${JSON.stringify(a.name)}))`));
+  return {generation: a.gen, sections: Object.fromEntries(chain.filter(n => !a.have.includes(n)).map(n => [n, STAFF_CHAIN[n]]))};
+};
+function schedulesBoard(){
+  const b = board();
+  b.take({meta: {day: 4}, names: {}, businesses: [], supply: {factories: {sites: []}}}, 6);
+  b.run('drawSchedules()');
+  return b;
+}
+
+test('one Schedules draw after a new build sends each section once (#474)', async () => {
+  const b = schedulesBoard();
+  assert.deepEqual(b.asked.map(a => [a.name, a.gen, a.have]), [
+    ['staffing', 6, []],
+    ['officeStaffing', 6, ['staffing']],
+    ['hiring', 6, ['staffing', 'officeStaffing']],
+  ]);
+  const sent = b.asked.flatMap(a => Object.keys(chainReply(b, a).sections));
+  assert.deepEqual(sent, ['staffing', 'officeStaffing', 'factoryStaffing', 'hiring'], 'each section once');
+  for(const a of b.asked){ a.resolve(chainReply(b, a)); await tick(); }
+  for(const n of Object.keys(STAFF_CHAIN)) assert.equal(b.run(`odState("${n}")`), 'ready', n);
+  b.run('drawSchedules()');
+  assert.equal(b.asked.length, 3, 'nothing asked again');
+});
+
+test('an in-flight section that fails is offered again with what counted on it (#474)', async () => {
+  const b = schedulesBoard();
+  for(const a of [...b.asked]){ a.reject(new Error('staffing failed')); await tick(); }
+  for(const n of Object.keys(STAFF_CHAIN)) assert.equal(b.run(`odState("${n}")`), 'error', n);
+  b.run('odRetry("hiring")');
+  const retry = b.asked.at(-1);
+  assert.deepEqual([retry.name, retry.gen, retry.have], ['hiring', 6, []], 'the whole chain again');
+  retry.resolve(chainReply(b, retry));
+  await tick();
+  for(const n of Object.keys(STAFF_CHAIN)) assert.equal(b.run(`odState("${n}")`), 'ready', n);
+});
+
+test('a later request answered after an earlier one failed leaves the failure to retry (#474)', async () => {
+  const b = schedulesBoard();
+  b.asked[0].reject(new Error('staffing failed'));
+  await tick();
+  b.asked[1].resolve(chainReply(b, b.asked[1]));
+  await tick();
+  b.asked[2].resolve(chainReply(b, b.asked[2]));
+  await tick();
+  assert.equal(b.run('odState("staffing")'), 'error');
+  assert.equal(b.run('odReady("hiring")'), false);
+  assert.equal(b.run('odError("hiring")'), true, 'Try again is offered where hiring is drawn');
+  b.run('odRetry("hiring")');
+  const retry = b.asked.at(-1);
+  assert.equal(retry.have.includes('staffing'), false, 'the failed section comes with the retry');
+  retry.resolve(chainReply(b, retry));
+  await tick();
+  assert.equal(b.run('odReady("hiring")'), true);
+});
+
+test('work held on a later section is dropped when an earlier one in its chain fails (#474)', async () => {
+  const b = schedulesBoard();
+  b.run(`globalThis.ran = 0; globalThis.kept = 0;
+    odThen("hiring", () => ran++);
+    odThen("hiring", () => kept++, "keep", true)`);
+  b.asked[0].reject(new Error('staffing failed'));
+  await tick();
+  b.asked[1].resolve(chainReply(b, b.asked[1]));
+  await tick();
+  b.asked[2].resolve(chainReply(b, b.asked[2]));
+  await tick();
+  assert.deepEqual(JSON.parse(b.run('JSON.stringify(odThens.map(t => t.key))')), ['keep'],
+    'only the work that keeps through errors is still held');
+  b.run('odRetry("hiring")');
+  const retry = b.asked.at(-1);
+  retry.resolve(chainReply(b, retry));
+  await tick();
+  assert.equal(b.run('odReady("hiring")'), true);
+  assert.equal(b.run('ran'), 0);
+  assert.equal(b.run('kept'), 1);
+});
+
+test('a reply that leaves out what it alone was bringing makes that an error, not a wait (#474)', async () => {
+  const b = schedulesBoard();
+  // Said in the reader's language, as every message on the board is.
+  b.run('ttLang = "de"; ttTable = {"nav.od.notSent": "DE-not-sent"}');
+  b.asked[0].resolve({generation: 6, sections: {}});
+  await tick();
+  assert.equal(b.run('odState("staffing")'), 'error');
+  assert.equal(b.run('odAsked.get("staffing").error'), 'DE-not-sent');
+  assert.match(b.run('odWaitHtml("staffing")'), /DE-not-sent/);
+  assert.equal(b.run('odError("hiring")'), true, 'what counted on it says so where it is drawn');
+});
+
+test('a stale-refused section is not counted on, and a new build starts afresh (#474)', async () => {
+  const b = schedulesBoard();
+  b.asked[0].reject(Object.assign(new Error('newer build'), {stale: true}));
+  await tick();
+  assert.equal(b.run('odInFlight("staffing", 6)'), false);
+  b.take({meta: {day: 5}, names: {}, businesses: [], supply: {factories: {sites: []}}}, 7);
+  const before = b.asked.length;
+  b.run('drawSchedules()');
+  assert.deepEqual(b.asked.slice(before).map(a => [a.name, a.gen, a.have]), [
+    ['staffing', 7, []],
+    ['officeStaffing', 7, ['staffing']],
+    ['hiring', 7, ['staffing', 'officeStaffing']],
+  ]);
+  // Board 6's late answer is dropped.
+  b.asked[1].resolve(chainReply(b, b.asked[1]));
+  await tick();
+  assert.equal(b.run('odReady("officeStaffing")'), false);
+  assert.equal(b.run('odState("officeStaffing")'), 'loading', 'board 7 still waits for its own');
 });
 
 test('factory planning waits for location and financing before loading or saving its step', () => {

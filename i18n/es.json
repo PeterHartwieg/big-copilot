@@ -2840,6 +2840,7 @@
  "nav.od.failed": "No se pudo calcular: {why}",
  "nav.od.goals": "Calculando los hitos…",
  "nav.od.hiring": "Calculando las necesidades de personal…",
+ "nav.od.notSent": "faltaba en la respuesta",
  "nav.od.officeStaffing": "Calculando el personal de las oficinas…",
  "nav.od.openFactory": "Calculando los costes de fábrica…",
  "nav.od.openStore": "Calculando los planes de tienda…",

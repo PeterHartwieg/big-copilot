@@ -3069,6 +3069,7 @@
  "nav.od.failed": "Could not work this out: {why}",
  "nav.od.goals": "Working out milestones…",
  "nav.od.hiring": "Working out staff needs…",
+ "nav.od.notSent": "it was left out of the answer",
  "nav.od.officeStaffing": "Working out office staffing…",
  "nav.od.openFactory": "Working out factory costs…",
  "nav.od.openStore": "Working out store plans…",

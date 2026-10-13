@@ -2612,6 +2612,7 @@
  "nav.od.failed": "Konnte nicht berechnet werden: {why}",
  "nav.od.goals": "Meilensteine werden berechnet…",
  "nav.od.hiring": "Personalbedarf wird berechnet…",
+ "nav.od.notSent": "es fehlte in der Antwort",
  "nav.od.officeStaffing": "Büropersonal wird berechnet…",
  "nav.od.openFactory": "Fabrikkosten werden berechnet…",
  "nav.od.openStore": "Ladenpläne werden berechnet…",

@@ -2930,6 +2930,7 @@
  "nav.od.failed": "gpt-6.1-sol",
  "nav.od.goals": "gpt-6.1-sol",
  "nav.od.hiring": "gpt-6.1-sol",
+ "nav.od.notSent": "claude-opus-5-5",
  "nav.od.officeStaffing": "gpt-6.1-sol",
  "nav.od.openFactory": "gpt-6.1-sol",
  "nav.od.openStore": "gpt-6.1-sol",
