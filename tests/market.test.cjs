@@ -2,32 +2,17 @@
 // primary products, with office agencies as their own band under the shops.
 // Install Playwright and its Chromium browser to run; NODE_PATH may point at an
 // existing Playwright installation.
-const {test, before, after} = require('node:test');
+const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {en, enRe} = require('./_i18n.cjs');
-const {spawnSync} = require('node:child_process');
-const path = require('node:path');
-const fs = require('node:fs');
-const {chromium} = require('playwright');
+const {suiteBrowser, boardHtml, abortExternal} = require('./_page.cjs');
 
-let browser;
-let html;
-before(async () => {
-  const result = spawnSync(process.env.PYTHON || 'python', ['-c',
-    'from ba_dashboard import render; import sys; sys.stdout.buffer.write(render(None).encode("utf-8"))'],
-  {cwd: path.join(__dirname, '..'), maxBuffer: 4 * 1024 * 1024});
-  assert.equal(result.status, 0, result.stderr?.toString());
-  html = process.env.BOARD_TARGET === 'web'
-    ? fs.readFileSync(path.join(__dirname, '..', 'web', 'index.html'), 'utf8')
-    : result.stdout.toString();
-  browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
-});
-after(async () => { await browser?.close(); });
+const browser = suiteBrowser();
 
 async function grid() {
-  const page = await browser.newPage({viewport: {width: 1280, height: 1100}});
-  await page.route('https://**', route => route.abort());
-  await page.setContent(html, {waitUntil: 'load'});
+  const page = await (await browser()).newPage({viewport: {width: 1280, height: 1100}});
+  await abortExternal(page);
+  await page.setContent(boardHtml(), {waitUntil: 'load'});
   await page.evaluate(() => {
     document.body.classList.add('has-board');
     const hoods = ['ba:neighborhood_hellskitchen', 'ba:neighborhood_industrycity', 'ba:neighborhood_midtown'];
