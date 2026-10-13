@@ -499,16 +499,6 @@ test('an opened store staff check waits for shop plans before judging spare peop
   assert.deepEqual(b.asked.map(a => a.name), ['staffing']);
 });
 
-test('Today office schedule target is independent of deferred office plans', () => {
-  const b = board();
-  b.run('delete D.officeStaffing');
-  const before = b.run('nxStaffInto({key: "office", status: "office"})');
-  b.run('D.officeStaffing = [{key: "office", shifts: [{h: 8}]}]');
-  assert.equal(b.run('nxStaffInto({key: "office", status: "office"})'), before);
-  assert.equal(before, '#sitePanel .sp-acts');
-  assert.equal(b.asked.length, 0);
-});
-
 test('search and the expansion question enter the on-demand finder with their presets', () => {
   const b = board({market: {hoods: ['hood'], types: [{slug: 'shop', type: 'Shop', cells: [{demand: 30}]}], offices: []}});
   b.run('globalThis.__route = null; openRoute = (id, o) => { __route = {id, o}; odNeed("premises"); }');

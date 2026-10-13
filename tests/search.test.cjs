@@ -1363,7 +1363,7 @@ test('the search control wears the New badge until the palette first opens, and 
       if (width <= 560) await page.click('#phoneMore');
       await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
       const shown = () => page.evaluate(() => {
-        const c = ssMastControl(), b = c.querySelector('[data-new-feature="board-search"]');
+        const c = [ssField, ssFieldBtn].find(el => el.isConnected && el.getClientRects().length), b = c.querySelector('[data-new-feature="board-search"]');
         const r = c.getBoundingClientRect(), br = b.getBoundingClientRect(), m = $('mast').getBoundingClientRect();
         return {id: c.id, badge: !b.hidden && br.width > 0, box: [r.left, r.top, r.width, r.height].map(Math.round),
           inside: br.top >= m.top && br.left >= 0 && br.right <= innerWidth, scroll: document.documentElement.scrollWidth, room: document.documentElement.getBoundingClientRect().width};

@@ -361,7 +361,7 @@ def encode(root: dict) -> bytes:
 
 
 def write_link_save(path: str) -> None:
-    """The company tests/game_link_write.test.cjs and the mock's tests share."""
+    """The company tests/game_link_write*.test.cjs and the mock's tests share."""
     with open(path, "wb") as fh:
         fh.write(encode(link_company()))
 
