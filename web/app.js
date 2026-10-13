@@ -2574,7 +2574,9 @@
     // One section of the build `gen` (the board's), computed on demand from
     // the build the worker holds: resolves to {generation, sections}, or
     // rejects stale (err.stale) once a newer build has been asked for.
-    section: (name, gen) => ask({kind: "section", name, gen}),
+    // `have`: the sections of that build the board already holds, left out
+    // of the reply.
+    section: (name, gen, have) => ask({kind: "section", name, gen, have: Array.isArray(have) ? have.slice() : null}),
     watch: (h) => { handlers = h; },
     // The game link, for the board's write buttons: the kinds the mod takes
     // and whose company it is, and the game's day and hour at the last

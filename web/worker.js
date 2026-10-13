@@ -10,7 +10,9 @@
  *             save already on hand, against the history this worker already
  *             holds (names asked for together each keep theirs)
  *   section - a page asks for one section of the build `gen` (SECTIONS in
- *             ba_dashboard.py): computed from the build held here, never a
+ *             ba_dashboard.py), listing in `have` the sections of it the page
+ *             holds already, which are not sent again: computed from the
+ *             build held here, never a
  *             second parse, and never a history write. A section asked for a
  *             build this worker no longer holds, or one still waiting when a
  *             newer build or name is asked for, is answered `stale` unrun;
@@ -230,7 +232,10 @@ onmessage = (e) => {
           postMessage({kind: "section", id: msg.id, stale: true});
           return;
         }
-        const data = py.runPython(`ba_dashboard.browser_section(${JSON.stringify(msg.name)}, ${JSON.stringify(msg.gen)})`);
+        // The sections the board already holds of this build go unsent; a
+        // page that lists none (`have` absent) gets the whole chain.
+        const have = Array.isArray(msg.have) ? msg.have.filter(n => typeof n === "string") : null;
+        const data = py.runPython(`ba_dashboard.browser_section(${JSON.stringify(msg.name)}, ${JSON.stringify(msg.gen)}, ${have ? JSON.stringify(have) : "None"})`);
         postMessage({kind: "section", id: msg.id, data});
       } else if (msg.kind === "build") {
         // Compared whole: a replacement of the same length is still new.
