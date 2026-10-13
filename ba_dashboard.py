@@ -15019,39 +15019,64 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
         shifts.extend(pins)
         return shifts, hire_weeks, here
 
-    def waited_on(shifts, hire_weeks):
-        # The people a week waits on: its hires and the bench members it draws.
-        return (sum(len(weeks) for weeks in hire_weeks.values())
-                + len({s["employee"] for s in shifts if s.get("fromBench")}))
+    def people(shifts, hire_weeks):
+        """Who a week puts to work: (people here, bench members, hires)."""
+        here_ids = {s["employee"] for s in shifts + fixed
+                    if s["employee"] is not None and not s.get("fromBench")}
+        bench_ids = {s["employee"] for s in shifts if s.get("fromBench")}
+        return here_ids, bench_ids, sum(len(weeks) for weeks in hire_weeks.values())
+
+    def snapshot(shifts, hire_weeks, here):
+        # Only the pool's weeks and the hires' change in a placement.
+        return (shifts, hire_weeks, here, {pid: _copy_state(entry) for pid, entry in state.items()
+                                           if pid in start or pid not in keys})
+
+    def restore(saved):
+        for pid in set(state) - keys:
+            del state[pid]
+        state.update(saved[3])
+        return saved[:3]
 
     shifts, hire_weeks, here = place([])
     # Issue #446: a write leaves out every entry that waits on somebody not
     # here yet, so a plan that moved a person off an hour they work now and
     # gave the hour to a hire is a week with fewer people in that hour until
-    # the hire comes. Where the plain week does that, it is placed once more
-    # with everybody's entries as they stand kept wherever the plan still wants
-    # those hours covered (_hold_rows()), and the rest placed round them. That
-    # week is kept unless it waits on more people: the fewest people first.
+    # the hire comes. Where the plain week does that, it is placed again with
+    # the entries as they stand held where the plan still wants those hours
+    # (_hold_rows()) and the rest placed round them: first every entry, in a
+    # role with such an hour, of somebody the plain week gives hours, then
+    # only the entries on those hours. The fewest people come first, so a held
+    # week is kept only if it puts nobody to work the plain week leaves at
+    # 0 h, draws the same bench members, hires no more people, and leaves
+    # fewer hours short; of two such, the one with fewer short. Otherwise the
+    # plain week stands.
     dropped, missing = _waiting_drops(shifts, standing, role_keys) if standing else ([], 0)
     if dropped:
-        # Only the pool's weeks and the hires' change in a placement.
-        plain = (shifts, hire_weeks, here, {pid: _copy_state(entry) for pid, entry in state.items()
-                                            if pid in start or pid not in keys})
-        best = (waited_on(shifts, hire_weeks), missing)
-        for held in (standing, dropped):
+        plain = snapshot(shifts, hire_weeks, here)
+        here_ids, bench_ids, hired = people(shifts, hire_weeks)
+        short_roles = {role_keys.get(row["station"]) for row in dropped}
+        tries = [
+            [row for row in standing
+             if row["employee"] in here_ids and role_keys.get(row["station"]) in short_roles],
+            [row for row in dropped if row["employee"] in here_ids],
+        ]
+        best, kept = missing, None
+        for held in tries:
+            if not held or (kept is not None and held == kept[1]):
+                continue
             for pid, entry in start.items():
                 state[pid] = _copy_state(entry)
             for pid in set(state) - keys:
                 del state[pid]
             shifts, hire_weeks, here = place(held)
-            rank = (waited_on(shifts, hire_weeks), _waiting_drops(shifts, standing, role_keys)[1])
-            if rank[0] <= best[0] and rank[1] < best[1]:
-                break
-        else:
-            shifts, hire_weeks, here = plain[:3]
-            for pid in set(state) - keys:
-                del state[pid]
-            state.update(plain[3])
+            now_here, now_bench, now_hired = people(shifts, hire_weeks)
+            short = _waiting_drops(shifts, standing, role_keys)[1]
+            if (now_here <= here_ids and now_bench == bench_ids and now_hired <= hired
+                    and short < best):
+                best, kept = short, (snapshot(shifts, hire_weeks, here), held)
+                if not short:
+                    break
+        shifts, hire_weeks, here = restore(kept[0] if kept else plain)
     shifts.sort(
         key=lambda s: (s["wd"], s["from"], s["to"], str(s["station"]), str(s["employee"]))
     )

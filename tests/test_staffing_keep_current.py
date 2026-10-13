@@ -48,6 +48,49 @@ def place(people, current, keep, stations=1, wanted=None):
     return week, need
 
 
+OTHER = "ba:skill_lawyer"
+WEEKDAYS = (0, 1, 2, 3, 4)
+
+
+def place_roles(people, current, keep, roles, bench=()):
+    """_place_week() on several roles: {skill: {station id: {weekday: (from, to)}}}.
+
+    `bench` are people of `people` not assigned here (addr None), offered as
+    the unassigned bench. Goes through _place_week(), blackout re-cut and all.
+    """
+    posts, need = [], {}
+    for skill, stations in roles.items():
+        runs = {}
+        for index, (sid, days) in enumerate(stations.items()):
+            posts.append({"id": sid, "skill": skill, "rate": 1, "name": sid})
+            runs[index] = [set(range(*days[wd])) if wd in days else set() for wd in range(7)]
+        need[skill] = {"need": [[sum(h in runs[i][wd] for i in runs) for h in range(24)]
+                                for wd in range(7)],
+                       "basis": [["test"] * 24 for _ in range(7)], "stations": runs}
+    grid = {"roles": [{"skill": skill, "label": skill} for skill in roles], "stations": posts}
+    state = {p["id"]: ba_dashboard._fresh_state() for p in people}
+    return ba_dashboard._place_week(grid, need, ba_dashboard.ALL_DAY_OPEN, [], list(people),
+                                    {p["id"]: p for p in people}, {"key": "k", "name": "T"},
+                                    [p for p in people if p["id"] in bench], state,
+                                    current=current, keep=keep)
+
+
+def workers(week):
+    """(people here with hours, bench members drawn, hires)."""
+    here = {s["employee"] for s in week["shifts"]
+            if s["employee"] is not None and not s.get("fromBench")}
+    bench = {s["employee"] for s in week["shifts"] if s.get("fromBench")}
+    return here, bench, hires(week)
+
+
+def hours_of(week):
+    out = collections.Counter()
+    for s in week["shifts"]:
+        if s["employee"] is not None:
+            out[s["employee"]] += s["to"] - s["from"]
+    return out
+
+
 def fewer(week, current):
     """Person-hours the plan, written before its hires come, leaves short of now."""
     now, here, planned = (collections.Counter() for _ in range(3))
@@ -192,6 +235,87 @@ class CallersTest(unittest.TestCase):
         with without_keep():
             plain = self.office()
         self.assertFalse({3, 4, 5, 6} <= set(staffed_days(plain)), staffed_days(plain))
+
+
+class FewestPeopleTest(unittest.TestCase):
+    """Review round 1 on PR #459: holding entries never costs the owner's rule,
+    the fewest people for the needed hours (spares go to 0 h, nobody surplus is
+    kept by trimming a colleague, a held week hires nobody more)."""
+
+    def assertNoMorePeople(self, plain, week):
+        here, bench, hired = workers(week)
+        here0, bench0, hired0 = workers(plain)
+        self.assertLessEqual(here, here0)
+        self.assertEqual(bench, bench0)
+        self.assertLessEqual(hired, hired0)
+
+    def test_a_role_with_no_short_hour_is_left_as_planned(self):
+        # Role A waits on a hire; role B needs one person and has two now. The
+        # plain week gives b1 the whole of B and leaves b2 spare at 0 h; holding
+        # b2's Wednesday and Thursday would cut b1 to 24 h to keep a surplus person.
+        roles = {SKILL: {"pc0": {wd: OPEN for wd in range(7)}},
+                 OTHER: {"desk": {wd: OPEN for wd in (0, 1, 2, 3)}}}
+        people = [person("a"), person("b1", skills={OTHER}), person("b2", skills={OTHER})]
+        current = ([entry("a", wd) for wd in (3, 4, 5, 6)]
+                   + [entry("b1", wd, station="desk") for wd in (0, 1)]
+                   + [entry("b2", wd, station="desk") for wd in (2, 3)])
+        plain = place_roles(people, current, False, roles)
+        week = place_roles(people, current, True, roles)
+        self.assertEqual(hours_of(plain)["b2"], 0)
+        self.assertEqual(hours_of(week)["b2"], 0)
+        self.assertEqual(hours_of(week)["b1"], hours_of(plain)["b1"])
+        self.assertNoMorePeople(plain, week)
+        # Role A's own drop is still held.
+        self.assertEqual(sorted(s["wd"] for s in week["shifts"] if s["employee"] == "a"),
+                         [3, 4, 5, 6])
+
+    def test_nobody_the_plain_week_leaves_spare_is_given_hours(self):
+        # Three weekday-only people for one station 09-21 every day: the plain
+        # week is two of them and a hire for the weekend.
+        roles = {SKILL: {"pc0": {wd: OPEN for wd in range(7)}}}
+        people = [person(f"e{i}", weekendsOff=True) for i in range(3)]
+        current = [entry("e0", 0), entry("e0", 1), entry("e1", 2), entry("e1", 3), entry("e2", 4)]
+        plain = place_roles(people, current, False, roles)
+        week = place_roles(people, current, True, roles)
+        self.assertNoMorePeople(plain, week)
+
+    def test_a_bench_member_is_never_traded_for_a_hire(self):
+        # A weekday-only employee, a part-timer and a weekday-only bench member
+        # who keeps the mornings free.
+        roles = {SKILL: {"pc0": {wd: OPEN for wd in range(7)}}}
+        people = [person("e", weekendsOff=True), person("p", band=(10, 30)),
+                  person("z", weekendsOff=True, blackouts=[(0, 12)], addr=None)]
+        current = [entry("e", 3), entry("e", 4), entry("p", 2), entry("p", 5)]
+        plain = place_roles(people, current, False, roles, bench={"z"})
+        week = place_roles(people, current, True, roles, bench={"z"})
+        self.assertEqual(workers(plain)[1:], ({"z"}, 0))
+        self.assertNoMorePeople(plain, week)
+
+    def test_sweep_across_roles(self):
+        """Small one- and two-role sites with people on rotated days now: a
+        held week never puts anybody to work the plain week leaves at 0 h,
+        never draws other bench members and never hires more."""
+        shapes = [(0, 1, 2, 3), (3, 4, 5, 6), (0, 2, 4, 6), (1, 2)]
+        for crew, second, days, weekends_off in itertools.product(
+                (1, 2, 3), (0, 1, 2), shapes, (False, True)):
+            roles = {SKILL: {"pc0": {wd: OPEN for wd in range(7)},
+                             "pc1": {wd: OPEN for wd in WEEKDAYS}}}
+            if second:
+                roles[OTHER] = {"desk": {wd: OPEN for wd in (0, 1, 2, 3)}}
+            people = [person(f"p{i}", weekendsOff=weekends_off and i == 0) for i in range(crew)]
+            people += [person(f"o{i}", skills={OTHER}) for i in range(second)]
+            current, seen = [], set()
+            for i, who in enumerate(p["id"] for p in people):
+                station = "desk" if who.startswith("o") else ("pc0", "pc1")[i % 2]
+                for wd in ((d + i) % 7 for d in days):
+                    if (station, wd) not in seen and wd in roles[OTHER if station == "desk" else SKILL][station]:
+                        seen.add((station, wd))
+                        current.append(entry(who, wd, station=station))
+            with self.subTest(crew=crew, second=second, days=days, weekends_off=weekends_off):
+                plain = place_roles(people, current, False, roles)
+                week = place_roles(people, current, True, roles)
+                self.assertNoMorePeople(plain, week)
+                self.assertLessEqual(fewer(week, current), fewer(plain, current))
 
 
 class HoldRowsTest(unittest.TestCase):
