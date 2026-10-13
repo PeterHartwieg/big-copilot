@@ -75,10 +75,12 @@ PLURAL_SUFFIX = re.compile(r"_(" + "|".join(PLURAL_CATEGORIES) + r")$")
 # The placeholder syntax tt() and msg() share, and the specs both implement.
 FIELD = re.compile(r"\{(\w+)(?::([^{}]+))?\}")
 SPECS = re.compile(r",|\$|\$c|day|,?\.\df")
-# CLDR plural categories of the languages Big Copilot is translated into.
-PLURALS = {"en": ("one", "other"), "de": ("one", "other"), "pt": ("one", "many", "other"),
-           "fr": ("one", "many", "other"), "es": ("one", "many", "other"), "ru": ("one", "few", "many", "other"),
-           "ko": ("other",), "tr": ("one", "other"), "it": ("one", "many", "other")}
+# CLDR plural categories of the languages Big Copilot is translated into:
+# UI_LANGUAGES in ba_dashboard.py, the one table of them. Imported at module
+# level on purpose (about 0.4 s): PLURALS is a module constant that
+# tools/translation_catalogue.py and the tests read and extend.
+from ba_dashboard import UI_LANGUAGES  # noqa: E402
+PLURALS = {code: lang["plurals"] for code, lang in UI_LANGUAGES.items()}
 ATTRS = ("data-tt-title", "data-tt-aria-label", "data-tt-placeholder", "data-tt-tip")
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 

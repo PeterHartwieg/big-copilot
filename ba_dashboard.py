@@ -609,14 +609,31 @@ GAME_NAME_LANGS = {
     "fi": "Suomi", "tr": "Türkçe", "el": "Ελληνικά", "ru": "Русский", "uk": "Українська",
     "ja": "日本語", "ko": "한국어", "zh-cn": "简体中文", "zh-tw": "繁體中文",
 }
-# The languages Big Copilot's own text comes in (TT_LANGS in web/i18n.js, one
-# i18n/<lang>.json each; tests/test_game_names.py holds the three together).
-# The footer's Language list shows them first, as "Whole page"; every other
-# entry of GAME_NAME_LANGS changes only the game's names.
-UI_LANGS = ("en", "de", "es", "fr", "it", "pt", "ru", "ko", "tr")
-# The ones still mostly machine-drafted (i18n/<lang>.ai.json): the footer says
-# so under the picker, with a link to help check them.
-UI_LANGS_DRAFTED = ("es", "fr", "it", "pt", "ru", "ko", "tr")
+# The languages Big Copilot's own text comes in, one i18n/<lang>.json each
+# but English, in GAME_NAME_LANGS' order (which names each in its own words).
+# This is the one table: every other list of them is read off it or held to
+# it. Each language has
+#   locale   the number locale the page formats in (TT_NUM_LOCALES in
+#            web/i18n.js, whose TT_LANGS lists these codes in this order)
+#   plurals  its CLDR plural categories (PLURALS in tools/i18n.py reads them)
+#   drafted  still mostly machine-drafted (i18n/<lang>.ai.json): the footer
+#            says so under the picker, with a link to help check it
+# tests/test_i18n_languages.py holds web/i18n.js, i18n/ and Intl's plural rules
+# to it. The footer's Language list shows these first, as "Whole page"; every
+# other entry of GAME_NAME_LANGS changes only the game's names.
+UI_LANGUAGES = {
+    "en": {"locale": "en-US", "plurals": ("one", "other"), "drafted": False},
+    "de": {"locale": "de-DE", "plurals": ("one", "other"), "drafted": False},
+    "es": {"locale": "es-ES", "plurals": ("one", "many", "other"), "drafted": True},
+    "fr": {"locale": "fr-FR", "plurals": ("one", "many", "other"), "drafted": True},
+    "it": {"locale": "it-IT", "plurals": ("one", "many", "other"), "drafted": True},
+    "pt": {"locale": "pt-BR", "plurals": ("one", "many", "other"), "drafted": True},
+    "tr": {"locale": "tr-TR", "plurals": ("one", "other"), "drafted": True},
+    "ru": {"locale": "ru-RU", "plurals": ("one", "few", "many", "other"), "drafted": True},
+    "ko": {"locale": "ko-KR", "plurals": ("other",), "drafted": True},
+}
+UI_LANGS = tuple(UI_LANGUAGES)
+UI_LANGS_DRAFTED = tuple(code for code, lang in UI_LANGUAGES.items() if lang["drafted"])
 # A language whose file names fewer of the English name keys than this is left
 # out rather than shown half in English (the game's ar.json names none).
 NAME_COVERAGE = 0.5

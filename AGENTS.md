@@ -86,7 +86,11 @@ Everything else:
   repo (`docs/contributing.md`, "Supporters list")
 - changelog: `web/changelog.json`
 - UI text in other languages: `tt()` and the loader in `web/i18n.js`, `msg()` in
-  `ba_dashboard.py`, the catalogue tool `tools/i18n.py`, the translations in `i18n/`
+  `ba_dashboard.py`, the catalogue tool `tools/i18n.py`, the translations in `i18n/`.
+  The languages themselves (code, number locale, plural categories, drafted) are one
+  table, `UI_LANGUAGES` in `ba_dashboard.py`; `tests/test_i18n_languages.py` holds
+  `web/i18n.js`, `i18n/` and Intl to it, and the Node tests read `UI_LANGS` from
+  `tests/_i18n.cjs`
 - supporting a new game build: `docs/game-update.md`, with its scripts in `tools/game_update/`
 - game link: the wire contract is `docs/game-link-api.md`; the mod is `mod/BigCopilotLink/`
   (C#, built only inside the modding SDK's Unity project, never here); the mock that

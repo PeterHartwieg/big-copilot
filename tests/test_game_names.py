@@ -145,7 +145,7 @@ class Picker(unittest.TestCase):
             with self.subTest(landing=landing):
                 markup = footer_html(landing=landing, site=True)
                 self.assertIn('data-tt="foot.lang.head"', markup)
-                self.assertIn('<div class="gn-pick" data-gn-pick data-value="en" data-drafted="es fr it pt ru ko tr">', markup)
+                self.assertIn('<div class="gn-pick" data-gn-pick data-value="en" data-drafted="es fr it pt tr ru ko">', markup)
                 self.assertIn('aria-haspopup="listbox"', markup)
                 # The button shows the first choice until the script paints the kept one.
                 self.assertIn('<span class="gn-cur" lang="en" translate="no">English</span>', markup)
@@ -161,15 +161,7 @@ class Picker(unittest.TestCase):
                 self.assertIn(("de", "Deutsch"), options)
                 self.assertIn(("ja", "日本語"), options)
 
-    def test_the_whole_page_languages_are_the_ones_with_ui_text(self):
-        # UI_LANGS (the footer's "Whole page"), TT_LANGS in web/i18n.js and the
-        # translations under i18n/ name the same languages.
-        script = (ROOT / "web/i18n.js").read_text(encoding="utf-8")
-        tt = re.search(r"const TT_LANGS = \[([^\]]*)\]", script).group(1)
-        self.assertEqual(sorted(re.findall(r'"([a-z-]+)"', tt)), sorted(UI_LANGS))
-        ours = sorted(n[:-5] for n in os.listdir(ROOT / "i18n") if n.endswith(".json") and n.count(".") == 1)
-        self.assertEqual(ours, sorted(set(UI_LANGS) - {"en"}))
-        self.assertTrue(set(UI_LANGS) <= set(GAME_NAME_LANGS))
+    # UI_LANGS against web/i18n.js and i18n/: tests/test_i18n_languages.py.
 
     def test_the_drafted_note_names_the_languages_still_mostly_unreviewed(self):
         # The footer's "Machine-translated" note shows for a language while more
