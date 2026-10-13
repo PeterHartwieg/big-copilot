@@ -11685,10 +11685,7 @@ def _spread_open(residue: list, shifts: list, pool: list, state: dict, before: d
                     if after < min(floor, here):
                         continue
                     trial = _copy_state(state[pid])
-                    trial["hours"] -= mine["to"] - mine["from"]
-                    trial["busy"][mine["wd"]].difference_update(range(mine["from"], mine["to"]))
-                    if not trial["busy"][mine["wd"]]:
-                        trial["days"].discard(mine["wd"])
+                    _week_take(trial, mine["wd"], mine["from"], mine["to"], drop_day=True)
                     if not _can_work(person, trial, open_row):
                         continue
                     days_after = len(trial["days"] | {wd}) - before[pid][1]
@@ -11714,16 +11711,7 @@ def _spread_open(residue: list, shifts: list, pool: list, state: dict, before: d
             stuck.add((wd, hour))
             continue
         open_row, person, mine = swap
-        theirs = state[person["id"]]
-        theirs["hours"] -= mine["to"] - mine["from"]
-        theirs["busy"][mine["wd"]].difference_update(range(mine["from"], mine["to"]))
-        if not theirs["busy"][mine["wd"]]:
-            theirs["days"].discard(mine["wd"])
-        if not any(other is not mine and other["employee"] == person["id"]
-                   and other["station"] == mine["station"] and other["wd"] == mine["wd"]
-                   for other in shifts):
-            theirs["stations"].discard((mine["station"], mine["wd"]))
-        mine.update(employee=None, name=None, fromBench=False)
+        _week_off(mine, person, state, shifts)
         _take_over(open_row, person, state)
         residue.remove(open_row)
         residue.append(mine)
@@ -11962,13 +11950,29 @@ def _lift_hire(hire: dict, rows: list, givers: dict, state: dict, before: dict,
     return True
 
 
+def _week_take(week: dict, wd: int, start: int, end: int, drop_day: bool = False) -> None:
+    """Take the hours start..end of day `wd` off one person's week.
+
+    Only the hours and the busy hours move: a piece cut off the end of a line
+    leaves its head with the person, so they keep the day. `drop_day` is for a
+    whole line, and lets the day go once nothing of it is left busy. The
+    station and the row itself are `_week_off()`'s.
+    """
+    week["hours"] -= end - start
+    week["busy"][wd].difference_update(range(start, end))
+    if drop_day and not week["busy"][wd]:
+        week["days"].discard(wd)
+
+
 def _week_off(row: dict, person: dict, state: dict, rows: list) -> None:
-    """Take one of a person's lines off their week, leaving the row nobody's."""
+    """Take one of a person's lines off their week, leaving the row nobody's.
+
+    The station goes only when nothing of theirs is left on it that day: a
+    person who holds both pieces of a split day keeps the station until the
+    second goes.
+    """
     mine = state[person["id"]]
-    mine["hours"] -= row["to"] - row["from"]
-    mine["busy"][row["wd"]].difference_update(range(row["from"], row["to"]))
-    if not mine["busy"][row["wd"]]:
-        mine["days"].discard(row["wd"])
+    _week_take(mine, row["wd"], row["from"], row["to"], drop_day=True)
     if not any(other is not row and other["employee"] == person["id"]
                and other["station"] == row["station"] and other["wd"] == row["wd"]
                for other in rows):
@@ -12826,23 +12830,7 @@ def _take_over(shift: dict, taker: dict, state: dict) -> None:
 
 def _hand_over(shift: dict, donor: dict, taker: dict, state: dict, shifts: list) -> None:
     """Move one whole shift from the donor's week to the taker's, state and row alike."""
-    hours = shift["to"] - shift["from"]
-    mine = state[donor["id"]]
-    mine["hours"] -= hours
-    mine["busy"][shift["wd"]].difference_update(range(shift["from"], shift["to"]))
-    if not mine["busy"][shift["wd"]]:
-        mine["days"].discard(shift["wd"])
-    # Only when nothing of theirs is left on that station that day. A person who
-    # holds both pieces of a split day keeps the station until the second goes,
-    # which is the one thing this function used to get wrong.
-    if not any(
-        other is not shift
-        and other["employee"] == donor["id"]
-        and other["station"] == shift["station"]
-        and other["wd"] == shift["wd"]
-        for other in shifts
-    ):
-        mine["stations"].discard((shift["station"], shift["wd"]))
+    _week_off(shift, donor, state, shifts)
     _take_over(shift, taker, state)
 
 
@@ -12856,9 +12844,7 @@ def _piece_over(shift: dict, donor: dict, taker: dict, state: dict, shifts: list
     third priority is the longest shifts it can manage, and this is the second.
     """
     start = shift["to"] - take
-    mine = state[donor["id"]]
-    mine["hours"] -= take
-    mine["busy"][shift["wd"]].difference_update(range(start, shift["to"]))
+    _week_take(state[donor["id"]], shift["wd"], start, shift["to"])
     shift["to"] = start
     shift["hours"] = shift["to"] - shift["from"]
     piece = dict(shift, **{"from": start, "to": start + take})
@@ -13221,9 +13207,8 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set, only=Non
             index, take = picked
             row = rows[index]
             start = row["to"] - take
-            mine, theirs = own(row["employee"]), weeks[pid]
-            mine["hours"] -= take
-            mine["busy"][row["wd"]].difference_update(range(start, row["to"]))
+            theirs = weeks[pid]
+            _week_take(own(row["employee"]), row["wd"], start, row["to"])
             theirs["hours"] += take
             theirs["busy"][row["wd"]].update(range(start, row["to"]))
             theirs["days"].add(row["wd"])
@@ -13364,9 +13349,8 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set, only=Non
             "station": shift["station"],
         }):
             return False
-        mine, theirs = weeks[giver["id"]], weeks[taker["id"]]
-        mine["hours"] -= take
-        mine["busy"][shift["wd"]].difference_update(range(start, shift["to"]))
+        theirs = weeks[taker["id"]]
+        _week_take(weeks[giver["id"]], shift["wd"], start, shift["to"])
         theirs["hours"] += take
         theirs["busy"][shift["wd"]].update(range(start, shift["to"]))
         theirs["days"].add(shift["wd"])

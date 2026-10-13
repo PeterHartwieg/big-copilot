@@ -3258,5 +3258,96 @@ print(json.dumps(row["shifts"], sort_keys=True))
         self.assertTrue(json.loads(made[0]))
 
 
+class WeekTakeTest(unittest.TestCase):
+    """`_week_take()` and `_week_off()`, the one place a week gives hours up.
+
+    Every caller that takes hours off somebody's week goes through these two:
+    a piece cut off the end of a line (the day stays), a whole line on a trial
+    copy (the day goes once it is empty), and a whole line off the real week
+    (the station and the row as well).
+    """
+
+    @staticmethod
+    def person(pid):
+        return {"id": pid, "name": pid.upper(), "addr": 1}
+
+    @staticmethod
+    def line(pid, wd, start, end, station=1):
+        return {"wd": wd, "station": station, "skill": SERVICE, "kind": "serve",
+                "from": start, "to": end, "employee": pid, "name": pid.upper(),
+                "hours": end - start, "fromBench": False}
+
+    def week_with(self, *lines):
+        state = {"a": ba_dashboard._fresh_state(), "b": ba_dashboard._fresh_state()}
+        for row in lines:
+            ba_dashboard._take_over(row, self.person(row["employee"]), state)
+        return state
+
+    def test_a_piece_keeps_the_day_even_when_it_empties_it(self):
+        state = self.week_with(self.line("a", 2, 8, 16))
+        week = state["a"]
+        ba_dashboard._week_take(week, 2, 12, 16)
+        self.assertEqual(week["hours"], 4)
+        self.assertEqual(week["busy"][2], set(range(8, 12)))
+        self.assertEqual(week["days"], {2})
+        # The partial form never drops the day, even when nothing is left busy
+        # (`_top_up_short()` hands a whole line over this way).
+        ba_dashboard._week_take(week, 2, 8, 12)
+        self.assertEqual(week["busy"][2], set())
+        self.assertEqual(week["days"], {2})
+        self.assertEqual(week["stations"], {(1, 2)}, "the station is not its business")
+
+    def test_a_whole_line_drops_the_day_only_once_it_is_empty(self):
+        state = self.week_with(self.line("a", 3, 6, 10), self.line("a", 3, 14, 18))
+        trial = ba_dashboard._copy_state(state["a"])
+        ba_dashboard._week_take(trial, 3, 6, 10, drop_day=True)
+        self.assertEqual(trial["days"], {3}, "the evening line still works that day")
+        ba_dashboard._week_take(trial, 3, 14, 18, drop_day=True)
+        self.assertEqual(trial["days"], set())
+        self.assertEqual(trial["hours"], 0)
+        self.assertEqual(state["a"]["hours"], 8, "the copy leaves the real week alone")
+
+    def test_week_off_keeps_a_station_another_line_still_holds(self):
+        first, second = self.line("a", 1, 6, 10), self.line("a", 1, 14, 18)
+        other = self.line("a", 1, 10, 14, station=2)
+        rows = [first, second, other]
+        state = self.week_with(*rows)
+        ba_dashboard._week_off(first, self.person("a"), state, rows)
+        self.assertEqual(state["a"]["stations"], {(1, 1), (2, 1)})
+        self.assertEqual(state["a"]["days"], {1})
+        self.assertEqual((first["employee"], first["name"], first["fromBench"]),
+                         (None, None, False))
+        ba_dashboard._week_off(other, self.person("a"), state, rows)
+        self.assertEqual(state["a"]["stations"], {(1, 1)})
+        ba_dashboard._week_off(second, self.person("a"), state, rows)
+        self.assertEqual(state["a"]["stations"], set())
+        self.assertEqual(state["a"]["days"], set())
+        self.assertEqual(state["a"]["hours"], 0)
+
+    def test_hand_over_moves_the_whole_line(self):
+        row = self.line("a", 4, 8, 16)
+        rows = [row]
+        state = self.week_with(row)
+        ba_dashboard._hand_over(row, self.person("a"), self.person("b"), state, rows)
+        self.assertEqual((state["a"]["hours"], state["a"]["days"], state["a"]["stations"]),
+                         (0, set(), set()))
+        self.assertEqual((state["b"]["hours"], state["b"]["days"], state["b"]["stations"]),
+                         (8, {4}, {(1, 4)}))
+        self.assertEqual((row["employee"], row["name"]), ("b", "B"))
+
+    def test_piece_over_leaves_the_donor_the_head(self):
+        row = self.line("a", 5, 8, 16)
+        rows = [row]
+        state = self.week_with(row)
+        piece = ba_dashboard._piece_over(row, self.person("a"), self.person("b"),
+                                         state, rows, 3)
+        self.assertEqual((row["from"], row["to"], row["hours"]), (8, 13, 5))
+        self.assertEqual((piece["from"], piece["to"], piece["employee"]), (13, 16, "b"))
+        self.assertEqual(state["a"]["busy"][5], set(range(8, 13)))
+        self.assertEqual((state["a"]["hours"], state["a"]["days"], state["a"]["stations"]),
+                         (5, {5}, {(1, 5)}))
+        self.assertEqual(state["b"]["busy"][5], set(range(13, 16)))
+
+
 if __name__ == "__main__":
     unittest.main()
