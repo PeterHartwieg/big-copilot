@@ -179,3 +179,19 @@ test('missing game tables, prices, recipes and buildings retain existing fallbac
   const noBox = fixture(); delete noBox.facts.products.grain.bx;
   assert.equal(create(frozen(noBox)).boxes({beer: 2}), 116);
 });
+
+/* The game values come from the payload alone (issue #347). */
+test('a missing game value fails loudly instead of being guessed', () => {
+  for(const [where, key] of [['game', 'driverHours'], ['game', 'hqHours']]){
+    const {facts, ...rest} = fixture();
+    const copy = structuredClone(facts);
+    delete copy[where][key];
+    const m = create({...rest, facts: copy});
+    assert.throws(() => m.running({counts: {beer: 1}}), new RegExp(`openFactory\\.${where}\\.${key} is missing`));
+  }
+  const {facts, ...rest} = fixture();
+  const copy = structuredClone(facts);
+  delete copy.shelf.cc;
+  assert.throws(() => create({...rest, facts: copy}).investment({counts: {beer: 1}, building: {key: 'b', m2: 100}}),
+    /openFactory\.shelf\.cc is missing/);
+});

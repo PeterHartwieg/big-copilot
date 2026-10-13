@@ -1,12 +1,13 @@
 """The cheapest campaign mix (docs/dashboard-reference.md, Promotion).
 
-marketing_score() is the game's own formula, so it is held against every
-promotion the saves on this machine store, when there are any; the optimizer
-is held to Peter's rule on synthetic sites. No save is ever committed.
+marketing_score() is the game's own formula; the owner holds it against the
+promotion every save on his machine stores with tools/check_marketing.py,
+which is not a test because it reads private saves. Here everything is
+synthetic: the formula on hand-made sites, and the optimizer held to Peter's
+rule. No save is ever committed.
 """
 from __future__ import annotations
 
-import glob
 import os
 import sys
 import unittest
@@ -373,38 +374,6 @@ class Finding(MsgAsserts, unittest.TestCase):
         # Its plan reaches 100 with what it knows: no line.
         self.assertEqual(_promotion([_site("a", "A", _mk(["SmallInternet"], ["SmallInternet"], 80, 100, 100, 100,
                                                         visit=[BILLBOARDS]))]), [])
-
-
-class AgainstTheSaves(unittest.TestCase):
-    """The formula against the promotion each save stores for each site."""
-
-    def test_every_stored_promotion(self):
-        saves = glob.glob(os.path.join(d.SAVE_ROOT, "**", "*.hsg"), recursive=True) if os.path.isdir(d.SAVE_ROOT) else []
-        if not saves:
-            self.skipTest("no saves on this machine")
-        from ba_save import load_save
-        checked = 0
-        for path in saves:
-            try:
-                save = load_save(path)
-            except Exception:  # noqa: BLE001 - an unreadable save is check_saves.py's business
-                continue
-            for b in save.items(save.root.get("BuildingRegistrations")):
-                if not b.get("RentedByPlayer"):
-                    continue
-                row = d.load_buildings().get((b["StreetName"], b["StreetNumber"]))
-                if not row or row.get("t") not in d.MARKETING_REACH or not row.get("m"):
-                    continue
-                if b.get("businessTypeName") in (None, "ba:businesstype_empty"):
-                    continue
-                promo = save.deref(b.get("promotion")) or {}
-                on = {c.get("marketingTypeName") for c in save.items(b.get("marketingCampaigns")) if c.get("enabled")}
-                got = d.marketing_score(promo.get("trafficIndex", 0), on, row["m"], row["t"], d.hood_key(row))
-                self.assertEqual(got, (promo.get("marketing"), promo.get("total")),
-                                 f"{os.path.basename(path)} {b.get('businessTypeName')} {b['StreetName']} {b['StreetNumber']}")
-                checked += 1
-        if not checked:
-            self.skipTest("no shop or office in the saves")
 
 
 if __name__ == "__main__":

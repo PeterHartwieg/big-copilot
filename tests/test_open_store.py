@@ -780,5 +780,59 @@ class FactoryRulesTests(unittest.TestCase):
             self.assertEqual(skills[skill], wage, skill)
 
 
+class GameValueDriftTests(unittest.TestCase):
+    """Game values kept by hand in ba_dashboard.py agree with their single
+    source (issue #347): the rules make_store_rules.py reads out of the game,
+    HOUSE_RULES' Normal column, and the constants openStore ships the board."""
+
+    @classmethod
+    def setUpClass(cls):
+        path = os.path.join(os.path.dirname(HERE), "ba_store_rules.json")
+        with open(path, encoding="utf-8") as fh:
+            cls.rules = json.load(fh)
+
+    def test_marketing_strength_is_the_rules_neighbourhood_strength(self):
+        self.assertEqual(ba_dashboard.MARKETING_STRENGTH,
+                         {k: v["ms"] for k, v in self.rules["hoods"].items()})
+
+    def test_pallet_shelf_fallback_is_the_rules_box_capacity(self):
+        self.assertEqual(ba_dashboard.PALLET_SHELF_BOXES,
+                         self.rules["furniture"][ba_dashboard.PALLET_SHELF]["cc"])
+
+    def test_house_rule_falls_back_to_normal(self):
+        for key, _name, _unit, normal, _harder, _what in ba_dashboard.HOUSE_RULES:
+            self.assertEqual(ba_dashboard._house_rule({}, key), normal, key)
+            self.assertEqual(ba_dashboard._house_rule({key: 0}, key), normal, key)
+        self.assertEqual(ba_dashboard._house_rule({"exportMultiplier": 1.25}, "exportMultiplier"), 1.25)
+        with self.assertRaises(KeyError):
+            ba_dashboard._house_rule({}, "noSuchSlider")
+
+    def test_days_per_year_falls_back_to_the_game_year(self):
+        self.assertEqual(ba_dashboard._days_per_year(None), ba_dashboard.DAYS_PER_YEAR)
+        self.assertEqual(ba_dashboard._days_per_year({"daysPerYear": 0}), ba_dashboard.DAYS_PER_YEAR)
+        self.assertEqual(ba_dashboard._days_per_year({"daysPerYear": 30}), 30)
+
+    def test_ramp_days_count_the_ramp(self):
+        self.assertEqual(ba_dashboard.RAMP_DAYS, len(ba_dashboard.RAMP))
+        self.assertTrue(all(0 < r < 1 for r in ba_dashboard.RAMP))
+
+    def test_the_payload_ships_the_planners_game_values(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "payload.hsg")
+            save_fixtures.write_data_save(path, save_fixtures.DAY)
+            payload = ba_dashboard.extract(load_save(path), Names(save_fixtures.data_names()), None)
+        game = payload["openStore"]["game"]
+        self.assertEqual(game["ramp"], list(ba_dashboard.RAMP))
+        self.assertEqual(game["office"], {
+            "always": ba_dashboard.OFFICE_ALWAYS_ON, "fullDoor": ba_dashboard.OFFICE_FULL_DOOR,
+            "day": list(ba_dashboard.OFFICE_DAY), "weekend": list(ba_dashboard.OFFICE_WEEKEND)})
+        self.assertEqual(game["wageBase"], ba_dashboard.PLAN_WAGES)
+        self.assertEqual(game["satisfaction"], ba_dashboard.PLAN_SATISFACTION)
+        factory = payload["openFactory"]
+        self.assertEqual(factory["game"]["driverHours"], ba_dashboard.DRIVER_DAY_HOURS)
+        self.assertEqual(factory["game"]["hqHours"], ba_dashboard.HQ_WEEK_HOURS)
+        self.assertEqual(factory["shelf"]["cc"], ba_dashboard.PALLET_SHELF_BOXES)
+
+
 if __name__ == "__main__":
     unittest.main()

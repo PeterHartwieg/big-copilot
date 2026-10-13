@@ -81,7 +81,15 @@ const CONVERTED = {
        out). */
     + '#secStandards .sechead, #secStandards .nx-card b > span, #secPrices .sechead, #secPrices [data-price-guide] small, '
     + '#secSchedules .sechead, #secSchedules .st, #secSchedules .nx-btn, '
-    + '#secNeeds .sechead, #secNeeds .nx-btn, #secNeeds p.quiet',
+    + '#secNeeds .sechead, #secNeeds .nx-btn, #secNeeds p.quiet, '
+    /* Staff needs' hiring page: its heads, filters, counts, notes, the order
+       panel and Quick hire's labels. Left out: the role names (.hs-rn), a
+       single site's name under them, and the names in lists (b, Quick hire's
+       picks). */
+    + '#secStaff .hs-head h2, #secStaff .hs-link, #secStaff .hs-fbar, #secStaff thead, #secStaff .hs-roles td:not(.l), '
+    + '#secStaff .hs-re, #secStaff .hs-facts2, #secStaff .hs-note, #secStaff .hs-find h4, #secStaff .hs-find li > span, '
+    + '#secStaff .hs-find a, #secStaff .hs-find-advice, #secStaff .hs-order, #secStaff .hs-quick .qh, '
+    + '#secStaff .hs-quick .fld > span:first-child, #secStaff .hs-quick summary, #secStaff .hs-match.none, #secStaff .hs-quick [data-hq-go]',
   /* The Wiki's own words: the home view's search row, legend, topic shelf
      heading and states; a guide's section headings, checklist cards and
      captions (its labels are guideUi's, keyed wiki.ui.*), tiles, card and lane

@@ -814,6 +814,28 @@ week they have at the site, as much of it as the rules allow, and the rest of th
 placed around it. A cut that leaves them satisfied is made, and named in the Staff page's
 "fewer hours than now".
 
+**While a plan waits on somebody, nobody here is moved off the hours they cover** (issue
+#446). A schedule write sends only the entries of people already at the site; the ones a
+hire or an unassigned person is to work stay empty until the player adds them. So a plan
+that moved somebody off an hour they work now and gave that hour to a hire would, written
+before the hire comes, leave the hour with fewer people than the game has. Where a shop's
+plan, or an office's demand plan, would do that, the week is placed once more with entries
+as they stand kept wherever the plan still wants those hours covered (on another station of
+the same role if their own is not in the plan then, and only what the rules allow: an entry
+the plan would not give them, such as a 13-hour day or a server on cleaning, is not kept),
+and the rest of the week placed around them. First every entry in a role with such an hour
+is kept, for the people the plain week gives hours; then only the entries on those hours.
+The fewest people still come first, so a kept week is used only if it puts nobody to work
+whom the plain week leaves at 0 h, draws the same unassigned people, hires nobody more and
+leaves fewer hours short (the first that does is used); otherwise the plain week stands, and
+that hour is short until the hire comes. The hours the plan wants (`need`) never change.
+Full cover (the 24/7 test) holds entries this way only where the shop is open around the
+clock already: holding them in a shop's longest week cost the board most of a second
+placement of it. Elsewhere the review of a full-cover write says how many hours of the week
+it leaves fewer people on than now until the people it waits on are added. An office's
+default plan adds entries and replaces none, so it is left as it was; factories are not
+written this way.
+
 **A week can change hands whole.** Which name the plan starts is decided before anybody has
 an hour, so a cheaper person with no hours demand can end up holding a week a full-timer
 beside them needed. Once the hours are settled that week is handed over entire where it fits

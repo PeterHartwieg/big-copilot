@@ -50,8 +50,9 @@ Everything else:
   with the authored wording in `tools/wiki_sample.json` and the hand-written articles in
   `tools/wiki_topics.json`. The rest of `tools/` is not the wiki: the translation page's
   `translation_catalogue.py` and `translation_moderate.mjs`, the feature list's
-  `feature_moderate.mjs`, `supporters.py`, `i18n.py`, `payload_diff.py`,
-  `game_link_mock.py` and `game_update/`, the deploy script
+  `feature_moderate.mjs`, `supporters.py`, `i18n.py`, the owner-only save sweeps
+  `payload_diff.py` and `check_marketing.py`, `game_link_mock.py` and `game_update/`,
+  the deploy script
   `deploy.mjs`, the local CI gate `verify.mjs` with its sharding helpers
   (`python_shard.py`, `shard_times.mjs`, `shard_weights.mjs`), the hosted page's optimizer
   `optimize_web.mjs`, the measurement script `profile_store_planner.py`, and the GLM
@@ -205,6 +206,7 @@ stale one fails them.
 | The translation page: `template/translate.html`, `web/translate.js`, `web/translate.css`, `tools/translation_catalogue.py`, `tools/translation_moderate.mjs` | `python build_web.py --assemble`, then `python -m unittest tests.test_translation_catalogue tests.test_catalogue_scan`, `node --test tests/translation_ui.test.cjs` and `npm run test:community` |
 | `web/community.js`, `web/community.css` | those two npm commands, after `python build_web.py --assemble` — both files are cache-busted by the build stamp |
 | `make_buildings.py`, `make_floor_plans.py` or what they write | `python -m unittest tests.test_floor_plans tests.test_premises`, then `python build_web.py` with the installed game: `ba_buildings.json` feeds `web/wiki-data.json` |
+| `marketing_score()`, `MARKETING_REACH` or the neighbourhood factors (the promotion formula) | `python -m unittest tests.test_marketing_plan`; then `python tools/check_marketing.py`, which holds the formula against the promotion each save stores (owner only: it reads every save on the machine; never commit its output) |
 | `_open_store()` and its helpers, `ba_store_rules.json`, or the board's `os*` functions (Open a store) | `python -m unittest tests.test_open_store` and `node --test tests/open_store.test.cjs tests/open_store_checklist.test.cjs tests/open_store_opened.test.cjs tests/finder_plan.test.cjs`; after a change to the profit model, `python check_profit_model.py` and compare its numbers with `docs/dashboard-reference.md`, "Open a store" |
 | `make_item_prices.py`, `ba_item_prices.json`, or the payback figures (`_payback()`, the Payback column, `spPayback()`) | `python -m unittest tests.test_payback` and `node --test tests/payback.test.cjs` |
 | Added or changed UI text (`tt()`, `data-tt*`, `msg()`), `web/i18n.js`, `tools/i18n.py`, `i18n/` | `python -m unittest discover -s tests -p "test_i18n*.py"` and `node --test tests/i18n_*.test.cjs tests/global_names.test.cjs`, plus the rows for the files the text is in |

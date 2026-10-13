@@ -1,5 +1,11 @@
 [
   {
+    "pr": 465,
+    "date": "2026-10-13",
+    "title": "Staff needs in your language",
+    "summary": "The hiring page under Staffing › Staff needs, with Change picks and its filters, now shows in every language Big Copilot speaks, with role names, sites and numbers as your language writes them and lists sorted the way your language sorts."
+  },
+  {
     "pr": 454,
     "date": "2026-10-13",
     "title": "Price your buildings and buy before tax day",
