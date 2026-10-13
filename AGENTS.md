@@ -263,7 +263,9 @@ and never attach one to an issue.
   board globals, persistence and the DOM.
 - `section{content-visibility:auto}` clips absolutely positioned children, so a popover
   rendered inside a section is cut off. Hang it off `<body>` with `position:fixed` and
-  place it against its anchor, the way `#tip` and `#alertPop` do. The
+  place it against its anchor, the way `#tip` and `#alertPop` do; `bodyPopover()` in
+  `template/board.js` gives a new one the shared outside-press, Escape, resize, scroll
+  and focus-return handling. The
   `section.measured{content-visibility:visible}` escape hatch is for the Playwright tests,
   which add `measured` to measure a section that is off screen; it is not the fix.
 - Many tests read source files as text — slicing between comment or declaration anchors
