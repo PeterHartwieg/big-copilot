@@ -9,19 +9,23 @@ needs regenerating when the game adds a street or a neighbourhood.
 
 Keys are single letters to keep the file under 100 KB:
   s street slug · n number · h neighbourhood id · t building type
-  z size code   · m square metres · x traffic index · v building version
+  z size code   · m square metres (the business unit) · x traffic index
+  v building version · q the whole building's square metres (totalSqm)
 
-The companion dump has no version. `--versions` reads each building's
-BuildingVersion from the installed game's buildings bundle and writes it into
-the existing table. It is owner-side, like make_demand_curves.py:
+The companion dump has no version and no building total. `--versions` reads
+each building's BuildingVersion and totalSqm from the installed game's
+buildings bundle and writes them into the existing table. It is owner-side,
+like make_demand_curves.py:
 
     py -m pip install --target <scratch folder outside this repo> UnityPy
     set PYTHONPATH=<that folder>
     python make_buildings.py --versions
 
 Size plus version is the building's layout ("C2"), the key the floor plans use
-(make_floor_plans.py). A run from the companion dump keeps the versions already
-in the table, so the two steps can run in either order.
+(make_floor_plans.py). `q` is what a bought building earns rent on and what its
+market value is priced by (Real estate). A run from the companion dump keeps
+the versions and totals already in the table, so the two steps can run in
+either order.
 """
 
 from __future__ import annotations
@@ -60,7 +64,7 @@ def _read() -> list:
 
 
 def game_versions() -> dict:
-    """{(street slug, number): (type, size code, version)} from the game's bundle."""
+    """{(street slug, number): (type, size code, version, total m2)} from the game's bundle."""
     try:  # owner-side only: the board never imports this module
         import UnityPy
     except ImportError:  # pragma: no cover - depends on the operator's machine
@@ -87,12 +91,15 @@ def game_versions() -> dict:
             tree["BuildingType"].removeprefix("ba:buildingtype_"),
             tree["BuildingSize"].removeprefix("ba:buildingsize_").upper(),
             int(tree["BuildingVersion"]),
+            # A prefab field no code writes: the building's total floor area,
+            # which the unit's m (BuildingSizeData.squareMeters) is not.
+            int(round(tree["totalSqm"])),
         )
     return out
 
 
 def add_versions() -> None:
-    """Write each building's version into the existing table.
+    """Write each building's version and total m2 into the existing table.
 
     The game and the table have to agree on the type and size of every
     building both hold; a disagreement means the table is from another game
@@ -108,15 +115,17 @@ def add_versions() -> None:
         if not found:
             missing += 1
             r.pop("v", None)
+            r.pop("q", None)
             continue
-        kind, size, version = found
+        kind, size, version, total = found
         if (kind, size) != (r["t"], r["z"]):
             clash.append(f"{r['n']} {r['s']}: table {r['t']} {r['z']}, game {kind} {size}")
         r["v"] = version
+        r["q"] = total
     if clash:
         raise SystemExit("the table and the game disagree:\n  " + "\n  ".join(clash[:20]))
     _write(rows)
-    print(f"ba_buildings.json: versions for {len(rows) - missing} of {len(rows)} buildings, "
+    print(f"ba_buildings.json: versions and totals for {len(rows) - missing} of {len(rows)} buildings, "
           f"{os.path.getsize(OUT) // 1024} KB")
 
 
@@ -128,7 +137,7 @@ def main() -> None:
         raise SystemExit("usage: python make_buildings.py <companion_buildings.json> | --versions")
     with open(sys.argv[1], encoding="utf-8") as fh:
         city = json.load(fh)
-    versions = {(r["s"], r["n"]): r["v"] for r in _read() if "v" in r}
+    kept = {(r["s"], r["n"]): {k: r[k] for k in ("v", "q") if k in r} for r in _read()}
 
     rows = []
     for b in city:
@@ -150,10 +159,8 @@ def main() -> None:
                 "x": b["traffic_index"],
             }
         )
-        # The companion dump has no version; keep the one --versions wrote.
-        version = versions.get((rows[-1]["s"], rows[-1]["n"]))
-        if version is not None:
-            rows[-1]["v"] = version
+        # The companion dump has no version or total; keep what --versions wrote.
+        rows[-1].update(kept.get((rows[-1]["s"], rows[-1]["n"]), {}))
     rows.sort(key=lambda r: (r["s"], r["n"]))
 
     _write(rows)

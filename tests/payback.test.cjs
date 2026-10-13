@@ -66,10 +66,10 @@ test('the Payback column: its header, a cell per chain and site, and every row a
   assert.equal(net[0], profitAt);
   // Installation firm by default: the shop still has days to go; the brewery
   // is a cost centre and has no payback of its own.
-  assert.equal(await kidCell(page, SPIRITS), en('co.payback.cell.togo', {n: 146}));
+  assert.equal(await kidCell(page, SPIRITS), en('co.payback.cell.togo', {n: 130}));
   assert.equal(await kidCell(page, BREWERY), '—');
   assert.match(await page.$eval(`#portfolio tr.kid[data-key="${SPIRITS}"] .pb-cell`, e => e.dataset.tip),
-    new RegExp('^' + enRe('co.payback.togo', {n: 146}).source + '\\.' + ' ' + enRe('co.payback.cost.firm').source));
+    new RegExp('^' + enRe('co.payback.togo', {n: 130}).source + '\\.' + ' ' + enRe('co.payback.cost.firm').source));
   // Beside the sidebar at 1280 px the whole table fits, Payback included.
   const fit = await page.$eval('#portfolio', t => [t.parentElement.scrollWidth, t.parentElement.clientWidth]);
   assert.ok(fit[0] <= fit[1], `the table overflows at 1280 px: ${fit}`);
@@ -80,13 +80,13 @@ test('the install mode changes the cells and is kept per character', async t => 
   const page = await board(t, ctx);
   assert.equal(await page.locator('#paybackMode a.on').getAttribute('data-id'), 'firm');
   await page.click('#paybackMode a[data-id="self"]');
-  assert.equal(await kidCell(page, SPIRITS), en('co.payback.cell.reached', {day: 30}));
+  assert.equal(await kidCell(page, SPIRITS), en('co.payback.cell.reached', {day: 7}));
   assert.match(await page.$eval(`#portfolio tr.kid[data-key="${SPIRITS}"] .pb-cell`, e => e.dataset.tip),
-    new RegExp('^' + enRe('co.payback.reached', {day: 30, n: 27}).source + '\\.'));
+    new RegExp('^' + enRe('co.payback.reached', {day: 7, n: 4}).source + '\\.'));
   assert.equal(await page.evaluate(k => localStorage.getItem(k), STORE), 'self');
   const again = await board(t, ctx);
   assert.equal(await again.locator('#paybackMode a.on').getAttribute('data-id'), 'self');
-  assert.equal(await kidCell(again, GIFTS), en('co.payback.cell.reached', {day: 27}));
+  assert.equal(await kidCell(again, GIFTS), en('co.payback.cell.reached', {day: 6}));
   // Another character's board does not read this one's choice.
   assert.equal(await again.evaluate(() => { D.meta.character = 'OTHERco'; return paybackMode(); }), 'firm');
 });
@@ -125,7 +125,7 @@ test('the site panel has a Payback line for a shop and none for a factory', asyn
   const page = await board(t, await context(t));
   await page.evaluate(k => openSite(k), SPIRITS);
   await page.waitForSelector('#sitePanel .sitehead');
-  assert.equal(await page.locator('#sitePanel .sp-pay').innerText(), en('sp.payback.line', {what: en('co.payback.togo', {n: 146})}));
+  assert.equal(await page.locator('#sitePanel .sp-pay').innerText(), en('sp.payback.line', {what: en('co.payback.togo', {n: 130})}));
   await page.evaluate(k => openSite(k), BREWERY);
   await page.waitForFunction(k => siteKey === k, BREWERY);
   assert.equal(await page.locator('#sitePanel .sp-pay').count(), 0);

@@ -108,6 +108,8 @@ this column is where to look when you change a key's shape — not a complete ca
 | `alertsDemand` | `_alerts(..., "dem")`, a second pass over the same `supply.facts` with factory lines sized on demand: `{lines, minor}`, the shape of `alerts` and `minor` | `alertLines()`, when the sizing switch reads Demand |
 | `goals` | Section `goals`: `_goals()` | `drawGoals` |
 | `rivalry` | `_rivalry()`, from `_rival_weekly_incomes()`, `_player_weekly_income()` and `_rivalry_backfill()`; the days in first place are counted over `History.rivalry()`, the history's `rivalry` record. `null` when the save lists no rivals | `rlShown`, `drawKpis` (through `rlKpiTile`), `rlGoalsHtml` (from `drawGoals`) |
+| `realEstateCounts` | Core: `_estate_counts()` over `_estate_owned()` (kept on `build.shared["estate"]`), with the tax plan from `_real_estate()` on the last day before tax day: `{owned, flagged, gain, taxEve}` | `routeCount()` (Real estate's view counts) and the search's live tag, through `reCounts()` |
+| `realEstate` | Section `realEstate`: `_real_estate()`, from `_estate_owned()` (owned rows with `_estate_market()`, `_best_price()`, `_property_tax_day()`, `_fill_days()`, `_estate_payback()`, and `_rent_multiplier()` over the last rent statements, `ba_mods.ECONOMY_RENT_FACTOR` its fallback), `_estate_buy()` (listings plus buildings rented in, `_listing_income()`), and `_tax_shelter()` over `_tax_period()` with `_tax_pick()`: `{owned, villas, mult, histFrom, buy, tax}`. `_premises()` reads the same multiplier for `forSale[].payback` | `drawEstate`, `drawEstateBuy` and the rent write `gwRent()`, through `reData()` |
 
 Four indirect routes an agent would otherwise miss:
 
@@ -491,6 +493,7 @@ restoring the focused action if the keyboard is still inside the popover.
 | openStore | `openStore` | premises | Open a store; Plan a factory's location, investment and financing; Demand popovers |
 | openFactory | `openFactory` | (none) | Plan a factory's costs and opening requirements |
 | goals | `goals` | (none) | Milestones |
+| realEstate | `realEstate` | (none) | Real estate's My buildings and Buy a building |
 
 The core contains the warnings' keys: `meta`, `kpi`, `names`, `skillNames`, `businesses`,
 `daily`, `loans`, `supply`, `rhythm`, `market`, `chains`, `trends`, `hypeExposure`, `hours`,
@@ -504,7 +507,11 @@ and 3 KB on the largest measured save). `plan` stays core because Today reads it
 recipes and item names (`factoryView`, `sbDeps`, the supply strip and finding
 pills), and every page reads `itemName`. It costs about 4 ms and 65 KB on the
 largest measured save. `mods`, on a modded save only, stays core because the masthead
-draws it on the first frame; it is a few small fields. Map asks for no section.
+draws it on the first frame; it is a few small fields. `realEstateCounts` stays core for the
+sidebar's Real estate counts: `_estate_owned()` is one pass over the owned buildings and the
+61 summaries (about 7 ms on the largest measured save), kept on `build.shared["estate"]` for
+the section; on the last day before tax day the core also works out the tax plan, which the
+section then reuses. Map asks for no section.
 
 The extraction's staff list, all hour grids, statements, buildings, recipes, stations,
 market and supply objects stay on `build.shared` for deferred producers. The producers
@@ -741,7 +748,7 @@ byte what it was: `tests/i18n_layout.test.cjs` checks the page asks for no table
 
 **Keys** are `<area>.<thing>[.<part>]`. The area names the page, and the pull request that
 owns it; they are the CSS prefixes: `nav`, `land`, `app`, `foot`, `today`, `f` (findings),
-`co`, `sp` (site panel), `sb` (supply), `gr`, `map`, `wiki`, `comm`, `upd`, `br` (the bug report form), and `day` for the
+`co`, `sp` (site panel), `sb` (supply), `gr`, `map`, `wiki`, `comm`, `upd`, `br` (the bug report form), `re` (Real estate), and `day` for the
 weekday names in `web/i18n.js`. `AREAS` in `tools/i18n.py` is the list. A key never ends in
 `_one`, `_other` or another plural category: the catalogue writes plurals that way.
 
@@ -1177,7 +1184,7 @@ to fetching `data.json` from a site that has no such route.
 ## Pages
 
 The UI redesign (26 Sep 2026, chunk 1) put a layer of routes over the pages: the sidebar
-(see [The sidebar](#the-sidebar)) shows five areas and two references, and every place the reader can be is a route such as
+(see [The sidebar](#the-sidebar)) shows six areas and two references, and every place the reader can be is a route such as
 `supply/imports` (see [Routes](#routes)). The pages below are the routes' *hosts*: they keep
 their ids, sections and `PAGE_DRAWS` tags, so lazy drawing and the calm refresh are as they
 were. `ROUTES` names each route's host page and view, and `HOST_ROUTES` the route a host view
@@ -1194,6 +1201,7 @@ four of them. Each page is a `div.page` that `showPage()` unhides.
 | `staffing` | Staffing | `pageStaffing` | one view at a time — see below |
 | `growth` | Expansion | `pageGrowth` | one view at a time — see below |
 | `map` | City map (and Expansion › Find a location) | `pageMap` | `showCityMap` / `refreshCityMaps` in `web/map.js`, which also hosts the location finder as a mode of the page — `openFinder()` switches it on with a preset, `showFinder()` without one (a replayed entry's own filters, `nxFs`, else those on screen), and `CityMapView` ranks the `premises` rows beside the map. The route decides the mode: `map` is always the plain map, `expansion/finder` the finder. The board script heads the page (`#mapHead`) and puts the finder's ways on under it (`#finderCtx`), both from `drawFinderCtx()` |
+| `estate` | Real estate | `pageEstate` | one view at a time — see below |
 | `wiki` | Wiki | `pageWiki` | `wikiVisit` → `showWikiRoute` in `web/wiki.js`; the entry is omitted when `showWikiRoute` is undefined |
 
 Company's views (Businesses):
@@ -1262,6 +1270,18 @@ Growth's views (Expansion; Find a location is the Map page's finder):
 | Open a store (`open`) | `secOpen` | `drawOpenStore`: the steps and plan picker (`#osCtl`, beside the tabs), the plan's strip (`#osStrip`), the finder in plan mode for step 2 (`#osFinderMap`, a `CityMapView` with `options.plan`, kept between draws and never storing filters), and the step's body (`#osBody`). Plans are kept per character in `localStorage` under `ba_open_store_v1:<character>`. Its New badge is `VIEW_NEW` in `paintLocal()` |
 | Plan a factory (`plan`) | `secPlan`, `secIngredients`, `secPlanFlow` | `drawPlan` |
 
+Real estate's views (mockup/real-estate; both read the `realEstate` section, the counts beside them
+`realEstateCounts`):
+
+| View | Section | Drawn by |
+| --- | --- | --- |
+| My buildings (`buildings`) | `secEstate` | `drawEstate`: the control row (`reOwnedCtl()`: Set best prices through `gwRent()`, the gain once full, a modded save's multiplier), the table (`reOwnedTable()`), a row opened in place (`reOpen`, `reSpark()`, `reFacts()`), Show all (`reAll`) |
+| Buy a building (`buy`) | `secBuy` | `drawEstateBuy`: the Price / Payback switch and the payback line (`reBuyCtl()`, `reBuySort`), the Before tax day panel (`reTaxPanel()`), the For sale list (`reBuyTable()`) |
+
+Their two findings (`rentprice`, `taxeve`) land through `reLandOn()`: the view lit while the
+finding's arrival strip stands (`reLanded()`). Their place on the Overview is the house and
+the view (`reFindSite()`); the tax-eve sentence is the board's own (`reTaxSplit()`).
+
 Outside the pages, `drawMast` and `drawFooter` own the sidebar's name and clock and the footer, and
 `indexTrends` builds the lookup the other draws use. `renderAll()` calls those itself and
 works through `PAGE_DRAWS` for the rest, one row per draw function, tagged with the views
@@ -1307,7 +1327,7 @@ what is above it (`sdFit()` sets `--sd-cut` while the news strip is in view). To
 - the head (`#sdHead`): the company's name (`#title`), the dot and the sphere (`wireSphere()`:
   the balls rest on the head's rule, at its right end, and roll left as the page scrolls);
 - Search (`ssField`, or its icon `ssFieldBtn` on the rail);
-- the five areas (`#nav`, `navHtml()`), and under the open one its views: the same
+- the six areas (`#nav`, `navHtml()`), and under the open one its views: the same
   `#localNav` that `paintLocal()` fills, moved there by `sdPlaceViews()`;
 - the references (`#navRefs`, `refsHtml()`);
 - the foot: the clock (`#clock`; `#sdClk` is the rail's short one), then `#sdRow` with ···
@@ -1366,7 +1386,7 @@ is one of:
 | Hash | Opens |
 | --- | --- |
 | `#overview`, `#supply/imports`, `#staffing/needs`, … | a route (`ROUTES`), through `openRoute()`: its host page and view, then what the route asks of it (`enter`, `after`, `into`) |
-| `#businesses`, `#supply`, `#staffing`, `#expansion` | an area (`AREAS`): the view it was last left on this session, else its first (`areaEntry()`) |
+| `#businesses`, `#supply`, `#staffing`, `#expansion`, `#estate` | an area (`AREAS`): the view it was last left on this session, else its first (`areaEntry()`) |
 | `#today`, `#payroll`, `#staff`, `#guide` | an old word for a route, through `ROUTE_ALIASES` |
 | `#company`, `#growth` | a host page (`PAGES`), on the view it was last left on, under the route that view shows (`HOST_ROUTES`) |
 | `#results` | an old page name, through `PAGE_ALIASES`, on the view that replaced it |
@@ -1551,12 +1571,12 @@ all three.
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
 | The markup (`template/board.html`): `<div class="page" id="page…">` for a page, or `<section class="sec rv" id="sec…" data-sub="…">` inside its page for a view; a page with views also gets its `<nav class="seg" id="…Nav">` | The host element | the navigation tests, indirectly |
-| `const PAGES = [` (board script) | *Only for a page*: `{id, label, host, newFeature?}` | `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, then City map and Wiki" |
+| `const PAGES = [` (board script) | *Only for a page*: `{id, label, host, newFeature?}` | `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, Real estate, then City map and Wiki" |
 | `const ICON = {` (board script) | *Only for a page*: its nav icon, keyed by page id | none |
 | `const SUBS = {` (board script; items generated by `navItems()` from `VIEW_META`) | *Only for a new host with views*: its DOM host/nav ids, storage key, default view and optional shown hook. Do not add individual items; `VIEW_META` generates them | `tests/navigation.test.cjs`, "Businesses carries Results, Products & prices, Standards and Milestones; Staffing its three views" and "every view in SUBS has its SEC_PAGE row and a PAGE_DRAWS tag" |
 | `const VIEW_META = [` and `const SEC_PAGE = {` (board script) | One canonical `{route, host, needs, section?, label}` record in `VIEW_META`. `label` is a callback around `tt()`, so language changes remain live. Its primary section generates a `SEC_PAGE` row; add only secondary and legacy `secX: [page, view]` rows explicitly. Without it `reveal()`, the sub-nav and `pageFromHash()` fail | `tests/navigation.test.cjs`, "every view in SUBS has its SEC_PAGE row …" and "every Company section deep link opens the view that holds it"; `tests/alert_kinds.test.cjs`, "the supply kinds land on the Supply view of their route" |
 | `const PAGE_DRAWS = [` (board script) | `["page/view", () => drawX(), null, ["section"]]`, tagged with every view whose markup it writes | `tests/calm_refresh.test.cjs`, "a refresh on Today draws Today …"; `tests/navigation.test.cjs`, "every PAGE_DRAWS tag names a real page or view" and the SUBS test above |
-| `const ROUTE_BEHAVIOR = {`, `const ROUTES =`, `const AREAS = [`, `routeViewLabel(` (board script) | *For a route*: shared host, label, lazy `needs` and area view order come from `VIEW_META`; `ROUTE_BEHAVIOR` holds only distinct `enter`, `after`, `into` or other hooks. `HOST_ROUTES` is derived; set `defaultHost: false` for a second mode sharing a host (the finder on Map). Area defaults stay explicit | `tests/shell_routes.test.cjs`, "every finding kind names a real route, and every route is a view of its area"; `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, then City map and Wiki" |
+| `const ROUTE_BEHAVIOR = {`, `const ROUTES =`, `const AREAS = [`, `routeViewLabel(` (board script) | *For a route*: shared host, label, lazy `needs` and area view order come from `VIEW_META`; `ROUTE_BEHAVIOR` holds only distinct `enter`, `after`, `into` or other hooks. `HOST_ROUTES` is derived; set `defaultHost: false` for a second mode sharing a host (the finder on Map). Area defaults stay explicit | `tests/shell_routes.test.cjs`, "every finding kind names a real route, and every route is a view of its area"; `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, Real estate, then City map and Wiki" |
 | `const ROUTE_ALIASES =` (board script) | *Only when* an old page or view name becomes a route | `tests/navigation.test.cjs`, "the old #payroll hash, #secPayroll and a remembered Payroll open Staffing › Payroll" and "the #staff hash, #secStaff and a remembered Staff open Staffing › Staff needs" |
 | `const SS_VIEWS = [` (board script) | `{id, t, p, ic, syn, go}`, so search can open it | `tests/search.test.cjs`, "the index holds every group …" |
 | `function showPage(` (board script) | *Only if* the page loads or draws when shown, as the Map does | none |

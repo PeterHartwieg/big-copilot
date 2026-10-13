@@ -20,7 +20,7 @@ const ORIGIN = 'http://localhost:9323';
 const TYPES = {'.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml'};
 const SECTION_KEYS = {staffing: ['staffing'], officeStaffing: ['officeStaffing'], factoryStaffing: ['factoryStaffing'],
   hiring: ['hiring', 'candidates'], premises: ['premises'], products: ['products'],
-  openStore: ['openStore'], openFactory: ['openFactory'], goals: ['goals']};
+  openStore: ['openStore'], openFactory: ['openFactory'], goals: ['goals'], realEstate: ['realEstate']};
 const SECTION_NEEDS = {officeStaffing: ['staffing'], factoryStaffing: ['officeStaffing'], hiring: ['factoryStaffing'], openStore: ['premises']};
 
 let browser, payload;

@@ -218,6 +218,8 @@ class Sections(unittest.TestCase):
         # The Rivals leaderboard writes the history its run in first place is
         # counted from, as cashFlow's ledger does (#414).
         expected.append("rivalry")
+        # Real estate's sidebar numbers: a few counts over the owned buildings.
+        expected.append("realEstateCounts")
         self.assertEqual(set(self.build().core), set(expected))
 
     def test_later_planning_first_equals_each_stage_in_order(self):
@@ -265,7 +267,7 @@ class Sections(unittest.TestCase):
         names = list(ba_dashboard.SECTIONS)
         orders = [names[::-1],
                   ["openStore", "staffing", "hiring", "goals", "products",
-                   "openFactory", "premises", "factoryStaffing", "officeStaffing"]]
+                   "openFactory", "premises", "factoryStaffing", "officeStaffing", "realEstate"]]
         import random
         shuffled = names[:]
         random.Random(238).shuffle(shuffled)

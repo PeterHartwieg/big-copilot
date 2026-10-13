@@ -71,7 +71,7 @@ test('Results carries Company finances: cash beside profit, the loans and what t
   const history = (await page.locator("#secFinance .bz-history").innerText()).replace(/\s+/g, " ");
   assert.match(tiles[0], new RegExp(enRe('co.fin.cash').source + ' \\$25,560', 'i'));
   assert.match(tiles[1], new RegExp(enRe('co.fin.owed').source + ' \\$29,900 ' + enRe('co.fin.owed.sub', {n: 1, interest: 40, pays: 300}).source, 'i'));
-  assert.match(history, new RegExp(enRe('co.fin.hist').source + ' ' + enRe('co.fin.hist.v', {d: 26}).source + ' ' + enRe('co.fin.hist.daily', {n: 21}).source, 'i'));
+  assert.match(history, new RegExp(enRe('co.fin.hist').source + ' ' + enRe('co.fin.hist.v', {d: 4}).source + ' ' + enRe('co.fin.hist.daily', {n: 43}).source, 'i'));
   // The cash line is a comparison with a day, not where cash history starts (round 1, S4).
   assert.match(history, enRe('co.fin.hist.cash2', {d: 40}));
   // Pins the wording: cash comparison must not imply cash history starts on that day.
@@ -281,7 +281,7 @@ test('Milestones: the career goals with their bars, and the totals', async t => 
   const page = await board(t, {hash: '#businesses/milestones'});
   const rows = await page.$$eval('#secGoals .bz-mile', els => els.map(e => e.innerText.replace(/\s+/g, ' ').trim()));
   assert.deepEqual(rows, [en('co.goals.types') + ' 2 / 2', en('co.goals.rivals') + ' 0 / 1', en('co.goals.personal') + ' ' + en('co.goals.done', {n: 1}), en('co.goals.diplomas') + ' 1 / 2']);
-  assert.match(await page.locator('#secGoals .bz-fins:not(.rl-fins)').innerText(), new RegExp(enRe('co.goals.goods.lab').source + '\\s+52,800[\\s\\S]*' + enRe('co.goals.tax.lab').source + '\\s+\\$5,200[\\s\\S]*' + enRe('co.goals.buildings.lab').source + '\\s+1', 'i'));
+  assert.match(await page.locator('#secGoals .bz-fins:not(.rl-fins)').innerText(), new RegExp(enRe('co.goals.goods.lab').source + '\\s+52,800[\\s\\S]*' + enRe('co.goals.tax.lab').source + '\\s+\\$5,200[\\s\\S]*' + enRe('co.goals.buildings.lab').source + '\\s+5', 'i'));
 });
 
 test('a business\'s page summarises its week and links to the one planner; the ways to its planners keep it picked and lead back', async t => {

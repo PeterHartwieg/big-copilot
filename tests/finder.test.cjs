@@ -66,10 +66,10 @@ const PREMISES = {
       occupant: {name: 'HART. Gym', type: 'Gym', typeSlug: 'ba:businesstype_gym'}}),
   ],
   forSale: [
-    {key: MT[2], address: at(MT[2]).address, hood: MT_HOOD, type: 'retail', size: 'M', m2: 1000, price: 4200000},
+    {key: MT[2], address: at(MT[2]).address, hood: MT_HOOD, type: 'retail', size: 'M', m2: 1000, price: 4200000, payback: 1778},
     // A tower on a mature save runs past a billion.
-    {key: MT[3], address: at(MT[3]).address, hood: MT_HOOD, type: 'theater', size: 'R', m2: 1200, price: 5584228352},
-    {key: HK[0], address: at(HK[0]).address, hood: HK_HOOD, type: 'retail', size: 'C', m2: 225, price: 750000},
+    {key: MT[3], address: at(MT[3]).address, hood: MT_HOOD, type: 'theater', size: 'R', m2: 1200, price: 5584228352, payback: 1826},
+    {key: HK[0], address: at(HK[0]).address, hood: HK_HOOD, type: 'retail', size: 'C', m2: 225, price: 750000, payback: null},
   ],
   demand: {
     [HK_HOOD]: [
@@ -382,13 +382,15 @@ test('for sale is a plain list, cheapest first, and the neighbourhood chips stil
     assert.equal(await page.locator('#cityMapPage .fchip.show[data-show="sale"] b').textContent(), '2');
     assert.equal(await page.locator('#cityMapPage .fhead.sale').count(), 1);
     assert.equal(await page.locator('#cityMapPage .place.fr.sale .v.sc').count(), 0);  // never scored
-    assert.equal(await page.locator('#cityMapPage .fhead.sale span.on').count(), 0);   // one order, no sort arrow
-    assert.deepEqual(await page.$$eval('#cityMapPage .place.fr.sale > :last-child', v => v.map(x => x.textContent)),
+    assert.equal(await page.locator('#cityMapPage .fhead.sale span.on').textContent(), en('map.col.price'));
+    assert.equal(await page.locator('#cityMapPage .fhead.sale span').count(), 6);
+    assert.deepEqual(await page.$$eval('#cityMapPage .place.fr.sale .v.pb', v => v.map(x => x.textContent)), ['—', en('map.payback.days', {n: '1,778'})]);
+    assert.deepEqual(await page.$$eval('#cityMapPage .place.fr.sale > :nth-child(5)', v => v.map(x => x.textContent)),
       ['$750k', '$4.20M']);
     // A price past a billion says so rather than counting in thousands of millions.
     await page.locator('#cityMapPage .fchip.cat[data-cat="theater"]').click();
     assert.deepEqual(await rowKeys(page), [MT[3]]);
-    assert.deepEqual(await page.$$eval('#cityMapPage .place.fr.sale > :last-child', v => v.map(x => x.textContent)),
+    assert.deepEqual(await page.$$eval('#cityMapPage .place.fr.sale > :nth-child(5)', v => v.map(x => x.textContent)),
       ['$5.58bn']);
     await page.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
     // A listing lights its own footprint, green rather than buy-out amber, and
@@ -696,21 +698,30 @@ test('the x drops a name, and an empty name saves nothing', async () => {
   } finally { await page.close(); }
 });
 
-test('a search saved on the for-sale list has no sort to give and takes none away', async () => {
+test('a sale search restores its own sort and leaves the ranked sort alone', async () => {
   const {page, errors} = await fixture();
   try{
     await openMap(page); await turnOn(page);
     // Save while reading the sale list, with the ranked lists on their own order.
     await page.locator('#cityMapPage .fchip.show[data-show="sale"]').click();
     await saveAs(page, 'On sale');
+    await page.locator('#cityMapPage .fhead [data-s="payback"]').click();
+    await saveAs(page, 'By payback');
+    assert.match(await page.locator(`${saved} [data-saved="By payback"]`).getAttribute('data-tip'), enRe('map.saved.tip.payback'));
+    assert.doesNotMatch(await page.locator(`${saved} [data-saved="On sale"]`).getAttribute('data-tip'), enRe('map.saved.tip.payback'));
+    assert.equal(await page.locator(`${saved} [data-saved="On sale"]`).getAttribute('aria-pressed'), 'false');
+    assert.equal(await page.evaluate(() => finderSaved()[1].filters.saleSort), 'payback');
     // Now sort the ranked list by traffic and go back to the sale list: the same
     // visible filters, so the chip is lit whatever the hidden sort is.
     await page.locator('#cityMapPage .fchip.show[data-show="rent"]').click();
     await page.locator('#cityMapPage .fhead [data-s="traffic"]').click();
     await page.locator('#cityMapPage .fchip.show[data-show="sale"]').click();
-    assert.equal(await page.locator(`${saved} [data-saved="On sale"]`).getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.locator(`${saved} [data-saved="By payback"]`).getAttribute('aria-pressed'), 'true');
     // Applying it changes nothing a sale list cannot show, so the sort survives.
     await page.locator(`${saved} [data-saved="On sale"]`).click();
+    assert.equal(await page.locator('#cityMapPage .fhead.sale span.on').textContent(), en('map.col.price'));
+    await page.locator(`${saved} [data-saved="By payback"]`).click();
+    assert.equal(await page.locator('#cityMapPage .fhead.sale span.on').textContent(), en('map.col.payback'));
     await page.locator('#cityMapPage .fchip.show[data-show="rent"]').click();
     assert.equal(await page.locator('#cityMapPage .fhead span.on').textContent(), en('map.col.traffic'));
     assert.deepEqual(errors, []);
@@ -1980,5 +1991,97 @@ test('a live refresh leaves the Type list alone unless its types changed', async
     });
     assert.equal(same, COFFEE);
     assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+
+test('sale heads sort by payback with null last and price ties, independently of ranked heads', async () => {
+  const premises = {...PREMISES, forSale: [
+    {...PREMISES.forSale[0], payback: 1778},
+    {...PREMISES.forSale[2], payback: null},
+    {key: MT[0], address: at(MT[0]).address, hood: MT_HOOD, type: 'retail', m2: 285, price: 900000, payback: 1778},
+    {key: MT[1], address: at(MT[1]).address, hood: MT_HOOD, type: 'retail', m2: 120, price: 1000000, payback: 1524},
+  ]};
+  const {page, errors} = await fixture(null, {premises});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator('#cityMapPage .fhead [data-s="traffic"]').click();
+    await page.locator('#cityMapPage .fchip.show[data-show="sale"]').click();
+    const head = page.locator('#cityMapPage .fhead [data-s="payback"]');
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1], MT[2]]);
+    await head.click();
+    assert.deepEqual(await rowKeys(page), [MT[1], MT[0], MT[2], HK[0]]);
+    assert.equal(await page.locator('#cityMapPage .fhead.sale span.on').textContent(), en('map.col.payback'));
+    assert.equal(await head.getAttribute('data-tip'), en('map.col.payback.tip2'));
+    assert.deepEqual(await page.evaluate(() => [cityMapPage.fs.sort, cityMapPage.fs.sortPicked]), ['traffic', true]);
+    await head.click();
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1], MT[2]]);
+    assert.equal(await page.locator('#cityMapPage .fhead.sale span.on').textContent(), en('map.col.price'));
+    await head.focus(); await head.press('Enter');
+    assert.deepEqual(await rowKeys(page), [MT[1], MT[0], MT[2], HK[0]]);
+    await head.focus(); await head.press('Space');
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1], MT[2]]);
+    await head.click();
+    await page.locator('#cityMapPage .fhead [data-s="price"]').click();
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1], MT[2]]);
+    await head.click();
+    await page.locator('#cityMapPage .fchip.show[data-show="rent"]').click();
+    await page.locator('#cityMapPage .fhead [data-s="m2"]').click();
+    assert.equal(await page.evaluate(() => cityMapPage.fs.saleSort), 'payback');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('the sale chip reads the rounded median at paint time and omits payback without data', async () => {
+  const {page} = await fixture();
+  try{
+    await openMap(page); await turnOn(page);
+    const chip = page.locator('#cityMapPage .fchip.show[data-show="sale"]');
+    assert.equal(await chip.getAttribute('data-tip'), en('map.show.sale.tip2') + ' ' + en('map.show.sale.tip.payback3', {n: 1800}));
+    // Under the Payback sort the tip makes no claim about the order.
+    await chip.click();
+    await page.locator('#cityMapPage .fhead [data-s="payback"]').click();
+    assert.equal(await page.locator('#cityMapPage .fhead [data-s="payback"]').getAttribute('class'), 'on');
+    assert.equal(await chip.getAttribute('data-tip'), en('map.show.sale.tip2') + ' ' + en('map.show.sale.tip.payback3', {n: 1800}));
+    assert.doesNotMatch(await chip.getAttribute('data-tip'), /cheapest/i);
+    await page.evaluate(() => { D.premises.forSale.forEach(s => s.payback = 1576); cityMapPage.update(); });
+    assert.equal(await chip.getAttribute('data-tip'), en('map.show.sale.tip2') + ' ' + en('map.show.sale.tip.payback3', {n: 1600}));
+    await page.evaluate(() => { D.premises.forSale.forEach(s => s.payback = null); cityMapPage.update(); });
+    assert.equal(await chip.getAttribute('data-tip'), en('map.show.sale.tip2'));
+    assert.equal(await page.evaluate(() => { D.premises = null; return MAP_WORDS.showSaleTip; }), en('map.show.sale.tip2'));
+  } finally { await page.close(); }
+});
+
+test('sale sort defaults, validation, storage and saved identities follow the visible list', async () => {
+  const {page} = await fixture();
+  try{
+    await openMap(page); await turnOn(page);
+    assert.deepEqual(await page.evaluate(() => {
+      const v = cityMapPage, f = {...v.fs, show: 'sale'};
+      return [finderDefaults().saleSort, finderPick({...f, saleSort: 'unknown'}).saleSort,
+        v.savedFilters({filters: {...f, saleSort: undefined}}).saleSort,
+        v.savedFilters({filters: {...f, saleSort: 'unknown'}}).saleSort,
+        v.savedKey({...f, saleSort: 'price'}) !== v.savedKey({...f, saleSort: 'payback'}),
+        v.savedKey({...f, saleSort: 'payback', sort: 'traffic'}) === v.savedKey({...f, saleSort: 'payback', sort: 'score'}),
+        v.savedKey({...f, show: 'rent', saleSort: 'price'}) === v.savedKey({...f, show: 'rent', saleSort: 'payback'})];
+    }), ['price', 'price', 'price', 'price', true, true, true]);
+    await page.locator('#cityMapPage .fchip.show[data-show="sale"]').click();
+    await page.locator('#cityMapPage .fhead [data-s="payback"]').click();
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem(cityMapPage.finderStore())).saleSort), 'payback');
+    assert.deepEqual(await page.evaluate(() => {
+      const v = cityMapPage, store = v.finderStore();
+      v.fsCharacter = null; v.loadFinder(); const kept = v.fs.saleSort;
+      localStorage.setItem(store, JSON.stringify({saleSort: 'unknown'}));
+      v.fsCharacter = null; v.loadFinder(); const invalid = v.fs.saleSort;
+      v.fs.saleSort = 'payback'; v.setFinder();
+      return [kept, invalid, v.fs.saleSort];
+    }), ['payback', 'price', 'price']);
+    // A ranked search, applied, leaves the For sale order as the player left it.
+    assert.equal(await page.evaluate(() => {
+      const v = cityMapPage;
+      v.saveSearch('Ranked'); finderKeepSaved(finderSaved().map(s => s.name === 'Ranked' ? {...s, filters: {...s.filters, show: 'rent', saleSort: 'price'}} : s));
+      v.fs.saleSort = 'payback'; v.applySaved('Ranked');
+      return v.fs.saleSort;
+    }), 'payback');
   } finally { await page.close(); }
 });

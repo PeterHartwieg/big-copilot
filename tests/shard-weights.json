@@ -59,6 +59,7 @@
   "tests/plan_extra.test.cjs": 6,
   "tests/plans_contracts.test.cjs": 8.0,
   "tests/progress.test.cjs": 26.5,
+  "tests/real_estate.test.cjs": 11.5,
   "tests/release.test.cjs": 3.5,
   "tests/report.test.cjs": 0.2,
   "tests/report_flow.test.cjs": 10.8,
