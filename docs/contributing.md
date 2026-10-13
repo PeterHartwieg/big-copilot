@@ -236,9 +236,19 @@ The amounts live in a private ledger outside the repository,
 ## New feature badges
 
 New user-facing features get a small `New` badge on their navigation link or
-entry button until the player first opens them. Reuse the shared
-`featureDiscovery` helper in `template/board.html`; keep a stable feature ID across
-releases so routine updates do not reannounce an already visited feature.
+entry button until the player first opens them, or until 45 days after the
+feature shipped, whichever comes first. Reuse the shared `featureDiscovery`
+helper in `template/board.html`; keep a stable feature ID across releases so
+routine updates do not reannounce an already visited feature.
+
+Register every feature ID in `NEW_SINCE` in that helper, with the date of its
+`web/changelog.json` entry. The 45 days (`NEW_DAYS`) are counted to the newest
+changelog date the page ships with, not to the visitor's clock, so a badge
+retires with the first build after its window and a first-time visitor sees
+only the recent ones. An ID without a date keeps its badge;
+`tests/feature_badges.test.cjs` fails until it has one, and also fails on a date
+no badge uses any more, so delete the row when you remove a badge. Tests that
+need a badge on screen pin the day with `featureDiscovery.asOf(date)`.
 
 For a top-level page, add `newFeature: "your-feature-id"` to its `PAGES` entry;
 navigation renders the badge and records the visit automatically, including
@@ -251,7 +261,9 @@ same ID on all entry points so their badges disappear together.
 Visits are stored per browser under `ba_dash_feature_seen:<id>`, independently
 of the loaded save. If storage is unavailable, dismissal lasts for the current
 page session. Map and Changelog are the first examples; new changelog entries
-do not reset the Changelog feature badge. Assemble with `python build_web.py --assemble` to see them.
+do not reset the Changelog feature badge. A Wiki topic's badge is the same
+helper: list its slug in `WIKI_NEW` in `web/wiki.js` and date
+`wiki-topic-<slug>` in `NEW_SINCE`. Assemble with `python build_web.py --assemble` to see them.
 
 ## Map assets
 

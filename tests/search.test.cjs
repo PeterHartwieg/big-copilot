@@ -1358,6 +1358,7 @@ test('the search control wears the New badge until the palette first opens, and 
     const page = await board({width, height: 900});
     try {
       if (chip) await withChip(page);
+      await page.evaluate(() => featureDiscovery.asOf(featureDiscovery.since['board-search']));
       // On a phone the control is in the sidebar's drawer.
       if (width <= 560) await page.click('#phoneMore');
       await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));

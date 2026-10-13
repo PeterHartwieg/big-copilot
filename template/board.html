@@ -4833,15 +4833,61 @@ section.od-updating{background-image:linear-gradient(90deg,transparent,var(--acc
   <ol class="changelog-list"><!--__CHANGELOG__--></ol>
 </dialog>
 <script>
-/* Shared feature discovery: stable IDs persist across releases and saves. */
+/* Shared feature discovery: stable IDs persist across releases and saves.
+   Each id is registered in NEW_SINCE with the date its feature shipped (its
+   changelog entry). A badge shows until the player opens the feature, or until
+   NEW_DAYS have passed between that date and the newest changelog entry this
+   page ships with: a badge retires with the first build after its window, and
+   the visitor's clock plays no part. docs/contributing.md, "New feature badges". */
 const featureDiscovery = (() => {
+  const NEW_DAYS = 45;
+  const NEW_SINCE = {
+    "map": "2026-09-12",
+    "changelog": "2026-09-13",
+    "community-voting": "2026-09-13",
+    "wiki": "2026-09-14",
+    "wiki-topics": "2026-09-15",
+    "wiki-topic-how-rent-works": "2026-09-15",
+    "game-link": "2026-09-22",
+    "board-search": "2026-09-24",
+    "floor-plans": "2026-09-25",
+    "open-store": "2026-09-29",
+    "factory-flow": "2026-10-01",
+    "feature-requests": "2026-10-05",
+    "plans-contracts": "2026-10-11",
+    "real-estate-buildings": "2026-10-13",
+    "real-estate-buy": "2026-10-13",
+  };
   const seen = new Set();
   const key = id => 'ba_dash_feature_seen:' + id;
+  let pinned = '';
+  /* The newest changelog date on the page; the changelog dialog lists them all. */
+  function today(){
+    if(pinned) return pinned;
+    let newest = '';
+    try {
+      document.querySelectorAll('#changelogDialog time[datetime]').forEach(t => {
+        const d = t.getAttribute('datetime') || '';
+        if(d > newest) newest = d;
+      });
+    } catch(e) {}
+    return newest;
+  }
+  /* Still inside its window. An id with no date, or a page with no changelog,
+     keeps its badge: tests/feature_badges.test.cjs holds every badge id to a date. */
+  function recent(id){
+    const since = Date.parse(NEW_SINCE[id]), now = Date.parse(today());
+    return !(since === since && now === now) || now - since < NEW_DAYS * 864e5;
+  }
+  function isNew(id){
+    if(!seen.has(id)) {
+      try { if(localStorage.getItem(key(id)) === '1') seen.add(id); } catch(e) {}
+    }
+    return !seen.has(id) && recent(id);
+  }
   function refresh(){
     document.querySelectorAll('[data-new-feature]').forEach(badge => {
-      const id = badge.dataset.newFeature;
-      try { if(localStorage.getItem(key(id)) === '1') seen.add(id); } catch(e) {}
-      badge.hidden = seen.has(id);
+      badge.hidden = !isNew(badge.dataset.newFeature);
     });
   }
   function visit(id){
@@ -4850,7 +4896,9 @@ const featureDiscovery = (() => {
     try { localStorage.setItem(key(id), '1'); } catch(e) {}
     refresh();
   }
-  return {refresh, visit};
+  /* Tests pin the day the windows are counted to, so they do not age. */
+  function asOf(date){ pinned = date || ''; refresh(); }
+  return {refresh, visit, isNew, asOf, since: NEW_SINCE, days: NEW_DAYS};
 })();
 featureDiscovery.refresh();
 /* --- changelog dialog ------------------------------------------------ */
