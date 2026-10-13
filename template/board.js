@@ -51,11 +51,16 @@ const fmt = n => (n<0?"-":"") + "$" + num(Math.round(Math.abs(n)));
    gnRedraw()). Never call a bare toLocaleString(): it follows the browser. */
 let NUM_LOCALE = typeof ttNumLocale === "function" ? ttNumLocale() : "en-US";
 const num = (n, opts) => Number(n).toLocaleString(NUM_LOCALE, opts);
+/* Compact money, "$1.25M" / "$120k" / "$75", in the UI's number locale
+   ("$1,25M" on a German board), as tt()'s {w:$c} writes it; never grouped. */
 const compact = n => {
-  const a = Math.abs(n), s = n<0?"-":"";
-  if(a>=1e6) return s+"$"+(a/1e6).toFixed(a>=1e7?1:2)+"M";
-  if(a>=1e3) return s+"$"+Math.round(a/1e3)+"k";
-  return s+"$"+Math.round(a);
+  const a = Math.abs(n), s = n<0?"-":"", plain = {useGrouping: false};
+  if(a>=1e6){
+    const d = a>=1e7?1:2;
+    return s+"$"+num(a/1e6, {minimumFractionDigits: d, maximumFractionDigits: d, useGrouping: false})+"M";
+  }
+  if(a>=1e3) return s+"$"+num(Math.round(a/1e3), plain)+"k";
+  return s+"$"+num(Math.round(a), plain);
 };
 /* localStorage, every access guarded: a private window or a full quota throws,
    and a choice that cannot be kept is simply not kept. A value that is not
@@ -1305,7 +1310,7 @@ const VIEWS = {
       [tt("co.col.marketing", "Marketing"), b=>fmt(-b.marketing), "", b=>b.marketing],
       [tt("co.col.theft", "Theft"), b=>b.theft?fmt(-b.theft):"—", "", b=>b.theft],
       [tt("co.col.profit", "Profit"), b=>`<span class="${sign(b.profit)}">${fmt(b.profit)}</span>`, "", b=>b.profit],
-      [tt("co.col.margin", "Margin"), b=>b.margin===null?"—":`${b.margin.toFixed(1)}%`, "", b=>b.margin??-999],
+      [tt("co.col.margin", "Margin"), b=>b.margin===null?"—":tt("co.pnl.margin.v", "{x:.1f}%", {x: b.margin}), "", b=>b.margin??-999],
       /* When the investment is earned back (paybackCell()); a cost centre's
          counts in its chain's row, not its own. */
       [tt("co.col.payback", "Payback"), b=>paybackCell(paybackSite(b.key)), "", b=>paybackRank(paybackSite(b.key))],
@@ -1317,7 +1322,7 @@ const VIEWS = {
                  fmt(-c.cogs), fmt(-c.wages), fmt(-c.rent),
                  fmt(-c.marketing), c.theft?fmt(-c.theft):"—",
                  `<b class="${sign(c.profit)}">${fmt(c.profit)}</b>`,
-                 c.margin===null?"—":`${c.margin.toFixed(1)}%`,
+                 c.margin===null?"—":tt("co.pnl.margin.v", "{x:.1f}%", {x: c.margin}),
                  paybackCell(paybackChain(c), true)],
     chainKey: (c, i) => i === 2 ? c.change ?? -999 : i === 10 ? paybackRank(paybackChain(c)) : VIEWS.pnl.cols[i][3](c),
     total: bs => ["", fmt(sum(bs,"revenue")), "", fmt(-sum(bs,"cogs")), fmt(-sum(bs,"wages")),
@@ -1334,7 +1339,7 @@ const VIEWS = {
       [tt("co.col.customers", "Customers"), b=>b.customers?num(b.customers):"—", "", b=>b.customers],
       // An office's customer is an hour billed, so its spend is per hour.
       [tt("co.col.basket", "Spend / visit"), b=>b.basket===null?"—":b.status==="office"
-        ? tt("co.ops.basket.hour", "${x:.2f}/hour", {x: b.basket}) : `$${b.basket.toFixed(2)}`, "", b=>b.basket??-1],
+        ? tt("co.ops.basket.hour", "${x:.2f}/hour", {x: b.basket}) : tt("co.ops.basket.visit", "${x:.2f}", {x: b.basket}), "", b=>b.basket??-1],
       // Satisfaction and promotion are the Standards table's own columns, above this one.
       [tt("co.col.traffic", "Foot traffic"), b=>b.customers?gauge(b.traffic):"—", "gauge", b=>b.traffic],
       [tt("co.col.marketing", "Marketing"), b=>b.customers?meter(b.marketingIndex):"—", "gauge", b=>b.marketingIndex],
@@ -7577,7 +7582,7 @@ function drawSite(){
     <table>
       <thead><tr><th>${tt("sp.fees.col.fee", "Fee")}</th><th>${tt("sp.fees.col.hours", "Hours billed / day")}</th><th>${tt("sp.shelf.col.revenue", "Revenue / day")}</th></tr></thead>
       <tbody>${shelves.map(l => `<tr data-el="${attr(spKeyTok(l.slug, l.item))}">
-          <td class="l">${spEsc(l.item)}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : tt("sp.shelf.noprice", "no price")}</span></td>
+          <td class="l">${spEsc(l.item)}<span class="sub">${l.price ? tt("sp.shelf.price", "${x:.2f}", {x: l.price}) : tt("sp.shelf.noprice", "no price")}</span></td>
           <td>${num(l.soldPerDay)}</td>
           <td>${fmt(l.revenue)}</td></tr>`).join("")}</tbody></table>` : `<p class="quiet">${tt("sp.fees.none", "Nothing billed here yet.")}</p>`)
     : shelves.length ? `
@@ -7599,7 +7604,7 @@ function drawSite(){
         /* The shelf's word, as Checks says it; a shelf Python did not judge has none. */
         const word = sp && supplyFact(siteTab, l.slug) && f.st !== "covered" ? ` ${szChip(f)}` : "";
         return `<tr data-el="${attr(spKeyTok(l.slug, l.item))}${over ? " outruns" : ""}">
-          <td class="l">${spEsc(l.item)}${word}<span class="sub">${l.price ? `$${l.price.toFixed(2)}` : tt("sp.shelf.noprice", "no price")}</span></td>
+          <td class="l">${spEsc(l.item)}${word}<span class="sub">${l.price ? tt("sp.shelf.price", "${x:.2f}", {x: l.price}) : tt("sp.shelf.noprice", "no price")}</span></td>
           <td>${num(l.soldPerDay)}</td>
           <td>${over && !deal ? `<span class="sp-red">${busiest}</span>` : busiest}</td>
           <td>${fmt(l.revenue)}</td>
@@ -17133,7 +17138,7 @@ function hrReview(o = {}, hooks = {}){
       const bytes = hrBodyBytes(hrLast.req.body);
       if(bytes > HR_MAX_BODY)
         return tt("co.hire.toolarge", "This is more than the game link takes in one go: the weeks of {n} sites come to {mb} MB, and the link takes 2 MB. Staff the sites one at a time from their Staffing, or narrow a role's filters so fewer sites are hired into.",
-          {n: c.sites, mb: (bytes / 1048576).toFixed(1)});
+          {n: c.sites, mb: num(bytes / 1048576, {minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false})});
       return "";
     },
     nothingSay: () => hrLast && hrBodyBytes(hrLast.req.body) > HR_MAX_BODY ? `<b>${tt("co.hire.toomuch", "Too much for one go")}</b>` : "",
@@ -26277,7 +26282,7 @@ function startWatching(){
     lost(){
       const dot = $("live");
       /* "Not live" replaces a Stale mark: nothing repaints an off dot. */
-      if(dot){ dot.classList.remove("stale"); dot.title = ""; dot.classList.add("off"); dot.querySelector("em").textContent = "Not live"; }
+      if(dot){ dot.classList.remove("stale"); dot.title = ""; dot.classList.add("off"); dot.querySelector("em").textContent = tt("nav.notlive.word", "Not live"); }
     },
   });
 }
