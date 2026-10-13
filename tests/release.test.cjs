@@ -15,7 +15,7 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
     page.on('pageerror', error => errors.push(error.message));
     const base = process.env.RELEASE_URL || 'http://release.test/';
     if(!process.env.RELEASE_URL) {
-      const files = new Set(['/index.html','/app.js','/worker.js','/community.js','/community.css','/maps/locations.json','/maps/map-background.svg','/wiki-data.json']);
+      const files = new Set(['/index.html','/app.js','/worker.js','/community.js','/community.css','/maps/locations.json','/maps/map-background.svg','/wiki-data.min.json']);
       await page.route('**/*', route => {
         const url = new URL(route.request().url());
         if(url.hostname === 'release.test' && url.pathname === '/api/community/features') return route.fulfill({contentType:'application/json',body:JSON.stringify({features:[]})});

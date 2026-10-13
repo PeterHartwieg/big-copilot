@@ -338,7 +338,7 @@ test('opening another page starts at its own top, however far down its link was'
 test('the catalogue is fetched once, with the build stamp on it', async () => {
   const w = wiki();
   await w.load('wiki');
-  assert.deepEqual(w.fetched, ['wiki-data.json?v=stamp1']);
+  assert.deepEqual(w.fetched, ['wiki-data.min.json?v=stamp1']);
   await w.go('wiki/products-cheapgift');
   await w.go('wiki');
   assert.equal(w.fetched.length, 1, 'moving around the wiki does not fetch it again');
@@ -751,8 +751,24 @@ test('every address the shipped catalogue links to is a building on the map', {s
   assert.deepEqual(unresolved, [], 'an address that resolves to nothing would be a pin that goes nowhere');
   assert.ok(raw.size > 20, 'and the corpus really does carry addresses');
   // The extraction resolves the guide's suppliers itself; the two agree.
-  for (const [key, supplier] of Object.entries(real.guides['businesstypes-giftshop'].SUPPLIERS))
+  // A guide lists the site keys it names; the rows sit once, in the top-level table.
+  for (const key of real.guides['businesstypes-giftshop'].SUPPLIERS) {
+    const supplier = real.SUPPLIERS[key];
     assert.equal(w.call(`wikiAddressKey(${JSON.stringify(supplier.street)})`), key, supplier.name);
+  }
+});
+
+/* The payload writes what the guides share once (share_guide_tables() in
+   tools/build_wiki_data.py): supplier rows in a top-level table the guide names
+   by key, its SOURCES in provenance.guideSources, its labels in the top-level
+   COPY. A guide written that way draws exactly as one carrying its own. */
+test('a guide written with the shared tables draws as one carrying its own', async () => {
+  const {SUPPLIERS, SOURCES, ...rest} = GIFT_GUIDE;
+  const shared = {...DATA, SUPPLIERS: {...SUPPLIERS},
+    provenance: {...(DATA.provenance || {}), guideSources: SOURCES},
+    guides: {'businesstypes-giftshop': {...rest, SUPPLIERS: Object.keys(SUPPLIERS)}}};
+  for (const route of ['wiki/businesstypes-giftshop', 'wiki/general-movement'])
+    assert.equal(await wiki({data: shared}).load(route), await wiki().load(route), route);
 });
 
 /* --- the authored page --------------------------------------------------- */

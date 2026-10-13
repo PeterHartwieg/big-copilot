@@ -33,6 +33,11 @@ import os
 import re
 from xml.sax.saxutils import escape as xml_escape
 
+try:
+    from .wiki_data import expand_guides
+except ImportError:  # direct tools script
+    from wiki_data import expand_guides
+
 SITE = "https://bigcopilot.com"
 FURNITURE = "common_furniture"
 TOPIC_LABEL = "Big Copilot topics"
@@ -465,8 +470,9 @@ def build(data: dict) -> dict[str, str]:
 
 
 def load(web: str) -> dict:
+    """The committed payload, each guide with its shared tables put back."""
     with open(os.path.join(web, "wiki-data.json"), encoding="utf-8") as fh:
-        return json.load(fh)
+        return expand_guides(json.load(fh))
 
 
 def existing(web: str) -> set[str]:

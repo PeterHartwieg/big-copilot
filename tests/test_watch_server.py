@@ -189,7 +189,7 @@ class WatchServer(unittest.TestCase):
     def test_only_a_loopback_host_is_served(self):
         """EX-4 in #110: a page on a name rebound to 127.0.0.1 sends its own Host."""
         port = self.server.server_port
-        for route in ("/", "/data.json", "/stamp", "/wiki-data.json"):
+        for route in ("/", "/data.json", "/stamp", "/wiki-data.min.json"):
             for host in ("attacker.example", f"attacker.example:{port}", f"127.0.0.1:{port + 1}", ""):
                 request = urllib.request.Request(self.base + route, headers={"Host": host})
                 self.assertEqual(self.refused(request), 403, (route, host))

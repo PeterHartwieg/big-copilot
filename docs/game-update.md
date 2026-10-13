@@ -358,8 +358,8 @@ confirm the loss is real and run `python build_web.py --allow-fewer-guides`. The
 
 A line diff of `web/wiki-data.json` runs to hundreds of lines for one changed fact.
 `textdiff.py` compares both files with `HEAD` by key and by page instead, and prints the
-first difference inside each. It leaves out what every rebuild changes: the per-guide
-`SOURCES` and the Steam build id the guides quote. `0 change(s) outside provenance` means
+first difference inside each, with each guide's shared supplier rows put back. It leaves
+out what every rebuild changes: the guides' `SOURCES` and the Steam build id the guides quote. `0 change(s) outside provenance` means
 the game text the board ships did not change.
 
 Read each change:

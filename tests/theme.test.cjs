@@ -9,7 +9,7 @@ const path = require('node:path');
 const {chromium} = require('playwright');
 
 const FILES = new Set(['/index.html', '/app.js', '/worker.js', '/community.js', '/community.css',
-  '/maps/locations.json', '/maps/map-background.svg', '/wiki-data.json']);
+  '/maps/locations.json', '/maps/map-background.svg', '/wiki-data.min.json']);
 
 /* The page, served from web/ with nothing else reachable. colorScheme is the
    operating system's setting, which "auto" follows and a choice overrides. */

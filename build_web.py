@@ -35,8 +35,8 @@ import shutil
 import tokenize
 
 from ba_dashboard import (
-    FLOOR_PLAN_KINDS, GAME_NAME_LANGS, IMPORTER_TEXT, NAME_COVERAGE, NAME_PREFIXES, VERIFIED_BUILD, footer_html,
-    name_coverage, name_table, render,
+    FLOOR_PLAN_KINDS, GAME_NAME_LANGS, IMPORTER_TEXT, NAME_COVERAGE, NAME_PREFIXES, VERIFIED_BUILD, WIKI_SERVED,
+    compact_wiki, footer_html, name_coverage, name_table, render,
 )
 from ba_save import NotEnglishText, bundled_locale, load_game_locale, load_locale, locale_search_paths
 from tools.build_wiki_data import (
@@ -930,6 +930,12 @@ def check(root: str = HERE) -> list[str]:
         shipped_topics = None
     if shipped_topics != wiki_topics(os.path.join(root, "tools", "wiki_topics.json")):
         stale.append("web/wiki-data.json")
+    # The compact copy the page fetches, from the committed catalogue.
+    try:
+        if differs("web/" + WIKI_SERVED, served_wiki(root)):
+            stale.append("web/" + WIKI_SERVED)
+    except (OSError, ValueError):
+        stale.append("web/" + WIKI_SERVED)
     release = release_info(root)
     if differs("web/version.json", release_json(release) + "\n"):
         stale.append("web/version.json")
@@ -982,6 +988,17 @@ def splice_wiki_topics(root: str = HERE) -> bool:
     return True
 
 
+def served_wiki(root: str = HERE) -> str:
+    """web/wiki-data.min.json: the committed catalogue without its indentation.
+
+    The committed file stays indented so a rebuild's diff reads line by line
+    (docs/game-update.md); the page fetches this copy instead (WIKI_URL in
+    web/wiki.js). Gitignored, like the rest of the assembled site.
+    """
+    with open(os.path.join(root, "web", "wiki-data.json"), encoding="utf-8") as fh:
+        return compact_wiki(fh.read())
+
+
 def assemble(root: str = HERE) -> None:
     """Write every file check() compares, from the committed sources; no game.
 
@@ -1006,6 +1023,8 @@ def assemble(root: str = HERE) -> None:
         raise SystemExit(f"web/wiki-data.json: cannot carry tools/wiki_topics.json into it: {exc}") from None
     if spliced:
         print("web/wiki-data.json: hand-written articles updated from tools/wiki_topics.json")
+    with open(os.path.join(web, WIKI_SERVED), "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(served_wiki(root))
     # The static wiki pages, sitemap.xml and robots.txt follow the payload.
     pages = wiki_pages.write(web)
     print(f"web/wiki/: {pages} static pages, sitemap.xml and robots.txt")

@@ -22120,6 +22120,19 @@ def script_json(text: str) -> str:
     return text.replace("<", "\\u003c")
 
 
+# The wiki catalogue as the page receives it. web/wiki-data.json is committed
+# indented, so a rebuild's diff can be read; a quarter of it is indentation,
+# which the page would only download and parse. The site fetches this compact
+# copy (WIKI_URL in web/wiki.js), which build_web.py writes beside it, the
+# watch server answers the same path, and an export embeds the same text.
+WIKI_SERVED = "wiki-data.min.json"
+
+
+def compact_wiki(text: str) -> str:
+    """web/wiki-data.json's text without its indentation; the same JSON."""
+    return json.dumps(json.loads(text), ensure_ascii=False, separators=(",", ":"))
+
+
 def render(
     data: dict | None,
     live: bool = False,
@@ -22232,7 +22245,7 @@ def render(
         catalogue = optional_asset("wiki-data.json")
         if catalogue:
             wiki_payload = ("window.BIG_COPILOT_WIKI="
-                            + script_json(catalogue.strip()) + ";")
+                            + script_json(compact_wiki(catalogue)) + ";")
     # The <html> start tag is optional and the page never closed one, so this
     # only names the language of the element the parser makes anyway.
     return "<!doctype html>" + chr(10) + '<html lang="en">' + chr(10) + '<meta charset="utf-8">' + chr(10) + head + (
@@ -23058,8 +23071,24 @@ class BoardHandler(_RequestHandler):
             "/maps/locations.json": "application/json",
             "/maps/map-background.svg": "image/svg+xml",
             "/maps/floor-plans.json": "application/json",
-            "/wiki-data.json": "application/json",
         }
+        # The wiki's compact copy, made here from the committed catalogue: a
+        # checkout run without build_web.py has no web/wiki-data.min.json.
+        if route == "/" + WIKI_SERVED:
+            try:
+                with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "web",
+                                       "wiki-data.json"), encoding="utf-8") as fh:
+                    body = compact_wiki(fh.read()).encode("utf-8")
+            except (OSError, ValueError):
+                self.send_error(404)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if route in map_assets:
             path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", route.lstrip("/"))
             try:

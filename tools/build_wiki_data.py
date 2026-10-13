@@ -53,10 +53,13 @@ WHOLESALER_PAGE = "wholesalers_locations"
 # its guide without a list here being edited.
 GUIDE_EXCLUDED = ("factory", "headquarters", "warehouse")
 
-# The keys each business guide carries, including compatibility fields.
+# The keys each business guide carries once its shared tables are put back
+# (wiki_data.expand_guides()), including compatibility fields. As written, a
+# guide's SUPPLIERS is the list of site keys it names, and SOURCES is left out
+# when it is the shared provenance.guideSources (share_guide_tables()).
 GUIDE_FIELDS = ("BUSINESS", "PRODUCTS", "RECIPES", "WORKSTATIONS", "WORKSTATION",
-                "FIXTURES", "SUPPLIERS", "WHOLESALERS", "RETAIL_SIZES", "CATEGORIES",
-                "SOURCES", "GAPS", "COPY")
+                "FIXTURES", "SUPPLIERS", "WHOLESALERS", "RETAIL_SIZES",
+                "SOURCES", "GAPS")
 
 # A fee the help says is collected by itself. Only those words make a fee
 # automatic: a ticket page that lists what collecting it requires is not.
@@ -846,8 +849,7 @@ class Guide:
     """
 
     def __init__(self, short, locale, records, suppliers, holders, layouts, wholesale_slugs,
-                 wholesaler_list, slugs_by_prefix, importer_pages, categories, sources_for, ui,
-                 words):
+                 wholesaler_list, slugs_by_prefix, importer_pages, sources_for, words):
         self.short = short
         self.words = words  # the authored wording, read once per build
         self.locale = locale
@@ -859,9 +861,7 @@ class Guide:
         self.wholesaler_list = wholesaler_list
         self.slugs_by_prefix = slugs_by_prefix
         self.importer_pages = importer_pages
-        self.categories = categories
         self.sources_for = sources_for
-        self.ui = ui
         self.prefix = "ba:businesstype_" + short
         self.record = self.records.get(self.prefix) or {}
         self.touched: set[str] = set()    # help prefixes this guide reads
@@ -1435,11 +1435,33 @@ class Guide:
             "SUPPLIERS": self.suppliers(),
             "WHOLESALERS": self.wholesalers(),
             "RETAIL_SIZES": self.retail_sizes(),
-            "CATEGORIES": _guide_categories(self.categories, self),
             "SOURCES": self.sources_for(self.short),
             "GAPS": self.gaps(),
-            "COPY": dict(self.ui),
         }
+
+
+def share_guide_tables(guides: dict, guide_sources: dict) -> dict:
+    """Write once what the guides share, in place; return the supplier table.
+
+    Every guide used to carry its own copy of the same supplier rows, the same
+    labels (COPY) and, all but the Gift Shop, the same SOURCES block: about a
+    sixth of the file. Now a guide's SUPPLIERS is the sorted list of the site
+    keys it names, the rows sit once in the returned table (the payload's
+    top-level SUPPLIERS), and a guide's SOURCES is left out when it is
+    `guide_sources` (provenance.guideSources). The labels are the payload's
+    top-level COPY. wiki_data.expand_guides() and wikiExpandGuides() in
+    web/wiki.js put each guide back the way it reads.
+    """
+    table: dict = {}
+    for page_id, guide in guides.items():
+        for key, row in guide["SUPPLIERS"].items():
+            if table.setdefault(key, row) != row:
+                raise wiki_data.SourceError("guide %s describes supplier %s unlike another guide"
+                                            % (page_id, key))
+        guide["SUPPLIERS"] = sorted(guide["SUPPLIERS"])
+        if guide["SOURCES"] == guide_sources:
+            del guide["SOURCES"]
+    return {key: table[key] for key in sorted(table)}
 
 
 def retail_rows(locale: dict[str, str], touch=None) -> list[dict]:
@@ -1463,7 +1485,7 @@ def retail_rows(locale: dict[str, str], touch=None) -> list[dict]:
 
 
 def build_guides(locale, records, suppliers, holders, layouts, wholesalers, wholesale_slugs,
-                 slugs_by_prefix, importer_pages, categories, sources_for, ui, words,
+                 slugs_by_prefix, importer_pages, sources_for, words,
                  common_gaps=None) -> dict:
     """A guide per customer-facing business type, keyed by its help page's id."""
     owners: dict[str, list[dict]] = {}
@@ -1485,8 +1507,8 @@ def build_guides(locale, records, suppliers, holders, layouts, wholesalers, whol
             continue
         builder = Guide(
             short, locale, records, suppliers, holders, owners.get(short, []),
-            wholesale_slugs, wholesalers, slugs_by_prefix, importer_pages, categories,
-            sources_for, ui, words,
+            wholesale_slugs, wholesalers, slugs_by_prefix, importer_pages,
+            sources_for, words,
         )
         guide = builder.build()
         if common_gaps:
@@ -1811,6 +1833,28 @@ def validate_public(payload: dict) -> None:
     guides = payload.get("guides")
     if not isinstance(guides, dict) or not guides:
         raise wiki_data.SourceError("payload has no guides")
+    # What the guides share is written once (share_guide_tables()); check that
+    # part as written, then every guide as it reads once expanded.
+    copy = payload.get("COPY")
+    if not isinstance(copy, dict):
+        raise wiki_data.SourceError("payload has no shared COPY")
+    for field in GUIDE_UI_FALLBACKS:
+        if field not in copy:
+            raise wiki_data.SourceError("COPY has no %s" % field)
+    table = payload.get("SUPPLIERS")
+    if not isinstance(table, dict):
+        raise wiki_data.SourceError("payload has no shared SUPPLIERS")
+    if not isinstance(provenance.get("guideSources"), dict):
+        raise wiki_data.SourceError("provenance has no guideSources")
+    for key, guide in guides.items():
+        listed = guide.get("SUPPLIERS") if isinstance(guide, dict) else None
+        if not isinstance(listed, list):
+            raise wiki_data.SourceError("guide %s SUPPLIERS is not a list of keys" % key)
+        for key_ in listed:
+            if key_ not in table:
+                raise wiki_data.SourceError("guide %s names supplier %s the table does not hold"
+                                            % (key, key_))
+    guides = wiki_data.expand_guides(json.loads(json.dumps(payload)))["guides"]
     page_ids = seen
     retail_building = wording()["buildingWords"].get("retail buildings")
     for key, guide in guides.items():
@@ -1921,9 +1965,6 @@ def validate_public(payload: dict) -> None:
                 owner = row["path"].split("BusinessLayouts/")[1].split("/")[0].lower()
                 if owner != short:
                     raise wiki_data.SourceError("guide %s carries %s layouts" % (key, owner))
-        for field, value in GUIDE_UI_FALLBACKS.items():
-            if field not in guide["COPY"]:
-                raise wiki_data.SourceError("guide %s COPY has no %s" % (key, field))
 
     validate_topics(payload.get("topics"))
 
@@ -2027,7 +2068,10 @@ def build_public_wiki(data_dir: str | None = None, buildings_path: str | None = 
 
     guides = build_guides(locale, records, suppliers, holders_by_product(records), layouts,
                           wholesalers, wholesale_slugs, slugs_by_prefix, importer_pages,
-                          categories, sources_for, ui, words, common_gaps)
+                          sources_for, words, common_gaps)
+    # What every guide shares is written once (share_guide_tables()).
+    guide_sources = sources_for("")
+    supplier_table = share_guide_tables(guides, guide_sources)
 
     provenance = build_provenance(
         structure_info, pages, help_pages, duplicates, without_content,
@@ -2037,6 +2081,7 @@ def build_public_wiki(data_dir: str | None = None, buildings_path: str | None = 
     )
     provenance["sources"]["locale"] = locale_meta
     provenance["sources"]["helpStructure"] = structure_meta
+    provenance["guideSources"] = guide_sources
     provenance["counts"]["categories"] = len(categories)
     provenance["counts"]["guides"] = len(guides)
     built = {guide["BUSINESS"]["nameSrc"].removeprefix("ba:businesstype_") for guide in guides.values()}
@@ -2049,6 +2094,9 @@ def build_public_wiki(data_dir: str | None = None, buildings_path: str | None = 
         "categories": categories,
         "pages": pages,
         "guides": guides,
+        # the guides' shared labels and supplier rows (share_guide_tables())
+        "COPY": dict(ui),
+        "SUPPLIERS": supplier_table,
         "topics": topics(),
         "provenance": provenance,
     }
@@ -2197,21 +2245,6 @@ def _layout_meta(streaming_dir, layout) -> dict:
     meta["build"] = layout["build"]
     meta["items"] = layout["items"]
     return meta
-
-
-def _guide_categories(categories: list[dict], guide: "Guide") -> list[dict]:
-    """The guide's CATEGORIES block: how much of each group the guide reads."""
-    covered = {page_id for page_id in (guide.slugs_by_prefix.get(prefix)
-                                       for prefix in guide.touched) if page_id}
-    return [
-        {
-            "key": category["id"],
-            "name": category["label"],
-            "pages": category["count"],
-            "sample": sum(1 for page_id in category["pageIds"] if page_id in covered),
-        }
-        for category in categories
-    ]
 
 
 def serialise(payload: dict) -> str:

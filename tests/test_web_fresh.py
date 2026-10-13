@@ -34,7 +34,7 @@ CHECK_INPUTS = tuple(dict.fromkeys(
     build_web.STAMP_INPUTS
     + tuple(build_web.worker_assets()[1])
     + build_web.PY_COPIED + tuple(f"web/py/{name}" for name in build_web.PY_COPIED)
-    + ("web/version.json", "web/index.html", "web/update.js", "web/translate/index.html")
+    + ("web/version.json", "web/index.html", "web/update.js", "web/translate/index.html", "web/wiki-data.min.json")
 ))
 
 # What a standalone `python build_web.py --check` reads on top of those: the
@@ -413,7 +413,7 @@ class CommandLine(SharedCopy):
             raise AssertionError("assemble() looked for the installed game")
 
         tmp = self.root
-        assembled = ("web/index.html", "web/version.json", "web/sitemap.xml", "web/robots.txt",
+        assembled = ("web/index.html", "web/version.json", "web/sitemap.xml", "web/robots.txt", "web/wiki-data.min.json",
                      *(f"web/py/{name}" for name in build_web.PY_COPIED))
         # What assemble() deletes or writes, put back for the other tests.
         with kept(tmp, *assembled, "web/translate/index.html", "web/wiki-data.json", "tools/wiki_topics.json",
