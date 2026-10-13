@@ -163,7 +163,11 @@ _PLACEHOLDER_RE = re.compile(r"\{[a-zA-Z][a-zA-Z0-9]*\}")
 
 
 def wording() -> dict:
-    """The authored sentences, read per build."""
+    """The authored sentences, read from `WORDING_PATH`.
+
+    `build_public_wiki()` reads it once and hands the dict down as `words`;
+    nothing below it opens the file again.
+    """
     with open(WORDING_PATH, encoding="utf-8") as fh:
         return json.load(fh)
 
@@ -413,6 +417,7 @@ def collect_suppliers(
     buildings: dict,
     records: list[dict],
     importer_names: dict[str, str],
+    words: dict,
 ) -> tuple[dict, list[dict]]:
     """Every address the help links, as one supplier per building.
 
@@ -422,7 +427,7 @@ def collect_suppliers(
     building table does not know still gets an entry, with the fields the table
     would have filled left `null` and the miss reported.
     """
-    kinds = wording()["supplierKinds"]
+    kinds = words["supplierKinds"]
     seen: dict[str, dict] = {}
 
     def slot(key: str, raw: str) -> dict:
@@ -440,10 +445,12 @@ def collect_suppliers(
         text = locale[key]
         if not (key.endswith("_content") and isinstance(text, str)):
             continue
-        _, sections = wiki_data.sections(text)
+        sections = None  # parsed on the page's first address link; most pages have none
         for match in _LINK_RE.finditer(text):
             if match.group(2) not in _ADDRESS_KINDS:
                 continue
+            if sections is None:
+                _, sections = wiki_data.sections(text)
             raw = match.group(3).strip()
             address = parse_address(raw)
             entry = slot(site_key(address) if address else "unparsed:" + raw, raw)
@@ -477,7 +484,7 @@ def collect_suppliers(
                 labels.append(label)
         if key in imported:
             dominant = sorted(imported[key].items(), key=lambda item: (-item[1], item[0]))[0][0]
-            labels = [wording()["importerKinds"].get(dominant, "Importer") if label == "Importer"
+            labels = [words["importerKinds"].get(dominant, "Importer") if label == "Importer"
                       else label for label in labels]
         row = buildings.get(address) if address else None
         suppliers[key] = {
@@ -506,7 +513,7 @@ def hood_key(row: dict | None) -> str | None:
     return "ba:neighborhood_" + hood if hood else None
 
 
-def pier_flag(suppliers: dict, locale: dict[str, str] | None = None) -> dict[str, str]:
+def pier_flag(suppliers: dict, words: dict, locale: dict[str, str] | None = None) -> dict[str, str]:
     """A note for the piers, whose neighbourhoods the building table splits.
 
     The help treats the import piers alike; the table puts them in three
@@ -518,7 +525,7 @@ def pier_flag(suppliers: dict, locale: dict[str, str] | None = None) -> dict[str
                     if key.startswith("ba:street_pier#") and s["hood"]})
     if len(hoods) < 2:
         return {}
-    detail = wording()["pierFlag"].format(hoods=", ".join(hoods))
+    detail = words["pierFlag"].format(hoods=", ".join(hoods))
     return {key: detail for key in suppliers if key.startswith("ba:street_pier#")}
 
 
@@ -839,8 +846,10 @@ class Guide:
     """
 
     def __init__(self, short, locale, records, suppliers, holders, layouts, wholesale_slugs,
-                 wholesaler_list, slugs_by_prefix, importer_pages, categories, sources_for, ui):
+                 wholesaler_list, slugs_by_prefix, importer_pages, categories, sources_for, ui,
+                 words):
         self.short = short
+        self.words = words  # the authored wording, read once per build
         self.locale = locale
         self.records = {record["slug"]: record for record in records}
         self.supplier_table = suppliers
@@ -914,12 +923,12 @@ class Guide:
     def _building(self) -> str | None:
         blob = wiki_data.prose_text(wiki_data.sections(
             self.locale.get("help_%s_content" % self.prefix, ""))[0])
-        return next((label for needle, label in wording()["buildingWords"].items()
+        return next((label for needle, label in self.words["buildingWords"].items()
                      if needle in blob.lower()), None)
 
     def retail_sizes(self) -> list[dict]:
         """The retail size rows, for a retail business only."""
-        if self.building != wording()["buildingWords"].get("retail buildings"):
+        if self.building != self.words["buildingWords"].get("retail buildings"):
             return []
         return retail_rows(self.locale, self.touch)
 
@@ -1053,9 +1062,9 @@ class Guide:
     def business(self) -> dict:
         text = self.locale.get("help_%s_content" % self.prefix, "")
         blob = wiki_data.prose_text(wiki_data.sections(text)[0])
-        serving = next((label for needle, label in wording()["servingWords"].items()
+        serving = next((label for needle, label in self.words["servingWords"].items()
                         if needle in blob), None)
-        lede, notes = guide_copy(wording(), self.locale, self.short)
+        lede, notes = guide_copy(self.words, self.locale, self.short)
         skills = self.record.get("skills") or []
         for ref in skills:
             self.touch(ref.get("slug") or "")
@@ -1097,7 +1106,7 @@ class Guide:
             "furnitureSlugs": [ref["slug"].removeprefix("ba:itemname_") for ref in refs],
             "atLeastOneProduct": any(_AT_LEAST_ONE_RE.search(line) for line in bullets) or None,
             "raw": list(bullets),
-            "note": wording()["provenanceNotes"]["requirements"],
+            "note": self.words["provenanceNotes"]["requirements"],
         }
 
     def recruiters(self) -> dict[str, list[str]]:
@@ -1388,7 +1397,7 @@ class Guide:
         The sentences are the authored wording's `guideGaps`; this only decides,
         from the build's own evidence, whether a row is true of this business.
         """
-        templates = wording()["guideGaps"]
+        templates = self.words["guideGaps"]
         gaps = []
         for kind, rows in sorted(self.noted.items()):
             template = templates[kind]
@@ -1400,7 +1409,7 @@ class Guide:
         soft = sorted(product["name"] for product in self.product_entries.values()
                       if product["kind"] == "product" and product["wholesale"] is False)
         if soft:
-            entry = wording()["gaps"]["wholesaleNegative"]
+            entry = self.words["gaps"]["wholesaleNegative"]
             gaps.append({
                 "what": entry["what"],
                 "detail": entry["detail"].format(productsClause=_list_clause(
@@ -1454,7 +1463,8 @@ def retail_rows(locale: dict[str, str], touch=None) -> list[dict]:
 
 
 def build_guides(locale, records, suppliers, holders, layouts, wholesalers, wholesale_slugs,
-                 slugs_by_prefix, importer_pages, categories, sources_for, ui, common_gaps=None) -> dict:
+                 slugs_by_prefix, importer_pages, categories, sources_for, ui, words,
+                 common_gaps=None) -> dict:
     """A guide per customer-facing business type, keyed by its help page's id."""
     owners: dict[str, list[dict]] = {}
     for layout in layouts:
@@ -1470,11 +1480,13 @@ def build_guides(locale, records, suppliers, holders, layouts, wholesalers, whol
     for short in shorts:
         page_id = slugs_by_prefix.get("ba:businesstype_" + short)
         if not page_id:
+            # no help page, no guide; refuse_losses() stops the build that
+            # loses one the standing payload had
             continue
         builder = Guide(
             short, locale, records, suppliers, holders, owners.get(short, []),
             wholesale_slugs, wholesalers, slugs_by_prefix, importer_pages, categories,
-            sources_for, ui,
+            sources_for, ui, words,
         )
         guide = builder.build()
         if common_gaps:
@@ -1486,28 +1498,50 @@ def build_guides(locale, records, suppliers, holders, layouts, wholesalers, whol
 # --- gaps ----------------------------------------------------------------
 
 
+def locale_tables(locale: dict[str, str]) -> dict:
+    """The locale-wide facts every guide's gaps compare against, computed once.
+
+    None of these depends on the guide: the help pages with content, how many
+    of them carry a money figure, every size code the building-type page lists,
+    and each page's address links (for the spelled-more-than-one-way check,
+    which `build_gaps()` narrows to the pages a guide reads).
+    """
+    content = [(key, text) for key, text in locale.items()
+               if isinstance(text, str) and key.endswith("_content")]
+    address_links: dict[str, list[tuple[str, str]]] = {}
+    for key, text in content:
+        links = [(match.group(3).strip(), match.group(1)) for match in _LINK_RE.finditer(text)
+                 if match.group(2) in _ADDRESS_KINDS]
+        if links:
+            address_links[key] = links
+    return {
+        "content": content,
+        "pricedPages": sum(1 for _, text in content if _MONEY_FIGURE_RE.search(text)),
+        "sizes": _sizes_by_section(locale),
+        "addressLinks": address_links,
+    }
+
+
 def build_gaps(locale: dict[str, str], help_pages: list[dict],
                records: list[dict], guide: dict, layouts: list[dict],
-               steam: dict, suppliers: dict, touched: set[str]) -> list[dict]:
+               steam: dict, touched: set[str], words: dict, tables: dict) -> list[dict]:
     """What this payload cannot say, each kept only while its check still holds.
 
     A gap is a claim about a limit, so it is verified the same way a fact is:
     the price gap is only written while the guide's own pages really carry no
     money figure, the size-code gap only while a code really is listed twice.
     A limit the game lifts disappears from this list rather than lingering as
-    stale honesty.
+    stale honesty. `tables` is `locale_tables(locale)`, built once per build.
     """
-    templates, gaps = wording()["gaps"], []
+    templates, gaps = words["gaps"], []
 
     def add(key: str, **slots) -> None:
         entry = templates[key]
         gaps.append({"what": entry["what"], "detail": entry["detail"].format(**slots) if slots
                      else entry["detail"]})
 
-    content = [(key, text) for key, text in locale.items()
-               if isinstance(text, str) and key.endswith("_content")]
     touched_keys = {"help_%s_content" % prefix for prefix in touched}
-    scoped_locale = {key: text for key, text in content if key in touched_keys}
+    scoped_locale = {key: text for key, text in tables["content"] if key in touched_keys}
 
     # The gap is about this guide, not about the whole locale: the pages the
     # guide reads carry no money figure, which is why it can state no price.
@@ -1518,7 +1552,7 @@ def build_gaps(locale: dict[str, str], help_pages: list[dict],
         (prefix, locale.get("help_%s_content" % prefix, "")) for prefix in sorted(touched)
     ) if text]
     if guide_pages and not any(_MONEY_FIGURE_RE.search(text) for text in guide_pages):
-        priced_elsewhere = sum(1 for _, text in content if _MONEY_FIGURE_RE.search(text))
+        priced_elsewhere = tables["pricedPages"]
         if not priced_elsewhere:
             elsewhere = templates["pricesNowhereElse"]
         elif priced_elsewhere == 1:
@@ -1540,7 +1574,7 @@ def build_gaps(locale: dict[str, str], help_pages: list[dict],
     if recipe_texts and all("max production rate per hour" in text.lower() for text in recipe_texts):
         add("ratedRate")
 
-    sizes = _sizes_by_section(locale)
+    sizes = tables["sizes"]
     repeated = sorted(code for code, places in sizes.items() if len(places) > 1)
     if repeated and guide.get("RETAIL_SIZES"):
         rows = "; ".join(
@@ -1555,7 +1589,7 @@ def build_gaps(locale: dict[str, str], help_pages: list[dict],
         add("danglingLinks", count=sum(dangling.values()), slugs=len(dangling), top=top)
 
     odd_bold = sum(1 for text in scoped_locale.values() if text.count("**") % 2)
-    spelled = _multi_spelled(scoped_locale, suppliers)
+    spelled = _multi_spelled(tables["addressLinks"], scoped_locale)
     if odd_bold or spelled:
         add("sourceQuirks", oddBoldClause=_bold_clause(odd_bold), spelled=spelled)
 
@@ -1611,15 +1645,15 @@ def _dangling_links(locale: dict[str, str], help_pages: list[dict]) -> Counter:
     return dangling
 
 
-def _multi_spelled(locale: dict[str, str], suppliers: dict) -> str:
-    """Addresses the help names more than one way, as a short list."""
+def _multi_spelled(address_links: dict[str, list[tuple[str, str]]], pages) -> str:
+    """Addresses `pages` name more than one way, as a short list.
+
+    `address_links` is `locale_tables()`'s page key -> (address, link label) list.
+    """
     spelled: dict[str, set[str]] = {}
-    for key, text in locale.items():
-        if not (key.endswith("_content") and isinstance(text, str)):
-            continue
-        for match in _LINK_RE.finditer(text):
-            if match.group(2) in _ADDRESS_KINDS:
-                spelled.setdefault(match.group(3).strip(), set()).add(match.group(1))
+    for key in pages:
+        for raw, name in address_links.get(key, ()):
+            spelled.setdefault(raw, set()).add(name)
     rows = []
     for raw, names in sorted(spelled.items()):
         if len(names) > 1:
@@ -1632,10 +1666,10 @@ def _multi_spelled(locale: dict[str, str], suppliers: dict) -> str:
 
 def build_provenance(structure_info, pages, help_pages, duplicates, without_content,
                      buildings_meta, suppliers, supplier_issues, layout_metas, layout_issues,
-                     records, unparsed, steam, extracted, building_rows,
+                     records, unparsed, steam, extracted, building_rows, words,
                      buildings_issue=None) -> dict:
     """Where every number came from, and what was not available."""
-    notes = dict(wording()["provenanceNotes"])
+    notes = dict(words["provenanceNotes"])
     notes["unparsed"] = notes["unparsed"].format(count=len(unparsed))
     issues = {"suppliers": supplier_issues, "layouts": layout_issues}
     if buildings_issue:
@@ -1778,6 +1812,7 @@ def validate_public(payload: dict) -> None:
     if not isinstance(guides, dict) or not guides:
         raise wiki_data.SourceError("payload has no guides")
     page_ids = seen
+    retail_building = wording()["buildingWords"].get("retail buildings")
     for key, guide in guides.items():
         if key not in page_ids:
             raise wiki_data.SourceError("guide %s is not a page the menu lists" % key)
@@ -1874,8 +1909,7 @@ def validate_public(payload: dict) -> None:
                 if key_ not in guide["SUPPLIERS"]:
                     raise wiki_data.SourceError("guide %s hiringBySkill names an unlisted recruiter"
                                                 % key)
-        if guide["RETAIL_SIZES"] and guide_business.get("building") != \
-                wording()["buildingWords"].get("retail buildings"):
+        if guide["RETAIL_SIZES"] and guide_business.get("building") != retail_building:
             raise wiki_data.SourceError("guide %s carries retail sizes for a non-retail building" % key)
         for slug, fixture in guide["FIXTURES"].items():
             groups = fixture.get("groups")
@@ -1954,6 +1988,8 @@ def build_public_wiki(data_dir: str | None = None, buildings_path: str | None = 
     if not help_pages:
         raise wiki_data.SourceError("helpstructure.json lists no pages; the menu cannot be built")
 
+    # The authored wording, read once and handed to every stage that fills it.
+    words = wording()
     buildings, buildings_meta, buildings_issue = load_buildings(buildings_path=buildings_path)
     catalogue = wiki_data.build_catalogue(locale, help_pages=help_pages)
     records = catalogue["records"]
@@ -1964,8 +2000,8 @@ def build_public_wiki(data_dir: str | None = None, buildings_path: str | None = 
 
     importer_names = canonical_importer_names(help_pages, locale)
     importer_pages = importer_page_by_key(help_pages, locale)
-    suppliers, supplier_issues = collect_suppliers(locale, buildings, records, importer_names)
-    flags = pier_flag(suppliers, locale)
+    suppliers, supplier_issues = collect_suppliers(locale, buildings, records, importer_names, words)
+    flags = pier_flag(suppliers, words, locale)
     for key, detail in flags.items():
         suppliers[key]["flag"] = detail
 
@@ -1975,33 +2011,36 @@ def build_public_wiki(data_dir: str | None = None, buildings_path: str | None = 
 
     steam, extracted = _steam_and_date(paths, layouts)
     layout_metas = [_layout_meta(streaming_dir, layout) for layout in layouts]
+    locale_meta, structure_meta = _locale_meta(paths), _structure_meta(paths)
     def sources_for(short: str) -> dict:
         """A guide's sources: the shared files, plus only its own layouts."""
         owned = [meta for meta in layout_metas
                  if meta["path"].split("BusinessLayouts/")[1].split("/")[0].lower() == short]
-        return _sources(paths, locale, structure_info, help_pages, owned, buildings_meta, steam)
+        return _sources(locale_meta, structure_meta, locale, structure_info, help_pages, owned,
+                        buildings_meta, steam, words)
 
-    ui, copy_issues = guide_ui(wording())
+    ui, copy_issues = guide_ui(words)
+    tables = locale_tables(locale)
     def common_gaps(builder, guide):
         return build_gaps(locale, help_pages, records, guide, builder.layouts, steam,
-                          guide["SUPPLIERS"], builder.touched)
+                          builder.touched, words, tables)
 
     guides = build_guides(locale, records, suppliers, holders_by_product(records), layouts,
                           wholesalers, wholesale_slugs, slugs_by_prefix, importer_pages,
-                          categories, sources_for, ui, common_gaps)
+                          categories, sources_for, ui, words, common_gaps)
 
     provenance = build_provenance(
         structure_info, pages, help_pages, duplicates, without_content,
         buildings_meta, suppliers, supplier_issues, layout_metas, layout_issues,
-        records, catalogue["unparsed"], steam, extracted, len(buildings),
+        records, catalogue["unparsed"], steam, extracted, len(buildings), words,
         buildings_issue,
     )
-    provenance["sources"]["locale"] = _locale_meta(paths)
-    provenance["sources"]["helpStructure"] = _structure_meta(paths)
+    provenance["sources"]["locale"] = locale_meta
+    provenance["sources"]["helpStructure"] = structure_meta
     provenance["counts"]["categories"] = len(categories)
     provenance["counts"]["guides"] = len(guides)
     built = {guide["BUSINESS"]["nameSrc"].removeprefix("ba:businesstype_") for guide in guides.values()}
-    copy_issues += dropped_copy(wording(), locale, built)
+    copy_issues += dropped_copy(words, locale, built)
     if copy_issues:
         provenance["issues"]["copy"] = copy_issues
 
@@ -2069,22 +2108,27 @@ def _source_date(paths, layouts=()) -> str | None:
     return datetime.fromtimestamp(max(mtimes), timezone.utc).strftime("%Y-%m-%d")
 
 
-def _sources(paths, locale, structure_info, help_pages, layout_metas, buildings_meta, steam) -> dict:
-    """The guide's SOURCES block, in the shape the wiki page renders."""
-    notes = wording()["sourceNotes"]
+def _sources(locale_meta, structure_meta, locale, structure_info, help_pages, layout_metas,
+             buildings_meta, steam, words) -> dict:
+    """The guide's SOURCES block, in the shape the wiki page renders.
+
+    `locale_meta` and `structure_meta` are the two help files' rows, hashed once
+    per build by the caller.
+    """
+    notes = words["sourceNotes"]
     files = [
         dict(
-            _locale_meta(paths),
+            locale_meta,
             note=notes["locale"].format(entries=len(locale)),
         ),
         dict(
-            _structure_meta(paths),
+            structure_meta,
             note=notes["helpStructure"].format(
                 categories=len({entry.get("category") for entry in help_pages if entry.get("category")}),
                 entries=len(help_pages),
                 unique=len({entry.get("slug") for entry in help_pages if entry.get("slug")}),
-                parse=wording()["lenientParse"] if (structure_info or {}).get("parseMode") == "lenient"
-                else wording()["strictParse"],
+                parse=words["lenientParse"] if (structure_info or {}).get("parseMode") == "lenient"
+                else words["strictParse"],
             ),
         ),
     ]
@@ -2111,11 +2155,11 @@ def _sources(paths, locale, structure_info, help_pages, layout_metas, buildings_
         "extracted": steam["extracted"],
         "sourceDate": steam["extracted"],
         "files": files,
-        "build": _build_rows(steam),
+        "build": _build_rows(steam, words),
     }
 
 
-def _build_rows(steam: dict) -> list[dict]:
+def _build_rows(steam: dict, words: dict) -> list[dict]:
     """The build rows a guide states, each only what was observed."""
     rows = []
     for key, value in (
@@ -2124,7 +2168,7 @@ def _build_rows(steam: dict) -> list[dict]:
         ("steam", steam.get("steamLabel")),
         ("saveBuild", None),
     ):
-        template = wording()["buildRows"][key]
+        template = words["buildRows"][key]
         entry = {
             "label": template["label"],
             "value": value,
@@ -2200,26 +2244,62 @@ def _same_but_the_date(payload: dict, existing: str) -> bool:
     return serialise(redate(payload)) == existing
 
 
+ALLOW_FEWER_GUIDES = "--allow-fewer-guides"
+
+
+def refuse_losses(payload: dict, existing: str | None) -> None:
+    """Stop a build that loses a guide or authored copy without saying so.
+
+    A business type whose help page drops out of helpstructure.json loses its
+    guide, and an authored lede or note whose `when` clause no longer matches
+    the game's text is left out (`provenance.issues.copy`). Both are right to
+    happen after a game patch, and both are easy to miss in a build log, so
+    either one stops the build until it is passed `--allow-fewer-guides`.
+    `existing` is the standing payload's text; without one, no guide can be lost.
+    """
+    problems = []
+    try:
+        before = set((json.loads(existing) or {}).get("guides") or {}) if existing else set()
+    except (ValueError, AttributeError):
+        before = set()
+    lost = sorted(before - set(payload["guides"]))
+    if lost:
+        problems.append("the standing payload has guides this build does not: %s (has the "
+                        "business's help page left helpstructure.json?)" % ", ".join(lost))
+    for row in payload["provenance"]["issues"].get("copy") or []:
+        problems.append("authored copy %s: %s" % (row.get("key"), row.get("reason")))
+    if problems:
+        raise wiki_data.SourceError(
+            "the wiki build would lose content:\n  " + "\n  ".join(problems)
+            + "\nFix tools/wiki_sample.json, or pass %s to accept the loss." % ALLOW_FEWER_GUIDES)
+
+
 def write_public_wiki(path: str, data_dir: str | None = None,
-                      buildings_path: str | None = None) -> str:
+                      buildings_path: str | None = None,
+                      allow_fewer_guides: bool = False) -> str:
     """Build, validate, then replace the payload; skip the write when unchanged.
 
     The temporary file lives beside the target so the swap is a rename, and a
     payload that fails validation leaves the previous one standing. When the
     bytes did not move, the existing file is left alone, so a rebuild does not
-    touch a file it did not change.
+    touch a file it did not change. A build that loses a guide or authored copy
+    is refused (`refuse_losses`) unless `allow_fewer_guides` is set.
     """
     payload = build_public_wiki(data_dir, buildings_path=buildings_path)
     text = serialise(payload)
     validate_public(json.loads(text))
     directory = os.path.dirname(os.path.abspath(path)) or "."
-    os.makedirs(directory, exist_ok=True)
+    existing = None
     if os.path.exists(path):
         try:
             with open(path, "rb") as fh:
                 existing = fh.read().decode("utf-8")
         except (OSError, ValueError):
             existing = None
+    if not allow_fewer_guides:
+        refuse_losses(payload, existing)
+    os.makedirs(directory, exist_ok=True)
+    if os.path.exists(path):
         if existing == text:
             return text
         # Steam touches files it did not change, which moves sourceDate to
@@ -2252,10 +2332,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--buildings", help="ba_buildings.json to place suppliers with "
                                             "(default: the checkout's)")
     parser.add_argument("--quiet", action="store_true", help="print only errors")
+    parser.add_argument(ALLOW_FEWER_GUIDES, action="store_true",
+                        help="write the payload even though it has fewer guides than the "
+                             "standing one, or leaves authored copy out")
     args = parser.parse_args(argv)
 
     try:
-        text = write_public_wiki(args.out, args.data_dir, buildings_path=args.buildings)
+        text = write_public_wiki(args.out, args.data_dir, buildings_path=args.buildings,
+                                 allow_fewer_guides=args.allow_fewer_guides)
     except wiki_data.SourceError as exc:
         print("error: %s" % exc, file=sys.stderr)
         return 2

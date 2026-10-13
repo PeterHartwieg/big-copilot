@@ -307,14 +307,19 @@ class FixtureCase(unittest.TestCase):
         """The payload as it is written to disk, parsed back."""
         return json.loads(build.serialise(self.build()))
 
-    def write_payload(self, path):
+    def write_payload(self, path, allow_fewer_guides=True):
+        # The synthetic gift shop page cannot hold the real authored copy's
+        # `when` clauses, so the loss guard is waived here and tested on its
+        # own in LossTests.
         return build.write_public_wiki(
-            path, self.root, buildings_path=os.path.join(self.root, "ba_buildings.json")
+            path, self.root, buildings_path=os.path.join(self.root, "ba_buildings.json"),
+            allow_fewer_guides=allow_fewer_guides,
         )
 
     def cli(self, out):
         return ["--data-dir", self.root, "--out", out,
-                "--buildings", os.path.join(self.root, "ba_buildings.json")]
+                "--buildings", os.path.join(self.root, "ba_buildings.json"),
+                "--allow-fewer-guides"]
 
     def guide(self):
         return self.build()["guides"]["businesstypes-giftshop"]
@@ -967,6 +972,62 @@ class WriteTests(FixtureCase):
         self.assertEqual(code, 2)
         self.assertIn("error", stderr.getvalue())
         self.assertFalse(os.path.exists(out))
+
+
+class LossTests(FixtureCase):
+    """A build that loses a guide or authored copy stops unless told to go on."""
+
+    def setUp(self):
+        super().setUp()
+        self.out = os.path.join(self.root, "web", "wiki-data.json")
+
+    def without_authored_copy(self):
+        """Point the builder at the real wording minus its per-guide copy."""
+        wording = json.loads(self.read(build.WORDING_PATH))
+        wording["guides"] = {}
+        path = os.path.join(self.root, "wiki_sample_nocopy.json")
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(wording, fh)
+        original = build.WORDING_PATH
+        build.WORDING_PATH = path
+        self.addCleanup(setattr, build, "WORDING_PATH", original)
+
+    def test_dropped_authored_copy_stops_the_build_and_leaves_the_file(self):
+        self.write_payload(self.out)
+        before = self.read(self.out)
+        self.write_locale(dict(LOCALE, **{"ba:itemname_roundedshelf": "Rounded Shelving"}))
+        with self.assertRaisesRegex(wiki_data.SourceError,
+                                    r"authored copy guides\.giftshop\.lede[\s\S]*--allow-fewer-guides"):
+            self.write_payload(self.out, allow_fewer_guides=False)
+        self.assertEqual(self.read(self.out), before)
+
+    def test_a_lost_guide_stops_the_build(self):
+        self.without_authored_copy()
+        payload = json.loads(self.write_payload(self.out, allow_fewer_guides=False))
+        payload["guides"]["businesstypes-ghostshop"] = payload["guides"]["businesstypes-giftshop"]
+        with open(self.out, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(build.serialise(payload))
+        with self.assertRaisesRegex(wiki_data.SourceError, "businesstypes-ghostshop"):
+            self.write_payload(self.out, allow_fewer_guides=False)
+        self.assertIn("businesstypes-ghostshop", self.read(self.out))
+        written = json.loads(self.write_payload(self.out, allow_fewer_guides=True))
+        self.assertNotIn("businesstypes-ghostshop", written["guides"])
+
+    def test_nothing_lost_builds_without_the_flag(self):
+        self.without_authored_copy()
+        self.write_payload(self.out, allow_fewer_guides=False)
+        self.write_payload(self.out, allow_fewer_guides=False)
+
+    def test_the_cli_reports_the_loss_and_takes_the_flag(self):
+        args = [arg for arg in self.cli(self.out) if arg != "--allow-fewer-guides"]
+        with self.quiet() as stderr:
+            code = build.main(args)
+        self.assertEqual(code, 2)
+        self.assertIn("--allow-fewer-guides", stderr.getvalue())
+        self.assertFalse(os.path.exists(self.out))
+        with self.quiet():
+            self.assertEqual(build.main(args + ["--allow-fewer-guides"]), 0)
+        self.assertTrue(os.path.exists(self.out))
 
 
 class TopicTests(FixtureCase):

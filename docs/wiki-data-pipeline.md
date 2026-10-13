@@ -180,6 +180,17 @@ A bad required source — locale or helpstructure — exits with code 2, prints
 sources (`ba_buildings.json`, shipped layouts, the Steam manifest) are recorded
 as absent instead.
 
+A build that loses content stops the same way: a guide the standing payload
+has and this build does not (its business's help page left
+`helpstructure.json`), or authored copy whose `when` clause no longer matches
+(`provenance.issues.copy`). Both can be right after a game patch. Fix the
+wording in `tools/wiki_sample.json`, or accept the loss with
+`--allow-fewer-guides`, which both this script and `python build_web.py` take.
+
+The builder reads `tools/wiki_sample.json` once per build and hands it down as
+`words`; the locale-wide tables the guides' gaps compare against
+(`locale_tables()`) and the help files' hashes are computed once, not per guide.
+
 ### Hand-written topics
 
 A topic is an article about something the game's help never states, such as how
@@ -220,6 +231,13 @@ plain, script-free HTML from the committed `web/wiki-data.json`:
 - **The markdown follows `web/wiki.js`**: `wikiInline`'s bold and link rules,
   `wikiBody`'s bullets, label headings and paragraphs. A link to a page that
   does not exist, or to the page itself, is plain text; an address is text.
+  `tests/test_wiki_pages.py` runs `wikiBlocks` in node over every committed
+  page body and fails when it and `markdown_blocks` disagree.
+- **Two label rules, on purpose.** Rendering (`is_label` here, `wikiIsLabel` in
+  `web/wiki.js`) draws a line as a heading only when it is at most 64
+  characters and ends in a colon. Extraction (`_LABEL_MAX = 200` in
+  `tools/wiki_data.py`) is looser, so a long heading still splits the facts
+  into sections even though the page draws it as a paragraph.
 - Each page has its own title, a meta description (the body's first sentence,
   or the topic's lede), a canonical `https://bigcopilot.com/wiki/.../` URL, an
   "Open your save in Big Copilot" link to `/` and an "Open in the app" link to

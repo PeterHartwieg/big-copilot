@@ -8,6 +8,7 @@ from pathlib import Path
 import json
 import re
 import shutil
+import subprocess
 import tempfile
 import unittest
 
@@ -192,6 +193,70 @@ class Markdown(unittest.TestCase):
         for bad in ("Has Space", "c", "topic", "a/b"):
             with self.subTest(id=bad), self.assertRaises(ValueError):
                 wiki_pages.build(self.site("", extra=[{"id": bad, "categoryId": "g", "title": "x", "body": ""}]))
+
+
+def js_blocks(bodies: list[str]) -> list[list[tuple]]:
+    """`wikiBlocks` from web/wiki.js, run in node over `bodies`, as Python's tuples.
+
+    The slice runs from `wikiIsLabel` to `wikiBody`: the label rule and the
+    block parser, which use nothing else from the board.
+    """
+    source = (WEB / "wiki.js").read_text(encoding="utf-8")
+    start, end = "function wikiIsLabel(", "function wikiBody("
+    for anchor in (start, end):
+        if source.count(anchor) != 1:
+            raise AssertionError("web/wiki.js holds %r %d times, expected once"
+                                 % (anchor, source.count(anchor)))
+    code = source[source.index(start):source.index(end)]
+    script = code + """
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", chunk => { input += chunk; });
+process.stdin.on("end", () => {
+  process.stdout.write(JSON.stringify(JSON.parse(input).map(wikiBlocks)));
+});
+"""
+    out = subprocess.run(["node", "-e", script], input=json.dumps(bodies), check=True,
+                         text=True, encoding="utf-8", capture_output=True).stdout
+    shape = {"p": "lines", "ul": "items", "h": "line"}
+    return [[(block["kind"], block[shape[block["kind"]]]) for block in blocks]
+            for blocks in json.loads(out)]
+
+
+class ParserParity(unittest.TestCase):
+    """The static pages and the in-board reader parse help text with their own
+    copies of one rule set (`markdown_blocks`/`is_label` here, `wikiBlocks`/
+    `wikiIsLabel` in web/wiki.js). These tests hold the two to each other."""
+
+    def assertSameBlocks(self, bodies):
+        js = js_blocks(bodies)
+        self.assertEqual(len(js), len(bodies))
+        for body, theirs in zip(bodies, js):
+            ours = [(kind, list(value) if isinstance(value, list) else value)
+                    for kind, value in wiki_pages.markdown_blocks(body)]
+            if ours != theirs:
+                self.fail("markdown_blocks and wikiBlocks disagree on %r:\npython %r\njs     %r"
+                          % (body[:200], ours, theirs))
+
+    def test_every_committed_page_body_parses_the_same(self):
+        bodies = [page.get("body") or "" for page in DATA["pages"]]
+        self.assertGreater(len(bodies), 100)
+        self.assertSameBlocks(bodies)
+
+    def test_the_edges_of_the_rules_parse_the_same(self):
+        self.assertSameBlocks([
+            "",
+            "**Needs**:\n* one\n- two\n• three\n‣ four\n\nLine one\r\nline two",
+            "x" * 63 + ":",                 # a label at the limit
+            "x" * 64 + ":",
+            "x" * 65 + ":",                 # one over: a paragraph
+            "**" + "y" * 64 + "**:",        # bold marks do not count
+            "Ends here.:",                  # a sentence is never a label
+            "Wait!:",
+            "No colon",
+            "  * indented bullet\n*not a bullet\n-",
+            "Para\nLabel:\n* item\nAfter list\n\n\n* new list",
+        ])
 
 
 class Sitemap(unittest.TestCase):
