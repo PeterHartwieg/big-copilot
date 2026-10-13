@@ -10,7 +10,9 @@ has shipped and left it (Find a location on 15 September 2026, Optimize staffing
 20 September 2026, Supply chain for factories not running 24/7 with Supply by
 object's Demand sizing, Multilingual support as the footer's Language on 27
 September 2026, and Time to break even as the Payback column of Businesses ›
-Results on 28 September 2026). The vote dialog offers a small suggestion form even when the list is empty. The
+Results on 28 September 2026). Visitor requests that ship are retired the same way: the
+"Real Estate Function" request (31 votes) shipped as the Real estate area on 13 October
+2026 (PR #454) and was retired with `feature_moderate.mjs retire`. The vote dialog offers a small suggestion form even when the list is empty. The
 count means
 dashboard tabs seen in the last ten minutes, not verified people or players
 currently in the game. Votes help prioritise work; they are not release promises.
