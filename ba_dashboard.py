@@ -2722,16 +2722,20 @@ def _estate_notes(estate: dict | None) -> list:
     if flagged:
         gain = sum(r["gain"] for r in flagged)
         top = sorted(flagged, key=lambda r: (-r["gain"], r["key"]))[:3]
+        text = (msg("f.rentprice", {"one": "{n} building priced off its best rent · +{w:$}/day",
+                                    "other": "{n} buildings priced off their best rent · +{w:$}/day"},
+                    n=len(flagged), w=gain) if gain > 0 else
+                msg("f.rentprice.risk", {"one": "{n} building priced off its best rent · {w:$}/day",
+                                         "other": "{n} buildings priced off their best rent · {w:$}/day"},
+                    n=len(flagged), w=gain))
         out.append(_finding(
-            "info", msg("f.site.estate", "Real estate"), "rentprice",
-            msg("f.rentprice", {"one": "{n} building priced off its best rent · +{w:$}/day",
-                                "other": "{n} buildings priced off their best rent · +{w:$}/day"},
-                n=len(flagged), w=gain),
+            "info", msg("f.site.estate", "Real estate"), "rentprice", text,
             worth=gain,
             # The Overview's picture (rent now against at the best prices) and
             # its Details (the three largest changes): the section that holds
             # the rows is not loaded there.
-            ev={"now": money(sum(r["now"] for r in rows)), "n": len(flagged),
+            ev={"now": money(sum(r["now"] for r in rows)), "full": money(sum(r["full"] for r in rows)),
+                "n": len(flagged),
                 "top": [{"key": r["key"], "address": r["address"], "hood": r["hood"],
                          "price": r["pending"] if r["pending"] is not None else r["price"],
                          "best": r["best"], "gain": r["gain"]} for r in top]},

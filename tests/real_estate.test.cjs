@@ -150,6 +150,15 @@ test('My buildings: a row a building, flagged first by gain, the villa a line, a
   assert.equal(await det.locator('.re-spark .pj').count(), 1, 'a flagged building shows the wait and the fill');
   await page.locator(`#secEstate tr[data-re-row="${OVER}"] td.bd b`).click();
   assert.equal(await det.isVisible(), false);
+  // A pending price at or over market rent fills nothing: no projection, no date.
+  await page.evaluate(key => {
+    const o = D.realEstate.owned.find(x => x.key === key);
+    Object.assign(o, {pending: Math.round((o.market + 0.5) * 100) / 100, days: 3, flag: false, risk: false, fill: 20});
+    reOpen.add(key); drawEstate();
+  }, PENDING);
+  const pdet = page.locator(`#secEstate tr[data-re-of="${PENDING}"]`);
+  assert.equal(await pdet.locator('.re-spark .pj').count(), 0);
+  assert.doesNotMatch(await pdet.innerText(), enRe('re.fact.fills', {n: 20}));
   // A vanilla save says nothing of the multiplier; a modded one names it, quietly.
   assert.equal(await page.locator('#viewCtl .re-mod').count(), 0);
   await page.evaluate(() => { D.realEstate.mult = {value: 5, source: 'measured', buildings: 3}; drawEstate(); });
@@ -174,6 +183,9 @@ test('Set best prices: the dry run lists every change, Apply sets them, Undo put
   assert.equal(await dlg.locator('h2').textContent(), en('re.gw.title.many', {n: flagged.length}));
   assert.equal(await dlg.locator('.gw-shop').count(), flagged.length);
   assert.match(await dlg.locator('.gw-verdict').innerText(), enRe('re.gw.will', {n: flagged.length}, {text: true}));
+  // Once full is each building's own full income at the best price, filling included.
+  assert.equal(await dlg.locator('.gw-tally > div').nth(1).locator('.gw-big').textContent(),
+    await page.evaluate(keys => fmt(D.realEstate.owned.filter(o => keys.includes(o.key)).reduce((s, o) => s + o.full, 0)), flagged.map(o => o.key)));
   await dlg.locator('[data-gw-b="apply"]').click();
   await page.locator('dialog.gw-dlg[data-phase="done"]').waitFor();
   const writes = (await (await fetch(mockUrl + '/debug/writes')).json()).writes.filter(w => w.kind === 'rent');
@@ -259,6 +271,8 @@ test('the rent finding: one opportunity, its picture and Details, landing on eve
   const row = page.locator('#alerts .find[data-kind="rentprice"]');
   assert.ok(await row.evaluate(f => f.classList.contains('opp')), 'an opportunity');
   assert.equal(await row.locator('.ov-cmp').count(), 1);
+  const ev = JSON.parse(payload).alerts.find(a => a.group === 'rentprice').ev;
+  assert.equal(await row.locator('.ov-cmp .n').nth(1).textContent(), await page.evaluate(v => fmt(v), ev.full));
   await row.locator('.ov-det').click();
   assert.equal(await row.locator('.ov-x .ov-plan:not(.quiet)').count(), Math.min(3, flagged.length));
   await row.locator('.ov-act').click();

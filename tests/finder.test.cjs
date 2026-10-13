@@ -2012,7 +2012,7 @@ test('sale heads sort by payback with null last and price ties, independently of
     await head.click();
     assert.deepEqual(await rowKeys(page), [MT[1], MT[0], MT[2], HK[0]]);
     assert.equal(await page.locator('#cityMapPage .fhead.sale span.on').textContent(), en('map.col.payback'));
-    assert.equal(await head.getAttribute('data-tip'), en('map.col.payback.tip'));
+    assert.equal(await head.getAttribute('data-tip'), en('map.col.payback.tip2'));
     assert.deepEqual(await page.evaluate(() => [cityMapPage.fs.sort, cityMapPage.fs.sortPicked]), ['traffic', true]);
     await head.click();
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1], MT[2]]);
@@ -2037,9 +2037,9 @@ test('the sale chip reads the rounded median at paint time and omits payback wit
   try{
     await openMap(page); await turnOn(page);
     const chip = page.locator('#cityMapPage .fchip.show[data-show="sale"]');
-    assert.equal(await chip.getAttribute('data-tip'), en('map.show.sale.tip2') + ' ' + en('map.show.sale.tip.payback', {n: 1800}));
+    assert.equal(await chip.getAttribute('data-tip'), en('map.show.sale.tip2') + ' ' + en('map.show.sale.tip.payback2', {n: 1800}));
     await page.evaluate(() => { D.premises.forSale.forEach(s => s.payback = 1576); cityMapPage.update(); });
-    assert.equal(await chip.getAttribute('data-tip'), en('map.show.sale.tip2') + ' ' + en('map.show.sale.tip.payback', {n: 1600}));
+    assert.equal(await chip.getAttribute('data-tip'), en('map.show.sale.tip2') + ' ' + en('map.show.sale.tip.payback2', {n: 1600}));
     await page.evaluate(() => { D.premises.forSale.forEach(s => s.payback = null); cityMapPage.update(); });
     assert.equal(await chip.getAttribute('data-tip'), en('map.show.sale.tip2'));
     assert.equal(await page.evaluate(() => { D.premises = null; return MAP_WORDS.showSaleTip; }), en('map.show.sale.tip2'));
@@ -2070,5 +2070,12 @@ test('sale sort defaults, validation, storage and saved identities follow the vi
       v.fs.saleSort = 'payback'; v.setFinder();
       return [kept, invalid, v.fs.saleSort];
     }), ['payback', 'price', 'price']);
+    // A ranked search, applied, leaves the For sale order as the player left it.
+    assert.equal(await page.evaluate(() => {
+      const v = cityMapPage;
+      v.saveSearch('Ranked'); finderKeepSaved(finderSaved().map(s => s.name === 'Ranked' ? {...s, filters: {...s.filters, show: 'rent', saleSort: 'price'}} : s));
+      v.fs.saleSort = 'payback'; v.applySaved('Ranked');
+      return v.fs.saleSort;
+    }), 'payback');
   } finally { await page.close(); }
 });

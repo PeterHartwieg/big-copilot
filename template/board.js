@@ -3914,8 +3914,8 @@ function ovPicture(a, b){
       break;
     case "rentprice": {
       /* Rent now against at the best prices, company-wide. */
-      const now = (a.ev || {}).now;
-      if(ok(now) && ok(a.worth)) return ovBars([[tt("today.pic.rentNow", "Rent now a day"), now, ""], [tt("today.pic.rentBest", "At best prices"), now + a.worth, "w"]], fmt);
+      const now = (a.ev || {}).now, full = (a.ev || {}).full;
+      if(ok(now) && ok(full)) return ovBars([[tt("today.pic.rentNow", "Rent now a day"), now, ""], [tt("today.pic.rentBest", "At best prices"), full, "w"]], fmt);
       break;
     }
   }
@@ -17738,16 +17738,27 @@ function reGainCell(o){
   if(!o.flag) return `<span class="re-gain q">${Math.round(g) ? reGainText(g) : "—"}</span>`;
   return `<span class="re-gain">${reGainText(g)}</span>`;
 }
+/* Where a building fills, and at what price: a pending price under market
+   rent after its own days (the game's strict price < market: at or over it
+   tenants leave), else, for a building off its best price, the best price
+   after a fresh 7-day wait. Null when neither: nothing to project. */
+function reFillAt(o){
+  if(!o.fill) return null;
+  const pending = o.pending !== null && o.pending !== undefined;
+  if(pending && o.pending < o.market - 0.0001) return {wait: o.days || 0, price: o.pending};
+  if(o.flag) return {wait: 7, price: o.best};
+  return null;
+}
 /* 61 days of occupancy to today, then, on its own scale, the wait and the fill
-   at the best price (dashed) to "full ≈ day N". A building already set or not
-   off its price shows no projection. */
+   (dashed) to "full ≈ day N" (reFillAt()). */
 function reSpark(o, re){
   const today = (D.meta || {}).day || 0;
   const hist = (o.hist || []).slice();
   hist.push(o.occ);
   const past = hist.length;
-  const wait = o.pending !== null && o.pending !== undefined ? (o.days || 0) : 7;
-  const fut = (o.flag || (o.pending !== null && o.pending !== undefined)) && o.fill ? wait + o.fill : 0;
+  const at = reFillAt(o);
+  const wait = at ? at.wait : 0;
+  const fut = at ? wait + o.fill : 0;
   const W = 640, H = 104, top = 14, bot = 80, x0 = 6, xn = fut ? 400 : 590;
   const x = i => x0 + i * (xn - x0) / Math.max(past - 1, 1);
   const xf = d => xn + d * (590 - xn) / Math.max(fut, 1);
@@ -17793,8 +17804,11 @@ function reFacts(o){
   if(pending) parts.push(tt("re.fact.pending", {one: "{p} applies in {n} day, on day {d}", other: "{p} applies in {n} days, on day {d}"},
     {p: `<b>${reP2(o.pending)}</b>`, n: o.days, d: today + (o.days || 0)}));
   const fills = o.fill ? tt("re.fact.fills", {one: "fills in about {n} day", other: "fills in about {n} days"}, {n: o.fill}) : "";
-  if(o.fill) parts.push(o.flag || pending ? tt("re.fact.fills.at", "{fills} at {p}", {fills: `<em>${fills}</em>`, p: reP2(pending ? o.pending : o.best)}) : fills);
-  else parts.push(tt("re.fact.full", "full"));
+  const at = reFillAt(o);
+  /* A pending price at or over market fills nothing: no date for it. */
+  if(at) parts.push(tt("re.fact.fills.at", "{fills} at {p}", {fills: `<em>${fills}</em>`, p: reP2(at.price)}));
+  else if(!o.fill) parts.push(tt("re.fact.full", "full"));
+  else if(!pending) parts.push(fills);
   return `<p class="re-facts">${parts.join('<span class="sep">·</span>')}</p>`;
 }
 function reOwnedRow(o, re, lit, hide){
@@ -24187,11 +24201,13 @@ function gwRent(keys){
   const plan = r => judged.get(gwKeyOf(r.address));
   const setRows = answer => (answer.rows || []).filter(r => !r.error && r.set && plan(r));
   const day = answer => {
-    const d = (answer.rows || []).map(r => Number(r.appliesOnDay)).find(Number.isFinite);
+    const d = (answer.rows || []).filter(r => r.appliesOnDay !== null && r.appliesOnDay !== undefined)
+      .map(r => Number(r.appliesOnDay)).find(Number.isFinite);
     return Number.isFinite(d) ? d : (Number((D.meta || {}).day) || 0) + 7;
   };
   const first = pool()[0];
   if(!first) return;
+  let applied = 0;  // the prices the last apply set, for the undo note
   const refusal = r => {
     const known = GW_REFUSE.rent[r.error] || GW_REFUSE.any[r.error];
     return (typeof known === "function" ? known(r) : known) || {rule: tt("sp.gw.uni.refused", "The game refused this ({code})", {code: spEsc(r.error)}), fix: ""};
@@ -24260,7 +24276,7 @@ function gwRent(keys){
         return tally + note + (r.error ? `<div class="gw-shops">${row(r, phase)}</div>` : "");
       }
       const tally = phase === "ready" ? `<div class="gw-tally"><div><span class="gw-lab">${tt("re.gw.now", "Rent now, a day")}</span><span class="gw-big dim">${fmt(sum(p => p.now))}</span></div>
-        <div><span class="gw-lab">${tt("re.gw.full", "Once full, a day")}</span><span class="gw-big">${fmt(sum(p => (p.now || 0) + (p.gain || 0)))}</span></div>
+        <div><span class="gw-lab">${tt("re.gw.full", "Once full, a day")}</span><span class="gw-big">${fmt(sum(p => p.full))}</span></div>
         <div><span class="gw-lab">${tt("re.gw.n", "Buildings")}</span><span class="gw-big dim">${set.length}${rows.length > set.length ? `<small>+${rows.length - set.length}</small>` : ""}</span></div></div>` : "";
       const note = phase === "ready" && set.length ? gwCall("info", "clock", tt("re.gw.wait", "Each price applies after the game's <b>7-day wait</b>, on day {d}. The buildings then fill over the weeks after; the gain is what they earn once full.", {d})) : "";
       /* The largest gain first, as the view's button lists them. */
@@ -24289,13 +24305,14 @@ function gwRent(keys){
     applyLabel: answer => many ? tt("re.gw.apply", {one: "Set {n} price", other: "Set {n} prices"}, {n: answer ? setRows(answer).length || kept().length : kept().length})
       : tt("re.gw.apply1", "Set the price"),
     applying: tt("re.gw.applying", "Setting rent in the game…"),
-    undoHint: () => many ? tt("re.gw.undohint", "Undo puts back all {n} prices at once, until the game's next day.", {n: kept().length})
+    undoHint: () => many && applied > 1 ? tt("re.gw.undohint", "Undo puts back all {n} prices at once, until the game's next day.", {n: applied})
       : tt("re.gw.undohint1", "Undo puts the price back, until the game's next day."),
     changed: answer => setRows(answer).length > 0,
     done: answer => {
       const n = setRows(answer).length;
       if(answer.undo) return n > 1 ? tt("re.gw.undone.many", "Undone: the prices are back as they were at {n} buildings.", {n})
         : tt("re.gw.undone", "Undone: the price is back as it was.");
+      applied = n;
       return tt("re.gw.toast", {one: "Best price set at {n} building · it applies on day {d}", other: "Best prices set at {n} buildings · they apply on day {d}"}, {n, d: day(answer)});
     },
   });

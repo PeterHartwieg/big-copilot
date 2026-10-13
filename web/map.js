@@ -179,7 +179,7 @@ function finderShowTip(k){
       const days = (premises()?.forSale || []).map(s => s.payback).filter(n => n != null).sort((a, b) => a - b);
       if(!days.length) return intro;
       const mid = Math.floor(days.length / 2), median = days.length % 2 ? days[mid] : (days[mid - 1] + days[mid]) / 2;
-      return intro + " " + tt("map.show.sale.tip.payback", "Payback is about {n:,} days for every one of them, so the list is cheapest first.", {n: Math.round(median / 50) * 50});
+      return intro + " " + tt("map.show.sale.tip.payback2", "Payback is about {n:,} days for nearly every one of them, so the list starts cheapest first.", {n: Math.round(median / 50) * 50});
     }
   }
 }
@@ -905,6 +905,7 @@ class CityMapView {
     const f = this.savedFilters(s);
     // A sale search restores its own order and leaves the ranked order alone.
     if(f.show === "sale"){ f.sort = this.fs.sort; f.sortPicked = this.fs.sortPicked; }
+    else f.saleSort = this.fs.saleSort;
     this.fs = {...this.fs, ...f, on:true};
     if(f.show !== "sale") this.clampSort();
     this.showAll = false; this.deselect(); this.saveFinder(); this.update();
@@ -1155,7 +1156,7 @@ class CityMapView {
   }
   saleList(rows){
     return `<div class="fhead sale"><span></span><span>${ssEsc(tt("map.col.address", "Address"))}</span><span>${ssEsc(tt("map.col.type", "Type"))}</span><span>${
-      ssEsc(tt("map.unit.m2", "m²"))}</span><span data-s="price" role="button" tabindex="0" class="${this.fs.saleSort !== 'payback' ? 'on' : ''}">${ssEsc(tt("map.col.price", "Price"))}</span><span data-s="payback" role="button" tabindex="0" class="${this.fs.saleSort === 'payback' ? 'on' : ''}" data-tip="${attr(tt("map.col.payback.tip", "The price over a day's rent at the best price, full, less property tax"))}">${ssEsc(tt("map.col.payback", "Payback"))}</span></div>`
+      ssEsc(tt("map.unit.m2", "m²"))}</span><span data-s="price" role="button" tabindex="0" class="${this.fs.saleSort !== 'payback' ? 'on' : ''}">${ssEsc(tt("map.col.price", "Price"))}</span><span data-s="payback" role="button" tabindex="0" class="${this.fs.saleSort === 'payback' ? 'on' : ''}" data-tip="${attr(tt("map.col.payback.tip2", "The price over a day's rent at the best price, full, plus any rent it saves you, less property tax"))}">${ssEsc(tt("map.col.payback", "Payback"))}</span></div>`
       + rows.map(s => `<button type="button" class="place fr sale${s.key === this.selected ? ' on' : ''}" data-pick="${ssEsc(s.key)}" aria-pressed="${s.key === this.selected}"><span class="hood"${hoodColorAttr(s.hood)}>${ssEsc(hoodTag(s.hood))}</span><span class="nm">${ssEsc(s.address)}<small>${this.layoutTag(s)}${ssEsc(hoodName(s.hood))}</small>${this.finderPhoneFact(this.sites?.get(s.key))}</span><span class="v t">${ssEsc(typeLabel(s.type))}</span><span class="v">${num(s.m2)}</span><span class="v">${ssEsc(askingPrice(s.price))}</span><span class="v pb">${s.payback == null ? '—' : ssEsc(tt("map.payback.days", "{n} d", {n: num(s.payback)}))}</span></button>`).join('');
   }
   /* The facts every address carries, finder on or off: what the place is, what

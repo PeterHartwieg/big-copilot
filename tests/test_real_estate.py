@@ -509,6 +509,14 @@ class Findings(unittest.TestCase):
         # Time-boxed: never counted away under the materiality gate.
         self.assertIn(a, build.core["alerts"])
 
+    def test_only_move_out_risks_carry_no_plus(self):
+        row = {"key": "k", "address": "a", "hood": "h", "price": 3.74, "pending": None, "best": 3.73,
+               "gain": -29.0, "now": 6800.0, "full": 6771.0, "flag": True}
+        (a,) = d._estate_notes({"rows": [row]})
+        self.assertEqual(a["text"].key, "f.rentprice.risk")
+        self.assertNotIn("+", a["text"])
+        self.assertEqual(a["ev"]["full"], 6771.0)
+
     def test_a_list_worth_less_than_a_trip_waits(self):
         tax = {"left": 1, "spend": 5_000, "saves": 250.0, "cash": 1_000_000}
         self.assertFalse(d._tax_eve(tax))
