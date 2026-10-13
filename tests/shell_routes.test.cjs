@@ -188,6 +188,19 @@ test('staffing landings use a factory\'s Production without supply facts', async
   assert.deepEqual(got, {atFactory: true, route: 'supply/production'});
 });
 
+test("an office's nobody-staffed finding lands on Schedules with the office picked before office plans load", async t => {
+  const page = await board(t);
+  const got = await page.evaluate(() => {
+    // The fixture has no office: one of its shops stands in.
+    const office = Object.assign(D.businesses.find(b => b.status === 'retail'), {status: 'office'});
+    delete D.officeStaffing;
+    goToAlert({group: 'staff', site: office.name, siteKey: office.key, ev: {}});
+    return {key: office.key, route, picked: schedLit};
+  });
+  assert.equal(got.route, 'staffing/schedules');
+  assert.equal(got.picked, got.key);
+});
+
 // --- Find a location keeps its filters ---------------------------------------------------
 
 test('Find a location opened without a preset keeps the reader\'s filters through Back, Forward and a reload', async t => {
