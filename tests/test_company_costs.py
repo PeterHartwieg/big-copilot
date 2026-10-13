@@ -118,7 +118,11 @@ class SitesAddUpTests(unittest.TestCase):
         self.assertGreater(gifts, 0)
         self.assertLess(hub, 0)
         self.assertEqual(sorted(g["profit"] for g in p["sitesGone"]), sorted([round(gifts, 2), round(hub, 2)]))
-        self.assertTrue(all(g["name"] for g in p["sitesGone"]))
+        regs = {(r["StreetName"], r["StreetNumber"]): r for r in F.data_company()["BuildingRegistrations"]}
+        by_profit = {g["profit"]: g["name"] for g in p["sitesGone"]}
+        # The registration's own business name, not the address.
+        self.assertEqual(by_profit[round(gifts, 2)], regs[F.GIFTS]["BusinessName"])
+        self.assertEqual(by_profit[round(hub, 2)], regs[F.HUB]["BusinessName"])
         self.assertAlmostEqual(self.total(p), p["daily"][-1]["business"], delta=1)
 
 

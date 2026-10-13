@@ -3541,7 +3541,8 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     Build. History-recording producers, the warnings and everything they read
     stay eager. ownedBuildings and homes stay here because the map's layers and
     home site panel read them; staff stays because Today's fixed-cost tile reads
-    the payroll. All three cost nothing. plan stays core because Today reads its
+    the payroll. All three cost nothing. sitesGone stays beside businesses
+    because the Portfolio's footer sums both. plan stays core because Today reads its
     recipes and item names (factoryView, sbDeps, the supply strip and finding
     pills), and every page reads itemName; it costs about 4 ms and 65 KB on the
     largest measured save. Page-only producers have no history
