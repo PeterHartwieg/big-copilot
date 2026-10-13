@@ -156,6 +156,7 @@ side and running `--assemble`.
 | `web/py/gametext.json`, `web/wiki-data.json` | `python build_web.py`, which needs the installed game. `--assemble` carries `tools/wiki_topics.json` (the hand-written articles) into the committed `web/wiki-data.json` without it |
 | `web/names/<lang>.json`, the game names in each other language the game ships | `python build_web.py`, which needs the installed game; the language list is `GAME_NAME_LANGS` in `ba_dashboard.py`, and the build stops when the game's `locale.json` disagrees with it |
 | `web/wiki/**/index.html`, `web/sitemap.xml`, `web/robots.txt` | `python build_web.py --assemble`, from the committed `web/wiki-data.json` through `tools/wiki_pages.py`; `python tools/wiki_pages.py` alone needs no game; gitignored |
+| `web/wiki-data.min.json`, the compact copy the page fetches | `python build_web.py --assemble`, from the committed `web/wiki-data.json`, which stays indented for its diff; gitignored |
 | `web/maps/locations.json`, `web/maps/map-background.svg` | `export_map.py`, from private geometry; owner only |
 | `ba_buildings.json` | `make_buildings.py`; the `v` (version) key comes from `make_buildings.py --versions`, which reads the installed game's buildings bundle with UnityPy; owner only |
 | `web/maps/floor-plans.json` | `make_floor_plans.py`, which draws the building shells out of the installed game's Addressables bundles with UnityPy; owner only. `build_web.py` refuses a set that misses a layout `ba_buildings.json` uses |

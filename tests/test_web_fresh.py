@@ -34,7 +34,7 @@ CHECK_INPUTS = tuple(dict.fromkeys(
     build_web.STAMP_INPUTS
     + tuple(build_web.worker_assets()[1])
     + build_web.PY_COPIED + tuple(f"web/py/{name}" for name in build_web.PY_COPIED)
-    + ("web/version.json", "web/index.html", "web/update.js", "web/translate/index.html")
+    + ("web/version.json", "web/index.html", "web/update.js", "web/translate/index.html", "web/wiki-data.min.json")
 ))
 
 # What a standalone `python build_web.py --check` reads on top of those: the
@@ -285,6 +285,22 @@ class CheckedCopy(SharedCopy):
             place(tmp, "web/py/ba_dashboard.py", Path(tmp, "ba_dashboard.py").read_bytes())
             self.assertIn("web/py/ba_dashboard.py", build_web.check(tmp))
 
+    def test_the_wiki_s_compact_copy_is_checked(self):
+        # The copy the page fetches is assembled from web/wiki-data.json:
+        # edited, indented or missing, it is named.
+        tmp = self.root
+        served = "web/" + build_web.WIKI_SERVED
+        self.assertNotIn(served, build_web.check(tmp))
+        with kept(tmp, served):
+            copy = Path(tmp, served)
+            for broken in (copy.read_bytes().replace(b'"schemaVersion":1', b'"schemaVersion":2', 1),
+                           Path(tmp, "web/wiki-data.json").read_bytes()):
+                with self.subTest(size=len(broken)):
+                    copy.write_bytes(broken)
+                    self.assertIn(served, build_web.check(tmp))
+            copy.unlink()
+            self.assertIn(served, build_web.check(tmp))
+
     def test_stale_wiki_generator_is_reported(self):
         # Nothing the page fetches changes when the generator does, so only the
         # stamp can tell that web/wiki-data.json needs rebuilding.
@@ -413,7 +429,7 @@ class CommandLine(SharedCopy):
             raise AssertionError("assemble() looked for the installed game")
 
         tmp = self.root
-        assembled = ("web/index.html", "web/version.json", "web/sitemap.xml", "web/robots.txt",
+        assembled = ("web/index.html", "web/version.json", "web/sitemap.xml", "web/robots.txt", "web/wiki-data.min.json",
                      *(f"web/py/{name}" for name in build_web.PY_COPIED))
         # What assemble() deletes or writes, put back for the other tests.
         with kept(tmp, *assembled, "web/translate/index.html", "web/wiki-data.json", "tools/wiki_topics.json",

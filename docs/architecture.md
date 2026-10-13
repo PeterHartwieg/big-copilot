@@ -1030,7 +1030,7 @@ supplied by the caller.
 | `/*__MAP_PAYLOAD__*/` | `render()`, from `web/maps/locations.json` plus the base64 background — only for a standalone export (`data`, not `live`, not `map_external`) |
 | `/*__WIKI_CSS__*/` | `render()`, from `web/wiki.css` if present |
 | `/*__WIKI_SCRIPT__*/` | `render()`, from `web/wiki.js` if present |
-| `/*__WIKI_PAYLOAD__*/` | `render()`, from `web/wiki-data.json`; skipped when `live=True`, because the hosted build fetches it with the build stamp instead |
+| `/*__WIKI_PAYLOAD__*/` | `render()`, from `web/wiki-data.json` without its indentation (`compact_wiki()`); skipped when `live=True`, because the hosted build fetches `wiki-data.min.json` with the build stamp instead |
 | `/*__HOOD_TAGS__*/{}` | `render()`, from `HOOD_TAG` — one neighbourhood-tag table shared by the board and the wiki, keyed by the game's neighbourhood key |
 | `/*__HOOD_NAMES__*/{}` | `render()`, from `HOOD_LABEL` — each neighbourhood's English name by the same key: `hoodName()`'s fallback and `hoodKeyOf()`'s way back from a stored name |
 | `/*__NAMES__*/null` | `render()`'s `names=` argument, `{lang, names}` from `cli_names()` for `--lang`; `null` elsewhere, where the site fetches `web/names/<lang>.json` instead |
@@ -1165,7 +1165,8 @@ case `app.js` fetches the bytes from that mod on the player's own machine, and t
 else. The page still uses the network for its own assets, all same-origin.
 The static ones are versioned, so a deploy busts their caches: `web/map.js` fetches
 `maps/locations.json` with the build stamp and the background image with its own content
-hash, `web/wiki.js` fetches `wiki-data.json` with the build stamp, and the board fetches
+hash, `web/wiki.js` fetches `wiki-data.min.json` (the committed `wiki-data.json` without its
+indentation, written by assembly) with the build stamp, and the board fetches
 `names/<lang>.json` with it when a language is picked, and `web/i18n.js` fetches
 `i18n/<lang>.json` with it for a UI language. The dynamic ones
 carry no version, because the whole point is to see the current state: `web/update.js`
@@ -1718,12 +1719,17 @@ fails cleanly and asks for reload instead of combining releases. Gradual
 deployments remain unsupported for the broader stamped assets.
 
 Those broader assets (`app.js`, `community.js` and `.css`, `report.js` and `.css`,
-`i18n/`, `names/`, `maps/` and `wiki-data.json`) are also cached immutably, but
+`i18n/`, `names/`, `maps/` and `wiki-data.min.json`) are also cached immutably, but
 their URLs name a release, not bytes. Every request carries `?v=<build stamp>`
 (the map background `?v=<its SHA-256>`), and each file is a stamp input, so new
 bytes arrive under a new URL. An old stamp requested after a deploy gets the new
 bytes. `tests/test_headers.py` holds each request to the stamp and each file to
-`STAMP_INPUTS`. `/translations/*` revalidates and `/version.json` is `no-store`.
+`STAMP_INPUTS` (`wiki-data.min.json` through `wiki-data.json`, which it is copied from).
+In the release that moved the page to `wiki-data.min.json` (#325, #326), `/wiki-data.json`
+also changed shape: its guides name their suppliers by key and share one `SOURCES` block. A tab
+still running the wiki script from before that release, and opening the Wiki only after the
+deploy, draws guides without supplier lines or sources until it reloads, which the update
+banner asks for. Nothing crashes, and no copy in the old shape is kept. `/translations/*` revalidates and `/version.json` is `no-store`.
 
 These coherence guarantees apply to pages and workers using the pinned protocol.
 There is one historical migration window: a pre-manifest worker already fetched

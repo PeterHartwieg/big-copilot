@@ -60,6 +60,7 @@ mockup/*/project/
 /web/sitemap.xml
 /web/robots.txt
 /web/wiki/
+/web/wiki-data.min.json
 /web/i18n/
 /web/py/ba_save.py
 /web/py/ba_facts.py

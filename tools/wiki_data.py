@@ -53,6 +53,30 @@ class SourceError(Exception):
     """A source file is missing, unreadable or not the format it claims."""
 
 
+def expand_guides(payload: dict) -> dict:
+    """Give every guide of a public wiki payload its shared tables back, in place.
+
+    The payload writes what the guides share once (tools/build_wiki_data.py,
+    share_guide_tables()): the supplier rows sit in the top-level `SUPPLIERS`,
+    keyed by site key, and a guide lists the keys it names; a guide's `SOURCES`
+    is left out when it is the shared `provenance.guideSources`. This puts each
+    guide back in the shape it reads in, with `SUPPLIERS` an object of its own
+    rows and `SOURCES` always there. A guide already in that shape is left as it
+    is, so expanding twice changes nothing. `wikiExpandGuides()` in web/wiki.js
+    does the same for the page. Returns the payload.
+    """
+    table = payload.get("SUPPLIERS") if isinstance(payload.get("SUPPLIERS"), dict) else {}
+    shared = (payload.get("provenance") or {}).get("guideSources")
+    for guide in (payload.get("guides") or {}).values():
+        if not isinstance(guide, dict):
+            continue
+        if isinstance(guide.get("SUPPLIERS"), list):
+            guide["SUPPLIERS"] = {key: table[key] for key in guide["SUPPLIERS"] if key in table}
+        if "SOURCES" not in guide and shared is not None:
+            guide["SOURCES"] = shared
+    return payload
+
+
 def help_prefix(help_key: str) -> str | None:
     """The helpstructure key a help page is listed under, if it is listed.
 

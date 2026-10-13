@@ -17,7 +17,8 @@ from tools import wiki_pages
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web"
-DATA = json.loads((WEB / "wiki-data.json").read_text(encoding="utf-8"))
+# Read the way the build reads it, each guide with its shared tables put back.
+DATA = wiki_pages.load(WEB)
 FILES = wiki_pages.build(DATA)
 HTML = {rel: body for rel, body in FILES.items() if rel.endswith(".html")}
 
@@ -81,6 +82,26 @@ class ExpectedPages(unittest.TestCase):
         # Sold by importers and made from a recipe: both are listed.
         self.assertRegex(table, r"Novel</a></th><td>Primary</td><td>[^<]*</td><td>[^<]*Own production</td>")
         self.assertLess(table.index("Youth Novel"), table.index("Flower (Cheap)"))
+
+    def test_suppliers_are_named_not_keyed(self):
+        # A guide lists its suppliers by site key; the table names them.
+        for rel, body in HTML.items():
+            self.assertNotIn("ba:street_", body, rel)
+        raw = json.loads((WEB / "wiki-data.json").read_text(encoding="utf-8"))
+        named = 0
+        for pid, guide in raw["guides"].items():
+            body = HTML[f"wiki/{pid}/index.html"]
+            table = body[body.index("<h2>What it sells</h2>"):]
+            for product in guide["PRODUCTS"].values():
+                for key in product.get("importers") or []:
+                    name = raw["SUPPLIERS"][key]["name"]
+                    self.assertIn(wiki_pages.text(name), table, (pid, key))
+                    named += 1
+        self.assertGreater(named, 0, "no guide names an importer: the check proves nothing")
+
+    def test_a_payload_built_without_load_still_names_suppliers(self):
+        raw = json.loads((WEB / "wiki-data.json").read_text(encoding="utf-8"))
+        self.assertEqual(wiki_pages.build(raw), FILES)
 
     def test_guides_carry_their_table(self):
         for pid in DATA["guides"]:
@@ -327,7 +348,7 @@ class Check(unittest.TestCase):
 
     def test_build_web_check_reports_the_pages(self):
         with tempfile.TemporaryDirectory() as tmp:
-            for rel in ("web/wiki-data.json", *build_web.STAMP_INPUTS, "web/version.json",
+            for rel in ("web/wiki-data.json", "web/wiki-data.min.json", *build_web.STAMP_INPUTS, "web/version.json",
                         *build_web.worker_assets()[1],
                         "web/index.html", "web/translate/index.html", "web/update.js", *build_web.PY_COPIED,
                         *(f"web/py/{name}" for name in build_web.PY_COPIED)):
