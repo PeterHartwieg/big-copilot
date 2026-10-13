@@ -6700,8 +6700,10 @@ def _supply_leaves(businesses: list, index: dict, sold_week: dict, target_at: di
     # nothing; nor does one shut with the game's temporarily closed switch.
     stocked = {(b["key"], line["slug"]) for b in businesses for line in b["lines"]
                if line["units"] > 0 or line.get("weekSold", 0) > 0}
+    # A plan left topping up what a converted shop no longer sells needs nothing.
+    retired = {(b["key"], line["slug"]) for b in businesses for line in b["lines"] if line.get("retired")}
     for (dest, item), (amount, _source) in target_at.items():
-        if not (dest in index and amount > 0 and (dest, item) not in leaves):
+        if not (dest in index and amount > 0 and (dest, item) not in leaves) or (dest, item) in retired:
             continue
         shop = businesses[index[dest]]
         if shop["status"] != "retail" or shop.get("closed"):

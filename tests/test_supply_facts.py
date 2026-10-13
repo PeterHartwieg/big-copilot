@@ -374,6 +374,13 @@ class ShelfTests(unittest.TestCase):
         self.assertFalse([r for r in c.supply["shops"] if r["slug"] == SODA])
         self.assertFalse([f for f in c.findings() if f["siteKey"] == site_key(SHOP_A)])
 
+    def test_a_plan_left_topping_up_a_retired_product_asks_nothing_upstream(self):
+        # The old stock is gone and the plan still stands: the hub needs none.
+        c = shelf_company(target=200, units=0, rate=0, stock_at_hub=100)
+        c.lines[SHOP_A][SODA]["retired"] = True
+        c.run()
+        self.assertEqual((c.fact(HUB, SODA)["use"], c.fact(HUB, SODA)["need"]), (0, 0))
+
     def test_stock_a_converted_shop_cannot_sell_is_not_idle_nor_sent_on(self):
         # A shop holding old-type soda beside one that sells soda on no plan:
         # the old stock is no idle row and no source (via) for the other.
