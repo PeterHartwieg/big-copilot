@@ -100,7 +100,7 @@ class FloorPlans(unittest.TestCase):
         from ba_dashboard import render
         page = render({"meta": {"save": "Fixture"}}, live=False)
         start = page.index("window.BIG_COPILOT_MAP=") + len("window.BIG_COPILOT_MAP=")
-        embedded = json.JSONDecoder().raw_decode(page[start:].replace("<\/", "</"))[0]
+        embedded = json.JSONDecoder().raw_decode(page[start:].replace(r"<\/", "</"))[0]
         self.assertEqual(embedded["plans"], PLANS)
         self.assertNotIn("window.BIG_COPILOT_MAP=", render(None, live=True))
 

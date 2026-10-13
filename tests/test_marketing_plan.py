@@ -8,13 +8,10 @@ rule. No save is ever committed.
 """
 from __future__ import annotations
 
-import os
-import sys
 import unittest
 from tests.i18n_check import MsgAsserts, list_items
 from unittest import mock
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ba_dashboard as d  # noqa: E402
 

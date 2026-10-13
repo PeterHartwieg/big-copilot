@@ -10,7 +10,6 @@ import urllib.request
 from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
-sys.path.insert(0, os.path.dirname(__file__))
 from tests import es3_fixture  # noqa: E402
 import game_link_mock  # noqa: E402
 import ba_save  # noqa: E402

@@ -10,14 +10,10 @@ synthetic: tests/save_fixtures.py's trading company (a liquor store, a gift
 shop, a depot and a brewery) and small hand-made tables. Never a real save.
 """
 import os
-import sys
 import tempfile
 import unittest
 from unittest import mock
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.dirname(HERE))
 
 import ba_dashboard  # noqa: E402
 from tests import save_fixtures  # noqa: E402

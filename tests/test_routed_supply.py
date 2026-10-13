@@ -374,6 +374,7 @@ class RoutedSupplyTests(MsgAsserts, unittest.TestCase):
         businesses = [business(FACTORY, "F", "factory", "support", 0, 0),
                       business(DEPOT, "D", "warehouse", "support", 2700, 0),
                       business(SHOP, "S", "supermarket", "retail", 500, DRAW)]
+        # No assertion: the test passes when _supply() returns without raising.
         _supply(SaveStub(plans, [], machines=1), Names({}), businesses, DAY, {}, recipes)
 
     def test_a_target_with_no_item_name_sorts_after_the_named_ones(self):

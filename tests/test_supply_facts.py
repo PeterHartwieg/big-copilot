@@ -7,10 +7,9 @@ on Today read the same facts.
 """
 import json
 import os
-import subprocess
-import sys
 import unittest
 from tests.i18n_check import MsgAsserts, msg_param, msgs
+from tests._seeds import under_seeds
 
 from ba_dashboard import (plain, Names, RECIPE_ITEMS, SUPPLY_MARGIN, _alerts, _business, _coming_week,
                           _supply, _supply_fact, _supply_status, site_key)
@@ -1352,15 +1351,10 @@ class RoundTenFixTests(unittest.TestCase):
 
 class StableOrderTests(unittest.TestCase):
     def test_the_facts_do_not_depend_on_the_hash_seed(self):
-        script = ("import json, test_supply_facts as t;"
+        script = ("import json; from tests import test_supply_facts as t;"
                   "c = t.two_shop_company([(1500, {})]);"
                   "print(json.dumps({'facts': c.supply['facts'], 'graph': c.supply['graph']}))")
-        runs = []
-        for seed in ("1", "2"):
-            env = dict(os.environ, PYTHONHASHSEED=seed,
-                       PYTHONPATH=os.pathsep.join([HERE, os.path.dirname(HERE)]))
-            runs.append(subprocess.run([sys.executable, "-c", script], check=True, text=True,
-                                       capture_output=True, env=env, cwd=HERE).stdout)
+        runs = under_seeds(script)
         self.assertEqual(runs[0], runs[1])
 
 

@@ -12,13 +12,10 @@ import copy
 import json
 import math
 import os
-import sys
 import tempfile
 import unittest
 import unittest.mock
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.dirname(HERE))
 
 import ba_dashboard as d  # noqa: E402
 from ba_save import Names, load_save  # noqa: E402

@@ -7,8 +7,6 @@ import collections
 import json
 import math
 import os
-import subprocess
-import sys
 import unittest
 
 from ba_dashboard import (
@@ -33,9 +31,8 @@ from ba_save import Names, Save
 import ba_dashboard
 from tests import test_staffing as ts
 from tests.test_factory_staffing import FACTORY as FACTORY_ADDR, Bare, People, hand_factory, hand_rows
+from tests._seeds import under_seeds
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-HERE = os.path.dirname(os.path.abspath(__file__))
 SERVICE = "ba:skill_customerservice"
 CLEANING = "ba:skill_cleaning"
 GUARD = "ba:skill_securityguard"
@@ -1120,23 +1117,20 @@ class StrayStationTest(unittest.TestCase):
 
 class HashSeedTest(unittest.TestCase):
     SCRIPT = """
-import json, sys
-sys.path.insert(0, %r)
-sys.path.insert(0, %r)
-import test_staff_hire as t
-import test_staffing as ts
+import json
+from tests import test_staff_hire as t, test_staffing as ts
 row = ts.plan(
     [(1, ts.REGISTER), (2, ts.REGISTER), (8, ts.CLEAN_STATION), (9, ts.LOCKER)],
-    [ts.employee("p%%d" %% i, [ts.SERVICE, ts.CLEANING, ts.GUARD], wage=20 + i,
-                 here=i %% 3 != 0,
+    [ts.employee("p%d" % i, [ts.SERVICE, ts.CLEANING, ts.GUARD], wage=20 + i,
+                 here=i % 3 != 0,
                  demands=("ba:jobdemand_fulltime", "ba:jobdemand_nonights"))
      for i in range(4)],
     ts.FLAT,
 )
 _s, _b, offices = t.office_rows(5, [[[8, 20]] for _ in range(7)],
-                                [t.lawyer("l%%d" %% i, here=i %% 2 == 0) for i in range(4)])
+                                [t.lawyer("l%d" % i, here=i % 2 == 0) for i in range(4)])
 cands = t._candidates(t.save_of({"CandidateEmployeeInstances": {"$items": [
-    t.new_layout("c%%d" %% i, "N%%d" %% i, [(ts.SERVICE, 50.0), (ts.CLEANING, 50.0)],
+    t.new_layout("c%d" % i, "N%d" % i, [(ts.SERVICE, 50.0), (ts.CLEANING, 50.0)],
                  demands={"$items": ["ba:jobdemand_nonights", "ba:jobdemand_fulltime",
                                      "ba:jobdemand_sofa"]})
     for i in range(6)]}}))
@@ -1144,12 +1138,7 @@ print(json.dumps([row["_hire"], row["fullCover"]["_hire"], offices, cands], sort
 """
 
     def test_two_hash_seeds_give_the_same_payload(self):
-        script = self.SCRIPT % (ROOT, HERE)
-        made = []
-        for seed in ("0", "12345"):
-            env = dict(os.environ, PYTHONHASHSEED=seed)
-            made.append(subprocess.run([sys.executable, "-c", script], capture_output=True,
-                                       text=True, check=True, env=env).stdout)
+        made = under_seeds(self.SCRIPT)
         self.assertEqual(made[0], made[1])
         self.assertTrue(json.loads(made[0])[0]["hireWeeks"])
 

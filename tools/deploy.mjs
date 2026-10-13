@@ -15,8 +15,9 @@
 
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
+import { selectPython, wranglerBin } from './verify.mjs';
 
 export const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -53,14 +54,9 @@ export async function deploy(args = [], {
     return result.stdout;
   };
   const dirty = () => output('git', ['status', '--porcelain']).split('\n').filter(Boolean);
-  // The Python that runs build_web.py: $PYTHON, else the first of python3,
-  // python and py that answers.
+  // The Python that runs build_web.py, chosen as npm run verify chooses it.
   const python = () => {
-    for (const cmd of [env.PYTHON, 'python3', 'python', 'py'].filter(Boolean)) {
-      const probe = spawn(cmd, ['--version'], { encoding: 'utf8' });
-      if (!probe.error && probe.status === 0) return cmd;
-    }
-    stop('no Python found; set PYTHON to its path');
+    try { return selectPython(env, spawn); } catch (err) { stop(err.message); }
   };
 
   let changed = dirty();
@@ -80,9 +76,8 @@ export async function deploy(args = [], {
   }
   if (run(py, ['build_web.py', '--check']) !== 0) stop('python build_web.py --check reports stale files');
 
-  // wrangler's own entry point, run by this Node: no .cmd shim, so no shell on Windows.
-  const wrangler = path.join(root, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
-  if (!existsSync(wrangler)) stop('node_modules/wrangler is missing; run npm ci');
+  let wrangler;
+  try { wrangler = wranglerBin(root); } catch (err) { stop(err.message); }
 
   // Check the reproducible Python output first; minification only changes the
   // ignored deployment artifact. From here on web/ holds the minified page and

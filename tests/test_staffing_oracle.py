@@ -37,14 +37,10 @@ import json
 import math
 import os
 import random
-import sys
 import tempfile
 import unittest
 import unittest.mock
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.dirname(HERE))
 
 import ba_dashboard  # noqa: E402
 from ba_dashboard import JOB_DEMANDS, SERVICE_SKILL, SHIFT_CAP, FULL_TIME  # noqa: E402

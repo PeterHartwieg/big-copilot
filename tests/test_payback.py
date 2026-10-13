@@ -11,11 +11,8 @@ real save.
 import json
 import math
 import os
-import sys
 import unittest
 from unittest import mock
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ba_dashboard
 from ba_dashboard import (
@@ -615,7 +612,6 @@ class ExtractTest(unittest.TestCase):
         import json
         import tempfile
 
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         from tests.save_fixtures import data_names, write_data_save
         from ba_save import load_save
 

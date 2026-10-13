@@ -1,11 +1,8 @@
 """The shift print: docs/game-link-api.md, "Shift print". The mod pins the same vector."""
 import os
-import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, os.path.dirname(__file__))
 from tests import es3_fixture  # noqa: E402
 from ba_dashboard import schedule_entries, shift_print  # noqa: E402
 from ba_save import Save  # noqa: E402

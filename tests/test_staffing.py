@@ -11,8 +11,6 @@ import io
 import json
 import math
 import os
-import subprocess
-import sys
 import unittest
 import unittest.mock
 
@@ -37,6 +35,7 @@ from ba_dashboard import (
     site_key,
 )
 from ba_save import Names, Save
+from tests._seeds import under_seeds
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SERVICE = "ba:skill_customerservice"
@@ -1775,6 +1774,7 @@ class SurvivalTest(unittest.TestCase):
         self.assertEqual((row["shifts"], row["roles"], row["headcount"]), ([], [], {}))
 
     def test_the_whole_row_survives_json(self):
+        # No assertion: the test passes when json.dumps() does not raise.
         json.dumps(self.row_for_json())
 
     def row_for_json(self):
@@ -3228,14 +3228,12 @@ class HashSeedTest(unittest.TestCase):
     """Set iteration order follows the hash seed, so two seeds must agree."""
 
     SCRIPT = """
-import json, sys
-sys.path.insert(0, %r)
-sys.path.insert(0, %r)
-import test_staffing as t
+import json
+from tests import test_staffing as t
 row = t.plan(
     [(1, t.REGISTER), (2, t.REGISTER), (8, t.CLEAN_STATION), (9, t.LOCKER)],
-    [t.employee("p%%d" %% i, [t.SERVICE, t.CLEANING, t.GUARD], wage=20 + i,
-                demands=("ba:jobdemand_fulltime",) if i %% 2 else
+    [t.employee("p%d" % i, [t.SERVICE, t.CLEANING, t.GUARD], wage=20 + i,
+                demands=("ba:jobdemand_fulltime",) if i % 2 else
                         ("ba:jobdemand_fulltime", "ba:jobdemand_fivedaysweek"))
      for i in range(8)],
     t.FLAT,
@@ -3244,16 +3242,7 @@ print(json.dumps(row["shifts"], sort_keys=True))
 """
 
     def test_two_hash_seeds_give_the_same_shifts(self):
-        script = self.SCRIPT % (ROOT, os.path.join(ROOT, "tests"))
-        made = []
-        for seed in ("0", "12345"):
-            env = dict(os.environ, PYTHONHASHSEED=seed)
-            made.append(
-                subprocess.run(
-                    [sys.executable, "-c", script],
-                    capture_output=True, text=True, check=True, env=env,
-                ).stdout
-            )
+        made = under_seeds(self.SCRIPT)
         self.assertEqual(made[0], made[1])
         self.assertTrue(json.loads(made[0]))
 

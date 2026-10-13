@@ -32,7 +32,6 @@ import sys
 import tempfile
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-sys.path.insert(0, ROOT)
 
 import ba_dashboard  # noqa: E402
 from ba_save import Names, load_save  # noqa: E402

@@ -12,6 +12,7 @@ function fixture(t) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'deploy ')));
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));
   fs.mkdirSync(path.join(root, 'node_modules', 'wrangler', 'bin'), {recursive: true});
+  fs.writeFileSync(path.join(root, 'node_modules', 'wrangler', 'package.json'), JSON.stringify({bin: {wrangler: './bin/wrangler.js'}}));
   fs.writeFileSync(path.join(root, 'node_modules', 'wrangler', 'bin', 'wrangler.js'), '');
   return root;
 }
@@ -21,7 +22,7 @@ function fixture(t) {
 // `fail` names ('--check', 'wrangler', ...), which get that result instead.
 function fakeSpawn(calls, fail = {}) {
   return (command, args) => {
-    if (args[0] === '--version') return {status: 0};
+    if (args[0] === '-c') return {status: 0, stdout: 'python-test'};
     if (command === 'git' && args[0] === 'status') return {status: 0, stdout: ''};
     const key = args[0] === 'build_web.py' ? args[1]
       : path.basename(args[0]) === 'wrangler.js' ? 'wrangler' : args[0];
@@ -86,7 +87,7 @@ test('Ctrl-C during the deploy cannot end the script before the restore', async 
   const before = process.listenerCount('SIGINT');
   const seen = [];
   const spawn = (command, args) => {
-    if (args[0] === '--version') return {status: 0};
+    if (args[0] === '-c') return {status: 0, stdout: 'python-test'};
     if (command === 'git' && args[0] === 'status') return {status: 0, stdout: ''};
     if (path.basename(args[0]) === 'wrangler.js') {
       seen.push(['wrangler', process.listenerCount('SIGINT')]);

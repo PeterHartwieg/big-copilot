@@ -14,12 +14,10 @@ from __future__ import annotations
 import json
 import os
 import re
-import sys
 import tempfile
 import unittest
 from unittest import mock
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ba_dashboard
 import ba_save
