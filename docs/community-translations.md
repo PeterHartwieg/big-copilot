@@ -69,6 +69,10 @@ rejected before a candidate can become an overlay.
 
 The hosted language loader overlays selected community wording on the bundled
 translation only when it matches the source version shipped with that page.
+For any language other than English it asks `GET /api/translations/overlay?lang=<lang>`
+on every page load, a remembered language included, before the player does anything; the
+request carries only the language code. Only when the overlay has a row does it fetch
+`/translations/<lang>.manifest.json`. The privacy notice, section 5, says so.
 Each hosted page pins its catalogue revisions, so an older open page rejects a
 manifest replaced by a later deployment rather than trusting its cache-busting URL.
 Unavailable or mismatched community data leaves the bundled translation or English

@@ -228,8 +228,8 @@ For development, install Python 3 and Node.js 24, run `npm ci` and
 `npm run test:optimized` checks the optimized hosted page and restores readable
 assembly on success.
 
-See the [contribution guide](docs/contributing.md) for build instructions, tests
-and the source-file map.
+See the [contribution guide](docs/contributing.md) for build instructions and tests;
+`AGENTS.md` maps the source files.
 
 ## Licence
 
