@@ -18945,8 +18945,9 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
     item per customer demand the type makes) or "shelf" (the displays), and
     `why` what the line answers: a requirement's name, a demand, or the
     products a display holds. Every item is one somebody sells, at its default
-    price, and made for the type where the item names the types it is for;
-    the cheapest one that does the job wins.
+    price, and made for the type where the item names the types it is for
+    (a main product's display falls back to any that works in the type when
+    none is made for it); the cheapest one that does the job wins.
 
     The displays are `copied` -- (item, qty, products) from the player's own
     site of the type and layout -- and, for every product the type sells that
@@ -18974,11 +18975,11 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
         names = [n for n in names if sold(n, typed)]
         return min(names, key=lambda n: (unit_cost(n), n)) if names else None
 
-    def sized(names):
+    def sized(names, typed=True):
         """The station that covers `cap` customers an hour for the least."""
         best = None
         for n in _in_order(set(names)):
-            if not sold(n):
+            if not sold(n, typed):
                 continue
             rate = facts(n).get("c") or 0
             qty = max(1, math.ceil(cap / rate)) if rate and cap else 1
@@ -19078,12 +19079,19 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
     # else enough of its cheapest. A display several products share is summed
     # first and added once, so what it stands on counts it whole.
     shelves = {}
-    for p in [*(p for p, _impact in t.get("i") or ()), *shelf_products]:
+    main = dict(t.get("i") or ())
+    for p in [*main, *shelf_products]:
         row = products.get(p) or {}
         if p in covered or row.get("s") or row.get("k") or p in (t.get("f"), t.get("fw")):
             continue  # shown already, or a service, a ticket or an entrance fee: no shelf
         shows = catalogue.displays.get(p, ())
+        # A main product with no display made for the type takes any that
+        # works in it: a fast food restaurant's ice cream stands in the coffee
+        # shop's counter (issue #497). An extra (weight under 1) is left to
+        # outfit_optional(), which allows the same.
         item, qty = sized(shows)
+        if not item and (main.get(p, 0) >= 1 or p in shelf_products):
+            item, qty = sized(shows, False)
         if not item:
             continue
         got = shelves.setdefault(item, [0, []])
