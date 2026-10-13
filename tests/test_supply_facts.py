@@ -166,6 +166,7 @@ class Company:
                       "tradeRate": line.get("tradeRate", line["rate"]),
                       **({"weekSold": line["weekSold"]} if "weekSold" in line else {}),
                       **({"issued": True} if line.get("issued") else {}),
+                      **({"retired": True} if line.get("retired") else {}),
                       **({"soldDays": line["soldDays"]} if line.get("soldDays") else {})}
                      for slug, line in self.lines[site["addr"]].items()]
             out.append({
@@ -214,6 +215,53 @@ def shelf_company(target=None, units=500, rate=100, trade_days=30, stock_at_hub=
 
 
 # --- tests ---------------------------------------------------------------------
+
+class RetiredLineTests(unittest.TestCase):
+    """A line is retired where the game's own list of what customers can buy
+    there (cachedAvailableProducts) leaves it out (issue #493)."""
+
+    def lines(self, offered, sold=("ba:itemname_paperbag",), selling=ROSE, stocked=(), sold_until=20):
+        # Twenty days of roses; `selling` sells too up to `sold_until`.
+        record = shop_record([sale_day(d, 40, 20) for d in range(2, 21)])
+        for entry in record["orderHistory"]["$items"]:
+            if entry["dayNumber"] <= sold_until and selling != ROSE:
+                entry["itemSales"]["$items"].append({"itemName": selling, "amountSold": 5, "totalPrice": 5})
+        record["itemInstances"] = {"$items": [
+            {"$v": {"itemName": "ba:itemname_shelf", "cargoInstances": {"$items": [{"itemName": slug, "amount": 40}]}}}
+            for slug in stocked]}
+        record["cachedAvailableProducts"] = {"$items": list(offered)}
+        # Beer keeps a price from the shop's old type; nothing stocks or sells it.
+        extra = [{"itemName": BEER, "price": 3}] + [{"itemName": slug, "price": 0} for slug in sold]
+        record["retailPrices"]["$items"] += extra
+        save = Save({"EmployeeInstances": {"$items": []}}, {}, "")
+        b = _business(save, Names({}), record, ADDR, {}, [], {ADDR: []}, 21)
+        return {l["slug"]: l for l in b["lines"]}
+
+    def test_a_product_off_the_list_is_retired_and_one_on_it_is_not(self):
+        lines = self.lines([ROSE])
+        self.assertTrue(lines[BEER].get("retired"))
+        self.assertNotIn("retired", lines[ROSE])
+
+    def test_the_paper_bag_is_never_retired(self):
+        self.assertNotIn("retired", self.lines([ROSE])["ba:itemname_paperbag"])
+
+    def test_old_sales_of_a_product_the_type_could_sell_are_still_retired(self):
+        # Soda sold before the conversion; the florist could sell soda with a
+        # fridge, but the game does not list it, so its old sales are no shelf.
+        soda = "ba:itemname_sodacan"
+        lines = self.lines([ROSE], sold=(soda,), selling=soda, stocked=(soda,))
+        self.assertTrue(lines[soda].get("retired"))
+
+    def test_stock_that_sold_weeks_ago_stays_retired_once_the_week_has_passed(self):
+        # The soda last sold on day 5, outside the week the rates read.
+        soda = "ba:itemname_sodacan"
+        lines = self.lines([ROSE], sold=(soda,), selling=soda, stocked=(soda,), sold_until=5)
+        self.assertEqual(lines[soda]["rate"], 0)
+        self.assertTrue(lines[soda].get("retired"))
+
+    def test_an_empty_list_retires_nothing(self):
+        self.assertFalse([l for l in self.lines([]).values() if l.get("retired")])
+
 
 class TradingDayTests(unittest.TestCase):
     """A shelf's rate is read over trading days: after the opening day, with
@@ -315,6 +363,34 @@ class ShelfTests(unittest.TestCase):
                          ("noplan", "target", "warn", 120))
         [finding] = [f for f in c.findings() if f["siteKey"] == site_key(SHOP_A)]
         self.assertEqual(finding["group"], "unplanned")
+
+    def test_a_product_the_shop_no_longer_sells_is_no_shelf(self):
+        # Issue #493: a shop taken over and changed to another type keeps the
+        # old type's stock and last week of sales, but has no shelf to fill.
+        c = shelf_company(units=150, stock_at_hub=900)
+        c.lines[SHOP_A][SODA]["retired"] = True
+        c.run()
+        self.assertNotIn(SODA, c.supply["facts"].get(str(c.index(SHOP_A)), {}))
+        self.assertFalse([r for r in c.supply["shops"] if r["slug"] == SODA])
+        self.assertFalse([f for f in c.findings() if f["siteKey"] == site_key(SHOP_A)])
+
+    def test_a_plan_left_topping_up_a_retired_product_asks_nothing_upstream(self):
+        # The old stock is gone and the plan still stands: the hub needs none.
+        c = shelf_company(target=200, units=0, rate=0, stock_at_hub=100)
+        c.lines[SHOP_A][SODA]["retired"] = True
+        c.run()
+        self.assertEqual((c.fact(HUB, SODA)["use"], c.fact(HUB, SODA)["need"]), (0, 0))
+
+    def test_stock_a_converted_shop_cannot_sell_is_not_idle_nor_sent_on(self):
+        # A shop holding old-type soda beside one that sells soda on no plan:
+        # the old stock is no idle row and no source (via) for the other.
+        c = shelf_company(units=150, stock_at_hub=900)
+        c.shop(SHOP_B, "Converted Shop")
+        c.hold(SHOP_B, SODA, 1500, retired=True)
+        c.run()
+        self.assertFalse([r for r in c.supply["idle"] if r.get("slug") == SODA])
+        self.assertIsNone(c.fact(SHOP_A, SODA).get("via"))
+        self.assertEqual([f["group"] for f in c.findings()], ["unplanned"])
 
     def test_routed_lists_a_positive_stock_target_and_not_a_zero_one(self):
         c, _fact = self.verdict(target=120)
