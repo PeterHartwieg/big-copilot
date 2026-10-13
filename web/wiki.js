@@ -25,7 +25,9 @@
    actually has, and a link the game points at nothing degrades to plain text
    rather than to a dead link. */
 
-const WIKI_URL = "wiki-data.json";
+/* The compact copy build_web.py writes beside the committed, indented
+   web/wiki-data.json (WIKI_SERVED in ba_dashboard.py). */
+const WIKI_URL = "wiki-data.min.json";
 /* The game's help writes addresses as "13 5a"; the city's own tables spell the
    ordinal out. Only these two directions ever meet, so one table does both. */
 const WIKI_ORDINALS = ["", "first", "second", "third", "fourth", "fifth", "sixth", "seventh",
@@ -183,7 +185,28 @@ function wikiRich(text, params){
 /* Shape, as agreed with the extraction: schemaVersion 1, categories, pages
    (id, categoryId, title, body) and the business guides the page is
    drawn from. Anything else in the file is left alone. */
-function wikiIndex(raw){
+/* What the guides share is written once (share_guide_tables() in
+   tools/build_wiki_data.py): the supplier rows in the top-level SUPPLIERS, a
+   guide listing the site keys it names, and the SOURCES block in
+   provenance.guideSources unless the guide has its own. This returns the
+   catalogue with each guide back the way the page reads it, as
+   wiki_data.expand_guides() does for Python, and leaves the file's own objects
+   alone; a guide already in that shape is kept as it is. */
+function wikiExpandGuides(raw){
+  if(!raw.guides || typeof raw.guides !== "object") return raw;
+  const table = raw.SUPPLIERS && typeof raw.SUPPLIERS === "object" ? raw.SUPPLIERS : {};
+  const shared = (raw.provenance || {}).guideSources;
+  const guides = {};
+  Object.entries(raw.guides).forEach(([id, g]) => {
+    if(!g || typeof g !== "object"){ guides[id] = g; return; }
+    const own = Array.isArray(g.SUPPLIERS) ? {SUPPLIERS: Object.fromEntries(g.SUPPLIERS
+      .filter(k => Object.prototype.hasOwnProperty.call(table, k)).map(k => [k, table[k]]))} : {};
+    guides[id] = {...g, ...own, ...(!("SOURCES" in g) && shared ? {SOURCES: shared} : {})};
+  });
+  return {...raw, guides};
+}
+function wikiIndex(file){
+  const raw = wikiExpandGuides(file);
   const pages = Array.isArray(raw.pages) ? raw.pages.filter(p => p && p.id) : [];
   const categories = Array.isArray(raw.categories) ? raw.categories.filter(c => c && c.id) : [];
   const byId = new Map(pages.map(p => [String(p.id), p]));

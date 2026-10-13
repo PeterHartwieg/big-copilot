@@ -107,12 +107,25 @@ The contract (`schemaVersion: 1`):
   Price and source-quality checks use the pages that guide reads; recipe limits
   appear only where recipes are shown.
 
+  What every guide shares is written once (`share_guide_tables()`): a guide's
+  `SUPPLIERS` is the sorted list of site keys it names, whose rows are the
+  top-level `SUPPLIERS`; its `SOURCES` is left out when it is
+  `provenance.guideSources` (every guide but one whose shop layouts ship, the
+  Gift Shop); and the labels are the top-level `COPY`. Readers put each guide
+  back first, with `wiki_data.expand_guides()` in Python and `wikiExpandGuides()`
+  in `web/wiki.js`, so a guide reads with `SUPPLIERS` an object of its own rows
+  and `SOURCES` always there. Fixtures stay in each guide: the same fixture
+  can carry a different product list from one business to the next.
+
   Authored copy lives in `tools/wiki_sample.json`: `guideUi` supplies shared
   labels, `guideGaps` supplies missing-data messages, and `guides` contains
   business summaries and notes. Each summary
   and note has source conditions; it is included only while those literal
   excerpts still appear in the named help pages. Review the wording whenever
   related game content changes. Facts continue to come from the builder.
+- `COPY` — the guides' labels, `guideUi` filled in, shared by every guide.
+- `SUPPLIERS` — every supplier a guide names, keyed by site key: its name,
+  address, neighbourhood, kind, building facts and how many pages mention it.
 - `topics` — hand-authored articles, sorted by slug, carried through from
   `tools/wiki_topics.json` exactly as written. This is the one part of the
   payload the game does not write: an article covers something the help never
@@ -129,7 +142,8 @@ The contract (`schemaVersion: 1`):
   and byte counts, Steam app and depot build, the sources' newest file
   modification time as `sourceDate`, duplicates, links that point at no page,
   and issues (addresses the building table does not know, a missing or corrupt
-  building table, layouts that would not read).
+  building table, layouts that would not read). `guideSources` is the SOURCES
+  block the guides share.
 
 Supplier keys are the same `ba:street_<slug>#<number>` site keys the map page
 uses, so cross-references join. `ba_buildings.json` gives each address its
@@ -151,7 +165,7 @@ next build. A wording slot the builder cannot fill is a build failure, not a
 literal `{count}` in the shipped file.
 
 The output is deterministic: sorted iteration, no run timestamp, `sourceDate`
-is the newest mtime of the game help and counted layouts rather than the moment this ran (each guide's
+is the newest mtime of the game help and counted layouts rather than the moment this ran (each
 SOURCES block repeats it as `sourceDate` and keeps the mockup's `extracted` key
 with the same value), each source row records its hash and size with a null `mtime`
 (Steam touches unchanged files, and the hash already says whether the bytes moved), and
@@ -159,6 +173,16 @@ with the same value), each source row records its hash and size with a null `mti
 did not change. When the source date is all that changed (Steam touched a file without
 changing it on a later day), it keeps the standing file and its date. Source paths in the payload are game-relative; a privacy check
 rejects any build that would leak an absolute path, a user name or save data.
+
+### What the page receives
+
+`web/wiki-data.json` is committed indented, so a rebuild's diff reads line by
+line. The page never fetches it: `python build_web.py` and `--assemble` write
+`web/wiki-data.min.json` beside it, the same JSON without the indentation
+(`compact_wiki()` in `ba_dashboard.py`), gitignored like the rest of the
+assembled site and compared by `--check`. `WIKI_URL` in `web/wiki.js` fetches
+that copy, the local watch server makes it from the committed file on request,
+and an exported `dashboard.html` embeds the same compact text.
 
 ### Commands
 

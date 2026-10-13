@@ -43,14 +43,14 @@ async function fixture(t, {hash='', width=1280, theme='dark', motion='reduce', c
   page.on('pageerror', e => errors.push(e.message));
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
-    if(holdData && url.pathname === '/wiki-data.json') await holdData;
+    if(holdData && url.pathname === '/wiki-data.min.json') await holdData;
     if(url.hostname !== 'wiki.test') return route.abort();
     if(url.pathname.startsWith('/api/')) return route.fulfill({contentType:'application/json',body:JSON.stringify({features:[],online:0})});
     const name = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
     const target = path.resolve(root, name);
     if(!target.startsWith(root + path.sep) || !fs.existsSync(target)) return route.abort();
     if(name === 'index.html') return route.fulfill({contentType:'text/html',body:currentPage()});
-    if(name === 'wiki-data.json' && changeData) {
+    if(name === 'wiki-data.min.json' && changeData) {
       const data = JSON.parse(fs.readFileSync(target, 'utf8'));
       changeData(data);
       return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
@@ -367,8 +367,9 @@ test('phone layouts fit in dark and light, with a single row of nav icons', asyn
    out of the records it does carry so every address, fixture and recipe on it
    is real. The extraction will supply the real ones; this is the shape. */
 function addGuides(data) {
-  // The Gift Shop's own headings (COPY) and stations stay on the Gift Shop.
-  const {COPY, WORKSTATIONS, ...s} = data.guides['businesstypes-giftshop'];
+  // The Gift Shop's stations stay on the Gift Shop. The headings are the
+  // payload's shared COPY, which every guide reads.
+  const {WORKSTATIONS, ...s} = data.guides['businesstypes-giftshop'];
   const product = (key, over) => ({...s.PRODUCTS[key], ...over});
   data.guides = {
     ...data.guides,
@@ -401,8 +402,9 @@ test('a guide draws its services and its side range as cards of the same make', 
   const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-florist', changeData:addGuides});
   await page.getByRole('heading', {name:'Florist',exact:true,level:1}).waitFor();
   const seen = await page.locator('#wikiRoot h2').allTextContents();
-  assert.deepEqual(seen, [en('wiki.copy.setupTitle'), en('wiki.copy.primaryTitle'), en('wiki.copy.servicesTitle'), en('wiki.copy.secondaryTitle'), en('wiki.copy.graphTitle'),
-    en('wiki.copy.primaryRecipesTitle'), en('wiki.copy.secondaryRecipesTitle'), en('wiki.copy.suppliersTitle'), en('wiki.yours.title'), en('wiki.prices.title'), en('wiki.copy.sourceTitle')]);
+  // The headings are the payload's shared labels (its top-level COPY, guideUi).
+  assert.deepEqual(seen, [en('wiki.ui.setupTitle'), en('wiki.ui.primaryTitle'), en('wiki.ui.servicesTitle'), en('wiki.ui.secondaryTitle'), en('wiki.ui.graphTitle'),
+    en('wiki.ui.primaryRecipesTitle'), en('wiki.ui.secondaryRecipesTitle'), en('wiki.ui.suppliersTitle'), en('wiki.yours.title'), en('wiki.prices.title'), en('wiki.ui.sourceTitle')]);
   assert.equal(await page.locator('.wk-card').count(), 3, 'a card each for both ranges and the fee');
   // The square is the control, and the row it belongs to answers to it.
   const square = page.locator('.wk-item .wk-tick').first();
@@ -412,7 +414,7 @@ test('a guide draws its services and its side range as cards of the same make', 
   await square.click();
   assert.equal(await page.locator('.wk-item.done').count(), 0);
   const service = page.locator('.wk-card.svc');
-  assert.match(await service.innerText(), new RegExp("Delivery Fee[\\s\\S]*" + enRe('wiki.copy.automaticFee').source + "[\\s\\S]*A van", ''));
+  assert.match(await service.innerText(), new RegExp("Delivery Fee[\\s\\S]*" + enRe('wiki.ui.automaticFee').source + "[\\s\\S]*A van", ''));
   // A service's dependency keeps the help's own link, and it goes somewhere.
   await service.getByRole('link', {name:'Gift Shops',exact:true}).click();
   await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();

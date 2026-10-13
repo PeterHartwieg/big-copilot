@@ -18,8 +18,8 @@ WEB = ROOT / "web"
 # stamp inputs, and every fetch carries ?v=<build stamp> (the map background
 # ?v=<its SHA-256>). _headers cannot see the query string.
 STAMPED_RULES = ("/app.js", "/community.js", "/community.css", "/report.js", "/report.css",
-                 "/i18n/*", "/names/*", "/maps/*", "/wiki-data.json")
-STAMPED_PATH = r"(?:app\.js|community\.(?:js|css)|report\.(?:js|css)|i18n/|names/|maps/|wiki-data\.json)"
+                 "/i18n/*", "/names/*", "/maps/*", "/wiki-data.min.json")
+STAMPED_PATH = r"(?:app\.js|community\.(?:js|css)|report\.(?:js|css)|i18n/|names/|maps/|wiki-data\.min\.json)"
 # A string or template literal that starts with one of those paths, after an
 # optional leading slash or ${...} prefix.
 STAMPED_LITERAL = re.compile(r"""[`'"](?:\$\{[^}]*\})?/?""" + STAMPED_PATH)
@@ -194,12 +194,15 @@ class Headers(unittest.TestCase):
         langs = [lang for lang in build_web.ui_text.languages() if lang != "en"]
         self.assertTrue(langs and any(p.parent.name == "i18n" for p in files),
                         "web/i18n/ is missing: run python3 build_web.py --assemble")
+        # A copy assembly writes from one stamp input moves with it: the wiki's
+        # compact copy (build_web.served_wiki()) is the committed catalogue.
+        derived = {"wiki-data.min.json": "wiki-data.json"}
         for path in files:
             served = path.relative_to(WEB).as_posix()
             if any(fnmatch(served, pattern) for pattern in ignored):
                 continue  # never deployed (maps/full-map.*)
             with self.subTest(file=served):
-                self.assertIn(f"web/{served}", build_web.STAMP_INPUTS,
+                self.assertIn(f"web/{derived.get(served, served)}", build_web.STAMP_INPUTS,
                               f"/{served} is cached immutable but is not a stamp input")
 
     def test_every_request_for_a_stamped_path_carries_the_stamp(self):

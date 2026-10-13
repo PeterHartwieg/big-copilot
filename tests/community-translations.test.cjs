@@ -17,7 +17,12 @@ const BASE = {schemaVersion:1, lang:'it', revision:'catalogue-1', entries:[
 ]};
 // stamp stands in for web/version.json's build stamp; each test is its own
 // deployment, so overlays cached by an earlier test never answer a later one.
-let cats, mf, db, script, ipSeq = 1, stamp = null, stampSeq = 0, assetReads = {};
+// catTags[lang], when set, is the ETag ASSETS sends with that catalogue, and it
+// answers a matching If-None-Match with 304, as Workers Static Assets does.
+// assetHold[lang], when set, parks that catalogue's response until released, and
+// assetFull[lang] answers with the full body even to a matching If-None-Match.
+let assetHold = {}, assetFull = {};
+let cats, catTags = {}, mf, db, script, ipSeq = 1, stamp = null, stampSeq = 0, assetReads = {};
 const ip = () => `10.98.${Math.floor(++ipSeq / 250)}.${ipSeq % 250 + 1}`;
 const raw = fs.readFileSync(path.join(ROOT,'migrations/0002_translations.sql'),'utf8');
 async function migrate(target) {
@@ -43,7 +48,12 @@ function options() {
       assetReads[pathname] = (assetReads[pathname] || 0) + 1;
       if (pathname === '/version.json') return stamp ? Response.json({version:stamp, latest:null}) : new Response('missing',{status:404});
       const lang = /^\/translations\/([^/]+)\.json$/.exec(pathname)?.[1];
-      return lang ? cats[lang] ? Response.json(cats[lang]) : new Response('missing',{status:404}) : new Response('static fixture');
+      if (!lang) return new Response('static fixture');
+      if (!cats[lang]) return new Response('missing',{status:404});
+      if (assetHold[lang]) { assetHold[lang].arrived(); await assetHold[lang].release; }
+      const tag = catTags[lang];
+      if (tag && !assetFull[lang] && request.headers.get('if-none-match') === tag) return new Response(null,{status:304,headers:{etag:tag}});
+      return Response.json(cats[lang], tag ? {headers:{etag:tag}} : undefined);
     }}};
 }
 async function fetchApi(route, {body, voter=ip(), instance=mf, headers={}, method}={}) {
@@ -76,7 +86,7 @@ before(async()=>{
   db=await mf.getD1Database('COMMUNITY_DB'); await migrate(db);
 });
 beforeEach(async()=>{
-  cats={it:structuredClone(BASE),de:{...structuredClone(BASE),lang:'de'}};
+  cats={it:structuredClone(BASE),de:{...structuredClone(BASE),lang:'de'}}; catTags={}; assetHold={}; assetFull={};
   stamp=`stamp-${++stampSeq}`; assetReads={};
   await db.prepare('DELETE FROM translation_votes').run();
   await db.prepare('DELETE FROM translation_candidates').run();
@@ -452,4 +462,129 @@ test('a Worker deploy that bumps OVERLAY_FORMAT never revalidates a browser copy
     assert.equal(response.headers.get('etag'),`"v2-0-${stamp}"`);
     assert.deepEqual((await json(response)).translations,{});
   } finally {await scoped.dispose();}
+});
+
+// The summary before issue #322 ran these two statements, binding the source map
+// twice; the single statement that replaced them must answer every page the same.
+async function summaryBefore(lang, cursor='') {
+  const crypto=require('node:crypto');
+  const cat=new Map(cats[lang].entries.map(e=>[e.key,e]));
+  const sources=JSON.stringify(Object.fromEntries([...cat].map(([key,e])=>[key,e.sourceVersion])));
+  const pageSql=`SELECT e.key, e.source_version, e.selected_id FROM translation_entries e
+      JOIN json_each(?2) current ON current.key = e.key AND current.value = e.source_version
+      WHERE e.lang = ?1 AND e.key > ?3 ORDER BY e.key LIMIT ?4`;
+  const [keys,rows,revision]=await db.batch([
+    db.prepare(pageSql).bind(lang,sources,cursor,51),
+    db.prepare(`WITH page AS (${pageSql})
+      SELECT c.key, c.id, c.text, COUNT(v.voter_hash) AS votes FROM page
+      JOIN translation_candidates c ON c.lang = ?1 AND c.key = page.key AND c.source_version = page.source_version
+      LEFT JOIN translation_votes v ON v.candidate_id = c.id
+      WHERE c.hidden = 0 GROUP BY c.id ORDER BY c.key, c.created_at, c.id`).bind(lang,sources,cursor,50),
+    db.prepare('SELECT revision FROM translation_revisions WHERE lang = ?1').bind(lang),
+  ]);
+  const page=keys.results.slice(0,50), entries={};
+  for(const row of page) {
+    const e=cat.get(row.key);
+    const baseId=crypto.createHash('sha256').update(JSON.stringify([lang,e.key,e.sourceVersion,e.text??e.en])).digest('hex');
+    const wire=id=>id===baseId||!id?'bundled':id;
+    entries[row.key]={sourceVersion:row.source_version,selectedId:wire(row.selected_id),candidates:
+      rows.results.filter(c=>c.key===row.key).map(c=>({id:wire(c.id),text:c.text,votes:c.votes}))};
+  }
+  return {schemaVersion:1,lang,revision:revision.results[0]?.revision||0,entries,nextCursor:keys.results.length>50?page.at(-1).key:null};
+}
+
+test('the one-statement summary answers every page exactly as the two statements did',async()=>{
+  for(let i=0;i<130;i++) {
+    const key=`phrase_${String(i).padStart(3,'0')}`;
+    cats.it.entries.push({...structuredClone(BASE.entries[i%2?1:0]),key});
+  }
+  for(let i=0;i<130;i++) {
+    const key=`phrase_${String(i).padStart(3,'0')}`, tokens=i%2?'':' {n}';
+    if(i%7===3) continue; // no community rows at all
+    await json(await suggest(`Testo ${i}${tokens}`,ip(),key));
+    if(i%3===0) await json(await suggest(`Altro ${i}${tokens}`,ip(),key));
+    if(i%5===0) await json(await vote('bundled',ip(),key));
+    if(i%11===0) await json(await vote('bundled',ip(),key));
+    // Every candidate hidden: the entry stays on the page with none.
+    if(i%13===0) await db.prepare('UPDATE translation_candidates SET hidden=1 WHERE key=?1').bind(key).run();
+  }
+  // A retired source version and another language never reach the Italian page.
+  cats.it.entries.find(e=>e.key==='phrase_010').sourceVersion=V2;
+  await json(await suggest('Hallo {n}',ip(),'greeting',V1,'de'));
+  let cursor='', pages=0;
+  do {
+    const query=cursor?'&cursor='+encodeURIComponent(cursor):'';
+    const actual=await json(await fetchApi('/api/translations?lang=it'+query));
+    // Stringified, so the order of entries and candidates must match too.
+    assert.equal(JSON.stringify(actual),JSON.stringify(await summaryBefore('it',cursor)),`page after ${JSON.stringify(cursor)}`);
+    cursor=actual.nextCursor; pages++;
+  } while(cursor);
+  assert.equal(pages,3);
+  assert.ok(!(await json(await fetchApi('/api/translations?lang=it'))).entries.phrase_010,'the retired version is left out');
+  // The overlay's rows, in the order the query before #322 returned them.
+  const sources=JSON.stringify(Object.fromEntries(cats.it.entries.map(e=>[e.key,e.sourceVersion])));
+  const before=(await db.prepare(`SELECT c.key, c.source_version, c.text FROM translation_entries e
+      JOIN translation_candidates c ON c.id = e.selected_id AND c.hidden = 0
+      JOIN json_each(?2) current ON current.key = e.key AND current.value = e.source_version
+      WHERE e.lang = ?1`).bind('it',sources).all()).results;
+  const bundled=new Map(cats.it.entries.map(e=>[e.key,e.text??e.en]));
+  const expected=Object.fromEntries(before.filter(r=>r.text!==bundled.get(r.key)).map(r=>[r.key,{text:r.text,sourceVersion:r.source_version}]));
+  assert.ok(Object.keys(expected).length>50);
+  assert.equal(JSON.stringify((await json(await overlayOf())).translations),JSON.stringify(expected));
+});
+
+test('a parsed catalogue is reused only while ASSETS reports the same ETag',async()=>{
+  catTags.it='"catalogue-a"';
+  const user=ip();
+  await json(await entry(user));
+  const reads=catalogueReads('it');
+  // Changing the bytes behind an unchanged tag cannot happen in a deployment;
+  // here it proves the parse was reused, since the change stays invisible.
+  cats.it.entries[0].text='Salve {n}';
+  const cached=await json(await entry(user));
+  assert.equal(cached.candidates.find(c=>c.id==='bundled').text,'Ciao {n}');
+  assert.equal(catalogueReads('it'),reads+1,'the request still asks ASSETS, conditionally');
+  catTags.it='"catalogue-b"'; // a deployment replaced the catalogue
+  const deployed=await json(await entry(user));
+  assert.equal(deployed.candidates.find(c=>c.id==='bundled').text,'Salve {n}');
+  delete catTags.it; // no ETag: parsed every time, as before
+  cats.it.entries[0].text='Buongiorno {n}';
+  assert.equal((await json(await entry(user))).candidates.find(c=>c.id==='bundled').text,'Buongiorno {n}');
+  cats.it.entries[0].text='Ciao {n}';
+  assert.equal((await json(await entry(user))).candidates.find(c=>c.id==='bundled').text,'Ciao {n}');
+  // A language the deployment no longer ships is unknown, not served from memory.
+  catTags.it='"catalogue-c"'; await json(await entry(user));
+  delete cats.it;
+  await json(await entry(user),404);
+});
+
+const bundledOf = async (lang, voter=ip()) =>
+  (await json(await fetchApi('/api/translations/entry?'+new URLSearchParams(fields('greeting',V1,lang)),{voter}))).candidates.find(c=>c.id==='bundled').text;
+
+test('a cached parse is reused when ASSETS answers 200 with the same ETag',async()=>{
+  catTags.it='"catalogue-a"';
+  assert.equal(await bundledOf('it'),'Ciao {n}');
+  assetFull.it=true; // ignores If-None-Match, sends the body and the same tag
+  cats.it.entries[0].text='Salve {n}';
+  const reads=catalogueReads('it');
+  assert.equal(await bundledOf('it'),'Ciao {n}','the same tag reuses the parse');
+  assert.equal(catalogueReads('it'),reads+1);
+});
+
+test('a revalidation that finishes after eviction still keeps at most two catalogues',async()=>{
+  cats.fr={...structuredClone(BASE),lang:'fr'};
+  for(const lang of ['it','de','fr']) catTags[lang]=`"${lang}-a"`;
+  assert.equal(await bundledOf('it'),'Ciao {n}');
+  assert.equal(await bundledOf('de'),'Ciao {n}'); // held: it, de
+  let arrived, release;
+  const reached=new Promise(resolve=>{arrived=resolve;});
+  assetHold.it={arrived, release:new Promise(resolve=>{release=resolve;})};
+  const late=bundledOf('it'); // revalidates it, parked in ASSETS
+  await reached;
+  assert.equal(await bundledOf('fr'),'Ciao {n}'); // held: de, fr (it evicted)
+  release(); delete assetHold.it;
+  assert.equal(await late,'Ciao {n}'); // the 304 re-inserts it, which must evict de
+  // Bytes changed behind unchanged tags reveal which parses are still held.
+  for(const lang of ['it','de','fr']) cats[lang].entries[0].text='Salve {n}';
+  assert.equal(await bundledOf('de'),'Salve {n}','de was evicted, so it is parsed again');
 });

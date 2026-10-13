@@ -89,6 +89,14 @@ The Worker's code is not part of the build stamp: a change that makes the overla
 answer differently for the same revision and catalogue bumps `OVERLAY_FORMAT` in
 `server/translations.mjs`, which retires both the cached entries and browser tags.
 
+Each Worker isolate also keeps the parsed catalogue of its last two languages in
+memory. Every request still asks `ASSETS` for the catalogue, with `If-None-Match`
+set to the `ETag` of the copy it holds, and reuses that copy only on a 304 or a
+response with the same tag; a catalogue served without an `ETag` is parsed every
+time. The `{key: sourceVersion}` map that the summary, overlay and cleanup queries
+join with `json_each()` is built once per parsed catalogue, and the summary binds it
+in a single statement.
+
 The local CLI remains offline. Exporting accepted community wording into `i18n/`
 makes it available in subsequent bundled builds. Import must validate the English
 source version before updating `.base.json`, and only accepted human contributions

@@ -322,7 +322,8 @@ class FixtureCase(unittest.TestCase):
                 "--allow-fewer-guides"]
 
     def guide(self):
-        return self.build()["guides"]["businesstypes-giftshop"]
+        """The Gift Shop's guide with its shared tables put back, as readers see it."""
+        return wiki_data.expand_guides(self.build())["guides"]["businesstypes-giftshop"]
 
     def page(self, payload, page_id):
         return next(page for page in payload["pages"] if page["id"] == page_id)
@@ -567,7 +568,7 @@ class FactsFollowSourceTests(FixtureCase):
         locale = dict(LOCALE, importertypename_bluestone="BlueStone Imports")
         self.write_locale(locale)
         payload = self.build()
-        self.assertEqual(payload["guides"]["businesstypes-giftshop"]["SUPPLIERS"]["ba:street_pier#4"]["name"],
+        self.assertEqual(payload["SUPPLIERS"]["ba:street_pier#4"]["name"],
                          "BlueStone Imports")
         self.assertEqual(self.page(payload, "importers-bluestone")["title"],
                          "BlueStone Imports")
@@ -751,7 +752,7 @@ class SourceTests(FixtureCase):
     def test_a_missing_building_table_leaves_suppliers_unplaced_and_reported(self):
         os.unlink(os.path.join(self.root, "ba_buildings.json"))
         payload = self.build()
-        supplier = payload["guides"]["businesstypes-giftshop"]["SUPPLIERS"]["ba:street_fifthavenue#13"]
+        supplier = payload["SUPPLIERS"]["ba:street_fifthavenue#13"]
         self.assertIsNone(supplier["hood"])
         self.assertIsNone(supplier["traffic"])
         self.assertIn("no building", payload["provenance"]["issues"]["suppliers"][0]["reason"])
@@ -792,7 +793,7 @@ class SourceTests(FixtureCase):
         self.write("ba_buildings.json", "{not json")
         payload = self.build()
         self.assertIsNone(payload["provenance"]["sources"]["buildings"])
-        self.assertIsNone(payload["guides"]["businesstypes-giftshop"]["SUPPLIERS"]["ba:street_pier#4"]["hood"])
+        self.assertIsNone(payload["SUPPLIERS"]["ba:street_pier#4"]["hood"])
 
     def test_optional_source_failures_name_no_path_on_this_machine(self):
         # A corrupt table and an unreadable layout are both recorded, and the

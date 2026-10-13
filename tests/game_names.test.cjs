@@ -52,6 +52,8 @@ function seam({table = null, lang = 'de'} = {}){
     spEsc: s => String(s), attr: s => String(s),
     hasData: () => !!context.D,
     renderCalm(lazy){ drawn.push(['calm', lazy]); },
+    /* What takeData() tells the rest of the board of a new board. */
+    sbBoard(){}, pgBoard(){}, szAdopt(){},
     document: {querySelectorAll: sel => sel === '[data-gn-pick]' ? [picker] : [], querySelector: () => null},
     localStorage: {getItem: () => null, setItem(){}},
     navigator: {languages: ['en-US']}, window: {}, fetch: async () => { throw new Error('offline'); },

@@ -3,9 +3,9 @@
 // What it touches at load (document, window, storage, observers) is one inert
 // stub that answers every property and call with itself, so the boot code runs
 // and does nothing. A test that runs a draw and reads what it wrote passes
-// recordingDocument()'s document (below). A test that needs real events or
-// layout runs in the browser, and one that drives its own stubbed DOM
-// (tests/navigation.test.cjs) still slices (tests/_slice.cjs).
+// recordingDocument()'s document (below); one that drives navigation passes its
+// own document, window, location and history (tests/navigation.test.cjs). A
+// test that needs real events or layout runs in the browser.
 // Section metadata comes from Python's authored registry, as on either front
 // door; do not depend on the readable/optimized state of the assembled HTML.
 // What it does not provide: render() fills no other placeholder, so there is no
@@ -48,8 +48,10 @@ const inert = new Proxy(function(){}, {
 /* A fresh context with web/i18n.js (which runs ahead of the board script on
    the page) and then the whole board script in it. Top-level functions are
    properties of the returned context; `const` and `let` names are reached with
-   vm.runInContext(name, context). `globals` are set before either runs. */
-function loadBoard(globals = {}){
+   vm.runInContext(name, context). `globals` are set before either runs.
+   `edit`, given, rewrites the board script's source first (a test's extra
+   registry row). */
+function loadBoard(globals = {}, {edit = null} = {}){
   const context = vm.createContext({
     document: inert, window: inert, navigator: inert, location: inert, history: inert,
     localStorage: inert, sessionStorage: inert, matchMedia: inert, getComputedStyle: inert,
@@ -63,7 +65,7 @@ function loadBoard(globals = {}){
     ...globals,
   });
   vm.runInContext(I18N, context, {filename: 'web/i18n.js'});
-  vm.runInContext(SOURCE, context, {filename: 'template/board.js'});
+  vm.runInContext(edit ? edit(SOURCE) : SOURCE, context, {filename: 'template/board.js'});
   return context;
 }
 

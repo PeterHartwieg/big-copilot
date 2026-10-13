@@ -33,6 +33,11 @@ import os
 import re
 from xml.sax.saxutils import escape as xml_escape
 
+try:
+    from .wiki_data import expand_guides
+except ImportError:  # direct tools script
+    from wiki_data import expand_guides
+
 SITE = "https://bigcopilot.com"
 FURNITURE = "common_furniture"
 TOPIC_LABEL = "Big Copilot topics"
@@ -446,8 +451,12 @@ def robots() -> str:
 
 
 def build(data: dict) -> dict[str, str]:
-    """Every generated file, keyed by its path under web/ with forward slashes."""
-    site = Site(data)
+    """Every generated file, keyed by its path under web/ with forward slashes.
+
+    The guides are put back first (expand_guides(), which changes nothing the
+    second time), so a payload read without load() still names its suppliers.
+    """
+    site = Site(expand_guides(data))
     files: dict[str, str] = {f"{OUT_DIR}/index.html": index_page(site)}
     paths = ["/", "/wiki/"]
     for cat in site.categories:
@@ -465,8 +474,9 @@ def build(data: dict) -> dict[str, str]:
 
 
 def load(web: str) -> dict:
+    """The committed payload, each guide with its shared tables put back."""
     with open(os.path.join(web, "wiki-data.json"), encoding="utf-8") as fh:
-        return json.load(fh)
+        return expand_guides(json.load(fh))
 
 
 def existing(web: str) -> set[str]:

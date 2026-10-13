@@ -48,10 +48,39 @@ export function validateTranslation(text, validation) {
     validation.required.every(group => Array.isArray(group) && group.some(token => tokens.includes(token)));
 }
 
+// Parsed catalogues, least recently used first. A catalogue is deployment-immutable
+// and the ETag that ASSETS sends names its bytes, so a parse is reused, across
+// requests in this isolate, only while ASSETS still reports that ETag: a 304 to
+// If-None-Match, or a 200 carrying the same tag. A response without an ETag is
+// parsed every time and never kept. A parsed catalogue is several MB, so only the
+// last CATALOGUE_CACHE languages are kept. Callers must not mutate what they get.
+const CATALOGUE_CACHE = 2;
+const parsedCatalogues = new Map();
+const sourceMaps = new WeakMap();
+// Every insertion, a revalidated hit included, goes through here: a hit whose
+// revalidation finishes after other languages evicted it must still evict.
+function rememberCatalogue(lang, held) {
+  parsedCatalogues.delete(lang);
+  parsedCatalogues.set(lang, held);
+  while (parsedCatalogues.size > CATALOGUE_CACHE) parsedCatalogues.delete(parsedCatalogues.keys().next().value);
+}
+
 async function catalogue(request, env, lang) {
   if (!LANG.test(lang || '')) return null;
-  const response = await env.ASSETS.fetch(new Request(new URL(`/translations/${lang}.json`, request.url)));
-  if (!response.ok) return null;
+  const cached = parsedCatalogues.get(lang);
+  const response = await env.ASSETS.fetch(new Request(new URL(`/translations/${lang}.json`, request.url),
+    cached ? { headers: { 'if-none-match': cached.etag } } : undefined));
+  const etag = response.headers.get('etag');
+  if (cached && (response.status === 304 || (response.ok && etag === cached.etag))) {
+    rememberCatalogue(lang, cached);
+    await response.body?.cancel();
+    return cached.cat;
+  }
+  parsedCatalogues.delete(lang);
+  if (!response.ok) {
+    await response.body?.cancel();
+    return null;
+  }
   const raw = await response.text();
   if (raw.length > MAX_CATALOGUE_BYTES) return null;
   const data = JSON.parse(raw);
@@ -62,9 +91,19 @@ async function catalogue(request, env, lang) {
         typeof entry.en !== 'string' || !(entry.text === null || typeof entry.text === 'string') || !plainObject(entry.validation)) return null;
     entries.set(entry.key, entry);
   }
-  return { ...data, entries };
+  const cat = { ...data, entries };
+  if (etag) rememberCatalogue(lang, { etag, cat });
+  return cat;
 }
-const sourceMap = cat => JSON.stringify(Object.fromEntries([...cat.entries].map(([key, entry]) => [key, entry.sourceVersion])));
+// {key: sourceVersion} as JSON, the text json_each() joins against; built once per parse.
+function sourceMap(cat) {
+  let text = sourceMaps.get(cat);
+  if (text === undefined) {
+    text = JSON.stringify(Object.fromEntries([...cat.entries].map(([key, entry]) => [key, entry.sourceVersion])));
+    sourceMaps.set(cat, text);
+  }
+  return text;
+}
 const baseline = entry => entry.text ?? entry.en;
 async function digest(value) {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
@@ -169,39 +208,55 @@ export async function handleTranslations(request, env, body, ip, sign, diagnosti
   return response;
 }
 
+// One statement binds the source map once: the page's current entries (one more
+// than a page, to tell whether another follows), each with its visible candidates.
+// An entry without visible candidates still yields one row, with a null c.id; the
+// extra entry (n > ?4) yields only that row, since its candidates are not joined.
+// CROSS JOIN keeps json_each() the outer loop, read once, with a primary-key lookup
+// per catalogue key; as the inner loop SQLite rescans it for every entry row.
+const summarySql = `WITH page AS (
+    SELECT e.key, e.source_version, e.selected_id, ROW_NUMBER() OVER (ORDER BY e.key) AS n FROM json_each(?2) current
+    CROSS JOIN translation_entries e ON e.lang = ?1 AND e.key = current.key AND e.source_version = current.value
+    WHERE e.key > ?3 ORDER BY e.key LIMIT ?4 + 1)
+  SELECT page.key, page.source_version, page.selected_id, page.n, c.id, c.text, COUNT(v.voter_hash) AS votes FROM page
+  LEFT JOIN translation_candidates c ON page.n <= ?4 AND c.lang = ?1 AND c.key = page.key
+    AND c.source_version = page.source_version AND c.hidden = 0
+  LEFT JOIN translation_votes v ON v.candidate_id = c.id
+  GROUP BY page.key, c.id ORDER BY page.key, c.created_at, c.id`;
+
 async function summary(db, lang, cat, cursor) {
   if (cursor.length > 240) return error('invalid_cursor', 'Invalid page cursor.');
-  const sources = sourceMap(cat);
-  const pageSql = `SELECT e.key, e.source_version, e.selected_id FROM translation_entries e
-      JOIN json_each(?2) current ON current.key = e.key AND current.value = e.source_version
-      WHERE e.lang = ?1 AND e.key > ?3 ORDER BY e.key LIMIT ?4`;
-  const [keys, rows, revision] = await db.batch([
-    db.prepare(pageSql).bind(lang, sources, cursor, PAGE_SIZE + 1),
-    db.prepare(`WITH page AS (${pageSql})
-      SELECT c.key, c.id, c.text, COUNT(v.voter_hash) AS votes FROM page
-      JOIN translation_candidates c ON c.lang = ?1 AND c.key = page.key AND c.source_version = page.source_version
-      LEFT JOIN translation_votes v ON v.candidate_id = c.id
-      WHERE c.hidden = 0 GROUP BY c.id ORDER BY c.key, c.created_at, c.id`).bind(lang, sources, cursor, PAGE_SIZE),
+  const [rows, revision] = await db.batch([
+    db.prepare(summarySql).bind(lang, sourceMap(cat), cursor, PAGE_SIZE),
     revisionQuery(db).bind(lang),
   ]);
-  const page = keys.results.slice(0, PAGE_SIZE);
   const entries = {};
-  for (const row of page) {
-    const baseId = await candidateId(lang, cat.entries.get(row.key), baseline(cat.entries.get(row.key)));
-    const wire = id => id === baseId || !id ? 'bundled' : id;
-    entries[row.key] = { sourceVersion: row.source_version, selectedId: wire(row.selected_id), candidates:
-      rows.results.filter(candidate => candidate.key === row.key).map(candidate => ({ id: wire(candidate.id), text: candidate.text, votes: candidate.votes })) };
+  let last = null, more = false, wire = null;
+  for (const row of rows.results) {
+    if (row.n > PAGE_SIZE) {
+      more = true;
+      continue;
+    }
+    if (row.key !== last) {
+      last = row.key;
+      const entry = cat.entries.get(row.key);
+      const baseId = await candidateId(lang, entry, baseline(entry));
+      wire = id => id === baseId || !id ? 'bundled' : id;
+      entries[row.key] = { sourceVersion: row.source_version, selectedId: wire(row.selected_id), candidates: [] };
+    }
+    if (row.id !== null) entries[row.key].candidates.push({ id: wire(row.id), text: row.text, votes: row.votes });
   }
   return reply({ schemaVersion: 1, lang, revision: revision.results[0]?.revision || 0, entries,
-    nextCursor: keys.results.length > PAGE_SIZE ? page.at(-1).key : null }, 200, true);
+    nextCursor: more ? last : null }, 200, true);
 }
 
 async function overlay(db, lang, cat) {
   const [rows, revision] = await db.batch([
-    db.prepare(`SELECT c.key, c.source_version, c.text FROM translation_entries e
+    // json_each() stays the outer loop, as in summarySql.
+    db.prepare(`SELECT c.key, c.source_version, c.text FROM json_each(?2) current
+      CROSS JOIN translation_entries e ON e.lang = ?1 AND e.key = current.key AND e.source_version = current.value
       JOIN translation_candidates c ON c.id = e.selected_id AND c.hidden = 0
-      JOIN json_each(?2) current ON current.key = e.key AND current.value = e.source_version
-      WHERE e.lang = ?1`).bind(lang, sourceMap(cat)), revisionQuery(db).bind(lang),
+      ORDER BY e.key`).bind(lang, sourceMap(cat)), revisionQuery(db).bind(lang),
   ]);
   const translations = {};
   for (const row of rows.results) {
@@ -290,8 +345,9 @@ export async function cleanupTranslationVotes(env) {
   for (const { lang } of langs.results) {
     const cat = await catalogue(new Request('https://bigcopilot.com/'), env, lang);
     if (!cat) continue; // never discard votes on an unavailable catalogue
-    await db.prepare(`DELETE FROM translation_votes WHERE lang = ?1 AND NOT EXISTS (
-      SELECT 1 FROM json_each(?2) current WHERE current.key = translation_votes.key AND current.value = translation_votes.source_version
+    // NOT IN reads json_each() once; a correlated NOT EXISTS rescans it per vote.
+    await db.prepare(`DELETE FROM translation_votes WHERE lang = ?1 AND (key, source_version) NOT IN (
+      SELECT key, value FROM json_each(?2)
     )`).bind(lang, sourceMap(cat)).run();
   }
 }
