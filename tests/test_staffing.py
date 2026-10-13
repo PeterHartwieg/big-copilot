@@ -3172,7 +3172,8 @@ class OddSaveTest(unittest.TestCase):
                 raise ValueError("this site is broken")
             return real(save, names, business, building, *args, **kw)
 
-        with unittest.mock.patch.object(ba_dashboard, "_plan_site", explode), \n                contextlib.redirect_stderr(io.StringIO()):
+        with unittest.mock.patch.object(ba_dashboard, "_plan_site", explode), \
+                contextlib.redirect_stderr(io.StringIO()):
             rows = plan_sites(self.SPECS, people)
         # Two sites in, two rows out: the failed one is named, not dropped,
         # and says what broke (issue #308).
@@ -3201,7 +3202,8 @@ class OddSaveTest(unittest.TestCase):
                 raise ValueError("this site's schedule is malformed")
             return real(save, building, stations)
 
-        with unittest.mock.patch.object(ba_dashboard, "_current_roster", explode), \n                contextlib.redirect_stderr(io.StringIO()):
+        with unittest.mock.patch.object(ba_dashboard, "_current_roster", explode), \
+                contextlib.redirect_stderr(io.StringIO()):
             rows = plan_sites(self.SPECS, people)
         self.assertEqual(len(rows), 2)
         broken, whole = rows
