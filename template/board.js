@@ -17739,13 +17739,14 @@ function reGainCell(o){
   return `<span class="re-gain">${reGainText(g)}</span>`;
 }
 /* Where a building fills, and at what price: a pending price under market
-   rent after its own days (the game's strict price < market: at or over it
-   tenants leave), else, for a building off its best price, the best price
-   after a fresh 7-day wait. Null when neither: nothing to project. */
+   rent after its own days (`under`, Python's own comparison as the game makes
+   it: at or over market tenants leave), else, for a building off its best
+   price, the best price after a fresh 7-day wait. Null when neither: nothing
+   to project. */
 function reFillAt(o){
   if(!o.fill) return null;
   const pending = o.pending !== null && o.pending !== undefined;
-  if(pending && o.pending < o.market - 0.0001) return {wait: o.days || 0, price: o.pending};
+  if(pending && o.under) return {wait: o.days || 0, price: o.pending};
   if(o.flag) return {wait: 7, price: o.best};
   return null;
 }

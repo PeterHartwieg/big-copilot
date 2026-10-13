@@ -24,7 +24,7 @@ const TYPES = {'.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
 const PENDING = 'ba:street_tenthavenue#1';   // its best price already waits: never offered again
 const OVER = 'ba:street_eighthstreet#5';     // 1.2 x market rent, emptying: the largest gain
 
-let browser, mock, mockUrl, dir, payload, eve;
+let browser, mock, mockUrl, dir, payload, eve, pend;
 
 before(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'real-estate-'));
@@ -43,10 +43,26 @@ with open(os.path.join(out, "payload.json"), "w", encoding="utf-8") as fh:
     json.dump(d.materialize_all(d.build_core(load_save(save), names)), fh)
 with open(os.path.join(out, "eve.json"), "w", encoding="utf-8") as fh:
     json.dump(d.materialize_all(eve_build()), fh)
+# Two pending prices: the best price at 1 Harbor Street, whose market rent rounds
+# to that same cent, and 24 Twelfth Street's own market rent, at which it never fills.
+from tests.es3_fixture import address, encode
+tree = F.data_company()
+twelfth = d._market_rent(d.load_buildings()[("ba:street_twelfthstreet", 24)])
+tree["realEstate"] = tree["realEstate"] + [
+    {"address": address("ba:street_harborstreet", 1), "purchaseDay": 20, "purchasePrice": 5000000.0, "totalSqm": 1000,
+     "occupancy": 40.0, "pricePerSqm": 6.5, "pendingPricePerSqm": 5.64, "daysUntilUpdatingPricePerSqm": 7},
+    {"address": address("ba:street_twelfthstreet", 24), "purchaseDay": 20, "purchasePrice": 5000000.0, "totalSqm": 1000,
+     "occupancy": 97.0, "pricePerSqm": 3.5, "pendingPricePerSqm": twelfth, "daysUntilUpdatingPricePerSqm": 4}]
+pend = os.path.join(out, "pend.hsg")
+with open(pend, "wb") as fh:
+    fh.write(encode(tree))
+with open(os.path.join(out, "pend.json"), "w", encoding="utf-8") as fh:
+    json.dump(d.materialize_all(d.build_core(load_save(pend), names)), fh)
 `, dir], {cwd: root, env: {...process.env, PYTHONIOENCODING: 'utf-8'}});
   assert.equal(made.status, 0, made.stderr?.toString());
   payload = fs.readFileSync(path.join(dir, 'payload.json'), 'utf8');
   eve = fs.readFileSync(path.join(dir, 'eve.json'), 'utf8');
+  pend = fs.readFileSync(path.join(dir, 'pend.json'), 'utf8');
   const meta = JSON.parse(payload).meta;
   mock = spawn(PYTHON, ['-u', path.join(root, 'tools', 'game_link_mock.py'), path.join(dir, 'estate.hsg'), '--port', '0',
     '--day', String(meta.day), '--hour', '14'], {cwd: root});
@@ -150,15 +166,6 @@ test('My buildings: a row a building, flagged first by gain, the villa a line, a
   assert.equal(await det.locator('.re-spark .pj').count(), 1, 'a flagged building shows the wait and the fill');
   await page.locator(`#secEstate tr[data-re-row="${OVER}"] td.bd b`).click();
   assert.equal(await det.isVisible(), false);
-  // A pending price at or over market rent fills nothing: no projection, no date.
-  await page.evaluate(key => {
-    const o = D.realEstate.owned.find(x => x.key === key);
-    Object.assign(o, {pending: Math.round((o.market + 0.5) * 100) / 100, days: 3, flag: false, risk: false, fill: 20});
-    reOpen.add(key); drawEstate();
-  }, PENDING);
-  const pdet = page.locator(`#secEstate tr[data-re-of="${PENDING}"]`);
-  assert.equal(await pdet.locator('.re-spark .pj').count(), 0);
-  assert.doesNotMatch(await pdet.innerText(), enRe('re.fact.fills', {n: 20}));
   // A vanilla save says nothing of the multiplier; a modded one names it, quietly.
   assert.equal(await page.locator('#viewCtl .re-mod').count(), 0);
   await page.evaluate(() => { D.realEstate.mult = {value: 5, source: 'measured', buildings: 3}; drawEstate(); });
@@ -282,4 +289,26 @@ test('the rent finding: one opportunity, its picture and Details, landing on eve
   // The light goes out with the arrival: the view on its own again.
   await page.evaluate(() => { routeArrival = null; drawEstate(); });
   assert.equal(await page.locator('#secEstate tr.re-lit').count(), 0);
+});
+
+test("a pending price fills where the game says it is under market, and only there", async (t) => {
+  const page = await linked(t, {data: pend});
+  await go(page, 'estate/buildings');
+  const rows = owned(pend);
+  const harbor = rows.find(o => o.key === 'ba:street_harborstreet#1');
+  const twelfth = rows.find(o => o.key === 'ba:street_twelfthstreet#24');
+  // The board's recommended price, pending, where the rounded market rent is that same cent.
+  assert.equal(harbor.pending, harbor.best);
+  assert.equal(Math.round(harbor.market * 100) / 100, harbor.best);
+  assert.equal(harbor.under, true);
+  assert.ok(harbor.fill > 0);
+  // A pending price at market rent: not flagged, not full, and it never fills.
+  assert.deepEqual([twelfth.under, twelfth.flag, twelfth.risk, twelfth.fill > 0], [false, false, false, true]);
+  for (const o of [harbor, twelfth]) await page.locator(`#secEstate tr[data-re-row="${o.key}"] td.bd b`).click();
+  const h = page.locator(`#secEstate tr[data-re-of="${harbor.key}"]`), w = page.locator(`#secEstate tr[data-re-of="${twelfth.key}"]`);
+  await h.locator('svg.re-spark').waitFor();
+  assert.equal(await h.locator('.re-spark .pj').count(), 1);
+  assert.match(await h.innerText(), enRe('re.fact.fills', {n: harbor.fill}));
+  assert.equal(await w.locator('.re-spark .pj').count(), 0);
+  assert.doesNotMatch(await w.innerText(), enRe('re.fact.fills', {n: twelfth.fill}));
 });

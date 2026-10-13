@@ -18833,7 +18833,8 @@
     "size": "C",
     "sqm": 5337,
     "tax": 684.92,
-    "type": "retail"
+    "type": "retail",
+    "under": false
    },
    {
     "address": "23 Fifth Avenue",
@@ -18898,7 +18899,8 @@
     "size": "C",
     "sqm": 2849,
     "tax": 149.57,
-    "type": "retail"
+    "type": "retail",
+    "under": false
    },
    {
     "address": "59 Fifth Avenue",
@@ -18963,7 +18965,8 @@
     "size": "C",
     "sqm": 1317,
     "tax": 42.25,
-    "type": "retail"
+    "type": "retail",
+    "under": true
    },
    {
     "address": "1 Tenth Avenue",
@@ -19028,7 +19031,8 @@
     "size": "A",
     "sqm": 1006,
     "tax": 29.34,
-    "type": "retail"
+    "type": "retail",
+    "under": true
    }
   ],
   "tax": {

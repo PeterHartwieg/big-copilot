@@ -179,7 +179,7 @@ function finderShowTip(k){
       const days = (premises()?.forSale || []).map(s => s.payback).filter(n => n != null).sort((a, b) => a - b);
       if(!days.length) return intro;
       const mid = Math.floor(days.length / 2), median = days.length % 2 ? days[mid] : (days[mid - 1] + days[mid]) / 2;
-      return intro + " " + tt("map.show.sale.tip.payback2", "Payback is about {n:,} days for nearly every one of them, so the list starts cheapest first.", {n: Math.round(median / 50) * 50});
+      return intro + " " + tt("map.show.sale.tip.payback3", "Payback is about {n:,} days for nearly every one of them.", {n: Math.round(median / 50) * 50});
     }
   }
 }

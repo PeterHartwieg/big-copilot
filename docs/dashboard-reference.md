@@ -2415,7 +2415,9 @@ One row per building you own (villas left out, `realEstate.villas` counts them),
 first and then by gain: `key`, `address`, `hood`, `type`, `size`, `sqm` (total m²), `occ`
 (occupancy %, as the game rounds it) and `max` (its ceiling, 99 when your own unit is half
 the building), `price` (per m², today), `pending` and `days` (a price waiting to apply, and
-in how many days; `None` and 0 otherwise), `market` (market rent per m²), `best` (the best
+in how many days; `None` and 0 otherwise), `pendingRaw` (the save's pending price as it stands, also
+with nothing waiting: the rent write's `expect`), `under` (the price that will hold is under market
+rent as the game compares them, so the building fills there), `market` (market rent per m²), `best` (the best
 price), `now` (income a day today), `full` (income a day at the best price, full), `gain`,
 `payback` (days for the price paid to come back at `full`, less property tax), `paid` and
 `bought` (price and day of purchase), `tax` (property tax a day), `fill` (about how many days

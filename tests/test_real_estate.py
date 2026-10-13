@@ -177,6 +177,30 @@ class MarketRent(unittest.TestCase):
         self.assertFalse(d._below_market(rent, rent))
         self.assertEqual(d._best_price(rent), 3.73)
 
+    def test_under_is_the_games_own_comparison(self):
+        """`under` (the price that will hold is under market, so the building
+        fills) decides as the game does, not on the rounded market rent."""
+        tree = F.data_company()
+        estate_ = [e for e in tree["realEstate"]]
+        harbor = self.rent("ba:street_harborstreet", 1)
+        twelfth = self.rent("ba:street_twelfthstreet", 24)
+        estate_.append({"address": address("ba:street_harborstreet", 1), "purchaseDay": 20, "purchasePrice": 1.0,
+                        "totalSqm": 1000, "occupancy": 40.0, "pricePerSqm": 6.5,
+                        "pendingPricePerSqm": 5.64, "daysUntilUpdatingPricePerSqm": 7})
+        estate_.append({"address": address("ba:street_twelfthstreet", 24), "purchaseDay": 20, "purchasePrice": 1.0,
+                        "totalSqm": 1000, "occupancy": 40.0, "pricePerSqm": twelfth,
+                        "pendingPricePerSqm": 0.0, "daysUntilUpdatingPricePerSqm": 0})
+        tree["realEstate"] = estate_
+        rows = {r["key"]: r for r in estate(tree)[1]["owned"]}
+        # The best price the board recommends, pending: under market, though
+        # the rounded market rent reads 5.64 too.
+        h = rows["ba:street_harborstreet#1"]
+        self.assertEqual((h["pending"], h["best"], round(harbor, 2)), (5.64, 5.64, 5.64))
+        self.assertTrue(h["under"])
+        self.assertGreater(h["fill"], 0)
+        # A price exactly at market rent: tenants may leave, it does not fill.
+        self.assertFalse(rows["ba:street_twelfthstreet#24"]["under"])
+
     def test_the_fixture_formula_agrees(self):
         for addr, (_sqm, rent, _day, _paid) in F.ESTATE.items():
             self.assertEqual(d._market_rent(d.load_buildings()[addr]), rent, addr)

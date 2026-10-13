@@ -2424,6 +2424,9 @@ def _estate_owned(save: Save, names: Names, mods: dict) -> dict:
             # The save's pendingPricePerSqm as it stands, also with no change
             # waiting (0, or the last price set): the rent write's `expect`.
             "pendingRaw": round(entry.get("pendingPricePerSqm") or 0, 2),
+            # Whether the price that will hold (the pending one, else today's)
+            # is under market rent as the game compares them: it fills there.
+            "under": not over,
             "days": days if pending is not None else 0,
             "market": round(market, 4), "best": best,
             "now": money(now), "full": money(full), "gain": money(gain),
