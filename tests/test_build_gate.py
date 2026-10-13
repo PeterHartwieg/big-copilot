@@ -83,6 +83,7 @@ class BuildGateTests(unittest.TestCase):
         # the class the wiki builder raises, which main() has to catch
         from tools.build_wiki_data import wiki_data
         SourceError = wiki_data.SourceError
+        self.assertIs(build_web.SourceError, SourceError)
         locale = self.write("game", "StreamingAssets", "locale", "en.json")
         with mock.patch.object(build_web, "refuse_floor_plan_gaps"), \
                 mock.patch.object(build_web, "load_game_locale", return_value=(locale, {})), \

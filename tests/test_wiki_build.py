@@ -1026,7 +1026,7 @@ class LossTests(FixtureCase):
         build.WORDING_PATH = path
         self.addCleanup(setattr, build, "WORDING_PATH", original)
         with self.assertRaisesRegex(wiki_data.SourceError,
-                                    "UI string chooseProduct is missing from guideUi"):
+                                    r"UI string chooseProduct: not in wording\(\)\['guideUi'\]"):
             self.write_payload(self.out, allow_fewer_guides=False)
 
     def test_a_lost_guide_stops_the_build(self):

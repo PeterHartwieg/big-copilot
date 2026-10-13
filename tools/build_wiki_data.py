@@ -2271,7 +2271,7 @@ def refuse_losses(payload: dict, existing: str | None) -> None:
         if key.startswith("guides."):
             problems.append("authored copy %s is left out: %s" % (key, row.get("reason")))
         else:  # guide_ui(): a guide string the wording does not carry
-            problems.append("UI string %s is missing from guideUi: %s" % (key, row.get("reason")))
+            problems.append("UI string %s: %s" % (key, row.get("reason")))
     if problems:
         raise wiki_data.SourceError(
             "the wiki build stopped:\n  " + "\n  ".join(problems)
