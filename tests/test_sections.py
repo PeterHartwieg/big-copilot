@@ -220,6 +220,8 @@ class Sections(unittest.TestCase):
         expected.append("rivalry")
         # Real estate's sidebar numbers: a few counts over the owned buildings.
         expected.append("realEstateCounts")
+        # The Portfolio footer's sites given up or sold that day, beside businesses.
+        expected.append("sitesGone")
         self.assertEqual(set(self.build().core), set(expected))
 
     def test_later_planning_first_equals_each_stage_in_order(self):

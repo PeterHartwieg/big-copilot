@@ -4515,7 +4515,8 @@ const SORT_ICON = `<svg class="sort" viewBox="0 0 24 24"><path d="M12 19V5M6 11l
    day, whose `business` is the sites' sum. A site whose business opened today
    shows none of yesterday's statement, which the game still counts in
    `business` (the lease's rent while it stood empty, or an earlier business
-   there): `profitBefore` carries it onto a row of its own. */
+   there): `profitBefore` carries it onto a row of its own. So does a site
+   given up or sold that day, which has no row at all (`sitesGone`). */
 function outsideRows(span){
   const days = D.daily || [];
   const last = days[days.length - 1];
@@ -4525,7 +4526,10 @@ function outsideRows(span){
   const costs = (last.business || 0) - last.profit + income;
   const earlier = (D.businesses || []).filter(b => Math.abs(b.profitBefore || 0) >= 0.005);
   const before = earlier.reduce((s, b) => s + b.profitBefore, 0);
-  if(Math.abs(costs) < 1 && Math.abs(realEstate) < 1 && Math.abs(salary) < 1 && Math.abs(before) < 1) return "";
+  const gone = D.sitesGone || [];
+  const goneSum = gone.reduce((s, g) => s + g.profit, 0);
+  if(Math.abs(costs) < 1 && Math.abs(realEstate) < 1 && Math.abs(salary) < 1 && Math.abs(before) < 1
+     && Math.abs(goneSum) < 1) return "";
   const parts = [["loans", last.loans], ["insurance", last.insurance],
                  ["homes", last.homes], ["parking", last.parking]].filter(([, n]) => n >= 1);
   const other = costs - parts.reduce((s, [, n]) => s + n, 0);
@@ -4543,7 +4547,10 @@ function outsideRows(span){
   const day = last.day;
   const beforeTip = tt("co.outside.before.tip", "Day {day}: {sites}. Booked at the address before the business there now opened.",
     {day, sites: earlier.map(b => tt("co.outside.before.site", "{site} {w:$}", {site: b.name, w: b.profitBefore})).join(", ")});
+  const goneTip = tt("co.outside.gone.tip", "Day {day}: {sites}. Booked at a site you no longer rent.",
+    {day, sites: gone.map(g => tt("co.outside.before.site", "{site} {w:$}", {site: g.name, w: g.profit})).join(", ")});
   return (Math.abs(before) >= 1 ? row(tt("co.outside.before", "Before a site's business opened"), before, "", beforeTip) : "")
+    + (Math.abs(goneSum) >= 1 ? row(tt("co.outside.gone", "Sites you no longer rent"), goneSum, "", goneTip) : "")
     + (Math.abs(costs) >= 1 ? row(tt("co.outside.costs", "Company costs outside sites"), -costs, "", tip) : "")
     + (Math.abs(realEstate) >= 1 ? row(tt("co.outside.realestate", "Real estate income"), realEstate, "",
       tt("co.outside.realestate.tip", "Day {day}: rent from the real estate you own, booked to the company, not to a site", {day})) : "")

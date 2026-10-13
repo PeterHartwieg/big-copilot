@@ -66,12 +66,16 @@ class SitesAddUpTests(unittest.TestCase):
     """The Portfolio's sites, with what was booked before a business opened,
     are the game's business profit (issue #430)."""
 
-    def payload(self, opened_today=()):
+    def payload(self, opened_today=(), given_up=()):
         tree = F.data_company()
         for reg in tree["BuildingRegistrations"]:
-            if (reg["StreetName"], reg["StreetNumber"]) in opened_today:
+            where = (reg["StreetName"], reg["StreetNumber"])
+            if where in opened_today:
                 # The lease stood (and paid rent) yesterday; its business was set up today.
                 reg["creationDay"] = F.DAY
+            if where in given_up:
+                # Traded yesterday, given up today: the registration stays, not rented.
+                reg["RentedByPlayer"] = False
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "sites.hsg")
             with open(path, "wb") as fh:
@@ -79,26 +83,43 @@ class SitesAddUpTests(unittest.TestCase):
             return extract(load_save(path), Names(F.data_names()), None)
 
     def total(self, payload):
-        return sum(b["profit"] + b["profitBefore"] for b in payload["businesses"])
+        return (sum(b["profit"] + b["profitBefore"] for b in payload["businesses"])
+                + sum(g["profit"] for g in payload["sitesGone"]))
+
+    def booked(self, payload, where):
+        yesterday = next(s for s in F.data_company()["financialSummaries"]
+                         if s["dayNumber"] == payload["daily"][-1]["day"])
+        return next(st["TotalProfit"] for st in yesterday["businessIncomeStatements"]
+                    if st["Address"] == address(*where))
 
     def test_every_site_trading_since_before_yesterday_adds_up(self):
         p = self.payload()
         self.assertTrue(all(b["profitBefore"] == 0 for b in p["businesses"]))
+        self.assertEqual(p["sitesGone"], [])
         self.assertAlmostEqual(self.total(p), p["daily"][-1]["business"], delta=0.05)
 
     def test_a_business_opened_today_keeps_yesterdays_statement_apart(self):
         p = self.payload(opened_today=[F.GIFTS])
         gifts = next(b for b in p["businesses"] if b["key"] == f"{F.GIFTS[0]}#{F.GIFTS[1]}")
-        yesterday = next(s for s in F.data_company()["financialSummaries"]
-                         if s["dayNumber"] == p["daily"][-1]["day"])
-        booked = next(st["TotalProfit"] for st in yesterday["businessIncomeStatements"]
-                      if st["Address"] == address(*F.GIFTS))
+        booked = self.booked(p, F.GIFTS)
         # Not this business's own takings (Open a store reads them)...
         self.assertEqual((gifts["profit"], gifts["revenue"]), (0, 0))
         # ...but still the company's, so the footer can show it.
         self.assertAlmostEqual(gifts["profitBefore"], booked, places=2)
         self.assertNotEqual(booked, 0)
         self.assertAlmostEqual(self.total(p), p["daily"][-1]["business"], delta=0.05)
+
+    def test_sites_given_up_today_keep_yesterdays_statement_in_the_footer(self):
+        # The gift shop made money yesterday; the import hub only paid rent.
+        p = self.payload(given_up=[F.GIFTS, F.HUB])
+        keys = {b["key"] for b in p["businesses"]}
+        self.assertNotIn(f"{F.GIFTS[0]}#{F.GIFTS[1]}", keys)
+        gifts, hub = self.booked(p, F.GIFTS), self.booked(p, F.HUB)
+        self.assertGreater(gifts, 0)
+        self.assertLess(hub, 0)
+        self.assertEqual(sorted(g["profit"] for g in p["sitesGone"]), sorted([round(gifts, 2), round(hub, 2)]))
+        self.assertTrue(all(g["name"] for g in p["sitesGone"]))
+        self.assertAlmostEqual(self.total(p), p["daily"][-1]["business"], delta=1)
 
 
 if __name__ == "__main__":

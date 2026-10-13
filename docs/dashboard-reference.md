@@ -139,7 +139,9 @@ the map.
     business opened today shows none of yesterday's statement, which the game still
     counts in the company's figure (the lease's rent while it stood empty, or an earlier
     business at the address); *Before a site's business opened* carries that amount,
-    naming the sites on hover, so the rows add up.
+    naming the sites on hover. A site given up or sold that day has no row, yet its
+    statement is in the company's figure too: *Sites you no longer rent* carries it, so
+    the rows add up.
   - *Business detail*: nothing until a site is opened from the portfolio or a finding;
     then that site alone, with its profit history, cost breakdown, crew and shelves, and
     an hour-by-hour grid comparing historical customers with capacity from the
