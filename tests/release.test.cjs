@@ -80,6 +80,11 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
     await page.evaluate(() => window.BigCopilotWiki.route('wiki/topic%2Fhow-rent-works'));
     await page.getByRole('heading', {name:'How rent works'}).waitFor();
     await page.reload();
+    // A reload drops the pinned day: pin it again before counting.
+    await page.evaluate(() => featureDiscovery.asOf('2026-10-05'));
+    // The control: Open a store (shipped 29 Sep) is never visited here, so it is
+    // new only while the pin holds; the dismissals above are visits, not age.
+    assert.equal(await page.evaluate(() => featureDiscovery.isNew('open-store')), true);
     for (const feature of ['game-link', 'community-voting', 'feature-requests', 'board-search', 'factory-flow',
       'map', 'wiki', 'changelog', 'wiki-topic-how-rent-works']) {
       assert.equal(await page.locator(`[data-new-feature="${feature}"]:not([hidden])`).count(), 0);

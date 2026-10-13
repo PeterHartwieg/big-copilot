@@ -91,7 +91,6 @@ function badgeIds(){
   const wikiNew = vm.runInNewContext('(' + between(wiki, 'const WIKI_NEW = ', '};').slice('const WIKI_NEW = '.length) + '})');
   wikiNew.shelf.forEach(key => ids.add(`wiki-${key}`));
   wikiNew.topics.forEach(slug => ids.add(`wiki-topic-${slug}`));
-  ids.add('changelog');
   return ids;
 }
 

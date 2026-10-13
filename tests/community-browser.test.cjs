@@ -9,6 +9,14 @@ let browser;
 before(async () => { browser = await chromium.launch({headless:true, channel:process.env.PLAYWRIGHT_CHANNEL}); });
 after(async () => { await browser?.close(); });
 
+/* A reload drops the day newPage() pinned. Pin it again, and check it holds
+   with a badge no test here visits: Open a store (29 Sep) is new only while it
+   does, so a hidden badge after the reload is a remembered visit, not its age. */
+async function repin(page) {
+  await page.evaluate(() => featureDiscovery.asOf('2026-10-05'));
+  assert.equal(await page.evaluate(() => featureDiscovery.isNew('open-store')), true);
+}
+
 async function setup(t, options = {}) {
   const context = await browser.newContext({viewport:{width:options.width || 1280, height:900}, reducedMotion:'reduce'});
   t.after(() => context.close());
@@ -441,7 +449,7 @@ test('visitor requests: empty ballot publishes from the collapsed form and retri
   await page.keyboard.press('Escape'); await openVotes(page);
   await dialog.getByText('Synthetic new idea',{exact:true}).waitFor();
   assert.equal(state.features.length,1);
-  await page.reload(); await openVotes(page);
+  await page.reload(); await repin(page); await openVotes(page);
   assert.equal(await dialog.locator('[data-new-feature="feature-requests"]').isVisible(),false);
 });
 
@@ -531,7 +539,7 @@ test('visitor requests: returning visitors see one footer badge until the form i
   const dialog=await openVotes(page);
   await dialog.locator('summary').click();
   await page.waitForFunction(()=>[...document.querySelectorAll('[data-new-feature="feature-requests"]')].every(el=>el.hidden));
-  await page.reload();
+  await page.reload(); await repin(page);
   assert.equal(await page.locator('[data-new-feature="feature-requests"]:not([hidden])').count(),0);
 });
 
