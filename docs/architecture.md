@@ -1484,7 +1484,7 @@ row's state and `pgPill()` draws it with words and a symbol, never colour alone.
 
 | State | Set by | Cleared by |
 | --- | --- | --- |
-| Marked by you (`marked`) | the player's tick: a Supply checklist row (`ba_order_marks_v1:<character>`), or every entry of a week on Schedules (`ba_dash_roster:<site>`) | the player (untick, Clear my marks), or the row changing: a new figure is a new row |
+| Marked by you (`marked`) | the player's tick: a Supply checklist row (`ba_order_marks_v2:<character>`, seeded once from `ba_order_marks_v1`), or every entry of a week on Schedules (`ba_dash_roster:<site>`) | the player (untick, Clear my marks), or the row changing: a new figure is a new row |
 | Applied · awaiting refresh (`applied`) | `pgRecord()`, called only from a successful answer to a game-link write: imports (`pgImportsDone()`), a shop's or office's schedule (`pgScheduleDone()`), a hire or move (`pgHireDone()`), uniforms (`pgUniformDone()`) | a later board judging it, an undo of the write (`pgDrop()`; a hire before mod 0.4.0, or the company's first hire, has no undo), or `PG_KEEP_DAYS` (14) game days |
 | Confirmed · day N (`confirmed`) | `pgEvaluate()`, when a later board shows the write's postcondition (`PG_CHECK`) | Clear these on Supply › Changes (`pgClearSettled()`, import records only), or 14 game days |
 

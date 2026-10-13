@@ -97,7 +97,7 @@ test('a figure kept by the previous board has no basis: Needs review, out of eve
   // Copied to version 3 with no basis; version 2 stays, for a rollback to find.
   assert.deepEqual(await page.evaluate(() => [JSON.parse(localStorage.getItem('ba_import_set_v3:r8-fixture')), JSON.parse(localStorage.getItem('ba_import_set_v2:r8-fixture'))]),
     [{[HUB_FLOUR]: {value: 15000, inGame: 14000, basis: null}}, {[HUB_FLOUR]: {value: 15000, inGame: 14000}}]);
-  const row = () => page.evaluate(() => { const r = sbData().rows.find(x => x.kind === 'Weekly imports' && x.slug === 'flour');
+  const row = () => page.evaluate(() => { const r = sbData().rows.find(x => x.kind === 'imports' && x.slug === 'flour');
     return [r.proposed, r.review, r.basis]; });
   assert.deepEqual(await row(), [15000, true, null], 'the figure is kept, and asks for a review');
   assert.equal(await page.evaluate(() => gwImportPlan(null).some(l => l.r.slug === 'flour')), false, 'never written as it stands');
@@ -117,7 +117,7 @@ test('with storage refused the old figure stays where it was, and the page still
   const page = await board(t, {refuse: true, seed: {'ba_import_set_v2:r8-fixture': JSON.stringify({[HUB_FLOUR]: {value: 15000, inGame: 14000}})}});
   assert.equal(await page.evaluate(() => localStorage.getItem('ba_import_set_v2:r8-fixture')) !== null, true, 'version 2 is kept');
   assert.equal(await page.evaluate(() => localStorage.getItem('ba_import_set_v3:r8-fixture')), null);
-  assert.equal(await page.evaluate(() => sbData().rows.find(x => x.slug === 'flour' && x.kind === 'Weekly imports').review), true);
+  assert.equal(await page.evaluate(() => sbData().rows.find(x => x.slug === 'flour' && x.kind === 'imports').review), true);
 });
 
 test('figures, marks and progress belong to one company', async t => {
@@ -125,7 +125,7 @@ test('figures, marks and progress belong to one company', async t => {
     'ba_import_set_v3:r8-fixture': JSON.stringify({[HUB_FLOUR]: {value: 15000, inGame: 14000, basis: 'cap'}}),
     'ba_import_set_v3:other-co': JSON.stringify({[HUB_FLOUR]: {value: 99000, inGame: 14000, basis: 'dem'}}),
   }});
-  assert.equal(await page.evaluate(() => sbData().rows.find(x => x.slug === 'flour' && x.kind === 'Weekly imports').proposed), 15000);
+  assert.equal(await page.evaluate(() => sbData().rows.find(x => x.slug === 'flour' && x.kind === 'imports').proposed), 15000);
   await page.locator('#secImports tr[data-slug="flour"] .sb-tick').click();
   await page.evaluate(() => pgRecord({id: 'imports|hub#1|flour|weekly|15000', family: 'imports', target: {depot: 'hub#1', slug: 'flour'},
     expect: {contracts: [], inGame: 15000}, rowKeys: [], label: 'Flour'}));
@@ -133,7 +133,7 @@ test('figures, marks and progress belong to one company', async t => {
   const other = await page.evaluate(() => {
     const d = JSON.parse(JSON.stringify(D)); d.meta.character = 'other-co'; d.supply.factories.character = 'other-co';
     takeData(d); orderMarkCache.clear(); sbStamp++;
-    const r = sbData().rows.find(x => x.slug === 'flour' && x.kind === 'Weekly imports');
+    const r = sbData().rows.find(x => x.slug === 'flour' && x.kind === 'imports');
     return {proposed: r.proposed, marked: sbData().marks.size, progress: Object.keys(pgStore().recs).length};
   });
   assert.deepEqual(other, {proposed: 99000, marked: 0, progress: 0});
@@ -178,10 +178,10 @@ test('the recurring order and the one-time catch-up are two changes, each with i
   const tick = key => page.locator(`#secChanges .sbc-row[data-key="${key.replace(/"/g, '\\"')}"] .sb-tick`);
   const st = async () => Object.fromEntries(await page.evaluate(() => sbData().rows.filter(r => r.slug === 'flour' && r.site === 0 && r.view === 'imports')
     .map(r => [r.kind, pgState(sbData(), r)])));
-  await tick(keys['Before the next delivery']).click();
-  assert.deepEqual(await st(), {'Weekly imports': 'suggested', 'Before the next delivery': 'marked'});
-  await tick(keys['Weekly imports']).click();
-  assert.deepEqual(await st(), {'Weekly imports': 'marked', 'Before the next delivery': 'marked'});
+  await tick(keys['once']).click();
+  assert.deepEqual(await st(), {'imports': 'suggested', 'once': 'marked'});
+  await tick(keys['imports']).click();
+  assert.deepEqual(await st(), {'imports': 'marked', 'once': 'marked'});
   // Copy the changes: both, each in its own words.
   const copied = await page.evaluate(() => orderChecklistText(sbData().rows.filter(r => r.slug === 'flour' && r.site === 0 && r.view === 'imports'), 'T'));
   assert.match(copied, enRe("sb.ck.copy.row", {item: "Flour", change: en("sb.ck.copy.weekly", {from: 14000, n: 14420})}));
@@ -208,7 +208,7 @@ test('one figure and one basis from the row to the copy, under both bases', asyn
     assert.match(await page.locator('#sbCard .sbi-panel[data-panel=manual]').textContent(), textRe("sb.card.do.weekly", {n: "15,500"}));
     // Changes, its copy, and the write the game link would send.
     const got = await page.evaluate(() => {
-      const r = sbData().rows.find(x => x.kind === 'Weekly imports' && x.slug === 'flour');
+      const r = sbData().rows.find(x => x.kind === 'imports' && x.slug === 'flour');
       const plan = gwImportPlan(null, gwImportRows.find(x => x.slug === 'flour' && x.s === 0).impId)[0];
       return {proposed: r.proposed, basis: r.basis, text: orderChecklistText([r], 'T', sizing), write: plan ? plan.r.value : null};
     });
@@ -237,17 +237,17 @@ test('the factory hours an import is planned on: named on the card, a step of th
   assert.match(await cap.locator('#sbCard .sbi-steps').textContent(), textRe("sb.card.do.hours.each2", {item: "Cake", need: 24, m: 2, n: 2, now: en("sb.dep.h", {h: 12})}));
   // Pins the wording: manual steps must not advertise a game link.
   assert.doesNotMatch(await cap.locator('#sbCard .sbi-steps').textContent(), /game link/);
-  const hours = () => cap.evaluate(() => sbData().rows.filter(r => r.kind === 'Factory run hours').map(r => [r.current, r.proposed, (r.forImports || []).map(x => x.item).join()]));
+  const hours = () => cap.evaluate(() => sbData().rows.filter(r => r.kind === 'hours').map(r => [r.current, r.proposed, (r.forImports || []).map(x => x.item).join()]));
   assert.deepEqual(await hours(), [[12, 24, 'Flour']]);
-  assert.match(await cap.locator('#secChanges .sbc-row[data-key*="Factory run hours"]').textContent(), enRe("sb.cw.hoursFor", {items: "Flour"}));
+  assert.match(await cap.locator(`#secChanges .sbc-row[data-key^='["hours",']`).textContent(), enRe("sb.cw.hoursFor", {items: "Flour"}));
   // The link offers no write for it.
   assert.equal(await cap.evaluate(() => gwImportPlan(null).some(l => l.r.item === 'Cake')), false);
   // Shop demand: Flour needs no change, so nothing depends on the hours; a
   // figure typed there is planned on 10 h, which the line does not run.
   const dem = await board(t, {mode: 'dem'});
-  assert.deepEqual(await dem.evaluate(() => sbData().rows.filter(r => r.kind === 'Factory run hours').length), 0);
+  assert.deepEqual(await dem.evaluate(() => sbData().rows.filter(r => r.kind === 'hours').length), 0);
   await dem.evaluate(() => { impSetKeep(impSetId('hub#1', 'flour'), {value: 12000, inGame: 14000, basis: 'dem'}); drawSupplyStrip(); drawChangesView(); });
-  const row = await dem.evaluate(() => sbData().rows.filter(r => r.kind === 'Factory run hours').map(r => [r.current, r.proposed, !!r.dep]));
+  const row = await dem.evaluate(() => sbData().rows.filter(r => r.kind === 'hours').map(r => [r.current, r.proposed, !!r.dep]));
   assert.deepEqual(row, [[12, 10, true]]);
   await dem.evaluate(() => { sbSelOff = false; sbSel = {s: 0, slug: 'flour'}; drawImportsView(); wireAll(); });
   assert.match(await dem.locator('#sbCard .sbi-dep').textContent(), new RegExp(textRe("sb.dep.line.each", {thin: "", now: en("sb.dep.h", {h: 12}), need: 10, m: 2, n: 2}).source + ".*" + enRe("sb.dep.more.draw").source, "s"));
@@ -423,7 +423,7 @@ test('a figure typed under one basis keeps it after a switch; the hours it assum
   const got = await page.evaluate(() => {
     const d = sbData();
     const r = sbImportRow(d, 0, 'flour');
-    const w = d.rows.find(x => x.kind === 'Weekly imports' && x.slug === 'flour');
+    const w = d.rows.find(x => x.kind === 'imports' && x.slug === 'flour');
     return {deps: r.deps.map(x => [x.need, x.basis]), hours: (w.hours || []).map(h => h.proposed),
       text: orderChecklistText([w, ...(w.hours || [])], 'T', sizing)};
   });
@@ -462,7 +462,7 @@ test('an import figure typed on full production, then shop demand on screen: Why
   // Changes and its copy: one hours step for the Beer machines, never two.
   const got = await page.evaluate(() => {
     const d = sbData();
-    const hours = d.rows.filter(x => x.kind === 'Factory run hours' && x.slug === 'ba:itemname_beer');
+    const hours = d.rows.filter(x => x.kind === 'hours' && x.slug === 'ba:itemname_beer');
     return {hours: hours.map(h => h.proposed), text: orderChecklistText(d.rows, 'T', sizing)};
   });
   assert.ok(got.hours.length <= 1, `one hours step for the Beer machines, got ${got.hours}`);
