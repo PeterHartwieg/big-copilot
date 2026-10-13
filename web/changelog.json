@@ -1,5 +1,11 @@
 [
   {
+    "pr": 454,
+    "date": "2026-10-13",
+    "title": "Price your buildings and buy before tax day",
+    "summary": "A new Real estate area. My buildings lists every building you own with its occupancy, income and the best rent: one cent under the game's market rent, where no tenant moves out and the building fills to 100%. With the game linked, Set best prices applies them all at once (or Set one building), through the game's own 7-day wait, with Undo. Buy a building lists every building for sale with its income and payback, buildings you already rent in first, and Before tax day picks the deductible buildings that take your cash closest to $0 to cut the coming tax bill. Find a location's For sale list now shows payback too. Setting rent needs Big Copilot Link 0.6.0."
+  },
+  {
     "pr": 448,
     "date": "2026-10-11",
     "title": "See every delivery plan and import contract in one place",
