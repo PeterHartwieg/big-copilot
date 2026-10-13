@@ -981,10 +981,10 @@ class LossTests(FixtureCase):
         super().setUp()
         self.out = os.path.join(self.root, "web", "wiki-data.json")
 
-    def without_authored_copy(self):
-        """Point the builder at the real wording minus its per-guide copy."""
+    def without_authored_copy(self, guides=None):
+        """Point the builder at the real wording with `guides` as its per-guide copy."""
         wording = json.loads(self.read(build.WORDING_PATH))
-        wording["guides"] = {}
+        wording["guides"] = guides or {}
         path = os.path.join(self.root, "wiki_sample_nocopy.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(wording, fh)
@@ -993,13 +993,41 @@ class LossTests(FixtureCase):
         self.addCleanup(setattr, build, "WORDING_PATH", original)
 
     def test_dropped_authored_copy_stops_the_build_and_leaves_the_file(self):
-        self.write_payload(self.out)
+        page = "help_ba:businesstype_giftshop_content"
+        self.without_authored_copy({"giftshop": {
+            "lede": {"text": "Gift shops self-serve.",
+                     "when": [{"src": page, "includes": "Customers are self-serving."}]},
+            "notes": [],
+        }})
+        # the clause holds on the fixture's page, so the copy ships and nothing stops
+        payload = json.loads(self.write_payload(self.out, allow_fewer_guides=False))
+        self.assertEqual(payload["guides"]["businesstypes-giftshop"]["BUSINESS"]["lede"],
+                         "Gift shops self-serve.")
         before = self.read(self.out)
-        self.write_locale(dict(LOCALE, **{"ba:itemname_roundedshelf": "Rounded Shelving"}))
+        # a patch rewords the phrase the clause quotes
+        self.write_locale(dict(LOCALE, **{page: GIFT_HELP.replace(
+            "Customers are self-serving.", "Customers serve themselves.")}))
         with self.assertRaisesRegex(wiki_data.SourceError,
-                                    r"authored copy guides\.giftshop\.lede[\s\S]*--allow-fewer-guides"):
+                                    r"authored copy guides\.giftshop\.lede is left out"
+                                    r"[\s\S]*--allow-fewer-guides"):
             self.write_payload(self.out, allow_fewer_guides=False)
         self.assertEqual(self.read(self.out), before)
+        written = json.loads(self.write_payload(self.out, allow_fewer_guides=True))
+        self.assertIsNone(written["guides"]["businesstypes-giftshop"]["BUSINESS"]["lede"])
+
+    def test_a_missing_ui_string_is_named_as_one(self):
+        wording = json.loads(self.read(build.WORDING_PATH))
+        wording["guides"] = {}
+        del wording["guideUi"]["chooseProduct"]
+        path = os.path.join(self.root, "wiki_sample_noui.json")
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(wording, fh)
+        original = build.WORDING_PATH
+        build.WORDING_PATH = path
+        self.addCleanup(setattr, build, "WORDING_PATH", original)
+        with self.assertRaisesRegex(wiki_data.SourceError,
+                                    "UI string chooseProduct is missing from guideUi"):
+            self.write_payload(self.out, allow_fewer_guides=False)
 
     def test_a_lost_guide_stops_the_build(self):
         self.without_authored_copy()

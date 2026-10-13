@@ -2267,11 +2267,15 @@ def refuse_losses(payload: dict, existing: str | None) -> None:
         problems.append("the standing payload has guides this build does not: %s (has the "
                         "business's help page left helpstructure.json?)" % ", ".join(lost))
     for row in payload["provenance"]["issues"].get("copy") or []:
-        problems.append("authored copy %s: %s" % (row.get("key"), row.get("reason")))
+        key = row.get("key") or ""
+        if key.startswith("guides."):
+            problems.append("authored copy %s is left out: %s" % (key, row.get("reason")))
+        else:  # guide_ui(): a guide string the wording does not carry
+            problems.append("UI string %s is missing from guideUi: %s" % (key, row.get("reason")))
     if problems:
         raise wiki_data.SourceError(
-            "the wiki build would lose content:\n  " + "\n  ".join(problems)
-            + "\nFix tools/wiki_sample.json, or pass %s to accept the loss." % ALLOW_FEWER_GUIDES)
+            "the wiki build stopped:\n  " + "\n  ".join(problems)
+            + "\nFix tools/wiki_sample.json, or pass %s to accept it." % ALLOW_FEWER_GUIDES)
 
 
 def write_public_wiki(path: str, data_dir: str | None = None,

@@ -46,8 +46,12 @@ from tools.build_wiki_data import (
 from tools import i18n as ui_text
 from tools import translation_catalogue
 from tools import wiki_pages
-from tools.wiki_data import SourceError
+from tools.build_wiki_data import wiki_data as _builder_wiki_data
 from tools.wiki_paths import game_data_dir
+
+# The wiki builder imports wiki_data as a top-level module, so the SourceError it
+# raises is not tools.wiki_data.SourceError: catch the builder's own class.
+SourceError = _builder_wiki_data.SourceError
 
 # The game text shipped with the page: the display names of items, business
 # types, neighbourhoods, stations and skills, and the few help pages the
