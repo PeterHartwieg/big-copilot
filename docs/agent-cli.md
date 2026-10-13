@@ -1,9 +1,8 @@
 # CLI agents
 
-Use a CLI agent only when delegation is requested. Give each concurrent agent
-explicit file ownership, preserve existing changes, and inspect its actual model
-metadata and results. Do not impose execution timeouts or terminate agents solely
-because of elapsed time. Do not commit or deploy without task authorization.
+How to run the CLI agents. When to delegate, file ownership, timeouts and what an
+agent may commit or deploy are in `AGENTS.md`, "Working alongside other agents". Check
+each agent's actual model metadata and results.
 
 ## What each agent loads
 

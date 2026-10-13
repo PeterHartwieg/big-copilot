@@ -4,8 +4,10 @@
  * stylesheet) after app.js and the parent calls BigCopilotCommunity.start()
  * once enterBoard has placed the controls. The footer carries the vote card in
  * its own markup; this file only reveals it, which is what keeps it off the
- * CLI's dashboard.html. Until start(), or a click on that card, no request is
- * made at all.
+ * CLI's dashboard.html. Until start(), or a click on that card, this file
+ * makes no request at all. (web/i18n.js's ttLoadCommunity() is separate: for a
+ * language other than English it asks for that language's community wording
+ * on every load, and the privacy notice says so.)
  *
  * Presence: once the board is up (a save loaded or the wiki opened), one
  * heartbeat POSTs a random id to /api/community/presence and the response
@@ -101,9 +103,10 @@
      so the dashboard.html the CLI writes, which never loads this file, does not
      offer a vote that cannot be cast.
 
-     It cannot wait for the API to answer first: the landing makes no request at
-     all until the reader asks for one, and that silence is a promise the privacy
-     notice makes. So the card appears as soon as this file runs, and goes away
+     It cannot wait for the API to answer first: this file sends nothing from the
+     landing until the reader asks for something (the language loader in
+     web/i18n.js asks for community wording on its own, for a language other than
+     English, and the privacy notice names that). So the card appears as soon as this file runs, and goes away
      again only once a second heartbeat has failed without either ever having
      answered, which is what a copy served from anywhere but bigcopilot.com looks
      like. One failure is a blip, and so is any number of them once something has

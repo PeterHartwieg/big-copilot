@@ -9,8 +9,14 @@ const hash = text => createHash('sha256').update(text).digest('hex');
 const buffer = text => new TextEncoder().encode(text).buffer;
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'web/worker.js'), 'utf8');
-const files = ['ba_save.py', 'ba_dashboard.py', 'ba_facts.py', 'ba_mods.py', 'gametext.json', 'ba_buildings.json',
-  'ba_demand_curves.json', 'ba_item_prices.json', 'ba_store_rules.json'];
+// The fetched files are the ones PY_CODE and PY_DATA name in build_web.py, in that order.
+const buildWeb = fs.readFileSync(path.join(__dirname, '..', 'build_web.py'), 'utf8');
+const pyTuple = name => {
+  const match = buildWeb.match(new RegExp(`^${name} = \\(([^)]*)\\)`, 'm'));
+  if (!match) throw new Error(`${name} not found in build_web.py`);
+  return [...match[1].matchAll(/"([^"]+)"/g)].map(m => m[1]);
+};
+const files = [...pyTuple('PY_CODE'), ...pyTuple('PY_DATA')];
 const deferred = () => {
   let resolve, reject;
   const promise = new Promise((a, b) => { resolve = a; reject = b; });

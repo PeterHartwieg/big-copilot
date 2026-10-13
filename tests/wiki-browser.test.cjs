@@ -81,6 +81,8 @@ test('the landing Wiki entry is visible with and without reduced motion', async 
 test('a cold Wiki article link and reload work without a save', async t => {
   const {page, errors} = await fixture(t, {hash:'#wiki/businesstypes-giftshop'});
   await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
+  // The article's h1 is the page's one: the board's own (#pageTitle) steps aside.
+  assert.deepEqual(await page.getByRole('heading', {level:1}).allInnerTexts(), ['Gift Shop']);
   assert.equal(await page.locator('#landing').count(), 0);
   // The six places and the two references, all present without a save.
   assert.equal(await page.locator('#nav a[data-id]').count(), 6);
@@ -88,6 +90,10 @@ test('a cold Wiki article link and reload work without a save', async t => {
   await page.reload();
   await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();
   assert.match(page.url(), /#wiki\/businesstypes-giftshop$/);
+  // The Wiki's home has no h1 of its own, so the board's names the place.
+  await page.evaluate(() => { location.hash = '#wiki'; });
+  await page.locator('#wikiSearch').waitFor();
+  assert.deepEqual(await page.getByRole('heading', {level:1}).allInnerTexts(), [en('nav.ref.wiki2')]);
   assert.deepEqual(errors, []);
 });
 

@@ -2984,7 +2984,7 @@ PAYLOAD_KEYS = (
     "openFactory", "trends", "hypeExposure", "hours", "hourFindings", "staffing",
     "factoryStaffing", "officeStaffing", "candidates", "hiring", "plan", "names",
     "skillNames", "marketingAgencies", "cashFlow", "ledgerDays", "alerts", "minor",
-    "alertsDemand", "goals", "rivalry", "realEstateCounts", "realEstate",
+    "alertsDemand", "goals", "rivalry", "realEstateCounts", "realEstate", "sitesGone",
 )
 # Keys only some saves carry: `mods` is there only for a save a mod adapter
 # reads (ba_mods.detect()), so a vanilla save's payload is what it was.
@@ -3541,7 +3541,8 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     Build. History-recording producers, the warnings and everything they read
     stay eager. ownedBuildings and homes stay here because the map's layers and
     home site panel read them; staff stays because Today's fixed-cost tile reads
-    the payroll. All three cost nothing. plan stays core because Today reads its
+    the payroll. All three cost nothing. sitesGone stays beside businesses
+    because the Portfolio's footer sums both. plan stays core because Today reads its
     recipes and item names (factoryView, sbDeps, the supply strip and finding
     pills), and every page reads itemName; it costs about 4 ms and 65 KB on the
     largest measured save. Page-only producers have no history
@@ -3581,6 +3582,7 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         row["closed"] = bool(b.get("temporarilyClosed"))
         businesses.append(row)
     businesses.sort(key=lambda x: -x["profit"])
+    sites_gone = _sites_gone(save, names, latest, {_address_of(b, strict=True) for b in buildings}, residential)
     _job_demands(save, names, businesses)
 
     daily = _daily_series(save, summaries)
@@ -3748,6 +3750,8 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         },
         "daily": daily,
         "businesses": businesses,
+        # Core beside businesses: the Portfolio's footer reads both.
+        "sitesGone": sites_gone,
         # The map's layers and home site panel read these on every draw;
         # they cost nothing (under 1 ms and 1 KB), so Map needs no section.
         "ownedBuildings": _owned_buildings(save, names),
@@ -3760,7 +3764,7 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         "market": market,
         "chains": chains,
         # Investment, profit so far and break-even, per site and per chain
-        # (_payback(), docs/open-a-store-scope.md).
+        # (_payback(), docs/dashboard-reference.md, "Payback").
         "payback": payback,
         "trends": trends,
         "hypeExposure": hype,
@@ -4330,9 +4334,13 @@ def shift_print(entries) -> str:
 def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencies=None) -> dict:
     # The address keeps its takings after a business closes: a statement from
     # before this business opened (or from a day it did not exist) is the old
-    # tenant's, not this one's.
+    # tenant's, not this one's. The game still counts it in the day's business
+    # profit (the lease's rent while it stood empty, or an earlier business
+    # there), so the row keeps it apart as `profitBefore` and the Portfolio's
+    # footer shows it, and the sites still add up to the company's figure.
     since = b.get("creationDay", 0)
-    st = latest.get(addr, {}) if not history or history[-1][0] >= since else {}
+    booked = latest.get(addr, {})
+    st = booked if not history or history[-1][0] >= since else {}
     name = b.get("BusinessName")
     tag = ""
     if name and name.startswith("[") and "]" in name:
@@ -4533,6 +4541,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
         "theft": money(st.get("Theft", 0)),
         "licensing": money(st.get("LicensingFees", 0)),
         "profit": profit,
+        "profitBefore": money(0 if st is booked else booked.get("TotalProfit", 0)),
         "margin": round(profit / revenue * 100, 1) if revenue else None,
         "satisfaction": {
             "overall": sat.get("overall", 0) if status in ("retail", "office") else None,
@@ -4867,6 +4876,27 @@ def _product_rhythm(save: Save, buildings: list) -> dict:
                 "weeks": _weeks(profile),
             }
     return out
+
+
+def _sites_gone(save: Save, names: Names, latest: dict, rented: set, residential: set) -> list:
+    """The last finished day's statements at sites the player no longer rents.
+
+    A lease given up or a business sold today has no Portfolio row, while the
+    game still counts its statement in the day's business profit. Each such
+    site, by its business name if the registration keeps one, else its
+    address, with that day's profit, so the Portfolio's footer can add up.
+    """
+    regs = {}
+    for b in save.items(save.root.get("BuildingRegistrations")):
+        addr = _address_of(b)
+        if all(addr):
+            regs[addr] = b
+    out = []
+    for addr in _in_order(set(latest) - rented - residential):
+        name = (regs.get(addr) or {}).get("BusinessName")
+        out.append({"name": name or names.addr(addr),
+                    "profit": money(latest[addr].get("TotalProfit", 0))})
+    return [g for g in out if g["profit"]]
 
 
 def _daily_series(save: Save, summaries: list) -> list:
@@ -13751,6 +13781,26 @@ def _collector_paused():
             gc.enable()
 
 
+# The planner failures already told about on stderr, by their error string, so
+# a watch server rebuilding every autosave prints each traceback once.
+_PLAN_FAILURES_SAID: set = set()
+
+
+def _plan_failed(exc: BaseException, what: str) -> str:
+    """A site the planner fell over on: "Type: message, in fn, file line N", for
+    the failed row's "error", so a bug report or a payload says what broke.
+    The traceback goes to stderr the first time each error appears (in the
+    browser the one line, which Pyodide writes to the console); the row
+    keeps the site's place on the board either way."""
+    error = f"{type(exc).__name__}: {exc}{_raised_at(exc)}"
+    if error not in _PLAN_FAILURES_SAID:
+        _PLAN_FAILURES_SAID.add(error)
+        print(f"could not plan {what}: {error}", file=sys.stderr, flush=True)
+        if sys.platform != "emscripten":
+            traceback.print_exception(type(exc), exc, exc.__traceback__, file=sys.stderr)
+    return error
+
+
 def _staffing(
     save: Save,
     names: Names,
@@ -13813,17 +13863,18 @@ def _staffing(
         key=lambda row: (row[0]["name"] or "", row[0]["key"]),
     )
 
-    def failed(business):
+    def failed(business, error):
         # One odd site is one missing plan, not a blank board, and not a
         # silent hole either: the row says the site could not be planned so
-        # the page can say so. Nothing of it is committed, and it fails in
-        # the same place on every run, so the payload stays the same twice
-        # over.
+        # the page can say so, and "error" says why (_plan_failed()). Nothing
+        # of it is committed, and it fails in the same place on every run, so
+        # the payload stays the same twice over.
         return {
             "key": business["key"],
             "name": business["name"],
             "typeSlug": business["typeSlug"],
             "failed": True,
+            "error": error,
         }
 
     sites = []
@@ -13843,8 +13894,8 @@ def _staffing(
         try:
             site = _plan_site(save, names, business, building, grid, people,
                               list(bench), scratch, curves, table, base_promotion, caps)
-        except Exception:
-            sites.append((business, None))
+        except Exception as exc:
+            sites.append((business, _plan_failed(exc, f"the staffing of {business['key']}")))
             continue
         sites.append((business, site))
         if _opens_first(site, business):
@@ -13868,7 +13919,7 @@ def _staffing(
     # new shop's test needs. Site order within each.
     def live(entry):
         business, site = entry[1]
-        if site is None:
+        if isinstance(site, str):
             return 1
         grid = site["grid"]
         opens = [wd for wd in range(7) if grid["open"][wd]]
@@ -13883,8 +13934,8 @@ def _staffing(
     shared = {person["id"]: _copy_state(state[person["id"]]) for person in left}
     out = [None] * len(sites)
     for index, (business, site) in sorted(enumerate(sites), key=lambda e: (live(e), e[0])):
-        if site is None:
-            out[index] = failed(business)
+        if isinstance(site, str):  # the demand plan failed: site is its error
+            out[index] = failed(business, site)
             continue
         mine = {p["id"] for p in site["took"]}
         free = {p["id"] for p in left}
@@ -13916,8 +13967,8 @@ def _staffing(
                     current=site["current"]["list"],
                 )
             row = _finish_site(site, full, names, people, opened)
-        except Exception:
-            out[index] = failed(business)
+        except Exception as exc:
+            out[index] = failed(business, _plan_failed(exc, f"the full cover of {business['key']}"))
             continue
         # Only the plan the site is on by default reserves whom it draws off
         # the bench, before the offices and factories are planned: the demand
@@ -14144,9 +14195,10 @@ def _factory_staffing(save: Save, names, businesses: list, factories: dict, staf
                 else:
                     row = _factory_site_plan(save, building, site, business, posts_of, pool,
                                              people, mode, label, names, wage_day, world["state"])
-            except Exception:
+            except Exception as exc:
                 row = {"key": business["key"], "s": site["s"], "name": business["name"],
-                       "failed": True}
+                       "failed": True,
+                       "error": _plan_failed(exc, f"the {mode} staffing of factory {business['key']}")}
             rows[mode] = row
         for mode in SIZING_MODES:
             row = rows[mode]
@@ -15691,9 +15743,10 @@ def _office_staffing(save: Save, names, businesses: list, grids: list, staff: li
         try:
             row, took = _office_site_plan(save, names, business, building, grid, skill,
                                           pool, people, bench, scratch)
-        except Exception:
+        except Exception as exc:
             out.append({"key": business["key"], "name": business["name"],
-                        "typeSlug": business["typeSlug"], "failed": True})
+                        "typeSlug": business["typeSlug"], "failed": True,
+                        "error": _plan_failed(exc, f"the staffing of office {business['key']}")})
             continue
         state.update(scratch)
         taken = {p["id"] for p in took}
@@ -17751,7 +17804,7 @@ def _site_trends(businesses: list, day: int) -> list:
 
 # ------------------------------------------------------------------- payback
 # What a site cost to set up, and when its profit paid that back
-# (docs/open-a-store-scope.md, "Phase 1"). The rules are the game's own, read
+# (docs/dashboard-reference.md, "Payback"). The rules are the game's own, read
 # from its code on 28 Sep 2026 and checked against six real bills to the coin:
 #   installation firm  586 x the building's m² + every item at its default
 #                      price; walls and floors cost nothing
@@ -18281,7 +18334,7 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
 
 
 # ------------------------------------------------------------- open a store
-# Expansion › Open a store (docs/open-a-store-scope.md, phase 2): the facts a
+# Expansion › Open a store (docs/dashboard-reference.md, "Open a store"): the facts a
 # plan for a store that does not exist yet is worked out from. Python says what
 # the save and the game's tables hold -- what a type needs to be fully outfitted
 # in each layout, what every product meets in every neighbourhood, the player's

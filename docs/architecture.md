@@ -75,6 +75,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `kpi` | `build_core()` inline, with `_net_worth()` | `drawMast`, `drawKpis`, `hrReview/firstHire`, `SS_VIEWS.payroll.live` |
 | `daily` | `_daily_series()`, plus the rolling `profit7` added in `extract()` | `drawChart`, `drawKpis`, `drawKpis/hist` |
 | `businesses` | `_business()` per rented non-residential building; each site's `campaigns` and `marketingPlan` from `_marketing()`, with `marketing_plan()` and `marketing_score()` over `MARKETING_TYPES`, `MARKETING_STRENGTH` and `MARKETING_REACH`, planning with the types the site already has a switch for (flipped at any time) and those sold by agencies that are phone contacts, `agencies` naming the ones a new switch needs (`marketingPlan` is None but for a shop or an office; its `on` is None when the site has no switch, no agency is a contact and a change is needed); `_alerts()` reads it for the `promotion` findings | `drawPortfolio`, `drawSitePicker`, `openSite`, `siteKeys`, `drawSite`, `drawWeekday`, `supplyChecklistRows` and its locals `lineOf`, `held`, `label`, `factoryView/held`, `alertSite`, `nameUses`, Supply's views (`drawImportsView`, `drawDeliveriesView`, `drawProductionView`, `drawChangesView`) through their parts `sbShopsPart`, `sbDepotPart`, `sbFactoryPart` and row helpers (`sbObject`, `sbDepotRow`, `sbLineRow`, `sbInputRow`, `sbTabOf`), the Imports card `sbImportCard`, and `drawFactoryStaffing`, the marketing write's `gwMkSites` (with `spMkLine` and `gwMarketing` reading each site's `marketingPlan`); `web/map.js` `mapBusinesses`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn`, `wikiGuidePrices` |
+| `sitesGone` | Core: `_sites_gone()`, the last finished day's statements at addresses the player no longer rents (a lease given up or a business sold that day), `[{name, profit}]`; core beside `businesses` because the Portfolio's footer sums both | `outsideRows` |
 | `ownedBuildings` | Core: `_owned_buildings()`; cheap map layers (Sections) | `web/map.js` only: `CityMapView.update`, `openLocationMap` |
 | `homes` | Core: `_homes()` (cheap map layers; Sections), with `m` and `hood` from `load_buildings()` | `spHome`, `siteKeys`; `web/map.js` `CityMapView.update`, `openLocationMap` |
 | `products` | Section `products`: `_products()`, with `peak`/`swing`/`weeks` from `_product_rhythm()` | `drawProducts`, `SS_VIEWS.products.live`, `ssBuild`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn` |
@@ -1083,10 +1084,9 @@ What `page_html()` produces, top of the file down:
    `window.LEDGER_RELEASE`, `update.js`, `app.js?v=<stamp>`, `community.js?v=<stamp>`.
 5. The board script, `template/board.js`, in the last `<script>` block of the template.
 
-Before any of that, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`,
-`ba_dashboard.py`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json` and
-`ba_store_rules.json` into `web/py/`, stripping comments and docstring contents only
-from `ba_dashboard.py` while preserving its lines, and
+Before any of that, `main()` refreshes `web/wiki-data.json`, copies the files `PY_CODE`
+and `PY_DATA` name (all but `gametext.json`: `PY_COPIED`) into `web/py/`, stripping
+comments and docstring contents only from `ba_dashboard.py` while preserving its lines, and
 writes `web/py/gametext.json` and `web/names/<lang>.json` (`write_name_tables()`) from the installed locale — everything `stamp()` hashes has to be in place before
 `release_info()` runs. `main()` then writes `web/index.html` and `web/version.json`.
 
@@ -1660,12 +1660,10 @@ because a deploy from a checkout that lacks them would remove them from the site
 files from `https://cdn.jsdelivr.net/pyodide/v<version>/full/` into a new version folder,
 change `PYODIDE_VERSION` in `web/worker.js`, and delete the old folder.
 
-The nine board dependencies are listed in `PY_CODE` and `PY_DATA` in
-`build_web.py` and checked against `CODE_FILES`/`DATA_FILES` in the worker:
-
-- `ba_save.py`, `ba_facts.py`, `ba_mods.py` and `ba_dashboard.py` — required code.
-- `gametext.json`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json`
-  and `ba_store_rules.json` — game data tables.
+The board's dependencies are the files `PY_CODE` (the Python modules) and `PY_DATA`
+(the game data tables) name in `build_web.py`. `tests/test_web_fresh.py` checks them
+against `CODE_FILES`/`DATA_FILES` in the worker, and `tests/worker_startup.test.cjs`
+reads its list from the same two tuples.
 
 `ba_dashboard.py` ships as `strip_copy()` of the source: comments removed and docstrings
 emptied, every line where it was. The virtual filesystem is new on each page load, so

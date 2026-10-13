@@ -1,5 +1,5 @@
-// Payback on Businesses › Results and the site panel (docs/open-a-store-scope.md,
-// Phase 1): the column per chain and site, the company-cost rows still as wide
+// Payback on Businesses › Results and the site panel (docs/dashboard-reference.md,
+// "Payback"): the column per chain and site, the company-cost rows still as wide
 // as the header, the install-mode switch kept per character, sorting by the
 // column, and the site panel's line for a shop but not for a factory. The board
 // is the CLI page rendered from the synthetic day-47 payload snapshot
@@ -103,6 +103,32 @@ test('sorting by Payback orders the chains by the day they pay back', async t =>
   const up = await ranks();
   assert.deepEqual(up, [...up].sort((a, z) => a - z));
   assert.notDeepEqual(up, down);
+});
+
+test('the portfolio sorts from buttons in its headers, says the order in aria-sort, and keeps the focus', async t => {
+  const page = await board(t, await context(t));
+  const sorts = () => page.$$eval('#portfolio thead th', ths => ths.map(th => th.getAttribute('aria-sort')));
+  // Every column but the name sorts, from a button the keyboard reaches.
+  const before = await sorts();
+  assert.equal(before[0], null);
+  assert.ok(before.slice(1).every(s => s === 'none'), JSON.stringify(before));
+  assert.equal(await page.locator('#portfolio thead th[data-i] > button.supply-sort').count(), before.length - 1);
+  const at = before.length - 1;
+  // A click sorts high to low first, a second one low to high.
+  await page.click(`#portfolio thead th[data-i="${at}"] button`);
+  assert.equal((await sorts())[at], 'descending');
+  assert.equal((await sorts()).filter(s => s !== 'none' && s !== null).length, 1);
+  // From the keyboard: Enter and Space turn the order, the focus stays on the header's button.
+  await page.focus(`#portfolio thead th[data-i="${at}"] button`);
+  await page.keyboard.press('Enter');
+  assert.equal((await sorts())[at], 'ascending');
+  assert.ok(await page.evaluate(i => document.activeElement.matches(`#portfolio thead th[data-i="${i}"] button`), at));
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press(' ');
+  const now = await sorts();
+  assert.equal(now[at - 1], 'descending');
+  assert.equal(now[at], 'none');
+  assert.ok(await page.evaluate(i => document.activeElement.matches(`#portfolio thead th[data-i="${i}"] button`), at - 1));
 });
 
 test('a depot\'s own truck is in its chain\'s investment and says so', async t => {

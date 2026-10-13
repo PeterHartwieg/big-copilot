@@ -21,7 +21,7 @@ const MAX_BODY_BYTES = 1024;
 // caches.default key only; this path is not a routable endpoint.
 const COUNT_CACHE_PATH = "/api/community/_presence-count-v1";
 
-// A bug report (docs/bug-report-scope.md). The whole multipart body is capped:
+// A bug report (docs/community-features.md, "Bug reports"). The whole multipart body is capped:
 // a save is about 5 MB of gzip, so 8 MB leaves it headroom. The report part is
 // a small JSON object, the details part the private traceback and settings.
 const REPORT_MAX_BYTES = 8 * 1024 * 1024;

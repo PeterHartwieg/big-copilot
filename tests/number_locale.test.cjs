@@ -43,6 +43,37 @@ test('no bare toLocaleString() in the board script, map.js, wiki.js or i18n.js: 
   assert.equal(vm.runInContext('num(1234.5)', board), '1.234,5');
 });
 
+// Money and figures written outside num() and tt() keep the dot whatever the
+// language (issue #306): compact money, the margin, the spend per visit, the
+// shelf prices and the hire's MB. compact() writes what it always wrote in
+// English, and the UI's decimal comma in German.
+test('compact() follows the UI number locale and writes the old English unchanged', () => {
+  const board = loadBoard();
+  const old = n => {
+    const a = Math.abs(n), s = n<0?"-":"";
+    if(a>=1e6) return s+"$"+(a/1e6).toFixed(a>=1e7?1:2)+"M";
+    if(a>=1e3) return s+"$"+Math.round(a/1e3)+"k";
+    return s+"$"+Math.round(a);
+  };
+  for (const v of [0, 0.4, 98, 999.4, 999.5, 1000, 999499, 999999, 1000000, 1125000, 3574000, 9999999,
+    12345678, 1234567890, -2500, -3574000])
+    assert.equal(vm.runInContext(`compact(${v})`, board), old(v), String(v));
+  vm.runInContext('NUM_LOCALE = "de-DE"', board);
+  assert.equal(vm.runInContext('compact(1250000)', board), '$1,25M');
+  assert.equal(vm.runInContext('compact(-12345678)', board), '-$12,3M');
+  assert.equal(vm.runInContext('compact(1234567890)', board), '$1234,6M', 'never grouped');
+  assert.equal(vm.runInContext('compact(999999)', board), '$1000k', 'never grouped');
+});
+
+test('no money on the board is written with a bare toFixed()', () => {
+  // "$" + x.toFixed(2) keeps the dot in German; it goes through
+  // tt("…", "${x:.2f}") instead. (CSS widths still use toFixed(), rightly.)
+  const src = read('template/board.js');
+  assert.deepEqual(src.split('\n').filter(line => /\$\$\{[^}]*\.toFixed\(/.test(line)), []);
+  assert.doesNotMatch(src, /margin\.toFixed\(/, 'the margin goes through tt("…", "{x:.1f}%")');
+  assert.doesNotMatch(src, /mb: \(bytes \/ 1048576\)\.toFixed/);
+});
+
 let browser, html;
 before(async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'number-locale-'));

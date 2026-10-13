@@ -1,4 +1,4 @@
-// Expansion › Open a store (docs/open-a-store-scope.md, phase 2): the four
+// Expansion › Open a store (docs/dashboard-reference.md, "Open a store"): the four
 // steps a plan walks -- what, where, the investment, break even -- the Demand
 // cell's way in, the plans kept per character, and the financing panel. Step 5,
 // the checklist until opening, is tests/open_store_checklist.test.cjs; step 6,
