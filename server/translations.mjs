@@ -9,7 +9,9 @@ const MAX_CATALOGUE_BYTES = 16 * 1024 * 1024;
 const LANG = /^[a-z]{2}(?:-[A-Za-z]{2,8})?$/;
 const VERSION = /^[a-f0-9]{64}$/;
 const TOKEN = /\{(\w+)(?::([^{}]+))?\}/g;
-const ENTITY = /&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;?)/i;
+// Entities HTML would decode: any &name; or numeric one, and the legacy ones it
+// decodes without a semicolon (&lt, &gt, &amp, &quot even before letters). "R&D" is text.
+const ENTITY = /&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;|lt|gt|amp|quot|(?:apos|nbsp)(?![a-z\d]))/i;
 // The overlay changes only when translation_revisions.revision moves (every vote,
 // suggestion, moderation action and vote cleanup bumps it in the same transaction)
 // or a deployment replaces the catalogue, which changes the build stamp in

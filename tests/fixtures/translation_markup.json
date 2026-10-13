@@ -14,7 +14,9 @@
     ["plain", "{n} -> {n}"],
     ["plain", "L'attività \"migliore\" & {n}"],
     ["tags", "＜b＞{n}＜/b＞ <b>negozi</b> <span class=\"ok\">pronti</span>"],
-    ["plain", "{n} ＜img＞ AT&T"]
+    ["plain", "{n} ＜img＞ AT&T"],
+    ["plain", "{n} Q&As, R&D, F&E e AT&T"],
+    ["plain", "{n} &Apostrofo &nbspx"]
   ],
   "invalid": [
     ["tags", "{n} negozi pronti"],
@@ -45,6 +47,12 @@
     ["tags", "<b>{n}</b> <span class=\"ok\">pronti</span> &lt"],
     ["plain", "{n} &ltimg src=x&gt"],
     ["plain", "{n} &amp grazie"],
-    ["plain", "{n}&nbsp;grazie"]
+    ["plain", "{n}&nbsp;grazie"],
+    ["plain", "{n} &lt"],
+    ["plain", "{n} &ltimg"],
+    ["plain", "{n} &GT;"],
+    ["plain", "{n} &quotx"],
+    ["plain", "{n} &nbsp grazie"],
+    ["plain", "{n} &apos"]
   ]
 }
