@@ -9,7 +9,8 @@ after a change to marketing_score(), MARKETING_REACH or the neighbourhood
 factors. For every rented shop or office whose building has a known area it
 recomputes (marketing, total) from the save's traffic index and enabled
 campaigns and compares it with the save's own promotion. Prints each mismatch
-and exits 1 if there is any. Its output names saves and addresses: never
+and exits 1 if there is any, or if saves were found but no site was checked;
+an error while comparing is raised, not skipped. Its output names saves and addresses: never
 commit it.
 """
 from __future__ import annotations
@@ -26,9 +27,8 @@ import ba_dashboard as d  # noqa: E402
 from ba_save import load_save  # noqa: E402
 
 
-def check(path):
-    """Yield (label, got, stored) for every comparable site in one save."""
-    save = load_save(path)
+def check(save):
+    """Yield (label, got, stored) for every comparable site in one loaded save."""
     for b in save.items(save.root.get("BuildingRegistrations")):
         if not b.get("RentedByPlayer"):
             continue
@@ -55,16 +55,20 @@ def main(argv=None):
     checked = bad = unreadable = 0
     for path in saves:
         try:
-            rows = list(check(path))
+            save = load_save(path)
         except Exception:  # noqa: BLE001 - an unreadable save is check_saves.py's business
             unreadable += 1
             continue
-        for label, got, stored in rows:
+        # A comparison error is a formula bug, not an unreadable save: let it raise.
+        for label, got, stored in check(save):
             checked += 1
             if got != stored:
                 bad += 1
                 print(f"{os.path.relpath(path, args.root)} {label}: computed {got}, save has {stored}")
     print(f"{len(saves)} saves, {unreadable} unreadable, {checked} sites checked, {bad} mismatches")
+    if not checked:
+        print("no shop or office was checked: nothing held the formula")
+        return 1
     return 1 if bad else 0
 
 
