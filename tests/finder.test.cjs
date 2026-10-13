@@ -6,6 +6,7 @@
    the rule, not one save's readings. */
 const {test} = require('node:test');
 const H = require('./_finder.cjs');
+const {UI_LANGS} = require('./_i18n.cjs');
 const {assert, en, enRe, fs, path, root, geometry, at, HK, MT, COFFEE, HK_NAME, HK_HOOD, MT_HOOD, site, PREMISES, fixture, openMap, chip, turnOn, pick, rowKeys, facts, saved, plan} = H;
 
 test('ordinary map facts retain deposit estimates and unknown deposits for player premises', async () => {
@@ -729,7 +730,7 @@ test('phone finder facts use a complete translated line in every language', asyn
   const {page, errors} = await fixture();
   try{
     await openMap(page);
-    for(const lang of ['de', 'es', 'fr', 'ko', 'pt', 'ru', 'tr']){
+    for(const lang of UI_LANGS.filter(l => l !== 'en')){
       const table = JSON.parse(fs.readFileSync(path.join(root, `web/i18n/${lang}.json`)));
       assert.ok(table['map.fr.phone.cap'], `${lang}: capacity line shipped`);
       assert.ok(table['map.fr.phone.rent'], `${lang}: rent line shipped`);
@@ -740,7 +741,10 @@ test('phone finder facts use a complete translated line in every language', asyn
           cityMapPage.finderPhoneFact({rent: null}, true)];
       }, {lang, table});
       for(const [i, key, n] of [[0, 'map.fr.phone.cap', '200'], [1, 'map.fr.phone.rent', '$140'], [2, 'map.fr.phone.rent', '—']]){
-        assert.equal(lines[i], `<span class="fr-phone-fact">${table[key].replace('{n}', n)}</span>`, lang);
+        // The line is HTML-escaped: Italian's "dell'edificio" reads dell&#39;edificio.
+        const line = table[key].replace('{n}', n).replace(/[&<>"']/g, c =>
+          ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+        assert.equal(lines[i], `<span class="fr-phone-fact">${line}</span>`, lang);
       }
     }
     assert.deepEqual(errors, []);
