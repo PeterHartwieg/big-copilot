@@ -1059,11 +1059,13 @@ What `page_html()` produces, top of the file down:
    (the stamp, set here rather than in `BEFORE_SCRIPT` because `web/i18n.js`, in the
    template's head, fetches a UI table with it), `window.LEDGER_ASSETS` (the pinned
    worker and Python/data manifest), the early board resource failure handler,
-   and the `web/community.css` link stamped
-   with the release version. There is no analytics
+   and `web/community.css`, inlined as a `<style>` block so it costs no
+   render-blocking request. There is no analytics
    script, and Cloudflare's automatic Web Analytics injection is switched off for the
    domain, because the privacy notice says the site runs none. `page_html()` then swaps the
-   template's Google Fonts links for `web/fonts/fonts.css`, stamped the same way.
+   template's Google Fonts links for `web/fonts/fonts.css`, inlined the same way with its
+   `url()`s moved under `fonts/`, behind preloads for the two font files the first paint
+   uses (`PRELOAD_FONTS`).
 3. The template (`template/board.html`), whose head scripts are the theme and `web/i18n.js`, with the landing screen
    (`BANNER`) substituted into its `<!--__BANNER__-->` slot: the release banner, the drop
    zone, the save-location help and the footer.
