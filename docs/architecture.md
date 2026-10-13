@@ -555,8 +555,14 @@ The worker's existing newer-build priority and stale replies are unchanged.
 runs `browser_build()`, which sends the core and keeps the `Build` under the message's id,
 its generation; the reply carries it as `gen`, and `web/app.js` puts it on the data under
 `Symbol.for("bigcopilot.build")`. A `section` message names a section and a generation, and
-`browser_section()` answers `{generation, sections}`: the section asked for and every
-section it needs, so a retry after a failure half way still sends them all. A section for a
+lists in `have` the sections of that build the board already holds (`odNeed()` reads them
+with `odReady()`). `browser_section()` answers `{generation, sections}`: the section asked
+for and every section it needs, less those in `have`, so a retry after a failure half way
+still sends what the board lacks and a held section is never sent twice. A new build is a
+new generation whose board holds none, so after another save, a live refresh or a worker
+restart the whole chain comes again; a language switch keeps what the board holds, since it
+localises from the English payload the sections were merged into. A message without `have`
+gets the whole chain. A section for a
 build the worker no longer holds is answered `stale` without running: one whose generation
 is not the build held, or one asked for before a newer build or name. Before it starts, a
 section lets every message already sent to the worker arrive (`waiting()`, a
@@ -1755,7 +1761,8 @@ Three entry points, called through `py.runPython` with paths interpolated as JSO
   build the core, keep the `Build` under `generation` for the sections, and return the
   core as a JSON string. It also writes `<history_path>.character` so a later name can be
   filed under the right company without reparsing the save.
-- `browser_section(name, generation)` — one section of the build held, as JSON
+- `browser_section(name, generation, have)` — one section of the build held, less the
+  sections in `have` the page already holds, as JSON
   ([Sections](#sections)); `StaleBuild` for a build no longer held. Never writes the history.
 - `browser_name(history_path, rid, slug)` — record a factory-line name; the worker then
   rebuilds from the save already in the filesystem.

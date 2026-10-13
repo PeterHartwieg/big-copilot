@@ -22,8 +22,8 @@ function board(core = {}) {
     label: 'In browser',
     data: async () => null,
     watch() {},
-    section(name, gen) {
-      return new Promise((resolve, reject) => asked.push({name, gen, resolve, reject}));
+    section(name, gen, have) {
+      return new Promise((resolve, reject) => asked.push({name, gen, have: have && [...have], resolve, reject}));
     },
   };
   // Everything else on window answers as the harness's stub does: with itself.
@@ -253,6 +253,40 @@ test('an arriving section is merged into the English payload and the board, not 
   assert.equal(b.run('localiseNames(D).hiring.sites.length'), 0);
   assert.equal(b.run('odNeed("hiring")'), true);
   assert.equal(b.asked.length, 1);
+});
+
+test('a section asked for lists what the board holds of its chain, and a new board holds none (#327)', async () => {
+  // The core here carries staffing and office staffing, as a prefetch would
+  // have left them: asking for hiring says so, and the reply that leaves
+  // them out still makes hiring ready.
+  const b = board();
+  b.run('odNeed("hiring")');
+  assert.deepEqual(b.asked[0].have, ['staffing', 'officeStaffing']);
+  b.asked[0].resolve({generation: 5, sections: {
+    factoryStaffing: {factoryStaffing: {cap: [], dem: []}},
+    hiring: {hiring: {sites: [], people: {}}, candidates: []},
+  }});
+  await tick();
+  assert.equal(b.run('odReady("hiring")'), true);
+  assert.equal(b.run('D.staffing.length'), 0, 'the held section is kept');
+  b.run('odNeed("premises")');
+  assert.deepEqual(b.asked[1].have, []);
+  b.asked[1].resolve({generation: 5, sections: {premises: {premises: {}}}});
+  await tick();
+  // A language switch localises from the English payload, which keeps what
+  // the board holds, so it is still listed.
+  b.run('D = localiseNames(D)');
+  b.run('odNeed("openStore")');
+  assert.deepEqual(b.asked[2].have, ['premises']);
+  b.asked[2].resolve({generation: 5, sections: {openStore: {openStore: {}}}});
+  await tick();
+  assert.equal(b.run('odReady("openStore")'), true);
+  // A new board (another save, a live refresh, a worker restart) holds
+  // nothing of the old one's sections: it lists none it does not hold.
+  b.take({meta: {day: 4}, names: {}, businesses: [], supply: {factories: {sites: []}}}, 6);
+  b.run('odNeed("hiring")');
+  b.run('odNeed("openStore")');
+  assert.deepEqual(b.asked.slice(3).map(a => [a.name, a.gen, a.have]), [['hiring', 6, []], ['openStore', 6, []]]);
 });
 
 test('an answer for an older board is dropped, and the newer board asks again', async () => {

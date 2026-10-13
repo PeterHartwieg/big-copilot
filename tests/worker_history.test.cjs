@@ -42,7 +42,7 @@ function worker({failSection = false} = {}) {
       calls.push(code);
       if (code.includes('browser_section(')) {
         if (failSection) throw new Error('Traceback...\nSaveShapeError: the board hit a bug');
-        const [, name, gen] = /browser_section\("(\w+)", (\d+)\)/.exec(code);
+        const [, name, gen] = /browser_section\("(\w+)", (\d+), /.exec(code);
         return JSON.stringify({generation: Number(gen), sections: {[name]: {[name]: []}}});
       }
       if (code.includes('browser_build(') && files.has('/save/boom.hsg')) throw new Error('Traceback...\nSaveShapeError: not a save');
@@ -157,7 +157,16 @@ test('a section is computed for the build the worker holds, and writes no histor
   assert.equal(JSON.stringify(JSON.parse(reply.data).sections), JSON.stringify({hiring: {hiring: []}}));
   assert.equal('history' in reply, false, 'a section carries no history');
   assert.equal(w.writes.length, before, 'and writes nothing to the filesystem');
-  assert.match(w.calls.at(-1), /browser_section\("hiring", 1\)/);
+  assert.match(w.calls.at(-1), /browser_section\("hiring", 1, None\)/, 'a page that lists nothing held gets the whole chain');
+});
+
+test('a section passes on what the board holds, as a Python list (#327)', async () => {
+  const w = worker();
+  await w.send(build(1, ''));
+  await w.send({kind: 'section', id: 2, name: 'hiring', gen: 1, have: ['staffing', 'officeStaffing', 7]});
+  assert.match(w.calls.at(-1), /browser_section\("hiring", 1, \["staffing","officeStaffing"\]\)$/);
+  await w.send({kind: 'section', id: 3, name: 'premises', gen: 1, have: []});
+  assert.match(w.calls.at(-1), /browser_section\("premises", 1, \[\]\)$/);
 });
 
 test('a section of a build the worker no longer holds is answered stale, unrun', async () => {

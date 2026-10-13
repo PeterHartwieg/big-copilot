@@ -22602,11 +22602,14 @@ def browser_build(
     return json.dumps(build.core, separators=(",", ":"))
 
 
-def browser_section(name: str, generation) -> str:
+def browser_section(name: str, generation, have=None) -> str:
     """One section of the build the worker holds, as JSON: {"generation", "sections"}.
 
     `sections` is {name: {key: value}} for the section asked for and every
-    section it needs, however deep, so the page holds all of them after it.
+    section it needs, however deep, less those in `have`: the sections the
+    page already holds for this build (odNeed() in the board script lists
+    them). The section asked for is always sent. With no `have` (a page
+    that lists none) the whole chain goes, so the page holds all of it after.
     A build other than `generation` is stale (StaleBuild): the page dropped
     the board it asked for, or the worker has started a newer one. Writes no
     history: only a build records one.
@@ -22617,9 +22620,10 @@ def browser_section(name: str, generation) -> str:
     if name not in SECTIONS:
         raise ValueError(f"no section {name!r}")
     safe_section(build, name)
-    # Every section it needs too, computed now or before: the page may never
-    # have had one that was computed on the way to a request that then failed.
-    chain = _section_chain(name)
+    # Every section it needs too, computed now or before, that the page does
+    # not hold: it may never have had one computed on the way to a request
+    # that then failed. What it holds is not sent again (issue #327).
+    chain = _section_chain(name) - set(have or ()) | {name}
     sent = {done: build.sections[done] for done in SECTIONS if done in chain}
     return json.dumps({"generation": generation, "sections": sent}, separators=(",", ":"))
 
