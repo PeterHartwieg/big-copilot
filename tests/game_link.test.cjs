@@ -11,8 +11,9 @@ const {between} = require('./_slice.cjs');
 // branch hands it the refresh, checkFolder() hands it the watch.
 // The page's tt(), which app.js writes every word through.
 const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
-// How app.js hands the strip its words: say(), failure() and errWords().
-const sayHelpers = between(source, '  const say = (v)', '\n', {endAfter: '  const errWords'});
+// How app.js hands the strip its words: say(), failure() and errWords(),
+// from web/app.js run whole.
+const {shell} = require('./_shell.cjs').loadShell();
 const words = (v) => (typeof v === 'function' ? v() : v);
 const section = between(source, '  /* --- the game link (docs/game-link-api.md)', '  /* --- building');
 const updater = between(source, '  async function update()', '  /* --- watching the folder');
@@ -63,7 +64,8 @@ function harness({routes = {}} = {}) {
     localStorage: {getItem: () => null, setItem() {}, removeItem(key) { delete remembered[key]; }},
     // the app helpers the section is allowed to touch
     $: el, strip,
-    company: 'Costy Co', sourceGen: 1, busy: false, attempt: null, readerError: null, handlers: null,
+    say: shell.say, failure: shell.failure, errWords: shell.errWords,
+    company: 'Costy Co', sourceGen: 1, attempt: null, readerError: null, handlers: null,
     watchTimer: 1,  // watching the game; null is the player's pause
     lastGood: {}, lastCheck: null, lastEntries: null, watchChecking: false,
     savePicker: {hidden: false},
@@ -102,7 +104,7 @@ function harness({routes = {}} = {}) {
     },
   });
   vm.runInContext(i18n, context);
-  vm.runInContext(sayHelpers + '\n' + section + '\n' + updater + '\n' + watcher, context);
+  vm.runInContext(section + '\n' + updater + '\n' + watcher, context);
   vm.runInContext('linkWait = (ms) => { __waits.push(ms); __advance(ms); return Promise.resolve(); };', context);
   // linkFetch only ever reaches an address on this computer; the tests that
   // call it directly talk to the default one.

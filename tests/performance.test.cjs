@@ -120,7 +120,7 @@ test('folder timer and visibility wake cannot overlap an unfinished scan', async
   const gate = new Promise(resolve => { release = resolve; });
   const context = vm.createContext({
     document:{hidden:false}, dirHandle:{async queryPermission(){return 'granted';}},
-    busy:false, attempt:null, readerError:null, watchChecking:false, sourceGen:0,
+    attempt:null, readerError:null, watchChecking:false, sourceGen:0,
     async scanHandle(){scans++; await gate; return [];},
     async refreshSaveMenu(){return '';}, chooseFrom(){return {};},
     stopWatch(){}, syncWatchBtn(){}, lastCheck:null,
