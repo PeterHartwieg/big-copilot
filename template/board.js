@@ -12679,7 +12679,7 @@ function osCkStaff(plan, opened){
   const shorts = S.weeks.filter(isShort), anyShort = shorts.length > 0;
   const shortH = shorts.filter(open).reduce((n, x) => n + Number(x.w.hours || 0), 0);
   const placedShorts = shorts.filter(x => !open(x));
-  const roles = m => osNames([...m].map(([skill, n]) => `${n} ${hrRoles(skill, n)}`));
+  const roles = m => osNames([...m].map(([skill, n]) => hrRoleCount(skill, n)));
   const bySkillOf = (list, f = () => true) => list.filter(f).reduce((m, x) => m.set(x.w.skill, (m.get(x.w.skill) || 0) + 1), new Map());
   /* Without the link, the step that clears a placed week is the hire or the
      move itself. */
@@ -15331,7 +15331,7 @@ function hrModel(){
   const mine = S => S.weeks.filter(x => !(x.who && x.who.type === "quick"));
   const skills = new Map();
   sites.forEach(S => mine(S).forEach(x => skills.set(x.w.skill, (skills.get(x.w.skill) || 0) + 1)));
-  const order = [...skills.keys()].sort((a, b) => skills.get(b) - skills.get(a) || (gameName(a) || a).localeCompare(gameName(b) || b));
+  const order = [...skills.keys()].sort((a, b) => skills.get(b) - skills.get(a) || gnCompare(gameName(a) || a, gameName(b) || b));
   const overs = [];
   const roles = order.map(skill => {
     const {f, pt} = hrFilterFor(skill);
@@ -15967,34 +15967,63 @@ function hrRequest(m, o = {}){
    role; what the button does, the button and Quick hire on the right;
    Current staff at the foot. Change picks opens one role over the page. */
 const hrSiteName = S => S ? (S.b ? shortName(S.b) : S.site.name || "?") : "";
-/* A role's name for a count of people: "22 Lawyers", "3 Customer Service". */
+/* A role's name for a count of people, English plural rules only while the
+   game's names are English: "22 Lawyers", "3 Customer Service". */
 function hrRoles(skill, n){
   const name = gameName(skill) || String(skill || "").replace(/^ba:skill_/, "");
-  const many = n === 1 ? name : /man$/i.test(name) ? name.replace(/man$/i, "men")
+  const many = n === 1 || gnLang !== "en" ? name : /man$/i.test(name) ? name.replace(/man$/i, "men")
     : /(er|or|ant|ent|ist|ian|ard|ger)$/i.test(name) ? `${name}s` : name;
   return spEsc(many);
 }
-const HR_KIND_WORDS = {shop: ["shop", "shops"], office: ["office", "offices"], factory: ["factory", "factories"],
-  warehouse: ["warehouse", "warehouses"], hq: ["headquarters", "headquarters"]};
+/* A count of people in a role, "22 Lawyers", as one message: the English
+   plural is a param (`roles`), and a translation writes the game's own name
+   (`role_name`) where it cannot decline it, "22 × Anwalt". */
+const hrRoleCount = (skill, n) => tt("co.hire.roles", {one: "{n:,} {roles}", other: "{n:,} {roles}"},
+  {n, roles: hrRoles(skill, n), role_name: hrRole(skill)});
+/* A site's kind as one word, "shop", for Quick hire's site list. */
+function hrKindWord(kind){
+  switch(kind){
+    case "shop": return tt("co.hire.kind.shop", "shop");
+    case "office": return tt("co.hire.kind.office", "office");
+    case "factory": return tt("co.hire.kind.factory", "factory");
+    case "warehouse": return tt("co.hire.kind.warehouse", "warehouse");
+    case "hq": return tt("co.hire.kind.hq", "headquarters");
+  }
+  return null;
+}
 /* Where a role hires, in a few words: the site, or "4 shops". */
 function hrWhere(sites){
-  if(sites.length === 1) return `${spEsc(hrSiteName(sites[0]))}${sites[0].site.new ? `<span class="hs-tag">new</span>` : ""}`;
-  const kinds = new Set(sites.map(S => S.site.kind));
-  const k = kinds.size === 1 ? HR_KIND_WORDS[[...kinds][0]] : null;
-  return `${sites.length} ${k ? k[1] : "sites"}`;
+  if(sites.length === 1) return `${spEsc(hrSiteName(sites[0]))}${sites[0].site.new ? `<span class="hs-tag">${tt("co.hire.tag.new", "new")}</span>` : ""}`;
+  const kinds = new Set(sites.map(S => S.site.kind)), n = sites.length;
+  switch(kinds.size === 1 ? [...kinds][0] : null){
+    case "shop": return tt("co.hire.where.shop", {one: "{n} shop", other: "{n} shops"}, {n});
+    case "office": return tt("co.hire.where.office", {one: "{n} office", other: "{n} offices"}, {n});
+    case "factory": return tt("co.hire.where.factory", {one: "{n} factory", other: "{n} factories"}, {n});
+    case "warehouse": return tt("co.hire.where.warehouse", {one: "{n} warehouse", other: "{n} warehouses"}, {n});
+    case "hq": return tt("co.hire.where.hq", {one: "{n} headquarters", other: "{n} headquarters"}, {n});
+  }
+  return tt("co.hire.where.sites", {one: "{n} site", other: "{n} sites"}, {n});
+}
+/* A list ending in "and": "A, B and C". */
+function hrAndList(items){
+  if(items.length < 2) return items.length ? items[0] : "";
+  if(items.length === 2) return tt("co.hire.and", "{a} and {b}", {a: items[0], b: items[1]});
+  return tt("co.hire.list", "{a}, {b}", {a: items[0], b: hrAndList(items.slice(1))});
 }
 const hrChev = () => hrSvg("chev");
 /* How long a candidate's application has left. */
 function hrExpires(c){
   const h = Number(c.hoursLeft);
   if(c.hoursLeft === null || c.hoursLeft === undefined || !Number.isFinite(h)) return "–";
-  return h < 24 ? `${Math.max(0, Math.round(h))} h` : h < 48 ? "1 day" : `${Math.floor(h / 24)} days`;
+  return h < 24 ? tt("co.hire.exp.hours", "{h} h", {h: Math.max(0, Math.round(h))})
+    : tt("co.hire.exp.days", {one: "{n} day", other: "{n} days"}, {n: Math.floor(h / 24)});
 }
 function hrLinkState(){
   /* Linked is the normal state, and not linked is said under the hire
      button: only a mod too old to hire speaks here (declutter T4). */
   const l = gwLink();
-  if(l && !(l.writes || []).includes("hire")) return `<span class="hs-link old"><i></i>${l.mod ? `Mod ${spEsc(l.mod)}` : "Mod"} · too old to hire</span>`;
+  if(l && !(l.writes || []).includes("hire")) return `<span class="hs-link old"><i></i>${l.mod
+    ? tt("co.hire.link.old.v", "Mod {v} · too old to hire", {v: spEsc(l.mod)}) : tt("co.hire.link.old", "Mod · too old to hire")}</span>`;
   return "";
 }
 
@@ -16008,10 +16037,13 @@ function hrGroups(m){
 function hrReLine(g){
   const {x, people} = g, n = people.length;
   const to = spEsc(hrSiteName(x.to));
-  if(x.fixed) return `<div class="hs-re"><span class="hs-i">${hrSvg("check2")}</span><span><b>Assign ${hrNum(n)}</b> · unassigned → ${to}</span></div>`;
-  const from = x.from ? `${spEsc(hrSiteName(x.from))} (no hours)` : "unassigned";
-  return `<div class="hs-re${x.off ? " off" : ""}"><span class="hs-i">${hrSvg("move")}</span><span><b>Reassign ${hrNum(n)}</b> · ${from} → ${to}</span>
-    <label><input type="checkbox" class="hs-cb" data-hr-move="${attr(g.group)}"${x.off ? "" : " checked"} aria-label="${attr(`Reassign ${n} ${gameName(x.skill) || ""}`)}">Reassign</label></div>`;
+  if(x.fixed) return `<div class="hs-re"><span class="hs-i">${hrSvg("check2")}</span><span>${
+    tt("co.hire.re.assign", "<b>Assign {n:,}</b> · unassigned → {to}", {n, to})}</span></div>`;
+  const line = x.from ? tt("co.hire.re.from", "<b>Reassign {n:,}</b> · {from} (no hours) → {to}", {n, from: spEsc(hrSiteName(x.from)), to})
+    : tt("co.hire.re.bench", "<b>Reassign {n:,}</b> · unassigned → {to}", {n, to});
+  return `<div class="hs-re${x.off ? " off" : ""}"><span class="hs-i">${hrSvg("move")}</span><span>${line}</span>
+    <label><input type="checkbox" class="hs-cb" data-hr-move="${attr(g.group)}"${x.off ? "" : " checked"} aria-label="${
+      attr(tt("co.hire.re.aria", "Reassign {n} {role}", {n, role: gameName(x.skill) || ""}))}">${tt("co.hire.re.box", "Reassign")}</label></div>`;
 }
 /* A role's row: Open · Own staff · New hires · Stays open · Wages/day. */
 function hrRoleRow(m, r, lines){
@@ -16023,14 +16055,16 @@ function hrRoleRow(m, r, lines){
   const bill = hires.reduce((n, x) => n + Number(x.who.c.wage || 0) * Number(x.w.hours || 0) / 7, 0);
   const avg = f => people.reduce((n, c) => n + f(c), 0) / people.length;
   const none = !r.pool.length;
-  const act = none && r.short ? `<td class="act l txt warn">No candidates</td>`
-    : `<td class="act"><button type="button" class="hs-btn" data-hr-open="${attr(r.skill)}" aria-label="${attr(`Change picks: ${gameName(r.skill) || r.skill}`)}"><span class="t">Change picks</span>${hrChev()}</button></td>`;
+  const act = none && r.short ? `<td class="act l txt warn">${tt("co.hire.role.nocands", "No candidates")}</td>`
+    : `<td class="act"><button type="button" class="hs-btn" data-hr-open="${attr(r.skill)}" aria-label="${
+      attr(tt("co.hire.role.change.aria", "Change picks: {role}", {role: gameName(r.skill) || r.skill}))}"><span class="t">${tt("co.hire.role.change", "Change picks")}</span>${hrChev()}</button></td>`;
   const row = `<tr class="${lines ? "has-sub" : ""}" data-hr-role="${attr(r.skill)}">
     <td class="l hs-rn"><b>${hrRole(r.skill)}</b><small>${hrWhere(sites)}</small></td>
     <td class="num opt">${hrNum(r.weeks.filter(x => x.w.band !== "short").length)}</td>
     <td class="${r.moved ? "num" : "dim"} opt">${r.moved ? hrNum(r.moved) : "–"}</td>
-    <td class="${people.length ? "num" : r.short ? "warn" : "dim"}" data-l="New hires">${hrNum(people.length)}${people.length ? `<small>${Math.round(avg(c => hrLevel(c, r.skill)))}% · ${hrWage(Math.round(avg(c => Number(c.wage) || 0)))}/h</small>` : ""}</td>
-    <td class="${r.short ? "warn" : "dim"}" data-l="Stays open">${r.short ? hrNum(r.short) : "–"}${r.tooFew
+    <td class="${people.length ? "num" : r.short ? "warn" : "dim"}" data-l="${attr(tt("co.hire.col.hires", "New hires"))}">${hrNum(people.length)}${people.length ? `<small>${
+      tt("co.hire.role.avg", "{lv}% · {w}/h", {lv: Math.round(avg(c => hrLevel(c, r.skill))), w: hrWage(Math.round(avg(c => Number(c.wage) || 0)))})}</small>` : ""}</td>
+    <td class="${r.short ? "warn" : "dim"}" data-l="${attr(tt("co.hire.col.open", "Stays open"))}">${r.short ? hrNum(r.short) : "–"}${r.tooFew
       ? `<small class="hs-toofew">${tt("co.hire.role.toofew", "{h} h a week too few for a hire", {h: hrNum(r.tooFew)})}</small>` : ""}</td>
     <td class="${bill ? "num" : "dim"} opt">${bill ? `+${fmt(bill)}` : "–"}</td>${act}</tr>`;
   return row + (lines ? `<tr class="hs-subrow"><td class="l" colspan="7">${lines}</td></tr>` : "");
@@ -16040,8 +16074,8 @@ function hrRoleRow(m, r, lines){
 const HR_SKILLS = [0, 50, 60, 70, 80, 90, 100];
 const HR_WAGES = [10, 15, 20, 25, 30, 40, 50, 60, 80, 100];
 function hrDemLabel(ex){
-  if(!ex.length) return `<b>nobody</b>`;
-  return `<b class="set">${ex.length <= 2 ? ex.map(hrName).join(", ") : `${ex.length} demands`}</b>`;
+  if(!ex.length) return `<b>${tt("co.hire.f.nobody", "nobody")}</b>`;
+  return `<b class="set">${ex.length <= 2 ? ex.map(hrName).join(", ") : tt("co.hire.f.demands", {one: "{n} demand", other: "{n} demands"}, {n: ex.length})}</b>`;
 }
 function hrFbar(target, f, count){
   const skills = [...new Set([...HR_SKILLS, f.min])].sort((a, b) => a - b);
@@ -16049,10 +16083,11 @@ function hrFbar(target, f, count){
   const open = !!hrPop && hrPop.target === target;
   return `<div class="hs-fbar" data-hr-filters="${attr(target)}">
     <button type="button" class="hs-sel" data-hs-dem-open="${attr(target)}" aria-haspopup="true" aria-expanded="${open}"${
-      f.ex.includes(HR_PT) ? ` data-tip="Part-time is left out for shop roles only."` : ""}>Leave out who asks for: ${hrDemLabel(f.ex)}${hrChev()}</button>
-    <label class="hs-sel">Skill at least: <select data-hr-min aria-label="Skill at least" class="${f.min ? "set" : ""}">${skills.map(v =>
-      `<option value="${v}"${v === f.min ? " selected" : ""}>${v ? `${v}%` : "any"}</option>`).join("")}</select>${hrChev()}</label>
-    <label class="hs-sel">Wage at most: <select data-hr-max aria-label="Wage at most" class="${f.max === null ? "" : "set"}"><option value=""${f.max === null ? " selected" : ""}>any</option>${
+      f.ex.includes(HR_PT) ? ` data-tip="${attr(tt("co.hire.f.pt.tip", "Part-time is left out for shop roles only."))}"` : ""}>${
+      tt("co.hire.f.leaveout", "Leave out who asks for: {who}", {who: hrDemLabel(f.ex)})}${hrChev()}</button>
+    <label class="hs-sel">${tt("co.hire.f.min", "Skill at least:")} <select data-hr-min aria-label="${attr(tt("co.hire.f.min.aria", "Skill at least"))}" class="${f.min ? "set" : ""}">${skills.map(v =>
+      `<option value="${v}"${v === f.min ? " selected" : ""}>${v ? `${v}%` : tt("co.hire.f.any", "any")}</option>`).join("")}</select>${hrChev()}</label>
+    <label class="hs-sel">${tt("co.hire.f.max", "Wage at most:")} <select data-hr-max aria-label="${attr(tt("co.hire.f.max.aria", "Wage at most"))}" class="${f.max === null ? "" : "set"}"><option value=""${f.max === null ? " selected" : ""}>${tt("co.hire.f.any", "any")}</option>${
       wages.map(v => `<option value="${v}"${v === f.max ? " selected" : ""}>${hrWage(v)}</option>`).join("")}</select>${hrChev()}</label>
     ${count ? `<span class="hs-fsum">${count}</span>` : ""}</div>`;
 }
@@ -16068,17 +16103,24 @@ function hrOpenHtml(m){
   const t = hrTotals(m);
   const soon = m.cands.filter(c => Number(c.hoursLeft) < 24).length;
   // No candidates is the role rows' to say (declutter T5).
-  const facts = m.cands.length ? `<p class="hs-facts2"><b>${hrNum(m.cands.length)}</b> candidates${soon ? ` · <b class="warn">${hrNum(soon)}</b> expire within 24 h${gwLink() ? "" : " (as of the save)"}` : ""}</p>` : "";
+  const nc = m.cands.length;
+  const facts = nc ? `<p class="hs-facts2">${!soon ? tt("co.hire.facts", {one: "<b>{n:,}</b> candidate", other: "<b>{n:,}</b> candidates"}, {n: nc})
+    : gwLink() ? tt("co.hire.facts.soon", {one: "<b>{n:,}</b> candidate · <b class='warn'>{k:,}</b> expires within 24 h",
+        other: "<b>{n:,}</b> candidates · <b class='warn'>{k:,}</b> expire within 24 h"}, {n: nc, k: soon})
+    : tt("co.hire.facts.soon.save", {one: "<b>{n:,}</b> candidate · <b class='warn'>{k:,}</b> expires within 24 h (as of the save)",
+        other: "<b>{n:,}</b> candidates · <b class='warn'>{k:,}</b> expire within 24 h (as of the save)"}, {n: nc, k: soon})}</p>` : "";
   /* No "Open places" heading: the filters under "Whom to hire" say what the
      table is (Peter's testing, A10). */
   const head = hrNoHoursHtml();
   if(!m.roles.length){
     /* Nothing to hire, but maybe people to give hours: then not "has its people". */
     const idle = hrIdleHtml(m);
-    return `${head}${idle ? "" : `<p class="hs-note">Every planned site has its people.</p>`}${stray ? `<div class="hs-scroll">${stray}</div>` : ""}${idle}${hrSpareHtml()}${facts}`;
+    return `${head}${idle ? "" : `<p class="hs-note">${tt("co.hire.allstaffed", "Every planned site has its people.")}</p>`}${stray ? `<div class="hs-scroll">${stray}</div>` : ""}${idle}${hrSpareHtml()}${facts}`;
   }
-  return `${head}${hrFbar("", f, match ? `<b>${hrNum(match)}</b> match` : "")}
-    <div class="hs-scroll"><table class="hs-t hs-roles"><thead><tr><th class="l">Role</th><th class="opt">Open</th><th class="opt">Own staff</th><th>New hires</th><th>Stays open</th><th class="opt">Wages/day</th><th><span class="gw-sr">Change picks</span></th></tr></thead>
+  return `${head}${hrFbar("", f, match ? tt("co.hire.f.match", {one: "<b>{n:,}</b> match", other: "<b>{n:,}</b> match"}, {n: match}) : "")}
+    <div class="hs-scroll"><table class="hs-t hs-roles"><thead><tr><th class="l">${tt("co.hire.col.role", "Role")}</th><th class="opt">${tt("co.hire.col.places", "Open")}</th><th class="opt">${
+      tt("co.hire.col.own", "Own staff")}</th><th>${tt("co.hire.col.hires", "New hires")}</th><th>${tt("co.hire.col.open", "Stays open")}</th><th class="opt">${
+      tt("co.hire.col.wages", "Wages/day")}</th><th><span class="gw-sr">${tt("co.hire.role.change", "Change picks")}</span></th></tr></thead>
     <tbody>${m.roles.map(r => hrRoleRow(m, r, lines(r.skill))).join("")}${stray ? `<tr class="hs-subrow"><td class="l" colspan="7">${stray}</td></tr>` : ""}</tbody></table></div>
     ${hrFindHtml(m)}${hrIdleHtml(m)}${hrSpareHtml()}${facts}`;
 }
@@ -16105,13 +16147,14 @@ function hrUnstaffedOf(S){
 function hrIdleHtml(m){
   const of = hrUnstaffedOf;
   const rows = m.sites.filter(S => (S.site.kind === "shop" || S.site.kind === "office") && of(S)).map(S => {
-    const u = of(S), name = spEsc(S.b ? shortName(S.b) : S.site.name || "A site");
-    const who = (u.roles || []).filter(r => r.idle).map(r => `your ${hrNum(r.idle)} ${hrRole(r.skill)} staff ${r.idle === 1 ? "has" : "have"} no hours`);
+    const u = of(S), name = spEsc(S.b ? shortName(S.b) : S.site.name || tt("co.hire.asite.cap", "A site"));
+    const who = (u.roles || []).filter(r => r.idle).map(r => tt("co.hire.idle.role",
+      {one: "your {n:,} {role} staff has no hours", other: "your {n:,} {role} staff have no hours"}, {n: r.idle, role: hrRole(r.skill)}));
     const href = siteHref(S.key);
-    return `<li><b>${name}</b><span>${hrNum(u.hours)} h with nobody on${who.length ? ` · ${who.join(" · ")}` : ""}</span>${
-      href ? `<a class="to" href="${attr(href)}" data-hr-roster="${attr(S.key)}">${hrSvg("chev")}Write their week</a>` : ""}</li>`;
+    return `<li><b>${name}</b><span>${[tt("co.hire.idle.hours", "{h:,} h with nobody on", {h: Number(u.hours || 0)}), ...who].join(" · ")}</span>${
+      href ? `<a class="to" href="${attr(href)}" data-hr-roster="${attr(S.key)}">${hrSvg("chev")}${tt("co.hire.idle.write", "Write their week")}</a>` : ""}</li>`;
   }).join("");
-  return rows ? `<div class="hs-find hs-idle"><h4>Staff with no hours</h4><ul>${rows}</ul></div>` : "";
+  return rows ? `<div class="hs-find hs-idle"><h4>${tt("co.hire.idle.title", "Staff with no hours")}</h4><ul>${rows}</ul></div>` : "";
 }
 /* The people the game's week gives no hours and the plan on screen none
    either (spSpareIds()): no demand of theirs is a warning, and fewer on the
@@ -16121,8 +16164,10 @@ function hrIdleHtml(m){
 function hrSpareHtml(){
   const sites = (D.businesses || []).map(b => [b, spSpareIds(b).length]).filter(([, n]) => n);
   const n = sites.reduce((t, [, k]) => t + k, 0);
-  return n ? `<p class="hs-note hs-spare">${hrNum(n)} ${n === 1 ? "person isn't" : "people aren't"} needed where they are: move them to a site that needs them, or let them go · ${
-    sites.map(([b, k]) => `${spEsc(shortName(b))} ${hrNum(k)}`).join(", ")}</p>` : "";
+  return n ? `<p class="hs-note hs-spare">${tt("co.hire.spare", {
+    one: "{n:,} person isn't needed where they are: move them to a site that needs them, or let them go · {sites}",
+    other: "{n:,} people aren't needed where they are: move them to a site that needs them, or let them go · {sites}"},
+    {n, sites: sites.map(([b, k]) => `${spEsc(shortName(b))} ${hrNum(k)}`).join(", ")})}</p>` : "";
 }
 /* Where to find them: for each role places stay open in, how many and where
    the people come from, for an early company whose headhunters recruit few
@@ -16138,17 +16183,23 @@ function hrFindHtml(m){
   const rows = short.map(r => {
     const out = r.pool.length - r.pass;
     const have = !r.pool.length ? ""
-      : !r.pass ? `${plural(r.pool.length, "candidate")}, all left out by your filters`
-      : out ? `${hrNum(out)} more left out by your filters` : "";
+      : !r.pass ? tt("co.hire.find.allout", {one: "{n} candidate, all left out by your filters", other: "{n} candidates, all left out by your filters"}, {n: r.pool.length})
+      : out ? tt("co.hire.find.out", {one: "{n:,} more left out by your filters", other: "{n:,} more left out by your filters"}, {n: out}) : "";
     const n = recruiting[r.skill] || 0, hh = hrRole("ba:skill_headhunter");
-    const where = n ? `${n === 1 ? `your ${hh} is` : `${hrNum(n)} of your ${hh}s are`} recruiting ${hrRole(r.skill)}: wait for more candidates, or a ${spEsc(agency)}`
+    const where = n ? tt("co.hire.find.recruiting", {
+        one: "your {headhunter} is recruiting {role}: wait for more candidates, or a {agency}",
+        other: "{n:,} of your {headhunters} are recruiting {role}: wait for more candidates, or a {agency}"},
+        {n, headhunter: hh, headhunters: gnLang === "en" ? `${hh}s` : hh, headhunter_name: hh, role: hrRole(r.skill), agency: spEsc(agency)})
       : "";
     return `<li><b>${hrRole(r.skill)}</b>${have ? `<span>${have}</span>` : ""}${where ? `<span class="to">${hrSvg("chev")}${where}</span>` : ""}</li>`;
   }).join("");
   const genericRoles = short.filter(r => !recruiting[r.skill]).map(r => hrRole(r.skill));
   const generic = genericRoles.length
-    ? `<p class="hs-find-advice">${genericRoles.length > 1 ? `${genericRoles.slice(0, -1).join(", ")} and ${genericRoles.at(-1)}` : genericRoles[0]}: a ${hrRole("ba:skill_headhunter")} at your headquarters recruiting ${genericRoles.length > 1 ? "each role" : "that role"}, or a ${spEsc(agency)}.</p>` : "";
-  return `<div class="hs-find"><h4 class="nx-sr">Where to find them</h4><ul>${rows}</ul>${generic}</div>`;
+    ? `<p class="hs-find-advice">${tt("co.hire.find.advice", {
+        one: "{roles}: a {headhunter} at your headquarters recruiting that role, or a {agency}.",
+        other: "{roles}: a {headhunter} at your headquarters recruiting each role, or a {agency}."},
+        {n: genericRoles.length, roles: hrAndList(genericRoles), headhunter: hrRole("ba:skill_headhunter"), agency: spEsc(agency)})}</p>` : "";
+  return `<div class="hs-find"><h4 class="nx-sr">${tt("co.hire.find.title", "Where to find them")}</h4><ul>${rows}</ul>${generic}</div>`;
 }
 /* "When you hire": what Staff all sites does, in numbers (the reassigns,
    the hires, the weeks it writes, the places that stay open), then the
@@ -16162,7 +16213,7 @@ function hrOrderHtml(m, t){
   const weeks = hrRequest(m, {mode: "both", one: true}).weeks;
   const items = [
     t.move ? `<li><span>${tt("co.hire.tile.move", "Reassign")}</span><b>${hrNum(t.move)}</b></li>` : "",
-    `<li><span>${tt("co.hire.tile.hire", "Hire")}</span><b>${hrNum(t.hire)}</b>${byRole.length ? `<small>${byRole.map(([r, n]) => `${hrNum(n)} ${hrRoles(r.skill, n)}`).join(" · ")}</small>` : ""}</li>`,
+    `<li><span>${tt("co.hire.tile.hire", "Hire")}</span><b>${hrNum(t.hire)}</b>${byRole.length ? `<small>${byRole.map(([r, n]) => hrRoleCount(r.skill, n)).join(" · ")}</small>` : ""}</li>`,
     weeks ? `<li><span>${tt("co.hire.tile.weeks", "Site schedules")}</span><b>${hrNum(weeks)}</b></li>` : "",
     short.length ? `<li class="short"><span>${tt("co.hire.order.short", "Stays open")}</span><b>${hrNum(t.short)}</b></li>` : "",
   ].join("");
@@ -16215,8 +16266,8 @@ function drawStaffPage(parts){
   if(parts && sec.querySelector("#hsOpen")) parts.forEach(id => { const el = sec.querySelector(`#${id}`); if(el) el.innerHTML = html[id](); });
   else sec.innerHTML = `<div class="hs-head"><h2>${tt("co.needs.hire.title", "Whom to hire")}</h2><div class="aside">${hrLinkState()}</div></div>
     <div class="hs-split"><div class="hs-left" id="hsOpen">${html.hsOpen()}</div>
-      <div class="hs-right"><aside class="hs-order" id="hsOrder" aria-label="When you hire">${html.hsOrder()}</aside>
-        <section class="hs-quick" id="hsQuick" aria-label="Quick hire">${html.hsQuick()}</section></div></div>`;
+      <div class="hs-right"><aside class="hs-order" id="hsOrder" aria-label="${attr(tt("co.hire.order.title", "When you hire"))}">${html.hsOrder()}</aside>
+        <section class="hs-quick" id="hsQuick" aria-label="${attr(tt("co.hire.quick.title", "Quick hire"))}">${html.hsQuick()}</section></div></div>`;
   hrSheetPaint(m);
   if(hrPop) hrPopDraw(m);
   if(parts) wireTips();
@@ -16259,15 +16310,17 @@ const hrKey = el => {
 /* Why a demand is not met where someone goes, in a few words. */
 function hrWhy(m, slug, S, wk){
   const kind = hrKind(slug);
-  if(kind === "schedule") return "the plan's hours break it";
-  if(kind === "company") return hrDemandAt(m, slug, S, wk) === "warn" ? tt("co.hire.require.hrplan", "assign a plan offering this") : "not offered";
+  const nowhere = () => tt("co.hire.why.nowhere", "none at any site");
+  const notHere = () => tt("co.hire.why.nothere", "none at {site}", {site: spEsc(hrSiteName(S))});
+  if(kind === "schedule") return tt("co.hire.why.hours", "the plan's hours break it");
+  if(kind === "company") return hrDemandAt(m, slug, S, wk) === "warn" ? tt("co.hire.require.hrplan", "assign a plan offering this") : tt("co.hire.why.notoffered", "not offered");
   if(kind === "station"){
-    if(hrDemandAt(m, slug, S, wk) === "no") return "none at any site";
-    if(hrDeskAnywhere(slug, S)) return wk && wk.w ? "not at this desk" : "met at a desk here: seat them there";
-    return `none at ${spEsc(hrSiteName(S))}`;
+    if(hrDemandAt(m, slug, S, wk) === "no") return nowhere();
+    if(hrDeskAnywhere(slug, S)) return wk && wk.w ? tt("co.hire.why.desk", "not at this desk") : tt("co.hire.why.seat", "met at a desk here: seat them there");
+    return notHere();
   }
   const tone = hrDemandAt(m, slug, S, wk);
-  return tone === "warn" ? `none at ${spEsc(hrSiteName(S))}` : "none at any site";
+  return tone === "warn" ? notHere() : nowhere();
 }
 /* One candidate as a row of Change picks. */
 function hrCandRow(m, r, c){
@@ -16278,24 +16331,27 @@ function hrCandRow(m, r, c){
   const wk = at && at.week;
   const warned = new Map(picked ? hrWarns(m, c, S, wk) : []);
   const lv = hrLevel(c, r.skill);
-  const dem = (c.demands || []).map(d => warned.has(d) ? `<span class="warn">${hrName(d)} (${hrWhy(m, d, S, wk)})</span>` : hrName(d)).join(", ");
+  const unmet = d => tt("co.hire.cand.unmet", "{demand} ({why})", {demand: hrName(d), why: hrWhy(m, d, S, wk)});
+  const dem = (c.demands || []).map(d => warned.has(d) ? `<span class="warn">${unmet(d)}</span>` : hrName(d)).join(", ");
   /* On a phone Asks for is hidden: the unmet ones go under the name. */
-  const why = [...warned.keys()].map(d => `${hrName(d)} (${hrWhy(m, d, S, wk)})`).join(", ");
+  const why = [...warned.keys()].map(unmet).join(", ");
   const noShop = !picked && !elsewhere && r.pt && r.shop && !r.allShop && hrAsksPt(c);
-  const to = elsewhere ? `<span class="dim">picked for ${spEsc(hrSiteName(elsewhere))}</span>`
-    : noShop ? `<span class="dim">not for shop weeks (Part-time)</span>`
+  const to = elsewhere ? `<span class="dim">${tt("co.hire.cand.elsewhere", "picked for {site}", {site: spEsc(hrSiteName(elsewhere))})}</span>`
+    : noShop ? `<span class="dim">${tt("co.hire.cand.noshop", "not for shop weeks (Part-time)")}</span>`
     : at && at.nofit ? `<span class="dim">${tt("co.hire.nofit", "no open week meets their schedule demands")}</span>`
-    : S ? `${spEsc(hrSiteName(S))}${at.over ? ` <span class="warn">over the plan</span>` : ""}` : `<span class="dim">–</span>`;
+    : S ? (at.over ? tt("co.hire.cand.over", "{site} <span class='warn'>over the plan</span>", {site: spEsc(hrSiteName(S))}) : spEsc(hrSiteName(S))) : `<span class="dim">–</span>`;
   const soon = Number(c.hoursLeft) < 24;
   return `<tr class="${picked ? "on" : ""}" data-hr-cand="${attr(c.id)}">
-    <td class="l"><input type="checkbox" class="hs-cb" data-hr-pick="${attr(c.id)}" data-hr-skill="${attr(r.skill)}"${picked ? " checked" : ""}${elsewhere ? " disabled" : ""} aria-label="${attr(`Pick ${c.name || "this candidate"}`)}"></td>
+    <td class="l"><input type="checkbox" class="hs-cb" data-hr-pick="${attr(c.id)}" data-hr-skill="${attr(r.skill)}"${picked ? " checked" : ""}${elsewhere ? " disabled" : ""} aria-label="${attr(c.name ? tt("co.hire.cand.pick", "Pick {name}", {name: c.name}) : tt("co.hire.cand.pick.anon", "Pick this candidate"))}"></td>
     <td class="nm"><b>${spEsc(c.name || "?")}</b>${why ? `<small class="hs-why warn">${why}</small>` : ""}</td>
     <td class="l"><span class="hs-sk" style="--w:${Math.max(0, Math.min(100, lv || 0))}%"><i></i></span>${Math.round(lv || 0)}%</td>
     <td>${hrWage(c.wage)}</td><td class="to">${to}</td>
     <td class="dem opt">${dem || `<span class="dim">–</span>`}</td>
     <td class="exp${soon ? " warn" : ""}">${hrExpires(c)}</td></tr>`;
 }
-const HR_CAND_HEAD = `<thead><tr><th class="l" style="width:34px"><span class="gw-sr">Pick</span></th><th class="l">Candidate</th><th class="l">Skill</th><th>Wage/h</th><th class="l">Goes to</th><th class="l opt">Asks for</th><th>Expires in</th></tr></thead>`;
+const hrCandHead = () => `<thead><tr><th class="l" style="width:34px"><span class="gw-sr">${tt("co.hire.col.pick", "Pick")}</span></th><th class="l">${
+  tt("co.hire.col.cand", "Candidate")}</th><th class="l">${tt("co.hire.col.skill", "Skill")}</th><th>${tt("co.hire.col.wage", "Wage/h")}</th><th class="l">${
+  tt("co.hire.col.to", "Goes to")}</th><th class="l opt">${tt("co.hire.col.asks", "Asks for")}</th><th>${tt("co.hire.col.expires", "Expires in")}</th></tr></thead>`;
 function hrSheetHtml(m, r){
   /* The places hires fill, as the role row counts them: no week too short
      for any contract, none a reassign takes. */
@@ -16313,25 +16369,34 @@ function hrSheetHtml(m, r){
   const out = r.pool.filter(c => !placed(c) && !r.passes(c));
   const cap = 200, shown = hrUi.all ? next.slice(0, cap) : next.slice(0, 10);
   const over = picked.length - need;
-  const count = `${hrNum(picked.length)} of ${hrNum(need)}${over > 0 ? ` · ${hrNum(over)} over the plan` : over < 0 ? ` · ${hrNum(-over)} open` : ""}`;
+  const count = over > 0 ? tt("co.hire.sheet.count.over", "{n:,} of {k:,} · {x:,} over the plan", {n: picked.length, k: need, x: over})
+    : over < 0 ? tt("co.hire.sheet.count.open", "{n:,} of {k:,} · {x:,} open", {n: picked.length, k: need, x: -over})
+    : tt("co.hire.sheet.count", "{n:,} of {k:,}", {n: picked.length, k: need});
   const bill = r.weeks.reduce((n, x) => n + (x.who && x.who.type === "hire" ? Number(x.who.c.wage || 0) * Number(x.w.hours || 0) / 7 : 0), 0);
   const lacks = picked.some(c => { const at = r.at.get(c.id); return hrWarns(m, c, at.week ? at.week.S : at.over, at.week).length; });
-  const table = rows => `<div class="hs-scroll"><table class="hs-t hs-c">${HR_CAND_HEAD}<tbody>${rows.map(c => hrCandRow(m, r, c)).join("")}</tbody></table></div>`;
-  return `<div class="hs-sh"><div><h2 id="hsSheetT">${hrRole(r.skill)}</h2><p>${plural(need, "new hire")} · ${sites.map(({S, n}) => `${spEsc(hrSiteName(S))} (${hrNum(n)})`).join(", ")}</p></div>
-      <button type="button" class="gw-x" data-hs-close data-od-close aria-label="Close">${gwSvg("close")}</button></div>
+  const table = rows => `<div class="hs-scroll"><table class="hs-t hs-c">${hrCandHead()}<tbody>${rows.map(c => hrCandRow(m, r, c)).join("")}</tbody></table></div>`;
+  return `<div class="hs-sh"><div><h2 id="hsSheetT">${hrRole(r.skill)}</h2><p>${tt("co.hire.sheet.need", {one: "{n} new hire · {sites}", other: "{n} new hires · {sites}"},
+        {n: need, sites: sites.map(({S, n}) => tt("co.hire.sheet.site", "{site} ({n:,})", {site: spEsc(hrSiteName(S)), n})).join(", ")})}</p></div>
+      <button type="button" class="gw-x" data-hs-close data-od-close aria-label="${attr(tt("nav.dlg.close", "Close"))}">${gwSvg("close")}</button></div>
     <div class="hs-sb">
-      ${hrFbar(r.skill, f, `<b>${hrNum(r.pass)}</b> match · <b>${hrNum(r.out)}</b> left out`)}
-      <div class="hs-scope"><span>Filters for</span><label class="hs-radio"><input type="radio" name="hsScope" data-hr-scope="all"${own ? "" : " checked"}>every role</label><label class="hs-radio"><input type="radio" name="hsScope" data-hr-scope="own"${own ? " checked" : ""}>${hrRole(r.skill)} only</label></div>
-      <div class="hs-grp"><b>Picked</b><span>${count}</span>${lacks ? `<span class="hs-legend"><i></i>site lacks it</span>` : ""}</div>
-      ${picked.length ? table(picked) : `<p class="hs-note">Nobody matches.</p>`}
-      <div class="hs-grp"><b>Next best</b><span>${hrNum(next.length)} more</span></div>
-      ${shown.length ? table(shown) : `<p class="hs-note">Nobody else matches.</p>`}
-      ${hrUi.out && out.length ? `<div class="hs-grp"><b>Left out</b><span>${hrNum(out.length)}</span></div>${table(out.slice(0, cap))}` : ""}
-      <div class="hs-more">${next.length > shown.length ? `<a class="link" href="#" data-hs-all>${hrUi.all ? `Show the first ${cap}` : "Show all"}</a>` : ""}${hrUi.all && next.length > cap ? `<span>The first ${cap} of ${hrNum(next.length)}</span>` : ""}${
-        out.length ? `<a class="link" href="#" data-hs-out>${hrUi.out ? "Hide the left out" : `Show the ${hrNum(out.length)} left out`}</a>` : ""}</div>
+      ${hrFbar(r.skill, f, tt("co.hire.f.matchout", {one: "<b>{n:,}</b> match · <b>{k:,}</b> left out", other: "<b>{n:,}</b> match · <b>{k:,}</b> left out"}, {n: r.pass, k: r.out}))}
+      <div class="hs-scope"><span>${tt("co.hire.scope", "Filters for")}</span><label class="hs-radio"><input type="radio" name="hsScope" data-hr-scope="all"${own ? "" : " checked"}>${
+        tt("co.hire.scope.all", "every role")}</label><label class="hs-radio"><input type="radio" name="hsScope" data-hr-scope="own"${own ? " checked" : ""}>${
+        tt("co.hire.scope.own", "{role} only", {role: hrRole(r.skill)})}</label></div>
+      <div class="hs-grp"><b>${tt("co.hire.sheet.picked", "Picked")}</b><span>${count}</span>${lacks ? `<span class="hs-legend"><i></i>${tt("co.hire.sheet.lacks", "site lacks it")}</span>` : ""}</div>
+      ${picked.length ? table(picked) : `<p class="hs-note">${tt("co.hire.sheet.none", "Nobody matches.")}</p>`}
+      <div class="hs-grp"><b>${tt("co.hire.sheet.next", "Next best")}</b><span>${tt("co.hire.sheet.more", {one: "{n:,} more", other: "{n:,} more"}, {n: next.length})}</span></div>
+      ${shown.length ? table(shown) : `<p class="hs-note">${tt("co.hire.sheet.noneelse", "Nobody else matches.")}</p>`}
+      ${hrUi.out && out.length ? `<div class="hs-grp"><b>${tt("co.hire.sheet.out", "Left out")}</b><span>${hrNum(out.length)}</span></div>${table(out.slice(0, cap))}` : ""}
+      <div class="hs-more">${next.length > shown.length ? `<a class="link" href="#" data-hs-all>${hrUi.all ? tt("co.hire.sheet.first", "Show the first {n}", {n: cap})
+        : tt("co.hire.sheet.all", "Show all")}</a>` : ""}${hrUi.all && next.length > cap ? `<span>${tt("co.hire.sheet.firstof", "The first {n} of {k:,}", {n: cap, k: next.length})}</span>` : ""}${
+        out.length ? `<a class="link" href="#" data-hs-out>${hrUi.out ? tt("co.hire.sheet.hideout", "Hide the left out")
+          : tt("co.hire.sheet.showout", {one: "Show the {n:,} left out", other: "Show the {n:,} left out"}, {n: out.length})}</a>` : ""}</div>
     </div>
-    <div class="hs-sf"><div class="tot"><div><span>Picked</span><b>${count}</b></div><div><span>Added wages</span><b>+${fmt(bill)}/day</b></div></div>
-      <div class="end"><a class="link" href="#" data-hs-reset>Reset to automatic</a><button type="button" class="hs-cta" data-hs-done data-od-close>Done</button></div></div>`;
+    <div class="hs-sf"><div class="tot"><div><span>${tt("co.hire.sheet.picked", "Picked")}</span><b>${count}</b></div><div><span>${
+      tt("co.hire.tile.wages", "Added wages")}</span><b>+${fmt(bill)}${tt("co.hire.perday", "/day")}</b></div></div>
+      <div class="end"><a class="link" href="#" data-hs-reset>${tt("co.hire.sheet.reset", "Reset to automatic")}</a><button type="button" class="hs-cta" data-hs-done data-od-close>${
+        tt("co.hire.sheet.done", "Done")}</button></div></div>`;
 }
 /* Change picks is a dialog on <body>: open for hrUi.sheet, drawn again with
    the page, closed when that role is gone. */
@@ -16391,14 +16456,15 @@ function hrPopDraw(m){
   const count = new Map();
   hrPopPool(m, hrPop.target).forEach(c => (c.demands || []).forEach(d => count.set(d, (count.get(d) || 0) + 1)));
   f.ex.forEach(d => { if(!count.has(d)) count.set(d, 0); });
-  const all = [...count].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])));
+  const all = [...count].sort((a, b) => b[1] - a[1] || gnCompare(gameName(a[0]) || a[0], gameName(b[0]) || b[0]));
   const few = hrPop.all || all.length <= 12 ? all : all.filter(([d], i) => i < 10 || f.ex.includes(d));
   let pop = $("hsDemPop");
   if(!pop){
     pop = document.createElement("div");
     pop.dataset.odNeeds = "hiring";
-    pop.id = "hsDemPop"; pop.setAttribute("role", "dialog"); pop.setAttribute("aria-label", "Leave out anyone asking for");
+    pop.id = "hsDemPop"; pop.setAttribute("role", "dialog");
   }
+  pop.setAttribute("aria-label", tt("co.hire.dem.aria", "Leave out anyone asking for"));
   const host = anchor.closest("dialog") || document.body;
   if(pop.parentElement !== host) host.appendChild(pop);
   const had = document.activeElement && pop.contains(document.activeElement) ? document.activeElement.getAttribute("data-hr-dem") : null;
@@ -16407,11 +16473,12 @@ function hrPopDraw(m){
   const company = f === hrFilters().company;
   const r = hrPop.target && hrPop.target !== "quick" ? m.roles.find(x => x.skill === hrPop.target) : null;
   const fixed = d => company && d === HR_PT && !!r && !r.shop;
-  pop.innerHTML = `<div class="ph">Leave out anyone asking for:</div>${few.map(([d, n]) =>
+  pop.innerHTML = `<div class="ph">${tt("co.hire.dem.head", "Leave out anyone asking for:")}</div>${few.map(([d, n]) =>
       `<label class="hs-opt"><input type="checkbox" class="hs-cb" data-hr-dem="${attr(d)}"${f.ex.includes(d) ? " checked" : ""}${fixed(d) ? " disabled" : ""}><span>${hrName(d)}${
-        company && d === HR_PT ? ` <small>· shop roles only</small>` : ""}</span><small>${hrNum(n)}</small></label>`).join("")
-    || `<p class="ph">Nobody asks for anything.</p>`}
-    <div class="pf">${few.length < all.length ? `<button type="button" data-hs-dem-all>All ${all.length} demands</button>` : "<span></span>"}<button type="button" data-hs-dem-clear>Clear</button></div>`;
+        company && d === HR_PT ? ` <small>${tt("co.hire.dem.shops", "· shop roles only")}</small>` : ""}</span><small>${hrNum(n)}</small></label>`).join("")
+    || `<p class="ph">${tt("co.hire.dem.empty", "Nobody asks for anything.")}</p>`}
+    <div class="pf">${few.length < all.length ? `<button type="button" data-hs-dem-all>${tt("co.hire.dem.all", "All {n} demands", {n: all.length})}</button>` : "<span></span>"}<button type="button" data-hs-dem-clear>${
+      tt("co.hire.dem.clear", "Clear")}</button></div>`;
   pop.hidden = false;
   document.querySelectorAll("[data-hs-dem-open]").forEach(b => b.setAttribute("aria-expanded", String(b === anchor)));
   hrPopPlace(anchor, pop);
@@ -16588,7 +16655,7 @@ function hrPopClose(back){
 function hrQuickPlan(sites, cands, used){
   const q = hrUi.quick, H = D.hiring || {};
   const skills = [...new Set((H.sites || []).flatMap(s => s.accepts || []))]
-    .sort((a, b) => (gameName(a) || a).localeCompare(gameName(b) || b));
+    .sort((a, b) => gnCompare(gameName(a) || a, gameName(b) || b));
   if(q.skill && !skills.includes(q.skill)) q.skill = "";
   const at = sites.filter(S => !q.skill || (S.site.accepts || []).includes(q.skill));
   if(q.site && !at.some(S => S.key === q.site)) q.site = "";
@@ -16684,7 +16751,7 @@ const hrQuickNote = (p, Q) => {
 function hrQuickHtml(m){
   const Q = hrQuickModel(m), q = Q.q;
   const l = gwLink(), off = !l || !(l.writes || []).includes("hire");
-  const kind = S => { const k = HR_KIND_WORDS[S.site.kind]; return S.b && S.b.type ? S.b.type : k ? k[0] : S.site.kind; };
+  const kind = S => S.b && S.b.type ? S.b.type : hrKindWord(S.site.kind) || S.site.kind;
   /* The matches that can be picked: not a part-time asker the shop's default leaves out. */
   const pickable = Q.matches.length - (Q.leftOut || 0);
   const k = Q.picks.length, n = Q.fitting === null || Q.fitting === undefined ? pickable : Q.fitting;
