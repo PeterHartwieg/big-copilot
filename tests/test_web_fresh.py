@@ -8,13 +8,17 @@ repository, over a doctored copy of it, and once through the command line
 itself, and assembles a copy with every route to the game shut.
 
 Each class makes its copy once. A test that doctors it puts the original bytes
-back through kept(), so the next test starts from the same copy.
+back through kept(), so the next test starts from the same copy. The command
+line checks run side by side, each on a hard-linked sibling of the copy, and
+the module works out this checkout's UI text once (setUpModule).
 """
 from contextlib import contextmanager
 from pathlib import Path
 import json
+import os
 import hashlib
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -91,6 +95,49 @@ def kept(root, *names, trees=()):
                 place(root, path.relative_to(root), data)
 
 
+def setUpModule():
+    """Work out this checkout's UI text once for the whole module.
+
+    check() and assemble() spend most of their time on the expected UI tables:
+    the call-site scan, then each language's shipped table and public
+    catalogue. All of that reads this checkout only (root redirects just the
+    tables compared or written), and no test here edits this checkout, so the
+    answers cannot change between calls. The comparison against each copy's
+    own web/i18n/ and web/translations/ still runs every time.
+    """
+    from tools import i18n, translation_catalogue
+
+    memo = {}
+
+    def remembered(module, name, key):
+        original = getattr(module, name)
+
+        def wrapper(*args, **kwargs):
+            # Keep the arguments alive with the answer, so an id() in the key
+            # is never reused by a later object.
+            slot = (name, key(*args, **kwargs))
+            if slot not in memo:
+                memo[slot] = (args, kwargs, original(*args, **kwargs))
+            return memo[slot][2]
+
+        patcher = mock.patch.object(module, name, wrapper)
+        patcher.start()
+        unittest.addModuleCleanup(patcher.stop)
+
+    def arg(args, kwargs, index, name, default=None):
+        return args[index] if len(args) > index else kwargs.get(name, default)
+
+    # The scan reads this checkout's sources; its list is only ever read.
+    remembered(i18n, "calls", lambda: ())
+    remembered(i18n, "catalogue", lambda *a, **k: (id(arg(a, k, 0, "found")), arg(a, k, 1, "where", False)))
+    remembered(i18n, "passed", lambda *a, **k: id(arg(a, k, 0, "found")))
+    remembered(i18n, "shipped", lambda *a, **k: (
+        arg(a, k, 0, "lang"), id(arg(a, k, 1, "english")), str(arg(a, k, 2, "root", i18n.ROOT)), id(arg(a, k, 3, "params"))))
+    remembered(translation_catalogue, "catalogue", lambda *a, **k: (
+        arg(a, k, 0, "lang"), id(arg(a, k, 1, "found")), str(arg(a, k, 2, "root", translation_catalogue.ROOT)),
+        tuple(id(v) for v in (arg(a, k, 3, "inputs") or {}).values())))
+
+
 class SharedCopy(unittest.TestCase):
     """One copy of the repository per class, made by fill(root) before its tests."""
 
@@ -106,12 +153,19 @@ class SharedCopy(unittest.TestCase):
         cls.fill(cls.root)
 
 
-def run_check(root):
-    """`python build_web.py --check` against a copy, with nothing of ours in it."""
-    return subprocess.run(
+def start_check(root):
+    """`python build_web.py --check` against a copy, with nothing of ours in it, started."""
+    return subprocess.Popen(
         [sys.executable, str(Path(root, "build_web.py")), "--check"],
-        cwd=root, capture_output=True, text=True,
+        cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
     )
+
+
+def linked_copy(root, target):
+    """A copy of root whose files are hard links to root's. Replace a file
+    (unlink, then write) rather than writing into it, or root changes too."""
+    shutil.copytree(root, target, copy_function=os.link, ignore=shutil.ignore_patterns("__pycache__"))
+    return target
 
 
 class WebFresh(unittest.TestCase):
@@ -298,30 +352,45 @@ class CommandLine(SharedCopy):
     def test_command_line_reports_a_stale_copy(self):
         # unittest runs a class's tests in name order, so this runs after the
         # assemble test: its "up to date" also shows that test left nothing behind.
-        tmp = self.root
-        fresh = run_check(tmp)
-        self.assertEqual(fresh.returncode, 0, fresh.stdout + fresh.stderr)
-        self.assertIn("web/ is up to date", fresh.stdout)
-        with kept(tmp, "web/py/ba_dashboard.py"):
-            copy = Path(tmp, "web/py/ba_dashboard.py")
-            copy.write_bytes(copy.read_bytes() + b"\n# stale\n")
-            stale = run_check(tmp)
-            self.assertEqual(stale.returncode, 1, stale.stdout + stale.stderr)
-            self.assertIn("stale: web/py/ba_dashboard.py", stale.stdout)
+        # The stale run edits a hard-linked sibling, so both checks run at once.
+        with tempfile.TemporaryDirectory() as siblings:
+            sibling = linked_copy(self.root, Path(siblings, "stale"))
+            copy = Path(sibling, "web/py/ba_dashboard.py")
+            data = copy.read_bytes()
+            copy.unlink()  # never write through the link into the shared copy
+            copy.write_bytes(data + b"\n# stale\n")
+            runs = start_check(self.root), start_check(sibling)
+            fresh, stale = [(*run.communicate(), run.returncode) for run in runs]
+        self.assertEqual(fresh[2], 0, fresh[0] + fresh[1])
+        self.assertIn("web/ is up to date", fresh[0])
+        self.assertEqual(stale[2], 1, stale[0] + stale[1])
+        self.assertIn("stale: web/py/ba_dashboard.py", stale[0])
 
     def test_command_line_reports_an_edited_template(self):
         # render() reads the board markup, script and calculation core, so an
         # edit to any changes the page and, through STAMP_INPUTS, the stamp.
-        tmp = self.root
-        for name, before in (("board.html", b"<title>"), ("board.js", b"let D = "), ("open-store-model.js", b"const OpenStoreModel = "),
-                             ("open-factory-model.js", b"const OpenFactoryModel = ")):
-            with self.subTest(name=name), kept(tmp, f"template/{name}"):
-                board = Path(tmp, "template", name)
-                board.write_bytes(board.read_bytes().replace(before, before + b"x", 1))
-                stale = run_check(tmp)
-                self.assertEqual(stale.returncode, 1, stale.stdout + stale.stderr)
-                self.assertIn("stale: web/version.json", stale.stdout)
-                self.assertIn("stale: web/index.html", stale.stdout)
+        # --check writes nothing, so each edit gets its own sibling of the copy,
+        # hard-linked but for the one file it replaces, and the four checks run
+        # at once.
+        edits = (("board.html", b"<title>"), ("board.js", b"let D = "), ("open-store-model.js", b"const OpenStoreModel = "),
+                 ("open-factory-model.js", b"const OpenFactoryModel = "))
+        with tempfile.TemporaryDirectory() as siblings:
+            runs = {}
+            for name, before in edits:
+                sibling = linked_copy(self.root, Path(siblings, name))
+                board = Path(sibling, "template", name)
+                data = board.read_bytes()
+                board.unlink()  # never write through the link into the shared copy
+                board.write_bytes(data.replace(before, before + b"x", 1))
+                runs[name] = start_check(sibling)
+            # Every check finishes before the folder goes, whatever fails.
+            results = {name: (*run.communicate(), run.returncode) for name, run in runs.items()}
+            for name, _before in edits:
+                with self.subTest(name=name):
+                    stdout, stderr, returncode = results[name]
+                    self.assertEqual(returncode, 1, stdout + stderr)
+                    self.assertIn("stale: web/version.json", stdout)
+                    self.assertIn("stale: web/index.html", stdout)
 
     def test_assemble_rebuilds_what_check_compares_without_the_game(self):
         # Every file --check compares is written from the committed sources;
