@@ -1515,6 +1515,14 @@ test('Where to find them: a role places stay open in, how many and where people 
     'Lawyer',
     'Customer Service ' + en('co.hire.find.out', {n:2}) + ' ' + en('co.hire.find.recruiting', {n:1, headhunter:'Headhunter', role:'Customer Service', agency:'Recruitment Agency'}),
   ]);
+  // Two Headhunters recruiting the role: the plural line.
+  const two = await page.evaluate(CS => {
+    D.hiring.recruiting = {[CS]: 2};
+    const el = document.createElement('div');
+    el.innerHTML = hrFindHtml({roles: [{skill: CS, short: 2, pool: Array(3).fill({}), pass: 1}]});
+    return el.querySelector('li .to').textContent.trim();
+  }, CS);
+  assert.equal(two, en('co.hire.find.recruiting', {n: 2, headhunters: 'Headhunters', role: 'Customer Service', agency: 'Recruitment Agency'}));
   // Nothing short, nothing said.
   assert.equal(await page.evaluate(() => hrFindHtml({roles: []})), '');
 });

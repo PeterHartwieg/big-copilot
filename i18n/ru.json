@@ -453,7 +453,7 @@
  "co.hire.find.advice_other": "{roles}: головной офис — найм по каждой должности, специалист: {headhunter}; или агентство: {agency}.",
  "co.hire.find.allout_few": "{n} кандидата, все исключены фильтрами",
  "co.hire.find.allout_many": "{n} кандидатов, все исключены фильтрами",
- "co.hire.find.allout_one": "{n} кандидат, исключён фильтрами",
+ "co.hire.find.allout_one": "{n} кандидат, все исключены фильтрами",
  "co.hire.find.allout_other": "{n} кандидата, исключено фильтрами",
  "co.hire.find.out_few": "ещё {n:,} исключено фильтрами",
  "co.hire.find.out_many": "ещё {n:,} исключено фильтрами",
