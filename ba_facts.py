@@ -199,19 +199,27 @@ def resolve(save, baseline):
             records = []
             for row in table.values():
                 row.update(factsUnavailable=True, layoutKnown=False, layoutCapacity=None, m=None)
+        # One baseline scan per (type, size), not per record: up to MAX_ROWS
+        # records against the whole table otherwise.
+        areas_of = {}
         for street, n, size, version, area in records:
             row = table.get((street, n))
             if row is None:
                 continue
-            areas = {r["m"] for r in baseline.values() if r.get("t") == row.get("t") and r.get("z") == size}
+            group = row.get("t"), size
+            areas = areas_of.get(group)
+            if areas is None:
+                areas = areas_of[group] = {r["m"] for r in baseline.values()
+                                           if r.get("t") == group[0] and r.get("z") == size}
             known = (row.get("t"), size, version) in layouts and len(areas) == 1
             row.update(z=size, v=version, m=next(iter(areas)) if known else None,
                        propertyArea=area, factsSource="alcware", layoutKnown=known)
             if not known:
                 row.update(layoutCapacity=None, factsUnavailable=True)
+    # save.facts is set only by ba_save.load_save(), after unpack() validated
+    # it against the save's hash and load_save() matched its character.
     facts = getattr(save, "facts", None)
     if facts:
-        validate(facts, character=save.root.get("characterId"))
         types = facts.get("marketingTypes")
         present = {(item["street"], item["number"]) for item in facts["buildings"]}
         for key, row in table.items():

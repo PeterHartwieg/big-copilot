@@ -3695,14 +3695,13 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
                         recipes=recipes, planning={}, estate=estate,
                         base_promotion=(save.deref(root.get("gameVariables")) or {}).get(
                             "baseCustomerPromotionMultiplier", 0.55))
-    alerts = _alerts(
-        businesses, supply, chains, trends, hype, hour_findings, grids, day, gate, agencies=agencies, estate=estate
-    )
-    # The same findings with factory lines sized on demand, for the board's
-    # Demand switch: a second pass over the facts already built, not a second
-    # supply model.
-    alerts_demand = _alerts(
-        businesses, supply, chains, trends, hype, hour_findings, grids, day, gate, "dem", agencies=agencies, estate=estate
+    # The second result is the same findings with factory lines sized on
+    # demand, for the board's Demand switch: the supply findings again over the
+    # facts already built, not a second supply model, and every other finding
+    # shared.
+    alerts, alerts_demand = _alerts(
+        businesses, supply, chains, trends, hype, hour_findings, grids, day, gate, ("cap", "dem"),
+        agencies=agencies, estate=estate,
     )
 
     # Every sentence written with msg() carries its key and params to the page
@@ -20214,10 +20213,10 @@ def _alerts(
     grids: list,
     day: int,
     gate: float,
-    mode: str = "cap",
+    mode: str | tuple = "cap",
     agencies: list = (),
     estate: dict | None = None,
-) -> dict:
+) -> dict | list:
     """Only things worth acting on, with a number and a deadline where one exists.
 
     Two filters run over everything below. Findings that repeat across many
@@ -20225,6 +20224,10 @@ def _alerts(
     carry a dollar figure have to clear the materiality gate — a fraction of a
     day's profit — or they are counted at the foot of the panel instead of read
     out. A site that cannot trade at all is never counted away.
+
+    ``mode`` sizes factory lines on capacity ("cap") or on demand ("dem"). Only
+    the supply helpers read it, so a tuple of modes builds every other finding
+    once and returns one result per mode, in order (extract() asks for both).
     """
     # Real estate first (_estate_owned()): the company-wide rent line leads the
     # opportunities and, on tax eve, the buildings to buy lead the warnings.
@@ -20686,13 +20689,11 @@ def _alerts(
             key=b["key"],
         )
 
-    # A shop only runs dry if a day of selling outruns the morning top-up.
-    found.extend(_shelf_notes(businesses, supply, silent, mode))
-
-    # A depot only runs dry if it cannot reach the next delivery by more than a
-    # few hours, and an order is only wrong if it cannot cover the week it has to
-    # cover.
-    found.extend(_import_notes(businesses, supply, silent, mode))
+    # The supply findings that depend on the mode go in here, between the
+    # findings above and those below (by_mode()). note() appends to whatever
+    # `found` is bound to when it is called, so rebinding `found` here sends
+    # every note() below into the second half while `head` keeps the first.
+    head, found = found, []
 
     # --- what the hour-by-hour grid says that a daily total cannot
     # Five shops hitting the same 30/h ceiling in the same hours is one finding
@@ -20815,11 +20816,29 @@ def _alerts(
             key=finding["key"],
         )
 
-    found.extend(_idle_notes(businesses, supply["idle"], silent, mode))
-    found.extend(_feed_notes(businesses, supply.get("factories", {}), silent, mode))
-    found.extend(_staff_notes(businesses, supply.get("factories", {}), silent, mode))
-    found.extend(_unnamed_notes(businesses, supply.get("factories", {}), silent))
-    return _condense(found, gate)
+    middle = found
+    factories = supply.get("factories", {})
+
+    def by_mode(mode: str) -> dict:
+        # _condense() pops fields off the rows it is given, so each mode gets
+        # its own copies of the shared findings.
+        rows = [dict(f) for f in head]
+        # A shop only runs dry if a day of selling outruns the morning top-up.
+        rows.extend(_shelf_notes(businesses, supply, silent, mode))
+        # A depot only runs dry if it cannot reach the next delivery by more than a
+        # few hours, and an order is only wrong if it cannot cover the week it has to
+        # cover.
+        rows.extend(_import_notes(businesses, supply, silent, mode))
+        rows.extend(dict(f) for f in middle)
+        rows.extend(_idle_notes(businesses, supply["idle"], silent, mode))
+        rows.extend(_feed_notes(businesses, factories, silent, mode))
+        rows.extend(_staff_notes(businesses, factories, silent, mode))
+        rows.extend(_unnamed_notes(businesses, factories, silent))
+        return _condense(rows, gate)
+
+    if isinstance(mode, str):
+        return by_mode(mode)
+    return [by_mode(m) for m in mode]
 
 
 def _fact_labels(businesses: list, supply: dict) -> dict:
