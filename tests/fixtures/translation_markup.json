@@ -16,7 +16,10 @@
     ["tags", "＜b＞{n}＜/b＞ <b>negozi</b> <span class=\"ok\">pronti</span>"],
     ["plain", "{n} ＜img＞ AT&T"],
     ["plain", "{n} Q&As, R&D, F&E e AT&T"],
-    ["plain", "{n} &Apostrofo &nbspx"]
+    ["plain", "{n} &Apostrofo &nbspx"],
+    ["plain", "{n} &apoſ"],
+    ["plain", "{n} &ſup;"],
+    ["plain", "{n} &#٣;"]
   ],
   "invalid": [
     ["tags", "{n} negozi pronti"],
@@ -53,6 +56,8 @@
     ["plain", "{n} &GT;"],
     ["plain", "{n} &quotx"],
     ["plain", "{n} &nbsp grazie"],
-    ["plain", "{n} &apos"]
+    ["plain", "{n} &apos"],
+    ["plain", "{n} &nbsp١"],
+    ["plain", "{n} &nbspİ"]
   ]
 }

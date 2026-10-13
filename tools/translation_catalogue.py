@@ -32,7 +32,9 @@ def digest(value):
 # The tags a community text may carry are the English's own, copied exactly.
 # A bare '>' ("a -> b") is text to HTML and stays allowed; a bare '<' is not.
 MARKUP = re.compile(r'<[^<>]*>')
-TAG = re.compile(r'<(/?)([a-z][a-z\d]*)(?=[\s>/])', re.I)
+# re.ASCII here and in valid_text(): JS regexes without the u flag match \d
+# and case only in ASCII ("١" is no digit, "ſ" no "s"), and the copies must agree.
+TAG = re.compile(r'<(/?)([a-z][a-z\d]*)(?=[\s>/])', re.I | re.ASCII)
 VOID_TAGS = {'br'}
 
 
@@ -77,7 +79,7 @@ def valid_text(text, rule):
     # Identical to the API validator and the hosted loader: no control
     # characters or entities, and markup only as keeps_markup() allows.
     if re.search(r'[\x00-\x08\x0b-\x1f\x7f-\x9f]', text) or re.search(
-            r'&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;|lt|gt|amp|quot|(?:apos|nbsp)(?![a-z\d]))', text, re.I):
+            r'&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;|lt|gt|amp|quot|(?:apos|nbsp)(?![a-z\d]))', text, re.I | re.ASCII):
         return False
     if re.search(r'[{}]', i18n.FIELD.sub('', text)):
         return False
