@@ -87,8 +87,9 @@ thead th[data-i]{cursor:pointer; user-select:none}
 thead th[data-i]:hover{color:var(--ink)}
 thead th svg.sort{display:inline-block; width:11px; height:11px; stroke:var(--accent); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vertical-align:-1px; margin-left:5px}
 thead th[data-dir="desc"] svg.sort{transform:rotate(180deg)}
-/* A Supply header sorts from a button inside it, so the keyboard reaches it
-   and the cell stays a column header. The button takes the header's type. */
+/* A sortable header sorts from a button inside it (sortTh()), so the keyboard
+   reaches it and the cell stays a column header. The button takes the
+   header's type. */
 thead th .supply-sort{all:unset;cursor:pointer}
 thead th .supply-sort:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
 tr.kid.on td{background:var(--accent-soft)}
@@ -4613,6 +4614,11 @@ section.od-updating{background-image:linear-gradient(90deg,transparent,var(--acc
   </div>
 </nav>
 <div class="wrap">
+  <!-- The page column is the document's main landmark, and its h1 names the
+       place on screen for screen readers (paintShell()); the lit tabs already
+       show it. The footer and the phone's tab bar stay outside it. -->
+<main id="main">
+  <h1 class="nx-sr" id="pageTitle"></h1>
   <!-- A host page (the in-browser board) fills these with its source controls;
        the local server page leaves them empty and they take no room. -->
   <div class="source-row" id="sourceRow"></div>
@@ -4814,6 +4820,7 @@ section.od-updating{background-image:linear-gradient(90deg,transparent,var(--acc
       <p class="quiet" style="margin-top:44px" data-tt="wiki.absent">The wiki is not part of this build.</p>
     </div>
   </div>
+</main>
 <!--__FOOTER__-->
   <nav class="nx-tabs" id="phoneNav" aria-label="Places" data-tt-aria-label="nav.label.phone"></nav>
 </div>
