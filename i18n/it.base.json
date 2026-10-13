@@ -955,6 +955,7 @@
  "comm.tr.missingPlaceholder": "Keep the required placeholders shown above.",
  "comm.tr.next": "Next",
  "comm.tr.noAlternatives": "No alternatives yet. You can suggest new wording.",
+ "comm.tr.noEncoded": "Type characters as they are, not as encoded HTML codes.",
  "comm.tr.noMatches": "No matching phrases.",
  "comm.tr.notTranslated": "Not translated",
  "comm.tr.offline": "You are offline. Reconnect and try again.",

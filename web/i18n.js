@@ -304,7 +304,7 @@ function ttKeepsMarkup(text, markup = []){
 function ttCommunityValid(text, rule){
   if(typeof text !== "string" || !text.trim() || !rule || [...text].length > Math.min(rule.maxLength || 2000, 2000)) return false;
   if(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(text)
-    || /&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;)/i.test(text)
+    || /&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;?)/i.test(text)
     || !ttKeepsMarkup(text, rule.markup)
     || /[{}]/.test(text.replace(TT_SPEC, ""))) return false;
   const tokens = new Set([...text.matchAll(TT_SPEC)].map(m => `${m[1]}:${m[2] || ""}`));

@@ -955,6 +955,7 @@
  "comm.tr.missingPlaceholder": "Mantieni i segnaposto richiesti indicati sopra.",
  "comm.tr.next": "Avanti",
  "comm.tr.noAlternatives": "Nessuna alternativa ancora. Puoi proporre un nuovo testo.",
+ "comm.tr.noEncoded": "Scrivi i caratteri così come sono, non come codici HTML codificati.",
  "comm.tr.noMatches": "Nessuna frase corrispondente.",
  "comm.tr.notTranslated": "Non tradotta",
  "comm.tr.offline": "Sei offline. Riconnettiti e riprova.",

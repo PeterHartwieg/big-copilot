@@ -77,7 +77,7 @@ def valid_text(text, rule):
     # Identical to the API validator and the hosted loader: no control
     # characters or entities, and markup only as keeps_markup() allows.
     if re.search(r'[\x00-\x08\x0b-\x1f\x7f-\x9f]', text) or re.search(
-            r'&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;)', text, re.I):
+            r'&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;?)', text, re.I):
         return False
     if re.search(r'[{}]', i18n.FIELD.sub('', text)):
         return False

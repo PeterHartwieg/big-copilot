@@ -955,6 +955,7 @@
  "comm.tr.missingPlaceholder": "gpt-6.1-sol",
  "comm.tr.next": "gpt-6.1-sol",
  "comm.tr.noAlternatives": "gpt-6.1-sol",
+ "comm.tr.noEncoded": "claude-opus-5-5",
  "comm.tr.noMatches": "gpt-6.1-sol",
  "comm.tr.notTranslated": "gpt-6.1-sol",
  "comm.tr.offline": "gpt-6.1-sol",

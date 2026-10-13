@@ -180,7 +180,7 @@
   }
   function close(e, discard) {interaction++;if(discard)drafts.delete(draftKey(e));open=null;errors.delete(entryKey(e));updateUrl(deepKey);render(e.key+(openMode==='edit'?':edit':':alternatives'));}
   function validate(e,text) {
-    if(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(text)||/&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;)/i.test(text))return tt('comm.tr.plainText','Use plain text without HTML or encoded markup.');
+    if(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(text)||/&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;?)/i.test(text))return e.validation?.markup?tt('comm.tr.noEncoded','Type characters as they are, not as encoded HTML codes.'):tt('comm.tr.plainText','Use plain text without HTML or encoded markup.');
     if(!ttKeepsMarkup(text,e.validation?.markup))return e.validation?.markup?tt('comm.tr.tags','Use the tags shown above, each as often as in the English, and close them in the order they open.'):tt('comm.tr.plainText','Use plain text without HTML or encoded markup.');
     if(!text.trim())return tt('comm.tr.enterText','Enter a translation.');
     if([...text].length>(e.validation?.maxLength||2000))return tt('comm.tr.tooLong','Translation is too long.');
