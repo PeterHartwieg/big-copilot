@@ -2211,8 +2211,27 @@
    "capInitial": false,
    "delivery": 250,
    "installFee": 586,
+   "office": {
+    "always": 3,
+    "day": [
+     8,
+     22
+    ],
+    "fullDoor": 50,
+    "weekend": [
+     6,
+     0
+    ]
+   },
    "prices": 1.0,
    "promo": 0.55,
+   "ramp": [
+    0.55,
+    0.92,
+    0.94,
+    0.97,
+    0.99
+   ],
    "satisfaction": 95,
    "tax": 0,
    "wageBase": {

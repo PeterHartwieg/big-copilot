@@ -12891,7 +12891,7 @@ function osUntilHtml(plan){
    another business opens in its place, the plan says so and attaches to
    nothing: it is history. A plan made before any of this was kept compares
    the investment only. */
-const OS_SNAP_DAYS = 30, OS_RAMP_SHOWN = 5;
+const OS_SNAP_DAYS = 30;
 const OS_SNAP_INV = ["furniture", "fee", "deposit", "decor", "delivery", "firm", "self"];
 /* The single figure a range is shown as: its middle (the range is on hover). */
 const OS_MID = (OS_LOW + OS_HIGH) / 2;
@@ -13130,7 +13130,7 @@ function osRoiTable(row, snap, planMode, o){
     rows.push(tr(tt("gr.os.roi.day", "Profit a day"), tt("gr.os.roi.day.sub", {one: "the last day", other: "the last {n} days"}, {n: recent}),
       osMidMoney(lo, hi), m(rate), rate == null ? `<td></td>` : Math.abs(rate - mid) < 0.5 ? `<td class="d">${tt("gr.os.roi.onPlan", "on plan")}</td>`
         : `<td class="${rate >= lo ? "d" : "dn"}">${osSigned(rate - mid)}</td>`));
-    const sold = osSelling(row), n = Math.min(OS_RAMP_SHOWN, sold.length);
+    const sold = osSelling(row), n = Math.min(osCore().rampDays(), sold.length);
     if(n && snap.curve && snap.curve.length >= n){
       const was = Math.round(snap.curve.slice(0, n).reduce((a, b) => a + b, 0) * OS_MID), now = sold.slice(0, n).reduce((a, d) => a + d[1], 0);
       rows.push(tr(tt("gr.os.roi.ramp", {one: "The first day", other: "The first {n} days"}, {n}),
@@ -25849,6 +25849,32 @@ function gwCheckLines(found){
   return found.length ? gwCall("warn", "alert", `${tt("sp.gw.chk.head", {one: "This week breaks a rule or a demand for {n} person:",
     other: "This week breaks a rule or a demand for {n} people:"}, {n: found.length})}<ul class="gw-chk">${lines}</ul>`) : "";
 }
+/* The hours of the day a week (`days`, as a write sends it) leaves fewer
+   people on than the game has now, per station kind and skill, and no more
+   than the plan wants there (an hour it wants fewer on is the plan's to cut).
+   Only while the plan waits on somebody: then their entries go out empty.
+   The full-cover plan is placed without holding anybody where they work now
+   unless the shop is open around the clock already (issue #446), so its
+   review says it. Returns how many weekday hours. */
+function gwFewerNow(row, days){
+  const plan = (row || {}).shifts || [];
+  const waits = new Set((((row || {}).addPeople || {}).assign || []).map(x => x.p));
+  if(!plan.some(s => spNobody(s.p) || waits.has(s.p))) return 0;
+  const stations = (row.stations || []), index = new Map(stations.map((st, i) => [st && st.id, i]));
+  const kind = i => ((stations[i] || {}).skill) || "";
+  const count = (list, at) => {
+    const out = new Map();
+    list.forEach(s => { for(let h = s.f; h < s.t; h++){ const k = `${at(s)}|${s.d}|${h}`; out.set(k, (out.get(k) || 0) + 1); } });
+    return out;
+  };
+  const now = count(((row.current || {}).list || []).filter(s => !spNobody(s.p)), s => kind(s.s));
+  const planned = count(plan, s => kind(s.s));
+  const sent = count((days || []).flatMap(({d, shifts}) => (shifts || []).map(s => ({d, f: s.f, t: s.t, s: index.get(s.itemInstanceId)}))),
+    s => kind(s.s));
+  const hours = new Set();
+  now.forEach((n, k) => { if((sent.get(k) || 0) < Math.min(n, planned.get(k) || 0)) hours.add(k.split("|").slice(1).join("|")); });
+  return hours.size;
+}
 /* The week a write sends, from the plan's rows, their station and person
    indices turned back into the game's ids. Only the people already working
    here: a hire's entry has nobody on it and a bench member's somebody not
@@ -26071,6 +26097,10 @@ function gwSchedule(key){
           ? tt("sp.pick.openall", "Every open hour") : tt("sp.pick.open", "Open hours")}</span><span class="gw-only">${whole}</span>`
         : !row.office && spCoverOnly(row) ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.cover", "Cleaning and security")}</span><span class="gw-only">${whole}</span>`
         : `<span class="gw-plan">${gwSvg("roster")}${tt("sp.pick.demand", "Demand plan")}</span><span class="gw-only">${whole}</span>`;
+      const fewer = row.full && phase === "ready" ? gwFewerNow(row, week.days) : 0;
+      const short = fewer ? gwCall("info", "info", tt("sp.gw.sch.fewer", {
+        one: "<b>{n} hour of the week</b> has fewer people than now until you add the people this plan waits on.",
+        other: "<b>{n} hours of the week</b> have fewer people than now until you add the people this plan waits on."}, {n: fewer})) : "";
       const kept = week.kept && !row.office ? gwCall("info", "info", tt("sp.gw.sch.kept", {
         one: "The {n} serving entry in the game stays as it stands: this plan covers cleaning and security only.",
         other: "The {n} serving entries in the game stay as they stand: this plan covers cleaning and security only."}, {n: week.kept})) : "";
@@ -26113,7 +26143,7 @@ function gwSchedule(key){
           {name: spEsc(w.name || tt("sp.gw.someone.cap", "Someone")), n: Number(w.hours), day: WEEKDAY_NAMES[w.d] ? ttDay(w.d) : tt("sp.gw.aday", "a day")})));
       return `<div class="gw-planrow">${which}</div>`
         + gwTiles([[labels[0], now.length, sentList.length], [labels[1], gwHours(now), gwHours(sentList)], [labels[2], nowPeople, afterPeople]])
-        + gwWeek(now, week.days) + kept + toggle
+        + gwWeek(now, week.days) + kept + short + toggle
         + (left.length ? `<div class="gw-box">${gwCall("", "exit", tt("sp.gw.left.head", "<b>No hours here after this</b>"))}<div class="gw-pills">${left.join("")}</div></div>` : "")
         /* People elsewhere who fit come before any hire (spRowLess()): said
            in the fixed strip with the add box. */

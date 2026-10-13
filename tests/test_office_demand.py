@@ -268,9 +268,14 @@ class RetainedDutyTests(unittest.TestCase):
             for hour in save.items(day['hourReports']):
                 hour['customers'] = int(day['dayNumber'] % 7 not in (0, 6) and hour['hour'] < 12)
         row = self.rerun(save, business)
-        self.assertEqual(sum(s['t']-s['f'] for s in row['shifts'] if s['p'] is not None), 20)
+        # The second computer 08-12 waits on a hire, so the lawyer keeps the
+        # 08-16 they work now rather than moving to 08-12 and leaving 12-16
+        # empty until the hire comes (issue #446): 40 professional hours and
+        # the 10 retained ones are their 50, and nobody is cut.
+        self.assertEqual(sum(s['t']-s['f'] for s in row['shifts'] if s['p'] is not None), 40)
         self.assertEqual(row['shortHours'], [])
-        self.assertEqual(row['_hire']['fewer'][0]['hours'], 30)
+        self.assertEqual(row['_hire']['fewer'], [])
+        self.assertEqual(row['headcount']['ba:skill_lawyer']['hire'], 1)
 
     def test_zero_professional_need_does_not_leave_a_retained_worker_below_minimum(self):
         _, save, business = plan(customers=0, staffed=1, support=True)

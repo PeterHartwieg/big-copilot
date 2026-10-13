@@ -2033,8 +2033,7 @@ def _premises(save: Save, names: Names, market: dict, estate: dict | None = None
     price (Real estate's rule, at `estate`'s rent multiplier; 1 without one).
     """
     mult = estate["mult"]["value"] if estate else 1
-    per_year = estate["perYear"] if estate else (
-        (save.deref(save.root.get("gameVariables")) or {}).get("daysPerYear") or 60)
+    per_year = estate["perYear"] if estate else _days_per_year(save.deref(save.root.get("gameVariables")))
     rent_paid = _rent_paid(save)
     table = load_buildings(save)
     caps = _door_caps(names)
@@ -2283,7 +2282,7 @@ def _best_price(market_rent: float) -> float:
 def _property_tax_day(row: dict, sqm: float, per_year: int) -> float:
     """RealEstate.TaxesAmount spread over the tax year's days."""
     return (sqm * REAL_ESTATE_TYPES.get(row.get("t"), 0) * REAL_ESTATE_HOODS.get(row.get("h"), 0)
-            * PROPERTY_TAX_PER_SQM / (per_year or 60))
+            * PROPERTY_TAX_PER_SQM / (per_year or DAYS_PER_YEAR))
 
 
 def _is_villa(row: dict) -> bool:
@@ -2349,7 +2348,7 @@ def _estate_owned(save: Save, names: Names, mods: dict) -> dict:
     """
     root = save.root
     table = load_buildings(save)
-    per_year = (save.deref(root.get("gameVariables")) or {}).get("daysPerYear") or 60
+    per_year = _days_per_year(save.deref(root.get("gameVariables")))
     rented = {_address_of(r): r for r in save.items(root.get("BuildingRegistrations")) if r.get("RentedByPlayer")}
     summaries = sorted(save.items(root.get("financialSummaries")), key=lambda s: s.get("dayNumber") or 0)
     paid_by_day = []
@@ -2464,9 +2463,9 @@ def _tax_period(save: Save) -> dict:
     """
     root = save.root
     gv = save.deref(root.get("gameVariables")) or {}
-    per_year = gv.get("daysPerYear") or 60
+    per_year = _days_per_year(gv)
     if not isinstance(per_year, int) or per_year < 1:
-        per_year = 60
+        per_year = DAYS_PER_YEAR
     day = root.get("Day") or 0
     if not isinstance(day, int) or day < 0:
         day = 0
@@ -3694,7 +3693,7 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
                         stmt_history=stmt_history, daily=daily, market=market,
                         recipes=recipes, planning={}, estate=estate,
                         base_promotion=(save.deref(root.get("gameVariables")) or {}).get(
-                            "baseCustomerPromotionMultiplier", 0.55))
+                            "baseCustomerPromotionMultiplier", HOUSE_RULE_NORMAL["baseCustomerPromotionMultiplier"]))
     # The second result is the same findings with factory lines sized on
     # demand, for the board's Demand switch: the supply findings again over the
     # facts already built, not a second supply model, and every other finding
@@ -3818,7 +3817,7 @@ def _net_worth(root: dict, history, character: str, day: int) -> dict:
 
 def _city_date(save: Save, day: int) -> str:
     """In-game day number rendered as a year/day-of-year, using the save's calendar."""
-    per_year = save.deref(save.root.get("gameVariables")).get("daysPerYear") or 60
+    per_year = _days_per_year(save.deref(save.root.get("gameVariables")))
     year = (day - 1) // per_year + 1
     return f"Year {year}, day {(day - 1) % per_year + 1} of {per_year}"
 
@@ -3850,6 +3849,23 @@ HOUSE_RULES = [
      "surcharge for rushing an import"),
     ("taxPercentage", "Tax rate", "%", 5, "up", "annual rate from the IRS"),
 ]
+
+# Normal's value of each slider, for a save that does not hold the setting.
+HOUSE_RULE_NORMAL = {key: normal for key, _name, _unit, normal, _harder, _what in HOUSE_RULES}
+# GameVariables.daysPerYear on every preset: the tax year, and the year the
+# calendar and the loans count in.
+DAYS_PER_YEAR = 60
+
+
+def _house_rule(gv: dict, key: str) -> float:
+    """The save's custom-game setting `key`, or Normal's when it holds none (or 0)."""
+    return (gv or {}).get(key) or HOUSE_RULE_NORMAL[key]
+
+
+def _days_per_year(gv: dict) -> int:
+    """The save's year length in days, DAYS_PER_YEAR when it holds none."""
+    return (gv or {}).get("daysPerYear") or DAYS_PER_YEAR
+
 
 # The game's Difficulty enum, which is what the save's ``difficulty`` holds.
 DIFFICULTY_SLOTS = {0: "Custom", 1: "Easy", 2: "Normal", 3: "Hard"}
@@ -7176,7 +7192,7 @@ def _supply_depot_rows(walked: dict, eats: dict, made: dict, *, businesses: list
             landing = supply["arrives"] if supply["active"] and rounds else None
             def cover_walk(extra):
                 remaining, cover, runs_out = line["units"], 0.0, None
-                for ahead in range(60):
+                for ahead in range(LASTS_CAP):
                     share = today if ahead == 0 else 1.0
                     # On a round-fed site's delivery day only the round
                     # leaves before the drop; the lines eat after it.
@@ -7194,7 +7210,7 @@ def _supply_depot_rows(walked: dict, eats: dict, made: dict, *, businesses: list
                     remaining -= today_use
                     cover += share
                 else:
-                    cover = 60.0
+                    cover = float(LASTS_CAP)
                 return cover, runs_out
 
             cover, runs_out = cover_walk(before)
@@ -8728,7 +8744,7 @@ def _supply_facts(ctx: dict) -> dict:
         p = {}
         if paused and use and not covered:
             p["paused"] = True
-            p["cover"] = row["cover"] if row else (stock / (use / 7) if use else 60)
+            p["cover"] = row["cover"] if row else (stock / (use / 7) if use else LASTS_CAP)
         elif not entry and use and not covered:
             # Nothing brings it here. Where every site it tops up has an
             # import of its own, that import is the one to raise (its fact
@@ -9179,7 +9195,7 @@ def _supply_facts(ctx: dict) -> dict:
                     # covers the line, the player most likely paused it
                     # because the depot feeds the line now (why topup).
                     if st in ("short", "noplan") or (st == "stalled" and why == "notDrawn"):
-                        cover = stock / row["perDay"] if row["perDay"] else 60
+                        cover = stock / row["perDay"] if row["perDay"] else LASTS_CAP
                         ist, iwhy, ilvl = "paused", "order", "warn" if cover >= 7 else "critical"
                     else:
                         ist, iwhy, ilvl = "paused", "topup", "info"
@@ -12570,6 +12586,106 @@ def _without_pins(slots: list, pins: list) -> list:
     return out
 
 
+# --- while the plan waits on somebody (issue #446)
+# A write sends the plan's entries for the people already here and leaves the
+# ones that wait on a hire or a bench member empty until the player adds them.
+# A plan that moved somebody off an hour they work now, and gave that hour to
+# a hire, so writes a week with fewer people in that hour than the game has.
+# Until nobody is waited on, the people here keep the hours they cover now
+# wherever the plan still wants them covered.
+def _waiting_drops(shifts: list, standing: list, role_keys: dict) -> tuple:
+    """Where the plan, written now, leaves an hour fewer people than it has: (entries, hours).
+
+    Per role, day and hour: the plan's entries for people already here
+    against the people on it now, capped at what the plan wants there (an hour
+    it wants fewer people on is the plan's to cut). The entries as they stand
+    on such an hour, and the person-hours missing across them. Nothing when no
+    entry of the plan waits on somebody.
+    """
+    if not any(s["employee"] is None or s.get("fromBench") for s in shifts):
+        return [], 0
+    planned, here, now = (collections.Counter() for _ in range(3))
+    for s in shifts:
+        role = role_keys.get(s["station"])
+        for hour in range(s["from"], s["to"]):
+            planned[role, s["wd"], hour] += 1
+            if s["employee"] is not None and not s.get("fromBench"):
+                here[role, s["wd"], hour] += 1
+    for row in standing:
+        for hour in range(row["from"], row["to"]):
+            now[role_keys.get(row["station"]), row["wd"], hour] += 1
+    short = {key: min(count, planned[key]) - here[key] for key, count in now.items()
+             if here[key] < min(count, planned[key])}
+    return [row for row in standing
+            if any((role_keys.get(row["station"]), row["wd"], hour) in short
+                   for hour in range(row["from"], row["to"]))], sum(short.values())
+
+
+def _hold_rows(rows: list, slots: list, role_keys: dict, by_id: dict, base: dict,
+               taken=()) -> list:
+    """Entries as they stand, kept as pins, inside the hours the plan wants covered.
+
+    Each entry on its own station where the plan staffs that station then;
+    what is left of it, where the plan staffs another station of the same
+    role for that run of hours, on that one. Never an hour a pin in `taken`
+    or an earlier entry holds, and only what `_can_work()` allows on top of
+    `base` (the week before this site), in pieces no longer than a shift.
+    """
+    wanted = collections.defaultdict(set)
+    shape = {}
+    for slot in slots:
+        wanted[slot["station"], slot["wd"]].update(range(slot["from"], slot["to"]))
+        shape[slot["station"]] = (slot["skill"], slot["kind"])
+    for row in taken:
+        wanted[row["station"], row["wd"]].difference_update(range(row["from"], row["to"]))
+    by_role = collections.defaultdict(list)
+    for station in shape:
+        by_role[role_keys.get(station)].append(station)
+    weeks, out = {}, []
+
+    def place(person, station, wd, hours):
+        week = weeks.setdefault(person["id"], _copy_state(base[person["id"]])
+                                if base and person["id"] in base else _fresh_state())
+        left = set(hours)
+        for start, end in _runs(hours):
+            for low, high in _cut_run(start, end):
+                skill, kind = shape[station]
+                piece = {"wd": wd, "station": station, "skill": skill,
+                         "from": low, "to": high, "kind": kind}
+                if not _can_work(person, week, piece):
+                    continue
+                week["hours"] += high - low
+                week["busy"][wd].update(range(low, high))
+                week["days"].add(wd)
+                wanted[station, wd].difference_update(range(low, high))
+                left.difference_update(range(low, high))
+                out.append(dict(piece, employee=person["id"], name=person["name"],
+                                hours=high - low, fromBench=False))
+        return left
+
+    order = sorted(rows, key=lambda r: (str(r["employee"]), r["wd"], r["from"], r["to"],
+                                        str(r["station"])))
+    rest = []
+    for row in order:
+        person = by_id.get(row["employee"])
+        if person is None:
+            continue
+        hours = [h for h in range(row["from"], row["to"])
+                 if h in wanted.get((row["station"], row["wd"]), ())]
+        left = place(person, row["station"], row["wd"], hours) if hours else set()
+        left |= set(range(row["from"], row["to"])) - set(hours)
+        if left:
+            rest.append((row, person, left))
+    for row, person, left in rest:
+        for start, end in _runs(left):
+            run = set(range(start, end))
+            for station in by_role.get(role_keys.get(row["station"]), ()):
+                if station != row["station"] and run <= wanted[station, row["wd"]]:
+                    place(person, station, row["wd"], sorted(run))
+                    break
+    return out
+
+
 def _current_roster(save: Save, building: dict, stations: dict) -> dict:
     """The site's schedule as it stands, to show beside the plan.
 
@@ -13921,10 +14037,18 @@ def _staffing(
         grid = site["grid"]
         offered = any(s["skill"] for s in grid["stations"]) and any(grid["open"])
         try:
+            # Full cover keeps the people here on the hours they work now while
+            # it waits on a hire (issue #446) only where the shop is open around
+            # the clock already, so the week is the hours it runs: holding them
+            # in every shop's longest week cost the board most of a second
+            # placement of it (+84% extract on the largest save). Elsewhere the
+            # write's review says how many hours it leaves fewer people on than
+            # now until the hires come (gwFewerNow() in the board script).
             full = _place_week(
                 grid, _full_need(grid), ALL_DAY_OPEN, site["coverPosts"],
                 site["own"] + site_bench, people, business, site_bench, scratch,
                 current=site["current"]["list"],
+                keep=_open_all_hours(grid["open"]),
             )
             if not offered:
                 opened = None
@@ -13934,7 +14058,7 @@ def _staffing(
                 opened = _place_week(
                     grid, _open_need(site), grid["open"], site["coverPosts"],
                     site["own"] + site_bench, people, business, site_bench, opened_scratch,
-                    current=site["current"]["list"],
+                    current=site["current"]["list"], keep=True,
                 )
             row = _finish_site(site, full, names, people, opened)
         except Exception as exc:
@@ -14608,7 +14732,7 @@ def _serving_hours(shifts: list) -> int:
 
 
 def _place_week(grid, need, slots_open, cover_posts, pool, people, business, bench, state,
-                groups=None, current=None, hires=True, fixed=None) -> dict:
+                groups=None, current=None, hires=True, fixed=None, keep=False) -> dict:
     """One week of shifts for one site: _place_cut_week(), cut again where that helps.
 
     The plain cut (_cut_run()) halves a 24-hour day into 0-12 and 12-24, and both
@@ -14624,7 +14748,8 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     lines. Everywhere else the week is the plain one, line for line.
     """
     args = (grid, need, slots_open, cover_posts, pool, people, business, bench)
-    kwargs = {"groups": groups, "current": current, "hires": hires, "fixed": fixed}
+    kwargs = {"groups": groups, "current": current, "hires": hires, "fixed": fixed,
+              "keep": keep}
     kept = {pid: _copy_state(entry) for pid, entry in state.items()}
     week = _place_cut_week(*args, state, **kwargs)
     week.pop("snapMoved")
@@ -14634,6 +14759,9 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     best = None
     for snap in (True, False):
         trial = {pid: _copy_state(entry) for pid, entry in kept.items()}
+        # With `keep`, each re-cut week is held against its own re-cut plain
+        # week (issue #446), not against the plain cut above; the rank then
+        # picks among weeks that each passed that guard.
         other = _place_cut_week(*args, trial, cuts=cuts, snap=snap, **kwargs)
         moved = other.pop("snapMoved")
         if _week_rank(other) < _week_rank(best[0] if best else week):
@@ -14699,7 +14827,7 @@ def _week_rank(week: dict) -> tuple:
 
 def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business, bench, state,
                     groups=None, current=None, hires=True, fixed=None, cuts=None,
-                    snap=True) -> dict:
+                    snap=True, keep=False) -> dict:
     """One week of shifts for one site, from one need curve: the placer itself.
 
     Everything after the need curve, in the scope's order: a. per-station cover
@@ -14715,7 +14843,11 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
     may work open with no hire weeks, for a caller that only asks whether a
     pool covers the week. `cuts` is extra cut points per skill
     (_blackout_cuts()), and `snap` how _cut_at() treats an edge near a run's
-    end; only _place_week() passes them.
+    end; only _place_week() passes them. `keep` is for a caller whose write
+    replaces the week with the plan's entries for the people already here:
+    while the plan waits on a hire or a bench member, nobody is moved off an
+    hour they work now if that leaves the hour fewer people than it has
+    (_waiting_drops(), _hold_rows()).
     """
     # The one step every plan repeats: a long build says it is alive from here.
     _progress()
@@ -14875,46 +15007,126 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
         if person["id"] in now and (person["band"] or person["days"] is not None)
         and (person["id"] in fixed_people or any(_usable(person, skill, kind) for skill, kind in planned_roles))
     ]
-    start = {pid: _copy_state(state[pid]) for pid in before} if protected else None
-    pins, kept, allowed = [], [], {}
-    while True:
-        here = fresh_here()
-        shifts = _fill_week(slots, cover_slots, pool, state, here, pins, allowed)
-        _repair_week(shifts, pool, state, here["rostered"], before)
-        worse = [
-            person["id"] for person in protected
-            if person["id"] not in kept
-            and _worse_off(person, state[person["id"]], before[person["id"]], now[person["id"]])
-        ]
-        if not worse:
-            break
-        # Keep their week as it stands and plan everybody else round it, from
-        # the start. Whose week is kept changes what the rest are given, so the
-        # test is asked again until nobody new is cut short.
-        for pid, entry in start.items():
-            state[pid] = _copy_state(entry)
-        kept += worse
-        role_of = {s["id"]: _station_role(s) for s in grid["stations"]}
-        staffed_roles = {role_of.get(slot["station"]) for slot in slots}
-        # Zero professional demand is not a spare person when fixed duties
-        # remain. Their existing professional week may still be needed to keep
-        # a minimum-hours/day demand that the combined current week meets.
-        staffed_roles.update(role_of[row["station"]] for pid in kept if pid in fixed_people
-                             for row in now[pid]["rows"] if row["station"] in role_of)
-        stations_ok = {s["id"]: (s["skill"], "serve") for s in grid["stations"]
-                       if _station_role(s) in staffed_roles}
-        stations_ok.update({slot["station"]: (slot["skill"], slot["kind"])
-                            for slot in cover_slots})
-        by_id = {person["id"]: person for person in pool}
-        pins = _pin_weeks(kept, now, stations_ok, open_hours, by_id, start)
+    # The entries of the week as it stands that a write must not take off
+    # anybody before the people the plan waits on are here (_waiting_drops()):
+    # only where the caller's write replaces the week (`keep`) and the plan
+    # may hire. Empty everywhere else, and then this is the plain placement.
+    standing = [
+        row for row in current or ()
+        if row["station"] in owned and row.get("employee") in now
+    ] if keep and hires else []
+    role_keys = {s["id"]: ("serve", _station_role(s)) for s in grid["stations"]}
+    role_keys.update({post["id"]: COVER_STATIONS[post["slug"]] for post in cover_posts})
+    by_id = {person["id"]: person for person in pool}
+    start = {pid: _copy_state(state[pid]) for pid in before} if protected or standing else None
+    keys = set(state)
 
-    # e. The lines nobody here may work: offered again with hires in the pool
-    # and the week settled for them, only where there are such lines, so a
-    # week that needs nobody new is exactly the week above (_place_hires()).
-    hire_weeks = {}
-    if hires and any(shift["employee"] is None for shift in shifts):
-        shifts, hire_weeks = _place_hires(shifts, pool, state, here, before)
-    shifts.extend(pins)
+    def place(held):
+        """d. and e. from `start`, with the entries in `held` kept where they stand."""
+        pins, kept, allowed = [], [], {}
+        if held:
+            pins = _hold_rows(held, slots + cover_slots, role_keys, by_id, start)
+        while True:
+            here = fresh_here()
+            shifts = _fill_week(slots, cover_slots, pool, state, here, pins, allowed)
+            _repair_week(shifts, pool, state, here["rostered"], before)
+            worse = [
+                person["id"] for person in protected
+                if person["id"] not in kept
+                and _worse_off(person, state[person["id"]], before[person["id"]], now[person["id"]])
+            ]
+            if not worse:
+                break
+            # Keep their week as it stands and plan everybody else round it, from
+            # the start. Whose week is kept changes what the rest are given, so the
+            # test is asked again until nobody new is cut short.
+            for pid, entry in start.items():
+                state[pid] = _copy_state(entry)
+            kept += worse
+            role_of = {s["id"]: _station_role(s) for s in grid["stations"]}
+            staffed_roles = {role_of.get(slot["station"]) for slot in slots}
+            # Zero professional demand is not a spare person when fixed duties
+            # remain. Their existing professional week may still be needed to keep
+            # a minimum-hours/day demand that the combined current week meets.
+            staffed_roles.update(role_of[row["station"]] for pid in kept if pid in fixed_people
+                                 for row in now[pid]["rows"] if row["station"] in role_of)
+            stations_ok = {s["id"]: (s["skill"], "serve") for s in grid["stations"]
+                           if _station_role(s) in staffed_roles}
+            stations_ok.update({slot["station"]: (slot["skill"], slot["kind"])
+                                for slot in cover_slots})
+            pins = _pin_weeks(kept, now, stations_ok, open_hours, by_id, start)
+            if held:
+                pins += _hold_rows([row for row in held if row["employee"] not in kept],
+                                   slots + cover_slots, role_keys, by_id, start, taken=pins)
+
+        # e. The lines nobody here may work: offered again with hires in the pool
+        # and the week settled for them, only where there are such lines, so a
+        # week that needs nobody new is exactly the week above (_place_hires()).
+        hire_weeks = {}
+        if hires and any(shift["employee"] is None for shift in shifts):
+            shifts, hire_weeks = _place_hires(shifts, pool, state, here, before)
+        shifts.extend(pins)
+        return shifts, hire_weeks, here
+
+    def people(shifts, hire_weeks):
+        """Who a week puts to work: (people here, bench members, hires)."""
+        here_ids = {s["employee"] for s in shifts + fixed
+                    if s["employee"] is not None and not s.get("fromBench")}
+        bench_ids = {s["employee"] for s in shifts if s.get("fromBench")}
+        return here_ids, bench_ids, sum(len(weeks) for weeks in hire_weeks.values())
+
+    def snapshot(shifts, hire_weeks, here):
+        # Only the pool's weeks and the hires' change in a placement.
+        return (shifts, hire_weeks, here, {pid: _copy_state(entry) for pid, entry in state.items()
+                                           if pid in start or pid not in keys})
+
+    def restore(saved):
+        for pid in set(state) - keys:
+            del state[pid]
+        state.update(saved[3])
+        return saved[:3]
+
+    shifts, hire_weeks, here = place([])
+    # Issue #446: a write leaves out every entry that waits on somebody not
+    # here yet, so a plan that moved a person off an hour they work now and
+    # gave the hour to a hire is a week with fewer people in that hour until
+    # the hire comes. Where the plain week does that, it is placed again with
+    # the entries as they stand held where the plan still wants those hours
+    # (_hold_rows()) and the rest placed round them: first every entry, in a
+    # role with such an hour, of somebody the plain week gives hours, then
+    # only the entries on those hours. The fewest people come first, so a held
+    # week is kept only if it puts nobody to work the plain week leaves at
+    # 0 h, draws the same bench members, hires no more people, and leaves
+    # fewer hours short; the first that does is kept. Otherwise the plain
+    # week stands.
+    dropped, missing = _waiting_drops(shifts, standing, role_keys) if standing else ([], 0)
+    if dropped:
+        plain = snapshot(shifts, hire_weeks, here)
+        here_ids, bench_ids, hired = people(shifts, hire_weeks)
+        short_roles = {role_keys.get(row["station"]) for row in dropped}
+        tries = [
+            [row for row in standing
+             if row["employee"] in here_ids and role_keys.get(row["station"]) in short_roles],
+            [row for row in dropped if row["employee"] in here_ids],
+        ]
+        kept = None
+        for index, held in enumerate(tries):
+            # The second try is the first again where every entry of a short
+            # role is on a short hour: asked once.
+            if not held or (index and held == tries[0]):
+                continue
+            for pid, entry in start.items():
+                state[pid] = _copy_state(entry)
+            for pid in set(state) - keys:
+                del state[pid]
+            shifts, hire_weeks, here = place(held)
+            now_here, now_bench, now_hired = people(shifts, hire_weeks)
+            short = _waiting_drops(shifts, standing, role_keys)[1]
+            if (now_here <= here_ids and now_bench == bench_ids and now_hired <= hired
+                    and short < missing):
+                kept = snapshot(shifts, hire_weeks, here)
+                break
+        shifts, hire_weeks, here = restore(kept or plain)
     shifts.sort(
         key=lambda s: (s["wd"], s["from"], s["to"], str(s["station"]), str(s["employee"]))
     )
@@ -15327,7 +15539,7 @@ def _plan_site(
     # guard on a locker from a cashier on a register.
     current = _current_roster(save, building, {**stations, **cover_stations})
     week = _place_week(grid, need, grid["open"], cover_posts, pool, people, business,
-                       bench, state, current=current["list"])
+                       bench, state, current=current["list"], keep=True)
     return {
         "save": save,
         "business": business,
@@ -15762,7 +15974,7 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
     week = _place_week(fake, need, slots_open, [], pool, people, business, usable_bench,
                        state, groups=_station_groups(save, building),
                        current=[r for r in current["list"] if r not in retained] if demand_based else current["list"],
-                       fixed=retained if demand_based else None)
+                       fixed=retained if demand_based else None, keep=demand_based)
     if demand_based:
         retained_people = {r["employee"] for r in retained}
         worked = {r["employee"] for r in week["shifts"]} | retained_people
@@ -18372,13 +18584,19 @@ BOAT_PRICES = {0: 3_200_000, 1: 2_500_000, 2: 90_000_000}
 # The satisfaction a well-run new shop settles at (all four parts near 95)
 # where the player runs none of the type to take it from.
 PLAN_SATISFACTION = 95
+# CitizenHelper.Init: the price a working-, middle- and upper-class customer
+# accepts, as a multiple of the reference price; a neighbourhood's index is
+# their average over its class shares (ba_store_rules.json hoods w, m, u).
+PRICE_ACCEPTANCE = (1.2, 1.4, 1.7)
 # What a shop of the player's own is measured over: its last finished trading
 # days after the opening, the window the profit model was validated on.
 OWN_PROFIT_DAYS = 14
 # The days after its first sale a new shop still earns below its steady
 # state (research RAMP.md: satisfaction starts at 50, new staff climb 0.6 an
-# hour); the board's OS_RAMP holds the factors.
-RAMP_DAYS = 5
+# hour): each day's gross margin as a share of the steady one, from the
+# opening day on. The board's plan reads them from openStore.game.ramp.
+RAMP = (0.55, 0.92, 0.94, 0.97, 0.99)
+RAMP_DAYS = len(RAMP)
 # The shops a new one would take demand from, measured over their last week.
 SALES_DAYS = 7
 # FurnitureStoreManagerDialog: one flat fee per furniture delivery contract.
@@ -19216,7 +19434,7 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
         addr = save.address(loan.get("bankAddress"))
         owed[places.get(site_key(addr)) if addr else None] += loan.get("remainingAmount") or 0
     last = [d["profit"] for d in daily[-7:]]
-    per_year = gv.get("daysPerYear") or 60
+    per_year = _days_per_year(gv)
     banks = []
     for bank, terms in sorted((rules.get("banks") or {}).items()):
         name, addr = BANK_PLACES.get(bank, (bank, None))
@@ -19231,7 +19449,7 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
         "floor": TUTORIAL_LOAN_FLOOR if tutorial else 0,
         "profit7": money(sum(last) / 7) if last else 0,
         "owed": money(sum(owed.values())),
-        "multiplier": round(gv.get("bankInterestMultiplier") or 0.7, 4),
+        "multiplier": round(_house_rule(gv, "bankInterestMultiplier"), 4),
         "year": per_year,
         "minimum": LOAN_MINIMUM,
         "banks": banks,
@@ -19378,9 +19596,8 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
         shares = (h.get("w") or 0, h.get("m") or 0, h.get("u") or 0)
         total = sum(shares) or 1
         hoods[hood] = {
-            # CitizenHelper.Init: the price everyone accepts, as a multiple of
-            # the reference price.
-            "idx": round((1.2 * shares[0] + 1.4 * shares[1] + 1.7 * shares[2]) / total, 4),
+            # The price everyone accepts, as a multiple of the reference price.
+            "idx": round(sum(w * s for w, s in zip(PRICE_ACCEPTANCE, shares)) / total, 4),
             "strength": h.get("ms") or 0,
             "demands": h.get("cw") or 0,
             "interior": h.get("mi") or 0,
@@ -19391,9 +19608,9 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     used_vendors = {v for item in items_used for v in (furniture.get(item) or {}).get("v") or ()}
     return {
         "game": {
-            "promo": round(gv.get("baseCustomerPromotionMultiplier") or 0.55, 4),
+            "promo": round(_house_rule(gv, "baseCustomerPromotionMultiplier"), 4),
             "prices": round(mpm, 4),
-            "wages": round(gv.get("employeeHourlySalaryMultiplier") or 0.7, 4),
+            "wages": round(_house_rule(gv, "employeeHourlySalaryMultiplier"), 4),
             "tax": gv.get("taxPercentage") or 0,
             "capInitial": (build_at_start or 0) >= CAPPED_INITIAL_BUILD,
             "agent": agent,
@@ -19401,6 +19618,9 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
             "delivery": FURNITURE_DELIVERY_FEE,
             "satisfaction": PLAN_SATISFACTION,
             "wageBase": PLAN_WAGES,
+            "ramp": list(RAMP),
+            "office": {"always": OFFICE_ALWAYS_ON, "fullDoor": OFFICE_FULL_DOOR, "day": list(OFFICE_DAY),
+                       "weekend": list(OFFICE_WEEKEND)},
         },
         "types": types,
         "market": market,
@@ -19434,6 +19654,9 @@ FACTORY_TRUCK = "ba:vehicletype_freighttruckt1"
 DEPOT_VAN = "ba:vehicletype_deliverytruck"
 VEHICLE_DEALER = ("General US Trucks", "ba:street_seventhavenue#1", "ba:neighborhood_industrycity")
 PALLET_SHELF = "ba:itemname_palletshelf"
+# The boxes a pallet shelf holds (its furniture row's cc in ba_store_rules.json),
+# for rules that lack the row.
+PALLET_SHELF_BOXES = 60
 # The game pays a delivery driver a flat 5.7 hours a day, whatever the round
 # takes (NOTES.md, decision 15); a hire at headquarters is planned at 40 h.
 DRIVER_DAY_HOURS = 5.7
@@ -19610,8 +19833,8 @@ def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, r
     return {
         "game": {
             "prices": round(gv.get("marketPriceMultiplier") or 1.0, 4),
-            "export": round(gv.get("exportMultiplier") or 0.65, 4),
-            "wages": round(gv.get("employeeHourlySalaryMultiplier") or 0.7, 4),
+            "export": round(_house_rule(gv, "exportMultiplier"), 4),
+            "wages": round(_house_rule(gv, "employeeHourlySalaryMultiplier"), 4),
             "agent": agent,
             "agentName": agents[0][1] if agents else None,
             "installFee": INSTALL_FEE_PER_M2,
@@ -19625,7 +19848,7 @@ def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, r
         "products": facts,
         "kits": kits,
         "shelf": {"item": PALLET_SHELF, "p": items[PALLET_SHELF]["p"],
-                  "cc": (furniture.get(PALLET_SHELF) or {}).get("cc") or 60},
+                  "cc": (furniture.get(PALLET_SHELF) or {}).get("cc") or PALLET_SHELF_BOXES},
         "vehicles": {role: {"type": kind, "p": float(vehicle_prices.get(kind) or 0), "name": names.label(kind),
                             "dealer": VEHICLE_DEALER[0], "at": VEHICLE_DEALER[1], "hood": VEHICLE_DEALER[2]}
                      for role, kind in (("truck", FACTORY_TRUCK), ("van", DEPOT_VAN))},
