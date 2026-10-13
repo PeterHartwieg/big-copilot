@@ -4512,7 +4512,10 @@ const SORT_ICON = `<svg class="sort" viewBox="0 0 24 24"><path d="M12 19V5M6 11l
    not to any site, and so are real estate income and the player's salary.
    Lines under the total say so, the costs on one and each income on its own,
    and end on the figure Today's Profit tile shows. Read off the last finished
-   day, whose `business` is the sites' sum. */
+   day, whose `business` is the sites' sum. A site whose business opened today
+   shows none of yesterday's statement, which the game still counts in
+   `business` (the lease's rent while it stood empty, or an earlier business
+   there): `profitBefore` carries it onto a row of its own. */
 function outsideRows(span){
   const days = D.daily || [];
   const last = days[days.length - 1];
@@ -4520,7 +4523,9 @@ function outsideRows(span){
   const realEstate = last.realEstate || 0, salary = last.salary || 0;
   const income = realEstate + salary;
   const costs = (last.business || 0) - last.profit + income;
-  if(Math.abs(costs) < 1 && Math.abs(realEstate) < 1 && Math.abs(salary) < 1) return "";
+  const earlier = (D.businesses || []).filter(b => Math.abs(b.profitBefore || 0) >= 0.005);
+  const before = earlier.reduce((s, b) => s + b.profitBefore, 0);
+  if(Math.abs(costs) < 1 && Math.abs(realEstate) < 1 && Math.abs(salary) < 1 && Math.abs(before) < 1) return "";
   const parts = [["loans", last.loans], ["insurance", last.insurance],
                  ["homes", last.homes], ["parking", last.parking]].filter(([, n]) => n >= 1);
   const other = costs - parts.reduce((s, [, n]) => s + n, 0);
@@ -4536,7 +4541,10 @@ function outsideRows(span){
   const row = (label, n, cls, t) => `<tr class="td-outside${cls}"><td class="l" colspan="${span - 3}"${
     t ? ` data-tip="${attr(t)}" tabindex="0"` : ""}>${label}</td><td><span class="${sign(n)}">${fmt(n)}</span></td><td></td><td></td></tr>`;
   const day = last.day;
-  return (Math.abs(costs) >= 1 ? row(tt("co.outside.costs", "Company costs outside sites"), -costs, "", tip) : "")
+  const beforeTip = tt("co.outside.before.tip", "Day {day}: {sites}. Booked at the address before the business there now opened.",
+    {day, sites: earlier.map(b => tt("co.outside.before.site", "{site} {w:$}", {site: b.name, w: b.profitBefore})).join(", ")});
+  return (Math.abs(before) >= 1 ? row(tt("co.outside.before", "Before a site's business opened"), before, "", beforeTip) : "")
+    + (Math.abs(costs) >= 1 ? row(tt("co.outside.costs", "Company costs outside sites"), -costs, "", tip) : "")
     + (Math.abs(realEstate) >= 1 ? row(tt("co.outside.realestate", "Real estate income"), realEstate, "",
       tt("co.outside.realestate.tip", "Day {day}: rent from the real estate you own, booked to the company, not to a site", {day})) : "")
     + (Math.abs(salary) >= 1 ? row(tt("co.outside.salary", "Salary income"), salary, "",

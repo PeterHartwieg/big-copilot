@@ -191,6 +191,31 @@ test('the Portfolio itemises real estate and salary income outside sites', async
   } finally { await page.close(); }
 });
 
+test('the Portfolio shows what a site booked before its business opened, so the rows add up', async () => {
+  const page = await today(1440);
+  try {
+    const result = await page.evaluate(() => {
+      // A lease that paid $132 rent yesterday and got its business today: its row
+      // shows none of it, the game's business profit does.
+      const b = D.businesses[0];
+      b.profitBefore = -132;
+      const last = D.daily[D.daily.length - 1];
+      last.business -= 132; last.profit -= 132;
+      const t = document.createElement('table');
+      t.innerHTML = `<tfoot>${outsideRows(10)}</tfoot>`;
+      const rows = [...t.querySelectorAll('tr')];
+      return {name: b.name, rows: rows.map(tr => [...tr.cells].map(c => c.textContent.trim()).join('|')),
+              tip: rows[0].querySelector('[data-tip]').dataset.tip};
+    });
+    assert.deepEqual(result.rows, [
+      en('co.outside.before') + '|-$132||',
+      en('co.outside.costs') + '|-$1,500||',
+      en('co.outside.profit') + '|$9,868||',
+    ]);
+    assert.equal(result.tip, en('co.outside.before.tip', {day: 29, sites: en('co.outside.before.site', {site: result.name, w: -132})}));
+  } finally { await page.close(); }
+});
+
 test('at 390 px the Overview folds its figures into one line, pairs them when opened, stacks its tool panels and never scrolls sideways', async () => {
   const page = await today(390);
   try {

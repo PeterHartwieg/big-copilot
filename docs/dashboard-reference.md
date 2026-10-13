@@ -135,7 +135,11 @@ the map.
     site to open its detail. Under the sites' total, *Company costs outside sites* (loan
     payments, health insurance, homes, parking; itemised on hover) leads to *Company
     profit*, the figure on the Overview's Profit tile. Real estate income and salary
-    income, when there is any, get their own rows before *Company profit*.
+    income, when there is any, get their own rows before *Company profit*. A site whose
+    business opened today shows none of yesterday's statement, which the game still
+    counts in the company's figure (the lease's rent while it stood empty, or an earlier
+    business at the address); *Before a site's business opened* carries that amount,
+    naming the sites on hover, so the rows add up.
   - *Business detail*: nothing until a site is opened from the portfolio or a finding;
     then that site alone, with its profit history, cost breakdown, crew and shelves, and
     an hour-by-hour grid comparing historical customers with capacity from the

@@ -4330,9 +4330,13 @@ def shift_print(entries) -> str:
 def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencies=None) -> dict:
     # The address keeps its takings after a business closes: a statement from
     # before this business opened (or from a day it did not exist) is the old
-    # tenant's, not this one's.
+    # tenant's, not this one's. The game still counts it in the day's business
+    # profit (the lease's rent while it stood empty, or an earlier business
+    # there), so the row keeps it apart as `profitBefore` and the Portfolio's
+    # footer shows it, and the sites still add up to the company's figure.
     since = b.get("creationDay", 0)
-    st = latest.get(addr, {}) if not history or history[-1][0] >= since else {}
+    booked = latest.get(addr, {})
+    st = booked if not history or history[-1][0] >= since else {}
     name = b.get("BusinessName")
     tag = ""
     if name and name.startswith("[") and "]" in name:
@@ -4533,6 +4537,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
         "theft": money(st.get("Theft", 0)),
         "licensing": money(st.get("LicensingFees", 0)),
         "profit": profit,
+        "profitBefore": 0 if st is booked else money(booked.get("TotalProfit", 0)),
         "margin": round(profit / revenue * 100, 1) if revenue else None,
         "satisfaction": {
             "overall": sat.get("overall", 0) if status in ("retail", "office") else None,

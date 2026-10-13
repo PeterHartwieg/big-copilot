@@ -796,6 +796,7 @@
     }
    ],
    "profit": 0.0,
+   "profitBefore": 0,
    "promotion": 0,
    "quitWarnings": 0,
    "rent": 0.0,
@@ -895,6 +896,7 @@
     }
    ],
    "profit": 0.0,
+   "profitBefore": 0,
    "promotion": 0,
    "quitWarnings": 0,
    "rent": 0.0,
@@ -996,6 +998,7 @@
    "peakDay": null,
    "people": [],
    "profit": 0.0,
+   "profitBefore": 0,
    "promotion": 0,
    "quitWarnings": 0,
    "rent": 0.0,
@@ -1061,6 +1064,7 @@
    "peakDay": null,
    "people": [],
    "profit": 0.0,
+   "profitBefore": 0,
    "promotion": 0,
    "quitWarnings": 0,
    "rent": 0.0,
