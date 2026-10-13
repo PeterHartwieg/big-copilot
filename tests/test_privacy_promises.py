@@ -69,6 +69,23 @@ class PrivacyPromises(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertTrue((WEB / "fonts" / name).is_file())
 
+    def test_the_board_page_inlines_its_fonts_and_community_css(self):
+        # Issue #323: each linked stylesheet in the head blocked the first paint
+        # for a round trip. web/index.html inlines fonts.css (its url()s under
+        # fonts/) and community.css, and preloads fonts it really uses: a
+        # preload whose href differs from the @font-face URL fetches twice.
+        html = (WEB / "index.html").read_text(encoding="utf-8")
+        self.assertIsNone(re.search(r'<link[^>]+href="/?(?:fonts/fonts|community)\.css', html))
+        self.assertIn(".community-dialog", html)
+        faces = set(re.findall(r"url\((fonts/[^)]+\.woff2)\)", html))
+        self.assertTrue(faces)
+        for name in faces:
+            with self.subTest(font=name):
+                self.assertTrue((WEB / name).is_file())
+        preloads = re.findall(r'<link rel="preload" href="([^"]+)" as="font" type="font/woff2" crossorigin>', html)
+        self.assertTrue(preloads)
+        self.assertLessEqual(set(preloads), faces)
+
     def test_the_board_stores_no_presence_id(self):
         community = (WEB / "community.js").read_text(encoding="utf-8")
         self.assertNotIn("localStorage.setItem", community)

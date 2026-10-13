@@ -768,6 +768,46 @@ def translation_page_html(release: dict, root: str = HERE) -> str:
             .replace("__I18N_SCRIPT__", runtime))
 
 
+def inline_style(path: str, css: str | None = None) -> str:
+    """One stylesheet as a <style> block, for the hosted page's head."""
+    css = read_text(path) if css is None else css
+    # The HTML parser ends a <style> element at the first "</style", wherever it is.
+    if re.search(r"</style", css, re.I):
+        raise SystemExit(f"{os.path.relpath(path, HERE)} contains '</style' and cannot be inlined")
+    return "<style>" + chr(10) + css.strip() + chr(10) + "</style>"
+
+
+# The two font files every page paints with first: Archivo's variable Latin
+# file (every weight) and Plex Mono 400 Latin. The page discovers fonts only
+# once the board's stylesheet has arrived and text is laid out, so these are
+# preloaded from the head; the other weights and the Latin Extended files load
+# when a glyph needs them. The hrefs must equal the inlined @font-face URLs, or
+# the browser fetches each file twice.
+PRELOAD_FONTS = ("archivo-v25-latin.woff2", "ibm-plex-mono-v20-400-latin.woff2")
+
+
+def font_faces(root: str = HERE) -> str:
+    """web/fonts/fonts.css inlined for web/index.html, with its two preloads.
+
+    The @font-face URLs name files beside fonts.css; inlined in a page at the
+    site root they gain the fonts/ folder. Linking the file instead cost a
+    render-blocking round trip before first paint (issue #323). The static
+    pages (privacy, impressum, supporters, the wiki) still link /fonts/fonts.css.
+    """
+    path = os.path.join(root, "web", "fonts", "fonts.css")
+    css = read_text(path)
+    urls = re.findall(r"url\(([^)]*)\)", css)
+    if not urls or any(not re.fullmatch(r"[\w.-]+\.woff2", url) for url in urls):
+        raise SystemExit("web/fonts/fonts.css: every url() must be a bare woff2 file name beside it; update font_faces() in build_web.py")
+    missing = [name for name in PRELOAD_FONTS if name not in urls]
+    if missing:
+        raise SystemExit("PRELOAD_FONTS in build_web.py names fonts web/fonts/fonts.css does not use: " + ", ".join(missing))
+    css = re.sub(r"url\(([^)]*)\)", r"url(fonts/\1)", css)
+    preloads = "".join(f'<link rel="preload" href="fonts/{name}" as="font" type="font/woff2" crossorigin>' + chr(10)
+                       for name in PRELOAD_FONTS)
+    return preloads + inline_style(path, css)
+
+
 def page_html(release: dict, root: str = HERE) -> str:
     """web/index.html for one release: the same string the build writes.
 
@@ -802,7 +842,11 @@ window.addEventListener("error", function(event) {
     window.dispatchEvent(new Event("ledger-asset-failure"));
   }
 }, true);</script>''' + chr(10)
-    head += '<link rel="stylesheet" href="community.css?v=' + release["version"] + '">' + chr(10)
+    # community.css is small and every visitor needs it before first paint, so
+    # it is inlined rather than linked: a <link> here blocked rendering for a
+    # round trip of its own (issue #323). Inlined, it needs no stamp; the file
+    # stays a stamp input so a change still announces a new release.
+    head += inline_style(os.path.join(root, "web", "community.css")) + chr(10)
     with open(os.path.join(root, "web", "update.js"), encoding="utf-8") as fh:
         update_script = fh.read()
     scripts = BEFORE_SCRIPT.replace("__STAMP__", release["version"]).replace(
@@ -817,7 +861,7 @@ window.addEventListener("error", function(event) {
     # visitor's IP address reaches Google; the privacy notice relies on that.
     if GOOGLE_FONTS not in page:
         raise SystemExit("the board template's Google Fonts links changed; update GOOGLE_FONTS in build_web.py")
-    return (page.replace(GOOGLE_FONTS, '<link rel="stylesheet" href="fonts/fonts.css?v=' + release["version"] + '">')
+    return (page.replace(GOOGLE_FONTS, font_faces(root))
             .replace("/*__TT_CATALOGUES__*/null", translation_revisions(root)))
 
 
