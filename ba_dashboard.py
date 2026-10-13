@@ -2444,10 +2444,13 @@ def _tax_period(save: Save) -> dict:
     which by then run to the day before tax day; the deductions are the
     period's running list, currentTaxPeriodDeductibleExpenses (the game takes
     their size), which ResetCurrentTaxPeriod clears at each tax day. The game
-    keeps daysPerYear + 2 summaries (CleanupOldSummaries), so the whole period
-    is still there at tax time, whatever the year's length.
+    keeps daysPerYear + 1 summaries (CleanupOldSummaries, right after writing
+    yesterday's), so the whole period is still there at tax time, whatever the
+    year's length.
 
-    The projection adds the summaries' average day for each day still to come
+    The projection adds the average day for each day still to come, from the
+    first summary with a business statement in it (days before the first
+    business opened would only dilute it),
     and scales the running costs over the period's midnights; a one-off
     purchase counts once. On tax day itself the new period has just begun:
     nothing is projected (`fresh`).
@@ -2462,13 +2465,16 @@ def _tax_period(save: Save) -> dict:
         day = 0
     tax_day = (day // per_year + 1) * per_year
     start = tax_day - per_year + 1
-    sales, held = 0.0, set()
+    sales, held, trading = 0.0, set(), set()
     for summary in save.items(root.get("financialSummaries")):
         number = (summary or {}).get("dayNumber")
         if not isinstance(number, int) or not start <= number <= tax_day:
             continue
         held.add(number)
-        for st in save.items(summary.get("businessIncomeStatements")):
+        statements = save.items(summary.get("businessIncomeStatements"))
+        if statements:
+            trading.add(number)
+        for st in statements:
             sales += (st or {}).get("TotalSales") or 0
     gambling = max((root.get("CurrentTaxPeriodGamblingWinnings") or 0)
                    - (root.get("CurrentTaxPeriodGamblingLosses") or 0), 0)
@@ -2488,7 +2494,8 @@ def _tax_period(save: Save) -> dict:
     if fresh:
         sales_end, deduct_end = sales, recurring + once
     else:
-        sales_end = sales + (sales / len(held) * (tax_day - day) if held else 0.0)
+        days = sum(1 for n in held if trading and n >= min(trading))
+        sales_end = sales + (sales / days * (tax_day - day) if days else 0.0)
         deduct_end = once + recurring * per_year / midnights
     return {
         "day": day, "taxDay": tax_day, "start": start, "left": tax_day - day, "perYear": per_year,
@@ -3602,13 +3609,20 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     # the last day before tax day the count needs the plan too.
     # Never a reason for the board not to load: on a failure the sidebar counts
     # nothing, and the section works it out again, so the page says what broke.
+    # The owned rows and the tax plan fail apart: a broken plan leaves the
+    # rows (and the rent multiplier the finder prices at) in place.
     try:
         estate = _estate_owned(save, names, mods)
-        if _tax_period(save)["left"] == 1:
-            _real_estate(save, names, estate)
-        estate_counts = _estate_counts(estate)
     except Exception:
-        estate, estate_counts = None, {"owned": 0, "flagged": 0, "gain": 0.0, "taxEve": False}
+        estate = None
+    try:
+        if estate is not None and _tax_period(save)["left"] == 1:
+            _real_estate(save, names, estate)
+    except Exception:
+        estate.pop("buy", None)
+        estate.pop("tax", None)
+    estate_counts = (_estate_counts(estate) if estate is not None
+                     else {"owned": 0, "flagged": 0, "gain": 0.0, "taxEve": False})
     build.shared.update(businesses=businesses, factories=factories, staff=staff,
                         buildings=buildings, residential=residential, all_grids=all_grids,
                         stmt_history=stmt_history, daily=daily, market=market, supply=supply,

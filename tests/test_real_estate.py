@@ -357,13 +357,18 @@ class BeforeTaxDay(unittest.TestCase):
                 tree["Money"] = 1_000_000
                 tree["buildingsForSale"] = [{"address": address(*a), "buildingPrice": float(p)}
                                             for a, p in SHOP_LISTINGS]
-                tax = estate(tree)[1]["tax"]
+                owned, re_ = estate(tree)
+                tax = re_["tax"]
                 self.assertEqual(tax["taxDay"], day + per_year if day % per_year == 0 else per_year)
                 self.assertEqual((tax["assessed"], tax["target"], tax["pick"], tax["spend"]), (False, 0, [], 0))
                 if day % per_year == 0:
                     self.assertEqual(tax["salesEnd"], tax["sales"])
                     self.assertEqual(tax["deductionsEnd"], tax["deductions"])
-                    self.assertFalse(built(tree).core["realEstateCounts"]["taxEve"])
+                    # The core loads with its whole count: the owned buildings, and no eve.
+                    flagged = [r for r in re_["owned"] if r["flag"]]
+                    self.assertEqual(built(tree).core["realEstateCounts"], {
+                        "owned": 4, "flagged": len(flagged),
+                        "gain": round(sum(r["gain"] for r in flagged), 2), "taxEve": False})
 
     def test_a_failure_never_stops_the_core_loading(self):
         tree = F.data_company()
@@ -375,6 +380,32 @@ class BeforeTaxDay(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "odd save"):
                 d.section(build, "realEstate")
         self.assertEqual(len(d.section(build, "realEstate")["realEstate"]["owned"]), 4)
+
+    def test_a_failed_tax_plan_keeps_the_owned_rows(self):
+        # Only the plan fails: the owned rows, their count and the multiplier the
+        # finder prices at stay; the page works the plan out again and says why.
+        tree = F.data_company(59)
+        with unittest.mock.patch.object(d, "_tax_shelter", side_effect=RuntimeError("odd plan")):
+            build = built(tree)
+            self.assertEqual(build.core["realEstateCounts"]["owned"], 4)
+            self.assertFalse(build.core["realEstateCounts"]["taxEve"])
+            self.assertIsNotNone(build.shared["estate"])
+            self.assertNotIn("tax", build.shared["estate"])
+            with self.assertRaisesRegex(RuntimeError, "odd plan"):
+                d.section(build, "realEstate")
+
+    def test_the_average_day_starts_at_the_first_business(self):
+        # Summaries from before the first shop opened carry no business
+        # statement; they would only dilute the projection.
+        tree = F.data_company()
+        first = tree["financialSummaries"][0]["dayNumber"]
+        tree["financialSummaries"][:0] = [
+            {"dayNumber": n, "businessIncomeStatements": [], "totalBusinessProfit": 0.0, "totalProfit": 0.0}
+            for n in range(1, first)]
+        tax = estate(tree)[1]["tax"]
+        sales, held = period_sales(tree)
+        trading = held - (first - 1)
+        self.assertAlmostEqual(tax["salesEnd"], sales + sales / trading * (60 - F.DAY), places=1)
 
     def test_cash_bound(self):
         tax = taxed(1_000_000, 100)

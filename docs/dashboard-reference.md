@@ -2458,11 +2458,12 @@ by rate × its price, up to the taxable base.
 
 - `sales` is the period's business sales so far: every business statement in the daily
   summaries numbered from the period's first day, which is what the game sums at tax time
-  (it keeps daysPerYear + 2 summaries, so the whole period is there however long the year).
+  (it keeps daysPerYear + 1 summaries, so the whole period is there however long the year).
   `deductions` is the game's own running list for the period
   (`currentTaxPeriodDeductibleExpenses`, cleared at each tax day), `gambling` the net
   winnings. `salesEnd` and `deductionsEnd` project them to tax day: sales add the
-  summaries' average day for each day still to come before it; running costs (wages, rent,
+  average day since the first summary with a business in it, for each day still to come
+  before it; running costs (wages, rent,
   marketing, imports, fees, the rows keyed `tax_*`, `econoview_*`, `ba:transaction_*` and
   Economy Expansion's `oc:tax_expense_*`) scale over the period's midnights, booked so far
   at day − first day + 1 of them; anything else (a boat, a vehicle (`tax_vehicle`, the
