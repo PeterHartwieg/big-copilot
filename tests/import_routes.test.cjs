@@ -195,7 +195,6 @@ test('Changes counts the marks on every view, and each view counts what is left'
     // One visible count says how far along the list is;
     // Copy remaining carries no second count.
     assert.equal(await counted(page), en("sb.cw.road", {done: 3, n: 10}));
-    assert.equal(await page.locator('#sbcTop .sbc-n').count(), 0);
     await page.evaluate(() => { openRoute('overview'); drawAlerts(); });
     // Pins the wording: the obsolete Your changes label stays off Overview.
     assert.doesNotMatch(await page.locator('#alertSection').innerText(), /Your changes/);

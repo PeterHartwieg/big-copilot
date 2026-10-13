@@ -241,3 +241,12 @@ test('office billing, staffed-hour wages and own-shop calibration use explicit i
   const other = OpenStoreModel.create({facts: {...facts, market: {...facts.market, P: {...facts.market.P, p: 2000}}}, company});
   assert.ok(other.model('T', SHOP, options).revenue > api.model('T', SHOP, options).revenue, 'factories do not share a facts cache');
 });
+
+test('demand with n sellers steps down past the room the price leaves, then bottoms out', () => {
+  // ProductMarketHelper.CalculateDemand: a 55 item leaves room for five sellers.
+  const m = model(RETAIL);
+  assert.equal(m.demandWith(1, 55), 79.5);
+  assert.equal(m.demandWith(2, 55), 59.5);
+  assert.equal(m.demandWith(4, 55), 31.5);
+  assert.equal(m.demandWith(0, 55), 99.5);
+});

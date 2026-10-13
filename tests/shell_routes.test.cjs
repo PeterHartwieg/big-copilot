@@ -175,7 +175,7 @@ test('Staffing › Schedules keeps the business picked through a reload, its pag
   assert.deepEqual([w.route, w.lit], ['supply/deliveries', 'supply/deliveries'], 'Forward keeps it');
 });
 
-test('staffing landings use a factory\'s Production without supply facts and an office\'s Schedule action without office plans', async t => {
+test('staffing landings use a factory\'s Production without supply facts', async t => {
   const page = await board(t);
   const got = await page.evaluate(() => {
     const factory = D.businesses.find(b => b.typeSlug === 'ba:businesstype_factory');
@@ -183,12 +183,22 @@ test('staffing landings use a factory\'s Production without supply facts and an 
     D.supply = null;
     const atFactory = ovAtFactory({group: 'staff', site: factory.name, siteKey: factory.key});
     D.supply = supply;
-    const office = {key: 'ba:street_nowhere#1', name: 'Test Office', status: 'office'};
-    const shop = D.businesses.find(b => b.status === 'retail');
-    return {atFactory, route: (() => { D.supply = null; const r = findingRoute({group: 'staff', site: factory.name, siteKey: factory.key}).route; D.supply = supply; return r; })(),
-      office: nxStaffInto(office), shop: nxStaffInto(shop)};
+    return {atFactory, route: (() => { D.supply = null; const r = findingRoute({group: 'staff', site: factory.name, siteKey: factory.key}).route; D.supply = supply; return r; })()};
   });
-  assert.deepEqual(got, {atFactory: true, route: 'supply/production', office: '#sitePanel .sp-acts', shop: '#sp-sched'});
+  assert.deepEqual(got, {atFactory: true, route: 'supply/production'});
+});
+
+test("an office's nobody-staffed finding lands on Schedules with the office picked before office plans load", async t => {
+  const page = await board(t);
+  const got = await page.evaluate(() => {
+    // The fixture has no office: one of its shops stands in.
+    const office = Object.assign(D.businesses.find(b => b.status === 'retail'), {status: 'office'});
+    delete D.officeStaffing;
+    goToAlert({group: 'staff', site: office.name, siteKey: office.key, ev: {}});
+    return {key: office.key, route, picked: schedLit};
+  });
+  assert.equal(got.route, 'staffing/schedules');
+  assert.equal(got.picked, got.key);
 });
 
 // --- Find a location keeps its filters ---------------------------------------------------
