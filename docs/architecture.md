@@ -561,13 +561,13 @@ with `odReady()`) and those an earlier request for the same build is still bring
 reply lands first, and should it fail, the section is in error and Try again re-sends the
 chain. A reply that leaves out a section only its own request was bringing makes that
 section an error (`nav.od.notSent`) rather than leaving later requests waiting on it; a
-section refused as stale is never counted on. `browser_section()` answers `{generation, sections}`: the section asked
-for and every section it needs, less those in `have`, so a retry after a failure half way
-still sends what the board lacks and a held section is never sent twice. A new build is a
-new generation whose board holds none, so after another save, a live refresh or a worker
-restart the whole chain comes again; a language switch keeps what the board holds, since it
-localises from the English payload the sections were merged into. A message without `have`
-gets the whole chain. A section for a
+section refused as stale is never counted on. `browser_section()` answers
+`{generation, sections}`: the section asked for and every section it needs, less those in
+`have`, so a retry after a failure half way still sends what the board lacks and a held
+section is never sent twice. A new build is a new generation whose board holds none, so
+after another save, a live refresh or a worker restart the whole chain comes again; a
+language switch keeps what the board holds, since it localises from the English payload the
+sections were merged into. A message without `have` gets the whole chain. A section for a
 build the worker no longer holds is answered `stale` without running: one whose generation
 is not the build held, or one asked for before a newer build or name. Before it starts, a
 section lets every message already sent to the worker arrive (`waiting()`, a

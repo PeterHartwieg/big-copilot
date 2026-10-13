@@ -576,6 +576,28 @@ test('a later request answered after an earlier one failed leaves the failure to
   assert.equal(b.run('odReady("hiring")'), true);
 });
 
+test('work held on a later section is dropped when an earlier one in its chain fails (#474)', async () => {
+  const b = schedulesBoard();
+  b.run(`globalThis.ran = 0; globalThis.kept = 0;
+    odThen("hiring", () => ran++);
+    odThen("hiring", () => kept++, "keep", true)`);
+  b.asked[0].reject(new Error('staffing failed'));
+  await tick();
+  b.asked[1].resolve(chainReply(b, b.asked[1]));
+  await tick();
+  b.asked[2].resolve(chainReply(b, b.asked[2]));
+  await tick();
+  assert.deepEqual(JSON.parse(b.run('JSON.stringify(odThens.map(t => t.key))')), ['keep'],
+    'only the work that keeps through errors is still held');
+  b.run('odRetry("hiring")');
+  const retry = b.asked.at(-1);
+  retry.resolve(chainReply(b, retry));
+  await tick();
+  assert.equal(b.run('odReady("hiring")'), true);
+  assert.equal(b.run('ran'), 0);
+  assert.equal(b.run('kept'), 1);
+});
+
 test('a reply that leaves out what it alone was bringing makes that an error, not a wait (#474)', async () => {
   const b = schedulesBoard();
   // Said in the reader's language, as every message on the board is.
