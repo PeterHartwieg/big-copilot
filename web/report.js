@@ -22,6 +22,8 @@
  * Everything is rendered with textContent; the issue's address is shown only
  * when it is this repository's. Names declared here start br; the whole file is
  * one function, so it adds only window.BigCopilotReport to the page's scope.
+ * The dialog's backdrop, focus and relabelling come from web/app.js's
+ * window.BigCopilotDialog, shared with the vote dialog (brKit() keeps a copy).
  */
 (function () {
   "use strict";
@@ -150,13 +152,41 @@
   let brDialog = null;
   let brEls = null;
   let brCtx = null;
-  let brOpener = null;
   let brBytes = null;   // promise of the save's bytes, or null when none is held
   let brGame = null;    // promise of the game build
   let brKnown = {bytes: undefined, build: undefined};
   let brSent = null;    // {number, url} once this open has filed its issue
   let brBusy = false;
   let brSeq = 0;
+  let brModal = null;   // brKit().modal(): backdrop, Escape and focus
+
+  /* The dialog scaffolding web/app.js shares as window.BigCopilotDialog, or
+     this file's own copy when it is missing. The copy must stay: a tab opened
+     before a deploy runs the old app.js, which has no helper, yet fetches this
+     file new (the stamped URL serves the current bytes). This form is the way
+     out when something fails, so it must open there too, not fall back to the
+     Discord link and lose the error it was opened for. */
+  function brKit() {
+    if (window.BigCopilotDialog) return window.BigCopilotDialog;
+    return {
+      modal(dialog, {held, onClose}) {
+        let opener = null;
+        dialog.addEventListener("click", (event) => {
+          const r = dialog.getBoundingClientRect();
+          if (!held() && event.target === dialog && (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom)) dialog.close();
+        });
+        dialog.addEventListener("close", () => {
+          if (opener && document.contains(opener)) opener.focus();
+          opener = null;
+          onClose();
+        });
+        return {show(from) { opener = from || null; dialog.showModal(); }};
+      },
+      status: (cls) => brEl("p", cls, {role: "status", "aria-live": "polite"}),
+      relabel(fn) { if (typeof ttOnChange === "function") ttOnChange(() => queueMicrotask(fn)); },
+      json: (res) => res.json().catch(() => null),
+    };
+  }
 
   const brEnv = () => ({storage: brStorage(), doc: document, nav: navigator});
   function brStorage() { try { return window.localStorage; } catch (e) { return null; } }
@@ -177,7 +207,10 @@
   }
 
   function brBuildDialog() {
-    brDialog = brEl("dialog", "br-dialog", {"aria-labelledby": "brTitle"});
+    const dlg = brKit();
+    // brDialog is set only once the dialog is whole, so a failure part way
+    // through leaves the next open to build it again.
+    const dialog = brEl("dialog", "br-dialog", {"aria-labelledby": "brTitle"});
     const form = brEl("form", "br-form", {novalidate: ""});
     const head = brEl("div", "br-head");
     const title = brEl("h2", "", {id: "brTitle"});
@@ -211,7 +244,7 @@
     const previewHead = brEl("summary");
     const previewBody = brEl("ul", "br-preview-list");
     preview.append(previewHead, previewBody);
-    const status = brEl("p", "br-status", {role: "status", "aria-live": "polite"});
+    const status = dlg.status("br-status");
     const privacy = brEl("a", "br-privacy", {href: "privacy.html", target: "_blank", rel: "noopener"});
     body.append(intro, err, label, text, pub, save.wrap, details.wrap, preview, status, privacy);
 
@@ -221,25 +254,18 @@
     const send = brEl("button", "btn2 primary", {type: "submit"});
     foot.append(cancel, send);
     form.append(head, body, foot);
-    brDialog.append(form);
+    dialog.append(form);
 
     form.addEventListener("submit", (event) => { event.preventDefault(); brSend(); });
     save.input.addEventListener("change", brPreview);
     details.input.addEventListener("change", brPreview);
-    brDialog.addEventListener("click", (event) => {
-      const r = brDialog.getBoundingClientRect();
-      if (!brBusy && event.target === brDialog && (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom)) brDialog.close();
-    });
-    // Escape waits for a send in flight too.
-    brDialog.addEventListener("cancel", (event) => { if (brBusy) event.preventDefault(); });
-    brDialog.addEventListener("close", () => {
-      if (brOpener && document.contains(brOpener)) brOpener.focus();
-      brOpener = null;
-      if (!brBusy) brRelease();
-    });
+    // The backdrop waits for a send in flight, and so does Escape.
+    brModal = dlg.modal(dialog, {held: () => brBusy, onClose: () => { if (!brBusy) brRelease(); }});
+    dialog.addEventListener("cancel", (event) => { if (brBusy) event.preventDefault(); });
     brEls = {title, close, intro, err, errHead, errLine, label, text, pub, save, details, preview, previewHead, previewBody, status, privacy, cancel, send};
-    document.body.appendChild(brDialog);
-    if (typeof ttOnChange === "function") ttOnChange(() => queueMicrotask(brLabel));
+    document.body.appendChild(dialog);
+    dlg.relabel(brLabel);
+    brDialog = dialog;
   }
 
   // The dialog's words, written when it opens and again on a change of language.
@@ -333,7 +359,6 @@
     if (typeof brDialog.showModal !== "function") return;
     const seq = ++brSeq;
     brCtx = Object.assign({siteBuild: "dev", source: "none", error: "", trace: "", errorName: ""}, ctx || {});
-    brOpener = opener || null;
     brSent = null;
     brBusy = false;
     brKnown = {bytes: undefined, build: undefined};
@@ -346,7 +371,7 @@
     brStatus("");
     brLabel();
     brLock(false);
-    brDialog.showModal();
+    brModal.show(opener);
     e.text.focus();
     // The save and its game build arrive on their own: the bytes are quick,
     // the build may need the reader to parse the save again.
@@ -392,7 +417,7 @@
     if (!brDialog.open) { brLock(false); brRelease(); return; }
     let issue = null;
     if (res && res.status === 201) {
-      const data = await res.json().catch(() => null);
+      const data = await brKit().json(res);
       issue = brIssue(data && data.issue);
     }
     if (issue) {
