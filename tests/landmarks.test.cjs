@@ -5,39 +5,18 @@
 // (tests/fixtures/payload_snapshot/, never a real save); the landing's markup
 // is read from the built web page. Install Playwright and its Chromium browser
 // to run; NODE_PATH may point at an existing installation.
-const {test, before, after} = require('node:test');
+const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {en} = require('./_i18n.cjs');
-const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
-const {chromium} = require('playwright');
+const {suiteBrowser, renderBoard, openPage, ROOT} = require('./_page.cjs');
 
-const ROOT = path.join(__dirname, '..');
-let browser, html;
-before(async () => {
-  const made = spawnSync(process.env.PYTHON || 'python', ['-c', `
-import json, sys
-from ba_dashboard import render
-d = json.load(open("tests/fixtures/payload_snapshot/data_day47_history.json", encoding="utf-8"))
-sys.stdout.buffer.write(render(d).encode("utf-8"))`], {cwd: ROOT, maxBuffer: 64 * 1024 * 1024});
-  assert.equal(made.status, 0, made.stderr.toString());
-  html = made.stdout.toString('utf8');
-  browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
-});
-after(async () => { await browser?.close(); });
+const browser = suiteBrowser();
 
 async function board(t, hash) {
-  const ctx = await browser.newContext({viewport: {width: 1280, height: 900}, reducedMotion: 'reduce'});
-  t.after(() => ctx.close());
-  await ctx.route('https://**', route => route.abort());
-  await ctx.route('https://lm.test/**', route => new URL(route.request().url()).pathname === '/'
-    ? route.fulfill({contentType: 'text/html; charset=utf-8', body: html}) : route.fulfill({status: 404, body: ''}));
-  const page = await ctx.newPage();
-  const errors = [];
-  page.on('pageerror', e => errors.push(e.message));
-  t.after(() => assert.deepEqual(errors, [], 'no script error on the page'));
-  await page.goto(`https://lm.test/${hash}`, {waitUntil: 'load'});
+  const html = renderBoard('tests/fixtures/payload_snapshot/data_day47_history.json');
+  const {page} = await openPage(t, await browser(), {html, url: 'https://lm.test/', hash, reducedMotion: 'reduce'});
   await page.waitForFunction(() => typeof hasData === 'function' && hasData());
   return page;
 }

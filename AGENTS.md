@@ -244,6 +244,10 @@ and never attach one to an issue.
 - A worktree without `node_modules` either points `NODE_PATH` at the canonical checkout's
   `node_modules`, or runs `npm ci` and then `npx playwright install chromium`.
 - `PLAYWRIGHT_CHANNEL=msedge` (or `chrome`) uses an installed browser instead.
+- Browser suites share `tests/_page.cjs` (#340): `suiteBrowser()`/`launch()`, `abortExternal()`,
+  `collectErrors()`, `renderBoard()` (memoised) and `boardHtml()` (honours `BOARD_TARGET`),
+  `serveWeb()`, `openPage()`, `loadPayload()` and `MIME`. A new browser suite uses it; an old
+  one moves onto it when you touch it, keeping its host, viewport, storage and motion.
 - The Python tests need `node` on PATH: `tests/test_plan_orders.py` runs the board script.
 
 ## Traps
