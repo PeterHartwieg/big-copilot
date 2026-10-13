@@ -10,10 +10,10 @@ from tools import translation_catalogue as tc
 class TranslationCatalogue(unittest.TestCase):
     def test_hosted_pages_pin_the_generated_catalogue_contract(self):
         root = Path(__file__).resolve().parents[1]
-        expected = {lang: json.loads((root / 'web' / 'translations' / f'{lang}.manifest.json').read_text())['revision']
+        expected = {lang: json.loads((root / 'web' / 'translations' / f'{lang}.manifest.json').read_text(encoding='utf-8'))['revision']
                     for lang in i18n.languages()}
         for name in ('index.html', 'translate/index.html'):
-            source = (root / 'web' / name).read_text()
+            source = (root / 'web' / name).read_text(encoding='utf-8')
             match = re.search(r'const TT_CATALOGUES = (\{[^;]+\});', source)
             self.assertIsNotNone(match, name)
             self.assertEqual(json.loads(match.group(1)), expected, name)
@@ -133,7 +133,3 @@ class TranslationCatalogue(unittest.TestCase):
         self.assertEqual(set(out['translations'][entry['key']]), {'text','sourceVersion'})
         raw['translations'][entry['key']]['sourceVersion'] = 'stale'
         with self.assertRaises(i18n.CatalogueError): tc.selected_overlay('it', raw, data)
-
-
-if __name__ == '__main__':
-    unittest.main()

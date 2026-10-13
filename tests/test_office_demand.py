@@ -300,7 +300,3 @@ class RetainedDutyTests(unittest.TestCase):
             slots = [h for s in all_hours if s['d'] == d for h in range(s['f'], s['t'])]
             self.assertLessEqual(len(slots), 12)
             self.assertEqual(len(slots), len(set(slots)))
-
-
-if __name__ == '__main__':
-    unittest.main()

@@ -137,7 +137,3 @@ class TaxPickTests(unittest.TestCase):
                 self.assert_valid(items, target, result)
                 rng.shuffle(items)
                 self.assertEqual(_tax_pick(items, target, 5_000), result)
-
-
-if __name__ == '__main__':
-    unittest.main()
