@@ -4742,7 +4742,7 @@ section.od-updating{background-image:linear-gradient(90deg,transparent,var(--acc
 </div>
 <dialog class="changelog-dialog" id="changelogDialog" aria-labelledby="changelogTitle">
   <div class="changelog-head"><div><h2 id="changelogTitle" data-tt="nav.dlg.changelog.title">Changelog</h2></div><button type="button" class="btn2" id="closeChangelog" autofocus data-tt="nav.dlg.close">Close</button></div>
-  <ol class="changelog-list"><!--__CHANGELOG__--></ol>
+  <ol class="changelog-list" id="changelogList" data-src="__CHANGELOG_SRC__"><!--__CHANGELOG__--></ol>
 </dialog>
 <script>
 /* Shared feature discovery: stable IDs persist across releases and saves.
@@ -4773,7 +4773,8 @@ const featureDiscovery = (() => {
   const seen = new Set();
   const key = id => 'ba_dash_feature_seen:' + id;
   let pinned = '';
-  /* The newest changelog date on the page; the changelog dialog lists them all. */
+  /* The newest changelog date on the page. The hosted page ships only the
+     newest entry until the dialog's first open; a local page lists them all. */
   function today(){
     if(pinned) return pinned;
     let newest = '';
@@ -4814,20 +4815,62 @@ const featureDiscovery = (() => {
 })();
 featureDiscovery.refresh();
 /* --- changelog dialog ------------------------------------------------ */
-(() => {
+/* The hosted page ships only the newest entry, which also dates the badges
+   above; the list's data-src names the whole changelog, fetched on the first
+   open (issue #328). A page opened from a file carries every entry and no
+   data-src. A failed fetch keeps the newest entry and tries again next open. */
+const openChangelog = (() => {
   const dialog = document.getElementById('changelogDialog');
-  document.addEventListener('click', event => {
-    if(event.target.closest('[data-changelog]')) {
+  const list = document.getElementById('changelogList');
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  let loading = null;
+  /* One entry, in the markup render() writes for it. */
+  function entry(change){
+    const make = (tag, text) => { const el = document.createElement(tag); if(text != null) el.textContent = text; return el; };
+    const date = String(change.date), pr = parseInt(change.pr, 10);
+    const li = make('li'), meta = make('div'), time = make('time', `${date.slice(8, 10)} ${MONTHS[parseInt(date.slice(5, 7), 10) - 1]} ${date.slice(0, 4)}`);
+    li.className = 'changelog-entry';
+    meta.className = 'changelog-meta';
+    time.setAttribute('datetime', date);
+    const link = make('a', `PR #${pr} ↗`);
+    link.href = `https://github.com/PeterHartwieg/big-copilot/pull/${pr}`;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.setAttribute('aria-label', `View pull request ${pr}`);
+    meta.append(time, link);
+    li.append(meta, make('h3', change.title), make('p', change.summary));
+    return li;
+  }
+  function loadAll(){
+    const src = list && list.dataset.src;
+    if(!src || loading) return;
+    loading = fetch(`${src}?v=${encodeURIComponent(window.LEDGER_BUILD || '')}`)
+      .then(response => { if(!response.ok) throw new Error(String(response.status)); return response.json(); })
+      .then(changes => {
+        if(!Array.isArray(changes) || !changes.length) throw new Error('empty');
+        changes.sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : b.pr - a.pr);
+        list.replaceChildren(...changes.map(entry));
+        list.removeAttribute('data-src');
+      })
+      .catch(() => { loading = null; });
+  }
+  function open(){
+    if(!dialog.open) {
       dialog.showModal();
       featureDiscovery.visit('changelog');
       dialog.scrollTop = 0;
     }
+    loadAll();
+  }
+  document.addEventListener('click', event => {
+    if(event.target.closest('[data-changelog]')) open();
   });
   document.getElementById('closeChangelog').addEventListener('click', () => dialog.close());
   dialog.addEventListener('click', event => {
     const box = dialog.getBoundingClientRect();
     if(event.target === dialog && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom)) dialog.close();
   });
+  return open;
 })();
 /* An entry point marked data-visit-feature dismisses that feature's badges when
    it is used, wherever it sits: a footer link, a button the shell owns. */

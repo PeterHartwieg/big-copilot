@@ -21482,7 +21482,7 @@ const SS_VIEWS = [
    get p(){ return tt("nav.search.wiki.line", "the game's own help"); }, ic: "wiki", syn: ["help", "guide", "manual", "wiki"], need: false, go: () => openRoute("wiki")},
   {id: "changelog", get t(){ return tt("nav.search.changelog.title", "Changelog"); },
    get p(){ return tt("nav.search.changelog.line", "More · what's new"); }, ic: "list", syn: ["new", "updates", "release notes"], need: false,
-   go(){ const d = $("changelogDialog"); if(d && !d.open){ d.showModal(); featureDiscovery.visit("changelog"); d.scrollTop = 0; } }},
+   go(){ openChangelog(); }},
 ];
 /* The words players use for the wiki's pages, by title. */
 const SS_WIKI_SYN = {"MyEmployees App": ["hire", "hiring", "fire"], "Headhunter": ["hire", "recruit"],
@@ -22456,8 +22456,7 @@ function nxMenuDo(id, from = null){
   if(id === "map" || id === "wiki"){ if(hasData()) openRoute(id); else if(window.BigCopilotBoard) window.BigCopilotBoard.browseWiki(); return; }
   if(id === "search"){ ssOpen(); return; }
   if(id === "news"){
-    const d = $("changelogDialog");
-    if(d && !d.open){ d.showModal(); featureDiscovery.visit("changelog"); d.scrollTop = 0; }
+    openChangelog();
     return;
   }
   /* Preferences and Help & feedback are sheets over the board (pxOpen()),
