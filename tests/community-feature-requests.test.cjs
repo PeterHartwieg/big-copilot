@@ -8,7 +8,7 @@ const {Miniflare,convertV4MiniflareOptions} = require('miniflare');
 const ROOT = path.resolve(__dirname,'..');
 let mf,db,moderationCommand,moderationOutcome,workerScript,ipSeq = 1;
 const ip = () => `10.77.${Math.floor(++ipSeq/250)}.${ipSeq%250+1}`;
-const migrations = ['0001_community.sql','0003_feature_requests.sql'];
+const {migrate} = require('./_community.cjs');
 before(async () => {
   ({moderationCommand,moderationOutcome} = await import(pathToFileURL(path.join(ROOT,'tools/feature_moderate.mjs'))));
   const built = await require('esbuild').build({stdin:{resolveDir:ROOT,contents:`
@@ -25,12 +25,7 @@ before(async () => {
     bindings:{COMMUNITY_IP_SECRET:'synthetic-request-secret'},
     // Database concurrency tests isolate SQL behavior; rate limiting has its own worker below.
     ratelimits:{COMMUNITY_LIMITER:{namespace_id:'1001',simple:{limit:120,period:60}},SUGGEST_LIMITER:{namespace_id:'1004',simple:{limit:10000,period:60}}}}));
-  await mf.ready; db = await mf.getD1Database('COMMUNITY_DB');
-  for (const file of migrations) {
-    const raw = fs.readFileSync(path.join(ROOT,'migrations',file),'utf8');
-    for (const statement of raw.match(/CREATE TABLE[\s\S]*?;|CREATE INDEX[\s\S]*?;|CREATE TRIGGER[\s\S]*?END;/g))
-      await db.prepare(statement).run();
-  }
+  await mf.ready; db = await mf.getD1Database('COMMUNITY_DB'); await migrate(db);
 });
 beforeEach(async () => {
   await db.prepare('DELETE FROM feature_request_votes').run();
@@ -306,9 +301,7 @@ test('requests: the dedicated connection limiter refuses submissions before anot
     d1Databases:['COMMUNITY_DB'],bindings:{COMMUNITY_IP_SECRET:'synthetic-limited-secret'},
     ratelimits:{COMMUNITY_LIMITER:{namespace_id:'1001',simple:{limit:120,period:60}},SUGGEST_LIMITER:{namespace_id:'1004',simple:{limit:1,period:60}}}}));
   try {
-    await limited.ready; const database=await limited.getD1Database('COMMUNITY_DB');
-    for(const file of migrations) for(const statement of fs.readFileSync(path.join(ROOT,'migrations',file),'utf8')
-      .match(/CREATE TABLE[\s\S]*?;|CREATE INDEX[\s\S]*?;|CREATE TRIGGER[\s\S]*?END;/g)) await database.prepare(statement).run();
+    await limited.ready; const database=await limited.getD1Database('COMMUNITY_DB'); await migrate(database);
     const connection=ip(), headers={'CF-Connecting-IP':connection,Origin:'https://limit.example','Content-Type':'application/json'};
     const submit=title=>limited.dispatchFetch('https://limit.example/api/community/suggest',{method:'POST',headers,body:JSON.stringify({title,description:'Synthetic.'})});
     assert.equal((await submit('First')).status,200);

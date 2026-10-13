@@ -24,13 +24,7 @@ const BASE = {schemaVersion:1, lang:'it', revision:'catalogue-1', entries:[
 let assetHold = {}, assetFull = {};
 let cats, catTags = {}, mf, db, script, ipSeq = 1, stamp = null, stampSeq = 0, assetReads = {};
 const ip = () => `10.98.${Math.floor(++ipSeq / 250)}.${ipSeq % 250 + 1}`;
-const raw = fs.readFileSync(path.join(ROOT,'migrations/0002_translations.sql'),'utf8');
-async function migrate(target) {
-  for (const stmt of raw.match(/CREATE TABLE[\s\S]*?;|CREATE INDEX[\s\S]*?;|CREATE TRIGGER[\s\S]*?END;/g)) await target.prepare(stmt).run();
-  for (const stmt of fs.readFileSync(path.join(ROOT,'migrations/0001_community.sql'),'utf8').replace(/--[^\n]*/g,'').split(';').filter(x=>x.trim())) await target.prepare(stmt).run();
-  const requests = fs.readFileSync(path.join(ROOT,'migrations/0003_feature_requests.sql'),'utf8');
-  for (const stmt of requests.match(/CREATE TABLE[\s\S]*?;|CREATE INDEX[\s\S]*?;|CREATE TRIGGER[\s\S]*?END;/g)) await target.prepare(stmt).run();
-}
+const {migrate} = require('./_community.cjs');
 // wrangler.jsonc is the source of truth for the translation suggestion budget.
 function limiterFromConfig(name) {
   const config = fs.readFileSync(path.join(ROOT,'wrangler.jsonc'),'utf8');
@@ -274,6 +268,61 @@ test('invalid envelopes, cross-origin writes, unknown ids, oversized bodies and 
   await json(await fetchApi('/api/translations/suggest',{body:'x'.repeat(17000)}),413);
   await json(await fetchApi('/api/translations/entry',{method:'POST',body:{}}),405);
   assert.equal((await db.prepare('SELECT COUNT(*) n FROM translation_candidates').first()).n,0);
+});
+
+test('an unknown or malformed language is unknown_language on every route, with the code alone',async()=>{
+  for(const lang of ['xx','../it','']) {
+    const query=new URLSearchParams({lang}).toString();
+    for(const response of [
+      await fetchApi('/api/translations?'+query),
+      await fetchApi('/api/translations/entry?'+new URLSearchParams(fields('greeting',V1,lang))),
+      await fetchApi('/api/translations/overlay?'+query),
+      await suggest('Salve {n}',ip(),'greeting',V1,lang),
+      await fetchApi('/api/translations/vote',{body:{...fields('greeting',V1,lang),candidateId:'bundled'}}),
+    ]) {
+      assert.equal(response.headers.get('cache-control'),'private, no-store');
+      assert.deepEqual(await json(response,404),{error:'unknown_language'},`${lang} ${response.url}`);
+    }
+  }
+  assert.equal((await db.prepare('SELECT COUNT(*) n FROM translation_candidates').first()).n,0);
+});
+
+test('a summary cursor over 240 characters is invalid_cursor',async()=>{
+  await json(await suggest('Salve {n}',ip()));
+  assert.deepEqual(await json(await fetchApi('/api/translations?lang=it&cursor='+'z'.repeat(241)),400),{error:'invalid_cursor'});
+  // 240 characters is still a cursor: the page starts after it.
+  assert.deepEqual(Object.keys((await json(await fetchApi('/api/translations?lang=it&cursor='+'a'.repeat(240)))).entries),['greeting']);
+});
+
+test('reads and votes share the community budget: 429 after it, with Retry-After',async()=>{
+  // A small stand-in for COMMUNITY_LIMITER, so the budget runs out in a few requests.
+  const limit=4,period=60,config=options();
+  config.ratelimits={...config.ratelimits,COMMUNITY_LIMITER:{namespace_id:'1001',simple:{limit,period}}};
+  const scoped=new Miniflare(convertV4MiniflareOptions(config));
+  try {
+    await scoped.ready; await migrate(await scoped.getD1Database('COMMUNITY_DB'));
+    const windowOf=()=>Math.floor(Date.now()/(period*1000));
+    let run=null;
+    // As in the suggestion budget test: a run across a window boundary proves nothing.
+    for(let tries=1;!run;tries++) {
+      const start=windowOf(),voter=ip(),at=route=>fetchApi(route,{voter,instance:scoped});
+      const responses=[
+        await at('/api/translations?lang=it'),
+        await at('/api/translations/entry?'+new URLSearchParams(fields())),
+        await at('/api/translations/overlay?lang=it'),
+        await fetchApi('/api/translations/vote',{body:{...fields(),candidateId:'bundled'},voter,instance:scoped}),
+        await at('/api/translations/entry?'+new URLSearchParams(fields())),
+        await fetchApi('/api/translations/vote',{body:{...fields(),candidateId:'bundled'},voter,instance:scoped}),
+      ];
+      const statuses=responses.map(r=>r.status),retry=responses.at(-1).headers.get('retry-after');
+      const bodies=await Promise.all(responses.map(r=>r.json()));
+      if(windowOf()===start) run={statuses,body:bodies.at(-1),retry};
+      else assert.ok(tries<3,'three runs in a row straddled a limiter window');
+    }
+    assert.deepEqual(run.statuses,[...Array(limit).fill(200),429,429]);
+    assert.deepEqual(run.body,{error:'Too many requests'});
+    assert.equal(run.retry,'60');
+  } finally {await scoped.dispose();}
 });
 
 test('text length is code points and JSON body allows a legitimate 2000-character translation',async()=>{
