@@ -183,7 +183,9 @@ test('assembled production catalogue finds pasted rendered wording and keeps pag
   const {page,entries}=await setup(t,{actual:true,query:'?lang=it&q=Foot+traffic+12'});
   const traffic=entries.find(e=>e.key==='sp.pull.traffic');assert.ok(traffic,'real authored phrase exists');
   await page.locator('.tr-primary:not(:disabled)').waitFor();assert.equal(await rows(page).count(),1);
-  assert.equal(await rows(page).getAttribute('data-key'),traffic.key);assert.equal((await page.locator('textarea').inputValue()).includes('<b>'),false);
+  assert.equal(await rows(page).getAttribute('data-key'),traffic.key);assert.equal((await page.locator('textarea').inputValue()).includes('<b>'),true,'a tagged phrase keeps its tags for editing');
+  await page.getByText('Keep the tags around the same words as the English: '+traffic.en,{exact:true}).waitFor();
+  assert.equal((await rows(page).locator('.tr-row .tr-target span').innerText()).includes('<b>'),false,'and shows them nowhere else');
   assert.equal(await page.locator('#trArea option[value=sp]').innerText(),'Business details');
   assert.equal(await page.locator('#trLanguage option[value=it]').innerText(),'Italiano');
   const external=await page.locator('link[rel=stylesheet]').evaluateAll(links=>links.filter(l=>new URL(l.href).hostname!=='translations.test').length);
@@ -227,10 +229,22 @@ test('closing a distant direct-linked phrase keeps it visible and focused even w
   await open(page,key);assert.equal(await page.locator('textarea').inputValue(),'Passaggio conservato {n}');
   await page.getByRole('button',{name:'Cancel',exact:true}).click();assert.equal(await rows(page).count(),1);
   assert.equal(await page.locator(`[data-key="${key}"] .tr-edit`).evaluate(e=>document.activeElement===e),true);
-  const bundled=actual.find(e=>e.key===key).text.replace(/<\/?[a-z][^>]*>/gi,'');
+  const bundled=actual.find(e=>e.key===key).text;
   await open(page,key);assert.equal(await page.locator('textarea').inputValue(),bundled,'Cancel restores bundled wording while preserving linked context');
 });
 
+test('a tagged phrase takes a suggestion with exactly its English tags and refuses any other markup',async t=>{
+  const key='sp.pull.traffic';
+  const {page,state}=await setup(t,{actual:true,query:'?lang=it&key='+key});await page.locator('.tr-primary:not(:disabled)').waitFor();
+  for(const text of ['Passaggio {n}','Passaggio <b onclick="x">{n}</b>','Passaggio <i>{n}</i>']){
+    await page.locator('textarea').fill(text);await page.getByRole('button',{name:'Submit',exact:true}).click();
+    await page.getByRole('alert').getByText('Use the tags shown above, each as often as in the English, and close them in the order they open.',{exact:true}).waitFor();
+  }
+  assert.equal(state.writes.length,0,'refused before any request');
+  await page.locator('textarea').fill('<b>{n}</b> di passaggio');await page.getByRole('button',{name:'Submit',exact:true}).click();
+  await page.getByText('Suggestion saved with your vote.',{exact:true}).waitFor();
+  assert.equal(state.writes.at(-1).text,'<b>{n}</b> di passaggio');
+});
 test('rendered searches retain clock and currency anchors without matching every placeholder-only phrase',async t=>{
   const {page}=await setup(t,{actual:true});await rows(page).first().waitFor();
   for(const [query,key] of [['Monday09:00','sp.hour.when'],['Mon09:00','sp.hour.whenshort'],['$5.64','sp.home.perm2.v'],['$5,64','sp.home.perm2.v']]){

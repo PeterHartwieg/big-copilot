@@ -116,3 +116,26 @@ test('the manifest is fetched only when the overlay has a row', async () => {
     assert.equal(rejected.run('tt("comm.good","English {n}",{n:2})'),'Bundled 2',row.text);
   }
 });
+test('markup rule: the loader and the Worker agree with the catalogue on every shared case', async () => {
+  // tests/test_translation_catalogue.py runs the same cases through valid_text().
+  const cases = JSON.parse(fs.readFileSync(require('node:path').join(__dirname, 'fixtures/translation_markup.json'), 'utf8'));
+  const {validateTranslation} = await import('../server/translations.mjs');
+  const {ctx,run} = load();
+  for(const [expected, list] of [[true, cases.valid], [false, cases.invalid]]) {
+    for(const [rule, text] of list) {
+      ctx.text = text; ctx.rule = cases.rules[rule];
+      assert.equal(run('ttCommunityValid(text,rule)'), expected, `loader: ${text}`);
+      assert.equal(validateTranslation(text, cases.rules[rule]), expected, `worker: ${text}`);
+    }
+  }
+});
+test('a selected community text with the English tags replaces bundled wording; other markup falls back', () => {
+  const {ctx,run}=load();
+  const tagged={allowed:['n:'],required:[['n:']],maxLength:2000,markup:['</b>','<b>']};
+  ctx.bundled={'comm.tag':'<b>{n}</b> negozi'};
+  ctx.manifest={schemaVersion:1,lang:'it',revision:'new',entries:{'comm.tag':{sourceVersion:'good',validation:tagged}}};
+  ctx.overlay={schemaVersion:1,lang:'it',revision:'old',translations:{'comm.tag':{text:'Negozi: <b>{n}</b>',sourceVersion:'good'}}};
+  assert.equal(run('ttCommunityMerge("it",bundled,manifest,overlay)["comm.tag"]'),'Negozi: <b>{n}</b>');
+  ctx.overlay.translations['comm.tag'].text='Negozi: <b onmouseover="alert(1)">{n}</b>';
+  assert.equal(run('ttCommunityMerge("it",bundled,manifest,overlay)["comm.tag"]'),'<b>{n}</b> negozi');
+});

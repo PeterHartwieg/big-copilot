@@ -163,6 +163,21 @@ test('plain punctuation is allowed; malformed tokens, missing aliases, markup an
   assert.equal((await db.prepare('SELECT COUNT(*) n FROM translation_votes').first()).n,2);
 });
 
+test('a tagged phrase accepts exactly its English tags, in any order, and refuses every other markup',async()=>{
+  cats.it.entries.push({key:'tagged', en:'<b>{n}</b> shops <span class="ok">ready</span>', text:null, drafted:false, area:'Board',
+    context:'Synthetic markup', sourceVersion:V1,
+    validation:{allowed:['n:'], required:[['n:']], maxLength:2000, markup:['</b>','</span>','<b>','<span class="ok">']}});
+  for(const text of ['{n} negozi pronti','<b>{n}</b> negozi pronti','<b>{n}</b> <span class="ok" onclick="x">pronti</span>',
+    '<b>{n}</b> <span class="ok">pronti</span> <img src=x onerror=alert(1)>','<b>{n} <span class="ok">pronti</b></span>',
+    '<b>{n}</b> <span class="ok">pronti</span> &lt;b&gt;']) {
+    const result=await json(await suggest(text,ip(),'tagged'),400); assert.equal(result.error,'invalid_translation',text);
+  }
+  const good='<span class="ok">Pronti</span>: <b>{n}</b> negozi';
+  assert.equal(selected(await json(await suggest(good,ip(),'tagged'))).text,good);
+  const overlay=await json(await fetchApi('/api/translations/overlay?lang=it'));
+  assert.equal(overlay.translations.tagged.text,good);
+});
+
 test('source versions isolate history and reject stale writes; nightly cleanup removes only retired vote hashes',async()=>{
   const user=ip();
   const old=await json(await suggest('Salve {n}',user));

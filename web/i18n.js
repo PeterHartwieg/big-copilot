@@ -279,13 +279,33 @@ function ttLoad(lang){
   got.catch(() => ttTables.delete(lang));
   return got;
 }
-/* Community text remains plain text: quotes and apostrophes are valid;
-   markup, encoded markup and malformed placeholders are not. Validate again
-   at the rendering boundary, even though the API validates submissions. */
+/* Community text is plain text (quotes and apostrophes are valid; encoded
+   markup and malformed placeholders are not), except that a key whose English
+   has tags may carry exactly those tags: rule.markup, as many of each,
+   properly nested, in any order, and no other "<". A bare ">" is text.
+   validateTranslation() in server/translations.mjs is the same rule. Validate
+   again at the rendering boundary, even though the API validates submissions. */
+function ttKeepsMarkup(text, markup = []){
+  const tag = /<[^<>]*>/g;
+  if(!Array.isArray(markup) || text.replace(tag, "").includes("<")) return false;
+  const pieces = text.match(tag) || [], want = [...markup].sort(), got = [...pieces].sort();
+  if(got.length !== want.length || got.some((p, i) => p !== want[i])) return false;
+  const open = [];
+  for(const piece of pieces){
+    const m = /^<(\/?)([a-z][a-z\d]*)(?=[\s>/])/i.exec(piece);
+    if(!m) return false;
+    const name = m[2].toLowerCase();
+    if(name === "br") continue;
+    if(!m[1]) open.push(name);
+    else if(open.pop() !== name) return false;
+  }
+  return !open.length;
+}
 function ttCommunityValid(text, rule){
   if(typeof text !== "string" || !text.trim() || !rule || [...text].length > Math.min(rule.maxLength || 2000, 2000)) return false;
-  if(/[<>\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(text)
+  if(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(text)
     || /&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;)/i.test(text)
+    || !ttKeepsMarkup(text, rule.markup)
     || /[{}]/.test(text.replace(TT_SPEC, ""))) return false;
   const tokens = new Set([...text.matchAll(TT_SPEC)].map(m => `${m[1]}:${m[2] || ""}`));
   return Array.isArray(rule.allowed) && Array.isArray(rule.required)

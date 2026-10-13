@@ -29,8 +29,16 @@ def digest(value):
     return hashlib.sha256(i18n._dump(value).encode('utf-8')).hexdigest()
 
 
+# The tags a community text may carry are the English's own, copied exactly.
+# A bare '>' ("a -> b") is text to HTML and stays allowed; a bare '<' is not.
+MARKUP = re.compile(r'<[^<>]*>')
+TAG = re.compile(r'<(/?)([a-z][a-z\d]*)(?=[\s>/])', re.I)
+VOID_TAGS = {'br'}
+
+
 def validation(key, english, lang, params):
-    """Compile fits() into exact tokens and required alternative groups.
+    """Compile fits() into exact tokens and required alternative groups, plus
+    `markup`, the English's tags (see MARKUP), when it has any.
 
     A plural form may use any placeholder of its family, but it must keep only
     those of its own English (the form of its category, else `other`): "{n}
@@ -41,9 +49,13 @@ def validation(key, english, lang, params):
     plural = base != key and base not in english
     category = key[len(base) + 1:] if plural else None
     given = params.get(base if plural else key)
+    markup = sorted(MARKUP.findall(i18n._english_text(key, english)))
+    # Only a key with markup carries the field: adding it to every rule would
+    # change every source version and retire votes that are still valid.
+    extra = {'markup': markup} if markup else {}
     if given is None:
         required = [[t] for t in sorted(own)] if not plural or category == 'other' else []
-        return {'allowed': sorted(tokens), 'required': required, 'maxLength': MAX_LENGTH}
+        return {'allowed': sorted(tokens), 'required': required, 'maxLength': MAX_LENGTH, **extra}
     specs = {}
     for token in tokens:
         name, spec = token.split(':', 1)
@@ -56,19 +68,44 @@ def validation(key, english, lang, params):
         alternatives = [token for token in allowed if token.split(':', 1)[0] == name or
                         (token.split(':', 1)[0] not in specs and i18n._names_it(token.split(':', 1)[0], name))]
         required.append(alternatives)
-    return {'allowed': allowed, 'required': required, 'maxLength': MAX_LENGTH}
+    return {'allowed': allowed, 'required': required, 'maxLength': MAX_LENGTH, **extra}
 
 
 def valid_text(text, rule):
     if not isinstance(text, str) or not text.strip() or len(text) > rule['maxLength']:
         return False
-    # Keep one plain-text representation, identical to the API validator.
-    if re.search(r'[<>\x00-\x08\x0b-\x1f\x7f-\x9f]', text) or re.search(
+    # Identical to the API validator and the hosted loader: no control
+    # characters or entities, and markup only as keeps_markup() allows.
+    if re.search(r'[\x00-\x08\x0b-\x1f\x7f-\x9f]', text) or re.search(
             r'&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;)', text, re.I):
         return False
     if re.search(r'[{}]', i18n.FIELD.sub('', text)):
         return False
-    return keeps_placeholders(text, rule)
+    return keeps_markup(text, rule) and keeps_placeholders(text, rule)
+
+
+def keeps_markup(text, rule):
+    """The markup half of valid_text(): exactly the English's tags, each copied
+    character for character, as many of each as the English has, properly
+    nested; no other '<'. Their order may change with the wording."""
+    if '<' in MARKUP.sub('', text):
+        return False
+    pieces = MARKUP.findall(text)
+    if sorted(pieces) != sorted(rule.get('markup', [])):
+        return False
+    open_tags = []
+    for piece in pieces:
+        tag = TAG.match(piece)
+        if not tag:
+            return False
+        name = tag.group(2).lower()
+        if name in VOID_TAGS:
+            continue
+        if not tag.group(1):
+            open_tags.append(name)
+        elif not open_tags or open_tags.pop() != name:
+            return False
+    return not open_tags
 
 
 def keeps_placeholders(text, rule):
@@ -82,11 +119,11 @@ def check_contracts(data):
 
     Such a contract makes the natural wording impossible: the API answers
     invalid_translation for it, and the overlay drops a selected text that
-    breaks it. Only the placeholder rule is checked, not the plain-text one:
-    English and bundled wording may carry markup the community API refuses."""
+    breaks it. Both must pass the whole contract, markup included: the
+    translate page offers the bundled wording as the start of a suggestion."""
     dead = [entry['key'] for entry in data['entries']
-            if not keeps_placeholders(entry['en'], entry['validation'])
-            or (entry['text'] is not None and not keeps_placeholders(entry['text'], entry['validation']))]
+            if not valid_text(entry['en'], entry['validation'])
+            or (entry['text'] is not None and not valid_text(entry['text'], entry['validation']))]
     if dead:
         raise i18n.CatalogueError(f'{data["lang"]}: {len(dead)} translation contracts reject their own English '
                                   f'or bundled text: {", ".join(dead[:10])}')
