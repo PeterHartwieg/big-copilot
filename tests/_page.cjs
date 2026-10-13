@@ -1,8 +1,10 @@
 // The one browser harness for the Playwright suites (issue #340): launching
-// Chromium, shutting out the internet, rendering the board, serving web/,
+// Chromium, aborting https requests, rendering the board, serving web/,
 // opening a page and catching its script errors, in one place so the suites
-// stay in step. Suites move onto it as they are touched; each keeps its own
-// host name, viewport, storage, motion setting and BOARD_TARGET handling.
+// stay in step. Suites move onto it as they are touched, keeping their
+// viewport, storage, motion setting and BOARD_TARGET handling; a host may
+// change where the harness serves it more simply (sphere left its 127.0.0.1
+// server for https://sphere.test/).
 //
 //   const page = require('./_page.cjs');
 //   const browser = page.suiteBrowser();          // launched once, closed after
@@ -56,7 +58,11 @@ function launch(options = {}) {
    ends. Call at the top level of the suite file. */
 function suiteBrowser(options = {}) {
   let launched = null;
-  after(async () => { if (launched) await (await launched).close(); });
+  after(async () => {
+    // A failed launch already failed the tests that asked for it.
+    const browser = await launched?.catch(() => null);
+    await browser?.close();
+  });
   return () => (launched ||= launch(options));
 }
 
@@ -78,23 +84,30 @@ function collectErrors(page, t = null) {
 
 /* The CLI board rendered by Python: render(None), a bare board with no data,
    or render() of a JSON payload file named relative to the repository root
-   (tests/fixtures/payload_snapshot/..., synthetic only). Memoised per process. */
+   (tests/fixtures/payload_snapshot/..., synthetic only). Memoised per process,
+   a failure too: a broken render runs Python once and throws the same error
+   to every test that asks. */
 const rendered = new Map();
-function renderBoard(payloadFile = null) {
-  const key = payloadFile || '';
-  if (!rendered.has(key)) {
-    const load = payloadFile
-      ? `d = json.load(open(${JSON.stringify(payloadFile)}, encoding="utf-8"))`
-      : 'd = None';
-    const made = spawnSync(selectPython(), ['-c', `
+function runRender(payloadFile) {
+  const load = payloadFile
+    ? `d = json.load(open(${JSON.stringify(payloadFile)}, encoding="utf-8"))`
+    : 'd = None';
+  const made = spawnSync(selectPython(), ['-c', `
 import json, sys
 from ba_dashboard import render
 ${load}
 sys.stdout.buffer.write(render(d).encode("utf-8"))`], {cwd: ROOT, maxBuffer: 64 * 1024 * 1024});
-    assert.equal(made.status, 0, made.stderr?.toString());
-    rendered.set(key, made.stdout.toString('utf8'));
+  assert.equal(made.status, 0, made.stderr?.toString());
+  return made.stdout.toString('utf8');
+}
+function renderBoard(payloadFile = null) {
+  const key = payloadFile || '';
+  if (!rendered.has(key)) {
+    try { rendered.set(key, {html: runRender(payloadFile)}); } catch (error) { rendered.set(key, {error}); }
   }
-  return rendered.get(key);
+  const {html, error} = rendered.get(key);
+  if (error) throw error;
+  return html;
 }
 
 /* The board a suite tests: the CLI page from renderBoard(), or with

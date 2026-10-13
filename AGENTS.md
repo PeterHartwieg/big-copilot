@@ -247,7 +247,8 @@ and never attach one to an issue.
 - Browser suites share `tests/_page.cjs` (#340): `suiteBrowser()`/`launch()`, `abortExternal()`,
   `collectErrors()`, `renderBoard()` (memoised) and `boardHtml()` (honours `BOARD_TARGET`),
   `serveWeb()`, `openPage()`, `loadPayload()` and `MIME`. A new browser suite uses it; an old
-  one moves onto it when you touch it, keeping its host, viewport, storage and motion.
+  one moves onto it when you touch it, keeping its viewport, storage and motion; its host
+  may change where the harness serves it more simply.
 - The Python tests need `node` on PATH: `tests/test_plan_orders.py` runs the board script.
 
 ## Traps
