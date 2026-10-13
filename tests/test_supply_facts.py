@@ -220,16 +220,21 @@ class RetiredLineTests(unittest.TestCase):
     """A line is retired where the game's own list of what customers can buy
     there (cachedAvailableProducts) leaves it out (issue #493)."""
 
-    def lines(self, offered, sold=("ba:itemname_paperbag",), selling=ROSE):
-        record = shop_record([sale_day(d, 40, 20) for d in range(2, 9)])
+    def lines(self, offered, sold=("ba:itemname_paperbag",), selling=ROSE, stocked=(), sold_until=20):
+        # Twenty days of roses; `selling` sells too up to `sold_until`.
+        record = shop_record([sale_day(d, 40, 20) for d in range(2, 21)])
         for entry in record["orderHistory"]["$items"]:
-            entry["itemSales"]["$items"][0]["itemName"] = selling
+            if entry["dayNumber"] <= sold_until and selling != ROSE:
+                entry["itemSales"]["$items"].append({"itemName": selling, "amountSold": 5, "totalPrice": 5})
+        record["itemInstances"] = {"$items": [
+            {"$v": {"itemName": "ba:itemname_shelf", "cargoInstances": {"$items": [{"itemName": slug, "amount": 40}]}}}
+            for slug in stocked]}
         record["cachedAvailableProducts"] = {"$items": list(offered)}
         # Beer keeps a price from the shop's old type; nothing stocks or sells it.
         extra = [{"itemName": BEER, "price": 3}] + [{"itemName": slug, "price": 0} for slug in sold]
         record["retailPrices"]["$items"] += extra
         save = Save({"EmployeeInstances": {"$items": []}}, {}, "")
-        b = _business(save, Names({}), record, ADDR, {}, [], {ADDR: []}, 10)
+        b = _business(save, Names({}), record, ADDR, {}, [], {ADDR: []}, 21)
         return {l["slug"]: l for l in b["lines"]}
 
     def test_a_product_off_the_list_is_retired_and_one_on_it_is_not(self):
@@ -243,13 +248,20 @@ class RetiredLineTests(unittest.TestCase):
     def test_a_product_the_type_sells_is_not_retired_before_the_game_lists_it(self):
         # Just stocked, not yet on the list: the florist's own type sells it.
         flower = "ba:itemname_cheapflower"
-        self.assertNotIn("retired", self.lines([ROSE], sold=(flower,))[flower])
+        self.assertNotIn("retired", self.lines([ROSE], sold=(flower,), stocked=(flower,))[flower])
 
     def test_old_sales_of_a_product_the_type_could_sell_are_still_retired(self):
         # Soda sold before the conversion; the florist could sell soda with a
         # fridge, but the game does not list it, so its old sales are no shelf.
         soda = "ba:itemname_sodacan"
-        lines = self.lines([ROSE], sold=(soda,), selling=soda)
+        lines = self.lines([ROSE], sold=(soda,), selling=soda, stocked=(soda,))
+        self.assertTrue(lines[soda].get("retired"))
+
+    def test_stock_that_sold_weeks_ago_stays_retired_once_the_week_has_passed(self):
+        # The soda last sold on day 5, outside the week the rates read.
+        soda = "ba:itemname_sodacan"
+        lines = self.lines([ROSE], sold=(soda,), selling=soda, stocked=(soda,), sold_until=5)
+        self.assertEqual(lines[soda]["rate"], 0)
         self.assertTrue(lines[soda].get("retired"))
 
     def test_an_empty_list_retires_nothing(self):
