@@ -43,6 +43,7 @@ with open(os.path.join(out, "payload.json"), "w", encoding="utf-8") as fh:
     json.dump(d.materialize_all(d.build_core(load_save(save), names)), fh)
 with open(os.path.join(out, "eve.json"), "w", encoding="utf-8") as fh:
     json.dump(d.materialize_all(eve_build()), fh)
+# (The save holds prices as floats; the payload and the page show them rounded to the cent.)
 # Two pending prices: the best price at 1 Harbor Street, whose market rent rounds
 # to that same cent, and 24 Twelfth Street's own market rent, at which it never fills.
 from tests.es3_fixture import address, encode

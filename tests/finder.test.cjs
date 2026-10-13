@@ -2041,6 +2041,7 @@ test('the sale chip reads the rounded median at paint time and omits payback wit
     // Under the Payback sort the tip makes no claim about the order.
     await chip.click();
     await page.locator('#cityMapPage .fhead [data-s="payback"]').click();
+    assert.equal(await page.locator('#cityMapPage .fhead [data-s="payback"]').getAttribute('class'), 'on');
     assert.equal(await chip.getAttribute('data-tip'), en('map.show.sale.tip2') + ' ' + en('map.show.sale.tip.payback3', {n: 1800}));
     assert.doesNotMatch(await chip.getAttribute('data-tip'), /cheapest/i);
     await page.evaluate(() => { D.premises.forSale.forEach(s => s.payback = 1576); cityMapPage.update(); });
