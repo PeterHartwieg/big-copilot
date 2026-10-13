@@ -46,8 +46,12 @@ from tools.build_wiki_data import (
 from tools import i18n as ui_text
 from tools import translation_catalogue
 from tools import wiki_pages
-from tools.wiki_data import SourceError
+from tools.build_wiki_data import wiki_data as _builder_wiki_data
 from tools.wiki_paths import game_data_dir
+
+# The wiki builder imports wiki_data as a top-level module, so the SourceError it
+# raises is not tools.wiki_data.SourceError: catch the builder's own class.
+SourceError = _builder_wiki_data.SourceError
 
 # The game text shipped with the page: the display names of items, business
 # types, neighbourhoods, stations and skills, and the few help pages the
@@ -1003,7 +1007,7 @@ def assemble(root: str = HERE) -> None:
     print(f"wrote {out} ({len(page) // 1024} KB) and web/py/")
 
 
-def main() -> None:
+def main(allow_fewer_guides: bool = False) -> None:
     os.makedirs(os.path.join(WEB, "py"), exist_ok=True)
     refuse_floor_plan_gaps()
     # Resolve the game text before anything else is written. Every step below
@@ -1040,7 +1044,13 @@ def main() -> None:
 
     # Refresh reference content before stamping assets, so a game update also
     # invalidates browser caches for the Wiki catalogue.
-    wiki_text = write_public_wiki(os.path.join(WEB, "wiki-data.json"))
+    # A build that loses a guide or authored copy stops here unless the loss is
+    # accepted with --allow-fewer-guides (refuse_losses() in build_wiki_data.py).
+    try:
+        wiki_text = write_public_wiki(os.path.join(WEB, "wiki-data.json"),
+                                      allow_fewer_guides=allow_fewer_guides)
+    except SourceError as exc:
+        raise SystemExit(f"wiki: {exc}") from None
     # what the wiki build had to leave out (a reworded phrase, a missing
     # supplier): recorded in the payload's provenance, and said here
     for kind, rows in json.loads(wiki_text)["provenance"]["issues"].items():
@@ -1067,7 +1077,13 @@ if __name__ == "__main__":
         "--check", action="store_true",
         help="report the files under web/ that no longer match the sources; write nothing",
     )
+    parser.add_argument(
+        "--allow-fewer-guides", action="store_true",
+        help="write the wiki payload even though it loses a guide or authored copy",
+    )
     args = parser.parse_args()
+    if args.allow_fewer_guides and (args.assemble or args.check):
+        parser.error("--allow-fewer-guides applies to the full build only")
     if args.assemble:
         assemble()
     elif args.check:
@@ -1087,4 +1103,4 @@ if __name__ == "__main__":
             raise SystemExit(1)
         print("web/ is up to date")
     else:
-        main()
+        main(allow_fewer_guides=args.allow_fewer_guides)

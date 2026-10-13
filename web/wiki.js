@@ -385,7 +385,10 @@ function wikiLink(label, target, ctx){
   return ssEsc(label);
 }
 /* A label line: the game's own way of titling a list ("**Required Workstation**:",
-   "Product Capacity:"). Short, ends in a colon, and never a sentence. */
+   "Product Capacity:"). Short, ends in a colon, and never a sentence. This is
+   the rendering rule (64 characters), the same as is_label() in
+   tools/wiki_pages.py; the extraction rule, _LABEL_MAX (200) in
+   tools/wiki_data.py, is looser on purpose. */
 function wikiIsLabel(line){
   const bare = line.replace(/\*\*/g, "").trim();
   return bare.length > 0 && bare.length <= 64 && /:$/.test(bare) && !/[.!?]/.test(bare);
