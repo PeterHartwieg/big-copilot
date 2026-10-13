@@ -732,6 +732,8 @@ test('the crumb leads back where the reader came from, else to the portfolio', (
   assert.equal(chain.attrs.href, '#secPortfolio');
   assert.equal(chain.attrs['data-chain'], 'Clothing Stores');
   assert.ok(portfolio.at < chain.at, 'the portfolio comes before the chain');
+  const gap = html.slice(portfolio.at, chain.at);
+  assert.equal(gap.slice(gap.indexOf('</a>') + 4), '<i>›</i>', 'the separator sits directly between them');
   const pick = find(html, {id: 'sitePick'});
   assert.equal(pick.tag, 'div');
   assert.deepEqual(pick.classes, ['ss-pick']);
