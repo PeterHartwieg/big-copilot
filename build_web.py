@@ -46,8 +46,12 @@ from tools.build_wiki_data import (
 from tools import i18n as ui_text
 from tools import translation_catalogue
 from tools import wiki_pages
-from tools.wiki_data import SourceError
+from tools.build_wiki_data import wiki_data as _builder_wiki_data
 from tools.wiki_paths import game_data_dir
+
+# The wiki builder imports wiki_data as a top-level module, so the SourceError it
+# raises is not tools.wiki_data.SourceError: catch the builder's own class.
+SourceError = _builder_wiki_data.SourceError
 
 # The game text shipped with the page: the display names of items, business
 # types, neighbourhoods, stations and skills, and the few help pages the
@@ -764,6 +768,46 @@ def translation_page_html(release: dict, root: str = HERE) -> str:
             .replace("__I18N_SCRIPT__", runtime))
 
 
+def inline_style(path: str, css: str | None = None) -> str:
+    """One stylesheet as a <style> block, for the hosted page's head."""
+    css = read_text(path) if css is None else css
+    # The HTML parser ends a <style> element at the first "</style", wherever it is.
+    if re.search(r"</style", css, re.I):
+        raise SystemExit(f"{os.path.relpath(path, HERE)} contains '</style' and cannot be inlined")
+    return "<style>" + chr(10) + css.strip() + chr(10) + "</style>"
+
+
+# The two font files every page paints with first: Archivo's variable Latin
+# file (every weight) and Plex Mono 400 Latin. The page discovers fonts only
+# once the board's stylesheet has arrived and text is laid out, so these are
+# preloaded from the head; the other weights and the Latin Extended files load
+# when a glyph needs them. The hrefs must equal the inlined @font-face URLs, or
+# the browser fetches each file twice.
+PRELOAD_FONTS = ("archivo-v25-latin.woff2", "ibm-plex-mono-v20-400-latin.woff2")
+
+
+def font_faces(root: str = HERE) -> str:
+    """web/fonts/fonts.css inlined for web/index.html, with its two preloads.
+
+    The @font-face URLs name files beside fonts.css; inlined in a page at the
+    site root they gain the fonts/ folder. Linking the file instead cost a
+    render-blocking round trip before first paint (issue #323). The static
+    pages (privacy, impressum, supporters, the wiki) still link /fonts/fonts.css.
+    """
+    path = os.path.join(root, "web", "fonts", "fonts.css")
+    css = read_text(path)
+    urls = re.findall(r"url\(([^)]*)\)", css)
+    if not urls or any(not re.fullmatch(r"[\w.-]+\.woff2", url) for url in urls):
+        raise SystemExit("web/fonts/fonts.css: every url() must be a bare woff2 file name beside it; update font_faces() in build_web.py")
+    missing = [name for name in PRELOAD_FONTS if name not in urls]
+    if missing:
+        raise SystemExit("PRELOAD_FONTS in build_web.py names fonts web/fonts/fonts.css does not use: " + ", ".join(missing))
+    css = re.sub(r"url\(([^)]*)\)", r"url(fonts/\1)", css)
+    preloads = "".join(f'<link rel="preload" href="fonts/{name}" as="font" type="font/woff2" crossorigin>' + chr(10)
+                       for name in PRELOAD_FONTS)
+    return preloads + inline_style(path, css)
+
+
 def page_html(release: dict, root: str = HERE) -> str:
     """web/index.html for one release: the same string the build writes.
 
@@ -798,7 +842,11 @@ window.addEventListener("error", function(event) {
     window.dispatchEvent(new Event("ledger-asset-failure"));
   }
 }, true);</script>''' + chr(10)
-    head += '<link rel="stylesheet" href="community.css?v=' + release["version"] + '">' + chr(10)
+    # community.css is small and every visitor needs it before first paint, so
+    # it is inlined rather than linked: a <link> here blocked rendering for a
+    # round trip of its own (issue #323). Inlined, it needs no stamp; the file
+    # stays a stamp input so a change still announces a new release.
+    head += inline_style(os.path.join(root, "web", "community.css")) + chr(10)
     with open(os.path.join(root, "web", "update.js"), encoding="utf-8") as fh:
         update_script = fh.read()
     scripts = BEFORE_SCRIPT.replace("__STAMP__", release["version"]).replace(
@@ -813,7 +861,7 @@ window.addEventListener("error", function(event) {
     # visitor's IP address reaches Google; the privacy notice relies on that.
     if GOOGLE_FONTS not in page:
         raise SystemExit("the board template's Google Fonts links changed; update GOOGLE_FONTS in build_web.py")
-    return (page.replace(GOOGLE_FONTS, '<link rel="stylesheet" href="fonts/fonts.css?v=' + release["version"] + '">')
+    return (page.replace(GOOGLE_FONTS, font_faces(root))
             .replace("/*__TT_CATALOGUES__*/null", translation_revisions(root)))
 
 
@@ -1003,7 +1051,7 @@ def assemble(root: str = HERE) -> None:
     print(f"wrote {out} ({len(page) // 1024} KB) and web/py/")
 
 
-def main() -> None:
+def main(allow_fewer_guides: bool = False) -> None:
     os.makedirs(os.path.join(WEB, "py"), exist_ok=True)
     refuse_floor_plan_gaps()
     # Resolve the game text before anything else is written. Every step below
@@ -1040,7 +1088,13 @@ def main() -> None:
 
     # Refresh reference content before stamping assets, so a game update also
     # invalidates browser caches for the Wiki catalogue.
-    wiki_text = write_public_wiki(os.path.join(WEB, "wiki-data.json"))
+    # A build that loses a guide or authored copy stops here unless the loss is
+    # accepted with --allow-fewer-guides (refuse_losses() in build_wiki_data.py).
+    try:
+        wiki_text = write_public_wiki(os.path.join(WEB, "wiki-data.json"),
+                                      allow_fewer_guides=allow_fewer_guides)
+    except SourceError as exc:
+        raise SystemExit(f"wiki: {exc}") from None
     # what the wiki build had to leave out (a reworded phrase, a missing
     # supplier): recorded in the payload's provenance, and said here
     for kind, rows in json.loads(wiki_text)["provenance"]["issues"].items():
@@ -1067,7 +1121,13 @@ if __name__ == "__main__":
         "--check", action="store_true",
         help="report the files under web/ that no longer match the sources; write nothing",
     )
+    parser.add_argument(
+        "--allow-fewer-guides", action="store_true",
+        help="write the wiki payload even though it loses a guide or authored copy",
+    )
     args = parser.parse_args()
+    if args.allow_fewer_guides and (args.assemble or args.check):
+        parser.error("--allow-fewer-guides applies to the full build only")
     if args.assemble:
         assemble()
     elif args.check:
@@ -1087,4 +1147,4 @@ if __name__ == "__main__":
             raise SystemExit(1)
         print("web/ is up to date")
     else:
-        main()
+        main(allow_fewer_guides=args.allow_fewer_guides)

@@ -42,7 +42,10 @@ _WHOLESALE_RE = re.compile(
 )
 
 # Sentences, not labels: they carry no colon and end in a full stop, which is
-# what keeps them out of the labelled sections below.
+# what keeps them out of the labelled sections below. This is the extraction
+# rule, deliberately looser than the 64-character rendering rule in
+# `is_label()` (tools/wiki_pages.py) and `wikiIsLabel()` (web/wiki.js): a long
+# heading still splits the facts here, yet is drawn as a paragraph on the page.
 _LABEL_MAX = 200
 
 

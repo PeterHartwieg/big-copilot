@@ -184,6 +184,11 @@ class Site:
 
 
 def is_label(line: str) -> bool:
+    """wikiIsLabel: the rendering rule, 64 characters ending in a colon.
+
+    Deliberately stricter than `_LABEL_MAX` (200) in tools/wiki_data.py, which
+    is the extraction rule; tests/test_wiki_pages.py holds this one to wiki.js.
+    """
     bare = line.replace("**", "").strip()
     return 0 < len(bare) <= 64 and bare.endswith(":") and not re.search(r"[.!?]", bare)
 

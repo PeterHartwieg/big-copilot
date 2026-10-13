@@ -230,7 +230,8 @@ class Headers(unittest.TestCase):
                     self.assertTrue(self.names_the_release(rest, before),
                                     "a stamped path requested without ?v=<build stamp> or ?v=<content hash>")
         # Each hosted page sets the stamp before any of its scripts fetches, and
-        # loads app.js, community.js and community.css with that same stamp.
+        # loads app.js and community.js with that same stamp. community.css is
+        # inlined into web/index.html (issue #323), so it is not requested.
         pages = [WEB / "index.html", WEB / "translate" / "index.html"]
         for page in pages:
             with self.subTest(page=page.relative_to(WEB).as_posix()):
@@ -244,7 +245,7 @@ class Headers(unittest.TestCase):
                 self.assertLess(stamp.start(), first_fetcher, "a script runs before window.LEDGER_BUILD is set")
                 refs = re.findall(r'(?:src|href)="(/?' + STAMPED_PATH + r'[^"]*)"', html)
                 if page.parent == WEB:
-                    self.assertGreaterEqual(len(refs), 3, refs)
+                    self.assertGreaterEqual(len(refs), 2, refs)
                 for ref in refs:
                     self.assertTrue(ref.endswith(f"?v={stamp.group(1)}"), f"{ref} does not carry the page's stamp")
 

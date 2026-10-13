@@ -349,6 +349,13 @@ the rest (`web/index.html`, `web/version.json`, the `web/py/` copies, the static
 `web/sitemap.xml` and `web/robots.txt`). Commit the game-derived files it changed; the
 assembled ones are gitignored.
 
+The build stops when the wiki would lose a guide the committed `web/wiki-data.json` has,
+or leave out authored copy whose `when` clause no longer matches the new help text, or
+when a guide UI string is missing from `guideUi` in `tools/wiki_sample.json`, and names
+each one. Either fix the clause or the wording in `tools/wiki_sample.json`, or
+confirm the loss is real and run `python build_web.py --allow-fewer-guides`. Then read
+`textdiff.py` as usual.
+
 A line diff of `web/wiki-data.json` runs to hundreds of lines for one changed fact.
 `textdiff.py` compares both files with `HEAD` by key and by page instead, and prints the
 first difference inside each. It leaves out what every rebuild changes: the per-guide
