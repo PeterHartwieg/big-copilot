@@ -46,7 +46,3 @@ class StaffingDisplayTests(MsgAsserts, unittest.TestCase):
                        days=msg_param("sp.py.list.comma", a=msg_param("sp.py.wd.1"), b=msg_param("sp.py.wd.0")),
                        hours=msg_param("sp.py.list.comma", a=msg_param("sp.py.when.hours", a=0, b=1),
                                        b=msg_param("sp.py.when.hours", a=23, b=24)))
-
-
-if __name__ == "__main__":
-    unittest.main()

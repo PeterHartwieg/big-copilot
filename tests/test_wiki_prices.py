@@ -141,7 +141,3 @@ class WikiPricesTests(unittest.TestCase):
         self.assertEqual(lines[ITEM]["soldPrice"], 10.0)
         self.assertEqual(lines[ITEM]["rate"], 0.1)
         self.assertIsNone(lines["idle"]["soldPrice"])
-
-
-if __name__ == "__main__":
-    unittest.main()

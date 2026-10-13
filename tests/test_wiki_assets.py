@@ -54,7 +54,3 @@ class WikiAssets(unittest.TestCase):
         self.assertIn('window.BIG_COPILOT_WIKI=' + script_json(compact_wiki(committed)) + ';', exported)
         hosted = render(None, live=True)
         self.assertFalse('window.BIG_COPILOT_WIKI=' in hosted, 'Hosted page should fetch Wiki data')
-
-
-if __name__ == '__main__':
-    unittest.main()

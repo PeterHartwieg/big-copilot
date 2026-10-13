@@ -83,7 +83,3 @@ class UiLanguagesTest(unittest.TestCase):
                 self.assertEqual(got[code]["supported"], [lang["locale"]])
                 self.assertEqual(sorted(got[code]["plurals"], key=order.index), list(lang["plurals"]))
                 self.assertEqual(sorted(got[code]["byCode"], key=order.index), list(lang["plurals"]))
-
-
-if __name__ == "__main__":
-    unittest.main()

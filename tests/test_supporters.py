@@ -40,7 +40,3 @@ class Ranking(unittest.TestCase):
     def test_the_committed_file_is_in_the_written_shape(self):
         text = (ROOT / "web" / "supporters.json").read_text(encoding="utf-8")
         self.assertEqual(text, render(json.loads(text)["supporters"]))
-
-
-if __name__ == "__main__":
-    unittest.main()

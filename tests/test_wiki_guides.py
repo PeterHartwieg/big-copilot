@@ -23,7 +23,6 @@ import unittest
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
 )
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import build_wiki_data as build
 import wiki_data
@@ -908,6 +907,7 @@ class DeterminismTests(GuideCase):
 
     def test_the_payload_survives_its_own_validator(self):
         payload = json.loads(build.serialise(self.build()))
+        # No assertion: the test passes when validate_public() does not raise.
         build.validate_public(payload)
 
 

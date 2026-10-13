@@ -167,7 +167,3 @@ class SecondSkillTests(unittest.TestCase):
         data = extract_company(cleaner_first, names=Names({f"help_{REGISTER}_content": register}))
         grid = next(g for g in data["hours"] if g["key"] == "ba:street_secondavenue#10")
         self.assertGreater(grid["staffed"][MONDAY][10], 0)
-
-
-if __name__ == "__main__":
-    unittest.main()

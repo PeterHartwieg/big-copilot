@@ -13,14 +13,11 @@ import copy
 import json
 import math
 import os
-import sys
 import tempfile
 import unittest
 from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.dirname(HERE))
 
 import ba_dashboard  # noqa: E402
 from tests import save_fixtures  # noqa: E402
@@ -832,7 +829,3 @@ class GameValueDriftTests(unittest.TestCase):
         self.assertEqual(factory["game"]["driverHours"], ba_dashboard.DRIVER_DAY_HOURS)
         self.assertEqual(factory["game"]["hqHours"], ba_dashboard.HQ_WEEK_HOURS)
         self.assertEqual(factory["shelf"]["cc"], ba_dashboard.PALLET_SHELF_BOXES)
-
-
-if __name__ == "__main__":
-    unittest.main()

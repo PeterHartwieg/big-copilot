@@ -13,7 +13,6 @@ import http.client
 import http.server
 import json
 import os
-import sys
 import tempfile
 import threading
 import time
@@ -21,9 +20,6 @@ import unittest
 import urllib.error
 import urllib.request
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.dirname(HERE))
 
 import ba_dashboard  # noqa: E402
 from tests import es3_fixture  # noqa: E402
@@ -201,7 +197,3 @@ class WatchServer(unittest.TestCase):
             with urllib.request.urlopen(request) as response:
                 self.assertEqual(response.status, 200, host)
                 json.loads(response.read())
-
-
-if __name__ == "__main__":
-    unittest.main()

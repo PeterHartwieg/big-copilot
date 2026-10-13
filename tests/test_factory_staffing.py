@@ -8,9 +8,6 @@ the factory's own staff, each run cut into shifts of at most 12 hours.
 """
 import json
 import math
-import os
-import subprocess
-import sys
 import unittest
 from tests.i18n_check import MsgAsserts
 import unittest.mock
@@ -19,8 +16,8 @@ import ba_dashboard
 from ba_dashboard import (SHIFT_CAP, SUPPLY_MARGIN, _factory_run_start, _factory_staffing,
                           _line_hours, site_key)
 from tests.test_supply_facts import (FACTORY, HUB, RID, SHOP_A, BEER, WATER, Company, beer_chain)
+from tests._seeds import under_seeds
 
-HERE = os.path.dirname(os.path.abspath(__file__))
 WORKER = "ba:skill_factoryworker"
 NOMORNINGS = "ba:jobdemand_nomornings"
 KEY = site_key(FACTORY)
@@ -217,16 +214,11 @@ class RosterTests(unittest.TestCase):
         json.dumps(rows)
 
     def test_the_rows_do_not_depend_on_the_hash_seed(self):
-        script = ("import json, test_factory_staffing as t;"
+        script = ("import json; from tests import test_factory_staffing as t;"
                   "c = t.rostered_chain([24, 24]);"
                   "p = t.People().add(9, demands=[t.NOMORNINGS]).add(3);"
                   "print(json.dumps(t.factory_rows(c, p), sort_keys=True))")
-        runs = []
-        for seed in ("1", "2", "3"):
-            env = dict(os.environ, PYTHONHASHSEED=seed,
-                       PYTHONPATH=os.pathsep.join([HERE, os.path.dirname(HERE)]))
-            runs.append(subprocess.run([sys.executable, "-c", script], check=True, text=True,
-                                       capture_output=True, env=env, cwd=HERE).stdout)
+        runs = under_seeds(script, seeds=("1", "2", "3"))
         self.assertEqual(runs[0], runs[1])
         self.assertEqual(runs[0], runs[2])
 
@@ -615,7 +607,3 @@ class FewestCoveringTests(unittest.TestCase):
         self.assertEqual(count, 188)
         self.assertLess(len(asked), 25)
         self.assertEqual(len(asked), len(set(asked)))
-
-
-if __name__ == "__main__":
-    unittest.main()

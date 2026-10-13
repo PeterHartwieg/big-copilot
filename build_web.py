@@ -536,12 +536,12 @@ PY_COPIED = tuple(name for name in PY_CODE + PY_DATA if name != "gametext.json")
 STRIPPED = ("ba_dashboard.py",)
 _PY_DATA_SHIPPED = tuple(f"web/py/{name}" for name in PY_DATA)
 
-# Everything the page fetches, together with the build inputs that shape it:
-# build_web.py itself, and the wiki generator (code, authored wording and
-# hand-written articles) that writes web/wiki-data.json.
-# Those generators are hashed because a change to one leaves the committed
-# payload stale while every fetched file still looks untouched, and --check
-# would call the folder fresh. stamp() hashes the entries in the order below;
+# Everything the page fetches, together with the build inputs that shape it,
+# build_web.py itself among them. Generators whose output is listed here (the
+# wiki builder and its wording, tools/i18n.py, tools/translation_catalogue.py)
+# are not: their output carries any change that reaches a visitor, --check
+# compares that output, and an edit that changes nothing served must not tell
+# every open tab to update. stamp() hashes the entries in the order below;
 # changing that order, or appending to the list, changes the stamp, which is
 # the point for an append: a deploy busts caches.
 STAMP_INPUTS = (
@@ -550,8 +550,7 @@ STAMP_INPUTS = (
     # prices and the store rules came later and sit further down: the order is the stamp.
     *PY_CODE, *_PY_DATA_SHIPPED[:3],
     "web/wiki.js", "web/wiki.css", "web/wiki-data.json",
-    "tools/build_wiki_data.py", "tools/wiki_data.py", "tools/wiki_paths.py", "tools/wiki_sample.json",
-    "tools/wiki_topics.json", "web/fonts/fonts.css", "web/maps/floor-plans.json",
+    "web/fonts/fonts.css", "web/maps/floor-plans.json",
     *(f"{NAMES_DIR}/{code}.json" for code in NAME_LANGS),
     # Big Copilot's own text: tt() (inlined in the page) and each language's
     # table, which the page fetches (tools/i18n.py ship writes them).
@@ -570,7 +569,7 @@ STAMP_INPUTS = (
     "tools/optimize_web.mjs", "package-lock.json",
     # The bug report form, which web/app.js loads on demand with the stamp.
     "web/report.js", "web/report.css",
-    "tools/i18n.py", "tools/translation_catalogue.py", "template/translate.html",
+    "template/translate.html",
     "web/translate.js", "web/translate.css",
     *(f"web/translations/{lang}{suffix}.json" for lang in ui_text.languages() for suffix in ("", ".manifest")),
 )
@@ -873,7 +872,7 @@ def check(root: str = HERE) -> list[str]:
     are ignored on both sides, so a CRLF checkout is not stale by itself.
 
     root redirects everything read directly here: the PY_COPIED files and
-    their copies under web/py/, every STAMP_INPUTS entry, web/changelog.json,
+    their copies under web/py/, every STAMP_INPUTS entry, tools/wiki_topics.json, web/changelog.json,
     web/update.js, web/version.json and web/index.html. It does not redirect
     what render() reads through the imported ba_dashboard -- the board
     template, the footer changelog and the embedded map.js, map.css, wiki.js
@@ -920,9 +919,9 @@ def check(root: str = HERE) -> list[str]:
     if missing:
         return stale + missing
     # The hand-written articles travel into wiki-data.json as they stand, so an
-    # edit to tools/wiki_topics.json names the payload, not only the stamp.
-    # (An edit to tools/wiki_sample.json shows through the stamp alone: what the
-    # wording does to the payload cannot be known without the installed game.)
+    # edit to tools/wiki_topics.json names the payload. (An edit to
+    # tools/wiki_sample.json does not show here: what the wording does to the
+    # payload cannot be known without the installed game.)
     try:
         with open(os.path.join(root, "web", "wiki-data.json"), encoding="utf-8") as fh:
             shipped_topics = json.load(fh).get("topics")

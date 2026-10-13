@@ -2593,6 +2593,45 @@
     refresh: () => update(),
   };
 
+  /* --- the site's own dialogs -------------------------------------------- */
+  // What the hosted page's two dialogs share: web/community.js's vote dialog
+  // and web/report.js's bug report form, which both load after this file. The
+  // board's changelog dialog runs in the CLI's dashboard.html too, where this
+  // file is not loaded, so it keeps its own.
+  window.BigCopilotDialog = {
+    /* Makes a built <dialog> modal: a click on its backdrop closes it, unless
+       held() says it must stay (a send in flight), and every close, Escape
+       included, hands focus back to the control that opened it while that
+       control is still on the page, then calls onClose(). Returns show(from),
+       which opens it with `from` as that control. */
+    modal(dialog, {held = () => false, onClose = null} = {}) {
+      let opener = null;
+      dialog.addEventListener("click", (event) => {
+        const r = dialog.getBoundingClientRect();
+        if (!held() && event.target === dialog && (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom)) dialog.close();
+      });
+      dialog.addEventListener("close", () => {
+        if (opener && document.contains(opener)) opener.focus();
+        opener = null;
+        if (onClose) onClose();
+      });
+      return {show(from) { opener = from || null; dialog.showModal(); }};
+    },
+    // A line that screen readers announce when its text changes.
+    status(className) {
+      const p = document.createElement("p");
+      p.className = className;
+      p.setAttribute("role", "status");
+      p.setAttribute("aria-live", "polite");
+      return p;
+    },
+    // Writes a dialog's words again on a change of UI language, after the
+    // board's own listener has set the number locale.
+    relabel(fn) { if (typeof ttOnChange === "function") ttOnChange(() => queueMicrotask(fn)); },
+    // A response's JSON body, or null when it has none.
+    json(res) { return res.json().catch(() => null); },
+  };
+
   /* --- the landing: reveal, the drop zone, the sphere ------------------ */
   // The landing's document and window listeners hang off this controller,
   // so dropping the landing drops them too rather than leaving handlers

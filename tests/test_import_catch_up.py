@@ -18,7 +18,3 @@ class ImportCatchUpTests(unittest.TestCase):
         self.assertEqual(_import_catch_up(400, 100, [1] * 7, 0, 3, 1), 0)
         self.assertEqual(_import_catch_up(0, 100, [1] * 7, 3, 3, .5), 0)
         self.assertEqual(_import_catch_up(0, 100, [1] * 7, 3, 2, .5), 0)
-
-
-if __name__ == "__main__":
-    unittest.main()

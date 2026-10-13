@@ -12,12 +12,10 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from unittest import mock
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ba_save
 import build_web
@@ -97,7 +95,3 @@ class BuildGateTests(unittest.TestCase):
                         build_web.main(allow_fewer_guides=allow)
                     self.assertEqual(str(caught.exception), "wiki: lost businesstypes-x")
                     self.assertIs(wiki.call_args.kwargs["allow_fewer_guides"], allow)
-
-
-if __name__ == "__main__":
-    unittest.main()

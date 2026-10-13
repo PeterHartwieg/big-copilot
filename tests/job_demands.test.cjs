@@ -1,4 +1,4 @@
-﻿// Staff demands on a site's detail and in the finding filters. Install
+// Staff demands on a site's detail and in the finding filters. Install
 // Playwright and its Chromium browser to run; NODE_PATH may point at an existing
 // Playwright installation.
 const {test, before, after} = require('node:test');

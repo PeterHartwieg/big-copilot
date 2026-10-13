@@ -9,14 +9,10 @@ from __future__ import annotations
 
 import gzip
 import os
-import sys
 import tempfile
 import unittest
 import warnings
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.dirname(HERE))
 
 from tests.es3_fixture import (  # noqa: E402
     Byte, Enum, Float32, Instance, NullInstance, Packed, Ref, Shared, Unnamed, encode,
@@ -267,7 +263,3 @@ class PropertyKeys(unittest.TestCase):
         ]
         self.assertEqual(got, want)
         self.assertEqual([list(row) for row in got], [list(row) for row in want])
-
-
-if __name__ == "__main__":
-    unittest.main()

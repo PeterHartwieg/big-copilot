@@ -244,7 +244,3 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(market[ITEM + "icecream"]["r"], round((10 * .35 + 4 * .4375) / 14, 6))
         self.assertEqual(market[ITEM + "icecream"]["p"], 7)
         self.assertEqual(market[ITEM + "paperbag"], {"r": .123})
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -97,7 +97,3 @@ class ProductKeyTests(unittest.TestCase):
         self.assertEqual(sorted(r["slug"] for r in rows),
                          ["ba:itemname_lettuce", "ba:itemname_rawlettuce"])
         self.assertEqual({r["item"] for r in rows}, {"Bag of Lettuce"})
-
-
-if __name__ == "__main__":
-    unittest.main()

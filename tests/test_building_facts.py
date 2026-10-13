@@ -268,7 +268,3 @@ class BuildingFacts(unittest.TestCase):
         game._call = call
         self.assertIsNone(game.poll())
         self.assertEqual(Path(first).read_bytes(), previous)
-
-
-if __name__ == "__main__":
-    unittest.main()

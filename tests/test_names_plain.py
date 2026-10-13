@@ -3,11 +3,8 @@
 A crafted save can put anything in a slug or a street number; the game's own
 text is left as it is.
 """
-import os
-import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 from ba_save import Names, house_number  # noqa: E402
 
@@ -37,7 +34,3 @@ class SlugFallbacks(unittest.TestCase):
         self.assertEqual(house_number("19<img src=x>"), "19")
         self.assertEqual(house_number("<b>"), "-")
         self.assertEqual(self.names.addr(("ba:street_broadway", "7<i>")), "7 Broadway")
-
-
-if __name__ == "__main__":
-    unittest.main()

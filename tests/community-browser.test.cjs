@@ -92,6 +92,8 @@ async function setup(t, options = {}) {
     if(!['index.html','app.js','community.js','community.css','version.json'].includes(name)) return route.abort();
     let body=fs.readFileSync(path.join(web,name),'utf8');
     if(options.savedLanguageBeforeInit && name==='community.js') body+='\nwindow.communityListenerReady = true;';
+    // A tab still on an app.js from before window.BigCopilotDialog existed.
+    if(options.noDialogHelper && name==='community.js') body='delete window.BigCopilotDialog;\n'+body;
     if(options.savedLanguageBeforeInit && name==='index.html') {
       body=body.replace(/(<script src="community\.js[^\"]*"><\/script>)/,'$1<script src="/community-timing-gate.js"></script>');
       if(options.fallbackVoteMarkup) body=body.replace(/(<footer class="sitefoot sf-compact">)([\s\S]*?)(<\/footer>)/,(_all,start,contents,end)=>
@@ -170,6 +172,17 @@ test('landing is network quiet; actual save loading starts presence and preserve
   await page.evaluate(() => { BigCopilotCommunity.start(); BigCopilotCommunity.start(); });
   assert.equal(await page.locator('[data-community-open]').count(),1);
   assert.equal(state.heartbeats.length,1);
+});
+
+test("without app.js's dialog helper the vote card stays hidden, nothing is sent and nothing throws", async t => {
+  const {page,state,loadSave} = await setup(t,{noDialogHelper:true});
+  assert.equal(await page.evaluate(() => window.BigCopilotDialog), undefined);
+  assert.equal(await page.locator('.community-dialog').count(),0);
+  assert.equal(await page.locator('[data-vote-card]').filter({visible:true}).count(),0);
+  await loadSave(page);
+  await page.evaluate(() => { BigCopilotCommunity.start(); BigCopilotCommunity.paintOnline(); });
+  assert.equal(await page.locator('[data-vote-card]').filter({visible:true}).count(),0);
+  assert.equal(state.heartbeats.length,0); assert.equal(state.reads,0);
 });
 
 test('each tab keeps its own id and schedule in memory, and nothing reaches browser storage', async t => {

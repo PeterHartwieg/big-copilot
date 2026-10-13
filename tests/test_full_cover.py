@@ -985,7 +985,3 @@ class ExchangeKeepsDemandsTest(unittest.TestCase):
                     hours_was, days_was = self.broken(base, which(base))
                     self.assertLessEqual(hours_now, hours_was)
                     self.assertLessEqual(days_now, days_was)
-
-
-if __name__ == "__main__":
-    unittest.main()

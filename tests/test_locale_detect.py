@@ -299,7 +299,3 @@ class FindLocaleTests(unittest.TestCase):
         self.assertEqual(len(ba_save._LOCALE_CANDIDATES), 8)
         for path in ba_save._LOCALE_CANDIDATES:
             self.assertTrue(path.endswith("en.json"), path)
-
-
-if __name__ == "__main__":
-    unittest.main()

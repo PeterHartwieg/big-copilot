@@ -7,9 +7,11 @@ the repository root, the way `python -m unittest tests.<name>` starts, and
 reads every file under tests/ for an import statement that names a sibling
 without `tests.`, which an import cannot see when it sits inside a function.
 
-Some modules still put tests/ on sys.path. No import statement needs it now;
-the subprocess scripts in test_staffing and test_staff_hire and the Node suites'
-`python -c` snippets set their own paths.
+No test module patches sys.path for the repository root or tests/: every run
+starts at the root, so `import ba_dashboard` and `from tests import x` resolve.
+Only the files also run as scripts (`python tests/<file>.py`) put the root on
+it. Hash-seed subprocesses go through tests/_seeds.py, which runs them from the
+root; the Node suites' `python -c` snippets set their own paths.
 """
 import ast
 import json

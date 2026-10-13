@@ -32,7 +32,3 @@ class CatalogueScan(unittest.TestCase):
         self.assertEqual(tc.sources(found, english, params), inputs)
         with self.assertRaises(ValueError):
             tc.catalogue(i18n.languages()[0], found, inputs=inputs)
-
-
-if __name__ == '__main__':
-    unittest.main()
