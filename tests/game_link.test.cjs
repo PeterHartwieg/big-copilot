@@ -219,6 +219,7 @@ test('a Block answered under the prompt reads as blocked once the fetch fails', 
   h.run('linkUrl = "http://127.0.0.1:8322"');
   const err = await h.run('linkFetch("/health").then(() => null, (e) => e)');
   assert.equal(err.message, en("app.link.blocked"));
+  assert.equal(err.unsent, true, 'held at the prompt, it never left the browser');
 });
 
 test('an unreachable game leaves the bad state, the install note and the link', async () => {
@@ -1212,7 +1213,7 @@ test('a write asks the browser afresh: withdrawn is unreachable and unsent, rese
   }
 });
 
-test('a fetch the browser blocked under a remembered grant is unsent', async () => {
+test('a fetch that fails under a grant the player then withdraws may have left: blocked, not unsent', async () => {
   const h = harness({routes: {health: HEALTH}});
   const states = {'loopback-network': 'granted'};
   onPublicPage(h, states);
@@ -1220,5 +1221,60 @@ test('a fetch the browser blocked under a remembered grant is unsent', async () 
   h.context.fetch = async () => { states['loopback-network'] = 'denied'; throw new TypeError('Failed to fetch'); };
   const err = await h.run('linkFetch("/health").then(() => null, (e) => e)');
   assert.equal(err.message, en("app.link.blocked"));
-  assert.equal(err.unsent, true);
+  assert.notEqual(err.unsent, true);
+});
+
+test('a write under a fresh grant whose fetch fails, the grant then withdrawn, is uncertain and read again', async () => {
+  const h = harness({routes: {health: HEALTH}});
+  const states = {'loopback-network': 'granted'};
+  onPublicPage(h, states);
+  h.run('approvalMemo["http://127.0.0.1:8322"] = "token"');
+  h.context.fetch = async (url) => {
+    h.seen.calls.push([String(url)]);
+    if (String(url).includes('/write/')) states['loopback-network'] = 'denied';
+    throw new TypeError('Failed to fetch');
+  };
+  const got = await h.run('gameWrite("uniforms", {sites: []}, {})');
+  assert.equal(got.error, 'uncertain', 'the request may have reached the game');
+  assert.ok(got.reread && typeof got.reread.then === 'function', 'the board reads the game again');
+  assert.ok(h.seen.calls.some(([url]) => url.includes('/write/')), 'the write went out');
+  await got.reread;
+});
+
+test('a write held at the prompt and blocked there is unreachable, unsent', async () => {
+  const h = harness({routes: {health: HEALTH}});
+  const states = {'loopback-network': 'prompt'};
+  onPublicPage(h, states);
+  h.run('approvalMemo["http://127.0.0.1:8322"] = "token"');
+  h.context.fetch = async () => { states['loopback-network'] = 'denied'; throw new TypeError('Failed to fetch'); };
+  const got = await h.run('gameWrite("uniforms", {sites: []}, {})');
+  assert.equal(got.error, 'unreachable');
+  assert.equal(got.reread, undefined);
+});
+
+test('only the first status per permission name is listened to, however often it is asked', async () => {
+  const h = harness({routes: {health: HEALTH, refresh: reply(202, {accepted: true, stamp: 's1'})}});
+  const log = onPublicPage(h, {'loopback-network': 'granted', 'local-network-access': 'prompt'});
+  for (let i = 0; i < 5; i++) await h.run('linkFetch("/refresh", {method: "POST"})');
+  assert.equal(log.queries, 10, 'every write-like call asks afresh');
+  const listened = log.statuses.filter((s) => typeof s.onchange === 'function');
+  assert.deepEqual(listened, [log.statuses[0], log.statuses[1]], 'one per name, the first');
+});
+
+test('a change during the ask leaves nothing remembered', async () => {
+  const h = harness({routes: {health: HEALTH}});
+  const states = {'loopback-network': 'granted'};
+  const log = onPublicPage(h, states);
+  await h.run('linkFetch("/health")');  // listens to the first status
+  const query = h.context.navigator.permissions.query;
+  h.context.navigator.permissions.query = async (q) => {
+    const status = await query(q);
+    changed(log);  // the site settings change while the answer is read
+    return status;
+  };
+  await h.run('loopbackPermission(true)');
+  h.context.navigator.permissions.query = query;
+  const before = log.queries;
+  await h.run('linkFetch("/health")');
+  assert.ok(log.queries > before, 'the poll asks again: the overtaken grant was not kept');
 });
