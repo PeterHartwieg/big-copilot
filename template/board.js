@@ -16083,7 +16083,7 @@ function hrFbar(target, f, count){
   const open = !!hrPop && hrPop.target === target;
   return `<div class="hs-fbar" data-hr-filters="${attr(target)}">
     <button type="button" class="hs-sel" data-hs-dem-open="${attr(target)}" aria-haspopup="true" aria-expanded="${open}"${
-      f.ex.includes(HR_PT) ? ` data-tip="${attr(tt("co.hire.f.pt.tip", "Part-time is left out for shop roles only."))}"` : ""}>${
+      f.ex.includes(HR_PT) ? ` data-tip="${attr(tt("co.hire.f.pt.tip", "{demand} is left out for shop roles only.", {demand: hrName(HR_PT)}))}"` : ""}>${
       tt("co.hire.f.leaveout", "Leave out who asks for: {who}", {who: hrDemLabel(f.ex)})}${hrChev()}</button>
     <label class="hs-sel">${tt("co.hire.f.min", "Skill at least:")} <select data-hr-min aria-label="${attr(tt("co.hire.f.min.aria", "Skill at least"))}" class="${f.min ? "set" : ""}">${skills.map(v =>
       `<option value="${v}"${v === f.min ? " selected" : ""}>${v ? `${v}%` : tt("co.hire.f.any", "any")}</option>`).join("")}</select>${hrChev()}</label>
@@ -16104,11 +16104,14 @@ function hrOpenHtml(m){
   const soon = m.cands.filter(c => Number(c.hoursLeft) < 24).length;
   // No candidates is the role rows' to say (declutter T5).
   const nc = m.cands.length;
-  const facts = nc ? `<p class="hs-facts2">${!soon ? tt("co.hire.facts", {one: "<b>{n:,}</b> candidate", other: "<b>{n:,}</b> candidates"}, {n: nc})
-    : gwLink() ? tt("co.hire.facts.soon", {one: "<b>{n:,}</b> candidate · <b class='warn'>{k:,}</b> expires within 24 h",
-        other: "<b>{n:,}</b> candidates · <b class='warn'>{k:,}</b> expire within 24 h"}, {n: nc, k: soon})
-    : tt("co.hire.facts.soon.save", {one: "<b>{n:,}</b> candidate · <b class='warn'>{k:,}</b> expires within 24 h (as of the save)",
-        other: "<b>{n:,}</b> candidates · <b class='warn'>{k:,}</b> expire within 24 h (as of the save)"}, {n: nc, k: soon})}</p>` : "";
+  /* How many candidates, and how many of them expire soon: two messages, each
+     pluralised on its own count. */
+  const expiring = !soon ? null : gwLink()
+    ? tt("co.hire.facts.soon", {one: "<b class='warn'>{n:,}</b> expires within 24 h", other: "<b class='warn'>{n:,}</b> expire within 24 h"}, {n: soon})
+    : tt("co.hire.facts.soon.save", {one: "<b class='warn'>{n:,}</b> expires within 24 h (as of the save)",
+        other: "<b class='warn'>{n:,}</b> expire within 24 h (as of the save)"}, {n: soon});
+  const facts = nc ? `<p class="hs-facts2">${[tt("co.hire.facts", {one: "<b>{n:,}</b> candidate", other: "<b>{n:,}</b> candidates"}, {n: nc}),
+    expiring].filter(Boolean).join(" · ")}</p>` : "";
   /* No "Open places" heading: the filters under "Whom to hire" say what the
      table is (Peter's testing, A10). */
   const head = hrNoHoursHtml();
@@ -16189,7 +16192,7 @@ function hrFindHtml(m){
     const where = n ? tt("co.hire.find.recruiting", {
         one: "your {headhunter} is recruiting {role}: wait for more candidates, or a {agency}",
         other: "{n:,} of your {headhunters} are recruiting {role}: wait for more candidates, or a {agency}"},
-        {n, headhunter: hh, headhunters: gnLang === "en" ? `${hh}s` : hh, headhunter_name: hh, role: hrRole(r.skill), agency: spEsc(agency)})
+        {n, headhunter: hh, headhunters: hrRoles("ba:skill_headhunter", n), headhunter_name: hh, role: hrRole(r.skill), agency: spEsc(agency)})
       : "";
     return `<li><b>${hrRole(r.skill)}</b>${have ? `<span>${have}</span>` : ""}${where ? `<span class="to">${hrSvg("chev")}${where}</span>` : ""}</li>`;
   }).join("");
@@ -16337,7 +16340,7 @@ function hrCandRow(m, r, c){
   const why = [...warned.keys()].map(unmet).join(", ");
   const noShop = !picked && !elsewhere && r.pt && r.shop && !r.allShop && hrAsksPt(c);
   const to = elsewhere ? `<span class="dim">${tt("co.hire.cand.elsewhere", "picked for {site}", {site: spEsc(hrSiteName(elsewhere))})}</span>`
-    : noShop ? `<span class="dim">${tt("co.hire.cand.noshop", "not for shop weeks (Part-time)")}</span>`
+    : noShop ? `<span class="dim">${tt("co.hire.cand.noshop", "not for shop weeks ({demand})", {demand: hrName(HR_PT)})}</span>`
     : at && at.nofit ? `<span class="dim">${tt("co.hire.nofit", "no open week meets their schedule demands")}</span>`
     : S ? (at.over ? tt("co.hire.cand.over", "{site} <span class='warn'>over the plan</span>", {site: spEsc(hrSiteName(S))}) : spEsc(hrSiteName(S))) : `<span class="dim">–</span>`;
   const soon = Number(c.hoursLeft) < 24;
@@ -16456,7 +16459,7 @@ function hrPopDraw(m){
   const count = new Map();
   hrPopPool(m, hrPop.target).forEach(c => (c.demands || []).forEach(d => count.set(d, (count.get(d) || 0) + 1)));
   f.ex.forEach(d => { if(!count.has(d)) count.set(d, 0); });
-  const all = [...count].sort((a, b) => b[1] - a[1] || gnCompare(gameName(a[0]) || a[0], gameName(b[0]) || b[0]));
+  const all = [...count].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])));
   const few = hrPop.all || all.length <= 12 ? all : all.filter(([d], i) => i < 10 || f.ex.includes(d));
   let pop = $("hsDemPop");
   if(!pop){

@@ -324,7 +324,7 @@ test('netting: the bench a plan counts on, then spare people, then hires, best f
   // Bo's assignment takes no hire week: own staff counts Sam alone.
   // The order panel beside the table holds the totals: no Total row repeats them (declutter T6).
   assert.equal(await roles.locator('tfoot').count(), 0);
-  assert.match(await page.locator('#hsOpen .hs-facts2').textContent(), textRe('co.hire.facts.soon', {n:15, k:2}, {anchor:'full'}));
+  assert.match(await page.locator('#hsOpen .hs-facts2').textContent(), new RegExp(`^${textRe('co.hire.facts', {n: 15}).source} · ${textRe('co.hire.facts.soon', {n: 2}).source}$`));
   // The order panel: what the button does.
   const order = page.locator('#hsOrder');
   assert.deepEqual(await order.locator('.hs-ol li > span').allTextContents(), [en("co.hire.tile.move"), en('co.hire.tile.hire'), en("co.hire.tile.weeks")]);
@@ -656,6 +656,16 @@ test('"Pick more" sends no reassign, and leaves the bench a plan counts on out o
   assert.ok(!bare.days.some(x => x.shifts.some(s => s.employeeId === 'BENCH1')));
 });
 
+test('the candidate facts count the candidates and the ones expiring apart: many candidates, one expiring', async (t) => {
+  const d = JSON.parse(payload);
+  d.candidates = d.candidates.map(c => c.id === 'h1' ? Object.assign({}, c, {hoursLeft: 100}) : c);
+  const page = await board(t, {data: JSON.stringify(d)});
+  const facts = await page.locator('#hsOpen .hs-facts2').textContent();
+  assert.equal(facts, `${textEn('co.hire.facts', {n: 15})} · ${textEn('co.hire.facts.soon', {n: 1})}`);
+  // Pins the wording: the verb follows the one expiring, not the fifteen candidates.
+  assert.match(facts, /1 expires within 24 h/);
+});
+
 test('a role with no candidates says so instead of Change picks', async (t) => {
   const d = JSON.parse(payload);
   d.candidates = d.candidates.filter(c => c.id !== 'l1');
@@ -848,7 +858,7 @@ test('not linked: everything works from the save, the button is off with how to 
   await gate.locator('summary').click();
   assert.equal(await gate.locator('ol').isVisible(), true);
   assert.equal(await page.locator('#hsOrder .hs-note').count(), 0);
-  assert.match(await page.locator('#hsOpen .hs-facts2').textContent(), textRe('co.hire.facts.soon.save', {n:15, k:2}, {anchor:'full'}));
+  assert.match(await page.locator('#hsOpen .hs-facts2').textContent(), new RegExp(`^${textRe('co.hire.facts', {n: 15}).source} · ${textRe('co.hire.facts.soon.save', {n: 2}).source}$`));
   await review.dispatchEvent('click');
   assert.equal(await page.locator('dialog.gw-dlg').count(), 0);
   // The picks still work, and Quick hire picks but does not hire.
@@ -1182,7 +1192,7 @@ test('Part-time is left out per destination: a shop week, not an office week of 
   assert.deepEqual(m.roles[0].picked, ['p1', 'c2', 'c1', 'c4']);
   assert.deepEqual(m.weeks[4], [O, 'office', ['hire:l1', 'hire:p1']]);
   await page.locator(`[data-hr-open="${CS}"]`).click();
-  assert.equal(await page.locator('#hsSheet [data-hr-cand="p2"] td.to').textContent(), en('co.hire.cand.noshop'));
+  assert.equal(await page.locator('#hsSheet [data-hr-cand="p2"] td.to').textContent(), en('co.hire.cand.noshop', {demand: 'Part-time'}));
   assert.equal(await page.locator('#hsSheet [data-hr-cand="p1"] td.to').textContent(), 'HART. Law');
   await page.locator('#hsSheet [data-hs-close]').click();
   await page.locator('#hsSheet').waitFor({state: 'detached'});
@@ -1233,7 +1243,7 @@ test('Part-time is left out by default for shop roles only', async (t) => {
   const filter = page.locator('#hsOpen [data-hs-dem-open=""]');
   assert.match(await filter.textContent(), textRe('co.hire.f.leaveout', {who:'Part-time'}, {anchor:'start'}));
   // Shop roles only: the filter's tip, not a line under it (declutter T10).
-  assert.equal(await filter.getAttribute('data-tip'), en('co.hire.f.pt.tip'));
+  assert.equal(await filter.getAttribute('data-tip'), en('co.hire.f.pt.tip', {demand: 'Part-time'}));
   assert.equal(await page.locator('#hsOpen .hs-shops').count(), 0);
   // Quick hire takes the page's filters (declutter T9): Part-time left out at a shop, not at the office.
   const box = page.locator('#hsQuick');
