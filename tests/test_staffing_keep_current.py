@@ -189,7 +189,7 @@ def staffed_days(plan_row):
 
 
 class CallersTest(unittest.TestCase):
-    """The plans a write replaces the week with hold: a shop's three, an office's demand plan."""
+    """The plans a write replaces the week with hold: a shop's demand and open-hours plans, an office's demand plan."""
 
     def shop(self):
         crew = [ts.employee("a", [ts.SERVICE], demands=(ts.FULLTIME,))]
@@ -224,7 +224,9 @@ class CallersTest(unittest.TestCase):
 
     def test_a_shop_keeps_its_cashier_on_their_days(self):
         row = self.shop()
-        for plan_row in (row, row["fullCover"], row["openCover"]):
+        # The demand plan and the open-hours plan; the 24/7 test is a choice
+        # that changes the opening hours, and keeps nobody's (a speed call).
+        for plan_row in (row, row["openCover"]):
             self.assertTrue({3, 4, 5, 6} <= set(staffed_days(plan_row)), staffed_days(plan_row))
         with without_keep():
             plain = self.shop()

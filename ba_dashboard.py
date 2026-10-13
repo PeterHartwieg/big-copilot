@@ -14000,10 +14000,17 @@ def _staffing(
         grid = site["grid"]
         offered = any(s["skill"] for s in grid["stations"]) and any(grid["open"])
         try:
+            # The 24/7 test is a choice the player makes, and a week it writes
+            # opens the shop hours it is not open now: it keeps nobody's hours
+            # while it waits on a hire (issue #446), unless it is also the
+            # open-hours plan the shop is on by default (_open_is_full(),
+            # _opens_first()). Holding them in every shop's longest week cost
+            # the board most of a second placement of it.
             full = _place_week(
                 grid, _full_need(grid), ALL_DAY_OPEN, site["coverPosts"],
                 site["own"] + site_bench, people, business, site_bench, scratch,
-                current=site["current"]["list"], keep=True,
+                current=site["current"]["list"],
+                keep=offered and _open_is_full(site) and _opens_first(site, business),
             )
             if not offered:
                 opened = None
@@ -15048,8 +15055,8 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
     # only the entries on those hours. The fewest people come first, so a held
     # week is kept only if it puts nobody to work the plain week leaves at
     # 0 h, draws the same bench members, hires no more people, and leaves
-    # fewer hours short; of two such, the one with fewer short. Otherwise the
-    # plain week stands.
+    # fewer hours short; the first that does is kept. Otherwise the plain
+    # week stands.
     dropped, missing = _waiting_drops(shifts, standing, role_keys) if standing else ([], 0)
     if dropped:
         plain = snapshot(shifts, hire_weeks, here)
@@ -15060,9 +15067,9 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
              if row["employee"] in here_ids and role_keys.get(row["station"]) in short_roles],
             [row for row in dropped if row["employee"] in here_ids],
         ]
-        best, kept = missing, None
+        kept = None
         for held in tries:
-            if not held or (kept is not None and held == kept[1]):
+            if not held:
                 continue
             for pid, entry in start.items():
                 state[pid] = _copy_state(entry)
@@ -15072,11 +15079,10 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
             now_here, now_bench, now_hired = people(shifts, hire_weeks)
             short = _waiting_drops(shifts, standing, role_keys)[1]
             if (now_here <= here_ids and now_bench == bench_ids and now_hired <= hired
-                    and short < best):
-                best, kept = short, (snapshot(shifts, hire_weeks, here), held)
-                if not short:
-                    break
-        shifts, hire_weeks, here = restore(kept[0] if kept else plain)
+                    and short < missing):
+                kept = snapshot(shifts, hire_weeks, here)
+                break
+        shifts, hire_weeks, here = restore(kept or plain)
     shifts.sort(
         key=lambda s: (s["wd"], s["from"], s["to"], str(s["station"]), str(s["employee"]))
     )

@@ -821,9 +821,13 @@ and the rest of the week placed around them. First every entry in a role with su
 is kept, for the people the plain week gives hours; then only the entries on those hours.
 The fewest people still come first, so a kept week is used only if it puts nobody to work
 whom the plain week leaves at 0 h, draws the same unassigned people, hires nobody more and
-leaves fewer hours short; otherwise the plain week stands, and that hour is short until the
-hire comes. The hours the plan wants (`need`) never change. An office's default plan adds
-entries and replaces none, so it is left as it was; factories are not written this way.
+leaves fewer hours short (the first that does is used); otherwise the plain week stands, and
+that hour is short until the hire comes. The hours the plan wants (`need`) never change. The
+24/7 test keeps nobody's hours this way unless it is also the open-hours plan the shop is on
+by default: it opens the shop hours it is not open now, and holding entries in that, the
+longest week a shop has, cost the board most of a second placement of it. An office's
+default plan adds entries and replaces none, so it is left as it was; factories are not
+written this way.
 
 **A week can change hands whole.** Which name the plan starts is decided before anybody has
 an hour, so a cheaper person with no hours demand can end up holding a week a full-timer
