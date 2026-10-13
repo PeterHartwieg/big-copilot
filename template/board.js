@@ -22581,9 +22581,9 @@ function pxPrefsHtml(){
   const gametext = chip ? pxRow("gametext", tt("nav.px.text.title", "Game text"), tt("nav.px.text.lead", "Names, recipes and station capacities come with the page. A newer game's own en.json wins over them."),
     `<p class="px-state">${spEsc(chip.textContent.trim())}</p><div class="px-acts"><button type="button" class="nx-btn sm" data-px-do="locale">${tt("nav.px.text.choose", "Choose en.json")}</button>${
       reset && !reset.hidden ? `<button type="button" class="nx-btn sm ghost" data-px-do="localeReset">${spEsc(reset.textContent.trim())}</button>` : ""}</div>`) : "";
-  const forget = $("forgetHistory");
+  const forgetBtn = $("forgetHistory");
   const history = pxRow("history", tt("nav.px.hist.title", "History"), tt("nav.px.hist.lead", "Trends and week-on-week figures need a history the save does not keep."),
-    forget ? `<p class="px-note">${tt("nav.px.hist.web", "Two weeks of demand and sixty days of cash are kept in this browser, per company. Forgetting them starts a fresh record; your saves are not touched.")}</p><div class="px-acts"><button type="button" class="nx-btn sm" data-px-do="forget">${tt("land.forget", "Forget history")}</button></div>`
+    forgetBtn ? `<p class="px-note">${tt("nav.px.hist.web", "Two weeks of demand and sixty days of cash are kept in this browser, per company. Forgetting them starts a fresh record; your saves are not touched.")}</p><div class="px-acts"><button type="button" class="nx-btn sm" data-px-do="forget">${tt("land.forget", "Forget history")}</button></div>`
       : `<p class="px-note">${tt("nav.px.hist.cli2", "The Python version keeps it in market_history.json beside the board; Local board below rebuilds it from older saves.")}</p>`);
   const on = ALERT_GROUPS.filter(g => alertGroupPrefs[g.id] !== false).length;
   const line = hasData() && D.kpi && Number.isFinite(D.kpi.materiality) ? fmt(D.kpi.materiality) : null;
