@@ -11880,6 +11880,92 @@ function drawMarket(){
   wireTips();
 }
 
+/* --- the planners' shared pieces ----------------------------------------------
+   Open a store and Plan a factory draw the same step bar, plan list and
+   financing card (the os- classes); each passes its own data- prefix ("os" or
+   "of"), its words where they differ, and its numbers. Drawing never writes
+   the plan: the loaders and the new-plan paths give every plan its finance. */
+/* Names in a sentence: the first two, and how many more. */
+const planNames = names => names.length > 2
+  ? tt("gr.os.why.more", "{items} +{n}", {items: names.slice(0, 2).join(", "), n: names.length - 2}) : names.join(", ");
+/* A kept plan's loan, as the loaders read it back from storage. */
+const planFinanceClean = f => f && typeof f === "object" ? {on: !!f.on,
+  amount: f.amount == null || !Number.isFinite(+f.amount) ? null : Math.max(0, +f.amount),
+  bank: typeof f.bank === "string" ? f.bank : null} : {on: false, amount: null, bank: null};
+/* The plan's lender: its own pick, else Vantander, else the first bank. */
+function planBank(plan){
+  const banks = (osFacts().finance || {}).banks || [], fin = (plan && plan.finance) || {};
+  return banks.find(b => b.id === fin.bank) || banks.find(b => b.id === "VantanderBankSettings") || banks[0] || null;
+}
+/* The step bar and the plan picker. `steps` holds each step's {s, label,
+   ready, done, tip}; `pick` the picker's plans, the current id, a plan's name
+   and the picker's words. */
+function planCtlHtml(prefix, step, steps, navAria, pick){
+  const html = steps.map(({s, label, ready, done, tip}, i) =>
+    `${i ? `<span class="sep" aria-hidden="true"></span>` : ""}<button type="button" class="${s === step ? "on" : done ? "done" : ""}" data-${prefix}-step="${s}"${
+      ready ? "" : " disabled"}${s === step ? ` aria-current="step"` : ""}${tip ? ` data-tip="${attr(tip)}"` : ""}><i>${done ? icon("tick") : String(i + 1)}</i>${label}</button>`).join("");
+  const opts = pick.plans.map(p => `<option value="${attr(p.id)}"${p.id === pick.cur ? " selected" : ""}>${spEsc(pick.name(p))}</option>`).join("");
+  return `<nav class="os-steps" aria-label="${attr(navAria)}">${html}</nav>
+    <div class="aside"><label class="os-planpick"><span>${pick.label}</span><select data-${prefix}-plan aria-label="${attr(pick.aria)}">
+      <option value=""${pick.cur ? "" : " selected"}>${pick.fresh}</option>${opts}</select>${icon("chev")}</label></div>`;
+}
+/* The kept plans, one row each: opened by its button, deleted by its ×. A
+   row is {id, cls, title (HTML), sub (text), stage, pct, value (HTML), drop
+   (the ×'s label)}. */
+const planRowHtml = (prefix, r) => `<div class="os-plan${r.cls}"><button type="button" class="os-plango" data-${prefix}-open="${attr(r.id)}"><span><b>${r.title}</b><small>${spEsc(r.sub)}</small></span>
+      <span><span class="os-lab">${r.stage}</span><span class="os-meter" style="--w:${r.pct}%"><i></i></span></span>
+      <span class="v">${r.value}</span>${icon("chev")}</button>
+      <button type="button" class="os-x" data-${prefix}-drop="${attr(r.id)}" aria-label="${attr(r.drop)}" data-tip="${
+        attr(tt("gr.os.plans.dropTip", "Delete this plan"))}">×</button></div>`;
+const planListHtml = (title, rows) => `<div class="os-h"><h2>${title}</h2><span class="c">${rows.length}</span></div><div class="os-plans">${rows.join("")}</div>`;
+/* The financing card: a switch, the lender, the amount as a field and a
+   slider kept to what the bank lends and to the investment (`total`), and the
+   figures, `facts(bank, amount)`. Half the investment until the reader picks
+   an amount; 0 is a choice too. */
+function planFinanceHtml(prefix, plan, total, offText, facts){
+  const f = osFacts().finance || {}, banks = f.banks || [];
+  if(!banks.length || !plan) return "";
+  const fin = plan.finance || {}, on = !!fin.on;
+  const head = `<div class="os-finhead"><h3>${osIcon("bank")}${tt("gr.os.fin.title", "Financing")}</h3>
+    <label class="os-switch"><input type="checkbox" data-${prefix}-fin-on${on ? " checked" : ""}><span>${tt("gr.os.fin.on", "Borrow part of it")}</span></label></div>`;
+  if(!on) return `<div class="os-card os-fin" id="${prefix}Fin">${head}<p class="quiet">${offText}</p></div>`;
+  const bank = planBank(plan);
+  const lenders = banks.map(b => `<button type="button" class="${b.id === bank.id ? "on" : ""}" data-${prefix}-bank="${attr(b.id)}" aria-pressed="${b.id === bank.id}">${spEsc(b.name)} <b>${
+    tt("gr.os.fin.rate", "{r}% a year · {d} days", {r: num(Math.round(b.rate * (f.multiplier || 0) * 10) / 10), d: b.term})}</b></button>`).join("");
+  const limit = Math.min(osLoanLimit(bank), Math.floor(total));
+  const amount = Math.max(0, Math.min(limit, fin.amount ?? Math.round(total / 2)));
+  return `<div class="os-card os-fin" id="${prefix}Fin">${head}
+    <div class="os-finctl"><div class="os-fr"><span>${tt("gr.os.fin.lender", "Lender")}</span><nav class="os-seg">${lenders}</nav></div>
+    <div class="os-fr"><span>${tt("gr.os.fin.amount", "Amount")}</span><div class="os-amount"><label class="os-num">$<input type="number" min="0" max="${limit}" step="1000" value="${Math.round(amount)}" data-${prefix}-fin-amount aria-label="${attr(tt("gr.os.fin.amountAria", "Amount to borrow"))}"></label>
+      <input type="range" min="0" max="${limit}" step="${Math.max(500, osNiceStep(limit / 100))}" value="${Math.round(amount)}" data-${prefix}-fin-range aria-label="${attr(tt("gr.os.fin.amountAria", "Amount to borrow"))}">
+      <small>${tt("gr.os.fin.limit", "{bank} lends you up to {w} now", {bank: bank.name, w: fmt(osLoanLimit(bank))})}</small></div></div></div>
+    <div class="os-finfacts" id="${prefix}FinFacts">${facts(bank, amount)}</div></div>`;
+}
+/* The figures under it, as cells. Below the bank's minimum there is no loan,
+   and one cell says so; otherwise `cells(loan)` draws them. */
+const planFinCell = (lab, value, sub) => `<div><span class="os-lab">${lab}</span><b>${value}</b><small>${sub}</small></div>`;
+function planFinFacts(total, bank, amount, cells){
+  const loan = osLoan(amount, bank);
+  if(!loan) return planFinCell(tt("gr.os.fin.upfront", "Cash upfront"), fmt(total), tt("gr.os.fin.min", "a bank lends {w} at least", {w: fmt((osFacts().finance || {}).minimum || 0)}));
+  return cells(loan);
+}
+/* Only the figures move while the amount is typed or dragged. The field says
+   the loan the figures use: past the limit it snaps back, even while it is
+   being typed in. */
+function planFinanceUpdate(prefix, plan, total, amount, facts, save){
+  const bank = planBank(plan);
+  if(!bank) return;
+  const limit = Math.min(osLoanLimit(bank), Math.floor(total)), asked = Math.round(+amount || 0);
+  amount = Math.max(0, Math.min(limit, asked));
+  plan.finance = {...(plan.finance || {}), amount};
+  save();
+  const box = $(`${prefix}FinFacts`);
+  if(box) box.innerHTML = facts(bank, amount);
+  const fin = $(`${prefix}Fin`);
+  if(fin) fin.querySelectorAll(`[data-${prefix}-fin-amount], [data-${prefix}-fin-range]`).forEach(i => {
+    if(document.activeElement !== i || asked !== amount) i.value = amount; });
+}
+
 /* --- Expansion › Open a store ------------------------------------------------
    docs/dashboard-reference.md, "Open a store". A plan walks four steps: what to open
    (a type, or a Demand cell), where (Find a location, embedded and fixed to
@@ -11941,9 +12027,7 @@ function osLoad(){
       osPlans = raw.plans.filter(p => p && typeof p.id === "string" && typeof p.type === "string")
         .map(p => ({id: p.id, type: p.type, hood: typeof p.hood === "string" ? p.hood : null,
           key: typeof p.key === "string" ? p.key : null, mode: p.mode === "self" ? "self" : p.mode === "firm" ? "firm" : null,
-          finance: p.finance && typeof p.finance === "object" ? {on: !!p.finance.on,
-            amount: p.finance.amount == null || !Number.isFinite(+p.finance.amount) ? null : Math.max(0, +p.finance.amount),
-            bank: typeof p.finance.bank === "string" ? p.finance.bank : null} : {on: false, amount: null, bank: null},
+          finance: planFinanceClean(p.finance),
           step: OS_STEPS.includes(p.step) ? p.step : "what", made: +p.made || null, snap: osSnapClean(p.snap),
           opened: Number.isFinite(p.opened) ? p.opened : null, paid: !!p.paid,
           /* A plan kept before `sold` was: one whose store opened is taken as a record. */
@@ -12084,17 +12168,12 @@ function osStepReady(s, plan){
 function osCtlHtml(plan){
   const at = OS_STEPS.indexOf(osStep);
   const steps = OS_STEPS.map((s, i) => {
-    const ready = osStepReady(s, plan), done = i < at && ready, cls = s === osStep ? "on" : done ? "done" : "";
-    const mark = done ? icon("tick") : String(i + 1);
-    const later = s === "open" && !ready;
-    return `${i ? `<span class="sep" aria-hidden="true"></span>` : ""}<button type="button" class="${cls}" data-os-step="${s}"${
-      ready ? "" : ` disabled`}${s === osStep ? ` aria-current="step"` : ""}${later ? ` data-tip="${attr(tt("gr.os.step.payback",
-      "Payback monitoring comes once the store trades."))}"` : ""}><i>${mark}</i>${osStepLabel(s)}</button>`;
-  }).join("");
-  const opts = osPlans.map(p => `<option value="${attr(p.id)}"${p.id === osCur ? " selected" : ""}>${spEsc(osPlanName(p))}</option>`).join("");
-  return `<nav class="os-steps" aria-label="${attr(tt("gr.os.steps.label", "Open a store, step by step"))}">${steps}</nav>
-    <div class="aside"><label class="os-planpick"><span>${tt("gr.os.plan.pick", "Plan")}</span><select data-os-plan aria-label="${attr(tt("gr.os.plan.pickAria", "Which plan"))}">
-      <option value=""${osCur ? "" : " selected"}>${tt("gr.os.plan.new", "New plan")}</option>${opts}</select>${icon("chev")}</label></div>`;
+    const ready = osStepReady(s, plan);
+    return {s, label: osStepLabel(s), ready, done: i < at && ready,
+      tip: s === "open" && !ready ? tt("gr.os.step.payback", "Payback monitoring comes once the store trades.") : null};
+  });
+  return planCtlHtml("os", osStep, steps, tt("gr.os.steps.label", "Open a store, step by step"), {plans: osPlans, cur: osCur, name: osPlanName,
+    label: tt("gr.os.plan.pick", "Plan"), aria: tt("gr.os.plan.pickAria", "Which plan"), fresh: tt("gr.os.plan.new", "New plan")});
 }
 const osPlanName = p => {
   const b = osBuilding(p.key);
@@ -12212,14 +12291,13 @@ function osPlansHtml(){
       : p.step === "breakeven" ? [50, tt("gr.os.stage.be", "Break even")] : [33, tt("gr.os.stage.invest", "Investment")];
     const sub = b ? tt("gr.os.plans.at", "{address} · {hood}", {address: b.address, hood: hoodName(b.hood)})
       : p.hood ? tt("gr.os.plans.hood", "{hood} · no location yet", {hood: hoodName(p.hood)}) : tt("gr.os.plans.none", "no location yet");
-    return `<div class="os-plan${open ? " open" : closed ? " closed" : ""}"><button type="button" class="os-plango" data-os-open="${attr(p.id)}"><span><b>${spEsc(osTypeName(p.type))}${
-      open ? ` <span class="os-tag req">${tt("gr.os.plans.open", "Open")}</span>` : closed ? ` <span class="os-tag">${tt("gr.os.plans.closed", "Closed")}</span>` : ""}</b><small>${spEsc(sub)}</small></span>
-      <span><span class="os-lab">${stage[1]}</span><span class="os-meter" style="--w:${stage[0]}%"><i></i></span></span>
-      <span class="v">${cost ? fmt(cost) : inv ? fmt(inv[mode]) : `<span class="os-dim">–</span>`}</span>${icon("chev")}</button>
-      <button type="button" class="os-x" data-os-drop="${attr(p.id)}" aria-label="${attr(tt("gr.os.plans.drop", "Delete the plan {name}", {name: osPlanName(p)}))}" data-tip="${
-        attr(tt("gr.os.plans.dropTip", "Delete this plan"))}">×</button></div>`;
-  }).join("");
-  return `<div class="os-h"><h2>${tt("gr.os.plans.title", "Your plans")}</h2><span class="c">${osPlans.length}</span></div><div class="os-plans">${rows}</div>`;
+    return planRowHtml("os", {id: p.id, cls: open ? " open" : closed ? " closed" : "", sub, stage: stage[1], pct: stage[0],
+      title: `${spEsc(osTypeName(p.type))}${open ? ` <span class="os-tag req">${tt("gr.os.plans.open", "Open")}</span>`
+        : closed ? ` <span class="os-tag">${tt("gr.os.plans.closed", "Closed")}</span>` : ""}`,
+      value: cost ? fmt(cost) : inv ? fmt(inv[mode]) : `<span class="os-dim">–</span>`,
+      drop: tt("gr.os.plans.drop", "Delete the plan {name}", {name: osPlanName(p)})});
+  });
+  return planListHtml(tt("gr.os.plans.title", "Your plans"), rows);
 }
 
 /* Step 2: Find a location, embedded, fixed to the plan's type. */
@@ -12514,62 +12592,29 @@ const osNiceStep = v => { const e = Math.pow(10, Math.floor(Math.log10(Math.max(
 /* The financing panel: part of the investment borrowed, what that costs a
    day against the expected profit, and break even with and without it. */
 function osFinHtml(plan, est){
-  const f = osFacts().finance || {}, banks = f.banks || [];
-  if(!banks.length) return "";
-  const fin = plan.finance || (plan.finance = {on: false, amount: 0, bank: null});
-  const on = !!fin.on;
-  const head = `<div class="os-finhead"><h3>${osIcon("bank")}${tt("gr.os.fin.title", "Financing")}</h3>
-    <label class="os-switch"><input type="checkbox" data-os-fin-on${on ? " checked" : ""}><span>${tt("gr.os.fin.on", "Borrow part of it")}</span></label></div>`;
-  if(!on) return `<div class="os-card os-fin" id="osFin">${head}<p class="quiet">${tt("gr.os.fin.off",
-    "A bank loan pays part of the investment now and costs interest every day until it is repaid. The game books the loan to the company, not to the store.")}</p></div>`;
-  const bank = banks.find(b => b.id === fin.bank) || banks.find(b => b.id === "VantanderBankSettings") || banks[0];
-  const lenders = banks.map(b => `<button type="button" class="${b.id === bank.id ? "on" : ""}" data-os-bank="${attr(b.id)}" aria-pressed="${b.id === bank.id}">${spEsc(b.name)} <b>${
-    tt("gr.os.fin.rate", "{r}% a year · {d} days", {r: num(Math.round(b.rate * (f.multiplier || 0) * 10) / 10), d: b.term})}</b></button>`).join("");
-  const mode = osMode(plan), inv = est.inv[mode];
-  const limit = Math.min(osLoanLimit(bank), Math.floor(inv));
-  /* Half the investment until the reader picks an amount; 0 is a choice too. */
-  const amount = Math.max(0, Math.min(limit, fin.amount ?? Math.round(inv / 2)));
-  return `<div class="os-card os-fin" id="osFin">${head}
-    <div class="os-finctl"><div class="os-fr"><span>${tt("gr.os.fin.lender", "Lender")}</span><nav class="os-seg">${lenders}</nav></div>
-    <div class="os-fr"><span>${tt("gr.os.fin.amount", "Amount")}</span><div class="os-amount"><label class="os-num">$<input type="number" min="0" max="${limit}" step="1000" value="${Math.round(amount)}" data-os-fin-amount aria-label="${attr(tt("gr.os.fin.amountAria", "Amount to borrow"))}"></label>
-      <input type="range" min="0" max="${limit}" step="${Math.max(500, osNiceStep(limit / 100))}" value="${Math.round(amount)}" data-os-fin-range aria-label="${attr(tt("gr.os.fin.amountAria", "Amount to borrow"))}">
-      <small>${tt("gr.os.fin.limit", "{bank} lends you up to {w} now", {bank: bank.name, w: fmt(osLoanLimit(bank))})}</small></div></div></div>
-    <div class="os-finfacts" id="osFinFacts">${osFinFacts(plan, est, bank, amount)}</div></div>`;
+  return planFinanceHtml("os", plan, est.inv[osMode(plan)], tt("gr.os.fin.off",
+    "A bank loan pays part of the investment now and costs interest every day until it is repaid. The game books the loan to the company, not to the store."),
+    (bank, amount) => osFinFacts(plan, est, bank, amount));
 }
 function osFinFacts(plan, est, bank, amount){
   /* On the same basis as the headline: the middle of the profit range. */
-  const f = osFacts().finance || {}, mode = osMode(plan), inv = est.inv[mode], p = est.profit * OS_MID, day = k => est.day(k) * OS_MID;
-  const loan = osLoan(amount, bank);
-  const cell = (lab, value, sub) => `<div><span class="os-lab">${lab}</span><b>${value}</b><small>${sub}</small></div>`;
-  if(!loan) return cell(tt("gr.os.fin.upfront", "Cash upfront"), fmt(inv), tt("gr.os.fin.min", "a bank lends {w} at least", {w: fmt(f.minimum || 0)}));
-  const own = inv - amount, daily = loan.interest + loan.repay;
-  const without = osBreakDay(inv, day), with_ = osLoanDays(own, day, loan);
-  const payoff = without != null && without < loan.days ? without * loan.interest : null;
-  const dayText = n => n == null ? tt("gr.os.be.never", "not at this profit") : tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: num(n)});
-  return cell(tt("gr.os.fin.upfront", "Cash upfront"), fmt(own), tt("gr.os.fin.upfront.sub", "{w} borrowed", {w: fmt(amount)}))
-    + cell(tt("gr.os.fin.daily", "A day while it runs"), fmt(daily), tt("gr.os.fin.daily.sub", "{r} repaid + {i} interest, against {p} profit", {r: fmt(loan.repay), i: fmt(loan.interest), p: fmt(p)}))
-    + cell(tt("gr.os.fin.interest", "Interest"), fmt(loan.total), payoff != null ? tt("gr.os.fin.interest.early", "over {n} days; {w} if paid off at break even", {n: num(loan.days), w: fmt(payoff)})
-      : tt("gr.os.fin.interest.term", "over {n} days, flat on the amount borrowed", {n: num(loan.days)}))
-    + cell(tt("gr.os.fin.be", "Your own cash back"), dayText(with_), tt("gr.os.fin.be.sub", "{d} without the loan", {d: dayText(without)}));
+  const inv = est.inv[osMode(plan)], p = est.profit * OS_MID, day = k => est.day(k) * OS_MID, cell = planFinCell;
+  return planFinFacts(inv, bank, amount, loan => {
+    const own = inv - amount, daily = loan.interest + loan.repay;
+    const without = osBreakDay(inv, day), with_ = osLoanDays(own, day, loan);
+    const payoff = without != null && without < loan.days ? without * loan.interest : null;
+    const dayText = n => n == null ? tt("gr.os.be.never", "not at this profit") : tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: num(n)});
+    return cell(tt("gr.os.fin.upfront", "Cash upfront"), fmt(own), tt("gr.os.fin.upfront.sub", "{w} borrowed", {w: fmt(amount)}))
+      + cell(tt("gr.os.fin.daily", "A day while it runs"), fmt(daily), tt("gr.os.fin.daily.sub", "{r} repaid + {i} interest, against {p} profit", {r: fmt(loan.repay), i: fmt(loan.interest), p: fmt(p)}))
+      + cell(tt("gr.os.fin.interest", "Interest"), fmt(loan.total), payoff != null ? tt("gr.os.fin.interest.early", "over {n} days; {w} if paid off at break even", {n: num(loan.days), w: fmt(payoff)})
+        : tt("gr.os.fin.interest.term", "over {n} days, flat on the amount borrowed", {n: num(loan.days)}))
+      + cell(tt("gr.os.fin.be", "Your own cash back"), dayText(with_), tt("gr.os.fin.be.sub", "{d} without the loan", {d: dayText(without)}));
+  });
 }
-/* Only the figures move while the amount is typed or dragged. */
 function osFinUpdate(amount){
   const plan = osPlan(), b = plan && osBuilding(plan.key), est = b && osEstimate(plan, b);
   if(!plan || !est || !est.inv) return;
-  const banks = (osFacts().finance || {}).banks || [];
-  const bank = banks.find(x => x.id === (plan.finance || {}).bank) || banks.find(x => x.id === "VantanderBankSettings") || banks[0];
-  const limit = Math.min(osLoanLimit(bank), Math.floor(est.inv[osMode(plan)]));
-  const asked = Math.round(+amount || 0);
-  amount = Math.max(0, Math.min(limit, asked));
-  plan.finance.amount = amount;
-  osSave();
-  const facts = $("osFinFacts");
-  if(facts) facts.innerHTML = osFinFacts(plan, est, bank, amount);
-  /* The field says the loan the figures use: past the limit it snaps back,
-     even while it is being typed in. */
-  const fin = $("osFin");
-  if(fin) fin.querySelectorAll("[data-os-fin-amount], [data-os-fin-range]").forEach(i => {
-    if(document.activeElement !== i || asked !== amount) i.value = amount; });
+  planFinanceUpdate("os", plan, est.inv[osMode(plan)], amount, (bank, n) => osFinFacts(plan, est, bank, n), osSave);
 }
 
 /* --- step 5: until opening ---------------------------------------------------
@@ -12585,9 +12630,7 @@ const osOtherType = plan => { const b = osRented(plan); return b && b.status !==
 const osBuilt = plan => osOtherType(plan) ? null : ((D.openStore || {}).built || {})[plan.key] || null;
 const osCk = (icon, state, title, sub, act, p) => ({icon, state, title, sub, act: act || "", p: p || 0});
 const osCkAddress = plan => { const b = osBuilding(plan.key); return spEsc(b ? b.address : plan.key); };
-/* Names in a sentence: the first two, and how many more. */
-const osNames = names => names.length > 2
-  ? tt("gr.os.why.more", "{items} +{n}", {items: names.slice(0, 2).join(", "), n: names.length - 2}) : names.join(", ");
+const osNames = names => planNames(names);
 const osIngame = html => `<div class="os-ingame">${osIcon("game")}<span>${html}</span></div>`;
 /* A write as a button when the game link lists it, else what to do in the game. */
 function osAct(kind, label, ico, data, ingame){
@@ -13794,7 +13837,8 @@ function drawPlan(){
    Python sends the facts (_open_factory(): prices, the workstations' kits,
    storage, vehicles, what each warehouse and factory holds); the arithmetic
    runs in open-factory-model.js, sharing vendor grouping with OpenStoreModel.
-   This flow reuses the store UI (the os- classes) and osLoan() for financing. No break-even and no payback: a factory is a cost
+   This flow reuses the store UI: the os- classes, the planners' shared pieces
+   (planCtlHtml(), planFinanceHtml() and the rest) and osLoan() for financing. No break-even and no payback: a factory is a cost
    centre of its chain. The investment is the one-off, upfront cost (machines
    and shelves at list price, the installation firm's fee or the furniture
    delivery, the deposit, the truck); raw material, wages and rent are the
@@ -13834,9 +13878,7 @@ function ofLoad(){
           size: ["peak", "average", "now", "custom", "auto"].includes(p.size) ? p.size : "custom",
           key: typeof p.key === "string" ? p.key : null, mode: p.mode === "self" || p.mode === "firm" ? p.mode : null,
           depot: typeof p.depot === "boolean" ? p.depot : null, depotKey: typeof p.depotKey === "string" ? p.depotKey : null,
-          finance: p.finance && typeof p.finance === "object" ? {on: !!p.finance.on,
-            amount: p.finance.amount == null || !Number.isFinite(+p.finance.amount) ? null : Math.max(0, +p.finance.amount),
-            bank: typeof p.finance.bank === "string" ? p.finance.bank : null} : {on: false, amount: null, bank: null},
+          finance: planFinanceClean(p.finance),
           step: OF_STEPS.includes(p.step) ? p.step : "what", made: Number.isFinite(p.made) ? p.made : null,
           inv: Number.isFinite(p.inv) ? p.inv : null}));
       ofCur = ofPlans.some(p => p.id === raw.current) ? raw.current : null;
@@ -14053,20 +14095,17 @@ function ofStepReady(s){
 const ofTargetBuilding = () => ofIsOwned() ? ofBuilding(planTarget) || (D.businesses || []).find(b => b.key === planTarget) : null;
 function ofCtlHtml(plan){
   const at = OF_STEPS.indexOf(ofStep), owned = ofIsOwned(), home = ofTargetBuilding();
+  /* A factory the player runs has its building: Where is ticked, not a step. */
   const steps = OF_STEPS.map((s, i) => {
-    const mine = owned && s === "where";
-    const ready = ofStepReady(s), done = mine || (i < at && ready), cls = s === ofStep ? "on" : done ? "done" : "";
-    const label = mine ? tt("gr.of.step.yours", "{address} · yours", {address: spEsc(home ? home.address : planTarget)}) : ofStepLabel(s);
-    return `${i ? `<span class="sep" aria-hidden="true"></span>` : ""}<button type="button" class="${cls}" data-of-step="${s}"${ready && !mine ? "" : " disabled"}${
-      s === ofStep ? ` aria-current="step"` : ""}${mine ? ` data-tip="${attr(tt("gr.of.step.yoursTip", "Not needed: the factory is already rented"))}"` : ""}><i>${done ? icon("tick") : String(i + 1)}</i>${label}</button>`;
-  }).join("");
-  const opts = ofPlans.map(p => `<option value="${attr(p.id)}"${p.id === ofCur ? " selected" : ""}>${spEsc(ofPlanName(p))}</option>`).join("");
-  return `<nav class="os-steps" aria-label="${attr(tt("gr.of.steps.label", "Plan a factory, step by step"))}">${steps}</nav>
-    <div class="aside"><label class="os-planpick"><span>${tt("gr.of.plan.pick", "Plan")}</span><select data-of-plan aria-label="${attr(tt("gr.of.plan.pickAria", "Which factory plan"))}">
-      <option value=""${ofCur ? "" : " selected"}>${tt("gr.of.plan.new", "New plan")}</option>${opts}</select>${icon("chev")}</label></div>`;
+    const mine = owned && s === "where", ready = ofStepReady(s);
+    return {s, ready: ready && !mine, done: mine || (i < at && ready),
+      label: mine ? tt("gr.of.step.yours", "{address} · yours", {address: spEsc(home ? home.address : planTarget)}) : ofStepLabel(s),
+      tip: mine ? tt("gr.of.step.yoursTip", "Not needed: the factory is already rented") : null};
+  });
+  return planCtlHtml("of", ofStep, steps, tt("gr.of.steps.label", "Plan a factory, step by step"), {plans: ofPlans, cur: ofCur, name: ofPlanName,
+    label: tt("gr.of.plan.pick", "Plan"), aria: tt("gr.of.plan.pickAria", "Which factory plan"), fresh: tt("gr.of.plan.new", "New plan")});
 }
-/* Two names and how many more. */
-const ofNames = names => names.length > 2 ? tt("gr.os.why.more", "{items} +{n}", {items: names.slice(0, 2).join(", "), n: names.length - 2}) : names.join(", ");
+const ofNames = names => planNames(names);
 function ofPlanName(p){
   const made = Object.entries(p.counts || {}).filter(([, m]) => m > 0).map(([slug]) => itemName(slug));
   const what = made.length ? ofNames(made) : ofTypeName(p.type);
@@ -14212,13 +14251,10 @@ function ofPlansHtml(){
       : p.site ? tt("gr.of.plans.yours", "{address} · yours · for {type} shops", {address: b ? b.address : p.site, type: ofTypeName(p.type)})
       : b ? tt("gr.of.plans.at", "{address} · {hood} · for {type} shops", {address: b.address, hood: hoodName(b.hood), type: ofTypeName(p.type)})
       : tt("gr.of.plans.none", "no location yet · for {type} shops", {type: ofTypeName(p.type)});
-    return `<div class="os-plan"><button type="button" class="os-plango" data-of-open="${attr(p.id)}"><span><b>${spEsc(ofPlanName(p))}</b><small>${spEsc(sub)}</small></span>
-      <span><span class="os-lab">${ofStepLabel(p.step)}</span><span class="os-meter" style="--w:${Math.round((at + 1) / OF_STEPS.length * 100)}%"><i></i></span></span>
-      <span class="v">${p.inv != null ? fmt(p.inv) : `<span class="os-dim">–</span>`}</span>${icon("chev")}</button>
-      <button type="button" class="os-x" data-of-drop="${attr(p.id)}" aria-label="${attr(tt("gr.of.plans.drop", "Delete the plan {name}", {name: ofPlanName(p)}))}" data-tip="${
-        attr(tt("gr.os.plans.dropTip", "Delete this plan"))}">×</button></div>`;
-  }).join("");
-  return `<div class="os-h"><h2>${tt("gr.of.plans.title", "Your factory plans")}</h2><span class="c">${ofPlans.length}</span></div><div class="os-plans">${rows}</div>`;
+    return planRowHtml("of", {id: p.id, cls: "", title: spEsc(ofPlanName(p)), sub, stage: ofStepLabel(p.step), pct: Math.round((at + 1) / OF_STEPS.length * 100),
+      value: p.inv != null ? fmt(p.inv) : `<span class="os-dim">–</span>`, drop: tt("gr.of.plans.drop", "Delete the plan {name}", {name: ofPlanName(p)})});
+  });
+  return planListHtml(tt("gr.of.plans.title", "Your factory plans"), rows);
 }
 
 /* Step 2: Find a location in plan mode, on warehouse buildings: every size
@@ -14335,53 +14371,24 @@ function ofFirmHtml(inv){
 /* The financing panel: part of the investment borrowed, what that costs a
    day while it runs and the interest over its term. No days to earn it back:
    that needs a profit, and a factory is a cost centre. */
-function ofBank(plan){
-  const banks = (osFacts().finance || {}).banks || [], fin = (plan && plan.finance) || {};
-  return banks.find(b => b.id === fin.bank) || banks.find(b => b.id === "VantanderBankSettings") || banks[0] || null;
-}
 function ofFinHtml(plan, inv){
-  const f = osFacts().finance || {}, banks = f.banks || [];
-  if(!banks.length || !plan) return "";
-  const fin = plan.finance || (plan.finance = {on: false, amount: null, bank: null}), on = !!fin.on;
-  const head = `<div class="os-finhead"><h3>${osIcon("bank")}${tt("gr.os.fin.title", "Financing")}</h3>
-    <label class="os-switch"><input type="checkbox" data-of-fin-on${on ? " checked" : ""}><span>${tt("gr.os.fin.on", "Borrow part of it")}</span></label></div>`;
-  if(!on) return `<div class="os-card os-fin" id="ofFin">${head}<p class="quiet">${tt("gr.of.fin.off",
-    "A bank loan pays part of the investment now and costs interest every day until it is repaid. The game books the loan to the company, not to the factory.")}</p></div>`;
-  const bank = ofBank(plan), total = inv[ofMode(plan)];
-  const lenders = banks.map(b => `<button type="button" class="${b.id === bank.id ? "on" : ""}" data-of-bank="${attr(b.id)}" aria-pressed="${b.id === bank.id}">${spEsc(b.name)} <b>${
-    tt("gr.os.fin.rate", "{r}% a year · {d} days", {r: num(Math.round(b.rate * (f.multiplier || 0) * 10) / 10), d: b.term})}</b></button>`).join("");
-  const limit = Math.min(osLoanLimit(bank), Math.floor(total));
-  const amount = Math.max(0, Math.min(limit, fin.amount ?? Math.round(total / 2)));
-  return `<div class="os-card os-fin" id="ofFin">${head}
-    <div class="os-finctl"><div class="os-fr"><span>${tt("gr.os.fin.lender", "Lender")}</span><nav class="os-seg">${lenders}</nav></div>
-    <div class="os-fr"><span>${tt("gr.os.fin.amount", "Amount")}</span><div class="os-amount"><label class="os-num">$<input type="number" min="0" max="${limit}" step="1000" value="${Math.round(amount)}" data-of-fin-amount aria-label="${attr(tt("gr.os.fin.amountAria", "Amount to borrow"))}"></label>
-      <input type="range" min="0" max="${limit}" step="${Math.max(500, osNiceStep(limit / 100))}" value="${Math.round(amount)}" data-of-fin-range aria-label="${attr(tt("gr.os.fin.amountAria", "Amount to borrow"))}">
-      <small>${tt("gr.os.fin.limit", "{bank} lends you up to {w} now", {bank: bank.name, w: fmt(osLoanLimit(bank))})}</small></div></div></div>
-    <div class="os-finfacts" id="ofFinFacts">${ofFinFacts(total, bank, amount)}</div></div>`;
+  const total = plan ? inv[ofMode(plan)] : 0;
+  return planFinanceHtml("of", plan, total, tt("gr.of.fin.off",
+    "A bank loan pays part of the investment now and costs interest every day until it is repaid. The game books the loan to the company, not to the factory."),
+    (bank, amount) => ofFinFacts(total, bank, amount));
 }
 function ofFinFacts(total, bank, amount){
-  const f = osFacts().finance || {}, loan = osLoan(amount, bank);
-  const cell = (lab, value, sub) => `<div><span class="os-lab">${lab}</span><b>${value}</b><small>${sub}</small></div>`;
-  if(!loan) return cell(tt("gr.os.fin.upfront", "Cash upfront"), fmt(total), tt("gr.os.fin.min", "a bank lends {w} at least", {w: fmt(f.minimum || 0)}));
-  return cell(tt("gr.of.fin.borrow", "Borrow"), fmt(amount), tt("gr.of.fin.of", "of {w}", {w: fmt(total)}))
+  const cell = planFinCell;
+  return planFinFacts(total, bank, amount, loan => cell(tt("gr.of.fin.borrow", "Borrow"), fmt(amount), tt("gr.of.fin.of", "of {w}", {w: fmt(total)}))
     + cell(tt("gr.os.fin.upfront", "Cash upfront"), fmt(total - amount), tt("gr.of.fin.rest", "the rest of the investment"))
     + cell(tt("gr.of.fin.daily", "Repaid a day"), fmt(loan.interest + loan.repay), tt("gr.of.fin.daily.sub", "{r} back + {i} interest", {r: fmt(loan.repay), i: fmt(loan.interest)}))
-    + cell(tt("gr.os.fin.interest", "Interest"), fmt(loan.total), tt("gr.of.fin.interest.sub", "over {n} days · less if paid off early", {n: num(loan.days)}));
+    + cell(tt("gr.os.fin.interest", "Interest"), fmt(loan.total), tt("gr.of.fin.interest.sub", "over {n} days · less if paid off early", {n: num(loan.days)})));
 }
 function ofFinUpdate(amount){
   const plan = ofPlan(), inv = plan && ofInvestment(plan);
   if(!plan || !inv) return;
-  const bank = ofBank(plan), total = inv[ofMode(plan)];
-  if(!bank) return;
-  const limit = Math.min(osLoanLimit(bank), Math.floor(total)), asked = Math.round(+amount || 0);
-  amount = Math.max(0, Math.min(limit, asked));
-  plan.finance.amount = amount;
-  ofSave();
-  const facts = $("ofFinFacts");
-  if(facts) facts.innerHTML = ofFinFacts(total, bank, amount);
-  const fin = $("ofFin");
-  if(fin) fin.querySelectorAll("[data-of-fin-amount], [data-of-fin-range]").forEach(i => {
-    if(document.activeElement !== i || asked !== amount) i.value = amount; });
+  const total = inv[ofMode(plan)];
+  planFinanceUpdate("of", plan, total, amount, (bank, n) => ofFinFacts(total, bank, n), ofSave);
 }
 
 /* --- step 4: until production -------------------------------------------------
