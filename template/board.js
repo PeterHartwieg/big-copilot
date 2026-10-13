@@ -8043,7 +8043,8 @@ function sbCkKind(kind){
   }
 }
 /* Until October 2026 a kind was its English label, and that label is the
-   first entry of every tick stored then (ba_order_marks_v1) and of the row
+   first entry of every tick stored then (ba_order_marks_v1, which seeds
+   ba_order_marks_v2: orderMarksRead()) and of the row
    keys a game-link write recorded (ba_progress_v1). The labels never changed
    while they were ids, so this one table carries every stored key over. */
 const SB_CK_OLD_KINDS = {"Weekly imports": "imports", "Before the next delivery": "once",
@@ -8539,7 +8540,7 @@ const orderMarkCache = new Map();
 /* --- progress: marked by you, applied, confirmed ---------------------------
    Three meanings of done (docs/architecture.md, "Progress: marked, applied,
    confirmed"). A local mark
-   is the player's own note (the order marks, ba_order_marks_v1, and the
+   is the player's own note (the order marks, ba_order_marks_v2, and the
    roster's ticks): reversible, never the game's word. "Applied · awaiting
    refresh" is written here only from a supported write's successful answer
    (imports, a shop's or an office's schedule, a hire or move); "Confirmed"
@@ -9028,11 +9029,11 @@ function sbData(){
   pgEvaluate();
   const c = supplyChecklistRows();
   const character = (D.supply.factories || {}).character;
-  const storageKey = character ? `ba_order_marks_v1:${character}` : null;
+  const storageKey = character ? ORDER_MARKS_V2 + character : null;
   // No character id means no persistent marks; never mix two unknown companies.
   if(!storageKey) orderMarkCache.delete(null);
   if(!orderMarkCache.has(storageKey)){
-    const saved = storageKey ? rememberedJson(storageKey) : [];
+    const saved = storageKey ? orderMarksRead(character) : [];
     orderMarkCache.set(storageKey, new Set(Array.isArray(saved) ? saved.filter(x => typeof x === "string") : []));
   }
   const complete = D.meta.locale === true;
@@ -9063,6 +9064,21 @@ function sbData(){
   });
   sbCaches[sizing] = {...c, marks, storageKey, complete, byView, at, D, sizing, stamp: sbStamp, names};
   return sbCaches[sizing];
+}
+/* The ticks are kept per character in version 2 (kinds as ids). Version 1
+   (kinds as English sentences) seeds it once, through sbCkMigrateKey(), and
+   is never written again: a tab still running the board before version 2
+   reconciles and saves version 1 by its own rules, and cannot drop a tick
+   made here. */
+const ORDER_MARKS_V1 = "ba_order_marks_v1:", ORDER_MARKS_V2 = "ba_order_marks_v2:";
+function orderMarksRead(character){
+  const saved = rememberedJson(ORDER_MARKS_V2 + character);
+  if(saved !== null && saved !== undefined) return saved;
+  const old = rememberedJson(ORDER_MARKS_V1 + character);
+  if(!Array.isArray(old)) return [];
+  const moved = [...new Set(old.filter(x => typeof x === "string").map(sbCkMigrateKey))];
+  rememberJson(ORDER_MARKS_V2 + character, moved);
+  return moved;
 }
 const sbSaveMarks = d => { if(d.storageKey) try{ localStorage.setItem(d.storageKey, JSON.stringify([...d.marks])); }catch(e){} };
 /* The checklist rows about one row of a table: its site and item (by key), of the

@@ -168,12 +168,52 @@ test('a tick stored under the old name-keyed form carries over to the key-based 
     const now = JSON.stringify(['imports', 'hub#1', 'flour', 14000, 14420, null]);
     await page.evaluate(legacy => {
       localStorage.setItem('ba_order_marks_v1:r8-fixture', JSON.stringify([legacy]));
+      localStorage.removeItem('ba_order_marks_v2:r8-fixture');
       orderMarkCache.clear(); sbStamp++;
       drawSupplyStrip(); drawChangesView(); drawImportsView(); drawDeliveriesView(); drawProductionView(); wireAll();
     }, legacy);
     assert.equal(await page.locator('#secImports tr[data-slug="flour"] .sb-tick').getAttribute('aria-pressed'), 'true');
     assert.equal(await counted(page), en("sb.cw.road", {done: 1, n: 10}));
-    assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('ba_order_marks_v1:r8-fixture'))), [now]);
+    assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('ba_order_marks_v2:r8-fixture'))), [now]);
+    // Version 1 is left as it was.
+    assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('ba_order_marks_v1:r8-fixture'))), [legacy]);
+  } finally { await page.close(); }
+});
+
+test('a tab still on the old board cannot drop a tick made after the upgrade (#349)', async () => {
+  const page = await board(fixture(), {which: 'changes', tab: 'imports'});
+  try {
+    const legacy = JSON.stringify(['Weekly imports', 'hub#1', 'flour', 14000, 14420, null]);
+    const now = JSON.stringify(['imports', 'hub#1', 'flour', 14000, 14420, null]);
+    const v1 = () => page.evaluate(() => JSON.parse(localStorage.getItem('ba_order_marks_v1:r8-fixture')));
+    const v2 = () => page.evaluate(() => JSON.parse(localStorage.getItem('ba_order_marks_v2:r8-fixture')));
+    const reload = () => page.evaluate(() => {
+      orderMarkCache.clear(); sbStamp++;
+      drawSupplyStrip(); drawChangesView(); drawImportsView(); drawDeliveriesView(); drawProductionView(); wireAll();
+    });
+    // Before the upgrade: one tick, stored by the old board under its English kind.
+    await page.evaluate(legacy => {
+      localStorage.setItem('ba_order_marks_v1:r8-fixture', JSON.stringify([legacy]));
+      localStorage.removeItem('ba_order_marks_v2:r8-fixture');
+    }, legacy);
+    // The upgrade seeds version 2 from it, and a tick is made on the new board.
+    await reload();
+    assert.deepEqual(await v2(), [now]);
+    const added = await page.evaluate(() => {
+      const d = sbData(), r = d.rows.find(x => !d.marks.has(x.key));
+      d.marks.add(r.key); sbSaveMarks(d);
+      return r.key;
+    });
+    assert.deepEqual((await v2()).sort(), [now, added].sort());
+    assert.deepEqual(await v1(), [legacy], 'the new board never writes version 1');
+    // A tab left on the old board reconciles version 1 by its rules (its rows
+    // are keyed by English kinds) and saves: here it keeps nothing.
+    await page.evaluate(() => localStorage.setItem('ba_order_marks_v1:r8-fixture', JSON.stringify([])));
+    // The next load on the new board still holds both ticks.
+    await reload();
+    assert.deepEqual((await v2()).sort(), [now, added].sort());
+    assert.equal(await page.locator('#secImports tr[data-slug="flour"] .sb-tick').getAttribute('aria-pressed'), 'true');
+    assert.equal(await counted(page), en("sb.cw.road", {done: 2, n: 10}));
   } finally { await page.close(); }
 });
 
@@ -200,8 +240,8 @@ test('Changes counts the marks on every view, and each view counts what is left'
     assert.doesNotMatch(await page.locator('#alertSection').innerText(), /Your changes/);
     await page.evaluate(() => openRoute('supply/changes'));
     assert.equal(await page.locator('#sbcTop [data-sb-copy="remaining"] small').count(), 0);
-    // The ticks are kept on the device, per character, under the key the old checklist used.
-    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('ba_order_marks_v1:r8-fixture')));
+    // The ticks are kept on the device, per character.
+    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('ba_order_marks_v2:r8-fixture')));
     assert.equal(kept.length, 3);
     // The flour tick is Weekly imports only: its top-up into the factory is a row of its own.
     assert.equal(await page.locator('#secProduction tr[data-slug="flour"] .sb-tick').getAttribute('aria-pressed'), 'false');
