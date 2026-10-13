@@ -3330,10 +3330,16 @@ const viewMetaForRoute = id => VIEW_META.find(v => v.route === id);
 /* Registry: "A view or a page" (only if: see the checklist). */
 const SEC_MOVED = {secRhythm: "secDaily", secLogistics: "secImports", secStock: "secDeliveries", secShops: "secDeliveries",
   secWarehouses: "secImports", secFactories: "secProduction", sbStrip: "secChanges"};
+/* The view an old section's replacement is on, by its section or one `also` on it. */
+function secMovedHost(was, now){
+  const v = VIEW_META.find(m => m.section === now || (m.also || []).includes(now));
+  if(!v) throw new Error(`SEC_MOVED target not in VIEW_META: ${was} -> ${now}`);
+  return v.host;
+}
 /* Registry: "A view or a page" (every row derived from VIEW_META and SEC_MOVED). */
 const SEC_PAGE = Object.fromEntries([
   ...VIEW_META.flatMap(v => [v.section, ...(v.also || [])].filter(Boolean).map(sec => [sec, v.host])),
-  ...Object.entries(SEC_MOVED).map(([was, now]) => [was, VIEW_META.find(v => v.section === now).host]),
+  ...Object.entries(SEC_MOVED).map(([was, now]) => [was, secMovedHost(was, now)]),
 ]);
 /* Put something at the top of the window and keep it there while the page
    under it settles. Sections carry content-visibility:auto, so the ones above

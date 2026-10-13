@@ -173,11 +173,18 @@ test('a new canonical view derives its common tables without sibling table edits
   assert.equal(result.label, 'Example');
 });
 
+/* The sections each route asks for as it opens; every route not named asks for none. */
+const ROUTE_NEEDS = {
+  'overview': ['staffing'], 'businesses/prices': ['products'], 'businesses/milestones': ['goals'],
+  'supply/production': ['factoryStaffing'], 'staffing/schedules': ['hiring'], 'staffing/needs': ['hiring'],
+  'expansion/open': ['openStore'], 'expansion/factory': ['openFactory', 'openStore'],
+  'estate/buildings': ['realEstate'], 'estate/buy': ['realEstate'], 'wiki': ['products'],
+  'expansion/finder': ['premises'], 'map': [],
+};
 test('shared view identity supplies navigation, primary sections, route hosts and labels', () => {
   const b = board();
   const result = vm.runInContext(`VIEW_META.map(v => ({
     route: v.route, host: v.host,
-    needs: [...new Set([...PAGE_DRAWS.filter(r => r[0].split(" ").includes(v.host.join("/"))).flatMap(r => r[3]), ...(v.needs || [])])],
     actualHost: ROUTES[v.route].host, actualNeeds: ROUTES[v.route].needs,
     label: v.label(), actualLabel: routeViewLabel(v.route),
     sectionHost: v.section ? SEC_PAGE[v.section] : null,
@@ -187,7 +194,7 @@ test('shared view identity supplies navigation, primary sections, route hosts an
   }))`, b.context);
   for (const v of JSON.parse(JSON.stringify(result))) {
     assert.deepEqual(v.actualHost, v.host, v.route);
-    assert.deepEqual(v.actualNeeds, v.needs, v.route);
+    assert.deepEqual(v.actualNeeds, ROUTE_NEEDS[v.route] || [], v.route);
     assert.equal(v.actualLabel, v.label, v.route);
     if (v.sectionHost) {
       assert.deepEqual(v.sectionHost, v.host, v.route);
