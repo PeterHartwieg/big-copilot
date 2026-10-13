@@ -218,7 +218,7 @@ test('factory staffing repeats line hours only when the main line does not show 
         const box=document.createElement('div'); box.innerHTML=drawFactoryStaffing(()=>true,shown);
         return {hours:box.querySelector('.sb-sln .hrs').textContent.trim(), hidden:box.querySelector('.sb-sln .hrs').hidden, blocks:box.querySelector('.shifts').textContent.trim(), context:box.querySelector('.sb-hc').textContent.trim()};
       };
-      return {same:read([main]), hidden:read([]), changed:read([{...main,hoursNow:7}]), unnamed:read([{...main,unnamed:true}]), collapsed:read([{...main,objectOpen:false}]), proposed:read([{...main,chk:[{kind:'Factory run hours',proposed:10}]}])};
+      return {same:read([main]), hidden:read([]), changed:read([{...main,hoursNow:7}]), unnamed:read([{...main,unnamed:true}]), collapsed:read([{...main,objectOpen:false}]), proposed:read([{...main,chk:[{kind:'hours',proposed:10}]}])};
     });
     assert.equal(got.same.hidden,true);
     for(const state of ['hidden','changed','unnamed','collapsed','proposed']) {assert.match(got[state].hours,/12/);assert.equal(got[state].hidden,false);}

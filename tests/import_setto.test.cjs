@@ -102,7 +102,7 @@ const cells = page => page.$$eval('#secImports tr[data-slug]', rows => rows.map(
   };
 }));
 const actions = page => page.evaluate(() => sbData().rows
-  .filter(a => a.kind === 'Weekly imports').map(a => [a.item, a.current, a.proposed, a.mode]));
+  .filter(a => a.kind === 'imports').map(a => [a.item, a.current, a.proposed, a.mode]));
 const box = (page, item) => page.locator('#secImports tr[data-slug]', {hasText: item}).locator('input');
 
 test('the table reads a Smart Delivery level apart from a weekly order', async () => {

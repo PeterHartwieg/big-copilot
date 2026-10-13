@@ -157,14 +157,15 @@ function board({saved = {}, data = {}, extraView = null} = {}) {
 
 test('a new canonical view derives its common tables without sibling table edits', () => {
   const b = board({extraView: {route: 'businesses/example', host: ['company', 'example'],
-    needs: [], section: 'secExample'}});
+    section: 'secExample', also: ['secExampleMore']}});
   const derived = vm.runInContext(`({route: ROUTES["businesses/example"],
-    section: SEC_PAGE.secExample, item: SUBS.company.items.find(i => i[0] === "example"),
+    section: SEC_PAGE.secExample, also: SEC_PAGE.secExampleMore, item: SUBS.company.items.find(i => i[0] === "example"),
     areas: AREAS.find(a => a.id === "businesses").views,
     defaultRoute: HOST_ROUTES["company/example"], label: routeViewLabel("businesses/example")})`, b.context);
   const result = JSON.parse(JSON.stringify(derived));
   assert.deepEqual(result.route, {host: ['company', 'example'], needs: []});
   assert.deepEqual(result.section, ['company', 'example']);
+  assert.deepEqual(result.also, ['company', 'example']);
   assert.equal(result.item[0], 'example');
   assert.equal(result.item[2], 'secExample');
   assert.ok(result.areas.includes('example'));
@@ -172,26 +173,43 @@ test('a new canonical view derives its common tables without sibling table edits
   assert.equal(result.label, 'Example');
 });
 
+/* The sections each route asks for as it opens; every route not named asks for none. */
+const ROUTE_NEEDS = {
+  'overview': ['staffing'], 'businesses/prices': ['products'], 'businesses/milestones': ['goals'],
+  'supply/production': ['factoryStaffing'], 'staffing/schedules': ['hiring'], 'staffing/needs': ['hiring'],
+  'expansion/open': ['openStore'], 'expansion/factory': ['openFactory', 'openStore'],
+  'estate/buildings': ['realEstate'], 'estate/buy': ['realEstate'], 'wiki': ['products'],
+  'expansion/finder': ['premises'], 'map': [],
+};
 test('shared view identity supplies navigation, primary sections, route hosts and labels', () => {
   const b = board();
   const result = vm.runInContext(`VIEW_META.map(v => ({
-    route: v.route, host: v.host, needs: v.needs,
+    route: v.route, host: v.host,
     actualHost: ROUTES[v.route].host, actualNeeds: ROUTES[v.route].needs,
     label: v.label(), actualLabel: routeViewLabel(v.route),
     sectionHost: v.section ? SEC_PAGE[v.section] : null,
+    alsoHosts: (v.also || []).map(sec => SEC_PAGE[sec]),
     item: v.section ? SUBS[v.host[0]].items.find(i => i[0] === v.host[1]) : null,
     defaultRoute: HOST_ROUTES[v.host.join("/")], defaultHost: v.defaultHost,
   }))`, b.context);
   for (const v of JSON.parse(JSON.stringify(result))) {
     assert.deepEqual(v.actualHost, v.host, v.route);
-    assert.deepEqual(v.actualNeeds, v.needs, v.route);
+    assert.deepEqual(v.actualNeeds, ROUTE_NEEDS[v.route] || [], v.route);
     assert.equal(v.actualLabel, v.label, v.route);
     if (v.sectionHost) {
       assert.deepEqual(v.sectionHost, v.host, v.route);
       assert.equal(v.item[0], v.host[1], v.route);
     }
+    for (const host of v.alsoHosts) assert.deepEqual(host, v.host, v.route);
     if (v.defaultHost !== false) assert.equal(v.defaultRoute, v.route);
   }
+  /* A route's sections are its host's draw rows' tags; VIEW_META's own `needs`
+     is kept for what no row declares, which today is only the finder's. */
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(VIEW_META.filter(v => v.needs).map(v => [v.route, v.needs]))', b.context)),
+    [['expansion/finder', ['premises']]]);
+  /* Every old section in SEC_MOVED opens the view of the section that replaced it. */
+  const moved = JSON.parse(vm.runInContext('JSON.stringify(Object.entries(SEC_MOVED).map(([was, now]) => [was, SEC_PAGE[was], SEC_PAGE[now]]))', b.context));
+  for (const [was, host, now] of moved) assert.deepEqual(host, now, was);
   assert.equal(vm.runInContext('HOST_ROUTES.map', b.context), 'map',
     'the finder shares Map without changing its default route');
 });

@@ -3289,60 +3289,58 @@ const ALERT_SITE_PICK = findingKindsWith("sitePick");
    opens that page first, then scrolls; the reader never lands on a hidden
    section. */
 /* Registry: "A view or a page" (docs/architecture.md, Registries). Author
-   shared identity in VIEW_META; navigation labels/items, primary SEC_PAGE
-   rows, area views, route identity and HOST_ROUTES derive from it. Keep
-   markup, draw rows, search entries, aliases and route hooks explicit. */
-/* Shared canonical view identity: host, primary section, lazy dependencies
-   and translated navigation label. Route hooks, legacy aliases, secondary
-   sections, draw rows and search entries retain their distinct behavior. */
+   shared identity in VIEW_META; navigation labels/items, every SEC_PAGE row,
+   area views, route identity, route needs and HOST_ROUTES derive from it.
+   Keep markup, draw rows, search entries, aliases and route hooks explicit. */
+/* Shared canonical view identity: host, primary `section`, the sections
+   `also` on it (a block a finding or an old link reveals) and its translated
+   navigation label. A route's lazy sections are its host's PAGE_DRAWS tags;
+   `needs` adds only what no draw row declares (the finder: the map draws
+   itself). Route hooks, legacy aliases, draw rows and search entries keep
+   their distinct behaviour. */
 const VIEW_META = [
-  {route: "overview", host: ["today"], needs: ["staffing"], label: () => tt("nav.area.overview", "Overview")},
-  {route: "businesses/results", host: ["company", "results"], needs: [], section: "secDaily", label: () => tt("nav.view.results", "Results")},
-  {route: "businesses/prices", host: ["company", "products"], needs: ["products"], section: "secProducts", label: () => tt("nav.view.prices", "Products & prices")},
-  {route: "businesses/standards", host: ["company", "standards"], needs: [], section: "secStandards", label: () => tt("nav.view.standards", "Standards")},
-  {route: "businesses/milestones", host: ["company", "milestones"], needs: ["goals"], section: "secGoals", label: () => tt("nav.view.milestones", "Milestones")},
-  {route: "supply/changes", host: ["supply", "changes"], needs: [], section: "secChanges", label: () => tt("nav.view.changes", "Changes")},
-  {route: "supply/roles", host: ["supply", "roles"], needs: [], section: "secRoles", label: () => tt("nav.view.roles", "Plans & contracts")},
-  {route: "supply/imports", host: ["supply", "imports"], needs: [], section: "secImports", label: () => tt("nav.view.imports", "Imports")},
-  {route: "supply/deliveries", host: ["supply", "deliveries"], needs: [], section: "secDeliveries", label: () => tt("nav.view.deliveries", "Deliveries")},
-  {route: "supply/production", host: ["supply", "production"], needs: ["factoryStaffing"], section: "secProduction", label: () => tt("nav.view.production", "Production")},
-  {route: "supply/flow", host: ["supply", "flow"], needs: [], section: "secFlow", label: () => tt("nav.view.flow", "Goods flow")},
-  {route: "staffing/schedules", host: ["staffing", "schedules"], needs: ["hiring"], section: "secSchedules", label: () => tt("nav.view.schedules", "Schedules")},
-  {route: "staffing/needs", host: ["staffing", "needs"], needs: ["hiring"], section: "secStaff", label: () => tt("nav.view.needs", "Staff needs")},
-  {route: "staffing/payroll", host: ["staffing", "payroll"], needs: [], section: "secPayroll", label: () => tt("nav.view.payroll", "Payroll")},
-  {route: "expansion/demand", host: ["growth", "market"], needs: [], section: "secMarket", label: () => tt("nav.view.demand", "Demand")},
+  {route: "overview", host: ["today"], also: ["alertSection", "secMoves"], label: () => tt("nav.area.overview", "Overview")},
+  {route: "businesses/results", host: ["company", "results"], section: "secDaily", also: ["secPortfolio", "secDetail"], label: () => tt("nav.view.results", "Results")},
+  {route: "businesses/prices", host: ["company", "products"], section: "secProducts", also: ["secPrices"], label: () => tt("nav.view.prices", "Products & prices")},
+  {route: "businesses/standards", host: ["company", "standards"], section: "secStandards", label: () => tt("nav.view.standards", "Standards")},
+  {route: "businesses/milestones", host: ["company", "milestones"], section: "secGoals", label: () => tt("nav.view.milestones", "Milestones")},
+  {route: "supply/changes", host: ["supply", "changes"], section: "secChanges", label: () => tt("nav.view.changes", "Changes")},
+  {route: "supply/roles", host: ["supply", "roles"], section: "secRoles", label: () => tt("nav.view.roles", "Plans & contracts")},
+  {route: "supply/imports", host: ["supply", "imports"], section: "secImports", label: () => tt("nav.view.imports", "Imports")},
+  {route: "supply/deliveries", host: ["supply", "deliveries"], section: "secDeliveries", label: () => tt("nav.view.deliveries", "Deliveries")},
+  {route: "supply/production", host: ["supply", "production"], section: "secProduction", label: () => tt("nav.view.production", "Production")},
+  {route: "supply/flow", host: ["supply", "flow"], section: "secFlow", label: () => tt("nav.view.flow", "Goods flow")},
+  {route: "staffing/schedules", host: ["staffing", "schedules"], section: "secSchedules", label: () => tt("nav.view.schedules", "Schedules")},
+  {route: "staffing/needs", host: ["staffing", "needs"], section: "secStaff", also: ["secNeeds"], label: () => tt("nav.view.needs", "Staff needs")},
+  {route: "staffing/payroll", host: ["staffing", "payroll"], section: "secPayroll", label: () => tt("nav.view.payroll", "Payroll")},
+  {route: "expansion/demand", host: ["growth", "market"], section: "secMarket", label: () => tt("nav.view.demand", "Demand")},
   {route: "expansion/finder", host: ["map"], needs: ["premises"], defaultHost: false, label: () => tt("nav.view.finder", "Find a location")},
-  {route: "expansion/open", host: ["growth", "open"], needs: ["openStore"], section: "secOpen", label: () => tt("nav.view.open", "Open a store")},
-  {route: "expansion/factory", host: ["growth", "plan"], needs: ["openFactory", "openStore"], section: "secPlan", label: () => tt("nav.view.factory", "Plan a factory")},
-  {route: "estate/buildings", host: ["estate", "buildings"], needs: ["realEstate"], section: "secEstate", label: () => tt("nav.view.estate.buildings", "My buildings")},
-  {route: "estate/buy", host: ["estate", "buy"], needs: ["realEstate"], section: "secBuy", label: () => tt("nav.view.estate.buy", "Buy a building")},
-  {route: "map", host: ["map"], needs: [], label: () => tt("nav.ref.map", "City map")},
-  {route: "wiki", host: ["wiki"], needs: ["products"], label: () => tt("nav.ref.wiki2", "Wiki")},
+  {route: "expansion/open", host: ["growth", "open"], section: "secOpen", label: () => tt("nav.view.open", "Open a store")},
+  {route: "expansion/factory", host: ["growth", "plan"], section: "secPlan", also: ["secIngredients", "secPlanFlow"], label: () => tt("nav.view.factory", "Plan a factory")},
+  {route: "estate/buildings", host: ["estate", "buildings"], section: "secEstate", label: () => tt("nav.view.estate.buildings", "My buildings")},
+  {route: "estate/buy", host: ["estate", "buy"], section: "secBuy", label: () => tt("nav.view.estate.buy", "Buy a building")},
+  {route: "map", host: ["map"], label: () => tt("nav.ref.map", "City map")},
+  {route: "wiki", host: ["wiki"], label: () => tt("nav.ref.wiki2", "Wiki")},
 ];
 const viewMetaForRoute = id => VIEW_META.find(v => v.route === id);
-/* Registry: "A view or a page" (primary rows from VIEW_META; secondary/legacy rows below). */
-const SEC_PAGE = {
-  ...Object.fromEntries(VIEW_META.filter(v => v.section).map(v => [v.section, v.host])),
-  alertSection:["today"], secMoves:["today"],
-  /* secRhythm was Weekly rhythm, folded into Daily result's By weekday: an
-     old link to it still opens Results, and reveal() lands it on the chart. */
-  secRhythm:["company","results"],
-  secPortfolio:["company","results"], secDetail:["company","results"],
-  /* The R13 tabs, and Supply's Orders and Checks before them: an old link
-     opens the view that took their place. */
-  secShops:["supply","deliveries"], secWarehouses:["supply","imports"], secFactories:["supply","production"],
-  secLogistics:["supply","imports"], secStock:["supply","deliveries"], sbStrip:["supply","changes"],
-  secIngredients:["growth","plan"], secPlanFlow:["growth","plan"],
-  secPrices:["company","products"],
-  /* Staffing: the schedules, the staff needs (main's Staff page, issue #89,
-     is their hiring half) and Payroll, which moved from Company. The old
-     #secPayroll link opens Payroll; #secStaff opens Staff needs. */
-  secNeeds:["staffing","needs"],
-};
-/* Sections that have gone, and the section that took their place. */
+/* Sections that have gone, and the section that took their place: an old
+   link opens the view that holds the new one. secRhythm was Weekly rhythm,
+   folded into Daily result's By weekday, and reveal() lands it on the chart;
+   the others are the R13 tabs, and Supply's Orders and Checks before them. */
 /* Registry: "A view or a page" (only if: see the checklist). */
 const SEC_MOVED = {secRhythm: "secDaily", secLogistics: "secImports", secStock: "secDeliveries", secShops: "secDeliveries",
   secWarehouses: "secImports", secFactories: "secProduction", sbStrip: "secChanges"};
+/* The view an old section's replacement is on, by its section or one `also` on it. */
+function secMovedHost(was, now){
+  const v = VIEW_META.find(m => m.section === now || (m.also || []).includes(now));
+  if(!v) throw new Error(`SEC_MOVED target not in VIEW_META: ${was} -> ${now}`);
+  return v.host;
+}
+/* Registry: "A view or a page" (every row derived from VIEW_META and SEC_MOVED). */
+const SEC_PAGE = Object.fromEntries([
+  ...VIEW_META.flatMap(v => [v.section, ...(v.also || [])].filter(Boolean).map(sec => [sec, v.host])),
+  ...Object.entries(SEC_MOVED).map(([was, now]) => [was, secMovedHost(was, now)]),
+]);
 /* Put something at the top of the window and keep it there while the page
    under it settles. Sections carry content-visibility:auto, so the ones above
    the target are estimated heights until they paint, and a single scroll to a
@@ -3977,7 +3975,7 @@ function ovPlanHtml(a, b){
   const rows = (d.at.get(`${s}|${slug}`) || []).filter(r => r.proposed !== null && r.proposed !== undefined);
   if(!rows.length) return "";
   return `<div><span class="lab">${tt("today.det.plan", "Proposed change")}</span>${rows.map(r => `<p class="ov-plan">${sbcChange(r)} <span>${sbcWhere(r)}${
-    r.kind === "Weekly imports" && r.basis && r.edited ? ` · ${tt("today.det.own", "your figure, planned for {basis}", {basis: szNameLow(r.basis)})}` : r.review ? ` · ${tt("today.det.review", "your figure, basis unknown: review it")}` : ""}</span> ${
+    r.kind === "imports" && r.basis && r.edited ? ` · ${tt("today.det.own", "your figure, planned for {basis}", {basis: szNameLow(r.basis)})}` : r.review ? ` · ${tt("today.det.review", "your figure, basis unknown: review it")}` : ""}</span> ${
     pgPill(r.review ? "review" : pgState(d, r), pgOf(r.key))}</p>`).join("")}</div>`;
 }
 /* Numbers the ids that name a finding's button after its site. */
@@ -8024,21 +8022,42 @@ function importSetting(fact, contract, edit){
 }
 
 /* --- the order checklist's words (sb.ck) ----------------------------------
-   A row's `kind` is its id: it sits in every tick's stored key and the tabs
-   pick their rows by it, so it stays English. sbCkKind() is what a kind is
-   called on screen and in the copied checklist. */
+   A row's `kind` is a short id (imports, once, factory, route, shop,
+   wholesale, depot, hours): it sits in every tick's stored key and the tabs
+   pick their rows by it. sbCkKind() is the one place a kind gets its words,
+   on screen and in the copied checklist. */
 function sbCkKind(kind){
   switch(kind){
-    case "Weekly imports": return tt("sb.ck.kind.imports", "Weekly imports");
-    case "Before the next delivery": return tt("sb.ck.kind.once", "Before the next delivery");
-    case "Factory daily top-ups": return tt("sb.ck.kind.factory", "Factory daily top-ups");
-    case "Check the delivery route": return tt("sb.ck.kind.route", "Check the delivery route");
-    case "Shop daily top-ups": return tt("sb.ck.kind.shop", "Shop daily top-ups");
-    case "Wholesale deliveries": return tt("sb.ck.kind.wholesale", "Wholesale deliveries");
-    case "Depot daily top-ups": return tt("sb.ck.kind.depot", "Depot daily top-ups");
-    case "Factory run hours": return tt("sb.ck.kind.hours", "Factory run hours");
+    case "imports": return tt("sb.ck.kind.imports", "Weekly imports");
+    case "once": return tt("sb.ck.kind.once", "Before the next delivery");
+    case "factory": return tt("sb.ck.kind.factory", "Factory daily top-ups");
+    case "route": return tt("sb.ck.kind.route", "Check the delivery route");
+    case "shop": return tt("sb.ck.kind.shop", "Shop daily top-ups");
+    case "wholesale": return tt("sb.ck.kind.wholesale", "Wholesale deliveries");
+    case "depot": return tt("sb.ck.kind.depot", "Depot daily top-ups");
+    case "hours": return tt("sb.ck.kind.hours", "Factory run hours");
     default: return kind;
   }
+}
+/* Until October 2026 a kind was its English label, and that label is the
+   first entry of every tick stored then (ba_order_marks_v1, which seeds
+   ba_order_marks_v2: orderMarksRead()) and of the row
+   keys a game-link write recorded (ba_progress_v1). The labels never changed
+   while they were ids, so this one table carries every stored key over. */
+const SB_CK_OLD_KINDS = {"Weekly imports": "imports", "Before the next delivery": "once",
+  "Factory daily top-ups": "factory", "Check the delivery route": "route", "Shop daily top-ups": "shop",
+  "Wholesale deliveries": "wholesale", "Depot daily top-ups": "depot", "Factory run hours": "hours"};
+/* A stored key as today's rows key it: an old English kind becomes its id.
+   Anything else (a key already moved, a key of another shape, not a string)
+   comes back as it was, so running it twice changes nothing. */
+function sbCkMigrateKey(key){
+  // Every old kind starts with a capital, no id does: most keys stop here.
+  if(typeof key !== "string" || !/^\["[A-Z]/.test(key)) return key;
+  let a;
+  try{ a = JSON.parse(key); }catch(e){ return key; }
+  if(!Array.isArray(a) || typeof a[0] !== "string" || !Object.prototype.hasOwnProperty.call(SB_CK_OLD_KINDS, a[0])) return key;
+  a[0] = SB_CK_OLD_KINDS[a[0]];
+  return JSON.stringify(a);
 }
 /* A reason's sentences, one message each, one after another. */
 function sbCkJoin(items){
@@ -8135,7 +8154,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     if(r.fit === "paused" && ((r.need || 0) > 0 || r.edited || importResumes(r))){
       const now = r.smart ? tt("sb.ck.paused.smart", "It is set to keep {n:,} in stock.", {n: r.inGame ?? r.pausedWeekly})
         : tt("sb.ck.paused.weekly", {one: "It is configured for {n:,} unit/week.", other: "It is configured for {n:,} units/week."}, {n: r.pausedWeekly});
-      const row = add("Weekly imports", r.s, r, null, r.edited ? value : null,
+      const row = add("imports", r.s, r, null, r.edited ? value : null,
         sbCkJoin([tt("sb.ck.resume", "Resume the paused import contract."), now, ...(r.edited ? [setting(value), yours]
           : (r.need || 0) > 0 ? [tt("sb.ck.paused.sized", "{sized}: {n:,} a week.", {sized, n: r.setTo ?? r.need}),
             tt("sb.ck.paused.review", "Review the quantity after resuming.")]
@@ -8147,11 +8166,11 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
       const why = r.edited ? yours : r.fit === "tight"
         ? tt("sb.ck.tight", "{sized}; the order covers the use but not the margin.", {sized})
         : tt("sb.ck.sized.end", "{sized}.", {sized});
-      sbCkPlan(add("Weekly imports", r.s, r, r.inGame ?? r.current ?? null, value,
+      sbCkPlan(add("imports", r.s, r, r.inGame ?? r.current ?? null, value,
         sbCkJoin([setting(value), why]), null, mode, false, !r.edited && r.fit === "tight"), r);
     }
   }));
-  looseRows.forEach(r => add("Weekly imports", null, r, null, null,
+  looseRows.forEach(r => add("imports", null, r, null, null,
     sbCkJoin([tt("sb.ck.loose", "Choose a supplying depot before setting an order."),
       tt("sb.ck.loose.use", {one: "The factory lines use {n:,} unit/week.", other: "The factory lines use {n:,} units/week."}, {n: Math.round(r.week)})]))
     .lead = tt("sb.ck.lead.loose", "choose a supplying depot before setting an order"));
@@ -8171,16 +8190,16 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
        next delivery" group, its other one-offs with it, ahead of its order
        changes (a paused import to resume among them). */
     const first = () => {
-      const at = rows.findIndex(x => x.kind === "Weekly imports" && x.site === r.s);
+      const at = rows.findIndex(x => x.kind === "imports" && x.site === r.s);
       if(at >= 0) rows.splice(at, 0, rows.pop());
     };
-    if(f.st === "paused" && !rows.some(x => x.kind === "Weekly imports" && x.site === r.s && x.slug === r.slug)) add("Weekly imports", r.s, r, null, null,
+    if(f.st === "paused" && !rows.some(x => x.kind === "imports" && x.site === r.s && x.slug === r.slug)) add("imports", r.s, r, null, null,
       r.from ? tt("sb.ck.review.from", "Review the paused import from {from}; resume it in-game if still needed.", {from: r.from})
         : tt("sb.ck.review", "Review the paused import from the supplier; resume it in-game if still needed.")).lead = r.from
       ? tt("sb.ck.lead.review.from", "review the paused import from {from}; resume it in-game if still needed", {from: r.from})
       : tt("sb.ck.lead.review", "review the paused import from the supplier; resume it in-game if still needed");
     else if(fi.st === "short" && fi.why === "shortfall" && r.covered){
-      const row = add("Before the next delivery", r.s, r, null, catchUp, sbCkJoin([bring, !r.paused
+      const row = add("once", r.s, r, null, catchUp, sbCkJoin([bring, !r.paused
         ? tt("sb.ck.round", "A route brings the week's draw, but a busy day may empty the shelf before its next round.")
         : r.from ? tt("sb.ck.round.paused.from", "A route brings the week's draw, but a busy day may empty the shelf before its next round, and the backup import from {from} is paused.", {from: r.from})
         : tt("sb.ck.round.paused", "A route brings the week's draw, but a busy day may empty the shelf before its next round, and the backup import from the supplier is paused."),
@@ -8196,7 +8215,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
        drop: the finding names the order, but raising it does not bridge the
        days to that drop, so the one-off comes too, ahead of the order. */
     else if(fi.st === "short" && (fi.why === "shortfall" || (fi.why === "order" && r.coverFit === "short" && catchUp))){
-      const row = add("Before the next delivery", r.s, r, null, catchUp, sbCkJoin([bring,
+      const row = add("once", r.s, r, null, catchUp, sbCkJoin([bring,
         catchUp ? tt("sb.ck.estimate", "Estimated demand minus current stock and scheduled incoming deliveries, rounded up to whole units.") : "",
         tt("sb.ck.runOut", {one: "Stock may run out {n} day before a scheduled delivery.", other: "Stock may run out {n} days before a scheduled delivery."}, {n: r.shortBy}),
         tt("sb.ck.oneOff", "Arrange a one-off supply; a weekly order change alone will not bridge this gap.")]));
@@ -8207,13 +8226,13 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
   });
   sites.forEach(s => s.rows.forEach(r => {
     const f = r.fact || {};
-    if(set(f)) add("Factory daily top-ups", s.s, r, r.target || 0, f.setTo,
+    if(set(f)) add("factory", s.s, r, r.target || 0, f.setTo,
       sbCkJoin([r.from === null || r.from === undefined ? tt("sb.ck.choose", "Choose a supplying depot.") : from(r.from),
         r.sizedFor === "dem"
           ? tt("sb.ck.input.dem", "What the shops at the end of the chain use{margin}; confirm staffing and output limits.", {margin: margin(r.margin, {fact: f})})
           : tt("sb.ck.input.cap", "Full-rate input requirement{margin}; confirm staffing and output limits.", {margin: margin(r.margin, {fact: f})})]),
       r.from ?? null, null, false, f.st === "tight");
-    if(f.st === "stalled" && f.why !== "waiting") add("Check the delivery route", s.s, r, null, null,
+    if(f.st === "stalled" && f.why !== "waiting") add("route", s.s, r, null, null,
       sbCkJoin([tt("sb.ck.stalled", "No delivery was recorded despite stock at {site}.", {site: address(r.from)}),
         tt("sb.ck.stalled.check", "Check the route and transport in-game.")]), r.from ?? null)
       .lead = tt("sb.ck.lead.stalled", "no delivery was recorded despite stock at {site}", {site: address(r.from)});
@@ -8229,7 +8248,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     const m = margin(r.margin);
     /* A top-up target set far above what sells (idle, `lowers`): the lower
        target to type, a change that is never tight and never on Today. */
-    if(src !== null && r.peakSold > 0 && set(f) && f.lowers) add("Shop daily top-ups", r.s, r, r.target || 0,
+    if(src !== null && r.peakSold > 0 && set(f) && f.lowers) add("shop", r.s, r, r.target || 0,
       f.setTo, sbCkJoin([from(src), r.sold > 0
         ? tt("sb.ck.lower.days", {one: "Lower the top-up: it holds {n:,} day of sales.", other: "Lower the top-up: it holds {n:,} days of sales."}, {n: Math.round((r.target || 0) / r.sold)})
         : tt("sb.ck.lower.weeks", "Lower the top-up: it holds weeks of sales."),
@@ -8238,7 +8257,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
           : tt("sb.ck.peak.round", {one: "Peak sales {n:,} unit/day (no weekday profile) until the next round{margin}.",
             other: "Peak sales {n:,} units/day (no weekday profile) until the next round{margin}."}, {n: r.peakSold, margin: m})]),
       src, null, false, false, true);
-    else if(src !== null && r.peakSold > 0 && set(f)) add("Shop daily top-ups", r.s, r, r.target || 0,
+    else if(src !== null && r.peakSold > 0 && set(f)) add("shop", r.s, r, r.target || 0,
       f.setTo, sbCkJoin([from(src), r.peakDay
         ? tt("sb.ck.peak.day", {one: "Peak sales {n:,} unit/day on {day}{margin}; check shelf space.",
           other: "Peak sales {n:,} units/day on {day}{margin}; check shelf space."}, {n: r.peakSold, day: sbDay(r.peakDay), margin: m})
@@ -8256,7 +8275,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
        take none, so its need is its use and no margin is claimed. */
     const all = Number.isFinite(f.need) && Number.isFinite(f.use) && f.need > f.use;
     const n = f.use || 0, m = margin(r.margin, r);
-    if(set(f)) add("Wholesale deliveries", r.s, r, Number.isFinite(f.have) ? f.have : null, f.setTo,
+    if(set(f)) add("wholesale", r.s, r, Number.isFinite(f.have) ? f.have : null, f.setTo,
       sbCkJoin([f.role === "depot"
         ? (all ? tt("sb.ck.ws.uses.all", "Uses {n:,} a week{margin}, {need:,} in all.", {n, margin: m, need: f.need})
           : tt("sb.ck.ws.uses", "Uses {n:,} a week.", {n}))
@@ -8266,7 +8285,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
       null, "weekly", false, f.st === "tight");
     /* Independent of the contract: stock that runs out before the delivery
        is brought in by hand, whether or not the contract is raised too. */
-    if(f.st === "short" && Number.isFinite(f.catchUp) && f.catchUp > 0) add("Before the next delivery", r.s, r, null, f.catchUp,
+    if(f.st === "short" && Number.isFinite(f.catchUp) && f.catchUp > 0) add("once", r.s, r, null, f.catchUp,
       f.day ? tt("sb.ck.ws.bring.day", {one: "Bring in {n:,} extra unit by hand before {day}'s wholesale delivery: the stock on hand runs out before it lands.",
           other: "Bring in {n:,} extra units by hand before {day}'s wholesale delivery: the stock on hand runs out before it lands."}, {n: f.catchUp, day: sbDay(f.day)})
         : tt("sb.ck.ws.bring", {one: "Bring in {n:,} extra unit by hand before the next wholesale delivery: the stock on hand runs out before it lands.",
@@ -8278,7 +8297,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     const f = r.fact || {};
     if(!set(f)) return;
     const src = Number.isInteger(f.from) ? f.from : null;
-    add("Depot daily top-ups", r.s, r, Number.isFinite(f.have) ? f.have : 0, f.setTo,
+    add("depot", r.s, r, Number.isFinite(f.have) ? f.have : 0, f.setTo,
       sbCkJoin([src !== null ? tt("sb.ck.depot.plan", "Set on the plan of {site}.", {site: address(src)}) : "",
         tt("sb.ck.depot.busiest", {one: "Its busiest day sends on {n:,} unit{margin}.", other: "Its busiest day sends on {n:,} units{margin}."},
           {n: f.use || 0, margin: margin(r.margin, r)})]),
@@ -8287,7 +8306,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
        plan is a change of its own, to the same level. */
     (f.raise || []).forEach(([other, have, level]) => {
       if(!Number.isInteger(other)) return;
-      add("Depot daily top-ups", r.s, r, Number.isFinite(have) ? have : 0, level,
+      add("depot", r.s, r, Number.isFinite(have) ? have : 0, level,
         sbCkJoin([tt("sb.ck.depot.plan", "Set on the plan of {site}.", {site: address(other)}),
           tt("sb.ck.depot.busiest", {one: "Its busiest day sends on {n:,} unit{margin}.", other: "Its busiest day sends on {n:,} units{margin}."},
             {n: f.use || 0, margin: margin(r.margin, r)})]),
@@ -8307,7 +8326,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     /* Each machine's own hours where the line says them ("12 h and 0 h"),
        unless a thin weekday is the thing to name. */
     const each = Array.isArray(r.each) && r.each.length ? sbHoursWords(r.each) : null;
-    add("Factory run hours", r.s, r, now, r.need, sbCkJoin([r.machines > 1
+    add("hours", r.s, r, now, r.need, sbCkJoin([r.machines > 1
       ? (!day && each ? tt("sb.ck.staff.each.now", {one: "Staff {item} for {n} hour a day, on each of its {m} machines; the schedule has them at {now} a day.",
             other: "Staff {item} for {n} hours a day, on each of its {m} machines; the schedule has them at {now} a day."}, {item, n, m, now: each})
         : day ? tt("sb.ck.staff.each.thin", {one: "Staff {item} for {n} hour a day, on each of its {m} machines; the schedule has them {now} ({day} {h} h).",
@@ -8336,7 +8355,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
        on screen stay the step, and the import's row says its figure belongs
        to the other basis, with no hours step of its own. */
     if(dep.basis && dep.basis !== sizing && dep.needNow !== null && dep.needNow !== dep.need){
-      const imp = rows.find(x => x.kind === "Weekly imports" && x.site === dep.for.s && x.slug === dep.for.slug);
+      const imp = rows.find(x => x.kind === "imports" && x.site === dep.for.s && x.slug === dep.for.slug);
       if(imp){
         imp.clash = (imp.clash || []).concat([dep]);
         imp.reason = sbCkJoin([imp.reason, tt("sb.ck.dep.clash", {one: "Its figure assumes {item} at {site} runs {n} hour a day, as {basis} plans; that is not a step here, where {now} plans {m} h. Reset the figure to plan it for {now}.",
@@ -8347,12 +8366,12 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     }
     /* The line's own hours row, where it asks for the same hours; a figure
        planned on the other basis asks for its own. */
-    let row = rows.find(x => x.kind === "Factory run hours" && x.site === dep.s && x.slug === dep.slug && (x.line === undefined || x.line === dep.rid)
+    let row = rows.find(x => x.kind === "hours" && x.site === dep.s && x.slug === dep.slug && (x.line === undefined || x.line === dep.rid)
       && x.proposed === dep.need);
     if(!row){
       const had = dep.now, n = dep.need, m = dep.machines, item = dep.item, material = dep.material;
       const depot = address(dep.depot), now = dep.each ? sbHoursWords(dep.each) : `${had}`;
-      row = add("Factory run hours", dep.s, {item, slug: dep.slug}, had, n, sbCkJoin([m > 1
+      row = add("hours", dep.s, {item, slug: dep.slug}, had, n, sbCkJoin([m > 1
         ? tt("sb.ck.dep.each.now", {one: "Staff {item} for {n} hour a day on each of its {m} machines; the schedule has them at {now}.",
             other: "Staff {item} for {n} hours a day on each of its {m} machines; the schedule has them at {now}."}, {item, n, m, now})
         : tt("sb.ck.dep.one.now", {one: "Staff {item} for {n} hour a day; the schedule has it at {now}.",
@@ -8363,7 +8382,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
       row.dep = true;
     }
     row.forImports = (row.forImports || []).concat([for_]);
-    const imp = rows.find(x => x.kind === "Weekly imports" && x.site === dep.for.s && x.slug === dep.for.slug);
+    const imp = rows.find(x => x.kind === "imports" && x.site === dep.for.s && x.slug === dep.for.slug);
     if(imp) imp.hours = (imp.hours || []).concat([row]);
   });
   const groups = new Map();
@@ -8389,7 +8408,7 @@ function sbCkPlan(row, r){
 }
 /* What a copied line says about its plan, after its reason. */
 function sbCkBasisWords(r, mode = sizing){
-  if(r.kind !== "Weekly imports" || r.proposed === null || r.proposed === undefined) return "";
+  if(r.kind !== "imports" || r.proposed === null || r.proposed === undefined) return "";
   if(r.review) return tt("sb.ck.basis.unknown", "The basis it was planned on is not known: review it first.");
   return r.basis && r.basis !== mode ? tt("sb.ck.basis", "Planned for {basis}.", {basis: szNameLow(r.basis)}) : "";
 }
@@ -8402,14 +8421,14 @@ function orderChecklistText(rows, title, mode = "cap"){
       tt("sb.ck.copy.unchecked", "Storage and transport capacity are not checked.")])];
   /* A figure of the player's typed under the other basis keeps it, and so do
      the factory hours it assumes: said once, and on each such line. */
-  if(rows.some(r => r.kind === "Weekly imports" && (r.basis === "cap" || r.basis === "dem") && r.basis !== mode))
+  if(rows.some(r => r.kind === "imports" && (r.basis === "cap" || r.basis === "dem") && r.basis !== mode))
     out.push(tt("sb.ck.copy.mixed2", "Lines that name another basis keep the figure they were set for; the factory hours are this basis's."));
   let group = null;
   rows.forEach(r => {
     if(r.group !== group){ group = r.group; out.push("", group); }
     const was = r.current ?? tt("sb.ck.copy.notSet", "not set"), n = r.proposed;
     const change = r.proposed === null ? tt("sb.ck.copy.review", "Review")
-      : r.kind === "Before the next delivery" ? tt("sb.ck.copy.once", {one: "add {n} unit once", other: "add {n} units once"}, {n})
+      : r.kind === "once" ? tt("sb.ck.copy.once", {one: "add {n} unit once", other: "add {n} units once"}, {n})
       : r.mode === "smart" ? tt("sb.ck.copy.smart", {one: "Smart Delivery stock {from} -> {n} unit", other: "Smart Delivery stock {from} -> {n} units"}, {from: was, n})
       : r.mode === "hours" ? tt("sb.ck.copy.hours", {one: "run {from} -> {n} hour/day", other: "run {from} -> {n} hours/day"}, {from: was, n})
       : r.mode === "weekly" ? tt("sb.ck.copy.weekly", {one: "{from} -> {n} unit/week", other: "{from} -> {n} units/week"}, {from: was, n})
@@ -8423,8 +8442,9 @@ function orderChecklistText(rows, title, mode = "cap"){
 function reconcileOrderMarks(saved, rows, complete){
   /* A tick stored while rows were keyed by the item's name reads back as the
      same row's key-based one: the checklist names items by key now, and a
-     tick the player made is not dropped for it. */
-  const kept = new Set(saved);
+     tick the player made is not dropped for it. A tick stored while kinds
+     were English reads back under the kind's id first (sbCkMigrateKey()). */
+  const kept = new Set([...saved].map(sbCkMigrateKey));
   rows.forEach(r => {
     if(r.legacyKey && r.legacyKey !== r.key && kept.has(r.legacyKey)){ kept.delete(r.legacyKey); kept.add(r.key); }
   });
@@ -8489,7 +8509,7 @@ function planImportsState(rows, marks, nameOf, gaps = {}){
     /* The checklist's own reason, as it gives it: its first sentence, said
        mid-sentence (lead). */
     ? r.lead ?? String(r.reason || "").split(". ")[0].replace(/\.$/, "").replace(/^./, c => c.toLowerCase())
-    : r.kind === "Before the next delivery" ? tt("today.moves.plan.once", "add {to} units before the next delivery", {to: n(r.proposed)})
+    : r.kind === "once" ? tt("today.moves.plan.once", "add {to} units before the next delivery", {to: n(r.proposed)})
     : r.mode === "smart" ? tt("today.moves.plan.smart", "Smart Delivery stock {from} \u2192 {to}", {from: n(r.current), to: n(r.proposed)})
     : r.mode === "weekly" ? tt("today.moves.plan.weekly", "weekly order {from} \u2192 {to}", {from: n(r.current), to: n(r.proposed)})
     : r.mode === "hours" ? tt("today.moves.plan.hours", "run hours {from} \u2192 {to} a day", {from: n(r.current), to: n(r.proposed)})
@@ -8517,7 +8537,7 @@ const orderMarkCache = new Map();
 /* --- progress: marked by you, applied, confirmed ---------------------------
    Three meanings of done (docs/architecture.md, "Progress: marked, applied,
    confirmed"). A local mark
-   is the player's own note (the order marks, ba_order_marks_v1, and the
+   is the player's own note (the order marks, ba_order_marks_v2, and the
    roster's ticks): reversible, never the game's word. "Applied · awaiting
    refresh" is written here only from a supported write's successful answer
    (imports, a shop's or an office's schedule, a hire or move); "Confirmed"
@@ -8705,7 +8725,8 @@ function pgEvaluate(){
 }
 /* The records a row of the change checklist has: by the row's key as it was
    when the write went out. */
-const pgOf = key => Object.values(pgStore().recs).find(r => (r.rowKeys || []).includes(key)) || null;
+// rowKeys recorded before the kinds were ids read through sbCkMigrateKey().
+const pgOf = key => Object.values(pgStore().recs).find(r => (r.rowKeys || []).some(k => k === key || sbCkMigrateKey(k) === key)) || null;
 /* A row's state, one of suggested, marked, applied, confirmed, changed. */
 function pgState(d, row){
   const rec = pgOf(row.key);
@@ -8758,7 +8779,7 @@ function pgImportsDone(lines, answer){
       return p ? {id: c.id, amount: Number(p.amount), activate: !!row.reactivated} : null;
     }).filter(Boolean);
     if(!contracts.length) return;
-    const rowKeys = d ? d.rows.filter(x => x.kind === "Weekly imports" && x.site === r.s && x.slug === r.slug).map(x => x.key) : [];
+    const rowKeys = d ? d.rows.filter(x => x.kind === "imports" && x.site === r.s && x.slug === r.slug).map(x => x.key) : [];
     pgRecord({id: `imports|${depot}|${r.slug}|${r.smart ? "smart" : "weekly"}|${r.value}`, family: "imports",
       target: {depot, slug: r.slug, smart: !!r.smart},
       expect: {contracts, value: r.value, inGame: r.smart ? r.value : Math.max(0, r.value - (l.uncovered || 0)),
@@ -8882,12 +8903,12 @@ const SB_SEC = {changes: "secChanges", roles: "secRoles", imports: "secImports",
    run hours to Production, which plans the lines that eat them. */
 function sbViewOf(r){
   switch(r.kind){
-    case "Weekly imports": return "imports";
-    case "Before the next delivery": {
+    case "imports": return "imports";
+    case "once": {
       const f = r.site === null || r.site === undefined ? null : szFactFor(r.site, r.slug, sizing);
       return f && f.wholesale ? "deliveries" : "imports";
     }
-    case "Factory daily top-ups": case "Check the delivery route": case "Factory run hours": return "production";
+    case "factory": case "route": case "hours": return "production";
     default: return "deliveries";
   }
 }
@@ -9005,11 +9026,11 @@ function sbData(){
   pgEvaluate();
   const c = supplyChecklistRows();
   const character = (D.supply.factories || {}).character;
-  const storageKey = character ? `ba_order_marks_v1:${character}` : null;
+  const storageKey = character ? ORDER_MARKS_V2 + character : null;
   // No character id means no persistent marks; never mix two unknown companies.
   if(!storageKey) orderMarkCache.delete(null);
   if(!orderMarkCache.has(storageKey)){
-    const saved = storageKey ? rememberedJson(storageKey) : [];
+    const saved = storageKey ? orderMarksRead(character) : [];
     orderMarkCache.set(storageKey, new Set(Array.isArray(saved) ? saved.filter(x => typeof x === "string") : []));
   }
   const complete = D.meta.locale === true;
@@ -9040,6 +9061,21 @@ function sbData(){
   });
   sbCaches[sizing] = {...c, marks, storageKey, complete, byView, at, D, sizing, stamp: sbStamp, names};
   return sbCaches[sizing];
+}
+/* The ticks are kept per character in version 2 (kinds as ids). Version 1
+   (kinds as English sentences) seeds it once, through sbCkMigrateKey(), and
+   is never written again: a tab still running the board before version 2
+   reconciles and saves version 1 by its own rules, and cannot drop a tick
+   made here. */
+const ORDER_MARKS_V1 = "ba_order_marks_v1:", ORDER_MARKS_V2 = "ba_order_marks_v2:";
+function orderMarksRead(character){
+  const saved = rememberedJson(ORDER_MARKS_V2 + character);
+  if(saved !== null && saved !== undefined) return saved;
+  const old = rememberedJson(ORDER_MARKS_V1 + character);
+  if(!Array.isArray(old)) return [];
+  const moved = [...new Set(old.filter(x => typeof x === "string").map(sbCkMigrateKey))];
+  rememberJson(ORDER_MARKS_V2 + character, moved);
+  return moved;
 }
 const sbSaveMarks = d => { if(d.storageKey) try{ localStorage.setItem(d.storageKey, JSON.stringify([...d.marks])); }catch(e){} };
 /* The checklist rows about one row of a table: its site and item (by key), of the
@@ -9561,7 +9597,7 @@ function sbVerdict(view, text, calm, o = {}){
   return `<p class="sb-verdict">${calm && text ? `<span class="check">${icon("tick")}</span>` : ""}${text ? `<span>${text}</span>` : ""}${crumb}</p>`;
 }
 /* The unit a change is typed in. */
-const sbUnitOf = r => r.kind === "Before the next delivery" ? tt("sb.unit.once", "once")
+const sbUnitOf = r => r.kind === "once" ? tt("sb.unit.once", "once")
   : r.mode === "smart" ? tt("sb.unit.stock", "in stock") : r.mode === "weekly" ? tt("sb.unit.week", "a week")
   : r.mode === "hours" ? tt("sb.unit.hoursDay", "h a day") : tt("sb.unit.day", "a day");
 /* The rows no table claimed: a change is never left without its tick. */
@@ -9574,7 +9610,7 @@ function sbOthers(d, view, claimed){
       tt("sb.col.why", "Why")}</th></tr></thead><tbody>${rows.map(r => {
       const b = D.businesses[r.site];
       const to = r.proposed === null ? `<span class="sb-unit">${tt("sb.others.review", "review")}</span>`
-        : r.kind === "Before the next delivery" ? `<span class="sb-chg"><b>+${num(r.proposed)}</b><small>${tt("sb.unit.once", "once")}</small></span>`
+        : r.kind === "once" ? `<span class="sb-chg"><b>+${num(r.proposed)}</b><small>${tt("sb.unit.once", "once")}</small></span>`
         : sbChg(r.current, r.proposed, sbUnitOf(r));
       return `${sbTr(d, {s: r.site, slug: r.slug}, [r], null)}<td class="sb-tk">${sbTick(d, [r], b ? sbTickAt(r.item, b) : r.item)}</td>
         <td class="l">${b ? siteTd(b) : tt("sb.others.chooseDepot", "choose a depot")}</td><td class="l">${spEsc(r.item)}</td><td>${to}</td><td class="l st sb-ckwhy">${spEsc(r.reason)}</td></tr>`;
@@ -9877,7 +9913,7 @@ async function sbCopyRows(btn, which){
 }
 
 /* --- Shops: every shelf against tomorrow morning's round --------------- */
-const SB_SHOP_KINDS = ["Shop daily top-ups", "Wholesale deliveries", "Before the next delivery"];
+const SB_SHOP_KINDS = ["shop", "wholesale", "once"];
 const SB_SHOP_COLS = [sbCol(() => tt("sb.col.shop", "Shop"), bySite, "l"), sbCol(() => tt("sb.col.product", "Product"), r => r.item, "l"),
   sbCol(() => tt("sb.col.sells", "Sells / day"), r => r.sold ?? null),
   sbCol(() => tt("sb.col.busiestDay", "Busiest day"), r => r.peakSold ?? null), sbCol(() => tt("sb.col.onHand", "On hand"), r => r.stock ?? null),
@@ -9924,8 +9960,8 @@ function sbShopsPart(d, claimed, view){
       <td class="l st">${sbStatus(r.fact, spEsc(szTip(r.fact)))}</td>`);
     const b = D.businesses[r.s], f = r.fact;
     const from = r.from ?? f.via ?? null;
-    const set = r.chk.find(c => c.kind === "Shop daily top-ups" || c.kind === "Wholesale deliveries");
-    const once = r.chk.find(c => c.kind === "Before the next delivery");
+    const set = r.chk.find(c => c.kind === "shop" || c.kind === "wholesale");
+    const once = r.chk.find(c => c.kind === "once");
     const setting = r.wholesale && !r.target
       ? sbChg(r.wholesale, set ? set.proposed : null, tt("sb.unit.week", "a week"), sbWholesale(r.wholesaleDay))
       : sbChg(r.target || null, set ? set.proposed : null, tt("sb.unit.day", "a day"),
@@ -10079,7 +10115,7 @@ function sbImportCtx(d){
 }
 
 /* --- Warehouses: every depot, first tier or second --------------------- */
-const SB_WH_KINDS = ["Weekly imports", "Before the next delivery", "Depot daily top-ups", "Wholesale deliveries"];
+const SB_WH_KINDS = ["imports", "once", "depot", "wholesale"];
 const SB_WH_COLS = [sbCol(() => tt("sb.col.product", "Product"), r => r.item, "l"), sbCol(() => tt("sb.col.onHand", "On hand"), r => r.stock ?? null),
   sbCol(() => tt("sb.col.draw", "Draw / day"), r => r.draw ?? null, "", () => tt("sb.col.draw.tip", "What is drawn each day: the logistics rounds out of here and, at a factory, what its own lines eat")),
   sbCol(() => tt("sb.col.busiest", "Busiest"), r => r.busy ?? null),
@@ -10124,8 +10160,8 @@ function sbDepotRow(d, ctx, r, kid){
         spRail(ir.stockCover ?? ir.cover, ir.paused ? null : truck, false, false, null, false)}</span>`
     : f.cad === "daily" && Number.isFinite(f.use) && f.have > 0 ? sbGauge(Math.round(f.use / f.have * 100), f.st === "short" ? "bad" : f.st === "tight" ? "warn" : "")
     : "—";
-  const set = r.chk.find(c => c.kind === "Depot daily top-ups" || c.kind === "Wholesale deliveries");
-  const once = r.chk.find(c => c.kind === "Before the next delivery");
+  const set = r.chk.find(c => c.kind === "depot" || c.kind === "wholesale");
+  const once = r.chk.find(c => c.kind === "once");
   const from = Number.isInteger(f.from) && D.businesses[f.from] ? D.businesses[f.from] : null;
   /* Several plans to raise together: the setting names every one. */
   const plans = from ? [from, ...(f.raise || []).map(x => D.businesses[x[0]]).filter(Boolean)] : [];
@@ -10234,7 +10270,7 @@ function sbDepotPart(d, claimed, ctx, view, want){
   });
   /* A factory input no depot brings: nothing to set until one is chosen. */
   if(want === "imports" && d.looseRows.length && sbInScope(view, null)){
-    const chk = d.looseRows.map(r => sbChk(d, claimed, null, r.slug, ["Weekly imports"]));
+    const chk = d.looseRows.map(r => sbChk(d, claimed, null, r.slug, ["imports"]));
     const left = chk.flat().filter(c => !d.marks.has(c.key)).length;
     blocks.push(sbObject(view, null, {icon: "crate", name: tt("sb.wh.noDepot", "No depot"), left, open: true,
       how: `<span><em>${tt("sb.wh.noDepot.how", "factory inputs no depot imports or tops up")}</em></span>`,
@@ -10261,8 +10297,8 @@ function sbDepotPart(d, claimed, ctx, view, want){
 }
 
 /* --- Factories: lines, their hours, their inputs, and the staffing ------ */
-const SB_LINE_KINDS = ["Factory run hours"];
-const SB_INPUT_KINDS = ["Factory daily top-ups", "Check the delivery route"];
+const SB_LINE_KINDS = ["hours"];
+const SB_INPUT_KINDS = ["factory", "route"];
 const SB_LINE_COLS = [sbCol(() => tt("sb.col.line", "Line"), r => r.item || r.workstation, "l"),
   sbCol(() => tt("sb.col.machines", "Machines"), null, "l", () => tt("sb.col.machines.tip", "A square a machine, filled by the share of the week someone is scheduled on it")),
   sbCol(() => tt("sb.col.hours", "Hours a day"), r => Number.isFinite(r.hoursNow) ? r.hoursNow : null, "l",
@@ -10311,7 +10347,7 @@ function sbLineRow(d, r, site){
   const now = Number.isFinite(r.hoursNow) ? r.hoursNow : r.fullWeek ? Math.round(r.hoursWeek / r.fullWeek * 24) : null;
   const need = (r.needHours || {})[sizing];
   const chk = r.chk || [];
-  const set = chk.find(c => c.kind === "Factory run hours");
+  const set = chk.find(c => c.kind === "hours");
   /* The basis switch on the view says what the hours are planned for; only
      the one surprise is said here (declutter G5). */
   const sized = sizing === "dem" && r.demBasis === "none" ? tt("sb.line.sized.none", "nothing downstream is drawn, so Demand sizes it round the clock too") : "";
@@ -10367,8 +10403,8 @@ function sbLineRow(d, r, site){
 function sbInputRow(d, r, site){
   const f = r.fact, b = D.businesses[r.s];
   const depot = r.from !== null && r.from !== undefined && D.businesses[r.from] ? mapRef(D.businesses[r.from]) : tt("sb.imp.aDepot", "a depot");
-  const set = r.chk.find(c => c.kind === "Factory daily top-ups");
-  const route = r.chk.find(c => c.kind === "Check the delivery route");
+  const set = r.chk.find(c => c.kind === "factory");
+  const route = r.chk.find(c => c.kind === "route");
   const setting = r.directImport ? `<span class="sub" data-tip="${attr(tt("sb.in.direct.tip", "Weekly import delivered to this factory; assessed against weekly input demand, not daily logistics rounds."))}">${
       tt("sb.in.direct", "direct import")}</span>`
     : sbChg(r.target || null, set ? set.proposed : null, tt("sb.unit.day", "a day"), r.from !== null && r.from !== undefined && D.businesses[r.from]
@@ -10553,18 +10589,18 @@ function sbcWhere(r){
   const src = r.source !== null && r.source !== undefined && D.businesses[r.source] ? spEsc(shortName(D.businesses[r.source])) : "";
   const who = r.importer ? spEsc(r.importer) : "";
   switch(r.kind){
-    case "Weekly imports":
+    case "imports":
       if(r.proposed === null) return r.lead ? spEsc(r.lead) : tt("sb.cw.reviewGame", "review it in the game");
       return r.mode === "smart"
         ? (who ? tt("sb.cw.smartAt", "{who} Smart Delivery", {who}) : tt("sb.cw.smart", "Smart Delivery stock"))
         : (who ? tt("sb.cw.weeklyAt", "{who} weekly order", {who}) : tt("sb.cw.weekly", "weekly order"));
-    case "Before the next delivery": return tt("sb.cw.once", "one-time purchase, by hand");
-    case "Shop daily top-ups": return src ? tt("sb.cw.topupFrom", "top-up from {site}", {site: src}) : tt("sb.cw.topup", "top-up target");
-    case "Depot daily top-ups": return src ? tt("sb.cw.plan", "{site}'s plan", {site: src}) : tt("sb.cw.topup", "top-up target");
-    case "Wholesale deliveries": return tt("sb.cw.wholesale", "wholesale delivery");
-    case "Factory daily top-ups": return src ? tt("sb.cw.topupFrom", "top-up from {site}", {site: src}) : tt("sb.cw.chooseDepot", "choose a depot");
-    case "Check the delivery route": return tt("sb.cw.route", "check the route in the game");
-    case "Factory run hours": return r.forImports && r.forImports.length
+    case "once": return tt("sb.cw.once", "one-time purchase, by hand");
+    case "shop": return src ? tt("sb.cw.topupFrom", "top-up from {site}", {site: src}) : tt("sb.cw.topup", "top-up target");
+    case "depot": return src ? tt("sb.cw.plan", "{site}'s plan", {site: src}) : tt("sb.cw.topup", "top-up target");
+    case "wholesale": return tt("sb.cw.wholesale", "wholesale delivery");
+    case "factory": return src ? tt("sb.cw.topupFrom", "top-up from {site}", {site: src}) : tt("sb.cw.chooseDepot", "choose a depot");
+    case "route": return tt("sb.cw.route", "check the route in the game");
+    case "hours": return r.forImports && r.forImports.length
       ? tt("sb.cw.hoursFor", "factory staffing, for {items}", {items: sbList([...new Set(r.forImports.map(x => spEsc(x.item)))])})
       : tt("sb.cw.hours", "factory staffing");
     default: return "";
@@ -10573,7 +10609,7 @@ function sbcWhere(r){
 /* Current → proposed, with the unit; a review has no figure. */
 function sbcChange(r){
   if(r.proposed === null || r.proposed === undefined) return `<span class="sb-unit">${tt("sb.others.review", "review")}</span>`;
-  if(r.kind === "Before the next delivery") return `<span class="sb-chg"><b>+${num(r.proposed)}</b><small>${tt("sb.unit.once", "once")}</small></span>`;
+  if(r.kind === "once") return `<span class="sb-chg"><b>+${num(r.proposed)}</b><small>${tt("sb.unit.once", "once")}</small></span>`;
   const was = r.current === null || r.current === undefined ? tt("sb.cw.none", "none") : num(r.current);
   return `<span class="sb-chg"><s>${was}</s><span class="to">${spIcon("right")}</span><b>${num(r.proposed)}</b><small>${sbUnitOf(r)}</small></span>`;
 }
@@ -10778,7 +10814,7 @@ function sbImportCard(d){
   /* With no line picked, the first one the list asks a change of: the view
      opens on a decision, until the reader closes the card. */
   if(!sbSel && !sbSelOff){
-    const first = d.rows.find(x => x.kind === "Weekly imports" && x.proposed !== null && sbInScope("imports", x.site));
+    const first = d.rows.find(x => x.kind === "imports" && x.proposed !== null && sbInScope("imports", x.site));
     if(first) sbSel = {s: first.site, slug: first.slug};
   }
   if(!sbSel) return "";
@@ -10787,8 +10823,8 @@ function sbImportCard(d){
   const close = `<button type="button" class="sbi-x" data-sb-unsel aria-label="${attr(tt("sb.card.close", "Close the review"))}">${gwSvg("close")}</button>`;
   if(!r || !b) return `<div class="sbi-card empty" id="sbCard"${sbArrive && sbArrive.view === "imports" ? " data-sb-at" : ""}><p>${tt("sb.card.gone", "This line has no import to review with the latest numbers.")}</p>${close}</div>`;
   const ir = supplyImports().find(x => x.s === r.s && x.slug === r.slug) || null;
-  const weekly = d.rows.find(x => x.kind === "Weekly imports" && x.site === r.s && x.slug === r.slug) || null;
-  const once = d.rows.find(x => x.kind === "Before the next delivery" && x.site === r.s && x.slug === r.slug && x.view === "imports") || null;
+  const weekly = d.rows.find(x => x.kind === "imports" && x.site === r.s && x.slug === r.slug) || null;
+  const once = d.rows.find(x => x.kind === "once" && x.site === r.s && x.slug === r.slug && x.view === "imports") || null;
   const hours = weekly && weekly.hours ? weekly.hours : [];
   const f = r.fact;
   const unit = r.smart ? tt("sb.unit.stock", "in stock") : tt("sb.unit.week", "a week");
@@ -11476,8 +11512,8 @@ function drawFactoryStaffing(keep = () => true, drawnLines = []){
       const chips = (l.cuts || []).map(([a, z]) => `<span class="sb-shift">${h(a)}–${h(z)}<small>${tt("sb.unit.nh", "{n} h", {n: z - a})}</small></span>`).join("");
       const echoed = drawnLines.find(x => !x.unnamed && x.s === r.s && x.slug === l.slug
         && Number.isFinite(x.hoursNow) && x.hoursNow === l.hoursNow && (x.needHours || {})[sizing] === l.hours
-        && (!(x.chk || []).some(c => c.kind === "Factory run hours")
-          || (x.chk || []).find(c => c.kind === "Factory run hours").proposed === l.hours));
+        && (!(x.chk || []).some(c => c.kind === "hours")
+          || (x.chk || []).find(c => c.kind === "hours").proposed === l.hours));
       const hidden = echoed && echoed.objectOpen;
       return `<div class="sb-sln"><span class="nm">${spEsc(l.item)}</span><span class="hrs"${echoed ? ` data-sb-hours-for="${attr(echoed.objectKey)}"` : ""}${hidden ? " hidden" : ""}>${Number.isFinite(l.hoursNow) && l.hoursNow === l.hours ? "" : sbDayStrip(l.hoursNow, l.hours,
         tt("sb.staff.line.tip", "{now} h staffed, {need} h needed, from {from}:00", {now: l.hoursNow ?? 0, need: l.hours, from: h(l.from || 0)}), l.from || 0)}${
@@ -19072,9 +19108,9 @@ const PAGE_ALIASES = {results: ["company", "results"]};
 const hasData = () => !!D;
 /* The views of each page. */
 /* Registry: "A view or a page" (docs/architecture.md, Registries). Author
-   shared identity in VIEW_META; navigation labels/items, primary SEC_PAGE
-   rows, area views, route identity and HOST_ROUTES derive from it. Keep
-   markup, draw rows, search entries, aliases and route hooks explicit. */
+   shared identity in VIEW_META; navigation labels/items, every SEC_PAGE row,
+   area views, route identity, route needs and HOST_ROUTES derive from it.
+   Keep markup, draw rows, search entries, aliases and route hooks explicit. */
 const navItems = host => VIEW_META.filter(v => v.host[0] === host && v.section)
   .map(v => navView(v.host[1], v.label, v.section));
 /* Registry: "A view or a page" (navigation items from VIEW_META; host settings below). */
@@ -19128,28 +19164,30 @@ Object.entries(SUBS).forEach(([id, sv]) => {
    presentation there, and `scopes`, on Supply, are the tabs the route may be
    read on. docs/architecture.md, Routes, says how an address resolves; the old
    hashes are ROUTE_ALIASES, PAGE_ALIASES, SEC_PAGE and SEC_MOVED. */
+/* An area's views, in VIEW_META's order. */
+const areaViews = area => VIEW_META.filter(v => v.route.startsWith(`${area}/`)).map(v => v.route.split("/")[1]);
 /* Registry: "A view or a page" (for a route: see the checklist). */
 const AREAS = [
   {id:"overview", icon:"today", get label(){ return tt("nav.area.overview", "Overview"); }},
   {id:"businesses", icon:"company", get label(){ return tt("nav.area.businesses", "Businesses"); },
-   views:VIEW_META.filter(v => v.route.startsWith("businesses/")).map(v => v.route.split("/")[1]), start:"results"},
+   views:areaViews("businesses"), start:"results"},
   {id:"supply", icon:"supply", get label(){ return tt("nav.area.supply", "Supply"); },
-   views:VIEW_META.filter(v => v.route.startsWith("supply/")).map(v => v.route.split("/")[1]), start:"changes"},
+   views:areaViews("supply"), start:"changes"},
   {id:"staffing", icon:"people", get label(){ return tt("nav.area.staffing", "Staffing"); },
-   views:VIEW_META.filter(v => v.route.startsWith("staffing/")).map(v => v.route.split("/")[1]), start:"schedules"},
+   views:areaViews("staffing"), start:"schedules"},
   {id:"expansion", icon:"growth", get label(){ return tt("nav.area.expansion", "Expansion"); },
-   views:VIEW_META.filter(v => v.route.startsWith("expansion/")).map(v => v.route.split("/")[1]), start:"demand"},
+   views:areaViews("expansion"), start:"demand"},
   {id:"estate", icon:"estate", get label(){ return tt("nav.area.estate", "Real estate"); },
-   views:VIEW_META.filter(v => v.route.startsWith("estate/")).map(v => v.route.split("/")[1]), start:"buildings"},
+   views:areaViews("estate"), start:"buildings"},
 ];
 const REFS = [
   {id:"map", icon:"map", newFeature:"map", get label(){ return tt("nav.ref.map", "City map"); }},
   ...(typeof showWikiRoute === "function" ? [{id:"wiki", icon:"wiki", newFeature:"wiki", get label(){ return tt("nav.ref.wiki2", "Wiki"); }}] : []),
 ];
 /* Registry: "A view or a page" (docs/architecture.md, Registries). Author
-   shared identity in VIEW_META; navigation labels/items, primary SEC_PAGE
-   rows, area views, route identity and HOST_ROUTES derive from it. Keep
-   markup, draw rows, search entries, aliases and route hooks explicit. */
+   shared identity in VIEW_META; navigation labels/items, every SEC_PAGE row,
+   area views, route identity, route needs and HOST_ROUTES derive from it.
+   Keep markup, draw rows, search entries, aliases and route hooks explicit. */
 const ROUTE_BEHAVIOR = {
   /* The portfolio is one table on two views: Standards shows its
      Operations comparison, and Results gets back the view it had before. */
@@ -19229,7 +19267,14 @@ const ROUTE_BEHAVIOR = {
 };
 /* Registry: "A view or a page" (identity from VIEW_META; hooks from ROUTE_BEHAVIOR). */
 const ROUTES = Object.fromEntries(VIEW_META.map(v => [v.route,
-  {host: v.host, needs: v.needs, ...ROUTE_BEHAVIOR[v.route]}]));
+  {host: v.host, get needs(){ return routeNeeds(v); }, ...ROUTE_BEHAVIOR[v.route]}]));
+/* The sections a route reads: what its host view's PAGE_DRAWS rows declare,
+   in their order, and the `needs` its VIEW_META record adds. Read when asked
+   (PAGE_DRAWS is declared further down). */
+function routeNeeds(v){
+  const host = v.host.join("/");
+  return [...new Set([...PAGE_DRAWS.filter(row => row[0].split(" ").includes(host)).flatMap(row => row[3]), ...(v.needs || [])])];
+}
 /* The route a host page and view shows when nothing more precise was asked
    for: a finding, a search or the reader's own click on a scope tab. */
 /* Registry: "A view or a page" (only if: see the checklist). */
@@ -19401,9 +19446,9 @@ function drawWikiSections(){
   wikiVisit();
 }
 /* Registry: "A view or a page" (docs/architecture.md, Registries). Author
-   shared identity in VIEW_META; navigation labels/items, primary SEC_PAGE
-   rows, area views, route identity and HOST_ROUTES derive from it. Keep
-   markup, draw rows, search entries, aliases and route hooks explicit. */
+   shared identity in VIEW_META; navigation labels/items, every SEC_PAGE row,
+   area views, route identity, route needs and HOST_ROUTES derive from it.
+   Keep markup, draw rows, search entries, aliases and route hooks explicit. */
 const PAGE_DRAWS = [
   ["today", () => drawKpis(), null, []], ["today", () => drawAlerts(), null, []], ["today", () => drawTools(), null, []],
   ["company/results", () => drawChart(), null, []], ["company/results", () => drawFinance(), null, []], ["company/results company/standards", () => drawPortfolio(), null, []],
@@ -21290,9 +21335,9 @@ const ssWorst = rows => rows.map(r => SS_SEV[r.level] || "opp")
    and `each`, where one view answers for several things, gives one entry per
    thing (its own id, line and go) in place of the view's single one. */
 /* Registry: "A view or a page" (docs/architecture.md, Registries). Author
-   shared identity in VIEW_META; navigation labels/items, primary SEC_PAGE
-   rows, area views, route identity and HOST_ROUTES derive from it. Keep
-   markup, draw rows, search entries, aliases and route hooks explicit. */
+   shared identity in VIEW_META; navigation labels/items, every SEC_PAGE row,
+   area views, route identity, route needs and HOST_ROUTES derive from it.
+   Keep markup, draw rows, search entries, aliases and route hooks explicit. */
 const SS_VIEWS = [
   {id: "alerts", get t(){ return tt("nav.search.alerts.title", "Needs attention"); },
    get p(){ return tt("nav.search.alerts.line", "Overview"); }, ic: "today", syn: ["problems", "alerts", "warnings", "findings", "to do", "today"],
@@ -21444,7 +21489,7 @@ const SS_VIEWS = [
    get p(){ return tt("nav.search.wiki.line", "the game's own help"); }, ic: "wiki", syn: ["help", "guide", "manual", "wiki"], need: false, go: () => openRoute("wiki")},
   {id: "changelog", get t(){ return tt("nav.search.changelog.title", "Changelog"); },
    get p(){ return tt("nav.search.changelog.line", "More · what's new"); }, ic: "list", syn: ["new", "updates", "release notes"], need: false,
-   go(){ const d = $("changelogDialog"); if(d && !d.open){ d.showModal(); featureDiscovery.visit("changelog"); d.scrollTop = 0; } }},
+   go(){ openChangelog(); }},
 ];
 /* The words players use for the wiki's pages, by title. */
 const SS_WIKI_SYN = {"MyEmployees App": ["hire", "hiring", "fire"], "Headhunter": ["hire", "recruit"],
@@ -22418,8 +22463,7 @@ function nxMenuDo(id, from = null){
   if(id === "map" || id === "wiki"){ if(hasData()) openRoute(id); else if(window.BigCopilotBoard) window.BigCopilotBoard.browseWiki(); return; }
   if(id === "search"){ ssOpen(); return; }
   if(id === "news"){
-    const d = $("changelogDialog");
-    if(d && !d.open){ d.showModal(); featureDiscovery.visit("changelog"); d.scrollTop = 0; }
+    openChangelog();
     return;
   }
   /* Preferences and Help & feedback are sheets over the board (pxOpen()),

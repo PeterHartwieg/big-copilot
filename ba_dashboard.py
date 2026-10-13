@@ -22181,6 +22181,13 @@ def render(
     asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
     with open(os.path.join(asset_root, "changelog.json"), encoding="utf-8") as fh:
         changes = json.load(fh)
+    changes = sorted(changes, key=lambda entry: (entry["date"], entry["pr"]), reverse=True)
+    # The hosted page ships the newest entry only (it also dates the New
+    # badges) and fetches the rest from web/changelog.json on the dialog's
+    # first open (issue #328). A local page has nothing to fetch from, so it
+    # carries them all.
+    if site:
+        changes = changes[:1]
     changelog = "".join(
         '<li class="changelog-entry"><div class="changelog-meta">'
         f'<time datetime="{html_escape(entry["date"])}">'
@@ -22189,7 +22196,7 @@ def render(
         f'target="_blank" rel="noopener" aria-label="View pull request {int(entry["pr"])}">'
         f'PR #{int(entry["pr"])} ↗</a></div>'
         f'<h3>{html_escape(entry["title"])}</h3><p>{html_escape(entry["summary"])}</p></li>'
-        for entry in sorted(changes, key=lambda entry: (entry["date"], entry["pr"]), reverse=True)
+        for entry in changes
     )
     with open(os.path.join(asset_root, "map.js"), encoding="utf-8") as fh:
         map_script = fh.read()
@@ -22273,6 +22280,7 @@ def render(
         # The game names in another language, for a local page built with --lang.
         .replace("/*__NAMES__*/null", names_json)
         .replace("<!--__CHANGELOG__-->", changelog)
+        .replace("__CHANGELOG_SRC__", "changelog.json" if site else "", 1)
         .replace("/*__LIVE__*/false", "true" if live else "false")
         .replace("__TITLE__", html_escape(title))
         .replace("<!--__FOOTER__-->", footer_html(site=site))
