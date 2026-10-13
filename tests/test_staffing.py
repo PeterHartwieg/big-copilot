@@ -3306,6 +3306,8 @@ class WeekTakeTest(unittest.TestCase):
         self.assertEqual(trial["days"], set())
         self.assertEqual(trial["hours"], 0)
         self.assertEqual(state["a"]["hours"], 8, "the copy leaves the real week alone")
+        self.assertEqual(state["a"]["busy"][3], set(range(6, 10)) | set(range(14, 18)))
+        self.assertEqual(state["a"]["days"], {3})
 
     def test_week_off_keeps_a_station_another_line_still_holds(self):
         first, second = self.line("a", 1, 6, 10), self.line("a", 1, 14, 18)
