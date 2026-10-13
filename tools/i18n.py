@@ -989,7 +989,7 @@ def main(argv=None) -> int:
         elif args.cmd == "status":
             found = calls()
             english, params = catalogue(found), passed(found)
-            bad = 0
+            orphans, mismatches, pending = 0, 0, 0
             for lang in [args.lang] if args.lang else languages():
                 st = status(lang, english, params)
                 print(f"{lang}: {len(english)} English keys; " + ", ".join(f"{len(v)} {k}" for k, v in st.items()))
@@ -1005,14 +1005,18 @@ def main(argv=None) -> int:
                         if name != f"{lang}.json"}
                 for name, keys in left.items():
                     print(f"  {len(keys)} left in i18n/{name} for keys not translated or orphaned")
-                if args.complete:
-                    bad += sum(len(v) for v in st.values()) + sum(len(v) for v in left.values())
-                elif args.strict:
-                    bad += len(st["orphan"]) + len(st["mismatch"]) + sum(len(v) for v in left.values())
-            if bad and (args.strict or args.complete):
-                print("i18n: status failed; orphans and leftovers go with python tools/i18n.py prune",
-                      file=sys.stderr)
-            return 1 if bad else 0
+                if args.strict or args.complete:
+                    orphans += len(st["orphan"]) + sum(len(v) for v in left.values())
+                    mismatches += len(st["mismatch"])
+                    pending += (len(st["missing"]) + len(st["stale"])) if args.complete else 0
+            if orphans:
+                print("i18n: orphaned keys or leftover marks; run python tools/i18n.py prune", file=sys.stderr)
+            if mismatches:
+                print("i18n: placeholder mismatches; fix each translation's placeholders to match its English "
+                      "and the params its calls pass", file=sys.stderr)
+            if pending:
+                print("i18n: missing or stale keys; translate and accept them", file=sys.stderr)
+            return 1 if orphans or mismatches or pending else 0
         elif args.cmd == "prune":
             english = catalogue()
             for lang in [args.lang] if args.lang else languages():
