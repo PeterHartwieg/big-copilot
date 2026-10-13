@@ -6,6 +6,8 @@ wrong, and every shift the builder produces is checked against the game's own
 rules rather than against a hand-copied expectation.
 """
 import collections
+import contextlib
+import io
 import json
 import math
 import os
@@ -3170,11 +3172,13 @@ class OddSaveTest(unittest.TestCase):
                 raise ValueError("this site is broken")
             return real(save, names, business, building, *args, **kw)
 
-        with unittest.mock.patch.object(ba_dashboard, "_plan_site", explode):
+        with unittest.mock.patch.object(ba_dashboard, "_plan_site", explode),                 contextlib.redirect_stderr(io.StringIO()):
             rows = plan_sites(self.SPECS, people)
-        # Two sites in, two rows out: the failed one is named, not dropped.
+        # Two sites in, two rows out: the failed one is named, not dropped,
+        # and says what broke (issue #308).
         self.assertEqual(len(rows), 2)
         broken, whole = rows
+        self.assertTrue(broken.pop("error").startswith("ValueError: this site is broken, in "))
         self.assertEqual(
             broken,
             {"key": site_key((STREET, 12)), "name": "HART. Test 12",
@@ -3197,7 +3201,7 @@ class OddSaveTest(unittest.TestCase):
                 raise ValueError("this site's schedule is malformed")
             return real(save, building, stations)
 
-        with unittest.mock.patch.object(ba_dashboard, "_current_roster", explode):
+        with unittest.mock.patch.object(ba_dashboard, "_current_roster", explode),                 contextlib.redirect_stderr(io.StringIO()):
             rows = plan_sites(self.SPECS, people)
         self.assertEqual(len(rows), 2)
         broken, whole = rows
