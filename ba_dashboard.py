@@ -826,6 +826,9 @@ RETAIL_TYPES = {
 # like any shop's: supply, the factory view and the Growth planner count them
 # line by line, by item, never by the business type.
 ISSUED_ITEMS = {"ba:itemname_cinematicket", "ba:itemname_theaterticket"}
+# Handed out at the register with every sale. A shop stocks it like a product,
+# but the game never lists it among what customers can buy there.
+PAPER_BAG = "ba:itemname_paperbag"
 
 # The office agencies left out of RETAIL_TYPES above. Their customers are digital,
 # so nothing a shop floor needs (amenities, uniforms, shelves) applies, but they
@@ -4450,6 +4453,13 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
     prices = {
         p["itemName"]: p["price"] for p in save.items(b["retailPrices"]) if p
     }
+    # What customers can buy here now, by the game's own list. A shop taken
+    # over and changed to another type keeps the old type's stock, prices and
+    # last week of sales, none of which it can sell or reprice any more (issue
+    # #493). A product the list does not hold is `retired`: no shelf to plan.
+    # An empty list (a shop not scored yet) says nothing, and the paper bag and
+    # the issued tickets are never on it.
+    offered = {i for i in save.items(b.get("cachedAvailableProducts")) if isinstance(i, str)}
 
     lines = []
     # Rows that tie on cover would otherwise reshuffle between runs and page loads.
@@ -4484,6 +4494,8 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
                 "soldPerDay": round(units_sold[item] / span),
                 "soldPerWeek": round(units_sold[item] / span * 7),
                 **({"issued": True} if item in ISSUED_ITEMS else {}),
+                **({"retired": True} if offered and item not in offered
+                    and item != PAPER_BAG and item not in ISSUED_ITEMS else {}),
                 # Unrounded, for _products() alone; build_core() takes them
                 # off the payload: a price from rounded units is no price.
                 "_sold": units_sold[item] / span,
@@ -7416,7 +7428,8 @@ def _supply_shop_rows(businesses: list, index: dict, target_at: dict, wholesale:
             continue
         for line in business["lines"]:
             item, rate = line["slug"], line.get("tradeRate", line["rate"])
-            if rate <= 0:
+            # A product the shop's type no longer sells has no shelf to fill.
+            if rate <= 0 or line.get("retired"):
                 continue
             target, source = target_at.get((business["key"], item), (0, None))
             factor, peak_day = peak_of(business)
@@ -8046,7 +8059,7 @@ def _supply_idle(businesses: list, *, index: dict, factories: dict, edges: dict,
         key = business["key"]
         for line in business["lines"]:
             item = line["slug"]
-            if (key, item) in target_at or (key, item) in wholesale:
+            if (key, item) in target_at or (key, item) in wholesale or line.get("retired"):
                 continue
             if business["status"] == "retail":
                 rate = sold.get(key, {}).get(item, 0.0)
@@ -9012,7 +9025,10 @@ def _supply_facts(ctx: dict) -> dict:
         """A shop's shelf, judged on its daily top-up against its busiest day,
         or, where a wholesale store delivers it each week and no top-up does,
         on the week: the order against a week of sales, and the stock against
-        the days to the drop. Returns (probe, fields, cadence)."""
+        the days to the drop. Returns (probe, fields, cadence), or None for
+        a shelf there is nothing to judge on."""
+        if line.get("retired"):
+            return None  # the shop's type no longer sells it (issue #493)
         key, slug = business["key"], line["slug"]
         rate = line.get("tradeRate", line["rate"])
         target = target_at.get((key, slug), (0, None))[0]

@@ -4993,7 +4993,7 @@ function spShelfFolded(b, line, peak = spShelfPeak(b)){
    boxed up in its cargo; a shop lists what it sells or holds. drawSite() draws
    by it and the Products link (xlSellers) picks by it, so a link never lands
    on a row that is not there. */
-const spShelfListed = (b, l) => b.status === "office" ? l.price > 0 || l.rate > 0 : l.rate > 0 || l.units > 0;
+const spShelfListed = (b, l) => b.status === "office" ? l.price > 0 || l.rate > 0 : !l.retired && (l.rate > 0 || l.units > 0);
 const SMALL = `style="font-size:12px;color:var(--ink-3);margin-left:6px"`;
 const CLOSE_ICON = `<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"></path></svg>`;
 /* Two letters for a role: the initials of its first two words. */
