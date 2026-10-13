@@ -56,16 +56,26 @@ English remains in its existing `tt()` and `msg()` call sites. Assembly extracts
 catalogue for each supported target language, including Italian, and preserves the
 runtime's placeholder and plural rules. Catalogue output is generated and ignored
 by Git. A plural form's contract requires the placeholders of its own English form,
-and assembly stops when a contract's placeholder rule would reject its own English or
-bundled wording.
+and assembly stops when a contract, markup rule included, would reject its own
+English or bundled wording.
 A source version includes the phrase's English and validation contract;
 the whole-catalogue revision also changes with bundled wording and review metadata.
 
 The API validates contributions against its own generated catalogue, not metadata
-supplied by the browser. Community wording is plain text. The contribution page
-uses safe text rendering, and the dashboard keeps its normal escaping at HTML and
-attribute boundaries. Invalid placeholders, stale submissions and markup are
-rejected before a candidate can become an overlay.
+supplied by the browser. Community wording is plain text, except on a phrase whose
+English has tags (`<b>`, `<span class="ok">` and the like), which the board draws as
+HTML. Its contract lists those tags as `markup`, copied character for character
+from the English, and its wording must carry exactly them: as many of each, properly
+nested, in any order, with no other `<`, attribute or entity. Such wording is no
+more able to add an element or attribute than the English is. A bare `>` ("a -> b")
+is text and allowed anywhere. The same rule runs in `tools/translation_catalogue.py`
+(`keeps_markup()`), the Worker (`keepsMarkup()` in `server/translations.mjs`), the
+hosted loader (`ttKeepsMarkup()` in `web/i18n.js`, again at the rendering boundary)
+and the contribution page, which keeps the tags in the editor and shows the English
+with them. The contribution page otherwise uses safe text rendering, and the
+dashboard keeps its normal escaping at HTML and attribute boundaries. Invalid
+placeholders, stale submissions and other markup are rejected before a candidate
+can become an overlay.
 
 The hosted language loader overlays selected community wording on the bundled
 translation only when it matches the source version shipped with that page.

@@ -9,7 +9,10 @@ const MAX_CATALOGUE_BYTES = 16 * 1024 * 1024;
 const LANG = /^[a-z]{2}(?:-[A-Za-z]{2,8})?$/;
 const VERSION = /^[a-f0-9]{64}$/;
 const TOKEN = /\{(\w+)(?::([^{}]+))?\}/g;
-const ENTITY = /&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;)/i;
+// Entities HTML would decode: any &name; or numeric one, and, without a
+// semicolon, the ones that decode to <, >, & or quotes (even before letters, as
+// in "&ltimg"), plus &apos and &nbsp at a word end. "R&D" stays text.
+const ENTITY = /&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;|lt|gt|amp|quot|(?:apos|nbsp)(?![a-z\d]))/i;
 // The overlay changes only when translation_revisions.revision moves (every vote,
 // suggestion, moderation action and vote cleanup bumps it in the same transaction)
 // or a deployment replaces the catalogue, which changes the build stamp in
@@ -28,13 +31,40 @@ const PUBLIC = { 'cache-control': 'public, max-age=0, must-revalidate' };
 // The code alone: the page words each code through tt().
 const error = (code, status = 400) => json({ error: code }, status, PRIVATE);
 
+// A key whose English has tags is drawn as HTML, so its wording may carry
+// exactly those tags (validation.markup, copied character for character from
+// the English by tools/translation_catalogue.py), as many of each, properly
+// nested, in any order. Any other '<' is refused; a bare '>' is text.
+// keeps_markup() there and ttCommunityValid() in web/i18n.js mirror this.
+const MARKUP = /<[^<>]*>/g;
+const TAG = /^<(\/?)([a-z][a-z\d]*)(?=[\s>/])/i;
+const VOID_TAGS = new Set(['br']);
+export function keepsMarkup(text, markup = []) {
+  if (!Array.isArray(markup) || text.replace(MARKUP, '').includes('<')) return false;
+  const pieces = text.match(MARKUP) || [];
+  const want = [...markup].sort(), got = [...pieces].sort();
+  if (got.length !== want.length || got.some((piece, i) => piece !== want[i])) return false;
+  const open = [];
+  for (const piece of pieces) {
+    const tag = TAG.exec(piece);
+    if (!tag) return false;
+    const name = tag[2].toLowerCase();
+    if (VOID_TAGS.has(name)) continue;
+    if (!tag[1]) open.push(name);
+    else if (open.pop() !== name) return false;
+  }
+  return open.length === 0;
+}
+
 export function validateTranslation(text, validation) {
   if (typeof text !== 'string' || !text.trim() || !plainObject(validation)) return false;
   if ([...text].length > Math.min(validation.maxLength || 2000, 2000)) return false;
-  // tt() produces plain text. Quotes and apostrophes are ordinary characters;
-  // consumers escape at HTML sinks. Markup, entities and control characters are
-  // not accepted as a second, ambiguous representation of the submitted text.
-  if (/[<>\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(text) || ENTITY.test(text)) return false;
+  // Quotes and apostrophes are ordinary characters; consumers escape at HTML
+  // sinks. Entities and control characters are not accepted as a second,
+  // ambiguous representation of the submitted text, and markup only as
+  // keepsMarkup() allows.
+  if (/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(text) || ENTITY.test(text)) return false;
+  if (!keepsMarkup(text, validation.markup)) return false;
   const tokens = [...text.matchAll(TOKEN)].map(match => `${match[1]}:${match[2] || ''}`);
   if (/[{}]/.test(text.replace(TOKEN, ''))) return false;
   if (!Array.isArray(validation.allowed) || !Array.isArray(validation.required)) return false;
