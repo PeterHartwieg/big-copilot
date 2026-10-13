@@ -44,7 +44,7 @@ test('a paused contract beside a top-up that falls short is resumed; one the top
     inGame: 1000, setTo: null, value: 1000, changed: false, use: 0, need: 0, parts: {lines: 0, sites: 0, route: 0},
     fact: fact('paused', {why: lvl === 'info' ? 'topup' : 'order', lvl, use: 0, need: 0})});
   const rows = build({imports: [{s: 1, rows: [paused('critical')]}]});
-  assert.deepEqual(rows.map(r => [r.kind, r.item, !!r.paused]), [['Weekly imports', 'Water', true]]);
+  assert.deepEqual(rows.map(r => [r.kind, r.item, !!r.paused]), [['imports', 'Water', true]]);
   assert.match(rows[0].reason, enRe("sb.ck.paused.topup"));
   assert.deepEqual(build({imports: [{s: 1, rows: [paused('info')]}]}), []);
 });
@@ -56,9 +56,9 @@ test('a wholesale contract short of the week that also runs dry gives two change
     role: 'depot', cad: 'weekly', use: 1680, need: 1680, have: 1000, setTo: 1680, day: 'Monday', wholesale: true})};
   const rows = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [], [shelf, depot])));
   assert.deepEqual(rows.map(r => [r.kind, r.item, r.current, r.proposed]), [
-    ['Wholesale deliveries', 'Soda', 1200, 1420],
-    ['Before the next delivery', 'Soda', null, 164],
-    ['Wholesale deliveries', 'Syrup', 1000, 1680]]);
+    ['wholesale', 'Soda', 1200, 1420],
+    ['once', 'Soda', null, 164],
+    ['wholesale', 'Syrup', 1000, 1680]]);
   assert.match(rows[0].reason, enRe("sb.ck.ws.sells.all", {n: 1232, margin: en("sb.ck.margin.pct", {pct: 15}), need: 1417}, {anchor: "start"}));
   assert.match(rows[1].reason, enRe("sb.ck.ws.bring.day", {n: 164, day: "Monday"}, {anchor: "start"}));
   // Factory lines sized 24/7 take no margin: need is use, and none is claimed.
@@ -72,8 +72,8 @@ test('a depot only a route feeds gets its daily top-up, from the site whose plan
     [depot('short', 80, 'Paper Bag'), depot('tight', 104, 'Soda'), {...depot('covered', 200, 'Cups'),
       fact: fact('covered', {role: 'depot', cad: 'daily', have: 200, setTo: null})}])));
   assert.deepEqual(rows.map(r => [r.kind, r.item, r.current, r.proposed, !!r.tight, r.source]), [
-    ['Depot daily top-ups', 'Paper Bag', 80, 120, false, 1],
-    ['Depot daily top-ups', 'Soda', 104, 120, true, 1]]);
+    ['depot', 'Paper Bag', 80, 120, false, 1],
+    ['depot', 'Soda', 104, 120, true, 1]]);
   assert.match(rows[0].reason, new RegExp("^" + enRe("sb.ck.depot.plan", {site: "Factory · 2 Factory Street"}).source + " " + enRe("sb.ck.depot.busiest", {n: 100, margin: en("sb.ck.margin.pct", {pct: 15})}).source + "$"));
   assert.equal(rows[0].group, en("sb.ck.kind.depot") + ' · Depot · 1 Depot Street');
 });
@@ -142,7 +142,7 @@ test('incomplete data preserves saved marks until a complete snapshot can reconc
 
 test('a row is keyed by its item key, and a tick stored under the item name still counts', () => {
   const [row] = build({imports:[{s:0, rows:[order({slug: 'ba:itemname_sugar'})]}]});
-  assert.equal(row.key, JSON.stringify(['Weekly imports', 'depot#1', 'ba:itemname_sugar', 1000, 1500, null]));
+  assert.equal(row.key, JSON.stringify(['imports', 'depot#1', 'ba:itemname_sugar', 1000, 1500, null]));
   // The key a tick was stored under before: the same row, by the item's name.
   const stored = JSON.stringify(['Weekly imports', 'depot#1', 'Sugar', 1000, 1500, null]);
   assert.deepEqual([...context.reconcileOrderMarks(new Set([stored]), [row], true)], [row.key]);
@@ -152,6 +152,48 @@ test('a row is keyed by its item key, and a tick stored under the item name stil
   assert.notEqual(twin.key, row.key);
   // A stored name no row carries any more is dropped like any resolved tick.
   assert.equal(context.reconcileOrderMarks(new Set([stored]), [], true).size, 0);
+});
+
+test('ticks stored while kinds were English sentences read back under the short ids (#349)', () => {
+  // Every kind a release stored, as it stored it, and the id it is now.
+  const old = {'Weekly imports': 'imports', 'Before the next delivery': 'once', 'Factory daily top-ups': 'factory',
+    'Check the delivery route': 'route', 'Shop daily top-ups': 'shop', 'Wholesale deliveries': 'wholesale',
+    'Depot daily top-ups': 'depot', 'Factory run hours': 'hours'};
+  const tail = ['depot#1', 'ba:itemname_sugar', 1000, 1500, 'factory#2', 'smart'];
+  for(const [english, id] of Object.entries(old)){
+    const moved = context.sbCkMigrateKey(JSON.stringify([english, ...tail]));
+    assert.equal(moved, JSON.stringify([id, ...tail]));
+    // Running it again changes nothing.
+    assert.equal(context.sbCkMigrateKey(moved), moved);
+    assert.equal(context.sbCkKind(id), en(`sb.ck.kind.${id}`));
+  }
+  // Keys of any other shape come back untouched, and nothing throws.
+  for(const other of ['', 'Weekly imports', '[', '[broken', '{"a":1}', '["Something else",1]', '["imports",null]',
+                      '[1,2]', '[]', JSON.stringify([['Weekly imports'], 'x'])])
+    assert.equal(context.sbCkMigrateKey(other), other);
+  for(const other of [null, undefined, 3, {}]) assert.equal(context.sbCkMigrateKey(other), other);
+  // Through reconcileOrderMarks: a stored English tick lands on today's row,
+  // a second pass is a no-op, and a key it does not know is kept while the
+  // data is incomplete and dropped like any resolved tick once it is complete.
+  const [row] = build({imports:[{s:0, rows:[order({slug: 'ba:itemname_sugar'})]}]});
+  assert.equal(row.kind, 'imports');
+  const stored = row.key.replace('["imports"', '["Weekly imports"');
+  assert.notEqual(stored, row.key);
+  const unknown = 'not a checklist key';
+  const once = context.reconcileOrderMarks(new Set([stored, unknown]), [row], false);
+  assert.deepEqual([...once].sort(), [row.key, unknown].sort());
+  assert.deepEqual([...context.reconcileOrderMarks(once, [row], false)].sort(), [...once].sort());
+  assert.deepEqual([...context.reconcileOrderMarks(new Set([stored]), [row], true)], [row.key]);
+  assert.deepEqual([...context.reconcileOrderMarks(new Set([row.key]), [row], true)], [row.key]);
+  // A game-link write recorded its rows' keys too (ba_progress_v1): an old
+  // record still answers today's row.
+  vm.runInContext(`pgMemo.set("", {recs: {w: {id: "w", rowKeys: [${JSON.stringify(stored)}]}}, n: 0,
+    gone: new Set(), mine: new Set(), synced: new Set()});`, context);
+  try {
+    const pgOf = vm.runInContext('pgOf', context);
+    assert.equal(pgOf(row.key).id, 'w');
+    assert.equal(pgOf(JSON.stringify(['once', 'depot#1'])), null);
+  } finally { vm.runInContext('pgMemo.delete("");', context); }
 });
 
 test('with the names in German, a tick stored under the English name still counts', () => {
@@ -206,7 +248,7 @@ test('a stalled input asks to check the route; one waiting on another input does
     {item:'Flour', target:300, perDay:215, from:0, fact:fact('stalled', {why:'notDrawn'})},
     {item:'Sugar', target:300, perDay:215, from:0, fact:fact('stalled', {why:'waiting'})},
   ]}]});
-  assert.deepEqual(rows.map(r => [r.kind, r.item]), [['Check the delivery route', 'Flour']]);
+  assert.deepEqual(rows.map(r => [r.kind, r.item]), [['route', 'Flour']]);
 });
 
 test('a measured delivery gap has a one-off quantity, separate from the recurring order', () => {
@@ -226,7 +268,7 @@ test('a factory input topped up each morning takes its run-out from its own impo
   const gap = {s:1, item:'Water', shortBy:2.1, catchUp:480, runsOut:'Friday',
     fact:fact('covered', {role:'input', cad:'daily', import:fact('short', {why:'shortfall', role:'input', cad:'weekly'})})};
   const rows = build({checks:[gap]});
-  assert.deepEqual(rows.map(r => [r.kind, r.item, r.proposed]), [['Before the next delivery', 'Water', 480]]);
+  assert.deepEqual(rows.map(r => [r.kind, r.item, r.proposed]), [['once', 'Water', 480]]);
   // A paused contract is still read off the outer fact.
   assert.deepEqual(build({checks:[{...gap, catchUp:null, from:'Importer',
     fact:fact('covered', {import:fact('paused')})}]}), []);
@@ -237,11 +279,11 @@ test('an order short of its week that also runs dry before the drop gives the on
   const run = {s:0, item:'Sugar', coverFit:'short', shortBy:2.3, catchUp:540, runsOut:'Friday', fact:short};
   const rows = build({imports:[{s:0, rows:[order({fact:short})]}], checks:[run]});
   assert.deepEqual(rows.map(r => [r.kind, r.item, r.proposed]),
-    [['Before the next delivery', 'Sugar', 540], ['Weekly imports', 'Sugar', 1500]]);
+    [['once', 'Sugar', 540], ['imports', 'Sugar', 1500]]);
   assert.match(rows[0].reason, enRe("sb.ck.bring.day", {n: 540, day: 'Friday'}, {anchor: 'start'}));
   // Stock that reaches the drop leaves the order alone.
   assert.deepEqual(build({imports:[{s:0, rows:[order({fact:short})]}], checks:[{...run, coverFit:'ok', catchUp:0}]})
-    .map(r => r.kind), ['Weekly imports']);
+    .map(r => r.kind), ['imports']);
 });
 
 test('the one-offs come first by site, ahead of all its order changes, in the copied text too', () => {
@@ -253,8 +295,8 @@ test('the one-offs come first by site, ahead of all its order changes, in the co
   const rows = build({imports:[{s:0, rows:[big, order({fact:short})]}, {s:1, rows:[order({s:1, item:'Salt', fact:fact('short', {why:'order', setTo:1500})})]}],
     checks:[run, other]});
   assert.deepEqual(rows.map(r => [r.kind, r.site, r.item]), [
-    ['Before the next delivery', 0, 'Sugar'], ['Weekly imports', 0, 'Flour'], ['Weekly imports', 0, 'Sugar'],
-    ['Before the next delivery', 1, 'Salt'], ['Weekly imports', 1, 'Salt']]);
+    ['once', 0, 'Sugar'], ['imports', 0, 'Flour'], ['imports', 0, 'Sugar'],
+    ['once', 1, 'Salt'], ['imports', 1, 'Salt']]);
   const text = context.orderChecklistText(rows, 'Company');
   const at = words => text.indexOf(words);
   assert.ok(at('Sugar: ' + en('sb.ck.copy.once', {n: 540})) < at('Flour: '), text);
@@ -266,7 +308,7 @@ test('a depot a route feeds, its backup import paused, lists the one-off before 
   const rows = build({imports:[{s:0, rows:[order({item:'Water', fit:'paused', paused:true, pausedWeekly:1000, current:0,
     inGame:1000, setTo:1500, value:1500, need:1500, fact:f})]}],
     checks:[{s:0, item:'Water', covered:true, paused:true, from:'Importer', shortBy:1, catchUp:300, runsOut:'Sunday', fact:f}]});
-  assert.deepEqual(rows.map(r => [r.kind, r.item]), [['Before the next delivery', 'Water'], ['Weekly imports', 'Water']]);
+  assert.deepEqual(rows.map(r => [r.kind, r.item]), [['once', 'Water'], ['imports', 'Water']]);
   assert.match(rows[0].reason, enRe("sb.ck.bring.day", {n: 300, day: 'Sunday'}, {anchor: 'start'}));
   assert.match(rows[1].reason, enRe("sb.ck.resume", {}, {anchor: 'start'}));
 });
@@ -277,7 +319,7 @@ test('a factory topped up each morning whose own import is short and runs dry ge
   const rows = build({imports:[{s:1, rows:[order({s:1, item:'Water', fact:imp})]}],
     checks:[{s:1, item:'Water', coverFit:'short', shortBy:2, catchUp:480, runsOut:'Friday', fact:outer}]});
   assert.deepEqual(rows.map(r => [r.kind, r.item, r.proposed]),
-    [['Before the next delivery', 'Water', 480], ['Weekly imports', 'Water', 1500]]);
+    [['once', 'Water', 480], ['imports', 'Water', 1500]]);
 });
 
 test('completion identities survive site reordering but change with settings and sources', () => {
@@ -487,7 +529,7 @@ test('tight never reaches Today: with only margin changes left, the card says no
 test('a top-up target set too high is a change to lower, never tight and never on Today', () => {
   const [row] = build({shops:[{s:2, item:'Paper Bag', target:3000, sold:90, peakSold:99, peakDay:'Saturday', from:0,
     fact:fact('idle', {why:'targetHigh', role:'shelf', cad:'daily', use:99, need:114, have:3000, setTo:120, lowers:true})}]});
-  assert.deepEqual([row.kind, row.current, row.proposed, row.lower, row.tight], ['Shop daily top-ups', 3000, 120, true, undefined]);
+  assert.deepEqual([row.kind, row.current, row.proposed, row.lower, row.tight], ['shop', 3000, 120, true, undefined]);
   assert.match(row.reason, new RegExp("^" + enRe("sb.ck.from", {site: "Depot · 1 Depot Street"}).source + " " + enRe("sb.ck.lower.days", {n: 33}).source));
   // An idle shelf without the figure asks for nothing.
   assert.deepEqual(build({shops:[{s:2, item:'Paper Bag', target:3000, sold:90, peakSold:99, from:0,
@@ -581,10 +623,10 @@ test('a factory line short of its hours is one "Factory run hours" row; more hou
   ];
   const rows = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [], [], lines)));
   assert.deepEqual(rows.map(r => [r.kind, r.item, r.current, r.proposed, r.mode]),
-    [['Factory run hours', 'Cake', 12, 24, 'hours']]);
+    [['hours', 'Cake', 12, 24, 'hours']]);
   assert.match(rows[0].reason, new RegExp("^" + enRe("sb.ck.staff.each", {item: "Cake", n: 24, m: 2, now: 12}).source + " " + enRe("sb.ck.hours.full").source));
   // Keyed by the item's key, as every checklist row is.
-  assert.equal(rows[0].key, JSON.stringify(['Factory run hours', 'factory#2', 'ba:itemname_cake', 12, 24, null]));
+  assert.equal(rows[0].key, JSON.stringify(['hours', 'factory#2', 'ba:itemname_cake', 12, 24, null]));
   assert.match(context.orderChecklistText(rows, 'Company'), enRe("sb.ck.copy.row", {item: "Cake", change: en("sb.ck.copy.hours", {from: 12, n: 24})}));
   assert.match(context.orderChecklistText(rows, 'Company', 'dem'), enRe("sb.ck.copy.shop"));
   assert.match(context.orderChecklistText(rows, 'Company'), enRe("sb.ck.copy.full"));
