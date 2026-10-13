@@ -12,7 +12,7 @@ Error paths on demand: --throttle answers every /refresh with 429, --refuse
 <reason> with 409, --schema <n> advertises another schema version. The day,
 hour and cash in /health are whatever the flags say, not the save's.
 
-The writes (POST /write/uniforms, /imports, /schedule, /hire, /marketing, /undo) are checked
+The writes (POST /write/uniforms, /imports, /schedule, /hire, /marketing, /rent, /undo) are checked
 against the save as ba_save reads it, as far as the bytes allow: addresses,
 contract ids and amounts, the shift print, uniforms already set, who is
 assigned where, which stations exist. What the game alone knows (importer caps,
@@ -44,8 +44,8 @@ it is refused screen_open. --hire-gone <id> (or /debug/config "hireGone") makes 
 --myemployees (or "myEmployees") the phone's MyEmployees app open.
 
 --features (or /debug/config "features") names what /health lists as
-`features`, by default hire.reschedule,hire.undo as mod 0.4.0 does; "" is an
-older mod, whose /health then leaves marketing out of the default --writes
+`features`, by default hire.reschedule,hire.undo,rent.undo as mod 0.6.0 does; "" is an
+older mod, whose /health then leaves marketing and rent out of the default --writes
 (through /debug/config, set "writes" as well).
 With hire.reschedule a hire call may carry the week of a site no
 hire or move touches; with hire.undo POST /write/undo {"kind": "hire"} takes
@@ -66,6 +66,13 @@ an apply left in memory, and undoes the enabled flags it switched.
 --agency-closed / --agency-open / --no-contact STREET:NUMBER (or /debug/config
 "agencyClosed", "agencyOpen", "noContact") force an agency closed, open, or out
 of the phone's contacts, which only new entries look at.
+
+A rent write reads the save's realEstate entries and prices them with the building
+facts and the build 3682 constants below. Applies keep pending prices and counters
+in memory; undo checks the same mock day, standing in for the game's daily tick.
+Unknown buildings answer not_owned because the mock cannot price them. Other-save
+and not_owned rows have before: null. The mock never advances the counters itself;
+without rent.undo its rent undo answers 409 no_undo.
 """
 from __future__ import annotations
 
@@ -96,7 +103,7 @@ ALLOWED_ORIGINS = ("https://bigcopilot.com", "https://www.bigcopilot.com")
 # As the mod matches them (LinkHttpServer.IsAllowedOrigin): in any case.
 LOCAL_ORIGIN = re.compile(r"^http://(?:127\.0\.0\.1|localhost)(?::[0-9]{1,5})?$", re.IGNORECASE)
 EXPOSED = "ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character"
-WRITE_KINDS = ("uniforms", "imports", "schedule", "hire", "marketing")
+WRITE_KINDS = ("uniforms", "imports", "schedule", "hire", "marketing", "rent")
 PAIR_OUTCOMES = ("approve", "deny", "expire", "popup_open", "no_ui", "busy", "main_thread_unavailable")
 PAIR_DELAY = 1.0  # seconds before the mock's player answers the popup
 PAIR_COOLDOWNS = (10, 30, 120)  # seconds an origin waits after a denial or an expiry, then a repeat, then more
@@ -114,10 +121,10 @@ ENDPOINTS = (["/health", "/save", "/facts", "/refresh"] + [f"/write/{k}" for k i
              + ["/pair/request", "/pair/status"])
 # The refusal --refuse-write refused answers per kind when it names no rule.
 REFUSED_DEFAULT = {"uniforms": "no_locker", "imports": "locked", "schedule": "screen_open", "hire": "screen_open",
-                   "marketing": "agency_closed"}
-UNDOABLE = ("uniforms", "imports", "schedule", "hire", "marketing")  # hire only with the hire.undo feature
-# What /health lists as `features` by default, as mod 0.4.0 does.
-FEATURES = ("hire.reschedule", "hire.undo")
+                   "marketing": "agency_closed", "rent": "villa"}
+UNDOABLE = ("uniforms", "imports", "schedule", "hire", "marketing", "rent")  # hire and rent require undo features
+# What /health lists as `features` by default, as mod 0.6.0 does.
+FEATURES = ("hire.reschedule", "hire.undo", "rent.undo")
 HQ_TYPE = "ba:businesstype_headquarters"
 CLEANING_STATION = "ba:itemname_cleaningstation"
 LOCKER = "ba:itemname_uniformlocker"
@@ -125,6 +132,23 @@ LOCKER = "ba:itemname_uniformlocker"
 # the board's table, as (address, name, types) in its order.
 MARKETING_AGENCIES = tuple((where, name, kinds)
                            for where, (name, kinds) in ba_dashboard.MARKETING_AGENCIES.items())
+
+# Building.GetBuildingDailyMarketRentPerSqm, game DLL build 3682.
+RENT_TYPE_MULT = {"retail": 1.0, "office": 0.75, "residential": 1.5,
+                  "warehouse": 0.5, "cinema": 1.0, "theater": 1.0, "special": 0.0}
+RENT_HOOD_MULT = {"midtown": 2.2, "hellskitchen": 1.3, "murrayhill": 0.9,
+                  "garmentdistrict": 0.65, "lowermanhattan": 0.55,
+                  "industrycity": 0.5, "thehamptons": 0.5}
+RENT_BASE_PRICE = 20554
+RENT_PER_PRICE = 0.00056
+
+
+def market_rent_per_sqm(building_row) -> float | None:
+    if not building_row or building_row.get("t") not in RENT_TYPE_MULT or building_row.get("h") not in RENT_HOOD_MULT:
+        return None
+    kind, traffic = building_row["t"], building_row.get("x", 0)
+    factor = 1 + max(30 - traffic, 0) / 100 if kind == "residential" else 0.3 + traffic / 100
+    return RENT_BASE_PRICE * RENT_TYPE_MULT[kind] * RENT_HOOD_MULT[building_row["h"]] * factor * RENT_PER_PRICE
 
 
 def allowed_origin(origin: str | None) -> bool:
@@ -229,6 +253,7 @@ class Link:
         self.uniforms: dict = {}    # address -> {skill: preset id}
         self.campaigns: dict = {}   # address -> [{type, agency, enabled}], a marketing apply's
         self.promotions: dict = {}  # address -> the promotion a marketing apply left
+        self.rents: dict = {}      # address -> pending price and days left by a rent apply
         # Marketing agencies forced open or closed, and contacts dropped from the
         # phone (addresses), so the page's tests reach no_contact and agency_closed.
         self.agency_open: set = set(agency_open or ())
@@ -458,6 +483,8 @@ class Link:
                 return 503, {"error": "busy"}
             if kind == "undo" and body.get("kind") == "hire" and "hire.undo" not in self.features:
                 return 409, {"error": "no_undo"}  # a mod before 0.4.0 never undoes a hire
+            if kind == "undo" and body.get("kind") == "rent" and "rent.undo" not in self.features:
+                return 409, {"error": "no_undo"}
             if not dry and self.refuse_write:
                 return self._refusal(kind, body)
             if kind == "undo":
@@ -520,16 +547,27 @@ class Link:
                 if rule == "locked":
                     # The mod's ReopenDay(): Monday 08:00, tomorrow on a Sunday.
                     row["reopens"] = {"day": self._imminent_monday(), "hour": 8}
+                if kind == "rent":
+                    # A refused row is the building as it stands (RentWrite.Answer):
+                    # nothing planned, null where there is no building to read.
+                    before = row.get("before")
+                    for key in ("pricePerSqm", "pendingPricePerSqm", "daysUntilUpdatingPricePerSqm"):
+                        row[key] = before[key] if before else None
+                    days = before["daysUntilUpdatingPricePerSqm"] if before else 0
+                    row.update(set=False, clamped=False, appliesOnDay=self.day + days if days > 0 else None)
+            if kind == "rent":  # the mod's refusal is its whole answer, its error from the rows
+                top = "changed" if any(row.get("error") == "changed" for row in rows) else "refused"
+                return 409, dict(answer, ok=False, dryRun=False, error=top, rows=rows)
             return 409, {"error": error, "rows": rows}
         if error in ("changed", "refused") and kind == "undo":
             # As the mod's undo of that kind answers (UniformWrite, ImportWrite,
-            # ScheduleWrite, MarketingWrite .Undo): a uniforms or marketing undo is
+            # ScheduleWrite, MarketingWrite, RentWrite .Undo): a uniforms, marketing or rent undo is
             # only ever refused as changed.
             target = body.get("kind")
             rule = "changed" if error == "changed" else detail or REFUSED_DEFAULT.get(target, "screen_open")
             head = {"error": "changed" if rule == "changed" else "refused", "ok": False, "kind": target,
                     "dryRun": False, "undo": True}
-            if target == "uniforms":
+            if target in ("uniforms", "rent"):
                 return 409, dict(head, error="changed", rows=[{"error": "changed"}])
             if target == "marketing":  # an undo is only ever refused as changed
                 return 409, dict(head, error="changed",
@@ -980,6 +1018,134 @@ class Link:
                 self.campaigns[address] = after
                 if promotion is not None:
                     self.promotions[address] = promotion
+        return 200, answer
+
+    # rent -----------------------------------------------------------------------
+    def _rent_state(self, save, address):
+        entry = next((e for e in save.items(save.root.get("realEstate"))
+                      if save.address(e.get("address")) == address), None)
+        if entry is None:
+            return None, 0
+        state = {k: entry.get(k, 0) or 0 for k in
+                 ("pricePerSqm", "pendingPricePerSqm", "daysUntilUpdatingPricePerSqm")}
+        state.update(self.rents.get(address, {}))
+        return state, entry.get("totalSqm", 0) or 0
+
+    def _rent_row(self, address, before, after, asked, market, total, *, error=None, clamped=False, set_price=False):
+        # Python and Mathf.RoundToInt both round half to even. The game's float32
+        # versus the mock's float64 can differ by a cent at an exact half.
+        low = round(0.8 * market * 100) / 100 if market is not None else None
+        high = round(1.2 * market * 100) / 100 if market is not None else None
+        # No building to read (not owned, another save): every field about it is null.
+        after = after or {"pricePerSqm": None, "pendingPricePerSqm": None, "daysUntilUpdatingPricePerSqm": None}
+        total = total if before is not None else None
+
+        def prop(value):
+            return round(value, 4) if isinstance(value, float) else value
+
+        days = after["daysUntilUpdatingPricePerSqm"] or 0
+        return {"address": _wire(address),
+                "before": {k: prop(v) for k, v in before.items()} if before is not None else None,
+                **{k: prop(v) for k, v in after.items()}, "asked": prop(asked),
+                "clamped": clamped, "set": set_price,
+                "appliesOnDay": prop(self.day + days) if days > 0 else None,
+                "marketRentPerSqm": prop(market), "min": low, "max": high,
+                "totalSqm": prop(total), "error": error}
+
+    def _rent(self, save, body, dry):
+        items = body.get("items")
+        if not isinstance(items, list) or not items:
+            raise BadRequest("items must be a list of at least one building")
+        parsed, seen = [], set()
+        for item in items:
+            if not isinstance(item, dict):
+                raise BadRequest("each item must be an object")
+            address = _address(item.get("address"), "item.address")
+            if address in seen:
+                raise BadRequest("a building occurs twice")
+            seen.add(address)
+            expect = item.get("expect")
+            if not isinstance(expect, dict):
+                raise BadRequest("item.expect must be an object")
+            for label, value, positive in (("pricePerSqm", item.get("pricePerSqm"), True),
+                                           ("expect.pricePerSqm", expect.get("pricePerSqm"), False),
+                                           ("expect.pendingPricePerSqm", expect.get("pendingPricePerSqm"), False)):
+                if (isinstance(value, bool) or not isinstance(value, (int, float))
+                        or not math.isfinite(value) or value < 0 or (positive and value == 0)):
+                    raise BadRequest(f"{label} must be a finite {'positive' if positive else 'non-negative'} number")
+            parsed.append((address, item["pricePerSqm"], expect))
+        other = self._other_save(body)
+        buildings = ba_dashboard.load_buildings(save)
+        rows, sets = [], []
+        for address, asked, expect in parsed:
+            before, total = self._rent_state(save, address)
+            building = buildings.get(address)
+            market = market_rent_per_sqm(building) if not other and before is not None else None
+            error = None
+            if other:
+                error = "changed"
+            elif before is None:
+                error = "not_owned"
+            elif any(abs(expect[k] - before[k]) >= 0.005 for k in ("pricePerSqm", "pendingPricePerSqm")):
+                error = "changed"
+            elif building and building.get("z") == "T":
+                error = "villa"
+            elif market is None:
+                error = "not_owned"  # The mock cannot price a building unknown to its table.
+            after = dict(before) if before is not None and not other and error != "not_owned" else None
+            clamped, set_price = False, False
+            if error is None:
+                low, high = round(0.8 * market * 100) / 100, round(1.2 * market * 100) / 100
+                bounded = max(low, min(asked, high))
+                result = round(bounded * 100) / 100
+                clamped = abs(bounded - asked) >= 0.005  # as the mod: moved by the slider's ends, to the cent
+                set_price = abs(result - before["pendingPricePerSqm"]) >= 0.005
+                if set_price:
+                    after.update(pendingPricePerSqm=result, daysUntilUpdatingPricePerSqm=7)
+                    sets.append({"address": address, "oldPending": before["pendingPricePerSqm"],
+                                 "oldDays": before["daysUntilUpdatingPricePerSqm"],
+                                 "newPending": result, "pricePerSqm": before["pricePerSqm"]})
+            rows.append(self._rent_row(address, None if other or error == "not_owned" else before,
+                                       after, asked, market if error != "not_owned" else None, total, error=error, clamped=clamped, set_price=set_price))
+        ok = all(row["error"] is None for row in rows)
+        answer = {"ok": ok, "kind": "rent", "dryRun": dry, "day": self.day, "rows": rows}
+        if not ok:
+            error = "changed" if any(r["error"] == "changed" for r in rows) else "refused"
+            return (200, answer) if dry else (409, dict(answer, error=error))
+        if not dry:
+            for item in sets:
+                self.rents[item["address"]] = {"pendingPricePerSqm": item["newPending"], "daysUntilUpdatingPricePerSqm": 7}
+            if sets:
+                self.undo["rent"] = {"day": self.day, "items": sets}
+            else:
+                self.undo.pop("rent", None)
+        return 200, answer
+
+    def _undo_rent(self, record, dry):
+        save = self._save()
+        buildings = ba_dashboard.load_buildings(save)
+        rows, restores = [], []
+        for item in record["items"]:
+            address = item["address"]
+            before, total = self._rent_state(save, address)
+            changed = (before is None or self.day != record["day"]
+                       or before["pendingPricePerSqm"] != item["newPending"]
+                       or before["daysUntilUpdatingPricePerSqm"] != 7
+                       or before["pricePerSqm"] != item["pricePerSqm"])
+            after = dict(before) if before is not None else None
+            if not changed:
+                after.update(pendingPricePerSqm=item["oldPending"], daysUntilUpdatingPricePerSqm=item["oldDays"])
+                restores.append((address, after))
+            rows.append(self._rent_row(address, before, after, item["oldPending"],
+                                       market_rent_per_sqm(buildings.get(address)) if before is not None else None,
+                                       total, error="changed" if changed else None, set_price=not changed))
+        ok = all(row["error"] is None for row in rows)
+        answer = {"ok": ok, "kind": "rent", "dryRun": dry, "day": self.day, "undo": True, "rows": rows}
+        if not ok:
+            return (200, answer) if dry else (409, dict(answer, error="changed"))
+        if not dry:
+            for address, after in restores:
+                self.rents[address] = {k: after[k] for k in ("pendingPricePerSqm", "daysUntilUpdatingPricePerSqm")}
         return 200, answer
 
     # imports --------------------------------------------------------------------
@@ -1695,14 +1861,14 @@ class Link:
     def _undo(self, body, dry):
         kind = body.get("kind")
         if kind not in UNDOABLE:
-            raise BadRequest("kind must be uniforms, imports, schedule, hire or marketing")
+            raise BadRequest("kind must be uniforms, imports, schedule, hire, marketing or rent")
         record = self.undo.get(kind)
         if record is None:
             return 409, {"error": "nothing_to_undo"}
         if kind == "hire":
             return self._undo_hire(record, dry)
-        if kind == "marketing":
-            status, answer = self._undo_marketing(record, dry)
+        if kind in ("marketing", "rent"):
+            status, answer = getattr(self, "_undo_" + kind)(record, dry)
             if status == 200 and not dry:
                 del self.undo[kind]  # an undo is not itself undoable
             return status, answer
@@ -1901,7 +2067,7 @@ class Link:
                 self.applied, self.undo, self.order = [], {}, None
                 self.uniforms, self.products, self.contracts, self.schedules = {}, {}, {}, {}
                 self.opened, self.terms = {}, {}
-                self.campaigns, self.promotions = {}, {}
+                self.campaigns, self.promotions, self.rents = {}, {}, {}
                 self.agency_open, self.agency_closed, self.no_contact = set(), set(), set()
                 self.moved, self.hired, self.gone, self.myemployees = {}, set(), set(), False
                 self.screen_open, self.features = set(), list(FEATURES)
@@ -2240,9 +2406,9 @@ def main() -> None:
     ap.add_argument("--writes", default=",".join(WRITE_KINDS),
                     help='the write kinds /health lists, comma-separated; "" leaves the key out, as mod 0.1.0 does')
     ap.add_argument("--features", default=",".join(FEATURES),
-                    help='what /health lists as features, comma-separated (default: %(default)s, as mod 0.4.0); '
+                    help='what /health lists as features, comma-separated (default: %(default)s, as mod 0.6.0); '
                          '"" for an older mod: a hire refuses a reschedule-only site with 400 and its undo is no_undo, '
-                         'and /health leaves marketing out of the default writes')
+                         'rent undo is no_undo, and /health leaves marketing and rent out of the default writes')
     ap.add_argument("--refuse-write", metavar="ERROR[:DETAIL]",
                     help="answer every apply with this refusal: changed, refused[:rule], cannot_write[:reason], "
                          "busy, main_thread_unavailable, not_paired, too_large")
@@ -2267,7 +2433,7 @@ def main() -> None:
     writes = [k for k in args.writes.split(",") if k] if args.writes else None
     features = [f for f in args.features.split(",") if f]
     if not features and writes is not None and args.writes == ap.get_default("writes"):
-        writes = [k for k in writes if k != "marketing"]  # an older mod: marketing is 0.4.0's too
+        writes = [k for k in writes if k not in ("marketing", "rent")]  # unavailable on an older mod
     link = Link(args.save, character=args.character, company=args.company, day=args.day, hour=args.hour,
                 cash=args.cash, build=args.build, schema=args.schema, throttle=args.throttle, refuse=args.refuse,
                 pair=args.pair, writes=writes, refuse_write=args.refuse_write, busy_writes=args.busy_writes,

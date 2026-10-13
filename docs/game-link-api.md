@@ -196,7 +196,7 @@ state from the listener's threads.
   than the served bytes.
 - `writes` lists the write kinds this mod accepts (see "Writes" below); a mod before 0.2.0
   sends no `writes`, which a client reads as `[]`. Mod 0.2.0 lists `uniforms`, `imports`,
-  `schedule`; 0.3.0 adds `hire`; 0.4.0 adds `marketing`. A client offers a kind only when it
+  `schedule`; 0.3.0 adds `hire`; 0.4.0 adds `marketing`; 0.6.0 adds `rent`. A client offers a kind only when it
   is listed, and tells the player to update the mod when the kind is missing. `paired` is true only when this request
   carried a token the game approved for its origin, so a poll without one always says
   false. Both are
@@ -206,6 +206,7 @@ state from the listener's threads.
   0.4.0 lists `hire.reschedule` (a `hire` call may carry weeks no hire or move reaches) and
   `hire.undo` (`POST /write/undo {"kind": "hire"}` undoes a hire call). A client asks for
   a feature only when it is listed, and says nothing about a token it does not know.
+  0.6.0 adds `rent.undo` (`POST /write/undo {"kind": "rent"}`).
   Additive: `schemaVersion` stays 1. A capability is named rather than read off
   `modVersion`, whose numbers may be renamed before a release.
 
@@ -266,7 +267,8 @@ and a fourth undoes the last write of a kind. Mod 0.3.0 adds `hire`, which hires
 moves staff between sites and writes their weeks in one call. Mod 0.4.0 lets that call carry
 the weeks of sites no hire or move reaches, and undoes it in one step (`features`
 `hire.reschedule` and `hire.undo`); before 0.4.0 a hire has no undo. Mod 0.4.0 also adds `marketing`, which sets the marketing
-campaigns each site runs. The game members each write calls are in
+campaigns each site runs, and mod 0.6.0 `rent`, which sets the rent price of buildings the
+player owns. The game members each write calls are in
 `mod/BigCopilotLink/README.md` ("The game members it uses"), and what the board proposes is in
 `docs/dashboard-reference.md`; the scopes they were built from are in `docs/archive/`. This
 section is only the wire.
@@ -886,6 +888,87 @@ reads "Big Copilot updated marketing at <business>".
   false, an apply `409 changed`); the undo stays available. The answer is the write's, with `"undo": true`, `before` the state the undo
   found, and `entriesAdded` empty.
 
+#### `POST /write/rent`
+
+Mod 0.6.0 and later (`writes` lists `rent`, `features` lists `rent.undo`). Sets the rent price
+a m² of buildings the player owns, exactly as BizMan's Real estate page does it
+(`RealEstateSettings.ApplyNewRent`): the new price waits in `pendingPricePerSqm` and the game
+copies it into `pricePerSqm` seven daily ticks later. The rules are in
+`research/real-estate-2026-10-12/rules.md` (sections 3 and 10; owner only).
+
+```json
+{"dryRun": true,
+ "expect": {"character": "58e6a328-…", "company": "HART. YT"},
+ "items": [{"address": {"street": "ba:street_twelfthstreet", "number": 24},
+            "pricePerSqm": 3.73,
+            "expect": {"pricePerSqm": 3.74, "pendingPricePerSqm": 0}}]}
+```
+
+- `items` lists one entry of the game's `realEstate` (a building the player owns) per row;
+  one building twice, or no item at all, is `400`. `pricePerSqm` is the asked price, $ a m² a day, a finite number
+  above 0 (else `400`).
+- `expect` on an item is the compare-and-set: the building's `pricePerSqm` and
+  `pendingPricePerSqm` as the page read them from the bytes (`0` for a building whose price was
+  never changed). Both are required and compared to the cent (within half a cent): the game
+  holds them as floats.
+- `expect` on the body is the uniforms write's same-save guard, unchanged: a `character` or
+  `company` that differs from the loaded game answers every row `changed`, before `not_owned`.
+
+**What the game holds after it.** With `m` the building's daily market rent a m²
+(`Building.GetBuildingDailyMarketRentPerSqm()`), the price is clamped to BizMan's slider,
+`min = round(0.8·m, 2)` to `max = round(1.2·m, 2)`, and rounded to the cent. An item whose
+result equals the building's current `pendingPricePerSqm` changes nothing, as BizMan's Apply
+button stays off then: its row says `"set": false` and the seven days are not restarted. Any
+other item sets `pendingPricePerSqm` to the result and `daysUntilUpdatingPricePerSqm` to 7,
+also when the result equals the current `pricePerSqm` (which cancels a pending change, as the
+slider does). `pricePerSqm` itself is never written, occupancy is not touched, no money moves,
+and the game raises no event. An open BizMan Real estate page shows the old value until it is
+opened again.
+
+```json
+{"ok": true, "kind": "rent", "dryRun": true, "day": 329,
+ "rows": [{"address": {"street": "ba:street_twelfthstreet", "number": 24},
+           "before": {"pricePerSqm": 3.74, "pendingPricePerSqm": 0, "daysUntilUpdatingPricePerSqm": 0},
+           "pricePerSqm": 3.74, "pendingPricePerSqm": 3.73, "daysUntilUpdatingPricePerSqm": 7,
+           "asked": 3.73, "clamped": false, "set": true, "appliesOnDay": 336,
+           "marketRentPerSqm": 3.7352, "min": 2.99, "max": 4.48, "totalSqm": 1820,
+           "error": null}]}
+```
+
+- `day` is the game day the answer was made on (`TimeHelper.CurrentDay`).
+- `before` is the building as the game holds it. `pricePerSqm`, `pendingPricePerSqm` and
+  `daysUntilUpdatingPricePerSqm` are the building after the write (a dry run: after an apply
+  made now).
+- `asked` echoes the item's price; `clamped` is true when the slider's range moved it.
+- `set` is true when the apply writes this building (false: unchanged, as above).
+- `appliesOnDay` is the day the pending price takes over, `day + daysUntilUpdatingPricePerSqm`
+  after the write; null when no price is pending (`daysUntilUpdatingPricePerSqm` 0).
+- `marketRentPerSqm`, `min`, `max` are the game's own figures for the building, so the page
+  can hold them against its model; `totalSqm` is the entry's.
+- Row `error`, in the order checked: `changed` (another save, as above), `not_owned` (no
+  `realEstate` entry at that address: a building the player does not own), `changed` (an
+  `expect` price differs from the game's by half a cent or more), `villa` (a Hamptons villa,
+  `Building.IsHamptonsHouse()`, BuildingSize `ba:buildingsize_t`: the game hides its rent and
+  pays none). A refused row answers `before` and the after-fields as they are now, `set` false,
+  `appliesOnDay` as now. On `not_owned` and on a row of another save there is no building to
+  read: `before`, the after-fields, `appliesOnDay`, `totalSqm`, `marketRentPerSqm`, `min` and
+  `max` are null.
+- An apply with any row error answers `409` with the write's whole answer (`ok` false, `kind`
+  `rent`, `dryRun` false, `day`, the rows as refused rows) plus `error`: `changed` when any row's error is
+  `changed`, else `refused`. Nothing is written.
+- **An apply that sets nothing** (every item already pending at its price) answers `200` with a
+  stamp, shows no notification, and leaves nothing to undo (an earlier rent write's undo is
+  gone). An apply that sets any reads "Big Copilot set new rent at <n> building(s)" in the game.
+- **Undo** (`rent.undo`). `POST /write/undo {"kind": "rent"}` puts back `pendingPricePerSqm`
+  and `daysUntilUpdatingPricePerSqm` of every building the last applied rent write set. It holds
+  only while each of them still holds exactly what the write left: the pending price it wrote, 7
+  days (no daily tick since), and the same `pricePerSqm`. A building changed since in BizMan, sold,
+  or a game day later answers that row `changed`, and nothing is undone (a dry run `200` with `ok`
+  false, an apply `409 changed`); the undo stays available until the next rent write replaces
+  it, so in practice an undo lasts until midnight in the game. The answer is the write's with
+  `"undo": true`, `before` the state the undo found and the after-fields what it restored;
+  `asked` is the price restored and `clamped` false.
+
 #### `POST /write/undo`
 
 ```json
@@ -897,7 +980,9 @@ the target still holds what that write left there: uniforms only on the skills i
 still holding its preset; imports the amounts, running state, Repeating, urgent flag, next
 delivery day and plan order; the schedule the shifts and, when it opened them, the
 opening hours, after checking the restored shifts as a write would (a person moved away
-or a station sold since answers `changed`); marketing the enabled flags its write switched.
+or a station sold since answers `changed`); marketing the enabled flags its write switched;
+rent the pending price and its seven-day counter (on the same game day only; see "POST
+/write/rent").
 Answers like the write it undoes, with `"undo": true`: uniforms list the
 skills it cleared in `set`; imports and schedule answer `before` as the state the undo
 found and the values as they now stand;
@@ -912,7 +997,7 @@ restores whichever write came last.
 `404 {"error": "not_found", "endpoints": [...]}`, listing the paths above: 0.1.0 lists
 `/health`, `/save`, `/refresh`; 0.2.0 adds `/write/uniforms`, `/write/imports`,
 `/write/schedule`, `/write/undo`, `/pair/request`, `/pair/status`; 0.3.0 adds `/write/hire`;
-0.4.0 adds `/write/marketing`.
+0.4.0 adds `/write/marketing`; 0.6.0 adds `/write/rent`.
 Methods other than the ones above answer `405`.
 
 ## Overload and pending work
@@ -1029,7 +1114,7 @@ last refresh (the mock has no main-thread fallback).
 `--throttle`, `--refuse <reason>` and `--schema <n>` exercise the clients' error paths.
 For the writes, `--refuse-write <error>[:<detail>]`, `--busy-writes <n>` and `--writes <kinds>`
 do the same; `--features <list>` names what `/health` lists as `features` (by default
-`hire.reschedule,hire.undo`, as mod 0.4.0; `""` for an older mod, whose hire call then refuses
+`hire.reschedule,hire.undo,rent.undo`, as mod 0.6.0; `""` for an older mod, whose hire call then refuses
 a reschedule-only site with `400`, whose hire undo answers `no_undo` and whose default `writes`
 leave out `marketing`), and for `hire`, `--hire-gone <candidateId>` (repeatable) makes a candidate gone
 and `--myemployees` opens the phone's MyEmployees app. For `schedule` and `hire`,
@@ -1062,3 +1147,11 @@ clock (`day` and `hour` as `/health` reports them, set by `--day`, `--hour` or
 `noContact` as lists of `{street, number}`, force an agency closed (it then opens the next day
 at 8), open, or out of the phone's contacts; as in the game, only new entries look at them. `--refuse-write refused` answers a marketing
 apply `agency_closed` at CityAds by default.
+For `rent` it reads the save's `realEstate` entries and works out each building's market rent a
+m² from `ba_buildings.json` (type, neighbourhood, traffic) and the game's constants (build 3682),
+so `min` and `max` can differ from the game's by a cent at an exact half; a building the table
+does not know answers `not_owned`, and a villa is size `T`. An apply's pending prices and
+counters are kept in memory; the mock never counts them down, and its undo holds only while its
+`day` is the day of the write (standing in for the daily tick). With `features` lacking
+`rent.undo` the undo answers `409 no_undo`, and `--features ""` leaves `rent` out of the
+default writes. `--refuse-write refused` answers a rent apply `villa`.

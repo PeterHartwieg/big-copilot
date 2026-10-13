@@ -1323,7 +1323,7 @@
   const APPROVAL_AUTO_WAIT_S = 10;
   const WRITE_BUSY_RETRIES = 3;
   // The kinds that carry the same-save guard (`expect`), see gameWrite().
-  const SAME_SAVE_KINDS = new Set(["uniforms", "marketing"]);
+  const SAME_SAVE_KINDS = new Set(["uniforms", "marketing", "rent"]);
   // The mod always finishes a write it has started, however long the game
   // takes over it, so a write waits far longer for its answer than a read.
   const WRITE_WAIT_MS = 30000;
@@ -1368,7 +1368,8 @@
   const linkWrites = () => (linkUrl && linkHealth && linkSpeaks() && Array.isArray(linkHealth.writes)
     ? linkHealth.writes.slice() : []);
   // What those kinds can do beyond their first contract (mod 0.5.0: the hire
-  // call's reschedule-only weeks and its undo); a mod before it lists none.
+  // call's reschedule-only weeks and its undo; 0.6.0: rent.undo); a mod before
+  // it lists none.
   // Only strings: a token this page does not know is passed on and ignored.
   const linkFeatures = () => (linkUrl && linkHealth && linkSpeaks() && Array.isArray(linkHealth.features)
     ? linkHealth.features.filter((f) => typeof f === "string") : []);
@@ -1573,10 +1574,10 @@
         : {status: 0, error: "mismatch", version: linkSchema, need: LINK_SCHEMA, body: null};
     }
     const path = kind === "undo" ? "/write/undo" : `/write/${kind}`;
-    // Uniforms and marketing find their buildings by address alone, and every
-    // save has the same map: the save this board was read from goes along, and
-    // a mod from 0.3.1 answers `changed` when the game has another loaded.
-    // Older mods ignore the field; marketing needs 0.4.0 anyway.
+    // Uniforms, marketing and rent find their buildings by address alone, and
+    // every save has the same map: the save this board was read from goes
+    // along, and a mod from 0.3.1 answers `changed` when the game has another
+    // loaded. Older mods ignore the field; marketing needs 0.4.0 anyway, rent 0.6.0.
     const sameSave = SAME_SAVE_KINDS.has(kind) && bound.character ? {expect: {character: bound.character, company: bound.company}} : {};
     const payload = JSON.stringify(Object.assign({}, body, sameSave, {dryRun}));
     // One click asks the game at most once: a token this write asked for and

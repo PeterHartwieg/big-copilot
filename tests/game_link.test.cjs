@@ -1056,8 +1056,8 @@ test('the game clock moves with every health read, and the board hears when the 
   assert.deepEqual(ticks, [17]);
 });
 
-test('marketing and uniforms name the save they were planned from; the other kinds do not', async () => {
-  const health = {...HEALTH, writes: ['uniforms', 'imports', 'schedule', 'hire', 'marketing']};
+test('marketing, uniforms and rent name the save they were planned from; the other kinds do not', async () => {
+  const health = {...HEALTH, writes: ['uniforms', 'imports', 'schedule', 'hire', 'marketing', 'rent']};
   const h = harness({routes: {health}});
   h.run(`linkHealth = ${JSON.stringify(health)}; keepApproval(linkUrl, "approved-token")`);
   const sent = [];
@@ -1068,7 +1068,7 @@ test('marketing and uniforms name the save they were planned from; the other kin
     sent.push([kind, JSON.parse(init.body), init.headers.Authorization]);
     return reply(200, {ok: true, kind, dryRun: true, rows: []});
   };
-  for (const kind of ['marketing', 'uniforms', 'imports']) {
+  for (const kind of ['marketing', 'uniforms', 'rent', 'imports']) {
     const got = await h.run(`gameWrite(${JSON.stringify(kind)}, {sites: []}, {dryRun: true})`);
     assert.equal(got.error, null, kind);
     assert.equal(got.body.kind, kind);
@@ -1077,6 +1077,7 @@ test('marketing and uniforms name the save they were planned from; the other kin
   assert.deepEqual(sent.map(([kind, body, auth]) => [kind, body.expect || null, body.dryRun, auth]), [
     ['marketing', save, true, 'Bearer approved-token'],
     ['uniforms', save, true, 'Bearer approved-token'],
+    ['rent', save, true, 'Bearer approved-token'],
     ['imports', null, true, 'Bearer approved-token'],
   ]);
   assert.deepEqual(plain(h.run('linkWrites()')), health.writes, 'the board offers what the mod lists');
