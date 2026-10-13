@@ -98,6 +98,8 @@ async function setup(t, options = {}) {
     await page.goto('https://community.test/');
     await page.waitForFunction(() => !!window.BigCopilotCommunity);
     await page.evaluate(() => { renderAll = drawMast; });
+    // Inside the suggestion badge's window however long the changelog grows.
+    await page.evaluate(() => featureDiscovery.asOf('2026-10-05'));
     return page;
   }
   async function loadSave(page) {

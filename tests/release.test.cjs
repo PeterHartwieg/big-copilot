@@ -25,6 +25,10 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
       });
     }
     await page.goto(base);
+    // Badges retire 45 days after their feature shipped, counted to the newest
+    // changelog entry; pin that day inside every window checked here so the
+    // test does not age as the changelog grows.
+    await page.evaluate(() => featureDiscovery.asOf('2026-10-05'));
     assert.equal(await page.locator('#linkBtn').isVisible(), true);
     // A dismissal must start with a badge that was actually shown.
     assert.equal(await page.locator('#linkBtn [data-new-feature="game-link"]').isVisible(), true);

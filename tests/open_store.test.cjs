@@ -90,6 +90,7 @@ test('an empty rented shop is suggested and its investment has no second deposit
 
 test('the view is Expansion\'s, New until opened, and starts on What with its six steps', async t => {
   const page = await board(t, {hash: '#expansion/demand'});
+  await page.evaluate(() => featureDiscovery.asOf(featureDiscovery.since['open-store']));
   const tab = page.locator('#localNav a[data-route="expansion/open"]');
   assert.equal(await tab.locator('.feature-new').isVisible(), true, 'New until the view is opened');
   assert.deepEqual(await page.$$eval('#localNav a[data-route]', as => as.map(a => a.dataset.route)),

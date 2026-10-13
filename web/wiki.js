@@ -44,7 +44,8 @@ const wikiTopicLabel = () => tt("wiki.topics.label", "Big Copilot topics");
 const wikiTopicId = slug => `topic/${String(slug ?? "")}`;
 /* What this release added inside the Wiki. The nav says the Wiki changed; these
    say what in it changed, so the reader is not left to hunt. A future topic is
-   marked by listing its slug here and nowhere else.
+   marked by listing its slug here, with its date beside its id
+   (wiki-topic-<slug>) in featureDiscovery's NEW_SINCE.
 
    The badge is the board's — the same markup and the same feature discovery —
    but each mark carries its own id, never the nav's. Sharing the nav's id would
@@ -69,7 +70,9 @@ const wikiSeen = id => {
 function wikiNewBadge(what, key){
   if(!(WIKI_NEW[what] || []).includes(String(key))) return "";
   const id = WIKI_NEW_ID[what](String(key));
-  if(wikiSeen(id)) return "";
+  // The board's helper also retires a mark whose window has passed.
+  if(typeof featureDiscovery !== "undefined" && featureDiscovery
+    && typeof featureDiscovery.isNew === "function" ? !featureDiscovery.isNew(id) : wikiSeen(id)) return "";
   return `<span class="feature-new" data-new-feature="${attr(id)}">${spEsc(tt("wiki.new", "New"))}</span>`;
 }
 /* Reaching a marked topic is meeting it: the entry's own mark and the shelf that
