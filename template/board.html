@@ -4773,7 +4773,8 @@ const featureDiscovery = (() => {
   const seen = new Set();
   const key = id => 'ba_dash_feature_seen:' + id;
   let pinned = '';
-  /* The newest changelog date on the page; the changelog dialog lists them all. */
+  /* The newest changelog date on the page. The hosted page ships only the
+     newest entry until the dialog's first open; a local page lists them all. */
   function today(){
     if(pinned) return pinned;
     let newest = '';
