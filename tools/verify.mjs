@@ -29,6 +29,22 @@ export function selectPython(env = process.env, spawn = spawnSync) {
     : 'no Python found; install Python 3 or set PYTHON to its executable path');
 }
 
+// Wrangler's own entry point, for this Node to run (no .cmd shim, so no shell on
+// Windows). Resolved like any package, so NODE_PATH pointing at another
+// checkout's node_modules works in a worktree without one.
+export function wranglerBin(root = ROOT) {
+  const require = createRequire(path.join(root, 'package.json'));
+  try {
+    const manifest = require.resolve('wrangler/package.json');
+    const bin = require(manifest).bin;
+    const wrangler = path.resolve(path.dirname(manifest), typeof bin === 'string' ? bin : bin.wrangler);
+    if (!existsSync(wrangler)) throw new Error('missing executable');
+    return wrangler;
+  } catch {
+    throw new Error('Wrangler is missing; run npm ci or point NODE_PATH at the checkout containing node_modules');
+  }
+}
+
 export function nodeFiles(root, requested = []) {
   const files = readdirSync(path.join(root, 'tests')).filter(name => name.endsWith('.test.cjs')).sort();
   if (!requested.length) return files.map(name => `tests/${name}`);
@@ -149,33 +165,40 @@ export function verify(args = [], { root = ROOT, env = process.env, spawn = spaw
     ? ['tools/python_shard.py', ...modules]
     : ['-m', 'unittest', ...(focused.length ? focused : ['discover', '-s', 'tests'])]]);
   if (['all', 'node'].includes(stage)) commands.push([process.execPath, ['--test', `--test-concurrency=${NODE_CONCURRENCY}`, ...(shard ? SHARD_REPORTERS : []), ...files]]);
+  // From the optimizer on, web/ holds the minified page until restoreAt assembles
+  // the readable one again; a failure in between still runs that restore.
+  let optimizedAt = -1, restoreAt = -1;
   if (['all', 'optimized'].includes(stage)) {
+    optimizedAt = commands.length;
     // Load esbuild only in this child; assemble/Python CI jobs need no npm install.
     commands.push([process.execPath, [path.join(root, 'tools', 'optimize_web.mjs')]]);
     commands.push([process.execPath, [path.join(root, 'tools', 'optimize_web.mjs'), '--check']]);
     commands.push([process.execPath, ['--test', `--test-concurrency=${NODE_CONCURRENCY}`, ...OPTIMIZED_NODE_SUITES], { BOARD_TARGET: 'web' }]);
   }
   // Freshness compares readable Python output, not the deployment transform.
-  if (['all', 'optimized'].includes(stage)) commands.push([python, ['build_web.py', '--assemble']]);
-  if (['all', 'worker'].includes(stage)) {
-    const require = createRequire(path.join(root, 'package.json'));
-    let wrangler;
-    try {
-      const manifest = require.resolve('wrangler/package.json');
-      const bin = require(manifest).bin;
-      wrangler = path.resolve(path.dirname(manifest), typeof bin === 'string' ? bin : bin.wrangler);
-      if (!existsSync(wrangler)) throw new Error('missing executable');
-    } catch {
-      throw new Error('Wrangler is missing; run npm ci or point NODE_PATH at the checkout containing node_modules');
-    }
-    commands.push([process.execPath, [wrangler, 'deploy', '--dry-run']]);
+  if (['all', 'optimized'].includes(stage)) {
+    restoreAt = commands.length;
+    commands.push([python, ['build_web.py', '--assemble']]);
   }
+  if (['all', 'worker'].includes(stage)) commands.push([process.execPath, [wranglerBin(root), 'deploy', '--dry-run']]);
   if (['all', 'check'].includes(stage)) commands.push([python, ['build_web.py', '--check']]);
-  for (const [command, commandArgs, envOverrides] of commands) {
-    const status = run(command, commandArgs, envOverrides);
-    if (status !== 0) return status;
+  let next = 0;
+  try {
+    for (; next < commands.length; next++) {
+      const status = run(...commands[next]);
+      if (status !== 0) return status;
+    }
+    return 0;
+  } finally {
+    if (next >= optimizedAt && next < restoreAt) {
+      // The failure's own status (or error) stands; a failed restore only adds a note.
+      try {
+        if (run(...commands[restoreAt]) !== 0) throw new Error('failed');
+      } catch (error) {
+        log(`re-assembling the readable page failed (${error.message}); run python build_web.py --assemble before --check or the tests`);
+      }
+    }
   }
-  return 0;
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -4,6 +4,7 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
+import { wranglerBin } from './verify.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HELP = `Usage: node tools/translation_moderate.mjs <command> [--remote]
@@ -54,7 +55,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     if (process.argv.length < 3 || process.argv.includes('--help')) console.log(HELP);
     else {
       const command = moderationCommand(process.argv.slice(2));
-      const result = spawnSync(process.execPath, [path.join(ROOT, 'node_modules/wrangler/bin/wrangler.js'), ...command.args], {
+      const result = spawnSync(process.execPath, [wranglerBin(ROOT), ...command.args], {
         cwd: ROOT, stdio: 'inherit',
       });
       if (result.error) throw result.error;

@@ -107,7 +107,3 @@ class Footer(unittest.TestCase):
     def test_the_landing_states_the_build_it_was_checked_on(self):
         # It has no save yet, so it cannot be told one the way the board is.
         self.assertIn(f'data-foot-build="{VERIFIED_BUILD}"', footer_html(landing=True, site=True))
-
-
-if __name__ == "__main__":
-    unittest.main()

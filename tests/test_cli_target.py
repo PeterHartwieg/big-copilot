@@ -140,7 +140,3 @@ class SaveFolderPresent(unittest.TestCase):
             with mock.patch.object(ba_dashboard, "SAVE_ROOT", folder):
                 found = ba_dashboard.resolve_target("New Costy Co Save Game")
         self.assertEqual(found, path)
-
-
-if __name__ == "__main__":
-    unittest.main()

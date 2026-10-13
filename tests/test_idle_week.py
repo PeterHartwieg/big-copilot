@@ -242,7 +242,3 @@ class BothModesTests(unittest.TestCase):
         groups = [row["group"] for row in both[0]["lines"] + both[0]["minor"]["rows"]]
         self.assertEqual(groups.count("staff"), 1)
         self.assertIn("idlestaff", groups)
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -37,14 +37,10 @@ import json
 import math
 import os
 import random
-import sys
 import tempfile
 import unittest
 import unittest.mock
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.dirname(HERE))
 
 import ba_dashboard  # noqa: E402
 from ba_dashboard import JOB_DEMANDS, SERVICE_SKILL, SHIFT_CAP, FULL_TIME  # noqa: E402
@@ -1338,7 +1334,3 @@ class OracleControlTest(unittest.TestCase):
         self.assertLess(ba_dashboard._placement_rank(real, state["r"], slot, here),
                         ba_dashboard._placement_rank(hire, state[hire["id"]], slot, here))
         self.assertIs(ba_dashboard._best_for(slot, [hire, real], state, here), real)
-
-
-if __name__ == "__main__":
-    unittest.main()

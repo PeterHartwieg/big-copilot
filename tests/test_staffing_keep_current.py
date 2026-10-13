@@ -367,7 +367,3 @@ class HoldRowsTest(unittest.TestCase):
     def test_two_entries_never_share_a_computer_hour(self):
         pins = self.hold([entry("a", 2), entry("b", 2)], [person("a"), person("b")])
         self.assertEqual([p["employee"] for p in pins], ["a"])
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -11,14 +11,10 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from unittest import mock
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.dirname(HERE))
 
 import ba_dashboard  # noqa: E402
 from tests import es3_fixture  # noqa: E402
@@ -155,7 +151,3 @@ class BrowserBuild(unittest.TestCase):
               self.assertRaises(ba_dashboard.SaveShapeError) as caught):
             ba_dashboard.browser_build(path, self.locale, self.history, self.names)
         self.assertRegex(str(caught.exception), r"KeyError: 'Day', in build_core, ba_dashboard\.py line \d+\)")
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -1,12 +1,9 @@
 """skillNames: the game's own name for every skill a station can ask for, so the
 write dialogs never spell a role from its slug."""
 import os
-import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, os.path.dirname(__file__))
 from tests import es3_fixture  # noqa: E402
 import ba_dashboard  # noqa: E402
 from ba_save import Names, load_save  # noqa: E402
@@ -23,7 +20,3 @@ class SkillNames(unittest.TestCase):
         self.assertEqual(data["skillNames"]["ba:skill_securityguard"], "Security Guard")
         # A skill the text does not name falls back as names.label() does.
         self.assertEqual(data["skillNames"]["ba:skill_cleaning"], "Cleaning")
-
-
-if __name__ == "__main__":
-    unittest.main()

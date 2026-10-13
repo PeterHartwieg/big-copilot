@@ -13,9 +13,7 @@ from __future__ import annotations
 import os
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # the repo root, for a script run
 from tests import save_fixtures as f  # noqa: E402
 from tests.es3_fixture import encode  # noqa: E402
 

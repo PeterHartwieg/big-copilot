@@ -11,14 +11,11 @@ import json
 import os
 import re
 import subprocess
-import sys
 import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-sys.path.insert(0, HERE)
-sys.path.insert(0, ROOT)
 
 import ba_dashboard  # noqa: E402
 from tests import es3_fixture  # noqa: E402
@@ -257,7 +254,3 @@ class RegistryPointerTests(unittest.TestCase):
                 "%s has no %s comment above its declaration: add the "
                 "block or the only-if pointer, as the tables beside it have"
                 % (", ".join(missing), tag)))
-
-
-if __name__ == "__main__":
-    unittest.main()

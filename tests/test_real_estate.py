@@ -12,13 +12,10 @@ import copy
 import json
 import math
 import os
-import sys
 import tempfile
 import unittest
 import unittest.mock
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.dirname(HERE))
 
 import ba_dashboard as d  # noqa: E402
 from ba_save import Names, load_save  # noqa: E402
@@ -547,8 +544,3 @@ class Findings(unittest.TestCase):
         self.assertTrue(d._tax_eve(dict(tax, saves=10_000.0)))
         self.assertTrue(d._tax_eve(dict(tax, cash=20_000, saves=250.0)))
         self.assertFalse(d._tax_eve(dict(tax, left=2, saves=50_000.0)))
-
-
-
-if __name__ == "__main__":
-    unittest.main()

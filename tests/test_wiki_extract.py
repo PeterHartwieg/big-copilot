@@ -21,7 +21,6 @@ from unittest import mock
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
 )
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ba_save
 import wiki_paths
@@ -582,7 +581,3 @@ class PathTests(FixtureCase):
     def test_documented_data_directory_and_streaming_assets_resolve_equally(self):
         self.assertEqual(wiki_paths.default_paths(self._tmp.name),
                          wiki_paths.default_paths(self.game))
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -43,7 +43,3 @@ class LineOrderTests(unittest.TestCase):
         # Real saves hold cargo with no itemName; sorting it beside strings must not raise.
         lines = self.lines(SLUGS + [None])
         self.assertEqual([line["slug"] for line in lines], sorted(SLUGS) + [None])
-
-
-if __name__ == "__main__":
-    unittest.main()

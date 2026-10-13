@@ -100,7 +100,7 @@ class FloorPlans(unittest.TestCase):
         from ba_dashboard import render
         page = render({"meta": {"save": "Fixture"}}, live=False)
         start = page.index("window.BIG_COPILOT_MAP=") + len("window.BIG_COPILOT_MAP=")
-        embedded = json.JSONDecoder().raw_decode(page[start:].replace("<\/", "</"))[0]
+        embedded = json.JSONDecoder().raw_decode(page[start:].replace(r"<\/", "</"))[0]
         self.assertEqual(embedded["plans"], PLANS)
         self.assertNotIn("window.BIG_COPILOT_MAP=", render(None, live=True))
 
@@ -117,7 +117,3 @@ class FloorPlans(unittest.TestCase):
             self.assertEqual(build_web.floor_plan_gaps(tmp), ["warehouse H3"])
             os.remove(Path(tmp) / "web/maps/floor-plans.json")
             self.assertEqual(build_web.floor_plan_gaps(tmp), ["web/maps/floor-plans.json"])
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -447,7 +447,7 @@ class Check(unittest.TestCase):
 
     def test_build_web_check_reports_the_pages(self):
         with tempfile.TemporaryDirectory() as tmp:
-            for rel in ("web/wiki-data.json", "web/wiki-data.min.json", *build_web.STAMP_INPUTS, "web/version.json",
+            for rel in ("web/wiki-data.json", "web/wiki-data.min.json", "tools/wiki_topics.json", *build_web.STAMP_INPUTS, "web/version.json",
                         *build_web.worker_assets()[1],
                         "web/index.html", "web/translate/index.html", "web/update.js", *build_web.PY_COPIED,
                         *(f"web/py/{name}" for name in build_web.PY_COPIED)):
@@ -458,7 +458,3 @@ class Check(unittest.TestCase):
             self.assertEqual(build_web.check(tmp), [])
             Path(tmp, "web/wiki/index.html").unlink()
             self.assertEqual(build_web.check(tmp), ["web/wiki/index.html"])
-
-
-if __name__ == "__main__":
-    unittest.main()

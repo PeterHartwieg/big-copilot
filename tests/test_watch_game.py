@@ -12,7 +12,6 @@ import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "..", "tools"))
 
 import ba_dashboard  # noqa: E402
@@ -439,7 +438,3 @@ class WatchSurvivesAFailingFirstBuild(unittest.TestCase):
         self.assertEqual(sum("schema version 2" in line for line in lines), 1, lines)
         self.assertEqual(sum("the game link is back" in line for line in lines), 1, lines)
         self.assertTrue(any("rebuilt from the game (day 40)" in line for line in lines), lines)
-
-
-if __name__ == "__main__":
-    unittest.main()

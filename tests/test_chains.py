@@ -9,16 +9,13 @@ The statuses here are the ones `_business()` really emits — a warehouse is
 `overhead` and a factory is `support` — and the type slugs are the game's own,
 because the tie-break between two kinds of shop is by slug.
 """
-import os
-import subprocess
-import sys
 import unittest
 
 from ba_dashboard import COST_KEYS, _chains
 from ba_save import Save
 from tests.i18n_check import MsgAsserts
+from tests._seeds import under_seeds
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 FAST_FOOD = "ba:businesstype_fastfoodrestaurant"
 ELECTRONICS = "ba:businesstype_electronicsstore"
@@ -129,16 +126,10 @@ def cross_fed():
     return f"{chains['wardrobe#1']}|{chains['larder#1']}"
 
 
-def under_seeds(call):
-    """What `call` prints under six different hash seeds."""
+def printed_by(call):
+    """What `call` prints under six different hash seeds, as a set."""
     script = f"from tests.test_chains import {call}; print({call}())"
-    printed = set()
-    for seed in ("1", "2", "3", "4", "5", "6"):
-        env = dict(os.environ, PYTHONHASHSEED=seed)
-        result = subprocess.run([sys.executable, "-c", script], cwd=ROOT, env=env,
-                                capture_output=True, text=True, check=True)
-        printed.add(result.stdout.strip())
-    return printed
+    return {out.strip() for out in under_seeds(script, seeds=("1", "2", "3", "4", "5", "6"))}
 
 
 class ChainTieTests(unittest.TestCase):
@@ -147,18 +138,18 @@ class ChainTieTests(unittest.TestCase):
         self.assertEqual(depot_chain(), "Electronics Stores")
 
     def test_the_choice_does_not_depend_on_the_hash_seed(self):
-        self.assertEqual(under_seeds("depot_chain"), {"Electronics Stores"})
+        self.assertEqual(printed_by("depot_chain"), {"Electronics Stores"})
 
     def test_a_loop_between_depots_settles_the_same_way_every_run(self):
         # A weaker guard than the sweep below: this fixture's readings are all
         # single shops, so it shows the loop settles, not that set order is out.
-        self.assertEqual(under_seeds("cross_fed"),
+        self.assertEqual(printed_by("cross_fed"),
                          {"Clothing Stores|Fast Food Restaurants"})
 
     def test_a_reading_of_several_kinds_settles_the_same_way_every_run(self):
         # Here the readings really do hold two kinds of shop apiece, so this is
         # the sweep that would catch a set's order reaching the answer.
-        self.assertEqual(under_seeds("back_haul"),
+        self.assertEqual(printed_by("back_haul"),
                          {"Clothing Stores|Clothing Stores|Clothing Stores"})
 
 
@@ -1017,7 +1008,3 @@ class OfficeTests(unittest.TestCase):
         businesses = [depot("store"), shop("advocates", LAW)]
         plans = [plan("store", [destination("advocates", ["paper", "ink"])])]
         self.assertEqual(chains_of(businesses, plans)["store#1"], "Law Firms")
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Operator-only, local by default. No public moderation endpoint or new secret.
 import {spawnSync} from 'node:child_process';
-import {createRequire} from 'node:module';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import path from 'node:path';
+import {wranglerBin} from './verify.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HELP = `Usage: node tools/feature_moderate.mjs <command> [--remote]
   list [--limit 50] [--before <list_cursor>]
@@ -97,8 +97,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     if (process.argv.length < 3 || process.argv.includes('--help')) console.log(HELP);
     else {
       const command = moderationCommand(process.argv.slice(2));
-      const require = createRequire(import.meta.url);
-      const wrangler = path.join(path.dirname(require.resolve('wrangler/package.json')), 'bin', 'wrangler.js');
+      const wrangler = wranglerBin(ROOT);
       const execute = args => {
         const result = spawnSync(process.execPath, [wrangler, ...args],
           {cwd: ROOT, encoding:'utf8', maxBuffer:10*1024*1024});

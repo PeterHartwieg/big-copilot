@@ -29,9 +29,10 @@ import build_web
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# The stamped assets, plus the copies and generated files check() compares.
+# The stamped assets, plus the copies and generated files check() compares,
+# and the hand-written articles it holds web/wiki-data.json to.
 CHECK_INPUTS = tuple(dict.fromkeys(
-    build_web.STAMP_INPUTS
+    build_web.STAMP_INPUTS + ("tools/wiki_topics.json",)
     + tuple(build_web.worker_assets()[1])
     + build_web.PY_COPIED + tuple(f"web/py/{name}" for name in build_web.PY_COPIED)
     + ("web/version.json", "web/index.html", "web/update.js", "web/translate/index.html", "web/wiki-data.min.json")
@@ -301,15 +302,13 @@ class CheckedCopy(SharedCopy):
             copy.unlink()
             self.assertIn(served, build_web.check(tmp))
 
-    def test_stale_wiki_generator_is_reported(self):
-        # Nothing the page fetches changes when the generator does, so only the
-        # stamp can tell that web/wiki-data.json needs rebuilding.
-        tmp = self.root
-        for authored in ("tools/wiki_sample.json", "tools/wiki_topics.json"):
-            with self.subTest(authored=authored), kept(tmp, authored):
-                edited = Path(tmp, authored)
-                edited.write_bytes(edited.read_bytes() + b"\n")
-                self.assertIn("web/version.json", build_web.check(tmp))
+    def test_generators_are_not_stamp_inputs(self):
+        # Their output is stamped and compared, so an edit that changes nothing
+        # served must not tell every open tab to update (#345).
+        for generator in ("tools/build_wiki_data.py", "tools/wiki_data.py", "tools/wiki_paths.py",
+                          "tools/wiki_sample.json", "tools/wiki_topics.json", "tools/i18n.py",
+                          "tools/translation_catalogue.py"):
+            self.assertNotIn(generator, build_web.STAMP_INPUTS)
 
     def test_an_edited_article_names_the_wiki_payload(self):
         # Not only the stamp: the payload that carries the articles is named.
@@ -318,9 +317,7 @@ class CheckedCopy(SharedCopy):
             edited = Path(tmp, "tools/wiki_topics.json")
             edited.write_text(edited.read_text(encoding="utf-8").replace(
                 "0.02482", "0.02483", 1), encoding="utf-8")
-            stale = build_web.check(tmp)
-            self.assertIn("web/wiki-data.json", stale)
-            self.assertIn("web/version.json", stale)
+            self.assertIn("web/wiki-data.json", build_web.check(tmp))
 
     def test_unrelated_release_changes_leave_content_urls_unchanged(self):
         tmp = self.root
@@ -460,7 +457,3 @@ class CommandLine(SharedCopy):
             self.assertIn("web/wiki-data.json", build_web.check(tmp))
             build_web.assemble(tmp)
             self.assertEqual(build_web.check(tmp), [])
-
-
-if __name__ == "__main__":
-    unittest.main()

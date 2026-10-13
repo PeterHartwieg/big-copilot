@@ -24,7 +24,6 @@ from datetime import datetime, timezone
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
 )
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ba_dashboard
 import build_wiki_data as build
@@ -1148,7 +1147,3 @@ class TopicTests(FixtureCase):
     def test_no_machine_path_reaches_a_topic(self):
         for string in build._strings(self.payload()["topics"]):
             self.assertIsNone(build._PRIVATE_PATH_RE.search(string), string)
-
-
-if __name__ == "__main__":
-    unittest.main()

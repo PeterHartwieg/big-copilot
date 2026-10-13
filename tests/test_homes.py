@@ -49,7 +49,3 @@ class HomesTests(unittest.TestCase):
 
     def test_no_residences(self):
         self.assertEqual(homes([{'StreetName': 'ba:street_fifthavenue', 'StreetNumber': 57}], set(), Names({})), [])
-
-
-if __name__ == '__main__':
-    unittest.main()

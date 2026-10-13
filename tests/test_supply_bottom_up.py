@@ -470,10 +470,6 @@ class ParkedGoodsTests(unittest.TestCase):
         self.assertEqual(fact["use"], 1680)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class ConservationTests(unittest.TestCase):
     """A sender's output is shared between its routes, never counted twice."""
 

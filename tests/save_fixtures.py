@@ -25,7 +25,7 @@ import os
 import struct
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # the repo root, for a script run
 from tests.es3_fixture import address, encode  # noqa: E402
 
 DAY = 40  # a Friday: day 1 is a Monday

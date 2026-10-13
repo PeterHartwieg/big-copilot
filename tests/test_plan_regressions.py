@@ -185,7 +185,3 @@ class PlannerRegressions(MsgAsserts, unittest.TestCase):
         self.assertIn(ITEM + "gymcovercharge", self.catalogue[GYM])
         self.assertEqual(len(self.catalogue[HAIR]), 4)
         self.assertIn(ITEM + "haircuttingfee", self.catalogue[HAIR])
-
-
-if __name__ == "__main__":
-    unittest.main()

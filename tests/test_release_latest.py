@@ -2,12 +2,10 @@
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from unittest import mock
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import build_web
 import ba_dashboard
@@ -55,7 +53,3 @@ class ChangelogDialogTest(unittest.TestCase):
         local = self.entries(ba_dashboard.render(None))
         self.assertEqual(local.count('class="changelog-entry"'), len(changes))
         self.assertIn('data-src=""', local)
-
-
-if __name__ == "__main__":
-    unittest.main()

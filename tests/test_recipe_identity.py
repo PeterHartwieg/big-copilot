@@ -182,7 +182,3 @@ class RecipeIdentityTests(unittest.TestCase):
         locale = json.loads((root / "web/py/gametext.json").read_text(encoding="utf-8"))
         self.assertEqual(len(RECIPE_ITEMS), 62)
         self.assertEqual(set(RECIPE_ITEMS.values()), set(_recipes(Names(locale))))
-
-
-if __name__ == "__main__":
-    unittest.main()

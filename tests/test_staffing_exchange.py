@@ -125,7 +125,3 @@ class ExchangeTest(unittest.TestCase):
         self.assertEqual([s['employee'] for s in shifts[::2]], [f't{i:02}' for i in range(count)])
         self.assertEqual([s['employee'] for s in shifts[1::2]], [f'g{i:02}' for i in range(count)])
         self.assertLessEqual(shape.call_count, 4 * len(shifts))
-
-
-if __name__ == '__main__':
-    unittest.main()

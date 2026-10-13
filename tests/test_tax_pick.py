@@ -1,16 +1,12 @@
 """_tax_pick(): Real estate's Before tax day shopping list, the subset of listings
 whose prices sum closest to the target from below, fewer buildings within the slack."""
 import itertools
-import os
-from pathlib import Path
 import random
-import subprocess
-import sys
 import time
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ba_dashboard import _tax_pick  # noqa: E402
+from tests._seeds import under_seeds
 
 
 def brute_pick_score(items, target, slack):
@@ -101,15 +97,7 @@ class TaxPickTests(unittest.TestCase):
             'for i in range(1000)]; '
             'print(_tax_pick(items, 31900000, 5000))'
         )
-        outputs = []
-        for seed in ('0', '1', '12345'):
-            env = dict(os.environ, PYTHONHASHSEED=seed)
-            result = subprocess.run(
-                [sys.executable, '-B', '-c', code], env=env,
-                cwd=Path(__file__).resolve().parents[1],
-                capture_output=True, text=True, check=True,
-            )
-            outputs.append(result.stdout)
+        outputs = under_seeds(code, seeds=('0', '1', '12345'))
         self.assertEqual(outputs, [outputs[0]] * len(outputs))
 
     def test_sixteen_items_within_the_capped_budget_match_brute_force(self):
@@ -149,7 +137,3 @@ class TaxPickTests(unittest.TestCase):
                 self.assert_valid(items, target, result)
                 rng.shuffle(items)
                 self.assertEqual(_tax_pick(items, target, 5_000), result)
-
-
-if __name__ == '__main__':
-    unittest.main()

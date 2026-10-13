@@ -1,6 +1,4 @@
 """Offices trade like shops: their own status, the hour grid, its findings and alerts."""
-import os
-import sys
 import unittest
 
 from tests.i18n_check import MsgAsserts, find_msg, list_items, msg_param
@@ -19,7 +17,6 @@ from ba_dashboard import (
     money,
 )
 from ba_save import Names, Save
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from build_web import ships  # noqa: E402
 
 LAW = "ba:businesstype_lawfirm"
@@ -326,7 +323,3 @@ class OfficeAlertTextTests(MsgAsserts, unittest.TestCase):
                        runs=msg_param("sp.py.idle.part", n=6, noun=msg_param("sp.py.workstations"),
                                       when=msg_param("sp.py.when.part", days=msg_param("sp.py.wd.1"),
                                                      hours=msg_param("sp.py.when.hours", a=9, b=13))))
-
-
-if __name__ == "__main__":
-    unittest.main()
