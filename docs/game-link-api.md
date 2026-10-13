@@ -905,7 +905,7 @@ copies it into `pricePerSqm` seven daily ticks later. The rules are in
 ```
 
 - `items` lists one entry of the game's `realEstate` (a building the player owns) per row;
-  one building twice is `400`. `pricePerSqm` is the asked price, $ a m² a day, a finite number
+  one building twice, or no item at all, is `400`. `pricePerSqm` is the asked price, $ a m² a day, a finite number
   above 0 (else `400`).
 - `expect` on an item is the compare-and-set: the building's `pricePerSqm` and
   `pendingPricePerSqm` as the page read them from the bytes (`0` for a building whose price was
@@ -953,7 +953,8 @@ opened again.
   `appliesOnDay` as now. On `not_owned` and on a row of another save there is no building to
   read: `before`, the after-fields, `appliesOnDay`, `totalSqm`, `marketRentPerSqm`, `min` and
   `max` are null.
-- An apply with any row error answers `409` with the rows, `changed` when any row's error is
+- An apply with any row error answers `409` with the write's whole answer (`ok` false, `kind`
+  `rent`, `dryRun` false, `day`, the rows as refused rows) plus `error`: `changed` when any row's error is
   `changed`, else `refused`. Nothing is written.
 - **An apply that sets nothing** (every item already pending at its price) answers `200` with a
   stamp, shows no notification, and leaves nothing to undo (an earlier rent write's undo is

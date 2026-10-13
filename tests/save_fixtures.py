@@ -22,6 +22,7 @@ neighbourhood. Never a real save: tests use synthetic fixtures only.
 from __future__ import annotations
 
 import os
+import struct
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -50,6 +51,13 @@ VILLA = ("ba:street_oceancrestroad", 3)      # a Hamptons villa: no rent income
 VILLA_FOR_SALE = ("ba:street_easthamptonsway", 3)
 SHOP_FOR_SALE = ("ba:street_fifthavenue", 4)  # retail C, Garment District
 REPRICED = DAY - 5  # the day the liquor store's building went to 1.2 x market rent
+# currentTaxPeriodDeductibleExpenses: running costs a day, booked at each
+# midnight of the period (DAY - 1 + 1 of them by DAY, the period starting on
+# day 1), and rows booked once: a boat, a vehicle, a wholesale bill, a deposit.
+RECURRING = {"econoview_row_salaries": 350.0, "tax_rent": 30.0, "tax_import": 12.5,
+             "ba:transaction_healthinsurance_label": 4.0}
+ONCE = {"boattypename_LuxuryYacht": 8000.0, "tax_vehicle": 4000.0, "Metro Wholesale": 240.0,
+        "9 7th Avenue": 480.0}
 
 BEER, WATER = "ba:itemname_beer", "ba:itemname_water"
 GIFT, UMBRELLA, BAG = "ba:itemname_cheapgift", "ba:itemname_umbrella", "ba:itemname_paperbag"
@@ -224,10 +232,21 @@ def _log(d: int) -> tuple[list, list]:
     return hub, brewery
 
 
+def _f32(x: float) -> float:
+    return struct.unpack("<f", struct.pack("<f", x))[0]
+
+
 def _market_rent(type_mult: float, hood_mult: float, traffic: int) -> float:
-    """The game's market rent per m2 a day (rules.md): written out again here,
-    not imported, so the tests check the board's formula against a second copy."""
-    return 20554 * type_mult * hood_mult * (0.3 + traffic / 100) * 0.00056
+    """The game's market rent per m2 a day for a non-residential building
+    (rules.md; Building.GetMarketPricePerSqm and GetBuildingDailyMarketRentPerSqm
+    as the game's Mono runtime works them out: single-precision fields and
+    constants, double arithmetic, single where the IL stores or returns).
+    Written out again here, not imported, so the tests check the board's
+    formula against a second copy."""
+    price = _f32(_f32(20554.0) * _f32(type_mult))
+    price = _f32(price * _f32(hood_mult))
+    price = _f32(price * (_f32(1.3) - (100 - traffic) / 100.0))
+    return _f32(price * _f32(0.00056))
 
 
 # Each owned building: (address, total m2, market rent, bought on, price paid),
@@ -249,7 +268,7 @@ def _estate_day(addr, d: int) -> tuple[float, float]:
             return round(rent - 0.005, 2), 80.0
         return round(rent * 1.2, 2), 80.0 - 2 * (d - REPRICED)
     if addr == OWN_UNDER:  # a few cents under market and filling a point a day
-        return 4.0, 40.0 + (d - (DAY - 21))
+        return 4.0, min(100.0, 40.0 + (d - (DAY - 21)))
     if addr == OWN_FULL:  # never repriced: the market rent it was bought at, full
         return rent, 100.0
     return round(rent * 1.2, 2), 50.0  # OWN_PENDING
@@ -280,9 +299,11 @@ def _estate(day: int) -> list:
     return out
 
 
-def data_company(day: int = DAY) -> dict:
+def data_company(day: int = DAY, per_year: int = 60) -> dict:
     """The company's save tree on `day` (a Friday by default). See the module doc."""
-    past = range(max(OPENED + 1, day - 21), day)        # financial summaries
+    # Financial summaries: the game keeps the ones numbered day - daysPerYear - 1 on
+    # (FinancialSummaryHelper.CleanupOldSummaries), so a whole tax period.
+    past = range(max(OPENED + 1, day - per_year - 1), day)
     orders = range(max(OPENED, day - 14), day)          # a fortnight of order history
     hub_log, brewery_log = [], []
     for d in range(max(OPENED + 1, day - 20), day):
@@ -412,7 +433,7 @@ def data_company(day: int = DAY) -> dict:
         "SaveGameName": "Payload Co", "characterId": CHARACTER, "buildNumberAtStart": 3671,
         "buildNumberAtLastSave": 3671 if day <= DAY else 3682,
         "Happiness": 60.0,
-        "gameVariables": {"daysPerYear": 60, "difficulty": 2, "startingMoney": 10000.0,
+        "gameVariables": {"daysPerYear": per_year, "difficulty": 2, "startingMoney": 10000.0,
                           "marketPriceMultiplier": 0.7, "employeeHourlySalaryMultiplier": 0.9,
                           "rivalsDifficultyMultiplier": 1.0, "taxPercentage": 5.0,
                           "baseCustomerPromotionMultiplier": 0.55},
@@ -470,11 +491,11 @@ def data_company(day: int = DAY) -> dict:
         "buildingsForSale": [{"address": address(*FOR_SALE), "buildingPrice": 410000.0},
                              {"address": address(*SHOP_FOR_SALE), "buildingPrice": 6500.0},
                              {"address": address(*VILLA_FOR_SALE), "buildingPrice": 90000000.0}],
-        # This tax period's deductions: running costs, and a boat bought once.
+        # This tax period's deductions, under the keys real saves use: running
+        # costs (RECURRING, a day each midnight), and rows booked once (ONCE).
         "currentTaxPeriodDeductibleExpenses": [
-            {"key": "econoview_row_salaries", "amount": -14000.0 * (day - 1) / 39},
-            {"key": "tax_rent", "amount": -1200.0 * (day - 1) / 39},
-            {"key": "boattypename_SmallBoat", "amount": -8000.0},
+            *({"key": k, "amount": -per_day * day} for k, per_day in RECURRING.items()),
+            *({"key": k, "amount": -amount} for k, amount in ONCE.items()),
         ],
         "achievementsData": {"goodsProducedInFactories": 1200 * (day - OPENED), "taxesPaid": 5200.0},
         "PlayerDiplomas": [{"completed": True}, {"completed": False}],

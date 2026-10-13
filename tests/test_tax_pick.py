@@ -112,6 +112,20 @@ class TaxPickTests(unittest.TestCase):
             outputs.append(result.stdout)
         self.assertEqual(outputs, [outputs[0]] * len(outputs))
 
+    def test_sixteen_items_within_the_capped_budget_match_brute_force(self):
+        # A full search of 16 items is 2^17 nodes; the budget is capped at
+        # four times TAX_PICK_NODES, so these cases hold the pruning to it.
+        for seed in range(30):
+            rng = random.Random(16_000 + seed)
+            items = [(f'k{i:02}', rng.randint(1_000_000, 40_000_000)) for i in range(16)]
+            target = rng.randint(10_000_000, sum(p for _, p in items) - 1)
+            slack = rng.choice((0, 1_000, target // 500))
+            with self.subTest(seed=seed):
+                result = _tax_pick(items, target, slack)
+                self.assert_valid(items, target, result)
+                self.assertEqual((len(result[0]), -result[1]),
+                                 brute_pick_score(items, target, slack))
+
     def test_large_target_returns_every_item(self):
         items = [(f'key{i:04}', i + 1) for i in range(1000)]
         total = sum(price for _, price in items)

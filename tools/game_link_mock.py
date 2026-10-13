@@ -547,6 +547,17 @@ class Link:
                 if rule == "locked":
                     # The mod's ReopenDay(): Monday 08:00, tomorrow on a Sunday.
                     row["reopens"] = {"day": self._imminent_monday(), "hour": 8}
+                if kind == "rent":
+                    # A refused row is the building as it stands (RentWrite.Answer):
+                    # nothing planned, null where there is no building to read.
+                    before = row.get("before")
+                    for key in ("pricePerSqm", "pendingPricePerSqm", "daysUntilUpdatingPricePerSqm"):
+                        row[key] = before[key] if before else None
+                    days = before["daysUntilUpdatingPricePerSqm"] if before else 0
+                    row.update(set=False, clamped=False, appliesOnDay=self.day + days if days > 0 else None)
+            if kind == "rent":  # the mod's refusal is its whole answer, its error from the rows
+                top = "changed" if any(row.get("error") == "changed" for row in rows) else "refused"
+                return 409, dict(answer, ok=False, dryRun=False, error=top, rows=rows)
             return 409, {"error": error, "rows": rows}
         if error in ("changed", "refused") and kind == "undo":
             # As the mod's undo of that kind answers (UniformWrite, ImportWrite,
@@ -1043,8 +1054,8 @@ class Link:
 
     def _rent(self, save, body, dry):
         items = body.get("items")
-        if not isinstance(items, list):
-            raise BadRequest("items must be a list")
+        if not isinstance(items, list) or not items:
+            raise BadRequest("items must be a list of at least one building")
         parsed, seen = [], set()
         for item in items:
             if not isinstance(item, dict):
@@ -1081,7 +1092,7 @@ class Link:
                 error = "villa"
             elif market is None:
                 error = "not_owned"  # The mock cannot price a building unknown to its table.
-            after = dict(before) if before is not None and error != "not_owned" else None
+            after = dict(before) if before is not None and not other and error != "not_owned" else None
             clamped, set_price = False, False
             if error is None:
                 low, high = round(0.8 * market * 100) / 100, round(1.2 * market * 100) / 100
@@ -1100,7 +1111,7 @@ class Link:
         answer = {"ok": ok, "kind": "rent", "dryRun": dry, "day": self.day, "rows": rows}
         if not ok:
             error = "changed" if any(r["error"] == "changed" for r in rows) else "refused"
-            return (200, answer) if dry else (409, {"error": error, "rows": rows})
+            return (200, answer) if dry else (409, dict(answer, error=error))
         if not dry:
             for item in sets:
                 self.rents[item["address"]] = {"pendingPricePerSqm": item["newPending"], "daysUntilUpdatingPricePerSqm": 7}

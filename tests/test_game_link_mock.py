@@ -1640,10 +1640,24 @@ class RentWrite(LinkedMock):
             self.assertEqual(row["error"], "changed")
             self.assertIsNone(row["before"])
             self.assertEqual([row[k] for k in ("marketRentPerSqm", "min", "max")], [None] * 3)
-        self.assertEqual(self.rent(dry=False, expect={"character": "other"})[0], 409)
+            # Another company's building: nothing of this save's is said about it.
+            self.assertEqual([row[k] for k in ("pricePerSqm", "pendingPricePerSqm", "daysUntilUpdatingPricePerSqm",
+                                               "appliesOnDay", "totalSqm")], [None] * 5)
+        status, answer = self.rent(dry=False, expect={"character": "other"})
+        self.assertEqual(status, 409)
+        # The refusal carries the dry run's whole answer, as the mod's does.
+        self.assertEqual((answer["error"], answer["ok"], answer["kind"], answer["dryRun"]), ("changed", False, "rent", False))
 
     def test_duplicate_address_is_bad_request(self):
         self.assertEqual(self.rent(self.item(), self.item())[0], 400)
+
+    def test_empty_items_is_bad_request_and_keeps_the_undo(self):
+        self.assertEqual(self.rent(dry=False)[0], 200)
+        self.assertIn("rent", self.link.undo)
+        for dry in (True, False):
+            status, answer = self.post("rent", {"dryRun": dry, "items": []})
+            self.assertEqual((status, answer["error"]), (400, "bad_request"))
+        self.assertIn("rent", self.link.undo, "a malformed call leaves the last write's undo alone")
 
     def test_invalid_prices_and_expect_are_bad_request(self):
         for price in (0, -1, True, "10", None, float("nan"), float("inf")):
@@ -1708,6 +1722,17 @@ class RentWrite(LinkedMock):
         self.config({"refuseWrite": "refused"})
         status, answer = self.rent(dry=False)
         self.assertEqual((status, answer["error"], answer["rows"][0]["error"]), (409, "refused", "villa"))
+        # As the mod answers a refusal: the whole answer, nothing planned, the building as it stands.
+        self.assertEqual((answer["ok"], answer["kind"], answer["dryRun"], answer["day"]), (False, "rent", False, self.link.day))
+        row = answer["rows"][0]
+        self.assertFalse(row["set"])
+        self.assertFalse(row["clamped"])
+        fields = ("pricePerSqm", "pendingPricePerSqm", "daysUntilUpdatingPricePerSqm")
+        self.assertEqual([row[k] for k in fields], [row["before"][k] for k in fields])
+        days = row["before"]["daysUntilUpdatingPricePerSqm"]
+        self.assertEqual(row["appliesOnDay"], self.link.day + days if days else None)
+        status, answer = self.rent(self.item(BARE), dry=False)  # not owned: nothing to read
+        self.assertEqual([answer["rows"][0][k] for k in ("pricePerSqm", "appliesOnDay", "set")], [None, None, False])
         status, answer = self.post("undo", {"kind": "rent"})
         self.assertEqual((status, answer["error"], answer["rows"]), (409, "changed", [{"error": "changed"}]))
         self.config({"refuseWrite": None})

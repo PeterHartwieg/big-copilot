@@ -15,6 +15,7 @@ import os
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
@@ -43,8 +44,12 @@ def estate(tree: dict) -> tuple[dict, dict]:
 
 
 def best(rent: float) -> float:
-    """The highest cent under market rent, worked out again."""
-    return math.floor(rent * 100 - 1e-6) / 100
+    """The highest cent the game sees under market rent (both in single
+    precision), worked out again."""
+    cents = int(rent * 100) + 1
+    while F._f32(cents / 100) >= rent:
+        cents -= 1
+    return cents / 100
 
 
 def key(addr) -> str:
@@ -109,15 +114,26 @@ class OwnedBuildings(unittest.TestCase):
         self.assertEqual((row["paid"], row["bought"]), (paid, day))
         self.assertEqual(row["payback"], round(paid / (row["full"] - tax)))
 
+    def test_never_repriced_is_at_market_exactly_as_the_game_sees_it(self):
+        # Bought, never repriced: the price is the market rent itself, in single
+        # precision, so the game's (m - price) / m is 0 and tenants may leave.
+        row = self.rows[key(F.OWN_FULL)]
+        rent = F.ESTATE[F.OWN_FULL][1]
+        self.assertEqual(F._estate_day(F.OWN_FULL, F.DAY)[0], rent)
+        self.assertTrue(row["risk"])
+        self.assertLess(F._f32(row["best"]), rent)
+        self.assertGreaterEqual(F._f32(row["best"] + 0.01), rent)
+
     def test_flagged_first_by_gain_then_the_rest(self):
         flags = [r["flag"] for r in self.re["owned"]]
         self.assertEqual(flags, sorted(flags, reverse=True))
 
     def test_history_is_exact_while_the_price_held_and_none_before(self):
-        self.assertEqual(self.re["histFrom"], F.DAY - 21)
-        days = range(F.DAY - 21, F.DAY)
+        self.assertEqual(self.re["histFrom"], F.OPENED + 1)
+        days = range(F.OPENED + 1, F.DAY)
+        bought = F.ESTATE[F.OWN_UNDER][2]
         under = self.rows[key(F.OWN_UNDER)]["hist"]
-        self.assertEqual(under, [int(F._estate_day(F.OWN_UNDER, x)[1]) for x in days])
+        self.assertEqual(under, [int(F._estate_day(F.OWN_UNDER, x)[1]) if x >= bought else None for x in days])
         liquor = self.rows[key(F.LIQUOR)]["hist"]
         for x, value in zip(days, liquor):
             if x < F.REPRICED:
@@ -132,6 +148,38 @@ class OwnedBuildings(unittest.TestCase):
         self.assertEqual(counts["flagged"], len(flagged))
         self.assertAlmostEqual(counts["gain"], sum(r["gain"] for r in flagged), places=1)
         self.assertFalse(counts["taxEve"])
+
+
+class MarketRent(unittest.TestCase):
+    """The game's market rent, worked out in single precision as it does."""
+
+    def rent(self, street, number):
+        return d._market_rent(d.load_buildings()[(street, number)])
+
+    def test_a_market_rent_just_over_a_cent_keeps_that_cent(self):
+        # 1 Harbor Street (a Hamptons cinema) and 9 Fifth Avenue (a Garment
+        # District office) sit a hair over a whole cent: the game takes that
+        # cent as under market.
+        harbor = self.rent("ba:street_harborstreet", 1)
+        self.assertTrue(5.64 < harbor < 5.6401, harbor)
+        self.assertEqual(d._best_price(harbor), 5.64)
+        office = self.rent("ba:street_fifthavenue", 9)
+        self.assertEqual(d._best_price(office), 4.04)
+        self.assertTrue(d._below_market(4.04, office))
+        self.assertFalse(d._below_market(4.05, office))
+
+    def test_the_market_rent_itself_is_not_under_market(self):
+        rent = self.rent("ba:street_twelfthstreet", 24)
+        # The price a building there kept from its purchase, as the game wrote it:
+        # single precision after every operation would be one unit in the last
+        # place higher, and read that price as under market.
+        self.assertEqual(rent, 3.735072612762451)
+        self.assertFalse(d._below_market(rent, rent))
+        self.assertEqual(d._best_price(rent), 3.73)
+
+    def test_the_fixture_formula_agrees(self):
+        for addr, (_sqm, rent, _day, _paid) in F.ESTATE.items():
+            self.assertEqual(d._market_rent(d.load_buildings()[addr]), rent, addr)
 
 
 class RentMultiplier(unittest.TestCase):
@@ -187,7 +235,7 @@ class BuyABuilding(unittest.TestCase):
     def test_a_building_rented_in_costs_a_percent_over_market_and_saves_its_rent(self):
         row = self.rows[key(F.GIFTS)]
         value = 2961 * 20554 * 1.0 * 0.55 * (0.3 + 0.40)  # retail, Lower Manhattan, traffic 40
-        self.assertEqual(row["price"], round(value * 1.01))
+        self.assertAlmostEqual(row["price"], value * 1.01, delta=value * 1e-6)
         self.assertFalse(row["listed"])
         self.assertEqual(row["saves"], F.RENT[F.GIFTS])
         self.assertEqual(row["payback"], round(row["price"] / (row["income"] + row["saves"] - row["tax"])))
@@ -200,13 +248,22 @@ class BuyABuilding(unittest.TestCase):
         self.assertFalse(self.rows[key(F.HOME)]["deductible"])
 
     def test_the_finder_listings_carry_the_same_payback(self):
-        save = load(F.data_company())
+        # The gift shop's building listed as well: both lists count the rent it ends.
+        tree = F.data_company()
+        tree["buildingsForSale"].append({"address": address(*F.GIFTS), "buildingPrice": 23_000_000.0})
+        save = load(tree)
         names = Names(F.data_names())
         owned = d._estate_owned(save, names, {})
+        buy = {b["key"]: b for b in d._real_estate(save, names, owned)["buy"]}
         premises = d._premises(save, names, {}, owned)
         paybacks = {r["key"]: r["payback"] for r in premises["forSale"]}
+        self.assertEqual(len(paybacks), 4)
         for k in paybacks:
-            self.assertEqual(paybacks[k], self.rows[k]["payback"], k)
+            self.assertEqual(paybacks[k], buy[k]["payback"], k)
+        gifts = buy[key(F.GIFTS)]
+        self.assertEqual((gifts["listed"], gifts["price"], gifts["saves"]), (True, 23_000_000, F.RENT[F.GIFTS]))
+        self.assertEqual(paybacks[key(F.GIFTS)],
+                         round(23_000_000 / (gifts["income"] + F.RENT[F.GIFTS] - gifts["tax"])))
 
 
 # Deductible listings for the shopping list, and one that is not.
@@ -230,25 +287,125 @@ def taxed(cash: float, sales_factor: float, day: int = F.DAY) -> dict:
     return estate(tree)[1]["tax"]
 
 
+def period_sales(tree: dict) -> tuple[float, int]:
+    """(every sale the period's summaries hold, how many days they cover)."""
+    gv = tree["gameVariables"]["daysPerYear"]
+    tax_day = (tree["Day"] // gv + 1) * gv
+    rows = [s for s in tree["financialSummaries"] if tax_day - gv + 1 <= s["dayNumber"] <= tax_day]
+    return sum(st["TotalSales"] for s in rows for st in s["businessIncomeStatements"]), len(rows)
+
+
+def built(tree: dict):
+    """build_core() over a save tree: the core loads, whatever the day."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "core.hsg")
+        with open(path, "wb") as fh:
+            fh.write(encode(tree))
+        return d.build_core(load_save(path), Names(F.data_names()))
+
+
 class BeforeTaxDay(unittest.TestCase):
     def test_under_the_threshold_nothing_is_assessed(self):
-        tax = estate(F.data_company())[1]["tax"]
+        tax = taxed(25_000, 0.5)
         self.assertLess(tax["salesEnd"], d.TAX_THRESHOLD)
         self.assertEqual((tax["assessed"], tax["target"], tax["pick"], tax["spend"]), (False, 0, [], 0))
 
     def test_the_projection(self):
         tree = F.data_company()
         tax = estate(tree)[1]["tax"]
-        sales = sum(st["TotalSales"] for s in tree["financialSummaries"] for st in s["businessIncomeStatements"])
-        start, elapsed = 1, F.DAY - 1
+        sales, held = period_sales(tree)
+        # The game keeps the period's summaries: every day the company traded
+        # (it opened on day 3, its first summary is day 4) up to yesterday.
+        self.assertEqual(held, F.DAY - 1 - F.OPENED)
         self.assertEqual((tax["taxDay"], tax["left"], tax["rate"]), (60, 60 - F.DAY, 5.0))
+        # What the game will sum: the summaries so far, and their average day
+        # for each day still to come before tax day.
         self.assertAlmostEqual(tax["sales"], sales, places=1)
-        self.assertAlmostEqual(tax["salesEnd"], sales * (60 - start) / elapsed, places=1)
-        recurring = (14000.0 + 1200.0) * (F.DAY - 1) / 39
-        self.assertAlmostEqual(tax["deductions"], recurring + 8000.0, places=1)
-        # Running costs scale to the whole period; the boat counts once.
-        self.assertAlmostEqual(tax["deductionsEnd"], recurring * 60 / elapsed + 8000.0, places=1)
+        self.assertAlmostEqual(tax["salesEnd"], sales + sales / held * (60 - F.DAY), places=1)
+        recurring = sum(F.RECURRING.values()) * F.DAY  # a day each midnight, days 1 to DAY
+        once = sum(F.ONCE.values())
+        self.assertAlmostEqual(tax["deductions"], recurring + once, places=1)
+        # Running costs scale to the period's 60 midnights; the boat, the
+        # vehicle, the wholesale bill and the deposit count once.
+        self.assertAlmostEqual(tax["deductionsEnd"], recurring * 60 / F.DAY + once, places=1)
         self.assertAlmostEqual(tax["baseEnd"], max(0, tax["salesEnd"] - tax["deductionsEnd"]), places=1)
+
+    def test_a_vehicle_bought_counts_once(self):
+        self.assertFalse(d._recurring_deduction("tax_vehicle"))
+        self.assertTrue(d._recurring_deduction("tax_rent"))
+        self.assertTrue(d._recurring_deduction("econoview_row_salaries"))
+        self.assertFalse(d._recurring_deduction("9 7th Avenue"))
+
+    def test_a_long_tax_year_sums_the_whole_year(self):
+        # daysPerYear 365 on day 200: the game keeps daysPerYear + 2 summaries,
+        # so the 196 days traded so far are all there and all taxed.
+        tree = F.data_company(200, per_year=365)
+        tax = estate(tree)[1]["tax"]
+        sales, held = period_sales(tree)
+        self.assertEqual((tax["taxDay"], tax["left"], held), (365, 165, 199 - F.OPENED))
+        self.assertAlmostEqual(tax["sales"], sales, places=1)
+        self.assertAlmostEqual(tax["salesEnd"], sales + sales / held * 165, places=1)
+        self.assertAlmostEqual(tax["deductionsEnd"],
+                               sum(F.RECURRING.values()) * 365 + sum(F.ONCE.values()), places=1)
+
+    def test_tax_day_and_the_first_day_project_nothing(self):
+        # On tax day the new period began at today's midnight, after its costs:
+        # no day of it is over, so nothing is projected or assessed.
+        for day, per_year in ((60, 60), (120, 60), (365, 365), (1, 60)):
+            with self.subTest(day=day, per_year=per_year):
+                tree = F.data_company(day, per_year=per_year)
+                tree["Money"] = 1_000_000
+                tree["buildingsForSale"] = [{"address": address(*a), "buildingPrice": float(p)}
+                                            for a, p in SHOP_LISTINGS]
+                owned, re_ = estate(tree)
+                tax = re_["tax"]
+                self.assertEqual(tax["taxDay"], day + per_year if day % per_year == 0 else per_year)
+                self.assertEqual((tax["assessed"], tax["target"], tax["pick"], tax["spend"]), (False, 0, [], 0))
+                if day % per_year == 0:
+                    self.assertEqual(tax["salesEnd"], tax["sales"])
+                    self.assertEqual(tax["deductionsEnd"], tax["deductions"])
+                    # The core loads with its whole count: the owned buildings, and no eve.
+                    flagged = [r for r in re_["owned"] if r["flag"]]
+                    self.assertEqual(built(tree).core["realEstateCounts"], {
+                        "owned": 4, "flagged": len(flagged),
+                        "gain": round(sum(r["gain"] for r in flagged), 2), "taxEve": False})
+
+    def test_a_failure_never_stops_the_core_loading(self):
+        tree = F.data_company()
+        with unittest.mock.patch.object(d, "_estate_owned", side_effect=RuntimeError("odd save")):
+            build = built(tree)
+            self.assertEqual(build.core["realEstateCounts"],
+                             {"owned": 0, "flagged": 0, "gain": 0.0, "taxEve": False})
+            # The page asks again, and there the failure shows.
+            with self.assertRaisesRegex(RuntimeError, "odd save"):
+                d.section(build, "realEstate")
+        self.assertEqual(len(d.section(build, "realEstate")["realEstate"]["owned"]), 4)
+
+    def test_a_failed_tax_plan_keeps_the_owned_rows(self):
+        # Only the plan fails: the owned rows, their count and the multiplier the
+        # finder prices at stay; the page works the plan out again and says why.
+        tree = F.data_company(59)
+        with unittest.mock.patch.object(d, "_tax_shelter", side_effect=RuntimeError("odd plan")):
+            build = built(tree)
+            self.assertEqual(build.core["realEstateCounts"]["owned"], 4)
+            self.assertFalse(build.core["realEstateCounts"]["taxEve"])
+            self.assertIsNotNone(build.shared["estate"])
+            self.assertNotIn("tax", build.shared["estate"])
+            with self.assertRaisesRegex(RuntimeError, "odd plan"):
+                d.section(build, "realEstate")
+
+    def test_the_average_day_starts_at_the_first_business(self):
+        # Summaries from before the first shop opened carry no business
+        # statement; they would only dilute the projection.
+        tree = F.data_company()
+        first = tree["financialSummaries"][0]["dayNumber"]
+        tree["financialSummaries"][:0] = [
+            {"dayNumber": n, "businessIncomeStatements": [], "totalBusinessProfit": 0.0, "totalProfit": 0.0}
+            for n in range(1, first)]
+        tax = estate(tree)[1]["tax"]
+        sales, held = period_sales(tree)
+        trading = held - (first - 1)
+        self.assertAlmostEqual(tax["salesEnd"], sales + sales / trading * (60 - F.DAY), places=1)
 
     def test_cash_bound(self):
         tax = taxed(1_000_000, 100)
@@ -261,7 +418,7 @@ class BeforeTaxDay(unittest.TestCase):
         self.assertAlmostEqual(tax["saves"], 990_000 * 5 / 100, places=2)
 
     def test_base_bound(self):
-        tax = taxed(50_000_000, 10)  # a base under a million, cash far over it
+        tax = taxed(50_000_000, 5)  # a base under a million, cash far over it
         self.assertTrue(tax["assessed"])
         self.assertLess(tax["baseEnd"], 1_000_000)
         self.assertEqual((tax["target"], tax["bound"]), (int(tax["baseEnd"]), "base"))
