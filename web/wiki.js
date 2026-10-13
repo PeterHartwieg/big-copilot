@@ -711,8 +711,7 @@ function wikiSource(page){
   /* A page with no guide behind it borrows the Gift Shop guide's list: the
      same game files and build rows, as it always has. */
   const sources = (wikiActive || wikiGuideFor("businesstypes-giftshop") || {}).SOURCES || {};
-  const files = Array.isArray((wikiData.provenance || {}).files) ? wikiData.provenance.files
-    : Array.isArray(sources.files) ? sources.files : [];
+  const files = Array.isArray(sources.files) ? sources.files : [];
   const build = Array.isArray(sources.build) ? sources.build : [];
   const sourceName = f => /BusinessLayouts/i.test(f.path || "") ? tt("wiki.src.layout", "Shipped shop layout")
     : /helpstructure/i.test(f.path || "") ? tt("wiki.src.menu", "Game help menu")
@@ -746,8 +745,8 @@ function wikiSource(page){
    so no chip says it on the page (declutter M2). */
 function wikiStamp(){
   const p = wikiData.provenance || {};
-  const when = p.sourceDate || p.extracted || "";
-  const claimed = p.saveBuildNumber ?? p.gameBuild;
+  const when = p.sourceDate || "";
+  const claimed = p.saveBuildNumber;
   const build = typeof claimed === "number" || typeof claimed === "string" ? claimed : null;
   const bits = [];
   if(when) bits.push(tt("wiki.stamp.date.said", "Read from game files of {date}, their newest modification date.", {date: String(when).slice(0, 10)}));

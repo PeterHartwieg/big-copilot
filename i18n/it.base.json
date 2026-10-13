@@ -5754,7 +5754,6 @@
  "wiki.ui.missingRecipe": "Recipe details unavailable",
  "wiki.ui.missingRecipeTip": "This recipe is referenced by the product help, but its details are unavailable in this build.",
  "wiki.ui.noEquipment": "No selling equipment listed",
- "wiki.ui.noListedEquipment": "No equipment listed",
  "wiki.ui.noListedSuppliers": "No supplier listed",
  "wiki.ui.noOtherSellers": "No other seller listed",
  "wiki.ui.noRecipe": "No factory recipe listed",

@@ -20902,6 +20902,9 @@ function wireSphere(){
     });
     return taken.length;
   };
+  /* For the tests: true once every ball on the shelf has settled, which is when
+     __consumeBalls and a wordmark click take effect. */
+  window.__sphereIdle = () => balls.length > 0 && !balls.some(b => b.busy);
   /* The board's own name: the web page's landing keeps its .wordmark in the
      page until the board replaces it. */
   const wordmark = $("title") || q('.wordmark');

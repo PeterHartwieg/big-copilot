@@ -190,9 +190,8 @@ const DATA = {
   topics: [TOPIC],
   // The date is the newest source modification time, and the save build is not
   // knowable from an installation, so the extraction states it as null.
-  provenance: {extracted: '2026-09-03', saveBuildNumber: null,
-    steam: {buildId: '25231854', appId: '1331550'},
-    files: [{path: 'Big Ambitions_Data/StreamingAssets/helpstructure.json', note: '14 categories.'}]},
+  provenance: {sourceDate: '2026-09-03', saveBuildNumber: null,
+    steam: {buildId: '25231854', appId: '1331550'}},
 };
 const CATEGORY_COUNT = DATA.categories.length;
 

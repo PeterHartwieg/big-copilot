@@ -5661,7 +5661,6 @@
  "wiki.ui.missingRecipe": "Detalles de la receta no disponibles",
  "wiki.ui.missingRecipeTip": "La ayuda del producto menciona esta receta, pero sus detalles no están disponibles en esta versión.",
  "wiki.ui.noEquipment": "No se indica equipo de venta",
- "wiki.ui.noListedEquipment": "No se indica equipamiento",
  "wiki.ui.noListedSuppliers": "No se indica proveedor",
  "wiki.ui.noOtherSellers": "No se indican otros vendedores",
  "wiki.ui.noRecipe": "No se indica receta de fábrica",
