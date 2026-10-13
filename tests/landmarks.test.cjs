@@ -66,7 +66,7 @@ test('one h1, inside main, names the place on screen and follows the route', asy
   const box = await page.locator('#pageTitle').boundingBox();
   assert.ok(box.width <= 1 && box.height <= 1, JSON.stringify(box));
   await page.evaluate(() => { location.hash = '#supply/imports'; });
-  await page.waitForFunction(() => document.getElementById('pageTitle').textContent !== 'Overview');
+  await page.waitForFunction(was => document.getElementById('pageTitle').textContent !== was, en('nav.area.overview'));
   assert.deepEqual(await h1s(page), [en('nav.path', {area: en('nav.area.supply'), view: await page.evaluate(() => routeViewLabel('supply/imports'))})]);
 });
 
