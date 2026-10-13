@@ -835,9 +835,11 @@
   // what the browser is waiting for. The permission's name moved with the
   // address spaces: "loopback-network" from Chrome 145, "local-network-access"
   // before; a browser that knows neither asks nothing and reads as granted.
-  // Granted once is granted for the session: the polls ask four times a
-  // second, and only a fetch that failed (linkFailure()) asks the browser
-  // `again`, to tell a Block from a closed port.
+  // A grant is remembered only for the reads that poll (/health four times
+  // a second while a refresh lands), and only until the browser says it
+  // changed: a write, an approval and a fetch that failed (linkFailure())
+  // ask the browser `again`, so a grant the player withdrew mid-session is
+  // still told from a closed port, and a reset to Ask still waits for them.
   const PROMPT_WAIT_MS = 90000;
   const SAVE_WAIT_MS = 30000;  // a whole save, headers and bytes
   let loopbackGranted = false;
@@ -853,7 +855,12 @@
     if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname || "")) return "granted";
     const states = [];
     for (const name of ["loopback-network", "local-network-access"]) {
-      try { states.push((await navigator.permissions.query({name})).state); } catch (e) {}
+      try {
+        const status = await navigator.permissions.query({name});
+        // A change in the site settings ends the remembered grant at once.
+        status.onchange = () => { loopbackGranted = false; };
+        states.push(status.state);
+      } catch (e) {}
     }
     if (!states.length || states.includes("granted")) return "granted";
     return states.includes("denied") ? "denied" : "prompt";
@@ -885,7 +892,8 @@
     const base = link || linkUrl;
     const moved = () => Object.assign(failure(() => tt("app.link.moved", "The board is no longer linked to the same game.")), {unsent: true, moved: true});
     if (!loopbackOrigin(base || "")) throw Object.assign(failure(() => tt("app.link.local", "Not linked to the game on this computer.")), {unsent: true});
-    const permission = await loopbackPermission();
+    // Anything but a plain read asks the browser afresh: see loopbackPermission().
+    const permission = await loopbackPermission(!!bound || (rest.method || "GET").toUpperCase() !== "GET");
     if (permission === "denied") throw Object.assign(linkBlocked(), {unsent: true});
     const asking = permission === "prompt";
     if (asking && attempt) state("busy", () => tt("app.link.allow", "Allow Big Copilot to reach the game"),
@@ -907,23 +915,25 @@
         // game and not about this call's options. The name, not instanceof:
         // the error can come from another realm than this script's.
         if (err.name === "TypeError" && space && linkSpace === null) continue;
-        throw await linkFailure();
+        throw await linkFailure(false);
       }
       if (read && res.ok) {
         try { res.bytes = await res.arrayBuffer(); }
-        catch (err) { clearTimeout(timer); throw await linkFailure(); }
+        catch (err) { clearTimeout(timer); throw await linkFailure(true); }
       }
       clearTimeout(timer);
       linkSpace = space;
       linkGone = false;  // the mod answered, whatever it said: the watcher's gone note is over
       return res;
     }
-    throw await linkFailure();
+    throw await linkFailure(false);
   }
   // A "Block" on the prompt fails the fetch like a closed port does; only
-  // the permission tells them apart.
-  async function linkFailure() {
-    if (await loopbackPermission(true) === "denied") return linkBlocked();
+  // the permission tells them apart. A blocked fetch never left the browser
+  // (`unsent`), unless an answer had already come (`answered`: its bytes
+  // failed on the way).
+  async function linkFailure(answered) {
+    if (await loopbackPermission(true) === "denied") return Object.assign(linkBlocked(), {unsent: !answered});
     return failure(() => tt("app.link.down", "The game is not running, or the Big Copilot Link mod is not installed."));
   }
 
@@ -948,7 +958,9 @@
 
   // The link as a source, gone: everything it knew of the game, and the
   // remembered address, so it does not come back on the next visit.
-  function dropLink() {
+  // `forget` false keeps the remembered address, for a link chosen anew,
+  // which writes its own over it.
+  function dropLink(forget = true) {
     linkUrl = null;
     lastLinkStamp = "";
     linkHealth = null;
@@ -956,7 +968,7 @@
     linkSchema = LINK_SCHEMA;
     linkGone = false;
     linkNotReady = 0;
-    try { localStorage.removeItem(LINK_KEY); } catch (e) {}
+    if (forget) { try { localStorage.removeItem(LINK_KEY); } catch (e) {} }
     linkMoved();
   }
   // The folder as a source, gone from memory, with the save menu that
@@ -982,7 +994,7 @@
   function becomeSource(kind, {handle = null, url = null, name = "", gen} = {}) {
     if (gen === undefined) gen = supersede();
     else if (gen !== sourceGen) return null;
-    dropLink();
+    dropLink(kind !== "link");
     if (kind === "link") {
       linkUrl = url;
       stored.set(LINK_KEY, url);
@@ -1948,22 +1960,21 @@
     paintStrip();
   }
 
-  // Applies the pick (`want`, the remembered one unless given) to a scan.
-  // Returns {file, dir, fellBack}: fellBack says what was asked for when it
-  // is no longer there and the newest stands in.
-  function chooseFrom(entries, want = pick) {
+  // Applies the pick to a scan. Returns {file, dir, fellBack}: fellBack says
+  // what was asked for when it is no longer there and the newest stands in.
+  function chooseFrom(entries) {
     let saves = entries.filter((e) => isSave(e.file));
     if (!saves.length) return {file: null, dir: "", fellBack: ""};
     let fellBack = "";
-    if (want.dir) {
-      const inDir = saves.filter((e) => e.dir === want.dir);
+    if (pick.dir) {
+      const inDir = saves.filter((e) => e.dir === pick.dir);
       if (inDir.length) saves = inDir;
       else fellBack = () => tt("app.pick.gone.folder", "Could not find the chosen character's folder; showing the newest save instead.");
     }
-    if (want.name && !fellBack) {
-      const named = saves.find((e) => e.file.name === want.name);
+    if (pick.name && !fellBack) {
+      const named = saves.find((e) => e.file.name === pick.name);
       if (named) return {file: named.file, dir: named.dir, fellBack: ""};
-      const name = want.name.replace(/\.(hsg|bcsave)$/i, "");
+      const name = pick.name.replace(/\.(hsg|bcsave)$/i, "");
       fellBack = () => tt("app.pick.gone.save", "Could not find the save named {name}; showing the newest save instead.", {name});
     }
     const best = saves.reduce((a, b) => (b.file.lastModified > a.file.lastModified ? b : a));
