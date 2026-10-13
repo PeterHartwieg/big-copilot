@@ -1,7 +1,8 @@
 """Big Copilot's own text in other languages: the catalogue tool.
 
     python tools/i18n.py extract [--where]         the English catalogue, as JSON, to stdout
-    python tools/i18n.py status [LANG] [--strict]  missing, stale, orphaned and mismatched keys
+    python tools/i18n.py status [LANG] [--strict | --complete]  missing, stale, orphaned and mismatched keys
+    python tools/i18n.py prune [LANG]              drop orphaned keys and their base and draft marks
     python tools/i18n.py ship [--check]            write web/i18n/<lang>.json (build_web.py calls ship())
     python tools/i18n.py accept LANG [KEY ...]     record the current English as what KEY was translated from
     python tools/i18n.py glossary LANG --out PATH  the game's own words for terms our English uses
@@ -28,8 +29,13 @@ each one was translated from, which is how a changed English shows up as stale.
 The build ships i18n/<lang>.json minus orphans, placeholder mismatches and
 stale keys (English changed, or none recorded) as web/i18n/<lang>.json.
 Missing and stale translations never fail the build: the page falls back to
-English per key. `status --strict` fails on them, for a
-translation pull request.
+English per key. `status --strict` fails on what is never right: an orphan
+(a key no source names any more, with its base and any draft mark) and a
+mismatch. The test suite holds main to it (tests/test_i18n_status.py), so a
+change that drops or renames a key runs `prune`, which deletes the orphans
+from all three files; git history keeps their text should a key come back.
+`status --complete` fails on missing and stale keys too, for a translation
+pull request.
 
 A machine draft (`import-draft`) ships like any translation, and
 i18n/<lang>.ai.json names each drafted key and the model that wrote it until a
@@ -663,6 +669,27 @@ def status(lang: str, english: dict | None = None, params: dict | None = None) -
     return {"missing": missing, "stale": stale, "orphan": orphan, "mismatch": mismatch}
 
 
+def prune(lang: str, english: dict | None = None, write: bool = True) -> dict:
+    """Drop from i18n/<lang>.json, .base.json and .ai.json every key no source
+    names any more (status()'s orphans), every base of a key not translated,
+    and every draft mark of a key not translated or orphaned. Returns
+    {file name: [dropped keys]} for the files that change; with write=False
+    it writes nothing, which is how `status --strict` asks."""
+    english = catalogue() if english is None else english
+    table, base = load(lang)
+    marks = drafted(lang)
+    live = {k: v for k, v in table.items() if _english_for(k, english)[0] is not None}
+    out = {}
+    for name, data in ((f"{lang}.json", table), (f"{lang}.base.json", base), (f"{lang}{AI_SUFFIX}", marks)):
+        gone = sorted(k for k in data if k not in live)
+        if not gone:
+            continue
+        out[name] = gone
+        if write:
+            _write(name, {k: v for k, v in data.items() if k in live})
+    return out
+
+
 def _english_text(key: str, english: dict) -> str | None:
     """The English a translated key was made from: its own, or for a plural
     form the English form of that category, else `other`."""
@@ -919,7 +946,13 @@ def main(argv=None) -> int:
                    help="instead, the param names each key's calls pass (null where they cannot be read)")
     p = sub.add_parser("status", help="missing, stale, orphaned and mismatched translations")
     p.add_argument("lang", nargs="?")
-    p.add_argument("--strict", action="store_true", help="fail on anything but a clean translation")
+    how = p.add_mutually_exclusive_group()
+    how.add_argument("--strict", action="store_true",
+                     help="fail on orphans (and their leftover base or draft marks) and mismatches")
+    how.add_argument("--complete", action="store_true",
+                     help="fail on anything but a complete, current translation")
+    p = sub.add_parser("prune", help="drop orphaned keys from i18n/<lang>.json, .base.json and .ai.json")
+    p.add_argument("lang", nargs="?")
     p = sub.add_parser("ship", help="write web/i18n/<lang>.json")
     p.add_argument("--check", action="store_true", help="write nothing; fail when web/i18n/ is stale")
     p = sub.add_parser("accept", help="record the current English as the base of translated keys")
@@ -968,9 +1001,24 @@ def main(argv=None) -> int:
                     models = collections.Counter(marks.values())
                     print(f"  {len(marks)} machine-drafted, awaiting review ("
                           + ", ".join(f"{n} by {m}" for m, n in sorted(models.items())) + ")")
-                if args.strict:
-                    bad += sum(len(v) for v in st.values())
+                left = {name: keys for name, keys in prune(lang, english, write=False).items()
+                        if name != f"{lang}.json"}
+                for name, keys in left.items():
+                    print(f"  {len(keys)} left in i18n/{name} for keys not translated or orphaned")
+                if args.complete:
+                    bad += sum(len(v) for v in st.values()) + sum(len(v) for v in left.values())
+                elif args.strict:
+                    bad += len(st["orphan"]) + len(st["mismatch"]) + sum(len(v) for v in left.values())
+            if bad and (args.strict or args.complete):
+                print("i18n: status failed; orphans and leftovers go with python tools/i18n.py prune",
+                      file=sys.stderr)
             return 1 if bad else 0
+        elif args.cmd == "prune":
+            english = catalogue()
+            for lang in [args.lang] if args.lang else languages():
+                dropped = prune(lang, english)
+                print(f"{lang}: " + (", ".join(f"{len(v)} dropped from i18n/{k}" for k, v in dropped.items())
+                                     or "nothing to prune"))
         elif args.cmd == "ship":
             stale = ship(check=args.check)
             for path in stale:

@@ -897,15 +897,20 @@ and the detail after `: ` or `; `.
 | `i18n/de.base.json` | The English each German string was translated from, per key. Staleness is measured against it; `python tools/i18n.py accept de [key …]` records it |
 | `i18n/de.ai.json` | Only while machine drafts await review: `"key": "model"` for every key `python tools/i18n.py import-draft de <file> --model <id>` took in and no native speaker has checked yet. `reviewed de <key …>` (or `--all`) accepts the key and drops its line, as does `accept` for a key a person has fixed; the file goes when the last one does. Drafts ship like any translation; `status` counts them and never fails on them, and `draft-sheet de --review` lists them with their context for the reviewer |
 | `web/i18n/de.json` | Assembled by `python build_web.py --assemble` (`tools/i18n.py ship`) and not committed: `i18n/de.json` minus orphans, placeholder mismatches (a placeholder its calls do not pass; see [Python's sentences](#pythons-sentences)) and stale keys (whose English changed since `de.base.json` recorded it, or was never recorded), which show English until redone and `accept`ed. In `STAMP_INPUTS`, and compared by `--check` |
-| `tools/i18n.py` | `extract` (the English catalogue, read off the call sites: a JS lexer over the scripts, an HTML parser over the markup, `ast` over `msg(`), `extract --params` (the params each key's calls pass), `status [--strict]`, `ship`, `accept`, `glossary`, `draft-sheet [--review]`, `import-draft`, `reviewed` |
+| `tools/i18n.py` | `extract` (the English catalogue, read off the call sites: a JS lexer over the scripts, an HTML parser over the markup, `ast` over `msg(`), `extract --params` (the params each key's calls pass), `status [--strict | --complete]`, `prune`, `ship`, `accept`, `glossary`, `draft-sheet [--review]`, `import-draft`, `reviewed` |
 | `tools/translation_catalogue.py` | Community catalogues, per-key source versions, compiled placeholder validation and validated overlay export/import |
 | `web/translations/<lang>.json`, `web/translations/<lang>.manifest.json` | Generated public contribution catalogue and compact runtime validation manifest; assembled, not committed |
 
 No English catalogue is committed: it would conflict on every English edit. `extract` builds
 it on demand and fails on a key with two English defaults, or a call whose key or English is
-not a literal (or holds `${}`). A missing, stale or orphaned translation never fails the
-build or the tests: the page falls back to English per key, so an English edit elsewhere
-never breaks anybody. `status --strict` fails on them, for a translation pull request.
+not a literal (or holds `${}`). A missing or stale translation never fails the build or the
+tests: the page falls back to English per key, so an English edit elsewhere never breaks
+anybody. An orphan (a translated key no source names any more) never fails the build, which
+drops it, but `status --strict` fails on it, on its leftover base or draft mark, and on a
+placeholder mismatch, and `tests/test_i18n_status.py` holds main to that. A change that
+removes or renames a key runs `python tools/i18n.py prune`, which deletes the orphans from
+`<lang>.json`, `.base.json` and `.ai.json` (git history keeps their text). `status
+--complete` also fails on missing and stale keys, for a translation pull request.
 
 `glossary de --out <path>` and `draft-sheet de --out <path>` read the installed game's
 `en.json` and `de.json` for the game's own words (address form: du, as the game's German
