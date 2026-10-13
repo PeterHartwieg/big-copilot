@@ -480,7 +480,7 @@
   /* --- entry points ---------------------------------------------------------- */
 
   function start() {
-    if (started) return;
+    if (started || !ui) return;
     started = true;
     paintOnline();  // repaints the shared count into whatever masthead is up
     if (typeof featureDiscovery !== "undefined") featureDiscovery.refresh();
@@ -488,6 +488,9 @@
   }
 
   function init() {
+    // Without web/app.js's helper there is no dialog to open, so the vote card
+    // stays hidden rather than offer a button that does nothing.
+    if (!ui) return;
     // Earlier versions stored the presence id; drop it from returning browsers.
     try { localStorage.removeItem(LEGACY_STORE_KEY); } catch (e) {}
     syncVoteCard(true);

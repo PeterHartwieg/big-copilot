@@ -134,6 +134,29 @@ test('a failed read attaches the save by default and the traceback only when tic
   assert.doesNotMatch(parts.details, /private-history-sentinel|private-approval-sentinel/);
 });
 
+test('a tab still on an app.js without the dialog helper opens the form and sends', async (t) => {
+  // Opened before a deploy: the old app.js has no window.BigCopilotDialog, but
+  // the report.js it fetches on the first click is the new one.
+  const {page, posts} = await setup(t);
+  await failRead(page);
+  await page.evaluate(() => { delete window.BigCopilotDialog; });
+  const control = page.locator('#reportBtn');
+  await control.click();
+  await page.locator('.br-dialog[open]').waitFor();
+  assert.equal(await page.locator('#brTitle').innerText(), en('br.title'));
+  assert.equal(await page.locator('.br-status').getAttribute('role'), 'status');
+  await page.waitForFunction(() => !document.getElementById('brSave').disabled);
+  await page.locator('#brText').fill('It broke on an old tab.');
+  await page.locator('.br-foot .primary').click();
+  await page.locator('.br-status a').waitFor();
+  assert.equal(await page.locator('.br-status a').getAttribute('href'), 'https://github.com/PeterHartwieg/big-copilot/issues/42');
+  assert.deepEqual(Object.keys(await partsOf(posts[0])).sort(), ['report', 'save']);
+  // The backdrop closes it and the focus goes back to the control.
+  await page.mouse.click(5, 5);
+  await page.waitForFunction(() => !document.querySelector('.br-dialog').open);
+  await page.waitForFunction(() => document.activeElement === document.getElementById('reportBtn'));
+});
+
 test('unticked boxes send the text alone, and a 503 points to the Discord channel', async (t) => {
   const {page, posts} = await setup(t, {api: 'unavailable'});
   await failRead(page);
