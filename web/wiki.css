@@ -101,7 +101,7 @@
 .wiki .wk-read{margin-top:26px;max-width:70ch;font-size:14.5px;line-height:1.75;color:var(--ink-2)}
 .wiki .wk-read p{margin:0 0 14px}
 .wiki .wk-read b{color:var(--ink);font-weight:600}
-.wiki .wk-lab{margin:26px 0 10px;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;
+.wiki .wk-lab{margin:26px 0 10px;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;
   text-transform:uppercase;color:var(--ink-3)}
 .wiki .wk-list{margin:0 0 16px;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
 .wiki .wk-list li{position:relative;padding-left:18px}
@@ -299,7 +299,6 @@
 .wiki .wk-savebox.empty p{margin:0;max-width:64ch}
 .wiki .wk-slot{border:1px solid var(--rule-soft);border-radius:9px;padding:12px 14px;background:var(--surface);
   display:flex;flex-direction:column;gap:6px;min-width:0}
-.wiki .wk-lab{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
 .wiki .wk-slot .wk-v{font:500 20px/1.2 "IBM Plex Mono",monospace;color:var(--ink);overflow-wrap:anywhere}
 .wiki .wk-slot .wk-v.none{color:var(--ink-3)}
 .wiki .wk-prices{border-bottom:1px solid var(--rule);padding:12px 0}

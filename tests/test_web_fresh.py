@@ -161,6 +161,21 @@ def start_check(root):
     )
 
 
+@contextmanager
+def started():
+    """A list for start_check()'s runs. Any run still going when the block
+    ends, say because a sibling could not be made, is killed and waited for,
+    so the folder it runs in can go and the real error shows."""
+    runs = []
+    try:
+        yield runs
+    finally:
+        for run in runs:
+            if run.poll() is None:
+                run.kill()
+            run.communicate()
+
+
 def linked_copy(root, target):
     """A copy of root whose files are hard links to root's. Replace a file
     (unlink, then write) rather than writing into it, or root changes too."""
@@ -359,8 +374,9 @@ class CommandLine(SharedCopy):
             data = copy.read_bytes()
             copy.unlink()  # never write through the link into the shared copy
             copy.write_bytes(data + b"\n# stale\n")
-            runs = start_check(self.root), start_check(sibling)
-            fresh, stale = [(*run.communicate(), run.returncode) for run in runs]
+            with started() as runs:
+                runs += start_check(self.root), start_check(sibling)
+                fresh, stale = [(*run.communicate(), run.returncode) for run in runs]
         self.assertEqual(fresh[2], 0, fresh[0] + fresh[1])
         self.assertIn("web/ is up to date", fresh[0])
         self.assertEqual(stale[2], 1, stale[0] + stale[1])
@@ -374,17 +390,15 @@ class CommandLine(SharedCopy):
         # at once.
         edits = (("board.html", b"<title>"), ("board.js", b"let D = "), ("open-store-model.js", b"const OpenStoreModel = "),
                  ("open-factory-model.js", b"const OpenFactoryModel = "))
-        with tempfile.TemporaryDirectory() as siblings:
-            runs = {}
+        with tempfile.TemporaryDirectory() as siblings, started() as runs:
             for name, before in edits:
                 sibling = linked_copy(self.root, Path(siblings, name))
                 board = Path(sibling, "template", name)
                 data = board.read_bytes()
                 board.unlink()  # never write through the link into the shared copy
                 board.write_bytes(data.replace(before, before + b"x", 1))
-                runs[name] = start_check(sibling)
-            # Every check finishes before the folder goes, whatever fails.
-            results = {name: (*run.communicate(), run.returncode) for name, run in runs.items()}
+                runs.append(start_check(sibling))
+            results = {name: (*run.communicate(), run.returncode) for (name, _before), run in zip(edits, runs)}
             for name, _before in edits:
                 with self.subTest(name=name):
                     stdout, stderr, returncode = results[name]

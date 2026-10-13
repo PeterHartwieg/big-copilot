@@ -519,7 +519,7 @@ test('quick payback renders investment labels on opposite chart edges', async t 
   const page = await board(t);
   const labels = await page.evaluate(() => {
     const m = {revenue: 12000, cogs: 2000, wages: 500, rent: 200, marketing: 300, profit: 9000};
-    const est = {profit: m.profit, inv: {firm: 12000, self: 10000}, day: k => osDayProfit(m, null, k)};
+    const est = {profit: m.profit, inv: {firm: 12000, self: 10000}, day: k => osCore().dayProfit(m, null, k)};
     document.querySelector('#osBody').innerHTML = osChart(est, 'firm');
     return ['w', 'i'].map(cls => {
       const label = document.querySelector('#osBody svg text.lbl.' + cls);

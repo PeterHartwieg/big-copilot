@@ -36,7 +36,7 @@ test('a dry run, the game\'s approval, an apply that rebuilds the board, and und
   // No approval yet: the write asks the game first, and waits for the player there.
   const request = await asked;
   // Not in the catalogue: linkClientName() writes this English itself.
-  assert.match(JSON.parse(request.postData()).name, /^(Chrome|Edge|Firefox|Safari|Opera|A H.browser)( on \w+)?$/);
+  assert.match(JSON.parse(request.postData()).name, /^(Chrome|Edge|Firefox|Safari|Opera|A browser)( on \w+)?$/);
   await pair(page).getByText(WAITING).waitFor();
   await ready(page);
   assert.equal(typeof await kept(page), 'string');

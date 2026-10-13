@@ -231,7 +231,7 @@ const NORMAL = {label: 'Normal', slot: 2, harder: 0, easier: 0, startingMoney: 0
 // top to bottom down the sidebar.
 const ballRoom = page => page.evaluate(() => {
   const r = el => el.getBoundingClientRect();
-  return {control: r(ssMastControl()), head: r(document.getElementById('sdHead')), side: r(document.getElementById('mast')),
+  return {control: r([ssField, ssFieldBtn].find(el => el.isConnected && el.getClientRects().length)), head: r(document.getElementById('sdHead')), side: r(document.getElementById('mast')),
     // The rail shows its short clock instead.
     balls: [...document.querySelectorAll('.sd .orb.live:not(.nx-off)')].map(r),
     clock: r(document.getElementById(document.body.classList.contains('sd-rail') ? 'sdClk' : 'clock'))};
