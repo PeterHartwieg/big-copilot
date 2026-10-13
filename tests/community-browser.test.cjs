@@ -9,12 +9,12 @@ let browser;
 before(async () => { browser = await chromium.launch({headless:true, channel:process.env.PLAYWRIGHT_CHANNEL}); });
 after(async () => { await browser?.close(); });
 
-/* A reload drops the day newPage() pinned. Pin it again, and check it holds
-   with a badge no test here visits: Open a store (29 Sep) is new only while it
-   does, so a hidden badge after the reload is a remembered visit, not its age. */
+/* A reload drops the day newPage() pinned: pin it again. A badge can also be
+   hidden by age, so the suggestion visit itself is checked in storage, under
+   the key featureDiscovery writes. */
 async function repin(page) {
   await page.evaluate(() => featureDiscovery.asOf('2026-10-05'));
-  assert.equal(await page.evaluate(() => featureDiscovery.isNew('open-store')), true);
+  assert.equal(await page.evaluate(() => localStorage.getItem('ba_dash_feature_seen:feature-requests')), '1');
 }
 
 async function setup(t, options = {}) {
