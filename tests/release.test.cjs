@@ -15,7 +15,7 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
     page.on('pageerror', error => errors.push(error.message));
     const base = process.env.RELEASE_URL || 'http://release.test/';
     if(!process.env.RELEASE_URL) {
-      const files = new Set(['/index.html','/app.js','/worker.js','/community.js','/community.css','/maps/locations.json','/maps/map-background.svg','/wiki-data.min.json']);
+      const files = new Set(['/index.html','/app.js','/worker.js','/community.js','/community.css','/maps/locations.json','/maps/map-background.svg','/wiki-data.min.json','/changelog.json']);
       await page.route('**/*', route => {
         const url = new URL(route.request().url());
         if(url.hostname === 'release.test' && url.pathname === '/api/community/features') return route.fulfill({contentType:'application/json',body:JSON.stringify({features:[]})});
@@ -41,8 +41,19 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
     await page.locator('.community-dialog summary').click();
     await page.waitForFunction(()=>[...document.querySelectorAll('[data-new-feature="feature-requests"]')].every(el=>el.hidden));
     await page.keyboard.press('Escape');
+    // The page ships the newest entry; opening the dialog fetches the rest (issue #328).
+    assert.equal(await page.locator('#changelogDialog .changelog-entry').count(),1);
+    const shipped = await page.locator('#changelogDialog .changelog-entry').evaluate(li => [li.textContent, li.querySelector('a').outerHTML]);
     await page.locator('#landing [data-changelog]').click();
     assert.equal(await page.locator('#changelogDialog').evaluate(d => d.open),true);
+    const changes = require('../web/changelog.json');
+    await page.waitForFunction(n => document.querySelectorAll('#changelogDialog .changelog-entry').length === n, changes.length);
+    const first = await page.locator('#changelogDialog .changelog-entry').first();
+    const newest = [...changes].sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : b.pr - a.pr)[0];
+    assert.equal(await first.locator('time').getAttribute('datetime'), newest.date);
+    assert.equal(await first.locator('h3').textContent(), newest.title);
+    // The fetched entries are drawn as render() writes them.
+    assert.deepEqual(await first.evaluate(li => [li.textContent, li.querySelector('a').outerHTML]), shipped);
     assert.equal(await page.locator('[data-new-feature="changelog"]:not([hidden])').count(),0);
     await page.keyboard.press('Escape');
     await page.evaluate(() => {

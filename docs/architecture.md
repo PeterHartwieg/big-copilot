@@ -1023,7 +1023,8 @@ supplied by the caller.
 | `/*__LIVE__*/false` | `render()`: `true` when called with `live=True` |
 | `<!--__BANNER__-->` | `render()`'s `banner=` argument. `build_web.py` passes its `BANNER` (the landing screen); the local page passes nothing |
 | `<!--__BEFORE_SCRIPT__-->` | `render()`'s `before_script=` argument. `page_html()` passes a filled-in `BEFORE_SCRIPT`; the local page passes nothing |
-| `<!--__CHANGELOG__-->` | `render()`, from `web/changelog.json`, newest first |
+| `<!--__CHANGELOG__-->` | `render()`, from `web/changelog.json`, newest first. With `site=True` only the newest entry, which also dates the New badges; `openChangelog()` fetches the rest on the dialog's first open |
+| `__CHANGELOG_SRC__` | `render()`: `changelog.json` with `site=True`, the file `openChangelog()` fetches with the build stamp; empty on a local page, which carries every entry |
 | `<!--__FOOTER__-->` | `render()`, from `footer_html(site=...)`. The same function fills the landing's footer inside `BANNER`, so the two cannot drift; `render()`'s `site=` argument decides whether the legal links ride along, and only `build_web.py` passes it |
 | `/*__MAP_CSS__*/` | `render()`, from `web/map.css` |
 | `/*__MAP_SCRIPT__*/` | `render()`, from `web/map.js` |
