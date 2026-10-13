@@ -1228,7 +1228,7 @@ test('a write under a fresh grant whose fetch fails, the grant then withdrawn, i
   const h = harness({routes: {health: HEALTH}});
   const states = {'loopback-network': 'granted'};
   onPublicPage(h, states);
-  h.run('approvalMemo["http://127.0.0.1:8322"] = "token"');
+  h.run('approvalMemo["http://127.0.0.1:8322"] = "token"; linkSpace = "loopback"');
   h.context.fetch = async (url) => {
     h.seen.calls.push([String(url)]);
     if (String(url).includes('/write/')) states['loopback-network'] = 'denied';
@@ -1237,8 +1237,45 @@ test('a write under a fresh grant whose fetch fails, the grant then withdrawn, i
   const got = await h.run('gameWrite("uniforms", {sites: []}, {})');
   assert.equal(got.error, 'uncertain', 'the request may have reached the game');
   assert.ok(got.reread && typeof got.reread.then === 'function', 'the board reads the game again');
-  assert.ok(h.seen.calls.some(([url]) => url.includes('/write/')), 'the write went out');
+  assert.equal(h.seen.calls.filter(([url]) => url.includes('/write/')).length, 1, 'the write went out, once');
   await got.reread;
+});
+
+test('a write the player allowed at the prompt, then blocked, may have reached the game', async () => {
+  for (const [kind, body, path] of [['uniforms', {sites: []}, '/write/uniforms'], ['undo', {kind: 'uniforms'}, '/write/undo']]) {
+    const h = harness({routes: {health: HEALTH}});
+    const states = {'loopback-network': 'prompt'};
+    const log = onPublicPage(h, states);
+    h.run('approvalMemo["http://127.0.0.1:8322"] = "token"; linkSpace = "loopback"');
+    const sent = [];
+    h.context.fetch = async (url) => {
+      if (String(url).endsWith(path)) {
+        // Allow on the prompt: the request goes out and the game has it.
+        log.statuses.forEach((s) => { s.state = 'granted'; });
+        changed(log);
+        sent.push(String(url));
+        // Then Block in the site settings, before the answer is in.
+        states['loopback-network'] = 'denied';
+        log.statuses.forEach((s) => { s.state = 'denied'; });
+        changed(log);
+      }
+      throw new TypeError('Failed to fetch');
+    };
+    const got = await h.run(`gameWrite(${JSON.stringify(kind)}, ${JSON.stringify(body)}, {})`);
+    assert.equal(sent.length, 1, kind);
+    assert.equal(got.error, 'uncertain', kind);
+    assert.ok(got.reread && typeof got.reread.then === 'function', kind);
+    await got.reread;
+  }
+});
+
+test('a refused write of a new link address does not leave the old one remembered', async () => {
+  const h = harness({routes: {health: HEALTH, save: reply(200, null, {'X-Game-Link-Stamp': 's1'})}});
+  h.remembered.ledger_link = 'http://127.0.0.1:8323';
+  h.context.stored.set = () => false;
+  await h.run('linkToGame()');
+  assert.equal('ledger_link' in h.remembered, false, 'the old address is gone');
+  assert.equal(h.run('linkUrl'), 'http://127.0.0.1:8322', 'the link is the source for this visit');
 });
 
 test('a write held at the prompt and blocked there is unreachable, unsent', async () => {

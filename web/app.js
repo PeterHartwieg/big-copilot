@@ -846,6 +846,9 @@
   // The browser's word that the permission changed: counted, so an answer
   // that a change overtook while it was being read is not remembered.
   let loopbackChanges = 0;
+  // How often it changed to granted: a fetch held at the prompt that the
+  // player allowed has gone out, whatever is said of the permission after.
+  let loopbackGrants = 0;
   const loopbackWatched = {};  // name -> the one status listened to
   async function loopbackPermission(again = false) {
     if (loopbackGranted && !again) return "granted";
@@ -867,7 +870,11 @@
         // back a new one, and the asks go on for the session.
         if (!loopbackWatched[name]) {
           loopbackWatched[name] = status;
-          status.onchange = () => { loopbackChanges++; loopbackGranted = false; };
+          status.onchange = () => {
+            loopbackChanges++;
+            loopbackGranted = false;
+            if (status.state === "granted") loopbackGrants++;
+          };
         }
         states.push(status.state);
       } catch (e) {}
@@ -906,6 +913,7 @@
     const permission = await loopbackPermission(!!bound || (rest.method || "GET").toUpperCase() !== "GET");
     if (permission === "denied") throw Object.assign(linkBlocked(), {unsent: true});
     const asking = permission === "prompt";
+    const grants = loopbackGrants;  // an Allow on this call's prompt moves it
     if (asking && attempt) state("busy", () => tt("app.link.allow", "Allow Big Copilot to reach the game"),
       () => tt("app.link.allow.where", "your browser is asking, at the top of the window"));
     const spaces = linkSpace === null ? ["loopback", "local", ""] : [linkSpace];
@@ -925,7 +933,7 @@
         // game and not about this call's options. The name, not instanceof:
         // the error can come from another realm than this script's.
         if (err.name === "TypeError" && space && linkSpace === null) continue;
-        throw await linkFailure(!asking);
+        throw await linkFailure(!asking || loopbackGrants !== grants);
       }
       if (read && res.ok) {
         try { res.bytes = await res.arrayBuffer(); }
@@ -936,13 +944,15 @@
       linkGone = false;  // the mod answered, whatever it said: the watcher's gone note is over
       return res;
     }
-    throw await linkFailure(!asking);
+    throw await linkFailure(!asking || loopbackGrants !== grants);
   }
   // A "Block" on the prompt fails the fetch like a closed port does; only
   // the permission tells them apart. `mayHaveLeft` false when the request
   // cannot have reached the game: the browser held it at its prompt, and
   // the player blocked it there. Under a grant it may have gone out before
   // the player withdrew it, and the game may have acted on it: not unsent.
+  // A permission that reads "prompt" after a failure is deliberately not
+  // unsent either: only "denied" says the browser refused the request.
   async function linkFailure(mayHaveLeft) {
     if (await loopbackPermission(true) === "denied") return Object.assign(linkBlocked(), {unsent: !mayHaveLeft});
     return failure(() => tt("app.link.down", "The game is not running, or the Big Copilot Link mod is not installed."));
