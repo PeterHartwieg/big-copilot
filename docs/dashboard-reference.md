@@ -1288,7 +1288,9 @@ renting a building therefore does not erase its deposit from the plan's history.
   cheapest mix of rows and single seats;
 - only items a furniture store sells, and, where the game says what an item is for, only
   items made for this type (those tags only sort the catalogue, so an item that answers a
-  customer demand, such as a speaker or a sink, is any a store sells);
+  customer demand, such as a speaker or a sink, is any a store sells, and a main product
+  or one a requirement names that no display is made for takes the cheapest display that
+  works in the type: a fast food restaurant's ice cream counter, a gym's drinks fridge);
 - the deposit, as the finder estimates it: about 60 days of rent, with the building's own
   fittings.
 
