@@ -1589,13 +1589,14 @@ Nothing between `extract()` and the board filters keys: `render()`, the watch se
 
 ### A finder filter
 
-All in `web/map.js`, covered by `tests/finder.test.cjs`. `saveFinder()` and `loadFinder()`
-keep the filters per character in `localStorage`, under `finderStore()`'s
-`FINDER_KEY:<character>`. One thing is not stored: the on/off switch, `fs.on` (every load
-opens the plain map). The floor-plan layouts, `fs.layouts`, are stored with the rest by
-`saveFinder()`; a preset or a change of category clears them, and a saved search keeps them
-only where its kind has two or more layouts. Saved searches are a separate list under
-`FINDER_SAVED_KEY`.
+All in `web/map.js`, covered by `tests/finder.test.cjs`, with saved searches in
+`tests/finder_saved.test.cjs` and the Layout filter in `tests/finder_layout.test.cjs`.
+`saveFinder()` and `loadFinder()` keep the filters per character in `localStorage`, under
+`finderStore()`'s `FINDER_KEY:<character>`. One thing is not stored: the on/off switch,
+`fs.on` (every load opens the plain map). The floor-plan layouts, `fs.layouts`, are stored
+with the rest by `saveFinder()`; a preset or a change of category clears them, and a saved
+search keeps them only where its kind has two or more layouts. Saved searches are a separate
+list under `FINDER_SAVED_KEY`.
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
@@ -1608,8 +1609,8 @@ only where its kind has two or more layouts. Saved searches are a separate list 
 | `savedFilters(s){` | Validation of the stored value | "a saved search is read against this save …" |
 | `savedTip(s){` and `function finderRange(` | Its part of a saved search's summary | none for most filters |
 | `sortKeys(`, `function finderSortName(`, `finderList(`, and the grid columns in `web/map.css` | *Only if* it is also a sortable column | "the Cap column sits between m² and Upfront …" |
-| `def _premises(` in `ba_dashboard.py`, and the fixtures in `tests/finder.test.cjs` | *Only if* it needs a new field on each row | `tests/test_premises.py` (exact row dicts) |
-| `function ssFinder(` and the `openFinder({…})` callers (board script), and `function finderPreset(`, which turns a Growth › Demand cell into a preset for `openFinder(go, true)` | *Only if* a caller should preset it | `tests/search.test.cjs`; `tests/finder.test.cjs`, "a Growth cell opens the finder on its own type and neighbourhood" |
+| `def _premises(` in `ba_dashboard.py`, and the fixtures in `tests/_finder.cjs` | *Only if* it needs a new field on each row | `tests/test_premises.py` (exact row dicts) |
+| `function ssFinder(` and the `openFinder({…})` callers (board script), and `function finderPreset(`, which turns a Growth › Demand cell into a preset for `openFinder(go, true)` | *Only if* a caller should preset it | `tests/search.test.cjs`; `tests/finder_layout.test.cjs`, "a Growth cell opens the finder on its own type and neighbourhood" |
 
 A new filter is a user-facing change, so it also gets a `web/changelog.json` entry.
 
