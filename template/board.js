@@ -682,13 +682,13 @@ function odThensAsk(){
 }
 function odRedraw(){
   if(!hasData()) return;
-  const cell = demPop && !demPop.hidden ? demPopCell : null;
+  const cell = demUi && demUi.isOpen() ? demPopCell : null;
   /* renderAll() replans a waiting dialog itself (odThensAsk()); one that
      threw before it got there still does. */
   try{ renderCalm(true); }catch(e){ console.error(e); odDialog(); }
   /* Demand's redraw replaces the anchor. Keep only the popover that was
      still open for this cell, without taking focus from its reader. */
-  if(cell && demPop && !demPop.hidden && demPopCell === cell){
+  if(cell && demUi && demUi.isOpen() && demPopCell === cell){
     const anchor = cell.isConnected ? cell : q(`#market .cell[data-slug="${CSS.escape(cell.dataset.slug)}"][data-hood="${CSS.escape(cell.dataset.hood)}"]`);
     if(anchor) demCellPop(anchor, false); else demPopClose(false);
   }
@@ -1082,21 +1082,14 @@ function gnActive(i, scroll = true){
   if(scroll) rows[gnAt].scrollIntoView({block: "nearest"});
 }
 /* Under the button while the list fits there, else above it (the footer is the
-   foot of the page), on whichever side has more room; the rows scroll. */
+   foot of the page), on whichever side has more room; the rows scroll
+   (popFit()). At least as wide as the button. */
 function gnPlace(){
   const btn = gnPopFor && gnPopFor.querySelector(".gn-btn");
   if(!btn || !btn.isConnected){ gnClose(false); return; }
   const r = btn.getBoundingClientRect();
-  const vw = document.documentElement.clientWidth || window.innerWidth;
-  const vh = document.documentElement.clientHeight || window.innerHeight;
   gnPop.style.minWidth = Math.round(r.width) + "px";
-  gnPop.style.maxHeight = "";
-  const h = gnPop.offsetHeight, below = vh - 12 - (r.bottom + 6), above = r.top - 6 - 12;
-  const down = h <= below || below >= above;
-  const fit = Math.max(120, Math.min(h, down ? below : above));
-  gnPop.style.maxHeight = fit + "px";
-  gnPop.style.top = Math.max(12, down ? r.bottom + 6 : r.top - 6 - fit) + "px";
-  gnPop.style.left = Math.max(12, Math.min(r.left, vw - gnPop.offsetWidth - 12)) + "px";
+  popFit(gnPop, r, 6);
 }
 function gnClose(focus){
   if(!gnPopFor) return;
@@ -13599,7 +13592,7 @@ function factoryCounts(type, added = []){
 const PLAN_EXTRA_KEY = "ba_plan_extra_v1";
 const planExtraStore = () => `${PLAN_EXTRA_KEY}:${(D && D.meta && D.meta.character) || "default"}`;
 let planExtra = null, planExtraFor = null;
-let pcPop = null, pcPopFor = null;  // the Add product picker and its button (pcPopOpen())
+let pcPop = null, pcPopFor = null, pcUi = null;  // the Add product picker, its button and its bodyPopover() (pcPopOpen())
 function planExtraAll(){
   if(planExtra && planExtraFor === planExtraStore()) return planExtra;
   planExtra = {}; planExtraFor = planExtraStore();
@@ -18876,7 +18869,7 @@ function drawFooter(){
    chip opened it, the way #alertPop is -- a section's paint containment would
    clip one rendered inside it. Built on first use, refilled on every render so
    a live refresh cannot leave stale settings in it. */
-let fvDiffPop = null, fvDiffAnchor = null;
+let fvDiffPop = null, fvDiffAnchor = null, fvDiffUi = null;
 /* Which chip has focus right now ("mast" or "foot"), or null. renderAll()
    asks before drawMast() and drawFooter() replace the chips, and hands the
    answer to drawDifficulty(), so a refresh gives focus back to the chip that
@@ -18929,18 +18922,7 @@ function fvPlaceDiffPop(){
 /* `restore` hands focus back to the chip (Esc, or the chip clicked again); an
    outside click leaves it wherever that click put it. The chip's own tooltip
    would open on that focus, over a popover just closed, so it is put away. */
-function fvCloseDiff(restore){
-  if(!fvDiffPop || !fvDiffPop.classList.contains("on")) return;
-  fvDiffPop.classList.remove("on");
-  document.querySelectorAll(".fv-diff").forEach(b => b.setAttribute("aria-expanded", "false"));
-  if(restore && fvDiffAnchor && fvDiffAnchor.getClientRects().length){
-    fvDiffAnchor.focus({preventScroll: true});
-    hideTip();
-  }
-  /* "What am I playing on?" lit the chip while the popover is its answer;
-     Esc and a resize close it without a click the landing would hear. */
-  ssCheckLanding();
-}
+function fvCloseDiff(restore){ if(fvDiffUi) fvDiffUi.close(restore); }
 function fvOpenDiff(anchor){
   const h = D && D.meta && D.meta.houseRules;
   if(!h) return;
@@ -18948,9 +18930,7 @@ function fvOpenDiff(anchor){
   fvDiffAnchor = anchor;
   fvDiffPop.innerHTML = fvDiffPopHtml(h);
   hideTip();
-  fvDiffPop.classList.add("on");
-  anchor.setAttribute("aria-expanded", "true");
-  fvPlaceDiffPop();
+  fvDiffUi.open();
   wireTips();
   /* Into the dialog, so a keyboard reads it and tabs through its settings. */
   fvDiffPop.focus({preventScroll: true});
@@ -18959,37 +18939,21 @@ function fvOpenDiff(anchor){
    chips. */
 function drawDifficulty(hadFocus = null){
   if(!fvDiffPop){
-    fvDiffPop = document.createElement("div");
-    fvDiffPop.className = "fv-pop";
-    fvDiffPop.id = "fvDiffPop";
-    fvDiffPop.tabIndex = -1;
-    fvDiffPop.setAttribute("role", "dialog");
-    fvDiffPop.setAttribute("aria-label", "Difficulty");
-    document.body.appendChild(fvDiffPop);
+    /* Either chip is the toggle; a resize places it again (fvPlaceDiffPop()
+       closes it when the chip it hung from is hidden). */
+    fvDiffUi = bodyPopover({id: "fvDiffPop", className: "fv-pop", label: "Difficulty", focusable: true, onClass: "on",
+      anchor: () => fvDiffAnchor, toggles: "button.fv-diff", place: () => fvPlaceDiffPop(),
+      /* "What am I playing on?" lit the chip while the popover is its answer;
+         Esc and a resize close it without a click the landing would hear. */
+      onClose: () => ssCheckLanding()});
+    fvDiffPop = fvDiffUi.el;
     document.addEventListener("click", e => {
       const chip = e.target.closest && e.target.closest("button.fv-diff");
       if(!chip) return;
       e.preventDefault();
-      if(fvDiffPop.classList.contains("on") && fvDiffAnchor === chip) fvCloseDiff(true);
+      if(fvDiffUi.isOpen() && fvDiffAnchor === chip) fvCloseDiff(true);
       else { fvCloseDiff(false); fvOpenDiff(chip); }
     });
-    /* Outside click closes it; mousedown, so the click that follows lands on
-       whatever was clicked rather than on a popover that is still there. */
-    document.addEventListener("mousedown", e => {
-      if(!fvDiffPop.classList.contains("on")) return;
-      if(fvDiffPop.contains(e.target) || (e.target.closest && e.target.closest("button.fv-diff"))) return;
-      fvCloseDiff(false);
-    });
-    document.addEventListener("keydown", e => {
-      if(e.key !== "Escape" || !fvDiffPop.classList.contains("on")) return;
-      fvCloseDiff(true);
-    });
-    window.addEventListener("resize", () => { if(fvDiffPop.classList.contains("on")) fvPlaceDiffPop(); });
-    window.addEventListener("scroll", e => {
-      if(!fvDiffPop.classList.contains("on")) return;
-      if(e.target && e.target.nodeType === 1 && fvDiffPop.contains(e.target)) return;
-      fvPlaceDiffPop();
-    }, true);
   }
   /* A live refresh (drawMast, drawFooter) replaced the chip that had focus
      just before it: give focus to the replacement, and only then. */
@@ -19000,7 +18964,7 @@ function drawDifficulty(hadFocus = null){
   /* A redraw replaced the chip the popover hung from: follow the chip in the
      same place, or close when the save has no difficulty to show. */
   const h = D && D.meta && D.meta.houseRules;
-  if(!fvDiffPop.classList.contains("on")) return;
+  if(!fvDiffUi.isOpen()) return;
   if(!h){ fvCloseDiff(false); return; }
   const fresh = fvDiffAnchor && document.contains(fvDiffAnchor) ? fvDiffAnchor
     : document.querySelector(`button.fv-diff[data-fv-at="${fvDiffAnchor ? fvDiffAnchor.dataset.fvAt : "mast"}"]`);
@@ -20410,7 +20374,7 @@ let alertKindChoices = {};
    the anchor; with none on the page the panel hangs off the section's top
    right. */
 const KINDS_TOGGLE = "#alertSection .sechead .ibtn, [data-kinds], #alertKindsToggle";
-let kindsPop = null, kindsAnchor = null;
+let kindsPop = null, kindsAnchor = null, kindsUi = null;
 
 /* How many findings each kind puts on the board today — read from the whole
    unfiltered set, the read-out lines and the smaller ones counted below them
@@ -20477,29 +20441,24 @@ function placeKindsPop(){
   kindsPop.style.left = Math.max(12, Math.min(r.right - kindsPop.offsetWidth, vw - kindsPop.offsetWidth - 12)) + "px";
   kindsPop.style.top = Math.max(12, y) + "px";
 }
-function closeKindsPanel(){
-  if(!kindsPop || !kindsPop.classList.contains("on")) return;
-  kindsPop.classList.remove("on");
-  document.querySelectorAll(KINDS_TOGGLE).forEach(a => a.setAttribute("aria-expanded", "false"));
-}
+function closeKindsPanel(){ if(kindsUi) kindsUi.close(false); }
 function openKindsPanel(anchor){
   if(!kindsPop) buildAlertSettingsPanel();
   kindsAnchor = anchor && anchor.nodeType === 1 ? anchor : document.querySelector(KINDS_TOGGLE);
   drawKindRows();
-  kindsPop.classList.add("on");
-  placeKindsPop();
-  if(kindsAnchor) kindsAnchor.setAttribute("aria-expanded", "true");
+  kindsUi.open();
 }
 /* The one entry point the Needs attention head calls: the tune button toggles
    the panel and anchors it under itself. */
 function toggleKindsPanel(anchor){
-  if(kindsPop && kindsPop.classList.contains("on")) closeKindsPanel();
+  if(kindsUi && kindsUi.isOpen()) closeKindsPanel();
   else openKindsPanel(anchor);
 }
 
-/* The panel is a body-level popover, like #tip: a section's paint containment
-   would clip one rendered inside it. Built once, on boot, because the
-   preferences it reads have to be in place before the first drawAlerts(); the
+/* The panel is a body-level popover (bodyPopover()). Any of KINDS_TOGGLE is
+   its toggle; Escape hands focus back to the button, scrolling it into view.
+   Built once, on boot, because the preferences it reads have to be in place
+   before the first drawAlerts(); the
    counts are filled in each time it opens, so a live refresh cannot leave a
    stale number behind. */
 function buildAlertSettingsPanel(){
@@ -20512,15 +20471,13 @@ function buildAlertSettingsPanel(){
     rememberJson(ALERT_SETTINGS_KEY, {v: 2, set: alertKindChoices});
   }
   if(kindsPop){ drawKindRows(); return; }
-  kindsPop = document.createElement("div");
-  kindsPop.className = "pop";
-  kindsPop.id = "alertPop";
-  kindsPop.setAttribute("role", "dialog");
+  kindsUi = bodyPopover({id: "alertPop", className: "pop", onClass: "on", anchor: () => kindsAnchor,
+    toggles: KINDS_TOGGLE, place: () => placeKindsPop(), focusScroll: true});
+  kindsPop = kindsUi.el;
   kindsPop.innerHTML = `<h3></h3>
     <div class="kinds"></div>
     <div class="foot2"><a class="link" href="#" data-kinds-reset></a>`
     + `<a class="btn2 primary" href="#" data-kinds-done></a></div>`;
-  document.body.appendChild(kindsPop);
   drawKindRows();
 
   /* The switches themselves are wired by wireKinds(), with everything else. */
@@ -20551,26 +20508,6 @@ function buildAlertSettingsPanel(){
     e.preventDefault();
     toggleKindsPanel(t);
   });
-  /* Outside click closes it; mousedown, so the click that follows lands on
-     whatever was clicked rather than on a panel that is still there. */
-  document.addEventListener("mousedown", e => {
-    if(!kindsPop.classList.contains("on")) return;
-    if(kindsPop.contains(e.target) || (e.target.closest && e.target.closest(KINDS_TOGGLE))) return;
-    closeKindsPanel();
-  });
-  document.addEventListener("keydown", e => {
-    if(e.key !== "Escape" || !kindsPop.classList.contains("on")) return;
-    closeKindsPanel();
-    if(kindsAnchor) kindsAnchor.focus();
-  });
-  window.addEventListener("resize", () => { if(kindsPop.classList.contains("on")) placeKindsPop(); });
-  /* The panel follows the button as the page scrolls — but the rows scrolling
-     inside it are not the page moving, and re-measuring would fight them. */
-  window.addEventListener("scroll", e => {
-    if(!kindsPop.classList.contains("on")) return;
-    if(e.target && e.target.nodeType === 1 && kindsPop.contains(e.target)) return;
-    placeKindsPop();
-  }, true);
 }
 buildAlertSettingsPanel();
 
@@ -20702,6 +20639,101 @@ const onLeave = (sel, fn) => document.addEventListener("mouseout", e => {
 const once = fn => { let done = false; return () => { if(done) return; done = true; fn(); }; };
 /* A bare "#" link is a control, never a navigation. */
 document.addEventListener("click", e => { const a = closest(e, 'a[href="#"]'); if(a) e.preventDefault(); });
+
+/* --- body-level popovers -----------------------------------------------------
+   A section's paint containment (content-visibility) clips anything absolutely
+   positioned inside it, so a popover hangs off <body> with position:fixed and
+   is placed against the element that opened it, as #tip is. bodyPopover()
+   makes that element once and owns what every such popover does the same way:
+
+   - open(): shown (the `hidden` attribute, or `onClass` added), the anchor's
+     aria-expanded true, then placed. Content, focus into it and tooltips are
+     the caller's.
+   - place(): o.place() while it is open.
+   - close(restore): hidden again and aria-expanded false (on every `toggles`
+     element, else on the anchor); `restore` hands focus back to the anchor
+     while it is on screen and puts away the tooltip that focus would open over
+     a popover just closed. Then o.onClose(restore), if given.
+   - A press outside closes it without moving focus: mousedown, so the click
+     that follows lands on whatever was pressed rather than on a popover still
+     there. The popover, its anchor and any `toggles` element are inside; a
+     toggle's own click decides.
+   - Escape closes it with focus back (`escPrevent` also prevents the key's
+     default, as the newer popovers do).
+   - A resize places it again, or closes it with `resize: "close"`.
+   - Any scroll outside it places it again; its own list scrolling is not the
+     page moving, and re-measuring would fight it.
+
+   `anchor` is a function: each popover keeps its own anchor (a refresh can
+   swap it). Each popover listens on its own, from when it is made, so the
+   order between popovers and the sheets' and drawer's capture-phase Escape
+   handlers stays what it was. */
+function bodyPopover(o){
+  const el = document.createElement("div");
+  el.id = o.id;
+  el.className = o.className;
+  el.setAttribute("role", "dialog");
+  if(o.label) el.setAttribute("aria-label", o.label);
+  if(o.focusable) el.tabIndex = -1;
+  if(!o.onClass) el.hidden = true;
+  document.body.appendChild(el);
+  const isOpen = () => o.onClass ? el.classList.contains(o.onClass) : !el.hidden;
+  const inside = t => {
+    const a = o.anchor();
+    return el.contains(t) || !!(a && a.contains(t)) || !!(o.toggles && t && t.closest && t.closest(o.toggles));
+  };
+  const pop = {
+    el, isOpen,
+    open(){
+      if(o.onClass) el.classList.add(o.onClass); else el.hidden = false;
+      const a = o.anchor();
+      if(a) a.setAttribute("aria-expanded", "true");
+      pop.place();
+    },
+    place(){ if(isOpen()) o.place(); },
+    close(restore){
+      if(!isOpen()) return;
+      if(o.onClass) el.classList.remove(o.onClass); else el.hidden = true;
+      const a = o.anchor();
+      (o.toggles ? [...document.querySelectorAll(o.toggles)] : a ? [a] : []).forEach(b => b.setAttribute("aria-expanded", "false"));
+      if(restore && a && a.isConnected && a.getClientRects().length){
+        a.focus(o.focusScroll ? undefined : {preventScroll: true});
+        hideTip();
+      }
+      if(o.onClose) o.onClose(restore);
+    },
+  };
+  document.addEventListener("mousedown", e => { if(isOpen() && !inside(e.target)) pop.close(false); });
+  document.addEventListener("keydown", e => {
+    if(e.key !== "Escape" || !isOpen()) return;
+    if(o.escPrevent) e.preventDefault();
+    pop.close(true);
+  });
+  window.addEventListener("resize", () => { if(o.resize === "close") pop.close(false); else pop.place(); });
+  window.addEventListener("scroll", e => {
+    if(e.target && e.target.nodeType === 1 && el.contains(e.target)) return;
+    pop.place();
+  }, true);
+  return pop;
+}
+/* A list's placement (the Add product picker, the language picker): under its
+   anchor `gap` px away while it fits there, else on whichever side has more
+   room, where its rows scroll (never under 120 px tall). Never out of the
+   window; its left edge on the anchor's; the rows stay where they were
+   scrolled. */
+function popFit(el, r, gap){
+  const vw = document.documentElement.clientWidth || window.innerWidth;
+  const vh = document.documentElement.clientHeight || window.innerHeight;
+  const keep = el.scrollTop;
+  el.style.maxHeight = "";
+  const full = el.offsetHeight, below = vh - 12 - (r.bottom + gap), above = r.top - gap - 12;
+  const down = full <= below || below >= above;
+  el.style.maxHeight = `${Math.max(120, Math.min(full, down ? below : above))}px`;
+  const h = el.offsetHeight;
+  el.style.top = `${Math.max(12, Math.min(down ? r.bottom + gap : r.top - gap - h, vh - h - 12))}px`;
+  el.style.left = `${Math.max(12, Math.min(r.left, vw - el.offsetWidth - 12))}px`;
+  el.scrollTop = keep;
+}
 
 /* tooltips: one element at body level, placed from the carrier's rect ------- */
 const tipEl = document.createElement("div");
@@ -22954,7 +22986,7 @@ const wireHeat = once(() => {
      here, or find a location; Enter and Space do what a click does. */
   on("click", ".heat .cell", c => {
     if(!finderPreset(c.dataset.slug, c.dataset.hood)) return;
-    if(demPopCell === c && demPop && !demPop.hidden){ demPopClose(true); return; }
+    if(demPopCell === c && demUi && demUi.isOpen()){ demPopClose(true); return; }
     demCellPop(c);
   });
   on("click", "#demCellPop [data-dem-go]", (el, e) => {
@@ -22996,29 +23028,16 @@ function demOpenStore(slug, hood){
 }
 /* The cell's popover: its demand, the sellers there and the buildings of its
    kind to rent, then Open a store here (where Open a store knows the type)
-   and Find a location. One element at body level, placed against the cell,
-   the way #alertPop is: a section's paint containment would clip it. */
-let demPop = null, demPopCell = null;
+   and Find a location. A body-level popover (bodyPopover()), placed against
+   the cell; a resize closes it. */
+let demPop = null, demPopCell = null, demUi = null;
 function demCellPop(cell, focus = true){
   const slug = cell.dataset.slug, hood = cell.dataset.hood, go = finderPreset(slug, hood);
   if(!go) return;
   if(!demPop){
-    demPop = document.createElement("div");
-    demPop.id = "demCellPop";
-    demPop.className = "os-pop";
-    demPop.setAttribute("role", "dialog");
-    demPop.tabIndex = -1;
-    demPop.hidden = true;
-    document.body.appendChild(demPop);
-    /* An outside press closes it; mousedown, so the click that follows lands
-       on whatever was pressed. */
-    document.addEventListener("mousedown", e => {
-      if(demPop.hidden || demPop.contains(e.target) || (demPopCell && demPopCell.contains(e.target))) return;
-      demPopClose(false);
-    });
-    document.addEventListener("keydown", e => { if(e.key === "Escape" && !demPop.hidden){ e.preventDefault(); demPopClose(true); } });
-    window.addEventListener("resize", () => demPopClose(false));
-    document.addEventListener("scroll", () => { if(!demPop.hidden) demPopPlace(); }, true);
+    demUi = bodyPopover({id: "demCellPop", className: "os-pop", focusable: true, anchor: () => demPopCell,
+      place: () => demPopPlace(), resize: "close", escPrevent: true});
+    demPop = demUi.el;
   }
   if(demPopCell && demPopCell !== cell) demPopCell.setAttribute("aria-expanded", "false");
   demPopCell = cell;
@@ -23037,15 +23056,13 @@ function demCellPop(cell, focus = true){
     ${ready ? "" : odWaitHtml("openStore", true)}
     <div class="acts">${plan ? `<button type="button" class="os-cta" data-dem-go="open" data-od-needs="openStore">${osIcon("store")}${tt("gr.pop.open", "Open a store here")}</button>` : ""}
       <button type="button" class="os-btn" data-dem-go="find">${icon("pin")}${tt("gr.pop.find", "Find a location")}</button></div>`;
-  demPop.hidden = false;
-  cell.setAttribute("aria-expanded", "true");
+  demUi.open();
   hideTip();
-  demPopPlace();
   if(focus) (demPop.querySelector("[data-dem-go]") || demPop).focus({preventScroll: true});
   else if(focusedAction) demPop.querySelector(`[data-dem-go="${CSS.escape(focusedAction)}"]`)?.focus({preventScroll: true});
 }
 function demPopPlace(){
-  if(!demPop || demPop.hidden || !demPopCell) return;
+  if(!demUi || !demUi.isOpen() || !demPopCell) return;
   if(!demPopCell.isConnected || !demPopCell.getClientRects().length){ demPopClose(false); return; }
   const vw = document.documentElement.clientWidth || window.innerWidth;
   const vh = document.documentElement.clientHeight || window.innerHeight;
@@ -23062,13 +23079,7 @@ function demPopPlace(){
   demPop.style.setProperty("--arrow", `${Math.max(16, Math.min(w - 16, r.left + r.width / 2 - x))}px`);
 }
 /* `restore` hands focus back to the cell (Esc, or the cell clicked again). */
-function demPopClose(restore){
-  if(!demPop || demPop.hidden) return;
-  demPop.hidden = true;
-  const cell = demPopCell;
-  if(cell) cell.setAttribute("aria-expanded", "false");
-  if(restore && cell && cell.isConnected){ cell.focus({preventScroll: true}); hideTip(); }
-}
+function demPopClose(restore){ if(demUi) demUi.close(restore); }
 /* The finder preset a Growth cell opens: its type, the type's category and
    only its neighbourhood. A cell with no demand reading has no type to look
    for, and a board built before the premises payload has nowhere to send it. */
@@ -23343,7 +23354,7 @@ const bindPlan = once(() => {
      reworks the figures, so the field keeps its focus. */
   on("click", "[data-pc-toggle]", (b, e) => {
     e.preventDefault();
-    if(pcPop && !pcPop.hidden && pcPopFor === b) pcPopClose(true); else pcPopOpen(b);
+    if(pcUi && pcUi.isOpen() && pcPopFor === b) pcPopClose(true); else pcPopOpen(b);
   });
   on("click", "#pcPop [data-pc-pick]", (o, e) => {
     e.preventDefault();
@@ -23395,31 +23406,16 @@ const bindPlan = once(() => {
     planDraw();
   });
 });
-/* The picker: one element at body level, placed under the Add product button,
-   the way #alertPop is, since a section's paint containment would clip it.
-   Escape and a press outside close it. */
+/* The picker: a body-level popover (bodyPopover()) under the Add product
+   button. Escape and a press outside close it, and so does a resize. */
 function pcPopOpen(btn){
   const entry = ofCustom() ? ofCustomEntry() : ((D.plan || {}).catalogue || {})[planType];
   if(!entry) return;
   if(!pcPop){
-    pcPop = document.createElement("div");
+    pcUi = bodyPopover({id: "pcPop", className: "pc-pop", anchor: () => pcPopFor,
+      place: () => pcPopPlace(), resize: "close", escPrevent: true});
+    pcPop = pcUi.el;
     pcPop.dataset.odNeeds = "openFactory openStore";
-    pcPop.id = "pcPop";
-    pcPop.className = "pc-pop";
-    pcPop.setAttribute("role", "dialog");
-    pcPop.hidden = true;
-    document.body.appendChild(pcPop);
-    document.addEventListener("mousedown", e => {
-      if(pcPop.hidden || pcPop.contains(e.target) || (pcPopFor && pcPopFor.contains(e.target))) return;
-      pcPopClose(false);
-    });
-    document.addEventListener("keydown", e => { if(e.key === "Escape" && !pcPop.hidden){ e.preventDefault(); pcPopClose(true); } });
-    window.addEventListener("resize", () => pcPopClose(false));
-    /* The page scrolling moves it along; its own list scrolling does not. */
-    document.addEventListener("scroll", e => {
-      if(pcPop.hidden || (e.target && e.target.nodeType === 1 && pcPop.contains(e.target))) return;
-      pcPopPlace();
-    }, true);
   }
   if(pcPopFor && pcPopFor !== btn) pcPopFor.setAttribute("aria-expanded", "false");
   pcPopFor = btn;
@@ -23453,43 +23449,22 @@ function pcPopOpen(btn){
       pcPopPlace();
     };
   }
-  pcPop.hidden = false;
+  pcUi.open();
   pcPop.scrollTop = 0;
-  btn.setAttribute("aria-expanded", "true");
   hideTip();
-  pcPopPlace();
   wireTips();
   (pcPop.querySelector(".pc-search") || pcPop.querySelector(".pc-opt:not(.on)") || pcPop.querySelector(".pc-opt") || pcPop).focus({preventScroll: true});
 }
+/* Under the button, its left edge on the button's; above it when only there
+   is room. In a window too short for either, it takes the larger space and its
+   list scrolls (popFit()). A button gone from the page closes it. */
 function pcPopPlace(){
-  if(!pcPop || pcPop.hidden || !pcPopFor) return;
+  if(!pcUi || !pcUi.isOpen() || !pcPopFor) return;
   if(!pcPopFor.isConnected || !pcPopFor.getClientRects().length){ pcPopClose(false); return; }
-  const vw = document.documentElement.clientWidth || window.innerWidth;
-  const vh = document.documentElement.clientHeight || window.innerHeight;
-  const r = pcPopFor.getBoundingClientRect(), w = pcPop.offsetWidth;
-  /* Under the button, its left edge on the button's; above it when only
-     there is room. In a window too short for either, it takes the larger
-     space and its list scrolls; it never leaves the window. */
-  const keep = pcPop.scrollTop;
-  pcPop.style.maxHeight = "";
-  const full = pcPop.offsetHeight;
-  const below = vh - 12 - (r.bottom + 8), above = r.top - 8 - 12;
-  const down = full <= below || !(full <= above) && below >= above;
-  pcPop.style.maxHeight = `${Math.max(120, Math.min(full, down ? below : above))}px`;
-  const h = pcPop.offsetHeight;
-  const y = Math.max(12, Math.min(down ? r.bottom + 8 : r.top - 8 - h, vh - h - 12));
-  pcPop.style.left = `${Math.max(12, Math.min(r.left, vw - w - 12))}px`;
-  pcPop.style.top = `${y}px`;
-  pcPop.scrollTop = keep;
+  popFit(pcPop, pcPopFor.getBoundingClientRect(), 8);
 }
 /* `restore` hands focus back to the button (Escape, or the button again). */
-function pcPopClose(restore){
-  if(!pcPop || pcPop.hidden) return;
-  pcPop.hidden = true;
-  const btn = pcPopFor;
-  if(btn) btn.setAttribute("aria-expanded", "false");
-  if(restore && btn && btn.isConnected) btn.focus({preventScroll: true});
-}
+function pcPopClose(restore){ if(pcUi) pcUi.close(restore); }
 function wirePlan(){ bindPlan(); if(odReady("openFactory") && odReady("openStore")) planDraw(); }
 
 /* site detail: the panel answers the pointer -------------------------------------

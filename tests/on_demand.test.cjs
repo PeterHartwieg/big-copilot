@@ -726,6 +726,7 @@ test('Today and shell supply readers use core recipes without a section request'
 test('Demand popover asks for store facts and redraws the still-open cell on arrival', async () => {
   const b = board({market: {hoods: ['hood'], types: [{slug: 'shop', cells: [{demand: 30}]}]}});
   b.run(`demPop = {contains(){ return false; }, setAttribute(){}, querySelector(){ return null; }, focus(){}};
+    demUi = {open(){ demPop.hidden = false; }, close(){ demPop.hidden = true; }, isOpen: () => !demPop.hidden};
     demPopPlace = () => {}; hideTip = () => {};
     globalThis.__cell = {isConnected: true, dataset: {slug: "shop", hood: "hood"}, setAttribute(){}};
     demCellPop(__cell)`);
@@ -748,6 +749,7 @@ test('Demand popover asks for store facts and redraws the still-open cell on arr
 test('a closed Demand popover stays closed when store facts arrive', async () => {
   const b = board({market: {hoods: ['hood'], types: [{slug: 'shop', cells: [{demand: 30}]}]}});
   b.run(`demPop = {contains(){ return false; }, setAttribute(){}, querySelector(){ return null; }, focus(){}};
+    demUi = {open(){ demPop.hidden = false; }, close(){ demPop.hidden = true; }, isOpen: () => !demPop.hidden};
     demPopPlace = () => {}; hideTip = () => {};
     globalThis.__cell = {isConnected: true, dataset: {slug: "shop", hood: "hood"}, setAttribute(){}};
     demCellPop(__cell); demPopClose(false)`);
