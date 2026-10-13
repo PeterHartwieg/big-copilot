@@ -617,7 +617,6 @@ UI_LANGS = ("en", "de", "es", "fr", "it", "pt", "ru", "ko", "tr")
 # The ones still mostly machine-drafted (i18n/<lang>.ai.json): the footer says
 # so under the picker, with a link to help check them.
 UI_LANGS_DRAFTED = ("es", "fr", "it", "pt", "ru", "ko", "tr")
-TRANSLATING_URL = f"{REPO_URL}/blob/main/docs/translating.md"
 # A language whose file names fewer of the English name keys than this is left
 # out rather than shown half in English (the game's ar.json names none).
 NAME_COVERAGE = 0.5
@@ -1002,7 +1001,6 @@ COMPANY_DEMAND_KINDS = {"insurance", "happiness"}
 # game's item data gives display slots to the industrial coffee machine alone;
 # fridges keep food as cargo but have none, so an empty fridge still counts.
 DISPLAY_ITEMS = {"ba:itemname_industrialcoffeemachine"}
-JOB_DEMAND_PRIORITY = ("Nice to have", "Important", "Critical")
 
 # Day 1 of a save is a Monday, so day % 7 gives the weekday directly. Confirmed
 # against payroll (hours logged this week) and against import delivery days.
@@ -1769,8 +1767,8 @@ VENUE_TYPES = {
 
 def _cap_rows(names: Names):
     """(category, size letter, layout code, customer capacity) for each size row
-    of help_building_types_content, in a CAP_CATEGORIES section: the one parse
-    _door_caps() and _venue_caps() both read."""
+    of help_building_types_content, in a CAP_CATEGORIES section: the parse
+    _door_caps() reads."""
     section = None
     for line in (names.locale.get("help_building_types_content") or "").split("\n"):
         line = line.strip()
@@ -3313,7 +3311,7 @@ def section(build: Build, name: str) -> dict:
         spec = SECTIONS[name]
         for need in spec["needs"]:
             section(build, need)
-        _progress(spec["words"], force=True)
+        _progress(name, force=True)
         try:
             values = spec["produce"](build)
             wired = _wire_msgs({key: values[key] for key in spec["keys"]})
@@ -3466,40 +3464,41 @@ def _open_factory_section(build: Build) -> dict:
 
 
 # The section registry: each section's payload keys, the sections it needs
-# first, its producer, and what the page is told while it runs. Planning keeps
-# its order: planning world -> shops -> offices -> factory lines -> hiring.
+# first and its producer. The page draws its own words while a section is
+# worked out (odWords() in the board script); section() only restarts the
+# page's inactivity clock, with the section's name. Planning keeps its order:
+# planning world -> shops -> offices -> factory lines -> hiring.
 # Each stage plans over a copy of the bench and weeks the stage before left,
 # kept per stage in build.shared["planning"]. Nothing a warning reads is here.
 SECTIONS = {
     "staffing": {"keys": ("staffing",), "needs": (),
-                 "produce": _staffing_section, "words": "Working out shop staffing"},
+                 "produce": _staffing_section},
     "officeStaffing": {"keys": ("officeStaffing",), "needs": ("staffing",),
-                       "produce": _office_staffing_section, "words": "Working out office staffing"},
+                       "produce": _office_staffing_section},
     "factoryStaffing": {"keys": ("factoryStaffing",), "needs": ("officeStaffing",),
-                        "produce": _factory_staffing_section, "words": "Working out factory staffing"},
+                        "produce": _factory_staffing_section},
     "hiring": {"keys": ("hiring", "candidates"), "needs": ("factoryStaffing",),
-               "produce": _hiring_section, "words": "Working out staff needs"},
+               "produce": _hiring_section},
     "premises": {"keys": ("premises",), "needs": (),
-                 "produce": _premises_section, "words": "Working out locations"},
+                 "produce": _premises_section},
     "products": {"keys": ("products",), "needs": (),
-                 "produce": _products_section, "words": "Working out products"},
+                 "produce": _products_section},
     "openStore": {"keys": ("openStore",), "needs": ("premises",),
-                  "produce": _open_store_section, "words": "Working out store plans"},
+                  "produce": _open_store_section},
     "openFactory": {"keys": ("openFactory",), "needs": (),
-                    "produce": _open_factory_section, "words": "Working out factory costs"},
+                    "produce": _open_factory_section},
     "realEstate": {"keys": ("realEstate",), "needs": (),
-                   "produce": _real_estate_section, "words": "Working out real estate"},
+                   "produce": _real_estate_section},
     "goals": {"keys": ("goals",), "needs": (),
-              "produce": lambda b: {"goals": _goals(b.save, b.names, b.shared["businesses"])},
-              "words": "Working out milestones"},
+              "produce": lambda b: {"goals": _goals(b.save, b.names, b.shared["businesses"])}},
 }
 
 
 def section_metadata() -> dict:
     """Public section keys/dependencies for both HTML front doors.
 
-    Producers and progress wording stay Python-only. Preserve registry and
-    dependency order; the browser uses it for planning and readiness checks.
+    Producers stay Python-only. Preserve registry and dependency order; the
+    browser uses it for planning and readiness checks.
     """
     return {name: {"keys": list(spec["keys"]), "needs": list(spec["needs"])}
             for name, spec in SECTIONS.items()}
@@ -3691,9 +3690,9 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     estate_counts = (_estate_counts(estate) if estate is not None
                      else {"owned": 0, "flagged": 0, "gain": 0.0, "taxEve": False})
     build.shared.update(businesses=businesses, factories=factories, staff=staff,
-                        buildings=buildings, residential=residential, all_grids=all_grids,
-                        stmt_history=stmt_history, daily=daily, market=market, supply=supply,
-                        recipes=recipes, stations=stations, rhythm=rhythm, planning={}, estate=estate,
+                        buildings=buildings, all_grids=all_grids,
+                        stmt_history=stmt_history, daily=daily, market=market,
+                        recipes=recipes, planning={}, estate=estate,
                         base_promotion=(save.deref(root.get("gameVariables")) or {}).get(
                             "baseCustomerPromotionMultiplier", 0.55))
     alerts = _alerts(
@@ -10426,19 +10425,7 @@ def _hourly(
         # The roster, read the same way the game reads it: scheduleDay.day is the
         # game day modulo 7, with 7 standing in for Sunday's 0. A site with no
         # serving station installed has no roster to read and stays at zero.
-        open_hours = [[] for _ in range(7)]
-        for scheduled in save.items(b.get("scheduleDays")):
-            if not scheduled.get("isOpen"):
-                continue
-            wd = scheduled["day"] % 7
-            open_hours[wd] = sorted(
-                [
-                    max(0, slot.get("startingHour") or 0),
-                    min(24, slot.get("endingHour") or 0),
-                ]
-                for slot in save.items(scheduled.get("openingHourSlots"))
-                if (slot.get("endingHour") or 0) > (slot.get("startingHour") or 0)
-            )
+        open_hours = _open_hours(save, b)
         staffed = [[0] * 24 for _ in range(7)]
         on_shift = [[0] * 24 for _ in range(7)]
         if by_role:
@@ -18442,16 +18429,6 @@ def _plan_initial(build_at_start, model: str | None, size_cap, type_slug: str, s
     return _initial_customers(build_at_start, size_cap, type_slug, sqm, products)
 
 
-def demand_with(providers: int, default_price: float) -> float:
-    """A product's expected neighbourhood demand with `providers` sellers
-    (ProductMarketHelper.CalculateDemand): 100 less a step per seller past the
-    few the item's price makes room for, drawn one below or at it, and 29 to
-    34 once it bottoms out."""
-    opt = optimal_providers(default_price)
-    base = 100 - (providers * 100) // opt
-    return min(100.0, base - 0.5) if base >= 30 else 31.5
-
-
 def optimal_providers(default_price: float) -> int:
     """Item.GetOptimalProviders: how many sellers a neighbourhood holds before
     demand starts to fall, fewer for dear goods."""
@@ -18856,14 +18833,6 @@ def plan_layout(row: dict) -> str | None:
     if row.get("z") and row.get("v") is not None and not _layout(row):
         return f"{row['z']}{row['v']}"
     return _layout(row) or row.get("z")
-
-
-def _venue_caps(names: Names) -> dict:
-    """{size and version: customer capacity} for the cinemas and theatres
-    (S1 150, S2 125, S3 100; R1 200 ...), from the same rows _door_caps()
-    reads (_cap_rows()), keyed by layout code for every venue."""
-    return {code: cap for section, _letter, code, cap in _cap_rows(names)
-            if section in ("cinema", "theater")}
 
 
 def _building_row(reg: dict, save=None) -> dict:
@@ -20176,8 +20145,8 @@ def _worked_over(d: dict):
 
 
 def _demand_priority(priority: int):
-    """A job demand's priority as a finding says it: JOB_DEMAND_PRIORITY,
-    lowercased."""
+    """A job demand's priority as a finding says it, lowercased: the game's
+    0 Nice to have, 1 Important, 2 Critical."""
     if priority == 2:
         return msg("f.jobdemand.critical", "critical")
     if priority == 1:
@@ -22066,7 +22035,7 @@ def render(
 # fetched files on disk and never renders.
 _template = None
 # Where the board script stands in board.html: a line of its own, the whole
-# body of the page's last <script> block (tools/split_board_script.py).
+# body of the page's last <script> block.
 BOARD_SCRIPT_SLOT = "/*__BOARD_SCRIPT__*/\n"
 
 

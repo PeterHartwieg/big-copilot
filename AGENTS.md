@@ -18,7 +18,7 @@ the numbers drift.
 | --- | --- |
 | Extraction (save → numbers) | `def build_core(` (the core), `SECTIONS` (the sections) and the `_` helpers before `def render(`, in `ba_dashboard.py`; `def extract(` is both |
 | The board's HTML and CSS | `template/board.html`, read on the first `render()` by `load_template()` |
-| The board script | `template/board.js`, which `load_template()` splices into `/*__BOARD_SCRIPT__*/`, the body of the page's last `<script>` block, before any other placeholder is filled. A branch from before the split that conflicts in `board.html` is resolved by `tools/split_board_script.py --resolve` (`docs/architecture.md`, "Template placeholders") |
+| The board script | `template/board.js`, which `load_template()` splices into `/*__BOARD_SCRIPT__*/`, the body of the page's last `<script>` block, before any other placeholder is filled. A branch from before the split (1 Oct 2026), with the script still inline in `board.html`, needs the retired tool and its `--resolve` from history: `git show ecabe57c:tools/split_board_script.py` |
 | Open a store calculations | `template/open-store-model.js`: an explicit-input calculation module, embedded before the board script by `load_template()` and imported directly by its arithmetic tests and `check_profit_model.py` |
 | Plan a factory calculations | `template/open-factory-model.js`: explicit-input prices, storage, investment and running costs; the board owns plan selection and persistence |
 | Where `web/map.js` and `web/wiki.js` are spliced in | `/*__MAP_SCRIPT__*/`, `/*__WIKI_SCRIPT__*/` in `template/board.js` |
@@ -51,7 +51,7 @@ Everything else:
   `tools/wiki_topics.json`. The rest of `tools/` is not the wiki: the translation page's
   `translation_catalogue.py` and `translation_moderate.mjs`, the feature list's
   `feature_moderate.mjs`, `supporters.py`, `i18n.py`, `payload_diff.py`,
-  `split_board_script.py`, `game_link_mock.py` and `game_update/`, the deploy script
+  `game_link_mock.py` and `game_update/`, the deploy script
   `deploy.mjs`, the local CI gate `verify.mjs` with its sharding helpers
   (`python_shard.py`, `shard_times.mjs`, `shard_weights.mjs`), the hosted page's optimizer
   `optimize_web.mjs`, the measurement script `profile_store_planner.py`, and the GLM
@@ -209,7 +209,6 @@ stale one fails them.
 | `make_item_prices.py`, `ba_item_prices.json`, or the payback figures (`_payback()`, the Payback column, `spPayback()`) | `python -m unittest tests.test_payback` and `node --test tests/payback.test.cjs` |
 | Added or changed UI text (`tt()`, `data-tt*`, `msg()`), `web/i18n.js`, `tools/i18n.py`, `i18n/` | `python -m unittest discover -s tests -p "test_i18n*.py"` and `node --test tests/i18n_*.test.cjs tests/global_names.test.cjs`, plus the rows for the files the text is in |
 | `tools/Invoke-ZaiClaude.ps1` | `python -m unittest tests.test_agent_cli` |
-| `tools/split_board_script.py`, or the splice in `load_template()` | `python -m unittest tests.test_split_board_script` |
 | `tools/game_update/` | no tests: run the script you changed against the installed game (`docs/game-update.md`) |
 | `tools/game_link_mock.py`, `docs/game-link-api.md` | `python -m unittest tests.test_game_link_mock tests.test_watch_game` and `node --test tests/game_link.test.cjs`; a contract change bumps `schemaVersion` in the doc, the mock, the mod and both clients in one commit |
 | `mod/BigCopilotLink/` | nothing runs here: Peter builds it in the SDK's Unity project on the Mac (its README) and checks `curl http://127.0.0.1:8322/health` |

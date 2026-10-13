@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.dirname(HERE))
 import ba_dashboard  # noqa: E402
 from tests import save_fixtures  # noqa: E402
 from ba_dashboard import (  # noqa: E402
-    CAPPED_INITIAL_BUILD, _plan_initial, decor_route, demand_with, optimal_providers, outfit_lines,
+    CAPPED_INITIAL_BUILD, _plan_initial, decor_route, optimal_providers, outfit_lines,
 )
 from ba_save import Names, Save, load_save  # noqa: E402
 
@@ -178,7 +178,7 @@ class OutfitTests(unittest.TestCase):
         self.assertEqual(ba_dashboard.plan_layout({"key": "ba:street_thirdavenue#15", "layout": None, "size": "S"}), "S3")
         self.assertEqual(ba_dashboard.plan_layout({"key": "ba:street_broadwaystreet#4", "layout": None, "size": "S"}), "S1")
         text = chr(10).join(["**Cinema**", "* **S1**: 2,000m / 150 customer capacity", "* **S3**: 2,000m / 100 customer capacity"])
-        self.assertEqual(ba_dashboard._venue_caps(Names({"help_building_types_content": text})), {"S1": 150, "S3": 100})
+        self.assertEqual(ba_dashboard._door_caps(Names({"help_building_types_content": text}))["cinema"], {"S1": 150, "S3": 100})
 
     def test_a_gym_holds_five_distinct_workout_types_the_cheapest_way(self):
         gym = "ba:businesstype_gym"
@@ -414,10 +414,6 @@ class DemandTests(unittest.TestCase):
         self.assertEqual(optimal_providers(799), 2)
         self.assertEqual(optimal_providers(3), 7)
         self.assertEqual(optimal_providers(0), 7)
-        self.assertEqual(demand_with(1, 55), 79.5)
-        self.assertEqual(demand_with(2, 55), 59.5)
-        self.assertEqual(demand_with(4, 55), 31.5)   # bottomed out
-        self.assertEqual(demand_with(0, 55), 99.5)
 
 
 class DecorTests(unittest.TestCase):
