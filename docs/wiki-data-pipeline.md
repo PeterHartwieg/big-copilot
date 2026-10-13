@@ -276,15 +276,15 @@ plain HTML, with no executable script, from the committed `web/wiki-data.json`:
   schema.org JSON-LD block carries a `BreadcrumbList` (the crumbs that have a
   page, then the page itself; none on the index) and, on an entry or topic, an
   `Article`. JSON-LD is `<script type="application/ld+json">`, a data block the
-  browser never runs, so the CSP and the privacy notice's "no scripts" are
-  untouched; `<`, `>` and `&` in it are written as Unicode escapes, so no
+  browser never runs, so neither the CSP nor the privacy notice's promise of
+  "no tracking or analytics scripts" is affected; `<`, `>` and `&` in it are written as Unicode escapes, so no
   text can close the tag.
 - **One date, from the payload.** The sitemap's `<lastmod>` and the entries'
   `dateModified` are `provenance.sourceDate`, the newest modification date of
   the game files the payload was read from. It changes only when the game's
-  help does, so rebuilds stay byte-identical. `/` and the hand-written topics
-  change with Big Copilot's own releases, which the payload does not date, so
-  they carry no date; neither does anything when `sourceDate` is missing.
+  help does, so rebuilds stay byte-identical. `/`, the hand-written topics and
+  `/wiki/`, which lists the topics, change with Big Copilot's own releases,
+  which the payload does not date, so they carry no date; neither does anything when `sourceDate` is missing.
 - Styles are inline; the only request is `/fonts/fonts.css`. No executable
   script, no third-party request, so the privacy notice holds.
 

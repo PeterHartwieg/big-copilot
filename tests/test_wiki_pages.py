@@ -5,6 +5,7 @@ Runs over the committed web/wiki-data.json, which is build output rather than a
 save, plus small synthetic payloads for the markdown rules.
 """
 from pathlib import Path
+import html
 import json
 import re
 import shutil
@@ -327,8 +328,7 @@ class ShareAndStructuredData(unittest.TestCase):
                 self.assertEqual([i["position"] for i in items], list(range(1, len(items) + 1)))
                 self.assertEqual(items[0]["item"], "https://bigcopilot.com/wiki/")
                 self.assertEqual(items[-1]["item"], url)
-                self.assertEqual(items[-1]["name"], re.search(r"<h1>([^<]+)</h1>", body).group(1)
-                                 .replace("&amp;", "&").replace("&#39;", "'"))
+                self.assertEqual(items[-1]["name"], html.unescape(re.search(r"<h1>([^<]+)</h1>", body).group(1)))
                 for item in items:
                     self.assertTrue(item["item"].startswith("https://bigcopilot.com/wiki/"))
 
@@ -372,7 +372,7 @@ class Sitemap(unittest.TestCase):
                                FILES["sitemap.xml"]))
         for loc, lastmod in urls.items():
             with self.subTest(loc=loc):
-                undated = loc == "https://bigcopilot.com/" or "/wiki/topic/" in loc
+                undated = loc in ("https://bigcopilot.com/", "https://bigcopilot.com/wiki/") or "/wiki/topic/" in loc
                 self.assertEqual(lastmod, "" if undated else date)
 
     def test_no_lastmod_without_a_source_date(self):

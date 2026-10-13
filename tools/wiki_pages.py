@@ -523,11 +523,12 @@ def build(data: dict) -> dict[str, str]:
     """
     site = Site(expand_guides(data))
     files: dict[str, str] = {f"{OUT_DIR}/index.html": index_page(site)}
-    # <lastmod> is the game help's sourceDate on the pages drawn from it. The
-    # app's front page and the hand-written topics change with Big Copilot's
-    # own releases, which the payload does not date, so they get none.
+    # <lastmod> is the game help's sourceDate on the pages drawn only from it.
+    # The app's front page, the hand-written topics and the index, which lists
+    # the topics, change with Big Copilot's own releases, which the payload does
+    # not date, so they get none.
     game = site.source_date
-    paths: list[tuple[str, str | None]] = [("/", None), ("/wiki/", game)]
+    paths: list[tuple[str, str | None]] = [("/", None), ("/wiki/", None)]
     for cat in site.categories:
         files[f"{OUT_DIR}/c/{cat['id']}/index.html"] = category_page(site, cat)
         paths.append((f"/wiki/c/{cat['id']}/", game))
