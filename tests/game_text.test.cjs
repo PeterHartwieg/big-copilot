@@ -10,10 +10,12 @@ const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
 const {between} = require('./_slice.cjs');
-const consts = between(source, '  const LANGUAGE_KEY =', '  const DB =');
-const helpers = between(source, '  function gameTextLanguage(', '  async function takeLocale(');
+// web/app.js run whole: gameTextLanguage() and dropForeignLocale() are called
+// through window.BigCopilotShell, over the storage given it.
+const {loadShell} = require('./_shell.cjs');
 // The page's tt(), which app.js writes every word through.
 const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
+// takeLocale() and resetLocale(), which drive the strip and the build.
 const take = between(source, '  async function takeLocale(', '  /* --- what the board asks for');
 
 const ENGLISH = {'ba:neighborhood_global': 'Global', menu_options_others_language: 'Language'};
@@ -22,9 +24,13 @@ const GERMAN = {'ba:neighborhood_global': 'Global', menu_options_others_language
 function setup(kept = '') {
   const storage = {ledger_locale: kept};
   const notes = [];
+  const {shell} = loadShell({globals: {localStorage: {
+    getItem: (key) => (key in storage ? storage[key] : null),
+    setItem(key, value) { storage[key] = value; },
+    removeItem(key) { delete storage[key]; },
+  }}});
   const context = vm.createContext({
-    Intl, JSON, String,
-    LOCALE_KEY: 'ledger_locale',
+    LOCALE_KEY: 'ledger_locale', gameTextLanguage: shell.gameTextLanguage,
     localStorage: {removeItem(key) { delete storage[key]; }},
     stored: {get: (key) => storage[key] || '', set: (key, value) => { storage[key] = value; return true; }},
     // app.js hands note() its words as a function that writes them.
@@ -35,8 +41,9 @@ function setup(kept = '') {
   });
   const builds = [];
   vm.runInContext(i18n, context);
-  vm.runInContext(consts + helpers + take + '\nthis.api = {gameTextLanguage, dropForeignLocale, takeLocale, resetLocale};', context);
-  return {api: context.api, storage, notes, builds, context};
+  vm.runInContext(take + '\nthis.api = {takeLocale, resetLocale};', context);
+  const api = {gameTextLanguage: shell.gameTextLanguage, dropForeignLocale: shell.dropForeignLocale, ...context.api};
+  return {api, storage, notes, builds, context};
 }
 
 const file = (name, table) => ({name, text: async () => JSON.stringify(table)});

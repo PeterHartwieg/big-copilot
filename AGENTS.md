@@ -269,7 +269,8 @@ and never attach one to an issue.
 - Many tests read source files as text — slicing between comment or declaration anchors
   through `between()`/`at()` in `tests/_slice.cjs` or a bare `indexOf`, matching a line with a
   regex, or loading the whole board script into a VM through `loadBoard()` in
-  `tests/_board.cjs`. When you change a comment or declaration in a source file, update the
+  `tests/_board.cjs` (and `web/app.js` through `loadShell()` in `tests/_shell.cjs`, whose
+  helpers a test calls on `window.BigCopilotShell`). When you change a comment or declaration in a source file, update the
   tests that read it: `rg -l "board\.js|_board\.cjs" tests` lists them (put the file's name in the
   pattern: `board\.html`, `app\.js`, `map\.js`, `worker\.js`, `ba_dashboard\.py`). `check_profit_model.py`
   imports `template/open-store-model.js` directly. A reworded
