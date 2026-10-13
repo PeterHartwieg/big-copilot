@@ -70,6 +70,7 @@ function remembered(key){ try{ return localStorage.getItem(key); }catch(e){ retu
 function remember(key, v){ try{ localStorage.setItem(key, v); }catch(e){} }
 function rememberedJson(key){ try{ return JSON.parse(localStorage.getItem(key)); }catch(e){ return null; } }
 function rememberJson(key, v){ try{ localStorage.setItem(key, JSON.stringify(v)); }catch(e){} }
+function forget(key){ try{ localStorage.removeItem(key); }catch(e){} }
 const el = (t,c,h) => { const e=document.createElement(t); if(c)e.className=c; if(h!==undefined)e.innerHTML=h; return e; };
 const sign = n => n>0?"pos":n<0?"neg":"";
 const sum = (rows,key) => rows.reduce((a,b)=>a+(b[key]||0),0);
@@ -108,28 +109,62 @@ function sparkHtml(values, labels){
 /* --- the redesign's shared vocabulary ---------------------------------------
    Icons are inline stroke SVG on a 24 grid, never glyphs. Every view builds
    its section heads, chips, ? marks and segmented controls from these. */
+/* The glyphs more than one icon table draws, one name each: the tables
+   below (ICON, SP_ICON, OS_ICON, HR_P, GW_P and the rest) name them by
+   their own words and point here. Inner markup, strokes on a 24 grid. */
+const PATHS = {
+  alert: '<path d="M12 4l9 16H3z"></path><path d="M12 10v4.5M12 17.5v.01"></path>',
+  back: '<path d="M15 6l-6 6 6 6"></path>',
+  building: '<path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16"></path><path d="M14 10h5a1 1 0 0 1 1 1v10M4 21h17M8 8h2M8 12h2M8 16h2M17 14h1M17 18h1"></path>',
+  chevDown: '<path d="M6 9l6 6 6-6"></path>',
+  chevRight: '<path d="M9 6l6 6-6 6"></path>',
+  clock: '<circle cx="12" cy="12" r="8.5"></circle><path d="M12 7v5l3.5 2"></path>',
+  crate: '<path d="M3.5 8.5 12 4l8.5 4.5v8L12 21l-8.5-4.5z"></path><path d="M3.5 8.5 12 13l8.5-4.5M12 13v8"></path>',
+  exit: '<path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H8"></path>',
+  factory: '<path d="M3 20V10l5 3V10l5 3V6h4v14z"></path><path d="M17 20h4V4h-4M3 20h18"></path>',
+  game: '<path d="M7 8.5h10a4.5 4.5 0 0 1 4.4 5.4l-.6 2.9a2.2 2.2 0 0 1-3.8 1L15 15.5H9l-2 2.3a2.2 2.2 0 0 1-3.8-1l-.6-2.9A4.5 4.5 0 0 1 7 8.5z"></path><path d="M8.5 11.5v3M7 13h3M15.5 12.3v.01M17.3 13.8v.01"></path>',
+  heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"></path>',
+  hire: '<circle cx="10" cy="8" r="3.5"></circle><path d="M3.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"></path>',
+  magnet: '<path d="M6 4v8a6 6 0 0 0 12 0V4h-4v8a2 2 0 0 1-4 0V4zM6 8h4M14 8h4"></path>',
+  pause: '<path d="M9 6v12M15 6v12"></path>',
+  people: '<circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path>',
+  phone: '<rect x="7" y="2.5" width="10" height="19" rx="2"></rect><path d="M11 18.5h2"></path>',
+  plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"></path>',
+  plus: '<path d="M12 5v14M5 12h14"></path>',
+  profit: '<path d="M4 19h16"></path><path d="M5 15l4-5 4 3 6-7"></path>',
+  refresh: '<path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v5h-5"></path>',
+  right: '<path d="M5 12h14M13 6l6 6-6 6"></path>',
+  roster: '<path d="M4 7h9M4 12h16M4 17h6"></path><path d="M16 5v4M13 15v4"></path>',
+  search: '<circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path>',
+  shelves: '<path d="M4 3v18M20 3v18M4 8h16M4 14h16M4 20h16"></path><path d="M8 8V5.5M12 8V5M16 14v-2.5M9 14v-3"></path>',
+  shirt: '<path d="M8 4L3 7l2 4 2-1v10h10V10l2 1 2-4-5-3a4 4 0 0 1-8 0z"></path>',
+  sofa: '<path d="M6 11V8a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v3"></path><path d="M4 13a2 2 0 0 1 4 0v2h8v-2a2 2 0 0 1 4 0v5H4zM7 18v2M17 18v2"></path>',
+  sun: '<circle cx="12" cy="12" r="4"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"></path>',
+  tick: '<path d="M5 12.5l4.5 4.5L19 7"></path>',
+  truck: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.5" cy="17.5" r="1.8"></circle><circle cx="16.5" cy="17.5" r="1.8"></circle>',
+};
 /* Registry: "A view or a page" (only if: see the checklist). */
 const ICON = {
-  today: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"></path></svg>',
-  results: '<svg viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M5 15l4-5 4 3 6-7"></path></svg>',
-  supply: '<svg viewBox="0 0 24 24"><path d="M3.5 8.5 12 4l8.5 4.5v8L12 21l-8.5-4.5z"></path><path d="M3.5 8.5 12 13l8.5-4.5M12 13v8"></path></svg>',
+  today: `<svg viewBox="0 0 24 24">${PATHS.sun}</svg>`,
+  results: `<svg viewBox="0 0 24 24">${PATHS.profit}</svg>`,
+  supply: `<svg viewBox="0 0 24 24">${PATHS.crate}</svg>`,
   growth: '<svg viewBox="0 0 24 24"><path d="M4 18 10 12l4 4 6-7"></path><path d="M15 9h5v5"></path></svg>',
-  company: '<svg viewBox="0 0 24 24"><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16"></path><path d="M14 10h5a1 1 0 0 1 1 1v10M4 21h17M8 8h2M8 12h2M8 16h2M17 14h1M17 18h1"></path></svg>',
-  go: '<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>',
+  company: `<svg viewBox="0 0 24 24">${PATHS.building}</svg>`,
+  go: `<svg viewBox="0 0 24 24">${PATHS.right}</svg>`,
   wiki: '<svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"></path><path d="M4 20.5V5.5M20 18v3H6.5"></path><path d="M9 8h7M9 11.5h5"></path></svg>',
   tune: '<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>',
-  tick: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"></path></svg>',
+  tick: `<svg viewBox="0 0 24 24">${PATHS.tick}</svg>`,
   arrow_up: '<svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"></path></svg>',
   folder: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>',
   trend_up: '<svg viewBox="0 0 24 24"><path d="M4 17l6-6 4 4 6-7"></path></svg>',
   trend_dn: '<svg viewBox="0 0 24 24"><path d="M4 7l6 6 4-4 6 7"></path></svg>',
   chev: '<svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M9 6l6 6-6 6"></path></svg>',
   calendar: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4M8 14h3M13 14h3M8 18h3"></path></svg>',
-  people: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path></svg>',
+  people: `<svg viewBox="0 0 24 24">${PATHS.people}</svg>`,
   pin: '<svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg>',
   copy: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"></rect><path d="M15 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3"></path></svg>',
-  plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>',
-  refresh: '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v5h-5"></path></svg>',
+  plus: `<svg viewBox="0 0 24 24">${PATHS.plus}</svg>`,
+  refresh: `<svg viewBox="0 0 24 24">${PATHS.refresh}</svg>`,
   more: '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="18" cy="12" r="1.4"></circle></svg>',
   estate: '<svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"></path><path d="M5.5 9.5V20h13V9.5"></path><path d="M10 20v-5.5h4V20"></path></svg>',
 };
@@ -139,50 +174,50 @@ const icon = name => ICON[name] || "";
    ICON so the panel can name a door or a sink without crowding the board's
    own small set. */
 const SP_ICON = {
-  alert: '<path d="M12 4l9 16H3z"></path><path d="M12 10v4.5M12 17.5v.01"></path>',
+  alert: PATHS.alert,
   standards: '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.3 6L12 16.4 6.6 19.4l1.3-6L3.4 9.3l6-.7z"></path>',
-  magnet: '<path d="M6 4v8a6 6 0 0 0 12 0V4h-4v8a2 2 0 0 1-4 0V4zM6 8h4M14 8h4"></path>',
-  hours: '<circle cx="12" cy="12" r="8.5"></circle><path d="M12 7v5l3.5 2"></path>',
-  crew: '<circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path>',
-  shelves: '<path d="M4 3v18M20 3v18M4 8h16M4 14h16M4 20h16"></path><path d="M8 8V5.5M12 8V5M16 14v-2.5M9 14v-3"></path>',
+  magnet: PATHS.magnet,
+  hours: PATHS.clock,
+  crew: PATHS.people,
+  shelves: PATHS.shelves,
   fees: '<path d="M6 3h9l4 4v14H6z"></path><path d="M14 3v5h5M9.5 13h5M9.5 16.5h5"></path>',
-  profit: '<path d="M4 19h16"></path><path d="M5 15l4-5 4 3 6-7"></path>',
+  profit: PATHS.profit,
   week: '<rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path>',
   toilet: '<path d="M7 4h4v7H7zM5 11h13a5 5 0 0 1-5 5h-3a5 5 0 0 1-5-5zM10 16l-1 4h6l-1-4"></path>',
   door: '<path d="M6 21V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17M4 21h16"></path><path d="M14.5 12v1"></path>',
   sink: '<path d="M4 14h16v2a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4zM9 14V8a3 3 0 0 1 6 0"></path><path class="drip" d="M15 10.2v1.6"></path>',
   music: '<path d="M9 18V6l10-2v12"></path><circle cx="6.5" cy="18" r="2.5"></circle><circle cx="16.5" cy="16" r="2.5"></circle>',
-  interior: '<path d="M6 11V8a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v3"></path><path d="M4 13a2 2 0 0 1 4 0v2h8v-2a2 2 0 0 1 4 0v5H4zM7 18v2M17 18v2"></path>',
-  shirt: '<path d="M8 4L3 7l2 4 2-1v10h10V10l2 1 2-4-5-3a4 4 0 0 1-8 0z"></path>',
+  interior: PATHS.sofa,
+  shirt: PATHS.shirt,
   locker: '<rect x="6" y="3" width="12" height="18" rx="1.5"></rect><path d="M9 7h6M9 10h6M14.5 14v2"></path>',
   shield: '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"></path>',
   person: '<circle cx="12" cy="8" r="3.5"></circle><path d="M5 20a7 7 0 0 1 14 0"></path>',
   tag: '<path d="M3 12V4h8l10 10-8 8z"></path><path d="M7.5 8.5v.01"></path>',
   sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path><path d="M18.5 16v4M16.5 18h4"></path>',
-  building: '<path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16"></path><path d="M14 10h5a1 1 0 0 1 1 1v10M4 21h17M8 8h2M8 12h2M8 16h2M17 14h1M17 18h1"></path>',
+  building: PATHS.building,
   wave: '<path d="M2 14c2.5 0 2.5-4 5-4s2.5 4 5 4 2.5-4 5-4 2.5 4 5 4"></path>',
-  crate: '<path d="M3.5 8.5 12 4l8.5 4.5v8L12 21l-8.5-4.5z"></path><path d="M3.5 8.5 12 13l8.5-4.5M12 13v8"></path>',
-  truck: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.5" cy="17.5" r="1.8"></circle><circle cx="16.5" cy="17.5" r="1.8"></circle>',
-  pause: '<path d="M9 6v12M15 6v12"></path>',
+  crate: PATHS.crate,
+  truck: PATHS.truck,
+  pause: PATHS.pause,
   gear: '<circle cx="12" cy="12" r="3.2"></circle><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"></path>',
   pipe: '<path d="M3 8h6v8h12M3 12h2M17 20v-2M21 20v-2"></path>',
   route: '<circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="5" r="2"></circle><path d="M8 18h7a3.25 3.25 0 0 0 0-6.5H9a3.25 3.25 0 0 1 0-6.5h7"></path>',
   counter: '<rect x="4" y="11" width="16" height="8" rx="1.5"></rect><path d="M7 11V6h7v5M9 15h6"></path>',
   monitor: '<rect x="3" y="4.5" width="18" height="12" rx="2"></rect><path d="M9 20.5h6M12 16.5v4"></path>',
   desk: '<path d="M3 9h18M5 9v10M19 9v10M13 9v6h6"></path>',
-  clock: '<circle cx="12" cy="12" r="8.5"></circle><path d="M12 7v5l3.5 2"></path>',
-  heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"></path>',
-  exit: '<path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H8"></path>',
-  chev: '<path d="M9 6l6 6-6 6"></path>',
-  roster: '<path d="M4 7h9M4 12h16M4 17h6"></path><path d="M16 5v4M13 15v4"></path>',
+  clock: PATHS.clock,
+  heart: PATHS.heart,
+  exit: PATHS.exit,
+  chev: PATHS.chevRight,
+  roster: PATHS.roster,
   list: '<path d="M8 6h12M8 12h12M8 18h12M4 6v.01M4 12v.01M4 18v.01"></path>',
   coin: '<circle cx="12" cy="12" r="8.5"></circle><path d="M14.5 9.5c-.5-1-1.5-1.5-2.5-1.5-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1 2-2.5 2c-1.2 0-2.2-.6-2.6-1.6M12 6.5V8M12 16v1.5"></path>',
   bench: '<path d="M4 11h16M5 11V7M19 11V7M6 11v7M18 11v7M4 15h16"></path>',
   pinned: '<path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"></path>',
-  tick: '<path d="M5 12.5l4.5 4.5L19 7"></path>',
+  tick: PATHS.tick,
   down: '<path d="M12 5v14M6 13l6 6 6-6"></path>',
   ship: '<path d="M3 15l2 5h14l2-5z"></path><path d="M6 15V9h12v6M12 9V4M9 6h6"></path>',
-  right: '<path d="M5 12h14M13 6l6 6-6 6"></path>',
+  right: PATHS.right,
 };
 const spIcon = name => SP_ICON[name] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SP_ICON[name]}</svg>` : "";
 /* Anything out of the save — a shop's name, an employee's, the game's own word
@@ -554,8 +589,8 @@ function odBoard(old){
   /* Another company's board drops a held press at once: coming back to the
      first before its sections arrive must not revive it (odHold()). */
   if(odHeldAct && !odSameScope(odHeldAct.scope, scope)) odHeldAct = null;
-  const dlg = gwOpen;
-  if(dlg && dlg.open && typeof dlg._odBoard === "function") dlg._odBoard();
+  const st = gwOpenState();
+  if(st && gwOpen.open && typeof st.odBoard === "function") st.odBoard();
 }
 const odError = name => odChain(name).some(n => odState(n) === "error");
 /* Keep a successfully drawn row while this company's new sections load.
@@ -633,9 +668,10 @@ function odArrived(){
    renderAll() calls it (odThensAsk()), so every redraw after an arrival, a
    failure or a Try again reaches it. */
 function odDialog(){
-  const dlg = gwOpen;
-  if(dlg && dlg.open && typeof dlg._odCurrent === "function" && !dlg._odCurrent()) return;
-  if(dlg && dlg.open && typeof dlg._odWait === "function"){ const again = dlg._odWait; dlg._odWait = null; again(); }
+  const st = gwOpenState();
+  if(!st || !gwOpen.open) return;
+  if(typeof st.odCurrent === "function" && !st.odCurrent()) return;
+  if(typeof st.odWait === "function"){ const again = st.odWait; st.odWait = null; again(); }
 }
 /* Work left waiting when a board arrives asks that board for its section,
    and so does a write dialog that waits (it plans again, odDialog()). */
@@ -1843,10 +1879,10 @@ const FLOW_KIND_ORDER = {import: 0, factory: 1, depot: 2, shop: 3};
 const SB_FC_ICON = {
   import: '<path d="M4 15l1.5 5h13L20 15z"></path><path d="M6 15V9h12v6M12 9V4M9 6h6"></path>',
   depot: '<path d="M3 20V9l9-5 9 5v11"></path><path d="M7 20v-7h10v7M7 16h10"></path>',
-  factory: '<path d="M3 20V10l5 3V10l5 3V6h4v14z"></path><path d="M17 20h4V4h-4M3 20h18"></path>',
+  factory: PATHS.factory,
   shop: '<path d="M4 9l1.5-5h13L20 9"></path><path d="M4 9h16v2a2.7 2.7 0 0 1-5.3 0 2.7 2.7 0 0 1-5.4 0A2.7 2.7 0 0 1 4 11z"></path><path d="M5.5 13v7h13v-7M10 20v-4h4v4"></path>',
-  chev: '<path d="M6 9l6 6 6-6"></path>',
-  back: '<path d="M15 6l-6 6 6 6"></path>',
+  chev: PATHS.chevDown,
+  back: PATHS.back,
   rows: '<path d="M4 6h16M4 12h16M4 18h10"></path>',
   panel: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"></rect><path d="M14 4.5v15"></path>',
   book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"></path><path d="M5 17a3 3 0 0 1 3-3h11"></path>',
@@ -2392,13 +2428,13 @@ const szDevice = () => remembered(SIZING_KEY) === "dem" ? "dem" : "cap";
 const szWho = () => (D && D.meta && D.meta.character) || "";
 function szRead(who = szWho()){
   if(Object.prototype.hasOwnProperty.call(szMem, who)) return szMem[who];
-  if(who) try{ const v = localStorage.getItem(`${SIZING_KEY}:${who}`); if(v === "cap" || v === "dem") return v; }catch(e){}
+  if(who){ const v = remembered(`${SIZING_KEY}:${who}`); if(v === "cap" || v === "dem") return v; }
   return szDevice();
 }
 function szPick(v){
   const who = szWho();
   szMem[who] = v === "dem" ? "dem" : "cap";
-  if(who) try{ localStorage.setItem(`${SIZING_KEY}:${who}`, szMem[who]); }catch(e){}
+  if(who) remember(`${SIZING_KEY}:${who}`, szMem[who]);
 }
 let sizing = szDevice();
 function szAdopt(){ sizing = szRead(); }
@@ -4432,11 +4468,11 @@ function xlKind(w, n, slug){
 const PAYBACK_KEY = "ba_dash_payback";
 const paybackStore = () => `${PAYBACK_KEY}:${(D && D.meta && D.meta.character) || "default"}`;
 function paybackMode(){
-  try { if(localStorage.getItem(paybackStore()) === "self") return "self"; } catch(e) {}
+  if(remembered(paybackStore()) === "self") return "self";
   return "firm";
 }
 function paybackSetMode(mode){
-  try { localStorage.setItem(paybackStore(), mode); } catch(e) {}
+  remember(paybackStore(), mode);
 }
 const paybackSite = key => ((D.payback || {}).sites || {})[key] || null;
 /* A chain is filed under its first site's key. */
@@ -5208,17 +5244,14 @@ const spTickId = (row, s) => {
    anyway, with nothing ticked. */
 const spTicksRead = key => {
   if(!key) return new Set();
-  try {
-    const kept = JSON.parse(localStorage.getItem(SP_ROSTER_STORE + key) || "[]");
-    return new Set(Array.isArray(kept) ? kept.filter(x => typeof x === "string") : []);
-  } catch(e){ return new Set(); }
+  const kept = rememberedJson(SP_ROSTER_STORE + key);
+  return new Set(Array.isArray(kept) ? kept.filter(x => typeof x === "string") : []);
 };
 const spTicksWrite = (key, ticks) => {
   if(!key) return;
-  try {
-    if(ticks.size) localStorage.setItem(SP_ROSTER_STORE + key, JSON.stringify([...ticks]));
-    else localStorage.removeItem(SP_ROSTER_STORE + key);
-  } catch(e){ /* nothing to do: the plan is still on the page */ }
+  /* Storage that refuses leaves nothing to do: the plan is still on the page. */
+  if(ticks.size) rememberJson(SP_ROSTER_STORE + key, [...ticks]);
+  else forget(SP_ROSTER_STORE + key);
 };
 /* How much of *this* plan is typed. A tick left over from an older plan
    counts for nothing, so the ring never promises more than is there, and the
@@ -5246,11 +5279,8 @@ const spPlanRead = key => {
   const at = spPlanKey(key);
   if(spPlanMem[at]) return spPlanMem[at];
   if(!spCharacter()) return "demand";
-  try {
-    const had = localStorage.getItem(SP_PLAN_STORE + at);
-    return had === "full" || had === "open" ? had : "demand";
-  }
-  catch(e){ return "demand"; }
+  const had = remembered(SP_PLAN_STORE + at);
+  return had === "full" || had === "open" ? had : "demand";
 };
 const spPlanWrite = (key, which) => {
   const at = spPlanKey(key);
@@ -5259,10 +5289,9 @@ const spPlanWrite = (key, which) => {
   /* Staffing › Schedules summarises the plan shown (spShownRow()). */
   nxSchedStale();
   if(!spCharacter()) return;
-  try {
-    if(which === "full" || which === "open") localStorage.setItem(SP_PLAN_STORE + at, which);
-    else localStorage.removeItem(SP_PLAN_STORE + at);
-  } catch(e){ /* spPlanMem holds the pick for as long as the page is open */ }
+  /* Storage that refuses: spPlanMem holds the pick for as long as the page is open. */
+  if(which === "full" || which === "open") remember(SP_PLAN_STORE + at, which);
+  else forget(SP_PLAN_STORE + at);
 };
 /* A demand test needs a serving station to test. A site with none has
    cleaning and security alone, and both plans would be the same week. */
@@ -9094,7 +9123,7 @@ function orderMarksRead(character){
   rememberJson(ORDER_MARKS_V2 + character, moved);
   return moved;
 }
-const sbSaveMarks = d => { if(d.storageKey) try{ localStorage.setItem(d.storageKey, JSON.stringify([...d.marks])); }catch(e){} };
+const sbSaveMarks = d => { if(d.storageKey) rememberJson(d.storageKey, [...d.marks]); };
 /* The checklist rows about one row of a table: its site and item (by key), of the
    kinds that table sets. Each is claimed once, so a row no table shows still
    gets a tick of its own (sbOthers()). */
@@ -9224,7 +9253,7 @@ function impSetEdits(){
   if(!impSetMemo.has(key)){
     let saved = null, legacy = null;
     if(key) saved = rememberedJson(key);
-    if(key && (saved === null || saved === undefined)) try{ legacy = JSON.parse(localStorage.getItem(IMP_SET_V2 + character)); }catch(e){}
+    if(key && (saved === null || saved === undefined)) legacy = rememberedJson(IMP_SET_V2 + character);
     const edits = saved !== null && saved !== undefined ? impSetParse(saved, false) : impSetParse(legacy, true);
     impSetMemo.set(key, edits);
     if(legacy && typeof legacy === "object") impSetMigrate(character, edits);
@@ -9234,7 +9263,7 @@ function impSetEdits(){
 /* The version 2 store is left where it is for a release or two: a rollback
    to the board before version 3 still finds the figures typed there. */
 function impSetMigrate(character, edits){
-  try{ localStorage.setItem(IMP_SET_V3 + character, JSON.stringify(edits)); }catch(e){}
+  rememberJson(IMP_SET_V3 + character, edits);
 }
 function impSetKeep(id, entry){
   const {key, edits} = impSetEdits();
@@ -12054,18 +12083,18 @@ const OS_ICON = {
   paint: '<rect x="4" y="3" width="14" height="6" rx="1.5"></rect><path d="M18 6h2v5h-8v3"></path><rect x="10.5" y="14" width="3" height="7" rx="1"></rect>',
   key: '<circle cx="8" cy="15" r="4"></circle><path d="M11 12l9-9M16 7l3 3"></path>',
   bank: '<path d="M3 10h18L12 4z"></path><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"></path>',
-  shelves: '<path d="M4 3v18M20 3v18M4 8h16M4 14h16M4 20h16"></path><path d="M8 8V5.5M12 8V5M16 14v-2.5M9 14v-3"></path>',
-  people: '<circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M15.5 14.5a5 5 0 0 1 6 5"></path>',
-  shirt: '<path d="M8 4L3 7l2 4 2-1v10h10V10l2 1 2-4-5-3a4 4 0 0 1-8 0z"></path>',
-  heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"></path>',
+  shelves: PATHS.shelves,
+  people: PATHS.people,
+  shirt: PATHS.shirt,
+  heart: PATHS.heart,
   megaphone: '<path d="M3 10v4h3l6 4V6L6 10z"></path><path d="M16 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"></path>',
-  truck: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.5" cy="17.5" r="1.8"></circle><circle cx="16.5" cy="17.5" r="1.8"></circle>',
-  factory: '<path d="M3 20V10l5 3V10l5 3V6h4v14z"></path><path d="M17 20h4V4h-4M3 20h18"></path>',
-  hire: '<circle cx="10" cy="8" r="3.5"></circle><path d="M3.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"></path>',
-  game: '<path d="M7 8.5h10a4.5 4.5 0 0 1 4.4 5.4l-.6 2.9a2.2 2.2 0 0 1-3.8 1L15 15.5H9l-2 2.3a2.2 2.2 0 0 1-3.8-1l-.6-2.9A4.5 4.5 0 0 1 7 8.5z"></path><path d="M8.5 11.5v3M7 13h3M15.5 12.3v.01M17.3 13.8v.01"></path>',
-  plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"></path>',
-  tick: '<path d="M5 12.5l4.5 4.5L19 7"></path>',
-  chev: '<path d="M9 6l6 6-6 6"></path>',
+  truck: PATHS.truck,
+  factory: PATHS.factory,
+  hire: PATHS.hire,
+  game: PATHS.game,
+  plug: PATHS.plug,
+  tick: PATHS.tick,
+  chev: PATHS.chevRight,
 };
 const osIcon = name => OS_ICON[name] ? `<svg class="os-ico" viewBox="0 0 24 24" aria-hidden="true">${OS_ICON[name]}</svg>` : icon(name);
 
@@ -12076,7 +12105,7 @@ function osLoad(){
   osPlansFor = who; osPlans = []; osCur = null; osStep = "what"; osBest = new Map();
   let dirty = false;
   try{
-    const raw = JSON.parse(localStorage.getItem(who));
+    const raw = rememberedJson(who);
     if(raw && Array.isArray(raw.plans)){
       osPlans = raw.plans.filter(p => p && typeof p.id === "string" && typeof p.type === "string")
         .map(p => ({id: p.id, type: p.type, hood: typeof p.hood === "string" ? p.hood : null,
@@ -12102,7 +12131,7 @@ function osLoad(){
 function osSave(){
   const plan = osPlan();
   if(plan) plan.step = osStep;
-  try{ localStorage.setItem(osStore(), JSON.stringify({plans: osPlans, current: osCur})); }catch(e){}
+  rememberJson(osStore(), {plans: osPlans, current: osCur});
 }
 const osPlan = () => osPlans.find(p => p.id === osCur) || null;
 /* The list kept to its limits, newest first as it stands: twelve unfinished
@@ -13568,7 +13597,7 @@ function planExtraAll(){
   if(planExtra && planExtraFor === planExtraStore()) return planExtra;
   planExtra = {}; planExtraFor = planExtraStore();
   try{
-    const saved = JSON.parse(localStorage.getItem(planExtraFor) || "{}");
+    const saved = rememberedJson(planExtraFor) || {};
     if(saved && typeof saved === "object" && !Array.isArray(saved))
       Object.entries(saved).forEach(([type, slugs]) => {
         if(!slugs || typeof slugs !== "object" || Array.isArray(slugs)) return;
@@ -13582,7 +13611,7 @@ function planExtraAll(){
   return planExtra;
 }
 function planExtraKeep(){
-  try{ localStorage.setItem(planExtraStore(), JSON.stringify(planExtraAll())); }catch(e){}
+  rememberJson(planExtraStore(), planExtraAll());
 }
 /* The added products of a type that its list still offers, in the list's order. */
 function planAdded(type){
@@ -13923,7 +13952,7 @@ function ofLoad(){
   ofPlansFor = who; ofPlans = []; ofCur = null; ofStep = "what"; ofSizeMode = "auto"; ofModeNow = "self";
   if(switched){ planCounts = {}; planTarget = null; }
   try{
-    const raw = JSON.parse(localStorage.getItem(who));
+    const raw = rememberedJson(who);
     if(raw && Array.isArray(raw.plans)){
       ofPlans = raw.plans.filter(p => p && typeof p.id === "string" && typeof p.type === "string").slice(0, OF_MAX_PLANS)
         .map(p => ({id: p.id, type: p.type, site: typeof p.site === "string" ? p.site : null,
@@ -13946,7 +13975,7 @@ function ofSave(){
   if(!odReady("openFactory") || !odReady("openStore")) return;
   const plan = ofPlan();
   if(plan){ plan.step = ofStep; ofSyncInvestment(plan); }
-  try{ localStorage.setItem(ofStore(), JSON.stringify({plans: ofPlans, current: ofCur})); }catch(e){}
+  rememberJson(ofStore(), {plans: ofPlans, current: ofCur});
 }
 const ofPlan = () => ofPlans.find(p => p.id === ofCur) || null;
 /* "auto" until the player picks: custom ranges keep their chosen counts;
@@ -15080,14 +15109,14 @@ function drawProducts(){
 const HR_P = {
   move: '<path d="M4 8h13M13 4l4 4-4 4"></path><path d="M20 16H7M11 12l-4 4 4 4"></path>',
   filter: '<path d="M4 5h16l-6 7.5V19l-4 2v-8.5z"></path>',
-  search: '<circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path>',
+  search: PATHS.search,
   hq: '<path d="M4 21V9l8-5 8 5v12"></path><path d="M9 21v-6h6v6M9 11h.01M15 11h.01"></path>',
   plus2: '<path d="M12 6v12M6 12h12"></path>',
   x2: '<path d="M7 7l10 10M17 7 7 17"></path>',
-  check2: '<path d="M5 12.5l4.5 4.5L19 7"></path>',
-  chev: '<path d="M9 6l6 6-6 6"></path>',
+  check2: PATHS.tick,
+  chev: PATHS.chevRight,
   coin: '<circle cx="12" cy="12" r="8.5"></circle><path d="M14.5 9.5c-.4-.9-1.4-1.5-2.5-1.5-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1 2-2.5 2c-1.1 0-2.1-.6-2.5-1.5M12 6.5V8M12 16v1.5"></path>',
-  phone: '<rect x="7" y="2.5" width="10" height="19" rx="2"></rect><path d="M11 18.5h2"></path>',
+  phone: PATHS.phone,
 };
 const hrSvg = (name, cls) => `<svg${cls ? ` class="${cls}"` : ""} viewBox="0 0 24 24" aria-hidden="true">${HR_P[name] || GW_P[name] || ""}</svg>`;
 const hrName = slug => spEsc(gameName(slug) || String(slug || "").replace(/^ba:[a-z]+_/, ""));
@@ -15113,7 +15142,7 @@ function hrFilters(){
   const who = spCharacter() || "";
   if(hrFilterMem && hrFilterMem.who === who) return hrFilterMem;
   let kept = null;
-  if(who) try{ kept = JSON.parse(localStorage.getItem(HR_STORE + who) || "null"); }catch(e){ kept = null; }
+  if(who) kept = rememberedJson(HR_STORE + who);
   const roles = {};
   Object.entries((kept && typeof kept.roles === "object" && kept.roles) || {}).forEach(([k, f]) => { roles[k] = hrCleanFilter(f); });
   const company = hrCleanFilter(kept && kept.company);
@@ -15124,7 +15153,7 @@ function hrFilters(){
 function hrFiltersSave(){
   const f = hrFilters();
   if(!f.who) return;
-  try{ localStorage.setItem(HR_STORE + f.who, JSON.stringify({v: 2, company: f.company, roles: f.roles})); }catch(e){}
+  rememberJson(HR_STORE + f.who, {v: 2, company: f.company, roles: f.roles});
 }
 /* The filter a role is picked by: its own, applied as it is, else the
    company's without Part-time, with `pt` saying whether the company's
@@ -19657,9 +19686,9 @@ function showPage(id, scroll = true, historyMode = "push"){
    the foot's ···. A place's link is its area; the Overview's carries the
    critical count, the others a chevron where their views are folded away. */
 const NX_ICON = {
-  back: '<path d="M15 6l-6 6 6 6"></path>',
-  chevd: '<path d="M6 9l6 6 6-6"></path>',
-  chevr: '<path d="M9 6l6 6-6 6"></path>',
+  back: PATHS.back,
+  chevd: PATHS.chevDown,
+  chevr: PATHS.chevRight,
   panel: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"></rect><path d="M9 4.5v15"></path>',
 };
 const nxIcon = name => NX_ICON[name] ? `<svg class="nx-i" viewBox="0 0 24 24" aria-hidden="true">${NX_ICON[name]}</svg>` : icon(name);
@@ -20461,7 +20490,7 @@ function buildAlertSettingsPanel(){
        change to a default is picked up rather than frozen. */
     alertKindChoices = {};
     Object.assign(alertGroupPrefs, kindPrefs(alertKindChoices));
-    try{ localStorage.removeItem(ALERT_SETTINGS_KEY); }catch(e2){}
+    forget(ALERT_SETTINGS_KEY);
     drawKindRows();
     drawAlerts();
     refreshCityMaps();
@@ -21027,9 +21056,9 @@ const SS_PER = 4, SS_PER_PHONE = 3;
 const SS_RECENT_KEY = "ba_dash_search_recent";
 const SS_ASK_KEY = "ba_dash_ask_used";
 const SS_ICON = {
-  search: '<circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path>',
+  search: PATHS.search,
   enter: '<path d="M20 5v6a3 3 0 0 1-3 3H5"></path><path d="M9 10l-4 4 4 4"></path>',
-  back: '<path d="M15 6l-6 6 6 6"></path>',
+  back: PATHS.back,
   flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"></path>',
 };
 const ssSvg = name => SS_ICON[name] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SS_ICON[name]}</svg>`
@@ -22461,7 +22490,7 @@ nxMenu.setAttribute("aria-label", tt("nav.more.title", "More"));
 document.body.appendChild(nxMenu);
 let nxMenuFrom = null;
 const NX_MENU_ICON = {
-  search: '<circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path>',
+  search: PATHS.search,
   help: '<circle cx="12" cy="12" r="8.5"></circle><path d="M9.8 9.5a2.3 2.3 0 0 1 4.4.9c0 1.6-2.2 2-2.2 3.4M12 16.8v.01"></path>',
 };
 function nxMenuItems(phone){
@@ -22584,9 +22613,9 @@ function pxPrefsHtml(){
   const gametext = chip ? pxRow("gametext", tt("nav.px.text.title", "Game text"), tt("nav.px.text.lead", "Names, recipes and station capacities come with the page. A newer game's own en.json wins over them."),
     `<p class="px-state">${spEsc(chip.textContent.trim())}</p><div class="px-acts"><button type="button" class="nx-btn sm" data-px-do="locale">${tt("nav.px.text.choose", "Choose en.json")}</button>${
       reset && !reset.hidden ? `<button type="button" class="nx-btn sm ghost" data-px-do="localeReset">${spEsc(reset.textContent.trim())}</button>` : ""}</div>`) : "";
-  const forget = $("forgetHistory");
+  const forgetBtn = $("forgetHistory");
   const history = pxRow("history", tt("nav.px.hist.title", "History"), tt("nav.px.hist.lead", "Trends and week-on-week figures need a history the save does not keep."),
-    forget ? `<p class="px-note">${tt("nav.px.hist.web", "Two weeks of demand and sixty days of cash are kept in this browser, per company. Forgetting them starts a fresh record; your saves are not touched.")}</p><div class="px-acts"><button type="button" class="nx-btn sm" data-px-do="forget">${tt("land.forget", "Forget history")}</button></div>`
+    forgetBtn ? `<p class="px-note">${tt("nav.px.hist.web", "Two weeks of demand and sixty days of cash are kept in this browser, per company. Forgetting them starts a fresh record; your saves are not touched.")}</p><div class="px-acts"><button type="button" class="nx-btn sm" data-px-do="forget">${tt("land.forget", "Forget history")}</button></div>`
       : `<p class="px-note">${tt("nav.px.hist.cli2", "The Python version keeps it in market_history.json beside the board; Local board below rebuilds it from older saves.")}</p>`);
   const on = ALERT_GROUPS.filter(g => alertGroupPrefs[g.id] !== false).length;
   const line = hasData() && D.kpi && Number.isFinite(D.kpi.materiality) ? fmt(D.kpi.materiality) : null;
@@ -23659,40 +23688,74 @@ function gwUndoStays(kind){
 }
 const gwUndoable = {};  // kind -> {spec, text, sub, character, at}: its last apply, until undone or replaced
 let gwOpen = null;      // the dialog on screen
+/* What a write dialog keeps between its paints, one record per dialog, read
+   through gwState(dlg) (or gwOpenState() for the one on screen):
+     gone(replaced)  takes the dialog down (gwDialog())
+     cancel          stops this page waiting on the game's question (gwApprovalView())
+     tick            the approval clock's interval (gwAsking(), gwPaint())
+     want            where a keyboard's focus goes on the next paint (gwFocusKey())
+     soft            the answer on screen is being asked again in place (gwConfirm())
+     idle            {at, now, ask}: a "nothing to change" answer, asked again
+                     once the game's hour moves on (gwIdleAgain())
+     board           the board an apply or undo answered on; its "read again"
+                     line turns done on a newer one (gwReadBack())
+     replan          back to the write after an undo (gwConfirm(), gwUndo())
+     gate            the undo's gate, weighed on every board built (gwGate())
+     built           a board was built since the undo answered
+     odCurrent       false, and closes the dialog, once the company it was
+                     opened for is gone (odDialog())
+     odWait          plans again once a missing section arrives (odDialog())
+     odBoard         a new board suspends an unfinished review (odBoard()) */
+const gwStates = new WeakMap();
+function gwState(dlg){
+  let st = gwStates.get(dlg);
+  if(!st) gwStates.set(dlg, st = {gone: null, cancel: null, tick: null, want: null, soft: false, idle: null,
+    board: null, replan: null, gate: null, built: false, odCurrent: null, odWait: null, odBoard: null});
+  return st;
+}
+const gwOpenState = () => gwOpen ? gwState(gwOpen) : null;
+/* The open dialog's undo gate, if it has one: `built` marks a board built
+   since the undo, `weigh` repaints the gate. */
+function gwGate(built, weigh){
+  const st = gwOpenState();
+  if(!st || !st.gate) return;
+  if(built) st.built = true;
+  if(weigh) st.gate();
+}
 
 /* The dialogs' icons: strokes on a 24 grid, as the design draws them. */
 const GW_P = {
-  shirt: '<path d="M8 4L3 7l2 4 2-1v10h10V10l2 1 2-4-5-3a4 4 0 0 1-8 0z"></path>',
-  crate: '<path d="M3.5 8.5 12 4l8.5 4.5v8L12 21l-8.5-4.5z"></path><path d="M3.5 8.5 12 13l8.5-4.5M12 13v8"></path>',
-  roster: '<path d="M4 7h9M4 12h16M4 17h6"></path><path d="M16 5v4M13 15v4"></path>',
-  game: '<path d="M7 8.5h10a4.5 4.5 0 0 1 4.4 5.4l-.6 2.9a2.2 2.2 0 0 1-3.8 1L15 15.5H9l-2 2.3a2.2 2.2 0 0 1-3.8-1l-.6-2.9A4.5 4.5 0 0 1 7 8.5z"></path><path d="M8.5 11.5v3M7 13h3M15.5 12.3v.01M17.3 13.8v.01"></path>',
+  shirt: PATHS.shirt,
+  crate: PATHS.crate,
+  roster: PATHS.roster,
+  game: PATHS.game,
   tank: '<ellipse cx="12" cy="5.5" rx="7" ry="2.5"></ellipse><path d="M5 5.5v13c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-13"></path><path d="M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"></path>',
-  truck: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"></path><circle cx="6.5" cy="17.5" r="1.8"></circle><circle cx="16.5" cy="17.5" r="1.8"></circle>',
+  truck: PATHS.truck,
   lock: '<rect x="5" y="10.5" width="14" height="10" rx="2"></rect><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"></path>',
-  tick: '<path d="M5 12.5l4.5 4.5L19 7"></path>',
+  tick: PATHS.tick,
   close: '<path d="M6 6l12 12M18 6L6 18"></path>',
-  right: '<path d="M5 12h14M13 6l6 6-6 6"></path>',
+  right: PATHS.right,
   undo: '<path d="M9 14L4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path>',
-  refresh: '<path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v5h-5"></path>',
-  alert: '<path d="M12 4l9 16H3z"></path><path d="M12 10v4.5M12 17.5v.01"></path>',
+  refresh: PATHS.refresh,
+  alert: PATHS.alert,
   info: '<circle cx="12" cy="12" r="8.5"></circle><path d="M12 11v5M12 8v.01"></path>',
   play: '<path d="M8 5.5v13l10.5-6.5z"></path>',
-  pause: '<path d="M9 6v12M15 6v12"></path>',
+  pause: PATHS.pause,
   cap: '<path d="M4 20V8M4 8h16M20 8v12"></path><path d="M8 14h8"></path>',
-  exit: '<path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H8"></path>',
-  plus: '<path d="M12 5v14M5 12h14"></path>',
-  clock: '<circle cx="12" cy="12" r="8.5"></circle><path d="M12 7v5l3.5 2"></path>',
+  exit: PATHS.exit,
+  plus: PATHS.plus,
+  clock: PATHS.clock,
   flame: '<path d="M12 21c-3.9 0-6.5-2.6-6.5-6.2 0-3.1 2.1-5.1 3.6-7.3.5 1.7 1.5 2.8 2.6 3.3C11.7 7.3 13 4.6 15.2 3c-.3 2.9 3.3 5.7 3.3 10.6 0 4.3-2.8 7.4-6.5 7.4z"></path>',
   key: '<circle cx="8" cy="14" r="4"></circle><path d="M11 11l9-8M16 6.5l3 3"></path>',
-  plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"></path>',
-  sun: '<circle cx="12" cy="12" r="4"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"></path>',
+  plug: PATHS.plug,
+  sun: PATHS.sun,
   cursor: '<path d="M5 3l14 7-6 2-2 6z"></path>',
-  sofa: '<path d="M6 11V8a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v3"></path><path d="M4 13a2 2 0 0 1 4 0v2h8v-2a2 2 0 0 1 4 0v5H4zM7 18v2M17 18v2"></path>',
+  sofa: PATHS.sofa,
   save: '<path d="M5 4h11l3 3v13H5z"></path><path d="M8 4v5h7V4M8 20v-6h8v6"></path>',
   skip: '<path d="M6 5.5v13l9-6.5zM18 5v14"></path>',
-  hire: '<circle cx="10" cy="8" r="3.5"></circle><path d="M3.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"></path>',
-  phone: '<rect x="7" y="2.5" width="10" height="19" rx="2"></rect><path d="M11 18.5h2"></path>',
-  magnet: '<path d="M6 4v8a6 6 0 0 0 12 0V4h-4v8a2 2 0 0 1-4 0V4zM6 8h4M14 8h4"></path>',
+  hire: PATHS.hire,
+  phone: PATHS.phone,
+  magnet: PATHS.magnet,
   tag: '<path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1 1 0 0 1 0 1.4l-7.1 7.1a1 1 0 0 1-1.4 0z"></path><circle cx="8" cy="8" r="1.5"></circle>',
 };
 const gwSvg = (name, cls) => `<svg${cls ? ` class="${cls}"` : ""} viewBox="0 0 24 24" aria-hidden="true">${GW_P[name] || ""}</svg>`;
@@ -24711,14 +24774,15 @@ const GW_SCENE = `<div class="gw-scene" aria-hidden="true"><div class="gw-sbar">
 let gwReadStuck = false;
 function gwFollowFailed(){
   gwReadStuck = true;
-  if(gwOpen && gwOpen._gwGate) gwOpen._gwGate();
+  gwGate(false, true);
 }
 /* Before a focused button is switched off: its place is remembered for the
    next paint, and the dialog holds the focus meanwhile. */
 function gwKeepFocus(dlg, selector){
+  const st = gwState(dlg);
   const a = document.activeElement;
   if(!a || a === dlg || !dlg.contains(a) || !a.matches(selector)) return;
-  dlg._gwWant = gwFocusKey(a) || dlg._gwWant;
+  st.want = gwFocusKey(a) || st.want;
   dlg.focus();
 }
 /* The dialog hangs off <body> in the top layer, so no section's paint
@@ -24726,8 +24790,9 @@ function gwKeepFocus(dlg, selector){
    verdict carries the wire, and its body and foot are the state's. */
 function gwDialog(icon, title, where){
   /* The one before goes at once, not when its close event comes round. */
-  if(gwOpen){ const was = gwOpen; was.close(); was._gwGone(true); }
+  if(gwOpen){ const was = gwOpen; was.close(); gwState(was).gone(true); }
   const dlg = document.createElement("dialog");
+  const st = gwState(dlg);
   dlg.className = "gw-dlg";
   dlg.tabIndex = -1;  // where focus goes when the control that held it is drawn away
   dlg.setAttribute("aria-labelledby", "gwTitle");
@@ -24737,15 +24802,15 @@ function gwDialog(icon, title, where){
   dlg.querySelector("[data-gw-close]").onclick = () => dlg.close();
   /* `replaced`: another dialog takes its place, so no Undo strip comes up
      under it; the new one's own gwToast() decides. */
-  dlg._gwGone = replaced => {
+  st.gone = replaced => {
     if(!dlg.isConnected) return;
     /* Closed while the game asks the player: this page stops waiting. */
-    if(dlg._gwCancel) dlg._gwCancel();
-    clearInterval(dlg._gwTick);
+    if(st.cancel) st.cancel();
+    clearInterval(st.tick);
     dlg.remove(); if(gwOpen === dlg) gwOpen = null;
     if(replaced !== true) gwToast();
   };
-  dlg.addEventListener("close", () => dlg._gwGone());
+  dlg.addEventListener("close", () => st.gone());
   document.body.appendChild(dlg);
   dlg.showModal();
   gwOpen = dlg;
@@ -24792,14 +24857,15 @@ function gwLift(dlg, body){
    dialog keeps its place: the same control when it is drawn again, else the
    primary button, else the dialog itself. */
 function gwPaint(dlg, v){
+  const st = gwState(dlg);
   const was = document.activeElement;
   const inside = !!was && dlg.contains(was);
-  if(inside && was !== dlg) dlg._gwWant = gwFocusKey(was) || dlg._gwWant || null;
+  if(inside && was !== dlg) st.want = gwFocusKey(was) || st.want || null;
   dlg.dataset.phase = v.phase || "";
-  dlg._gwSoft = false;
+  st.soft = false;
   dlg.classList.toggle("is-applying", v.phase === "applying");
   dlg.classList.toggle("is-done", v.phase === "done");
-  if(!v.keepTick){ clearInterval(dlg._gwTick); dlg._gwTick = null; }
+  if(!v.keepTick){ clearInterval(st.tick); st.tick = null; }
   dlg.querySelector(".gw-verdict").innerHTML = `${gwWire(v.wire || "ask")}<span>${v.say || ""}</span>${v.meta ? `<span class="gw-meta">${v.meta}</span>` : ""}`;
   const body = dlg.querySelector(".gw-body");
   body.innerHTML = v.body || "";
@@ -24835,14 +24901,15 @@ function gwPaint(dlg, v){
   });
   dlg.querySelector(".gw-foot").replaceChildren(...parts);
   if(!inside) return;
-  const want = dlg._gwWant && dlg.querySelector(dlg._gwWant);
-  if(want && !want.disabled){ want.focus(); dlg._gwWant = null; return; }
+  const want = st.want && dlg.querySelector(st.want);
+  if(want && !want.disabled){ want.focus(); st.want = null; return; }
   if(dlg.contains(document.activeElement) && document.activeElement !== dlg) return;
   (dlg.querySelector(".gw-foot .gw-b.go:not([disabled])") || dlg).focus();
 }
 /* The permission, asked in the game while the dialog waits: the states
    web/app.js reports, drawn in the write's own dialog. */
 function gwAsking(dlg, state, info){
+  const st = gwState(dlg);
   const cancel = [tt("nav.dlg.cancel", "Cancel"), () => info.cancel && info.cancel(), {kind: "ghost"}];
   const hint = "";
   if(state === "retry") return gwPaint(dlg, {phase: "approval", wire: "busy", say: `<b>${tt("nav.dlg.say.question", "The game is busy with a question")}</b>`,
@@ -24865,8 +24932,8 @@ function gwAsking(dlg, state, info){
   const late = () => Date.now() - since >= 30000;
   let shown = late() ? "quiet" : "waiting";
   if(shown === "quiet") quiet(false); else waiting();
-  dlg._gwTick = setInterval(() => {
-    if(!dlg.open) return clearInterval(dlg._gwTick);
+  st.tick = setInterval(() => {
+    if(!dlg.open) return clearInterval(st.tick);
     if(shown === "waiting" && late()){ shown = "quiet"; return quiet(true); }
     const meta = dlg.querySelector(".gw-meta");
     if(meta) meta.textContent = clock();
@@ -24876,9 +24943,10 @@ function gwAsking(dlg, state, info){
    and its Cancel (or closing it) stops this page waiting. `allowed` hears when
    the game said yes. */
 function gwApprovalView(dlg, allowed){
+  const st = gwState(dlg);
   return (state, info = {}) => {
     if(!dlg.open) return;
-    dlg._gwCancel = state === "end" || state === "approved" ? null : info.cancel || null;
+    st.cancel = state === "end" || state === "approved" ? null : info.cancel || null;
     if(state === "approved") return allowed();
     if(state === "end") return;
     gwAsking(dlg, state, info);
@@ -24967,17 +25035,18 @@ function gwConfirm(spec){
   const title = () => typeof spec.title === "function" ? spec.title() : spec.title;
   const where = () => typeof spec.where === "function" ? spec.where() : spec.where || "";
   const dlg = gwDialog(spec.icon, title(), where());
+  const st = gwState(dlg);
   dlg.querySelector(".gw-body").dataset.odNeeds = (spec.needs || []).join(" ");
   const stays = () => gwUndoStays(spec.kind);
   const cancel = [tt("nav.dlg.cancel", "Cancel"), () => dlg.close(), {kind: "ghost", close: true}];
   const left = [cancel];
   const current = () => {
     if(!spec.scope || odSameScope(spec.scope, odScope())) return true;
-    dlg._odWait = null;
+    st.odWait = null;
     dlg.close();
     return false;
   };
-  dlg._odCurrent = current;
+  st.odCurrent = current;
   let applying = false;  // one apply per go: a second click must not send a second write
   let judged = "";       // the body the answer on screen judged, as sent
   let whose = "";        // and the game it judged it for
@@ -24998,8 +25067,8 @@ function gwConfirm(spec){
        completed sections cannot plan a write for the new source. */
     const rereading = spec.scope && odBoardScope && !odSameScope(odBoardScope, odScope());
     const missing = (spec.needs || []).filter(n => rereading || !odNeed(n));
-    const soft = dlg.dataset.phase === "ready" || (dlg.dataset.phase === "asking" && dlg._gwSoft);
-    dlg._odWait = missing.length ? () => plan({soft}) : null;
+    const soft = dlg.dataset.phase === "ready" || (dlg.dataset.phase === "asking" && st.soft);
+    st.odWait = missing.length ? () => plan({soft}) : null;
     if(!missing.length) return false;
     judged = "";
     /* Keep a judged answer readable through refreshes, including another
@@ -25043,7 +25112,7 @@ function gwConfirm(spec){
     if(none) return nothing(none);
     /* In place only over the game's answer on screen, or over one already
        being asked about in place: a second change while the first is asked. */
-    if(o.soft && (dlg.dataset.phase === "ready" || (dlg.dataset.phase === "asking" && dlg._gwSoft))) quietly(o.from);
+    if(o.soft && (dlg.dataset.phase === "ready" || (dlg.dataset.phase === "asking" && st.soft))) quietly(o.from);
     else asking();
     const body = spec.body();
     const sent = JSON.stringify(body), game = gwWhose();
@@ -25062,7 +25131,7 @@ function gwConfirm(spec){
     /* A dry run that would change nothing is said in one line, and Apply
        stays off: never an Apply that does nothing (`spec.idle`). */
     const idle = answer.ok && spec.idle ? spec.idle(answer) : "";
-    const top = dlg._gwSoft ? dlg.querySelector(".gw-body").scrollTop : null;
+    const top = st.soft ? dlg.querySelector(".gw-body").scrollTop : null;
     gwPaint(dlg, {phase: "ready", wire: answer.ok ? "ok" : "no", say: idle ? `<b>${idle}</b>` : spec.verdict(answer), meta: spec.meta ? spec.meta(answer) : gwNow(),
       body: idle ? "" : (answer.ok || spec.inline ? "" : gwRefusals(spec, answer)) + spec.draw(answer, "ready"),
       hint: idle ? "" : answer.ok ? spec.hint || "" : spec.refusedHint ? spec.refusedHint(answer) : tt("nav.dlg.unchanged", "Nothing was changed."),
@@ -25079,7 +25148,7 @@ function gwConfirm(spec){
     /* An idle answer is asked again at the player's Try again, and by
        itself once `spec.idleAt()` moves on (gwIdleAgain(), after every
        render and every tick of the game's clock): an agency may have opened. */
-    dlg._gwIdle = idle ? {at: spec.idleAt ? spec.idleAt() : "", now: spec.idleAt || null, ask: () => plan({soft: true})} : null;
+    st.idle = idle ? {at: spec.idleAt ? spec.idleAt() : "", now: spec.idleAt || null, ask: () => plan({soft: true})} : null;
     if(spec.bind) spec.bind(dlg, from => plan({soft: true, from}));
     if(top !== null) dlg.querySelector(".gw-body").scrollTop = top;
   };
@@ -25088,7 +25157,7 @@ function gwConfirm(spec){
      and the control that changed says it is busy. */
   const quietly = from => {
     gwKeepFocus(dlg, '.gw-foot [data-gw-b="apply"]');
-    dlg._gwSoft = true;
+    st.soft = true;
     dlg.dataset.phase = "asking";
     dlg.querySelector(".gw-verdict").innerHTML = `${gwWire("ask")}<span><b>${tt("nav.dlg.say.asking", "Asking the game…")}</b></span><span class="gw-meta">${tt("nav.dlg.dryrun", "dry run")}</span>`;
     dlg.querySelector(".gw-body").setAttribute("aria-busy", "true");
@@ -25140,7 +25209,7 @@ function gwConfirm(spec){
     if(!dlg.open) return gwToast();
     gwHead(dlg, title(), where());
     /* The board reads the game again; the line under the drawing says when it has. */
-    dlg._gwBoard = D;
+    st.board = D;
     const hint = spec.undoHint ? spec.undoHint() : null;
     gwPaint(dlg, {phase: "done", wire: "ok", say: `<b>${tt("nav.dlg.say.done", "Done in the game")}</b>`, meta: gwNow(),
       body: (spec.doneBody ? spec.doneBody(answer, spec) : `<p class="gw-said ok nx-sr">${spec.done(answer)}</p>${spec.draw(answer, "done")}`) + gwReread(false),
@@ -25157,17 +25226,17 @@ function gwConfirm(spec){
      the game: the write's `expect` no longer matches, the dry run answers
      `changed`, and the way on is a refresh. Should the board's read give up,
      a refresh is offered, and the wait goes on. */
-  dlg._gwReplan = (undone, undo) => {
+  st.replan = (undone, undo) => {
     const mine = ++seq;
-    dlg._gwBuilt = false;  // set by the next board built
-    dlg._gwBoard = null;   // the apply's "read again" line is this gate's now
+    st.built = false;  // set by the next board built
+    st.board = null;   // the apply's "read again" line is this gate's now
     gwHead(dlg, title(), where());
     let shown = "";
     const gate = force => {
-      if(!dlg.open || mine !== seq){ if(dlg._gwGate === gate) dlg._gwGate = null; return; }
+      if(!dlg.open || mine !== seq){ if(st.gate === gate) st.gate = null; return; }
       const l = gwLink();
       const same = !!l && l.source === undo.source && gwWhose() === undo.whose;
-      const fresh = same && dlg._gwBuilt;
+      const fresh = same && st.built;
       const stuck = same && !fresh && gwReadStuck;
       /* Drawn again only when it says something new: a board built with
          nothing to change keeps the click, the focus and the screen reader's peace. */
@@ -25181,11 +25250,11 @@ function gwConfirm(spec){
         hint: fresh || !same ? "" : tt("nav.dlg.undone.hint", "Offered again once the board has read the game."),
         buttons: [...left,
           ...(stuck ? [[tt("nav.dlg.refresh", "Refresh the board"), () => { if(typeof SOURCE.refresh === "function") SOURCE.refresh(); }, {kind: "ghost", icon: "refresh", key: "refresh"}]] : []),
-          [spec.againLabel || tt("nav.dlg.applyagain", "Apply again"), () => { dlg._gwGate = null; plan(); },
+          [spec.againLabel || tt("nav.dlg.applyagain", "Apply again"), () => { st.gate = null; plan(); },
            {kind: "go", icon: "right", disabled: !fresh, why: !same ? tt("nav.dlg.unlinked", "The board is no longer linked to this game")
              : tt("nav.dlg.rereading", "Reading the game again…"), key: "again"}]]});
     };
-    dlg._gwGate = gate;
+    st.gate = gate;
     gate(true);
   };
   /* The board read again at the player's word: the dialog closes. */
@@ -25195,7 +25264,7 @@ function gwConfirm(spec){
   };
   /* A new board suspends an unfinished review immediately, including any
      dry run still in flight. Completed writes keep their result and Undo. */
-  dlg._odBoard = () => {
+  st.odBoard = () => {
     if(applying || ["applying", "done", "undone"].includes(dlg.dataset.phase)) return;
     if((spec.needs || []).some(n => !odReady(n))) plan({soft: true});
   };
@@ -25209,7 +25278,8 @@ async function gwUndo(spec, dlg){
     dlg = gwDialog(spec.icon, tt("nav.dlg.undo.title", "Undo: {title}", {title: typeof spec.title === "function" ? spec.title() : spec.title}),
       typeof spec.where === "function" ? spec.where() : spec.where || "");
   }
-  if(dlg._gwReplan && dlg.dataset.phase){
+  const st = gwState(dlg);
+  if(st.replan && dlg.dataset.phase){
     /* In the write's own dialog the drawing stays while the game undoes it. */
     gwKeepFocus(dlg, ".gw-foot button");
     dlg.dataset.phase = "applying";
@@ -25234,8 +25304,8 @@ async function gwUndo(spec, dlg){
   }
   const answer = res.body || {};
   if(spec.onUndo) spec.onUndo();
-  if(dlg._gwReplan) return dlg._gwReplan(spec.done(answer), sentTo);
-  dlg._gwBoard = D;
+  if(st.replan) return st.replan(spec.done(answer), sentTo);
+  st.board = D;
   gwPaint(dlg, {phase: "undone", wire: "ok", say: `<b>${tt("nav.dlg.say.undone", "Undone in the game")}</b>`, meta: gwNow(),
     body: `<p class="gw-said ok">${spec.done(answer)}</p>${spec.draw ? spec.draw(answer, "undone") : ""}${gwReread(false)}`,
     buttons: ["|", [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "go", close: true}]]});
@@ -25270,9 +25340,9 @@ function gwToast(){
    hour it asked at has passed, whether the hour came with a new board or
    only with the game's clock. */
 function gwIdleAgain(){
-  const dlg = gwOpen, idle = dlg && dlg._gwIdle;
+  const dlg = gwOpen, st = gwOpenState(), idle = st && st.idle;
   if(!idle || !idle.now || dlg.dataset.phase !== "ready" || idle.now() === idle.at) return;
-  dlg._gwIdle = null;
+  st.idle = null;
   idle.ask();
 }
 /* After every render: an open dialog whose apply the board has now read
@@ -25281,11 +25351,11 @@ function gwReadBack(){
   gwIdleAgain();
   /* The pages on screen are drawn at the game's hour now. */
   if(hasData()) gwMkSig = gwMkOpenSig();
-  const dlg = gwOpen;
+  const dlg = gwOpen, st = gwOpenState();
   /* A dialog waiting on an undo's gate says only what the gate says. */
-  if(dlg && dlg._gwGate) return dlg._gwGate();
-  if(!dlg || !dlg._gwBoard || dlg._gwBoard === D) return;
-  dlg._gwBoard = null;
+  if(st && st.gate) return st.gate();
+  if(!st || !st.board || st.board === D) return;
+  st.board = null;
   const line = dlg.querySelector(".gw-reread:not(.done)");
   /* Read back: the line says so to a screen reader only; a read that failed stays loud. */
   if(line && !line.querySelector(".gw-prog.gw-warn")) line.outerHTML = gwReread(true).replace('class="gw-reread done"', 'class="gw-reread done nx-sr"');
@@ -26404,7 +26474,7 @@ function startWatching(){
       gwMkSig = gwMkOpenSig();  // the gates this board is drawn with
       gwTerms.clear();  // what the game said of caps belongs to the board it was said about
       gwReadStuck = false;
-      if(gwOpen && gwOpen._gwGate) gwOpen._gwBuilt = true;  // an undo's gate: a board built since
+      gwGate(true, false);  // an undo's gate: a board built since
       /* A row that would not draw failed on older numbers than these: the
          next board clears its mark, and it is tried again when it opens. One
          that throws on these numbers marks the dot again (renderAll()). */
@@ -26418,11 +26488,11 @@ function startWatching(){
     followFailed: () => gwFollowFailed(),
     /* The read that follows a write ended well, with a board built or the one
        on screen found current: an undo's gate may open. */
-    followDone: () => { if(gwOpen && gwOpen._gwGate){ gwOpen._gwBuilt = true; gwOpen._gwGate(); } },
+    followDone: () => gwGate(true, true),
     /* Another source, with no new board yet: an undo's gate closes again. */
     /* A section left loading for the build just cancelled will not come for
        this board either: it says so (odSourceFailed()), and a new board asks anew. */
-    linkChanged: () => { odThens = odThens.filter(t => odSameScope(t.scope, odScope())); if(gwOpen && gwOpen._gwGate) gwOpen._gwGate(); odSourceFailed(tt("app.reader.superseded", "Save selection changed")); },
+    linkChanged: () => { odThens = odThens.filter(t => odSameScope(t.scope, odScope())); gwGate(false, true); odSourceFailed(tt("app.reader.superseded", "Save selection changed")); },
     /* The game's clock moved with no new board: the marketing gates follow it. */
     linkClock: () => gwMkTick(),
     lost(){

@@ -357,16 +357,16 @@ test('a shop the game opens no hour is read off its own plan, not the Staff page
 test('work held for a section runs when it arrives; a waiting write dialog hears arrivals and failures', async () => {
   const b = board();
   b.run('globalThis.ran = 0; odThen("hiring", () => { globalThis.ran++; })');
-  b.run('globalThis.painted = 0; gwOpen = {open: true, _odWait: () => { globalThis.painted++; }}');
+  b.run('globalThis.painted = 0; gwOpen = {open: true}; gwState(gwOpen).odWait = () => { globalThis.painted++; }');
   assert.equal(b.run('ran'), 0);
   b.asked[0].reject(new Error('boom'));
   await tick();
   assert.equal(b.run('painted'), 1, 'the dialog paints the failure');
-  b.run('gwOpen._odWait = () => { globalThis.painted++; }');
+  b.run('gwOpenState().odWait = () => { globalThis.painted++; }');
   b.run('odThen("hiring", () => { globalThis.ran++; })');
   b.run('odRetry("hiring")');
   assert.equal(b.run('painted'), 2, 'and paints the Try again');
-  b.run('gwOpen._odWait = () => { globalThis.painted++; }');
+  b.run('gwOpenState().odWait = () => { globalThis.painted++; }');
   b.asked.at(-1).resolve({generation: 5, sections: {
     factoryStaffing: {factoryStaffing: {cap: [], dem: []}},
     hiring: {hiring: {sites: []}, candidates: []},
