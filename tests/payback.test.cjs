@@ -1,5 +1,5 @@
-// Payback on Businesses › Results and the site panel (docs/open-a-store-scope.md,
-// Phase 1): the column per chain and site, the company-cost rows still as wide
+// Payback on Businesses › Results and the site panel (docs/dashboard-reference.md,
+// "Payback"): the column per chain and site, the company-cost rows still as wide
 // as the header, the install-mode switch kept per character, sorting by the
 // column, and the site panel's line for a shop but not for a factory. The board
 // is the CLI page rendered from the synthetic day-47 payload snapshot

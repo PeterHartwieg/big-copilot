@@ -1083,10 +1083,9 @@ What `page_html()` produces, top of the file down:
    `window.LEDGER_RELEASE`, `update.js`, `app.js?v=<stamp>`, `community.js?v=<stamp>`.
 5. The board script, `template/board.js`, in the last `<script>` block of the template.
 
-Before any of that, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`,
-`ba_dashboard.py`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json` and
-`ba_store_rules.json` into `web/py/`, stripping comments and docstring contents only
-from `ba_dashboard.py` while preserving its lines, and
+Before any of that, `main()` refreshes `web/wiki-data.json`, copies the files `PY_CODE`
+and `PY_DATA` name (all but `gametext.json`: `PY_COPIED`) into `web/py/`, stripping
+comments and docstring contents only from `ba_dashboard.py` while preserving its lines, and
 writes `web/py/gametext.json` and `web/names/<lang>.json` (`write_name_tables()`) from the installed locale — everything `stamp()` hashes has to be in place before
 `release_info()` runs. `main()` then writes `web/index.html` and `web/version.json`.
 
@@ -1659,12 +1658,10 @@ because a deploy from a checkout that lacks them would remove them from the site
 files from `https://cdn.jsdelivr.net/pyodide/v<version>/full/` into a new version folder,
 change `PYODIDE_VERSION` in `web/worker.js`, and delete the old folder.
 
-The nine board dependencies are listed in `PY_CODE` and `PY_DATA` in
-`build_web.py` and checked against `CODE_FILES`/`DATA_FILES` in the worker:
-
-- `ba_save.py`, `ba_facts.py`, `ba_mods.py` and `ba_dashboard.py` — required code.
-- `gametext.json`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json`
-  and `ba_store_rules.json` — game data tables.
+The board's dependencies are the files `PY_CODE` (the Python modules) and `PY_DATA`
+(the game data tables) name in `build_web.py`. `tests/test_web_fresh.py` checks them
+against `CODE_FILES`/`DATA_FILES` in the worker, and `tests/worker_startup.test.cjs`
+reads its list from the same two tuples.
 
 `ba_dashboard.py` ships as `strip_copy()` of the source: comments removed and docstrings
 emptied, every line where it was. The virtual filesystem is new on each page load, so

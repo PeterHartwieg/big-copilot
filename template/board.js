@@ -11858,7 +11858,7 @@ function drawMarket(){
 }
 
 /* --- Expansion › Open a store ------------------------------------------------
-   docs/open-a-store-scope.md, phase 2. A plan walks four steps: what to open
+   docs/dashboard-reference.md, "Open a store". A plan walks four steps: what to open
    (a type, or a Demand cell), where (Find a location, embedded and fixed to
    the type), the investment for a 100% outfitted store in that building in
    either install mode, and when it breaks even, with a loan if the reader

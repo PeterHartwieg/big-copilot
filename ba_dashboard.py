@@ -3760,7 +3760,7 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         "market": market,
         "chains": chains,
         # Investment, profit so far and break-even, per site and per chain
-        # (_payback(), docs/open-a-store-scope.md).
+        # (_payback(), docs/dashboard-reference.md, "Payback").
         "payback": payback,
         "trends": trends,
         "hypeExposure": hype,
@@ -17751,7 +17751,7 @@ def _site_trends(businesses: list, day: int) -> list:
 
 # ------------------------------------------------------------------- payback
 # What a site cost to set up, and when its profit paid that back
-# (docs/open-a-store-scope.md, "Phase 1"). The rules are the game's own, read
+# (docs/dashboard-reference.md, "Payback"). The rules are the game's own, read
 # from its code on 28 Sep 2026 and checked against six real bills to the coin:
 #   installation firm  586 x the building's m² + every item at its default
 #                      price; walls and floors cost nothing
@@ -18281,7 +18281,7 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
 
 
 # ------------------------------------------------------------- open a store
-# Expansion › Open a store (docs/open-a-store-scope.md, phase 2): the facts a
+# Expansion › Open a store (docs/dashboard-reference.md, "Open a store"): the facts a
 # plan for a store that does not exist yet is worked out from. Python says what
 # the save and the game's tables hold -- what a type needs to be fully outfitted
 # in each layout, what every product meets in every neighbourhood, the player's

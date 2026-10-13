@@ -7,6 +7,7 @@ dashboard.html
 # Python
 __pycache__/
 *.pyc
+# A local virtual environment on the owner's machine
 .venv-map/
 
 # Cloudflare and Node
@@ -16,6 +17,7 @@ dist/
 
 # OS
 .DS_Store
+# Local scratch pages and the watch server's logs on the owner's machine
 web/test-*
 watch.log
 watch.err

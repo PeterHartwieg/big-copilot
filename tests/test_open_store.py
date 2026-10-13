@@ -1,5 +1,5 @@
 """Expansion › Open a store: the facts a plan is worked out from (_open_store(),
-docs/open-a-store-scope.md, phase 2).
+docs/dashboard-reference.md, "Open a store").
 
 The rules are the game's own: what a type needs to open, one item per customer
 demand, tills and displays sized to the building's customer capacity, the
