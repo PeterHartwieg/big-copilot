@@ -4456,15 +4456,19 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
     # What customers can buy here now, by the game's own list. A shop taken
     # over and changed to another type keeps the old type's stock, prices and
     # last week of sales, none of which it can sell or reprice any more (issue
-    # #493). A product neither the list nor the type's own products hold is
-    # `retired`: no shelf to plan. The type's products keep a shelf the player
-    # has just stocked judged before the game lists it. An empty list (a shop
-    # not scored yet) says nothing, and the paper bag and the issued tickets
-    # are never on it.
+    # #493). A product the list does not hold is `retired`: no shelf to plan.
+    # One that has not sold yet and that the type itself sells is a shelf the
+    # player may have just stocked, before the game lists it, so it is not;
+    # old stock with past sales is retired even where the new type could sell
+    # it (soda in many), since the list follows the furniture. An empty list
+    # (a shop not scored yet) says nothing, and the paper bag and the issued
+    # tickets are never on it.
     offered = {i for i in save.items(b.get("cachedAvailableProducts")) if isinstance(i, str)}
+    unsold_ok = set()
     if offered:
+        offered |= {PAPER_BAG} | ISSUED_ITEMS
         own = ((load_store_rules().get("types") or {}).get(b.get("businessTypeName")) or {}).get("i") or ()
-        offered |= {p for p, _impact in own} | {PAPER_BAG} | ISSUED_ITEMS
+        unsold_ok = {p for p, _impact in own}
 
     lines = []
     # Rows that tie on cover would otherwise reshuffle between runs and page loads.
@@ -4499,7 +4503,8 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
                 "soldPerDay": round(units_sold[item] / span),
                 "soldPerWeek": round(units_sold[item] / span * 7),
                 **({"issued": True} if item in ISSUED_ITEMS else {}),
-                **({"retired": True} if offered and item not in offered else {}),
+                **({"retired": True} if offered and item not in offered
+                    and (units_sold[item] or item not in unsold_ok) else {}),
                 # Unrounded, for _products() alone; build_core() takes them
                 # off the payload: a price from rounded units is no price.
                 "_sold": units_sold[item] / span,

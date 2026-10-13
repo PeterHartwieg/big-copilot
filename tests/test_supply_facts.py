@@ -220,8 +220,10 @@ class RetiredLineTests(unittest.TestCase):
     """A line is retired where the game's own list of what customers can buy
     there (cachedAvailableProducts) leaves it out (issue #493)."""
 
-    def lines(self, offered, sold=("ba:itemname_paperbag",)):
+    def lines(self, offered, sold=("ba:itemname_paperbag",), selling=ROSE):
         record = shop_record([sale_day(d, 40, 20) for d in range(2, 9)])
+        for entry in record["orderHistory"]["$items"]:
+            entry["itemSales"]["$items"][0]["itemName"] = selling
         record["cachedAvailableProducts"] = {"$items": list(offered)}
         # Beer keeps a price from the shop's old type; nothing stocks or sells it.
         extra = [{"itemName": BEER, "price": 3}] + [{"itemName": slug, "price": 0} for slug in sold]
@@ -242,6 +244,13 @@ class RetiredLineTests(unittest.TestCase):
         # Just stocked, not yet on the list: the florist's own type sells it.
         flower = "ba:itemname_cheapflower"
         self.assertNotIn("retired", self.lines([ROSE], sold=(flower,))[flower])
+
+    def test_old_sales_of_a_product_the_type_could_sell_are_still_retired(self):
+        # Soda sold before the conversion; the florist could sell soda with a
+        # fridge, but the game does not list it, so its old sales are no shelf.
+        soda = "ba:itemname_sodacan"
+        lines = self.lines([ROSE], sold=(soda,), selling=soda)
+        self.assertTrue(lines[soda].get("retired"))
 
     def test_an_empty_list_retires_nothing(self):
         self.assertFalse([l for l in self.lines([]).values() if l.get("retired")])
