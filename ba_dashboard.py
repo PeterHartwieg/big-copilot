@@ -2033,8 +2033,7 @@ def _premises(save: Save, names: Names, market: dict, estate: dict | None = None
     price (Real estate's rule, at `estate`'s rent multiplier; 1 without one).
     """
     mult = estate["mult"]["value"] if estate else 1
-    per_year = estate["perYear"] if estate else (
-        (save.deref(save.root.get("gameVariables")) or {}).get("daysPerYear") or 60)
+    per_year = estate["perYear"] if estate else _days_per_year(save.deref(save.root.get("gameVariables")))
     rent_paid = _rent_paid(save)
     table = load_buildings(save)
     caps = _door_caps(names)
@@ -2283,7 +2282,7 @@ def _best_price(market_rent: float) -> float:
 def _property_tax_day(row: dict, sqm: float, per_year: int) -> float:
     """RealEstate.TaxesAmount spread over the tax year's days."""
     return (sqm * REAL_ESTATE_TYPES.get(row.get("t"), 0) * REAL_ESTATE_HOODS.get(row.get("h"), 0)
-            * PROPERTY_TAX_PER_SQM / (per_year or 60))
+            * PROPERTY_TAX_PER_SQM / (per_year or DAYS_PER_YEAR))
 
 
 def _is_villa(row: dict) -> bool:
@@ -2349,7 +2348,7 @@ def _estate_owned(save: Save, names: Names, mods: dict) -> dict:
     """
     root = save.root
     table = load_buildings(save)
-    per_year = (save.deref(root.get("gameVariables")) or {}).get("daysPerYear") or 60
+    per_year = _days_per_year(save.deref(root.get("gameVariables")))
     rented = {_address_of(r): r for r in save.items(root.get("BuildingRegistrations")) if r.get("RentedByPlayer")}
     summaries = sorted(save.items(root.get("financialSummaries")), key=lambda s: s.get("dayNumber") or 0)
     paid_by_day = []
@@ -2464,9 +2463,9 @@ def _tax_period(save: Save) -> dict:
     """
     root = save.root
     gv = save.deref(root.get("gameVariables")) or {}
-    per_year = gv.get("daysPerYear") or 60
+    per_year = _days_per_year(gv)
     if not isinstance(per_year, int) or per_year < 1:
-        per_year = 60
+        per_year = DAYS_PER_YEAR
     day = root.get("Day") or 0
     if not isinstance(day, int) or day < 0:
         day = 0
@@ -3694,7 +3693,7 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
                         stmt_history=stmt_history, daily=daily, market=market,
                         recipes=recipes, planning={}, estate=estate,
                         base_promotion=(save.deref(root.get("gameVariables")) or {}).get(
-                            "baseCustomerPromotionMultiplier", 0.55))
+                            "baseCustomerPromotionMultiplier", HOUSE_RULE_NORMAL["baseCustomerPromotionMultiplier"]))
     # The second result is the same findings with factory lines sized on
     # demand, for the board's Demand switch: the supply findings again over the
     # facts already built, not a second supply model, and every other finding
@@ -3818,7 +3817,7 @@ def _net_worth(root: dict, history, character: str, day: int) -> dict:
 
 def _city_date(save: Save, day: int) -> str:
     """In-game day number rendered as a year/day-of-year, using the save's calendar."""
-    per_year = save.deref(save.root.get("gameVariables")).get("daysPerYear") or 60
+    per_year = _days_per_year(save.deref(save.root.get("gameVariables")))
     year = (day - 1) // per_year + 1
     return f"Year {year}, day {(day - 1) % per_year + 1} of {per_year}"
 
@@ -3850,6 +3849,23 @@ HOUSE_RULES = [
      "surcharge for rushing an import"),
     ("taxPercentage", "Tax rate", "%", 5, "up", "annual rate from the IRS"),
 ]
+
+# Normal's value of each slider, for a save that does not hold the setting.
+HOUSE_RULE_NORMAL = {key: normal for key, _name, _unit, normal, _harder, _what in HOUSE_RULES}
+# GameVariables.daysPerYear on every preset: the tax year, and the year the
+# calendar and the loans count in.
+DAYS_PER_YEAR = 60
+
+
+def _house_rule(gv: dict, key: str) -> float:
+    """The save's custom-game setting `key`, or Normal's when it holds none (or 0)."""
+    return (gv or {}).get(key) or HOUSE_RULE_NORMAL[key]
+
+
+def _days_per_year(gv: dict) -> int:
+    """The save's year length in days, DAYS_PER_YEAR when it holds none."""
+    return (gv or {}).get("daysPerYear") or DAYS_PER_YEAR
+
 
 # The game's Difficulty enum, which is what the save's ``difficulty`` holds.
 DIFFICULTY_SLOTS = {0: "Custom", 1: "Easy", 2: "Normal", 3: "Hard"}
@@ -7176,7 +7192,7 @@ def _supply_depot_rows(walked: dict, eats: dict, made: dict, *, businesses: list
             landing = supply["arrives"] if supply["active"] and rounds else None
             def cover_walk(extra):
                 remaining, cover, runs_out = line["units"], 0.0, None
-                for ahead in range(60):
+                for ahead in range(LASTS_CAP):
                     share = today if ahead == 0 else 1.0
                     # On a round-fed site's delivery day only the round
                     # leaves before the drop; the lines eat after it.
@@ -7194,7 +7210,7 @@ def _supply_depot_rows(walked: dict, eats: dict, made: dict, *, businesses: list
                     remaining -= today_use
                     cover += share
                 else:
-                    cover = 60.0
+                    cover = float(LASTS_CAP)
                 return cover, runs_out
 
             cover, runs_out = cover_walk(before)
@@ -8728,7 +8744,7 @@ def _supply_facts(ctx: dict) -> dict:
         p = {}
         if paused and use and not covered:
             p["paused"] = True
-            p["cover"] = row["cover"] if row else (stock / (use / 7) if use else 60)
+            p["cover"] = row["cover"] if row else (stock / (use / 7) if use else LASTS_CAP)
         elif not entry and use and not covered:
             # Nothing brings it here. Where every site it tops up has an
             # import of its own, that import is the one to raise (its fact
@@ -9179,7 +9195,7 @@ def _supply_facts(ctx: dict) -> dict:
                     # covers the line, the player most likely paused it
                     # because the depot feeds the line now (why topup).
                     if st in ("short", "noplan") or (st == "stalled" and why == "notDrawn"):
-                        cover = stock / row["perDay"] if row["perDay"] else 60
+                        cover = stock / row["perDay"] if row["perDay"] else LASTS_CAP
                         ist, iwhy, ilvl = "paused", "order", "warn" if cover >= 7 else "critical"
                     else:
                         ist, iwhy, ilvl = "paused", "topup", "info"
@@ -18372,13 +18388,19 @@ BOAT_PRICES = {0: 3_200_000, 1: 2_500_000, 2: 90_000_000}
 # The satisfaction a well-run new shop settles at (all four parts near 95)
 # where the player runs none of the type to take it from.
 PLAN_SATISFACTION = 95
+# CitizenHelper.Init: the price a working-, middle- and upper-class customer
+# accepts, as a multiple of the reference price; a neighbourhood's index is
+# their average over its class shares (ba_store_rules.json hoods w, m, u).
+PRICE_ACCEPTANCE = (1.2, 1.4, 1.7)
 # What a shop of the player's own is measured over: its last finished trading
 # days after the opening, the window the profit model was validated on.
 OWN_PROFIT_DAYS = 14
 # The days after its first sale a new shop still earns below its steady
 # state (research RAMP.md: satisfaction starts at 50, new staff climb 0.6 an
-# hour); the board's OS_RAMP holds the factors.
-RAMP_DAYS = 5
+# hour): each day's gross margin as a share of the steady one, from the
+# opening day on. The board's plan reads them from openStore.game.ramp.
+RAMP = (0.55, 0.92, 0.94, 0.97, 0.99)
+RAMP_DAYS = len(RAMP)
 # The shops a new one would take demand from, measured over their last week.
 SALES_DAYS = 7
 # FurnitureStoreManagerDialog: one flat fee per furniture delivery contract.
@@ -19216,7 +19238,7 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
         addr = save.address(loan.get("bankAddress"))
         owed[places.get(site_key(addr)) if addr else None] += loan.get("remainingAmount") or 0
     last = [d["profit"] for d in daily[-7:]]
-    per_year = gv.get("daysPerYear") or 60
+    per_year = _days_per_year(gv)
     banks = []
     for bank, terms in sorted((rules.get("banks") or {}).items()):
         name, addr = BANK_PLACES.get(bank, (bank, None))
@@ -19231,7 +19253,7 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
         "floor": TUTORIAL_LOAN_FLOOR if tutorial else 0,
         "profit7": money(sum(last) / 7) if last else 0,
         "owed": money(sum(owed.values())),
-        "multiplier": round(gv.get("bankInterestMultiplier") or 0.7, 4),
+        "multiplier": round(_house_rule(gv, "bankInterestMultiplier"), 4),
         "year": per_year,
         "minimum": LOAN_MINIMUM,
         "banks": banks,
@@ -19378,9 +19400,8 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
         shares = (h.get("w") or 0, h.get("m") or 0, h.get("u") or 0)
         total = sum(shares) or 1
         hoods[hood] = {
-            # CitizenHelper.Init: the price everyone accepts, as a multiple of
-            # the reference price.
-            "idx": round((1.2 * shares[0] + 1.4 * shares[1] + 1.7 * shares[2]) / total, 4),
+            # The price everyone accepts, as a multiple of the reference price.
+            "idx": round(sum(w * s for w, s in zip(PRICE_ACCEPTANCE, shares)) / total, 4),
             "strength": h.get("ms") or 0,
             "demands": h.get("cw") or 0,
             "interior": h.get("mi") or 0,
@@ -19391,9 +19412,9 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     used_vendors = {v for item in items_used for v in (furniture.get(item) or {}).get("v") or ()}
     return {
         "game": {
-            "promo": round(gv.get("baseCustomerPromotionMultiplier") or 0.55, 4),
+            "promo": round(_house_rule(gv, "baseCustomerPromotionMultiplier"), 4),
             "prices": round(mpm, 4),
-            "wages": round(gv.get("employeeHourlySalaryMultiplier") or 0.7, 4),
+            "wages": round(_house_rule(gv, "employeeHourlySalaryMultiplier"), 4),
             "tax": gv.get("taxPercentage") or 0,
             "capInitial": (build_at_start or 0) >= CAPPED_INITIAL_BUILD,
             "agent": agent,
@@ -19401,6 +19422,9 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
             "delivery": FURNITURE_DELIVERY_FEE,
             "satisfaction": PLAN_SATISFACTION,
             "wageBase": PLAN_WAGES,
+            "ramp": list(RAMP),
+            "office": {"always": OFFICE_ALWAYS_ON, "fullDoor": OFFICE_FULL_DOOR, "day": list(OFFICE_DAY),
+                       "weekend": list(OFFICE_WEEKEND)},
         },
         "types": types,
         "market": market,
@@ -19434,6 +19458,9 @@ FACTORY_TRUCK = "ba:vehicletype_freighttruckt1"
 DEPOT_VAN = "ba:vehicletype_deliverytruck"
 VEHICLE_DEALER = ("General US Trucks", "ba:street_seventhavenue#1", "ba:neighborhood_industrycity")
 PALLET_SHELF = "ba:itemname_palletshelf"
+# The boxes a pallet shelf holds (its furniture row's cc in ba_store_rules.json),
+# for rules that lack the row.
+PALLET_SHELF_BOXES = 60
 # The game pays a delivery driver a flat 5.7 hours a day, whatever the round
 # takes (NOTES.md, decision 15); a hire at headquarters is planned at 40 h.
 DRIVER_DAY_HOURS = 5.7
@@ -19610,8 +19637,8 @@ def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, r
     return {
         "game": {
             "prices": round(gv.get("marketPriceMultiplier") or 1.0, 4),
-            "export": round(gv.get("exportMultiplier") or 0.65, 4),
-            "wages": round(gv.get("employeeHourlySalaryMultiplier") or 0.7, 4),
+            "export": round(_house_rule(gv, "exportMultiplier"), 4),
+            "wages": round(_house_rule(gv, "employeeHourlySalaryMultiplier"), 4),
             "agent": agent,
             "agentName": agents[0][1] if agents else None,
             "installFee": INSTALL_FEE_PER_M2,
@@ -19625,7 +19652,7 @@ def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, r
         "products": facts,
         "kits": kits,
         "shelf": {"item": PALLET_SHELF, "p": items[PALLET_SHELF]["p"],
-                  "cc": (furniture.get(PALLET_SHELF) or {}).get("cc") or 60},
+                  "cc": (furniture.get(PALLET_SHELF) or {}).get("cc") or PALLET_SHELF_BOXES},
         "vehicles": {role: {"type": kind, "p": float(vehicle_prices.get(kind) or 0), "name": names.label(kind),
                             "dealer": VEHICLE_DEALER[0], "at": VEHICLE_DEALER[1], "hood": VEHICLE_DEALER[2]}
                      for role, kind in (("truck", FACTORY_TRUCK), ("van", DEPOT_VAN))},

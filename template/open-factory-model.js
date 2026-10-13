@@ -15,10 +15,21 @@ const OpenFactoryModel = ((storeModel) => {
    * machine counts. investment additionally takes a selected depot building;
    * running takes wantsDepot (HQ needs even when no depot is available yet).
    * Methods never change their arguments. Missing kits/building yield a null
-   * investment; other missing facts retain the board's existing zero/fallbacks.
+   * investment; other missing facts retain the board's existing zero/fallbacks,
+   * except a game value a present table lacks (driverHours, hqHours, shelf.cc),
+   * which throws: Python ships each one, and the model keeps no copy of it.
    */
   function create({facts = {}, recipes = {}, aliases = {}, sources = {}, hours = 24} = {}){
     const game = facts.game || {};
+    /* A value openFactory ships (_open_factory() in Python, its single source).
+       A table that is there without it is a payload bug, not a reason to guess;
+       no table at all is a plan with no facts, which counts nothing. */
+    const need = (from, key, where) => {
+      if(from == null) return 0;
+      const v = from[key];
+      if(v == null) throw new Error(`openFactory.${where}.${key} is missing`);
+      return v;
+    };
     function ofProd(slug){
       const P = facts.products || {};
       if(P[slug]) return P[slug];
@@ -35,7 +46,7 @@ const OpenFactoryModel = ((storeModel) => {
       return r && r.out ? r.ingredients.reduce((s, i) => s + i.per * ofImportPrice(i.slug), 0) / r.out : 0; };
     /* SkillData.baseHourlyWage × (1 + 1.05^skill / 100) × the game's salary
        multiplier, at skill 100, as the store flow plans its staff. */
-    const ofHourly = skill => ((facts.skills || {})[`ba:skill_${skill}`] || 0) * (1 + Math.pow(1.05, 100) / 100) * (game.wages || 0);
+    const ofHourly = skill => ((facts.skills || {})[`ba:skill_${skill}`] || 0) * storeModel.SKILL_100_WAGE * (game.wages || 0);
     /* What a line saves a week: the imports it replaces, less the raw material
        its machines eat running flat out. The surplus is valued apart, as an export. */
     const ofSaves = l => Math.min(l.made, l.want) * ofImportPrice(l.slug) - l.made * ofRawUnit(l.slug);
@@ -85,9 +96,9 @@ const OpenFactoryModel = ((storeModel) => {
       const adds = owned ? Object.fromEntries(Object.entries(counts).map(([slug, m]) => [slug, Math.max(0, m - (now[slug] || 0))])) : counts;
       /* A factory you run stores for every line it keeps after the change, its
          other types' included, against the shelves standing there. */
-      const shelf = F.shelf || {}, cc = shelf.cc || 60, boxes = ofBoxes(owned ? {...now, ...counts} : counts);
+      const shelf = F.shelf || {}, cc = need(F.shelf, "cc", "shelf"), boxes = ofBoxes(owned ? {...now, ...counts} : counts);
       const placed = owned ? (((F.sites || {})[b.key] || {}).shelves || 0) : 0;
-      const shelves = Math.max(0, Math.ceil(boxes / cc) - placed);
+      const shelves = cc ? Math.max(0, Math.ceil(boxes / cc) - placed) : 0;
       const out = {lines: [...ofKit(adds)].map(([item, qty]) => [item, qty, "ws"])};
       if(shelves && shelf.item) out.lines.push([shelf.item, shelves, "shelf"]);
       const price = item => (items[item] || {}).p || 0;
@@ -127,8 +138,8 @@ const OpenFactoryModel = ((storeModel) => {
       const hq = ofHq(counts, wantsDepot), b = inv ? inv.b : building;
       const raw = ofRawCost(counts), workers = machines * 168 * ofHourly("factoryworker");
       const drivers = 1 + (inv && inv.depot ? 1 : 0);
-      const driver = drivers * (g.driverHours || 5.7) * 7 * ofHourly("deliverydriver");
-      const office = (hq.agents * ofHourly("purchasingagent") + hq.managers * ofHourly("logisticsmanager")) * (g.hqHours || 40);
+      const driver = drivers * need(facts.game, "driverHours", "game") * 7 * ofHourly("deliverydriver");
+      const office = (hq.agents * ofHourly("purchasingagent") + hq.managers * ofHourly("logisticsmanager")) * need(facts.game, "hqHours", "game");
       const rent = ((b && b.rent) || 0) * 7 + (inv && inv.depot ? (inv.depot.b.rent || 0) * 7 : 0);
       return {raw, wages: workers + driver + office, rent, workers, driver, hq: office, total: raw + workers + driver + office + rent};
     }

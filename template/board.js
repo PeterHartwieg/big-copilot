@@ -12891,7 +12891,7 @@ function osUntilHtml(plan){
    another business opens in its place, the plan says so and attaches to
    nothing: it is history. A plan made before any of this was kept compares
    the investment only. */
-const OS_SNAP_DAYS = 30, OS_RAMP_SHOWN = 5;
+const OS_SNAP_DAYS = 30;
 const OS_SNAP_INV = ["furniture", "fee", "deposit", "decor", "delivery", "firm", "self"];
 /* The single figure a range is shown as: its middle (the range is on hover). */
 const OS_MID = (OS_LOW + OS_HIGH) / 2;
@@ -13130,7 +13130,7 @@ function osRoiTable(row, snap, planMode, o){
     rows.push(tr(tt("gr.os.roi.day", "Profit a day"), tt("gr.os.roi.day.sub", {one: "the last day", other: "the last {n} days"}, {n: recent}),
       osMidMoney(lo, hi), m(rate), rate == null ? `<td></td>` : Math.abs(rate - mid) < 0.5 ? `<td class="d">${tt("gr.os.roi.onPlan", "on plan")}</td>`
         : `<td class="${rate >= lo ? "d" : "dn"}">${osSigned(rate - mid)}</td>`));
-    const sold = osSelling(row), n = Math.min(OS_RAMP_SHOWN, sold.length);
+    const sold = osSelling(row), n = Math.min(osCore().rampDays(), sold.length);
     if(n && snap.curve && snap.curve.length >= n){
       const was = Math.round(snap.curve.slice(0, n).reduce((a, b) => a + b, 0) * OS_MID), now = sold.slice(0, n).reduce((a, d) => a + d[1], 0);
       rows.push(tr(tt("gr.os.roi.ramp", {one: "The first day", other: "The first {n} days"}, {n}),
