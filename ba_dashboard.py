@@ -9582,6 +9582,12 @@ def _station_name(names: Names, slug: str) -> str:
     return match.group(1) if match else f"{slug.title()} Workstation"
 
 
+def _in_log(flow: dict):
+    """in_by_day(key, slug): what arrived at a site of an item, by day."""
+    # A hand-built flow (the recipe tests) may carry only the net log.
+    return flow.get("inByDay") or flow["byDay"]
+
+
 def _held_at(flow: dict, key, slug) -> float:
     """What the site `key` holds of `slug`."""
     return flow["held"].get(key, {}).get(slug, 0)
@@ -9600,8 +9606,7 @@ def _arrives(flow: dict, key, slug) -> float:
     factory that has since changed, and the last completed round is the
     honest measure of what the logistics brings in.
     """
-    # A hand-built flow (the recipe tests) may carry only the net log.
-    in_by_day = flow.get("inByDay") or flow["byDay"]
+    in_by_day = _in_log(flow)
     # The log is already cut to the window and to completed days. What the
     # factory sends on of the same item (an import passed to a depot's
     # target) arrived but was never eaten, so it comes off.
@@ -9767,8 +9772,7 @@ def _factories(
     for slug, rec in recipes.items():
         by_station[rec["workstation"]].append(slug)
 
-    # A hand-built flow (the recipe tests) may carry only the net log.
-    in_by_day = flow.get("inByDay") or flow["byDay"]
+    in_by_day = _in_log(flow)
     hours_today = save.root.get("Hour", 24) + (save.root.get("Minute") or 0) / 60
     resolve = _ingredient_resolver(flow, names)
 
@@ -15031,8 +15035,9 @@ def _week_c_headcount(ctx: dict) -> None:
 def _week_d_place(ctx: dict) -> None:
     """d. Place, most-constrained-first, serving stations before cover.
 
-    Adds `shifts` and `hire_weeks` (_week_d_fill()), and `before` and
-    `roles_here` for e.
+    Adds `shifts` and `hire_weeks` (_week_d_fill()), `before` and
+    `roles_here` for e., and the placement's working set: `flex`, `now`,
+    `protected`, `fixed_people`, `role_keys`, `by_id`, `start` and `keys`.
     """
     grid, cover_posts, pool, state = ctx["grid"], ctx["cover_posts"], ctx["pool"], ctx["state"]
     current, fixed, slots, cover_slots = ctx["current"], ctx["fixed"], ctx["slots"], ctx["cover_slots"]
