@@ -57,6 +57,13 @@ export function validateTranslation(text, validation) {
 const CATALOGUE_CACHE = 2;
 const parsedCatalogues = new Map();
 const sourceMaps = new WeakMap();
+// Every insertion, a revalidated hit included, goes through here: a hit whose
+// revalidation finishes after other languages evicted it must still evict.
+function rememberCatalogue(lang, held) {
+  parsedCatalogues.delete(lang);
+  parsedCatalogues.set(lang, held);
+  while (parsedCatalogues.size > CATALOGUE_CACHE) parsedCatalogues.delete(parsedCatalogues.keys().next().value);
+}
 
 async function catalogue(request, env, lang) {
   if (!LANG.test(lang || '')) return null;
@@ -64,12 +71,12 @@ async function catalogue(request, env, lang) {
   const response = await env.ASSETS.fetch(new Request(new URL(`/translations/${lang}.json`, request.url),
     cached ? { headers: { 'if-none-match': cached.etag } } : undefined));
   const etag = response.headers.get('etag');
-  parsedCatalogues.delete(lang);
   if (cached && (response.status === 304 || (response.ok && etag === cached.etag))) {
+    rememberCatalogue(lang, cached);
     await response.body?.cancel();
-    parsedCatalogues.set(lang, cached);
     return cached.cat;
   }
+  parsedCatalogues.delete(lang);
   if (!response.ok) {
     await response.body?.cancel();
     return null;
@@ -85,10 +92,7 @@ async function catalogue(request, env, lang) {
     entries.set(entry.key, entry);
   }
   const cat = { ...data, entries };
-  if (etag) {
-    parsedCatalogues.set(lang, { etag, cat });
-    while (parsedCatalogues.size > CATALOGUE_CACHE) parsedCatalogues.delete(parsedCatalogues.keys().next().value);
-  }
+  if (etag) rememberCatalogue(lang, { etag, cat });
   return cat;
 }
 // {key: sourceVersion} as JSON, the text json_each() joins against; built once per parse.

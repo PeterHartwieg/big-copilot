@@ -19,6 +19,9 @@ const BASE = {schemaVersion:1, lang:'it', revision:'catalogue-1', entries:[
 // deployment, so overlays cached by an earlier test never answer a later one.
 // catTags[lang], when set, is the ETag ASSETS sends with that catalogue, and it
 // answers a matching If-None-Match with 304, as Workers Static Assets does.
+// assetHold[lang], when set, parks that catalogue's response until released, and
+// assetFull[lang] answers with the full body even to a matching If-None-Match.
+let assetHold = {}, assetFull = {};
 let cats, catTags = {}, mf, db, script, ipSeq = 1, stamp = null, stampSeq = 0, assetReads = {};
 const ip = () => `10.98.${Math.floor(++ipSeq / 250)}.${ipSeq % 250 + 1}`;
 const raw = fs.readFileSync(path.join(ROOT,'migrations/0002_translations.sql'),'utf8');
@@ -47,8 +50,9 @@ function options() {
       const lang = /^\/translations\/([^/]+)\.json$/.exec(pathname)?.[1];
       if (!lang) return new Response('static fixture');
       if (!cats[lang]) return new Response('missing',{status:404});
+      if (assetHold[lang]) { assetHold[lang].arrived(); await assetHold[lang].release; }
       const tag = catTags[lang];
-      if (tag && request.headers.get('if-none-match') === tag) return new Response(null,{status:304,headers:{etag:tag}});
+      if (tag && !assetFull[lang] && request.headers.get('if-none-match') === tag) return new Response(null,{status:304,headers:{etag:tag}});
       return Response.json(cats[lang], tag ? {headers:{etag:tag}} : undefined);
     }}};
 }
@@ -82,7 +86,7 @@ before(async()=>{
   db=await mf.getD1Database('COMMUNITY_DB'); await migrate(db);
 });
 beforeEach(async()=>{
-  cats={it:structuredClone(BASE),de:{...structuredClone(BASE),lang:'de'}}; catTags={};
+  cats={it:structuredClone(BASE),de:{...structuredClone(BASE),lang:'de'}}; catTags={}; assetHold={}; assetFull={};
   stamp=`stamp-${++stampSeq}`; assetReads={};
   await db.prepare('DELETE FROM translation_votes').run();
   await db.prepare('DELETE FROM translation_candidates').run();
@@ -552,4 +556,35 @@ test('a parsed catalogue is reused only while ASSETS reports the same ETag',asyn
   catTags.it='"catalogue-c"'; await json(await entry(user));
   delete cats.it;
   await json(await entry(user),404);
+});
+
+const bundledOf = async (lang, voter=ip()) =>
+  (await json(await fetchApi('/api/translations/entry?'+new URLSearchParams(fields('greeting',V1,lang)),{voter}))).candidates.find(c=>c.id==='bundled').text;
+
+test('a cached parse is reused when ASSETS answers 200 with the same ETag',async()=>{
+  catTags.it='"catalogue-a"';
+  assert.equal(await bundledOf('it'),'Ciao {n}');
+  assetFull.it=true; // ignores If-None-Match, sends the body and the same tag
+  cats.it.entries[0].text='Salve {n}';
+  const reads=catalogueReads('it');
+  assert.equal(await bundledOf('it'),'Ciao {n}','the same tag reuses the parse');
+  assert.equal(catalogueReads('it'),reads+1);
+});
+
+test('a revalidation that finishes after eviction still keeps at most two catalogues',async()=>{
+  cats.fr={...structuredClone(BASE),lang:'fr'};
+  for(const lang of ['it','de','fr']) catTags[lang]=`"${lang}-a"`;
+  assert.equal(await bundledOf('it'),'Ciao {n}');
+  assert.equal(await bundledOf('de'),'Ciao {n}'); // held: it, de
+  let arrived, release;
+  const reached=new Promise(resolve=>{arrived=resolve;});
+  assetHold.it={arrived, release:new Promise(resolve=>{release=resolve;})};
+  const late=bundledOf('it'); // revalidates it, parked in ASSETS
+  await reached;
+  assert.equal(await bundledOf('fr'),'Ciao {n}'); // held: de, fr (it evicted)
+  release(); delete assetHold.it;
+  assert.equal(await late,'Ciao {n}'); // the 304 re-inserts it, which must evict de
+  // Bytes changed behind unchanged tags reveal which parses are still held.
+  for(const lang of ['it','de','fr']) cats[lang].entries[0].text='Salve {n}';
+  assert.equal(await bundledOf('de'),'Salve {n}','de was evicted, so it is parsed again');
 });
