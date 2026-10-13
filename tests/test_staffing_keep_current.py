@@ -191,12 +191,12 @@ def staffed_days(plan_row):
 class CallersTest(unittest.TestCase):
     """The plans a write replaces the week with hold: a shop's demand and open-hours plans, an office's demand plan."""
 
-    def shop(self):
+    def shop(self, opens=((9, 21),)):
         crew = [ts.employee("a", [ts.SERVICE], demands=(ts.FULLTIME,))]
         shifts = [{"wd": wd, "employeeId": "a", "itemInstanceId": 1, "startingHour": 9,
                    "endingHour": 21, "type": 1} for wd in (3, 4, 5, 6)]
         return ts.plan([(1, ts.REGISTER)], crew, {h: (12 if 9 <= h < 21 else 0) for h in range(24)},
-                       opens=((9, 21),), shifts=shifts)
+                       opens=opens, shifts=shifts)
 
     def office(self):
         # One computer measured busy 08-16 every day; the one lawyer works it
@@ -224,13 +224,26 @@ class CallersTest(unittest.TestCase):
 
     def test_a_shop_keeps_its_cashier_on_their_days(self):
         row = self.shop()
-        # The demand plan and the open-hours plan; the 24/7 test is a choice
-        # that changes the opening hours, and keeps nobody's (a speed call).
+        # The demand plan and the open-hours plan. Full cover holds only where
+        # the shop is open around the clock already (a speed call); this one is
+        # open 09-21, so its full cover is the plain week, and the write review
+        # says the hours it leaves short (gwFewerNow()).
         for plan_row in (row, row["openCover"]):
             self.assertTrue({3, 4, 5, 6} <= set(staffed_days(plan_row)), staffed_days(plan_row))
         with without_keep():
             plain = self.shop()
         self.assertFalse({3, 4, 5, 6} <= set(staffed_days(plain)), staffed_days(plain))
+        self.assertEqual(row["fullCover"]["shifts"], plain["fullCover"]["shifts"])
+
+    def test_a_shop_open_around_the_clock_keeps_its_cashier_in_full_cover(self):
+        # keep=_open_all_hours(): full cover is the hours the shop runs now.
+        row = self.shop(opens=((0, 24),))
+        for plan_row in (row["fullCover"], row["openCover"]):
+            self.assertTrue({3, 4, 5, 6} <= set(staffed_days(plan_row)), staffed_days(plan_row))
+        with without_keep():
+            plain = self.shop(opens=((0, 24),))
+        for plan_row in (plain["fullCover"], plain["openCover"]):
+            self.assertFalse({3, 4, 5, 6} <= set(staffed_days(plan_row)), staffed_days(plan_row))
 
     def test_an_office_keeps_its_lawyer_on_their_days(self):
         self.assertTrue({3, 4, 5, 6} <= set(staffed_days(self.office())))
