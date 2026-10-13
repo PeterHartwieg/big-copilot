@@ -394,9 +394,9 @@ function takeData(raw){
   D = localiseNames(raw);
   odBoard(old);
   boardSeq++;
-  if(typeof sbBoard === "function" && old && old !== raw) sbBoard(old);
-  if(typeof pgBoard === "function") pgBoard();
-  if(typeof szAdopt === "function") szAdopt();
+  if(old && old !== raw) sbBoard(old);
+  pgBoard();
+  szAdopt();
   return D;
 }
 
@@ -564,7 +564,7 @@ function odWantView(view){
 }
 /* Navigation intent only: never run factory planning automatically. */
 function odPrefetchSections(view){
-  const r = typeof ROUTES !== "undefined" && ROUTES[view];
+  const r = ROUTES[view];
   const host = r ? r.host.join("/") : view;
   const needs = r ? r.needs || [] : PAGE_DRAWS.filter(row => row[0].split(" ").includes(host)).flatMap(row => row[3] || []);
   return [...new Set(needs.flatMap(n => odChain(n).includes("factoryStaffing")
@@ -920,10 +920,10 @@ async function setGameNames(lang){
 function gnRedraw(){
   /* While gnSwitch() puts both layers in force, one redraw waits for both. */
   if(gnHold){ gnPending = true; return; }
-  if(typeof hasData === "function" && hasData()){
+  if(hasData()){
     D = localiseNames(D);
     renderCalm(false);
-  } else if(typeof page !== "undefined" && page === "wiki" && typeof wikiVisit === "function"){
+  } else if(page === "wiki"){
     wikiVisit();
   }
 }
@@ -3371,7 +3371,7 @@ function reveal(secId, historyMode = "push", into = null){
   /* A section on more than one view (data-sub="results standards") opens on
      the view the route being opened asks for, where it is one of them: a
      promotion finding reveals the portfolio on Standards, not Results. */
-  const want = typeof routeNext !== "undefined" && routeNext && typeof ROUTES !== "undefined" ? ROUTES[routeNext] : null;
+  const want = routeNext ? ROUTES[routeNext] : null;
   if(want && want.host[0] === p && want.host[1] && sv && want.host[1] !== sv){
     const el = $(SEC_MOVED[secId] || secId);
     if(el && el.dataset && String(el.dataset.sub || "").split(" ").includes(want.host[1])) sv = want.host[1];
@@ -3384,8 +3384,7 @@ function reveal(secId, historyMode = "push", into = null){
      search landing on Milestones from Results) is a new visit: the route is
      named for the call, so showSub() does not rewrite the entry on screen
      and showPage() adds one, and Back returns to the view left. */
-  const named = typeof routeNext !== "undefined" && routeNext === null && sv && typeof HOST_ROUTES !== "undefined"
-    && page === p && typeof sub !== "undefined" && sub[p] !== sv ? HOST_ROUTES[`${p}/${sv}`] || null : null;
+  const named = routeNext === null && sv && page === p && sub[p] !== sv ? HOST_ROUTES[`${p}/${sv}`] || null : null;
   if(named) routeNext = named;
   if(sv) showSub(p, sv);
   showPage(p, false, historyMode);
@@ -11033,7 +11032,7 @@ const srSiteHtml = (s, name) => { const b = srSite(s); return b ? sbName(b) : `<
 const srImporterHtml = a => `<span class="nm" data-tip="${attr(a.pier || "")}"><span class="sp-i">${spIcon("ship")}</span>${spEsc(a.importer || a.pier || "—")}</span>`;
 /* The findings about one site's products that a view of Supply owns. */
 function srFinds(key, slugs, routes){
-  if(!key || !slugs.size || typeof alertLines !== "function") return [];
+  if(!key || !slugs.size) return [];
   return alertLines().filter(a => !kindOff(a) && a.siteKey === key && a.ev && slugs.has(a.ev.slug)
     && routes.includes(findingRoute(a).route));
 }
@@ -11995,7 +11994,7 @@ const OS_STEPS = ["what", "where", "investment", "breakeven", "opening", "open"]
    actual ÷ model on real shops (research PROFIT_MODEL.md, section 6). */
 const OS_LOW = 0.8, OS_HIGH = 1.05;
 let osPlans = [], osPlansFor = null, osCur = null, osStep = "what", osFinder = null, osBest = new Map(), osBestFor = null, osNotice = "";
-const osFacts = () => (typeof D !== "undefined" && D && D.openStore) || {};
+const osFacts = () => (D && D.openStore) || {};
 const osStore = () => `${OS_KEY}:${(D && D.meta && D.meta.character) || "default"}`;
 const OS_ICON = {
   store: '<path d="M4 10v10h16V10"></path><path d="M3 10l2-6h14l2 6"></path><path d="M3 10c0 1.7 1.3 3 3 3s3-1.3 3-3c0 1.7 1.3 3 3 3s3-1.3 3-3c0 1.7 1.3 3 3 3s3-1.3 3-3"></path><path d="M10 20v-5h4v5"></path>',
@@ -12339,7 +12338,7 @@ function osPick(key){
   osStep = "investment";
   osSave();
   drawOpenStore();
-  if(typeof settleScroll === "function") settleScroll($("secOpen"));
+  settleScroll($("secOpen"));
 }
 
 /* Step 3: the investment. */
@@ -13290,7 +13289,7 @@ function osRoiHtml(plan){
 }
 /* Businesses › Results with the Payback column in sight, as search goes there. */
 function osToResults(){
-  if(typeof siteShut === "function") siteShut();
+  siteShut();
   view = "pnl"; sortKey = null;
   drawPortfolio();
   reveal("secPortfolio");
@@ -13320,7 +13319,7 @@ function drawOpenStore(){
     : osStep === "opening" ? osUntilHtml(plan) : osStep === "open" ? osRoiHtml(plan) : "";
   if(where) osShowFinder(plan);
   if(osStep === "investment" && plan && osMode(plan) === "self") osPaintMini();
-  if(typeof wireTips === "function") wireTips();
+  wireTips();
 }
 function osGo(step){
   const plan = osPlan();
@@ -13328,7 +13327,7 @@ function osGo(step){
   osStep = step;
   osSave();
   drawOpenStore();
-  if(typeof settleScroll === "function") settleScroll($("secOpen"));
+  settleScroll($("secOpen"));
 }
 /* A new plan for a type, from a Demand cell, the grid of types or search. */
 function osStart(type, hood){
@@ -13353,7 +13352,7 @@ function wireOpenStore(){
     osStep = plan ? plan.step : "what";
     osSave(); drawOpenStore();
   });
-  on("click", "[data-os-new]", (el, e) => { e.preventDefault(); osStart(el.dataset.osNew, el.dataset.osHood || null); if(typeof settleScroll === "function") settleScroll($("secOpen")); });
+  on("click", "[data-os-new]", (el, e) => { e.preventDefault(); osStart(el.dataset.osNew, el.dataset.osHood || null); settleScroll($("secOpen")); });
   /* A plan whose store trades opens on After opening. */
   on("click", "[data-os-open]", (el, e) => { e.preventDefault(); osCur = el.dataset.osOpen; const plan = osPlan();
     osStep = plan ? (osAttached(plan) || osClosed(plan) ? "open" : plan.step) : "what"; osSave(); drawOpenStore(); });
@@ -17616,7 +17615,7 @@ function drawPayroll(){
    tie at the top is not a first place: the game's sort may list either side
    first. */
 const RL_HIDE_KEY = "ba_rivalry_hidden";
-const rlShown = () => !!(typeof D !== "undefined" && D && D.rivalry) && remembered(RL_HIDE_KEY) !== "1";
+const rlShown = () => !!(D && D.rivalry) && remembered(RL_HIDE_KEY) !== "1";
 /* The best rival by name where the save gives one, else by its stable number
    (as the map's cards do). Text, never markup. */
 const rlRivalName = r => r.rival?.name || (r.rival?.number != null
@@ -17729,7 +17728,7 @@ const RE_ICON = {
   alert: '<path d="M12 4l9 16H3z"></path><path d="M12 10v4.5M12 17.5v.01"></path>',
   key: '<circle cx="8" cy="14" r="4"></circle><path d="M11 11l9-8M16 6.5l3 3"></path>',
 };
-function reSvg(name, cls){ return `<svg${cls ? ` class="${cls}"` : ""} viewBox="0 0 24 24" aria-hidden="true">${(typeof RE_ICON !== "undefined" && RE_ICON[name]) || ""}</svg>`; }
+function reSvg(name, cls){ return `<svg${cls ? ` class="${cls}"` : ""} viewBox="0 0 24 24" aria-hidden="true">${RE_ICON[name] || ""}</svg>`; }
 function reP2(v){ return num(Number(v) || 0, {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
 function reHood(hood){ return `<span class="hood"${hoodColorAttr(hood)}>${spEsc(HOOD_TAGS[hood] || "")}</span>`; }
 function reData(){ return hasData() && D.realEstate ? D.realEstate : null; }
@@ -17739,7 +17738,7 @@ function reLanded(kind){
   if(!reLand || reLand.kind !== kind) return false;
   /* Drawn as the landing opens, before its arrival is written. */
   if(reLand.fresh) return true;
-  const a = typeof routeArrival !== "undefined" ? routeArrival : null;
+  const a = routeArrival;
   if(!a || a.finding !== reLand.id){ reLand = null; return false; }
   return true;
 }
@@ -18965,8 +18964,8 @@ function renderAll(initial = false){
     catch(e){ pageStale.add(row); staleDraws.set(row, e && e.message || String(e)); console.error(e); }
     finally{ odHidden = false; odWanted = false; }
   });
-  if(typeof odWantView === "function"){ odWantView(shown); odThensAsk(); }
-  if(typeof odPaintUpdating === "function") odPaintUpdating();
+  odWantView(shown); odThensAsk();
+  odPaintUpdating();
   if(typing) typing();
   if(marked || staleDraws.size) paintStale();
   drawFooter();
@@ -19070,7 +19069,7 @@ function navView(id, label, anchor){
 const PAGE_ALIASES = {results: ["company", "results"]};
 /* The board opens on the Game guide with no save at all, so everything the
    pages do with numbers asks first. */
-const hasData = () => typeof D !== "undefined" && !!D;
+const hasData = () => !!D;
 /* The views of each page. */
 /* Registry: "A view or a page" (docs/architecture.md, Registries). Author
    shared identity in VIEW_META; navigation labels/items, primary SEC_PAGE
@@ -19087,7 +19086,7 @@ const SUBS = {
      follows Goods flow (sbShown()). */
   supply: {host:"pageSupply", nav:"supplyNav", key:"ba_dash_supply", start:"changes",
            items:navItems("supply"),
-           shown: k => { if(typeof sbShown === "function") sbShown(k); }},
+           shown: k => sbShown(k)},
   staffing: {host:"pageStaffing", nav:"staffingNav", key:"ba_dash_staffing", start:"schedules",
              items:navItems("staffing")},
   growth: {host:"pageGrowth", nav:"growthNav", key:"ba_dash_growth", start:"market",
@@ -19157,23 +19156,23 @@ const ROUTE_BEHAVIOR = {
   "businesses/results": {enter(){
     const more = $("portMore"), label = $("portMoreLabel");
     if(more) more.open = true; if(label) label.hidden = true;
-    if(typeof view !== "undefined" && routeStdWas !== null){
+    if(routeStdWas !== null){
     if(view === "ops") view = routeStdWas;
     routeStdWas = null; sortKey = null; if(hasData()) drawPortfolio(); } }},
   /* The shop whose prices are on screen: a task's or the reader's, kept on
      the history entry (nxPrice), so Back, Forward and a reload give it back. */
   "businesses/prices": {after(o){
-    if(typeof drawPriceShops !== "function" || !hasData()) return;
+    if(!hasData()) return;
     const kept = o.historyMode && o.historyMode !== "push" ? (routeState().nxPrice || {}).pick : null;
     if(o.pick || kept) bzPriceLit = o.pick || kept;
     drawPriceShops(); bzPriceKeep();
-    if(typeof wireAll === "function") wireAll();
+    wireAll();
   }},
   /* The portfolio's Operations comparison is the Standards view's body. */
   "businesses/standards": {enter(){
     const more = $("portMore"), label = $("portMoreLabel");
     if(more) more.open = false; if(label) label.hidden = false;
-    if(typeof view !== "undefined" && view !== "ops"){
+    if(view !== "ops"){
     routeStdWas = view; view = "ops"; sortKey = null; if(hasData()) drawPortfolio(); } }},
   /* Supply's five views. Back, Forward and a reload give a view back its
      scope, Needs a change / Everything, the reviewed import and the followed
@@ -19186,21 +19185,20 @@ const ROUTE_BEHAVIOR = {
   "supply/flow": {enter: routeSupplyEnter, after: routeSupplyAfter},
   /* A task or the search may name the shop; the list lights it. */
   "staffing/schedules": {after(o){
-    if(typeof schedPick !== "function") return;
     const was = o.historyMode && o.historyMode !== "push" ? routeState().nxSch || {} : {};
     const kept = was.pick || null;
     /* Back, Forward and a reload give the business back with its day and view. */
     if(kept && !o.pick){ schedLit = kept; schedDay = was.day ?? null; schedView = was.view ?? null; }
     schedPick(o.pick || kept || schedLit);
     schedKeep();
-    if(typeof wireAll === "function") wireAll();
-    if(o.into === "#sp-roster" && typeof settleScroll === "function") settleScroll($("sp-roster") || $("schDetail"));
+    wireAll();
+    if(o.into === "#sp-roster") settleScroll($("sp-roster") || $("schDetail"));
   }},
   /* Back from Find a location (or a reload) comes back to the cell that
      asked, kept on the entry (nxDem): its row ringed and the cell focused. */
   "expansion/demand": {after(o){
     const kept = o.historyMode && o.historyMode !== "push" ? routeState().nxDem : null;
-    if(kept && typeof demArrive === "function" && hasData()) demArrive(kept);
+    if(kept && hasData()) demArrive(kept);
   }},
   /* The finder is a mode of the City map's page (web/map.js). */
   /* A task or a Demand cell asks a question (a preset); Back, Forward, a
@@ -19213,7 +19211,7 @@ const ROUTE_BEHAVIOR = {
      neighbourhood (o.osType, o.osHood); any visit marks the view's New badge seen. */
   "expansion/open": {after(o){
     featureDiscovery.visit("open-store");
-    if(o.osType && typeof osStart === "function" && hasData()) osStart(o.osType, o.osHood || null);
+    if(o.osType && hasData()) osStart(o.osType, o.osHood || null);
   }},
   /* Any visit marks the view's New badge seen (the factory flow, #172). */
   "expansion/factory": {after(){ featureDiscovery.visit("factory-flow"); }},
@@ -19227,7 +19225,7 @@ const ROUTE_BEHAVIOR = {
      location is its own route, and Back moves between the two. */
   "map": {after(){
     if(routeFinderOn()){ cityMapPage.fs.on = false; cityMapPage.deselect(); cityMapPage.saveFinder(); cityMapPage.update(); }
-    routeSync(); if(typeof drawFinderCtx === "function") drawFinderCtx(); }},
+    routeSync(); drawFinderCtx(); }},
 };
 /* Registry: "A view or a page" (identity from VIEW_META; hooks from ROUTE_BEHAVIOR). */
 const ROUTES = Object.fromEntries(VIEW_META.map(v => [v.route,
@@ -19324,18 +19322,17 @@ function routeHistoryState(replace, arrival){
 /* A Supply view opened: a replayed or reloaded entry gives the views the
    state it kept (nxSb); a new visit leaves an earlier landing behind. */
 function routeSupplyEnter(o = {}){
-  if(typeof sbRestore !== "function") return;
   if(o.historyMode && o.historyMode !== "push"){
     const x = routeState().nxSb;
     if(x) sbRestore(x);
   } else if(!o.keepArrive) sbArrive = null;
 }
 function routeSupplyAfter(){
-  if(!hasData() || !D.supply || typeof drawSupplyView !== "function") return;
+  if(!hasData() || !D.supply) return;
   drawSupplyView(sub.supply);
-  if(sub.supply === "flow" && typeof drawFlow === "function") drawFlow();
-  if(typeof wireAll === "function") wireAll();
-  if(typeof sbKeep === "function") sbKeep();
+  if(sub.supply === "flow") drawFlow();
+  wireAll();
+  sbKeep();
 }
 /* Open a route: its host view, then its page. `o.historyMode` as showPage();
    `o.arrival` is why the reader is going (the strip at the top of the page);
@@ -19355,18 +19352,18 @@ function openRoute(id, o = {}){
   if(r.enter) r.enter(o);
   const [p, sv] = r.host;
   if(sv) showSub(p, sv);
-  if(p === "today" && mode === "push" && !o.restore && typeof ovForget === "function") ovForget();
+  if(p === "today" && mode === "push" && !o.restore) ovForget();
   routeNext = target;
   arrivalNext = o.arrival || null;
   showPage(p, o.scroll !== false && !o.into && !r.into, mode);
   routeNext = null; arrivalNext = null;
   if(r.after) r.after(o);
   const into = o.into || (mode === "push" ? r.into : null);
-  if(into && typeof settleScroll === "function" && typeof q === "function") settleScroll(q(into));
-  if(p === "today" && typeof ovArrive === "function") ovArrive(o.restore || (mode !== "push" ? routeState().nxOv : null));
+  if(into) settleScroll(q(into));
+  if(p === "today") ovArrive(o.restore || (mode !== "push" ? routeState().nxOv : null));
   /* A fresh visit ranked the list again: the order it shows is kept from now
      on, so the next refresh appends and announces rather than re-ranks. */
-  if(p === "today" && typeof ovOrder !== "undefined" && !ovOrder && hasData()) drawAlerts();
+  if(p === "today" && !ovOrder && hasData()) drawAlerts();
   return true;
 }
 /* An area's view with the arrival carried along, when the reader moves on
@@ -19462,7 +19459,7 @@ const viewOf = id => SUBS[id] ? `${id}/${sub[id]}` : id;
    view shows older numbers than the dot would otherwise claim); the page
    still opens, and the other rows due on it still draw. */
 function drawStale(pageId){
-  if(pageId === page && typeof odWantView === "function") odWantView(viewOf(pageId));
+  if(pageId === page) odWantView(viewOf(pageId));
   if(!pageStale.size || !hasData()) return;
   const view = viewOf(pageId);
   /* A row drawn on every refresh ("") is only out of date when it threw, and
@@ -19499,7 +19496,7 @@ function paintSubNav(pageId){
   if(pageId === "supply" && page === "supply") paintLocal();
 }
 function showSub(pageId, id){
-  if(typeof odLeftView === "function") odLeftView();
+  odLeftView();
   const sv = SUBS[pageId];
   if(!sv || !sv.items.some(([k]) => k === id)) return;
   /* A site's page lives on Results; any other Company view takes it down. */
@@ -19508,7 +19505,7 @@ function showSub(pageId, id){
   drawStale(pageId);
   document.querySelectorAll(`#${sv.host} [data-sub]`).forEach(el => { el.hidden = !String(el.dataset.sub || "").split(" ").includes(id); });
   /* Plan a factory's Ingredients stand only in step 1, for a factory you run. */
-  if(pageId === "growth" && id === "plan" && typeof ofIngShow === "function") ofIngShow();
+  if(pageId === "growth" && id === "plan") ofIngShow();
   /* The site panel is only on screen while a site is open, so it owns its own
      visibility and the sweep above is corrected by the panel itself. */
   if(pageId === "company" && hasData()) drawSite();
@@ -19539,7 +19536,7 @@ function routeSync(){
    site's page is on it, and the ways onto Company that mean the portfolio (the
    nav, a hash, a section) take the site down themselves. */
 function showPage(id, scroll = true, historyMode = "push"){
-  if(typeof odLeftView === "function") odLeftView();
+  odLeftView();
   /* Deferred finder restoration belongs to the visit that opened it. Any
      navigation ends that visit; showFinder() creates the next one's token. */
   if(typeof cityMapPage !== "undefined" && cityMapPage){
@@ -19550,7 +19547,7 @@ function showPage(id, scroll = true, historyMode = "push"){
      its entry keeps the list as it stands -- filters, "Show N more", open
      Details, the place -- so Back finds it so. A finding or a task has just
      done so with the row or the directory as its place (ovRemember()). */
-  if(page === "today" && id !== "today" && historyMode === "push" && hasData() && typeof ovRemember === "function"){
+  if(page === "today" && id !== "today" && historyMode === "push" && hasData()){
     if(ovLeft) ovLeft = false; else ovRemember(null);
   }
   /* An old page hash opens the view that replaced it. */
@@ -19689,12 +19686,11 @@ function sdPref(){
   return v === "rail" || v === "full" ? v : "";
 }
 const sdPhone = () => !!(window.matchMedia && matchMedia("(max-width:560px)").matches);
-/* The body's classes, where there is a real body (the tests' stand-in has none). */
-const sdBody = () => document.body && document.body.classList && typeof document.body.classList.toggle === "function" ? document.body.classList : null;
-const sdRail = () => !!(sdBody() && sdBody().contains("sd-rail"));
+/* The body's classes. */
+const sdBody = () => document.body.classList;
+const sdRail = () => sdBody().contains("sd-rail");
 let sdWas = null;
 function sdLayout(){
-  if(!sdBody()) return;
   const phone = sdPhone(), pref = sdPref();
   /* A narrow window (a game beside the board, snapped to half the screen)
      takes the rail whatever was chosen wide; only a chosen rail holds there. */
@@ -19724,7 +19720,6 @@ function sdSet(rail){
    place picked closes it. The scrim is made the first time it opens. */
 let sdScrim = null;
 function sdDrawer(open){
-  if(!sdBody()) return;
   const on = !!open && sdPhone(), was = sdBody().contains("sd-open");
   if(on && !sdScrim){
     sdScrim = document.createElement("div");
@@ -19741,7 +19736,7 @@ function sdDrawer(open){
 /* Escape closes one thing at a time: a menu open in the drawer first (seen
    before its own handler closes it), the drawer on the next press. */
 document.addEventListener("keydown", e => {
-  if(e.key !== "Escape" || !sdBody() || !sdBody().contains("sd-open")) return;
+  if(e.key !== "Escape" || !sdBody().contains("sd-open")) return;
   const menu = $("nxMenu"), src = document.querySelector("#srcMenu.open");
   if((menu && !menu.hidden) || src || document.querySelector("dialog[open]")) return;
   sdDrawer(false);
@@ -19846,8 +19841,8 @@ function viewTip(id, html){
    comment keeps its place in the view; it goes back when the route changes.
    A view that draws its markup again releases it first (ctlRelease()), so
    an id is never in the page twice; the observer below moves the new one. */
-/* A real row only: a page without it (or a test's stand-in) has nothing to move. */
-const ctlSlot = () => { const s = typeof $ === "function" ? $("viewCtl") : null; return s && s.children && typeof s.appendChild === "function" ? s : null; };
+/* The row, where the page has one. */
+const ctlSlot = () => $("viewCtl");
 function ctlRelease(host){
   const slot = ctlSlot();
   if(!slot || !host || typeof host.contains !== "function") return;
@@ -19860,7 +19855,7 @@ function ctlReturn(el){
 function ctlHoist(){
   const slot = ctlSlot();
   if(!slot) return;
-  const want = typeof route === "string" ? route : "";
+  const want = route;
   [...slot.children].forEach(el => { if(el.dataset.viewCtl !== want || !(el._ctlHome && el._ctlHome.isConnected)) ctlReturn(el); });
   const el = [...document.querySelectorAll(".wrap .page [data-view-ctl]")].find(x => x.dataset.viewCtl === want);
   if(el){
@@ -19885,15 +19880,15 @@ if(typeof MutationObserver !== "undefined"){
 /* The count beside a view in the area's row: what is still to do there. */
 function routeCount(id){
   if(!hasData()) return 0;
-  if(id === "supply/changes") return typeof sbLeft !== "undefined" && sbLeft ? Object.values(sbLeft).reduce((s, n) => s + n, 0) : 0;
-  if(id === "supply/roles") return typeof srCount === "function" && D.supply ? srCount() : 0;
+  if(id === "supply/changes") return sbLeft ? Object.values(sbLeft).reduce((s, n) => s + n, 0) : 0;
+  if(id === "supply/roles") return D.supply ? srCount() : 0;
   /* Real estate: the buildings off their best price (a pending one counts as
      set), and Buy a building only on the last day before tax day. */
   if(id === "estate/buildings") return reCounts().flagged || 0;
   if(id === "estate/buy") return reCounts().taxEve ? 1 : 0;
-  if(/^supply\/(imports|deliveries|production)$/.test(id)) return typeof sbLeft !== "undefined" && sbLeft ? sbLeft[id.split("/")[1]] || 0 : 0;
-  if(id === "staffing/needs" && typeof alertLines === "function")
-    return alertLines().filter(a => (a.group === "jobdemand" || a.group === "companydemand") && !(typeof kindOff === "function" && kindOff(a))).length;
+  if(/^supply\/(imports|deliveries|production)$/.test(id)) return sbLeft ? sbLeft[id.split("/")[1]] || 0 : 0;
+  if(id === "staffing/needs")
+    return alertLines().filter(a => (a.group === "jobdemand" || a.group === "companydemand") && !kindOff(a)).length;
   return 0;
 }
 /* Why the reader is here and the way back: a finding's place and kind, or
@@ -19967,16 +19962,16 @@ function navRelabel(){
     el.textContent = tt("foot.build", "Game build {n}", {n: el.dataset.footBuild});
   });
   if(!hasData() && $("clock")) $("clock").dataset.tip = tt("nav.clock.tip0", "Game time when the save was written. Day 1 was a Monday.");
-  if(typeof ssChrome === "function") ssChrome();
-  if(typeof ovCritBadge === "function") ovCritBadge();
-  if(typeof inkHome === "function") requestAnimationFrame(inkHome);
+  ssChrome();
+  ovCritBadge();
+  requestAnimationFrame(inkHome);
 }
 if(typeof ttOnChange === "function") ttOnChange(navRelabel);
 /* A place in the sidebar or the phone's bar: its area, on the view it was
    last left on this visit (Supply opens Changes the first time). The bar's
    Map & more opens the sidebar as a drawer. */
 function navClick(e){
-  if(e.target.closest && e.target.closest("#phoneMore")){ sdDrawer(!(sdBody() && sdBody().contains("sd-open"))); return; }
+  if(e.target.closest && e.target.closest("#phoneMore")){ sdDrawer(!sdBody().contains("sd-open")); return; }
   const a = e.target.closest("a[data-id]");
   if(!a || e.button > 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
   e.preventDefault();
@@ -19988,7 +19983,7 @@ function navClick(e){
 $("nav").addEventListener("click", navClick);
 if($("navRefs")) $("navRefs").addEventListener("click", navClick);
 if($("phoneNav")) $("phoneNav").addEventListener("click", navClick);
-if($("navMore") && $("navMore").addEventListener) $("navMore").addEventListener("click", () => { if(typeof nxMenuToggle === "function") nxMenuToggle($("navMore")); });
+if($("navMore") && $("navMore").addEventListener) $("navMore").addEventListener("click", () => nxMenuToggle($("navMore")));
 sdLayout();
 /* The area's row: a view, with the arrival carried while the reader stays in
    the area they were sent to. */
@@ -20241,7 +20236,7 @@ document.addEventListener("click", siteLinkClick, true);
    by a search: the crumb names the page the palette was opened on. With no
    palette up, `cameFrom` is openSite()'s own. */
 function siteOpenOver(key, cameFrom = siteHereFrom()){
-  if(typeof ssIsOpen !== "function" || !ssIsOpen()) return openSite(key, true, null, "push", cameFrom);
+  if(!ssIsOpen()) return openSite(key, true, null, "push", cameFrom);
   ssClose(false);
   ssClearAsked();
   ssTicket++; ssPending = null;
@@ -26286,7 +26281,7 @@ function boot(){
   if(!shellOnly){
     const sv = SUBS[page];
     if(sv && sv.shown) sv.shown(sub[page]);
-    if(page === "growth" && sub.growth === "plan" && typeof ofIngShow === "function") ofIngShow();
+    if(page === "growth" && sub.growth === "plan") ofIngShow();
   }
   if(shellOnly){
     /* A save arriving while the wiki is open: the numbers fill in behind it and
