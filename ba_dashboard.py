@@ -3693,7 +3693,7 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
                         stmt_history=stmt_history, daily=daily, market=market,
                         recipes=recipes, planning={}, estate=estate,
                         base_promotion=(save.deref(root.get("gameVariables")) or {}).get(
-                            "baseCustomerPromotionMultiplier", 0.55))
+                            "baseCustomerPromotionMultiplier", HOUSE_RULE_NORMAL["baseCustomerPromotionMultiplier"]))
     alerts = _alerts(
         businesses, supply, chains, trends, hype, hour_findings, grids, day, gate, agencies=agencies, estate=estate
     )
