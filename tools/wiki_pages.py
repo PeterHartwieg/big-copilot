@@ -451,8 +451,12 @@ def robots() -> str:
 
 
 def build(data: dict) -> dict[str, str]:
-    """Every generated file, keyed by its path under web/ with forward slashes."""
-    site = Site(data)
+    """Every generated file, keyed by its path under web/ with forward slashes.
+
+    The guides are put back first (expand_guides(), which changes nothing the
+    second time), so a payload read without load() still names its suppliers.
+    """
+    site = Site(expand_guides(data))
     files: dict[str, str] = {f"{OUT_DIR}/index.html": index_page(site)}
     paths = ["/", "/wiki/"]
     for cat in site.categories:

@@ -1724,7 +1724,12 @@ their URLs name a release, not bytes. Every request carries `?v=<build stamp>`
 (the map background `?v=<its SHA-256>`), and each file is a stamp input, so new
 bytes arrive under a new URL. An old stamp requested after a deploy gets the new
 bytes. `tests/test_headers.py` holds each request to the stamp and each file to
-`STAMP_INPUTS` (`wiki-data.min.json` through `wiki-data.json`, which it is copied from). `/translations/*` revalidates and `/version.json` is `no-store`.
+`STAMP_INPUTS` (`wiki-data.min.json` through `wiki-data.json`, which it is copied from).
+In the release that moved the page to `wiki-data.min.json` (#325, #326), `/wiki-data.json`
+also changed shape: its guides name their suppliers by key and share one `SOURCES` block. A tab
+still running the wiki script from before that release, and opening the Wiki only after the
+deploy, draws guides without supplier lines or sources until it reloads, which the update
+banner asks for. Nothing crashes, and no copy in the old shape is kept. `/translations/*` revalidates and `/version.json` is `no-store`.
 
 These coherence guarantees apply to pages and workers using the pinned protocol.
 There is one historical migration window: a pre-manifest worker already fetched
