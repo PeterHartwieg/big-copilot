@@ -556,7 +556,12 @@ runs `browser_build()`, which sends the core and keeps the `Build` under the mes
 its generation; the reply carries it as `gen`, and `web/app.js` puts it on the data under
 `Symbol.for("bigcopilot.build")`. A `section` message names a section and a generation, and
 lists in `have` the sections of that build the board already holds (`odNeed()` reads them
-with `odReady()`). `browser_section()` answers `{generation, sections}`: the section asked
+with `odReady()`) and those an earlier request for the same build is still bringing
+(`odInFlight()`, #474). Listing those relies on the worker answering in order: the earlier
+reply lands first, and should it fail, the section is in error and Try again re-sends the
+chain. A reply that leaves out a section only its own request was bringing makes that
+section an error (`nav.od.notSent`) rather than leaving later requests waiting on it; a
+section refused as stale is never counted on. `browser_section()` answers `{generation, sections}`: the section asked
 for and every section it needs, less those in `have`, so a retry after a failure half way
 still sends what the board lacks and a held section is never sent twice. A new build is a
 new generation whose board holds none, so after another save, a live refresh or a worker

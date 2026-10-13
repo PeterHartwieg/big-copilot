@@ -458,8 +458,15 @@ function odNeed(name){
      section is in error and odError() offers Try again for this one too.
      Worked out before this request marks its own chain loading. */
   const have = odChain(name).filter(n => odReady(n) || odInFlight(n, gen));
+  /* The entries this request starts, so its reply can tell what it lost. */
   const mine = new Map();
-  chain.forEach(n => { if(!odAsked.has(n) || odAsked.get(n).gen !== gen) odAsked.set(n, mine.set(n, {gen, state: "loading"}).get(n)); });
+  chain.forEach(n => {
+    const held = odAsked.get(n);
+    if(held && held.gen === gen) return;
+    const entry = {gen, state: "loading"};
+    odAsked.set(n, entry);
+    mine.set(n, entry);
+  });
   let asked;
   try{ asked = Promise.resolve(SOURCE.section(name, gen, have)); }catch(e){ asked = Promise.reject(e); }
   asked.then(got => {
@@ -467,7 +474,8 @@ function odNeed(name){
     /* What this request alone was bringing and its reply left out would
        otherwise wait for ever, later requests counting on it: an error. */
     const lost = [...mine].filter(([n, m]) => odAsked.get(n) === m && !odReady(n)).map(([n]) => n);
-    if(lost.length && gen === odGen()) odFailed(lost, gen, new Error("section not sent"));
+    if(lost.length && gen === odGen())
+      odFailed(lost, gen, new Error(tt("nav.od.notSent", "it was left out of the answer")));
   }, err => odFailed(chain, gen, err));
   return false;
 }
@@ -515,7 +523,7 @@ function odFailed(chain, gen, err){
   if(gen !== odGen()) return;
   odDropHeld(chain);
   /* What waited on it is not done: it is said where it is drawn instead. */
-  odThens = odThens.filter(t => t.keepOnError || !chain.includes(t.name));
+  odThens = odThens.filter(t => t.keepOnError || !odChain(t.name).some(c => chain.includes(c)));
   odRedraw();
 }
 /* The source could not read the save again (SOURCE.watch()'s stale(why)):

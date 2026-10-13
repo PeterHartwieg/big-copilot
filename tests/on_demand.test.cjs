@@ -578,9 +578,13 @@ test('a later request answered after an earlier one failed leaves the failure to
 
 test('a reply that leaves out what it alone was bringing makes that an error, not a wait (#474)', async () => {
   const b = schedulesBoard();
+  // Said in the reader's language, as every message on the board is.
+  b.run('ttLang = "de"; ttTable = {"nav.od.notSent": "DE-not-sent"}');
   b.asked[0].resolve({generation: 6, sections: {}});
   await tick();
   assert.equal(b.run('odState("staffing")'), 'error');
+  assert.equal(b.run('odAsked.get("staffing").error'), 'DE-not-sent');
+  assert.match(b.run('odWaitHtml("staffing")'), /DE-not-sent/);
   assert.equal(b.run('odError("hiring")'), true, 'what counted on it says so where it is drawn');
 });
 

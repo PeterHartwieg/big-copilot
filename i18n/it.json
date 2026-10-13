@@ -2930,6 +2930,7 @@
  "nav.od.failed": "Impossibile completare il calcolo: {why}",
  "nav.od.goals": "Calcolo dei traguardi…",
  "nav.od.hiring": "Calcolo del fabbisogno di personale…",
+ "nav.od.notSent": "mancava nella risposta",
  "nav.od.officeStaffing": "Calcolo del personale degli uffici…",
  "nav.od.openFactory": "Calcolo dei costi delle fabbriche…",
  "nav.od.openStore": "Calcolo dei piani dei negozi…",

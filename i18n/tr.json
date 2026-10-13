@@ -2611,6 +2611,7 @@
  "nav.od.failed": "Hesaplanamadı: {why}",
  "nav.od.goals": "Kilometre taşları hesaplanıyor…",
  "nav.od.hiring": "Personel ihtiyacı hesaplanıyor…",
+ "nav.od.notSent": "yanıtta yer almıyordu",
  "nav.od.officeStaffing": "Ofis personeli hesaplanıyor…",
  "nav.od.openFactory": "Fabrika maliyetleri hesaplanıyor…",
  "nav.od.openStore": "Mağaza planları hesaplanıyor…",
