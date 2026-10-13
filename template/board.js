@@ -454,7 +454,9 @@ function odNeed(name){
   const chain = odChain(name).filter(n => !odReady(n));
   chain.forEach(n => { if(!odAsked.has(n) || odAsked.get(n).gen !== gen) odAsked.set(n, {gen, state: "loading"}); });
   let asked;
-  try{ asked = Promise.resolve(SOURCE.section(name, gen)); }catch(e){ asked = Promise.reject(e); }
+  /* What the board already holds of this build is not sent again (#327). */
+  const have = odChain(name).filter(odReady);
+  try{ asked = Promise.resolve(SOURCE.section(name, gen, have)); }catch(e){ asked = Promise.reject(e); }
   asked.then(got => odTake(gen, got), err => odFailed(chain, gen, err));
   return false;
 }

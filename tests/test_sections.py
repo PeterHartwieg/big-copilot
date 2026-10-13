@@ -396,6 +396,26 @@ class BrowserSections(unittest.TestCase):
         got = json.loads(ba_dashboard.browser_section("hiring", 8))
         self.assertEqual(set(got["sections"]), {"staffing", "officeStaffing", "factoryStaffing", "hiring"})
 
+    def test_what_the_page_holds_is_not_sent_again(self):
+        # #327: the page lists the sections of this build it holds; a second
+        # request sends only the rest, and the section asked for always.
+        self.build(4)
+        first = json.loads(ba_dashboard.browser_section("officeStaffing", 4, []))
+        self.assertEqual(set(first["sections"]), {"staffing", "officeStaffing"})
+        got = json.loads(ba_dashboard.browser_section("hiring", 4, ["staffing", "officeStaffing"]))
+        self.assertEqual(set(got["sections"]), {"factoryStaffing", "hiring"})
+        self.assertEqual(got["sections"]["factoryStaffing"],
+                         json.loads(ba_dashboard.browser_section("factoryStaffing", 4))["sections"]["factoryStaffing"])
+        # Listing the section asked for itself still sends it; unknown names
+        # are ignored.
+        own = json.loads(ba_dashboard.browser_section("staffing", 4, ["staffing", "nonsense"]))
+        self.assertEqual(set(own["sections"]), {"staffing"})
+        # A new build: the page holds nothing of it and lists nothing, and the
+        # whole chain comes again.
+        self.build(5)
+        fresh = json.loads(ba_dashboard.browser_section("hiring", 5, []))
+        self.assertEqual(set(fresh["sections"]), {"staffing", "officeStaffing", "factoryStaffing", "hiring"})
+
     def test_a_section_of_another_build_is_stale(self):
         self.build(1)
         self.build(2)
