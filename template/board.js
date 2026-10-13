@@ -452,13 +452,29 @@ function odNeed(name){
   const a = odAsked.get(name);
   if(a && a.gen === gen) return false;  // asked already: loading, or failed (odRetry())
   const chain = odChain(name).filter(n => !odReady(n));
-  chain.forEach(n => { if(!odAsked.has(n) || odAsked.get(n).gen !== gen) odAsked.set(n, {gen, state: "loading"}); });
+  /* What the board already holds of this build is not sent again (#327), nor
+     what an earlier request of this build is still bringing (#474): the
+     worker answers in order, so that reply lands first. Should it fail, the
+     section is in error and odError() offers Try again for this one too.
+     Worked out before this request marks its own chain loading. */
+  const have = odChain(name).filter(n => odReady(n) || odInFlight(n, gen));
+  const mine = new Map();
+  chain.forEach(n => { if(!odAsked.has(n) || odAsked.get(n).gen !== gen) odAsked.set(n, mine.set(n, {gen, state: "loading"}).get(n)); });
   let asked;
-  /* What the board already holds of this build is not sent again (#327). */
-  const have = odChain(name).filter(odReady);
   try{ asked = Promise.resolve(SOURCE.section(name, gen, have)); }catch(e){ asked = Promise.reject(e); }
-  asked.then(got => odTake(gen, got), err => odFailed(chain, gen, err));
+  asked.then(got => {
+    odTake(gen, got);
+    /* What this request alone was bringing and its reply left out would
+       otherwise wait for ever, later requests counting on it: an error. */
+    const lost = [...mine].filter(([n, m]) => odAsked.get(n) === m && !odReady(n)).map(([n]) => n);
+    if(lost.length && gen === odGen()) odFailed(lost, gen, new Error("section not sent"));
+  }, err => odFailed(chain, gen, err));
   return false;
+}
+/* Asked for on board `gen` and on its way: loading, not refused as stale. */
+function odInFlight(name, gen){
+  const a = odAsked.get(name);
+  return !!a && a.gen === gen && a.state === "loading" && !a.stale;
 }
 /* Sections arriving for board `gen`: merged into the English payload (so a
    language switch, which localises from it, keeps them) and localised into
