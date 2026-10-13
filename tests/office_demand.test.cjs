@@ -19,9 +19,9 @@ test('office demand write replaces professional hours and retains cleaning', () 
     {f: 9, t: 13, employeeId: 'lawyer', itemInstanceId: 'pc0'},
     {f: 8, t: 12, employeeId: 'cleaner', itemInstanceId: 'clean'}]}]);
   assert.equal(week.kept, 1);
-  assert.equal(c.gwRosterMatches(r, week), false);
+  assert.equal(c.hrDiffers(r, week.days, new Set()), true);
   r.current.list[0] = {...r.shifts[0]};
-  assert.equal(c.gwRosterMatches(r, c.gwRosterWeek(r)), true);
+  assert.equal(c.hrDiffers(r, c.gwRosterWeek(r).days, new Set()), false);
 });
 test('measured zero demand can remove the last professional hours', () => {
   const c = loadBoard(), r = row();
@@ -29,7 +29,7 @@ test('measured zero demand can remove the last professional hours', () => {
   const week = c.gwRosterWeek(r);
   assert.equal(week.sent, 0);
   assert.deepEqual(plain(week.days[0].shifts.map(x => x.employeeId)), ['cleaner']);
-  assert.equal(c.gwRosterMatches(r, week), false);
+  assert.equal(c.hrDiffers(r, week.days, new Set()), true);
   c.payload = {businesses: [{key: r.key, status: 'office'}], officeStaffing: [r]};
   vm.runInContext('D = payload', c);
   assert.ok(c.gwRosterPlan(r.key));

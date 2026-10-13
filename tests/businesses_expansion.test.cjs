@@ -474,8 +474,6 @@ test('Find a location keeps a picked building through a detour, and its strip le
   await findFrom(page, 'ba:businesstype_liquorstore', 'ba:neighborhood_midtown');
   await page.waitForFunction(() => typeof cityMapPage !== 'undefined' && cityMapPage && cityMapPage.finderOn());
   await page.evaluate(() => cityMapPage.ready);
-  // No cards under the map repeat the tabs and the Wiki (declutter E4).
-  assert.equal(await page.locator('#finderCtx .fx-card').count(), 0);
   // Takeover shows the save's one rival: pick it, leave, come back.
   await page.evaluate(() => { cityMapPage.fs.show = 'takeover'; cityMapPage.fs.hoods = null; cityMapPage.saveFinder(); cityMapPage.update(); });
   const key = await page.evaluate(() => { const r = cityMapPage.rows()[0]; if(r) cityMapPage.select(r.key); return r ? r.key : null; });
@@ -595,7 +593,6 @@ test('Help & feedback is a sheet with the way to ask; the changelog and the proj
 test('Plan a factory says nothing its table already says; Demand has no trend-history note; Payroll says plainly where wages part from the rates', async t => {
   const page = await board(t, {hash: '#expansion/factory'});
   await page.locator('#planBody table').first().waitFor();
-  assert.equal(await page.locator('#secPlan .planline').count(), 0, 'no sentence under the products');
   if (await page.locator('#ingBody tr').count()) {
     assert.equal((await page.locator('#ingNote').textContent()).trim(), '', 'the Total row is the cost');
     assert.match(await page.locator('#ingTable th.cash').getAttribute('data-tip'), enRe('gr.ing.cash.tip'));

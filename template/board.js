@@ -3653,11 +3653,6 @@ function ovAtFactory(a){
      of its machines names the machine, and the site names its type. */
   return !!(a.ev && a.ev.slot !== undefined) || !!(b && b.typeSlug === "ba:businesstype_factory");
 }
-/* A shop's schedule summary; an office's Schedule action, which exists
-   whether or not the office default has hours. Today need not ask for it. */
-function nxStaffInto(b){
-  return b && b.status === "office" ? "#sitePanel .sp-acts" : "#sp-sched";
-}
 function ovActLabel(act){
   switch(act){
     case "readiness": return tt("today.act.readiness", "Open readiness");
@@ -5550,7 +5545,7 @@ const SP_CHECK_NO = {get closed(){ return tt("sp.check.closed.no", "temporarily 
 const spCheckTip = (state, what) => state === "no" ? tt("sp.check.no", "missing: {what}", {what})
   : state === "unk" ? tt("sp.check.unk", "not checked yet: {what}", {what}) : what;
 const SP_CHECK_ICON = {closed: "door", staff: "person", prices: "tag", stock: "crate", shelves: "shelves", plan: "route"};
-/* Mirrors JOB_DEMAND_PRIORITY in the Python, which reads it off the game. */
+/* Mirrors _demand_priority() in the Python, which reads it off the game. */
 const SP_PRIORITY = {get 0(){ return tt("sp.pri.0", "nice to have"); }, get 1(){ return tt("sp.pri.1", "important"); },
   get 2(){ return tt("sp.pri.2", "critical"); }};
 /* Mirrors TREND_MIN_DAYS in the Python: two full weeks make a trend. */
@@ -9123,8 +9118,7 @@ function sbToggle(btn){
    read. Version 2 ({value, inGame}) had no basis: it is read once into
    version 3 with `basis: null`, which the page shows as Needs review and keeps
    out of a write until the player keeps or resets it (importSetting()); the
-   version 2 record is removed only once version 3 has been written and reads
-   back the same. Storage may be missing or refuse (a private window, a
+   version 2 record stays where it is (impSetMigrate()). Storage may be missing or refuse (a private window, a
    preview); every read and write is guarded, and without it the figures last
    as long as the page. No character id means nothing is written, so two
    unknown companies never share figures. */
@@ -9156,9 +9150,6 @@ function impSetEdits(){
   }
   return {key, edits: impSetMemo.get(key)};
 }
-/* Version 2 into version 3: written, read back, and only then the old record
-   goes. A write that fails, or reads back different, leaves version 2 where it
-   is for the next load. */
 /* The version 2 store is left where it is for a release or two: a rollback
    to the board before version 3 still finds the figures typed there. */
 function impSetMigrate(character, edits){
@@ -12015,31 +12006,19 @@ const osCap = (...args) => osCore().cap(...args);
 const osLayout = (...args) => osCore().layout(...args);
 const osOutfit = (...args) => osCore().outfit(...args);
 const osDecor = (...args) => osCore().decor(...args);
-const osUnits = (...args) => osCore().units(...args);
-const osDemandWith = (...args) => osCore().demandWith(...args);
-const osPromo = (...args) => osCore().promo(...args);
-const osDays = (...args) => osCore().days(...args);
 function osInvestment(plan, b){ return osCore().investment(...arguments); }
 function osStores(out, items = osFacts().items || {}){ return osCore().stores(...arguments); }
-function osPrice(item, hood){ return osCore().price(...arguments); }
-function osDemand(item, hood, existing){ return osCore().demand(...arguments); }
 function osSatisfaction(slug){ return osCore().satisfaction(...arguments); }
-function osInitial(t, b, o){ return osCore().initial(...arguments); }
 function osProvides(slug, b){ return osCore().provides(...arguments); }
 function osModel(slug, b, o = {}){ return osCore().model(...arguments); }
 function osOfficeStaffed(computers, cap, wd, hr){ return osCore().officeStaffed(...arguments); }
-function osOfficeModel(slug, t, b, h, o){ return osCore().officeModel(...arguments); }
 function osOwnRatio(slug){ return osCore().ownRatio(...arguments); }
 function osCannibal(slug, hood, provides){ return osCore().cannibal(...arguments); }
 function osHyped(slug, hood){ return osCore().hyped(...arguments); }
-function osDayProfit(m, mh, k){ return osCore().dayProfit(...arguments); }
 function osBreakDay(inv, day, factor = 1){ return osCore().breakDay(...arguments); }
 function osLoanLimit(bank){ return osCore().loanLimit(...arguments); }
 function osLoan(amount, bank){ return osCore().loan(...arguments); }
 function osLoanDays(own, profit, loan){ return osCore().loanDays(...arguments); }
-const OS_OFFICE = OpenStoreModel.OFFICE;
-const OS_RAMP = OpenStoreModel.RAMP;
-const OS_HYPE = OpenStoreModel.HYPE;
 const osBuilding = key => key && typeof premises === "function" && premises() ? premises().buildings.find(b => b.key === key) || null : null;
 const osTypeName = slug => gameName(slug) || String(slug || "").replace(/^ba:businesstype_/, "");
 const osItemName = item => gameName(item) || prettySlug(String(item || ""));
@@ -13801,8 +13780,6 @@ const OF_MAX_PLANS = 12;
    machine-hours a week, rounded up. */
 const OF_WORKER_HOURS = 50;
 const OF_FACTORY = "ba:businesstype_factory", OF_DEPOT = "ba:businesstype_warehouse";
-/* A warehouse building's parking: one vehicle in an H, two in the rest. */
-const ofSlots = b => b && b.size === "H" ? 1 : 2;
 let ofPlans = [], ofPlansFor = null, ofCur = null, ofStep = "what", ofFinder = null, ofSizeMode = "auto";
 /* What the plan is for: "new", or the key of a factory the player runs. */
 let planTarget = null;
@@ -21648,8 +21625,6 @@ featureDiscovery.refresh();
 ssField.addEventListener("click", () => ssOpen());
 ssFieldBtn.addEventListener("click", () => ssOpen());
 [ssField, ssFieldBtn].forEach(el => el.addEventListener("focus", () => { if(hasData()) odNeed("products"); }));
-/* Whichever of the two is showing. */
-const ssMastControl = () => [ssField, ssFieldBtn].find(el => el.isConnected && el.getClientRects().length) || null;
 /* The sidebar gives the field its own row, full width, so nothing is fitted
    any more (the masthead's row shared it with the places and the sphere):
    what is left is the layout (sdLayout()) and the sphere's shelf, which
@@ -25832,19 +25807,6 @@ function gwRosterWeek(row){
     ((row.current || {}).list || []).filter(s => !s.k).forEach(s => { if(put(s)) kept++; });
   return {days: [...days].sort((a, b) => a[0] - b[0]).map(([d, shifts]) => ({d, shifts})), sent, kept, unreadable, added, dropped,
     leftOut: [...left].map(([p, hours]) => ({p, hours}))};
-}
-/* Whether the game's schedule already is this week, entry for entry (and
-   open around the clock where the plan wants that). */
-function gwRosterMatches(row, week){
-  /* An office's write only adds: written once there is nothing left to add. */
-  if(row.office && !row.demandBased) return week.sent === 0;
-  const line = (d, s) => [d, s.f, s.t, s.employeeId, s.itemInstanceId].join("|");
-  const want = week.days.flatMap(({d, shifts}) => shifts.map(s => line(d, s))).sort();
-  const have = ((row.current || {}).list || []).map(s => {
-    const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
-    return line(s.d, {f: s.f, t: s.t, employeeId: (who || {}).id, itemInstanceId: (st || {}).id});
-  }).sort();
-  return !(row.full && !row.openNow) && want.length === have.length && want.every((x, i) => x === have[i]);
 }
 /* An office row's computers: the stations of its one role, by index. */
 const gwOfficeComputers = row => new Set((row.roles || []).flatMap(r => r.stations || []));
