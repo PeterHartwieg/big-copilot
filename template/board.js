@@ -3289,60 +3289,58 @@ const ALERT_SITE_PICK = findingKindsWith("sitePick");
    opens that page first, then scrolls; the reader never lands on a hidden
    section. */
 /* Registry: "A view or a page" (docs/architecture.md, Registries). Author
-   shared identity in VIEW_META; navigation labels/items, primary SEC_PAGE
-   rows, area views, route identity and HOST_ROUTES derive from it. Keep
-   markup, draw rows, search entries, aliases and route hooks explicit. */
-/* Shared canonical view identity: host, primary section, lazy dependencies
-   and translated navigation label. Route hooks, legacy aliases, secondary
-   sections, draw rows and search entries retain their distinct behavior. */
+   shared identity in VIEW_META; navigation labels/items, every SEC_PAGE row,
+   area views, route identity, route needs and HOST_ROUTES derive from it.
+   Keep markup, draw rows, search entries, aliases and route hooks explicit. */
+/* Shared canonical view identity: host, primary `section`, the sections
+   `also` on it (a block a finding or an old link reveals) and its translated
+   navigation label. A route's lazy sections are its host's PAGE_DRAWS tags;
+   `needs` adds only what no draw row declares (the finder: the map draws
+   itself). Route hooks, legacy aliases, draw rows and search entries keep
+   their distinct behaviour. */
 const VIEW_META = [
-  {route: "overview", host: ["today"], needs: ["staffing"], label: () => tt("nav.area.overview", "Overview")},
-  {route: "businesses/results", host: ["company", "results"], needs: [], section: "secDaily", label: () => tt("nav.view.results", "Results")},
-  {route: "businesses/prices", host: ["company", "products"], needs: ["products"], section: "secProducts", label: () => tt("nav.view.prices", "Products & prices")},
-  {route: "businesses/standards", host: ["company", "standards"], needs: [], section: "secStandards", label: () => tt("nav.view.standards", "Standards")},
-  {route: "businesses/milestones", host: ["company", "milestones"], needs: ["goals"], section: "secGoals", label: () => tt("nav.view.milestones", "Milestones")},
-  {route: "supply/changes", host: ["supply", "changes"], needs: [], section: "secChanges", label: () => tt("nav.view.changes", "Changes")},
-  {route: "supply/roles", host: ["supply", "roles"], needs: [], section: "secRoles", label: () => tt("nav.view.roles", "Plans & contracts")},
-  {route: "supply/imports", host: ["supply", "imports"], needs: [], section: "secImports", label: () => tt("nav.view.imports", "Imports")},
-  {route: "supply/deliveries", host: ["supply", "deliveries"], needs: [], section: "secDeliveries", label: () => tt("nav.view.deliveries", "Deliveries")},
-  {route: "supply/production", host: ["supply", "production"], needs: ["factoryStaffing"], section: "secProduction", label: () => tt("nav.view.production", "Production")},
-  {route: "supply/flow", host: ["supply", "flow"], needs: [], section: "secFlow", label: () => tt("nav.view.flow", "Goods flow")},
-  {route: "staffing/schedules", host: ["staffing", "schedules"], needs: ["hiring"], section: "secSchedules", label: () => tt("nav.view.schedules", "Schedules")},
-  {route: "staffing/needs", host: ["staffing", "needs"], needs: ["hiring"], section: "secStaff", label: () => tt("nav.view.needs", "Staff needs")},
-  {route: "staffing/payroll", host: ["staffing", "payroll"], needs: [], section: "secPayroll", label: () => tt("nav.view.payroll", "Payroll")},
-  {route: "expansion/demand", host: ["growth", "market"], needs: [], section: "secMarket", label: () => tt("nav.view.demand", "Demand")},
+  {route: "overview", host: ["today"], also: ["alertSection", "secMoves"], label: () => tt("nav.area.overview", "Overview")},
+  {route: "businesses/results", host: ["company", "results"], section: "secDaily", also: ["secPortfolio", "secDetail"], label: () => tt("nav.view.results", "Results")},
+  {route: "businesses/prices", host: ["company", "products"], section: "secProducts", also: ["secPrices"], label: () => tt("nav.view.prices", "Products & prices")},
+  {route: "businesses/standards", host: ["company", "standards"], section: "secStandards", label: () => tt("nav.view.standards", "Standards")},
+  {route: "businesses/milestones", host: ["company", "milestones"], section: "secGoals", label: () => tt("nav.view.milestones", "Milestones")},
+  {route: "supply/changes", host: ["supply", "changes"], section: "secChanges", label: () => tt("nav.view.changes", "Changes")},
+  {route: "supply/roles", host: ["supply", "roles"], section: "secRoles", label: () => tt("nav.view.roles", "Plans & contracts")},
+  {route: "supply/imports", host: ["supply", "imports"], section: "secImports", label: () => tt("nav.view.imports", "Imports")},
+  {route: "supply/deliveries", host: ["supply", "deliveries"], section: "secDeliveries", label: () => tt("nav.view.deliveries", "Deliveries")},
+  {route: "supply/production", host: ["supply", "production"], section: "secProduction", label: () => tt("nav.view.production", "Production")},
+  {route: "supply/flow", host: ["supply", "flow"], section: "secFlow", label: () => tt("nav.view.flow", "Goods flow")},
+  {route: "staffing/schedules", host: ["staffing", "schedules"], section: "secSchedules", label: () => tt("nav.view.schedules", "Schedules")},
+  {route: "staffing/needs", host: ["staffing", "needs"], section: "secStaff", also: ["secNeeds"], label: () => tt("nav.view.needs", "Staff needs")},
+  {route: "staffing/payroll", host: ["staffing", "payroll"], section: "secPayroll", label: () => tt("nav.view.payroll", "Payroll")},
+  {route: "expansion/demand", host: ["growth", "market"], section: "secMarket", label: () => tt("nav.view.demand", "Demand")},
   {route: "expansion/finder", host: ["map"], needs: ["premises"], defaultHost: false, label: () => tt("nav.view.finder", "Find a location")},
-  {route: "expansion/open", host: ["growth", "open"], needs: ["openStore"], section: "secOpen", label: () => tt("nav.view.open", "Open a store")},
-  {route: "expansion/factory", host: ["growth", "plan"], needs: ["openFactory", "openStore"], section: "secPlan", label: () => tt("nav.view.factory", "Plan a factory")},
-  {route: "estate/buildings", host: ["estate", "buildings"], needs: ["realEstate"], section: "secEstate", label: () => tt("nav.view.estate.buildings", "My buildings")},
-  {route: "estate/buy", host: ["estate", "buy"], needs: ["realEstate"], section: "secBuy", label: () => tt("nav.view.estate.buy", "Buy a building")},
-  {route: "map", host: ["map"], needs: [], label: () => tt("nav.ref.map", "City map")},
-  {route: "wiki", host: ["wiki"], needs: ["products"], label: () => tt("nav.ref.wiki2", "Wiki")},
+  {route: "expansion/open", host: ["growth", "open"], section: "secOpen", label: () => tt("nav.view.open", "Open a store")},
+  {route: "expansion/factory", host: ["growth", "plan"], section: "secPlan", also: ["secIngredients", "secPlanFlow"], label: () => tt("nav.view.factory", "Plan a factory")},
+  {route: "estate/buildings", host: ["estate", "buildings"], section: "secEstate", label: () => tt("nav.view.estate.buildings", "My buildings")},
+  {route: "estate/buy", host: ["estate", "buy"], section: "secBuy", label: () => tt("nav.view.estate.buy", "Buy a building")},
+  {route: "map", host: ["map"], label: () => tt("nav.ref.map", "City map")},
+  {route: "wiki", host: ["wiki"], label: () => tt("nav.ref.wiki2", "Wiki")},
 ];
 const viewMetaForRoute = id => VIEW_META.find(v => v.route === id);
-/* Registry: "A view or a page" (primary rows from VIEW_META; secondary/legacy rows below). */
-const SEC_PAGE = {
-  ...Object.fromEntries(VIEW_META.filter(v => v.section).map(v => [v.section, v.host])),
-  alertSection:["today"], secMoves:["today"],
-  /* secRhythm was Weekly rhythm, folded into Daily result's By weekday: an
-     old link to it still opens Results, and reveal() lands it on the chart. */
-  secRhythm:["company","results"],
-  secPortfolio:["company","results"], secDetail:["company","results"],
-  /* The R13 tabs, and Supply's Orders and Checks before them: an old link
-     opens the view that took their place. */
-  secShops:["supply","deliveries"], secWarehouses:["supply","imports"], secFactories:["supply","production"],
-  secLogistics:["supply","imports"], secStock:["supply","deliveries"], sbStrip:["supply","changes"],
-  secIngredients:["growth","plan"], secPlanFlow:["growth","plan"],
-  secPrices:["company","products"],
-  /* Staffing: the schedules, the staff needs (main's Staff page, issue #89,
-     is their hiring half) and Payroll, which moved from Company. The old
-     #secPayroll link opens Payroll; #secStaff opens Staff needs. */
-  secNeeds:["staffing","needs"],
-};
-/* Sections that have gone, and the section that took their place. */
+/* Sections that have gone, and the section that took their place: an old
+   link opens the view that holds the new one. secRhythm was Weekly rhythm,
+   folded into Daily result's By weekday, and reveal() lands it on the chart;
+   the others are the R13 tabs, and Supply's Orders and Checks before them. */
 /* Registry: "A view or a page" (only if: see the checklist). */
 const SEC_MOVED = {secRhythm: "secDaily", secLogistics: "secImports", secStock: "secDeliveries", secShops: "secDeliveries",
   secWarehouses: "secImports", secFactories: "secProduction", sbStrip: "secChanges"};
+/* The view an old section's replacement is on, by its section or one `also` on it. */
+function secMovedHost(was, now){
+  const v = VIEW_META.find(m => m.section === now || (m.also || []).includes(now));
+  if(!v) throw new Error(`SEC_MOVED target not in VIEW_META: ${was} -> ${now}`);
+  return v.host;
+}
+/* Registry: "A view or a page" (every row derived from VIEW_META and SEC_MOVED). */
+const SEC_PAGE = Object.fromEntries([
+  ...VIEW_META.flatMap(v => [v.section, ...(v.also || [])].filter(Boolean).map(sec => [sec, v.host])),
+  ...Object.entries(SEC_MOVED).map(([was, now]) => [was, secMovedHost(was, now)]),
+]);
 /* Put something at the top of the window and keep it there while the page
    under it settles. Sections carry content-visibility:auto, so the ones above
    the target are estimated heights until they paint, and a single scroll to a
@@ -19110,9 +19108,9 @@ const PAGE_ALIASES = {results: ["company", "results"]};
 const hasData = () => !!D;
 /* The views of each page. */
 /* Registry: "A view or a page" (docs/architecture.md, Registries). Author
-   shared identity in VIEW_META; navigation labels/items, primary SEC_PAGE
-   rows, area views, route identity and HOST_ROUTES derive from it. Keep
-   markup, draw rows, search entries, aliases and route hooks explicit. */
+   shared identity in VIEW_META; navigation labels/items, every SEC_PAGE row,
+   area views, route identity, route needs and HOST_ROUTES derive from it.
+   Keep markup, draw rows, search entries, aliases and route hooks explicit. */
 const navItems = host => VIEW_META.filter(v => v.host[0] === host && v.section)
   .map(v => navView(v.host[1], v.label, v.section));
 /* Registry: "A view or a page" (navigation items from VIEW_META; host settings below). */
@@ -19166,28 +19164,30 @@ Object.entries(SUBS).forEach(([id, sv]) => {
    presentation there, and `scopes`, on Supply, are the tabs the route may be
    read on. docs/architecture.md, Routes, says how an address resolves; the old
    hashes are ROUTE_ALIASES, PAGE_ALIASES, SEC_PAGE and SEC_MOVED. */
+/* An area's views, in VIEW_META's order. */
+const areaViews = area => VIEW_META.filter(v => v.route.startsWith(`${area}/`)).map(v => v.route.split("/")[1]);
 /* Registry: "A view or a page" (for a route: see the checklist). */
 const AREAS = [
   {id:"overview", icon:"today", get label(){ return tt("nav.area.overview", "Overview"); }},
   {id:"businesses", icon:"company", get label(){ return tt("nav.area.businesses", "Businesses"); },
-   views:VIEW_META.filter(v => v.route.startsWith("businesses/")).map(v => v.route.split("/")[1]), start:"results"},
+   views:areaViews("businesses"), start:"results"},
   {id:"supply", icon:"supply", get label(){ return tt("nav.area.supply", "Supply"); },
-   views:VIEW_META.filter(v => v.route.startsWith("supply/")).map(v => v.route.split("/")[1]), start:"changes"},
+   views:areaViews("supply"), start:"changes"},
   {id:"staffing", icon:"people", get label(){ return tt("nav.area.staffing", "Staffing"); },
-   views:VIEW_META.filter(v => v.route.startsWith("staffing/")).map(v => v.route.split("/")[1]), start:"schedules"},
+   views:areaViews("staffing"), start:"schedules"},
   {id:"expansion", icon:"growth", get label(){ return tt("nav.area.expansion", "Expansion"); },
-   views:VIEW_META.filter(v => v.route.startsWith("expansion/")).map(v => v.route.split("/")[1]), start:"demand"},
+   views:areaViews("expansion"), start:"demand"},
   {id:"estate", icon:"estate", get label(){ return tt("nav.area.estate", "Real estate"); },
-   views:VIEW_META.filter(v => v.route.startsWith("estate/")).map(v => v.route.split("/")[1]), start:"buildings"},
+   views:areaViews("estate"), start:"buildings"},
 ];
 const REFS = [
   {id:"map", icon:"map", newFeature:"map", get label(){ return tt("nav.ref.map", "City map"); }},
   ...(typeof showWikiRoute === "function" ? [{id:"wiki", icon:"wiki", newFeature:"wiki", get label(){ return tt("nav.ref.wiki2", "Wiki"); }}] : []),
 ];
 /* Registry: "A view or a page" (docs/architecture.md, Registries). Author
-   shared identity in VIEW_META; navigation labels/items, primary SEC_PAGE
-   rows, area views, route identity and HOST_ROUTES derive from it. Keep
-   markup, draw rows, search entries, aliases and route hooks explicit. */
+   shared identity in VIEW_META; navigation labels/items, every SEC_PAGE row,
+   area views, route identity, route needs and HOST_ROUTES derive from it.
+   Keep markup, draw rows, search entries, aliases and route hooks explicit. */
 const ROUTE_BEHAVIOR = {
   /* The portfolio is one table on two views: Standards shows its
      Operations comparison, and Results gets back the view it had before. */
@@ -19267,7 +19267,14 @@ const ROUTE_BEHAVIOR = {
 };
 /* Registry: "A view or a page" (identity from VIEW_META; hooks from ROUTE_BEHAVIOR). */
 const ROUTES = Object.fromEntries(VIEW_META.map(v => [v.route,
-  {host: v.host, needs: v.needs, ...ROUTE_BEHAVIOR[v.route]}]));
+  {host: v.host, get needs(){ return routeNeeds(v); }, ...ROUTE_BEHAVIOR[v.route]}]));
+/* The sections a route reads: what its host view's PAGE_DRAWS rows declare,
+   in their order, and the `needs` its VIEW_META record adds. Read when asked
+   (PAGE_DRAWS is declared further down). */
+function routeNeeds(v){
+  const host = v.host.join("/");
+  return [...new Set([...PAGE_DRAWS.filter(row => row[0].split(" ").includes(host)).flatMap(row => row[3]), ...(v.needs || [])])];
+}
 /* The route a host page and view shows when nothing more precise was asked
    for: a finding, a search or the reader's own click on a scope tab. */
 /* Registry: "A view or a page" (only if: see the checklist). */
@@ -19439,9 +19446,9 @@ function drawWikiSections(){
   wikiVisit();
 }
 /* Registry: "A view or a page" (docs/architecture.md, Registries). Author
-   shared identity in VIEW_META; navigation labels/items, primary SEC_PAGE
-   rows, area views, route identity and HOST_ROUTES derive from it. Keep
-   markup, draw rows, search entries, aliases and route hooks explicit. */
+   shared identity in VIEW_META; navigation labels/items, every SEC_PAGE row,
+   area views, route identity, route needs and HOST_ROUTES derive from it.
+   Keep markup, draw rows, search entries, aliases and route hooks explicit. */
 const PAGE_DRAWS = [
   ["today", () => drawKpis(), null, []], ["today", () => drawAlerts(), null, []], ["today", () => drawTools(), null, []],
   ["company/results", () => drawChart(), null, []], ["company/results", () => drawFinance(), null, []], ["company/results company/standards", () => drawPortfolio(), null, []],
@@ -21328,9 +21335,9 @@ const ssWorst = rows => rows.map(r => SS_SEV[r.level] || "opp")
    and `each`, where one view answers for several things, gives one entry per
    thing (its own id, line and go) in place of the view's single one. */
 /* Registry: "A view or a page" (docs/architecture.md, Registries). Author
-   shared identity in VIEW_META; navigation labels/items, primary SEC_PAGE
-   rows, area views, route identity and HOST_ROUTES derive from it. Keep
-   markup, draw rows, search entries, aliases and route hooks explicit. */
+   shared identity in VIEW_META; navigation labels/items, every SEC_PAGE row,
+   area views, route identity, route needs and HOST_ROUTES derive from it.
+   Keep markup, draw rows, search entries, aliases and route hooks explicit. */
 const SS_VIEWS = [
   {id: "alerts", get t(){ return tt("nav.search.alerts.title", "Needs attention"); },
    get p(){ return tt("nav.search.alerts.line", "Overview"); }, ic: "today", syn: ["problems", "alerts", "warnings", "findings", "to do", "today"],
