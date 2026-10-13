@@ -5175,7 +5175,6 @@
  "wiki.ui.missingRecipe": "Rezeptdetails nicht verfügbar",
  "wiki.ui.missingRecipeTip": "Die Produkthilfe verweist auf dieses Rezept, aber seine Details sind in diesem Build nicht verfügbar.",
  "wiki.ui.noEquipment": "Keine Verkaufsausstattung gelistet",
- "wiki.ui.noListedEquipment": "Keine Ausstattung gelistet",
  "wiki.ui.noListedSuppliers": "Kein Lieferant gelistet",
  "wiki.ui.noOtherSellers": "Kein anderer Verkäufer gelistet",
  "wiki.ui.noRecipe": "Kein Fabrikrezept gelistet",
