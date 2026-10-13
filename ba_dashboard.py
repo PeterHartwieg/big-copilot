@@ -14000,17 +14000,18 @@ def _staffing(
         grid = site["grid"]
         offered = any(s["skill"] for s in grid["stations"]) and any(grid["open"])
         try:
-            # The 24/7 test is a choice the player makes, and a week it writes
-            # opens the shop hours it is not open now: it keeps nobody's hours
-            # while it waits on a hire (issue #446), unless it is also the
-            # open-hours plan the shop is on by default (_open_is_full(),
-            # _opens_first()). Holding them in every shop's longest week cost
-            # the board most of a second placement of it.
+            # Full cover keeps the people here on the hours they work now while
+            # it waits on a hire (issue #446) only where the shop is open around
+            # the clock already, so the week is the hours it runs: holding them
+            # in every shop's longest week cost the board most of a second
+            # placement of it (+84% extract on the largest save). Elsewhere the
+            # write's review says how many hours it leaves fewer people on than
+            # now until the hires come (gwFewerNow() in the board script).
             full = _place_week(
                 grid, _full_need(grid), ALL_DAY_OPEN, site["coverPosts"],
                 site["own"] + site_bench, people, business, site_bench, scratch,
                 current=site["current"]["list"],
-                keep=offered and _open_is_full(site) and _opens_first(site, business),
+                keep=_open_all_hours(grid["open"]),
             )
             if not offered:
                 opened = None
@@ -14720,6 +14721,9 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     best = None
     for snap in (True, False):
         trial = {pid: _copy_state(entry) for pid, entry in kept.items()}
+        # With `keep`, each re-cut week is held against its own re-cut plain
+        # week (issue #446), not against the plain cut above; the rank then
+        # picks among weeks that each passed that guard.
         other = _place_cut_week(*args, trial, cuts=cuts, snap=snap, **kwargs)
         moved = other.pop("snapMoved")
         if _week_rank(other) < _week_rank(best[0] if best else week):
@@ -15068,8 +15072,10 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
             [row for row in dropped if row["employee"] in here_ids],
         ]
         kept = None
-        for held in tries:
-            if not held:
+        for index, held in enumerate(tries):
+            # The second try is the first again where every entry of a short
+            # role is on a short hour: asked once.
+            if not held or (index and held == tries[0]):
                 continue
             for pid, entry in start.items():
                 state[pid] = _copy_state(entry)

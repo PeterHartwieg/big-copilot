@@ -822,10 +822,11 @@ is kept, for the people the plain week gives hours; then only the entries on tho
 The fewest people still come first, so a kept week is used only if it puts nobody to work
 whom the plain week leaves at 0 h, draws the same unassigned people, hires nobody more and
 leaves fewer hours short (the first that does is used); otherwise the plain week stands, and
-that hour is short until the hire comes. The hours the plan wants (`need`) never change. The
-24/7 test keeps nobody's hours this way unless it is also the open-hours plan the shop is on
-by default: it opens the shop hours it is not open now, and holding entries in that, the
-longest week a shop has, cost the board most of a second placement of it. An office's
+that hour is short until the hire comes. The hours the plan wants (`need`) never change.
+Full cover (the 24/7 test) holds entries this way only where the shop is open around the
+clock already: holding them in a shop's longest week cost the board most of a second
+placement of it. Elsewhere the review of a full-cover write says how many hours of the week
+it leaves fewer people on than now until the people it waits on are added. An office's
 default plan adds entries and replaces none, so it is left as it was; factories are not
 written this way.
 
