@@ -237,7 +237,7 @@ rent is computed. One object per article in `tools/wiki_topics.json`.
 
 The in-app wiki draws every entry inside the board, so a search engine sees one
 URL and none of the text. `tools/wiki_pages.py` writes the same entries as
-plain, script-free HTML from the committed `web/wiki-data.json`:
+plain HTML, with no executable script, from the committed `web/wiki-data.json`:
 
 | Path | What |
 | --- | --- |
@@ -247,6 +247,9 @@ plain, script-free HTML from the committed `web/wiki-data.json`:
 | `/wiki/topic/<slug>/` | one per hand-written topic |
 | `/sitemap.xml`, `/robots.txt` | `/`, and every page above; robots allows all and names the sitemap |
 
+- **English only.** The pages are not translated, though the app is: the
+  payload's help text is the game's English locale (`en.json`), and every page
+  says `lang="en"`.
 - **Furniture is left to the app.** Its 521 entries of equipment stats get no
   page, its category gets none, and a link to one goes to `/#wiki/<id>`.
 - **Slugs are the payload's ids, unchanged**, because they are linked from
@@ -267,8 +270,23 @@ plain, script-free HTML from the committed `web/wiki-data.json`:
   "Open your save in Big Copilot" link to `/` and an "Open in the app" link to
   the same entry under `/#wiki`. A business guide adds one table of what it
   sells, where it is sold from and who supplies it.
-- Styles are inline; the only request is `/fonts/fonts.css`. No script, no
-  third-party request, so the privacy notice holds.
+- **Sharing and structured data.** Each page repeats its title, description
+  and canonical URL as Open Graph (`og:type` is `article` on an entry or topic,
+  `website` on the index and a category) and Twitter `summary` card tags. A
+  schema.org JSON-LD block carries a `BreadcrumbList` (the crumbs that have a
+  page, then the page itself; none on the index) and, on an entry or topic, an
+  `Article`. JSON-LD is `<script type="application/ld+json">`, a data block the
+  browser never runs, so the CSP and the privacy notice's "no scripts" are
+  untouched; `<`, `>` and `&` in it are written as Unicode escapes, so no
+  text can close the tag.
+- **One date, from the payload.** The sitemap's `<lastmod>` and the entries'
+  `dateModified` are `provenance.sourceDate`, the newest modification date of
+  the game files the payload was read from. It changes only when the game's
+  help does, so rebuilds stay byte-identical. `/` and the hand-written topics
+  change with Big Copilot's own releases, which the payload does not date, so
+  they carry no date; neither does anything when `sourceDate` is missing.
+- Styles are inline; the only request is `/fonts/fonts.css`. No executable
+  script, no third-party request, so the privacy notice holds.
 
 `python build_web.py` and `python build_web.py --assemble` write them after the
 payload, and remove pages the payload no longer has. They are not committed. `python build_web.py --check` rebuilds them in memory

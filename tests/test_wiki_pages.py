@@ -144,11 +144,22 @@ class Links(unittest.TestCase):
                 self.assertIn(f'href="{site_path(rel)}"', index)
 
 
+LD = re.compile(r'<script type="application/ld\+json">([^<]*)</script>')
+
+
+def ld_graph(body: str) -> list[dict]:
+    m = LD.search(body)
+    return json.loads(m.group(1))["@graph"] if m else []
+
+
 class NoScriptsNoThirdParties(unittest.TestCase):
     def test_pages_run_no_script_and_fetch_only_from_this_site(self):
         for rel, body in HTML.items():
             with self.subTest(rel=rel):
-                self.assertNotIn("<script", body.lower())
+                # The one <script> allowed is a JSON-LD data block, which no
+                # browser executes; anything else would break the privacy notice.
+                self.assertEqual(body.lower().count("<script"), len(LD.findall(body)))
+                self.assertLessEqual(len(LD.findall(body)), 1)
                 self.assertNotRegex(body, r"""\bsrc=["'](https?:)?//""")
                 self.assertNotRegex(body, r"""url\(["']?(https?:)?//""")
                 for tag in re.findall(r"<link\b[^>]*>", body):
@@ -280,12 +291,100 @@ class ParserParity(unittest.TestCase):
         ])
 
 
+class ShareAndStructuredData(unittest.TestCase):
+    def meta(self, body, attr, name):
+        m = re.search(rf'<meta {attr}="{re.escape(name)}" content="([^"]*)">', body)
+        return m and m.group(1)
+
+    def test_every_page_has_open_graph_and_twitter_tags_matching_its_head(self):
+        for rel, body in HTML.items():
+            with self.subTest(rel=rel):
+                title = re.search(r"<title>([^<]+)</title>", body).group(1)
+                desc = self.meta(body, "name", "description")
+                url = "https://bigcopilot.com" + site_path(rel)
+                self.assertEqual(self.meta(body, "property", "og:title"), title)
+                self.assertEqual(self.meta(body, "property", "og:description"), desc)
+                self.assertEqual(self.meta(body, "property", "og:url"), url)
+                self.assertEqual(self.meta(body, "property", "og:site_name"), "Big Copilot")
+                self.assertEqual(self.meta(body, "name", "twitter:card"), "summary")
+                self.assertEqual(self.meta(body, "name", "twitter:title"), title)
+                self.assertEqual(self.meta(body, "name", "twitter:description"), desc)
+                self.assertIn(f'<link rel="canonical" href="{url}">', body)
+                article = rel.count("/") == 2 or rel.startswith("wiki/topic/")
+                self.assertEqual(self.meta(body, "property", "og:type"), "article" if article else "website")
+
+    def test_json_ld_parses_and_names_this_page(self):
+        for rel, body in HTML.items():
+            url = "https://bigcopilot.com" + site_path(rel)
+            with self.subTest(rel=rel):
+                graph = ld_graph(body)
+                if rel == "wiki/index.html":
+                    self.assertEqual(graph, [])
+                    continue
+                crumbs = [n for n in graph if n["@type"] == "BreadcrumbList"]
+                self.assertEqual(len(crumbs), 1)
+                items = crumbs[0]["itemListElement"]
+                self.assertEqual([i["position"] for i in items], list(range(1, len(items) + 1)))
+                self.assertEqual(items[0]["item"], "https://bigcopilot.com/wiki/")
+                self.assertEqual(items[-1]["item"], url)
+                self.assertEqual(items[-1]["name"], re.search(r"<h1>([^<]+)</h1>", body).group(1)
+                                 .replace("&amp;", "&").replace("&#39;", "'"))
+                for item in items:
+                    self.assertTrue(item["item"].startswith("https://bigcopilot.com/wiki/"))
+
+    def test_entries_are_articles_dated_by_the_game_help(self):
+        graph = ld_graph(HTML["wiki/businesstypes-bookstore/index.html"])
+        crumbs, article = graph
+        self.assertEqual([i["name"] for i in crumbs["itemListElement"]],
+                         ["Wiki", "Business Types", "Bookstore"])
+        self.assertEqual(article["@type"], "Article")
+        self.assertEqual(article["headline"], "Bookstore")
+        self.assertEqual(article["inLanguage"], "en")
+        self.assertEqual(article["dateModified"], DATA["provenance"]["sourceDate"])
+        # A hand-written topic is not dated by the game's help.
+        topic = ld_graph(HTML["wiki/topic/how-rent-works/index.html"])
+        self.assertEqual([n["@type"] for n in topic], ["BreadcrumbList", "Article"])
+        self.assertNotIn("dateModified", topic[1])
+        self.assertEqual([n["@type"] for n in ld_graph(HTML["wiki/c/common_business_types/index.html"])],
+                         ["BreadcrumbList"])
+
+    def test_json_ld_cannot_close_its_tag(self):
+        page = {"id": "a", "categoryId": "g", "title": "A </script><b>&", "body": "x."}
+        data = {"pages": [page], "categories": [{"id": "g", "label": "G", "pageIds": ["a"]}],
+                "guides": {}, "topics": []}
+        body = wiki_pages.build(data)["wiki/a/index.html"]
+        block = LD.search(body).group(1)
+        self.assertNotIn("<", block)
+        self.assertEqual(json.loads(block)["@graph"][1]["headline"], "A </script><b>&")
+
+
 class Sitemap(unittest.TestCase):
     def test_sitemap_lists_exactly_the_generated_pages(self):
         locs = re.findall(r"<loc>([^<]+)</loc>", FILES["sitemap.xml"])
         self.assertEqual(len(locs), len(set(locs)))
         expected = {"https://bigcopilot.com/"} | {"https://bigcopilot.com" + site_path(rel) for rel in HTML}
         self.assertEqual(set(locs), expected)
+
+    def test_lastmod_is_the_game_help_date_on_pages_drawn_from_it(self):
+        date = DATA["provenance"]["sourceDate"]
+        self.assertRegex(date, r"^\d{4}-\d{2}-\d{2}$")
+        urls = dict(re.findall(r"<url><loc>([^<]+)</loc>(?:<lastmod>([^<]+)</lastmod>)?</url>",
+                               FILES["sitemap.xml"]))
+        for loc, lastmod in urls.items():
+            with self.subTest(loc=loc):
+                undated = loc == "https://bigcopilot.com/" or "/wiki/topic/" in loc
+                self.assertEqual(lastmod, "" if undated else date)
+
+    def test_no_lastmod_without_a_source_date(self):
+        for provenance in (None, {}, {"sourceDate": "23 Sep"}):
+            data = {"pages": [{"id": "a", "categoryId": "g", "title": "A", "body": "x."}],
+                    "categories": [{"id": "g", "label": "G", "pageIds": ["a"]}], "guides": {}, "topics": []}
+            if provenance is not None:
+                data["provenance"] = provenance
+            with self.subTest(provenance=provenance):
+                files = wiki_pages.build(data)
+                self.assertNotIn("<lastmod>", files["sitemap.xml"])
+                self.assertNotIn("dateModified", files["wiki/a/index.html"])
 
     def test_robots_allows_all_and_names_the_sitemap(self):
         robots = FILES["robots.txt"]
