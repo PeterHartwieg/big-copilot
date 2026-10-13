@@ -355,7 +355,3 @@ class JobDemandFindingTests(MsgAsserts, unittest.TestCase):
 
     def test_the_web_build_ships_the_demand_names(self):
         self.assertTrue(ships("ba:jobdemand_hasmousepad", "Mouse Pad"))
-
-
-if __name__ == "__main__":
-    unittest.main()

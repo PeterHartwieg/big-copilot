@@ -53,7 +53,3 @@ class ChangelogDialogTest(unittest.TestCase):
         local = self.entries(ba_dashboard.render(None))
         self.assertEqual(local.count('class="changelog-entry"'), len(changes))
         self.assertIn('data-src=""', local)
-
-
-if __name__ == "__main__":
-    unittest.main()

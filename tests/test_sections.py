@@ -433,7 +433,3 @@ class BrowserSections(unittest.TestCase):
         self.build(3)
         with self.assertRaises(ValueError):
             ba_dashboard.browser_section("unknown", 3)
-
-
-if __name__ == "__main__":
-    unittest.main()

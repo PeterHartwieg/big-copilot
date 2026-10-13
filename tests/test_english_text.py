@@ -153,7 +153,3 @@ class _Patched:
     def __exit__(self, *exc):
         for p in reversed(self.patches):
             p.stop()
-
-
-if __name__ == "__main__":
-    unittest.main()

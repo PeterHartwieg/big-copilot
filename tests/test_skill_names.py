@@ -20,7 +20,3 @@ class SkillNames(unittest.TestCase):
         self.assertEqual(data["skillNames"]["ba:skill_securityguard"], "Security Guard")
         # A skill the text does not name falls back as names.label() does.
         self.assertEqual(data["skillNames"]["ba:skill_cleaning"], "Cleaning")
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -34,7 +34,3 @@ class SlugFallbacks(unittest.TestCase):
         self.assertEqual(house_number("19<img src=x>"), "19")
         self.assertEqual(house_number("<b>"), "-")
         self.assertEqual(self.names.addr(("ba:street_broadway", "7<i>")), "7 Broadway")
-
-
-if __name__ == "__main__":
-    unittest.main()

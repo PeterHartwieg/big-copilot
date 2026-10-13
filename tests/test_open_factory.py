@@ -168,7 +168,3 @@ class PayloadTests(unittest.TestCase):
     def test_no_store_rules_means_nothing_to_price(self):
         with mock.patch.object(ba_dashboard, "load_store_rules", return_value={"products": {}}):
             self.assertEqual(ba_dashboard._open_factory(self.save, self.names, [], [], {}, []), {})
-
-
-if __name__ == "__main__":
-    unittest.main()

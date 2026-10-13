@@ -1428,10 +1428,6 @@ class MockHireOneAction(LinkedMock):
         self.assertEqual(self.post("undo", {"kind": "hire", "dryRun": True}), (409, {"error": "no_undo"}))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class MockOfficeSchedule(LinkedMock):
     """An office's week goes through /write/schedule like a shop's: only a
     headquarters is refused (the mod's ScheduleWrite.cs)."""

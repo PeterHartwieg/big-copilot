@@ -438,7 +438,3 @@ class AmenityAlertTests(MsgAsserts, unittest.TestCase):
                         {"name": ""}, {"trading": False}):
             with self.subTest(options=options):
                 self.assertEqual(self.warnings(**options), [])
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -44,7 +44,3 @@ class ShiftPrint(unittest.TestCase):
         self.assertEqual(prints["ba:street_secondavenue#10"], shift_print([
             (0, 0, 12, EMPLOYEE, "CLEANcccccccccccccccccc==ue", 0),
             (1, 8, 20, EMPLOYEE, "REGISTERaaaaaaaaaaaaaa==ue", 1)]))
-
-
-if __name__ == "__main__":
-    unittest.main()

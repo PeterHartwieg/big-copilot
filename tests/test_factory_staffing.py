@@ -8,7 +8,6 @@ the factory's own staff, each run cut into shifts of at most 12 hours.
 """
 import json
 import math
-import os
 import unittest
 from tests.i18n_check import MsgAsserts
 import unittest.mock
@@ -608,7 +607,3 @@ class FewestCoveringTests(unittest.TestCase):
         self.assertEqual(count, 188)
         self.assertLess(len(asked), 25)
         self.assertEqual(len(asked), len(set(asked)))
-
-
-if __name__ == "__main__":
-    unittest.main()

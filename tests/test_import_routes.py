@@ -435,8 +435,3 @@ class ImportRoutesTests(MsgAsserts, unittest.TestCase):
         # minus stock and the small day-11 drop.
         self.assertEqual(row["catchUp"], 7 * 240 - 240 - 50)
         self.assertEqual(row["coverageUntil"], 16)
-
-
-
-if __name__ == "__main__":
-    unittest.main()

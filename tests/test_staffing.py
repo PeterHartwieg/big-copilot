@@ -3338,7 +3338,3 @@ class WeekTakeTest(unittest.TestCase):
         self.assertEqual((state["a"]["hours"], state["a"]["days"], state["a"]["stations"]),
                          (5, {5}, {(1, 5)}))
         self.assertEqual(state["b"]["busy"][5], set(range(13, 16)))
-
-
-if __name__ == "__main__":
-    unittest.main()

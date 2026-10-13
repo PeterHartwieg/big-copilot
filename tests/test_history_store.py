@@ -223,7 +223,3 @@ class BrowserBound(Tmp):
             history.demand("c", day, snapshot(day))
         history.write()
         self.assertEqual(len(json.loads(self.read())["characters"]["c"]["days"]), ba_dashboard.HISTORY_DAYS)
-
-
-if __name__ == "__main__":
-    unittest.main()

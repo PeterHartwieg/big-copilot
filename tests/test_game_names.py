@@ -297,7 +297,3 @@ class WaitingOn(unittest.TestCase):
         row = next(r for r in site["needs"] if r["slug"] == water)
         self.assertEqual(row["waitingOn"], ["Bag of Lettuce", "Bag of Lettuce"])
         self.assertEqual(row["waitingOnSlugs"], [lettuce, raw])
-
-
-if __name__ == "__main__":
-    unittest.main()

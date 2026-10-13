@@ -829,7 +829,3 @@ class GameValueDriftTests(unittest.TestCase):
         self.assertEqual(factory["game"]["driverHours"], ba_dashboard.DRIVER_DAY_HOURS)
         self.assertEqual(factory["game"]["hqHours"], ba_dashboard.HQ_WEEK_HOURS)
         self.assertEqual(factory["shelf"]["cc"], ba_dashboard.PALLET_SHELF_BOXES)
-
-
-if __name__ == "__main__":
-    unittest.main()

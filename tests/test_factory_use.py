@@ -171,7 +171,3 @@ class TwoStatusesTests(unittest.TestCase):
                 self.assertEqual((order["st"], order["why"]), ("short", "order"))
         # The line's own hours status is neither of them.
         self.assertEqual(line["status"], "covered")
-
-
-if __name__ == "__main__":
-    unittest.main()

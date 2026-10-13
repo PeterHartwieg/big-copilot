@@ -1519,7 +1519,3 @@ class IssuedTicketTests(unittest.TestCase):
                          ["ba:itemname_cheeseplatter", "ba:itemname_martini"])
         self.assertIsNotNone(c.fact(SHOP_A, "ba:itemname_cheeseplatter"))
         self.assertIsNone(c.fact(SHOP_A, "ba:itemname_theaterticket"))
-
-
-if __name__ == "__main__":
-    unittest.main()

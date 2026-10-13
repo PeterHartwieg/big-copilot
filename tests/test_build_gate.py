@@ -95,7 +95,3 @@ class BuildGateTests(unittest.TestCase):
                         build_web.main(allow_fewer_guides=allow)
                     self.assertEqual(str(caught.exception), "wiki: lost businesstypes-x")
                     self.assertIs(wiki.call_args.kwargs["allow_fewer_guides"], allow)
-
-
-if __name__ == "__main__":
-    unittest.main()

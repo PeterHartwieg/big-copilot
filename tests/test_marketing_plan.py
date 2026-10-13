@@ -371,7 +371,3 @@ class Finding(MsgAsserts, unittest.TestCase):
         # Its plan reaches 100 with what it knows: no line.
         self.assertEqual(_promotion([_site("a", "A", _mk(["SmallInternet"], ["SmallInternet"], 80, 100, 100, 100,
                                                         visit=[BILLBOARDS]))]), [])
-
-
-if __name__ == "__main__":
-    unittest.main()

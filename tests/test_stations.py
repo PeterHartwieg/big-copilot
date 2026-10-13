@@ -1058,7 +1058,3 @@ class HairdresserTests(MsgAsserts, unittest.TestCase):
         self.assertEqual([a["site"] for a in lines], ["Curls", "Braids"])
         self.assertHasMsg(lines[0]["text"], "sp.py.fix.role.post", station="hairdresser chair", station_name="Hairdresser Chair")
         self.assertHasMsg(lines[1]["text"], "sp.py.fix.role.post", station="hairdresser headwash", station_name="Hairdresser Headwash")
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -581,7 +581,3 @@ class PathTests(FixtureCase):
     def test_documented_data_directory_and_streaming_assets_resolve_equally(self):
         self.assertEqual(wiki_paths.default_paths(self._tmp.name),
                          wiki_paths.default_paths(self.game))
-
-
-if __name__ == "__main__":
-    unittest.main()

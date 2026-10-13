@@ -263,7 +263,3 @@ class PropertyKeys(unittest.TestCase):
         ]
         self.assertEqual(got, want)
         self.assertEqual([list(row) for row in got], [list(row) for row in want])
-
-
-if __name__ == "__main__":
-    unittest.main()

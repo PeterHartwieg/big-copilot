@@ -1334,7 +1334,3 @@ class OracleControlTest(unittest.TestCase):
         self.assertLess(ba_dashboard._placement_rank(real, state["r"], slot, here),
                         ba_dashboard._placement_rank(hire, state[hire["id"]], slot, here))
         self.assertIs(ba_dashboard._best_for(slot, [hire, real], state, here), real)
-
-
-if __name__ == "__main__":
-    unittest.main()

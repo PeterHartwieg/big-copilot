@@ -239,7 +239,3 @@ class IngredientPriceTests(unittest.TestCase):
     def test_no_books_no_prices(self):
         save = Stub({"Day": 3, "financialSummaries": [], "BuildingRegistrations": []})
         self.assertEqual(_ingredient_prices(save, Names({}), {}, [])["unit"], {})
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -630,7 +630,3 @@ class ExtractTest(unittest.TestCase):
         self.assertTrue(data["loans"])
         for loan in data["loans"]:
             self.assertRegex(loan["key"], r"^ba:street_[a-z0-9]+#\d+$")
-
-
-if __name__ == "__main__":
-    unittest.main()

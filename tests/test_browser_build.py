@@ -151,7 +151,3 @@ class BrowserBuild(unittest.TestCase):
               self.assertRaises(ba_dashboard.SaveShapeError) as caught):
             ba_dashboard.browser_build(path, self.locale, self.history, self.names)
         self.assertRegex(str(caught.exception), r"KeyError: 'Day', in build_core, ba_dashboard\.py line \d+\)")
-
-
-if __name__ == "__main__":
-    unittest.main()

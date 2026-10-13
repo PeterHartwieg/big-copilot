@@ -323,7 +323,3 @@ class OfficeAlertTextTests(MsgAsserts, unittest.TestCase):
                        runs=msg_param("sp.py.idle.part", n=6, noun=msg_param("sp.py.workstations"),
                                       when=msg_param("sp.py.when.part", days=msg_param("sp.py.wd.1"),
                                                      hours=msg_param("sp.py.when.hours", a=9, b=13))))
-
-
-if __name__ == "__main__":
-    unittest.main()

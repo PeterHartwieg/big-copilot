@@ -359,7 +359,3 @@ class Check(unittest.TestCase):
             self.assertEqual(build_web.check(tmp), [])
             Path(tmp, "web/wiki/index.html").unlink()
             self.assertEqual(build_web.check(tmp), ["web/wiki/index.html"])
-
-
-if __name__ == "__main__":
-    unittest.main()

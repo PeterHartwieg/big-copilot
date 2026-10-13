@@ -197,7 +197,3 @@ class WatchServer(unittest.TestCase):
             with urllib.request.urlopen(request) as response:
                 self.assertEqual(response.status, 200, host)
                 json.loads(response.read())
-
-
-if __name__ == "__main__":
-    unittest.main()

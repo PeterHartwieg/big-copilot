@@ -9,7 +9,6 @@ The statuses here are the ones `_business()` really emits — a warehouse is
 `overhead` and a factory is `support` — and the type slugs are the game's own,
 because the tie-break between two kinds of shop is by slug.
 """
-import os
 import unittest
 
 from ba_dashboard import COST_KEYS, _chains
@@ -1009,7 +1008,3 @@ class OfficeTests(unittest.TestCase):
         businesses = [depot("store"), shop("advocates", LAW)]
         plans = [plan("store", [destination("advocates", ["paper", "ink"])])]
         self.assertEqual(chains_of(businesses, plans)["store#1"], "Law Firms")
-
-
-if __name__ == "__main__":
-    unittest.main()

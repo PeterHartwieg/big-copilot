@@ -403,7 +403,3 @@ class SmartSupplyTests(MsgAsserts, unittest.TestCase):
         early["nextDeliveryDay"], late["nextDeliveryDay"] = 11, 16
         _, row = self.measured([early, late])
         self.assertEqual((row["coverFit"], row["catchUp"]), ("ok", 0))
-
-
-if __name__ == "__main__":
-    unittest.main()

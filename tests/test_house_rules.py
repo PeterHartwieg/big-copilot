@@ -102,7 +102,3 @@ class HouseRulesTests(unittest.TestCase):
         # Not a Msg: difficulty label is a plain str.
         self.assertEqual(h["label"], "Unknown")
         self.assertEqual((h["harder"], h["easier"]), (1, 0))
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -213,10 +213,6 @@ class SiteFieldTests(MsgAsserts, unittest.TestCase):
         self.assertIn(LAW_FIRM, OFFICE_TYPES)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 # --- what a finding carries for the site panel to point at -------------------
 
 DEPOT_KEY = site_key(("ba:street_firstavenue", 1))

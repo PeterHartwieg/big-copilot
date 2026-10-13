@@ -117,7 +117,3 @@ class FloorPlans(unittest.TestCase):
             self.assertEqual(build_web.floor_plan_gaps(tmp), ["warehouse H3"])
             os.remove(Path(tmp) / "web/maps/floor-plans.json")
             self.assertEqual(build_web.floor_plan_gaps(tmp), ["web/maps/floor-plans.json"])
-
-
-if __name__ == "__main__":
-    unittest.main()

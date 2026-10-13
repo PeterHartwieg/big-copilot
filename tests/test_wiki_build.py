@@ -1147,7 +1147,3 @@ class TopicTests(FixtureCase):
     def test_no_machine_path_reaches_a_topic(self):
         for string in build._strings(self.payload()["topics"]):
             self.assertIsNone(build._PRIVATE_PATH_RE.search(string), string)
-
-
-if __name__ == "__main__":
-    unittest.main()

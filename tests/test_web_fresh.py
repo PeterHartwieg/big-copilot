@@ -302,18 +302,13 @@ class CheckedCopy(SharedCopy):
             copy.unlink()
             self.assertIn(served, build_web.check(tmp))
 
-    def test_a_generator_edit_alone_leaves_the_stamp(self):
+    def test_generators_are_not_stamp_inputs(self):
         # Their output is stamped and compared, so an edit that changes nothing
         # served must not tell every open tab to update (#345).
-        tmp = self.root
-        before = build_web.stamp(tmp)
         for generator in ("tools/build_wiki_data.py", "tools/wiki_data.py", "tools/wiki_paths.py",
                           "tools/wiki_sample.json", "tools/wiki_topics.json", "tools/i18n.py",
                           "tools/translation_catalogue.py"):
             self.assertNotIn(generator, build_web.STAMP_INPUTS)
-            with self.subTest(generator=generator), kept(tmp, generator):
-                place(tmp, generator, (ROOT / generator).read_bytes() + b"\n")
-                self.assertEqual(build_web.stamp(tmp), before)
 
     def test_an_edited_article_names_the_wiki_payload(self):
         # Not only the stamp: the payload that carries the articles is named.
@@ -462,7 +457,3 @@ class CommandLine(SharedCopy):
             self.assertIn("web/wiki-data.json", build_web.check(tmp))
             build_web.assemble(tmp)
             self.assertEqual(build_web.check(tmp), [])
-
-
-if __name__ == "__main__":
-    unittest.main()

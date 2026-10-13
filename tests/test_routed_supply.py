@@ -525,7 +525,3 @@ class RoutedFactoryViewTests(MsgAsserts, unittest.TestCase):
         row = self.need((200, True, 200))
         self.assertEqual((row["importFit"], row["importCovered"], row["importNeed"]),
                          ("short", False, 1480))
-
-
-if __name__ == "__main__":
-    unittest.main()

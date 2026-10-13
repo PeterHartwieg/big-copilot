@@ -108,7 +108,3 @@ class MainTests(unittest.TestCase):
         summary = "\n".join(line for line in out.getvalue().splitlines() if not line.startswith("  missing"))
         self.assertEqual(code, 0, "orphaned or mismatched translations; after removing or renaming a key run "
                                   "python tools/i18n.py prune\n" + summary)
-
-
-if __name__ == "__main__":
-    unittest.main()

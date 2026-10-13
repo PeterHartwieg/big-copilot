@@ -223,7 +223,3 @@ class HistoryExtractTests(unittest.TestCase):
         self.assertEqual((flow["fromDay"], flow["days"]), (N, BETWEEN - N))
         self.assertEqual((flow["cashFrom"], flow["cashTo"]),
                          (self.first["kpi"]["cash"], between["kpi"]["cash"]))
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -401,6 +401,3 @@ class RemainingStagesTests(unittest.TestCase):
         sourced = build.call_args.args[0]["sourced"]
         self.assertTrue(sourced("foreign", SODA))
         self.assertFalse(sourced(key(FACTORY), SODA))
-
-if __name__ == "__main__":
-    unittest.main()

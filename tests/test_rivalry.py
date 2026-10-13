@@ -302,7 +302,3 @@ class RivalryTests(unittest.TestCase):
             self.assertTrue(runs[1]["rivalry"]["streakAtLeast"])
             loaded = bd.History(history_path)
             self.assertEqual(loaded.book[fx.CHARACTER]["rivalry"][str(fx.DAY)]["src"], "live")
-
-
-if __name__ == "__main__":
-    unittest.main()

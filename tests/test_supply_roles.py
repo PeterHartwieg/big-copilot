@@ -337,7 +337,3 @@ class ImporterNames(unittest.TestCase):
             "ba:importertypename_jetcargo": "Jet Cargo lokal"})
         self.assertAlmostEqual(dashboard.name_coverage(english, other), 2 / 3)
         self.assertEqual(dashboard.name_coverage(english, {}), 0.0)
-
-
-if __name__ == "__main__":
-    unittest.main()

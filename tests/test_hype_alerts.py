@@ -108,7 +108,3 @@ class HypeLineTests(MsgAsserts, unittest.TestCase):
         _, rows = hype_lines([wave(7, 4, 50, electro, baseline(63012)),
                               wave(3, 13, 58, electro, baseline(63012))], trends=trends)
         self.assertEqual([r["siteKey"] for r in rows if r["group"] == "trend"], [GIFTS])
-
-
-if __name__ == "__main__":
-    unittest.main()

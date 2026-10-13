@@ -124,7 +124,3 @@ class SitesAddUpTests(unittest.TestCase):
         self.assertEqual(by_profit[round(gifts, 2)], regs[F.GIFTS]["BusinessName"])
         self.assertEqual(by_profit[round(hub, 2)], regs[F.HUB]["BusinessName"])
         self.assertAlmostEqual(self.total(p), p["daily"][-1]["business"], delta=1)
-
-
-if __name__ == "__main__":
-    unittest.main()

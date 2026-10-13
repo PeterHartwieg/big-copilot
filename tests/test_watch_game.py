@@ -438,7 +438,3 @@ class WatchSurvivesAFailingFirstBuild(unittest.TestCase):
         self.assertEqual(sum("schema version 2" in line for line in lines), 1, lines)
         self.assertEqual(sum("the game link is back" in line for line in lines), 1, lines)
         self.assertTrue(any("rebuilt from the game (day 40)" in line for line in lines), lines)
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -6,7 +6,6 @@ candidate names are save data like employee names.
 import collections
 import json
 import math
-import os
 import unittest
 
 from ba_dashboard import (
@@ -1141,7 +1140,3 @@ print(json.dumps([row["_hire"], row["fullCover"]["_hire"], offices, cands], sort
         made = under_seeds(self.SCRIPT)
         self.assertEqual(made[0], made[1])
         self.assertTrue(json.loads(made[0])[0]["hireWeeks"])
-
-
-if __name__ == "__main__":
-    unittest.main()

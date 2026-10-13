@@ -46,7 +46,3 @@ class RenderPayload(unittest.TestCase):
         self.assertNotIn("<", page[start:page.index(";", page.index("]}", start))])
         # No placeholder was filled inside the save's text.
         self.assertEqual(page.count("\x00"), 0)
-
-
-if __name__ == "__main__":
-    unittest.main()
