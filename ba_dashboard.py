@@ -9574,6 +9574,117 @@ def _line_use(machines: int, rate: float, makes: float, sold: float | None,
     return out
 
 
+# --- _factories()' helpers: one factory line or input, read off the flow
+def _station_name(names: Names, slug: str) -> str:
+    """A factory workstation's name, from the game's help page for it."""
+    text = names.locale.get(f"help_factory_workstation_{slug}_content", "")
+    match = re.search(r"\*\*([^*]+)\*\*", text)
+    return match.group(1) if match else f"{slug.title()} Workstation"
+
+
+def _in_log(flow: dict):
+    """in_by_day(key, slug): what arrived at a site of an item, by day."""
+    # A hand-built flow (the recipe tests) may carry only the net log.
+    return flow.get("inByDay") or flow["byDay"]
+
+
+def _held_at(flow: dict, key, slug) -> float:
+    """What the site `key` holds of `slug`."""
+    return flow["held"].get(key, {}).get(slug, 0)
+
+
+def _shipped(flow: dict, key, slug) -> float:
+    """What the site `key` sends out of `slug` a day."""
+    return flow["shipped"](key, slug) or 0.0
+
+
+def _arrives(flow: dict, key, slug) -> float:
+    """The daily feed this line is actually getting.
+
+    The week behind an input only describes it if the input was drawn all
+    week. Where the record is younger than the window the average is of a
+    factory that has since changed, and the last completed round is the
+    honest measure of what the logistics brings in.
+    """
+    in_by_day = _in_log(flow)
+    # The log is already cut to the window and to completed days. What the
+    # factory sends on of the same item (an import passed to a depot's
+    # target) arrived but was never eaten, so it comes off.
+    seen = in_by_day(key, slug)
+    drawn = [d for d, amount in seen.items() if amount > 0]
+    if len(drawn) >= SHIPPED_WINDOW * FEED_SETTLED:
+        forwarded = flow.get("forwarded") or (lambda *args: 0.0)
+        return max(0.0, (flow["received"](key, slug) or 0.0) - forwarded(key, slug))
+    if not drawn:
+        return 0.0
+    last = max(drawn)
+    out_by_day = flow.get("outByDay") or (lambda *args: {})
+    return max(0.0, seen[last] - out_by_day(key, slug).get(last, 0.0))
+
+
+def _line_limit(set_to: list):
+    """The stock at which a line's machines all stop, from each machine's
+    Produce up to, or None if one of them has none set and so runs whatever
+    is held."""
+    return max(set_to) if set_to and None not in set_to else None
+
+
+def _ingredient_resolver(flow: dict, names: Names):
+    """resolve(ing): the item the city actually holds for a recipe ingredient.
+
+    The help text links an ingredient under one name and the game moves it
+    under another -- "Bag of Tomatoes" is rawtomato on the page and tomato in
+    every warehouse -- so each ingredient is matched to the item the city
+    actually holds, by label when the slug itself is never seen.
+    """
+    seen = {slug for lines in flow["held"].values() for slug in lines}
+    seen |= {slug for _key, slug in flow["targets"]} | {slug for _key, slug in flow["imports"]}
+    by_label = collections.defaultdict(list)
+    for slug, label in names.locale.items():
+        if slug.startswith("ba:itemname_"):
+            by_label[label].append(slug)
+
+    def resolve(ing: dict) -> str:
+        if ing["slug"] in seen:
+            return ing["slug"]
+        return next((alt for alt in by_label.get(ing["item"], []) if alt in seen), ing["slug"])
+
+    return resolve
+
+
+def _missing_inputs(flow: dict, recipes: dict, resolve, key, slug, keys: bool = False) -> list:
+    """Inputs of a recipe that neither arrive nor are held at the site: their
+    names, or with `keys` their game keys, in the same order."""
+    if flow["received"](key, "") is None:
+        return []
+    return [
+        ing["slug"] if keys else ing["item"]
+        for ing in recipes[slug]["ingredients"]
+        if not _arrives(flow, key, resolve(ing)) and not _held_at(flow, key, resolve(ing))
+    ]
+
+
+def _import_behind(flow: dict, factories, site, slug):
+    """The site whose import carries a need topped up from `site`: a
+    factory (one of `factories`) with no import of its own passes on what
+    its own top-up brings, so a factory it feeds is sized on the import
+    behind it."""
+    seen = set()
+    while site in factories and (site, slug) not in flow["imports"] and site not in seen:
+        seen.add(site)
+        behind = flow["targets"].get((site, slug), (0, None))[1]
+        if not behind:
+            break
+        site = behind
+    return site
+
+
+def _unnamed_hours(machines_posted: list) -> dict:
+    """An unnamed line's hours now and its machines' ids, as a line's."""
+    got = _line_hours(machines_posted, 1, 1, 0, "none")
+    return {"hoursNow": got["hoursNow"], "_posts": got["_posts"]}
+
+
 def _factories(
     save: Save,
     names: Names,
@@ -9657,69 +9768,13 @@ def _factories(
             "depotRoutes": _depot_routes(flow, index),
         }
 
-    def station_name(slug: str) -> str:
-        text = names.locale.get(f"help_factory_workstation_{slug}_content", "")
-        match = re.search(r"\*\*([^*]+)\*\*", text)
-        return match.group(1) if match else f"{slug.title()} Workstation"
-
     by_station = collections.defaultdict(list)
     for slug, rec in recipes.items():
         by_station[rec["workstation"]].append(slug)
 
-    def held(key, slug):
-        return flow["held"].get(key, {}).get(slug, 0)
-
-    # A hand-built flow (the recipe tests) may carry only the net log.
-    in_by_day = flow.get("inByDay") or flow["byDay"]
-    out_by_day = flow.get("outByDay") or (lambda *args: {})
-    forwarded = flow.get("forwarded") or (lambda *args: 0.0)
-
-    def out_of(key, slug):
-        return flow["shipped"](key, slug) or 0.0
-
-    def arrives(key, slug):
-        """The daily feed this line is actually getting.
-
-        The week behind an input only describes it if the input was drawn all
-        week. Where the record is younger than the window the average is of a
-        factory that has since changed, and the last completed round is the
-        honest measure of what the logistics brings in.
-        """
-        # The log is already cut to the window and to completed days. What the
-        # factory sends on of the same item (an import passed to a depot's
-        # target) arrived but was never eaten, so it comes off.
-        seen = in_by_day(key, slug)
-        drawn = [d for d, amount in seen.items() if amount > 0]
-        if len(drawn) >= SHIPPED_WINDOW * FEED_SETTLED:
-            return max(0.0, (flow["received"](key, slug) or 0.0) - forwarded(key, slug))
-        if not drawn:
-            return 0.0
-        last = max(drawn)
-        return max(0.0, seen[last] - out_by_day(key, slug).get(last, 0.0))
-
+    in_by_day = _in_log(flow)
     hours_today = save.root.get("Hour", 24) + (save.root.get("Minute") or 0) / 60
-
-    def line_limit(key, line):
-        """The stock at which a line's machines all stop, or None if one of
-        them has no Produce up to set and so runs whatever is held."""
-        set_to = limits[key][line]
-        return max(set_to) if set_to and None not in set_to else None
-
-    # The help text links an ingredient under one name and the game moves it
-    # under another — "Bag of Tomatoes" is rawtomato on the page and tomato in
-    # every warehouse — so each ingredient is matched to the item the city
-    # actually holds, by label when the slug itself is never seen.
-    seen = {slug for lines in flow["held"].values() for slug in lines}
-    seen |= {slug for _key, slug in flow["targets"]} | {slug for _key, slug in flow["imports"]}
-    by_label = collections.defaultdict(list)
-    for slug, label in names.locale.items():
-        if slug.startswith("ba:itemname_"):
-            by_label[label].append(slug)
-
-    def resolve(ing: dict) -> str:
-        if ing["slug"] in seen:
-            return ing["slug"]
-        return next((alt for alt in by_label.get(ing["item"], []) if alt in seen), ing["slug"])
+    resolve = _ingredient_resolver(flow, names)
 
     chosen = history.named(character) if history else {}
 
@@ -9768,17 +9823,6 @@ def _factories(
                 total += n * per * 24 * dem_output(site, slug) / capacity_at[site][slug]
         return total
 
-    def missing(key, slug, keys=False):
-        """Inputs of a recipe that neither arrive nor are held at the site: their
-        names, or with `keys` their game keys, in the same order."""
-        if flow["received"](key, "") is None:
-            return []
-        return [
-            ing["slug"] if keys else ing["item"]
-            for ing in recipes[slug]["ingredients"]
-            if not arrives(key, resolve(ing)) and not held(key, resolve(ing))
-        ]
-
     # --- each factory: its lines, and what they eat
     made_by = collections.defaultdict(set)
     sites, depot_need = [], collections.defaultdict(float)
@@ -9786,24 +9830,6 @@ def _factories(
     # whose coming week was read off a line (_coming_week).
     ramp_at = collections.defaultdict(set)
     demand = flow.get("demand")
-
-    def upstream(site, slug):
-        """The site whose import carries a need topped up from `site`: a
-        factory with no import of its own passes on what its own top-up
-        brings, so a factory it feeds is sized on the import behind it."""
-        seen = set()
-        while site in machines and (site, slug) not in flow["imports"] and site not in seen:
-            seen.add(site)
-            behind = flow["targets"].get((site, slug), (0, None))[1]
-            if not behind:
-                break
-            site = behind
-        return site
-
-    def unnamed_hours(machines_posted):
-        """An unnamed line's hours now and its machines' ids, as a line's."""
-        got = _line_hours(machines_posted, 1, 1, 0, "none")
-        return {"hoursNow": got["hoursNow"], "_posts": got["_posts"]}
 
     dem_out = collections.defaultdict(float)  # (factory, product) -> a day's make in Demand sizing
     for key, counter in machines.items():
@@ -9829,12 +9855,12 @@ def _factories(
                 unnamed.append(
                     {
                         "rid": rid,
-                        "workstation": station_name(station),
+                        "workstation": _station_name(names, station),
                         "workstationKey": f"ba:factoryworkstationtype_{station}",
                         "slots": sorted(slots[key][(station, rid)]),
                         "machines": n,
                         "idle": rid is None,
-                        "limit": line_limit(key, (station, rid)),
+                        "limit": _line_limit(limits[key][(station, rid)]),
                         "candidates": [
                             {"slug": c, "item": recipes[c]["item"]}
                             for c in by_station.get(station, [])
@@ -9842,18 +9868,18 @@ def _factories(
                         **staffing,
                         # A recipe the board cannot name still runs: its
                         # machines are rostered like any line's (_factory_staffing).
-                        **(unnamed_hours(posted[key][(station, rid)]) if rid else {}),
+                        **(_unnamed_hours(posted[key][(station, rid)]) if rid else {}),
                     }
                 )
                 continue
             rec = recipes[slug]
             makes = n * rec["out"] * 24
             share = staffing["hoursWeek"] / staffing["fullWeek"] if staffing["fullWeek"] else 0.0
-            ships = out_of(key, slug)
-            stock = held(key, slug)
+            ships = _shipped(flow, key, slug)
+            stock = _held_at(flow, key, slug)
             to_city = sum(a for d, i, a in flow["edges"].get(key, []) if i == slug and d in index)
             to_pier = sum(a for d, i, a in flow["edges"].get(key, []) if i == slug and d not in index)
-            stopped = missing(key, slug)
+            stopped = _missing_inputs(flow, recipes, resolve, key, slug)
             # Held by its production limit: the output held is at the limit, or
             # under it by no more than the machines could have made back of
             # what the morning round took. That is bounded three ways: by a
@@ -9886,7 +9912,7 @@ def _factories(
             # takes it to send, so the walk and the sizing agree on who
             # brings the margin.
             dem_out[(key, slug)] += min(makes, dem_makes * (1 + SUPPLY_MARGIN))
-            limit = line_limit(key, (station, rid))
+            limit = _line_limit(limits[key][(station, rid)])
             make_back = min(ships, makes / 24 * hours_today, (limit or 0) * LIMIT_SLACK)
             limit_held = limit is not None and stock > 0 and stock >= limit - make_back
             lines.append(
@@ -9896,8 +9922,8 @@ def _factories(
                     "slug": slug,
                     "missing": stopped,
                     # Their game keys, index for index, for the page to name them.
-                    "missingSlugs": missing(key, slug, keys=True),
-                    "workstation": station_name(station),
+                    "missingSlugs": _missing_inputs(flow, recipes, resolve, key, slug, keys=True),
+                    "workstation": _station_name(names, station),
                     "workstationKey": f"ba:factoryworkstationtype_{station}",
                     "slots": sorted(slots[key][(station, rid)]),
                     "machines": n,
@@ -9946,7 +9972,7 @@ def _factories(
         # it draws matches what it makes, not what it could. A starved line
         # runs its input down instead.
         rest_of_day = max(0.0, 24 - hours_today) / 24
-        on_hand = {slug: held(key, slug) >= row["perDay"] * rest_of_day for slug, row in needs.items()}
+        on_hand = {slug: _held_at(flow, key, slug) >= row["perDay"] * rest_of_day for slug, row in needs.items()}
         for line in lines:
             if line["limitHeld"] or line["limit"] is None or line["missing"]:
                 continue
@@ -9988,7 +10014,7 @@ def _factories(
             # A paused contract never makes an input direct: beside a top-up the
             # top-up is what brings it today.
             direct = bool(own_import and not warehouse_need and not (mixed and not direct_weekly))
-            import_source = key if direct else upstream(source, slug) if source else None
+            import_source = key if direct else _import_behind(flow, machines, source, slug) if source else None
             # An input that only sits because every line using it is stopped
             # for want of something else is waiting, not being ignored.
             waiting = (
@@ -10010,10 +10036,10 @@ def _factories(
             # is starved, not held.
             ship_draw, all_limit = row.pop("_shipDraw"), row.pop("_allLimit")
             row["limited"] = bool(
-                row["lines"] and held(key, slug) > 0 and (
+                row["lines"] and _held_at(flow, key, slug) > 0 and (
                     all(held_lines[line] for line in row["lines"])
-                    or (all_limit and ship_draw > 0 and arrives(key, slug) >= ship_draw * 0.85
-                        and held(key, slug) >= free_draw[slug] * rest_of_day))
+                    or (all_limit and ship_draw > 0 and _arrives(flow, key, slug) >= ship_draw * 0.85
+                        and _held_at(flow, key, slug) >= free_draw[slug] * rest_of_day))
             )
             row["target"] = target
             row["source"] = import_source
@@ -10028,9 +10054,9 @@ def _factories(
             row["dailyNeed"] = row["perDay"]
             row["importSite"] = index.get(import_source)
             row["known"] = not own_import and flow["received"](key, slug) is not None
-            row["arrives"] = round(arrives(key, slug))
-            row["stock"] = held(key, slug)
-            row["depotStock"] = held(source, slug) if source and not direct else 0
+            row["arrives"] = round(_arrives(flow, key, slug))
+            row["stock"] = _held_at(flow, key, slug)
+            row["depotStock"] = _held_at(flow, source, slug) if source and not direct else 0
             # Planned, stocked at the depot, and yet nothing came all week.
             row["stalled"] = bool(row["known"] and not row["arrives"] and row["depotStock"] > 0)
             if own_import:
@@ -10073,7 +10099,7 @@ def _factories(
                 "needs": list(needs.values()),
                 "targets": into,
                 "known": flow["received"](key, "") is not None,
-                "arrivals": {slug: round(arrives(key, slug)) for slug in _in_order(watched)},
+                "arrivals": {slug: round(_arrives(flow, key, slug)) for slug in _in_order(watched)},
             }
         )
 
@@ -14865,17 +14891,44 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
     while the plan waits on a hire or a bench member, nobody is moved off an
     hour they work now if that leaves the hour fewer people than it has
     (_waiting_drops(), _hold_rows()).
+
+    Each step is a _week_<letter>_*() function over one `ctx` dict: the
+    arguments, and what each step adds for the ones after it. f.'s slots are
+    cut before c. counts them, so the steps run a, b, f, c, d, e.
     """
     # The one step every plan repeats: a long build says it is alive from here.
     _progress()
+    ctx = {
+        "grid": grid, "need": need, "slots_open": slots_open, "cover_posts": cover_posts,
+        "pool": pool, "people": people, "business": business, "bench": bench,
+        "state": state, "groups": groups, "current": current, "hires": hires,
+        "fixed": fixed or [], "cuts": cuts, "snap": snap, "keep": keep,
+        # Whether `snap` moved an edge anywhere, so _place_week() knows if the
+        # trial with edges dropped would cut any different lines.
+        "snap_moved": False,
+    }
+    _week_a_cover(ctx)
+    _week_b_cut(ctx)
+    _week_f_cover_slots(ctx)
+    _week_c_headcount(ctx)
+    _week_d_place(ctx)
+    return _week_e_residue(ctx)
+
+
+def _week_a_cover(ctx: dict) -> None:
+    """a. Per-station cover, with the troughs bridged before b. cuts it.
+
+    Adds `open_hours` (each weekday's open hours, sorted), `wanted` (each
+    role's stations' hours per weekday) and `slack` (the bridged hours, their
+    cost and the budget they came out of).
+    """
+    grid, need, slots_open = ctx["grid"], ctx["need"], ctx["slots_open"]
     open_hours = [
         sorted({hour for start, end in slots_open[wd] for hour in range(start, end)})
         for wd in range(7)
     ]
-
-    # a. Per-station cover, b. the cut, with the troughs bridged in between.
     wanted, role_wages = {}, {}
-    site_pool = _site_pool(people, business, bench)  # one list for every role's wage
+    site_pool = _site_pool(ctx["people"], ctx["business"], ctx["bench"])  # one list for every role's wage
     for role in grid["roles"]:
         skill, role_key = role["skill"], _role_key(role)
         posts = [s for s in grid["stations"] if _station_role(s) == role_key]
@@ -14899,28 +14952,33 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
     slack_hours, slack_cost = _bridge_troughs(
         wanted, role_wages, budget, slots_open
     )
+    ctx["open_hours"] = open_hours
+    ctx["wanted"] = wanted
+    ctx["slack"] = (slack_hours, slack_cost, budget)
 
-    # Whether `snap` moved an edge anywhere, so _place_week() knows if the
-    # trial with edges dropped would cut any different lines.
-    snap_moved = False
 
-    def cut(start, end, skill):
-        nonlocal snap_moved
-        points = (cuts or {}).get(skill)
-        pieces = _cut_at(start, end, points, snap)
-        if points and snap and not snap_moved:
-            snap_moved = pieces != _cut_at(start, end, points, False)
-        return pieces
+def _week_cut_piece(ctx: dict, start: int, end: int, skill) -> list:
+    """One run cut into shifts (_cut_at()), at the extra points `ctx` has for
+    `skill`; notes in `snap_moved` whether `snap` changed the cut."""
+    points = (ctx["cuts"] or {}).get(skill)
+    pieces = _cut_at(start, end, points, ctx["snap"])
+    if points and ctx["snap"] and not ctx["snap_moved"]:
+        ctx["snap_moved"] = pieces != _cut_at(start, end, points, False)
+    return pieces
 
+
+def _week_b_cut(ctx: dict) -> None:
+    """b. The cut: each serving station's bridged runs as `slots`."""
+    grid = ctx["grid"]
     slots = []
     for role in grid["roles"]:
         skill, role_key = role["skill"], _role_key(role)
         posts = [s for s in grid["stations"] if _station_role(s) == role_key]
-        for index, days in wanted[role_key].items():
+        for index, days in ctx["wanted"][role_key].items():
             post = posts[index]
             for wd in range(7):
                 for start, end in _runs(days[wd]):
-                    for cut_start, cut_end in cut(start, end, skill):
+                    for cut_start, cut_end in _week_cut_piece(ctx, start, end, skill):
                         slots.append(
                             {
                                 "wd": wd,
@@ -14931,16 +14989,19 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
                                 "kind": "serve",
                             }
                         )
+    ctx["slots"] = slots
 
-    # f. Cleaning and security: one person per station for every open hour, cut
-    # the same way and placed after the serving stations, so neither ever steals
-    # a person from a queue.
+
+def _week_f_cover_slots(ctx: dict) -> None:
+    """f. Cleaning and security: one person per station for every open hour, cut
+    the same way and placed after the serving stations, so neither ever steals
+    a person from a queue. Adds `cover_slots`."""
     cover_slots = []
-    for post in cover_posts:
+    for post in ctx["cover_posts"]:
         kind, skill = COVER_STATIONS[post["slug"]]
         for wd in range(7):
-            for start, end in _runs(open_hours[wd]):
-                for cut_start, cut_end in cut(start, end, skill):
+            for start, end in _runs(ctx["open_hours"][wd]):
+                for cut_start, cut_end in _week_cut_piece(ctx, start, end, skill):
                     cover_slots.append(
                         {
                             "wd": wd,
@@ -14951,10 +15012,13 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
                             "kind": kind,
                         }
                     )
+    ctx["cover_slots"] = cover_slots
 
-    # c. Headcount, before anybody is placed: the number the player most wants.
+
+def _week_c_headcount(ctx: dict) -> None:
+    """c. Headcount, before anybody is placed: the number the player most wants."""
     headcount = {}
-    for group in (slots, cover_slots):
+    for group in (ctx["slots"], ctx["cover_slots"]):
         for slot in group:
             entry = headcount.setdefault(
                 slot["skill"],
@@ -14965,8 +15029,18 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
     for entry in headcount.values():
         entry["min"] = math.ceil(entry["needed"] / FULL_TIME[1])
         entry["max"] = entry["needed"] // FULL_TIME[0]
+    ctx["headcount"] = headcount
 
-    # d. Place, most-constrained-first, serving stations before cover.
+
+def _week_d_place(ctx: dict) -> None:
+    """d. Place, most-constrained-first, serving stations before cover.
+
+    Adds `shifts` and `hire_weeks` (_week_d_fill()), `before` and
+    `roles_here` for e., and the placement's working set: `flex`, `now`,
+    `protected`, `fixed_people`, `role_keys`, `by_id`, `start` and `keys`.
+    """
+    grid, cover_posts, pool, state = ctx["grid"], ctx["cover_posts"], ctx["pool"], ctx["state"]
+    current, fixed, slots, cover_slots = ctx["current"], ctx["fixed"], ctx["slots"], ctx["cover_slots"]
     before = {
         person["id"]: (
             state[person["id"]]["hours"],
@@ -14976,7 +15050,6 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
     }
     # Fixed duties belong to this site's complete week, but are never replaced
     # by the planner. Capture the outside-site baseline before reserving them.
-    fixed = fixed or []
     for row in fixed:
         entry = state.get(row["employee"])
         if entry is not None:
@@ -15004,12 +15077,6 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
         person["id"]: sum(1 for skill, kind in roles_here if _usable(person, skill, kind))
         for person in pool
     }
-
-    def fresh_here():
-        # Each station's furniture group (_station_groups()), where the caller
-        # has the building: a desk demand is met at a station, not a site.
-        return {"groups": groups or {}, "rostered": set(), "flex": flex}
-
     # The people already working here whom a plan could cut short of the week
     # they have (_worse_off()): those holding an hours band or a day count,
     # with a week here now, in a role this plan staffs.
@@ -15031,79 +15098,18 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
     standing = [
         row for row in current or ()
         if row["station"] in owned and row.get("employee") in now
-    ] if keep and hires else []
+    ] if ctx["keep"] and ctx["hires"] else []
     role_keys = {s["id"]: ("serve", _station_role(s)) for s in grid["stations"]}
     role_keys.update({post["id"]: COVER_STATIONS[post["slug"]] for post in cover_posts})
-    by_id = {person["id"]: person for person in pool}
-    start = {pid: _copy_state(state[pid]) for pid in before} if protected or standing else None
-    keys = set(state)
+    ctx.update(
+        before=before, roles_here=roles_here, flex=flex, now=now, protected=protected,
+        fixed_people=fixed_people, role_keys=role_keys,
+        by_id={person["id"]: person for person in pool},
+        start={pid: _copy_state(state[pid]) for pid in before} if protected or standing else None,
+        keys=set(state),
+    )
 
-    def place(held):
-        """d. and e. from `start`, with the entries in `held` kept where they stand."""
-        pins, kept, allowed = [], [], {}
-        if held:
-            pins = _hold_rows(held, slots + cover_slots, role_keys, by_id, start)
-        while True:
-            here = fresh_here()
-            shifts = _fill_week(slots, cover_slots, pool, state, here, pins, allowed)
-            _repair_week(shifts, pool, state, here["rostered"], before)
-            worse = [
-                person["id"] for person in protected
-                if person["id"] not in kept
-                and _worse_off(person, state[person["id"]], before[person["id"]], now[person["id"]])
-            ]
-            if not worse:
-                break
-            # Keep their week as it stands and plan everybody else round it, from
-            # the start. Whose week is kept changes what the rest are given, so the
-            # test is asked again until nobody new is cut short.
-            for pid, entry in start.items():
-                state[pid] = _copy_state(entry)
-            kept += worse
-            role_of = {s["id"]: _station_role(s) for s in grid["stations"]}
-            staffed_roles = {role_of.get(slot["station"]) for slot in slots}
-            # Zero professional demand is not a spare person when fixed duties
-            # remain. Their existing professional week may still be needed to keep
-            # a minimum-hours/day demand that the combined current week meets.
-            staffed_roles.update(role_of[row["station"]] for pid in kept if pid in fixed_people
-                                 for row in now[pid]["rows"] if row["station"] in role_of)
-            stations_ok = {s["id"]: (s["skill"], "serve") for s in grid["stations"]
-                           if _station_role(s) in staffed_roles}
-            stations_ok.update({slot["station"]: (slot["skill"], slot["kind"])
-                                for slot in cover_slots})
-            pins = _pin_weeks(kept, now, stations_ok, open_hours, by_id, start)
-            if held:
-                pins += _hold_rows([row for row in held if row["employee"] not in kept],
-                                   slots + cover_slots, role_keys, by_id, start, taken=pins)
-
-        # e. The lines nobody here may work: offered again with hires in the pool
-        # and the week settled for them, only where there are such lines, so a
-        # week that needs nobody new is exactly the week above (_place_hires()).
-        hire_weeks = {}
-        if hires and any(shift["employee"] is None for shift in shifts):
-            shifts, hire_weeks = _place_hires(shifts, pool, state, here, before)
-        shifts.extend(pins)
-        return shifts, hire_weeks, here
-
-    def people(shifts, hire_weeks):
-        """Who a week puts to work: (people here, bench members, hires)."""
-        here_ids = {s["employee"] for s in shifts + fixed
-                    if s["employee"] is not None and not s.get("fromBench")}
-        bench_ids = {s["employee"] for s in shifts if s.get("fromBench")}
-        return here_ids, bench_ids, sum(len(weeks) for weeks in hire_weeks.values())
-
-    def snapshot(shifts, hire_weeks, here):
-        # Only the pool's weeks and the hires' change in a placement.
-        return (shifts, hire_weeks, here, {pid: _copy_state(entry) for pid, entry in state.items()
-                                           if pid in start or pid not in keys})
-
-    def restore(saved):
-        for pid in set(state) - keys:
-            del state[pid]
-        state.update(saved[3])
-        return saved[:3]
-
-    shifts, hire_weeks, here = place([])
+    shifts, hire_weeks, here = _week_d_fill(ctx, [])
     # Issue #446: a write leaves out every entry that waits on somebody not
     # here yet, so a plan that moved a person off an hour they work now and
     # gave the hour to a hire is a week with fewer people in that hour until
@@ -15118,8 +15124,9 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
     # week stands.
     dropped, missing = _waiting_drops(shifts, standing, role_keys) if standing else ([], 0)
     if dropped:
-        plain = snapshot(shifts, hire_weeks, here)
-        here_ids, bench_ids, hired = people(shifts, hire_weeks)
+        start, keys = ctx["start"], ctx["keys"]
+        plain = _week_d_snapshot(ctx, shifts, hire_weeks, here)
+        here_ids, bench_ids, hired = _week_d_who(ctx, shifts, hire_weeks)
         short_roles = {role_keys.get(row["station"]) for row in dropped}
         tries = [
             [row for row in standing
@@ -15136,18 +15143,106 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
                 state[pid] = _copy_state(entry)
             for pid in set(state) - keys:
                 del state[pid]
-            shifts, hire_weeks, here = place(held)
-            now_here, now_bench, now_hired = people(shifts, hire_weeks)
+            shifts, hire_weeks, here = _week_d_fill(ctx, held)
+            now_here, now_bench, now_hired = _week_d_who(ctx, shifts, hire_weeks)
             short = _waiting_drops(shifts, standing, role_keys)[1]
             if (now_here <= here_ids and now_bench == bench_ids and now_hired <= hired
                     and short < missing):
-                kept = snapshot(shifts, hire_weeks, here)
+                kept = _week_d_snapshot(ctx, shifts, hire_weeks, here)
                 break
-        shifts, hire_weeks, here = restore(kept or plain)
+        shifts, hire_weeks, here = _week_d_restore(ctx, kept or plain)
     shifts.sort(
         key=lambda s: (s["wd"], s["from"], s["to"], str(s["station"]), str(s["employee"]))
     )
+    ctx["shifts"] = shifts
+    ctx["hire_weeks"] = hire_weeks
 
+
+def _week_d_fill(ctx: dict, held: list) -> tuple:
+    """d. and e. from `ctx["start"]`, with the entries in `held` kept where they
+    stand: (shifts, hire weeks, the rank's `here`)."""
+    grid, pool, state, before = ctx["grid"], ctx["pool"], ctx["state"], ctx["before"]
+    slots, cover_slots, start = ctx["slots"], ctx["cover_slots"], ctx["start"]
+    role_keys, by_id, now = ctx["role_keys"], ctx["by_id"], ctx["now"]
+    pins, kept, allowed = [], [], {}
+    if held:
+        pins = _hold_rows(held, slots + cover_slots, role_keys, by_id, start)
+    while True:
+        # Each station's furniture group (_station_groups()), where the caller
+        # has the building: a desk demand is met at a station, not a site.
+        here = {"groups": ctx["groups"] or {}, "rostered": set(), "flex": ctx["flex"]}
+        shifts = _fill_week(slots, cover_slots, pool, state, here, pins, allowed)
+        _repair_week(shifts, pool, state, here["rostered"], before)
+        worse = [
+            person["id"] for person in ctx["protected"]
+            if person["id"] not in kept
+            and _worse_off(person, state[person["id"]], before[person["id"]], now[person["id"]])
+        ]
+        if not worse:
+            break
+        # Keep their week as it stands and plan everybody else round it, from
+        # the start. Whose week is kept changes what the rest are given, so the
+        # test is asked again until nobody new is cut short.
+        for pid, entry in start.items():
+            state[pid] = _copy_state(entry)
+        kept += worse
+        role_of = {s["id"]: _station_role(s) for s in grid["stations"]}
+        staffed_roles = {role_of.get(slot["station"]) for slot in slots}
+        # Zero professional demand is not a spare person when fixed duties
+        # remain. Their existing professional week may still be needed to keep
+        # a minimum-hours/day demand that the combined current week meets.
+        staffed_roles.update(role_of[row["station"]] for pid in kept if pid in ctx["fixed_people"]
+                             for row in now[pid]["rows"] if row["station"] in role_of)
+        stations_ok = {s["id"]: (s["skill"], "serve") for s in grid["stations"]
+                       if _station_role(s) in staffed_roles}
+        stations_ok.update({slot["station"]: (slot["skill"], slot["kind"])
+                            for slot in cover_slots})
+        pins = _pin_weeks(kept, now, stations_ok, ctx["open_hours"], by_id, start)
+        if held:
+            pins += _hold_rows([row for row in held if row["employee"] not in kept],
+                               slots + cover_slots, role_keys, by_id, start, taken=pins)
+
+    # e. The lines nobody here may work: offered again with hires in the pool
+    # and the week settled for them, only where there are such lines, so a
+    # week that needs nobody new is exactly the week above (_place_hires()).
+    hire_weeks = {}
+    if ctx["hires"] and any(shift["employee"] is None for shift in shifts):
+        shifts, hire_weeks = _place_hires(shifts, pool, state, here, before)
+    shifts.extend(pins)
+    return shifts, hire_weeks, here
+
+
+def _week_d_who(ctx: dict, shifts: list, hire_weeks: dict) -> tuple:
+    """Who a week puts to work: (people here, bench members, hires)."""
+    here_ids = {s["employee"] for s in shifts + ctx["fixed"]
+                if s["employee"] is not None and not s.get("fromBench")}
+    bench_ids = {s["employee"] for s in shifts if s.get("fromBench")}
+    return here_ids, bench_ids, sum(len(weeks) for weeks in hire_weeks.values())
+
+
+def _week_d_snapshot(ctx: dict, shifts: list, hire_weeks: dict, here: dict) -> tuple:
+    """A placement to come back to (_week_d_restore())."""
+    # Only the pool's weeks and the hires' change in a placement.
+    start, keys = ctx["start"], ctx["keys"]
+    return (shifts, hire_weeks, here, {pid: _copy_state(entry) for pid, entry in ctx["state"].items()
+                                       if pid in start or pid not in keys})
+
+
+def _week_d_restore(ctx: dict, saved: tuple) -> tuple:
+    """Put back a _week_d_snapshot(): (shifts, hire weeks, here)."""
+    state = ctx["state"]
+    for pid in set(state) - ctx["keys"]:
+        del state[pid]
+    state.update(saved[3])
+    return saved[:3]
+
+
+def _week_e_residue(ctx: dict) -> dict:
+    """e. The residue: who the site has against the headcount, the hires'
+    weeks, the spare people and the demands left short; the placer's result."""
+    pool, bench, state, fixed = ctx["pool"], ctx["bench"], ctx["state"], ctx["fixed"]
+    shifts, hire_weeks, headcount = ctx["shifts"], ctx["hire_weeks"], ctx["headcount"]
+    before, by_id = ctx["before"], ctx["by_id"]
     # Who the site has is settled now rather than before placement: a bench
     # member counts here only if this site is the one that drew them off it.
     # One pass over the shifts, not one per person: the bench is every
@@ -15211,7 +15306,6 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
         and any(_usable(person, skill, entry["kind"]) for skill, entry in headcount.items())
     })
     # And the roles each of them is spare in: a move keeps to one of these.
-    by_id = {person["id"]: person for person in pool}
     spare_skills = {
         pid: [
             skill for skill in _in_order(headcount)
@@ -15301,7 +15395,7 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
         if person["id"] not in worked:
             continue
         usable = _in_order({
-            skill for skill, kind in roles_here if _usable(person, skill, kind)
+            skill for skill, kind in ctx["roles_here"] if _usable(person, skill, kind)
         })
         bench_rows.append({
             "employee": person["id"],
@@ -15309,14 +15403,14 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
             "skills": usable,
         })
     return {
-        "need": need,
+        "need": ctx["need"],
         "shifts": shifts,
         "headcount": headcount,
         "shortHours": short_hours,
         "shortDays": short_days,
         "placed": _demand_driven(shifts, pool),
         "bench": bench_rows,
-        "slack": (slack_hours, slack_cost, budget),
+        "slack": ctx["slack"],
         "weekly": weekly,
         "took": [person for person in bench if person["id"] in worked],
         "hireWeeks": hire_weeks,
@@ -15324,7 +15418,7 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
         "spareSkills": spare_skills,
         "fewer": fewer,
         # Taken off by _place_week(): whether `snap` changed any cut.
-        "snapMoved": snap_moved,
+        "snapMoved": ctx["snap_moved"],
     }
 
 
