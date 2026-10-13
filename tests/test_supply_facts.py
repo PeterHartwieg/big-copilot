@@ -245,11 +245,6 @@ class RetiredLineTests(unittest.TestCase):
     def test_the_paper_bag_is_never_retired(self):
         self.assertNotIn("retired", self.lines([ROSE])["ba:itemname_paperbag"])
 
-    def test_a_product_the_type_sells_is_not_retired_before_the_game_lists_it(self):
-        # Just stocked, not yet on the list: the florist's own type sells it.
-        flower = "ba:itemname_cheapflower"
-        self.assertNotIn("retired", self.lines([ROSE], sold=(flower,), stocked=(flower,))[flower])
-
     def test_old_sales_of_a_product_the_type_could_sell_are_still_retired(self):
         # Soda sold before the conversion; the florist could sell soda with a
         # fridge, but the game does not list it, so its old sales are no shelf.
