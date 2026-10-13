@@ -24,12 +24,15 @@
  * Voting: a native <dialog> fetches the curated feature list only when opened
  * and POSTs one feature id per vote; the reply carries the fresh count, so
  * the list is never re-fetched after voting. Everything is rendered with
- * textContent; no untrusted HTML is ever built.
+ * textContent; no untrusted HTML is ever built. Its backdrop, focus and
+ * relabelling come from window.BigCopilotDialog in web/app.js, which the page
+ * loads first; the bug report form (web/report.js) shares them.
  */
 (function () {
   "use strict";
 
   const API = "/api/community";
+  const ui = window.BigCopilotDialog;  // web/app.js
   // Where earlier versions kept the presence id; init() removes it.
   const LEGACY_STORE_KEY = "ba_community_state";
   const MIN_DUE_MS = 1000, MAX_DUE_MS = 300000;  // the server's heartbeat window, respected locally
@@ -80,7 +83,7 @@
         body: JSON.stringify({browserId}),
       });
       if (res.ok) {
-        const parsed = parsePresence(await res.json().catch(() => null));
+        const parsed = parsePresence(await ui.json(res));
         if (parsed) { ok = true; count = parsed.count; nextIn = parsed.nextIn; }
       } else {
         const after = Number(res.headers.get("retry-after"));
@@ -190,7 +193,7 @@
   let nextAfter = null, suggestion = null;
   let rows = [];
   let loadSeq = 0;   // bumped per open; a late reply from an older open is dropped
-  let opener = null;
+  let modal = null;  // ui.modal(): backdrop, Escape and focus
   const voteBusy = new Set();
   const pendingVotes = new Set();
 
@@ -261,10 +264,7 @@
     head.append(heading, close);
     const body = document.createElement("div");
     body.className = "community-body";
-    statusEl = document.createElement("p");
-    statusEl.className = "community-status";
-    statusEl.setAttribute("role", "status");
-    statusEl.setAttribute("aria-live", "polite");
+    statusEl = ui.status("community-status");
     cardsEl = document.createElement("div");
     cardsEl.className = "community-cards";
     cardsEl.addEventListener("click", (event) => {
@@ -303,8 +303,7 @@
     notice.id = "communitySuggestionNotice";
     titleInput.setAttribute("aria-describedby", notice.id); descriptionInput.setAttribute("aria-describedby", notice.id);
     const submit = document.createElement("button"); submit.type = "submit"; submit.className = "btn2";
-    const feedback = document.createElement("p"); feedback.className = "community-status";
-    feedback.setAttribute("role", "status"); feedback.setAttribute("aria-live", "polite");
+    const feedback = ui.status("community-status");
     form.append(notice, titleLabel, titleInput, descriptionLabel, descriptionInput, submit, feedback);
     form.addEventListener("submit", event => {
       event.preventDefault(); const pending = suggestFeature();
@@ -316,23 +315,14 @@
     labelDialog();
     body.append(statusEl, cardsEl, moreEl, details, privacy);
     dialog.append(head, body);
-    // Backdrop click, taken the way the changelog dialog takes it.
-    dialog.addEventListener("click", (event) => {
-      const box = dialog.getBoundingClientRect();
-      if (event.target === dialog && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom)) dialog.close();
-    });
-    // Escape closes through the dialog's own cancel path; either close returns focus.
-    dialog.addEventListener("close", () => {
-      if (opener && document.contains(opener)) opener.focus();
-      opener = null;
-    });
+    // A backdrop click or Escape closes it; either close returns focus.
+    modal = ui.modal(dialog);
     document.body.appendChild(dialog);
   }
 
   function openDialog(from) {
     if (!dialog || typeof dialog.showModal !== "function") return;
-    opener = from || null;
-    dialog.showModal();
+    modal.show(from);
     dialog.scrollTop = 0;
     if (typeof featureDiscovery !== "undefined") featureDiscovery.visit("community-voting");
     suggestion.details.open = !!suggestion.failure;
@@ -355,7 +345,7 @@
       if (seq !== loadSeq || !dialog.open) return;
       const res = await fetch(API + "/features" + (more ? "?after=" + encodeURIComponent(nextAfter) : ""), {cache: "no-store"});
       if (!res.ok) throw new Error("HTTP " + res.status);
-      const data = await res.json().catch(() => null);
+      const data = await ui.json(res);
       continuation = data && typeof data.nextAfter === "string" ? data.nextAfter : null;
       list = data && Array.isArray(data.features) ? data.features.map(parseFeature).filter(Boolean) : null;
     } catch (e) { list = null; }
@@ -420,7 +410,7 @@
         body: JSON.stringify({featureId}),
       });
       if (!res.ok) throw new Error("HTTP " + res.status);
-      const data = await res.json().catch(() => null);
+      const data = await ui.json(res);
       const feature = parseFeature(data && data.feature);
       // The reply carries the fresh count, so the whole list is not re-fetched.
       if (!feature || (feature.id !== featureId && !(featureId.startsWith("request-") && /^request-[a-f0-9]{64}$/.test(feature.id))))
@@ -461,11 +451,11 @@
       if (!res.ok) {
         if (res.status === 400) failureText = tt("comm.suggest.text.error", "Use plain text within the title and description limits, without markup or control characters.");
         else if (res.status === 409) failureText = tt("comm.suggest.closed", "That idea is no longer open for voting. Please support another idea.");
-        else if (res.status === 503 && (await res.json().catch(() => null))?.error === "Request list full") failureText = tt("comm.suggest.full", "The idea list is full. Please vote on an existing idea and try again after moderation; your text is kept here.");
+        else if (res.status === 503 && (await ui.json(res))?.error === "Request list full") failureText = tt("comm.suggest.full", "The idea list is full. Please vote on an existing idea and try again after moderation; your text is kept here.");
         else if (res.status === 429) failureText = tt("comm.suggest.limit", "Too many requests. Wait a minute and try again; your text is kept here.");
         throw new Error("HTTP " + res.status);
       }
-      const data = await res.json(), feature = parseFeature(data && data.feature);
+      const data = await ui.json(res), feature = parseFeature(data && data.feature);
       if (!feature || !/^request-[a-f0-9]{64}$/.test(feature.id)) throw new Error("Invalid suggestion response");
       suggestion.failure = false;
       suggestion.form.reset(); suggestion.feedback.textContent = "";
@@ -535,11 +525,11 @@
     // A change of UI language: the dialog's words, the open list's buttons and
     // the online line are written again.
     // After the board's listener has set the number locale the count is written in.
-    if (typeof ttOnChange === "function") ttOnChange(() => queueMicrotask(() => {
+    ui.relabel(() => {
       labelDialog();
       if (dialog && dialog.open) rows.forEach((row) => { if (!voteBusy.has(row.id)) paintRow(row); });
       paintOnline();
-    }));
+    });
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

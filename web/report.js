@@ -22,6 +22,8 @@
  * Everything is rendered with textContent; the issue's address is shown only
  * when it is this repository's. Names declared here start br; the whole file is
  * one function, so it adds only window.BigCopilotReport to the page's scope.
+ * The dialog's backdrop, focus and relabelling come from web/app.js's
+ * window.BigCopilotDialog, shared with the vote dialog.
  */
 (function () {
   "use strict";
@@ -150,13 +152,13 @@
   let brDialog = null;
   let brEls = null;
   let brCtx = null;
-  let brOpener = null;
   let brBytes = null;   // promise of the save's bytes, or null when none is held
   let brGame = null;    // promise of the game build
   let brKnown = {bytes: undefined, build: undefined};
   let brSent = null;    // {number, url} once this open has filed its issue
   let brBusy = false;
   let brSeq = 0;
+  let brModal = null;   // window.BigCopilotDialog.modal(): backdrop, Escape and focus (web/app.js)
 
   const brEnv = () => ({storage: brStorage(), doc: document, nav: navigator});
   function brStorage() { try { return window.localStorage; } catch (e) { return null; } }
@@ -177,6 +179,7 @@
   }
 
   function brBuildDialog() {
+    const dlg = window.BigCopilotDialog;
     brDialog = brEl("dialog", "br-dialog", {"aria-labelledby": "brTitle"});
     const form = brEl("form", "br-form", {novalidate: ""});
     const head = brEl("div", "br-head");
@@ -211,7 +214,7 @@
     const previewHead = brEl("summary");
     const previewBody = brEl("ul", "br-preview-list");
     preview.append(previewHead, previewBody);
-    const status = brEl("p", "br-status", {role: "status", "aria-live": "polite"});
+    const status = dlg.status("br-status");
     const privacy = brEl("a", "br-privacy", {href: "privacy.html", target: "_blank", rel: "noopener"});
     body.append(intro, err, label, text, pub, save.wrap, details.wrap, preview, status, privacy);
 
@@ -226,20 +229,12 @@
     form.addEventListener("submit", (event) => { event.preventDefault(); brSend(); });
     save.input.addEventListener("change", brPreview);
     details.input.addEventListener("change", brPreview);
-    brDialog.addEventListener("click", (event) => {
-      const r = brDialog.getBoundingClientRect();
-      if (!brBusy && event.target === brDialog && (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom)) brDialog.close();
-    });
-    // Escape waits for a send in flight too.
+    // The backdrop waits for a send in flight, and so does Escape.
+    brModal = dlg.modal(brDialog, {held: () => brBusy, onClose: () => { if (!brBusy) brRelease(); }});
     brDialog.addEventListener("cancel", (event) => { if (brBusy) event.preventDefault(); });
-    brDialog.addEventListener("close", () => {
-      if (brOpener && document.contains(brOpener)) brOpener.focus();
-      brOpener = null;
-      if (!brBusy) brRelease();
-    });
     brEls = {title, close, intro, err, errHead, errLine, label, text, pub, save, details, preview, previewHead, previewBody, status, privacy, cancel, send};
     document.body.appendChild(brDialog);
-    if (typeof ttOnChange === "function") ttOnChange(() => queueMicrotask(brLabel));
+    dlg.relabel(brLabel);
   }
 
   // The dialog's words, written when it opens and again on a change of language.
@@ -333,7 +328,6 @@
     if (typeof brDialog.showModal !== "function") return;
     const seq = ++brSeq;
     brCtx = Object.assign({siteBuild: "dev", source: "none", error: "", trace: "", errorName: ""}, ctx || {});
-    brOpener = opener || null;
     brSent = null;
     brBusy = false;
     brKnown = {bytes: undefined, build: undefined};
@@ -346,7 +340,7 @@
     brStatus("");
     brLabel();
     brLock(false);
-    brDialog.showModal();
+    brModal.show(opener);
     e.text.focus();
     // The save and its game build arrive on their own: the bytes are quick,
     // the build may need the reader to parse the save again.
@@ -392,7 +386,7 @@
     if (!brDialog.open) { brLock(false); brRelease(); return; }
     let issue = null;
     if (res && res.status === 201) {
-      const data = await res.json().catch(() => null);
+      const data = await window.BigCopilotDialog.json(res);
       issue = brIssue(data && data.issue);
     }
     if (issue) {
