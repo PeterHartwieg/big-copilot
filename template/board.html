@@ -87,8 +87,9 @@ thead th[data-i]{cursor:pointer; user-select:none}
 thead th[data-i]:hover{color:var(--ink)}
 thead th svg.sort{display:inline-block; width:11px; height:11px; stroke:var(--accent); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vertical-align:-1px; margin-left:5px}
 thead th[data-dir="desc"] svg.sort{transform:rotate(180deg)}
-/* A Supply header sorts from a button inside it, so the keyboard reaches it
-   and the cell stays a column header. The button takes the header's type. */
+/* A sortable header sorts from a button inside it (sortTh()), so the keyboard
+   reaches it and the cell stays a column header. The button takes the
+   header's type. */
 thead th .supply-sort{all:unset;cursor:pointer}
 thead th .supply-sort:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
 tr.kid.on td{background:var(--accent-soft)}
@@ -3139,6 +3140,9 @@ body.nx-arrived .ss-crumbs .ss-crumb.from{display:none}
 .px-seg:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .px-code{margin:0;max-width:100%;overflow-x:auto;padding:12px 14px;border-radius:10px;border:1px solid var(--rule-soft);background:var(--surface);font:400 12px/1.7 "IBM Plex Mono",monospace;color:var(--ink-2);white-space:pre}
 .px-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* A wiki article carries its own h1: the page's own (#pageTitle) steps aside
+   then, so a screen reader finds one h1, the article's. */
+main:has(> #pageWiki:not([hidden]) h1) > #pageTitle{display:none}
 /* For screen readers only: a heading the lit tab or chip already shows. */
 .nx-sr{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
 .px-sheet .fv-diff{position:static}
@@ -4613,6 +4617,11 @@ section.od-updating{background-image:linear-gradient(90deg,transparent,var(--acc
   </div>
 </nav>
 <div class="wrap">
+  <!-- The page column is the document's main landmark, and its h1 names the
+       place on screen for screen readers (paintShell()); the lit tabs already
+       show it. The footer and the phone's tab bar stay outside it. -->
+<main id="main">
+  <h1 class="nx-sr" id="pageTitle"></h1>
   <!-- A host page (the in-browser board) fills these with its source controls;
        the local server page leaves them empty and they take no room. -->
   <div class="source-row" id="sourceRow"></div>
@@ -4814,6 +4823,7 @@ section.od-updating{background-image:linear-gradient(90deg,transparent,var(--acc
       <p class="quiet" style="margin-top:44px" data-tt="wiki.absent">The wiki is not part of this build.</p>
     </div>
   </div>
+</main>
 <!--__FOOTER__-->
   <nav class="nx-tabs" id="phoneNav" aria-label="Places" data-tt-aria-label="nav.label.phone"></nav>
 </div>

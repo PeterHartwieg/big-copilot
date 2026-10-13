@@ -2550,13 +2550,34 @@ function supplySorted(rows, cols, state){
     return (typeof x === "string" ? gnCompare(x, y) : (x > y) - (x < y)) * state.dir;
   });
 }
+/* A sortable column header, for every sortable table on the board: the
+   button inside lets the keyboard reach it and keeps the cell a column header,
+   and aria-sort says which way the column is sorted. `dir` is "asc", "desc",
+   or null for a column that sorts but is not sorted now; `attrs` carries the
+   table's own data attributes, which its click handler reads off the cell. */
+function sortTh(label, {cls = "", tip = "", attrs = "", dir = null} = {}){
+  return `<th class="${cls}"${tip ? ` data-tip="${attr(tip)}"` : ""}${attrs} aria-sort="${
+    dir === "desc" ? "descending" : dir === "asc" ? "ascending" : "none"}"${dir ? ` data-dir="${dir}"` : ""}>`
+    + `<button type="button" class="supply-sort">${label}${dir ? SORT_ICON : ""}</button></th>`;
+}
+/* Clicks on the th[data-i] headers under host sort by that column, through
+   sortBy(i). A table redrawn from the keyboard hands focus back to the header
+   it left; a redraw may replace the host itself, and `live` finds the one now
+   on screen. */
+function wireSortHeads(host, sortBy, redraw, live = () => host){
+  host.querySelectorAll("thead th[data-i]").forEach(th => th.onclick = () => {
+    const button = th.querySelector("button.supply-sort");
+    const at = document.activeElement === button ? [...host.querySelectorAll("button.supply-sort")].indexOf(button) : -1;
+    sortBy(+th.dataset.i);
+    redraw();
+    if(at >= 0) live().querySelectorAll("button.supply-sort")[at]?.focus({preventScroll: true});
+  });
+}
 function supplyHead(cols, state){
   return `<thead><tr>${cols.map(([label, key, cls, tip], i) => {
-    const on = !!key && state?.col === i, dir = on && state.dir < 0 ? "desc" : "asc";
-    const sort = key ? ` data-i="${i}" aria-sort="${on ? (dir === "desc" ? "descending" : "ascending") : "none"}"${
-      on ? ` data-dir="${dir}"` : ""}` : "";
-    return `<th class="${cls || ""}"${tip ? ` data-tip="${attr(tip)}"` : ""}${sort}>${key
-      ? `<button type="button" class="supply-sort">${label}${on ? SORT_ICON : ""}</button>` : label}</th>`;
+    if(!key) return `<th class="${cls || ""}"${tip ? ` data-tip="${attr(tip)}"` : ""}>${label}</th>`;
+    const on = state?.col === i;
+    return sortTh(label, {cls: cls || "", tip, attrs: ` data-i="${i}"`, dir: on ? (state.dir < 0 ? "desc" : "asc") : null});
   }).join("")}</tr></thead>`;
 }
 /* What order the rows are in, and the way back to the usual one. */
@@ -2572,15 +2593,10 @@ function supplySortNote(cols, state){
 /* The headers and the note under host share one order, kept in supplySort[id].
    A table redrawn from the keyboard hands focus back to the header it left. */
 function wireSupplySort(host, id, cols, redraw, live = () => host){
-  host.querySelectorAll("thead th[data-i]").forEach(th => th.onclick = () => {
-    const i = +th.dataset.i, s = supplySort[id];
+  wireSortHeads(host, i => {
+    const s = supplySort[id];
     supplySort[id] = s?.col === i ? {col: i, dir: -s.dir} : {col: i, dir: cols[i][2] === "l" ? 1 : -1};
-    const button = th.querySelector("button.supply-sort");
-    const at = document.activeElement === button ? [...host.querySelectorAll("button.supply-sort")].indexOf(button) : -1;
-    redraw();
-    /* A redraw may replace the host itself: `live` finds the one now on screen. */
-    if(at >= 0) live().querySelectorAll("button.supply-sort")[at]?.focus({preventScroll: true});
-  });
+  }, redraw, live);
   host.querySelectorAll("[data-usual]").forEach(a => a.onclick = e => {
     e.preventDefault();
     // Only a keyboard activation moves the focus: a click reports how many
@@ -4604,18 +4620,14 @@ function drawPortfolio(){
     t.innerHTML = `<tbody><tr><td class="l quiet">${tt("co.port.empty", "No businesses in this save yet.")}</td></tr></tbody>`;
     return;
   }
-  t.innerHTML = `<thead><tr>${cols.map(([h,,cls,key],i) =>
-      `<th class="${cls||""}"${key ? ` data-i="${i}"` : ""}${i===sortKey?` data-dir="${sortDir<0?"desc":"asc"}"`:""}>${h}${
-        i===sortKey ? SORT_ICON : ""}</th>`).join("")}</tr></thead>
+  t.innerHTML = `<thead><tr>${cols.map(([h,,cls,key],i) => key
+      ? sortTh(h, {cls: cls || "", attrs: ` data-i="${i}"`, dir: i === sortKey ? (sortDir < 0 ? "desc" : "asc") : null})
+      : `<th class="${cls||""}">${h}</th>`).join("")}</tr></thead>
     <tbody>${body.join("")}</tbody>
     ${v.total ? `<tfoot><tr>${v.total(D.businesses).map((c,i) =>
       `<td class="${i?"":"l"}">${i===0?tt("co.port.total", {one: "{n} site", other: "{n} sites"}, {n: D.businesses.length}):c}</td>`).join("")}</tr>${
       view === "pnl" ? outsideRows(cols.length) : ""}</tfoot>` : ""}`;
-  t.querySelectorAll("thead th[data-i]").forEach(th => th.onclick = () => {
-    const i = +th.dataset.i;
-    if(sortKey===i) sortDir = -sortDir; else { sortKey=i; sortDir=-1; }
-    drawPortfolio();
-  });
+  wireSortHeads(t, i => { if(sortKey===i) sortDir = -sortDir; else { sortKey=i; sortDir=-1; } }, drawPortfolio);
   t.querySelectorAll("tr.kid").forEach(tr => tr.onclick = e => { if(!inSiteLink(e)) openSite(tr.dataset.key); });
   wirePortfolio(); wireTips();
 }
@@ -17854,7 +17866,7 @@ function reOwnedTable(re, litAll){
   const head = `<thead><tr><th></th><th class="l">${tt("re.col.building", "Building")}</th><th>${tt("re.col.m2", "m²")}</th><th>${tt("re.col.occ", "Occupancy")}</th>`
     + `<th data-tip="${attr(tt("re.col.price.tip", "Rent a m² a day; a new price waits 7 days in the game"))}">${tt("re.col.price", "Price / m²")}</th><th>${tt("re.col.income", "Income / day")}</th>`
     + `<th data-tip="${attr(tt("re.col.best.tip", "The highest cent under market rent: nobody moves out, and the building fills to 100%"))}">${tt("re.col.best", "Best price")}</th>`
-    + `<th class="on" data-dir="desc">${tt("re.col.gain", "Gain / day")}${SORT_ICON}</th>`
+    + `<th class="on" data-dir="desc" aria-sort="descending">${tt("re.col.gain", "Gain / day")}${SORT_ICON}</th>`
     + `<th data-tip="${attr(tt("re.col.payback.tip", "The price you paid, over a day's rent at the best price, full, less property tax"))}">${tt("re.col.payback", "Payback")}</th><th></th></tr></thead>`;
   const body = rows.map((o, i) => reOwnedRow(o, re, litAll && o.flag, !all && i >= first)).join("");
   const sqm = rows.reduce((s, o) => s + (o.sqm || 0), 0);
@@ -17949,7 +17961,8 @@ function reBuyTable(re){
   const cash = re.tax && Number.isFinite(re.tax.cash) ? re.tax.cash : Infinity;
   const rows = reBuySorted(re.buy);
   const all = reAll.buy || rows.length <= RE_FIRST.buy;
-  const th = (k, label, tip) => `<th data-re-sort="${k}"${reBuySort === k ? ` class="on"` : ""}${tip ? ` data-tip="${attr(tip)}"` : ""} tabindex="0" role="button">${label}${reBuySort === k ? SORT_ICON : ""}</th>`;
+  /* Both sorts lead with the smallest: the cheapest, the soonest paid back. */
+  const th = (k, label, tip) => sortTh(label, {cls: reBuySort === k ? "on" : "", tip, attrs: ` data-re-sort="${k}"`, dir: reBuySort === k ? "asc" : null});
   const head = `<thead><tr><th class="l">${tt("re.col.building", "Building")}</th>${th("price", tt("re.col.price2", "Price"))}`
     + `<th data-tip="${attr(tt("re.col.rent.tip", "A day's rent at the best price, once full"))}">${tt("re.col.rent", "Rent / day")}</th>`
     + th("payback", tt("re.col.payback", "Payback"), tt("re.col.payback.buy.tip", "The price over a day's rent at the best price, full, plus any rent it saves you, less property tax")) + `</tr></thead>`;
@@ -18006,13 +18019,15 @@ function bindEstate(){
     if(which === "buy") drawEstateBuy(); else drawEstate();
     wireAll();
   });
-  const sortTo = k => {
+  /* A header sorted from the keyboard gets the focus back after the redraw. */
+  const sortTo = (k, el) => {
     if(k !== "price" && k !== "payback") return;
+    const kept = el.tagName === "TH" && el.contains(document.activeElement);
     reBuySort = reBuySort === k && k !== "price" ? "price" : k;
     drawEstateBuy(); wireAll();
+    if(kept) q(`#secBuy th[data-re-sort="${k}"] button`)?.focus({preventScroll: true});
   };
-  on("click", "[data-re-sort]", (el, e) => { e.preventDefault(); sortTo(el.dataset.reSort); });
-  on("keydown", "#pageEstate th[data-re-sort]", (el, e) => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); sortTo(el.dataset.reSort); } });
+  on("click", "[data-re-sort]", (el, e) => { e.preventDefault(); sortTo(el.dataset.reSort, el); });
 }
 
 /* The difficulty, as one chip and a popover with every setting that differs
@@ -19724,6 +19739,10 @@ function paintShell(){
     a.classList.toggle("on", on);
     if(on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
+  /* The page's one h1, for screen readers: the lit area and view already
+     show where the reader is. */
+  const h1 = $("pageTitle");
+  if(h1) h1.textContent = routePath(r);
   paintLocal();
   paintArrival();
   /* A place picked in the phone's drawer is where the reader is going. */
@@ -19805,7 +19824,7 @@ function ctlHoist(){
 }
 if(typeof MutationObserver !== "undefined"){
   const ctlWatch = new MutationObserver(() => ctlHoist());
-  document.querySelectorAll(".wrap > .page").forEach(p => ctlWatch.observe(p, {childList: true, subtree: true}));
+  document.querySelectorAll("#main > .page").forEach(p => ctlWatch.observe(p, {childList: true, subtree: true}));
 }
 /* The count beside a view in the area's row: what is still to do there. */
 function routeCount(id){
