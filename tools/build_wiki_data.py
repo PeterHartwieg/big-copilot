@@ -76,38 +76,16 @@ _GROUP_PAGE_MARKERS = ("purchased from the following locations", "customer capac
 # say where a piece goes or what it consumes.
 _NON_MEMBER_SECTIONS = ("must be placed", "requires")
 
-# UI strings the guides are drawn with. Whatever `wording()['guideUi']` does not
-# carry yet falls back to the nearest heading the wiki page already has, or to
-# nothing at all for the short labels - and that absence is reported, not hidden.
-GUIDE_UI_FALLBACKS = {
-    "primaryTitle": "Sells",
-    "secondaryTitle": "Sells",
-    "primaryRecipesTitle": "Make it",
-    "secondaryRecipesTitle": "Make it",
-    "servicesTitle": "Sells",
-    "dependenciesTitle": "To open",
-    "automaticFee": "",
-    "noRecipe": "",
-    "missingRecipe": "",
-    "noRequirements": "",
-    "chooseProduct": "",
-    "stockTitle": "Stock",
-    "primaryHint": "",
-    "secondaryHint": "",
-    "recipeHint": "",
-    "setupHint": "",
-    "graphHint": "",
-    "placesHint": "",
-    "sourceHint": "",
-    "suppliersTitle": "Where to go",
-    "staffTitle": "People",
-    "fixturesTitle": "Fixtures",
-}
-
-# A guide's own gaps: the checks a guide can fail, keyed as the authored
-# wording's `guideGaps` keys. The prose lives in the wording, not here.
-GUIDE_GAP_KINDS = ("rangeItems", "feeKind", "feeRequirements", "recipePages",
-                   "recipeRates", "workstations")
+# UI strings the guides are drawn with: the keys `wording()['guideUi']` has to
+# carry. A missing one ships as an empty string and is reported, which stops the
+# build until it is passed `--allow-fewer-guides`.
+GUIDE_UI_KEYS = (
+    "primaryTitle", "secondaryTitle", "primaryRecipesTitle", "secondaryRecipesTitle",
+    "servicesTitle", "dependenciesTitle", "automaticFee", "noRecipe", "missingRecipe",
+    "noRequirements", "chooseProduct", "stockTitle", "primaryHint", "secondaryHint",
+    "recipeHint", "setupHint", "graphHint", "placesHint", "sourceHint",
+    "suppliersTitle", "staffTitle", "fixturesTitle",
+)
 
 # Shipped layouts the placement counts come from: (label, path under
 # StreamingAssets). A layout shows where the game's own shop puts things; it
@@ -142,12 +120,6 @@ _SUFFIXES = {
 # pattern keeps a link the game rewrites a miss in both places, not one.
 _LINK_RE = wiki_data._LINK_RE
 _ADDRESS_KINDS = ("address", "location")
-# Link kinds whose target is a page slug outright (`(general-energy)`), as
-# against naming a record through a known prefix (`(products-clay)`).
-_SLUG_LINK_KINDS = (
-    "wholesalers", "importers", "fees", "logistics", "vehicles", "employees",
-    "general", "rivals", "finance", "building", "special", "minor",
-)
 
 # A place on this machine must never reach the payload, in any string. A drive
 # letter counts only where no URL scheme letter comes before it, so the `s:/`
@@ -758,20 +730,14 @@ def guide_ui(wording_data: dict) -> tuple[dict, list[dict]]:
     """The guide strings all guides share, and what the wording does not carry yet.
 
     Every key `wording()['guideUi']` supplies travels as written; a contract key
-    it does not supply falls back to a heading the wiki page already has, or to
-    nothing for the short labels. The misses are returned so the build reports
-    them instead of shipping a guess.
+    it does not supply ships as an empty string. The misses are returned so the
+    build reports them instead of shipping a guess.
     """
     ui = dict((wording_data or {}).get("guideUi") or {})
-    missing = [
-        {"key": key,
-         "reason": "not in wording()['guideUi']; %s"
-                   % ("the %r fallback is used" % GUIDE_UI_FALLBACKS[key] if GUIDE_UI_FALLBACKS[key]
-                      else "no string is shipped")}
-        for key in GUIDE_UI_FALLBACKS if key not in ui
-    ]
-    for key, fallback in GUIDE_UI_FALLBACKS.items():
-        ui.setdefault(key, fallback)
+    missing = [{"key": key, "reason": "not in wording()['guideUi']; no string is shipped"}
+               for key in GUIDE_UI_KEYS if key not in ui]
+    for key in GUIDE_UI_KEYS:
+        ui.setdefault(key, "")
     return ui, missing
 
 
@@ -1838,7 +1804,7 @@ def validate_public(payload: dict) -> None:
     copy = payload.get("COPY")
     if not isinstance(copy, dict):
         raise wiki_data.SourceError("payload has no shared COPY")
-    for field in GUIDE_UI_FALLBACKS:
+    for field in GUIDE_UI_KEYS:
         if field not in copy:
             raise wiki_data.SourceError("COPY has no %s" % field)
     table = payload.get("SUPPLIERS")
