@@ -34,6 +34,7 @@ async function setup(t, options = {}) {
       localStorage.setItem('ba_dash_page', 'supply');
       localStorage.setItem('ba_dash_supply', 'shops');
       localStorage.setItem('ledger_history', 'original-history');
+      if (options.link) localStorage.setItem('ledger_link', 'http://127.0.0.1:8322');
       sessionStorage.seeded = 'yes';
     }
     // Storage that refuses the history, as a full quota does.
@@ -583,4 +584,48 @@ test('the landing save-folder box has More help, which opens the save help under
   await more.click();
   assert.equal(await page.locator('#help').evaluate(d => d.open), false);
   assert.equal(await more.getAttribute('aria-expanded'), 'false');
+});
+
+
+test('a remembered offline Link opens the local save with its saved selection and reconnect action', async t => {
+  const page = await setup(t, {link:true});
+  await messages(page);
+  assert.equal(await page.evaluate(() => fixture.worker.messages[0].name), 'chosen.hsg');
+  await page.evaluate(() => fixture.complete());
+  await page.waitForFunction(expected => document.getElementById('srcNote').textContent.includes(expected),
+    en('app.link.fallback.used', {folder:'Saves'}));
+  assert.equal(await hasBoard(page), true);
+  assert.equal(await page.evaluate(() => window.LEDGER_SOURCE.link()), null);
+  assert.equal(await page.evaluate(() => localStorage.getItem('ledger_link')), 'http://127.0.0.1:8322');
+  assert.equal(await page.locator('#watchBtn').getAttribute('data-on'), 'true');
+  assert.equal(await page.locator('#watchBtn').getAttribute('title'), en('app.watch.folder.on.title', {s:30}));
+  await page.locator('#menuBtn').click();
+  assert.equal(await page.locator('#linkBtn').isVisible(), true);
+  assert.match(await page.locator('.save-current').innerText(), /Alice/);
+});
+
+test('an offline Link with expired folder permission offers Update and waits for the click', async t => {
+  const page = await setup(t, {link:true, permission:'prompt'});
+  await page.waitForFunction(expected => document.getElementById('srcStatus').textContent === expected,
+    en('app.link.fallback.allow'));
+  assert.equal(await page.locator('#updateBtn').isEnabled(), true);
+  assert.equal(await page.evaluate(() => fixture.calls.includes('requestPermission')), false);
+  assert.equal(await page.evaluate(() => fixture.worker.messages.length), 0);
+  await page.locator('#updateBtn').click();
+  await messages(page);
+  await page.evaluate(() => fixture.complete());
+  assert.equal(await hasBoard(page), true);
+  assert.equal(await page.evaluate(() => fixture.calls.includes('requestPermission')), true);
+});
+
+test('without a remembered folder an offline Link offers Choose a folder instead', async t => {
+  const page = await setup(t, {link:true, missing:true});
+  await page.waitForFunction(expected => document.getElementById('srcStatus').textContent.startsWith(expected),
+    en('app.link.unreached'));
+  assert.equal(await page.locator('#recoverBtn').innerText(), en('app.recover.link'));
+  await page.locator('#recoverBtn').click();
+  await messages(page);
+  await page.evaluate(() => fixture.complete());
+  assert.equal(await hasBoard(page), true);
+  assert.equal(await page.evaluate(() => localStorage.getItem('ledger_link')), null);
 });

@@ -64,6 +64,8 @@ function harness({routes = {}} = {}) {
     // the app helpers the section is allowed to touch
     $: el, strip,
     company: 'Costy Co', sourceGen: 1, busy: false, attempt: null, readerError: null, handlers: null,
+    canHandle: true, dirHandle: null, handles: {get: async () => null},
+    sourceActivity: 0, directoryPickPending: 0,
     watchTimer: 1,  // watching the game; null is the player's pause
     lastGood: {}, lastCheck: null, lastEntries: null, watchChecking: false,
     savePicker: {hidden: false},
@@ -74,19 +76,14 @@ function harness({routes = {}} = {}) {
     note(...given) {
       const args = given.map((a, i) => (i === 1 || i === 2 ? words(a) : a));
       seen.notes.push(args); context.noted.tone = args[0] || ''; context.noted.text = args[1] || ''; context.noted.sub = args[2] || '';
+      context.noted.words = [given[1], given[2]]; context.noted.recover = !!given[3];
     },
     stored: {get: (key) => remembered[key] || '', set: (key, value) => { remembered[key] = value; return true; }},
     onBoard: () => true,
-    supersede: () => ++context.sourceGen,
+    supersede: () => { context.finishAttempt(context.sourceGen); return ++context.sourceGen; },
     closeSavePicker() {}, place() {}, armWatch() {}, stopWatch() {}, syncWatchBtn() {}, linkMoved() {},
     pickedOnce() {},
     idleState() { seen.states.push(['idle']); strip.tone = 'ready'; },
-    // The page's attempt, as app.js keeps it: one read at a time, per source.
-    startAttempt(gen) {
-      if (gen !== context.sourceGen) return false;
-      if (!context.attempt) context.attempt = {gen};
-      return true;
-    },
     finishAttempt(gen) { if (context.attempt && context.attempt.gen === gen) context.attempt = null; },
     // A build ends the attempt whether the board takes the bytes or not.
     async buildFrom(file, dir, gen) { seen.builds.push(file); context.finishAttempt(gen); },
@@ -102,6 +99,7 @@ function harness({routes = {}} = {}) {
     },
   });
   vm.runInContext(i18n, context);
+  vm.runInContext(between(source, '  function startAttempt(', '  // Cancel ownership'), context);
   vm.runInContext(sayHelpers + '\n' + section + '\n' + updater + '\n' + watcher, context);
   vm.runInContext('linkWait = (ms) => { __waits.push(ms); __advance(ms); return Promise.resolve(); };', context);
   // linkFetch only ever reaches an address on this computer; the tests that
@@ -1102,6 +1100,7 @@ test('schema 2 downloads a hash-bound portable save; stale facts never build', a
     const current = {...facts, ...(invalid ? {[invalid]: 'wrong'} : {})};
     const response = {...reply(200, null), arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(current)).buffer};
     const h = harness({routes: {health, save, facts: response}});
+    withFallback(h); // Invalid facts keep their diagnostic even with a local fallback.
     await h.run('loadFromLink("Reading the game")');
     assert.equal(h.seen.builds.length, invalid ? 0 : 1, invalid || 'matching pair');
     if (!invalid) {
@@ -1112,4 +1111,441 @@ test('schema 2 downloads a hash-bound portable save; stale facts never build', a
       assert.deepEqual(packed.facts, facts);
     }
   }
+});
+
+// Exercise the actual folder loader after a link failure, including its scan,
+// saved selection, failure states and handoff to the board's build.
+function withFallback(h, permission = 'granted') {
+  const local = {name: 'local.hsg', lastModified: 10};
+  const handle = {name: 'Big Ambitions', queryPermission: async () => permission,
+    requestPermission: async () => { throw new Error('Automatic fallback must not prompt'); }};
+  h.context.handles.get = async () => handle;
+  h.remembered.ledger_link = 'http://127.0.0.1:8322';
+  h.context.scanHandle = async value => {
+    assert.equal(value, handle);
+    return [{file: local, dir: 'character'}];
+  };
+  h.context.chooseFrom = entries => entries[0] || {};
+  h.context.onScreen = () => false;
+  h.context.fileLine = file => file.name;
+  h.context.sayStoreTrouble = () => false;
+  h.context.armWatch = () => { h.seen.folderWatch = true; };
+  // The strip as the real buildFrom() leaves it after a board took the bytes:
+  // the note cleared, busy while reading, then storage trouble said again
+  // and the ok tone, which is what the fallback's own note is judged on.
+  h.context.buildFrom = async (file, dir, gen) => {
+    h.seen.builds.push(file);
+    h.context.note('');
+    h.context.state('busy', file.name);
+    h.context.finishAttempt(gen);
+    if (!h.context.sayStoreTrouble()) h.context.note('');
+    h.context.state('ok', 'Up to date');
+  };
+  vm.runInContext(between(source, '  async function loadFromEntries(', '  async function takeHandle('), h.context);
+  return {handle, local};
+}
+
+test('a failed initial link opens the remembered local folder and keeps Link for the next visit', async () => {
+  const h = harness();
+  h.context.onBoard = () => false;
+  const {handle, local} = withFallback(h);
+  await h.run('loadFromLink("Opening the game link", sourceGen)');
+  assert.deepEqual(h.seen.builds, [local]);
+  assert.equal(h.run('linkUrl'), null);
+  assert.equal(h.context.dirHandle, handle);
+  assert.equal(h.remembered.ledger_link, 'http://127.0.0.1:8322');
+  assert.equal(h.context.attempt, null);
+  assert.equal(h.seen.folderWatch, true);
+  assert.equal(h.els.get('srcStrip').title, '');
+});
+
+test('a disconnected watcher switches to local saves and disables game writes', async () => {
+  const h = harness();
+  const {local} = withFallback(h);
+  h.run(`linkHealth = ${JSON.stringify({...HEALTH, writes: ['uniforms']})}; lastLinkStamp = "s1"`);
+  assert.deepEqual(plain(h.run('linkWrites()')), ['uniforms']);
+  await h.run('checkFolder()');
+  assert.deepEqual(h.seen.builds, [local]);
+  assert.deepEqual(plain(h.run('linkWrites()')), []);
+  assert.equal(h.run('linkHealth'), null);
+  assert.equal(h.context.watchChecking, false);
+});
+
+test('Update falls back when the running game has closed', async () => {
+  const h = harness();
+  const {local} = withFallback(h);
+  await h.run('update()');
+  assert.deepEqual(h.seen.builds, [local]);
+  assert.equal(h.context.attempt, null);
+});
+
+for (const permission of ['prompt', 'denied']) {
+  test(`folder permission ${permission} waits for an explicit Update click`, async () => {
+    const h = harness();
+    const {handle, local} = withFallback(h, permission);
+    await h.run('loadFromLink("Opening", sourceGen)');
+    assert.deepEqual(h.seen.builds, []);
+    assert.equal(h.run('linkUrl'), null);
+    assert.equal(h.context.dirHandle, handle);
+    assert.equal(h.context.attempt, null);
+    assert.equal(h.seen.states.at(-1)[0], 'remembered');
+    assert.equal(h.seen.notes.at(-1)[1], en('app.link.fallback.permission'));
+    handle.requestPermission = async () => 'granted';
+    await h.run('update()');
+    assert.deepEqual(h.seen.builds, [local]);
+  });
+}
+
+test('a folder handle kept in this tab works when browser storage is unavailable', async () => {
+  const h = harness();
+  const {handle, local} = withFallback(h);
+  h.context.handles.get = async () => null;
+  h.context.dirHandle = handle;
+  await h.run('linkToGame()');
+  assert.deepEqual(h.seen.builds, [local]);
+});
+
+test('no remembered folder, unsupported browsers and unavailable permission checks keep link recovery usable', async () => {
+  for (const mode of ['missing', 'unsupported', 'permission-error']) {
+    const h = harness();
+    if (mode === 'unsupported') h.context.canHandle = false;
+    if (mode === 'permission-error') h.context.handles.get = async () => ({queryPermission: async () => { throw Error('Unavailable'); }});
+    await h.run('loadFromLink("Opening", sourceGen)');
+    assert.equal(h.run('linkUrl'), 'http://127.0.0.1:8322', mode);
+    assert.equal(h.seen.states.at(-1)[1], en('app.link.unreached'), mode);
+    assert.equal(h.seen.notes.at(-1)[3], true, 'offers the existing Choose a folder instead action');
+    assert.equal(h.context.attempt, null);
+  }
+});
+
+test('source selections supersede pending folder restoration', async () => {
+  for (const stage of ['storage', 'permission', 'scan']) {
+    const h = harness();
+    const {handle} = withFallback(h);
+    let release;
+    const pending = new Promise(resolve => { release = resolve; });
+    if (stage === 'storage') h.context.handles.get = () => pending;
+    if (stage === 'permission') handle.queryPermission = () => pending;
+    if (stage === 'scan') h.context.scanHandle = () => pending;
+    const loading = h.run('loadFromLink("Opening", sourceGen)');
+    await new Promise(resolve => setImmediate(resolve));
+    h.run('supersede(); dropLink(); dirHandle = null;');
+    release(stage === 'storage' ? handle : stage === 'permission' ? 'granted' : []);
+    await loading;
+    assert.deepEqual(h.seen.builds, [], stage);
+    assert.equal(h.context.dirHandle, null, stage);
+    assert.equal(h.run('linkUrl'), null, stage);
+  }
+});
+
+test('an empty or unreadable fallback folder keeps its own actionable error', async () => {
+  for (const empty of [true, false]) {
+    const h = harness();
+    withFallback(h);
+    h.context.scanHandle = async () => { if (empty) return []; throw Error('Folder moved'); };
+    await h.run('loadFromLink("Opening", sourceGen)');
+    assert.equal(h.seen.states.at(-1)[1], en(empty ? 'app.nosave' : 'app.folder.unread'));
+    assert.deepEqual(h.seen.builds, []);
+    assert.equal(h.context.attempt, null);
+  }
+});
+
+test('healthy Link never reads the fallback folder', async () => {
+  const h = harness({routes: {health: HEALTH, save: reply(200)}});
+  withFallback(h);
+  h.context.handles.get = async () => { throw Error('Unexpected folder read'); };
+  await h.run('loadFromLink("Opening", sourceGen, false)');
+  assert.equal(h.seen.builds.length, 1);
+  assert.equal(h.seen.builds[0].linkStamp, 's1');
+});
+
+test('a mod with no save or an incompatible connection falls back after its normal diagnosis', async () => {
+  for (const health of [{...HEALTH, stamp: '', busy: true}, {...HEALTH, schemaVersion: 99}, reply(503)]) {
+    const h = harness({routes: {health}});
+    const {local} = withFallback(h);
+    await h.run('loadFromLink("Opening", sourceGen)');
+    assert.deepEqual(h.seen.builds, [local]);
+  }
+});
+
+// The note the fallback leaves, as the strip writes it: text, then sub.
+const lastNote = (h) => h.seen.notes.at(-1);
+const used = en('app.link.fallback.used', {folder: 'Big Ambitions'});
+const reconnect = en('app.link.fallback.reconnect');
+const mismatch = (h) => en('app.link.mismatch.why', {v: 99, need: h.run('LINK_SCHEMA')});
+// A blocked browser's fallback names its own next step: Update now reads the folder.
+const blocked = `${en('app.link.blocked')} ${en('app.link.blocked.fallback')}`;
+
+test('plain unavailability falls back with the generic reconnect hint', async () => {
+  const h = harness();
+  withFallback(h);
+  await h.run('loadFromLink("Opening", sourceGen)');
+  assert.deepEqual(lastNote(h).slice(0, 3), ['info', used, reconnect]);
+});
+
+test('a fallback keeps the diagnosis the player can act on', async (t) => {
+  const cases = {
+    mismatch: [{...HEALTH, schemaVersion: 99}, (h) => `${mismatch(h)} ${reconnect}`],
+    'not the mod': [{...HEALTH, schemaVersion: undefined}, () => `${en('app.link.notmod.why')} ${reconnect}`],
+    'never health': [reply(503), () => `${en('app.link.notmod.never')} ${reconnect}`],
+    'denied loopback': [HEALTH, () => blocked],
+  };
+  for (const [name, [health, sub]] of Object.entries(cases)) {
+    await t.test(name, async () => {
+      const h = harness({routes: {health}});
+      // The browser's own answer: this site may not reach the loopback.
+      if (name === 'denied loopback') h.context.navigator = {permissions: {query: async () => ({state: 'denied'})}};
+      const {local} = withFallback(h);
+      await h.run('loadFromLink("Opening", sourceGen)');
+      assert.deepEqual(h.seen.builds, [local]);
+      assert.equal(h.run('linkUrl'), null);
+      assert.deepEqual(lastNote(h).slice(0, 3), ['info', used, sub(h)]);
+      if (name === 'denied loopback') assert.deepEqual(h.seen.calls, [], 'a blocked browser sends nothing');
+    });
+  }
+});
+
+test('a blocked browser with no folder to fall back to keeps its Update advice', async () => {
+  const h = harness({routes: {health: HEALTH}});
+  h.context.navigator = {permissions: {query: async () => ({state: 'denied'})}};
+  await h.run('loadFromLink("Opening", sourceGen)');
+  assert.equal(h.run('linkUrl'), 'http://127.0.0.1:8322');
+  assert.deepEqual(lastNote(h), ['bad', en('app.link.blocked'), en('app.link.blocked.fix'), true]);
+});
+
+test('a fallback waiting for folder access still says why Link failed', async () => {
+  const h = harness({routes: {health: {...HEALTH, schemaVersion: 99}}});
+  withFallback(h, 'prompt');
+  await h.run('loadFromLink("Opening", sourceGen)');
+  assert.equal(h.seen.states.at(-1)[0], 'remembered');
+  assert.deepEqual(lastNote(h), ['info', en('app.link.fallback.permission'), `${mismatch(h)} ${reconnect}`, true]);
+});
+
+test('the watcher keeps a version, port or blocked-browser diagnosis when it falls back', async () => {
+  for (const [health, sub, denied] of [
+    [{...HEALTH, schemaVersion: 99}, (h) => `${en('app.link.port.version', {v: 99, need: h.run('LINK_SCHEMA')})} ${reconnect}`],
+    [{...HEALTH, schemaVersion: undefined}, () => `${en('app.link.port.gone')} ${reconnect}`],
+    [HEALTH, () => blocked, true],
+  ]) {
+    const h = harness({routes: {health}});
+    if (denied) h.context.navigator = {permissions: {query: async () => ({state: 'denied'})}};
+    const {local} = withFallback(h);
+    await h.run('checkFolder()');
+    assert.deepEqual(h.seen.builds, [local]);
+    assert.deepEqual(lastNote(h).slice(0, 3), ['info', used, sub(h)]);
+  }
+});
+
+test('a folder warning keeps its place and the switch to the local save is still said', async () => {
+  const h = harness();
+  withFallback(h);
+  const moved = 'The character you chose is gone; showing the newest save.';
+  h.context.chooseFrom = entries => ({...entries[0], fellBack: moved});
+  await h.run('loadFromLink("Opening", sourceGen)');
+  assert.equal(h.seen.states.at(-1)[0], 'ok');
+  assert.deepEqual(lastNote(h), ['warn', moved, `${used} ${reconnect}`, false]);
+});
+
+test('a folder warning with its own advice keeps it ahead of the fallback and the Link diagnosis', async () => {
+  const h = harness({routes: {health: {...HEALTH, schemaVersion: 99}}});
+  withFallback(h);
+  h.context.sayStoreTrouble = () => { h.context.note('warn', 'Browser storage is full.', 'Free some space.'); return true; };
+  await h.run('loadFromLink("Opening", sourceGen)');
+  assert.deepEqual(lastNote(h), ['warn', 'Browser storage is full.',
+    `Free some space. ${used} ${mismatch(h)} ${reconnect}`, false]);
+});
+
+test('Link can reconnect after fallback, while an explicit local selection forgets the preference', async () => {
+  const h = harness();
+  withFallback(h);
+  await h.run('loadFromLink("Opening", sourceGen)');
+  h.routes.health = HEALTH;
+  h.routes.save = reply(200);
+  await h.run('linkToGame()');
+  assert.equal(h.run('linkUrl'), 'http://127.0.0.1:8322');
+  assert.equal(h.context.dirHandle, null);
+  assert.equal(h.seen.builds.at(-1).linkStamp, 's1');
+  h.run('dropLink()');
+  assert.equal(h.remembered.ledger_link, undefined);
+  assert.equal(h.run('linkFolderHandle'), null);
+});
+
+
+test('a game that closes during the building-facts download falls back to local saves', async () => {
+  const h = harness({routes: {health: {...HEALTH, features: ['building-facts.v1']}, save: reply(200)}});
+  const {local} = withFallback(h);
+  await h.run('loadFromLink("Opening", sourceGen)');
+  assert.deepEqual(h.seen.builds, [local]);
+  assert.equal(h.run('linkUrl'), null);
+});
+
+test('an accepted refresh whose port stops answering as the mod falls back after its normal wait', async () => {
+  const h = harness({routes: {refresh: reply(202, {stamp:'s1'}), health: reply(503)}});
+  const {local} = withFallback(h);
+  await h.run('refreshFromGame()');
+  assert.deepEqual(h.seen.builds, [local]);
+});
+
+
+for (const stage of ['health', 'storage', 'permission']) {
+  for (const completed of [false, true]) {
+    test(`background fallback yields to Update during ${stage}, completed=${completed}`, async () => {
+      const h = harness();
+      const {handle} = withFallback(h);
+      let release;
+      const pending = new Promise(resolve => { release = resolve; });
+      if (stage === 'health') h.run('readHealth = () => __pending');
+      h.context.__pending = pending;
+      if (stage === 'storage') h.context.handles.get = () => pending;
+      if (stage === 'permission') handle.queryPermission = () => pending;
+      const checking = h.run('checkLink()');
+      await new Promise(resolve => setImmediate(resolve));
+      // Exercise the real foreground entry point and real attempt bookkeeping.
+      let finishRefresh;
+      h.run('linkFetch = () => __refresh');
+      h.context.__refresh = new Promise(resolve => { finishRefresh = resolve; });
+      const updating = h.run('update()');
+      if (completed) {
+        finishRefresh(reply(409, {reason:'saving'}));
+        await updating;
+      }
+      const states = h.seen.states.length, notes = h.seen.notes.length;
+      release(stage === 'health' ? {schemaVersion:99} : stage === 'storage' ? handle : 'granted');
+      await checking;
+      assert.equal(h.run('linkUrl'), 'http://127.0.0.1:8322');
+      assert.equal(h.context.sourceGen, 1);
+      assert.deepEqual(h.seen.builds, []);
+      assert.equal(h.seen.states.length, states, 'obsolete failure must not change foreground status');
+      assert.equal(h.seen.notes.length, notes, 'obsolete failure must not replace foreground diagnostics');
+      if (!completed) {
+        assert.ok(h.context.attempt, 'Update still owns its attempt');
+        finishRefresh(reply(409, {reason:'saving'}));
+        await updating;
+      }
+    });
+  }
+}
+
+test('an open directory picker takes precedence over fallback and its accepted folder wins', async () => {
+  const h = harness();
+  withFallback(h);
+  const chosen = {name:'Chosen by hand'};
+  const file = {name:'chosen.hsg', lastModified:20};
+  let accept;
+  h.context.window = {showDirectoryPicker: () => new Promise(resolve => { accept = resolve; })};
+  h.context.handles.set = async () => {};
+  h.context.scanHandle = async handle => { assert.equal(handle, chosen); return [{file, dir:'.'}]; };
+  vm.runInContext(between(source, '  async function takeHandle(', '  // What this tab picked once'), h.context);
+  const picking = h.run('pickFolder()');
+  await h.run('checkLink()');
+  assert.equal(h.context.directoryPickPending, 1);
+  assert.deepEqual(h.seen.builds, []);
+  assert.equal(h.context.sourceGen, 1);
+  accept(chosen);
+  await picking;
+  assert.equal(h.context.directoryPickPending, 0);
+  assert.equal(h.context.dirHandle, chosen);
+  assert.deepEqual(h.seen.builds, [file]);
+  assert.equal(h.remembered.ledger_link, undefined);
+});
+
+test('a picker opened during fallback permission checking suppresses the pending fallback', async () => {
+  const h = harness();
+  const {handle} = withFallback(h);
+  let permission, dismiss;
+  handle.queryPermission = () => new Promise(resolve => { permission = resolve; });
+  h.context.window = {showDirectoryPicker: () => new Promise((resolve, reject) => { dismiss = reject; })};
+  vm.runInContext(between(source, '  async function takeHandle(', '  // What this tab picked once'), h.context);
+  const checking = h.run('checkLink()');
+  await new Promise(resolve => setImmediate(resolve));
+  const picking = h.run('pickFolder()');
+  permission('granted');
+  await checking;
+  assert.equal(h.run('linkUrl'), 'http://127.0.0.1:8322');
+  assert.deepEqual(h.seen.builds, []);
+  dismiss(new Error('Picker cancelled'));
+  await picking;
+  assert.equal(h.context.directoryPickPending, 0);
+  handle.queryPermission = async () => 'granted';
+  await h.run('checkLink()');
+  assert.equal(h.run('linkUrl'), null, 'a later check may fall back after cancellation');
+});
+
+for (const state of ['hidden', 'paused', 'pause-resume']) {
+  test(`background fallback stops when ${state} while permission is pending`, async () => {
+    const h = harness();
+    const {handle} = withFallback(h);
+    let release;
+    handle.queryPermission = () => new Promise(resolve => { release = resolve; });
+    const checking = h.run('checkLink()');
+    await new Promise(resolve => setImmediate(resolve));
+    if (state === 'hidden') h.context.document.hidden = true;
+    else {
+      h.context.stopWatch = () => { h.context.watchTimer = null; };
+      vm.runInContext(between(source, '  async function toggleWatch()', "  /* --- the game's text"), h.context);
+      await h.run('toggleWatch()');
+      if (state === 'pause-resume') h.context.watchTimer = 1;
+    }
+    release('granted');
+    await checking;
+    assert.equal(h.run('linkUrl'), 'http://127.0.0.1:8322');
+    assert.deepEqual(h.seen.builds, []);
+  });
+}
+
+
+for (const operation of ['load', 'update']) {
+  test(`a foreground ${operation} failure finishes while a folder picker is open, even if cancelled`, async () => {
+    const h = harness();
+    withFallback(h);
+    let rejectLink, dismiss;
+    const pending = new Promise((resolve, reject) => { rejectLink = reject; });
+    h.context.__foreground = pending;
+    if (operation === 'load') h.run('readHealth = () => __foreground');
+    else h.run('linkFetch = () => __foreground');
+    h.context.window = {showDirectoryPicker: () => new Promise((resolve, reject) => { dismiss = reject; })};
+    vm.runInContext(between(source, '  async function takeHandle(', '  // What this tab picked once'), h.context);
+    const loading = h.run(operation === 'load' ? 'loadFromLink("Opening", sourceGen)' : 'update()');
+    const picking = h.run('pickFolder()');
+    rejectLink(new Error('Game closed'));
+    await loading;
+    assert.equal(h.context.attempt, null, 'foreground failure releases its attempt');
+    assert.equal(h.context.strip.tone, 'bad', 'normal recovery diagnostics remain available');
+    assert.equal(h.run('linkUrl'), 'http://127.0.0.1:8322');
+    assert.deepEqual(h.seen.builds, []);
+    dismiss(new Error('Picker cancelled'));
+    await picking;
+    assert.equal(h.context.directoryPickPending, 0);
+    assert.equal(h.context.attempt, null);
+    h.context.__foreground = Promise.resolve(reply(409, {reason:'saving'}));
+    h.run('linkFetch = () => __foreground');
+    await h.run('update()');
+    assert.equal(h.context.attempt, null);
+    assert.match(h.seen.notes.at(-1)[1], enRe('app.link.refuse.saving'), 'Update can retry after cancellation');
+  });
+}
+
+
+test('a version-mismatch fallback cannot replace a newer successful Update', async () => {
+  const h = harness({routes:{health:{...HEALTH, schemaVersion:99}}});
+  const {handle} = withFallback(h);
+  let release;
+  handle.queryPermission = () => new Promise(resolve => { release = resolve; });
+  const loading = h.run('loadFromLink("Opening", sourceGen)');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.context.attempt, null, 'version diagnostic made Update available');
+  h.routes.health = HEALTH;
+  h.routes.save = reply(200);
+  h.routes.refresh = reply(202, {stamp:''});
+  await h.run('update()');
+  assert.equal(h.seen.builds.length, 1);
+  assert.equal(h.seen.builds[0].linkStamp, HEALTH.stamp);
+  const states = h.seen.states.length, notes = h.seen.notes.length;
+  release('granted');
+  await loading;
+  assert.equal(h.run('linkUrl'), 'http://127.0.0.1:8322');
+  assert.equal(h.context.sourceGen, 1);
+  assert.equal(h.seen.builds.length, 1, 'the successful Link board stays');
+  assert.equal(h.seen.states.length, states);
+  assert.equal(h.seen.notes.length, notes);
 });

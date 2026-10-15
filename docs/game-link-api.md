@@ -1077,7 +1077,8 @@ unverified.
 ## The clients' loop
 
 1. `GET /health`. A connection error means the game is not there: say so, keep the
-   last board, retry on the next poll or on Update.
+   last board, retry on the next poll or on Update. The page instead switches to the
+   save folder it remembers, when it has one (step 6).
 2. Only a `200` with a JSON object is judged: any other status, or a `200` whose body
    is no JSON object, means the mod is there and not ready (or something else held the
    port for a moment) and is waited out like `busy`, for a bounded time (the page
@@ -1099,6 +1100,15 @@ unverified.
    the mod attached. A watcher that meets ten answers in a row that were never health,
    or a health object that is not this client's version, says so once under the board
    it keeps, and withdraws that the moment a health answer of its version arrives.
+6. The page only, with a save folder remembered in the browser: when the game cannot be
+   reached, a read finds no save or never meets health, or the mod speaks another
+   version, the page reads that folder instead and stops the link's reads and writes.
+   This applies to the first read, Update and the watcher alike. Its note says the board
+   is the local save and keeps any reason the player can act on (the version, the port,
+   a browser blocking loopback). The link is not tried again on its own: the player
+   chooses Link to the game, and the next visit starts from the link as before. Without
+   a remembered folder, or in a browser without folder handles, steps 1 and 5 stand.
+   Nothing on the wire changes.
 
 ## The mock
 
