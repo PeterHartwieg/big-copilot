@@ -1,5 +1,11 @@
 [
   {
+    "pr": 499,
+    "date": "2026-10-15",
+    "title": "Keep using local saves when Game Link is unavailable",
+    "summary": "If the game is closed or Game Link cannot connect, Big Copilot opens your remembered save folder and watches it for new saves. If folder access has expired, click Update to allow access. The page tells you when it is showing a local save and keeps any connection advice. Choose Link to the game to reconnect; your next visit tries Link again."
+  },
+  {
     "pr": 465,
     "date": "2026-10-13",
     "title": "Staff needs in your language",

@@ -1165,6 +1165,17 @@ The bytes behind `data()` can come from the game link as well as from a folder h
 file: when the player has linked the page to the running game, `app.js` fetches
 the save from the Big Copilot Link mod on the player's own loopback
 ([game-link-api.md](game-link-api.md)) and hands the worker the same kind of `File`.
+If Link cannot connect or becomes unavailable while watching, the browser falls back
+to the remembered local save folder, using the existing character/file selection and
+folder watcher. Folder access must already be granted for an automatic read; otherwise
+Update requests access from a click. Browsers without directory handles, or visits with
+no remembered folder, keep the Link error and offer Choose a folder instead. The note
+after a fallback always says the board is the local save. It comes after any warning the
+folder gave, and it keeps a reason the player can act on: a mod of another version, another
+program on the port, or a browser blocking loopback. A folder that will not read keeps its
+own error. The source change disables game writes and discards late Link reads. Link
+stays the preferred source on the next visit; the player can also choose Link to the game to reconnect during this
+visit. An explicit folder or file selection forgets that preference.
 
 What that does and does not change. On the hosted site the save itself never leaves the
 tab: `LEDGER_SOURCE` replaces the three watch-server routes, so nothing about the save is

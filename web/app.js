@@ -288,6 +288,10 @@
   // gone mid-build) leaves the attempt to the build. Every gate that waits
   // for quiet asks only whether there is an attempt.
   let attempt = null;
+  // Background checks yield to any newer read or explicit source interaction,
+  // even when that interaction has already finished by the time they return.
+  let sourceActivity = 0;
+  let directoryPickPending = 0;
   let readerError = null;
   let worker = null;
   // How long the reader may go without a word while it has work: a reply or
@@ -312,7 +316,7 @@
   }
   function startAttempt(gen, restoring = false) {
     if (gen !== sourceGen || readerError) return false;
-    if (!attempt) attempt = {gen, restoring, building: false};
+    if (!attempt) { attempt = {gen, restoring, building: false}; sourceActivity++; }
     if (restoring) attempt.restoring = true;
     return true;
   }
@@ -799,6 +803,7 @@
   let portNote = "";
   const portNoteUp = () => !!portNote && noted.text === portNote;
   const portGone = () => tt("app.link.port.gone", "That address no longer answers as the Big Copilot Link mod.");
+  const notModNever = () => tt("app.link.notmod.never", "It answers, but never with the mod's health. Is another program on that port?");
   let linkSpace = null;   // the targetAddressSpace this browser accepted, "" for none
   // Every wait the link takes. Tests swap this rather than sleep.
   let linkWait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -886,6 +891,9 @@
   function linkBlocked() {
     const err = failure(() => tt("app.link.blocked", "Your browser is blocking this site from reaching the game."));
     err.sub = () => tt("app.link.blocked.fix", "Allow local network access for this site in its site settings (the icon left of the address), then click Update.");
+    // Said again under a fallback to the folder, where Update reads the folder.
+    err.blocked = true;
+    err.fallbackSub = () => tt("app.link.blocked.fallback", "Allow local network access for this site in its site settings (the icon left of the address), then choose Link to the game.");
     return err;
   }
 
@@ -968,20 +976,84 @@
     return `${h.company || company} · ${when} · ${tt("app.link.source", "game link")}${extra ? ` · ${extra}` : ""}`;
   }
 
-  function linkDown(gen, err) {
+  async function linkDown(gen, err, fallback = true) {
     // The shared bad state: the game is closed, the mod is off, or the
-    // browser refused the loopback request. linkUrl stays set, so Update
-    // and the watcher keep retrying.
+    // browser refused the loopback request. Use the remembered folder when
+    // possible; otherwise Update and the watcher keep retrying the link.
+    if (gen !== sourceGen) return;
+    if (fallback && await fallbackFromLink(gen, undefined, linkWhy(err))) return;
     if (gen !== sourceGen) return;
     finishAttempt(gen);
     state("bad", () => tt("app.link.unreached", "Could not reach the game"), linkUrl);
     note("bad", errWords(err), err.sub || (() => tt("app.link.start", "Start the game with the mod enabled and load a save, then click Update.")), true);
   }
 
+  // What a fallback keeps saying about a failed request: a browser blocking
+  // the game is the player's to fix, with its own next step; a game that is
+  // simply not there is not.
+  const linkWhy = (err) => (err && err.blocked ? Object.assign(() => say(errWords(err)), {next: err.fallbackSub}) : null);
+
+  // Keep a handle from this visit even if IndexedDB could not store it.
+  let linkFolderHandle = null;
+  async function fallbackFromLink(gen, eligible = () => true, why = null) {
+    // True means handled or superseded, so an obsolete background failure
+    // cannot fall through and paint an error over a newer foreground result.
+    // Some diagnoses (notably a version mismatch) already ended their
+    // attempt. They must not outlive a newer Update while checking a folder.
+    // `why`: a diagnosis the player can act on (a blocked browser, a mod of
+    // another version, another program on the port), said with the fallback;
+    // its `next`, when it has one, replaces the reconnect hint.
+    const owner = attempt, activity = sourceActivity;
+    const current = () => gen === sourceGen && !!linkUrl && !readerError &&
+      (owner ? attempt === owner : sourceActivity === activity) && eligible();
+    if (!current()) return true;
+    // A current foreground failure must still finish its attempt when a
+    // picker defers fallback; cancelling that picker must not strand loading.
+    if (directoryPickPending || !canHandle) return false;
+    const handle = linkFolderHandle || await handles.get("saves");
+    if (!current()) return true;
+    if (!handle || directoryPickPending) return false;
+    let permission;
+    try { permission = await handle.queryPermission({mode: "read"}); }
+    catch (e) { return !current(); }
+    if (!current()) return true;
+    // A build of the link's bytes holds the attempt and ends it itself: it is
+    // newer than this failure, and switching would throw it away.
+    if (directoryPickPending || attempt?.building) return false;
+    // Switching source also invalidates outstanding reads and game writes.
+    // Keep Link as the next visit's preference; this folder is a fallback.
+    const restoring = !!(attempt && attempt.restoring);
+    const next = becomeSource("folder", {handle, keepLink: true});
+    $("srcStrip").title = "";
+    const reconnect = (why && why.next) || (() => tt("app.link.fallback.reconnect", "Choose Link to the game to reconnect when the game is ready."));
+    const after = why ? () => `${say(why)} ${say(reconnect)}` : reconnect;
+    if (permission !== "granted") {
+      state("remembered", () => tt("app.link.fallback.allow", "Game link unavailable · allow folder access"), handle.name);
+      note("info", () => tt("app.link.fallback.permission", "Allow access to your remembered folder to open the local save."), why ? after : "", true);
+      return true;
+    }
+    startAttempt(next, restoring);
+    await loadFromHandle(handle, () => tt("app.link.fallback.open", "Game link unavailable · opening the local save"));
+    // A folder that would not read keeps its own error. A board from it is
+    // always said to be the local save, after any warning the folder gave
+    // (a character that moved, browser storage), which keeps its place.
+    if (next === sourceGen && strip.tone === "ok") {
+      const used = () => tt("app.link.fallback.used", "Game link unavailable; showing the saved file from {folder}.", {folder: handle.name});
+      if (!noted.text) note("info", used, after);
+      else {
+        const [text, sub] = noted.words;
+        note(noted.tone, text, () => [say(sub), say(used), say(after)].filter(Boolean).join(" "), noted.recover);
+      }
+    }
+    return true;
+  }
+
   // The link as a source, gone: everything it knew of the game, and the
   // remembered address, so it does not come back on the next visit.
   // `forget` false keeps the remembered address, for a link chosen anew,
-  // which writes its own over it.
+  // which writes its own over it, and for a fallback to the folder, which
+  // leaves the link the next visit's source; forgetting also forgets the
+  // folder this tab would fall back to.
   function dropLink(forget = true) {
     linkUrl = null;
     lastLinkStamp = "";
@@ -990,7 +1062,10 @@
     linkSchema = LINK_SCHEMA;
     linkGone = false;
     linkNotReady = 0;
-    if (forget) { try { localStorage.removeItem(LINK_KEY); } catch (e) {} }
+    if (forget) {
+      linkFolderHandle = null;
+      try { localStorage.removeItem(LINK_KEY); } catch (e) {}
+    }
     linkMoved();
   }
   // The folder as a source, gone from memory, with the save menu that
@@ -1012,11 +1087,13 @@
   // whatever it is), and a snapshot or a file is noted for the tab, which a
   // reload asks for again. `gen`: the request's generation when the caller
   // took it before its own asynchronous work; otherwise a new one. Returns
-  // the generation, or null when another choice came first.
-  function becomeSource(kind, {handle = null, url = null, name = "", gen} = {}) {
+  // the generation, or null when another choice came first. `keepLink`: the
+  // folder the page fell back to on its own (fallbackFromLink()), not by
+  // hand, so the remembered link stays the next visit's source.
+  function becomeSource(kind, {handle = null, url = null, name = "", gen, keepLink = false} = {}) {
     if (gen === undefined) gen = supersede();
     else if (gen !== sourceGen) return null;
-    dropLink(kind !== "link");
+    dropLink(kind !== "link" && !keepLink);
     if (kind === "link") {
       linkUrl = url;
       // Storage that refuses the new address must not keep the old one.
@@ -1036,6 +1113,8 @@
   }
 
   async function linkToGame() {
+    // The folder this link set aside is the one to fall back to.
+    linkFolderHandle = dirHandle || linkFolderHandle;
     const gen = becomeSource("link", {url: linkBase()});
     await loadFromLink(() => tt("app.link.linking", "Linking to the game"), gen);
   }
@@ -1084,21 +1163,25 @@
     }
   }
   // False when the mod speaks this page's version; otherwise the bad state
-  // is on screen and the caller returns. A not-ready answer is not judged.
+  // is on screen, the caller returns, and the reason it gives is kept for a
+  // fallback to say. A not-ready answer is not judged.
   function wrongVersion(health, gen) {
     if (health === NOT_READY || linkVersionKnown(health.schemaVersion)) return false;
     finishAttempt(gen);
+    let why;
     if (health.schemaVersion == null) {
       // A JSON object with no version in it is not the mod's health at all.
+      why = () => tt("app.link.notmod.why", "It answers, but not with the mod's health. Is another program on that port?");
       state("bad", () => tt("app.link.notmod", "That address does not answer as the Big Copilot Link mod"), linkUrl);
-      note("bad", () => tt("app.link.notmod.why", "It answers, but not with the mod's health. Is another program on that port?"),
-        () => tt("app.link.port.check", "Check the port in the mod's options, then click Update."), true);
+      note("bad", why, () => tt("app.link.port.check", "Check the port in the mod's options, then click Update."), true);
     } else {
+      const v = health.schemaVersion;
+      why = () => tt("app.link.mismatch.why", "The mod speaks version {v}; this page needs version {need}. Update the mod (or the page) and try again.",
+        {v, need: LINK_SCHEMA});
       state("bad", () => tt("app.link.mismatch", "The Big Copilot Link mod and this page do not match"), linkUrl);
-      note("bad", () => tt("app.link.mismatch.why", "The mod speaks version {v}; this page needs version {need}. Update the mod (or the page) and try again.",
-        {v: health.schemaVersion, need: LINK_SCHEMA}), "", true);
+      note("bad", why, "", true);
     }
-    return true;
+    return why;
   }
 
   // A run of answers on the port that were never the mod's health: whatever
@@ -1106,8 +1189,7 @@
   function notTheMod(gen) {
     finishAttempt(gen);
     state("bad", () => tt("app.link.notmod", "That address does not answer as the Big Copilot Link mod"), linkUrl);
-    note("bad", () => tt("app.link.notmod.never", "It answers, but never with the mod's health. Is another program on that port?"),
-      () => tt("app.link.port.check", "Check the port in the mod's options, then click Update."), true);
+    note("bad", notModNever, () => tt("app.link.port.check", "Check the port in the mod's options, then click Update."), true);
   }
   // Update ends without new bytes, the game there all along: the board stays,
   // and `words` say why under it. Only a board the link built says "up to
@@ -1129,9 +1211,10 @@
     state("busy", why, linkUrl);
     let health;
     try { health = await readHealth(); }
-    catch (err) { linkDown(gen, err); return; }
+    catch (err) { await linkDown(gen, err); return; }
     if (gen !== sourceGen) return;
-    if (wrongVersion(health, gen)) return;
+    let wrong = wrongVersion(health, gen);
+    if (wrong) { await fallbackFromLink(gen, undefined, wrong); return; }
     // The mod serializes on the game's main thread and only while the game
     // is not saving, so a first refresh can take a moment to land.
     if (health.stamp === "" || health.busy) {
@@ -1142,6 +1225,8 @@
       while (health.stamp === "" || health.busy) {
         state("busy", () => tt("app.link.serializing", "Waiting for the game to serialize its state"), linkUrl);
         if (Date.now() >= deadline) {
+          if (await fallbackFromLink(gen, undefined, sawHealth ? null : notModNever)) return;
+          if (gen !== sourceGen) return;
           // Thirty seconds of answers that were never health: not the mod.
           if (!sawHealth) notTheMod(gen);
           else {
@@ -1154,12 +1239,13 @@
         await linkWait(LINK_POLL_MS);
         if (gen !== sourceGen) return;
         try { health = await readHealth(); }
-        catch (err) { linkDown(gen, err); return; }
+        catch (err) { await linkDown(gen, err); return; }
         if (gen !== sourceGen) return;
         if (health !== NOT_READY) sawHealth = true;
         // Judged on every real answer: an incompatible mod that is also busy
         // is refused now, not after thirty seconds of waiting.
-        if (wrongVersion(health, gen)) return;
+        wrong = wrongVersion(health, gen);
+        if (wrong) { await fallbackFromLink(gen, undefined, wrong); return; }
       }
     }
     let built = false;  // the board took these bytes
@@ -1171,7 +1257,7 @@
       // The bytes are read inside linkFetch, under its timer: a save is a few
       // MB even on loopback, so it gets longer than a health check.
       try { res = await linkFetch("/save", {headers: lastLinkStamp ? {"If-None-Match": `"${lastLinkStamp}"`} : {}, wait: SAVE_WAIT_MS, read: true}); }
-      catch (err) { linkDown(gen, err); return; }
+      catch (err) { await linkDown(gen, err); return; }
       if (gen !== sourceGen) return;
       if (res.status === 304) {  // a newer stamp was announced and then overtaken
         finishAttempt(gen);
@@ -1187,6 +1273,8 @@
           if (error) why = () => tt("app.link.save.error", "The mod answered {status} ({error}) for the save.", {status, error});
         } catch (e) {}
         if (gen !== sourceGen) return;
+        if (await fallbackFromLink(gen)) return;
+        if (gen !== sourceGen) return;
         finishAttempt(gen);
         state("bad", () => tt("app.link.unread", "Could not read the game"), linkUrl);
         note("bad", why, () => tt("app.link.loadsave", "Load a save in the game, then click Update."), true);
@@ -1197,8 +1285,10 @@
         const snapshotStamp = res.headers.get("X-Game-Link-Stamp") || health.stamp;
         const snapshotCharacter = res.headers.get("X-Game-Link-Character") || health.character;
         if ((health.features || []).includes("building-facts.v1")) {
+          let reply;
+          try { reply = await linkFetch(`/facts?stamp=${encodeURIComponent(snapshotStamp)}`, {read: true}); }
+          catch (err) { await linkDown(gen, err); return; }
           try {
-            const reply = await linkFetch(`/facts?stamp=${encodeURIComponent(snapshotStamp)}`, {read: true});
             if (gen !== sourceGen) return;
             if (!reply.ok) throw new Error(tt("app.facts.retry", "The game changed while reading its building values. Click Update to try again."));
             if (reply.bytes.byteLength > 8 * 1024 * 1024) throw new Error(tt("app.facts.mismatch", "The building values do not match this save. Update the game link and try again."));
@@ -1212,7 +1302,7 @@
             for (let i = 0; i < raw.length; i += 32768) binary += String.fromCharCode(...raw.subarray(i, i + 32768));
             bytes = new TextEncoder().encode(JSON.stringify({format: "big-copilot-save", version: 1, save: btoa(binary), facts}));
             extension = "bcsave";
-          } catch (err) { linkDown(gen, err); return; }
+          } catch (err) { await linkDown(gen, err, false); return; }
           if (gen !== sourceGen) return;
         }
         // linkHealth now, not after the build: the strip's line while the
@@ -1286,7 +1376,7 @@
     for (let round = 0; round < 2; round++) {
       let res;
       try { res = await linkFetch("/refresh", {method: "POST"}); }
-      catch (err) { linkDown(gen, err); return; }
+      catch (err) { await linkDown(gen, err); return; }
       if (gen !== sourceGen) return;
       if (res.status === 202) {
         try { before = (await res.json()).stamp || lastLinkStamp; } catch (e) {}
@@ -1310,7 +1400,8 @@
         let health = NOT_READY;
         try { health = await readHealth(); } catch (e) {}
         if (gen !== sourceGen) return;
-        if (wrongVersion(health, gen)) return;
+        const wrong = wrongVersion(health, gen);
+        if (wrong) { await fallbackFromLink(gen, undefined, wrong); return; }
         const inFlight = health !== NOT_READY && health.busy === true;
         if (health !== NOT_READY && !health.busy && health.stamp && health.stamp !== lastLinkStamp) {
           // No look after this build: Update goes on to ask for a refresh, and
@@ -1360,10 +1451,11 @@
     let sawHealth = false;
     while (Date.now() < (sawHealth ? deadline : started + 30000)) {
       try { health = await readHealth(); }
-      catch (err) { linkDown(gen, err); return; }
+      catch (err) { await linkDown(gen, err); return; }
       if (gen !== sourceGen) return;
       if (health !== NOT_READY) sawHealth = true;
-      if (wrongVersion(health, gen)) return;
+      const wrong = wrongVersion(health, gen);
+      if (wrong) { await fallbackFromLink(gen, undefined, wrong); return; }
       if (health.stamp && health.stamp !== before && !health.busy) break;
       health = null;
       state("busy", () => tt("app.link.serializing", "Waiting for the game to serialize its state"), linkUrl);
@@ -1371,6 +1463,8 @@
       if (gen !== sourceGen) return;
     }
     if (!health) {
+      if (!sawHealth && await fallbackFromLink(gen, undefined, notModNever)) return;
+      if (gen !== sourceGen) return;
       if (!sawHealth) notTheMod(gen);
       else {
         finishAttempt(gen);
@@ -1794,13 +1888,19 @@
 
   async function checkLink(look = true) {
     // The watcher's link half: a quiet /health, and a build only when the
-    // game has moved on. A game that went away is said once, under the
-    // board that stays, and the next answer clears it.
-    const gen = sourceGen;
+    // game has moved on. A game that went away, or a port that stopped
+    // answering as the mod, switches to the remembered folder, saying why
+    // when the player can act on it; the link is then chosen again by hand.
+    // With no folder to read it is said once, under the board that stays,
+    // and the next answer clears it.
+    const gen = sourceGen, activity = sourceActivity;
+    const fallbackCurrent = () => sourceActivity === activity && !document.hidden && !attempt && !directoryPickPending && !!watchTimer;
     const wasGone = linkGone;  // linkFetch clears it the moment the mod answers
     let health;
     try { health = await readHealth(); }
     catch (err) {
+      if (gen !== sourceGen) return;
+      if (await fallbackFromLink(gen, fallbackCurrent, linkWhy(err))) return;
       if (gen !== sourceGen) return;
       // The gone note replaces whatever was said about the port; that is said
       // again after the game is back if the port is still not the mod.
@@ -1818,6 +1918,8 @@
     // board that stays; one health answer counts from zero again.
     if (health === NOT_READY) {
       linkNotReady++;
+      if (linkNotReady >= 10 && await fallbackFromLink(gen, fallbackCurrent, portGone)) return;
+      if (gen !== sourceGen) return;
       if (linkNotReady >= 10 && !portNoteUp() && strip.tone === "ok") {
         note("warn", portGone,
           () => tt("app.link.port.other", "Is another program on that port? Check the port in the mod's options, then click Update."));
@@ -1832,6 +1934,8 @@
       const v = health.schemaVersion;
       const words = v == null ? portGone
         : () => tt("app.link.port.version", "The mod now speaks version {v}; this page needs version {need}.", {v, need: LINK_SCHEMA});
+      if (await fallbackFromLink(gen, fallbackCurrent, words)) return;
+      if (gen !== sourceGen) return;
       if (noted.text !== words() && strip.tone === "ok") {
         note("warn", words, () => tt("app.link.port.details", "Click Update for the details."));
         portNote = noted.text;
@@ -2315,9 +2419,12 @@
     if (canHandle) {
       const gen = sourceGen;
       let handle;
+      directoryPickPending++;
+      sourceActivity++;
       try {
         handle = await window.showDirectoryPicker({id: "ba-saves", mode: "read"});
       } catch (e) { return; }  // the picker was dismissed
+      finally { directoryPickPending--; }
       if (gen !== sourceGen) return;
       await takeHandle(handle, () => tt("app.open.walking", "Looking through the folder"));
     } else {
@@ -2453,6 +2560,7 @@
         : tt("app.watch.folder.title", "Check the folder every {s} seconds and rebuild on every autosave.", {s: 30}));
   }
   async function toggleWatch() {
+    sourceActivity++;
     if (watchTimer) {
       watching = false;
       try { localStorage.setItem("ledger_watch", "off"); } catch (e) {}
@@ -3117,8 +3225,8 @@
     state("busy", () => tt("app.open.previous", "Checking for a previous save…"));
     // A game link chosen on an earlier visit outranks the folder it set
     // aside: choosing a folder forgets the link, so a stored link is always
-    // the source picked last. A probe that fails leaves the bad state and
-    // its note on screen; Update retries it and the folder button takes over.
+    // the source picked last. An unavailable link falls back to that folder;
+    // without one, Update retries and the folder button offers a new source.
     const rememberedLink = stored.get(LINK_KEY);
     if (rememberedLink) {
       // Stored by this page, but storage is the browser's to edit: the same
