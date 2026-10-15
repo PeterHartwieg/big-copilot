@@ -84,6 +84,75 @@ class BuildingFacts(unittest.TestCase):
         with self.assertRaises(ValueError): f.validate(self.facts, stamp="later")
         with self.assertRaises(ValueError): f.unpack(b'{"format":"big-copilot-save","version":1,"save":"!"}')
 
+    def test_every_rejection_branch_of_validate(self):
+        # One case per raise in validate(), each pinned to its own message so a
+        # case cannot pass by tripping an earlier check.
+        def building(x): return x["buildings"][0]
+        def campaign(x): return x["marketingTypes"][0]
+        def agency(x): return x["agencies"][0]
+        too_many = [{}] * (f.MAX_ROWS + 1)
+        cases = (
+            ("not a dict", lambda x: x.clear(), "schema"),
+            ("too large", lambda x: x.update(pad="x" * f.MAX_FACTS), "too large"),
+            ("no character", lambda x: x.update(character=""), "no character"),
+            ("no stamp", lambda x: x.update(stamp=None), "no snapshot stamp"),
+            ("build not int", lambda x: x.update(build=True), "game build"),
+            ("hash not hex", lambda x: x.update(saveSha256="Z" * 64), "no save hash"),
+            ("buildings not a list", lambda x: x.update(buildings={}), "building facts list"),
+            ("too many buildings", lambda x: x.update(buildings=too_many), "building facts list"),
+            ("row not a dict", lambda x: x["buildings"].append("row"), "building address"),
+            ("empty street", lambda x: building(x).update(street=""), "building address"),
+            ("negative number", lambda x: building(x).update(number=-1), "building number"),
+            ("float number", lambda x: building(x).update(number=1.0), "building number"),
+            ("duplicate building", lambda x: x["buildings"].append(copy.deepcopy(building(x))), "Duplicate building"),
+            ("no type", lambda x: building(x).pop("type"), "Incomplete building identity"),
+            ("empty size", lambda x: building(x).update(size=""), "Incomplete building identity"),
+            ("no neighbourhood", lambda x: building(x).update(neighbourhood=None), "Incomplete building identity"),
+            ("negative version", lambda x: building(x).update(version=-2), "building version"),
+            ("property area", lambda x: building(x).update(propertyArea=-1), "building propertyArea"),
+            ("no capacity key", lambda x: building(x).pop("capacity"), "building capacity"),
+            ("capacity below -1", lambda x: building(x).update(capacity=-2), "building capacity"),
+            ("marketing not a dict", lambda x: building(x).update(marketing=[1, 1]), "marketing multipliers"),
+            ("no strength", lambda x: building(x)["marketing"].pop("strength"), "marketing multipliers"),
+            ("negative reach", lambda x: building(x)["marketing"].update(reachMultiplier=-1), "marketing multipliers"),
+            ("catalogue not a list", lambda x: x.update(marketingTypes={}), "campaign catalogue"),
+            ("seven campaigns", lambda x: x["marketingTypes"].append(copy.deepcopy(campaign(x))), "campaign catalogue"),
+            ("campaign not a dict", lambda x: x["marketingTypes"].__setitem__(0, "SmallInternet"), "campaign identity"),
+            ("campaign id order", lambda x: campaign(x).update(id=1), "campaign identity"),
+            ("campaign id bool", lambda x: campaign(x).update(id=False), "campaign identity"),
+            ("campaign renamed", lambda x: campaign(x).update(name="TinyInternet"), "campaign identity"),
+            ("campaign price", lambda x: campaign(x).update(price="10"), "campaign values"),
+            ("campaign reach", lambda x: campaign(x).pop("reach"), "campaign values"),
+            ("agencies missing", lambda x: x.pop("agencies"), "marketing agencies"),
+            ("too many agencies", lambda x: x.update(agencies=too_many), "marketing agencies"),
+            ("agency not a dict", lambda x: x["agencies"].append(None), "marketing agency$"),
+            ("agency empty street", lambda x: agency(x).update(street=""), "marketing agency$"),
+            ("agency negative number", lambda x: agency(x).update(number=-1), "marketing agency$"),
+            ("agency types not a list", lambda x: agency(x).update(types="SmallInternet"), "marketing agency$"),
+            ("agency unknown type", lambda x: agency(x)["types"].append("Radio"), "marketing agency$"),
+            ("duplicate agency", lambda x: x["agencies"].append(copy.deepcopy(agency(x))), "Duplicate marketing agency"),
+        )
+        self.assertTrue(self.facts["agencies"] and self.facts["agencies"][0]["types"], "fixture needs an agency")
+        f.validate(self.facts)
+        for label, mutate, message in cases:
+            bad = copy.deepcopy(self.facts)
+            mutate(bad)
+            with self.subTest(label), self.assertRaisesRegex(ValueError, message):
+                f.validate(bad)
+        # The pairing checks, each against the argument it compares.
+        for kwargs, message in (({"raw": b"other"}, "different save"), ({"stamp": "later"}, "different refresh"),
+                                ({"character": "other"}, "different character")):
+            with self.subTest(**kwargs), self.assertRaisesRegex(ValueError, message):
+                f.validate(self.facts, **kwargs)
+        with self.assertRaisesRegex(ValueError, "schema"):
+            f.validate([self.facts])
+        # A missing or empty catalogue is fine; residential -1 and unknown capacity are too.
+        ok = copy.deepcopy(self.facts)
+        ok.pop("marketingTypes")
+        building(ok).update(version=-1, capacity=None, marketing=None)
+        ok["agencies"] = []
+        f.validate(ok)
+
     def test_live_city_accepts_residential_version_sentinel(self):
         # Link captures the whole city, including homes without a numbered layout.
         # Include every version in the shipped catalogue, not only owned shops.
@@ -199,7 +268,3 @@ class BuildingFacts(unittest.TestCase):
         game._call = call
         self.assertIsNone(game.poll())
         self.assertEqual(Path(first).read_bytes(), previous)
-
-
-if __name__ == "__main__":
-    unittest.main()

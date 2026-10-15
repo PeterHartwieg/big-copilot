@@ -14,7 +14,8 @@ const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs 
 
 /* One product, flat curves, one open hour a week. */
 const RETAIL = {
-  game: {promo: 0.5, wages: 0.7, capInitial: true, wageBase: {cashier: 16, cleaner: 12, guard: 15, perCashier: 30}},
+  game: {promo: 0.5, wages: 0.7, capInitial: true, satisfaction: 95, wageBase: {cashier: 16, cleaner: 12, guard: 15, perCashier: 30},
+    ramp: [0.55, 0.92, 0.94, 0.97, 0.99], office: {always: 3, fullDoor: 50, day: [8, 22], weekend: [6, 0]}},
   hoods: {H: {idx: 1.2, strength: 1, demands: 0, interior: 0}},
   types: {T: {model: 'retail', products: [['P', 1]], amt: 1, days: Array(7).fill(1), hours: Array(24).fill(1), layouts: {}}},
   market: {P: {p: 10, r: 0.5, d: 1, s: 0, cost: 4, hoods: {H: [0, 0, null]}}},
@@ -240,4 +241,44 @@ test('office billing, staffed-hour wages and own-shop calibration use explicit i
   close(ratio.ratio, 1 / ramped, 'actual divided by predicted');
   const other = OpenStoreModel.create({facts: {...facts, market: {...facts.market, P: {...facts.market.P, p: 2000}}}, company});
   assert.ok(other.model('T', SHOP, options).revenue > api.model('T', SHOP, options).revenue, 'factories do not share a facts cache');
+});
+
+test('demand with n sellers steps down past the room the price leaves, then bottoms out', () => {
+  // ProductMarketHelper.CalculateDemand: a 55 item leaves room for five sellers.
+  const m = model(RETAIL);
+  assert.equal(m.demandWith(1, 55), 79.5);
+  assert.equal(m.demandWith(2, 55), 59.5);
+  assert.equal(m.demandWith(4, 55), 31.5);
+  assert.equal(m.demandWith(0, 55), 99.5);
+});
+
+/* The game values come from the payload alone (issue #347): a missing one
+   throws rather than falling back to a number kept here. */
+test('a missing game value fails loudly instead of being guessed', () => {
+  for(const key of ['wageBase', 'satisfaction']){
+    const facts = structuredClone(RETAIL);
+    delete facts.game[key];
+    assert.throws(() => model(facts).model('T', SHOP, {open: HOUR}), new RegExp(`openStore\\.game\\.${key} is missing`));
+  }
+  const noRamp = structuredClone(RETAIL);
+  delete noRamp.game.ramp;
+  assert.throws(() => model(noRamp).rampDays(), /openStore\.game\.ramp is missing/);
+  const noOffice = structuredClone(RETAIL);
+  delete noOffice.game.office;
+  assert.throws(() => model(noOffice).officeStaffed(4, 50, 1, 10), /openStore\.game\.office is missing/);
+  assert.throws(() => model({...RETAIL, finance: {multiplier: 0.7, minimum: 500}}).loan(1000, {rate: 5, term: 240}),
+    /openStore\.finance\.year is missing/);
+  assert.equal(model(RETAIL).rampDays(), 5);
+});
+
+test('the office default follows the shipped office facts', () => {
+  const m = model(RETAIL);
+  assert.equal(m.officeStaffed(10, 50, 1, 3), 3, 'night: the always-on computers');
+  assert.equal(m.officeStaffed(10, 50, 1, 10), 10, 'weekday daytime: every computer');
+  assert.equal(m.officeStaffed(10, 50, 6, 10), 5, 'weekend daytime: half');
+  const facts = structuredClone(RETAIL);
+  facts.game.office = {always: 2, fullDoor: 50, day: [9, 17], weekend: [0]};
+  const other = model(facts);
+  assert.equal(other.officeStaffed(10, 50, 1, 8), 2);
+  assert.equal(other.officeStaffed(10, 50, 6, 10), 10, 'Saturday is a weekday here');
 });

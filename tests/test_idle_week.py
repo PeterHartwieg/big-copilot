@@ -226,5 +226,19 @@ class IdleWeekTests(MsgAsserts, unittest.TestCase):
         self.assertEqual(_hour_findings([grid], [business()], {}), [])
 
 
-if __name__ == "__main__":
-    unittest.main()
+class BothModesTests(unittest.TestCase):
+    def test_both_modes_at_once_match_two_single_passes(self):
+        # _condense() pops fields off its rows, so the findings both modes share
+        # must reach each mode as their own copies. Three sites under one key
+        # with nobody on staff make three "staff" rows at one site, which
+        # _condense() merges (CONDENSE_AT), and the gym's overstaffing is a
+        # shared row written after the mode's supply findings.
+        def run(mode):
+            people = [dict(business(), staff=0, name=f"Pump {i}") for i in range(3)]
+            findings = _hour_findings([gym([MONDAY])], [business()], WAGES)
+            return _alerts(people + [business()], EMPTY_SUPPLY, [], [], [], findings, [], 20, 0.0, mode)
+        both = run(("cap", "dem"))
+        self.assertEqual(both, [run("cap"), run("dem")])
+        groups = [row["group"] for row in both[0]["lines"] + both[0]["minor"]["rows"]]
+        self.assertEqual(groups.count("staff"), 1)
+        self.assertIn("idlestaff", groups)

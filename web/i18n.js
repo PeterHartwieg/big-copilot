@@ -23,11 +23,13 @@ const TT_SITE = /*__TT_SITE__*/false;
    open page's source contract when static assets are replaced on deployment. */
 const TT_CATALOGUES = /*__TT_CATALOGUES__*/null;
 const TT_KEY = "ba_dash_names";
-/* The languages Big Copilot's own text comes in, English first. */
-const TT_LANGS = ["en", "de", "pt", "fr", "es", "ru", "ko", "tr", "it"];
-/* Numbers follow the UI language: English is always en-US. */
-const TT_NUM_LOCALES = {en: "en-US", de: "de-DE", pt: "pt-BR", fr: "fr-FR", es: "es-ES", ru: "ru-RU", ko: "ko-KR",
-                        tr: "tr-TR", it: "it-IT"};
+/* The languages Big Copilot's own text comes in, English first, and the
+   number locale of each (English is always en-US): UI_LANGUAGES in
+   ba_dashboard.py, in its order. tests/test_i18n_languages.py holds the two
+   to it; tests read them from here. */
+const TT_LANGS = ["en", "de", "es", "fr", "it", "pt", "tr", "ru", "ko"];
+const TT_NUM_LOCALES = {en: "en-US", de: "de-DE", es: "es-ES", fr: "fr-FR", it: "it-IT", pt: "pt-BR", tr: "tr-TR",
+                        ru: "ru-RU", ko: "ko-KR"};
 /* A placeholder: {name} or {name:spec}; single braces, as SUMMARIES writes them. */
 const TT_SPEC = /\{(\w+)(?::([^{}]+))?\}/g;
 /* A game name inside a sentence (tok() in Python), for a page without the
@@ -277,13 +279,33 @@ function ttLoad(lang){
   got.catch(() => ttTables.delete(lang));
   return got;
 }
-/* Community text remains plain text: quotes and apostrophes are valid;
-   markup, encoded markup and malformed placeholders are not. Validate again
-   at the rendering boundary, even though the API validates submissions. */
+/* Community text is plain text (quotes and apostrophes are valid; encoded
+   markup and malformed placeholders are not), except that a key whose English
+   has tags may carry exactly those tags: rule.markup, as many of each,
+   properly nested, in any order, and no other "<". A bare ">" is text.
+   validateTranslation() in server/translations.mjs is the same rule. Validate
+   again at the rendering boundary, even though the API validates submissions. */
+function ttKeepsMarkup(text, markup = []){
+  const tag = /<[^<>]*>/g;
+  if(!Array.isArray(markup) || text.replace(tag, "").includes("<")) return false;
+  const pieces = text.match(tag) || [], want = [...markup].sort(), got = [...pieces].sort();
+  if(got.length !== want.length || got.some((p, i) => p !== want[i])) return false;
+  const open = [];
+  for(const piece of pieces){
+    const m = /^<(\/?)([a-z][a-z\d]*)(?=[\s>/])/i.exec(piece);
+    if(!m) return false;
+    const name = m[2].toLowerCase();
+    if(name === "br") continue;
+    if(!m[1]) open.push(name);
+    else if(open.pop() !== name) return false;
+  }
+  return !open.length;
+}
 function ttCommunityValid(text, rule){
   if(typeof text !== "string" || !text.trim() || !rule || [...text].length > Math.min(rule.maxLength || 2000, 2000)) return false;
-  if(/[<>\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(text)
-    || /&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;)/i.test(text)
+  if(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(text)
+    || /&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;|lt|gt|amp|quot|(?:apos|nbsp)(?![a-z\d]))/i.test(text)
+    || !ttKeepsMarkup(text, rule.markup)
     || /[{}]/.test(text.replace(TT_SPEC, ""))) return false;
   const tokens = new Set([...text.matchAll(TT_SPEC)].map(m => `${m[1]}:${m[2] || ""}`));
   return Array.isArray(rule.allowed) && Array.isArray(rule.required)

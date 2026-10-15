@@ -9,7 +9,7 @@ const {loadBoard} = require('./_board.cjs');
 const root = path.join(__dirname, '..');
 // Bundled catalogues promise complete station grammar. Empty and partial
 // community catalogues still exercise the fallback separately below.
-const completeLangs = ['de', 'es', 'fr', 'it', 'ko', 'pt', 'ru', 'tr'];
+const completeLangs = require('./_i18n.cjs').UI_LANGS.filter(lang => lang !== 'en');
 const langs = completeLangs.map(lang => `${lang}.json`);
 const supportedFiles = fs.readdirSync(path.join(root, 'i18n')).filter(f => /^[a-z]{2}\.json$/.test(f));
 const boardKeys = ['sp.hour.role', 'sp.hours.what.noun', 'sp.idle.part'];

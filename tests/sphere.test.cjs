@@ -1,45 +1,18 @@
-const {test, before, after} = require('node:test');
+// The wordmark's sphere: balls rolled out onto the shelf, and the map's hook
+// that swallows them. A bare CLI board (render(None)), no save.
+const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const http = require('node:http');
-const {spawnSync} = require('node:child_process');
-const {chromium} = require('playwright');
-const root = path.join(__dirname, '..');
-let browser,server,url,html;
-before(async()=>{
-  const rendered=spawnSync(process.env.PYTHON || 'python',['-c','from ba_dashboard import render; import sys; sys.stdout.buffer.write(render(None).encode("utf-8"))'],{cwd:root,maxBuffer:4*1024*1024});
-  assert.equal(rendered.status,0,rendered.stderr.toString());html=rendered.stdout;
-  server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/html');res.end(html);});
-  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));url=`http://127.0.0.1:${server.address().port}`;
-  browser=await chromium.launch({headless:true,channel:process.env.PLAYWRIGHT_CHANNEL});
-});
-after(async()=>{await browser?.close();await new Promise(resolve=>server?.close(resolve));});
+const {suiteBrowser, renderBoard, openPage} = require('./_page.cjs');
+const browser = suiteBrowser();
 /* Waits out the newest ball's entrance. Spawn and the hook refuse while a ball
-   is busy, and busy clears only in the entrance's last frame (p >= 1). First
-   the ball stands where it rests, full size; the frame before the last is under
-   1 ms short of the end and may already round to that pose. Its step asked for
-   the last frame before this asks for one, so it runs first in any frame
-   stamped past now plus that 1 ms, and then the entrance is over (as in
-   map.test.cjs). Under reduced motion the pose and busy change together. */
+   is busy; the sphere says when none is (as in map.test.cjs). */
 async function entranceOver(page){
-  await page.waitForFunction(()=>{
-    const o=[...document.querySelectorAll('.orb')].pop();
-    return !!o&&/^translate\(-?0px, -?0px\) scale\(1\)$/.test(o.style.transform);
-  },null,{polling:50});
-  await page.evaluate(()=>new Promise(done=>{
-    const seen=performance.now();
-    const frame=t=>t>seen+1?done():requestAnimationFrame(frame);
-    requestAnimationFrame(frame);
-  }));
+  await page.waitForFunction(()=>window.__sphereIdle(),null,{polling:50});
 }
-async function fixture(reduced){
+async function fixture(t,reduced){
   // Wide enough for three balls: the shelf ends short of the search field.
-  const page=await browser.newPage({viewport:{width:1920,height:960}});const errors=[];
-  page.on('pageerror',e=>errors.push(e.message));
-  if(reduced)await page.emulateMedia({reducedMotion:'reduce'});
-  await page.route('https://**',r=>r.abort());
-  await page.goto(url);
+  const {page,errors}=await openPage(t,await browser(),{html:renderBoard(),url:'https://sphere.test/',
+    viewport:{width:1920,height:960},reducedMotion:reduced?'reduce':undefined,allowErrors:true});
   // A bare board never boots (D is null) and its wordmark has no text, so the
   // test gives the wordmark its words and wires the sphere by hand.
   await page.evaluate(()=>{ $('title').textContent='Big Copilot'; wireSphere(); });
@@ -56,8 +29,8 @@ async function rollOut(page,count){
 }
 const orbs=page=>page.locator('.orb').count();
 
-test('the map hook swallows every shelf ball one after another and the shelf recovers',async()=>{
-  const {page,errors}=await fixture();
+test('the map hook swallows every shelf ball one after another and the shelf recovers',async t=>{
+  const {page,errors}=await fixture(t);
   try{
     await entranceOver(page); // the first ball's entrance
     await rollOut(page,2);await rollOut(page,3);
@@ -78,8 +51,8 @@ test('the map hook swallows every shelf ball one after another and the shelf rec
   }finally{await page.close();}
 });
 
-test('with reduced motion the hook empties the shelf at once and reports each ball',async()=>{
-  const {page,errors}=await fixture(true);
+test('with reduced motion the hook empties the shelf at once and reports each ball',async t=>{
+  const {page,errors}=await fixture(t,true);
   try{
     await entranceOver(page); // under reduced motion an entrance ends at its 400 ms mark
     assert.equal(await orbs(page),1);

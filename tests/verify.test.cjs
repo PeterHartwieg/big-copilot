@@ -207,7 +207,10 @@ test('each failure stops later stages; spawn errors and signals fail safely', as
   for (let stage = 1; stage <= 9; stage++) {
     const calls = [];
     assert.equal(verify([], {root, spawn: fakeSpawn(calls,stage), log: () => {}}), 7);
-    assert.equal(calls.length, stage);
+    // Stages 4-6 leave the minified page behind, so the readable assembly still runs.
+    const restores = stage >= 4 && stage <= 6;
+    assert.equal(calls.length, restores ? stage + 1 : stage);
+    if (restores) assert.deepEqual(calls.at(-1).args, ['build_web.py', '--assemble']);
   }
   for (const failure of [{error: new Error('cannot spawn')}, {signal: 'SIGTERM'}, {status: null}]) {
     const calls = []; const run = () => verify([], {root,spawn: fakeSpawn(calls,1,failure),log: () => {}});
@@ -363,6 +366,15 @@ test('two CI runs fit within eighteen runner slots, including the aggregate chec
   }
 });
 
+test('wranglerBin resolves the package entry point and names the fix when it is missing', async t => {
+  const {wranglerBin} = await runner; const root = fixture(t);
+  assert.equal(wranglerBin(root), path.join(root,'node_modules','wrangler','bin','wrangler.js'));
+  // NODE_PATH would find the runner's own Wrangler, so the missing case needs it unset.
+  if (process.env.NODE_PATH) return;
+  fs.rmSync(path.join(root,'node_modules'),{recursive:true});
+  assert.throws(()=>wranglerBin(root),/Wrangler is missing; run npm ci or point NODE_PATH/);
+});
+
 test('standalone Worker check needs no Python and preserves the environment', async t => {
   const {verify} = await runner; const root = fixture(t); const calls = [];
   assert.equal(verify(['worker'], {root, env: {PYTHON: 'invalid Python override'}, log: () => {},
@@ -406,6 +418,17 @@ test('optimized stage shares hosted coverage and restores readable assembly', as
   assert.equal(calls[3].options.env.PLAYWRIGHT_CHANNEL,'chrome');
   const failed=[];
   assert.equal(verify(['optimized'],{root,spawn:fakeSpawn(failed,3),log:()=>{}}),7);
-  assert.equal(failed.length,3);
+  assert.deepEqual(failed.map(call=>call.args.at(-1)),['--assemble',path.join(root,'tools','optimize_web.mjs'),'--check','--assemble']);
+  // A spawn error in the optimized stage restores too, then reports the error.
+  const thrown=[];
+  assert.throws(()=>verify(['optimized'],{root,spawn:fakeSpawn(thrown,4,{error:new Error('cannot spawn')}),log:()=>{}}),/cannot spawn/);
+  assert.deepEqual(thrown.map(call=>call.args.at(-1)),['--assemble',path.join(root,'tools','optimize_web.mjs'),'--check',OPTIMIZED_NODE_SUITES.at(-1),'--assemble']);
+  // A failed restore keeps the stage's own status.
+  const notes=[];
+  const twice=[]; let n=0;
+  const spawn=(command,args,options)=>{ if(args[0]==='-c') return {status:0,stdout:'/Python path/python3'}; twice.push(args); n++; return n===2||n===3?{status:9}:{status:0}; };
+  assert.equal(verify(['optimized'],{root,spawn,log:line=>notes.push(line)}),9);
+  assert.equal(twice.length,3);
+  assert.ok(notes.some(line=>/re-assembling the readable page failed/.test(line)));
   assert.throws(()=>verify(['optimized','tests/theme.test.cjs'],{root}),/does not accept extra arguments/);
 });

@@ -34,7 +34,7 @@ and campaign prediction with BizMan. Renovate while a refresh is running and ver
 a stale pair is never published. Test dry run and Apply after changing campaign
 prices or building area: both must refuse a stale prediction. These Unity/in-game
 checks cannot be performed by this repository's tests. The local save/browser checks
-are recorded in [`docs/building-facts-compatibility.md`](../../docs/building-facts-compatibility.md);
+are recorded in [`docs/archive/building-facts-compatibility.md`](../../docs/archive/building-facts-compatibility.md);
 they do not validate the new collector inside the game.
 
 ## What it shares, and with whom
@@ -286,6 +286,18 @@ matters: Mono's `HttpListener` answers a body-less POST without one with `411` b
 the mod sees it (browsers and Python send it on their own). On Windows use `curl.exe`
 in PowerShell — plain `curl` is an alias for `Invoke-WebRequest`. In the game, F5 is
 Quick Save, which the mod follows with a refresh of its own.
+
+The building facts belong to one snapshot: take the stamp from a `/save` response's
+`X-Game-Link-Stamp` header (`curl -D - -o live.hsg http://127.0.0.1:8322/save` prints it),
+then, before the next refresh:
+
+```
+curl "http://127.0.0.1:8322/facts?stamp=<stamp>"
+```
+
+Expect `"model":"building-values-v1"`, the same `stamp`, a `saveSha256` and a `buildings`
+list (`docs/game-link-api.md`, "Building facts"). Once a refresh has replaced the snapshot,
+the old stamp answers 409 `stamp_mismatch`.
 
 Verified on a Mac, build 3680 (22 Sep 2026): every endpoint as the contract says;
 the board built from `/save` matched the board built from the game's own save of the
@@ -628,9 +640,10 @@ choose **Edit mod** on the item under **My created mods**, select the mod folder
 set **Target Build** to the game build it was built against, and upload. The
 description is Steam BBCode: `mod/workshop/description.bbcode`, pasted whole.
 `mod/workshop/thumbnail.png` is the live Workshop preview (the "Big Copilot Link. Business
-dashboard" card, 2048 px); `node mod/workshop/render.cjs` would overwrite it with the older
-orb art from `art.html`, so render only `how-it-works.png` (an extra
-image added on the Workshop page under Add/edit images & videos) from `art.html`.
+dashboard" card, 2048 px), made by hand. `node mod/workshop/render.cjs` renders only
+`how-it-works.png` (an extra image added on the Workshop page under Add/edit images &
+videos) from `art.html`; `art.html` also holds the older orb thumbnail, which the script
+writes over `thumbnail.png` only when given `--thumbnail`.
 
 ## Options
 

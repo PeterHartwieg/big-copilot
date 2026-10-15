@@ -25,7 +25,9 @@
    actually has, and a link the game points at nothing degrades to plain text
    rather than to a dead link. */
 
-const WIKI_URL = "wiki-data.json";
+/* The compact copy build_web.py writes beside the committed, indented
+   web/wiki-data.json (WIKI_SERVED in ba_dashboard.py). */
+const WIKI_URL = "wiki-data.min.json";
 /* The game's help writes addresses as "13 5a"; the city's own tables spell the
    ordinal out. Only these two directions ever meet, so one table does both. */
 const WIKI_ORDINALS = ["", "first", "second", "third", "fourth", "fifth", "sixth", "seventh",
@@ -44,7 +46,8 @@ const wikiTopicLabel = () => tt("wiki.topics.label", "Big Copilot topics");
 const wikiTopicId = slug => `topic/${String(slug ?? "")}`;
 /* What this release added inside the Wiki. The nav says the Wiki changed; these
    say what in it changed, so the reader is not left to hunt. A future topic is
-   marked by listing its slug here and nowhere else.
+   marked by listing its slug here, with its date beside its id
+   (wiki-topic-<slug>) in featureDiscovery's NEW_SINCE.
 
    The badge is the board's — the same markup and the same feature discovery —
    but each mark carries its own id, never the nav's. Sharing the nav's id would
@@ -69,7 +72,9 @@ const wikiSeen = id => {
 function wikiNewBadge(what, key){
   if(!(WIKI_NEW[what] || []).includes(String(key))) return "";
   const id = WIKI_NEW_ID[what](String(key));
-  if(wikiSeen(id)) return "";
+  // The board's helper also retires a mark whose window has passed.
+  if(typeof featureDiscovery !== "undefined" && featureDiscovery
+    && typeof featureDiscovery.isNew === "function" ? !featureDiscovery.isNew(id) : wikiSeen(id)) return "";
   return `<span class="feature-new" data-new-feature="${attr(id)}">${spEsc(tt("wiki.new", "New"))}</span>`;
 }
 /* Reaching a marked topic is meeting it: the entry's own mark and the shelf that
@@ -180,7 +185,28 @@ function wikiRich(text, params){
 /* Shape, as agreed with the extraction: schemaVersion 1, categories, pages
    (id, categoryId, title, body) and the business guides the page is
    drawn from. Anything else in the file is left alone. */
-function wikiIndex(raw){
+/* What the guides share is written once (share_guide_tables() in
+   tools/build_wiki_data.py): the supplier rows in the top-level SUPPLIERS, a
+   guide listing the site keys it names, and the SOURCES block in
+   provenance.guideSources unless the guide has its own. This returns the
+   catalogue with each guide back the way the page reads it, as
+   wiki_data.expand_guides() does for Python, and leaves the file's own objects
+   alone; a guide already in that shape is kept as it is. */
+function wikiExpandGuides(raw){
+  if(!raw.guides || typeof raw.guides !== "object") return raw;
+  const table = raw.SUPPLIERS && typeof raw.SUPPLIERS === "object" ? raw.SUPPLIERS : {};
+  const shared = (raw.provenance || {}).guideSources;
+  const guides = {};
+  Object.entries(raw.guides).forEach(([id, g]) => {
+    if(!g || typeof g !== "object"){ guides[id] = g; return; }
+    const own = Array.isArray(g.SUPPLIERS) ? {SUPPLIERS: Object.fromEntries(g.SUPPLIERS
+      .filter(k => Object.prototype.hasOwnProperty.call(table, k)).map(k => [k, table[k]]))} : {};
+    guides[id] = {...g, ...own, ...(!("SOURCES" in g) && shared ? {SOURCES: shared} : {})};
+  });
+  return {...raw, guides};
+}
+function wikiIndex(file){
+  const raw = wikiExpandGuides(file);
   const pages = Array.isArray(raw.pages) ? raw.pages.filter(p => p && p.id) : [];
   const categories = Array.isArray(raw.categories) ? raw.categories.filter(c => c && c.id) : [];
   const byId = new Map(pages.map(p => [String(p.id), p]));
@@ -382,7 +408,10 @@ function wikiLink(label, target, ctx){
   return ssEsc(label);
 }
 /* A label line: the game's own way of titling a list ("**Required Workstation**:",
-   "Product Capacity:"). Short, ends in a colon, and never a sentence. */
+   "Product Capacity:"). Short, ends in a colon, and never a sentence. This is
+   the rendering rule (64 characters), the same as is_label() in
+   tools/wiki_pages.py; the extraction rule, _LABEL_MAX (200) in
+   tools/wiki_data.py, is looser on purpose. */
 function wikiIsLabel(line){
   const bare = line.replace(/\*\*/g, "").trim();
   return bare.length > 0 && bare.length <= 64 && /:$/.test(bare) && !/[.!?]/.test(bare);
@@ -682,8 +711,7 @@ function wikiSource(page){
   /* A page with no guide behind it borrows the Gift Shop guide's list: the
      same game files and build rows, as it always has. */
   const sources = (wikiActive || wikiGuideFor("businesstypes-giftshop") || {}).SOURCES || {};
-  const files = Array.isArray((wikiData.provenance || {}).files) ? wikiData.provenance.files
-    : Array.isArray(sources.files) ? sources.files : [];
+  const files = Array.isArray(sources.files) ? sources.files : [];
   const build = Array.isArray(sources.build) ? sources.build : [];
   const sourceName = f => /BusinessLayouts/i.test(f.path || "") ? tt("wiki.src.layout", "Shipped shop layout")
     : /helpstructure/i.test(f.path || "") ? tt("wiki.src.menu", "Game help menu")
@@ -717,8 +745,8 @@ function wikiSource(page){
    so no chip says it on the page (declutter M2). */
 function wikiStamp(){
   const p = wikiData.provenance || {};
-  const when = p.sourceDate || p.extracted || "";
-  const claimed = p.saveBuildNumber ?? p.gameBuild;
+  const when = p.sourceDate || "";
+  const claimed = p.saveBuildNumber;
   const build = typeof claimed === "number" || typeof claimed === "string" ? claimed : null;
   const bits = [];
   if(when) bits.push(tt("wiki.stamp.date.said", "Read from game files of {date}, their newest modification date.", {date: String(when).slice(0, 10)}));

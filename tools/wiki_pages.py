@@ -5,7 +5,7 @@
 
 The in-app wiki (web/wiki.js) draws every entry from web/wiki-data.json inside
 the board, so a search engine sees one URL and none of the text. This module
-writes the same entries as plain, script-free HTML under web/wiki/:
+writes the same entries as plain HTML under web/wiki/, with no executable script:
 
     /wiki/                     the index: every topic, category and entry
     /wiki/c/<category id>/     one per category
@@ -19,7 +19,15 @@ Slugs are the payload's ids, unchanged, because they are linked from outside.
 The markdown is rendered with the same inline and link rules as wikiInline and
 wikiBody in web/wiki.js. Nothing here reads the installed game, so
 build_web.py can regenerate and --check these pages from the committed payload
-alone. The output is deterministic: sorted, no timestamps.
+alone. The output is deterministic: sorted, no timestamps. The one date, the
+sitemap's <lastmod> and the articles' dateModified, is the payload's
+provenance.sourceDate, the newest modification date of the game files it was
+read from, so it moves only when the game's help does.
+
+Each page carries Open Graph and Twitter card tags and a schema.org JSON-LD
+block (a BreadcrumbList, plus an Article on entry and topic pages). JSON-LD is
+a data block, never executed. The pages are English only: the payload's help
+text is the game's English locale.
 
 Each page carries its styles inline and fetches only /fonts/fonts.css from this
 site, so the privacy notice's promises (no third-party requests, no analytics,
@@ -33,7 +41,14 @@ import os
 import re
 from xml.sax.saxutils import escape as xml_escape
 
+try:
+    from .wiki_data import expand_guides
+except ImportError:  # direct tools script
+    from wiki_data import expand_guides
+
 SITE = "https://bigcopilot.com"
+SITE_NAME = "Big Copilot"
+ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}\Z")
 FURNITURE = "common_furniture"
 TOPIC_LABEL = "Big Copilot topics"
 OUT_DIR = "wiki"
@@ -118,6 +133,11 @@ class Site:
         self.topics = sorted((t for t in data.get("topics") or [] if t and t.get("slug")),
                              key=lambda t: str(t["slug"]))
         self.guides = data.get("guides") if isinstance(data.get("guides"), dict) else {}
+        # When the game's help was last changed, as the payload states it; None
+        # when it states none, so no page claims a date it cannot back.
+        provenance = data.get("provenance") if isinstance(data.get("provenance"), dict) else {}
+        date = str(provenance.get("sourceDate") or "")
+        self.source_date = date if ISO_DATE.match(date) else None
         # The pages that get a static page of their own: every help page outside furniture.
         self.static = [p for p in self.pages if p.get("categoryId") != FURNITURE]
         self.static_ids = {str(p["id"]) for p in self.static}
@@ -184,6 +204,11 @@ class Site:
 
 
 def is_label(line: str) -> bool:
+    """wikiIsLabel: the rendering rule, 64 characters ending in a colon.
+
+    Deliberately stricter than `_LABEL_MAX` (200) in tools/wiki_data.py, which
+    is the extraction rule; tests/test_wiki_pages.py holds this one to wiki.js.
+    """
     bare = line.replace("**", "").strip()
     return 0 < len(bare) <= 64 and bare.endswith(":") and not re.search(r"[.!?]", bare)
 
@@ -276,11 +301,48 @@ def cat_label(cat: dict) -> str:
     return CAT_LABEL.get(str(cat["id"]), cat.get("label") or cat["id"])
 
 
+def json_ld(data) -> str:
+    """A JSON-LD block. '<', '>' and '&' are escaped so no value can close the tag."""
+    raw = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    raw = raw.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    return f'<script type="application/ld+json">{raw}</script>'
+
+
+def structured(*, url: str, crumb: list[tuple[str, str]], heading: str, desc: str,
+               article: bool, modified: str | None) -> str:
+    """schema.org for the page: where it sits (BreadcrumbList) and, for an entry
+    or topic, what it is (Article). A crumb with no page of its own is left out,
+    since every breadcrumb item but the last needs a URL; the page itself closes
+    the trail. The index alone gets no block: its trail would be itself."""
+    trail = [(label, SITE + href) for label, href in crumb if href and SITE + href != url]
+    trail.append((heading, url))
+    graph = []
+    if len(trail) > 1:
+        graph.append({"@type": "BreadcrumbList", "itemListElement": [
+            {"@type": "ListItem", "position": i, "name": label, "item": item}
+            for i, (label, item) in enumerate(trail, 1)]})
+    if article:
+        node = {"@type": "Article", "headline": heading, "description": desc, "url": url,
+                "mainEntityOfPage": url, "inLanguage": "en",
+                "isPartOf": {"@type": "WebSite", "name": SITE_NAME, "url": SITE + "/"}}
+        if modified:
+            node["dateModified"] = modified
+        graph.append(node)
+    if not graph:
+        return ""
+    return json_ld({"@context": "https://schema.org", "@graph": graph}) + "\n"
+
+
 def document(*, path: str, title: str, desc: str, app: str, crumb: list[tuple[str, str]],
-             heading: str, main: str) -> str:
-    """One page. path is the site path ('/wiki/x/'); app the in-app route ('#wiki/x')."""
+             heading: str, main: str, article: bool = False, modified: str | None = None) -> str:
+    """One page. path is the site path ('/wiki/x/'); app the in-app route ('#wiki/x').
+
+    article marks an entry or topic (og:type article, a schema.org Article);
+    modified is its dateModified, the game help's sourceDate, or None.
+    """
     trail = " › ".join(f'<a href="{text(href)}">{text(label)}</a>' if href else text(label)
                        for label, href in crumb)
+    url = SITE + path
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -288,8 +350,17 @@ def document(*, path: str, title: str, desc: str, app: str, crumb: list[tuple[st
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{text(title)}</title>
 <meta name="description" content="{text(desc)}">
-<link rel="canonical" href="{SITE}{text(path)}">
-<link rel="icon" href="{FAVICON}">
+<link rel="canonical" href="{text(url)}">
+<meta property="og:type" content="{'article' if article else 'website'}">
+<meta property="og:site_name" content="{SITE_NAME}">
+<meta property="og:title" content="{text(title)}">
+<meta property="og:description" content="{text(desc)}">
+<meta property="og:url" content="{text(url)}">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="{text(title)}">
+<meta name="twitter:description" content="{text(desc)}">
+{structured(url=url, crumb=crumb, heading=heading, desc=desc, article=article, modified=modified)}<link rel="icon" href="{FAVICON}">
 <link rel="stylesheet" href="/fonts/fonts.css">
 <style>
 {CSS}</style>
@@ -374,7 +445,8 @@ def entry_page(site: Site, page: dict) -> str:
         head = f"{title} ({cat_label(cat)})"
     return document(path=f"/wiki/{pid}/", title=f"{head} · Big Ambitions wiki",
                     desc=description(page.get("body"), f"{title}, from Big Ambitions' in-game help."),
-                    app=f"#wiki/{pid}", crumb=crumb, heading=title, main=main)
+                    app=f"#wiki/{pid}", crumb=crumb, heading=title, main=main,
+                    article=True, modified=site.source_date)
 
 
 def topic_page(site: Site, topic: dict) -> str:
@@ -391,7 +463,7 @@ def topic_page(site: Site, topic: dict) -> str:
     return document(path=f"/wiki/topic/{slug}/", title=f"{title} · Big Ambitions wiki",
                     desc=description(topic.get("lede"), title), app=f"#wiki/{here}",
                     crumb=[("Wiki", "/wiki/"), (TOPIC_LABEL, "")], heading=title,
-                    main="\n".join(p for p in parts if p))
+                    main="\n".join(p for p in parts if p), article=True)
 
 
 def entry_list(site: Site, pages: list[dict]) -> str:
@@ -430,8 +502,11 @@ def index_page(site: Site) -> str:
                     app="#wiki", crumb=[("Wiki", "")], heading="Big Ambitions wiki", main="\n".join(parts))
 
 
-def sitemap(paths: list[str]) -> str:
-    urls = "".join(f"  <url><loc>{xml_escape(SITE + p)}</loc></url>\n" for p in paths)
+def sitemap(paths: list[tuple[str, str | None]]) -> str:
+    """Each (path, lastmod); a path with no date the payload can back gets no <lastmod>."""
+    urls = "".join(f"  <url><loc>{xml_escape(SITE + p)}</loc>"
+                   + (f"<lastmod>{xml_escape(d)}</lastmod>" if d else "") + "</url>\n"
+                   for p, d in paths)
     return ('<?xml version="1.0" encoding="UTF-8"?>\n'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + urls + "</urlset>\n")
 
@@ -441,27 +516,37 @@ def robots() -> str:
 
 
 def build(data: dict) -> dict[str, str]:
-    """Every generated file, keyed by its path under web/ with forward slashes."""
-    site = Site(data)
+    """Every generated file, keyed by its path under web/ with forward slashes.
+
+    The guides are put back first (expand_guides(), which changes nothing the
+    second time), so a payload read without load() still names its suppliers.
+    """
+    site = Site(expand_guides(data))
     files: dict[str, str] = {f"{OUT_DIR}/index.html": index_page(site)}
-    paths = ["/", "/wiki/"]
+    # <lastmod> is the game help's sourceDate on the pages drawn only from it.
+    # The app's front page, the hand-written topics and the index, which lists
+    # the topics, change with Big Copilot's own releases, which the payload does
+    # not date, so they get none.
+    game = site.source_date
+    paths: list[tuple[str, str | None]] = [("/", None), ("/wiki/", None)]
     for cat in site.categories:
         files[f"{OUT_DIR}/c/{cat['id']}/index.html"] = category_page(site, cat)
-        paths.append(f"/wiki/c/{cat['id']}/")
+        paths.append((f"/wiki/c/{cat['id']}/", game))
     for topic in site.topics:
         files[f"{OUT_DIR}/topic/{topic['slug']}/index.html"] = topic_page(site, topic)
-        paths.append(f"/wiki/topic/{topic['slug']}/")
+        paths.append((f"/wiki/topic/{topic['slug']}/", None))
     for page in sorted(site.static, key=lambda p: str(p["id"])):
         files[f"{OUT_DIR}/{page['id']}/index.html"] = entry_page(site, page)
-        paths.append(f"/wiki/{page['id']}/")
+        paths.append((f"/wiki/{page['id']}/", game))
     files[SITEMAP] = sitemap(paths)
     files[ROBOTS] = robots()
     return files
 
 
 def load(web: str) -> dict:
+    """The committed payload, each guide with its shared tables put back."""
     with open(os.path.join(web, "wiki-data.json"), encoding="utf-8") as fh:
-        return json.load(fh)
+        return expand_guides(json.load(fh))
 
 
 def existing(web: str) -> set[str]:

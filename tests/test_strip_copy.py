@@ -157,7 +157,3 @@ class StripDashboard(unittest.TestCase):
                 self.assertEqual(before.co_firstlineno, after.co_firstlineno)
                 self.assertEqual([line for _, _, line in before.co_lines()],
                                  [line for _, _, line in after.co_lines()])
-
-
-if __name__ == "__main__":
-    unittest.main()

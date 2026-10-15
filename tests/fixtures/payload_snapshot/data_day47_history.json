@@ -1076,6 +1076,7 @@
     }
    ],
    "profit": 759.0,
+   "profitBefore": 0.0,
    "promotion": 120.0,
    "quitWarnings": 1,
    "rent": 225.0,
@@ -1447,6 +1448,7 @@
     }
    ],
    "profit": 350.0,
+   "profitBefore": 0.0,
    "promotion": 80.0,
    "quitWarnings": 0,
    "rent": 100.0,
@@ -1756,6 +1758,7 @@
    "peakDay": null,
    "people": [],
    "profit": -460.0,
+   "profitBefore": 0.0,
    "promotion": 0,
    "quitWarnings": 0,
    "rent": 460.0,
@@ -2048,6 +2051,7 @@
     }
    ],
    "profit": -897.0,
+   "profitBefore": 0.0,
    "promotion": 0,
    "quitWarnings": 0,
    "rent": 445.0,
@@ -4277,7 +4281,7 @@
       "bench": [],
       "fewer": [
        {
-        "hours": 40.0,
+        "hours": 50.0,
         "id": "EMPdee",
         "name": "Dee Park",
         "now": 70
@@ -4285,18 +4289,11 @@
       ],
       "hireWeeks": [
        {
-        "band": "full",
-        "days": 3,
-        "hours": 30,
+        "band": "part",
+        "days": 2,
+        "hours": 20,
         "skill": "ba:skill_customerservice",
         "slots": [
-         {
-          "d": 0,
-          "f": 9,
-          "shift": 0,
-          "station": "REGgifts",
-          "t": 19
-         },
          {
           "d": 5,
           "f": 9,
@@ -4439,7 +4436,7 @@
       "bench": [],
       "fewer": [
        {
-        "hours": 40.0,
+        "hours": 50.0,
         "id": "EMPdee",
         "name": "Dee Park",
         "now": 70
@@ -4447,18 +4444,11 @@
       ],
       "hireWeeks": [
        {
-        "band": "full",
-        "days": 3,
-        "hours": 30,
+        "band": "part",
+        "days": 2,
+        "hours": 20,
         "skill": "ba:skill_customerservice",
         "slots": [
-         {
-          "d": 0,
-          "f": 9,
-          "shift": 0,
-          "station": "REGgifts",
-          "t": 19
-         },
          {
           "d": 5,
           "f": 9,
@@ -8738,8 +8728,27 @@
    "capInitial": true,
    "delivery": 250,
    "installFee": 586,
+   "office": {
+    "always": 3,
+    "day": [
+     8,
+     22
+    ],
+    "fullDoor": 50,
+    "weekend": [
+     6,
+     0
+    ]
+   },
    "prices": 0.7,
    "promo": 0.55,
+   "ramp": [
+    0.55,
+    0.92,
+    0.94,
+    0.97,
+    0.99
+   ],
    "satisfaction": 95,
    "tax": 5.0,
    "wageBase": {
@@ -13388,7 +13397,7 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 52922.0,
+      "furniture": 54722.0,
       "lines": [
        [
         "ba:itemname_cashregister",
@@ -13503,6 +13512,14 @@
         "shelf",
         [
          "ba:itemname_sodacan"
+        ]
+       ],
+       [
+        "ba:itemname_icecreamcounter",
+        1,
+        "shelf",
+        [
+         "ba:itemname_icecream"
         ]
        ]
       ],
@@ -13534,7 +13551,7 @@
      "C2": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 52922.0,
+      "furniture": 54722.0,
       "lines": [
        [
         "ba:itemname_cashregister",
@@ -13649,6 +13666,14 @@
         "shelf",
         [
          "ba:itemname_sodacan"
+        ]
+       ],
+       [
+        "ba:itemname_icecreamcounter",
+        1,
+        "shelf",
+        [
+         "ba:itemname_icecream"
         ]
        ]
       ],
@@ -13680,7 +13705,7 @@
      "M1": {
       "fee": 586000.0,
       "from": null,
-      "furniture": 108544.0,
+      "furniture": 113944.0,
       "lines": [
        [
         "ba:itemname_cashregister",
@@ -13795,6 +13820,14 @@
         "shelf",
         [
          "ba:itemname_sodacan"
+        ]
+       ],
+       [
+        "ba:itemname_icecreamcounter",
+        3,
+        "shelf",
+        [
+         "ba:itemname_icecream"
         ]
        ]
       ],
@@ -15302,7 +15335,7 @@
      "C1": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 24205.0,
+      "furniture": 27705.0,
       "lines": [
        [
         "ba:itemname_fitball",
@@ -15399,6 +15432,15 @@
         1,
         "dem",
         "sink"
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        4,
+        "shelf",
+        [
+         "ba:itemname_energydrink",
+         "ba:itemname_sodacan"
+        ]
        ]
       ],
       "opt": [
@@ -15414,7 +15456,7 @@
      "C2": {
       "fee": 131850.0,
       "from": null,
-      "furniture": 24205.0,
+      "furniture": 27705.0,
       "lines": [
        [
         "ba:itemname_fitball",
@@ -15511,6 +15553,15 @@
         1,
         "dem",
         "sink"
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        4,
+        "shelf",
+        [
+         "ba:itemname_energydrink",
+         "ba:itemname_sodacan"
+        ]
        ]
       ],
       "opt": [
@@ -15526,7 +15577,7 @@
      "M1": {
       "fee": 586000.0,
       "from": null,
-      "furniture": 51085.0,
+      "furniture": 58085.0,
       "lines": [
        [
         "ba:itemname_fitball",
@@ -15623,6 +15674,15 @@
         1,
         "dem",
         "sink"
+       ],
+       [
+        "ba:itemname_drinksfridge",
+        8,
+        "shelf",
+        [
+         "ba:itemname_energydrink",
+         "ba:itemname_sodacan"
+        ]
        ]
       ],
       "opt": [
@@ -19561,6 +19621,7 @@
   "top": 0.0,
   "you": -3361.0
  },
+ "sitesGone": [],
  "skillNames": {
   "ba:skill_actor": "Actor",
   "ba:skill_cleaning": "Cleaning",
@@ -19636,7 +19697,7 @@
       "skill": "ba:skill_customerservice"
      }
     ],
-    "hoursUncovered": 30,
+    "hoursUncovered": 20,
     "people": 1
    },
    "basis": {
@@ -20013,7 +20074,7 @@
    "cost": {
     "current": 1260.0,
     "currentCover": 0.0,
-    "weekly": 720.0
+    "weekly": 900.0
    },
    "current": {
     "cleaning": 0,
@@ -20267,7 +20328,7 @@
     "ba:skill_customerservice": {
      "have": 1,
      "hire": 1,
-     "hireHours": 30,
+     "hireHours": 20,
      "kind": "serve",
      "max": 2,
      "min": 2,
@@ -20522,7 +20583,7 @@
        "skill": "ba:skill_customerservice"
       }
      ],
-     "hoursUncovered": 30,
+     "hoursUncovered": 20,
      "people": 1
     },
     "bench": [],
@@ -20530,13 +20591,13 @@
     "cost": {
      "current": 1260.0,
      "currentCover": 0.0,
-     "weekly": 720.0
+     "weekly": 900.0
     },
     "headcount": {
      "ba:skill_customerservice": {
       "have": 1,
       "hire": 1,
-      "hireHours": 30,
+      "hireHours": 20,
       "kind": "serve",
       "max": 2,
       "min": 2,
@@ -20594,7 +20655,7 @@
      {
       "d": 0,
       "f": 9,
-      "p": null,
+      "p": 0,
       "s": 0,
       "t": 19
      },
@@ -20669,7 +20730,7 @@
     {
      "d": 0,
      "f": 9,
-     "p": null,
+     "p": 0,
      "s": 0,
      "t": 19
     },

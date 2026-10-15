@@ -4,29 +4,14 @@ For setup, see the [README](../README.md). File paths below are relative to the 
 
 ## Files
 
+The map of where each part of the code lives, and which tests a change to it needs, is
+`AGENTS.md`: "Where changes go", "Sources and generated files" and "Finishing a change".
+Beside it:
+
 | File | What it does |
 | --- | --- |
-| `ba_facts.py` | Validates portable `.bcsave` snapshots and resolves runtime building values and supported renovation save records. |
-| `ba_mods.py` | Detects the mods a save carries from their save data (never running a mod) and holds the adapters' inputs, such as the Alcware Seasons calendar and its per-product sales-ratio factors. |
-| `ba_save.py` | Reads the `.hsg` format, being gzip around an Easy Save 3 binary stream. The format notes are in the module docstring. |
-| `ba_dashboard.py` | Pulls the numbers out of a parsed save and renders the HTML from `template/board.html` and `template/board.js`. |
-| `template/board.html` | The board's markup and CSS, with the placeholders `render()` fills in. |
-| `template/board.js` | The board script, spliced into the last `<script>` block of `board.html` (`/*__BOARD_SCRIPT__*/`). A branch from before the split: [Template placeholders](architecture.md#template-placeholders). |
-| `build_web.py` | Assembles `web/` from the same template the local server uses. `python build_web.py --assemble` writes the code-derived site without the game; it is gitignored, so run it before the tests and before looking at the site locally. The full `python build_web.py` also rebuilds the committed game-derived files and needs the game. |
-| `web/` | The static site. `index.html` is assembled and not committed; `app.js` and `worker.js` are kept by hand; `py/` holds the copies of the Python files and data the worker fetches ([The static site](architecture.md#pyodide)). |
-| `web/map.js`, `web/map.css` | Shared map/overlay code, embedded by `render()` into browser and local output. |
-| `web/maps/locations.json`, `web/maps/map-background.svg` | Generated address hit geometry and zoomable background. The approved poster exports remain unchanged. |
-| `export_map.py` | Builds runtime assets from approved canonical geometry, its recipe and the poster SVG. Extraction snapshots are retained privately. |
-| `web/maps/floor-plans.json`, `make_floor_plans.py` | The finder's floor plans, one for each building layout, drawn from the installed game's building shells. |
 | `check_saves.py` | Parses and extracts every save under the save root and prints a table, plus spot-checks of known numbers. Run `python check_saves.py [folder]`. |
-| `tools/payload_diff.py` | Proves a refactor leaves the payload alone over every save on the machine: `dump research/<name>` on main and on the branch, then `compare` the two; it exits 1 on any difference. The dumps hold save contents, so they go under the gitignored `research/` and are never committed. |
 | `wrangler.jsonc` | Cloudflare assets and community Worker config. `npm run deploy` assembles `web/` and publishes it with the server ([Deployment baseline](#deployment-baseline)). |
-| `server/`, `migrations/` | Community presence/voting API, curated feature list, and D1 schema. Server code stays outside public assets. |
-| `web/community.js`, `web/community.css` | Hosted-site community controls; included by the browser build only. |
-| `web/wiki.js`, `web/wiki.css` | Wiki navigation, readers and visual business guides, including primary and secondary products. |
-| `web/i18n.js`, `tools/i18n.py`, `i18n/` | Big Copilot's own text in other languages: `tt()` and the table loader, the catalogue tool, and the translations (German first). `web/i18n/` is assembled from `i18n/` by `python build_web.py --assemble` and not committed. |
-| `tools/build_wiki_data.py`, `web/wiki-data.json` | Build the public Wiki payload from the installed game's help. The browser build refreshes this before calculating its cache version. |
-| `dashboard.html` | The generated page from a local run. Overwritten each time. |
 | `market_history.json` | Rolling demand snapshots and the cash/net-worth ledger, per character, from local runs. Safe to delete; it rebuilds, but the accumulated trend history is lost, so back it up rather than deleting it. |
 | `LICENSE` | MIT. |
 
@@ -169,6 +154,8 @@ deploy) includes the entry in the footer changelog on both the landing screen an
 dashboard.
 Entries appear newest first and link to their PR; reading them does not require
 GitHub access.
+A PR that ships more than one feature may carry one entry for each, with the same PR
+number and date.
 
 ## Deployment baseline
 
@@ -249,9 +236,19 @@ The amounts live in a private ledger outside the repository,
 ## New feature badges
 
 New user-facing features get a small `New` badge on their navigation link or
-entry button until the player first opens them. Reuse the shared
-`featureDiscovery` helper in `template/board.html`; keep a stable feature ID across
-releases so routine updates do not reannounce an already visited feature.
+entry button until the player first opens them, or until 45 days after the
+feature shipped, whichever comes first. Reuse the shared `featureDiscovery`
+helper in `template/board.html`; keep a stable feature ID across releases so
+routine updates do not reannounce an already visited feature.
+
+Register every feature ID in `NEW_SINCE` in that helper, with the date of its
+`web/changelog.json` entry. The 45 days (`NEW_DAYS`) are counted to the newest
+changelog date the page ships with, not to the visitor's clock, so a badge
+retires with the first build after its window and a first-time visitor sees
+only the recent ones. An ID without a date keeps its badge;
+`tests/feature_badges.test.cjs` fails until it has one, and also fails on a date
+no badge uses any more, so delete the row when you remove a badge. Tests that
+need a badge on screen pin the day with `featureDiscovery.asOf(date)`.
 
 For a top-level page, add `newFeature: "your-feature-id"` to its `PAGES` entry;
 navigation renders the badge and records the visit automatically, including
@@ -264,7 +261,9 @@ same ID on all entry points so their badges disappear together.
 Visits are stored per browser under `ba_dash_feature_seen:<id>`, independently
 of the loaded save. If storage is unavailable, dismissal lasts for the current
 page session. Map and Changelog are the first examples; new changelog entries
-do not reset the Changelog feature badge. Assemble with `python build_web.py --assemble` to see them.
+do not reset the Changelog feature badge. A Wiki topic's badge is the same
+helper: list its slug in `WIKI_NEW` in `web/wiki.js` and date
+`wiki-topic-<slug>` in `NEW_SINCE`. Assemble with `python build_web.py --assemble` to see them.
 
 ## Map assets
 

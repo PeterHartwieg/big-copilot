@@ -77,7 +77,3 @@ class WeekdayWindowTests(unittest.TestCase):
         # Keyed by the item's key, never its name.
         self.assertEqual(out["shirt"]["weeks"], min(p["n"] for p in out["shirt"]["profile"]))
         self.assertEqual(out["shirt"]["peak"], "Friday")
-
-
-if __name__ == "__main__":
-    unittest.main()

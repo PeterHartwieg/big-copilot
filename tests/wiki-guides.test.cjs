@@ -282,7 +282,7 @@ const DATA = {
     'businesstypes-supermarket': WIDE,
     'businesstypes-gym': GYM,
   },
-  provenance: {sourceDate: '2026-09-10', saveBuildNumber: null, files: []},
+  provenance: {sourceDate: '2026-09-10', saveBuildNumber: null},
 };
 
 /* --- the board around it ------------------------------------------------- */

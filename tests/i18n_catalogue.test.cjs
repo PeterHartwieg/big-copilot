@@ -4,9 +4,10 @@
 // read (a key or English that is not a literal, or holds ${}), a translation
 // whose placeholders are not ones its calls pass (or, where those cannot be
 // read, not the English's own), or whose plural forms do not match the English it was made
-// from, broken JSON, and a web/i18n/ table out of step with i18n/. A missing,
-// stale or orphaned translation does not fail: the page falls back to English
-// per key, and `python tools/i18n.py status --strict` gates translation work.
+// from, broken JSON, and a web/i18n/ table out of step with i18n/. A missing
+// or stale translation does not fail: the page falls back to English per key,
+// and `python tools/i18n.py status --complete` gates translation work. Orphans
+// fail `status --strict`, which tests/test_i18n_status.py runs.
 // docs/architecture.md, "UI text".
 const {test} = require('node:test');
 const assert = require('node:assert/strict');

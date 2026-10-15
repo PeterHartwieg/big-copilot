@@ -32,18 +32,15 @@ and, for a kept week, which of the person's current shifts it keeps.
 """
 import collections
 import contextlib
+import io
 import json
 import math
 import os
 import random
-import sys
 import tempfile
 import unittest
 import unittest.mock
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.dirname(HERE))
 
 import ba_dashboard  # noqa: E402
 from ba_dashboard import JOB_DEMANDS, SERVICE_SKILL, SHIFT_CAP, FULL_TIME  # noqa: E402
@@ -1103,6 +1100,78 @@ class OracleSnapshotTest(unittest.TestCase):
         self.assertGreater(checked, 5)
 
 
+class PlannerFailureTest(unittest.TestCase):
+    """A site the planner falls over on stays a `failed` row, and says why (issue #308).
+
+    Each planner's per-site call is made to raise: the row keeps the site's
+    place for the board, carries the exception as "error", and the traceback
+    goes to stderr once however often the same failure comes back.
+    """
+
+    def setUp(self):
+        ba_dashboard._PLAN_FAILURES_SAID.clear()
+        self.addCleanup(ba_dashboard._PLAN_FAILURES_SAID.clear)
+
+    def extract(self, data=False):
+        from tests import es3_fixture
+        from tests import save_fixtures
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "payload.hsg")
+            if data:
+                save_fixtures.write_data_save(path, save_fixtures.DAY)
+                names = Names(dict(save_fixtures.data_names()))
+            else:
+                es3_fixture.write_link_save(path)
+                names = Names({})
+            return ba_dashboard.extract(load_save(path), names, os.path.join(tmp, "history.json"))
+
+    def broken(self, name, call, times=1):
+        """`call()` with ba_dashboard.`name` raising; its result and stderr."""
+        err = io.StringIO()
+        with unittest.mock.patch.object(ba_dashboard, name, side_effect=ValueError("planner broke")), \
+                contextlib.redirect_stderr(err):
+            out = [call() for _ in range(times)]
+        return out[-1], err.getvalue()
+
+    def assertSaid(self, rows, err):
+        self.assertTrue(rows)
+        for row in rows:
+            self.assertTrue(row["failed"], row)
+            self.assertTrue(row["error"].startswith("ValueError: planner broke"), row["error"])
+        # Once per distinct failure, with its traceback, however many rebuilds.
+        self.assertEqual(err.count("Traceback (most recent call last)"),
+                         len({row["error"] for row in rows}), err)
+        self.assertIn("planner broke", err)
+
+    def test_a_shop_whose_demand_plan_fails(self):
+        payload, err = self.broken("_plan_site", self.extract, times=2)
+        self.assertSaid(payload["staffing"], err)
+        self.assertEqual(err.count("could not plan"), 1, err)
+
+    def test_a_shop_whose_full_cover_fails(self):
+        payload, err = self.broken("_finish_site", self.extract)
+        self.assertSaid(payload["staffing"], err)
+
+    def test_a_factory_whose_plan_fails(self):
+        payload, err = self.broken("_factory_site_plan", lambda: self.extract(data=True))
+        rows = [row for mode in ba_dashboard.SIZING_MODES for row in payload["factoryStaffing"][mode]]
+        self.assertSaid(rows, err)
+
+    def test_an_office_whose_plan_fails(self):
+        from tests.test_office_demand import plan
+        (row, _, _), err = self.broken("_office_site_plan", plan)
+        self.assertSaid([row], err)
+
+    def test_the_fixtures_plan_without_failures(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            payload = self.extract(data=True)
+        rows = (payload["staffing"] + list(payload.get("officeStaffing") or ())
+                + [row for rows in payload["factoryStaffing"].values() for row in rows])
+        self.assertEqual([row for row in rows if row.get("failed") or "error" in row], [])
+        self.assertNotIn("could not plan", err.getvalue())
+
+
 class OracleControlTest(unittest.TestCase):
     """The oracle fails on a week that breaks a rule, and each pin fails when its fix goes.
 
@@ -1265,7 +1334,3 @@ class OracleControlTest(unittest.TestCase):
         self.assertLess(ba_dashboard._placement_rank(real, state["r"], slot, here),
                         ba_dashboard._placement_rank(hire, state[hire["id"]], slot, here))
         self.assertIs(ba_dashboard._best_for(slot, [hire, real], state, here), real)
-
-
-if __name__ == "__main__":
-    unittest.main()

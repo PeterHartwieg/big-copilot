@@ -13,7 +13,6 @@ import http.client
 import http.server
 import json
 import os
-import sys
 import tempfile
 import threading
 import time
@@ -21,9 +20,6 @@ import unittest
 import urllib.error
 import urllib.request
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.dirname(HERE))
 
 import ba_dashboard  # noqa: E402
 from tests import es3_fixture  # noqa: E402
@@ -189,7 +185,7 @@ class WatchServer(unittest.TestCase):
     def test_only_a_loopback_host_is_served(self):
         """EX-4 in #110: a page on a name rebound to 127.0.0.1 sends its own Host."""
         port = self.server.server_port
-        for route in ("/", "/data.json", "/stamp", "/wiki-data.json"):
+        for route in ("/", "/data.json", "/stamp", "/wiki-data.min.json"):
             for host in ("attacker.example", f"attacker.example:{port}", f"127.0.0.1:{port + 1}", ""):
                 request = urllib.request.Request(self.base + route, headers={"Host": host})
                 self.assertEqual(self.refused(request), 403, (route, host))
@@ -201,7 +197,3 @@ class WatchServer(unittest.TestCase):
             with urllib.request.urlopen(request) as response:
                 self.assertEqual(response.status, 200, host)
                 json.loads(response.read())
-
-
-if __name__ == "__main__":
-    unittest.main()

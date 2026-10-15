@@ -10,10 +10,10 @@ from tools import translation_catalogue as tc
 class TranslationCatalogue(unittest.TestCase):
     def test_hosted_pages_pin_the_generated_catalogue_contract(self):
         root = Path(__file__).resolve().parents[1]
-        expected = {lang: json.loads((root / 'web' / 'translations' / f'{lang}.manifest.json').read_text())['revision']
+        expected = {lang: json.loads((root / 'web' / 'translations' / f'{lang}.manifest.json').read_text(encoding='utf-8'))['revision']
                     for lang in i18n.languages()}
         for name in ('index.html', 'translate/index.html'):
-            source = (root / 'web' / name).read_text()
+            source = (root / 'web' / name).read_text(encoding='utf-8')
             match = re.search(r'const TT_CATALOGUES = (\{[^;]+\});', source)
             self.assertIsNotNone(match, name)
             self.assertEqual(json.loads(match.group(1)), expected, name)
@@ -70,21 +70,43 @@ class TranslationCatalogue(unittest.TestCase):
         data['entries'][0]['text'] = 'Un negozio'
         with self.assertRaisesRegex(i18n.CatalogueError, 'bundled text'):
             tc.check_contracts(data)
+        data = tc.catalogue('it', self.found())
+        data['entries'][0]['text'] = '<b>{n}</b> negozio: {item}'
+        with self.assertRaisesRegex(i18n.CatalogueError, 'bundled text'):
+            tc.check_contracts(data)
 
     def test_every_assembled_entry_accepts_its_own_english_and_bundled_text(self):
         # The API answers invalid_translation for any wording on a key whose
         # contract its own English breaks, so walk the shipped catalogues.
         folder = Path(__file__).resolve().parents[1] / 'web' / 'translations'
-        markup = re.compile(r'[<>]|&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;)', re.I)
         for lang in i18n.languages():
             entries = json.loads((folder / f'{lang}.json').read_text(encoding='utf-8'))['entries']
             self.assertGreater(len(entries), 1000, lang)
-            dead = [e['key'] for e in entries if not tc.keeps_placeholders(e['en'], e['validation'])
-                    or (e['text'] is not None and not tc.keeps_placeholders(e['text'], e['validation']))]
+            dead = [e['key'] for e in entries if not tc.valid_text(e['en'], e['validation'])
+                    or (e['text'] is not None and not tc.valid_text(e['text'], e['validation']))]
             self.assertEqual(dead, [], lang)
-            # Markup is the plain-text rule's business; everything else passes whole.
-            plain = [e['key'] for e in entries if not markup.search(e['en']) and not tc.valid_text(e['en'], e['validation'])]
-            self.assertEqual(plain, [], lang)
+            tagged = [e for e in entries if '<' in e['en']]
+            self.assertGreater(len(tagged), 100, lang)
+            self.assertTrue(all(e['validation'].get('markup') for e in tagged), lang)
+
+    def test_markup_rule_matches_the_api_and_the_loader(self):
+        # tests/i18n_community.test.cjs runs the same cases through the Worker and web/i18n.js.
+        cases = json.loads((Path(__file__).resolve().parent / 'fixtures' / 'translation_markup.json')
+                           .read_text(encoding='utf-8'))
+        for rule, text in cases['valid']:
+            self.assertTrue(tc.valid_text(text, cases['rules'][rule]), text)
+        for rule, text in cases['invalid']:
+            self.assertFalse(tc.valid_text(text, cases['rules'][rule]), text)
+
+    def test_only_english_with_tags_carries_a_markup_contract(self):
+        # A plain key's contract, and so its source version, is what it was before markup.
+        found = self.found('Hello -> {n}', {'n'}) + [
+            {'key': 'comm.tagged', 'en': '<b>{n}</b> <span class="ok">shops</span>', 'params': {'n'}, 'where': 'x:1'}]
+        rules = {e['key']: e['validation'] for e in tc.catalogue('it', found)['entries']}
+        self.assertNotIn('markup', rules['comm.test'])
+        self.assertEqual(rules['comm.tagged']['markup'], sorted(['<b>', '</b>', '<span class="ok">', '</span>']))
+        self.assertTrue(tc.valid_text('<span class="ok">negozi</span> <b>{n}</b>', rules['comm.tagged']))
+        self.assertFalse(tc.valid_text('<b>{n}</b> negozi', rules['comm.tagged']))
 
     def test_contract_agrees_with_fits_when_forms_use_different_words(self):
         # An accepted community text must also survive shipped(), which filters by fits().
@@ -133,7 +155,3 @@ class TranslationCatalogue(unittest.TestCase):
         self.assertEqual(set(out['translations'][entry['key']]), {'text','sourceVersion'})
         raw['translations'][entry['key']]['sourceVersion'] = 'stale'
         with self.assertRaises(i18n.CatalogueError): tc.selected_overlay('it', raw, data)
-
-
-if __name__ == '__main__':
-    unittest.main()

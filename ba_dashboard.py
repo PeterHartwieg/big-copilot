@@ -609,15 +609,31 @@ GAME_NAME_LANGS = {
     "fi": "Suomi", "tr": "Türkçe", "el": "Ελληνικά", "ru": "Русский", "uk": "Українська",
     "ja": "日本語", "ko": "한국어", "zh-cn": "简体中文", "zh-tw": "繁體中文",
 }
-# The languages Big Copilot's own text comes in (TT_LANGS in web/i18n.js, one
-# i18n/<lang>.json each; tests/test_game_names.py holds the three together).
-# The footer's Language list shows them first, as "Whole page"; every other
-# entry of GAME_NAME_LANGS changes only the game's names.
-UI_LANGS = ("en", "de", "es", "fr", "it", "pt", "ru", "ko", "tr")
-# The ones still mostly machine-drafted (i18n/<lang>.ai.json): the footer says
-# so under the picker, with a link to help check them.
-UI_LANGS_DRAFTED = ("es", "fr", "it", "pt", "ru", "ko", "tr")
-TRANSLATING_URL = f"{REPO_URL}/blob/main/docs/translating.md"
+# The languages Big Copilot's own text comes in, one i18n/<lang>.json each
+# but English, in GAME_NAME_LANGS' order (which names each in its own words).
+# This is the one table: every other list of them is read off it or held to
+# it. Each language has
+#   locale   the number locale the page formats in (TT_NUM_LOCALES in
+#            web/i18n.js, whose TT_LANGS lists these codes in this order)
+#   plurals  its CLDR plural categories (PLURALS in tools/i18n.py reads them)
+#   drafted  still mostly machine-drafted (i18n/<lang>.ai.json): the footer
+#            says so under the picker, with a link to help check it
+# tests/test_i18n_languages.py holds web/i18n.js, i18n/ and Intl's plural rules
+# to it. The footer's Language list shows these first, as "Whole page"; every
+# other entry of GAME_NAME_LANGS changes only the game's names.
+UI_LANGUAGES = {
+    "en": {"locale": "en-US", "plurals": ("one", "other"), "drafted": False},
+    "de": {"locale": "de-DE", "plurals": ("one", "other"), "drafted": False},
+    "es": {"locale": "es-ES", "plurals": ("one", "many", "other"), "drafted": True},
+    "fr": {"locale": "fr-FR", "plurals": ("one", "many", "other"), "drafted": True},
+    "it": {"locale": "it-IT", "plurals": ("one", "many", "other"), "drafted": True},
+    "pt": {"locale": "pt-BR", "plurals": ("one", "many", "other"), "drafted": True},
+    "tr": {"locale": "tr-TR", "plurals": ("one", "other"), "drafted": True},
+    "ru": {"locale": "ru-RU", "plurals": ("one", "few", "many", "other"), "drafted": True},
+    "ko": {"locale": "ko-KR", "plurals": ("other",), "drafted": True},
+}
+UI_LANGS = tuple(UI_LANGUAGES)
+UI_LANGS_DRAFTED = tuple(code for code, lang in UI_LANGUAGES.items() if lang["drafted"])
 # A language whose file names fewer of the English name keys than this is left
 # out rather than shown half in English (the game's ar.json names none).
 NAME_COVERAGE = 0.5
@@ -810,6 +826,9 @@ RETAIL_TYPES = {
 # like any shop's: supply, the factory view and the Growth planner count them
 # line by line, by item, never by the business type.
 ISSUED_ITEMS = {"ba:itemname_cinematicket", "ba:itemname_theaterticket"}
+# Handed out at the register with every sale. A shop stocks it like a product,
+# but the game never lists it among what customers can buy there.
+PAPER_BAG = "ba:itemname_paperbag"
 
 # The office agencies left out of RETAIL_TYPES above. Their customers are digital,
 # so nothing a shop floor needs (amenities, uniforms, shelves) applies, but they
@@ -1002,7 +1021,6 @@ COMPANY_DEMAND_KINDS = {"insurance", "happiness"}
 # game's item data gives display slots to the industrial coffee machine alone;
 # fridges keep food as cargo but have none, so an empty fridge still counts.
 DISPLAY_ITEMS = {"ba:itemname_industrialcoffeemachine"}
-JOB_DEMAND_PRIORITY = ("Nice to have", "Important", "Critical")
 
 # Day 1 of a save is a Monday, so day % 7 gives the weekday directly. Confirmed
 # against payroll (hours logged this week) and against import delivery days.
@@ -1769,8 +1787,8 @@ VENUE_TYPES = {
 
 def _cap_rows(names: Names):
     """(category, size letter, layout code, customer capacity) for each size row
-    of help_building_types_content, in a CAP_CATEGORIES section: the one parse
-    _door_caps() and _venue_caps() both read."""
+    of help_building_types_content, in a CAP_CATEGORIES section: the parse
+    _door_caps() reads."""
     section = None
     for line in (names.locale.get("help_building_types_content") or "").split("\n"):
         line = line.strip()
@@ -2035,8 +2053,7 @@ def _premises(save: Save, names: Names, market: dict, estate: dict | None = None
     price (Real estate's rule, at `estate`'s rent multiplier; 1 without one).
     """
     mult = estate["mult"]["value"] if estate else 1
-    per_year = estate["perYear"] if estate else (
-        (save.deref(save.root.get("gameVariables")) or {}).get("daysPerYear") or 60)
+    per_year = estate["perYear"] if estate else _days_per_year(save.deref(save.root.get("gameVariables")))
     rent_paid = _rent_paid(save)
     table = load_buildings(save)
     caps = _door_caps(names)
@@ -2285,7 +2302,7 @@ def _best_price(market_rent: float) -> float:
 def _property_tax_day(row: dict, sqm: float, per_year: int) -> float:
     """RealEstate.TaxesAmount spread over the tax year's days."""
     return (sqm * REAL_ESTATE_TYPES.get(row.get("t"), 0) * REAL_ESTATE_HOODS.get(row.get("h"), 0)
-            * PROPERTY_TAX_PER_SQM / (per_year or 60))
+            * PROPERTY_TAX_PER_SQM / (per_year or DAYS_PER_YEAR))
 
 
 def _is_villa(row: dict) -> bool:
@@ -2351,7 +2368,7 @@ def _estate_owned(save: Save, names: Names, mods: dict) -> dict:
     """
     root = save.root
     table = load_buildings(save)
-    per_year = (save.deref(root.get("gameVariables")) or {}).get("daysPerYear") or 60
+    per_year = _days_per_year(save.deref(root.get("gameVariables")))
     rented = {_address_of(r): r for r in save.items(root.get("BuildingRegistrations")) if r.get("RentedByPlayer")}
     summaries = sorted(save.items(root.get("financialSummaries")), key=lambda s: s.get("dayNumber") or 0)
     paid_by_day = []
@@ -2466,9 +2483,9 @@ def _tax_period(save: Save) -> dict:
     """
     root = save.root
     gv = save.deref(root.get("gameVariables")) or {}
-    per_year = gv.get("daysPerYear") or 60
+    per_year = _days_per_year(gv)
     if not isinstance(per_year, int) or per_year < 1:
-        per_year = 60
+        per_year = DAYS_PER_YEAR
     day = root.get("Day") or 0
     if not isinstance(day, int) or day < 0:
         day = 0
@@ -2984,7 +3001,7 @@ PAYLOAD_KEYS = (
     "openFactory", "trends", "hypeExposure", "hours", "hourFindings", "staffing",
     "factoryStaffing", "officeStaffing", "candidates", "hiring", "plan", "names",
     "skillNames", "marketingAgencies", "cashFlow", "ledgerDays", "alerts", "minor",
-    "alertsDemand", "goals", "rivalry", "realEstateCounts", "realEstate",
+    "alertsDemand", "goals", "rivalry", "realEstateCounts", "realEstate", "sitesGone",
 )
 # Keys only some saves carry: `mods` is there only for a save a mod adapter
 # reads (ba_mods.detect()), so a vanilla save's payload is what it was.
@@ -3313,7 +3330,7 @@ def section(build: Build, name: str) -> dict:
         spec = SECTIONS[name]
         for need in spec["needs"]:
             section(build, need)
-        _progress(spec["words"], force=True)
+        _progress(name, force=True)
         try:
             values = spec["produce"](build)
             wired = _wire_msgs({key: values[key] for key in spec["keys"]})
@@ -3466,40 +3483,41 @@ def _open_factory_section(build: Build) -> dict:
 
 
 # The section registry: each section's payload keys, the sections it needs
-# first, its producer, and what the page is told while it runs. Planning keeps
-# its order: planning world -> shops -> offices -> factory lines -> hiring.
+# first and its producer. The page draws its own words while a section is
+# worked out (odWords() in the board script); section() only restarts the
+# page's inactivity clock, with the section's name. Planning keeps its order:
+# planning world -> shops -> offices -> factory lines -> hiring.
 # Each stage plans over a copy of the bench and weeks the stage before left,
 # kept per stage in build.shared["planning"]. Nothing a warning reads is here.
 SECTIONS = {
     "staffing": {"keys": ("staffing",), "needs": (),
-                 "produce": _staffing_section, "words": "Working out shop staffing"},
+                 "produce": _staffing_section},
     "officeStaffing": {"keys": ("officeStaffing",), "needs": ("staffing",),
-                       "produce": _office_staffing_section, "words": "Working out office staffing"},
+                       "produce": _office_staffing_section},
     "factoryStaffing": {"keys": ("factoryStaffing",), "needs": ("officeStaffing",),
-                        "produce": _factory_staffing_section, "words": "Working out factory staffing"},
+                        "produce": _factory_staffing_section},
     "hiring": {"keys": ("hiring", "candidates"), "needs": ("factoryStaffing",),
-               "produce": _hiring_section, "words": "Working out staff needs"},
+               "produce": _hiring_section},
     "premises": {"keys": ("premises",), "needs": (),
-                 "produce": _premises_section, "words": "Working out locations"},
+                 "produce": _premises_section},
     "products": {"keys": ("products",), "needs": (),
-                 "produce": _products_section, "words": "Working out products"},
+                 "produce": _products_section},
     "openStore": {"keys": ("openStore",), "needs": ("premises",),
-                  "produce": _open_store_section, "words": "Working out store plans"},
+                  "produce": _open_store_section},
     "openFactory": {"keys": ("openFactory",), "needs": (),
-                    "produce": _open_factory_section, "words": "Working out factory costs"},
+                    "produce": _open_factory_section},
     "realEstate": {"keys": ("realEstate",), "needs": (),
-                   "produce": _real_estate_section, "words": "Working out real estate"},
+                   "produce": _real_estate_section},
     "goals": {"keys": ("goals",), "needs": (),
-              "produce": lambda b: {"goals": _goals(b.save, b.names, b.shared["businesses"])},
-              "words": "Working out milestones"},
+              "produce": lambda b: {"goals": _goals(b.save, b.names, b.shared["businesses"])}},
 }
 
 
 def section_metadata() -> dict:
     """Public section keys/dependencies for both HTML front doors.
 
-    Producers and progress wording stay Python-only. Preserve registry and
-    dependency order; the browser uses it for planning and readiness checks.
+    Producers stay Python-only. Preserve registry and dependency order; the
+    browser uses it for planning and readiness checks.
     """
     return {name: {"keys": list(spec["keys"]), "needs": list(spec["needs"])}
             for name, spec in SECTIONS.items()}
@@ -3541,7 +3559,8 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     Build. History-recording producers, the warnings and everything they read
     stay eager. ownedBuildings and homes stay here because the map's layers and
     home site panel read them; staff stays because Today's fixed-cost tile reads
-    the payroll. All three cost nothing. plan stays core because Today reads its
+    the payroll. All three cost nothing. sitesGone stays beside businesses
+    because the Portfolio's footer sums both. plan stays core because Today reads its
     recipes and item names (factoryView, sbDeps, the supply strip and finding
     pills), and every page reads itemName; it costs about 4 ms and 65 KB on the
     largest measured save. Page-only producers have no history
@@ -3581,6 +3600,7 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         row["closed"] = bool(b.get("temporarilyClosed"))
         businesses.append(row)
     businesses.sort(key=lambda x: -x["profit"])
+    sites_gone = _sites_gone(save, names, latest, {_address_of(b, strict=True) for b in buildings}, residential)
     _job_demands(save, names, businesses)
 
     daily = _daily_series(save, summaries)
@@ -3689,19 +3709,18 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     estate_counts = (_estate_counts(estate) if estate is not None
                      else {"owned": 0, "flagged": 0, "gain": 0.0, "taxEve": False})
     build.shared.update(businesses=businesses, factories=factories, staff=staff,
-                        buildings=buildings, residential=residential, all_grids=all_grids,
-                        stmt_history=stmt_history, daily=daily, market=market, supply=supply,
-                        recipes=recipes, stations=stations, rhythm=rhythm, planning={}, estate=estate,
+                        buildings=buildings, all_grids=all_grids,
+                        stmt_history=stmt_history, daily=daily, market=market,
+                        recipes=recipes, planning={}, estate=estate,
                         base_promotion=(save.deref(root.get("gameVariables")) or {}).get(
-                            "baseCustomerPromotionMultiplier", 0.55))
-    alerts = _alerts(
-        businesses, supply, chains, trends, hype, hour_findings, grids, day, gate, agencies=agencies, estate=estate
-    )
-    # The same findings with factory lines sized on demand, for the board's
-    # Demand switch: a second pass over the facts already built, not a second
-    # supply model.
-    alerts_demand = _alerts(
-        businesses, supply, chains, trends, hype, hour_findings, grids, day, gate, "dem", agencies=agencies, estate=estate
+                            "baseCustomerPromotionMultiplier", HOUSE_RULE_NORMAL["baseCustomerPromotionMultiplier"]))
+    # The second result is the same findings with factory lines sized on
+    # demand, for the board's Demand switch: the supply findings again over the
+    # facts already built, not a second supply model, and every other finding
+    # shared.
+    alerts, alerts_demand = _alerts(
+        businesses, supply, chains, trends, hype, hour_findings, grids, day, gate, ("cap", "dem"),
+        agencies=agencies, estate=estate,
     )
 
     # Every sentence written with msg() carries its key and params to the page
@@ -3748,6 +3767,8 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         },
         "daily": daily,
         "businesses": businesses,
+        # Core beside businesses: the Portfolio's footer reads both.
+        "sitesGone": sites_gone,
         # The map's layers and home site panel read these on every draw;
         # they cost nothing (under 1 ms and 1 KB), so Map needs no section.
         "ownedBuildings": _owned_buildings(save, names),
@@ -3760,7 +3781,7 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         "market": market,
         "chains": chains,
         # Investment, profit so far and break-even, per site and per chain
-        # (_payback(), docs/open-a-store-scope.md).
+        # (_payback(), docs/dashboard-reference.md, "Payback").
         "payback": payback,
         "trends": trends,
         "hypeExposure": hype,
@@ -3816,7 +3837,7 @@ def _net_worth(root: dict, history, character: str, day: int) -> dict:
 
 def _city_date(save: Save, day: int) -> str:
     """In-game day number rendered as a year/day-of-year, using the save's calendar."""
-    per_year = save.deref(save.root.get("gameVariables")).get("daysPerYear") or 60
+    per_year = _days_per_year(save.deref(save.root.get("gameVariables")))
     year = (day - 1) // per_year + 1
     return f"Year {year}, day {(day - 1) % per_year + 1} of {per_year}"
 
@@ -3848,6 +3869,23 @@ HOUSE_RULES = [
      "surcharge for rushing an import"),
     ("taxPercentage", "Tax rate", "%", 5, "up", "annual rate from the IRS"),
 ]
+
+# Normal's value of each slider, for a save that does not hold the setting.
+HOUSE_RULE_NORMAL = {key: normal for key, _name, _unit, normal, _harder, _what in HOUSE_RULES}
+# GameVariables.daysPerYear on every preset: the tax year, and the year the
+# calendar and the loans count in.
+DAYS_PER_YEAR = 60
+
+
+def _house_rule(gv: dict, key: str) -> float:
+    """The save's custom-game setting `key`, or Normal's when it holds none (or 0)."""
+    return (gv or {}).get(key) or HOUSE_RULE_NORMAL[key]
+
+
+def _days_per_year(gv: dict) -> int:
+    """The save's year length in days, DAYS_PER_YEAR when it holds none."""
+    return (gv or {}).get("daysPerYear") or DAYS_PER_YEAR
+
 
 # The game's Difficulty enum, which is what the save's ``difficulty`` holds.
 DIFFICULTY_SLOTS = {0: "Custom", 1: "Easy", 2: "Normal", 3: "Hard"}
@@ -4330,9 +4368,13 @@ def shift_print(entries) -> str:
 def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencies=None) -> dict:
     # The address keeps its takings after a business closes: a statement from
     # before this business opened (or from a day it did not exist) is the old
-    # tenant's, not this one's.
+    # tenant's, not this one's. The game still counts it in the day's business
+    # profit (the lease's rent while it stood empty, or an earlier business
+    # there), so the row keeps it apart as `profitBefore` and the Portfolio's
+    # footer shows it, and the sites still add up to the company's figure.
     since = b.get("creationDay", 0)
-    st = latest.get(addr, {}) if not history or history[-1][0] >= since else {}
+    booked = latest.get(addr, {})
+    st = booked if not history or history[-1][0] >= since else {}
     name = b.get("BusinessName")
     tag = ""
     if name and name.startswith("[") and "]" in name:
@@ -4411,6 +4453,17 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
     prices = {
         p["itemName"]: p["price"] for p in save.items(b["retailPrices"]) if p
     }
+    # What customers can buy here now, by the game's own list. A shop taken
+    # over and changed to another type keeps the old type's stock, prices and
+    # last week of sales, none of which it can sell or reprice any more (issue
+    # #493). A product the list does not hold is `retired`: no shelf to plan.
+    # The list follows the furniture, not the type, so soda the new type could
+    # sell from a fridge it does not have is retired too; a product stocked but
+    # not sold yet is on it already. An empty list (a shop not scored yet) says
+    # nothing, and the paper bag and the issued tickets are never on it.
+    offered = {i for i in save.items(b.get("cachedAvailableProducts")) if isinstance(i, str)}
+    if offered:
+        offered |= {PAPER_BAG} | ISSUED_ITEMS
 
     lines = []
     # Rows that tie on cover would otherwise reshuffle between runs and page loads.
@@ -4445,6 +4498,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
                 "soldPerDay": round(units_sold[item] / span),
                 "soldPerWeek": round(units_sold[item] / span * 7),
                 **({"issued": True} if item in ISSUED_ITEMS else {}),
+                **({"retired": True} if offered and item not in offered else {}),
                 # Unrounded, for _products() alone; build_core() takes them
                 # off the payload: a price from rounded units is no price.
                 "_sold": units_sold[item] / span,
@@ -4533,6 +4587,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
         "theft": money(st.get("Theft", 0)),
         "licensing": money(st.get("LicensingFees", 0)),
         "profit": profit,
+        "profitBefore": money(0 if st is booked else booked.get("TotalProfit", 0)),
         "margin": round(profit / revenue * 100, 1) if revenue else None,
         "satisfaction": {
             "overall": sat.get("overall", 0) if status in ("retail", "office") else None,
@@ -4867,6 +4922,27 @@ def _product_rhythm(save: Save, buildings: list) -> dict:
                 "weeks": _weeks(profile),
             }
     return out
+
+
+def _sites_gone(save: Save, names: Names, latest: dict, rented: set, residential: set) -> list:
+    """The last finished day's statements at sites the player no longer rents.
+
+    A lease given up or a business sold today has no Portfolio row, while the
+    game still counts its statement in the day's business profit. Each such
+    site, by its business name if the registration keeps one, else its
+    address, with that day's profit, so the Portfolio's footer can add up.
+    """
+    regs = {}
+    for b in save.items(save.root.get("BuildingRegistrations")):
+        addr = _address_of(b)
+        if all(addr):
+            regs[addr] = b
+    out = []
+    for addr in _in_order(set(latest) - rented - residential):
+        name = (regs.get(addr) or {}).get("BusinessName")
+        out.append({"name": name or names.addr(addr),
+                    "profit": money(latest[addr].get("TotalProfit", 0))})
+    return [g for g in out if g["profit"]]
 
 
 def _daily_series(save: Save, summaries: list) -> list:
@@ -6624,8 +6700,10 @@ def _supply_leaves(businesses: list, index: dict, sold_week: dict, target_at: di
     # nothing; nor does one shut with the game's temporarily closed switch.
     stocked = {(b["key"], line["slug"]) for b in businesses for line in b["lines"]
                if line["units"] > 0 or line.get("weekSold", 0) > 0}
+    # A plan left topping up what a converted shop no longer sells needs nothing.
+    retired = {(b["key"], line["slug"]) for b in businesses for line in b["lines"] if line.get("retired")}
     for (dest, item), (amount, _source) in target_at.items():
-        if not (dest in index and amount > 0 and (dest, item) not in leaves):
+        if not (dest in index and amount > 0 and (dest, item) not in leaves) or (dest, item) in retired:
             continue
         shop = businesses[index[dest]]
         if shop["status"] != "retail" or shop.get("closed"):
@@ -7148,7 +7226,7 @@ def _supply_depot_rows(walked: dict, eats: dict, made: dict, *, businesses: list
             landing = supply["arrives"] if supply["active"] and rounds else None
             def cover_walk(extra):
                 remaining, cover, runs_out = line["units"], 0.0, None
-                for ahead in range(60):
+                for ahead in range(LASTS_CAP):
                     share = today if ahead == 0 else 1.0
                     # On a round-fed site's delivery day only the round
                     # leaves before the drop; the lines eat after it.
@@ -7166,7 +7244,7 @@ def _supply_depot_rows(walked: dict, eats: dict, made: dict, *, businesses: list
                     remaining -= today_use
                     cover += share
                 else:
-                    cover = 60.0
+                    cover = float(LASTS_CAP)
                 return cover, runs_out
 
             cover, runs_out = cover_walk(before)
@@ -7355,7 +7433,8 @@ def _supply_shop_rows(businesses: list, index: dict, target_at: dict, wholesale:
             continue
         for line in business["lines"]:
             item, rate = line["slug"], line.get("tradeRate", line["rate"])
-            if rate <= 0:
+            # A product the shop's type no longer sells has no shelf to fill.
+            if rate <= 0 or line.get("retired"):
                 continue
             target, source = target_at.get((business["key"], item), (0, None))
             factor, peak_day = peak_of(business)
@@ -7985,7 +8064,7 @@ def _supply_idle(businesses: list, *, index: dict, factories: dict, edges: dict,
         key = business["key"]
         for line in business["lines"]:
             item = line["slug"]
-            if (key, item) in target_at or (key, item) in wholesale:
+            if (key, item) in target_at or (key, item) in wholesale or line.get("retired"):
                 continue
             if business["status"] == "retail":
                 rate = sold.get(key, {}).get(item, 0.0)
@@ -8026,7 +8105,10 @@ def _supply_idle(businesses: list, *, index: dict, factories: dict, edges: dict,
         factor, _peak = peak_of(business)
         for line in business["lines"]:
             item, units = line["slug"], line["units"]
-            if units < IDLE_UNITS or (key, item) in made_at and (key, item) not in need_rows:
+            # Stock a converted shop cannot sell is no shelf, and a shop sends
+            # nothing on, so it is neither idle here nor a source for others.
+            if (units < IDLE_UNITS or line.get("retired")
+                    or (key, item) in made_at and (key, item) not in need_rows):
                 continue
             target, source = target_at.get((key, item), (0, None))
             supply = imports.get((key, item))
@@ -8252,14 +8334,16 @@ def _supply(
     """
     index = {b["key"]: i for i, b in enumerate(businesses)}
     # What each shelf sells a trading day (_business); a hand-built business
-    # without it sells at its calendar rate.
-    sold = {b["key"]: {l["slug"]: l.get("tradeRate", l["rate"]) for l in b["lines"]}
+    # without it sells at its calendar rate. A retired line's sales are from
+    # before the shop changed type, and size nothing.
+    sold = {b["key"]: {l["slug"]: l.get("tradeRate", l["rate"]) for l in b["lines"] if not l.get("retired")}
             for b in businesses}
     held = {b["key"]: {l["slug"]: l["units"] for l in b["lines"]} for b in businesses}
     # What each shelf sells a week, as a day: the trading-day rate over the
     # days the shop traded in the last week (_business's weekSold). Every
     # weekly figure reads this; a daily top-up reads the trading-day rate.
-    sold_week = {b["key"]: {l["slug"]: _week_sold(b, l) / 7 for l in b["lines"]} for b in businesses}
+    sold_week = {b["key"]: {l["slug"]: _week_sold(b, l) / 7 for l in b["lines"] if not l.get("retired")}
+                 for b in businesses}
 
     # Most of today is already spent. A save taken at 23:00 on a Saturday has one
     # hour of Saturday's selling left in it, not a whole day of it, and charging
@@ -8700,7 +8784,7 @@ def _supply_facts(ctx: dict) -> dict:
         p = {}
         if paused and use and not covered:
             p["paused"] = True
-            p["cover"] = row["cover"] if row else (stock / (use / 7) if use else 60)
+            p["cover"] = row["cover"] if row else (stock / (use / 7) if use else LASTS_CAP)
         elif not entry and use and not covered:
             # Nothing brings it here. Where every site it tops up has an
             # import of its own, that import is the one to raise (its fact
@@ -8951,7 +9035,10 @@ def _supply_facts(ctx: dict) -> dict:
         """A shop's shelf, judged on its daily top-up against its busiest day,
         or, where a wholesale store delivers it each week and no top-up does,
         on the week: the order against a week of sales, and the stock against
-        the days to the drop. Returns (probe, fields, cadence)."""
+        the days to the drop. Returns (probe, fields, cadence), or None for
+        a shelf there is nothing to judge on."""
+        if line.get("retired"):
+            return None  # the shop's type no longer sells it (issue #493)
         key, slug = business["key"], line["slug"]
         rate = line.get("tradeRate", line["rate"])
         target = target_at.get((key, slug), (0, None))[0]
@@ -9151,7 +9238,7 @@ def _supply_facts(ctx: dict) -> dict:
                     # covers the line, the player most likely paused it
                     # because the depot feeds the line now (why topup).
                     if st in ("short", "noplan") or (st == "stalled" and why == "notDrawn"):
-                        cover = stock / row["perDay"] if row["perDay"] else 60
+                        cover = stock / row["perDay"] if row["perDay"] else LASTS_CAP
                         ist, iwhy, ilvl = "paused", "order", "warn" if cover >= 7 else "critical"
                     else:
                         ist, iwhy, ilvl = "paused", "topup", "info"
@@ -9513,6 +9600,117 @@ def _line_use(machines: int, rate: float, makes: float, sold: float | None,
     return out
 
 
+# --- _factories()' helpers: one factory line or input, read off the flow
+def _station_name(names: Names, slug: str) -> str:
+    """A factory workstation's name, from the game's help page for it."""
+    text = names.locale.get(f"help_factory_workstation_{slug}_content", "")
+    match = re.search(r"\*\*([^*]+)\*\*", text)
+    return match.group(1) if match else f"{slug.title()} Workstation"
+
+
+def _in_log(flow: dict):
+    """in_by_day(key, slug): what arrived at a site of an item, by day."""
+    # A hand-built flow (the recipe tests) may carry only the net log.
+    return flow.get("inByDay") or flow["byDay"]
+
+
+def _held_at(flow: dict, key, slug) -> float:
+    """What the site `key` holds of `slug`."""
+    return flow["held"].get(key, {}).get(slug, 0)
+
+
+def _shipped(flow: dict, key, slug) -> float:
+    """What the site `key` sends out of `slug` a day."""
+    return flow["shipped"](key, slug) or 0.0
+
+
+def _arrives(flow: dict, key, slug) -> float:
+    """The daily feed this line is actually getting.
+
+    The week behind an input only describes it if the input was drawn all
+    week. Where the record is younger than the window the average is of a
+    factory that has since changed, and the last completed round is the
+    honest measure of what the logistics brings in.
+    """
+    in_by_day = _in_log(flow)
+    # The log is already cut to the window and to completed days. What the
+    # factory sends on of the same item (an import passed to a depot's
+    # target) arrived but was never eaten, so it comes off.
+    seen = in_by_day(key, slug)
+    drawn = [d for d, amount in seen.items() if amount > 0]
+    if len(drawn) >= SHIPPED_WINDOW * FEED_SETTLED:
+        forwarded = flow.get("forwarded") or (lambda *args: 0.0)
+        return max(0.0, (flow["received"](key, slug) or 0.0) - forwarded(key, slug))
+    if not drawn:
+        return 0.0
+    last = max(drawn)
+    out_by_day = flow.get("outByDay") or (lambda *args: {})
+    return max(0.0, seen[last] - out_by_day(key, slug).get(last, 0.0))
+
+
+def _line_limit(set_to: list):
+    """The stock at which a line's machines all stop, from each machine's
+    Produce up to, or None if one of them has none set and so runs whatever
+    is held."""
+    return max(set_to) if set_to and None not in set_to else None
+
+
+def _ingredient_resolver(flow: dict, names: Names):
+    """resolve(ing): the item the city actually holds for a recipe ingredient.
+
+    The help text links an ingredient under one name and the game moves it
+    under another -- "Bag of Tomatoes" is rawtomato on the page and tomato in
+    every warehouse -- so each ingredient is matched to the item the city
+    actually holds, by label when the slug itself is never seen.
+    """
+    seen = {slug for lines in flow["held"].values() for slug in lines}
+    seen |= {slug for _key, slug in flow["targets"]} | {slug for _key, slug in flow["imports"]}
+    by_label = collections.defaultdict(list)
+    for slug, label in names.locale.items():
+        if slug.startswith("ba:itemname_"):
+            by_label[label].append(slug)
+
+    def resolve(ing: dict) -> str:
+        if ing["slug"] in seen:
+            return ing["slug"]
+        return next((alt for alt in by_label.get(ing["item"], []) if alt in seen), ing["slug"])
+
+    return resolve
+
+
+def _missing_inputs(flow: dict, recipes: dict, resolve, key, slug, keys: bool = False) -> list:
+    """Inputs of a recipe that neither arrive nor are held at the site: their
+    names, or with `keys` their game keys, in the same order."""
+    if flow["received"](key, "") is None:
+        return []
+    return [
+        ing["slug"] if keys else ing["item"]
+        for ing in recipes[slug]["ingredients"]
+        if not _arrives(flow, key, resolve(ing)) and not _held_at(flow, key, resolve(ing))
+    ]
+
+
+def _import_behind(flow: dict, factories, site, slug):
+    """The site whose import carries a need topped up from `site`: a
+    factory (one of `factories`) with no import of its own passes on what
+    its own top-up brings, so a factory it feeds is sized on the import
+    behind it."""
+    seen = set()
+    while site in factories and (site, slug) not in flow["imports"] and site not in seen:
+        seen.add(site)
+        behind = flow["targets"].get((site, slug), (0, None))[1]
+        if not behind:
+            break
+        site = behind
+    return site
+
+
+def _unnamed_hours(machines_posted: list) -> dict:
+    """An unnamed line's hours now and its machines' ids, as a line's."""
+    got = _line_hours(machines_posted, 1, 1, 0, "none")
+    return {"hoursNow": got["hoursNow"], "_posts": got["_posts"]}
+
+
 def _factories(
     save: Save,
     names: Names,
@@ -9596,69 +9794,13 @@ def _factories(
             "depotRoutes": _depot_routes(flow, index),
         }
 
-    def station_name(slug: str) -> str:
-        text = names.locale.get(f"help_factory_workstation_{slug}_content", "")
-        match = re.search(r"\*\*([^*]+)\*\*", text)
-        return match.group(1) if match else f"{slug.title()} Workstation"
-
     by_station = collections.defaultdict(list)
     for slug, rec in recipes.items():
         by_station[rec["workstation"]].append(slug)
 
-    def held(key, slug):
-        return flow["held"].get(key, {}).get(slug, 0)
-
-    # A hand-built flow (the recipe tests) may carry only the net log.
-    in_by_day = flow.get("inByDay") or flow["byDay"]
-    out_by_day = flow.get("outByDay") or (lambda *args: {})
-    forwarded = flow.get("forwarded") or (lambda *args: 0.0)
-
-    def out_of(key, slug):
-        return flow["shipped"](key, slug) or 0.0
-
-    def arrives(key, slug):
-        """The daily feed this line is actually getting.
-
-        The week behind an input only describes it if the input was drawn all
-        week. Where the record is younger than the window the average is of a
-        factory that has since changed, and the last completed round is the
-        honest measure of what the logistics brings in.
-        """
-        # The log is already cut to the window and to completed days. What the
-        # factory sends on of the same item (an import passed to a depot's
-        # target) arrived but was never eaten, so it comes off.
-        seen = in_by_day(key, slug)
-        drawn = [d for d, amount in seen.items() if amount > 0]
-        if len(drawn) >= SHIPPED_WINDOW * FEED_SETTLED:
-            return max(0.0, (flow["received"](key, slug) or 0.0) - forwarded(key, slug))
-        if not drawn:
-            return 0.0
-        last = max(drawn)
-        return max(0.0, seen[last] - out_by_day(key, slug).get(last, 0.0))
-
+    in_by_day = _in_log(flow)
     hours_today = save.root.get("Hour", 24) + (save.root.get("Minute") or 0) / 60
-
-    def line_limit(key, line):
-        """The stock at which a line's machines all stop, or None if one of
-        them has no Produce up to set and so runs whatever is held."""
-        set_to = limits[key][line]
-        return max(set_to) if set_to and None not in set_to else None
-
-    # The help text links an ingredient under one name and the game moves it
-    # under another — "Bag of Tomatoes" is rawtomato on the page and tomato in
-    # every warehouse — so each ingredient is matched to the item the city
-    # actually holds, by label when the slug itself is never seen.
-    seen = {slug for lines in flow["held"].values() for slug in lines}
-    seen |= {slug for _key, slug in flow["targets"]} | {slug for _key, slug in flow["imports"]}
-    by_label = collections.defaultdict(list)
-    for slug, label in names.locale.items():
-        if slug.startswith("ba:itemname_"):
-            by_label[label].append(slug)
-
-    def resolve(ing: dict) -> str:
-        if ing["slug"] in seen:
-            return ing["slug"]
-        return next((alt for alt in by_label.get(ing["item"], []) if alt in seen), ing["slug"])
+    resolve = _ingredient_resolver(flow, names)
 
     chosen = history.named(character) if history else {}
 
@@ -9707,17 +9849,6 @@ def _factories(
                 total += n * per * 24 * dem_output(site, slug) / capacity_at[site][slug]
         return total
 
-    def missing(key, slug, keys=False):
-        """Inputs of a recipe that neither arrive nor are held at the site: their
-        names, or with `keys` their game keys, in the same order."""
-        if flow["received"](key, "") is None:
-            return []
-        return [
-            ing["slug"] if keys else ing["item"]
-            for ing in recipes[slug]["ingredients"]
-            if not arrives(key, resolve(ing)) and not held(key, resolve(ing))
-        ]
-
     # --- each factory: its lines, and what they eat
     made_by = collections.defaultdict(set)
     sites, depot_need = [], collections.defaultdict(float)
@@ -9725,24 +9856,6 @@ def _factories(
     # whose coming week was read off a line (_coming_week).
     ramp_at = collections.defaultdict(set)
     demand = flow.get("demand")
-
-    def upstream(site, slug):
-        """The site whose import carries a need topped up from `site`: a
-        factory with no import of its own passes on what its own top-up
-        brings, so a factory it feeds is sized on the import behind it."""
-        seen = set()
-        while site in machines and (site, slug) not in flow["imports"] and site not in seen:
-            seen.add(site)
-            behind = flow["targets"].get((site, slug), (0, None))[1]
-            if not behind:
-                break
-            site = behind
-        return site
-
-    def unnamed_hours(machines_posted):
-        """An unnamed line's hours now and its machines' ids, as a line's."""
-        got = _line_hours(machines_posted, 1, 1, 0, "none")
-        return {"hoursNow": got["hoursNow"], "_posts": got["_posts"]}
 
     dem_out = collections.defaultdict(float)  # (factory, product) -> a day's make in Demand sizing
     for key, counter in machines.items():
@@ -9768,12 +9881,12 @@ def _factories(
                 unnamed.append(
                     {
                         "rid": rid,
-                        "workstation": station_name(station),
+                        "workstation": _station_name(names, station),
                         "workstationKey": f"ba:factoryworkstationtype_{station}",
                         "slots": sorted(slots[key][(station, rid)]),
                         "machines": n,
                         "idle": rid is None,
-                        "limit": line_limit(key, (station, rid)),
+                        "limit": _line_limit(limits[key][(station, rid)]),
                         "candidates": [
                             {"slug": c, "item": recipes[c]["item"]}
                             for c in by_station.get(station, [])
@@ -9781,18 +9894,18 @@ def _factories(
                         **staffing,
                         # A recipe the board cannot name still runs: its
                         # machines are rostered like any line's (_factory_staffing).
-                        **(unnamed_hours(posted[key][(station, rid)]) if rid else {}),
+                        **(_unnamed_hours(posted[key][(station, rid)]) if rid else {}),
                     }
                 )
                 continue
             rec = recipes[slug]
             makes = n * rec["out"] * 24
             share = staffing["hoursWeek"] / staffing["fullWeek"] if staffing["fullWeek"] else 0.0
-            ships = out_of(key, slug)
-            stock = held(key, slug)
+            ships = _shipped(flow, key, slug)
+            stock = _held_at(flow, key, slug)
             to_city = sum(a for d, i, a in flow["edges"].get(key, []) if i == slug and d in index)
             to_pier = sum(a for d, i, a in flow["edges"].get(key, []) if i == slug and d not in index)
-            stopped = missing(key, slug)
+            stopped = _missing_inputs(flow, recipes, resolve, key, slug)
             # Held by its production limit: the output held is at the limit, or
             # under it by no more than the machines could have made back of
             # what the morning round took. That is bounded three ways: by a
@@ -9825,7 +9938,7 @@ def _factories(
             # takes it to send, so the walk and the sizing agree on who
             # brings the margin.
             dem_out[(key, slug)] += min(makes, dem_makes * (1 + SUPPLY_MARGIN))
-            limit = line_limit(key, (station, rid))
+            limit = _line_limit(limits[key][(station, rid)])
             make_back = min(ships, makes / 24 * hours_today, (limit or 0) * LIMIT_SLACK)
             limit_held = limit is not None and stock > 0 and stock >= limit - make_back
             lines.append(
@@ -9835,8 +9948,8 @@ def _factories(
                     "slug": slug,
                     "missing": stopped,
                     # Their game keys, index for index, for the page to name them.
-                    "missingSlugs": missing(key, slug, keys=True),
-                    "workstation": station_name(station),
+                    "missingSlugs": _missing_inputs(flow, recipes, resolve, key, slug, keys=True),
+                    "workstation": _station_name(names, station),
                     "workstationKey": f"ba:factoryworkstationtype_{station}",
                     "slots": sorted(slots[key][(station, rid)]),
                     "machines": n,
@@ -9885,7 +9998,7 @@ def _factories(
         # it draws matches what it makes, not what it could. A starved line
         # runs its input down instead.
         rest_of_day = max(0.0, 24 - hours_today) / 24
-        on_hand = {slug: held(key, slug) >= row["perDay"] * rest_of_day for slug, row in needs.items()}
+        on_hand = {slug: _held_at(flow, key, slug) >= row["perDay"] * rest_of_day for slug, row in needs.items()}
         for line in lines:
             if line["limitHeld"] or line["limit"] is None or line["missing"]:
                 continue
@@ -9927,7 +10040,7 @@ def _factories(
             # A paused contract never makes an input direct: beside a top-up the
             # top-up is what brings it today.
             direct = bool(own_import and not warehouse_need and not (mixed and not direct_weekly))
-            import_source = key if direct else upstream(source, slug) if source else None
+            import_source = key if direct else _import_behind(flow, machines, source, slug) if source else None
             # An input that only sits because every line using it is stopped
             # for want of something else is waiting, not being ignored.
             waiting = (
@@ -9949,10 +10062,10 @@ def _factories(
             # is starved, not held.
             ship_draw, all_limit = row.pop("_shipDraw"), row.pop("_allLimit")
             row["limited"] = bool(
-                row["lines"] and held(key, slug) > 0 and (
+                row["lines"] and _held_at(flow, key, slug) > 0 and (
                     all(held_lines[line] for line in row["lines"])
-                    or (all_limit and ship_draw > 0 and arrives(key, slug) >= ship_draw * 0.85
-                        and held(key, slug) >= free_draw[slug] * rest_of_day))
+                    or (all_limit and ship_draw > 0 and _arrives(flow, key, slug) >= ship_draw * 0.85
+                        and _held_at(flow, key, slug) >= free_draw[slug] * rest_of_day))
             )
             row["target"] = target
             row["source"] = import_source
@@ -9967,9 +10080,9 @@ def _factories(
             row["dailyNeed"] = row["perDay"]
             row["importSite"] = index.get(import_source)
             row["known"] = not own_import and flow["received"](key, slug) is not None
-            row["arrives"] = round(arrives(key, slug))
-            row["stock"] = held(key, slug)
-            row["depotStock"] = held(source, slug) if source and not direct else 0
+            row["arrives"] = round(_arrives(flow, key, slug))
+            row["stock"] = _held_at(flow, key, slug)
+            row["depotStock"] = _held_at(flow, source, slug) if source and not direct else 0
             # Planned, stocked at the depot, and yet nothing came all week.
             row["stalled"] = bool(row["known"] and not row["arrives"] and row["depotStock"] > 0)
             if own_import:
@@ -10012,7 +10125,7 @@ def _factories(
                 "needs": list(needs.values()),
                 "targets": into,
                 "known": flow["received"](key, "") is not None,
-                "arrivals": {slug: round(arrives(key, slug)) for slug in _in_order(watched)},
+                "arrivals": {slug: round(_arrives(flow, key, slug)) for slug in _in_order(watched)},
             }
         )
 
@@ -10396,19 +10509,7 @@ def _hourly(
         # The roster, read the same way the game reads it: scheduleDay.day is the
         # game day modulo 7, with 7 standing in for Sunday's 0. A site with no
         # serving station installed has no roster to read and stays at zero.
-        open_hours = [[] for _ in range(7)]
-        for scheduled in save.items(b.get("scheduleDays")):
-            if not scheduled.get("isOpen"):
-                continue
-            wd = scheduled["day"] % 7
-            open_hours[wd] = sorted(
-                [
-                    max(0, slot.get("startingHour") or 0),
-                    min(24, slot.get("endingHour") or 0),
-                ]
-                for slot in save.items(scheduled.get("openingHourSlots"))
-                if (slot.get("endingHour") or 0) > (slot.get("startingHour") or 0)
-            )
+        open_hours = _open_hours(save, b)
         staffed = [[0] * 24 for _ in range(7)]
         on_shift = [[0] * 24 for _ in range(7)]
         if by_role:
@@ -11668,10 +11769,7 @@ def _spread_open(residue: list, shifts: list, pool: list, state: dict, before: d
                     if after < min(floor, here):
                         continue
                     trial = _copy_state(state[pid])
-                    trial["hours"] -= mine["to"] - mine["from"]
-                    trial["busy"][mine["wd"]].difference_update(range(mine["from"], mine["to"]))
-                    if not trial["busy"][mine["wd"]]:
-                        trial["days"].discard(mine["wd"])
+                    _week_take(trial, mine["wd"], mine["from"], mine["to"], drop_day=True)
                     if not _can_work(person, trial, open_row):
                         continue
                     days_after = len(trial["days"] | {wd}) - before[pid][1]
@@ -11697,16 +11795,7 @@ def _spread_open(residue: list, shifts: list, pool: list, state: dict, before: d
             stuck.add((wd, hour))
             continue
         open_row, person, mine = swap
-        theirs = state[person["id"]]
-        theirs["hours"] -= mine["to"] - mine["from"]
-        theirs["busy"][mine["wd"]].difference_update(range(mine["from"], mine["to"]))
-        if not theirs["busy"][mine["wd"]]:
-            theirs["days"].discard(mine["wd"])
-        if not any(other is not mine and other["employee"] == person["id"]
-                   and other["station"] == mine["station"] and other["wd"] == mine["wd"]
-                   for other in shifts):
-            theirs["stations"].discard((mine["station"], mine["wd"]))
-        mine.update(employee=None, name=None, fromBench=False)
+        _week_off(mine, person, state, shifts)
         _take_over(open_row, person, state)
         residue.remove(open_row)
         residue.append(mine)
@@ -11945,13 +12034,29 @@ def _lift_hire(hire: dict, rows: list, givers: dict, state: dict, before: dict,
     return True
 
 
+def _week_take(week: dict, wd: int, start: int, end: int, drop_day: bool = False) -> None:
+    """Take the hours start..end of day `wd` off one person's week.
+
+    Only the hours and the busy hours move: a piece cut off the end of a line
+    leaves its head with the person, so they keep the day. `drop_day` is for a
+    whole line, and lets the day go once nothing of it is left busy. The
+    station and the row itself are `_week_off()`'s.
+    """
+    week["hours"] -= end - start
+    week["busy"][wd].difference_update(range(start, end))
+    if drop_day and not week["busy"][wd]:
+        week["days"].discard(wd)
+
+
 def _week_off(row: dict, person: dict, state: dict, rows: list) -> None:
-    """Take one of a person's lines off their week, leaving the row nobody's."""
+    """Take one of a person's lines off their week, leaving the row nobody's.
+
+    The station goes only when nothing of theirs is left on it that day: a
+    person who holds both pieces of a split day keeps the station until the
+    second goes.
+    """
     mine = state[person["id"]]
-    mine["hours"] -= row["to"] - row["from"]
-    mine["busy"][row["wd"]].difference_update(range(row["from"], row["to"]))
-    if not mine["busy"][row["wd"]]:
-        mine["days"].discard(row["wd"])
+    _week_take(mine, row["wd"], row["from"], row["to"], drop_day=True)
     if not any(other is not row and other["employee"] == person["id"]
                and other["station"] == row["station"] and other["wd"] == row["wd"]
                for other in rows):
@@ -12550,6 +12655,106 @@ def _without_pins(slots: list, pins: list) -> list:
     return out
 
 
+# --- while the plan waits on somebody (issue #446)
+# A write sends the plan's entries for the people already here and leaves the
+# ones that wait on a hire or a bench member empty until the player adds them.
+# A plan that moved somebody off an hour they work now, and gave that hour to
+# a hire, so writes a week with fewer people in that hour than the game has.
+# Until nobody is waited on, the people here keep the hours they cover now
+# wherever the plan still wants them covered.
+def _waiting_drops(shifts: list, standing: list, role_keys: dict) -> tuple:
+    """Where the plan, written now, leaves an hour fewer people than it has: (entries, hours).
+
+    Per role, day and hour: the plan's entries for people already here
+    against the people on it now, capped at what the plan wants there (an hour
+    it wants fewer people on is the plan's to cut). The entries as they stand
+    on such an hour, and the person-hours missing across them. Nothing when no
+    entry of the plan waits on somebody.
+    """
+    if not any(s["employee"] is None or s.get("fromBench") for s in shifts):
+        return [], 0
+    planned, here, now = (collections.Counter() for _ in range(3))
+    for s in shifts:
+        role = role_keys.get(s["station"])
+        for hour in range(s["from"], s["to"]):
+            planned[role, s["wd"], hour] += 1
+            if s["employee"] is not None and not s.get("fromBench"):
+                here[role, s["wd"], hour] += 1
+    for row in standing:
+        for hour in range(row["from"], row["to"]):
+            now[role_keys.get(row["station"]), row["wd"], hour] += 1
+    short = {key: min(count, planned[key]) - here[key] for key, count in now.items()
+             if here[key] < min(count, planned[key])}
+    return [row for row in standing
+            if any((role_keys.get(row["station"]), row["wd"], hour) in short
+                   for hour in range(row["from"], row["to"]))], sum(short.values())
+
+
+def _hold_rows(rows: list, slots: list, role_keys: dict, by_id: dict, base: dict,
+               taken=()) -> list:
+    """Entries as they stand, kept as pins, inside the hours the plan wants covered.
+
+    Each entry on its own station where the plan staffs that station then;
+    what is left of it, where the plan staffs another station of the same
+    role for that run of hours, on that one. Never an hour a pin in `taken`
+    or an earlier entry holds, and only what `_can_work()` allows on top of
+    `base` (the week before this site), in pieces no longer than a shift.
+    """
+    wanted = collections.defaultdict(set)
+    shape = {}
+    for slot in slots:
+        wanted[slot["station"], slot["wd"]].update(range(slot["from"], slot["to"]))
+        shape[slot["station"]] = (slot["skill"], slot["kind"])
+    for row in taken:
+        wanted[row["station"], row["wd"]].difference_update(range(row["from"], row["to"]))
+    by_role = collections.defaultdict(list)
+    for station in shape:
+        by_role[role_keys.get(station)].append(station)
+    weeks, out = {}, []
+
+    def place(person, station, wd, hours):
+        week = weeks.setdefault(person["id"], _copy_state(base[person["id"]])
+                                if base and person["id"] in base else _fresh_state())
+        left = set(hours)
+        for start, end in _runs(hours):
+            for low, high in _cut_run(start, end):
+                skill, kind = shape[station]
+                piece = {"wd": wd, "station": station, "skill": skill,
+                         "from": low, "to": high, "kind": kind}
+                if not _can_work(person, week, piece):
+                    continue
+                week["hours"] += high - low
+                week["busy"][wd].update(range(low, high))
+                week["days"].add(wd)
+                wanted[station, wd].difference_update(range(low, high))
+                left.difference_update(range(low, high))
+                out.append(dict(piece, employee=person["id"], name=person["name"],
+                                hours=high - low, fromBench=False))
+        return left
+
+    order = sorted(rows, key=lambda r: (str(r["employee"]), r["wd"], r["from"], r["to"],
+                                        str(r["station"])))
+    rest = []
+    for row in order:
+        person = by_id.get(row["employee"])
+        if person is None:
+            continue
+        hours = [h for h in range(row["from"], row["to"])
+                 if h in wanted.get((row["station"], row["wd"]), ())]
+        left = place(person, row["station"], row["wd"], hours) if hours else set()
+        left |= set(range(row["from"], row["to"])) - set(hours)
+        if left:
+            rest.append((row, person, left))
+    for row, person, left in rest:
+        for start, end in _runs(left):
+            run = set(range(start, end))
+            for station in by_role.get(role_keys.get(row["station"]), ()):
+                if station != row["station"] and run <= wanted[station, row["wd"]]:
+                    place(person, station, row["wd"], sorted(run))
+                    break
+    return out
+
+
 def _current_roster(save: Save, building: dict, stations: dict) -> dict:
     """The site's schedule as it stands, to show beside the plan.
 
@@ -12809,23 +13014,7 @@ def _take_over(shift: dict, taker: dict, state: dict) -> None:
 
 def _hand_over(shift: dict, donor: dict, taker: dict, state: dict, shifts: list) -> None:
     """Move one whole shift from the donor's week to the taker's, state and row alike."""
-    hours = shift["to"] - shift["from"]
-    mine = state[donor["id"]]
-    mine["hours"] -= hours
-    mine["busy"][shift["wd"]].difference_update(range(shift["from"], shift["to"]))
-    if not mine["busy"][shift["wd"]]:
-        mine["days"].discard(shift["wd"])
-    # Only when nothing of theirs is left on that station that day. A person who
-    # holds both pieces of a split day keeps the station until the second goes,
-    # which is the one thing this function used to get wrong.
-    if not any(
-        other is not shift
-        and other["employee"] == donor["id"]
-        and other["station"] == shift["station"]
-        and other["wd"] == shift["wd"]
-        for other in shifts
-    ):
-        mine["stations"].discard((shift["station"], shift["wd"]))
+    _week_off(shift, donor, state, shifts)
     _take_over(shift, taker, state)
 
 
@@ -12839,9 +13028,7 @@ def _piece_over(shift: dict, donor: dict, taker: dict, state: dict, shifts: list
     third priority is the longest shifts it can manage, and this is the second.
     """
     start = shift["to"] - take
-    mine = state[donor["id"]]
-    mine["hours"] -= take
-    mine["busy"][shift["wd"]].difference_update(range(start, shift["to"]))
+    _week_take(state[donor["id"]], shift["wd"], start, shift["to"])
     shift["to"] = start
     shift["hours"] = shift["to"] - shift["from"]
     piece = dict(shift, **{"from": start, "to": start + take})
@@ -13204,9 +13391,8 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set, only=Non
             index, take = picked
             row = rows[index]
             start = row["to"] - take
-            mine, theirs = own(row["employee"]), weeks[pid]
-            mine["hours"] -= take
-            mine["busy"][row["wd"]].difference_update(range(start, row["to"]))
+            theirs = weeks[pid]
+            _week_take(own(row["employee"]), row["wd"], start, row["to"])
             theirs["hours"] += take
             theirs["busy"][row["wd"]].update(range(start, row["to"]))
             theirs["days"].add(row["wd"])
@@ -13347,9 +13533,8 @@ def _top_up_short(shifts: list, pool: list, state: dict, rostered: set, only=Non
             "station": shift["station"],
         }):
             return False
-        mine, theirs = weeks[giver["id"]], weeks[taker["id"]]
-        mine["hours"] -= take
-        mine["busy"][shift["wd"]].difference_update(range(start, shift["to"]))
+        theirs = weeks[taker["id"]]
+        _week_take(weeks[giver["id"]], shift["wd"], start, shift["to"])
         theirs["hours"] += take
         theirs["busy"][shift["wd"]].update(range(start, shift["to"]))
         theirs["days"].add(shift["wd"])
@@ -13751,6 +13936,26 @@ def _collector_paused():
             gc.enable()
 
 
+# The planner failures already told about on stderr, by their error string, so
+# a watch server rebuilding every autosave prints each traceback once.
+_PLAN_FAILURES_SAID: set = set()
+
+
+def _plan_failed(exc: BaseException, what: str) -> str:
+    """A site the planner fell over on: "Type: message, in fn, file line N", for
+    the failed row's "error", so a bug report or a payload says what broke.
+    The traceback goes to stderr the first time each error appears (in the
+    browser the one line, which Pyodide writes to the console); the row
+    keeps the site's place on the board either way."""
+    error = f"{type(exc).__name__}: {exc}{_raised_at(exc)}"
+    if error not in _PLAN_FAILURES_SAID:
+        _PLAN_FAILURES_SAID.add(error)
+        print(f"could not plan {what}: {error}", file=sys.stderr, flush=True)
+        if sys.platform != "emscripten":
+            traceback.print_exception(type(exc), exc, exc.__traceback__, file=sys.stderr)
+    return error
+
+
 def _staffing(
     save: Save,
     names: Names,
@@ -13813,17 +14018,18 @@ def _staffing(
         key=lambda row: (row[0]["name"] or "", row[0]["key"]),
     )
 
-    def failed(business):
+    def failed(business, error):
         # One odd site is one missing plan, not a blank board, and not a
         # silent hole either: the row says the site could not be planned so
-        # the page can say so. Nothing of it is committed, and it fails in
-        # the same place on every run, so the payload stays the same twice
-        # over.
+        # the page can say so, and "error" says why (_plan_failed()). Nothing
+        # of it is committed, and it fails in the same place on every run, so
+        # the payload stays the same twice over.
         return {
             "key": business["key"],
             "name": business["name"],
             "typeSlug": business["typeSlug"],
             "failed": True,
+            "error": error,
         }
 
     sites = []
@@ -13843,8 +14049,8 @@ def _staffing(
         try:
             site = _plan_site(save, names, business, building, grid, people,
                               list(bench), scratch, curves, table, base_promotion, caps)
-        except Exception:
-            sites.append((business, None))
+        except Exception as exc:
+            sites.append((business, _plan_failed(exc, f"the staffing of {business['key']}")))
             continue
         sites.append((business, site))
         if _opens_first(site, business):
@@ -13868,7 +14074,7 @@ def _staffing(
     # new shop's test needs. Site order within each.
     def live(entry):
         business, site = entry[1]
-        if site is None:
+        if isinstance(site, str):
             return 1
         grid = site["grid"]
         opens = [wd for wd in range(7) if grid["open"][wd]]
@@ -13883,8 +14089,8 @@ def _staffing(
     shared = {person["id"]: _copy_state(state[person["id"]]) for person in left}
     out = [None] * len(sites)
     for index, (business, site) in sorted(enumerate(sites), key=lambda e: (live(e), e[0])):
-        if site is None:
-            out[index] = failed(business)
+        if isinstance(site, str):  # the demand plan failed: site is its error
+            out[index] = failed(business, site)
             continue
         mine = {p["id"] for p in site["took"]}
         free = {p["id"] for p in left}
@@ -13900,10 +14106,18 @@ def _staffing(
         grid = site["grid"]
         offered = any(s["skill"] for s in grid["stations"]) and any(grid["open"])
         try:
+            # Full cover keeps the people here on the hours they work now while
+            # it waits on a hire (issue #446) only where the shop is open around
+            # the clock already, so the week is the hours it runs: holding them
+            # in every shop's longest week cost the board most of a second
+            # placement of it (+84% extract on the largest save). Elsewhere the
+            # write's review says how many hours it leaves fewer people on than
+            # now until the hires come (gwFewerNow() in the board script).
             full = _place_week(
                 grid, _full_need(grid), ALL_DAY_OPEN, site["coverPosts"],
                 site["own"] + site_bench, people, business, site_bench, scratch,
                 current=site["current"]["list"],
+                keep=_open_all_hours(grid["open"]),
             )
             if not offered:
                 opened = None
@@ -13913,11 +14127,11 @@ def _staffing(
                 opened = _place_week(
                     grid, _open_need(site), grid["open"], site["coverPosts"],
                     site["own"] + site_bench, people, business, site_bench, opened_scratch,
-                    current=site["current"]["list"],
+                    current=site["current"]["list"], keep=True,
                 )
             row = _finish_site(site, full, names, people, opened)
-        except Exception:
-            out[index] = failed(business)
+        except Exception as exc:
+            out[index] = failed(business, _plan_failed(exc, f"the full cover of {business['key']}"))
             continue
         # Only the plan the site is on by default reserves whom it draws off
         # the bench, before the offices and factories are planned: the demand
@@ -14144,9 +14358,10 @@ def _factory_staffing(save: Save, names, businesses: list, factories: dict, staf
                 else:
                     row = _factory_site_plan(save, building, site, business, posts_of, pool,
                                              people, mode, label, names, wage_day, world["state"])
-            except Exception:
+            except Exception as exc:
                 row = {"key": business["key"], "s": site["s"], "name": business["name"],
-                       "failed": True}
+                       "failed": True,
+                       "error": _plan_failed(exc, f"the {mode} staffing of factory {business['key']}")}
             rows[mode] = row
         for mode in SIZING_MODES:
             row = rows[mode]
@@ -14586,7 +14801,7 @@ def _serving_hours(shifts: list) -> int:
 
 
 def _place_week(grid, need, slots_open, cover_posts, pool, people, business, bench, state,
-                groups=None, current=None, hires=True, fixed=None) -> dict:
+                groups=None, current=None, hires=True, fixed=None, keep=False) -> dict:
     """One week of shifts for one site: _place_cut_week(), cut again where that helps.
 
     The plain cut (_cut_run()) halves a 24-hour day into 0-12 and 12-24, and both
@@ -14602,7 +14817,8 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     lines. Everywhere else the week is the plain one, line for line.
     """
     args = (grid, need, slots_open, cover_posts, pool, people, business, bench)
-    kwargs = {"groups": groups, "current": current, "hires": hires, "fixed": fixed}
+    kwargs = {"groups": groups, "current": current, "hires": hires, "fixed": fixed,
+              "keep": keep}
     kept = {pid: _copy_state(entry) for pid, entry in state.items()}
     week = _place_cut_week(*args, state, **kwargs)
     week.pop("snapMoved")
@@ -14612,6 +14828,9 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     best = None
     for snap in (True, False):
         trial = {pid: _copy_state(entry) for pid, entry in kept.items()}
+        # With `keep`, each re-cut week is held against its own re-cut plain
+        # week (issue #446), not against the plain cut above; the rank then
+        # picks among weeks that each passed that guard.
         other = _place_cut_week(*args, trial, cuts=cuts, snap=snap, **kwargs)
         moved = other.pop("snapMoved")
         if _week_rank(other) < _week_rank(best[0] if best else week):
@@ -14677,7 +14896,7 @@ def _week_rank(week: dict) -> tuple:
 
 def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business, bench, state,
                     groups=None, current=None, hires=True, fixed=None, cuts=None,
-                    snap=True) -> dict:
+                    snap=True, keep=False) -> dict:
     """One week of shifts for one site, from one need curve: the placer itself.
 
     Everything after the need curve, in the scope's order: a. per-station cover
@@ -14693,18 +14912,49 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
     may work open with no hire weeks, for a caller that only asks whether a
     pool covers the week. `cuts` is extra cut points per skill
     (_blackout_cuts()), and `snap` how _cut_at() treats an edge near a run's
-    end; only _place_week() passes them.
+    end; only _place_week() passes them. `keep` is for a caller whose write
+    replaces the week with the plan's entries for the people already here:
+    while the plan waits on a hire or a bench member, nobody is moved off an
+    hour they work now if that leaves the hour fewer people than it has
+    (_waiting_drops(), _hold_rows()).
+
+    Each step is a _week_<letter>_*() function over one `ctx` dict: the
+    arguments, and what each step adds for the ones after it. f.'s slots are
+    cut before c. counts them, so the steps run a, b, f, c, d, e.
     """
     # The one step every plan repeats: a long build says it is alive from here.
     _progress()
+    ctx = {
+        "grid": grid, "need": need, "slots_open": slots_open, "cover_posts": cover_posts,
+        "pool": pool, "people": people, "business": business, "bench": bench,
+        "state": state, "groups": groups, "current": current, "hires": hires,
+        "fixed": fixed or [], "cuts": cuts, "snap": snap, "keep": keep,
+        # Whether `snap` moved an edge anywhere, so _place_week() knows if the
+        # trial with edges dropped would cut any different lines.
+        "snap_moved": False,
+    }
+    _week_a_cover(ctx)
+    _week_b_cut(ctx)
+    _week_f_cover_slots(ctx)
+    _week_c_headcount(ctx)
+    _week_d_place(ctx)
+    return _week_e_residue(ctx)
+
+
+def _week_a_cover(ctx: dict) -> None:
+    """a. Per-station cover, with the troughs bridged before b. cuts it.
+
+    Adds `open_hours` (each weekday's open hours, sorted), `wanted` (each
+    role's stations' hours per weekday) and `slack` (the bridged hours, their
+    cost and the budget they came out of).
+    """
+    grid, need, slots_open = ctx["grid"], ctx["need"], ctx["slots_open"]
     open_hours = [
         sorted({hour for start, end in slots_open[wd] for hour in range(start, end)})
         for wd in range(7)
     ]
-
-    # a. Per-station cover, b. the cut, with the troughs bridged in between.
     wanted, role_wages = {}, {}
-    site_pool = _site_pool(people, business, bench)  # one list for every role's wage
+    site_pool = _site_pool(ctx["people"], ctx["business"], ctx["bench"])  # one list for every role's wage
     for role in grid["roles"]:
         skill, role_key = role["skill"], _role_key(role)
         posts = [s for s in grid["stations"] if _station_role(s) == role_key]
@@ -14728,28 +14978,33 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
     slack_hours, slack_cost = _bridge_troughs(
         wanted, role_wages, budget, slots_open
     )
+    ctx["open_hours"] = open_hours
+    ctx["wanted"] = wanted
+    ctx["slack"] = (slack_hours, slack_cost, budget)
 
-    # Whether `snap` moved an edge anywhere, so _place_week() knows if the
-    # trial with edges dropped would cut any different lines.
-    snap_moved = False
 
-    def cut(start, end, skill):
-        nonlocal snap_moved
-        points = (cuts or {}).get(skill)
-        pieces = _cut_at(start, end, points, snap)
-        if points and snap and not snap_moved:
-            snap_moved = pieces != _cut_at(start, end, points, False)
-        return pieces
+def _week_cut_piece(ctx: dict, start: int, end: int, skill) -> list:
+    """One run cut into shifts (_cut_at()), at the extra points `ctx` has for
+    `skill`; notes in `snap_moved` whether `snap` changed the cut."""
+    points = (ctx["cuts"] or {}).get(skill)
+    pieces = _cut_at(start, end, points, ctx["snap"])
+    if points and ctx["snap"] and not ctx["snap_moved"]:
+        ctx["snap_moved"] = pieces != _cut_at(start, end, points, False)
+    return pieces
 
+
+def _week_b_cut(ctx: dict) -> None:
+    """b. The cut: each serving station's bridged runs as `slots`."""
+    grid = ctx["grid"]
     slots = []
     for role in grid["roles"]:
         skill, role_key = role["skill"], _role_key(role)
         posts = [s for s in grid["stations"] if _station_role(s) == role_key]
-        for index, days in wanted[role_key].items():
+        for index, days in ctx["wanted"][role_key].items():
             post = posts[index]
             for wd in range(7):
                 for start, end in _runs(days[wd]):
-                    for cut_start, cut_end in cut(start, end, skill):
+                    for cut_start, cut_end in _week_cut_piece(ctx, start, end, skill):
                         slots.append(
                             {
                                 "wd": wd,
@@ -14760,16 +15015,19 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
                                 "kind": "serve",
                             }
                         )
+    ctx["slots"] = slots
 
-    # f. Cleaning and security: one person per station for every open hour, cut
-    # the same way and placed after the serving stations, so neither ever steals
-    # a person from a queue.
+
+def _week_f_cover_slots(ctx: dict) -> None:
+    """f. Cleaning and security: one person per station for every open hour, cut
+    the same way and placed after the serving stations, so neither ever steals
+    a person from a queue. Adds `cover_slots`."""
     cover_slots = []
-    for post in cover_posts:
+    for post in ctx["cover_posts"]:
         kind, skill = COVER_STATIONS[post["slug"]]
         for wd in range(7):
-            for start, end in _runs(open_hours[wd]):
-                for cut_start, cut_end in cut(start, end, skill):
+            for start, end in _runs(ctx["open_hours"][wd]):
+                for cut_start, cut_end in _week_cut_piece(ctx, start, end, skill):
                     cover_slots.append(
                         {
                             "wd": wd,
@@ -14780,10 +15038,13 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
                             "kind": kind,
                         }
                     )
+    ctx["cover_slots"] = cover_slots
 
-    # c. Headcount, before anybody is placed: the number the player most wants.
+
+def _week_c_headcount(ctx: dict) -> None:
+    """c. Headcount, before anybody is placed: the number the player most wants."""
     headcount = {}
-    for group in (slots, cover_slots):
+    for group in (ctx["slots"], ctx["cover_slots"]):
         for slot in group:
             entry = headcount.setdefault(
                 slot["skill"],
@@ -14794,8 +15055,18 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
     for entry in headcount.values():
         entry["min"] = math.ceil(entry["needed"] / FULL_TIME[1])
         entry["max"] = entry["needed"] // FULL_TIME[0]
+    ctx["headcount"] = headcount
 
-    # d. Place, most-constrained-first, serving stations before cover.
+
+def _week_d_place(ctx: dict) -> None:
+    """d. Place, most-constrained-first, serving stations before cover.
+
+    Adds `shifts` and `hire_weeks` (_week_d_fill()), `before` and
+    `roles_here` for e., and the placement's working set: `flex`, `now`,
+    `protected`, `fixed_people`, `role_keys`, `by_id`, `start` and `keys`.
+    """
+    grid, cover_posts, pool, state = ctx["grid"], ctx["cover_posts"], ctx["pool"], ctx["state"]
+    current, fixed, slots, cover_slots = ctx["current"], ctx["fixed"], ctx["slots"], ctx["cover_slots"]
     before = {
         person["id"]: (
             state[person["id"]]["hours"],
@@ -14805,7 +15076,6 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
     }
     # Fixed duties belong to this site's complete week, but are never replaced
     # by the planner. Capture the outside-site baseline before reserving them.
-    fixed = fixed or []
     for row in fixed:
         entry = state.get(row["employee"])
         if entry is not None:
@@ -14833,12 +15103,6 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
         person["id"]: sum(1 for skill, kind in roles_here if _usable(person, skill, kind))
         for person in pool
     }
-
-    def fresh_here():
-        # Each station's furniture group (_station_groups()), where the caller
-        # has the building: a desk demand is met at a station, not a site.
-        return {"groups": groups or {}, "rostered": set(), "flex": flex}
-
     # The people already working here whom a plan could cut short of the week
     # they have (_worse_off()): those holding an hours band or a day count,
     # with a week here now, in a role this plan staffs.
@@ -14853,14 +15117,90 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
         if person["id"] in now and (person["band"] or person["days"] is not None)
         and (person["id"] in fixed_people or any(_usable(person, skill, kind) for skill, kind in planned_roles))
     ]
-    start = {pid: _copy_state(state[pid]) for pid in before} if protected else None
+    # The entries of the week as it stands that a write must not take off
+    # anybody before the people the plan waits on are here (_waiting_drops()):
+    # only where the caller's write replaces the week (`keep`) and the plan
+    # may hire. Empty everywhere else, and then this is the plain placement.
+    standing = [
+        row for row in current or ()
+        if row["station"] in owned and row.get("employee") in now
+    ] if ctx["keep"] and ctx["hires"] else []
+    role_keys = {s["id"]: ("serve", _station_role(s)) for s in grid["stations"]}
+    role_keys.update({post["id"]: COVER_STATIONS[post["slug"]] for post in cover_posts})
+    ctx.update(
+        before=before, roles_here=roles_here, flex=flex, now=now, protected=protected,
+        fixed_people=fixed_people, role_keys=role_keys,
+        by_id={person["id"]: person for person in pool},
+        start={pid: _copy_state(state[pid]) for pid in before} if protected or standing else None,
+        keys=set(state),
+    )
+
+    shifts, hire_weeks, here = _week_d_fill(ctx, [])
+    # Issue #446: a write leaves out every entry that waits on somebody not
+    # here yet, so a plan that moved a person off an hour they work now and
+    # gave the hour to a hire is a week with fewer people in that hour until
+    # the hire comes. Where the plain week does that, it is placed again with
+    # the entries as they stand held where the plan still wants those hours
+    # (_hold_rows()) and the rest placed round them: first every entry, in a
+    # role with such an hour, of somebody the plain week gives hours, then
+    # only the entries on those hours. The fewest people come first, so a held
+    # week is kept only if it puts nobody to work the plain week leaves at
+    # 0 h, draws the same bench members, hires no more people, and leaves
+    # fewer hours short; the first that does is kept. Otherwise the plain
+    # week stands.
+    dropped, missing = _waiting_drops(shifts, standing, role_keys) if standing else ([], 0)
+    if dropped:
+        start, keys = ctx["start"], ctx["keys"]
+        plain = _week_d_snapshot(ctx, shifts, hire_weeks, here)
+        here_ids, bench_ids, hired = _week_d_who(ctx, shifts, hire_weeks)
+        short_roles = {role_keys.get(row["station"]) for row in dropped}
+        tries = [
+            [row for row in standing
+             if row["employee"] in here_ids and role_keys.get(row["station"]) in short_roles],
+            [row for row in dropped if row["employee"] in here_ids],
+        ]
+        kept = None
+        for index, held in enumerate(tries):
+            # The second try is the first again where every entry of a short
+            # role is on a short hour: asked once.
+            if not held or (index and held == tries[0]):
+                continue
+            for pid, entry in start.items():
+                state[pid] = _copy_state(entry)
+            for pid in set(state) - keys:
+                del state[pid]
+            shifts, hire_weeks, here = _week_d_fill(ctx, held)
+            now_here, now_bench, now_hired = _week_d_who(ctx, shifts, hire_weeks)
+            short = _waiting_drops(shifts, standing, role_keys)[1]
+            if (now_here <= here_ids and now_bench == bench_ids and now_hired <= hired
+                    and short < missing):
+                kept = _week_d_snapshot(ctx, shifts, hire_weeks, here)
+                break
+        shifts, hire_weeks, here = _week_d_restore(ctx, kept or plain)
+    shifts.sort(
+        key=lambda s: (s["wd"], s["from"], s["to"], str(s["station"]), str(s["employee"]))
+    )
+    ctx["shifts"] = shifts
+    ctx["hire_weeks"] = hire_weeks
+
+
+def _week_d_fill(ctx: dict, held: list) -> tuple:
+    """d. and e. from `ctx["start"]`, with the entries in `held` kept where they
+    stand: (shifts, hire weeks, the rank's `here`)."""
+    grid, pool, state, before = ctx["grid"], ctx["pool"], ctx["state"], ctx["before"]
+    slots, cover_slots, start = ctx["slots"], ctx["cover_slots"], ctx["start"]
+    role_keys, by_id, now = ctx["role_keys"], ctx["by_id"], ctx["now"]
     pins, kept, allowed = [], [], {}
+    if held:
+        pins = _hold_rows(held, slots + cover_slots, role_keys, by_id, start)
     while True:
-        here = fresh_here()
+        # Each station's furniture group (_station_groups()), where the caller
+        # has the building: a desk demand is met at a station, not a site.
+        here = {"groups": ctx["groups"] or {}, "rostered": set(), "flex": ctx["flex"]}
         shifts = _fill_week(slots, cover_slots, pool, state, here, pins, allowed)
         _repair_week(shifts, pool, state, here["rostered"], before)
         worse = [
-            person["id"] for person in protected
+            person["id"] for person in ctx["protected"]
             if person["id"] not in kept
             and _worse_off(person, state[person["id"]], before[person["id"]], now[person["id"]])
         ]
@@ -14877,26 +15217,58 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
         # Zero professional demand is not a spare person when fixed duties
         # remain. Their existing professional week may still be needed to keep
         # a minimum-hours/day demand that the combined current week meets.
-        staffed_roles.update(role_of[row["station"]] for pid in kept if pid in fixed_people
+        staffed_roles.update(role_of[row["station"]] for pid in kept if pid in ctx["fixed_people"]
                              for row in now[pid]["rows"] if row["station"] in role_of)
         stations_ok = {s["id"]: (s["skill"], "serve") for s in grid["stations"]
                        if _station_role(s) in staffed_roles}
         stations_ok.update({slot["station"]: (slot["skill"], slot["kind"])
                             for slot in cover_slots})
-        by_id = {person["id"]: person for person in pool}
-        pins = _pin_weeks(kept, now, stations_ok, open_hours, by_id, start)
+        pins = _pin_weeks(kept, now, stations_ok, ctx["open_hours"], by_id, start)
+        if held:
+            pins += _hold_rows([row for row in held if row["employee"] not in kept],
+                               slots + cover_slots, role_keys, by_id, start, taken=pins)
 
     # e. The lines nobody here may work: offered again with hires in the pool
     # and the week settled for them, only where there are such lines, so a
     # week that needs nobody new is exactly the week above (_place_hires()).
     hire_weeks = {}
-    if hires and any(shift["employee"] is None for shift in shifts):
+    if ctx["hires"] and any(shift["employee"] is None for shift in shifts):
         shifts, hire_weeks = _place_hires(shifts, pool, state, here, before)
     shifts.extend(pins)
-    shifts.sort(
-        key=lambda s: (s["wd"], s["from"], s["to"], str(s["station"]), str(s["employee"]))
-    )
+    return shifts, hire_weeks, here
 
+
+def _week_d_who(ctx: dict, shifts: list, hire_weeks: dict) -> tuple:
+    """Who a week puts to work: (people here, bench members, hires)."""
+    here_ids = {s["employee"] for s in shifts + ctx["fixed"]
+                if s["employee"] is not None and not s.get("fromBench")}
+    bench_ids = {s["employee"] for s in shifts if s.get("fromBench")}
+    return here_ids, bench_ids, sum(len(weeks) for weeks in hire_weeks.values())
+
+
+def _week_d_snapshot(ctx: dict, shifts: list, hire_weeks: dict, here: dict) -> tuple:
+    """A placement to come back to (_week_d_restore())."""
+    # Only the pool's weeks and the hires' change in a placement.
+    start, keys = ctx["start"], ctx["keys"]
+    return (shifts, hire_weeks, here, {pid: _copy_state(entry) for pid, entry in ctx["state"].items()
+                                       if pid in start or pid not in keys})
+
+
+def _week_d_restore(ctx: dict, saved: tuple) -> tuple:
+    """Put back a _week_d_snapshot(): (shifts, hire weeks, here)."""
+    state = ctx["state"]
+    for pid in set(state) - ctx["keys"]:
+        del state[pid]
+    state.update(saved[3])
+    return saved[:3]
+
+
+def _week_e_residue(ctx: dict) -> dict:
+    """e. The residue: who the site has against the headcount, the hires'
+    weeks, the spare people and the demands left short; the placer's result."""
+    pool, bench, state, fixed = ctx["pool"], ctx["bench"], ctx["state"], ctx["fixed"]
+    shifts, hire_weeks, headcount = ctx["shifts"], ctx["hire_weeks"], ctx["headcount"]
+    before, by_id = ctx["before"], ctx["by_id"]
     # Who the site has is settled now rather than before placement: a bench
     # member counts here only if this site is the one that drew them off it.
     # One pass over the shifts, not one per person: the bench is every
@@ -14960,7 +15332,6 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
         and any(_usable(person, skill, entry["kind"]) for skill, entry in headcount.items())
     })
     # And the roles each of them is spare in: a move keeps to one of these.
-    by_id = {person["id"]: person for person in pool}
     spare_skills = {
         pid: [
             skill for skill in _in_order(headcount)
@@ -15050,7 +15421,7 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
         if person["id"] not in worked:
             continue
         usable = _in_order({
-            skill for skill, kind in roles_here if _usable(person, skill, kind)
+            skill for skill, kind in ctx["roles_here"] if _usable(person, skill, kind)
         })
         bench_rows.append({
             "employee": person["id"],
@@ -15058,14 +15429,14 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
             "skills": usable,
         })
     return {
-        "need": need,
+        "need": ctx["need"],
         "shifts": shifts,
         "headcount": headcount,
         "shortHours": short_hours,
         "shortDays": short_days,
         "placed": _demand_driven(shifts, pool),
         "bench": bench_rows,
-        "slack": (slack_hours, slack_cost, budget),
+        "slack": ctx["slack"],
         "weekly": weekly,
         "took": [person for person in bench if person["id"] in worked],
         "hireWeeks": hire_weeks,
@@ -15073,7 +15444,7 @@ def _place_cut_week(grid, need, slots_open, cover_posts, pool, people, business,
         "spareSkills": spare_skills,
         "fewer": fewer,
         # Taken off by _place_week(): whether `snap` changed any cut.
-        "snapMoved": snap_moved,
+        "snapMoved": ctx["snap_moved"],
     }
 
 
@@ -15305,7 +15676,7 @@ def _plan_site(
     # guard on a locker from a cashier on a register.
     current = _current_roster(save, building, {**stations, **cover_stations})
     week = _place_week(grid, need, grid["open"], cover_posts, pool, people, business,
-                       bench, state, current=current["list"])
+                       bench, state, current=current["list"], keep=True)
     return {
         "save": save,
         "business": business,
@@ -15691,9 +16062,10 @@ def _office_staffing(save: Save, names, businesses: list, grids: list, staff: li
         try:
             row, took = _office_site_plan(save, names, business, building, grid, skill,
                                           pool, people, bench, scratch)
-        except Exception:
+        except Exception as exc:
             out.append({"key": business["key"], "name": business["name"],
-                        "typeSlug": business["typeSlug"], "failed": True})
+                        "typeSlug": business["typeSlug"], "failed": True,
+                        "error": _plan_failed(exc, f"the staffing of office {business['key']}")})
             continue
         state.update(scratch)
         taken = {p["id"] for p in took}
@@ -15739,7 +16111,7 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
     week = _place_week(fake, need, slots_open, [], pool, people, business, usable_bench,
                        state, groups=_station_groups(save, building),
                        current=[r for r in current["list"] if r not in retained] if demand_based else current["list"],
-                       fixed=retained if demand_based else None)
+                       fixed=retained if demand_based else None, keep=demand_based)
     if demand_based:
         retained_people = {r["employee"] for r in retained}
         worked = {r["employee"] for r in week["shifts"]} | retained_people
@@ -16731,7 +17103,7 @@ def _market(
     sells = collections.defaultdict(set)
     for b in trading:
         for line in b["lines"]:
-            if line["price"]:
+            if line["price"] and not line.get("retired"):
                 sells[line["slug"]].add(b["neighbourhood"])
     makes = set()
     for plan in save.items(save.root["logisticsManagerPlans"]):
@@ -17751,7 +18123,7 @@ def _site_trends(businesses: list, day: int) -> list:
 
 # ------------------------------------------------------------------- payback
 # What a site cost to set up, and when its profit paid that back
-# (docs/open-a-store-scope.md, "Phase 1"). The rules are the game's own, read
+# (docs/dashboard-reference.md, "Payback"). The rules are the game's own, read
 # from its code on 28 Sep 2026 and checked against six real bills to the coin:
 #   installation firm  586 x the building's m² + every item at its default
 #                      price; walls and floors cost nothing
@@ -18281,7 +18653,7 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
 
 
 # ------------------------------------------------------------- open a store
-# Expansion › Open a store (docs/open-a-store-scope.md, phase 2): the facts a
+# Expansion › Open a store (docs/dashboard-reference.md, "Open a store"): the facts a
 # plan for a store that does not exist yet is worked out from. Python says what
 # the save and the game's tables hold -- what a type needs to be fully outfitted
 # in each layout, what every product meets in every neighbourhood, the player's
@@ -18349,13 +18721,19 @@ BOAT_PRICES = {0: 3_200_000, 1: 2_500_000, 2: 90_000_000}
 # The satisfaction a well-run new shop settles at (all four parts near 95)
 # where the player runs none of the type to take it from.
 PLAN_SATISFACTION = 95
+# CitizenHelper.Init: the price a working-, middle- and upper-class customer
+# accepts, as a multiple of the reference price; a neighbourhood's index is
+# their average over its class shares (ba_store_rules.json hoods w, m, u).
+PRICE_ACCEPTANCE = (1.2, 1.4, 1.7)
 # What a shop of the player's own is measured over: its last finished trading
 # days after the opening, the window the profit model was validated on.
 OWN_PROFIT_DAYS = 14
 # The days after its first sale a new shop still earns below its steady
 # state (research RAMP.md: satisfaction starts at 50, new staff climb 0.6 an
-# hour); the board's OS_RAMP holds the factors.
-RAMP_DAYS = 5
+# hour): each day's gross margin as a share of the steady one, from the
+# opening day on. The board's plan reads them from openStore.game.ramp.
+RAMP = (0.55, 0.92, 0.94, 0.97, 0.99)
+RAMP_DAYS = len(RAMP)
 # The shops a new one would take demand from, measured over their last week.
 SALES_DAYS = 7
 # FurnitureStoreManagerDialog: one flat fee per furniture delivery contract.
@@ -18387,16 +18765,6 @@ def _plan_initial(build_at_start, model: str | None, size_cap, type_slug: str, s
     if model == "office":
         return _initial_customers(CAPPED_INITIAL_BUILD, size_cap, type_slug, sqm, products)
     return _initial_customers(build_at_start, size_cap, type_slug, sqm, products)
-
-
-def demand_with(providers: int, default_price: float) -> float:
-    """A product's expected neighbourhood demand with `providers` sellers
-    (ProductMarketHelper.CalculateDemand): 100 less a step per seller past the
-    few the item's price makes room for, drawn one below or at it, and 29 to
-    34 once it bottoms out."""
-    opt = optimal_providers(default_price)
-    base = 100 - (providers * 100) // opt
-    return min(100.0, base - 0.5) if base >= 30 else 31.5
 
 
 def optimal_providers(default_price: float) -> int:
@@ -18577,8 +18945,10 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
     item per customer demand the type makes) or "shelf" (the displays), and
     `why` what the line answers: a requirement's name, a demand, or the
     products a display holds. Every item is one somebody sells, at its default
-    price, and made for the type where the item names the types it is for;
-    the cheapest one that does the job wins.
+    price, and made for the type where the item names the types it is for
+    (the display of a main product, or of one a requirement names, falls back
+    to any that works in the type when none is made for it); the cheapest one
+    that does the job wins.
 
     The displays are `copied` -- (item, qty, products) from the player's own
     site of the type and layout -- and, for every product the type sells that
@@ -18606,11 +18976,11 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
         names = [n for n in names if sold(n, typed)]
         return min(names, key=lambda n: (unit_cost(n), n)) if names else None
 
-    def sized(names):
+    def sized(names, typed=True):
         """The station that covers `cap` customers an hour for the least."""
         best = None
         for n in _in_order(set(names)):
-            if not sold(n):
+            if not sold(n, typed):
                 continue
             rate = facts(n).get("c") or 0
             qty = max(1, math.ceil(cap / rate)) if rate and cap else 1
@@ -18710,12 +19080,19 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
     # else enough of its cheapest. A display several products share is summed
     # first and added once, so what it stands on counts it whole.
     shelves = {}
-    for p in [*(p for p, _impact in t.get("i") or ()), *shelf_products]:
+    main = dict(t.get("i") or ())
+    for p in [*main, *shelf_products]:
         row = products.get(p) or {}
         if p in covered or row.get("s") or row.get("k") or p in (t.get("f"), t.get("fw")):
             continue  # shown already, or a service, a ticket or an entrance fee: no shelf
         shows = catalogue.displays.get(p, ())
+        # A main product, or one a requirement names, with no display made
+        # for the type takes any that works in it: a fast food restaurant's
+        # ice cream stands in the coffee shop's counter (issue #497). An extra
+        # (weight under 1) is left to outfit_optional(), which allows the same.
         item, qty = sized(shows)
+        if not item and (main.get(p, 0) >= 1 or p in shelf_products):
+            item, qty = sized(shows, False)
         if not item:
             continue
         got = shelves.setdefault(item, [0, []])
@@ -18803,14 +19180,6 @@ def plan_layout(row: dict) -> str | None:
     if row.get("z") and row.get("v") is not None and not _layout(row):
         return f"{row['z']}{row['v']}"
     return _layout(row) or row.get("z")
-
-
-def _venue_caps(names: Names) -> dict:
-    """{size and version: customer capacity} for the cinemas and theatres
-    (S1 150, S2 125, S3 100; R1 200 ...), from the same rows _door_caps()
-    reads (_cap_rows()), keyed by layout code for every venue."""
-    return {code: cap for section, _letter, code, cap in _cap_rows(names)
-            if section in ("cinema", "theater")}
 
 
 def _building_row(reg: dict, save=None) -> dict:
@@ -19211,7 +19580,7 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
         addr = save.address(loan.get("bankAddress"))
         owed[places.get(site_key(addr)) if addr else None] += loan.get("remainingAmount") or 0
     last = [d["profit"] for d in daily[-7:]]
-    per_year = gv.get("daysPerYear") or 60
+    per_year = _days_per_year(gv)
     banks = []
     for bank, terms in sorted((rules.get("banks") or {}).items()):
         name, addr = BANK_PLACES.get(bank, (bank, None))
@@ -19226,7 +19595,7 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
         "floor": TUTORIAL_LOAN_FLOOR if tutorial else 0,
         "profit7": money(sum(last) / 7) if last else 0,
         "owed": money(sum(owed.values())),
-        "multiplier": round(gv.get("bankInterestMultiplier") or 0.7, 4),
+        "multiplier": round(_house_rule(gv, "bankInterestMultiplier"), 4),
         "year": per_year,
         "minimum": LOAN_MINIMUM,
         "banks": banks,
@@ -19373,9 +19742,8 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
         shares = (h.get("w") or 0, h.get("m") or 0, h.get("u") or 0)
         total = sum(shares) or 1
         hoods[hood] = {
-            # CitizenHelper.Init: the price everyone accepts, as a multiple of
-            # the reference price.
-            "idx": round((1.2 * shares[0] + 1.4 * shares[1] + 1.7 * shares[2]) / total, 4),
+            # The price everyone accepts, as a multiple of the reference price.
+            "idx": round(sum(w * s for w, s in zip(PRICE_ACCEPTANCE, shares)) / total, 4),
             "strength": h.get("ms") or 0,
             "demands": h.get("cw") or 0,
             "interior": h.get("mi") or 0,
@@ -19386,9 +19754,9 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     used_vendors = {v for item in items_used for v in (furniture.get(item) or {}).get("v") or ()}
     return {
         "game": {
-            "promo": round(gv.get("baseCustomerPromotionMultiplier") or 0.55, 4),
+            "promo": round(_house_rule(gv, "baseCustomerPromotionMultiplier"), 4),
             "prices": round(mpm, 4),
-            "wages": round(gv.get("employeeHourlySalaryMultiplier") or 0.7, 4),
+            "wages": round(_house_rule(gv, "employeeHourlySalaryMultiplier"), 4),
             "tax": gv.get("taxPercentage") or 0,
             "capInitial": (build_at_start or 0) >= CAPPED_INITIAL_BUILD,
             "agent": agent,
@@ -19396,6 +19764,9 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
             "delivery": FURNITURE_DELIVERY_FEE,
             "satisfaction": PLAN_SATISFACTION,
             "wageBase": PLAN_WAGES,
+            "ramp": list(RAMP),
+            "office": {"always": OFFICE_ALWAYS_ON, "fullDoor": OFFICE_FULL_DOOR, "day": list(OFFICE_DAY),
+                       "weekend": list(OFFICE_WEEKEND)},
         },
         "types": types,
         "market": market,
@@ -19429,6 +19800,9 @@ FACTORY_TRUCK = "ba:vehicletype_freighttruckt1"
 DEPOT_VAN = "ba:vehicletype_deliverytruck"
 VEHICLE_DEALER = ("General US Trucks", "ba:street_seventhavenue#1", "ba:neighborhood_industrycity")
 PALLET_SHELF = "ba:itemname_palletshelf"
+# The boxes a pallet shelf holds (its furniture row's cc in ba_store_rules.json),
+# for rules that lack the row.
+PALLET_SHELF_BOXES = 60
 # The game pays a delivery driver a flat 5.7 hours a day, whatever the round
 # takes (NOTES.md, decision 15); a hire at headquarters is planned at 40 h.
 DRIVER_DAY_HOURS = 5.7
@@ -19605,8 +19979,8 @@ def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, r
     return {
         "game": {
             "prices": round(gv.get("marketPriceMultiplier") or 1.0, 4),
-            "export": round(gv.get("exportMultiplier") or 0.65, 4),
-            "wages": round(gv.get("employeeHourlySalaryMultiplier") or 0.7, 4),
+            "export": round(_house_rule(gv, "exportMultiplier"), 4),
+            "wages": round(_house_rule(gv, "employeeHourlySalaryMultiplier"), 4),
             "agent": agent,
             "agentName": agents[0][1] if agents else None,
             "installFee": INSTALL_FEE_PER_M2,
@@ -19620,7 +19994,7 @@ def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, r
         "products": facts,
         "kits": kits,
         "shelf": {"item": PALLET_SHELF, "p": items[PALLET_SHELF]["p"],
-                  "cc": (furniture.get(PALLET_SHELF) or {}).get("cc") or 60},
+                  "cc": (furniture.get(PALLET_SHELF) or {}).get("cc") or PALLET_SHELF_BOXES},
         "vehicles": {role: {"type": kind, "p": float(vehicle_prices.get(kind) or 0), "name": names.label(kind),
                             "dealer": VEHICLE_DEALER[0], "at": VEHICLE_DEALER[1], "hood": VEHICLE_DEALER[2]}
                      for role, kind in (("truck", FACTORY_TRUCK), ("van", DEPOT_VAN))},
@@ -19899,7 +20273,7 @@ def _plan(
             continue
         sites[b["typeSlug"]] += 1
         for line in b["lines"]:
-            if line["price"] and line["rate"] > 0:
+            if line["price"] and line["rate"] > 0 and not line.get("retired"):
                 mine[b["typeSlug"]][line["slug"]].append(line["rate"])
     own = {}
     for kind, products in mine.items():
@@ -20123,8 +20497,8 @@ def _worked_over(d: dict):
 
 
 def _demand_priority(priority: int):
-    """A job demand's priority as a finding says it: JOB_DEMAND_PRIORITY,
-    lowercased."""
+    """A job demand's priority as a finding says it, lowercased: the game's
+    0 Nice to have, 1 Important, 2 Critical."""
     if priority == 2:
         return msg("f.jobdemand.critical", "critical")
     if priority == 1:
@@ -20208,10 +20582,10 @@ def _alerts(
     grids: list,
     day: int,
     gate: float,
-    mode: str = "cap",
+    mode: str | tuple = "cap",
     agencies: list = (),
     estate: dict | None = None,
-) -> dict:
+) -> dict | list:
     """Only things worth acting on, with a number and a deadline where one exists.
 
     Two filters run over everything below. Findings that repeat across many
@@ -20219,6 +20593,10 @@ def _alerts(
     carry a dollar figure have to clear the materiality gate — a fraction of a
     day's profit — or they are counted at the foot of the panel instead of read
     out. A site that cannot trade at all is never counted away.
+
+    ``mode`` sizes factory lines on capacity ("cap") or on demand ("dem"). Only
+    the supply helpers read it, so a tuple of modes builds every other finding
+    once and returns one result per mode, in order (extract() asks for both).
     """
     # Real estate first (_estate_owned()): the company-wide rent line leads the
     # opportunities and, on tax eve, the buildings to buy lead the warnings.
@@ -20680,13 +21058,11 @@ def _alerts(
             key=b["key"],
         )
 
-    # A shop only runs dry if a day of selling outruns the morning top-up.
-    found.extend(_shelf_notes(businesses, supply, silent, mode))
-
-    # A depot only runs dry if it cannot reach the next delivery by more than a
-    # few hours, and an order is only wrong if it cannot cover the week it has to
-    # cover.
-    found.extend(_import_notes(businesses, supply, silent, mode))
+    # The supply findings that depend on the mode go in here, between the
+    # findings above and those below (by_mode()). note() appends to whatever
+    # `found` is bound to when it is called, so rebinding `found` here sends
+    # every note() below into the second half while `head` keeps the first.
+    head, found = found, []
 
     # --- what the hour-by-hour grid says that a daily total cannot
     # Five shops hitting the same 30/h ceiling in the same hours is one finding
@@ -20809,11 +21185,29 @@ def _alerts(
             key=finding["key"],
         )
 
-    found.extend(_idle_notes(businesses, supply["idle"], silent, mode))
-    found.extend(_feed_notes(businesses, supply.get("factories", {}), silent, mode))
-    found.extend(_staff_notes(businesses, supply.get("factories", {}), silent, mode))
-    found.extend(_unnamed_notes(businesses, supply.get("factories", {}), silent))
-    return _condense(found, gate)
+    middle = found
+    factories = supply.get("factories", {})
+
+    def by_mode(mode: str) -> dict:
+        # _condense() pops fields off the rows it is given, so each mode gets
+        # its own copies of the shared findings.
+        rows = [dict(f) for f in head]
+        # A shop only runs dry if a day of selling outruns the morning top-up.
+        rows.extend(_shelf_notes(businesses, supply, silent, mode))
+        # A depot only runs dry if it cannot reach the next delivery by more than a
+        # few hours, and an order is only wrong if it cannot cover the week it has to
+        # cover.
+        rows.extend(_import_notes(businesses, supply, silent, mode))
+        rows.extend(dict(f) for f in middle)
+        rows.extend(_idle_notes(businesses, supply["idle"], silent, mode))
+        rows.extend(_feed_notes(businesses, factories, silent, mode))
+        rows.extend(_staff_notes(businesses, factories, silent, mode))
+        rows.extend(_unnamed_notes(businesses, factories, silent))
+        return _condense(rows, gate)
+
+    if isinstance(mode, str):
+        return by_mode(mode)
+    return [by_mode(m) for m in mode]
 
 
 def _fact_labels(businesses: list, supply: dict) -> dict:
@@ -21855,6 +22249,19 @@ def script_json(text: str) -> str:
     return text.replace("<", "\\u003c")
 
 
+# The wiki catalogue as the page receives it. web/wiki-data.json is committed
+# indented, so a rebuild's diff can be read; a quarter of it is indentation,
+# which the page would only download and parse. The site fetches this compact
+# copy (WIKI_URL in web/wiki.js), which build_web.py writes beside it, the
+# watch server answers the same path, and an export embeds the same text.
+WIKI_SERVED = "wiki-data.min.json"
+
+
+def compact_wiki(text: str) -> str:
+    """web/wiki-data.json's text without its indentation; the same JSON."""
+    return json.dumps(json.loads(text), ensure_ascii=False, separators=(",", ":"))
+
+
 def render(
     data: dict | None,
     live: bool = False,
@@ -21903,6 +22310,13 @@ def render(
     asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
     with open(os.path.join(asset_root, "changelog.json"), encoding="utf-8") as fh:
         changes = json.load(fh)
+    changes = sorted(changes, key=lambda entry: (entry["date"], entry["pr"]), reverse=True)
+    # The hosted page ships the newest entry only (it also dates the New
+    # badges) and fetches the rest from web/changelog.json on the dialog's
+    # first open (issue #328). A local page has nothing to fetch from, so it
+    # carries them all.
+    if site:
+        changes = changes[:1]
     changelog = "".join(
         '<li class="changelog-entry"><div class="changelog-meta">'
         f'<time datetime="{html_escape(entry["date"])}">'
@@ -21911,7 +22325,7 @@ def render(
         f'target="_blank" rel="noopener" aria-label="View pull request {int(entry["pr"])}">'
         f'PR #{int(entry["pr"])} ↗</a></div>'
         f'<h3>{html_escape(entry["title"])}</h3><p>{html_escape(entry["summary"])}</p></li>'
-        for entry in sorted(changes, key=lambda entry: (entry["date"], entry["pr"]), reverse=True)
+        for entry in changes
     )
     with open(os.path.join(asset_root, "map.js"), encoding="utf-8") as fh:
         map_script = fh.read()
@@ -21967,7 +22381,7 @@ def render(
         catalogue = optional_asset("wiki-data.json")
         if catalogue:
             wiki_payload = ("window.BIG_COPILOT_WIKI="
-                            + script_json(catalogue.strip()) + ";")
+                            + script_json(compact_wiki(catalogue)) + ";")
     # The <html> start tag is optional and the page never closed one, so this
     # only names the language of the element the parser makes anyway.
     return "<!doctype html>" + chr(10) + '<html lang="en">' + chr(10) + '<meta charset="utf-8">' + chr(10) + head + (
@@ -21995,6 +22409,7 @@ def render(
         # The game names in another language, for a local page built with --lang.
         .replace("/*__NAMES__*/null", names_json)
         .replace("<!--__CHANGELOG__-->", changelog)
+        .replace("__CHANGELOG_SRC__", "changelog.json" if site else "", 1)
         .replace("/*__LIVE__*/false", "true" if live else "false")
         .replace("__TITLE__", html_escape(title))
         .replace("<!--__FOOTER__-->", footer_html(site=site))
@@ -22013,7 +22428,7 @@ def render(
 # fetched files on disk and never renders.
 _template = None
 # Where the board script stands in board.html: a line of its own, the whole
-# body of the page's last <script> block (tools/split_board_script.py).
+# body of the page's last <script> block.
 BOARD_SCRIPT_SLOT = "/*__BOARD_SCRIPT__*/\n"
 
 
@@ -22337,11 +22752,14 @@ def browser_build(
     return json.dumps(build.core, separators=(",", ":"))
 
 
-def browser_section(name: str, generation) -> str:
+def browser_section(name: str, generation, have=None) -> str:
     """One section of the build the worker holds, as JSON: {"generation", "sections"}.
 
     `sections` is {name: {key: value}} for the section asked for and every
-    section it needs, however deep, so the page holds all of them after it.
+    section it needs, however deep, less those in `have`: the sections the
+    page already holds for this build (odNeed() in the board script lists
+    them). The section asked for is always sent. With no `have` (a page
+    that lists none) the whole chain goes, so the page holds all of it after.
     A build other than `generation` is stale (StaleBuild): the page dropped
     the board it asked for, or the worker has started a newer one. Writes no
     history: only a build records one.
@@ -22352,9 +22770,10 @@ def browser_section(name: str, generation) -> str:
     if name not in SECTIONS:
         raise ValueError(f"no section {name!r}")
     safe_section(build, name)
-    # Every section it needs too, computed now or before: the page may never
-    # have had one that was computed on the way to a request that then failed.
-    chain = _section_chain(name)
+    # Every section it needs too, computed now or before, that the page does
+    # not hold: it may never have had one computed on the way to a request
+    # that then failed. What it holds is not sent again (issue #327).
+    chain = _section_chain(name) - set(have or ()) | {name}
     sent = {done: build.sections[done] for done in SECTIONS if done in chain}
     return json.dumps({"generation": generation, "sections": sent}, separators=(",", ":"))
 
@@ -22789,8 +23208,24 @@ class BoardHandler(_RequestHandler):
             "/maps/locations.json": "application/json",
             "/maps/map-background.svg": "image/svg+xml",
             "/maps/floor-plans.json": "application/json",
-            "/wiki-data.json": "application/json",
         }
+        # The wiki's compact copy, made here from the committed catalogue: a
+        # checkout run without build_web.py has no web/wiki-data.min.json.
+        if route == "/" + WIKI_SERVED:
+            try:
+                with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "web",
+                                       "wiki-data.json"), encoding="utf-8") as fh:
+                    body = compact_wiki(fh.read()).encode("utf-8")
+            except (OSError, ValueError):
+                self.send_error(404)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if route in map_assets:
             path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", route.lstrip("/"))
             try:

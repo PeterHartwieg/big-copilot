@@ -544,8 +544,7 @@ test('a render keeps a Stale mark on the fresh dot, and a lost source replaces i
   await page.evaluate(() => { window.calmWatch.stale('rebuild broke'); renderCalm(); });
   assert.deepEqual(await liveDot(page), {stale: true, says: en("nav.stale.word"), why: 'rebuild broke'});
   await page.evaluate(() => window.calmWatch.lost());
-  // Not in the catalogue: the lost live dot writes this English itself.
-  assert.deepEqual(await liveDot(page), {stale: false, says: 'Not live', why: ''});
+  assert.deepEqual(await liveDot(page), {stale: false, says: en("nav.notlive.word"), why: ''});
 });
 
 test('a refresh settles the board, not an open dialog', async t => {
@@ -559,7 +558,7 @@ test('a refresh settles the board, not an open dialog', async t => {
     document.body.appendChild(dlg);
     dlg.showModal();
     gwOpen = dlg;
-    dlg._gwGate = () => { dlg.innerHTML = '<div class="gw-w ok"><span class="g">ready</span></div>'; };
+    gwState(dlg).gate = () => { dlg.innerHTML = '<div class="gw-w ok"><span class="g">ready</span></div>'; };
     const playing = () => document.getAnimations().filter(a => a.animationName === 'gw-nod' && dlg.contains(a.effect.target))
       .map(a => a.playState);
     window.calmWatch.changed(JSON.parse(p));

@@ -48,6 +48,12 @@ const vm = require('node:vm');
 const ROOT = path.join(__dirname, '..');
 const PY = process.env.PYTHON || 'python';
 
+/* The languages Big Copilot's own text comes in, English first: TT_LANGS in
+   web/i18n.js, which tests/test_i18n_languages.py holds to UI_LANGUAGES in
+   ba_dashboard.py. A test that walks the languages reads them here. */
+const UI_LANGS = JSON.parse(/const TT_LANGS = (\[[^\]]*\]);/
+  .exec(fs.readFileSync(path.join(ROOT, 'web', 'i18n.js'), 'utf8'))[1]);
+
 let table = null;
 /* The files the catalogue is read from (calls() in tools/i18n.py), as
    path:size:mtime: the extract is kept on disk under this signature, so the
@@ -228,4 +234,4 @@ function findMsg(w, key){
   return null;
 }
 
-module.exports = {catalogue, useCatalogue, english, en, enBetween, enText, enRe, textRe, escapeRe: escape, wire, assertMsg, msgParam, findMsg};
+module.exports = {UI_LANGS, catalogue, useCatalogue, english, en, enBetween, enText, enRe, textRe, escapeRe: escape, wire, assertMsg, msgParam, findMsg};

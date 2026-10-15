@@ -22,13 +22,9 @@ breaks the meaning is caught here:
 from __future__ import annotations
 
 import os
-import sys
 import tempfile
 import unittest
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.dirname(HERE))
 
 import ba_dashboard  # noqa: E402
 from tests import save_fixtures as fx  # noqa: E402
@@ -227,7 +223,3 @@ class HistoryExtractTests(unittest.TestCase):
         self.assertEqual((flow["fromDay"], flow["days"]), (N, BETWEEN - N))
         self.assertEqual((flow["cashFrom"], flow["cashTo"]),
                          (self.first["kpi"]["cash"], between["kpi"]["cash"]))
-
-
-if __name__ == "__main__":
-    unittest.main()

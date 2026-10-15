@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * The bug report route, POST /api/report (docs/bug-report-scope.md).
+ * The bug report route, POST /api/report (docs/community-features.md, "Bug reports").
  *
  * Runs the real worker (server/worker.mjs) in Miniflare with an in-memory R2
  * bucket, the report limiter as wrangler.jsonc declares it, a stubbed ASSETS
@@ -23,6 +23,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const {Miniflare, convertV4MiniflareOptions, Response: MfResponse} = require('miniflare');
+const {vmWorkerSource} = require('./_community.cjs');
 
 const ROOT = path.join(__dirname, '..');
 const WORKER_PATH = path.join(ROOT, 'server', 'worker.mjs');
@@ -36,6 +37,7 @@ const SAVE_SENTINEL = 'private-save-bytes-sentinel';
 let mf = null;
 let bucket = null;
 let workerScript = '';
+let vmScript = ''; // the Worker as a classic script, for vmWorker()
 let ipCounter = 0;
 // What the stand-in for GitHub saw, and how it answers the next call.
 const github = {calls: [], answer: null};
@@ -135,6 +137,7 @@ async function expectStatus(res, status, label) {
 
 before(async () => {
   workerScript = await bundleWorker();
+  vmScript = await vmWorkerSource([]);
   mf = new Miniflare(convertV4MiniflareOptions(baseOptions()));
   await mf.ready;
   bucket = await mf.getR2Bucket('REPORTS');
@@ -385,14 +388,10 @@ test('config: wrangler.jsonc binds the EU bucket and names the token as a secret
 
 /* ------------------------------------------------------------- R2 failures, in a VM */
 
-// The unchanged worker source with synthetic bindings, as the diagnostics
+// The bundled worker source with synthetic bindings, as the diagnostics
 // tests in community-api.test.cjs run it.
 function vmWorker(fetchImpl) {
   const events = [];
-  const source = fs.readFileSync(WORKER_PATH, 'utf8')
-    .replace('import FEATURES from "./features.json";', 'const FEATURES = [];')
-    .replace(/import .* from \"\.\/feature_requests\.mjs\";/, fs.readFileSync(path.join(ROOT,'server/feature_requests.mjs'),'utf8').replace(/^export /gm,''))
-    .replace('export default {', 'globalThis.worker = {');
   const context = {
     Request, Response, FormData, Blob, File, URL, TextEncoder, TextDecoder, AbortSignal, setTimeout,
     crypto: crypto.webcrypto,
@@ -400,7 +399,7 @@ function vmWorker(fetchImpl) {
     fetch: fetchImpl,
     caches: {default: {match: async () => null, put: async () => {}}},
   };
-  require('node:vm').runInNewContext(source, context);
+  require('node:vm').runInNewContext(vmScript, context);
   return {worker: context.worker, events};
 }
 

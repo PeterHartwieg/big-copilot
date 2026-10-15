@@ -9,7 +9,7 @@
 // existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
-const {en, enRe} = require('./_i18n.cjs');
+const {en, enRe, UI_LANGS} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -38,7 +38,7 @@ function seamSource(){
 const LANGS = ['en', 'cs', 'da', 'de', 'es', 'fr', 'it', 'lt', 'hu', 'nl', 'pl', 'pt', 'ro', 'fi', 'tr',
   'el', 'ru', 'uk', 'ja', 'ko', 'zh-cn', 'zh-tw'];
 /* The footer's list: the languages the whole page comes in, then the rest. */
-const PAGE_LANGS = ['en', 'de', 'es', 'fr', 'it', 'pt', 'tr', 'ru', 'ko'];
+const PAGE_LANGS = UI_LANGS;
 const LIST = [...PAGE_LANGS, ...LANGS.filter(l => !PAGE_LANGS.includes(l))];
 function seam({table = null, lang = 'de'} = {}){
   const opts = LANGS.map(value => ({dataset: {value}, textContent: value, getAttribute: () => value}));
@@ -47,11 +47,13 @@ function seam({table = null, lang = 'de'} = {}){
   const drawn = [];
   const context = vm.createContext({
     D: null, HOOD_NAMES: {}, page: 'today', console,
-    SOURCE: {}, gwLink: () => null, gwOpen: null, odSiteDrawn: null,
+    SOURCE: {}, gwLink: () => null, gwOpen: null, gwOpenState: () => null, odSiteDrawn: null,
     prettySlug: s => s.replace(/^ba:[a-z]+_/, ''),
     spEsc: s => String(s), attr: s => String(s),
     hasData: () => !!context.D,
     renderCalm(lazy){ drawn.push(['calm', lazy]); },
+    /* What takeData() tells the rest of the board of a new board. */
+    sbBoard(){}, pgBoard(){}, szAdopt(){},
     document: {querySelectorAll: sel => sel === '[data-gn-pick]' ? [picker] : [], querySelector: () => null},
     localStorage: {getItem: () => null, setItem(){}},
     navigator: {languages: ['en-US']}, window: {}, fetch: async () => { throw new Error('offline'); },

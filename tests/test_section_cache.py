@@ -375,6 +375,3 @@ class PlanningCacheTests(unittest.TestCase):
         self.assertEqual(list(cache.entries), ['new', 'oldest'])
         self.assertEqual(cache.get('oldest'), {'rows': [4, 5]})
         self.assertEqual(cache.bytes, sum(board._planning_size(value) for value, _ in cache.entries.values()))
-
-if __name__ == '__main__':
-    unittest.main()

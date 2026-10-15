@@ -15,7 +15,7 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
     page.on('pageerror', error => errors.push(error.message));
     const base = process.env.RELEASE_URL || 'http://release.test/';
     if(!process.env.RELEASE_URL) {
-      const files = new Set(['/index.html','/app.js','/worker.js','/community.js','/community.css','/maps/locations.json','/maps/map-background.svg','/wiki-data.json']);
+      const files = new Set(['/index.html','/app.js','/worker.js','/community.js','/community.css','/maps/locations.json','/maps/map-background.svg','/wiki-data.min.json','/changelog.json']);
       await page.route('**/*', route => {
         const url = new URL(route.request().url());
         if(url.hostname === 'release.test' && url.pathname === '/api/community/features') return route.fulfill({contentType:'application/json',body:JSON.stringify({features:[]})});
@@ -25,6 +25,10 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
       });
     }
     await page.goto(base);
+    // Badges retire 45 days after their feature shipped, counted to the newest
+    // changelog entry; pin that day inside every window checked here so the
+    // test does not age as the changelog grows.
+    await page.evaluate(() => featureDiscovery.asOf('2026-10-05'));
     assert.equal(await page.locator('#linkBtn').isVisible(), true);
     // A dismissal must start with a badge that was actually shown.
     assert.equal(await page.locator('#linkBtn [data-new-feature="game-link"]').isVisible(), true);
@@ -37,8 +41,19 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
     await page.locator('.community-dialog summary').click();
     await page.waitForFunction(()=>[...document.querySelectorAll('[data-new-feature="feature-requests"]')].every(el=>el.hidden));
     await page.keyboard.press('Escape');
+    // The page ships the newest entry; opening the dialog fetches the rest (issue #328).
+    assert.equal(await page.locator('#changelogDialog .changelog-entry').count(),1);
+    const shipped = await page.locator('#changelogDialog .changelog-entry').evaluate(li => [li.textContent, li.querySelector('a').outerHTML]);
     await page.locator('#landing [data-changelog]').click();
     assert.equal(await page.locator('#changelogDialog').evaluate(d => d.open),true);
+    const changes = require('../web/changelog.json');
+    await page.waitForFunction(n => document.querySelectorAll('#changelogDialog .changelog-entry').length === n, changes.length);
+    const first = await page.locator('#changelogDialog .changelog-entry').first();
+    const newest = [...changes].sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : b.pr - a.pr)[0];
+    assert.equal(await first.locator('time').getAttribute('datetime'), newest.date);
+    assert.equal(await first.locator('h3').textContent(), newest.title);
+    // The fetched entries are drawn as render() writes them.
+    assert.deepEqual(await first.evaluate(li => [li.textContent, li.querySelector('a').outerHTML]), shipped);
     assert.equal(await page.locator('[data-new-feature="changelog"]:not([hidden])').count(),0);
     await page.keyboard.press('Escape');
     await page.evaluate(() => {
@@ -76,8 +91,12 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
     await page.evaluate(() => window.BigCopilotWiki.route('wiki/topic%2Fhow-rent-works'));
     await page.getByRole('heading', {name:'How rent works'}).waitFor();
     await page.reload();
+    // A reload drops the pinned day: pin it again before counting. A badge can
+    // also be hidden by age, so the visit itself is checked in storage too.
+    await page.evaluate(() => featureDiscovery.asOf('2026-10-05'));
     for (const feature of ['game-link', 'community-voting', 'feature-requests', 'board-search', 'factory-flow',
       'map', 'wiki', 'changelog', 'wiki-topic-how-rent-works']) {
+      assert.equal(await page.evaluate(id => localStorage.getItem('ba_dash_feature_seen:' + id), feature), '1', `${feature} visit remembered`);
       assert.equal(await page.locator(`[data-new-feature="${feature}"]:not([hidden])`).count(), 0);
     }
     assert.deepEqual(errors,[]);

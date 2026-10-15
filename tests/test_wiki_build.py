@@ -24,7 +24,6 @@ from datetime import datetime, timezone
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
 )
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ba_dashboard
 import build_wiki_data as build
@@ -307,17 +306,23 @@ class FixtureCase(unittest.TestCase):
         """The payload as it is written to disk, parsed back."""
         return json.loads(build.serialise(self.build()))
 
-    def write_payload(self, path):
+    def write_payload(self, path, allow_fewer_guides=True):
+        # The synthetic gift shop page cannot hold the real authored copy's
+        # `when` clauses, so the loss guard is waived here and tested on its
+        # own in LossTests.
         return build.write_public_wiki(
-            path, self.root, buildings_path=os.path.join(self.root, "ba_buildings.json")
+            path, self.root, buildings_path=os.path.join(self.root, "ba_buildings.json"),
+            allow_fewer_guides=allow_fewer_guides,
         )
 
     def cli(self, out):
         return ["--data-dir", self.root, "--out", out,
-                "--buildings", os.path.join(self.root, "ba_buildings.json")]
+                "--buildings", os.path.join(self.root, "ba_buildings.json"),
+                "--allow-fewer-guides"]
 
     def guide(self):
-        return self.build()["guides"]["businesstypes-giftshop"]
+        """The Gift Shop's guide with its shared tables put back, as readers see it."""
+        return wiki_data.expand_guides(self.build())["guides"]["businesstypes-giftshop"]
 
     def page(self, payload, page_id):
         return next(page for page in payload["pages"] if page["id"] == page_id)
@@ -562,7 +567,7 @@ class FactsFollowSourceTests(FixtureCase):
         locale = dict(LOCALE, importertypename_bluestone="BlueStone Imports")
         self.write_locale(locale)
         payload = self.build()
-        self.assertEqual(payload["guides"]["businesstypes-giftshop"]["SUPPLIERS"]["ba:street_pier#4"]["name"],
+        self.assertEqual(payload["SUPPLIERS"]["ba:street_pier#4"]["name"],
                          "BlueStone Imports")
         self.assertEqual(self.page(payload, "importers-bluestone")["title"],
                          "BlueStone Imports")
@@ -746,7 +751,7 @@ class SourceTests(FixtureCase):
     def test_a_missing_building_table_leaves_suppliers_unplaced_and_reported(self):
         os.unlink(os.path.join(self.root, "ba_buildings.json"))
         payload = self.build()
-        supplier = payload["guides"]["businesstypes-giftshop"]["SUPPLIERS"]["ba:street_fifthavenue#13"]
+        supplier = payload["SUPPLIERS"]["ba:street_fifthavenue#13"]
         self.assertIsNone(supplier["hood"])
         self.assertIsNone(supplier["traffic"])
         self.assertIn("no building", payload["provenance"]["issues"]["suppliers"][0]["reason"])
@@ -787,7 +792,7 @@ class SourceTests(FixtureCase):
         self.write("ba_buildings.json", "{not json")
         payload = self.build()
         self.assertIsNone(payload["provenance"]["sources"]["buildings"])
-        self.assertIsNone(payload["guides"]["businesstypes-giftshop"]["SUPPLIERS"]["ba:street_pier#4"]["hood"])
+        self.assertIsNone(payload["SUPPLIERS"]["ba:street_pier#4"]["hood"])
 
     def test_optional_source_failures_name_no_path_on_this_machine(self):
         # A corrupt table and an unreadable layout are both recorded, and the
@@ -969,6 +974,90 @@ class WriteTests(FixtureCase):
         self.assertFalse(os.path.exists(out))
 
 
+class LossTests(FixtureCase):
+    """A build that loses a guide or authored copy stops unless told to go on."""
+
+    def setUp(self):
+        super().setUp()
+        self.out = os.path.join(self.root, "web", "wiki-data.json")
+
+    def without_authored_copy(self, guides=None):
+        """Point the builder at the real wording with `guides` as its per-guide copy."""
+        wording = json.loads(self.read(build.WORDING_PATH))
+        wording["guides"] = guides or {}
+        path = os.path.join(self.root, "wiki_sample_nocopy.json")
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(wording, fh)
+        original = build.WORDING_PATH
+        build.WORDING_PATH = path
+        self.addCleanup(setattr, build, "WORDING_PATH", original)
+
+    def test_dropped_authored_copy_stops_the_build_and_leaves_the_file(self):
+        page = "help_ba:businesstype_giftshop_content"
+        self.without_authored_copy({"giftshop": {
+            "lede": {"text": "Gift shops self-serve.",
+                     "when": [{"src": page, "includes": "Customers are self-serving."}]},
+            "notes": [],
+        }})
+        # the clause holds on the fixture's page, so the copy ships and nothing stops
+        payload = json.loads(self.write_payload(self.out, allow_fewer_guides=False))
+        self.assertEqual(payload["guides"]["businesstypes-giftshop"]["BUSINESS"]["lede"],
+                         "Gift shops self-serve.")
+        before = self.read(self.out)
+        # a patch rewords the phrase the clause quotes
+        self.write_locale(dict(LOCALE, **{page: GIFT_HELP.replace(
+            "Customers are self-serving.", "Customers serve themselves.")}))
+        with self.assertRaisesRegex(wiki_data.SourceError,
+                                    r"authored copy guides\.giftshop\.lede is left out"
+                                    r"[\s\S]*--allow-fewer-guides"):
+            self.write_payload(self.out, allow_fewer_guides=False)
+        self.assertEqual(self.read(self.out), before)
+        written = json.loads(self.write_payload(self.out, allow_fewer_guides=True))
+        self.assertIsNone(written["guides"]["businesstypes-giftshop"]["BUSINESS"]["lede"])
+
+    def test_a_missing_ui_string_is_named_as_one(self):
+        wording = json.loads(self.read(build.WORDING_PATH))
+        wording["guides"] = {}
+        del wording["guideUi"]["chooseProduct"]
+        path = os.path.join(self.root, "wiki_sample_noui.json")
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(wording, fh)
+        original = build.WORDING_PATH
+        build.WORDING_PATH = path
+        self.addCleanup(setattr, build, "WORDING_PATH", original)
+        with self.assertRaisesRegex(wiki_data.SourceError,
+                                    r"UI string chooseProduct: not in wording\(\)\['guideUi'\]"):
+            self.write_payload(self.out, allow_fewer_guides=False)
+
+    def test_a_lost_guide_stops_the_build(self):
+        self.without_authored_copy()
+        payload = json.loads(self.write_payload(self.out, allow_fewer_guides=False))
+        payload["guides"]["businesstypes-ghostshop"] = payload["guides"]["businesstypes-giftshop"]
+        with open(self.out, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(build.serialise(payload))
+        with self.assertRaisesRegex(wiki_data.SourceError, "businesstypes-ghostshop"):
+            self.write_payload(self.out, allow_fewer_guides=False)
+        self.assertIn("businesstypes-ghostshop", self.read(self.out))
+        written = json.loads(self.write_payload(self.out, allow_fewer_guides=True))
+        self.assertNotIn("businesstypes-ghostshop", written["guides"])
+
+    def test_nothing_lost_builds_without_the_flag(self):
+        self.without_authored_copy()
+        self.write_payload(self.out, allow_fewer_guides=False)
+        self.write_payload(self.out, allow_fewer_guides=False)
+
+    def test_the_cli_reports_the_loss_and_takes_the_flag(self):
+        args = [arg for arg in self.cli(self.out) if arg != "--allow-fewer-guides"]
+        with self.quiet() as stderr:
+            code = build.main(args)
+        self.assertEqual(code, 2)
+        self.assertIn("--allow-fewer-guides", stderr.getvalue())
+        self.assertFalse(os.path.exists(self.out))
+        with self.quiet():
+            self.assertEqual(build.main(args + ["--allow-fewer-guides"]), 0)
+        self.assertTrue(os.path.exists(self.out))
+
+
 class TopicTests(FixtureCase):
     """The hand-authored articles: written beside the payload, not extracted.
 
@@ -1058,7 +1147,3 @@ class TopicTests(FixtureCase):
     def test_no_machine_path_reaches_a_topic(self):
         for string in build._strings(self.payload()["topics"]):
             self.assertIsNone(build._PRIVATE_PATH_RE.search(string), string)
-
-
-if __name__ == "__main__":
-    unittest.main()

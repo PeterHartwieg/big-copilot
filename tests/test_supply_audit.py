@@ -352,7 +352,3 @@ class RouteAdviceTests(MsgAsserts, unittest.TestCase):
         f.run()
         # It feeds the hub, which feeds the factory's line: not idle at all.
         self.assertFalse([r for r in f.supply["idle"] if r["s"] == 2 and "routedFrom" in r])
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -9,6 +9,9 @@
   const node = (tag, cls, text) => { const n = document.createElement(tag); if(cls) n.className=cls; if(text !== undefined) n.textContent=text; return n; };
   const button = (text, cls, action, focus) => {const b=node('button',cls,text);b.type='button';b.onclick=action;if(focus)b.dataset.focus=focus;return b;};
   const visibleText = value => String(value || '').replace(/<\/?[a-z][^>]*>/gi,'');
+  // A key whose English has tags keeps them while it is edited: the API takes
+  // exactly those tags back (validation.markup). Elsewhere they are left out.
+  const editText = (e, value) => e.validation?.markup ? String(value || '') : visibleText(value);
   const fold = value => visibleText(value).normalize('NFKD').replace(/\p{M}/gu,'').toLocaleLowerCase();
   const normalize = value => fold(value).replace(/[^\p{L}\p{N}{}]+/gu,' ').trim().replace(/\s+/g,' ');
   const draftKey = e => lang + ':' + e.key;
@@ -96,8 +99,8 @@
     const b=button(c.voted?tt('comm.tr.yourVote','Your vote'):tt('comm.tr.voteThis','Vote for this'),'tr-vote',()=>mutate(e,'vote',{candidateId:c.id}),e.key+':vote:'+suffix);
     b.append(node('span','tr-vote-count',formatNumber(c.votes || 0)));
     b.setAttribute('aria-label',c.voted
-      ?tt('comm.tr.yourVoteForCount',{one:'Your vote: {text} · {n} vote',other:'Your vote: {text} · {n} votes'},{text:c.text,n:c.votes||0})
-      :tt('comm.tr.voteForCount',{one:'Vote for {text} · {n} vote',other:'Vote for {text} · {n} votes'},{text:c.text,n:c.votes||0}));
+      ?tt('comm.tr.yourVoteForCount',{one:'Your vote: {text} · {n} vote',other:'Your vote: {text} · {n} votes'},{text:visibleText(c.text),n:c.votes||0})
+      :tt('comm.tr.voteForCount',{one:'Vote for {text} · {n} vote',other:'Vote for {text} · {n} votes'},{text:visibleText(c.text),n:c.votes||0}));
     b.setAttribute('aria-pressed',String(!!c.voted));b.disabled=pending.has(entryKey(e));return b;
   }
   function row(e) {
@@ -106,7 +109,7 @@
     const main=node('div','tr-row'), en=node('div','tr-en',visibleText(e.en));
     en.lang='en';en.append(node('div','tr-area',e.context || e.area));
     const target=node('div','tr-target');
-    if(hasText(e)){const text=node('span','',c.id==='bundled'?visibleText(c.text):c.text);text.lang=lang;target.append(text);
+    if(hasText(e)){const text=node('span','',visibleText(c.text));text.lang=lang;target.append(text);
       const status=c.id!=='bundled'?tt('comm.tr.community','Community'):e.drafted?tt('comm.tr.draft','Draft'):tt('comm.tr.bundled','Bundled');
       target.append(node('small',c.votes?'tr-checked':'',status));
     }else target.append(node('span','tr-missing',tt('comm.tr.notTranslated','Not translated')));
@@ -129,7 +132,7 @@
         if(openMode==='alternatives'&&!d.candidates?.some(alt=>alt.id!==d.selectedId))form.append(node('p','tr-help',tt('comm.tr.noAlternatives','No alternatives yet. You can suggest new wording.')));
         for(const alt of d.candidates || []){
           if(alt.id===d.selectedId)continue;
-          const alternative=node('div','tr-alt'),text=node('span','',alt.id==='bundled'?visibleText(alt.text):alt.text);text.lang=lang;
+          const alternative=node('div','tr-alt'),text=node('span','',visibleText(alt.text));text.lang=lang;
           if(alt.id==='bundled')text.append(node('small','',tt('comm.tr.bundled','Bundled')));
           alternative.append(text,voteButton(e,alt,alt.id));form.append(alternative);
         }
@@ -137,11 +140,12 @@
       if(openMode==='edit'){
         const inputId='trText-'+entries.indexOf(e),l=node('label','',tt('comm.tr.wording','{language} wording',{language:label()}));l.htmlFor=inputId;
         const input=node('textarea');input.id=inputId;input.lang=lang;input.dataset.focus=e.key+':text';input.maxLength=(e.validation?.maxLength || 2000)*2;
-        input.value=drafts.has(draftKey(e))?drafts.get(draftKey(e)):hasText(e)?(c.id==='bundled'?visibleText(c.text):c.text):'';
+        input.value=drafts.has(draftKey(e))?drafts.get(draftKey(e)):hasText(e)?editText(e,c.text):'';
         input.disabled=pending.has(key);input.oninput=()=>{drafts.set(draftKey(e),input.value);errors.delete(key);const alert=form.querySelector('.tr-error');if(alert)alert.remove();};
         input.onkeydown=event=>{if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();submit(e);}};
         form.append(l,input);
         const tokens=e.validation?.required || [];
+        if(e.validation?.markup?.length){form.append(node('p','tr-help',tt('comm.tr.keepTags','Keep the tags around the same words as the English: {english}',{english:e.en})));}
         if(tokens.length){form.append(node('p','tr-help',tt('comm.tr.keepPlaceholders','Keep these placeholders: {tokens}',{tokens:tokens.map(group=>group.map(t=>'{'+t.replace(/:$/,'')+'}').join(' / ')).join(', ')})));}
         if(errors.has(key)&&d){const p=node('p','tr-error',errorText(errors.get(key)));p.setAttribute('role','alert');form.append(p);}
         const actions=node('div','tr-actions'),send=button(pending.has(key)?tt('comm.tr.saving','Saving…'):tt('comm.tr.submit','Submit'),'tr-primary',()=>submit(e),e.key+':submit');send.disabled=pending.has(key)||!d;
@@ -176,7 +180,9 @@
   }
   function close(e, discard) {interaction++;if(discard)drafts.delete(draftKey(e));open=null;errors.delete(entryKey(e));updateUrl(deepKey);render(e.key+(openMode==='edit'?':edit':':alternatives'));}
   function validate(e,text) {
-    if(/[<>\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(text)||/&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;)/i.test(text))return tt('comm.tr.plainText','Use plain text without HTML or encoded markup.');
+    if(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(text))return tt('comm.tr.plainText','Use plain text without HTML or encoded markup.');
+    if(/&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;|lt|gt|amp|quot|(?:apos|nbsp)(?![a-z\d]))/i.test(text))return tt('comm.tr.noEncoded','Type characters as they are, not as HTML codes.');
+    if(!ttKeepsMarkup(text,e.validation?.markup))return e.validation?.markup?tt('comm.tr.tags','Use the tags shown above, each as often as in the English, and close them in the order they open.'):tt('comm.tr.plainText','Use plain text without HTML or encoded markup.');
     if(!text.trim())return tt('comm.tr.enterText','Enter a translation.');
     if([...text].length>(e.validation?.maxLength||2000))return tt('comm.tr.tooLong','Translation is too long.');
     const found=[...text.matchAll(/\{(\w+)(?::([^{}]+))?\}/g)].map(m=>m[1]+':'+(m[2]||''));
@@ -188,7 +194,7 @@
   }
   function submit(e) {
     const current=selected(e);
-    const value=drafts.has(draftKey(e))?drafts.get(draftKey(e)):hasText(e)?(current.id==='bundled'?visibleText(current.text):current.text):'';
+    const value=drafts.has(draftKey(e))?drafts.get(draftKey(e)):hasText(e)?editText(e,current.text):'';
     const error=validate(e,value.trim());
     if(error){errors.set(entryKey(e),{code:'validation',text:error});render(e.key+':text');return;}
     mutate(e,'suggest',{text:value.trim()});

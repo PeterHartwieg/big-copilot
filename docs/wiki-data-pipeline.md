@@ -107,12 +107,25 @@ The contract (`schemaVersion: 1`):
   Price and source-quality checks use the pages that guide reads; recipe limits
   appear only where recipes are shown.
 
+  What every guide shares is written once (`share_guide_tables()`): a guide's
+  `SUPPLIERS` is the sorted list of site keys it names, whose rows are the
+  top-level `SUPPLIERS`; its `SOURCES` is left out when it is
+  `provenance.guideSources` (every guide but one whose shop layouts ship, the
+  Gift Shop); and the labels are the top-level `COPY`. Readers put each guide
+  back first, with `wiki_data.expand_guides()` in Python and `wikiExpandGuides()`
+  in `web/wiki.js`, so a guide reads with `SUPPLIERS` an object of its own rows
+  and `SOURCES` always there. Fixtures stay in each guide: the same fixture
+  can carry a different product list from one business to the next.
+
   Authored copy lives in `tools/wiki_sample.json`: `guideUi` supplies shared
   labels, `guideGaps` supplies missing-data messages, and `guides` contains
   business summaries and notes. Each summary
   and note has source conditions; it is included only while those literal
   excerpts still appear in the named help pages. Review the wording whenever
   related game content changes. Facts continue to come from the builder.
+- `COPY` — the guides' labels, `guideUi` filled in, shared by every guide.
+- `SUPPLIERS` — every supplier a guide names, keyed by site key: its name,
+  address, neighbourhood, kind, building facts and how many pages mention it.
 - `topics` — hand-authored articles, sorted by slug, carried through from
   `tools/wiki_topics.json` exactly as written. This is the one part of the
   payload the game does not write: an article covers something the help never
@@ -129,7 +142,8 @@ The contract (`schemaVersion: 1`):
   and byte counts, Steam app and depot build, the sources' newest file
   modification time as `sourceDate`, duplicates, links that point at no page,
   and issues (addresses the building table does not know, a missing or corrupt
-  building table, layouts that would not read).
+  building table, layouts that would not read). `guideSources` is the SOURCES
+  block the guides share.
 
 Supplier keys are the same `ba:street_<slug>#<number>` site keys the map page
 uses, so cross-references join. `ba_buildings.json` gives each address its
@@ -151,7 +165,7 @@ next build. A wording slot the builder cannot fill is a build failure, not a
 literal `{count}` in the shipped file.
 
 The output is deterministic: sorted iteration, no run timestamp, `sourceDate`
-is the newest mtime of the game help and counted layouts rather than the moment this ran (each guide's
+is the newest mtime of the game help and counted layouts rather than the moment this ran (each
 SOURCES block repeats it as `sourceDate` and keeps the mockup's `extracted` key
 with the same value), each source row records its hash and size with a null `mtime`
 (Steam touches unchanged files, and the hash already says whether the bytes moved), and
@@ -159,6 +173,16 @@ with the same value), each source row records its hash and size with a null `mti
 did not change. When the source date is all that changed (Steam touched a file without
 changing it on a later day), it keeps the standing file and its date. Source paths in the payload are game-relative; a privacy check
 rejects any build that would leak an absolute path, a user name or save data.
+
+### What the page receives
+
+`web/wiki-data.json` is committed indented, so a rebuild's diff reads line by
+line. The page never fetches it: `python build_web.py` and `--assemble` write
+`web/wiki-data.min.json` beside it, the same JSON without the indentation
+(`compact_wiki()` in `ba_dashboard.py`), gitignored like the rest of the
+assembled site and compared by `--check`. `WIKI_URL` in `web/wiki.js` fetches
+that copy, the local watch server makes it from the committed file on request,
+and an exported `dashboard.html` embeds the same compact text.
 
 ### Commands
 
@@ -179,6 +203,17 @@ A bad required source — locale or helpstructure — exits with code 2, prints
 `error: …` on stderr, and leaves the previous payload standing. The optional
 sources (`ba_buildings.json`, shipped layouts, the Steam manifest) are recorded
 as absent instead.
+
+A build that loses content stops the same way: a guide the standing payload
+has and this build does not (its business's help page left
+`helpstructure.json`), or authored copy whose `when` clause no longer matches
+(`provenance.issues.copy`). Both can be right after a game patch. Fix the
+wording in `tools/wiki_sample.json`, or accept the loss with
+`--allow-fewer-guides`, which both this script and `python build_web.py` take.
+
+The builder reads `tools/wiki_sample.json` once per build and hands it down as
+`words`; the locale-wide tables the guides' gaps compare against
+(`locale_tables()`) and the help files' hashes are computed once, not per guide.
 
 ### Hand-written topics
 
@@ -202,7 +237,7 @@ rent is computed. One object per article in `tools/wiki_topics.json`.
 
 The in-app wiki draws every entry inside the board, so a search engine sees one
 URL and none of the text. `tools/wiki_pages.py` writes the same entries as
-plain, script-free HTML from the committed `web/wiki-data.json`:
+plain HTML, with no executable script, from the committed `web/wiki-data.json`:
 
 | Path | What |
 | --- | --- |
@@ -212,6 +247,9 @@ plain, script-free HTML from the committed `web/wiki-data.json`:
 | `/wiki/topic/<slug>/` | one per hand-written topic |
 | `/sitemap.xml`, `/robots.txt` | `/`, and every page above; robots allows all and names the sitemap |
 
+- **English only.** The pages are not translated, though the app is: the
+  payload's help text is the game's English locale (`en.json`), and every page
+  says `lang="en"`.
 - **Furniture is left to the app.** Its 521 entries of equipment stats get no
   page, its category gets none, and a link to one goes to `/#wiki/<id>`.
 - **Slugs are the payload's ids, unchanged**, because they are linked from
@@ -220,13 +258,35 @@ plain, script-free HTML from the committed `web/wiki-data.json`:
 - **The markdown follows `web/wiki.js`**: `wikiInline`'s bold and link rules,
   `wikiBody`'s bullets, label headings and paragraphs. A link to a page that
   does not exist, or to the page itself, is plain text; an address is text.
+  `tests/test_wiki_pages.py` runs `wikiBlocks` in node over every committed
+  page body and fails when it and `markdown_blocks` disagree.
+- **Two label rules, on purpose.** Rendering (`is_label` here, `wikiIsLabel` in
+  `web/wiki.js`) draws a line as a heading only when it is at most 64
+  characters and ends in a colon. Extraction (`_LABEL_MAX = 200` in
+  `tools/wiki_data.py`) is looser, so a long heading still splits the facts
+  into sections even though the page draws it as a paragraph.
 - Each page has its own title, a meta description (the body's first sentence,
   or the topic's lede), a canonical `https://bigcopilot.com/wiki/.../` URL, an
   "Open your save in Big Copilot" link to `/` and an "Open in the app" link to
   the same entry under `/#wiki`. A business guide adds one table of what it
   sells, where it is sold from and who supplies it.
-- Styles are inline; the only request is `/fonts/fonts.css`. No script, no
-  third-party request, so the privacy notice holds.
+- **Sharing and structured data.** Each page repeats its title, description
+  and canonical URL as Open Graph (`og:type` is `article` on an entry or topic,
+  `website` on the index and a category) and Twitter `summary` card tags. A
+  schema.org JSON-LD block carries a `BreadcrumbList` (the crumbs that have a
+  page, then the page itself; none on the index) and, on an entry or topic, an
+  `Article`. JSON-LD is `<script type="application/ld+json">`, a data block the
+  browser never runs, so neither the CSP nor the privacy notice's promise of
+  "no tracking or analytics scripts" is affected; `<`, `>` and `&` in it are written as Unicode escapes, so no
+  text can close the tag.
+- **One date, from the payload.** The sitemap's `<lastmod>` and the entries'
+  `dateModified` are `provenance.sourceDate`, the newest modification date of
+  the game files the payload was read from. It changes only when the game's
+  help does, so rebuilds stay byte-identical. `/`, the hand-written topics and
+  `/wiki/`, which lists the topics, change with Big Copilot's own releases,
+  which the payload does not date, so they carry no date; neither does anything when `sourceDate` is missing.
+- Styles are inline; the only request is `/fonts/fonts.css`. No executable
+  script, no third-party request, so the privacy notice holds.
 
 `python build_web.py` and `python build_web.py --assemble` write them after the
 payload, and remove pages the payload no longer has. They are not committed. `python build_web.py --check` rebuilds them in memory

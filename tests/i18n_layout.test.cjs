@@ -60,9 +60,9 @@ const CONVERTED = {
      column heads. Left out: the names (sites, products, the diagram's boxes)
      and the order checklist's own reasons (the "Other changes" Why cells),
      which are sb.ck's. */
-  sb: '#sbMode, #sbView, #sbStrip, #pageSupply .sb-verdict, #pageSupply .sb-sizing, #pageSupply .sb-ramp, '
+  sb: '#sbMode, #sbView, #sbStrip, #pageSupply .sb-verdict, #pageSupply .sb-ramp, '
     + '#pageSupply .sb-more, #pageSupply .sb-part, #pageSupply .sb-clear, #pageSupply thead, #pageSupply .sb-v, '
-    + '#pageSupply .sb-why, #pageSupply .sb-stats, #pageSupply .cnt, #pageSupply .how, #pageSupply .sb-chg small, '
+    + '#pageSupply .sb-stats, #pageSupply .cnt, #pageSupply .how, #pageSupply .sb-chg small, '
     + '#pageSupply .sb-unit, #pageSupply td .sub, #pageSupply .chip, #pageSupply .sb-staff .sechead, #pageSupply .sb-hc, '
     + '#pageSupply .sb-stot, #pageSupply .sb-flowleg, #pageSupply svg text.col, #pageSupply .imp-unit, #pageSupply .up',
   /* The order checklist's own reasons, in the "Other changes" Why cells. */
@@ -79,9 +79,17 @@ const CONVERTED = {
     /* The redesign's adapters: Standards' subjects, a shop's prices, and the
        Staffing lists' heads, states and buttons (the names in them are left
        out). */
-    + '#secStandards .sechead, #secStandards .nx-card b > span, #secPrices .sechead, #secPrices .nx-part, #secPrices [data-price-guide] small, '
-    + '#secSchedules .sechead, #secSchedules .st, #secSchedules .nx-part, #secSchedules .nx-btn, '
-    + '#secNeeds .sechead, #secNeeds .nx-part, #secNeeds .nx-btn, #secNeeds p.quiet',
+    + '#secStandards .sechead, #secStandards .nx-card b > span, #secPrices .sechead, #secPrices [data-price-guide] small, '
+    + '#secSchedules .sechead, #secSchedules .st, #secSchedules .nx-btn, '
+    + '#secNeeds .sechead, #secNeeds .nx-btn, #secNeeds p.quiet, '
+    /* Staff needs' hiring page: its heads, filters, counts, notes, the order
+       panel and Quick hire's labels. Left out: the role names (.hs-rn), a
+       single site's name under them, and the names in lists (b, Quick hire's
+       picks). */
+    + '#secStaff .hs-head h2, #secStaff .hs-link, #secStaff .hs-fbar, #secStaff thead, #secStaff .hs-roles td:not(.l), '
+    + '#secStaff .hs-re, #secStaff .hs-facts2, #secStaff .hs-note, #secStaff .hs-find h4, #secStaff .hs-find li > span, '
+    + '#secStaff .hs-find a, #secStaff .hs-find-advice, #secStaff .hs-order, #secStaff .hs-quick .qh, '
+    + '#secStaff .hs-quick .fld > span:first-child, #secStaff .hs-quick summary, #secStaff .hs-match.none, #secStaff .hs-quick [data-hq-go]',
   /* The Wiki's own words: the home view's search row, legend, topic shelf
      heading and states; a guide's section headings, checklist cards and
      captions (its labels are guideUi's, keyed wiki.ui.*), tiles, card and lane

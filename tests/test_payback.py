@@ -1,4 +1,4 @@
-"""Investment, profit so far and break-even (_payback(), docs/open-a-store-scope.md).
+"""Investment, profit so far and break-even (_payback(), docs/dashboard-reference.md, "Payback").
 
 The rules are the game's own: an installation firm charges 586 per square metre
 of the building on top of every item at its default price, and the walls and
@@ -11,11 +11,8 @@ real save.
 import json
 import math
 import os
-import sys
 import unittest
 from unittest import mock
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ba_dashboard
 from ba_dashboard import (
@@ -615,7 +612,6 @@ class ExtractTest(unittest.TestCase):
         import json
         import tempfile
 
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         from tests.save_fixtures import data_names, write_data_save
         from ba_save import load_save
 
@@ -634,7 +630,3 @@ class ExtractTest(unittest.TestCase):
         self.assertTrue(data["loans"])
         for loan in data["loans"]:
             self.assertRegex(loan["key"], r"^ba:street_[a-z0-9]+#\d+$")
-
-
-if __name__ == "__main__":
-    unittest.main()

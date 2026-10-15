@@ -35,8 +35,8 @@ import shutil
 import tokenize
 
 from ba_dashboard import (
-    FLOOR_PLAN_KINDS, GAME_NAME_LANGS, IMPORTER_TEXT, NAME_COVERAGE, NAME_PREFIXES, VERIFIED_BUILD, footer_html,
-    name_coverage, name_table, render,
+    FLOOR_PLAN_KINDS, GAME_NAME_LANGS, IMPORTER_TEXT, NAME_COVERAGE, NAME_PREFIXES, VERIFIED_BUILD, WIKI_SERVED,
+    compact_wiki, footer_html, name_coverage, name_table, render,
 )
 from ba_save import NotEnglishText, bundled_locale, load_game_locale, load_locale, locale_search_paths
 from tools.build_wiki_data import (
@@ -46,8 +46,12 @@ from tools.build_wiki_data import (
 from tools import i18n as ui_text
 from tools import translation_catalogue
 from tools import wiki_pages
-from tools.wiki_data import SourceError
+from tools.build_wiki_data import wiki_data as _builder_wiki_data
 from tools.wiki_paths import game_data_dir
+
+# The wiki builder imports wiki_data as a top-level module, so the SourceError it
+# raises is not tools.wiki_data.SourceError: catch the builder's own class.
+SourceError = _builder_wiki_data.SourceError
 
 # The game text shipped with the page: the display names of items, business
 # types, neighbourhoods, stations and skills, and the few help pages the
@@ -433,8 +437,11 @@ details.help[open] summary::after{content:"\2013"}
   <p class="news-copy"><b class="news-tag" data-tt="upd.news.tag">New</b><span data-tt="upd.news.open-store">Plan your next store: Expansion › Open a store prices a fully outfitted store in the building you pick and estimates the days it takes to earn that back.</span><a id="newsLink" href="#expansion/open" data-tt="upd.news.open-store-go">Open a store</a></p>
   <button type="button" class="news-dismiss" id="newsDismiss" aria-label="Dismiss this news" title="Dismiss this news" data-tt-aria-label="upd.news.dismiss" data-tt-title="upd.news.dismiss"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
 </aside>
-<section class="landing" id="landing">
-  <div class="brand rv" id="lgBrand"><span class="wordmark">Big Copilot</span><span class="dot" id="lgDot"></span></div>
+<!-- Before a save loads, the landing is the page's main landmark and the
+     wordmark its h1; the board's own <main> is out of sight until then, and
+     app.js removes the landing when the board shows. -->
+<section class="landing" id="landing" role="main">
+  <div class="brand rv" id="lgBrand"><span class="wordmark" role="heading" aria-level="1">Big Copilot</span><span class="dot" id="lgDot"></span></div>
   <p class="rv" id="welcomeLede" data-tt="land.lede">Drop a Big Ambitions save. Everything is read in this tab and nothing leaves it.</p>
   <div class="drop rv" id="drop" title="Drop the folder named Big Ambitions inside SaveGames here. The page looks through every company folder in it and takes the newest save; a menu then lets you pick another character or save." data-tt-title="land.drop.title2">
     <div class="folder"><i class="tab"></i><i></i><span class="file"></span><i class="flap"></i></div>
@@ -529,12 +536,12 @@ PY_COPIED = tuple(name for name in PY_CODE + PY_DATA if name != "gametext.json")
 STRIPPED = ("ba_dashboard.py",)
 _PY_DATA_SHIPPED = tuple(f"web/py/{name}" for name in PY_DATA)
 
-# Everything the page fetches, together with the build inputs that shape it:
-# build_web.py itself, and the wiki generator (code, authored wording and
-# hand-written articles) that writes web/wiki-data.json.
-# Those generators are hashed because a change to one leaves the committed
-# payload stale while every fetched file still looks untouched, and --check
-# would call the folder fresh. stamp() hashes the entries in the order below;
+# Everything the page fetches, together with the build inputs that shape it,
+# build_web.py itself among them. Generators whose output is listed here (the
+# wiki builder and its wording, tools/i18n.py, tools/translation_catalogue.py)
+# are not: their output carries any change that reaches a visitor, --check
+# compares that output, and an edit that changes nothing served must not tell
+# every open tab to update. stamp() hashes the entries in the order below;
 # changing that order, or appending to the list, changes the stamp, which is
 # the point for an append: a deploy busts caches.
 STAMP_INPUTS = (
@@ -543,8 +550,7 @@ STAMP_INPUTS = (
     # prices and the store rules came later and sit further down: the order is the stamp.
     *PY_CODE, *_PY_DATA_SHIPPED[:3],
     "web/wiki.js", "web/wiki.css", "web/wiki-data.json",
-    "tools/build_wiki_data.py", "tools/wiki_data.py", "tools/wiki_paths.py", "tools/wiki_sample.json",
-    "tools/wiki_topics.json", "web/fonts/fonts.css", "web/maps/floor-plans.json",
+    "web/fonts/fonts.css", "web/maps/floor-plans.json",
     *(f"{NAMES_DIR}/{code}.json" for code in NAME_LANGS),
     # Big Copilot's own text: tt() (inlined in the page) and each language's
     # table, which the page fetches (tools/i18n.py ship writes them).
@@ -563,7 +569,7 @@ STAMP_INPUTS = (
     "tools/optimize_web.mjs", "package-lock.json",
     # The bug report form, which web/app.js loads on demand with the stamp.
     "web/report.js", "web/report.css",
-    "tools/i18n.py", "tools/translation_catalogue.py", "template/translate.html",
+    "template/translate.html",
     "web/translate.js", "web/translate.css",
     *(f"web/translations/{lang}{suffix}.json" for lang in ui_text.languages() for suffix in ("", ".manifest")),
 )
@@ -761,6 +767,46 @@ def translation_page_html(release: dict, root: str = HERE) -> str:
             .replace("__I18N_SCRIPT__", runtime))
 
 
+def inline_style(path: str, css: str | None = None) -> str:
+    """One stylesheet as a <style> block, for the hosted page's head."""
+    css = read_text(path) if css is None else css
+    # The HTML parser ends a <style> element at the first "</style", wherever it is.
+    if re.search(r"</style", css, re.I):
+        raise SystemExit(f"{os.path.relpath(path, HERE)} contains '</style' and cannot be inlined")
+    return "<style>" + chr(10) + css.strip() + chr(10) + "</style>"
+
+
+# The two font files every page paints with first: Archivo's variable Latin
+# file (every weight) and Plex Mono 400 Latin. The page discovers fonts only
+# once the board's stylesheet has arrived and text is laid out, so these are
+# preloaded from the head; the other weights and the Latin Extended files load
+# when a glyph needs them. The hrefs must equal the inlined @font-face URLs, or
+# the browser fetches each file twice.
+PRELOAD_FONTS = ("archivo-v25-latin.woff2", "ibm-plex-mono-v20-400-latin.woff2")
+
+
+def font_faces(root: str = HERE) -> str:
+    """web/fonts/fonts.css inlined for web/index.html, with its two preloads.
+
+    The @font-face URLs name files beside fonts.css; inlined in a page at the
+    site root they gain the fonts/ folder. Linking the file instead cost a
+    render-blocking round trip before first paint (issue #323). The static
+    pages (privacy, impressum, supporters, the wiki) still link /fonts/fonts.css.
+    """
+    path = os.path.join(root, "web", "fonts", "fonts.css")
+    css = read_text(path)
+    urls = re.findall(r"url\(([^)]*)\)", css)
+    if not urls or any(not re.fullmatch(r"[\w.-]+\.woff2", url) for url in urls):
+        raise SystemExit("web/fonts/fonts.css: every url() must be a bare woff2 file name beside it; update font_faces() in build_web.py")
+    missing = [name for name in PRELOAD_FONTS if name not in urls]
+    if missing:
+        raise SystemExit("PRELOAD_FONTS in build_web.py names fonts web/fonts/fonts.css does not use: " + ", ".join(missing))
+    css = re.sub(r"url\(([^)]*)\)", r"url(fonts/\1)", css)
+    preloads = "".join(f'<link rel="preload" href="fonts/{name}" as="font" type="font/woff2" crossorigin>' + chr(10)
+                       for name in PRELOAD_FONTS)
+    return preloads + inline_style(path, css)
+
+
 def page_html(release: dict, root: str = HERE) -> str:
     """web/index.html for one release: the same string the build writes.
 
@@ -795,7 +841,11 @@ window.addEventListener("error", function(event) {
     window.dispatchEvent(new Event("ledger-asset-failure"));
   }
 }, true);</script>''' + chr(10)
-    head += '<link rel="stylesheet" href="community.css?v=' + release["version"] + '">' + chr(10)
+    # community.css is small and every visitor needs it before first paint, so
+    # it is inlined rather than linked: a <link> here blocked rendering for a
+    # round trip of its own (issue #323). Inlined, it needs no stamp; the file
+    # stays a stamp input so a change still announces a new release.
+    head += inline_style(os.path.join(root, "web", "community.css")) + chr(10)
     with open(os.path.join(root, "web", "update.js"), encoding="utf-8") as fh:
         update_script = fh.read()
     scripts = BEFORE_SCRIPT.replace("__STAMP__", release["version"]).replace(
@@ -810,7 +860,7 @@ window.addEventListener("error", function(event) {
     # visitor's IP address reaches Google; the privacy notice relies on that.
     if GOOGLE_FONTS not in page:
         raise SystemExit("the board template's Google Fonts links changed; update GOOGLE_FONTS in build_web.py")
-    return (page.replace(GOOGLE_FONTS, '<link rel="stylesheet" href="fonts/fonts.css?v=' + release["version"] + '">')
+    return (page.replace(GOOGLE_FONTS, font_faces(root))
             .replace("/*__TT_CATALOGUES__*/null", translation_revisions(root)))
 
 
@@ -822,7 +872,7 @@ def check(root: str = HERE) -> list[str]:
     are ignored on both sides, so a CRLF checkout is not stale by itself.
 
     root redirects everything read directly here: the PY_COPIED files and
-    their copies under web/py/, every STAMP_INPUTS entry, web/changelog.json,
+    their copies under web/py/, every STAMP_INPUTS entry, tools/wiki_topics.json, web/changelog.json,
     web/update.js, web/version.json and web/index.html. It does not redirect
     what render() reads through the imported ba_dashboard -- the board
     template, the footer changelog and the embedded map.js, map.css, wiki.js
@@ -869,9 +919,9 @@ def check(root: str = HERE) -> list[str]:
     if missing:
         return stale + missing
     # The hand-written articles travel into wiki-data.json as they stand, so an
-    # edit to tools/wiki_topics.json names the payload, not only the stamp.
-    # (An edit to tools/wiki_sample.json shows through the stamp alone: what the
-    # wording does to the payload cannot be known without the installed game.)
+    # edit to tools/wiki_topics.json names the payload. (An edit to
+    # tools/wiki_sample.json does not show here: what the wording does to the
+    # payload cannot be known without the installed game.)
     try:
         with open(os.path.join(root, "web", "wiki-data.json"), encoding="utf-8") as fh:
             shipped_topics = json.load(fh).get("topics")
@@ -879,6 +929,12 @@ def check(root: str = HERE) -> list[str]:
         shipped_topics = None
     if shipped_topics != wiki_topics(os.path.join(root, "tools", "wiki_topics.json")):
         stale.append("web/wiki-data.json")
+    # The compact copy the page fetches, from the committed catalogue.
+    try:
+        if differs("web/" + WIKI_SERVED, served_wiki(root)):
+            stale.append("web/" + WIKI_SERVED)
+    except (OSError, ValueError):
+        stale.append("web/" + WIKI_SERVED)
     release = release_info(root)
     if differs("web/version.json", release_json(release) + "\n"):
         stale.append("web/version.json")
@@ -931,6 +987,17 @@ def splice_wiki_topics(root: str = HERE) -> bool:
     return True
 
 
+def served_wiki(root: str = HERE) -> str:
+    """web/wiki-data.min.json: the committed catalogue without its indentation.
+
+    The committed file stays indented so a rebuild's diff reads line by line
+    (docs/game-update.md); the page fetches this copy instead (WIKI_URL in
+    web/wiki.js). Gitignored, like the rest of the assembled site.
+    """
+    with open(os.path.join(root, "web", "wiki-data.json"), encoding="utf-8") as fh:
+        return compact_wiki(fh.read())
+
+
 def assemble(root: str = HERE) -> None:
     """Write every file check() compares, from the committed sources; no game.
 
@@ -955,6 +1022,8 @@ def assemble(root: str = HERE) -> None:
         raise SystemExit(f"web/wiki-data.json: cannot carry tools/wiki_topics.json into it: {exc}") from None
     if spliced:
         print("web/wiki-data.json: hand-written articles updated from tools/wiki_topics.json")
+    with open(os.path.join(web, WIKI_SERVED), "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(served_wiki(root))
     # The static wiki pages, sitemap.xml and robots.txt follow the payload.
     pages = wiki_pages.write(web)
     print(f"web/wiki/: {pages} static pages, sitemap.xml and robots.txt")
@@ -1000,7 +1069,7 @@ def assemble(root: str = HERE) -> None:
     print(f"wrote {out} ({len(page) // 1024} KB) and web/py/")
 
 
-def main() -> None:
+def main(allow_fewer_guides: bool = False) -> None:
     os.makedirs(os.path.join(WEB, "py"), exist_ok=True)
     refuse_floor_plan_gaps()
     # Resolve the game text before anything else is written. Every step below
@@ -1037,7 +1106,13 @@ def main() -> None:
 
     # Refresh reference content before stamping assets, so a game update also
     # invalidates browser caches for the Wiki catalogue.
-    wiki_text = write_public_wiki(os.path.join(WEB, "wiki-data.json"))
+    # A build that loses a guide or authored copy stops here unless the loss is
+    # accepted with --allow-fewer-guides (refuse_losses() in build_wiki_data.py).
+    try:
+        wiki_text = write_public_wiki(os.path.join(WEB, "wiki-data.json"),
+                                      allow_fewer_guides=allow_fewer_guides)
+    except SourceError as exc:
+        raise SystemExit(f"wiki: {exc}") from None
     # what the wiki build had to leave out (a reworded phrase, a missing
     # supplier): recorded in the payload's provenance, and said here
     for kind, rows in json.loads(wiki_text)["provenance"]["issues"].items():
@@ -1064,7 +1139,13 @@ if __name__ == "__main__":
         "--check", action="store_true",
         help="report the files under web/ that no longer match the sources; write nothing",
     )
+    parser.add_argument(
+        "--allow-fewer-guides", action="store_true",
+        help="write the wiki payload even though it loses a guide or authored copy",
+    )
     args = parser.parse_args()
+    if args.allow_fewer_guides and (args.assemble or args.check):
+        parser.error("--allow-fewer-guides applies to the full build only")
     if args.assemble:
         assemble()
     elif args.check:
@@ -1084,4 +1165,4 @@ if __name__ == "__main__":
             raise SystemExit(1)
         print("web/ is up to date")
     else:
-        main()
+        main(allow_fewer_guides=args.allow_fewer_guides)

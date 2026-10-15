@@ -595,7 +595,3 @@ class DemandTests(unittest.TestCase):
     def test_an_empty_market_reshapes_to_nothing(self):
         self.assertEqual(_premises_demand({}), {})
         self.assertEqual(premises(market=self.MARKET)["demand"]["ba:neighborhood_midtown"][1]["demand"], 80)
-
-
-if __name__ == "__main__":
-    unittest.main()

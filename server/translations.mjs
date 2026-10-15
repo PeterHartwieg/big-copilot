@@ -1,3 +1,5 @@
+import { json, plainObject, fields } from './http.mjs';
+
 // Public catalogue-backed translations. All strings and source versions are
 // checked against the deployed ASSETS catalogue, never client-supplied metadata.
 // D1 triggers keep winner selection atomic for votes and operator moderation.
@@ -7,7 +9,10 @@ const MAX_CATALOGUE_BYTES = 16 * 1024 * 1024;
 const LANG = /^[a-z]{2}(?:-[A-Za-z]{2,8})?$/;
 const VERSION = /^[a-f0-9]{64}$/;
 const TOKEN = /\{(\w+)(?::([^{}]+))?\}/g;
-const ENTITY = /&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;)/i;
+// Entities HTML would decode: any &name; or numeric one, and, without a
+// semicolon, the ones that decode to <, >, & or quotes (even before letters, as
+// in "&ltimg"), plus &apos and &nbsp at a word end. "R&D" stays text.
+const ENTITY = /&(?:#(?:x[\da-f]+|\d+);?|[a-z][a-z\d]+;|lt|gt|amp|quot|(?:apos|nbsp)(?![a-z\d]))/i;
 // The overlay changes only when translation_revisions.revision moves (every vote,
 // suggestion, moderation action and vote cleanup bumps it in the same transaction)
 // or a deployment replaces the catalogue, which changes the build stamp in
@@ -20,27 +25,46 @@ const OVERLAY_EDGE_TTL = 24 * 60 * 60;
 const OVERLAY_BROWSER_TTL = 60;
 const STAMP = /^[\w.-]{1,64}$/;
 
-function reply(data, status = 200, isPublic = false) {
-  return new Response(JSON.stringify(data), { status, headers: {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': isPublic ? 'public, max-age=0, must-revalidate' : 'private, no-store',
-    'x-content-type-options': 'nosniff',
-  } });
-}
-function error(code, message, status = 400) { return reply({ error: code, message }, status); }
-function plainObject(value) { return value && typeof value === 'object' && !Array.isArray(value); }
-function fields(body, expected) {
-  return plainObject(body) && Object.keys(body).length === expected.length &&
-    expected.every(key => typeof body[key] === 'string');
+// Entry replies carry the voter's own flags; the summary is the same for everyone.
+const PRIVATE = { 'cache-control': 'private, no-store' };
+const PUBLIC = { 'cache-control': 'public, max-age=0, must-revalidate' };
+// The code alone: the page words each code through tt().
+const error = (code, status = 400) => json({ error: code }, status, PRIVATE);
+
+// A key whose English has tags is drawn as HTML, so its wording may carry
+// exactly those tags (validation.markup, copied character for character from
+// the English by tools/translation_catalogue.py), as many of each, properly
+// nested, in any order. Any other '<' is refused; a bare '>' is text.
+// keeps_markup() there and ttCommunityValid() in web/i18n.js mirror this.
+const MARKUP = /<[^<>]*>/g;
+const TAG = /^<(\/?)([a-z][a-z\d]*)(?=[\s>/])/i;
+const VOID_TAGS = new Set(['br']);
+export function keepsMarkup(text, markup = []) {
+  if (!Array.isArray(markup) || text.replace(MARKUP, '').includes('<')) return false;
+  const pieces = text.match(MARKUP) || [];
+  const want = [...markup].sort(), got = [...pieces].sort();
+  if (got.length !== want.length || got.some((piece, i) => piece !== want[i])) return false;
+  const open = [];
+  for (const piece of pieces) {
+    const tag = TAG.exec(piece);
+    if (!tag) return false;
+    const name = tag[2].toLowerCase();
+    if (VOID_TAGS.has(name)) continue;
+    if (!tag[1]) open.push(name);
+    else if (open.pop() !== name) return false;
+  }
+  return open.length === 0;
 }
 
 export function validateTranslation(text, validation) {
   if (typeof text !== 'string' || !text.trim() || !plainObject(validation)) return false;
   if ([...text].length > Math.min(validation.maxLength || 2000, 2000)) return false;
-  // tt() produces plain text. Quotes and apostrophes are ordinary characters;
-  // consumers escape at HTML sinks. Markup, entities and control characters are
-  // not accepted as a second, ambiguous representation of the submitted text.
-  if (/[<>\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(text) || ENTITY.test(text)) return false;
+  // Quotes and apostrophes are ordinary characters; consumers escape at HTML
+  // sinks. Entities and control characters are not accepted as a second,
+  // ambiguous representation of the submitted text, and markup only as
+  // keepsMarkup() allows.
+  if (/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(text) || ENTITY.test(text)) return false;
+  if (!keepsMarkup(text, validation.markup)) return false;
   const tokens = [...text.matchAll(TOKEN)].map(match => `${match[1]}:${match[2] || ''}`);
   if (/[{}]/.test(text.replace(TOKEN, ''))) return false;
   if (!Array.isArray(validation.allowed) || !Array.isArray(validation.required)) return false;
@@ -48,10 +72,39 @@ export function validateTranslation(text, validation) {
     validation.required.every(group => Array.isArray(group) && group.some(token => tokens.includes(token)));
 }
 
+// Parsed catalogues, least recently used first. A catalogue is deployment-immutable
+// and the ETag that ASSETS sends names its bytes, so a parse is reused, across
+// requests in this isolate, only while ASSETS still reports that ETag: a 304 to
+// If-None-Match, or a 200 carrying the same tag. A response without an ETag is
+// parsed every time and never kept. A parsed catalogue is several MB, so only the
+// last CATALOGUE_CACHE languages are kept. Callers must not mutate what they get.
+const CATALOGUE_CACHE = 2;
+const parsedCatalogues = new Map();
+const sourceMaps = new WeakMap();
+// Every insertion, a revalidated hit included, goes through here: a hit whose
+// revalidation finishes after other languages evicted it must still evict.
+function rememberCatalogue(lang, held) {
+  parsedCatalogues.delete(lang);
+  parsedCatalogues.set(lang, held);
+  while (parsedCatalogues.size > CATALOGUE_CACHE) parsedCatalogues.delete(parsedCatalogues.keys().next().value);
+}
+
 async function catalogue(request, env, lang) {
   if (!LANG.test(lang || '')) return null;
-  const response = await env.ASSETS.fetch(new Request(new URL(`/translations/${lang}.json`, request.url)));
-  if (!response.ok) return null;
+  const cached = parsedCatalogues.get(lang);
+  const response = await env.ASSETS.fetch(new Request(new URL(`/translations/${lang}.json`, request.url),
+    cached ? { headers: { 'if-none-match': cached.etag } } : undefined));
+  const etag = response.headers.get('etag');
+  if (cached && (response.status === 304 || (response.ok && etag === cached.etag))) {
+    rememberCatalogue(lang, cached);
+    await response.body?.cancel();
+    return cached.cat;
+  }
+  parsedCatalogues.delete(lang);
+  if (!response.ok) {
+    await response.body?.cancel();
+    return null;
+  }
   const raw = await response.text();
   if (raw.length > MAX_CATALOGUE_BYTES) return null;
   const data = JSON.parse(raw);
@@ -62,9 +115,19 @@ async function catalogue(request, env, lang) {
         typeof entry.en !== 'string' || !(entry.text === null || typeof entry.text === 'string') || !plainObject(entry.validation)) return null;
     entries.set(entry.key, entry);
   }
-  return { ...data, entries };
+  const cat = { ...data, entries };
+  if (etag) rememberCatalogue(lang, { etag, cat });
+  return cat;
 }
-const sourceMap = cat => JSON.stringify(Object.fromEntries([...cat.entries].map(([key, entry]) => [key, entry.sourceVersion])));
+// {key: sourceVersion} as JSON, the text json_each() joins against; built once per parse.
+function sourceMap(cat) {
+  let text = sourceMaps.get(cat);
+  if (text === undefined) {
+    text = JSON.stringify(Object.fromEntries([...cat.entries].map(([key, entry]) => [key, entry.sourceVersion])));
+    sourceMaps.set(cat, text);
+  }
+  return text;
+}
 const baseline = entry => entry.text ?? entry.en;
 async function digest(value) {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
@@ -95,9 +158,9 @@ async function entryReply(db, lang, entry, voterHash, prefix = []) {
   if (!candidates.some(row => row.id === 'bundled')) {
     if (!bundled.results[0]?.hidden) candidates.unshift({ id: 'bundled', text: baseline(entry), votes: 0, voted: false });
   }
-  return reply({ schemaVersion: 1, lang, key: entry.key, sourceVersion: entry.sourceVersion,
+  return json({ schemaVersion: 1, lang, key: entry.key, sourceVersion: entry.sourceVersion,
     revision: revision.results[0]?.revision || 0,
-    selectedId: wireId(state.results[0]?.selected_id), pinned: Boolean(state.results[0]?.pinned_id), candidates });
+    selectedId: wireId(state.results[0]?.selected_id), pinned: Boolean(state.results[0]?.pinned_id), candidates }, 200, PRIVATE);
 }
 
 export async function handleTranslations(request, env, body, ip, sign, diagnostic, ctx) {
@@ -105,12 +168,12 @@ export async function handleTranslations(request, env, body, ip, sign, diagnosti
   const operation = url.pathname.split('/').at(-1);
   const writing = request.method === 'POST';
   if (writing && !fields(body, ['lang', 'key', 'sourceVersion', operation === 'suggest' ? 'text' : 'candidateId'])) {
-    return error('invalid_request', 'Send only the language, entry, source version and translation or vote.');
+    return error('invalid_request');
   }
   const lang = writing ? body.lang : url.searchParams.get('lang');
   if (operation === 'overlay') return cachedOverlay(request, env, ctx, lang, diagnostic);
   const cat = await catalogue(request, env, lang);
-  if (!cat) return error('unknown_language', 'This language is not available.', 404);
+  if (!cat) return error('unknown_language', 404);
   const db = env.COMMUNITY_DB;
   if (operation === 'translations') {
     diagnostic.category = 'database';
@@ -119,8 +182,8 @@ export async function handleTranslations(request, env, body, ip, sign, diagnosti
   const key = writing ? body.key : url.searchParams.get('key');
   const version = writing ? body.sourceVersion : url.searchParams.get('sourceVersion');
   const entry = cat.entries.get(key);
-  if (!entry) return error('unknown_entry', 'This translation entry does not exist.', 404);
-  if (version !== entry.sourceVersion) return error('stale_source', 'The English wording has changed. Reload this entry before contributing.', 409);
+  if (!entry) return error('unknown_entry', 404);
+  if (version !== entry.sourceVersion) return error('stale_source', 409);
   const voterHash = await sign(`translation-vote:${JSON.stringify([lang, key, version, ip])}`);
   diagnostic.category = 'database';
   if (!writing) return entryReply(db, lang, entry, voterHash);
@@ -129,13 +192,13 @@ export async function handleTranslations(request, env, body, ip, sign, diagnosti
   const baseId = await candidateId(lang, entry, baseText);
   let text = operation === 'suggest' ? body.text.replace(/\r\n?/g, '\n').normalize('NFC').trim() : null;
   if (text !== null && !validateTranslation(text, entry.validation)) {
-    return error('invalid_translation', 'Use plain text and keep every required placeholder unchanged.');
+    return error('invalid_translation');
   }
   let id = text !== null ? await candidateId(lang, entry, text) : body.candidateId === 'bundled' ? baseId : body.candidateId;
-  if (!VERSION.test(id)) return error('unknown_candidate', 'This translation is not available.', 404);
+  if (!VERSION.test(id)) return error('unknown_candidate', 404);
   const existing = await db.prepare('SELECT id, hidden FROM translation_candidates WHERE id = ?1 AND lang = ?2 AND key = ?3 AND source_version = ?4')
     .bind(id, lang, key, version).first();
-  if (existing?.hidden || (text === null && !existing && id !== baseId)) return error('unknown_candidate', 'This translation is not available.', 404);
+  if (existing?.hidden || (text === null && !existing && id !== baseId)) return error('unknown_candidate', 404);
   const now = Math.floor(Date.now() / 1000);
   const prefix = [
     db.prepare('INSERT INTO translation_entries (lang, key, source_version) VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING').bind(lang, key, version),
@@ -163,45 +226,61 @@ export async function handleTranslations(request, env, body, ip, sign, diagnosti
     // hidden after the pre-check but before the transaction took its snapshot.
     const hidden = operation === 'vote' || existing || await db.prepare(
       'SELECT id FROM translation_candidates WHERE id = ?1 AND hidden = 1').bind(id).first();
-    if (hidden) return error('unknown_candidate', 'This translation is no longer available. Reload the phrase and choose another version.', 404);
-    return error('candidate_limit', 'This entry already has the maximum number of alternatives. Vote for an existing version.', 409);
+    if (hidden) return error('unknown_candidate', 404);
+    return error('candidate_limit', 409);
   }
   return response;
 }
 
+// One statement binds the source map once: the page's current entries (one more
+// than a page, to tell whether another follows), each with its visible candidates.
+// An entry without visible candidates still yields one row, with a null c.id; the
+// extra entry (n > ?4) yields only that row, since its candidates are not joined.
+// CROSS JOIN keeps json_each() the outer loop, read once, with a primary-key lookup
+// per catalogue key; as the inner loop SQLite rescans it for every entry row.
+const summarySql = `WITH page AS (
+    SELECT e.key, e.source_version, e.selected_id, ROW_NUMBER() OVER (ORDER BY e.key) AS n FROM json_each(?2) current
+    CROSS JOIN translation_entries e ON e.lang = ?1 AND e.key = current.key AND e.source_version = current.value
+    WHERE e.key > ?3 ORDER BY e.key LIMIT ?4 + 1)
+  SELECT page.key, page.source_version, page.selected_id, page.n, c.id, c.text, COUNT(v.voter_hash) AS votes FROM page
+  LEFT JOIN translation_candidates c ON page.n <= ?4 AND c.lang = ?1 AND c.key = page.key
+    AND c.source_version = page.source_version AND c.hidden = 0
+  LEFT JOIN translation_votes v ON v.candidate_id = c.id
+  GROUP BY page.key, c.id ORDER BY page.key, c.created_at, c.id`;
+
 async function summary(db, lang, cat, cursor) {
-  if (cursor.length > 240) return error('invalid_cursor', 'Invalid page cursor.');
-  const sources = sourceMap(cat);
-  const pageSql = `SELECT e.key, e.source_version, e.selected_id FROM translation_entries e
-      JOIN json_each(?2) current ON current.key = e.key AND current.value = e.source_version
-      WHERE e.lang = ?1 AND e.key > ?3 ORDER BY e.key LIMIT ?4`;
-  const [keys, rows, revision] = await db.batch([
-    db.prepare(pageSql).bind(lang, sources, cursor, PAGE_SIZE + 1),
-    db.prepare(`WITH page AS (${pageSql})
-      SELECT c.key, c.id, c.text, COUNT(v.voter_hash) AS votes FROM page
-      JOIN translation_candidates c ON c.lang = ?1 AND c.key = page.key AND c.source_version = page.source_version
-      LEFT JOIN translation_votes v ON v.candidate_id = c.id
-      WHERE c.hidden = 0 GROUP BY c.id ORDER BY c.key, c.created_at, c.id`).bind(lang, sources, cursor, PAGE_SIZE),
+  if (cursor.length > 240) return error('invalid_cursor');
+  const [rows, revision] = await db.batch([
+    db.prepare(summarySql).bind(lang, sourceMap(cat), cursor, PAGE_SIZE),
     revisionQuery(db).bind(lang),
   ]);
-  const page = keys.results.slice(0, PAGE_SIZE);
   const entries = {};
-  for (const row of page) {
-    const baseId = await candidateId(lang, cat.entries.get(row.key), baseline(cat.entries.get(row.key)));
-    const wire = id => id === baseId || !id ? 'bundled' : id;
-    entries[row.key] = { sourceVersion: row.source_version, selectedId: wire(row.selected_id), candidates:
-      rows.results.filter(candidate => candidate.key === row.key).map(candidate => ({ id: wire(candidate.id), text: candidate.text, votes: candidate.votes })) };
+  let last = null, more = false, wire = null;
+  for (const row of rows.results) {
+    if (row.n > PAGE_SIZE) {
+      more = true;
+      continue;
+    }
+    if (row.key !== last) {
+      last = row.key;
+      const entry = cat.entries.get(row.key);
+      const baseId = await candidateId(lang, entry, baseline(entry));
+      wire = id => id === baseId || !id ? 'bundled' : id;
+      entries[row.key] = { sourceVersion: row.source_version, selectedId: wire(row.selected_id), candidates: [] };
+    }
+    if (row.id !== null) entries[row.key].candidates.push({ id: wire(row.id), text: row.text, votes: row.votes });
   }
-  return reply({ schemaVersion: 1, lang, revision: revision.results[0]?.revision || 0, entries,
-    nextCursor: keys.results.length > PAGE_SIZE ? page.at(-1).key : null }, 200, true);
+  return json({ schemaVersion: 1, lang, revision: revision.results[0]?.revision || 0, entries,
+    nextCursor: more ? last : null }, 200, PUBLIC);
 }
 
 async function overlay(db, lang, cat) {
   const [rows, revision] = await db.batch([
-    db.prepare(`SELECT c.key, c.source_version, c.text FROM translation_entries e
+    // json_each() stays the outer loop, as in summarySql.
+    db.prepare(`SELECT c.key, c.source_version, c.text FROM json_each(?2) current
+      CROSS JOIN translation_entries e ON e.lang = ?1 AND e.key = current.key AND e.source_version = current.value
       JOIN translation_candidates c ON c.id = e.selected_id AND c.hidden = 0
-      JOIN json_each(?2) current ON current.key = e.key AND current.value = e.source_version
-      WHERE e.lang = ?1`).bind(lang, sourceMap(cat)), revisionQuery(db).bind(lang),
+      ORDER BY e.key`).bind(lang, sourceMap(cat)), revisionQuery(db).bind(lang),
   ]);
   const translations = {};
   for (const row of rows.results) {
@@ -249,7 +328,7 @@ function overlayReply(request, body, revision, stamp) {
 // One primary-key read decides whether the cached overlay is current. Only a miss
 // fetches and parses the catalogue and runs the json_each() join.
 async function cachedOverlay(request, env, ctx, lang, diagnostic) {
-  if (!LANG.test(lang || '')) return error('unknown_language', 'This language is not available.', 404);
+  if (!LANG.test(lang || '')) return error('unknown_language', 404);
   const db = env.COMMUNITY_DB;
   diagnostic.category = 'database';
   const [stamp, current] = await Promise.all([buildStamp(request, env), revisionQuery(db).bind(lang).first()]);
@@ -264,7 +343,7 @@ async function cachedOverlay(request, env, ctx, lang, diagnostic) {
     }
   }
   const cat = await catalogue(request, env, lang);
-  if (!cat) return error('unknown_language', 'This language is not available.', 404);
+  if (!cat) return error('unknown_language', 404);
   const data = await overlay(db, lang, cat);
   const body = JSON.stringify(data);
   if (stamp) {
@@ -290,8 +369,9 @@ export async function cleanupTranslationVotes(env) {
   for (const { lang } of langs.results) {
     const cat = await catalogue(new Request('https://bigcopilot.com/'), env, lang);
     if (!cat) continue; // never discard votes on an unavailable catalogue
-    await db.prepare(`DELETE FROM translation_votes WHERE lang = ?1 AND NOT EXISTS (
-      SELECT 1 FROM json_each(?2) current WHERE current.key = translation_votes.key AND current.value = translation_votes.source_version
+    // NOT IN reads json_each() once; a correlated NOT EXISTS rescans it per vote.
+    await db.prepare(`DELETE FROM translation_votes WHERE lang = ?1 AND (key, source_version) NOT IN (
+      SELECT key, value FROM json_each(?2)
     )`).bind(lang, sourceMap(cat)).run();
   }
 }

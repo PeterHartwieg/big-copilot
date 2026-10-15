@@ -9,10 +9,9 @@ const {between} = require('./_slice.cjs');
 const startup = between(source, '    // A folder chosen on an earlier visit:', '  });', {last: true});
 // The page's tt(), which app.js writes every word through.
 const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
-// How app.js hands the strip its words: say(), failure() and errWords().
-const sayHelpers = between(source, '  const say = (v)', '\n', {endAfter: '  const errWords'});
-// The loopback check a remembered link goes through, as app.js has it.
-const loopback = between(source, '  function loopbackOrigin(', '  // Chrome and Edge hold a public page');
+// web/app.js run whole, for the helpers startup calls: errWords(), and the
+// loopback check a remembered link goes through.
+const {shell} = require('./_shell.cjs').loadShell();
 
 async function resume(permission, options = {}) {
   const loads = [];
@@ -24,6 +23,7 @@ async function resume(permission, options = {}) {
     return permission;
   }, requestPermission(){throw new Error('Startup must not request permission');}};
   const context = vm.createContext({
+    errWords:shell.errWords, loopbackOrigin:shell.loopbackOrigin,
     canHandle:options.supported !== false, dirHandle:null, sourceGen:0,
     handles:{async get(){return options.missing ? null : handle;}},
     stored:{get:(key) => key === 'ledger_link' && options.link ? options.link : ''},
@@ -36,7 +36,7 @@ async function resume(permission, options = {}) {
     async loadFromLink(why, gen){links.push([typeof why === 'function' ? why() : why, gen]);},
   });
   vm.runInContext(i18n, context);
-  await vm.runInContext(`(async () => {${sayHelpers}\n${loopback}\n${startup}\n})()`, context);
+  await vm.runInContext(`(async () => {${startup}\n})()`, context);
   return {loads, links, notes, handle, context};
 }
 

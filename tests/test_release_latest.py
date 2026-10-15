@@ -2,14 +2,13 @@
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from unittest import mock
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import build_web
+import ba_dashboard
 
 
 def entry(pr, date):
@@ -35,5 +34,22 @@ class ReleaseLatestTest(unittest.TestCase):
         self.assertIsNone(self.latest([]))
 
 
-if __name__ == "__main__":
-    unittest.main()
+class ChangelogDialogTest(unittest.TestCase):
+    """The hosted page ships the newest entry and fetches the rest (issue #328);
+    a local page, with nothing beside it to fetch, carries every entry."""
+
+    def entries(self, page):
+        dialog = page[page.index('<dialog class="changelog-dialog"'):]
+        return dialog[:dialog.index("</dialog>")]
+
+    def test_the_site_ships_the_newest_entry_and_names_the_file(self):
+        with open(os.path.join(os.path.dirname(ba_dashboard.__file__), "web", "changelog.json"), encoding="utf-8") as fh:
+            changes = json.load(fh)
+        newest = max(entry["date"] for entry in changes)
+        hosted = self.entries(ba_dashboard.render(None, live=True, site=True))
+        self.assertEqual(hosted.count('class="changelog-entry"'), 1)
+        self.assertIn(f'<time datetime="{newest}">', hosted)
+        self.assertIn('data-src="changelog.json"', hosted)
+        local = self.entries(ba_dashboard.render(None))
+        self.assertEqual(local.count('class="changelog-entry"'), len(changes))
+        self.assertIn('data-src=""', local)

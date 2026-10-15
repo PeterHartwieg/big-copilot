@@ -6,6 +6,8 @@
 
 import FEATURES from "./features.json";
 import {isRequestId, listRequests, voteRequest, suggestRequest, cleanupRequestVotes, cleanupRequestText} from "./feature_requests.mjs";
+import { handleTranslations, cleanupTranslationVotes } from "./translations.mjs";
+import { json, singleString } from "./http.mjs";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Pseudo IPv4 "overwrite headers" mode fills CF-Connecting-IP with a 240.0.0.0/4
@@ -21,7 +23,7 @@ const MAX_BODY_BYTES = 1024;
 // caches.default key only; this path is not a routable endpoint.
 const COUNT_CACHE_PATH = "/api/community/_presence-count-v1";
 
-// A bug report (docs/bug-report-scope.md). The whole multipart body is capped:
+// A bug report (docs/community-features.md, "Bug reports"). The whole multipart body is capped:
 // a save is about 5 MB of gzip, so 8 MB leaves it headroom. The report part is
 // a small JSON object, the details part the private traceback and settings.
 const REPORT_MAX_BYTES = 8 * 1024 * 1024;
@@ -50,11 +52,11 @@ const REPORT_SWEEP_AFTER_MS = 60 * 60 * 1000;
 // A bug report has a budget of its own, needs no D1 but the R2 bucket and the
 // GitHub token, and reads its own multipart body.
 const routes = {
-  "/api/translations": { operation: "translations", method: "GET", write: false, handler: translations },
-  "/api/translations/entry": { operation: "translations", method: "GET", write: false, handler: translations },
-  "/api/translations/overlay": { operation: "translations", method: "GET", write: false, handler: translations },
-  "/api/translations/suggest": { operation: "translations", method: "POST", write: true, handler: translations, maxBodyBytes: 16384, limiter: "TRANSLATION_SUGGEST_LIMITER" },
-  "/api/translations/vote": { operation: "translations", method: "POST", write: true, handler: translations },
+  "/api/translations": { operation: "translations", method: "GET", write: false, handler: handleTranslations },
+  "/api/translations/entry": { operation: "translations", method: "GET", write: false, handler: handleTranslations },
+  "/api/translations/overlay": { operation: "translations", method: "GET", write: false, handler: handleTranslations },
+  "/api/translations/suggest": { operation: "translations", method: "POST", write: true, handler: handleTranslations, maxBodyBytes: 16384, limiter: "TRANSLATION_SUGGEST_LIMITER" },
+  "/api/translations/vote": { operation: "translations", method: "POST", write: true, handler: handleTranslations },
   "/api/community/presence": { operation: "presence", method: "POST", write: true, handler: presence, limiter: "PRESENCE_LIMITER" },
   "/api/community/vote": { operation: "vote", method: "POST", write: true, handler: vote },
   "/api/community/suggest": { operation: "features", method: "POST", write: true, handler: suggest, maxBodyBytes: 8192, limiter: "SUGGEST_LIMITER" },
@@ -87,10 +89,7 @@ export default {
     const db = dailyTick ? env.COMMUNITY_DB : null;
     const results = await Promise.allSettled([
       env.REPORTS && (reportTick || !controller.cron) ? sweepReports(env.REPORTS) : null,
-      db && env.ASSETS ? (async () => {
-        const { cleanupTranslationVotes } = await import("./translations.mjs");
-        return cleanupTranslationVotes(env);
-      })() : null,
+      db && env.ASSETS ? cleanupTranslationVotes(env) : null,
       // The privacy notice promises both: presence rows go within two days, and a
       // poll's vote hashes go once its curated option or stored request closes.
       db ? (async () => db.batch([
@@ -605,18 +604,6 @@ async function sweepReports(bucket, now = Date.now()) {
   }
 }
 
-function json(data, status = 200, headers = {}) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": "no-store",
-      "x-content-type-options": "nosniff",
-      ...headers,
-    },
-  });
-}
-
 // One CryptoKey per request, reused by every HMAC in that request; message
 // prefixes ("rate:", "vote:") keep the uses domain-separated.
 async function signer(secret) {
@@ -680,17 +667,4 @@ async function readCapped(body, limit) {
     offset += chunk.byteLength;
   }
   return raw;
-}
-
-// Accepts exactly {"<key>": "<string>"} -- missing/wrong keys, extra keys, null,
-// arrays and non-strings are all rejected.
-function singleString(data, key) {
-  if (typeof data !== "object" || data === null || Array.isArray(data)) return null;
-  return Object.keys(data).length === 1 && typeof data[key] === "string" ? data[key] : null;
-}
-
-// Loaded only for this route; the feature/presence service stays independent.
-async function translations(...args) {
-  const { handleTranslations } = await import("./translations.mjs");
-  return handleTranslations(...args);
 }

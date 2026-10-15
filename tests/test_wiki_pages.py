@@ -5,9 +5,11 @@ Runs over the committed web/wiki-data.json, which is build output rather than a
 save, plus small synthetic payloads for the markdown rules.
 """
 from pathlib import Path
+import html
 import json
 import re
 import shutil
+import subprocess
 import tempfile
 import unittest
 
@@ -16,7 +18,8 @@ from tools import wiki_pages
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web"
-DATA = json.loads((WEB / "wiki-data.json").read_text(encoding="utf-8"))
+# Read the way the build reads it, each guide with its shared tables put back.
+DATA = wiki_pages.load(WEB)
 FILES = wiki_pages.build(DATA)
 HTML = {rel: body for rel, body in FILES.items() if rel.endswith(".html")}
 
@@ -81,6 +84,26 @@ class ExpectedPages(unittest.TestCase):
         self.assertRegex(table, r"Novel</a></th><td>Primary</td><td>[^<]*</td><td>[^<]*Own production</td>")
         self.assertLess(table.index("Youth Novel"), table.index("Flower (Cheap)"))
 
+    def test_suppliers_are_named_not_keyed(self):
+        # A guide lists its suppliers by site key; the table names them.
+        for rel, body in HTML.items():
+            self.assertNotIn("ba:street_", body, rel)
+        raw = json.loads((WEB / "wiki-data.json").read_text(encoding="utf-8"))
+        named = 0
+        for pid, guide in raw["guides"].items():
+            body = HTML[f"wiki/{pid}/index.html"]
+            table = body[body.index("<h2>What it sells</h2>"):]
+            for product in guide["PRODUCTS"].values():
+                for key in product.get("importers") or []:
+                    name = raw["SUPPLIERS"][key]["name"]
+                    self.assertIn(wiki_pages.text(name), table, (pid, key))
+                    named += 1
+        self.assertGreater(named, 0, "no guide names an importer: the check proves nothing")
+
+    def test_a_payload_built_without_load_still_names_suppliers(self):
+        raw = json.loads((WEB / "wiki-data.json").read_text(encoding="utf-8"))
+        self.assertEqual(wiki_pages.build(raw), FILES)
+
     def test_guides_carry_their_table(self):
         for pid in DATA["guides"]:
             with self.subTest(id=pid):
@@ -122,11 +145,22 @@ class Links(unittest.TestCase):
                 self.assertIn(f'href="{site_path(rel)}"', index)
 
 
+LD = re.compile(r'<script type="application/ld\+json">([^<]*)</script>')
+
+
+def ld_graph(body: str) -> list[dict]:
+    m = LD.search(body)
+    return json.loads(m.group(1))["@graph"] if m else []
+
+
 class NoScriptsNoThirdParties(unittest.TestCase):
     def test_pages_run_no_script_and_fetch_only_from_this_site(self):
         for rel, body in HTML.items():
             with self.subTest(rel=rel):
-                self.assertNotIn("<script", body.lower())
+                # The one <script> allowed is a JSON-LD data block, which no
+                # browser executes; anything else would break the privacy notice.
+                self.assertEqual(body.lower().count("<script"), len(LD.findall(body)))
+                self.assertLessEqual(len(LD.findall(body)), 1)
                 self.assertNotRegex(body, r"""\bsrc=["'](https?:)?//""")
                 self.assertNotRegex(body, r"""url\(["']?(https?:)?//""")
                 for tag in re.findall(r"<link\b[^>]*>", body):
@@ -194,12 +228,163 @@ class Markdown(unittest.TestCase):
                 wiki_pages.build(self.site("", extra=[{"id": bad, "categoryId": "g", "title": "x", "body": ""}]))
 
 
+def js_blocks(bodies: list[str]) -> list[list[tuple]]:
+    """`wikiBlocks` from web/wiki.js, run in node over `bodies`, as Python's tuples.
+
+    The slice runs from `wikiIsLabel` to `wikiBody`: the label rule and the
+    block parser, which use nothing else from the board.
+    """
+    source = (WEB / "wiki.js").read_text(encoding="utf-8")
+    start, end = "function wikiIsLabel(", "function wikiBody("
+    for anchor in (start, end):
+        if source.count(anchor) != 1:
+            raise AssertionError("web/wiki.js holds %r %d times, expected once"
+                                 % (anchor, source.count(anchor)))
+    code = source[source.index(start):source.index(end)]
+    script = code + """
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", chunk => { input += chunk; });
+process.stdin.on("end", () => {
+  process.stdout.write(JSON.stringify(JSON.parse(input).map(wikiBlocks)));
+});
+"""
+    out = subprocess.run(["node", "-e", script], input=json.dumps(bodies), check=True,
+                         text=True, encoding="utf-8", capture_output=True).stdout
+    shape = {"p": "lines", "ul": "items", "h": "line"}
+    return [[(block["kind"], block[shape[block["kind"]]]) for block in blocks]
+            for blocks in json.loads(out)]
+
+
+class ParserParity(unittest.TestCase):
+    """The static pages and the in-board reader parse help text with their own
+    copies of one rule set (`markdown_blocks`/`is_label` here, `wikiBlocks`/
+    `wikiIsLabel` in web/wiki.js). These tests hold the two to each other."""
+
+    def assertSameBlocks(self, bodies):
+        js = js_blocks(bodies)
+        self.assertEqual(len(js), len(bodies))
+        for body, theirs in zip(bodies, js):
+            ours = [(kind, list(value) if isinstance(value, list) else value)
+                    for kind, value in wiki_pages.markdown_blocks(body)]
+            if ours != theirs:
+                self.fail("markdown_blocks and wikiBlocks disagree on %r:\npython %r\njs     %r"
+                          % (body[:200], ours, theirs))
+
+    def test_every_committed_page_body_parses_the_same(self):
+        bodies = [page.get("body") or "" for page in DATA["pages"]]
+        self.assertGreater(len(bodies), 100)
+        self.assertSameBlocks(bodies)
+
+    def test_the_edges_of_the_rules_parse_the_same(self):
+        self.assertSameBlocks([
+            "",
+            "**Needs**:\n* one\n- two\n• three\n‣ four\n\nLine one\r\nline two",
+            "x" * 63 + ":",                 # a label at the limit
+            "x" * 64 + ":",
+            "x" * 65 + ":",                 # one over: a paragraph
+            "**" + "y" * 64 + "**:",        # bold marks do not count
+            "Ends here.:",                  # a sentence is never a label
+            "Wait!:",
+            "No colon",
+            "  * indented bullet\n*not a bullet\n-",
+            "Para\nLabel:\n* item\nAfter list\n\n\n* new list",
+        ])
+
+
+class ShareAndStructuredData(unittest.TestCase):
+    def meta(self, body, attr, name):
+        m = re.search(rf'<meta {attr}="{re.escape(name)}" content="([^"]*)">', body)
+        return m and m.group(1)
+
+    def test_every_page_has_open_graph_and_twitter_tags_matching_its_head(self):
+        for rel, body in HTML.items():
+            with self.subTest(rel=rel):
+                title = re.search(r"<title>([^<]+)</title>", body).group(1)
+                desc = self.meta(body, "name", "description")
+                url = "https://bigcopilot.com" + site_path(rel)
+                self.assertEqual(self.meta(body, "property", "og:title"), title)
+                self.assertEqual(self.meta(body, "property", "og:description"), desc)
+                self.assertEqual(self.meta(body, "property", "og:url"), url)
+                self.assertEqual(self.meta(body, "property", "og:site_name"), "Big Copilot")
+                self.assertEqual(self.meta(body, "name", "twitter:card"), "summary")
+                self.assertEqual(self.meta(body, "name", "twitter:title"), title)
+                self.assertEqual(self.meta(body, "name", "twitter:description"), desc)
+                self.assertIn(f'<link rel="canonical" href="{url}">', body)
+                article = rel.count("/") == 2 or rel.startswith("wiki/topic/")
+                self.assertEqual(self.meta(body, "property", "og:type"), "article" if article else "website")
+
+    def test_json_ld_parses_and_names_this_page(self):
+        for rel, body in HTML.items():
+            url = "https://bigcopilot.com" + site_path(rel)
+            with self.subTest(rel=rel):
+                graph = ld_graph(body)
+                if rel == "wiki/index.html":
+                    self.assertEqual(graph, [])
+                    continue
+                crumbs = [n for n in graph if n["@type"] == "BreadcrumbList"]
+                self.assertEqual(len(crumbs), 1)
+                items = crumbs[0]["itemListElement"]
+                self.assertEqual([i["position"] for i in items], list(range(1, len(items) + 1)))
+                self.assertEqual(items[0]["item"], "https://bigcopilot.com/wiki/")
+                self.assertEqual(items[-1]["item"], url)
+                self.assertEqual(items[-1]["name"], html.unescape(re.search(r"<h1>([^<]+)</h1>", body).group(1)))
+                for item in items:
+                    self.assertTrue(item["item"].startswith("https://bigcopilot.com/wiki/"))
+
+    def test_entries_are_articles_dated_by_the_game_help(self):
+        graph = ld_graph(HTML["wiki/businesstypes-bookstore/index.html"])
+        crumbs, article = graph
+        self.assertEqual([i["name"] for i in crumbs["itemListElement"]],
+                         ["Wiki", "Business Types", "Bookstore"])
+        self.assertEqual(article["@type"], "Article")
+        self.assertEqual(article["headline"], "Bookstore")
+        self.assertEqual(article["inLanguage"], "en")
+        self.assertEqual(article["dateModified"], DATA["provenance"]["sourceDate"])
+        # A hand-written topic is not dated by the game's help.
+        topic = ld_graph(HTML["wiki/topic/how-rent-works/index.html"])
+        self.assertEqual([n["@type"] for n in topic], ["BreadcrumbList", "Article"])
+        self.assertNotIn("dateModified", topic[1])
+        self.assertEqual([n["@type"] for n in ld_graph(HTML["wiki/c/common_business_types/index.html"])],
+                         ["BreadcrumbList"])
+
+    def test_json_ld_cannot_close_its_tag(self):
+        page = {"id": "a", "categoryId": "g", "title": "A </script><b>&", "body": "x."}
+        data = {"pages": [page], "categories": [{"id": "g", "label": "G", "pageIds": ["a"]}],
+                "guides": {}, "topics": []}
+        body = wiki_pages.build(data)["wiki/a/index.html"]
+        block = LD.search(body).group(1)
+        self.assertNotIn("<", block)
+        self.assertEqual(json.loads(block)["@graph"][1]["headline"], "A </script><b>&")
+
+
 class Sitemap(unittest.TestCase):
     def test_sitemap_lists_exactly_the_generated_pages(self):
         locs = re.findall(r"<loc>([^<]+)</loc>", FILES["sitemap.xml"])
         self.assertEqual(len(locs), len(set(locs)))
         expected = {"https://bigcopilot.com/"} | {"https://bigcopilot.com" + site_path(rel) for rel in HTML}
         self.assertEqual(set(locs), expected)
+
+    def test_lastmod_is_the_game_help_date_on_pages_drawn_from_it(self):
+        date = DATA["provenance"]["sourceDate"]
+        self.assertRegex(date, r"^\d{4}-\d{2}-\d{2}$")
+        urls = dict(re.findall(r"<url><loc>([^<]+)</loc>(?:<lastmod>([^<]+)</lastmod>)?</url>",
+                               FILES["sitemap.xml"]))
+        for loc, lastmod in urls.items():
+            with self.subTest(loc=loc):
+                undated = loc in ("https://bigcopilot.com/", "https://bigcopilot.com/wiki/") or "/wiki/topic/" in loc
+                self.assertEqual(lastmod, "" if undated else date)
+
+    def test_no_lastmod_without_a_source_date(self):
+        for provenance in (None, {}, {"sourceDate": "23 Sep"}):
+            data = {"pages": [{"id": "a", "categoryId": "g", "title": "A", "body": "x."}],
+                    "categories": [{"id": "g", "label": "G", "pageIds": ["a"]}], "guides": {}, "topics": []}
+            if provenance is not None:
+                data["provenance"] = provenance
+            with self.subTest(provenance=provenance):
+                files = wiki_pages.build(data)
+                self.assertNotIn("<lastmod>", files["sitemap.xml"])
+                self.assertNotIn("dateModified", files["wiki/a/index.html"])
 
     def test_robots_allows_all_and_names_the_sitemap(self):
         robots = FILES["robots.txt"]
@@ -262,7 +447,7 @@ class Check(unittest.TestCase):
 
     def test_build_web_check_reports_the_pages(self):
         with tempfile.TemporaryDirectory() as tmp:
-            for rel in ("web/wiki-data.json", *build_web.STAMP_INPUTS, "web/version.json",
+            for rel in ("web/wiki-data.json", "web/wiki-data.min.json", "tools/wiki_topics.json", *build_web.STAMP_INPUTS, "web/version.json",
                         *build_web.worker_assets()[1],
                         "web/index.html", "web/translate/index.html", "web/update.js", *build_web.PY_COPIED,
                         *(f"web/py/{name}" for name in build_web.PY_COPIED)):
@@ -273,7 +458,3 @@ class Check(unittest.TestCase):
             self.assertEqual(build_web.check(tmp), [])
             Path(tmp, "web/wiki/index.html").unlink()
             self.assertEqual(build_web.check(tmp), ["web/wiki/index.html"])
-
-
-if __name__ == "__main__":
-    unittest.main()

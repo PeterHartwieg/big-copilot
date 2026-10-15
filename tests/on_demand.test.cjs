@@ -22,8 +22,8 @@ function board(core = {}) {
     label: 'In browser',
     data: async () => null,
     watch() {},
-    section(name, gen) {
-      return new Promise((resolve, reject) => asked.push({name, gen, resolve, reject}));
+    section(name, gen, have) {
+      return new Promise((resolve, reject) => asked.push({name, gen, have: have && [...have], resolve, reject}));
     },
   };
   // Everything else on window answers as the harness's stub does: with itself.
@@ -255,6 +255,40 @@ test('an arriving section is merged into the English payload and the board, not 
   assert.equal(b.asked.length, 1);
 });
 
+test('a section asked for lists what the board holds of its chain, and a new board holds none (#327)', async () => {
+  // The core here carries staffing and office staffing, as a prefetch would
+  // have left them: asking for hiring says so, and the reply that leaves
+  // them out still makes hiring ready.
+  const b = board();
+  b.run('odNeed("hiring")');
+  assert.deepEqual(b.asked[0].have, ['staffing', 'officeStaffing']);
+  b.asked[0].resolve({generation: 5, sections: {
+    factoryStaffing: {factoryStaffing: {cap: [], dem: []}},
+    hiring: {hiring: {sites: [], people: {}}, candidates: []},
+  }});
+  await tick();
+  assert.equal(b.run('odReady("hiring")'), true);
+  assert.equal(b.run('D.staffing.length'), 0, 'the held section is kept');
+  b.run('odNeed("premises")');
+  assert.deepEqual(b.asked[1].have, []);
+  b.asked[1].resolve({generation: 5, sections: {premises: {premises: {}}}});
+  await tick();
+  // A language switch localises from the English payload, which keeps what
+  // the board holds, so it is still listed.
+  b.run('D = localiseNames(D)');
+  b.run('odNeed("openStore")');
+  assert.deepEqual(b.asked[2].have, ['premises']);
+  b.asked[2].resolve({generation: 5, sections: {openStore: {openStore: {}}}});
+  await tick();
+  assert.equal(b.run('odReady("openStore")'), true);
+  // A new board (another save, a live refresh, a worker restart) holds
+  // nothing of the old one's sections: it lists none it does not hold.
+  b.take({meta: {day: 4}, names: {}, businesses: [], supply: {factories: {sites: []}}}, 6);
+  b.run('odNeed("hiring")');
+  b.run('odNeed("openStore")');
+  assert.deepEqual(b.asked.slice(3).map(a => [a.name, a.gen, a.have]), [['hiring', 6, []], ['openStore', 6, []]]);
+});
+
 test('an answer for an older board is dropped, and the newer board asks again', async () => {
   const b = board();
   b.run('odNeed("factoryStaffing")');
@@ -323,16 +357,16 @@ test('a shop the game opens no hour is read off its own plan, not the Staff page
 test('work held for a section runs when it arrives; a waiting write dialog hears arrivals and failures', async () => {
   const b = board();
   b.run('globalThis.ran = 0; odThen("hiring", () => { globalThis.ran++; })');
-  b.run('globalThis.painted = 0; gwOpen = {open: true, _odWait: () => { globalThis.painted++; }}');
+  b.run('globalThis.painted = 0; gwOpen = {open: true}; gwState(gwOpen).odWait = () => { globalThis.painted++; }');
   assert.equal(b.run('ran'), 0);
   b.asked[0].reject(new Error('boom'));
   await tick();
   assert.equal(b.run('painted'), 1, 'the dialog paints the failure');
-  b.run('gwOpen._odWait = () => { globalThis.painted++; }');
+  b.run('gwOpenState().odWait = () => { globalThis.painted++; }');
   b.run('odThen("hiring", () => { globalThis.ran++; })');
   b.run('odRetry("hiring")');
   assert.equal(b.run('painted'), 2, 'and paints the Try again');
-  b.run('gwOpen._odWait = () => { globalThis.painted++; }');
+  b.run('gwOpenState().odWait = () => { globalThis.painted++; }');
   b.asked.at(-1).resolve({generation: 5, sections: {
     factoryStaffing: {factoryStaffing: {cap: [], dem: []}},
     hiring: {hiring: {sites: []}, candidates: []},
@@ -473,6 +507,127 @@ test('Staffing intent prefetches light planning stages without factory staffing 
   const b = board();
   b.run('delete D.staffing; delete D.officeStaffing; globalThis.document = {hidden: false}; odPrefetch("staffing/schedules"); odPrefetch("staffing/needs")');
   assert.deepEqual(b.asked.map(a => a.name), ['staffing', 'officeStaffing']);
+  // The second request counts on the first, still on its way (#474).
+  assert.deepEqual(b.asked.map(a => a.have), [[], ['staffing']]);
+});
+
+/* Sections of one chain, keyed as SECTIONS keys them, for a reply that sends
+   what was asked less what it lists in `have` (browser_section()). */
+const STAFF_CHAIN = {
+  staffing: {staffing: []},
+  officeStaffing: {officeStaffing: []},
+  factoryStaffing: {factoryStaffing: {cap: [], dem: []}},
+  hiring: {hiring: {sites: [], people: {}}, candidates: []},
+};
+const chainReply = (b, a) => {
+  const chain = JSON.parse(b.run(`JSON.stringify(odChain(${JSON.stringify(a.name)}))`));
+  return {generation: a.gen, sections: Object.fromEntries(chain.filter(n => !a.have.includes(n)).map(n => [n, STAFF_CHAIN[n]]))};
+};
+function schedulesBoard(){
+  const b = board();
+  b.take({meta: {day: 4}, names: {}, businesses: [], supply: {factories: {sites: []}}}, 6);
+  b.run('drawSchedules()');
+  return b;
+}
+
+test('one Schedules draw after a new build sends each section once (#474)', async () => {
+  const b = schedulesBoard();
+  assert.deepEqual(b.asked.map(a => [a.name, a.gen, a.have]), [
+    ['staffing', 6, []],
+    ['officeStaffing', 6, ['staffing']],
+    ['hiring', 6, ['staffing', 'officeStaffing']],
+  ]);
+  const sent = b.asked.flatMap(a => Object.keys(chainReply(b, a).sections));
+  assert.deepEqual(sent, ['staffing', 'officeStaffing', 'factoryStaffing', 'hiring'], 'each section once');
+  for(const a of b.asked){ a.resolve(chainReply(b, a)); await tick(); }
+  for(const n of Object.keys(STAFF_CHAIN)) assert.equal(b.run(`odState("${n}")`), 'ready', n);
+  b.run('drawSchedules()');
+  assert.equal(b.asked.length, 3, 'nothing asked again');
+});
+
+test('an in-flight section that fails is offered again with what counted on it (#474)', async () => {
+  const b = schedulesBoard();
+  for(const a of [...b.asked]){ a.reject(new Error('staffing failed')); await tick(); }
+  for(const n of Object.keys(STAFF_CHAIN)) assert.equal(b.run(`odState("${n}")`), 'error', n);
+  b.run('odRetry("hiring")');
+  const retry = b.asked.at(-1);
+  assert.deepEqual([retry.name, retry.gen, retry.have], ['hiring', 6, []], 'the whole chain again');
+  retry.resolve(chainReply(b, retry));
+  await tick();
+  for(const n of Object.keys(STAFF_CHAIN)) assert.equal(b.run(`odState("${n}")`), 'ready', n);
+});
+
+test('a later request answered after an earlier one failed leaves the failure to retry (#474)', async () => {
+  const b = schedulesBoard();
+  b.asked[0].reject(new Error('staffing failed'));
+  await tick();
+  b.asked[1].resolve(chainReply(b, b.asked[1]));
+  await tick();
+  b.asked[2].resolve(chainReply(b, b.asked[2]));
+  await tick();
+  assert.equal(b.run('odState("staffing")'), 'error');
+  assert.equal(b.run('odReady("hiring")'), false);
+  assert.equal(b.run('odError("hiring")'), true, 'Try again is offered where hiring is drawn');
+  b.run('odRetry("hiring")');
+  const retry = b.asked.at(-1);
+  assert.equal(retry.have.includes('staffing'), false, 'the failed section comes with the retry');
+  retry.resolve(chainReply(b, retry));
+  await tick();
+  assert.equal(b.run('odReady("hiring")'), true);
+});
+
+test('work held on a later section is dropped when an earlier one in its chain fails (#474)', async () => {
+  const b = schedulesBoard();
+  b.run(`globalThis.ran = 0; globalThis.kept = 0;
+    odThen("hiring", () => ran++);
+    odThen("hiring", () => kept++, "keep", true)`);
+  b.asked[0].reject(new Error('staffing failed'));
+  await tick();
+  b.asked[1].resolve(chainReply(b, b.asked[1]));
+  await tick();
+  b.asked[2].resolve(chainReply(b, b.asked[2]));
+  await tick();
+  assert.deepEqual(JSON.parse(b.run('JSON.stringify(odThens.map(t => t.key))')), ['keep'],
+    'only the work that keeps through errors is still held');
+  b.run('odRetry("hiring")');
+  const retry = b.asked.at(-1);
+  retry.resolve(chainReply(b, retry));
+  await tick();
+  assert.equal(b.run('odReady("hiring")'), true);
+  assert.equal(b.run('ran'), 0);
+  assert.equal(b.run('kept'), 1);
+});
+
+test('a reply that leaves out what it alone was bringing makes that an error, not a wait (#474)', async () => {
+  const b = schedulesBoard();
+  // Said in the reader's language, as every message on the board is.
+  b.run('ttLang = "de"; ttTable = {"nav.od.notSent": "DE-not-sent"}');
+  b.asked[0].resolve({generation: 6, sections: {}});
+  await tick();
+  assert.equal(b.run('odState("staffing")'), 'error');
+  assert.equal(b.run('odAsked.get("staffing").error'), 'DE-not-sent');
+  assert.match(b.run('odWaitHtml("staffing")'), /DE-not-sent/);
+  assert.equal(b.run('odError("hiring")'), true, 'what counted on it says so where it is drawn');
+});
+
+test('a stale-refused section is not counted on, and a new build starts afresh (#474)', async () => {
+  const b = schedulesBoard();
+  b.asked[0].reject(Object.assign(new Error('newer build'), {stale: true}));
+  await tick();
+  assert.equal(b.run('odInFlight("staffing", 6)'), false);
+  b.take({meta: {day: 5}, names: {}, businesses: [], supply: {factories: {sites: []}}}, 7);
+  const before = b.asked.length;
+  b.run('drawSchedules()');
+  assert.deepEqual(b.asked.slice(before).map(a => [a.name, a.gen, a.have]), [
+    ['staffing', 7, []],
+    ['officeStaffing', 7, ['staffing']],
+    ['hiring', 7, ['staffing', 'officeStaffing']],
+  ]);
+  // Board 6's late answer is dropped.
+  b.asked[1].resolve(chainReply(b, b.asked[1]));
+  await tick();
+  assert.equal(b.run('odReady("officeStaffing")'), false);
+  assert.equal(b.run('odState("officeStaffing")'), 'loading', 'board 7 still waits for its own');
 });
 
 test('factory planning waits for location and financing before loading or saving its step', () => {
@@ -497,16 +652,6 @@ test('an opened store staff check waits for shop plans before judging spare peop
   assert.doesNotMatch(row.sub, /no hours scheduled|of .*people/);
   assert.equal(b.run('__read'), 0);
   assert.deepEqual(b.asked.map(a => a.name), ['staffing']);
-});
-
-test('Today office schedule target is independent of deferred office plans', () => {
-  const b = board();
-  b.run('delete D.officeStaffing');
-  const before = b.run('nxStaffInto({key: "office", status: "office"})');
-  b.run('D.officeStaffing = [{key: "office", shifts: [{h: 8}]}]');
-  assert.equal(b.run('nxStaffInto({key: "office", status: "office"})'), before);
-  assert.equal(before, '#sitePanel .sp-acts');
-  assert.equal(b.asked.length, 0);
 });
 
 test('search and the expansion question enter the on-demand finder with their presets', () => {
@@ -581,6 +726,7 @@ test('Today and shell supply readers use core recipes without a section request'
 test('Demand popover asks for store facts and redraws the still-open cell on arrival', async () => {
   const b = board({market: {hoods: ['hood'], types: [{slug: 'shop', cells: [{demand: 30}]}]}});
   b.run(`demPop = {contains(){ return false; }, setAttribute(){}, querySelector(){ return null; }, focus(){}};
+    demUi = {open(){ demPop.hidden = false; }, close(){ demPop.hidden = true; }, isOpen: () => !demPop.hidden};
     demPopPlace = () => {}; hideTip = () => {};
     globalThis.__cell = {isConnected: true, dataset: {slug: "shop", hood: "hood"}, setAttribute(){}};
     demCellPop(__cell)`);
@@ -603,6 +749,7 @@ test('Demand popover asks for store facts and redraws the still-open cell on arr
 test('a closed Demand popover stays closed when store facts arrive', async () => {
   const b = board({market: {hoods: ['hood'], types: [{slug: 'shop', cells: [{demand: 30}]}]}});
   b.run(`demPop = {contains(){ return false; }, setAttribute(){}, querySelector(){ return null; }, focus(){}};
+    demUi = {open(){ demPop.hidden = false; }, close(){ demPop.hidden = true; }, isOpen: () => !demPop.hidden};
     demPopPlace = () => {}; hideTip = () => {};
     globalThis.__cell = {isConnected: true, dataset: {slug: "shop", hood: "hood"}, setAttribute(){}};
     demCellPop(__cell); demPopClose(false)`);

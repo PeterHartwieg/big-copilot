@@ -11,12 +11,16 @@ const {between} = require('./_slice.cjs');
 // branch hands it the refresh, checkFolder() hands it the watch.
 // The page's tt(), which app.js writes every word through.
 const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
-// How app.js hands the strip its words: say(), failure() and errWords().
-const sayHelpers = between(source, '  const say = (v)', '\n', {endAfter: '  const errWords'});
+// How app.js hands the strip its words: say(), failure() and errWords(),
+// from web/app.js run whole.
+const {shell} = require('./_shell.cjs').loadShell();
 const words = (v) => (typeof v === 'function' ? v() : v);
 const section = between(source, '  /* --- the game link (docs/game-link-api.md)', '  /* --- building');
 const updater = between(source, '  async function update()', '  /* --- watching the folder');
 const watcher = between(source, '  async function checkFolder()', '  function armWatch()');
+// The page's attempt, as app.js keeps it: one read at a time, per source,
+// and a build in it ends it itself.
+const attempts = between(source, '  function finishAttempt(gen)', '  // Cancel ownership');
 
 const HEALTH = {
   ok: true, schemaVersion: 1, modVersion: '0.1.0', source: 'mock', build: 3680,
@@ -63,8 +67,9 @@ function harness({routes = {}} = {}) {
     localStorage: {getItem: () => null, setItem() {}, removeItem(key) { delete remembered[key]; }},
     // the app helpers the section is allowed to touch
     $: el, strip,
-    company: 'Costy Co', sourceGen: 1, busy: false, attempt: null, readerError: null, handlers: null,
-    canHandle: true, dirHandle: null, handles: {get: async () => null},
+    say: shell.say, failure: shell.failure, errWords: shell.errWords,
+    company: 'Costy Co', sourceGen: 1, attempt: null, readerError: null, handlers: null,
+    canHandle: true, dirHandle: null, handles: {get: async () => null, set() {}},
     sourceActivity: 0, directoryPickPending: 0,
     watchTimer: 1,  // watching the game; null is the player's pause
     lastGood: {}, lastCheck: null, lastEntries: null, watchChecking: false,
@@ -84,9 +89,16 @@ function harness({routes = {}} = {}) {
     closeSavePicker() {}, place() {}, armWatch() {}, stopWatch() {}, syncWatchBtn() {}, linkMoved() {},
     pickedOnce() {},
     idleState() { seen.states.push(['idle']); strip.tone = 'ready'; },
-    finishAttempt(gen) { if (context.attempt && context.attempt.gen === gen) context.attempt = null; },
     // A build ends the attempt whether the board takes the bytes or not.
-    async buildFrom(file, dir, gen) { seen.builds.push(file); context.finishAttempt(gen); },
+    async buildFrom(file, dir, gen) {
+      seen.builds.push(file);
+      if (!context.startAttempt(gen)) return;
+      const run = context.attempt;
+      run.building = true;
+      await null;
+      run.building = false;
+      context.finishAttempt(gen);
+    },
     async scanHandle() { return []; },
     async refreshSaveMenu() { return ''; },
     chooseFrom: () => ({}),
@@ -99,8 +111,7 @@ function harness({routes = {}} = {}) {
     },
   });
   vm.runInContext(i18n, context);
-  vm.runInContext(between(source, '  function startAttempt(', '  // Cancel ownership'), context);
-  vm.runInContext(sayHelpers + '\n' + section + '\n' + updater + '\n' + watcher, context);
+  vm.runInContext(attempts + '\n' + section + '\n' + updater + '\n' + watcher, context);
   vm.runInContext('linkWait = (ms) => { __waits.push(ms); __advance(ms); return Promise.resolve(); };', context);
   // linkFetch only ever reaches an address on this computer; the tests that
   // call it directly talk to the default one.
@@ -211,6 +222,7 @@ test('a Block answered under the prompt reads as blocked once the fetch fails', 
   h.run('linkUrl = "http://127.0.0.1:8322"');
   const err = await h.run('linkFetch("/health").then(() => null, (e) => e)');
   assert.equal(err.message, en("app.link.blocked"));
+  assert.equal(err.unsent, true, 'held at the prompt, it never left the browser');
 });
 
 test('an unreachable game leaves the bad state, the install note and the link', async () => {
@@ -1132,11 +1144,17 @@ function withFallback(h, permission = 'granted') {
   h.context.armWatch = () => { h.seen.folderWatch = true; };
   // The strip as the real buildFrom() leaves it after a board took the bytes:
   // the note cleared, busy while reading, then storage trouble said again
-  // and the ok tone, which is what the fallback's own note is judged on.
+  // and the ok tone, which is what the fallback's own note is judged on. The
+  // build holds the attempt while it runs and ends it itself.
   h.context.buildFrom = async (file, dir, gen) => {
     h.seen.builds.push(file);
+    if (!h.context.startAttempt(gen)) return;
+    const run = h.context.attempt;
+    run.building = true;
     h.context.note('');
     h.context.state('busy', file.name);
+    await null;
+    run.building = false;
     h.context.finishAttempt(gen);
     if (!h.context.sayStoreTrouble()) h.context.note('');
     h.context.state('ok', 'Up to date');
@@ -1548,4 +1566,212 @@ test('a version-mismatch fallback cannot replace a newer successful Update', asy
   assert.equal(h.seen.builds.length, 1, 'the successful Link board stays');
   assert.equal(h.seen.states.length, states);
   assert.equal(h.seen.notes.length, notes);
+});
+
+test('a link failure while a build of the link holds the attempt leaves the build alone', async () => {
+  const h = harness();
+  withFallback(h);
+  assert.equal(h.run('startAttempt(sourceGen)'), true);
+  h.run('attempt.building = true');
+  const owner = h.run('attempt');
+  await h.run('linkDown(sourceGen, failure(() => "gone"))');
+  assert.deepEqual(h.seen.builds, [], 'no folder read');
+  assert.equal(h.run('linkUrl'), 'http://127.0.0.1:8322');
+  assert.equal(h.run('attempt'), owner, 'the build still holds its attempt');
+  assert.equal(h.context.sourceGen, 1);
+});
+
+// #359: a read that settles while a build of the same source runs (the game
+// gone mid-build) leaves the attempt to the build, which ends it.
+test('an attempt with a build in it outlives its reader and ends with the build', () => {
+  const h = harness();
+  assert.equal(h.run('startAttempt(1)'), true);
+  h.run('attempt.building = true');
+  h.run('finishAttempt(1)');
+  assert.notEqual(h.run('attempt'), null, 'the reader settled, the build still holds the attempt');
+  assert.equal(h.run('startAttempt(1) && attempt.building'), true, 'a second read waits on that build');
+  h.run('attempt.building = false; finishAttempt(1)');
+  assert.equal(h.run('attempt'), null, 'the build ended it');
+  assert.equal(h.run('startAttempt(0)'), false, 'an older source takes nothing');
+});
+
+// The loopback permission, remembered for the polls and asked afresh for
+// everything else. Each query hands back its own status, whose onchange the
+// page sets, so a test can say the site settings changed.
+function onPublicPage(h, states) {
+  const log = {queries: 0, statuses: []};
+  h.context.navigator = {permissions: {query: async ({name}) => {
+    log.queries++;
+    if (!(name in states)) throw new TypeError(`unknown permission ${name}`);
+    const status = {state: states[name], onchange: null};
+    log.statuses.push(status);
+    return status;
+  }}};
+  h.context.location = {hash: '', hostname: 'bigcopilot.com'};
+  return log;
+}
+const changed = (log) => log.statuses.forEach((s) => s.onchange && s.onchange());
+
+test('a grant is asked for once across the polls, and again after a failed fetch', async () => {
+  const h = harness({routes: {health: HEALTH}});
+  const log = onPublicPage(h, {'loopback-network': 'granted'});
+  for (let i = 0; i < 4; i++) await h.run('linkFetch("/health")');
+  assert.equal(log.queries, 2, 'both names asked once, for the first poll only');
+  delete h.routes.health;  // nothing answers now
+  await h.run('linkFetch("/health").then(() => null, (e) => e)');
+  assert.equal(log.queries, 4, 'the failure asks the browser again');
+});
+
+test('a grant withdrawn in the site settings is refused before the next poll, unsent', async () => {
+  const h = harness({routes: {health: HEALTH}});
+  const states = {'loopback-network': 'granted'};
+  const log = onPublicPage(h, states);
+  await h.run('linkFetch("/health")');
+  states['loopback-network'] = 'denied';
+  changed(log);
+  const calls = h.seen.calls.length;
+  const err = await h.run('linkFetch("/health").then(() => null, (e) => e)');
+  assert.equal(err.message, en("app.link.blocked"));
+  assert.equal(err.unsent, true);
+  assert.equal(h.seen.calls.length, calls, 'nothing fetched');
+});
+
+test('a grant reset to Ask waits for the player again, with the strip saying so', async () => {
+  const h = harness({routes: {health: HEALTH}});
+  const states = {'loopback-network': 'granted'};
+  const log = onPublicPage(h, states);
+  await h.run('linkFetch("/health")');
+  states['loopback-network'] = 'prompt';
+  changed(log);
+  const delays = [];
+  h.context.setTimeout = (fn, ms) => { delays.push(ms); return 0; };
+  h.run('attempt = {gen: 1}');
+  await h.run('linkFetch("/health")');
+  assert.deepEqual(delays, [90000]);
+  assert.deepEqual(h.seen.states.at(-1), ['busy', en("app.link.allow"), en("app.link.allow.where")]);
+});
+
+test('a write asks the browser afresh: withdrawn is unreachable and unsent, reset to Ask waits', async () => {
+  for (const now of ['denied', 'prompt']) {
+    const h = harness({routes: {health: HEALTH}});
+    const states = {'loopback-network': 'granted'};
+    onPublicPage(h, states);
+    await h.run('linkFetch("/health")');
+    // No change event: a browser that sends none still has the write ask.
+    states['loopback-network'] = now;
+    const delays = [];
+    h.context.setTimeout = (fn, ms) => { delays.push(ms); return 0; };
+    h.run('approvalMemo["http://127.0.0.1:8322"] = "token"');
+    const got = await h.run('gameWrite("uniforms", {sites: []}, {})');
+    if (now === 'denied') {
+      assert.equal(got.error, 'unreachable', 'not "uncertain": the write never left');
+      assert.equal(got.reread, undefined);
+      assert.ok(!h.seen.calls.some(([url]) => url.includes('/write/')), 'nothing was sent');
+    } else {
+      assert.equal(delays[0], 90000, 'the write waits for the player');
+    }
+  }
+});
+
+test('a fetch that fails under a grant the player then withdraws may have left: blocked, not unsent', async () => {
+  const h = harness({routes: {health: HEALTH}});
+  const states = {'loopback-network': 'granted'};
+  onPublicPage(h, states);
+  await h.run('linkFetch("/health")');
+  h.context.fetch = async () => { states['loopback-network'] = 'denied'; throw new TypeError('Failed to fetch'); };
+  const err = await h.run('linkFetch("/health").then(() => null, (e) => e)');
+  assert.equal(err.message, en("app.link.blocked"));
+  assert.notEqual(err.unsent, true);
+});
+
+test('a write under a fresh grant whose fetch fails, the grant then withdrawn, is uncertain and read again', async () => {
+  const h = harness({routes: {health: HEALTH}});
+  const states = {'loopback-network': 'granted'};
+  onPublicPage(h, states);
+  h.run('approvalMemo["http://127.0.0.1:8322"] = "token"; linkSpace = "loopback"');
+  h.context.fetch = async (url) => {
+    h.seen.calls.push([String(url)]);
+    if (String(url).includes('/write/')) states['loopback-network'] = 'denied';
+    throw new TypeError('Failed to fetch');
+  };
+  const got = await h.run('gameWrite("uniforms", {sites: []}, {})');
+  assert.equal(got.error, 'uncertain', 'the request may have reached the game');
+  assert.ok(got.reread && typeof got.reread.then === 'function', 'the board reads the game again');
+  assert.equal(h.seen.calls.filter(([url]) => url.includes('/write/')).length, 1, 'the write went out, once');
+  await got.reread;
+});
+
+test('a write the player allowed at the prompt, then blocked, may have reached the game', async () => {
+  for (const [kind, body, path] of [['uniforms', {sites: []}, '/write/uniforms'], ['undo', {kind: 'uniforms'}, '/write/undo']]) {
+    const h = harness({routes: {health: HEALTH}});
+    const states = {'loopback-network': 'prompt'};
+    const log = onPublicPage(h, states);
+    h.run('approvalMemo["http://127.0.0.1:8322"] = "token"; linkSpace = "loopback"');
+    const sent = [];
+    h.context.fetch = async (url) => {
+      if (String(url).endsWith(path)) {
+        // Allow on the prompt: the request goes out and the game has it.
+        log.statuses.forEach((s) => { s.state = 'granted'; });
+        changed(log);
+        sent.push(String(url));
+        // Then Block in the site settings, before the answer is in.
+        states['loopback-network'] = 'denied';
+        log.statuses.forEach((s) => { s.state = 'denied'; });
+        changed(log);
+      }
+      throw new TypeError('Failed to fetch');
+    };
+    const got = await h.run(`gameWrite(${JSON.stringify(kind)}, ${JSON.stringify(body)}, {})`);
+    assert.equal(sent.length, 1, kind);
+    assert.equal(got.error, 'uncertain', kind);
+    assert.ok(got.reread && typeof got.reread.then === 'function', kind);
+    await got.reread;
+  }
+});
+
+test('a refused write of a new link address does not leave the old one remembered', async () => {
+  const h = harness({routes: {health: HEALTH, save: reply(200, null, {'X-Game-Link-Stamp': 's1'})}});
+  h.remembered.ledger_link = 'http://127.0.0.1:8323';
+  h.context.stored.set = () => false;
+  await h.run('linkToGame()');
+  assert.equal('ledger_link' in h.remembered, false, 'the old address is gone');
+  assert.equal(h.run('linkUrl'), 'http://127.0.0.1:8322', 'the link is the source for this visit');
+});
+
+test('a write held at the prompt and blocked there is unreachable, unsent', async () => {
+  const h = harness({routes: {health: HEALTH}});
+  const states = {'loopback-network': 'prompt'};
+  onPublicPage(h, states);
+  h.run('approvalMemo["http://127.0.0.1:8322"] = "token"');
+  h.context.fetch = async () => { states['loopback-network'] = 'denied'; throw new TypeError('Failed to fetch'); };
+  const got = await h.run('gameWrite("uniforms", {sites: []}, {})');
+  assert.equal(got.error, 'unreachable');
+  assert.equal(got.reread, undefined);
+});
+
+test('only the first status per permission name is listened to, however often it is asked', async () => {
+  const h = harness({routes: {health: HEALTH, refresh: reply(202, {accepted: true, stamp: 's1'})}});
+  const log = onPublicPage(h, {'loopback-network': 'granted', 'local-network-access': 'prompt'});
+  for (let i = 0; i < 5; i++) await h.run('linkFetch("/refresh", {method: "POST"})');
+  assert.equal(log.queries, 10, 'every write-like call asks afresh');
+  const listened = log.statuses.filter((s) => typeof s.onchange === 'function');
+  assert.deepEqual(listened, [log.statuses[0], log.statuses[1]], 'one per name, the first');
+});
+
+test('a change during the ask leaves nothing remembered', async () => {
+  const h = harness({routes: {health: HEALTH}});
+  const states = {'loopback-network': 'granted'};
+  const log = onPublicPage(h, states);
+  await h.run('linkFetch("/health")');  // listens to the first status
+  const query = h.context.navigator.permissions.query;
+  h.context.navigator.permissions.query = async (q) => {
+    const status = await query(q);
+    changed(log);  // the site settings change while the answer is read
+    return status;
+  };
+  await h.run('loopbackPermission(true)');
+  h.context.navigator.permissions.query = query;
+  const before = log.queries;
+  await h.run('linkFetch("/health")');
+  assert.ok(log.queries > before, 'the poll asks again: the overtaken grant was not kept');
 });

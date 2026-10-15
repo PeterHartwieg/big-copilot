@@ -9,14 +9,10 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from unittest import mock
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.dirname(HERE))
 
 import ba_dashboard  # noqa: E402
 from ba_dashboard import History  # noqa: E402
@@ -227,7 +223,3 @@ class BrowserBound(Tmp):
             history.demand("c", day, snapshot(day))
         history.write()
         self.assertEqual(len(json.loads(self.read())["characters"]["c"]["days"]), ba_dashboard.HISTORY_DAYS)
-
-
-if __name__ == "__main__":
-    unittest.main()

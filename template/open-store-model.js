@@ -2,8 +2,9 @@
    Node consumers require it directly. No board, DOM, storage or translations. */
 const OpenStoreModel = (() => {
   "use strict";
-  const OS_OFFICE = {always: 3, fullDoor: 50, day: [8, 22]};
-  const OS_RAMP = [0.55, 0.92, 0.94, 0.97, 0.99];
+  /* SkillData's wage lift at skill 100, 1 + 1.05^skill / 100: the plans staff
+     every station at full skill. */
+  const SKILL_100_WAGE = 1 + Math.pow(1.05, 100) / 100;
   const OS_HYPE = {demand: 20, days: 14, idle: 21};
   // Premises status describes the lease; occupant describes the business in it.
   const emptyLease = b => !!b && b.status === "mine" && !b.occupant;
@@ -30,6 +31,13 @@ const OpenStoreModel = (() => {
    */
   function create({facts = {}, company = {}, optional = false} = {}){
     const osFacts = () => facts;
+    /* A game value openStore.game ships (_open_store() in Python, its single
+       source). A missing one is a payload bug, not a reason to guess. */
+    const osGame = key => {
+      const v = (osFacts().game || {})[key];
+      if(v == null) throw new Error(`openStore.game.${key} is missing`);
+      return v;
+    };
     const osType = slug => (osFacts().types || {})[slug] || null;
     const osCap = b => { const v = b && (osFacts().venues || {})[b.key];
       return v && v[1] ? v[1] : (b && b.cap) || 0; };
@@ -121,7 +129,7 @@ const OpenStoreModel = (() => {
        their median, else a well-run shop's. */
     function osSatisfaction(slug){
       const seen = ((osFacts().own || {})[slug] || []).map(s => s.sat).filter(v => Number.isFinite(v)).sort((a, b) => a - b);
-      return seen.length ? seen[Math.floor(seen.length / 2)] : ((osFacts().game || {}).satisfaction || 95);
+      return seen.length ? seen[Math.floor(seen.length / 2)] : osGame("satisfaction");
     }
     /* One day of a store of type `slug` in building `b`. `o`: reach (m² of
        marketing) and cost, or promoTotal for a shop whose promotion is known;
@@ -195,8 +203,8 @@ const OpenStoreModel = (() => {
       /* A hairdresser's service uses one hair-care product at its cost. */
       const care = (F.market || {})["ba:itemname_haircareproduct"];
       if(slug === "ba:businesstype_hairdresser" && care) cogs += lines.filter(l => l.service).reduce((s, l) => s + l.units, 0) * care.cost;
-      const w = g.wageBase || {}, rate = (1 + Math.pow(1.05, 100) / 100) * (g.wages || 0);
-      const wages = open / 7 * (Math.ceil(cap / (w.perCashier || 30)) * (w.cashier || 0) + (w.cleaner || 0) + (w.guard || 0)) * rate;
+      const w = osGame("wageBase"), rate = SKILL_100_WAGE * (g.wages || 0);
+      const wages = open / 7 * (Math.ceil(cap / w.perCashier) * (w.cashier || 0) + (w.cleaner || 0) + (w.guard || 0)) * rate;
       const rent = o.rent ?? (b.rent || 0), marketing = o.cost || 0;
       return {revenue, cogs, wages, rent, marketing, profit: revenue - cogs - wages - rent - marketing,
         customers: customers / 7, fees: fees / 7, lines, promo: total};
@@ -211,9 +219,10 @@ const OpenStoreModel = (() => {
        not, with a cleaner through every open hour as in a shop. The fee is priced
        as a shop's goods are: the highest every client accepts. */
     function osOfficeStaffed(computers, cap, wd, hr){
-      const always = Math.min(computers, Math.max(1, Math.round(OS_OFFICE.always * cap / OS_OFFICE.fullDoor)));
-      if(hr < OS_OFFICE.day[0] || hr >= OS_OFFICE.day[1]) return always;
-      return wd === 0 || wd === 6 ? Math.max(always, Math.ceil(computers / 2)) : computers;
+      const office = osGame("office");
+      const always = Math.min(computers, Math.max(1, Math.round(office.always * cap / office.fullDoor)));
+      if(hr < office.day[0] || hr >= office.day[1]) return always;
+      return office.weekend.includes(wd) ? Math.max(always, Math.ceil(computers / 2)) : computers;
     }
     function osOfficeModel(slug, t, b, h, o){
       const F = osFacts(), g = F.game || {};
@@ -225,7 +234,7 @@ const OpenStoreModel = (() => {
       const initial = osInitial(t, b, o);
       const sat = 1 + ((o.sat ?? osSatisfaction(slug)) - 50) / 100;
       const demand = osDemand(fee, b.hood, o.existing), {price, mono} = osPrice(fee, b.hood);
-      const wage = (t.wage || 0) * (1 + Math.pow(1.05, 100) / 100) * (g.wages || 0);
+      const wage = (t.wage || 0) * SKILL_100_WAGE * (g.wages || 0);
       const slots = o.open || Array.from({length: 7}, () => [[0, 24]]);
       const computers = o.computers || cap;
       let billed = 0, staffed = 0, open = 0;
@@ -240,8 +249,7 @@ const OpenStoreModel = (() => {
         }
       }
       const units = billed / 7;
-      const skill = 1 + Math.pow(1.05, 100) / 100;
-      const revenue = units * price, wages = (staffed * wage + open * ((g.wageBase || {}).cleaner || 0) * skill * (g.wages || 0)) / 7;
+      const revenue = units * price, wages = (staffed * wage + open * (osGame("wageBase").cleaner || 0) * SKILL_100_WAGE * (g.wages || 0)) / 7;
       const rent = o.rent ?? (b.rent || 0), marketing = o.cost || 0;
       return {revenue, cogs: 0, wages, rent, marketing, profit: revenue - wages - rent - marketing,
         customers: units, fees: 0, office: true, lines: [{p: fee, impact: 1, amt: 1, r: 1, demand, service: true, cost: 0, price, mono, units}], promo: total};
@@ -290,8 +298,8 @@ const OpenStoreModel = (() => {
        A new store earns less at first. The opening day is a partial day at
        satisfaction 50 all round, taken as 0.8 of a day; new staff start at 50
        satisfaction and climb 0.6 an hour, and the shop's customer service
-       follows them a day late. OS_RAMP is each day's gross margin as a share of
-       the steady one, from the opening day (0) on; rent, wages and marketing are
+       follows them a day late. openStore.game.ramp (RAMP in Python) is each
+       day's gross margin as a share of the steady one, from the opening day (0) on; rent, wages and marketing are
        paid in full from the start. The first shop in a neighbourhood to sell a
        product nobody has sold there for 21 days gets +20 demand on it for 14
        days (ProductMarketHelper.CreateHypeEventsForNewItemsAddedToANeighbourhood,
@@ -315,8 +323,9 @@ const OpenStoreModel = (() => {
        ramped, the fixed costs whole. */
     function osDayProfit(m, mh, k){
       const x = mh && k >= 1 && k <= OS_HYPE.days ? mh : m;
-      if(x === m && k >= OS_RAMP.length) return m.profit;
-      const r = k < OS_RAMP.length ? OS_RAMP[k] : 1;
+      const ramp = osGame("ramp");
+      if(x === m && k >= ramp.length) return m.profit;
+      const r = k < ramp.length ? ramp[k] : 1;
       return r * (x.revenue - x.cogs) - (x.wages + x.rent + x.marketing);
     }
     /* The day the running profit first covers `inv`, day by day: 1 is the
@@ -346,10 +355,15 @@ const OpenStoreModel = (() => {
       const economy = Math.floor(Math.max(0, Math.max(f.floor || 0, f.wealth || 0, 0.25 * (f.profit7 || 0) * bank.term) - (f.owed || 0)));
       return Math.min(room, economy);
     }
+    const osYear = () => {
+      const year = (osFacts().finance || {}).year;
+      if(!year) throw new Error("openStore.finance.year is missing");
+      return year;
+    };
     function osLoan(amount, bank){
       const f = osFacts().finance || {};
       if(!bank || amount < (f.minimum || 0)) return null;
-      const interest = Math.floor(amount * bank.rate * (f.multiplier || 0) / 100 / (f.year || 60) + 1e-6);
+      const interest = Math.floor(amount * bank.rate * (f.multiplier || 0) / 100 / osYear() + 1e-6);
       const repay = Math.max(5, Math.floor(amount / (bank.term || 1)));
       const days = Math.ceil(amount / repay);
       return {amount, interest, repay, days, total: days * interest};
@@ -397,8 +411,9 @@ const OpenStoreModel = (() => {
       loanLimit: osLoanLimit,
       loan: osLoan,
       loanDays: osLoanDays,
+      rampDays: () => osFacts().game ? osGame("ramp").length : 0,
     };
   }
-  return {create, emptyLease, availablePremises, leaseDeposit, OFFICE: OS_OFFICE, RAMP: OS_RAMP, HYPE: OS_HYPE};
+  return {create, emptyLease, availablePremises, leaseDeposit, HYPE: OS_HYPE, SKILL_100_WAGE};
 })();
 if(typeof module !== "undefined" && module.exports) module.exports = OpenStoreModel;

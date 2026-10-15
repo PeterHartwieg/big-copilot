@@ -64,7 +64,3 @@ class EnglishLookupTests(unittest.TestCase):
         english = NoScanDict({f"f.unrelated{i}": "Unrelated" for i in range(10000)})
         english.update({"f.shop_one": "A shop", "f.shop_other": "{n} shops"})
         self.assertEqual(i18n._english_for("f.shop_few", english), ("{n} shops", {"n:"}))
-
-
-if __name__ == "__main__":
-    unittest.main()

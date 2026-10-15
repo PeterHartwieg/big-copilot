@@ -243,9 +243,17 @@ test('Buy a building: cheapest first, Payback by its switch or its head, the ren
   const order = await page.evaluate(() => reBuySorted(D.realEstate.buy).map(x => [x.saves > 0, x.payback]));
   const firstOther = order.findIndex(([saves]) => !saves);
   assert.ok(order.slice(firstOther).every(([saves]) => !saves), 'the buildings you rent in lead the Payback sort');
-  // The column head switches back.
-  await page.locator('#secBuy th[data-re-sort="price"]').click();
+  assert.equal(await page.locator('#secBuy th[data-re-sort="payback"]').getAttribute('aria-sort'), 'ascending');
+  assert.equal(await page.locator('#secBuy th[data-re-sort="price"]').getAttribute('aria-sort'), 'none');
+  // The column head switches back, from a button inside it that the keyboard
+  // reaches; the cell stays a column header, and the focus stays on its button.
+  assert.equal(await page.locator('#secBuy th[data-re-sort]:not([role]) > button.supply-sort').count(), 2);
+  await page.locator('#secBuy th[data-re-sort="price"] button').focus();
+  await page.keyboard.press('Enter');
   assert.equal(await page.locator('#viewCtl [data-re-sort="price"]').getAttribute('class'), 'on');
+  assert.equal(await page.locator('#secBuy th[data-re-sort="price"]').getAttribute('aria-sort'), 'ascending');
+  assert.equal(await page.locator('#secBuy th[data-re-sort="payback"]').getAttribute('aria-sort'), 'none');
+  assert.ok(await page.evaluate(() => document.activeElement.matches('#secBuy th[data-re-sort="price"] button')));
   // Show all lists the rest.
   await page.evaluate(() => { RE_FIRST.buy = 2; reAll.buy = false; drawEstateBuy(); });
   assert.equal(await page.locator('#secBuy tbody tr:not(.re-hide)').count(), 2);

@@ -77,7 +77,7 @@
 /maps/*
   Cache-Control: public, max-age=31536000, immutable
 
-/wiki-data.json
+/wiki-data.min.json
   Cache-Control: public, max-age=31536000, immutable
 
 # Fixed paths remain for local development and are never immutable.

@@ -18,19 +18,18 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import subprocess
 import sys
 import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-sys.path.insert(0, HERE)
-sys.path.insert(0, ROOT)
+sys.path.insert(0, ROOT)  # for `python tests/test_payload_snapshot.py --update`
 
 import ba_dashboard  # noqa: E402
 from tests import es3_fixture  # noqa: E402
 from tests import save_fixtures  # noqa: E402
+from tests._seeds import under_seeds
 from ba_save import Names, load_save  # noqa: E402
 
 SNAPSHOTS = os.path.join(HERE, "fixtures", "payload_snapshot")
@@ -216,15 +215,10 @@ class PayloadSnapshotTests(unittest.TestCase):
                     self.assertNotIn(form, text, f"{case} holds a local path")
 
     def test_the_same_bytes_under_two_hash_seeds(self):
-        script = ("import hashlib, json, test_payload_snapshot as t;"
+        script = ("import hashlib, json; from tests import test_payload_snapshot as t;"
                   "print(json.dumps({k: hashlib.sha256(v.encode()).hexdigest()"
                   " for k, v in t.snapshots().items()}, sort_keys=True))")
-        runs = []
-        for seed in ("1", "2"):
-            env = dict(os.environ, PYTHONHASHSEED=seed, PYTHONPATH=os.pathsep.join([HERE, ROOT]))
-            env.pop("UPDATE_SNAPSHOTS", None)
-            runs.append(subprocess.run([sys.executable, "-c", script], check=True, text=True,
-                                       capture_output=True, env=env, cwd=HERE).stdout)
+        runs = under_seeds(script, unset=("UPDATE_SNAPSHOTS",))
         self.assertEqual(runs[0], runs[1])
         ours = {k: hashlib.sha256(v.encode()).hexdigest() for k, v in self.texts.items()}
         self.assertEqual(json.loads(runs[0]), ours)

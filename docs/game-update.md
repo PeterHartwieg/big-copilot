@@ -270,9 +270,9 @@ floor-plan set that is missing a layout `ba_buildings.json` uses
 
 ### Hand-read tables no script checks
 
-Two more groups of constants in `ba_dashboard.py` were read from the game by hand.
-`tools/game_update/bundles.py` compares only the three tables above and no test reads the
-game, so a patch can change either group without anything failing.
+Three more groups of constants in `ba_dashboard.py` were read from the game by hand.
+`tools/game_update/bundles.py` compares only the tables above and no test reads the
+game, so a patch can change any of them without anything failing.
 
 - `ASSIGN_SKILLS`, with `_SHOP_SKILLS`, decides which skills a business accepts when
   somebody is assigned to it, so the Staff page never proposes a hire the mod refuses
@@ -296,6 +296,32 @@ game, so a patch can change either group without anything failing.
   open hour because the game stores no need for them (`docs/dashboard-reference.md`, "The
   week the board would copy into BizMan"). The banner says these rules were read "at
   VERIFIED_BUILD", so re-check them before bumping it in "5. Bump the build" below.
+- The planners' constants (Expansion › Open a store and Plan a factory, the payback and the
+  supply rules). Re-read each against the game class named here; the comment above each
+  constant says more.
+
+  | Constant | Read from |
+  | --- | --- |
+  | `BOAT_PRICES` | `BoatTypes..cctor`, each `BoatData.type`'s price (counted as wealth) |
+  | `LOAN_MINIMUM` | `Dialogs.BankDialog`, the smallest loan it accepts |
+  | `TUTORIAL_LOAN_FLOOR` | `Dialogs.BankDialog`, what a bank lends against while the tutorial's first-loan objective is open |
+  | `FURNITURE_DELIVERY_FEE` | `FurnitureStoreManagerDialog`, the flat fee per delivery contract |
+  | `INSTALL_FEE_PER_M2` | `InteriorInstallationFirmHelper.GetInstallationFee` |
+  | `DRIVER_DAY_HOURS` | `EmployeeHelper.PayDailyWages` → `PayWage`, the flat hours a delivery driver is paid a day |
+  | `CAPPED_INITIAL_BUILD` | `CustomerEntriesCalculatorRetail.BuildNumberToStartCappingInitialCustomers` |
+  | `PRICE_ACCEPTANCE` | `CitizenHelper.Init`, the price each customer class accepts |
+  | `DAYS_PER_YEAR` | `GameVariables.daysPerYear` on the presets; used only when a save holds none |
+
+  Tests pin the ones with a source in the repository: `MARKETING_STRENGTH`, `PLAN_WAGES`,
+  `PLAN_OFFICE_WAGES` and `PALLET_SHELF_BOXES` against `ba_store_rules.json`, and the
+  game-variable fallbacks against `HOUSE_RULES`' Normal column through `_house_rule()`
+  (`tests/test_open_store.py`, `GameValueDriftTests` and
+  "test_every_skill_has_its_base_hourly_wage"). So re-run `make_store_rules.py` (above)
+  rather than editing those by hand. `HQ_WEEK_HOURS`, `MATERIAL_FLOOR`, `RAMP` and the
+  `OFFICE_*` default are the board's own choices or measurements, not the game's. The
+  board's planners (`template/open-store-model.js`, `template/open-factory-model.js`) keep
+  no copy of any of these: they read them from the `openStore` and `openFactory` payloads,
+  and throw when one is missing.
 
 ### Values measured from saves
 
@@ -323,10 +349,17 @@ the rest (`web/index.html`, `web/version.json`, the `web/py/` copies, the static
 `web/sitemap.xml` and `web/robots.txt`). Commit the game-derived files it changed; the
 assembled ones are gitignored.
 
+The build stops when the wiki would lose a guide the committed `web/wiki-data.json` has,
+or leave out authored copy whose `when` clause no longer matches the new help text, or
+when a guide UI string is missing from `guideUi` in `tools/wiki_sample.json`, and names
+each one. Either fix the clause or the wording in `tools/wiki_sample.json`, or
+confirm the loss is real and run `python build_web.py --allow-fewer-guides`. Then read
+`textdiff.py` as usual.
+
 A line diff of `web/wiki-data.json` runs to hundreds of lines for one changed fact.
 `textdiff.py` compares both files with `HEAD` by key and by page instead, and prints the
-first difference inside each. It leaves out what every rebuild changes: the per-guide
-`SOURCES` and the Steam build id the guides quote. `0 change(s) outside provenance` means
+first difference inside each, with each guide's shared supplier rows put back. It leaves
+out what every rebuild changes: the guides' `SOURCES` and the Steam build id the guides quote. `0 change(s) outside provenance` means
 the game text the board ships did not change.
 
 Read each change:

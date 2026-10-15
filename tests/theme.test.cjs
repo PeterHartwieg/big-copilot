@@ -5,29 +5,19 @@
 // next visit. None of that survives a stubbed DOM, so these run in Playwright.
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('node:path');
-const {chromium} = require('playwright');
+const {suiteBrowser, openPage, serveWeb} = require('./_page.cjs');
 
-const FILES = new Set(['/index.html', '/app.js', '/worker.js', '/community.js', '/community.css',
-  '/maps/locations.json', '/maps/map-background.svg', '/wiki-data.json']);
+const browser = suiteBrowser();
+const FILES = ['/index.html', '/app.js', '/worker.js', '/community.js', '/community.css',
+  '/maps/locations.json', '/maps/map-background.svg', '/wiki-data.min.json'];
 
 /* The page, served from web/ with nothing else reachable. colorScheme is the
    operating system's setting, which "auto" follows and a choice overrides. */
 async function open(t, {colorScheme = 'dark'} = {}) {
-  const browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
-  t.after(() => browser.close());
-  const context = await browser.newContext({viewport: {width: 1280, height: 900}, colorScheme});
-  const page = await context.newPage();
+  const {page, errors} = await openPage(t, await browser(), {context: {colorScheme}, allowErrors: true});
   page.setDefaultTimeout(0);
   page.setDefaultNavigationTimeout(0);
-  const errors = [];
-  page.on('pageerror', error => errors.push(error.message));
-  await page.route('**/*', route => {
-    const url = new URL(route.request().url());
-    const name = url.pathname === '/' ? '/index.html' : url.pathname;
-    if (url.hostname !== 'theme.test' || !FILES.has(name)) return route.abort();
-    return route.fulfill({path: path.join(__dirname, '../web', name)});
-  });
+  await serveWeb(page, {host: 'theme.test', only: FILES});
   await page.goto('http://theme.test/');
   return {page, errors};
 }

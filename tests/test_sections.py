@@ -11,15 +11,11 @@ from __future__ import annotations
 import json
 import os
 import re
-import sys
 import tempfile
 import unittest
 import unittest.mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
-sys.path.insert(0, HERE)
-sys.path.insert(0, ROOT)
 
 import ba_dashboard  # noqa: E402
 from tests import es3_fixture  # noqa: E402
@@ -69,7 +65,7 @@ class Registry(unittest.TestCase):
 
     def test_new_registry_entry_is_rendered_without_a_browser_edit(self):
         spec = {"keys": ("example", "other"), "needs": ("products",),
-                "produce": lambda _: {}, "words": "Example"}
+                "produce": lambda _: {}}
         with unittest.mock.patch.dict(ba_dashboard.SECTIONS, example=spec):
             page = ba_dashboard.render(None)
         block = re.search(r"const OD_SECTIONS = (\{[^\n]+\});", page)
@@ -181,10 +177,9 @@ class Sections(unittest.TestCase):
         heard.clear()
         ba_dashboard.section(build, "hiring")
         details = [detail for _stage, detail in heard]
-        self.assertIn("Working out factory staffing", details)
-        self.assertIn("Working out staff needs", details)
-        self.assertLess(details.index("Working out factory staffing"),
-                        details.index("Working out staff needs"))
+        self.assertIn("factoryStaffing", details)
+        self.assertIn("hiring", details)
+        self.assertLess(details.index("factoryStaffing"), details.index("hiring"))
 
     def test_hiring_keeps_saying_it_is_working(self):
         # Every site of the Staff page's key ticks the heartbeat: with no wait
@@ -195,7 +190,7 @@ class Sections(unittest.TestCase):
         ba_dashboard.set_progress(lambda stage, detail: heard.append(detail))
         with unittest.mock.patch.object(ba_dashboard, "PROGRESS_EVERY_S", 0):
             ba_dashboard.section(build, "hiring")
-        self.assertEqual(heard[0], "Working out staff needs")
+        self.assertEqual(heard[0], "hiring")
         self.assertGreater(len(heard), 1, "a heartbeat after the start")
 
     def test_a_failed_factory_section_leaves_the_pool_whole(self):
@@ -220,6 +215,8 @@ class Sections(unittest.TestCase):
         expected.append("rivalry")
         # Real estate's sidebar numbers: a few counts over the owned buildings.
         expected.append("realEstateCounts")
+        # The Portfolio footer's sites given up or sold that day, beside businesses.
+        expected.append("sitesGone")
         self.assertEqual(set(self.build().core), set(expected))
 
     def test_later_planning_first_equals_each_stage_in_order(self):
@@ -395,6 +392,26 @@ class BrowserSections(unittest.TestCase):
         got = json.loads(ba_dashboard.browser_section("hiring", 8))
         self.assertEqual(set(got["sections"]), {"staffing", "officeStaffing", "factoryStaffing", "hiring"})
 
+    def test_what_the_page_holds_is_not_sent_again(self):
+        # #327: the page lists the sections of this build it holds; a second
+        # request sends only the rest, and the section asked for always.
+        self.build(4)
+        first = json.loads(ba_dashboard.browser_section("officeStaffing", 4, []))
+        self.assertEqual(set(first["sections"]), {"staffing", "officeStaffing"})
+        got = json.loads(ba_dashboard.browser_section("hiring", 4, ["staffing", "officeStaffing"]))
+        self.assertEqual(set(got["sections"]), {"factoryStaffing", "hiring"})
+        self.assertEqual(got["sections"]["factoryStaffing"],
+                         json.loads(ba_dashboard.browser_section("factoryStaffing", 4))["sections"]["factoryStaffing"])
+        # Listing the section asked for itself still sends it; unknown names
+        # are ignored.
+        own = json.loads(ba_dashboard.browser_section("staffing", 4, ["staffing", "nonsense"]))
+        self.assertEqual(set(own["sections"]), {"staffing"})
+        # A new build: the page holds nothing of it and lists nothing, and the
+        # whole chain comes again.
+        self.build(5)
+        fresh = json.loads(ba_dashboard.browser_section("hiring", 5, []))
+        self.assertEqual(set(fresh["sections"]), {"staffing", "officeStaffing", "factoryStaffing", "hiring"})
+
     def test_a_section_of_another_build_is_stale(self):
         self.build(1)
         self.build(2)
@@ -416,7 +433,3 @@ class BrowserSections(unittest.TestCase):
         self.build(3)
         with self.assertRaises(ValueError):
             ba_dashboard.browser_section("unknown", 3)
-
-
-if __name__ == "__main__":
-    unittest.main()

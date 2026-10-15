@@ -106,8 +106,9 @@
     const about = {build, mb: "6"};
     if (build) fill("lgHelpAutosave", tt("land.help.autosave", "The game autosaves every five minutes. Your browser may call folder access an \"upload\" or ask to \"let this site view files\"; the save stays on your computer. Checked on game build {build}; the Python runtime the page needs is about {mb} MB, fetched once and cached.", richParams(about)), about);
     fill("lgHelpLinked", tt("land.help.linked", "<b>Linked to the game.</b> With the <a>Big Copilot Link mod</a> from the Steam Workshop enabled, click <b>Link to the game</b> and the board reads the running game itself. Chrome and Edge ask once to allow the site to reach your computer; the data still never leaves it."));
-    // Community wording is plain text, so it may omit the authored <a>.
-    // Keep the existing Workshop action available using its trusted markup URL
+    // Translations must keep the authored <a> (the catalogue's markup contract),
+    // but should one ever lack it, or a page predate that contract, keep the
+    // existing Workshop action available using its trusted markup URL
     // and already-localized label; candidate text never supplies a link.
     const linked = $("lgHelpLinked"), mod = $("modLink");
     if (linked && mod && !linked.querySelector("a")) {
@@ -270,7 +271,6 @@
   let sectionFailure = null;
   let builtGen = null;
   let boardBuild = null;
-  let busy = false;
   let runtimeReady = false;
   // Watching the folder: Chromium only, once read access is granted.
   // The preference survives; the timer does not.
@@ -281,6 +281,12 @@
   const WATCH_MS = 30000;
   const pending = new Map();
   let nextId = 1;
+  // The read under way, one per source: {gen, restoring, building}. It is
+  // taken by whatever starts reading (a scan, the link, a build) and ended by
+  // whatever settles it; `building` while the worker has the bytes, and a
+  // build ends the attempt itself, so a reader that settled first (the game
+  // gone mid-build) leaves the attempt to the build. Every gate that waits
+  // for quiet asks only whether there is an attempt.
   let attempt = null;
   // Background checks yield to any newer read or explicit source interaction,
   // even when that interaction has already finished by the time they return.
@@ -306,20 +312,19 @@
   }
 
   function finishAttempt(gen) {
-    if (attempt && attempt.gen === gen) attempt = null;
+    if (attempt && attempt.gen === gen && !attempt.building) attempt = null;
   }
   function startAttempt(gen, restoring = false) {
     if (gen !== sourceGen || readerError) return false;
-    if (!attempt) { attempt = {gen, restoring}; sourceActivity++; }
+    if (!attempt) { attempt = {gen, restoring, building: false}; sourceActivity++; }
     if (restoring) attempt.restoring = true;
     return true;
   }
   // Cancel ownership, not the worker's computation. Its late replies are ignored.
   function supersede() {
-    finishAttempt(sourceGen);
+    attempt = null;  // a build of the old source included
     sourceGen++;
     reopen = null;
-    busy = false;
     heldFailure = null;  // a report from the new source is not about the old one
     sectionFailure = null;
     queued = null;
@@ -533,7 +538,7 @@
       : strip.meta;
     $("srcMeta").textContent = restoring ? "" : meta;
     const btn = $("updateBtn");
-    btn.disabled = !!readerError || !!attempt || busy || !(dirHandle || lastFile || linkUrl);
+    btn.disabled = !!readerError || !!attempt || !(dirHandle || lastFile || linkUrl);
     const opens = !board && dirHandle && !lastFile;
     btn.textContent = opens ? (pick.dir || pick.name ? tt("app.update.chosen", "Open chosen save") : tt("app.update.newest", "Open newest save"))
       : tt("app.update", "Update");
@@ -836,15 +841,49 @@
   // what the browser is waiting for. The permission's name moved with the
   // address spaces: "loopback-network" from Chrome 145, "local-network-access"
   // before; a browser that knows neither asks nothing and reads as granted.
+  // A grant is remembered only for the reads that poll (/health four times
+  // a second while a refresh lands), and only until the browser says it
+  // changed: a write, an approval and a fetch that failed (linkFailure())
+  // ask the browser `again`, so a grant the player withdrew mid-session is
+  // still told from a closed port, and a reset to Ask still waits for them.
   const PROMPT_WAIT_MS = 90000;
   const SAVE_WAIT_MS = 30000;  // a whole save, headers and bytes
-  async function loopbackPermission() {
+  let loopbackGranted = false;
+  // The browser's word that the permission changed: counted, so an answer
+  // that a change overtook while it was being read is not remembered.
+  let loopbackChanges = 0;
+  // How often it changed to granted: a fetch held at the prompt that the
+  // player allowed has gone out, whatever is said of the permission after.
+  let loopbackGrants = 0;
+  const loopbackWatched = {};  // name -> the one status listened to
+  async function loopbackPermission(again = false) {
+    if (loopbackGranted && !again) return "granted";
+    const before = loopbackChanges;
+    const answer = await askLoopback();
+    loopbackGranted = answer === "granted" && loopbackChanges === before;
+    return answer;
+  }
+  async function askLoopback() {
     if (typeof navigator === "undefined" || !navigator.permissions) return "granted";
     // A page served from this machine is already on loopback: nothing to ask.
     if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname || "")) return "granted";
     const states = [];
     for (const name of ["loopback-network", "local-network-access"]) {
-      try { states.push((await navigator.permissions.query({name})).state); } catch (e) {}
+      try {
+        const status = await navigator.permissions.query({name});
+        // A change in the site settings ends the remembered grant at once.
+        // One status per name is listened to, the first: each query hands
+        // back a new one, and the asks go on for the session.
+        if (!loopbackWatched[name]) {
+          loopbackWatched[name] = status;
+          status.onchange = () => {
+            loopbackChanges++;
+            loopbackGranted = false;
+            if (status.state === "granted") loopbackGrants++;
+          };
+        }
+        states.push(status.state);
+      } catch (e) {}
     }
     if (!states.length || states.includes("granted")) return "granted";
     return states.includes("denied") ? "denied" : "prompt";
@@ -879,9 +918,11 @@
     const base = link || linkUrl;
     const moved = () => Object.assign(failure(() => tt("app.link.moved", "The board is no longer linked to the same game.")), {unsent: true, moved: true});
     if (!loopbackOrigin(base || "")) throw Object.assign(failure(() => tt("app.link.local", "Not linked to the game on this computer.")), {unsent: true});
-    const permission = await loopbackPermission();
+    // Anything but a plain read asks the browser afresh: see loopbackPermission().
+    const permission = await loopbackPermission(!!bound || (rest.method || "GET").toUpperCase() !== "GET");
     if (permission === "denied") throw Object.assign(linkBlocked(), {unsent: true});
     const asking = permission === "prompt";
+    const grants = loopbackGrants;  // an Allow on this call's prompt moves it
     if (asking && attempt) state("busy", () => tt("app.link.allow", "Allow Big Copilot to reach the game"),
       () => tt("app.link.allow.where", "your browser is asking, at the top of the window"));
     const spaces = linkSpace === null ? ["loopback", "local", ""] : [linkSpace];
@@ -901,23 +942,28 @@
         // game and not about this call's options. The name, not instanceof:
         // the error can come from another realm than this script's.
         if (err.name === "TypeError" && space && linkSpace === null) continue;
-        throw await linkFailure();
+        throw await linkFailure(!asking || loopbackGrants !== grants);
       }
       if (read && res.ok) {
         try { res.bytes = await res.arrayBuffer(); }
-        catch (err) { clearTimeout(timer); throw await linkFailure(); }
+        catch (err) { clearTimeout(timer); throw await linkFailure(true); }
       }
       clearTimeout(timer);
       linkSpace = space;
       linkGone = false;  // the mod answered, whatever it said: the watcher's gone note is over
       return res;
     }
-    throw await linkFailure();
+    throw await linkFailure(!asking || loopbackGrants !== grants);
   }
   // A "Block" on the prompt fails the fetch like a closed port does; only
-  // the permission tells them apart.
-  async function linkFailure() {
-    if (await loopbackPermission() === "denied") return linkBlocked();
+  // the permission tells them apart. `mayHaveLeft` false when the request
+  // cannot have reached the game: the browser held it at its prompt, and
+  // the player blocked it there. Under a grant it may have gone out before
+  // the player withdrew it, and the game may have acted on it: not unsent.
+  // A permission that reads "prompt" after a failure is deliberately not
+  // unsent either: only "denied" says the browser refused the request.
+  async function linkFailure(mayHaveLeft) {
+    if (await loopbackPermission(true) === "denied") return Object.assign(linkBlocked(), {unsent: !mayHaveLeft});
     return failure(() => tt("app.link.down", "The game is not running, or the Big Copilot Link mod is not installed."));
   }
 
@@ -971,18 +1017,14 @@
     try { permission = await handle.queryPermission({mode: "read"}); }
     catch (e) { return !current(); }
     if (!current()) return true;
-    if (directoryPickPending) return false;
+    // A build of the link's bytes holds the attempt and ends it itself: it is
+    // newer than this failure, and switching would throw it away.
+    if (directoryPickPending || attempt?.building) return false;
     // Switching source also invalidates outstanding reads and game writes.
     // Keep Link as the next visit's preference; this folder is a fallback.
     const restoring = !!(attempt && attempt.restoring);
-    const next = supersede();
-    dropLink(false);
-    dirHandle = handle;
-    lastEntries = null;
-    closeSavePicker();
-    pickedOnce("");
+    const next = becomeSource("folder", {handle, keepLink: true});
     $("srcStrip").title = "";
-    if (!onBoard()) place();
     const reconnect = (why && why.next) || (() => tt("app.link.fallback.reconnect", "Choose Link to the game to reconnect when the game is ready."));
     const after = why ? () => `${say(why)} ${say(reconnect)}` : reconnect;
     if (permission !== "granted") {
@@ -1006,11 +1048,13 @@
     return true;
   }
 
+  // The link as a source, gone: everything it knew of the game, and the
+  // remembered address, so it does not come back on the next visit.
+  // `forget` false keeps the remembered address, for a link chosen anew,
+  // which writes its own over it, and for a fallback to the folder, which
+  // leaves the link the next visit's source; forgetting also forgets the
+  // folder this tab would fall back to.
   function dropLink(forget = true) {
-    // A folder or a file chosen by hand replaces the link as the source, and
-    // that choice is remembered too, so the link must not come back on the
-    // next visit. The reverse is not cleared: the folder handle stays in
-    // IndexedDB, and choosing it again is one click, not one picker trip.
     linkUrl = null;
     lastLinkStamp = "";
     linkHealth = null;
@@ -1024,26 +1068,54 @@
     }
     linkMoved();
   }
-
-  async function linkToGame() {
-    const gen = supersede();
-    linkUrl = linkBase();
-    // A board built from a folder or an earlier link is not this link's: the
-    // first stamp the mod answers has to be read, whatever it is.
-    lastLinkStamp = "";
-    linkHealth = null;
-    linkNow = null;
-    linkSchema = LINK_SCHEMA;
-    linkGone = false;
-    linkNotReady = 0;
-    stored.set(LINK_KEY, linkUrl);
-    pickedOnce("");
-    linkFolderHandle = dirHandle || linkFolderHandle;
-    dirHandle = null;  // in memory; the remembered handle stays in IndexedDB
+  // The folder as a source, gone from memory, with the save menu that
+  // described it. The handle stays in IndexedDB, so choosing that folder
+  // again is one click, not one picker trip.
+  function dropFolder() {
+    dirHandle = null;
     savePicker.hidden = true;
     closeSavePicker();
     lastEntries = null;
+  }
+
+  // The one way a source is chosen by hand: "link" (the game at `url`),
+  // "folder" (a live folder `handle`), "snapshot" (a folder's files, read
+  // once) or "file" (one save, `name`). The choice is the source from now
+  // on, and remembered as the source picked last: the other two are dropped
+  // (a link starts afresh too: a board built from a folder or an earlier
+  // link is not this link's, so the first stamp the mod answers is read,
+  // whatever it is), and a snapshot or a file is noted for the tab, which a
+  // reload asks for again. `gen`: the request's generation when the caller
+  // took it before its own asynchronous work; otherwise a new one. Returns
+  // the generation, or null when another choice came first. `keepLink`: the
+  // folder the page fell back to on its own (fallbackFromLink()), not by
+  // hand, so the remembered link stays the next visit's source.
+  function becomeSource(kind, {handle = null, url = null, name = "", gen, keepLink = false} = {}) {
+    if (gen === undefined) gen = supersede();
+    else if (gen !== sourceGen) return null;
+    dropLink(kind !== "link" && !keepLink);
+    if (kind === "link") {
+      linkUrl = url;
+      // Storage that refuses the new address must not keep the old one.
+      if (!stored.set(LINK_KEY, url)) { try { localStorage.removeItem(LINK_KEY); } catch (e) {} }
+    }
+    if (kind === "folder") {
+      dirHandle = handle;
+      handles.set("saves", handle);
+    } else if (kind === "snapshot") {
+      dirHandle = null;  // its own scan fills the save menu again
+    } else {
+      dropFolder();
+    }
+    pickedOnce(kind === "snapshot" ? "folder" : kind === "file" ? "file" : "", name);
     if (!onBoard()) place();
+    return gen;
+  }
+
+  async function linkToGame() {
+    // The folder this link set aside is the one to fall back to.
+    linkFolderHandle = dirHandle || linkFolderHandle;
+    const gen = becomeSource("link", {url: linkBase()});
     await loadFromLink(() => tt("app.link.linking", "Linking to the game"), gen);
   }
 
@@ -1112,6 +1184,24 @@
     return why;
   }
 
+  // A run of answers on the port that were never the mod's health: whatever
+  // answers there is not the mod.
+  function notTheMod(gen) {
+    finishAttempt(gen);
+    state("bad", () => tt("app.link.notmod", "That address does not answer as the Big Copilot Link mod"), linkUrl);
+    note("bad", notModNever, () => tt("app.link.port.check", "Check the port in the mod's options, then click Update."), true);
+  }
+  // Update ends without new bytes, the game there all along: the board stays,
+  // and `words` say why under it. Only a board the link built says "up to
+  // date": a folder board has no game state to name, and its own line is
+  // still true.
+  function linkSettled(gen, words) {
+    finishAttempt(gen);
+    if (lastLinkStamp) state("ok", () => tt("app.state.current", "Up to date"), () => linkLine(linkHealth));
+    else idleState();
+    note("warn", words);
+  }
+
   // `look` false: no look after the build (lookAgain()), for a caller that
   // goes on reading the game itself, and for the look's own build.
   async function loadFromLink(why, gen, look = true) {
@@ -1137,13 +1227,10 @@
         if (Date.now() >= deadline) {
           if (await fallbackFromLink(gen, undefined, sawHealth ? null : notModNever)) return;
           if (gen !== sourceGen) return;
-          finishAttempt(gen);
-          if (!sawHealth) {
-            // Thirty seconds of answers that were never health: not the mod.
-            state("bad", () => tt("app.link.notmod", "That address does not answer as the Big Copilot Link mod"), linkUrl);
-            note("bad", notModNever,
-              () => tt("app.link.port.check", "Check the port in the mod's options, then click Update."), true);
-          } else {
+          // Thirty seconds of answers that were never health: not the mod.
+          if (!sawHealth) notTheMod(gen);
+          else {
+            finishAttempt(gen);
             state("bad", () => tt("app.link.nosave", "The game has not produced a save yet"), linkUrl);
             note("bad", () => tt("app.link.nosave.why", "The mod has had nothing to serve for {s} seconds. Load a save in the game, then click Update.", {s: 30}), "", true);
           }
@@ -1298,12 +1385,7 @@
       if (res.status === 409) {
         let reason = "other";
         try { reason = (await res.json()).reason || "other"; } catch (e) {}
-        finishAttempt(gen);
-        // Only a board the link built says "up to date": a folder board has no
-        // game state to name, and its own line is still true.
-        if (lastLinkStamp) state("ok", () => tt("app.state.current", "Up to date"), () => linkLine(linkHealth));
-        else idleState();
-        note("warn", () => linkRefused(reason));
+        linkSettled(gen, () => linkRefused(reason));
         return;
       }
       if (res.status === 429) {
@@ -1347,10 +1429,7 @@
       }
       // 503 main_thread_unavailable, or anything else: the mod is there but
       // did not take the request. Not "the game is not running".
-      finishAttempt(gen);
-      if (lastLinkStamp) state("ok", () => tt("app.state.current", "Up to date"), () => linkLine(linkHealth));
-      else idleState();
-      note("warn", () => tt("app.link.refresh.refused", "The mod did not take the refresh (answered {status}). Try Update again in a moment.", {status: res.status}));
+      linkSettled(gen, () => tt("app.link.refresh.refused", "The mod did not take the refresh (answered {status}). Try Update again in a moment.", {status: res.status}));
       return;
     }
     await awaitNewStamp(before, gen);
@@ -1386,12 +1465,9 @@
     if (!health) {
       if (!sawHealth && await fallbackFromLink(gen, undefined, notModNever)) return;
       if (gen !== sourceGen) return;
-      finishAttempt(gen);
-      if (!sawHealth) {
-        state("bad", () => tt("app.link.notmod", "That address does not answer as the Big Copilot Link mod"), linkUrl);
-        note("bad", notModNever,
-          () => tt("app.link.port.check", "Check the port in the mod's options, then click Update."), true);
-      } else {
+      if (!sawHealth) notTheMod(gen);
+      else {
+        finishAttempt(gen);
         state("bad", () => tt("app.link.unfinished", "The game did not finish serializing"), linkUrl);
         note("bad", () => tt("app.link.unfinished.why", "No new state from the mod in {s} seconds. Try Update again.", {s: 45}), "", true);
       }
@@ -1771,7 +1847,7 @@
   // Until no read is under way. A poll on the real clock, not linkWait: the
   // tests that swap that one in resolve it at once, and this must yield.
   async function whenIdle(gen) {
-    while ((busy || attempt) && gen === sourceGen && linkUrl) await new Promise((resolve) => setTimeout(resolve, 250));
+    while (attempt && gen === sourceGen && linkUrl) await new Promise((resolve) => setTimeout(resolve, 250));
   }
 
   // The mod refreshes after an apply; the board follows the stamp as it does
@@ -1818,7 +1894,7 @@
     // With no folder to read it is said once, under the board that stays,
     // and the next answer clears it.
     const gen = sourceGen, activity = sourceActivity;
-    const fallbackCurrent = () => sourceActivity === activity && !document.hidden && !busy && !attempt && !directoryPickPending && !!watchTimer;
+    const fallbackCurrent = () => sourceActivity === activity && !document.hidden && !attempt && !directoryPickPending && !!watchTimer;
     const wasGone = linkGone;  // linkFetch clears it the moment the mod answers
     let health;
     try { health = await readHealth(); }
@@ -1869,7 +1945,7 @@
     // The port answers as the mod again: whatever the watcher said about it
     // is withdrawn, even when the stamp has not moved.
     if (portNoteUp() && strip.tone === "ok") note("");
-    if (document.hidden || busy || attempt) return;
+    if (document.hidden || attempt) return;
     // The look after a build (`look` false) was asked for while watching; a
     // pause since, while its /health was on the way, ends it here. A tick of
     // the watcher itself cannot run paused: the pause stops its timer.
@@ -1888,8 +1964,9 @@
     if (!startAttempt(gen)) return;
     // A build asked for while one runs is not lost: the latest request, a
     // pick, a folder or a file dropped by hand, runs once this build ends.
-    if (busy) { queued = () => buildFrom(file, dir, gen); return; }
-    busy = true;
+    const run = attempt;
+    if (run.building) { queued = () => buildFrom(file, dir, gen); return; }
+    run.building = true;
     lastFile = file;
     lastFileGen = gen;
     heldFailure = null;
@@ -1910,7 +1987,7 @@
       }, [bytes], gen);
       built = data;
       if (gen !== sourceGen) return;
-      busy = false;
+      run.building = false;
       finishAttempt(gen);
       lastGood = file;
       lastGoodDir = dir || "";
@@ -1932,7 +2009,7 @@
       state("ok", () => tt("app.state.current", "Up to date"), () => line(tt("app.build.took", "built in {s:.1f} s", {s: took})));
     } catch (err) {
       if (gen !== sourceGen) return;
-      busy = false;
+      run.building = false;
       finishAttempt(gen);
       const at = Date.now(), kept = lastGood, paused = !!(dirHandle && watching && !watchTimer);
       // The reader hands a failed save's bytes back; a failure after it read
@@ -2010,8 +2087,8 @@
     paintStrip();
   }
 
-  // Applies the pick to a scan. Returns {file, fellBack}: fellBack says what
-  // was asked for when it is no longer there and the newest stands in.
+  // Applies the pick to a scan. Returns {file, dir, fellBack}: fellBack says
+  // what was asked for when it is no longer there and the newest stands in.
   function chooseFrom(entries) {
     let saves = entries.filter((e) => isSave(e.file));
     if (!saves.length) return {file: null, dir: "", fellBack: ""};
@@ -2270,7 +2347,7 @@
   // Whatever was asked for while a build ran; the latest request wins.
   let queued = null;
   async function applyPick() {
-    if (busy) { queued = applyPick; return; }
+    if (attempt && attempt.building) { queued = applyPick; return; }
     if (dirHandle) await loadFromHandle(dirHandle, () => tt("app.open.chosen", "Opening the chosen save"));
     else if (lastEntries) await loadFromEntries(lastEntries);
   }
@@ -2334,13 +2411,7 @@
   }
 
   async function takeHandle(handle, why, gen) {
-    if (gen === undefined) gen = supersede();
-    if (gen !== sourceGen) return;
-    dirHandle = handle;
-    handles.set("saves", handle);
-    pickedOnce("");
-    dropLink();  // a folder chosen here replaces the game link as the source
-    if (!onBoard()) place();
+    if (becomeSource("folder", {handle, gen}) === null) return;
     await loadFromHandle(handle, why);
   }
 
@@ -2386,7 +2457,7 @@
   }
 
   async function update() {
-    if (busy || attempt || readerError) return;
+    if (attempt || readerError) return;
     if (linkUrl) {
       await refreshFromGame();
       return;
@@ -2420,7 +2491,7 @@
 
   /* --- watching the folder ---------------------------------------------- */
   async function checkFolder() {
-    if (document.hidden || watchChecking || busy || attempt || readerError) return;
+    if (document.hidden || watchChecking || attempt || readerError) return;
     // One watcher, two sources. typeof rather than a bare read, so the
     // sliced tests can run this function without the link's names.
     if (typeof linkUrl === "string" && linkUrl) {
@@ -2593,7 +2664,7 @@
   // web/report.js and web/report.css load on the first click of a Report a bug
   // control: #reportBtn in the strip after a failure, or any [data-bug-report]
   // (the footer's, and its copy in Help & feedback). What the form may know is
-  // handed over here; it decides what is sent (docs/bug-report-scope.md).
+  // handed over here; it decides what is sent (docs/community-features.md, "Bug reports").
   let reportLoad = null;
   function loadReport() {
     if (window.BigCopilotReport) return Promise.resolve(window.BigCopilotReport);
@@ -2619,6 +2690,19 @@
   async function readerHeld(build) {
     if (!worker || readerError || !runtimeReady || !lastFile) return null;
     try { return await ask({kind: "held", build}); } catch (e) { return null; }
+  }
+  // The board's own save, as the game link packed it (a .bcsave: the save and
+  // the building values read with it), handed to the player as a download.
+  // The reader holds the bytes; `current(file)` says whether `file` is still
+  // the board's own save and the one last read, before the ask and after it.
+  async function exportSnapshot(file, readHeld, current) {
+    if (!file || !current(file) || !/\.bcsave$/i.test(file.name)) return;
+    const held = await readHeld(false);
+    if (!held?.bytes || !current(file) || held.name !== file.name) return;
+    const url = URL.createObjectURL(new Blob([held.bytes], {type: "application/octet-stream"}));
+    const a = document.createElement("a");
+    a.href = url; a.download = file.name; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   function reportContext() {
     const failed = heldFailure;
@@ -2682,7 +2766,9 @@
     // One section of the build `gen` (the board's), computed on demand from
     // the build the worker holds: resolves to {generation, sections}, or
     // rejects stale (err.stale) once a newer build has been asked for.
-    section: (name, gen) => ask({kind: "section", name, gen}),
+    // `have`: the sections of that build the board already holds, left out
+    // of the reply.
+    section: (name, gen, have) => ask({kind: "section", name, gen, have: Array.isArray(have) ? have.slice() : null}),
     watch: (h) => { handlers = h; },
     // The game link, for the board's write buttons: the kinds the mod takes
     // and whose company it is, and the game's day and hour at the last
@@ -2698,6 +2784,56 @@
     // Update, for a board that learns the game has moved on.
     refresh: () => update(),
   };
+
+  /* --- the site's own dialogs -------------------------------------------- */
+  // What the hosted page's two dialogs share: web/community.js's vote dialog
+  // and web/report.js's bug report form, which both load after this file. The
+  // board's changelog dialog runs in the CLI's dashboard.html too, where this
+  // file is not loaded, so it keeps its own.
+  window.BigCopilotDialog = {
+    /* Makes a built <dialog> modal: a click on its backdrop closes it, unless
+       held() says it must stay (a send in flight), and every close, Escape
+       included, hands focus back to the control that opened it while that
+       control is still on the page, then calls onClose(). Returns show(from),
+       which opens it with `from` as that control. */
+    modal(dialog, {held = () => false, onClose = null} = {}) {
+      let opener = null;
+      dialog.addEventListener("click", (event) => {
+        const r = dialog.getBoundingClientRect();
+        if (!held() && event.target === dialog && (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom)) dialog.close();
+      });
+      dialog.addEventListener("close", () => {
+        if (opener && document.contains(opener)) opener.focus();
+        opener = null;
+        if (onClose) onClose();
+      });
+      return {show(from) { opener = from || null; dialog.showModal(); }};
+    },
+    // A line that screen readers announce when its text changes.
+    status(className) {
+      const p = document.createElement("p");
+      p.className = className;
+      p.setAttribute("role", "status");
+      p.setAttribute("aria-live", "polite");
+      return p;
+    },
+    // Writes a dialog's words again on a change of UI language, after the
+    // board's own listener has set the number locale.
+    relabel(fn) { if (typeof ttOnChange === "function") ttOnChange(() => queueMicrotask(fn)); },
+    // A response's JSON body, or null when it has none.
+    json(res) { return res.json().catch(() => null); },
+  };
+
+  /* --- for the tests ------------------------------------------------------ */
+  // The shell's helpers that need no running page, so the Node tests call
+  // them rather than slicing this file's text (tests/_shell.cjs runs it in a
+  // VM with a stand-in document). Pure ones, and a few that touch only the
+  // elements, storage and navigator they are given. Nothing on the page
+  // calls them through here.
+  window.BigCopilotShell = Object.freeze({
+    say, failure, errWords, savePlatform, wireSaveLocation, gameTextLanguage, dropForeignLocale,
+    loopbackOrigin, newestOf, entriesOf, chooseFrom, browserLabel, readAnswer, wellFormed, exportSnapshot,
+  });
 
   /* --- the landing: reveal, the drop zone, the sphere ------------------ */
   // The landing's document and window listeners hang off this controller,
@@ -2940,7 +3076,7 @@
     // Entries from a folder (an <input webkitdirectory>, or a folder walked
     // from a drop) feed the menu and the pick. Files chosen by hand are
     // read as they are: no rule applies, and the menu, which described some
-    // other folder, is put away unless a live folder handle still backs it.
+    // other folder, is put away (becomeSource()).
     // gen: the request's generation when the caller took it before its own
     // asynchronous work (a dropped folder's walk); otherwise a new one.
     const takeEntries = async (entries, fromFolder, gen) => {
@@ -2956,13 +3092,10 @@
         } else if (!locale) note("warn", () => tt("app.drop.neither", "That is neither a .hsg save nor en.json."));
         return;
       }
-      if (gen === undefined) gen = supersede();  // a new set of files, whatever its shape
-      else if (gen !== sourceGen) return;        // superseded during the walk
-      dirHandle = null; // A manual file/snapshot must not be replaced by the old watcher.
-      dropLink();       // and a folder or file chosen here replaces the game link
-      pickedOnce(fromFolder ? "folder" : "file", fromFolder ? "" : newestOf(saves.map((e) => e.file)).name);
-      if (!onBoard()) place();
-      if (!startAttempt(gen)) return;
+      // A new set of files, whatever its shape; none when superseded during the walk.
+      const newest = newestOf(saves.map((e) => e.file));
+      gen = becomeSource(fromFolder ? "snapshot" : "file", {name: fromFolder ? "" : newest.name, gen});
+      if (gen === null || !startAttempt(gen)) return;
       state("busy", () => tt("app.open.selected", "Opening the selected save…"));
       if (locale) await takeLocale(locale.file, false);
       if (gen !== sourceGen) return;
@@ -2971,8 +3104,7 @@
         if (gen !== sourceGen) return;  // superseded while the sidecars were read
         await loadFromEntries(wanted, "", moved, gen);
       } else {
-        if (!dirHandle) { savePicker.hidden = true; closeSavePicker(); lastEntries = null; }
-        buildFrom(newestOf(saves.map((e) => e.file)), "", gen);
+        buildFrom(newest, "", gen);
       }
     };
     const take = (files) => {
@@ -3037,16 +3169,7 @@
       if (typeof featureDiscovery !== "undefined") featureDiscovery.visit("game-link");
       linkToGame();
     });
-    $("snapshotExport")?.addEventListener("click", async () => {
-      const file = lastGood;
-      if (!file || file !== lastFile || !/\.bcsave$/i.test(file.name)) return;
-      const held = await readerHeld(false);
-      if (!held?.bytes || lastGood !== file || lastFile !== file || held.name !== file.name) return;
-      const url = URL.createObjectURL(new Blob([held.bytes], {type: "application/octet-stream"}));
-      const a = document.createElement("a");
-      a.href = url; a.download = file.name; a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    });
+    $("snapshotExport")?.addEventListener("click", () => exportSnapshot(lastGood, readerHeld, (file) => lastGood === file && lastFile === file));
     $("recoverBtn").addEventListener("click", () => (fileAgain() ? $("savePick").click() : pickFolder()));
     $("reloadBtn").addEventListener("click", () => location.reload());
     if ($("reportBtn")) $("reportBtn").addEventListener("click", (e) => openReport(e.currentTarget));

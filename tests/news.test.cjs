@@ -86,11 +86,3 @@ for (const width of [390, 1280]) test(`strip and update banner stack without ove
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, 'no sideways scroll');
   }
 });
-
-test('landing screenshots with the strip', {skip:!process.env.NEWS_SCREENSHOT_DIR}, async t => {
-  for (const width of [390, 1280]) {
-    const page = await setup(t, {width});
-    await page.locator('#newsStrip').waitFor({state:'visible'});
-    await page.screenshot({path:path.join(process.env.NEWS_SCREENSHOT_DIR, `news-${width}.png`)});
-  }
-});

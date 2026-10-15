@@ -397,13 +397,11 @@ def load_save(path: str) -> Save:
         raise SaveFormatError(f"stopped at {r.p:#x} of {len(data):#x}")
     save = Save(root, r.refs, path)
     if facts is not None:
+        # unpack() validated the facts already; only the pairing with this
+        # parsed save is left to check.
         if facts["character"] != root.get("characterId"):
             raise SaveFormatError("Building facts belong to a different character")
-        try:
-            ba_facts.validate(facts, character=root.get("characterId"))
-        except ValueError as exc:
-            raise SaveFormatError(str(exc)) from exc
-        if facts.get("build") != root.get("buildNumberAtLastSave"):
+        if facts["build"] != root.get("buildNumberAtLastSave"):
             raise SaveFormatError("Building facts belong to a different game build")
         save.facts = facts
     if r.external_refs:

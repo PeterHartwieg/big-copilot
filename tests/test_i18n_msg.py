@@ -612,7 +612,3 @@ class Coverage(unittest.TestCase):
                                          {"text": msg("f.staff.none", "No staff assigned") + "!"}]})
         self.assertEqual(uncovered(payload, "alerts", "text"), ["No staff assigned!"])
         self.assertEqual(len(rows_at({"a": [{"b": [{}, {}]}, {"b": [{}]}]}, "a.b")), 3)
-
-
-if __name__ == "__main__":
-    unittest.main()

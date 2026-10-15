@@ -17,8 +17,11 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(ROOT, "tools"))
+from wiki_data import expand_guides  # noqa: E402
 GAMETEXT = "web/py/gametext.json"
 WIKI = "web/wiki-data.json"
 
@@ -99,9 +102,19 @@ def main() -> None:
     if a and b and a != b:
         old = json.loads(json.dumps(old, ensure_ascii=False)
                          .replace(f"buildid {a}", f"buildid {b}"))
+    # The guides share their supplier rows and labels, written once at the top
+    # (share_guide_tables() in tools/build_wiki_data.py): compare each guide with
+    # its rows put back, and the labels once. A file from before the sharing
+    # carries them, and a CATEGORIES block nothing read, in every guide.
     for side in (old, new):
+        expand_guides(side)
+        side.pop("SUPPLIERS", None)
         for guide in (side.get("guides") or {}).values():
             guide.pop("SOURCES", None)
+            guide.pop("CATEGORIES", None)
+            copy = guide.pop("COPY", None)
+            if copy is not None:
+                side.setdefault("COPY", copy)
     total += compare("page", by_id(old["pages"], "id"), by_id(new["pages"], "id"), detail=True)
     total += compare("category", by_id(old["categories"], "id"),
                      by_id(new["categories"], "id"), detail=False)

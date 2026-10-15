@@ -75,6 +75,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `kpi` | `build_core()` inline, with `_net_worth()` | `drawMast`, `drawKpis`, `hrReview/firstHire`, `SS_VIEWS.payroll.live` |
 | `daily` | `_daily_series()`, plus the rolling `profit7` added in `extract()` | `drawChart`, `drawKpis`, `drawKpis/hist` |
 | `businesses` | `_business()` per rented non-residential building; each site's `campaigns` and `marketingPlan` from `_marketing()`, with `marketing_plan()` and `marketing_score()` over `MARKETING_TYPES`, `MARKETING_STRENGTH` and `MARKETING_REACH`, planning with the types the site already has a switch for (flipped at any time) and those sold by agencies that are phone contacts, `agencies` naming the ones a new switch needs (`marketingPlan` is None but for a shop or an office; its `on` is None when the site has no switch, no agency is a contact and a change is needed); `_alerts()` reads it for the `promotion` findings | `drawPortfolio`, `drawSitePicker`, `openSite`, `siteKeys`, `drawSite`, `drawWeekday`, `supplyChecklistRows` and its locals `lineOf`, `held`, `label`, `factoryView/held`, `alertSite`, `nameUses`, Supply's views (`drawImportsView`, `drawDeliveriesView`, `drawProductionView`, `drawChangesView`) through their parts `sbShopsPart`, `sbDepotPart`, `sbFactoryPart` and row helpers (`sbObject`, `sbDepotRow`, `sbLineRow`, `sbInputRow`, `sbTabOf`), the Imports card `sbImportCard`, and `drawFactoryStaffing`, the marketing write's `gwMkSites` (with `spMkLine` and `gwMarketing` reading each site's `marketingPlan`); `web/map.js` `mapBusinesses`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn`, `wikiGuidePrices` |
+| `sitesGone` | Core: `_sites_gone()`, the last finished day's statements at addresses the player no longer rents (a lease given up or a business sold that day), `[{name, profit}]`; core beside `businesses` because the Portfolio's footer sums both | `outsideRows` |
 | `ownedBuildings` | Core: `_owned_buildings()`; cheap map layers (Sections) | `web/map.js` only: `CityMapView.update`, `openLocationMap` |
 | `homes` | Core: `_homes()` (cheap map layers; Sections), with `m` and `hood` from `load_buildings()` | `spHome`, `siteKeys`; `web/map.js` `CityMapView.update`, `openLocationMap` |
 | `products` | Section `products`: `_products()`, with `peak`/`swing`/`weeks` from `_product_rhythm()` | `drawProducts`, `SS_VIEWS.products.live`, `ssBuild`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn` |
@@ -86,7 +87,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `premises` | Section `premises`: `_premises()`, with `_premises_status()`, `_premises_demand()`, `_rent_estimate()`, `_deposit_estimate()`, `_deposit_check()`, `_door_caps()`, `_rival_numbers()`, `_rival_names()` | `drawFindLocation`, `finderPreset`, `wireCards`; `web/map.js` `premises` |
 | `chains` | `_chains()` | `drawPortfolio`, `siteCrumbs` |
 | `payback` | `_payback()`, with `_site_setup()` and `setup_cost()` (the investment in both install modes, reusable for a store not yet rented; `vehicles` the site's own, from `_site_vehicles()` and `_vehicle_deliveries()`), `_install_bills()`, `_payback_row()`, `payback_outcome()` and `_payback_rate()`; `History.payback()` keeps the firm's bill, each vehicle's delivery and each reached break-even day after the save forgets them (an older save of the same character reads it and writes nothing). An outcome is `reached`, `latest`, `togo`, `never`, `unknown`, or `window` for a lease older than the statements: the whole payback period at recent profit, since what it earned before is unknown. `{sites: {key: …}, chains: {first site key: …}, recentDays}`; a trading site whose run from the opening is known also carries `days` (`[day, profit, sales]` from the opening) and `before` (the lease's cost before it); `_payback_trail()` keeps and extends those days in the history after the record stops reaching the opening, and a site whose kept days no longer meet the record says `rolled` | `paybackSite`, `paybackChain`, through `drawPortfolio`'s Payback column, `spPayback()` in `drawSite()` and `osRoiHtml()` (Open a store, step 6) |
-| `openStore` | Section `openStore`: `_open_store()`, in the "open a store" section after `_payback()`: `load_store_rules()` (`ba_store_rules.json`), `outfit_lines()` (a 100% outfitted store per type and layout, `setup_cost()` pricing it), `outfit_optional()` (the optional items beside it, a layout's `opt` and `optFurniture`), `decor_route()` (the cheapest walls and floors to each neighbourhood's interior score, kept per layout and score), `_layout_slots()`, `_copied_shelving()`, `_store_market()` (per product: import cost, sellers and rival prices per neighbourhood, `demand_with()`/`optimal_providers()`), `_plan_initial()` (the arrivals each hour starts from, `_initial_customers()` shared with the staffing assistant), `_own_shops()` (the player's shops as the model sees them, measured from each one's first day with sales; `k` for one still in its first days) and `_own_sales()` (what they sell), `_opened_stores()` (per business of a planned type: the furniture standing in it, which opening requirements it meets, `required_placed()`, and what it offers for sale, the game's provider count), `_finance_facts()` (banks, wealth with vehicles and boats, the tutorial's floor, and borrowing room). The facts only; the arithmetic the reader moves runs in the board. `{game, types, market, hoods, decor, items, vendors, own, sales, built, campaigns, finance}`, or `{}` when the store rules are missing | `drawOpenStore` (Expansion › Open a store), with `osModel()`/`osOfficeModel()`, `osBestModel()`, `osDayProfit()` (the first days' ramp and a first seller's hype), `osBreakDay()`, `osOwnRatio()`, `osCannibal()` and `osLoan()`; `demCellPop()` (a Demand cell's Open a store here) |
+| `openStore` | Section `openStore`: `_open_store()`, in the "open a store" section after `_payback()`: `load_store_rules()` (`ba_store_rules.json`), `outfit_lines()` (a 100% outfitted store per type and layout, `setup_cost()` pricing it), `outfit_optional()` (the optional items beside it, a layout's `opt` and `optFurniture`), `decor_route()` (the cheapest walls and floors to each neighbourhood's interior score, kept per layout and score), `_layout_slots()`, `_copied_shelving()`, `_store_market()` (per product: import cost, sellers and rival prices per neighbourhood, `optimal_providers()`; the demand step per seller is the model's `demandWith`), `_plan_initial()` (the arrivals each hour starts from, `_initial_customers()` shared with the staffing assistant), `_own_shops()` (the player's shops as the model sees them, measured from each one's first day with sales; `k` for one still in its first days) and `_own_sales()` (what they sell), `_opened_stores()` (per business of a planned type: the furniture standing in it, which opening requirements it meets, `required_placed()`, and what it offers for sale, the game's provider count), `_finance_facts()` (banks, wealth with vehicles and boats, the tutorial's floor, and borrowing room). The facts only; the arithmetic the reader moves runs in the board. `{game, types, market, hoods, decor, items, vendors, own, sales, built, campaigns, finance}`, or `{}` when the store rules are missing | `drawOpenStore` (Expansion › Open a store), with `osModel()` (offices through `osOfficeModel()` in `template/open-store-model.js`), `osBestModel()`, the model's `osDayProfit()` (the first days' ramp and a first seller's hype), `osBreakDay()`, `osOwnRatio()`, `osCannibal()` and `osLoan()`; `demCellPop()` (a Demand cell's Open a store here) |
 | `openFactory` | Section `openFactory`: `_open_factory()`, after `_open_store()`: per recipe product and ingredient its wholesale price, the save's import price index, box size (`bx`) and importer cap (`mo`) from `ba_store_rules.json` (an ingredient the help names one way and the city trades another is read under the name the rules know, by its label); `_factory_kits()` (each workstation's machines at list price); the Pallet Shelf and its box capacity; the factory's truck and a new depot's van with their dealer; who sells the machines; per warehouse and factory the player runs its pallet shelves, the products import contracts deliver to it and its vehicles, and for a factory `_factory_days()` (what left it each finished day by its delivery log, and the piers' part from its sales); at headquarters the purchasing agents against the import contracts and the logistics managers against the sites they manage. `{game, skills, products, kits, shelf, vehicles, items, vendors, sites, hq}`, or `{}` when the store rules are missing | `drawPlan` (Expansion › Plan a factory) through `ofDraw()`: `ofInvestment()` (one-off, upfront), `ofRunning()` (raw material, wages, rent a week), `ofUntilRows()`, `ofRunHtml()`; the loan through `osLoan()` over `openStore.finance` |
 | `trends` | `_site_trends()` | `indexTrends` |
 | `hypeExposure` | `_hype_exposure()`; `extract()` also passes the same list to `_alerts()`, where the `hype` findings come from | `spHypeRow` (a `const` arrow function, called from `spPull()` for the site panel's Promotion block) |
@@ -105,7 +106,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `ledgerDays` | `extract()` inline, `len(ledger)` | no reader — but see below |
 | `alerts` | `_alerts()`, its `lines`, with factory lines sized 24/7 | `alertLines()`, which `drawAlerts`, `kindCounts` and `web/map.js` `mapFindings` ask |
 | `minor` | `_alerts()`, its `minor`, sized 24/7 | `alertLines()` |
-| `alertsDemand` | `_alerts(..., "dem")`, a second pass over the same `supply.facts` with factory lines sized on demand: `{lines, minor}`, the shape of `alerts` and `minor` | `alertLines()`, when the sizing switch reads Demand |
+| `alertsDemand` | `_alerts(..., ("cap", "dem"))`'s second result: the same `supply.facts` with factory lines sized on demand, the supply findings run again and every other finding shared: `{lines, minor}`, the shape of `alerts` and `minor` | `alertLines()`, when the sizing switch reads Demand |
 | `goals` | Section `goals`: `_goals()` | `drawGoals` |
 | `rivalry` | `_rivalry()`, from `_rival_weekly_incomes()`, `_player_weekly_income()` and `_rivalry_backfill()`; the days in first place are counted over `History.rivalry()`, the history's `rivalry` record. `null` when the save lists no rivals | `rlShown`, `drawKpis` (through `rlKpiTile`), `rlGoalsHtml` (from `drawGoals`) |
 | `realEstateCounts` | Core: `_estate_counts()` over `_estate_owned()` (kept on `build.shared["estate"]`), with the tax plan from `_real_estate()` on the last day before tax day: `{owned, flagged, gain, taxEve}` | `routeCount()` (Real estate's view counts) and the search's live tag, through `reCounts()` |
@@ -554,8 +555,19 @@ The worker's existing newer-build priority and stale replies are unchanged.
 runs `browser_build()`, which sends the core and keeps the `Build` under the message's id,
 its generation; the reply carries it as `gen`, and `web/app.js` puts it on the data under
 `Symbol.for("bigcopilot.build")`. A `section` message names a section and a generation, and
-`browser_section()` answers `{generation, sections}`: the section asked for and every
-section it needs, so a retry after a failure half way still sends them all. A section for a
+lists in `have` the sections of that build the board already holds (`odNeed()` reads them
+with `odReady()`) and those an earlier request for the same build is still bringing
+(`odInFlight()`, #474). Listing those relies on the worker answering in order: the earlier
+reply lands first, and should it fail, the section is in error and Try again re-sends the
+chain. A reply that leaves out a section only its own request was bringing makes that
+section an error (`nav.od.notSent`) rather than leaving later requests waiting on it; a
+section refused as stale is never counted on. `browser_section()` answers
+`{generation, sections}`: the section asked for and every section it needs, less those in
+`have`, so a retry after a failure half way still sends what the board lacks and a held
+section is never sent twice. A new build is a new generation whose board holds none, so
+after another save, a live refresh or a worker restart the whole chain comes again; a
+language switch keeps what the board holds, since it localises from the English payload the
+sections were merged into. A message without `have` gets the whole chain. A section for a
 build the worker no longer holds is answered `stale` without running: one whose generation
 is not the build held, or one asked for before a newer build or name. Before it starts, a
 section lets every message already sent to the worker arrive (`waiting()`, a
@@ -590,6 +602,8 @@ rendered targets and a new registry entry without any browser-table edit.
   its view opens (`drawStale()`).
 - A `PAGE_DRAWS` row's fourth element names the sections the row reads (Staffing ›
   Schedules and Staff needs: `hiring`; Supply › Production: `factoryStaffing`; Today: `staffing`).
+  A route's `needs` (`ROUTES`, `routeNeeds()`) are its host view's rows' sections, plus
+  what its `VIEW_META` record adds where no row declares it (Find a location: `premises`).
   `odWantView()` asks for them as the view opens (`drawStale()`) and as a board arrives on
   it (`renderAll()`). First boot resolves the URL or remembered route's host before
   drawing. It paints with `odBooting` set until ordinary navigation restores the route,
@@ -714,8 +728,8 @@ performance target remains unverified by synthetic native benchmarks.
 **Adding a feature.** Decide whether it is core or a section. Core is for what the warnings
 need (plus the documented cheap map layers); anything computed on load needs that reason,
 written beside it. A section declares its
-keys, its needs, its producer and its words in `SECTIONS`; `OD_SECTIONS` is generated,
-never edited. Its readers ask with `odNeed()` and draw `odWaitHtml()`; it has no side effect on the core (no write to
+keys, its needs and its producer in `SECTIONS`, and its words while it is worked out in
+`odWords()`; `OD_SECTIONS` is generated, never edited. Its readers ask with `odNeed()` and draw `odWaitHtml()`; it has no side effect on the core (no write to
 an object the core already sent, no history), which `tests/test_sections.py` checks; and
 it is invalidated by the next build. A private part a section needs goes on
 `build.private`, never on a payload object.
@@ -896,15 +910,20 @@ and the detail after `: ` or `; `.
 | `i18n/de.base.json` | The English each German string was translated from, per key. Staleness is measured against it; `python tools/i18n.py accept de [key …]` records it |
 | `i18n/de.ai.json` | Only while machine drafts await review: `"key": "model"` for every key `python tools/i18n.py import-draft de <file> --model <id>` took in and no native speaker has checked yet. `reviewed de <key …>` (or `--all`) accepts the key and drops its line, as does `accept` for a key a person has fixed; the file goes when the last one does. Drafts ship like any translation; `status` counts them and never fails on them, and `draft-sheet de --review` lists them with their context for the reviewer |
 | `web/i18n/de.json` | Assembled by `python build_web.py --assemble` (`tools/i18n.py ship`) and not committed: `i18n/de.json` minus orphans, placeholder mismatches (a placeholder its calls do not pass; see [Python's sentences](#pythons-sentences)) and stale keys (whose English changed since `de.base.json` recorded it, or was never recorded), which show English until redone and `accept`ed. In `STAMP_INPUTS`, and compared by `--check` |
-| `tools/i18n.py` | `extract` (the English catalogue, read off the call sites: a JS lexer over the scripts, an HTML parser over the markup, `ast` over `msg(`), `extract --params` (the params each key's calls pass), `status [--strict]`, `ship`, `accept`, `glossary`, `draft-sheet [--review]`, `import-draft`, `reviewed` |
+| `tools/i18n.py` | `extract` (the English catalogue, read off the call sites: a JS lexer over the scripts, an HTML parser over the markup, `ast` over `msg(`), `extract --params` (the params each key's calls pass), `status [--strict | --complete]`, `prune`, `ship`, `accept`, `glossary`, `draft-sheet [--review]`, `import-draft`, `reviewed` |
 | `tools/translation_catalogue.py` | Community catalogues, per-key source versions, compiled placeholder validation and validated overlay export/import |
 | `web/translations/<lang>.json`, `web/translations/<lang>.manifest.json` | Generated public contribution catalogue and compact runtime validation manifest; assembled, not committed |
 
 No English catalogue is committed: it would conflict on every English edit. `extract` builds
 it on demand and fails on a key with two English defaults, or a call whose key or English is
-not a literal (or holds `${}`). A missing, stale or orphaned translation never fails the
-build or the tests: the page falls back to English per key, so an English edit elsewhere
-never breaks anybody. `status --strict` fails on them, for a translation pull request.
+not a literal (or holds `${}`). A missing or stale translation never fails the build or the
+tests: the page falls back to English per key, so an English edit elsewhere never breaks
+anybody. An orphan (a translated key no source names any more) never fails the build, which
+drops it, but `status --strict` fails on it, on its leftover base or draft mark, and on a
+placeholder mismatch, and `tests/test_i18n_status.py` holds main to that. A change that
+removes or renames a key runs `python tools/i18n.py prune`, which deletes the orphans from
+`<lang>.json`, `.base.json` and `.ai.json` (git history keeps their text). `status
+--complete` also fails on missing and stale keys, for a translation pull request.
 
 `glossary de --out <path>` and `draft-sheet de --out <path>` read the installed game's
 `en.json` and `de.json` for the game's own words (address form: du, as the game's German
@@ -996,20 +1015,8 @@ calculation and HTML rendering do not save. Direct arithmetic coverage lives in
 `tests/open_factory_model.test.cjs`; `tests/open_factory.test.cjs` covers transitions,
 restoration, read-only redraws and the surrounding five-step flow in the browser.
 
-`tools/split_board_script.py` made the original two-file split. Its split/join helpers
-remain historical migration tools: they refuse an assembled page containing the
-calculation module, or a board script depending on that module, before writing files.
-This prevents copying the core into `board.js` twice or producing an incomplete page.
-Use `load_template()`/`render()` for current multi-file assembly. `--resolve` still works
-with older inline branches and a current slotted page: it merges the board sources
-without joining the calculation module into either side. A branch from before it, with the script
-still inline, conflicts in `board.html` when it meets main, by merge or rebase. The one way
-to resolve that is `python tools/split_board_script.py --resolve`: it splits each of the
-three staged versions of `board.html` that is still inline, takes `board.js` from the
-commit of each side that is already split, and merges both files three ways with
-`git merge-file`, so both sides' markup, CSS and script edits survive. A clean result is
-staged; otherwise the conflict markers are left for a human. Taking either side's
-`board.html` and splitting it again loses the other side's edits.
+A branch from before the split (1 Oct 2026), with the script still inline in `board.html`,
+needs the retired split tool and its `--resolve` from history: `git show ecabe57c:tools/split_board_script.py`.
 
 The template carries eighteen tokens besides the slot, some in `board.html` and some in
 `board.js`. All eighteen are substituted by `render()`, but the text for three of them is
@@ -1023,14 +1030,15 @@ supplied by the caller.
 | `/*__LIVE__*/false` | `render()`: `true` when called with `live=True` |
 | `<!--__BANNER__-->` | `render()`'s `banner=` argument. `build_web.py` passes its `BANNER` (the landing screen); the local page passes nothing |
 | `<!--__BEFORE_SCRIPT__-->` | `render()`'s `before_script=` argument. `page_html()` passes a filled-in `BEFORE_SCRIPT`; the local page passes nothing |
-| `<!--__CHANGELOG__-->` | `render()`, from `web/changelog.json`, newest first |
+| `<!--__CHANGELOG__-->` | `render()`, from `web/changelog.json`, newest first. With `site=True` only the newest entry, which also dates the New badges; `openChangelog()` fetches the rest on the dialog's first open |
+| `__CHANGELOG_SRC__` | `render()`: `changelog.json` with `site=True`, the file `openChangelog()` fetches with the build stamp; empty on a local page, which carries every entry |
 | `<!--__FOOTER__-->` | `render()`, from `footer_html(site=...)`. The same function fills the landing's footer inside `BANNER`, so the two cannot drift; `render()`'s `site=` argument decides whether the legal links ride along, and only `build_web.py` passes it |
 | `/*__MAP_CSS__*/` | `render()`, from `web/map.css` |
 | `/*__MAP_SCRIPT__*/` | `render()`, from `web/map.js` |
 | `/*__MAP_PAYLOAD__*/` | `render()`, from `web/maps/locations.json` plus the base64 background — only for a standalone export (`data`, not `live`, not `map_external`) |
 | `/*__WIKI_CSS__*/` | `render()`, from `web/wiki.css` if present |
 | `/*__WIKI_SCRIPT__*/` | `render()`, from `web/wiki.js` if present |
-| `/*__WIKI_PAYLOAD__*/` | `render()`, from `web/wiki-data.json`; skipped when `live=True`, because the hosted build fetches it with the build stamp instead |
+| `/*__WIKI_PAYLOAD__*/` | `render()`, from `web/wiki-data.json` without its indentation (`compact_wiki()`); skipped when `live=True`, because the hosted build fetches `wiki-data.min.json` with the build stamp instead |
 | `/*__HOOD_TAGS__*/{}` | `render()`, from `HOOD_TAG` — one neighbourhood-tag table shared by the board and the wiki, keyed by the game's neighbourhood key |
 | `/*__HOOD_NAMES__*/{}` | `render()`, from `HOOD_LABEL` — each neighbourhood's English name by the same key: `hoodName()`'s fallback and `hoodKeyOf()`'s way back from a stored name |
 | `/*__NAMES__*/null` | `render()`'s `names=` argument, `{lang, names}` from `cli_names()` for `--lang`; `null` elsewhere, where the site fetches `web/names/<lang>.json` instead |
@@ -1070,11 +1078,13 @@ What `page_html()` produces, top of the file down:
    (the stamp, set here rather than in `BEFORE_SCRIPT` because `web/i18n.js`, in the
    template's head, fetches a UI table with it), `window.LEDGER_ASSETS` (the pinned
    worker and Python/data manifest), the early board resource failure handler,
-   and the `web/community.css` link stamped
-   with the release version. There is no analytics
+   and `web/community.css`, inlined as a `<style>` block so it costs no
+   render-blocking request. There is no analytics
    script, and Cloudflare's automatic Web Analytics injection is switched off for the
    domain, because the privacy notice says the site runs none. `page_html()` then swaps the
-   template's Google Fonts links for `web/fonts/fonts.css`, stamped the same way.
+   template's Google Fonts links for `web/fonts/fonts.css`, inlined the same way with its
+   `url()`s moved under `fonts/`, behind preloads for the two font files the first paint
+   uses (`PRELOAD_FONTS`).
 3. The template (`template/board.html`), whose head scripts are the theme and `web/i18n.js`, with the landing screen
    (`BANNER`) substituted into its `<!--__BANNER__-->` slot: the release banner, the drop
    zone, the save-location help and the footer.
@@ -1083,10 +1093,9 @@ What `page_html()` produces, top of the file down:
    `window.LEDGER_RELEASE`, `update.js`, `app.js?v=<stamp>`, `community.js?v=<stamp>`.
 5. The board script, `template/board.js`, in the last `<script>` block of the template.
 
-Before any of that, `main()` refreshes `web/wiki-data.json`, copies `ba_save.py`,
-`ba_dashboard.py`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json` and
-`ba_store_rules.json` into `web/py/`, stripping comments and docstring contents only
-from `ba_dashboard.py` while preserving its lines, and
+Before any of that, `main()` refreshes `web/wiki-data.json`, copies the files `PY_CODE`
+and `PY_DATA` name (all but `gametext.json`: `PY_COPIED`) into `web/py/`, stripping
+comments and docstring contents only from `ba_dashboard.py` while preserving its lines, and
 writes `web/py/gametext.json` and `web/names/<lang>.json` (`write_name_tables()`) from the installed locale — everything `stamp()` hashes has to be in place before
 `release_info()` runs. `main()` then writes `web/index.html` and `web/version.json`.
 
@@ -1165,8 +1174,7 @@ after a fallback always says the board is the local save. It comes after any war
 folder gave, and it keeps a reason the player can act on: a mod of another version, another
 program on the port, or a browser blocking loopback. A folder that will not read keeps its
 own error. The source change disables game writes and discards late Link reads. Link
-stays the preferred source
-on the next visit; the player can also choose Link to the game to reconnect during this
+stays the preferred source on the next visit; the player can also choose Link to the game to reconnect during this
 visit. An explicit folder or file selection forgets that preference.
 
 What that does and does not change. On the hosted site the save itself never leaves the
@@ -1176,7 +1184,8 @@ case `app.js` fetches the bytes from that mod on the player's own machine, and t
 else. The page still uses the network for its own assets, all same-origin.
 The static ones are versioned, so a deploy busts their caches: `web/map.js` fetches
 `maps/locations.json` with the build stamp and the background image with its own content
-hash, `web/wiki.js` fetches `wiki-data.json` with the build stamp, and the board fetches
+hash, `web/wiki.js` fetches `wiki-data.min.json` (the committed `wiki-data.json` without its
+indentation, written by assembly) with the build stamp, and the board fetches
 `names/<lang>.json` with it when a language is picked, and `web/i18n.js` fetches
 `i18n/<lang>.json` with it for a UI language. The dynamic ones
 carry no version, because the whole point is to see the current state: `web/update.js`
@@ -1317,11 +1326,12 @@ Stale until that row draws or the next board arrives. Another company or save dr
 every row so hidden markup cannot retain the previous company's content.
 
 Adding a page means: a `div.page` in the markup, an entry in `PAGES` (with `newFeature` if
-it deserves a badge — see [contributing.md](contributing.md)) and in `ICON`, an `SS_VIEWS`
+it deserves a badge, dated in `NEW_SINCE` — see [contributing.md](contributing.md)) and in `ICON`, an `SS_VIEWS`
 entry so search finds it, and a `PAGE_DRAWS` row for its draw function. Author a new
-canonical view in `VIEW_META`: it generates its navigation item, primary `SEC_PAGE`
-row, area view, route identity, label and default host route. Only secondary/legacy
-section rows are added directly to `SEC_PAGE`; route hooks stay in `ROUTE_BEHAVIOR`. The full checklist,
+canonical view in `VIEW_META`: it generates its navigation item, every `SEC_PAGE` row
+(its `section`, the sections `also` on it, and the old ones `SEC_MOVED` points at it),
+area view, route identity, route needs (from its `PAGE_DRAWS` tags), label and default
+host route; route hooks stay in `ROUTE_BEHAVIOR`. The full checklist,
 with the test that guards each table, is under [Registries](#registries). Tag the row with every
 view whose DOM it writes; if other code reads state it computes from another page, tag it
 `""` so it is drawn on every refresh. A wrong tag shows old numbers until the next full
@@ -1494,7 +1504,7 @@ row's state and `pgPill()` draws it with words and a symbol, never colour alone.
 
 | State | Set by | Cleared by |
 | --- | --- | --- |
-| Marked by you (`marked`) | the player's tick: a Supply checklist row (`ba_order_marks_v1:<character>`), or every entry of a week on Schedules (`ba_dash_roster:<site>`) | the player (untick, Clear my marks), or the row changing: a new figure is a new row |
+| Marked by you (`marked`) | the player's tick: a Supply checklist row (`ba_order_marks_v2:<character>`, seeded once from `ba_order_marks_v1`), or every entry of a week on Schedules (`ba_dash_roster:<site>`) | the player (untick, Clear my marks), or the row changing: a new figure is a new row |
 | Applied · awaiting refresh (`applied`) | `pgRecord()`, called only from a successful answer to a game-link write: imports (`pgImportsDone()`), a shop's or office's schedule (`pgScheduleDone()`), a hire or move (`pgHireDone()`), uniforms (`pgUniformDone()`) | a later board judging it, an undo of the write (`pgDrop()`; a hire before mod 0.4.0, or the company's first hire, has no undo), or `PG_KEEP_DAYS` (14) game days |
 | Confirmed · day N (`confirmed`) | `pgEvaluate()`, when a later board shows the write's postcondition (`PG_CHECK`) | Clear these on Supply › Changes (`pgClearSettled()`, import records only), or 14 game days |
 
@@ -1533,7 +1543,7 @@ too.
 
 A registry records where a new thing belongs. Section metadata is authored in Python
 `SECTIONS` and generated for the browser; shared view identity is authored in `VIEW_META`
-and derives the common navigation tables. Behavior-specific entries stay explicit.
+and derives the navigation, section and route tables. Behavior-specific entries stay explicit.
 A missing authored row often fails quietly: a finding that goes nowhere when clicked, a
 view search cannot find. Each checklist below names the anchor to grep, what goes in it,
 and the test that covers the table ("none" means no test reads it). A few tables are held
@@ -1557,7 +1567,7 @@ and above `FINDING_KINDS` in `template/board.js`.
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
-| The inputs of `def _alerts(` (called twice in `extract()`): `businesses`, `supply`, `trends`, `hype`, `hours`, `grids`; it also takes `chains` but never reads it | *Only if* it needs a new figure: where the finding's numbers come from. A business's single fields (`revenue`, `profit`, `theft`) are its last day only; its `series`, built in the `series.append(` loop of `def _business(`, holds up to 30 days, and `_site_trends()` shows how to sum a week from it. A new per-day figure goes into that loop | the kind's own Python test |
+| The inputs of `def _alerts(` (called once in `extract()` with both sizing modes): `businesses`, `supply`, `trends`, `hype`, `hours`, `grids`; it also takes `chains` but never reads it | *Only if* it needs a new figure: where the finding's numbers come from. A business's single fields (`revenue`, `profit`, `theft`) are its last day only; its `series`, built in the `series.append(` loop of `def _business(`, holds up to 30 days, and `_site_trends()` shows how to sum a week from it. A new per-day figure goes into that loop | the kind's own Python test |
 | `note(` in `def _alerts(`, or `_finding(` in one of the `_*_notes` helpers (`_shelf_notes`, `_import_notes`, `_idle_notes`, `_feed_notes`, `_staff_notes`, `_unnamed_notes`) | The finding itself, with its group id: a string literal, or a literal tuple a `for` loop runs over, which is what the registry test can read | the kind's own Python test, such as `tests/test_routed_supply.py`; `tests/test_doc_registries.py` holds the groups emitted equal to `ALERT_GROUPS` |
 | The hand-built business dicts the tests pass to `_alerts()`: `def stub(` in `tests/test_site_panel_fields.py` (shared with `tests/test_hype_alerts.py`); `def business(` in `tests/test_idle_week.py` (reused by `tests/idle_week_fixture.py` for `tests/site_panel.test.cjs`); `def businesses(self)` on `Company` in `tests/test_supply_facts.py`; `ImportRoutesTests.build()` in `tests/test_import_routes.py`, whose businesses `tests/test_smart_delivery.py` passes on; and the `business()` inside `depot_supply()` in `tests/test_routed_supply.py`, wrapped in `SupplyOnly`, which a `for b in businesses` loop sees as empty but an index `businesses[s]` still reaches. None has `series`; only businesses built by the real `_business()` do | *Only if* the kind reads a new business field: read it with `.get()` and a default, or add it to every one of these, or those tests break | `tests/test_site_panel_fields.py`, `tests/test_hype_alerts.py`, `tests/test_idle_week.py`, `tests/site_panel.test.cjs`, `tests/test_supply_facts.py`, `tests/test_import_routes.py`, `tests/test_smart_delivery.py`, `tests/test_routed_supply.py` |
 | `AMENITY_DEMANDS = {` | *Only if* it is an amenity kind: `slug: (group, text)` | `tests/test_uniform_alerts.py`, "test_an_empty_cache_means_every_demand_failed" |
@@ -1583,17 +1593,19 @@ all three.
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
 | The markup (`template/board.html`): `<div class="page" id="page…">` for a page, or `<section class="sec rv" id="sec…" data-sub="…">` inside its page for a view; a page with views also gets its `<nav class="seg" id="…Nav">` | The host element | the navigation tests, indirectly |
-| `const PAGES = [` (board script) | *Only for a page*: `{id, label, host, newFeature?}` | `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, Real estate, then City map and Wiki" |
+| `const PAGES = [` (board script) | *Only for a page*: `{id, label, host, newFeature?}`; a `newFeature` id also gets its ship date in `NEW_SINCE` | `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, Real estate, then City map and Wiki"; `tests/feature_badges.test.cjs`, "every badge id has a ship date, and every date belongs to a badge" |
 | `const ICON = {` (board script) | *Only for a page*: its nav icon, keyed by page id | none |
-| `const SUBS = {` (board script; items generated by `navItems()` from `VIEW_META`) | *Only for a new host with views*: its DOM host/nav ids, storage key, default view and optional shown hook. Do not add individual items; `VIEW_META` generates them | `tests/navigation.test.cjs`, "Businesses carries Results, Products & prices, Standards and Milestones; Staffing its three views" and "every view in SUBS has its SEC_PAGE row and a PAGE_DRAWS tag" |
-| `const VIEW_META = [` and `const SEC_PAGE = {` (board script) | One canonical `{route, host, needs, section?, label}` record in `VIEW_META`. `label` is a callback around `tt()`, so language changes remain live. Its primary section generates a `SEC_PAGE` row; add only secondary and legacy `secX: [page, view]` rows explicitly. Without it `reveal()`, the sub-nav and `pageFromHash()` fail | `tests/navigation.test.cjs`, "every view in SUBS has its SEC_PAGE row …" and "every Company section deep link opens the view that holds it"; `tests/alert_kinds.test.cjs`, "the supply kinds land on the Supply view of their route" |
-| `const PAGE_DRAWS = [` (board script) | `["page/view", () => drawX(), null, ["section"]]`, tagged with every view whose markup it writes | `tests/calm_refresh.test.cjs`, "a refresh on Today draws Today …"; `tests/navigation.test.cjs`, "every PAGE_DRAWS tag names a real page or view" and the SUBS test above |
-| `const ROUTE_BEHAVIOR = {`, `const ROUTES =`, `const AREAS = [`, `routeViewLabel(` (board script) | *For a route*: shared host, label, lazy `needs` and area view order come from `VIEW_META`; `ROUTE_BEHAVIOR` holds only distinct `enter`, `after`, `into` or other hooks. `HOST_ROUTES` is derived; set `defaultHost: false` for a second mode sharing a host (the finder on Map). Area defaults stay explicit | `tests/shell_routes.test.cjs`, "every finding kind names a real route, and every route is a view of its area"; `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, Real estate, then City map and Wiki" |
+| `const VIEW_META = [` (board script) | One record per view or route: `{route, host, section?, also?, needs?, defaultHost?, label}`. `section` is the view's main section; `also` lists the other sections on it that a finding, a search or an old link reveals; `label` is a callback around `tt()`, so language changes remain live. Everything below marked *derived* comes from it: the view's item in `SUBS` (`navItems()`), its `SEC_PAGE` rows, its place in its area's `AREAS` views (`areaViews()`), its `ROUTES` entry with its `needs` (`routeNeeds()`: the sections its host's `PAGE_DRAWS` rows declare; `needs` here only for one no row declares, as the finder's `premises`), `HOST_ROUTES` and `routeViewLabel()`. Set `defaultHost: false` for a second mode sharing a host (the finder on Map) | `tests/navigation.test.cjs`, "a new canonical view derives its common tables without sibling table edits", "shared view identity supplies navigation, primary sections, route hosts and labels", "every view in SUBS has its SEC_PAGE row …" and "every Company section deep link opens the view that holds it"; `tests/alert_kinds.test.cjs`, "the supply kinds land on the Supply view of their route"; `tests/shell_routes.test.cjs`, "every finding kind names a real route, and every route is a view of its area" |
+| `const PAGE_DRAWS = [` (board script) | `["page/view", () => drawX(), null, ["section"]]`, tagged with every view whose markup it writes; the fourth element names the sections the row reads, and is also where its route's `needs` come from | `tests/calm_refresh.test.cjs`, "a refresh on Today draws Today …"; `tests/navigation.test.cjs`, "every PAGE_DRAWS tag names a real page or view" and the SUBS test above; `tests/on_demand.test.cjs`, "every row and route declares sections …" |
+| `const ROUTE_BEHAVIOR = {` (board script) | *Only if* the route does something of its own as it opens: `enter`, `after` or `into` | `tests/shell_routes.test.cjs`; the route's own tests |
+| `const SUBS = {` (board script) | *Only for a new host with views*: its DOM host/nav ids, storage key, default view and optional shown hook; its items are derived | `tests/navigation.test.cjs`, "Businesses carries Results, Products & prices, Standards and Milestones; Staffing its three views" |
+| `const AREAS = [` (board script) | *Only for a new area*: `{id, icon, label, views: areaViews(id), start}`; its views are derived | `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, Real estate, then City map and Wiki" |
+| `SEC_PAGE`, `ROUTES`, `HOST_ROUTES` (board script) | *Derived*: never add to them | the `VIEW_META` tests above |
 | `const ROUTE_ALIASES =` (board script) | *Only when* an old page or view name becomes a route | `tests/navigation.test.cjs`, "the old #payroll hash, #secPayroll and a remembered Payroll open Staffing › Payroll" and "the #staff hash, #secStaff and a remembered Staff open Staffing › Staff needs" |
-| `const SS_VIEWS = [` (board script) | `{id, t, p, ic, syn, go}`, so search can open it | `tests/search.test.cjs`, "the index holds every group …" |
+| `const SS_VIEWS = [` (board script) | `{id, t, p, ic, syn, go}`, so search can open it. Kept by hand: an entry carries search's own title, line and the words players use, and several are not views at all | `tests/search.test.cjs`, "the index holds every group …" |
 | `function showPage(` (board script) | *Only if* the page loads or draws when shown, as the Map does | none |
-| `const SB_VIEWS =`, `const SB_SEC =` (board script) | *Only for* a new Supply view: its section, keyed by the view id. Also its single `VIEW_META` record (which generates navigation, primary section, area, route identity, label and default host), any distinct `ROUTE_BEHAVIOR` hooks, and its drawer in `drawSupplyView()`'s dispatch map (a missing view draws Changes) and its `PAGE_DRAWS` row; `sbViewOf()`, which puts a kind of change on a view, and the view-keyed objects in `sbData()` (`byView`), `sbUpdateStrip()` (`sbLeft`), `sbMode` and `sbScope` | `tests/navigation.test.cjs`, "Supply is six task views …"; `tests/import_routes.test.cjs`; `tests/progress.test.cjs` |
-| `const PAGE_ALIASES =`, `const SEC_MOVED =` (board script) | *Only when* renaming or moving an old page or section | `tests/navigation.test.cjs` |
+| `const SB_VIEWS =`, `const SB_SEC =` (board script) | *Only for* a new Supply view: its section, keyed by the view id. Also its single `VIEW_META` record, any distinct `ROUTE_BEHAVIOR` hooks, and its drawer in `drawSupplyView()`'s dispatch map (a missing view draws Changes) and its `PAGE_DRAWS` row; `sbViewOf()`, which puts a kind of change on a view, and the view-keyed objects in `sbData()` (`byView`), `sbUpdateStrip()` (`sbLeft`), `sbMode` and `sbScope` | `tests/navigation.test.cjs`, "Supply is six task views …"; `tests/import_routes.test.cjs`; `tests/progress.test.cjs` |
+| `const PAGE_ALIASES =`, `const SEC_MOVED =` (board script) | *Only when* renaming or moving an old page or section: `SEC_MOVED` maps the old section to the one that replaced it, and its `SEC_PAGE` row follows | `tests/navigation.test.cjs` |
 | `const quietRender =` in `tests/search.test.cjs` | *Only if* the view adds a draw function: the function, in the list the test stubs | that test |
 | The `later()` change in `const MOVED =` in `tests/calm_refresh.test.cjs` | *Only if* the view should prove it redraws on a refresh: the fixture save is `tests/es3_fixture.py`'s `link_company()`, whose lists are often empty (`"Loans": []`), so `later()` has to add the data the view shows | `tests/calm_refresh.test.cjs` |
 
@@ -1613,13 +1625,14 @@ Nothing between `extract()` and the board filters keys: `render()`, the watch se
 
 ### A finder filter
 
-All in `web/map.js`, covered by `tests/finder.test.cjs`. `saveFinder()` and `loadFinder()`
-keep the filters per character in `localStorage`, under `finderStore()`'s
-`FINDER_KEY:<character>`. One thing is not stored: the on/off switch, `fs.on` (every load
-opens the plain map). The floor-plan layouts, `fs.layouts`, are stored with the rest by
-`saveFinder()`; a preset or a change of category clears them, and a saved search keeps them
-only where its kind has two or more layouts. Saved searches are a separate list under
-`FINDER_SAVED_KEY`.
+All in `web/map.js`, covered by `tests/finder.test.cjs`, with saved searches in
+`tests/finder_saved.test.cjs` and the Layout filter in `tests/finder_layout.test.cjs`.
+`saveFinder()` and `loadFinder()` keep the filters per character in `localStorage`, under
+`finderStore()`'s `FINDER_KEY:<character>`. One thing is not stored: the on/off switch,
+`fs.on` (every load opens the plain map). The floor-plan layouts, `fs.layouts`, are stored
+with the rest by `saveFinder()`; a preset or a change of category clears them, and a saved
+search keeps them only where its kind has two or more layouts. Saved searches are a separate
+list under `FINDER_SAVED_KEY`.
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
@@ -1632,8 +1645,8 @@ only where its kind has two or more layouts. Saved searches are a separate list 
 | `savedFilters(s){` | Validation of the stored value | "a saved search is read against this save …" |
 | `savedTip(s){` and `function finderRange(` | Its part of a saved search's summary | none for most filters |
 | `sortKeys(`, `function finderSortName(`, `finderList(`, and the grid columns in `web/map.css` | *Only if* it is also a sortable column | "the Cap column sits between m² and Upfront …" |
-| `def _premises(` in `ba_dashboard.py`, and the fixtures in `tests/finder.test.cjs` | *Only if* it needs a new field on each row | `tests/test_premises.py` (exact row dicts) |
-| `function ssFinder(` and the `openFinder({…})` callers (board script), and `function finderPreset(`, which turns a Growth › Demand cell into a preset for `openFinder(go, true)` | *Only if* a caller should preset it | `tests/search.test.cjs`; `tests/finder.test.cjs`, "a Growth cell opens the finder on its own type and neighbourhood" |
+| `def _premises(` in `ba_dashboard.py`, and the fixtures in `tests/_finder.cjs` | *Only if* it needs a new field on each row | `tests/test_premises.py` (exact row dicts) |
+| `function ssFinder(` and the `openFinder({…})` callers (board script), and `function finderPreset(`, which turns a Growth › Demand cell into a preset for `openFinder(go, true)` | *Only if* a caller should preset it | `tests/search.test.cjs`; `tests/finder_layout.test.cjs`, "a Growth cell opens the finder on its own type and neighbourhood" |
 
 A new filter is a user-facing change, so it also gets a `web/changelog.json` entry.
 
@@ -1644,7 +1657,7 @@ A new filter is a user-facing change, so it also gets a `web/changelog.json` ent
 | The URL constants (`REPO_URL =` to `GAME_MAKER_URL =`) | `NEW_URL = "…"`. Never put a URL in `web/*.js` | `tests/test_privacy_promises.py`, "test_scripts_fetch_only_from_this_site" |
 | `def footer_html(` | `{_sf_out(URL, "Label", icon, title=, feature=)}` in its column. One function fills both the board and the landing screen | `tests/test_footer.py`, "test_the_two_homes_do_not_share_an_id"; `tests/restore.test.cjs`, "the board footer offers the game, the channel and the Discord …" (exact link counts) |
 | Section 8, "External links and donations", in `web/privacy.html` | The provider's name in its list | none |
-| `feature=` on `_sf_out` | *Only for* a New badge; see [contributing.md](contributing.md) | none |
+| `feature=` on `_sf_out` | *Only for* a New badge, with its ship date in `NEW_SINCE`; see [contributing.md](contributing.md) | `tests/feature_badges.test.cjs`, "every badge id has a ship date, and every date belongs to a badge" |
 
 Then `python build_web.py --assemble`.
 
@@ -1671,12 +1684,10 @@ because a deploy from a checkout that lacks them would remove them from the site
 files from `https://cdn.jsdelivr.net/pyodide/v<version>/full/` into a new version folder,
 change `PYODIDE_VERSION` in `web/worker.js`, and delete the old folder.
 
-The nine board dependencies are listed in `PY_CODE` and `PY_DATA` in
-`build_web.py` and checked against `CODE_FILES`/`DATA_FILES` in the worker:
-
-- `ba_save.py`, `ba_facts.py`, `ba_mods.py` and `ba_dashboard.py` — required code.
-- `gametext.json`, `ba_buildings.json`, `ba_demand_curves.json`, `ba_item_prices.json`
-  and `ba_store_rules.json` — game data tables.
+The board's dependencies are the files `PY_CODE` (the Python modules) and `PY_DATA`
+(the game data tables) name in `build_web.py`. `tests/test_web_fresh.py` checks them
+against `CODE_FILES`/`DATA_FILES` in the worker, and `tests/worker_startup.test.cjs`
+reads its list from the same two tuples.
 
 `ba_dashboard.py` ships as `strip_copy()` of the source: comments removed and docstrings
 emptied, every line where it was. The virtual filesystem is new on each page load, so
@@ -1730,12 +1741,17 @@ fails cleanly and asks for reload instead of combining releases. Gradual
 deployments remain unsupported for the broader stamped assets.
 
 Those broader assets (`app.js`, `community.js` and `.css`, `report.js` and `.css`,
-`i18n/`, `names/`, `maps/` and `wiki-data.json`) are also cached immutably, but
+`i18n/`, `names/`, `maps/` and `wiki-data.min.json`) are also cached immutably, but
 their URLs name a release, not bytes. Every request carries `?v=<build stamp>`
 (the map background `?v=<its SHA-256>`), and each file is a stamp input, so new
 bytes arrive under a new URL. An old stamp requested after a deploy gets the new
 bytes. `tests/test_headers.py` holds each request to the stamp and each file to
-`STAMP_INPUTS`. `/translations/*` revalidates and `/version.json` is `no-store`.
+`STAMP_INPUTS` (`wiki-data.min.json` through `wiki-data.json`, which it is copied from).
+In the release that moved the page to `wiki-data.min.json` (#325, #326), `/wiki-data.json`
+also changed shape: its guides name their suppliers by key and share one `SOURCES` block. A tab
+still running the wiki script from before that release, and opening the Wiki only after the
+deploy, draws guides without supplier lines or sources until it reloads, which the update
+banner asks for. Nothing crashes, and no copy in the old shape is kept. `/translations/*` revalidates and `/version.json` is `no-store`.
 
 These coherence guarantees apply to pages and workers using the pinned protocol.
 There is one historical migration window: a pre-manifest worker already fetched
@@ -1773,7 +1789,8 @@ Three entry points, called through `py.runPython` with paths interpolated as JSO
   build the core, keep the `Build` under `generation` for the sections, and return the
   core as a JSON string. It also writes `<history_path>.character` so a later name can be
   filed under the right company without reparsing the save.
-- `browser_section(name, generation)` — one section of the build held, as JSON
+- `browser_section(name, generation, have)` — one section of the build held, less the
+  sections in `have` the page already holds, as JSON
   ([Sections](#sections)); `StaleBuild` for a build no longer held. Never writes the history.
 - `browser_name(history_path, rid, slug)` — record a factory-line name; the worker then
   rebuilds from the save already in the filesystem.

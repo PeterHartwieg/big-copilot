@@ -1,5 +1,17 @@
 [
   {
+    "pr": 499,
+    "date": "2026-10-15",
+    "title": "Keep using local saves when Game Link is unavailable",
+    "summary": "If the game is closed or Game Link cannot connect, Big Copilot opens your remembered save folder and watches it for new saves. If folder access has expired, click Update to allow access. The page tells you when it is showing a local save and keeps any connection advice. Choose Link to the game to reconnect; your next visit tries Link again."
+  },
+  {
+    "pr": 465,
+    "date": "2026-10-13",
+    "title": "Staff needs in your language",
+    "summary": "The hiring page under Staffing › Staff needs, with Change picks and its filters, now shows in every language Big Copilot speaks, with role names, sites and numbers as your language writes them and lists sorted the way your language sorts."
+  },
+  {
     "pr": 454,
     "date": "2026-10-13",
     "title": "Price your buildings and buy before tax day",
@@ -210,12 +222,6 @@
     "summary": "With the Big Copilot Link mod 0.2.0, the board can now make three changes in your game for you: set uniforms where roles have none, apply the import amounts from Plan imports, and write a shop's staffing plan, for one shop or a run of shops. Every change shows what the game will do before you apply it, can be undone once, and is refused, with nothing written, if the game has moved on since the board last read it. The first write from a browser asks for approval in the game; after that it is remembered."
   },
   {
-    "pr": 83,
-    "date": "2026-09-24",
-    "title": "Fix: warehouses fed by your own factory no longer read as short",
-    "summary": "A warehouse your own factory tops up every morning on a logistics route was flagged as a critical import shortfall for every item the factory delivers, often with an alert that weekly orders cannot cover their week and a large one-off to bring in. The board now counts what your factories bring on routes before it judges the import, so a backup import next to such a route no longer raises the alarm, paused or not. If a route brings only part of what leaves, the import is sized on the rest, and a busy day that could still empty the shelf before the next morning's round is still flagged. The Factories page takes the same routes into account."
-  },
-  {
     "pr": 77,
     "date": "2026-09-23",
     "title": "Full cover for a new shop, and a demand plan after 9 days",
@@ -226,12 +232,6 @@
     "date": "2026-09-23",
     "title": "Imports that read Smart Delivery, and your own order figures",
     "summary": "The weekly imports now understand the purchasing agent's Smart Delivery setting: its amount is a stock level the agent tops up to each Monday, not a delivery, and the board judges it that way, in the order the game delivers your contracts. The imports table shows what arrived last week, what is set in game (\"in stock\" or \"a week\"), and a Set to box with the board's suggestion that you can change. Your figures carry into the Plan imports checklist, which names the importer to change when a material has more than one contract. For Smart Delivery the suggestion is the stock that runs everything the depot feeds at full capacity for a week, so it only moves when your capacity does."
-  },
-  {
-    "pr": 75,
-    "date": "2026-09-23",
-    "title": "No more gas station tips",
-    "summary": "Big Copilot will no longer tell you to open a gas station. Or a wholesaler. Or a casino. The city runs those itself and is not selling, however good the numbers look. Market demand and Find a location now suggest only business types you can actually open, straight from the game's own F1 help, including ones nobody in your city runs yet."
   },
   {
     "pr": 68,

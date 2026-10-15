@@ -9,6 +9,14 @@ let browser;
 before(async () => { browser = await chromium.launch({headless:true, channel:process.env.PLAYWRIGHT_CHANNEL}); });
 after(async () => { await browser?.close(); });
 
+/* A reload drops the day newPage() pinned: pin it again. A badge can also be
+   hidden by age, so the suggestion visit itself is checked in storage, under
+   the key featureDiscovery writes. */
+async function repin(page) {
+  await page.evaluate(() => featureDiscovery.asOf('2026-10-05'));
+  assert.equal(await page.evaluate(() => localStorage.getItem('ba_dash_feature_seen:feature-requests')), '1');
+}
+
 async function setup(t, options = {}) {
   const context = await browser.newContext({viewport:{width:options.width || 1280, height:900}, reducedMotion:'reduce'});
   t.after(() => context.close());
@@ -84,6 +92,8 @@ async function setup(t, options = {}) {
     if(!['index.html','app.js','community.js','community.css','version.json'].includes(name)) return route.abort();
     let body=fs.readFileSync(path.join(web,name),'utf8');
     if(options.savedLanguageBeforeInit && name==='community.js') body+='\nwindow.communityListenerReady = true;';
+    // A tab still on an app.js from before window.BigCopilotDialog existed.
+    if(options.noDialogHelper && name==='community.js') body='delete window.BigCopilotDialog;\n'+body;
     if(options.savedLanguageBeforeInit && name==='index.html') {
       body=body.replace(/(<script src="community\.js[^\"]*"><\/script>)/,'$1<script src="/community-timing-gate.js"></script>');
       if(options.fallbackVoteMarkup) body=body.replace(/(<footer class="sitefoot sf-compact">)([\s\S]*?)(<\/footer>)/,(_all,start,contents,end)=>
@@ -98,6 +108,8 @@ async function setup(t, options = {}) {
     await page.goto('https://community.test/');
     await page.waitForFunction(() => !!window.BigCopilotCommunity);
     await page.evaluate(() => { renderAll = drawMast; });
+    // Inside the suggestion badge's window however long the changelog grows.
+    await page.evaluate(() => featureDiscovery.asOf('2026-10-05'));
     return page;
   }
   async function loadSave(page) {
@@ -160,6 +172,17 @@ test('landing is network quiet; actual save loading starts presence and preserve
   await page.evaluate(() => { BigCopilotCommunity.start(); BigCopilotCommunity.start(); });
   assert.equal(await page.locator('[data-community-open]').count(),1);
   assert.equal(state.heartbeats.length,1);
+});
+
+test("without app.js's dialog helper the vote card stays hidden, nothing is sent and nothing throws", async t => {
+  const {page,state,loadSave} = await setup(t,{noDialogHelper:true});
+  assert.equal(await page.evaluate(() => window.BigCopilotDialog), undefined);
+  assert.equal(await page.locator('.community-dialog').count(),0);
+  assert.equal(await page.locator('[data-vote-card]').filter({visible:true}).count(),0);
+  await loadSave(page);
+  await page.evaluate(() => { BigCopilotCommunity.start(); BigCopilotCommunity.paintOnline(); });
+  assert.equal(await page.locator('[data-vote-card]').filter({visible:true}).count(),0);
+  assert.equal(state.heartbeats.length,0); assert.equal(state.reads,0);
 });
 
 test('each tab keeps its own id and schedule in memory, and nothing reaches browser storage', async t => {
@@ -439,7 +462,7 @@ test('visitor requests: empty ballot publishes from the collapsed form and retri
   await page.keyboard.press('Escape'); await openVotes(page);
   await dialog.getByText('Synthetic new idea',{exact:true}).waitFor();
   assert.equal(state.features.length,1);
-  await page.reload(); await openVotes(page);
+  await page.reload(); await repin(page); await openVotes(page);
   assert.equal(await dialog.locator('[data-new-feature="feature-requests"]').isVisible(),false);
 });
 
@@ -529,7 +552,7 @@ test('visitor requests: returning visitors see one footer badge until the form i
   const dialog=await openVotes(page);
   await dialog.locator('summary').click();
   await page.waitForFunction(()=>[...document.querySelectorAll('[data-new-feature="feature-requests"]')].every(el=>el.hidden));
-  await page.reload();
+  await page.reload(); await repin(page);
   assert.equal(await page.locator('[data-new-feature="feature-requests"]:not([hidden])').count(),0);
 });
 

@@ -12,12 +12,10 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from unittest import mock
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ba_save
 import build_web
@@ -79,6 +77,21 @@ class BuildGateTests(unittest.TestCase):
             self.run_main({"BA_LOCALE": loose})
         wiki.assert_not_called()
 
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_a_refused_wiki_build_stops_with_its_message_and_takes_the_flag(self):
+        # the class the wiki builder raises, which main() has to catch
+        from tools.build_wiki_data import wiki_data
+        SourceError = wiki_data.SourceError
+        self.assertIs(build_web.SourceError, SourceError)
+        locale = self.write("game", "StreamingAssets", "locale", "en.json")
+        with mock.patch.object(build_web, "refuse_floor_plan_gaps"), \
+                mock.patch.object(build_web, "load_game_locale", return_value=(locale, {})), \
+                mock.patch.object(build_web, "bundled_locale", return_value=False), \
+                mock.patch.object(build_web, "game_data_dir", return_value=self.tmp.name), \
+                mock.patch.object(build_web, "write_public_wiki",
+                                  side_effect=SourceError("lost businesstypes-x")) as wiki:
+            for allow in (False, True):
+                with self.subTest(allow=allow):
+                    with self.assertRaises(SystemExit) as caught:
+                        build_web.main(allow_fewer_guides=allow)
+                    self.assertEqual(str(caught.exception), "wiki: lost businesstypes-x")
+                    self.assertIs(wiki.call_args.kwargs["allow_fewer_guides"], allow)

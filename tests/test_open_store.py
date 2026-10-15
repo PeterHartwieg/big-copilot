@@ -1,5 +1,5 @@
 """Expansion › Open a store: the facts a plan is worked out from (_open_store(),
-docs/open-a-store-scope.md, phase 2).
+docs/dashboard-reference.md, "Open a store").
 
 The rules are the game's own: what a type needs to open, one item per customer
 demand, tills and displays sized to the building's customer capacity, the
@@ -13,19 +13,16 @@ import copy
 import json
 import math
 import os
-import sys
 import tempfile
 import unittest
 from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.dirname(HERE))
 
 import ba_dashboard  # noqa: E402
 from tests import save_fixtures  # noqa: E402
 from ba_dashboard import (  # noqa: E402
-    CAPPED_INITIAL_BUILD, _plan_initial, decor_route, demand_with, optimal_providers, outfit_lines,
+    CAPPED_INITIAL_BUILD, _plan_initial, decor_route, optimal_providers, outfit_lines,
 )
 from ba_save import Names, Save, load_save  # noqa: E402
 
@@ -155,6 +152,32 @@ class OutfitTests(unittest.TestCase):
         music = [l["item"] for l in outfit_lines(SHOP, rules, prices, 30, 225) if l["why"] == "music"]
         self.assertEqual(music, ["ba:itemname_clubspeaker"])
 
+    def test_a_product_with_no_display_made_for_the_type_takes_any_that_works_in_it(self):
+        # Issue #497: every ice cream display is tagged for coffee shops and
+        # supermarkets, and a fast food restaurant sells ice cream all the same.
+        rules = json.loads(json.dumps(RULES))
+        rules["furniture"]["ba:itemname_shelf"]["bt"] = ["coffeeshop"]
+        rules["furniture"]["ba:itemname_cheapshelf"] = {"c": 25, "h": ["ba:itemname_whisky"], "v": VENDOR, "bt": ["cinema"],
+                                                        "o": ["cinema"]}
+        prices = {"items": {**PRICES["items"], "ba:itemname_cheapshelf": {"p": 10}}}
+        got = {(l["item"], l["group"]): l for l in outfit_lines(SHOP, rules, prices, 30, 225)}
+        self.assertEqual(got[("ba:itemname_shelf", "shelf")]["qty"], 2)
+        self.assertEqual(got[("ba:itemname_shelf", "shelf")]["why"], ["ba:itemname_whisky"])
+        # Never one the game keeps out of the type, however cheap.
+        self.assertNotIn(("ba:itemname_cheapshelf", "shelf"), got)
+        # An extra (weight under 1) is left to the optional items.
+        rules["types"][SHOP]["i"] = [["ba:itemname_beer", 1], ["ba:itemname_whisky", 0.5], ["ba:itemname_sodacan", 0.85]]
+        got = {(l["item"], l["group"]) for l in outfit_lines(SHOP, rules, prices, 30, 225)}
+        self.assertNotIn(("ba:itemname_shelf", "shelf"), got)
+        rules["types"][SHOP]["i"] = RULES["types"][SHOP]["i"]
+        # A display made for the type still wins over a cheaper one made for another.
+        rules["furniture"]["ba:itemname_shelf"]["bt"] = ["liquorstore"]
+        rules["furniture"]["ba:itemname_plainshelf"] = {"c": 25, "h": ["ba:itemname_whisky"], "v": VENDOR, "bt": ["florist"]}
+        prices["items"]["ba:itemname_plainshelf"] = {"p": 5}
+        got = {(l["item"], l["group"]) for l in outfit_lines(SHOP, rules, prices, 30, 225)}
+        self.assertIn(("ba:itemname_shelf", "shelf"), got)
+        self.assertNotIn(("ba:itemname_plainshelf", "shelf"), got)
+
     def test_a_cinema_seats_its_capacity_across_its_screens(self):
         cinema = "ba:businesstype_cinema"
         rules = {"types": {cinema: {"b": "cinema", "c": 1, "i": [], "dm": [],
@@ -178,7 +201,7 @@ class OutfitTests(unittest.TestCase):
         self.assertEqual(ba_dashboard.plan_layout({"key": "ba:street_thirdavenue#15", "layout": None, "size": "S"}), "S3")
         self.assertEqual(ba_dashboard.plan_layout({"key": "ba:street_broadwaystreet#4", "layout": None, "size": "S"}), "S1")
         text = chr(10).join(["**Cinema**", "* **S1**: 2,000m / 150 customer capacity", "* **S3**: 2,000m / 100 customer capacity"])
-        self.assertEqual(ba_dashboard._venue_caps(Names({"help_building_types_content": text})), {"S1": 150, "S3": 100})
+        self.assertEqual(ba_dashboard._door_caps(Names({"help_building_types_content": text}))["cinema"], {"S1": 150, "S3": 100})
 
     def test_a_gym_holds_five_distinct_workout_types_the_cheapest_way(self):
         gym = "ba:businesstype_gym"
@@ -414,10 +437,6 @@ class DemandTests(unittest.TestCase):
         self.assertEqual(optimal_providers(799), 2)
         self.assertEqual(optimal_providers(3), 7)
         self.assertEqual(optimal_providers(0), 7)
-        self.assertEqual(demand_with(1, 55), 79.5)
-        self.assertEqual(demand_with(2, 55), 59.5)
-        self.assertEqual(demand_with(4, 55), 31.5)   # bottomed out
-        self.assertEqual(demand_with(0, 55), 99.5)
 
 
 class DecorTests(unittest.TestCase):
@@ -784,5 +803,55 @@ class FactoryRulesTests(unittest.TestCase):
             self.assertEqual(skills[skill], wage, skill)
 
 
-if __name__ == "__main__":
-    unittest.main()
+class GameValueDriftTests(unittest.TestCase):
+    """Game values kept by hand in ba_dashboard.py agree with their single
+    source (issue #347): the rules make_store_rules.py reads out of the game,
+    HOUSE_RULES' Normal column, and the constants openStore ships the board."""
+
+    @classmethod
+    def setUpClass(cls):
+        path = os.path.join(os.path.dirname(HERE), "ba_store_rules.json")
+        with open(path, encoding="utf-8") as fh:
+            cls.rules = json.load(fh)
+
+    def test_marketing_strength_is_the_rules_neighbourhood_strength(self):
+        self.assertEqual(ba_dashboard.MARKETING_STRENGTH,
+                         {k: v["ms"] for k, v in self.rules["hoods"].items()})
+
+    def test_pallet_shelf_fallback_is_the_rules_box_capacity(self):
+        self.assertEqual(ba_dashboard.PALLET_SHELF_BOXES,
+                         self.rules["furniture"][ba_dashboard.PALLET_SHELF]["cc"])
+
+    def test_house_rule_falls_back_to_normal(self):
+        for key, _name, _unit, normal, _harder, _what in ba_dashboard.HOUSE_RULES:
+            self.assertEqual(ba_dashboard._house_rule({}, key), normal, key)
+            self.assertEqual(ba_dashboard._house_rule({key: 0}, key), normal, key)
+        self.assertEqual(ba_dashboard._house_rule({"exportMultiplier": 1.25}, "exportMultiplier"), 1.25)
+        with self.assertRaises(KeyError):
+            ba_dashboard._house_rule({}, "noSuchSlider")
+
+    def test_days_per_year_falls_back_to_the_game_year(self):
+        self.assertEqual(ba_dashboard._days_per_year(None), ba_dashboard.DAYS_PER_YEAR)
+        self.assertEqual(ba_dashboard._days_per_year({"daysPerYear": 0}), ba_dashboard.DAYS_PER_YEAR)
+        self.assertEqual(ba_dashboard._days_per_year({"daysPerYear": 30}), 30)
+
+    def test_ramp_days_count_the_ramp(self):
+        self.assertEqual(ba_dashboard.RAMP_DAYS, len(ba_dashboard.RAMP))
+        self.assertTrue(all(0 < r < 1 for r in ba_dashboard.RAMP))
+
+    def test_the_payload_ships_the_planners_game_values(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "payload.hsg")
+            save_fixtures.write_data_save(path, save_fixtures.DAY)
+            payload = ba_dashboard.extract(load_save(path), Names(save_fixtures.data_names()), None)
+        game = payload["openStore"]["game"]
+        self.assertEqual(game["ramp"], list(ba_dashboard.RAMP))
+        self.assertEqual(game["office"], {
+            "always": ba_dashboard.OFFICE_ALWAYS_ON, "fullDoor": ba_dashboard.OFFICE_FULL_DOOR,
+            "day": list(ba_dashboard.OFFICE_DAY), "weekend": list(ba_dashboard.OFFICE_WEEKEND)})
+        self.assertEqual(game["wageBase"], ba_dashboard.PLAN_WAGES)
+        self.assertEqual(game["satisfaction"], ba_dashboard.PLAN_SATISFACTION)
+        factory = payload["openFactory"]
+        self.assertEqual(factory["game"]["driverHours"], ba_dashboard.DRIVER_DAY_HOURS)
+        self.assertEqual(factory["game"]["hqHours"], ba_dashboard.HQ_WEEK_HOURS)
+        self.assertEqual(factory["shelf"]["cc"], ba_dashboard.PALLET_SHELF_BOXES)

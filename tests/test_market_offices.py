@@ -154,7 +154,3 @@ class MarketOfficeTests(unittest.TestCase):
 
     def test_without_the_building_table_no_neighbourhood_is_called_office_free(self):
         self.assertEqual(self.market(buildings={})["noOffices"], [])
-
-
-if __name__ == "__main__":
-    unittest.main()

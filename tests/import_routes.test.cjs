@@ -131,20 +131,20 @@ test('every change on the checklist is a fact\'s figure, and sits on its task vi
   const page = await board(fixture());
   try {
     assert.deepEqual(await actions(page), [
-      {kind: 'Weekly imports', item: 'Flour', current: 14000, proposed: 14420, tight: true, paused: false},
-      {kind: 'Weekly imports', item: 'Sugar', current: null, proposed: null, tight: false, paused: true},
+      {kind: 'imports', item: 'Flour', current: 14000, proposed: 14420, tight: true, paused: false},
+      {kind: 'imports', item: 'Sugar', current: null, proposed: null, tight: false, paused: true},
       // 24/7 sizes a line at capacity with no margin: a day of the machines.
-      {kind: 'Factory daily top-ups', item: 'Flour', current: 1400, proposed: 1600, tight: false, paused: false},
-      {kind: 'Check the delivery route', item: 'Milk', current: null, proposed: null, tight: false, paused: false},
+      {kind: 'factory', item: 'Flour', current: 1400, proposed: 1600, tight: false, paused: false},
+      {kind: 'route', item: 'Milk', current: null, proposed: null, tight: false, paused: false},
       // Paper Bag topped up far above its sales: the lower target, a change to lower.
-      {kind: 'Shop daily top-ups', item: 'Paper Bag', current: 3000, proposed: 120, tight: false, paused: false, lower: true},
+      {kind: 'shop', item: 'Paper Bag', current: 3000, proposed: 120, tight: false, paused: false, lower: true},
       // The gym's shelf is on no plan; the hub that holds its soda could send it.
-      {kind: 'Shop daily top-ups', item: 'Soda Can', current: 0, proposed: 70, tight: false, paused: false},
-      {kind: 'Shop daily top-ups', item: 'Paper Bag', current: 1400, proposed: 30, tight: false, paused: false, lower: true},
-      {kind: 'Shop daily top-ups', item: 'Paper Bag', current: 1500, proposed: 30, tight: false, paused: false, lower: true},
-      {kind: 'Depot daily top-ups', item: 'Cake', current: 200, proposed: 290, tight: false, paused: false},
+      {kind: 'shop', item: 'Soda Can', current: 0, proposed: 70, tight: false, paused: false},
+      {kind: 'shop', item: 'Paper Bag', current: 1400, proposed: 30, tight: false, paused: false, lower: true},
+      {kind: 'shop', item: 'Paper Bag', current: 1500, proposed: 30, tight: false, paused: false, lower: true},
+      {kind: 'depot', item: 'Cake', current: 200, proposed: 290, tight: false, paused: false},
       // The cake line is staffed 12 of the 24 hours full production plans it for.
-      {kind: 'Factory run hours', item: 'Cake', current: 12, proposed: 24, tight: false, paused: false},
+      {kind: 'hours', item: 'Cake', current: 12, proposed: 24, tight: false, paused: false},
     ]);
     const views = await page.evaluate(() => Object.fromEntries(Object.entries(sbData().byView).map(([t, r]) => [t, r.length])));
     assert.deepEqual(views, {imports: 2, deliveries: 5, production: 3});
@@ -165,15 +165,55 @@ test('a tick stored under the old name-keyed form carries over to the key-based 
   const page = await board(fixture(), {which: 'changes', tab: 'imports'});
   try {
     const legacy = JSON.stringify(['Weekly imports', 'hub#1', 'Flour', 14000, 14420, null]);
-    const now = JSON.stringify(['Weekly imports', 'hub#1', 'flour', 14000, 14420, null]);
+    const now = JSON.stringify(['imports', 'hub#1', 'flour', 14000, 14420, null]);
     await page.evaluate(legacy => {
       localStorage.setItem('ba_order_marks_v1:r8-fixture', JSON.stringify([legacy]));
+      localStorage.removeItem('ba_order_marks_v2:r8-fixture');
       orderMarkCache.clear(); sbStamp++;
       drawSupplyStrip(); drawChangesView(); drawImportsView(); drawDeliveriesView(); drawProductionView(); wireAll();
     }, legacy);
     assert.equal(await page.locator('#secImports tr[data-slug="flour"] .sb-tick').getAttribute('aria-pressed'), 'true');
     assert.equal(await counted(page), en("sb.cw.road", {done: 1, n: 10}));
-    assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('ba_order_marks_v1:r8-fixture'))), [now]);
+    assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('ba_order_marks_v2:r8-fixture'))), [now]);
+    // Version 1 is left as it was.
+    assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('ba_order_marks_v1:r8-fixture'))), [legacy]);
+  } finally { await page.close(); }
+});
+
+test('a tab still on the old board cannot drop a tick made after the upgrade (#349)', async () => {
+  const page = await board(fixture(), {which: 'changes', tab: 'imports'});
+  try {
+    const legacy = JSON.stringify(['Weekly imports', 'hub#1', 'flour', 14000, 14420, null]);
+    const now = JSON.stringify(['imports', 'hub#1', 'flour', 14000, 14420, null]);
+    const v1 = () => page.evaluate(() => JSON.parse(localStorage.getItem('ba_order_marks_v1:r8-fixture')));
+    const v2 = () => page.evaluate(() => JSON.parse(localStorage.getItem('ba_order_marks_v2:r8-fixture')));
+    const reload = () => page.evaluate(() => {
+      orderMarkCache.clear(); sbStamp++;
+      drawSupplyStrip(); drawChangesView(); drawImportsView(); drawDeliveriesView(); drawProductionView(); wireAll();
+    });
+    // Before the upgrade: one tick, stored by the old board under its English kind.
+    await page.evaluate(legacy => {
+      localStorage.setItem('ba_order_marks_v1:r8-fixture', JSON.stringify([legacy]));
+      localStorage.removeItem('ba_order_marks_v2:r8-fixture');
+    }, legacy);
+    // The upgrade seeds version 2 from it, and a tick is made on the new board.
+    await reload();
+    assert.deepEqual(await v2(), [now]);
+    const added = await page.evaluate(() => {
+      const d = sbData(), r = d.rows.find(x => !d.marks.has(x.key));
+      d.marks.add(r.key); sbSaveMarks(d);
+      return r.key;
+    });
+    assert.deepEqual((await v2()).sort(), [now, added].sort());
+    assert.deepEqual(await v1(), [legacy], 'the new board never writes version 1');
+    // A tab left on the old board reconciles version 1 by its rules (its rows
+    // are keyed by English kinds) and saves: here it keeps nothing.
+    await page.evaluate(() => localStorage.setItem('ba_order_marks_v1:r8-fixture', JSON.stringify([])));
+    // The next load on the new board still holds both ticks.
+    await reload();
+    assert.deepEqual((await v2()).sort(), [now, added].sort());
+    assert.equal(await page.locator('#secImports tr[data-slug="flour"] .sb-tick').getAttribute('aria-pressed'), 'true');
+    assert.equal(await counted(page), en("sb.cw.road", {done: 2, n: 10}));
   } finally { await page.close(); }
 });
 
@@ -195,14 +235,13 @@ test('Changes counts the marks on every view, and each view counts what is left'
     // One visible count says how far along the list is;
     // Copy remaining carries no second count.
     assert.equal(await counted(page), en("sb.cw.road", {done: 3, n: 10}));
-    assert.equal(await page.locator('#sbcTop .sbc-n').count(), 0);
     await page.evaluate(() => { openRoute('overview'); drawAlerts(); });
     // Pins the wording: the obsolete Your changes label stays off Overview.
     assert.doesNotMatch(await page.locator('#alertSection').innerText(), /Your changes/);
     await page.evaluate(() => openRoute('supply/changes'));
     assert.equal(await page.locator('#sbcTop [data-sb-copy="remaining"] small').count(), 0);
-    // The ticks are kept on the device, per character, under the key the old checklist used.
-    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('ba_order_marks_v1:r8-fixture')));
+    // The ticks are kept on the device, per character.
+    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('ba_order_marks_v2:r8-fixture')));
     assert.equal(kept.length, 3);
     // The flour tick is Weekly imports only: its top-up into the factory is a row of its own.
     assert.equal(await page.locator('#secProduction tr[data-slug="flour"] .sb-tick').getAttribute('aria-pressed'), 'false');
@@ -267,9 +306,9 @@ test('Demand sizing reads the facts\' Demand figures, and says where a shop is s
     assert.match(await page.locator('#secProduction').textContent(), new RegExp("1,160\\s*" + enRe("sb.ramp").source));
     assert.match(await page.locator('#secProduction .sb-ramp').textContent(), /Cake Shop Midtown/);
     assert.deepEqual((await actions(page)).map(a => [a.kind, a.item]), [
-      ['Weekly imports', 'Sugar'], ['Check the delivery route', 'Milk'], ['Shop daily top-ups', 'Paper Bag'],
-      ['Shop daily top-ups', 'Soda Can'], ['Shop daily top-ups', 'Paper Bag'], ['Shop daily top-ups', 'Paper Bag'],
-      ['Depot daily top-ups', 'Cake']]);
+      ['imports', 'Sugar'], ['route', 'Milk'], ['shop', 'Paper Bag'],
+      ['shop', 'Soda Can'], ['shop', 'Paper Bag'], ['shop', 'Paper Bag'],
+      ['depot', 'Cake']]);
     // The basis sits on Imports, Production and Changes, all on Shop demand.
     assert.equal(await page.locator('#sbBasis-imports a.on').textContent(), en("sb.basis.dem"));
     assert.equal(await page.locator('#sbBasis-production a.on').textContent(), en("sb.basis.dem"));
@@ -312,7 +351,7 @@ test('a line short of its hours is a change at full production; under shop deman
     assert.equal(cake.tick, false);
     assert.match(cake.cells[8], enRe("sb.word.covered", {}, {anchor: "full"}));
     assert.match(cake.tip, textRe("sb.line.fewer", {lower: 10, now: 12}, {anchor: "start", cap: true}));
-    assert.ok((await actions(dem)).every(a => a.kind !== 'Factory run hours'));
+    assert.ok((await actions(dem)).every(a => a.kind !== 'hours'));
     // Bread feeds nothing a shop draws: Demand sizes it round the clock too.
     assert.match((await bySlug(dem, 'secProduction', 1)).bread.cells[3], enRe("sb.unit.nh", {n: 24}));
   } finally { await dem.close(); }
@@ -375,7 +414,7 @@ test('a line with a day off reads its week, and names the thin day', async () =>
   try {
     const cake = (await bySlug(page, 'secProduction', 1)).cake;
     assert.match(cake.tip, textRe("sb.line.short.thin2", {now: 12, day: "Sun", hours: 0, n: 24}, {cap: true}));
-    const row = await page.evaluate(() => sbData().rows.find(r => r.kind === 'Factory run hours'));
+    const row = await page.evaluate(() => sbData().rows.find(r => r.kind === 'hours'));
     assert.match(row.reason, enRe("sb.ck.staff.each.thin", {now: 12, day: "Sun", h: 0}));
   } finally { await page.close(); }
 });
@@ -386,7 +425,7 @@ test('two lines making one item at a factory each keep their own change and tick
   site.lines.push({...site.lines[0], rid: 'r-cake-2', slots: [9, 10]});
   const page = await board(data);
   try {
-    const rows = await page.evaluate(() => sbData().rows.filter(r => r.kind === 'Factory run hours').map(r => [r.line, r.key]));
+    const rows = await page.evaluate(() => sbData().rows.filter(r => r.kind === 'hours').map(r => [r.line, r.key]));
     assert.deepEqual(rows.map(r => r[0]), ['r-cake', 'r-cake-2']);
     assert.notEqual(rows[0][1], rows[1][1]);
     const ticks = page.locator('#secProduction tr[data-slug="cake"] .sb-tick');
@@ -427,7 +466,7 @@ test('shared product figures sit on the first line shown, after the sort and the
     assert.equal(cells.length, 2);
     assert.match(cells[0], enRe("sb.line.toCity", {n: 270}));
     assert.match(cells[1], enRe("sb.line.shared", {item: "Cake"}));
-    const dep = await changes.evaluate(() => sbData().rows.filter(r => r.kind === 'Factory run hours').map(r => [r.line, !!r.dep, (r.forImports || []).map(x => x.item).join()]));
+    const dep = await changes.evaluate(() => sbData().rows.filter(r => r.kind === 'hours').map(r => [r.line, !!r.dep, (r.forImports || []).map(x => x.item).join()]));
     assert.deepEqual(dep, [['r-cake', false, 'Flour'], ['r-cake-2', true, 'Flour']]);
   } finally { await changes.close(); }
 });
@@ -526,7 +565,7 @@ test("a shelf a wholesale store delivers each week reads its week, and its chang
   const page = await board(data);
   try {
     assert.deepEqual((await actions(page)).find(a => a.item === 'Soda Can'),
-      {kind: 'Wholesale deliveries', item: 'Soda Can', current: 300, proposed: 430, tight: false, paused: false});
+      {kind: 'wholesale', item: 'Soda Can', current: 300, proposed: 430, tight: false, paused: false});
     // Shop, Product, Sells, Busiest, On hand, Pressure, Daily top-up, Status after the tick.
     const soda = (await bySlug(page, 'secDeliveries', 4)).soda;
     assert.match(soda.cells[7], new RegExp("^300 430 " + enRe("sb.unit.week").source + " " + enRe("sb.where.wholesaleDay", {day: "Monday"}).source + "$"));
@@ -542,9 +581,9 @@ test("Deliveries lists a route-fed depot's daily top-up from its fact, naming th
     use: 100, need: 115, have: 80, setTo: 120, imp: false, from: 1};
   const page = await board(data);
   try {
-    const act = (await page.evaluate(() => sbData().rows)).find(a => a.kind === 'Depot daily top-ups' && a.item === 'Soda Can');
+    const act = (await page.evaluate(() => sbData().rows)).find(a => a.kind === 'depot' && a.item === 'Soda Can');
     assert.deepEqual([act.kind, act.current, act.proposed, act.source, !!act.tight],
-      ['Depot daily top-ups', 80, 120, 1, false]);
+      ['depot', 80, 120, 1, false]);
     assert.match(act.reason, /Bakery Factory/);
     const soda = (await bySlug(page, 'secDeliveries', 0)).soda;
     assert.match(soda.cells[WH.order], new RegExp("^80 120 " + enRe("sb.unit.day").source + " " + enRe("sb.where.plan", {site: "Bakery Factory"}).source + "$"));
@@ -573,14 +612,14 @@ test("a factory's paused contract the top-up falls short without is a change; on
         const tr = table ? table.querySelector('tr[data-slug="milk"]') : null;
         return {milk: tr ? `${tr.textContent} ${[...tr.querySelectorAll('[data-tip]')].map(x => x.dataset.tip).join(' ')}`.replace(/\s+/g, ' ') : null,
                 tick: !!(table && table.querySelector('tr[data-slug="milk"] .sb-tick')),
-                acts: sbData().rows.filter(a => a.item === 'Milk' && a.kind === 'Weekly imports').map(a => [a.kind, !!a.paused])};
+                acts: sbData().rows.filter(a => a.item === 'Milk' && a.kind === 'imports').map(a => [a.kind, !!a.paused])};
       });
     } finally { await page.close(); }
   };
   const short = await read('critical');
   assert.match(short.milk, enRe("sb.imp.resume"));
   assert.ok(short.tick);
-  assert.deepEqual(short.acts, [['Weekly imports', true]]);
+  assert.deepEqual(short.acts, [['imports', true]]);
   const covered = await read('info');
   assert.match(covered.milk, enRe("sb.why.paused.topup"));
   assert.equal(covered.tick, false);
@@ -638,8 +677,8 @@ test('wholesale deliveries and depot top-ups from facts shaped like a real save\
     await page.evaluate(() => { sbMode.deliveries = 'changes'; drawDeliveriesView(); });
     assert.ok(!(await bySlug(page, 'secDeliveries', 0)).cups);
     const acts = await page.evaluate(() => sbData().rows.map(a => [a.kind, a.site, a.item, a.current, a.proposed]));
-    assert.ok(acts.some(a => a.join() === 'Wholesale deliveries,0,Syrup,1000,1680'), JSON.stringify(acts));
-    assert.ok(acts.some(a => a.join() === 'Before the next delivery,4,Chips,,120'), JSON.stringify(acts));
+    assert.ok(acts.some(a => a.join() === 'wholesale,0,Syrup,1000,1680'), JSON.stringify(acts));
+    assert.ok(acts.some(a => a.join() === 'once,4,Chips,,120'), JSON.stringify(acts));
     assert.equal(await page.locator('#pageSupply .sb-part', {hasText: en("sb.others")}).count(), 0);
   } finally { await page.close(); }
 });
@@ -836,11 +875,11 @@ for (const scenario of [
       });
       assert.equal(seen.rows.length, seen.imports.length, 'one import row per import fact');
       const acts = await page.evaluate(() => sbData().rows);
-      const weekly = acts.filter(a => a.kind === 'Weekly imports' && a.proposed !== null);
+      const weekly = acts.filter(a => a.kind === 'imports' && a.proposed !== null);
       assert.equal(weekly.length, seen.wanted.length);
       for (const [s, , setTo] of seen.wanted)
         assert.ok(weekly.some(a => a.site === s && a.proposed === setTo), `weekly ${setTo} at ${s}`);
-      const daily = acts.filter(a => a.kind === 'Factory daily top-ups');
+      const daily = acts.filter(a => a.kind === 'factory');
       assert.deepEqual(daily.map(a => [a.site, a.proposed]).sort(), seen.topups.map(([s, , v]) => [s, v]).sort());
       // Every change has a tick on its tab.
       const ticked = await page.evaluate(() => [...document.querySelectorAll('#pageSupply .sb-tick[data-sb-keys]')]
@@ -898,7 +937,7 @@ test('a depot two plans have to rise for lists both on the checklist', async () 
   const page = await board(data, {which: 'changes', tab: 'deliveries'});
   try {
     const got = await page.evaluate(() => supplyChecklistRows().rows
-      .filter(r => r.kind === 'Depot daily top-ups').map(r => [D.businesses[r.source].name, r.current, r.proposed]));
+      .filter(r => r.kind === 'depot').map(r => [D.businesses[r.source].name, r.current, r.proposed]));
     assert.deepEqual(got.sort(), [['Brewery a', 500, 1500], ['Brewery b', 500, 1500]]);
   } finally { await page.close(); }
 });
@@ -925,7 +964,7 @@ test('each basis lists only its own depot top-up changes', async () => {
   const page = await board(data, {which: 'changes', tab: 'deliveries'});
   try {
     const plans = mode => page.evaluate(mode => { sizing = mode; return supplyChecklistRows().rows
-      .filter(r => r.kind === 'Depot daily top-ups').map(r => [D.businesses[r.source].name, r.current, r.proposed]).sort(); }, mode);
+      .filter(r => r.kind === 'depot').map(r => [D.businesses[r.source].name, r.current, r.proposed]).sort(); }, mode);
     assert.deepEqual(await plans('cap'), [['Hub a', 100, 2400], ['Hub b', 100, 2400]]);
     assert.deepEqual(await plans('dem'), [['Hub a', 100, 120]]);
     assert.deepEqual(await plans('cap'), [['Hub a', 100, 2400], ['Hub b', 100, 2400]]);

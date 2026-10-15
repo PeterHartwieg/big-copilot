@@ -350,7 +350,3 @@ class TheTodayLinesKeepTheirWords(MsgAsserts, unittest.TestCase):
                                                              hours=msg_param("sp.py.when.hours", a=8, b=12))))
                 self.assertIn(noun, keys_in(row["text"]))
                 self.assertIn("sp.py.idle.part", keys_in(row["text"]))
-
-
-if __name__ == "__main__":
-    unittest.main()

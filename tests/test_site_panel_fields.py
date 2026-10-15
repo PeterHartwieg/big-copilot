@@ -5,13 +5,11 @@ of a site's series, the amenity-by-amenity reading a shop's standards lamps
 need, and the list of pre-flight checks a silent site fails.
 """
 import os
-import sys
 import tempfile
 import unittest
 
 from tests.i18n_check import MsgAsserts, list_items, msg_param
 
-sys.path.insert(0, os.path.dirname(__file__))
 from tests import es3_fixture  # noqa: E402
 from ba_dashboard import (  # noqa: E402
     AMENITY_DEMANDS, NEW_SITE_DAYS, OFFICE_TYPES, RETAIL_TYPES, _alert_id, _alerts,
@@ -213,10 +211,6 @@ class SiteFieldTests(MsgAsserts, unittest.TestCase):
     def test_both_kinds_are_the_statuses_the_panel_forks_on(self):
         self.assertIn(FLORIST, RETAIL_TYPES)
         self.assertIn(LAW_FIRM, OFFICE_TYPES)
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 # --- what a finding carries for the site panel to point at -------------------

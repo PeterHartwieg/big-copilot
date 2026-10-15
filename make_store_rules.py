@@ -131,6 +131,7 @@ sys.path.insert(0, os.path.join(HERE, "tools"))
 from make_demand_curves import _behaviours, _bundle, _game_root  # noqa: E402
 from make_item_prices import _price  # noqa: E402
 from build_wiki_data import parse_address, site_key, street_label  # noqa: E402
+from wiki_data import expand_guides  # noqa: E402
 
 SERVICE = 4  # Item.type bit for a product sold as a service
 SELF_SERVICE = 2  # BusinessType.customerType of the shops whose customers serve themselves
@@ -491,7 +492,7 @@ def _workout_types(root: str) -> dict:
 def _vendors(furniture: dict) -> dict:
     """Fill each piece's "v" from the help text and return the vendor table."""
     with open(os.path.join(HERE, "web", "wiki-data.json"), encoding="utf-8") as fh:
-        wiki = json.load(fh)
+        wiki = expand_guides(json.load(fh))
     with open(os.path.join(HERE, "ba_buildings.json"), encoding="utf-8") as fh:
         sites = {f"{row['s']}#{row['n']}": row for row in json.load(fh) if row.get("s")}
 

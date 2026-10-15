@@ -4,10 +4,8 @@ Synthetic payloads only; the page as a whole is tests/hostile_names.test.cjs.
 """
 import json
 import os
-import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 import ba_dashboard  # noqa: E402
 
@@ -48,7 +46,3 @@ class RenderPayload(unittest.TestCase):
         self.assertNotIn("<", page[start:page.index(";", page.index("]}", start))])
         # No placeholder was filled inside the save's text.
         self.assertEqual(page.count("\x00"), 0)
-
-
-if __name__ == "__main__":
-    unittest.main()

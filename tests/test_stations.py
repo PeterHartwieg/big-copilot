@@ -7,12 +7,11 @@ site whose stations want different skills is only as fast as its slowest role.
 import hashlib
 import json
 import os
-import subprocess
-import sys
 import unittest
 from unittest.mock import patch
 
 from tests.i18n_check import MsgAsserts, find_msg, msg_param
+from tests._seeds import under_seeds
 
 from ba_dashboard import (
     plain,
@@ -738,23 +737,14 @@ class TheatreGridTests(MsgAsserts, unittest.TestCase):
 
     def test_the_words_do_not_move_between_runs(self):
         """The same fixture under two hash seeds names the roles in one order."""
-        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         script = (
-            "import json, sys\n"
-            "sys.path[:0] = [sys.argv[1], sys.argv[2]]\n"
-            "import test_stations as T\n"
+            "import json\n"
+            "from tests import test_stations as T\n"
             "grid = T.TheatreGridTests().theatre(rooms=2)\n"
             "print(json.dumps([(r['key'], r['label'], r['station'], r['counters'], r['noun'])"
             " for r in grid['roles']]))\n"
         )
-        seeds = []
-        for seed in ("0", "1"):
-            run = subprocess.run(
-                [sys.executable, "-c", script, root, os.path.dirname(os.path.abspath(__file__))],
-                capture_output=True, text=True, env=dict(os.environ, PYTHONHASHSEED=seed),
-            )
-            self.assertEqual(run.returncode, 0, run.stderr)
-            seeds.append(run.stdout)
+        seeds = under_seeds(script)
         self.assertEqual(seeds[0], seeds[1])
         # Not a Msg: grid roles' noun is a plain str used by the page's limit matching.
         self.assertEqual(json.loads(seeds[0]), [
@@ -1068,7 +1058,3 @@ class HairdresserTests(MsgAsserts, unittest.TestCase):
         self.assertEqual([a["site"] for a in lines], ["Curls", "Braids"])
         self.assertHasMsg(lines[0]["text"], "sp.py.fix.role.post", station="hairdresser chair", station_name="Hairdresser Chair")
         self.assertHasMsg(lines[1]["text"], "sp.py.fix.role.post", station="hairdresser headwash", station_name="Hairdresser Headwash")
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -23,7 +23,6 @@ import unittest
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
 )
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import build_wiki_data as build
 import wiki_data
@@ -298,7 +297,8 @@ class GuideCase(FixtureCase):
         self.write("StreamingAssets/helpstructure.json", json.dumps(structure))
 
     def guides(self):
-        return self.build()["guides"]
+        """Every guide with its shared tables put back, as readers see them."""
+        return wiki_data.expand_guides(self.build())["guides"]
 
     def guide(self, short):
         return self.guides()["businesstypes-" + short]
@@ -768,11 +768,35 @@ class IsolationTests(GuideCase):
         self.assertIn("ba:street_fourthavenue#17", salon)
         self.assertNotIn("ba:street_fourthavenue#17", giftshop)
 
-    def test_categories_count_what_each_guide_reads(self):
-        salon = self.guide("salon")["CATEGORIES"]
-        business = next(row for row in salon if row["key"] == "common_business_types")
-        self.assertGreaterEqual(business["sample"], 1)
-        self.assertLessEqual(business["sample"], business["pages"])
+    def test_what_the_guides_share_is_written_once(self):
+        payload = json.loads(build.serialise(self.build()))
+        guides = payload["guides"]
+        # each guide names its suppliers by key; the rows sit once, at the top
+        for key, guide in guides.items():
+            self.assertIsInstance(guide["SUPPLIERS"], list, key)
+            self.assertEqual(guide["SUPPLIERS"], sorted(guide["SUPPLIERS"]), key)
+            self.assertNotIn("COPY", guide)
+            self.assertNotIn("CATEGORIES", guide)
+        self.assertEqual(sorted(payload["SUPPLIERS"]),
+                         sorted({k for guide in guides.values() for k in guide["SUPPLIERS"]}))
+        # the Gift Shop's own layouts keep its SOURCES; the rest share one block
+        self.assertIn("SOURCES", guides["businesstypes-giftshop"])
+        self.assertNotIn("SOURCES", guides["businesstypes-salon"])
+        shared = payload["provenance"]["guideSources"]
+        self.assertNotIn("BusinessLayouts/", json.dumps(shared))
+        # put back, each guide reads as it did, and putting back twice is a no-op
+        expanded = wiki_data.expand_guides(json.loads(json.dumps(payload)))
+        salon = expanded["guides"]["businesstypes-salon"]
+        self.assertEqual(salon["SOURCES"], shared)
+        self.assertEqual(set(salon["SUPPLIERS"]), set(guides["businesstypes-salon"]["SUPPLIERS"]))
+        self.assertEqual(salon["SUPPLIERS"]["ba:street_pier#4"], payload["SUPPLIERS"]["ba:street_pier#4"])
+        self.assertEqual(wiki_data.expand_guides(json.loads(json.dumps(expanded))), expanded)
+
+    def test_a_guide_naming_a_supplier_the_table_lacks_is_refused(self):
+        payload = json.loads(build.serialise(self.build()))
+        payload["guides"]["businesstypes-salon"]["SUPPLIERS"].append("ba:street_nowhere#1")
+        with self.assertRaisesRegex(wiki_data.SourceError, "the table does not hold"):
+            build.validate_public(payload)
 
     def test_the_wholesaler_list_follows_the_guide_s_own_range(self):
         giftshop, salon = self.guide("giftshop"), self.guide("salon")
@@ -799,10 +823,11 @@ class IsolationTests(GuideCase):
 
 class CopyTests(GuideCase):
     def test_copy_is_shared_between_guides(self):
+        # written once, for every guide (share_guide_tables())
         payload = self.build()
-        copy = payload["guides"]["businesstypes-salon"]["COPY"]
+        copy = payload["COPY"]
         self.assertEqual(copy["primaryTitle"], "Primary range")
-        self.assertEqual(copy, payload["guides"]["businesstypes-giftshop"]["COPY"])
+        self.assertNotIn("COPY", payload["guides"]["businesstypes-salon"])
 
     def test_a_wording_key_that_is_missing_falls_back_and_is_reported(self):
         wording = json.loads(self.read(build.WORDING_PATH))
@@ -815,7 +840,7 @@ class CopyTests(GuideCase):
             payload = self.build()
         finally:
             build.WORDING_PATH = original
-        copy = payload["guides"]["businesstypes-salon"]["COPY"]
+        copy = payload["COPY"]
         self.assertEqual(copy["chooseProduct"], "")
         self.assertEqual(copy["secondaryTitle"], "Also sells")
         # guides.* rows are dropped authored copy, reported beside the UI keys
@@ -882,6 +907,7 @@ class DeterminismTests(GuideCase):
 
     def test_the_payload_survives_its_own_validator(self):
         payload = json.loads(build.serialise(self.build()))
+        # No assertion: the test passes when validate_public() does not raise.
         build.validate_public(payload)
 
 

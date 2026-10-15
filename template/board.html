@@ -19,14 +19,16 @@ try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "d
    the light values follow the system setting or an explicit data-theme, which the
    footer's theme control sets. color-scheme rides along with each set so that
    scrollbars, selects and the other native widgets follow a chosen theme instead
-   of staying with the operating system's. */
+   of staying with the operating system's. --pop-shadow is set for light only: on
+   dark each popover keeps its own shadow, the fallback in its rule. */
 :root{
   color-scheme:dark;
   --ground:#0d100f; --surface:#151917; --raised:#1c211e;
-  --ink:#e9ece6; --ink-2:#9aa39d; --ink-3:#6b756f;
+  --ink:#e9ece6; --ink-2:#9aa39d; --ink-3:#808a84;
   --rule:#262c28; --rule-soft:#1e2320;
   --accent:#43c07a; --accent-soft:#43c07a26; --on-accent:#08130d;
   --pos:#43c07a; --neg:#ff6257; --warn:#f0913a; --info:#6ea8ff;
+  --neg-soft:#ff625722; --warn-soft:#f0913a22; --info-soft:#6ea8ff1f;
   --tip-bg:#e9ece6; --tip-ink:#0d100f;
   --shadow:0 1px 2px #00000059;
 }
@@ -34,12 +36,14 @@ try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "d
   :root:not([data-theme="dark"]){
     color-scheme:light;
     --ground:#eef0ea; --surface:#fdfdfb; --raised:#f3f4ef;
-    --ink:#15181a; --ink-2:#5b6469; --ink-3:#8b9499;
+    --ink:#15181a; --ink-2:#5b6469; --ink-3:#636c71;
     --rule:#d2d6cd; --rule-soft:#e0e3da;
     --accent:#00703a; --accent-soft:#00703a1f; --on-accent:#ffffff;
-    --pos:#00703a; --neg:#cc2a20; --warn:#c25400; --info:#2a5ea8;
+    --pos:#00703a; --neg:#cc2a20; --warn:#b34d00; --info:#2a5ea8;
+    --neg-soft:#cc2a201a; --warn-soft:#b34d001a; --info-soft:#2a5ea81a;
     --tip-bg:#15181a; --tip-ink:#f3f4ef;
     --shadow:0 1px 2px #15181a0f;
+    --pop-shadow:0 24px 60px -24px #1a1f1c77;
   }
   :root:not([data-theme="dark"]) .chip.dim{background:#00000010}
   :root:not([data-theme="dark"]) .orb::after{opacity:.2}
@@ -47,12 +51,14 @@ try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "d
 :root[data-theme="light"]{
   color-scheme:light;
   --ground:#eef0ea; --surface:#fdfdfb; --raised:#f3f4ef;
-  --ink:#15181a; --ink-2:#5b6469; --ink-3:#8b9499;
+  --ink:#15181a; --ink-2:#5b6469; --ink-3:#636c71;
   --rule:#d2d6cd; --rule-soft:#e0e3da;
   --accent:#00703a; --accent-soft:#00703a1f; --on-accent:#ffffff;
-  --pos:#00703a; --neg:#cc2a20; --warn:#c25400; --info:#2a5ea8;
+  --pos:#00703a; --neg:#cc2a20; --warn:#b34d00; --info:#2a5ea8;
+  --neg-soft:#cc2a201a; --warn-soft:#b34d001a; --info-soft:#2a5ea81a;
   --tip-bg:#15181a; --tip-ink:#f3f4ef;
   --shadow:0 1px 2px #15181a0f;
+  --pop-shadow:0 24px 60px -24px #1a1f1c77;
 }
 :root[data-theme="light"] .chip.dim{background:#00000010}
 :root[data-theme="light"] .orb::after{opacity:.2}
@@ -64,7 +70,7 @@ body{
   font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
 }
 .mono,.num{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
-.pos{color:var(--pos)}.neg{color:var(--neg)}.warn{color:var(--warn)}.warnc{color:var(--warn)}
+.pos{color:var(--pos)}.neg{color:var(--neg)}.warn{color:var(--warn)}
 /* Data tables use the available monitor width; prose keeps its own limits. */
 .wrap{width:calc(100% - clamp(32px,5vw,80px));margin:0 auto;position:relative;z-index:1;padding-bottom:72px}
 svg{display:block}
@@ -74,9 +80,6 @@ svg{display:block}
    honest. */
 section{content-visibility:auto; contain-intrinsic-size:auto 620px}
 section.measured{content-visibility:visible}
-/* A finding's link scrolls to a section, clear of the top of the window (the
-   sidebar's own block at the end of this sheet sets the margin). */
-section,.sitehead{scroll-margin-top:116px}
 
 /* ===== kept from the old board: what the artboards could not show ==========
    Header sorting, the site picker's full list inside its .seg, the open
@@ -87,8 +90,9 @@ thead th[data-i]{cursor:pointer; user-select:none}
 thead th[data-i]:hover{color:var(--ink)}
 thead th svg.sort{display:inline-block; width:11px; height:11px; stroke:var(--accent); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vertical-align:-1px; margin-left:5px}
 thead th[data-dir="desc"] svg.sort{transform:rotate(180deg)}
-/* A Supply header sorts from a button inside it, so the keyboard reaches it
-   and the cell stays a column header. The button takes the header's type. */
+/* A sortable header sorts from a button inside it (sortTh()), so the keyboard
+   reaches it and the cell stays a column header. The button takes the
+   header's type. */
 thead th .supply-sort{all:unset;cursor:pointer}
 thead th .supply-sort:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
 tr.kid.on td{background:var(--accent-soft)}
@@ -96,8 +100,6 @@ tr.kid.on td{background:var(--accent-soft)}
 .seg select.sitepick option,.seg select.sitepick optgroup{color:var(--ink); background:var(--surface)}
 .flow .pipe.paused{stroke:var(--neg);stroke-opacity:.7}
 .scrollx{overflow-x:auto;max-width:100%;min-width:0}
-#pageSupply .sb-t td.l{white-space:normal}
-.flowpipes{display:grid;grid-template-columns:1fr 1fr;gap:20px 32px;margin:0 0 4px}
 select.linepick{
   font:inherit;font-size:12px;color:var(--ink);background:var(--surface);
   border:1px solid var(--rule);border-radius:6px;padding:3px 8px;margin-left:6px;
@@ -123,12 +125,13 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .rv.in{opacity:1}
 .rv.in:not(.move){transform:none}
 
-.brand{display:flex;align-items:baseline;gap:2px;user-select:none;flex:none}
-.wordmark{font-size:30px;font-weight:800;letter-spacing:-.045em;line-height:1;cursor:pointer}
+.brand{display:flex;gap:2px;user-select:none;flex:none;align-items:center}
+.wordmark{font-weight:800;letter-spacing:-.045em;line-height:1;cursor:pointer;font-size:24px}
 
 .brand .dot{
   display:inline-block;flex:none;width:11px;height:11px;border-radius:50%;background:var(--accent);
   transform-origin:50% 100%;transition:transform .25s cubic-bezier(.34,1.56,.64,1);cursor:pointer;
+  align-self:flex-end;margin-bottom:5px;
 }
 .brand:hover .dot{transform:translateY(-6px) scale(1.15)}
 .brand .dot.spin{animation:coinspin .6s linear}
@@ -264,15 +267,9 @@ button.unname:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .why:hover i{animation:qdrop .5s cubic-bezier(.34,1.56,.64,1)}
 @keyframes qdrop{0%{transform:translateY(-16px);opacity:0}100%{transform:none;opacity:1}}
 .seg{display:inline-flex;flex-wrap:wrap;max-width:100%;border:1px solid var(--rule);border-radius:7px;padding:2px;gap:2px;background:var(--surface)}
-.seg a{white-space:nowrap}
-.seg a{padding:6px 12px;border-radius:5px;font-size:12.5px;font-weight:500;color:var(--ink-2);text-decoration:none;transition:background .15s,color .15s}
+.seg a{white-space:nowrap;padding:6px 12px;border-radius:5px;font-size:12.5px;font-weight:500;color:var(--ink-2);text-decoration:none;transition:background .15s,color .15s}
 .seg a:hover{color:var(--ink)}
 .seg a.on{background:var(--ink);color:var(--ground)}
-/* A translated view label longer than a phone's share of the row wraps in its
-   cell rather than spilling out of it (docs/architecture.md, "UI text"). */
-@media(max-width:760px){
-  :lang(de) #pageSupply .sb-tabs a > span:not([class]){min-width:0;white-space:normal;overflow-wrap:anywhere;hyphens:auto;text-align:center}
-}
 /* The sizing switch (supplyFact): the seg with its name in front, and the
    note a figure built on a shop open under a week carries under Demand. */
 .sz-ramp{display:inline-block;margin-left:6px;font-size:11px;color:var(--warn);white-space:nowrap;cursor:help}
@@ -300,7 +297,7 @@ button.link:disabled{opacity:.45;cursor:default}
   background:radial-gradient(220px circle at var(--mx,50%) var(--my,50%),var(--accent-soft),transparent 70%);
 }
 .kpi:hover::before{opacity:1}
-.kpi .lab{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.kpi .lab{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);display:flex;align-items:center;justify-content:space-between;gap:8px}
 .kpi .v{font-family:"IBM Plex Mono",monospace;font-size:30px;font-weight:500;letter-spacing:-.02em;line-height:1.05}
 .kpi .row{display:flex;align-items:center;gap:10px;min-height:20px}
 .chip{
@@ -328,7 +325,6 @@ button.link:disabled{opacity:.45;cursor:default}
    arrow by the label says so. */
 a.kpi.td-go{color:inherit;text-decoration:none;cursor:pointer;transition:border-color .2s}
 a.kpi.td-go:hover{border-color:var(--rule)}
-.kpi .lab{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .td-go-ic{display:inline-grid;place-items:center;color:var(--ink-3);transition:color .15s,transform .2s}
 .td-go-ic svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 a.kpi.td-go:hover .td-go-ic{color:var(--accent);transform:translateX(3px)}
@@ -479,7 +475,7 @@ a.kpi.td-go:hover .td-go-ic{color:var(--accent);transform:translateX(3px)}
 /* While any modal dialog is open the page behind it holds still. The page
    scrolls on the viewport (neither html nor body sets overflow); its gutter
    is always kept, so the page does not shift sideways as the scrollbar goes. */
-html{scrollbar-gutter:stable}
+html{scrollbar-gutter:stable;--ss-mast:var(--release-height,0px)}
 html:has(dialog:modal){overflow:hidden}
 .gw-lead{margin:0;font-size:13.5px;line-height:1.5;color:var(--ink-2);text-wrap:pretty}
 .gw-lead b{color:var(--ink);font-weight:600}
@@ -816,8 +812,6 @@ html:has(dialog:modal){overflow:hidden}
 /* The dots stand still for a player who asked for less motion: the packets
    sit on the wire, the bars and cards simply appear. */
 @media (prefers-reduced-motion:reduce){
-  .gw-dlg *,.gw-btn *,#gwToast *{animation:none!important;transition:none!important}
-  .gw-btn,.gw-b,.gw-x,.gw-preset,.gw-mini-b,.gw-role,.gw-kind{transition:none!important}
   .gw-btn:hover,.gw-b:hover,.gw-x:hover,.gw-preset:hover,.gw-mini-b:hover,.gw-role:hover,.gw-role:focus-visible,.gw-dlg:hover .gw-kind{transform:none!important}
   .gw-w.ask .p{opacity:1}
   .gw-dlg .gw-busy{opacity:.6}
@@ -853,6 +847,7 @@ html:has(dialog:modal){overflow:hidden}
 .move:hover .ic{transform:translateZ(24px)}
 .move:hover b{transform:translateZ(16px)}
 .move:hover span{transform:translateZ(10px)}
+.move .soon.live{border-style:solid;color:var(--accent);border-color:var(--accent-soft);background:var(--accent-soft)}
 .move .soon{position:absolute;top:16px;right:16px;font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;color:var(--ink-3);border:1px dashed var(--rule);padding:4px 6px;border-radius:4px}
 .move:hover .soon{color:var(--accent);border-color:var(--accent)}
 /* The Plan imports card names the product it would change first. */
@@ -886,7 +881,6 @@ html:has(dialog:modal){overflow:hidden}
 #pageStaffing .pay-off li .up{color:var(--warn);font-family:"IBM Plex Mono",monospace}
 #pageStaffing .pay-off li .dn{color:var(--accent);font-family:"IBM Plex Mono",monospace}
 #pageStaffing .pay-off li small{color:var(--ink-3)}
-#pageStaffing .pay-links{display:flex;flex-wrap:wrap;gap:8px 22px;margin:20px 0 0}
 /* Staffing › Schedules: the businesses in a list, the chosen one's week beside it */
 #pageStaffing .sch-grid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:28px;align-items:start;margin-top:18px}
 #pageStaffing .sch-list{position:sticky;top:84px;display:flex;flex-direction:column;max-height:calc(100vh - 110px);overflow:auto;padding-right:4px}
@@ -927,8 +921,6 @@ html:has(dialog:modal){overflow:hidden}
 .ov-pg{display:inline-flex;vertical-align:1px}
 .nx-st{display:inline-flex;align-items:center;gap:6px;min-height:22px;padding:0 9px;border-radius:12px;font:500 11px/1.2 "IBM Plex Mono",monospace;letter-spacing:.01em;white-space:nowrap;box-sizing:border-box}
 .nx-st svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;flex:none}
-.nx-st.sug{border:1px dashed var(--rule);color:var(--ink-3)}
-.nx-st.sug i{width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block}
 .nx-st.mine{border:1px solid var(--ink-3);color:var(--ink-2)}
 .nx-st.app{border:1px solid var(--info);color:var(--info);background:color-mix(in srgb,var(--info) 9%,transparent)}
 .nx-st.ok{background:var(--accent);border:1px solid var(--accent);color:var(--on-accent)}
@@ -939,7 +931,6 @@ html:has(dialog:modal){overflow:hidden}
 #pageSupply > .sec.sb-view{margin-top:4px}
 .sbv-bar{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px;margin-top:18px}
 .sbv-bar .lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
-.sbv-sp{flex:1}
 .sbv-scope{display:inline-flex;align-items:center;gap:10px}
 .sbv-sel{position:relative;display:inline-flex;align-items:center;gap:8px;min-height:34px;padding:0 10px;border:1px solid var(--rule);border-radius:8px;background:var(--surface);color:var(--ink)}
 .sbv-sel:focus-within{outline:2px solid var(--accent);outline-offset:1px}
@@ -947,13 +938,10 @@ html:has(dialog:modal){overflow:hidden}
 .sbv-sel select{border:0;background:transparent;color:inherit;font:600 13px/1.2 Archivo,sans-serif;padding:6px 2px;cursor:pointer;max-width:260px}
 .sbv-sel select:focus{outline:none}
 .sbv-sel option,.sbv-sel optgroup{background:var(--surface);color:var(--ink)}
-.sbv-mode a,.sbf-mode a{padding:7px 12px}
+.sbv-mode a{padding:7px 12px}
 .sbv-group{margin-top:26px}
 .sbv-group>h3{display:flex;align-items:center;gap:9px;margin:0;padding-bottom:10px;border-bottom:1px solid var(--rule);font:500 11px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
 .sbv-group>h3 svg{width:15px;height:15px;stroke:var(--ink-3);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.sbv-note{margin:12px 0 0;font-size:13px;color:var(--ink-2)}
-.sbv-note b{color:var(--ink);font-weight:600}
-.sbv-foot{margin:18px 0 0;font-size:12.5px;color:var(--ink-3)}
 #pageSupply .sb-copystatus{font-size:12.5px;color:var(--accent);margin:10px 0 0}
 #pageSupply .sb-copystatus:empty{display:none}
 #pageSupply textarea.sb-fallback{width:100%;min-height:160px;margin-top:10px;font:13px/1.6 "IBM Plex Mono",monospace;background:var(--surface);color:var(--ink);border:1px solid var(--rule);border-radius:7px;padding:12px;box-sizing:border-box}
@@ -969,10 +957,6 @@ html:has(dialog:modal){overflow:hidden}
 
 /* Changes: completion count, then the changes by view */
 #pageSupply .sbc-top{display:flex;flex-wrap:wrap;align-items:center;gap:14px 22px;margin-top:16px;padding:16px 18px 16px 22px;border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface)}
-#pageSupply .sbc-n{display:grid;grid-template-columns:auto auto;align-items:baseline;column-gap:8px;font-family:"IBM Plex Mono",monospace;min-width:110px}
-#pageSupply .sbc-n b{font-size:30px;font-weight:500;line-height:1;letter-spacing:-.02em}
-#pageSupply .sbc-n span{font-size:13px;color:var(--ink-3)}
-#pageSupply .sbc-n small{grid-column:1/-1;margin-top:4px;font:400 12px/1.2 Archivo,sans-serif;color:var(--ink-3)}
 #pageSupply .sbc-progress{flex:1 1 220px;font-size:13px;color:var(--ink-2)}
 #pageSupply .sbc-acts{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 #pageSupply .sbc-acts .nx-btn small{font:500 11px/1 "IBM Plex Mono",monospace;opacity:.8}
@@ -1119,7 +1103,6 @@ html:has(dialog:modal){overflow:hidden}
 .sbf-chip svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.7}
 .sbf-chip button{width:24px;height:24px;border:0;border-radius:6px;background:none;color:var(--ink-2);display:grid;place-items:center;cursor:pointer}
 .sbf-chip button:hover,.sbf-chip button:focus-visible{background:var(--surface);color:var(--ink);outline:none}
-.sbf-hint{font-size:12.5px;color:var(--ink-3)}
 #pageSupply #secFlow .sb-diag{margin-top:14px}
 .sbf-panel{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-top:14px}
 .sbf-panel>.quiet{margin:0}
@@ -1428,7 +1411,6 @@ tr.re-opened .re-tog{transform:rotate(90deg);color:var(--ink)}
 #pageSupply .sb-chg b{color:var(--accent);font-weight:600}
 #pageSupply .sb-chg small,#pageSupply .sb-unit{font-size:10.5px;color:var(--ink-3);font-family:Archivo,sans-serif}
 #pageSupply .sb-uses{border-bottom:1px dotted var(--ink-3);cursor:help}
-#pageSupply .sb-rated{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;box-shadow:inset 0 0 0 1px var(--warn);color:var(--warn);font:500 9.5px/1.6 "IBM Plex Mono",monospace;letter-spacing:.04em;vertical-align:1px;cursor:help}
 #pageSupply td .sub.r{text-align:right}
 
 /* one word per fact */
@@ -1442,7 +1424,6 @@ tr.re-opened .re-tog{transform:rotate(90deg);color:var(--ink)}
 #pageSupply .sb-v.idle{background:color-mix(in srgb,var(--info) 16%,transparent);color:var(--info)}
 #pageSupply .sb-v.new{box-shadow:inset 0 0 0 1px var(--rule);color:var(--ink-3);background:none}
 #pageSupply .sb-v.made{background:var(--raised);color:var(--ink-2)}
-#pageSupply .sb-why{display:block;margin-top:4px;font:400 12px/1.35 Archivo,sans-serif;color:var(--ink-3)}
 #pageSupply tr:hover .sb-v.bad svg,#pageSupply tr:hover .sb-v.plan svg{animation:sp-wiggle .5s ease-in-out}
 
 /* a pressure gauge for a daily round, the week's rail for a weekly import */
@@ -1523,11 +1504,6 @@ tr.re-opened .re-tog{transform:rotate(90deg);color:var(--ink)}
 #pageSupply .sb-t .sp-m{width:24px;height:24px;border-radius:6px}
 #pageSupply .sb-t .sp-m svg{width:13px;height:13px}
 
-/* sizing: 24/7 or Demand, remembered per device */
-#pageSupply .sb-sizing{display:flex;align-items:center;gap:14px;margin-top:16px;font-size:12.5px;color:var(--ink-3);flex-wrap:wrap}
-#pageSupply .sb-sizing .lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
-#pageSupply .sb-sizing .what{max-width:560px}
-#pageSupply .sb-sizing .what b{color:var(--ink-2);font-weight:500}
 #pageSupply .sb-ramp{display:flex;align-items:flex-start;gap:12px;margin:12px 0 4px;padding:10px 14px;border-radius:8px;background:#f0913a14;box-shadow:inset 0 0 0 1px #f0913a55;font-size:12.5px;color:var(--ink-2)}
 #pageSupply .sb-ramp b{color:var(--ink);font-weight:600}
 
@@ -1679,7 +1655,6 @@ tr.re-opened .re-tog{transform:rotate(90deg);color:var(--ink)}
 #pageSupply .sb-fc-empty b{font-size:14px;font-weight:600}
 #pageSupply .sb-fc-empty p{margin:0;font-size:12.5px;line-height:1.5;color:var(--ink-2);max-width:280px}
 #pageSupply .sb-fc-empty .sb-fc-btn{flex:none;margin-top:6px}
-@media (prefers-reduced-motion:reduce){#pageSupply .sb-fc-node,#pageSupply .sb-fc-chev{transition:none}}
 
 /* the Set to box of an import line, its reset, and a line's contracts */
 #pageSupply .imp-unit{font:400 11px Archivo,sans-serif;color:var(--ink-3)}
@@ -1698,13 +1673,6 @@ tr.re-opened .re-tog{transform:rotate(90deg);color:var(--ink)}
 #pageSupply .up{cursor:default}
 
 @media(max-width:760px){
-  #pageSupply .sb-sub{flex-direction:column;align-items:stretch;gap:10px}
-  #pageSupply .sb-sub .aside{margin-left:0;justify-content:space-between}
-  #pageSupply .sb-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
-  #pageSupply .sb-tabs a{justify-content:center;padding:9px 4px;font-size:12px;gap:6px}
-  #pageSupply .sb-tray{flex-wrap:wrap;gap:10px 12px;padding:10px 12px}
-  #pageSupply .sb-tray .lab,#pageSupply .sb-tray .why,#pageSupply .sb-tray .btn2 small{display:none}
-  #pageSupply .sb-tray .btn2{margin-left:auto}
   #pageSupply .sb-obj>summary{grid-template-columns:auto minmax(0,1fr) 28px;gap:10px 12px}
   #pageSupply .sb-obj .sb-stats{grid-column:2/4;grid-row:2;gap:18px;justify-content:flex-start}
   #pageSupply .sb-obj .sb-stat{text-align:left}
@@ -1831,7 +1799,8 @@ g[data-series].off{opacity:0}
 .heat .h{font:500 10px/1.3 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);text-align:center;padding-bottom:6px;transition:color .15s;min-width:0;overflow-wrap:anywhere}
 .heat .h.hl{color:var(--ink)}
 .heat .mk-tag{display:none;place-items:center;min-width:24px;height:20px;padding:0 4px;border-radius:4px;background:var(--hood-fill,var(--raised));border:1px solid var(--rule);color:var(--ink)}
-.heat .r{font-size:13px;font-weight:500;padding-right:12px;transition:color .15s}
+/* a row landed on sits well below the top, as a section does */
+.heat .r{font-size:13px;font-weight:500;padding-right:12px;transition:color .15s;scroll-margin-top:116px}
 .heat .r.hl{color:var(--accent)}
 .heat .r small{display:block;font-size:11px;color:var(--ink-3);font-weight:400}
 .heat .band{grid-column:1/-1;margin-top:14px;padding-top:14px;border-top:1px solid var(--rule);font:500 10px/1.3 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
@@ -1852,7 +1821,6 @@ g[data-series].off{opacity:0}
    finder's Demand figure lands on rings once */
 .heat .r .mk-plan{font-size:11px;white-space:nowrap}
 .heat .mk-arrive{border-radius:6px;animation:sp-arrive 2.4s ease-out}
-.heat .r{scroll-margin-top:116px}  /* a row landed on sits well below the top, as a section does */
 
 /* waves ------------------------------------------------------------------ */
 .waves{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}
@@ -1905,8 +1873,6 @@ g[data-series].off{opacity:0}
 .covers .sub .chip{vertical-align:middle}
 td .ing{font-size:12px;color:var(--ink-2);white-space:normal;font-family:Archivo,sans-serif}
 td .ing b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)}
-.planline{margin:14px 0 0;font-size:13.5px;color:var(--ink-2)}
-.planline b{color:var(--ink);font-family:"IBM Plex Mono",monospace;font-weight:500}
 /* Add product (issue #162): the range's last row opens a picker of what the
    type also sells; an added line gets a remove button by its name and, where
    no shop of the type sells it yet, a rate the player types in Supplies. The
@@ -1917,8 +1883,7 @@ tbody tr.pc-addrow:hover{background:none}
 .pc-add:hover,.pc-add[aria-expanded="true"]{border-color:var(--accent);border-style:solid;color:var(--ink);background:var(--accent-soft)}
 .pc-add svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
 .pc-add small{font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3);margin-left:2px}
-.pc-pop{position:fixed;z-index:60;width:380px;max-width:calc(100vw - 24px);max-height:min(460px,calc(100vh - 24px));overflow:auto;overscroll-behavior:contain;padding:6px;border-radius:12px;background:var(--raised);border:1px solid var(--rule);box-shadow:0 18px 48px #0006}
-:root[data-theme="light"] .pc-pop{box-shadow:0 24px 60px -24px #1a1f1c77}
+.pc-pop{position:fixed;z-index:60;width:380px;max-width:calc(100vw - 24px);max-height:min(460px,calc(100vh - 24px));overflow:auto;overscroll-behavior:contain;padding:6px;border-radius:12px;background:var(--raised);border:1px solid var(--rule);box-shadow:var(--pop-shadow,0 18px 48px #0006)}
 .pc-pop[hidden]{display:none}
 .pc-pop-h{display:flex;align-items:baseline;justify-content:space-between;padding:8px 10px}
 .pc-pop-h b,.pc-pop-h span{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
@@ -1978,12 +1943,10 @@ tbody tr.pc-addrow:hover{background:none}
 #sitePanel .sp-acts .nx-btn svg{stroke:var(--accent)}
 #sitePanel .sp-schedrow{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:14px 16px;border-radius:12px;background:var(--surface);border:1px solid var(--rule-soft)}
 #sitePanel .sp-schedst{font-size:13.5px;color:var(--ink)}
-#sitePanel .sp-schedf{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--warn)}
-#sitePanel .sp-schedf svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8}
 #sitePanel .bz-sp{flex:1}
 .sitehead .sub{font-size:13px}
 .sstats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:22px}
-.sstat{padding:14px 16px;border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft)}
+.sstat{padding:14px 16px;border-radius:10px;background:var(--surface);border:1px solid var(--rule-soft);position:relative}
 .sstat .lab{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
 .sstat .v{font-family:"IBM Plex Mono",monospace;font-size:22px;font-weight:500;margin-top:8px;letter-spacing:-.02em}
 .hours{display:grid;grid-template-columns:40px repeat(24,minmax(0,1fr));gap:3px;align-items:center}
@@ -2118,7 +2081,6 @@ section:hover > .sechead .sp-ico.magnet{transform:rotate(90deg) scale(1.1)}
 @keyframes sp-hop{40%{transform:translateY(-4px)}}
 
 /* the tiles' second line: a cost bar, a fortnight spark, the ceilings */
-.sstat{position:relative}
 .sstat .v small{font-size:12px;color:var(--ink-3);margin-left:6px;letter-spacing:0}
 .sstat .chip{vertical-align:3px;margin-left:8px}
 .sstat .chip svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;display:inline-block;vertical-align:-1px}
@@ -2400,7 +2362,7 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
 
 .person .sp-i{color:var(--warn);margin-left:-2px}
 .person .sp-i svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.sp-roster{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+.sp-roster{display:flex;flex-direction:column;border-top:1px solid var(--rule);container-type:inline-size}
 .sp-offroster{display:flex;flex-wrap:wrap;gap:10px 28px;margin:4px 0 14px}
 .sp-offroster>div{display:flex;flex-direction:column;gap:6px}
 .sp-offroster span{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
@@ -2428,7 +2390,6 @@ section:hover .sp-promo u{animation:sp-pull 1.3s ease-in infinite}
    count sharing one line squeezed each other, or pushed the count out of the
    block. Too narrow, a row stacks: the role, its count, its dots, each on a
    line of its own. */
-.sp-roster{container-type:inline-size}
 @container (max-width:620px){
   .sp-rrow{grid-template-columns:minmax(0,1fr);gap:0}
   .sp-rrow .sp-rbtn{grid-row:1}
@@ -2649,9 +2610,6 @@ body.ss-open{overflow:hidden}
 .ss-row mark{background:var(--accent-soft);color:var(--accent);border-radius:3px;padding:0 1px;margin:0 -1px}
 .ss-side{display:flex;align-items:center;gap:8px}
 .ss-side .map-shortcut{margin:0}
-.ss-go{display:none;align-items:center;gap:6px;font:500 11px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
-.ss-go svg{width:13px;height:13px}
-.ss-row.on .ss-go{display:inline-flex}
 .ss-row.on .ss-tag{display:none}
 .ss-tag{font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3);white-space:nowrap}
 .ss-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:1px}
@@ -2668,8 +2626,6 @@ body.ss-open{overflow:hidden}
 .ss-q2 .ic{border-radius:50%;background:var(--accent-soft);color:var(--accent);font:600 13px/1 "IBM Plex Mono",monospace}
 .ss-q2:hover .ic,.ss-q2.on .ic{animation:ss-hop .5s cubic-bezier(.34,1.56,.64,1)}
 @keyframes ss-hop{40%{transform:translateY(-4px) rotate(-10deg)}}
-.ss-hint{margin:0;padding:10px 20px 4px;font-size:12.5px;color:var(--ink-3)}
-.ss-hint b{color:var(--ink-2);font-weight:500}
 /* nothing found: the sphere looks for it, then shrugs */
 .ss-none{display:grid;justify-items:center;gap:10px;padding:34px 30px 22px;text-align:center}
 .ss-none p{margin:0;font-size:14px;color:var(--ink-2);max-width:460px;overflow-wrap:anywhere}
@@ -2701,25 +2657,9 @@ body.ss-open{overflow:hidden}
 
 /* Ask the board: one quiet row under Next moves, folded into a button in its
    head once a question has been used */
-.ss-ask{position:relative;display:flex;align-items:center;flex-wrap:wrap;gap:10px 22px;margin-top:26px;padding:14px 0 16px;border-top:1px solid var(--rule-soft)}
 .ss-asklead{flex:none;white-space:nowrap;display:inline-flex;align-items:center;gap:8px;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
 .ss-asklead i{width:9px;height:9px;border-radius:50%;background:var(--accent);display:inline-block;animation:ss-idle 3.2s ease-in-out infinite}
 @keyframes ss-idle{0%,80%,100%{transform:none}85%{transform:translateY(-5px)}90%{transform:none}94%{transform:translateY(-2px)}}
-.ss-aq{position:relative;font-size:13.5px;color:var(--ink-2);text-decoration:none;padding:4px 0;border-bottom:1px solid var(--rule);transition:color .15s,border-color .15s}
-.ss-aq:hover,.ss-aq:focus-visible{color:var(--ink);border-bottom-color:var(--accent);outline:none}
-.ss-aq::after{content:"\2192";display:inline-block;margin-left:5px;opacity:0;transform:translateX(-4px);transition:opacity .15s,transform .2s;color:var(--accent)}
-.ss-aq:hover::after,.ss-aq:focus-visible::after{opacity:1;transform:none}
-.ss-roll{position:absolute;left:0;top:4px;width:9px;height:9px;border-radius:50%;background:var(--accent);opacity:0;pointer-events:none;transition:transform .45s cubic-bezier(.34,1.4,.64,1),opacity .2s}
-.ss-ask:hover .ss-roll{opacity:1}
-.ss-askmini{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 8px 0 11px;border:1px solid var(--rule);border-radius:7px;background:var(--surface);font:500 12.5px/1 Archivo,sans-serif;color:var(--ink-2);cursor:pointer;transition:color .15s,border-color .15s}
-.ss-askmini i{width:8px;height:8px;border-radius:50%;background:var(--accent)}
-.ss-askmini:hover{color:var(--ink);border-color:var(--ink-3)}
-@media(max-width:640px){
-  .ss-ask{flex-wrap:nowrap;overflow-x:auto;margin:22px -16px 0;padding:14px 16px 16px;gap:10px;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);mask-image:linear-gradient(90deg,#000 88%,transparent)}
-  .ss-ask .ss-aq{flex:none;white-space:nowrap;border:1px solid var(--rule);border-radius:999px;padding:8px 13px;background:var(--surface)}
-  .ss-ask .ss-aq::after,.ss-roll{display:none}
-  .ss-askmini .ss-kbd{display:none}
-}
 
 /* where a question lands: the question stays in view, the answer is lit and
    the rest dims, the site panel's lighting rule */
@@ -2856,7 +2796,6 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
 .gn-note:hover{color:var(--accent)}
 .gn-note[hidden]{display:none}
 @keyframes gnpop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){.gn-pop,.gn-chev{animation:none;transition:none}}
 /* The one-time offer of the player's own language, hung off <body>. */
 .gn-offer{position:fixed;right:16px;bottom:16px;z-index:60;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;
   max-width:min(420px,calc(100vw - 32px));padding:12px 14px;border:1px solid var(--rule);border-radius:10px;
@@ -2892,7 +2831,6 @@ tr.ss-ring > td{animation:ss-flash 2.4s ease-out}
 .sf-meta:empty{display:none}
 @keyframes sfbeat{0%,100%{transform:scale(1)}40%{transform:scale(1.22)}}
 @keyframes sfnudge{0%,100%{transform:translateY(0)}40%{transform:translateY(-3px)}}
-@media (prefers-reduced-motion:reduce){.sf-card,.sf-beat,.sf-nudge{animation:none!important;transition:none}}
 /* The phone artboard, at the brief's ~640px: cards stack, the columns pair
    up, the base unstacks. */
 @media (max-width:640px){
@@ -3061,19 +2999,10 @@ body:has(#changelogDialog[open]){overflow:hidden}
    arrived, and the Overview: company figures, Needs attention first, then the
    thirteen tasks. Every class is nx- (shell) or ov- (Overview), because the
    board's classes are global. */
-:root{--neg-soft:#ff625722;--warn-soft:#f0913a22;--info-soft:#6ea8ff1f;--ink-3:#808a84}
-@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--neg-soft:#cc2a201a;--warn-soft:#b34d001a;--info-soft:#2a5ea81a;--ink-3:#636c71;--warn:#b34d00}}
-:root[data-theme="light"]{--neg-soft:#cc2a201a;--warn-soft:#b34d001a;--info-soft:#2a5ea81a;--ink-3:#636c71;--warn:#b34d00}
 .nx-i{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
-
-.wordmark{font-size:24px}
-
-.brand{align-items:center}
-.brand .dot{align-self:flex-end;margin-bottom:5px}
 
 .nx-n{font:600 10.5px/1 "IBM Plex Mono",monospace;padding:3px 6px;border-radius:9px;background:var(--neg);color:#fff}
 
-section,.sitehead{scroll-margin-top:140px}
 /* the area's own views, a row on top of the page on the rail (and in the
    sidebar, a column: .sd .nx-local); on a phone a row of pills that scrolls
    sideways inside itself */
@@ -3081,7 +3010,7 @@ section,.sitehead{scroll-margin-top:140px}
 .nx-local::-webkit-scrollbar{display:none}
 /* One row: the area's views on the left, the view's controls on the right
    (ctlHoist()); below about 1100 px the controls take a line of their own. */
-.nx-localrow{display:flex;align-items:center;flex-wrap:wrap;gap:4px 16px;min-height:52px;border-bottom:1px solid var(--rule-soft)}
+.nx-localrow{display:flex;align-items:center;flex-wrap:wrap;gap:4px 16px;border-bottom:1px solid var(--rule-soft);min-height:58px}
 .nx-localrow[hidden],.nx-ctl[hidden]{display:none}
 .nx-localrow .nx-local{border-bottom:0;flex:0 1 auto;min-width:0;min-height:52px}
 .nx-ctl{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px 12px;margin-left:auto;padding:6px 0;min-width:0}
@@ -3108,8 +3037,6 @@ section,.sitehead{scroll-margin-top:140px}
 .nx-arrive b{color:var(--ink);font-weight:600}
 /* The strip is the way back; a site page's own crumb does not repeat it. */
 body.nx-arrived .ss-crumbs .ss-crumb.from{display:none}
-.nx-arrive .nx-x{margin-left:auto;border:0;background:none;color:var(--ink-3);cursor:pointer;font:inherit;font-size:12px;padding:4px}
-.nx-arrive .nx-x:hover{color:var(--ink)}
 /* the utilities menu (··· and, on a phone, Map & more): hung off <body> */
 .nx-menu{position:fixed;z-index:61;min-width:230px;padding:6px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 20px 60px #0007}
 .nx-menu[hidden]{display:none}
@@ -3119,7 +3046,6 @@ body.nx-arrived .ss-crumbs .ss-crumb.from{display:none}
 .px-scrim[hidden],.px-sheet[hidden]{display:none}
 .px-sheet{position:fixed;z-index:55;top:0;right:0;bottom:0;width:min(760px,100vw);overflow-y:auto;background:var(--ground);border-left:1px solid var(--rule);box-shadow:-30px 0 80px #0006;animation:px-in .28s cubic-bezier(.2,.9,.3,1)}
 @keyframes px-in{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
-@media (prefers-reduced-motion:reduce){.px-sheet{animation:none}}
 .px-head{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 28px;background:var(--ground);border-bottom:1px solid var(--rule)}
 .px-head h2{margin:0;font-size:26px;font-weight:600;letter-spacing:-.02em;outline:none}
 .px-body{padding:6px 28px 40px}
@@ -3132,13 +3058,11 @@ body.nx-arrived .ss-crumbs .ss-crumb.from{display:none}
 .px-note{margin:0;font-size:12.5px;line-height:1.5;color:var(--ink-2);max-width:520px}
 .px-state{font-size:12.5px;color:var(--ink-2)}
 .px-acts{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px}
-.px-acts.px-wrap .nx-btn{white-space:normal;text-align:left}
-.px-segs{display:inline-flex;padding:3px;border-radius:10px;border:1px solid var(--rule);background:var(--surface)}
-.px-seg{min-height:32px;padding:0 14px;border:0;border-radius:7px;background:none;color:var(--ink-2);font:500 13px/1 Archivo,sans-serif;cursor:pointer}
-.px-seg[aria-pressed="true"]{background:var(--ink);color:var(--ground)}
-.px-seg:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .px-code{margin:0;max-width:100%;overflow-x:auto;padding:12px 14px;border-radius:10px;border:1px solid var(--rule-soft);background:var(--surface);font:400 12px/1.7 "IBM Plex Mono",monospace;color:var(--ink-2);white-space:pre}
 .px-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* A wiki article carries its own h1: the page's own (#pageTitle) steps aside
+   then, so a screen reader finds one h1, the article's. */
+main:has(> #pageWiki:not([hidden]) h1) > #pageTitle{display:none}
 /* For screen readers only: a heading the lit tab or chip already shows. */
 .nx-sr{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
 .px-sheet .fv-diff{position:static}
@@ -3188,15 +3112,14 @@ body.px-on{overflow:hidden}
 .ov-news:focus{outline:2px solid var(--info);outline-offset:2px}
 /* Names wrap; they are never cut or pushed off the screen. */
 #alertSection .find.ov-f .what,.ov-now,.nx-arrive b,.nx-card b,.nx-row .nm,.nx-row .st{overflow-wrap:anywhere;min-width:0}
-#alertSection .find.ov-f .site{white-space:normal;flex-wrap:wrap;overflow:visible;min-width:0}
+#alertSection .find.ov-f .site{white-space:normal;flex-wrap:wrap;overflow:visible;min-width:0;font-size:13px;color:var(--ink-2)}
 #alertSection .find.ov-f .site .ss-sl{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
 .ov-l1{max-width:100%}
 .ov-l1 > *{max-width:100%}
-.nx-row .nm > span:last-child{white-space:normal}
 /* The phone's company line, and the four figures it opens. */
 .ov-ctx{display:none}
 @media (max-width:560px){
-  .ov-ctx{display:flex;align-items:center;flex-wrap:wrap;gap:4px 16px;min-height:44px;padding:6px 0;border-bottom:1px solid var(--rule-soft);font:500 12.5px/1.2 "IBM Plex Mono",monospace;color:var(--ink-2)}
+  .ov-ctx{display:flex;align-items:center;flex-wrap:wrap;gap:4px 16px;border-bottom:1px solid var(--rule-soft);font:500 12.5px/1.2 "IBM Plex Mono",monospace;color:var(--ink-2);min-height:40px;padding:4px 0}
   .ov-ctx span{display:inline-flex;align-items:baseline;gap:6px}
   .ov-ctx small{font:inherit;color:var(--ink-3)}
   .ov-ctx b{font-weight:500;color:var(--ink)}
@@ -3243,7 +3166,6 @@ body.px-on{overflow:hidden}
   #alertKindsToggle.nx-btn{min-width:36px;min-height:32px;padding:0 9px;justify-content:center}
   .ov-head .aside{gap:6px}
   .ov-head .aside .nx-btn{min-height:32px}
-  .ov-ctx{min-height:40px;padding:4px 0}
   /* An action's words never run past its button: tighter, and a longer one
      (a translation, larger text) takes a second line inside it. */
   #alertSection .find.ov-f .ov-ac .nx-btn{padding:0 10px;gap:6px;white-space:normal;text-align:left;line-height:1.2;overflow-wrap:anywhere;hyphens:auto;min-width:0}
@@ -3313,7 +3235,6 @@ body.no-save .nx-tabs{display:none}
 #alertSection .find.ov-f.crit .mark{box-shadow:0 0 0 4px var(--neg-soft)}
 .ov-t{grid-column:2;grid-row:1/3;display:flex;flex-direction:column;gap:5px;min-width:0}
 .ov-t .ov-l1{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;min-width:0}
-#alertSection .find.ov-f .site{font-size:13px;color:var(--ink-2)}
 #alertSection .find.ov-f .what{font-size:15.5px;line-height:1.3}
 #alertSection .find.ov-f.crit .what{font-size:17px;letter-spacing:-.01em}
 .ov-k{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
@@ -3376,7 +3297,7 @@ body.no-save .nx-tabs{display:none}
 .ov-empty b{display:block;font-size:17px;color:var(--accent);margin-bottom:4px}
 .ov-empty p{margin:0;color:var(--ink-2);font-size:13px}
 /* the queue is long: a slim bar keeps All tools in reach */
-.ov-sticky{position:sticky;top:76px;z-index:4;display:none;align-items:center;flex-wrap:wrap;gap:6px 12px;min-height:48px;margin:0 0 -48px;padding:6px 0;background:color-mix(in srgb,var(--ground) 94%,transparent);backdrop-filter:blur(6px);border-bottom:1px solid var(--rule)}
+.ov-sticky{position:sticky;z-index:4;display:none;align-items:center;flex-wrap:wrap;gap:6px 12px;min-height:48px;margin:0 0 -48px;padding:6px 0;background:color-mix(in srgb,var(--ground) 94%,transparent);backdrop-filter:blur(6px);border-bottom:1px solid var(--rule);top:var(--release-height,0px)}
 .ov-sticky.on{display:flex}
 .ov-sticky b{font-size:15px}
 .ov-sticky .aside{margin-left:auto;display:flex;gap:8px}
@@ -3388,10 +3309,9 @@ body.no-save .nx-tabs{display:none}
 .ov-p{position:relative;display:flex;flex-direction:column;border-radius:14px;background:var(--surface);border:1px solid var(--rule-soft);padding:16px 16px 8px;overflow:hidden;transition:border-color .2s}
 .ov-p:hover{border-color:var(--rule)}
 .ov-ph{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;min-height:62px}
-.ov-ph b{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:600}
+.ov-ph b{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:600;min-width:0;overflow-wrap:anywhere}
 .ov-ph b svg{width:18px;height:18px;stroke:var(--accent);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .ov-ill{width:min(118px,42%);height:auto;aspect-ratio:118/56;flex:0 1 auto;min-width:0;transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
-.ov-ph b{min-width:0;overflow-wrap:anywhere}
 .wrap .sitefoot .sf-link{overflow-wrap:anywhere;min-width:0}
 .ov-p:hover .ov-ill{transform:translateY(-2px) scale(1.04)}
 .ov-ill .oi-ln{fill:none;stroke:var(--ink-3);stroke-width:2;stroke-linecap:round}
@@ -3455,9 +3375,7 @@ body.no-save .nx-tabs{display:none}
   .ov-head .aside{margin-left:0}
   .ov-tp{grid-template-columns:minmax(0,1fr)}
   .ov-task{min-height:46px}
-  .ov-sticky{top:58px}
 }
-@media (prefers-reduced-motion:reduce){.ov-sticky{transition:none}.ov-ill,.ov-det svg{transition:none}}
 /* the adapters: Standards' subjects, a shop's prices, the Staffing lists */
 .nx-lead{display:flex;flex-wrap:wrap;gap:10px}
 .nx-card{display:flex;flex-direction:column;gap:6px;min-width:190px;flex:1 1 190px;padding:14px 16px;border-radius:12px;background:var(--surface);border:1px solid var(--rule-soft);color:inherit;text-decoration:none;cursor:pointer;font:inherit;text-align:left}
@@ -3473,15 +3391,13 @@ button.nx-card{appearance:none}
 .nx-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto;gap:4px 16px;align-items:center;min-height:52px;padding:8px 6px 8px 0;border-bottom:1px solid var(--rule-soft)}
 .nx-row.lit{background:linear-gradient(90deg,transparent,var(--accent-soft) 12%);box-shadow:inset 3px 0 0 var(--accent);padding-left:12px}
 .nx-row .nm{display:flex;align-items:center;gap:8px;min-width:0;font-weight:600}
-.nx-row .nm > span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.nx-row .nm > span:last-child{white-space:normal;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .nx-row .nm > svg{width:17px;height:17px;flex:none;stroke:var(--ink-3);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .nx-card b .hood{margin-right:-2px}
 .nx-row .st{font-size:13px;color:var(--ink-2)}
 .nx-row .st b{color:var(--ink);font-weight:600}
 .nx-row .st .bad{color:var(--neg)}.nx-row .st .warn{color:var(--warn)}
 .nx-row .ac{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
-.nx-part{margin:22px 0 8px;font:500 10.5px/1.2 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
-.nx-part:first-child{margin-top:4px}
 /* Businesses' own views (chunk 3): bz- is Businesses. */
 #pageMap .fx-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin:24px 0 12px}
 #pageMap .fx-head:empty{display:none}
@@ -3489,12 +3405,6 @@ button.nx-card{appearance:none}
 #pageMap .fx-head .quiet{font-size:13px}
 #pageMap .fx-ctx{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0 0}
 #pageMap .fx-ctx[hidden]{display:none}
-#pageMap .fx-card{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-radius:12px;border:1px solid var(--rule-soft);background:var(--surface);color:inherit;text-decoration:none;min-width:0}
-#pageMap .fx-card:hover{border-color:var(--rule)}
-#pageMap .fx-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-#pageMap .fx-card svg{width:17px;height:17px;flex:none;margin-top:1px;stroke:var(--accent);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-#pageMap .fx-card b{display:block;font-size:14px;font-weight:600;overflow-wrap:anywhere}
-#pageMap .fx-card small{display:block;margin-top:4px;font-size:12.5px;color:var(--ink-2);line-height:1.35}
 @media (max-width:760px){#pageMap .fx-ctx{grid-template-columns:minmax(0,1fr)}}
 #pageCompany .bz-h{margin:28px 0 8px;font-size:17px;font-weight:600;letter-spacing:-.01em}
 #pageCompany .bz-none{margin:14px 0 0}
@@ -3555,7 +3465,6 @@ button.nx-card{appearance:none}
 .bz-price-select select{font:500 13px Archivo,sans-serif;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:8px 12px;max-width:360px;min-width:0}
 #portMoreLabel{cursor:pointer;font-size:14px;color:var(--ink-2);padding:10px 0}
 .bz-chips{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 22px}
-.bz-lab{margin-right:6px;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
 .bz-chip{display:inline-flex;align-items:center;gap:8px;min-height:34px;padding:0 12px 0 6px;border-radius:9px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font:500 13px/1.2 Archivo,sans-serif;cursor:pointer;max-width:100%}
 .bz-chip span:last-child{overflow-wrap:anywhere;text-align:left}
 .bz-chip:hover{border-color:var(--ink-3)}
@@ -3601,14 +3510,12 @@ button.nx-card{appearance:none}
 .hs-btn:hover{border-color:var(--ink-3);transform:translateY(-1px)}
 .hs-btn svg{width:13px;height:13px}
 .hs-note{margin:0;font-size:12.5px;line-height:1.45;color:var(--ink-3);text-wrap:pretty}
-.hs-shead{display:flex;align-items:center;gap:12px;margin-bottom:12px}
-.hs-shead h3{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
 /* the split: open places left, the order and quick hire right */
 .hs-split{display:grid;grid-template-columns:minmax(0,1fr) 332px;gap:36px;align-items:start;margin-top:28px}
 .hs-right{display:flex;flex-direction:column;gap:18px}
 @media (min-height:960px){.hs-right{position:sticky;top:20px}}
 .hs-order{display:flex;flex-direction:column;gap:16px;padding:20px;border-radius:14px;background:var(--surface);border:1px solid var(--rule)}
-.hs-order h3,.hs-kick{margin:0;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.hs-order h3{margin:0;font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
 .hs-ol{display:flex;flex-direction:column;gap:12px;margin:0;padding:0;list-style:none}
 .hs-ol li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:baseline}
 .hs-ol li span{font-size:14px;font-weight:600;color:var(--ink)}
@@ -3637,7 +3544,6 @@ details.hs-gate[open] summary{margin-bottom:8px}
 .hs-sel select option{color:var(--ink);background:var(--surface)}
 .hs-fsum{font-size:12.5px;color:var(--ink-3);margin-left:auto}
 .hs-fsum b{color:var(--ink-2);font-weight:500;font-family:"IBM Plex Mono",monospace}
-.hs-shops{margin:-6px 0 12px}
 /* the demand list: hangs off <body> (or the sheet), placed against its button */
 #hsDemPop{position:fixed;z-index:60;width:330px;max-width:calc(100vw - 24px);max-height:min(460px,calc(100vh - 24px));overflow:auto;padding:8px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 24px 50px -20px #000c;box-sizing:border-box}
 #hsDemPop[hidden]{display:none}
@@ -3732,24 +3638,12 @@ details.hs-gate[open] summary{margin-bottom:8px}
 .hs-match summary b{font:500 15px/1 "IBM Plex Mono",monospace;color:var(--accent)}
 .hs-match summary svg{width:12px;height:12px;color:var(--ink-3);margin-left:auto;transition:transform .2s}
 .hs-match[open] summary svg{transform:rotate(90deg)}
-.hs-match ul,.hs-qlist{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column}
-.hs-match ul{max-height:220px;overflow:auto}
-.hs-match li small,.hs-qlist li small{display:block;font-size:11px;margin-top:2px}
-.hs-match li .warn,.hs-qlist .warn{color:var(--warn)}
+.hs-match ul{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;max-height:220px;overflow:auto}
+.hs-match li small{display:block;font-size:11px;margin-top:2px}
+.hs-match li .warn{color:var(--warn)}
 .hs-c td.nm .hs-why{display:none;font-family:Archivo,sans-serif;font-size:11.5px;font-weight:400;white-space:normal;margin-top:2px}
-.hs-match li,.hs-qlist li{display:grid;grid-template-columns:minmax(0,1fr) 44px 64px;gap:8px;padding:6px 0;border-bottom:1px solid var(--rule-soft);font-size:12.5px;color:var(--ink)}
-.hs-qlist li.h{grid-template-columns:minmax(0,1fr) 44px 64px 44px}
-.hs-match .m,.hs-qlist .m{font:500 12px/1.4 "IBM Plex Mono",monospace;color:var(--ink-2);text-align:right}
-/* current staff: payroll, set apart */
-.hs-apart{margin-top:64px;padding-top:28px;border-top:1px solid var(--rule)}
-.hs-pay{display:grid;grid-template-columns:1.3fr 1fr;gap:48px;align-items:start;margin-top:14px}
-.hs-pay h3{margin:0 0 4px;font-size:17px;font-weight:600}
-.hs-pay .facts{display:flex;flex-direction:column;gap:14px}
-.hs-pay .facts div{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:10px;border-bottom:1px solid var(--rule-soft);font-size:13px;color:var(--ink-2)}
-.hs-pay .facts b{font:500 15px/1 "IBM Plex Mono",monospace;color:var(--ink)}
-.hs-pay .facts b.warn{color:var(--warn)}
-.hs-pay .roles{margin-top:12px}
-.hs-pay .role{grid-template-columns:150px 1fr 44px}
+.hs-match li{display:grid;grid-template-columns:minmax(0,1fr) 44px 64px;gap:8px;padding:6px 0;border-bottom:1px solid var(--rule-soft);font-size:12.5px;color:var(--ink)}
+.hs-match .m{font:500 12px/1.4 "IBM Plex Mono",monospace;color:var(--ink-2);text-align:right}
 /* change picks: one role over the page */
 dialog.hs-sheet{position:fixed;inset:0 0 0 auto;margin:0;width:min(940px,100%);max-width:100%;height:100%;max-height:100vh;padding:0;border:0;border-left:1px solid var(--rule);background:var(--ground);color:var(--ink);box-shadow:-30px 0 80px -30px #000c;box-sizing:border-box}
 dialog.hs-sheet[open]{display:flex;flex-direction:column}
@@ -3877,8 +3771,6 @@ dialog.hs-sheet::backdrop{background:#000;opacity:.45}
   .hs-roles tfoot td.l{grid-column:1/-1}
   .hs-t th,.hs-t td{padding:10px 8px}
   .hs-re label{margin-left:0}
-  .hs-pay{grid-template-columns:minmax(0,1fr);gap:24px}
-  .hs-pay .role{grid-template-columns:120px 1fr 40px}
   .hs-sh{padding:18px 16px 14px}
   .hs-sb{padding:14px 16px 20px}
   .hs-sf{padding:12px 16px 16px}
@@ -3891,7 +3783,6 @@ dialog.hs-sheet::backdrop{background:#000;opacity:.45}
   .hr-dp{grid-template-columns:minmax(0,1fr) 44px 90px}
   .hr-dp .r,.hr-dp>.m:nth-of-type(3),.hr-dp>.m:nth-of-type(4){display:none}
 }
-@media (prefers-reduced-motion:reduce){#secStaff *,.gw-dlg.hr-wide *,.hs-sheet *{animation:none!important;transition:none!important}}
 
 /* ----- one look for the board's selects (Peter's testing, A1) --------------
    Every select that still wore the browser's own arrow gets the board's: no
@@ -3916,7 +3807,6 @@ select option,select optgroup{color:var(--ink);background:var(--surface)}
    sidebar is a 64 px rail of icons and the views return to the top of the
    page, beside the controls; on a phone it is a drawer. Every class is sd-;
    the old masthead's .mast, .nav and .nx-refs rules no longer match. */
-html{--ss-mast:var(--release-height,0px)}
 .sd-app{--sd-w:256px;display:grid;grid-template-columns:var(--sd-w) minmax(0,1fr);align-items:start}
 body.sd-rail .sd-app{--sd-w:64px}
 .sd{position:sticky;top:var(--release-height,0px);z-index:6;height:calc(100vh - var(--release-height,0px) - var(--sd-cut,0px));min-width:0;
@@ -3988,17 +3878,15 @@ body.sd-rail .sd-app{--sd-w:64px}
 .sd-tog{margin-left:auto}
 /* A host's Update and ··· (web/app.js place()): Update takes the width. */
 .sd .nx-src{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
-.sd .nx-src #updateBtn{flex:1;min-width:0;height:36px;justify-content:center}
-.sd .nx-src #updateBtn{display:inline-flex;align-items:center;gap:7px}
+.sd .nx-src #updateBtn{flex:1;min-width:0;height:36px;justify-content:center;display:inline-flex;align-items:center;gap:7px}
 .sd .nx-src #updateBtn::before{content:"";flex:none;width:15px;height:15px;background:currentColor;
   -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 12a8 8 0 1 1-2.3-5.7'/%3E%3Cpath d='M20 4v5h-5'/%3E%3C/svg%3E") center/contain no-repeat;
   mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 12a8 8 0 1 1-2.3-5.7'/%3E%3Cpath d='M20 4v5h-5'/%3E%3C/svg%3E") center/contain no-repeat}
 .sd .nx-src .menu > .ibtn{width:36px;height:36px}
 /* the page beside it: the view's controls, from the left */
 body:not(.sd-rail) .nx-ctl{margin-left:0;justify-content:flex-start}
-.nx-localrow{min-height:58px}
+/* A finding's link scrolls to a section, clear of the top of the window. */
 section,.sitehead{scroll-margin-top:calc(var(--release-height,0px) + 20px)}
-.ov-sticky{top:var(--release-height,0px)}
 @media (min-width:641px){#sitePanel [data-block]{scroll-margin-top:calc(var(--release-height,0px) + 24px)}}
 /* ----- the rail ----- */
 body.sd-rail .sd-in{align-items:center;padding:18px 10px 14px}
@@ -4058,7 +3946,6 @@ body.sd-rail .nx-localrow:has(a[data-route^="supply/"]) .nx-ctl .sbv-mode a{padd
   .ss-pal{z-index:50}
   body:not(.sd-rail) .nx-ctl{margin-left:0}
 }
-@media (prefers-reduced-motion:reduce){.sd,body.sd-open .sd,.sd-scrim,.sd .ss-q{transition:none}.sd .ss-q:hover .ss-lens{animation:none}}
 /* ----- Expansion › Open a store (drawOpenStore()), ported from the approved
    canvas (mockup/open-store on branch open-store-canvas, OS_CSS); every class
    is os-, and #demCellPop is the Demand cell's popover ----- */
@@ -4069,14 +3956,13 @@ body.sd-rail .nx-localrow:has(a[data-route^="supply/"]) .nx-ctl .sbv-mode a{padd
 /* Buttons read as text until a class says otherwise; :where() keeps this below every os- rule. */
 :where(#secOpen) button{font:inherit;color:inherit}
 /* the six steps, and the plan picker ------------------------------------------ */
-.os-ctl{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;margin:0}
-.os-ctl{min-width:0;max-width:100%}
+.os-ctl{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;margin:0;min-width:0;max-width:100%}
 .os-ctl .aside{margin-left:auto;display:flex;align-items:center;gap:10px;min-width:0;max-width:100%}
-.os-steps{display:flex;align-items:center;flex-wrap:wrap;gap:2px}
-.os-steps button{display:flex;align-items:center;gap:8px;height:34px;padding:0 12px 0 6px;border:0;border-radius:17px;background:none;color:var(--ink-3);font-size:13px;font-weight:500;white-space:nowrap;cursor:pointer}
+.os-steps{display:flex;align-items:center;flex-wrap:wrap;gap:2px;min-width:0;max-width:100%}
+.os-steps button{display:flex;align-items:center;gap:8px;padding:0 12px 0 6px;border:0;border-radius:17px;background:none;color:var(--ink-3);font-size:13px;font-weight:500;cursor:pointer;max-width:100%;height:auto;min-height:34px;white-space:normal;overflow-wrap:anywhere;text-align:left}
 .os-steps button:hover:not(:disabled){color:var(--ink)}
 .os-steps button:disabled{cursor:default;opacity:.75}
-.os-steps button i{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1px solid var(--rule);font:600 11px/1 "IBM Plex Mono",monospace;font-style:normal}
+.os-steps button i{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1px solid var(--rule);font:600 11px/1 "IBM Plex Mono",monospace;font-style:normal;flex-shrink:0}
 .os-steps button i svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .os-steps button.done{color:var(--ink-2)}
 .os-steps button.done i{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
@@ -4100,7 +3986,7 @@ body.sd-rail .nx-localrow:has(a[data-route^="supply/"]) .nx-ctl .sbv-mode a{padd
 .os-pb small{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .os-pb .dim{color:var(--ink-3);font-weight:500}
 /* buttons and links -------------------------------------------------------------- */
-.os-cta{display:inline-flex;align-items:center;justify-content:center;gap:9px;height:40px;padding:0 16px;border-radius:10px;border:1px solid var(--accent);background:var(--accent);color:var(--on-accent);font:600 13.5px/1 Archivo,sans-serif;text-decoration:none;white-space:nowrap;cursor:pointer}
+.os-cta{display:inline-flex;align-items:center;justify-content:center;gap:9px;height:40px;padding:0 16px;border-radius:10px;border:1px solid var(--accent);background:var(--accent);color:var(--on-accent);font:600 13.5px/1 Archivo,sans-serif;text-decoration:none;white-space:nowrap;cursor:pointer;min-height:40px}
 .os-cta:hover{filter:brightness(1.08);color:var(--on-accent)}
 .os-cta svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .os-cta.sm{height:34px;padding:0 13px;font-size:12.5px;border-radius:9px}
@@ -4112,12 +3998,12 @@ body.sd-rail .nx-localrow:has(a[data-route^="supply/"]) .nx-ctl .sbv-mode a{padd
 .os-link{color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--rule);font-size:12.5px}
 .os-link:hover{color:var(--ink);border-color:var(--ink-3)}
 /* step 5: until opening ------------------------------------------------------------- */
-.os-prog{display:flex;align-items:center;gap:14px;margin-top:26px}
+.os-prog{display:flex;align-items:center;gap:14px;margin-top:26px;flex-wrap:wrap}
 .os-prog h2{margin:0;font-size:17px;font-weight:600}
 .os-prog .m{flex:0 0 180px;height:6px;border-radius:3px;background:var(--rule);overflow:hidden}
 .os-prog .m i{display:block;height:100%;width:var(--w);background:var(--accent);border-radius:3px}
 .os-prog .c{font:500 13px/1 "IBM Plex Mono",monospace;color:var(--ink-2)}
-.os-prog .aside{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--ink-3)}
+.os-prog .aside{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--ink-3);flex-wrap:wrap;min-width:0;max-width:100%}
 .os-live{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2);white-space:nowrap}
 .os-live i{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
 .os-live.off i{background:var(--ink-3);box-shadow:0 0 0 4px color-mix(in srgb,var(--ink-3) 20%,transparent)}
@@ -4135,7 +4021,7 @@ body.sd-rail .nx-localrow:has(a[data-route^="supply/"]) .nx-ctl .sbv-mode a{padd
 .os-ck .tx small{display:block;overflow-wrap:anywhere;margin-top:3px;font-size:12.5px;color:var(--ink-3);line-height:1.4}
 .os-ck .tx small .w{color:var(--warn)}
 .os-ck .tx small .ok{color:var(--accent)}
-.os-ck .act{min-width:0;max-width:360px;display:flex;align-items:center;gap:8px;justify-content:flex-end}
+.os-ck .act{min-width:0;max-width:360px;display:flex;align-items:center;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 .os-ingame{min-width:0;overflow-wrap:anywhere;display:flex;align-items:flex-start;gap:9px;max-width:360px;padding:9px 12px;border-radius:9px;border:1px dashed var(--rule);font-size:12.5px;line-height:1.45;color:var(--ink-2);text-align:left}
 .os-ingame>span{min-width:0}
 .os-ingame svg{width:15px;height:15px;margin-top:1px;flex:none;stroke:var(--ink-3);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
@@ -4186,8 +4072,7 @@ body.sd-rail .nx-localrow:has(a[data-route^="supply/"]) .nx-ctl .sbv-mode a{padd
 .os-meter{display:block;height:4px;margin-top:7px;border-radius:2px;background:var(--rule);overflow:hidden}
 .os-meter i{display:block;height:100%;width:var(--w);background:var(--accent);border-radius:2px}
 /* the Demand cell's popover -------------------------------------------------------------- */
-.os-pop{position:fixed;z-index:60;width:300px;padding:16px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:0 24px 60px -18px #000d}
-:root[data-theme="light"] .os-pop{box-shadow:0 24px 60px -24px #1a1f1c77}
+.os-pop{position:fixed;z-index:60;width:300px;padding:16px;border-radius:12px;background:var(--surface);border:1px solid var(--rule);box-shadow:var(--pop-shadow,0 24px 60px -18px #000d)}
 .os-pop[hidden]{display:none}
 .os-pop::before{content:"";position:absolute;left:calc(var(--arrow,150px) - 6px);top:-7px;width:12px;height:12px;background:var(--surface);border-left:1px solid var(--rule);border-top:1px solid var(--rule);transform:rotate(45deg)}
 .os-pop.up::before{top:auto;bottom:-7px;transform:rotate(225deg)}
@@ -4228,7 +4113,7 @@ body.sd-rail .nx-localrow:has(a[data-route^="supply/"]) .nx-ctl .sbv-mode a{padd
 .os-inv tfoot td{padding:14px 12px;font:500 15px/1.2 "IBM Plex Mono",monospace;border-bottom:0}
 .os-inv tfoot td.l{font-family:Archivo,sans-serif;font-weight:600}
 .os-self{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:24px;align-items:start;margin-top:16px}
-.os-store{border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface);overflow:hidden}
+.os-store{border:1px solid var(--rule-soft);border-radius:12px;background:var(--surface);overflow:hidden;container-type:inline-size}
 .os-store+.os-store,.os-store+.os-gap{margin-top:14px}
 .os-sh{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--rule-soft)}
 .os-store>.os-sh:last-child{border-bottom:0}
@@ -4256,9 +4141,8 @@ body.sd-rail .nx-localrow:has(a[data-route^="supply/"]) .nx-ctl .sbv-mode a{padd
 .os-maplist{display:flex;flex-direction:column;gap:6px;margin-top:10px}
 .os-maplist div{display:grid;grid-template-columns:minmax(22px,auto) minmax(0,1fr) auto;gap:10px;align-items:center;font-size:12.5px;color:var(--ink-2)}
 .os-maplist i{display:grid;place-items:center;width:20px;height:20px;border-radius:10px;background:#6ea8ff;color:#0d100f;font:600 10.5px/1 "IBM Plex Mono",monospace;font-style:normal}
-.os-maplist i.n{background:var(--ink);color:var(--ground);font-size:8.5px}
 /* A translated NEW stays on one line and widens its pill. */
-.os-maplist i.n{width:auto;min-width:20px;white-space:nowrap}
+.os-maplist i.n{background:var(--ink);color:var(--ground);font-size:8.5px;width:auto;min-width:20px;white-space:nowrap}
 .os-maplist span{min-width:0;overflow-wrap:anywhere}
 .os-maplist b{font:500 12.5px/1 "IBM Plex Mono",monospace;color:var(--ink)}
 /* step 4: break even ----------------------------------------------------------------- */
@@ -4387,10 +4271,10 @@ body.sd-rail .nx-localrow:has(a[data-route^="supply/"]) .nx-ctl .sbv-mode a{padd
 #secPlanFlow{margin-top:0}
 .ff-for{display:flex;align-items:center;gap:10px;min-width:0}
 .ff-kind{display:inline-flex;flex-wrap:wrap;padding:3px;gap:2px;border:1px solid var(--rule);border-radius:10px;background:var(--surface)}
-.ff-kind button{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 12px;border:0;border-radius:7px;background:none;color:var(--ink-2);font-size:12.5px;font-weight:500;white-space:nowrap;cursor:pointer}
+.ff-kind button{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 12px;border:0;border-radius:7px;background:none;color:var(--ink-2);font-size:12.5px;font-weight:500;white-space:nowrap;cursor:pointer;min-width:0;max-width:100%}
 .ff-kind button:hover{color:var(--ink)}
 .ff-kind button.on{background:var(--ink);color:var(--ground)}
-.ff-kind button svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ff-kind button svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 .ff-kind button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #planPicker > .os-lab{margin-right:2px}
 .ff-ctl{margin:6px 0 0}
@@ -4460,7 +4344,6 @@ body.sd-rail .nx-localrow:has(a[data-route^="supply/"]) .nx-ctl .sbv-mode a{padd
 .ff-sub+.os-cks{margin-top:8px}
 .os-ck.skip .st{border-style:dashed}
 .os-ck.skip .tx b{color:var(--ink-3);font-weight:500}
-.os-ck .act{flex-wrap:wrap}
 .os-ck .tx small .lt{color:var(--info)}
 .ff-run2{grid-template-columns:minmax(0,.85fr) minmax(0,1.35fr);margin-top:18px}
 .ff-run2 .ff-outc{margin-top:0}
@@ -4492,24 +4375,17 @@ a.sb-plan:hover em{color:var(--ink);text-decoration:underline}
 .nx-ctl #osCtl,.nx-ctl [data-view-ctl="expansion/factory"]{min-width:0;max-width:100%}
 @media (max-width:1100px){.nx-ctl #osCtl,.nx-ctl [data-view-ctl="expansion/factory"]{flex-wrap:wrap}}
 .nx-ctl #osCtl>.aside,#ofCtl>.aside{min-width:0;max-width:100%}
-.os-steps{min-width:0;max-width:100%}
-.os-steps button{max-width:100%;height:auto;min-height:34px;white-space:normal;overflow-wrap:anywhere;text-align:left}
-.os-steps button i{flex-shrink:0}
 .nx-ctl [data-view-ctl="expansion/factory"] .aside{flex-wrap:wrap;min-width:0;max-width:100%}
 .nx-ctl [data-view-ctl="expansion/factory"] .field{min-width:0;max-width:100%}
 .nx-ctl [data-view-ctl="expansion/factory"] select{min-width:0;max-width:100%}
 .ff-for,.ff-kind{min-width:0;max-width:100%}
 @media (max-width:1100px){.ff-for{flex-wrap:wrap}}
-.ff-kind button{min-width:0;max-width:100%}
-.ff-kind button svg{flex-shrink:0}
 .ff-kind button span{min-width:0;overflow:hidden;text-overflow:ellipsis}
 
 /* Above phone widths, let the step group shrink as on the desktop board. */
 @media (min-width:621px){.os-ctl#osCtl{flex-wrap:nowrap}}
 
-/* Progress metadata and wide investment tables must stay within the page. */
-.os-prog{flex-wrap:wrap}
-.os-prog .aside{flex-wrap:wrap;min-width:0;max-width:100%}
+/* Wide investment tables must stay within the page. */
 @media (max-width:760px){
   .os-inv{display:block;overflow-x:auto}
   /* The planner finder must wrap translated column/filter labels inside
@@ -4518,8 +4394,8 @@ a.sb-plan:hover em{color:var(--ink);text-decoration:underline}
   .os-finder .frow .lab{overflow-wrap:anywhere}
 }
 
-/* Supplier rows follow the card width, including the narrow desktop column. */
-.os-store{container-type:inline-size}
+/* Supplier rows follow the card width (.os-store is the container), including the
+   narrow desktop column. */
 @container (max-width:540px){
   /* Item and explanation share the left column; price stays on the right. */
   .os-store table,.os-store tbody{display:block;width:100%;min-width:0}
@@ -4538,7 +4414,6 @@ a.sb-plan:hover em{color:var(--ink);text-decoration:underline}
 
 /* Named actions keep their usual height when they fit, and grow when needed. */
 .os-btn,.os-cta{max-width:100%;height:auto;white-space:normal;overflow-wrap:anywhere}
-.os-cta{min-height:40px}
 .os-btn,.os-cta.sm{height:auto;min-height:34px}
 .os-btn svg,.os-cta svg{flex-shrink:0}
 
@@ -4613,6 +4488,11 @@ section.od-updating{background-image:linear-gradient(90deg,transparent,var(--acc
   </div>
 </nav>
 <div class="wrap">
+  <!-- The page column is the document's main landmark, and its h1 names the
+       place on screen for screen readers (paintShell()); the lit tabs already
+       show it. The footer and the phone's tab bar stay outside it. -->
+<main id="main">
+  <h1 class="nx-sr" id="pageTitle"></h1>
   <!-- A host page (the in-browser board) fills these with its source controls;
        the local server page leaves them empty and they take no room. -->
   <div class="source-row" id="sourceRow"></div>
@@ -4705,7 +4585,7 @@ section.od-updating{background-image:linear-gradient(90deg,transparent,var(--acc
       <div class="heat" id="market"></div>
     </section>
 
-    <!-- Expansion › Open a store (drawOpenStore(), docs/open-a-store-scope.md):
+    <!-- Expansion › Open a store (drawOpenStore(), docs/dashboard-reference.md):
          the steps and the plan picker in #osCtl (beside the view's tabs), the
          plan's strip, the embedded finder for step 2 (#osFinderMap, a
          CityMapView in plan mode, kept between draws) and the step's body. -->
@@ -4814,24 +4694,72 @@ section.od-updating{background-image:linear-gradient(90deg,transparent,var(--acc
       <p class="quiet" style="margin-top:44px" data-tt="wiki.absent">The wiki is not part of this build.</p>
     </div>
   </div>
+</main>
 <!--__FOOTER__-->
   <nav class="nx-tabs" id="phoneNav" aria-label="Places" data-tt-aria-label="nav.label.phone"></nav>
 </div>
 </div>
 <dialog class="changelog-dialog" id="changelogDialog" aria-labelledby="changelogTitle">
   <div class="changelog-head"><div><h2 id="changelogTitle" data-tt="nav.dlg.changelog.title">Changelog</h2></div><button type="button" class="btn2" id="closeChangelog" autofocus data-tt="nav.dlg.close">Close</button></div>
-  <ol class="changelog-list"><!--__CHANGELOG__--></ol>
+  <ol class="changelog-list" id="changelogList" data-src="__CHANGELOG_SRC__"><!--__CHANGELOG__--></ol>
 </dialog>
 <script>
-/* Shared feature discovery: stable IDs persist across releases and saves. */
+/* Shared feature discovery: stable IDs persist across releases and saves.
+   Each id is registered in NEW_SINCE with the date its feature shipped (its
+   changelog entry). A badge shows until the player opens the feature, or until
+   NEW_DAYS have passed between that date and the newest changelog entry this
+   page ships with: a badge retires with the first build after its window, and
+   the visitor's clock plays no part. docs/contributing.md, "New feature badges". */
 const featureDiscovery = (() => {
+  const NEW_DAYS = 45;
+  const NEW_SINCE = {
+    "map": "2026-09-12",
+    "changelog": "2026-09-13",
+    "community-voting": "2026-09-13",
+    "wiki": "2026-09-14",
+    "wiki-topics": "2026-09-15",
+    "wiki-topic-how-rent-works": "2026-09-15",
+    "game-link": "2026-09-22",
+    "board-search": "2026-09-24",
+    "floor-plans": "2026-09-25",
+    "open-store": "2026-09-29",
+    "factory-flow": "2026-10-01",
+    "feature-requests": "2026-10-05",
+    "plans-contracts": "2026-10-11",
+    "real-estate-buildings": "2026-10-13",
+    "real-estate-buy": "2026-10-13",
+  };
   const seen = new Set();
   const key = id => 'ba_dash_feature_seen:' + id;
+  let pinned = '';
+  /* The newest changelog date on the page. The hosted page ships only the
+     newest entry until the dialog's first open; a local page lists them all. */
+  function today(){
+    if(pinned) return pinned;
+    let newest = '';
+    try {
+      document.querySelectorAll('#changelogDialog time[datetime]').forEach(t => {
+        const d = t.getAttribute('datetime') || '';
+        if(d > newest) newest = d;
+      });
+    } catch(e) {}
+    return newest;
+  }
+  /* Still inside its window. An id with no date, or a page with no changelog,
+     keeps its badge: tests/feature_badges.test.cjs holds every badge id to a date. */
+  function recent(id){
+    const since = Date.parse(NEW_SINCE[id]), now = Date.parse(today());
+    return !(since === since && now === now) || now - since < NEW_DAYS * 864e5;
+  }
+  function isNew(id){
+    if(!seen.has(id)) {
+      try { if(localStorage.getItem(key(id)) === '1') seen.add(id); } catch(e) {}
+    }
+    return !seen.has(id) && recent(id);
+  }
   function refresh(){
     document.querySelectorAll('[data-new-feature]').forEach(badge => {
-      const id = badge.dataset.newFeature;
-      try { if(localStorage.getItem(key(id)) === '1') seen.add(id); } catch(e) {}
-      badge.hidden = seen.has(id);
+      badge.hidden = !isNew(badge.dataset.newFeature);
     });
   }
   function visit(id){
@@ -4840,24 +4768,68 @@ const featureDiscovery = (() => {
     try { localStorage.setItem(key(id), '1'); } catch(e) {}
     refresh();
   }
-  return {refresh, visit};
+  /* Tests pin the day the windows are counted to, so they do not age. */
+  function asOf(date){ pinned = date || ''; refresh(); }
+  return {refresh, visit, isNew, asOf, since: NEW_SINCE, days: NEW_DAYS};
 })();
 featureDiscovery.refresh();
 /* --- changelog dialog ------------------------------------------------ */
-(() => {
+/* The hosted page ships only the newest entry, which also dates the badges
+   above; the list's data-src names the whole changelog, fetched on the first
+   open (issue #328). A page opened from a file carries every entry and no
+   data-src. A failed fetch keeps the newest entry and tries again next open. */
+const openChangelog = (() => {
   const dialog = document.getElementById('changelogDialog');
-  document.addEventListener('click', event => {
-    if(event.target.closest('[data-changelog]')) {
+  const list = document.getElementById('changelogList');
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  let loading = null;
+  /* One entry, in the markup render() writes for it. */
+  function entry(change){
+    const make = (tag, text) => { const el = document.createElement(tag); if(text != null) el.textContent = text; return el; };
+    const date = String(change.date), pr = parseInt(change.pr, 10);
+    const li = make('li'), meta = make('div'), time = make('time', `${date.slice(8, 10)} ${MONTHS[parseInt(date.slice(5, 7), 10) - 1]} ${date.slice(0, 4)}`);
+    li.className = 'changelog-entry';
+    meta.className = 'changelog-meta';
+    time.setAttribute('datetime', date);
+    const link = make('a', `PR #${pr} ↗`);
+    link.href = `https://github.com/PeterHartwieg/big-copilot/pull/${pr}`;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.setAttribute('aria-label', `View pull request ${pr}`);
+    meta.append(time, link);
+    li.append(meta, make('h3', change.title), make('p', change.summary));
+    return li;
+  }
+  function loadAll(){
+    const src = list && list.dataset.src;
+    if(!src || loading) return;
+    loading = fetch(`${src}?v=${encodeURIComponent(window.LEDGER_BUILD || '')}`)
+      .then(response => { if(!response.ok) throw new Error(String(response.status)); return response.json(); })
+      .then(changes => {
+        if(!Array.isArray(changes) || !changes.length) throw new Error('empty');
+        changes.sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : b.pr - a.pr);
+        list.replaceChildren(...changes.map(entry));
+        list.removeAttribute('data-src');
+      })
+      .catch(() => { loading = null; });
+  }
+  function open(){
+    if(!dialog.open) {
       dialog.showModal();
       featureDiscovery.visit('changelog');
       dialog.scrollTop = 0;
     }
+    loadAll();
+  }
+  document.addEventListener('click', event => {
+    if(event.target.closest('[data-changelog]')) open();
   });
   document.getElementById('closeChangelog').addEventListener('click', () => dialog.close());
   dialog.addEventListener('click', event => {
     const box = dialog.getBoundingClientRect();
     if(event.target === dialog && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom)) dialog.close();
   });
+  return open;
 })();
 /* An entry point marked data-visit-feature dismisses that feature's badges when
    it is used, wherever it sits: a footer link, a button the shell owns. */
