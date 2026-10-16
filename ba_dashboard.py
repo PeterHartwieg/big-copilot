@@ -3352,7 +3352,7 @@ def _take_posts(factories: dict) -> dict:
 
     Keyed as _factory_staffing() reads them: ("line" or "unnamed", the site's
     `s`, the line's place in its list), so two lines making one item keep theirs;
-    ("off", `s`) holds the site's switched-off machines as {id, name}.
+    ("off", `s`) holds the site's switched-off machines as {id, item, slot}.
     """
     posts = {}
     for site in factories.get("sites", []):
@@ -10170,7 +10170,7 @@ def _factories(
                 "arrivals": {slug: round(_arrives(flow, key, slug)) for slug in _in_order(watched)},
                 # The switched-off machines, for _factory_staffing() to list as
                 # idle; _take_posts() takes them off the payload.
-                "_offPosts": [{"id": m["id"], "name": f"{off_item(m)}, position {m['slot']}"}
+                "_offPosts": [{"id": m["id"], "item": off_item(m), "slot": m["slot"]}
                               for m in sorted(switched_off[key], key=lambda m: m["slot"])],
             }
         )
@@ -14541,8 +14541,11 @@ def _factory_site_plan(save, building, site, business, posts_of, pool, people, m
             "cuts": [list(cut) for cut in _cut_run(start, start + hours)],
             **({"unnamed": True} if unnamed else {}),
         })
-    # A switched-off machine is idle in every sizing (#500).
-    idle.extend({"id": m["id"], "skill": FACTORY_SKILL, "rate": 1, "name": m["name"]}
+    # A switched-off machine is idle in every sizing (#500). A factory with
+    # every machine switched off has no line to place a week on, so no row.
+    idle.extend({"id": m["id"], "skill": FACTORY_SKILL, "rate": 1,
+                 "name": msg("sp.py.factory.station", "{item}, position {slot}",
+                             item=plain(m["item"]), slot=m["slot"], item_name=m["item"])}
                 for m in posts_of.get(("off", site["s"]), []))
     if not lines:
         return None

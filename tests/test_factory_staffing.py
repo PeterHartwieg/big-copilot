@@ -351,13 +351,16 @@ class UnnamedAndSharedLineTests(MsgAsserts, unittest.TestCase):
         # listed, so the Staff page never keeps a shift on it as a driver's.
         business = [{"key": KEY, "name": "Brewery", "status": "support"}]
         factories = hand_factory([("beer", 2, 24, 24, 24)])
-        factories["sites"][0]["_offPosts"] = [{"id": "wine-0", "name": "Wine, position 3"}]
+        factories["sites"][0]["_offPosts"] = [{"id": "wine-0", "item": "Wine", "slot": 3}]
         people = People().add(7)
         rows = _factory_staffing(Bare(people), None, business, factories, people.staff, detail=True)
         for mode in ("cap", "dem"):
             with self.subTest(mode=mode):
                 [row] = rows[mode]
-                self.assertIn("wine-0", [st["id"] for st in row["stations"]])
+                ids = [st["id"] for st in row["stations"]]
+                self.assertIn("wine-0", ids)
+                # Listed, and given no hours: the plan staffs only the beer line.
+                self.assertNotIn(ids.index("wine-0"), {shift["s"] for shift in row["shifts"]})
                 self.assertEqual([line["slug"] for line in row["lines"]], ["beer"])
         self.assertNotIn("_offPosts", factories["sites"][0])
 

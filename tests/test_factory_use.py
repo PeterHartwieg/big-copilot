@@ -251,4 +251,4 @@ class SwitchedOffTests(unittest.TestCase):
         self.assertEqual(line["production"], {"status": "covered", "level": "ok"})
         [water] = site["needs"]
         self.assertEqual(water["perDay"], 2 * 10 * 24)
-        self.assertEqual(site["_offPosts"], [{"id": "m-2", "name": "Beer, position 3"}])
+        self.assertEqual(site["_offPosts"], [{"id": "m-2", "item": "Beer", "slot": 3}])
