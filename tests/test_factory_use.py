@@ -14,7 +14,7 @@ import unittest
 
 from ba_dashboard import RECIPE_ITEMS, SUPPLY_MARGIN, Names, _line_use, _supply, site_key
 from tests.test_factory_staffing import line_of, rostered_chain
-from tests.test_supply_facts import BEER, FACTORY, RECIPES, RID, SHOP_A, WATER, Company, beer_chain
+from tests.test_supply_facts import BEER, FACTORY, RECIPES, RID, SHOP_A, SHOP_B, WATER, Company, beer_chain
 
 MALTINGS = ("upper_road", 7)
 
@@ -100,6 +100,50 @@ class SoldIsMeasuredTests(unittest.TestCase):
         self.assertEqual(line["production"], {"status": "covered", "level": "ok"})
         self.assertEqual(line["needHours"]["dem"], math.ceil(400 * (1 + SUPPLY_MARGIN) / 30))
 
+    def test_a_new_shops_top_up_asks_for_no_machines(self):
+        # #501 as seen on a save: the bar sells 600 a day; a shop opened two
+        # days ago holds 100 beer, has sold none yet and is topped up to 600.
+        # Its top-up must not count as a day's sales beside the bar's.
+        c = Company()
+        c.factory(FACTORY, "Brewery")
+        c.shop(SHOP_A, "Beer Bar")
+        c.shop(SHOP_B, "Beer Shop", opened=c.day - 2, trade_days=2)
+        c.hold(FACTORY, WATER, 500)
+        c.hold(FACTORY, BEER, 300)
+        c.hold(SHOP_A, BEER, 200, 600)
+        c.hold(SHOP_B, BEER, 100, 0)
+        c.plan(FACTORY, SHOP_A, BEER, 400)
+        c.plan(FACTORY, SHOP_B, BEER, 600)
+        run_with(c, RECIPES)
+        line = lines_at(c, FACTORY)[0]
+        self.assertEqual((line["makes"], line["soldDay"], line["needDay"]), (720, 600, 690))
+        self.assertEqual(line["production"], {"status": "covered", "level": "ok"})
+
+    def test_a_downstream_lines_top_up_asks_its_feeder_for_no_machines(self):
+        # The maltings feed a brewery whose beer goes to a bar that has never
+        # sold any but is topped up to 600: the brewery eats nothing for it
+        # when the maltings' machines are judged.
+        rid, malt = next((r, i) for r, i in sorted(RECIPE_ITEMS.items()) if i != BEER)
+        recipes = {
+            BEER: {"slug": BEER, "item": "Beer", "out": 30, "workstation": "bottledgoods",
+                   "ingredients": [{"slug": malt, "item": "Malt", "per": 10}]},
+            malt: {"slug": malt, "item": "Malt", "out": 20, "workstation": "bottledgoods", "ingredients": []},
+        }
+        c = Company()
+        c.factory(MALTINGS, "Maltings", rid=rid)
+        c.factory(FACTORY, "Brewery")
+        c.shop(SHOP_A, "Beer Bar")
+        c.hold(MALTINGS, malt, 100)
+        c.hold(FACTORY, malt, 250)
+        c.hold(FACTORY, BEER, 300)
+        c.hold(SHOP_A, BEER, 0, 0)
+        c.plan(MALTINGS, FACTORY, malt, 300)
+        c.plan(FACTORY, SHOP_A, BEER, 600)
+        run_with(c, recipes)
+        line = lines_at(c, MALTINGS)[0]
+        self.assertEqual((line["soldDay"], line["needDay"]), (0, 0))
+        self.assertEqual(line["production"], {"status": "covered", "level": "ok"})
+
     def test_a_target_far_above_sales_asks_for_no_machines(self):
         # #501: the bar sells 200 a day and is topped up to 5,000. One machine
         # makes 720 a day, enough for 230 with the margin.
@@ -181,3 +225,30 @@ class TwoStatusesTests(unittest.TestCase):
                 self.assertEqual((order["st"], order["why"]), ("short", "order"))
         # The line's own hours status is neither of them.
         self.assertEqual(line["status"], "covered")
+
+
+class SwitchedOffTests(unittest.TestCase):
+    def test_a_machine_set_to_produce_up_to_0_leaves_its_line(self):
+        # #500: three beer machines, the third switched off. The line makes
+        # and eats for two, and the bar's 1,000 a day fits in 1,440.
+        c = Company()
+        c.factory(FACTORY, "Brewery", machines=3)
+        c.shop(SHOP_A, "Beer Bar")
+        c.hold(FACTORY, WATER, 500)
+        c.hold(FACTORY, BEER, 300)
+        c.hold(SHOP_A, BEER, 200, 1000)
+        c.plan(FACTORY, SHOP_A, BEER, 400)
+        save = c.save()
+        factory = next(r for r in save.root["BuildingRegistrations"]
+                       if (r["StreetName"], r["StreetNumber"]) == FACTORY)
+        factory["itemInstances"][2]["$v"].update(produceUpTo=True, produceUpToValue=0)
+        c.business_list = c.businesses()
+        c.supply = _supply(save, Names({}), c.business_list, c.day, {}, RECIPES)
+        site = next(s for s in c.supply["factories"]["sites"]
+                    if c.business_list[s["s"]]["key"] == site_key(FACTORY))
+        [line] = site["lines"]
+        self.assertEqual((site["machines"], line["machines"], line["makes"]), (3, 2, 1440))
+        self.assertEqual(line["production"], {"status": "covered", "level": "ok"})
+        [water] = site["needs"]
+        self.assertEqual(water["perDay"], 2 * 10 * 24)
+        self.assertEqual(site["_offPosts"], [{"id": "m-2", "name": "Beer, position 3"}])
