@@ -2082,11 +2082,16 @@ the factory page, is what the shops this line supplies sell of its product a day
 without the margin and without what other factory lines eat of it; two lines making one
 product split it as they split the rest. It reads the same under either sizing. The need
 behind it, what Shop demand sizes the line on (new shops' coming week and other lines'
-use included) plus the margin, is not capped at 24 hours: where it is more than the line
-makes round the clock, the line reads **short: needs 1 more machine** (or more, from the
-recipe's rate), and its tip says what that gives, *1 more machine makes 1,440 a day against
-836 needed*. A line at 24 hours cannot gain hours, so this is a machine gap; the hours and
-the staffing keep their 24-hour cap. The verdict counts such lines. Each status on a line
+use included) plus the margin, is not capped at 24 hours. Unlike Shop demand, it never lets
+a top-up target stand in for a shop's sales, here or at the shops of a factory line that eats
+the product, and a line nothing draws on eats nothing for its feeders: a stock level is not
+a day's sale, so it never asks for machines. A machine set to *Produce up to* 0 is switched
+off: it is no line, eats nothing and counts only among the factory's placed machines, and
+the staffing plan leaves it empty. Where the need is more than the line makes round the
+clock, the line reads **short: needs 1 more machine** (or more, from the recipe's rate), and
+its tip says what that gives, *1 more machine makes 1,440 a day against 836 needed*. A line
+at 24 hours cannot gain hours, so this is a machine gap; the hours and the staffing keep
+their 24-hour cap. The verdict counts such lines. Each status on a line
 names what is short: **hours short**, **short: needs N more machines**, and **order short**
 or **ingredients short** for the inputs it eats (the input's own row says *order short*,
 *top-up short* or *input short*). A line short on both production and an input shows both,

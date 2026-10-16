@@ -346,6 +346,24 @@ class UnnamedAndSharedLineTests(MsgAsserts, unittest.TestCase):
         self.assertEqual(sorted(st["id"] for st in row["stations"]), ["a-0", "a-1", "b-0", "b-1"])
         self.assertEqual(row["headcount"]["needed"], 672)
 
+    def test_a_switched_off_machine_is_an_idle_station(self):
+        # #500: a machine set to Produce up to 0 is no line, but its post is
+        # listed, so the Staff page never keeps a shift on it as a driver's.
+        business = [{"key": KEY, "name": "Brewery", "status": "support"}]
+        factories = hand_factory([("beer", 2, 24, 24, 24)])
+        factories["sites"][0]["_offPosts"] = [{"id": "wine-0", "item": "Wine", "slot": 3}]
+        people = People().add(7)
+        rows = _factory_staffing(Bare(people), None, business, factories, people.staff, detail=True)
+        for mode in ("cap", "dem"):
+            with self.subTest(mode=mode):
+                [row] = rows[mode]
+                ids = [st["id"] for st in row["stations"]]
+                self.assertIn("wine-0", ids)
+                # Listed, and given no hours: the plan staffs only the beer line.
+                self.assertNotIn(ids.index("wine-0"), {shift["s"] for shift in row["shifts"]})
+                self.assertEqual([line["slug"] for line in row["lines"]], ["beer"])
+        self.assertNotIn("_offPosts", factories["sites"][0])
+
     def test_the_payload_row_carries_only_what_the_board_reads(self):
         c = rostered_chain([24])
         stub = c.save()
