@@ -171,28 +171,37 @@ side and running `--assemble`.
 
 ## Finishing a change
 
-`.github/workflows/tests.yml` runs the Python suite, the Node suites (Chromium on Linux),
-`npm run check:worker` and `python build_web.py --check` on every pull request and push to main,
-each after `python build_web.py --assemble`.
+CI is the test gate. `.github/workflows/tests.yml` runs the Python suite, the Node suites
+(Chromium on Linux), `npm run check:worker` and `python build_web.py --check` on every pull
+request and push to main, each after `python build_web.py --assemble`. Push the branch, open
+the PR and let CI run the full suites; read its result, and reproduce a failure locally only
+to fix it.
 
-After dependency and browser setup, `npm run verify` runs that full gate locally through
-`tools/verify.mjs`: assembly, Python, Node (concurrency 2), optimized hosted-page tests,
-the Worker dry run and the freshness check. It needs no installed game, production
-credentials or clean working tree.
+While you work, run the focused suites the table below names for your change. Where a row
+names a whole suite (`discover -s tests`, `tests/*.test.cjs`) or `npm run verify`, that is
+CI's coverage: locally, run the focused files in the same row, or none. The owner-only
+checks in the table (`tools/payload_diff.py`, `check_profit_model.py`,
+`tools/check_marketing.py`, and `python build_web.py` with the installed game) never run in
+CI, so run them locally when a row asks for them.
+
+To reproduce a CI failure, `npm run verify` runs the same gate locally through
+`tools/verify.mjs` after dependency and browser setup: assembly, Python, Node (concurrency 2),
+optimized hosted-page tests, the Worker dry run and the freshness check. It needs no
+installed game, production credentials or clean working tree.
 `npm test` runs the assembled Node suite; `npm test -- tests/name.test.cjs` selects a suite
 (quote wildcard patterns for portability). `npm run test:optimized` checks the optimized
 hosted page and restores the raw assembly on success. `npm run test:python -- tests.test_name` runs
 an assembled Python subset. Both use the same stages as CI. `PYTHON` selects an executable;
 otherwise the runner tries `python3`, `python`, then `py`, resolves the executable and
 passes it to subprocesses. Prefer these commands over raw test commands when working
-across platforms. The table below names each change's required suites.
+across platforms. The table below maps each change to the suites that cover it.
 
 The site under `web/` is assembled, not committed, so run `python build_web.py --assemble`
 before the tests below and again after each change you test: about twenty suites read or
 serve the built page (`web/index.html`, `web/version.json`, `web/i18n/`), and a missing or
 stale one fails them.
 
-| You changed | Run |
+| You changed | Covered by |
 | --- | --- |
 | `SECTIONS`, `build_core()`, `section()`, `materialize_all()`, `browser_section()`, the worker's `section` message or the board's `od*` functions (what is core and what is computed on demand) | `python -m unittest tests.test_sections tests.test_browser_build tests.test_payload_snapshot` and `node --test tests/on_demand.test.cjs tests/worker_history.test.cjs tests/worker_startup.test.cjs`; then the `tools/payload_diff.py` dump and compare below, since a payload with every section computed must not change |
 | `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`. Premises extraction is `tests/test_premises.py`. `tests/test_payload_snapshot.py` compares whole `extract()` payloads with `tests/fixtures/payload_snapshot/`; after an intended change regenerate them with `python tests/test_payload_snapshot.py --update` and review the diff. A change meant to leave the payload alone also runs `python tools/payload_diff.py dump research/<name>` on main and on the branch and `compare`s the two (owner only: it reads every save on the machine) |
