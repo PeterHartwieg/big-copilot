@@ -6742,7 +6742,9 @@ def _customer_driven(businesses: list, index: dict, edges: dict, key: str, item:
 
 def _demand_ends(businesses: list, day: int, sold: dict, sold_week: dict, leaves: dict) -> tuple:
     """What each shop's shelves draw a day as Demand sizing reads them:
-    (`sold_dem`, `sold_measured`, `ramping`), each keyed by shop key."""
+    (`sold_dem`, `sold_measured`, `ramping`, `sold_sales`), each keyed by
+    shop key. `sold_sales` is `sold_dem` before any target stands in for a
+    line's sales: what a factory line's machines are judged on (#501)."""
     # Demand sizing reads a factory line's use off what the ends draw of its
     # product down the plan. A shop under a week old has not settled yet: its
     # coming week is read off a straight line through its trading days
@@ -6750,7 +6752,7 @@ def _demand_ends(businesses: list, day: int, sold: dict, sold_week: dict, leaves
     sold_dem, ramping = {}, set()
     # What each shop measurably sells a day, before any coming week or target
     # stands in for it: the Sold / day a factory line shows (demand(measured)).
-    sold_measured = {}
+    sold_measured, sold_sales = {}, {}
     for business in businesses:
         key = business["key"]
         if business["status"] != "retail" or business.get("closed"):
@@ -6770,6 +6772,7 @@ def _demand_ends(businesses: list, day: int, sold: dict, sold_week: dict, leaves
                 ahead = _coming_week(line.get("soldDays") or [], day)
                 if ahead is not None:
                     rates[line["slug"]] = ahead
+        sold_sales[key] = dict(rates)
         # A line topped up to a target it has sold none of yet asks for the
         # target, as the chain's walk reads it (leaves).
         if business["status"] == "retail":
@@ -6777,7 +6780,7 @@ def _demand_ends(businesses: list, day: int, sold: dict, sold_week: dict, leaves
                 if dest == key and not rates.get(item):
                     rates[item] = use
         sold_dem[key] = rates
-    return sold_dem, sold_measured, ramping
+    return sold_dem, sold_measured, ramping, sold_sales
 
 
 class _DemandSizing:
@@ -6785,7 +6788,7 @@ class _DemandSizing:
     day from a site down the plans (demand()), and how a sender asked for more
     than it has is held down (levels()). Its inputs are stage 1's and 2's:
     `index`, `edges`, `leaves`, `imports`, `wholesale`, `drops` (each import
-    line's active contracts), and `ends`, _demand_ends()'s triple.
+    line's active contracts), and `ends`, _demand_ends()'s four figures.
 
     The plans with their loops cut as the chain's walk cuts them, and each
     plan's share of what the site it tops up draws: two factories topping
@@ -6799,7 +6802,7 @@ class _DemandSizing:
                  drops: dict, ends: tuple):
         self.index, self.edges, self.leaves = index, edges, leaves
         self.imports, self.wholesale, self.drops = imports, wholesale, drops
-        self.sold_dem, self.sold_measured, self.ramping = ends
+        self.sold_dem, self.sold_measured, self.ramping, self.sold_sales = ends
         self.drawn, self.levels_at = {}, {}
         self.graph = {}
         self.set_made(lambda _site, _item: False)
@@ -6997,7 +7000,7 @@ class _DemandSizing:
         return self.levels_at[memo]
 
     def demand(self, key: str, item: str, seen: frozenset = frozenset(), eats=None,
-               held_down: bool = True, measured: bool = False) -> tuple:
+               held_down: bool = True, measured: bool = False, selling: bool = False) -> tuple:
         """What the ends draw of `item` a day from this site down the plan, as
         Demand sizing reads it, and the young shops behind that figure. The
         ends are the shelves and, given `eats(site, item)`, the factory lines
@@ -7007,13 +7010,18 @@ class _DemandSizing:
         shelves' measured sales alone (sold_measured: no coming week, no
         target in their place, and `eats` not added), shared out between the
         senders as Demand sizing shares its own figure (the same levels and
-        targets), for display; it sizes nothing."""
+        targets), for display; it sizes nothing. With `selling`, Demand
+        sizing's figure without a top-up target standing in for a shelf's
+        sales (sold_sales; the coming week and `eats` kept), shared out the
+        same way: what a factory line's machines are judged on (_line_use()),
+        since a stock level is no day's sale. It sizes nothing either."""
         if key not in self.index or key in seen:
             return 0.0, frozenset()
-        memo = (key, item, eats is not None, held_down, measured)
+        memo = (key, item, eats is not None, held_down, measured, selling)
         if memo in self.drawn:
             return self.drawn[memo]
-        total = (self.sold_measured if measured else self.sold_dem).get(key, {}).get(item, 0.0)
+        shelves = self.sold_measured if measured else self.sold_sales if selling else self.sold_dem
+        total = shelves.get(key, {}).get(item, 0.0)
         ramp = {self.index[key]} if key in self.ramping and total > 0 else set()
         if eats is not None and not measured:
             total += eats(key, item)
@@ -7022,7 +7030,7 @@ class _DemandSizing:
             weights = self.graph["share"].get((dest_key, item)) or {}
             if not weights.get(key):
                 continue
-            more, behind = self.demand(dest_key, item, seen | {key}, eats, held_down, measured)
+            more, behind = self.demand(dest_key, item, seen | {key}, eats, held_down, measured, selling)
             # The routes come first, as in the chain's walk: the site's own
             # import brings only what the senders' room leaves.
             residual = more
@@ -9578,16 +9586,17 @@ def _line_use(machines: int, rate: float, makes: float, sold: float | None,
 
     `soldDay` is `sold`, the line's share of what the shops down its plan
     measurably sell a day: no margin, no target or coming week in place of
-    sales, no factory line eating it. `needDay` is `use`, the figure Demand
-    sizing works from (demand(): those, the new shops' coming week or target
-    and the factory lines that eat the product), plus the margin once, never
-    capped. Both read the same in either sizing. `production` is short where
-    `needDay` is past what the line makes at 24 h: a line at 24 h cannot gain
-    hours, so it is a machine gap, `more` machines at the recipe's rate,
-    making `makesWith` a day with them; critical where `use` alone is past
-    it, a warning where only the margin is. A line nothing draws on reads 0,
-    0 and covered. All three are None where no demand can be read at all
-    (no plan walk: `sold` and `use` None)."""
+    sales, no factory line eating it. `needDay` is `use`, what Demand sizing
+    works from without a target standing in for sales (demand(selling): the
+    new shops' coming week and the factory lines that eat the product), plus
+    the margin once, never capped. Both read the same in either sizing.
+    `production` is short where `needDay` is past what the line makes at
+    24 h: a line at 24 h cannot gain hours, so it is a machine gap, `more`
+    machines at the recipe's rate, making `makesWith` a day with them;
+    critical where `use` alone is past it, a warning where only the margin
+    is. A line nothing draws on reads 0, 0 and covered. All three are None
+    where no demand can be read at all (no plan walk: `sold` and `use`
+    None)."""
     if sold is None or use is None:
         return {"soldDay": None, "needDay": None, "production": None}
     need = use * (1 + SUPPLY_MARGIN)
@@ -9742,6 +9751,7 @@ def _factories(
     # Each machine's item id and its rostered hours per weekday, for the line's
     # hours now, what runs, and the factory roster (_factory_staffing).
     posted = collections.defaultdict(lambda: collections.defaultdict(list))
+    switched_off = collections.Counter()
     for building in save.items(save.root["BuildingRegistrations"]):
         if not building.get("RentedByPlayer"):
             continue
@@ -9751,6 +9761,13 @@ def _factories(
         posts = {}
         for item in _item_instances(save, building["itemInstances"]):
             if not item.get("workstationType"):
+                continue
+            if item.get("produceUpTo") and not item.get("produceUpToValue"):
+                # Produce up to 0: the player has switched the machine off.
+                # It makes nothing and eats nothing, so it is no line (#500),
+                # though the factory still counts it as placed.
+                switched_off[key] += 1
+                machines.setdefault(key, collections.Counter())
                 continue
             station = item["workstationType"].replace(WS_PREFIX, "").removesuffix("workstation")
             line = (station, item.get("selectedRecipeId"))
@@ -9922,14 +9939,15 @@ def _factories(
             if demand:
                 wanted, ramp = demand(key, slug, eats=dem_eats)
                 # Two figures for _line_use(), each this line's share as the
-                # makers of the product split it: `use`, what Demand sizing
-                # works from (new shops' coming week and targets, the factory
-                # lines that eat it), uncapped and without the margin; `sold`,
-                # what the shops down the plan measurably sell, split by the
-                # same routing, and nothing else.
+                # makers of the product split it, by the routing Demand sizing
+                # uses: `sold`, what the shops down the plan measurably sell,
+                # and nothing else; `use`, what Demand sizing works from (new
+                # shops' coming week, the factory lines that eat it) but with
+                # no top-up target standing in for sales: a stock level is no
+                # day's sale, and it must not ask for machines (#501).
                 split = makes / capacity[slug] if capacity[slug] else 0.0
-                use = wanted * split
                 sold = demand(key, slug, eats=dem_eats, measured=True)[0] * split
+                use = demand(key, slug, eats=dem_eats, selling=True)[0] * split
                 if wanted > 0 and capacity[slug]:
                     dem_makes = min(makes, wanted * makes / capacity[slug])
                     dem_basis = "sales"
@@ -10116,9 +10134,9 @@ def _factories(
         sites.append(
             {
                 "s": index[key],
-                "machines": sum(counter.values()),
-                # Placed is `machines`; running, those with a recipe and
-                # somebody posted at some hour.
+                "machines": sum(counter.values()) + switched_off[key],
+                # Placed is `machines`, the switched off included; running,
+                # those with a recipe and somebody posted at some hour.
                 "running": sum(m["running"] for line in posted[key].values() for m in line),
                 "lines": lines,
                 "unnamed": unnamed,

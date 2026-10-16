@@ -2082,8 +2082,10 @@ the factory page, is what the shops this line supplies sell of its product a day
 without the margin and without what other factory lines eat of it; two lines making one
 product split it as they split the rest. It reads the same under either sizing. The need
 behind it, what Shop demand sizes the line on (new shops' coming week and other lines'
-use included) plus the margin, is not capped at 24 hours: where it is more than the line
-makes round the clock, the line reads **short: needs 1 more machine** (or more, from the
+use included) plus the margin, is not capped at 24 hours. Unlike Shop demand, it never lets
+a top-up target stand in for a shop's sales: a stock level is not a day's sale, so it never
+asks for machines.
+Where the need is more than the line makes round the clock, the line reads **short: needs 1 more machine** (or more, from the
 recipe's rate), and its tip says what that gives, *1 more machine makes 1,440 a day against
 836 needed*. A line at 24 hours cannot gain hours, so this is a machine gap; the hours and
 the staffing keep their 24-hour cap. The verdict counts such lines. Each status on a line

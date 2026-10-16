@@ -157,6 +157,14 @@ class ProductionLimitTests(unittest.TestCase):
         self.assertEqual((line["limit"], line["limitHeld"]), (500, True))
         self.assertEqual(_feed_notes(f.businesses, f.supply["factories"], set()), [])
 
+    def test_a_machine_set_to_produce_up_to_0_is_switched_off(self):
+        """#500: Produce up to 0 with nothing held is a line the player turned
+        off, not one starved of its inputs."""
+        f = self.run_limited({"produceUpTo": True, "produceUpToValue": 0}, beer=0)
+        site = f.supply["factories"]["sites"][0]
+        self.assertEqual((site["machines"], site["lines"], site["needs"]), (1, [], []))
+        self.assertEqual(_feed_notes(f.businesses, f.supply["factories"], set()), [])
+
     def test_without_the_limit_the_same_line_is_not_drawing(self):
         need = self.run_limited({}).need()
         self.assertEqual((need["status"], need["why"], need["level"]), ("stalled", "notDrawn", "warn"))

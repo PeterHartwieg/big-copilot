@@ -91,11 +91,21 @@ class SoldIsMeasuredTests(unittest.TestCase):
         self.assertEqual(line["soldDay"], 275)
         self.assertEqual(line["needDay"], round(400 * (1 + SUPPLY_MARGIN)))
 
-    def test_a_shelf_with_a_target_and_no_sales_is_need_not_sold(self):
-        # The bar never sold beer but is topped up to 400 a day.
+    def test_a_shelf_with_a_target_and_no_sales_sizes_hours_not_machines(self):
+        # The bar never sold beer but is topped up to 400. Demand sizing still
+        # reads the target for the hours; a stock level is no day's sale, so
+        # it asks for no machines (#501).
         _site, line = line_of(rostered_chain([24], sold_a=0, bar_units=0))
-        self.assertEqual((line["soldDay"], line["needDay"]), (0, round(400 * (1 + SUPPLY_MARGIN))))
+        self.assertEqual((line["soldDay"], line["needDay"]), (0, 0))
+        self.assertEqual(line["production"], {"status": "covered", "level": "ok"})
         self.assertEqual(line["needHours"]["dem"], math.ceil(400 * (1 + SUPPLY_MARGIN) / 30))
+
+    def test_a_target_far_above_sales_asks_for_no_machines(self):
+        # #501: the bar sells 200 a day and is topped up to 5,000. One machine
+        # makes 720 a day, enough for 230 with the margin.
+        _site, line = line_of(rostered_chain([24], sold_a=200, bar_target=5000))
+        self.assertEqual((line["soldDay"], line["needDay"]), (200, 230))
+        self.assertEqual(line["production"], {"status": "covered", "level": "ok"})
 
     def test_a_line_only_a_downstream_factory_eats_sells_nothing(self):
         # The maltings make malt for the brewery; no shop sells malt. The bar

@@ -209,7 +209,8 @@ hours where it is under that; `demBasis` is `none` where nothing is drawn and De
 sizes the line at 24. Each line also carries its use against what it makes at 24 h, for
 display only (`_line_use()`, issue #145): `soldDay`, its share of what the shops down its
 plan measurably sell a day (no margin, no target or coming week, no factory line eating
-it); `needDay`, the uncapped figure Demand sizing works from plus the margin; and
+it); `needDay`, the uncapped figure Demand sizing works from, but with no top-up target
+standing in for a sale (#501), plus the margin; and
 `production`, `{status, level}` with `more` machines and `makesWith` a day where
 `needDay` is past what the line makes, so the 24 h cap on the hours stays. All three are
 null where no demand can be read. `supply.factories.sites[]` counts `running` machines (a recipe and
