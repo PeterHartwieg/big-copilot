@@ -8,35 +8,41 @@ const assert = require('node:assert/strict');
 const {en, enRe, enText: textEn, textRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
-const {chromium} = require('playwright');
+const pageHarness = require('./_page.cjs');
 
 const ROOT = path.join(__dirname, '..');
 const LIQ = 'ba:businesstype_liquorstore', MID = 'ba:neighborhood_midtown';
 const SITE = 'ba:street_broadwaystreet#9';
+const HQ = 'ba:businesstype_headquarters', HQ_SITE = 'ba:street_broadwaystreet#1';
 let browser, html;
 before(async () => {
-  const made = spawnSync(process.env.PYTHON || 'python', ['-c', `
-import json, sys
-from ba_dashboard import render
-d = json.load(open("tests/fixtures/payload_snapshot/data_day47_history.json", encoding="utf-8"))
-sys.stdout.buffer.write(render(d).encode("utf-8"))`], {cwd: ROOT, maxBuffer: 64 * 1024 * 1024});
-  assert.equal(made.status, 0, made.stderr.toString());
-  html = made.stdout.toString('utf8');
-  browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
+  html = pageHarness.renderBoard('tests/fixtures/payload_snapshot/data_day47_history.json');
+  browser = await pageHarness.launch();
 });
 after(async () => { await browser?.close(); });
 
-async function board(t, {hash = '#expansion/open', width = 1280, height = 900, context = null} = {}) {
+let hqPayload;
+function headquartersPayload(){
+  if(!hqPayload){
+    const made = spawnSync(process.env.PYTHON || 'python', ['-c',
+      'import json; from tests.test_open_store import headquarters_payload; print(json.dumps(headquarters_payload()))'],
+      {cwd: ROOT, maxBuffer: 64 * 1024 * 1024});
+    assert.equal(made.status, 0, made.stderr.toString());
+    hqPayload = JSON.parse(made.stdout.toString('utf8'));
+  }
+  return hqPayload;
+}
+
+async function board(t, {hash = '#expansion/open', width = 1280, height = 900, context = null, hq = false} = {}) {
   const ctx = context || await browser.newContext({viewport: {width, height}, reducedMotion: 'reduce', colorScheme: 'dark'});
   if(!context) t.after(() => ctx.close());
   const page = await ctx.newPage();
-  const errors = [];
-  page.on('pageerror', e => errors.push(e.message));
-  t.after(() => assert.deepEqual(errors, [], 'no script error on the page'));
-  await ctx.route('https://**', route => route.abort());
+  pageHarness.collectErrors(page, t);
+  await pageHarness.abortExternal(ctx);
   await ctx.route('https://os.test/**', route => route.fulfill({contentType: 'text/html; charset=utf-8', body: html}));
   await page.goto('https://os.test/' + hash, {waitUntil: 'load'});
   await page.waitForFunction(() => typeof route === 'string' && typeof hasData === 'function' && hasData());
+  if(hq) await pageHarness.loadPayload(page, headquartersPayload());
   /* The save has no empty shop: its one rival in Midtown stands in for one. */
   await page.evaluate(site => { premises().buildings.find(b => b.key === site).status = 'vacant'; }, SITE);
   return page;
@@ -51,6 +57,13 @@ async function planned(page){
   await page.locator(`#osBody .os-type[data-os-new="${LIQ}"]`).click();
   await page.locator('#osFinderMap .place.fr').first().waitFor();
   await page.locator(`#osFinderMap .place[data-pick="${SITE}"]`).click();
+  await page.locator('#osFinderMap .site [data-action="plan"]').click();
+  await page.waitForFunction(() => osStep === 'investment');
+}
+
+async function plannedHq(page){
+  await page.locator(`#osBody .os-type[data-os-new="${HQ}"]`).click();
+  await page.locator(`#osFinderMap .place[data-pick="${HQ_SITE}"]`).click();
   await page.locator('#osFinderMap .site [data-action="plan"]').click();
   await page.waitForFunction(() => osStep === 'investment');
 }
@@ -142,7 +155,7 @@ const pvsa = page => page.$$eval('#osBody .os-pvsa tbody tr', trs => trs.map(tr 
 const pvRow = async (page, name) => (await pvsa(page)).find(x => x[0].startsWith(name));
 const goOpen = async page => { await page.locator('#osCtl [data-os-step="open"]').click(); await page.waitForFunction(() => osStep === 'open'); };
 
-module.exports = {assert, en, enRe, textEn, textRe, spawnSync, path, chromium, ROOT, LIQ, MID, SITE, board, steps, strip, money, planned, MKPLAN, running, LINK, rows, until, BEER, WHISKY, line, opened, linked, routed, wanted, FULL, HIRES, SHORT6, hiring, realHiring, spy, OPENED, traded, openedPlan, tiles, pvsa, pvRow, goOpen,
+module.exports = {assert, en, enRe, textEn, textRe, spawnSync, path, ROOT, LIQ, MID, SITE, HQ, HQ_SITE, board, steps, strip, money, planned, plannedHq, MKPLAN, running, LINK, rows, until, BEER, WHISKY, line, opened, linked, routed, wanted, FULL, HIRES, SHORT6, hiring, realHiring, spy, OPENED, traded, openedPlan, tiles, pvsa, pvRow, goOpen,
   get browser(){ return browser; },
   get html(){ return html; },
 };

@@ -28,7 +28,38 @@ from ba_save import Names, Save, load_save  # noqa: E402
 
 POS, MUSIC, SINK, TOILET = 8, ba_dashboard.MUSIC_FLAG, ba_dashboard.SINK_FLAG, ba_dashboard.TOILET_FLAG
 SHOP = "ba:businesstype_liquorstore"
+HQ = "ba:businesstype_headquarters"
+HQ_SITE = "ba:street_broadwaystreet#1"
 VENDOR = ["ba:street_fifthavenue#13"]
+
+
+def headquarters_payload():
+    """Synthetic company with offices to rent, also used by the browser tests.
+
+    The general snapshot company has no office buildings. Add two known map
+    addresses here without changing that fixture or any of its shop plans.
+    """
+    original = ba_dashboard._premises
+
+    def premises(*args, **kwargs):
+        out = original(*args, **kwargs)
+        for number, size, version, rent, traffic in ((1, "D", 2, 100, 25), (17, "J", 1, 80, 29)):
+            out["buildings"].append({
+                "key": f"ba:street_broadwaystreet#{number}", "address": f"{number} Broadway Street",
+                "hood": "ba:neighborhood_hellskitchen" if number == 1 else "ba:neighborhood_murrayhill",
+                "type": "office", "size": size, "layout": f"{size}{version}", "cap": 10, "m2": 285,
+                "traffic": traffic, "rent": rent, "deposit": rent * 60, "status": "vacant", "occupant": None,
+            })
+        return out
+
+    names = {**save_fixtures.data_names(), HQ: "Headquarters",
+             "ba:skill_purchasingagent": "Purchasing Agent", "ba:skill_logisticsmanager": "Logistics Manager",
+             "ba:skill_hrmanager": "HR Manager", "ba:skill_headhunter": "Headhunter", "ba:skill_pricingmanager": "Pricing Manager",
+             "ba:itemname_computer": "Computer", "ba:itemname_armchair1": "Armchair", "ba:itemname_officedesk1": "Office Desk"}
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.object(ba_dashboard, "_premises", premises):
+        path = os.path.join(tmp, "payload.hsg")
+        save_fixtures.write_data_save(path, save_fixtures.DAY + 7)
+        return ba_dashboard.extract(load_save(path), Names(names), None)
 
 # A liquor store's rules, cut down: a point of sale by its type flag, baskets
 # by name, a stall per 100 m² at most two, and four customer demands.
@@ -76,6 +107,24 @@ def lines_of(cap, sqm, copied=None):
 
 
 class OutfitTests(unittest.TestCase):
+    def test_headquarters_defaults_to_one_complete_workstation_per_role_whatever_the_building_capacity(self):
+        rules, prices = ba_dashboard.load_store_rules(), ba_dashboard.load_item_prices()
+        skills = rules["types"][HQ]["sk"]
+        self.assertEqual(len(skills), 5)
+        self.assertEqual(rules["types"][HQ]["rq"], [])
+        self.assertEqual(rules["types"][HQ]["i"], [])
+        for cap in (10, 50):
+            lines = outfit_lines(HQ, rules, prices, cap, 285)
+            self.assertEqual([(l["item"], l["qty"], l["group"]) for l in lines], [
+                ("ba:itemname_computer", 5, "staff"), ("ba:itemname_armchair1", 5, "staff"),
+                ("ba:itemname_officedesk1", 5, "staff")])
+            computer = lines[0]["item"]
+            self.assertTrue(set(skills) <= set(ba_dashboard.STATION_SKILLS[computer]))
+            mounts = {l["item"] for l in lines if l["why"] == "mount"}
+            for group in rules["furniture"][computer]["m"]:
+                self.assertEqual(len(mounts & set(group)), 1)
+            self.assertEqual(sum(prices["items"][l["item"]]["p"] * l["qty"] for l in lines), 9150)
+
     def test_a_fully_outfitted_store_holds_what_it_needs_and_one_item_per_demand(self):
         got = lines_of(30, 225)
         # Tills cover 30 customers an hour for the least: two small tills (1,800)
@@ -575,6 +624,30 @@ class PayloadTests(unittest.TestCase):
             payload = ba_dashboard.extract(load_save(path), Names(save_fixtures.data_names()), None)
         cls.facts = payload["openStore"]
         cls.payload = payload
+
+    def test_headquarters_is_an_office_plan_with_an_outfit_and_no_profit_model(self):
+        payload = headquarters_payload()
+        facts = payload["openStore"]
+        hq = facts["types"][HQ]
+        self.assertEqual(hq["cat"], "office")
+        self.assertIsNone(hq["model"])
+        self.assertEqual(hq["products"], [])
+        self.assertNotIn("wage", hq)
+        self.assertEqual(hq["staffSkills"], ba_dashboard.load_store_rules()["types"][HQ]["sk"])
+        self.assertEqual(set(hq["layouts"]), {"D2", "J1"})
+        for outfit in hq["layouts"].values():
+            self.assertEqual(outfit["furniture"], 9150)
+            self.assertEqual(outfit["fee"], 285 * ba_dashboard.INSTALL_FEE_PER_M2)
+            self.assertIsNone(outfit["from"])
+            self.assertEqual(sum(l[1] for l in outfit["lines"]), 15)
+            for item, *_ in outfit["lines"]:
+                self.assertTrue(facts["items"][item]["v"])
+        # Offices still bill clients; entertainment venues still have no model.
+        for slug, t in facts["types"].items():
+            if slug in ba_dashboard.OFFICE_TYPES:
+                self.assertEqual(t["model"], "office")
+            if t["cat"] in ("cinema", "theater"):
+                self.assertIsNone(t["model"])
 
     def test_every_planned_type_has_an_outfit_per_layout_to_rent_and_its_model(self):
         types = self.facts["types"]

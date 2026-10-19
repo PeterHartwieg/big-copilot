@@ -6,6 +6,28 @@ const {test} = require('node:test');
 const H = require('./_open_store.cjs');
 const {assert, en, enRe, textRe, path, ROOT, LIQ, MID, SITE, board, strip, money, planned, running, rows, until, line, opened, linked, FULL, OPENED, traded, openedPlan, tiles, pvsa, pvRow, goOpen} = H;
 
+test('opened headquarters compares its investment and keeps running costs without payback or sales claims', async t => {
+  const page = await board(t, {hq: true});
+  await H.plannedHq(page);
+  await opened(page, {key: H.HQ_SITE, typeSlug: H.HQ, type: 'Headquarters', status: 'hq', opened: OPENED,
+    hasTraded: false, revenue: 0, staff: 2});
+  await page.evaluate(key => {
+    const snap = osPlan().snap;
+    D.payback.sites[key] = {costCentre: true, cost: {...snap.inv, materials: snap.inv.decor}, profit: -5000};
+    drawOpenStore();
+  }, H.HQ_SITE);
+  await goOpen(page);
+  const text = await page.locator('#osBody').innerText();
+  assert.match(text, /Running cost[\s\S]*\$700\/week in rent/i);
+  assert.match(text, /Plan and now[\s\S]*Furniture[\s\S]*Deposit/);
+  assert.doesNotMatch(text, /Profit a day|Paid back|No day with sales|no payback for|Days to break even/);
+  assert.equal(await page.locator('#osBody svg.os-chart, #osBody .os-roi').count(), 0);
+  assert.equal(await page.locator('#osBody [data-os-results]').count(), 0);
+  await page.locator('#osCtl [data-os-plan]').selectOption('');
+  assert.match(await page.locator('#osBody .os-plan').innerText(), /Headquarters[\s\S]*Open/);
+  assert.doesNotMatch(await page.locator('#osBody .os-plan').innerText(), /paid back/);
+});
+
 for(const mode of ['self', 'firm']) test(`an untouched default loan for an existing lease survives reload and opening (${mode})`, async t => {
   const page = await board(t);
   await page.evaluate(key => { const b = osBuilding(key); b.status = 'mine'; b.occupant = null; }, SITE);

@@ -13,6 +13,65 @@ const {test} = require('node:test');
 const H = require('./_open_store.cjs');
 const {assert, en, textEn, textRe, LIQ, MID, SITE, board, steps, strip, money, planned, rows, until, line, opened, FULL, OPENED} = H;
 
+test('headquarters finds offices and prices a default outfit and weekly rent without a profit model', async t => {
+  const page = await board(t, {hq: true});
+  await page.locator(`#osBody .os-type[data-os-new="${H.HQ}"]`).click();
+  await page.locator('#osFinderMap .place.fr').first().waitFor();
+  assert.equal(await page.locator('#osFinderMap .fplan-type').textContent(), 'Headquarters');
+  assert.deepEqual(await page.evaluate(() => [osFinder.fs.cat, osFinder.fs.type]), ['office', H.HQ]);
+  const candidates = await page.$$eval('#osFinderMap .place.fr', rs => rs.map(r => r.dataset.pick));
+  assert.equal(candidates.length, 2);
+  assert.deepEqual(await page.evaluate(keys => keys.map(k => osBuilding(k).type), candidates), ['office', 'office']);
+  await page.locator(`#osFinderMap .place[data-pick="${H.HQ_SITE}"]`).click();
+  await page.locator('#osFinderMap .site [data-action="plan"]').click();
+  const cost = await page.evaluate(() => osInvestment(osPlan(), osBuilding(osPlan().key)));
+  assert.equal(cost.furniture, 9150);
+  assert.equal(cost.items, 15);
+  assert.equal(cost.deposit, 6000);
+  assert.equal(cost.firm, 9150 + 285 * 586 + 6000);
+  assert.equal(cost.self, 9150 + cost.delivery + cost.decor + 6000);
+  assert.match(await page.locator('#osBody').innerText(), /5 workstations by default/);
+  for(const role of ['Purchasing Agent', 'Logistics Manager', 'HR Manager', 'Headhunter', 'Pricing Manager'])
+    assert.ok((await page.locator('#osBody').innerText()).includes(role), role);
+  for(const mode of ['firm', 'self']){
+    await page.locator(`[data-os-mode="${mode}"]`).click();
+    assert.match(await page.locator('#osBody').innerText(), /Computer[\s\S]*Armchair[\s\S]*Office Desk/);
+    assert.match(await page.locator('#osBody').innerText(), /\$700\/week in rent/);
+    assert.match((await strip(page))[3], /Running cost[\s\S]*\$700\/week in rent/i);
+    const quantities = await page.evaluate(() => osOutfit(osPlan(), osBuilding(osPlan().key)).lines.map(l => l[1]));
+    assert.deepEqual(quantities, [5, 5, 5]);
+  }
+  assert.match(await page.locator('#osCtl [data-os-step="breakeven"]').innerText(), /Running cost$/);
+  await page.locator('#osCtl [data-os-step="breakeven"]').click();
+  const text = await page.locator('#osBody').innerText();
+  assert.match(text, /Wages are extra and depend on whom you hire and their hours/);
+  assert.match(text, /Headquarters has no sales income or break-even/);
+  assert.equal(await page.locator('#osBody svg.os-chart, #osFin').count(), 0);
+  const estimate = await page.evaluate(() => {
+    const p = osPlan(), b = osBuilding(p.key), e = osEstimate(p, b);
+    return {model: osModel(p.type, b), profit: e.profit ?? null, days: e.days ?? null, snap: p.snap};
+  });
+  assert.deepEqual([estimate.model, estimate.profit, estimate.days], [null, null, null]);
+  assert.equal(estimate.snap.profit, null);
+  assert.equal(estimate.snap.days, null);
+  await page.evaluate(() => { osPlansFor = null; osLoad(); drawOpenStore(); });
+  assert.equal(await page.evaluate(() => osPlan().type), H.HQ);
+  assert.equal(await page.evaluate(() => osStep), 'breakeven');
+  // A missing rent is unknown, never a promise of free headquarters.
+  await page.evaluate(() => { osBuilding(osPlan().key).rent = null; drawOpenStore(); });
+  assert.match(await page.locator('#osBody').innerText(), /Rent is unavailable/);
+  assert.doesNotMatch(await page.locator('#osBody').innerText(), /\$0\/week/);
+});
+
+test('headquarters can use an empty office already rented without a second deposit', async t => {
+  const page = await board(t, {hq: true});
+  await page.evaluate(key => { const b = osBuilding(key); b.status = 'mine'; b.occupant = null; }, H.HQ_SITE);
+  await H.plannedHq(page);
+  assert.equal(await page.evaluate(() => osInvestment(osPlan(), osBuilding(osPlan().key)).deposit), 0);
+  assert.match(await page.locator('#osBody').innerText(), /no additional rental deposit/);
+  assert.match((await strip(page))[3], /\$700\/week in rent/);
+});
+
 test('an empty rented shop is suggested and its investment has no second deposit', async t => {
   const page = await board(t);
   const before = await page.evaluate(({key, type}) => {

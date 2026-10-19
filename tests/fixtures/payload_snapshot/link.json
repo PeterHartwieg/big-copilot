@@ -5722,6 +5722,89 @@
     ],
     "run": 0
    },
+   "ba:businesstype_headquarters": {
+    "amt": 1,
+    "cat": "office",
+    "days": [
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0
+    ],
+    "demands": [],
+    "fee": null,
+    "feeWeekend": null,
+    "hours": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "initial": {
+     "K1": 0.0
+    },
+    "layouts": {
+     "K1": {
+      "fee": 386760.0,
+      "from": null,
+      "furniture": 9150.0,
+      "lines": [
+       [
+        "ba:itemname_computer",
+        5,
+        "staff",
+        "workcomputer"
+       ],
+       [
+        "ba:itemname_armchair1",
+        5,
+        "staff",
+        "mount"
+       ],
+       [
+        "ba:itemname_officedesk1",
+        5,
+        "staff",
+        "mount"
+       ]
+      ]
+     }
+    },
+    "model": null,
+    "noOrder": false,
+    "products": [],
+    "run": 0,
+    "staffSkills": [
+     "ba:skill_purchasingagent",
+     "ba:skill_logisticsmanager",
+     "ba:skill_hrmanager",
+     "ba:skill_headhunter",
+     "ba:skill_pricingmanager"
+    ]
+   },
    "ba:businesstype_jewelrystore": {
     "amt": 1,
     "cat": "retail",

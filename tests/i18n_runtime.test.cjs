@@ -56,6 +56,26 @@ const german = (table, extra) => {
   return it;
 };
 
+test('headquarters running cost translates complete messages and formats rent in the UI locale', () => {
+  const board = loadBoard({__t: {
+    'gr.os.hq.running': 'Laufende Kosten',
+    'gr.os.hq.rent': 'Miete pro Woche: {w}',
+    'gr.os.hq.wagesExtra': 'Löhne kommen hinzu.',
+    'gr.os.hq.noIncome': 'Die Zentrale erzielt keine Umsätze.',
+    'gr.os.hq.rentUnknown': 'Die Miete ist unbekannt.',
+  }});
+  vm.runInContext('ttSetTable("de", __t); NUM_LOCALE = ttNumLocale()', board);
+  const html = board.osHqRunningHtml({rent: 1234});
+  assert.match(html, /Laufende Kosten/);
+  assert.match(html, /Miete pro Woche: \$8\.638/);
+  assert.match(html, /Löhne kommen hinzu\./);
+  assert.match(html, /Die Zentrale erzielt keine Umsätze\./);
+  assert.doesNotMatch(html, /Running cost|Wages are extra|no sales income/);
+  assert.match(board.osHqRunningHtml({rent: null}), /Die Miete ist unbekannt\./);
+  assert.equal(vm.runInContext('osStepLabel("breakeven", {type: OS_HQ})', board), 'Laufende Kosten');
+  assert.equal(vm.runInContext('osStepLabel("breakeven", {type: "ba:businesstype_lawfirm"})', board), 'Break even');
+});
+
 test('English with no table: the English given, placeholders filled, plural by n', () => {
   const {run} = load();
   assert.equal(run('tt("sp.tile.size", "Size")'), 'Size');
