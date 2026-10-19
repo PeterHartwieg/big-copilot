@@ -2990,6 +2990,278 @@ def _rivalry(save: Save, summaries: list, history, character: str, day: int) -> 
     }
 
 
+def _rival_intel_layout(reg: dict, building: dict, rules: dict) -> dict | None:
+    """The exact layout EstimatedWeeklyIncomeHelper reads, not placed furniture."""
+    size, version = building.get("z"), building.get("v")
+    if not size or version is None or not reg.get("Layout"):
+        return None
+    key = "|".join((reg.get("businessTypeName") or "", "ba:buildingsize_" + size.lower(),
+                    str(version), reg["Layout"].lower()))
+    return rules.get("layouts", {}).get(key)
+
+
+def _rival_intel_costs(save: Save, reg: dict, building: dict, layout: dict,
+                       rules: dict) -> tuple | None:
+    """Exact daily market rent and weekly wages, or unknown (never estimates).
+
+    CalculateWeeklyWages averages wages by primary skill, then pays that
+    average for every matching workstation skill for all opening hours.
+    Empty aiEmployees causes the game to generate random people: withhold it.
+    """
+    rent_rule = rules.get("buildings", {}).get(building.get("t"), {})
+    sqm = rules.get("sizes", {}).get("ba:buildingsize_" + str(building.get("z") or "").lower())
+    per_sqm = _market_rent(building)
+    if sqm is None or per_sqm is None or "rent" not in rent_rule:
+        return None
+    rent = math.ceil(_f32(sqm * per_sqm * _f32(rent_rule["rent"])))
+    hours = sum((slot.get("endingHour") or 0) - (slot.get("startingHour") or 0)
+                for day in save.items(reg.get("scheduleDays")) if day.get("isOpen")
+                for slot in save.items(day.get("openingHourSlots")))
+    employees = [(e.get("primarySkillName"), e.get("primarySkillValue"))
+                 for e in save.items(reg.get("aiEmployees"))]
+    if not employees and hours and layout.get("sk"):
+        return None
+    for person in save.items(reg.get("poachedEmployees")):
+        character = save.deref(person.get("characterData")) or {}
+        skills = save.items(character.get("skills"))
+        if not skills:
+            return None
+        employees.append((skills[0].get("name"), skills[0].get("value")))
+    wages = collections.defaultdict(list)
+    variables = save.deref(save.root.get("gameVariables")) or {}
+    multiplier = _f32(variables.get("employeeHourlySalaryMultiplier", 1))
+    for skill, value in employees:
+        base = load_store_rules().get("skills", {}).get(skill)
+        if base is None or value is None or value < 0:
+            return None
+        boost = _f32(_f32(math.pow(_f32(value), _f32(1.05))) / 100 + 1)
+        wages[skill].append(_f32(_f32(base) * boost * multiplier))
+    average = {}
+    for skill, values in wages.items():
+        total = 0.0
+        for value in values:
+            total = _f32(total + value)
+        average[skill] = _f32(total / len(values))
+    weekly = 0.0
+    for skill in layout.get("sk", []):
+        weekly = _f32(weekly + average.get(skill, 0) * hours)
+    return rent, weekly
+
+
+def _rival_intel_available(save: Save, reg: dict, item: str, hood: str,
+                          day: int, rules: dict) -> float | None:
+    """DaysFromLastWeekThatTheItemWasNotSoldDueToMarketEvents, build 3682."""
+    special = {s.get("rivalId") for s in save.items(save.root.get("specialRivalStates")) if s.get("rivalId")}
+    if reg.get("buildingOwnerRivalId") in special or reg.get("buildingOwnerRivalId") in SPECIAL_RIVAL_NAMES:
+        return 1.0
+    events = [e for e in save.items(save.root.get("marketEvents"))
+              if e.get("itemName") == item and e.get("type") in (3, 4)]
+    if not events:
+        return 1.0
+    source = rules.get("sources", {}).get(reg.get("BusinessName"))
+    if source is None:
+        return None
+    days = 0
+    for event in events:
+        where = event.get("neighbourhood") or ""
+        if (source == 1 and where) or (source == 0 and where != hood):
+            continue
+        start = event.get("startDay") or 0
+        delay = 1 if event["type"] == 4 else rules.get("shortageDelay")
+        if delay is None:
+            return None
+        first = start + delay
+        last = start + (event.get("durationInDays") or 0) - 1
+        if event.get("stopped"):
+            last = min(last, event.get("dayStopped") or 0)
+        if day - 6 <= last:
+            days += last + 1 - max(day - 6, first)
+            if day < last:
+                days = max(days - (last - day), 0)
+    return 1 - days / 7
+
+
+def _rival_intel_shares(products: list) -> list:
+    """Normalise the private revenue/margin weights and remove those weights."""
+    revenue = sum(p["_revenue"] for p in products)
+    margin = sum(p["_margin"] for p in products)
+    products.sort(key=lambda p: (-p["_revenue"], p["item"]))
+    for product in products:
+        value = product.pop("_revenue")
+        product["revenueShare"] = 100 * value / revenue if revenue else 0.0
+        value = product.pop("_margin")
+        product["marginShare"] = 100 * value / margin if margin else 0.0
+    return products
+
+
+def _rival_intel_site(save: Save, reg: dict, building: dict, day: int,
+                     defended: set, demand: dict, indices: dict, calendar: dict | None = None) -> dict:
+    """One rival shop's exact per-customer split, scaled by its saved net income."""
+    incomes = save.items(reg.get("dailyIncomes"))
+    daily = float(incomes[-1] or 0) if incomes else 0.0
+    hood = hood_key(building) or ""
+    site = {"address": Names({}).addr(_address_of(reg)), "hood": hood,
+            "type": reg.get("businessTypeName") or "", "name": reg.get("BusinessName") or "",
+            "opened": reg.get("creationDay") or 0, "daily": daily, "products": []}
+    all_rules = load_store_rules()
+    rules = all_rules.get("rival", {})
+    layout = _rival_intel_layout(reg, building, rules)
+    kind = all_rules.get("types", {}).get(site["type"])
+    if layout is None or kind is None:
+        return site
+    impacts = dict(kind.get("i") or [])
+    primary = kind.get("p", [item for item, impact in impacts.items() if impact >= 1])
+    maximum = kind.get("a", 1)
+    variables = save.deref(save.root.get("gameVariables")) or {}
+    multiplier = variables.get("marketPriceMultiplier", 1)
+    physical = rules.get("buildings", {}).get(building.get("t"), {}).get("physical")
+    # GetProductBenefit() reads the first price listed for an item, and
+    # CalculateProductsIncome() counts the item once for every time it is listed.
+    listed, first = collections.Counter(), {}
+    for price in save.items(reg.get("retailPrices")):
+        item = price.get("itemName")
+        listed[item] += 1
+        first.setdefault(item, price)
+    rows = []
+    for item, price in first.items():
+        product = all_rules.get("products", {}).get(item)
+        if not product:
+            return site  # an unknown item may be a service; never silently omit its income
+        if not (product.get("s") or item in layout.get("p", [])):
+            continue
+        available = 1.0 if product.get("s") else _rival_intel_available(save, reg, item, hood, day, rules)
+        if available is None or (product.get("d") and physical is None):
+            return site  # unknown eligibility cannot become a zero-weight product
+        quantity = maximum if maximum <= 1 else (1 + maximum) / 2 if item in primary else 1
+        # Alcware Seasons rescales the sales ratio day by day (ba_mods.sales_ratio()).
+        ratio = product.get("r", 0)
+        if calendar and ba_mods:
+            ratio = ba_mods.sales_ratio(ratio, item, calendar, day)
+        factor = impacts.get(item, 0.025) * quantity * ratio * available * listed[item]
+        if product.get("d") and physical:
+            factor *= demand.get((item, hood), 50) / 100
+        retail = float(price.get("price") or 0)
+        wholesale = product.get("w", 0) * indices.get(item, 1) * multiplier
+        rows.append({"item": item, "price": retail, "defended": item in defended,
+                     "revenue": None, "margin": None,
+                     "_revenue": retail * factor, "_margin": (retail - wholesale) * factor})
+    costs = _rival_intel_costs(save, reg, building, layout, rules)
+    benefit = sum(p["_margin"] for p in rows)
+    # A shop priced under wholesale has a negative benefit; its customer
+    # count is still recoverable, only a zero one is not.
+    if costs is not None and incomes and benefit:
+        rent, wages = costs
+        customers = (daily * 7 + rent * 7 + wages) / benefit
+        if customers >= 0:
+            for row in rows:
+                row["revenue"] = row["_revenue"] * customers / 7
+                row["margin"] = row["_margin"] * customers / 7
+    site["products"] = _rival_intel_shares(rows)
+    return site
+
+
+def _rival_intel_median(values: list) -> float:
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    return (ordered[middle] + ordered[~middle]) / 2
+
+
+def _rival_intel(save: Save) -> dict:
+    """Product income and recent business changes; no history or core mutation."""
+    day = int(save.root.get("Day") or 0)
+    numbers = _rival_numbers(save)
+    names = _rival_names(save, numbers)
+    weekly = _rival_weekly_incomes(save)
+    table = load_buildings(save)
+    regs = save.items(save.root.get("BuildingRegistrations"))
+    calendar = ba_mods.seasons(save) if ba_mods else None
+    defenses = collections.defaultdict(set)
+    for state in save.items(save.root.get("specialRivalStates")):
+        for defense in save.items(state.get("defenseStates")):
+            if defense.get("defensiveMechanic") == 3:  # DefensiveMechanic.PriceReduction
+                defenses[state.get("rivalId")].update(save.items(defense.get("affectedItems")))
+    demand, indices = {}, {}
+    for entry in save.items(save.root.get("productMarketEntries")):
+        item = entry.get("itemName")
+        indices[item] = entry.get("importPriceIndex", 1)
+        for value in save.items(entry.get("demandValues")):
+            demand[item, value.get("neighborhood")] = value.get("demand", 50)
+    own = collections.defaultdict(list)
+    for reg in regs:
+        if reg.get("RentedByPlayer") and reg.get("businessTypeName") != EMPTY_TYPE:
+            offered = set(save.items(reg.get("cachedAvailableProducts")))
+            if offered:
+                offered |= {PAPER_BAG} | ISSUED_ITEMS
+            for price in save.items(reg.get("retailPrices")):
+                if (price.get("itemName") and (not offered or price["itemName"] in offered)
+                        and isinstance(price.get("price"), (int, float))):
+                    own[price["itemName"]].append(price["price"])
+    rivals = []
+    for rival in sorted(numbers, key=lambda r: (-weekly.get(r, 0), numbers[r], r)):
+        sites = [_rival_intel_site(save, reg, table.get(_address_of(reg), {}), day,
+                                  defenses.get(rival, set()), demand, indices, calendar)
+                 for reg in regs if reg.get("businessOwnerRivalId") == rival
+                 and not reg.get("RentedByPlayer") and reg.get("businessTypeName")
+                 and reg.get("businessTypeName") != EMPTY_TYPE
+                 and _rival_building_type(reg, table) in RIVAL_BUILDING_TYPES]
+        sites.sort(key=lambda site: (-site["daily"], site["address"], site["name"]))
+        # Your price rides on every shop's rows too: a rival's own total can be
+        # withheld below while its shops' tables still show.
+        for site in sites:
+            for product in site["products"]:
+                product["yourPrice"] = _rival_intel_median(own[product["item"]]) if product["item"] in own else None
+        groups = collections.defaultdict(list)
+        for site in sites:
+            for product in site["products"]:
+                groups[product["item"]].append(product)
+        # A per-customer share from two shops cannot be added: they may serve
+        # different numbers of customers. Withhold that total if a scale is unknown.
+        known = all(site["products"] and all(p["revenue"] is not None for p in site["products"])
+                    for site in sites)
+        products = []
+        if known or len(sites) == 1:
+            for item in _in_order(groups):
+                sold = groups[item]
+                revenue = sum(p["revenue"] for p in sold) if known else None
+                margin = sum(p["margin"] for p in sold) if known else None
+                products.append({"item": item, "revenue": revenue, "margin": margin,
+                                 "_revenue": revenue if known else sold[0]["revenueShare"],
+                                 "_margin": margin if known else sold[0]["marginShare"],
+                                 "shops": len(sold), "price": _rival_intel_median([p["price"] for p in sold]),
+                                 "yourPrice": _rival_intel_median(own[item]) if item in own else None,
+                                 "defended": any(p["defended"] for p in sold)})
+        products = _rival_intel_shares(products)
+        rivals.append({"number": numbers[rival], "name": names.get(numbers[rival]),
+                       "weekly": float(weekly.get(rival, 0)), "shops": len(sites),
+                       "buildings": sum(reg.get("buildingOwnerRivalId") == rival for reg in regs),
+                       "top": products[0]["item"] if products else None,
+                       "products": products, "sites": sites})
+    # Names on historical events are authoritative. Associate only an unambiguous
+    # current company name; an address since taken over cannot identify its old owner.
+    by_name = collections.defaultdict(list)
+    for number, name in names.items():
+        by_name[name].append(number)
+    events = []
+    for event in save.items(save.root.get("marketEvents")):
+        if event.get("type") not in (0, 1):
+            continue
+        address = save.address(event.get("address"))
+        # Older builds stored the street as a number, which names no street today.
+        if address and not isinstance(address[0], str):
+            address = None
+        name = event.get("rivalName") or None
+        matches = by_name.get(name, [])
+        events.append({"day": int(event.get("startDay") or 0),
+                       "kind": "opened" if event["type"] == 0 else "closed",
+                       "rival": matches[0] if len(matches) == 1 else None, "rivalName": name,
+                       "business": event.get("businessName") or "",
+                       "type": event.get("businessTypeName") or "", "address": Names({}).addr(address) if address else "",
+                       "hood": hood_key(table.get(address)) or event.get("neighbourhood") or ""})
+    events.sort(key=lambda e: (-e["day"], e["address"], e["kind"], e["business"],
+                               e["rivalName"] or "", e["type"]))
+    return {"day": day, "rivals": rivals, "events": events[:60]}
+
+
 # ---------------------------------------------------------------- extraction
 # The payload's top-level keys, in the order the page has always been sent
 # them. Each is the core's (computed on every build) or one section's
@@ -3002,7 +3274,7 @@ PAYLOAD_KEYS = (
     "openFactory", "trends", "hypeExposure", "hours", "hourFindings", "staffing",
     "factoryStaffing", "officeStaffing", "candidates", "hiring", "plan", "names",
     "skillNames", "marketingAgencies", "cashFlow", "ledgerDays", "alerts", "minor",
-    "alertsDemand", "goals", "rivalry", "realEstateCounts", "realEstate", "sitesGone", "wholesale",
+    "alertsDemand", "goals", "rivalry", "rivalIntel", "realEstateCounts", "realEstate", "sitesGone", "wholesale",
 )
 # Keys only some saves carry: `mods` is there only for a save a mod adapter
 # reads (ba_mods.detect()), so a vanilla save's payload is what it was.
@@ -3520,6 +3792,8 @@ SECTIONS = {
                    "produce": _real_estate_section},
     "goals": {"keys": ("goals",), "needs": (),
               "produce": lambda b: {"goals": _goals(b.save, b.names, b.shared["businesses"])}},
+    "rivalIntel": {"keys": ("rivalIntel",), "needs": (),
+                   "produce": lambda b: {"rivalIntel": _rival_intel(b.save)}},
 }
 
 
@@ -18849,7 +19123,9 @@ def load_store_rules() -> dict:
     customers an hour it adds, the products it holds, its tags, what it stands
     on, who sells it), `types` per business type (products and their impact,
     requirements, customer demands), `hoods`, `banks` and `vendors`. Generated
-    by make_store_rules.py and written to /data/ by the browser worker. A
+    by make_store_rules.py and written to /data/ by the browser worker. `rival`
+    adds the AI layouts' purchasers/workstation skills, sourcing, size areas,
+    rent multipliers and shortage delay for the rival product breakdown. A
     missing file is not an error: the view then has nothing to plan with.
     """
     global _store_rules
@@ -18863,7 +19139,7 @@ def load_store_rules() -> dict:
     return _store_rules
 
 
-STORE_RULE_PARTS = ("products", "furniture", "types", "hoods", "banks", "vendors", "vehicles", "skills")
+STORE_RULE_PARTS = ("products", "furniture", "types", "hoods", "banks", "vendors", "vehicles", "skills", "rival")
 # The building kinds a store can be planned in.
 PLAN_KINDS = ("retail", "office", "cinema", "theater")
 PLAN_HQ = "ba:businesstype_headquarters"

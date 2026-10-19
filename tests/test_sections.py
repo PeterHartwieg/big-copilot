@@ -79,6 +79,10 @@ class Registry(unittest.TestCase):
                     "hours", "hourFindings"):
             self.assertNotIn(key, sections)
 
+    def test_rival_intel_is_an_independent_on_demand_section(self):
+        self.assertEqual(ba_dashboard.SECTIONS["rivalIntel"]["keys"], ("rivalIntel",))
+        self.assertEqual(ba_dashboard.SECTIONS["rivalIntel"]["needs"], ())
+
 
 class Sections(unittest.TestCase):
     """The data company (shops, a factory and staff) on its day N."""
@@ -135,6 +139,19 @@ class Sections(unittest.TestCase):
         whole = ba_dashboard.materialize_all(self.build())
         self.assertTrue(whole["factoryStaffing"]["cap"], "a factory to staff")
         self.assertTrue(whole["hiring"]["sites"], "sites to hire for")
+        self.assertTrue(whole["rivalIntel"]["rivals"], "a rival company to inspect")
+
+    def test_rival_intel_waits_until_requested_and_computes_once(self):
+        with unittest.mock.patch.object(ba_dashboard, "_rival_intel", wraps=ba_dashboard._rival_intel) as intel:
+            build = self.build()
+            intel.assert_not_called()
+            self.assertNotIn("rivalIntel", build.core)
+            sent = json.dumps(build.core)
+            first = ba_dashboard.section(build, "rivalIntel")
+            self.assertIs(ba_dashboard.section(build, "rivalIntel"), first)
+            intel.assert_called_once_with(build.save)
+            self.assertEqual(set(build.sections), {"rivalIntel"})
+            self.assertEqual(json.dumps(build.core), sent)
 
     def test_every_section_computed_is_the_whole_payload(self):
         whole = normalise(ba_dashboard.extract(load_save(self.path), Names(dict(self.names)), None))
@@ -264,7 +281,7 @@ class Sections(unittest.TestCase):
         names = list(ba_dashboard.SECTIONS)
         orders = [names[::-1],
                   ["openStore", "staffing", "hiring", "goals", "products",
-                   "openFactory", "premises", "factoryStaffing", "officeStaffing", "realEstate", "wholesale"]]
+                   "openFactory", "premises", "factoryStaffing", "officeStaffing", "realEstate", "wholesale", "rivalIntel"]]
         import random
         shuffled = names[:]
         random.Random(238).shuffle(shuffled)

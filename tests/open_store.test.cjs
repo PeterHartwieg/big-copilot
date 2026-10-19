@@ -108,7 +108,7 @@ test('the view is Expansion\'s, New until opened, and starts on What with its si
   const tab = page.locator('#localNav a[data-route="expansion/open"]');
   assert.equal(await tab.locator('.feature-new').isVisible(), true, 'New until the view is opened');
   assert.deepEqual(await page.$$eval('#localNav a[data-route]', as => as.map(a => a.dataset.route)),
-    ['expansion/demand', 'expansion/finder', 'expansion/open', 'expansion/factory']);
+    ['expansion/demand', 'expansion/finder', 'expansion/open', 'expansion/factory', 'expansion/rivals']);
   await tab.click();
   await page.waitForFunction(() => route === 'expansion/open');
   assert.equal(await page.locator('#localNav a[data-route="expansion/open"] .feature-new').isVisible(), false);
