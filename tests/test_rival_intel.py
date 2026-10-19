@@ -161,6 +161,11 @@ class RivalIntelTests(unittest.TestCase):
         # Last week is days 14..20: only 14 and 15 were blocked.
         self.assertAlmostEqual(self.products()[A]["revenueShare"], 100 * (50 / 7) / (50 / 7 + 5))
 
+    def test_saved_neighbourhood_demand_scales_a_demanded_product(self):
+        # A at 80% demand: revenue 10 * .8 / .5 = 16 against B's 5.
+        self.root["productMarketEntries"][0]["demandValues"][0]["demand"] = 80
+        self.assertAlmostEqual(self.products()[A]["revenueShare"], 100 * 16 / 21)
+
     def test_an_item_listed_twice_counts_twice_at_its_first_price(self):
         # GetProductBenefit() reads the first price; CalculateProductsIncome() walks every entry.
         self.root["BuildingRegistrations"][0]["retailPrices"] = [
