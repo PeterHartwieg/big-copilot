@@ -6322,7 +6322,8 @@ def _wholesale_shopping(save: Save, names: Names, businesses: list) -> dict:
             stock = max(0, line["units"])
             week = max(0.0, _week_sold(business, line))
             if slug == care and service_use:
-                week = max(0.0, week - line.get("weekFree", 0)) + service_use
+                # Free units past the services are bottles given away at a $0 price.
+                week = max(0.0, week - min(line.get("weekFree", 0), service_use)) + service_use
             deals = contracts.get((business["key"], slug), [])
             managed = "route" if targets.get((business["key"], slug), (0,))[0] > 0 else \
                 "import" if imports.get((business["key"], slug), {}).get("active") else None

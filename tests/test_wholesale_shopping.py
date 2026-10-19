@@ -139,7 +139,8 @@ class WholesaleShopping(unittest.TestCase):
         # hours do not, so the use is the paid bottles plus every service.
         cases = (("unwatched: 35 bottles and 100 free", 135, 100, 100, (135, 160, 200)),
                  ("watched: 20 bottles", 20, None, 65, (85, 100, 100)),
-                 ("services only", 0, None, 100, (100, 120, 150)))
+                 ("services only", 0, None, 100, (100, 120, 150)),
+                 ("35 given away at $0 and 100 free", 135, 135, 100, (135, 160, 200)))
         for name, sold, free, services, expect in cases:
             with self.subTest(name):
                 c = Company()
