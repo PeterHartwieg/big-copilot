@@ -3001,7 +3001,7 @@ PAYLOAD_KEYS = (
     "openFactory", "trends", "hypeExposure", "hours", "hourFindings", "staffing",
     "factoryStaffing", "officeStaffing", "candidates", "hiring", "plan", "names",
     "skillNames", "marketingAgencies", "cashFlow", "ledgerDays", "alerts", "minor",
-    "alertsDemand", "goals", "rivalry", "realEstateCounts", "realEstate", "sitesGone",
+    "alertsDemand", "goals", "rivalry", "realEstateCounts", "realEstate", "sitesGone", "wholesale",
 )
 # Keys only some saves carry: `mods` is there only for a save a mod adapter
 # reads (ba_mods.detect()), so a vanilla save's payload is what it was.
@@ -3455,6 +3455,11 @@ def _products_section(build: Build) -> dict:
     return {"products": products}
 
 
+def _wholesale_section(build: Build) -> dict:
+    """Section wholesale: purchases now and recurring amounts for existing shops."""
+    return {"wholesale": _wholesale_shopping(build.save, build.names, build.shared["businesses"])}
+
+
 def _premises_section(build: Build) -> dict:
     """Section premises: buildings for the location finder."""
     return {"premises": _premises(build.save, build.names, build.shared["market"], build.shared["estate"])}
@@ -3504,6 +3509,8 @@ SECTIONS = {
                  "produce": _premises_section},
     "products": {"keys": ("products",), "needs": (),
                  "produce": _products_section},
+    "wholesale": {"keys": ("wholesale",), "needs": (),
+                  "produce": _wholesale_section},
     "openStore": {"keys": ("openStore",), "needs": ("premises",),
                   "produce": _open_store_section},
     "openFactory": {"keys": ("openFactory",), "needs": (),
@@ -6223,6 +6230,89 @@ def _supply_wholesale(save: Save, index: dict, day: int, spent_today: float) -> 
                 deal["day"] = WEEKDAYS[due % 7]
                 deal["days"] = round(max(0.0, due - day - spent_today), 2)
     return wholesale
+
+
+def _wholesale_buy(need: float, stock: float, deliveries: list) -> float:
+    """Extra stock needed now over seven days, including gaps before each drop.
+
+    Consumption follows the measured weekly average, with the same margin as
+    supply. A later delivery cannot repair an earlier shortage. Quantities
+    are rounded to purchasable boxes by the caller, after this calculation.
+    """
+    received, extra = 0.0, 0.0
+    for days, amount in sorted(deliveries):
+        extra = max(extra, need * days / 7 - stock - received)
+        received += amount
+    return max(extra, need - stock - received, 0.0)
+
+
+def _wholesale_shopping(save: Save, names: Names, businesses: list) -> dict:
+    """Wholesale purchases and weekly setup amounts; existing supply is unchanged.
+
+    Only known physical products at open shops are listed. Daily logistics
+    and direct imports are identified, never treated as missing supply.
+    Wholesale contracts keep their individual dates: an early small drop
+    cannot stand in for a larger drop later in the week. An outstanding drop
+    without a future date makes Buy now unknown until the player checks it.
+    """
+    products = load_store_rules().get("products") or {}
+    result = {"rows": [], "margin": SUPPLY_MARGIN, "available": bool(products)}
+    if not products:
+        return result
+    _edges, targets = _supply_plans(save, businesses)
+    now = save.root["Day"] + (save.root["Hour"] + int(save.root["Minute"]) / 60) / 24
+    contracts = collections.defaultdict(list)
+    for contract in save.items(save.root.get("DeliveryContracts")):
+        if not contract.get("enabled"):
+            continue
+        key = site_key(save.address(contract.get("businessAddress")))
+        due = contract.get("nextDeliveryDay")
+        days = due - now if isinstance(due, (int, float)) and math.isfinite(due) else None
+        recurring = bool(contract.get("repeatingOrder") and not contract.get("isUrgentOrder"))
+        for entry in save.items(contract.get("items")):
+            slug, amount = entry.get("itemName"), entry.get("amount") or 0
+            if slug and amount > 0:
+                contracts[(key, slug)].append((days, amount, recurring))
+    imports, _configured, _next = _supply_imports(save, names, save.root["Day"])
+    for s, business in enumerate(businesses):
+        if business.get("status") != "retail" or business.get("closed"):
+            continue
+        lines = {line["slug"]: line for line in business["lines"] if line.get("slug")}
+        care = "ba:itemname_haircareproduct"
+        # The store model already counts one Hair Care Product per service.
+        service_use = sum(_week_sold(business, line) for slug, line in lines.items()
+                          if products.get(slug, {}).get("s") and not line.get("retired")) \
+            if business.get("typeSlug") == "ba:businesstype_hairdresser" else 0
+        if service_use and care not in lines:
+            lines[care] = {"slug": care, "item": names.label(care), "units": 0, "rate": 0}
+        for slug in _in_order(lines):
+            line, product = lines[slug], products.get(slug)
+            if not product or product.get("s") or product.get("k") or line.get("issued") or line.get("retired"):
+                continue
+            stock = max(0, line["units"])
+            week = max(0.0, _week_sold(business, line)) + (service_use if slug == care else 0)
+            deals = contracts.get((business["key"], slug), [])
+            managed = "route" if targets.get((business["key"], slug), (0,))[0] > 0 else \
+                "import" if imports.get((business["key"], slug), {}).get("active") else None
+            unknown = any(days is None or days <= 0 for days, _amount, _recurring in deals)
+            arrivals = [[days, amount] for days, amount, _recurring in deals if days is not None and 0 < days < 7]
+            young = business.get("tradeDays", 0) < MIN_TRADE_DAYS
+            reason = managed or ("new" if young else "no-sales" if not week else None)
+            need = week * (1 + SUPPLY_MARGIN)
+            weekly = _ceil_ten(need) if not reason else None
+            buy = _wholesale_buy(need, stock, arrivals) if not reason and not unknown else None
+            box = product.get("bx") or None
+            boxes = math.ceil(round(buy / box, 9)) if buy is not None and box else None
+            result["rows"].append({
+                "s": s, "slug": slug, "item": line["item"], "stock": stock,
+                "week": round(week, 1), "box": box, "weekly": weekly,
+                "buy": boxes * box if boxes is not None else math.ceil(buy) if buy is not None else None,
+                "boxes": boxes, "scheduled": sum(amount for _days, amount in arrivals),
+                "deliveries": [[round(days, 3), amount] for days, amount in sorted(arrivals)],
+                "current": sum(amount for _days, amount, recurring in deals if recurring),
+                "reason": reason, "deliveryUnknown": unknown,
+            })
+    return result
 
 
 def _supply_imports(save: Save, names: Names, day: int) -> tuple:
