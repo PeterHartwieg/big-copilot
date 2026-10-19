@@ -17916,7 +17916,7 @@ const riBar = p => Math.max(0, Math.min(100, riShare(p)));
 const riPrice = p => p == null ? "" : tt("gr.rivals.price", "${p:,.2f}", {p});
 /* One product table: the rival's (with its shops and your price) or a shop's. */
 function riProducts(rows, {whole = false, withheld = false} = {}){
-  if(withheld) return `<p class="rv-empty">${tt("gr.rivals.withheld", "One of its shops can't be worked out from the save, so its products are not added up across shops. Open a shop below for that shop's own split.")}</p>`;
+  if(withheld) return `<p class="rv-empty">${tt("gr.rivals.withheld", "One of its shops can't be worked out from the save, so its products are not added up across shops.")} ${tt("gr.rivals.withheld.open", "Open a shop below for that shop's own split.")}</p>`;
   if(!rows || !rows.length) return `<p class="rv-empty">${tt("gr.rivals.unknownSplit", "This split can't be worked out from the save: a rent, wage, layout or product fact the game uses is missing, as it is for some modded business types.")}</p>`;
   const head = `<thead><tr><th class="l">${tt("gr.rivals.col.item", "Product")}</th>`
     + `<th data-tip="${attr(tt("gr.rivals.col.share.tip", "The product's part of this rival's sales, by the game's own weekly-income formula"))}">${tt("gr.rivals.col.share", "Revenue share")}</th>`
@@ -17973,9 +17973,11 @@ function riWire(sec){
   riWired = sec;
   sec.addEventListener("click", e => {
     const who = e.target.closest && e.target.closest("[data-rv-rival]");
-    if(who){ riPick = Number(who.dataset.rvRival); drawRivals(); wireTips(); return; }
+    /* The redraw replaces the control pressed; focus goes back to its new copy. */
+    const refocus = (attr, value) => { const el = sec.querySelector(`[${attr}="${CSS.escape(value)}"]`); if(el) el.focus(); };
+    if(who){ riPick = Number(who.dataset.rvRival); drawRivals(); wireTips(); refocus("data-rv-rival", who.dataset.rvRival); return; }
     const hist = e.target.closest && e.target.closest("[data-rv-hist]");
-    if(hist){ e.preventDefault(); riHistAll = hist.dataset.rvHist === "all"; drawRivals(); wireTips(); }
+    if(hist){ e.preventDefault(); riHistAll = hist.dataset.rvHist === "all"; drawRivals(); wireTips(); refocus("data-rv-hist", hist.dataset.rvHist); }
   });
   /* A shop's table is drawn as it opens, and stays open across redraws. */
   sec.addEventListener("toggle", e => {

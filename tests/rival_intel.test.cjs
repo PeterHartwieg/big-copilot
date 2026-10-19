@@ -194,7 +194,7 @@ test('a withheld company total and a shop the save cannot split say so, not that
     drawRivals();
   });
   const empty = page.locator('#secRivals > .rv-empty');
-  assert.equal(await empty.innerText(), en('gr.rivals.withheld'));
+  assert.equal(await empty.innerText(), `${en('gr.rivals.withheld')} ${en('gr.rivals.withheld.open')}`);
   const sites = page.locator('#secRivals .rv-site');
   await sites.nth(1).locator('summary').click();
   await page.waitForFunction(() => document.querySelectorAll('#secRivals .rv-site')[1].querySelector('.rv-empty'));
@@ -203,4 +203,14 @@ test('a withheld company total and a shop the save cannot split say so, not that
   await sites.nth(0).locator('summary').click();
   await page.waitForFunction(() => document.querySelector('#secRivals .rv-site .rv-t'));
   assert.equal(await sites.nth(0).locator('.rv-yours').first().innerText(), en('gr.rivals.price', {p: 4.75}));
+});
+
+test('picking a rival or a history filter keeps the keyboard focus on that control', async t => {
+  const page = await board(t);
+  await page.locator('#secRivals .rv-who').nth(1).focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.rvRival), '9');
+  await page.locator('#secRivals [data-rv-hist="one"]').focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.rvHist), 'one');
 });

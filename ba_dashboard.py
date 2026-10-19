@@ -3051,7 +3051,7 @@ def _rival_intel_costs(save: Save, reg: dict, building: dict, layout: dict,
 def _rival_intel_available(save: Save, reg: dict, item: str, hood: str,
                           day: int, rules: dict) -> float | None:
     """DaysFromLastWeekThatTheItemWasNotSoldDueToMarketEvents, build 3682."""
-    special = {s.get("rivalId") for s in save.items(save.root.get("specialRivalStates"))}
+    special = {s.get("rivalId") for s in save.items(save.root.get("specialRivalStates")) if s.get("rivalId")}
     if reg.get("buildingOwnerRivalId") in special or reg.get("buildingOwnerRivalId") in SPECIAL_RIVAL_NAMES:
         return 1.0
     events = [e for e in save.items(save.root.get("marketEvents"))
