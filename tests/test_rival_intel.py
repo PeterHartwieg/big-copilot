@@ -150,6 +150,10 @@ class RivalIntelTests(unittest.TestCase):
         self.assertAlmostEqual(self.products()[A]["revenueShare"], 100 * (40 / 7) / (40 / 7 + 5))
         self.root["specialRivalStates"] = [{"rivalId": "alpha"}]
         self.assertAlmostEqual(self.products()[A]["revenueShare"], 200 / 3)
+        # A special rival state with no rivalId exempts nobody, a city-owned building included.
+        self.root["BuildingRegistrations"][0]["buildingOwnerRivalId"] = None
+        self.root["specialRivalStates"] = [{}]
+        self.assertAlmostEqual(self.products()[A]["revenueShare"], 100 * (40 / 7) / (40 / 7 + 5))
 
     def test_stopped_supply_event_counts_only_days_through_its_stop(self):
         self.root["marketEvents"] = [event(10, kind=4, itemName=A, neighbourhood=HOOD,

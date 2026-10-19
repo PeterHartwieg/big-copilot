@@ -179,11 +179,15 @@ test('a share outside 0–100 is printed as it is, with only its bar held to the
   await page.evaluate(() => {
     const p = D.rivalIntel.rivals[0].products;
     p[0].marginShare = 133.3; p[1].marginShare = -33.3;
+    p[0].revenueShare = 120; p[1].revenueShare = -20;
     drawRivals();
   });
   const rows = productRows(page);
   assert.equal(await rows.nth(0).locator('td').nth(2).innerText(), en('gr.rivals.pct', {p: 133.3}));
   assert.equal(await rows.nth(1).locator('td').nth(2).innerText(), en('gr.rivals.pct', {p: -33.3}));
+  assert.ok((await rows.nth(0).innerText()).includes(en('gr.rivals.pct', {p: 120})));
+  assert.equal(await rows.nth(0).locator('.rv-bar i').getAttribute('style'), 'width:100.0%');
+  assert.equal(await rows.nth(1).locator('.rv-bar i').getAttribute('style'), 'width:0.0%');
 });
 
 test('a withheld company total and a shop the save cannot split say so, not that nothing sells', async t => {
