@@ -173,3 +173,34 @@ test('while the section is worked out the page waits, then draws it', async t =>
   await page.waitForFunction(() => document.querySelectorAll('#secRivals .rv-who').length === 2);
   assert.equal(await page.locator('#secRivals .od-wait').count(), 0);
 });
+
+test('a share outside 0–100 is printed as it is, with only its bar held to the box', async t => {
+  const page = await board(t);
+  await page.evaluate(() => {
+    const p = D.rivalIntel.rivals[0].products;
+    p[0].marginShare = 133.3; p[1].marginShare = -33.3;
+    drawRivals();
+  });
+  const rows = productRows(page);
+  assert.equal(await rows.nth(0).locator('td').nth(2).innerText(), en('gr.rivals.pct', {p: 133.3}));
+  assert.equal(await rows.nth(1).locator('td').nth(2).innerText(), en('gr.rivals.pct', {p: -33.3}));
+});
+
+test('a withheld company total and a shop the save cannot split say so, not that nothing sells', async t => {
+  const page = await board(t);
+  await page.evaluate(() => {
+    const r = D.rivalIntel.rivals[0];
+    r.products = []; r.top = null; r.sites[1].products = [];
+    drawRivals();
+  });
+  const empty = page.locator('#secRivals > .rv-empty');
+  assert.equal(await empty.innerText(), en('gr.rivals.withheld'));
+  const sites = page.locator('#secRivals .rv-site');
+  await sites.nth(1).locator('summary').click();
+  await page.waitForFunction(() => document.querySelectorAll('#secRivals .rv-site')[1].querySelector('.rv-empty'));
+  assert.equal(await sites.nth(1).locator('.rv-empty').innerText(), en('gr.rivals.unknownSplit'));
+  // The other shop still shows your price on its own rows.
+  await sites.nth(0).locator('summary').click();
+  await page.waitForFunction(() => document.querySelector('#secRivals .rv-site .rv-t'));
+  assert.equal(await sites.nth(0).locator('.rv-yours').first().innerText(), en('gr.rivals.price', {p: 4.75}));
+});

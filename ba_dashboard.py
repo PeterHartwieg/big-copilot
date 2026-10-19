@@ -3095,7 +3095,7 @@ def _rival_intel_shares(products: list) -> list:
 
 
 def _rival_intel_site(save: Save, reg: dict, building: dict, day: int,
-                     defended: set, demand: dict, indices: dict) -> dict:
+                     defended: set, demand: dict, indices: dict, calendar: dict | None = None) -> dict:
     """One rival shop's exact per-customer split, scaled by its saved net income."""
     incomes = save.items(reg.get("dailyIncomes"))
     daily = float(incomes[-1] or 0) if incomes else 0.0
@@ -3115,9 +3115,15 @@ def _rival_intel_site(save: Save, reg: dict, building: dict, day: int,
     variables = save.deref(save.root.get("gameVariables")) or {}
     multiplier = variables.get("marketPriceMultiplier", 1)
     physical = rules.get("buildings", {}).get(building.get("t"), {}).get("physical")
-    rows = []
+    # GetProductBenefit() reads the first price listed for an item, and
+    # CalculateProductsIncome() counts the item once for every time it is listed.
+    listed, first = collections.Counter(), {}
     for price in save.items(reg.get("retailPrices")):
         item = price.get("itemName")
+        listed[item] += 1
+        first.setdefault(item, price)
+    rows = []
+    for item, price in first.items():
         product = all_rules.get("products", {}).get(item)
         if not product:
             return site  # an unknown item may be a service; never silently omit its income
@@ -3127,7 +3133,11 @@ def _rival_intel_site(save: Save, reg: dict, building: dict, day: int,
         if available is None or (product.get("d") and physical is None):
             return site  # unknown eligibility cannot become a zero-weight product
         quantity = maximum if maximum <= 1 else (1 + maximum) / 2 if item in primary else 1
-        factor = impacts.get(item, 0.025) * quantity * product.get("r", 0) * available
+        # Alcware Seasons rescales the sales ratio day by day (ba_mods.sales_ratio()).
+        ratio = product.get("r", 0)
+        if calendar and ba_mods:
+            ratio = ba_mods.sales_ratio(ratio, item, calendar, day)
+        factor = impacts.get(item, 0.025) * quantity * ratio * available * listed[item]
         if product.get("d") and physical:
             factor *= demand.get((item, hood), 50) / 100
         retail = float(price.get("price") or 0)
@@ -3137,7 +3147,9 @@ def _rival_intel_site(save: Save, reg: dict, building: dict, day: int,
                      "_revenue": retail * factor, "_margin": (retail - wholesale) * factor})
     costs = _rival_intel_costs(save, reg, building, layout, rules)
     benefit = sum(p["_margin"] for p in rows)
-    if costs is not None and incomes and benefit > 0:
+    # A shop priced under wholesale has a negative benefit; its customer
+    # count is still recoverable, only a zero one is not.
+    if costs is not None and incomes and benefit:
         rent, wages = costs
         customers = (daily * 7 + rent * 7 + wages) / benefit
         if customers >= 0:
@@ -3162,6 +3174,7 @@ def _rival_intel(save: Save) -> dict:
     weekly = _rival_weekly_incomes(save)
     table = load_buildings(save)
     regs = save.items(save.root.get("BuildingRegistrations"))
+    calendar = ba_mods.seasons(save) if ba_mods else None
     defenses = collections.defaultdict(set)
     for state in save.items(save.root.get("specialRivalStates")):
         for defense in save.items(state.get("defenseStates")):
@@ -3186,7 +3199,7 @@ def _rival_intel(save: Save) -> dict:
     rivals = []
     for rival in sorted(numbers, key=lambda r: (-weekly.get(r, 0), numbers[r], r)):
         sites = [_rival_intel_site(save, reg, table.get(_address_of(reg), {}), day,
-                                  defenses.get(rival, set()), demand, indices)
+                                  defenses.get(rival, set()), demand, indices, calendar)
                  for reg in regs if reg.get("businessOwnerRivalId") == rival
                  and not reg.get("RentedByPlayer") and reg.get("businessTypeName")
                  and reg.get("businessTypeName") != EMPTY_TYPE
@@ -3233,13 +3246,16 @@ def _rival_intel(save: Save) -> dict:
         if event.get("type") not in (0, 1):
             continue
         address = save.address(event.get("address"))
+        # Older builds stored the street as a number, which names no street today.
+        if address and not isinstance(address[0], str):
+            address = None
         name = event.get("rivalName") or None
         matches = by_name.get(name, [])
         events.append({"day": int(event.get("startDay") or 0),
                        "kind": "opened" if event["type"] == 0 else "closed",
                        "rival": matches[0] if len(matches) == 1 else None, "rivalName": name,
                        "business": event.get("businessName") or "",
-                       "type": event.get("businessTypeName") or "", "address": Names({}).addr(address),
+                       "type": event.get("businessTypeName") or "", "address": Names({}).addr(address) if address else "",
                        "hood": hood_key(table.get(address)) or event.get("neighbourhood") or ""})
     events.sort(key=lambda e: (-e["day"], e["address"], e["kind"], e["business"],
                                e["rivalName"] or "", e["type"]))

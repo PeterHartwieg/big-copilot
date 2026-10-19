@@ -110,7 +110,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | `alertsDemand` | `_alerts(..., ("cap", "dem"))`'s second result: the same `supply.facts` with factory lines sized on demand, the supply findings run again and every other finding shared: `{lines, minor}`, the shape of `alerts` and `minor` | `alertLines()`, when the sizing switch reads Demand |
 | `goals` | Section `goals`: `_goals()` | `drawGoals` |
 | `rivalry` | `_rivalry()`, from `_rival_weekly_incomes()`, `_player_weekly_income()` and `_rivalry_backfill()`; the days in first place are counted over `History.rivalry()`, the history's `rivalry` record. `null` when the save lists no rivals | `rlShown`, `drawKpis` (through `rlKpiTile`), `rlGoalsHtml` (from `drawGoals`) |
-| `rivalIntel` | Section `rivalIntel`: `_rival_intel()`, every company in leaderboard order, with per-product revenue and margin shares, daily dollars recovered from the latest saved net income plus exact market rent and layout wages, shop details, buildings owned today, and the latest 60 opened/closed market events. Item, business-type and neighbourhood values are game ids; `revenue` and `margin` are null when their scale cannot be reproduced. `{day, rivals, events}` | `drawRivals` (Growth › Rivals), through `odNeed('rivalIntel')` |
+| `rivalIntel` | Section `rivalIntel`: `_rival_intel()`, every company in leaderboard order, with per-product revenue and margin shares, daily dollars recovered from the latest saved net income plus exact market rent and layout wages, shop details, buildings owned today, and the latest 60 opened/closed market events. Item, business-type and neighbourhood values are game ids; `revenue` and `margin` are null when their scale cannot be reproduced. `{day, rivals, events}` | `drawRivals` (Expansion › Rivals), through `odNeed('rivalIntel')` |
 | `realEstateCounts` | Core: `_estate_counts()` over `_estate_owned()` (kept on `build.shared["estate"]`), with the tax plan from `_real_estate()` on the last day before tax day: `{owned, flagged, gain, taxEve}` | `routeCount()` (Real estate's view counts) and the search's live tag, through `reCounts()` |
 | `realEstate` | Section `realEstate`: `_real_estate()`, from `_estate_owned()` (owned rows with `_estate_market()`, `_best_price()`, `_property_tax_day()`, `_fill_days()`, `_estate_payback()`, and `_rent_multiplier()` over the last rent statements, `ba_mods.ECONOMY_RENT_FACTOR` its fallback), `_estate_buy()` (listings plus buildings rented in, `_listing_income()`), and `_tax_shelter()` over `_tax_period()` with `_tax_pick()`: `{owned, villas, mult, histFrom, buy, tax}`. `_premises()` reads the same multiplier for `forSale[].payback` | `drawEstate`, `drawEstateBuy` and the rent write `gwRent()`, through `reData()` |
 
@@ -498,7 +498,7 @@ restoring the focused action if the keyboard is still inside the popover.
 | openStore | `openStore` | premises | Open a store; Plan a factory's location, investment and financing; Demand popovers |
 | openFactory | `openFactory` | (none) | Plan a factory's costs and opening requirements |
 | goals | `goals` | (none) | Milestones |
-| rivalIntel | `rivalIntel` | (none) | Growth › Rivals: products, shops and recent opened/closed businesses |
+| rivalIntel | `rivalIntel` | (none) | Expansion › Rivals: products, shops and recent opened/closed businesses |
 | realEstate | `realEstate` | (none) | Real estate's My buildings and Buy a building |
 
 The core contains the warnings' keys: `meta`, `kpi`, `names`, `skillNames`, `businesses`,

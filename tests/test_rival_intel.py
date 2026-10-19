@@ -157,6 +157,35 @@ class RivalIntelTests(unittest.TestCase):
         # Last week is days 14..20: only 14 and 15 were blocked.
         self.assertAlmostEqual(self.products()[A]["revenueShare"], 100 * (50 / 7) / (50 / 7 + 5))
 
+    def test_an_item_listed_twice_counts_twice_at_its_first_price(self):
+        # GetProductBenefit() reads the first price; CalculateProductsIncome() walks every entry.
+        self.root["BuildingRegistrations"][0]["retailPrices"] = [
+            {"itemName": A, "price": 10}, {"itemName": A, "price": 20}, {"itemName": B, "price": 20}]
+        products = self.products()
+        self.assertAlmostEqual(products[A]["revenueShare"], 80)
+        self.assertEqual((products[A]["price"], products[A]["shops"]), (10, 1))
+
+    def test_seasons_sales_ratio_reaches_the_split(self):
+        patch.object(bd.ba_mods, "seasons", return_value={"length": 30}).start()
+        patch.object(bd.ba_mods, "sales_ratio",
+                     side_effect=lambda base, item, cal, day: base * 2 if item == A else base).start()
+        self.assertAlmostEqual(self.products()[A]["revenueShare"], 80)
+
+    def test_a_shop_priced_under_wholesale_still_gets_dollars(self):
+        reg = self.root["BuildingRegistrations"][0]
+        reg["retailPrices"] = [{"itemName": A, "price": 1}, {"itemName": B, "price": 1}]
+        reg["dailyIncomes"] = [-400]
+        # Margin weights -1 and -.75; (-400 + 100 rent + 200 wages) a day over -1.75 a customer.
+        products = self.products()
+        self.assertAlmostEqual(sum(p["margin"] for p in products.values()), -100)
+        self.assertAlmostEqual(products[A]["marginShare"], 100 / 1.75)
+
+    def test_an_event_from_an_older_build_with_a_numbered_street_keeps_no_address(self):
+        self.root["marketEvents"] = [event(5, address={"streetName": 22, "streetNumber": 2},
+                                          neighbourhood=HOOD)]
+        (logged,) = self.intel()["events"]
+        self.assertEqual((logged["address"], logged["hood"], logged["kind"]), ("", HOOD, "opened"))
+
     def test_zero_revenue_and_margin_are_finite_and_have_no_private_fields(self):
         self.rules["products"][A]["r"] = self.rules["products"][B]["r"] = 0
         for product in self.products().values():

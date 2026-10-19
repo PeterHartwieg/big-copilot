@@ -17909,12 +17909,15 @@ const riOpen = new Set();   // the shops expanded, by address
 let riWired = null;         // the section the handlers are on
 const riName = r => r && r.name ? r.name
   : r && r.number != null ? tt("gr.rivals.n", "Rival {n}", {n: r.number}) : tt("gr.rivals.unknown", "A rival");
-const riShare = p => Math.max(0, Math.min(100, Number(p) || 0));
+/* A margin share can leave 0–100 (a product sold under wholesale): the figure
+   stays as the payload has it, only the bar is held to its box. */
+const riShare = p => Number(p) || 0;
+const riBar = p => Math.max(0, Math.min(100, riShare(p)));
 const riPrice = p => p == null ? "" : tt("gr.rivals.price", "${p:,.2f}", {p});
 /* One product table: the rival's (with its shops and your price) or a shop's. */
 function riProducts(rows, {whole = false, withheld = false} = {}){
-  if(withheld) return `<p class="rv-empty">${tt("gr.rivals.withheld", "The game's rent or wage term for one of its shops could not be worked out from the save, so its products are not added up across shops. Open a shop below for that shop's own split.")}</p>`;
-  if(!rows || !rows.length) return `<p class="rv-empty">${tt("gr.rivals.noProducts", "No product earns this rival anything the game counts.")}</p>`;
+  if(withheld) return `<p class="rv-empty">${tt("gr.rivals.withheld", "One of its shops can't be worked out from the save, so its products are not added up across shops. Open a shop below for that shop's own split.")}</p>`;
+  if(!rows || !rows.length) return `<p class="rv-empty">${tt("gr.rivals.unknownSplit", "This split can't be worked out from the save: a rent, wage, layout or product fact the game uses is missing, as it is for some modded business types.")}</p>`;
   const head = `<thead><tr><th class="l">${tt("gr.rivals.col.item", "Product")}</th>`
     + `<th data-tip="${attr(tt("gr.rivals.col.share.tip", "The product's part of this rival's sales, by the game's own weekly-income formula"))}">${tt("gr.rivals.col.share", "Revenue share")}</th>`
     + `<th data-tip="${attr(tt("gr.rivals.col.margin.tip", "The product's part of this rival's margin: its price less the wholesale price"))}">${tt("gr.rivals.col.margin", "Margin share")}</th>`
@@ -17926,12 +17929,12 @@ function riProducts(rows, {whole = false, withheld = false} = {}){
     const mine = p.yourPrice;
     const top = whole && i === 0 ? `<span class="rv-top">${tt("gr.rivals.top", "Its biggest earner: a price cut here hurts it most.")}</span>` : "";
     const day = p.revenue == null
-      ? `<span class="rv-none" data-tip="${attr(tt("gr.rivals.noDollars.tip", "The game's rent or wage term for this rival could not be worked out from the save, so only the shares are shown"))}">—</span>`
+      ? `<span class="rv-none" data-tip="${attr(tt("gr.rivals.noDollars.tip", "The rent, wage or income figure the game uses for this shop can't be worked out from the save, so only the shares are shown"))}">—</span>`
       : fmt(p.revenue);
     const defended = p.defended ? chipHtml("warn", tt("gr.rivals.defended", "Defended"),
       tt("gr.rivals.defended.tip", "A special rival: it answers a price war on this product with a price cut of its own")) : "";
     return `<tr data-rv-item="${attr(p.item)}"><td class="l rv-item">${spEsc(gameName(p.item) || prettySlug(String(p.item || "")))}${top}</td>`
-      + `<td><span class="rv-share"><span class="rv-bar" aria-hidden="true"><i style="width:${share.toFixed(1)}%"></i></span>${tt("gr.rivals.pct", "{p:.1f}%", {p: share})}</span></td>`
+      + `<td><span class="rv-share"><span class="rv-bar" aria-hidden="true"><i style="width:${riBar(share).toFixed(1)}%"></i></span>${tt("gr.rivals.pct", "{p:.1f}%", {p: share})}</span></td>`
       + `<td>${tt("gr.rivals.pct", "{p:.1f}%", {p: riShare(p.marginShare)})}</td>`
       + `<td>${day}</td><td>${riPrice(p.price)}</td>`
       + `<td class="rv-yours">${mine == null ? `<span class="rv-none" data-tip="${attr(tt("gr.rivals.notYours.tip", "None of your shops sells it"))}">—</span>` : riPrice(mine)}</td>`
@@ -18015,7 +18018,7 @@ function drawRivals(){
   sec.innerHTML = title + pick
     + `<h3 class="rv-h">${tt("gr.rivals.products", "What {rival} sells", {rival: spEsc(riName(r))})}<small>${tt("gr.rivals.products.sub", "highest revenue first, across all its shops")}</small></h3>`
     + riProducts(r.products, {whole: true,
-      withheld: !(r.products || []).length && (r.sites || []).some(s => (s.products || []).length)})
+      withheld: !(r.products || []).length && (r.sites || []).length > 1})
     + `<h3 class="rv-h">${tt("gr.rivals.sites", "Its shops")}<small>${tt("gr.rivals.sites.sub", "highest daily income first; open one for its products")}</small></h3>`
     + sites + riLog(events, r);
 }

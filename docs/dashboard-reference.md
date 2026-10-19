@@ -2746,7 +2746,7 @@ mods have booked the day, so the board always recomputes yours from the statemen
 
 ## Rival intel
 
-Growth › Rivals lists every company in leaderboard order, including companies with no
+Expansion › Rivals lists every company in leaderboard order, including companies with no
 shops today. Its shop count is the businesses it runs; its building count is the
 registrations whose `buildingOwnerRivalId` names it. These can differ. Building purchases
 have no dated log in the save, so the count describes ownership today. Weekly income is
