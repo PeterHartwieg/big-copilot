@@ -328,7 +328,10 @@ test('the shopping list combines required capacity stations without changing the
     const firm = read(osFirmHtml(b, out, inv)), self = read(osSelfHtml(b, out, inv));
     const lines = osShoppingLines(out.lines);
     return {firm, self, lines, unchanged: before === JSON.stringify(out), stores, afterStores: osStores(out),
-      unmerged: osShoppingLines([[chair, 1, 'req', 'hairdresserchair'], [speaker, 2, 'cap', 'capacity']])};
+      unmerged: osShoppingLines([[chair, 1, 'req', 'hairdresserchair'], [speaker, 2, 'cap', 'capacity']]),
+      mount: (() => { const host = document.createElement('div');
+        host.innerHTML = osShoppingTags(osShoppingLines([['test:desk', 1, 'req', 'mount'], ['test:desk', 3, 'cap', 'mount']])[0]);
+        return [...host.querySelectorAll('.os-tag')].map(x => x.textContent); })()};
   });
   assert.equal(result.unchanged, true);
   assert.deepEqual(result.afterStores, result.stores);
@@ -336,6 +339,7 @@ test('the shopping list combines required capacity stations without changing the
   assert.equal(result.lines.reduce((n, l) => n + l[1], 0), 8);
   assert.equal(result.lines.reduce((n, l) => n + l[1] * ({'test:hairdresserchair': 500, 'test:register': 200, 'test:speaker': 100}[l[0]]), 0), 3000);
   assert.deepEqual(result.unmerged.map(l => l[2]), ['req', 'cap']);
+  assert.deepEqual(result.mount, [en('gr.os.why.mount'), en('gr.os.why.req')], 'a merged mount keeps a Required tag');
   for(const mode of ['firm', 'self']){
     const rows = result[mode].filter(r => !r.tags.includes(en('gr.os.why.interior')));
     assert.equal(rows.length, 4, mode);

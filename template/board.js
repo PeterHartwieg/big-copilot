@@ -12501,8 +12501,9 @@ function osShoppingLines(lines){
     return [[l[0], m.qty, "cap", m.cap[3], [...new Set(m.req)]]];
   });
 }
+/* A mount's own tag already says "Stands on it": its opening tag says Required. */
 const osShoppingTags = ([, , group, why, required]) => osTag(group, why)
-  + (required || []).map(w => osTag("req", w)).join("");
+  + [...new Set((required || []).map(w => w === "mount" ? "" : w))].map(w => osTag("req", w)).join("");
 function osFirmHtml(b, out, inv){
   const items = osFacts().items || {}, decor = osDecor(b), fee = (osFacts().game || {}).installFee || 586;
   const grp = (title, note, total) => `<tr class="grp"><td colspan="5">${title}${note ? `<span>${note}</span>` : ""}<b>${fmt(total)}</b></td></tr>`;
