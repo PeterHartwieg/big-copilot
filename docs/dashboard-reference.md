@@ -1999,17 +1999,18 @@ Supply › Deliveries includes a separate wholesale plan for existing shops. Sel
 shop or all shops. It uses the measured weekly sales (`_week_sold()`, so a shop that
 opens two days is not treated as opening seven) plus the supply margin of 15%.
 Hairdressers also use one Hair Care Product per service. While the player is away the
-game books each of those as a free sale, so the plan takes the larger of the product's
-sales and the services, never their sum. Services, tickets, retired
+game books each of those as a free sale beside the bottles customers buy, so the plan
+counts the bottles sold at the shelf price plus every service. Services, tickets, retired
 products and closed shops are not purchases. A product with a daily logistics target
 or an active direct import is counted separately and has no new wholesale suggestion.
 
 **Buy now** covers seven days from the save's clock. It subtracts current stock and
 each enabled wholesale delivery within the window, including one-off orders, and also
 covers the stock gap before each delivery: a large drop late in the week cannot cover
-an earlier shortage. Every drop lands at 08:00 on its day, and a repeating contract
-that was rushed delivers again the next Monday, so both drops count when they fall in
-the window. Use is spread evenly through the week for this estimate. The
+an earlier shortage. Every drop lands at 08:00 on its day. A repeating contract that
+was rushed delivers again the next Monday, but that drop does not count: the game cuts
+it to what is left of the product's weekly wholesale limit, which no save records. Use
+is spread evenly through the week for this estimate. The
 purchase rounds up to whole boxes from the product catalogue, with both boxes and units
 shown. Disabled orders and drops beyond the window do not reduce it. An outstanding
 order with a missing or overdue date pauses this estimate until its date is checked.

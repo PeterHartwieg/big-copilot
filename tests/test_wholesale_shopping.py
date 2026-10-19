@@ -133,33 +133,39 @@ class WholesaleShopping(unittest.TestCase):
         c.closed = {SHOP}
         self.assertEqual(self.rows(c), [])
 
-    def test_haircare_counts_each_service_once(self):
+    def test_haircare_counts_paid_bottles_and_each_service_once(self):
         # Unwatched hours book each service's product as a free sale, watched
-        # hours do not: the larger of the two figures is the week's use.
-        for sold, week, weekly, buy in ((35, 100, 120, 150), (100, 100, 120, 150), (135, 135, 160, 200)):
-            with self.subTest(sold=sold):
+        # hours do not, so the use is the bottles sold at the shelf price plus
+        # every service.
+        cases = (("unwatched: 35 bottles and 100 free", 135, round(20 * 35 / 135, 2), 100, (135, 160, 200)),
+                 ("watched: 20 bottles", 20, 20, 65, (85, 100, 100)),
+                 ("services only", 0, None, 100, (100, 120, 150)))
+        for name, sold, sold_price, services, expect in cases:
+            with self.subTest(name):
                 c = Company()
                 c.site(SHOP, "Salon", status="retail", kind="ba:businesstype_hairdresser")
-                c.hold(SHOP, CARE, 0, rate=sold / 7, weekSold=sold)
-                c.hold(SHOP, SERVICE, 0, rate=100 / 7, weekSold=100)
+                c.hold(SHOP, CARE, 0, rate=sold / 7, weekSold=sold, price=20, soldPrice=sold_price)
+                c.hold(SHOP, SERVICE, 0, rate=services / 7, weekSold=services)
                 [r] = self.rows(c)
-                self.assertEqual((r["slug"], r["week"], r["weekly"], r["buy"]), (CARE, week, weekly, buy))
+                self.assertEqual((r["slug"], r["week"], r["weekly"], r["buy"]), (CARE, *expect))
 
     def test_a_drop_due_this_morning_still_counts_before_08_00(self):
         c = self.company(stock=0, hour=6)
-        c.wholesale(SHOP, SODA, 900, due=20, repeating=False)
+        c.wholesale(SHOP, SODA, 900, due=20)
         [r] = self.rows(c)
         self.assertFalse(r["deliveryUnknown"])
         self.assertEqual(r["deliveries"], [[0.083, 900]])
 
-    def test_a_rushed_weekly_contract_also_delivers_the_next_monday(self):
+    def test_a_rushed_weekly_contract_stays_weekly_but_its_next_monday_is_not_credited(self):
+        # The game trims that drop to the weekly wholesale limit left, which no
+        # save records, so Buy now does not lean on it.
         c = self.company(stock=0)
         c.wholesale(SHOP, SODA, 500, due=21)  # Sunday, rushed; Monday is day 22
         c.deliveries[0]["isUrgentOrder"] = True
         c.wholesale(SHOP, SODA, 40, due=21, repeating=False)
         [r] = self.rows(c)
-        self.assertEqual(r["deliveries"], [[0.5, 40], [0.5, 500], [1.5, 500]])
-        self.assertEqual((r["scheduled"], r["current"]), (1040, 500))
+        self.assertEqual(r["deliveries"], [[0.5, 40], [0.5, 500]])
+        self.assertEqual((r["scheduled"], r["current"]), (540, 500))
 
 if __name__ == "__main__":
     unittest.main()
