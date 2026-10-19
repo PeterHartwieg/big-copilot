@@ -25,7 +25,7 @@ class WholesaleWrite(unittest.TestCase):
                          cash=100, build=3682, schema=3, throttle=False, refuse=None)
         self.shop = dict(StreetName=SHOP['street'], StreetNumber=SHOP['number'], RentedByPlayer=True,
                          businessTypeName='ba:businesstype_giftshop', cachedAvailableProducts=[SODA],
-                         itemInstances=[{'itemName': 'ba:itemname_storageunit'}])
+                         itemInstances=[{'itemName': 'ba:itemname_storageshelf'}])
         self.vendor = dict(StreetName=SUPPLIER['street'], StreetNumber=SUPPLIER['number'], BusinessName='Wholesaler',
                            businessTypeName='ba:businesstype_wholesalestore', cachedAvailableProducts=[SODA, GIFT],
                            scheduleDays=[{'day': d, 'isOpen': True, 'openingHourSlots': [{'startingHour': 8, 'endingHour': 18}]} for d in range(1, 8)])
@@ -144,7 +144,9 @@ class WholesaleWrite(unittest.TestCase):
         self.save.root['Contacts'] = [{'streetName': SUPPLIER['street'], 'streetNumber': SUPPLIER['number']}]
         self.shop['itemInstances'] = []
         self.refuse('no_storage')
-        self.shop['itemInstances'] = [{'itemName': 'ba:itemname_storageunit'}]
+        self.shop['itemInstances'] = [{'itemName': 'ba:itemname_palletshelf'}]  # a shelf, not business storage
+        self.refuse('no_storage')
+        self.shop['itemInstances'] = [{'itemName': 'ba:itemname_storageshelf'}]
         self.refuse('product_unavailable', self.body(items=[{'item': 'unknown', 'amount': 1}]))
         self.link.screen_open.add(('any', 1))
         self.refuse('screen_open')

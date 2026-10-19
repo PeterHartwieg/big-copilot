@@ -1265,7 +1265,9 @@ class Link:
         if business.get("n"):
             offered.add("ba:itemname_paperbag")
         stock = {save.deref(h.get("$v", h)).get("itemName") for h in save.items((site or {}).get("itemInstances")) if isinstance(h, dict)}
-        storage = terms.get("storage", bool(stock & {"ba:itemname_storageunit", "ba:itemname_palletshelf", "ba:itemname_industrialfridge"}))
+        # The mod's test: a piece tagged as business storage (store rules `x`).
+        furniture = rules.get("furniture", {})
+        storage = terms.get("storage", any("storage" in (furniture.get(n) or {}).get("x", ()) for n in stock))
         error = None
         if self._other_save(body) or snapshot != self.stamp:
             error = "changed"

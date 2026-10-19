@@ -1577,6 +1577,7 @@ FLAT_WEEK = {wd: 1.0 for wd in range(7)}
 # capacity. Every figure the board suggests is rounded up to SUPPLY_ROUND_TO.
 SUPPLY_MARGIN = 0.15
 SUPPLY_ROUND_TO = 10
+WHOLESALE_HOUR = 8  # a wholesale drop lands at 08:00 on its day (DeliveryHelper.DeliveryHour)
 # A standing supply that is missing is always said; what is held only grades
 # how soon it bites: stock lasting under this many days is critical.
 LASTS_WEEK = 7
@@ -6279,19 +6280,29 @@ def _wholesale_shopping(save: Save, names: Names, businesses: list) -> dict:
             continue
         key = site_key(save.address(contract.get("businessAddress")))
         due = contract.get("nextDeliveryDay")
-        days = due - now if isinstance(due, (int, float)) and math.isfinite(due) else None
-        recurring = bool(contract.get("repeatingOrder") and not contract.get("isUrgentOrder"))
+        recurring = bool(contract.get("repeatingOrder"))
+        # Every drop lands at 08:00. After one, a repeating contract (a rushed
+        # one included) books the next Monday, so a week can hold two drops.
+        drops = None
+        if isinstance(due, (int, float)) and math.isfinite(due):
+            drops = [due + WHOLESALE_HOUR / 24 - now]
+            while recurring and drops[-1] > 0:
+                due += (1 - due) % 7 or 7  # day 1 is a Monday
+                if due + WHOLESALE_HOUR / 24 - now >= 7:
+                    break
+                drops.append(due + WHOLESALE_HOUR / 24 - now)
         for entry in save.items(contract.get("items")):
             slug, amount = entry.get("itemName"), entry.get("amount") or 0
             if slug and amount > 0:
-                contracts[(key, slug)].append((days, amount, recurring))
+                contracts[(key, slug)].append((drops, amount, recurring))
     imports, _configured, _next = _supply_imports(save, names, save.root["Day"])
     for s, business in enumerate(businesses):
         if business.get("status") != "retail" or business.get("closed"):
             continue
         lines = {line["slug"]: line for line in business["lines"] if line.get("slug")}
         care = "ba:itemname_haircareproduct"
-        # The store model already counts one Hair Care Product per service.
+        # One Hair Care Product per service. While nobody watches, the game
+        # books each one as a free sale, so the sales already count those.
         service_use = sum(_week_sold(business, line) for slug, line in lines.items()
                           if products.get(slug, {}).get("s") and not line.get("retired")) \
             if business.get("typeSlug") == "ba:businesstype_hairdresser" else 0
@@ -6302,12 +6313,12 @@ def _wholesale_shopping(save: Save, names: Names, businesses: list) -> dict:
             if not product or product.get("s") or product.get("k") or line.get("issued") or line.get("retired"):
                 continue
             stock = max(0, line["units"])
-            week = max(0.0, _week_sold(business, line)) + (service_use if slug == care else 0)
+            week = max(0.0, _week_sold(business, line), service_use if slug == care else 0)
             deals = contracts.get((business["key"], slug), [])
             managed = "route" if targets.get((business["key"], slug), (0,))[0] > 0 else \
                 "import" if imports.get((business["key"], slug), {}).get("active") else None
-            unknown = any(days is None or days <= 0 for days, _amount, _recurring in deals)
-            arrivals = [[days, amount] for days, amount, _recurring in deals if days is not None and 0 < days < 7]
+            unknown = any(drops is None or drops[0] <= 0 for drops, _amount, _recurring in deals)
+            arrivals = [[days, amount] for drops, amount, _recurring in deals for days in drops or () if 0 < days < 7]
             young = business.get("tradeDays", 0) < MIN_TRADE_DAYS
             reason = managed or ("new" if young else "no-sales" if not week else None)
             need = week * (1 + SUPPLY_MARGIN)
