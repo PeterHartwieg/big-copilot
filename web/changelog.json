@@ -6,6 +6,12 @@
     "summary": "Supply › Deliveries now plans seven days of wholesale shopping for your shops. Buy now shows boxes and units after current stock and scheduled deliveries, including stock needed before a late delivery arrives. Weekly delivery gives the full recurring quantity, with setup guidance and the current contract total. Select a shop or all shops and copy either list. Products already supplied by routes or imports are identified separately, and missing history or delivery dates are marked for checking. With Big Copilot Link 0.7.0, select a shop and an open wholesaler to place a weekly or one-off delivery in one click, with live contract checks and same-day undo. Deliveries follow the game’s normal Monday schedule."
   },
   {
+    "pr": 504,
+    "date": "2026-10-19",
+    "title": "One row per item in a new store's shopping list",
+    "summary": "Open a store's shopping list no longer splits a station into a required row and a capacity row. One required hairdresser chair and three more for capacity now show as four chairs on one row, still tagged Required, at the same total cost. Thank you to the player who suggested this on the feature list."
+  },
+  {
     "pr": 499,
     "date": "2026-10-15",
     "title": "Keep using local saves when Game Link is unavailable",
