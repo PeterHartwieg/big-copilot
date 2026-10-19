@@ -2000,7 +2000,8 @@ shop or all shops. It uses the measured weekly sales (`_week_sold()`, so a shop 
 opens two days is not treated as opening seven) plus the supply margin of 15%.
 Hairdressers also use one Hair Care Product per service. While the player is away the
 game books each of those as a free sale beside the bottles customers buy, so the plan
-counts the bottles sold at the shelf price plus every service. Services, tickets, retired
+counts the paid bottles (the sales less the free ones, over the same trading days) plus
+every service. Services, tickets, retired
 products and closed shops are not purchases. A product with a daily logistics target
 or an active direct import is counted separately and has no new wholesale suggestion.
 

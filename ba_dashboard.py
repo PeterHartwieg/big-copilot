@@ -4415,10 +4415,16 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
 
     units_sold = collections.Counter()
     revenue_by_item = collections.Counter()
+    # Units booked at no price: a hairdresser's Hair Care Product used in a
+    # service while nobody watches (HairdresserBusinessSimulator).
+    free = lambda sale: sum(p.get("amount", 0) for p in save.items(sale.get("itemSoldBreakdownEntries"))
+                            if isinstance(p, dict) and not p.get("price"))
+    free_sold = collections.Counter()
     for entry in recent:
         for sale in save.items(entry.get("itemSales")):
             units_sold[sale["itemName"]] += sale.get("amountSold", 0)
             revenue_by_item[sale["itemName"]] += sale.get("totalPrice", 0)
+            free_sold[sale["itemName"]] += free(sale)
     span = max(len(recent), 1)
 
     # A trading day is one after the opening day with somebody through the
@@ -4436,10 +4442,11 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
     # it (the opening day, an empty day or two) are no week it could sell in.
     first_trade = trading[0].get("dayNumber", day - 7) if trading else day - 7
     open_days = min(7, max(1, day - first_trade))
-    trade_sold = collections.Counter()
+    trade_sold, trade_free = collections.Counter(), collections.Counter()
     for entry in trade_window:
         for sale in save.items(entry.get("itemSales")):
             trade_sold[sale["itemName"]] += sale.get("amountSold", 0)
+            trade_free[sale["itemName"]] += free(sale)
     # A site under a week old keeps its trading days, so Demand sizing can fit
     # a line through them and read the coming week off it (_coming_week).
     young = day - opened < NEW_SITE_DAYS
@@ -4487,6 +4494,8 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
         # site open less than a week spreads its week over the days it has
         # been open, not over days before it opened.
         week_sold = (trade_rate * week_trading * 7 / open_days) if trade_window else rate * 7
+        week_free = (trade_free[item] / len(trade_window) * week_trading * 7 / open_days) if trade_window \
+            else free_sold[item] / span * 7
         lines.append(
             {
                 "item": names.label(item),
@@ -4495,6 +4504,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
                 "rate": round(rate, 1),
                 "tradeRate": round(trade_rate, 1),
                 "weekSold": round(week_sold, 1),
+                **({"weekFree": round(week_free, 1)} if week_free else {}),
                 **({"soldDays": sold_days[item]} if sold_days.get(item) else {}),
                 "cover": round(stock[item] / rate, 1) if rate > 0.5 else None,
                 "price": money(prices.get(item, 0)),
@@ -6298,8 +6308,8 @@ def _wholesale_shopping(save: Save, names: Names, businesses: list) -> dict:
         care = "ba:itemname_haircareproduct"
         # One Hair Care Product per service. While nobody watches, the game
         # books each one as a free sale beside the bottles customers buy, so
-        # the use is the paid bottles (the sales at the shelf price) plus
-        # every service.
+        # the use is the paid bottles (the sales less the free ones, over the
+        # same trading days) plus every service.
         service_use = sum(_week_sold(business, line) for slug, line in lines.items()
                           if products.get(slug, {}).get("s") and not line.get("retired")) \
             if business.get("typeSlug") == "ba:businesstype_hairdresser" else 0
@@ -6312,8 +6322,7 @@ def _wholesale_shopping(save: Save, names: Names, businesses: list) -> dict:
             stock = max(0, line["units"])
             week = max(0.0, _week_sold(business, line))
             if slug == care and service_use:
-                price, paid = line.get("price") or 0, line.get("soldPrice")
-                week = (week * min(1.0, paid / price) if price > 0 and paid is not None else 0.0) + service_use
+                week = max(0.0, week - line.get("weekFree", 0)) + service_use
             deals = contracts.get((business["key"], slug), [])
             managed = "route" if targets.get((business["key"], slug), (0,))[0] > 0 else \
                 "import" if imports.get((business["key"], slug), {}).get("active") else None

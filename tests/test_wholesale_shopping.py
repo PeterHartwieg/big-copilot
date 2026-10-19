@@ -3,7 +3,8 @@ import copy
 import unittest
 from unittest.mock import patch
 
-from ba_dashboard import Names, _wholesale_buy, _wholesale_shopping
+from ba_dashboard import Names, _business, _wholesale_buy, _wholesale_shopping
+from ba_save import Save
 from tests.test_supply_facts import Company, SODA, BEER
 
 SHOP = ("main_street", 1)
@@ -135,19 +136,33 @@ class WholesaleShopping(unittest.TestCase):
 
     def test_haircare_counts_paid_bottles_and_each_service_once(self):
         # Unwatched hours book each service's product as a free sale, watched
-        # hours do not, so the use is the bottles sold at the shelf price plus
-        # every service.
-        cases = (("unwatched: 35 bottles and 100 free", 135, round(20 * 35 / 135, 2), 100, (135, 160, 200)),
-                 ("watched: 20 bottles", 20, 20, 65, (85, 100, 100)),
+        # hours do not, so the use is the paid bottles plus every service.
+        cases = (("unwatched: 35 bottles and 100 free", 135, 100, 100, (135, 160, 200)),
+                 ("watched: 20 bottles", 20, None, 65, (85, 100, 100)),
                  ("services only", 0, None, 100, (100, 120, 150)))
-        for name, sold, sold_price, services, expect in cases:
+        for name, sold, free, services, expect in cases:
             with self.subTest(name):
                 c = Company()
                 c.site(SHOP, "Salon", status="retail", kind="ba:businesstype_hairdresser")
-                c.hold(SHOP, CARE, 0, rate=sold / 7, weekSold=sold, price=20, soldPrice=sold_price)
+                c.hold(SHOP, CARE, 0, rate=sold / 7, weekSold=sold, **({"weekFree": free} if free else {}))
                 c.hold(SHOP, SERVICE, 0, rate=services / 7, weekSold=services)
                 [r] = self.rows(c)
                 self.assertEqual((r["slug"], r["week"], r["weekly"], r["buy"]), (CARE, *expect))
+
+    def test_a_line_counts_its_free_sales_over_the_trading_days(self):
+        def day(d, paid, free):
+            parts = [{"price": 20.0, "amount": paid}] + ([{"price": 0.0, "amount": free}] if free else [])
+            return {"dayNumber": d, "totalCustomers": 10, "itemSales": {"$items": [
+                {"itemName": CARE, "amountSold": paid + free, "totalPrice": 20.0 * paid,
+                 "itemSoldBreakdownEntries": {"$items": parts}}]}}
+        building = {"BusinessName": "Salon", "businessTypeName": "ba:businesstype_hairdresser",
+                    "StreetName": "main_street", "StreetNumber": 1, "creationDay": 1,
+                    "orderHistory": {"$items": [day(d, 5, 10 if d < 18 else 0) for d in range(14, 21)]},
+                    "retailPrices": {"$items": []}, "itemInstances": {"$items": []},
+                    "cachedFulfilledCustomerDemands": {"$items": []}, "uniformsBySkill": {"$items": []}}
+        [line] = _business(Save({}, {}, ""), Names({}), building, SHOP, {}, [], {}, 21)["lines"]
+        # Seven trading days, four of them unwatched: 35 bottles and 40 free units.
+        self.assertEqual((line["weekSold"], line["weekFree"]), (75, 40))
 
     def test_a_drop_due_this_morning_still_counts_before_08_00(self):
         c = self.company(stock=0, hour=6)

@@ -161,8 +161,8 @@ class Company:
     def businesses(self):
         out = []
         for site in self.sites:
-            lines = [{"slug": slug, "item": slug.rsplit("_", 1)[-1].title(), "price": line.get("price", 1),
-                      **({"soldPrice": line["soldPrice"]} if "soldPrice" in line else {}),
+            lines = [{"slug": slug, "item": slug.rsplit("_", 1)[-1].title(), "price": 1,
+                      **({"weekFree": line["weekFree"]} if "weekFree" in line else {}),
                       "units": line["units"], "rate": line["rate"],
                       "tradeRate": line.get("tradeRate", line["rate"]),
                       **({"weekSold": line["weekSold"]} if "weekSold" in line else {}),
