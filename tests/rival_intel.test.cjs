@@ -214,3 +214,24 @@ test('picking a rival or a history filter keeps the keyboard focus on that contr
   await page.keyboard.press('Enter');
   assert.equal(await page.evaluate(() => document.activeElement.dataset.rvHist), 'one');
 });
+
+test('a rival with no shops says so once, not that its split is missing', async t => {
+  const page = await board(t);
+  await page.evaluate(() => {
+    const r = D.rivalIntel.rivals[1];
+    r.sites = []; r.products = []; r.shops = 0; r.top = null;
+    drawRivals();
+  });
+  await page.locator('#secRivals .rv-who').nth(1).click();
+  const empty = page.locator('#secRivals > .rv-empty');
+  assert.equal(await empty.count(), 1);
+  assert.equal(await empty.innerText(), en('gr.rivals.noShops'));
+  assert.equal(await page.locator('#secRivals .rv-h').count(), 0);
+});
+
+test('a save with no rivals has no filter to a rival', async t => {
+  const page = await board(t);
+  await page.evaluate(() => { D.rivalIntel.rivals = []; drawRivals(); });
+  assert.equal(await page.locator('#secRivals [data-rv-hist]').count(), 0);
+  assert.equal(await page.locator('#secRivals .rv-log li').count(), 3);
+});

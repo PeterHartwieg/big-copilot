@@ -17953,9 +17953,10 @@ function riSite(s){
 }
 function riLog(events, rival){
   const shown = riHistAll || !rival ? events : events.filter(e => e.rival === rival.number);
-  const seg = `<span class="seg" role="group" aria-label="${attr(tt("gr.rivals.hist.filter", "Whose shops"))}">`
+  /* With no rival to pick there is nothing to filter to: no switch. */
+  const seg = !rival ? "" : `<span class="seg" role="group" aria-label="${attr(tt("gr.rivals.hist.filter", "Whose shops"))}">`
     + `<a href="#" data-rv-hist="all"${riHistAll ? ` class="on" aria-pressed="true"` : ` aria-pressed="false"`}>${tt("gr.rivals.hist.all", "All rivals")}</a>`
-    + `<a href="#" data-rv-hist="one"${riHistAll ? ` aria-pressed="false"` : ` class="on" aria-pressed="true"`}>${rival ? spEsc(riName(rival)) : tt("gr.rivals.hist.one", "This rival")}</a></span>`;
+    + `<a href="#" data-rv-hist="one"${riHistAll ? ` aria-pressed="false"` : ` class="on" aria-pressed="true"`}>${spEsc(riName(rival))}</a></span>`;
   const rows = shown.map(e => {
     const who = e.rivalName || (e.rival != null ? tt("gr.rivals.n", "Rival {n}", {n: e.rival}) : tt("gr.rivals.unknown", "A rival"));
     const kind = e.kind === "closed" ? chipHtml("bad", tt("gr.rivals.closed", "Closed")) : chipHtml("ok", tt("gr.rivals.opened", "Opened"));
@@ -18014,15 +18015,15 @@ function drawRivals(){
     + `<small>${tt("gr.rivals.weekly", "{w:$} a week", {w: x.weekly || 0})}</small>`
     + `<small>${tt("gr.rivals.counts", "{s} · {b}", {s: tt("gr.rivals.shops", {one: "{n} shop", other: "{n} shops"}, {n: x.shops || 0}),
       b: tt("gr.rivals.buildings", {one: "{n} building", other: "{n} buildings"}, {n: x.buildings || 0})})}</small></button>`).join("")}</div>`;
-  const sites = (r.sites || []).length
-    ? `<div class="rv-sites">${r.sites.map(s => riSite(s)).join("")}</div>`
+  /* A rival with no shops sells nothing: one line in place of both blocks. */
+  const body = (r.sites || []).length
+    ? `<h3 class="rv-h">${tt("gr.rivals.products", "What {rival} sells", {rival: spEsc(riName(r))})}<small>${tt("gr.rivals.products.sub", "highest revenue first, across all its shops")}</small></h3>`
+      + riProducts(r.products, {whole: true,
+        withheld: !(r.products || []).length && r.sites.length > 1})
+      + `<h3 class="rv-h">${tt("gr.rivals.sites", "Its shops")}<small>${tt("gr.rivals.sites.sub", "highest daily income first; open one for its products")}</small></h3>`
+      + `<div class="rv-sites">${r.sites.map(s => riSite(s)).join("")}</div>`
     : `<p class="rv-empty">${tt("gr.rivals.noShops", "This rival runs no shops today.")}</p>`;
-  sec.innerHTML = title + pick
-    + `<h3 class="rv-h">${tt("gr.rivals.products", "What {rival} sells", {rival: spEsc(riName(r))})}<small>${tt("gr.rivals.products.sub", "highest revenue first, across all its shops")}</small></h3>`
-    + riProducts(r.products, {whole: true,
-      withheld: !(r.products || []).length && (r.sites || []).length > 1})
-    + `<h3 class="rv-h">${tt("gr.rivals.sites", "Its shops")}<small>${tt("gr.rivals.sites.sub", "highest daily income first; open one for its products")}</small></h3>`
-    + sites + riLog(events, r);
+  sec.innerHTML = title + pick + body + riLog(events, r);
 }
 
 /* --- the Rivals leaderboard (issue #414) -------------------------------------
