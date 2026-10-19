@@ -193,7 +193,9 @@ the map.
     round: sells a day, the busiest day, on hand, the pressure the busiest day puts on the
     round, and the daily top-up (or a wholesale store's week). Warehouses fed each morning
     from your own sites: their top-ups, wholesale, idle stock and lines no route reaches.
-    Factory inputs against their daily top-ups.
+    Factory inputs against their daily top-ups. **Wholesale shopping & deliveries**
+    plans a shop's next seven days of manual purchases and weekly wholesale quantities
+    (below), with a shop selector and separate copy buttons.
   - *Production*: machine hours needed against staffed, then every factory, one block each:
     its lines with their machines and the hours a day they are staffed against the hours
     they need, and its inputs; then **Staffing for factory lines** (below).
@@ -1973,6 +1975,59 @@ consume will always look as though it empties a few hours before the next drop. 
 the design working, not a finding. A holding that misses its delivery by less than half a
 day, or by less than 5% of the week the order covers, reads as **tight**: a chip in the
 table, not a line in Needs attention. Only a real gap becomes an alert.
+
+### Wholesale shopping and delivery setup
+
+When linked with Big Copilot Link 0.7.0 or later, select one shop and a wholesaler.
+**Place weekly order** writes the Weekly delivery quantities; **Place one-off order**
+writes the Buy now quantities without repeating. Only products sold by that wholesaler
+are included, listed with their amounts before either button. Each click checks and
+applies the live order. The wholesaler must be a phone contact and open at that moment.
+Orders use the game's regular Monday 08:00 delivery, with its Sunday 20:00 cut-off;
+a one-off order does not arrive immediately. Keep enough stock until delivery.
+
+Weekly setup replaces the listed amounts on the shop's contract with that wholesaler.
+The game allows one contract per pair, so one-off requires a new or inactive contract.
+Active one-off orders, overlapping weekly supply from another wholesaler, or unlisted
+products on an existing weekly contract require review in BizMan. The mod checks
+storage, eligibility, limits, market events and stale snapshots again on apply.
+Undo restores the prior contract on the same game day, while it remains unchanged
+and unlocked. Delivery costs are charged by the game when it delivers.
+
+
+Supply › Deliveries includes a separate wholesale plan for existing shops. Select one
+shop or all shops. It uses the measured weekly sales (`_week_sold()`, so a shop that
+opens two days is not treated as opening seven) plus the supply margin of 15%.
+Hairdressers also use one Hair Care Product per service. While the player is away the
+game books each of those as a free sale beside the bottles customers buy, so the plan
+counts the paid bottles (the sales less the free ones, over the same trading days) plus
+every service. Services, tickets, retired
+products and closed shops are not purchases. A product with a daily logistics target
+or an active direct import is counted separately and has no new wholesale suggestion.
+
+**Buy now** covers seven days from the save's clock. It subtracts current stock and
+each enabled wholesale delivery within the window, including one-off orders, and also
+covers the stock gap before each delivery: a large drop late in the week cannot cover
+an earlier shortage. Every drop lands at 08:00 on its day. A repeating contract that
+was rushed delivers again the next Monday, but that drop does not count: the game cuts
+it to what is left of the product's weekly wholesale limit, which no save records. Use
+is spread evenly through the week for this estimate. The
+purchase rounds up to whole boxes from the product catalogue, with both boxes and units
+shown. Disabled orders and drops beyond the window do not reduce it. An outstanding
+order with a missing or overdue date pauses this estimate until its date is checked.
+
+**Weekly delivery** is the full measured week plus 15%, rounded up to the next 10 units,
+independent of stock on hand. It is the total across all repeating contracts for that
+product at that shop; the current total appears beneath it. At a wholesaler in the game,
+choose the destination shop and repeat those quantities weekly. Stock must cover the
+wait for the first delivery; a newly created order is counted after the next save.
+
+A shop with fewer than five trading days, or a product without measured use, has no
+estimate rather than a zero recommendation. Copy shopping list and Copy weekly amounts
+use the selected shop and retain notes about unavailable estimates. These are estimates
+from past use: changed opening hours or demand can change the quantities needed.
+The facts live in the deferred `wholesale` section, computed when Deliveries opens and
+refreshed with the save, without changing existing supply findings or logistics targets.
 
 ## The supply chain view
 

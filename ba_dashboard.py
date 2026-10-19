@@ -1577,6 +1577,7 @@ FLAT_WEEK = {wd: 1.0 for wd in range(7)}
 # capacity. Every figure the board suggests is rounded up to SUPPLY_ROUND_TO.
 SUPPLY_MARGIN = 0.15
 SUPPLY_ROUND_TO = 10
+WHOLESALE_HOUR = 8  # a wholesale drop lands at 08:00 on its day (DeliveryHelper.DeliveryHour)
 # A standing supply that is missing is always said; what is held only grades
 # how soon it bites: stock lasting under this many days is critical.
 LASTS_WEEK = 7
@@ -3001,7 +3002,7 @@ PAYLOAD_KEYS = (
     "openFactory", "trends", "hypeExposure", "hours", "hourFindings", "staffing",
     "factoryStaffing", "officeStaffing", "candidates", "hiring", "plan", "names",
     "skillNames", "marketingAgencies", "cashFlow", "ledgerDays", "alerts", "minor",
-    "alertsDemand", "goals", "rivalry", "realEstateCounts", "realEstate", "sitesGone",
+    "alertsDemand", "goals", "rivalry", "realEstateCounts", "realEstate", "sitesGone", "wholesale",
 )
 # Keys only some saves carry: `mods` is there only for a save a mod adapter
 # reads (ba_mods.detect()), so a vanilla save's payload is what it was.
@@ -3455,6 +3456,11 @@ def _products_section(build: Build) -> dict:
     return {"products": products}
 
 
+def _wholesale_section(build: Build) -> dict:
+    """Section wholesale: purchases now and recurring amounts for existing shops."""
+    return {"wholesale": _wholesale_shopping(build.save, build.names, build.shared["businesses"])}
+
+
 def _premises_section(build: Build) -> dict:
     """Section premises: buildings for the location finder."""
     return {"premises": _premises(build.save, build.names, build.shared["market"], build.shared["estate"])}
@@ -3504,6 +3510,8 @@ SECTIONS = {
                  "produce": _premises_section},
     "products": {"keys": ("products",), "needs": (),
                  "produce": _products_section},
+    "wholesale": {"keys": ("wholesale",), "needs": (),
+                  "produce": _wholesale_section},
     "openStore": {"keys": ("openStore",), "needs": ("premises",),
                   "produce": _open_store_section},
     "openFactory": {"keys": ("openFactory",), "needs": (),
@@ -4407,10 +4415,16 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
 
     units_sold = collections.Counter()
     revenue_by_item = collections.Counter()
+    # Units booked at no price: a hairdresser's Hair Care Product used in a
+    # service while nobody watches (HairdresserBusinessSimulator).
+    free = lambda sale: sum(p.get("amount", 0) for p in save.items(sale.get("itemSoldBreakdownEntries"))
+                            if isinstance(p, dict) and not p.get("price"))
+    free_sold = collections.Counter()
     for entry in recent:
         for sale in save.items(entry.get("itemSales")):
             units_sold[sale["itemName"]] += sale.get("amountSold", 0)
             revenue_by_item[sale["itemName"]] += sale.get("totalPrice", 0)
+            free_sold[sale["itemName"]] += free(sale)
     span = max(len(recent), 1)
 
     # A trading day is one after the opening day with somebody through the
@@ -4428,10 +4442,11 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
     # it (the opening day, an empty day or two) are no week it could sell in.
     first_trade = trading[0].get("dayNumber", day - 7) if trading else day - 7
     open_days = min(7, max(1, day - first_trade))
-    trade_sold = collections.Counter()
+    trade_sold, trade_free = collections.Counter(), collections.Counter()
     for entry in trade_window:
         for sale in save.items(entry.get("itemSales")):
             trade_sold[sale["itemName"]] += sale.get("amountSold", 0)
+            trade_free[sale["itemName"]] += free(sale)
     # A site under a week old keeps its trading days, so Demand sizing can fit
     # a line through them and read the coming week off it (_coming_week).
     young = day - opened < NEW_SITE_DAYS
@@ -4479,6 +4494,8 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
         # site open less than a week spreads its week over the days it has
         # been open, not over days before it opened.
         week_sold = (trade_rate * week_trading * 7 / open_days) if trade_window else rate * 7
+        week_free = (trade_free[item] / len(trade_window) * week_trading * 7 / open_days) if trade_window \
+            else free_sold[item] / span * 7
         lines.append(
             {
                 "item": names.label(item),
@@ -4487,6 +4504,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
                 "rate": round(rate, 1),
                 "tradeRate": round(trade_rate, 1),
                 "weekSold": round(week_sold, 1),
+                **({"weekFree": round(week_free, 1)} if week_free else {}),
                 **({"soldDays": sold_days[item]} if sold_days.get(item) else {}),
                 "cover": round(stock[item] / rate, 1) if rate > 0.5 else None,
                 "price": money(prices.get(item, 0)),
@@ -6223,6 +6241,111 @@ def _supply_wholesale(save: Save, index: dict, day: int, spent_today: float) -> 
                 deal["day"] = WEEKDAYS[due % 7]
                 deal["days"] = round(max(0.0, due - day - spent_today), 2)
     return wholesale
+
+
+def _wholesale_buy(need: float, stock: float, deliveries: list) -> float:
+    """Extra stock needed now over seven days, including gaps before each drop.
+
+    Consumption follows the measured weekly average, with the same margin as
+    supply. A later delivery cannot repair an earlier shortage. Quantities
+    are rounded to purchasable boxes by the caller, after this calculation.
+    """
+    received, extra = 0.0, 0.0
+    for days, amount in sorted(deliveries):
+        extra = max(extra, need * days / 7 - stock - received)
+        received += amount
+    return max(extra, need - stock - received, 0.0)
+
+
+def _wholesale_shopping(save: Save, names: Names, businesses: list) -> dict:
+    """Wholesale purchases and weekly setup amounts; existing supply is unchanged.
+
+    Only known physical products at open shops are listed. Daily logistics
+    and direct imports are identified, never treated as missing supply.
+    Wholesale contracts keep their individual dates: an early small drop
+    cannot stand in for a larger drop later in the week. An outstanding drop
+    without a future date makes Buy now unknown until the player checks it.
+    """
+    products = load_store_rules().get("products") or {}
+    contacts = {(c.get("streetName"), c.get("streetNumber")) for c in save.items(save.root.get("Contacts"))}
+    live_suppliers = {(s["street"], s["number"]): s for s in (getattr(save, "facts", None) or {}).get("wholesalers", [])}
+    suppliers = []
+    for reg in save.items(save.root.get("BuildingRegistrations")):
+        if reg.get("businessTypeName") != "ba:businesstype_wholesalestore":
+            continue
+        address = _address_of(reg)
+        suppliers.append({"key": site_key(address), "name": reg.get("BusinessName") or names.street(address[0]),
+                          "contact": address in contacts, "hours": _open_hours(save, reg),
+                          "closed": bool(reg.get("temporarilyClosed")),
+                          "products": sorted(live_suppliers.get(address, {}).get("products", [])),
+                          "fee": live_suppliers.get(address, {}).get("fee")})
+    result = {"rows": [], "margin": SUPPLY_MARGIN, "available": bool(products), "suppliers": suppliers}
+    if not products:
+        return result
+    _edges, targets = _supply_plans(save, businesses)
+    now = save.root["Day"] + (save.root["Hour"] + int(save.root["Minute"]) / 60) / 24
+    contracts = collections.defaultdict(list)
+    for contract in save.items(save.root.get("DeliveryContracts")):
+        if not contract.get("enabled"):
+            continue
+        key = site_key(save.address(contract.get("businessAddress")))
+        due = contract.get("nextDeliveryDay")
+        # A rushed repeating contract stays weekly. Its next Monday drop is not
+        # counted: after a mid-week drop the game cuts the amount to what is
+        # left of the product's weekly wholesale limit, which no save records.
+        recurring = bool(contract.get("repeatingOrder"))
+        # Every drop lands at 08:00 on its day.
+        days = due + WHOLESALE_HOUR / 24 - now if isinstance(due, (int, float)) and math.isfinite(due) else None
+        for entry in save.items(contract.get("items")):
+            slug, amount = entry.get("itemName"), entry.get("amount") or 0
+            if slug and amount > 0:
+                contracts[(key, slug)].append((days, amount, recurring))
+    imports, _configured, _next = _supply_imports(save, names, save.root["Day"])
+    for s, business in enumerate(businesses):
+        if business.get("status") != "retail" or business.get("closed"):
+            continue
+        lines = {line["slug"]: line for line in business["lines"] if line.get("slug")}
+        care = "ba:itemname_haircareproduct"
+        # One Hair Care Product per service. While nobody watches, the game
+        # books each one as a free sale beside the bottles customers buy, so
+        # the use is the paid bottles (the sales less the free ones, over the
+        # same trading days) plus every service.
+        service_use = sum(_week_sold(business, line) for slug, line in lines.items()
+                          if products.get(slug, {}).get("s") and not line.get("retired")) \
+            if business.get("typeSlug") == "ba:businesstype_hairdresser" else 0
+        if service_use and care not in lines:
+            lines[care] = {"slug": care, "item": names.label(care), "units": 0, "rate": 0}
+        for slug in _in_order(lines):
+            line, product = lines[slug], products.get(slug)
+            if not product or product.get("s") or product.get("k") or line.get("issued") or line.get("retired"):
+                continue
+            stock = max(0, line["units"])
+            week = max(0.0, _week_sold(business, line))
+            if slug == care and service_use:
+                # Free units past the services are bottles given away at a $0 price.
+                week = max(0.0, week - min(line.get("weekFree", 0), service_use)) + service_use
+            deals = contracts.get((business["key"], slug), [])
+            managed = "route" if targets.get((business["key"], slug), (0,))[0] > 0 else \
+                "import" if imports.get((business["key"], slug), {}).get("active") else None
+            unknown = any(days is None or days <= 0 for days, _amount, _recurring in deals)
+            arrivals = [[days, amount] for days, amount, _recurring in deals if days is not None and 0 < days < 7]
+            young = business.get("tradeDays", 0) < MIN_TRADE_DAYS
+            reason = managed or ("new" if young else "no-sales" if not week else None)
+            need = week * (1 + SUPPLY_MARGIN)
+            weekly = _ceil_ten(need) if not reason else None
+            buy = _wholesale_buy(need, stock, arrivals) if not reason and not unknown else None
+            box = product.get("bx") or None
+            boxes = math.ceil(round(buy / box, 9)) if buy is not None and box else None
+            result["rows"].append({
+                "s": s, "slug": slug, "item": line["item"], "stock": stock,
+                "week": round(week, 1), "box": box, "weekly": weekly,
+                "buy": boxes * box if boxes is not None else math.ceil(buy) if buy is not None else None,
+                "boxes": boxes, "scheduled": sum(amount for _days, amount in arrivals),
+                "deliveries": [[round(days, 3), amount] for days, amount in sorted(arrivals)],
+                "current": sum(amount for _days, amount, recurring in deals if recurring),
+                "reason": reason, "deliveryUnknown": unknown,
+            })
+    return result
 
 
 def _supply_imports(save: Save, names: Names, day: int) -> tuple:
@@ -22943,7 +23066,7 @@ class GameLink:
     while a city is loaded, so the watch loop reports it once and carries on.
     """
 
-    SCHEMA = 2  # the schema version this client speaks; see the contract
+    SCHEMA = 3  # the schema version this client speaks; see the contract
     TIMEOUT = 5
 
     def __init__(self, url: str, out_dir: str):
@@ -23017,7 +23140,7 @@ class GameLink:
             return None
         self.not_ready = 0
         version = health.get("schemaVersion")
-        if version not in (1, self.SCHEMA):
+        if version not in (1, 2, self.SCHEMA):
             raise LinkMismatch(
                 f"the Big Copilot Link mod speaks schema version {version}; this "
                 f"board needs version {self.SCHEMA}. Update the mod or the board"

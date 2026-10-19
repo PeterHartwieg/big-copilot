@@ -8624,5 +8624,11 @@
    "ready": false,
    "s": 3
   }
- ]
+ ],
+ "wholesale": {
+  "available": true,
+  "margin": 0.15,
+  "rows": [],
+  "suppliers": []
+ }
 }

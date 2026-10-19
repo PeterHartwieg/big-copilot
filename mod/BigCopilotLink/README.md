@@ -27,7 +27,7 @@ SHA-256 hash. The dashboard can download these together as a `.bcsave` snapshot 
 later use. Capacity and area changes made by other mods use the same path as changed
 game definitions. The collector uses game getters and never loads another mod's DLL.
 
-Build in the SDK and verify `/health` advertises schema 2 and `building-facts.v1`.
+Build in the SDK and verify `/health` advertises schema 3 and `building-facts.v1`.
 Peter's local regression check covers a normal city; the original reporter will
 test an Alcware-renovated shop. For the in-game test, compare area, customer capacity
 and campaign prediction with BizMan. Renovate while a refresh is running and verify
@@ -69,9 +69,9 @@ they do not validate the new collector inside the game.
   `HKEY_CURRENT_USER\Software\Hovgaard Games\Big Ambitions`, a plist on a Mac), where the
   SDK keeps mod options too. **Forget approved browsers** in the mod's options empties it.
 
-## What it changes (0.2.0 to 0.6.0)
+## What it changes (0.2.0 to 0.7.0)
 
-Seven `POST` endpoints, all in [`docs/game-link-api.md`](../../docs/game-link-api.md)
+Eight `POST` endpoints, all in [`docs/game-link-api.md`](../../docs/game-link-api.md)
 under "Writes":
 
 | Endpoint | What it changes |
@@ -82,7 +82,8 @@ under "Writes":
 | `/write/hire` | From 0.3.0. Hires headhunter candidates into businesses, moves employees from one business to another, and writes the weeks of the businesses involved, in one call: what MyEmployees' "Assign business and hire" and "Assign business" do, then the schedule write for each week sent. A candidate who has left the game's list since the board read it is skipped, and their shifts are left empty; anything else refused refuses the whole call. From 0.4.0 the same call also writes the weeks of businesses nobody is hired into or moved to or from (reschedule-only sites, `features` `hire.reschedule`), so the board's whole staffing action is one call, and it can be undone (`hire.undo`). |
 | `/write/marketing` | From 0.4.0. Switches each business's marketing campaigns to the set the board sends, disabling the rest (never removing one), and sets the business up the way a call and a chat with each agency would: an entry for every campaign type the agency sells, the unused ones switched off, so BizMan's Marketing page shows every switch for that business from then on. A switch the business already has is turned on or off at any time, as the phone does. A new one is added only through an agency already in your phone's contacts (you visited it once) and only while it is open: a business whose plan needs a new switch no such agency sells is refused, naming the agency and, when closed, when it opens; set-up switches that cannot be added yet are listed as waiting. Never adds a contact or a chat message. A switched-off entry costs nothing. |
 | `/write/rent` | From 0.6.0. Sets the rent price a m² of buildings you own, exactly as BizMan's Real estate page does: the new price waits seven days and then applies (`pendingPricePerSqm` and its counter; the current price is never written, occupancy is not touched). The price is held to BizMan's slider, 80% to 120% of the building's market rent, in whole cents. A price equal to the one already pending is left alone, so its seven days do not restart. Hamptons villas, buildings you do not own, and a price that moved since the board read it are refused. |
-| `/write/undo` | Puts back what the last write of a kind changed, in this city session, where the game still holds what that write left. From 0.4.0 also a hire call, all or nothing and only on the game day it was made: moves reversed, hires taken back quietly into the candidate list (never fired), every week and opened day as before. Before 0.4.0 a hire answers `no_undo`. From 0.6.0 also a rent write, only on the game day it was made (`rent.undo`). |
+| `/write/wholesale` | From 0.7.0. Creates or updates a regular weekly delivery, or creates a one-off order on a new/inactive contract. Requires an open wholesaler already in contacts, business storage and eligible products within live limits. A snapshot and checked quote bind apply to the displayed plan. Normal Monday 08:00 deliveries; never rushes an order or charges money itself. |
+| `/write/undo` | Puts back what the last write of a kind changed, in this city session, where the game still holds what that write left. From 0.4.0 also a hire call, all or nothing and only on the game day it was made: moves reversed, hires taken back quietly into the candidate list (never fired), every week and opened day as before. Before 0.4.0 a hire answers `no_undo`. From 0.6.0 also a rent write, only on the game day it was made (`rent.undo`). From 0.7.0 also a wholesale order (`wholesale.undo`), restoring the complete prior contract or removing a new one, on the same day while unchanged and unlocked. |
 
 - **Approving a browser.** Every write needs `Authorization: Bearer <token>`, a token
   the game gives a browser once you allow it. The first write from a browser asks in the
@@ -226,7 +227,7 @@ packager first; repository-only compilation does not replace that check.
    | ModId | `BigCopilotLink` |
    | DisplayName | `Big Copilot Link` |
    | Author | `Peter Hartwieg` |
-   | Version | `0.6.0` |
+   | Version | `0.7.0` |
    | Mod Assembly | drag `BigCopilotLink.asmdef` into the field |
    | Locales Folder | drag the `Locales` folder into the field; the option labels are keys in `Locales/en.json` |
 
@@ -266,7 +267,7 @@ Launch the game, enable **Big Copilot Link** in the Mods menu, load a save, then
 curl http://127.0.0.1:8322/health
 ```
 
-Expect `{"ok":true,"schemaVersion":2,"modVersion":"0.6.0","source":"game",…,"writes":["uniforms","imports","schedule","hire","marketing","rent"],"features":["hire.reschedule","hire.undo","rent.undo","building-facts.v1"],"paired":false}` and a
+Expect `{"ok":true,"schemaVersion":3,"modVersion":"0.7.0","source":"game",…,"writes":["uniforms","imports","schedule","hire","marketing","rent","wholesale"],"features":["hire.reschedule","hire.undo","rent.undo","wholesale.undo","building-facts.v1"],"paired":false}` and a
 `[BigCopilotLink] serving the game to Big Copilot on http://127.0.0.1:8322/` line in
 the player log (`%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\Player.log`;
 on a Mac, `~/Library/Logs/Hovgaard Games/Big Ambitions/Player.log`), then, a few
@@ -707,3 +708,31 @@ run in the game.
 Whether the game restores persisted option values by calling the change callbacks at
 registration is unverified. It is safe either way: restarting the listener is
 idempotent.
+
+
+### In-game checklist for 0.7.0
+
+The wholesale API was checked against installed build 3682's decompiled
+`WholesaleStoreManagerDialog`, `BizManContractSettings`,
+`BizManDeliveriesProductsScrollerController`, `DeliveryContract` and `DeliveryHelper`.
+Repository tests exercise a synthetic mock and the browser; they do not compile
+or execute this mod. Build it through the SDK Mod Builder and complete this checklist
+before publishing the mod:
+
+1. `/health` reports schema 3, version 0.7.0, `wholesale` and `wholesale.undo`.
+2. With a known open wholesaler and a shop with storage, place a weekly order from
+   the board. BizMan shows the selected products/amounts, Repeating enabled, and
+   the same date/price the result shows. No immediate cash or stock change occurs.
+3. Undo on the same day removes a new contract. Update an existing weekly contract;
+   undo restores amounts, delivery counters and its original date. An unchanged
+   weekly order leaves its delivery date alone.
+4. Place a one-off on a new/inactive pair: Repeating stays off. Try it on an active
+   weekly pair: refused, with the weekly contract intact. Positive unlisted products
+   or the same product on another active weekly contract also refuse weekly setup.
+5. Check closed/unvisited wholesalers, missing storage, limits, backorder, shortage,
+   and an open Deliveries screen. Each must refuse without a partial change.
+6. Check Sunday 19:00, Sunday 20:00 and Monday 08:00 dates and lock behavior against
+   the game's own Start order. Refresh, change a price/contract, or cross a day between
+   dry run and apply: a stale quote must refuse. Replaying a successful apply must
+   not add a second contract. Edit/deliver the contract or advance a day: undo refuses.
+7. Save/reload the city and verify the game retains the order; the old undo is gone.

@@ -23632,5 +23632,81 @@
    "ready": true,
    "s": 3
   }
- ]
+ ],
+ "wholesale": {
+  "available": true,
+  "margin": 0.15,
+  "rows": [
+   {
+    "box": 300,
+    "boxes": null,
+    "buy": null,
+    "current": 0,
+    "deliveries": [],
+    "deliveryUnknown": false,
+    "item": "Beer",
+    "reason": "route",
+    "s": 0,
+    "scheduled": 0,
+    "slug": "ba:itemname_beer",
+    "stock": 400,
+    "week": 2250.0,
+    "weekly": null
+   },
+   {
+    "box": 500,
+    "boxes": null,
+    "buy": null,
+    "current": 0,
+    "deliveries": [],
+    "deliveryUnknown": false,
+    "item": "Soda Can",
+    "reason": "no-sales",
+    "s": 0,
+    "scheduled": 0,
+    "slug": "ba:itemname_sodacan",
+    "stock": 0,
+    "week": 0.0,
+    "weekly": null
+   },
+   {
+    "box": 300,
+    "boxes": 0,
+    "buy": 0,
+    "current": 450,
+    "deliveries": [
+     [
+      2.729,
+      450
+     ]
+    ],
+    "deliveryUnknown": false,
+    "item": "Gift (Cheap)",
+    "reason": null,
+    "s": 1,
+    "scheduled": 450,
+    "slug": "ba:itemname_cheapgift",
+    "stock": 300,
+    "week": 600.0,
+    "weekly": 690
+   },
+   {
+    "box": 300,
+    "boxes": 1,
+    "buy": 300,
+    "current": 0,
+    "deliveries": [],
+    "deliveryUnknown": false,
+    "item": "Umbrella",
+    "reason": null,
+    "s": 1,
+    "scheduled": 0,
+    "slug": "ba:itemname_umbrella",
+    "stock": 30,
+    "week": 150.0,
+    "weekly": 180
+   }
+  ],
+  "suppliers": []
+ }
 }

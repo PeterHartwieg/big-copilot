@@ -58,6 +58,19 @@ class BuildingFacts(unittest.TestCase):
         path.write_bytes(f.pack(raw or self.raw, facts or self.facts))
         return load_save(str(path))
 
+    def test_wholesale_runtime_catalogue_is_optional_validated_and_preserved(self):
+        row = {"street": "supplier", "number": 4, "fee": 100, "products": ["ba:itemname_sodacan"]}
+        self.facts["wholesalers"] = [row]
+        self.assertEqual(self.load().facts["wholesalers"], [row])
+        for changes in ({"fee": -1}, {"fee": True}, {"products": ["x", "x"]}, {"products": [None]},
+                        {"number": True}, {"street": ""}):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                f.validate(dict(self.facts, wholesalers=[dict(row, **changes)]))
+        with self.assertRaises(ValueError):
+            f.validate(dict(self.facts, wholesalers=[row, row]))
+        del self.facts["wholesalers"]
+        self.assertEqual(f.validate(self.facts), self.facts)
+
     def test_portable_round_trip_and_save_local_resolution(self):
         baseline = copy.deepcopy(d.load_buildings())
         save = self.load()

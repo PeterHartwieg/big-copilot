@@ -125,7 +125,7 @@ class GameLinkAgainstMock(unittest.TestCase):
             self.game.poll()
         self.assertIsInstance(caught.exception, ba_dashboard.LinkUnavailable, "the watch loop's outage")
         self.assertIn("version 99", str(caught.exception))
-        self.assertIn("needs version 2", str(caught.exception))
+        self.assertIn("needs version 3", str(caught.exception))
         self.mock.schema = 1
         self.assertEqual(self.game.poll(), self.game.path, "a mod put right is read as ever")
 

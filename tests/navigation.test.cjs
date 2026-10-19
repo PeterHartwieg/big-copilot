@@ -176,6 +176,7 @@ test('a new canonical view derives its common tables without sibling table edits
 /* The sections each route asks for as it opens; every route not named asks for none. */
 const ROUTE_NEEDS = {
   'overview': ['staffing'], 'businesses/prices': ['products'], 'businesses/milestones': ['goals'],
+  'supply/deliveries': ['wholesale'],
   'supply/production': ['factoryStaffing'], 'staffing/schedules': ['hiring'], 'staffing/needs': ['hiring'],
   'expansion/open': ['openStore'], 'expansion/factory': ['openFactory', 'openStore'],
   'estate/buildings': ['realEstate'], 'estate/buy': ['realEstate'], 'wiki': ['products'],

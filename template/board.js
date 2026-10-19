@@ -702,6 +702,7 @@ function odWords(name){
     case "officeStaffing": return tt("nav.od.officeStaffing", "Working out office staffing…");
     case "premises": return tt("nav.od.premises", "Working out locations…");
     case "products": return tt("nav.od.products", "Working out products…");
+    case "wholesale": return tt("nav.od.wholesale", "Working out wholesale shopping…");
     case "openStore": return tt("nav.od.openStore", "Working out store plans…");
     case "openFactory": return tt("nav.od.openFactory", "Working out factory costs…");
     case "goals": return tt("nav.od.goals", "Working out milestones…");
@@ -9790,6 +9791,13 @@ let sbBound = false;
 function bindSupply(){
   if(sbBound) return;
   sbBound = true;
+  on("change", "#pageSupply [data-sw-shop]", sel => {
+    swShop = sel.value;
+    sbAgain("deliveries");
+    q("[data-sw-shop]", $("secDeliveries"))?.focus();
+  });
+  on("click", "#pageSupply [data-sw-copy]", (btn, e) => { e.preventDefault(); swCopy(btn); });
+  on("change", "#pageSupply [data-sw-supplier]", sel => { swSupplier = sel.value; sbAgain("deliveries"); });
   on("click", "#pageSupply .sb-tick[data-sb-keys], #pageSupply [data-sb-mark]", (btn, e) => { e.preventDefault(); e.stopPropagation(); sbToggle(btn); });
   on("click", "#pageSupply tr.sb-gr", (tr, e) => {
     if(e.target.closest("a, select, input, .sb-tick, .map-shortcut")) return;
@@ -11011,6 +11019,141 @@ function drawImportsView(){
   sbWire(sec, [["warehouses", SB_WH_COLS]], "imports");
 }
 
+/* Wholesale buying uses its own deferred facts. These are estimates for
+   purchases and new contracts, never changes to daily logistics targets. */
+let swShop = "", swSupplier = "", swCharacter = null;
+function swRows(){
+  if(!odReady("wholesale")) return [];
+  const rows = (D.wholesale || {}).rows || [];
+  const character = D.meta?.character;
+  if(swCharacter !== character){ swCharacter = character; swShop = ""; swSupplier = ""; }
+  if(swShop && !rows.some(r => D.businesses[r.s]?.key === swShop)) swShop = "";
+  return rows.filter(r => !swShop || D.businesses[r.s]?.key === swShop);
+}
+function swBuyText(r){
+  return r.boxes !== null && r.boxes !== undefined
+    ? tt("sb.wholesale.boxes", {one: "{n:,} box · {units:,} units", other: "{n:,} boxes · {units:,} units"}, {n: r.boxes, units: r.buy})
+    : tt("sb.wholesale.units", "{n:,} units", {n: r.buy});
+}
+function swNote(r){
+  if(r.reason === "new") return tt("sb.wholesale.new", "Needs at least five trading days");
+  if(r.reason === "no-sales") return tt("sb.wholesale.noSales", "No measured use yet");
+  if(r.deliveryUnknown) return tt("sb.wholesale.checkDelivery", "Check the outstanding delivery date before buying");
+  return "";
+}
+function swHtml(){
+  if(!odNeed("wholesale")) return `<div class="sw-plan">${odWaitHtml("wholesale", true)}</div>`;
+  const data = D.wholesale;
+  if(!data) return "";  // a partial/static payload from before this section
+  const scoped = swRows(), rows = scoped.filter(r => r.reason !== "route" && r.reason !== "import");
+  const managed = scoped.length - rows.length;
+  const shops = [...new Set(data.rows.map(r => r.s))].filter(s => D.businesses[s]);
+  const options = shops.map(s => { const b = D.businesses[s];
+    return `<option value="${attr(b.key)}"${swShop === b.key ? " selected" : ""}>${spEsc(shortName(b))}</option>`; }).join("");
+  const margin = Math.round(data.margin * 100);
+  const body = rows.map(r => {
+    const b = D.businesses[r.s], note = swNote(r);
+    const due = r.deliveries.map(([days, amount]) => tt("sb.wholesale.drop", "{n:,} units in {days:.1f} days", {n: amount, days})).join("; ");
+    return `<tr data-sw-slug="${attr(r.slug)}"><td class="l">${b ? siteTd(b) : ""}</td>
+      <td class="l">${spEsc(r.item)}${note ? `<span class="sub">${spEsc(note)}</span>` : ""}</td>
+      <td>${r.reason === "no-sales" || r.reason === "new" ? "—" : num(r.week)}</td><td>${num(r.stock)}</td>
+      <td${due ? ` data-tip="${attr(due)}" tabindex="0"` : ""}>${r.deliveryUnknown ? "—" : num(r.scheduled)}</td>
+      <td class="sw-buy">${r.buy === null ? "—" : `<b>${spEsc(swBuyText(r))}</b>`}</td>
+      <td>${r.weekly === null ? "—" : `<b>${num(r.weekly)}</b>`}${r.current ? `<span class="sub">${tt("sb.wholesale.current", "Now {n:,} / week", {n: r.current})}</span>` : ""}</td></tr>`;
+  }).join("");
+  const buyable = rows.some(r => r.buy > 0), weekly = rows.some(r => r.weekly > 0);
+  return `<div class="sw-plan"><div class="sw-head"><h3>${spIcon("crate")}${tt("sb.wholesale.title", "Wholesale shopping & deliveries")}</h3>
+    <label>${tt("sb.wholesale.shop", "Shop")} <select data-sw-shop aria-label="${attr(tt("sb.wholesale.shop", "Shop"))}"><option value="">${tt("sb.scope.shops", "All shops")}</option>${options}</select></label></div>
+    <p>${tt("sb.wholesale.explain", "Plan seven days from now using recent weekly use plus a {margin}% margin.", {margin})} ${tt("sb.wholesale.buyExplain", "Buy now subtracts current stock and scheduled wholesale deliveries, while covering any gap before they arrive.")}</p>
+    ${rows.length ? `<div class="scrollx"><table class="sb-t sw-table"><thead><tr>
+      <th class="l">${tt("sb.wholesale.shop", "Shop")}</th><th class="l">${tt("sb.col.product", "Product")}</th>
+      <th>${tt("sb.wholesale.use", "Uses / week")}</th><th>${tt("sb.col.onHand", "On hand")}</th>
+      <th>${tt("sb.wholesale.scheduled", "Due in 7 days")}</th><th>${tt("sb.wholesale.buy", "Buy now")}</th>
+      <th>${tt("sb.wholesale.weekly", "Weekly delivery")}</th></tr></thead><tbody>${body}</tbody></table></div>`
+      : `<p class="quiet">${data.available ? tt("sb.wholesale.empty", "No products need a wholesale plan in this selection.") : tt("sb.wholesale.noCatalogue", "Product data is unavailable for wholesale planning.")}</p>`}
+    ${managed ? `<p class="quiet">${tt("sb.wholesale.managed", {one: "{n} product already has a daily delivery plan or an import; review that supply before adding a wholesale order.", other: "{n} products already have daily delivery plans or imports; review that supply before adding wholesale orders."}, {n: managed})}</p>` : ""}
+    <details class="sw-help"><summary>${tt("sb.wholesale.setup", "Set up a weekly delivery")}</summary><p>${tt("sb.wholesale.setupText", "At a wholesaler in the game, choose the shop as the destination and repeat the order weekly using the Weekly delivery quantities.")} ${tt("sb.wholesale.totalText", "Each quantity is the total for that product at that shop across all repeating wholesale contracts.")}</p>
+      <p>${tt("sb.wholesale.firstText", "Keep enough stock for the first delivery: a new contract is counted here after it appears in the next save.")} ${tt("sb.wholesale.forecastText", "These are estimates from recorded use; changed opening hours or demand can change what the shop needs.")}</p></details>
+    <div class="sw-actions"><button type="button" class="nx-btn sm" data-sw-copy="buy"${buyable ? "" : " disabled"}>${icon("copy")}${tt("sb.wholesale.copyBuy", "Copy shopping list")}</button>
+      <button type="button" class="nx-btn sm" data-sw-copy="weekly"${weekly ? "" : " disabled"}>${icon("copy")}${tt("sb.wholesale.copyWeekly", "Copy weekly amounts")}</button>
+      <span class="sw-status" role="status"></span></div><textarea class="sb-fallback" aria-label="${attr(tt("sb.wholesale.copyText", "Wholesale list to copy"))}" hidden></textarea>${swOrderHtml()}</div>`;
+}
+function swOrderSupplier(){
+  const suppliers = (D.wholesale || {}).suppliers || [];
+  if(!suppliers.some(s => s.key === swSupplier)) swSupplier = suppliers.find(s => s.contact)?.key || suppliers[0]?.key || "";
+  return suppliers.find(s => s.key === swSupplier);
+}
+function swOrderRows(mode){
+  const supplier = swOrderSupplier();
+  return swRows().filter(r => r.reason !== "route" && r.reason !== "import" && supplier?.products.includes(r.slug)
+    && (mode === "weekly" ? r.weekly : r.buy) > 0);
+}
+function swOrderBlocked(mode){
+  if(!swShop) return tt("sb.wholesale.pickShop", "Select one shop to place an order.");
+  const s = swOrderSupplier(), clock = gwMkClock();
+  if(!s) return tt("sb.wholesale.noSupplier", "No wholesaler is recorded in this save.");
+  if(!s.contact) return tt("sb.wholesale.visit", "Visit this wholesaler once to add it to your contacts.");
+  if(!clock || !gwMkOpenAt(s, clock.day, clock.hour)) return tt("sb.wholesale.closed", "This wholesaler is closed. Order when it opens.");
+  if(!swOrderRows(mode).length) return tt("sb.wholesale.noOrder", "No known quantities to order from this wholesaler.");
+  return "";
+}
+function swOrderHtml(){
+  if(!gwLink()) return "";
+  const supplier = swOrderSupplier();
+  const suppliers = (D.wholesale || {}).suppliers || [];
+  const options = suppliers.map(s => `<option value="${attr(s.key)}"${s.key === swSupplier ? " selected" : ""}>${spEsc(s.name)}</option>`).join("");
+  const weekly = swShop ? swOrderRows("weekly") : [], once = swShop ? swOrderRows("once") : [];
+  return `<div class="sw-order"><label>${tt("sb.wholesale.supplier", "Wholesaler")} <select data-sw-supplier>${options}</select></label>
+    <p>${tt("sb.wholesale.orderExplain", "Place the listed quantities for products this wholesaler sells, with its delivery fee. Regular deliveries arrive Monday at 08:00; keep enough stock until then.")}</p>
+    ${Number.isFinite(supplier?.fee) ? `<p class="quiet">${tt("sb.wholesale.fee", "New contract delivery fee: {fee:$}", {fee: supplier.fee})}</p>` : ""}
+    <p class="quiet">${tt("sb.wholesale.weeklyProducts", "Weekly: {items}", {items: spEsc(todayList(weekly.map(r => `${r.item}: ${num(r.weekly)}`)) || "—")})}</p>
+    <p class="quiet">${tt("sb.wholesale.onceProducts", "One-off: {items}", {items: spEsc(todayList(once.map(r => `${r.item}: ${num(r.buy)}`)) || "—")})}</p>
+    <p class="quiet">${tt("sb.wholesale.orderRules", "Weekly replaces this contract’s listed quantities. One-off uses Buy now quantities and needs no active contract with this wholesaler.")}</p>
+    <div class="sw-actions">${gwButton("wholesale", tt("sb.wholesale.placeWeekly", "Place weekly order"), 'data-gw-mode="weekly"', swOrderBlocked("weekly"), {count: weekly.length})}
+    ${gwButton("wholesale", tt("sb.wholesale.placeOnce", "Place one-off order"), 'data-gw-mode="once"', swOrderBlocked("once"), {count: once.length, alt: true})}</div>
+    <p class="quiet">${spEsc(swOrderBlocked("weekly") || tt("sb.wholesale.oneClick", "One click checks the live order and places it in the game. You can undo it before the game day changes."))}</p></div>`;
+}
+function gwWholesale(mode){
+  if(!odReady("wholesale") || swOrderBlocked(mode)) return;
+  const shop = swShop, supplier = swSupplier, scope = odScope();
+  const label = mode === "weekly" ? tt("sb.wholesale.placeWeekly", "Place weekly order") : tt("sb.wholesale.placeOnce", "Place one-off order");
+  gwConfirm({kind: "wholesale", icon: "truck", needs: ["wholesale"], scope, oneClick: true,
+    title: label, where: () => gwWhere(D.businesses.find(b => b.key === shop)),
+    body: () => ({address: gwAddress(shop), supplier: gwAddress(supplier), mode, snapshot: gwLink()?.stamp,
+      items: swOrderRows(mode).map(r => ({item: r.slug, amount: mode === "weekly" ? r.weekly : r.buy}))}),
+    applyBody: (answer, body) => ({...body, quote: answer.quote}),
+    nothing: () => swShop !== shop || swSupplier !== supplier ? tt("sb.wholesale.selectionChanged", "The selection changed. Place the order from the updated list.") : swOrderBlocked(mode),
+    idle: answer => answer.rows?.every(r => !r.set) ? tt("sb.wholesale.alreadySet", "This weekly order is already set.") : "",
+    verdict: answer => answer.ok ? tt("sb.wholesale.checked", "The wholesaler can take this order.") : tt("sp.gw.refuses", "The game refuses this"),
+    object: r => gwSiteName(r),
+    draw: answer => answer.undo ? "" : (answer.rows || []).filter(r => !r.error).map(r => `<p><b>${spEsc(r.supplierName)}</b> · ${tt("sb.wholesale.orderDue", "Delivery day {day} at 08:00 · {cost:$} including delivery", {day: r.nextDeliveryDay, cost: r.cost})}</p><ul>${(r.items || []).map(i => `<li>${spEsc(itemName(i.item))}: ${num(i.amount)}</li>`).join("")}</ul>`).join(""),
+    applyLabel: () => label, applying: tt("sb.wholesale.placing", "Placing the wholesale order…"),
+    changed: answer => answer.rows?.some(r => r.set),
+    done: answer => answer.undo ? tt("sb.wholesale.undone", "Wholesale order undone.") : tt("sb.wholesale.placed", "Wholesale order placed in the game."),
+  });
+}
+function swCopyText(mode){
+  const amount = r => mode === "weekly" ? r.weekly : r.buy;
+  const rows = swRows().filter(r => r.reason !== "route" && r.reason !== "import" && (amount(r) > 0 || amount(r) === null));
+  const title = mode === "weekly" ? tt("sb.wholesale.weeklyTitle", "Weekly wholesale deliveries") : tt("sb.wholesale.buyTitle", "Wholesale shopping for seven days");
+  return [title, ...rows.map(r => tt("sb.wholesale.copyLine", "{shop} · {item}: {amount}", {
+    shop: D.businesses[r.s] ? shortName(D.businesses[r.s]) : "", item: r.item,
+    amount: amount(r) === null ? swNote(r) : mode === "weekly" ? tt("sb.wholesale.perWeek", "{n:,} units / week", {n: r.weekly}) : swBuyText(r)}))].join("\n");
+}
+async function swCopy(btn){
+  if(!odNeed("wholesale")) return;
+  const text = swCopyText(btn.dataset.swCopy), host = btn.closest(".sw-plan");
+  const status = q(".sw-status", host), fallback = q("textarea", host);
+  try{
+    await navigator.clipboard.writeText(text);
+    status.textContent = tt("sb.wholesale.copied", "List copied");
+    fallback.hidden = true;
+  }catch(e){
+    fallback.value = text; fallback.hidden = false; fallback.focus(); fallback.select();
+    status.textContent = tt("sb.strip.copyByHand", "Copy the selected text below.");
+  }
+}
+
 /* --- Deliveries: by where the goods arrive ---------------------------------- */
 function drawDeliveriesView(){
   const sec = $("secDeliveries");
@@ -11028,6 +11171,7 @@ function drawDeliveriesView(){
   const whBody = wh.every.length ? wh.blocks : "";
   const every = shops.rows.concat(wh.every), kept = shops.kept.concat(wh.kept);
   sbFill(sec, sbToolbar("deliveries", {kinds: ["shops", "warehouses"]})
+    + swHtml()
     + (every.length ? sbVerdict("deliveries", [shops.rows.length ? shops.verdict : "", wh.every.length ? sbLinesVerdict(wh.every) : ""].filter(Boolean).join(" "), false)
       : sbVerdict("deliveries", tt("sb.del.none2", "No shelf or second-tier warehouse is on a delivery plan yet."), true, {keep: true}))
     + group("shelves", tt("sb.del.shops2", "Shops"), tt("sb.del.shops.tip", "Daily top-ups and wholesale deliveries"), shopsBody)
@@ -19497,7 +19641,7 @@ const PAGE_DRAWS = [
   ["company/standards", () => drawStandards(), null, []],
   ["company/results", () => drawSitePicker(), null, []], ["", () => drawSite(), null, []],
   ["today supply/changes supply/roles supply/imports supply/deliveries supply/production supply/flow", () => drawSupplyStrip(), null, []],
-  ["supply/changes", () => drawChangesView(), null, []], ["supply/roles", () => drawRolesView(), null, []], ["supply/imports", () => drawImportsView(), null, []], ["supply/deliveries", () => drawDeliveriesView(), null, []],
+  ["supply/changes", () => drawChangesView(), null, []], ["supply/roles", () => drawRolesView(), null, []], ["supply/imports", () => drawImportsView(), null, []], ["supply/deliveries", () => drawDeliveriesView(), null, ["wholesale"]],
   ["supply/production", () => drawProductionView(), null, ["factoryStaffing"]], ["supply/flow", () => drawFlowView(), null, []], ["supply/flow", () => drawFlow(), null, []],
   ["growth/market", () => drawMovers(), null, []], ["growth/market", () => drawMarket(), null, []], ["growth/open", () => drawOpenStore(), null, ["openStore"]],
   ["growth/plan", () => drawPlan(), null, ["openFactory", "openStore"]],  // changed for growth: no drawExpansion()
@@ -21531,7 +21675,7 @@ const SS_VIEWS = [
   /* Top-ups are on every tab (a shelf's, a depot's, a factory input's): the
      tab with the most still to type, else Shops. */
   {id: "topups", get t(){ return tt("nav.search.topups.title", "Deliveries"); },
-   get p(){ return tt("nav.search.topups.line", "Supply › Deliveries · daily top-ups and wholesale"); }, ic: "route", syn: ["top-up", "distribution", "logistics", "delivery plan", "daily top-ups", "delivery targets"],
+   get p(){ return tt("nav.search.topups.line", "Supply › Deliveries · daily top-ups and wholesale"); }, ic: "route", syn: ["top-up", "distribution", "logistics", "delivery plan", "daily top-ups", "delivery targets", "wholesale", "shopping list", "weekly shopping", "seven days"],
    go: () => openRoute("supply/deliveries")},
   {id: "shops", get t(){ return tt("nav.search.shops.title", "Shops"); },
    get p(){ return tt("nav.search.shops.line", "Supply › Deliveries · every shelf against tomorrow's round"); }, ic: "shelves", syn: ["shelves", "run out", "stock out", "empty shelf", "before the drop"],
@@ -23699,6 +23843,7 @@ function gwUpdateMod(kind){
   if(kind === "hire") return tt("nav.dlg.mod.hire", "Update the Big Copilot Link mod to hire and place staff from here");
   if(kind === "marketing") return tt("nav.dlg.mod.marketing", "Update the Big Copilot Link mod to set marketing from here");
   if(kind === "rent") return tt("nav.dlg.mod.rent", "Update the Big Copilot Link mod to set rent from here (version 0.6.0 or later)");
+  if(kind === "wholesale") return tt("sb.wholesale.mod", "Update Big Copilot Link to version 0.7.0 or later to place wholesale orders.");
   return tt("nav.dlg.mod.other", "Update the Big Copilot Link mod to {kind} from here", {kind});
 }
 /* How long an apply's Undo lasts, by the kind of write (no full stop). */
@@ -23709,6 +23854,7 @@ function gwUndoStays(kind){
   if(kind === "hire") return tt("nav.dlg.stays.hire", "Undo stays until your next staffing step, on this game day");
   if(kind === "marketing") return tt("nav.dlg.stays.marketing", "Undo stays until your next marketing change");
   if(kind === "rent") return tt("nav.dlg.stays.rent", "Undo stays until your next rent change, on this game day");
+  if(kind === "wholesale") return tt("sb.wholesale.undoStays", "Undo stays until your next wholesale order, on this game day");
   return tt("nav.dlg.stays.other", "Undo stays until your next {kind} change", {kind});
 }
 const gwUndoable = {};  // kind -> {spec, text, sub, character, at}: its last apply, until undone or replaced
@@ -24189,7 +24335,7 @@ function gwMkAll(mode, alt, line = null){
 let gwMkSig = "";
 function gwMkOpenSig(){
   const c = gwMkClock();
-  return ((D && D.marketingAgencies) || []).map(a => c && gwMkOpenAt(a, c.day, c.hour) ? "1" : "0").join("");
+  return [...((D && D.marketingAgencies) || []), ...((D && D.wholesale?.suppliers) || [])].map(a => c && gwMkOpenAt(a, c.day, c.hour) ? "1" : "0").join("");
 }
 function gwMkTick(){
   if(!hasData()) return;
@@ -24573,7 +24719,7 @@ function gwMkOpensOf(r){
    offered only when every error the answer names is one of them; the rest
    ask for another request, or a refreshed board. */
 const GW_FIXABLE = new Set(["screen_open", "no_locker", "no_preset", "no_business", "no_agent", "no_warehouse",
-  "locked", "backorder", "not_assigned", "myemployees", "no_contact", "agency_closed"]);
+  "locked", "backorder", "not_assigned", "myemployees", "no_contact", "agency_closed", "supplier_closed", "no_storage"]);
 const gwFixable = answer => {
   const a = answer || {};
   /* A hire's dry run names an app open in the game as `blocked`. */
@@ -24643,6 +24789,22 @@ const GW_REFUSE = {
 GW_REFUSE.rent = {
   not_owned: {get rule(){ return tt("re.gw.refuse.notowned.rule", "You no longer own this building"); }, get fix(){ return tt("re.gw.refuse.notowned.fix", "Refresh the board."); }},
   villa: {get rule(){ return tt("re.gw.refuse.villa.rule", "A Hamptons villa: the game pays it no rent"); }, get fix(){ return tt("re.gw.refuse.villa.fix", "Leave it out."); }},
+};
+GW_REFUSE.wholesale = {
+  locked: GW_REFUSE.imports.locked,
+  not_supported: {get rule(){ return tt("sb.wholesale.refuse.not_supported.rule", "This business cannot receive wholesale deliveries"); }, get fix(){ return tt("sb.wholesale.refuse.not_supported.fix", "Choose a shop that accepts wholesale deliveries."); }},
+  supplier_missing: {get rule(){ return tt("sb.wholesale.refuse.supplier_missing.rule", "This wholesaler is no longer available"); }, get fix(){ return tt("sb.wholesale.refuse.supplier_missing.fix", "Refresh the board."); }},
+  no_contact: {get rule(){ return tt("sb.wholesale.refuse.no_contact.rule", "This wholesaler is not in your contacts"); }, get fix(){ return tt("sb.wholesale.refuse.no_contact.fix", "Visit it once in the game, then try again."); }},
+  supplier_closed: {get rule(){ return tt("sb.wholesale.refuse.supplier_closed.rule", "The wholesaler is closed now"); }, get fix(){ return tt("sb.wholesale.refuse.supplier_closed.fix", "Try again during its opening hours."); }},
+  no_storage: {get rule(){ return tt("sb.wholesale.refuse.no_storage.rule", "The shop has no business storage"); }, get fix(){ return tt("sb.wholesale.refuse.no_storage.fix", "Place business storage at the shop, then try again."); }},
+  duplicate_contracts: {get rule(){ return tt("sb.wholesale.refuse.duplicate_contracts.rule", "Several contracts exist for this shop and wholesaler"); }, get fix(){ return tt("sb.wholesale.refuse.duplicate_contracts.fix", "Review these contracts in BizMan first."); }},
+  active_order: {get rule(){ return tt("sb.wholesale.refuse.active_order.rule", "An order is already active with this wholesaler"); }, get fix(){ return tt("sb.wholesale.refuse.active_order.fix", "Finish or cancel it in BizMan, or choose another wholesaler."); }},
+  other_contract: {get rule(){ return tt("sb.wholesale.refuse.other_contract.rule", "Another weekly contract supplies these products"); }, get fix(){ return tt("sb.wholesale.refuse.other_contract.fix", "Review that contract in BizMan before adding another weekly order."); }},
+  other_products: {get rule(){ return tt("sb.wholesale.refuse.other_products.rule", "The existing contract also orders products outside this list"); }, get fix(){ return tt("sb.wholesale.refuse.other_products.fix", "Edit the whole contract in BizMan to keep those quantities under your control."); }},
+  product_unavailable: {get rule(){ return tt("sb.wholesale.refuse.product_unavailable.rule", "A product is not available for this shop from this wholesaler"); }, get fix(){ return tt("sb.wholesale.refuse.product_unavailable.fix", "Refresh the board or choose another wholesaler."); }},
+  over_cap: {get rule(){ return tt("sb.wholesale.refuse.over_cap.rule", "This order exceeds the remaining wholesale limit"); }, get fix(){ return tt("sb.wholesale.refuse.over_cap.fix", "Order the smaller amount in BizMan or use another wholesaler."); }},
+  backorder: {get rule(){ return tt("sb.wholesale.refuse.backorder.rule", "A product is on backorder at this wholesaler"); }, get fix(){ return tt("sb.wholesale.refuse.backorder.fix", "Try again after the market event ends."); }},
+  shortage: {get rule(){ return tt("sb.wholesale.refuse.shortage.rule", "A shortage would reduce this order"); }, get fix(){ return tt("sb.wholesale.refuse.shortage.fix", "Order the available amount in BizMan or choose another wholesaler."); }},
 };
 /* A hire's rows name their scope: a candidate hired, an employee moved, a
    site, or one shift of a site's week (the schedule's own codes). */
@@ -25052,11 +25214,14 @@ function gwFailed(dlg, spec, res, retry, recheck){
                                when the game approved afresh in an open
                                dialog, which asks the game again)
      onUndo()                  optional: heard once its undo went through
+     oneClick                  optional: apply the first successful check from this click
+     applyBody(answer, body)   optional: bind apply to the returned quote
      scope                     optional: company/source captured at opening;
                                a pending plan closes when that scope changes
    The dialog dry-runs as it opens, offers Apply only when the game would take
    every row, and after an apply offers Undo until the next write of the kind. */
 function gwConfirm(spec){
+  let oneClick = !!spec.oneClick;  // only this user gesture; retries and clock changes never auto-apply
   const title = () => typeof spec.title === "function" ? spec.title() : spec.title;
   const where = () => typeof spec.where === "function" ? spec.where() : spec.where || "";
   const dlg = gwDialog(spec.icon, title(), where());
@@ -25129,7 +25294,8 @@ function gwConfirm(spec){
      `undone`, the undo just made, said once above the fresh answer. */
   const plan = async (o = {}) => {
     if(!current()) return;
-    const mine = ++seq;
+    const mine = ++seq, autoApply = oneClick;
+    oneClick = false;
     judged = "";
     gwHead(dlg, title(), where());
     if(waiting()) return;
@@ -25176,6 +25342,7 @@ function gwConfirm(spec){
     st.idle = idle ? {at: spec.idleAt ? spec.idleAt() : "", now: spec.idleAt || null, ask: () => plan({soft: true})} : null;
     if(spec.bind) spec.bind(dlg, from => plan({soft: true, from}));
     if(top !== null) dlg.querySelector(".gw-body").scrollTop = top;
+    if(autoApply && answer.ok && !idle) apply();
   };
   /* The game asked again from a dialog that shows its answer: the answer on
      screen stays until the new one replaces it; the wire asks, Apply waits,
@@ -25206,7 +25373,8 @@ function gwConfirm(spec){
     gwPaint(dlg, {phase: "applying", wire: "ask", say: `<b>${spec.applying}</b>`, body: spec.draw(last || {}, "applying"),
       buttons: ["|", [tt("nav.dlg.applying", "Applying"), null, {kind: "go", busy: true, disabled: true}]]});
     const local = spec.local ? spec.local(JSON.parse(judged), false) : null;
-    const res = local ? {status: 200, error: null, body: local} : await SOURCE.write(spec.kind, JSON.parse(judged), {dryRun: false, approval: view(seq)});
+    const applyBody = spec.applyBody ? spec.applyBody(last, JSON.parse(judged)) : JSON.parse(judged);
+    const res = local ? {status: 200, error: null, body: local} : await SOURCE.write(spec.kind, applyBody, {dryRun: false, approval: view(seq)});
     if(res.error){
       /* No answer: whether the game holds it is unknown, and so is what an
          undo would restore. */
@@ -26360,6 +26528,7 @@ const bindWrites = once(() => {
     else if(kind === "marketing") gwMarketing(btn.hasAttribute("data-gw-mk-all")
       ? gwMkSites(btn.dataset.gwMode, btn.dataset.gwMkLine || null).map(b => b.key) : JSON.parse(btn.dataset.gwSites || "[]"), btn.dataset.gwMode);
     else if(kind === "rent") gwRent(btn.hasAttribute("data-gw-rent-all") ? null : [btn.dataset.gwRent]);
+    else if(kind === "wholesale") gwWholesale(btn.dataset.gwMode);
   }, true);
 });
 function wireWrites(){ bindWrites(); gwToast(); gwReadBack(); }
