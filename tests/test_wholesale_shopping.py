@@ -29,6 +29,25 @@ class WholesaleShopping(unittest.TestCase):
         self.assertEqual(businesses, before, "a deferred section cannot alter core business rows")
         return rows
 
+    def test_suppliers_use_paired_runtime_products_and_saved_contacts_and_hours(self):
+        c = self.company()
+        save = c.save()
+        vendor = {"StreetName": "supplier", "StreetNumber": 4, "BusinessName": "Warehouse Market",
+                  "businessTypeName": "ba:businesstype_wholesalestore", "cachedAvailableProducts": ["wrong-cache"],
+                  "scheduleDays": [{"day": 7, "isOpen": True, "openingHourSlots": [{"startingHour": 8, "endingHour": 18}]}]}
+        save.root["BuildingRegistrations"].append(vendor)
+        save.root["Contacts"] = [{"streetName": "supplier", "streetNumber": 4}]
+        save.facts = {"wholesalers": [{"street": "supplier", "number": 4, "fee": 100, "products": [BEER, SODA]}]}
+        with patch("ba_dashboard.load_store_rules", return_value=RULES):
+            [supplier] = _wholesale_shopping(save, Names({}), c.businesses())["suppliers"]
+        self.assertEqual(supplier["products"], sorted([BEER, SODA]))
+        self.assertEqual((supplier["fee"], supplier["contact"], supplier["hours"][0]), (100, True, [[8, 18]]))
+        save.facts = None
+        with patch("ba_dashboard.load_store_rules", return_value=RULES):
+            data = _wholesale_shopping(save, Names({}), c.businesses())
+        self.assertEqual(data["suppliers"][0]["products"], [], "NPC cached products are not authoritative")
+        self.assertTrue(data["rows"], "old saves still support manual shopping")
+
     def test_manual_purchase_uses_stock_and_whole_boxes_but_weekly_amount_does_not(self):
         [r] = self.rows(self.company())
         self.assertEqual((r["week"], r["stock"], r["weekly"]), (700, 100, 810))

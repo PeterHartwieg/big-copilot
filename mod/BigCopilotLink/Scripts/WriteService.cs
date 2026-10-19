@@ -79,7 +79,7 @@ namespace BigCopilotLink
     /// </summary>
     public sealed class WriteService
     {
-        public static readonly string[] Kinds = { "uniforms", "imports", "schedule", "hire", "marketing", "rent" };
+        public static readonly string[] Kinds = { "uniforms", "imports", "schedule", "hire", "marketing", "rent", "wholesale" };
 
         /// <summary>
         /// /health "features" (0.4.0): what a kind can do beyond what its version of the
@@ -87,7 +87,7 @@ namespace BigCopilotLink
         /// move reaches. hire.undo: POST /write/undo {"kind": "hire"}. rent.undo (0.6.0):
         /// POST /write/undo {"kind": "rent"}.
         /// </summary>
-        public static readonly string[] Features = { "hire.reschedule", "hire.undo", "rent.undo" };
+        public static readonly string[] Features = { "hire.reschedule", "hire.undo", "rent.undo", "wholesale.undo" };
 
         private const int MaxBodyBytes = 256 * 1024;
 
@@ -112,6 +112,8 @@ namespace BigCopilotLink
         internal HireWrite.UndoState HireUndo;
         internal MarketingWrite.UndoState MarketingUndo;
         internal RentWrite.UndoState RentUndo;
+        internal WholesaleWrite.UndoState WholesaleUndo;
+        internal string CurrentStamp { get { return _saves.Current.Stamp; } }
 
         public WriteService(SaveService saves, ApprovalService approvals)
         {
@@ -128,13 +130,14 @@ namespace BigCopilotLink
             HireUndo = null;
             MarketingUndo = null;
             RentUndo = null;
+            WholesaleUndo = null;
         }
 
         // ---- the HTTP side ---------------------------------------------------------
 
         /// <summary>
         /// An HTTP pool thread. <paramref name="kind"/> is "uniforms", "imports",
-        /// "schedule", "hire", "marketing", "rent" or "undo". Every answer comes back as a status and a body;
+        /// "schedule", "hire", "marketing", "rent", "wholesale" or "undo". Every answer comes back as a status and a body;
         /// the listener writes it.
         /// </summary>
         public WriteAnswer Handle(HttpListenerRequest request, string kind, CancellationToken cancellation = default(CancellationToken))
@@ -198,11 +201,16 @@ namespace BigCopilotLink
                     var req = RentWrite.Parse(root);
                     return (ws, dryRun) => RentWrite.Run(ws, req, dryRun);
                 }
+                case "wholesale":
+                {
+                    var req = WholesaleWrite.Parse(root);
+                    return (ws, dryRun) => WholesaleWrite.Run(ws, req, dryRun);
+                }
                 default:
                 {
                     var target = JsonReader.Str(root, "kind", "body", true);
                     if (Array.IndexOf(Kinds, target) < 0)
-                        throw new BadRequestException("body.kind must be one of uniforms, imports, schedule, hire, marketing, rent (each undoable)");
+                        throw new BadRequestException("body.kind must be one of uniforms, imports, schedule, hire, marketing, rent, wholesale (each undoable)");
                     return (ws, dryRun) => ws.Undo(target, dryRun);
                 }
             }
@@ -383,6 +391,9 @@ namespace BigCopilotLink
                 case "rent":
                     if (RentUndo == null) return WriteAnswer.Error(409, "nothing_to_undo");
                     return RentWrite.Undo(this, RentUndo, dryRun);
+                case "wholesale":
+                    if (WholesaleUndo == null) return WriteAnswer.Error(409, "nothing_to_undo");
+                    return WholesaleWrite.Undo(this, WholesaleUndo, dryRun);
                 default:
                     if (ScheduleUndo == null) return WriteAnswer.Error(409, "nothing_to_undo");
                     return ScheduleWrite.Undo(this, ScheduleUndo, dryRun);

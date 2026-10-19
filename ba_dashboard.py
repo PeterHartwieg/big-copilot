@@ -6256,7 +6256,19 @@ def _wholesale_shopping(save: Save, names: Names, businesses: list) -> dict:
     without a future date makes Buy now unknown until the player checks it.
     """
     products = load_store_rules().get("products") or {}
-    result = {"rows": [], "margin": SUPPLY_MARGIN, "available": bool(products)}
+    contacts = {(c.get("streetName"), c.get("streetNumber")) for c in save.items(save.root.get("Contacts"))}
+    live_suppliers = {(s["street"], s["number"]): s for s in (getattr(save, "facts", None) or {}).get("wholesalers", [])}
+    suppliers = []
+    for reg in save.items(save.root.get("BuildingRegistrations")):
+        if reg.get("businessTypeName") != "ba:businesstype_wholesalestore":
+            continue
+        address = _address_of(reg)
+        suppliers.append({"key": site_key(address), "name": reg.get("BusinessName") or names.street(address[0]),
+                          "contact": address in contacts, "hours": _open_hours(save, reg),
+                          "closed": bool(reg.get("temporarilyClosed")),
+                          "products": sorted(live_suppliers.get(address, {}).get("products", [])),
+                          "fee": live_suppliers.get(address, {}).get("fee")})
+    result = {"rows": [], "margin": SUPPLY_MARGIN, "available": bool(products), "suppliers": suppliers}
     if not products:
         return result
     _edges, targets = _supply_plans(save, businesses)
@@ -23033,7 +23045,7 @@ class GameLink:
     while a city is loaded, so the watch loop reports it once and carries on.
     """
 
-    SCHEMA = 2  # the schema version this client speaks; see the contract
+    SCHEMA = 3  # the schema version this client speaks; see the contract
     TIMEOUT = 5
 
     def __init__(self, url: str, out_dir: str):
@@ -23107,7 +23119,7 @@ class GameLink:
             return None
         self.not_ready = 0
         version = health.get("schemaVersion")
-        if version not in (1, self.SCHEMA):
+        if version not in (1, 2, self.SCHEMA):
             raise LinkMismatch(
                 f"the Big Copilot Link mod speaks schema version {version}; this "
                 f"board needs version {self.SCHEMA}. Update the mod or the board"

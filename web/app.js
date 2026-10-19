@@ -789,9 +789,9 @@
   // any caller read, the watcher's included. linkHealth moves only with new
   // bytes, so a mod updated under an open tab shows here first: writes go
   // only while the two agree (linkSpeaks()).
-  const LINK_SCHEMA = 2;
+  const LINK_SCHEMA = 3;
   let linkSchema = LINK_SCHEMA;
-  const linkVersionKnown = v => v === 1 || v === LINK_SCHEMA;
+  const linkVersionKnown = v => v === 1 || v === 2 || v === LINK_SCHEMA;
   const linkSpeaks = () => linkVersionKnown(linkSchema);
   let linkGone = false;   // the watcher has said the game went away
   let linkNotReady = 0;   // /health answers in a row that were never health, any caller
@@ -1493,7 +1493,7 @@
   const APPROVAL_AUTO_WAIT_S = 10;
   const WRITE_BUSY_RETRIES = 3;
   // The kinds that carry the same-save guard (`expect`), see gameWrite().
-  const SAME_SAVE_KINDS = new Set(["uniforms", "marketing", "rent"]);
+  const SAME_SAVE_KINDS = new Set(["uniforms", "marketing", "rent", "wholesale"]);
   // The mod always finishes a write it has started, however long the game
   // takes over it, so a write waits far longer for its answer than a read.
   const WRITE_WAIT_MS = 30000;
@@ -1744,7 +1744,7 @@
         : {status: 0, error: "mismatch", version: linkSchema, need: LINK_SCHEMA, body: null};
     }
     const path = kind === "undo" ? "/write/undo" : `/write/${kind}`;
-    // Uniforms, marketing and rent find their buildings by address alone, and
+    // Uniforms, marketing, rent and wholesale find their buildings by address alone, and
     // every save has the same map: the save this board was read from goes
     // along, and a mod from 0.3.1 answers `changed` when the game has another
     // loaded. Older mods ignore the field; marketing needs 0.4.0 anyway, rent 0.6.0.

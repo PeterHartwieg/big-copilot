@@ -1978,6 +1978,23 @@ table, not a line in Needs attention. Only a real gap becomes an alert.
 
 ### Wholesale shopping and delivery setup
 
+When linked with Big Copilot Link 0.7.0 or later, select one shop and a wholesaler.
+**Place weekly order** writes the Weekly delivery quantities; **Place one-off order**
+writes the Buy now quantities without repeating. Only products sold by that wholesaler
+are included, listed with their amounts before either button. Each click checks and
+applies the live order. The wholesaler must be a phone contact and open at that moment.
+Orders use the game's regular Monday 08:00 delivery, with its Sunday 20:00 cut-off;
+a one-off order does not arrive immediately. Keep enough stock until delivery.
+
+Weekly setup replaces the listed amounts on the shop's contract with that wholesaler.
+The game allows one contract per pair, so one-off requires a new or inactive contract.
+Active one-off orders, overlapping weekly supply from another wholesaler, or unlisted
+products on an existing weekly contract require review in BizMan. The mod checks
+storage, eligibility, limits, market events and stale snapshots again on apply.
+Undo restores the prior contract on the same game day, while it remains unchanged
+and unlocked. Delivery costs are charged by the game when it delivers.
+
+
 Supply › Deliveries includes a separate wholesale plan for existing shops. Select one
 shop or all shops. It uses the measured weekly sales (`_week_sold()`, so a shop that
 opens two days is not treated as opening seven) plus the supply margin of 15%.
