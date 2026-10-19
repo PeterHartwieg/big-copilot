@@ -6,6 +6,26 @@ const {test} = require('node:test');
 const H = require('./_open_store.cjs');
 const {assert, en, enRe, textRe, path, LIQ, SITE, board, steps, money, planned, MKPLAN, running, LINK, rows, until, line, opened, linked, routed, wanted, FULL, HIRES, SHORT6, hiring, realHiring, spy, traded} = H;
 
+test('headquarters checks lease, workstations and staff without customer tasks or schedule writes', async t => {
+  const page = await board(t, {hq: true});
+  await H.plannedHq(page);
+  await page.locator('#osCtl [data-os-step="opening"]').click();
+  let r = await rows(page);
+  assert.deepEqual(r.map(x => [x.title, x.state]), [['Lease', 'todo'], ['Furniture', 'todo'], ['Headquarters staff', 'todo']]);
+  assert.match(r[1].sub, /every employee has a computer, desk and chair/);
+  assert.equal(await page.locator('#osBody [data-os-write], #osBody [data-of-goto]').count(), 0);
+  await opened(page, {key: H.HQ_SITE, typeSlug: H.HQ, type: 'Headquarters', status: 'hq', opened: H.OPENED,
+    hasTraded: false, revenue: 0, staff: 2, stationShifts: 0});
+  await linked(page);
+  r = await rows(page);
+  assert.deepEqual(r.map(x => x.state), ['done', 'todo', 'todo'], 'staff placement stays an explicit in-game check');
+  assert.match(r[2].sub, /2 people on staff/);
+  assert.match(r[2].act, /assign each employee a computer workstation in BizMan/);
+  assert.equal(await page.locator('#osBody [data-os-write]').count(), 0);
+  assert.equal(await page.locator('#osCtl [data-os-step="open"]').isDisabled(), false, 'HQ does not wait for sales');
+  assert.equal(await page.locator('#osBody [data-os-step="open"]').innerText(), 'After opening');
+});
+
 test('a redraw of every page (a language switch) keeps Plan a factory\'s Ingredients off Open a store', async t => {
   const page = await board(t);
   await planned(page);

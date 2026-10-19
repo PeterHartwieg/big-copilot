@@ -18866,6 +18866,8 @@ def load_store_rules() -> dict:
 STORE_RULE_PARTS = ("products", "furniture", "types", "hoods", "banks", "vendors", "vehicles", "skills")
 # The building kinds a store can be planned in.
 PLAN_KINDS = ("retail", "office", "cinema", "theater")
+PLAN_HQ = "ba:businesstype_headquarters"
+WORK_COMPUTER_FLAG = 8388608
 # The structural wage estimate (research PROFIT_MODEL.md, "Costs"): base
 # hourly wages of a cashier, a cleaner and a security guard, which a skill of
 # 100 lifts by 1 + 1.05^100 / 100, and the customers an hour one cashier serves.
@@ -19117,7 +19119,8 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
     type's requirements, one each, and the scale a self-service shop showing
     produce needs), "cap" (the more of a capacity station it
     takes for its customers an hour to cover the building's `cap`), "dem" (one
-    item per customer demand the type makes) or "shelf" (the displays), and
+    item per customer demand the type makes), "staff" (an HQ's default
+    workstations, one per role) or "shelf" (the displays), and
     `why` what the line answers: a requirement's name, a demand, or the
     products a display holds. Every item is one somebody sells, at its default
     price, and made for the type where the item names the types it is for
@@ -19177,6 +19180,13 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
         return {line["item"] for line in lines}
 
     shelf_products = []
+    # HQ has no opening requirements or customers. Its roles work at the
+    # same computers as office professionals (STATION_SKILLS). Plan one per
+    # skill in the game's type table, with each computer's own desk/chair
+    # mounts, rather than sizing them to customer capacity. This is a default,
+    # not a claim about how many managers the company needs.
+    if type_slug == PLAN_HQ:
+        add(cheapest(catalogue.flagged(WORK_COMPUTER_FLAG)), len(t.get("sk") or ()), "staff", "workcomputer")
     for req in t.get("rq") or ():
         if req.get("any") or req.get("lic"):
             continue  # a product on a shelf (the displays), or a fee paid in game
@@ -19843,11 +19853,12 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
 
     for slug, t in sorted((rules.get("types") or {}).items()):
         cat = t.get("b")
-        if not t.get("c") or slug not in RETAIL_TYPES | OFFICE_TYPES or cat not in PLAN_KINDS:
+        if not t.get("c") or slug not in RETAIL_TYPES | OFFICE_TYPES | {PLAN_HQ} or cat not in PLAN_KINDS:
             continue
         # The rules reproduce shops and offices; a cinema's screens and seats
         # and a theatre's actors cap them in ways the model does not follow.
-        model = "office" if slug in OFFICE_TYPES else None if cat in ("cinema", "theater") else "retail"
+        # Headquarters earns nothing: it has an outfit, never a profit model.
+        model = None if slug == PLAN_HQ or cat in ("cinema", "theater") else "office" if slug in OFFICE_TYPES else "retail"
         models[slug] = model
         sells = [[p, round(impact, 4)] for p, impact in t.get("i") or ()]
         own = [b for b in businesses if b.get("typeSlug") == slug and b.get("status") != "vacant"]
@@ -19857,7 +19868,7 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
             sample = same_layout[0]
             source = None
             same = [b for b in own if b["key"] in regs and plan_layout(_building_row(regs[b["key"]], save)) == layout]
-            if same:
+            if same and slug != PLAN_HQ:
                 source = max(same, key=lambda b: (sum(s["profit"] for s in (b.get("series") or [])[-7:]), b["key"]))
             copied = _copied_shelving(save, regs[source["key"]], slug, rules) if source else None
             # A venue's own version seats its own crowd (S1 150, S3 100).
@@ -19894,6 +19905,7 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
             "run": len(own),
             "layouts": layouts,
             "initial": initial,
+            **({"staffSkills": list(t.get("sk") or ())} if slug == PLAN_HQ else {}),
             # An office's hourly wage at skill 0 for the profession it bills.
             **({"wage": max((PLAN_OFFICE_WAGES.get(k, 0) for k in t.get("sk") or ()), default=0)}
                if model == "office" else {}),

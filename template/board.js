@@ -12212,6 +12212,8 @@ function planFinanceUpdate(prefix, plan, total, amount, facts, save){
    searches, and every read and write is guarded: a browser that refuses
    storage keeps the plans for the visit. */
 const OS_KEY = "ba_open_store_v1";
+const OS_HQ = "ba:businesstype_headquarters";
+const osIsHq = plan => !!plan && plan.type === OS_HQ;
 /* Twelve plans still on their way to opening; the plans whose store opened
    are history, kept apart up to OS_MAX_HISTORY (osCapPlans()). */
 const OS_MAX_PLANS = 12, OS_MAX_HISTORY = 24;
@@ -12381,7 +12383,7 @@ function osBestModel(slug, b){
 }
 
 /* --- the view ----------------------------------------------------------------- */
-const osStepLabel = s => ({what: tt("gr.os.step.what", "What"), where: tt("gr.os.step.where", "Where"),
+const osStepLabel = (s, plan) => s === "breakeven" && osIsHq(plan) ? tt("gr.os.hq.running", "Running cost") : ({what: tt("gr.os.step.what", "What"), where: tt("gr.os.step.where", "Where"),
   investment: tt("gr.os.step.investment", "Investment"), breakeven: tt("gr.os.step.breakeven", "Break even"),
   opening: tt("gr.os.step.opening", "Until opening"), open: tt("gr.os.step.open", "Open")})[s];
 /* A step can be opened once what it needs is chosen; the last once the
@@ -12396,8 +12398,8 @@ function osCtlHtml(plan){
   const at = OS_STEPS.indexOf(osStep);
   const steps = OS_STEPS.map((s, i) => {
     const ready = osStepReady(s, plan);
-    return {s, label: osStepLabel(s), ready, done: i < at && ready,
-      tip: s === "open" && !ready ? tt("gr.os.step.payback", "Payback monitoring comes once the store trades.") : null};
+    return {s, label: osStepLabel(s, plan), ready, done: i < at && ready,
+      tip: s === "open" && !ready && !osIsHq(plan) ? tt("gr.os.step.payback", "Payback monitoring comes once the store trades.") : null};
   });
   return planCtlHtml("os", osStep, steps, tt("gr.os.steps.label", "Open a store, step by step"), {plans: osPlans, cur: osCur, name: osPlanName,
     label: tt("gr.os.plan.pick", "Plan"), aria: tt("gr.os.plan.pickAria", "Which plan"), fresh: tt("gr.os.plan.new", "New plan")});
@@ -12427,6 +12429,9 @@ function osStripHtml(plan){
   /* After opening the tiles carry the numbers: the strip says what and where. */
   if(osStep === "open") return `<div class="os-pb os-pb2">${cell(tt("gr.os.strip.open", "Open"), what)}${cell(tt("gr.os.strip.whereLab", "Where"), where)}</div>`;
   const est = b && inv ? osEstimate(plan, b) : null;
+  if(osIsHq(plan)) return `<div class="os-pb">${cell(tt("gr.os.strip.open", "Open"), what)}${cell(tt("gr.os.strip.whereLab", "Where"), where)}${
+    cell(tt("gr.os.strip.invest", "Investment"), invest)}${cell(tt("gr.os.hq.running", "Running cost"),
+      `<b class="m">${b && b.rent != null ? tt("gr.os.hq.rent", "{w}/week in rent", {w: fmt(b.rent * 7)}) : "–"}</b><small>${tt("gr.os.hq.wagesExtra", "Wages are extra and depend on whom you hire and their hours.")}</small>`)}</div>`;
   const be = est && est.days ? `<b class="m">${osRange(est.days[mode])}</b><small>${tt("gr.os.strip.be2", "after opening · at {w}/day", {w: osMidMoney(est.profit * OS_LOW, est.profit * OS_HIGH)})}</small>`
     : est && est.none ? `<b class="dim">${tt("gr.os.none.short", "No estimate")}</b><small>${est.none}</small>`
     : `<b class="dim">–</b><small>${tt("gr.os.strip.afterInvest", "after the investment")}</small>`;
@@ -12450,6 +12455,7 @@ function osRange(d){
 function osEstimate(plan, b){
   const t = osType(plan.type), inv = osInvestment(plan, b);
   if(!t || !inv) return null;
+  if(osIsHq(plan)) return {inv, none: tt("gr.os.hq.noIncome", "Headquarters has no sales income or break-even.")};
   if(t.model !== "retail" && t.model !== "office") return {inv, none: t.cat === "cinema" || t.cat === "theater"
     ? tt("gr.os.none.venue", "the game's rules for screens, seats and actors are not modelled") : tt("gr.os.none.type", "this type is not modelled")};
   const m = osBestModel(plan.type, b);
@@ -12510,12 +12516,12 @@ function osPlansHtml(){
     /* A plan whose store trades is marked open, its bar the share paid back
        as Results counts it; one whose store is gone, closed. */
     const closed = osClosed(p), open = !closed && osAttached(p), row = open && paybackSite(p.key), cost = row && (row.cost || {})[paybackMode()];
-    const o = osNowOf(row), prog = row ? osProgress(row, o, cost || 0) : null;
+    const o = osIsHq(p) ? null : osNowOf(row), prog = row && !osIsHq(p) ? osProgress(row, o, cost || 0) : null;
     const stage = closed ? [0, tt("gr.os.stage.closed", "Closed")]
       : open ? (osPaidBack(o) ? [100, tt("gr.os.stage.paid", "Open · paid back")] : prog && prog.pct != null
         ? [Math.floor(prog.pct), tt("gr.os.stage.open", "Open · {n}% paid back", {n: Math.floor(prog.pct)})] : [0, tt("gr.os.stage.openOnly", "Open")])
       : !b ? [17, tt("gr.os.stage.where", "Where")] : p.step === "opening" ? [67, tt("gr.os.stage.opening", "Until opening")]
-      : p.step === "breakeven" ? [50, tt("gr.os.stage.be", "Break even")] : [33, tt("gr.os.stage.invest", "Investment")];
+      : p.step === "breakeven" ? [50, osIsHq(p) ? tt("gr.os.hq.running", "Running cost") : tt("gr.os.stage.be", "Break even")] : [33, tt("gr.os.stage.invest", "Investment")];
     const sub = b ? tt("gr.os.plans.at", "{address} · {hood}", {address: b.address, hood: hoodName(b.hood)})
       : p.hood ? tt("gr.os.plans.hood", "{hood} · no location yet", {hood: hoodName(p.hood)}) : tt("gr.os.plans.none", "no location yet");
     return planRowHtml("os", {id: p.id, cls: open ? " open" : closed ? " closed" : "", sub, stage: stage[1], pct: stage[0],
@@ -12544,7 +12550,7 @@ function osPick(key){
        marked once the store closes) is that store's record: another place is
        a new plan of the type there. Any other plan starts over at the new
        place, since what it kept for the last one is not this one's. */
-    if(plan.opened != null && plan.sold){
+    if(plan.opened != null && (plan.sold || osIsHq(plan))){
       plan = osNew(plan.type, null);
       if(!plan){
         osCur = null; osStep = "what";
@@ -12577,6 +12583,7 @@ function osWhy(group, why){
     return names.length > 2 ? tt("gr.os.why.more", "{items} +{n}", {items: names.slice(0, 2).join(", "), n: names.length - 2}) : names.join(", ");
   }
   if(why === "mount") return tt("gr.os.why.mount", "Stands on it");
+  if(group === "staff") return tt("gr.os.why.workstation", "Workstation");
   if(group === "cap") return why === "seats" ? tt("gr.os.why.seats", "Seats") : tt("gr.os.why.cap", "Capacity");
   if(group === "req") return why === "pointofsales" ? tt("gr.os.why.pos", "Point of sale") : tt("gr.os.why.req", "Required");
   if(group === "opt") return why === "cleaning" ? tt("gr.os.why.cleaning", "Cleaning") : tt("gr.os.why.security", "Security");
@@ -12594,7 +12601,7 @@ function osToolbar(plan, inv, out){
   return `<div class="os-toolbar"><nav class="os-seg big" aria-label="${attr(tt("gr.os.inv.mode", "Interior"))}">
     <button type="button" class="${mode === "firm" ? "on" : ""}" data-os-mode="firm" aria-pressed="${mode === "firm"}">${tt("gr.os.inv.firm", "Installation firm")} <b>${fmt(inv.firm)}</b></button>
     <button type="button" class="${mode === "self" ? "on" : ""}" data-os-mode="self" aria-pressed="${mode === "self"}">${tt("gr.os.inv.self", "Self-installation")} <b>${fmt(inv.self)}</b></button></nav>
-    <div class="aside"><span>${tt("gr.os.inv.outfitted", "100% outfitted")}</span><b>${tt("gr.os.inv.items", {one: "{n} item", other: "{n} items"}, {n: inv.items})}</b>
+    <div class="aside"><span>${osIsHq(plan) ? tt("gr.os.hq.default", "Default outfit") : tt("gr.os.inv.outfitted", "100% outfitted")}</span><b>${tt("gr.os.inv.items", {one: "{n} item", other: "{n} items"}, {n: inv.items})}</b>
     <span>${tt("gr.os.inv.itemsLab", "Items")}</span><b>${fmt(out.furniture)}</b></div></div>
     ${(out.opt || []).length ? `<div class="os-optbar"><label class="os-switch"><input type="checkbox" data-os-opt${osOptional() ? " checked" : ""}><span>${tt("gr.os.opt.switch", "Include optional items")}</span></label>
     <span class="quiet">${osOptional() ? tt("gr.os.opt.on", "Optional items count in the investment, the shopping list and the break-even estimate.")
@@ -12608,6 +12615,7 @@ const osOptKinds = opt => [
 ].filter(Boolean);
 function osGroupNote(group, b, out){
   const h = (osFacts().hoods || {})[b.hood] || {};
+  if(group === "staff") return tt("gr.os.grp.staff.note", "one per headquarters role by default");
   if(group === "req") return tt("gr.os.grp.req.note", "what the type needs to open");
   if(group === "dem") return tt("gr.os.grp.dem.note", "{hood}: each customer asks with a {n}% chance times the demand's weight", {hood: hoodName(b.hood), n: Math.round((h.demands || 0) * 100)});
   if(group === "cap") return tt("gr.os.grp.cap.note", "stations for {n} customers an hour", {n: osCap(b)});
@@ -12617,12 +12625,24 @@ function osGroupNote(group, b, out){
     : tt("gr.os.grp.shelf.note", "per product, enough for {n} customers an hour", {n: osCap(b)});
 }
 const OS_GROUPS = [["req", () => tt("gr.os.grp.req", "Required to open")], ["dem", () => tt("gr.os.grp.dem", "Customer demands")],
+  ["staff", () => tt("gr.os.grp.staff", "Workstations")],
   ["cap", () => tt("gr.os.grp.cap", "Building capacity")], ["shelf", () => tt("gr.os.grp.shelf", "Shelves and displays")],
   ["opt", () => tt("gr.os.grp.opt", "Optional items")]];
 function osInvestHtml(plan){
   const b = osBuilding(plan.key), out = osOutfit(plan, b), inv = osInvestment(plan, b);
   if(!b || !out || !inv) return `<p class="quiet os-gap">${tt("gr.os.inv.none", "No outfit is known for this building's layout.")}</p>`;
-  return osToolbar(plan, inv, out) + (osMode(plan) === "self" ? osSelfHtml(b, out, inv) : osFirmHtml(b, out, inv));
+  const skills = (osType(plan.type) || {}).staffSkills || [];
+  const note = osIsHq(plan) ? `<p class="os-note">${tt("gr.os.hq.outfit", "{n} workstations by default, one per headquarters role: {roles}.",
+    {n: skills.length, roles: grList(skills.map(k => spEsc(gameName(k))))})}</p>` : "";
+  return osToolbar(plan, inv, out) + note + (osMode(plan) === "self" ? osSelfHtml(b, out, inv) : osFirmHtml(b, out, inv))
+    + (osIsHq(plan) ? osHqRunningHtml(b) : "");
+}
+/* HQ roles and hours are the player's choices, so only the rent is priced. */
+function osHqRunningHtml(b){
+  return `<div class="os-card"><h3>${tt("gr.os.hq.running", "Running cost")}</h3><p class="os-note">${
+    !b || b.rent == null ? tt("gr.os.hq.rentUnknown", "Rent is unavailable for this building.") : tt("gr.os.hq.rent", "{w}/week in rent", {w: fmt(b.rent * 7)})}</p>
+    <p class="os-note">${tt("gr.os.hq.wagesExtra", "Wages are extra and depend on whom you hire and their hours.")}</p>
+    <p class="os-note">${tt("gr.os.hq.noIncome", "Headquarters has no sales income or break-even.")}</p></div>`;
 }
 /* Shopping rows only: a required station also bought for capacity is one
    purchase. Keep its opening tag; leave outfit lines and vendor selection intact. */
@@ -12737,6 +12757,7 @@ function osBreakHtml(plan){
   const b = osBuilding(plan.key), est = b && osEstimate(plan, b), mode = osMode(plan);
   if(!b || !est) return `<p class="quiet os-gap">${tt("gr.os.be.nowhere", "Pick a location first.")}</p>`;
   const inv = est.inv;
+  if(osIsHq(plan)) return osHqRunningHtml(b);
   if(est.none) return `<div class="os-none">
     <div><span class="os-lab">${tt("gr.os.inv.firm", "Installation firm")}</span><b>${fmt(inv.firm)}</b><small>${tt("gr.os.be.investment", "investment")}</small></div>
     <div><span class="os-lab">${tt("gr.os.inv.self", "Self-installation")}</span><b>${fmt(inv.self)}</b><small>${tt("gr.os.be.investment", "investment")}</small></div>
@@ -13140,13 +13161,20 @@ function osCkLogistics(plan, opened){
 }
 function osUntilRows(plan){
   const b = osBuilding(plan.key), rented = osRented(plan), opened = osClosed(plan) ? null : osAttached(plan), address = osCkAddress(plan);
-  const uni = osCkUniforms(plan, opened);
-  return [
-    osCk("key", opened ? "done" : "todo", tt("gr.os.ck.lease", "Lease"), opened
+  const lease = osCk("key", opened ? "done" : "todo", tt("gr.os.ck.lease", "Lease"), opened
       ? tt("gr.os.ck.lease.done", "<span class=\"ok\">Rented</span> · {address}", {address})
       : !rented ? tt("gr.os.ck.lease.todo", "{address} · not rented yet", {address})
       : osOtherType(plan) ? tt("gr.os.ck.lease.rented", "Rented · {address}", {address})
-      : tt("gr.os.ck.lease.vacant", "Rented · {address} · <span class=\"w\">nothing opened there yet</span>", {address})),
+      : tt("gr.os.ck.lease.vacant", "Rented · {address} · <span class=\"w\">nothing opened there yet</span>", {address}));
+  if(osIsHq(plan)) return [lease,
+    osCk("shelves", "todo", tt("gr.os.ck.furn", "Furniture"),
+      tt("gr.os.hq.furniture.check", "Check in BizMan that every employee has a computer, desk and chair.")),
+    osCk("people", "todo", tt("gr.os.hq.staff", "Headquarters staff"), opened && opened.staff
+      ? tt("gr.os.ck.staff.count", {one: "{n} person on staff", other: "{n} people on staff"}, {n: opened.staff})
+      : tt("gr.os.ck.staff.nobody", "Nobody is hired yet"),
+      osIngame(tt("gr.os.hq.staff.check", "Hire the roles your company needs and assign each employee a computer workstation in BizMan.")))];
+  const uni = osCkUniforms(plan, opened);
+  return [lease,
     osCkFurniture(plan, b), osCkStaff(plan, opened), uni, osCkDemands(plan, opened, uni),
     osCkMarketing(plan, b, opened), osCkLogistics(plan, opened)];
 }
@@ -13157,7 +13185,7 @@ function osUntilHtml(plan){
     {day: num(m.day), time: `${String(Number(m.hour) || 0).padStart(2, "0")}:${String(Math.floor(Number(m.minute) || 0)).padStart(2, "0")}`}) : "";
   const live = link ? `<span class="os-live"><i></i>${tt("gr.os.ck.live", "Game linked")}</span>`
     : `<span class="os-live off"><i></i>${tt("gr.os.ck.live.off", "Save file · game not linked")}</span>`;
-  const gate = link ? "" : `<div class="os-gate">${osIcon("plug")}<span>${tt("gr.os.ck.gate", "<b>Link the game</b> and these become buttons.")}${
+  const gate = link || osIsHq(plan) ? "" : `<div class="os-gate">${osIcon("plug")}<span>${tt("gr.os.ck.gate", "<b>Link the game</b> and these become buttons.")}${
     osLinkHint ? ` ${tt("gr.os.ck.gate.hint", "Find <b>Big Copilot Link</b> on the Steam Workshop.")}` : ""}</span><button type="button" class="os-btn" data-os-howlink>${
     tt("gr.os.ck.gate.how", "How to link")}</button></div>`;
   const other = osOtherType(plan);
@@ -13167,8 +13195,10 @@ function osUntilHtml(plan){
     tt("gr.os.ck.count", "{n} of {of}", {n: done, of: rows.length})}</span><div class="aside">${live}<span>${clock}</span></div></div>
     <div class="os-cks">${rows.map(r => `<div class="os-ck ${r.state}"${r.state === "part" ? ` style="--p:${r.p}%"` : ""}><span class="st">${
       r.state === "done" ? osIcon("tick") : ""}</span><span class="ic">${osIcon(r.icon)}</span><div class="tx"><b>${r.title}</b><small>${r.sub}</small></div><div class="act">${r.act}</div></div>`).join("")}</div>
-    ${gate}${note}${osAttached(plan) ? `<div class="os-links"><button type="button" class="os-btn" data-os-step="open">${tt("gr.os.ck.paybackGo", "After opening: the payback")}${icon("chev")}</button></div>`
-      : `<p class="os-payback">${tt("gr.os.ck.payback", "Once the store trades, the payback shows here.")}</p>`}`;
+    ${gate}${note}${osAttached(plan) ? `<div class="os-links"><button type="button" class="os-btn" data-os-step="open">${osIsHq(plan)
+      ? tt("gr.os.hq.after", "After opening") : tt("gr.os.ck.paybackGo", "After opening: the payback")}${icon("chev")}</button></div>`
+      : `<p class="os-payback">${osIsHq(plan) ? tt("gr.os.hq.afterWait", "Once headquarters is set up at this address, its costs show here.")
+        : tt("gr.os.ck.payback", "Once the store trades, the payback shows here.")}</p>`}`;
 }
 /* --- step 6: after opening ---------------------------------------------------
    Once a business of the planned type stands at the plan's address, the plan
@@ -13497,6 +13527,11 @@ function osRoiHtml(plan){
   const site = osAttached(plan);
   if(!site) return `<p class="quiet os-gap">${tt("gr.os.roi.none", "Nothing of the planned type trades at this address yet.")}</p>`;
   const row = paybackSite(plan.key), nowMode = paybackMode(), planMode = osMode(plan);
+  if(osIsHq(plan)){
+    const {snap} = osPlanned(plan);
+    return osHqRunningHtml(osBuilding(plan.key)) + (row && row.cost ? osRoiTable(row, snap, planMode, null) : "")
+      + `<div class="os-links">${osRoiSiteBtn(plan.key)}${osRoiUntilBtn(plan)}</div>`;
+  }
   if(!row || row.costCentre) return `<p class="quiet os-gap">${tt("gr.os.roi.norow", "The save holds no payback for {address} yet.", {address: osCkAddress(plan)})}</p>`;
   const {snap, live} = osPlanned(plan);
   const inv = (row.cost || {})[nowMode] || 0, o = osNowOf(row), opened = site.opened;

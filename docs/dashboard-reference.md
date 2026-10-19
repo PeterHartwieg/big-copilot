@@ -1256,7 +1256,7 @@ of output.
 
 ## Open a store
 
-Expansion › Open a store plans a store that does not exist yet, in four steps: what to
+Expansion › Open a store plans a shop, office or headquarters that does not exist yet, in four steps: what to
 open, where, the investment, and when it breaks even. A plan is kept per character in this
 browser. Start one from the neighbourhoods with the most demand for a type you do not run
 there, from the grid of types, or from a Demand cell's **Open a store here**. The board
@@ -1313,6 +1313,28 @@ everything, with the stores pinned on the map), and, in Midtown, the walls and f
 reach its interior score of 50: the cheapest floors first, then the cheapest walls, until
 the score's two halves (spend per interior element, and the share of slots painted) average
 50. The toggle is the same one Businesses › Results uses.
+
+**Headquarters** is in the Offices type grid and uses office buildings in Find a location.
+Its outfit defaults to five workstations, one for each role the game's type table lists:
+Purchasing Agent, Logistics Manager, HR Manager, Headhunter and Pricing Manager. Each takes
+the cheapest work computer and one piece from each of its placement requirements, using
+the same rules as offices. The current tables choose a $900 Computer, an $800 Office Desk
+and a $130 Armchair per workstation: $9,150 for five, before installation, deliveries,
+walls and floors, and the deposit. No furniture is copied from an existing headquarters.
+Five is a fixed planning default, not the company's required headcount; add or leave out
+workstations in the game for the people you hire. Plan a factory counts extra managers and
+agents for that factory's logistics, not the staff needed across an entire headquarters.
+Individual employee demands can call for more furniture and are outside this default.
+
+Headquarters has no sales income or break-even. Step 4 is **Running cost**, with seven days
+of the selected building's rent. Wages are extra: the plan does not assume whom you hire,
+their skill or their hours. The deposit and both installation modes follow the same rules
+as a shop, including no second deposit for an empty office already rented. **Until opening**
+checks the lease and gives in-game instructions for workstations and staff; these two
+checks stay pending because a furniture count does not prove that every employee has a
+usable workstation. No customer marketing or delivery setup is requested. **After opening**
+shows rent and compares the investment when the save holds its costs, without waiting for
+sales or showing payback.
 
 **Break even** is the investment divided by the expected profit a day. Everywhere Open a
 store shows a range of profit or of days, it shows the middle as one figure and the range on
