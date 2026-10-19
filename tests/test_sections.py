@@ -264,7 +264,7 @@ class Sections(unittest.TestCase):
         names = list(ba_dashboard.SECTIONS)
         orders = [names[::-1],
                   ["openStore", "staffing", "hiring", "goals", "products",
-                   "openFactory", "premises", "factoryStaffing", "officeStaffing", "realEstate"]]
+                   "openFactory", "premises", "factoryStaffing", "officeStaffing", "realEstate", "wholesale"]]
         import random
         shuffled = names[:]
         random.Random(238).shuffle(shuffled)

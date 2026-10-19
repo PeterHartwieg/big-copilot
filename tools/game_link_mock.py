@@ -2,7 +2,7 @@
 
     python tools/game_link_mock.py "<path to a .hsg>" [--port 8322]
 
-Speaks the contract in docs/game-link-api.md (schema 2, with schema 1 compatibility) so the web app and the
+Speaks the contract in docs/game-link-api.md (schema 3, with schema 1 and 2 compatibility) so the web app and the
 local watcher can be developed and tested without the game or Unity. POST
 /refresh and a change of the file's modification time both re-read the file
 and issue a new stamp, so pointing it at the game's own autosave folder gives a
@@ -12,7 +12,7 @@ Error paths on demand: --throttle answers every /refresh with 429, --refuse
 <reason> with 409, --schema <n> advertises another schema version. The day,
 hour and cash in /health are whatever the flags say, not the save's.
 
-The writes (POST /write/uniforms, /imports, /schedule, /hire, /marketing, /rent, /undo) are checked
+The writes (POST /write/uniforms, /imports, /schedule, /hire, /marketing, /rent, /wholesale, /undo) are checked
 against the save as ba_save reads it, as far as the bytes allow: addresses,
 contract ids and amounts, the shift print, uniforms already set, who is
 assigned where, which stations exist. What the game alone knows (importer caps,
@@ -46,8 +46,8 @@ it is refused screen_open. --hire-gone <id> (or /debug/config "hireGone") makes 
 --myemployees (or "myEmployees") the phone's MyEmployees app open.
 
 --features (or /debug/config "features") names what /health lists as
-`features`, by default hire.reschedule,hire.undo,rent.undo as mod 0.6.0 does; "" is an
-older mod, whose /health then leaves marketing and rent out of the default --writes
+`features`, by default hire.reschedule,hire.undo,rent.undo,wholesale.undo as mod 0.7.0 does; "" is an
+older mod, whose /health then leaves marketing, rent and wholesale out of the default --writes
 (through /debug/config, set "writes" as well).
 With hire.reschedule a hire call may carry the week of a site no
 hire or move touches; with hire.undo POST /write/undo {"kind": "hire"} takes
@@ -80,6 +80,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import http.server
 import json
 import math
@@ -98,7 +99,7 @@ import ba_save  # noqa: E402
 import ba_dashboard  # noqa: E402
 from ba_dashboard import ASSIGN_SKILLS, STATION_SKILLS, _uniform_gaps, money, schedule_entries, shift_print  # noqa: E402
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 DEFAULT_PORT = 8322
 REFRESH_WINDOW = 15  # the mod's window for its automatic refreshes; --throttle's retryAfter
 REQUEST_WINDOW = 3  # a POST /refresh waits this long since the last refresh, as the mod from 0.4.0
@@ -106,7 +107,7 @@ ALLOWED_ORIGINS = ("https://bigcopilot.com", "https://www.bigcopilot.com")
 # As the mod matches them (LinkHttpServer.IsAllowedOrigin): in any case.
 LOCAL_ORIGIN = re.compile(r"^http://(?:127\.0\.0\.1|localhost)(?::[0-9]{1,5})?$", re.IGNORECASE)
 EXPOSED = "ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character"
-WRITE_KINDS = ("uniforms", "imports", "schedule", "hire", "marketing", "rent")
+WRITE_KINDS = ("uniforms", "imports", "schedule", "hire", "marketing", "rent", "wholesale")
 PAIR_OUTCOMES = ("approve", "deny", "expire", "popup_open", "no_ui", "busy", "main_thread_unavailable")
 PAIR_DELAY = 1.0  # seconds before the mock's player answers the popup
 PAIR_COOLDOWNS = (10, 30, 120)  # seconds an origin waits after a denial or an expiry, then a repeat, then more
@@ -124,10 +125,10 @@ ENDPOINTS = (["/health", "/save", "/facts", "/refresh"] + [f"/write/{k}" for k i
              + ["/pair/request", "/pair/status"])
 # The refusal --refuse-write refused answers per kind when it names no rule.
 REFUSED_DEFAULT = {"uniforms": "no_locker", "imports": "locked", "schedule": "screen_open", "hire": "screen_open",
-                   "marketing": "agency_closed", "rent": "villa"}
-UNDOABLE = ("uniforms", "imports", "schedule", "hire", "marketing", "rent")  # hire and rent require undo features
-# What /health lists as `features` by default, as mod 0.6.0 does.
-FEATURES = ("hire.reschedule", "hire.undo", "rent.undo")
+                   "marketing": "agency_closed", "rent": "villa", "wholesale": "supplier_closed"}
+UNDOABLE = ("uniforms", "imports", "schedule", "hire", "marketing", "rent", "wholesale")  # hire and rent require undo features
+# What /health lists as `features` by default, as mod 0.7.0 does.
+FEATURES = ("hire.reschedule", "hire.undo", "rent.undo", "wholesale.undo")
 HQ_TYPE = "ba:businesstype_headquarters"
 CLEANING_STATION = "ba:itemname_cleaningstation"
 LOCKER = "ba:itemname_uniformlocker"
@@ -283,6 +284,8 @@ class Link:
         self.screen_open: set = set(screen_open or ())
         # What the items bundle would tell the game per contract, set by
         # /debug/config: {id: {"unitPrice": float, "cap": int}}.
+        self.wholesale_contracts = None
+        self.wholesale_terms: dict = {}  # debug overrides for runtime fees, prices, caps and market events
         self.terms: dict = {}
         self.refresh(force=True)
 
@@ -541,6 +544,8 @@ class Link:
             if kind == "undo" and body.get("kind") == "hire" and "hire.undo" not in self.features:
                 return 409, {"error": "no_undo"}  # a mod before 0.4.0 never undoes a hire
             if kind == "undo" and body.get("kind") == "rent" and "rent.undo" not in self.features:
+                return 409, {"error": "no_undo"}
+            if kind == "undo" and body.get("kind") == "wholesale" and "wholesale.undo" not in self.features:
                 return 409, {"error": "no_undo"}
             if not dry and self.refuse_write:
                 return self._refusal(kind, body)
@@ -1203,6 +1208,166 @@ class Link:
         if not dry:
             for address, after in restores:
                 self.rents[address] = {k: after[k] for k in ("pendingPricePerSqm", "daysUntilUpdatingPricePerSqm")}
+        return 200, answer
+
+    # wholesale -----------------------------------------------------------------
+    def _wholesale_state(self, save):
+        # Like import writes, an in-memory overlay. Only rent patches /save bytes.
+        if self.wholesale_contracts is None:
+            self.wholesale_contracts = []
+            for c in save.items(save.root.get("DeliveryContracts")):
+                self.wholesale_contracts.append({
+                    "address": _wire(save.address(c.get("businessAddress"))),
+                    "supplier": _wire(save.address(c.get("wholesaleAddress"))),
+                    "enabled": bool(c.get("enabled")), "repeating": bool(c.get("repeatingOrder")),
+                    "urgent": bool(c.get("isUrgentOrder")), "day": c.get("nextDeliveryDay") or 0,
+                    "fee": c.get("deliveryFee") or 0,
+                    "items": [{"item": i["itemName"], "amount": i.get("amount") or 0,
+                               "ordered": i.get("amountOrderedThisWeek") or 0,
+                               "last": i.get("amountOrderedLastWeek") or 0}
+                              for i in save.items(c.get("items"))]})
+        return self.wholesale_contracts
+
+    def _wholesale(self, save, body, dry):
+        address, supplier = (_address(body.get(k), k) for k in ("address", "supplier"))
+        mode, snapshot = body.get("mode"), body.get("snapshot")
+        if mode not in ("weekly", "once") or not isinstance(snapshot, str) or not snapshot:
+            raise BadRequest("mode must be weekly or once, and snapshot must be a nonempty string")
+        expect = body.get("expect")
+        if not isinstance(expect, dict) or any(not isinstance(expect.get(k), str) or not expect[k] for k in ("character", "company")):
+            raise BadRequest("expect.character and expect.company are required strings")
+        if body.get("quote") is not None and not isinstance(body["quote"], str):
+            raise BadRequest("quote must be a string")
+        items = body.get("items")
+        if not isinstance(items, list) or not 1 <= len(items) <= 200:
+            raise BadRequest("items must contain 1 to 200 products")
+        wanted = {}
+        for i in items:
+            if not isinstance(i, dict) or not isinstance(i.get("item"), str) or not i["item"] \
+                    or i["item"] in wanted or not _whole(i.get("amount")) or not 1 <= i["amount"] <= 1000000:
+                raise BadRequest("products must be unique with integer amounts from 1 to 1000000")
+            wanted[i["item"]] = i["amount"]
+        contracts = self._wholesale_state(save)
+        site, vendor = self._registration(save, address), self._registration(save, supplier)
+        existing = [c for c in contracts if c["address"] == _wire(address) and c["supplier"] == _wire(supplier)]
+        before = existing[0] if len(existing) == 1 else None
+        terms = self.wholesale_terms.get(ba_dashboard.site_key(supplier), {})
+        runtime = next((s for s in (self.facts or {}).get("wholesalers", [])
+                        if (s["street"], s["number"]) == supplier), {})
+        sale = runtime.get("products", save.items((vendor or {}).get("cachedAvailableProducts")))
+        already_set = mode == "weekly" and before and before["enabled"] and before["repeating"] and not before["urgent"] \
+            and all(any(i["item"] == name and i["amount"] == amount for i in before["items"]) for name, amount in wanted.items())
+        rules = ba_dashboard.load_store_rules()
+        kind = (site or {}).get("businessTypeName")
+        business = rules.get("types", {}).get(kind, {})
+        offered = set(save.items((site or {}).get("cachedAvailableProducts")))
+        offered.update(i[0] for i in business.get("i", []))
+        if business.get("n"):
+            offered.add("ba:itemname_paperbag")
+        stock = {save.deref(h.get("$v", h)).get("itemName") for h in save.items((site or {}).get("itemInstances")) if isinstance(h, dict)}
+        # The mod's test: a piece tagged as business storage (store rules `x`).
+        furniture = rules.get("furniture", {})
+        storage = terms.get("storage", any("storage" in (furniture.get(n) or {}).get("x", ()) for n in stock))
+        error = None
+        if self._other_save(body) or snapshot != self.stamp:
+            error = "changed"
+        elif site is None or not site.get("RentedByPlayer"):
+            error = "not_rented"
+        elif not business.get("c") or kind == "ba:businesstype_empty":
+            error = "not_supported"
+        elif not vendor or vendor.get("businessTypeName") != "ba:businesstype_wholesalestore":
+            error = "supplier_missing"
+        elif supplier not in self._contact_addresses(save):
+            error = "no_contact"
+        elif vendor.get("temporarilyClosed") or not self._open_at(save, vendor, self.day, self.hour):
+            error = "supplier_closed"
+        elif self.screen_open:
+            error = "screen_open"
+        elif not storage:
+            error = "no_storage"
+        elif len(existing) > 1:
+            error = "duplicate_contracts"
+        elif before and before["enabled"] and (mode == "once" or not before["repeating"] or before["urgent"]):
+            error = "active_order"
+        elif before and self._lock_window() and before["day"] == self._imminent_monday():
+            error = "locked"
+        elif mode == "weekly" and before and any(i["amount"] > 0 and i["item"] not in wanted for i in before["items"]):
+            error = "other_products"
+        for name, amount in sorted(wanted.items()):
+            if error:
+                break
+            product = terms.get("products", {}).get(name, {})
+            old = next((i for i in (before or {}).get("items", []) if i["item"] == name), {})
+            if name not in sale or name not in offered:
+                error = "product_unavailable"
+            elif mode == "weekly" and any(c is not before and c["address"] == _wire(address) and c["enabled"] and c["repeating"]
+                                        and any(i["item"] == name and i["amount"] > 0 for i in c["items"]) for c in contracts):
+                error = "other_contract"
+            elif not already_set and not terms.get("limitsDisabled") and amount > max(0, product.get("cap", 1000000) - old.get("ordered", 0)):
+                error = "over_cap"
+            elif not already_set and product.get("backorder"):
+                error = "backorder"
+            elif not already_set and not terms.get("limitsDisabled") and amount > product.get("shortage", 1000000):
+                error = "shortage"
+        after, quote, cost, changed = None, None, 0, False
+        if not error:
+            after = json.loads(json.dumps(before)) if before else {"address": _wire(address), "supplier": _wire(supplier),
+                "enabled": False, "repeating": False, "urgent": False, "day": 0, "fee": terms.get("fee", runtime.get("fee", 0)), "items": []}
+            if mode == "once":
+                for i in after["items"]:
+                    i["amount"] = 0
+            for name, amount in sorted(wanted.items()):
+                item = next((i for i in after["items"] if i["item"] == name), None)
+                if item is None:
+                    item = {"item": name, "ordered": 0, "last": 0}
+                    after["items"].append(item)
+                item["amount"] = amount
+            after.update(enabled=True, repeating=mode == "weekly", urgent=False)
+            changed = before != after
+            if changed:
+                after["day"] = self._monday()
+            cost = after["fee"] + sum(i["amount"] * terms.get("products", {}).get(i["item"], {}).get("price",
+                rules.get("products", {}).get(i["item"], {}).get("w", 0)) for i in after["items"])
+            quote = hashlib.sha256(json.dumps([snapshot, mode, self.day, before, after, cost, contracts], sort_keys=True).encode()).hexdigest()
+            if not dry and body.get("quote") != quote:
+                error = "changed"
+        row = {"address": _wire(address), "supplier": _wire(supplier), "supplierName": (vendor or {}).get("BusinessName", ""),
+               "error": error, "set": not error and changed}
+        if not error:
+            row.update(nextDeliveryDay=after["day"], hour=8, repeating=after["repeating"], cost=cost,
+                       items=[{"item": i["item"], "amount": i["amount"]} for i in after["items"] if i["amount"] > 0])
+        answer = {"ok": not error, "kind": "wholesale", "dryRun": dry, "rows": [row]}
+        if quote:
+            answer["quote"] = quote
+        if error and not dry:
+            return 409, dict(answer, error="changed" if error == "changed" else "refused")
+        if not dry:
+            self.undo.pop("wholesale", None)
+            if changed:
+                index = contracts.index(before) if before is not None else len(contracts)
+                self.undo["wholesale"] = {"index": index, "before": before, "after": json.loads(json.dumps(after)), "day": self.day}
+                if before is None:
+                    contracts.append(after)
+                else:
+                    contracts[index] = after
+        return 200, answer
+
+    def _undo_wholesale(self, record, dry):
+        contracts, after = self.wholesale_contracts or [], record["after"]
+        index = record["index"]
+        error = "changed" if self.day != record["day"] or index >= len(contracts) or contracts[index] != after \
+            or (self._lock_window() and after["day"] == self._imminent_monday()) else "screen_open" if self.screen_open else None
+        row = {"address": after["address"], "supplier": after["supplier"], "supplierName": "", "error": error, "set": not error}
+        if self.day != record["day"]:
+            row["scope"] = "day"
+        answer = {"ok": not error, "kind": "wholesale", "dryRun": dry, "undo": True, "rows": [row]}
+        if error:
+            return (200, answer) if dry else (409, dict(answer, error="changed" if error == "changed" else "refused"))
+        if not dry:
+            if record["before"] is None:
+                contracts.pop(index)
+            else:
+                contracts[index] = record["before"]
         return 200, answer
 
     # imports --------------------------------------------------------------------
@@ -1918,13 +2083,13 @@ class Link:
     def _undo(self, body, dry):
         kind = body.get("kind")
         if kind not in UNDOABLE:
-            raise BadRequest("kind must be uniforms, imports, schedule, hire, marketing or rent")
+            raise BadRequest("kind must be uniforms, imports, schedule, hire, marketing, rent or wholesale")
         record = self.undo.get(kind)
         if record is None:
             return 409, {"error": "nothing_to_undo"}
         if kind == "hire":
             return self._undo_hire(record, dry)
-        if kind in ("marketing", "rent"):
+        if kind in ("marketing", "rent", "wholesale"):
             status, answer = getattr(self, "_undo_" + kind)(record, dry)
             if status == 200 and not dry:
                 del self.undo[kind]  # an undo is not itself undoable
@@ -2126,6 +2291,7 @@ class Link:
                 self.applied, self.undo, self.order = [], {}, None
                 self.uniforms, self.products, self.contracts, self.schedules = {}, {}, {}, {}
                 self.opened, self.terms = {}, {}
+                self.wholesale_contracts, self.wholesale_terms = None, {}
                 self.campaigns, self.promotions, self.rents = {}, {}, {}
                 self.agency_open, self.agency_closed, self.no_contact = set(), set(), set()
                 self.moved, self.hired, self.gone, self.myemployees = {}, set(), set(), False
@@ -2135,6 +2301,8 @@ class Link:
                 self.pair_cooldowns, self.strikes, self.reject_tokens = list(PAIR_COOLDOWNS), {}, False
                 self.day, self.hour = self._clock
                 self.character, self.company = self._loaded
+            if "wholesaleTerms" in body:
+                self.wholesale_terms = dict(body["wholesaleTerms"] or {})
             if "importTerms" in body:
                 self.terms = dict(body["importTerms"] or {})
             if "day" in body:
@@ -2468,9 +2636,9 @@ def main() -> None:
     ap.add_argument("--writes", default=",".join(WRITE_KINDS),
                     help='the write kinds /health lists, comma-separated; "" leaves the key out, as mod 0.1.0 does')
     ap.add_argument("--features", default=",".join(FEATURES),
-                    help='what /health lists as features, comma-separated (default: %(default)s, as mod 0.6.0); '
+                    help='what /health lists as features, comma-separated (default: %(default)s, as mod 0.7.0); '
                          '"" for an older mod: a hire refuses a reschedule-only site with 400 and its undo is no_undo, '
-                         'rent undo is no_undo, and /health leaves marketing and rent out of the default writes')
+                         'rent/wholesale undo is no_undo, and /health leaves marketing, rent and wholesale out of the default writes')
     ap.add_argument("--refuse-write", metavar="ERROR[:DETAIL]",
                     help="answer every apply with this refusal: changed, refused[:rule], cannot_write[:reason], "
                          "busy, main_thread_unavailable, not_paired, too_large")
@@ -2495,7 +2663,7 @@ def main() -> None:
     writes = [k for k in args.writes.split(",") if k] if args.writes else None
     features = [f for f in args.features.split(",") if f]
     if not features and writes is not None and args.writes == ap.get_default("writes"):
-        writes = [k for k in writes if k not in ("marketing", "rent")]  # unavailable on an older mod
+        writes = [k for k in writes if k not in ("marketing", "rent", "wholesale")]  # unavailable on an older mod
     link = Link(args.save, character=args.character, company=args.company, day=args.day, hour=args.hour,
                 cash=args.cash, build=args.build, schema=args.schema, throttle=args.throttle, refuse=args.refuse,
                 pair=args.pair, writes=writes, refuse_write=args.refuse_write, busy_writes=args.busy_writes,

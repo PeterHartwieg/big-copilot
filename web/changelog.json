@@ -6,6 +6,12 @@
     "summary": "Choose Headquarters in Open a store to find an office building, price the deposit and a default outfit of five computer workstations, and see the weekly rent. Wages depend on your hires and are extra; headquarters earns no sales income, so the plan shows running cost without a break-even estimate. Thank you to the player who suggested this on the feature list."
   },
   {
+    "pr": 505,
+    "date": "2026-10-19",
+    "title": "Plan wholesale shopping and place deliveries",
+    "summary": "Supply › Deliveries now plans seven days of wholesale shopping for your shops. Buy now shows boxes and units after current stock and scheduled deliveries, including stock needed before a late delivery arrives. Weekly delivery gives the full recurring quantity, with setup guidance and the current contract total. Select a shop or all shops and copy either list. Products already supplied by routes or imports are identified separately, and missing history or delivery dates are marked for checking. With Big Copilot Link 0.7.0, select a shop and an open wholesaler to place a weekly or one-off delivery in one click, with live contract checks and same-day undo. Deliveries follow the game’s normal Monday schedule. Thank you to the player who suggested this on the feature list."
+  },
+  {
     "pr": 504,
     "date": "2026-10-19",
     "title": "One row per item in a new store's shopping list",

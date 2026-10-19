@@ -323,6 +323,26 @@ test('a board with every section (the CLI page, the watch server) asks for nothi
   assert.equal(b.asked.length, 0);
 });
 
+test('wholesale waits for its section, retries failures and discards estimates on refresh', async () => {
+  const b = board();
+  assert.match(b.run('swHtml()'), /Working out wholesale shopping/);
+  assert.deepEqual(b.asked.map(a => a.name), ['wholesale']);
+  assert.equal(b.run('swRows().length'), 0);
+  assert.equal(b.run(`PAGE_DRAWS.find(r => r[0] === 'supply/deliveries')[3].includes('wholesale')`), true);
+  b.asked[0].reject(new Error('could not read the wholesale orders'));
+  await tick();
+  assert.match(b.run('swHtml()'), /data-od-retry="wholesale"/);
+  b.run('odRetry("wholesale")');
+  b.asked[1].resolve({generation: 5, sections: {wholesale: {wholesale: {available: true, margin: .15, rows: []}}}});
+  await tick();
+  assert.match(b.run('swHtml()'), /No products need a wholesale plan/);
+  assert.equal(b.run('odReady("wholesale")'), true);
+  b.take({meta: {day: 4}, names: {}, businesses: [], supply: {factories: {sites: []}}}, 6);
+  assert.equal(b.run('odReady("wholesale")'), false);
+  assert.match(b.run('swHtml()'), /Working out wholesale shopping/);
+  assert.equal(b.asked.at(-1).gen, 6);
+});
+
 test('a hire is judged only on a board that has worked out where everybody is', async () => {
   const b = board();
   const rec = {family: 'hire', state: 'applied', expect: {people: [{id: 'p1', site: 'ba:street_a#1'}]}};

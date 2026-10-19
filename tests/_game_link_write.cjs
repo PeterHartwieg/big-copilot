@@ -12,6 +12,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const {chromium} = require('playwright');
+const H = require('./_page.cjs');
 
 const root = path.join(__dirname, '..');
 const web = path.join(root, 'web');
@@ -62,8 +63,7 @@ before(async () => {
   // The page is served by the test on a made-up origin, which Chrome places
   // in no address space it would prompt for; the permission prompt itself is
   // tests/game_link.test.cjs's.
-  browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL,
-    args: ['--disable-features=LocalNetworkAccessChecks']});
+  browser = await H.launch({args: ['--disable-features=LocalNetworkAccessChecks']});
 });
 after(async () => {
   await browser?.close();
@@ -125,7 +125,7 @@ async function linked(t, {writes = ['uniforms', 'imports', 'schedule'], approved
     };
     if (code) localStorage.setItem('ledger_link_approval', JSON.stringify({[code.link]: code.token}));
   }, {data, code});
-  await context.route('https://**', (route) => route.abort());
+  await H.abortExternal(context);
   await context.route(ORIGIN + '/**', (route) => {
     const file = path.join(web, decodeURIComponent(new URL(route.request().url()).pathname.slice(1)) || 'index.html');
     if (!file.startsWith(web) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return route.fulfill({status: 404, body: ''});
@@ -133,8 +133,7 @@ async function linked(t, {writes = ['uniforms', 'imports', 'schedule'], approved
   });
   const page = await context.newPage();
   if (clock) await page.clock.install();
-  const errors = [];
-  page.on('pageerror', (err) => errors.push(err.message));
+  const errors = H.collectErrors(page);
   t.after(() => assert.deepEqual(errors, [], 'no script error on the page'));
   await page.goto(`${ORIGIN}/#link=${mockUrl}`);
   if (link) {

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -93,6 +94,22 @@ namespace BigCopilotLink
                 foreach (var kind in settings.marketingTypesAvailable) w.Value(kind.ToString());
                 w.EndArray();
                 w.EndObject();
+            }
+            w.EndArray();
+            w.BeginArray("wholesalers");
+            foreach (var b in Helpers.BuildingHelper.allBuildings)
+            {
+                if (b == null || b.SpecialService == null) continue;
+                var settings = b.SpecialService.settings as Buildings.WholesaleStoreSettings;
+                BuildingRegistration reg;
+                if (settings == null || !regs.TryGetValue(Key(b.StreetName, b.StreetNumber), out reg)) continue;
+                w.BeginObject();
+                w.Prop("street", b.StreetName); w.Prop("number", b.StreetNumber);
+                w.Prop("fee", (double)settings.deliveryFee);
+                w.BeginArray("products");
+                // NPC stock is derived from its layout/season, not cachedAvailableProducts.
+                foreach (var product in reg.GetListOfItemsForSale().Distinct().OrderBy(x => x, StringComparer.Ordinal)) w.Value(product);
+                w.EndArray(); w.EndObject();
             }
             w.EndArray();
             w.EndObject();

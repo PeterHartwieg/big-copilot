@@ -119,7 +119,7 @@ class MockContract(unittest.TestCase):
         self.assertEqual(status, 404)
         self.assertEqual(json.loads(body)["endpoints"], [
             "/health", "/save", "/facts", "/refresh", "/write/uniforms", "/write/imports", "/write/schedule", "/write/hire",
-            "/write/marketing", "/write/rent", "/write/undo",
+            "/write/marketing", "/write/rent", "/write/wholesale", "/write/undo",
             "/pair/request", "/pair/status"])
         self.assertEqual(call(self.url + "/refresh")[0], 405)
         for method, route in (("HEAD", "/health"), ("PUT", "/save"), ("POST", "/"), ("DELETE", "/refresh"), ("TRACE", "/health")):
@@ -245,7 +245,7 @@ class MockWrites(LinkedMock):
 
     def test_health_lists_the_writes_and_says_paired_only_with_a_token_for_its_origin(self):
         health = json.loads(call(self.url + "/health")[2])
-        self.assertEqual(health["writes"], ["uniforms", "imports", "schedule", "hire", "marketing", "rent"])
+        self.assertEqual(health["writes"], ["uniforms", "imports", "schedule", "hire", "marketing", "rent", "wholesale"])
         self.assertIs(health["paired"], False)
         health = json.loads(call(self.url + "/health", headers={"Authorization": f"Bearer {TOKEN}"})[2])
         self.assertIs(health["paired"], True)
@@ -1212,11 +1212,11 @@ class MockHireOneAction(LinkedMock):
 
     def test_health_lists_the_features_and_config_changes_them(self):
         health = json.loads(call(self.url + "/health")[2])
-        self.assertEqual(health["features"], ["hire.reschedule", "hire.undo", "rent.undo"])
+        self.assertEqual(health["features"], ["hire.reschedule", "hire.undo", "rent.undo", "wholesale.undo"])
         self.assertEqual(self.link.configure({"features": []})["features"], [])
         self.assertEqual(json.loads(call(self.url + "/health")[2])["features"], [])
         self.link.configure({"reset": True})
-        self.assertEqual(json.loads(call(self.url + "/health")[2])["features"], ["hire.reschedule", "hire.undo", "rent.undo"])
+        self.assertEqual(json.loads(call(self.url + "/health")[2])["features"], ["hire.reschedule", "hire.undo", "rent.undo", "wholesale.undo"])
         # --features "" is a Link with none; a 0.1.0 mock lists neither key.
         older = game_link_mock.Link(self.path, character="abc", company="Mock Co", day=34, hour=14, cash=1.5,
                                     build=3680, schema=1, throttle=False, refuse=None, features=[])

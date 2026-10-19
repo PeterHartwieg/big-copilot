@@ -5,9 +5,10 @@ two clients: the web app at bigcopilot.com (`web/app.js`) and the local watcher
 (`ba_dashboard.py --watch --game`). `tools/game_link_mock.py` serves the same contract
 from a save file on disk, so the clients can be developed and tested without the game.
 
-Schema version **2**. Current clients also accept version 1 (without runtime facts).
+Schema version **3**. Current clients also accept versions 1 and 2.
+Version 3 adds wholesale orders (`wholesale`, mod 0.7.0) and guarded same-day undo.
 Version 2 adds the paired building-facts snapshot and marketing prediction guard below.
-Bump it on any breaking change and update the mod, the mock, the
+Bump it on any contract change and update the mod, the mock, the
 two clients and this file in the same commit. A client refuses a mod whose
 `schemaVersion` it does not know and says which version it needs.
 
@@ -79,6 +80,13 @@ reach, multipliers, and agency availability. It does not claim compatibility wit
 arbitrary replacement simulation algorithm or a new campaign enum. Those need a new
 model version. The dashboard withholds campaign planning if its current calculation
 disagrees with the promotion in the save. Unknown layout geometry has no floor plan.
+
+From mod 0.7.0 the facts also carry an optional `wholesalers` array:
+`[{"street":"ba:street_thirdavenue","number":4,"fee":100,"products":["ba:itemname_sodacan"]}]`.
+Products come from the live registration's `GetListOfItemsForSale()` (including
+layout and seasonal rules), and the fee from `WholesaleStoreSettings`. The snapshot
+consistency fingerprint includes them. Older facts may omit the array; the board
+then keeps manual planning available but has no supplier product list for orders.
 
 ## Where the mod listens
 
@@ -196,7 +204,7 @@ state from the listener's threads.
   than the served bytes.
 - `writes` lists the write kinds this mod accepts (see "Writes" below); a mod before 0.2.0
   sends no `writes`, which a client reads as `[]`. Mod 0.2.0 lists `uniforms`, `imports`,
-  `schedule`; 0.3.0 adds `hire`; 0.4.0 adds `marketing`; 0.6.0 adds `rent`. A client offers a kind only when it
+  `schedule`; 0.3.0 adds `hire`; 0.4.0 adds `marketing`; 0.6.0 adds `rent`; 0.7.0 adds `wholesale`. A client offers a kind only when it
   is listed, and tells the player to update the mod when the kind is missing. `paired` is true only when this request
   carried a token the game approved for its origin, so a poll without one always says
   false. Both are
@@ -206,7 +214,8 @@ state from the listener's threads.
   0.4.0 lists `hire.reschedule` (a `hire` call may carry weeks no hire or move reaches) and
   `hire.undo` (`POST /write/undo {"kind": "hire"}` undoes a hire call). A client asks for
   a feature only when it is listed, and says nothing about a token it does not know.
-  0.6.0 adds `rent.undo` (`POST /write/undo {"kind": "rent"}`).
+  0.6.0 adds `rent.undo` (`POST /write/undo {"kind": "rent"}`);
+  0.7.0 adds `wholesale.undo`.
   Additive: `schemaVersion` stays 1. A capability is named rather than read off
   `modVersion`, whose numbers may be renamed before a release.
 
@@ -968,6 +977,85 @@ opened again.
   it, so in practice an undo lasts until midnight in the game. The answer is the write's with
   `"undo": true`, `before` the state the undo found and the after-fields what it restored;
   `asked` is the price restored and `clamped` false.
+
+#### `POST /write/wholesale`
+
+Mod 0.7.0, schema 3, `writes` includes `wholesale`. Places a regular delivery
+for one shop and one wholesaler, either repeating weekly or once. The dashboard
+checks the order and applies it from one click; an unsuccessful check or a retry
+requires another explicit placement. Normal browser pairing is still required.
+
+```json
+{"dryRun":true,
+ "expect":{"character":"abc","company":"Example Co"},
+ "snapshot":"34-14-1234567890",
+ "address":{"street":"ba:street_secondavenue","number":10},
+ "supplier":{"street":"ba:street_thirdavenue","number":4},
+ "mode":"weekly",
+ "items":[{"item":"ba:itemname_sodacan","amount":810}]}
+```
+
+- `mode` is `weekly` or `once`; `items` has 1–200 unique product names and whole
+  unit amounts from 1 to 1,000,000. `expect` requires both identity fields.
+- `snapshot` is the stamp of the bytes used to build the board, not a later health
+  stamp. It must still equal the mod's current snapshot stamp.
+- A successful dry run returns an opaque `quote`. Apply repeats the request with
+  `dryRun:false` and that `quote`. The mod recomputes it from the snapshot, day,
+  live contract before/after, price and the destination's other wholesale contracts.
+  Missing or changed quotes refuse the entire apply. A replay after success fails
+  its snapshot check; the client does not resend an uncertain apply.
+- Both phases require a rented business that accepts wholesale deliveries, business
+  storage, a wholesaler in the phone's contacts, and that wholesaler open **now**.
+  A visible BizMan Deliveries screen blocks changes. Live product eligibility,
+  remaining weekly limits, backorders and shortages are checked without reducing
+  quantities silently. The mod does not add contacts.
+- The game has one contract per destination/wholesaler pair. `weekly` can create or
+  update it. An active one-off or urgent order blocks replacement; products already
+  on another active weekly contract also block it. A weekly contract with positive
+  amounts for products outside the request is refused, so restarting it cannot
+  silently order unlisted products. `once` requires a new or inactive contract and
+  clears its old amounts, retaining delivery counters.
+- Changed orders start at `DeliveryHelper.GetNextDeliveryDay()`: Monday 08:00,
+  with the game's Sunday 20:00–Monday 08:00 cut-off. The game may therefore schedule
+  the following week. This endpoint never rushes a delivery. An unchanged weekly
+  order keeps its existing date. A locked imminent contract cannot be edited.
+- Creating an order charges nothing immediately. `cost` is the live expected price
+  including delivery; the game handles payment and stock when delivery runs.
+
+Success (`dryRun` matches the request):
+
+```json
+{"ok":true,"kind":"wholesale","dryRun":true,"quote":"opaque",
+ "rows":[{"address":{"street":"ba:street_secondavenue","number":10},
+          "supplier":{"street":"ba:street_thirdavenue","number":4},
+          "supplierName":"Wholesaler","error":null,"set":true,
+          "nextDeliveryDay":36,"hour":8,"repeating":true,"cost":1720,
+          "items":[{"item":"ba:itemname_sodacan","amount":810}]}]}
+```
+
+`set:false` means the weekly order already matches. A refused dry run is HTTP 200,
+`ok:false`, with one row error. A refused apply is HTTP 409 with root `error` equal
+to `changed` for a stale identity, snapshot or quote, otherwise `refused`.
+Other row codes are `not_rented`, `not_supported`, `supplier_missing`, `no_contact`,
+`supplier_closed`, `screen_open`, `no_storage`, `duplicate_contracts`, `active_order`,
+`locked`, `other_products`, `product_unavailable`, `other_contract`, `over_cap`,
+`backorder` and `shortage`. No partial write occurs.
+
+`features` includes `wholesale.undo`. `POST /write/undo {"kind":"wholesale"}`
+removes a newly created contract or restores the prior contract, including product
+amounts, delivery counters, flags and date. It requires the same game day, the exact
+contract state left by apply, an unlocked contract and a closed Deliveries screen.
+It may undo after the wholesaler closes. The usual `nothing_to_undo` applies after
+undo or city reload; an edited or delivered contract returns `changed`. The response
+has `undo:true` and one row; undo does not quote a purchase cost, and a removed
+contract has no delivery fields.
+
+The mock keeps wholesale contracts in memory, like imports; it does not patch
+`/save` bytes. `POST /debug/config` accepts `wholesaleTerms`, keyed by supplier
+`street#number`, with `fee`, optional `storage`/`limitsDisabled`, and `products`
+keyed by item name (`price`, `cap`, `backorder`, `shortage`). Defaults use catalogue
+prices, zero delivery fee, and a simulated limit of 1,000,000 units. These replace
+runtime facts unavailable in save files; they are not the game's real limits.
 
 #### `POST /write/undo`
 

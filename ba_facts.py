@@ -97,6 +97,25 @@ def validate(facts, raw=None, stamp=None, character=None):
         if key in seen:
             raise ValueError("Duplicate marketing agency")
         seen.add(key)
+    wholesalers = facts.get("wholesalers", [])  # optional before mod 0.7.0
+    if not isinstance(wholesalers, list) or len(wholesalers) > MAX_ROWS:
+        raise ValueError("Invalid wholesalers")
+    seen = set()
+    for row in wholesalers:
+        if not isinstance(row, dict) or not isinstance(row.get("street"), str) or not row["street"] \
+                or type(row.get("number")) is not int or row["number"] < 0:
+            raise ValueError("Invalid wholesaler address")
+        key = row["street"], row["number"]
+        if key in seen:
+            raise ValueError("Duplicate wholesaler")
+        seen.add(key)
+        fee = row.get("fee")
+        products = row.get("products")
+        if type(fee) not in (int, float) or not math.isfinite(fee) or fee < 0:
+            raise ValueError("Invalid wholesale delivery fee")
+        if not isinstance(products, list) or len(products) > MAX_ROWS or any(not isinstance(p, str) or not p for p in products) \
+                or len(set(products)) != len(products):
+            raise ValueError("Invalid wholesale products")
     return facts
 
 
