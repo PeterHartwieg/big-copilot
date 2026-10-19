@@ -47,7 +47,7 @@ it is refused screen_open. --hire-gone <id> (or /debug/config "hireGone") makes 
 
 --features (or /debug/config "features") names what /health lists as
 `features`, by default hire.reschedule,hire.undo,rent.undo,wholesale.undo as mod 0.7.0 does; "" is an
-older mod, whose /health then leaves marketing and rent out of the default --writes
+older mod, whose /health then leaves marketing, rent and wholesale out of the default --writes
 (through /debug/config, set "writes" as well).
 With hire.reschedule a hire call may carry the week of a site no
 hire or move touches; with hire.undo POST /write/undo {"kind": "hire"} takes
@@ -2634,9 +2634,9 @@ def main() -> None:
     ap.add_argument("--writes", default=",".join(WRITE_KINDS),
                     help='the write kinds /health lists, comma-separated; "" leaves the key out, as mod 0.1.0 does')
     ap.add_argument("--features", default=",".join(FEATURES),
-                    help='what /health lists as features, comma-separated (default: %(default)s, as mod 0.6.0); '
+                    help='what /health lists as features, comma-separated (default: %(default)s, as mod 0.7.0); '
                          '"" for an older mod: a hire refuses a reschedule-only site with 400 and its undo is no_undo, '
-                         'rent undo is no_undo, and /health leaves marketing and rent out of the default writes')
+                         'rent/wholesale undo is no_undo, and /health leaves marketing, rent and wholesale out of the default writes')
     ap.add_argument("--refuse-write", metavar="ERROR[:DETAIL]",
                     help="answer every apply with this refusal: changed, refused[:rule], cannot_write[:reason], "
                          "busy, main_thread_unavailable, not_paired, too_large")
@@ -2661,7 +2661,7 @@ def main() -> None:
     writes = [k for k in args.writes.split(",") if k] if args.writes else None
     features = [f for f in args.features.split(",") if f]
     if not features and writes is not None and args.writes == ap.get_default("writes"):
-        writes = [k for k in writes if k not in ("marketing", "rent")]  # unavailable on an older mod
+        writes = [k for k in writes if k not in ("marketing", "rent", "wholesale")]  # unavailable on an older mod
     link = Link(args.save, character=args.character, company=args.company, day=args.day, hour=args.hour,
                 cash=args.cash, build=args.build, schema=args.schema, throttle=args.throttle, refuse=args.refuse,
                 pair=args.pair, writes=writes, refuse_write=args.refuse_write, busy_writes=args.busy_writes,

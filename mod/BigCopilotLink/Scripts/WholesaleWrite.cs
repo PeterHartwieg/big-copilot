@@ -230,7 +230,8 @@ namespace BigCopilotLink
             if (p.After != null && p.Error == null)
             {
                 w.Prop("nextDeliveryDay", p.After.nextDeliveryDay); w.Prop("hour", 8);
-                w.Prop("repeating", p.After.repeatingOrder); w.PropFloat("cost", p.Cost);
+                w.Prop("repeating", p.After.repeatingOrder);
+                if (!undo) w.PropFloat("cost", p.Cost);
                 w.BeginArray("items");
                 foreach (var item in p.After.items.Where(i => i.amount > 0))
                 { w.BeginObject(); w.Prop("item", item.itemName); w.Prop("amount", item.amount); w.EndObject(); }

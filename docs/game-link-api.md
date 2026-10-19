@@ -1047,7 +1047,8 @@ amounts, delivery counters, flags and date. It requires the same game day, the e
 contract state left by apply, an unlocked contract and a closed Deliveries screen.
 It may undo after the wholesaler closes. The usual `nothing_to_undo` applies after
 undo or city reload; an edited or delivered contract returns `changed`. The response
-has `undo:true` and one row; a removed contract has no delivery fields.
+has `undo:true` and one row; undo does not quote a purchase cost, and a removed
+contract has no delivery fields.
 
 The mock keeps wholesale contracts in memory, like imports; it does not patch
 `/save` bytes. `POST /debug/config` accepts `wholesaleTerms`, keyed by supplier
