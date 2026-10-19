@@ -54,6 +54,8 @@ namespace BigCopilotLink
             var expect = JsonReader.Obj(JsonReader.Get(root, "expect"), "body.expect");
             req.Character = JsonReader.Str(expect, "character", "body.expect", true);
             req.Company = JsonReader.Str(expect, "company", "body.expect", true);
+            if (string.IsNullOrEmpty(req.Snapshot) || string.IsNullOrEmpty(req.Character) || string.IsNullOrEmpty(req.Company))
+                throw new BadRequestException("snapshot, expect.character and expect.company must not be empty");
             var items = JsonReader.Arr(JsonReader.Get(root, "items"), "body.items");
             if (items.Count == 0 || items.Count > 200) throw new BadRequestException("body.items must contain 1 to 200 products");
             foreach (var value in items)
@@ -61,7 +63,7 @@ namespace BigCopilotLink
                 var item = JsonReader.Obj(value, "body.items[]");
                 var name = JsonReader.Str(item, "item", "body.items[]", true);
                 var amount = JsonReader.Num(item, "amount", "body.items[]");
-                if (!JsonReader.IsWhole(amount, 1, 1000000) || req.Items.ContainsKey(name))
+                if (string.IsNullOrEmpty(name) || !JsonReader.IsWhole(amount, 1, 1000000) || req.Items.ContainsKey(name))
                     throw new BadRequestException("each product must be unique, with an integer amount from 1 to 1000000");
                 req.Items.Add(name, (int)amount);
             }

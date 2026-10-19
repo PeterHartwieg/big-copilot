@@ -115,7 +115,7 @@ async function linkedBoard(t, {width = 1280, old = false} = {}) {
   const shop = await page.evaluate(() => {
     const s = D.businesses.findIndex(b => b.status === 'retail');
     D.wholesale = {available: true, margin: .15, suppliers: [
-      {key: 'supplier#4', name: 'Wholesale <img>', contact: true, hours: Array.from({length: 7}, () => [[8, 18]]), products: ['soda'], closed: false},
+      {key: 'supplier#4', name: 'Wholesale <img>', fee: 100, contact: true, hours: Array.from({length: 7}, () => [[8, 18]]), products: ['soda'], closed: false},
       {key: 'other#2', name: 'Other wholesaler', contact: false, hours: [], products: ['beer'], closed: false},
     ], rows: [
       {s, slug: 'soda', item: 'Soda', week: 700, stock: 100, scheduled: 50, deliveries: [], buy: 700, boxes: 14, box: 50, weekly: 810, current: 0, reason: null},
@@ -132,6 +132,7 @@ const orderPhase = (page, phase) => page.waitForFunction(p => document.querySele
 test('one click checks then applies weekly and one-off quantities for the selected supplier; undo is offered', async t => {
   for(const mode of ['weekly', 'once']) {
     const page = await linkedBoard(t);
+    assert.match(await page.locator('.sw-order').innerText(), /New contract delivery fee: \$100/);
     assert.match(await page.locator('.sw-order').innerText(), /Weekly: Soda: 810/);
     assert.match(await page.locator('.sw-order').innerText(), /One-off: Soda: 700/);
     assert.equal(await page.locator('.sw-order img').count(), 0);

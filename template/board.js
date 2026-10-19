@@ -11102,7 +11102,7 @@ function swOrderHtml(){
   const supplier = swOrderSupplier();
   const suppliers = (D.wholesale || {}).suppliers || [];
   const options = suppliers.map(s => `<option value="${attr(s.key)}"${s.key === swSupplier ? " selected" : ""}>${spEsc(s.name)}</option>`).join("");
-  const weekly = swOrderRows("weekly"), once = swOrderRows("once");
+  const weekly = swShop ? swOrderRows("weekly") : [], once = swShop ? swOrderRows("once") : [];
   return `<div class="sw-order"><label>${tt("sb.wholesale.supplier", "Wholesaler")} <select data-sw-supplier>${options}</select></label>
     <p>${tt("sb.wholesale.orderExplain", "Place the listed quantities for products this wholesaler sells, with its delivery fee. Regular deliveries arrive Monday at 08:00; keep enough stock until then.")}</p>
     ${Number.isFinite(supplier?.fee) ? `<p class="quiet">${tt("sb.wholesale.fee", "New contract delivery fee: {fee:$}", {fee: supplier.fee})}</p>` : ""}
