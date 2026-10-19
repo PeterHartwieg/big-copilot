@@ -2807,6 +2807,8 @@ shown. Unknown layout or supply eligibility withholds that shop's product breakd
 With multiple shops, company totals require every shop's scale: per-customer shares cannot
 be added across shops serving different numbers of people, so an incomplete company total
 is withheld. Company prices and your prices are medians across shops selling that item.
+Every shop's product rows carry your price too, so a shop's table shows it when the
+company total is withheld.
 A PriceReduction defense in `specialRivalStates[].defenseStates` marks the affected items
 as defended, as `CompetitionHelper.SetItemsToIgnoreByRival()` does.
 

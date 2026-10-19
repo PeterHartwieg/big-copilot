@@ -93,7 +93,7 @@ class RivalIntelTests(unittest.TestCase):
         site = rival["sites"][0]
         self.assertEqual(set(site), {"address", "hood", "type", "name", "opened", "daily", "products"})
         self.assertEqual(set(site["products"][0]), {
-            "item", "revenueShare", "marginShare", "revenue", "margin", "price", "defended"})
+            "item", "revenueShare", "marginShare", "revenue", "margin", "price", "yourPrice", "defended"})
         self.assertAlmostEqual(sum(p["margin"] for p in site["products"]) - 100 - 1400 / 7, site["daily"])
 
     def test_primary_amount_above_one_and_fractional_maximum(self):
@@ -221,10 +221,17 @@ class RivalIntelTests(unittest.TestCase):
 
     def test_unknown_shop_scale_withholds_company_split_without_adding_equal_weights(self):
         self.root["BuildingRegistrations"].append(shop(2, aiEmployees=[]))
+        self.root["BuildingRegistrations"].append(
+            shop(3, RentedByPlayer=True, retailPrices=[{"itemName": A, "price": 8}]))
         rival = self.intel()["rivals"][0]
         self.assertEqual(rival["products"], [])
         self.assertIsNone(rival["top"])
         self.assertTrue(all(site["products"] for site in rival["sites"]))
+        # Your price still reaches each shop's rows with the company total withheld.
+        for site in rival["sites"]:
+            prices = {p["item"]: p["yourPrice"] for p in site["products"]}
+            self.assertEqual(prices[A], 8)
+            self.assertIsNone(prices.get(B))
 
     def test_your_price_excludes_retired_products_left_in_a_shops_price_list(self):
         self.root["BuildingRegistrations"].append(shop(2, RentedByPlayer=True,

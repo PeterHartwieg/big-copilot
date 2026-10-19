@@ -3192,6 +3192,11 @@ def _rival_intel(save: Save) -> dict:
                  and reg.get("businessTypeName") != EMPTY_TYPE
                  and _rival_building_type(reg, table) in RIVAL_BUILDING_TYPES]
         sites.sort(key=lambda site: (-site["daily"], site["address"], site["name"]))
+        # Your price rides on every shop's rows too: a rival's own total can be
+        # withheld below while its shops' tables still show.
+        for site in sites:
+            for product in site["products"]:
+                product["yourPrice"] = _rival_intel_median(own[product["item"]]) if product["item"] in own else None
         groups = collections.defaultdict(list)
         for site in sites:
             for product in site["products"]:

@@ -17912,7 +17912,8 @@ const riName = r => r && r.name ? r.name
 const riShare = p => Math.max(0, Math.min(100, Number(p) || 0));
 const riPrice = p => p == null ? "" : tt("gr.rivals.price", "${p:,.2f}", {p});
 /* One product table: the rival's (with its shops and your price) or a shop's. */
-function riProducts(rows, {yours = null, whole = false} = {}){
+function riProducts(rows, {whole = false, withheld = false} = {}){
+  if(withheld) return `<p class="rv-empty">${tt("gr.rivals.withheld", "The game's rent or wage term for one of its shops could not be worked out from the save, so its products are not added up across shops. Open a shop below for that shop's own split.")}</p>`;
   if(!rows || !rows.length) return `<p class="rv-empty">${tt("gr.rivals.noProducts", "No product earns this rival anything the game counts.")}</p>`;
   const head = `<thead><tr><th class="l">${tt("gr.rivals.col.item", "Product")}</th>`
     + `<th data-tip="${attr(tt("gr.rivals.col.share.tip", "The product's part of this rival's sales, by the game's own weekly-income formula"))}">${tt("gr.rivals.col.share", "Revenue share")}</th>`
@@ -17922,7 +17923,7 @@ function riProducts(rows, {yours = null, whole = false} = {}){
     + (whole ? `<th>${tt("gr.rivals.col.shops", "Shops")}</th>` : "") + `<th></th></tr></thead>`;
   const body = rows.map((p, i) => {
     const share = riShare(p.revenueShare);
-    const mine = whole ? p.yourPrice : yours ? yours[p.item] : null;
+    const mine = p.yourPrice;
     const top = whole && i === 0 ? `<span class="rv-top">${tt("gr.rivals.top", "Its biggest earner: a price cut here hurts it most.")}</span>` : "";
     const day = p.revenue == null
       ? `<span class="rv-none" data-tip="${attr(tt("gr.rivals.noDollars.tip", "The game's rent or wage term for this rival could not be worked out from the save, so only the shares are shown"))}">—</span>`
@@ -17938,14 +17939,14 @@ function riProducts(rows, {yours = null, whole = false} = {}){
   }).join("");
   return `<div class="scrollx"><table class="rv-t">${head}<tbody>${body}</tbody></table></div>`;
 }
-function riSite(s, yours){
+function riSite(s){
   const open = riOpen.has(s.address);
   const sub = [spEsc(hoodName(s.hood)), spEsc(osTypeName(s.type)),
     s.opened != null ? tt("gr.rivals.since", "since day {d:,}", {d: s.opened}) : ""].filter(Boolean).join(" · ");
   return `<details class="rv-site" data-rv-site="${attr(s.address)}"${open ? " open" : ""}><summary>`
     + `${reHood(s.hood)}<span class="rv-addr">${spEsc(s.name || s.address)}</span><span class="rv-sub">${spEsc(s.address)} · ${sub}</span>`
     + `<span class="rv-daily">${tt("gr.rivals.perDay", "{w:$} a day", {w: s.daily || 0})}</span></summary>`
-    + (open ? riProducts(s.products, {yours}) : "") + `</details>`;
+    + (open ? riProducts(s.products) : "") + `</details>`;
 }
 function riLog(events, rival){
   const shown = riHistAll || !rival ? events : events.filter(e => e.rival === rival.number);
@@ -17982,13 +17983,11 @@ function riWire(sec){
       if(!d.querySelector(".rv-t, .rv-empty")){
         const ri = D && D.rivalIntel, r = ri && (ri.rivals || []).find(x => x.number === riPick);
         const s = r && (r.sites || []).find(x => x.address === d.dataset.rvSite);
-        if(s){ d.insertAdjacentHTML("beforeend", riProducts(s.products, {yours: riYours(r)})); wireTips(); }
+        if(s){ d.insertAdjacentHTML("beforeend", riProducts(s.products)); wireTips(); }
       }
     } else riOpen.delete(d.dataset.rvSite);
   }, true);
 }
-/* Your median price per item, from the rival's own rows: the same for every rival. */
-const riYours = r => Object.fromEntries((r.products || []).filter(p => p.yourPrice != null).map(p => [p.item, p.yourPrice]));
 function drawRivals(){
   const sec = $("secRivals");
   if(!sec) return;
@@ -18010,13 +18009,13 @@ function drawRivals(){
     + `<small>${tt("gr.rivals.weekly", "{w:$} a week", {w: x.weekly || 0})}</small>`
     + `<small>${tt("gr.rivals.counts", "{s} · {b}", {s: tt("gr.rivals.shops", {one: "{n} shop", other: "{n} shops"}, {n: x.shops || 0}),
       b: tt("gr.rivals.buildings", {one: "{n} building", other: "{n} buildings"}, {n: x.buildings || 0})})}</small></button>`).join("")}</div>`;
-  const yours = riYours(r);
   const sites = (r.sites || []).length
-    ? `<div class="rv-sites">${r.sites.map(s => riSite(s, yours)).join("")}</div>`
+    ? `<div class="rv-sites">${r.sites.map(s => riSite(s)).join("")}</div>`
     : `<p class="rv-empty">${tt("gr.rivals.noShops", "This rival runs no shops today.")}</p>`;
   sec.innerHTML = title + pick
     + `<h3 class="rv-h">${tt("gr.rivals.products", "What {rival} sells", {rival: spEsc(riName(r))})}<small>${tt("gr.rivals.products.sub", "highest revenue first, across all its shops")}</small></h3>`
-    + riProducts(r.products, {whole: true})
+    + riProducts(r.products, {whole: true,
+      withheld: !(r.products || []).length && (r.sites || []).some(s => (s.products || []).length)})
     + `<h3 class="rv-h">${tt("gr.rivals.sites", "Its shops")}<small>${tt("gr.rivals.sites.sub", "highest daily income first; open one for its products")}</small></h3>`
     + sites + riLog(events, r);
 }

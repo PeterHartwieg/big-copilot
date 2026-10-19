@@ -100,7 +100,7 @@ rivalIntel = {
         {
           "address": str, "hood": str, "type": str,   # business type id
           "name": str, "opened": int, "daily": float, # latest dailyIncomes entry
-          "products": [ { "item", "revenueShare", "marginShare", "revenue", "margin", "price", "defended" } ]
+          "products": [ { "item", "revenueShare", "marginShare", "revenue", "margin", "price", "yourPrice", "defended" } ]
         }
       ]
     }
