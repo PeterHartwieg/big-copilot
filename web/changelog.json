@@ -1,5 +1,11 @@
 [
   {
+    "pr": 505,
+    "date": "2026-10-19",
+    "title": "Plan wholesale shopping and weekly deliveries",
+    "summary": "Supply › Deliveries now plans seven days of wholesale shopping for your shops. Buy now shows boxes and units after current stock and scheduled deliveries, including stock needed before a late delivery arrives. Weekly delivery gives the full recurring quantity, with setup guidance and the current contract total. Select a shop or all shops and copy either list. Products already supplied by routes or imports are identified separately, and missing history or delivery dates are marked for checking."
+  },
+  {
     "pr": 499,
     "date": "2026-10-15",
     "title": "Keep using local saves when Game Link is unavailable",
