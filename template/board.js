@@ -12480,6 +12480,30 @@ function osInvestHtml(plan){
   if(!b || !out || !inv) return `<p class="quiet os-gap">${tt("gr.os.inv.none", "No outfit is known for this building's layout.")}</p>`;
   return osToolbar(plan, inv, out) + (osMode(plan) === "self" ? osSelfHtml(b, out, inv) : osFirmHtml(b, out, inv));
 }
+/* Shopping rows only: a required station also bought for capacity is one
+   purchase. Keep its opening tag; leave outfit lines and vendor selection intact. */
+function osShoppingLines(lines){
+  const merged = new Map();
+  lines.forEach(l => {
+    if(l[2] !== "req" && l[2] !== "cap") return;
+    const m = merged.get(l[0]) || {qty: 0, req: [], cap: null};
+    m.qty += l[1];
+    if(l[2] === "req") m.req.push(l[3]);
+    else m.cap = l;
+    merged.set(l[0], m);
+  });
+  const seen = new Set();
+  return lines.flatMap(l => {
+    const m = merged.get(l[0]);
+    if(!m || !m.req.length || !m.cap || !["req", "cap"].includes(l[2])) return [l];
+    if(seen.has(l[0])) return [];
+    seen.add(l[0]);
+    return [[l[0], m.qty, "cap", m.cap[3], [...new Set(m.req)]]];
+  });
+}
+/* A mount's own tag already says "Stands on it": its opening tag says Required. */
+const osShoppingTags = ([, , group, why, required]) => osTag(group, why)
+  + [...new Set((required || []).map(w => w === "mount" ? "" : w))].map(w => osTag("req", w)).join("");
 function osFirmHtml(b, out, inv){
   const items = osFacts().items || {}, decor = osDecor(b), fee = (osFacts().game || {}).installFee || 586;
   const grp = (title, note, total) => `<tr class="grp"><td colspan="5">${title}${note ? `<span>${note}</span>` : ""}<b>${fmt(total)}</b></td></tr>`;
@@ -12488,14 +12512,16 @@ function osFirmHtml(b, out, inv){
     `<tr><td class="l">${tt("gr.os.inv.walls", "Walls and floors")}<span class="sub">${decor ? tt("gr.os.inv.walls.met", "{hood} asks for an interior score of {n}: the firm lays them",
       {hood: hoodName(b.hood), n: ((osFacts().hoods || {})[b.hood] || {}).interior}) : tt("gr.os.inv.walls.free", "the firm lays them at no charge")}</span></td>
       <td class="w">${decor ? `<span class="os-tag dem">${tt("gr.os.why.interior", "Interior")}</span>` : ""}</td><td></td><td></td><td class="free">${tt("gr.os.inv.free", "free")}</td></tr>`];
+  const shopping = osShoppingLines(out.lines);
   OS_GROUPS.forEach(([g, title]) => {
-    const lines = out.lines.filter(l => l[2] === g);
+    const lines = shopping.filter(l => l[2] === g);
     if(!lines.length) return;
     const total = lines.reduce((s, l) => s + l[1] * ((items[l[0]] || {}).p || 0), 0);
     rows.push(grp(title(), osGroupNote(g, b, out), total));
-    lines.forEach(([item, qty, group, why]) => {
+    lines.forEach(l => {
+      const [item, qty] = l;
       const each = (items[item] || {}).p || 0;
-      rows.push(`<tr><td class="l">${spEsc(osItemName(item))}</td><td class="w">${osTag(group, why)}</td><td>${qty}</td><td>${fmt(each)}</td><td>${fmt(each * qty)}</td></tr>`);
+      rows.push(`<tr><td class="l">${spEsc(osItemName(item))}</td><td class="w">${osShoppingTags(l)}</td><td>${qty}</td><td>${fmt(each)}</td><td>${fmt(each * qty)}</td></tr>`);
     });
   });
   rows.push(grp(tt("gr.os.inv.deposit", "Deposit"), b.status === "mine" ? depositNote(b) : tt("gr.os.inv.deposit.note", "refunded when the lease ends"), inv.deposit));
@@ -12509,11 +12535,10 @@ function osSelfHtml(b, out, inv){
   const F = osFacts(), items = F.items || {}, vendors = F.vendors || {}, fee = (F.game || {}).delivery || 0, decor = osDecor(b);
   const stores = osStores(out);
   const storeTotal = s => s.lines.reduce((t, k) => t + out.lines[k][1] * ((items[out.lines[k][0]] || {}).p || 0), 0) + fee;
-  const tagCell = (group, why) => `<td class="w">${osTag(group, why)}</td>`;
   const cards = stores.map((s, i) => {
     const v = vendors[s.key] || {};
-    const rows = s.lines.map(k => { const [item, qty, group, why] = out.lines[k];
-      return `<tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: qty, item: osItemName(item)})}</td>${tagCell(group, why)}<td>${fmt(qty * ((items[item] || {}).p || 0))}</td></tr>`; }).join("");
+    const rows = osShoppingLines(s.lines.map(k => out.lines[k])).map(l => { const [item, qty] = l;
+      return `<tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: qty, item: osItemName(item)})}</td><td class="w">${osShoppingTags(l)}</td><td>${fmt(qty * ((items[item] || {}).p || 0))}</td></tr>`; }).join("");
     return `<div class="os-store"><div class="os-sh"><span class="k">${osLetter(i)}</span><span><b>${spEsc(v.n || s.key)}</b><small>${spEsc(v.a || "")}${
       v.h ? ` · ${spEsc(hoodName(v.h))}` : ""}</small></span><span class="t">${fmt(storeTotal(s))}</span></div>
       <table><tbody>${rows}<tr class="del"><td class="l">${tt("gr.os.self.delivery", "Delivery")}</td><td class="w"></td><td>${fmt(fee)}</td></tr></tbody></table></div>`;

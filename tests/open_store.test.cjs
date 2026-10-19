@@ -100,7 +100,7 @@ test('Plan here opens the investment: one table by reason for the firm, a list b
   assert.equal(inv.firm, inv.furniture + inv.fee + b.deposit);
   const groups = await page.$$eval('#osBody .os-inv tr.grp td', tds => tds.map(td => td.firstChild.textContent.trim()));
   assert.deepEqual(groups.filter(g => g !== en('gr.os.grp.dem') && g !== en('gr.os.grp.cap')),
-    [en('gr.os.inv.firm'), en('gr.os.grp.req'), en('gr.os.grp.shelf'), en('gr.os.inv.deposit')]);
+    [en('gr.os.inv.firm'), en('gr.os.grp.shelf'), en('gr.os.inv.deposit')]);
   assert.ok(groups.includes(en('gr.os.grp.dem')), 'a liquor store asks for music, uniforms and a toilet');
   // Midtown asks for an interior score: the firm lays the walls and floors free.
   assert.match(await page.locator('#osBody .os-inv td.free').locator('xpath=..').innerText(), textRe('gr.os.inv.walls.met', {hood: 'Midtown', n: 50}, {}));
@@ -302,4 +302,58 @@ test('the loan amount: past the limit the field snaps to it, and 0 stays 0 acros
   await page.evaluate(() => openRoute('expansion/open'));
   await page.waitForFunction(() => osStep === 'breakeven');
   assert.equal(await page.locator('#osFin [data-os-fin-amount]').inputValue(), '0', 'and so does a reload');
+});
+
+test('the shopping list combines required capacity stations without changing the outfit or vendor allocation', async t => {
+  const page = await board(t);
+  await planned(page);
+  const result = await page.evaluate(() => {
+    const b = osBuilding(osPlan().key), F = osFacts();
+    const chair = 'test:hairdresserchair', till = 'test:register', speaker = 'test:speaker';
+    F.items[chair] = {p: 500, v: ['test:salon']};
+    F.items[till] = {p: 200, v: ['test:salon']};
+    F.items[speaker] = {p: 100, v: ['test:audio']};
+    F.vendors['test:salon'] = {n: 'Salon supplier'};
+    F.vendors['test:audio'] = {n: 'Audio supplier'};
+    const out = {lines: [[chair, 1, 'req', 'hairdresserchair'], [chair, 3, 'cap', 'capacity'],
+      [till, 1, 'req', 'pointofsales'], [till, 1, 'cap', 'capacity'],
+      [speaker, 1, 'dem', 'music'], [chair, 1, 'opt', 'security']], furniture: 3000};
+    const before = JSON.stringify(out), stores = osStores(out);
+    const inv = {fee: 0, deposit: 0, firm: 3000, self: 3000, items: 8};
+    const read = html => {
+      const host = document.createElement('div'); host.innerHTML = html;
+      return [...host.querySelectorAll('tbody tr')].filter(tr => tr.querySelector('.os-tag')).map(tr => ({
+        cells: [...tr.cells].map(td => td.textContent), tags: [...tr.querySelectorAll('.os-tag')].map(x => x.textContent)}));
+    };
+    const firm = read(osFirmHtml(b, out, inv)), self = read(osSelfHtml(b, out, inv));
+    const lines = osShoppingLines(out.lines);
+    return {firm, self, lines, unchanged: before === JSON.stringify(out), stores, afterStores: osStores(out),
+      unmerged: osShoppingLines([[chair, 1, 'req', 'hairdresserchair'], [speaker, 2, 'cap', 'capacity']]),
+      mount: (() => { const host = document.createElement('div');
+        host.innerHTML = osShoppingTags(osShoppingLines([['test:desk', 1, 'req', 'mount'], ['test:desk', 3, 'cap', 'mount']])[0]);
+        return [...host.querySelectorAll('.os-tag')].map(x => x.textContent); })()};
+  });
+  assert.equal(result.unchanged, true);
+  assert.deepEqual(result.afterStores, result.stores);
+  assert.deepEqual(result.stores.map(s => s.lines), [[0, 1, 2, 3, 5], [4]]);
+  assert.equal(result.lines.reduce((n, l) => n + l[1], 0), 8);
+  assert.equal(result.lines.reduce((n, l) => n + l[1] * ({'test:hairdresserchair': 500, 'test:register': 200, 'test:speaker': 100}[l[0]]), 0), 3000);
+  assert.deepEqual(result.unmerged.map(l => l[2]), ['req', 'cap']);
+  assert.deepEqual(result.mount, [en('gr.os.why.mount'), en('gr.os.why.req')], 'a merged mount keeps a Required tag');
+  for(const mode of ['firm', 'self']){
+    const rows = result[mode].filter(r => !r.tags.includes(en('gr.os.why.interior')));
+    assert.equal(rows.length, 4, mode);
+    const chair = rows.find(r => r.tags.includes(en('gr.os.why.cap')) && r.tags.includes(en('gr.os.why.req')));
+    const till = rows.find(r => r.tags.includes(en('gr.os.why.pos')));
+    assert.ok(chair, mode + ' retains the opening requirement');
+    assert.deepEqual(till.tags, [en('gr.os.why.cap'), en('gr.os.why.pos')]);
+    assert.equal(money(chair.cells.at(-1)), 2000);
+    assert.equal(money(till.cells.at(-1)), 400);
+    if(mode === 'firm'){
+      assert.equal(chair.cells[2], '4'); assert.equal(till.cells[2], '2');
+    }else{
+      assert.match(chair.cells[0], /^4 × /); assert.match(till.cells[0], /^2 × /);
+    }
+    assert.equal(rows.filter(r => r.tags.includes(en('gr.os.why.security'))).length, 1, 'optional row stays separate');
+  }
 });
