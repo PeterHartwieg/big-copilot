@@ -14,7 +14,8 @@ Results on 28 September 2026). Visitor requests that ship are retired the same w
 "Real Estate Function" request (31 votes) shipped as the Real estate area on 13 October
 2026 (PR #454) and was retired with `feature_moderate.mjs retire`, and "a couple small
 things to add:" (9 votes) was retired when its merged shopping-list rows shipped on
-19 October 2026 (PR #504). The vote dialog offers a small suggestion form even when the list is empty. The
+19 October 2026 (PR #504), as was "How much to order from wholesale" (45 votes) when
+wholesale shopping shipped the same day (PR #505). The vote dialog offers a small suggestion form even when the list is empty. The
 count means
 dashboard tabs seen in the last ten minutes, not verified people or players
 currently in the game. Votes help prioritise work; they are not release promises.
