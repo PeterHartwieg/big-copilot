@@ -178,7 +178,7 @@ const ROUTE_NEEDS = {
   'overview': ['staffing'], 'businesses/prices': ['products'], 'businesses/milestones': ['goals'],
   'supply/deliveries': ['wholesale'],
   'supply/production': ['factoryStaffing'], 'staffing/schedules': ['hiring'], 'staffing/needs': ['hiring'],
-  'expansion/open': ['openStore'], 'expansion/factory': ['openFactory', 'openStore'],
+  'expansion/open': ['openStore'], 'expansion/factory': ['openFactory', 'openStore'], 'expansion/rivals': ['rivalIntel'],
   'estate/buildings': ['realEstate'], 'estate/buy': ['realEstate'], 'wiki': ['products'],
   'expansion/finder': ['premises'], 'map': [],
 };
@@ -453,7 +453,7 @@ for (const [pageId, view, anchor, nav] of [
   ['supply','changes','secChanges','supplyNav'], ['supply','imports','secImports','supplyNav'],
   ['supply','deliveries','secDeliveries','supplyNav'], ['supply','production','secProduction','supplyNav'],
   ['supply','flow','secFlow','supplyNav'],
-  ['growth','market','secMarket','growthNav'], ['growth','plan','secPlan','growthNav'],
+  ['growth','market','secMarket','growthNav'], ['growth','plan','secPlan','growthNav'], ['growth','rivals','secRivals','growthNav'],
   ['company','products','secProducts','companyNav'], ['staffing','payroll','secPayroll','staffingNav'],
   ['company','milestones','secGoals','companyNav'], ['company','standards','secStandards','companyNav'],
   ['staffing','schedules','secSchedules','staffingNav'], ['staffing','needs','secStaff','staffingNav'],

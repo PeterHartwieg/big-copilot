@@ -914,7 +914,7 @@ test('profit: switching the portfolio to Operations takes the landing down', asy
    test board draws itself: a live refresh then runs as the app runs it. */
 const quietRender = page => page.evaluate(() => {
   ['indexTrends', 'drawMast', 'drawKpis', 'drawAlerts', 'drawRhythm', 'drawSupplyStrip', 'drawChangesView', 'drawRolesView', 'drawImportsView', 'drawDeliveriesView', 'drawProductionView', 'drawFlowView',
-   'drawFlow', 'drawMovers', 'drawMarket', 'drawOpenStore', 'drawPlan', 'drawProducts', 'drawStaff', 'drawGoals', 'drawEstate', 'drawEstateBuy', 'drawFindLocation',
+   'drawFlow', 'drawMovers', 'drawMarket', 'drawOpenStore', 'drawPlan', 'drawProducts', 'drawStaff', 'drawGoals', 'drawEstate', 'drawEstateBuy', 'drawRivals', 'drawFindLocation',
    'drawOptimizeStaffing', 'drawFooter', 'wireAll', 'refreshCityMaps'].forEach(name => { window[name] = () => {}; });
 });
 

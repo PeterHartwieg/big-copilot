@@ -19233,6 +19233,43 @@
    "index": 93
   }
  },
+ "rivalIntel": {
+  "day": 40,
+  "events": [
+   {
+    "address": "9 Broadway Street",
+    "business": "Corner Gifts",
+    "day": 12,
+    "hood": "ba:neighborhood_midtown",
+    "kind": "opened",
+    "rival": 1,
+    "rivalName": "Corner Holdings",
+    "type": ""
+   }
+  ],
+  "rivals": [
+   {
+    "buildings": 1,
+    "name": "Corner Holdings",
+    "number": 1,
+    "products": [],
+    "shops": 1,
+    "sites": [
+     {
+      "address": "9 Broadway Street",
+      "daily": 0.0,
+      "hood": "ba:neighborhood_midtown",
+      "name": "Corner Gifts",
+      "opened": 12,
+      "products": [],
+      "type": "ba:businesstype_giftshop"
+     }
+    ],
+    "top": null,
+    "weekly": 0.0
+   }
+  ]
+ },
  "rivalry": {
   "days": [
    {

@@ -2744,6 +2744,77 @@ Businesses › Milestones. Preferences › Rivals leaderboard hides both.
 The game writes its own copy of your weekly income for the leaderboard chart before some
 mods have booked the day, so the board always recomputes yours from the statements.
 
+## Rival intel
+
+Growth › Rivals lists every company in leaderboard order, including companies with no
+shops today. Its shop count is the businesses it runs; its building count is the
+registrations whose `buildingOwnerRivalId` names it. These can differ. Building purchases
+have no dated log in the save, so the count describes ownership today. Weekly income is
+the same figure as [The Rivals leaderboard](#the-rivals-leaderboard).
+
+The product breakdown follows build 3682's `EstimatedWeeklyIncomeHelper.GetProductBenefit()`.
+For each shop's `retailPrices`, a retail product counts only if that exact business layout
+has a purchaser for it; a service always counts. Its per-customer product margin is:
+
+```
+benefit = (retail price − wholesale price) × product impact × amount
+          × productSalesRatio × neighbourhood demand × available
+```
+
+Wholesale price follows `ItemHelper.GetWholesalePrice()`: the item's wholesale price,
+times its saved `importPriceIndex`, times `gameVariables.marketPriceMultiplier`.
+`BusinessType.GetProductImpact()` supplies the impact (0.025 for an unlisted product).
+Amount is `maxAmountPerProduct` when that is at most 1; above 1 it is
+`(1 + maxAmountPerProduct) / 2` for a primary product and 1 for the others.
+`BusinessType.GetPrimaryProducts()` defines primary as impact at least 1.
+
+Demand is the saved neighbourhood reading divided by 100 for a demanded product in a
+building tagged `sellsphysicalproducts`, and 1 otherwise. A missing demand uses the game's
+own fallback of 50%. Available is `1 − blocked days / 7`, following
+`DaysFromLastWeekThatTheItemWasNotSoldDueToMarketEvents()`: ProductBackorder (type 4) starts
+blocking the day after the event starts, ProductShortage (type 3) after the game's
+`startDayToEmptyShelvesWhenThereIsAShortage` delay. Stopped events end on their stop day.
+Wholesale-sourced shops use their own neighbourhood's events; import-sourced shops use
+city-wide events with an empty neighbourhood. Special rival building owners are exempt.
+These events affect retail products, not services.
+
+**Margin share** divides each benefit by the sum. **Revenue share** uses retail price in
+place of retail minus wholesale, then divides by that revenue sum. Shares with a zero
+denominator read as zero. Products are ordered by revenue, with item ids breaking ties.
+The top product is the one earning the most revenue across the company's shops.
+
+Dollar columns are per day. `CompetitionHelper.UpdateDailyValuation()` saves
+`(weekly product margin − daily market rent × 7 − weekly wages) / 7` as `dailyIncomes`.
+The board recovers weekly customers by adding those costs back to the latest entry and
+dividing by the sum of benefits. It then multiplies every product's per-customer revenue
+and margin by those customers and divides by 7. Product margin is before rent and wages;
+the shop's daily income is after them.
+
+Rent follows `Building.GetBuildingDailyMarketRent()`: the size's square metres, times
+`_market_rent()` (the game's market price per square metre and neighbourhood rent rate),
+times the building type's `buildingPriceMultiplierForRent`, rounded up. This uses the
+same real-estate market-price rule as the Real estate page, with the extra type rent
+multiplier; it does not use the location finder's fitted estimated rent. Wages follow
+`CalculateWeeklyWages()`: average `EmployeeHelper.CalculateHourlyWageForSkill()` by primary
+skill across AI and poached employees, then pay that average for each matching workstation
+skill in the layout for every scheduled opening hour. Salary difficulty is included.
+The generated `ba_store_rules.json` carries the primary products, purchasers and workstation
+skills per layout, business sourcing, rent multipliers, building sizes and shortage delay.
+
+When a shop lacks a saved income, exact layout, rent input or employee data needed to
+recover its scale, its dollar fields are `null`. Available per-shop shares can still be
+shown. Unknown layout or supply eligibility withholds that shop's product breakdown.
+With multiple shops, company totals require every shop's scale: per-customer shares cannot
+be added across shops serving different numbers of people, so an incomplete company total
+is withheld. Company prices and your prices are medians across shops selling that item.
+A PriceReduction defense in `specialRivalStates[].defenseStates` marks the affected items
+as defended, as `CompetitionHelper.SetItemsToIgnoreByRival()` does.
+
+The history is the save's BusinessOpened and BusinessClosed market events (types 0 and 1),
+newest first, at most 60. A historical rival name is associated with a company number only
+when the existing rival-name lookup identifies that name unambiguously; a later occupant
+of the same address cannot claim an earlier event. Ties use explicit stable keys.
+
 ## Reading the numbers
 
 A few figures are derived rather than stored, and it is worth knowing how:

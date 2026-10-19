@@ -707,6 +707,7 @@ function odWords(name){
     case "openFactory": return tt("nav.od.openFactory", "Working out factory costs…");
     case "goals": return tt("nav.od.goals", "Working out milestones…");
     case "realEstate": return tt("nav.od.realEstate", "Working out real estate…");
+    case "rivalIntel": return tt("nav.od.rivalIntel", "Working out what rivals sell…");
     case "hiring": return tt("nav.od.hiring", "Working out staff needs…");
     default: return tt("nav.od.factoryStaffing", "Working out factory staffing…");
   }
@@ -732,6 +733,7 @@ const OD_ACTION_SECTIONS = [
   ["#secPlan, #secIngredients, #secPlanFlow, #ofCtl, #planPicker, #planFor", ["openFactory", "openStore"]],
   ["#secStaff, #secSchedules, [data-gw=\"schedule\"]", ["hiring"]],
   ["#secProducts", ["products"]], ["#secGoals", ["goals"]],
+  ["#secRivals", ["rivalIntel"]],
   ["#secProduction", ["factoryStaffing"]],
 ];
 /* Detached controls declare the sections they read on their host (or on
@@ -3371,6 +3373,7 @@ const VIEW_META = [
   {route: "expansion/finder", host: ["map"], needs: ["premises"], defaultHost: false, label: () => tt("nav.view.finder", "Find a location")},
   {route: "expansion/open", host: ["growth", "open"], section: "secOpen", label: () => tt("nav.view.open", "Open a store")},
   {route: "expansion/factory", host: ["growth", "plan"], section: "secPlan", also: ["secIngredients", "secPlanFlow"], label: () => tt("nav.view.factory", "Plan a factory")},
+  {route: "expansion/rivals", host: ["growth", "rivals"], section: "secRivals", label: () => tt("nav.view.rivals", "Rivals")},
   {route: "estate/buildings", host: ["estate", "buildings"], section: "secEstate", label: () => tt("nav.view.estate.buildings", "My buildings")},
   {route: "estate/buy", host: ["estate", "buy"], section: "secBuy", label: () => tt("nav.view.estate.buy", "Buy a building")},
   {route: "map", host: ["map"], label: () => tt("nav.ref.map", "City map")},
@@ -17893,6 +17896,131 @@ function drawPayroll(){
         : r.count}</span></div>`).join("")}</div></details>` : `<p class="quiet">${tt("co.pay.empty", "No staff hired yet.")}</p>`);
 }
 
+/* --- Expansion › Rivals (docs/rival-intel-scope.md) -------------------------
+   D.rivalIntel (an on-demand section, _rival_intel() in Python): every rival
+   company in the game's leaderboard order, what each earns its money on (the
+   game's own weekly-income formula, split per product), its shops, and the
+   market log of shops rivals opened and closed. The page states the facts and
+   marks the product that earns the chosen rival most; it gives no other
+   advice. Every class is rv-, every name ri*. */
+let riPick = null;          // the chosen rival's number
+let riHistAll = true;       // the history: every rival (true) or the chosen one
+const riOpen = new Set();   // the shops expanded, by address
+let riWired = null;         // the section the handlers are on
+const riName = r => r && r.name ? r.name
+  : r && r.number != null ? tt("gr.rivals.n", "Rival {n}", {n: r.number}) : tt("gr.rivals.unknown", "A rival");
+const riShare = p => Math.max(0, Math.min(100, Number(p) || 0));
+const riPrice = p => p == null ? "" : tt("gr.rivals.price", "${p:,.2f}", {p});
+/* One product table: the rival's (with its shops and your price) or a shop's. */
+function riProducts(rows, {yours = null, whole = false} = {}){
+  if(!rows || !rows.length) return `<p class="rv-empty">${tt("gr.rivals.noProducts", "No product earns this rival anything the game counts.")}</p>`;
+  const head = `<thead><tr><th class="l">${tt("gr.rivals.col.item", "Product")}</th>`
+    + `<th data-tip="${attr(tt("gr.rivals.col.share.tip", "The product's part of this rival's sales, by the game's own weekly-income formula"))}">${tt("gr.rivals.col.share", "Revenue share")}</th>`
+    + `<th data-tip="${attr(tt("gr.rivals.col.margin.tip", "The product's part of this rival's margin: its price less the wholesale price"))}">${tt("gr.rivals.col.margin", "Margin share")}</th>`
+    + `<th>${tt("gr.rivals.col.day", "$ a day")}</th>`
+    + `<th>${tt("gr.rivals.col.price", "Its price")}</th><th>${tt("gr.rivals.col.yours", "Your price")}</th>`
+    + (whole ? `<th>${tt("gr.rivals.col.shops", "Shops")}</th>` : "") + `<th></th></tr></thead>`;
+  const body = rows.map((p, i) => {
+    const share = riShare(p.revenueShare);
+    const mine = whole ? p.yourPrice : yours ? yours[p.item] : null;
+    const top = whole && i === 0 ? `<span class="rv-top">${tt("gr.rivals.top", "Its biggest earner: a price cut here hurts it most.")}</span>` : "";
+    const day = p.revenue == null
+      ? `<span class="rv-none" data-tip="${attr(tt("gr.rivals.noDollars.tip", "The game's rent or wage term for this rival could not be worked out from the save, so only the shares are shown"))}">—</span>`
+      : fmt(p.revenue);
+    const defended = p.defended ? chipHtml("warn", tt("gr.rivals.defended", "Defended"),
+      tt("gr.rivals.defended.tip", "A special rival: it answers a price war on this product with a price cut of its own")) : "";
+    return `<tr data-rv-item="${attr(p.item)}"><td class="l rv-item">${spEsc(gameName(p.item) || prettySlug(String(p.item || "")))}${top}</td>`
+      + `<td><span class="rv-share"><span class="rv-bar" aria-hidden="true"><i style="width:${share.toFixed(1)}%"></i></span>${tt("gr.rivals.pct", "{p:.1f}%", {p: share})}</span></td>`
+      + `<td>${tt("gr.rivals.pct", "{p:.1f}%", {p: riShare(p.marginShare)})}</td>`
+      + `<td>${day}</td><td>${riPrice(p.price)}</td>`
+      + `<td class="rv-yours">${mine == null ? `<span class="rv-none" data-tip="${attr(tt("gr.rivals.notYours.tip", "None of your shops sells it"))}">—</span>` : riPrice(mine)}</td>`
+      + (whole ? `<td>${num(p.shops || 0)}</td>` : "") + `<td>${defended}</td></tr>`;
+  }).join("");
+  return `<div class="scrollx"><table class="rv-t">${head}<tbody>${body}</tbody></table></div>`;
+}
+function riSite(s, yours){
+  const open = riOpen.has(s.address);
+  const sub = [spEsc(hoodName(s.hood)), spEsc(osTypeName(s.type)),
+    s.opened != null ? tt("gr.rivals.since", "since day {d:,}", {d: s.opened}) : ""].filter(Boolean).join(" · ");
+  return `<details class="rv-site" data-rv-site="${attr(s.address)}"${open ? " open" : ""}><summary>`
+    + `${reHood(s.hood)}<span class="rv-addr">${spEsc(s.name || s.address)}</span><span class="rv-sub">${spEsc(s.address)} · ${sub}</span>`
+    + `<span class="rv-daily">${tt("gr.rivals.perDay", "{w:$} a day", {w: s.daily || 0})}</span></summary>`
+    + (open ? riProducts(s.products, {yours}) : "") + `</details>`;
+}
+function riLog(events, rival){
+  const shown = riHistAll || !rival ? events : events.filter(e => e.rival === rival.number);
+  const seg = `<span class="seg" role="group" aria-label="${attr(tt("gr.rivals.hist.filter", "Whose shops"))}">`
+    + `<a href="#" data-rv-hist="all"${riHistAll ? ` class="on" aria-pressed="true"` : ` aria-pressed="false"`}>${tt("gr.rivals.hist.all", "All rivals")}</a>`
+    + `<a href="#" data-rv-hist="one"${riHistAll ? ` aria-pressed="false"` : ` class="on" aria-pressed="true"`}>${rival ? spEsc(riName(rival)) : tt("gr.rivals.hist.one", "This rival")}</a></span>`;
+  const rows = shown.map(e => {
+    const who = e.rivalName || (e.rival != null ? tt("gr.rivals.n", "Rival {n}", {n: e.rival}) : tt("gr.rivals.unknown", "A rival"));
+    const kind = e.kind === "closed" ? chipHtml("bad", tt("gr.rivals.closed", "Closed")) : chipHtml("ok", tt("gr.rivals.opened", "Opened"));
+    const where = [spEsc(e.address || ""), spEsc(hoodName(e.hood)), spEsc(osTypeName(e.type))].filter(Boolean).join(" · ");
+    return `<li data-rv-event="${attr(e.kind)}" data-rv-of="${attr(e.rival ?? "")}"><span class="rv-day">${tt("gr.rivals.day", "Day {d:,}", {d: e.day})}</span>${kind}`
+      + `<span class="rv-what"><b>${spEsc(e.business || "")}</b> · ${spEsc(who)}<small>${where}</small></span></li>`;
+  }).join("");
+  const empty = `<p class="rv-empty">${riHistAll ? tt("gr.rivals.hist.none", "The game's market log holds no shop a rival opened or closed.")
+    : tt("gr.rivals.hist.noneOne", "The game's market log holds no shop this rival opened or closed.")}</p>`;
+  return `<div class="rv-histhead"><h3>${tt("gr.rivals.hist.title", "Opened and closed")}</h3>${seg}</div>`
+    + (rows ? `<ol class="rv-log">${rows}</ol>` : empty);
+}
+function riWire(sec){
+  if(riWired === sec) return;
+  riWired = sec;
+  sec.addEventListener("click", e => {
+    const who = e.target.closest && e.target.closest("[data-rv-rival]");
+    if(who){ riPick = Number(who.dataset.rvRival); drawRivals(); wireTips(); return; }
+    const hist = e.target.closest && e.target.closest("[data-rv-hist]");
+    if(hist){ e.preventDefault(); riHistAll = hist.dataset.rvHist === "all"; drawRivals(); wireTips(); }
+  });
+  /* A shop's table is drawn as it opens, and stays open across redraws. */
+  sec.addEventListener("toggle", e => {
+    const d = e.target;
+    if(!d || !d.dataset || d.dataset.rvSite === undefined) return;
+    if(d.open){
+      riOpen.add(d.dataset.rvSite);
+      if(!d.querySelector(".rv-t, .rv-empty")){
+        const ri = D && D.rivalIntel, r = ri && (ri.rivals || []).find(x => x.number === riPick);
+        const s = r && (r.sites || []).find(x => x.address === d.dataset.rvSite);
+        if(s){ d.insertAdjacentHTML("beforeend", riProducts(s.products, {yours: riYours(r)})); wireTips(); }
+      }
+    } else riOpen.delete(d.dataset.rvSite);
+  }, true);
+}
+/* Your median price per item, from the rival's own rows: the same for every rival. */
+const riYours = r => Object.fromEntries((r.products || []).filter(p => p.yourPrice != null).map(p => [p.item, p.yourPrice]));
+function drawRivals(){
+  const sec = $("secRivals");
+  if(!sec) return;
+  if(!hasData()){ sec.innerHTML = ""; return; }
+  riWire(sec);
+  const title = sechead(tt("gr.rivals.title", "Rivals"), {sr: true});
+  if(!odNeed("rivalIntel")){ sec.innerHTML = title + odWaitHtml("rivalIntel"); return; }
+  const ri = D.rivalIntel || {};
+  const rivals = ri.rivals || [], events = ri.events || [];
+  if(!rivals.length){
+    sec.innerHTML = title + `<p class="rv-empty">${tt("gr.rivals.none", "This save holds no rival companies.")}</p>` + riLog(events, null);
+    return;
+  }
+  let r = rivals.find(x => x.number === riPick);
+  if(!r){ r = rivals[0]; riPick = r.number; }
+  const pick = `<div class="rv-pick" role="group" aria-label="${attr(tt("gr.rivals.pick", "Pick a rival"))}">${rivals.map((x, i) =>
+    `<button type="button" class="rv-who" data-rv-rival="${attr(x.number)}" aria-pressed="${x === r}">`
+    + `<span class="rv-rank">${tt("gr.rivals.rank", "#{n}", {n: i + 1})}</span><b>${spEsc(riName(x))}</b>`
+    + `<small>${tt("gr.rivals.weekly", "{w:$} a week", {w: x.weekly || 0})}</small>`
+    + `<small>${tt("gr.rivals.counts", "{s} · {b}", {s: tt("gr.rivals.shops", {one: "{n} shop", other: "{n} shops"}, {n: x.shops || 0}),
+      b: tt("gr.rivals.buildings", {one: "{n} building", other: "{n} buildings"}, {n: x.buildings || 0})})}</small></button>`).join("")}</div>`;
+  const yours = riYours(r);
+  const sites = (r.sites || []).length
+    ? `<div class="rv-sites">${r.sites.map(s => riSite(s, yours)).join("")}</div>`
+    : `<p class="rv-empty">${tt("gr.rivals.noShops", "This rival runs no shops today.")}</p>`;
+  sec.innerHTML = title + pick
+    + `<h3 class="rv-h">${tt("gr.rivals.products", "What {rival} sells", {rival: spEsc(riName(r))})}<small>${tt("gr.rivals.products.sub", "highest revenue first, across all its shops")}</small></h3>`
+    + riProducts(r.products, {whole: true})
+    + `<h3 class="rv-h">${tt("gr.rivals.sites", "Its shops")}<small>${tt("gr.rivals.sites.sub", "highest daily income first; open one for its products")}</small></h3>`
+    + sites + riLog(events, r);
+}
+
 /* --- the Rivals leaderboard (issue #414) -------------------------------------
    D.rivalry (_rivalry() in Python): the player's place among the rivals by
    weekly income, as the game's Rivals app ranks it, the gap to the best rival
@@ -19680,6 +19808,7 @@ const PAGE_DRAWS = [
   ["supply/production", () => drawProductionView(), null, ["factoryStaffing"]], ["supply/flow", () => drawFlowView(), null, []], ["supply/flow", () => drawFlow(), null, []],
   ["growth/market", () => drawMovers(), null, []], ["growth/market", () => drawMarket(), null, []], ["growth/open", () => drawOpenStore(), null, ["openStore"]],
   ["growth/plan", () => drawPlan(), null, ["openFactory", "openStore"]],  // changed for growth: no drawExpansion()
+  ["growth/rivals", () => drawRivals(), null, ["rivalIntel"]],
   ["estate/buildings", () => drawEstate(), null, ["realEstate"]], ["estate/buy", () => drawEstateBuy(), null, ["realEstate"]],
   ["company/products", () => drawPriceShops(), null, []], ["company/products", () => drawProducts(), null, ["products"]],
   // A third element names a row other code marks stale on its own (hrStale(), nxSchedStale());
@@ -21746,6 +21875,10 @@ const SS_VIEWS = [
   {id: "plan", get t(){ return tt("nav.search.plan.title", "Plan a factory"); },
    get p(){ return tt("nav.search.plan.line", "Expansion › Plan a factory"); }, ic: "growth", syn: ["new factory", "recipe plan", "expand", "plan a chain", "open a factory", "factory location", "add machines"],
    go: () => openRoute("expansion/factory")},
+  {id: "rivals", get t(){ return tt("nav.search.rivals.title", "Rivals"); },
+   get p(){ return tt("nav.search.rivals.line", "Expansion › Rivals · what each rival sells, its shops and what it opened or closed"); }, ic: "growth",
+   syn: ["rivals", "competitors", "competition", "price war", "undercut", "rival shops", "rival products", "rival prices", "opened", "closed"],
+   go: () => openRoute("expansion/rivals")},
   {id: "estate", get t(){ return tt("nav.search.estate.title", "My buildings"); },
    get p(){ return tt("nav.search.estate.line", "Real estate › My buildings · rent prices and occupancy"); }, ic: "estate",
    syn: ["real estate", "buildings", "rent price", "set rent", "landlord", "tenants", "occupancy", "property", "best price", "market rent"],

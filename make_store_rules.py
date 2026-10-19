@@ -10,7 +10,8 @@ owner-side only, and nothing ba_dashboard.py imports needs either. The planner
 reads it to price a store that does not exist yet and to list the furniture a
 fully outfitted one needs.
 
-Eight bundles under <game>/Big Ambitions_Data/StreamingAssets/aa/StandaloneWindows64/:
+Bundles under <game>/Big Ambitions_Data/StreamingAssets/aa/StandaloneWindows64/
+(Data/StreamingAssets/aa/StandaloneOSX inside the macOS app):
 
   defaultlocalgroup_assets_items_*.bundle
       every Item (wholesalePrice, defaultMarketPrice, productSalesRatio, type
@@ -82,6 +83,7 @@ where noted):
                               "v": [vendor site keys]}},  (lists omitted when empty)
      "types": {"<business type>": {"b": building type, "c": 1 player can create,
                                    "i": [[item, impact], ...], "a": maxAmountPerProduct,
+                                   "p": [primary products: impact >= 1],
                                    "n": 1 accepts customers without orders,
                                    "ss": 1 self-service customers (customerType 2; omitted
                                          otherwise), the ones that weigh a "wg" product
@@ -97,7 +99,18 @@ where noted):
                                 "e": 1 emergency loan}},
      "vendors": {"<site key>": {"n": name, "a": street label, "h": neighbourhood}},
      "vehicles": {"<vehicle type>": price},  (motor vehicles only: what a bank counts as wealth)
-     "skills": {"<skill>": baseHourlyWage}}
+     "skills": {"<skill>": baseHourlyWage},
+     "rival": {"layouts": {"<type>|<size>|<version>|<lowercase layout>":
+                            {"p": [purchaser products], "sk": [workstation skills]}},
+               "sources": {"<AI business name>": 0 wholesale | 1 import},
+               "buildings": {"<building type slug>": {"rent": rent multiplier,
+                                                      "physical": 1 sells physical products}},
+               "sizes": {"<building size>": square metres}, "shortageDelay": days}}
+
+Rival facts additionally read the aibusinessdefaults, buildingtypes and
+buildingsizes bundles, ProductMarketSettings in assets/addressables/market,
+and StreamingAssets/BusinessLayouts. Workstation skills retain the layout's
+order and repeats for CalculateWeeklyWages' single-precision additions.
 
 `products` holds every item a business type sells (the gifts and flowers are
 furniture too, and sit in both tables), every entrance fee, every other
@@ -114,6 +127,7 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
 
 try:  # owner-side only: the board never imports this module
     import UnityPy
@@ -128,7 +142,7 @@ except ImportError:  # pragma: no cover - depends on the operator's machine
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "tools"))
-from make_demand_curves import _behaviours, _bundle, _game_root  # noqa: E402
+from make_demand_curves import _behaviours, _game_root  # noqa: E402
 from make_item_prices import _price  # noqa: E402
 from build_wiki_data import parse_address, site_key, street_label  # noqa: E402
 from wiki_data import expand_guides  # noqa: E402
@@ -152,6 +166,22 @@ STORAGE_TAGS = {"ba:itemtag_isbusinessstorage", "ba:itemtag_iswarehousestorage"}
 # The help's own sentence ahead of a furniture page's vendor list.
 _PURCHASE = "can be purchased from the following locations"
 _ADDRESS_LINK = re.compile(r"\[([^\]]+)\]\(address:\s*([^)]+)\)")
+
+
+def _streaming_assets(root: str) -> Path:
+    """The shared data directory on Windows/Linux and inside the macOS app."""
+    for relative in ("Big Ambitions_Data/StreamingAssets", "Data/StreamingAssets"):
+        path = Path(root) / relative
+        if path.is_dir():
+            return path
+    raise SystemExit(f"no StreamingAssets under {root}")
+
+
+def _bundle(root: str, stem: str) -> str:
+    found = sorted((_streaming_assets(root) / "aa").glob(f"*/{stem}_*.bundle"))
+    if not found:
+        raise SystemExit(f"no {stem} bundle under {root}")
+    return str(found[-1])
 
 
 def _behaviours_by_id(path: str) -> dict:
@@ -364,6 +394,9 @@ def _types(types: list, requirements: dict) -> dict:
             "c": 1 if "ba:businesstag_allowplayercreation" in (tree.get("tags") or []) else 0,
             "i": [[p["itemName"], _round(p.get("impact"))] for p in tree.get("businessProducts") or []],
             "a": _round(tree.get("maxAmountPerProduct")),
+            # BusinessType.GetPrimaryProducts(): impact >= 1, including services.
+            "p": _names(p["itemName"] for p in tree.get("businessProducts") or []
+                        if float(p.get("impact") or 0) >= 1),
             "n": 1 if tree.get("acceptCustomersWithoutOrderEntries") else 0,
         }
         if tree.get("customerType") == SELF_SERVICE:
@@ -380,6 +413,49 @@ def _types(types: list, requirements: dict) -> dict:
         row["sk"] = list(tree.get("employeePrimarySkills") or [])
         out[tree["businessTypeName"]] = row
     return out
+
+
+def _rival_rules(root: str, items: dict) -> dict:
+    """EstimatedWeeklyIncomeHelper's layout, wages, rent and supply inputs.
+
+    Only purchaser products and workstations are retained from each layout,
+    never its geometry. Keys match BusinessLayoutSetHelper.CreateLayoutSetKey.
+    """
+    layouts = {}
+    for path in sorted((_streaming_assets(root) / "BusinessLayouts").glob("*/*/*.json")):
+        tree = json.loads(path.read_text(encoding="utf-8-sig"))
+        products, skills = set(), []
+        for piece in tree.get("Items") or []:
+            purchaser = (piece.get("playerItemPurchaserSettings") or {}).get("itemName")
+            if purchaser:
+                products.add(purchaser)
+            item = items.get(piece.get("itemName"))
+            if item is None:
+                raise SystemExit(f"unknown layout item {piece.get('itemName')} in {path}")
+            if int(item.get("type") or 0) & 16:  # ItemType.EmployeeWorkstation
+                skills.extend(item.get("suitableSkills") or [])
+        key = "|".join((tree["BusinessType"], tree["BuildingSize"],
+                        str(tree["BuildingVersion"]), path.stem.lower()))
+        layouts[key] = {"p": sorted(products), "sk": skills}
+    sources = {t["businessName"]: int(t["goodsSource"])
+               for t in _behaviours(_bundle(root, "defaultlocalgroup_assets_aibusinessdefaults"))
+               if t.get("businessName")}
+    building_types = {t["buildingType"].removeprefix("ba:buildingtype_"): {
+                                 "rent": _round(t["buildingPriceMultiplierForRent"]),
+                                 "physical": int("ba:buildingtypetag_sellsphysicalproducts" in (t.get("tags") or []))}
+                      for t in _behaviours(_bundle(root, "defaultlocalgroup_assets_buildingtypes"))
+                      if "buildingPriceMultiplierForRent" in t}
+    sizes = {t["buildingSize"]: int(t["squareMeters"])
+             for t in _behaviours(_bundle(root, "defaultlocalgroup_assets_buildingsizes"))
+             if t.get("buildingSize")}
+    settings = [t for t in _behaviours(_bundle(root, "defaultlocalgroup_assets_assets/addressables/market"))
+                if "startDayToEmptyShelvesWhenThereIsAShortage" in t]
+    if len(settings) != 1:
+        raise SystemExit("expected one ProductMarketSettings asset")
+    if not all((layouts, sources, building_types, sizes)):
+        raise SystemExit("incomplete rival layouts, business defaults or building facts")
+    return {"layouts": layouts, "sources": sources, "buildings": building_types,
+            "sizes": sizes, "shortageDelay": int(settings[0]["startDayToEmptyShelvesWhenThereIsAShortage"])}
 
 
 def _hoods(root: str) -> dict:
@@ -565,6 +641,7 @@ def main() -> None:
         "vendors": vendors,
         "vehicles": _vehicles(root),
         "skills": _skills(root),
+        "rival": _rival_rules(root, items),
     }
     if not all(out.values()):
         raise SystemExit(
