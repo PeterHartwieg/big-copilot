@@ -275,7 +275,7 @@ const OpenStoreModel = (() => {
        the demand for every product it sells one step down there, for them too,
        whatever the product's weight for either type. A product the store at the
        address sells already (`provides`, osProvides()) moves nothing more. */
-    function osCannibal(slug, hood, provides){
+    function osCannibal(slug, hood, provides, excludeKey){
       const t = osType(slug), sales = ((osFacts().sales || {})[hood]) || {};
       const shops = new Set(), items = [];
       let loss = 0;
@@ -286,11 +286,47 @@ const OpenStoreModel = (() => {
         const n = ((m.hoods || {})[hood] || [0])[0] || 0;
         const now = osDemandWith(n, m.p), after = osDemandWith(n + 1, m.p);
         if(now <= 0 || after >= now) return;
-        rows.forEach(([key, units, margin]) => { loss += units * Math.max(0, margin) * (1 - after / now); shops.add(key); });
+        rows.forEach(([key, units, margin]) => { if(key === excludeKey) return; loss += units * Math.max(0, margin) * (1 - after / now); shops.add(key); });
         items.push(p);
       });
       return shops.size ? {loss, shops: shops.size, items} : null;
     }
+    /* Independent additions to an existing shop, with unchanged hours, prices
+       for its current range, promotion and satisfaction. The product's demand
+       counts this shop as a new provider; neighbouring own shops lose demand.
+       Full new equipment is budgeted (existing pieces may be occupied), plus
+       delivery and seven days of stock. Extra daily costs are explicit inputs.
+       Old floor-based arrival rules need a before/after range model: do not
+       silently use a fully stocked shop's arrivals for those saves. */
+    function osExpansions(slug, b, o = {}){
+      const F = osFacts(), t = osType(slug), built = (F.built || {})[b?.key];
+      if(!b || b.factsUnavailable || !t || t.model !== "retail" || !F.game?.capInitial
+          || !Array.isArray(built?.sells) || !Array.isArray(o.open) || o.open.length !== 7
+          || !Number.isFinite(o.sat) || !Number.isFinite(o.promoTotal) || !(osCap(b) > 0)) return null;
+      const sells = new Set(built.sells), m = osModel(slug, b, {...o, existing: p => sells.has(p)});
+      if(!m) return null;
+      const extraCost = Number.isFinite(o.extraCost) ? Math.max(0, o.extraCost) : 0;
+      return m.lines.filter(l => !sells.has(l.p) && !l.service).map(l => {
+        const choices = (t.expansionDisplays?.[l.p] || []).map(option => {
+          if(!(option.capacity > 0)) return null;
+          const n = Math.ceil(osCap(b) / option.capacity), counts = new Map();
+          for(const [item, qty] of [...option.lines.map(([p, q]) => [p, q * n]), ...(option.extra || [])])
+            counts.set(item, (counts.get(item) || 0) + qty);
+          const lines = [...counts].map(([p, qty]) => [p, qty, "shelf", [l.p]]);
+          if(lines.some(([p]) => !(F.items?.[p]?.p > 0) || !F.items[p].v?.length)) return null;
+          const equipment = lines.reduce((sum, [p, qty]) => sum + F.items[p].p * qty, 0);
+          const stores = osStores({lines}), delivery = stores.length * (F.game.delivery || 0);
+          return {lines, stores, equipment, delivery, setup: equipment + delivery};
+        }).filter(Boolean).sort((a, z) => a.setup - z.setup);
+        const kit = choices[0] || null;
+        const loss = osCannibal(slug, b.hood, p => p !== l.p, b.key)?.loss || 0;
+        const margin = l.units * (l.price - l.cost), net = margin - loss - extraCost;
+        const stock = l.units * l.cost * 7, investment = kit ? kit.setup + stock : null;
+        return {...l, kit, margin, loss, extraCost, net, stock, investment,
+          payback: investment === null ? null : osDays(investment, net)};
+      }).sort((a, z) => (a.payback ?? Infinity) - (z.payback ?? Infinity) || z.net - a.net || a.p.localeCompare(z.p));
+    }
+
     /* Days to earn `inv` back at `profit` a day; null when it never does. */
     const osDays = (inv, profit) => profit > 0 ? Math.max(1, Math.ceil(inv / profit)) : null;
 
@@ -401,6 +437,7 @@ const OpenStoreModel = (() => {
       initial: osInitial,
       provides: osProvides,
       model: osModel,
+      expansions: osExpansions,
       officeStaffed: osOfficeStaffed,
       officeModel: osOfficeModel,
       ownRatio: osOwnRatio,

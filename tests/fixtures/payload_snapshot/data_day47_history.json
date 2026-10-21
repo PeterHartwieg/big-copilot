@@ -8861,8 +8861,27 @@
      "ba:street_seventhavenue#13"
     ]
    },
+   "ba:itemname_clothingrackangled": {
+    "p": 325.0,
+    "v": [
+     "ba:street_fifthavenue#13",
+     "ba:street_seventhavenue#13"
+    ]
+   },
    "ba:itemname_coatcheckleft": {
     "p": 3000.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
+   "ba:itemname_cocktailbarbeershelf": {
+    "p": 1000.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
+   "ba:itemname_cocktailbardrinkscounter": {
+    "p": 800.0,
     "v": [
      "ba:street_eleventhstreet#16"
     ]
@@ -8998,6 +9017,19 @@
      "ba:street_seventhavenue#13"
     ]
    },
+   "ba:itemname_largebookshelf": {
+    "p": 780.0,
+    "v": [
+     "ba:street_fifthavenue#13"
+    ]
+   },
+   "ba:itemname_largedrinksfridge": {
+    "p": 2200.0,
+    "v": [
+     "ba:street_eleventhstreet#16",
+     "ba:street_fourthavenue#16"
+    ]
+   },
    "ba:itemname_loadedbarbell": {
     "p": 2100.0,
     "v": [
@@ -9111,6 +9143,12 @@
    },
    "ba:itemname_tobaccoshelf1": {
     "p": 1895.0,
+    "v": [
+     "ba:street_eleventhstreet#16"
+    ]
+   },
+   "ba:itemname_tobaccoshelf2": {
+    "p": 1495.0,
     "v": [
      "ba:street_eleventhstreet#16"
     ]
@@ -11558,6 +11596,208 @@
       0.5
      ]
     ],
+    "expansionDisplays": {
+     "ba:itemname_cheapflower": [
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productdisplaystandtiered",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_roundedshelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_cheapgift": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productpanel",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_roundedshelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_earbuds01": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productdisplaytable",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_limitededitionbook": [
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largebookshelf",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_singlebookshelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_motivationalbook": [
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largebookshelf",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_singlebookshelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_novel": [
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largebookshelf",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_singlebookshelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_picturebook": [
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largebookshelf",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_singlebookshelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_technicalmanual": [
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largebookshelf",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_singlebookshelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_umbrella": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productpanel",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_youngnovel": [
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largebookshelf",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_singlebookshelf",
+         1
+        ]
+       ]
+      }
+     ]
+    },
     "fee": null,
     "feeWeekend": null,
     "hours": [
@@ -12007,6 +12247,208 @@
       0.5
      ]
     ],
+    "expansionDisplays": {
+     "ba:itemname_cheapjewelry": [
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_jewelryfloorshowcase",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_classiccheapfemaleclothing": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_clothingrack",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 5,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_clothingrackangled",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_classiccheapmaleclothing": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_clothingrack",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 5,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_clothingrackangled",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_classicexpensivefemaleclothing": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_clothingrack",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 5,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_clothingrackangled",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_classicexpensivemaleclothing": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_clothingrack",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 5,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_clothingrackangled",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_expensivejewelry": [
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_jewelryfloorshowcase",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_moderncheapfemaleclothing": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_clothingrack",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 5,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_clothingrackangled",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_moderncheapmaleclothing": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_clothingrack",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 5,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_clothingrackangled",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_modernexpensivefemaleclothing": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_clothingrack",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 5,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_clothingrackangled",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_modernexpensivemaleclothing": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_clothingrack",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 5,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_clothingrackangled",
+         1
+        ]
+       ]
+      }
+     ]
+    },
     "fee": null,
     "feeWeekend": null,
     "hours": [
@@ -12454,6 +12896,194 @@
       1
      ]
     ],
+    "expansionDisplays": {
+     "ba:itemname_apple": [
+      {
+       "capacity": 40,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_fruitpallet",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_woodenproductcrate",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_banana": [
+      {
+       "capacity": 40,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_fruitpallet",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_woodenproductcrate",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_croissant": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_bakeryshowcase",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_cupcake": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_bakeryshowcase",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_cupofcoffee": [
+      {
+       "capacity": 30,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_industrialcoffeemachine",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_cupoftea": [
+      {
+       "capacity": 30,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_industrialcoffeemachine",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_donut": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_bakeryshowcase",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_icecream": [
+      {
+       "capacity": 30,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_icecreamcounter",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 30,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_industrialfreezer",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_smallindustrialfreezer",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_salad": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_saladbar",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_sodacan": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksfridge",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largedrinksfridge",
+         1
+        ]
+       ]
+      }
+     ]
+    },
     "fee": null,
     "feeWeekend": null,
     "hours": [
@@ -12975,6 +13605,124 @@
       0.5
      ]
     ],
+    "expansionDisplays": {
+     "ba:itemname_earbuds01": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productdisplaytable",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_energydrink": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksfridge",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largedrinksfridge",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_headphones01": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productdisplaytable",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_smartphone1": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productdisplaytable",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_smartphone2": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productdisplaytable",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_smartwatch1": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productdisplaytable",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_smartwatch2": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productdisplaytable",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_sodacan": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksfridge",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largedrinksfridge",
+         1
+        ]
+       ]
+      }
+     ]
+    },
     "fee": null,
     "feeWeekend": null,
     "hours": [
@@ -13360,6 +14108,198 @@
       1
      ]
     ],
+    "expansionDisplays": {
+     "ba:itemname_apple": [
+      {
+       "capacity": 40,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_fruitpallet",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_woodenproductcrate",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_banana": [
+      {
+       "capacity": 40,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_fruitpallet",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_woodenproductcrate",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_burger": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_industrialgrill",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_frenchfries": [
+      {
+       "capacity": 30,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_industrialfryermachine",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_hotdog": [
+      {
+       "capacity": 30,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_hotdoggrill",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_icecream": [
+      {
+       "capacity": 30,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_icecreamcounter",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 30,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_industrialfreezer",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_smallindustrialfreezer",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_kabob": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_industrialgrill",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_pizza": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_pizzaoven",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_salad": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_saladbar",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_sodacan": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksfridge",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largedrinksfridge",
+         1
+        ]
+       ]
+      }
+     ]
+    },
     "fee": null,
     "feeWeekend": null,
     "hours": [
@@ -13937,6 +14877,142 @@
       0.5
      ]
     ],
+    "expansionDisplays": {
+     "ba:itemname_cheapflower": [
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productdisplaystandtiered",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_roundedshelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_cheapgift": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productpanel",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_roundedshelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_energydrink": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksfridge",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largedrinksfridge",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_expensiveflower": [
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productdisplaystandtiered",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_roundedshelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_expensivegift": [
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_roundedshelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_sodacan": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksfridge",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largedrinksfridge",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_umbrella": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productpanel",
+         1
+        ]
+       ]
+      }
+     ]
+    },
     "fee": null,
     "feeWeekend": null,
     "hours": [
@@ -14347,6 +15423,284 @@
       0.5
      ]
     ],
+    "expansionDisplays": {
+     "ba:itemname_apple": [
+      {
+       "capacity": 40,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_flatwoodendisplaystand",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_fruitpallet",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_flatwoodendisplaystand",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_woodenproductcrate",
+         1
+        ],
+        [
+         "ba:itemname_flatwoodendisplaystand",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_banana": [
+      {
+       "capacity": 40,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_flatwoodendisplaystand",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_fruitpallet",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_flatwoodendisplaystand",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_woodenproductcrate",
+         1
+        ],
+        [
+         "ba:itemname_flatwoodendisplaystand",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_carrot": [
+      {
+       "capacity": 40,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_flatwoodendisplaystand",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_fruitpallet",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_flatwoodendisplaystand",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_woodenproductcrate",
+         1
+        ],
+        [
+         "ba:itemname_flatwoodendisplaystand",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_lettuce": [
+      {
+       "capacity": 40,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_flatwoodendisplaystand",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_fruitpallet",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_flatwoodendisplaystand",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_woodenproductcrate",
+         1
+        ],
+        [
+         "ba:itemname_flatwoodendisplaystand",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_pear": [
+      {
+       "capacity": 40,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_flatwoodendisplaystand",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_fruitpallet",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_flatwoodendisplaystand",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_woodenproductcrate",
+         1
+        ],
+        [
+         "ba:itemname_flatwoodendisplaystand",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_salad": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_saladbar",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_tomato": [
+      {
+       "capacity": 40,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_flatwoodendisplaystand",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_fruitpallet",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_flatwoodendisplaystand",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_woodenproductcrate",
+         1
+        ],
+        [
+         "ba:itemname_flatwoodendisplaystand",
+         1
+        ]
+       ]
+      }
+     ]
+    },
     "fee": null,
     "feeWeekend": null,
     "hours": [
@@ -14817,6 +16171,190 @@
       1
      ]
     ],
+    "expansionDisplays": {
+     "ba:itemname_cheapflower": [
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productdisplaystandtiered",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_roundedshelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_cheapgift": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productpanel",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_roundedshelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_earbuds01": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productdisplaytable",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_energydrink": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksfridge",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largedrinksfridge",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_expensiveflower": [
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productdisplaystandtiered",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_roundedshelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_expensivegift": [
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_roundedshelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_headphones01": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productdisplaytable",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_smartwatch1": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productdisplaytable",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_smartwatch2": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productdisplaytable",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_sodacan": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksfridge",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largedrinksfridge",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_umbrella": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productpanel",
+         1
+        ]
+       ]
+      }
+     ]
+    },
     "fee": null,
     "feeWeekend": null,
     "hours": [
@@ -15298,6 +16836,52 @@
       1
      ]
     ],
+    "expansionDisplays": {
+     "ba:itemname_energydrink": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksfridge",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largedrinksfridge",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_sodacan": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksfridge",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largedrinksfridge",
+         1
+        ]
+       ]
+      }
+     ]
+    },
     "fee": "ba:itemname_gymcovercharge",
     "feeWeekend": null,
     "hours": [
@@ -15748,6 +17332,20 @@
       0.5
      ]
     ],
+    "expansionDisplays": {
+     "ba:itemname_haircareproduct": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_hairdressershelf",
+         1
+        ]
+       ]
+      }
+     ]
+    },
     "fee": null,
     "feeWeekend": null,
     "hours": [
@@ -16120,6 +17718,56 @@
       0.5
      ]
     ],
+    "expansionDisplays": {
+     "ba:itemname_cheapjewelry": [
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_jewelryfloorshowcase",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_expensivejewelry": [
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_jewelryfloorshowcase",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_smartwatch1": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productdisplaytable",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_smartwatch2": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_productdisplaytable",
+         1
+        ]
+       ]
+      }
+     ]
+    },
     "fee": null,
     "feeWeekend": null,
     "hours": [
@@ -16485,6 +18133,256 @@
       0.5
      ]
     ],
+    "expansionDisplays": {
+     "ba:itemname_beer": [
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_cocktailbarbeershelf",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksshelf",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_woodencocktailbarbeershelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_bottleofwine": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_wineshelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_cigar": [
+      {
+       "capacity": 30,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_tobaccoshelf1",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_tobaccoshelf2",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_tobaccoshelf3",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_cigarette": [
+      {
+       "capacity": 30,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_tobaccoshelf1",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_tobaccoshelf2",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_tobaccoshelf3",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_energydrink": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksfridge",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largedrinksfridge",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_margarita": [
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_cocktailbardrinkscounter",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksshelf",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_woodencocktailbardrinkscounter",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_martini": [
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_cocktailbardrinkscounter",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksshelf",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_woodencocktailbardrinkscounter",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_sodacan": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksfridge",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largedrinksfridge",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_whisky": [
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_cocktailbardrinkscounter",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksshelf",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_woodencocktailbardrinkscounter",
+         1
+        ]
+       ]
+      }
+     ]
+    },
     "fee": null,
     "feeWeekend": null,
     "hours": [
@@ -16927,6 +18825,180 @@
       1
      ]
     ],
+    "expansionDisplays": {
+     "ba:itemname_beer": [
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_cocktailbarbeershelf",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksshelf",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_woodencocktailbarbeershelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_energydrink": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksfridge",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largedrinksfridge",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_margarita": [
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_cocktailbardrinkscounter",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksshelf",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_woodencocktailbardrinkscounter",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_martini": [
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_cocktailbardrinkscounter",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksshelf",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_woodencocktailbardrinkscounter",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_sodacan": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksfridge",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largedrinksfridge",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_whisky": [
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_cocktailbardrinkscounter",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksshelf",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_woodencocktailbardrinkscounter",
+         1
+        ]
+       ]
+      }
+     ]
+    },
     "fee": "ba:itemname_nightclubweekdaycovercharge",
     "feeWeekend": "ba:itemname_nightclubweekendcovercharge",
     "hours": [
@@ -17291,6 +19363,430 @@
       0.5
      ]
     ],
+    "expansionDisplays": {
+     "ba:itemname_apple": [
+      {
+       "capacity": 40,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_fruitpallet",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_woodenproductcrate",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_banana": [
+      {
+       "capacity": 40,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_fruitpallet",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_woodenproductcrate",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_bottleofwine": [
+      {
+       "capacity": 10,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_wineshelf",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_carrot": [
+      {
+       "capacity": 40,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_fruitpallet",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_woodenproductcrate",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_croissant": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_bakeryshowcase",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_cupcake": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_bakeryshowcase",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_donut": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_bakeryshowcase",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_energydrink": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksfridge",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largedrinksfridge",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_freshfood": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_industrialfridge",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_frozenfood": [
+      {
+       "capacity": 30,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_industrialfreezer",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_smallindustrialfreezer",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_icecream": [
+      {
+       "capacity": 30,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_icecreamcounter",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 30,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_industrialfreezer",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_smallindustrialfreezer",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_lettuce": [
+      {
+       "capacity": 40,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_fruitpallet",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_woodenproductcrate",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_pear": [
+      {
+       "capacity": 40,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_fruitpallet",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_woodenproductcrate",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_sodacan": [
+      {
+       "capacity": 20,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_drinksfridge",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 50,
+       "extra": [],
+       "lines": [
+        [
+         "ba:itemname_largedrinksfridge",
+         1
+        ]
+       ]
+      }
+     ],
+     "ba:itemname_tomato": [
+      {
+       "capacity": 40,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_fruitpallet",
+         1
+        ]
+       ]
+      },
+      {
+       "capacity": 15,
+       "extra": [
+        [
+         "ba:itemname_standingdigitalscale",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ],
+       "lines": [
+        [
+         "ba:itemname_woodenproductcrate",
+         1
+        ],
+        [
+         "ba:itemname_counter1",
+         1
+        ]
+       ]
+      }
+     ]
+    },
     "fee": null,
     "feeWeekend": null,
     "hours": [

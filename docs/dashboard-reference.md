@@ -1500,6 +1500,47 @@ A plan stays in Your plans after its store opens, marked **Open** with the share
 (or **Closed**), and opens on step 6. Twelve plans that have not opened are the limit; opened
 plans are history, kept apart up to 24, the oldest paid-back one making room first.
 
+## Shop expansions
+
+On a retail shop’s detail page, the **Shop expansions** block sits under Crew and Shelves.
+**Compare products** lists the physical products its business type sells but its
+`cachedAvailableProducts` does not currently offer, one row each with **Net / day**,
+**Upfront** and **Payback**, quickest payback first. Each row is an independent addition;
+do not sum the rows into a combined plan. Opening a row shows its daily ledger (added
+margin, margin lost at your shops nearby, extra costs, net) and its shopping list: each
+vendor’s displays and supports with unit prices, one delivery per vendor, and seven days
+of stock. Margin lost at your shops nearby is also shown under the row’s net. The
+comparison asks for the existing `openStore` section only when opened; the `?` beside the
+title holds the assumptions below.
+
+The shared store model uses the shop’s opening hours, current promotion and overall
+satisfaction, the building’s capacity, the product’s weight and sales ratio, and its
+neighbourhood demand after adding one provider. It uses the neighbourhood’s accepted
+selling price and the same import unit cost as Open a store. Added gross margin is
+units × (price − import cost). From it, subtract the modelled loss of margin at the
+player’s other shops in that neighbourhood and the entered extra daily staffing and
+operating costs. Historical sales at this same address are excluded from that loss.
+Existing rent, wages and marketing are unchanged; spare register capacity, staffing,
+stock and floor space must be checked in game. Temporary demand waves and tax are
+excluded, and no new-shop opening ramp is applied to an existing shop.
+
+Each purchasable display alternative includes its required supports. Enough displays
+to cover the building’s customer capacity are priced at list prices; self-service
+produce also includes a scale and its supports. The least expensive complete kit,
+including one delivery per vendor, wins. The upfront budget adds seven days of the
+new product’s stock at import cost. It buys new equipment, with no credit for existing
+pieces that may already serve another product. Reusing spare furniture can reduce
+actual spending. The comparison does not check placement geometry.
+
+Payback is the upfront budget divided by the added daily contribution, rounded up to
+whole days. A nonpositive contribution has no payback; an unavailable equipment kit
+has no investment or payback estimate. Unknown hours, promotion, satisfaction,
+providers or building facts, unsupported store types and games started before the
+current capacity-based arrival rules show an unavailable state. Services and fees
+are not display additions. On save refresh the comparison recomputes; a product now
+on offer disappears. Extra daily costs and expanded rows are session-only and remembered separately for
+each shop and character.
+
 ## Payback
 
 **Payback** (Businesses › Results, and a line on a shop's page) sets what a site cost to set

@@ -106,6 +106,35 @@ def lines_of(cap, sqm, copied=None):
             for line in outfit_lines(SHOP, RULES, PRICES, cap, sqm, copied)}
 
 
+class ExpansionDisplayTests(unittest.TestCase):
+    def test_alternatives_preserve_capacity_and_required_supports(self):
+        rules, prices = copy.deepcopy(RULES), copy.deepcopy(PRICES)
+        rules["furniture"]["ba:itemname_fridge"]["m"] = [["ba:itemname_baskets"]]
+        kits = ba_dashboard.expansion_displays(SHOP, rules, prices)
+        beer = kits["ba:itemname_beer"][0]
+        self.assertEqual(beer["capacity"], 10)
+        self.assertEqual(beer["lines"], [["ba:itemname_fridge", 1], ["ba:itemname_baskets", 1]])
+        self.assertEqual(beer["extra"], [])
+        # A shared display is a separate alternative per product, not a free shared purchase.
+        self.assertEqual(kits["ba:itemname_sodacan"][0], beer)
+
+    def test_unavailable_restricted_and_service_displays_are_not_offered(self):
+        rules, prices = copy.deepcopy(RULES), copy.deepcopy(PRICES)
+        rules["furniture"]["ba:itemname_fridge"]["o"] = ["cinema"]
+        rules["products"]["ba:itemname_whisky"]["s"] = 1
+        self.assertEqual(ba_dashboard.expansion_displays(SHOP, rules, prices), {})
+
+    def test_weighed_produce_needs_a_purchasable_scale_and_its_support(self):
+        rules, prices = copy.deepcopy(RULES), copy.deepcopy(PRICES)
+        rules["types"][SHOP]["ss"] = 1
+        rules["products"]["ba:itemname_beer"]["wg"] = 1
+        self.assertNotIn("ba:itemname_beer", ba_dashboard.expansion_displays(SHOP, rules, prices))
+        rules["furniture"]["scale"] = {"x": ["scale"], "v": VENDOR, "m": [["ba:itemname_baskets"]]}
+        prices["items"]["scale"] = {"p": 30}
+        kit = ba_dashboard.expansion_displays(SHOP, rules, prices)["ba:itemname_beer"][0]
+        self.assertEqual(kit["extra"], [["scale", 1], ["ba:itemname_baskets", 1]])
+
+
 class OutfitTests(unittest.TestCase):
     def test_headquarters_defaults_to_one_complete_workstation_per_role_whatever_the_building_capacity(self):
         rules, prices = ba_dashboard.load_store_rules(), ba_dashboard.load_item_prices()
