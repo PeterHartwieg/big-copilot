@@ -34,7 +34,7 @@ test('any address carries its facts: what it is, what it costs and whether it is
     assert.equal(await page.locator('#cityMapPage .site .st').textContent(), en('map.status.vacant'));
     assert.deepEqual(await facts(page),
       [en('map.fact.owner', {}) + en('map.owner.city', {}), en('map.fact.renter', {}) + en('map.renter.none', {}), en('map.kind.retail') + ' C' + en('map.fact.m2', {n: 225}), en('map.fact.traffic') + '60', en('map.fact.cap') + '30',
-       en('map.fact.rent') + '$140', en('map.fact.deposit') + '$840']);
+       en('map.fact.rent') + '$140', en('map.fact.deposit') + '$840', en('map.col.buildingPrice') + '$750,000']);
     assert.equal(await page.locator('#cityMapPage .site .fit').isVisible(), false);
     // A rival's building names the business and its type.
     await page.evaluate(key => cityMapPage.select(key), HK[1]);
@@ -260,7 +260,7 @@ test('takeover prices sort cheapest first, persist in saved searches and leave r
     } finally { await again.page.close(); }
     await pick(page, HK[1]);
     assert.ok((await facts(page)).includes(en('map.col.takeoverPrice') + '$375,000'));
-    const note = page.locator('#cityMapPage .site .facts > [data-tip]');
+    const note = page.locator('#cityMapPage .site .facts > .fr-takeover-fact');
     assert.equal(await note.getAttribute('tabindex'), '0');
     await note.focus();
     assert.equal(await page.locator('#tip').textContent(), en('map.takeover.estimate') + ' ' + en('map.takeover.estimate.offer'));
@@ -268,7 +268,7 @@ test('takeover prices sort cheapest first, persist in saved searches and leave r
   } finally { await page.close(); await context.close(); }
 });
 
-for(const [show, cost] of [['takeover', 'takeoverPrice'], ['rent', 'deposit']]){
+for(const [show, cost] of [['takeover', 'takeoverPrice'], ['takeover', 'buildingPrice'], ['rent', 'deposit']]){
   test(`${show} cost order survives sale listings, saved searches and a reload`, async () => {
     const context = await H.browser.newContext();
     const {page, errors} = await fixture(context);
@@ -314,7 +314,7 @@ test('unknown takeover prices sort last and remain distinct from zero and buildi
     assert.equal(await page.locator(`#cityMapPage [data-pick="${HK[1]}"] .fr-takeover-price`).getAttribute('data-tip'), en('map.takeover.unknown'));
     await page.locator('#cityMapPage [data-show="sale"]').click();
     assert.equal(await page.locator('#cityMapPage .fhead [data-s="price"]').count(), 1);
-    assert.equal(await page.locator('#cityMapPage .fr-takeover-price').count(), 0);
+    assert.deepEqual(await page.locator('#cityMapPage .fr-takeover-price').allTextContents(), ['—', '—']);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -374,15 +374,15 @@ test('for sale is a plain list, cheapest first, and the neighbourhood chips stil
     assert.equal(await page.locator('#cityMapPage .fchip.show[data-show="sale"] b').textContent(), '2');
     assert.equal(await page.locator('#cityMapPage .fhead.sale').count(), 1);
     assert.equal(await page.locator('#cityMapPage .place.fr.sale .v.sc').count(), 0);  // never scored
-    assert.equal(await page.locator('#cityMapPage .fhead.sale span.on').textContent(), en('map.col.price'));
-    assert.equal(await page.locator('#cityMapPage .fhead.sale span').count(), 6);
+    assert.equal(await page.locator('#cityMapPage .fhead.sale span.on').textContent(), en('map.col.buildingPrice'));
+    assert.equal(await page.locator('#cityMapPage .fhead.sale span').count(), 7);
     assert.deepEqual(await page.$$eval('#cityMapPage .place.fr.sale .v.pb', v => v.map(x => x.textContent)), ['—', en('map.payback.days', {n: '1,778'})]);
-    assert.deepEqual(await page.$$eval('#cityMapPage .place.fr.sale > :nth-child(5)', v => v.map(x => x.textContent)),
+    assert.deepEqual(await page.$$eval('#cityMapPage .place.fr.sale .fr-building-price', v => v.map(x => x.textContent)),
       ['$750k', '$4.20M']);
     // A price past a billion says so rather than counting in thousands of millions.
     await page.locator('#cityMapPage .fchip.cat[data-cat="theater"]').click();
     assert.deepEqual(await rowKeys(page), [MT[3]]);
-    assert.deepEqual(await page.$$eval('#cityMapPage .place.fr.sale > :nth-child(5)', v => v.map(x => x.textContent)),
+    assert.deepEqual(await page.$$eval('#cityMapPage .place.fr.sale .fr-building-price', v => v.map(x => x.textContent)),
       ['$5.58bn']);
     await page.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
     // A listing lights its own footprint, green rather than buy-out amber, and
@@ -622,7 +622,7 @@ test('a payload with no deposits says so rather than inventing one', async () =>
     assert.equal(await page.locator(`#cityMapPage .place[data-pick="${HK[0]}"] .dep`).getAttribute('data-tip'),
       en('map.deposit.none'));
     await pick(page, HK[0]);
-    assert.deepEqual((await facts(page)).slice(-1), [en('map.fact.deposit') + '—']);
+    assert.ok((await facts(page)).includes(en('map.fact.deposit') + '—'));
     assert.doesNotMatch(await page.locator('#cityMapPage .filters .why').getAttribute('data-tip'), enRe('map.rent.deposits', {}, {}));
     assert.deepEqual(errors, []);
   } finally { await page.close(); }

@@ -2086,7 +2086,6 @@
  "map.col.address": "Address",
  "map.col.cap": "Cap",
  "map.col.demand": "Demand",
- "map.col.price": "Price",
  "map.col.rent": "Rent",
  "map.col.score": "Score",
  "map.col.traffic": "Traffic",
