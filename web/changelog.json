@@ -1,5 +1,11 @@
 [
   {
+    "pr": 512,
+    "date": "2026-10-21",
+    "title": "Compare estimated takeover prices",
+    "summary": "Find a location now shows an estimated takeover price for rival businesses, with a column you can sort cheapest first and the full amount on each building’s card. The estimate follows BizMan’s valuation from income history and the furnished layout; the rival may accept a different offer. Missing estimates appear as a dash."
+  },
+  {
     "pr": 511,
     "date": "2026-10-21",
     "title": "Plan Street Food routes on the map",

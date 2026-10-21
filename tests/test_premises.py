@@ -384,6 +384,7 @@ class StatusTests(unittest.TestCase):
             "hood": "ba:neighborhood_hellskitchen", "type": "retail", "size": "C",
             "layout": "C2", "m2": 225,
             "traffic": 50, "cap": 30, "rent": 264, "deposit": 16590,
+            "takeoverPrice": None,
             "status": "vacant", "occupant": None, "owner": "city",
             "ownerRival": None, "occupantRival": None,
         })

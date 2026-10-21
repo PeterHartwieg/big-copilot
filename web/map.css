@@ -112,22 +112,24 @@
 .fchip.fname{cursor:text;border-color:var(--accent)}
 .fchip.fname.full{border-color:var(--warn)}
 .fchip.fname input{width:150px;border:0;background:none;color:var(--ink);font:inherit;outline:none;padding:0}
-.fhead{display:grid;grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 40px 52px;gap:0 5px;padding:10px 8px 8px 6px;border-bottom:1px solid var(--rule-soft);font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.fhead{display:grid;grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 40px var(--finder-cost-width,52px);gap:0 5px;padding:10px 8px 8px 6px;border-bottom:1px solid var(--rule-soft);font:500 9px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .fhead span{text-align:right;white-space:nowrap}
 .fhead span[data-s]{cursor:pointer}
 .fhead span[data-s]:hover{color:var(--ink-2)}
 .fhead span:nth-child(-n+3){text-align:left}
 .fhead span.on{color:var(--ink)}
 .fhead span.on::after{content:" ↓";color:var(--accent)}
+.fhead [data-s="takeoverPrice"]{white-space:normal;line-height:1.25;overflow-wrap:anywhere}
+.fhead.fr-takeover,.place.fr.fr-takeover{--finder-cost-width:80px}
 /* A header is a span with a button role: the browser's own focus ring lands on
    it after a click and reads as a change to the column. Keyboard focus keeps a
    ring, in the board's own accent. */
 .fhead span[data-s]:focus:not(:focus-visible){outline:none}
 .fhead span[data-s]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .fhead.sale{grid-template-columns:26px 1fr 58px 44px 66px 64px}
-.place.fr{grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 40px 52px;gap:0 5px;padding:9px 8px 9px 6px}
+.place.fr{grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 40px var(--finder-cost-width,52px);gap:0 5px;padding:9px 8px 9px 6px}
 /* A warehouse leads with its floor area, so it has one number column fewer. */
-.fhead.wh,.place.fr.wh{grid-template-columns:26px 24px 1fr 40px 40px 40px 40px 52px}
+.fhead.wh,.place.fr.wh{grid-template-columns:26px 24px 1fr 40px 40px 40px 40px var(--finder-cost-width,52px)}
 /* A factory plan's warehouse list: m², vehicles, rent, deposit (Plan a factory). */
 .fhead.wh.fpw,.place.fr.wh.fpw{grid-template-columns:26px 24px 1fr 44px 52px 0 50px 60px}
 .place.fr .rk{display:flex;align-items:center;justify-content:flex-end;gap:3px;font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
@@ -297,8 +299,8 @@ body.map-modal-open{overflow:hidden}
     as one piece and the results follow the filters. */
  .citymap.narrow .places{overflow-y:auto;overscroll-behavior:contain}
  .citymap.narrow .places .list{flex:none;overflow:visible}
- .fhead,.place.fr{grid-template-columns:26px 24px 1fr 38px 38px 38px 38px 38px 50px}
- .fhead.wh,.place.fr.wh{grid-template-columns:26px 24px 1fr 38px 38px 38px 38px 50px}
+ .fhead,.place.fr{grid-template-columns:26px 24px 1fr 38px 38px 38px 38px 38px var(--finder-cost-width,50px)}
+ .fhead.wh,.place.fr.wh{grid-template-columns:26px 24px 1fr 38px 38px 38px 38px var(--finder-cost-width,50px)}
  .fhead.sale,.place.fr.sale{grid-template-columns:24px 1fr 50px 38px 62px 64px}
  /* A text field under 16px makes a phone browser zoom the page in on focus. */
  .fchip,.fdel{height:32px}
@@ -320,7 +322,7 @@ body.map-modal-open{overflow:hidden}
    moves below the address; the score keeps its column. */
 @media(max-width:600px){
  .place.fr .fr-phone-fact{display:block;margin-top:2px;font-size:10px;line-height:1.4;white-space:normal;overflow-wrap:anywhere;color:var(--ink-2)}
- .fhead:not(.sale),.place.fr:not(.sale){grid-template-columns:28px 24px 1fr 42px 56px}
+ .fhead:not(.sale),.place.fr:not(.sale){grid-template-columns:28px 24px 1fr 42px var(--finder-cost-width,56px)}
  .fhead:not(.sale):not(.wh) span:nth-child(n+5):nth-child(-n+8),
  .place.fr:not(.sale):not(.wh) > :nth-child(n+5):nth-child(-n+8),
  .fhead.wh span:nth-child(n+5):nth-child(-n+7),

@@ -173,7 +173,7 @@ function finderShowName(k){
 function finderShowTip(k){
   switch(k){
     case "rent": return tt("map.show.available.tip", "Buildings available for rent and empty buildings you already rent.");
-    case "takeover": return tt("map.show.takeover.tip", "Rival businesses you can make an offer to in-game; the price is not in the save. Game services like banks and wholesalers are not for sale.");
+    case "takeover": return tt("map.show.takeover.tip2", "Rival businesses you can make an offer to in-game, with estimated takeover prices where known.") + " " + tt("map.show.takeover.tip3", "Game services like banks and wholesalers are not for sale.");
     default: {
       const intro = tt("map.show.sale.tip2", "Whole buildings for sale, with the rent they earn at the best price once full.");
       const days = (premises()?.forSale || []).map(s => s.payback).filter(n => n != null).sort((a, b) => a - b);
@@ -189,6 +189,12 @@ const finderDefaults = () => ({on:false, cat:"retail", type:"", show:"rent",
    would say "$5584.2M". An asking price gets its own scale. */
 const askingPrice = n => n == null ? "—"
   : n >= 1e9 ? tt("map.price.bn", "${x}bn", {x: (n / 1e9).toFixed(n >= 1e10 ? 1 : 2)}) : money(n);
+const takeoverLabel = () => tt("map.col.takeoverPrice", "Est. takeover price");
+const takeoverNote = b => b?.type === 'warehouse'
+  ? tt("map.takeover.unsupported", "The game does not provide a takeover valuation for this building type.")
+  : b && b.takeoverPrice == null
+  ? tt("map.takeover.unknown", "No takeover estimate is available for this business's income history and furnished layout.")
+  : tt("map.takeover.estimate", "BizMan's estimated business valuation: three years of average income plus the furnished layout value.") + " " + tt("map.takeover.estimate.offer", "The rival may accept a different offer; this does not buy the building.");
 /* A rival's or the game's occupant, by name and business type; the save does
    not always have them. */
 const mapUnnamed = () => tt("map.unnamed", "unnamed");
@@ -302,6 +308,7 @@ function finderSortName(s){
     case "m2": return tt("map.sortname.m2", "m²");
     case "cap": return tt("map.sortname.cap", "cap");
     case "deposit": return tt("map.sortname.deposit", "upfront");
+    case "takeoverPrice": return tt("map.sortname.takeoverPrice", "estimated takeover price");
     case "rent": return tt("map.sortname.rent", "rent");
     default: return s;
   }
@@ -833,9 +840,13 @@ class CityMapView {
   /* A factory plan's finder ranks warehouse buildings by rent, cheapest
      first (Plan a factory, issue #172): a factory has no customers, so
      neither traffic nor a building capacity tells one place from another. */
-  sortKeys(cat = this.fs.cat){
+  sortKeys(cat = this.fs.cat, show = this.fs.show){
     if(cat === 'warehouse' && this.planning) return ['rent', 'm2', 'deposit'];
-    return cat === 'warehouse' ? ['m2', 'traffic', 'cap', 'deposit'] : ['score', 'traffic', 'demand', 'm2', 'cap', 'deposit'];
+    // For sale has its own saleSort. Keep either ranked cost sort while that
+    // list is open, including when restoring its filters from storage.
+    const costs = show === 'sale' ? ['deposit', 'takeoverPrice']
+      : [show === 'takeover' ? 'takeoverPrice' : 'deposit'];
+    return cat === 'warehouse' ? ['m2', 'traffic', 'cap', ...costs] : ['score', 'traffic', 'demand', 'm2', 'cap', ...costs];
   }
   /* The business types this save reports demand for in a category, by slug. */
   catTypes(cat = this.fs.cat){
@@ -922,7 +933,7 @@ class CityMapView {
     if(!FINDER_CATS.includes(fs.cat)) fs.cat = "retail";
     fs.type = typeof fs.type === "string" ? fs.type : "";
     fs.hoods = Array.isArray(fs.hoods) && fs.hoods.length ? fs.hoods.slice() : null;
-    fs.sort = this.sortKeys(fs.cat)[0];
+    fs.sort = this.sortKeys(fs.cat, fs.show)[0];
     return fs;
   }
   /* The plan's type or neighbourhood changed: its question starts afresh, at
@@ -961,10 +972,11 @@ class CityMapView {
     // The type and the sort fall back here exactly as paintControls makes the
     // live ones fall back, so a search this save cannot honour in full still
     // matches the list it opens.
-    const keys = this.sortKeys(cat), sort = keys.includes(f.sort) ? f.sort : keys[0];
+    const show = FINDER_SHOWS.includes(f.show) ? f.show : "rent";
+    const keys = this.sortKeys(cat, show), sort = keys.includes(f.sort) ? f.sort : keys[0];
     return {...f, hoods, cat, sort, sortPicked: sort === keys[0] ? false : !!f.sortPicked,
       type: this.catTypes(cat).has(f.type) ? f.type : "",
-      show: FINDER_SHOWS.includes(f.show) ? f.show : "rent",
+      show,
       minM2: limit(f.minM2), maxM2: limit(f.maxM2), minCap: limit(f.minCap), maxCap: limit(f.maxCap),
       minTraffic: limit(f.minTraffic),
       // A layout this save's buildings of the kind do not have is dropped, and a
@@ -1165,12 +1177,13 @@ class CityMapView {
     }
     const value = r => fs.sort === 'traffic' ? r.bld.traffic : fs.sort === 'demand' ? r.f.demand
       : fs.sort === 'cap' ? r.bld.cap : fs.sort === 'deposit' ? OpenStoreModel.leaseDeposit(r.bld)
+      : fs.sort === 'takeoverPrice' ? r.bld.takeoverPrice
       : fs.sort === 'rent' ? r.bld.rent : fs.sort === 'm2' ? r.bld.m2 : r.f.score;
     // Every column reads best-first: the most of anything good, but the least
     // money up front, since the deposit decides whether a player can sign at all.
     // A row with nothing to sort on stays at the bottom whichever way the
     // column points; it is not the smallest value, it is no value at all.
-    const dir = fs.sort === 'deposit' || fs.sort === 'rent' ? -1 : 1;
+    const dir = ['deposit', 'rent', 'takeoverPrice'].includes(fs.sort) ? -1 : 1;
     out.sort((a, b) => {
       const x = value(a), y = value(b);
       if(x == null || y == null) return (x == null) - (y == null) || b.bld.traffic - a.bld.traffic;
@@ -1207,16 +1220,18 @@ class CityMapView {
   finderList(rows){
     // A warehouse ranks by floor area already, so its list has no second m²
     // column and keeps the narrower grid (class wh).
-    const fs = this.fs, wh = fs.cat === 'warehouse', fac = wh && !!this.planning, grid = fac ? ' wh fpw' : wh ? ' wh' : '';
+    const fs = this.fs, wh = fs.cat === 'warehouse', fac = wh && !!this.planning, takeover = fs.show === 'takeover';
+    const grid = (fac ? ' wh fpw' : wh ? ' wh' : '') + (takeover ? ' fr-takeover' : '');
     const address = tt("map.col.address", "Address"), m2 = tt("map.unit.m2", "m²"), traffic = tt("map.col.traffic", "Traffic");
     const cap = tt("map.col.cap", "Cap"), upfront = tt("map.col.upfront", "Upfront");
+    const cost = takeover ? ['takeoverPrice', takeoverLabel()] : ['deposit', upfront];
     /* A factory plan's columns: floor area, the parking slots a building of
        its size has (an H one, the rest two), rent and the deposit. */
     const cols = fac ? [["","#"],["",""],["",address],["m2",m2],["",tt("map.col.vehicles", "Vehicles")],["",""],["rent",tt("map.col.rent", "Rent")],["deposit",upfront]]
-      : wh ? [["","#"],["",""],["",address],["m2",m2],["traffic",traffic],["",""],["cap",cap],["deposit",upfront]]
-                    : [["","#"],["",""],["",address],["score",tt("map.col.score", "Score")],["traffic",traffic],["demand",tt("map.col.demand", "Demand")],["m2",m2],["cap",cap],["deposit",upfront]];
+      : wh ? [["","#"],["",""],["",address],["m2",m2],["traffic",traffic],["",""],["cap",cap],cost]
+                    : [["","#"],["",""],["",address],["score",tt("map.col.score", "Score")],["traffic",traffic],["demand",tt("map.col.demand", "Demand")],["m2",m2],["cap",cap],cost];
     const head = `<div class="fhead${grid}">${cols.map(([key, label]) => key
-      ? `<span data-s="${key}" role="button" tabindex="0" class="${key === fs.sort ? 'on' : ''}">${ssEsc(label)}</span>`
+      ? `<span data-s="${key}" role="button" tabindex="0" class="${key === fs.sort ? 'on' : ''}"${key === 'takeoverPrice' ? ` data-tip="${attr(takeoverNote())}"` : ''}>${ssEsc(label)}</span>`
       : `<span>${ssEsc(label)}</span>`).join('')}</div>`;
     // Each shaded column is stretched over the values actually on screen, so a
     // field of close scores still reads. Rent is never shaded: high is not good.
@@ -1228,6 +1243,9 @@ class CityMapView {
     const lead = scale(r => wh ? r.bld.m2 : r.f.score), byTraffic = scale(r => r.bld.traffic), byDemand = scale(r => r.f.demand);
     return head + rows.map((r, i) => {
       const b = r.bld, f = r.f;
+      const costCell = takeover
+        ? `<span class="v fr-takeover-price" data-tip="${attr(takeoverNote(b))}">${ssEsc(askingPrice(b.takeoverPrice))}</span>`
+        : `<span class="v dep" data-tip="${attr(depositNote(b))}">${OpenStoreModel.leaseDeposit(b) != null ? ssEsc(fmt(OpenStoreModel.leaseDeposit(b))) : '—'}</span>`;
       const company = b.status === 'rival' ? rivalName(b.occupantRival) : null;
       // Floor area and cap have columns of their own, so a row with nothing
       // else to say names its neighbourhood in full, as a for-sale row does.
@@ -1242,7 +1260,7 @@ class CityMapView {
         : `<span class="v sc sh"${lead(f.score, SHADE_LEAD)}>${f.score ?? '—'}</span><span class="v sh"${byTraffic(b.traffic, SHADE_SIDE)}>${b.traffic}</span><span class="v sh"${byDemand(f.demand, SHADE_SIDE)}>${f.demand ?? '—'}</span><span class="v m2">${num(b.m2)}</span>`;
       // The dot says what taking this place would mean: an empty floor to rent
       // or a rival to buy out.
-      return `<button type="button" class="place fr${grid}${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${ssEsc(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood"${hoodColorAttr(b.hood)}>${ssEsc(hoodTag(b.hood))}</span><span class="nm">${ssEsc(b.address)}<small>${this.layoutTag(b)}${ssEsc(sub)}</small>${this.finderPhoneFact(b, fac)}</span>${numbers}${fac ? `<span class="v cap">${b.rent != null ? ssEsc(fmt(b.rent)) : '—'}</span>` : `<span class="v cap">${ssEsc(capText(b.cap))}</span>`}<span class="v dep" data-tip="${attr(depositNote(b))}">${OpenStoreModel.leaseDeposit(b) != null ? ssEsc(fmt(OpenStoreModel.leaseDeposit(b))) : '—'}</span></button>`;
+      return `<button type="button" class="place fr${grid}${b.status === 'rival' ? ' buy' : ''}${r.key === this.selected ? ' on' : ''}" data-pick="${ssEsc(r.key)}" aria-pressed="${r.key === this.selected}"><span class="rk"><i></i>${i + 1}</span><span class="hood"${hoodColorAttr(b.hood)}>${ssEsc(hoodTag(b.hood))}</span><span class="nm">${ssEsc(b.address)}<small>${this.layoutTag(b)}${ssEsc(sub)}</small>${this.finderPhoneFact(b, fac)}</span>${numbers}${fac ? `<span class="v cap">${b.rent != null ? ssEsc(fmt(b.rent)) : '—'}</span>` : `<span class="v cap">${ssEsc(capText(b.cap))}</span>`}${costCell}</button>`;
     }).join('');
   }
   saleList(rows){
@@ -1267,7 +1285,8 @@ class CityMapView {
       + fact(tt("map.fact.traffic", "Foot traffic"), b.traffic)
       + fact(tt("map.fact.cap", "Building capacity"), ssEsc(capText(b.cap)))
       + fact(tt("map.fact.rent", "Est. rent / day"), b.rent != null ? ssEsc(fmt(b.rent)) : '—')
-      + fact(tt("map.fact.deposit", "Deposit"), b.deposit != null ? ssEsc(fmt(b.deposit)) : '—');
+      + fact(tt("map.fact.deposit", "Deposit"), b.deposit != null ? ssEsc(fmt(b.deposit)) : '—')
+      + (b.status === 'rival' ? fact(takeoverLabel(), b.takeoverPrice == null ? '—' : ssEsc(fmt(b.takeoverPrice)), ` class="wide" tabindex="0" data-tip="${attr(takeoverNote(b))}"`) : '');
     // Only a candidate reads as one: your own shop keeps its business numbers.
     if(!this.finderOn() || this.saleView() || b.type !== this.fs.cat || !this.candidate(b)) return;
     const f = this.fitFor(b);

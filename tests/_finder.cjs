@@ -43,10 +43,10 @@ const PREMISES = {
     site(HK[0], {traffic: 60, rent: 140, owner: 'city'}),                                    // score 46 on clothing 77
     site(MT[0], {traffic: 50, m2: 285, cap: 40, rent: 300}),                  // score 45 on coffee 90
     site(MT[1], {traffic: 20, m2: 120, cap: 15, rent: 60}),                   // score 18
-    site(HK[1], {traffic: 80, rent: 180, status: 'rival', owner: 'rival', ownerRival: 7, occupantRival: 3,
+    site(HK[1], {traffic: 80, rent: 180, takeoverPrice: 375000, status: 'rival', owner: 'rival', ownerRival: 7, occupantRival: 3,
       occupant: {name: 'Bean There', type: 'Coffee Shop', typeSlug: COFFEE}}), // score 62 on clothing 77
     // Company 9 has opened a business, so the save knows what it is called.
-    site(HK[2], {status: 'rival', owner: 'rival', ownerRival: 9, occupantRival: 9,
+    site(HK[2], {takeoverPrice: 125000, status: 'rival', owner: 'rival', ownerRival: 9, occupantRival: 9,
       occupant: {name: HOSTILE, type: 'Clothing Store', typeSlug: CLOTHES}}),
     site(HK[3], {type: 'residential', size: 'B', m2: 90, cap: null, rent: null, status: 'unavailable'}),
     // A bank is occupied by the game itself: never to rent, never to take over.

@@ -21160,6 +21160,7 @@
     "rent": null,
     "size": "N",
     "status": "mine",
+    "takeoverPrice": null,
     "traffic": 40,
     "type": "residential"
    },
@@ -21182,6 +21183,7 @@
     "rent": 98,
     "size": "C",
     "status": "mine",
+    "takeoverPrice": null,
     "traffic": 40,
     "type": "retail"
    },
@@ -21204,6 +21206,7 @@
     "rent": 1464,
     "size": "M",
     "status": "rival",
+    "takeoverPrice": null,
     "traffic": 29,
     "type": "retail"
    },
@@ -21226,6 +21229,7 @@
     "rent": 461,
     "size": "I",
     "status": "mine",
+    "takeoverPrice": null,
     "traffic": 33,
     "type": "warehouse"
    },
@@ -21248,6 +21252,7 @@
     "rent": 446,
     "size": "I",
     "status": "mine",
+    "takeoverPrice": null,
     "traffic": 31,
     "type": "warehouse"
    },
@@ -21270,6 +21275,7 @@
     "rent": 223,
     "size": "C",
     "status": "mine",
+    "takeoverPrice": null,
     "traffic": 10,
     "type": "retail"
    }

@@ -25,6 +25,12 @@ Each step is the section of the same number below.
 
 A bump that changes nothing else is a compatibility bump. It gets no changelog entry.
 
+Takeover estimates also depend on `CompetitionHelper.CalculateAiOwnedValuation` and
+`BusinessLayoutSet.GetValuation`. Recheck those methods on a game update and rerun
+`make_item_prices.py`: it reads the shipped `BusinessLayouts` furniture and building-type
+valuation tags as well as prices. `tests/test_takeover_price.py` covers the calculation
+and missing-data behavior; the estimate deliberately excludes the rival's offer threshold.
+
 ## 1. What changed
 
 **The build number.** The game's own build number (3682, not Steam's build id) shows in
