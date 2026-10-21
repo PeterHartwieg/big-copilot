@@ -28,7 +28,10 @@ function board({store = storage(), link = null} = {}){
   const {document, element} = recordingDocument();
   const source = {label: 'Live', data: async () => null, link: () => link, write: async () => ({status: 0, error: 'unreachable', body: null}),
     section: async () => ({})};
-  const window = new Proxy({}, {get: (_, key) => key === 'LEDGER_SOURCE' ? source : inert[key], set: () => true});
+  // What a test sets on window (the page's embedded artwork) is kept.
+  const own = {};
+  const window = new Proxy({}, {get: (_, key) => key === 'LEDGER_SOURCE' ? source : key in own ? own[key] : inert[key],
+    set: (_, key, value) => { own[key] = value; return true; }});
   const b = loadBoard({document, window, localStorage: store});
   return {b, element, store};
 }
@@ -61,15 +64,54 @@ test('Browse mods keeps what the save carries apart from what the board supports
   const html = element('secMods').innerHTML;
   const rows = [...html.matchAll(/data-mod="([^"]+)"/g)].map(m => m[1]);
   assert.deepEqual(rows, ['streetFood', 'seasons', 'retailExpansion', 'economyExpansion'], 'Street Food leads the curated list');
-  assert.match(html, /class="md-row feat" data-mod="streetFood"/);
+  assert.match(html, /class="md-feat" data-mod="streetFood"/);
   assert.match(html, /by Peter Hartwieg/);
   assert.match(html, /steamcommunity\.com\/sharedfiles\/filedetails\/\?id=3822355169/);
+  assert.match(html, /data-md-go="mods\/street-food"/, 'its main action opens the planner');
   assert.match(html, /In this save, version 0\.10\.0/);
   assert.match(html, /In this save: Summer, day 3 of 14/);
   assert.equal((html.match(/Not in this save/g) || []).length, 2, 'Retail and Economy Expansion are supported but absent');
-  assert.match(html, /What Big Copilot reads/);
-  assert.match(html, /Not covered/);
+  // What the board reads and does not cover stays, folded into one closed disclosure per mod.
+  const det = [...html.matchAll(/<details class="md-det"( open)?><summary>What Big Copilot reads<\/summary>([\s\S]*?)<\/details>/g)];
+  assert.equal(det.length, 4);
+  assert.ok(det.every(d => !d[1]), 'the details start closed');
+  assert.ok(det.every(d => /<h4>Not covered<\/h4>/.test(d[2])));
+  assert.match(det[0][2], /Commissary demand is not modelled/);
   assert.doesNotMatch(html, /fully compatible|all features|every feature/i);
+  assert.doesNotMatch(html, /<img[^>]+src="https?:/, 'no artwork is fetched from the Workshop');
+});
+
+test('My other mods shows each of Peter\'s other Workshop mods with its artwork; the supported ones appear only above', () => {
+  const {b, element} = board();
+  setD(b, {meta: {}, businesses: [], mods: {}});
+  vm.runInContext('window.BIG_COPILOT_MOD_ART = {"3806322395": "data:image/webp;base64,AAAA"}; window.LEDGER_BUILD = "b 7/1";', b);
+  b.drawMods();
+  const html = element('secMods').innerHTML;
+  const at = html.indexOf('class="md-mine"');
+  assert.ok(at > 0, 'the gallery follows the supported mods');
+  const above = html.slice(0, at), mine = html.slice(at);
+  assert.match(mine, /My other mods/);
+  assert.deepEqual([...mine.matchAll(/data-mod-ws="([^"]+)"/g)].map(m => m[1]),
+    ['3806322395', '3807225297', '3806807684', '3819853552', '3821783833'], 'Peter\'s five other published mods, none of the supported ones');
+  for (const name of ['Big Copilot Link', 'Campaign Objectives', 'HART Free Camera', 'HART. Self Driving', 'HART. RDSTR'])
+    assert.ok(mine.includes(`<b>${name}</b>`), name);
+  assert.match(mine, /href="https:\/\/steamcommunity\.com\/sharedfiles\/filedetails\/\?id=3807225297" target="_blank" rel="noopener"/);
+  assert.match(mine, /<img src="mods\/campaign-objectives\.webp\?v=b%207%2F1" alt="" loading="lazy" decoding="async">/, 'served beside the page, stamped with the build');
+  assert.match(mine, /<img src="data:image\/webp;base64,AAAA"/, 'an embedded copy wins where the page carries one, unstamped');
+  assert.doesNotMatch(mine, /AAAA\?v=/);
+  // Without a build stamp the served path is left as it is.
+  vm.runInContext('window.LEDGER_BUILD = "";', b);
+  b.drawMods();
+  assert.match(element('secMods').innerHTML, /<img src="mods\/campaign-objectives\.webp" alt=""/);
+  assert.match(mine, /A roadster with electric motors/);
+  // Above: each supported mod with its artwork, the Workshop's title and its real author.
+  assert.match(above, /<img src="mods\/street-food\.webp\?v=b%207%2F1"/);
+  assert.match(above, /<img src="mods\/seasons\.webp\?v=b%207%2F1"/);
+  assert.match(above, /Alcware - Seasons<\/h3>[\s\S]*?by Alcsaar/);
+  assert.match(above, /Economy Expansion<\/h3>[\s\S]*?by Andre1408/);
+  assert.match(above, /aria-label="Alcware - Retail Expansion on the Steam Workshop"/);
+  assert.doesNotMatch(html, /<img[^>]+src="https?:/, 'nothing is fetched from Steam');
+  assert.doesNotMatch(html, /install|subscribe/i, 'no install action');
 });
 
 test('Browse mods says the records are unreadable rather than calling the mod supported in full', () => {

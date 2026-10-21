@@ -35,7 +35,7 @@ import shutil
 import tokenize
 
 from ba_dashboard import (
-    FLOOR_PLAN_KINDS, GAME_NAME_LANGS, IMPORTER_TEXT, NAME_COVERAGE, NAME_PREFIXES, VERIFIED_BUILD, WIKI_SERVED,
+    FLOOR_PLAN_KINDS, GAME_NAME_LANGS, IMPORTER_TEXT, MOD_ART_FILES, NAME_COVERAGE, NAME_PREFIXES, VERIFIED_BUILD, WIKI_SERVED,
     compact_wiki, footer_html, name_coverage, name_table, render,
 )
 from ba_save import NotEnglishText, bundled_locale, load_game_locale, load_locale, locale_search_paths
@@ -565,6 +565,7 @@ STAMP_INPUTS = (
     "template/open-store-model.js",
     "template/open-factory-model.js",
     "template/street-food-model.js",
+    *(f"web/{path}" for path in MOD_ART_FILES.values()),
     # The deployment transform and its pinned compiler affect the served page.
     # stamp() selects only esbuild's lock entry, not unrelated dev dependencies.
     "tools/optimize_web.mjs", "package-lock.json",
@@ -621,7 +622,7 @@ def stamp(root: str = HERE) -> str:
         if name == "package-lock.json":
             compiler = json.loads(data)["packages"]["node_modules/esbuild"]
             data = json.dumps(compiler, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        if not name.endswith(".svg"):
+        if not name.endswith((".svg", ".webp")):
             data = data.replace(b"\r\n", b"\n")
         h.update(data)
     return h.hexdigest()[:10]

@@ -22825,6 +22825,22 @@ def script_json(text: str) -> str:
 # watch server answers the same path, and an export embeds the same text.
 WIKI_SERVED = "wiki-data.min.json"
 
+# Workshop covers shown by the curated catalogue. The hosted page serves
+# these files locally; a CLI page carries their bytes so it works from any
+# folder, including with no network. Keep imports safe in Pyodide: render()
+# alone reads the files, never module import or save extraction.
+MOD_ART_FILES = {
+    "3822355169": "mods/street-food.webp",
+    "3803289067": "mods/seasons.webp",
+    "3801675050": "mods/retail-expansion.webp",
+    "3811945186": "mods/economy-expansion.webp",
+    "3806322395": "mods/big-copilot-link.webp",
+    "3807225297": "mods/campaign-objectives.webp",
+    "3806807684": "mods/free-camera.webp",
+    "3819853552": "mods/self-driving.webp",
+    "3821783833": "mods/rdstr.webp",
+}
+
 
 def compact_wiki(text: str) -> str:
     """web/wiki-data.json's text without its indentation; the same JSON."""
@@ -22877,6 +22893,14 @@ def render(
     # UI source stays shared between the local HTML and browser build. Static
     # exports embed geography so opening a file needs no local server or fetch.
     asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+    if not site:
+        import base64
+        artwork = {}
+        for item_id, path in MOD_ART_FILES.items():
+            with open(os.path.join(asset_root, path), "rb") as fh:
+                artwork[item_id] = "data:image/webp;base64," + base64.b64encode(fh.read()).decode("ascii")
+        head += ("<script>window.BIG_COPILOT_MOD_ART="
+                 + script_json(json.dumps(artwork, separators=(",", ":"))) + ";</script>\n")
     with open(os.path.join(asset_root, "changelog.json"), encoding="utf-8") as fh:
         changes = json.load(fh)
     changes = sorted(changes, key=lambda entry: (entry["date"], entry["pr"]), reverse=True)

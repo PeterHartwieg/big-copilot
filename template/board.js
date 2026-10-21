@@ -18988,14 +18988,11 @@ function drawOptimizeStaffing(){
    character in localStorage under ba_street_food_routes_v1:["<character>",
    "<company>"] (sfStore()); a refresh or an import never rewrites one, and a
    route reaches the game only through its reviewed write (gwStreetFoodRoute()). */
-const MOD_STREET_FOOD_URL = "https://steamcommunity.com/sharedfiles/filedetails/?id=3822355169";
 /* The curated list, Street Food first. `reads` is what the board does with
    the mod's records; `limits` what it does not do yet. */
 function modCatalogue(){
   return [
-    {id: "streetFood", featured: true, name: tt("nav.mods.sf.name", "HART. Street Food"), by: tt("nav.mods.sf.by", "by Peter Hartwieg"),
-     url: MOD_STREET_FOOD_URL,
-     what: tt("nav.mods.sf.what", "Food carts and trucks that drive a daily route of stops, stocked from commissaries."),
+    {id: "streetFood", ws: MOD_STREET_FOOD_ID, featured: true,
      reads: [tt("nav.mods.sf.reads.finance", "Fleet revenue, stock and crew wages join company results and tax-period sales."),
        tt("nav.mods.sf.reads.crew", "Vehicle crews are kept out of building staffing and hiring plans."),
        tt("nav.mods.sf.reads.supply", "Commissaries show as destinations in Plans & contracts."),
@@ -19003,20 +19000,22 @@ function modCatalogue(){
      limits: [tt("nav.mods.sf.limits.supply", "Commissary demand is not modelled, so supply recommendations for the sites that stock one are withheld."),
        tt("nav.mods.sf.limits.write", "A route reaches the game only when you review and set it with the game linked; there is no undo for it yet.")],
      go: "mods/street-food", goLabel: tt("nav.mods.sf.go", "Plan routes")},
-    {id: "seasons", name: tt("nav.mods.seasons.name", "Alcware Seasons"),
-     what: tt("nav.mods.seasons.what", "A calendar of seasons that changes how well products sell."),
+    {id: "seasons", ws: "3803289067",
      reads: [tt("nav.mods.seasons.reads.mast", "The season and its day show beside the company name."),
        tt("nav.mods.seasons.reads.open", "Open a store uses the season's sales ratio for the 27 products the mod changes.")],
      limits: [tt("nav.mods.seasons.limits", "Other estimates use the game's own sales ratios.")]},
-    {id: "retailExpansion", name: tt("nav.mods.retail.name", "Alcware Retail Expansion"),
-     what: tt("nav.mods.retail.what", "Renovations that change a building's size and how many customers it holds."),
+    {id: "retailExpansion", ws: "3801675050",
      reads: [tt("nav.mods.retail.reads", "A renovated building's capacity and floor area come from the mod's records.")],
      limits: [tt("nav.mods.retail.limits", "When its records cannot be read, estimates that need a building's capacity or floor area are left out.")]},
-    {id: "economyExpansion", name: tt("nav.mods.ee.name", "Economy Expansion"),
-     what: tt("nav.mods.ee.what", "Higher rents and running costs across the city."),
+    {id: "economyExpansion", ws: "3811945186",
      reads: [tt("nav.mods.ee.reads", "Rent prices for buildings you own follow the multiplier the save records.")],
      limits: [tt("nav.mods.ee.limits", "Rent, deposits and running costs of buildings you have not rented are still the game's own figures.")]},
-  ];
+  ].map(m => {
+    /* The Workshop's title and author, and the summary shortened from its description. */
+    const w = MOD_WORKSHOP.find(x => x.id === m.ws) || {};
+    return {...m, name: w.name || m.id, what: w.summary || "", url: modWorkshopUrl(m.ws),
+      by: w.author ? tt("nav.mods.by", "by {author}", {author: w.author}) : ""};
+  });
 }
 /* Whether this save carries a mod, and in what state: words, never colour alone. */
 function modState(id){
@@ -19041,24 +19040,89 @@ function modState(id){
     default: return absent;
   }
 }
+/* The Big Ambitions mods on the Steam Workshop the Mods page shows, as the
+   Workshop lists them (checked 21 Oct 2026): id, published title, author,
+   artwork under web/mods/ and a one-line summary shortened from the
+   Workshop description (not its wording). The
+   supported ones (each named by `ws` in modCatalogue()) wear their artwork in
+   Supported mods; the rest are Peter Hartwieg's other mods, the gallery under
+   it. Artwork is served beside the page; a page without those files (the
+   CLI's) may carry it as window.BIG_COPILOT_MOD_ART, data URLs keyed by
+   Workshop id. Nothing is fetched from Steam. */
+const MOD_WORKSHOP = [
+  {id: "3822355169", name: "HART. Street Food", author: "Peter Hartwieg", image: "mods/street-food.webp",
+   get summary(){ return tt("nav.mods.ws.streetFood", "Food carts and trucks with your choice of equipment, menu and daily routes."); }},
+  {id: "3803289067", name: "Alcware - Seasons", author: "Alcsaar", image: "mods/seasons.webp",
+   get summary(){ return tt("nav.mods.ws.seasons", "Changing seasons, weather and seasonal product demand."); }},
+  {id: "3801675050", name: "Alcware - Retail Expansion", author: "Alcsaar", image: "mods/retail-expansion.webp",
+   get summary(){ return tt("nav.mods.ws.retail", "Expand shops, cinemas and theatres at their existing addresses."); }},
+  {id: "3811945186", name: "Economy Expansion", author: "Andre1408", image: "mods/economy-expansion.webp",
+   get summary(){ return tt("nav.mods.ws.ee", "Deeper business costs, utilities and office infrastructure."); }},
+  {id: "3806322395", name: "Big Copilot Link", author: "Peter Hartwieg", image: "mods/big-copilot-link.webp",
+   get summary(){ return tt("nav.mods.ws.link", "Connect your running game to Big Copilot and apply changes after reviewing them."); }},
+  {id: "3807225297", name: "Campaign Objectives", author: "Peter Hartwieg", image: "mods/campaign-objectives.webp",
+   get summary(){ return tt("nav.mods.ws.campaign", "Play through campaign chapters with objectives and progress tracked in the game."); }},
+  {id: "3806807684", name: "HART Free Camera", author: "Peter Hartwieg", image: "mods/free-camera.webp",
+   get summary(){ return tt("nav.mods.ws.camera", "Film your city with a free camera, smooth flights and paths through saved views."); }},
+  {id: "3819853552", name: "HART. Self Driving", author: "Peter Hartwieg", image: "mods/self-driving.webp",
+   get summary(){ return tt("nav.mods.ws.selfDriving", "Ride through the city in taxis, with your private driver or in your own car."); }},
+  {id: "3821783833", name: "HART. RDSTR", author: "Peter Hartwieg", image: "mods/rdstr.webp",
+   get summary(){ return tt("nav.mods.ws.rdstr", "A roadster with electric motors, nitrogen thrusters and a barrel-roll manoeuvre."); }},
+];
+const MOD_STREET_FOOD_ID = "3822355169";
+const modWorkshopUrl = id => `https://steamcommunity.com/sharedfiles/filedetails/?id=${encodeURIComponent(id)}`;
+/* The embedded copy as it is; the served file stamped with the build, so a
+   new cover is never read from an old cache. */
+function modArtSrc(w){
+  const own = typeof window !== "undefined" && window.BIG_COPILOT_MOD_ART;
+  if(own && typeof own === "object" && typeof own[w.id] === "string" && own[w.id]) return own[w.id];
+  if(!w.image) return "";
+  const build = typeof window !== "undefined" && window.LEDGER_BUILD;
+  return typeof build === "string" && build ? `${w.image}?v=${encodeURIComponent(build)}` : w.image;
+}
+/* A mod's artwork in its square, its own shape kept; decorative, since its
+   name is written beside it. Without verified artwork, the board's mod mark. */
+function modArt(w){
+  const src = w && modArtSrc(w);
+  return `<span class="md-art">${src ? `<img src="${attr(src)}" alt="" loading="lazy" decoding="async"${
+    w.width && w.height ? ` width="${+w.width}" height="${+w.height}"` : ""}>` : icon("mods")}</span>`;
+}
+/* What the board reads of a mod and what it does not, folded away. */
+function modDetails(m){
+  const list = l => `<ul class="md-list">${l.map(x => `<li>${spEsc(x)}</li>`).join("")}</ul>`;
+  return `<details class="md-det"><summary>${tt("nav.mods.details", "What Big Copilot reads")}</summary>${list(m.reads)}<h4>${
+    tt("nav.mods.col.limits", "Not covered")}</h4>${list(m.limits)}</details>`;
+}
 function drawMods(){
   const sec = $("secMods");
   if(!sec) return;
-  const list = l => `<ul class="md-list">${l.map(x => `<li>${spEsc(x)}</li>`).join("")}</ul>`;
-  const rows = modCatalogue().map(m => {
-    const st = modState(m.id);
-    return `<article class="md-row${m.featured ? " feat" : ""}" data-mod="${attr(m.id)}">
-      <div class="md-id"><h3>${spEsc(m.name)}</h3>${m.by ? `<p class="md-by">${spEsc(m.by)}</p>` : ""}<p class="md-what">${spEsc(m.what)}</p>
-        ${m.go || m.url ? `<div class="md-acts">${m.go ? `<button type="button" class="nx-btn sm${m.featured ? " pri" : ""}" data-md-go="${attr(m.go)}">${spEsc(m.goLabel)}</button>` : ""}${
-          m.url ? `<a class="nx-btn sm ghost" href="${attr(m.url)}" target="_blank" rel="noopener">${tt("nav.mods.workshop", "Steam Workshop")}</a>` : ""}</div>` : ""}</div>
-      <dl class="md-facts">
-        <dt>${tt("nav.mods.col.save", "This save")}</dt><dd>${chipHtml(st.cls, spEsc(st.text))}</dd>
-        <dt>${tt("nav.mods.col.reads", "What Big Copilot reads")}</dt><dd>${list(m.reads)}</dd>
-        <dt>${tt("nav.mods.col.limits", "Not covered")}</dt><dd>${list(m.limits)}</dd>
-      </dl></article>`;
+  const [feat, ...rest] = modCatalogue();
+  const st = modState(feat.id);
+  const ws = id => MOD_WORKSHOP.find(w => w.id === id) || null;
+  const art = ws(feat.ws);
+  const featured = `<article class="md-feat" data-mod="${attr(feat.id)}">${modArt(art)}<div class="md-body">
+      <h3>${spEsc(feat.name)}</h3><p class="md-by">${spEsc(feat.by)}</p><p class="md-what">${spEsc(feat.what)}</p>
+      <div class="md-state">${chipHtml(st.cls, spEsc(st.text))}</div>
+      <div class="md-acts"><button type="button" class="nx-btn sm pri" data-md-go="${attr(feat.go)}">${spEsc(feat.goLabel)}</button><a class="nx-btn sm ghost" href="${
+        attr(feat.url)}" target="_blank" rel="noopener">${tt("nav.mods.workshop", "Steam Workshop")}</a></div>
+      ${modDetails(feat)}</div></article>`;
+  const rows = rest.map(m => {
+    const s2 = modState(m.id);
+    return `<li class="md-row" data-mod="${attr(m.id)}">${modArt(ws(m.ws))}<div><h3>${spEsc(m.name)}</h3><p class="md-what">${spEsc(m.what)}</p><p class="md-by">${
+      spEsc(m.by)} <a class="md-wsl" href="${attr(m.url)}" target="_blank" rel="noopener" aria-label="${attr(tt("nav.mods.workshopOf", "{name} on the Steam Workshop", {name: m.name}))}">${
+      tt("nav.mods.workshop", "Steam Workshop")}</a></p></div>${chipHtml(s2.cls, spEsc(s2.text))}${modDetails(m)}</li>`;
   }).join("");
-  sec.innerHTML = sechead(tt("nav.mods.title", "Supported mods"), {quiet: tt("nav.mods.note", "Each row says whether this save carries the mod and what the board does with it. A mod not listed here may change numbers the board cannot see.")})
-    + `<div class="md-rows">${rows}</div>`;
+  /* The supported mods above are not shown again. */
+  const above = new Set(modCatalogue().map(m => m.ws).filter(Boolean));
+  const others = MOD_WORKSHOP.filter(w => !above.has(w.id));
+  const mine = others.length ? `<section class="md-mine" aria-labelledby="mdMine">${sechead(`<span id="mdMine">${tt("nav.mods.mine.title", "My other mods")}</span>`,
+      {quiet: tt("nav.mods.mine.note", "More Big Ambitions mods by Peter Hartwieg, on the Steam Workshop.")})}
+    <ul class="md-gallery">${others.map(w => `<li><a class="md-tile" data-mod-ws="${attr(w.id)}" href="${attr(modWorkshopUrl(w.id))}" target="_blank" rel="noopener">${
+      modArt(w)}<b>${spEsc(w.name)}</b>${w.summary ? `<span class="md-tdesc">${spEsc(w.summary)}</span>` : ""}<span class="md-tlink">${
+      tt("nav.mods.mine.open", "On the Steam Workshop")}</span></a></li>`).join("")}</ul></section>` : "";
+  sec.innerHTML = sechead(tt("nav.mods.title", "Supported mods"), {quiet: tt("nav.mods.note2", "What the board reads of each mod, and whether this save has it.")})
+    + featured + `<ul class="md-rows">${rows}</ul>`
+    + `<p class="quiet md-foot">${tt("nav.mods.unlisted", "A mod not listed here may change numbers the board cannot see.")}</p>` + mine;
 }
 
 /* --- Street Food: state, plans and the inspected moment ------------------ */

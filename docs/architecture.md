@@ -1029,6 +1029,13 @@ The template carries eighteen tokens besides the slot, some in `board.html` and 
 `board.js`. All eighteen are substituted by `render()`, but the text for three of them is
 supplied by the caller.
 
+The Mods catalogue uses Workshop cover artwork stored under `web/mods/`, with
+provenance in that folder's README. Hosted pages load the local files; non-site
+`render()` calls embed the covers in `window.BIG_COPILOT_MOD_ART`, keyed by Workshop
+item ID, so standalone files and the CLI watch server need no additional requests.
+`MOD_ART_FILES` declares the files for embedding and the build stamp. The catalogue
+does not request images or descriptions from Steam at runtime.
+
 | Token | Filled with |
 | --- | --- |
 | `__TITLE__` | `render()`: `<save name> · Big Copilot`, HTML-escaped because the save name is the player's own text; plain `Big Copilot` when there is no data |
