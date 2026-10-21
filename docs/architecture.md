@@ -71,7 +71,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | Key | Produced by | Read by |
 | --- | --- | --- |
 | `meta` | `extract()` inline, with `_city_date()` and `_difficulty()` | `drawMast`, `drawWeekday`, `drawSite`, `sbData`, `drawSupplyStrip`, `drawProductionView`, `drawFooter`, `fvOpenDiff`, `drawDifficulty`; `web/map.js` `refreshCityMaps`; `web/wiki.js` `wikiGuidePrices` |
-| `streetFood` | `ba_street_food.planner()`, deferred section: public opportunity categories and saved opening hours, announced events, owned fleet and routes; no demand weights or regulars | Mods › Street Food |
+| `streetFood` | `ba_street_food.planner()`, deferred section: public opportunity categories and saved opening hours, announced events, owned fleet and routes, plus native-checked stopping places from `ba_street_food_stops.json`; no demand weights or regulars | Mods › Street Food |
 | `mods` | `ba_mods.detect()`, added at the end of `build_core()`; only on a save a mod adapter reads (`OPTIONAL_KEYS`), absent on a vanilla save. Street Food's optional `streetFood` metadata comes from `ba_street_food.py`: status, vehicle count, live flag and saved mod version | `drawMast` (through `mdFlag()`) |
 | `kpi` | `build_core()` inline, with `_net_worth()` | `drawMast`, `drawKpis`, `hrReview/firstHire`, `SS_VIEWS.payroll.live` |
 | `daily` | `_daily_series()`, plus the rolling `profit7` added in `extract()` | `drawChart`, `drawKpis`, `drawKpis/hist` |

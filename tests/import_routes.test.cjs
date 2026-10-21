@@ -1,3 +1,4 @@
+const {boardHtml} = require('./_page.cjs');
 // Supply's views (the redesign's chunk 2: Changes, Imports, Deliveries,
 // Production, Goods flow) and the one change checklist read Python's one
 // verdict per supply fact (supplyFact); the board works none out of its own.
@@ -23,9 +24,7 @@ const FIXTURE = path.join(root, 'tests', 'fixtures', 'r8_supply.json');
 const fixture = () => JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
 let browser, html;
 before(async () => {
-  html = process.env.BOARD_TARGET === 'web'
-    ? fs.readFileSync(path.join(root, 'web/index.html'), 'utf8')
-    : python('from ba_dashboard import render; import sys; sys.stdout.buffer.write(render(None).encode("utf-8"))');
+  html = boardHtml();
   browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
 });
 after(async () => { await browser?.close(); });

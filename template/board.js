@@ -19192,6 +19192,60 @@ function sfOpps(){
   sfOppMemo = {src, assets, list, byKey: new Map(list.filter(o => o.key).map(o => [o.key, o]))};
   return list;
 }
+/* --- checked stopping places ----------------------------------------------
+   A new stop goes only on a place the game checked for the vehicle's kind:
+   a parking spot for a truck, a pavement spot for a cart
+   (D.streetFood.stopLocations, a catalogue from the game build). Checked
+   means it passes the game's placement rules, not that it is free: the game
+   snaps each stop to a legal place again when the route is set, but does not
+   check whether something occupies it. Picking a building or open ground only inspects it and lists the
+   checked places within SF_STOP_RADIUS to choose from; nothing is placed at a
+   clicked point or a building's centre, and nothing is chosen for the player.
+   The arithmetic is StreetFoodModel's nearbyStops() and stopLocation(). */
+const SF_STOP_RADIUS = 40;
+const SF_NO_STOPS = Object.freeze({status: "unavailable", spots: Object.freeze([])});
+/* The kind explored while no route is open. */
+let sfKindPick = "cart";
+function sfStopCatalogue(){
+  const c = sfData() && sfData().stopLocations;
+  return c && typeof c === "object" && c.status === "ready" && Array.isArray(c.spots) ? c : null;
+}
+const sfKindNow = () => { const plan = sfPlan(); return plan ? sfVehicleFor(plan).kind : sfKindPick; };
+let sfSpotMemo = {cat: undefined, kind: null, list: [], byId: new Map()};
+function sfSpotsOf(kind = sfKindNow()){
+  const cat = sfStopCatalogue();
+  if(sfSpotMemo.cat !== cat || sfSpotMemo.kind !== kind){
+    const list = cat ? cat.spots.filter(x => x && x.kind === kind && typeof x.id === "string" && Number.isFinite(x.x) && Number.isFinite(x.z)) : [];
+    sfSpotMemo = {cat, kind, list, byId: new Map(list.map(x => [x.id, x]))};
+  }
+  return sfSpotMemo.list;
+}
+const sfSpotById = (id, kind = sfKindNow()) => (sfSpotsOf(kind), sfSpotMemo.byId.get(id) || null);
+/* The checked places of a kind within 40 m, nearest first. */
+function sfStopsNear(pt, kind = sfKindNow()){
+  const M = sfM(), cat = sfStopCatalogue();
+  if(!M || !cat || !pt || !Number.isFinite(pt.x) || typeof M.nearbyStops !== "function") return [];
+  try{ const r = M.nearbyStops({x: pt.x, z: pt.z}, kind, cat, SF_STOP_RADIUS); return Array.isArray(r) ? r : []; }catch(e){ return []; }
+}
+/* The catalogue place a stop stands on exactly, or null. */
+function sfStopOn(stop, kind = sfKindNow()){
+  const M = sfM(), cat = sfStopCatalogue();
+  if(!M || !cat || typeof M.stopLocation !== "function") return null;
+  try{ return M.stopLocation(stop, kind, cat) || null; }catch(e){ return null; }
+}
+const sfSpotWord = kind => kind === "truck" ? tt("map.sf.spot.truck", "parking spot") : tt("map.sf.spot.cart", "pavement spot");
+const sfSpotTitle = kind => kind === "truck" ? tt("map.sf.spot.truckTitle", "Truck parking spot") : tt("map.sf.spot.cartTitle", "Pavement spot for carts");
+/* A checked place's name for a stop: the building it belongs to, else the
+   place it is near, else its kind. */
+function sfSpotName(x){
+  const b = x && x.key && sfMapView && sfMapView.assets ? sfMapView.assets.byKey.get(x.key) : null;
+  if(b && b.address) return b.address;
+  const o = x && x.key ? sfOppMemo.byKey.get(x.key) : null;
+  if(o && (o.name || o.address)) return o.name || o.address;
+  const near = sfPlaceNear(x);
+  return near ? near.name : sfSpotTitle(x && x.kind);
+}
+
 /* The day the map and the ribbon show: the open plan's, else the one picked,
    else the game's today. The minute: the one picked, else the game's now. */
 function sfDayNow(){
@@ -19235,7 +19289,9 @@ function sfClean(p){
     id: s.id, name: String(s.name || "").slice(0, 80),
     x: Number.isFinite(s.x) ? s.x : null, z: Number.isFinite(s.z) ? s.z : null,
     open: Number.isFinite(s.open) ? Math.round(s.open) : 660, close: Number.isFinite(s.close) ? Math.round(s.close) : 780,
-    key: typeof (raw.get(s.id) || {}).key === "string" ? raw.get(s.id).key : null}));
+    key: typeof (raw.get(s.id) || {}).key === "string" ? raw.get(s.id).key : null,
+    ...(typeof s.locationId === "string" ? {locationId: s.locationId} : {}),
+    ...(Number.isFinite(s.y) ? {y: s.y} : {}), ...(Number.isFinite(s.heading) ? {heading: s.heading} : {})}));
   const w = Number.isInteger(n.weekday) && n.weekday >= 0 && n.weekday < 7 ? n.weekday : 0;
   return {id: String(n.id || p.id), name: String(n.name || p.name || "").slice(0, 60) || tt("map.sf.plan.unnamed", "Untitled route"),
     vehicleId: n.vehicleId != null && n.vehicleId !== "" ? String(n.vehicleId) : null,
@@ -19256,7 +19312,11 @@ function sfCheck(plan){
   if(!plan || !M || typeof M.validate !== "function") return null;
   const vehicle = sfVehicleFor(plan);
   let out;
-  try{ out = M.validate(plan, {vehicle, rules: sfRules(), gameSpeed: (sfData() && sfData().gameSpeed) || 1}); }catch(e){ console.error(e); return null; }
+  try{ out = M.validate(plan, {vehicle, rules: sfRules(), gameSpeed: (sfData() && sfData().gameSpeed) || 1,
+    /* Fail closed: a payload without a catalogue (an older, cached one) checks
+       positions against an empty one, so only the vehicle's own saved stops pass. */
+    stopLocations: sfData() && sfData().stopLocations && typeof sfData().stopLocations === "object"
+      ? sfData().stopLocations : SF_NO_STOPS}); }catch(e){ console.error(e); return null; }
   if(!out || typeof out !== "object") return null;
   const issues = (Array.isArray(out.issues) ? out.issues : []).filter(i => i && typeof i.code === "string"
     /* A draft has no crew of its own: crew is checked once the plan names one of your vehicles. */
@@ -19275,6 +19335,9 @@ function sfIssueText(i, plan){
     case "travel_gap": return mins != null
       ? tt("map.sf.issue.travelGap", {one: "Stop {n} opens {k} minute before the vehicle can be there from stop {m}.", other: "Stop {n} opens {k} minutes before the vehicle can be there from stop {m}."}, {n: n(i.stopId), m: n(i.otherStopId), k: mins})
       : tt("map.sf.issue.travelGapPlain", "Stop {n} opens before the vehicle can be there from stop {m}.", {n: n(i.stopId), m: n(i.otherStopId)});
+    case "unverified_stop": return sfVehicleFor(plan).kind === "truck"
+      ? `${tt("map.sf.issue.unverifiedTruck", "Stop {n} is not on a checked parking spot.", {n: n(i.stopId)})} ${tt("map.sf.issue.unverifiedFix", "Pick one near it on the map, then Move here.")}`
+      : `${tt("map.sf.issue.unverifiedCart", "Stop {n} is not on a checked pavement spot.", {n: n(i.stopId)})} ${tt("map.sf.issue.unverifiedFix", "Pick one near it on the map, then Move here.")}`;
     case "missing_crew": return tt("map.sf.issue.noCrew", "This vehicle has no crew in the save.");
     case "crew_gap": return i.stopId ? tt("map.sf.issue.crewGap", "No saved crew hours cover stop {n}.", {n: n(i.stopId)}) : tt("map.sf.issue.crewGapAll", "The saved crew hours do not cover the whole route.");
     case "return_after_day": return tt("map.sf.issue.late", "The route runs past {t}, the latest a stop may close.", {t: sfClock(sfRules().schedules?.latestCloseMinute ?? 1620)});
@@ -19299,7 +19362,7 @@ function sfLegText(leg, kind){
 /* --- editing a plan --------------------------------------------------------- */
 function sfNewPlan(o = {}){
   if(sfPlans.length >= SF_MAX_PLANS) return null;
-  const kind = o.kind || "cart";
+  const kind = o.kind || sfKindPick || "cart";
   const plan = {id: sfId("r"), name: o.name || tt("map.sf.plan.n", "Route {n}", {n: sfPlans.length + 1}), vehicleId: o.vehicleId || null,
     kind, weekday: Number.isInteger(o.weekday) ? o.weekday : sfDayNow(), stops: o.stops || [], from: o.from || null};
   sfPlans.unshift(plan);
@@ -19316,19 +19379,36 @@ function sfEdit(fn){
 }
 /* The picked place (or spot) as the plan's next stop, open from where the
    last stop closes; the player sets the times. Without a plan, one starts. */
+/* A stop's position from a checked place: its exact point and heading, and
+   which place it is. The building key only names the stop. */
+const sfSpotStop = x => ({locationId: x.id, key: typeof x.key === "string" ? x.key : null, x: x.x, z: x.z,
+  ...(Number.isFinite(x.y) ? {y: x.y} : {}), ...(Number.isFinite(x.heading) ? {heading: x.heading} : {})});
 function sfAddStop(){
   const p = sfPicked();
-  if(!p || p.x == null) return;
+  if(!p || !p.spot) return;
   let plan = sfPlan();
-  if(!plan){ plan = sfNewPlan(); if(!plan){ sfRedraw(); return; } }
+  if(!plan){ plan = sfNewPlan({kind: p.spot.kind}); if(!plan){ sfRedraw(); return; } }
+  if(sfVehicleFor(plan).kind !== p.spot.kind) return;
   const last = plan.stops[plan.stops.length - 1];
   /* A stop opens on its own day (before 24:00) and may close past midnight. */
   const open = last ? Math.min(last.close, 1380) : 660;
-  plan.stops.push({id: sfId("s"), name: p.name || p.address || tt("map.sf.spot", "Spot on the map"), key: p.key || null,
-    x: p.x, z: p.z, open, close: Math.min(open + 120, 1620)});
+  plan.stops.push({id: sfId("s"), name: p.name, ...sfSpotStop(p.spot), open, close: Math.min(open + 120, 1620)});
   sfLit = plan.stops[plan.stops.length - 1].id;
   sfSave();
   sfRedraw();
+}
+/* A stop moved onto the picked checked place, at the player's word: its
+   times stay. */
+function sfMoveStop(id){
+  const p = sfPicked();
+  if(!p || !p.spot) return;
+  sfEdit(plan => {
+    const s = plan.stops.find(x => x.id === id);
+    if(!s || sfVehicleFor(plan).kind !== p.spot.kind) return;
+    delete s.y; delete s.heading;
+    Object.assign(s, {name: p.name}, sfSpotStop(p.spot));
+    sfLit = s.id;
+  });
 }
 /* An owned vehicle's saved route for one weekday, as a new plan beside the
    others: never over one the player made. */
@@ -19341,7 +19421,10 @@ function sfImport(vehicleId, day){
     vehicleId: String(v.id), kind: v.kind === "truck" ? "truck" : "cart", weekday: day, from: "save",
     stops: stops.map(s => {
       const at = Number.isFinite(s.x) && Number.isFinite(s.z) ? opps.find(o => o.kind === "building" && o.x != null && Math.hypot(o.x - s.x, o.z - s.z) < 1) : null;
+      /* The game's own position, exactly as saved: never moved onto a catalogue place. */
+      const on = sfStopOn(s, v.kind === "truck" ? "truck" : "cart");
       return {id: sfId("s"), name: String(s.name || ""), key: at ? at.key : null, x: Number.isFinite(s.x) ? s.x : null, z: Number.isFinite(s.z) ? s.z : null,
+        ...(Number.isFinite(s.y) ? {y: s.y} : {}), ...(Number.isFinite(s.heading) ? {heading: s.heading} : {}), ...(on ? {locationId: on.id} : {}),
         open: Number.isFinite(s.open) ? s.open : 660, close: Number.isFinite(s.close) ? s.close : 780};
     })});
   if(!plan){ sfNotice = tt("map.sf.plans.full", "You have twenty routes. Delete one to keep another."); }
@@ -19503,6 +19586,13 @@ function gwStreetFoodRoute(planId){
 function sfPicked(){
   if(!sfPick) return null;
   const assets = sfMapView && sfMapView.assets;
+  /* A checked place of the route's kind; one of the other kind (the vehicle
+     changed since) is inspected as the ground it stands on. */
+  if(sfPick.spot){
+    const x = sfSpotById(sfPick.spot);
+    if(x) return {spot: x, key: null, opp: null, name: sfSpotName(x), address: "", hood: null, type: null, x: x.x, z: x.z};
+    return Number.isFinite(sfPick.x) ? {key: null, opp: null, name: tt("map.sf.spot", "Spot on the map"), address: "", hood: null, type: null, x: sfPick.x, z: sfPick.z} : null;
+  }
   if(sfPick.key){
     sfOpps();
     const o = sfOppMemo.byKey.get(sfPick.key) || null, b = assets ? assets.byKey.get(sfPick.key) : null;
@@ -19576,7 +19666,16 @@ function sfLayersHtml(){
     const on = !sfOff.has(l);
     return `<button type="button" class="sf-lay${on ? "" : " off"}" data-sf-lay="${l}" aria-pressed="${on}"><i data-sf="${l}"></i><span>${spEsc(sfLayerName(l))}</span><span class="n mono">${counts[l]}</span></button>`;
   }).join("");
-  return chips ? `${chips}<span class="sf-key quiet">${tt("map.sf.layers.key", "Faint: closed then. Dashed: no saved hours.")}</span>` : "";
+  const plan = sfPlan(), kind = sfKindNow(), fixed = !!(plan && plan.vehicleId);
+  const kinds = `<span class="seg sf-kinds" role="group" aria-label="${attr(tt("map.sf.kind.aria", "Stopping places for"))}">${["cart", "truck"].map(k =>
+    `<button type="button" data-sf-kind="${k}" aria-pressed="${k === kind}"${k === kind ? ` class="on"` : ""}${fixed && k !== kind ? ` aria-disabled="true" data-tip="${
+      attr(tt("map.sf.kind.fixed", "The route's vehicle sets the kind"))}"` : ""}>${k === "truck" ? tt("map.sf.kind.trucks", "Trucks") : tt("map.sf.kind.carts", "Carts")}</button>`).join("")}</span>`;
+  const n = sfSpotsOf(kind).length;
+  const spotKey = sfStopCatalogue() ? `<span class="sf-key quiet"><span class="sf-spotmark" aria-hidden="true"></span>${spEsc(kind === "truck"
+      ? tt("map.sf.spots.keyTruck", {one: "{n} checked parking spot; zoom in to see it", other: "{n} checked parking spots; zoom in to see them"}, {n})
+      : tt("map.sf.spots.keyCart", {one: "{n} checked pavement spot; zoom in to see it", other: "{n} checked pavement spots; zoom in to see them"}, {n}))}</span>`
+    : `<span class="sf-key quiet">${tt("map.sf.spots.keyNone", "No checked stopping places in this build")}</span>`;
+  return `${kinds}${spotKey}${chips ? `<span class="sf-laybreak" aria-hidden="true"></span>${chips}<span class="sf-key quiet">${tt("map.sf.layers.key", "Faint: closed then. Dashed: no saved hours.")}</span>` : ""}`;
 }
 /* The places whose name or address holds what was typed, up to eight. */
 function sfFoundHtml(){
@@ -19590,7 +19689,7 @@ function sfInspectHtml(){
   const day = sfDayNow(), minute = sfMinuteNow(), p = sfPicked();
   const search = `<label class="srch sf-find">${ICON.search || ""}<input type="search" data-sf-find value="${attr(sfQuery)}" placeholder="${attr(tt("map.sf.find.ph", "Find a place by name"))}" aria-label="${attr(tt("map.sf.find.aria", "Find a Street Food place by name or address"))}" autocomplete="off"></label>`
     + `<div class="sf-foundhost">${sfFoundHtml()}</div>`;
-  if(!p) return `<div class="sf-box">${search}<p class="quiet sf-hint">${tt("map.sf.inspect.hint", "Click a building or open ground on the map to see what is around it and what is open at the time on the ribbon.")}</p></div>`;
+  if(!p) return `<div class="sf-box">${search}<p class="quiet sf-hint">${tt("map.sf.inspect.hint2", "Click a building or open ground to see what is around it, or a dot, a checked stopping place, to add it as a stop.")}</p></div>`;
   const o = p.opp, open = o ? sfOpenAt(o, day, minute) : null;
   const near = sfNearby(p).filter(r => r && r.key !== p.key);
   const radius = sfRules().radiusMetres || 50;
@@ -19598,20 +19697,47 @@ function sfInspectHtml(){
     const st = sfOpenAt(r, day, minute), lay = sfLayersOf(r)[0] || "";
     return `<li><i data-sf="${lay}"></i><button type="button" data-sf-pick="${attr(r.key)}">${spEsc(r.name || r.address || "")}</button><span class="quiet">${spEsc(lay ? sfLayerName(lay) : r.type || "")}</span><span class="mono">${sfDist(r.distance)}</span><span class="sf-ow ${sfOpenCls(st)}">${spEsc(sfOpenWord(st))}</span></li>`;
   }).join("");
-  const plan = sfPlan(), max = sfRules().schedules?.maxStops ?? 6;
-  const add = p.x == null ? `<p class="quiet">${tt("map.sf.inspect.nopos", "This place has no map position, so it cannot be a stop.")}</p>`
-    : `<button type="button" class="os-cta sm" data-sf-add>${icon("plus")}${plan ? tt("map.sf.inspect.add", "Add as stop {n}", {n: plan.stops.length + 1}) : tt("map.sf.inspect.start", "Start a route here")}</button>${
-      plan && plan.stops.length >= max ? `<span class="quiet">${tt("map.sf.inspect.full", "The route already has {n} stops, the most one holds.", {n: max})}</span>` : ""}`;
+  const plan = sfPlan(), max = sfRules().schedules?.maxStops ?? 6, kind = sfKindNow();
+  /* A stop row that stands on no checked place may be moved onto this one. */
+  const unchecked = p.spot && plan ? ((sfCheck(plan) || {issues: []}).issues).filter(i => i.code === "unverified_stop" && i.stopId)
+    .map(i => plan.stops.findIndex(x => x.id === i.stopId)).filter(k => k >= 0) : [];
+  const add = p.spot ? `<button type="button" class="os-cta sm" data-sf-add>${icon("plus")}${plan ? tt("map.sf.inspect.add", "Add as stop {n}", {n: plan.stops.length + 1}) : tt("map.sf.inspect.start", "Start a route here")}</button>${
+      plan && plan.stops.length >= max ? `<span class="quiet">${tt("map.sf.inspect.full", "The route already has {n} stops, the most one holds.", {n: max})}</span>` : ""}${
+      unchecked.map(k => `<button type="button" class="nx-btn sm" data-sf-move="${attr(plan.stops[k].id)}">${spEsc(tt("map.sf.inspect.move", "Move stop {n} here", {n: k + 1}))}</button>`).join("")}`
+    : sfSpotsHtml(p, kind);
+  if(p.spot) return `<div class="sf-box">${search}
+    <div class="sf-what"><h3><span class="sf-spotmark" aria-hidden="true"></span>${spEsc(sfSpotTitle(kind))}</h3>
+      <p class="sf-sub">${spEsc(sfWhereText(p.spot))}</p>
+      <p class="quiet sf-checked">${tt("map.sf.spot.checked2", "Checked against the game's placement rules.")} ${tt("map.sf.spot.occupied", "A spot may still be occupied in-game.")}</p></div>
+    <div class="sf-addrow">${add}</div>
+    <h4>${tt("map.sf.inspect.near", "Within {r} m", {r: radius})}</h4>
+    ${nearRows ? `<ul class="sf-near">${nearRows}</ul>${near.length > 12 ? `<p class="quiet">${tt("map.sf.inspect.more", {one: "and {n} more place", other: "and {n} more places"}, {n: near.length - 12})}</p>` : ""}`
+      : `<p class="quiet">${tt("map.sf.inspect.none", "No recorded places within {r} m.", {r: radius})}</p>`}</div>`;
   return `<div class="sf-box">${search}
     <div class="sf-what"><h3>${spEsc(p.name)}</h3>
       <p class="sf-sub">${p.hood ? `<span class="hood"${hoodColorAttr(p.hood)}>${spEsc(hoodCode(null, p.hood) || "")}</span>` : ""}${spEsc([p.type, p.address !== p.name ? p.address : ""].filter(Boolean).join(", "))}</p>
       ${o && o.kind === "event" && Number.isFinite(o.eventDay) ? `<p class="sf-event">${spEsc(tt("map.sf.inspect.event", "An announced event on day {d}; it is not a weekly fixture.", {d: o.eventDay}))}</p>` : ""}
       ${o ? `<p class="sf-when">${chipHtml(sfOpenCls(open), spEsc(tt("map.sf.inspect.at", "{state} at {t}", {state: sfOpenWord(open), t: sfClock(minute)})))}<span class="quiet">${spEsc(sfHoursText(o, day))}</span></p>`
         : p.key ? `<p class="quiet">${tt("map.sf.inspect.nothing", "Nothing here is a Street Food source in this save.")}</p>` : ""}</div>
+    <div class="sf-addrow sf-spots">${add}</div>
     <h4>${tt("map.sf.inspect.near", "Within {r} m", {r: radius})}</h4>
     ${nearRows ? `<ul class="sf-near">${nearRows}</ul>${near.length > 12 ? `<p class="quiet">${tt("map.sf.inspect.more", {one: "and {n} more place", other: "and {n} more places"}, {n: near.length - 12})}</p>` : ""}`
-      : `<p class="quiet">${sfM() ? tt("map.sf.inspect.none", "No recorded places within {r} m.", {r: radius}) : tt("map.sf.inspect.nomodel", "Nearby places need the route checks, which this build lacks.")}</p>`}
-    <div class="sf-addrow">${add}</div></div>`;
+      : `<p class="quiet">${sfM() ? tt("map.sf.inspect.none", "No recorded places within {r} m.", {r: radius}) : tt("map.sf.inspect.nomodel", "Nearby places need the route checks, which this build lacks.")}</p>`}</div>`;
+}
+/* The checked places of the route's kind near an inspected place, to choose
+   one from: nearest first, none chosen. Without a catalogue, or with none
+   near, the reason, and no way to add. */
+function sfSpotsHtml(p, kind){
+  if(!sfStopCatalogue()) return `<p class="quiet sf-nospot">${tt("map.sf.spots.unavailable", "Checked stopping places are not available, so no stop can be added here.")} ${tt("map.sf.spots.unavailableKept", "Stops already in a route stay.")}</p>`;
+  const near = p.x != null ? sfStopsNear(p, kind) : [];
+  const head = `<h4>${spEsc(kind === "truck" ? tt("map.sf.spots.nearTruck", "Parking spots within {r} m", {r: SF_STOP_RADIUS})
+    : tt("map.sf.spots.nearCart", "Pavement spots within {r} m", {r: SF_STOP_RADIUS}))}</h4>`;
+  if(!near.length) return `${head}<p class="quiet sf-nospot">${spEsc(`${kind === "truck"
+    ? tt("map.sf.spots.noneTruck", "No checked parking spot is within {r} m.", {r: SF_STOP_RADIUS})
+    : tt("map.sf.spots.noneCart", "No checked pavement spot is within {r} m.", {r: SF_STOP_RADIUS})} ${tt("map.sf.spots.noneHint", "Pick a dot on the map, or look nearer a street.")}`)}</p>`;
+  return `${head}<ul class="sf-spotlist">${near.slice(0, 6).map(x => `<li><button type="button" data-sf-spot="${attr(x.id)}"><span class="sf-spotmark" aria-hidden="true"></span>${
+    spEsc(sfSpotName(x))}</button><span class="mono">${sfDist(x.distance)}</span></li>`).join("")}</ul>${
+    near.length > 6 ? `<p class="quiet">${tt("map.sf.spots.more", {one: "and {n} more nearby", other: "and {n} more nearby"}, {n: near.length - 6})}</p>` : ""}`;
 }
 /* A time field: HH:MM, and the minutes past midnight stand for the next day
    (a close at or before the open, or an open the player marks "+1"). */
@@ -19741,7 +19867,12 @@ function sfMapState(){
   const plan = sfPlan(), check = sfCheck(plan);
   const bad = new Set((check ? check.issues : []).map(i => i.stopId).filter(Boolean));
   const p = sfPicked();
+  /* The checked places of the route's kind, the ones near the inspected
+     place lit, the picked one marked. */
+  const kind = sfKindNow();
   return {layerOf, open, points, radius: sfRules().radiusMetres || 50,
+    spotBase: sfSpotsOf(kind), spotKind: kind, spotWord: sfSpotTitle(kind),
+    spotNear: p && !p.spot && p.x != null ? sfStopsNear(p, kind).map(x => x.id) : [], spotSel: p && p.spot ? p.spot.id : null, pickSpot: !!(p && p.spot),
     stops: plan ? plan.stops.map(s => ({...s, issue: bad.has(s.id)})) : [],
     stopKeys: new Set(plan ? plan.stops.map(s => s.key).filter(Boolean) : []),
     pickKey: p && p.key || null, pickPoint: p && p.x != null ? {x: p.x, z: p.z} : null,
@@ -19765,7 +19896,11 @@ function sfShowMap(){
   if(!host || typeof StreetFoodMapView !== "function") return;
   if(!sfMapView || !sfMapView.root.isConnected || sfMapView.root !== host){
     sfMapView = new StreetFoodMapView(host, {
-      onPick: pick => { sfPick = pick; sfLit = null; sfRemember(); sfRedraw(true); },
+      onPick: pick => {
+        const x = pick && pick.spot ? sfSpotById(pick.spot) : null;
+        sfPick = x ? {spot: x.id, x: x.x, z: x.z} : pick && pick.spot ? null : pick;
+        sfLit = null; sfRemember(); sfRedraw(true);
+      },
       /* The assets carry the buildings' world positions: the places and the pick read again. */
       onReady: () => { sfOppMemo.assets = undefined; sfRedraw(true); sfFitMap(); },
     });
@@ -19806,7 +19941,7 @@ function sfRedraw(keepFocus = false){
 /* A control's identity across a redraw, so the keyboard stays on it. */
 function sfFocusKey(el){
   const esc = v => typeof CSS !== "undefined" && CSS.escape ? CSS.escape(v) : String(v).replace(/["\\]/g, "\\$&");
-  for(const a of ["data-sf-time", "data-sf-up", "data-sf-down", "data-sf-del", "data-sf-show", "data-sf-day", "data-sf-lay", "data-sf-pick", "data-sf-import"]){
+  for(const a of ["data-sf-time", "data-sf-up", "data-sf-down", "data-sf-del", "data-sf-show", "data-sf-day", "data-sf-lay", "data-sf-pick", "data-sf-import", "data-sf-spot", "data-sf-kind", "data-sf-move"]){
     if(!el.hasAttribute || !el.hasAttribute(a)) continue;
     const extra = a === "data-sf-time" ? `[data-sf-stop="${esc(el.getAttribute("data-sf-stop"))}"]` : a === "data-sf-import" ? `[data-sf-iday="${el.getAttribute("data-sf-iday")}"]` : "";
     return `[${a}="${esc(el.getAttribute(a))}"]${extra}`;
@@ -19825,7 +19960,8 @@ function sfRemember(){
 function sfRestore(x){
   if(!x || typeof x !== "object") return;
   const p = x.pick;
-  sfPick = p && typeof p === "object" && (typeof p.key === "string" || (Number.isFinite(p.x) && Number.isFinite(p.z))) ? (typeof p.key === "string" ? {key: p.key} : {x: p.x, z: p.z}) : null;
+  sfPick = !p || typeof p !== "object" ? null : typeof p.spot === "string" && Number.isFinite(p.x) ? {spot: p.spot, x: p.x, z: p.z}
+    : typeof p.key === "string" ? {key: p.key} : Number.isFinite(p.x) && Number.isFinite(p.z) ? {x: p.x, z: p.z} : null;
   sfMinute = Number.isFinite(x.minute) ? x.minute : null;
   sfDay = Number.isInteger(x.day) && x.day >= 0 && x.day < 7 ? x.day : null;
   if(page === "mods" && sub.mods === "streetfood") sfRedraw(true);
@@ -19906,6 +20042,22 @@ function wireMods(){
     if(sfMapView && p && p.x != null) sfMapView.focusOn(p);
   });
   on("click", "[data-sf-add]", () => sfAddStop());
+  on("click", "[data-sf-move]", el => sfMoveStop(el.dataset.sfMove));
+  on("click", "[data-sf-spot]", el => {
+    const x = sfSpotById(el.dataset.sfSpot);
+    if(!x) return;
+    sfPick = {spot: x.id, x: x.x, z: x.z}; sfLit = null; sfRemember(); sfRedraw();
+    if(sfMapView) sfMapView.focusOn(x);
+  });
+  /* The kind of checked place shown: the draft's own, or the one explored
+     with no route; an owned vehicle's kind is its own. */
+  on("click", "[data-sf-kind]", el => {
+    if(el.getAttribute("aria-disabled") === "true") return;
+    const k = el.dataset.sfKind === "truck" ? "truck" : "cart";
+    sfKindPick = k;
+    if(sfPlan()) sfEdit(p => { if(!p.vehicleId) p.kind = k; });
+    else sfRedraw();
+  });
   on("click", "[data-sf-import]", el => { sfImport(el.dataset.sfImport, +el.dataset.sfIday); sfFitMap(true); });
   on("input", "[data-sf-find]", el => {
     sfQuery = el.value;

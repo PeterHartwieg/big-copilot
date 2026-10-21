@@ -38,6 +38,15 @@ const StreetFoodModel = (() => {
     return today.some(([a, b]) => finite(a) && finite(b) && time >= a && time < (b < a ? b + 1440 : b)) ||
       yesterday.some(([a, b]) => finite(a) && finite(b) && (b < a ? b + 1440 : b) > 1440 && time < (b < a ? b : b - 1440));
   }
+  function nearbyStops(at, kind, catalogue, radius = 40) {
+    if (!catalogue || catalogue.status !== 'ready' || !['cart', 'truck'].includes(kind)) return [];
+    return nearby(at, (catalogue.spots || []).filter(s => s.kind === kind), radius)
+      .sort((a, b) => a.distance - b.distance || String(a.id).localeCompare(String(b.id)));
+  }
+  function stopLocation(stop, kind, catalogue) {
+    // Coordinates, not a persisted id or building key, establish the place.
+    return nearbyStops(stop, kind, catalogue, .05)[0] || null;
+  }
   function travelMinutes(from, to, vehicle, rules, gameSpeed = 1) {
     const d = distance(from, to), t = rules && rules.travel;
     if (d === null || !t || !finite(gameSpeed) || gameSpeed <= 0 || !finite(t.roadFactor) || t.roadFactor <= 0) return null;
@@ -54,6 +63,7 @@ const StreetFoodModel = (() => {
           !Number.isInteger(s.open) || !Number.isInteger(s.close) || s.open < 0 || s.close > 2880) return null;
       ids.add(s.id);
       stops.push({id: s.id, name: text(s.name), key: typeof s.key === 'string' ? text(s.key, 512) : null,
+        ...(typeof s.locationId === 'string' ? {locationId: text(s.locationId, 200)} : {}),
         x: point(s) ? s.x : null, z: point(s) ? s.z : null, open: s.open, close: s.close,
         ...(finite(s.y) ? {y: s.y} : {}), ...(finite(s.heading) ? {heading: s.heading} : {})});
     }
@@ -61,13 +71,16 @@ const StreetFoodModel = (() => {
       kind: value.kind === 'truck' ? 'truck' : 'cart', weekday: value.weekday, stops,
       ...(finite(value.made) ? {made: value.made} : {}), ...(finite(value.edited) ? {edited: value.edited} : {})};
   }
-  function validate(plan, {vehicle = null, rules = {}, gameSpeed = 1} = {}) {
+  function validate(plan, {vehicle = null, rules = {}, gameSpeed = 1, stopLocations} = {}) {
     const issues = [], legs = [], stops = plan && Array.isArray(plan.stops) ? plan.stops : [];
     const limits = rules.schedules || {}, latest = limits.latestCloseMinute || 1620;
     const add = (code, stop, extra = {}) => issues.push({code, ...(stop ? {stopId: stop.id} : {}), ...extra});
     if (stops.length > (limits.maxStops || 6)) add('too_many_stops');
     for (const stop of stops) {
       if (!point(stop)) add('missing_position', stop);
+      else if (stopLocations !== undefined && !stopLocation(stop, vehicle?.kind || plan.kind, stopLocations) &&
+          !(vehicle?.id && (vehicle.schedule?.stops || []).some(s => distance(s, stop) !== null && distance(s, stop) <= .05)))
+        add('unverified_stop', stop);
       if (!Number.isInteger(stop.open) || !Number.isInteger(stop.close) || stop.open < 0 || stop.open >= 1440 ||
           stop.close <= stop.open || stop.close > latest || stop.close - stop.open > 1440) add('bad_times', stop);
     }
@@ -120,6 +133,6 @@ const StreetFoodModel = (() => {
     return {issues, legs, travelMinutes: known ? total : null, distance: known ? metres : null};
   }
   return {project: (p, r) => transform(p, r, false), unproject: (p, r) => transform(p, r, true),
-    nearby, isOpen, travelMinutes, normalizePlan, validate};
+    nearby, nearbyStops, stopLocation, isOpen, travelMinutes, normalizePlan, validate};
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = StreetFoodModel;

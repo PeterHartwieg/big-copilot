@@ -1,3 +1,4 @@
+const {boardHtml} = require('./_page.cjs');
 // Sortable Supply tables (R13): the Shops table, each depot's table on
 // Warehouses, and a factory's lines and inputs on Factories.
 // Browser regressions: install Playwright and its Chromium browser to run.
@@ -5,7 +6,6 @@
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
 const {en, enRe} = require('./_i18n.cjs');
-const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require('playwright');
@@ -13,13 +13,7 @@ const {chromium} = require('playwright');
 const root = path.join(__dirname, '..');
 let browser, html;
 before(async () => {
-  const result = spawnSync(process.env.PYTHON || 'python', ['-c',
-    'from ba_dashboard import render; import sys; sys.stdout.buffer.write(render(None).encode("utf-8"))'],
-  {cwd: root, maxBuffer: 4 * 1024 * 1024});
-  assert.equal(result.status, 0, result.stderr?.toString());
-  html = process.env.BOARD_TARGET === 'web'
-    ? fs.readFileSync(path.join(root, 'web', 'index.html'), 'utf8')
-    : result.stdout.toString();
+  html = boardHtml();
   browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
 });
 after(async () => { await browser?.close(); });

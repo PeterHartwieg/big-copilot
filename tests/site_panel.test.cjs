@@ -1,3 +1,4 @@
+const {boardHtml} = require('./_page.cjs');
 // The site panel's mechanical half: the findings it lists and where they point,
 // the kind fork, the standards lamps' state, the crew fold and the rank.
 // Install Playwright and its Chromium browser to run; NODE_PATH may point at an
@@ -15,13 +16,7 @@ const {chromium} = require('playwright');
 let browser;
 let html;
 before(async () => {
-  const result = spawnSync(process.env.PYTHON || 'python', ['-c',
-    'from ba_dashboard import render; import sys; sys.stdout.buffer.write(render(None).encode("utf-8"))'],
-  {cwd: path.join(__dirname, '..'), maxBuffer: 4 * 1024 * 1024});
-  assert.equal(result.status, 0, result.stderr?.toString());
-  html = process.env.BOARD_TARGET === 'web'
-    ? fs.readFileSync(path.join(__dirname, '..', 'web', 'index.html'), 'utf8')
-    : result.stdout.toString();
+  html = boardHtml();
   browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
 });
 after(async () => { await browser?.close(); });

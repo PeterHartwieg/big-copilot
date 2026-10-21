@@ -34,7 +34,7 @@ const PINNED_WORKER = /\/assets\/[a-f0-9]{64}\/worker\.js$/.test(new URL(self.lo
 const SITE_URL = new URL(PINNED_WORKER ? "../../" : "./", self.location.href);
 const PYODIDE_URL = new URL(`pyodide/v${PYODIDE_VERSION}/`, SITE_URL).href;
 const CODE_FILES = ["ba_save.py", "ba_dashboard.py", "ba_facts.py", "ba_mods.py", "ba_street_food.py"];
-const DATA_FILES = ["gametext.json", "ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json", "ba_store_rules.json", "ba_street_food_rules.json"];
+const DATA_FILES = ["gametext.json", "ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json", "ba_store_rules.json", "ba_street_food_rules.json", "ba_street_food_stops.json"];
 
 const SAVE_DIR = "/save";
 const DATA_DIR = "/data";

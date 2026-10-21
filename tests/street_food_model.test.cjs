@@ -69,3 +69,29 @@ test('stored plans keep manual fields and drop untrusted extras; malformed recor
   assert.equal(M.normalizePlan({...p,stops:[p.stops[0],p.stops[0]]}),null);
   assert.equal(M.normalizePlan({...p,stops:[{...p.stops[0],open:NaN}]}),null);
 });
+
+test('only exact kind-specific catalogue positions or this vehicle’s existing stops are checked', () => {
+  const catalogue = {status:'ready',spots:[
+    {id:'truck-a',kind:'truck',x:10,z:20}, {id:'cart-a',kind:'cart',x:13,z:20}
+  ]};
+  const plan = {kind:'truck',weekday:0,stops:[{id:'s',x:10,z:20,open:660,close:720}]};
+  assert.equal(M.stopLocation(plan.stops[0], 'truck', catalogue).id,'truck-a');
+  assert.equal(M.stopLocation({...plan.stops[0],x:11,locationId:'truck-a'},'truck',catalogue),null);
+  assert.equal(M.stopLocation(plan.stops[0],'cart',catalogue),null);
+  assert.equal(M.validate(plan,{rules,stopLocations:catalogue}).issues.some(i=>i.code==='unverified_stop'),false);
+  assert.equal(M.validate({...plan,kind:'cart'},{rules,stopLocations:catalogue}).issues.some(i=>i.code==='unverified_stop'),true);
+  const unavailable={status:'unavailable',spots:[]};
+  assert.equal(M.validate(plan,{rules,stopLocations:unavailable}).issues.some(i=>i.code==='unverified_stop'),true);
+  assert.equal(M.validate(plan,{rules,stopLocations:unavailable,vehicle:{id:'owned',kind:'truck',schedule:{stops:plan.stops}}}).issues.some(i=>i.code==='unverified_stop'),false);
+  assert.equal(M.validate(plan,{rules,stopLocations:unavailable,vehicle:{kind:'truck',schedule:{stops:plan.stops}}}).issues.some(i=>i.code==='unverified_stop'),true);
+});
+
+test('nearby checked stops stay within reach and do not turn raw points into stops', () => {
+  const catalogue={status:'ready',spots:[{id:'far',kind:'truck',x:41,z:0},{id:'near',kind:'truck',x:20,z:0},{id:'cart',kind:'cart',x:1,z:0}]};
+  assert.deepEqual(M.nearbyStops({x:0,z:0},'truck',catalogue).map(s=>s.id),['near']);
+  assert.equal(M.stopLocation({x:0,z:0},'truck',catalogue),null);
+  assert.deepEqual(M.nearbyStops({x:0,z:0},'truck',{...catalogue,status:'unavailable'}),[]);
+  const plan=M.normalizePlan({id:'p',kind:'truck',weekday:0,stops:[{id:'s',locationId:'near',x:20,z:0,y:1,heading:90,open:660,close:720}]});
+  assert.equal(plan.stops[0].locationId,'near');
+  assert.equal(plan.stops[0].heading,90);
+});

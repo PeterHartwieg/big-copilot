@@ -282,6 +282,25 @@ into screen-sized overlay text so they cannot obscure buildings when zoomed in.
 The original PNG/SVG remain unchanged. All snapshot paths are explicit inputs;
 no player save or installed-game access is required for this export.
 
+Street Food's selectable stopping places are `ba_street_food_stops.json`.
+They are a catalogue of places checked by the mod's native `StopPicker.Snap`,
+not arbitrary points inferred from the drawing and not a live vacancy map.
+To regenerate on the isolated PC test rig, load a disposable `FT` save and
+collect the test bridge's read-only `route` operation `catalogue` in batches
+(`start: 0`, `count: 8`, then each response's `next`, until `total`). Combine
+the `rows` with `total` and `complete: true` in a local JSON file, then run
+`python tools/build_street_food_stops.py EXPORT.json --game-build BUILD --mod-source COMMIT`.
+The export contains public city positions only. It probes both vehicle kinds
+at every building entrance; it is not an exhaustive grid of every legal place.
+The current checked catalogue covers Manhattan; Industry City and the Hamptons
+returned no usable stops in this test-rig export, so they are not inferred from
+the map. Imported in-game routes in those regions still retain their stops.
+Regenerate after city or native placement-rule changes. Trucks use the game's
+wheel parking test and hatch direction; carts use the mod's pavement checks.
+Both are filtered against permanent obstacles using their actual prefab hulls.
+Planning offers these exact positions, while Game Link still reviews the route
+against the live game. Existing saved stops stay at their recorded coordinates.
+
 Run `python build_web.py --assemble` after map UI or asset changes. Browser and local watch
 views load the same runtime assets lazily; standalone HTML embeds them so opening
 it through `file://` works. A standalone file is therefore larger than the browser

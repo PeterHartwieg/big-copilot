@@ -1,3 +1,4 @@
+const {boardHtml} = require('./_page.cjs');
 // Plan a factory's Add product (issue #162): a type's other products are one
 // click from a line; an added product the shops do not all sell runs on a
 // per-shop rate the player can type, and its raw material joins Ingredients.
@@ -33,15 +34,7 @@ function planData(){
 }
 
 before(async () => {
-  html = process.env.BOARD_TARGET === 'web'
-    ? fs.readFileSync(path.join(root, 'web', 'index.html'), 'utf8')
-    : (() => {
-      const result = spawnSync(process.env.PYTHON || 'python', ['-c',
-        'from ba_dashboard import render; import sys; sys.stdout.buffer.write(render(None).encode("utf-8"))'],
-      {cwd: root, maxBuffer: 4 * 1024 * 1024});
-      assert.equal(result.status, 0, result.stderr?.toString());
-      return result.stdout.toString();
-    })();
+  html = boardHtml();
   plan = planData();
   browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
 });

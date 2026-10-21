@@ -404,3 +404,16 @@ body.map-modal-open{overflow:hidden}
 .sf-pin.sf-veh{width:22px;height:22px;border-radius:5px;background:#0d100fd9;border:1px solid #9aa39d;color:#e9ece6}
 .sf-pin.sf-veh svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 @media(max-width:760px){ .sf-city .stage{height:56dvh;min-height:300px} }
+
+/* Checked stopping places (paintSpots()): small dots once the map is zoomed
+   in, the ones near the inspected place and the picked one always. A hollow
+   ring for a truck's parking spot, a filled dot for a cart's pavement spot. */
+.sf-spots .sf-sp{fill:#e9ece6;fill-opacity:.55;stroke:#0d100f;stroke-width:1;vector-effect:non-scaling-stroke;cursor:pointer;display:none}
+.sf-spots .sf-sp.truck{fill:#0d100f;fill-opacity:.6;stroke:#e9ece6;stroke-width:1.4}
+.stage.zoomed .sf-spots .sf-sp{display:inline}
+.sf-spots .sf-sp.near{display:inline;fill:#ffd166;fill-opacity:1;stroke:#0d100f}
+.sf-spots .sf-sp.truck.near{fill:#0d100f;stroke:#ffd166;stroke-width:2}
+.sf-spots .sf-sp.sel{display:inline;fill:#ff4fd8;fill-opacity:1;stroke:#fff;stroke-width:2}
+.sf-spots .sf-sp:hover{fill:#ffd166;fill-opacity:1}
+.stage.interacting .sf-spots{pointer-events:none}
+.sf-pin.sf-spotsel{width:14px;height:14px;border-radius:50%;background:#ff4fd8;box-shadow:0 0 0 2px #fff,0 0 0 4px #0d100f}

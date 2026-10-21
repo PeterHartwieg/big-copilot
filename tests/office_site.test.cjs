@@ -1,3 +1,4 @@
+const {boardHtml} = require('./_page.cjs');
 // An office's site detail: the shop's hour grid in office words, and its fee in
 // place of shelves. Install Playwright and its Chromium browser to run; NODE_PATH
 // may point at an existing Playwright installation.
@@ -15,17 +16,11 @@ let browser;
 let html;
 let CINEMA;
 before(async () => {
-  const result = spawnSync(process.env.PYTHON || 'python', ['-c',
-    'from ba_dashboard import render; import sys; sys.stdout.buffer.write(render(None).encode("utf-8"))'],
-  {cwd: path.join(__dirname, '..'), maxBuffer: 4 * 1024 * 1024});
-  assert.equal(result.status, 0, result.stderr?.toString());
   const fixture = spawnSync(process.env.PYTHON || 'python', ['-m', 'tests.cinema_fixture'],
     {cwd: path.join(__dirname, '..'), maxBuffer: 8 * 1024 * 1024});
   assert.equal(fixture.status, 0, fixture.stderr?.toString());
   CINEMA = JSON.parse(fixture.stdout.toString());
-  html = process.env.BOARD_TARGET === 'web'
-    ? fs.readFileSync(path.join(__dirname, '..', 'web', 'index.html'), 'utf8')
-    : result.stdout.toString();
+  html = boardHtml();
   browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
 });
 after(async () => { await browser?.close(); });

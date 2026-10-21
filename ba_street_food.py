@@ -149,6 +149,19 @@ def planning_rules():
     return json.loads((folder / "ba_street_food_rules.json").read_text(encoding="utf-8"))
 
 
+@lru_cache(maxsize=1)
+def stop_locations():
+    """Public map facts exported through the native Street Food stop picker."""
+    folder = Path("/data") if sys.platform == "emscripten" else Path(__file__).parent
+    try:
+        data = json.loads((folder / "ba_street_food_stops.json").read_text(encoding="utf-8"))
+        if data.get("version") == 1 and isinstance(data.get("spots"), list) and data["spots"]:
+            return {**data, "status": "ready"}
+    except (OSError, ValueError):
+        pass
+    return {"version": 1, "status": "unavailable", "spots": []}
+
+
 def _point(value):
     if not isinstance(value, dict):
         return None
@@ -201,7 +214,8 @@ def planner(save, names, buildings, open_hours):
     output = {"status": data["status"] if data else "absent", "version": data.get("version") if data else None,
               "schemaVersion": state.get("schemaVersion") if state else None, "day": today,
               "weekday": (today - 1) % 7, "minute": int(save.root.get("Hour", 0) * 60 + save.root.get("Minute", 0)),
-              "gameSpeed": 1, "travelBasis": "default", "rules": published["rules"], "vehicles": [], "opportunities": []}
+              "gameSpeed": 1, "travelBasis": "default", "rules": published["rules"], "vehicles": [], "opportunities": [],
+              "stopLocations": stop_locations()}
     speed = snapshot.get("gameSpeed")
     if type(speed) in (float, int) and math.isfinite(speed) and speed > 0:
         output.update(gameSpeed=speed, travelBasis="live")

@@ -4639,6 +4639,26 @@ section.od-updating{background-image:linear-gradient(90deg,transparent,var(--acc
 .sf-sub{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0 0;font-size:12.5px;color:var(--ink-2)}
 .sf-when{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:10px 0 0}
 .sf-addrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
+/* Checked stopping places: the kind shown, the ones near an inspected place
+   to choose from, and the mark that stands for one (web/map.css draws the dots). */
+.sf-addrow.sf-spots{display:block}
+.sf-addrow.sf-spots h4{margin-top:0}
+.sf-kinds button{padding:5px 10px;border:0;border-radius:5px;background:none;color:var(--ink-2);font:500 12px Archivo,sans-serif;cursor:pointer}
+.sf-kinds button.on{background:var(--ink);color:var(--ground)}
+.sf-kinds button[aria-disabled="true"]{opacity:.45;cursor:default}
+.sf-kinds button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.sf-laybreak{flex-basis:100%;height:0}
+.sf-spotmark{display:inline-block;flex:none;width:9px;height:9px;margin-right:6px;border-radius:50%;background:#ffd166;box-shadow:0 0 0 1.5px var(--surface),0 0 0 2.5px var(--ink-3);vertical-align:-1px}
+.sf-key .sf-spotmark{margin-right:5px}
+.sf-spotlist{list-style:none;margin:0;padding:0}
+.sf-spotlist li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px solid var(--rule-soft);font-size:12.5px}
+.sf-spotlist button{display:inline-flex;align-items:center;min-width:0;padding:3px 0;border:0;background:none;color:var(--ink);font:inherit;text-align:left;cursor:pointer;overflow-wrap:anywhere}
+.sf-spotlist button:hover{color:var(--accent)}
+.sf-spotlist button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.sf-spotlist .mono{color:var(--ink-2);font-size:12px}
+.sf-nospot{margin:0}
+.sf-checked{margin:8px 0 0;font-size:11.5px;line-height:1.45}
+.sf-what h3 .sf-spotmark{width:11px;height:11px;background:#ff4fd8}
 .sf-field{display:grid;grid-template-columns:56px minmax(0,1fr);align-items:center;gap:8px;margin-bottom:8px;font-size:12px;color:var(--ink-3)}
 .sf-field input,.sf-field select{min-width:0;height:32px;padding:0 9px;border:1px solid var(--rule);border-radius:7px;background:var(--ground);color:var(--ink);font:500 13px Archivo,sans-serif}
 .sf-field input:focus-visible,.sf-field select:focus-visible,.sf-times input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
