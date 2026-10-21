@@ -7473,6 +7473,7 @@ function wireSpExpansion(b){
     if(!host || siteKey !== b.key) return;
     host.outerHTML = spExpansion(b);
     wireSpExpansion(b);
+    wireReveal();
   };
   if($("spExpansionToggle")) $("spExpansionToggle").onclick = () => {
     spExpansionState.open = !spExpansionState.open;

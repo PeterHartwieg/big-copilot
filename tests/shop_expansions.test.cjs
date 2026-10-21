@@ -24,6 +24,7 @@ test('shop details compare additions, reveal equipment and update payback with e
   const {page, key} = await shop(t);
   assert.equal(await page.locator('#spExpansionBody').isVisible(), false);
   await page.locator('#spExpansionToggle').click();
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('#sp-expansion')).opacity === '1');
   const body = page.locator('#spExpansionBody');
   assert.match(await body.innerText(), /34 days/);
   await body.locator('summary').click();
@@ -31,6 +32,7 @@ test('shop details compare additions, reveal equipment and update payback with e
   await page.locator('#spExpansionCost').fill('100');
   await page.locator('#spExpansionCost').press('Tab');
   assert.match(await body.innerText(), /No payback/);
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('#sp-expansion')).opacity === '1');
   // Save refresh: same-shop controls survive, but newly offered products vanish.
   await page.evaluate(key => {D.openStore.built[key].sells.push('P'); drawSite();}, key);
   assert.match(await body.innerText(), /already offers every physical product/);
