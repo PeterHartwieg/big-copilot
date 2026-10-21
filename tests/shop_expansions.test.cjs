@@ -29,6 +29,7 @@ test('shop details compare additions, reveal equipment and update payback with e
   assert.match(await body.innerText(), /34 days/);
   await body.locator('summary').click();
   assert.match(await body.innerText(), /240.*50.*24/s);
+  assert.match(await body.innerText(), /15\.00\/unit; goods cost \$4\.00\/unit/);
   await page.locator('#spExpansionCost').fill('100');
   await page.locator('#spExpansionCost').press('Tab');
   assert.match(await body.innerText(), /No payback/);

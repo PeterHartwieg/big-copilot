@@ -7454,7 +7454,7 @@ function spExpansion(b){
               : tt("sp.expand.invest", "{money} upfront", {money: fmt(r.investment)})}</span><span>${
               r.investment === null ? "—" : r.payback === null ? tt("sp.expand.noPayback", "No payback at these costs")
               : tt("sp.expand.payback", "About {days} days to pay back", {days: r.payback})}</span></summary>
-            <p>${tt("sp.expand.sales", "About {units:,.1f} units/day at {price}/unit; goods cost {cost}/unit.", {units: r.units, price: fmt(r.price), cost: fmt(r.cost)})}</p>
+            <p>${tt("sp.expand.sales", "About {units:,.1f} units/day at ${price:,.2f}/unit; goods cost ${cost:,.2f}/unit.", {units: r.units, price: r.price, cost: r.cost})}</p>
             <p>${tt("sp.expand.margin", "Added gross margin: {margin}/day; lost margin at your other shops: {loss}/day; extra costs: {extra}/day.", {margin: fmt(r.margin), loss: fmt(r.loss), extra: fmt(r.extraCost)})}</p>
             ${r.kit ? `<ul>${r.kit.lines.map(([item, qty]) => `<li>${tt("sp.expand.equipment", "{n} × {item} · {money}", {n: qty, item: spEsc(osItemName(item)), money: fmt(osFacts().items[item].p * qty)})}</li>`).join("")}</ul>
               <p>${tt("sp.expand.budget", "Equipment: {equipment}; delivery: {delivery}; seven days of initial stock: {stock}.", {equipment: fmt(r.kit.equipment), delivery: fmt(r.kit.delivery), stock: fmt(r.stock)})}</p>` : ""}
