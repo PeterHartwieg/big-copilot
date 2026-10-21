@@ -766,7 +766,7 @@ _item_prices = None
 
 
 def load_item_prices() -> dict:
-    """ba_item_prices.json as {"items": {...}, "materials": {...}}, read once.
+    """Furniture, materials and rival layout valuations, read once.
 
     Per item name: `p` Item.defaultMarketPrice, `t` its type bit flags. Per
     material uuid (the MaterialID a save's interiorDesigns slots hold): `t` 1
@@ -781,8 +781,9 @@ def load_item_prices() -> dict:
             lambda loaded: {
                 "items": loaded.get("items") or {},
                 "materials": loaded.get("materials") or {},
+                "takeover": loaded.get("takeover") or {},
             },
-            lambda: {"items": {}, "materials": {}},
+            lambda: {"items": {}, "materials": {}, "takeover": {}},
             catch=(OSError, ValueError, AttributeError),
         )
     return _item_prices
@@ -2044,6 +2045,43 @@ def _layout(row: dict) -> str | None:
     return f"{row['z']}{row['v']}"
 
 
+def _takeover_estimate(save: Save, reg: dict, row: dict) -> float | None:
+    """BizMan's estimated business valuation, not the rival's accepted offer.
+
+    CompetitionHelper.CalculateAiOwnedValuation (installed build 3682):
+    max(average dailyIncomes * daysPerYear * 3, 0) + layout.GetValuation().
+    The latter sums new furniture prices; it is unrelated to the building's
+    real-estate value or lease deposit. Unknown/modded layouts and missing
+    income history stay unknown rather than promising a partial price.
+    """
+    if _premises_status(reg, row) != "rival":
+        return None
+    facts = load_item_prices().get("takeover") or {}
+    if row.get("t") not in facts.get("types", []):
+        return None
+    layout = _layout(row)
+    interior = reg.get("Layout")
+    if not layout or not isinstance(interior, str) or not interior:
+        return None
+    key = f"{reg.get('businessTypeName')}|{layout}|{interior.lower()}"
+    furniture = facts.get("layouts", {}).get(key)
+    incomes = save.items(reg.get("dailyIncomes"))
+    days = (save.deref(save.root.get("gameVariables")) or {}).get("daysPerYear")
+    finite = lambda n: type(n) in (int, float) and math.isfinite(n)
+    if not finite(furniture) or furniture < 0 or not incomes or not all(map(finite, incomes)):
+        return None
+    if not finite(days) or days <= 0:
+        return None
+    try:
+        # LINQ Average(float) accumulates in double and returns float. The
+        # remaining arithmetic in the game also rounds at each float step.
+        earnings = _f32(_f32(_f32(sum(incomes) / len(incomes)) * _f32(days)) * 3)
+        value = _f32(max(earnings, 0) + furniture)
+    except OverflowError:
+        return None
+    return round(value, 2) if math.isfinite(value) else None
+
+
 def _premises(save: Save, names: Names, market: dict, estate: dict | None = None) -> dict:
     """Every building in the city, with what it would cost and what it holds.
 
@@ -2104,6 +2142,7 @@ def _premises(save: Save, names: Names, market: dict, estate: dict | None = None
                 "cap": _size_cap(row, caps),
                 "rent": rent,
                 "deposit": _deposit_estimate(row, rent),
+                "takeoverPrice": _takeover_estimate(save, reg, row),
                 "status": status,
                 "occupant": occupant,
                 "owner": owner,

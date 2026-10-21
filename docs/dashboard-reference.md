@@ -2432,7 +2432,7 @@ what the place is. The payload is `premises`: one row per building registration 
 building table places, plus the buildings on sale, the demand grid turned inside out by
 neighbourhood, and the two reconstructed tables below. A row carries the address, its
 neighbourhood, building type, size letter, square metres, foot traffic, building capacity,
-estimated rent, estimated deposit, status and occupant. Python does no ranking; the page
+estimated rent, estimated deposit, estimated takeover price, status and occupant. Python does no ranking; the page
 scores and sorts.
 
 Two addresses in some saves are registered but missing from the building table. They are
@@ -2570,6 +2570,29 @@ how many providers the game counts, whether one of them is yours, and its catego
 shows; there is no second reading of demand anywhere on the board. Neighbourhood keys are
 the game's own (`ba:neighborhood_<id>`), as a building's `hood` is, so the page joins them
 straight onto it.
+
+### Takeover price
+
+The takeover list's **Est. takeover price** column replaces the rental list's Upfront
+deposit column and sorts cheapest first, with unknown values last. A rival's building
+card shows the same estimate at full dollar precision. It is BizMan's estimated business
+valuation, calculated by `_takeover_estimate()` from `CompetitionHelper.CalculateAiOwnedValuation`
+in installed build 3682:
+
+`max(average(dailyIncomes) × daysPerYear × 3, 0) + furnished layout value`
+
+The income history and year length come from the save. `make_item_prices.py` extracts
+the shipped `BusinessLayouts` item values and the building types tagged
+`calculateaiownedvaluation` into `ba_item_prices.json`'s `takeover` table. The layout value
+is the sum of the items' default market prices, without stock, wall/floor materials or
+the player's resale multiplier. The business type, building size/version and saved
+`Layout` name identify the interior. Missing income, year length, unsupported building
+types and unknown or modded layouts produce `null`, shown as **—**.
+
+This is an estimate, not an accepted offer or the price of the building. The game
+applies the rival's separate acceptance threshold when evaluating an offer; that
+threshold is not applied here. The save's `takeoverOfferAcceptRate` is not used by
+the current game's offer handler and does not price this column.
 
 ### For sale
 

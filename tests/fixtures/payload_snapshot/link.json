@@ -9773,6 +9773,7 @@
     "rent": 129,
     "size": "C",
     "status": "mine",
+    "takeoverPrice": null,
     "traffic": 48,
     "type": "retail"
    },
@@ -9795,6 +9796,7 @@
     "rent": 206,
     "size": "H",
     "status": "mine",
+    "takeoverPrice": null,
     "traffic": 18,
     "type": "special"
    },
@@ -9817,6 +9819,7 @@
     "rent": 1041,
     "size": "K",
     "status": "mine",
+    "takeoverPrice": null,
     "traffic": 74,
     "type": "office"
    }

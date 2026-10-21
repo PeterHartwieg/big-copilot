@@ -231,6 +231,101 @@ test('an office category ranks office buildings on the office band', async () =>
   } finally { await page.close(); }
 });
 
+test('takeover prices sort cheapest first, persist in saved searches and leave rentals with deposits', async () => {
+  const context = await H.browser.newContext();
+  const {page, errors} = await fixture(context);
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator('#cityMapPage [data-show="takeover"]').click();
+    const header = page.locator('#cityMapPage .fhead [data-s="takeoverPrice"]');
+    assert.equal(await header.textContent(), en('map.col.takeoverPrice'));
+    assert.equal(await page.locator('#cityMapPage .fhead [data-s="deposit"]').count(), 0);
+    assert.deepEqual(await page.locator('#cityMapPage .fr-takeover-price').allTextContents(), ['$375k', '$125k']);
+    await header.focus(); await page.keyboard.press('Enter');
+    assert.deepEqual(await rowKeys(page), [HK[2], HK[1]]);
+    await H.saveAs(page, 'Affordable takeovers');
+    await page.locator('#cityMapPage [data-show="rent"]').click();
+    assert.equal(await page.locator('#cityMapPage .fr-takeover-price').count(), 0);
+    assert.equal(await page.locator('#cityMapPage .fhead [data-s="deposit"]').count(), 1);
+    await page.locator(`${saved} [data-saved="Affordable takeovers"]`).click();
+    assert.deepEqual(await rowKeys(page), [HK[2], HK[1]]);
+    assert.equal(await page.evaluate(() => cityMapPage.fs.sort), 'takeoverPrice');
+    const again = await fixture(context);
+    try{
+      await openMap(again.page); await turnOn(again.page);
+      assert.equal(await again.page.evaluate(() => cityMapPage.fs.show), 'takeover');
+      assert.deepEqual(await rowKeys(again.page), [HK[2], HK[1]]);
+      assert.equal(await again.page.locator('#cityMapPage .fhead [data-s="takeoverPrice"].on').count(), 1);
+      assert.deepEqual(again.errors, []);
+    } finally { await again.page.close(); }
+    await pick(page, HK[1]);
+    assert.ok((await facts(page)).includes(en('map.col.takeoverPrice') + '$375,000'));
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); await context.close(); }
+});
+
+test('unknown takeover prices sort last and remain distinct from zero and building asking prices', async () => {
+  const buildings = PREMISES.buildings.map(b => b.key === HK[1] ? {...b, takeoverPrice: null}
+    : b.key === HK[2] ? {...b, takeoverPrice: 0} : b);
+  const {page, errors} = await fixture(null, {premises: {...PREMISES, buildings}});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator('#cityMapPage [data-show="takeover"]').click();
+    await page.locator('#cityMapPage .fhead [data-s="takeoverPrice"]').click();
+    assert.deepEqual(await rowKeys(page), [HK[2], HK[1]]);
+    assert.deepEqual(await page.locator('#cityMapPage .fr-takeover-price').allTextContents(), ['$0', '—']);
+    assert.equal(await page.locator(`#cityMapPage [data-pick="${HK[1]}"] .fr-takeover-price`).getAttribute('data-tip'), en('map.takeover.unknown'));
+    await page.locator('#cityMapPage [data-show="sale"]').click();
+    assert.equal(await page.locator('#cityMapPage .fhead [data-s="price"]').count(), 1);
+    assert.equal(await page.locator('#cityMapPage .fr-takeover-price').count(), 0);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('takeover price stays visible on a phone and formats billion-dollar valuations', async () => {
+  const buildings = PREMISES.buildings.map(b => b.key === HK[1] ? {...b, takeoverPrice: 5584228352} : b);
+  const {page, errors} = await fixture(null, {premises: {...PREMISES, buildings}});
+  try{
+    await page.setViewportSize({width:390, height:844});
+    await openMap(page); await turnOn(page);
+    await page.locator('#cityMapPage [data-show="takeover"]').click();
+    const header = page.locator('#cityMapPage .fhead [data-s="takeoverPrice"]');
+    await header.scrollIntoViewIfNeeded();
+    assert.equal(await header.isVisible(), true);
+    const price = page.locator(`#cityMapPage [data-pick="${HK[1]}"] .fr-takeover-price`);
+    assert.equal(await price.textContent(), '$5.58bn');
+    assert.equal(await price.isVisible(), true);
+    assert.ok(await price.evaluate(el => el.getBoundingClientRect().right <= innerWidth));
+    assert.ok(await header.evaluate(el => el.scrollWidth <= el.clientWidth + 1));
+    for(const width of [390, 700, 1440]){
+      await page.setViewportSize({width, height:844});
+      for(const lang of UI_LANGS){
+        const table = lang === 'en' ? null
+          : JSON.parse(fs.readFileSync(path.join(root, `web/i18n/${lang}.json`), 'utf8'));
+        await page.evaluate(({lang, table}) => {
+          ttSetTable(lang, table); cityMapPage.update();
+        }, {lang, table});
+        assert.ok(await price.evaluate(el => el.scrollWidth <= el.clientWidth + 1), `${lang} at ${width}: currency fits its column`);
+      }
+    }
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('rival warehouses explain that the game has no takeover valuation for them', async () => {
+  const buildings = PREMISES.buildings.map(b => b.key === HK[1]
+    ? {...b, type:'warehouse', takeoverPrice:null} : b);
+  const {page, errors} = await fixture(null, {premises:{...PREMISES, buildings}});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator('#cityMapPage [data-show="takeover"]').click();
+    await page.locator('#cityMapPage .fchip.cat[data-cat="warehouse"]').click();
+    assert.equal(await page.locator('#cityMapPage .fr-takeover-price').textContent(), '—');
+    assert.equal(await page.locator('#cityMapPage .fr-takeover-price').getAttribute('data-tip'), en('map.takeover.unsupported'));
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
 test('for sale is a plain list, cheapest first, and the neighbourhood chips still apply', async () => {
   const {page, errors} = await fixture();
   try{
@@ -815,7 +910,8 @@ test('the card says who owns the place and who trades from it', async () => {
     assert.equal(await row(en('map.fact.owner')).textContent(), en('map.fact.owner', {}) + 'Amanda Mason');
     assert.equal(await row(en('map.fact.renter')).textContent(),
       en('map.fact.renter', {}) + en('map.renter.rival', {name: '<img src=x onerror=window.__x=1>', type: 'Clothing Store', company: 'Amanda Mason'}));
-    assert.equal(await page.locator('#cityMapPage .site .facts [data-tip]').count(), 0);
+    assert.equal(await row(en('map.fact.owner')).locator('[data-tip]').count(), 0);
+    assert.equal(await row(en('map.fact.renter')).locator('[data-tip]').count(), 0);
     assert.equal(await page.locator('#cityMapPage .site img').count(), 0);
     assert.equal(await page.evaluate(() => window.__x), undefined);
     // The game's own, and your own.
