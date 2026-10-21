@@ -1,5 +1,11 @@
 [
   {
+    "pr": 509,
+    "date": "2026-10-21",
+    "title": "Compare additions to an existing shop",
+    "summary": "Open a shop’s detail page and choose Shop expansions to compare products it does not currently offer, such as pizza or salad. See estimated added daily earnings, equipment, delivery and initial stock costs, and payback. Enter extra staffing or operating costs to check whether the addition still pays, including its effect on your other shops nearby. Thank you to the player who suggested this on the feature list."
+  },
+  {
     "pr": 507,
     "date": "2026-10-19",
     "title": "See what each rival sells and what it has opened",
