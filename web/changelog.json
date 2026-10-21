@@ -1,5 +1,11 @@
 [
   {
+    "pr": 511,
+    "date": "2026-10-21",
+    "title": "Plan Street Food routes on the map",
+    "summary": "Mods lists the mods Big Copilot supports and what it can read from your save. Street Food adds an opportunity map with nearby offices, nightlife, shops and other customer sources, saved opening hours and announced events. Choose your own stops and times, compare travel and crew coverage, and keep route alternatives for each company. With Big Copilot Link 0.8.0 and a compatible Street Food build, review and apply one day's route while keeping the other days and crew hours. Fleet finances and commissary supply routes are also recognised."
+  },
+  {
     "pr": 510,
     "date": "2026-10-21",
     "title": "Search layouts in Find a location",
