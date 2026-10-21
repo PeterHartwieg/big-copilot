@@ -260,6 +260,10 @@ test('takeover prices sort cheapest first, persist in saved searches and leave r
     } finally { await again.page.close(); }
     await pick(page, HK[1]);
     assert.ok((await facts(page)).includes(en('map.col.takeoverPrice') + '$375,000'));
+    const note = page.locator('#cityMapPage .site .facts > [data-tip]');
+    assert.equal(await note.getAttribute('tabindex'), '0');
+    await note.focus();
+    assert.equal(await page.locator('#tip').textContent(), en('map.takeover.estimate'));
     assert.deepEqual(errors, []);
   } finally { await page.close(); await context.close(); }
 });

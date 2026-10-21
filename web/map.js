@@ -1283,7 +1283,7 @@ class CityMapView {
       + fact(tt("map.fact.cap", "Building capacity"), ssEsc(capText(b.cap)))
       + fact(tt("map.fact.rent", "Est. rent / day"), b.rent != null ? ssEsc(fmt(b.rent)) : '—')
       + fact(tt("map.fact.deposit", "Deposit"), b.deposit != null ? ssEsc(fmt(b.deposit)) : '—')
-      + (b.status === 'rival' ? fact(takeoverLabel(), b.takeoverPrice == null ? '—' : ssEsc(fmt(b.takeoverPrice)), ` class="wide" data-tip="${attr(takeoverNote(b))}"`) : '');
+      + (b.status === 'rival' ? fact(takeoverLabel(), b.takeoverPrice == null ? '—' : ssEsc(fmt(b.takeoverPrice)), ` class="wide" tabindex="0" data-tip="${attr(takeoverNote(b))}"`) : '');
     // Only a candidate reads as one: your own shop keeps its business numbers.
     if(!this.finderOn() || this.saleView() || b.type !== this.fs.cat || !this.candidate(b)) return;
     const f = this.fitFor(b);
