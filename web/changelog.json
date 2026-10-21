@@ -1,5 +1,11 @@
 [
   {
+    "pr": 513,
+    "date": "2026-10-21",
+    "title": "Compare business and building costs together",
+    "summary": "Find a location shows estimated takeover prices and building asking prices side by side in both To take over and For sale. Sort by either cost to compare deals, keep that order in a saved search, and see both prices on phones. Buildings not listed for sale show a dash with an explanation."
+  },
+  {
     "pr": 512,
     "date": "2026-10-21",
     "title": "Compare estimated takeover prices",
