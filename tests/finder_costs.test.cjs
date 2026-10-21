@@ -102,7 +102,7 @@ test('both cost columns fit together on phones, tablets and desktop in every UI 
     for(const show of ['takeover', 'sale']){
       await mode(page, show);
       await H.pick(page, HK[1]);
-      for(const width of [320, 390, 600, 700, 1024, 1440]){
+      for(const width of [320, 360, 361, 390, 600, 601, 700, 760, 761, 1024, 1200, 1359, 1360, 1440]){
         await page.setViewportSize({width, height:1000});
         for(const lang of UI_LANGS){
           const table = lang === 'en' ? null : JSON.parse(fs.readFileSync(path.join(root, `web/i18n/${lang}.json`)));
@@ -145,6 +145,7 @@ test('both cost columns fit together on phones, tablets and desktop in every UI 
 test('purchase panels leave map controls and selected building cards accessible, including fullscreen', async () => {
   const {page, errors} = await fixture(null, {premises:combined()});
   try{
+    await page.setViewportSize({width:1360, height:1000});
     await openMap(page); await turnOn(page);
     for(const show of ['takeover', 'sale']){
       await mode(page, show);

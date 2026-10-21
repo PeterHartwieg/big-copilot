@@ -232,9 +232,9 @@
 /* places: a floating panel over the map ------------------------------------------ */
 .places{position:absolute;top:16px;right:16px;bottom:16px;width:var(--finder-panel-width);box-sizing:border-box;display:flex;flex-direction:column;z-index:5;border-radius:10px;border:1px solid var(--rule);background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);overflow:hidden}
 /* Two independent purchases need two readable price columns and an address. */
-/* A smaller desktop keeps the original panel width; secondary columns move
+/* Tablets and smaller desktops keep the original panel width; secondary columns move
    out of the comparison so the addresses and costs still have room. */
-@media(min-width:761px) and (max-width:1199px){
+@media(min-width:601px) and (max-width:1359px){
  .citymap:has(.fhead.fr-costs){--finder-panel-width:485px}
  .fhead.fr-takeover,.place.fr.fr-takeover,.fhead.fr-takeover.wh,.place.fr.fr-takeover.wh{grid-template-columns:26px 24px minmax(0,1fr) 40px 40px 80px 80px}
  .fhead.fr-takeover:not(.wh) > :nth-child(n+5):nth-child(-n+7),.place.fr.fr-takeover:not(.wh) > :nth-child(n+5):nth-child(-n+7){display:none}
@@ -315,9 +315,8 @@ body.map-modal-open{overflow:hidden}
  .citymap.narrow .places .list{flex:none;overflow:visible}
  .fhead,.place.fr{grid-template-columns:26px 24px 1fr 38px 38px 38px 38px 38px var(--finder-cost-width,50px)}
  .fhead.wh,.place.fr.wh{grid-template-columns:26px 24px 1fr 38px 38px 38px 38px var(--finder-cost-width,50px)}
- .fhead.fr-takeover,.place.fr.fr-takeover{grid-template-columns:26px 24px minmax(0,1fr) repeat(5,38px) 80px 80px}
- .fhead.fr-takeover.wh,.place.fr.fr-takeover.wh{grid-template-columns:26px 24px minmax(0,1fr) repeat(4,38px) 80px 80px}
- .fhead.sale,.place.fr.sale{grid-template-columns:24px minmax(0,1fr) 50px 38px 80px 80px 64px}
+ .fhead.fr-takeover,.place.fr.fr-takeover,.fhead.fr-takeover.wh,.place.fr.fr-takeover.wh{grid-template-columns:26px 24px minmax(0,1fr) 38px 38px 80px 80px}
+ .fhead.sale,.place.fr.sale{grid-template-columns:24px minmax(0,1fr) 38px 80px 80px 64px}
  /* A text field under 16px makes a phone browser zoom the page in on focus. */
  .fchip,.fdel{height:32px}
  .fdel{width:30px}
