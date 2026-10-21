@@ -770,3 +770,34 @@ explicit dry-run quote before apply. See `docs/game-link-api.md` for the complet
 contract. The provider uses Street Food's own placement and route validation and
 preserves crew hours and other weekdays. No automatic time fitting or undo is provided.
 Both mods need rebuilding for this capability; a build alone is not an in-game check.
+
+
+#### PC rig verification, 21 October 2026
+
+Checked on Windows game build 3682 in the isolated `agent1` background player,
+with Big Copilot Link 0.8.0 / schema 4 and the companion provider at `b93c6d1`.
+A new disposable FT character held a cart, truck, two commissary spaces and a
+cart crew member. The normal game and its saves were not used.
+
+- Health advertised the provider; live snapshots included unsaved route changes,
+  revisions, crew hours, homes and live travel speed. The CLI read the paired
+  save/facts snapshot successfully.
+- Real cart pavement and truck parking resolution succeeded. Review left the live
+  fleet unchanged. Apply changed only the selected weekday, retaining other days
+  and crew. An empty reviewed route cleared that day's stops without changing crew.
+- Unpaired requests, a wrong company, a wrong quote, an old revision, a crew-hours
+  edit after review, invalid hours, missing legal placement and insufficient travel
+  were refused. Review reported uncovered crew time.
+- The rendered board used the actual PC snapshot and real write responses through
+  a test transport adapter: 907 positioned places and both vehicles appeared. Its
+  review/apply dialog changed the truck's Monday route from 11:00–14:00 to
+  11:00–15:00 using the returned quote. Native BizMan Week plan showed those exact
+  hours and the return trip. This checks board-to-game integration; it does not
+  replace browser-shell pairing coverage in the automated suites.
+- Save/reload and a complete player restart retained routes, crew and hours. The
+  native pairing dialog explicitly named Street Food routes after its wording fix.
+  The session log had no FoodTrucks exceptions, mod errors or inactive Street Food
+  patches.
+
+This was a focused route-planning smoke test, not a multi-day sales, traffic or
+crew-driving test. Raw saves, responses, screenshots and logs remain private.
