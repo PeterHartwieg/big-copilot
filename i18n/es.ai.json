@@ -2298,7 +2298,6 @@
  "map.col.address": "gpt-6-sol",
  "map.col.cap": "gpt-6-sol",
  "map.col.demand": "gpt-6-sol",
- "map.col.price": "gpt-6-sol",
  "map.col.rent": "codex",
  "map.col.score": "gpt-6-sol",
  "map.col.traffic": "gpt-6-sol",

@@ -241,7 +241,7 @@ test('a sale search restores its own sort and leaves the ranked sort alone', asy
     assert.equal(await page.locator(`${saved} [data-saved="By payback"]`).getAttribute('aria-pressed'), 'true');
     // Applying it changes nothing a sale list cannot show, so the sort survives.
     await page.locator(`${saved} [data-saved="On sale"]`).click();
-    assert.equal(await page.locator('#cityMapPage .fhead.sale span.on').textContent(), en('map.col.price'));
+    assert.equal(await page.locator('#cityMapPage .fhead.sale span.on').textContent(), en('map.col.buildingPrice'));
     await page.locator(`${saved} [data-saved="By payback"]`).click();
     assert.equal(await page.locator('#cityMapPage .fhead.sale span.on').textContent(), en('map.col.payback'));
     await page.locator('#cityMapPage .fchip.show[data-show="rent"]').click();
@@ -460,7 +460,7 @@ test('sale heads sort by payback with null last and price ties, independently of
     assert.deepEqual(await page.evaluate(() => [cityMapPage.fs.sort, cityMapPage.fs.sortPicked]), ['traffic', true]);
     await head.click();
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1], MT[2]]);
-    assert.equal(await page.locator('#cityMapPage .fhead.sale span.on').textContent(), en('map.col.price'));
+    assert.equal(await page.locator('#cityMapPage .fhead.sale span.on').textContent(), en('map.col.buildingPrice'));
     await head.focus(); await head.press('Enter');
     assert.deepEqual(await rowKeys(page), [MT[1], MT[0], MT[2], HK[0]]);
     await head.focus(); await head.press('Space');

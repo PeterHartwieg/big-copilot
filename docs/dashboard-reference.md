@@ -2574,8 +2574,15 @@ straight onto it.
 ### Takeover price
 
 The takeover list's **Est. takeover price** column replaces the rental list's Upfront
-deposit column and sorts cheapest first, with unknown values last. A rival's building
-card shows the same estimate at full dollar precision. It is BizMan's estimated business
+deposit column and sorts cheapest first, with unknown values last. **Building price**
+sits beside it, joined by address to the save's current `premises.forSale` listings,
+and also sorts cheapest first. An unlisted building shows **—**, with a tooltip saying
+it is not listed for sale. The For sale list shows the same pair of columns, with
+**—** for takeover price where there is no rival business or no estimate.
+The two costs remain separate: purchasing a business does not purchase its building.
+Both columns remain visible on phones, and saved searches keep the chosen sort.
+A rival's building card shows both amounts at full dollar precision where known.
+The takeover price is BizMan's estimated business
 valuation, calculated by `_takeover_estimate()` from `CompetitionHelper.CalculateAiOwnedValuation`
 in installed build 3682:
 

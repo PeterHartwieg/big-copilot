@@ -2086,7 +2086,6 @@
  "map.col.address": "claude-sonnet-5",
  "map.col.cap": "claude-sonnet-5",
  "map.col.demand": "claude-sonnet-5",
- "map.col.price": "claude-sonnet-5",
  "map.col.rent": "codex",
  "map.col.score": "claude-sonnet-5",
  "map.col.traffic": "claude-sonnet-5",

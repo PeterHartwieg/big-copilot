@@ -1874,7 +1874,6 @@
  "map.col.address": "claude-opus-5-5",
  "map.col.cap": "claude-opus-5-5",
  "map.col.demand": "claude-opus-5-5",
- "map.col.price": "claude-opus-5-5",
  "map.col.rent": "codex",
  "map.col.score": "claude-opus-5-5",
  "map.col.traffic": "claude-opus-5-5",
