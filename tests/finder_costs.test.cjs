@@ -91,8 +91,12 @@ test('both cost columns fit together on phones, tablets and desktop in every UI 
   const {page, errors} = await fixture(null, {premises});
   try{
     await openMap(page); await turnOn(page);
+    // Linux reserves scrollbar space; exercise the same budget on platforms
+    // whose scrollbars otherwise overlay the page and the results panel.
+    await page.addStyleTag({content:'html, .places {scrollbar-gutter:stable} ::-webkit-scrollbar{width:15px}'});
     for(const show of ['takeover', 'sale']){
       await mode(page, show);
+      await H.pick(page, HK[1]);
       for(const width of [320, 390, 600, 700, 1024, 1440]){
         await page.setViewportSize({width, height:1000});
         for(const lang of UI_LANGS){
@@ -112,7 +116,12 @@ test('both cost columns fit together on phones, tablets and desktop in every UI 
           const headers = page.locator(`#cityMapPage .fhead [data-s="takeoverPrice"], #cityMapPage .fhead [data-s="${show === 'sale' ? 'price' : 'buildingPrice'}"]`);
           assert.equal(await headers.count(), 2);
           assert.ok(await headers.evaluateAll(els => els.every(el => el.getBoundingClientRect().width > 0 && el.scrollWidth <= el.clientWidth + 1)), 'headers fit');
-          assert.ok((await row(page, HK[1]).locator('.nm').boundingBox()).width >= 100, 'address remains readable');
+          const addressWidth = (await row(page, HK[1]).locator('.nm').boundingBox()).width;
+          assert.ok(addressWidth >= 100, `${show}, ${lang}, ${width}: address remains readable at ${addressWidth}px`);
+          if(width <= 600){
+            assert.ok(await row(page, HK[1]).evaluate(el => el.classList.contains('on')
+              && el.querySelector('.nm').getBoundingClientRect().left >= el.getBoundingClientRect().left + 5), 'selected address clears the accent bar');
+          }
         }
       }
     }

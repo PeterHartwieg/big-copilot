@@ -347,6 +347,9 @@ body.map-modal-open{overflow:hidden}
  /* On the purchase lists the two costs take priority; keep the address and
     its capacity line beside them, with every other fact on the building card. */
  .fhead.fr-costs,.place.fr.fr-costs,.fhead.fr-takeover.wh,.place.fr.fr-takeover.wh{grid-template-columns:minmax(0,1fr) 80px 80px}
+ /* Leave room for a full address even at 320px with classic scrollbars. */
+ .fhead.fr-costs,.place.fr.fr-costs{padding-left:5px;padding-right:0;column-gap:2px}
+ .place.fr.fr-costs .nm{white-space:normal;overflow-wrap:anywhere}
  .fhead.fr-takeover > :nth-child(-n+2),.place.fr.fr-takeover > :nth-child(-n+2),
  .fhead.fr-takeover > :nth-child(4),.place.fr.fr-takeover > :nth-child(4),
  .fhead.sale > :nth-child(1),.place.fr.sale > :nth-child(1),
