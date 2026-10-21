@@ -94,6 +94,11 @@ test('both cost columns fit together on phones, tablets and desktop in every UI 
     // Linux reserves scrollbar space; exercise the same budget on platforms
     // whose scrollbars otherwise overlay the page and the results panel.
     await page.addStyleTag({content:'html, .places {scrollbar-gutter:stable} ::-webkit-scrollbar{width:15px}'});
+    // macOS can still overlay the root scrollbar despite its stable gutter.
+    // Reserve the same 15px that Linux subtracts from the document viewport.
+    await page.evaluate(() => {
+      if(document.documentElement.clientWidth === innerWidth) document.documentElement.style.paddingRight = '15px';
+    });
     for(const show of ['takeover', 'sale']){
       await mode(page, show);
       await H.pick(page, HK[1]);

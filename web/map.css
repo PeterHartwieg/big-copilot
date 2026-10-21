@@ -357,6 +357,12 @@ body.map-modal-open{overflow:hidden}
  .fhead.sale > :nth-child(4),.place.fr.sale > :nth-child(4),
  .fhead.sale > :nth-child(7),.place.fr.sale > :nth-child(7){display:none}
 }
+/* At the smallest phone size, two classic scrollbars can consume 30px.
+   Give the address a full line and keep the two purchase amounts together. */
+@media(max-width:360px){
+ .fhead.fr-costs,.place.fr.fr-costs,.fhead.fr-takeover.wh,.place.fr.fr-takeover.wh{grid-template-columns:repeat(2,minmax(80px,1fr));row-gap:4px}
+ .place.fr.fr-costs .nm,.fhead.fr-takeover > :nth-child(3),.fhead.sale > :nth-child(2){grid-column:1/-1}
+}
 @media(pointer:coarse){.map-shortcut{min-width:32px;min-height:32px}.city-map .ibtn,.place{min-height:44px}}
 /* floor plans (issue #70): every class is lp- prefixed ----------------------------
    The plans are painted in the board's tokens, so they follow the theme; the map
