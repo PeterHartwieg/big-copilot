@@ -1,19 +1,15 @@
+const {boardHtml} = require('./_page.cjs');
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const {spawnSync} = require('node:child_process');
 const {chromium} = require('playwright');
 const root = path.join(__dirname, '..');
 const app = fs.readFileSync(path.join(root, 'web/app.js'), 'utf8');
 let browser, html;
 before(async () => {
-  const rendered = spawnSync(process.env.PYTHON || 'python', ['-c',
-    'from ba_dashboard import render; import sys; sys.stdout.buffer.write(render(None).encode("utf-8"))'],
-  {cwd:root, maxBuffer:4*1024*1024});
-  assert.equal(rendered.status, 0, rendered.stderr.toString());
-  html = rendered.stdout.toString();
+  html = boardHtml();
   browser = await chromium.launch({headless:true, channel:process.env.PLAYWRIGHT_CHANNEL});
 });
 after(async () => { await browser?.close(); });

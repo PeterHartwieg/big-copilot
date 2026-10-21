@@ -35,7 +35,7 @@ import shutil
 import tokenize
 
 from ba_dashboard import (
-    FLOOR_PLAN_KINDS, GAME_NAME_LANGS, IMPORTER_TEXT, NAME_COVERAGE, NAME_PREFIXES, VERIFIED_BUILD, WIKI_SERVED,
+    FLOOR_PLAN_KINDS, GAME_NAME_LANGS, IMPORTER_TEXT, MOD_ART_FILES, NAME_COVERAGE, NAME_PREFIXES, VERIFIED_BUILD, WIKI_SERVED,
     compact_wiki, footer_html, name_coverage, name_table, render,
 )
 from ba_save import NotEnglishText, bundled_locale, load_game_locale, load_locale, locale_search_paths
@@ -527,8 +527,8 @@ details.help[open] summary::after{content:"\2013"}
 # order it lists them (downloads run together): the code, without which the worker never becomes
 # ready, and the data, written only when its fetch succeeds. The worker names
 # each file itself; tests/test_web_fresh.py holds it to these two lists.
-PY_CODE = ("ba_save.py", "ba_dashboard.py", "ba_facts.py", "ba_mods.py")
-PY_DATA = ("gametext.json", "ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json", "ba_store_rules.json")
+PY_CODE = ("ba_save.py", "ba_dashboard.py", "ba_facts.py", "ba_mods.py", "ba_street_food.py")
+PY_DATA = ("gametext.json", "ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json", "ba_store_rules.json", "ba_street_food_rules.json", "ba_street_food_stops.json")
 # The ones shipped into web/py/ from the top of the checkout. gametext.json is
 # written there from the installed game instead (main()).
 PY_COPIED = tuple(name for name in PY_CODE + PY_DATA if name != "gametext.json")
@@ -558,12 +558,14 @@ STAMP_INPUTS = (
     # The furniture and material prices the payback figures read (make_item_prices.py).
     _PY_DATA_SHIPPED[3],
     # What a store sells, needs and can buy where, for the store planner (make_store_rules.py).
-    _PY_DATA_SHIPPED[4],
+    _PY_DATA_SHIPPED[4], _PY_DATA_SHIPPED[5], _PY_DATA_SHIPPED[6],
     # The board's markup and CSS, and its script, which render() reads (ba_dashboard.load_template()).
     "template/board.html",
     "template/board.js",
     "template/open-store-model.js",
     "template/open-factory-model.js",
+    "template/street-food-model.js",
+    *(f"web/{path}" for path in MOD_ART_FILES.values()),
     # The deployment transform and its pinned compiler affect the served page.
     # stamp() selects only esbuild's lock entry, not unrelated dev dependencies.
     "tools/optimize_web.mjs", "package-lock.json",
@@ -620,7 +622,7 @@ def stamp(root: str = HERE) -> str:
         if name == "package-lock.json":
             compiler = json.loads(data)["packages"]["node_modules/esbuild"]
             data = json.dumps(compiler, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        if not name.endswith(".svg"):
+        if not name.endswith((".svg", ".webp")):
             data = data.replace(b"\r\n", b"\n")
         h.update(data)
     return h.hexdigest()[:10]

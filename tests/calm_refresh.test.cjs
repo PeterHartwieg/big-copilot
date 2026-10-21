@@ -14,7 +14,7 @@ const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const {chromium} = require('playwright');
+const {launch} = require('./_page.cjs');
 
 const root = path.join(__dirname, '..');
 const PYTHON = process.env.PYTHON || 'python';
@@ -66,7 +66,7 @@ before(async () => {
   {cwd: root, maxBuffer: 16 * 1024 * 1024});
   assert.equal(page.status, 0, page.stderr?.toString());
   html = page.stdout.toString();
-  browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
+  browser = await launch();
 });
 after(async () => { await browser?.close(); });
 
@@ -633,6 +633,9 @@ for(const [hash, saved, view, shell] of [
         const [p, v] = id.split("/");
         showPage(p, false); if(v) showSub(p, v);
       }, id);
+      // The Street Food map starts only on this first visit. Compare the
+      // settled loading result (success or failure), not two sides of its promise.
+      if(id === "mods/streetfood") await visit.evaluate(() => sfMapView && sfMapView.ready);
       const read = () => visit.evaluate(() => {
         document.querySelectorAll('.sec').forEach(el => el.classList.add('measured'));
         return document.querySelector('.page:not([hidden])').innerText;

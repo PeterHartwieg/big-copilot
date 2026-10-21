@@ -5,12 +5,76 @@ two clients: the web app at bigcopilot.com (`web/app.js`) and the local watcher
 (`ba_dashboard.py --watch --game`). `tools/game_link_mock.py` serves the same contract
 from a save file on disk, so the clients can be developed and tested without the game.
 
-Schema version **3**. Current clients also accept versions 1 and 2.
+Schema version **4**. Current clients also accept versions 1, 2 and 3.
+Version 4 (mod 0.8.0) adds reviewed Street Food route writes (`streetFoodRoute`, capability `streetFood.routes`).
 Version 3 adds wholesale orders (`wholesale`, mod 0.7.0) and guarded same-day undo.
 Version 2 adds the paired building-facts snapshot and marketing prediction guard below.
 Bump it on any contract change and update the mod, the mock, the
 two clients and this file in the same commit. A client refuses a mod whose
 `schemaVersion` it does not know and says which version it needs.
+
+## Reviewed Street Food route writes
+
+`POST /write/streetFoodRoute` requires pairing, the ordinary main-thread write gate,
+and `expect: {character, company}`. It is advertised in `/health.writes` with
+`streetFood.routes` in `/health.features` only when the Street Food provider exposes
+`RouteV1(GameInstance, string, bool)`. Presence of old save records alone does not
+make writing available.
+
+The body contains `vehicleId`, `weekday` (Monday 0 through Sunday 6), `revision`
+(from that vehicle's snapshot `routeRevisions`) and `stops: [{x,z,open,close}]` in
+player-chosen order. Times are minutes after midnight, up to 03:00 the next day.
+At most six stops replace only the chosen weekday; an empty list clears its stops.
+Other weekdays, closed-day marks and every crew member's hours stay unchanged.
+
+First send `dryRun: true`. The mod resolves new places with its own legal parking /
+pavement picker and validates the complete week's hours and travel. Existing exact
+places retain their saved height and heading. A refusal changes nothing. The response
+is `{ok, kind: "streetFoodRoute", dryRun, quote, rows, warnings}`. Its single row has
+`vehicleId`, `weekday`, `before`, `after`, and `changed`; each stop has
+`x,z,y,heading,open,close`. Warnings include `crew_gap` and `day_closed`. These are
+visible in review; neither staffing nor closed-day marks are changed implicitly.
+
+Apply the identical body with `dryRun: false` and the reviewed `quote`. The mod
+checks company identity, route and crew revision, live crew, rules, speed, home,
+and resolved places again. A changed quote or revision returns `409 changed`.
+A busy vehicle, unavailable provider, invalid route, insufficient travel time or
+unavailable legal place returns `409 refused` with `reason` respectively
+`vehicle_busy`, `unavailable`, `invalid_route`, `travel_gap`, or `no_position`.
+Successful apply has the usual `stamp` and refreshes the board. No route undo is
+advertised. It never adjusts times, changes crew, opens a closed day, books an event,
+buys a permit or executes a route itself.
+
+The companion provider's `CaptureFactsV1(GameInstance)` extends the fresh marker with
+`gameSpeed` and `routeRevisions` (opaque SHA-256 values over each vehicle's identity,
+kind, whole schedule and crew). File saves without these fields can be planned;
+reviewed writing requires a fresh live snapshot with a revision. Travel without a
+live speed uses normal-speed estimates and is labelled accordingly.
+
+The mock supports this route contract for synthetic saves already carrying a fresh
+Street Food marker. It preserves the source file and overlays changes only in served
+bytes. It validates times/travel but has no game geometry: only the real provider can
+resolve legal placement. SDK compilation and synthetic checks do not establish an
+in-game smoke test.
+
+## Street Food save metadata
+
+Street Food metadata travels in the existing `/save` bytes. On the main thread the link optionally calls
+`FoodTrucks.BigCopilotSnapshot.CaptureV1(GameInstance)`. A compatible session returns
+the current schema-1 or schema-2 `foodtrucks:state` JSON without saving the game, settling
+takings or incrementing its save counter. The link copies the root and `modData`
+and writes the returned string into that copy.
+
+The copy also carries `bigcopilot:street-food-snapshot.v1`, a JSON string containing
+`{"status":"fresh"}` or `{"status":"unavailable"}`. It travels in the same bytes
+as the game state, including the existing facts hash and portable snapshot.
+Clients explicitly mark live inputs: missing metadata on an older link is stale,
+whereas a normal saved file needs no live provider. A failed or incompatible provider
+preserves the old mod block but cannot claim freshness.
+
+Before moving an unassigned employee, hire preflight calls the optional
+`IsCrewV1(GameInstance, string employeeId)`. Reserved crew or unavailable ownership
+is refused using the existing `changed` result. There is no writable fleet endpoint.
 
 ## Building facts (schema 2)
 

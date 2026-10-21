@@ -119,7 +119,7 @@ class MockContract(unittest.TestCase):
         self.assertEqual(status, 404)
         self.assertEqual(json.loads(body)["endpoints"], [
             "/health", "/save", "/facts", "/refresh", "/write/uniforms", "/write/imports", "/write/schedule", "/write/hire",
-            "/write/marketing", "/write/rent", "/write/wholesale", "/write/undo",
+            "/write/marketing", "/write/rent", "/write/wholesale", "/write/streetFoodRoute", "/write/undo",
             "/pair/request", "/pair/status"])
         self.assertEqual(call(self.url + "/refresh")[0], 405)
         for method, route in (("HEAD", "/health"), ("PUT", "/save"), ("POST", "/"), ("DELETE", "/refresh"), ("TRACE", "/health")):
@@ -245,7 +245,7 @@ class MockWrites(LinkedMock):
 
     def test_health_lists_the_writes_and_says_paired_only_with_a_token_for_its_origin(self):
         health = json.loads(call(self.url + "/health")[2])
-        self.assertEqual(health["writes"], ["uniforms", "imports", "schedule", "hire", "marketing", "rent", "wholesale"])
+        self.assertEqual(health["writes"], ["uniforms", "imports", "schedule", "hire", "marketing", "rent", "wholesale", "streetFoodRoute"])
         self.assertIs(health["paired"], False)
         health = json.loads(call(self.url + "/health", headers={"Authorization": f"Bearer {TOKEN}"})[2])
         self.assertIs(health["paired"], True)
@@ -908,6 +908,22 @@ class MockHire(LinkedMock):
         body.update(over)
         return body
 
+    def test_street_food_crew_cannot_be_moved_even_from_an_old_plan(self):
+        from tests.test_real_estate import load
+        root = es3_fixture.link_company()
+        person = next(e for e in root["EmployeeInstances"] if e["id"] == BEN)
+        person["assignedAddress"] = None
+        root.setdefault("VehicleInstances", []).append({"id": "cart", "vehicleTypeName": "foodtrucks:vehicletype_foodcart"})
+        root["modData"] = [{"$k": "foodtrucks:state", "$v": json.dumps({
+            "schemaVersion": 1, "vehicles": [{"vehicleId": "cart", "crew": [BEN]}]})}]
+        body = self.body(moves=[{"employeeId": BEN, "from": None, "to": CORNER}])
+        for dry in (True, False):
+            with self.subTest(dry=dry):
+                code, reply = self.link._hire(load(root), body, dry)
+                row = next(r for r in reply["rows"] if r["scope"] == "move" and r["id"] == BEN)
+                self.assertEqual(row["error"], "changed")
+                self.assertFalse(reply.get("applied", False))
+
     def test_health_lists_hire(self):
         self.assertIn("hire", json.loads(call(self.url + "/health")[2])["writes"])
 
@@ -1212,11 +1228,11 @@ class MockHireOneAction(LinkedMock):
 
     def test_health_lists_the_features_and_config_changes_them(self):
         health = json.loads(call(self.url + "/health")[2])
-        self.assertEqual(health["features"], ["hire.reschedule", "hire.undo", "rent.undo", "wholesale.undo"])
+        self.assertEqual(health["features"], ["hire.reschedule", "hire.undo", "rent.undo", "wholesale.undo", "streetFood.routes"])
         self.assertEqual(self.link.configure({"features": []})["features"], [])
         self.assertEqual(json.loads(call(self.url + "/health")[2])["features"], [])
         self.link.configure({"reset": True})
-        self.assertEqual(json.loads(call(self.url + "/health")[2])["features"], ["hire.reschedule", "hire.undo", "rent.undo", "wholesale.undo"])
+        self.assertEqual(json.loads(call(self.url + "/health")[2])["features"], ["hire.reschedule", "hire.undo", "rent.undo", "wholesale.undo", "streetFood.routes"])
         # --features "" is a Link with none; a 0.1.0 mock lists neither key.
         older = game_link_mock.Link(self.path, character="abc", company="Mock Co", day=34, hour=14, cash=1.5,
                                     build=3680, schema=1, throttle=False, refuse=None, features=[])

@@ -146,7 +146,7 @@ test('all downloads overlap runtime startup and imports wait for every body', as
   // Complete out of order; one response body is still being downloaded.
   const body = deferred();
   s.requests.get('ba_store_rules.json').resolve({ok: true, arrayBuffer: () => body.promise});
-  for (const name of files.slice(0, -1).reverse()) respond(s.requests.get(name), name);
+  for (const name of files.filter(n => n !== 'ba_store_rules.json').reverse()) respond(s.requests.get(name), name);
   s.runtime.resolve(s.py);
   await flush();
   assert.ok(!s.py.imported);
@@ -169,11 +169,11 @@ test('unstamped builds bypass cache and optional HTTP failures still boot', asyn
   s.runtime.resolve(s.py);
   await flush();
   assert.ok(s.py.imported);
-  assert.equal(s.writes.size, 4);
+  assert.equal(s.writes.size, pyTuple('PY_CODE').length);
   assert.ok(s.messages.some(m => m.stage === 'ready'));
 });
 
-for (const name of ['ba_save.py', 'ba_dashboard.py', 'ba_facts.py', 'ba_mods.py']) {
+for (const name of ['ba_save.py', 'ba_dashboard.py', 'ba_facts.py', 'ba_mods.py', 'ba_street_food.py']) {
   test(`a failed required ${name} reports startup failure before runtime finishes`, async () => {
     const s = await startup();
     assert.ok(s.requests.has(name));

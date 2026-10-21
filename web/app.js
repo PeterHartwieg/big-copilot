@@ -789,9 +789,9 @@
   // any caller read, the watcher's included. linkHealth moves only with new
   // bytes, so a mod updated under an open tab shows here first: writes go
   // only while the two agree (linkSpeaks()).
-  const LINK_SCHEMA = 3;
+  const LINK_SCHEMA = 4;
   let linkSchema = LINK_SCHEMA;
-  const linkVersionKnown = v => v === 1 || v === 2 || v === LINK_SCHEMA;
+  const linkVersionKnown = v => v === 1 || v === 2 || v === 3 || v === LINK_SCHEMA;
   const linkSpeaks = () => linkVersionKnown(linkSchema);
   let linkGone = false;   // the watcher has said the game went away
   let linkNotReady = 0;   // /health answers in a row that were never health, any caller
@@ -1493,7 +1493,7 @@
   const APPROVAL_AUTO_WAIT_S = 10;
   const WRITE_BUSY_RETRIES = 3;
   // The kinds that carry the same-save guard (`expect`), see gameWrite().
-  const SAME_SAVE_KINDS = new Set(["uniforms", "marketing", "rent", "wholesale"]);
+  const SAME_SAVE_KINDS = new Set(["uniforms", "marketing", "rent", "wholesale", "streetFoodRoute"]);
   // The mod always finishes a write it has started, however long the game
   // takes over it, so a write waits far longer for its answer than a read.
   const WRITE_WAIT_MS = 30000;
@@ -1982,7 +1982,7 @@
       const bytes = await file.arrayBuffer();
       if (gen !== sourceGen) return;
       const data = await ask({
-        kind: "build", name: file.name, bytes, mtime: file.lastModified,
+        kind: "build", name: file.name, bytes, mtime: file.lastModified, live: !!file.linkStamp,
         locale: stored.get(LOCALE_KEY), history: stored.get(HISTORY_KEY),
       }, [bytes], gen);
       built = data;
@@ -2756,7 +2756,7 @@
     data: async () => {
       if (!lastFile) throw new Error(tt("app.reader.nosave", "no save yet"));
       const bytes = await lastFile.arrayBuffer();
-      return ask({kind: "build", name: lastFile.name, bytes, mtime: lastFile.lastModified,
+      return ask({kind: "build", name: lastFile.name, bytes, mtime: lastFile.lastModified, live: !!lastFile.linkStamp,
                   locale: stored.get(LOCALE_KEY), history: stored.get(HISTORY_KEY)}, [bytes]);
     },
     // Resolves to the rebuilt data; the board swaps it in itself. No

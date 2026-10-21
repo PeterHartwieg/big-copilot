@@ -4546,6 +4546,198 @@ section.od-updating{background-image:linear-gradient(90deg,transparent,var(--acc
   .spx-detail{grid-template-columns:minmax(0,1fr);padding:12px}
   .spx .sechead > .quiet{flex-basis:100%;order:5}
 }
+/* --- Mods › Browse mods (drawMods()) -------------------------------------------
+   Street Food leads with its Workshop artwork, one line of what it is, the
+   save's state and its action; what the board reads waits in a disclosure.
+   The other supported mods are one line each, and Peter's other Workshop mods
+   a gallery of their artwork. Artwork keeps its own shape inside a square. */
+.md-feat{display:grid;grid-template-columns:200px minmax(0,1fr);gap:22px 28px;align-items:start;padding:20px;border:1px solid var(--rule);border-radius:12px;background:var(--surface)}
+.md-art{margin:0;aspect-ratio:1;border-radius:9px;overflow:hidden;background:var(--raised);display:grid;place-items:center}
+.md-art img{display:block;width:100%;height:100%;object-fit:contain}
+.md-art svg{width:40%;height:40%;stroke:var(--ink-3);fill:none;stroke-width:1.4;stroke-linejoin:round}
+.md-feat h3{margin:2px 0 0;font-size:21px;font-weight:600;letter-spacing:-.015em}
+.md-by{margin:4px 0 0;font-size:12.5px;color:var(--ink-3)}
+.md-what{margin:12px 0 0;font-size:14px;line-height:1.5;color:var(--ink-2);max-width:52ch}
+.md-state{margin-top:14px}
+.md-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+/* What the board reads of a mod, folded until asked for. */
+.md-det{margin-top:14px}
+.md-det > summary{display:inline-flex;align-items:center;gap:6px;cursor:pointer;list-style:none;font-size:12.5px;font-weight:500;color:var(--ink-2);border-radius:4px}
+.md-det > summary::-webkit-details-marker{display:none}
+.md-det > summary::before{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform .15s}
+.md-det[open] > summary::before{transform:rotate(45deg)}
+.md-det > summary:hover{color:var(--ink)}
+.md-det > summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.md-det h4{margin:12px 0 4px;font-size:12px;font-weight:600;color:var(--ink-3)}
+.md-list{margin:0;padding:0 0 0 16px;font-size:12.5px;line-height:1.5;color:var(--ink-2);max-width:70ch}
+.md-list li+li{margin-top:3px}
+/* The other supported mods: name and line, the save's state, details. */
+.md-rows{list-style:none;margin:18px 0 0;padding:0;border-top:1px solid var(--rule)}
+.md-row{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:4px 16px;align-items:center;padding:12px 2px;border-bottom:1px solid var(--rule-soft)}
+.md-row > .md-art{border-radius:7px}
+.md-wsl{margin-left:8px;color:var(--ink-2);text-decoration:none;white-space:nowrap;border-bottom:1px solid var(--rule)}
+.md-wsl:hover{color:var(--accent);border-color:currentColor}
+.md-wsl:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+.md-row h3{margin:0;font-size:14.5px;font-weight:600}
+.md-row .md-what{margin:2px 0 0;font-size:12.5px}
+.md-row .md-det{grid-column:2/-1;margin-top:2px}
+.md-foot{margin:12px 0 0}
+/* Peter's other Workshop mods. */
+.md-mine{margin-top:44px}
+.md-gallery{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(176px,1fr));gap:18px}
+.md-tile{display:flex;flex-direction:column;gap:6px;height:100%;color:var(--ink);text-decoration:none;border-radius:10px}
+.md-tile .md-art{border:1px solid var(--rule-soft);transition:border-color .15s}
+.md-tile:hover .md-art{border-color:var(--ink-3)}
+.md-tile:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.md-tile b{margin-top:4px;font-size:13.5px;font-weight:600;line-height:1.3}
+.md-tile .md-tdesc{font-size:12px;line-height:1.45;color:var(--ink-2)}
+.md-tile .md-tlink{margin-top:auto;padding-top:2px;font-size:12px;color:var(--ink-3)}
+.md-tile:hover .md-tlink{color:var(--accent)}
+@media (max-width:760px){
+  .md-feat{grid-template-columns:minmax(0,1fr);padding:16px}
+  .md-feat .md-art{max-width:240px}
+  .md-row{grid-template-columns:48px minmax(0,1fr)}
+  .md-row > .chip{grid-column:2;justify-self:start}
+  .md-gallery{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+}
+
+/* --- Mods › Street Food (drawStreetFood(), the sf* functions) ----------------
+   The map and the side column side by side, the day ribbon under both. The
+   layer colours are web/map.css's --sf-c-* on .sf-scope. */
+.sf-ctl{margin-bottom:0}
+.sf-note{margin:0 0 12px}
+.sf-note p{margin:4px 0;max-width:80ch}
+.sf-grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:14px 18px;align-items:start}
+.sf-grid[hidden]{display:none}
+.sf-mapcol{min-width:0}
+.sf-side{display:flex;flex-direction:column;gap:14px;min-width:0}
+.sf-ribbon{grid-column:1/-1;min-width:0}
+.sf-layers{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:10px}
+.sf-lay{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 10px;border:1px solid var(--rule);border-radius:15px;background:var(--surface);color:var(--ink);font:500 12px/1 Archivo,sans-serif;cursor:pointer}
+.sf-lay:hover{border-color:var(--ink-3)}
+.sf-lay:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sf-lay .n{color:var(--ink-3);font-size:11px}
+.sf-lay.off{color:var(--ink-3);background:transparent}
+.sf-lay.off i{background:transparent;box-shadow:inset 0 0 0 1.5px var(--sf-c)}
+.sf-scope i[data-sf]{display:inline-block;flex:none;width:9px;height:9px;border-radius:50%;background:var(--sf-c)}
+.sf-scope i[data-sf="commissary"]{border-radius:2px;background:transparent;box-shadow:inset 0 0 0 2px var(--sf-c)}
+.sf-key{margin-left:auto;font-size:11.5px}
+.sf-box{border:1px solid var(--rule);border-radius:10px;background:var(--surface);padding:14px}
+.sf-box h3{margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em;overflow-wrap:anywhere}
+.sf-box h4{margin:14px 0 6px;font-size:12px;font-weight:600;color:var(--ink-2)}
+.sf-find{display:flex;width:100%;box-sizing:border-box;margin-bottom:12px}
+.sf-find input{flex:1;min-width:0}
+.sf-found,.sf-near{list-style:none;margin:0 0 10px;padding:0}
+.sf-found li button,.sf-near li button{display:inline-flex;align-items:center;gap:8px;max-width:100%;padding:4px 0;border:0;background:none;color:var(--ink);font:inherit;font-size:12.5px;text-align:left;cursor:pointer;overflow-wrap:anywhere}
+.sf-found li button:hover,.sf-near li button:hover{color:var(--accent)}
+.sf-near li{display:grid;grid-template-columns:9px minmax(0,1fr) auto auto;align-items:center;gap:4px 8px;padding:3px 0;border-bottom:1px solid var(--rule-soft);font-size:12px}
+.sf-near li .quiet{grid-column:2;font-size:11.5px;margin-top:-4px}
+.sf-near li .mono{grid-row:1;grid-column:3;color:var(--ink-2)}
+.sf-near li .sf-ow{grid-row:1;grid-column:4;font-size:11.5px}
+.sf-ow.ok{color:var(--accent)}.sf-ow.dim{color:var(--ink-3)}.sf-ow.warn{color:var(--warn)}
+.sf-hint{margin:0;line-height:1.5}
+.sf-sub{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0 0;font-size:12.5px;color:var(--ink-2)}
+.sf-when{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:10px 0 0}
+.sf-addrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
+/* Checked stopping places: the kind shown, the ones near an inspected place
+   to choose from, and the mark that stands for one (web/map.css draws the dots). */
+.sf-addrow.sf-spots{display:block}
+.sf-addrow.sf-spots h4{margin-top:0}
+.sf-kinds button{padding:5px 10px;border:0;border-radius:5px;background:none;color:var(--ink-2);font:500 12px Archivo,sans-serif;cursor:pointer}
+.sf-kinds button.on{background:var(--ink);color:var(--ground)}
+.sf-kinds button[aria-disabled="true"]{opacity:.45;cursor:default}
+.sf-kinds button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.sf-laybreak{flex-basis:100%;height:0}
+.sf-spotmark{display:inline-block;flex:none;width:9px;height:9px;margin-right:6px;border-radius:50%;background:#ffd166;box-shadow:0 0 0 1.5px var(--surface),0 0 0 2.5px var(--ink-3);vertical-align:-1px}
+.sf-key .sf-spotmark{margin-right:5px}
+.sf-spotlist{list-style:none;margin:0;padding:0}
+.sf-spotlist li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px solid var(--rule-soft);font-size:12.5px}
+.sf-spotlist button{display:inline-flex;align-items:center;min-width:0;padding:3px 0;border:0;background:none;color:var(--ink);font:inherit;text-align:left;cursor:pointer;overflow-wrap:anywhere}
+.sf-spotlist button:hover{color:var(--accent)}
+.sf-spotlist button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.sf-spotlist .mono{color:var(--ink-2);font-size:12px}
+.sf-nospot{margin:0}
+.sf-checked{margin:8px 0 0;font-size:11.5px;line-height:1.45}
+.sf-what h3 .sf-spotmark{width:11px;height:11px;background:#ff4fd8}
+.sf-field{display:grid;grid-template-columns:56px minmax(0,1fr);align-items:center;gap:8px;margin-bottom:8px;font-size:12px;color:var(--ink-3)}
+.sf-field input,.sf-field select{min-width:0;height:32px;padding:0 9px;border:1px solid var(--rule);border-radius:7px;background:var(--ground);color:var(--ink);font:500 13px Archivo,sans-serif}
+.sf-field input:focus-visible,.sf-field select:focus-visible,.sf-times input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.sf-stops{list-style:none;margin:12px 0 0;padding:0;border-top:1px solid var(--rule-soft)}
+.sf-stop{display:grid;grid-template-columns:22px minmax(0,1fr) auto;grid-template-areas:"n name ord" "n times times" "n iss iss";gap:4px 8px;padding:9px 0;border-bottom:1px solid var(--rule-soft)}
+.sf-stop.lit{background:linear-gradient(90deg,#ff4fd814,transparent 70%)}
+.sf-n{grid-area:n;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--ground);font:600 12px/1 Archivo,sans-serif}
+.sf-stop.bad .sf-n{background:var(--warn);color:var(--on-accent)}
+.sf-sname{grid-area:name;align-self:center;min-width:0;padding:0;border:0;background:none;color:var(--ink);font:600 13px/1.3 Archivo,sans-serif;text-align:left;cursor:pointer;overflow-wrap:anywhere}
+.sf-sname:hover{color:var(--accent)}
+.sf-times{grid-area:times;display:flex;align-items:center;gap:6px;color:var(--ink-3)}
+.sf-times input{height:30px;padding:0 6px;border:1px solid var(--rule);border-radius:6px;background:var(--ground);color:var(--ink);font:500 12.5px "IBM Plex Mono",monospace;color-scheme:dark}
+:root[data-theme="light"] .sf-times input{color-scheme:light}
+.sf-p1{font:500 10.5px/1 "IBM Plex Mono",monospace;color:var(--ink-2);margin-left:-3px}
+.sf-ord{grid-area:ord;display:flex;gap:3px}
+.sf-ord .ibtn{width:26px;height:26px;font-size:13px}
+.sf-ord .ibtn[disabled]{opacity:.35;cursor:default}
+.sf-iss{grid-area:iss;margin:2px 0 0;font-size:12px;line-height:1.45;color:var(--warn)}
+.sf-leg{display:flex;align-items:center;gap:8px;padding:5px 0 5px 9px;font-size:11.5px;color:var(--ink-3);border-bottom:1px solid var(--rule-soft)}
+.sf-leg span{width:2px;height:14px;background:repeating-linear-gradient(var(--ink-3) 0 3px,transparent 3px 6px)}
+.sf-leg.bad{color:var(--warn)}
+.sf-leg.bad span{background:repeating-linear-gradient(var(--warn) 0 3px,transparent 3px 6px)}
+.sf-issues{list-style:none;margin:10px 0 0;padding:0;font-size:12px;color:var(--warn)}
+.sf-issues li{display:flex;gap:6px;align-items:flex-start;line-height:1.45}
+.sf-issues svg{flex:none;width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;margin-top:1px}
+.sf-fits{display:flex;align-items:center;gap:6px;margin:10px 0 0;font-size:12.5px;color:var(--accent)}
+.sf-fits svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+.sf-kept{margin:10px 0 0;font-size:11.5px;line-height:1.45}
+.sf-event{margin:8px 0 0;font-size:12px;color:var(--warn)}
+.sf-gwrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:12px}
+.sf-gwrow .quiet{font-size:11.5px;flex:1 1 12rem}
+/* the route write's review: the day as the game holds it, and as it would */
+.sf-gwcols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 20px;margin:4px 0 12px}
+.sf-gwlist{margin:6px 0 0;padding-left:20px;font-size:12.5px}
+.sf-gwlist li{padding:3px 0}
+.sf-gwlist li span+span{margin-left:8px}
+@media (max-width:560px){ .sf-gwcols{grid-template-columns:minmax(0,1fr)} }
+/* the day ribbon: 00:00 to the latest close, the time the map shows a line
+   the player drags (a range input laid over the strip) */
+.sf-ribhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:4px 0 8px}
+.sf-days button{padding:5px 10px;border:0;border-radius:5px;background:none;color:var(--ink-2);font:500 12.5px Archivo,sans-serif;cursor:pointer}
+.sf-days button:hover{color:var(--ink)}
+.sf-days button.on{background:var(--ink);color:var(--ground)}
+.sf-days button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.sf-at{font-size:12.5px;color:var(--ink-2)}
+.sf-at b{color:var(--ink);font-size:13px}
+.sf-ribhead .quiet{flex:1 1 20rem;min-width:0}
+.sf-rib{position:relative;height:62px;margin-bottom:20px;border:1px solid var(--rule);border-radius:8px;background:var(--surface)}
+.sf-tick{position:absolute;top:0;bottom:0;border-left:1px dashed var(--rule-soft)}
+.sf-tick b{position:absolute;top:100%;left:0;transform:translateX(-50%);margin-top:4px;font-size:10px;font-weight:500;color:var(--ink-3)}
+.sf-tick:first-child b{transform:none}
+.sf-tick:last-of-type b{transform:translateX(-100%)}
+.sf-rblk{position:absolute;top:12px;height:26px;box-sizing:border-box;min-width:4px;border-radius:5px;background:var(--ink);color:var(--ground);overflow:hidden}
+.sf-rblk b{display:block;padding:6px 7px;font:600 11.5px/1 Archivo,sans-serif}
+.sf-rblk.bad{background:var(--warn)}
+.sf-rblk.lit{box-shadow:0 0 0 2px var(--surface),0 0 0 4px #ff4fd8}
+.sf-rleg{position:absolute;top:21px;height:8px;background:repeating-linear-gradient(135deg,var(--ink-3) 0 2px,transparent 2px 5px)}
+.sf-rcrew{position:absolute;bottom:8px;height:4px;border-radius:2px;background:var(--accent);opacity:.7}
+.sf-now{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;background:#ff4fd8;pointer-events:none}
+.sf-cursor{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:ew-resize}
+.sf-rib:has(.sf-cursor:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.sf-fleet{margin-top:28px}
+.sf-vlist{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule)}
+.sf-vrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:10px 2px;border-bottom:1px solid var(--rule-soft);font-size:12.5px}
+.sf-vk{min-width:44px;font-size:11.5px;color:var(--ink-3)}
+.sf-warn{color:var(--warn)}
+.sf-imp{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px;margin-left:auto}
+.sf-imp .quiet{margin-right:4px}
+@media (max-width:1100px){
+  .sf-grid{grid-template-columns:minmax(0,1fr)}
+  .sf-side{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start}
+}
+@media (max-width:560px){
+  .sf-key{margin-left:0;flex-basis:100%}
+  .sf-ribbon{overflow-x:auto}
+  .sf-rib{min-width:640px}
+  .sf-times input{font-size:16px}
+  .sf-field input,.sf-field select{font-size:16px}
+}
 </style>
 <script>
 /*__I18N_SCRIPT__*/
@@ -4659,6 +4851,7 @@ section.od-updating{background-image:linear-gradient(90deg,transparent,var(--acc
        scope. The goods-flow picture's one svg#flow waits in #sbFlowHome and
        moves into Goods flow's .sb-diag while that view is on (sbPlaceFlow()). -->
   <div class="page" id="pageSupply" hidden>
+    <p id="sbStreetFood" class="quiet" hidden></p>
     <div class="sechead subhead" hidden><nav class="seg" id="supplyNav" aria-label="Supply views" data-tt-aria-label="nav.sub.supply"></nav></div>
     <section class="sec rv sb-view" id="secChanges" data-sub="changes"></section>
     <section class="sec rv sb-view" id="secRoles" data-sub="roles"></section>
@@ -4741,6 +4934,34 @@ section.od-updating{background-image:linear-gradient(90deg,transparent,var(--acc
     <div class="sechead subhead" hidden><nav class="seg" id="estateNav" aria-label="Real estate views" data-tt-aria-label="nav.sub.estate"></nav></div>
     <section class="sec rv" id="secEstate" data-sub="buildings"></section>
     <section class="sec rv" id="secBuy" data-sub="buy"></section>
+  </div>
+
+  <!-- Mods: the mods the board supports and what it reads of each (drawMods(),
+       over core D.mods), and the Street Food route planner (drawStreetFood(),
+       the sf* functions, over the streetFood section): the plan picker beside
+       the tabs (#sfCtl), the map (#sfMap, a StreetFoodMapView kept between
+       draws) with its layer chips, the inspected place and the plan beside it,
+       the day ribbon under them and the fleet as supporting context. -->
+  <div class="page" id="pageMods" hidden>
+    <div class="sechead subhead" hidden><nav class="seg" id="modsNav" aria-label="Mods views" data-tt-aria-label="nav.sub.mods"></nav></div>
+    <section class="sec rv" id="secMods" data-sub="browse"></section>
+    <section class="sec rv sf-scope" id="secStreetFood" data-sub="streetfood">
+      <h2 class="nx-sr" data-tt="map.sf.title">Street Food</h2>
+      <div class="sechead sf-ctl" id="sfCtl" data-view-ctl="mods/street-food"></div>
+      <div id="sfNote"></div>
+      <div class="sf-grid" id="sfGrid" hidden>
+        <div class="sf-mapcol">
+          <div class="sf-layers" id="sfLayers" role="group" aria-label="Map layers" data-tt-aria-label="map.sf.layers.label"></div>
+          <div class="sf-map" id="sfMap"></div>
+        </div>
+        <aside class="sf-side" aria-label="Inspect and plan" data-tt-aria-label="map.sf.side.label">
+          <div class="sf-inspect" id="sfInspect"></div>
+          <div class="sf-plan" id="sfPlan"></div>
+        </aside>
+        <div class="sf-ribbon" id="sfRibbon"></div>
+      </div>
+      <div class="sf-fleet" id="sfFleet"></div>
+    </section>
   </div>
 
   <!-- The company page: how it went first, then the reference tables, one view

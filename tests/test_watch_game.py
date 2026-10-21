@@ -10,6 +10,7 @@ import socket
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "tools"))
@@ -125,7 +126,7 @@ class GameLinkAgainstMock(unittest.TestCase):
             self.game.poll()
         self.assertIsInstance(caught.exception, ba_dashboard.LinkUnavailable, "the watch loop's outage")
         self.assertIn("version 99", str(caught.exception))
-        self.assertIn("needs version 3", str(caught.exception))
+        self.assertIn("needs version 4", str(caught.exception))
         self.mock.schema = 1
         self.assertEqual(self.game.poll(), self.game.path, "a mod put right is read as ever")
 
@@ -162,9 +163,9 @@ class GameLinkAgainstMock(unittest.TestCase):
         """Board._refresh in link mode: a stale file, the first stamp, a rename."""
         seen = []
         real = (ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render)
-        ba_dashboard.load_save = lambda path: path
+        ba_dashboard.load_save = lambda path: SimpleNamespace(path=path)
         ba_dashboard.safe_extract = lambda path, names, history: (
-            seen.append(path) or {"meta": {"day": 7, "save": "Mock Co"}, "supply": {"factories": {"character": "abc"}}})
+            seen.append(path.path) or {"meta": {"day": 7, "save": "Mock Co"}, "supply": {"factories": {"character": "abc"}}})
         ba_dashboard.render = lambda data, live=False: "<html>"
         try:
             out = os.path.join(self.out, "board.html")
@@ -194,9 +195,9 @@ class GameLinkAgainstMock(unittest.TestCase):
         """EX-7 in #109: the name reaches the board without waiting for the game."""
         seen = []
         real = (ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render)
-        ba_dashboard.load_save = lambda path: path
+        ba_dashboard.load_save = lambda path: SimpleNamespace(path=path)
         ba_dashboard.safe_extract = lambda path, names, history: (
-            seen.append(path) or {"meta": {"day": 7, "save": "Mock Co"}, "supply": {"factories": {"character": "abc"}}})
+            seen.append(path.path) or {"meta": {"day": 7, "save": "Mock Co"}, "supply": {"factories": {"character": "abc"}}})
         ba_dashboard.render = lambda data, live=False: "<html>"
         try:
             out = os.path.join(self.out, "board.html")
@@ -222,9 +223,9 @@ class GameLinkAgainstMock(unittest.TestCase):
         """#109: a damaged market_history.json loses the name, and says so."""
         seen = []
         real = (ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render)
-        ba_dashboard.load_save = lambda path: path
+        ba_dashboard.load_save = lambda path: SimpleNamespace(path=path)
         ba_dashboard.safe_extract = lambda path, names, history: (
-            seen.append(path) or {"meta": {"day": 7, "save": "Mock Co"}, "supply": {"factories": {"character": "abc"}}})
+            seen.append(path.path) or {"meta": {"day": 7, "save": "Mock Co"}, "supply": {"factories": {"character": "abc"}}})
         ba_dashboard.render = lambda data, live=False: "<html>"
         try:
             out = os.path.join(self.out, "board.html")
