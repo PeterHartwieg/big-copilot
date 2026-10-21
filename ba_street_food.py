@@ -223,7 +223,8 @@ def planner(save, names, buildings, open_hours):
             categories = [c for c in categories if c != "nightlife"] + ["shows"]
         hours = open_hours(save, reg) if "scheduleDays" in reg else None
         item = {"key": key, "address": names.addr(address), "name": reg.get("BusinessName") or names.addr(address),
-                "type": names.label(kind, "") if kind else row["t"], "hood": row.get("h", ""), "kind": "building",
+                "type": names.label(kind, "") if kind else row["t"], "typeSlug": kind,
+                "hood": row.get("h", ""), "kind": "building",
                 "categories": categories, "hours": [[[a * 60, b * 60] for a, b in hours[(i + 1) % 7]] for i in range(7)] if hours else None,
                 "closed": bool(reg.get("temporarilyClosed")), "x": None, "z": None}
         output["opportunities"].append(item)

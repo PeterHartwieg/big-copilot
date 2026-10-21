@@ -10897,6 +10897,7 @@
     "kind": "building",
     "name": "HART. Bare",
     "type": "Giftshop",
+    "typeSlug": "ba:businesstype_giftshop",
     "x": null,
     "z": null
    },
@@ -10920,6 +10921,7 @@
     "kind": "building",
     "name": "HART. Depot",
     "type": "Warehouse",
+    "typeSlug": "ba:businesstype_warehouse",
     "x": null,
     "z": null
    },
@@ -10943,6 +10945,7 @@
     "kind": "building",
     "name": "HART. Gifts",
     "type": "Giftshop",
+    "typeSlug": "ba:businesstype_giftshop",
     "x": null,
     "z": null
    },

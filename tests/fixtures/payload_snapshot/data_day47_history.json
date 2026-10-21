@@ -25208,6 +25208,7 @@
     "kind": "building",
     "name": "13 Broadway Street",
     "type": "Empty",
+    "typeSlug": "ba:businesstype_empty",
     "x": null,
     "z": null
    },
@@ -25266,6 +25267,7 @@
     "kind": "building",
     "name": "HART. Gifts",
     "type": "Gift Shop",
+    "typeSlug": "ba:businesstype_giftshop",
     "x": null,
     "z": null
    },
@@ -25289,6 +25291,7 @@
     "kind": "building",
     "name": "Corner Gifts",
     "type": "Gift Shop",
+    "typeSlug": "ba:businesstype_giftshop",
     "x": null,
     "z": null
    },
@@ -25312,6 +25315,7 @@
     "kind": "building",
     "name": "HART. Hub",
     "type": "Warehouse",
+    "typeSlug": "ba:businesstype_warehouse",
     "x": null,
     "z": null
    },
@@ -25370,6 +25374,7 @@
     "kind": "building",
     "name": "HART. Brewery",
     "type": "Factory",
+    "typeSlug": "ba:businesstype_factory",
     "x": null,
     "z": null
    },
@@ -25429,6 +25434,7 @@
     "kind": "building",
     "name": "HART. Spirits",
     "type": "Liquor Store",
+    "typeSlug": "ba:businesstype_liquorstore",
     "x": null,
     "z": null
    },

@@ -9,7 +9,7 @@ const http = require('node:http');
 const {spawnSync} = require('node:child_process');
 const {createHash} = require('node:crypto');
 const {gzipSync} = require('node:zlib');
-const {chromium} = require('playwright');
+const {launch} = require('./_page.cjs');
 const root = path.join(__dirname, '..'), web = path.join(root, 'web');
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const types = {'.html':'text/html', '.js':'text/javascript', '.mjs':'text/javascript', '.css':'text/css',
@@ -194,7 +194,7 @@ with patch("builtins.open", changed):
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${server.address().port}`;
-  browser = await chromium.launch({headless:true, channel:process.env.PLAYWRIGHT_CHANNEL});
+  browser = await launch();
 });
 after(async () => {await browser?.close(); await new Promise(resolve=>server ? server.close(resolve) : resolve());
   if (dir) fs.rmSync(dir, {recursive:true, force:true});});
@@ -249,7 +249,8 @@ test('cold, warm and changed releases reuse exact content bodies in a real brows
   }
   const bodies = label => traffic(label).filter(row=>row.body>0);
   const py = rows => rows.filter(row=>/\/(?:ba_[\w]+\.py|[\w]+\.json)$/.test(new URL(row.url,base).pathname) && row.url.startsWith('/assets/'));
-  assert.equal(py(bodies('cold-a')).length, 9);
+  assert.deepEqual(py(bodies('cold-a')).map(row => new URL(row.url, base).pathname.split('/').at(-1)).sort(),
+    Object.keys(variants.a.manifest.files).sort(), 'every pinned Python module and data table arrives once');
   for (const label of ['warm-a','unrelated','warm-unrelated']) {
     assert.equal(traffic(label).filter(row=>row.url.startsWith('/assets/')).length, 0, 'immutable assets never revalidate');
     assert.equal(traffic(label).filter(row=>row.url.startsWith('/pyodide/')).length, 0);
