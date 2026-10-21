@@ -4508,17 +4508,44 @@ section.od-updating{background-image:linear-gradient(90deg,transparent,var(--acc
 @keyframes od-turn{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.od-spin{animation:none;border-top-color:var(--ink-3)}}
 
-/* Shop expansion comparisons stay within the site panel at narrow widths. */
-.sp-expansion{padding:18px}
-.sp-expansion-cost{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:16px 0}
-.sp-expansion-cost input{width:140px;max-width:100%;padding:8px;border:1px solid var(--rule);border-radius:6px;background:var(--raised);color:var(--ink)}
-.sp-expansion-option{border-top:1px solid var(--rule);padding:14px 0;overflow-wrap:anywhere}
-.sp-expansion-option summary{cursor:pointer;display:flex;flex-wrap:wrap;gap:8px 22px;align-items:baseline}
-.sp-expansion-option summary::before{content:"+";color:var(--accent)}
-.sp-expansion-option[open] summary::before{content:"−"}
-.sp-expansion-option summary b{flex:1 1 180px}
-.sp-expansion-option summary span{font-variant-numeric:tabular-nums}
-.sp-expansion-option p,.sp-expansion-option ul{margin:12px 0}
+/* Shop expansions (spx-): the Shelves table's idiom for products a shop does
+   not stock yet. Net is the gauge; a row opens its ledger and shopping list. */
+.spx-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px 12px;margin:0 0 6px}
+.spx-bar label{font-size:12.5px;color:var(--ink-3)}
+.spx-bar .os-num input{width:96px}
+.spx-row{cursor:pointer}
+.spx-row td{vertical-align:top}
+.spx-row td.gauge{padding-bottom:16px}
+.spx-name{all:unset;cursor:pointer;font-weight:600;color:var(--ink)}
+.spx-name:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+.spx-row:hover .chev{transform:translateX(2px)}
+.spx-row.open .chev{transform:rotate(90deg)}
+.spx-row td.l .sub{padding-left:16px}
+.spx-row.open td{border-bottom-color:transparent}
+.spx-pay b{font-weight:600;color:var(--ink)}
+.spx-never{color:var(--neg)}
+.spx-kid:hover{background:none}
+.spx-kid td{padding:0 0 14px;white-space:normal;text-align:left}
+.spx-detail{font-family:Archivo,sans-serif;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:16px 28px;padding:14px 16px;border:1px solid var(--rule-soft);border-radius:10px;background:var(--surface)}
+.spx-part h3{margin:0 0 6px;font:500 10.5px/1.4 "IBM Plex Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.spx-note{margin:0 0 6px;font-size:12px;color:var(--ink-3)}
+.spx-line{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--rule-soft);font:400 12.5px/1.35 Archivo,sans-serif}
+.spx-line span{min-width:0;overflow-wrap:anywhere}
+.spx-line small{display:block;font-size:11.5px;color:var(--ink-3)}
+.spx-line b{flex:none;font:500 12.5px/1.35 "IBM Plex Mono",monospace;color:var(--ink)}
+.spx-vendor span{font-weight:600}
+.spx-item{padding-left:14px;color:var(--ink-2)}
+.spx-item b{color:var(--ink-2)}
+.spx-line.tot{border-top:1px solid var(--ink);border-bottom:0;margin-top:-1px;font-weight:600}
+.spx-line.tot b{font-weight:600}
+.spx .sp-read{margin-top:10px}
+@media (max-width:640px){
+  .spx-table th,.spx-table td{padding:9px 6px}
+  .spx-table td.gauge i{left:6px;right:6px}
+  .spx-row td.l .sub{padding-left:0}
+  .spx-detail{grid-template-columns:minmax(0,1fr);padding:12px}
+  .spx .sechead > .quiet{flex-basis:100%;order:5}
+}
 </style>
 <script>
 /*__I18N_SCRIPT__*/

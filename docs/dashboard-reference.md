@@ -1502,10 +1502,16 @@ plans are history, kept apart up to 24, the oldest paid-back one making room fir
 
 ## Shop expansions
 
-Open a retail shop’s detail page and choose **Shop expansions** to compare physical
-products its business type sells but its `cachedAvailableProducts` does not currently
-offer. Each row is an independent addition; do not sum the rows into a combined plan.
-The comparison asks for the existing `openStore` section only when opened.
+On a retail shop’s detail page, the **Shop expansions** block sits under Crew and Shelves.
+**Compare products** lists the physical products its business type sells but its
+`cachedAvailableProducts` does not currently offer, one row each with **Net / day**,
+**Upfront** and **Payback**, quickest payback first. Each row is an independent addition;
+do not sum the rows into a combined plan. Opening a row shows its daily ledger (added
+margin, margin lost at your shops nearby, extra costs, net) and its shopping list: each
+vendor’s displays and supports with unit prices, one delivery per vendor, and seven days
+of stock. Margin lost at your shops nearby is also shown under the row’s net. The
+comparison asks for the existing `openStore` section only when opened; the `?` beside the
+title holds the assumptions below.
 
 The shared store model uses the shop’s opening hours, current promotion and overall
 satisfaction, the building’s capacity, the product’s weight and sales ratio, and its

@@ -7425,71 +7425,132 @@ function xlArrive(sel, hit = ""){
   setTimeout(() => lit.forEach(el => el.classList.remove("sp-hit")), 3200);
 }
 
-/* The site's payback in the install mode the portfolio shows, one line under
-   its tiles; its basis on hover. A cost centre has none of its own. */
-/* One-product what-ifs; scope to the character and shop, never a saved plan. */
-let spExpansionState = {scope: "", open: false, extraCost: 0};
+/* Shop expansions: one-product what-ifs for a shop, in the Shelves table's
+   idiom. Scoped to the character and shop, never a saved plan. Only the body
+   is repainted, so the block's .rv reveal never starts over. */
+let spExpansionState = {scope: "", open: false, extraCost: 0, rows: new Set()};
+function spExpansionRows(b){
+  const building = (D.premises?.buildings || []).find(x => x.key === b.key);
+  const hours = (D.hours || []).find(x => x.key === b.key);
+  const model = OpenStoreModel.create({facts: osFacts(), company: {businesses: D.businesses, day: D.meta.day}});
+  return model.expansions(b.typeSlug, building, {open: hours?.open,
+    sat: b.satisfaction?.overall, promoTotal: b.promotion, extraCost: spExpansionState.extraCost});
+}
+/* What one addition earns a day, and what it takes to buy, vendor by vendor. */
+function spExpansionDetail(r){
+  const F = osFacts(), vendors = F.vendors || {}, items = F.items || {};
+  const line = (label, value, cls = "") => `<div class="spx-line${cls}"><span>${label}</span><b>${value}</b></div>`;
+  const day = `<div class="spx-part"><h3>${tt("sp.expand.perDay", "Per day")}</h3>
+    <p class="spx-note">${tt("sp.expand.sold", "{units:,.1f} sold at ${price:,.2f}, bought at ${cost:,.2f}", {units: r.units, price: r.price, cost: r.cost})}</p>
+    ${line(tt("sp.expand.margin2", "Added margin"), fmt(r.margin))}
+    ${line(tt("sp.expand.loss", "Lost at your shops nearby"), r.loss > 0 ? `<span class="neg">${fmt(-r.loss)}</span>` : fmt(0))}
+    ${line(tt("sp.expand.extraLine", "Extra staffing and other costs"), r.extraCost > 0 ? fmt(-r.extraCost) : fmt(0))}
+    ${line(tt("sp.expand.netLine", "Net"), `<span class="${r.net > 0 ? "" : "neg"}">${fmt(r.net)}</span>`, " tot")}</div>`;
+  if(!r.kit) return `${day}<div class="spx-part"><h3>${tt("sp.expand.buy", "Shopping list")}</h3>
+    <p class="quiet">${tt("sp.expand.noKit", "Equipment details are incomplete, so upfront cost and payback cannot be estimated.")}</p></div>`;
+  const groups = r.kit.stores.map(s => {
+    const v = vendors[s.key] || {};
+    const cost = s.lines.reduce((t, k) => t + items[r.kit.lines[k][0]].p * r.kit.lines[k][1], 0) + (F.game?.delivery || 0);
+    return `<div class="spx-line spx-vendor"><span>${spEsc(v.n || s.key)}${v.a ? `<small>${spEsc(v.a)}</small>` : ""}</span><b>${fmt(cost)}</b></div>${
+      s.lines.map(k => { const [item, qty] = r.kit.lines[k], each = items[item].p;
+        return `<div class="spx-line spx-item"><span>${tt("sp.expand.qty", "{n} × {item}", {n: qty, item: spEsc(osItemName(item))})}<small>${
+          tt("sp.expand.each", "${x:,.2f} each", {x: each})}</small></span><b>${fmt(each * qty)}</b></div>`; }).join("")}${
+      line(tt("sp.expand.delivery", "Delivery"), fmt(F.game?.delivery || 0), " spx-item")}`;
+  }).join("");
+  return `${day}<div class="spx-part"><h3>${tt("sp.expand.buy", "Shopping list")}</h3>${groups}
+    ${line(tt("sp.expand.stock", "Seven days of stock"), fmt(r.stock))}
+    ${line(tt("sp.expand.upfront", "Upfront"), fmt(r.investment), " tot")}</div>`;
+}
+function spExpansionTable(rows){
+  const top = Math.max(...rows.map(r => Math.abs(r.net)), 1);
+  return `<table class="spx-table">
+    <thead><tr><th>${tt("sp.shelf.col.product", "Product")}</th><th>${tt("sp.expand.col.net", "Net / day")}</th>
+      <th>${tt("sp.expand.col.upfront", "Upfront")}</th><th>${tt("sp.expand.col.payback", "Payback")}</th></tr></thead>
+    <tbody>${rows.map((r, i) => {
+      const open = spExpansionState.rows.has(r.p), id = `spxDetail${i}`;
+      return `<tr class="spx-row${open ? " open" : ""}" data-spx="${attr(r.p)}">
+        <td class="l"><button type="button" class="spx-name" aria-expanded="${open}" aria-controls="${id}">${CHEV()}${spEsc(osItemName(r.p))}</button>
+          <span class="sub">${tt("sp.expand.rate", "{units:,.1f} a day at ${price:,.2f}", {units: r.units, price: r.price})}</span></td>
+        <td class="gauge${r.net > 0 ? "" : " low"}"><span class="${r.net > 0 ? "" : "neg"}">${fmt(r.net)}</span>${
+          r.loss > 0 ? `<span class="sub">${tt("sp.expand.lossSub", "{w} from your shops nearby", {w: fmt(-r.loss)})}</span>` : ""}<i><b style="--w:${
+          Math.max(2, Math.abs(r.net) / top * 100).toFixed(0)}%"></b></i></td>
+        <td>${r.investment === null ? `—<span class="sub">${tt("sp.expand.noKitShort", "equipment unknown")}</span>` : fmt(r.investment)}</td>
+        <td class="spx-pay">${r.investment === null ? "—" : r.payback === null
+          ? `<span class="spx-never">${tt("sp.expand.never", "Never")}</span><span class="sub">${tt("sp.expand.neverSub", "at these costs")}</span>`
+          : `<b>${tt("sp.expand.days", {one: "{n} day", other: "{n} days"}, {n: r.payback})}</b>`}</td></tr>
+      <tr class="spx-kid" id="${id}"${open ? "" : " hidden"}><td colspan="4"><div class="spx-detail">${spExpansionDetail(r)}</div></td></tr>`;
+    }).join("")}</tbody></table>`;
+}
+function spExpansionBody(b){
+  if(!spExpansionState.open) return "";
+  if(!odNeed("openStore")) return odWaitHtml("openStore");
+  const rows = spExpansionRows(b);
+  if(rows === null) return spNone(tt("sp.expand.unavailable", "This comparison needs a supported shop, known opening hours, promotion and satisfaction, and a game started with the current building-capacity rules."));
+  if(!rows.length) return spNone(tt("sp.expand.complete", "This shop already offers every physical product in its business type’s range."));
+  return `<div class="spx-bar"><label for="spExpansionCost">${tt("sp.expand.extra", "Extra staffing and other costs / day")}</label>
+      <span class="os-num">$<input id="spExpansionCost" type="number" inputmode="decimal" required min="0" max="1000000000" step="any" value="${spExpansionState.extraCost}"></span></div>
+    <div class="scrollx" id="spExpansionRows">${spExpansionTable(rows)}</div>
+    <div class="sp-read">${tt("sp.expand.read", "One product at a time. Check floor space, register capacity, staffing and supply in game before buying.")}</div>`;
+}
 function spExpansion(b){
   const scope = JSON.stringify([D.meta.character, b.key]);
-  if(spExpansionState.scope !== scope) spExpansionState = {scope, open: false, extraCost: 0};
+  if(spExpansionState.scope !== scope) spExpansionState = {scope, open: false, extraCost: 0, rows: new Set()};
   if(b.status !== "retail") return "";
-  let body = "";
-  if(spExpansionState.open){
-    if(!odNeed("openStore")) body = odWaitHtml("openStore");
-    else {
-      const building = (D.premises?.buildings || []).find(x => x.key === b.key);
-      const hours = (D.hours || []).find(x => x.key === b.key);
-      const model = OpenStoreModel.create({facts: osFacts(), company: {businesses: D.businesses, day: D.meta.day}});
-      const rows = model.expansions(b.typeSlug, building, {open: hours?.open,
-        sat: b.satisfaction?.overall, promoTotal: b.promotion, extraCost: spExpansionState.extraCost});
-      body = rows === null ? `<p class="quiet">${tt("sp.expand.unavailable", "This comparison needs a supported shop, known opening hours, promotion and satisfaction, and a game started with the current building-capacity rules.")}</p>`
-        : !rows.length ? `<p class="quiet">${tt("sp.expand.complete", "This shop already offers every physical product in its business type’s range.")}</p>`
-        : `<p class="quiet">${tt("sp.expand.basis", "Compare one addition at a time, at this shop’s current hours, promotion and satisfaction, with enough equipment and staffing to serve it.")}</p>
-          <label class="sp-expansion-cost">${tt("sp.expand.extra", "Extra staffing and other costs / day")}
-            <input id="spExpansionCost" type="number" required min="0" max="1000000000" step="any" value="${spExpansionState.extraCost}"></label>
-          <p class="quiet">${tt("sp.expand.assumptions", "Estimates use the neighbourhood’s accepted price and import cost, include lost margin at your other shops nearby, and exclude temporary demand waves and tax.")}</p>
-          <div class="sp-expansion-list">${rows.map(r => `<details class="sp-expansion-option">
-            <summary><b>${spEsc(osItemName(r.p))}</b><span>${tt("sp.expand.net", "{money}/day added", {money: fmt(r.net)})}</span><span>${
-              r.investment === null ? tt("sp.expand.unknownKit", "Equipment estimate unavailable")
-              : tt("sp.expand.invest", "{money} upfront", {money: fmt(r.investment)})}</span><span>${
-              r.investment === null ? "—" : r.payback === null ? tt("sp.expand.noPayback", "No payback at these costs")
-              : tt("sp.expand.payback", "About {days} days to pay back", {days: r.payback})}</span></summary>
-            <p>${tt("sp.expand.sales", "About {units:,.1f} units/day at ${price:,.2f}/unit; goods cost ${cost:,.2f}/unit.", {units: r.units, price: r.price, cost: r.cost})}</p>
-            <p>${tt("sp.expand.margin", "Added gross margin: {margin}/day; lost margin at your other shops: {loss}/day; extra costs: {extra}/day.", {margin: fmt(r.margin), loss: fmt(r.loss), extra: fmt(r.extraCost)})}</p>
-            ${r.kit ? `<ul>${r.kit.lines.map(([item, qty]) => `<li>${tt("sp.expand.equipment", "{n} × {item} · {money}", {n: qty, item: spEsc(osItemName(item)), money: fmt(osFacts().items[item].p * qty)})}</li>`).join("")}</ul>
-              <p>${tt("sp.expand.budget", "Equipment: {equipment}; delivery: {delivery}; seven days of initial stock: {stock}.", {equipment: fmt(r.kit.equipment), delivery: fmt(r.kit.delivery), stock: fmt(r.stock)})}</p>` : ""}
-          </details>`).join("")}</div>
-          <p class="quiet">${tt("sp.expand.check", "The budget buys new displays and their supports at list prices, sized to building capacity; existing furniture may already be in use.")}</p>
-          <p class="quiet">${tt("sp.expand.checkSpace", "Check floor space, spare register capacity, staffing and supply in game before buying; reuse of spare equipment can lower the cost.")}</p>`;
-    }
-  }
-  return `<section class="sec rv sp-expansion" id="sp-expansion" data-block="expansion">
-    <button type="button" class="nx-btn" id="spExpansionToggle" aria-expanded="${spExpansionState.open}" aria-controls="spExpansionBody">${tt("sp.expand.title", "Shop expansions")} <span class="feature-new" data-new-feature="shop-expansions" hidden>New</span></button>
-    <div id="spExpansionBody"${spExpansionState.open ? "" : " hidden"}>${body}</div></section>`;
+  const open = spExpansionState.open;
+  return `<section class="sec rv spx" id="sp-expansion" data-block="expansion">
+    ${sechead(tt("sp.expand.title", "Shop expansions"), {icon: "crate",
+      after: `<span class="feature-new" data-new-feature="shop-expansions" hidden>New</span>`,
+      why: `${tt("sp.expand.basis", "Each row adds one product on its own, at this shop’s current hours, promotion and satisfaction, with enough displays for the building’s capacity.")} ${
+        tt("sp.expand.assumptions", "Estimates use the neighbourhood’s accepted price and import cost, include lost margin at your other shops nearby, and exclude temporary demand waves and tax.")} ${
+        tt("sp.expand.check", "The budget buys new displays and their supports at list prices, sized to building capacity; existing furniture may already be in use.")}`,
+      quiet: tt("sp.expand.quiet", "Products this shop’s type sells that it doesn’t"),
+      aside: `<button type="button" class="nx-btn sm" id="spExpansionToggle" aria-expanded="${open}" aria-controls="spExpansionBody">${
+        open ? tt("sp.expand.hide", "Hide") : tt("sp.expand.compare", "Compare products")}</button>`})}
+    <div id="spExpansionBody"${open ? "" : " hidden"}>${spExpansionBody(b)}</div></section>`;
 }
 function wireSpExpansion(b){
-  const paint = () => {
-    const host = $("sp-expansion");
-    if(!host || siteKey !== b.key) return;
-    host.outerHTML = spExpansion(b);
-    wireSpExpansion(b);
-    wireReveal();
+  const host = $("sp-expansion");
+  if(!host){ featureDiscovery.refresh(); return; }
+  const live = () => host.isConnected && siteKey === b.key;
+  const wireRows = () => $$("#spExpansionRows .spx-row").forEach(tr => {
+    tr.onclick = e => {
+      if(e.target.closest("a, input")) return;
+      const btn = tr.querySelector(".spx-name"), open = btn.getAttribute("aria-expanded") !== "true";
+      btn.setAttribute("aria-expanded", open);
+      tr.classList.toggle("open", open);
+      $(btn.getAttribute("aria-controls")).hidden = !open;
+      spExpansionState.rows[open ? "add" : "delete"](tr.dataset.spx);
+    };
+  });
+  const wireBody = () => {
+    const input = $("spExpansionCost");
+    if(input) input.onchange = () => {
+      if(!input.checkValidity() || input.value === ""){ input.reportValidity(); return; }
+      spExpansionState.extraCost = Number(input.value);
+      if(!live()) return;
+      $("spExpansionRows").innerHTML = spExpansionTable(spExpansionRows(b) || []);
+      wireRows();
+    };
+    wireRows();
   };
-  if($("spExpansionToggle")) $("spExpansionToggle").onclick = () => {
-    spExpansionState.open = !spExpansionState.open;
-    if(spExpansionState.open) featureDiscovery.visit("shop-expansions");
-    paint();
-    $("spExpansionToggle")?.focus({preventScroll: true});
+  $("spExpansionToggle").onclick = () => {
+    if(!live()) return;
+    const open = spExpansionState.open = !spExpansionState.open;
+    if(open) featureDiscovery.visit("shop-expansions");
+    const btn = $("spExpansionToggle"), body = $("spExpansionBody");
+    btn.setAttribute("aria-expanded", open);
+    btn.textContent = open ? tt("sp.expand.hide", "Hide") : tt("sp.expand.compare", "Compare products");
+    body.innerHTML = spExpansionBody(b);
+    body.hidden = !open;
+    wireBody();
+    featureDiscovery.refresh();
   };
-  if($("spExpansionCost")) $("spExpansionCost").onchange = e => {
-    if(!e.target.checkValidity() || e.target.value === ""){ e.target.reportValidity(); return; }
-    spExpansionState.extraCost = Number(e.target.value);
-    paint();
-    $("spExpansionCost")?.focus({preventScroll: true});
-  };
+  wireBody();
   featureDiscovery.refresh();
 }
 
+/* The site's payback in the install mode the portfolio shows, one line under
+   its tiles; its basis on hover. A cost centre has none of its own. */
 function spPayback(b){
   const row = paybackSite(b.key), o = paybackOf(row);
   if(!o) return "";
@@ -7960,7 +8021,6 @@ function drawSite(){
     ${vacant ? "" : spBody || `
     <div class="sstats rv" data-block="tiles" id="sp-tiles">${stats}</div>
     ${sp ? spPayback(b) : ""}
-    ${spExpansion(b)}
     ${sp ? `<div class="duo sec"${kind === "retail" ? ` style="grid-template-columns:3fr 2fr"` : ""}>
       <section class="rv" data-block="standards" id="sp-standards" data-readzone>
         ${sechead(tt("sp.sat.title", "Satisfaction"), {icon: "standards", why: office
@@ -8008,6 +8068,7 @@ function drawSite(){
         ${products}${shelfMore}
       </section>
     </div>
+    ${spExpansion(b)}
     ${!b.series.length && !b.rhythm ? "" : `<div class="duo sec"${!b.series.length || !b.rhythm ? ' style="grid-template-columns:1fr"' : ""}>
       ${b.series.length ? `<section class="rv" data-block="profit" id="sp-profit"${sp ? ` data-readzone` : ""}>
         ${sechead(tt("sp.profit.title", "Profit, last {n} days", {n: b.series.length}), {icon: sp ? "profit" : null, aside: sp && ready ? trendChip : null})}

@@ -10,6 +10,7 @@ exports.fixture = () => ({
     market: {P: {p: 10, r: 0.5, d: 1, cost: 4, hoods: {H: [0, 0, null]}},
       existing: {p: 10, r: 0.5, d: 1, cost: 4, hoods: {H: [1, 0, null]}}},
     items: {display: {p: 100, v: ['shop']}, support: {p: 20, v: ['shop']}},
+    vendors: {shop: {n: 'Synthetic Fittings', a: '1 Test Street'}},
     built: {k: {sells: ['existing']}},
   },
   building: {key: 'k', hood: 'H', cap: 20, m2: 100, layout: 'C1'},
