@@ -19311,7 +19311,7 @@ function sfWriteBlocked(plan, issues){
   const v = sfVehicles().find(x => String(x.id) === plan.vehicleId);
   if(!v) return tt("map.sf.gw.gone", "This vehicle is not in the game any more.");
   if(v.routeRevision == null) return tt("map.sf.gw.noRevision", "The game did not say which route this vehicle runs, so it cannot be changed safely.");
-  if(!plan.stops.length) return tt("map.sf.gw.noStops", "Add stops first.");
+  /* No stops is a route too: setting it clears that weekday in the game. */
   if(issues.some(i => !SF_ADVISORY.has(i.code))) return tt("map.sf.gw.issues", "Sort out the route's issues first.");
   return "";
 }
@@ -19319,9 +19319,12 @@ function sfWriteButton(plan, issues){
   const link = gwLink();
   if(!link) return "";
   const why = sfCanWrite() ? sfWriteBlocked(plan, issues) : gwUpdateMod(SF_WRITE);
-  return `<div class="sf-gwrow">${gwButton(SF_WRITE, tt("map.sf.gw.button", "Set in the game"), `data-gw-plan="${attr(plan.id)}"`,
-    why, {name: tt("map.sf.gw.buttonName", "Set this route in the game for {day}", {day: sfDayName(plan.weekday)}), shown: true})}${
-    why ? `<span class="quiet">${spEsc(why)}</span>` : ""}</div>`;
+  const clear = !plan.stops.length;
+  return `<div class="sf-gwrow">${gwButton(SF_WRITE, clear ? tt("map.sf.gw.clearButton", "Clear in the game") : tt("map.sf.gw.button", "Set in the game"), `data-gw-plan="${attr(plan.id)}"`,
+    why, {name: clear ? tt("map.sf.gw.clearButtonName", "Clear this vehicle's {day} route in the game", {day: sfDayName(plan.weekday)})
+      : tt("map.sf.gw.buttonName", "Set this route in the game for {day}", {day: sfDayName(plan.weekday)}), shown: true})}${
+    why ? `<span class="quiet">${spEsc(why)}</span>`
+      : clear ? `<span class="quiet">${spEsc(tt("map.sf.gw.clearNote", "With no stops, setting it clears {day} for this vehicle in the game; the other days stay.", {day: sfDayName(plan.weekday)}))}</span>` : ""}</div>`;
 }
 /* What the game holds or would hold for the day, one line a stop. */
 /* The named place nearest a world point, within 75 m: a Street Food place,
@@ -19352,7 +19355,8 @@ function sfWhereText(pt){
    where it is, and, for a proposed stop, the place the player asked for and
    how far the game's legal spot is from it. */
 function sfGwStops(list, names, asked){
-  if(!Array.isArray(list) || !list.length) return `<p class="quiet">${tt("map.sf.gw.noneThatDay", "No stops on this day.")}</p>`;
+  if(!Array.isArray(list) || !list.length) return `<p class="quiet">${asked ? tt("map.sf.gw.noneAfter", "No stops: the vehicle has no route on this day.")
+    : tt("map.sf.gw.noneThatDay", "No stops on this day.")}</p>`;
   return `<ol class="sf-gwlist">${list.map((s, i) => {
     const want = asked && asked[i];
     const moved = want && Number.isFinite(s.x) && Number.isFinite(want.x) ? Math.hypot(s.x - want.x, s.z - want.z) : 0;
@@ -19382,9 +19386,12 @@ function gwStreetFoodRoute(planId){
   const vName = () => { const v = vehicle(); return v && v.name || tt("map.sf.vehicle.unnamed", "Vehicle"); };
   const day = () => sfDayName((at() || first).weekday);
   const row = answer => ((answer && answer.rows) || [])[0] || {};
+  /* A plan with no stops clears the day: said so in every word of the dialog. */
+  const clears = () => !(at() || first).stops.length;
   gwConfirm({
     kind: SF_WRITE, icon: "truck", needs: ["streetFood"], scope: odScope(),
-    title: () => tt("map.sf.gw.title", "Set the {day} route for {vehicle}", {day: day(), vehicle: vName()}),
+    title: () => clears() ? tt("map.sf.gw.clearTitle", "Clear the {day} route for {vehicle}", {day: day(), vehicle: vName()})
+      : tt("map.sf.gw.title", "Set the {day} route for {vehicle}", {day: day(), vehicle: vName()}),
     where: () => `<span>${spEsc((at() || first).name)}</span>`,
     nothing: () => { const p = at(); if(!p) return tt("map.sf.gw.planGone", "This route plan has been deleted.");
       const i = (sfCheck(p) || {issues: []}).issues; return sfWriteBlocked(p, i); },
@@ -19394,7 +19401,9 @@ function gwStreetFoodRoute(planId){
     /* Apply is bound to what the game reviewed. */
     applyBody: (answer, body) => ({...body, quote: answer && answer.quote}),
     idle: answer => row(answer).changed === false ? tt("map.sf.gw.idle", "Nothing to change: the game already runs this route that day") : "",
-    verdict: answer => answer.ok
+    verdict: answer => answer.ok && !(row(answer).after || []).length
+      ? `<b>${tt("map.sf.gw.willClear", {one: "The game will remove {n} stop on {day}", other: "The game will remove {n} stops on {day}"}, {n: (row(answer).before || []).length, day: day()})}</b>`
+      : answer.ok
       ? `<b>${tt("map.sf.gw.will", {one: "The game will set {n} stop on {day}", other: "The game will set {n} stops on {day}"}, {n: (row(answer).after || []).length, day: day()})}</b>`
       : `<b>${tt("sp.gw.refuses", "The game refuses this")}</b>`,
     inline: true,
@@ -19409,17 +19418,20 @@ function gwStreetFoodRoute(planId){
       if(phase === "refused") return why;
       const cols = `<div class="sf-gwcols"><div><span class="gw-lab">${tt("map.sf.gw.before", "In the game now")}</span>${sfGwStops(r.before, null, null)}</div>
         <div><span class="gw-lab">${phase === "done" ? tt("map.sf.gw.now", "Set") : tt("map.sf.gw.after", "After")}</span>${sfGwStops(r.after, names, p.stops)}</div></div>`;
-      const note = phase === "ready" && answer.ok ? gwCall("info", "truck", tt("map.sf.gw.place", "The game puts each stop on the nearest legal parking or pavement spot, so one can sit a few metres from where you placed it. The times are yours; nothing is adjusted. Only {day} changes; the other days and the crew stay as they are.", {day: day()})) : "";
+      const note = phase === "ready" && answer.ok && !(r.after || []).length
+        ? gwCall("info", "truck", tt("map.sf.gw.clearPlace", "The vehicle will have no stops on {day}. Only {day} changes; the other days and the crew stay as they are.", {day: day()}))
+        : phase === "ready" && answer.ok ? gwCall("info", "truck", tt("map.sf.gw.place", "The game puts each stop on the nearest legal parking or pavement spot, so one can sit a few metres from where you placed it. The times are yours; nothing is adjusted. Only {day} changes; the other days and the crew stay as they are.", {day: day()})) : "";
       return why + cols + warn + note;
     },
     refusedHint: () => tt("nav.dlg.unchanged", "Nothing was changed."),
     hint: tt("map.sf.gw.noUndo", "There is no undo for a route yet: setting it again with the old stops puts it back."),
     object: () => spEsc(vName()),
-    applyLabel: () => tt("map.sf.gw.apply", "Set the route"),
+    applyLabel: () => clears() ? tt("map.sf.gw.clearApply", "Clear the route") : tt("map.sf.gw.apply", "Set the route"),
     applying: tt("map.sf.gw.applying", "Setting the route in the game…"),
     /* No undo in this first route write. */
     changed: () => false,
-    done: () => tt("map.sf.gw.done", "{vehicle}'s {day} route is set in the game", {vehicle: vName(), day: day()}),
+    done: () => clears() ? tt("map.sf.gw.cleared", "{vehicle}'s {day} route is cleared in the game", {vehicle: vName(), day: day()})
+      : tt("map.sf.gw.done", "{vehicle}'s {day} route is set in the game", {vehicle: vName(), day: day()}),
   });
 }
 

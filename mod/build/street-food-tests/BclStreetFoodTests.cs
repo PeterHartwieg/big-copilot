@@ -139,7 +139,79 @@ public static class BclStreetFoodTests
             Check(JsonReader.Bool(JsonReader.Obj(JsonReader.Parse(call(quoted, false)), "apply"), "ok", "apply", false),
                 "The unchanged reviewed route can be applied without a gameplay mutation");
             Check(Equals(before, provider.GetMethod("CaptureV1").Invoke(null, new[] { instance })), "No-change apply is read-only");
+            ExerciseReturnCoverage(instance, vehicle, provider);
         }
         finally { rules.SetValue(null, oldRules); }
+    }
+
+    static object FromJson(Type type, string json) => TypeNamed("Newtonsoft.Json.JsonConvert")
+        .GetMethod("DeserializeObject", new[] { typeof(string), typeof(Type) }).Invoke(null, new object[] { json, type });
+
+    // Replace a bay stop with a remote stop already used on another weekday.
+    // Cached synthetic geometry avoids loading a city or probing real parking.
+    static void ExerciseReturnCoverage(object instance, object vehicle, Type provider)
+    {
+        const string siteId = "bcl-test-bay";
+        var demand = TypeNamed("FoodTrucks.DemandData");
+        var sites = demand.GetProperty("Commissaries", Any);
+        var oldSites = sites.GetValue(null);
+        var commissary = TypeNamed("FoodTrucks.Commissary");
+        var attached = commissary.GetField("attached", Any);
+        var uninstalled = commissary.GetField("uninstalled", Any);
+        var oldAttached = attached.GetValue(null);
+        var oldUninstalled = uninstalled.GetValue(null);
+        var places = (IDictionary)commissary.GetField("bayPlaceCache", Any).GetValue(null);
+        var bayStops = (IDictionary)commissary.GetField("bayStopCache", Any).GetValue(null);
+        var oldPlaces = places.Contains(siteId) ? places[siteId] : null;
+        var oldStops = bayStops.Contains("test-cart") ? bayStops["test-cart"] : null;
+        var employees = (IDictionary)TypeNamed("Helpers.EmployeeHelper").GetField("EmployeeInstancesDictionary", Any).GetValue(null);
+        var oldEmployee = employees.Contains("bcl-test-crew") ? employees["bcl-test-crew"] : null;
+        try
+        {
+            sites.SetValue(null, sites.PropertyType.GetMethod("Parse").Invoke(null, new object[] {
+                "{\"schemaVersion\":1,\"commissaries\":[{\"id\":\"bcl-test-bay\",\"name\":\"Test bay\",\"address\":\"ba:street_test#1\",\"bay\":{\"x\":1,\"z\":2}}]}" }));
+            attached.SetValue(null, true);
+            uninstalled.SetValue(null, false);
+            var state = TypeNamed("FoodTrucks.FoodTrucksSession").GetProperty("CurrentState", Any).GetValue(null);
+            var home = state.GetType().GetProperty("Commissary");
+            var rule = TypeNamed("FoodTrucks.Core.Commissary.BaySnap").GetField("RuleVersion").GetRawConstantValue();
+            home.SetValue(state, FromJson(home.PropertyType, "{\"spaces\":[{\"vehicleId\":\"test-cart\",\"kind\":\"cart\",\"commissaryId\":\"bcl-test-bay\"}]," +
+                "\"bays\":{\"bcl-test-bay\":{\"rule\":" + rule + ",\"origins\":[{\"x\":1,\"z\":2}],\"points\":[{\"x\":1,\"z\":2,\"alongZ\":1}]}}}"));
+            var pointKey = $"{1d:F1},{2d:F1}";
+            var half = (Vector3)TypeNamed("FoodTrucks.HireRoutes").GetField("CartHalfSize", Any).GetValue(null);
+            places[siteId] = Activator.CreateInstance(places.GetType().GetGenericArguments()[1],
+                new object[] { $"{siteId}|{half.z:F2}|{pointKey}", new List<(Vector3, Quaternion)> { (new Vector3(1, 0, 2), Quaternion.identity) } });
+            bayStops["test-cart"] = Activator.CreateInstance(bayStops.GetType().GetGenericArguments()[1],
+                new object[] { $"{siteId}|{pointKey}|{pointKey};{101d:F1},{2d:F1}", new List<int> { 0 } });
+            var schedule = vehicle.GetType().GetProperty("Schedule");
+            schedule.SetValue(vehicle, FromJson(schedule.PropertyType, "{\"stops\":[" +
+                "{\"day\":1,\"spotKey\":\"bay\",\"x\":1,\"z\":2,\"openAt\":660,\"closeAt\":900}," +
+                "{\"day\":2,\"spotKey\":\"remote\",\"x\":101,\"z\":2,\"openAt\":660,\"closeAt\":900}]," +
+                "\"crewShifts\":[{\"employeeId\":\"bcl-test-crew\",\"day\":1,\"start\":10,\"end\":15}]}"));
+            vehicle.GetType().GetProperty("VehicleType").SetValue(vehicle, "cart");
+            var crew = (IList)vehicle.GetType().GetProperty("Crew").GetValue(vehicle);
+            crew.Clear(); crew.Add("bcl-test-crew");
+            var employeeType = employees.GetType().GetGenericArguments()[1];
+            var employee = FormatterServices.GetUninitializedObject(employeeType);
+            employeeType.GetField("id", Any).SetValue(employee, "bcl-test-crew");
+            employees["bcl-test-crew"] = employee;
+            var revision = (string)TypeNamed("FoodTrucks.Core.Fleet.CopilotRoutes").GetMethod("Revision").Invoke(null, new[] { vehicle });
+            var body = "{\"vehicleId\":\"test-cart\",\"revision\":\"" + revision +
+                "\",\"weekday\":0,\"stops\":[{\"x\":101,\"z\":2,\"open\":660,\"close\":900}]}";
+            var before = provider.GetMethod("CaptureV1").Invoke(null, new[] { instance });
+            var answer = (string)provider.GetMethod("RouteV1").Invoke(null, new object[] { instance, body, true });
+            var parsed = JsonReader.Obj(JsonReader.Parse(answer), "review");
+            Check(JsonReader.Bool(parsed, "ok", "review", false), "Remote replacement can be reviewed");
+            Check(answer.Contains("crew_gap"), "Review includes the uncovered return from the proposed remote stop");
+            Check(Equals(before, provider.GetMethod("CaptureV1").Invoke(null, new[] { instance })), "Commissary review leaves live route and crew untouched");
+        }
+        finally
+        {
+            sites.SetValue(null, oldSites);
+            attached.SetValue(null, oldAttached); uninstalled.SetValue(null, oldUninstalled);
+            if (oldPlaces == null) places.Remove(siteId); else places[siteId] = oldPlaces;
+            if (oldStops == null) bayStops.Remove("test-cart"); else bayStops["test-cart"] = oldStops;
+            if (oldEmployee == null) employees.Remove("bcl-test-crew"); else employees["bcl-test-crew"] = oldEmployee;
+        }
     }
 }

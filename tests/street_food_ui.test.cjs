@@ -150,6 +150,44 @@ test('an edit after the review, or another company in the game, asks the game ag
     body: {vehicleId: 'veh-7', weekday: 1, revision: 'r-0007', stops: [SENT_STOPS[0], {...SENT_STOPS[1], close: 930}], quote: 'q-3'}});
 });
 
+test('removing every stop of an owned route reviews the day as cleared, and Apply sends exactly the reviewed empty route', async t => {
+  const page = await board(t);
+  await answering(page);
+  await page.click('#sfFleet [data-sf-import="veh-7"]');
+  await routeButton(page).waitFor();
+  // Delete both stops in the plan, the last one included.
+  await page.click('#sfPlan [data-sf-del]');
+  await page.click('#sfPlan [data-sf-del]');
+  await page.waitForFunction(() => sfPlan().stops.length === 0);
+  const button = routeButton(page);
+  assert.equal(await button.getAttribute('aria-disabled'), null, 'an empty route for an owned vehicle may be reviewed');
+  assert.match(await button.innerText(), /Clear in the game/);
+  assert.match(await page.locator('#sfPlan').innerText(), /clears Tuesday for this vehicle in the game/);
+  assert.deepEqual(await writes(page), [], 'deleting stops writes nothing');
+  await button.click();
+  await phase(page, 'ready');
+  let sent = await writes(page);
+  assert.deepEqual(sent, [{kind: 'streetFoodRoute', dryRun: true,
+    body: {vehicleId: 'veh-7', weekday: 1, revision: 'r-0007', stops: []}}], 'only a review so far');
+  const dlg = page.locator('dialog.gw-dlg');
+  const text = await dlg.innerText();
+  assert.match(text, /Clear the Tuesday route for Taco Cart/);
+  assert.match(text, /The game will remove 1 stop on Tuesday/);
+  assert.match(text, /08:00–09:00\s*71 m from Tower/, 'the stop that goes, by its place');
+  assert.match(text, /No stops: the vehicle has no route on this day/);
+  assert.match(text, /the other days and the crew stay as they are/);
+  const apply = dlg.locator('.gw-foot [data-gw-b="apply"]');
+  assert.match(await apply.innerText(), /Clear the route/);
+  await apply.click();
+  await phase(page, 'done');
+  sent = await writes(page);
+  assert.equal(sent.length, 2, 'one review, one apply: nothing applied by itself');
+  assert.deepEqual(sent[1], {kind: 'streetFoodRoute', dryRun: false,
+    body: {vehicleId: 'veh-7', weekday: 1, revision: 'r-0007', stops: [], quote: 'q-1'}});
+  assert.match(await dlg.innerText(), /route is cleared in the game/);
+  assert.equal(await dlg.locator('[data-gw-b="undo"]').count(), 0, 'no undo');
+});
+
 test('without the capability, or with stale records, the write stays off and nothing is sent', async t => {
   for (const [label, o, why] of [
     ['an older mod', {link: {...LINK, writes: [], features: []}}, /Update the Big Copilot Link mod/],

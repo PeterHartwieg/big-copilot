@@ -208,6 +208,16 @@ test('the route write is offered only for a live, owned vehicle whose route fits
   html = t.element('sfPlan').innerHTML;
   assert.match(html, /data-gw="streetFoodRoute"[^>]*aria-disabled="true"/);
   assert.match(html, /Choose one of your vehicles/);
+  // An empty draft is no route to clear: still refused.
+  vm.runInContext('sfEdit(p => { p.stops = []; })', t.b);
+  html = t.element('sfPlan').innerHTML;
+  assert.match(html, /data-gw="streetFoodRoute"[^>]*aria-disabled="true"/);
+  assert.match(html, /Choose one of your vehicles/);
+  // The same empty plan for the owned vehicle clears that day, after a review.
+  vm.runInContext('sfEdit(p => { p.vehicleId = "v1"; })', t.b);
+  html = t.element('sfPlan').innerHTML;
+  assert.doesNotMatch(html, /data-gw="streetFoodRoute"[^>]*aria-disabled/);
+  assert.match(html, /Clear in the game/);
   // Stale records hold it back.
   t = board({link: {writes: ['streetFoodRoute'], features: ['streetFood.routes'], approved: true}});
   setD(t.b, {meta: {character: 'kim'}, businesses: [], streetFood: {...ready, status: 'stale'}});
