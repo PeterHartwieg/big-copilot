@@ -842,8 +842,11 @@ class CityMapView {
      neither traffic nor a building capacity tells one place from another. */
   sortKeys(cat = this.fs.cat, show = this.fs.show){
     if(cat === 'warehouse' && this.planning) return ['rent', 'm2', 'deposit'];
-    const cost = show === 'takeover' ? 'takeoverPrice' : 'deposit';
-    return cat === 'warehouse' ? ['m2', 'traffic', 'cap', cost] : ['score', 'traffic', 'demand', 'm2', 'cap', cost];
+    // For sale has its own saleSort. Keep either ranked cost sort while that
+    // list is open, including when restoring its filters from storage.
+    const costs = show === 'sale' ? ['deposit', 'takeoverPrice']
+      : [show === 'takeover' ? 'takeoverPrice' : 'deposit'];
+    return cat === 'warehouse' ? ['m2', 'traffic', 'cap', ...costs] : ['score', 'traffic', 'demand', 'm2', 'cap', ...costs];
   }
   /* The business types this save reports demand for in a category, by slug. */
   catTypes(cat = this.fs.cat){

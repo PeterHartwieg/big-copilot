@@ -268,6 +268,39 @@ test('takeover prices sort cheapest first, persist in saved searches and leave r
   } finally { await page.close(); await context.close(); }
 });
 
+for(const [show, cost] of [['takeover', 'takeoverPrice'], ['rent', 'deposit']]){
+  test(`${show} cost order survives sale listings, saved searches and a reload`, async () => {
+    const context = await H.browser.newContext();
+    const {page, errors} = await fixture(context);
+    try{
+      await openMap(page); await turnOn(page);
+      await page.locator(`#cityMapPage [data-show="${show}"]`).click();
+      await page.locator(`#cityMapPage .fhead [data-s="${cost}"]`).click();
+      const ranked = await rowKeys(page);
+      await page.locator('#cityMapPage [data-show="sale"]').click();
+      assert.equal(await page.evaluate(() => cityMapPage.fs.sort), cost);
+      await page.locator('#cityMapPage .fhead [data-s="payback"]').click();
+      await H.saveAs(page, 'Sale prices');
+      await page.locator(`#cityMapPage [data-show="${show}"]`).click();
+      assert.deepEqual(await rowKeys(page), ranked);
+      assert.equal(await page.locator(`#cityMapPage .fhead [data-s="${cost}"].on`).count(), 1);
+      await page.locator(`${saved} [data-saved="Sale prices"]`).click();
+      assert.equal(await page.evaluate(() => cityMapPage.fs.sort), cost);
+      const again = await fixture(context);
+      try{
+        await openMap(again.page); await turnOn(again.page);
+        assert.equal(await again.page.evaluate(() => cityMapPage.fs.show), 'sale');
+        assert.equal(await again.page.evaluate(() => cityMapPage.fs.saleSort), 'payback');
+        await again.page.locator(`#cityMapPage [data-show="${show}"]`).click();
+        assert.deepEqual(await rowKeys(again.page), ranked);
+        assert.equal(await again.page.locator(`#cityMapPage .fhead [data-s="${cost}"].on`).count(), 1);
+        assert.deepEqual(again.errors, []);
+      } finally { await again.page.close(); }
+      assert.deepEqual(errors, []);
+    } finally { await page.close(); await context.close(); }
+  });
+}
+
 test('unknown takeover prices sort last and remain distinct from zero and building asking prices', async () => {
   const buildings = PREMISES.buildings.map(b => b.key === HK[1] ? {...b, takeoverPrice: null}
     : b.key === HK[2] ? {...b, takeoverPrice: 0} : b);
