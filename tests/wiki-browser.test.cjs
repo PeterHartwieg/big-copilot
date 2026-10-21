@@ -4,10 +4,10 @@ const assert = require('node:assert/strict');
 const {en, enRe} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
-const {chromium} = require('playwright');
+const {launch} = require('./_page.cjs');
 const root = path.join(__dirname, '..', 'web');
 let browser;
-before(async () => { browser = await chromium.launch({headless:true, channel:process.env.PLAYWRIGHT_CHANNEL}); });
+before(async () => { browser = await launch(); });
 after(async () => { await browser?.close(); });
 
 /* The page the browser is given is the generated one with the wiki's own two
@@ -84,8 +84,8 @@ test('a cold Wiki article link and reload work without a save', async t => {
   // The article's h1 is the page's one: the board's own (#pageTitle) steps aside.
   assert.deepEqual(await page.getByRole('heading', {level:1}).allInnerTexts(), ['Gift Shop']);
   assert.equal(await page.locator('#landing').count(), 0);
-  // The six places and the two references, all present without a save.
-  assert.equal(await page.locator('#nav a[data-id]').count(), 6);
+  // The seven places, including Mods, and the two references are present without a save.
+  assert.equal(await page.locator('#nav a[data-id]').count(), 7);
   assert.equal(await page.locator('#navRefs a[data-id]').count(), 2);
   await page.reload();
   await page.getByRole('heading', {name:'Gift Shop',exact:true,level:1}).waitFor();

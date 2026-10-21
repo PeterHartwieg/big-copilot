@@ -365,3 +365,55 @@ body.map-modal-open{overflow:hidden}
 .city-map .site.lp-scroll .x{position:sticky;top:0;float:right;margin:-4px -6px 0 8px;z-index:1;background:var(--surface)}
 .city-map .site.lp-scroll .x:hover{background:var(--raised)}
 .city-map .site.lp-scroll h3{padding-right:0}
+
+/* --- Street Food: the opportunity map (StreetFoodMapView) --------------------
+   One colour per layer, shared with the board's layer chips and the ribbon
+   (--sf-c-*, on the view's .sf-scope); a footprint with nothing in a lit layer stays as the city is.
+   Open, closed and hours unknown differ in fill and outline, never colour
+   alone: closed is faint, unknown is outlined with dashes. */
+.sf-scope{--sf-c-office:#6ea8ff;--sf-c-nightlife:#b48cff;--sf-c-shows:#ff7ab8;--sf-c-industrial:#c2ab78;
+  --sf-c-retail:#43c07a;--sf-c-residential:#e7c35a;--sf-c-park:#3fb7b0;--sf-c-event:#f0913a;--sf-c-commissary:#e9ece6}
+.sf-city .citymap{margin-top:0}
+.sf-city .stage{height:min(66vh,680px);min-height:380px}
+.sf-city .map-canvas .fp.sf-src{fill:var(--sf-c);fill-opacity:.42;stroke:var(--sf-c);stroke-opacity:.9;stroke-width:1;vector-effect:non-scaling-stroke}
+.sf-city .map-canvas .fp.sf-src.sf-shut{fill-opacity:.08;stroke-opacity:.35}
+.sf-city .map-canvas .fp.sf-src.sf-unk{fill-opacity:.16;stroke-dasharray:3 2}
+.sf-city .map-canvas .fp.sf-stop{stroke:#fff;stroke-opacity:1;stroke-width:2}
+.sf-scope [data-sf="office"]{--sf-c:var(--sf-c-office)}
+.sf-scope [data-sf="nightlife"]{--sf-c:var(--sf-c-nightlife)}
+.sf-scope [data-sf="shows"]{--sf-c:var(--sf-c-shows)}
+.sf-scope [data-sf="industrial"]{--sf-c:var(--sf-c-industrial)}
+.sf-scope [data-sf="retail"]{--sf-c:var(--sf-c-retail)}
+.sf-scope [data-sf="residential"]{--sf-c:var(--sf-c-residential)}
+.sf-scope [data-sf="park"]{--sf-c:var(--sf-c-park)}
+.sf-scope [data-sf="event"]{--sf-c:var(--sf-c-event)}
+.sf-scope [data-sf="commissary"]{--sf-c:var(--sf-c-commissary)}
+.sf-marks .sf-pt{fill:var(--sf-c);stroke:#0d100f;stroke-width:1.5;vector-effect:non-scaling-stroke;cursor:default}
+.sf-marks .sf-pt.sf-com{fill:none;stroke:var(--sf-c);stroke-width:2}
+.sf-marks .sf-pt.sf-shut{fill-opacity:.25}
+.sf-marks .sf-pt.sf-unk{fill:#0d100f;stroke:var(--sf-c);stroke-dasharray:2 1.5}
+.sf-marks .sf-pt.sel{stroke:#ff4fd8;stroke-width:3}
+.sf-marks{pointer-events:none}
+.sf-ring{fill:#ff4fd81a;stroke:#ff4fd8;stroke-width:1.5;stroke-dasharray:5 4;vector-effect:non-scaling-stroke}
+.sf-route{fill:none;stroke:#e9ece6;stroke-width:2.5;stroke-opacity:.85;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.sf-pin{position:absolute;left:0;top:0;display:grid;place-items:center;pointer-events:none}
+.sf-pin.sf-stopn{width:22px;height:22px;border-radius:50%;background:#e9ece6;color:#0d100f;font:600 12px/1 Archivo,"Helvetica Neue",Arial,sans-serif;box-shadow:0 0 0 2px #0d100f,0 2px 6px #0008}
+.sf-pin.sf-stopn.bad{background:#f0913a}
+.sf-pin.sf-stopn.lit{box-shadow:0 0 0 2px #0d100f,0 0 0 5px #ff4fd8}
+.sf-pin.sf-spot{width:10px;height:10px;border-radius:50%;background:#ff4fd8;box-shadow:0 0 0 2px #0d100f}
+.sf-pin.sf-veh{width:22px;height:22px;border-radius:5px;background:#0d100fd9;border:1px solid #9aa39d;color:#e9ece6}
+.sf-pin.sf-veh svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+@media(max-width:760px){ .sf-city .stage{height:56dvh;min-height:300px} }
+
+/* Checked stopping places (paintSpots()): small dots once the map is zoomed
+   in, the ones near the inspected place and the picked one always. A hollow
+   ring for a truck's parking spot, a filled dot for a cart's pavement spot. */
+.sf-spots .sf-sp{fill:#e9ece6;fill-opacity:.55;stroke:#0d100f;stroke-width:1;vector-effect:non-scaling-stroke;cursor:pointer;display:none}
+.sf-spots .sf-sp.truck{fill:#0d100f;fill-opacity:.6;stroke:#e9ece6;stroke-width:1.4}
+.stage.zoomed .sf-spots .sf-sp{display:inline}
+.sf-spots .sf-sp.near{display:inline;fill:#ffd166;fill-opacity:1;stroke:#0d100f}
+.sf-spots .sf-sp.truck.near{fill:#0d100f;stroke:#ffd166;stroke-width:2}
+.sf-spots .sf-sp.sel{display:inline;fill:#ff4fd8;fill-opacity:1;stroke:#fff;stroke-width:2}
+.sf-spots .sf-sp:hover{fill:#ffd166;fill-opacity:1}
+.stage.interacting .sf-spots{pointer-events:none}
+.sf-pin.sf-spotsel{width:14px;height:14px;border-radius:50%;background:#ff4fd8;box-shadow:0 0 0 2px #fff,0 0 0 4px #0d100f}

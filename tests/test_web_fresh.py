@@ -193,6 +193,13 @@ class WebFresh(unittest.TestCase):
         with tempfile.TemporaryDirectory() as lf, tempfile.TemporaryDirectory() as crlf, \
                 tempfile.TemporaryDirectory() as svg_crlf:
             for name in build_web.STAMP_INPUTS:
+                if name.endswith(".webp"):
+                    # Binary covers are identical on every platform; text
+                    # checkout conversion must never touch their bytes.
+                    raw = (ROOT / name).read_bytes()
+                    for target in (lf, crlf, svg_crlf):
+                        place(target, name, raw)
+                    continue
                 unix = (ROOT / name).read_bytes().replace(b"\r\n", b"\n")
                 dos = unix.replace(b"\n", b"\r\n")
                 if name.endswith(".svg"):

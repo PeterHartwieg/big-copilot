@@ -22,10 +22,10 @@ namespace BigCopilotLink
     [ModEntryOnCityLoad]
     public class LinkMod : IModBigAmbitions
     {
-        public const string Version = "0.7.0";
+        public const string Version = "0.8.0";
 
         /// <summary>docs/game-link-api.md. Bump on any contract change.</summary>
-        public const int SchemaVersion = 3;
+        public const int SchemaVersion = 4;
 
         /// <summary>8321 is Peter's MCP bridge and 8765 the Companion mod, so neither is offered.</summary>
         private static readonly int[] Ports = { 8322, 8323, 8324, 8325 };

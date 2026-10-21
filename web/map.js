@@ -1958,6 +1958,195 @@ class CityMapView {
       this.reset(); this.update(); }
   }
 }
+/* --- Street Food: the opportunity map ----------------------------------------
+   Mods › Street Food draws on the City map's stage and camera, and nothing of
+   the finder: the board script (drawStreetFood(), the sf* functions) owns the
+   plan, the layers and the inspected time, and hands this view what to show
+   through show(state). The view lights footprints by what is there and
+   whether it is open at the inspected time, draws the places that are not
+   buildings (pitches, events, commissaries), the plan's stops in the order
+   the player set and the 50 m ring around the inspected point. A click on a
+   footprint or on open ground is handed back (options.onPick); the view
+   decides nothing. World positions go to the map through StreetFoodModel's
+   project()/unproject() over each region's worldBounds. */
+const sfProject = (pt, regions) => typeof StreetFoodModel === "object" && StreetFoodModel && pt
+  && Number.isFinite(pt.x) && Number.isFinite(pt.z) ? StreetFoodModel.project({x: pt.x, z: pt.z}, regions) : null;
+class StreetFoodMapView extends CityMapView {
+  /* options: {onPick({key} | {x, z}), onReady()} */
+  constructor(root, options = {}){
+    super(root, {panel: false});
+    this.sf = options;
+    this.state = null;
+    this.pinEls = [];
+    root.classList.add('sf-city');
+  }
+  build(){
+    const a = this.assets, id = this.root.id, clipId = `${id}-clip`;
+    this.root.innerHTML = `<div class="citymap sf-citymap${this.narrow ? " narrow" : ""}"><div class="stage" data-stage>
+      <svg class="map-canvas" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${attr(tt("map.sf.map.canvas", "City map with Street Food places and the plan's stops"))}">
+      <defs><clipPath id="${clipId}"><rect class="map-region-clip" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}"/></clipPath></defs><g clip-path="url(#${clipId})"><image class="map-detail-background" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}" href="${a.imageUrl}"/><image class="map-fast-background" x="0" y="0" width="${a.viewBox[2]}" height="${a.viewBox[3]}" href="${a.previewUrl}"/>
+      <g class="map-footprints">${a.buildings.map(b => `<path class="location fp" data-location="${ssEsc(b.key)}" d="${b.path}" fill-rule="evenodd"><title>${ssEsc(b.address)}</title></path>`).join('')}</g>
+      <g class="sf-marks"></g><g class="sf-spots"></g><g class="map-pips"></g></g></svg>
+      <div class="layer">${(a.districtLabels || []).map(l=>`<span class="dlabel" data-x="${l.anchor[0]}" data-y="${l.anchor[1]}">${ssEsc(l.label)}</span>`).join('')}<div class="sf-pins"></div></div>
+      <div class="zoomer" role="group" aria-label="${attr(MAP_WORDS.zoom)}" data-mw-aria="zoom"><button type="button" class="ibtn" data-action="in" aria-label="${attr(MAP_WORDS.zoomIn)}" data-mw-aria="zoomIn">+</button><button type="button" class="ibtn" data-action="out" aria-label="${attr(MAP_WORDS.zoomOut)}" data-mw-aria="zoomOut">−</button><button type="button" class="ibtn" data-action="reset" aria-label="${attr(MAP_WORDS.city)}" data-mw-aria="city" data-tip="${attr(MAP_WORDS.city)}" data-mw-tip="city">${ICON.home}</button></div>
+    </div></div>`;
+    this.svg = this.root.querySelector('.map-canvas');
+    this.stage = this.root.querySelector('[data-stage]');
+    this.citymap = this.root.querySelector('.citymap');
+    this.layer = this.root.querySelector('.layer');
+    this.card = null; this.search = null; this.list = null;
+    this.paths = new Map([...this.root.querySelectorAll('[data-location]')].map(p => [p.dataset.location, p]));
+    this.pips = this.root.querySelector('.map-pips');
+    this.marks = this.root.querySelector('.sf-marks');
+    this.spotLayer = this.root.querySelector('.sf-spots');
+    this.spotBase = null; this.spotEls = new Map();
+    this.pinHost = this.root.querySelector('.sf-pins');
+    this.districts = [...this.root.querySelectorAll('.dlabel')];
+    this.buildToken++;
+    this.wirePan();
+    // A still click on open ground is a spot to inspect: where it went down;
+    // on a checked stopping place, that place.
+    this.svg.addEventListener('pointerdown', e => { this.sfDown = {clientX: e.clientX, clientY: e.clientY,
+      spot: e.target.closest?.('[data-spot]')?.dataset.spot || null}; });
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = new ResizeObserver(() => {this.rect=null; if(!this.box) this.reset(); this.paintView();});
+    this.resizeObserver.observe(this.svg);
+    this.reset();
+    if(typeof wireTips === "function") wireTips();
+    this.sf.onReady?.();
+  }
+  show(state){ this.state = state; if(this.svg) this.update(); }
+  /* World metres to map units: the region's own scale, read off a 50 m step. */
+  toMap(pt){ return sfProject(pt, this.assets?.regions || []); }
+  update(){
+    if(!this.svg || !this.state) return;
+    this.stale = false;
+    const st = this.state;
+    this.paths.forEach((path, key) => {
+      const lay = st.layerOf.get(key) || '';
+      if((path.dataset.sf || '') !== lay){ if(lay) path.dataset.sf = lay; else delete path.dataset.sf; }
+      const open = lay ? st.open.get(key) : undefined;
+      path.classList.toggle('sf-src', !!lay);
+      path.classList.toggle('sf-shut', !!lay && open === false);
+      path.classList.toggle('sf-unk', !!lay && open == null);
+      path.classList.toggle('sf-stop', st.stopKeys.has(key));
+      path.classList.toggle('sel', key === st.pickKey);
+    });
+    const marks = [], pins = [];
+    this.paintSpots(st);
+    // The places that are not buildings: a dot, or a ring for a commissary.
+    st.points.forEach(o => {
+      const p = this.toMap(o); if(!p) return;
+      const cls = `sf-pt${o.open === false ? ' sf-shut' : o.open == null ? ' sf-unk' : ''}${o.key === st.pickKey ? ' sel' : ''}`;
+      marks.push(o.layer === 'commissary'
+        ? `<rect class="${cls} sf-com" data-r="5" data-x="${p.x.toFixed(2)}" data-y="${p.y.toFixed(2)}" data-sf="${o.layer}"><title>${ssEsc(o.name || o.address || '')}</title></rect>`
+        : `<circle class="${cls}" data-r="4" cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" data-sf="${o.layer}"><title>${ssEsc(o.name || o.address || '')}</title></circle>`);
+    });
+    // The inspected point and the 50 m around it.
+    const at = st.pickPoint ? this.toMap(st.pickPoint) : null;
+    if(at){
+      const edge = this.toMap({x: st.pickPoint.x + st.radius, z: st.pickPoint.z});
+      const r = edge ? Math.hypot(edge.x - at.x, edge.y - at.y) : 0;
+      if(r > 0) marks.push(`<circle class="sf-ring" cx="${at.x.toFixed(2)}" cy="${at.y.toFixed(2)}" r="${r.toFixed(2)}"></circle>`);
+      if(!st.pickKey) pins.push({cls: st.pickSpot ? 'sf-spotsel' : 'sf-spot', x: at.x, y: at.y, html: ''});
+    }
+    // The plan's stops, in the player's order; a stop with no position breaks the line.
+    const run = [];
+    const lines = [];
+    st.stops.forEach((s, i) => {
+      const p = this.toMap(s);
+      if(!p){ if(run.length > 1) lines.push(run.slice()); run.length = 0; return; }
+      run.push(p);
+      pins.push({cls: `sf-stopn${s.issue ? ' bad' : ''}${s.id === st.litStop ? ' lit' : ''}`, x: p.x, y: p.y, html: String(i + 1),
+        label: tt("map.sf.map.stop", "Stop {n}: {name}", {n: i + 1, name: s.name || ''})});
+    });
+    if(run.length > 1) lines.push(run);
+    lines.forEach(l => marks.push(`<polyline class="sf-route" points="${l.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')}"></polyline>`));
+    // The fleet as the save last placed it: supporting context, never a stop.
+    st.vehicles.forEach(v => {
+      const p = this.toMap(v.position); if(!p) return;
+      pins.push({cls: `sf-veh ${v.kind === 'truck' ? 'truck' : 'cart'}`, x: p.x, y: p.y, html: `<svg viewBox="0 0 24 24" aria-hidden="true">${PATHS.truck}</svg>`, label: v.name || ''});
+    });
+    this.marks.innerHTML = marks.join('');
+    this.marks.querySelectorAll('rect[data-x]').forEach(r => { r.setAttribute('x', r.dataset.x); r.setAttribute('y', r.dataset.y); });
+    this.pinHost.innerHTML = pins.map(p => `<span class="sf-pin ${p.cls}"${p.label ? ` title="${attr(p.label)}"` : ''}>${p.html}</span>`).join('');
+    this.pinEls = [...this.pinHost.children].map((el, i) => [el, pins[i].x, pins[i].y]);
+    this.paintView();
+  }
+  /* The checked stopping places of the route's kind (state.spotBase, the
+     board's list for that kind): a small dot each, drawn again only when the
+     list changes; the ones near the inspected place, and the picked one, are
+     lit by class. They show once the map is zoomed in, the lit ones always. */
+  paintSpots(st){
+    if(st.spotBase !== this.spotBase){
+      this.spotBase = st.spotBase;
+      const kind = st.spotKind === 'truck' ? 'truck' : 'cart', word = st.spotWord || '';
+      this.spotLayer.innerHTML = (st.spotBase || []).map(x => {
+        const p = this.toMap(x);
+        return p ? `<circle class="sf-sp ${kind}" data-spot="${attr(x.id)}" data-r="3" cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}"><title>${ssEsc(word)}</title></circle>` : '';
+      }).join('');
+      this.spotEls = new Map([...this.spotLayer.querySelectorAll('[data-spot]')].map(c => [c.dataset.spot, c]));
+      this.spotLit = new Set();
+      this.drawSpotSizes();
+    }
+    const lit = new Set([...(st.spotNear || []), ...(st.spotSel ? [st.spotSel] : [])]);
+    (this.spotLit || new Set()).forEach(id => { if(!lit.has(id)) this.spotEls.get(id)?.classList.remove('near', 'sel'); });
+    lit.forEach(id => { const c = this.spotEls.get(id); if(!c) return; c.classList.toggle('sel', id === st.spotSel); c.classList.toggle('near', id !== st.spotSel); });
+    this.spotLit = lit;
+  }
+  drawSpotSizes(){
+    const s = this.scale(); if(!s || !this.spotLayer) return;
+    const r = (3 / s).toFixed(2);
+    this.spotEls.forEach(c => c.setAttribute('r', r));
+  }
+  drawView(){
+    super.drawView();
+    const s = this.scale(); if(!s) return;
+    this.drawSpotSizes();
+    this.marks.querySelectorAll('[data-r]').forEach(c => {
+      const r = +c.dataset.r / s;
+      if(c.tagName.toLowerCase() === 'rect'){
+        c.setAttribute('width', (2*r).toFixed(2)); c.setAttribute('height', (2*r).toFixed(2));
+        c.setAttribute('x', (+c.dataset.x - r).toFixed(2)); c.setAttribute('y', (+c.dataset.y - r).toFixed(2));
+      } else c.setAttribute('r', r.toFixed(2));
+    });
+    this.pinEls.forEach(([el, x, y]) => { const p = this.proj(x, y); el.style.transform = `translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px) translate(-50%,-50%)`; });
+  }
+  paintBall(){}
+  wakeBall(){}
+  /* A footprint clicked: handed to the board, which decides what it shows. */
+  select(key){ if(key) this.sf.onPick?.({key}); }
+  /* A still click on open ground: the spot under the pointer, in world metres. */
+  deselect(){
+    const d = this.sfDown; this.sfDown = null;
+    if(d && d.spot){ this.sf.onPick?.({spot: d.spot}); return; }
+    if(!d || !this.svg || !this.box || typeof StreetFoodModel !== "object" || !StreetFoodModel) return;
+    const w = StreetFoodModel.unproject(this.point(d), this.assets.regions || []);
+    if(w && Number.isFinite(w.x) && Number.isFinite(w.z)) this.sf.onPick?.({x: w.x, z: w.z});
+  }
+  /* The camera to a world point (a stop picked in the list), closer in if needed. */
+  focusOn(pt){
+    const p = this.toMap(pt); if(!p || !this.box) return;
+    const r = this.stageRect(), s = Math.max(this.scale(), this.cityScale() * PICK_ZOOM);
+    this.cancelGlide();
+    this.glide([p.x - (r.width/2)/s, p.y - (r.height/2)/s, r.width/s, r.height/s]);
+  }
+  /* The camera on the given world points (the plan's stops, else the places),
+     instead of the whole city. */
+  fitTo(pts, tries = 30){
+    const ps = (pts || []).map(p => this.toMap(p)).filter(Boolean);
+    if(!ps.length || !this.assets) return;
+    // A stage not laid out yet has no size to fit to: wait for it.
+    this.rect = null;
+    if(!this.stageRect().width){ if(tries > 0) requestAnimationFrame(() => this.fitTo(pts, tries - 1)); return; }
+    const xs = ps.map(p => p.x), ys = ps.map(p => p.y), pad = 60;
+    const x0 = Math.min(...xs) - pad, y0 = Math.min(...ys) - pad;
+    this.cancelGlide();
+    this.box = this.fitBox([x0, y0, Math.max(60, Math.max(...xs) + pad - x0), Math.max(60, Math.max(...ys) + pad - y0)]);
+    this.paintView();
+  }
+  resetCharacter(){ this.state = null; this.sfDown = null; this.fitted = false; this.spotBase = null; if(this.spotLayer) this.spotLayer.innerHTML = ''; if(this.svg){ this.marks.innerHTML = ''; this.pinHost.innerHTML = ''; this.pinEls = []; this.reset(); } }
+}
 function showCityMap(){
   // A fresh view starts plain. One that is already here keeps the finder as the
   // player left it, so a trip to another page and back finds the list still up.

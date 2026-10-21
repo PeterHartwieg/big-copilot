@@ -1,3 +1,4 @@
+const {boardHtml} = require('./_page.cjs');
 // The import lines on Supply › Warehouses: Smart Delivery levels, the
 // editable Set to box, and how a typed figure reaches the change checklist.
 // Browser regressions: install Playwright and its Chromium browser to run.
@@ -13,15 +14,7 @@ const {chromium} = require('playwright');
 const root = path.join(__dirname, '..');
 let browser, html;
 before(async () => {
-  html = process.env.BOARD_TARGET === 'web'
-    ? fs.readFileSync(path.join(root, 'web', 'index.html'), 'utf8')
-    : (() => {
-      const result = spawnSync(process.env.PYTHON || 'python', ['-c',
-        'from ba_dashboard import render; import sys; sys.stdout.buffer.write(render(None).encode("utf-8"))'],
-      {cwd: root, maxBuffer: 4 * 1024 * 1024});
-      assert.equal(result.status, 0, result.stderr?.toString());
-      return result.stdout.toString();
-    })();
+  html = boardHtml();
   browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
 });
 after(async () => { await browser?.close(); });

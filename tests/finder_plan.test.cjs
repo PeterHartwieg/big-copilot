@@ -1,3 +1,4 @@
+const {boardHtml} = require('./_page.cjs');
 /* The finder embedded in a plan (Expansion › Open a store, step 2 "Where"):
    CityMapView with options.plan. It is always on, fixed to the plan's type,
    lists premises to rent, stores nothing, leaves the history entry alone, and
@@ -9,7 +10,6 @@ const {en} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
-const {spawnSync} = require('node:child_process');
 const {chromium} = require('playwright');
 const root = path.join(__dirname, '..');
 const geometry = JSON.parse(fs.readFileSync(path.join(root, 'web/maps/locations.json')));
@@ -63,10 +63,7 @@ const PREMISES = {
 
 let browser, server, url, html;
 before(async () => {
-  const rendered = spawnSync(process.env.PYTHON || 'python',
-    ['-c', 'from ba_dashboard import render; import sys; sys.stdout.buffer.write(render(None).encode("utf-8"))'],
-    {cwd: root, maxBuffer: 4 * 1024 * 1024});
-  assert.equal(rendered.status, 0, rendered.stderr.toString()); html = rendered.stdout;
+  html = boardHtml();
   server = http.createServer((req, res) => {
     const route = req.url.split('?')[0];
     const files = {'/maps/locations.json': ['locations.json', 'application/json'],

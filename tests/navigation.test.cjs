@@ -180,7 +180,7 @@ const ROUTE_NEEDS = {
   'supply/production': ['factoryStaffing'], 'staffing/schedules': ['hiring'], 'staffing/needs': ['hiring'],
   'expansion/open': ['openStore'], 'expansion/factory': ['openFactory', 'openStore'], 'expansion/rivals': ['rivalIntel'],
   'estate/buildings': ['realEstate'], 'estate/buy': ['realEstate'], 'wiki': ['products'],
-  'expansion/finder': ['premises'], 'map': [],
+  'expansion/finder': ['premises'], 'map': [], 'mods/street-food': ['streetFood'],
 };
 test('shared view identity supplies navigation, primary sections, route hosts and labels', () => {
   const b = board();
@@ -218,14 +218,14 @@ test('shared view identity supplies navigation, primary sections, route hosts an
 /* The redesign's sidebar (docs/architecture.md, "The sidebar"): five destinations,
    then the two references, then the foot's ···. The pages behind them are
    hosts, which keep their ids. */
-test('the sidebar is Overview, Businesses, Supply, Staffing, Expansion, Real estate, then City map and Wiki', () => {
+test('the sidebar is Overview, Businesses, Supply, Staffing, Expansion, Real estate, Mods, then City map and Wiki', () => {
   const b = board();
   assert.deepEqual([...vm.runInContext('AREAS.map(a => a.label)', b.context)],
-    ["overview", "businesses", "supply", "staffing", "expansion", "estate"].map(k => en("nav.area." + k)));
+    ["overview", "businesses", "supply", "staffing", "expansion", "estate", "mods"].map(k => en("nav.area." + k)));
   assert.deepEqual([...vm.runInContext('REFS.map(r => r.label)', b.context)], [en("nav.ref.map"), en("nav.ref.wiki2")]);
   assert.ok(!vm.runInContext('PAGES.some(p => p.id === "results")', b.context),
     'Results is a view inside Businesses, not a page of its own');
-  for (const id of ['overview', 'businesses', 'supply', 'staffing', 'expansion', 'estate'])
+  for (const id of ['overview', 'businesses', 'supply', 'staffing', 'expansion', 'estate', 'mods'])
     assert.ok(find(b.$('nav').innerHTML, {'data-id': id}), id);
   assert.ok(find(b.$('navRefs').innerHTML, {'data-id': 'map'}));
   assert.ok(find(b.$('navRefs').innerHTML, {'data-id': 'wiki'}));
@@ -237,6 +237,8 @@ test('the sidebar is Overview, Businesses, Supply, Staffing, Expansion, Real est
   const phone = b.$('phoneNav').innerHTML;
   assert.ok(find(phone, {'data-id': 'staffing'}) && find(phone, {id: 'phoneMore'})
     && find(phone, {'data-id': 'staffing'}).at < find(phone, {id: 'phoneMore'}).at, 'a phone has all five places and Map & more');
+  // Mods is reached on a phone through Map & more's drawer, so the bar keeps its six places.
+  assert.ok(!find(phone, {'data-id': 'mods'}), 'the phone bar leaves Mods to the drawer');
 });
 
 test('Businesses carries Results, Products & prices, Standards and Milestones; Staffing its three views', () => {

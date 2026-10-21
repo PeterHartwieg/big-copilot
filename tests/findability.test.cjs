@@ -1,3 +1,4 @@
+const {boardHtml} = require('./_page.cjs');
 // Findability: the cross-links from the thing on screen to the page that
 // answers the next question about it, the membership line under a Portfolio
 // chain, and the read-out each site block opens on before anything is pointed
@@ -7,7 +8,6 @@ const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
 const {en, enRe, enText, textRe} = require('./_i18n.cjs');
 // The readout renders catalogue markup as text.
-const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
 const {chromium} = require('playwright');
@@ -15,13 +15,7 @@ const {chromium} = require('playwright');
 let browser;
 let html;
 before(async () => {
-  const result = spawnSync(process.env.PYTHON || 'python', ['-c',
-    'from ba_dashboard import render; import sys; sys.stdout.buffer.write(render(None).encode("utf-8"))'],
-  {cwd: path.join(__dirname, '..'), maxBuffer: 4 * 1024 * 1024});
-  assert.equal(result.status, 0, result.stderr?.toString());
-  html = process.env.BOARD_TARGET === 'web'
-    ? fs.readFileSync(path.join(__dirname, '..', 'web', 'index.html'), 'utf8')
-    : result.stdout.toString();
+  html = boardHtml();
   browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
 });
 after(async () => { await browser?.close(); });

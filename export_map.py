@@ -54,7 +54,7 @@ def export(geometry_path, recipe_path, svg_path):
             raise ValueError('SVG and recipe do not have matching aspect ratios')
         def project(point, x0=x0, z1=z1, frame=frame, sx=sx, sz=sz):
             return [round(frame[0] + (point[0]-x0)*sx, 3), round(frame[1] + (z1-point[1])*sz, 3)]
-        regions.append({'id': panel['id'], 'label': panel['title'], 'bounds': frame})
+        regions.append({'id': panel['id'], 'label': panel['title'], 'bounds': frame, 'worldBounds': panel['bounds']})
         for slug in panel['districts']:
             projectors[recipe['districts'][slug]['neighbourhood']] = (panel['id'], project)
 
@@ -77,7 +77,8 @@ def export(geometry_path, recipe_path, svg_path):
         buildings.append({'key': f"{f['street']}#{f['number']}",
                           'address': names.addr((f['street'], f['number'])),
                           'hood': names.label(f['neighbourhood']), 'region': region,
-                          'path': path, 'bounds': bounds, 'anchor': entrance})
+                          'path': path, 'bounds': bounds, 'anchor': entrance,
+                          'world': [f['entrances'][0][0], f['entrances'][0][2]]})
     keys = [b['key'] for b in buildings]
     if len(keys) != len(set(keys)) or len(keys) != len(recipe['expected_addresses']):
         raise ValueError('Address coverage mismatch')

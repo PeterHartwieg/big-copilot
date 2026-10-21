@@ -44,7 +44,7 @@ namespace BigCopilotLink
         };
 
         private const string EndpointsJson =
-            "[\"/health\",\"/save\",\"/refresh\",\"/pair/request\",\"/pair/status\",\"/write/uniforms\",\"/write/imports\",\"/write/schedule\",\"/write/hire\",\"/write/marketing\",\"/write/rent\",\"/write/wholesale\",\"/write/undo\"]";
+            "[\"/health\",\"/save\",\"/refresh\",\"/pair/request\",\"/pair/status\",\"/write/uniforms\",\"/write/imports\",\"/write/schedule\",\"/write/hire\",\"/write/marketing\",\"/write/rent\",\"/write/wholesale\",\"/write/streetFoodRoute\",\"/write/undo\"]";
 
         private readonly int _port;
         private readonly SaveService _saves;
@@ -326,6 +326,7 @@ namespace BigCopilotLink
                 case "/write/marketing": return "marketing";
                 case "/write/rent": return "rent";
                 case "/write/wholesale": return "wholesale";
+                case "/write/streetFoodRoute": return "streetFoodRoute";
                 case "/write/undo": return "undo";
                 default: return null;
             }
@@ -410,11 +411,13 @@ namespace BigCopilotLink
             // always reads false).
             w.BeginArray("writes");
             foreach (var kind in WriteService.Kinds) w.Value(kind);
+            if (StreetFoodSnapshot.RouteMethod() != null) w.Value("streetFoodRoute");
             w.EndArray();
             // Additive in 0.4.0: what a kind can do beyond its first contract.
             w.BeginArray("features");
             foreach (var feature in WriteService.Features) w.Value(feature);
             w.Value("building-facts.v1");
+            if (StreetFoodSnapshot.RouteMethod() != null) w.Value("streetFood.routes");
             w.EndArray();
             w.Prop("paired", paired);
             w.EndObject();

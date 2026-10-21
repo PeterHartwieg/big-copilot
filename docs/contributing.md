@@ -270,12 +270,36 @@ helper: list its slug in `WIKI_NEW` in `web/wiki.js` and date
 `python export_map.py --geometry PATH/geometry.json --recipe PATH/recipe.json`
 exports `web/maps/locations.json` and `map-background.svg` against the approved
 `web/maps/full-map.svg`. Use the corresponding canonical snapshot and recipe;
-never hand-trace or independently edit the overlay coordinates. The exporter reads
+never hand-trace or independently edit the overlay coordinates. `locations.json`
+also carries each panel's `worldBounds` and each building's entrance `world` X/Z;
+Street Food route planning uses these same transforms. The approved 12 September
+snapshot can be recovered from Peter's PC under
+`Coding_Projects/Big Ambitions/research/map-runs/20260912T195445397597Z/full-map/`;
+verify its geometry and recipe hashes against the published asset before exporting. The exporter reads
 the SVG's actual panel clip rectangles, checks matching aspect ratios and address
 coverage, and records source/background hashes. It moves poster district labels
 into screen-sized overlay text so they cannot obscure buildings when zoomed in.
 The original PNG/SVG remain unchanged. All snapshot paths are explicit inputs;
 no player save or installed-game access is required for this export.
+
+Street Food's selectable stopping places are `ba_street_food_stops.json`.
+They are a catalogue of places checked by the mod's native `StopPicker.Snap`,
+not arbitrary points inferred from the drawing and not a live vacancy map.
+To regenerate on the isolated PC test rig, load a disposable `FT` save and
+collect the test bridge's read-only `route` operation `catalogue` in batches
+(`start: 0`, `count: 8`, then each response's `next`, until `total`). Combine
+the `rows` with `total` and `complete: true` in a local JSON file, then run
+`python tools/build_street_food_stops.py EXPORT.json --game-build BUILD --mod-source COMMIT`.
+The export contains public city positions only. It probes both vehicle kinds
+at every building entrance; it is not an exhaustive grid of every legal place.
+The current checked catalogue covers Manhattan; Industry City and the Hamptons
+returned no usable stops in this test-rig export, so they are not inferred from
+the map. Imported in-game routes in those regions still retain their stops.
+Regenerate after city or native placement-rule changes. Trucks use the game's
+wheel parking test and hatch direction; carts use the mod's pavement checks.
+Both are filtered against permanent obstacles using their actual prefab hulls.
+Planning offers these exact positions, while Game Link still reviews the route
+against the live game. Existing saved stops stay at their recorded coordinates.
 
 Run `python build_web.py --assemble` after map UI or asset changes. Browser and local watch
 views load the same runtime assets lazily; standalone HTML embeds them so opening

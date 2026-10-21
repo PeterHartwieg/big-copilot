@@ -247,6 +247,8 @@ namespace BigCopilotLink
                 // The game's move turns a person in training away
                 // (myemployees_mass_action_cant_assign_business_to_training_employee).
                 else if (employee.IsTraining) error = "in_training";
+                else if (employee.assignedAddress == null && StreetFoodSnapshot.Reserved(SaveGameManager.Current, move.EmployeeId))
+                    error = "changed";
                 else if (!Takes(target, employee)) error = "no_skill";
                 if (error != null)
                 {

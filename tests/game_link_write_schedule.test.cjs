@@ -208,7 +208,7 @@ test('schedule: a cover-only plan keeps the serving entries in the game', async 
 test('hire: a dry run and an apply through the page, which then reads the game again, and one undo', async (t) => {
   const page = await linked(t, {writes: WRITES_WITH_HIRE, approved: true});
   // The board hears what the mod can do beyond its kinds.
-  assert.deepEqual(await page.evaluate(() => window.LEDGER_SOURCE.link().features), ['hire.reschedule', 'hire.undo', 'rent.undo', 'wholesale.undo']);
+  assert.deepEqual(await page.evaluate(() => window.LEDGER_SOURCE.link().features), ['hire.reschedule', 'hire.undo', 'rent.undo', 'wholesale.undo', 'streetFood.routes']);
   const dry = await sourceWrite(page, 'hire', hireBody(), true);
   assert.equal(dry.status, 200);
   assert.equal(dry.error, null);

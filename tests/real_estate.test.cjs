@@ -135,7 +135,7 @@ const owned = data => JSON.parse(data).realEstate.owned;
 
 test('Real estate is the sixth area: two views, the count of buildings off their best price', async (t) => {
   const page = await linked(t);
-  assert.deepEqual(await page.evaluate(() => AREAS.map(a => a.id)), ['overview', 'businesses', 'supply', 'staffing', 'expansion', 'estate']);
+  assert.deepEqual(await page.evaluate(() => AREAS.map(a => a.id)), ['overview', 'businesses', 'supply', 'staffing', 'expansion', 'estate', 'mods']);
   await go(page, 'estate/buildings');
   assert.deepEqual(await page.locator('#localNav a[data-route]').evaluateAll(as => as.map(a => a.dataset.route)), ['estate/buildings', 'estate/buy']);
   const flagged = owned(payload).filter(o => o.flag).length;

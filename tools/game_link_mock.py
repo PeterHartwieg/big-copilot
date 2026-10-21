@@ -2,7 +2,7 @@
 
     python tools/game_link_mock.py "<path to a .hsg>" [--port 8322]
 
-Speaks the contract in docs/game-link-api.md (schema 3, with schema 1 and 2 compatibility) so the web app and the
+Speaks the contract in docs/game-link-api.md (schema 4, with schema 1–3 compatibility) so the web app and the
 local watcher can be developed and tested without the game or Unity. POST
 /refresh and a change of the file's modification time both re-read the file
 and issue a new stamp, so pointing it at the game's own autosave folder gives a
@@ -99,7 +99,7 @@ import ba_save  # noqa: E402
 import ba_dashboard  # noqa: E402
 from ba_dashboard import ASSIGN_SKILLS, STATION_SKILLS, _uniform_gaps, money, schedule_entries, shift_print  # noqa: E402
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 DEFAULT_PORT = 8322
 REFRESH_WINDOW = 15  # the mod's window for its automatic refreshes; --throttle's retryAfter
 REQUEST_WINDOW = 3  # a POST /refresh waits this long since the last refresh, as the mod from 0.4.0
@@ -107,7 +107,7 @@ ALLOWED_ORIGINS = ("https://bigcopilot.com", "https://www.bigcopilot.com")
 # As the mod matches them (LinkHttpServer.IsAllowedOrigin): in any case.
 LOCAL_ORIGIN = re.compile(r"^http://(?:127\.0\.0\.1|localhost)(?::[0-9]{1,5})?$", re.IGNORECASE)
 EXPOSED = "ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character"
-WRITE_KINDS = ("uniforms", "imports", "schedule", "hire", "marketing", "rent", "wholesale")
+WRITE_KINDS = ("uniforms", "imports", "schedule", "hire", "marketing", "rent", "wholesale", "streetFoodRoute")
 PAIR_OUTCOMES = ("approve", "deny", "expire", "popup_open", "no_ui", "busy", "main_thread_unavailable")
 PAIR_DELAY = 1.0  # seconds before the mock's player answers the popup
 PAIR_COOLDOWNS = (10, 30, 120)  # seconds an origin waits after a denial or an expiry, then a repeat, then more
@@ -125,10 +125,10 @@ ENDPOINTS = (["/health", "/save", "/facts", "/refresh"] + [f"/write/{k}" for k i
              + ["/pair/request", "/pair/status"])
 # The refusal --refuse-write refused answers per kind when it names no rule.
 REFUSED_DEFAULT = {"uniforms": "no_locker", "imports": "locked", "schedule": "screen_open", "hire": "screen_open",
-                   "marketing": "agency_closed", "rent": "villa", "wholesale": "supplier_closed"}
+                   "marketing": "agency_closed", "rent": "villa", "wholesale": "supplier_closed", "streetFoodRoute": "vehicle_busy"}
 UNDOABLE = ("uniforms", "imports", "schedule", "hire", "marketing", "rent", "wholesale")  # hire and rent require undo features
 # What /health lists as `features` by default, as mod 0.7.0 does.
-FEATURES = ("hire.reschedule", "hire.undo", "rent.undo", "wholesale.undo")
+FEATURES = ("hire.reschedule", "hire.undo", "rent.undo", "wholesale.undo", "streetFood.routes")
 HQ_TYPE = "ba:businesstype_headquarters"
 CLEANING_STATION = "ba:itemname_cleaningstation"
 LOCKER = "ba:itemname_uniformlocker"
@@ -267,6 +267,7 @@ class Link:
         self.contracts: dict = {}   # contract id -> {active, repeating, nextDeliveryDay}
         self.order: list | None = None
         self.schedules: dict = {}   # address -> [entries], as schedule_entries()
+        self.street_routes: dict = {}  # synthetic route overlays; source file is untouched
         self.opened: dict = {}      # address -> the weekdays a write opened 0 to 24
         self.undo: dict = {}
         # Hiring: where an apply put people (employee or candidate id ->
@@ -314,7 +315,7 @@ class Link:
                 self.busy = False
             return 409, {"error": "cannot_save", "reason": "saving"}
         with self.lock:
-            self.data = self._with_rents(data)
+            self.data = self._with_street_routes(self._with_rents(data))
             self._mtime = mtime
             # The contract's shape, kept distinct even inside one second: the
             # stamp is opaque, but two refreshes must never share one.
@@ -346,6 +347,7 @@ class Link:
                 # rent (and its undo) is not laid over it.
                 with self.lock:
                     self.rents = {}
+                    self.street_routes = {}
                     self.undo.pop("rent", None)
                 self.refresh(force=True)
 
@@ -499,6 +501,105 @@ class Link:
         except (OSError, EOFError, ValueError, IndexError, struct.error, ba_save.SaveFormatError) as exc:
             print(f"mock: rent not written into the save ({exc!r}); serving it unpatched", file=sys.stderr)
             return data
+
+    @staticmethod
+    def _route_revision(vehicle):
+        import hashlib
+        return hashlib.sha256(json.dumps({k: vehicle.get(k) for k in ("vehicleId", "vehicleType", "schedule", "crew")},
+                                         sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+    def _with_street_routes(self, data):
+        """Refresh synthetic mod blocks, including review revisions, in served bytes.
+
+        A fixture must already contain the fresh-provider marker. Real disk
+        saves without it never masquerade as a live Street Food provider.
+        """
+        import ba_street_food as sf
+        try:
+            raw = gzip.decompress(data)
+            reader = ba_save._Reader(raw)
+            if reader.u8() != 2:
+                return data
+            save = ba_save.Save(reader.instance(with_ref_id=True), reader.refs, self.path)
+            values = {r.get("$k"): save.deref(r.get("$v")) for r in save.items(save.root.get("modData"))}
+            block, marker = json.loads(values[sf.KEY]), json.loads(values[sf.SNAPSHOT_KEY])
+            if block.get("schemaVersion") not in (1, 2) or marker.get("status") != "fresh":
+                return data
+            for vehicle in block.get("vehicles", []):
+                if vehicle.get("vehicleId") in self.street_routes:
+                    vehicle["schedule"] = self.street_routes[vehicle["vehicleId"]]
+            marker["routeRevisions"] = {v["vehicleId"]: self._route_revision(v) for v in block.get("vehicles", [])}
+            marker.setdefault("gameSpeed", 1)
+            def string(value):
+                text = value.encode("utf-16-le")
+                return b"\x01" + struct.pack("<i", len(text) // 2) + text
+            for key, value in ((sf.KEY, block), (sf.SNAPSHOT_KEY, marker)):
+                old = string(values[key])
+                if raw.count(old) != 1:
+                    return data
+                raw = raw.replace(old, string(json.dumps(value, separators=(",", ":"))), 1)
+            return gzip.compress(raw)
+        except (KeyError, TypeError, ValueError, OSError, EOFError, ba_save.SaveFormatError):
+            return data
+
+    def _streetFoodRoute(self, save, body, dry):
+        import ba_street_food as sf
+        import hashlib
+        import copy
+        def refused(reason, changed=False):
+            return 409, {"error": "changed" if changed else "refused", "reason": reason, "rows": []}
+        expect = body.get("expect")
+        if not isinstance(expect, dict) or any(not isinstance(expect.get(k), str) or not expect[k] for k in ("character", "company")):
+            raise BadRequest("expect.character and expect.company are required")
+        if self._other_save(body):
+            return refused("changed", True)
+        data = sf.read(save)
+        if not data or data["status"] != "ready" or not data.get("fresh"):
+            return refused("unavailable")
+        vehicle = next((v for v in data["state"].get("vehicles", []) if v["vehicleId"] == body.get("vehicleId")), None)
+        if not vehicle or self._route_revision(vehicle) != body.get("revision"):
+            return refused("changed", True)
+        if vehicle.get("isOpen") or vehicle.get("transit"):
+            return refused("vehicle_busy")
+        day, stops = body.get("weekday"), body.get("stops")
+        if type(day) is not int or not 0 <= day <= 6 or not isinstance(stops, list) or len(stops) > 6:
+            raise BadRequest("weekday and stops are invalid")
+        rules = sf.planning_rules()["rules"]
+        speed = (data.get("snapshot") or {}).get("gameSpeed", 1)
+        native_day = (day + 1) % 7
+        after = []
+        for row in stops:
+            if not isinstance(row, dict) or not sf._point(row) or any(type(row.get(k)) is not int for k in ("open", "close")):
+                raise BadRequest("invalid route stop")
+            if not 0 <= row["open"] < 1440 or not row["open"] < row["close"] <= 1620 or row["close"] - row["open"] > 1440:
+                return refused("invalid_route")
+            after.append({"x": row["x"], "z": row["z"], "y": 0, "heading": 0, "open": row["open"], "close": row["close"]})
+        for a, b in zip(after, after[1:]):
+            rate = rules["travel"]["driveMinutesPerMetre"] if vehicle.get("vehicleType") == "truck" else 1 / rules["travel"]["pushMetresPerSecond"]
+            minutes = math.ceil(math.hypot(b["x"] - a["x"], b["z"] - a["z"]) * rate * speed * rules["travel"]["roadFactor"] - 1e-9)
+            if b["open"] < a["close"]:
+                return refused("invalid_route")
+            if b["open"] - a["close"] < minutes:
+                return refused("travel_gap")
+        schedule = copy.deepcopy(vehicle.get("schedule") or {"stops": [], "closed": [], "crewShifts": []})
+        before = [{"x": s["x"], "z": s["z"], "y": s.get("y", 0), "heading": s.get("heading", 0),
+                   "open": s["openAt"], "close": s["closeAt"]} for s in schedule["stops"] if s.get("day") == native_day]
+        kept = [s for s in schedule["stops"] if s.get("day") != native_day]
+        added = [{"day": native_day, "spotKey": f"mock:{s['x']}:{s['z']}", "x": s["x"], "z": s["z"], "y": s["y"],
+                  "heading": s["heading"], "openAt": s["open"], "closeAt": s["close"]} for s in after]
+        schedule["stops"] = sorted(kept + added, key=lambda s: ((s["day"] + 6) % 7, s["openAt"]))
+        # Validate the full week's overnight boundary, including Sunday/Monday.
+        active = [s for s in schedule["stops"] if s["day"] not in schedule.get("closed", [])]
+        spans = sorted((((s["day"] + 6) % 7) * 1440 + s["openAt"], ((s["day"] + 6) % 7) * 1440 + s["closeAt"]) for s in active)
+        if any(b[0] < a[1] for a, b in zip(spans, spans[1:])) or (spans and spans[-1][1] > spans[0][0] + 10080):
+            return refused("invalid_route")
+        quote = hashlib.sha256(json.dumps([body["revision"], day, after, speed], sort_keys=True).encode()).hexdigest()
+        if not dry and body.get("quote") != quote:
+            return refused("changed", True)
+        if not dry:
+            self.street_routes[vehicle["vehicleId"]] = schedule
+        return 200, {"ok": True, "kind": "streetFoodRoute", "dryRun": dry, "quote": quote, "warnings": [],
+                     "rows": [{"vehicleId": vehicle["vehicleId"], "weekday": day, "before": before, "after": after, "changed": before != after}]}
 
     def _save(self) -> ba_save.Save:
         """The bytes served now, parsed once per stamp. Bytes that do not parse
@@ -1869,6 +1970,7 @@ class Link:
         return parsed_sites, parsed_hires, parsed_moves
 
     def _hire(self, save, body, dry):
+        from ba_street_food import reserved as street_food_reserved
         sites, hires, moves = self._parse_hire(body, "hire.reschedule" in self.features)
         blocked = self.myemployees
         if blocked and not dry:
@@ -1910,6 +2012,8 @@ class Link:
                 error = "changed"
             elif person.get("trainingSession"):
                 error = "in_training"  # the game's move turns them away
+            elif street_food_reserved(save, person):
+                error = "changed"
             elif not takes(move["to"], self._skills(save, person)):
                 error = "no_skill"
             if error:
@@ -2290,6 +2394,7 @@ class Link:
             if body.get("reset"):  # forget every apply, as a reloaded city would
                 self.applied, self.undo, self.order = [], {}, None
                 self.uniforms, self.products, self.contracts, self.schedules = {}, {}, {}, {}
+                self.street_routes = {}
                 self.opened, self.terms = {}, {}
                 self.wholesale_contracts, self.wholesale_terms = None, {}
                 self.campaigns, self.promotions, self.rents = {}, {}, {}

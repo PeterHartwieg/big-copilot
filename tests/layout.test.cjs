@@ -1,9 +1,9 @@
+const {boardHtml} = require('./_page.cjs');
 // Browser regressions: install Playwright and its Chromium browser to run.
 // NODE_PATH may point at an existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
 const {en, enRe} = require('./_i18n.cjs');
-const {spawnSync} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
 const {chromium} = require('playwright');
@@ -11,13 +11,7 @@ const {chromium} = require('playwright');
 let browser;
 let html;
 before(async () => {
-  const result = spawnSync(process.env.PYTHON || 'python', ['-c',
-    'from ba_dashboard import render; import sys; sys.stdout.buffer.write(render(None).encode("utf-8"))'],
-  {cwd: path.join(__dirname, '..'), maxBuffer: 4 * 1024 * 1024});
-  assert.equal(result.status, 0, result.stderr?.toString());
-  html = process.env.BOARD_TARGET === 'web'
-    ? fs.readFileSync(path.join(__dirname, '..', 'web', 'index.html'), 'utf8')
-    : result.stdout.toString();
+  html = boardHtml();
   browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
 });
 after(async () => { await browser?.close(); });

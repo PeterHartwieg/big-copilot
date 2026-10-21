@@ -1,10 +1,10 @@
+const {boardHtml} = require('./_page.cjs');
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
 const {en, enRe} = require('./_i18n.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
-const {spawnSync} = require('node:child_process');
 const {chromium} = require('playwright');
 const root = path.join(__dirname, '..');
 const geometry = JSON.parse(fs.readFileSync(path.join(root,'web/maps/locations.json')));
@@ -17,8 +17,7 @@ const edge = geometry.buildings.find(b=>b.key==='ba:street_fifthavenue#1'); // f
 const hoodKey = name => `ba:neighborhood_${String(name).toLowerCase().replace(/[^a-z]/g, '')}`;
 let browser,server,url,html;
 before(async()=>{
-  const rendered=spawnSync(process.env.PYTHON || 'python',['-c','from ba_dashboard import render; import sys; sys.stdout.buffer.write(render(None).encode("utf-8"))'],{cwd:root,maxBuffer:4*1024*1024});
-  assert.equal(rendered.status,0,rendered.stderr.toString());html=rendered.stdout;
+  html = boardHtml();
   server=http.createServer((req,res)=>{
     const route=req.url.split('?')[0];
     const files={'/maps/locations.json':['locations.json','application/json'],'/maps/map-background.svg':['map-background.svg','image/svg+xml']};

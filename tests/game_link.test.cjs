@@ -240,7 +240,7 @@ test('a mod speaking another schema version is refused, naming the supported ver
   const h = harness({routes: {health: {...HEALTH, schemaVersion: 99, stamp: 's2'}}});
   await h.run('loadFromLink("Linking to the game")');
   assert.equal(h.seen.states.at(-1)[1], en("app.link.mismatch"));
-  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:99, need:3}));
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:99, need:4}));
   assert.equal(h.seen.builds.length, 0);
 });
 
@@ -754,7 +754,7 @@ test('an incompatible mod that is busy is refused at once, not after the wait', 
   h.run('linkUrl = "http://127.0.0.1:8322"');
   await h.run('loadFromLink("Reading the game")');
   assert.equal(h.waits.length, 0, 'no waiting');
-  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:99, need:3}));
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:99, need:4}));
 });
 
 test('a port that never answers as the mod is named after the wait, not blamed on a missing save', async () => {
@@ -805,7 +805,7 @@ test('an incompatible mod answering an Update is refused inside the poll, not af
   const h = harness({routes: {refresh: reply(202, {accepted: true, stamp: 's1'}), health: {...HEALTH, schemaVersion: 99}}});
   h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"');
   await h.run('update()');
-  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:99, need:3}));
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:99, need:4}));
   assert.equal(h.waits.length, 0);
 });
 
@@ -890,7 +890,7 @@ test('the watcher says once when a foreign object or another version answers, an
   assert.deepEqual(h.seen.notes.at(-1), ['']);
   body = {...HEALTH, schemaVersion: 99, stamp: 's1'};
   await h.run('checkFolder()');
-  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.port.version", {v:99, need:3}));
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.port.version", {v:99, need:4}));
 });
 
 test('an Update that reads health of this version re-arms the port note of the watcher', async () => {
@@ -930,7 +930,7 @@ test('a note the player earned another way does not silence the watcher, and the
   // A version-2 mod on the port replaces the wording.
   body = {...HEALTH, schemaVersion: 99, stamp: 's1'};
   await h.run('checkFolder()');
-  assert.match(h.context.noted.text, enRe("app.link.port.version", {v:99, need:3}));
+  assert.match(h.context.noted.text, enRe("app.link.port.version", {v:99, need:4}));
 });
 
 test('#link= only moves the port on this machine', () => {
@@ -1003,11 +1003,11 @@ test('a mod that now speaks another version takes no writes until it speaks this
 
   body = {...HEALTH, schemaVersion: 99, writes: ['uniforms', 'imports'], stamp: 's1'};
   await h.run('checkFolder()');
-  assert.match(h.context.noted.text, enRe("app.link.port.version", {v:99, need:3}));
+  assert.match(h.context.noted.text, enRe("app.link.port.version", {v:99, need:4}));
   assert.deepEqual(plain(h.run('linkWrites()')), [], 'the board draws its write buttons off');
   assert.equal(moved, 1, 'an open write dialog hears of it');
   const refused = await h.run('gameWrite("uniforms", {sites: []}, {dryRun: true})');
-  assert.deepEqual(plain(refused), {status: 0, error: 'mismatch', version: 99, need: 3, body: null});
+  assert.deepEqual(plain(refused), {status: 0, error: 'mismatch', version: 99, need: 4, body: null});
   assert.equal(h.run('bindSource().holds()'), false, 'a write under way stops before its next request');
   assert.ok(!h.seen.calls.some(([url]) => url.includes('/write/') || url.includes('/pair/')), 'nothing was sent');
 
@@ -1066,8 +1066,8 @@ test('the game clock moves with every health read, and the board hears when the 
   assert.deepEqual(ticks, [17]);
 });
 
-test('marketing, uniforms, rent and wholesale name the save they were planned from; the other kinds do not', async () => {
-  const health = {...HEALTH, writes: ['uniforms', 'imports', 'schedule', 'hire', 'marketing', 'rent', 'wholesale']};
+test('guarded writes including Street Food routes name the save they were planned from; imports do not', async () => {
+  const health = {...HEALTH, writes: ['uniforms', 'imports', 'schedule', 'hire', 'marketing', 'rent', 'wholesale', 'streetFoodRoute']};
   const h = harness({routes: {health}});
   h.run(`linkHealth = ${JSON.stringify(health)}; keepApproval(linkUrl, "approved-token")`);
   const sent = [];
@@ -1078,7 +1078,7 @@ test('marketing, uniforms, rent and wholesale name the save they were planned fr
     sent.push([kind, JSON.parse(init.body), init.headers.Authorization]);
     return reply(200, {ok: true, kind, dryRun: true, rows: []});
   };
-  for (const kind of ['marketing', 'uniforms', 'rent', 'wholesale', 'imports']) {
+  for (const kind of ['marketing', 'uniforms', 'rent', 'wholesale', 'streetFoodRoute', 'imports']) {
     const got = await h.run(`gameWrite(${JSON.stringify(kind)}, {sites: []}, {dryRun: true})`);
     assert.equal(got.error, null, kind);
     assert.equal(got.body.kind, kind);
@@ -1089,6 +1089,7 @@ test('marketing, uniforms, rent and wholesale name the save they were planned fr
     ['uniforms', save, true, 'Bearer approved-token'],
     ['rent', save, true, 'Bearer approved-token'],
     ['wholesale', save, true, 'Bearer approved-token'],
+    ['streetFoodRoute', save, true, 'Bearer approved-token'],
     ['imports', null, true, 'Bearer approved-token'],
   ]);
   assert.deepEqual(plain(h.run('linkWrites()')), health.writes, 'the board offers what the mod lists');
@@ -1098,7 +1099,7 @@ test('the refusal on Update is still the full one, and names the version this pa
   const h = harness({routes: {health: {...HEALTH, schemaVersion: 99}}});
   await h.run('loadFromLink("Linking to the game")');
   assert.deepEqual(h.seen.states.at(-1), ['bad', en("app.link.mismatch"), 'http://127.0.0.1:8322']);
-  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:99, need:3}));
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:99, need:4}));
   assert.deepEqual(plain(h.run('linkWrites()')), []);
 });
 
