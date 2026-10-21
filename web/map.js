@@ -173,7 +173,7 @@ function finderShowName(k){
 function finderShowTip(k){
   switch(k){
     case "rent": return tt("map.show.available.tip", "Buildings available for rent and empty buildings you already rent.");
-    case "takeover": return tt("map.show.takeover.tip2", "Rival businesses you can make an offer to in-game, with estimated takeover prices where known. Game services like banks and wholesalers are not for sale.");
+    case "takeover": return tt("map.show.takeover.tip2", "Rival businesses you can make an offer to in-game, with estimated takeover prices where known.") + " " + tt("map.show.takeover.tip3", "Game services like banks and wholesalers are not for sale.");
     default: {
       const intro = tt("map.show.sale.tip2", "Whole buildings for sale, with the rent they earn at the best price once full.");
       const days = (premises()?.forSale || []).map(s => s.payback).filter(n => n != null).sort((a, b) => a - b);
@@ -194,7 +194,7 @@ const takeoverNote = b => b?.type === 'warehouse'
   ? tt("map.takeover.unsupported", "The game does not provide a takeover valuation for this building type.")
   : b && b.takeoverPrice == null
   ? tt("map.takeover.unknown", "No takeover estimate is available for this business's income history and furnished layout.")
-  : tt("map.takeover.estimate", "BizMan's estimated business valuation: three years of average income plus the furnished layout value. The rival may accept a different offer; this does not buy the building.");
+  : tt("map.takeover.estimate", "BizMan's estimated business valuation: three years of average income plus the furnished layout value.") + " " + tt("map.takeover.estimate.offer", "The rival may accept a different offer; this does not buy the building.");
 /* A rival's or the game's occupant, by name and business type; the save does
    not always have them. */
 const mapUnnamed = () => tt("map.unnamed", "unnamed");

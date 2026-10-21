@@ -263,7 +263,7 @@ test('takeover prices sort cheapest first, persist in saved searches and leave r
     const note = page.locator('#cityMapPage .site .facts > [data-tip]');
     assert.equal(await note.getAttribute('tabindex'), '0');
     await note.focus();
-    assert.equal(await page.locator('#tip').textContent(), en('map.takeover.estimate'));
+    assert.equal(await page.locator('#tip').textContent(), en('map.takeover.estimate') + ' ' + en('map.takeover.estimate.offer'));
     assert.deepEqual(errors, []);
   } finally { await page.close(); await context.close(); }
 });
