@@ -3,7 +3,7 @@
    tests/_finder.cjs. */
 const {test} = require('node:test');
 const H = require('./_finder.cjs');
-const {assert, en, enRe, path, at, HK, MT, CLOTHES, COFFEE, LAW, CINEMA_AT, HK_HOOD, fixture, openMap, chip, turnOn, pick, rowKeys, facts, saved, scrolledFinderToGrowthCell, PLANNED, tags, layChips, layChip, plan} = H;
+const {assert, en, enRe, path, at, HK, MT, CLOTHES, COFFEE, LAW, CINEMA_AT, HK_HOOD, fixture, openMap, chip, turnOn, pick, rowKeys, facts, saved, scrolledFinderToGrowthCell, PLANNED, tags, layoutToggle, layoutOption, openLayouts, layoutOptions, pickLayout, plan} = H;
 
 test('a Growth cell opens its popover, whose Find a location opens the finder on its own type and neighbourhood', async () => {
   const {page, errors} = await fixture();
@@ -162,31 +162,31 @@ test('the Layout filter offers the kind\'s layout keys and lists by them', async
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
     assert.deepEqual(await tags(page), ['C1', 'D2', '']);
     // Every retail layout the city's buildings have, none lit: no filter.
-    assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
-    await page.locator(layChip('C1')).click();
+    assert.deepEqual(await layoutOptions(page), ['C1', 'C2', 'D2']);
+    await pickLayout(page, 'C1');
     assert.deepEqual(await rowKeys(page), [HK[0]]);
-    assert.deepEqual(await layChips(page), ['C1*', 'C2', 'D2']);
+    assert.deepEqual(await layoutOptions(page), ['C1*', 'C2', 'D2']);
     // Several at once, and with the other filters.
-    await page.locator(layChip('D2')).click();
+    await pickLayout(page, 'D2');
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0]]);
     await page.locator(`#cityMapPage .fchip.hd[data-h="${HK_HOOD}"]`).click();
     assert.deepEqual(await rowKeys(page), [MT[0]]);
     await page.locator(`#cityMapPage .fchip.hd[data-h="${HK_HOOD}"]`).click();
-    await page.locator(layChip('C1')).click(); await page.locator(layChip('D2')).click();
+    await pickLayout(page, 'C1'); await pickLayout(page, 'D2');
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
     // A layout belongs to its kind: another kind starts with none lit. Here
     // the offices have one layout only, which is nothing to choose between.
-    await page.locator(layChip('C1')).click();
+    await pickLayout(page, 'C1');
     await page.locator('#cityMapPage .fchip.cat[data-cat="office"]').click();
     assert.equal(await page.locator('#cityMapPage .frow.flayout').isVisible(), false);
     assert.deepEqual(await rowKeys(page), [HK[4]]);
     await page.locator('#cityMapPage .fchip.cat[data-cat="retail"]').click();
-    assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
+    assert.deepEqual(await layoutOptions(page), ['C1', 'C2', 'D2']);
     // Theatre layouts can now be filtered just like shop layouts (issue #244).
     await page.locator('#cityMapPage .fchip.cat[data-cat="theater"]').click();
-    assert.deepEqual(await layChips(page), ['R1', 'R3']);
+    assert.deepEqual(await layoutOptions(page), ['R1', 'R3']);
     assert.deepEqual(await tags(page), ['R1', 'R3']);
-    await page.locator(layChip('R1')).click();
+    await pickLayout(page, 'R1');
     assert.deepEqual(await rowKeys(page), [HK[5]]);
     // The map has no dock and no plan switch: the stage is the map's.
     assert.equal(await page.locator('#cityMapPage .lp-dock, #cityMapPage .lp-seg, #cityMapPage .lp-tile').count(), 0);
@@ -198,21 +198,21 @@ test('the Layout filter is kept, saved with a search and cleared by a preset', a
   const {page, errors} = await fixture(null, {premises: PLANNED});
   try{
     await openMap(page); await turnOn(page);
-    await page.locator(layChip('C1')).click();
+    await pickLayout(page, 'C1');
     // Kept with the other filters for the character.
     assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('ba_finder_v1:finder-a')).layouts), ['C1']);
     // A saved search carries it and brings it back.
     await page.evaluate(() => cityMapPage.saveSearch('Corner shops'));
     assert.match(await page.evaluate(() => cityMapPage.savedTip(finderSaved()[0])), enRe('map.saved.tip.layout', {codes: 'C1'}, {}));
-    await page.locator(layChip('C1')).click();
+    await pickLayout(page, 'C1');
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
     await page.evaluate(() => cityMapPage.applySaved('Corner shops'));
     await page.waitForFunction(() => document.querySelectorAll('#cityMapPage .place.fr').length === 1);
-    assert.deepEqual(await layChips(page), ['C1*', 'C2', 'D2']);
+    assert.deepEqual(await layoutOptions(page), ['C1*', 'C2', 'D2']);
     // A preset (Today's card, a Growth cell) is a fresh question.
     await page.evaluate(() => openFinder({cat: 'retail'}));
     await page.waitForFunction(() => document.querySelectorAll('#cityMapPage .place.fr').length === 3);
-    assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
+    assert.deepEqual(await layoutOptions(page), ['C1', 'C2', 'D2']);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -281,29 +281,30 @@ test('on a phone the card\'s plan fits the card and the card fits the map', asyn
   } finally { await page.close(); }
 });
 
-test('Layout chips pick to filter, keep the focus, and all lit or none lit is no filter', async () => {
+test('Layout dropdown choices keep the focus, and all or none selected is no filter', async () => {
   const {page, errors} = await fixture(null, {premises: PLANNED});
   try{
     await openMap(page); await turnOn(page);
-    await page.locator(layChip('C1')).focus();
+    await openLayouts(page);
+    await page.locator(layoutOption('C1')).focus();
     await page.keyboard.press('Enter');
     assert.equal(await page.evaluate(() => document.activeElement?.dataset.flay), 'C1');
-    assert.equal(await page.locator(layChip('C1')).getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.locator(layoutOption('C1')).getAttribute('aria-pressed'), 'true');
     assert.deepEqual(await rowKeys(page), [HK[0]]);
     // All three lit stay lit, the one just clicked with them, and list every
     // building, the one with no layout included.
-    await page.locator(layChip('C2')).click();
-    await page.locator(layChip('D2')).click();
-    assert.deepEqual(await layChips(page), ['C1*', 'C2*', 'D2*']);
+    await pickLayout(page, 'C2');
+    await pickLayout(page, 'D2');
+    assert.deepEqual(await layoutOptions(page), ['C1*', 'C2*', 'D2*']);
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
     // Unlighting one filters again, to the two still lit.
-    await page.locator(layChip('C2')).click();
+    await pickLayout(page, 'C2');
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0]]);
-    await page.locator(layChip('C1')).click();
+    await pickLayout(page, 'C1');
     assert.deepEqual(await rowKeys(page), [MT[0]]);
     // Clearing the last lit chip leaves none lit and the full list.
-    await page.locator(layChip('D2')).click();
-    assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
+    await pickLayout(page, 'D2');
+    assert.deepEqual(await layoutOptions(page), ['C1', 'C2', 'D2']);
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
@@ -318,10 +319,10 @@ test('a search saved before the Layout filter still matches and clears it', asyn
     await page.evaluate(() => cityMapPage.update());
     // Nothing chosen: the old search is the one on screen.
     assert.equal(await page.locator('#cityMapPage .fsaved-list .fchip.on').textContent(), 'Old');
-    await page.locator(layChip('C1')).click();
+    await pickLayout(page, 'C1');
     assert.equal(await page.locator('#cityMapPage .fsaved-list .fchip.on').count(), 0);
     await page.locator('#cityMapPage .fsaved-list [data-saved="Old"]').click();
-    assert.deepEqual(await layChips(page), ['C1', 'C2', 'D2']);
+    assert.deepEqual(await layoutOptions(page), ['C1', 'C2', 'D2']);
     assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
@@ -419,6 +420,162 @@ test('a live refresh leaves the Type list alone unless its types changed', async
       return select.querySelector('option') === first && select.value;
     });
     assert.equal(same, COFFEE);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('layout search includes occupied layouts and filters rentals, takeovers and sales', async () => {
+  const premises = {...PLANNED, forSale: PLANNED.forSale.map(s => ({...s,
+    layout: s.key === HK[0] ? 'C1' : s.key === MT[2] ? 'C2' : 'R3'}))};
+  const {page, errors} = await fixture(null, {premises});
+  try{
+    await openMap(page); await turnOn(page);
+    await openLayouts(page);
+    const search = page.locator('#mapLayoutPop input');
+    await search.fill(' c2 ');
+    assert.deepEqual(await page.$$eval('#mapLayoutPop [data-flay]:not([hidden])', els => els.map(el => el.dataset.flay)), ['C2']);
+    // Searching the menu leaves the results alone until a layout is selected.
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0], MT[1]]);
+    await search.press('ArrowDown'); await page.keyboard.press('Enter');
+    assert.deepEqual(await rowKeys(page), []);
+    assert.equal(await page.locator(layoutToggle).textContent(), 'C2');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator(layoutToggle).getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.locator(layoutToggle).evaluate(el => el === document.activeElement), true);
+    await page.locator('#cityMapPage [data-show="takeover"]').click();
+    assert.deepEqual(await rowKeys(page), [HK[1]]);
+    await page.locator('#cityMapPage [data-show="sale"]').click();
+    assert.deepEqual(await rowKeys(page), [MT[2]]);
+    await openLayouts(page);
+    await search.fill('nonexistent');
+    assert.equal(await page.locator('#mapLayoutPop .flayout-empty').innerText(), en('map.layouts.empty'));
+    // Clear is always reachable, including after a search with no matches.
+    await page.locator('#mapLayoutPop [data-layout-clear]').click();
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[2]]);
+    assert.equal(await page.locator(layoutToggle).textContent(), en('map.layouts.any'));
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('the layout menu retains its search and focus through refresh and closes on departure', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page); await openLayouts(page);
+    const search = page.locator('#mapLayoutPop input');
+    await search.fill('c');
+    const retained = await page.evaluate(() => {
+      const first = document.querySelector('#mapLayoutPop [data-flay]');
+      D = {...D, premises: {...D.premises}}; refreshCityMaps();
+      return first === document.querySelector('#mapLayoutPop [data-flay]');
+    });
+    assert.equal(retained, true);
+    assert.equal(await search.inputValue(), 'c');
+    assert.equal(await search.evaluate(el => el === document.activeElement), true);
+    await search.press('ArrowUp');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.flay), 'C2');
+    await page.locator(chip).focus();
+    assert.equal(await page.locator('#mapLayoutPop').isVisible(), false);
+    assert.equal(await page.locator(layoutToggle).getAttribute('aria-expanded'), 'false');
+    await openLayouts(page);
+    await page.evaluate(() => showPage('growth'));
+    await page.locator('#mapLayoutPop').waitFor({state:'hidden'});
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('the layout dropdown stays inside narrow screens and above the fullscreen map', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await page.setViewportSize({width:390, height:844});
+    await openMap(page); await turnOn(page); await openLayouts(page);
+    const box = await page.locator('#mapLayoutPop').boundingBox();
+    assert.ok(box.x >= 0 && box.y >= 0 && box.x + box.width <= 390 && box.y + box.height <= 844);
+    assert.equal(await page.locator(layoutToggle).evaluate(el => el.scrollWidth <= el.clientWidth), true);
+    await pickLayout(page, 'C1');
+    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({width:1440, height:1000});
+    await page.locator('#cityMapPage [data-action="full"]').click();
+    await page.waitForFunction(() => !!document.fullscreenElement);
+    await openLayouts(page);
+    assert.equal(await page.locator('#mapLayoutPop').evaluate(el => el.matches(':popover-open')), true);
+    // A real click must reach the menu above the fullscreen element.
+    await pickLayout(page, 'D2');
+    assert.deepEqual(await rowKeys(page), [HK[0], MT[0]]);
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#mapLayoutPop').isVisible(), false);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a language change while premises is deferred preserves selected layouts', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page); await pickLayout(page, 'C1');
+    await page.evaluate(() => {
+      window.__layoutPremises = D.premises;
+      delete D.premises;
+      ttSetTable('xx', {'map.layouts.any':'Any translated layout'});
+    });
+    assert.deepEqual(await page.evaluate(() => cityMapPage.fs.layouts), ['C1']);
+    assert.equal(await page.locator('#mapLayoutPop').isVisible(), false);
+    await page.evaluate(() => { D.premises = window.__layoutPremises; refreshCityMaps(); cityMapPage.saveFinder(); });
+    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('ba_finder_v1:finder-a')).layouts), ['C1']);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('the layout dropdown works without the native Popover API', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await page.evaluate(() => {
+      Object.defineProperty(HTMLElement.prototype, 'showPopover', {value:undefined, configurable:true});
+      Object.defineProperty(HTMLElement.prototype, 'hidePopover', {value:undefined, configurable:true});
+    });
+    await openMap(page); await turnOn(page); await openLayouts(page);
+    assert.equal(await page.locator('#mapLayoutPop').getAttribute('popover'), null);
+    await page.locator('#mapLayoutPop input').fill('c1');
+    await pickLayout(page, 'C1');
+    assert.deepEqual(await rowKeys(page), [HK[0]]);
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#mapLayoutPop').isVisible(), false);
+    assert.equal(await page.locator(layoutToggle).evaluate(el => el === document.activeElement), true);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('Tab leaves the layout dropdown at its toggle and the next finder control', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page); await openLayouts(page);
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(await page.locator(layoutToggle).evaluate(el => el === document.activeElement), true);
+    assert.equal(await page.locator('#mapLayoutPop').isVisible(), false);
+    await openLayouts(page);
+    await page.locator(layoutOption('D2')).focus();
+    await page.keyboard.press('Tab');
+    assert.equal(await page.locator('#cityMapPage [data-f="save"]').evaluate(el => el === document.activeElement), true);
+    assert.equal(await page.locator('#mapLayoutPop').isVisible(), false);
+    // An empty search ends at Any layout, with the same forward exit.
+    await openLayouts(page);
+    await page.locator('#mapLayoutPop input').fill('no match');
+    await page.keyboard.press('Tab'); await page.keyboard.press('Tab');
+    assert.equal(await page.locator('#cityMapPage [data-f="save"]').evaluate(el => el === document.activeElement), true);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('exiting fullscreen with the layout dropdown open restores focus', async () => {
+  const {page, errors} = await fixture(null, {premises: PLANNED});
+  try{
+    await openMap(page); await turnOn(page);
+    await page.locator('#cityMapPage [data-action="full"]').click();
+    await page.waitForFunction(() => !!document.fullscreenElement);
+    await openLayouts(page);
+    await page.evaluate(() => document.exitFullscreen());
+    await page.locator('#mapLayoutPop').waitFor({state:'hidden'});
+    assert.equal(await page.locator(layoutToggle).evaluate(el => el === document.activeElement), true);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

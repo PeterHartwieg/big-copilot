@@ -402,6 +402,7 @@ const MAP_WORDS = {
   get maxCap(){ return tt("map.num.maxcap", "Largest building capacity"); },
   get minTraffic(){ return tt("map.num.mintraffic", "Least foot traffic"); },
   get layouts(){ return tt("map.layouts.aria", "Layouts"); },
+  get anyLayout(){ return tt("map.layouts.any", "Any layout"); },
   get saved(){ return tt("map.saved.aria", "Saved searches"); },
   get nameAria(){ return tt("map.saved.name", "Name for this search"); },
   get save(){ return tt("map.saved.save", "Save"); },
@@ -436,7 +437,100 @@ function mapRelabel(root){
     if(word !== undefined) el.setAttribute(target, word);
   }));
 }
-if(typeof ttOnChange === "function") ttOnChange(() => mapViews.forEach(view => mapRelabel(view.root)));
+if(typeof ttOnChange === "function") ttOnChange(() => mapViews.forEach(view => { mapRelabel(view.root); view.paintLayouts(); }));
+
+/* One searchable layout menu serves the map and the planners. It lives above
+   the panel's clipping, with the shared popover's dismissal and focus handling. */
+let mapLayoutUi = null, mapLayoutView = null, mapLayoutAnchor = null;
+function mapLayoutPlace(){
+  if(!mapLayoutAnchor?.isConnected || !mapLayoutAnchor.getClientRects().length){ mapLayoutUi?.close(false); return; }
+  popFit(mapLayoutUi.el, mapLayoutAnchor.getBoundingClientRect(), 6);
+}
+function mapLayoutPaint(){
+  if(!mapLayoutUi?.isOpen()) return;
+  const view = mapLayoutView, pop = mapLayoutUi.el;
+  if(!premises() || !view?.finderOn()){ mapLayoutUi.close(false); return; }
+  const keys = view.layoutKeys(), sig = JSON.stringify([keys, ttLang]);
+  const search = pop.querySelector('input'), list = pop.querySelector('.flayout-options');
+  pop.setAttribute('aria-label', MAP_WORDS.layouts);
+  search.placeholder = tt("map.layouts.search", "Search layouts…");
+  search.setAttribute('aria-label', tt("map.layouts.search", "Search layouts…"));
+  const clear = pop.querySelector('[data-layout-clear]');
+  clear.textContent = MAP_WORDS.anyLayout;
+  clear.setAttribute('aria-pressed', String(!view.fs.layouts.length));
+  list.setAttribute('aria-label', MAP_WORDS.layouts);
+  // Keep the buttons in place through selections and ordinary save refreshes.
+  if(list.dataset.sig !== sig){
+    const focused = document.activeElement?.dataset.flay;
+    list.dataset.sig = sig;
+    list.innerHTML = keys.map(code => `<button type="button" class="flayout-option" data-flay="${attr(code)}" aria-pressed="false"><span translate="no">${ssEsc(code)}</span><span class="flayout-tick" aria-hidden="true">✓</span></button>`).join('');
+    if(focused) (Array.from(list.children).find(el => el.dataset.flay === focused) || search).focus({preventScroll:true});
+  }
+  const term = search.value.trim().toLowerCase();
+  list.querySelectorAll('[data-flay]').forEach(el => {
+    el.hidden = !el.dataset.flay.toLowerCase().includes(term);
+    el.setAttribute('aria-pressed', String(view.fs.layouts.includes(el.dataset.flay)));
+  });
+  const empty = pop.querySelector('.flayout-empty');
+  empty.textContent = tt("map.layouts.empty", "No matching layouts.");
+  empty.hidden = !!list.querySelector('[data-flay]:not([hidden])');
+  mapLayoutUi.place();
+}
+function mapLayoutOpen(view, anchor){
+  if(!premises()) return;
+  if(mapLayoutUi?.isOpen() && mapLayoutAnchor === anchor){ mapLayoutUi.close(true); return; }
+  mapLayoutUi?.close(false);
+  mapLayoutView = view; mapLayoutAnchor = anchor;
+  if(!mapLayoutUi){
+    mapLayoutUi = bodyPopover({id:'mapLayoutPop', className:'flayout-pop', anchor:() => mapLayoutAnchor,
+      place:mapLayoutPlace, escPrevent:true, onClose:() => {
+        if(mapLayoutUi.el.hasAttribute('popover') && mapLayoutUi.el.matches(':popover-open')) mapLayoutUi.el.hidePopover();
+      }});
+    const pop = mapLayoutUi.el;
+    // The browser's top layer also keeps the menu above the fullscreen map.
+    if(typeof pop.showPopover === 'function' && typeof pop.hidePopover === 'function') pop.setAttribute('popover', 'manual');
+    pop.dataset.odNeeds = 'premises';
+    pop.innerHTML = `<input type="search" autocomplete="off" spellcheck="false"><button type="button" class="flayout-any" data-layout-clear aria-pressed="true"></button><div class="flayout-options" role="group"></div><p class="flayout-empty" role="status" hidden></p>`;
+    pop.addEventListener('input', mapLayoutPaint);
+    pop.addEventListener('click', e => {
+      const pick = e.target.closest('[data-flay], [data-layout-clear]');
+      if(!pick || !premises()) return;
+      const fs = mapLayoutView.fs, code = pick.dataset.flay;
+      fs.layouts = !code ? [] : fs.layouts.includes(code) ? fs.layouts.filter(c => c !== code) : [...fs.layouts, code];
+      mapLayoutView.showAll = false; mapLayoutView.saveFinder(); mapLayoutView.update();
+    });
+    pop.addEventListener('keydown', e => {
+      if(e.key === 'Tab'){
+        const stops = [...pop.querySelectorAll('input, button')].filter(el => !el.disabled && el.getClientRects().length);
+        if(e.shiftKey && document.activeElement === stops[0]){ e.preventDefault(); mapLayoutUi.close(true); }
+        // Leave forward Tab's default intact: from the restored toggle it
+        // reaches the next finder control, rather than the end of the body.
+        else if(!e.shiftKey && document.activeElement === stops.at(-1)) mapLayoutUi.close(true);
+        return;
+      }
+      if(e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      const choices = [...pop.querySelectorAll('[data-flay]:not([hidden])')];
+      if(!choices.length) return;
+      e.preventDefault();
+      const i = choices.indexOf(document.activeElement), next = i < 0 ? (e.key === 'ArrowDown' ? 0 : choices.length - 1) : i + (e.key === 'ArrowDown' ? 1 : -1);
+      (choices[(next + choices.length) % choices.length] || choices[0]).focus();
+    });
+    document.addEventListener('focusin', e => {
+      if(mapLayoutUi.isOpen() && !pop.contains(e.target) && e.target !== mapLayoutAnchor) mapLayoutUi.close(false);
+    });
+  }
+  anchor.setAttribute('aria-controls', 'mapLayoutPop');
+  // Fullscreen makes elements outside its subtree inert, even in the top layer.
+  const host = document.fullscreenElement?.contains(anchor) ? document.fullscreenElement : document.body;
+  if(mapLayoutUi.el.parentElement !== host) host.appendChild(mapLayoutUi.el);
+  mapLayoutUi.el.querySelector('input').value = '';
+  mapLayoutUi.open();
+  if(mapLayoutUi.el.hasAttribute('popover')) mapLayoutUi.el.showPopover();
+  mapLayoutPaint();
+  mapLayoutUi.el.scrollTop = 0;
+  hideTip();
+  mapLayoutUi.el.querySelector('input').focus({preventScroll:true});
+}
 
 class CityMapView {
   /* options.panel: the page shows chips, search and the places panel; the
@@ -586,8 +680,14 @@ class CityMapView {
     this.wirePan();
     this.wireBall?.();
     this.resizeObserver?.disconnect();
-    this.resizeObserver = new ResizeObserver(() => {this.rect=null; if(!this.box) this.reset(); this.paintView();});
-    this.citymap.addEventListener('fullscreenchange', () => { this.rect = null; if(this.selected) this.select(this.selected, true); else this.reset(); });
+    this.resizeObserver = new ResizeObserver(() => {
+      this.rect=null; if(!this.box) this.reset(); this.paintView();
+      if(mapLayoutView === this) mapLayoutUi?.place();
+    });
+    this.citymap.addEventListener('fullscreenchange', () => {
+      if(mapLayoutView === this && mapLayoutUi) mapLayoutUi.close(mapLayoutUi.el.contains(document.activeElement));
+      this.rect = null; if(this.selected) this.select(this.selected, true); else this.reset();
+    });
     this.resizeObserver.observe(this.svg);
     this.reset();
     if(typeof wireTips === "function") wireTips();
@@ -643,7 +743,7 @@ class CityMapView {
       ${row('rowCap', `${numChip("minCap", "minCap")}
         ${numChip("maxCap", "maxCap")}`)}
       ${row('rowTraffic', `${numChip("minTraffic", "minTraffic")}`)}
-      ${row('rowLayout', `<span class="flays" role="group" aria-label="${attr(MAP_WORDS.layouts)}" data-mw-aria="layouts"></span>`, ' flayout')}
+      ${row('rowLayout', `<button type="button" class="fchip flayout-toggle" data-f="layouts" aria-haspopup="dialog" aria-expanded="false"><span></span>${ICON.chev}</button>`, ' flayout')}
       ${plan ? "" : row('rowSaved', `<span class="fsaved" role="group" aria-label="${attr(MAP_WORDS.saved)}" data-mw-aria="saved"><span class="fsaved-list"></span><span class="fsaved-new">
         <label class="fchip fname" hidden><input type="text" maxlength="24" data-f="name" aria-label="${attr(MAP_WORDS.nameAria)}" data-mw-aria="nameAria"></label>
         <span class="fsave"><button type="button" class="fchip fnew" data-f="save" data-tip="${attr(MAP_WORDS.saveTip)}" data-mw-tip="saveTip" data-mw="save">${ICON.plus}${ssEsc(MAP_WORDS.save)}</button><button type="button" class="fdel" data-f="cancel" aria-label="${attr(MAP_WORDS.cancel)}" data-mw-aria="cancel" hidden>${ICON.x}</button></span>
@@ -696,16 +796,7 @@ class CityMapView {
       this.fs.hoods = picked.length === all.length ? null : picked;
       changed();
     });
-    // Pick to filter: a chip is lit when its layout is picked, a click lights
-    // or unlights it, and the list shows only the lit layouts. None lit is no
-    // filter. The chips are drawn again with the kind, so the row answers
-    // through a handler on itself.
-    this.root.querySelector('.flays').addEventListener('click', e => {
-      const chip = e.target.closest('[data-flay]'); if(!chip) return;
-      const code = chip.dataset.flay, now = this.fs.layouts || [];
-      this.fs.layouts = now.includes(code) ? now.filter(c => c !== code) : [...now, code];
-      changed();
-    });
+    this.root.querySelector('[data-f="layouts"]').onclick = e => mapLayoutOpen(this, e.currentTarget);
     this.root.querySelectorAll('.fchip.num input').forEach(input => input.oninput = () => {
       this.fs[input.dataset.f] = Math.max(0, +input.value || 0); changed();
     });
@@ -1290,18 +1381,7 @@ class CityMapView {
       if(input.value !== v && document.activeElement !== input) input.value = v;
       box.classList.toggle('on', +v > 0);
     });
-    // The kind's layout keys, one chip each. A kind with fewer than two has
-    // nothing to choose between, so no row (and no filter).
-    const keys = this.layoutKeys(), layout = this.root.querySelector('.frow.flayout');
-    this.fs.layouts = keys.length < 2 ? [] : (this.fs.layouts || []).filter(c => keys.includes(c));
-    layout.hidden = keys.length < 2;
-    // Drawn again only when the kind's keys change, so a chip keeps the focus.
-    const host = layout.querySelector('.flays'), sig = JSON.stringify(keys);
-    if(host.dataset.sig !== sig){
-      host.dataset.sig = sig;
-      host.innerHTML = keys.map(c => `<button type="button" class="fchip flay" data-flay="${attr(c)}" aria-pressed="false">${ssEsc(c)}</button>`).join('');
-    }
-    host.querySelectorAll('.flay').forEach(chip => mark(chip, this.fs.layouts.includes(chip.dataset.flay)));
+    this.paintLayouts();
     this.root.querySelectorAll('.fchip.show').forEach(chip => {
       const key = chip.dataset.show;
       chip.dataset.tip = finderShowTip(key);
@@ -1310,6 +1390,22 @@ class CityMapView {
       mark(chip, this.fs.show === key);
     });
     this.paintSaved();
+  }
+  paintLayouts(){
+    const row = this.root.querySelector('.flayout'); if(!row) return;
+    // A language update can arrive between saves, before premises is computed.
+    // Missing facts must not erase the character's or planner's layout picks.
+    if(!premises()){ if(mapLayoutView === this) mapLayoutUi?.close(false); return; }
+    const keys = this.layoutKeys();
+    this.fs.layouts = keys.length < 2 ? [] : (this.fs.layouts || []).filter(c => keys.includes(c));
+    row.hidden = keys.length < 2;
+    const button = row.querySelector('[data-f="layouts"]');
+    const label = this.fs.layouts.length ? this.fs.layouts.join(', ') : MAP_WORDS.anyLayout;
+    button.querySelector('span').textContent = label;
+    button.classList.toggle('on', !!this.fs.layouts.length);
+    button.setAttribute('aria-label', tt("map.layouts.chosen", "Layouts: {layouts}", {layouts:label}));
+    button.title = label;
+    if(mapLayoutView === this) mapLayoutPaint();
   }
   /* Full screen takes the whole map box (stage and panel); the camera refits
      when the size changes, keeping the selection. */
@@ -1553,7 +1649,7 @@ class CityMapView {
     const memo = this.layoutKeysOf.byCat;
     if(!memo.has(cat)){
       const keys = new Set();
-      (P?.buildings || []).forEach(b => { if(b.type === cat && b.layout) keys.add(b.layout); });
+      [...(P?.buildings || []), ...(P?.forSale || [])].forEach(b => { if(b.type === cat && b.layout) keys.add(b.layout); });
       memo.set(cat, [...keys].sort((a, b) => a.localeCompare(b, 'en', {numeric: true})));
     }
     return memo.get(cat);
@@ -1841,12 +1937,14 @@ class CityMapView {
   /* Let go of a view whose host has left the page: nothing refreshes or
      relabels it again, and it no longer follows the pointer. */
   drop(){
+    if(mapLayoutView === this) mapLayoutUi?.close(false);
     mapViews.delete(this);
     this.resizeObserver?.disconnect();
     if(this.ballHover) document.removeEventListener('mousemove', this.ballHover);
     this.buildToken++;
   }
   resetCharacter(){
+    if(mapLayoutView === this) mapLayoutUi?.close(false);
     const finding = this.fs.on && !premises() && odOnDemand();
     this.selected=null; this.query=''; this.hot=null; this.onSettled=null;
     this.fsCharacter = undefined; this.showAll = false;

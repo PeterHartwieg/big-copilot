@@ -1637,7 +1637,11 @@ All in `web/map.js`, covered by `tests/finder.test.cjs`, with saved searches in
 `fs.on` (every load opens the plain map). The floor-plan layouts, `fs.layouts`, are stored
 with the rest by `saveFinder()`; a preset or a change of category clears them, and a saved
 search keeps them only where its kind has two or more layouts. Saved searches are a separate
-list under `FINDER_SAVED_KEY`.
+list under `FINDER_SAVED_KEY`. The Layout dropdown lists every layout found in the
+category, regardless of the other filters or availability. Its search narrows the menu;
+selecting one or several codes filters the results, and Any layout clears the selection.
+`mapLayoutOpen()` uses `bodyPopover()` and the browser top layer to stay visible above
+the panel and fullscreen map.
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
