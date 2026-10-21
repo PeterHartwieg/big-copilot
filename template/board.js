@@ -7426,9 +7426,13 @@ function xlArrive(sel, hit = ""){
 }
 
 /* Shop expansions: one-product what-ifs for a shop, in the Shelves table's
-   idiom. Scoped to the character and shop, never a saved plan. Only the body
-   is repainted, so the block's .rv reveal never starts over. */
-let spExpansionState = {scope: "", open: false, extraCost: 0, rows: new Set()};
+   idiom. Each character's shop keeps its own state for the session, never a
+   saved plan. Only the body is repainted, so the block's .rv reveal never
+   starts over. A cost still being typed when a refresh redraws the same shop
+   is put back, focused (spExpansionDrawn.draft), even after a wait for the
+   facts in between. */
+const spExpansionStates = new Map();
+let spExpansionState = null, spExpansionDrawn = {scope: "", wait: false, draft: null};
 function spExpansionRows(b){
   const building = (D.premises?.buildings || []).find(x => x.key === b.key);
   const hours = (D.hours || []).find(x => x.key === b.key);
@@ -7481,36 +7485,42 @@ function spExpansionTable(rows){
       <tr class="spx-kid" id="${id}"${open ? "" : " hidden"}><td colspan="4"><div class="spx-detail">${spExpansionDetail(r)}</div></td></tr>`;
     }).join("")}</tbody></table>`;
 }
-function spExpansionBody(b){
+function spExpansionBody(b, draft = null){
   if(!spExpansionState.open) return "";
-  if(!odNeed("openStore")) return odWaitHtml("openStore");
+  if(!odNeed("openStore")){ spExpansionDrawn.wait = true; return odWaitHtml("openStore"); }
   const rows = spExpansionRows(b);
   if(rows === null) return spNone(tt("sp.expand.unavailable", "This comparison needs a supported shop, known opening hours, promotion and satisfaction, and a game started with the current building-capacity rules."));
   if(!rows.length) return spNone(tt("sp.expand.complete", "This shop already offers every physical product in its business type’s range."));
   return `<div class="spx-bar"><label for="spExpansionCost">${tt("sp.expand.extra", "Extra staffing and other costs / day")}</label>
-      <span class="os-num">$<input id="spExpansionCost" type="number" inputmode="decimal" required min="0" max="1000000000" step="any" value="${spExpansionState.extraCost}"></span></div>
+      <span class="os-num">$<input id="spExpansionCost" type="number" inputmode="decimal" required min="0" max="1000000000" step="any" value="${attr(draft ?? String(spExpansionState.extraCost))}"></span></div>
     <div class="scrollx" id="spExpansionRows">${spExpansionTable(rows)}</div>
     <div class="sp-read">${tt("sp.expand.read", "One product at a time. Check floor space, register capacity, staffing and supply in game before buying.")}</div>`;
 }
 function spExpansion(b){
-  const scope = JSON.stringify([D.meta.character, b.key]);
-  if(spExpansionState.scope !== scope) spExpansionState = {scope, open: false, extraCost: 0, rows: new Set()};
+  /* The draft is the focused field's value, or the one a wait for the facts
+     is holding while focus has gone nowhere else. */
+  const scope = JSON.stringify([D.meta.character, b.key]), prev = spExpansionDrawn, input = document.activeElement;
+  const typing = input?.id === "spExpansionCost", held = prev.wait && (!input || input === document.body);
+  spExpansionDrawn = {scope, wait: false, draft: scope !== prev.scope ? null : typing ? input.value : held ? prev.draft : null};
   if(b.status !== "retail") return "";
+  if(!spExpansionStates.has(scope)) spExpansionStates.set(scope, {open: false, extraCost: 0, rows: new Set()});
+  spExpansionState = spExpansionStates.get(scope);
   const open = spExpansionState.open;
   return `<section class="sec rv spx" id="sp-expansion" data-block="expansion">
     ${sechead(tt("sp.expand.title", "Shop expansions"), {icon: "crate",
-      after: `<span class="feature-new" data-new-feature="shop-expansions" hidden>New</span>`,
+      after: `<span class="feature-new" data-new-feature="shop-expansions" hidden>${tt("nav.new", "New")}</span>`,
       why: `${tt("sp.expand.basis", "Each row adds one product on its own, at this shop’s current hours, promotion and satisfaction, with enough displays for the building’s capacity.")} ${
         tt("sp.expand.assumptions", "Estimates use the neighbourhood’s accepted price and import cost, include lost margin at your other shops nearby, and exclude temporary demand waves and tax.")} ${
         tt("sp.expand.check", "The budget buys new displays and their supports at list prices, sized to building capacity; existing furniture may already be in use.")}`,
       quiet: tt("sp.expand.quiet", "Products this shop’s type sells that it doesn’t"),
       aside: `<button type="button" class="nx-btn sm" id="spExpansionToggle" aria-expanded="${open}" aria-controls="spExpansionBody">${
         open ? tt("sp.expand.hide", "Hide") : tt("sp.expand.compare", "Compare products")}</button>`})}
-    <div id="spExpansionBody"${open ? "" : " hidden"}>${spExpansionBody(b)}</div></section>`;
+    <div id="spExpansionBody"${open ? "" : " hidden"}>${spExpansionBody(b, spExpansionDrawn.draft)}</div></section>`;
 }
 function wireSpExpansion(b){
   const host = $("sp-expansion");
   if(!host){ featureDiscovery.refresh(); return; }
+  const st = spExpansionState, drawn = spExpansionDrawn;
   const live = () => host.isConnected && siteKey === b.key;
   const wireRows = () => $$("#spExpansionRows .spx-row").forEach(tr => {
     tr.onclick = e => {
@@ -7519,23 +7529,36 @@ function wireSpExpansion(b){
       btn.setAttribute("aria-expanded", open);
       tr.classList.toggle("open", open);
       $(btn.getAttribute("aria-controls")).hidden = !open;
-      spExpansionState.rows[open ? "add" : "delete"](tr.dataset.spx);
+      st.rows[open ? "add" : "delete"](tr.dataset.spx);
     };
   });
-  const wireBody = () => {
+  const wireBody = (restore = false) => {
     const input = $("spExpansionCost");
-    if(input) input.onchange = () => {
+    /* A restored draft was never committed, and leaving the field without
+       another edit fires no change, so its first blur commits it. The change
+       and blur a redraw's removal fires are not the reader's. */
+    const kept = restore && drawn.draft !== null;
+    let pending = kept && drawn.draft !== String(st.extraCost);
+    const commit = () => {
+      if(drawn !== spExpansionDrawn) return;
+      pending = false;
       if(!input.checkValidity() || input.value === ""){ input.reportValidity(); return; }
-      spExpansionState.extraCost = Number(input.value);
+      st.extraCost = Number(input.value);
       if(!live()) return;
       $("spExpansionRows").innerHTML = spExpansionTable(spExpansionRows(b) || []);
       wireRows();
     };
+    if(input){
+      input.onchange = commit;
+      input.onblur = () => { if(pending) commit(); };
+      if(kept) input.focus({preventScroll: true});
+    }
     wireRows();
   };
   $("spExpansionToggle").onclick = () => {
     if(!live()) return;
-    const open = spExpansionState.open = !spExpansionState.open;
+    const open = st.open = !st.open;
+    drawn.draft = null;
     if(open) featureDiscovery.visit("shop-expansions");
     const btn = $("spExpansionToggle"), body = $("spExpansionBody");
     btn.setAttribute("aria-expanded", open);
@@ -7545,7 +7568,7 @@ function wireSpExpansion(b){
     wireBody();
     featureDiscovery.refresh();
   };
-  wireBody();
+  wireBody(true);
   featureDiscovery.refresh();
 }
 

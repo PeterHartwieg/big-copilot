@@ -1538,8 +1538,8 @@ has no investment or payback estimate. Unknown hours, promotion, satisfaction,
 providers or building facts, unsupported store types and games started before the
 current capacity-based arrival rules show an unavailable state. Services and fees
 are not display additions. On save refresh the comparison recomputes; a product now
-on offer disappears. Extra daily costs are session-only and reset for a different
-shop or character.
+on offer disappears. Extra daily costs and expanded rows are session-only and remembered separately for
+each shop and character.
 
 ## Payback
 
