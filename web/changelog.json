@@ -1,5 +1,11 @@
 [
   {
+    "pr": 510,
+    "date": "2026-10-21",
+    "title": "Search layouts in Find a location",
+    "summary": "Find a location now has a searchable Layout dropdown. Type a layout code, select one or several layouts, or choose Any layout to clear the filter. The same choices work for rentals, business takeovers and buildings for sale, and stay with your saved searches."
+  },
+  {
     "pr": 509,
     "date": "2026-10-21",
     "title": "Compare additions to an existing shop",
