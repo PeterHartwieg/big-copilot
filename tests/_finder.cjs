@@ -11,6 +11,7 @@ const path = require('node:path');
 const http = require('node:http');
 const {spawnSync} = require('node:child_process');
 const {chromium} = require('playwright');
+const {boardHtml, launch, abortExternal, collectErrors} = require('./_page.cjs');
 const root = path.join(__dirname, '..');
 const geometry = JSON.parse(fs.readFileSync(path.join(root, 'web/maps/locations.json')));
 const at = key => geometry.buildings.find(b => b.key === key);
@@ -102,10 +103,7 @@ const MARKET = {
 
 let browser, server, url, html;
 before(async () => {
-  const rendered = spawnSync(process.env.PYTHON || 'python',
-    ['-c', 'from ba_dashboard import render; import sys; sys.stdout.buffer.write(render(None).encode("utf-8"))'],
-    {cwd: root, maxBuffer: 4 * 1024 * 1024});
-  assert.equal(rendered.status, 0, rendered.stderr.toString()); html = rendered.stdout;
+  html = Buffer.from(boardHtml());
   server = http.createServer((req, res) => {
     const route = req.url.split('?')[0];
     const files = {'/maps/locations.json': ['locations.json', 'application/json'],
@@ -116,15 +114,15 @@ before(async () => {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   url = `http://127.0.0.1:${server.address().port}`;
-  browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
+  browser = await launch();
 });
 after(async () => { await browser?.close(); await new Promise(resolve => server?.close(resolve)); });
 
 /* A board with the premises payload and nothing the finder does not read. */
 async function fixture(context, {premises = PREMISES, character = 'finder-a'} = {}){
   const page = await (context || browser).newPage({viewport: {width: 1440, height: 1000}});
-  const errors = []; page.on('pageerror', e => errors.push(e.message));
-  await page.route('https://**', r => r.abort());
+  const errors = collectErrors(page);
+  await abortExternal(page);
   await page.goto(url);
   await page.evaluate(({premises, character, market}) => {
     D = {meta: {character, day: 20, save: 'Finder'}, businesses: [], alerts: [], minor: {rows: []},
@@ -208,11 +206,22 @@ const PLANNED = {...PREMISES, buildings: PREMISES.buildings.map(b =>
   : b.key === CINEMA_AT ? {...b, layout: 'S3'}
   : b.type === 'retail' || b.type === 'office' ? {...b, layout: null} : b)};
 const tags = page => page.$$eval('#cityMapPage .place.fr', rows => rows.map(r => r.querySelector('.lp-tag')?.textContent || ''));
-const layChips = page => page.$$eval('#cityMapPage .fchip.flay', c => c.map(x => `${x.textContent}${x.getAttribute('aria-pressed') === 'true' ? '*' : ''}`));
-const layChip = code => `#cityMapPage .fchip.flay[data-flay="${code}"]`;
+const layoutToggle = '#cityMapPage [data-f="layouts"]';
+const layoutOption = code => `#mapLayoutPop [data-flay="${code}"]`;
+async function openLayouts(page){
+  if(await page.locator(layoutToggle).getAttribute('aria-expanded') !== 'true') await page.locator(layoutToggle).click();
+}
+async function layoutOptions(page){
+  await openLayouts(page);
+  return page.$$eval('#mapLayoutPop [data-flay]', cs => cs.map(c => `${c.dataset.flay}${c.getAttribute('aria-pressed') === 'true' ? '*' : ''}`));
+}
+async function pickLayout(page, code){
+  await openLayouts(page);
+  await page.locator(layoutOption(code)).click();
+}
 const plan = '#cityMapPage .site .lp-plan';
 
-module.exports = {assert, en, enRe, fs, path, http, spawnSync, chromium, root, geometry, at, HK, MT, CLOTHES, COFFEE, LAW, THEATER, CINEMA_AT, HOSTILE, HK_NAME, hoodKey, HK_HOOD, MT_HOOD, site, PREMISES, MARKET, fixture, openMap, chip, turnOn, pick, rowKeys, facts, saved, savedNames, saveAs, scrolledFinderToGrowthCell, PLANNED, tags, layChips, layChip, plan,
+module.exports = {assert, en, enRe, fs, path, http, spawnSync, chromium, root, geometry, at, HK, MT, CLOTHES, COFFEE, LAW, THEATER, CINEMA_AT, HOSTILE, HK_NAME, hoodKey, HK_HOOD, MT_HOOD, site, PREMISES, MARKET, fixture, openMap, chip, turnOn, pick, rowKeys, facts, saved, savedNames, saveAs, scrolledFinderToGrowthCell, PLANNED, tags, layoutToggle, layoutOption, openLayouts, layoutOptions, pickLayout, plan,
   get browser(){ return browser; },
   get server(){ return server; },
   get url(){ return url; },

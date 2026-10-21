@@ -59,6 +59,27 @@
 .fsel select option{color:var(--ink);background:var(--surface)}
 .fsel.on select{background:var(--accent-soft);border-color:var(--accent)}
 .fsel .fchev{position:absolute;right:8px;display:grid;place-items:center;color:var(--ink-3);transform:rotate(90deg);pointer-events:none}
+/* Layout choices live in a searchable dropdown instead of wrapping the panel. */
+.flayout-toggle{max-width:calc(100% - 51px);min-width:150px;justify-content:space-between}
+.flayout-toggle span{overflow:hidden;text-overflow:ellipsis}
+.flayout-toggle svg{width:12px;height:12px;flex:none;transform:rotate(90deg);fill:none;stroke:currentColor;stroke-width:1.7}
+.flayout-pop{position:fixed;inset:auto;margin:0;z-index:60;box-sizing:border-box;width:230px;max-width:calc(100vw - 24px);
+  max-height:330px;overflow:auto;overscroll-behavior:contain;padding:8px;border:1px solid var(--rule);border-radius:10px;
+  background:var(--surface);color:var(--ink);box-shadow:var(--pop-shadow,0 18px 48px #0006);font:13px Archivo,"Helvetica Neue",Arial,sans-serif}
+.flayout-pop[hidden],.flayout-pop [hidden]{display:none}
+.flayout-pop input{display:block;box-sizing:border-box;width:100%;padding:8px;margin-bottom:5px;border:1px solid var(--rule);
+  border-radius:6px;background:var(--ground);color:var(--ink);font:inherit}
+.flayout-pop button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:34px;padding:7px 8px;
+  border:0;border-radius:5px;background:none;color:var(--ink-2);font:inherit;text-align:left;cursor:pointer}
+.flayout-pop button:hover{background:var(--raised);color:var(--ink)}
+.flayout-pop button[aria-pressed="true"]{background:var(--accent-soft);color:var(--ink)}
+.flayout-pop .flayout-option{font-family:"IBM Plex Mono",monospace}
+.flayout-tick{visibility:hidden;color:var(--accent)}
+.flayout-option[aria-pressed="true"] .flayout-tick{visibility:visible}
+.flayout-options{margin-top:5px;padding-top:5px;border-top:1px solid var(--rule-soft)}
+.flayout-pop button:focus-visible,.flayout-pop input:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.flayout-empty{padding:8px;color:var(--ink-3)}
+@media(max-width:760px){.flayout-pop input{font-size:16px}.flayout-pop button{min-height:40px}}
 .fchip.num{color:var(--ink-3);cursor:text}
 .fchip.num input{width:34px;border:0;background:none;color:var(--ink);font:inherit;text-align:right;outline:none;padding:0;-moz-appearance:textfield}
 .fchip.num input::-webkit-outer-spin-button,.fchip.num input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
