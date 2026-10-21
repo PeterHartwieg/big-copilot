@@ -156,7 +156,8 @@ namespace BigCopilotLink
                 if (text == null) throw new BadRequestException("the body is not UTF-8");
                 var root = JsonReader.Obj(JsonReader.Parse(text), "body");
                 dryRun = JsonReader.Bool(root, "dryRun", "body", false);
-                job = Prepare(kind, root);
+                job = kind == "streetFoodRoute"
+                    ? RouteJob(root, text) : Prepare(kind, root);
             }
             catch (BadRequestException e)
             {
@@ -164,6 +165,12 @@ namespace BigCopilotLink
             }
 
             return RunOnMainThread(job, dryRun, cancellation);
+        }
+
+        private static Func<WriteService, bool, WriteAnswer> RouteJob(Dictionary<string, object> root, string text)
+        {
+            var req = StreetFoodRouteWrite.Parse(root, text);
+            return (ws, dry) => StreetFoodRouteWrite.Run(ws, req, dry);
         }
 
         /// <summary>HTTP thread: the parse, into plain data the main thread then checks against the game.</summary>

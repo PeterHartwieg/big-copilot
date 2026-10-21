@@ -167,6 +167,8 @@ const ICON = {
   refresh: `<svg viewBox="0 0 24 24">${PATHS.refresh}</svg>`,
   more: '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="18" cy="12" r="1.4"></circle></svg>',
   estate: '<svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"></path><path d="M5.5 9.5V20h13V9.5"></path><path d="M10 20v-5.5h4V20"></path></svg>',
+  /* A puzzle piece: what a mod adds to the game. */
+  mods: '<svg viewBox="0 0 24 24"><path d="M10 4.5a2 2 0 0 1 4 0V6h4a1 1 0 0 1 1 1v4h-1.5a2 2 0 0 0 0 4H19v4a1 1 0 0 1-1 1h-4v-1.5a2 2 0 0 0-4 0V20H6a1 1 0 0 1-1-1v-4h1.5a2 2 0 0 0 0-4H5V7a1 1 0 0 1 1-1h4z"></path></svg>',
 };
 const icon = name => ICON[name] || "";
 /* The site panel's own drawings, on the same 24 grid: a section's head mark, a
@@ -707,6 +709,7 @@ function odWords(name){
     case "openFactory": return tt("nav.od.openFactory", "Working out factory costs…");
     case "goals": return tt("nav.od.goals", "Working out milestones…");
     case "realEstate": return tt("nav.od.realEstate", "Working out real estate…");
+    case "streetFood": return tt("nav.od.streetFood", "Reading Street Food records…");
     case "rivalIntel": return tt("nav.od.rivalIntel", "Working out what rivals sell…");
     case "hiring": return tt("nav.od.hiring", "Working out staff needs…");
     default: return tt("nav.od.factoryStaffing", "Working out factory staffing…");
@@ -735,6 +738,7 @@ const OD_ACTION_SECTIONS = [
   ["#secProducts", ["products"]], ["#secGoals", ["goals"]],
   ["#secRivals", ["rivalIntel"]],
   ["#secProduction", ["factoryStaffing"]],
+  ["#secStreetFood, #sfCtl", ["streetFood"]],
 ];
 /* Detached controls declare the sections they read on their host (or on
    the individual action). Close and retry do not read those sections. */
@@ -2481,6 +2485,7 @@ const szRank = f => { const i = SZ_RANK.indexOf(f.st); return i < 0 ? SZ_RANK.le
    line here; `named` and `unjudged` are the board's own, for SZ_NEW and
    SZ_NONE. */
 const SZ_WHY = {
+  get "new:streetFood"(){ return tt("sb.streetFood.limited", "Street Food commissary demand is not yet included, so supply and production recommendations for its suppliers are withheld."); },
   get "paused:order"(){ return tt("sb.why.paused.order", "The import is paused, and no route from your own site brings it"); },
   get "paused:topup"(){ return tt("sb.why.paused.topup", "Paused; a depot's daily top-up feeds the line"); },
   get "noplan:target"(){ return tt("sb.why.noplan.target", "No daily top-up plan brings it"); },
@@ -2785,6 +2790,7 @@ function factoryView(){
   const f = D.supply.factories;
   if(!f || !f.sites) return {sites: [], machines: 0, unnamed: 0};
   const view = JSON.parse(JSON.stringify(f));
+  view.sites = view.sites.filter(s => !s.streetFoodRestricted);
   const names = localNames();
   syncLocalNames(view);
   const recipes = {};
@@ -2887,6 +2893,12 @@ function mdFlag(m){
       ? tt("nav.mast.mods.retail.bad", "Retail Expansion: its records could not be read, so estimates that need a building's capacity or floor area are left out.")
       : tt("nav.mast.mods.retail.tip", {one: "Retail Expansion: {n} renovated building; its building capacity and floor area come from the mod's records.",
           other: "Retail Expansion: {n} renovated buildings; their building capacity and floor area come from the mod's records."}, {n}));
+  }
+  if(m.streetFood){
+    parts.push(tt("nav.mast.mods.streetFood", "STREET FOOD"));
+    tips.push(m.streetFood.status === "ready"
+      ? tt("nav.mast.mods.streetFood.ready", "Street Food records are included in company finances, and vehicle crews are reserved for the fleet.")
+      : tt("nav.mast.mods.streetFood.unavailable", "Street Food records are unavailable or stale, so tax estimates and reassignment of unassigned employees are withheld."));
   }
   if(!parts.length) return "";
   return `<span class="flag md-flag" data-tip="${attr(tips.join(" "))}">${
@@ -3376,6 +3388,8 @@ const VIEW_META = [
   {route: "expansion/rivals", host: ["growth", "rivals"], section: "secRivals", label: () => tt("nav.view.rivals", "Rivals")},
   {route: "estate/buildings", host: ["estate", "buildings"], section: "secEstate", label: () => tt("nav.view.estate.buildings", "My buildings")},
   {route: "estate/buy", host: ["estate", "buy"], section: "secBuy", label: () => tt("nav.view.estate.buy", "Buy a building")},
+  {route: "mods/browse", host: ["mods", "browse"], section: "secMods", label: () => tt("nav.view.mods.browse", "Browse mods")},
+  {route: "mods/street-food", host: ["mods", "streetfood"], section: "secStreetFood", label: () => tt("nav.view.mods.streetFood", "Street Food")},
   {route: "map", host: ["map"], label: () => tt("nav.ref.map", "City map")},
   {route: "wiki", host: ["wiki"], label: () => tt("nav.ref.wiki2", "Wiki")},
 ];
@@ -4594,14 +4608,15 @@ function outsideRows(span){
   const last = days[days.length - 1];
   if(!last) return "";
   const realEstate = last.realEstate || 0, salary = last.salary || 0;
-  const income = realEstate + salary;
+  const food = last.streetFood;
+  const income = realEstate + salary + (food?.profit || 0);
   const costs = (last.business || 0) - last.profit + income;
   const earlier = (D.businesses || []).filter(b => Math.abs(b.profitBefore || 0) >= 0.005);
   const before = earlier.reduce((s, b) => s + b.profitBefore, 0);
   const gone = D.sitesGone || [];
   const goneSum = gone.reduce((s, g) => s + g.profit, 0);
   if(Math.abs(costs) < 1 && Math.abs(realEstate) < 1 && Math.abs(salary) < 1 && Math.abs(before) < 1
-     && Math.abs(goneSum) < 1) return "";
+     && Math.abs(goneSum) < 1 && !food) return "";
   const parts = [["loans", last.loans], ["insurance", last.insurance],
                  ["homes", last.homes], ["parking", last.parking]].filter(([, n]) => n >= 1);
   const other = costs - parts.reduce((s, [, n]) => s + n, 0);
@@ -4623,6 +4638,9 @@ function outsideRows(span){
     {day, sites: gone.map(g => tt("co.outside.before.site", "{site} {w:$}", {site: g.name, w: g.profit})).join(", ")});
   return (Math.abs(before) >= 1 ? row(tt("co.outside.before", "Before a site's business opened"), before, "", beforeTip) : "")
     + (Math.abs(goneSum) >= 1 ? row(tt("co.outside.gone", "Sites you no longer rent"), goneSum, "", goneTip) : "")
+    + (food ? row(tt("co.outside.streetFood", "Street Food"), food.profit, "",
+      tt("co.outside.streetFood.tip", "Day {day}: revenue {revenue:$}, stock {stock:$}, crew wages {wages:$}, parking {parking:$}, other costs {costs:$}, reconciliation {adjustment:$}.",
+        {day, revenue: food.revenue, stock: food.cogs, wages: food.wages, parking: food.parking, costs: food.otherCosts, adjustment: food.adjustment})) : "")
     + (Math.abs(costs) >= 1 ? row(tt("co.outside.costs", "Company costs outside sites"), -costs, "", tip) : "")
     + (Math.abs(realEstate) >= 1 ? row(tt("co.outside.realestate", "Real estate income"), realEstate, "",
       tt("co.outside.realestate.tip", "Day {day}: rent from the real estate you own, booked to the company, not to a site", {day})) : "")
@@ -4667,7 +4685,7 @@ function drawPortfolio(){
   });
 
   const t = $("portfolio");
-  if(!D.businesses.length){
+  if(!D.businesses.length && !(view === "pnl" && D.daily?.some(d => d.streetFood))){
     t.innerHTML = `<tbody><tr><td class="l quiet">${tt("co.port.empty", "No businesses in this save yet.")}</td></tr></tbody>`;
     return;
   }
@@ -5986,7 +6004,8 @@ function spRosterNone(row, pick, key){
   /* A shop with no cover station and nothing measured still has its demand
      test to offer, so the pick sits here too and the section carries its site. */
   return `<section class="sec rv" data-block="roster" id="sp-roster"${pick ? ` data-site="${attr(row.key)}"` : ""}>
-    ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", why: failed
+    ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", why: row?.unavailable === "streetFood"
+      ? SZ_WHY["new:streetFood"] : failed
       ? tt("sp.roster.failed.why", "This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.")
       : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling counts everyone who may walk in, not the customers a shop like this serves, so nothing is suggested from it.")})}
     ${pick || ""}
@@ -9436,6 +9455,7 @@ function impSetKeep(id, entry){
    refresh. Also leaves the import rows for the game link's write-back
    (gwImportRows). */
 function supplyChecklistRows(){
+  const restricted = new Set(D.supply.streetFoodRestricted || []);
   const f = factoryView();
   const facts = D.supply.facts || {};
   const depotsKnown = (D.supply.factories && D.supply.factories.depots) || {};
@@ -9468,7 +9488,7 @@ function supplyChecklistRows(){
   const {edits} = impSetEdits();
   Object.keys(facts).forEach(si => {
     const s = +si;
-    if(!D.businesses[s]) return;
+    if(!D.businesses[s] || restricted.has(s)) return;
     const rows = Object.keys(facts[si]).filter(slug => facts[si][slug].imp).map(slug => {
       /* A factory input topped up daily and imported too: its contract's
          week is the fact's `import`. */
@@ -9521,7 +9541,7 @@ function supplyChecklistRows(){
     .filter(x => x.rows.length);
   const factRows = test => Object.keys(facts).flatMap(si => Object.keys(facts[si]).map(slug => {
     const fact = szFact(+si, slug);
-    return D.businesses[+si] && test(fact) ? {s: +si, slug, item: label(+si, slug), fact, margin, sizedFor} : null;
+    return !restricted.has(+si) && D.businesses[+si] && test(fact) ? {s: +si, slug, item: label(+si, slug), fact, margin, sizedFor} : null;
   }).filter(Boolean)).sort((a, b) => szRank(a.fact) - szRank(b.fact) || (b.fact.use || 0) - (a.fact.use || 0));
   /* Depots only a route from your own site fills, each morning, judged on
      that top-up against their busiest day (a day's figures); and the shops
@@ -9535,7 +9555,7 @@ function supplyChecklistRows(){
   importRows.forEach(x => x.rows.forEach(r => { r.deps = r.changed && Number.isFinite(r.value) ? sbDeps(f, r) : []; }));
   const deps = importRows.flatMap(x => x.rows.flatMap(r => r.deps.map(dep => ({...dep, for: r}))));
   const rows = buildOrderChecklist(importRows, looseRows, allSites,
-    (D.supply.shops || []).map(r => ({...r, fact: szFact(r.s, r.slug), margin})),
+    (D.supply.shops || []).filter(r => !restricted.has(r.s)).map(r => ({...r, fact: szFact(r.s, r.slug), margin})),
     supplyImports().map(r => ({...r, fact: szFact(r.s, r.slug)})), D.businesses, depotTopups, wholesaleRows, lines, deps);
   return {f, importRows, looseRows, allSites, lines, rows, margin};
 }
@@ -9886,6 +9906,11 @@ function sbFill(sec, html){
   sec.innerHTML = html;
 }
 function drawSupplyView(view){
+  const notice = $("sbStreetFood");
+  if(notice){
+    notice.hidden = !(D.supply?.streetFoodRestricted || []).length;
+    notice.textContent = SZ_WHY["new:streetFood"];
+  }
   ({changes: drawChangesView, roles: drawRolesView, imports: drawImportsView, deliveries: drawDeliveriesView,
     production: drawProductionView, flow: drawFlowView}[view] || drawChangesView)();
 }
@@ -11491,7 +11516,7 @@ const srN = v => Number.isFinite(v) ? num(Math.round(v)) : srDash;
 /* One stop's stock targets, every one, in the game's order: one column up to
    12, two above. The amount's header is the game's for the plan's source. */
 function srTargets(m, d){
-  const end = d.kind === "pier" || d.kind === "other";
+  const end = d.kind === "pier" || d.kind === "other" || d.kind === "commissary";
   const amount = m.factory ? tt("sb.roles.col.upTo", "Deliver up to") : tt("sb.roles.col.minStock", "Minimum stock amount");
   const finds = srStopFinds(d), by = new Map(finds.map(a => [a.ev.slug, a]));
   const rows = (d.targets || []).map(t => {
@@ -11837,7 +11862,7 @@ function drawFactoryStaffing(keep = () => true, drawnLines = []){
     /* The factory's own page has its lines and inputs, not a staffing block. */
     const go = b ? `<a class="link go" href="${attr(siteHref(b.key))}" data-sb-lines="${attr(b.key)}">${tt("sb.staff.open", "Open factory page ›")}</a>` : "";
     if(r.failed) return `<div class="sb-sfac"><div class="sb-sfh"><span>${name}</span><span class="sb-hc">${
-      tt("sb.staff.failed", "No plan could be built for this factory's workers.")}</span><span></span>${go}</div></div>`;
+      r.unavailable === "streetFood" ? SZ_WHY["new:streetFood"] : tt("sb.staff.failed", "No plan could be built for this factory's workers.")}</span><span></span>${go}</div></div>`;
     const hc = r.headcount || {}, dl = r.delta || {};
     workers += dl.workers || 0; perDay += dl.perDay || 0;
     const chip = dl.workers ? `<span class="d ${dl.workers > 0 ? "up" : "dn"}">${dl.workers > 0 ? tt("sb.staff.hire", "hire +{n}", {n: dl.workers}) : `−${-dl.workers}`}</span>` : "";
@@ -18543,6 +18568,7 @@ function reBuyCtl(re){
 }
 function reTaxPanel(re, lit){
   const t = re.tax;
+  if(t?.unavailable === "streetFood") return `<p class="quiet">${tt("re.tax.streetFood", "Tax estimates are unavailable until Street Food records can be read from a current save.")}</p>`;
   if(!t || !t.assessed || !(t.baseEnd > 0) || !(t.pick || []).length) return "";
   const picks = t.pick.map(k => re.buy.find(x => x.key === k)).filter(Boolean);
   const hot = t.left <= 1;
@@ -18941,6 +18967,886 @@ function drawOptimizeStaffing(){
           : tt("today.moves.staff.cover.week", "{site}: a week of {hours} cleaning and security hours to set, in {entries}.", {site, hours, entries})));
   go.textContent = tt("today.moves.staff.go", "Opens {site} › Staffing", {site: row.name});
   card.dataset.site = row.key;
+}
+
+/* --- Mods: Browse mods and the Street Food route planner ---------------------
+   Browse mods lists the mods the board knows, one row each: what the mod is,
+   whether this save carries it (core D.mods, which a save without mods leaves
+   out) and what the board does with it. Support and detection are separate
+   facts on every row, so a supported mod can be absent from the save, and a
+   detected one can carry records the board cannot read. No row claims that
+   every feature of a mod is understood.
+
+   Street Food is a planner the player drives: the city map lit by what is
+   around (offices, nightlife, shows, …) and what is open at the inspected
+   weekday and time, and a route the player builds stop by stop, in the order
+   they choose, with the times they choose. The board estimates travel and
+   says what does not fit (overlaps, too little time to drive, no crew); it
+   never orders the stops, proposes places, ranks them or assigns anyone. The
+   arithmetic is StreetFoodModel's (template/street-food-model.js); the map is
+   StreetFoodMapView (web/map.js). Plans are kept per company of each
+   character in localStorage under ba_street_food_routes_v1:["<character>",
+   "<company>"] (sfStore()); a refresh or an import never rewrites one, and a
+   route reaches the game only through its reviewed write (gwStreetFoodRoute()). */
+const MOD_STREET_FOOD_URL = "https://steamcommunity.com/sharedfiles/filedetails/?id=3822355169";
+/* The curated list, Street Food first. `reads` is what the board does with
+   the mod's records; `limits` what it does not do yet. */
+function modCatalogue(){
+  return [
+    {id: "streetFood", featured: true, name: tt("nav.mods.sf.name", "HART. Street Food"), by: tt("nav.mods.sf.by", "by Peter Hartwieg"),
+     url: MOD_STREET_FOOD_URL,
+     what: tt("nav.mods.sf.what", "Food carts and trucks that drive a daily route of stops, stocked from commissaries."),
+     reads: [tt("nav.mods.sf.reads.finance", "Fleet revenue, stock and crew wages join company results and tax-period sales."),
+       tt("nav.mods.sf.reads.crew", "Vehicle crews are kept out of building staffing and hiring plans."),
+       tt("nav.mods.sf.reads.supply", "Commissaries show as destinations in Plans & contracts."),
+       tt("nav.mods.sf.reads.routes", "Routes are planned on the city map and kept in this browser.")],
+     limits: [tt("nav.mods.sf.limits.supply", "Commissary demand is not modelled, so supply recommendations for the sites that stock one are withheld."),
+       tt("nav.mods.sf.limits.write", "A route reaches the game only when you review and set it with the game linked; there is no undo for it yet.")],
+     go: "mods/street-food", goLabel: tt("nav.mods.sf.go", "Plan routes")},
+    {id: "seasons", name: tt("nav.mods.seasons.name", "Alcware Seasons"),
+     what: tt("nav.mods.seasons.what", "A calendar of seasons that changes how well products sell."),
+     reads: [tt("nav.mods.seasons.reads.mast", "The season and its day show beside the company name."),
+       tt("nav.mods.seasons.reads.open", "Open a store uses the season's sales ratio for the 27 products the mod changes.")],
+     limits: [tt("nav.mods.seasons.limits", "Other estimates use the game's own sales ratios.")]},
+    {id: "retailExpansion", name: tt("nav.mods.retail.name", "Alcware Retail Expansion"),
+     what: tt("nav.mods.retail.what", "Renovations that change a building's size and how many customers it holds."),
+     reads: [tt("nav.mods.retail.reads", "A renovated building's capacity and floor area come from the mod's records.")],
+     limits: [tt("nav.mods.retail.limits", "When its records cannot be read, estimates that need a building's capacity or floor area are left out.")]},
+    {id: "economyExpansion", name: tt("nav.mods.ee.name", "Economy Expansion"),
+     what: tt("nav.mods.ee.what", "Higher rents and running costs across the city."),
+     reads: [tt("nav.mods.ee.reads", "Rent prices for buildings you own follow the multiplier the save records.")],
+     limits: [tt("nav.mods.ee.limits", "Rent, deposits and running costs of buildings you have not rented are still the game's own figures.")]},
+  ];
+}
+/* Whether this save carries a mod, and in what state: words, never colour alone. */
+function modState(id){
+  if(!hasData()) return {cls: "dim", text: tt("nav.mods.state.nosave", "No save open")};
+  const m = D.mods || {}, absent = {cls: "dim", text: tt("nav.mods.state.absent", "Not in this save")};
+  switch(id){
+    case "streetFood": {
+      const s = m.streetFood;
+      if(!s) return absent;
+      if(s.status === "ready") return {cls: "ok", text: s.version ? tt("nav.mods.state.sf.version", "In this save, version {v}", {v: String(s.version)}) : tt("nav.mods.state.in", "In this save")};
+      if(s.status === "stale") return {cls: "warn", text: tt("nav.mods.state.stale", "In this save, records stale")};
+      return {cls: "warn", text: tt("nav.mods.state.unreadable", "In this save, records unreadable")};
+    }
+    case "seasons":
+      return m.seasons ? {cls: "ok", text: tt("nav.mods.state.seasons", "In this save: {season}, day {d} of {n}",
+        {season: mdSeasonName(m.seasons.season), d: m.seasons.day, n: m.seasons.length})} : absent;
+    case "retailExpansion":
+      if(!m.retailExpansion) return absent;
+      return m.retailExpansion.renovated == null ? {cls: "warn", text: tt("nav.mods.state.unreadable", "In this save, records unreadable")}
+        : {cls: "ok", text: tt("nav.mods.state.retail", {one: "In this save: {n} renovated building", other: "In this save: {n} renovated buildings"}, {n: m.retailExpansion.renovated})};
+    case "economyExpansion": return m.economyExpansion ? {cls: "ok", text: tt("nav.mods.state.in", "In this save")} : absent;
+    default: return absent;
+  }
+}
+function drawMods(){
+  const sec = $("secMods");
+  if(!sec) return;
+  const list = l => `<ul class="md-list">${l.map(x => `<li>${spEsc(x)}</li>`).join("")}</ul>`;
+  const rows = modCatalogue().map(m => {
+    const st = modState(m.id);
+    return `<article class="md-row${m.featured ? " feat" : ""}" data-mod="${attr(m.id)}">
+      <div class="md-id"><h3>${spEsc(m.name)}</h3>${m.by ? `<p class="md-by">${spEsc(m.by)}</p>` : ""}<p class="md-what">${spEsc(m.what)}</p>
+        ${m.go || m.url ? `<div class="md-acts">${m.go ? `<button type="button" class="nx-btn sm${m.featured ? " pri" : ""}" data-md-go="${attr(m.go)}">${spEsc(m.goLabel)}</button>` : ""}${
+          m.url ? `<a class="nx-btn sm ghost" href="${attr(m.url)}" target="_blank" rel="noopener">${tt("nav.mods.workshop", "Steam Workshop")}</a>` : ""}</div>` : ""}</div>
+      <dl class="md-facts">
+        <dt>${tt("nav.mods.col.save", "This save")}</dt><dd>${chipHtml(st.cls, spEsc(st.text))}</dd>
+        <dt>${tt("nav.mods.col.reads", "What Big Copilot reads")}</dt><dd>${list(m.reads)}</dd>
+        <dt>${tt("nav.mods.col.limits", "Not covered")}</dt><dd>${list(m.limits)}</dd>
+      </dl></article>`;
+  }).join("");
+  sec.innerHTML = sechead(tt("nav.mods.title", "Supported mods"), {quiet: tt("nav.mods.note", "Each row says whether this save carries the mod and what the board does with it. A mod not listed here may change numbers the board cannot see.")})
+    + `<div class="md-rows">${rows}</div>`;
+}
+
+/* --- Street Food: state, plans and the inspected moment ------------------ */
+const SF_KEY = "ba_street_food_routes_v1";
+const SF_MAX_PLANS = 20;
+/* The mod's own limits, for a save that carries none (status absent). */
+const SF_RULES = {radiusMetres: 50, travel: {driveMinutesPerMetre: 0.04, pushMetresPerSecond: 4, roadFactor: 1},
+  schedules: {maxStops: 6, latestCloseMinute: 1620, restockMinutes: 30}};
+const SF_LAYERS = ["office", "nightlife", "shows", "industrial", "retail", "residential", "park", "event", "commissary"];
+let sfPlans = [], sfPlansFor = null, sfCur = null, sfMapView = null;
+/* What is being inspected: a place ({key}) or a spot ({x, z}); the day
+   (Monday 0) when no plan is open; the minute; the layers switched off; the
+   name search; the stop lit from the list. */
+let sfPick = null, sfDay = null, sfMinute = null, sfOff = new Set(), sfQuery = "", sfLit = null;
+/* A sentence about the last thing the player asked that could not be done. */
+let sfNotice = "";
+const sfData = () => (D && D.streetFood) || null;
+const sfM = () => typeof StreetFoodModel === "object" && StreetFoodModel ? StreetFoodModel : null;
+const sfRules = () => { const r = sfData() && sfData().rules; return r && typeof r === "object" ? r : SF_RULES; };
+/* Plans belong to one company of one character, as sameCompany() tells them
+   apart: the character and the company (meta.save), as a JSON pair, so no
+   name can pass for another's. */
+const sfStore = () => { const m = (D && D.meta) || {};
+  return `${SF_KEY}:${JSON.stringify([String(m.character || ""), String(m.save || "")])}`; };
+const sfId = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const sfDayName = w => ttDay((w + 1) % 7);
+const sfDayShort = w => coDayShort(WEEKDAY_NAMES[(w + 1) % 7]);
+const sfPad = n => String(n).padStart(2, "0");
+/* 13:30, and 01:30 with "+1" for a minute past midnight (the next day). */
+const sfHm = m => `${sfPad(Math.floor((((m % 1440) + 1440) % 1440) / 60))}:${sfPad((((m % 1440) + 1440) % 1440) % 60)}`;
+const sfClock = m => Number.isFinite(m) ? (m >= 1440 ? tt("map.sf.time.next", "{t} +1", {t: sfHm(m)}) : sfHm(m)) : "–";
+function sfLayerName(id){
+  switch(id){
+    case "office": return tt("map.sf.layer.office", "Offices");
+    case "nightlife": return tt("map.sf.layer.nightlife", "Nightlife");
+    case "shows": return tt("map.sf.layer.shows", "Shows");
+    case "industrial": return tt("map.sf.layer.industrial", "Industrial");
+    case "retail": return tt("map.sf.layer.retail", "Retail");
+    case "residential": return tt("map.sf.layer.residential", "Residential");
+    case "park": return tt("map.sf.layer.park", "Parks & waterfront");
+    case "event": return tt("map.sf.layer.event", "Events & pitches");
+    case "commissary": return tt("map.sf.layer.commissary", "Commissaries");
+    default: return id;
+  }
+}
+const sfLayersOf = o => o.kind === "commissary" ? ["commissary"] : o.kind === "event" || o.kind === "pitch" ? ["event"]
+  : [...new Set((o.categories || []).map(c => c === "waterfront" ? "park" : c))].filter(c => SF_LAYERS.includes(c));
+
+/* The places, each with a world position where one is known: their own, or
+   the city map's for a building (assets.byKey's `world`). Kept per payload
+   and per map assets. */
+let sfOppMemo = {src: undefined, assets: undefined, list: [], byKey: new Map()};
+function sfOpps(){
+  const src = sfData(), assets = sfMapView && sfMapView.assets || null;
+  if(sfOppMemo.src === src && sfOppMemo.assets === assets) return sfOppMemo.list;
+  const list = ((src && Array.isArray(src.opportunities)) ? src.opportunities : []).filter(o => o && typeof o === "object").map(o => {
+    let x = o.x, z = o.z;
+    /* A pitch, an event or a commissary names the building it stands at. */
+    const at = o.buildingKey || o.key;
+    if(!(Number.isFinite(x) && Number.isFinite(z)) && assets && at){
+      const w = assets.byKey.get(at)?.world;
+      if(Array.isArray(w) && Number.isFinite(+w[0]) && Number.isFinite(+w[1])){ x = +w[0]; z = +w[1]; }
+    }
+    const placed = Number.isFinite(x) && Number.isFinite(z);
+    return {...o, x: placed ? x : null, z: placed ? z : null, layers: sfLayersOf(o)};
+  });
+  sfOppMemo = {src, assets, list, byKey: new Map(list.filter(o => o.key).map(o => [o.key, o]))};
+  return list;
+}
+/* The day the map and the ribbon show: the open plan's, else the one picked,
+   else the game's today. The minute: the one picked, else the game's now. */
+function sfDayNow(){
+  const plan = sfPlan();
+  if(plan) return plan.weekday;
+  if(Number.isInteger(sfDay)) return sfDay;
+  const w = sfData() && sfData().weekday;
+  return Number.isInteger(w) && w >= 0 && w < 7 ? w : 0;
+}
+function sfMinuteNow(){
+  if(Number.isFinite(sfMinute)) return sfMinute;
+  const m = sfData() && sfData().minute;
+  return Number.isFinite(m) ? Math.max(0, Math.min(1439, Math.round(m))) : 720;
+}
+/* true, false or null (hours unknown), by the model; null without one. */
+function sfOpenAt(o, day = sfDayNow(), minute = sfMinuteNow()){
+  const M = sfM();
+  if(!M || !o) return null;
+  try{ const v = M.isOpen(o, day, minute); return v === true || v === false ? v : null; }catch(e){ return null; }
+}
+
+function sfLoad(){
+  const who = sfStore();
+  if(sfPlansFor === who) return;
+  sfPlansFor = who; sfPlans = []; sfCur = null; sfPick = null; sfLit = null; sfDay = null; sfMinute = null; sfQuery = "";
+  const raw = rememberedJson(who);
+  if(raw && Array.isArray(raw.plans)) sfPlans = raw.plans.map(sfClean).filter(Boolean).slice(0, SF_MAX_PLANS);
+  sfCur = raw && sfPlans.some(p => p.id === raw.current) ? raw.current : (sfPlans[0] ? sfPlans[0].id : null);
+}
+/* A kept plan read back: through the model's normalizePlan() where there is
+   one (junk is dropped), keeping the board's own fields beside it: the
+   draft's vehicle kind, each stop's building key and where an import came from. */
+function sfClean(p){
+  if(!p || typeof p !== "object" || typeof p.id !== "string") return null;
+  const M = sfM();
+  let n = p;
+  if(M && typeof M.normalizePlan === "function"){ try{ n = M.normalizePlan(p); }catch(e){ n = null; } }
+  if(!n || typeof n !== "object") return null;
+  const raw = new Map((Array.isArray(p.stops) ? p.stops : []).filter(s => s && typeof s === "object").map(s => [s.id, s]));
+  const stops = (Array.isArray(n.stops) ? n.stops : []).filter(s => s && typeof s.id === "string").map(s => ({
+    id: s.id, name: String(s.name || "").slice(0, 80),
+    x: Number.isFinite(s.x) ? s.x : null, z: Number.isFinite(s.z) ? s.z : null,
+    open: Number.isFinite(s.open) ? Math.round(s.open) : 660, close: Number.isFinite(s.close) ? Math.round(s.close) : 780,
+    key: typeof (raw.get(s.id) || {}).key === "string" ? raw.get(s.id).key : null}));
+  const w = Number.isInteger(n.weekday) && n.weekday >= 0 && n.weekday < 7 ? n.weekday : 0;
+  return {id: String(n.id || p.id), name: String(n.name || p.name || "").slice(0, 60) || tt("map.sf.plan.unnamed", "Untitled route"),
+    vehicleId: n.vehicleId != null && n.vehicleId !== "" ? String(n.vehicleId) : null,
+    kind: p.kind === "truck" ? "truck" : "cart", weekday: w, stops, from: typeof p.from === "string" ? p.from : null};
+}
+function sfSave(){ rememberJson(sfStore(), {plans: sfPlans, current: sfCur}); }
+const sfPlan = () => sfPlans.find(p => p.id === sfCur) || null;
+const sfVehicles = () => { const v = sfData() && sfData().vehicles; return Array.isArray(v) ? v.filter(x => x && typeof x === "object") : []; };
+/* The vehicle a plan is checked against: the owned one it names, or a draft
+   of the kind picked, with no crew to check. */
+function sfVehicleFor(plan){
+  const v = plan && plan.vehicleId != null ? sfVehicles().find(x => String(x.id) === plan.vehicleId) : null;
+  return v || {id: null, name: "", kind: plan && plan.kind === "truck" ? "truck" : "cart", crew: [], schedule: null, home: null, position: null, draft: true};
+}
+/* The model's check of the plan as the player left it, in their order. */
+function sfCheck(plan){
+  const M = sfM();
+  if(!plan || !M || typeof M.validate !== "function") return null;
+  const vehicle = sfVehicleFor(plan);
+  let out;
+  try{ out = M.validate(plan, {vehicle, rules: sfRules(), gameSpeed: (sfData() && sfData().gameSpeed) || 1}); }catch(e){ console.error(e); return null; }
+  if(!out || typeof out !== "object") return null;
+  const issues = (Array.isArray(out.issues) ? out.issues : []).filter(i => i && typeof i.code === "string"
+    /* A draft has no crew of its own: crew is checked once the plan names one of your vehicles. */
+    && !(vehicle.draft && (i.code === "missing_crew" || i.code === "crew_gap")));
+  return {...out, issues, legs: Array.isArray(out.legs) ? out.legs : []};
+}
+/* One issue, as a sentence about the stops it names. */
+function sfIssueText(i, plan){
+  const n = id => { const k = plan.stops.findIndex(s => s.id === id); return k < 0 ? "?" : k + 1; };
+  const mins = Number.isFinite(i.minutes) ? Math.round(i.minutes) : null;
+  switch(i.code){
+    case "bad_times": return tt("map.sf.issue.badTimes", "Stop {n} closes before it opens.", {n: n(i.stopId)});
+    case "missing_position": return tt("map.sf.issue.noPos", "Stop {n} has no map position, so travel to it is not estimated.", {n: n(i.stopId)});
+    case "too_many_stops": return tt("map.sf.issue.tooMany", "A route holds up to {max} stops; this one has {n}.", {max: sfRules().schedules?.maxStops ?? 6, n: plan.stops.length});
+    case "overlap": return tt("map.sf.issue.overlap", "Stop {n} opens before stop {m} closes.", {n: n(i.stopId), m: n(i.otherStopId)});
+    case "travel_gap": return mins != null
+      ? tt("map.sf.issue.travelGap", {one: "Stop {n} opens {k} minute before the vehicle can be there from stop {m}.", other: "Stop {n} opens {k} minutes before the vehicle can be there from stop {m}."}, {n: n(i.stopId), m: n(i.otherStopId), k: mins})
+      : tt("map.sf.issue.travelGapPlain", "Stop {n} opens before the vehicle can be there from stop {m}.", {n: n(i.stopId), m: n(i.otherStopId)});
+    case "missing_crew": return tt("map.sf.issue.noCrew", "This vehicle has no crew in the save.");
+    case "crew_gap": return i.stopId ? tt("map.sf.issue.crewGap", "No saved crew hours cover stop {n}.", {n: n(i.stopId)}) : tt("map.sf.issue.crewGapAll", "The saved crew hours do not cover the whole route.");
+    case "return_after_day": return tt("map.sf.issue.late", "The route runs past {t}, the latest a stop may close.", {t: sfClock(sfRules().schedules?.latestCloseMinute ?? 1620)});
+    default: return i.stopId ? tt("map.sf.issue.other", "Check stop {n}.", {n: n(i.stopId)}) : tt("map.sf.issue.otherPlan", "Check the route's times.");
+  }
+}
+/* The leg that ends at a stop: by the stops' ids, else by position. */
+function sfLegTo(check, plan, k){
+  if(!check || k < 1) return null;
+  const s = plan.stops[k], prev = plan.stops[k - 1];
+  return check.legs.find(l => l && (l.to === s.id || l.to?.id === s.id) && (l.from === prev.id || l.from?.id === prev.id))
+    || (check.legs.length === plan.stops.length - 1 ? check.legs[k - 1] : null);
+}
+const sfDist = m => !Number.isFinite(m) ? "" : m >= 1000 ? tt("map.sf.dist.km", "{n} km", {n: (m / 1000).toFixed(1)}) : tt("map.sf.dist.m", "{n} m", {n: Math.round(m)});
+function sfLegText(leg, kind){
+  if(!leg || !Number.isFinite(leg.minutes)) return tt("map.sf.leg.unknown", "Travel not estimated");
+  const t = kind === "truck" ? tt("map.sf.leg.drive", {one: "{n} min drive", other: "{n} min drive"}, {n: Math.round(leg.minutes)})
+    : tt("map.sf.leg.push", {one: "{n} min on foot", other: "{n} min on foot"}, {n: Math.round(leg.minutes)});
+  return Number.isFinite(leg.distance) ? tt("map.sf.leg.with", "{t}, {d}", {t, d: sfDist(leg.distance)}) : t;
+}
+
+/* --- editing a plan --------------------------------------------------------- */
+function sfNewPlan(o = {}){
+  if(sfPlans.length >= SF_MAX_PLANS) return null;
+  const kind = o.kind || "cart";
+  const plan = {id: sfId("r"), name: o.name || tt("map.sf.plan.n", "Route {n}", {n: sfPlans.length + 1}), vehicleId: o.vehicleId || null,
+    kind, weekday: Number.isInteger(o.weekday) ? o.weekday : sfDayNow(), stops: o.stops || [], from: o.from || null};
+  sfPlans.unshift(plan);
+  sfCur = plan.id;
+  sfSave();
+  return plan;
+}
+function sfEdit(fn){
+  const plan = sfPlan();
+  if(!plan) return;
+  fn(plan);
+  sfSave();
+  sfRedraw();
+}
+/* The picked place (or spot) as the plan's next stop, open from where the
+   last stop closes; the player sets the times. Without a plan, one starts. */
+function sfAddStop(){
+  const p = sfPicked();
+  if(!p || p.x == null) return;
+  let plan = sfPlan();
+  if(!plan){ plan = sfNewPlan(); if(!plan){ sfRedraw(); return; } }
+  const last = plan.stops[plan.stops.length - 1];
+  /* A stop opens on its own day (before 24:00) and may close past midnight. */
+  const open = last ? Math.min(last.close, 1380) : 660;
+  plan.stops.push({id: sfId("s"), name: p.name || p.address || tt("map.sf.spot", "Spot on the map"), key: p.key || null,
+    x: p.x, z: p.z, open, close: Math.min(open + 120, 1620)});
+  sfLit = plan.stops[plan.stops.length - 1].id;
+  sfSave();
+  sfRedraw();
+}
+/* An owned vehicle's saved route for one weekday, as a new plan beside the
+   others: never over one the player made. */
+function sfImport(vehicleId, day){
+  const v = sfVehicles().find(x => String(x.id) === String(vehicleId));
+  const stops = v && v.schedule && Array.isArray(v.schedule.stops) ? v.schedule.stops.filter(s => s && s.day === day) : [];
+  if(!stops.length) return;
+  const opps = sfOpps();
+  const plan = sfNewPlan({name: tt("map.sf.import.name", "{vehicle}, {day} as saved", {vehicle: v.name || tt("map.sf.vehicle.unnamed", "Vehicle"), day: sfDayName(day)}),
+    vehicleId: String(v.id), kind: v.kind === "truck" ? "truck" : "cart", weekday: day, from: "save",
+    stops: stops.map(s => {
+      const at = Number.isFinite(s.x) && Number.isFinite(s.z) ? opps.find(o => o.kind === "building" && o.x != null && Math.hypot(o.x - s.x, o.z - s.z) < 1) : null;
+      return {id: sfId("s"), name: String(s.name || ""), key: at ? at.key : null, x: Number.isFinite(s.x) ? s.x : null, z: Number.isFinite(s.z) ? s.z : null,
+        open: Number.isFinite(s.open) ? s.open : 660, close: Number.isFinite(s.close) ? s.close : 780};
+    })});
+  if(!plan){ sfNotice = tt("map.sf.plans.full", "You have twenty routes. Delete one to keep another."); }
+  sfRedraw();
+}
+
+/* --- setting a route in the game ------------------------------------------
+   With the game linked, a plan for one of your vehicles can be set in the
+   game for its weekday: the board asks the game first (a dry run), shows the
+   route it holds that day beside the one it would set, each stop where the
+   mod's own picker puts it (the nearest legal parking or pavement spot) and
+   the times as the player set them, and sets it only on Apply, bound to that
+   answer's quote. An edit to the plan asks again. Only that weekday changes;
+   the other days and the crew stay as they are, and nothing adjusts the
+   times. There is no undo for this write yet. */
+const SF_WRITE = "streetFoodRoute";
+/* Whether the linked mod sets Street Food routes (/health `features`, as
+   hrOneCall() reads it); the kind itself is in `writes` too, as gwButton() checks. */
+const sfCanWrite = () => { const f = (gwLink() || {}).features; return Array.isArray(f) && f.includes("streetFood.routes"); };
+/* Issues that stay on screen but do not hold a review back: the game takes a
+   route before it is staffed (it reports the gap and never hires), and checks
+   the true closing limits itself; the return home is only an estimate here.
+   Bad times, overlaps, too little travel time, a stop with no position and
+   too many stops hold it back. */
+const SF_ADVISORY = new Set(["missing_crew", "crew_gap", "return_after_day"]);
+/* Why the button is off, in words, or "" when it may open. */
+function sfWriteBlocked(plan, issues){
+  const s = sfData();
+  if(!s || s.status !== "ready") return tt("map.sf.gw.notLive", "Set routes once the Street Food records are read from the running game.");
+  if(!plan.vehicleId) return tt("map.sf.gw.noVehicle", "Choose one of your vehicles for this route first.");
+  const v = sfVehicles().find(x => String(x.id) === plan.vehicleId);
+  if(!v) return tt("map.sf.gw.gone", "This vehicle is not in the game any more.");
+  if(v.routeRevision == null) return tt("map.sf.gw.noRevision", "The game did not say which route this vehicle runs, so it cannot be changed safely.");
+  if(!plan.stops.length) return tt("map.sf.gw.noStops", "Add stops first.");
+  if(issues.some(i => !SF_ADVISORY.has(i.code))) return tt("map.sf.gw.issues", "Sort out the route's issues first.");
+  return "";
+}
+function sfWriteButton(plan, issues){
+  const link = gwLink();
+  if(!link) return "";
+  const why = sfCanWrite() ? sfWriteBlocked(plan, issues) : gwUpdateMod(SF_WRITE);
+  return `<div class="sf-gwrow">${gwButton(SF_WRITE, tt("map.sf.gw.button", "Set in the game"), `data-gw-plan="${attr(plan.id)}"`,
+    why, {name: tt("map.sf.gw.buttonName", "Set this route in the game for {day}", {day: sfDayName(plan.weekday)}), shown: true})}${
+    why ? `<span class="quiet">${spEsc(why)}</span>` : ""}</div>`;
+}
+/* What the game holds or would hold for the day, one line a stop. */
+/* The named place nearest a world point, within 75 m: a Street Food place,
+   else a building of the city map. {name, distance} or null. */
+const SF_NEAR = 75;
+function sfPlaceNear(pt){
+  if(!pt || !Number.isFinite(pt.x) || !Number.isFinite(pt.z)) return null;
+  let best = null;
+  const see = (name, x, z) => {
+    if(!name || !Number.isFinite(x) || !Number.isFinite(z)) return;
+    const d = Math.hypot(x - pt.x, z - pt.z);
+    if(d <= SF_NEAR && (!best || d < best.distance)) best = {name, distance: d};
+  };
+  sfOpps().forEach(o => see(o.name || o.address, o.x, o.z));
+  /* A building closer than the nearest place names the spot better. */
+  const assets = sfMapView && sfMapView.assets;
+  if(assets) assets.buildings.forEach(b => { if(Array.isArray(b.world)) see(b.address, +b.world[0], +b.world[1]); });
+  return best;
+}
+/* Where a stop is, in words: at a place, so far from one, or a spot on the map. */
+function sfWhereText(pt){
+  const at = sfPlaceNear(pt);
+  if(!at) return tt("map.sf.gw.spot", "a spot on the map");
+  return at.distance < 10 ? tt("map.sf.gw.at", "at {place}", {place: at.name})
+    : tt("map.sf.gw.near", "{d} from {place}", {d: sfDist(at.distance), place: at.name});
+}
+/* What the game holds or would hold for the day, one line a stop: its times,
+   where it is, and, for a proposed stop, the place the player asked for and
+   how far the game's legal spot is from it. */
+function sfGwStops(list, names, asked){
+  if(!Array.isArray(list) || !list.length) return `<p class="quiet">${tt("map.sf.gw.noneThatDay", "No stops on this day.")}</p>`;
+  return `<ol class="sf-gwlist">${list.map((s, i) => {
+    const want = asked && asked[i];
+    const moved = want && Number.isFinite(s.x) && Number.isFinite(want.x) ? Math.hypot(s.x - want.x, s.z - want.z) : 0;
+    const where = sfWhereText(s);
+    const asking = want ? tt("map.sf.gw.for", "for {name}", {name: (names && names[i]) || sfWhereText(want)}) : "";
+    return `<li><span class="mono">${sfClock(s.open)}–${sfClock(s.close)}</span><span class="sf-gwwhere">${spEsc(where)}</span>${
+      asking ? `<span class="quiet">${spEsc(asking)}</span>` : ""}${
+      moved >= 1 ? `<span class="quiet">${spEsc(tt("map.sf.gw.moved", "placed {d} from your spot", {d: sfDist(moved)}))}</span>` : ""}</li>`;
+  }).join("")}</ol>`;
+}
+function sfGwReason(reason){
+  switch(reason){
+    case "unavailable": return tt("map.sf.gw.why.unavailable", "Street Food is not available in the game right now.");
+    case "vehicle_busy": return tt("map.sf.gw.why.busy", "The vehicle cannot take a new route right now.");
+    case "invalid_route": return tt("map.sf.gw.why.invalid", "The game does not accept this route as it stands.");
+    case "travel_gap": return tt("map.sf.gw.why.travel", "The game finds too little time to travel between two stops.");
+    case "no_position": return tt("map.sf.gw.why.noPosition", "The game found no legal spot near one of the stops.");
+    case "changed": return tt("map.sf.gw.why.changed", "The vehicle's route changed in the game since the board read it.");
+    default: return reason ? tt("map.sf.gw.why.other", "The game refused this ({code}).", {code: String(reason)}) : "";
+  }
+}
+function gwStreetFoodRoute(planId){
+  const at = () => sfPlans.find(p => p.id === planId) || null;
+  const first = at();
+  if(!first) return;
+  const vehicle = () => { const p = at(); return p && sfVehicles().find(x => String(x.id) === p.vehicleId) || null; };
+  const vName = () => { const v = vehicle(); return v && v.name || tt("map.sf.vehicle.unnamed", "Vehicle"); };
+  const day = () => sfDayName((at() || first).weekday);
+  const row = answer => ((answer && answer.rows) || [])[0] || {};
+  gwConfirm({
+    kind: SF_WRITE, icon: "truck", needs: ["streetFood"], scope: odScope(),
+    title: () => tt("map.sf.gw.title", "Set the {day} route for {vehicle}", {day: day(), vehicle: vName()}),
+    where: () => `<span>${spEsc((at() || first).name)}</span>`,
+    nothing: () => { const p = at(); if(!p) return tt("map.sf.gw.planGone", "This route plan has been deleted.");
+      const i = (sfCheck(p) || {issues: []}).issues; return sfWriteBlocked(p, i); },
+    body: () => { const p = at(), v = vehicle();
+      return {vehicleId: v ? v.id : p.vehicleId, weekday: p.weekday, revision: v ? v.routeRevision : null,
+        stops: p.stops.map(s => ({x: s.x, z: s.z, open: s.open, close: s.close}))}; },
+    /* Apply is bound to what the game reviewed. */
+    applyBody: (answer, body) => ({...body, quote: answer && answer.quote}),
+    idle: answer => row(answer).changed === false ? tt("map.sf.gw.idle", "Nothing to change: the game already runs this route that day") : "",
+    verdict: answer => answer.ok
+      ? `<b>${tt("map.sf.gw.will", {one: "The game will set {n} stop on {day}", other: "The game will set {n} stops on {day}"}, {n: (row(answer).after || []).length, day: day()})}</b>`
+      : `<b>${tt("sp.gw.refuses", "The game refuses this")}</b>`,
+    inline: true,
+    draw: (answer, phase) => {
+      const r = row(answer), p = at() || first, names = p.stops.map(s => s.name);
+      const why = !answer.ok && answer.reason ? gwCall("neg", "alert", spEsc(sfGwReason(answer.reason))) : "";
+      const warn = (answer.warnings || []).filter(w => w && (w.code === "crew_gap" || w.code === "day_closed")).map(w => gwCall("warn", "alert",
+        w.code === "day_closed" ? tt("map.sf.gw.dayClosed", "{day} is switched off for this vehicle in the game. The route is set, but the day and the crew hours stay as they are until you change them there.", {day: day()})
+        : Number.isFinite(w.minutes)
+        ? tt("map.sf.gw.crewGap", {one: "{n} minute of the route has no saved crew hours. The crew is not changed.", other: "{n} minutes of the route have no saved crew hours. The crew is not changed."}, {n: Math.round(w.minutes)})
+        : tt("map.sf.gw.crewGapPlain", "Part of the route has no saved crew hours. The crew is not changed."))).join("");
+      if(phase === "refused") return why;
+      const cols = `<div class="sf-gwcols"><div><span class="gw-lab">${tt("map.sf.gw.before", "In the game now")}</span>${sfGwStops(r.before, null, null)}</div>
+        <div><span class="gw-lab">${phase === "done" ? tt("map.sf.gw.now", "Set") : tt("map.sf.gw.after", "After")}</span>${sfGwStops(r.after, names, p.stops)}</div></div>`;
+      const note = phase === "ready" && answer.ok ? gwCall("info", "truck", tt("map.sf.gw.place", "The game puts each stop on the nearest legal parking or pavement spot, so one can sit a few metres from where you placed it. The times are yours; nothing is adjusted. Only {day} changes; the other days and the crew stay as they are.", {day: day()})) : "";
+      return why + cols + warn + note;
+    },
+    refusedHint: () => tt("nav.dlg.unchanged", "Nothing was changed."),
+    hint: tt("map.sf.gw.noUndo", "There is no undo for a route yet: setting it again with the old stops puts it back."),
+    object: () => spEsc(vName()),
+    applyLabel: () => tt("map.sf.gw.apply", "Set the route"),
+    applying: tt("map.sf.gw.applying", "Setting the route in the game…"),
+    /* No undo in this first route write. */
+    changed: () => false,
+    done: () => tt("map.sf.gw.done", "{vehicle}'s {day} route is set in the game", {vehicle: vName(), day: day()}),
+  });
+}
+
+/* --- what is inspected -------------------------------------------------------- */
+function sfPicked(){
+  if(!sfPick) return null;
+  const assets = sfMapView && sfMapView.assets;
+  if(sfPick.key){
+    sfOpps();
+    const o = sfOppMemo.byKey.get(sfPick.key) || null, b = assets ? assets.byKey.get(sfPick.key) : null;
+    const w = o && o.x != null ? {x: o.x, z: o.z} : b && Array.isArray(b.world) ? {x: +b.world[0], z: +b.world[1]} : null;
+    return {key: sfPick.key, opp: o, name: (o && o.name) || (b && b.address) || (o && o.address) || "", address: (o && o.address) || (b && b.address) || "",
+      hood: (o && o.hood) || (b && b.hood) || null, type: o && o.type || null, x: w ? w.x : null, z: w ? w.z : null};
+  }
+  return Number.isFinite(sfPick.x) ? {key: null, opp: null, name: tt("map.sf.spot", "Spot on the map"), address: "", hood: null, type: null, x: sfPick.x, z: sfPick.z} : null;
+}
+/* A day's saved hours, as the save gives them: [start, end], or a list of them. */
+function sfHoursText(o, day){
+  if(!o || !Array.isArray(o.hours)) return tt("map.sf.hours.unknown", "No opening hours are saved for it.");
+  const h = o.hours[day];
+  const spans = !Array.isArray(h) || !h.length ? [] : Array.isArray(h[0]) ? h : [h];
+  const ok = spans.filter(s => Array.isArray(s) && Number.isFinite(s[0]) && Number.isFinite(s[1]));
+  if(!ok.length) return tt("map.sf.hours.closedDay", "Closed on {day}.", {day: sfDayName(day)});
+  return tt("map.sf.hours.day", "Saved hours on {day}: {hours}.", {day: sfDayName(day), hours: ok.map(([a, b]) => `${sfHm(a)}–${sfHm(b)}`).join(", ")});
+}
+function sfOpenWord(v){
+  return v === true ? tt("map.sf.open.yes", "Open") : v === false ? tt("map.sf.open.no", "Closed") : tt("map.sf.open.unknown", "Hours unknown");
+}
+const sfOpenCls = v => v === true ? "ok" : v === false ? "dim" : "warn";
+function sfNearby(pt){
+  const M = sfM();
+  if(!M || !pt || pt.x == null) return [];
+  try{ const r = M.nearby({x: pt.x, z: pt.z}, sfOpps(), sfRules().radiusMetres || 50); return Array.isArray(r) ? r : []; }catch(e){ return []; }
+}
+function sfFound(){
+  const q = sfQuery.trim().toLowerCase();
+  if(!q) return [];
+  return sfOpps().filter(o => `${o.name || ""} ${o.address || ""} ${o.type || ""} ${o.hood ? hoodName(o.hood) : ""}`.toLowerCase().includes(q)).slice(0, 8);
+}
+
+/* --- drawing ------------------------------------------------------------- */
+function sfStatusChip(){
+  const s = sfData(), st = s ? s.status : "absent";
+  const day = s && Number.isFinite(s.day) ? s.day : null;
+  switch(st){
+    case "ready": return chipHtml("ok", tt("map.sf.status.ready", "Read from the save"), day != null ? tt("map.sf.status.ready.tip", "Street Food records from day {d}.", {d: day}) : "");
+    case "stale": return chipHtml("warn", tt("map.sf.status.stale", "Records stale"));
+    case "unavailable": return chipHtml("warn", tt("map.sf.status.unavailable", "Records unavailable"));
+    case "unsupported": return chipHtml("warn", tt("map.sf.status.unsupported", "Version not supported"));
+    default: return chipHtml("dim", tt("map.sf.status.absent", "Not in this save"));
+  }
+}
+function sfNoteHtml(){
+  const s = sfData(), st = s ? s.status : "absent", lines = [];
+  if(st === "absent") lines.push(tt("map.sf.note.absent", "This save has no Street Food records. The map and your routes still work; no vehicles are read."));
+  if(st === "stale") lines.push(tt("map.sf.note.stale", "The Street Food records could not be refreshed with this save, so vehicles, crews and saved routes may be out of date."));
+  if(st === "unavailable") lines.push(tt("map.sf.note.unavailable", "The Street Food records in this save could not be read, so no vehicles or saved routes are shown. The map and your routes still work."));
+  if(st === "unsupported") lines.push(s && s.version ? tt("map.sf.note.unsupported", "This save's Street Food records are version {v}, which the board does not read. The map and your routes still work.", {v: String(s.version)})
+    : tt("map.sf.note.unsupportedPlain", "This save's Street Food records are a version the board does not read. The map and your routes still work."));
+  if(!sfM()) lines.push(tt("map.sf.note.nomodel", "This build has no route checks, so travel and issues are not shown."));
+  else if(!sfOpps().length) lines.push(tt("map.sf.note.noplaces", "No places came with this save, so the map shows the city only."));
+  if(sfNotice) lines.push(sfNotice);
+  return lines.length ? `<div class="sf-note">${lines.map(l => `<p class="quiet">${spEsc(l)}</p>`).join("")}</div>` : "";
+}
+function sfCtlHtml(){
+  const plan = sfPlan();
+  const opts = sfPlans.map(p => `<option value="${attr(p.id)}"${p.id === sfCur ? " selected" : ""}>${spEsc(p.name)}</option>`).join("");
+  return `<h2 class="nx-sr">${tt("map.sf.title", "Street Food")}</h2>${sfStatusChip()}
+    <div class="aside">${sfPlans.length ? `<label class="os-planpick"><span>${tt("map.sf.plan.pick", "Route")}</span><select data-sf-plan aria-label="${attr(tt("map.sf.plan.pickAria", "Route to show"))}">${opts}</select>${ICON.chev}</label>` : ""}
+      <button type="button" class="nx-btn sm" data-sf-new${sfPlans.length >= SF_MAX_PLANS ? ` aria-disabled="true"` : ""}>${icon("plus")}${tt("map.sf.plan.new", "New route")}</button>
+      ${plan ? `<button type="button" class="nx-btn sm ghost" data-sf-copy${sfPlans.length >= SF_MAX_PLANS ? ` aria-disabled="true"` : ""} data-tip="${attr(tt("map.sf.plan.copy.tip", "A copy to try another order or other times; this one stays as it is."))}">${icon("copy")}${tt("map.sf.plan.copy", "Copy as alternative")}</button>
+      <button type="button" class="nx-btn sm ghost" data-sf-drop>${tt("map.sf.plan.drop", "Delete")}</button>` : ""}</div>`;
+}
+function sfLayersHtml(){
+  const counts = {};
+  sfOpps().forEach(o => o.layers.forEach(l => { counts[l] = (counts[l] || 0) + 1; }));
+  const chips = SF_LAYERS.filter(l => counts[l]).map(l => {
+    const on = !sfOff.has(l);
+    return `<button type="button" class="sf-lay${on ? "" : " off"}" data-sf-lay="${l}" aria-pressed="${on}"><i data-sf="${l}"></i><span>${spEsc(sfLayerName(l))}</span><span class="n mono">${counts[l]}</span></button>`;
+  }).join("");
+  return chips ? `${chips}<span class="sf-key quiet">${tt("map.sf.layers.key", "Faint: closed then. Dashed: no saved hours.")}</span>` : "";
+}
+/* The places whose name or address holds what was typed, up to eight. */
+function sfFoundHtml(){
+  if(!sfQuery.trim()) return "";
+  const found = sfFound();
+  return `<ul class="sf-found">${found.length ? found.map(o => `<li><button type="button" data-sf-pick="${attr(o.key)}"><i data-sf="${o.layers[0] || ""}"></i>${spEsc(o.name || o.address || "")}${
+      o.x == null ? ` <span class="quiet">${tt("map.sf.find.nopos", "no map position")}</span>` : ""}</button></li>`).join("")
+    : `<li class="quiet">${tt("map.sf.find.none", "Nothing matches.")}</li>`}</ul>`;
+}
+function sfInspectHtml(){
+  const day = sfDayNow(), minute = sfMinuteNow(), p = sfPicked();
+  const search = `<label class="srch sf-find">${ICON.search || ""}<input type="search" data-sf-find value="${attr(sfQuery)}" placeholder="${attr(tt("map.sf.find.ph", "Find a place by name"))}" aria-label="${attr(tt("map.sf.find.aria", "Find a Street Food place by name or address"))}" autocomplete="off"></label>`
+    + `<div class="sf-foundhost">${sfFoundHtml()}</div>`;
+  if(!p) return `<div class="sf-box">${search}<p class="quiet sf-hint">${tt("map.sf.inspect.hint", "Click a building or open ground on the map to see what is around it and what is open at the time on the ribbon.")}</p></div>`;
+  const o = p.opp, open = o ? sfOpenAt(o, day, minute) : null;
+  const near = sfNearby(p).filter(r => r && r.key !== p.key);
+  const radius = sfRules().radiusMetres || 50;
+  const nearRows = near.slice(0, 12).map(r => {
+    const st = sfOpenAt(r, day, minute), lay = sfLayersOf(r)[0] || "";
+    return `<li><i data-sf="${lay}"></i><button type="button" data-sf-pick="${attr(r.key)}">${spEsc(r.name || r.address || "")}</button><span class="quiet">${spEsc(lay ? sfLayerName(lay) : r.type || "")}</span><span class="mono">${sfDist(r.distance)}</span><span class="sf-ow ${sfOpenCls(st)}">${spEsc(sfOpenWord(st))}</span></li>`;
+  }).join("");
+  const plan = sfPlan(), max = sfRules().schedules?.maxStops ?? 6;
+  const add = p.x == null ? `<p class="quiet">${tt("map.sf.inspect.nopos", "This place has no map position, so it cannot be a stop.")}</p>`
+    : `<button type="button" class="os-cta sm" data-sf-add>${icon("plus")}${plan ? tt("map.sf.inspect.add", "Add as stop {n}", {n: plan.stops.length + 1}) : tt("map.sf.inspect.start", "Start a route here")}</button>${
+      plan && plan.stops.length >= max ? `<span class="quiet">${tt("map.sf.inspect.full", "The route already has {n} stops, the most one holds.", {n: max})}</span>` : ""}`;
+  return `<div class="sf-box">${search}
+    <div class="sf-what"><h3>${spEsc(p.name)}</h3>
+      <p class="sf-sub">${p.hood ? `<span class="hood"${hoodColorAttr(p.hood)}>${spEsc(hoodCode(null, p.hood) || "")}</span>` : ""}${spEsc([p.type, p.address !== p.name ? p.address : ""].filter(Boolean).join(", "))}</p>
+      ${o && o.kind === "event" && Number.isFinite(o.eventDay) ? `<p class="sf-event">${spEsc(tt("map.sf.inspect.event", "An announced event on day {d}; it is not a weekly fixture.", {d: o.eventDay}))}</p>` : ""}
+      ${o ? `<p class="sf-when">${chipHtml(sfOpenCls(open), spEsc(tt("map.sf.inspect.at", "{state} at {t}", {state: sfOpenWord(open), t: sfClock(minute)})))}<span class="quiet">${spEsc(sfHoursText(o, day))}</span></p>`
+        : p.key ? `<p class="quiet">${tt("map.sf.inspect.nothing", "Nothing here is a Street Food source in this save.")}</p>` : ""}</div>
+    <h4>${tt("map.sf.inspect.near", "Within {r} m", {r: radius})}</h4>
+    ${nearRows ? `<ul class="sf-near">${nearRows}</ul>${near.length > 12 ? `<p class="quiet">${tt("map.sf.inspect.more", {one: "and {n} more place", other: "and {n} more places"}, {n: near.length - 12})}</p>` : ""}`
+      : `<p class="quiet">${sfM() ? tt("map.sf.inspect.none", "No recorded places within {r} m.", {r: radius}) : tt("map.sf.inspect.nomodel", "Nearby places need the route checks, which this build lacks.")}</p>`}
+    <div class="sf-addrow">${add}</div></div>`;
+}
+/* A time field: HH:MM, and the minutes past midnight stand for the next day
+   (a close at or before the open, or an open the player marks "+1"). */
+function sfTimeField(stop, which, n){
+  const v = stop[which], label = which === "open" ? tt("map.sf.stop.openAria", "Stop {n} opens", {n}) : tt("map.sf.stop.closeAria", "Stop {n} closes", {n});
+  return `<input type="time" step="900" value="${sfHm(v)}" data-sf-time="${which}" data-sf-stop="${attr(stop.id)}" aria-label="${attr(label)}">${v >= 1440 ? `<small class="sf-p1" title="${attr(tt("map.sf.time.nextTip", "After midnight, on the next day"))}">+1</small>` : ""}`;
+}
+function sfPlanHtml(){
+  const plan = sfPlan();
+  if(!plan) return `<div class="sf-box"><h3>${tt("map.sf.plan.none.title", "No route yet")}</h3><p class="quiet">${tt("map.sf.plan.none", "Pick a place on the map and start a route there, or start an empty one. You choose the stops, their order and their times.")}</p>
+    <button type="button" class="nx-btn sm" data-sf-new>${icon("plus")}${tt("map.sf.plan.new", "New route")}</button></div>`;
+  const check = sfCheck(plan), issues = check ? check.issues : [];
+  const byStop = new Map();
+  issues.forEach(i => { if(i.stopId){ if(!byStop.has(i.stopId)) byStop.set(i.stopId, []); byStop.get(i.stopId).push(i); } });
+  const general = issues.filter(i => !i.stopId || !plan.stops.some(s => s.id === i.stopId));
+  const vehicles = sfVehicles();
+  const vSel = `<select data-sf-veh aria-label="${attr(tt("map.sf.plan.vehicleAria", "Vehicle the route is for"))}">
+      <optgroup label="${attr(tt("map.sf.plan.draft", "A draft"))}"><option value="kind:cart"${!plan.vehicleId && plan.kind === "cart" ? " selected" : ""}>${tt("map.sf.kind.cartDraft", "Any cart")}</option><option value="kind:truck"${!plan.vehicleId && plan.kind === "truck" ? " selected" : ""}>${tt("map.sf.kind.truckDraft", "Any truck")}</option></optgroup>
+      ${vehicles.length ? `<optgroup label="${attr(tt("map.sf.plan.yours", "Your vehicles"))}">${vehicles.map(v => `<option value="id:${attr(String(v.id))}"${plan.vehicleId === String(v.id) ? " selected" : ""}>${spEsc(v.name || tt("map.sf.vehicle.unnamed", "Vehicle"))}</option>`).join("")}</optgroup>` : ""}
+      ${plan.vehicleId && !vehicles.some(v => String(v.id) === plan.vehicleId) ? `<option value="id:${attr(plan.vehicleId)}" selected>${tt("map.sf.plan.gone", "A vehicle not in this save")}</option>` : ""}</select>`;
+  const kind = sfVehicleFor(plan).kind;
+  const rows = plan.stops.map((s, k) => {
+    const n = k + 1, iss = byStop.get(s.id) || [];
+    const leg = k ? `<li class="sf-leg${iss.some(i => i.code === "travel_gap") ? " bad" : ""}"><span aria-hidden="true"></span>${spEsc(sfLegText(sfLegTo(check, plan, k), kind))}</li>` : "";
+    return `${leg}<li class="sf-stop${iss.length ? " bad" : ""}${s.id === sfLit ? " lit" : ""}" data-stop="${attr(s.id)}">
+      <span class="sf-n">${n}</span>
+      <button type="button" class="sf-sname" data-sf-show="${attr(s.id)}" data-tip="${attr(tt("map.sf.stop.show", "Show it on the map"))}">${spEsc(s.name || tt("map.sf.spot", "Spot on the map"))}</button>
+      <span class="sf-times">${sfTimeField(s, "open", n)}<span aria-hidden="true">–</span>${sfTimeField(s, "close", n)}</span>
+      <span class="sf-ord">
+        <button type="button" class="ibtn" data-sf-up="${attr(s.id)}" aria-label="${attr(tt("map.sf.stop.up", "Move stop {n} earlier", {n}))}"${k ? "" : " disabled"}>↑</button>
+        <button type="button" class="ibtn" data-sf-down="${attr(s.id)}" aria-label="${attr(tt("map.sf.stop.down", "Move stop {n} later", {n}))}"${k < plan.stops.length - 1 ? "" : " disabled"}>↓</button>
+        <button type="button" class="ibtn" data-sf-del="${attr(s.id)}" aria-label="${attr(tt("map.sf.stop.del", "Remove stop {n}", {n}))}">${ICON.x || "×"}</button></span>
+      ${iss.length ? `<p class="sf-iss">${iss.map(i => spEsc(sfIssueText(i, plan))).join(" ")}</p>` : ""}</li>`;
+  }).join("");
+  const home = sfVehicleFor(plan).home, parks = !!home && Number.isFinite(home.x);
+  const tp = check && Number.isFinite(check.travelMinutes) ? {t: tt("map.sf.min", {one: "{n} minute", other: "{n} minutes"}, {n: Math.round(check.travelMinutes)}),
+    d: Number.isFinite(check.distance) ? tt("map.sf.plan.over", " over {d}", {d: sfDist(check.distance)}) : ""} : null;
+  const total = tp && plan.stops.length > 1 ? (parks ? tt("map.sf.plan.totalHome", "Estimated travel, from where it parks and back: {t}{d}.", tp)
+    : tt("map.sf.plan.total", "Estimated travel between stops: {t}{d}.", tp)) : "";
+  const crewNote = sfVehicleFor(plan).draft ? tt("map.sf.plan.draftNote", "Crew is checked once the route names one of your vehicles.") : "";
+  /* Travel at the game's normal speed unless the link read the speed it runs at. */
+  const basis = sfData() && sfData().travelBasis === "live" ? tt("map.sf.plan.basisLive", "Travel uses the speed the game runs at now.")
+    : tt("map.sf.plan.basisDefault", "Travel assumes the game's normal speed.");
+  return `<div class="sf-box">
+    <label class="sf-field"><span>${tt("map.sf.plan.name", "Name")}</span><input type="text" maxlength="60" data-sf-name value="${attr(plan.name)}"></label>
+    <label class="sf-field"><span>${tt("map.sf.plan.vehicle", "For")}</span>${vSel}</label>
+    ${plan.stops.length ? `<ol class="sf-stops">${rows}</ol>` : `<p class="quiet">${tt("map.sf.plan.empty", "No stops yet. Pick a place on the map, then Add as stop.")}</p>`}
+    ${general.length ? `<ul class="sf-issues">${general.map(i => `<li>${spIcon("alert")}${spEsc(sfIssueText(i, plan))}</li>`).join("")}</ul>` : ""}
+    ${plan.stops.length && check && !issues.length ? `<p class="sf-fits">${icon("tick")}${tt("map.sf.plan.fits", "The stops, times and travel fit together.")}</p>` : ""}
+    ${total ? `<p class="quiet">${spEsc(`${total} ${basis}`)}</p>` : ""}
+    <p class="quiet sf-kept">${spEsc([crewNote, plan.from === "save" ? tt("map.sf.plan.imported", "Copied from the save; your edits stay here.") : "",
+      gwLink() ? tt("map.sf.plan.keptLinked", "Kept in this browser until you set it in the game.")
+        : tt("map.sf.plan.kept", "Kept in this browser. The game is not changed; set the route in the game yourself, or link the game to set it from here.")].filter(Boolean).join(" "))}</p>
+    ${sfWriteButton(plan, issues)}</div>`;
+}
+/* The day as a strip: the stops at their times in the player's order, the
+   travel after each, the crew's saved hours under them, and the time the map
+   shows, which the player drags. 00:00 to the latest close (03:00 +1). */
+function sfRibbonHtml(){
+  const plan = sfPlan(), day = sfDayNow(), minute = sfMinuteNow();
+  const end = sfRules().schedules?.latestCloseMinute ?? 1620;
+  const pct = m => `${(Math.max(0, Math.min(end, m)) / end * 100).toFixed(3)}%`;
+  const wid = (a, b) => `${(Math.max(0, Math.min(end, b) - Math.max(0, a)) / end * 100).toFixed(3)}%`;
+  const days = [0, 1, 2, 3, 4, 5, 6].map(w => `<button type="button" data-sf-day="${w}" aria-pressed="${w === day}" aria-label="${attr(sfDayName(w))}"${w === day ? ` class="on"` : ""}>${spEsc(sfDayShort(w))}</button>`).join("");
+  const ticks = [];
+  for(let m = 0; m <= end; m += 180) ticks.push(`<span class="sf-tick" style="left:${pct(m)}"><b class="mono">${sfHm(m)}</b></span>`);
+  let blocks = "";
+  if(plan){
+    const check = sfCheck(plan), bad = new Set((check ? check.issues : []).map(i => i.stopId).filter(Boolean));
+    const kind = sfVehicleFor(plan).kind;
+    plan.stops.forEach((s, k) => {
+      if(k){
+        const leg = sfLegTo(check, plan, k), prev = plan.stops[k - 1];
+        if(leg && Number.isFinite(leg.minutes) && leg.minutes > 0)
+          blocks += `<span class="sf-rleg" style="left:${pct(prev.close)};width:${wid(prev.close, prev.close + leg.minutes)}" title="${attr(sfLegText(leg, kind))}"></span>`;
+      }
+      blocks += `<span class="sf-rblk${bad.has(s.id) ? " bad" : ""}${s.id === sfLit ? " lit" : ""}" style="left:${pct(s.open)};width:${wid(s.open, s.close)}" title="${attr(`${k + 1}. ${s.name}: ${sfClock(s.open)}–${sfClock(s.close)}`)}"><b>${k + 1}</b></span>`;
+    });
+    const v = sfVehicleFor(plan);
+    const crew = v.schedule && Array.isArray(v.schedule.crewHours) ? v.schedule.crewHours.filter(h => h && h.day === day && Number.isFinite(h.start) && Number.isFinite(h.end)) : [];
+    blocks += crew.map(h => `<span class="sf-rcrew" style="left:${pct(h.start)};width:${wid(h.start, h.end)}" title="${attr(tt("map.sf.ribbon.crew", "Crew hours saved in the game: {a}–{b}", {a: sfClock(h.start), b: sfClock(h.end)}))}"></span>`).join("");
+  }
+  const caption = plan ? (plan.stops.length ? tt("map.sf.ribbon.plan", "{day}: the route's stops, the travel after each and the saved crew hours. Drag the line to see what is open then.", {day: sfDayName(day)})
+      : tt("map.sf.ribbon.empty", "{day}: the route has no stops yet. Drag the line to see what is open then.", {day: sfDayName(day)}))
+    : tt("map.sf.ribbon.noplan", "{day}: drag the line to see what is open then.", {day: sfDayName(day)});
+  return `<div class="sf-ribhead"><span class="sf-days seg" role="group" aria-label="${attr(tt("map.sf.ribbon.day", "Day"))}">${days}</span>
+      <span class="sf-at">${tt("map.sf.ribbon.at", "Map at {t}", {t: `<b class="mono" data-sf-atlabel>${sfClock(minute)}</b>`})}</span>
+      <span class="quiet">${spEsc(caption)}</span></div>
+    <div class="sf-rib">${ticks.join("")}${blocks}<span class="sf-now" style="left:${pct(minute)}" aria-hidden="true"></span>
+      <input type="range" class="sf-cursor" min="0" max="${end}" step="15" value="${minute}" data-sf-at aria-label="${attr(tt("map.sf.ribbon.cursor", "Time the map shows"))}" aria-valuetext="${attr(sfClock(minute))}"></div>`;
+}
+/* The fleet as the save has it: supporting context for a plan, never its subject. */
+function sfFleetHtml(){
+  const s = sfData(), vehicles = sfVehicles();
+  if(!s || s.status === "absent" || !vehicles.length) return "";
+  const rows = vehicles.map(v => {
+    const crew = Array.isArray(v.crew) ? v.crew : [], gone = crew.filter(c => c && c.exists === false).length;
+    const crewText = !crew.length ? tt("map.sf.fleet.nocrew", "No crew") : gone
+      ? tt("map.sf.fleet.crewGone", {one: "{n} crew, {k} no longer employed", other: "{n} crew, {k} no longer employed"}, {n: crew.length, k: gone})
+      : tt("map.sf.fleet.crew", {one: "{n} crew", other: "{n} crew"}, {n: crew.length});
+    const sch = v.schedule;
+    const days = sch && Array.isArray(sch.stops) ? [...new Set(sch.stops.filter(x => x && Number.isInteger(x.day)).map(x => x.day))].sort((a, b) => a - b) : [];
+    const route = !sch ? tt("map.sf.fleet.noRoute", "Saved route not readable") : !days.length ? tt("map.sf.fleet.emptyRoute", "No saved stops")
+      : tt("map.sf.fleet.route", "Saved stops on {days}", {days: days.map(sfDayShort).join(", ")});
+    const imports = days.map(d => `<button type="button" class="nx-btn sm ghost" data-sf-import="${attr(String(v.id))}" data-sf-iday="${d}" aria-label="${attr(tt("map.sf.fleet.importAria", "Copy {vehicle}'s {day} route into a new plan", {vehicle: v.name || "", day: sfDayName(d)}))}">${spEsc(sfDayShort(d))}</button>`).join("");
+    return `<li class="sf-vrow"><span class="sf-vk">${v.kind === "truck" ? tt("map.sf.kind.truck", "Truck") : tt("map.sf.kind.cart", "Cart")}</span>
+      <b>${spEsc(v.name || tt("map.sf.vehicle.unnamed", "Vehicle"))}</b><span class="${gone || !crew.length ? "sf-warn" : "quiet"}">${spEsc(crewText)}</span>
+      <span class="quiet">${spEsc(route)}${v.home && v.home.name ? `, ${spEsc(tt("map.sf.fleet.home", "parks at {name}", {name: v.home.name}))}` : ""}</span>
+      ${imports ? `<span class="sf-imp"><span class="quiet">${tt("map.sf.fleet.import", "Copy into a new route:")}</span>${imports}</span>` : ""}</li>`;
+  }).join("");
+  return sechead(tt("map.sf.fleet.title", "Your vehicles"), {quiet: spEsc(s.status === "stale" ? tt("map.sf.fleet.stale", "From records that may be out of date. A copied route is a new plan; your other routes stay as they are.")
+      : tt("map.sf.fleet.note", "As the save has them. A copied route is a new plan; your other routes stay as they are."))})
+    + `<ul class="sf-vlist">${rows}</ul>`;
+}
+/* The map's picture of the moment: which footprints and places are lit, open
+   or not, the plan's stops, the ring and the fleet. */
+function sfMapState(){
+  const opps = sfOpps(), day = sfDayNow(), minute = sfMinuteNow();
+  const layerOf = new Map(), open = new Map(), points = [];
+  opps.forEach(o => {
+    const lay = o.layers.find(l => !sfOff.has(l));
+    if(!lay) return;
+    const st = sfOpenAt(o, day, minute);
+    if(o.kind === "building" && o.key){ if(!layerOf.has(o.key)){ layerOf.set(o.key, lay); open.set(o.key, st); } }
+    else if(o.x != null) points.push({key: o.key, name: o.name, address: o.address, x: o.x, z: o.z, layer: lay, open: st});
+  });
+  const plan = sfPlan(), check = sfCheck(plan);
+  const bad = new Set((check ? check.issues : []).map(i => i.stopId).filter(Boolean));
+  const p = sfPicked();
+  return {layerOf, open, points, radius: sfRules().radiusMetres || 50,
+    stops: plan ? plan.stops.map(s => ({...s, issue: bad.has(s.id)})) : [],
+    stopKeys: new Set(plan ? plan.stops.map(s => s.key).filter(Boolean) : []),
+    pickKey: p && p.key || null, pickPoint: p && p.x != null ? {x: p.x, z: p.z} : null,
+    litStop: sfLit, vehicles: sfVehicles().filter(v => v.position && Number.isFinite(v.position.x))};
+}
+function sfPaintMap(){ if(sfMapView) sfMapView.show(sfMapState()); }
+/* The camera on the open plan's stops, else on the fleet, else on the
+   places: once as the map arrives, and again when another route is picked
+   (`again`). */
+function sfFitMap(again = false){
+  if(!sfMapView || typeof sfMapView.fitTo !== "function" || (sfMapView.fitted && !again)) return;
+  const plan = sfPlan(), stops = plan ? plan.stops.filter(s => s.x != null) : [];
+  const fleet = sfVehicles().map(v => v.position).filter(p => p && Number.isFinite(p.x));
+  const pts = stops.length ? stops : fleet.length ? fleet : sfOpps().filter(o => o.x != null);
+  if(!pts.length) return;
+  sfMapView.fitted = true;
+  sfMapView.fitTo(pts);
+}
+function sfShowMap(){
+  const host = $("sfMap");
+  if(!host || typeof StreetFoodMapView !== "function") return;
+  if(!sfMapView || !sfMapView.root.isConnected || sfMapView.root !== host){
+    sfMapView = new StreetFoodMapView(host, {
+      onPick: pick => { sfPick = pick; sfLit = null; sfRemember(); sfRedraw(true); },
+      /* The assets carry the buildings' world positions: the places and the pick read again. */
+      onReady: () => { sfOppMemo.assets = undefined; sfRedraw(true); sfFitMap(); },
+    });
+  }
+  sfPaintMap();
+}
+function drawStreetFood(){
+  const sec = $("secStreetFood");
+  if(!sec || !hasData()) return;
+  if(!odNeed("streetFood")){
+    $("sfCtl").innerHTML = `<h2 class="nx-sr">${tt("map.sf.title", "Street Food")}</h2>`;
+    $("sfNote").innerHTML = odWaitHtml("streetFood");
+    $("sfGrid").hidden = true; $("sfFleet").innerHTML = "";
+    return;
+  }
+  sfLoad();
+  if(sfMapView && sfMapView.root.isConnected) sfMapView.stale = false;
+  $("sfGrid").hidden = false;
+  sfShowMap();
+  sfRedraw();
+}
+/* Everything but the map's own stage, and the map's picture. `keepFocus`
+   (a pick on the map) leaves the keyboard where it was. */
+function sfRedraw(keepFocus = false){
+  if(!hasData() || !$("secStreetFood") || !odReady("streetFood")) return;
+  const active = document.activeElement, sel = !keepFocus && active && active.closest && active.closest("#secStreetFood, #viewCtl") ? sfFocusKey(active) : null;
+  $("sfCtl").innerHTML = sfCtlHtml();
+  $("sfNote").innerHTML = sfNoteHtml();
+  $("sfLayers").innerHTML = sfLayersHtml();
+  $("sfInspect").innerHTML = sfInspectHtml();
+  $("sfPlan").innerHTML = sfPlanHtml();
+  $("sfRibbon").innerHTML = sfRibbonHtml();
+  $("sfFleet").innerHTML = sfFleetHtml();
+  sfPaintMap();
+  wireTips();
+  if(sel){ const el = q(sel); if(el && typeof el.focus === "function") el.focus({preventScroll: true}); }
+}
+/* A control's identity across a redraw, so the keyboard stays on it. */
+function sfFocusKey(el){
+  const esc = v => typeof CSS !== "undefined" && CSS.escape ? CSS.escape(v) : String(v).replace(/["\\]/g, "\\$&");
+  for(const a of ["data-sf-time", "data-sf-up", "data-sf-down", "data-sf-del", "data-sf-show", "data-sf-day", "data-sf-lay", "data-sf-pick", "data-sf-import"]){
+    if(!el.hasAttribute || !el.hasAttribute(a)) continue;
+    const extra = a === "data-sf-time" ? `[data-sf-stop="${esc(el.getAttribute("data-sf-stop"))}"]` : a === "data-sf-import" ? `[data-sf-iday="${el.getAttribute("data-sf-iday")}"]` : "";
+    return `[${a}="${esc(el.getAttribute(a))}"]${extra}`;
+  }
+  for(const a of ["data-sf-name", "data-sf-veh", "data-sf-plan", "data-sf-find", "data-sf-at", "data-sf-add", "data-sf-new", "data-sf-copy"]) if(el.hasAttribute && el.hasAttribute(a)) return `[${a}]`;
+  return null;
+}
+/* The inspected place and time ride on the history entry (nxSf). */
+function sfRemember(){
+  try{
+    const st = Object.assign({}, history.state || {});
+    st.nxSf = {pick: sfPick, minute: Number.isFinite(sfMinute) ? sfMinute : null, day: Number.isInteger(sfDay) ? sfDay : null};
+    history.replaceState(st, "", location.href);
+  }catch(e){}
+}
+function sfRestore(x){
+  if(!x || typeof x !== "object") return;
+  const p = x.pick;
+  sfPick = p && typeof p === "object" && (typeof p.key === "string" || (Number.isFinite(p.x) && Number.isFinite(p.z))) ? (typeof p.key === "string" ? {key: p.key} : {x: p.x, z: p.z}) : null;
+  sfMinute = Number.isFinite(x.minute) ? x.minute : null;
+  sfDay = Number.isInteger(x.day) && x.day >= 0 && x.day < 7 ? x.day : null;
+  if(page === "mods" && sub.mods === "streetfood") sfRedraw(true);
+}
+let sfWired = false;
+function wireMods(){
+  if(sfWired) return;
+  sfWired = true;
+  on("click", "[data-md-go]", (el, e) => { e.preventDefault(); openRoute(el.dataset.mdGo); });
+  on("change", "[data-sf-plan]", el => { sfCur = el.value || null; sfLit = null; sfSave(); sfRedraw(); sfFitMap(true); });
+  on("click", "[data-sf-new]", el => {
+    if(el.getAttribute("aria-disabled") === "true") return;
+    if(!sfNewPlan()) sfNotice = tt("map.sf.plans.full", "You have twenty routes. Delete one to keep another.");
+    sfRedraw();
+  });
+  on("click", "[data-sf-copy]", el => {
+    const plan = sfPlan();
+    if(!plan || el.getAttribute("aria-disabled") === "true") return;
+    sfNewPlan({...JSON.parse(JSON.stringify(plan)), name: tt("map.sf.plan.copyName", "{name}, alternative", {name: plan.name}), from: null,
+      stops: plan.stops.map(s => ({...s, id: sfId("s")}))});
+    sfRedraw();
+  });
+  on("click", "[data-sf-drop]", () => {
+    const plan = sfPlan();
+    if(!plan) return;
+    sfPlans = sfPlans.filter(p => p.id !== plan.id);
+    sfCur = sfPlans[0] ? sfPlans[0].id : null; sfLit = null; sfNotice = "";
+    sfSave(); sfRedraw();
+  });
+  on("change", "[data-sf-name]", el => sfEdit(p => { p.name = el.value.trim().slice(0, 60) || p.name; }));
+  on("change", "[data-sf-veh]", el => sfEdit(p => {
+    const [k, v] = String(el.value).split(/:(.*)/s);
+    if(k === "kind"){ p.vehicleId = null; p.kind = v === "truck" ? "truck" : "cart"; }
+    else if(k === "id"){ p.vehicleId = v; const veh = sfVehicles().find(x => String(x.id) === v); if(veh) p.kind = veh.kind === "truck" ? "truck" : "cart"; }
+  }));
+  on("click", "[data-sf-day]", el => {
+    const w = +el.dataset.sfDay;
+    if(!(w >= 0 && w < 7)) return;
+    if(sfPlan()) sfEdit(p => { p.weekday = w; });
+    else { sfDay = w; sfRemember(); sfRedraw(); }
+  });
+  on("change", "[data-sf-time]", el => sfEdit(p => {
+    const s = p.stops.find(x => x.id === el.dataset.sfStop);
+    const m = /^(\d{1,2}):(\d{2})/.exec(el.value || "");
+    if(!s || !m) return;
+    let v = (+m[1]) * 60 + (+m[2]);
+    if(el.dataset.sfTime === "open"){
+      s.open = v;
+      if(s.close <= s.open) s.close = Math.min(s.open + 60, 1620);
+    } else {
+      /* A close at or before the open is past midnight, on the next day. */
+      if(v <= s.open) v += 1440;
+      s.close = v;
+    }
+  }));
+  on("click", "[data-sf-up], [data-sf-down]", el => sfEdit(p => {
+    const id = el.dataset.sfUp || el.dataset.sfDown, k = p.stops.findIndex(s => s.id === id), to = el.dataset.sfUp ? k - 1 : k + 1;
+    if(k < 0 || to < 0 || to >= p.stops.length) return;
+    const [s] = p.stops.splice(k, 1); p.stops.splice(to, 0, s); sfLit = s.id;
+  }));
+  on("click", "[data-sf-del]", el => sfEdit(p => { p.stops = p.stops.filter(s => s.id !== el.dataset.sfDel); if(sfLit === el.dataset.sfDel) sfLit = null; }));
+  on("click", "[data-sf-show]", el => {
+    const plan = sfPlan(), s = plan && plan.stops.find(x => x.id === el.dataset.sfShow);
+    if(!s) return;
+    sfLit = s.id;
+    sfPick = s.key ? {key: s.key} : s.x != null ? {x: s.x, z: s.z} : null;
+    sfRemember(); sfRedraw();
+    if(sfMapView && s.x != null) sfMapView.focusOn(s);
+  });
+  on("click", "[data-sf-lay]", el => {
+    const l = el.dataset.sfLay;
+    if(sfOff.has(l)) sfOff.delete(l); else sfOff.add(l);
+    sfRedraw();
+  });
+  on("click", "[data-sf-pick]", el => {
+    sfPick = {key: el.dataset.sfPick}; sfLit = null; sfRemember(); sfRedraw();
+    const p = sfPicked();
+    if(sfMapView && p && p.x != null) sfMapView.focusOn(p);
+  });
+  on("click", "[data-sf-add]", () => sfAddStop());
+  on("click", "[data-sf-import]", el => { sfImport(el.dataset.sfImport, +el.dataset.sfIday); sfFitMap(true); });
+  on("input", "[data-sf-find]", el => {
+    sfQuery = el.value;
+    const host = q("#sfInspect .sf-foundhost");
+    if(host) host.innerHTML = sfFoundHtml();
+  });
+  /* Dragging the line repaints the map, the inspected place and the label, not the plan. */
+  on("input", "[data-sf-at]", el => {
+    sfMinute = +el.value;
+    const label = q("[data-sf-atlabel]"), now = q("#sfRibbon .sf-now");
+    if(label) label.textContent = sfClock(sfMinute);
+    el.setAttribute("aria-valuetext", sfClock(sfMinute));
+    if(now) now.style.left = `${(sfMinute / (+el.max || 1620) * 100).toFixed(3)}%`;
+    $("sfInspect").innerHTML = sfInspectHtml();
+    sfPaintMap();
+  });
+  on("change", "[data-sf-at]", () => sfRemember());
 }
 
 /* --- the redesign's adapters: counts, Standards, prices, Staffing ------------
@@ -19590,6 +20496,7 @@ const PAGES = [
   {id:"staffing", get label(){ return tt("nav.area.staffing", "Staffing"); }, host:"pageStaffing"},
   {id:"growth",  get label(){ return tt("nav.area.expansion", "Expansion"); },   host:"pageGrowth"},
   {id:"estate",  get label(){ return tt("nav.area.estate", "Real estate"); },   host:"pageEstate"},
+  {id:"mods",    get label(){ return tt("nav.area.mods", "Mods"); },   host:"pageMods"},
   {id:"map", get label(){ return tt("nav.ref.map", "City map"); }, host:"pageMap", newFeature:"map"},
   /* A build without the wiki files carries no Game guide: an empty page is
      worse than no page at all. */
@@ -19633,6 +20540,9 @@ const SUBS = {
   /* Real estate's two views (mockup/real-estate). */
   estate: {host:"pageEstate", nav:"estateNav", key:"ba_dash_estate", start:"buildings",
            items:navItems("estate")},
+  /* Mods: the catalogue, and the Street Food route planner. */
+  mods: {host:"pageMods", nav:"modsNav", key:"ba_dash_mods", start:"browse",
+         items:navItems("mods")},
 };
 const PAGE_KEY = "ba_dash_page";
 let page = "today";
@@ -19682,6 +20592,9 @@ const AREAS = [
    views:areaViews("expansion"), start:"demand"},
   {id:"estate", icon:"estate", get label(){ return tt("nav.area.estate", "Real estate"); },
    views:areaViews("estate"), start:"buildings"},
+  /* A phone's bar keeps the six places; Mods is in its Map & more drawer. */
+  {id:"mods", icon:"mods", phone:false, get label(){ return tt("nav.area.mods", "Mods"); },
+   views:areaViews("mods"), start:"browse"},
 ];
 const REFS = [
   {id:"map", icon:"map", newFeature:"map", get label(){ return tt("nav.ref.map", "City map"); }},
@@ -19759,6 +20672,9 @@ const ROUTE_BEHAVIOR = {
   /* Real estate's views: each New until its first visit. */
   "estate/buildings": {after(){ featureDiscovery.visit("real-estate-buildings"); }},
   "estate/buy": {after(){ featureDiscovery.visit("real-estate-buy"); }},
+  /* Back, Forward and a reload give Street Food the place and time it was
+     inspecting (nxSf); the plans themselves are kept per character. */
+  "mods/street-food": {after(o){ if(o.historyMode && o.historyMode !== "push") sfRestore(routeState().nxSf); }},
   /* The map as the reader left it: with the finder on, that is Find a
      location, and the address says so (routeFor()). */
   /* The City map is the plain map: reached with the finder on (the
@@ -19964,6 +20880,7 @@ const PAGE_DRAWS = [
   ["growth/plan", () => drawPlan(), null, ["openFactory", "openStore"]],  // changed for growth: no drawExpansion()
   ["growth/rivals", () => drawRivals(), null, ["rivalIntel"]],
   ["estate/buildings", () => drawEstate(), null, ["realEstate"]], ["estate/buy", () => drawEstateBuy(), null, ["realEstate"]],
+  ["mods/browse", () => drawMods(), null, []], ["mods/streetfood", () => drawStreetFood(), null, ["streetFood"]],
   ["company/products", () => drawPriceShops(), null, []], ["company/products", () => drawProducts(), null, ["products"]],
   // A third element names a row other code marks stale on its own (hrStale(), nxSchedStale());
   // a fourth, the sections it reads, asked for as its view opens (odWantView()).
@@ -20209,7 +21126,7 @@ function sdFootPaint(){
 /* The phone's bar: the six places and Map & more, which opens the references
    and the utilities. */
 function phoneNavHtml(){
-  return AREAS.map(a => `<a href="#${a.id}" data-id="${a.id}">${icon(a.icon)}<span>${a.label}</span>${
+  return AREAS.filter(a => a.phone !== false).map(a => `<a href="#${a.id}" data-id="${a.id}">${icon(a.icon)}<span>${a.label}</span>${
     a.id === "overview" ? `<span class="nx-n" data-nav-crit hidden></span>` : ""}</a>`).join("")
     + `<button type="button" id="phoneMore" aria-haspopup="true" aria-expanded="false">${icon("map")}<span>${tt("nav.more.phone", "Map & more")}</span></button>`;
 }
@@ -22042,6 +22959,14 @@ const SS_VIEWS = [
    get p(){ return tt("nav.search.buy.line", "Real estate › Buy a building · price, payback and tax day"); }, ic: "estate",
    syn: ["buy building", "purchase", "invest", "payback", "for sale", "tax", "taxes", "deduction", "tax day", "property"],
    go: () => openRoute("estate/buy")},
+  {id: "mods", get t(){ return tt("nav.search.mods.title", "Browse mods"); },
+   get p(){ return tt("nav.search.mods.line", "Mods › Browse mods · what the board reads of each mod"); }, ic: "mods",
+   syn: ["mods", "modded", "workshop", "steam workshop", "street food", "seasons", "retail expansion", "economy expansion", "compatibility"],
+   go: () => openRoute("mods/browse")},
+  {id: "streetfood", get t(){ return tt("nav.search.streetFood.title", "Street Food routes"); },
+   get p(){ return tt("nav.search.streetFood.line", "Mods › Street Food · map, stops and opening hours"); }, ic: "map",
+   syn: ["street food", "food truck", "food cart", "truck route", "cart route", "stops", "commissary", "pitch", "route plan"],
+   go: () => openRoute("mods/street-food")},
   {id: "finder", get t(){ return tt("nav.search.finder.title", "Find a location"); },
    get p(){ return tt("nav.search.finder.line", "Expansion › Find a location"); }, ic: "pin", syn: ["rent", "premises", "building", "floor size", "m²", "vacant", "where should i open", "size"],
    live(){ const n = ((D.premises || {}).buildings || []).filter(b => b.type === "retail" && b.status === "vacant").length;
@@ -24166,6 +25091,7 @@ function gwUpdateMod(kind){
   if(kind === "marketing") return tt("nav.dlg.mod.marketing", "Update the Big Copilot Link mod to set marketing from here");
   if(kind === "rent") return tt("nav.dlg.mod.rent", "Update the Big Copilot Link mod to set rent from here (version 0.6.0 or later)");
   if(kind === "wholesale") return tt("sb.wholesale.mod", "Update Big Copilot Link to version 0.7.0 or later to place wholesale orders.");
+  if(kind === "streetFoodRoute") return tt("nav.dlg.mod.streetFoodRoute", "Update the Big Copilot Link mod, with Street Food running, to set routes from here");
   return tt("nav.dlg.mod.other", "Update the Big Copilot Link mod to {kind} from here", {kind});
 }
 /* How long an apply's Undo lasts, by the kind of write (no full stop). */
@@ -26851,6 +27777,7 @@ const bindWrites = once(() => {
       ? gwMkSites(btn.dataset.gwMode, btn.dataset.gwMkLine || null).map(b => b.key) : JSON.parse(btn.dataset.gwSites || "[]"), btn.dataset.gwMode);
     else if(kind === "rent") gwRent(btn.hasAttribute("data-gw-rent-all") ? null : [btn.dataset.gwRent]);
     else if(kind === "wholesale") gwWholesale(btn.dataset.gwMode);
+    else if(kind === "streetFoodRoute") gwStreetFoodRoute(btn.dataset.gwPlan);
   }, true);
 });
 function wireWrites(){ bindWrites(); gwToast(); gwReadBack(); }
@@ -26866,7 +27793,7 @@ function wireAll(){
   wireRoster();
   wireFlow(); bindSupply();
   wireHeat(); wirePlan(); wireOpenStore(); wireOpenFactory();
-  wireReveal(); wireWrites(); wireStaff(); bindEstate();
+  wireReveal(); wireWrites(); wireStaff(); bindEstate(); wireMods();
 }
 
 /* The board with no numbers in it: the Wiki reads straight from the game's own

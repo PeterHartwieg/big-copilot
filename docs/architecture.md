@@ -71,7 +71,8 @@ this column is where to look when you change a key's shape — not a complete ca
 | Key | Produced by | Read by |
 | --- | --- | --- |
 | `meta` | `extract()` inline, with `_city_date()` and `_difficulty()` | `drawMast`, `drawWeekday`, `drawSite`, `sbData`, `drawSupplyStrip`, `drawProductionView`, `drawFooter`, `fvOpenDiff`, `drawDifficulty`; `web/map.js` `refreshCityMaps`; `web/wiki.js` `wikiGuidePrices` |
-| `mods` | `ba_mods.detect()`, added at the end of `build_core()`; only on a save a mod adapter reads (`OPTIONAL_KEYS`), absent on a vanilla save | `drawMast` (through `mdFlag()`) |
+| `streetFood` | `ba_street_food.planner()`, deferred section: public opportunity categories and saved opening hours, announced events, owned fleet and routes; no demand weights or regulars | Mods › Street Food |
+| `mods` | `ba_mods.detect()`, added at the end of `build_core()`; only on a save a mod adapter reads (`OPTIONAL_KEYS`), absent on a vanilla save. Street Food's optional `streetFood` metadata comes from `ba_street_food.py`: status, vehicle count, live flag and saved mod version | `drawMast` (through `mdFlag()`) |
 | `kpi` | `build_core()` inline, with `_net_worth()` | `drawMast`, `drawKpis`, `hrReview/firstHire`, `SS_VIEWS.payroll.live` |
 | `daily` | `_daily_series()`, plus the rolling `profit7` added in `extract()` | `drawChart`, `drawKpis`, `drawKpis/hist` |
 | `businesses` | `_business()` per rented non-residential building; each site's `campaigns` and `marketingPlan` from `_marketing()`, with `marketing_plan()` and `marketing_score()` over `MARKETING_TYPES`, `MARKETING_STRENGTH` and `MARKETING_REACH`, planning with the types the site already has a switch for (flipped at any time) and those sold by agencies that are phone contacts, `agencies` naming the ones a new switch needs (`marketingPlan` is None but for a shop or an office; its `on` is None when the site has no switch, no agency is a contact and a change is needed); `_alerts()` reads it for the `promotion` findings | `drawPortfolio`, `drawSitePicker`, `openSite`, `siteKeys`, `drawSite`, `drawWeekday`, `supplyChecklistRows` and its locals `lineOf`, `held`, `label`, `factoryView/held`, `alertSite`, `nameUses`, Supply's views (`drawImportsView`, `drawDeliveriesView`, `drawProductionView`, `drawChangesView`) through their parts `sbShopsPart`, `sbDepotPart`, `sbFactoryPart` and row helpers (`sbObject`, `sbDepotRow`, `sbLineRow`, `sbInputRow`, `sbTabOf`), the Imports card `sbImportCard`, and `drawFactoryStaffing`, the marketing write's `gwMkSites` (with `spMkLine` and `gwMarketing` reading each site's `marketingPlan`); `web/map.js` `mapBusinesses`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn`, `wikiGuidePrices` |
@@ -498,6 +499,7 @@ restoring the focused action if the keyboard is still inside the popover.
 | openStore | `openStore` | premises | Open a store; a shop’s Shop expansions comparison (on opening); Plan a factory's location, investment and financing; Demand popovers |
 | openFactory | `openFactory` | (none) | Plan a factory's costs and opening requirements |
 | goals | `goals` | (none) | Milestones |
+| streetFood | `streetFood` | (none) | Mods › Street Food: opportunity map and manual route plans |
 | rivalIntel | `rivalIntel` | (none) | Expansion › Rivals: products, shops and recent opened/closed businesses |
 | realEstate | `realEstate` | (none) | Real estate's My buildings and Buy a building |
 
@@ -1226,6 +1228,7 @@ four of them. Each page is a `div.page` that `showPage()` unhides.
 | `supply` | Supply | `pageSupply` | one tab at a time — see below |
 | `staffing` | Staffing | `pageStaffing` | one view at a time — see below |
 | `growth` | Expansion | `pageGrowth` | one view at a time — see below |
+| `mods` | Mods | `pageMods` | `drawMods` and `drawStreetFood`: curated supported mods and the opportunity map/manual route planner |
 | `map` | City map (and Expansion › Find a location) | `pageMap` | `showCityMap` / `refreshCityMaps` in `web/map.js`, which also hosts the location finder as a mode of the page — `openFinder()` switches it on with a preset, `showFinder()` without one (a replayed entry's own filters, `nxFs`, else those on screen), and `CityMapView` ranks the `premises` rows beside the map. The route decides the mode: `map` is always the plain map, `expansion/finder` the finder. The board script heads the page (`#mapHead`) and puts the finder's ways on under it (`#finderCtx`), both from `drawFinderCtx()` |
 | `estate` | Real estate | `pageEstate` | one view at a time — see below |
 | `wiki` | Wiki | `pageWiki` | `wikiVisit` → `showWikiRoute` in `web/wiki.js`; the entry is omitted when `showWikiRoute` is undefined |
@@ -1876,6 +1879,16 @@ mod's DLL with its version, rescale the sales ratio Open a store uses
 (`_store_market()`) and `check_profit_model.py` measures against. Each adapter
 switches on only when the save carries that mod's data; `tools/payload_diff.py` on
 vanilla saves shows no difference.
+
+`ba_street_food.py` validates Street Food schema 1 or 2 once per Save, without
+filesystem reads or executing mod code. It contributes `daily[].streetFood`,
+tax-period revenue, crew exclusions and `supply.streetFoodRestricted` (indices of
+sites whose demand is incomplete). Restricted factory staffing rows carry
+`failed: true, unavailable: "streetFood"`. These are nested extensions of existing
+payload keys; the section boundaries stay unchanged. Both CLI and browser mark live
+inputs, so missing snapshot metadata on an old link cannot be mistaken for current
+mod state. See [Street Food compatibility](dashboard-reference.md#street-food-compatibility)
+for accounting and scope.
 
 Core extraction and deferred sections share that Save and table. Premises optionally
 carry `factsSource`, `layoutKnown`, `factsUnavailable`, and `marketingRules` (reach

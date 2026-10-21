@@ -64,9 +64,10 @@ try:
 except ModuleNotFoundError as exc:
     # A worker from before ba_mods.py (a tab left open across a deploy) does not
     # fetch it; the board then reads every save as a vanilla one.
-    if exc.name != "ba_mods":
+    if exc.name not in ("ba_mods", "ba_street_food"):
         raise
     ba_mods = None
+ba_street_food = ba_mods.ba_street_food if ba_mods else None
 
 SAVE_ROOT = os.path.join(
     os.environ.get("USERPROFILE", ""),
@@ -2505,10 +2506,29 @@ def _tax_period(save: Save) -> dict:
             sales += (st or {}).get("TotalSales") or 0
     gambling = max((root.get("CurrentTaxPeriodGamblingWinnings") or 0)
                    - (root.get("CurrentTaxPeriodGamblingLosses") or 0), 0)
+    street_food = ba_street_food.read(save) if ba_street_food else None
+    food_days = ba_street_food.days(save) if ba_street_food else []
+    food_today = 0.0
+    for entry in food_days:
+        if start <= entry["day"] <= tax_day:
+            sales += entry.get("revenueCents", 0) / 100
+            if entry["day"] == day:
+                food_today += entry.get("revenueCents", 0) / 100
+            if entry["day"] < day:
+                held.add(entry["day"])
+                trading.add(entry["day"])
+    food_rent = sum(v.get("commissaryRentCents", 0) for entry in food_days
+                    if start <= entry["day"] <= tax_day for v in entry.get("byVehicle", [])) / 100
     recurring = once = 0.0
     for row in save.items(root.get("currentTaxPeriodDeductibleExpenses")):
         amount = abs((row or {}).get("amount") or 0)
-        if _recurring_deduction((row or {}).get("key")):
+        if ba_street_food and (row or {}).get("key") == ba_street_food.COMMISSARY_EXPENSE:
+            # The shared label includes goods, fees and fines: scale paid rent only.
+            rent = min(amount, food_rent)
+            recurring += rent
+            once += amount - rent
+            food_rent -= rent
+        elif _recurring_deduction((row or {}).get("key")):
             recurring += amount
         else:
             once += amount
@@ -2522,14 +2542,20 @@ def _tax_period(save: Save) -> dict:
         sales_end, deduct_end = sales, recurring + once
     else:
         days = sum(1 for n in held if trading and n >= min(trading))
-        sales_end = sales + (sales / days * (tax_day - day) if days else 0.0)
+        # Today's whole day is already in the projection. Keep partial fleet
+        # takings in sales so far, but do not add them again to that forecast.
+        finished_sales = sales - food_today
+        sales_end = finished_sales + (finished_sales / days * (tax_day - day) if days else 0.0)
         deduct_end = once + recurring * per_year / midnights
-    return {
+    result = {
         "day": day, "taxDay": tax_day, "start": start, "left": tax_day - day, "perYear": per_year,
         "rate": gv.get("taxPercentage") or 0, "sales": sales, "salesEnd": sales_end,
         "gambling": gambling, "deductions": recurring + once, "deductionsEnd": deduct_end,
         "fresh": fresh,
     }
+    if street_food and street_food["status"] != "ready":
+        result["unavailable"] = "streetFood"
+    return result
 
 
 # The shopping list's search budget, in nodes: about 20 ms in CPython for a
@@ -2643,11 +2669,11 @@ def _tax_shelter(save: Save, period: dict, candidates: list) -> dict:
     cash = save.root.get("Money") or 0
     base_now = max(0.0, period["sales"] + period["gambling"] - period["deductions"])
     base = max(0.0, period["salesEnd"] + period["gambling"] - period["deductionsEnd"])
-    assessed = not period["fresh"] and period["salesEnd"] + period["gambling"] >= TAX_THRESHOLD
+    assessed = not period.get("unavailable") and not period["fresh"] and period["salesEnd"] + period["gambling"] >= TAX_THRESHOLD
     target = int(max(0.0, min(cash, base))) if assessed else 0
     pick, spend = _tax_pick(candidates, target, int(target * TAX_PICK_SLACK)) if target else ([], 0)
     rate = period["rate"]
-    return {
+    result = {
         "rate": rate, "taxDay": period["taxDay"], "left": period["left"], "perYear": period["perYear"],
         "cash": money(cash),
         "sales": money(period["sales"]), "salesEnd": money(period["salesEnd"]),
@@ -2659,6 +2685,9 @@ def _tax_shelter(save: Save, period: dict, candidates: list) -> dict:
         "pick": pick, "spend": spend, "saves": money(spend * rate / 100),
         "after": money(cash - spend),
     }
+    if period.get("unavailable"):
+        result["unavailable"] = period["unavailable"]
+    return result
 
 
 def _rent_paid(save: Save) -> dict:
@@ -3274,7 +3303,7 @@ PAYLOAD_KEYS = (
     "openFactory", "trends", "hypeExposure", "hours", "hourFindings", "staffing",
     "factoryStaffing", "officeStaffing", "candidates", "hiring", "plan", "names",
     "skillNames", "marketingAgencies", "cashFlow", "ledgerDays", "alerts", "minor",
-    "alertsDemand", "goals", "rivalry", "rivalIntel", "realEstateCounts", "realEstate", "sitesGone", "wholesale",
+    "alertsDemand", "goals", "rivalry", "rivalIntel", "realEstateCounts", "realEstate", "sitesGone", "wholesale", "streetFood",
 )
 # Keys only some saves carry: `mods` is there only for a save a mod adapter
 # reads (ba_mods.detect()), so a vanilla save's payload is what it was.
@@ -3284,7 +3313,7 @@ OPTIONAL_KEYS = frozenset({"mods"})
 
 # Three planning stages only: locale, effective tables and the predecessor world
 # are inputs too. Bump this when placement semantics or capsule shape changes.
-PLANNING_CACHE_VERSION = 3
+PLANNING_CACHE_VERSION = 4
 _PLANNING_CACHE_RULES = (
     "ALL_DAY_OPEN", "ASSIGN_SKILLS", "AT_CAP", "CAPPED_INITIAL_BUILD",
     "CAP_CATEGORIES", "CLEANING_SHIFT", "COVER_STATIONS", "DEMAND_RUN_DAYS",
@@ -3770,6 +3799,9 @@ def _open_factory_section(build: Build) -> dict:
 # Each stage plans over a copy of the bench and weeks the stage before left,
 # kept per stage in build.shared["planning"]. Nothing a warning reads is here.
 SECTIONS = {
+    "streetFood": {"keys": ("streetFood",), "needs": (),
+                   "produce": lambda b: {"streetFood": ba_street_food.planner(b.save, b.names, load_buildings(b.save), _open_hours)
+                                         if ba_street_food else {"status": "unavailable", "vehicles": [], "opportunities": []}}},
     "staffing": {"keys": ("staffing",), "needs": (),
                  "produce": _staffing_section},
     "officeStaffing": {"keys": ("officeStaffing",), "needs": ("staffing",),
@@ -4296,6 +4328,8 @@ def _staff(save: Save, names: Names):
             ),
         }
         rec["daily"] = rec["wage"] * rec["hours"] / 7
+        if ba_street_food and ba_street_food.reserved(save, e):
+            rec["streetFood"] = True
         staff.append(rec)
         by_addr[rec["addr"]].append(rec)
     return by_addr, staff
@@ -5274,6 +5308,13 @@ def _daily_series(save: Save, summaries: list) -> list:
                 "salary": money(s.get("salaryIncome", 0)),
             }
         )
+        food = ba_street_food.statement(save, s) if ba_street_food else None
+        if food is not None:
+            row = out[-1]
+            row["streetFood"] = food
+            for key in ("revenue", "cogs", "wages"):
+                row[key] = money(row[key] + food[key])
+            row["parking"] = money(row["parking"] - food["parking"])
     return out
 
 
@@ -6829,6 +6870,8 @@ def _supply_roles(save: Save, names: Names, businesses: list, factories: dict) -
         return out
 
     def kind_of(address, key):
+        if ba_street_food and ba_street_food.is_commissary(address):
+            return "commissary"
         if key in index:
             slug = businesses[index[key]].get("typeSlug")
             return {"ba:businesstype_warehouse": "wh", "ba:businesstype_factory": "fac"}.get(slug, "shop")
@@ -6860,6 +6903,10 @@ def _supply_roles(save: Save, names: Names, businesses: list, factories: dict) -
             kind = kind_of(where, dkey)
             if kind == "pier":
                 name = _importer_name(names, where)
+            elif kind == "commissary":
+                identity = ba_street_food.commissary_name(save, where)
+                name = (msg("sb.roles.commissary.name", "Commissary: {name}", name=identity)
+                        if identity else msg("sb.roles.commissary.unknown", "Street Food commissary"))
             elif dkey in index:
                 name = businesses[index[dkey]]["name"]
             else:
@@ -8840,7 +8887,7 @@ def _supply(
         day=day, spent_today=spent_today, peak_of=peak_of, draw=draw)
 
 
-    return {
+    result = {
         "day": day,
         "today": weekday(day),
         "graph": graph,
@@ -8881,6 +8928,8 @@ def _supply(
         "margin": SUPPLY_MARGIN,
         "roundTo": SUPPLY_ROUND_TO,
     }
+
+    return ba_street_food.restrict_supply(save, businesses, result) if ba_street_food else result
 
 
 def _below(have, figure) -> bool:
@@ -11426,6 +11475,9 @@ def _plan_people(save: Save, staff: list) -> dict:
         ]
     out = {}
     for person in staff:
+        # Vehicle crew have no base-game address; they are not a building's bench.
+        if person.get("streetFood"):
+            continue
         held = demands.get(person["id"], [])
         rules = [JOB_DEMANDS[slug] for slug in held]
         out[person["id"]] = {
@@ -14778,6 +14830,12 @@ def _factory_staffing(save: Save, names, businesses: list, factories: dict, staf
     out = {mode: [] for mode in SIZING_MODES}
     for site in sites:
         business = businesses[site["s"]]
+        if site.get("streetFoodRestricted"):
+            for mode in SIZING_MODES:
+                out[mode].append({"key": business["key"], "name": business["name"],
+                                  "typeSlug": business["typeSlug"], "failed": True,
+                                  "unavailable": "streetFood"})
+            continue
         building = buildings.get(business["key"])
         pool = [p for p in _site_pool(people, business, world["bench"])
                 if _usable(p, FACTORY_SKILL, "serve")]
@@ -17029,6 +17087,7 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
     employees = [e for e in save.items(save.root.get("EmployeeInstances")) if isinstance(e, dict)]
     bench = _in_order({
         e.get("id") for e in employees if not save.address(e.get("assignedAddress"))
+        and not (ba_street_food and ba_street_food.reserved(save, e))
     })
     named = set(bench)
     for site in sites:
@@ -20066,6 +20125,9 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
             - (fund.get("withdrawal") or 0) + (fund.get("interestPayment") or 0)
     property_ = sum((save.deref(e) or {}).get("purchasePrice") or 0 for e in save.items(root.get("realEstate")))
     prices = rules.get("vehicles") or {}
+    street_food = ba_street_food.read(save) if ba_street_food else None
+    if street_food:
+        prices = {**prices, **street_food["prices"]}
     vehicles = sum(prices.get((save.deref(v) or {}).get("vehicleTypeName"), 0)
                    for v in save.items(root.get("VehicleInstances")))
     boats = sum(BOAT_PRICES.get((save.deref(b) or {}).get("type"), 0) for b in save.items(root.get("playerBoats")))
@@ -21691,6 +21753,9 @@ def _alerts(
 
     middle = found
     factories = supply.get("factories", {})
+    if supply.get("streetFoodRestricted"):
+        factories = dict(factories, sites=[site for site in factories.get("sites", [])
+                                         if not site.get("streetFoodRestricted")])
 
     def by_mode(mode: str) -> dict:
         # _condense() pops fields off the rows it is given, so each mode gets
@@ -22953,7 +23018,7 @@ def load_template() -> str:
         with open(os.path.join(folder, "board.html"), encoding="utf-8") as fh:
             page = fh.read()
         scripts = []
-        for name in ("open-store-model.js", "open-factory-model.js", "board.js"):
+        for name in ("open-store-model.js", "open-factory-model.js", "street-food-model.js", "board.js"):
             with open(os.path.join(folder, name), encoding="utf-8") as fh:
                 scripts.append(fh.read())
         _template = splice_board_script(page, "\n".join(scripts))
@@ -23206,7 +23271,7 @@ class StaleBuild(Exception):
 
 def browser_build(
     save_path: str, locale_path: str, history_path: str, names_path: str | None = None,
-    generation=None,
+    generation=None, live_source=False,
 ) -> str:
     """One rebuild for the in-browser board: parse, the core, JSON.
 
@@ -23237,6 +23302,7 @@ def browser_build(
             f"{os.path.basename(save_path)} is not a Big Ambitions save this board can "
             f"read ({type(exc).__name__}: {exc})"
         ) from exc
+    save.live_source = live_source
     build = safe_build(save, names, history_path, generation)
     # Core does no placement; attach the browser-owned cache only after it has
     # succeeded, before any on-demand section can run.
@@ -23395,7 +23461,7 @@ class GameLink:
     while a city is loaded, so the watch loop reports it once and carries on.
     """
 
-    SCHEMA = 3  # the schema version this client speaks; see the contract
+    SCHEMA = 4  # the schema version this client speaks; see the contract
     TIMEOUT = 5
 
     def __init__(self, url: str, out_dir: str):
@@ -23469,7 +23535,7 @@ class GameLink:
             return None
         self.not_ready = 0
         version = health.get("schemaVersion")
-        if version not in (1, 2, self.SCHEMA):
+        if version not in (1, 2, 3, self.SCHEMA):
             raise LinkMismatch(
                 f"the Big Copilot Link mod speaks schema version {version}; this "
                 f"board needs version {self.SCHEMA}. Update the mod or the board"
@@ -23638,7 +23704,9 @@ class Board:
                     return False
 
         try:
-            data = safe_extract(load_save(path), self.names, self.history)
+            save = load_save(path)
+            save.live_source = self.link is not None
+            data = safe_extract(save, self.names, self.history)
             # names= only for --lang: an English board renders as it always has.
             lang = {"names": self.lang_names} if self.lang_names else {}
             if self.lang_ui:
@@ -24093,7 +24161,9 @@ def main() -> None:
         path = newest_under(target)
         source_name = os.path.basename(path)
     lang_names = cli_names(args.lang, locale_source, locale)
-    data = safe_extract(load_save(path), names, history)
+    save = load_save(path)
+    save.live_source = link is not None
+    data = safe_extract(save, names, history)
     with open(out, "w", encoding="utf-8") as fh:
         fh.write(render(data, names=lang_names, ui=cli_ui_table(args.lang)))
 

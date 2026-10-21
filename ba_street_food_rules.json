@@ -1,0 +1,447 @@
+{
+  "schema": 1,
+  "source": {
+    "demand": "f5daffd50838e3281e3f709d3b5597035d7195099d07a9d19663c1606173b3b5",
+    "pitches": "9aff7f2fde4ceb79b338b1486869b58748a0bfc90e619238bd4d1429189f86e7",
+    "rules": "46750055b0abfed54ed9aed139c269d43edbfb2a11f0c1722947859d511d0868",
+    "commissaries": "49f7342e5b19c16d541967f578a505c7063afb25a041cbfe90305387959b0f99"
+  },
+  "rules": {
+    "radiusMetres": 50,
+    "travel": {
+      "driveMinutesPerMetre": 0.04,
+      "pushMetresPerSecond": 4.0,
+      "roadFactor": 1.0
+    },
+    "schedules": {
+      "maxStops": 6,
+      "latestCloseMinute": 1620,
+      "stopRadiusMetres": 25,
+      "restockMinutes": 30,
+      "maxShiftHours": 12
+    }
+  },
+  "classifier": {
+    "buildingTypes": {
+      "ba:buildingtype_office": [
+        "office"
+      ],
+      "ba:buildingtype_retail": [
+        "retail"
+      ],
+      "ba:buildingtype_residential": [
+        "residential"
+      ],
+      "ba:buildingtype_warehouse": [
+        "industrial"
+      ],
+      "ba:buildingtype_cinema": [
+        "retail",
+        "nightlife"
+      ],
+      "ba:buildingtype_theater": [
+        "nightlife"
+      ],
+      "subwayentrance": [
+        "transit"
+      ],
+      "parkarea": [
+        "park"
+      ],
+      "skatepark": [
+        "park"
+      ]
+    },
+    "businessTypes": {
+      "ba:businesstype_nightclub": [
+        "nightlife"
+      ],
+      "ba:businesstype_casino": [
+        "nightlife"
+      ],
+      "ba:businesstype_theater": [
+        "nightlife"
+      ],
+      "ba:businesstype_liquorstore": [
+        "nightlife",
+        "retail"
+      ],
+      "ba:businesstype_cinema": [
+        "retail",
+        "nightlife"
+      ],
+      "ba:businesstype_factory": [
+        "industrial"
+      ],
+      "ba:businesstype_warehouse": [
+        "industrial"
+      ],
+      "ba:businesstype_wholesalestore": [
+        "industrial",
+        "retail"
+      ],
+      "ba:businesstype_truckgarage": [
+        "industrial"
+      ],
+      "ba:businesstype_movingservice": [
+        "industrial"
+      ],
+      "ba:businesstype_importexport": [
+        "industrial",
+        "office"
+      ],
+      "ba:businesstype_headquarters": [
+        "office"
+      ],
+      "ba:businesstype_lawfirm": [
+        "office"
+      ],
+      "ba:businesstype_bank": [
+        "office"
+      ],
+      "ba:businesstype_marketingagency": [
+        "office"
+      ],
+      "ba:businesstype_webdevelopmentagency": [
+        "office"
+      ],
+      "ba:businesstype_graphicdesigner": [
+        "office"
+      ],
+      "ba:businesstype_recruitmentagency": [
+        "office"
+      ],
+      "ba:businesstype_eventplanningagency": [
+        "office"
+      ],
+      "ba:businesstype_travelagency": [
+        "office",
+        "retail"
+      ],
+      "ba:businesstype_interiorinstallationfirm": [
+        "office",
+        "industrial"
+      ],
+      "ba:businesstype_coffeeshop": [
+        "retail"
+      ],
+      "ba:businesstype_fastfoodrestaurant": [
+        "retail"
+      ],
+      "ba:businesstype_giftshop": [
+        "retail"
+      ],
+      "ba:businesstype_supermarket": [
+        "retail"
+      ],
+      "ba:businesstype_jewelrystore": [
+        "retail"
+      ],
+      "ba:businesstype_clothingstore": [
+        "retail"
+      ],
+      "ba:businesstype_cardealership": [
+        "retail"
+      ],
+      "ba:businesstype_appliancestore": [
+        "retail"
+      ],
+      "ba:businesstype_furniturestore": [
+        "retail"
+      ],
+      "ba:businesstype_officesupplystore": [
+        "retail"
+      ],
+      "ba:businesstype_florist": [
+        "retail"
+      ],
+      "ba:businesstype_fruitandvegetablestore": [
+        "retail"
+      ],
+      "ba:businesstype_hairdresser": [
+        "retail"
+      ],
+      "ba:businesstype_electronicsstore": [
+        "retail"
+      ],
+      "ba:businesstype_bookstore": [
+        "retail"
+      ],
+      "ba:businesstype_gym": [
+        "retail",
+        "residential"
+      ],
+      "ba:businesstype_school": [
+        "residential"
+      ],
+      "ba:businesstype_hospital": [
+        "office"
+      ],
+      "ba:businesstype_clinic": [
+        "office"
+      ],
+      "ba:businesstype_irs": [
+        "office"
+      ],
+      "ba:businesstype_gasstation": [
+        "industrial"
+      ]
+    }
+  },
+  "pitches": [
+    {
+      "id": "midtown-fifth-street",
+      "name": "Fifth Street office row",
+      "address": "ba:street_fifthstreet#2",
+      "categories": [
+        "office"
+      ]
+    },
+    {
+      "id": "midtown-third-avenue",
+      "name": "Third Avenue after dark",
+      "address": "ba:street_thirdavenue#4",
+      "categories": [
+        "nightlife"
+      ]
+    },
+    {
+      "id": "midtown-second-avenue",
+      "name": "Second Avenue commuter corner",
+      "address": "ba:street_secondavenue#13",
+      "categories": []
+    },
+    {
+      "id": "lower-tenth-street",
+      "name": "Tenth Street office lunch",
+      "address": "ba:street_tenthstreet#10",
+      "categories": [
+        "office"
+      ]
+    },
+    {
+      "id": "lower-fifth-avenue",
+      "name": "Fifth Avenue nights, Lower Manhattan",
+      "address": "ba:street_fifthavenue#57",
+      "categories": [
+        "nightlife"
+      ]
+    },
+    {
+      "id": "lower-twelfth-street",
+      "name": "Twelfth Street wholesale gate",
+      "address": "ba:street_twelfthstreet#13",
+      "categories": [
+        "industrial"
+      ]
+    },
+    {
+      "id": "murray-fourth-street",
+      "name": "Fourth Street weekend stretch",
+      "address": "ba:street_fourthstreet#9",
+      "categories": [
+        "retail"
+      ]
+    },
+    {
+      "id": "murray-fifth-avenue",
+      "name": "Fifth Avenue, Murray Hill",
+      "address": "ba:street_fifthavenue#23",
+      "categories": [
+        "office"
+      ]
+    },
+    {
+      "id": "hells-fourth-street",
+      "name": "Fourth Street lunch and late",
+      "address": "ba:street_fourthstreet#4",
+      "categories": [
+        "nightlife"
+      ]
+    },
+    {
+      "id": "hells-fourth-avenue",
+      "name": "Fourth Avenue nightlife",
+      "address": "ba:street_fourthavenue#22",
+      "categories": [
+        "nightlife"
+      ]
+    },
+    {
+      "id": "hells-second-street",
+      "name": "Second Street offices",
+      "address": "ba:street_secondstreet#3",
+      "categories": [
+        "office"
+      ]
+    },
+    {
+      "id": "garment-third-street",
+      "name": "Third Street, Garment District",
+      "address": "ba:street_thirdstreet#27",
+      "categories": [
+        "retail"
+      ]
+    },
+    {
+      "id": "garment-fifth-avenue",
+      "name": "Fifth Avenue offices, Garment District",
+      "address": "ba:street_fifthavenue#5",
+      "categories": [
+        "office"
+      ]
+    },
+    {
+      "id": "industry-twenty-first-street",
+      "name": "Twenty-First Street club row",
+      "address": "ba:street_twentyfirststreet#12",
+      "categories": [
+        "nightlife"
+      ]
+    },
+    {
+      "id": "industry-ninth-avenue",
+      "name": "Ninth Avenue factory gate",
+      "address": "ba:street_ninthavenue#3",
+      "categories": [
+        "industrial"
+      ]
+    },
+    {
+      "id": "hamptons-ocean-crest-road",
+      "name": "Ocean Crest Road",
+      "address": "ba:street_oceancrestroad#1",
+      "categories": [
+        "waterfront"
+      ]
+    },
+    {
+      "id": "hamptons-seventh-avenue",
+      "name": "Seventh Avenue village",
+      "address": "ba:street_seventhavenue#34",
+      "categories": [
+        "retail"
+      ]
+    },
+    {
+      "id": "lower-park-eleventh-street",
+      "name": "Eleventh Street skate park",
+      "address": "ba:street_eleventhstreet#23",
+      "categories": [
+        "park"
+      ]
+    },
+    {
+      "id": "hells-park-second-avenue",
+      "name": "Second Avenue park",
+      "address": "ba:street_secondavenue#5",
+      "categories": [
+        "park"
+      ]
+    }
+  ],
+  "eventPlaces": [
+    {
+      "id": "midtown-fourth-avenue",
+      "name": "Fourth Avenue, Midtown",
+      "address": "ba:street_fourthavenue#34",
+      "categories": []
+    },
+    {
+      "id": "lower-sixth-avenue",
+      "name": "Sixth Avenue, Lower Manhattan",
+      "address": "ba:street_sixthavenue#36",
+      "categories": []
+    },
+    {
+      "id": "murray-fifth-avenue-market",
+      "name": "Fifth Avenue, Murray Hill",
+      "address": "ba:street_fifthavenue#62",
+      "categories": []
+    },
+    {
+      "id": "hells-third-avenue-cinema",
+      "name": "the cinema square on Third Avenue",
+      "address": "ba:street_thirdavenue#15",
+      "categories": []
+    },
+    {
+      "id": "garment-first-street",
+      "name": "First Street, Garment District",
+      "address": "ba:street_firststreet#82",
+      "categories": []
+    },
+    {
+      "id": "industry-tenth-avenue",
+      "name": "Tenth Avenue, Industry City",
+      "address": "ba:street_tenthavenue#22",
+      "categories": []
+    },
+    {
+      "id": "hamptons-harbor-street",
+      "name": "Harbor Street",
+      "address": "ba:street_harborstreet#1",
+      "categories": []
+    }
+  ],
+  "eventKinds": {
+    "market": {
+      "name": "weekend market",
+      "categories": [
+        "retail",
+        "park"
+      ]
+    },
+    "festival": {
+      "name": "street festival",
+      "categories": [
+        "nightlife"
+      ]
+    }
+  },
+  "commissaries": [
+    {
+      "id": "industry-city",
+      "name": "Industry City Commissary",
+      "address": "ba:street_twentyfirststreet#2",
+      "categories": [],
+      "bay": {
+        "x": -1439.0,
+        "z": -1073.4,
+        "heading": 180
+      }
+    },
+    {
+      "id": "garment-district",
+      "name": "Garment District Commissary",
+      "address": "ba:street_secondstreet#51",
+      "categories": [],
+      "bay": {
+        "x": 305.7,
+        "z": -311.6
+      }
+    },
+    {
+      "id": "hells-kitchen",
+      "name": "Hell's Kitchen Commissary",
+      "address": "ba:street_secondavenue#8",
+      "categories": []
+    },
+    {
+      "id": "lower-manhattan",
+      "name": "Lower Manhattan Commissary",
+      "address": "ba:street_twelfthstreet#5",
+      "categories": []
+    },
+    {
+      "id": "murray-hill",
+      "name": "Murray Hill Commissary",
+      "address": "ba:street_fifthstreet#12",
+      "categories": [],
+      "bay": {
+        "x": 43.8,
+        "z": -281.8
+      }
+    }
+  ]
+}

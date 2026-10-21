@@ -29,6 +29,7 @@ const SECTION_META = execFileSync(selectPython(),
   {cwd: ROOT, encoding: 'utf8'}).trim();
 const SOURCE = fs.readFileSync(path.join(ROOT, 'template', 'open-store-model.js'), 'utf8') + '\n'
   + fs.readFileSync(path.join(ROOT, 'template', 'open-factory-model.js'), 'utf8') + '\n'
+  + fs.readFileSync(path.join(ROOT, 'template', 'street-food-model.js'), 'utf8') + '\n'
   + fs.readFileSync(path.join(ROOT, 'template', 'board.js'), 'utf8').replace('/*__SECTION_META__*/{}',
     SECTION_META);
 const I18N = fs.readFileSync(path.join(ROOT, 'web', 'i18n.js'), 'utf8');

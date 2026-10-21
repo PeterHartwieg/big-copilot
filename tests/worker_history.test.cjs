@@ -82,6 +82,17 @@ const HIST = '/data/market_history.json';
 const LOCALE = '/data/en.json';
 const build = (id, history, locale = '') => ({kind: 'build', id, name: 'a.hsg', bytes: new ArrayBuffer(4), mtime: 1, locale, history});
 
+test('live provenance survives a name rebuild and resets for a file', async () => {
+  const w = worker();
+  await w.send({...build(1, '{}'), live: true});
+  await w.send({kind: 'name', id: 2, rid: 'a', slug: 'beer'});
+  let calls = w.calls.filter(c => c.includes('browser_build('));
+  assert.ok(calls.every(c => c.endsWith(', True)')));
+  await w.send(build(3, '{}'));
+  calls = w.calls.filter(c => c.includes('browser_build('));
+  assert.ok(calls.at(-1).endsWith(', False)'));
+});
+
 test('names asked for together each keep theirs', async () => {
   const w = worker();
   const before = JSON.stringify({names: []});

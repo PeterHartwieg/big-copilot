@@ -24861,6 +24861,650 @@
    ]
   }
  ],
+ "streetFood": {
+  "day": 40,
+  "gameSpeed": 1,
+  "minute": 870,
+  "opportunities": [
+   {
+    "address": "13 Broadway Street",
+    "categories": [
+     "residential"
+    ],
+    "closed": false,
+    "hood": "midtown",
+    "hours": [
+     [],
+     [],
+     [],
+     [],
+     [],
+     [],
+     []
+    ],
+    "key": "ba:street_broadwaystreet#13",
+    "kind": "building",
+    "name": "13 Broadway Street",
+    "type": "Empty",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "19 Broadway Street",
+    "categories": [
+     "retail"
+    ],
+    "closed": false,
+    "hood": "lowermanhattan",
+    "hours": [
+     [
+      [
+       540,
+       1140
+      ]
+     ],
+     [
+      [
+       540,
+       1140
+      ]
+     ],
+     [
+      [
+       540,
+       1140
+      ]
+     ],
+     [
+      [
+       540,
+       1140
+      ]
+     ],
+     [
+      [
+       540,
+       1140
+      ]
+     ],
+     [
+      [
+       540,
+       1140
+      ]
+     ],
+     [
+      [
+       540,
+       1140
+      ]
+     ]
+    ],
+    "key": "ba:street_broadwaystreet#19",
+    "kind": "building",
+    "name": "HART. Gifts",
+    "type": "Gift Shop",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "9 Broadway Street",
+    "categories": [
+     "retail"
+    ],
+    "closed": false,
+    "hood": "midtown",
+    "hours": [
+     [],
+     [],
+     [],
+     [],
+     [],
+     [],
+     []
+    ],
+    "key": "ba:street_broadwaystreet#9",
+    "kind": "building",
+    "name": "Corner Gifts",
+    "type": "Gift Shop",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "4 Eighth Avenue",
+    "categories": [
+     "industrial"
+    ],
+    "closed": false,
+    "hood": "industrycity",
+    "hours": [
+     [],
+     [],
+     [],
+     [],
+     [],
+     [],
+     []
+    ],
+    "key": "ba:street_eighthavenue#4",
+    "kind": "building",
+    "name": "HART. Hub",
+    "type": "Warehouse",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "8 Eighth Avenue",
+    "categories": [
+     "industrial"
+    ],
+    "closed": false,
+    "hood": "industrycity",
+    "hours": [
+     [
+      [
+       0,
+       1440
+      ]
+     ],
+     [
+      [
+       0,
+       1440
+      ]
+     ],
+     [
+      [
+       0,
+       1440
+      ]
+     ],
+     [
+      [
+       0,
+       1440
+      ]
+     ],
+     [
+      [
+       0,
+       1440
+      ]
+     ],
+     [
+      [
+       0,
+       1440
+      ]
+     ],
+     [
+      [
+       0,
+       1440
+      ]
+     ]
+    ],
+    "key": "ba:street_eighthavenue#8",
+    "kind": "building",
+    "name": "HART. Brewery",
+    "type": "Factory",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "5 Eighth Street",
+    "categories": [
+     "nightlife",
+     "retail"
+    ],
+    "closed": false,
+    "hood": "midtown",
+    "hours": [
+     [
+      [
+       480,
+       1320
+      ]
+     ],
+     [
+      [
+       480,
+       1320
+      ]
+     ],
+     [
+      [
+       480,
+       1320
+      ]
+     ],
+     [
+      [
+       480,
+       1320
+      ]
+     ],
+     [
+      [
+       480,
+       1320
+      ]
+     ],
+     [
+      [
+       480,
+       1320
+      ]
+     ],
+     [
+      [
+       480,
+       1320
+      ]
+     ]
+    ],
+    "key": "ba:street_eighthstreet#5",
+    "kind": "building",
+    "name": "HART. Spirits",
+    "type": "Liquor Store",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_secondstreet#51",
+    "buildingKey": "ba:street_secondstreet#51",
+    "categories": [],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "commissary:garment-district",
+    "kind": "commissary",
+    "name": "Garment District Commissary",
+    "type": "",
+    "x": 305.7,
+    "z": -311.6
+   },
+   {
+    "address": "ba:street_secondavenue#8",
+    "buildingKey": "ba:street_secondavenue#8",
+    "categories": [],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "commissary:hells-kitchen",
+    "kind": "commissary",
+    "name": "Hell's Kitchen Commissary",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_twentyfirststreet#2",
+    "buildingKey": "ba:street_twentyfirststreet#2",
+    "categories": [],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "commissary:industry-city",
+    "kind": "commissary",
+    "name": "Industry City Commissary",
+    "type": "",
+    "x": -1439.0,
+    "z": -1073.4
+   },
+   {
+    "address": "ba:street_twelfthstreet#5",
+    "buildingKey": "ba:street_twelfthstreet#5",
+    "categories": [],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "commissary:lower-manhattan",
+    "kind": "commissary",
+    "name": "Lower Manhattan Commissary",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_fifthstreet#12",
+    "buildingKey": "ba:street_fifthstreet#12",
+    "categories": [],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "commissary:murray-hill",
+    "kind": "commissary",
+    "name": "Murray Hill Commissary",
+    "type": "",
+    "x": 43.8,
+    "z": -281.8
+   },
+   {
+    "address": "ba:street_fifthavenue#5",
+    "buildingKey": "ba:street_fifthavenue#5",
+    "categories": [
+     "office"
+    ],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:garment-fifth-avenue",
+    "kind": "pitch",
+    "name": "Fifth Avenue offices, Garment District",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_thirdstreet#27",
+    "buildingKey": "ba:street_thirdstreet#27",
+    "categories": [
+     "retail"
+    ],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:garment-third-street",
+    "kind": "pitch",
+    "name": "Third Street, Garment District",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_oceancrestroad#1",
+    "buildingKey": "ba:street_oceancrestroad#1",
+    "categories": [
+     "waterfront"
+    ],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:hamptons-ocean-crest-road",
+    "kind": "pitch",
+    "name": "Ocean Crest Road",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_seventhavenue#34",
+    "buildingKey": "ba:street_seventhavenue#34",
+    "categories": [
+     "retail"
+    ],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:hamptons-seventh-avenue",
+    "kind": "pitch",
+    "name": "Seventh Avenue village",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_fourthavenue#22",
+    "buildingKey": "ba:street_fourthavenue#22",
+    "categories": [
+     "nightlife"
+    ],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:hells-fourth-avenue",
+    "kind": "pitch",
+    "name": "Fourth Avenue nightlife",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_fourthstreet#4",
+    "buildingKey": "ba:street_fourthstreet#4",
+    "categories": [
+     "nightlife"
+    ],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:hells-fourth-street",
+    "kind": "pitch",
+    "name": "Fourth Street lunch and late",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_secondavenue#5",
+    "buildingKey": "ba:street_secondavenue#5",
+    "categories": [
+     "park"
+    ],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:hells-park-second-avenue",
+    "kind": "pitch",
+    "name": "Second Avenue park",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_secondstreet#3",
+    "buildingKey": "ba:street_secondstreet#3",
+    "categories": [
+     "office"
+    ],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:hells-second-street",
+    "kind": "pitch",
+    "name": "Second Street offices",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_ninthavenue#3",
+    "buildingKey": "ba:street_ninthavenue#3",
+    "categories": [
+     "industrial"
+    ],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:industry-ninth-avenue",
+    "kind": "pitch",
+    "name": "Ninth Avenue factory gate",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_twentyfirststreet#12",
+    "buildingKey": "ba:street_twentyfirststreet#12",
+    "categories": [
+     "nightlife"
+    ],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:industry-twenty-first-street",
+    "kind": "pitch",
+    "name": "Twenty-First Street club row",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_fifthavenue#57",
+    "buildingKey": "ba:street_fifthavenue#57",
+    "categories": [
+     "nightlife"
+    ],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:lower-fifth-avenue",
+    "kind": "pitch",
+    "name": "Fifth Avenue nights, Lower Manhattan",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_eleventhstreet#23",
+    "buildingKey": "ba:street_eleventhstreet#23",
+    "categories": [
+     "park"
+    ],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:lower-park-eleventh-street",
+    "kind": "pitch",
+    "name": "Eleventh Street skate park",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_tenthstreet#10",
+    "buildingKey": "ba:street_tenthstreet#10",
+    "categories": [
+     "office"
+    ],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:lower-tenth-street",
+    "kind": "pitch",
+    "name": "Tenth Street office lunch",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_twelfthstreet#13",
+    "buildingKey": "ba:street_twelfthstreet#13",
+    "categories": [
+     "industrial"
+    ],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:lower-twelfth-street",
+    "kind": "pitch",
+    "name": "Twelfth Street wholesale gate",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_fifthstreet#2",
+    "buildingKey": "ba:street_fifthstreet#2",
+    "categories": [
+     "office"
+    ],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:midtown-fifth-street",
+    "kind": "pitch",
+    "name": "Fifth Street office row",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_secondavenue#13",
+    "buildingKey": "ba:street_secondavenue#13",
+    "categories": [],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:midtown-second-avenue",
+    "kind": "pitch",
+    "name": "Second Avenue commuter corner",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_thirdavenue#4",
+    "buildingKey": "ba:street_thirdavenue#4",
+    "categories": [
+     "nightlife"
+    ],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:midtown-third-avenue",
+    "kind": "pitch",
+    "name": "Third Avenue after dark",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_fifthavenue#23",
+    "buildingKey": "ba:street_fifthavenue#23",
+    "categories": [
+     "office"
+    ],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:murray-fifth-avenue",
+    "kind": "pitch",
+    "name": "Fifth Avenue, Murray Hill",
+    "type": "",
+    "x": null,
+    "z": null
+   },
+   {
+    "address": "ba:street_fourthstreet#9",
+    "buildingKey": "ba:street_fourthstreet#9",
+    "categories": [
+     "retail"
+    ],
+    "closed": false,
+    "hood": "",
+    "hours": null,
+    "key": "pitch:murray-fourth-street",
+    "kind": "pitch",
+    "name": "Fourth Street weekend stretch",
+    "type": "",
+    "x": null,
+    "z": null
+   }
+  ],
+  "rules": {
+   "radiusMetres": 50,
+   "schedules": {
+    "latestCloseMinute": 1620,
+    "maxShiftHours": 12,
+    "maxStops": 6,
+    "restockMinutes": 30,
+    "stopRadiusMetres": 25
+   },
+   "travel": {
+    "driveMinutesPerMetre": 0.04,
+    "pushMetresPerSecond": 4.0,
+    "roadFactor": 1.0
+   }
+  },
+  "schemaVersion": null,
+  "status": "absent",
+  "travelBasis": "default",
+  "vehicles": [],
+  "version": null,
+  "weekday": 4
+ },
  "supply": {
   "day": 40,
   "daysToImport": 3,

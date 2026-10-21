@@ -27,7 +27,7 @@ SHA-256 hash. The dashboard can download these together as a `.bcsave` snapshot 
 later use. Capacity and area changes made by other mods use the same path as changed
 game definitions. The collector uses game getters and never loads another mod's DLL.
 
-Build in the SDK and verify `/health` advertises schema 3 and `building-facts.v1`.
+Build in the SDK and verify `/health` advertises schema 4 and `building-facts.v1`.
 Peter's local regression check covers a normal city; the original reporter will
 test an Alcware-renovated shop. For the in-game test, compare area, customer capacity
 and campaign prediction with BizMan. Renovate while a refresh is running and verify
@@ -69,7 +69,7 @@ they do not validate the new collector inside the game.
   `HKEY_CURRENT_USER\Software\Hovgaard Games\Big Ambitions`, a plist on a Mac), where the
   SDK keeps mod options too. **Forget approved browsers** in the mod's options empties it.
 
-## What it changes (0.2.0 to 0.7.0)
+## What it changes (0.2.0 to 0.8.0)
 
 Eight `POST` endpoints, all in [`docs/game-link-api.md`](../../docs/game-link-api.md)
 under "Writes":
@@ -169,6 +169,29 @@ trying the worker thread again after 10 fallback refreshes.
 the worker thread failed again on its second chance; serializing on the main thread; the worker gets another chance after 10 fallback refreshes.
 ```
 
+## Street Food snapshots
+
+The link optionally discovers `FoodTrucks.BigCopilotSnapshot.CaptureV1(GameInstance)`.
+On the main thread it captures current mod JSON into a copied root and copied
+`modData` dictionary before serialization. It never fires a save event, settles
+takings or changes the live dictionary. A marker inside the served save records
+whether the provider supplied fresh state. Without the provider, Street Food
+records are marked unavailable for live planning.
+
+Hire preflight also calls `IsCrewV1(GameInstance, string)` before moving an
+unassigned employee. Vehicle crew, or unknown ownership when Street Food is present,
+is refused as `changed`; refresh the board to rebuild the plan.
+
+Compile both mods in an isolated SDK and copy `mod/build/street-food-tests/` into
+`Assets/Editor/BclStreetFoodTests/`. Set `BCL_STREET_FOOD_RULES` to the companion
+Street Food checkout's `data/rules.json`, then run Unity with
+`-batchmode -projectPath <SDK> -executeMethod BclStreetFoodTests.Run -logFile <log>`.
+This synthetic check verifies snapshot isolation, unchanged save counters, unavailable
+sessions, crew ownership that changes after a read, route review without mutation,
+and quote/revision guards on apply. It restores the test's static
+state and does not read a player save. In-game refresh and hire checks remain necessary
+before release.
+
 ## Queue validation in the SDK
 
 HTTP admission and main-thread work are bounded as described in
@@ -227,7 +250,7 @@ packager first; repository-only compilation does not replace that check.
    | ModId | `BigCopilotLink` |
    | DisplayName | `Big Copilot Link` |
    | Author | `Peter Hartwieg` |
-   | Version | `0.7.0` |
+   | Version | `0.8.0` |
    | Mod Assembly | drag `BigCopilotLink.asmdef` into the field |
    | Locales Folder | drag the `Locales` folder into the field; the option labels are keys in `Locales/en.json` |
 
@@ -267,7 +290,7 @@ Launch the game, enable **Big Copilot Link** in the Mods menu, load a save, then
 curl http://127.0.0.1:8322/health
 ```
 
-Expect `{"ok":true,"schemaVersion":3,"modVersion":"0.7.0","source":"game",…,"writes":["uniforms","imports","schedule","hire","marketing","rent","wholesale"],"features":["hire.reschedule","hire.undo","rent.undo","wholesale.undo","building-facts.v1"],"paired":false}` and a
+Expect `{"ok":true,"schemaVersion":4,"modVersion":"0.8.0","source":"game",…,"writes":["uniforms","imports","schedule","hire","marketing","rent","wholesale"],"features":["hire.reschedule","hire.undo","rent.undo","wholesale.undo","building-facts.v1"],"paired":false}` and a
 `[BigCopilotLink] serving the game to Big Copilot on http://127.0.0.1:8322/` line in
 the player log (`%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\Player.log`;
 on a Mac, `~/Library/Logs/Hovgaard Games/Big Ambitions/Player.log`), then, a few
@@ -736,3 +759,14 @@ before publishing the mod:
    dry run and apply: a stale quote must refuse. Replaying a successful apply must
    not add a second contract. Edit/deliver the contract or advance a day: undo refuses.
 7. Save/reload the city and verify the game retains the order; the old undo is gone.
+
+
+### Street Food routes (schema 4)
+
+With the companion `FoodTrucks.BigCopilotSnapshot.RouteV1` provider, health advertises
+`streetFoodRoute` and `streetFood.routes`. This uses the normal pairing and main-thread
+write gate, a mandatory same-company guard, a current per-vehicle revision and an
+explicit dry-run quote before apply. See `docs/game-link-api.md` for the complete
+contract. The provider uses Street Food's own placement and route validation and
+preserves crew hours and other weekdays. No automatic time fitting or undo is provided.
+Both mods need rebuilding for this capability; a build alone is not an in-game check.
