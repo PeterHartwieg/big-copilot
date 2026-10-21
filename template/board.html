@@ -4508,6 +4508,17 @@ section.od-updating{background-image:linear-gradient(90deg,transparent,var(--acc
 @keyframes od-turn{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.od-spin{animation:none;border-top-color:var(--ink-3)}}
 
+/* Shop expansion comparisons stay within the site panel at narrow widths. */
+.sp-expansion{padding:18px}
+.sp-expansion-cost{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:16px 0}
+.sp-expansion-cost input{width:140px;max-width:100%;padding:8px;border:1px solid var(--rule);border-radius:6px;background:var(--raised);color:var(--ink)}
+.sp-expansion-option{border-top:1px solid var(--rule);padding:14px 0;overflow-wrap:anywhere}
+.sp-expansion-option summary{cursor:pointer;display:flex;flex-wrap:wrap;gap:8px 22px;align-items:baseline}
+.sp-expansion-option summary::before{content:"+";color:var(--accent)}
+.sp-expansion-option[open] summary::before{content:"−"}
+.sp-expansion-option summary b{flex:1 1 180px}
+.sp-expansion-option summary span{font-variant-numeric:tabular-nums}
+.sp-expansion-option p,.sp-expansion-option ul{margin:12px 0}
 </style>
 <script>
 /*__I18N_SCRIPT__*/
@@ -4787,6 +4798,7 @@ const featureDiscovery = (() => {
     "board-search": "2026-09-24",
     "floor-plans": "2026-09-25",
     "open-store": "2026-09-29",
+    "shop-expansions": "2026-10-21",
     "factory-flow": "2026-10-01",
     "feature-requests": "2026-10-05",
     "plans-contracts": "2026-10-11",

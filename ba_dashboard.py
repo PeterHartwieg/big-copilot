@@ -19576,6 +19576,43 @@ SECURITY_LOCKER = "ba:itemname_securityguardlocker"
 SECURITY_CAMERAS = ("ba:itemname_securitycamera", "ba:itemname_securitycameraroof")
 
 
+def expansion_displays(type_slug: str, rules: dict, prices: dict, *, _catalogue=None) -> dict:
+    """Purchasable display kits for a single added product, including mounts.
+
+    Keep alternatives: the JS model chooses the cheapest complete kit at the
+    actual building capacity. No credit for existing furniture: it may already
+    serve another product. Self-service produce also needs its own scale kit.
+    Services and entrance fees cannot be added with a display alone.
+    """
+    catalogue = _catalogue or _OutfitCatalogue(rules, prices)
+    typed = catalogue.for_type(type_slug)
+    t = (rules.get("types") or {}).get(type_slug) or {}
+    products = rules.get("products") or {}
+
+    def kit(item):
+        return [[n, 1] for n in (item, *typed.mounts(item))]
+
+    out = {}
+    for product, impact in t.get("i") or ():
+        row = products.get(product) or {}
+        if impact <= 0 or row.get("s") or row.get("k") or product in (t.get("f"), t.get("fw")):
+            continue
+        extra = []
+        if t.get("ss") and row.get("wg"):
+            scales = [n for n in catalogue.furniture if "scale" in (typed.facts(n).get("x") or ())
+                      and typed.sold(n, False)]
+            if not scales:
+                continue
+            extra = kit(min(scales, key=lambda n: (typed.unit_cost(n), n)))
+        options = []
+        for item in sorted(catalogue.displays.get(product, ())):
+            if typed.sold(item, False):
+                options.append({"capacity": typed.facts(item)["c"], "lines": kit(item), "extra": extra})
+        if options:
+            out[product] = options
+    return out
+
+
 def outfit_optional(type_slug: str, rules: dict, prices: dict, lines: list, *, _catalogue=None) -> list:
     """What a store of a type can stand beside its outfit (`lines`, from
     outfit_lines()) without needing it to open, as lines of group "opt":
@@ -20167,7 +20204,11 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
         product_items.update(p for p, _i in sells)
         product_items.update(x for x in (t.get("f"), t.get("fw")) if x)
         curve = load_demand_curves()["types"].get(slug) or {}
+        displays = expansion_displays(slug, rules, prices, _catalogue=catalogue) if model == "retail" else {}
+        items_used.update(item for options in displays.values() for option in options
+                          for item, _qty in option["lines"] + option["extra"])
         types[slug] = {
+            **({"expansionDisplays": displays} if displays else {}),
             "cat": cat,
             "model": model,
             "products": sells,

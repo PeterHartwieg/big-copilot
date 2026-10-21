@@ -7427,6 +7427,68 @@ function xlArrive(sel, hit = ""){
 
 /* The site's payback in the install mode the portfolio shows, one line under
    its tiles; its basis on hover. A cost centre has none of its own. */
+/* One-product what-ifs; scope to the character and shop, never a saved plan. */
+let spExpansionState = {scope: "", open: false, extraCost: 0};
+function spExpansion(b){
+  const scope = JSON.stringify([D.meta.character, b.key]);
+  if(spExpansionState.scope !== scope) spExpansionState = {scope, open: false, extraCost: 0};
+  if(b.status !== "retail") return "";
+  let body = "";
+  if(spExpansionState.open){
+    if(!odNeed("openStore")) body = odWaitHtml("openStore");
+    else {
+      const building = (D.premises?.buildings || []).find(x => x.key === b.key);
+      const hours = (D.hours || []).find(x => x.key === b.key);
+      const model = OpenStoreModel.create({facts: osFacts(), company: {businesses: D.businesses, day: D.meta.day}});
+      const rows = model.expansions(b.typeSlug, building, {open: hours?.open,
+        sat: b.satisfaction?.overall, promoTotal: b.promotion, extraCost: spExpansionState.extraCost});
+      body = rows === null ? `<p class="quiet">${tt("sp.expand.unavailable", "This comparison needs a supported shop, known opening hours, promotion and satisfaction, and a game started with the current building-capacity rules.")}</p>`
+        : !rows.length ? `<p class="quiet">${tt("sp.expand.complete", "This shop already offers every physical product in its business type’s range.")}</p>`
+        : `<p class="quiet">${tt("sp.expand.basis", "Compare one addition at a time, at this shop’s current hours, promotion and satisfaction, with enough equipment and staffing to serve it.")}</p>
+          <label class="sp-expansion-cost">${tt("sp.expand.extra", "Extra staffing and other costs / day")}
+            <input id="spExpansionCost" type="number" required min="0" max="1000000000" step="any" value="${spExpansionState.extraCost}"></label>
+          <p class="quiet">${tt("sp.expand.assumptions", "Estimates use the neighbourhood’s accepted price and import cost, include lost margin at your other shops nearby, and exclude temporary demand waves and tax.")}</p>
+          <div class="sp-expansion-list">${rows.map(r => `<details class="sp-expansion-option">
+            <summary><b>${spEsc(osItemName(r.p))}</b><span>${tt("sp.expand.net", "{money}/day added", {money: fmt(r.net)})}</span><span>${
+              r.investment === null ? tt("sp.expand.unknownKit", "Equipment estimate unavailable")
+              : tt("sp.expand.invest", "{money} upfront", {money: fmt(r.investment)})}</span><span>${
+              r.investment === null ? "—" : r.payback === null ? tt("sp.expand.noPayback", "No payback at these costs")
+              : tt("sp.expand.payback", "About {days} days to pay back", {days: r.payback})}</span></summary>
+            <p>${tt("sp.expand.sales", "About {units:,.1f} units/day at {price}/unit; goods cost {cost}/unit.", {units: r.units, price: fmt(r.price), cost: fmt(r.cost)})}</p>
+            <p>${tt("sp.expand.margin", "Added gross margin: {margin}/day; lost margin at your other shops: {loss}/day; extra costs: {extra}/day.", {margin: fmt(r.margin), loss: fmt(r.loss), extra: fmt(r.extraCost)})}</p>
+            ${r.kit ? `<ul>${r.kit.lines.map(([item, qty]) => `<li>${tt("sp.expand.equipment", "{n} × {item} · {money}", {n: qty, item: spEsc(osItemName(item)), money: fmt(osFacts().items[item].p * qty)})}</li>`).join("")}</ul>
+              <p>${tt("sp.expand.budget", "Equipment: {equipment}; delivery: {delivery}; seven days of initial stock: {stock}.", {equipment: fmt(r.kit.equipment), delivery: fmt(r.kit.delivery), stock: fmt(r.stock)})}</p>` : ""}
+          </details>`).join("")}</div>
+          <p class="quiet">${tt("sp.expand.check", "The budget buys new displays and their supports at list prices, sized to building capacity; existing furniture may already be in use.")}</p>
+          <p class="quiet">${tt("sp.expand.checkSpace", "Check floor space, spare register capacity, staffing and supply in game before buying; reuse of spare equipment can lower the cost.")}</p>`;
+    }
+  }
+  return `<section class="sec rv sp-expansion" id="sp-expansion" data-block="expansion">
+    <button type="button" class="nx-btn" id="spExpansionToggle" aria-expanded="${spExpansionState.open}" aria-controls="spExpansionBody">${tt("sp.expand.title", "Shop expansions")} <span class="feature-new" data-new-feature="shop-expansions" hidden>New</span></button>
+    <div id="spExpansionBody"${spExpansionState.open ? "" : " hidden"}>${body}</div></section>`;
+}
+function wireSpExpansion(b){
+  const paint = () => {
+    const host = $("sp-expansion");
+    if(!host || siteKey !== b.key) return;
+    host.outerHTML = spExpansion(b);
+    wireSpExpansion(b);
+  };
+  if($("spExpansionToggle")) $("spExpansionToggle").onclick = () => {
+    spExpansionState.open = !spExpansionState.open;
+    if(spExpansionState.open) featureDiscovery.visit("shop-expansions");
+    paint();
+    $("spExpansionToggle")?.focus({preventScroll: true});
+  };
+  if($("spExpansionCost")) $("spExpansionCost").onchange = e => {
+    if(!e.target.checkValidity() || e.target.value === ""){ e.target.reportValidity(); return; }
+    spExpansionState.extraCost = Number(e.target.value);
+    paint();
+    $("spExpansionCost")?.focus({preventScroll: true});
+  };
+  featureDiscovery.refresh();
+}
+
 function spPayback(b){
   const row = paybackSite(b.key), o = paybackOf(row);
   if(!o) return "";
@@ -7897,6 +7959,7 @@ function drawSite(){
     ${vacant ? "" : spBody || `
     <div class="sstats rv" data-block="tiles" id="sp-tiles">${stats}</div>
     ${sp ? spPayback(b) : ""}
+    ${spExpansion(b)}
     ${sp ? `<div class="duo sec"${kind === "retail" ? ` style="grid-template-columns:3fr 2fr"` : ""}>
       <section class="rv" data-block="standards" id="sp-standards" data-readzone>
         ${sechead(tt("sp.sat.title", "Satisfaction"), {icon: "standards", why: office
@@ -7977,6 +8040,7 @@ function drawSite(){
   $$("#sp-lines select.linepick").forEach(sel => {
     sel.onchange = () => nameLine(sel.dataset.rid, sel.value || null);
   });
+  wireSpExpansion(b);
   wireSiteReads(); wireSiteFinds(); wireSiteChips(); wireSiteLines(); wireRoster(); wireTips(); wireReveal();
 }
 
