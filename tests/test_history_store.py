@@ -49,6 +49,52 @@ class Tmp(unittest.TestCase):
 
 
 class UnreadableHistory(Tmp):
+    def test_malformed_nested_tables_are_preserved_as_bad(self):
+        records = [None, [], "not a record"]
+        for table in ("days", "ledger", "rivalry", "recipes", "lineNames"):
+            records.extend({table: value} for value in (None, [], "not a table"))
+        for table in ("days", "ledger", "rivalry"):
+            records.extend(({table: {"yesterday": {}}}, {table: {"²": {}}},
+                            {table: {"1": None}}, {table: {"1": []}}))
+        for record in records:
+            with self.subTest(record=record):
+                before = json.dumps({"characters": {"alice": record}})
+                self.put(before)
+                history = History(self.path)
+                self.assertFalse(history.writable)
+                history.ledger("alice", 2, {"cash": 10})
+                self.assertFalse(history.write())
+                self.assertFalse(os.path.exists(self.path))
+                self.assertEqual(self.read(self.path + ".bad"), before)
+
+    def test_nested_damage_introduced_during_a_build_blocks_its_write(self):
+        self.seeded()
+        history = History(self.path)
+        history.ledger("alice", 61, {"cash": 10})
+        damaged = '{"characters":{"bob":{"ledger":null}}}'
+        self.put(damaged)
+        self.assertFalse(history.write())
+        self.assertFalse(os.path.exists(self.path))
+        self.assertEqual(self.read(self.path + ".bad"), damaged)
+
+    def test_older_and_extended_character_records_remain_readable(self):
+        book = {"old": {"days": {"0": snapshot(1)}}, "empty": {}, "new": {
+            "rivalry": {"2": {"rank": 1}}, "lineNames": {"rid": "beer"},
+            "recipes": {"old-rid": "water"},
+            "payback": {"sites": {"shop": {"opened": 1, "trail": [[1, 2, 3]]}},
+                        "chains": {}, "vehicleFees": {"truck": 5000}},
+            "futureExtension": ["kept", {"unknown": True}],
+        }}
+        self.put(json.dumps({"characters": book}))
+        history = History(self.path)
+        self.assertTrue(history.writable)
+        self.assertEqual(history.book, book)
+        self.assertTrue(history.write())
+        saved = json.loads(self.read())["characters"]
+        for name, record in book.items():
+            for key, value in record.items():
+                self.assertEqual(saved[name][key], value)
+
     def test_an_unparseable_file_is_kept_aside_and_not_overwritten(self):
         self.put('{"characters": {"alice": {"days": {"1": ')  # cut off mid-write
         history = History(self.path)
@@ -106,6 +152,45 @@ class UnreadableHistory(Tmp):
         # And a whole write still lands.
         self.assertTrue(history.write())
         self.assertIn("61", json.loads(self.read())["characters"]["alice"]["days"])
+
+
+class ConcurrentCharacters(Tmp):
+    def test_a_character_first_recorded_during_a_build_survives(self):
+        self.seeded()
+        building = History(self.path)
+        building.ledger("alice", 61, {"cash": 61000})
+        other = History(self.path)
+        other.ledger("carol", 10, {"cash": 100})
+        other.named("carol", {"new": "water"})
+        other.named("alice", {"rid": "coffee"})
+        self.assertTrue(other.write())
+        self.assertTrue(building.write())
+        saved = History(self.path)
+        self.assertEqual(saved.ledger_entries("carol"), [{"day": 10, "cash": 100}])
+        self.assertEqual(saved.named("carol"), {"new": "water"})
+        self.assertEqual(saved.named("alice"), {"rid": "coffee"})
+        self.assertEqual(saved.ledger_entries("alice")[-1]["day"], 61)
+
+    def test_new_characters_respect_browser_retention_and_active_character(self):
+        self.seeded()
+        building = History(self.path)
+        building.keep_recent("alice", 14, 2, day=40)
+        other = History(self.path)
+        for day in range(1, 61):
+            other.demand("carol", day, snapshot(day))
+        self.assertTrue(other.write())
+        self.assertTrue(building.write())
+        saved = History(self.path)
+        self.assertEqual(list(saved.book), ["carol", "alice"])
+        self.assertEqual(sorted(map(int, saved.book["carol"]["days"])), list(range(47, 61)))
+        self.assertEqual(sorted(map(int, saved.book["alice"]["days"])),
+                         list(range(27, 41)) + list(range(47, 61)))
+        # The same stale writer still remembers intentional evictions.
+        other = History(self.path)
+        other.demand("bob", 6, snapshot(6))
+        other.write()
+        self.assertTrue(building.write())
+        self.assertEqual(list(History(self.path).book), ["carol", "alice"])
 
 
 class OlderSave(Tmp):

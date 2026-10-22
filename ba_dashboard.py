@@ -18131,6 +18131,8 @@ class History:
         self.writable = True
         self.book = self._load()
         self._touched = set()  # (character, rid) names this instance changed
+        self._discarded = set()  # characters intentionally evicted by keep_recent()
+        self._retention = None
 
     def _load(self) -> dict:
         """The book on disk; {} when there is none or it cannot be used.
@@ -18148,6 +18150,20 @@ class History:
             book = whole.get("characters", {}) if isinstance(whole, dict) else None
             if not isinstance(book, dict):
                 raise ValueError("no characters table")
+            for record in book.values():
+                if not isinstance(record, dict):
+                    raise ValueError("invalid character record")
+                for name in ("days", "ledger", "rivalry", "recipes", "lineNames"):
+                    if name not in record:
+                        continue  # older records need not have every table
+                    table = record[name]
+                    if not isinstance(table, dict):
+                        raise ValueError(f"invalid {name} table")
+                    if name in ("days", "ledger", "rivalry"):
+                        for day, entry in table.items():
+                            int(day)  # the readers order these keys numerically
+                            if not isinstance(entry, dict):
+                                raise ValueError(f"invalid {name} day record")
             return book
         except ValueError:
             self.writable = False
@@ -18256,9 +18272,11 @@ class History:
         ``day`` is the save just built: an older save of ``character`` keeps
         its own two weeks up to that day, as well as the later days on record.
         """
+        self._retention = (character, days, characters, day)
         if character in self.book:
             self.book[character] = self.book.pop(character)
         for old in list(self.book)[:-characters]:
+            self._discarded.add(old)
             del self.book[old]
         for name, record in self.book.items():
             _prune_days(record.get("days", {}), days, day if name == character else None)
@@ -18276,6 +18294,13 @@ class History:
         disk = self._load()
         if not self.writable:
             return False
+        # A different character first recorded during this build must survive
+        # too, without resurrecting characters the browser deliberately evicted.
+        for character, record in disk.items():
+            if character not in self._discarded:
+                self.book.setdefault(character, record)
+        if self._retention is not None:
+            self.keep_recent(*self._retention)
         for character, ours in self.book.items():
             theirs = disk.get(character, {})
             # The office demand measurements' record (October 2026), which
