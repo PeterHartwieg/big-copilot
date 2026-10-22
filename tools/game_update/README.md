@@ -29,6 +29,12 @@ repository, never the repository root.
   in PowerShell or `export PYTHONPATH=<scratch>` in bash.
 - `textdiff.py [--rev REV] [--to REV]`: after `python build_web.py`, lists what changed in
   `web/py/gametext.json` and `web/wiki-data.json` by key and page, not by line.
+- `recipes.py`: compares every factory recipe's `id` and `output.item` in the installed
+  game's Addressables bundle with `RECIPE_ITEMS`. Needs UnityPy as above. Prints the
+  bundle path, SHA-256 and differences; exits non-zero on any difference, missing or
+  ambiguous bundle, unreadable asset, unexpected script, malformed identity or duplicate
+  id. Checks the referenced `Recipe` script, never guesses from visual stages. Works
+  with the Windows and macOS bundle layouts. It does not update the table.
 
-`presets.py`, `caps.py` and `bundles.py` find the game the way the board does:
+`presets.py`, `caps.py`, `bundles.py` and `recipes.py` find the game the way the board does:
 `BA_LOCALE`, then `ba_save.find_game_locale()`.
