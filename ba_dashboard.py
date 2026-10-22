@@ -1188,8 +1188,9 @@ def weekday(day: int) -> str:
 # Recipe identity only; rates and ingredients still come from _recipes(names).
 # Source (MIT stated in README; no upstream LICENSE file), pinned for review:
 # https://github.com/tiagovitorin/BigAmbitionsCompanion/blob/5db2e6a07145db9b19239efddc63c101be7346d6/data/normalized/recipes.json
-# Extraction build is unknown. Four ids are still unverified in game:
-# docs/dashboard-reference.md, "Which recipe a machine runs".
+# Originally imported from that source; all 62 identities independently checked
+# against installed game assets on 2026-10-22 with tools/game_update/recipes.py.
+# Bundle fingerprint: docs/dashboard-reference.md, "Which recipe a machine runs".
 RECIPE_ITEMS = {
     'Vqbpzomo9k67pEjqY+aXag==': 'ba:itemname_apple',
     'AKSV3auI1UySifPRajzUhQ==': 'ba:itemname_banana',

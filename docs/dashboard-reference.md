@@ -1141,7 +1141,7 @@ ordinary day, not a Saturday.
 ### Which recipe a machine runs
 
 The save stores a machine's recipe only as an opaque `selectedRecipeId`. `RECIPE_ITEMS` in
-`ba_dashboard.py` maps all 62 to the product they make, from the Big Ambitions Companion's
+`ba_dashboard.py` maps all 62 to the product they make, originally from the Big Ambitions Companion's
 `recipes.json`, pinned at commit 5db2e6a (its README says MIT; the repository has no LICENSE
 file; the extraction build is unknown). The table only names the product: workstation, rates
 and ingredients still come from the game's help text.
@@ -1154,14 +1154,24 @@ and ingredients still come from the game's help text.
 - An id the table does not know, on a newer build, waits for the picker until the table is
   updated.
 
-Four ids are unverified in game:
-`XMndnWD5o0SgWbgdUecVw==` (table: Martini) and `6FwXLAY4S0qEWikfkkX5iQ==` (Whisky);
-`buvcJRWqukKvDtwZVXyR6g==` (Headphones) and `mFpiOPcgFUKtjFu2TYBUCg==` (Smartwatch 2). To
-check one: on a copy of the company, save, change one machine's recipe in game, save again,
-and compare that machine's id across the two saves. If the table is wrong, drop the source.
+On 22 October 2026, `tools/game_update/recipes.py` independently checked all 62 identities
+against the installed macOS game's recipe assets, with zero differences. This includes
+the four previously unverified entries: Martini (`XMndnWD5o0SgWbgdUecVw==`), Whisky
+(`6FwXLAY4S0qEWikfkkX5iQ==`), Headphones (`buvcJRWqukKvDtwZVXyR6g==`) and Smartwatch 2
+(`mFpiOPcgFUKtjFu2TYBUCg==`). The bundle was
+`StandaloneOSX/defaultlocalgroup_assets_factories/recipes_75f92badf5b4602f45fa12aea3e39d44.bundle`,
+SHA-256 `f0c07d19e7bac2630bc421c43d3e1677c27a96c51bb8cb6b7f2c891d2d3c441e`, read with
+UnityPy 1.25.4. This identifies the checked assets, not a game build number or a gameplay
+test. The check follows each asset's `Recipe` script and reads its top-level `id` and
+`output.item`; intermediate products in `machineVisuals` do not name the recipe.
 
-To update the table: review the upstream diff, verify the changed ids that way, edit
-`RECIPE_ITEMS`, run `tests/test_recipe_identity.py`, then `python build_web.py --assemble`.
+After a game update, run the checker with the owner-only UnityPy setup in
+[The game tables](game-update.md#the-game-tables). Review any differences before editing
+`RECIPE_ITEMS`, update this provenance, and run
+`npm run test:python -- tests.test_recipe_identity`, which also assembles the page.
+If a machine's selection disagrees with the assets, check on a copy of the company:
+save, change one machine's recipe in game, save again, and compare that machine's id
+across the two saves. Asset verification does not replace that gameplay check.
 
 ### Why some rows have no price
 

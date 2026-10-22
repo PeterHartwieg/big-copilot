@@ -245,6 +245,33 @@ changes, read the rest of its fields (`betweenHours`, `shiftPeriod`, `daysWorkin
 When a table changes, update it, the build number its comment cites, and its pinned test
 (see [Pinned tests](#pinned-tests)).
 
+Check factory recipe identities separately, with the same UnityPy setup:
+
+```
+python tools/game_update/recipes.py
+```
+
+It finds the installed game through `BA_LOCALE` or the usual Steam locations, then
+requires exactly one `*/defaultlocalgroup_assets_factories/recipes_*.bundle` under its
+`StreamingAssets/aa/` directory (Windows and macOS layouts). It resolves each asset's
+script pointer and requires `BigAmbitions.Factories.Recipes.Recipe` from
+`BigAmbitions.Factories`, then compares `id` → `output.item` with `RECIPE_ITEMS`.
+`machineVisuals` can describe intermediate products and is not a source of recipe
+identity. The command prints the bundle path and SHA-256, so retain that fingerprint
+with the check result; the bundle hash does not establish the game's build number.
+
+`0 difference(s)` means every extracted identity matches, with no missing or extra ids.
+Differences and incomplete reads exit non-zero. Missing or multiple bundles, unreadable
+assets, unexpected scripts, malformed identities and duplicate ids stop the check;
+investigate the installation or changed asset layout before trusting a partial result.
+Nothing is written. When identities change, review the reported game/board pairs,
+update `RECIPE_ITEMS` and its provenance, and run
+`npm run test:python -- tests.test_recipe_identity` (which assembles the page first).
+Update its pinned count if the recipe set changed. This verifies asset identity only;
+workstation, rates and ingredients still come from the help text. A machine-selection
+problem still needs an in-game before/after save check as described in
+[Which recipe a machine runs](dashboard-reference.md#which-recipe-a-machine-runs).
+
 The arrival curves in `ba_demand_curves.json` come from the same bundles. With UnityPy on
 `PYTHONPATH`, run `python make_demand_curves.py` and then `git diff --stat
 ba_demand_curves.json`. No diff means the curves did not change. If they did, the file is
