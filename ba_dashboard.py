@@ -18131,7 +18131,6 @@ class History:
         self.writable = True
         self.book = self._load()
         self._touched = set()  # (character, rid) names this instance changed
-        self._discarded = set()  # characters intentionally evicted by keep_recent()
         self._retention = None
 
     def _load(self) -> dict:
@@ -18276,7 +18275,6 @@ class History:
         if character in self.book:
             self.book[character] = self.book.pop(character)
         for old in list(self.book)[:-characters]:
-            self._discarded.add(old)
             del self.book[old]
         for name, record in self.book.items():
             _prune_days(record.get("days", {}), days, day if name == character else None)
@@ -18295,9 +18293,14 @@ class History:
         if not self.writable:
             return False
         # A different character first recorded during this build must survive
-        # too, without resurrecting characters the browser deliberately evicted.
+        # too. For the bounded browser book, use the latest disk order before
+        # choosing evictions again: a character dropped earlier may have just
+        # become recent in another build. Ours-only records stay before that
+        # order; keep_recent() then moves this build's character to the end.
         for character, record in disk.items():
-            if character not in self._discarded:
+            if self._retention is not None:
+                self.book[character] = self.book.pop(character, record)
+            else:
                 self.book.setdefault(character, record)
         if self._retention is not None:
             self.keep_recent(*self._retention)

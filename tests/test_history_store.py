@@ -185,12 +185,41 @@ class ConcurrentCharacters(Tmp):
         self.assertEqual(sorted(map(int, saved.book["carol"]["days"])), list(range(47, 61)))
         self.assertEqual(sorted(map(int, saved.book["alice"]["days"])),
                          list(range(27, 41)) + list(range(47, 61)))
-        # The same stale writer still remembers intentional evictions.
+        # An evicted character can become recent again in another build.
         other = History(self.path)
         other.demand("bob", 6, snapshot(6))
         other.write()
         self.assertTrue(building.write())
-        self.assertEqual(list(History(self.path).book), ["carol", "alice"])
+        self.assertEqual(list(History(self.path).book), ["bob", "alice"])
+
+    def test_final_reread_reconsiders_an_evicted_character_made_recent(self):
+        history = History(self.path)
+        for n in range(9):
+            history.ledger(f"c{n}", 1, {"cash": n})
+        history.write()
+        building = History(self.path)
+        building.keep_recent("c8", 14, 8)
+        self.assertNotIn("c0", building.book)
+        other = History(self.path)
+        other.ledger("c0", 2, {"cash": 100})
+        other.keep_recent("c0", 14, 8)
+        other.write()
+        self.assertTrue(building.write())
+        saved = History(self.path)
+        self.assertEqual(list(saved.book), ["c2", "c3", "c4", "c5", "c6", "c7", "c0", "c8"])
+        self.assertEqual(saved.ledger_entries("c0")[-1], {"day": 2, "cash": 100})
+
+    def test_stale_characters_do_not_displace_newer_disk_characters(self):
+        self.seeded()
+        building = History(self.path)
+        building.keep_recent("alice", 14, 2)
+        other = History(self.path)
+        for name in ("carol", "dave"):
+            other.demand(name, 10, snapshot(10))
+            other.keep_recent(name, 14, 2)
+            other.write()
+        self.assertTrue(building.write())
+        self.assertEqual(list(History(self.path).book), ["dave", "alice"])
 
 
 class OlderSave(Tmp):
