@@ -145,6 +145,8 @@ class _Reader:
     def string(self) -> str | None:
         d = self.d
         p = self.p
+        if p >= len(d):
+            raise SaveFormatError(self._where("missing string marker"))
         marker = d[p]
         if marker == 0:
             self.p = p + 1
@@ -152,9 +154,13 @@ class _Reader:
         if marker != 1:
             self.p = p + 1
             raise SaveFormatError(self._where(f"string marker {marker:#04x}"))
+        if p + 5 > len(d):
+            raise SaveFormatError(self._where("truncated string length"))
         n = _I32(d, p + 1)[0]
         start = p + 5
         end = start + n * 2
+        if n < 0 or end > len(d):
+            raise SaveFormatError(self._where(f"string length {n} exceeds stream bounds"))
         self.p = end
         if n > STRING_CACHE_CHARS:
             return d[start:end].decode("utf-16-le", "replace")
@@ -274,7 +280,11 @@ class _Reader:
             if tag in PROP_TAGS:
                 key = None
                 if d[p] == 1:  # a string, not null: 01 <int32 chars> <utf-16>
-                    end = p + 5 + _I32(d, p + 1)[0] * 2
+                    n = _I32(d, p + 1)[0]
+                    end = p + 5 + n * 2
+                    if n < 0 or end > len(d):
+                        self.p = p
+                        raise SaveFormatError(self._where(f"string length {n} exceeds stream bounds"))
                     key = strings.get(d[p + 5 : end])
                 if key is None:
                     self.p = p
@@ -324,8 +334,11 @@ class _Reader:
         size = self.i32()
         if count < 0 or size < 1:
             raise SaveFormatError(self._where(f"packed array {count} x {size}"))
-        raw = self.d[self.p : self.p + count * size]
-        self.p += count * size
+        end = self.p + count * size
+        if end > len(self.d):
+            raise SaveFormatError(self._where(f"packed array {count} x {size} exceeds stream bounds"))
+        raw = self.d[self.p : end]
+        self.p = end
         elem = (type_name or "").split("[", 1)[0]
         decode = _PACKED.get((elem, size))
         if decode:
@@ -380,7 +393,7 @@ def load_save(path: str) -> Save:
         raise SaveFormatError(str(exc)) from exc
     data = gzip.decompress(raw)
     r = _Reader(data)
-    if r.u8() != 0x02:
+    if not data or r.u8() != 0x02:
         raise SaveFormatError("not an Easy Save 3 stream")
     # The tree holds no cycles (a back-reference is an id, not a link), so the
     # cyclic collector has nothing to find in it, and walking the growing tree
@@ -390,9 +403,13 @@ def load_save(path: str) -> Save:
     gc.disable()
     try:
         root = r.instance(with_ref_id=True)
+    except (IndexError, struct.error) as exc:
+        raise SaveFormatError("truncated Easy Save 3 stream") from exc
     finally:
         if collecting:
             gc.enable()
+    if not isinstance(root, dict):
+        raise SaveFormatError("Easy Save 3 root is not an object")
     if r.p != len(data):
         raise SaveFormatError(f"stopped at {r.p:#x} of {len(data):#x}")
     save = Save(root, r.refs, path)
