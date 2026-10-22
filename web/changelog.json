@@ -1,5 +1,11 @@
 [
   {
+    "pr": 514,
+    "date": "2026-10-22",
+    "title": "Read Real Life Overhaul reports",
+    "summary": "Mods recognises Real Life Overhaul and shows report availability. With a compatible RLO build, it also shows business, employee and credit account counts and reported credit account balances from a save or live connection. Forecasts and changes made through Big Copilot do not yet account for RLO rules or manager decisions."
+  },
+  {
     "pr": 513,
     "date": "2026-10-21",
     "title": "Compare business and building costs together",
