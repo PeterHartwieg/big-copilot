@@ -64,7 +64,7 @@ try:
 except ModuleNotFoundError as exc:
     # A worker from before ba_mods.py (a tab left open across a deploy) does not
     # fetch it; the board then reads every save as a vanilla one.
-    if exc.name not in ("ba_mods", "ba_street_food"):
+    if exc.name not in ("ba_mods", "ba_street_food", "ba_rlo"):
         raise
     ba_mods = None
 ba_street_food = ba_mods.ba_street_food if ba_mods else None

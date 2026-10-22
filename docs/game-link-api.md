@@ -76,6 +76,21 @@ Before moving an unassigned employee, hire preflight calls the optional
 `IsCrewV1(GameInstance, string employeeId)`. Reserved crew or unavailable ownership
 is refused using the existing `changed` result. There is no writable fleet endpoint.
 
+## RLO save metadata
+
+RLO companion reports travel inside the existing `/save` bytes, without changing
+Link's wire schema. The main-thread capture optionally calls
+`RealLifeOverhaul.Companion.CaptureV1(GameInstance)` and copies its JSON string to
+`reallife:companion` on a cloned root and `modData`. The copy also holds
+`bigcopilot:rlo-snapshot.v1`: either `{"status":"fresh","sha256":"<digest>"}`
+with the SHA-256 of the exact UTF-8 report, or `{"status":"unavailable"}`.
+An unavailable capture never blesses a retained report as fresh.
+
+Clients require matching character/clock identity and, for live or
+portable snapshots, a fresh marker and matching digest. Ordinary saves written
+by RLO require only the identity match. These are observations, with no write
+capability or implied forecasting support; see [RLO companion reporting](rlo-companion.md).
+
 ## Building facts (schema 2)
 
 `health.features` advertises `building-facts.v1`. Read `/save`, retain its

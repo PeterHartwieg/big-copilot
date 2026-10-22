@@ -27,6 +27,7 @@ import struct
 
 import ba_facts
 import ba_street_food
+import ba_rlo
 
 ECONOMY_KEY = "OcupancyCosts.State"
 SEASONS_KEY = "AlcwareSeasons.calendar.v1"
@@ -190,6 +191,9 @@ def detect(save) -> dict:
         except (ValueError, struct.error, UnicodeError):
             renovated = None
         out["retailExpansion"] = {"renovated": renovated}
+    rlo = ba_rlo.metadata(save)
+    if rlo is not None:
+        out["rlo"] = rlo
     street_food = ba_street_food.metadata(save)
     if street_food is not None:
         out["streetFood"] = street_food

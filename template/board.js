@@ -2900,6 +2900,11 @@ function mdFlag(m){
       ? tt("nav.mast.mods.streetFood.ready", "Street Food records are included in company finances, and vehicle crews are reserved for the fleet.")
       : tt("nav.mast.mods.streetFood.unavailable", "Street Food records are unavailable or stale, so tax estimates and reassignment of unassigned employees are withheld."));
   }
+  if(m.rlo){
+    parts.push(tt("nav.mast.mods.rlo", "REAL LIFE OVERHAUL"));
+    tips.push(tt("nav.mast.mods.rlo.tip", "Real Life Overhaul records are present; Browse mods shows report availability."));
+    tips.push(tt("nav.mods.rlo.limits.models", "Forecasts, staffing suggestions and game writes do not yet account for RLO rules or manager decisions."));
+  }
   if(!parts.length) return "";
   return `<span class="flag md-flag" data-tip="${attr(tips.join(" "))}">${
     attr(tt("nav.mast.mods.text", "MODDED: {list}", {list: parts.join(" · ")}))}</span>`;
@@ -19000,6 +19005,12 @@ function modCatalogue(){
      limits: [tt("nav.mods.sf.limits.supply", "Commissary demand is not modelled, so supply recommendations for the sites that stock one are withheld."),
        tt("nav.mods.sf.limits.write", "A route reaches the game only when you review and set it with the game linked; there is no undo for it yet.")],
      go: "mods/street-food", goLabel: tt("nav.mods.sf.go", "Plan routes")},
+    {id: "rlo", ws: "3816536560",
+     reads: [tt("nav.mods.rlo.reads", "RLO reports its feature status, business identities, ordinary hourly wages and additional credit accounts."),
+       tt("nav.mods.rlo.books", "Recorded profit comes from the game's financial statements; RLO wages and outstanding debt are not added to it again.")],
+     limits: [tt("nav.mods.rlo.limits.models", "Forecasts, staffing suggestions and game writes do not yet account for RLO rules or manager decisions."),
+       tt("nav.mods.rlo.limits.pay", "Ordinary hourly wages exclude overtime, sick pay and other fees."),
+       tt("nav.mods.rlo.limits.credit", "Credit account balances exclude private lender debts and debts recorded by other RLO features.")]},
     {id: "seasons", ws: "3803289067",
      reads: [tt("nav.mods.seasons.reads.mast", "The season and its day show beside the company name."),
        tt("nav.mods.seasons.reads.open", "Open a store uses the season's sales ratio for the 27 products the mod changes.")],
@@ -19029,6 +19040,15 @@ function modState(id){
       if(s.status === "stale") return {cls: "warn", text: tt("nav.mods.state.stale", "In this save, records stale")};
       return {cls: "warn", text: tt("nav.mods.state.unreadable", "In this save, records unreadable")};
     }
+    case "rlo": {
+      const r = m.rlo;
+      if(!r) return absent;
+      if(r.status === "ready") return {cls: "ok", text: tt("nav.mods.rlo.state.ready", "In this save, reports available")};
+      if(r.status === "partial") return {cls: "warn", text: tt("nav.mods.rlo.state.partial", "In this save, some reports unavailable")};
+      if(r.status === "legacy") return {cls: "warn", text: tt("nav.mods.rlo.state.legacy", "In this save, companion report missing")};
+      if(r.status === "stale") return {cls: "warn", text: tt("nav.mods.state.stale", "In this save, records stale")};
+      return {cls: "warn", text: tt("nav.mods.state.unreadable", "In this save, records unreadable")};
+    }
     case "seasons":
       return m.seasons ? {cls: "ok", text: tt("nav.mods.state.seasons", "In this save: {season}, day {d} of {n}",
         {season: mdSeasonName(m.seasons.season), d: m.seasons.day, n: m.seasons.length})} : absent;
@@ -19050,6 +19070,8 @@ function modState(id){
    CLI's) may carry it as window.BIG_COPILOT_MOD_ART, data URLs keyed by
    Workshop id. Nothing is fetched from Steam. */
 const MOD_WORKSHOP = [
+  {id: "3816536560", name: "Real Life Overhaul", author: "Adult Cudi",
+   get summary(){ return tt("nav.mods.ws.rlo", "Expanded city life, business management and credit."); }},
   {id: "3822355169", name: "HART. Street Food", author: "Peter Hartwieg", image: "mods/street-food.webp",
    get summary(){ return tt("nav.mods.ws.streetFood", "Food carts and trucks with your choice of equipment, menu and daily routes."); }},
   {id: "3803289067", name: "Alcware - Seasons", author: "Alcsaar", image: "mods/seasons.webp",
@@ -19088,9 +19110,29 @@ function modArt(w){
     w.width && w.height ? ` width="${+w.width}" height="${+w.height}"` : ""}>` : icon("mods")}</span>`;
 }
 /* What the board reads of a mod and what it does not, folded away. */
+/* Only validated observations appear here. Missing reports never become zero balances or zero employees. */
+function mdRloFacts(){
+  const r = hasData() && D.mods && D.mods.rlo, lines = [];
+  if(!r) return lines;
+  if(r.version) lines.push(tt("nav.mods.rlo.version", "Report written by RLO {v}.", {v: r.version}));
+  if(r.businesses != null) lines.push(tt("nav.mods.rlo.businesses", {one: "{n} business identity reported.", other: "{n} business identities reported."}, {n: r.businesses}));
+  if(r.employees != null) lines.push(tt("nav.mods.rlo.employees", {one: "Ordinary hourly pay reported for {n} employee.", other: "Ordinary hourly pay reported for {n} employees."}, {n: r.employees}));
+  if(r.accounts != null) lines.push(tt("nav.mods.rlo.accounts", {one: "{n} additional credit account reported.", other: "{n} additional credit accounts reported."}, {n: r.accounts}));
+  if(r.creditAccountBalance != null) lines.push(tt("nav.mods.rlo.debt", "Reported credit account balance: {amount}.", {amount: money(r.creditAccountBalance)}));
+  const labels = {features: tt("nav.mods.rlo.features", "Feature status"), businesses: tt("nav.mods.rlo.identity", "Business identities"),
+    employment: tt("nav.mods.rlo.employment", "Ordinary hourly pay"), credit: tt("nav.mods.rlo.credit", "Additional credit"),
+    accounting: tt("nav.mods.rlo.accounting", "Accounting source")};
+  for(const [key, label] of Object.entries(labels)){
+    const status = (r.capabilities || {})[key];
+    if(status && status !== "ready") lines.push(status === "disabled"
+      ? tt("nav.mods.rlo.disabled", "{report}: switched off at capture.", {report: label})
+      : tt("nav.mods.rlo.unavailable", "{report}: unavailable in this capture.", {report: label}));
+  }
+  return lines;
+}
 function modDetails(m){
   const list = l => `<ul class="md-list">${l.map(x => `<li>${spEsc(x)}</li>`).join("")}</ul>`;
-  return `<details class="md-det"><summary>${tt("nav.mods.details", "What Big Copilot reads")}</summary>${list(m.reads)}<h4>${
+  return `<details class="md-det"><summary>${tt("nav.mods.details", "What Big Copilot reads")}</summary>${list(m.id === "rlo" ? [...m.reads, ...mdRloFacts()] : m.reads)}<h4>${
     tt("nav.mods.col.limits", "Not covered")}</h4>${list(m.limits)}</details>`;
 }
 function drawMods(){
