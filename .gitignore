@@ -65,6 +65,7 @@ mockup/*/project/
 /web/py/ba_save.py
 /web/py/ba_facts.py
 /web/py/ba_mods.py
+/web/py/ba_rlo.py
 /web/py/ba_street_food.py
 /web/py/ba_street_food_rules.json
 /web/py/ba_street_food_stops.json

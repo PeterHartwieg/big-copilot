@@ -200,6 +200,28 @@ and quote/revision guards on apply. It restores the test's static
 state and does not read a player save. In-game refresh and hire checks remain necessary
 before release.
 
+## RLO companion capture
+
+The optional `RealLifeOverhaul.Companion.CaptureV1(GameInstance)` API supplies a
+read-only report on the main thread, before save serialization. Link copies the
+root and `modData`, attaches the report and its freshness digest, and leaves the
+running game unchanged. No schema-version bump or gameplay write is involved.
+See [RLO companion reporting](../../docs/rlo-companion.md) for the contract and limits.
+
+For the synthetic SDK check, compile the RLO contribution and put its DLL in an
+isolated SDK's `Assets/RloCompanion/`, with a PluginImporter usable by the Editor.
+Keep the real Street Food mod out of this SDK: the harness supplies its own
+identity-sensitive provider stub.
+Link this checkout's `mod/BigCopilotLink/` into `Assets/Mods/BigCopilotLink/` and copy
+`mod/build/rlo-tests/` into `Assets/Editor/BclRloTests/`. With game DLLs imported,
+run Unity with `-batchmode -projectPath <SDK> -executeMethod BclRloTests.Run
+-logFile <log>`. The harness checks the real RLO provider, composition with an identity-sensitive
+Street Food stub, effective parent settings, save-event identity, copied snapshots,
+digest pairing, ordinary-save capture, failure isolation, unavailable sessions
+and unchanged live mod data. It restores the synthetic static state and reads
+no player saves. Before release, also run the in-game save/reload and unsaved
+wage/credit-change checks in RLO's companion contract README.
+
 ## Queue validation in the SDK
 
 HTTP admission and main-thread work are bounded as described in

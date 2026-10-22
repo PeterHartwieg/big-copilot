@@ -405,7 +405,7 @@ namespace BigCopilotLink
             try
             {
                 facts = BuildingFacts.Capture(instance);
-                instance = StreetFoodSnapshot.Capture(instance);
+                instance = CompanionSnapshots.Capture(instance);
             }
             catch (Exception e) { return FailedStart("capturing building facts failed: " + e.Message, trigger == "retry"); }
             var character = instance.characterId;
