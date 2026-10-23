@@ -173,6 +173,12 @@ They are additive to `building-facts.v1`; its facts schema and the portable enve
 version remain 1, while the HTTP contract is schema 5. Older snapshots omit these
 blocks. Clients predating schema 5 need an update before connecting to Link 0.8.1. Both
 blocks participate in the same before/after capture and save-hash binding.
+Each block must be an object with a positive integer `schemaVersion` and a nonempty
+string `model`. A supported schema/model must satisfy the fields below. For an
+unsupported schema or model, the remaining content is preserved without imposing
+the version-1 shape, and consumers withhold the affected calculations. The full
+document's size limit, rejection of nonfinite numbers and save-pairing checks still
+apply, including to opaque future content.
 
 `vehiclePrices` has shape
 `{"schemaVersion":1,"model":"registered-vehicle-wealth-v1","prices":{"roadster:vehicletype_roadster":250000}}`.
@@ -186,6 +192,12 @@ schema/model and must report incomplete valuation where an owned vehicle has no
 known price. An unsupported valid block cannot silently authorize vanilla price
 fallback for its unknown economics. A missing block preserves older offline
 sources where their prices are known.
+An unregistered/null type, failed lookup or invalid wealth value is omitted from
+`prices`; it does not prevent the rest of the snapshot from loading. If the type
+registry cannot be enumerated, `prices` is empty. The collector always emits the
+block, so these failures cannot authorize offline fallback. Entries are sorted
+for the before/after consistency comparison; a changed set of available prices
+causes the same retry as any other changed fact.
 
 `economy` has shape:
 
@@ -205,7 +217,10 @@ sources where their prices are known.
 ```
 
 Provider versions identify the loaded assemblies; they do not promise supported
-arithmetic. HMP rule booleans are its current **selected options**, read from
+arithmetic. Multiple loaded assemblies with the same provider name produce one
+provider row with `status:"unavailable"` and null observations; neither assembly's
+flags are treated as effective. Its `version` contains the distinct assembly
+versions in sorted, comma-separated order. HMP rule booleans are its current **selected options**, read from
 `HardModePatch.Core.Rules`, and `runningCostsAvailable` is its public
 `RunningCostsPatch.Available` flag. They do not prove an account is connected,
 that RLO bills that site, or that factory diploma readiness is satisfied. Unknown

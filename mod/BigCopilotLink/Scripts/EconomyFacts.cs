@@ -15,19 +15,28 @@ namespace BigCopilotLink
             w.Prop("schemaVersion", 1);
             w.Prop("model", "economy-capabilities-v1");
             w.BeginArray("providers");
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies().OrderBy(a => a.FullName, StringComparer.Ordinal))
+            var providers = AppDomain.CurrentDomain.GetAssemblies()
+                .Where(a => a.GetName().Name == "HardModePatch" || a.GetName().Name == "RealLifeOverhaul")
+                .GroupBy(a => a.GetName().Name)
+                .OrderBy(group => group.Key, StringComparer.Ordinal);
+            foreach (var provider in providers)
             {
-                var name = assembly.GetName();
-                if (name.Name != "HardModePatch" && name.Name != "RealLifeOverhaul") continue;
+                var assemblies = provider.ToArray();
+                var ambiguous = assemblies.Length != 1;
+                var versions = assemblies.Select(a => a.GetName().Version)
+                    .Select(v => v == null ? "unknown" : v.ToString())
+                    .Distinct().OrderBy(v => v, StringComparer.Ordinal).ToArray();
                 w.BeginObject();
-                w.Prop("id", name.Name == "HardModePatch" ? "hard-mode-patch" : "real-life-overhaul");
-                w.Prop("version", name.Version == null ? "unknown" : name.Version.ToString());
-                if (name.Name == "HardModePatch")
+                w.Prop("id", provider.Key == "HardModePatch" ? "hard-mode-patch" : "real-life-overhaul");
+                w.Prop("version", string.Join(", ", versions));
+                if (provider.Key == "HardModePatch")
                 {
-                    bool? equipment = Rule(assembly, "EquipmentUtilities");
-                    bool? office = Rule(assembly, "OfficeIt");
-                    bool? diplomas = Rule(assembly, "FactoryDiplomas");
-                    bool? available = Available(assembly);
+                    // Duplicate assemblies do not establish which instance's
+                    // options are effective. Do not invoke either one's readers.
+                    bool? equipment = ambiguous ? null : Rule(assemblies[0], "EquipmentUtilities");
+                    bool? office = ambiguous ? null : Rule(assemblies[0], "OfficeIt");
+                    bool? diplomas = ambiguous ? null : Rule(assemblies[0], "FactoryDiplomas");
+                    bool? available = ambiguous ? null : Available(assemblies[0]);
                     w.Prop("status", equipment.HasValue && office.HasValue && diplomas.HasValue && available.HasValue
                         ? "observed" : "unavailable");
                     Bool(w, "runningCostsAvailable", available);
