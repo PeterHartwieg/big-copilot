@@ -18,6 +18,7 @@ MAX_FACTS = 8 * 1024 * 1024
 MAX_ROWS = 10000
 MARKETING_MODEL = "marketing-six-v1"
 VEHICLE_MODEL = "registered-vehicle-wealth-v1"
+ECONOMY_MODEL = "economy-capabilities-v1"
 CAMPAIGNS = ("SmallInternet", "MediumInternet", "LargeInternet", "SmallBillboard", "MediumBillboard", "LargeBillboard")
 
 
@@ -127,34 +128,39 @@ def validate(facts, raw=None, stamp=None, character=None):
                 or len(set(products)) != len(products):
             raise ValueError("Invalid wholesale products")
     vehicles = facts.get("vehiclePrices")
-    if vehicles is not None:
+    if "vehiclePrices" in facts:
         if (not isinstance(vehicles, dict) or type(vehicles.get("schemaVersion")) is not int or
                 vehicles["schemaVersion"] < 1 or not isinstance(vehicles.get("model"), str) or not vehicles["model"]):
             raise ValueError("Invalid vehicle price catalogue metadata")
-        prices = vehicles.get("prices")
-        if (not isinstance(prices, dict) or len(prices) > MAX_ROWS or
-                any(not isinstance(k, str) or not k or not number(v) for k, v in prices.items())):
-            raise ValueError("Invalid vehicle price catalogue")
+        # An independently versioned optional block may change its payload
+        # shape. Only this client's supported model has known field rules;
+        # the whole-document finite-number/size check above still applies.
+        if vehicles["schemaVersion"] == 1 and vehicles["model"] == VEHICLE_MODEL:
+            prices = vehicles.get("prices")
+            if (not isinstance(prices, dict) or len(prices) > MAX_ROWS or
+                    any(not isinstance(k, str) or not k or not number(v) for k, v in prices.items())):
+                raise ValueError("Invalid vehicle price catalogue")
     economy = facts.get("economy")
-    if economy is not None:
+    if "economy" in facts:
         if (not isinstance(economy, dict) or type(economy.get("schemaVersion")) is not int or
                 economy["schemaVersion"] < 1 or not isinstance(economy.get("model"), str) or not economy["model"]):
             raise ValueError("Invalid economy capability metadata")
-        providers = economy.get("providers")
-        if not isinstance(providers, list) or len(providers) > MAX_ROWS:
-            raise ValueError("Invalid economy providers")
-        seen = set()
-        for provider in providers:
-            if (not isinstance(provider, dict) or not isinstance(provider.get("id"), str) or not provider["id"] or
-                    provider["id"] in seen or not isinstance(provider.get("version"), str) or not provider["version"] or
-                    provider.get("status") not in ("observed", "unavailable")):
-                raise ValueError("Invalid economy provider identity")
-            seen.add(provider["id"])
-            rules = provider.get("rules")
-            if (not isinstance(rules, dict) or len(rules) > MAX_ROWS or
-                    any(not isinstance(k, str) or not k or (v is not None and type(v) is not bool) for k, v in rules.items()) or
-                    (provider.get("runningCostsAvailable") is not None and type(provider["runningCostsAvailable"]) is not bool)):
-                raise ValueError("Invalid economy provider observations")
+        if economy["schemaVersion"] == 1 and economy["model"] == ECONOMY_MODEL:
+            providers = economy.get("providers")
+            if not isinstance(providers, list) or len(providers) > MAX_ROWS:
+                raise ValueError("Invalid economy providers")
+            seen = set()
+            for provider in providers:
+                if (not isinstance(provider, dict) or not isinstance(provider.get("id"), str) or not provider["id"] or
+                        provider["id"] in seen or not isinstance(provider.get("version"), str) or not provider["version"] or
+                        provider.get("status") not in ("observed", "unavailable")):
+                    raise ValueError("Invalid economy provider identity")
+                seen.add(provider["id"])
+                rules = provider.get("rules")
+                if (not isinstance(rules, dict) or len(rules) > MAX_ROWS or
+                        any(not isinstance(k, str) or not k or (v is not None and type(v) is not bool) for k, v in rules.items()) or
+                        (provider.get("runningCostsAvailable") is not None and type(provider["runningCostsAvailable"]) is not bool)):
+                    raise ValueError("Invalid economy provider observations")
     return facts
 
 

@@ -41,16 +41,7 @@ namespace BigCopilotLink
             w.Prop("schemaVersion", 1);
             w.Prop("model", "registered-vehicle-wealth-v1");
             w.BeginObject("prices");
-            foreach (var name in Vehicles.VehicleTypes.VehicleTypeHelper.GetVehicleTypeNames().OrderBy(x => x, StringComparer.Ordinal))
-            {
-                var vehicle = Vehicles.VehicleTypes.VehicleTypeHelper.GetVehicleType(name);
-                // Match PlayerHelper.GetTotalAssetsWorth: nonmotor vehicles
-                // are known, but do not count toward the bank's asset value.
-                double price = vehicle == null ? double.NaN : vehicle.IsMotorVehicle ? vehicle.price : 0;
-                if (string.IsNullOrEmpty(name) || double.IsNaN(price) || double.IsInfinity(price) || price < 0 || price > 1e12)
-                    throw new InvalidOperationException("Invalid registered vehicle price");
-                w.Prop(name, price);
-            }
+            foreach (var price in VehiclePrices()) w.Prop(price.Key, price.Value);
             w.EndObject();
             w.EndObject();
             EconomyFacts.Write(w);
@@ -132,6 +123,37 @@ namespace BigCopilotLink
             w.EndArray();
             w.EndObject();
             return w.ToString();
+        }
+
+        private static SortedDictionary<string, double> VehiclePrices()
+        {
+            var prices = new SortedDictionary<string, double>(StringComparer.Ordinal);
+            string[] names;
+            try
+            {
+                // Finish enumeration before looking up any types. If the
+                // registry cannot be read, retain an explicit empty block:
+                // omission would incorrectly permit offline price fallback.
+                names = Vehicles.VehicleTypes.VehicleTypeHelper.GetVehicleTypeNames().ToArray();
+            }
+            catch (Exception) { return prices; }
+            foreach (var name in names)
+            {
+                if (string.IsNullOrEmpty(name)) continue;
+                try
+                {
+                    var vehicle = Vehicles.VehicleTypes.VehicleTypeHelper.GetVehicleType(name);
+                    if (vehicle == null) continue;
+                    // Match PlayerHelper.GetTotalAssetsWorth: nonmotor vehicles
+                    // are known, but do not count toward the bank's asset value.
+                    double price = vehicle.IsMotorVehicle ? vehicle.price : 0;
+                    if (double.IsNaN(price) || double.IsInfinity(price) || price < 0 || price > 1e12) continue;
+                    prices[name] = price;
+                }
+                catch (Exception) { /* An unreadable type remains unknown to finance. */ }
+            }
+            // Sorting makes before/after fingerprints independent of registry order.
+            return prices;
         }
 
         internal static bool MarketingSupported()

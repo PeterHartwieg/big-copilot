@@ -233,6 +233,71 @@ class BuildingFacts(unittest.TestCase):
         block["providers"] = []
         self.assertEqual(self.load().facts["economy"]["providers"], [])
 
+    def test_future_optional_blocks_preserve_changed_shapes_and_gate_consumers(self):
+        for key, model in (("vehiclePrices", f.VEHICLE_MODEL), ("economy", f.ECONOMY_MODEL)):
+            for version, identity in ((2, model), (1, "future-model-v2")):
+                with self.subTest(key=key, version=version, model=identity):
+                    # Neither v1 payload field exists: future shapes remain
+                    # intact through a portable save, without authorizing v1.
+                    block = {"schemaVersion": version, "model": identity,
+                             "entries": [["future", {"value": 123}]]}
+                    facts = dict(self.facts, **{key: block})
+                    save = self.load(facts)
+                    self.assertEqual(save.facts[key], block)
+                    self.assertEqual(d.load_buildings(save)[GIFTS]["m"], 225)
+                    if key == "vehiclePrices":
+                        self.assertIsNone(f.vehicle_prices(save.facts))
+                        self.assertEqual(d.ba_mods.vehicle_prices(save, {"known": 100}), ({}, False))
+                    else:
+                        self.assertEqual(d.ba_mods.capabilities(save),
+                                         {cap: ["economyUnknown"] for cap in d.ba_mods.ECONOMY_CAPABILITIES})
+                    with self.assertRaisesRegex(ValueError, "different save"):
+                        f.validate(facts, b"wrong save")
+
+    def test_optional_blocks_require_valid_envelopes_even_when_unsupported(self):
+        for key in ("vehiclePrices", "economy"):
+            future = {"schemaVersion": 2, "model": "future-v2", "entries": []}
+            for block in (None, [], {}, {"model": "future-v2"}, {"schemaVersion": 2},
+                          *[dict(future, schemaVersion=v) for v in (0, -1, True, 1.5, "2")],
+                          *[dict(future, model=v) for v in (None, "", 2)]):
+                with self.subTest(key=key, block=block), self.assertRaises(ValueError):
+                    f.validate(dict(self.facts, **{key: block}))
+            for value in (float("nan"), float("inf"), -float("inf")):
+                with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                    f.validate(dict(self.facts, **{key: dict(future, entries=[{"nested": value}])}))
+
+    def test_supported_optional_blocks_still_require_their_full_shape(self):
+        for key, model, field in (("vehiclePrices", f.VEHICLE_MODEL, "prices"),
+                                  ("economy", f.ECONOMY_MODEL, "providers")):
+            block = {"schemaVersion": 1, "model": model}
+            for malformed in (block, dict(block, **{field: None}), dict(block, **{field: "unknown"})):
+                with self.subTest(key=key, malformed=malformed), self.assertRaises(ValueError):
+                    f.validate(dict(self.facts, **{key: malformed}))
+
+    def test_partial_or_failed_vehicle_catalogue_never_authorizes_fallback(self):
+        block = {"schemaVersion": 1, "model": f.VEHICLE_MODEL, "prices": {"known": 0}}
+        self.facts["vehiclePrices"] = block
+        for expected in ({"known": 0}, {}):
+            block["prices"] = expected
+            save = self.load()
+            self.assertEqual(d.ba_mods.vehicle_prices(save, {"known": 100, "unreadable": 200}),
+                             (expected, True))
+            # Unrelated facts still load when optional registry entries failed.
+            self.assertEqual(d.load_buildings(save)[GIFTS]["m"], 225)
+
+    def test_ambiguous_provider_observation_loads_but_withholds_forecasts(self):
+        provider = {"id": "hard-mode-patch", "version": "0.5.0.0, 0.6.0.0", "status": "unavailable",
+                    "runningCostsAvailable": None,
+                    "rules": {"equipmentUtilities": None, "officeIt": None, "factoryDiplomas": None}}
+        self.facts["economy"] = {"schemaVersion": 1, "model": f.ECONOMY_MODEL, "providers": [provider]}
+        save = self.load()
+        self.assertEqual(save.facts["economy"]["providers"], [provider])
+        self.assertEqual(d.ba_mods.capabilities(save),
+                         {cap: ["economyUnknown"] for cap in d.ba_mods.ECONOMY_CAPABILITIES})
+        self.facts["economy"]["providers"].append(copy.deepcopy(provider))
+        with self.assertRaisesRegex(ValueError, "provider identity"):
+            f.validate(self.facts)
+
     def test_live_city_accepts_residential_version_sentinel(self):
         # Link captures the whole city, including homes without a numbered layout.
         # Include every version in the shipped catalogue, not only owned shops.
