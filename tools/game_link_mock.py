@@ -2,7 +2,7 @@
 
     python tools/game_link_mock.py "<path to a .hsg>" [--port 8322]
 
-Speaks the contract in docs/game-link-api.md (schema 4, with schema 1–3 compatibility) so the web app and the
+Speaks the contract in docs/game-link-api.md (schema 5, with schema 1–4 compatibility) so the web app and the
 local watcher can be developed and tested without the game or Unity. POST
 /refresh and a change of the file's modification time both re-read the file
 and issue a new stamp, so pointing it at the game's own autosave folder gives a
@@ -99,7 +99,7 @@ import ba_save  # noqa: E402
 import ba_dashboard  # noqa: E402
 from ba_dashboard import ASSIGN_SKILLS, STATION_SKILLS, _uniform_gaps, money, schedule_entries, shift_print  # noqa: E402
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 DEFAULT_PORT = 8322
 REFRESH_WINDOW = 15  # the mod's window for its automatic refreshes; --throttle's retryAfter
 REQUEST_WINDOW = 3  # a POST /refresh waits this long since the last refresh, as the mod from 0.4.0
