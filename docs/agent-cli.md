@@ -113,6 +113,22 @@ launcher excludes saved Claude settings sources so a provider override or hook i
 those files cannot replace its endpoint or authentication. Pass task permissions
 and extra source directories explicitly.
 
+The launcher also clears `CLAUDE_CODE_ENTRYPOINT` for its own process. A Claude Code
+desktop session exports `CLAUDE_CODE_ENTRYPOINT=claude-desktop` to everything it starts,
+and a CLI that sees it takes both its credential and its settings from that host: it
+ignores `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_API_KEY`, sends the stored claude.ai OAuth
+token from `~/.claude/.credentials.json` to whatever `ANTHROPIC_BASE_URL` names, and loads
+`CLAUDE.md` in spite of `--setting-sources=`. Z.ai then answers
+`401 token expired or incorrect`, which reads like a rotated key but is not one. Measured
+on Claude Code 2.1.183 on 19 Sep 2026 by pointing `ANTHROPIC_BASE_URL` at a local listener
+and logging the `authorization` header; that is also the way to re-check it. Of the
+variables a desktop session exports it is the only one with this effect:
+`CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH`,
+`CLAUDE_CODE_MESSAGING_SOCKET`, `CLAUDE_CODE_MESSAGING_TOKEN` and
+`CLAUDE_CODE_OAUTH_SCOPES` were each ruled out one at a time. A run started from a plain
+terminal never had the problem, so the same launcher could pass there and fail inside the
+app. `tests/test_agent_cli.py` covers it.
+
 Excluding those sources also excludes `CLAUDE.md`, so the launcher appends the
 working directory's `AGENTS.md` to the system prompt itself and prints
 `Instructions: <path> (<n> lines)` before starting. A missing `AGENTS.md` is not an

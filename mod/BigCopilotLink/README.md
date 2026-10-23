@@ -11,7 +11,7 @@ from 0.3.0, hiring the headhunters' candidates and moving staff between business
 "What it changes" below).
 
 **Players:** subscribe on the Steam Workshop,
-[Big Copilot Link: Live Business Dashboard](https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395)
+[Big Copilot Link](https://steamcommunity.com/sharedfiles/filedetails/?id=3806322395)
 (item 3806322395), enable it in the game's Mods menu, load a save, then click **Link to
 the game** on bigcopilot.com. The rest of this file is for building it.
 

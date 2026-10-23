@@ -4,8 +4,145 @@
     {
       "name": "web-test",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8790"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8790"
+      ],
       "port": 8790
+    },
+    {
+      "name": "game-link-web",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8791",
+        "--directory",
+        "C:/Users/Peter/Coding_Projects/big-copilot-game-link/web"
+      ],
+      "port": 8791
+    },
+    {
+      "name": "game-link-mock",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "C:/Users/Peter/Coding_Projects/big-copilot-game-link/tools/game_link_mock.py",
+        "C:/Users/Peter/AppData/LocalLow/Hovgaard Games/Big Ambitions/SaveGames/Big Ambitions/GP36BrwpAEaWepTscnr0Q==/Recover #1.hsg",
+        "--port",
+        "8322",
+        "--character",
+        "GP36BrwpAEaWepTscnr0Q==",
+        "--company",
+        "HART. YT",
+        "--day",
+        "120",
+        "--hour",
+        "9"
+      ],
+      "port": 8322
+    },
+    {
+      "name": "staff-hire-web",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8793",
+        "--directory",
+        "C:/Users/Peter/Coding_Projects/big-copilot-staff-hire/web"
+      ],
+      "port": 8793
+    },
+    {
+      "name": "staff-hire-mock",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "C:/Users/Peter/Coding_Projects/big-copilot-staff-hire/tools/game_link_mock.py",
+        "C:/Users/Peter/AppData/LocalLow/Hovgaard Games/Big Ambitions/SaveGames/Big Ambitions/GP36BrwpAEaWepTscnr0Q==/Recover #1.hsg",
+        "--port",
+        "8322",
+        "--character",
+        "GP36BrwpAEaWepTscnr0Q==",
+        "--company",
+        "HART. YT",
+        "--day",
+        "120",
+        "--hour",
+        "9"
+      ],
+      "port": 8322
+    },
+    {
+      "name": "marketing-write-web",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8793",
+        "--directory",
+        "C:/Users/Peter/Coding_Projects/big-copilot-marketing-write/web"
+      ],
+      "port": 8793
+    },
+    {
+      "name": "redesign-web",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8794",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "C:/Users/Peter/.codex/worktrees/ui-redesign-chunk3/Big Ambitions/web"
+      ],
+      "port": 8794
+    },
+    {
+      "name": "staff-one-action-web",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8799",
+        "--directory",
+        "C:/Users/Peter/Coding_Projects/big-copilot-staff-one-action/web"
+      ],
+      "port": 8799
+    },
+    {
+      "name": "write-back-web",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8792",
+        "--directory",
+        "C:/Users/Peter/Coding_Projects/big-copilot-write-back/web"
+      ],
+      "port": 8792
+    },
+    {
+      "name": "write-back-mock",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "C:/Users/Peter/Coding_Projects/big-copilot-write-back/tools/game_link_mock.py",
+        "C:/Users/Peter/AppData/LocalLow/Hovgaard Games/Big Ambitions/SaveGames/Big Ambitions/GP36BrwpAEaWepTscnr0Q==/Recover #1.hsg",
+        "--port",
+        "8322",
+        "--character",
+        "GP36BrwpAEaWepTscnr0Q==",
+        "--company",
+        "HART. YT",
+        "--day",
+        "120",
+        "--hour",
+        "9",
+        "--code",
+        "ABC234"
+      ],
+      "port": 8322
     }
   ]
 }

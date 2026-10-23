@@ -148,7 +148,7 @@ if ($NoTools) {
     $claudeArguments += '--tools='
 } else {
     $claudeArguments += @('--tools', 'Read,Write,Edit,Glob,Grep,Bash,PowerShell')
-    $claudeArguments += @('--allowedTools', 'Read,Write,Edit,Glob,Grep,Bash(python *),Bash(node *),Bash(npm test*),Bash(rg *),Bash(ls *),Bash(git status *),Bash(git diff *),PowerShell(Get-Content *),PowerShell(Get-ChildItem *)')
+    $claudeArguments += @('--allowedTools', 'Read,Write,Edit,Glob,Grep,Bash(python *),Bash(node *),Bash(npm test*),Bash(rg *),Bash(ls *),Bash(git status *),Bash(git diff *),PowerShell(Get-Content *),PowerShell(Get-ChildItem *),Bash(powershell *),PowerShell(powershell *),Bash(git log *),PowerShell(git log *),PowerShell(git status *),PowerShell(git diff *)')
 }
 if ($OutputFormat -eq 'stream-json') { $claudeArguments += '--verbose' }
 if ($Resume) { $claudeArguments += @('--resume', $Resume) }
@@ -168,6 +168,13 @@ $providerEnvironment = @{
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1'
     ANTHROPIC_API_KEY = $null
     CLAUDE_CODE_OAUTH_TOKEN = $null
+    # A desktop-hosted session exports CLAUDE_CODE_ENTRYPOINT=claude-desktop, and the
+    # CLI then takes both its credential and its settings from that host: it ignores
+    # ANTHROPIC_AUTH_TOKEN, sends the stored claude.ai OAuth token to whatever
+    # ANTHROPIC_BASE_URL names -- Z.ai rejects it as an expired token -- and loads
+    # CLAUDE.md in spite of --setting-sources=. Clearing it restores both guarantees,
+    # so the launcher behaves the same from a terminal and from inside the desktop app.
+    CLAUDE_CODE_ENTRYPOINT = $null
     CLAUDE_CODE_USE_BEDROCK = $null
     CLAUDE_CODE_USE_VERTEX = $null
     CLAUDE_CODE_USE_FOUNDRY = $null

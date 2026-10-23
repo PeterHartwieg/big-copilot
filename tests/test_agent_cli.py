@@ -41,6 +41,7 @@ $json = [pscustomobject]@{
     hasToken = ($env:ANTHROPIC_AUTH_TOKEN -eq 'fixture-only-token')
     noApiKey = (!$env:ANTHROPIC_API_KEY)
     noOauth = (!$env:CLAUDE_CODE_OAUTH_TOKEN)
+    noEntrypoint = (!$env:CLAUDE_CODE_ENTRYPOINT)
     endpoint = $env:ANTHROPIC_BASE_URL
     model = $env:ANTHROPIC_MODEL
     args = @($args)
@@ -117,6 +118,7 @@ class LauncherTests(unittest.TestCase):
             env['ANTHROPIC_BASE_URL'] = 'https://original.invalid'
             env['ANTHROPIC_API_KEY'] = 'original-fixture-api-key'
             env['CLAUDE_CODE_OAUTH_TOKEN'] = 'original-fixture-oauth'
+            env['CLAUDE_CODE_ENTRYPOINT'] = 'claude-desktop'
             log = root / 'run.json'
             script = root / 'exercise.ps1'
             script.write_text('''
@@ -127,6 +129,7 @@ if ($env:ANTHROPIC_AUTH_TOKEN -ne 'original-fixture-token') { throw 'Token not r
 if ($env:ANTHROPIC_BASE_URL -ne 'https://original.invalid') { throw 'Endpoint not restored' }
 if ($env:ANTHROPIC_API_KEY -ne 'original-fixture-api-key') { throw 'API key not restored' }
 if ($env:CLAUDE_CODE_OAUTH_TOKEN -ne 'original-fixture-oauth') { throw 'OAuth not restored' }
+if ($env:CLAUDE_CODE_ENTRYPOINT -ne 'claude-desktop') { throw 'Entrypoint not restored' }
 ''', encoding='utf-8')
             command = [shell, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(script),
                        str(LAUNCHER), str(root), str(log)]
@@ -134,6 +137,11 @@ if ($env:CLAUDE_CODE_OAUTH_TOKEN -ne 'original-fixture-oauth') { throw 'OAuth no
             self.assertEqual(result.returncode, 0, result.stderr)
             data = self.reported(root)
             self.assertTrue(data['hasToken'] and data['noApiKey'] and data['noOauth'])
+            # A desktop-hosted session sets CLAUDE_CODE_ENTRYPOINT=claude-desktop, which
+            # makes the CLI take its credential and its settings from that host instead:
+            # ANTHROPIC_AUTH_TOKEN is ignored, the stored claude.ai OAuth token goes to
+            # the Z.ai endpoint, and CLAUDE.md loads despite --setting-sources=.
+            self.assertTrue(data['noEntrypoint'], 'desktop entrypoint reached the worker')
             self.assertEqual(data['endpoint'], 'https://api.z.ai/api/anthropic')
             self.assertEqual(data['model'], 'glm-5.3-flash')
             self.assertTrue(log.exists())
