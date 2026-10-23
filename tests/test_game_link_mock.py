@@ -1862,6 +1862,25 @@ class MockMarketing(MarketingMock):
     contacts and open now, every site set up with their switches, and the enabled
     flags undone (docs/game-link-api.md)."""
 
+    def test_unsupported_runtime_catalogue_refuses_preview_apply_and_undo(self):
+        import copy
+        from ba_facts import CAMPAIGNS
+        _, applied = self.post("marketing", {"sites": [self.site()]})
+        self.assertTrue(applied["ok"])
+        campaigns, promotions = copy.deepcopy(self.link.campaigns), copy.deepcopy(self.link.promotions)
+        self.link.facts = {"marketingTypes": [{"id": i, "name": name, "price": 100, "reach": 20}
+                                             for i, name in enumerate(CAMPAIGNS)] +
+                            [{"id": 7, "name": "Radio", "price": 200, "reach": 30}]}
+        for dry in (True, False):
+            status, answer = self.post("marketing", {"dryRun": dry, "sites": [self.site()]})
+            self.assertEqual(status, 200 if dry else 409)
+            self.assertEqual(answer["rows"][0]["error"], "changed")
+            status, answer = self.link._undo_marketing(self.link.undo["marketing"], dry)
+            self.assertEqual(status, 200 if dry else 409)
+            self.assertFalse(answer["ok"])
+        self.assertEqual(self.link.campaigns, campaigns)
+        self.assertEqual(self.link.promotions, promotions)
+
     def test_prediction_is_checked_on_dry_run_and_again_on_apply(self):
         site = self.site()
         site["prediction"] = {"dailyCost": 600, "marketing": 18, "total": 87}

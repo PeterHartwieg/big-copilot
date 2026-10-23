@@ -20,13 +20,14 @@ namespace BigCopilotLink
             w.Prop("model", "building-values-v1");
             w.Prop("character", game.characterId);
             w.Prop("build", game.buildNumberAtLastSave);
+            w.Prop("marketingModel", "marketing-six-v1");
             w.BeginArray("marketingTypes");
             foreach (Entities.MarketingTypeName kind in Enum.GetValues(typeof(Entities.MarketingTypeName)))
             {
                 if (kind.ToString() == "None") continue;
                 var settings = Entities.MarketingTypeSettings.Get(kind);
                 // None is an enum sentinel, not a campaign. A future real
-                // campaign is included, so older clients reject its model.
+                // campaign is included; clients gate only unsupported calculations.
                 if (settings == null) throw new InvalidOperationException("Missing marketing settings");
                 w.BeginObject();
                 w.Prop("id", (int)kind);
@@ -36,6 +37,21 @@ namespace BigCopilotLink
                 w.EndObject();
             }
             w.EndArray();
+            w.BeginObject("vehiclePrices");
+            w.Prop("schemaVersion", 1);
+            w.Prop("model", "registered-vehicle-prices-v1");
+            w.BeginObject("prices");
+            foreach (var name in Vehicles.VehicleTypes.VehicleTypeHelper.GetVehicleTypeNames().OrderBy(x => x, StringComparer.Ordinal))
+            {
+                var vehicle = Vehicles.VehicleTypes.VehicleTypeHelper.GetVehicleType(name);
+                double price = vehicle == null ? double.NaN : vehicle.price;
+                if (string.IsNullOrEmpty(name) || double.IsNaN(price) || double.IsInfinity(price) || price < 0 || price > 1e12)
+                    throw new InvalidOperationException("Invalid registered vehicle price");
+                w.Prop(name, price);
+            }
+            w.EndObject();
+            w.EndObject();
+            EconomyFacts.Write(w);
             var regs = new Dictionary<string, BuildingRegistration>();
             foreach (var reg in game.BuildingRegistrations)
                 if (reg != null) regs[Key(reg.StreetName, reg.StreetNumber)] = reg;
@@ -114,6 +130,14 @@ namespace BigCopilotLink
             w.EndArray();
             w.EndObject();
             return w.ToString();
+        }
+
+        internal static bool MarketingSupported()
+        {
+            var kinds = Enum.GetValues(typeof(Entities.MarketingTypeName)).Cast<Entities.MarketingTypeName>()
+                .Where(kind => kind.ToString() != "None").ToArray();
+            return kinds.Length == MarketingWrite.TypeNames.Length && kinds.Select((kind, i) =>
+                (int)kind == i && kind.ToString() == MarketingWrite.TypeNames[i]).All(ok => ok);
         }
 
         private static string Key(string street, int number) { return street + "#" + number; }
