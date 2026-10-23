@@ -262,7 +262,7 @@ def capabilities(save) -> dict:
 
 
 def vehicle_prices(save, baseline) -> tuple[dict, bool]:
-    """Effective runtime prices, else reviewed offline defaults; unsupported
+    """Effective runtime vehicle wealth values, else reviewed offline defaults; unsupported
     present models must not silently fall back to vanilla valuations."""
     facts = getattr(save, "facts", None) or {}
     runtime = ba_facts.vehicle_prices(facts)
@@ -270,7 +270,7 @@ def vehicle_prices(save, baseline) -> tuple[dict, bool]:
         return (runtime or {}), runtime is not None
     # Roadster's registered asset price, reviewed in ModAssets.cs on 23 Oct
     # 2026. Runtime catalogues override this baseline (including changed prices).
-    prices = {"ba:vehicletype_handtruck": 0, **baseline, "roadster:vehicletype_roadster": 250000}
+    prices = {**baseline, "roadster:vehicletype_roadster": 250000}
     street_food = ba_street_food.read(save)
     if street_food:
         prices.update(street_food["prices"])

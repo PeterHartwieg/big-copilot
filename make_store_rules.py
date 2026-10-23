@@ -98,7 +98,7 @@ where noted):
      "banks": {"<asset name>": {"r": annual interest %, "y": years, "x": max loan,
                                 "e": 1 emergency loan}},
      "vendors": {"<site key>": {"n": name, "a": street label, "h": neighbourhood}},
-     "vehicles": {"<vehicle type>": price},  (motor vehicles only: what a bank counts as wealth)
+     "vehicles": {"<vehicle type>": wealth value},  (price if motor, otherwise known zero)
      "skills": {"<skill>": baseHourlyWage},
      "rival": {"layouts": {"<type>|<size>|<version>|<lowercase layout>":
                             {"p": [purchaser products], "sk": [workstation skills]}},
@@ -490,13 +490,18 @@ def _banks(root: str) -> dict:
 
 
 def _vehicles(root: str) -> dict:
-    """{vehicle type: price} for the motor vehicles (maxFuel above 0), the ones
-    VehicleType.IsMotorVehicle counts as the player's assets."""
+    """{vehicle type: wealth value}, retaining known non-motor vehicles at zero.
+
+    PlayerHelper.GetTotalAssetsWorth counts the type's price only when
+    VehicleType.IsMotorVehicle (maxFuel > 0). Retain every registered name so
+    flatbeds, electric scooters and handtrucks are distinguishable from an
+    unknown mod vehicle whose contribution cannot be established.
+    """
     out = {}
     for tree in _behaviours(_bundle(root, "defaultlocalgroup_assets_vehicletypes")):
         name = tree.get("vehicleTypeName")
-        if name and float(tree.get("maxFuel") or 0) > 0:
-            out[name] = _price(tree.get("price"))
+        if name:
+            out[name] = _price(tree.get("price")) if float(tree.get("maxFuel") or 0) > 0 else 0
     return out
 
 
