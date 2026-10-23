@@ -192,3 +192,27 @@ test('unchanged estimate inputs reuse calculations and changed core or plan inva
   plan.optional=true;b.osEstimate(plan,building);assert.equal(calls,2);
   core={};b.osEstimate(plan,building);assert.equal(calls,3);
 });
+
+
+test('unknown investments are unavailable, never persisted or described as full tuition',()=>{
+  const {b}=fixture();
+  vm.runInContext('D.openFactory={game:{},items:{},vendors:{},vehicles:{}};planTarget="new"',b);
+  const inv={self:null,firm:null,upfrontSelf:null,upfrontFirm:null,b:{key:'A#1',address:'Test',deposit:null},out:{lines:[]},stores:[],items:1,
+    fee:50,furniture:100,deposit:null,truck:0,delivery:0,boxes:0,modEducation:{totalCents:null,startupCents:0,requirements:[{courseId:18,status:'in-progress'}]},incomplete:['course-future-cost-unavailable']};
+  for(const html of [b.ofSelfHtml(inv),b.ofFirmHtml(inv)]){
+    assert.match(html,/Investment[\s\S]*Unavailable/);assert.doesNotMatch(html,/Includes full course tuition/);
+  }
+  Object.assign(b,{ofInvestment:()=>inv});
+  const plan={site:null,mode:'self',inv:12345};b.ofSyncInvestment(plan);assert.equal(Object.hasOwn(plan,'inv'),false);
+  assert.equal(vm.runInContext('ofCashUpfront({self:100,upfrontSelf:null},"self")',b),null);
+  Object.assign(b,{osEstimate:()=>({inv:{self:null,firm:null}})});assert.equal(b.osSnapOf({},{}),null);
+});
+
+test('finance refusal names unsupported credit or principal basis even with no bank rows',()=>{
+  const {b}=fixture();
+  for(const [reason,text] of [['additional-credit-eligibility',/additional credit/],['principal-expense-basis',/principal as an expense/],['native-bank-terms',/bank terms/],['vehiclePrices',/vehicle prices/]]){
+    b.__reason=reason;vm.runInContext('D.openStore={finance:{unavailable:__reason,banks:[]}}',b);
+    const html=b.planFinanceHtml('os',{},1000,'',()=> 'unused');assert.match(html,text);
+    if(reason!=='vehiclePrices')assert.doesNotMatch(html,/vehicle prices/);
+  }
+});

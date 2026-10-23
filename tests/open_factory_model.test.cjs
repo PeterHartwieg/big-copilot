@@ -285,6 +285,7 @@ test('factory education includes full tuition once and separates first payment; 
   assert.equal(enrolled.modEducation.startupCents,0);
   assert.equal(enrolled.modEducation.totalCents,null);
   assert.ok(enrolled.incomplete.includes('course-future-cost-unavailable'));
+  for(const key of ['self','firm','upfrontSelf','upfrontFirm']) assert.equal(enrolled[key],null,key);
 });
 test('unknown wages, selected prices and deposit treatment never become complete zero costs',()=>{
   const f=companionFixture();f.facts.priceUnavailable=['machine','grain'];
@@ -339,6 +340,7 @@ test('an unchanged owned factory needs no new purchase qualification proof',()=>
 test('unavailable native lease quotes block investment and dependent running rent',()=>{
   const f=companionFixture(),model=create(f),input={counts:{beer:1},building:{...actualFactory,rent:null,deposit:null}},inv=model.investment(input);
   assert.ok(inv.incomplete.includes('lease-quote-unavailable'));
+  for(const key of ['self','firm','upfrontSelf','upfrontFirm']) assert.equal(inv[key],null,key);
   const running=model.running(input,inv);assert.equal(running.rent,null);assert.equal(running.total,null);
 });
 
@@ -378,4 +380,35 @@ test('factory weekly costs use licence accrual rather than the first week cash p
   const cashDaily=inv.modCosts.byDayCents.reduce((a,b)=>a+b,0)/7;
   close(run.modCosts.dailyCents-cashDaily,2000);
   assert.match(run.modCosts.basis,/accrual/);
+});
+
+
+test('unknown startup and supporting depot deposits preserve null investment totals',()=>{
+  for(const missing of ['startup','depot','price']){
+    const f=companionFixture(),input={counts:{beer:1},building:actualFactory};
+    if(missing==='startup') f.facts.modEconomy.rlo.modules.utilities={status:'unavailable',data:null};
+    if(missing==='depot'){input.depot={...depot,deposit:null,rent:null};input.wantsDepot=true;}
+    if(missing==='price')f.facts.priceUnavailable=['machine'];
+    const inv=create(f).investment(input);
+    for(const key of ['self','firm','upfrontSelf','upfrontFirm'])assert.equal(inv[key],null,missing+':'+key);
+  }
+});
+
+test('factory purchase timing and carried debt flags gate only dependent forecasts',()=>{
+  const f=companionFixture(),data={depositAdjustment:'none',costFactorThousandths:1300,adjustmentQuiet:3,
+    livingTransactionTypes:[],livingExcludesWholesalePurchases:false,carriedDebtInSiteForecast:false};
+  f.facts.modEconomy.rlo.modules.prices={status:'ready',data};
+  const input={counts:{beer:1},building:actualFactory};
+  let model=create(f),inv=model.investment(input),run=model.running(input,inv);
+  assert.equal(model.rawCost(input.counts),null);assert.equal(model.rawCost({}),0);
+  assert.equal(model.saves({slug:'beer',made:100,want:100}),null);
+  assert.ok(model.rawWeek(input.counts).grain>0);assert.ok(Number.isFinite(inv.self));
+  assert.equal(run.raw,null);assert.equal(run.total,null);assert.ok(run.incomplete.includes('wholesale-purchase-timing-unavailable'));
+  data.livingExcludesWholesalePurchases=true;
+  model=create(f);assert.ok(Number.isFinite(model.rawCost(input.counts)));
+  data.livingExcludesWholesalePurchases=false;data.costFactorThousandths=1000;
+  model=create(f);assert.ok(Number.isFinite(model.rawCost(input.counts)));
+  data.carriedDebtInSiteForecast=true;
+  model=create(f);inv=model.investment(input);run=model.running(input,inv);
+  assert.ok(Number.isFinite(run.raw));assert.equal(run.total,null);assert.ok(run.incomplete.includes('company-carried-debt-unavailable'));
 });

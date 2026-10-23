@@ -293,7 +293,7 @@ test('unsupported economy forecasts are withheld without removing known outfit c
     const m = model(facts);
     assert.equal(m.model('T', SHOP), null);
     assert.equal(m.ownRatio('T'), null);
-    assert.equal(m.investment({type: 'T'}, SHOP).firm, 120);
+    assert.equal(m.investment({type: 'T'}, {...SHOP,deposit:0}).firm, 120);
   }
   assert.notEqual(model({...RETAIL, compatibility: {officeProfit: ['officeIt']}}).model('T', SHOP), null);
   assert.equal(model(RETAIL).model('T', {...SHOP, marketingUnavailable: true}), null);
@@ -489,4 +489,35 @@ test('expansion payback survives an identical cover renewal beyond the known ful
   assert.equal(core.model('T',b,{...o,existing:true}).modCosts.dayCost(9),null);
   assert.ok(Number.isFinite(withCover.payback) && withCover.payback>9);
   assert.equal(withCover.payback,noCover.payback);
+});
+
+
+test('City wholesale inclusion adjusts the daily goods category once, including the opening ramp',()=>{
+  const f=modFacts(),prices=priceRules(1200);prices.livingExcludesWholesalePurchases=false;
+  f.modEconomy.rlo.modules.prices=ready(prices);
+  const core=model(f),m=core.model('T',SHOP,{sat:50,open:HOUR});
+  const native=m.nativeByDay[0],owner=require('../template/mod-demand-model.js');
+  close(m.cogs,(native.cogs+owner.cityAdjust(native.cogs,1200,1))/7,'whole trading day, not mean goods cost');
+  const ramp=f.game.ramp[2],expected=core.dayProfit(m,null,2);
+  prices.livingExcludesWholesalePurchases=true;
+  const excluded=model(f),other=excluded.model('T',SHOP,{sat:50,open:HOUR});
+  close(m.cogs-other.cogs,owner.cityAdjust(native.cogs,1200,1)/7,'one extra City step');
+  close(excluded.dayProfit(other,null,2)-expected,owner.cityAdjust(native.cogs*ramp,1200,1),'ramp before daily City goods settlement');
+});
+
+test('carried company debt must be modelled before a site forecast can be numeric',()=>{
+  const f=modFacts(),prices=priceRules();prices.carriedDebtInSiteForecast=true;
+  f.modEconomy.rlo.modules.prices=ready(prices);
+  const core=model(f);assert.equal(core.model('T',SHOP,{sat:50,open:HOUR}),null);
+  assert.ok(core.diagnostics('T',SHOP).includes('company-carried-debt-unavailable'));
+  prices.carriedDebtInSiteForecast=false;
+  assert.ok(model(f).model('T',SHOP,{sat:50,open:HOUR}));
+});
+
+test('unknown required deposit leaves store totals null while known outfit amounts remain visible',()=>{
+  const core=model(modFacts()),investment=core.investment({type:'T'},{...SHOP,deposit:null});
+  assert.equal(investment.deposit,null);assert.equal(investment.firm,null);assert.equal(investment.self,null);
+  assert.equal(investment.furniture,100);assert.ok(investment.incomplete.includes('lease-quote-unavailable'));
+  const held=core.investment({type:'T'},{...SHOP,status:'mine',deposit:null});
+  assert.equal(held.deposit,0);assert.ok(Number.isFinite(held.firm));
 });

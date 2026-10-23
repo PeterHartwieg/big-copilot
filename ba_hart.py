@@ -125,7 +125,7 @@ def _costs(data):
         elif cents is not None:
             raise ValueError("Unknown HART IT cost must be null")
         out["currentSites"].append(dict(address={"street": street, "number": number},
-            equipmentApplies=_bool(row["equipmentApplies"]),
+            equipmentApplies=None if row["equipmentApplies"] is None else _bool(row["equipmentApplies"]),
             inputBasis=_enum(row["inputBasis"], ("billing-cache", "current-items")),
             officeSeats=_int(row["officeSeats"]), itSeatDayCents=cents, itStatus=status,
             itDay=_int(row["itDay"]), itBasis=row["itBasis"], **{k: _int(row[k]) for k in load_keys}))
@@ -139,9 +139,13 @@ def _held(data):
     # Attempts are historical records, not unique course identities: retakes may repeat.
     for row in data:
         _object(row)
-        out.append(dict(courseId=_enum(row["courseId"], (18, 19, 34)),
-            kind=_enum(row["kind"], ("enrollment", "result")), stage=_int(row["stage"], 0, 6),
-            heldSinceDay=_int(row["heldSinceDay"])))
+        course_id = _int(row["courseId"])
+        try:
+            out.append(dict(courseId=course_id,
+                kind=_enum(row["kind"], ("enrollment", "result")), stage=_int(row["stage"], 0, 6),
+                heldSinceDay=_int(row["heldSinceDay"])))
+        except (ValueError, TypeError, KeyError, OverflowError):
+            out.append(dict(courseId=course_id, status="unavailable", reason="held-course-unavailable"))
     return out
 
 
@@ -152,20 +156,27 @@ def _factory(data):
     _constant(education, provider="rlo", module="education", minimumVersion=1)
     courses, items = [], set()
     for row in _rows(data["courses"], lambda r: _int(r["courseId"])):
-        course = dict(courseId=_enum(row["courseId"], (18, 19, 34)), courseKey=_text(row["courseKey"]),
-                      itemIds=_strings(row["itemIds"]), campus=_enum(row["campus"], ("school",)),
-                      distanceAllowed=_bool(row["distanceAllowed"]), needsDegree=_bool(row["needsDegree"]))
-        for key in ("baseFeeCents", "sessions", "homeworkPieces"):
-            course[key] = _int(row[key])
-        for key, low, high in (("hoursPerSession", 1, 24), ("fullTimeStartHour", 0, 23), ("fullTimeWeekdayMask", 0, 127)):
-            course[key] = _int(row[key], low, high)
-        needs = row["needsAnyCourseIds"]
-        if not isinstance(needs, list):
-            raise ValueError("Invalid HART prerequisites")
-        course["needsAnyCourseIds"] = [_int(v, 0, 63) for v in needs]
-        if len(set(needs)) != len(needs) or items.intersection(course["itemIds"]):
+        # Identity and mapping must be trustworthy to isolate an unsupported course.
+        course_id, item_ids = _int(row["courseId"]), _strings(row["itemIds"])
+        if items.intersection(item_ids):
             raise ValueError("Duplicate HART course mapping")
-        items.update(course["itemIds"])
+        items.update(item_ids)
+        try:
+            course = dict(courseId=course_id, courseKey=_text(row["courseKey"]),
+                          itemIds=item_ids, campus=_enum(row["campus"], ("school",)),
+                          distanceAllowed=_bool(row["distanceAllowed"]), needsDegree=_bool(row["needsDegree"]))
+            for key in ("baseFeeCents", "sessions", "homeworkPieces"):
+                course[key] = _int(row[key])
+            for key, low, high in (("hoursPerSession", 1, 24), ("fullTimeStartHour", 0, 23), ("fullTimeWeekdayMask", 0, 127)):
+                course[key] = _int(row[key], low, high)
+            needs = row["needsAnyCourseIds"]
+            if not isinstance(needs, list) or len(needs) > companion.MAX_ROWS:
+                raise ValueError("Invalid HART prerequisites")
+            course["needsAnyCourseIds"] = [_int(v) for v in needs]
+            if len(set(needs)) != len(needs):
+                raise ValueError("Duplicate HART prerequisite")
+        except (ValueError, TypeError, KeyError, OverflowError):
+            course = dict(courseId=course_id, itemIds=item_ids, status="unavailable", reason="factory-course-unavailable")
         courses.append(course)
     return dict(model=data["model"], restriction=data["restriction"], gate=_feature(data["gate"]),
                 education={k: education[k] for k in ("provider", "module", "minimumVersion")},

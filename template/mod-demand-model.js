@@ -23,6 +23,13 @@ const ModDemandModel = (() => {
   function wageCents(nativeHourly,factor){return companyShare(roundEven(F(F(finite(nativeHourly))*100)),factor);}
   function wage(nativeHourly,factor){return wageCents(nativeHourly,factor)/100;}
   function adjustedMoney(figure,factor,quiet){const f=F(finite(figure));return F(f+cityAdjust(f,factor,quiet));}
+  // Catalogue wholesale amounts precede City transaction settlement. When the
+  // owner includes purchases, aggregate the purchase day's goods before rounding.
+  function wholesaleDayCost(amount,prices){
+    const value=finite(amount);
+    return prices.livingExcludesWholesalePurchases===false
+      ? value+cityAdjust(value,prices.costFactorThousandths,prices.adjustmentQuiet):value;
+  }
   function officeClients({terms,gameClients,free,boostThousandths,carryThousandths=0}){
     int(free);
     const total=BigInt(Math.max(0,int(gameClients)))*BigInt(clamp(int(boostThousandths),0,terms.officeBoostMost))
@@ -268,6 +275,6 @@ const ModDemandModel = (() => {
     }
     return {planning};
   }
-  return {companyShare,cityAdjust,wageCents,wage,adjustedMoney,officeClients,basketExtra,expectedBasket,aggregateBasket,scale,promotion,kindPoints,interiorModel,decorFor,priceTolerance,create};
+  return {wholesaleDayCost,companyShare,cityAdjust,wageCents,wage,adjustedMoney,officeClients,basketExtra,expectedBasket,aggregateBasket,scale,promotion,kindPoints,interiorModel,decorFor,priceTolerance,create};
 })();
 if(typeof module!=='undefined' && module.exports)module.exports=ModDemandModel;

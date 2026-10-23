@@ -91,13 +91,15 @@ const OpenStoreModel = (() => {
     // A standalone site quote can reproduce daily rounding, but cannot invent
     // the other sites' allocation or carried debt.
     function settleDay(native,ramp=1){
-      return {revenue:cityCost(native.revenue*ramp,true),cogs:native.cogs*ramp,
+      return {revenue:cityCost(native.revenue*ramp,true),cogs:pricesModule.status==="ready"?demandModel.wholesaleDayCost(native.cogs*ramp,pricesModule.data):native.cogs*ramp,
         wages:cityCost(native.wages),rent:cityCost(native.rent),
         marketing:pricesModule.status === "ready" && pricesModule.data.livingTransactionTypes.includes("ba:transaction_marketing")
           ? cityCost(native.marketing):native.marketing};
     }
     function finishModel(slug,t,b,o,result,modCosts,modDemandResult){
       if(!companion) return result;
+      if(pricesModule.status==='ready' && pricesModule.data.carriedDebtInSiteForecast===true)
+        return fail(slug,b,['company-carried-debt-unavailable']);
       if(modCosts?.status !== "ready") return null;
       result.byDay=result.nativeByDay.map(day=>settleDay(day));
       for(const field of ['revenue','cogs','wages','rent','marketing'])
@@ -176,7 +178,7 @@ const OpenStoreModel = (() => {
     function osInvestment(plan, b){
       const out = osOutfit(plan, b);
       if(!out || !b) return null;
-      const deposit = leaseDeposit(b) || 0, decor = osDecor(b,plan.type);
+      const deposit = leaseDeposit(b) ?? null, decor = osDecor(b,plan.type);
       const stores = osStores(out).length;
       const delivery = stores * ((osFacts().game || {}).delivery || 0);
       const result = {furniture: out.furniture, fee: out.fee, deposit, stores, delivery, decor: decor ? decor.cost : 0,
@@ -208,7 +210,7 @@ const OpenStoreModel = (() => {
         }
         if(modCosts?.startupCents != null){ result.firm+=modCosts.startupCents/100;result.self+=modCosts.startupCents/100; }
       }
-      if(incomplete.length) result.incomplete=[...new Set(incomplete)];
+      if(incomplete.length){result.incomplete=[...new Set(incomplete)];result.firm=null;result.self=null;}
       return result;
     }
     /* Self-installation's shopping list by store: each item from a store that
@@ -533,7 +535,11 @@ const OpenStoreModel = (() => {
           startupDelta=delta.startupCents/100;
           marginByDay=l.byDayUnits.map((units,wd)=>{
             const before=m.nativeByDay[wd].fees+m.lines.filter(row=>sells.has(row.p)).reduce((total,row)=>total+row.byDayUnits[wd]*row.price,0);
-            return cityCost(before+units*l.price,true)-cityCost(before,true)-units*l.cost;
+            const beforeGoods=m.lines.filter(row=>sells.has(row.p)).reduce((total,row)=>total+row.byDayUnits[wd]*row.cost,0);
+            const goods=pricesModule.status==='ready'
+              ? demandModel.wholesaleDayCost(beforeGoods+units*l.cost,pricesModule.data)-demandModel.wholesaleDayCost(beforeGoods,pricesModule.data)
+              : units*l.cost;
+            return cityCost(before+units*l.price,true)-cityCost(before,true)-goods;
           });
           margin=marginByDay.reduce((sum,value)=>sum+value,0)/7;
         }

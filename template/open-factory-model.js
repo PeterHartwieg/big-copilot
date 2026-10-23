@@ -109,9 +109,12 @@ const OpenFactoryModel = ((storeModel, economyModel, ownerModel) => {
     const ofWholesale = slug => { const p = ofProd(slug); return unavailablePrices.has(slug) ? null : p ? (p.w || 0) * (p.i || 1) * (game.prices || 1) : 0; };
     const ofImportPrice = slug => (ofWholesale(slug) == null ? null : ofWholesale(slug) * ofDiscount());
     const ofExportPrice = slug => (ofWholesale(slug) == null ? null : ofWholesale(slug) * (game.export || 0));
+    // Recipes describe weekly consumption, not dates or totals of purchase bills.
+    const wholesaleTimingUnknown = () => prices.status === "ready" && prices.data.livingExcludesWholesalePurchases === false
+      && prices.data.costFactorThousandths !== 1000;
     /* The raw material one unit made eats, at import prices. */
     const ofRawUnit = slug => { const r = recipes[slug];
-      return r && r.out ? (r.ingredients.some(i=>ofImportPrice(i.slug)==null) ? null : r.ingredients.reduce((s, i) => s + i.per * ofImportPrice(i.slug), 0) / r.out) : 0; };
+      return r && r.out ? (wholesaleTimingUnknown() || r.ingredients.some(i=>ofImportPrice(i.slug)==null) ? null : r.ingredients.reduce((s, i) => s + i.per * ofImportPrice(i.slug), 0) / r.out) : 0; };
     /* SkillData.baseHourlyWage × (1 + 1.05^skill / 100) × the game's salary
        multiplier, at skill 100, as the store flow plans its staff. */
     const baseHourly = skill => ((facts.skills || {})[`ba:skill_${skill}`] || 0) * storeModel.SKILL_100_WAGE * (game.wages || 0);
@@ -131,7 +134,11 @@ const OpenFactoryModel = ((storeModel, economyModel, ownerModel) => {
         if(r && m > 0) r.ingredients.forEach(i => { out[i.slug] = (out[i.slug] || 0) + m * i.per * hours * 7; }); });
       return out;
     }
-    const ofRawCost = counts => sum(Object.entries(ofRawWeek(counts)).map(([slug,n])=>ofImportPrice(slug)==null ? null : n*ofImportPrice(slug)));
+    const ofRawCost = counts => {
+      const lines=Object.entries(ofRawWeek(counts));
+      return wholesaleTimingUnknown() && lines.some(([,n])=>n>0) ? null
+        : sum(lines.map(([slug,n])=>ofImportPrice(slug)==null ? null : n*ofImportPrice(slug)));
+    };
     function ofKit(counts){
       const kits = facts.kits || {}, out = new Map();
       Object.entries(counts).forEach(([slug, m]) => { const r = recipes[slug];
@@ -175,29 +182,29 @@ const OpenFactoryModel = ((storeModel, economyModel, ownerModel) => {
       const shelves = cc ? Math.max(0, Math.ceil(boxes / cc) - placed) : 0;
       const out = {lines: [...ofKit(adds)].map(([item, qty]) => [item, qty, "ws"])};
       if(shelves && shelf.item) out.lines.push([shelf.item, shelves, "shelf"]);
-      const price = item => (items[item] || {}).p || 0;
-      const furniture = out.lines.reduce((s, [item, qty]) => s + qty * price(item), 0);
+      const price = item => unavailablePrices.has(item) || (modded && !Number.isFinite(items[item]?.p)) ? null : items[item]?.p || 0;
+      const furniture = sum(out.lines.map(([item,qty])=>price(item)===null ? null : qty*price(item)));
       const stores = storesFor(out, items);
-      const delivery = furniture ? stores.length * (g.delivery || 0) : 0;
+      const delivery = furniture || furniture===null ? stores.length * (g.delivery || 0) : 0;
       const fee = (g.installFee || 0) * (b.m2 || 0);
       const truck = owned ? 0 : ((F.vehicles || {}).truck || {}).p || 0;
-      const deposit = owned ? 0 : storeModel.leaseDeposit(b) || 0;
+      const deposit = owned ? 0 : storeModel.leaseDeposit(b);
       let depot = null;
       if(!owned && at){
         const van = ((F.vehicles || {}).van || {}).p || 0;
         const shelvesToBuy = modded ? Math.max(0,OF_DEPOT_SHELVES-(F.sites?.[at.key]?.shelves || 0)) : OF_DEPOT_SHELVES;
-        const racks = shelvesToBuy * (shelf.p || 0);
-        const depotDeposit = storeModel.leaseDeposit(at) || 0;
+        const racks = shelvesToBuy && unavailablePrices.has(shelf.item) ? null : shelvesToBuy * (shelf.p || 0);
+        const depotDeposit = storeModel.leaseDeposit(at);
         depot = {b: at, deposit: depotDeposit, shelves: shelvesToBuy, racks, van, delivery: shelvesToBuy ? g.delivery || 0 : 0,
-          total: depotDeposit + racks + van + (shelvesToBuy ? g.delivery || 0 : 0)};
+          total: sum([depotDeposit,racks,van,shelvesToBuy ? g.delivery || 0 : 0])};
       }
       const modCosts=modOperating({counts,building:b,owned,lines:out.lines,depot,wantsDepot:!owned && wantsDepot});
       const support=F.hq || {}, hqStaff=owned ? {agents:0,managers:0} : ofHq(counts,wantsDepot);
       const seats=modded && Number.isSafeInteger(support.spareWorkstations) ? Math.max(0,hqStaff.agents+hqStaff.managers-support.spareWorkstations) : 0;
       const hqLines=(support.workstationLines || []).map(([id,n])=>[id,n*seats]).filter(([,n])=>n>0);
-      const hqOut={lines:hqLines}, hqFurniture=hqLines.reduce((n,[id,q])=>n+q*price(id),0);
+      const hqOut={lines:hqLines}, hqFurniture=sum(hqLines.map(([id,q])=>price(id)===null ? null : q*price(id)));
       const hqDelivery=hqLines.length ? storesFor(hqOut,items).length*(g.delivery || 0) : 0;
-      const hqPurchase={lines:hqLines,seats,furniture:hqFurniture,delivery:hqDelivery,total:hqFurniture+hqDelivery};
+      const hqPurchase={lines:hqLines,seats,furniture:hqFurniture,delivery:hqDelivery,total:sum([hqFurniture,hqDelivery])};
       const education=modded ? (!out.lines.length ? {status:"ready",startupCents:0,totalCents:0,requirements:[],reasons:[]} : economy ? economy.factoryRequirements(out.lines) : {status:"unavailable",startupCents:null,totalCents:null,requirements:[],reasons:["mod-model-unavailable"]}) : null;
       const incomplete=[...(F.compatibility?.factoryOpening || []),...(modCosts?.reasons || []),...(education?.reasons || [])];
       if(education?.totalCents === null) incomplete.push("course-future-cost-unavailable");
@@ -205,19 +212,23 @@ const OpenFactoryModel = ((storeModel, economyModel, ownerModel) => {
       if([...out.lines,...hqLines,...(depot?.shelves ? [[shelf.item,depot.shelves]] : [])].some(([id,n])=>n>0 && (unavailablePrices.has(id) || !items[id]))) incomplete.push("equipment-price-unavailable");
       const adjustedDeposit=rentCost(deposit,true), depotAdjustment=depot ? rentCost(depot.deposit,true) : 0;
       if(!known([adjustedDeposit,depotAdjustment])) incomplete.push("deposit-adjustment-unavailable");
-      const firmCost = prices.status === "disabled" ? fee+furniture : prices.status === "ready"
+      const firmCost = furniture === null ? null : prices.status === "disabled" ? fee+furniture : prices.status === "ready"
         ? (prices.data.livingTransactionTypes.includes("ba:transaction_interiorinstallation") ? rentCost(fee+furniture) : fee+furniture) : null;
       if(firmCost === null) incomplete.push("installation-adjustment-unavailable");
-      const modCapital=(modCosts?.startupCents || 0)/100+(education?.totalCents || 0)/100;
-      const extra = hqPurchase.total + truck + (adjustedDeposit ?? deposit) + (depot ? depot.total - depot.deposit + (depotAdjustment ?? depot.deposit) : 0) + modCapital;
+      const startup=modded ? modCosts.startupCents : 0;
+      const tuition=modded ? education.totalCents : 0, firstPayment=modded ? education.startupCents : 0;
+      const capitalKnown=known([startup,tuition,firstPayment]);
+      const extra=sum([hqPurchase.total,truck,adjustedDeposit,depot ? sum([depot.racks,depot.van,depot.delivery,depotAdjustment]) : 0]);
+      const total=(installation,course)=>capitalKnown ? sum([installation,extra,startup/100,course/100]) : null;
+      const selfCost=sum([furniture,delivery]);
       return {b, out, stores, furniture, delivery, fee, truck, deposit, depot, boxes, shelves, placed,
         ...(incomplete.length ? {incomplete:[...new Set(incomplete)]}:{}),
         ...(modded ? {modCosts,modEducation:education,modRequirements:education.requirements,hqPurchase,
           assumptions:["captured-settings-constant","self-installation-uses-furniture-delivery","firm-net-installation-without-resales","additional-depot-van","course-installments-session-triggered"],
-          upfrontSelf:furniture+delivery+extra-(education.totalCents || 0)/100+(education.startupCents || 0)/100,
-          upfrontFirm:(firmCost ?? fee+furniture)+extra-(education.totalCents || 0)/100+(education.startupCents || 0)/100}:{}),
+          upfrontSelf:total(selfCost,firstPayment),
+          upfrontFirm:total(firmCost,firstPayment)}:{}),
         items: out.lines.reduce((n, l) => n + l[1], 0), adds,
-        self: furniture + delivery + extra, firm: (firmCost ?? fee+furniture) + extra};
+        self:total(selfCost,tuition), firm:total(firmCost,tuition)};
     }
     function ofHq(counts, wantsDepot = false){
       const hq = facts.hq || {}, need = ofIngredientsUncontracted(counts).length > 0;
@@ -233,7 +244,8 @@ const OpenFactoryModel = ((storeModel, economyModel, ownerModel) => {
         if(!modded) return result;
         const incomplete=[...(facts.compatibility?.factoryRunning || []),...(modCosts?.reasons || [])];
         if(!wageKnown() && result.wages !== 0) incomplete.push("new-hire-wage-unavailable");
-        if(result.raw === null) incomplete.push("material-price-unavailable");
+        if(result.raw === null) incomplete.push(wholesaleTimingUnknown() ? "wholesale-purchase-timing-unavailable" : "material-price-unavailable");
+        if(prices.status === "ready" && prices.data.carriedDebtInSiteForecast === true) incomplete.push("company-carried-debt-unavailable");
         if(result.rent === null) incomplete.push("rent-adjustment-unavailable");
         // CityDayFigures applies the city factor to native daily salary once.
         // The Company ordinary-hourly quote already displays that factor;

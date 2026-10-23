@@ -137,8 +137,36 @@ class HartTests(unittest.TestCase):
         self.assertEqual(result["heldRecords"]["data"][0]["courseId"], 18)
         factory["heldRecords"]["data"][0]["courseId"] = 12
         result = hart.module(load(company(block)), "factoryPurchases")
-        self.assertEqual(result["heldRecords"]["status"], "unavailable")
+        self.assertEqual(result["heldRecords"]["status"], "ready")
+        self.assertEqual(result["heldRecords"]["data"][0]["courseId"], 12)
         self.assertEqual(len(result["courses"]), 3)
+
+    def test_future_courses_and_unsupported_rows_are_isolated(self):
+        block = report()
+        factory = block["modules"]["factoryPurchases"]["data"]
+        future = copy.deepcopy(factory["courses"][0])
+        future.update(courseId=100, itemIds=["future:machine"], needsAnyCourseIds=[99])
+        factory["courses"].append(future)
+        factory["heldRecords"]["data"] = [dict(courseId=100, kind="result", stage=4, heldSinceDay=2),
+            dict(courseId=18, kind="unknown-future-kind", stage=9, heldSinceDay=2)]
+        result = hart.module(load(company(block)), "factoryPurchases")
+        self.assertEqual(result["courses"][-1]["courseId"], 100)
+        self.assertEqual(result["heldRecords"]["data"][0]["courseId"], 100)
+        self.assertEqual(result["heldRecords"]["data"][1]["status"], "unavailable")
+        future["campus"] = "future-campus"
+        result = hart.module(load(company(block)), "factoryPurchases")
+        self.assertEqual(result["courses"][-1], dict(courseId=100, itemIds=["future:machine"],
+            status="unavailable", reason="factory-course-unavailable"))
+        self.assertEqual(len(result["courses"]), 4)
+        self.assertNotIn("status", result["courses"][0])
+        future["courseId"] = 2**53
+        self.assertIsNone(hart.module(load(company(block)), "factoryPurchases"))
+
+    def test_unknown_native_building_keeps_equipment_applicability_unknown(self):
+        block = report()
+        block["modules"]["runningCosts"]["data"]["currentSites"][0]["equipmentApplies"] = None
+        result = hart.module(load(company(block)), "runningCosts")
+        self.assertIsNone(result["currentSites"][0]["equipmentApplies"])
 
     def test_exact_clock_and_live_digest_binding(self):
         root = company(marker=True)

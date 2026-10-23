@@ -401,7 +401,10 @@
                             "$ref": "#/$defs/address"
                           },
                           "equipmentApplies": {
-                            "type": "boolean"
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
                           },
                           "inputBasis": {
                             "enum": [

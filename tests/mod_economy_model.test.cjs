@@ -270,3 +270,26 @@ test('adapter errors expose stable reason codes instead of native exception text
   assert.deepEqual(adapter.operating(p).reasons,['invalid-operating-input']);
   assert.deepEqual(adapter.factoryRequirements(null).reasons,['invalid-factory-input']);
 });
+
+
+test('missing current building classification does not become a zero equipment forecast',()=>{
+  const c=planning(),p=officePlan();p.existing=true;
+  c.rlo.modules.company=disabled();c.rlo.modules.requirements=disabled();
+  c.hart.modules.runningCosts.data.currentSites[0].address={street:'Test',number:1};
+  c.hart.modules.runningCosts.data.currentSites[0].equipmentApplies=null;
+  c.rlo.modules.utilities.data.internetEnabled=false;
+  c.rlo.modules.utilities.data.accounts=['power','water'].map(service=>({address:{street:'Test',number:1},service,state:'active'}));
+  assert.ok(model.create(c).operating(p).reasons.includes('current-equipment-building-unavailable'));
+});
+
+test('future and unknown factory courses affect only their mapped purchases',()=>{
+  const c=planning(),data=c.hart.modules.factoryPurchases.data;
+  data.courses.push({courseId:100,itemIds:['future:machine'],status:'unavailable'});
+  let adapter=model.create(c);
+  assert.equal(adapter.factoryRequirements([['ba:itemname_industrialsewingmachine',1]]).status,'ready');
+  assert.deepEqual(adapter.factoryRequirements([['future:machine',1]]).reasons,['factory-course-unavailable']);
+  data.heldRecords.data=[{courseId:100,status:'unavailable'}];adapter=model.create(c);
+  assert.equal(adapter.factoryRequirements([['ba:itemname_industrialsewingmachine',1]]).status,'ready');
+  data.heldRecords.data.push({courseId:18,status:'unavailable'});
+  assert.deepEqual(model.create(c).factoryRequirements([['ba:itemname_industrialsewingmachine',1]]).reasons,['held-course-unavailable']);
+});

@@ -13,6 +13,6 @@ exports.fixture = () => ({
     vendors: {shop: {n: 'Synthetic Fittings', a: '1 Test Street'}},
     built: {k: {sells: ['existing']}},
   },
-  building: {key: 'k', hood: 'H', cap: 20, m2: 100, layout: 'C1'},
+  building: {key: 'k', hood: 'H', cap: 20, m2: 100, layout: 'C1', rent: 50},
   options: {sat: 50, promoTotal: 20, open: [[[10, 11]], [], [], [], [], [], []]},
 });

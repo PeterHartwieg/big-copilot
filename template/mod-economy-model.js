@@ -242,7 +242,8 @@ const ModEconomyModel = (() => {
               const extra=equipmentFor(existingExtraLines,itemClasses);
               equipment=extra.status!=='ready'?extra:{status:'ready',...Object.fromEntries(['openWatts','alwaysWatts','litresPerOpenHour','officeSeats']
                 .map(k=>[k,number(positive(baseline[k])+positive(extra[k]))]))};
-              equipmentOn=equipmentOn && baseline.equipmentApplies;
+              if(equipmentOn && baseline.equipmentApplies===null)reasons.push('current-equipment-building-unavailable');
+              equipmentOn=equipmentOn && baseline.equipmentApplies===true;
             }
           }else equipment = equipmentFor(lines,itemClasses);
           if(equipment.status !== 'ready') reasons.push(equipment.reason);
@@ -398,12 +399,15 @@ const ModEconomyModel = (() => {
       const requirements = [], reasons = [];
       let now=0,total=0,totalKnown=true;
       for(const course of needed){
+        if(course.status==='unavailable'){reasons.push('factory-course-unavailable');requirements.push({courseId:course.courseId,status:'unknown'});continue;}
         const observed = educationCourses.get(course.courseId);
         const held = f.data.heldRecords;
         if(!observed){reasons.push('education-course-unavailable');requirements.push({courseId:course.courseId,status:'unknown'});continue;}
         if(observed.qualified){requirements.push({courseId:course.courseId,status:'qualified',startupCents:0});continue;}
         if(held.status!=='ready'){reasons.push('held-records-unavailable');requirements.push({courseId:course.courseId,status:'unknown'});continue;}
-        if(held.data.some(c=>c.courseId===course.courseId)){reasons.push('course-record-held');requirements.push({courseId:course.courseId,status:'held'});continue;}
+        const records=held.data.filter(c=>c.courseId===course.courseId);
+        if(records.some(c=>c.status==='unavailable')){reasons.push('held-course-unavailable');requirements.push({courseId:course.courseId,status:'unknown'});continue;}
+        if(records.length){reasons.push('course-record-held');requirements.push({courseId:course.courseId,status:'held'});continue;}
         if(observed.enrollment){requirements.push({courseId:course.courseId,status:'in-progress',startupCents:0,
           enrollment:observed.enrollment});totalKnown=false;continue;}
         const quote = observed.quotes.find(q=>q.mode===0 && q.loan===false);
