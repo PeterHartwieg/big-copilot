@@ -67,7 +67,7 @@ test('selects complete equipment by total delivered cost and includes a scale on
 test('unknown hours, satisfaction, promotion, capacity, providers and legacy rules remain unavailable', () => {
   for(const mutate of [f => {f.facts.game.capInitial = false;}, f => {delete f.options.open;},
     f => {f.options.sat = null;}, f => {f.options.promoTotal = null;},
-    f => {delete f.facts.built.k;}, f => {f.building.cap = 0;}, f => {f.building.factsUnavailable = true;}]){
+    f => {delete f.facts.built.k;}, f => {f.building.cap = 0;}, f => {f.building.factsUnavailable = true;}, f => {delete f.building.rent;}]){
     const f = fixture(); mutate(f);
     assert.equal(Model.create({facts: f.facts}).expansions('T', f.building, f.options), null);
   }

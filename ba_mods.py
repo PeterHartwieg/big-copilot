@@ -27,6 +27,10 @@ import struct
 
 import ba_facts
 import ba_street_food
+import ba_rlo
+import ba_hart
+import ba_economy
+import ba_companion
 
 ECONOMY_KEY = "OcupancyCosts.State"
 SEASONS_KEY = "AlcwareSeasons.calendar.v1"
@@ -83,11 +87,7 @@ SEASON_FACTORS = {_ITEM + name: factors for factors, names in _FACTOR_ROWS.items
 
 def mod_data(save) -> dict:
     """modData as {key: value}; an empty dict where the save has none."""
-    out = {}
-    for pair in save.items(save.root.get("modData")):
-        if isinstance(pair, dict) and isinstance(pair.get("$k"), str):
-            out[pair["$k"]] = save.deref(pair.get("$v"))
-    return out
+    return ba_companion.mod_data(save)
 
 
 def calendar(value) -> dict | None:
@@ -190,7 +190,112 @@ def detect(save) -> dict:
         except (ValueError, struct.error, UnicodeError):
             renovated = None
         out["retailExpansion"] = {"renovated": renovated}
+    rlo = ba_rlo.metadata(save)
+    if rlo is not None:
+        out["rlo"] = rlo
+    hart = ba_hart.metadata(save)
+    if hart is not None:
+        out["hart"] = hart
     street_food = ba_street_food.metadata(save)
     if street_food is not None:
         out["streetFood"] = street_food
     return out
+
+
+# --- Planner capabilities --------------------------------------------------
+# Runtime facts are hash-bound to the save by ba_facts. A provider's selected
+# flags establish possible missing rules, never their cost or readiness. Keep
+# these decisions here rather than scattering mod names through the planners.
+ECONOMY_MODEL = "economy-capabilities-v1"
+ECONOMY_CAPABILITIES = ("storeProfit", "officeProfit", "factoryRunning", "factoryOpening")
+ECONOMY_RULES = {
+    "equipmentUtilities": ("storeProfit", "officeProfit", "factoryRunning"),
+    "officeIt": ("officeProfit", "factoryRunning"),
+    "factoryDiplomas": ("factoryOpening",),
+    "operatingCosts": ("storeProfit", "officeProfit", "factoryRunning"),
+}
+# Presence says only that effective settings need checking. Retained state from
+# a removed mod must never be described as proof that the mod is active.
+# HMP Core/DiplomaHold.cs (CareersKey/HoldKey), Core/IndebtedStart.cs
+# and Core/HardcoreStart.cs, reviewed 23 Oct 2026.
+ECONOMY_SAVE_KEYS = frozenset({"reallife:careers", "hardmodepatch:factory_diplomas_held",
+                               "HardModePatch.IndebtedStart", "HardModePatch.HardcoreNoFunds"})
+
+
+def capabilities(save) -> dict:
+    """Unavailable model capabilities as {capability: [reason code, ...]}.
+
+    Missing runtime metadata retains baseline behavior for ordinary saves;
+    recognized retained economy state explicitly requires a fresh snapshot.
+    An observed empty provider list proves the captured runtime had none.
+    Unsupported optional models affect forecasts, not recorded accounting.
+    """
+    import ba_economy
+
+    facts = getattr(save, "facts", None) or {}
+    out = {}
+
+    def scoped(provider):
+        current = ba_economy.report(save, provider)
+        return current is not None and current.get("status") in ("ready", "partial")
+
+    def disable(keys, reason):
+        for key in keys:
+            if reason not in out.setdefault(key, []):
+                out[key].append(reason)
+
+    economy = facts.get("economy")
+    if economy is None:
+        retained = ECONOMY_SAVE_KEYS.intersection(mod_data(save))
+        if (("reallife:careers" in retained and not scoped("rlo"))
+                or (retained - {"reallife:careers"} and not scoped("hart"))):
+            disable(ECONOMY_CAPABILITIES, "economyUnknown")
+    elif economy.get("schemaVersion") != 1 or economy.get("model") != ECONOMY_MODEL:
+        disable(ECONOMY_CAPABILITIES, "economyUnknown")
+    else:
+        for provider in economy.get("providers", []):
+            if provider.get("status") != "observed":
+                disable(ECONOMY_CAPABILITIES, "economyUnknown")
+                continue
+            rules = provider.get("rules", {})
+            identity = provider.get("id")
+            if identity not in ("hard-mode-patch", "hart-mod-pack", "real-life-overhaul"):
+                disable(ECONOMY_CAPABILITIES, "economyUnknown")
+                continue
+            # A fresh public report delegates each affected surface to its owner
+            # modules. Missing or failed optional modules are handled there;
+            # they must not erase independent supported planning surfaces.
+            if scoped("rlo" if identity == "real-life-overhaul" else "hart"):
+                continue
+            expected = ("operatingCosts",) if identity == "real-life-overhaul" else ("equipmentUtilities", "officeIt", "factoryDiplomas")
+            for rule, affected in ECONOMY_RULES.items():
+                if rule not in expected and rule not in rules:
+                    continue
+                value = rules.get(rule)
+                if value is not False:
+                    disable(affected, rule if value is True else "economyUnknown")
+            if any(rule not in ECONOMY_RULES and value is not False for rule, value in rules.items()):
+                disable(ECONOMY_CAPABILITIES, "economyUnknown")
+    if not ba_facts.marketing_supported(facts):
+        disable(("marketing", "storeProfit", "officeProfit"), "marketingUnknown")
+    return out
+
+
+def vehicle_prices(save, baseline, non_motor=()) -> tuple[dict, bool]:
+    """Effective runtime vehicle wealth values, else reviewed offline defaults; unsupported
+    present models must not silently fall back to vanilla valuations.
+
+    Only finance combines known non-motor zeros with motor purchase prices;
+    payback must retain its distinct purchase-price table.
+    """
+    facts = getattr(save, "facts", None) or {}
+    runtime = ba_facts.vehicle_prices(facts)
+    if "vehiclePrices" in facts:
+        return (runtime or {}), runtime is not None
+    # Roadster's registered asset price, reviewed in ModAssets.cs on 23 Oct
+    # 2026. Runtime catalogues override this baseline (including changed prices).
+    prices = {**dict.fromkeys(non_motor, 0), **baseline, "roadster:vehicletype_roadster": 250000}
+    street_food = ba_street_food.read(save)
+    if street_food:
+        prices.update(street_food["prices"])
+    return prices, True

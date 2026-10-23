@@ -156,6 +156,11 @@ namespace BigCopilotLink
             }
 
             var day = TimeHelper.CurrentDay;
+            if (!failed)
+            {
+                var refusal = Ownership(rows, dryRun ? "review" : "apply");
+                if (refusal.HasValue) return refusal.Value;
+            }
             if (dryRun || failed) return Answer(rows, day, dryRun, failed, false, null);
 
             var undo = new UndoState();
@@ -183,6 +188,17 @@ namespace BigCopilotLink
                     new Dictionary<string, string> { { "buildings", WriteService.Count(undo.Entries.Count, "building", "buildings") } });
             else stamp = ws.RefreshAfterWrite();
             return Answer(rows, day, false, false, false, stamp);
+        }
+
+        private static WriteAnswer? Ownership(List<Row> rows, string phase)
+        {
+            var targets = new List<Dictionary<string, object>>();
+            foreach (var row in rows)
+            {
+                var target = ModOwnership.Target(row.Address);
+                targets.Add(target);
+            }
+            return ModOwnership.Check("rent", phase, targets);
         }
 
         public static WriteAnswer Undo(WriteService ws, UndoState state, bool dryRun)
@@ -220,6 +236,11 @@ namespace BigCopilotLink
             }
 
             var day = TimeHelper.CurrentDay;
+            if (!changed)
+            {
+                var refusal = Ownership(rows, "undo");
+                if (refusal.HasValue) return refusal.Value;
+            }
             if (dryRun || changed) return Answer(rows, day, dryRun, changed, true, null);
 
             for (var i = 0; i < rows.Count; i++)

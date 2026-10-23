@@ -2,7 +2,7 @@
 
     python tools/game_link_mock.py "<path to a .hsg>" [--port 8322]
 
-Speaks the contract in docs/game-link-api.md (schema 4, with schema 1–3 compatibility) so the web app and the
+Speaks the contract in docs/game-link-api.md (schema 5, with schema 1–4 compatibility) so the web app and the
 local watcher can be developed and tested without the game or Unity. POST
 /refresh and a change of the file's modification time both re-read the file
 and issue a new stamp, so pointing it at the game's own autosave folder gives a
@@ -99,7 +99,7 @@ import ba_save  # noqa: E402
 import ba_dashboard  # noqa: E402
 from ba_dashboard import ASSIGN_SKILLS, STATION_SKILLS, _uniform_gaps, money, schedule_entries, shift_print  # noqa: E402
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 DEFAULT_PORT = 8322
 REFRESH_WINDOW = 15  # the mod's window for its automatic refreshes; --throttle's retryAfter
 REQUEST_WINDOW = 3  # a POST /refresh waits this long since the last refresh, as the mod from 0.4.0
@@ -270,6 +270,11 @@ class Link:
         self.street_routes: dict = {}  # synthetic route overlays; source file is untouched
         self.opened: dict = {}      # address -> the weekdays a write opened 0 to 24
         self.undo: dict = {}
+        # Explicit synthetic current-owner policy, never inferred from a saved report.
+        # Optional test callback receives each fresh query; no installed mod is called.
+        self.mod_ownership: dict | None = None
+        self.ownership_provider = None
+        self.ownership_queries: list[dict] = []
         # Hiring: where an apply put people (employee or candidate id ->
         # address, None for unassigned), the candidates it hired, the
         # candidates that have left the game's list since the bytes (expired,
@@ -663,6 +668,145 @@ class Link:
             answer["stamp"] = before
         return status, answer
 
+    @staticmethod
+    def _daytime_owner_week(target):
+        week = target.get("week")
+        if not isinstance(week, list) or len(week) != 7:
+            return False
+        days = set()
+        for row in week:
+            if not isinstance(row, dict) or type(row.get("day")) is not int or row["day"] not in range(7) or row["day"] in days:
+                return False
+            days.add(row["day"])
+            if type(row.get("isOpen")) is not bool:
+                return False
+            if not row["isOpen"]:
+                continue
+            hours = row.get("hours")
+            if not isinstance(hours, list):
+                return False
+            for interval in hours:
+                if not isinstance(interval, dict) or any(type(interval.get(k)) is not int for k in ("from", "to")):
+                    return False
+                if not 5 <= interval["from"] <= interval["to"] <= 22:
+                    return False
+        return True
+
+    def _ownership(self, operation, phase, targets):
+        """Simulate the native fresh query at the mutation boundary. Saved reports grant no authority."""
+        policy = self.mod_ownership
+        if policy is None:
+            return None
+        unknown = {"schemaVersion": 1, "decision": "unknown", "owner": "rlo", "task": operation,
+                   "reasons": ["fresh-owner-proof-unavailable"], "effects": []}
+        query = {"schemaVersion": 1, "operation": operation, "phase": phase, "targets": list(targets)}
+        if not query["targets"]:
+            return None
+        if operation in ("schedule", "hire"):
+            for target in query["targets"]:
+                if operation == "hire" and target.get("scheduling") is False:
+                    continue
+                week = target.get("week")
+                days = [row.get("day") for row in week if isinstance(row, dict)] if isinstance(week, list) else []
+                if len(days) != 7 or any(type(day) is not int for day in days) or set(days) != set(range(7)):
+                    return 409, {"error": "ownership_unknown", "owner": "rlo", "task": operation,
+                                 "reasons": ["ownership-week-incomplete"], "effects": []}
+        self.ownership_queries.append(json.loads(json.dumps(query)))
+        del self.ownership_queries[:-100]
+        if isinstance(policy, dict) and policy.get("providerPresent") is False:
+            return None
+        try:
+            current = self.ownership_provider(query) if self.ownership_provider else policy
+            if not isinstance(current, dict) or current.get("providerPresent") is not True:
+                responses = [unknown]
+            elif current.get("api") == "legacy":
+                # Config represents a fresh callback result, not the stored /save report.
+                report = current.get("report")
+                captured = {"character": self.character, "day": self.day, "hour": self.hour,
+                            "minute": int(self._save().root.get("Minute") or 0)}
+                features = (report or {}).get("modules", {}).get("features", {})
+                rows = features.get("data")
+                feature = "estate" if operation == "rent" else "managers"
+                matches = [row for row in rows if isinstance(row, dict) and row.get("id") == feature] if isinstance(rows, list) else []
+                valid = (current.get("captureStatus") == "fresh" and isinstance(report, dict)
+                         and type(report.get("schemaVersion")) is int and report["schemaVersion"] == 1
+                         and report.get("provider") == "rlo" and report.get("captured") == captured
+                         and all(type(report["captured"].get(k)) is int for k in ("day", "hour", "minute"))
+                         and type(features.get("version")) is int and features["version"] == 1
+                         and features.get("status") == "ready" and len(matches) == 1
+                         and matches[0].get("enabled") is False)
+                if valid and operation in ("schedule", "hire"):
+                    companies = [row for row in rows if isinstance(row, dict) and row.get("id") == "company"]
+                    company_off = len(companies) == 1 and companies[0].get("enabled") is False
+                    valid = company_off or all(self._daytime_owner_week(target) for target in query["targets"]
+                                               if operation == "schedule" or target.get("scheduling") is not False)
+                    if not valid:
+                        unknown["reasons"] = ["legacy-late-opening-permit-unverified"]
+                return None if valid else (409, {"error": "ownership_unknown",
+                    **{key: unknown[key] for key in ("owner", "task", "reasons", "effects")}})
+            elif current.get("api") == "v1":
+                responses = [current.get("response")]
+                rules = current.get("rules", [])
+                if not isinstance(rules, list) or len(rules) > 1000:
+                    responses = [unknown]
+                else:
+                    for rule in rules:
+                        if not isinstance(rule, dict):
+                            responses.append(unknown)
+                            continue
+                        if rule.get("operation", operation) != operation or rule.get("phase", phase) != phase:
+                            continue
+                        if any(rule.get("address") == {k: target[k] for k in ("street", "number")} for target in query["targets"]):
+                            responses.append(rule.get("response"))
+            else:
+                responses = [unknown]
+        except Exception:
+            responses = [unknown]
+        for response in responses:
+            valid = (isinstance(response, dict) and type(response.get("schemaVersion")) is int
+                     and response["schemaVersion"] == 1 and response.get("decision") in ("allowed", "conditional", "refused", "unknown")
+                     and isinstance(response.get("owner"), str) and isinstance(response.get("task"), str))
+            valid = valid and all(isinstance(response.get(key), list) and len(response[key]) <= 256
+                                  and all(isinstance(value, str) and len(value) <= 4096 for value in response[key])
+                                  for key in ("reasons", "effects"))
+            if not valid:
+                response = unknown
+            if response["decision"] != "allowed":
+                return 409, {"error": "ownership_unknown" if response["decision"] == "unknown" else "mod_owned",
+                             **{key: response[key] for key in ("owner", "task", "reasons", "effects")}}
+        return None
+
+    def _ownership_week(self, save, address, entries, opens=()):
+        reg = self._registration(save, address)
+        week = []
+        opened = set(opens)
+        for day, record in sorted(self._days(reg).items()):
+            is_open = day in opened or bool(record.get("isOpen"))
+            hours = ([{"from": 0, "to": 24}] if day in opened else
+                     [{"from": slot.get("startingHour", 0), "to": slot.get("endingHour", 0)}
+                      for slot in save.items(record.get("openingHourSlots"))]) if is_open else []
+            week.append({"day": day, "isOpen": is_open, "hours": hours,
+                         "shifts": [{"from": f, "to": t, "employeeId": who, "itemInstanceId": item or None}
+                                    for d, f, t, who, item, _kind in entries if d == day]})
+        return {**_wire(address), "week": week}
+
+    @staticmethod
+    def _ownership_hire_target(targets, address, *, hiring=False, moving=False, scheduling=False, week=None):
+        target = targets.setdefault(address, {**_wire(address), "hiring": False, "moving": False, "scheduling": False})
+        target["hiring"] |= hiring
+        target["moving"] |= moving
+        target["scheduling"] |= scheduling
+        if week is not None:
+            target["week"] = week["week"]
+
+    @staticmethod
+    def _ownership_wholesale(before, after):
+        contract = after or before
+        address, supplier = contract["address"], contract["supplier"]
+        return {**address, "contractId": f"{address['street']}#{address['number']}|{supplier['street']}#{supplier['number']}",
+                "action": "set" if after is not None else "remove",
+                "itemIds": sorted({item["item"] for row in (before, after) if row for item in row["items"]})}
+
     def _forced_agency(self, rule: str) -> dict:
         """The agency a forced no_contact or agency_closed names: the billboard
         agency, and for closed, tomorrow at 8."""
@@ -1014,8 +1158,10 @@ class Link:
         return None, None
 
     def _marketing(self, save, body, dry):
-        from ba_dashboard import MARKETING_REACH, load_buildings
-        names = [t[0] for t in self._marketing_types()]
+        from ba_dashboard import MARKETING_REACH, MARKETING_TYPES, load_buildings
+        from ba_facts import marketing_supported
+        supported = marketing_supported(self.facts)
+        names = [t[0] for t in self._marketing_types()] if supported else [t[0] for t in MARKETING_TYPES]
         sites = body.get("sites")
         if not isinstance(sites, list):
             raise BadRequest("sites must be a list")
@@ -1053,7 +1199,7 @@ class Link:
 
         rows, plans = [], []
         for address, on, was, prediction in parsed:
-            if other_save:
+            if other_save or not supported:
                 rows.append(self._marketing_blank(address, error="changed"))  # another company's building
                 continue
             reg = self._registration(save, address)
@@ -1147,12 +1293,14 @@ class Link:
         """Each switched flag back, where it still holds what the write left. It
         only flips existing entries, which the phone does any time: no agency
         check."""
+        from ba_facts import marketing_supported
+        supported = marketing_supported(self.facts)
         save = self._save()
         rows, restores, changed = [], [], False
         for site in record["sites"]:
             address = site["address"]
             reg = self._registration(save, address)
-            if reg is None:
+            if reg is None or not supported:
                 changed = True
                 rows.append(self._marketing_blank(address, site["business"], "changed"))
                 continue
@@ -1275,6 +1423,9 @@ class Link:
         if not ok:
             error = "changed" if any(r["error"] == "changed" for r in rows) else "refused"
             return (200, answer) if dry else (409, dict(answer, error=error))
+        refusal = self._ownership("rent", "review" if dry else "apply", [row["address"] for row in rows])
+        if refusal:
+            return refusal
         if not dry:
             for item in sets:
                 self.rents[item["address"]] = {"pendingPricePerSqm": item["newPending"], "daysUntilUpdatingPricePerSqm": 7}
@@ -1306,6 +1457,9 @@ class Link:
         answer = {"ok": ok, "kind": "rent", "dryRun": dry, "day": self.day, "undo": True, "rows": rows}
         if not ok:
             return (200, answer) if dry else (409, dict(answer, error="changed"))
+        refusal = self._ownership("rent", "undo", [_wire(address) for address, after in restores])
+        if refusal:
+            return refusal
         if not dry:
             for address, after in restores:
                 self.rents[address] = {k: after[k] for k in ("pendingPricePerSqm", "daysUntilUpdatingPricePerSqm")}
@@ -1442,6 +1596,10 @@ class Link:
             answer["quote"] = quote
         if error and not dry:
             return 409, dict(answer, error="changed" if error == "changed" else "refused")
+        if not error:
+            refusal = self._ownership("wholesale", "review" if dry else "apply", [self._ownership_wholesale(before, after)])
+            if refusal:
+                return refusal
         if not dry:
             self.undo.pop("wholesale", None)
             if changed:
@@ -1464,6 +1622,9 @@ class Link:
         answer = {"ok": not error, "kind": "wholesale", "dryRun": dry, "undo": True, "rows": [row]}
         if error:
             return (200, answer) if dry else (409, dict(answer, error="changed" if error == "changed" else "refused"))
+        refusal = self._ownership("wholesale", "undo", [self._ownership_wholesale(after, record["before"])])
+        if refusal:
+            return refusal
         if not dry:
             if record["before"] is None:
                 contracts.pop(index)
@@ -1821,6 +1982,11 @@ class Link:
         # openedHours only for a write that would go through.
         self._schedule_answer(answer, self._names(save), before, after, bool(opens) and answer["ok"],
                               self._open_days(reg, address, open_all))
+        if answer["ok"]:
+            refusal = self._ownership("schedule", "review" if dry else "apply", [
+                self._ownership_week(save, address, after, self.opened.get(address, set()) | opens)])
+            if refusal:
+                return refusal
         if dry or not answer["ok"]:
             return self._schedule_refused(answer, dry)
         self.schedules[address] = after
@@ -2110,6 +2276,26 @@ class Link:
                   "wageAdded": round(sum(h["wage"] for h in hired), 2), "rows": rows}
         if blocked:
             result["blocked"] = "myemployees"
+        if ok:
+            targets = {}
+            for h in hired:
+                self._ownership_hire_target(targets, h["_hire"]["address"], hiring=True)
+            for m in moved:
+                self._ownership_hire_target(targets, m["_move"]["to"], moving=True)
+                source = m["_move"]["from"]
+                if source is not None:
+                    self._ownership_hire_target(targets, source, moving=True)
+                    if m["shiftsCleared"]:
+                        removed = {x["_move"]["id"] for x in moved if x["_move"]["from"] == source and x["shiftsCleared"]}
+                        entries = [entry for entry in self._entries(save, self._registration(save, source), source) if entry[3] not in removed]
+                        self._ownership_hire_target(targets, source, scheduling=True,
+                            week=self._ownership_week(save, source, entries, self.opened.get(source, set())))
+            for address, after, opens in writes:
+                self._ownership_hire_target(targets, address, scheduling=True,
+                    week=self._ownership_week(save, address, after, self.opened.get(address, set()) | opens))
+            refusal = self._ownership("hire", "review" if dry else "apply", targets.values())
+            if refusal:
+                return refusal
         if dry:
             return 200, result
         if rows:
@@ -2250,6 +2436,9 @@ class Link:
                                   {d for d, sd in self._days(reg).items() if sd.get("isOpen")} | reopened)
             # True only when the undo restores opening hours the write opened.
             answer["openedHours"] = bool(record["opened"])
+            refusal = self._ownership("schedule", "undo", [self._ownership_week(save, address, record["before"], reopened)])
+            if refusal:
+                return refusal
             if not dry:
                 self.schedules[address] = record["before"]
                 self.opened[address] = reopened
@@ -2363,6 +2552,21 @@ class Link:
                   "wageAdded": round(-sum(h["wage"] for h in hired), 2) or 0, "rows": rows}
         if self.myemployees:
             result["blocked"] = "myemployees"
+        if result["ok"]:
+            targets = {}
+            for h in hires:
+                self._ownership_hire_target(targets, h["to"], hiring=True)
+            for m in moves:
+                self._ownership_hire_target(targets, m["to"], moving=True)
+                if m["from"] is not None:
+                    self._ownership_hire_target(targets, m["from"], moving=True)
+            for address, site in record["sites"].items():
+                reopened = self.opened.get(address, set()) - set(site["opened"])
+                self._ownership_hire_target(targets, address, scheduling=True,
+                    week=self._ownership_week(save, address, site["before"], reopened))
+            refusal = self._ownership("hire", "undo", targets.values())
+            if refusal:
+                return refusal
         if dry:
             return 200, result
         if rows:
@@ -2402,10 +2606,16 @@ class Link:
                 self.moved, self.hired, self.gone, self.myemployees = {}, set(), set(), False
                 self.screen_open, self.features = set(), list(FEATURES)
                 self.bonus_used = False
+                self.mod_ownership, self.ownership_provider, self.ownership_queries = None, None, []
                 self.pair, self.pair_delay, self.pair_requests, self.tokens = "approve", PAIR_DELAY, {}, {}
                 self.pair_cooldowns, self.strikes, self.reject_tokens = list(PAIR_COOLDOWNS), {}, False
                 self.day, self.hour = self._clock
                 self.character, self.company = self._loaded
+            if "modOwnership" in body:
+                policy = body["modOwnership"]
+                if policy is not None and not isinstance(policy, dict):
+                    raise BadRequest("modOwnership must be an object or null")
+                self.mod_ownership = json.loads(json.dumps(policy))
             if "wholesaleTerms" in body:
                 self.wholesale_terms = dict(body["wholesaleTerms"] or {})
             if "importTerms" in body:

@@ -23,10 +23,14 @@ namespace BigCopilotLink
         // A body is at most 256 KiB (a hire 2 MiB), but nesting is what would blow the stack.
         private const int MaxDepth = 32;
 
-        public static object Parse(string text)
+        public static object Parse(string text) { return ParseCore(text, false); }
+
+        internal static object ParseStrict(string text) { return ParseCore(text, true); }
+
+        private static object ParseCore(string text, bool rejectDuplicateKeys)
         {
             var pos = 0;
-            var value = ReadValue(text, ref pos, 0);
+            var value = ReadValue(text, ref pos, 0, rejectDuplicateKeys);
             SkipSpace(text, ref pos);
             if (pos != text.Length) throw Fail("trailing characters", pos);
             return value;
@@ -98,14 +102,14 @@ namespace BigCopilotLink
 
         // ---- parsing ---------------------------------------------------------------
 
-        private static object ReadValue(string s, ref int pos, int depth)
+        private static object ReadValue(string s, ref int pos, int depth, bool rejectDuplicateKeys)
         {
             if (depth > MaxDepth) throw Fail("nested too deeply", pos);
             SkipSpace(s, ref pos);
             if (pos >= s.Length) throw Fail("unexpected end", pos);
             var c = s[pos];
-            if (c == '{') return ReadObject(s, ref pos, depth);
-            if (c == '[') return ReadArray(s, ref pos, depth);
+            if (c == '{') return ReadObject(s, ref pos, depth, rejectDuplicateKeys);
+            if (c == '[') return ReadArray(s, ref pos, depth, rejectDuplicateKeys);
             if (c == '"') return ReadString(s, ref pos);
             if (c == '-' || (c >= '0' && c <= '9')) return ReadNumber(s, ref pos);
             if (Match(s, ref pos, "true")) return true;
@@ -114,7 +118,7 @@ namespace BigCopilotLink
             throw Fail("unexpected character", pos);
         }
 
-        private static Dictionary<string, object> ReadObject(string s, ref int pos, int depth)
+        private static Dictionary<string, object> ReadObject(string s, ref int pos, int depth, bool rejectDuplicateKeys)
         {
             var obj = new Dictionary<string, object>(StringComparer.Ordinal);
             pos++; // {
@@ -128,8 +132,9 @@ namespace BigCopilotLink
                 SkipSpace(s, ref pos);
                 if (pos >= s.Length || s[pos] != ':') throw Fail("expected ':'", pos);
                 pos++;
-                // A repeated key keeps the last value, as JavaScript's JSON.parse does.
-                obj[key] = ReadValue(s, ref pos, depth + 1);
+                if (rejectDuplicateKeys && obj.ContainsKey(key)) throw Fail("duplicate key", pos);
+                // Requests retain JSON.parse compatibility; companion/authority reports reject duplicates.
+                obj[key] = ReadValue(s, ref pos, depth + 1, rejectDuplicateKeys);
                 SkipSpace(s, ref pos);
                 if (pos >= s.Length) throw Fail("unexpected end", pos);
                 if (s[pos] == ',') { pos++; continue; }
@@ -138,7 +143,7 @@ namespace BigCopilotLink
             }
         }
 
-        private static List<object> ReadArray(string s, ref int pos, int depth)
+        private static List<object> ReadArray(string s, ref int pos, int depth, bool rejectDuplicateKeys)
         {
             var arr = new List<object>();
             pos++; // [
@@ -146,7 +151,7 @@ namespace BigCopilotLink
             if (pos < s.Length && s[pos] == ']') { pos++; return arr; }
             while (true)
             {
-                arr.Add(ReadValue(s, ref pos, depth + 1));
+                arr.Add(ReadValue(s, ref pos, depth + 1, rejectDuplicateKeys));
                 SkipSpace(s, ref pos);
                 if (pos >= s.Length) throw Fail("unexpected end", pos);
                 if (s[pos] == ',') { pos++; continue; }

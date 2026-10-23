@@ -29,7 +29,7 @@ function worker({failSection = false} = {}) {
   const calls = [];
   const py = {
     FS: {
-      writeFile(p, data) { writes.push(p); files.set(p, typeof data === 'string' ? data : '<bytes>'); },
+      writeFile(p, data) { writes.push(p); files.set(p, typeof data === 'string' ? data : new Uint8Array(data)); },
       readFile(p) { if (!files.has(p)) throw new Error('ENOENT'); return files.get(p); },
       unlink(p) { if (!files.delete(p)) throw new Error('ENOENT'); },
       analyzePath(p) { return {exists: files.has(p)}; },
@@ -63,7 +63,7 @@ function worker({failSection = false} = {}) {
   };
   const context = vm.createContext({
     py, postMessage: (m) => posted.push(m), performance: {now: () => 0},
-    String, JSON, Uint8Array, Math, Error, MessageChannel,
+    String, JSON, Uint8Array, ArrayBuffer, Math, Error, MessageChannel,
   });
   vm.runInContext(`${names}
 let lastSave = null;
@@ -242,4 +242,28 @@ test('a section Python cannot work out fails like a build, with its last line', 
   // section sends no save bytes (it was given none).
   assert.match(reply.trace, /SaveShapeError: the board hit a bug/);
   assert.equal(reply.bytes, null);
+});
+
+
+test('separate facts survive name rebuilds, held saves and failures, then clear on a file', async () => {
+  const w = worker(), facts = JSON.stringify({stamp: 'one'});
+  await w.send({...build(1, '{"names":[]}'), name: 'live.bcsave', facts});
+  assert.equal(w.files.get('/save/building-facts.json'), facts);
+  assert.match(w.calls.at(-1), /facts_path="\/save\/building-facts.json"/);
+  await w.send({kind: 'name', id: 2, rid: 'a', slug: 'beer'});
+  assert.match(w.calls.at(-1), /facts_path="\/save\/building-facts.json"/);
+  await w.send({kind: 'held', id: 3, build: true});
+  assert.equal(w.posted.at(-1).facts, facts);
+  assert.equal(w.posted.at(-1).bytes.byteLength, 4);
+  assert.match(w.calls.at(-1), /load_save\(.*facts_path=/);
+  await w.send({...build(4, '{}'), name: 'boom.hsg', facts});
+  assert.equal(w.posted.at(-1).kind, 'failed');
+  assert.equal(w.posted.at(-1).facts, facts);
+  assert.equal(w.posted.at(-1).bytes.byteLength, 4);
+  await w.send(build(5, '{}'));
+  assert.equal(w.files.has('/save/building-facts.json'), false);
+  assert.doesNotMatch(w.calls.at(-1), /facts_path=/);
+  await w.send({kind: 'held', id: 6});
+  assert.equal(w.posted.at(-1).facts, null);
+  assert.deepEqual([...w.files.keys()].filter(p => p.startsWith('/save/')), ['/save/a.hsg']);
 });

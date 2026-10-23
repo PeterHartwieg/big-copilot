@@ -291,8 +291,8 @@ namespace BigCopilotLink
         /// <summary>
         /// Main thread. Busy first, before anything is read: the walk and a write must
         /// never overlap. A dry run only reads, so the game saving or a state that
-        /// cannot save does not stop it; the contract promises a paired, well-formed dry
-        /// run a 200. An apply is refused in those states with SaveService's reasons.
+        /// cannot save does not stop it; ordinary native validation answers a paired, well-formed dry
+        /// run with 200; fresh mod-ownership refusals answer 409 in every phase. An apply is refused in those states with SaveService's reasons.
         /// </summary>
         private WriteAnswer? Gate(Func<WriteService, bool, WriteAnswer> job, bool dryRun)
         {

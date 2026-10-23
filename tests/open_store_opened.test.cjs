@@ -560,13 +560,20 @@ test('an estimate reuses its calculation API for repeated simulated days', async
     let creates = 0;
     OpenStoreModel.create = inputs => { creates++; return originalCreate(inputs); };
     try {
-      const plan = osPlan(), estimate = osEstimate(plan, osBuilding(plan.key));
-      const before = creates;
+      const plan = osPlan(), building = osBuilding(plan.key);
+      const warm = osEstimate(plan, building), reused = osEstimate({...plan}, {...building});
+      const warmCreates = creates;
+      D.openStore = {...D.openStore}; // a replacement payload must rebuild its model and estimate
+      const estimate = osEstimate(plan, building), before = creates;
       const values = Array.from({length: 20000}, (_, k) => estimate.day(k));
-      return {before, after: creates, finite: values.every(Number.isFinite)};
+      return {warmCreates, reused: warm === reused, replaced: warm !== estimate,
+        before, after: creates, finite: values.every(Number.isFinite)};
     } finally { OpenStoreModel.create = originalCreate; }
   });
-  assert.ok(result.before > 0);
+  assert.equal(result.warmCreates, 0);
+  assert.equal(result.reused, true);
+  assert.equal(result.replaced, true);
+  assert.equal(result.before, 1);
   assert.equal(result.after, result.before);
   assert.equal(result.finite, true);
 });

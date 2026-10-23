@@ -346,8 +346,15 @@
     }
   }
   function failReader(err) {
+    // A downloaded link File is an immutable in-memory snapshot. Preserve
+    // its pair if startup fails before the worker can return the bytes. A
+    // chosen disk File may have changed, so it must never use this fallback.
+    const linked = lastFileGen === sourceGen && lastFile?.linkFacts ? lastFile : null;
     readerError = err;
     supersede();
+    if (linked) heldFailure = {name: linked.name, file: linked, facts: linked.linkFacts,
+      error: String(err.message || ""), trace: String(err.stack || ""), kind: String(err.name || ""),
+      bytes: null, held: false, build: Number.isInteger(linked.linkBuild) ? linked.linkBuild : null};
     if (worker) worker.terminate();
     note("");
     state("bad", () => tt("app.reader.failed", "The reader could not finish loading"), errWords(err));
@@ -427,6 +434,7 @@
         if (msg.kind !== "built") throw msg.error ? Object.assign(new Error(msg.error), {
           trace: typeof msg.trace === "string" ? msg.trace : "",
           bytes: msg.bytes instanceof ArrayBuffer ? msg.bytes : null,
+          facts: typeof msg.facts === "string" ? msg.facts : null,
         }) : failure(() => tt("app.reader.invalid.bare", "Invalid reader response"));
         const data = JSON.parse(msg.data);
         if (!data || typeof data !== "object") throw failure(() => tt("app.reader.invalid.bare", "Invalid reader response"));
@@ -789,9 +797,9 @@
   // any caller read, the watcher's included. linkHealth moves only with new
   // bytes, so a mod updated under an open tab shows here first: writes go
   // only while the two agree (linkSpeaks()).
-  const LINK_SCHEMA = 4;
+  const LINK_SCHEMA = 5;
   let linkSchema = LINK_SCHEMA;
-  const linkVersionKnown = v => v === 1 || v === 2 || v === 3 || v === LINK_SCHEMA;
+  const linkVersionKnown = v => v === 1 || v === 2 || v === 3 || v === 4 || v === LINK_SCHEMA;
   const linkSpeaks = () => linkVersionKnown(linkSchema);
   let linkGone = false;   // the watcher has said the game went away
   let linkNotReady = 0;   // /health answers in a row that were never health, any caller
@@ -1280,7 +1288,8 @@
         note("bad", why, () => tt("app.link.loadsave", "Load a save in the game, then click Update."), true);
         return;
       } else {
-        let bytes = res.bytes;
+        const bytes = res.bytes;
+        let factsText = null;
         let extension = "hsg";
         const snapshotStamp = res.headers.get("X-Game-Link-Stamp") || health.stamp;
         const snapshotCharacter = res.headers.get("X-Game-Link-Character") || health.character;
@@ -1292,15 +1301,12 @@
             if (gen !== sourceGen) return;
             if (!reply.ok) throw new Error(tt("app.facts.retry", "The game changed while reading its building values. Click Update to try again."));
             if (reply.bytes.byteLength > 8 * 1024 * 1024) throw new Error(tt("app.facts.mismatch", "The building values do not match this save. Update the game link and try again."));
-            const facts = JSON.parse(new TextDecoder().decode(reply.bytes));
+            factsText = new TextDecoder().decode(reply.bytes);
+            const facts = JSON.parse(factsText);
             const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map(n => n.toString(16).padStart(2, "0")).join("");
             if (facts.schemaVersion !== 1 || facts.model !== "building-values-v1" ||
                 facts.stamp !== snapshotStamp || facts.character !== snapshotCharacter || facts.saveSha256 !== hash)
               throw new Error(tt("app.facts.mismatch", "The building values do not match this save. Update the game link and try again."));
-            const raw = new Uint8Array(bytes);
-            let binary = "";
-            for (let i = 0; i < raw.length; i += 32768) binary += String.fromCharCode(...raw.subarray(i, i + 32768));
-            bytes = new TextEncoder().encode(JSON.stringify({format: "big-copilot-save", version: 1, save: btoa(binary), facts}));
             extension = "bcsave";
           } catch (err) { await linkDown(gen, err, false); return; }
           if (gen !== sourceGen) return;
@@ -1312,6 +1318,10 @@
         const file = new File([bytes], `${snapshotCharacter}-live.${extension}`,
           {lastModified: Date.parse(health.refreshedAt) || Date.now()});
         file.linkStamp = snapshotStamp;
+        // The name is the eventual download's. Internally this File holds
+        // only gzip bytes; the portable Base64 envelope is created on demand.
+        file.linkFacts = factsText;
+        file.linkBuild = health.build;
         // buildFrom() takes the stamp only once the board has taken the bytes;
         // a build that failed keeps its own reason, and the stamp behind the
         // board, so the next check reads the same bytes again.
@@ -1982,7 +1992,7 @@
       const bytes = await file.arrayBuffer();
       if (gen !== sourceGen) return;
       const data = await ask({
-        kind: "build", name: file.name, bytes, mtime: file.lastModified, live: !!file.linkStamp,
+        kind: "build", name: file.name, bytes, facts: file.linkFacts || null, mtime: file.lastModified, live: !!file.linkStamp,
         locale: stored.get(LOCALE_KEY), history: stored.get(HISTORY_KEY),
       }, [bytes], gen);
       built = data;
@@ -2019,7 +2029,7 @@
       // name (web/report.js, brErrorLine()); a Python failure's is in its trace.
       heldFailure = {name: file.name, error: String(err.message || ""), trace: err.trace || String(err.stack || ""),
         kind: err.trace ? "" : String(err.name || ""),
-        bytes: err.bytes || null, held: !!built || err.held === true,
+        bytes: err.bytes || null, facts: err.facts || null, held: !!built || err.held === true,
         build: builtOn !== null ? builtOn : file.linkStamp && linkHealth && Number.isInteger(linkHealth.build) ? linkHealth.build : null};
       state("bad", () => tt("app.build.failed", "Could not read the save"),
         () => tt("app.build.attempted", "{name} · attempted {when}", {name: file.name, when: fmtTime(at)}));
@@ -2689,7 +2699,20 @@
   // just failed. Null when there is no reader to ask.
   async function readerHeld(build) {
     if (!worker || readerError || !runtimeReady || !lastFile) return null;
-    try { return await ask({kind: "held", build}); } catch (e) { return null; }
+    try {
+      const held = await ask({kind: "held", build});
+      if (held?.bytes && held.facts && !build) held.bytes = portableSaveBytes(held.bytes, held.facts);
+      return held;
+    } catch (e) { return null; }
+  }
+  // Only exports and reports need a portable JSON envelope. Encode in
+  // multiples of three bytes so chunks join without interior Base64 padding.
+  function portableSaveBytes(bytes, factsText) {
+    const raw = new Uint8Array(bytes), chunks = [];
+    for (let i = 0; i < raw.length; i += 24576)
+      chunks.push(btoa(String.fromCharCode(...raw.subarray(i, i + 24576))));
+    return new TextEncoder().encode(JSON.stringify({format: "big-copilot-save", version: 1,
+      save: chunks.join(""), facts: JSON.parse(factsText)})).buffer;
   }
   // The board's own save, as the game link packed it (a .bcsave: the save and
   // the building values read with it), handed to the player as a download.
@@ -2722,7 +2745,8 @@
       // reader; the board's game build is in its payload, a failed save's
       // needs the reader to parse it again.
       bytes: async () => {
-        if (failed && failed.bytes) return failed.bytes;
+        if (failed && failed.file) return portableSaveBytes(await failed.file.arrayBuffer(), failed.facts);
+        if (failed && failed.bytes) return failed.facts ? portableSaveBytes(failed.bytes, failed.facts) : failed.bytes;
         const name = failed ? (failed.held ? failed.name : "") : boardSave ? lastGood.name : "";
         if (!name) return null;
         const h = await readerHeld(false);
@@ -2754,10 +2778,11 @@
     // Read on every masthead paint, so it follows the UI language.
     get label() { return tt("app.source.label", "In browser"); },
     data: async () => {
-      if (!lastFile) throw new Error(tt("app.reader.nosave", "no save yet"));
-      const bytes = await lastFile.arrayBuffer();
-      return ask({kind: "build", name: lastFile.name, bytes, mtime: lastFile.lastModified, live: !!lastFile.linkStamp,
-                  locale: stored.get(LOCALE_KEY), history: stored.get(HISTORY_KEY)}, [bytes]);
+      const file = lastFile, gen = sourceGen;
+      if (!file) throw new Error(tt("app.reader.nosave", "no save yet"));
+      const bytes = await file.arrayBuffer();
+      return ask({kind: "build", name: file.name, bytes, facts: file.linkFacts || null, mtime: file.lastModified, live: !!file.linkStamp,
+                  locale: stored.get(LOCALE_KEY), history: stored.get(HISTORY_KEY)}, [bytes], gen);
     },
     // Resolves to the rebuilt data; the board swaps it in itself. No
     // history goes with it: the worker names against the copy it holds, so
@@ -2832,7 +2857,7 @@
   // calls them through here.
   window.BigCopilotShell = Object.freeze({
     say, failure, errWords, savePlatform, wireSaveLocation, gameTextLanguage, dropForeignLocale,
-    loopbackOrigin, newestOf, entriesOf, chooseFrom, browserLabel, readAnswer, wellFormed, exportSnapshot,
+    loopbackOrigin, newestOf, entriesOf, chooseFrom, browserLabel, readAnswer, wellFormed, exportSnapshot, portableSaveBytes,
   });
 
   /* --- the landing: reveal, the drop zone, the sphere ------------------ */

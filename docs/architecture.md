@@ -72,7 +72,7 @@ this column is where to look when you change a key's shape — not a complete ca
 | --- | --- | --- |
 | `meta` | `extract()` inline, with `_city_date()` and `_difficulty()` | `drawMast`, `drawWeekday`, `drawSite`, `sbData`, `drawSupplyStrip`, `drawProductionView`, `drawFooter`, `fvOpenDiff`, `drawDifficulty`; `web/map.js` `refreshCityMaps`; `web/wiki.js` `wikiGuidePrices` |
 | `streetFood` | `ba_street_food.planner()`, deferred section: public opportunity categories and saved opening hours, announced events, owned fleet and routes, plus native-checked stopping places from `ba_street_food_stops.json`; no demand weights or regulars | Mods › Street Food |
-| `mods` | `ba_mods.detect()`, added at the end of `build_core()`; only on a save a mod adapter reads (`OPTIONAL_KEYS`), absent on a vanilla save. Street Food's optional `streetFood` metadata comes from `ba_street_food.py`: status, vehicle count, live flag and saved mod version | `drawMast` (through `mdFlag()`) |
+| `mods` | `ba_mods.detect()`, added at the end of `build_core()`; only on a save a mod adapter reads (`OPTIONAL_KEYS`), absent on a vanilla save. RLO's optional `rlo` metadata comes from `ba_rlo.py`: capture status, capability availability and validated report counts and credit account balances (see [RLO companion reporting](rlo-companion.md)). Street Food's optional `streetFood` metadata comes from `ba_street_food.py`: status, vehicle count, live flag and saved mod version | `drawMast` (through `mdFlag()`), `drawMods` |
 | `kpi` | `build_core()` inline, with `_net_worth()` | `drawMast`, `drawKpis`, `hrReview/firstHire`, `SS_VIEWS.payroll.live` |
 | `daily` | `_daily_series()`, plus the rolling `profit7` added in `extract()` | `drawChart`, `drawKpis`, `drawKpis/hist` |
 | `businesses` | `_business()` per rented non-residential building; each site's `campaigns` and `marketingPlan` from `_marketing()`, with `marketing_plan()` and `marketing_score()` over `MARKETING_TYPES`, `MARKETING_STRENGTH` and `MARKETING_REACH`, planning with the types the site already has a switch for (flipped at any time) and those sold by agencies that are phone contacts, `agencies` naming the ones a new switch needs (`marketingPlan` is None but for a shop or an office; its `on` is None when the site has no switch, no agency is a contact and a change is needed); `_alerts()` reads it for the `promotion` findings | `drawPortfolio`, `drawSitePicker`, `openSite`, `siteKeys`, `drawSite`, `drawWeekday`, `supplyChecklistRows` and its locals `lineOf`, `held`, `label`, `factoryView/held`, `alertSite`, `nameUses`, Supply's views (`drawImportsView`, `drawDeliveriesView`, `drawProductionView`, `drawChangesView`) through their parts `sbShopsPart`, `sbDepotPart`, `sbFactoryPart` and row helpers (`sbObject`, `sbDepotRow`, `sbLineRow`, `sbInputRow`, `sbTabOf`), the Imports card `sbImportCard`, and `drawFactoryStaffing`, the marketing write's `gwMkSites` (with `spMkLine` and `gwMarketing` reading each site's `marketingPlan`); `web/map.js` `mapBusinesses`; `web/wiki.js` `wikiOwn`, `wikiGuideOwn`, `wikiGuidePrices` |
@@ -979,14 +979,16 @@ without its `.git`) or inside any other git work tree.
 
 The board's page is `template/board.html`, a file of its own beside `ba_dashboard.py`, and
 its script is `template/board.js` beside it. The calculation cores are
-`template/open-store-model.js` and `template/open-factory-model.js`. `render()` reads these files through
+`template/open-store-model.js` and `template/open-factory-model.js`, with the public
+companion arithmetic in `template/mod-economy-model.js` and `template/mod-demand-model.js`. `render()` reads these files through
 `load_template()`, once per process and never at import time: the Pyodide worker imports
 `ba_dashboard` without the files and never renders. `load_template()` first splices
-`open-store-model.js`, `open-factory-model.js`, then `board.js` into the line `/*__BOARD_SCRIPT__*/`, the whole body of the page's last
+the mod economy and demand helpers, `open-store-model.js`, `open-factory-model.js`,
+the Street Food helper, then `board.js` into the line `/*__BOARD_SCRIPT__*/`, the whole body of the page's last
 `<script>` block, so `render()` sees the page as one string and fills the placeholders in
 the page in the same order as when it was one file. The board's `/*__SECTION_META__*/{}`
 slot receives only `section_metadata()` keys/dependencies on each `render()`; it is
-not a second authored section registry. All four sources are in
+not a second authored section registry. All these sources are in
 `build_web.STAMP_INPUTS`, so an edit to any changes the build stamp. The calculation
 source stays inline in the existing script block for both standalone `file://` output
 and the hosted build, requiring neither npm nor a network import for Python rendering.
@@ -1708,6 +1710,21 @@ The board's dependencies are the files `PY_CODE` (the Python modules) and `PY_DA
 against `CODE_FILES`/`DATA_FILES` in the worker, and `tests/worker_startup.test.cjs`
 reads its list from the same two tuples.
 
+Live link snapshots transfer compressed save bytes and the hash-bound facts document
+separately. The worker writes the pair to its virtual filesystem and passes
+`facts_path` to `browser_build()`; `.bcsave` Base64 wrapping is deferred until an
+export or report needs it. A source change clears the previous facts. Startup
+failures retain the immutable downloaded pair for a report, without rereading a
+possibly changed disk file.
+
+`ba_save.load_save()` bounds decompressed ES3 to 512 MiB by default, including
+concatenated gzip members, and still validates gzip integrity. Local callers may
+explicitly override this through `BA_MAX_SAVE_MIB` or `max_decompressed_bytes`.
+This is a refusal limit, not a promise that every browser can parse a save that
+large. Fixed-size decode chunks and memoryview string reads reduce temporary
+copies; `tests/save_memory_probe.py` and `tests/worker_snapshot.test.cjs` exercise
+repeated synthetic large loads and recovery through the actual bundled Pyodide.
+
 `ba_dashboard.py` ships as `strip_copy()` of the source: comments removed and docstrings
 emptied, every line where it was. The virtual filesystem is new on each page load, so
 Python compiles the module every time, and a third of the source is comments and
@@ -1879,13 +1896,55 @@ in [Game link API](game-link-api.md#building-facts-schema-2). Plain saves can re
 Alcware Retail Expansion RCR3/4/5 renovation records from `modData`; no mod binary
 is loaded or executed. Unsupported renovation formats suppress affected estimates.
 
-`ba_mods.py` reads the other mods' data the same way, from the save alone: which
+`ba_mods.py` reads mod records and paired runtime capability observations: which
 adapters a save needs (`detect()`, the `mods` payload key and the masthead's modded
 flag) and the Alcware Seasons calendar, whose per-product factors, copied from the
 mod's DLL with its version, rescale the sales ratio Open a store uses
 (`_store_market()`) and `check_profit_model.py` measures against. Each adapter
 switches on only when the save carries that mod's data; `tools/payload_diff.py` on
 vanilla saves shows no difference.
+
+`capabilities(save)` is the shared registry of unsupported calculations. Its
+capability names identify consumers (`storeProfit`, `officeProfit`,
+`factoryRunning`, `factoryOpening`, `marketing`); reason codes identify the
+missing or unsupported rule. Store and factory facts carry these restrictions
+to their pure models and UI. Recorded accounting remains separate from estimates.
+An adapter must not infer active settings from an assembly name or retained save
+record alone. A paired, observed empty provider list can establish that no listed
+provider was present; missing metadata cannot make the same claim.
+
+Link schema 5 adds optional, independently identified `economy` and `vehiclePrices`
+blocks inside facts schema 1. Economy observations identify the active providers and
+unsupported calculations. Bound HART/RLO companion modules supply supported planning
+inputs; a provider name alone cannot enable its calculations. Registered
+vehicle prices supply the finance model, with reviewed offline defaults only when
+no runtime catalogue is present. An unknown owned vehicle makes wealth and loan
+estimates unavailable instead of valuing it at zero. Older Link schemas remain
+readable. See the wire contract for the exact fields and supported models.
+
+When adding an adapter or changing a model, declare the affected capabilities in
+this registry, provide synthetic fixtures for enabled, disabled, unavailable and
+unknown-version inputs, and check both the pure model and its UI boundary. Keep
+provider details out of individual feature renderers. Include effective runtime
+facts in cache inputs; a changed rule must not reuse a previous planning result.
+Hash and identity validation remain mandatory even for unsupported models.
+
+`ba_companion.py` owns the bounded JSON and paired clock/hash transport. `ba_hart.py`
+and `ba_rlo.py` validate provider envelopes, with additive RLO planning schemas in
+`ba_rlo_planning.py`. `ba_economy.py` joins their immutable observations once per
+`Save` and caches address/employee/item indexes. All five modules are shipped to
+Pyodide; none reads files at import time. Their fixtures and owner-generated
+arithmetic vectors live under `contracts/hart/` and `contracts/rlo/`.
+
+The `openStore` and `openFactory` sections carry `modEconomy` only for a relevant
+provider. The pure JS helpers expose explicit-input calculations; board adapters
+cache them by payload and effective input identity. Disabled means known off,
+ready-empty means known zero, and unavailable/failed/unknown affects only dependent
+estimates. Native statements are never rewritten. Paid, accrued and owed outside
+costs remain separate from profit, and staffing estimates identify ordinary hourly
+wages separately from actual payroll. See [HART/RLO compatibility](hmp-rlo-compatibility.md)
+for the agreed scope and remaining limitations. Live write authorization always
+comes from the current owner query, never from these saved observations.
 
 `ba_street_food.py` validates Street Food schema 1 or 2 once per Save, without
 filesystem reads or executing mod code. It contributes `daily[].streetFood`,
@@ -1909,3 +1968,7 @@ revision in its demand context so a renovation cannot reuse the previous estimat
 match the supported model or the required facts are unavailable. No campaign write
 or agency-visit advice is offered. The saved promotion and equipment-limited
 capacity remain observations, independent of the model's building maximum.
+Valid but unsupported marketing catalogues set `marketingUnavailable` on resolved
+rows; they do not invalidate unrelated building facts. Both the consumer and the
+native write handler refuse unsupported campaign calculations. Malformed catalogues
+and mismatched save/facts pairs still fail validation.

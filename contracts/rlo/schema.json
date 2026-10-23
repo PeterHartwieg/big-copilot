@@ -1,0 +1,450 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rlo:companion:v1",
+  "title": "RLO companion capture v1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "provider",
+    "modVersion",
+    "captured",
+    "modules"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "provider": {
+      "const": "rlo"
+    },
+    "modVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "captured": {
+      "type": "object",
+      "required": [
+        "character",
+        "day",
+        "hour",
+        "minute"
+      ],
+      "properties": {
+        "character": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "day": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "hour": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23
+        },
+        "minute": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 59
+        }
+      }
+    },
+    "modules": {
+      "type": "object",
+      "properties": {
+        "features": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "version",
+                "status",
+                "data"
+              ],
+              "properties": {
+                "version": {
+                  "const": 1
+                },
+                "status": {
+                  "const": "ready"
+                },
+                "data": {
+                  "type": "array",
+                  "maxItems": 10000,
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "enabled",
+                      "running"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1024
+                      },
+                      "enabled": {
+                        "type": "boolean"
+                      },
+                      "running": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "version",
+                "status",
+                "data"
+              ],
+              "properties": {
+                "version": {
+                  "const": 1
+                },
+                "status": {
+                  "enum": [
+                    "disabled",
+                    "unavailable",
+                    "failed"
+                  ]
+                },
+                "data": {
+                  "type": "null"
+                }
+              }
+            }
+          ]
+        },
+        "businesses": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "version",
+                "status",
+                "data"
+              ],
+              "properties": {
+                "version": {
+                  "const": 1
+                },
+                "status": {
+                  "const": "ready"
+                },
+                "data": {
+                  "type": "array",
+                  "maxItems": 10000,
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "street",
+                      "number",
+                      "name",
+                      "typeId",
+                      "temporarilyClosed"
+                    ],
+                    "properties": {
+                      "street": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1024
+                      },
+                      "number": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1024
+                      },
+                      "typeId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1024
+                      },
+                      "temporarilyClosed": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "version",
+                "status",
+                "data"
+              ],
+              "properties": {
+                "version": {
+                  "const": 1
+                },
+                "status": {
+                  "enum": [
+                    "disabled",
+                    "unavailable",
+                    "failed"
+                  ]
+                },
+                "data": {
+                  "type": "null"
+                }
+              }
+            }
+          ]
+        },
+        "employment": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "version",
+                "status",
+                "data"
+              ],
+              "properties": {
+                "version": {
+                  "const": 1
+                },
+                "status": {
+                  "const": "ready"
+                },
+                "data": {
+                  "type": "array",
+                  "maxItems": 10000,
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "employeeId",
+                      "baseHourlyCents",
+                      "cityHourlyCents",
+                      "raiseHourlyCents",
+                      "ordinaryHourlyCents"
+                    ],
+                    "properties": {
+                      "employeeId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1024
+                      },
+                      "baseHourlyCents": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "cityHourlyCents": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "raiseHourlyCents": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "ordinaryHourlyCents": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "version",
+                "status",
+                "data"
+              ],
+              "properties": {
+                "version": {
+                  "const": 1
+                },
+                "status": {
+                  "enum": [
+                    "disabled",
+                    "unavailable",
+                    "failed"
+                  ]
+                },
+                "data": {
+                  "type": "null"
+                }
+              }
+            }
+          ]
+        },
+        "credit": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "version",
+                "status",
+                "data"
+              ],
+              "properties": {
+                "version": {
+                  "const": 1
+                },
+                "status": {
+                  "const": "ready"
+                },
+                "data": {
+                  "type": "array",
+                  "maxItems": 10000,
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "kind",
+                      "balanceCents",
+                      "paymentTomorrowCents",
+                      "annualRateBasisPoints",
+                      "frozen",
+                      "includedInGameLoans"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1024
+                      },
+                      "kind": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1024
+                      },
+                      "balanceCents": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "paymentTomorrowCents": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "annualRateBasisPoints": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "frozen": {
+                        "type": "boolean"
+                      },
+                      "includedInGameLoans": {
+                        "const": false
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "version",
+                "status",
+                "data"
+              ],
+              "properties": {
+                "version": {
+                  "const": 1
+                },
+                "status": {
+                  "enum": [
+                    "disabled",
+                    "unavailable",
+                    "failed"
+                  ]
+                },
+                "data": {
+                  "type": "null"
+                }
+              }
+            }
+          ]
+        },
+        "accounting": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "version",
+                "status",
+                "data"
+              ],
+              "properties": {
+                "version": {
+                  "const": 1
+                },
+                "status": {
+                  "const": "ready"
+                },
+                "data": {
+                  "type": "object",
+                  "required": [
+                    "source",
+                    "coverage",
+                    "adjustment"
+                  ],
+                  "properties": {
+                    "source": {
+                      "const": "game.financialSummaries"
+                    },
+                    "coverage": {
+                      "const": "statement-backed-only"
+                    },
+                    "adjustment": {
+                      "const": "none"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "version",
+                "status",
+                "data"
+              ],
+              "properties": {
+                "version": {
+                  "const": 1
+                },
+                "status": {
+                  "enum": [
+                    "disabled",
+                    "unavailable",
+                    "failed"
+                  ]
+                },
+                "data": {
+                  "type": "null"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

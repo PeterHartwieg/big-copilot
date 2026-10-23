@@ -637,7 +637,9 @@ for(const [hash, saved, view, shell] of [
       // settled loading result (success or failure), not two sides of its promise.
       if(id === "mods/streetfood") await visit.evaluate(() => sfMapView && sfMapView.ready);
       const read = () => visit.evaluate(() => {
-        document.querySelectorAll('.sec').forEach(el => el.classList.add('measured'));
+        // Nested sections (including the mod gallery) also use content-visibility.
+        // Include their off-screen text on both sides of this render comparison.
+        document.querySelectorAll('section').forEach(el => el.classList.add('measured'));
         return document.querySelector('.page:not([hidden])').innerText;
       });
       const shown = await read();

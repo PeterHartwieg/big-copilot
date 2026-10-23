@@ -33,7 +33,7 @@ const PYODIDE_VERSION = "314.0.6";
 const PINNED_WORKER = /\/assets\/[a-f0-9]{64}\/worker\.js$/.test(new URL(self.location.href).pathname);
 const SITE_URL = new URL(PINNED_WORKER ? "../../" : "./", self.location.href);
 const PYODIDE_URL = new URL(`pyodide/v${PYODIDE_VERSION}/`, SITE_URL).href;
-const CODE_FILES = ["ba_save.py", "ba_dashboard.py", "ba_facts.py", "ba_mods.py", "ba_street_food.py"];
+const CODE_FILES = ["ba_save.py", "ba_dashboard.py", "ba_facts.py", "ba_mods.py", "ba_street_food.py", "ba_rlo.py", "ba_companion.py", "ba_hart.py", "ba_economy.py", "ba_rlo_planning.py"];
 const DATA_FILES = ["gametext.json", "ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json", "ba_store_rules.json", "ba_street_food_rules.json", "ba_street_food_stops.json"];
 
 const SAVE_DIR = "/save";
@@ -43,7 +43,7 @@ const LOCALE = `${DATA_DIR}/en.json`;
 const NAMES = `${DATA_DIR}/gametext.json`;  // game text shipped with the page
 
 let py = null;
-let lastSave = null; // {name, mtime} of the save currently in the filesystem
+let lastSave = null; // {name, mtime, facts} of the save currently in the filesystem
 let localeText = null; // the locale text last written, to skip rewrites
 let queue = Promise.resolve(); // rebuilds run one at a time, like the watcher
 let heldGen = null; // the generation of the build Python holds for sections, if any
@@ -158,14 +158,17 @@ function heldHistory() {
   try { return py.FS.readFile(HISTORY, {encoding: "utf8"}); } catch (e) { return null; }
 }
 
-function placeSave(name, bytes, mtime) {
+function placeSave(name, bytes, mtime, facts) {
   if (lastSave) { try { py.FS.unlink(`${SAVE_DIR}/${lastSave.name}`); } catch (e) {} }
   const path = `${SAVE_DIR}/${name}`;
   py.FS.writeFile(path, new Uint8Array(bytes));
   // The board's "saved" stamp reads the file's modification time. Emscripten's
   // utime takes milliseconds, the same unit the browser's File gives.
   py.FS.utime(path, mtime, mtime);
-  lastSave = {name, mtime};
+  // Facts travel separately from gzip bytes; remove the previous pair even
+  // when switching back to an ordinary file or a pre-packaged .bcsave.
+  writeText(`${SAVE_DIR}/building-facts.json`, facts);
+  lastSave = {name, mtime, facts: facts || null};
   return path;
 }
 
@@ -175,11 +178,12 @@ function placeSave(name, bytes, mtime) {
 function heldSave(msg) {
   const reply = {kind: "held", id: msg.id, bytes: null, build: null, name: lastSave ? lastSave.name : ""};
   if (!lastSave) return reply;
+  reply.facts = lastSave.facts;
   const path = `${SAVE_DIR}/${lastSave.name}`;
   try { reply.bytes = py.FS.readFile(path).buffer; } catch (e) {}
   if (msg.build) {
     try {
-      const build = py.runPython(`ba_save.load_save(${JSON.stringify(path)}).root.get("buildNumberAtLastSave")`);
+      const build = py.runPython(`ba_save.load_save(${JSON.stringify(path)}${lastSave.facts ? ', facts_path="/save/building-facts.json"' : ""}).root.get("buildNumberAtLastSave")`);
       reply.build = Number.isInteger(build) ? build : null;
     } catch (e) {}
   }
@@ -192,7 +196,7 @@ let liveSource = false;
 function build(path, gen) {
   heldGen = null;
   // A JSON string crosses the worker boundary cheaply; a proxy would not.
-  const data = py.runPython(`ba_dashboard.browser_build(${JSON.stringify(path)}, ${JSON.stringify(LOCALE)}, ${JSON.stringify(HISTORY)}, ${JSON.stringify(NAMES)}, ${JSON.stringify(gen)}, ${liveSource ? "True" : "False"})`);
+  const data = py.runPython(`ba_dashboard.browser_build(${JSON.stringify(path)}, ${JSON.stringify(LOCALE)}, ${JSON.stringify(HISTORY)}, ${JSON.stringify(NAMES)}, ${JSON.stringify(gen)}, ${liveSource ? "True" : "False"}${lastSave?.facts ? ", facts_path=\"/save/building-facts.json\"" : ""})`);
   heldGen = gen;
   return data;
 }
@@ -245,7 +249,7 @@ onmessage = (e) => {
           localeText = msg.locale;
         }
         writeText(HISTORY, msg.history);
-        const path = placeSave(msg.name, msg.bytes, msg.mtime);
+        const path = placeSave(msg.name, msg.bytes, msg.mtime, msg.facts);
         say("build", `Reading ${msg.name}`);
         const t = performance.now();
         liveSource = msg.live === true;
@@ -285,7 +289,7 @@ onmessage = (e) => {
       // for a bug report: it does not hold them otherwise, and reading the
       // File again can give a newer save or fail.
       const bytes = msg.kind === "build" && msg.bytes instanceof ArrayBuffer && msg.bytes.byteLength ? msg.bytes : null;
-      postMessage({kind: "failed", id: msg.id, error: last, trace: whole, bytes}, bytes ? [bytes] : []);
+      postMessage({kind: "failed", id: msg.id, error: last, trace: whole, bytes, facts: msg.kind === "build" ? msg.facts || null : null}, bytes ? [bytes] : []);
     }
   });
 };

@@ -27,7 +27,15 @@ SHA-256 hash. The dashboard can download these together as a `.bcsave` snapshot 
 later use. Capacity and area changes made by other mods use the same path as changed
 game definitions. The collector uses game getters and never loads another mod's DLL.
 
-Build in the SDK and verify `/health` advertises schema 4 and `building-facts.v1`.
+Version 0.8.1 uses wire schema 5 and adds registered vehicle prices and economy
+capability observations to the paired facts. Update the dashboard before using this
+Link version. The dashboard still accepts older Link schemas and portable snapshots.
+HMP/RLO capability observations identify forecasts that need unsupported rules;
+they do not claim to calculate those mods' complete running costs. Unknown marketing
+catalogues leave read-only building facts available and refuse campaign writes.
+The SDK package build verifies compilation; native gameplay acceptance is separate.
+
+Build in the SDK and verify `/health` advertises schema 5 and `building-facts.v1`.
 Peter's local regression check covers a normal city; the original reporter will
 test an Alcware-renovated shop. For the in-game test, compare area, customer capacity
 and campaign prediction with BizMan. Renovate while a refresh is running and verify
@@ -192,12 +200,76 @@ and quote/revision guards on apply. It restores the test's static
 state and does not read a player save. In-game refresh and hire checks remain necessary
 before release.
 
+## RLO companion capture
+
+The optional `RealLifeOverhaul.Companion.CaptureV1(GameInstance)` API supplies a
+read-only report on the main thread, before save serialization. Link copies the
+root and `modData`, attaches the report and its freshness digest, and leaves the
+running game unchanged. No schema-version bump or gameplay write is involved.
+See [RLO companion reporting](../../docs/rlo-companion.md) for the contract and limits.
+
+For the synthetic SDK check, compile the RLO contribution and put its DLL in an
+isolated SDK's `Assets/RloCompanion/`, with a PluginImporter usable by the Editor.
+Keep the real Street Food mod out of this SDK: the harness supplies its own
+identity-sensitive provider stub.
+Link this checkout's `mod/BigCopilotLink/` into `Assets/Mods/BigCopilotLink/` and copy
+`mod/build/rlo-tests/` into `Assets/Editor/BclRloTests/`. With game DLLs imported,
+run Unity with `-batchmode -projectPath <SDK> -executeMethod BclRloTests.Run
+-logFile <log>`. The harness checks the real RLO provider, composition with an identity-sensitive
+Street Food stub, effective parent settings, save-event identity, copied snapshots,
+digest pairing, ordinary-save capture, failure isolation, unavailable sessions
+and unchanged live mod data. It restores the synthetic static state and reads
+no player saves. Before release, also run the in-game save/reload and unsaved
+wage/credit-change checks in RLO's companion contract README.
+
+## HART capture and fresh ownership validation
+
+Link independently discovers `HARTModPack.Companion.CaptureV1(GameInstance)`.
+Current HART and RLO reports compose with Street Food on the same private root.
+Fresh markers bind exact raw UTF-8 reports; unavailable providers remove copied
+stale reports. Canonical provider identity/version/modules are checked again
+before asynchronous publication. See [HART reporting](../../docs/hart-companion.md).
+
+The native schedule, hire/move/reschedule, wholesale and rent writes query RLO's
+pure `OwnershipV1` during review, apply and undo. Only allowed permits mutation;
+conditional/refused/unknown returns a semantic 409, preserving undo. Hire checks
+all actual source and destination sites and every scheduling suboperation before
+any change. Old RLO is allowed only with fresh effective-disabled manager/estate
+proof; a manager whose director is not running is still potentially active.
+Scheduling additionally needs fresh Company-disabled proof or a complete proposed
+week within 05:00–22:00, including hiring with scheduling and undo. Older reports
+cannot verify a current late-opening permit.
+
+For the isolated synthetic SDK check, keep real RLO, HART and Street Food provider
+DLLs and the other provider test harnesses out of that SDK. Copy
+`mod/build/compatibility-tests/` to `Assets/Editor/BclCompatibilityTests/`, then run:
+
+```sh
+BCL_OWNERSHIP_SCHEMA=<checkout>/contracts/rlo/ownership-request.schema.json Unity -batchmode -nographics -projectPath <SDK> -executeMethod BclCompatibilityTests.Run -logFile <log>
+```
+
+The harness checks one-copy composition, exact hashes and copied clock, failure
+isolation and stale removal, canonical mid-walk changes, distinct-assembly
+ambiguity, each ownership operation/phase and actual builder against the frozen
+request schema, strict responses, old-report permit fallbacks, owned-property
+zero-cost provenance,
+source-week projections and a 10,000-item catalogue. It reads no player saves and
+never triggers game save events. It uses synthetic provider APIs; run the separate
+real RLO provider harness too when the candidate DLL is ready. SDK checks prove
+neither in-game behaviour nor ordinary save/reload correctness. Release acceptance
+still requires option/gate changes, current report matching, manager changes
+between review/apply/undo, refusal without partial mutation, and an undo retained
+after refusal with the exact release candidates.
+
 ## Source layout
 
 `Scripts/LinkMod.cs` owns mod startup/options and the shared logger.
 `LinkHttpServer.cs` handles HTTP admission/routing; `MainThreadDispatcher.cs` owns
 bounded main-thread work. `SaveService.cs`, `HealthState.cs` and `BuildingFacts.cs`
-own snapshots and their published metadata. `ApprovalService.cs` owns browser
+own snapshots and their published metadata. `CompanionSnapshots.cs` and
+`StreetFoodSnapshot.cs` attach the optional mod reports, `EconomyFacts.cs` and
+`NativeEconomyFacts.cs` read economy facts, and `ModOwnership.cs` asks RLO who owns
+a site before a write. `ApprovalService.cs` owns browser
 approval. `WriteService.cs` owns dispatch and per-city undo state; `WriteProtocol.cs`
 holds the shared `WriteAnswer` and `WireAddress` value types.
 
@@ -274,7 +346,7 @@ packager first; repository-only compilation does not replace that check.
    | ModId | `BigCopilotLink` |
    | DisplayName | `Big Copilot Link` |
    | Author | `Peter Hartwieg` |
-   | Version | `0.8.0` |
+   | Version | `0.8.1` |
    | Mod Assembly | drag `BigCopilotLink.asmdef` into the field |
    | Locales Folder | drag the `Locales` folder into the field; the option labels are keys in `Locales/en.json` |
 
@@ -301,7 +373,7 @@ packager first; repository-only compilation does not replace that check.
    the Windows build module is not installed and that is fine, the packager's assembly
    build works and the bundle step is skipped because the mod has no assets).
 
-The release script uses a dedicated SDK in `build/sdk`, verifies the runtime and manifest versions, and writes `build/BigCopilotLink-0.8.0.zip` and SHA-256 files. It reuses the existing Workshop thumbnail. It does not install or upload the mod. Set `BA_GAME_DLLS` to prepared game references when the documented Mac shim is unavailable.
+The release script uses a dedicated SDK in `build/sdk`, verifies the runtime and manifest versions, and writes `build/BigCopilotLink-0.8.1.zip` and SHA-256 files. It reuses the existing Workshop thumbnail. It does not install or upload the mod. Set `BA_GAME_DLLS` to prepared game references when the documented Mac shim is unavailable.
 
 Unity writes a `.meta` file next to every file in this folder; they are committed,
 along with `ModManifest.asset`, because the GUIDs have to stay stable. The repo's
@@ -315,7 +387,7 @@ Launch the game, enable **Big Copilot Link** in the Mods menu, load a save, then
 curl http://127.0.0.1:8322/health
 ```
 
-Expect `{"ok":true,"schemaVersion":4,"modVersion":"0.8.0","source":"game",…,"writes":["uniforms","imports","schedule","hire","marketing","rent","wholesale"],"features":["hire.reschedule","hire.undo","rent.undo","wholesale.undo","building-facts.v1"],"paired":false}` and a
+Expect `{"ok":true,"schemaVersion":5,"modVersion":"0.8.1","source":"game",…,"writes":["uniforms","imports","schedule","hire","marketing","rent","wholesale"],"features":["hire.reschedule","hire.undo","rent.undo","wholesale.undo","building-facts.v1"],"paired":false}` and a
 `[BigCopilotLink] serving the game to Big Copilot on http://127.0.0.1:8322/` line in
 the player log (`%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\Player.log`;
 on a Mac, `~/Library/Logs/Hovgaard Games/Big Ambitions/Player.log`), then, a few

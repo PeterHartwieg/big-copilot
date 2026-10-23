@@ -42,7 +42,7 @@ CHECK_INPUTS = tuple(dict.fromkeys(
 # modules build_web imports, and the web/ assets render() embeds in the page.
 CLI_INPUTS = tuple(dict.fromkeys(
     CHECK_INPUTS
-    + ("ba_save.py", "ba_dashboard.py", "template/board.html", "template/board.js", "template/open-store-model.js", "template/open-factory-model.js", "web/changelog.json", "web/map.js", "web/map.css",
+    + ("ba_save.py", "ba_dashboard.py", "template/board.html", "template/board.js", "template/mod-economy-model.js", "template/mod-demand-model.js", "template/open-store-model.js", "template/open-factory-model.js", "web/changelog.json", "web/map.js", "web/map.css",
        "web/wiki.js", "web/wiki.css", "web/wiki-data.json", "web/sitemap.xml", "web/robots.txt")
 ))
 # The translations under i18n/ are the source of web/i18n/, which --check rebuilds.

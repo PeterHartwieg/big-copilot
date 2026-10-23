@@ -453,6 +453,17 @@ numbers do not settle it, ask the owner before changing `OFFICE_POST_RATE`.
 
 ## 5. Bump the build
 
+Before advancing the verified build, check the calculation capabilities as well
+as the save shape. A save that parses does not establish that its forecasts use
+the current rules. Review the marketing catalogue/model, registered vehicle
+prices and the economy provider observations documented in
+[Runtime building values](architecture.md#runtime-building-values). Exercise a
+supported fixture and a valid unknown-model fixture: unaffected recorded data
+must remain available, while unsupported estimates and writes must be withheld.
+Keep the paired save hash and identity checks strict. Changes to the public Link
+contract advance its wire schema in the mod, mock, both clients and API document
+together, retaining explicit support for older schemas where possible.
+
 - `VERIFIED_BUILD` in `ba_dashboard.py`. It is the build the board says it was checked
   against. A save from a newer build shows a `BUILD N UNCHECKED` flag in the masthead, and
   a save that fails to extract says the game has probably changed its save format. The

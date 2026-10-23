@@ -71,3 +71,13 @@ test('hostile rival values are escaped in both text and tooltip attribute', () =
   assert.match(tip, /&lt;b(?:>|&gt;)&quot;x&amp;/);
   assert.doesNotMatch(html, /<b>|"x/);
 });
+
+
+test('RLO evidence is visible even when its companion report is missing', () => {
+  const {text, tip} = flagParts({rlo: {status: 'legacy'}});
+  assert.equal(text, 'MODDED: REAL LIFE OVERHAUL');
+  assert.match(tip, /Browse mods shows report availability/);
+  assert.match(tip, /Supported versioned reports inform estimates/);
+  assert.match(tip, /current mod owner before review, apply and undo/);
+  assert.doesNotMatch(tip, /do not yet account|full compatibility/i);
+});

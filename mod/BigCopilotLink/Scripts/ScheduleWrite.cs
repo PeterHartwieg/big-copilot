@@ -168,6 +168,12 @@ namespace BigCopilotLink
             // included) on the days the write owns, and no hours to open.
             var noOp = !failed && opens.Count == 0 && Print(Owned(dayByD)) == Print(after);
 
+            if (!failed)
+            {
+                var refusal = ModOwnership.Check("schedule", dryRun ? "review" : "apply",
+                    new[] { OwnershipTarget(reg, req.Address, after, req.OpenAllHours, null) });
+                if (refusal.HasValue) return refusal.Value;
+            }
             if (dryRun || failed)
                 return Answer(req.Address, reg, dryRun, failed, false, null, siteError, checks, before, after, openAfter, !failed && opens.Count > 0);
 
@@ -313,6 +319,11 @@ namespace BigCopilotLink
 
             var failed = siteError != null;
             var noChecks = new List<ShiftCheck>();
+            if (!failed)
+            {
+                var refusal = ModOwnership.Check("schedule", "undo", new[] { OwnershipTarget(reg, state.Address, restore.Restored, false, state) });
+                if (refusal.HasValue) return refusal.Value;
+            }
             if (dryRun || failed)
                 return Answer(state.Address, reg, dryRun, failed, true, null, siteError, noChecks, restore.Current, restore.Restored, restore.OpenAfter, state.OpenedHours);
 
@@ -405,6 +416,44 @@ namespace BigCopilotLink
         internal static void WriteRestore(JsonWriter w, Restore restore)
         {
             WeekFields(w, restore.Current, restore.Restored, restore.OpenAfter, restore.State.OpenedHours, null);
+        }
+
+        /// <summary>Exact proposed/restored week, including every opening interval. Reads only.</summary>
+        internal static Dictionary<string, object> OwnershipTarget(BuildingRegistration reg, WireAddress address,
+            List<Line> lines, bool openAllHours, UndoState restore)
+        {
+            var target = ModOwnership.Target(address);
+            var week = new List<object>();
+            var live = DaysByIndex(reg.scheduleDays ?? new List<ScheduleDay>());
+            for (var d = 0; d < 7; d++)
+            {
+                ScheduleDay day;
+                if (!live.TryGetValue(d, out day)) continue; // Provider refuses incomplete week.
+                var i = restore == null ? -1 : restore.Days.FindIndex(sd => DayIndex(sd) == d);
+                var restored = i >= 0 && restore.Opened[i];
+                var isOpen = openAllHours || (restored ? restore.WasOpen[i] : day.isOpen);
+                var hours = new List<object>();
+                if (isOpen)
+                {
+                    if (openAllHours) hours.Add(new Dictionary<string, object> { { "from", 0 }, { "to", 24 } });
+                    else foreach (var slot in (restored ? restore.Slots[i] : day.openingHourSlots) ?? new List<OpeningHourSlot>())
+                        if (slot != null) hours.Add(new Dictionary<string, object> { { "from", slot.startingHour }, { "to", slot.endingHour } });
+                }
+                var shifts = new List<object>();
+                foreach (var line in lines)
+                    if (line.D == d) shifts.Add(new Dictionary<string, object> { { "from", line.From }, { "to", line.To },
+                        { "employeeId", line.Employee }, { "itemInstanceId", string.IsNullOrEmpty(line.Item) ? null : line.Item } });
+                week.Add(new Dictionary<string, object> { { "day", d }, { "isOpen", isOpen }, { "hours", hours }, { "shifts", shifts } });
+            }
+            target["week"] = week;
+            return target;
+        }
+
+        internal static Dictionary<string, object> OwnershipCurrent(BuildingRegistration reg, WireAddress address, HashSet<string> removed)
+        {
+            var lines = Lines(reg.scheduleDays ?? new List<ScheduleDay>());
+            if (removed != null) lines.RemoveAll(line => removed.Contains(line.Employee));
+            return OwnershipTarget(reg, address, lines, false, null);
         }
 
         // ---- for the hire write -----------------------------------------------------

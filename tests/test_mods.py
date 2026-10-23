@@ -244,3 +244,109 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(market[ITEM + "icecream"]["r"], round((10 * .35 + 4 * .4375) / 14, 6))
         self.assertEqual(market[ITEM + "icecream"]["p"], 7)
         self.assertEqual(market[ITEM + "paperbag"], {"r": .123})
+
+
+class CapabilityTests(unittest.TestCase):
+    def with_economy(self, providers, **overrides):
+        save = save_with()
+        save.facts = {"economy": {"schemaVersion": 1, "model": mods.ECONOMY_MODEL,
+                                  "providers": providers, **overrides},
+                      "marketingTypes": [{"id": i, "name": name} for i, name in enumerate(mods.ba_facts.CAMPAIGNS)]}
+        return save
+
+    def provider(self, **rules):
+        return {"id": "hard-mode-patch", "version": "1.0", "status": "observed", "rules": {"equipmentUtilities": False, "officeIt": False, "factoryDiplomas": False, **rules}}
+
+    def test_vanilla_and_explicitly_disabled_rules_keep_baseline(self):
+        self.assertEqual(mods.capabilities(save_with()), {})
+        self.assertEqual(mods.capabilities(self.with_economy([])), {})
+        self.assertEqual(mods.capabilities(self.with_economy([self.provider(
+            equipmentUtilities=False, officeIt=False, factoryDiplomas=False)])), {})
+
+    def test_each_selected_rule_only_limits_affected_models(self):
+        for rule, expected in mods.ECONOMY_RULES.items():
+            with self.subTest(rule=rule):
+                provider = self.provider(**{rule: True})
+                if rule == "operatingCosts": provider["id"] = "real-life-overhaul"
+                actual = mods.capabilities(self.with_economy([provider]))
+                self.assertEqual(actual, {key: [rule] for key in expected})
+
+    def test_unknown_rules_and_providers_cannot_claim_complete_estimates(self):
+        unknown = {k: ["economyUnknown"] for k in mods.ECONOMY_CAPABILITIES}
+        provider = {"id": "real-life-overhaul", "version": "1", "status": "unavailable", "rules": {"operatingCosts": None}}
+        self.assertEqual(mods.capabilities(self.with_economy([provider])), unknown)
+        self.assertEqual(mods.capabilities(self.with_economy([], model="economy-v2")), unknown)
+        self.assertEqual(mods.capabilities(self.with_economy([], schemaVersion=2)), unknown)
+        self.assertEqual(mods.capabilities(self.with_economy([self.provider(officeIt=None)])),
+                         {k: ["economyUnknown"] for k in mods.ECONOMY_RULES["officeIt"]})
+        self.assertEqual(mods.capabilities(self.with_economy([self.provider(operatingCosts=True)])),
+                         {k: ["operatingCosts"] for k in mods.ECONOMY_RULES["operatingCosts"]})
+
+    def test_retained_state_means_unknown_not_active_and_fresh_absence_wins(self):
+        save = save_with({"reallife:careers": "old retained state"})
+        self.assertEqual(set(mods.capabilities(save)), set(mods.ECONOMY_CAPABILITIES))
+        self.assertEqual(mods.detect(save)["rlo"]["status"], "legacy")
+        # Save instances are immutable captures: create a fresh one for newer
+        # runtime facts instead of mutating an already cached report.
+        absent = save_with({"reallife:careers": "old retained state"})
+        absent.facts = self.with_economy([]).facts
+        self.assertEqual(mods.capabilities(absent), {})
+        import ba_economy
+        self.assertIsNone(ba_economy.report(absent, "rlo"))
+
+
+    def test_public_report_delegates_to_scoped_models(self):
+        from unittest.mock import patch
+        import ba_economy
+        for provider_id, key in (("hart-mod-pack", "hart"), ("hard-mode-patch", "hart"), ("real-life-overhaul", "rlo")):
+            save = self.with_economy([{**self.provider(equipmentUtilities=True, officeIt=True,
+                factoryDiplomas=True, operatingCosts=True), "id": provider_id}])
+            with patch.object(ba_economy, "report", side_effect=lambda current, provider: {
+                    "status": "partial", "modules": {}} if provider == key else None):
+                self.assertEqual(mods.capabilities(save), {})
+
+    def test_known_hart_without_report_remains_conservative(self):
+        provider = {**self.provider(officeIt=True), "id": "hart-mod-pack"}
+        self.assertEqual(mods.capabilities(self.with_economy([provider])),
+                         {key: ["officeIt"] for key in mods.ECONOMY_RULES["officeIt"]})
+
+    def test_invalid_provider_observation_cannot_delegate(self):
+        from unittest.mock import patch
+        import ba_economy
+        provider = {**self.provider(), "id": "hart-mod-pack", "status": "unavailable"}
+        with patch.object(ba_economy, "report", return_value={"status": "ready", "modules": {}}):
+            self.assertEqual(set(mods.capabilities(self.with_economy([provider]))), set(mods.ECONOMY_CAPABILITIES))
+
+    def test_hash_bound_capabilities_reach_planners_without_changing_recorded_finances(self):
+        from tests.save_fixtures import data_company, data_names
+        from tests.test_building_facts import facts_for
+        root = data_company()
+        raw = encode(root)
+        facts = facts_for(raw, root)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp, "synthetic.bcsave")
+            path.write_bytes(mods.ba_facts.pack(raw, facts))
+            before = dashboard.extract(load_save(str(path)), Names(data_names()), None)
+            facts["economy"] = self.with_economy([self.provider(equipmentUtilities=True, officeIt=True, factoryDiplomas=True)]).facts["economy"]
+            facts["marketingTypes"].append({"id": 6, "name": "NewCampaign", "price": 900, "reach": 200})
+            path.write_bytes(mods.ba_facts.pack(raw, facts))
+            after = dashboard.extract(load_save(str(path)), Names(data_names()), None)
+        self.assertEqual(after["daily"], before["daily"])
+        self.assertEqual(after["kpi"], before["kpi"])
+        self.assertEqual(after["openStore"]["compatibility"]["storeProfit"], ["equipmentUtilities", "marketingUnknown"])
+        self.assertEqual(after["openFactory"]["compatibility"]["factoryOpening"], ["factoryDiplomas"])
+        self.assertTrue(any(b.get("marketingPlan", {}).get("unavailable") for b in after["businesses"] if b.get("marketingPlan")))
+
+
+    def test_finance_combines_nonmotor_zeros_without_mutating_purchase_prices(self):
+        save = save_with()
+        motor = {"motor": 10000, "free_motor": 0}
+        non_motor = ["flatbed", "scooter", "handtruck"]
+        values, supported = mods.vehicle_prices(save, motor, non_motor)
+        self.assertTrue(supported)
+        self.assertEqual({name: values[name] for name in non_motor}, dict.fromkeys(non_motor, 0))
+        self.assertEqual(motor, {"motor": 10000, "free_motor": 0})
+        self.assertNotIn("unknown:vehicle", values)
+        save.facts = {"vehiclePrices": {"schemaVersion": 1, "model": mods.ba_facts.VEHICLE_MODEL,
+                                        "prices": {"scooter": 0}}}
+        self.assertEqual(mods.vehicle_prices(save, motor, non_motor), ({"scooter": 0}, True))

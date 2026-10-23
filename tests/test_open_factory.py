@@ -164,6 +164,17 @@ class PayloadTests(unittest.TestCase):
             out = ba_dashboard._open_factory(self.save, names, self.save.items(self.save.root["BuildingRegistrations"]),
                                              self.payload["businesses"], recipes, [])
         self.assertEqual(out["products"]["ba:itemname_rawtomato"], {"w": 0.29, "i": 1.0, "bx": 500, "mo": 25000})
+        # Runtime catalogue IDs use tomato, never the help-page alias. Missing
+        # identities must map back to the recipe key only when truly absent.
+        for present in (True, False):
+            def missing(_save, ids):
+                self.assertNotIn("ba:itemname_rawtomato", ids)
+                self.assertIn("ba:itemname_tomato", ids)
+                return [] if present else ["ba:itemname_tomato"]
+            with mock.patch.object(ba_dashboard, "load_store_rules", return_value=rules), mock.patch.object(
+                    ba_dashboard.ba_economy, "price_unavailable", side_effect=missing):
+                out = ba_dashboard._open_factory(self.save, names, [], [], recipes, [])
+            self.assertEqual(out.get("priceUnavailable", []), [] if present else ["ba:itemname_rawtomato"])
 
     def test_no_store_rules_means_nothing_to_price(self):
         with mock.patch.object(ba_dashboard, "load_store_rules", return_value={"products": {}}):

@@ -240,7 +240,7 @@ test('a mod speaking another schema version is refused, naming the supported ver
   const h = harness({routes: {health: {...HEALTH, schemaVersion: 99, stamp: 's2'}}});
   await h.run('loadFromLink("Linking to the game")');
   assert.equal(h.seen.states.at(-1)[1], en("app.link.mismatch"));
-  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:99, need:4}));
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:99, need:5}));
   assert.equal(h.seen.builds.length, 0);
 });
 
@@ -754,7 +754,7 @@ test('an incompatible mod that is busy is refused at once, not after the wait', 
   h.run('linkUrl = "http://127.0.0.1:8322"');
   await h.run('loadFromLink("Reading the game")');
   assert.equal(h.waits.length, 0, 'no waiting');
-  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:99, need:4}));
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:99, need:5}));
 });
 
 test('a port that never answers as the mod is named after the wait, not blamed on a missing save', async () => {
@@ -805,7 +805,7 @@ test('an incompatible mod answering an Update is refused inside the poll, not af
   const h = harness({routes: {refresh: reply(202, {accepted: true, stamp: 's1'}), health: {...HEALTH, schemaVersion: 99}}});
   h.run('linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"');
   await h.run('update()');
-  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:99, need:4}));
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:99, need:5}));
   assert.equal(h.waits.length, 0);
 });
 
@@ -890,7 +890,7 @@ test('the watcher says once when a foreign object or another version answers, an
   assert.deepEqual(h.seen.notes.at(-1), ['']);
   body = {...HEALTH, schemaVersion: 99, stamp: 's1'};
   await h.run('checkFolder()');
-  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.port.version", {v:99, need:4}));
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.port.version", {v:99, need:5}));
 });
 
 test('an Update that reads health of this version re-arms the port note of the watcher', async () => {
@@ -930,7 +930,7 @@ test('a note the player earned another way does not silence the watcher, and the
   // A version-2 mod on the port replaces the wording.
   body = {...HEALTH, schemaVersion: 99, stamp: 's1'};
   await h.run('checkFolder()');
-  assert.match(h.context.noted.text, enRe("app.link.port.version", {v:99, need:4}));
+  assert.match(h.context.noted.text, enRe("app.link.port.version", {v:99, need:5}));
 });
 
 test('#link= only moves the port on this machine', () => {
@@ -1003,11 +1003,11 @@ test('a mod that now speaks another version takes no writes until it speaks this
 
   body = {...HEALTH, schemaVersion: 99, writes: ['uniforms', 'imports'], stamp: 's1'};
   await h.run('checkFolder()');
-  assert.match(h.context.noted.text, enRe("app.link.port.version", {v:99, need:4}));
+  assert.match(h.context.noted.text, enRe("app.link.port.version", {v:99, need:5}));
   assert.deepEqual(plain(h.run('linkWrites()')), [], 'the board draws its write buttons off');
   assert.equal(moved, 1, 'an open write dialog hears of it');
   const refused = await h.run('gameWrite("uniforms", {sites: []}, {dryRun: true})');
-  assert.deepEqual(plain(refused), {status: 0, error: 'mismatch', version: 99, need: 4, body: null});
+  assert.deepEqual(plain(refused), {status: 0, error: 'mismatch', version: 99, need: 5, body: null});
   assert.equal(h.run('bindSource().holds()'), false, 'a write under way stops before its next request');
   assert.ok(!h.seen.calls.some(([url]) => url.includes('/write/') || url.includes('/pair/')), 'nothing was sent');
 
@@ -1099,12 +1099,12 @@ test('the refusal on Update is still the full one, and names the version this pa
   const h = harness({routes: {health: {...HEALTH, schemaVersion: 99}}});
   await h.run('loadFromLink("Linking to the game")');
   assert.deepEqual(h.seen.states.at(-1), ['bad', en("app.link.mismatch"), 'http://127.0.0.1:8322']);
-  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:99, need:4}));
+  assert.match(h.seen.notes.at(-1)[1], enRe("app.link.mismatch.why", {v:99, need:5}));
   assert.deepEqual(plain(h.run('linkWrites()')), []);
 });
 
 
-test('schema 2 downloads a hash-bound portable save; stale facts never build', async () => {
+test('schema 2 transfers raw save bytes and hash-bound facts separately; stale facts never build', async () => {
   const raw = new Uint8Array([31, 139, 1, 2, 3]).buffer;
   const health = {...HEALTH, schemaVersion: 2, features: ['building-facts.v1']};
   const facts = {schemaVersion: 1, model: 'building-values-v1', stamp: HEALTH.stamp, character: HEALTH.character,
@@ -1114,15 +1114,15 @@ test('schema 2 downloads a hash-bound portable save; stale facts never build', a
     const current = {...facts, ...(invalid ? {[invalid]: 'wrong'} : {})};
     const response = {...reply(200, null), arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(current)).buffer};
     const h = harness({routes: {health, save, facts: response}});
+    h.context.btoa = () => { throw new Error('A live load must not encode Base64'); };
     withFallback(h); // Invalid facts keep their diagnostic even with a local fallback.
     await h.run('loadFromLink("Reading the game")');
     assert.equal(h.seen.builds.length, invalid ? 0 : 1, invalid || 'matching pair');
     if (!invalid) {
       const file = h.seen.builds[0];
       assert.equal(file.name, 'abc-live.bcsave');
-      const packed = JSON.parse(new TextDecoder().decode(file.parts[0]));
-      assert.deepEqual(Buffer.from(packed.save, 'base64'), Buffer.from(raw));
-      assert.deepEqual(packed.facts, facts);
+      assert.equal(file.parts[0], raw, 'no binary string, Base64 or JSON copy before parsing');
+      assert.deepEqual(JSON.parse(file.linkFacts), facts);
     }
   }
 });
@@ -1776,4 +1776,13 @@ test('a change during the ask leaves nothing remembered', async () => {
   const before = log.queries;
   await h.run('linkFetch("/health")');
   assert.ok(log.queries > before, 'the poll asks again: the overtaken grant was not kept');
+});
+
+
+test('schema 5 and every supported older game link can still load saves', async () => {
+  for (const schemaVersion of [1, 2, 3, 4, 5]) {
+    const h = harness({routes: {health: {...HEALTH, schemaVersion}, save: reply(200)}});
+    await h.run('loadFromLink("Reading the game")');
+    assert.equal(h.seen.builds.length, 1, `schema ${schemaVersion}`);
+  }
 });

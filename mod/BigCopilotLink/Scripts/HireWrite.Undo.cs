@@ -403,6 +403,26 @@ namespace BigCopilotLink
             }
 
             var ok = rows.Count == 0 && !blocked;
+            if (ok)
+            {
+                var targets = new Dictionary<string, Dictionary<string, object>>(StringComparer.Ordinal);
+                foreach (var h in state.Hires)
+                {
+                    AddOwnership(targets, ModOwnership.Target(h.Target), true, false, false);
+                    if (h.AssignedBefore != null && !string.IsNullOrEmpty(h.AssignedBefore.streetName))
+                        AddOwnership(targets, ModOwnership.Target(new WireAddress(h.AssignedBefore.streetName, h.AssignedBefore.streetNumber)), true, false, false);
+                }
+                foreach (var m in state.Moves)
+                {
+                    AddOwnership(targets, ModOwnership.Target(m.Target), false, true, false);
+                    if (m.Source != null && !string.IsNullOrEmpty(m.Source.streetName))
+                        AddOwnership(targets, ModOwnership.Target(new WireAddress(m.Source.streetName, m.Source.streetNumber)), false, true, false);
+                }
+                foreach (var restore in restores)
+                    AddOwnership(targets, ScheduleWrite.OwnershipTarget(restore.Reg, restore.State.Address, restore.Restored, false, restore.State), false, false, true);
+                var refusal = ModOwnership.Check("hire", "undo", targets.Values);
+                if (refusal.HasValue) return refusal.Value;
+            }
             if (dryRun) return UndoAnswer(true, ok, blocked, null, hires, moves, restores, siteErrors, rows);
             if (rows.Count > 0) return Refused(rows);
 
