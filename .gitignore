@@ -37,3 +37,19 @@ docs/location-selector-scope.md
 mod/**/*.dll
 mod/**/Library/
 mod/**/obj/
+
+# --- repo cleanup 2026-10-23 ---
+.DS_Store
+node_modules/
+.wrangler/
+.scratch/
+e2e-failures/
+.recorder/
+.claude/worktrees/
+CLAUDE.local.md
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.hsg
