@@ -34,6 +34,15 @@ class EconomyInputs(unittest.TestCase):
         self.assertEqual(economy.candidate_hourly(save, 10.01), (11.38, True))
         self.assertEqual(economy.candidate_hourly(capture(), 10), (10, False))
 
+    def test_disabled_employment_is_known_off_but_missing_or_failed_is_unknown(self):
+        for status in ("disabled", "unavailable", "failed"):
+            with self.subTest(status=status):
+                save = capture()
+                save._mod_economy["reports"]["rlo"]["modules"]["employment"] = {
+                    "status": status, "data": None}
+                self.assertEqual(economy.hourly(save, "employee", 20.125),
+                                 (20.125, status == "disabled"))
+
     def test_new_hire_with_company_disabled_uses_city_level_once(self):
         save = capture({"prices": {"levelThousandths": 1137, "costFactorThousandths": 4000}})
         save._mod_economy["reports"]["rlo"]["modules"]["company"] = {"status": "disabled", "data": {

@@ -156,7 +156,7 @@ def tables(save, rules, prices):
 
 def hourly(save, employee_id, native_hourly):
     """An ordinary wage observation; no sick pay or overtime is fabricated."""
-    if report(save, "rlo") is None:
+    if report(save, "rlo") is None or module(save, "rlo", "employment")["status"] == "disabled":
         return native_hourly, True
     observed = index(save, "rlo", "employment", identity="employeeId").get(employee_id)
     if observed is not None:

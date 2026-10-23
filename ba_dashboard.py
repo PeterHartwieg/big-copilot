@@ -20436,7 +20436,14 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
         import ba_facts
         owner = ba_economy.data(save, "rlo", "bankTerms")
         native = ba_facts.native_economy(getattr(save, "facts", None), "banks")
-        if owner is not None:
+        if owner is not None and (owner["additionalCreditIncluded"] or owner["principalIsExpense"]):
+            # The native loan model has neither the additional credit ledger
+            # nor a principal-as-expense projection. Keep recorded totals, but
+            # do not present its native-only eligibility as a complete quote.
+            banks = []
+            finance_unavailable = ("additional-credit-eligibility" if owner["additionalCreditIncluded"]
+                                   else "principal-expense-basis")
+        elif owner is not None:
             banks = [{"id": row["bankId"], "name": BANK_PLACES.get(row["bankId"], (row["bankId"], None))[0], "key": site_key(ba_economy.address(row)),
                       "rate": ba_facts.catalogue_amount(row["annualRatePercent"]), "interestMultiplier": 1,
                       "years": row["termDays"] / per_year, "term": row["termDays"],

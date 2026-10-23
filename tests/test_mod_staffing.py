@@ -61,6 +61,27 @@ class ModRecommendationBoundaries(unittest.TestCase):
             self.assertEqual(bool(result["banks"]), known)
             self.assertEqual("unavailable" not in result, known)
 
+    def test_native_bank_quote_requires_supported_credit_and_expense_basis(self):
+        bank = {"bankId": "bank", "address": ADDRESS, "annualRatePercent": "7.5",
+                "termDays": 60, "capCents": 5000000, "nativeDebtAtBankCents": 12500,
+                "incomeTermShareThousandths": 500, "tutorialMinimumCents": 0,
+                "securedAccountRulesApply": False}
+        for credit, principal, reason in ((False, False, None),
+                (True, False, "additional-credit-eligibility"),
+                (False, True, "principal-expense-basis"),
+                (True, True, "additional-credit-eligibility")):
+            with self.subTest(credit=credit, principal=principal):
+                save = capture({"bankTerms": {"banks": [bank],
+                    "additionalCreditIncluded": credit, "principalIsExpense": principal}})
+                result = _finance_facts(save, [{"profit": 700}], {})
+                self.assertEqual(result.get("unavailable"), reason)
+                self.assertEqual(result["profit7"], 100)
+                if reason:
+                    self.assertEqual(result["banks"], [])
+                else:
+                    self.assertEqual(result["banks"][0]["max"], 50000)
+                    self.assertEqual(result["banks"][0]["owed"], 125)
+
     def test_disabled_outside_cost_owner_does_not_invalidate_native_tax(self):
         for status in ("disabled", "failed", "unavailable"):
             save = capture()
