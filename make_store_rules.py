@@ -98,7 +98,8 @@ where noted):
      "banks": {"<asset name>": {"r": annual interest %, "y": years, "x": max loan,
                                 "e": 1 emergency loan}},
      "vendors": {"<site key>": {"n": name, "a": street label, "h": neighbourhood}},
-     "vehicles": {"<vehicle type>": wealth value},  (price if motor, otherwise known zero)
+     "vehicles": {"<motor vehicle type>": purchase price},
+     "nonMotorVehicles": ["<vehicle type>", ...],  (known zero contributions to bank wealth)
      "skills": {"<skill>": baseHourlyWage},
      "rival": {"layouts": {"<type>|<size>|<version>|<lowercase layout>":
                             {"p": [purchaser products], "sk": [workstation skills]}},
@@ -489,20 +490,26 @@ def _banks(root: str) -> dict:
     return out
 
 
-def _vehicles(root: str) -> dict:
-    """{vehicle type: wealth value}, retaining known non-motor vehicles at zero.
+def _vehicles(root: str) -> tuple[dict, list]:
+    """Motor purchase prices and known non-motor names, kept separate.
 
-    PlayerHelper.GetTotalAssetsWorth counts the type's price only when
-    VehicleType.IsMotorVehicle (maxFuel > 0). Retain every registered name so
-    flatbeds, electric scooters and handtrucks are distinguishable from an
-    unknown mod vehicle whose contribution cannot be established.
+    PlayerHelper.GetTotalAssetsWorth counts a type's price only when
+    VehicleType.IsMotorVehicle (maxFuel > 0). Finance uses non-motor names to
+    distinguish known zero wealth from an unknown mod vehicle. Payback uses
+    motor purchase prices to identify a transaction's excess as delivery fees:
+    putting non-motor zero wealth values in that table would mistake the entire
+    purchase for delivery. A motor vehicle with a zero price still belongs in
+    the purchase table; price alone does not classify it.
     """
-    out = {}
+    motor, non_motor = {}, []
     for tree in _behaviours(_bundle(root, "defaultlocalgroup_assets_vehicletypes")):
         name = tree.get("vehicleTypeName")
         if name:
-            out[name] = _price(tree.get("price")) if float(tree.get("maxFuel") or 0) > 0 else 0
-    return out
+            if float(tree.get("maxFuel") or 0) > 0:
+                motor[name] = _price(tree.get("price"))
+            else:
+                non_motor.append(name)
+    return motor, sorted(non_motor)
 
 
 def _skills(root: str) -> dict:
@@ -637,6 +644,7 @@ def main() -> None:
         if item in furniture:
             furniture[item]["st"] = seats
     vendors = _vendors(furniture)
+    vehicles, non_motor_vehicles = _vehicles(root)
     out = {
         "products": _products(items, types, _recipe_goods(items)),
         "furniture": furniture,
@@ -644,7 +652,7 @@ def main() -> None:
         "hoods": _hoods(root),
         "banks": _banks(root),
         "vendors": vendors,
-        "vehicles": _vehicles(root),
+        "vehicles": vehicles,
         "skills": _skills(root),
         "rival": _rival_rules(root, items),
     }
@@ -654,6 +662,7 @@ def main() -> None:
             + "; the bundles did not parse as expected"
         )
     out = {k: {name: v[name] for name in sorted(v)} for k, v in out.items()}
+    out["nonMotorVehicles"] = non_motor_vehicles
 
     path = os.path.join(HERE, "ba_store_rules.json")
     with open(path, "w", encoding="utf-8", newline=chr(10)) as fh:

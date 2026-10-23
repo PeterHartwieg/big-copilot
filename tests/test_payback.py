@@ -260,6 +260,29 @@ class PaybackTest(PricesTestCase):
         self.assertEqual(chain["vehicles"], 98000)
         self.assertEqual(chain["firm"], shop["firm"] + brewery["firm"])
 
+    def test_nonmotor_purchases_do_not_become_delivery_fees_or_enter_payback_history(self):
+        with open(os.path.join(os.path.dirname(ba_dashboard.__file__), "ba_store_rules.json"), encoding="utf-8") as fh:
+            rules = json.load(fh)
+        non_motor = ["ba:vehicletype_flatbed", "ba:vehicletype_electricscooter", "ba:vehicletype_handtruck"]
+        for kind in non_motor:
+            self.assertIn(kind, rules["nonMotorVehicles"])
+            self.assertNotIn(kind, rules["vehicles"])
+        # A genuine zero-price motor type still has a delivery fee; excluding
+        # all zero prices would conflate its purchase price with bank wealth.
+        free_motor = "synthetic:free_motor"
+        rules["vehicles"][free_motor] = 0
+        fleet = [("TRUCK", TRUCK), ("FREE", free_motor)] + [("CART" + str(i), kind) for i, kind in enumerate(non_motor)]
+        transactions = [bought(TRUCK, 103000, 35), bought(free_motor, 500, 35)] + [bought(kind, 1000, 35) for kind in non_motor]
+        rows = [(day, {SHOP: (10000, 12000), BREWERY: (-4000, 0)}) for day in range(30, 40)]
+        company = {"vehicles": fleet, "brewery_slots": [vid for vid, kind in fleet]}
+        with mock.patch.object(ba_dashboard, "_store_rules", rules):
+            out, history = self.run_payback(rows, transactions=transactions, **company)
+            self.assertEqual(out["sites"][KEY_BREWERY]["cost"]["vehicles"], 103500)
+            self.assertEqual(history.payback("CHAR")["vehicleFees"], {"TRUCK": 5000, "FREE": 500})
+            later, _ = self.run_payback(rows + [(40, {SHOP: (10000, 12000), BREWERY: (-4000, 0)})], history, **company)
+            self.assertEqual(later["sites"][KEY_BREWERY]["cost"]["vehicles"], 103500)
+            self.assertEqual(history.payback("CHAR")["vehicleFees"], {"TRUCK": 5000, "FREE": 500})
+
     def test_a_truck_s_delivery_counts_and_is_remembered(self):
         rows = [(d, {SHOP: (10000, 12000), BREWERY: (-4000, 0)}) for d in range(30, 40)]
         fleet = dict(vehicles=[("OLD", TRUCK), ("NEW", TRUCK), ("CAR", CAR)], brewery_slots=["OLD", "NEW"])

@@ -18807,7 +18807,8 @@ def _vehicle_deliveries(save: Save, table: dict) -> dict:
     collected at the dealer the price alone. VehicleInstances grows in the
     order vehicles are bought, so the log's purchases of a type, oldest first,
     are the last instances of that type in the list; the excess over the
-    type's price (ba_store_rules.json `vehicles`) is the delivery.
+    type's price (ba_store_rules.json `vehicles`) is the delivery. This table
+    contains motor purchase prices, never non-motor zero wealth values.
     """
     bought = collections.defaultdict(list)
     for t in save.items(save.root.get("Transactions")):
@@ -19262,13 +19263,16 @@ def load_store_rules() -> dict:
     adds the AI layouts' purchasers/workstation skills, sourcing, size areas,
     rent multipliers and shortage delay for the rival product breakdown. A
     missing file is not an error: the view then has nothing to plan with.
+    `vehicles` holds motor purchase prices for payback; `nonMotorVehicles`
+    separately names the types finance knows contribute zero to bank wealth.
     """
     global _store_rules
     if _store_rules is None:
         _store_rules = _load_data(
             "ba_store_rules.json",
-            lambda loaded: {part: loaded.get(part) or {} for part in STORE_RULE_PARTS},
-            lambda: {part: {} for part in STORE_RULE_PARTS},
+            lambda loaded: {**{part: loaded.get(part) or {} for part in STORE_RULE_PARTS},
+                            "nonMotorVehicles": loaded.get("nonMotorVehicles") or []},
+            lambda: {**{part: {} for part in STORE_RULE_PARTS}, "nonMotorVehicles": []},
             catch=(OSError, ValueError, AttributeError),
         )
     return _store_rules
@@ -20200,7 +20204,8 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
         funds += (fund.get("initialDeposit") or 0) + (fund.get("additionalInvestment") or 0) \
             - (fund.get("withdrawal") or 0) + (fund.get("interestPayment") or 0)
     property_ = sum((save.deref(e) or {}).get("purchasePrice") or 0 for e in save.items(root.get("realEstate")))
-    prices, price_model = ba_mods.vehicle_prices(save, rules.get("vehicles") or {}) if ba_mods else (rules.get("vehicles") or {}, True)
+    motor_prices, non_motor = rules.get("vehicles") or {}, rules.get("nonMotorVehicles") or []
+    prices, price_model = ba_mods.vehicle_prices(save, motor_prices, non_motor) if ba_mods else ({**dict.fromkeys(non_motor, 0), **motor_prices}, True)
     owned_types = [(save.deref(v) or {}).get("vehicleTypeName") for v in save.items(root.get("VehicleInstances"))]
     unknown_vehicles = sorted({str(kind or "unknown") for kind in owned_types if kind not in prices})
     vehicles = sum(prices.get(kind, 0) for kind in owned_types)
