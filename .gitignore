@@ -76,3 +76,6 @@ mockup/*/project/
 
 /web/translations/
 /web/translate/
+
+# Local SDK and release packages
+/build/

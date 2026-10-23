@@ -14,23 +14,17 @@ public static class BclBatch
         var shim = Path.Combine(System.Environment.GetEnvironmentVariable("HOME"),
             "Library/Application Support/BigCopilotLink/dll-shim");
         Debug.Log("[BclBatch] importing from " + shim);
-        GameDllImporter.Import(shim);
+        if (string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("BA_GAME_DLLS")))
+            GameDllImporter.Import(shim);
         Debug.Log("[BclBatch] dll status " + GameDllImporter.GetStatus().State);
 
         var manifestPath = ModFolder + "/ModManifest.asset";
         var manifest = AssetDatabase.LoadAssetAtPath<BAModManifest>(manifestPath);
         if (manifest == null)
         {
-            manifest = ScriptableObject.CreateInstance<BAModManifest>();
-            manifest.ModId = "BigCopilotLink";
-            manifest.DisplayName = "Big Copilot Link";
-            manifest.Author = "Peter Hartwieg";
-            manifest.Version = "0.1.0";
-            manifest.ModAssembly = AssetDatabase.LoadAssetAtPath<AssemblyDefinitionAsset>(ModFolder + "/BigCopilotLink.asmdef");
-            manifest.LocalesFolder = AssetDatabase.LoadAssetAtPath<DefaultAsset>(ModFolder + "/Locales");
-            AssetDatabase.CreateAsset(manifest, manifestPath);
-            AssetDatabase.SaveAssets();
-            Debug.Log("[BclBatch] created manifest; asmdef=" + (manifest.ModAssembly != null) + " locales=" + (manifest.LocalesFolder != null));
+            Debug.LogError("[BclBatch] Missing committed ModManifest.asset; refusing to invent a release version.");
+            EditorApplication.Exit(2);
+            return;
         }
 
         var mod = ModDiscovery.DiscoverFor(manifest);
@@ -49,6 +43,6 @@ public static class BclBatch
             Debug.Log("[BclBatch] output " + job.OutputDirectoryAbsolute);
             EditorApplication.Exit(job.State == BuildState.Done ? 0 : 1);
         };
-        ModPackager.Enqueue(mod, installAfterBuild: true);
+        ModPackager.Enqueue(mod, installAfterBuild: false);
     }
 }

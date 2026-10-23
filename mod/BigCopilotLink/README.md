@@ -267,16 +267,17 @@ packager first; repository-only compilation does not replace that check.
 
    **Headless:** `mod/build/BclBatch.cs` and its asmdef, copied to
    `<sdk>/Assets/Editor/BclBatch/`, do the import, the manifest, the validation and
-   Build & Install without the editor UI:
+   build without installing, using the editor in batch mode:
 
    ```
-   /Applications/Unity/Hub/Editor/2022.3.62f2/Unity.app/Contents/MacOS/Unity \
-     -batchmode -projectPath ~/bigambitions -executeMethod BclBatch.Run -logFile ~/bcl-build.log
+   mod/build/build-release.sh
    ```
 
    (no `-quit`: the script exits the editor itself when the job is terminal; on a Mac
    the Windows build module is not installed and that is fine, the packager's assembly
    build works and the bundle step is skipped because the mod has no assets).
+
+The release script uses a dedicated SDK in `build/sdk`, verifies the runtime and manifest versions, and writes `build/BigCopilotLink-0.8.0.zip` and SHA-256 files. It reuses the existing Workshop thumbnail. It does not install or upload the mod. Set `BA_GAME_DLLS` to prepared game references when the documented Mac shim is unavailable.
 
 Unity writes a `.meta` file next to every file in this folder; they are committed,
 along with `ModManifest.asset`, because the GUIDs have to stay stable. The repo's
