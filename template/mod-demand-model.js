@@ -188,7 +188,7 @@ const ModDemandModel = (() => {
     const cafeSites=map(retailCapture?.cafe?.data?.currentSites,s=>key(s.address));
     function planning(input){
       try{return plan(input);}catch(error){return {status:'unavailable',promotion:null,basketThousandths:null,officeBoostThousandths:null,
-        reasons:[error.message||'demand-input-unknown'],assumptions:[]};}
+        reasons:['invalid-demand-input'],assumptions:[]};}
     }
     function plan({typeId,building,lines=[],outfit={},interiorScore,ownPromotion,existing=false,
       prices=outfit.prices,day=companion.day??1,openingDay=companion.day??1}){

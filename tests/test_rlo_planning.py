@@ -18,6 +18,15 @@ def sample(shape):
 
 
 class PlanningContracts(unittest.TestCase):
+    def test_ready_footfall_requires_all_fields_even_without_price_tolerance(self):
+        value = sample(SHAPES["footfall"])
+        site = sample(SHAPES["footfall"]["sites"][1])
+        site["status"] = "ready"
+        value["sites"] = [site]
+        value["priceTolerance"] = None
+        with self.assertRaises(ValueError):
+            VALIDATORS["footfall"](value)
+
     def test_all_modules_accept_shape_and_additive_fields(self):
         for name, shape in SHAPES.items():
             with self.subTest(module=name):

@@ -45,18 +45,14 @@ const OpenFactoryModel = ((storeModel, economyModel, ownerModel) => {
       const reasons = [...new Set(rows.flatMap(r=>r.reasons || []))];
       const dayCost = offset => sum(rows.map(r=>r.dayCost(offset)));
       const byDayCents = Array.from({length:7},(_,d)=>sum(rows.map(r=>r.byDayCents[d])));
-      const dailyCents = known(byDayCents) ? sum(byDayCents)/7 : null;
-      return {status:dailyCents === null || reasons.length ? "unavailable":"ready", dailyCents,byDayCents,
+      const dailyCents = sum(rows.map(r=>r.dailyCents));
+      return {status:dailyCents === null || reasons.length ? "unavailable":"ready", dailyCents,byDayCents,basis:"combined-operating-accrual",
         startupCents:sum(rows.map(r=>r.startupCents)),requirements:rows.flatMap(r=>r.requirements || []),reasons,
+        assumptions:[...new Set(rows.flatMap(r=>r.assumptions || []))],
         preparationDays:Math.max(0,...rows.map(r=>r.preparationDays || 0)),dayCost};
     }
     function deltaCosts(before, after){
-      const subtract = (a,b)=>known([a,b]) ? a-b : null;
-      const dayCost = d=>subtract(after.dayCost(d),before.dayCost(d));
-      const byDayCents = after.byDayCents.map((v,d)=>subtract(v,before.byDayCents[d]));
-      const reasons=[...new Set([...(before.reasons || []),...(after.reasons || [])])];
-      return {status:known(byDayCents)&&!reasons.length?"ready":"unavailable",dailyCents:known(byDayCents)?sum(byDayCents)/7:null,
-        byDayCents,startupCents:subtract(after.startupCents,before.startupCents),requirements:[],reasons,dayCost};
+      return economyModel.deltaCosts(before,after);
     }
     function operating({building,typeId,lines=[],existing=false,extra=[]}){
       if(!economy) return missingCost("mod-model-unavailable");

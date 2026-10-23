@@ -1,9 +1,9 @@
 [
   {
-    "pr": 514,
-    "date": "2026-10-22",
-    "title": "Read Real Life Overhaul reports",
-    "summary": "Mods recognises Real Life Overhaul and shows report availability. With a compatible RLO build, it also shows business, employee and credit account counts and reported credit account balances from a save or live connection. Forecasts and changes made through Big Copilot do not yet account for RLO rules or manager decisions."
+    "pr": 520,
+    "date": "2026-10-23",
+    "title": "Plan with supported HART and RLO rules",
+    "summary": "Compatible HART Mod Pack and Real Life Overhaul reports supply supported prices, demand, operating costs, course requirements and loan terms. The board keeps recorded results separate from additional costs and explains when an estimate is incomplete. Updated Big Copilot Link checks current mod ownership before applying or undoing changes. These features require compatible companion builds; some forecasts remain unavailable."
   },
   {
     "pr": 513,

@@ -84,7 +84,8 @@ class EconomyInputs(unittest.TestCase):
 
     def test_footfall_pairs_registration_instead_of_requiring_play_written(self):
         row = {"address": ADDRESS, "status": "ready", "ownPromotion": 30,
-               "writtenPromotion": 40, "registrationPromotionAtCapture": 30}
+               "writtenPromotion": 40, "registrationPromotionAtCapture": 30,
+               "issuePercent": 0, "ambientPercent": 0, "interiorPercent": 0, "baseMultiplier": "1"}
         save = capture({"footfall": {"sites": [row]}}, {"BuildingRegistrations": {"$items": [{
             "StreetName": ADDR[0], "StreetNumber": ADDR[1], "promotion": {"total": 30}}]}})
         self.assertEqual(economy.footfall(save)[ADDR]["status"], "ready")
@@ -92,6 +93,20 @@ class EconomyInputs(unittest.TestCase):
             "StreetName": ADDR[0], "StreetNumber": ADDR[1], "promotion": {"total": 31}}]}})
         self.assertEqual(economy.footfall(mismatched)[ADDR]["status"], "unavailable")
         self.assertEqual(row["status"], "ready")
+        broken = copy.deepcopy(row)
+        broken["baseMultiplier"] = None
+        invalid = capture({"footfall": {"sites": [broken]}}, {"BuildingRegistrations": {"$items": [{
+            "StreetName": ADDR[0], "StreetNumber": ADDR[1], "promotion": {"total": 30}}]}})
+        self.assertEqual(economy.footfall(invalid)[ADDR]["status"], "unavailable")
+
+    def test_planning_payload_is_cached_and_excludes_observation_only_modules(self):
+        save = capture({"prices": {"items": []}, "outsideStatements": {"rows": []},
+                        "bankTerms": {"banks": []}, "ownership": {"targets": []}})
+        first = economy.planner(save)
+        self.assertIs(economy.planner(save), first)
+        self.assertEqual(set(first["rlo"]["modules"]), {"prices"})
+        self.assertNotIn("items", first["rlo"]["modules"]["prices"]["data"])
+        self.assertIn("items", economy.data(save, "rlo", "prices"))
 
     def test_catalogue_tables_detach_and_apply_effective_price_once(self):
         save = capture({"prices": {"items": [{"itemId": "product", "defaultMarketAmount": "2.125",

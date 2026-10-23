@@ -365,8 +365,8 @@ test('mod run-rate is subtracted once and a future unknown quote stops payback',
     modCosts:{dailyCents:1000,dayCost:()=>1000}};
   close(core.dayProfit(m,null,6),60,'single mod-cost subtraction');
   m.modCosts.dayCost=()=>null;assert.equal(core.dayProfit(m,null,6),null);
-  assert.equal(core.breakDay(100,k=>k<2?10:null),null);
-  assert.equal(core.loanDays(100,k=>k<2?10:null,{days:1,interest:1,repay:1}),null);
+  assert.deepEqual(core.breakDay(100,k=>k<2?10:null),{status:'unavailable',reason:'future-cashflow-unavailable',offset:2});
+  assert.deepEqual(core.loanDays(100,k=>k<2?10:null,{days:1,interest:1,repay:1}),{status:'unavailable',reason:'future-cashflow-unavailable',offset:2});
   assert.equal(core.ownRatio('T'),null);
 });
 
@@ -468,4 +468,25 @@ test('failed company campaign ownership gates current sites but not a new site',
   assert.ok(model(f).model('T',SHOP,{sat:50,open:HOUR}));
   company.partStates.marketing='disabled';
   assert.ok(model(f).model('T',SHOP,{sat:50,open:HOUR,existing:true}));
+});
+
+
+test('companion horizons stay unavailable while legacy unmodded limits retain their result',()=>{
+  const core=model(modFacts()),expected={status:'unavailable',reason:'forecast-horizon-exceeded',offset:20000};
+  assert.deepEqual(core.breakDay(1e9,()=>0),expected);
+  assert.deepEqual(core.loanDays(1e9,()=>0,{days:0,interest:0,repay:0}),expected);
+  assert.equal(model(RETAIL).breakDay(1e9,()=>0),null);
+});
+
+test('expansion payback survives an identical cover renewal beyond the known full-site horizon',()=>{
+  const f=expansionFacts(),b={...SHOP,key:'road#1'},o={sat:50,open:HOUR,promoTotal:20};
+  f.items.shelf.p=10000;
+  const noCover=model(f).expansions('T',b,o)[0];
+  const company=companyRules();company.partStates.cover='ready';
+  company.sites=[{address:{street:'road',number:1},cover:[{active:true,fromDay:1,untilDay:48,dailyCents:100}],campaign:{active:false}}];
+  f.modEconomy.rlo.modules.company=ready(company);
+  const core=model(f),withCover=core.expansions('T',b,o)[0];
+  assert.equal(core.model('T',b,{...o,existing:true}).modCosts.dayCost(9),null);
+  assert.ok(Number.isFinite(withCover.payback) && withCover.payback>9);
+  assert.equal(withCover.payback,noCover.payback);
 });

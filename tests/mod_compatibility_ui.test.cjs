@@ -158,3 +158,37 @@ test('unavailable catalogue prices and exact native lease quotes have explicit l
   assert.equal(b.mcLeaseMoney({leaseBasis:'unavailable',deposit:null},0),'Unavailable');
   assert.equal(b.mcLeaseMoney({status:'mine',leaseBasis:'unavailable',deposit:null},0),'$0');
 });
+
+
+test('future unknown costs remain unavailable in ranges, charts and loan comparisons',()=>{
+  const {b}=fixture(),unknown={status:'unavailable',reason:'future-cashflow-unavailable',offset:8};
+  assert.match(b.osRange({low:3,mid:unknown,high:unknown}),/Unavailable.*future costs/);
+  assert.equal(vm.runInContext('osMid({low:3,mid:{status:"unavailable"},high:null})',b),null);
+  assert.match(b.osRange({low:{status:'unavailable',reason:'forecast-horizon-exceeded'}}),/Unavailable.*forecast horizon/);
+  assert.match(b.osRange({low:null,mid:null,high:null}),/not at this profit/);
+  const est={inv:{self:1000,firm:1200},profit:100,day:()=>null,days:{self:{low:unknown,mid:unknown,high:unknown}}};
+  assert.match(b.osChart(est,'self'),/Unavailable/);
+  Object.assign(b,{osMode:()=> 'self',osBreakDay:()=>unknown,osLoanDays:(own,day)=>{assert.equal(day(0),null);return unknown;},
+    planFinFacts:(total,bank,amount,cells)=>cells({interest:1,repay:10,days:10,total:10})});
+  const html=b.osFinFacts({},est,{},500);
+  assert.match(html,/Unavailable.*future costs/);assert.doesNotMatch(html,/NaN|not at this profit|paid off at break even/);
+  const cleaned=b.osSnapClean({inv:{},days:{self:{low:unknown,mid:unknown,high:unknown}}});
+  assert.match(b.osRange(cleaned.days.self),/Unavailable/);
+});
+
+test('loan rate labels use each captured bank multiplier',()=>{
+  const {b}=fixture(),bank={id:'bank',name:'Test Bank',rate:12,term:100,interestMultiplier:1};
+  b.__bank=bank;vm.runInContext('D.openStore={finance:{banks:[__bank],multiplier:1.5}}',b);
+  Object.assign(b,{planBank:()=>bank,osLoanLimit:()=>10000});
+  const html=b.planFinanceHtml('os',{finance:{on:true}},2000,'',()=> 'facts');
+  assert.match(html,/12% a year/);assert.doesNotMatch(html,/18% a year/);
+});
+
+test('unchanged estimate inputs reuse calculations and changed core or plan invalidates them',()=>{
+  const {b}=fixture();let core={},calls=0;
+  Object.assign(b,{osCore:()=>core,osEstimateUncached:()=>({serial:++calls})});
+  const plan={type:'shop',optional:false},building={key:'A#1',rent:30};
+  assert.equal(b.osEstimate(plan,building),b.osEstimate({...plan},{...building}));assert.equal(calls,1);
+  plan.optional=true;b.osEstimate(plan,building);assert.equal(calls,2);
+  core={};b.osEstimate(plan,building);assert.equal(calls,3);
+});

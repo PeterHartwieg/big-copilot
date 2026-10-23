@@ -352,3 +352,30 @@ test('planned payroll applies the city factor once to native base wages, separat
   close(model.hourly('factoryworker'),owner.wage(wage(10),1300));
   assert.ok(run.wages<nativeWeek*1.3*1.3);
 });
+
+
+test('new-site default raises gate factory forecasts while standard sick pay remains an excluded absence assumption',()=>{
+  const f=companionFixture(),company={partStates:{staff:'ready',licences:'disabled',cover:'disabled',tax:'disabled'},
+    newHireWageFactorThousandths:1000,newSiteDefaults:{raiseHourlyCents:100,sickPayPolicy:1},sites:[]};
+  f.facts.modEconomy.rlo.modules.company={status:'ready',data:company};
+  const input={counts:{beer:1},building:actualFactory};
+  let model=create(f),inv=model.investment(input);
+  assert.ok(inv.incomplete.includes('new-site-staff-defaults-unavailable'));
+  assert.equal(model.running(input,inv).total,null);
+  company.newSiteDefaults.raiseHourlyCents=0;
+  model=create(f);inv=model.investment(input);
+  assert.equal(inv.modCosts.status,'ready');assert.ok(Number.isFinite(model.running(input,inv).total));
+});
+
+
+test('factory weekly costs use licence accrual rather than the first week cash payments',()=>{
+  const f=companionFixture();
+  f.facts.modEconomy.rlo.modules.company={status:'ready',data:{partStates:{staff:'disabled',licences:'ready',cover:'disabled',tax:'disabled'},sites:[]}};
+  f.facts.modEconomy.rlo.modules.requirements={status:'ready',data:{types:[{typeId:'ba:businesstype_factory',licenceNeedsMask:1}],
+    licences:[{kind:0,feeCents:10000,termDays:10,closesWhenMissing:true},{kind:1,feeCents:20000,termDays:20,closesWhenMissing:false}],
+    lateOpeningHours:{before:5,after:22,permitKind:1},newSiteGraceDays:3}};
+  const model=create(f),input={counts:{beer:1},building:actualFactory},inv=model.investment(input),run=model.running(input,inv);
+  const cashDaily=inv.modCosts.byDayCents.reduce((a,b)=>a+b,0)/7;
+  close(run.modCosts.dailyCents-cashDaily,2000);
+  assert.match(run.modCosts.basis,/accrual/);
+});

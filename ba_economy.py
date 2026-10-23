@@ -60,16 +60,30 @@ def index(save, provider, name, field=None, identity="address"):
 
 def planner(save):
     """Section inputs only; the core payload carries compact status metadata."""
-    reports = context(save)["reports"]
+    state = context(save)
+    if "planner" in state:
+        return state["planner"]
+    reports = state["reports"]
     if not reports:
+        state["planner"] = None
         return None
+    needed = {"rlo": {"prices", "utilities", "company", "requirements", "footfall", "interiors", "closures", "education"},
+              "hart": {"runtime", "rent", "runningCosts", "factoryPurchases", "retailDemand"}}
     payload = {"version": 1, "day": save.root.get("Day", 0),
-            **{provider: {"status": value["status"], "source": value["source"], "modules": value["modules"]}
+            **{provider: {"status": value["status"], "source": value["source"], "modules": {
+                name: module for name, module in value["modules"].items() if name in needed[provider]}}
                for provider, value in reports.items()}}
     if data(save, "rlo", "footfall") is not None:
         rlo = payload["rlo"]
         rlo["modules"] = {**rlo["modules"], "footfall": {"status": "ready", "data": {
             **data(save, "rlo", "footfall"), "sites": list(footfall(save).values())}}}
+    # Registered catalogue amounts have already been joined into each section's
+    # product/furniture facts. The browser only needs the owner's price rules.
+    prices = payload.get("rlo", {}).get("modules", {}).get("prices")
+    if prices and prices.get("status") == "ready":
+        payload["rlo"]["modules"]["prices"] = {**prices, "data": {
+            key: value for key, value in prices["data"].items() if key != "items"}}
+    state["planner"] = payload
     return payload
 
 
@@ -83,7 +97,10 @@ def footfall(save):
         for addr, row in index(save, "rlo", "footfall", "sites").items():
             reg = regs.get(addr)
             native = (save.deref(reg.get("promotion")) or {}).get("total") if reg else None
-            if (row["status"] == "ready" and type(native) in (int, float)
+            captured_fields = ("ownPromotion", "writtenPromotion", "registrationPromotionAtCapture", "issuePercent",
+                               "ambientPercent", "interiorPercent", "baseMultiplier")
+            if (row["status"] == "ready" and all(row.get(key) is not None for key in captured_fields)
+                    and type(native) in (int, float)
                     and native == row["registrationPromotionAtCapture"]):
                 out[addr] = row
             else:

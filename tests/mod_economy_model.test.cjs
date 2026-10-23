@@ -206,3 +206,67 @@ test('existing site needs no company record when all site cost parts are disable
   c.rlo.modules.company.data.sites=[{address:{street:'Test',number:1}}];
   out=model.create(c).operating(p);assert.equal(out.status,'ready');assert.equal(out.dailyCents,0);
 });
+
+
+test('licence run-rate accrues fee per term independently from renewal dates and startup',()=>{
+  const c=planning(),p=officePlan();c.hart.modules.runningCosts=disabled();c.rlo.modules.utilities=disabled();
+  const fresh=model.create(c).operating(p);
+  assert.equal(fresh.startupCents,10000);assert.equal(fresh.dailyCents,1000);
+  assert.deepEqual(fresh.byDayCents,Array(7).fill(0));assert.equal(fresh.dayCost(13),10000);
+  c.rlo.modules.company.data.partStates.staff='disabled';c.rlo.modules.company.data.partStates.cover='disabled';
+  c.rlo.modules.company.data.sites=[{address:{street:'Test',number:1},licences:[{kind:0,valid:true,untilDay:10}]}];
+  p.existing=true;
+  let current=model.create(c).operating(p);
+  assert.equal(current.startupCents,0);assert.equal(current.dailyCents,1000);assert.equal(current.dayCost(2),10000);
+  c.rlo.modules.company.data.sites[0].licences[0].valid=false;
+  current=model.create(c).operating(p);
+  assert.equal(current.startupCents,10000);assert.equal(current.requirements[0].status,'required');
+  assert.equal(current.dayCost(2),0);assert.equal(current.dayCost(12),10000); // Grant extends max(until, day-1).
+});
+
+test('component deltas cancel the same unknown cover renewal but retain changed unknown inputs',()=>{
+  const c=planning(),p=officePlan();p.existing=true;
+  c.hart.modules.runningCosts.data.currentSites[0].address={street:'Test',number:1};
+  c.rlo.modules.requirements=disabled();c.rlo.modules.utilities.data.internetEnabled=false;
+  c.rlo.modules.utilities.data.accounts=['power','water'].map(service=>({address:{street:'Test',number:1},service,state:'active'}));
+  const site={address:{street:'Test',number:1},managerDailyAllowanceCents:100,overtime:{active:false},
+    cover:[{active:true,fromDay:1,untilDay:10,dailyCents:50}],licences:[]};
+  c.rlo.modules.company.data.sites=[site];
+  const adapter=model.create(c),before=adapter.operating(p),after=adapter.operating({...p,existingExtraLines:[['ba:itemname_computer',2]]});
+  assert.equal(before.dayCost(2),null);assert.equal(after.dayCost(2),null);
+  const delta=model.deltaCosts(before,after);
+  assert.equal(delta.status,'ready');assert.ok(delta.dailyCents>0);
+  assert.equal(delta.componentCost(2).company,0);assert.ok(delta.dayCost(2)>0);
+  site.cover[0].untilDay=12;
+  const changed=model.create(c).operating({...p,existingExtraLines:[['ba:itemname_computer',2]]});
+  assert.equal(model.deltaCosts(before,changed).dayCost(2),null,'different unknown commitment is not cancelled');
+});
+
+test('new site default raises are unknown while sick policy stays in the stated no-absence scope',()=>{
+  const c=planning();c.rlo.modules.company.data.newSiteDefaults={raiseHourlyCents:500,sickPayPolicy:1};
+  c.rlo.modules.company.data.sickShareThousandthsByPolicy=[0,1000];
+  let quote=model.create(c).operating(officePlan());
+  assert.ok(quote.reasons.includes('new-site-staff-defaults-unavailable'));
+  c.rlo.modules.company.data.newSiteDefaults.raiseHourlyCents=0;
+  quote=model.create(c).operating(officePlan());
+  assert.equal(quote.status,'ready');assert.ok(quote.assumptions.includes('unforeseen-sick-pay-and-overtime-excluded'));
+  c.rlo.modules.company.data.partStates.staff='disabled';c.rlo.modules.company.data.newSiteDefaults.raiseHourlyCents=500;
+  assert.equal(model.create(c).operating(officePlan()).status,'ready');
+});
+
+test('long horizons cache daily components and utility arithmetic by weekday and season',()=>{
+  const c=planning();let tariffReads=0;const terms=c.rlo.modules.utilities.data.terms,original=terms.unitCents;
+  Object.defineProperty(terms,'unitCents',{get(){tariffReads++;return original;},enumerable:true});
+  const quote=model.create(c).operating(officePlan());
+  for(let k=0;k<20000;k++)quote.dayCost(k);
+  const reads=tariffReads;
+  for(let pass=0;pass<6;pass++)for(let k=0;k<20000;k++)quote.dayCost(k);
+  assert.ok(reads<=60,`tariff reads are bounded by seasons and weekdays: ${reads}`);
+  assert.equal(tariffReads,reads);assert.strictEqual(quote.componentCost(1234),quote.componentCost(1234));
+});
+
+test('adapter errors expose stable reason codes instead of native exception text',()=>{
+  const adapter=model.create(planning()),p=officePlan();p.building.m2=null;
+  assert.deepEqual(adapter.operating(p).reasons,['invalid-operating-input']);
+  assert.deepEqual(adapter.factoryRequirements(null).reasons,['invalid-factory-input']);
+});

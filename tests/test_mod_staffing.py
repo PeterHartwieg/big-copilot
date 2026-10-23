@@ -4,9 +4,19 @@ import unittest
 from ba_dashboard import _mod_office_fallback_issue, _tax_period, _wage_basis, _finance_facts, _service_wages, site_key
 from ba_save import Save
 from tests.test_economy import capture, ADDRESS
+import ba_dashboard as dashboard
 
 
 class ModRecommendationBoundaries(unittest.TestCase):
+    def test_single_pass_decor_routes_match_every_individual_target(self):
+        materials = {"floor": {"p": 90, "t": 1, "b": True}, "wall": {"p": 45, "t": 2, "b": True}}
+        for dims in ((290, 225, 84), (1, 1, 1), (500, 1, 0), (0, 0, 0)):
+            routes = dashboard._decor_routes(*dims, materials)
+            for target in range(1, 101):
+                actual = next((r for r in routes.values() if r["score"] >= target), None)
+                self.assertEqual(actual, dashboard.decor_route(*dims, materials, target))
+        self.assertLess(len(dashboard._decor_routes(1, 1, 1, materials)), 100)
+
     def test_unread_office_hours_require_known_no_extra_clients(self):
         building = {"StreetName": ADDRESS["street"], "StreetNumber": ADDRESS["number"]}
         unread = {"lawyer": {"basis": [["office", "closed"]]}}
@@ -25,12 +35,12 @@ class ModRecommendationBoundaries(unittest.TestCase):
         outside = {"recurringDeductionLabels": [{"label": "Owner utility", "kind": "recurring"}],
                    "unclassifiedDeductionLabels": ["Mixed owner costs"],
                    "taxEffectsOutsideNativeForecast": []}
-        native = {"key": "Native one-time purchase", "amount": -125}
+        native = {"key": "tax_vehicle", "amount": -125}
         save = capture({"outsideStatements": outside}, {"currentTaxPeriodDeductibleExpenses": {"$items": [native]}})
         result = _tax_period(save)
         self.assertEqual(result["deductions"], 125)
         self.assertNotIn("projectionIncomplete", result)
-        for label in ("Mixed owner costs", "reallife_future_cost"):
+        for label in ("Mixed owner costs", "reallife_future_cost", "Future localized deduction"):
             save = capture({"outsideStatements": outside}, {"currentTaxPeriodDeductibleExpenses": {"$items": [native, {"key": label, "amount": -25}]}})
             result = _tax_period(save)
             self.assertEqual(result["deductions"], 150)

@@ -204,3 +204,9 @@ test('City price owner status gates retained tolerance independently of footfall
   c.rlo.modules.prices=ready({});
   assert.ok(model.create(c).planning(p).reasons.includes('planned-prices-unavailable'));
 });
+
+
+test('unexpected demand input errors use a stable reason code',()=>{
+  const result=model.create({}).planning(null);
+  assert.deepEqual(result.reasons,['invalid-demand-input']);
+});

@@ -2595,8 +2595,8 @@ def _tax_period(save: Save) -> dict:
         else:
             once += amount
             if (ba_economy and ba_economy.report(save, "rlo") is not None and amount
-                    and (semantic == "unknown" or (semantic is None and isinstance(label, str)
-                                                   and label.startswith("reallife_")))):
+                    and (semantic == "unknown" or (semantic is None
+                                                   and not str(label or "").startswith(TAX_ONCE_KEYS)))):
                 unclassified_mod_deductions.append(str(label or ""))
     # The summaries the period has had so far are its first day to yesterday,
     # the ones still to come today to the day before tax day; running costs
@@ -19399,7 +19399,8 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
             row["basis"] = "statement-profit"
             observations = [sites[k]["modAccounting"] for k in members]
             row["modAccounting"] = {
-                "coverage": "complete" if all(x["coverage"] == "complete" for x in observations) else "partial",
+                "coverage": ("unavailable" if all(x["coverage"] == "unavailable" for x in observations)
+                             else "complete" if all(x["coverage"] == "complete" for x in observations) else "partial"),
                 "knownOmittedCategories": sorted({c for x in observations for c in x["knownOmittedCategories"]}),
                 "rows": [r for x in observations for r in x["rows"]],
                 "statementAdjustment": "none", "balancesAreSeparate": True}
@@ -19579,6 +19580,35 @@ def decor_route(elements: int, floor_slots: int, wall_slots: int, materials: dic
             "wall": wall[1] if wall and painted["wall"] else None,
             "floorPrice": floor[0] if floor else None, "wallPrice": wall[0] if wall else None,
             "cost": money(spend), "score": score}
+
+
+def _decor_routes(elements, floor_slots, wall_slots, materials):
+    """Every distinct reached score in one greedy walk, for owner decor targets."""
+    if not elements or not floor_slots and not wall_slots:
+        return {}
+    def cheapest(kind):
+        return min(((m["p"], key) for key, m in materials.items()
+                    if m.get("t") == kind and m.get("b") and (m.get("p") or 0) > 0), default=None)
+    floor, wall = cheapest(1), cheapest(2)
+    kinds = sorted([kind for kind in ((floor, floor_slots, "floor"), (wall, wall_slots, "wall")) if kind[0]],
+                   key=lambda kind: kind[0][0])
+    total = floor_slots + wall_slots
+    painted, spend, last, routes = {"floor": 0, "wall": 0}, 0.0, 0, {}
+    for (price, _key), room, kind in kinds:
+        for _ in range(room):
+            painted[kind] += 1
+            spend += price
+            score = math.floor((min(spend / elements, 100) + 100 * sum(painted.values()) / total) / 2)
+            if score > last:
+                routes[str(score)] = {"floors": painted["floor"], "walls": painted["wall"],
+                    "floor": floor[1] if floor and painted["floor"] else None,
+                    "wall": wall[1] if wall and painted["wall"] else None,
+                    "floorPrice": floor[0] if floor else None, "wallPrice": wall[0] if wall else None,
+                    "cost": money(spend), "score": score}
+                last = score
+            if score >= 100:
+                return routes
+    return routes
 
 
 def works_in(facts: dict, kind: str) -> bool:
@@ -20407,7 +20437,7 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
         owner = ba_economy.data(save, "rlo", "bankTerms")
         native = ba_facts.native_economy(getattr(save, "facts", None), "banks")
         if owner is not None:
-            banks = [{"id": row["bankId"], "name": row["bankId"], "key": site_key(ba_economy.address(row)),
+            banks = [{"id": row["bankId"], "name": BANK_PLACES.get(row["bankId"], (row["bankId"], None))[0], "key": site_key(ba_economy.address(row)),
                       "rate": ba_facts.catalogue_amount(row["annualRatePercent"]), "interestMultiplier": 1,
                       "years": row["termDays"] / per_year, "term": row["termDays"],
                       "max": row["capCents"] / 100, "owed": row["nativeDebtAtBankCents"] / 100,
@@ -20580,11 +20610,23 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     decor = {}
     materials = prices.get("materials") or {}
     targets = sorted({int(h.get("mi") or 0) for h in (rules.get("hoods") or {}).values()} - {0})
-    if ba_economy and ba_economy.data(save, "rlo", "interiors") is not None:
-        targets = list(range(1, 101))
+    mod_interiors = ba_economy and ba_economy.data(save, "rlo", "interiors") is not None
     for layout in _in_order({layout for t in types.values() for layout in t["layouts"]}):
         # A layout nobody has read is costed as another version of its size.
         near = layout if layout in slots else next((k for k in sorted(slots) if k[:1] == layout[:1]), None)
+        if mod_interiors:
+            routes = _decor_routes(*slots[near], materials) if near else {}
+            # A native target lookup remains available to callers without a
+            # business type, even where one painted slot jumps over its score.
+            distinct = list(routes.values())
+            for target in targets:
+                first = next((route for route in distinct if route["score"] >= target), None)
+                if first:
+                    routes[str(target)] = first
+            if routes:
+                decor[layout] = {score: {**route, **({"like": near} if near != layout else {})}
+                                 for score, route in routes.items()}
+            continue
         for target in targets:
             route = decor_route(*slots[near], materials, target) if near else None
             if route:

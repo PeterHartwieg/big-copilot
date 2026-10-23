@@ -521,15 +521,16 @@ const OpenStoreModel = (() => {
         }).filter(Boolean).sort((a, z) => a.setup - z.setup);
         const kit = choices[0] || null;
         const loss = osCannibal(slug, b.hood, p => p !== l.p, b.key)?.loss || 0;
-        let margin = l.units * (l.price - l.cost),utilityDelta=0,startupDelta=0,after=null,marginByDay=null;
+        let margin = l.units * (l.price - l.cost),utilityDelta=0,startupDelta=0,after=null,delta=null,marginByDay=null;
         if(companion){
           if(!kit)return fail(slug,b,['expansion-equipment-price-unavailable']);
           if(loss && pricesModule.status==='ready' && pricesModule.data.takingsFactorThousandths!==1000)
             return fail(slug,b,['expansion-neighbour-cashflow-unavailable']);
           after=operating(slug,b,{...o,existing:true,existingExtraLines:kit.lines});
           if(after?.status!=='ready')return fail(slug,b,after?.reasons || ['expansion-operating-cost-unavailable']);
-          utilityDelta=after.dailyCents/100-m.modCosts.dailyCents/100;
-          startupDelta=(after.startupCents-m.modCosts.startupCents)/100;
+          delta=economyModel.deltaCosts(m.modCosts,after);
+          utilityDelta=delta.dailyCents/100;
+          startupDelta=delta.startupCents/100;
           marginByDay=l.byDayUnits.map((units,wd)=>{
             const before=m.nativeByDay[wd].fees+m.lines.filter(row=>sells.has(row.p)).reduce((total,row)=>total+row.byDayUnits[wd]*row.price,0);
             return cityCost(before+units*l.price,true)-cityCost(before,true)-units*l.cost;
@@ -539,13 +540,13 @@ const OpenStoreModel = (() => {
         const net = margin - loss - extraCost-utilityDelta;
         const stock = l.units * l.cost * 7, investment = kit ? kit.setup + stock+startupDelta : null;
         rows.push({...l, kit, margin, loss, extraCost:extraCost+utilityDelta, net, stock, investment,
-          ...(companion?{modOperatingDelta:utilityDelta,modStartupDelta:startupDelta,assumptions:m.assumptions}:{}),
+          ...(companion?{modOperatingDelta:utilityDelta,modStartupDelta:startupDelta,assumptions:[...new Set([...(m.assumptions||[]),...(delta.assumptions||[])])]}:{}),
           payback:investment===null?null:!companion?osDays(investment,net):osBreakDay(investment,k=>{
-            const next=after.dayCost(k),before=m.modCosts.dayCost(k);
-            return next===null || before===null?null:marginByDay[(companion.day+k)%7]-loss-extraCost-(next-before)/100;
+            const extra=delta.dayCost(k);
+            return extra===null?null:marginByDay[(companion.day+k)%7]-loss-extraCost-extra/100;
           })});
       }
-      return rows.sort((a, z) => (a.payback ?? Infinity) - (z.payback ?? Infinity) || z.net - a.net || a.p.localeCompare(z.p));
+      return rows.sort((a, z) => (Number.isFinite(a.payback)?a.payback:Infinity) - (Number.isFinite(z.payback)?z.payback:Infinity) || z.net - a.net || a.p.localeCompare(z.p));
     }
 
     /* Days to earn `inv` back at `profit` a day; null when it never does. */
@@ -600,11 +601,11 @@ const OpenStoreModel = (() => {
       let got = 0;
       for(let k = 0; k < 20000; k++){
         const value=day(k);
-        if(!Number.isFinite(value)) return null;
+        if(!Number.isFinite(value)) return {status:"unavailable",reason:"future-cashflow-unavailable",offset:k};
         got += factor * value;
         if(got >= inv) return k + 1;
       }
-      return null;
+      return companion?{status:"unavailable",reason:"forecast-horizon-exceeded",offset:20000}:null;
     }
 
     /* --- financing ---------------------------------------------------------------
@@ -643,11 +644,11 @@ const OpenStoreModel = (() => {
       let got = 0;
       for(let d = 1; d <= 20000; d++){
         const value=day(d-1);
-        if(!Number.isFinite(value)) return null;
+        if(!Number.isFinite(value)) return {status:"unavailable",reason:"future-cashflow-unavailable",offset:d-1};
         got += value - (d <= loan.days ? loan.interest + loan.repay : 0);
         if(got >= own) return d;
       }
-      return null;
+      return companion?{status:"unavailable",reason:"forecast-horizon-exceeded",offset:20000}:null;
     }
 
     return {

@@ -539,11 +539,12 @@ def _identities(name, data):
             for quote in course["quotes"]:
                 integer(quote["mode"], 0, 2)
                 _unique(quote, "installments", "index")
-    elif name == "footfall" and data["priceTolerance"] is not None:
+    elif name == "footfall":
         model = data["priceTolerance"]
-        _unique(model, "items", "itemId")
-        _unique(model, "districts", "districtId")
-        _unique(model, "monopolies", "itemId", "districtId")
+        if model is not None:
+            _unique(model, "items", "itemId")
+            _unique(model, "districts", "districtId")
+            _unique(model, "monopolies", "itemId", "districtId")
         for site in data["sites"]:
             if site["status"] == "ready" and any(site[key] is None for key in (
                     "ownPromotion", "writtenPromotion", "registrationPromotionAtCapture", "issuePercent",

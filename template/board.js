@@ -7509,7 +7509,7 @@ function spExpansionTable(rows){
           r.loss > 0 ? `<span class="sub">${tt("sp.expand.lossSub", "{w} from your shops nearby", {w: fmt(-r.loss)})}</span>` : ""}<i><b style="--w:${
           Math.max(2, Math.abs(r.net) / top * 100).toFixed(0)}%"></b></i></td>
         <td>${r.investment === null ? `—<span class="sub">${tt("sp.expand.noKitShort", "equipment unknown")}</span>` : fmt(r.investment)}</td>
-        <td class="spx-pay">${r.investment === null ? "—" : r.payback === null
+        <td class="spx-pay">${r.investment === null ? "—" : osDayUnknown(r.payback) ? spEsc(osFutureUnknown(r.payback)) : r.payback === null
           ? `<span class="spx-never">${tt("sp.expand.never", "Never")}</span><span class="sub">${tt("sp.expand.neverSub", "at these costs")}</span>`
           : `<b>${tt("sp.expand.days", {one: "{n} day", other: "{n} days"}, {n: r.payback})}</b>`}</td></tr>
       <tr class="spx-kid" id="${id}"${open ? "" : " hidden"}><td colspan="4"><div class="spx-detail">${spExpansionDetail(r)}</div></td></tr>`;
@@ -12369,6 +12369,12 @@ function mcStaffText(row){
 }
 function mcReason(reason){
   const words = {
+    "future-cashflow-unavailable": () => osFutureUnknown(),
+    "forecast-horizon-exceeded": () => osFutureUnknown({reason:"forecast-horizon-exceeded"}),
+    "new-site-staff-defaults-unavailable": () => tt("gr.mod.defaultRaise", "The configured raise for new sites is not included in this wage estimate."),
+    "invalid-operating-input": () => tt("gr.mod.modelInputs", "Required inputs for the mod cost estimate could not be verified."),
+    "invalid-demand-input": () => tt("gr.mod.demandInputs", "Required inputs for the mod demand estimate could not be verified."),
+    "invalid-factory-input": () => tt("gr.mod.factoryInputs", "Required inputs for the factory qualification estimate could not be verified."),
     "new-hire-wage-unavailable": () => tt("co.mod.newWageUnknown", "New-hire hourly wage quotes could not be verified."),
     "equipment-price-unavailable": () => tt("gr.mod.equipmentPrice", "A selected equipment price could not be verified."),
     "material-price-unavailable": () => tt("gr.mod.materialPrice", "A required material price could not be verified."),
@@ -12385,6 +12391,7 @@ function mcReason(reason){
     "rlo-requirements-unavailable": () => tt("gr.mod.requirementsUnknown", "Current RLO opening requirements could not be verified."),
     "operating-input-incomplete": () => tt("gr.mod.operatingUnknown", "The building or equipment facts needed for operating costs are incomplete."),
     "office-unread-hours-with-mod-demand": () => tt("co.mod.officeUnread", "This office has no measured working hours, and its current mod demand cannot be estimated from the default schedule."),
+    "ownership-week-incomplete": () => tt("nav.mod.reason.incompleteWeek", "The complete opening week is unavailable for the ownership check."),
     "legacy-late-opening-permit-unverified": () => tt("nav.mod.reason.legacyPermit", "This RLO version cannot verify a permit for the proposed late opening hours."),
     "ordinary-wage-unavailable": () => tt("co.mod.wageUnknown", "Current hourly wages could not be verified."),
     "promotion-observation-unavailable": () => tt("co.mod.promotionUnknown", "Current promotion effects could not be verified."),
@@ -12431,7 +12438,7 @@ function mcReason(reason){
     "owned-property-utility-deposit-unavailable": () => tt("gr.mod.reason.utilityDeposit", "The utility deposit for this owned property could not be verified."),
     "mod-tax-effects-outside-native-forecast": () => tt("re.mod.reason.effects", "Mod tax effects are outside the game's tax forecast."),
     "mod-tax-observations-unavailable": () => tt("re.mod.reason.records", "Current mod tax observations are unavailable."),
-    "unclassified-mod-deductions": () => tt("re.mod.reason.deductions", "Some mod deductions have no verified tax classification."),
+    "unclassified-mod-deductions": () => tt("re.mod.reason.deductions", "Some deductions have no verified tax classification."),
   };
   if(["owner-query-failed", "invalid-owner-response", "unsupported-owner-response", "invalid-owner-decision", "ownership-unavailable", "ownership-provider-unavailable", "ownership-invalid-or-failed", "manager-state-unavailable", "estate-state-unavailable", "licence-state-unavailable", "fresh-owner-report-unavailable", "fresh-owner-features-unavailable"].includes(reason))
     return tt("nav.mod.reason.liveUnavailable", "The mod's current ownership state is unavailable; try again after checking it in the game.");
@@ -12461,6 +12468,9 @@ function mcCostsHtml(costs, requirements = [], reasons = [], weekly = false){
   if(costs && Number.isFinite(costs.dailyCents)) lines.push(weekly
     ? tt("gr.mod.week", "Additional mod operating costs: {amount} per week.", {amount: fmt(costs.dailyCents * 7 / 100)})
     : tt("gr.mod.day", "Additional mod operating costs: {amount} per day on average.", {amount: fmt(costs.dailyCents / 100)}));
+  if(costs?.assumptions?.includes("unchanged-shared-commitment-renewal-inputs")) lines.push(tt("gr.mod.sharedTerms", "This comparison assumes shared contracts renew on the same terms for both alternatives."));
+  if(costs?.assumptions?.includes("unforeseen-sick-pay-and-overtime-excluded")) lines.push(tt("gr.mod.absenceAssumption", "Wage estimates exclude unforeseen sick pay and overtime."));
+  if(costs?.basis?.includes("accrual")) lines.push(tt("gr.mod.accrual", "Licence fees are spread over their term in this average; cash forecasts use their payment dates."));
   if(costs && Number.isFinite(costs.startupCents)) lines.push(tt("gr.mod.startup", "Mod setup costs: {amount} upfront.", {amount: fmt(costs.startupCents / 100)}));
   if(costs?.status === "unavailable" || why.length) lines.push(tt("gr.mod.incomplete", "This estimate is incomplete."));
   return `<div class="os-card mc-costs"><h3>${tt("gr.mod.title", "Mod costs and prerequisites")}</h3>${lines.map(x => `<p>${spEsc(x)}</p>`).join("")}<ul>${mcRequirementsHtml(req)}${why.map(x => `<li>${spEsc(mcReason(x))}</li>`).join("")}</ul></div>`;
@@ -12522,7 +12532,7 @@ function planFinanceHtml(prefix, plan, total, offText, facts){
   if(!on) return `<div class="os-card os-fin" id="${prefix}Fin">${head}<p class="quiet">${offText}</p></div>`;
   const bank = planBank(plan);
   const lenders = banks.map(b => `<button type="button" class="${b.id === bank.id ? "on" : ""}" data-${prefix}-bank="${attr(b.id)}" aria-pressed="${b.id === bank.id}">${spEsc(b.name)} <b>${
-    tt("gr.os.fin.rate", "{r}% a year · {d} days", {r: num(Math.round(b.rate * (f.multiplier || 0) * 10) / 10), d: b.term})}</b></button>`).join("");
+    tt("gr.os.fin.rate", "{r}% a year · {d} days", {r: num(Math.round(b.rate * (b.interestMultiplier ?? f.multiplier ?? 0) * 10) / 10), d: b.term})}</b></button>`).join("");
   const limit = Math.min(osLoanLimit(bank), Math.floor(total));
   const amount = Math.max(0, Math.min(limit, fin.amount ?? Math.round(total / 2)));
   return `<div class="os-card os-fin" id="${prefix}Fin">${head}
@@ -12813,19 +12823,35 @@ function osStripHtml(plan){
 }
 /* A range shown as its middle, the range itself on hover: "30 days" over
    "26–33 days". One figure where the range closes up. */
-const osMid = d => d && d.mid != null ? d.mid : d && d.low != null && d.high != null ? Math.round((d.low + d.high) / 2) : d && d.low != null ? d.low : null;
+const osDayUnknown = value => value?.status === "unavailable";
+const osRangeUnknown = range => !!range && [range.low,range.mid,range.high].some(osDayUnknown);
+const osMid = d => osRangeUnknown(d) ? null : d && d.mid != null ? d.mid : d && d.low != null && d.high != null ? Math.round((d.low + d.high) / 2) : d && d.low != null ? d.low : null;
+const osFutureUnknown = value => value?.reason === "forecast-horizon-exceeded"
+  ? tt("gr.mod.forecastHorizon", "Unavailable: break-even is beyond the forecast horizon.")
+  : tt("gr.mod.futureCashflow", "Unavailable: future costs could not be verified.");
 const osTipped = (shown, whole) => `<span class="os-rng" data-tip="${attr(whole)}" tabindex="0">${shown}</span>`;
 function osMidMoney(lo, hi){
   return Math.round(lo) === Math.round(hi) ? fmt(lo) : osTipped(fmt((lo + hi) / 2), tt("gr.os.money.range", "{lo}–{hi}", {lo: fmt(lo), hi: fmt(hi)}));
 }
 function osRange(d){
+  if(osRangeUnknown(d)) return osFutureUnknown([d.low,d.mid,d.high].find(osDayUnknown));
   if(!d || d.low == null) return tt("gr.os.be.never", "not at this profit");
   if(d.high == null) return tt("gr.os.days.from", "from {n} days", {n: num(d.low)});
   return d.low === d.high ? tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: d.low})
     : osTipped(tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: osMid(d)}), tt("gr.os.days.range", "{lo}–{hi} days", {lo: num(d.low), hi: num(d.high)}));
 }
 /* The estimate behind steps 3 and 4 for a plan in its building. */
+let osEstimateCache = null;
 function osEstimate(plan, b){
+  const core=osCore(), key=JSON.stringify([plan,b,NUM_LOCALE,typeof ttLang === "string" ? ttLang : "en"]);
+  if(!osEstimateCache || osEstimateCache.core!==core) osEstimateCache={core,rows:new Map()};
+  if(osEstimateCache.rows.has(key)) return osEstimateCache.rows.get(key);
+  const result=osEstimateUncached(plan,b);
+  if(osEstimateCache.rows.size>=64) osEstimateCache.rows.clear();
+  osEstimateCache.rows.set(key,result);
+  return result;
+}
+function osEstimateUncached(plan, b){
   const t = osType(plan.type), inv = osInvestment(plan, b);
   if(!t || !inv) return null;
   if(inv.incomplete?.length) return {inv,none:spEsc(inv.incomplete.map(mcReason).join(" "))};
@@ -13140,7 +13166,7 @@ function osBreakHtml(plan){
     <div><span class="os-lab">${tt("gr.os.strip.beLab", "Break even")}</span><b class="dim">${tt("gr.os.none.short", "No estimate")}</b><small>${est.none}</small></div></div>`;
   const m = est.model, p = est.profit, other = mode === "firm" ? "self" : "firm";
   const big = (key, alt) => `<div${alt ? ` class="alt"` : ""}><span class="os-lab">${key === "firm" ? tt("gr.os.inv.firm", "Installation firm") : tt("gr.os.inv.self", "Self-installation")}</span><b>${
-    p > 0 ? osRange(est.days[key]) : tt("gr.os.be.never", "not at this profit")}</b></div>`;
+    osRange(est.days[key])}</b></div>`;
   const tax = (osFacts().game || {}).tax || 0;
   const t = osType(plan.type), own = osOwnRatio(plan.type), cann = osCannibal(plan.type, b.hood, osProvides(plan.type, b));
   const row = (label, value, cls = "") => `<div class="os-site${cls}"><span><b>${label}</b></span><span class="v">${value}</span></div>`;
@@ -13202,13 +13228,20 @@ function osOwnHtml(plan, own){
    a band and its middle as the line, whose crossings are the days the
    headline gives. The first days bend the line: the ramp, and a first seller's hype. */
 function osChart(est, mode){
+  if(osRangeUnknown(est.days?.[mode])) return `<p class="quiet">${spEsc(osRange(est.days[mode]))}</p>`;
   const W = 560, H = 262, x0 = 58, y0 = 16, x1 = W - 16, y1 = H - 40, p = est.profit;
   if(!(p > 0)) return `<p class="quiet">${tt("gr.os.be.noChart", "At this profit the store does not earn its investment back.")}</p>`;
   const inv = est.inv, hi = Math.max(inv.firm, inv.self);
-  const last = osBreakDay(hi, est.day, OS_LOW) || Math.ceil(hi / (p * OS_LOW));
+  const breakAt = est.days?.[inv.firm>=inv.self ? "firm":"self"]?.high ?? osBreakDay(hi, est.day, OS_LOW);
+  if(osDayUnknown(breakAt)) return `<p class="quiet">${spEsc(osFutureUnknown(breakAt))}</p>`;
+  const last = breakAt || Math.ceil(hi / (p * OS_LOW));
   const dmax = Math.max(10, Math.ceil(last * 1.15 / 5) * 5);
   const cum = [0];
-  for(let d = 1; d <= dmax; d++) cum.push(cum[d - 1] + est.day(d - 1));
+  for(let d = 1; d <= dmax; d++){
+    const value=est.day(d-1);
+    if(!Number.isFinite(value)) return `<p class="quiet">${spEsc(osFutureUnknown())}</p>`;
+    cum.push(cum[d-1]+value);
+  }
   const vmax = Math.max(cum[dmax] * OS_HIGH, hi * 1.05, 1);
   const X = d => x0 + (x1 - x0) * d / dmax, Y = v => y1 - (y1 - y0) * Math.max(0, Math.min(v, vmax)) / vmax;
   const step = osNiceStep(vmax / 4), dstep = osNiceStep(dmax / 5);
@@ -13249,12 +13282,12 @@ function osFinHtml(plan, est){
 }
 function osFinFacts(plan, est, bank, amount){
   /* On the same basis as the headline: the middle of the profit range. */
-  const inv = est.inv[osMode(plan)], p = est.profit * OS_MID, day = k => est.day(k) * OS_MID, cell = planFinCell;
+  const inv = est.inv[osMode(plan)], p = est.profit * OS_MID, day = k => {const value=est.day(k);return Number.isFinite(value)?value*OS_MID:null;}, cell = planFinCell;
   return planFinFacts(inv, bank, amount, loan => {
     const own = inv - amount, daily = loan.interest + loan.repay;
     const without = osBreakDay(inv, day), with_ = osLoanDays(own, day, loan);
-    const payoff = without != null && without < loan.days ? without * loan.interest : null;
-    const dayText = n => n == null ? tt("gr.os.be.never", "not at this profit") : tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: num(n)});
+    const payoff = Number.isFinite(without) && without < loan.days ? without * loan.interest : null;
+    const dayText = n => osDayUnknown(n) ? osFutureUnknown(n) : n == null ? tt("gr.os.be.never", "not at this profit") : tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: num(n)});
     return cell(tt("gr.os.fin.upfront", "Cash upfront"), fmt(own), tt("gr.os.fin.upfront.sub", "{w} borrowed", {w: fmt(amount)}))
       + cell(tt("gr.os.fin.daily", "A day while it runs"), fmt(daily), tt("gr.os.fin.daily.sub", "{r} repaid + {i} interest, against {p} profit", {r: fmt(loan.repay), i: fmt(loan.interest), p: fmt(p)}))
       + cell(tt("gr.os.fin.interest", "Interest"), fmt(loan.total), payoff != null ? tt("gr.os.fin.interest.early", "over {n} days; {w} if paid off at break even", {n: num(loan.days), w: fmt(payoff)})
@@ -13612,13 +13645,15 @@ function osSnapOf(plan, b){
   const inv = {};
   OS_SNAP_INV.forEach(k => inv[k] = Math.round(est.inv[k] || 0));
   if(est.none) return {inv, cash, profit: null, days: null, curve: null};
-  return {inv, cash, profit: Math.round(est.profit), days: est.days,
-    curve: Array.from({length: OS_SNAP_DAYS}, (_, k) => Math.round(est.day(k)))};
+  const curve=Array.from({length:OS_SNAP_DAYS},(_,k)=>est.day(k));
+  const known=curve.every(Number.isFinite) && !Object.values(est.days).some(osRangeUnknown);
+  return {inv,cash,profit:known?Math.round(est.profit):null,days:est.days,
+    curve:known?curve.map(Math.round):null};
 }
 /* A stored snapshot, checked field by field as osLoad() checks the rest. */
 function osSnapClean(s){
   if(!s || typeof s !== "object" || !s.inv || typeof s.inv !== "object") return null;
-  const n = v => Number.isFinite(+v) ? +v : 0, day = v => Number.isFinite(v) ? v : null;
+  const n = v => Number.isFinite(+v) ? +v : 0, day = v => osDayUnknown(v) ? {status:"unavailable",reason:v.reason === "forecast-horizon-exceeded" ? v.reason : "future-cashflow-unavailable"} : Number.isFinite(v) ? v : null;
   const inv = {};
   OS_SNAP_INV.forEach(k => inv[k] = n(s.inv[k]));
   const range = d => d && typeof d === "object" ? {low: day(d.low), mid: day(d.mid), high: day(d.high)} : {low: null, mid: null, high: null};

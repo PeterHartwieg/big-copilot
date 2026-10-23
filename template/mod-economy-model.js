@@ -121,6 +121,38 @@ const ModEconomyModel = (() => {
     return {status: "ready", ...Object.fromEntries(Object.entries(sum).map(([key, value]) => [key, number(value)]))};
   }
 
+  const components = ['power','water','internet','officeIt','company','licences'];
+  const reasonCode=(error,allowed,fallback)=>allowed.includes(error?.message)?error.message:fallback;
+  const sumKnown = values => values.every(Number.isFinite) ? values.reduce((sum,n)=>sum+n,0) : null;
+  // Identical owner commitments cancel even when their future renewal quote is unknown.
+  // Identity includes capture day and every effective input to that component.
+  function deltaCosts(before, after){
+    const subtract=(a,b)=>Number.isFinite(a)&&Number.isFinite(b)?a-b:null;
+    const difference=(a,b)=>a&&b?Object.fromEntries(components.map(key=>[key,
+      after.componentKeys?.[key] != null && after.componentKeys[key]===before.componentKeys?.[key]
+        ? 0:subtract(a[key],b[key])])):null;
+    const cache=new Map();
+    const componentCost=offset=>{
+      if(cache.has(offset))return cache.get(offset);
+      const a=after.componentCost?.(offset),b=before.componentCost?.(offset);
+      const result=difference(a,b);
+      cache.set(offset,result);return result;
+    };
+    const dayCost=offset=>{const parts=componentCost(offset);return parts?sumKnown(Object.values(parts)):subtract(after.dayCost(offset),before.dayCost(offset));};
+    const startDay=Number.isSafeInteger(after.startDay)?after.startDay:Number.isSafeInteger(before.startDay)?before.startDay:1;
+    const byDayCents=after.byDayCents.map((_,weekday)=>dayCost((weekday-(startDay%7)+7)%7));
+    const accrualByDayCents=after.accrualComponentsByDay?.map((a,i)=>{
+      const parts=difference(a,before.accrualComponentsByDay?.[i]);return parts?sumKnown(Object.values(parts)):null;
+    });
+    const accrualSum=accrualByDayCents?sumKnown(accrualByDayCents):null;
+    const dailyCents=accrualByDayCents?(accrualSum===null?null:accrualSum/7):subtract(after.dailyCents,before.dailyCents);
+    const reasons=[...new Set([...(before.reasons||[]),...(after.reasons||[])])]
+      .filter(reason=>reason!=='commitment-future-input-unavailable'||dailyCents===null);
+    return {status:dailyCents===null||reasons.length?'unavailable':'ready',dailyCents,byDayCents,accrualByDayCents,
+      startupCents:subtract(after.startupCents,before.startupCents),requirements:[],reasons,dayCost,componentCost,
+      basis:'incremental-component-accrual',assumptions:['unchanged-shared-commitment-renewal-inputs'],startDay};
+  }
+
   function create(companion = {}){
     const captureDay = Number.isSafeInteger(companion.day) ? companion.day : 1;
     const get = (provider, name) => {
@@ -147,7 +179,7 @@ const ModEconomyModel = (() => {
 
     function operating(input){
       try { return operatingChecked(input); }
-      catch(error){ return noCost(error.message || 'invalid-operating-input'); }
+      catch(error){ return noCost(reasonCode(error,['operating-input-incomplete','schedule-unknown','utility-model-unavailable','licence-term-unavailable'],'invalid-operating-input')); }
     }
     function operatingChecked({typeId, building, lines = [], open, existing = false, day = captureDay, equipmentOverride = null, existingExtraLines = []}){
       positive(day);
@@ -183,6 +215,15 @@ const ModEconomyModel = (() => {
       if(existing && company.status === 'ready'){
         for(const part of ['staff','cover']) if(!['ready','disabled'].includes(company.data.partStates?.[part]))
           reasons.push(`company-${part}-unavailable`);
+      }
+      if(!existing && company.status==='ready'){
+        const state=company.data.partStates?.staff;
+        if(!['ready','disabled'].includes(state))reasons.push('company-staff-unavailable');
+        if(state==='ready'){
+          const defaults=company.data.newSiteDefaults;
+          if(defaults && defaults.raiseHourlyCents!==0)
+            reasons.push('new-site-staff-defaults-unavailable');
+        }
       }
       let equipment = {status:'ready',openWatts:0,alwaysWatts:0,litresPerOpenHour:0,officeSeats:0};
       let equipmentOn = false, officeOn = false;
@@ -254,9 +295,9 @@ const ModEconomyModel = (() => {
             if(licence.termDays <= 0) throw new TypeError('licence-term-unavailable');
             const held = existing ? site?.licences.find(l=>l.kind===licence.kind) : null;
             if(existing && !held){ reasons.push('licence-record-unavailable'); continue; }
-            const valid = !!held && held.untilDay >= day;
+            const valid = !!held && held.valid === true && held.untilDay >= day;
             const graceDays = existing ? 0 : r.newSiteGraceDays;
-            const first = valid ? held.untilDay-day+1 : graceDays + licence.termDays;
+            const first = valid ? held.untilDay-day+1 : (held?Math.max(0,held.untilDay-day+1):graceDays) + licence.termDays;
             if(!valid) startup.push(licence.feeCents);
             termsRenewals.push({kind:licence.kind,first,termDays:licence.termDays,cents:licence.feeCents});
             requirements.push({kind:'licence',licence:licence.kind,status:valid?'held':'required',
@@ -265,8 +306,15 @@ const ModEconomyModel = (() => {
           }
         }
       }
-      const componentCost = offset => {
-        positive(offset);
+      const componentCache=new Map(), utilityCache=new Map(), internetCache=new Map();
+      const componentKeys=Object.fromEntries(components.map(key=>[key,JSON.stringify({day,key,
+        input:key==='company'?[existing,company.data?.partStates?.staff,company.data?.partStates?.cover,site]:
+          key==='licences'?termsRenewals:key==='internet'?[internet,u.data?.terms.monthDays]:
+          key==='officeIt'?[officeOn,equipment.officeSeats,internet,u.data?.terms.priceLevel,u.data?.terms.monthDays,u.data?.terms.dailyCapCents,
+            h.data?.seatMonthCentsAtBasePrice,h.data?.priceLevelMin,h.data?.priceLevelMax]:
+          [u.status,kind,building.m2,hours,equipmentOn,equipment,u.data?.terms,utilityAccounts.find(a=>a.service===key)]})]));
+      const calculateComponents = offset => {
+        if(!Number.isSafeInteger(offset)||offset<0)throw new TypeError('invalid-day-offset');
         if(reasons.length) return null;
         const actualDay = day + offset, weekday = ((actualDay%7)+7)%7;
         const parts = {power:0,water:0,internet:0,officeIt:0,company:0,licences:0};
@@ -274,18 +322,24 @@ const ModEconomyModel = (() => {
           const t = u.data.terms;
           for(const service of ['power','water']){
             const account = existing ? utilityAccounts.find(a=>a.service===service) : null;
-            if(account && !['active','temporary'].includes(account.state)) return null;
-            if(account?.state==='temporary' && actualDay>=account.temporaryUntilDay) return null;
-            let use = utilityUse({terms:t,service,kind,area:building.m2,open:hours[weekday]>0,season:seasonAt(t,actualDay)});
-            if(equipmentOn) use = equipmentUse({terms:h.data,service,use,hours:hours[weekday],equipment});
-            parts[service] = utilityDayCents({terms:t,service,use,temporary:account?.state==='temporary'});
+            if(account && !['active','temporary'].includes(account.state)
+                || account?.state==='temporary' && actualDay>=account.temporaryUntilDay){parts[service]=null;continue;}
+            const season=seasonAt(t,actualDay),key=`${service}|${weekday}|${season}`;
+            if(!utilityCache.has(key)){
+              let use=utilityUse({terms:t,service,kind,area:building.m2,open:hours[weekday]>0,season});
+              if(equipmentOn)use=equipmentUse({terms:h.data,service,use,hours:hours[weekday],equipment});
+              utilityCache.set(key,utilityDayCents({terms:t,service,use,temporary:account?.state==='temporary'}));
+            }
+            parts[service]=utilityCache.get(key);
           }
           if(internet){
             const active = internet.state==='active';
             const outage = internet.outageUntilHour>internet.outageFromHour && Math.floor(internet.outageFromHour/24)===actualDay;
-            parts.internet = internetDayCents({monthCents:internet.monthCents,monthDays:t.monthDays,active,outage});
-            if(officeOn) parts.officeIt = officeItDayCents({terms:h.data,seats:equipment.officeSeats,priceLevel:t.priceLevel,
-              monthDays:t.monthDays,active,outage,cap:t.dailyCapCents});
+            if(!internetCache.has(outage))internetCache.set(outage,{
+              internet:internetDayCents({monthCents:internet.monthCents,monthDays:t.monthDays,active,outage}),
+              officeIt:officeOn?officeItDayCents({terms:h.data,seats:equipment.officeSeats,priceLevel:t.priceLevel,
+                monthDays:t.monthDays,active,outage,cap:t.dailyCapCents}):0});
+            Object.assign(parts,internetCache.get(outage));
           }
         }
         if(existing && site){
@@ -294,28 +348,38 @@ const ModEconomyModel = (() => {
             parts.company += site.overtime.dailyCents;
           for(const policy of company.data.partStates?.cover==='ready'?site.cover:[]){
             if(!policy.active) continue;
-            if(actualDay>policy.untilDay) return null; // Renewal premium depends on future takings/claims.
+            if(actualDay>policy.untilDay){parts.company=null;break;} // Renewal premium depends on future takings/claims.
             if(actualDay>=policy.fromDay) parts.company += policy.dailyCents;
           }
         }
         parts.licences = add(termsRenewals.filter(r=>offset>=r.first && (offset-r.first)%r.termDays===0).map(r=>r.cents));
         return parts;
       };
-      const dayCost = offset => { const parts=componentCost(offset); return parts ? add(Object.values(parts)) : null; };
+      const componentCost=offset=>{
+        if(!componentCache.has(offset))componentCache.set(offset,calculateComponents(offset));
+        return componentCache.get(offset);
+      };
+      const dayCost = offset => { const parts=componentCost(offset); return parts ? sumKnown(Object.values(parts)) : null; };
       // Copilot schedules are Sunday..Saturday; native day 1 is Monday.
       const byDayCents = Array.from({length:7},(_,weekday)=>dayCost((weekday-(day%7)+7)%7));
-      const known = byDayCents.every(Number.isSafeInteger);
+      const licenceAccrualCents=termsRenewals.reduce((sum,r)=>sum+r.cents/r.termDays,0);
+      const accrualComponentsByDay=Array.from({length:7},(_,weekday)=>{
+        const parts=componentCost((weekday-(day%7)+7)%7);
+        return parts?{...parts,licences:licenceAccrualCents}:null;
+      });
+      const accrualByDayCents=accrualComponentsByDay.map(parts=>parts?sumKnown(Object.values(parts)):null);
+      const known = accrualByDayCents.every(Number.isFinite);
       const finalReasons = !known && !reasons.length ? ['commitment-future-input-unavailable'] : [...new Set(reasons)];
-      return {status:known?'ready':'unavailable',dailyCents:known?add(byDayCents)/7:null,byDayCents,
+      return {status:known?'ready':'unavailable',dailyCents:known?sumKnown(accrualByDayCents)/7:null,byDayCents,accrualByDayCents,accrualComponentsByDay,licenceAccrualCents,
         startupCents:reasons.length?null:add(startup),requirements,reasons:finalReasons,
-        preparationDays,dayCost,componentCost,renewals:termsRenewals,
-        basis:'daily-accrual-plus-term-renewals',assumptions:['captured-price-level','no-new-outages','prerequisites-before-opening'],
+        preparationDays,dayCost,componentCost,componentKeys,startDay:day,renewals:termsRenewals,
+        basis:'daily-accrual-with-licence-fee-per-term',assumptions:['captured-price-level','no-new-outages','prerequisites-before-opening','unforeseen-sick-pay-and-overtime-excluded'],
         observedAccounts:utilityAccounts,companyAccountant:company.status==='ready' && company.data.partStates?.tax==='ready'?company.data.accountant:null};
     }
 
     function factoryRequirements(lines, ownedItems = []){
       try { return factoryChecked(lines,ownedItems); }
-      catch(error){ return {status:'unavailable',startupCents:null,totalCents:null,requirements:[],reasons:[error.message || 'factory-input-unknown']}; }
+      catch(error){ return {status:'unavailable',startupCents:null,totalCents:null,requirements:[],reasons:[reasonCode(error,['factory-gate-unavailable','factory-gate-unknown','education-owner-unavailable'],'invalid-factory-input')]}; }
     }
     function factoryChecked(lines, ownedItems){
       const f = get('hart','factoryPurchases'), e = get('rlo','education');
@@ -359,6 +423,6 @@ const ModEconomyModel = (() => {
     return {operating,factoryRequirements};
   }
 
-  return {create, seasonAt, utilityUse, equipmentUse, utilityDayCents, billMoney, internetDayCents, officeItDayCents, equipmentFor};
+  return {create, deltaCosts, seasonAt, utilityUse, equipmentUse, utilityDayCents, billMoney, internetDayCents, officeItDayCents, equipmentFor};
 })();
 if(typeof module !== "undefined" && module.exports) module.exports = ModEconomyModel;

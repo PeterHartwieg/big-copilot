@@ -124,7 +124,7 @@ Producer validation (23 October 2026)
   authorization, rent request shape, home equipment classification, malformed
   transaction rows, a changed gameplay cache path, abandoned utility state,
   deterministic interior ordering and owned-property lease provenance.
-- Game Link SDK harness: 84 synthetic assertions pass. This is not in-game
+- Game Link SDK harness: 119 synthetic assertions pass. This is not in-game
   save/load or Workshop acceptance.
 - RLO's complete gate is not green on macOS. Isolated unchanged base `850e2781`
   reproduces the Windows DPAPI/Steamworks, locale/path and inventory failures.
