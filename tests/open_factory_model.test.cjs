@@ -426,3 +426,28 @@ test('an unknown native lease is named as a missing quote rather than a mod adju
   const withoutDepot=model.investment({counts:{beer:1},building:factory});
   assert.ok(Number.isFinite(withoutDepot.self));assert.equal(withoutDepot.incomplete,undefined);
 });
+
+test('factory wholesale costs retain catalogue values inside the City quiet band',()=>{
+  const f=companionFixture(),data={costFactorThousandths:1001,adjustmentQuiet:3,livingExcludesWholesalePurchases:false};
+  f.facts.modEconomy.rlo.modules.prices={status:'ready',data};
+  const counts={beer:1};
+  data.livingExcludesWholesalePurchases=true;
+  const native=create(f).rawCost(counts);
+  data.livingExcludesWholesalePurchases=false;
+  for(const factor of [998,999,1000,1001,1002]){
+    data.costFactorThousandths=factor;
+    assert.equal(create(f).rawCost(counts),native,`quiet factor ${factor}`);
+  }
+  for(const factor of [997,1003]){
+    data.costFactorThousandths=factor;
+    assert.equal(create(f).rawCost(counts),null,`boundary factor ${factor}`);
+  }
+  for(const [factor,quiet] of [[1000,0],[1000,3]]){
+    Object.assign(data,{costFactorThousandths:factor,adjustmentQuiet:quiet});
+    assert.equal(create(f).rawCost(counts),native);
+  }
+  for(const [factor,quiet] of [[1000.5,3],[1000,1.5],['1000',3],[1000,'3'],[NaN,3],[1000,undefined],[Number.MAX_SAFE_INTEGER+1,3]]){
+    Object.assign(data,{costFactorThousandths:factor,adjustmentQuiet:quiet});
+    assert.equal(create(f).rawCost(counts),null,`malformed ${factor}/${quiet}`);
+  }
+});

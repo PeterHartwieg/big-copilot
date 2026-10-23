@@ -8,15 +8,15 @@ function fixture(){
   vm.runInContext('D = {meta:{character:"test",day:12},businesses:[],mods:{}}', b);
   return {b, ...doc};
 }
-test('ownership refusals explain current owner effects and escape unknown provider text', () => {
+test('ownership refusals explain current owner effects without exposing unknown provider text', () => {
   const {b} = fixture();
   const p = b.gwProblem({error:'mod_owned',body:{owner:'rlo.managers',reasons:['manager-controls-scheduling'],effects:['manager-may-rewrite-week','<img src=x onerror=alert(1)>']}});
   assert.match(p.say,/A mod controls this change/);
   assert.match(p.text,/Nothing was changed/);
   assert.match(p.sub,/manager controls scheduling/);
   assert.match(p.sub,/replace these opening hours/);
-  assert.match(p.sub,/&lt;img/);
-  assert.doesNotMatch(p.sub,/<img/);
+  assert.match(p.sub,/A required mod condition could not be verified/);
+  assert.doesNotMatch(p.sub,/<img|&lt;img|onerror/);
   assert.equal(p.retry,true);
   const unknown = b.gwProblem({error:'ownership_unknown',body:{reasons:['fresh-managers-disabled-proof-required'],effects:[]}});
   assert.match(unknown.sub,/does not confirm.*switched off/);
@@ -237,4 +237,125 @@ test('the store Items subtotal respects an unavailable selected equipment price'
   vm.runInContext('D.openStore={priceUnavailable:["counter"]}',b);
   const html=b.osToolbar({type:'shop',mode:'self'},{self:null,firm:null,items:1},{lines:[['counter',1]],furniture:98765});
   assert.match(html,/Items<\/span><b>Unavailable<\/b>/);assert.doesNotMatch(html,/98,765/);
+});
+
+test('expansion keeps readable model diagnostics for a valid shop with debt, campaigns, raises or closures',()=>{
+  const {b}=fixture();
+  vm.runInContext(`
+    D.openStore={game:{promo:0.5,wages:0.7,capInitial:true,satisfaction:95,wageBase:{cashier:16,cleaner:12,guard:15,perCashier:30}},
+      hoods:{H:{idx:1.2,strength:1,demands:0,interior:0}},
+      types:{T:{model:'retail',products:[['P',1]],amt:1,days:Array(7).fill(1),hours:Array(24).fill(1),layouts:{}}},
+      market:{P:{p:10,r:0.5,d:1,s:0,cost:4,hoods:{H:[0,0,null]}}},built:{k:{sells:[]}},
+      modEconomy:{day:12,rlo:{modules:Object.fromEntries(['prices','company','utilities','requirements','interiors','footfall','closures'].map(k=>[k,{status:'disabled'}]))}}};
+    D.openStore.modEconomy.rlo.modules.prices={status:'ready',data:{costFactorThousandths:1000,takingsFactorThousandths:1000,adjustmentQuiet:3,livingTransactionTypes:[],carriedDebtInSiteForecast:true}};
+    D.premises={buildings:[{hood:'H',cap:20,m2:100,traffic:20,layout:'C1',rent:50,key:'k'}]};
+    D.hours=[{key:'k',open:[[[10,11]],[],[],[],[],[],[]]}];
+    spExpansionState={open:true,extraCost:0,rows:new Set()};
+  `,b);
+  b.odNeed=()=>true;
+  const shop={key:'k',typeSlug:'T',satisfaction:{overall:50},promotion:20};
+  const result=b.spExpansionResult(shop);
+  assert.equal(result.rows,null);assert.deepEqual(Array.from(result.reasons),['company-carried-debt-unavailable']);
+  const html=b.spExpansionBody(shop);
+  assert.match(html,/cannot allocate the company's carried debt/);
+  assert.doesNotMatch(html,/known opening hours|current building-capacity rules/);
+  for(const effect of ['campaign','raise','closure']){
+    b.__effect=effect;
+    vm.runInContext(`
+      D.premises.buildings[0].key='road#1'; D.hours[0].key='road#1'; D.openStore.built={'road#1':{sells:[]}};
+      var modules=D.openStore.modEconomy.rlo.modules;
+      modules.prices={status:'disabled'};
+      modules.company={status:'ready',data:{partStates:{staff:'ready',marketing:'ready'},sites:[{address:{street:'road',number:1},
+        raises:__effect==='raise'?[{raiseHourlyCents:100}]:[],campaign:{active:__effect==='campaign'}}]}};
+      modules.closures=__effect==='closure'?{status:'ready',data:{rows:[{address:{street:'road',number:1}}]}}:{status:'disabled'};
+    `,b);
+    const current={...shop,key:'road#1'},result=b.spExpansionResult(current),html=b.spExpansionBody(current);
+    assert.deepEqual(Array.from(result.reasons),['mod-profit-inputs-unavailable'],effect);
+    assert.match(html,/Current mod prices, staffing, campaigns or opening restrictions/);
+    assert.doesNotMatch(html,/mod-profit-inputs-unavailable|known opening hours/);
+  }
+});
+
+test('expansion diagnostic reasons are readable and the generic fallback is only for missing reasons',()=>{
+  const {b}=fixture();
+  vm.runInContext('D.openStore={};spExpansionState={open:true,extraCost:0,rows:new Set()}',b);
+  b.odNeed=()=>true;
+  for(const [reason,expected] of [
+    ['expansion-interior-context-unavailable',/interior effect/],
+    ['expansion-entrance-fee-context-unavailable',/entrance-fee effect/],
+    ['expansion-price-demand-context-unavailable',/combined price and customer-demand effects/],
+    ['expansion-equipment-price-unavailable',/price of equipment/]]){
+    b.spExpansionResult=()=>({rows:null,reasons:[reason]});
+    const html=b.spExpansionBody({typeSlug:'T'});
+    assert.match(html,expected);assert.doesNotMatch(html,/known opening hours|expansion-.*-unavailable/);
+  }
+  b.spExpansionResult=()=>({rows:null,reasons:[]});
+  assert.match(b.spExpansionBody({typeSlug:'T'}),/known opening hours/);
+});
+
+test('demand and basket diagnostics are readable and unknown internal codes stay hidden',()=>{
+  const {b}=fixture();
+  for(const [codes,words] of [
+    [['expansion-neighbour-cashflow-unavailable'],/cash flow at your nearby shops/],
+    [['expansion-operating-cost-unavailable'],/additional operating costs/],
+    [['interiors-owner-unavailable','interior-site-unavailable','interior-district-unavailable'],/interior/],
+    [['footfall-owner-unavailable','footfall-site-unavailable','price-district-unavailable'],/customer-demand/],
+    [['city-price-owner-unavailable','planned-prices-unavailable','price-tolerance-unavailable'],/price/i],
+    [['hart-ambience-owner-inputs-unavailable','hart-retail-demand-unavailable'],/demand/],
+    [['cafe-owner-unavailable','cafe-rule-unknown','cafe-pairing-unproven'],/internet-cafe/],
+    [['basket-share-unknown','basket-product-set-unknown','basket-order-bound-unknown','basket-eligible-products-unknown','basket-product-eligibility-unproven','basket-product-set-incomplete'],/Eligible products and per-order quantities/],
+    [['basket-per-order-cap-may-bind','basket-order-bound-inconsistent'],/per-order limit/]]){
+    for(const code of codes){const text=b.mcReason(code);assert.match(text,words,code);assert.ok(!text.includes(code));}
+  }
+  vm.runInContext('D.openStore={};spExpansionState={open:true,extraCost:0,rows:new Set()}',b);
+  b.odNeed=()=>true;
+  for(const code of ['future-provider-private-error','<img src=x onerror=alert(1)>','toString']){
+    assert.equal(b.mcReason(code),'A required mod condition could not be verified.');
+    b.spExpansionResult=()=>({rows:null,reasons:[code]});
+    const html=b.spExpansionBody({typeSlug:'T'});
+    assert.match(html,/A required mod condition could not be verified/);assert.ok(!html.includes(code));
+  }
+});
+
+test('known interior and internet blockers explain the condition rather than unverifiable inputs',()=>{
+  const {b}=fixture();
+  for(const [reason,expected] of [
+    ['interior-standard-unattainable',/interior standard cannot be reached with the available walls and floors/],
+    ['internet-not-active',/internet connection is not active/]]){
+    const html=b.mcCostsHtml({status:'unavailable',dailyCents:null,startupCents:null,reasons:[reason]});
+    assert.match(html,expected);assert.doesNotMatch(html,/could not be verified/);assert.ok(!html.includes(reason));
+  }
+});
+
+test('audited model, staffing and course refusal reasons have specific wording',()=>{
+  const {b}=fixture(),generic=b.mcReason('future-unknown-reason');
+  for(const [codes,words] of [
+    [['interior-standard-unavailable'],/interior meets/],
+    [['catalogue-price-unavailable'],/catalogue price/],
+    [['city-prices-unavailable'],/city price adjustments/],
+    [['company-staff-unavailable'],/company staffing costs/],
+    [['company-cover-unavailable'],/company insurance costs/],
+    [['hart-equipment-unknown'],/equipment utility costs/],
+    [['hart-officeIt-unknown'],/office IT costs/],
+    [['hart-utility-owner-disabled'],/utility provider is disabled/],
+    [['utility-type-unavailable'],/utility category/],
+    [['utility-account-identities-unresolved'],/utility accounts/],
+    [['licence-type-unavailable'],/licences required/],
+    [['mod-model-unavailable'],/model needed/],
+    [['closure-observations-unavailable'],/restrictions on opening/],
+    [['not-offered'],/not currently offered/],
+    [['closed'],/closed to enrollment/],
+    [['already'],/already enrolled/],
+    [['passed'],/already completed/],
+    [['needs'],/prerequisite course must be completed/],
+    [['full'],/limit on courses/],
+    [['nodistance'],/does not offer distance learning/],
+    [['cash-insufficient','nomoney'],/not enough cash/],
+    [['loan-full'],/student-loan capacity/]]){
+    for(const code of codes){const text=b.mcReason(code);assert.match(text,words,code);assert.notEqual(text,generic);}
+  }
+  for(const code of ['equipmentUtilities','officeIt','factoryDiplomas','operatingCosts','economyUnknown','marketingUnknown']){
+    assert.equal(b.mcReason(code),b.planCompatibilityText({compatibility:{test:[code]}},'test'));
+    assert.notEqual(b.mcReason(code),generic);
+  }
 });

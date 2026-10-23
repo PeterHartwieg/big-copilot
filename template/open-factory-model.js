@@ -110,8 +110,12 @@ const OpenFactoryModel = ((storeModel, economyModel, ownerModel) => {
     const ofImportPrice = slug => (ofWholesale(slug) == null ? null : ofWholesale(slug) * ofDiscount());
     const ofExportPrice = slug => (ofWholesale(slug) == null ? null : ofWholesale(slug) * (game.export || 0));
     // Recipes describe weekly consumption, not dates or totals of purchase bills.
-    const wholesaleTimingUnknown = () => prices.status === "ready" && prices.data.livingExcludesWholesalePurchases === false
-      && prices.data.costFactorThousandths !== 1000;
+    const wholesaleTimingUnknown = () => {
+      if(prices.status !== "ready" || prices.data.livingExcludesWholesalePurchases !== false) return false;
+      const {costFactorThousandths: factor, adjustmentQuiet: quiet} = prices.data;
+      if(!Number.isSafeInteger(factor) || !Number.isSafeInteger(quiet)) return true;
+      return factor !== 1000 && Math.abs(factor - 1000) >= quiet;
+    };
     /* The raw material one unit made eats, at import prices. */
     const ofRawUnit = slug => { const r = recipes[slug];
       return r && r.out ? (wholesaleTimingUnknown() || r.ingredients.some(i=>ofImportPrice(i.slug)==null) ? null : r.ingredients.reduce((s, i) => s + i.per * ofImportPrice(i.slug), 0) / r.out) : 0; };

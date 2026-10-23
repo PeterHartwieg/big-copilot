@@ -90,8 +90,10 @@ it is separate from the registered catalogue and market/import multipliers.
 The store model applies that adjustment once to its daily goods category when
 wholesale purchases are included. Factory recipes provide weekly consumption,
 not dated purchase bills. When wholesale purchases are included and the City
-cost factor differs from 1000, factory raw-material costs, savings and complete
-running totals are unavailable. Ingredient quantities and observed catalogue
+cost factor differs from 1000 by at least `adjustmentQuiet`, factory raw-material
+costs, savings and complete running totals are unavailable. Both values must be
+safe integers; malformed values also make these estimates unavailable. Inside
+the quiet band the City adjustment is zero, so catalogue-based costs remain known. Ingredient quantities and observed catalogue
 quotes remain usable. The factory does not invent a daily purchase schedule.
 
 A report requesting carried company debt in site forecasts makes the complete

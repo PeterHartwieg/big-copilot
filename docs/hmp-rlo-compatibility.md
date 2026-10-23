@@ -1,7 +1,15 @@
-HMP/RLO compatibility implementation plan — agreed contract
-23 October 2026. Opus5.5 and coordinator agreed after three review rounds; final amendments below adopted before implementation.
+# HMP/RLO compatibility: audit decisions and implementation contract
 
-This replaces conflicting wording in draft 2. Read alongside the source coverage matrix in draft 2 and Opus review 2. Target Copilot2843245f plus PR51463edb6ba; HARTModPack8d8b56a (retired HMP is fallback only); RLO850e2781. Persistent City excluded. The goal covers existing Copilot observations, recommendations, forecasts and live writes; it does not add simulations for unsupported custom businesses or personal-life apps.
+23 October 2026. The coordinator and Opus 5.5 agreed after three planning review
+rounds; the final amendments below were adopted before implementation.
+
+The audit started from Copilot `2843245f` plus PR 514 (`63edb6ba`), HART Mod Pack
+`8d8b56a`, and RLO `850e2781`. Retired HMP receives conservative fallback support.
+The scope covers existing Copilot observations, recommendations, forecasts and
+live writes. It excludes Persistent City, unsupported custom-business simulations
+and personal-life apps. This document records the agreed decisions; the detailed
+wire schemas and producer-generated examples are in [HART contracts](../contracts/hart/README.md)
+and [RLO contracts](../contracts/rlo/README.md).
 
 Decisions on all seven blockers
 
@@ -50,7 +58,7 @@ public static string HARTModPack.Companion.CaptureV1(GameInstance game).
 modules runtime,rent,runningCosts,factoryPurchases,retailDemand.
 runtime: gameplayActive,blockedByLegacy,rloReview=accepted|refused|undecided|absent, target states; rules keyed existing Rules.All ids with requested,effective(bool|null),state,reason. RloGate.Refused=false alone is not accepted. Pure decided/accepted snapshot required. Same-assembly duplicate instances with one owner are not ambiguous; multiple distinct assembly objects are ambiguous. Legacy-only capabilities observed separately; never treat blocked pack options as proof of legacy behavior.
 rent: model=hart-rent-v1, effective new-lease multiplier by native building type. Link captures actual live new-lease quote/deposit and existing signed rent separately. Ordinary-save fallback uses this known multiplier only where native baseline quote is known and no other unmodelled rent provider applies; otherwise unknown.
-runningCosts: model=hart-running-costs-v1; equipment/officeIt independent effective states; referenceHours=12,closedShareThousandths=250, seatMonthCentsAtBasePrice=15000,officeTypeIds; items[itemId,openWatts,alwaysWatts,litresPerOpenHour,officeSeat]; currentSites[address,equipmentApplies,inputBasis=billing-cache|current-items,openWatts,alwaysWatts,litresPerOpenHour,officeSeats,itSeatDayCents,itBasis=included-in-rlo-internet-accrual]. Exact formula: power=max(RLO standby,alwaysWatts*24)+RLO open+openWatts*hours; water=RLO standby+max(RLO open,litresPerOpenHour*hours). Reconstruct full use on a zero-hours day before splitting. Preserve integer order/saturation. Cache peek matches next-bill inputs without inserting/resetting caches. RLO owns tariffs/use/season/money conversion. Missing item classification is unknown, not zero.
+runningCosts: model=hart-running-costs-v1; equipment/officeIt independent effective states; referenceHours=12,closedShareThousandths=250, seatMonthCentsAtBasePrice=15000,officeTypeIds; items[itemId,openWatts,alwaysWatts,litresPerOpenHour,officeSeat]; currentSites[address,equipmentApplies,inputBasis=billing-cache|current-items,openWatts,alwaysWatts,litresPerOpenHour,officeSeats,itSeatDayCents,itBasis=included-in-rlo-internet-accrual]. Exact formula: power=max(RLO standby,alwaysWatts*24)+RLO open+openWatts*hours; water=RLO standby+max(RLO open,litresPerOpenHour*hours). Reconstruct full use on a zero-hours day before splitting. Preserve integer order/saturation. Cache peek matches next-bill inputs without inserting/resetting caches. RLO owns tariffs/use/season/money conversion. Missing item classification is unknown, not zero. `equipmentApplies` is `boolean|null`: true or false is a proven current billing decision; null means the current building classification is unavailable and withholds only that site’s dependent estimate.
 factoryPurchases: model=hart-factory-purchase-gate-v1,restriction=purchase-only, gate effective conjunction, course/item mapping and definitions, typed heldRecords ready/unavailable. Gate enforced requires activepatch/no failure/intactcatalogue/RLOcareers+study/directorhealthy/studyrecord; disabled/fail-open gate imposes no purchase requirement but stateswhy. Held data malformed is unknown. Never infer actual qualification from CoursesRegistered or count0fallback. RLOeducation owns eligibility/effective fees.
 retailDemand: Cafe model=hart-cafe-stations-v1 with sessionsPerStationPerHour=2 and exact usable current station count via shared tree traversal; hypothetical plans need proven usable paired stations, not raw PC count. Ambience model=hart-ambience-demand-v1 only if pure owner score/preset/eligibility available; otherwise reason=ambience-owner-inputs-unavailable on affected retail forecast, offices unchanged. Native registered Bakery and vehicle prices captured by native facts, not multiplied a second time.
 
@@ -102,7 +110,8 @@ uses measured hours as recorded, but cannot use native default demand for unread
 hours while an interior client boost may apply. Ordinary wage estimates exclude
 overtime, sickness and unobserved future absence. Company-wide City rounding is
 represented as a standalone site/category estimate; captured City settings are
-held constant and company carried debt is excluded.
+held constant. A report that requests carried company debt makes the complete
+site forecast unavailable because the company balance cannot be allocated reliably.
 
 New custom businesses and personal-life apps are outside this task. Persistent
 City is excluded. Offline reports are observations at the saved clock; only
@@ -112,11 +121,17 @@ including undo.
 
 Producer validation (23 October 2026)
 
-- RLO candidate `32e13e0b`: native build with zero warnings/errors; 318 companion
-  checks and 99,290 Standard checks pass locally. Frozen Mac-built DLL SHA256:
-  `e992a80637fd664ee63db651f7248ef7065d3041f15c77ab0b11e913f801d802`.
-  The native Windows build is a separate artifact, not an interchangeable hash.
-- HART candidate `bd8415e`, including integration base `62b2dcc`, reviewed that
+- RLO candidate `952ac719`: native builds have zero warnings/errors; 318
+  companion checks pass. Independently built Mac and Windows DLLs are byte-identical,
+  SHA256 `1f7647f2e188a43e43bc3411d2945a04eb68b70f5796e913dd9ae6807b0eba5c`.
+  This equality was checked from the transferred Windows artifact, not assumed.
+  Windows Catalogue, Navigation (7,712), Planner (225), Contract (1,467),
+  Standard (99,291) and locale checks pass. The full Windows gate is **not green**:
+  Economy's existing 30,000-account benchmark took 35.16 ms against a 20 ms limit;
+  the unchanged base also reproduced a timing failure. A normal repeat took
+  38.04 ms and also failed an existing allocation assertion that passed in the
+  preceding run. Neither assertion was weakened. Detailed evidence is on RLO PR 27.
+- HART candidate `80cf0b03`, including integration base `62b2dcc`, reviewed that
   exact RLO binary: all 698 existing audited entries unchanged, three pure
   helpers added. The complete check-all gate passes: 227 Core checks, 287 API
   checks on each Windows/Mac reference set, 36 accepted and 27 refused companion
@@ -128,11 +143,10 @@ Producer validation (23 October 2026)
   failed billing director from an unavailable phone app: the latter still bills.
 - Game Link SDK harness: 119 synthetic assertions pass. This is not in-game
   save/load or Workshop acceptance.
-- RLO's full gate requires Windows. The unchanged base `850e2781` reproduces
-  the DPAPI/Steamworks, locale/path and inventory failures seen on macOS.
-  Native Windows validation uses a fresh Git checkout and installed game
-  assemblies; its final results are recorded on the RLO PR. Neither producer
-  repository has a GitHub CI workflow.
+- RLO's full gate requires Windows. Native Windows validation used a fresh
+  Git checkout with native line endings and the installed game assemblies.
+  Neither producer repository has a GitHub CI workflow. The failing performance
+  assertions remain a release gate; passing static reviews do not override them.
 
 These are candidate integration results, not evidence of an upstream RLO release
 or a deployed HART build. HART is based on the pending modpack integration branch;

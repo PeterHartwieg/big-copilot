@@ -7463,13 +7463,15 @@ function xlArrive(sel, hit = ""){
    facts in between. */
 const spExpansionStates = new Map();
 let spExpansionState = null, spExpansionDrawn = {scope: "", wait: false, draft: null};
-function spExpansionRows(b){
+function spExpansionResult(b){
   const building = (D.premises?.buildings || []).find(x => x.key === b.key);
   const hours = (D.hours || []).find(x => x.key === b.key);
   const model = OpenStoreModel.create({facts: osFacts(), company: {businesses: D.businesses, day: D.meta.day}});
-  return model.expansions(b.typeSlug, building, {open: hours?.open,
+  const rows = model.expansions(b.typeSlug, building, {open: hours?.open,
     sat: b.satisfaction?.overall, promoTotal: b.promotion, extraCost: spExpansionState.extraCost});
+  return {rows, reasons: model.diagnostics(b.typeSlug, building)};
 }
+function spExpansionRows(b){ return spExpansionResult(b).rows; }
 /* What one addition earns a day, and what it takes to buy, vendor by vendor. */
 function spExpansionDetail(r){
   const F = osFacts(), vendors = F.vendors || {}, items = F.items || {};
@@ -7520,8 +7522,9 @@ function spExpansionBody(b, draft = null){
   if(!odNeed("openStore")){ spExpansionDrawn.wait = true; return odWaitHtml("openStore"); }
   const compatibility = osCompatibilityText(b.typeSlug);
   if(compatibility) return spNone(compatibility);
-  const rows = spExpansionRows(b);
-  if(rows === null) return spNone(tt("sp.expand.unavailable", "This comparison needs a supported shop, known opening hours, promotion and satisfaction, and a game started with the current building-capacity rules."));
+  const {rows, reasons} = spExpansionResult(b);
+  if(rows === null) return spNone(reasons.length ? spEsc([...new Set(reasons)].map(mcReason).join(" "))
+    : tt("sp.expand.unavailable", "This comparison needs a supported shop, known opening hours, promotion and satisfaction, and a game started with the current building-capacity rules."));
   if(!rows.length) return spNone(tt("sp.expand.complete", "This shop already offers every physical product in its business type’s range."));
   return `<div class="spx-bar"><label for="spExpansionCost">${tt("sp.expand.extra", "Extra staffing and other costs / day")}</label>
       <span class="os-num">$<input id="spExpansionCost" type="number" inputmode="decimal" required min="0" max="1000000000" step="any" value="${attr(draft ?? String(spExpansionState.extraCost))}"></span></div>
@@ -12370,6 +12373,31 @@ function mcStaffText(row){
 }
 function mcReason(reason){
   const words = {
+    "interior-standard-unattainable": () => tt("gr.mod.interiorUnattainable", "The neighbourhood's interior standard cannot be reached with the available walls and floors."),
+    "internet-not-active": () => tt("gr.mod.internetInactive", "The site's internet connection is not active."),
+    "interior-standard-unavailable": () => tt("gr.mod.interiorStandard", "Whether the planned interior meets the neighbourhood's standard could not be verified."),
+    "catalogue-price-unavailable": () => tt("gr.mod.cataloguePrice", "A current catalogue price needed for this investment could not be verified."),
+    "city-prices-unavailable": () => tt("gr.mod.cityPrices", "The city price adjustments needed for this estimate could not be verified."),
+    "company-staff-unavailable": () => tt("gr.mod.companyStaff", "Current company staffing costs could not be verified."),
+    "company-cover-unavailable": () => tt("gr.mod.companyCover", "Current company insurance costs could not be verified."),
+    "hart-equipment-unknown": () => tt("gr.mod.hartEquipment", "Whether HART equipment utility costs apply could not be verified."),
+    "hart-officeIt-unknown": () => tt("gr.mod.hartOfficeIt", "Whether HART office IT costs apply could not be verified."),
+    "hart-utility-owner-disabled": () => tt("gr.mod.hartUtilityOwner", "HART utility costs are active, but their utility provider is disabled; these settings cannot produce a cost estimate."),
+    "utility-type-unavailable": () => tt("gr.mod.utilityType", "The utility category for this business type could not be verified."),
+    "utility-account-identities-unresolved": () => tt("gr.mod.utilityAccounts", "Some utility accounts could not be matched to their sites."),
+    "licence-type-unavailable": () => tt("gr.mod.licenceType", "The operating licences required for this business type could not be verified."),
+    "mod-model-unavailable": () => tt("gr.mod.modelUnavailable", "The model needed to estimate these mod costs and requirements is unavailable."),
+    "closure-observations-unavailable": () => tt("co.mod.closureUnknown", "Current mod restrictions on opening this site could not be verified."),
+    "not-offered": () => tt("gr.mod.courseNotOffered", "The required course is not currently offered."),
+    "closed": () => tt("gr.mod.courseClosed", "The required course is closed to enrollment."),
+    "already": () => tt("gr.mod.courseAlready", "You are already enrolled in the required course."),
+    "passed": () => tt("gr.mod.coursePassed", "You have already completed the required course."),
+    "needs": () => tt("gr.mod.courseNeeds", "A prerequisite course must be completed before enrollment."),
+    "full": () => tt("gr.mod.courseLimit", "The limit on courses studied at the same time has been reached."),
+    "nodistance": () => tt("gr.mod.courseDistance", "The required course does not offer distance learning."),
+    "cash-insufficient": () => tt("gr.mod.courseCash", "There is not enough cash for the course payment due at enrollment."),
+    "nomoney": () => tt("gr.mod.courseCash", "There is not enough cash for the course payment due at enrollment."),
+    "loan-full": () => tt("gr.mod.courseLoan", "There is not enough remaining student-loan capacity for this course."),
     "current-equipment-building-unavailable": () => tt("gr.mod.buildingEquipment", "Whether equipment costs apply to this building could not be verified."),
     "factory-course-unavailable": () => tt("gr.mod.factoryCourse", "The required factory course could not be verified."),
     "held-course-unavailable": () => tt("gr.mod.heldCourse", "The existing course qualification could not be verified."),
@@ -12377,6 +12405,27 @@ function mcReason(reason){
     "licence-term-unavailable": () => tt("gr.mod.licenceTerms", "The licence renewal fee or term could not be verified."),
     "wholesale-purchase-timing-unavailable": () => tt("gr.mod.purchaseTiming", "Factory material costs need purchase dates and bill totals to apply the city adjustment."),
     "company-carried-debt-unavailable": () => tt("gr.mod.carriedDebt", "This forecast cannot allocate the company's carried debt to the site."),
+    "mod-profit-inputs-unavailable": () => tt("gr.mod.profitInputs", "Current mod prices, staffing, campaigns or opening restrictions cannot be fully included in this profit estimate."),
+    "expansion-neighbour-cashflow-unavailable": () => tt("sp.expand.neighbourUnknown", "The effect on cash flow at your nearby shops could not be verified."),
+    "expansion-operating-cost-unavailable": () => tt("sp.expand.operatingUnknown", "The additional operating costs of this expansion could not be verified."),
+    "interiors-owner-unavailable": () => tt("gr.mod.interiorRules", "Current mod interior rules are unavailable."),
+    "interior-site-unavailable": () => tt("gr.mod.siteInterior", "This site's current interior effects could not be verified."),
+    "interior-district-unavailable": () => tt("gr.mod.districtInterior", "The neighbourhood's interior requirements could not be verified."),
+    "footfall-owner-unavailable": () => tt("gr.mod.demandRules", "Current mod customer-demand rules are unavailable."),
+    "footfall-site-unavailable": () => tt("gr.mod.siteDemand", "This site's current customer-demand effects could not be verified."),
+    "city-price-owner-unavailable": () => tt("gr.mod.cityPriceRules", "Current city price rules are unavailable."),
+    "price-district-unavailable": () => tt("gr.mod.districtPrices", "The neighbourhood's price and customer-demand effects could not be verified."),
+    "planned-prices-unavailable": () => tt("gr.mod.plannedPrices", "Selling prices for the planned range could not be verified."),
+    "price-tolerance-unavailable": () => tt("gr.mod.priceTolerance", "Customers' response to the planned prices could not be verified."),
+    "hart-ambience-owner-inputs-unavailable": () => tt("gr.mod.ambienceDemand", "The ambience effect on customer demand could not be verified."),
+    "hart-retail-demand-unavailable": () => tt("gr.mod.hartDemand", "Current HART retail-demand effects are unavailable."),
+    "cafe-owner-unavailable": () => tt("gr.mod.cafeRules", "Current internet-cafe capacity rules are unavailable."),
+    "cafe-rule-unknown": () => tt("gr.mod.cafeEffective", "Whether the internet-cafe capacity rule applies could not be verified."),
+    "cafe-pairing-unproven": () => tt("gr.mod.cafeStations", "The number of usable internet-cafe stations could not be verified."),
+    "expansion-interior-context-unavailable": () => tt("sp.expand.interiorUnknown", "The interior effect of adding this equipment could not be verified."),
+    "expansion-entrance-fee-context-unavailable": () => tt("sp.expand.feeUnknown", "The entrance-fee effect of expanding this shop could not be verified."),
+    "expansion-price-demand-context-unavailable": () => tt("sp.expand.demandUnknown", "The combined price and customer-demand effects of expanding this shop could not be verified."),
+    "expansion-equipment-price-unavailable": () => tt("sp.expand.priceUnknown", "The price of equipment needed for this expansion could not be verified."),
     "additional-credit-eligibility": () => tt("gr.mod.additionalCredit", "Loan eligibility depends on additional credit that this estimate cannot verify."),
     "principal-expense-basis": () => tt("gr.mod.principalExpense", "Loan estimates are unavailable because the captured rules treat principal as an expense."),
     "secured-bank-eligibility": () => tt("gr.mod.securedBank", "This bank’s secured-account borrowing eligibility could not be verified."),
@@ -12452,11 +12501,17 @@ function mcReason(reason){
     "mod-tax-observations-unavailable": () => tt("re.mod.reason.records", "Current mod tax observations are unavailable."),
     "unclassified-mod-deductions": () => tt("re.mod.reason.deductions", "Some deductions have no verified tax classification."),
   };
+  if(["equipmentUtilities", "officeIt", "factoryDiplomas", "operatingCosts", "economyUnknown", "marketingUnknown"].includes(reason))
+    return planCompatibilityText({compatibility:{reason:[reason]}}, "reason");
   if(["owner-query-failed", "invalid-owner-response", "unsupported-owner-response", "invalid-owner-decision", "ownership-unavailable", "ownership-provider-unavailable", "ownership-invalid-or-failed", "manager-state-unavailable", "estate-state-unavailable", "licence-state-unavailable", "fresh-owner-report-unavailable", "fresh-owner-features-unavailable"].includes(reason))
     return tt("nav.mod.reason.liveUnavailable", "The mod's current ownership state is unavailable; try again after checking it in the game.");
   if(["fresh-managers-disabled-proof-required", "fresh-estate-disabled-proof-required"].includes(reason))
     return tt("nav.mod.reason.legacy", "This older mod does not confirm that the affected management feature is switched off.");
-  return words[reason] ? words[reason]() : tt("nav.mod.reason.unavailable", "The mod could not verify this condition: {reason}.", {reason: String(reason)});
+  if(["basket-per-order-cap-may-bind", "basket-order-bound-inconsistent"].includes(reason))
+    return tt("gr.mod.basketLimit", "The per-order limit may change extra basket sales; an average sales estimate is insufficient.");
+  if(["basket-share-unknown", "basket-product-set-unknown", "basket-order-bound-unknown", "basket-eligible-products-unknown", "basket-product-eligibility-unproven", "basket-product-set-incomplete"].includes(reason))
+    return tt("gr.mod.basketInputs", "Eligible products and per-order quantities for extra basket sales could not be verified.");
+  return Object.prototype.hasOwnProperty.call(words, reason) ? words[reason]() : tt("nav.mod.reason.unsupported", "A required mod condition could not be verified.");
 }
 function mcRequirementsHtml(requirements){
   return (requirements || []).map(r => {
