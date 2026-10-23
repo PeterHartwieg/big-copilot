@@ -527,7 +527,7 @@ details.help[open] summary::after{content:"\2013"}
 # order it lists them (downloads run together): the code, without which the worker never becomes
 # ready, and the data, written only when its fetch succeeds. The worker names
 # each file itself; tests/test_web_fresh.py holds it to these two lists.
-PY_CODE = ("ba_save.py", "ba_dashboard.py", "ba_facts.py", "ba_mods.py", "ba_street_food.py", "ba_rlo.py", "ba_companion.py")
+PY_CODE = ("ba_save.py", "ba_dashboard.py", "ba_facts.py", "ba_mods.py", "ba_street_food.py", "ba_rlo.py", "ba_companion.py", "ba_hart.py", "ba_economy.py", "ba_rlo_planning.py")
 PY_DATA = ("gametext.json", "ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json", "ba_store_rules.json", "ba_street_food_rules.json", "ba_street_food_stops.json")
 # The ones shipped into web/py/ from the top of the checkout. gametext.json is
 # written there from the installed game instead (main()).
@@ -562,6 +562,8 @@ STAMP_INPUTS = (
     # The board's markup and CSS, and its script, which render() reads (ba_dashboard.load_template()).
     "template/board.html",
     "template/board.js",
+    "template/mod-economy-model.js",
+    "template/mod-demand-model.js",
     "template/open-store-model.js",
     "template/open-factory-model.js",
     "template/street-food-model.js",

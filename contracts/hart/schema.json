@@ -1,0 +1,1223 @@
+{
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "provider": {
+      "const": "hart-mod-pack"
+    },
+    "modVersion": {
+      "type": "string"
+    },
+    "captured": {
+      "type": "object",
+      "properties": {
+        "character": {
+          "type": "string"
+        },
+        "day": {
+          "type": "integer"
+        },
+        "hour": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23
+        },
+        "minute": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 59
+        }
+      },
+      "required": [
+        "character",
+        "day",
+        "hour",
+        "minute"
+      ],
+      "additionalProperties": false
+    },
+    "modules": {
+      "type": "object",
+      "properties": {
+        "runtime": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "status": {
+              "enum": [
+                "ready",
+                "disabled",
+                "unavailable",
+                "failed"
+              ]
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "data": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "gameplayActive": {
+                      "type": "boolean"
+                    },
+                    "blockedByLegacy": {
+                      "type": "boolean"
+                    },
+                    "rloReview": {
+                      "enum": [
+                        "accepted",
+                        "refused",
+                        "undecided",
+                        "absent"
+                      ]
+                    },
+                    "rules": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "$ref": "#/$defs/feature"
+                      }
+                    },
+                    "targets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "assemblyName": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "enum": [
+                              "missing",
+                              "verified",
+                              "compatible",
+                              "refused",
+                              "incompatible"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "assemblyName",
+                          "state"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 10000
+                    }
+                  },
+                  "required": [
+                    "gameplayActive",
+                    "blockedByLegacy",
+                    "rloReview",
+                    "rules",
+                    "targets"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "version",
+            "status",
+            "reason",
+            "data"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "not": {
+                      "const": "ready"
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "data": {
+                    "type": "null"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "ready"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "data": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "rent": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "status": {
+              "enum": [
+                "ready",
+                "disabled",
+                "unavailable",
+                "failed"
+              ]
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "data": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "const": "hart-rent-v1"
+                    },
+                    "state": {
+                      "$ref": "#/$defs/feature"
+                    },
+                    "rounding": {
+                      "const": "ceil-whole-money"
+                    },
+                    "residentialTypeId": {
+                      "type": "string"
+                    },
+                    "residentialMultiplierThousandths": {
+                      "type": "integer"
+                    },
+                    "otherMultiplierThousandths": {
+                      "type": "integer"
+                    },
+                    "appliesTo": {
+                      "const": "new-lease-market-rent"
+                    },
+                    "signedLeases": {
+                      "const": "unchanged"
+                    }
+                  },
+                  "required": [
+                    "model",
+                    "state",
+                    "rounding",
+                    "residentialTypeId",
+                    "residentialMultiplierThousandths",
+                    "otherMultiplierThousandths",
+                    "appliesTo",
+                    "signedLeases"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "version",
+            "status",
+            "reason",
+            "data"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "not": {
+                      "const": "ready"
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "data": {
+                    "type": "null"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "ready"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "data": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "runningCosts": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "status": {
+              "enum": [
+                "ready",
+                "disabled",
+                "unavailable",
+                "failed"
+              ]
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "data": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "const": "hart-running-costs-v1"
+                    },
+                    "equipment": {
+                      "$ref": "#/$defs/feature"
+                    },
+                    "officeIt": {
+                      "$ref": "#/$defs/feature"
+                    },
+                    "referenceHours": {
+                      "const": 12
+                    },
+                    "closedShareThousandths": {
+                      "const": 250
+                    },
+                    "priceLevelMin": {
+                      "const": 500
+                    },
+                    "priceLevelMax": {
+                      "const": 4000
+                    },
+                    "seatMonthCentsAtBasePrice": {
+                      "const": 15000
+                    },
+                    "officeTypeIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "maxItems": 10000
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "itemId": {
+                            "type": "string"
+                          },
+                          "openWatts": {
+                            "type": "integer"
+                          },
+                          "alwaysWatts": {
+                            "type": "integer"
+                          },
+                          "litresPerOpenHour": {
+                            "type": "integer"
+                          },
+                          "officeSeat": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "itemId",
+                          "openWatts",
+                          "alwaysWatts",
+                          "litresPerOpenHour",
+                          "officeSeat"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 10000
+                    },
+                    "currentSites": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "address": {
+                            "$ref": "#/$defs/address"
+                          },
+                          "equipmentApplies": {
+                            "type": "boolean"
+                          },
+                          "inputBasis": {
+                            "enum": [
+                              "billing-cache",
+                              "current-items"
+                            ]
+                          },
+                          "openWatts": {
+                            "type": "integer"
+                          },
+                          "alwaysWatts": {
+                            "type": "integer"
+                          },
+                          "litresPerOpenHour": {
+                            "type": "integer"
+                          },
+                          "officeSeats": {
+                            "type": "integer"
+                          },
+                          "itSeatDayCents": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "itStatus": {
+                            "enum": [
+                              "ready",
+                              "unavailable"
+                            ]
+                          },
+                          "itDay": {
+                            "type": "integer"
+                          },
+                          "itBasis": {
+                            "const": "included-in-rlo-internet-accrual"
+                          }
+                        },
+                        "required": [
+                          "address",
+                          "equipmentApplies",
+                          "inputBasis",
+                          "openWatts",
+                          "alwaysWatts",
+                          "litresPerOpenHour",
+                          "officeSeats",
+                          "itSeatDayCents",
+                          "itStatus",
+                          "itDay",
+                          "itBasis"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 10000
+                    }
+                  },
+                  "required": [
+                    "model",
+                    "equipment",
+                    "officeIt",
+                    "referenceHours",
+                    "closedShareThousandths",
+                    "priceLevelMin",
+                    "priceLevelMax",
+                    "seatMonthCentsAtBasePrice",
+                    "officeTypeIds",
+                    "items",
+                    "currentSites"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "version",
+            "status",
+            "reason",
+            "data"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "not": {
+                      "const": "ready"
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "data": {
+                    "type": "null"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "ready"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "data": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "factoryPurchases": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "status": {
+              "enum": [
+                "ready",
+                "disabled",
+                "unavailable",
+                "failed"
+              ]
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "data": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "const": "hart-factory-purchase-gate-v1"
+                    },
+                    "restriction": {
+                      "const": "purchase-only"
+                    },
+                    "gate": {
+                      "$ref": "#/$defs/feature"
+                    },
+                    "education": {
+                      "type": "object",
+                      "properties": {
+                        "provider": {
+                          "const": "rlo"
+                        },
+                        "module": {
+                          "const": "education"
+                        },
+                        "minimumVersion": {
+                          "const": 1
+                        }
+                      },
+                      "required": [
+                        "provider",
+                        "module",
+                        "minimumVersion"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "courses": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "courseId": {
+                            "type": "integer"
+                          },
+                          "courseKey": {
+                            "type": "string"
+                          },
+                          "itemIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 10000
+                          },
+                          "baseFeeCents": {
+                            "type": "integer"
+                          },
+                          "sessions": {
+                            "type": "integer"
+                          },
+                          "homeworkPieces": {
+                            "type": "integer"
+                          },
+                          "hoursPerSession": {
+                            "type": "integer"
+                          },
+                          "fullTimeWeekdayMask": {
+                            "type": "integer"
+                          },
+                          "fullTimeStartHour": {
+                            "type": "integer"
+                          },
+                          "campus": {
+                            "const": "school"
+                          },
+                          "needsAnyCourseIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "integer"
+                            },
+                            "maxItems": 10000
+                          },
+                          "needsDegree": {
+                            "type": "boolean"
+                          },
+                          "distanceAllowed": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "courseId",
+                          "courseKey",
+                          "itemIds",
+                          "baseFeeCents",
+                          "sessions",
+                          "homeworkPieces",
+                          "hoursPerSession",
+                          "fullTimeWeekdayMask",
+                          "fullTimeStartHour",
+                          "campus",
+                          "needsAnyCourseIds",
+                          "needsDegree",
+                          "distanceAllowed"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 10000
+                    },
+                    "heldRecords": {
+                      "type": "object",
+                      "properties": {
+                        "version": {
+                          "const": 1
+                        },
+                        "status": {
+                          "enum": [
+                            "ready",
+                            "disabled",
+                            "unavailable",
+                            "failed"
+                          ]
+                        },
+                        "reason": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "data": {
+                          "anyOf": [
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "courseId": {
+                                    "type": "integer"
+                                  },
+                                  "kind": {
+                                    "enum": [
+                                      "enrollment",
+                                      "result"
+                                    ]
+                                  },
+                                  "stage": {
+                                    "type": "integer"
+                                  },
+                                  "heldSinceDay": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "courseId",
+                                  "kind",
+                                  "stage",
+                                  "heldSinceDay"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "maxItems": 10000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "version",
+                        "status",
+                        "reason",
+                        "data"
+                      ],
+                      "additionalProperties": false,
+                      "allOf": [
+                        {
+                          "if": {
+                            "properties": {
+                              "status": {
+                                "not": {
+                                  "const": "ready"
+                                }
+                              }
+                            }
+                          },
+                          "then": {
+                            "properties": {
+                              "data": {
+                                "type": "null"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "if": {
+                            "properties": {
+                              "status": {
+                                "const": "ready"
+                              }
+                            }
+                          },
+                          "then": {
+                            "properties": {
+                              "data": {
+                                "not": {
+                                  "type": "null"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "model",
+                    "restriction",
+                    "gate",
+                    "education",
+                    "courses",
+                    "heldRecords"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "version",
+            "status",
+            "reason",
+            "data"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "not": {
+                      "const": "ready"
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "data": {
+                    "type": "null"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "ready"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "data": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "retailDemand": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "status": {
+              "enum": [
+                "ready",
+                "disabled",
+                "unavailable",
+                "failed"
+              ]
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "data": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "cafe": {
+                      "type": "object",
+                      "properties": {
+                        "version": {
+                          "const": 1
+                        },
+                        "status": {
+                          "enum": [
+                            "ready",
+                            "disabled",
+                            "unavailable",
+                            "failed"
+                          ]
+                        },
+                        "reason": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "data": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "state": {
+                                  "$ref": "#/$defs/feature"
+                                },
+                                "model": {
+                                  "const": "hart-cafe-stations-v1"
+                                },
+                                "sessionsPerStationPerHour": {
+                                  "const": 2
+                                },
+                                "currentSites": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "address": {
+                                        "$ref": "#/$defs/address"
+                                      },
+                                      "usableStations": {
+                                        "type": [
+                                          "integer",
+                                          "null"
+                                        ]
+                                      },
+                                      "status": {
+                                        "enum": [
+                                          "ready",
+                                          "unavailable"
+                                        ]
+                                      },
+                                      "reason": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "address",
+                                      "usableStations",
+                                      "status",
+                                      "reason"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "maxItems": 10000
+                                }
+                              },
+                              "required": [
+                                "state",
+                                "model",
+                                "sessionsPerStationPerHour",
+                                "currentSites"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "version",
+                        "status",
+                        "reason",
+                        "data"
+                      ],
+                      "additionalProperties": false,
+                      "allOf": [
+                        {
+                          "if": {
+                            "properties": {
+                              "status": {
+                                "not": {
+                                  "const": "ready"
+                                }
+                              }
+                            }
+                          },
+                          "then": {
+                            "properties": {
+                              "data": {
+                                "type": "null"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "if": {
+                            "properties": {
+                              "status": {
+                                "const": "ready"
+                              }
+                            }
+                          },
+                          "then": {
+                            "properties": {
+                              "data": {
+                                "not": {
+                                  "type": "null"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "ambience": {
+                      "type": "object",
+                      "properties": {
+                        "version": {
+                          "const": 1
+                        },
+                        "status": {
+                          "enum": [
+                            "ready",
+                            "disabled",
+                            "unavailable",
+                            "failed"
+                          ]
+                        },
+                        "reason": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "data": {
+                          "anyOf": [
+                            {
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "version",
+                        "status",
+                        "reason",
+                        "data"
+                      ],
+                      "additionalProperties": false,
+                      "allOf": [
+                        {
+                          "if": {
+                            "properties": {
+                              "status": {
+                                "not": {
+                                  "const": "ready"
+                                }
+                              }
+                            }
+                          },
+                          "then": {
+                            "properties": {
+                              "data": {
+                                "type": "null"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "if": {
+                            "properties": {
+                              "status": {
+                                "const": "ready"
+                              }
+                            }
+                          },
+                          "then": {
+                            "properties": {
+                              "data": {
+                                "not": {
+                                  "type": "null"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "ambienceModel": {
+                      "const": "hart-ambience-demand-v1"
+                    },
+                    "officeAmbience": {
+                      "const": "unchanged"
+                    }
+                  },
+                  "required": [
+                    "cafe",
+                    "ambience",
+                    "ambienceModel",
+                    "officeAmbience"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "version",
+            "status",
+            "reason",
+            "data"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "not": {
+                      "const": "ready"
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "data": {
+                    "type": "null"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "ready"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "data": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "runtime",
+        "rent",
+        "runningCosts",
+        "factoryPurchases",
+        "retailDemand"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "provider",
+    "modVersion",
+    "captured",
+    "modules"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "feature": {
+      "type": "object",
+      "properties": {
+        "requested": {
+          "type": "boolean"
+        },
+        "effective": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "requested",
+        "effective",
+        "state",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "address": {
+      "type": "object",
+      "properties": {
+        "street": {
+          "type": "string"
+        },
+        "number": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "street",
+        "number"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

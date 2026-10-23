@@ -65,7 +65,8 @@ Acceptance/release
 Pure models match owner-generated vectors to the specified rounding, including awkward fractions, price quiet boundaries, season/month changes, zero/partial/24h, stock flags and missing items. Tests cover statuses, toggles, failed hooks, legacy load orders, duplicates, stale saved reports, midwalk mutation, apply/undo after owner changes, malformed report, unknown model, and nonmutation including failure paths. Vanilla payload invariance; private save/profit comparison; browser and bundled Pyodide; SDK compile/reflection; RLO full documented build/checkers; pack build/API/check-all. Opus implementation review plus usual independent round, CI green before merge/deploy.
 Adding RLO producer changes DLL hash. Review exact candidate patched-target bodies and add that reviewed candidate hash to HART Targets only after build/inspection; never bypass the RloGate. Upstream rebuild/release changes may require another hash review. Code merging is not proof upstream shipped or native gameplay/Workshop acceptance happened. Track those dependencies truthfully.
 
-Please confirm whether all seven blockers are resolved and you agree this plan is ready to implement. Any remaining blocker must identify the unsafe or contradictory semantic decision and a concrete fix. Please focus this round on these decisions; no need to repeat the whole audit.
+Opus 5.5 agreed to these decisions after three plan review rounds. The contract
+amendments below were reviewed before consumer implementation.
 
 
 Final amendments adopted 23 October 2026 (normative over earlier wording)
@@ -77,4 +78,69 @@ Final amendments adopted 23 October 2026 (normative over earlier wording)
 5. Offline reports are clock-validated captured facts, not proof the provider is still installed. A same-clock retained report after removal may be indistinguishable; only bound Link capture establishes stronger live freshness.
 6. Licence/connection/education startup charges and subsequent renewal run-rates must not be double-counted between investment and break-even cash flows. Preserve per-period payment timing or state explicitly the modelled accrual basis.
 
-Implementation and release evidence will be recorded here as each gate completes.
+Implementation boundaries
+
+The implementation uses public owner snapshots and separate pure models, rather
+than reading private serialized mod state. Future updates can change a module
+version and its producer vectors without changing unrelated adapters. Unknown
+versions stay unavailable only where that module is required.
+
+Supported calculations include registered catalogue prices, ordinary wages,
+current own/written promotion, scoped retail basket and office client effects,
+interior targets, utilities, licences, education prerequisites, incremental
+factory/support equipment, and captured native bank terms. Native observed
+statements remain unchanged. Outside-statement paid/accrued/owed costs are shown
+separately; native tax projections are incomplete when owner effects or mixed
+deductions cannot be represented.
+
+This does not establish complete economic simulation for every mod setting.
+Retail basket estimates require proof that the native capacity limits cannot
+bind; other cases are explicitly unavailable. Shop expansion estimates require
+a verified changed-site demand context. Current employee raises/campaigns or
+unknown leases can make a particular projection incomplete. Office staffing
+uses measured hours as recorded, but cannot use native default demand for unread
+hours while an interior client boost may apply. Ordinary wage estimates exclude
+overtime, sickness and unobserved future absence. Company-wide City rounding is
+represented as a standalone site/category estimate; captured City settings are
+held constant and company carried debt is excluded.
+
+New custom businesses and personal-life apps are outside this task. Persistent
+City is excluded. Offline reports are observations at the saved clock; only
+bound live capture proves current provider presence. No manager handover is
+implemented: live writes require an allowed decision for every affected target,
+including undo.
+
+Producer validation (23 October 2026)
+
+- RLO candidate `0b911e4c`: native build with zero warnings/errors; 314 companion
+  checks and 99,286 Standard checks pass. Final DLL SHA256:
+  `14aa86b20dd354bc0784e0d482a3a2c8ed28dd8235b5224685ac8c0175d8f422`.
+- HART candidate `6b13fc4` reviewed that exact RLO binary: all 698 existing audited
+  entries unchanged, three pure helpers added. Its build, executable check-all
+  stages and refreshed import/package pins pass,
+  including both Windows/Mac API checks, legacy load order, duplicate ownership,
+  unknown-hash refusal, save publication and package pins.
+- Opus's producer review found and prompted fixes for legacy late-hour permit
+  authorization, rent request shape, home equipment classification, malformed
+  transaction rows, a changed gameplay cache path, abandoned utility state,
+  deterministic interior ordering and owned-property lease provenance.
+- Game Link SDK harness: 84 synthetic assertions pass. This is not in-game
+  save/load or Workshop acceptance.
+- RLO's complete gate is not green on macOS. Isolated unchanged base `850e2781`
+  reproduces the Windows DPAPI/Steamworks, locale/path and inventory failures.
+  Windows validation is still required; RLO currently has no GitHub CI workflow.
+
+These are candidate integration results, not evidence of an upstream RLO release
+or a deployed HART build. HART is based on the pending modpack integration branch;
+merging that entire base requires its own release readiness. Any rebuilt upstream
+RLO binary must undergo the same hash/body review. Actual game acceptance and
+release status must be recorded separately from code review and CI.
+
+Local consumer evidence: vanilla synthetic payload snapshots pass. The private
+420-save comparison has 230 matching extraction errors and 190 readable saves;
+only 30 RLO payloads change, in compatibility/planning metadata. Profit calibration
+output matches the previous code exactly, and the marketing check reports 958
+comparable sites with no mismatches. Private saves and comparison outputs are not
+committed. Browser scenarios pass; the stale mod-support wording assertion was
+updated and its focused suite passes. Final reviewer and CI status is recorded
+on the pull request.

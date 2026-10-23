@@ -77,5 +77,7 @@ test('RLO evidence is visible even when its companion report is missing', () => 
   const {text, tip} = flagParts({rlo: {status: 'legacy'}});
   assert.equal(text, 'MODDED: REAL LIFE OVERHAUL');
   assert.match(tip, /Browse mods shows report availability/);
-  assert.match(tip, /do not yet account for RLO rules or manager decisions/);
+  assert.match(tip, /Supported versioned reports inform estimates/);
+  assert.match(tip, /current mod owner before review, apply and undo/);
+  assert.doesNotMatch(tip, /do not yet account|full compatibility/i);
 });

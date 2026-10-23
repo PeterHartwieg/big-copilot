@@ -155,7 +155,7 @@ class RloTests(unittest.TestCase):
         del block["modules"]["credit"]
         self.assertNotIn("creditAccountBalance", rlo.metadata(load(company(block))))
 
-    def test_report_does_not_double_book_costs_or_change_planners(self):
+    def test_old_report_preserves_recorded_money_and_marks_missing_planning_inputs(self):
         root = company()
         vanilla = copy.deepcopy(root)
         del vanilla["modData"]
@@ -168,7 +168,17 @@ class RloTests(unittest.TestCase):
             after = d.extract(load_save(str(path)), Names(f.data_names()))
             after["meta"]["saved"] = before["meta"]["saved"]
         self.assertEqual(after.pop("mods")["rlo"]["creditAccountBalance"], 62000)
-        self.assertEqual(after, before)
+        for key in ("daily", "loans"):
+            self.assertEqual(after[key], before[key], key)
+        for key in ("cash", "debt", "profitYesterday", "profitAvg7", "profitSum7", "revenue", "rentBill"):
+            self.assertEqual(after["kpi"][key], before["kpi"][key], key)
+        by_key = {row["key"]: row for row in before["businesses"]}
+        for row in after["businesses"]:
+            for key in ("revenue", "cogs", "wages", "rent", "marketing", "profit", "series"):
+                self.assertEqual(row[key], by_key[row["key"]][key], (row["key"], key))
+        self.assertTrue(any(row.get("promotionUnavailable") for row in after["businesses"]))
+        self.assertIn("modEconomy", after["openStore"])
+        self.assertTrue(after["openStore"]["finance"]["unavailable"])
 
 
 if __name__ == "__main__":

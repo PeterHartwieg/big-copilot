@@ -40,6 +40,8 @@ function inlineScripts(rel){
 const SOURCES = [
   {name: 'web/i18n.js', text: read('web/i18n.js')},
   ...inlineScripts('template/board.html'),
+  {name: 'template/mod-economy-model.js', text: read('template/mod-economy-model.js')},
+  {name: 'template/mod-demand-model.js', text: read('template/mod-demand-model.js')},
   {name: 'template/open-store-model.js', text: read('template/open-store-model.js')},
   {name: 'template/open-factory-model.js', text: read('template/open-factory-model.js')},
   {name: 'template/board.js', text: read('template/board.js')},

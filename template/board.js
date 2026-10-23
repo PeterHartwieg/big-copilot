@@ -2900,10 +2900,14 @@ function mdFlag(m){
       ? tt("nav.mast.mods.streetFood.ready", "Street Food records are included in company finances, and vehicle crews are reserved for the fleet.")
       : tt("nav.mast.mods.streetFood.unavailable", "Street Food records are unavailable or stale, so tax estimates and reassignment of unassigned employees are withheld."));
   }
+  if(m.hart){
+    parts.push(tt("nav.mast.mods.hart", "HART MOD PACK"));
+    tips.push(tt("nav.mast.mods.hart.tip", "HART Mod Pack reports selected and effective rules separately; Browse mods shows report availability."));
+  }
   if(m.rlo){
     parts.push(tt("nav.mast.mods.rlo", "REAL LIFE OVERHAUL"));
     tips.push(tt("nav.mast.mods.rlo.tip", "Real Life Overhaul records are present; Browse mods shows report availability."));
-    tips.push(tt("nav.mods.rlo.limits.models", "Forecasts, staffing suggestions and game writes do not yet account for RLO rules or manager decisions."));
+    tips.push(tt("nav.mods.rlo.support", "Supported versioned reports inform estimates; affected game writes check the current mod owner before review, apply and undo."));
   }
   if(!parts.length) return "";
   return `<span class="flag md-flag" data-tip="${attr(tips.join(" "))}">${
@@ -2976,7 +2980,8 @@ function drawKpis(){
   /* Four tiles: what the day made, what it took, what is in the bank, and the
      pace metric once the game reports it again — until then, the cost base.
      Site and staff counts sit in the masthead; debt only appears when there is any. */
-  const fixed = k.rentBill + D.staff.dailyCost;
+  const fixedKnown = !D.staff.wageUnavailable && Number.isFinite(D.staff.dailyCost);
+  const fixed = fixedKnown ? k.rentBill + D.staff.dailyCost : null;
   /* A clause of its own after the chip's note, set off by a middle dot. */
   const owed = k.debt > 0
     ? ` · ${tt("today.kpi.owed", {one: "{debt:$} owed on {n} loan", other: "{debt:$} owed on {n} loans"},
@@ -3029,10 +3034,10 @@ function drawKpis(){
     {id: "cash", l: tt("today.kpi.cash", "Cash on hand"), v: fmt(k.cash), chip: cashTile.chip,
      sub: heavyDebt ? `${cashTile.sub} · ${tt("today.kpi.cash.debt", "{debt:$c} owed on loans", {debt: k.debt})}` : cashTile.sub},
     k.netWorth === null
-      ? {id: "fixed", l: tt("today.kpi.fixed", "Fixed cost / day"), v: fmt(fixed),
+      ? {id: "fixed", l: tt("today.kpi.fixed", "Fixed cost / day"), v: fixedKnown ? fmt(fixed) : "—",
          chip: chipHtml("dim", tt("today.kpi.fixed.chip", "rent {w:$c}", {w: k.rentBill}),
-           tt("today.kpi.fixed.tip", "{rent:$} rent, {payroll:$} payroll", {rent: k.rentBill, payroll: D.staff.dailyCost})),
-         sub: tt("today.kpi.fixed.sub", "payroll {w:$c}", {w: D.staff.dailyCost}),
+           fixedKnown ? tt("today.kpi.fixed.tip", "{rent:$} rent, {payroll:$} payroll", {rent: k.rentBill, payroll: D.staff.dailyCost}) : tt("co.mod.wageUnknown", "Current hourly wages could not be verified.")),
+         sub: fixedKnown ? tt("today.kpi.fixed.sub", "payroll {w:$c}", {w: D.staff.dailyCost}) : tt("co.mod.wageUnknown", "Current hourly wages could not be verified."),
          /* What the days actually paid in rent and wages; the number above is
             today's contracted rate, which is why the last point can sit below it. */
          spark: hist(d => (d.rent || 0) + (d.wages || 0))}
@@ -4557,7 +4562,7 @@ function paybackTip(row, chain){
     : tt("co.payback.rate", "Recent profit {w:$} a day.", {w: row.rate});
   const o = paybackOf(row);
   const kept = o && o.kept ? tt("co.payback.kept", "The break-even day is remembered from an earlier save.") : "";
-  return [cost, vehicles, profit, rate, kept].filter(Boolean).join(" ");
+  return [row.basis === "statement-profit" ? tt("co.payback.statement", "Payback uses recorded statement profit; costs outside those statements are shown separately.") : "", cost, vehicles, profit, rate, kept].filter(Boolean).join(" ");
 }
 /* A table cell: the short form, the whole sentence and its basis on hover. */
 function paybackCell(row, chain){
@@ -5884,7 +5889,7 @@ function spRoster(people, gaps, pairs){
       <span class="sp-rcount"><b>${r.people.length}</b>${
         /* No-break before each dot: a count that wraps never starts a line on one. */
         r.people.some(p => p.absent) ? `&nbsp;· ${tt("sp.crew.off", "{n} off", {n: r.people.filter(p => p.absent).length})}` : ""}${
-        r.people.every(p => typeof p.daily === "number") ? `&nbsp;· ${tt("sp.crew.perday", "{w:$}/day", {w: r.people.reduce((t, p) => t + p.daily, 0)})}` : ""}</span>
+        r.people.every(p => !p.wageUnavailable && typeof p.daily === "number") ? `&nbsp;· ${tt("sp.crew.perday", "{w:$}/day", {w: r.people.reduce((t, p) => t + p.daily, 0)})}` : ""}</span>
       <div class="sp-rpeople"><div class="crew">${r.people.map(p => spPersonPill(p, gaps, pairs)).join("")}</div></div>
     </div>`).join("")}</div><div class="sp-read sp-readout">${spCrewRead(people, roles.length)}</div></div>`;
 }
@@ -6009,7 +6014,7 @@ function spRosterNone(row, pick, key){
   /* A shop with no cover station and nothing measured still has its demand
      test to offer, so the pick sits here too and the section carries its site. */
   return `<section class="sec rv" data-block="roster" id="sp-roster"${pick ? ` data-site="${attr(row.key)}"` : ""}>
-    ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", why: row?.unavailable === "streetFood"
+    ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", why: row?.unavailable === "modCompatibility" ? mcStaffText(row) : row?.unavailable === "streetFood"
       ? SZ_WHY["new:streetFood"] : failed
       ? tt("sp.roster.failed.why", "This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.")
       : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling counts everyone who may walk in, not the customers a shop like this serves, so nothing is suggested from it.")})}
@@ -6018,7 +6023,7 @@ function spRosterNone(row, pick, key){
     ${spRosterStray((key && spRosterRow(key)) || row)}
     <div class="chartbox sp-gantt sp-empty">${rows}</div>
     <div class="sp-read">${failed ? tt("sp.roster.failed", "Plan unavailable") : tt("sp.roster.none", "Nothing to schedule")}</div>
-    ${key && gwLink() && !(row && row.demandBased) ? gwStaffButton(key, true) : ""}
+    ${key && row?.unavailable !== "modCompatibility" && gwLink() && !(row && row.demandBased) ? gwStaffButton(key, true) : ""}
   </section>`;
 }
 
@@ -6813,6 +6818,7 @@ function spRosterBlock(b){
     </div>
     ${/* The switch sits on the week it switches: up in the heading it changed
           a grid that had often scrolled off the bottom of the screen. */""}
+    ${mcOrdinaryWageNote(row)}
     <div class="sp-steps">${steps}<span class="seg sp-nowplan" style="margin-left:auto"><a href="#" data-view="now">${tt("sp.view.now", "now")}</a><a href="#" class="sp-on" data-view="plan">${tt("sp.view.plan", "plan")}</a></span><span class="seg sp-daytabs">${tabs}</span></div>
     ${gwRosterButtons(b.key)}
     <div class="chartbox sp-gantt">${hours}${
@@ -7604,7 +7610,7 @@ function spPayback(b){
   const row = paybackSite(b.key), o = paybackOf(row);
   if(!o) return "";
   return `<p class="sp-read sp-pay" data-tip="${attr(paybackTip(row))}" tabindex="0">${
-    tt("sp.payback.line", "Payback: {what}", {what: paybackSentence(o, row)})}</p>`;
+    row.basis === "statement-profit" ? tt("sp.payback.statement", "Statement-based payback: {what}", {what: paybackSentence(o, row)}) : tt("sp.payback.line", "Payback: {what}", {what: paybackSentence(o, row)})}</p>`;
 }
 let odSiteDrawn = null;
 function drawSite(){
@@ -7762,14 +7768,14 @@ function drawSite(){
   const people = b.people || [];
   const offToday = people.filter(p => p.absent).length;
   const roleTip = b.crew.length
-    ? `${b.crew.map(c => `${c.count > 1 ? tt("sp.crew.tip.many", "{role} ×{n} · {w}/day", {role: c.role, n: c.count, w: fmt(c.daily)})
-        : tt("sp.crew.tip.one", "{role} · {w}/day", {role: c.role, w: fmt(c.daily)})}${
+    ? `${b.crew.map(c => `${c.count > 1 ? tt("sp.crew.tip.many", "{role} ×{n} · {w}/day", {role: c.role, n: c.count, w: mcWageMoney(c,c.daily)})
+        : tt("sp.crew.tip.one", "{role} · {w}/day", {role: c.role, w: mcWageMoney(c,c.daily)})}${
         c.absent ? ` (${tt("sp.crew.off", "{n} off", {n: c.absent})})` : ""}`).join("; ")}.${offToday
         ? ` ${tt("sp.crew.tip.offtoday", {one: "{n} person off today.", other: "{n} people off today."}, {n: offToday})}` : ""}`
     : "";
   /* The Crew heading's aside: how many, and what they cost a day. */
   // With nobody, the block's own line says so once.
-  const crewQuiet = b.staff ? tt("sp.crew.quiet", {one: "{n} person · {w}/day", other: "{n} people · {w}/day"}, {n: b.staff, w: fmt(b.staffCost)}) : "";
+  const crewQuiet = b.staff ? tt("sp.crew.quiet", {one: "{n} person · {w}/day", other: "{n} people · {w}/day"}, {n: b.staff, w: mcWageMoney(b,b.staffCost)}) : "";
   const uniformGaps = sp ? b.uniformGaps : null;
   /* The Crew pills and the Roster's people are two different lists out of the
      save -- one folded into roles for the page, the other indexed for the
@@ -7793,7 +7799,7 @@ function drawSite(){
       ? people.map(personPill).join("")
       : b.crew.length
         ? b.crew.map(c => `<span class="person${c.absent && c.absent >= c.count ? " off" : ""}"><i>${spEsc(roleCode(c.role))}</i>${spEsc(c.role)}<small>${
-            c.count > 1 ? `${c.count} · ` : ""}${tt("sp.crew.daily", "{w}/day", {w: fmt(c.daily)})}${c.absent
+            c.count > 1 ? `${c.count} · ` : ""}${tt("sp.crew.daily", "{w}/day", {w: mcWageMoney(c,c.daily)})}${c.absent
             ? ` · <span class="off">${tt("sp.crew.off", "{n} off", {n: c.absent})}</span>` : ""}</small></span>`).join("")
         : `<span class="quiet">${tt("sp.crew.nobody", "Nobody assigned.")}</span>`;
   const crew = folded ? spRoster(people, uniformGaps, rosterPeople) : `<div class="crew">${pills}</div>`;
@@ -8069,7 +8075,7 @@ function drawSite(){
     ${spFinds(finds, b, kind)}
     ${vacant ? "" : spBody || `
     <div class="sstats rv" data-block="tiles" id="sp-tiles">${stats}</div>
-    ${sp ? spPayback(b) : ""}
+    ${sp ? spPayback(b) : ""}${mcAccountingHtml(b.modAccounting)}
     ${sp ? `<div class="duo sec"${kind === "retail" ? ` style="grid-template-columns:3fr 2fr"` : ""}>
       <section class="rv" data-block="standards" id="sp-standards" data-readzone>
         ${sechead(tt("sp.sat.title", "Satisfaction"), {icon: "standards", why: office
@@ -11869,7 +11875,7 @@ function drawFactoryStaffing(keep = () => true, drawnLines = []){
     /* The factory's own page has its lines and inputs, not a staffing block. */
     const go = b ? `<a class="link go" href="${attr(siteHref(b.key))}" data-sb-lines="${attr(b.key)}">${tt("sb.staff.open", "Open factory page ›")}</a>` : "";
     if(r.failed) return `<div class="sb-sfac"><div class="sb-sfh"><span>${name}</span><span class="sb-hc">${
-      r.unavailable === "streetFood" ? SZ_WHY["new:streetFood"] : tt("sb.staff.failed", "No plan could be built for this factory's workers.")}</span><span></span>${go}</div></div>`;
+      r.unavailable === "modCompatibility" ? spEsc(mcStaffText(r)) : r.unavailable === "streetFood" ? SZ_WHY["new:streetFood"] : tt("sb.staff.failed", "No plan could be built for this factory's workers.")}</span><span></span>${go}</div></div>`;
     const hc = r.headcount || {}, dl = r.delta || {};
     workers += dl.workers || 0; perDay += dl.perDay || 0;
     const chip = dl.workers ? `<span class="d ${dl.workers > 0 ? "up" : "dn"}">${dl.workers > 0 ? tt("sb.staff.hire", "hire +{n}", {n: dl.workers}) : `−${-dl.workers}`}</span>` : "";
@@ -11914,7 +11920,7 @@ function drawFactoryStaffing(keep = () => true, drawnLines = []){
       : tt("sb.staff.tot.workers.dn", {one: "−{n} factory worker", other: "−{n} factory workers"}, {n: -workers})}</b>` : ""}${
     perDay ? `<b class="${perDay > 0 ? "up" : "dn"}">${perDay > 0 ? tt("sb.staff.tot.perDay.up", "+{w:$} a day", {w: perDay})
       : tt("sb.staff.tot.perDay.dn", "−{w:$} a day", {w: -perDay})}</b>` : ""}</div>` : "";
-  return `<div class="sb-staff" id="sbStaff">${sechead(tt("sb.staff.title.plan", "Factory staffing for this plan"), {icon: "crew", why: SB_STAFF_WHY()})}${facs.join("")}${tot}</div>`;
+  return `<div class="sb-staff" id="sbStaff">${sechead(tt("sb.staff.title.plan", "Factory staffing for this plan"), {icon: "crew", why: SB_STAFF_WHY()})}${facs.join("")}${tot}${mcOrdinaryWageNote()}</div>`;
 }
 /* A typed figure is kept on commit (Enter, or leaving the box) and redraws the
    table and the checklist; the box the focus moved to keeps it. An empty box,
@@ -12331,6 +12337,159 @@ const planRowHtml = (prefix, r) => `<div class="os-plan${r.cls}"><button type="b
 const planListHtml = (title, rows) => `<div class="os-h"><h2>${title}</h2><span class="c">${rows.length}</span></div><div class="os-plans">${rows.join("")}</div>`;
 /* A small shared presentation boundary for unsupported runtime models.
    Reasons are codes from ba_mods, never provider-supplied HTML or wording. */
+/* Companion money stays in cents at the boundary; observations with different
+   accounting bases are displayed separately and never combined into profit. */
+function mcOrdinaryWageNote(row){
+  const ordinary = row ? row.wageBasis === "ordinary-hourly" || row.cost?.basis === "ordinary-hourly"
+    : D.staff?.wageBasis === "ordinary-hourly" || (D.candidates || []).some(c=>c.wageBasis === "ordinary-hourly");
+  return ordinary ? `<p class="quiet mc-wage-basis">${tt("co.mod.ordinaryEstimate", "Wage estimates use ordinary hourly pay and planned hours; overtime, sick pay and future absences are excluded. Actual payroll can differ.")}</p>` : "";
+}
+function mcPriceMoney(facts, lines, amount){
+  return (lines || []).some(([id,qty])=>qty>0 && (facts.priceUnavailable || []).includes(id))
+    ? tt("co.mod.wageNotQuoted", "Unavailable") : fmt(amount);
+}
+function mcItemMoney(facts, id, qty = 1){
+  return mcPriceMoney(facts,[[id,qty]],qty*(facts.items?.[id]?.p || 0));
+}
+function mcLeaseMoney(building, amount){
+  return building?.status !== "mine" && (building?.leaseBasis === "unavailable" || building?.deposit === null)
+    ? tt("co.mod.wageNotQuoted", "Unavailable") : fmt(amount);
+}
+function mcLeaseNote(building, fallback){
+  return building?.leaseBasis === "native-live-quote" ? tt("gr.mod.leaseQuote", "Current game lease quote; the deposit is refundable when the lease ends.")
+    : building?.leaseBasis === "unavailable" ? tt("gr.mod.leaseUnknown", "The current rent or lease deposit quote could not be verified.") : fallback;
+}
+function mcWageMoney(row, amount){
+  return row?.wageUnavailable || row?.staffCostUnavailable || !Number.isFinite(amount)
+    ? tt("co.mod.wageNotQuoted", "Unavailable") : fmt(amount);
+}
+function mcStaffText(row){
+  return tt("co.mod.staffBlocked", "Staffing recommendations are unavailable for this site.") + " "
+    + [...new Set(row?.modReasons || [])].map(mcReason).join(" ");
+}
+function mcReason(reason){
+  const words = {
+    "new-hire-wage-unavailable": () => tt("co.mod.newWageUnknown", "New-hire hourly wage quotes could not be verified."),
+    "equipment-price-unavailable": () => tt("gr.mod.equipmentPrice", "A selected equipment price could not be verified."),
+    "material-price-unavailable": () => tt("gr.mod.materialPrice", "A required material price could not be verified."),
+    "lease-quote-unavailable": () => tt("gr.mod.leaseUnknown", "The current rent or lease deposit quote could not be verified."),
+    "deposit-adjustment-unavailable": () => tt("gr.mod.depositUnknown", "The mod's adjustment to the lease deposit could not be verified."),
+    "rent-adjustment-unavailable": () => tt("gr.mod.rentUnknown", "The mod's adjustment to rent could not be verified."),
+    "wage-adjustment-unavailable": () => tt("gr.mod.wageAdjustment", "The mod's adjustment to the wage bill could not be verified."),
+    "installation-adjustment-unavailable": () => tt("gr.mod.installUnknown", "The mod's adjustment to the installation bill could not be verified."),
+    "current-equipment-unavailable": () => tt("gr.mod.currentEquipment", "The site's current equipment costs could not be verified."),
+    "equipment-item-unknown": () => tt("gr.mod.equipmentUnknown", "The operating costs of a selected item could not be verified."),
+    "schedule-unknown": () => tt("gr.mod.scheduleUnknown", "The site's complete opening week could not be verified."),
+    "company-licences-unavailable": () => tt("gr.mod.licencesUnknown", "Current company licence terms could not be verified."),
+    "rlo-company-unavailable": () => tt("gr.mod.companyUnknown", "Current RLO company costs could not be verified."),
+    "rlo-requirements-unavailable": () => tt("gr.mod.requirementsUnknown", "Current RLO opening requirements could not be verified."),
+    "operating-input-incomplete": () => tt("gr.mod.operatingUnknown", "The building or equipment facts needed for operating costs are incomplete."),
+    "office-unread-hours-with-mod-demand": () => tt("co.mod.officeUnread", "This office has no measured working hours, and its current mod demand cannot be estimated from the default schedule."),
+    "legacy-late-opening-permit-unverified": () => tt("nav.mod.reason.legacyPermit", "This RLO version cannot verify a permit for the proposed late opening hours."),
+    "ordinary-wage-unavailable": () => tt("co.mod.wageUnknown", "Current hourly wages could not be verified."),
+    "promotion-observation-unavailable": () => tt("co.mod.promotionUnknown", "Current promotion effects could not be verified."),
+    "active-mod-closure": () => tt("co.mod.closed", "A mod currently restricts opening at this site."),
+    "ownership-unknown": () => tt("co.mod.ownerUnknown", "The mod's current management ownership could not be verified."),
+    "opening-requirements-unknown": () => tt("co.mod.openingUnknown", "Current opening requirements could not be verified."),
+    "course-future-cost-unavailable": () => tt("gr.mod.courseFuture", "Remaining course payments are unknown; no new enrollment fee is assumed."),
+    "hq-support-site-unavailable": () => tt("gr.mod.hqUnknown", "The headquarters workstations and their site must be known before added office costs can be estimated."),
+    "depot-site-unavailable": () => tt("gr.mod.depotUnknown", "Choose the supporting depot before its costs can be estimated."),
+    "manager-controls-scheduling": () => tt("nav.mod.reason.scheduling", "An RLO manager controls scheduling at an affected site."),
+    "manager-controls-hiring": () => tt("nav.mod.reason.hiring", "An RLO manager controls hiring at an affected site."),
+    "manager-controls-stock": () => tt("nav.mod.reason.stock", "An RLO manager controls stock at an affected site."),
+    "stock-line-not-player-held": () => tt("nav.mod.reason.held", "An affected stock item is still controlled by an RLO manager."),
+    "estate-controls-property": () => tt("nav.mod.reason.estate", "RLO manages an affected property."),
+    "manager-may-rewrite-week": () => tt("nav.mod.effect.week", "The manager could replace these opening hours and employee assignments."),
+    "manager-may-hire-replacement": () => tt("nav.mod.effect.hire", "The manager could hire a replacement."),
+    "manager-may-rewrite-order": () => tt("nav.mod.effect.order", "The manager could replace this order."),
+    "write-may-transfer-control-to-player": () => tt("nav.mod.effect.control", "This change could transfer control of stock to you."),
+    "estate-may-rewrite-property": () => tt("nav.mod.effect.estate", "RLO could replace this property's settings."),
+    "late-opening-permit-missing": () => tt("nav.mod.reason.permit", "The proposed late opening hours need a current permit."),
+    "unpermitted-opening-hours": () => tt("nav.mod.effect.permit", "The proposed opening hours are not covered by a permit."),
+    "hq-spare-workstations-unavailable": () => tt("gr.mod.reason.hqSpare", "Usable spare HQ workstations could not be verified."),
+    "rlo-utilities-unavailable": () => tt("gr.mod.reason.utilities", "Current RLO utility terms are unavailable."),
+    "hart-running-costs-unavailable": () => tt("gr.mod.reason.hartCosts", "Effective HART equipment and office costs are unavailable."),
+    "factory-gate-unavailable": () => tt("gr.mod.reason.factoryGate", "The factory purchase requirements could not be verified."),
+    "factory-gate-unknown": () => tt("gr.mod.reason.factoryEffective", "Whether the factory course requirement is effective could not be verified."),
+    "education-owner-unavailable": () => tt("gr.mod.reason.education", "The current education provider is unavailable."),
+    "held-records-unavailable": () => tt("gr.mod.reason.heldRecords", "Existing factory qualification records could not be verified."),
+    "education-ineligible": () => tt("gr.mod.reason.ineligible", "A required course cannot currently be enrolled in."),
+    "company-site-unavailable": () => tt("gr.mod.reason.companySite", "Current management costs for this site are unavailable."),
+    "power-account-unavailable": () => tt("gr.mod.reason.power", "The site's current electricity account is unavailable."),
+    "water-account-unavailable": () => tt("gr.mod.reason.water", "The site's current water account is unavailable."),
+    "internet-account-unavailable": () => tt("gr.mod.reason.internetAccount", "The site's current internet account is unavailable."),
+    "licence-record-unavailable": () => tt("gr.mod.reason.licenceRecord", "An existing operating licence could not be verified."),
+    "commitment-future-input-unavailable": () => tt("gr.mod.reason.future", "Future charges depend on information that is not yet known."),
+    "hidden-cash": () => tt("re.mod.hiddenCash", "Hidden cash is not included in this forecast."),
+    "accountant-rebate": () => tt("re.mod.accountant", "Accountant rebates are not included in this forecast."),
+    "audit-penalty": () => tt("re.mod.audit", "Audit penalties are not included in this forecast."),
+    "backtax": () => tt("re.mod.backtax", "Back taxes are not included in this forecast."),
+    "course-record-held": () => tt("gr.mod.reason.courseHeld", "A course record is held, but completion could not be verified."),
+    "education-quote-unavailable": () => tt("gr.mod.reason.quote", "A current course fee could not be verified."),
+    "education-course-unavailable": () => tt("gr.mod.reason.course", "The required course could not be verified."),
+    "internet-coverage-unavailable": () => tt("gr.mod.reason.internet", "No supported internet plan could be verified for this address."),
+    "owned-property-utility-deposit-unavailable": () => tt("gr.mod.reason.utilityDeposit", "The utility deposit for this owned property could not be verified."),
+    "mod-tax-effects-outside-native-forecast": () => tt("re.mod.reason.effects", "Mod tax effects are outside the game's tax forecast."),
+    "mod-tax-observations-unavailable": () => tt("re.mod.reason.records", "Current mod tax observations are unavailable."),
+    "unclassified-mod-deductions": () => tt("re.mod.reason.deductions", "Some mod deductions have no verified tax classification."),
+  };
+  if(["owner-query-failed", "invalid-owner-response", "unsupported-owner-response", "invalid-owner-decision", "ownership-unavailable", "ownership-provider-unavailable", "ownership-invalid-or-failed", "manager-state-unavailable", "estate-state-unavailable", "licence-state-unavailable", "fresh-owner-report-unavailable", "fresh-owner-features-unavailable"].includes(reason))
+    return tt("nav.mod.reason.liveUnavailable", "The mod's current ownership state is unavailable; try again after checking it in the game.");
+  if(["fresh-managers-disabled-proof-required", "fresh-estate-disabled-proof-required"].includes(reason))
+    return tt("nav.mod.reason.legacy", "This older mod does not confirm that the affected management feature is switched off.");
+  return words[reason] ? words[reason]() : tt("nav.mod.reason.unavailable", "The mod could not verify this condition: {reason}.", {reason: String(reason)});
+}
+function mcRequirementsHtml(requirements){
+  return (requirements || []).map(r => {
+    const name = r.kind === "internet" ? tt("gr.mod.internet", "Internet installation")
+      : r.kind === "licence" ? tt("gr.mod.licence", "Operating licence {id}", {id: r.licence})
+      : r.courseKey ? gameName(r.courseKey) : tt("gr.mod.course", "Factory course {id}", {id: r.courseId});
+    const state = r.status === "in-progress" ? tt("gr.mod.enrolled", "Already enrolled; no new enrollment fee is added, and completion is not guaranteed.")
+      : r.status === "qualified" ? tt("gr.mod.qualified", "Qualification already verified.")
+      : r.status === "held" ? (r.kind === "licence" ? tt("gr.mod.licenceHeld", "A current licence is already held; renewal charges are included when due.") : tt("gr.mod.held", "An existing record is held; no new fee is assumed."))
+      : r.status === "required" ? tt("gr.mod.required", "Required before opening.")
+      : tt("gr.mod.requirementUnknown", "This prerequisite could not be verified.");
+    const cost = Number.isFinite(r.startupCents) ? tt("gr.mod.requirementCost", "Upfront: {amount}.", {amount: fmt(r.startupCents / 100)}) : "";
+    return `<li><b>${spEsc(name)}</b> ${spEsc(state)} ${spEsc(cost)}${r.preparationDays ? " " + spEsc(tt("gr.mod.preparation", "Allow {n} days before opening.", {n: r.preparationDays})) : ""}</li>`;
+  }).join("");
+}
+function mcCostsHtml(costs, requirements = [], reasons = [], weekly = false){
+  const req = [...new Map([...(costs?.requirements || []), ...(requirements || [])].map(r => [JSON.stringify(r), r])).values()];
+  const why = [...new Set([...(costs?.reasons || []), ...(reasons || [])])];
+  if(!req.length && !why.length && (!costs || (costs.status === "ready" && costs.dailyCents === 0 && costs.startupCents === 0))) return "";
+  const lines = [];
+  if(costs && Number.isFinite(costs.dailyCents)) lines.push(weekly
+    ? tt("gr.mod.week", "Additional mod operating costs: {amount} per week.", {amount: fmt(costs.dailyCents * 7 / 100)})
+    : tt("gr.mod.day", "Additional mod operating costs: {amount} per day on average.", {amount: fmt(costs.dailyCents / 100)}));
+  if(costs && Number.isFinite(costs.startupCents)) lines.push(tt("gr.mod.startup", "Mod setup costs: {amount} upfront.", {amount: fmt(costs.startupCents / 100)}));
+  if(costs?.status === "unavailable" || why.length) lines.push(tt("gr.mod.incomplete", "This estimate is incomplete."));
+  return `<div class="os-card mc-costs"><h3>${tt("gr.mod.title", "Mod costs and prerequisites")}</h3>${lines.map(x => `<p>${spEsc(x)}</p>`).join("")}<ul>${mcRequirementsHtml(req)}${why.map(x => `<li>${spEsc(mcReason(x))}</li>`).join("")}</ul></div>`;
+}
+function mcEducationHtml(education){
+  if(!education || !(education.requirements || []).length) return "";
+  const total=Number.isFinite(education.totalCents) ? fmt(education.totalCents/100) : tt("co.mod.wageNotQuoted", "Unavailable");
+  const now=Number.isFinite(education.startupCents) ? fmt(education.startupCents/100) : tt("co.mod.wageNotQuoted", "Unavailable");
+  return `<p class="os-note">${spEsc(tt("gr.mod.educationCash", "Course tuition in investment: {total}; cash needed upfront: {now}.", {total,now}))} ${tt("gr.mod.educationTiming", "Later payments depend on course sessions, and completion is not guaranteed.")}</p>`;
+}
+function mcAccountingHtml(observation){
+  if(!observation) return "";
+  const basis = {paid: tt("co.mod.paid", "Paid"), accrued: tt("co.mod.accrued", "Accrued"), owed: tt("co.mod.owed", "Owed")};
+  const categories = {"utilities.power":tt("co.mod.category.power","Electricity"), "utilities.water":tt("co.mod.category.water","Water"),
+    "utilities.internet":tt("co.mod.category.internet","Internet"), "cover.premium":tt("co.mod.category.premium","Insurance premium"),
+    "cover.excess":tt("co.mod.category.excess","Insurance excess"), "tax.accountant":tt("co.mod.category.accountant","Accountant"),
+    "tax.penalty":tt("co.mod.category.penalty","Tax penalty"), "tax.rebate":tt("co.mod.category.rebate","Tax rebate"),
+    "tax.backtax":tt("co.mod.category.backtax","Back taxes"), racket:tt("co.mod.category.racket","Protection payments"),
+    repair:tt("co.mod.category.repair","Repairs"), other:tt("co.mod.category.other","Other costs")};
+  const places = new Map((D.businesses || []).map(b=>[b.key,b.address || b.name]));
+  const rows = (observation.rows || []).map(r => {
+    const at=r.scope === "company" ? tt("co.mod.companyScope","Company-wide") : r.address
+      ? places.get(`${r.address.street}#${r.address.number}`) || tt("co.mod.siteAddress","{number} {street}",{number:r.address.number,street:gameName(r.address.street) || r.address.street}) : "";
+    const amount=Number.isFinite(r.cents) ? fmt(r.cents/100) : tt("co.mod.wageNotQuoted","Unavailable");
+    return `<li>${at ? spEsc(at)+" · " : ""}${spEsc(categories[r.category] || r.category)} · ${spEsc(basis[r.basis] || r.basis)} · ${spEsc(tt("co.mod.period", "days {from}–{to}: {amount}", {from:r.fromDay,to:r.toDay,amount}))}</li>`;
+  }).join("");
+  const omitted = (observation.knownOmittedCategories || []).join(", ");
+  return `<details class="mc-accounting"><summary>${tt("co.mod.accounting", "Mod accounting observations")}</summary><p>${tt("co.mod.separate", "Recorded profit is unchanged; paid costs, accruals and balances are separate observations.")}</p>${observation.coverage !== "complete" ? `<p>${tt("co.mod.partial", "Coverage is incomplete; these records are not a total of all mod costs.")}</p>` : ""}${omitted ? `<p>${spEsc(tt("co.mod.omitted", "Known categories outside the statements: {categories}.", {categories: omitted}))}</p>` : ""}<ul>${rows}</ul></details>`;
+}
 function planCompatibilityText(facts, capability){
   const reasons = facts?.compatibility?.[capability] || [];
   const words = {
@@ -12545,12 +12704,19 @@ const OS_OPT_KEY = "ba_dash_os_optional";
 let osOptOn = null;
 const osOptional = () => osOptOn === null ? (osOptOn = remembered(OS_OPT_KEY) === "1") : osOptOn;
 function osSetOptional(on){ osOptOn = !!on; remember(OS_OPT_KEY, on ? "1" : "0"); }
-const osCore = () => OpenStoreModel.create({facts: osFacts(), company: {businesses: (D && D.businesses) || [], day: ((D && D.meta) || {}).day}, optional: osOptional()});
+let osCoreCache = null;
+function osCore(){
+  const facts=osFacts(), businesses=D?.businesses, day=D?.meta?.day, optional=osOptional();
+  const key=[D,facts,businesses,day,optional];
+  if(!osCoreCache || key.some((v,i)=>v!==osCoreCache.key[i]))
+    osCoreCache={key,model:OpenStoreModel.create({facts,company:{businesses:businesses || [],day},optional})};
+  return osCoreCache.model;
+}
 const osType = (...args) => osCore().type(...args);
 const osCap = (...args) => osCore().cap(...args);
 const osLayout = (...args) => osCore().layout(...args);
 const osOutfit = (...args) => osCore().outfit(...args);
-const osDecor = (...args) => osCore().decor(...args);
+const osDecor = (building, slug = osPlan()?.type) => osCore().decor(building, slug);
 function osInvestment(plan, b){ return osCore().investment(...arguments); }
 function osStores(out, items = osFacts().items || {}){ return osCore().stores(...arguments); }
 function osSatisfaction(slug){ return osCore().satisfaction(...arguments); }
@@ -12572,7 +12738,8 @@ const osTypeLower = slug => gnLower(osTypeName(slug));
 /* The board owns the best-marketing cache and its payload invalidation. */
 function osBestModel(slug, b){
   /* A new board (a refresh, another save) starts the cache afresh. */
-  if(osBestFor !== D){ osBest = new Map(); osBestFor = D; }
+  const modelCore=osCore();
+  if(osBestFor !== modelCore){ osBest = new Map(); osBestFor = modelCore; }
   if(osCompatibilityText(slug) || b.marketingUnavailable) return null;
   const id = `${slug}|${b.key}`;
   if(osBest.has(id)) return osBest.get(id);
@@ -12628,7 +12795,7 @@ function osStripHtml(plan){
       {hood: hoodName(b.hood), layout: osLayout(b), m2: num(b.m2), rent: fmt(b.rent || 0)})}</small>`
     : `<b class="dim">${tt("gr.os.strip.nowhere", "Not picked yet")}</b><small>${tt("gr.os.strip.nowhere.sub", "{type}, {where}",
       {type: osTypeName(plan.type), where: plan.hood ? hoodName(plan.hood) : anyHood})}</small>`;
-  const invest = inv ? `<b class="m">${fmt(inv[mode])}</b><small>${b.status === "mine"
+  const invest = inv ? `<b class="m">${fmt(inv[mode])}</b><small>${inv.incomplete?.length ? tt("gr.compat.equipment", "Partial estimate") : b.status === "mine"
     ? mode === "self" ? tt("gr.os.strip.selfRented", "Self-installation · Already rented") : tt("gr.os.strip.firmRented", "Installation firm · Already rented")
     : mode === "self" ? tt("gr.os.strip.self", "Self-installation · deposit included")
     : tt("gr.os.strip.firm", "Installation firm · deposit included")}</small>` : `<b class="dim">–</b><small>${tt("gr.os.strip.afterWhere", "after the location")}</small>`;
@@ -12661,13 +12828,14 @@ function osRange(d){
 function osEstimate(plan, b){
   const t = osType(plan.type), inv = osInvestment(plan, b);
   if(!t || !inv) return null;
+  if(inv.incomplete?.length) return {inv,none:spEsc(inv.incomplete.map(mcReason).join(" "))};
   if(osIsHq(plan)) return {inv, none: tt("gr.os.hq.noIncome", "Headquarters has no sales income or break-even.")};
   if(t.model !== "retail" && t.model !== "office") return {inv, none: t.cat === "cinema" || t.cat === "theater"
     ? tt("gr.os.none.venue", "the game's rules for screens, seats and actors are not modelled") : tt("gr.os.none.type", "this type is not modelled")};
   const compatibility = osCompatibilityText(plan.type);
   if(compatibility) return {inv, none: compatibility};
   const m = osBestModel(plan.type, b);
-  if(!m) return {inv, none: tt("gr.os.none.data", "the save lacks what the estimate needs")};
+  if(!m) return {inv, none: (b.marketingUnavailable ? mcReason("promotion-observation-unavailable") : spEsc(osCore().diagnostics?.(plan.type,b)?.map(mcReason).join(" ") || "")) || tt("gr.os.none.data", "the save lacks what the estimate needs")};
   const hyped = m.office ? [] : osHyped(plan.type, b.hood);
   const mh = hyped.length ? osModel(plan.type, b, {reach: m.reach, cost: m.marketing, hype: hyped}) : null;
   const core = osCore();
@@ -12842,7 +13010,7 @@ function osInvestHtml(plan){
   const skills = (osType(plan.type) || {}).staffSkills || [];
   const note = osIsHq(plan) ? `<p class="os-note">${tt("gr.os.hq.outfit", "{n} workstations by default, one per headquarters role: {roles}.",
     {n: skills.length, roles: grList(skills.map(k => spEsc(gameName(k))))})}</p>` : "";
-  return osToolbar(plan, inv, out) + note + (osMode(plan) === "self" ? osSelfHtml(b, out, inv) : osFirmHtml(b, out, inv))
+  return osToolbar(plan, inv, out) + note + mcCostsHtml(inv.modCosts, inv.modRequirements, inv.incomplete) + (osMode(plan) === "self" ? osSelfHtml(b, out, inv) : osFirmHtml(b, out, inv))
     + (osIsHq(plan) ? osHqRunningHtml(b) : "");
 }
 /* HQ roles and hours are the player's choices, so only the rent is priced. */
@@ -12878,7 +13046,7 @@ const osShoppingTags = ([, , group, why, required]) => osTag(group, why)
   + [...new Set((required || []).map(w => w === "mount" ? "" : w))].map(w => osTag("req", w)).join("");
 function osFirmHtml(b, out, inv){
   const items = osFacts().items || {}, decor = osDecor(b), fee = (osFacts().game || {}).installFee || 586;
-  const grp = (title, note, total) => `<tr class="grp"><td colspan="5">${title}${note ? `<span>${note}</span>` : ""}<b>${fmt(total)}</b></td></tr>`;
+  const grp = (title, note, total, lines = []) => `<tr class="grp"><td colspan="5">${title}${note ? `<span>${note}</span>` : ""}<b>${mcPriceMoney(osFacts(),lines,total)}</b></td></tr>`;
   const rows = [grp(tt("gr.os.inv.firm", "Installation firm"), "", inv.fee),
     `<tr><td class="l">${tt("gr.os.inv.fee", "Installation fee")}<span class="sub">${tt("gr.os.inv.fee.sub", "{fee} × {m2} m²", {fee: num(fee), m2: num(b.m2)})}</span></td><td class="w"></td><td></td><td></td><td>${fmt(inv.fee)}</td></tr>`,
     `<tr><td class="l">${tt("gr.os.inv.walls", "Walls and floors")}<span class="sub">${decor ? tt("gr.os.inv.walls.met", "{hood} asks for an interior score of {n}: the firm lays them",
@@ -12889,15 +13057,15 @@ function osFirmHtml(b, out, inv){
     const lines = shopping.filter(l => l[2] === g);
     if(!lines.length) return;
     const total = lines.reduce((s, l) => s + l[1] * ((items[l[0]] || {}).p || 0), 0);
-    rows.push(grp(title(), osGroupNote(g, b, out), total));
+    rows.push(grp(title(), osGroupNote(g, b, out), total, lines));
     lines.forEach(l => {
       const [item, qty] = l;
       const each = (items[item] || {}).p || 0;
-      rows.push(`<tr><td class="l">${spEsc(osItemName(item))}</td><td class="w">${osShoppingTags(l)}</td><td>${qty}</td><td>${fmt(each)}</td><td>${fmt(each * qty)}</td></tr>`);
+      rows.push(`<tr><td class="l">${spEsc(osItemName(item))}</td><td class="w">${osShoppingTags(l)}</td><td>${qty}</td><td>${mcItemMoney(osFacts(),item)}</td><td>${mcItemMoney(osFacts(),item,qty)}</td></tr>`);
     });
   });
   rows.push(grp(tt("gr.os.inv.deposit", "Deposit"), b.status === "mine" ? depositNote(b) : tt("gr.os.inv.deposit.note", "refunded when the lease ends"), inv.deposit));
-  if(b.status !== "mine") rows.push(`<tr><td class="l">${tt("gr.os.inv.deposit.est", "Estimated deposit")}<span class="sub">${tt("gr.os.inv.deposit.estSub", "about 60 days of rent, with the building's own fittings")}</span></td><td class="w"></td><td></td><td></td><td>${fmt(inv.deposit)}</td></tr>`);
+  if(b.status !== "mine") rows.push(`<tr><td class="l">${tt("gr.os.inv.deposit.est", "Estimated deposit")}<span class="sub">${mcLeaseNote(b,tt("gr.os.inv.deposit.estSub", "about 60 days of rent, with the building's own fittings"))}</span></td><td class="w"></td><td></td><td></td><td>${mcLeaseMoney(b,inv.deposit)}</td></tr>`);
   return `<table class="os-inv"><thead><tr><th class="l">${tt("gr.os.inv.col.item", "Item")}</th><th class="l">${tt("gr.os.inv.col.why", "Why")}</th>
     <th>${tt("gr.os.inv.col.qty", "Qty")}</th><th>${tt("gr.os.inv.col.each", "Each")}</th><th>${tt("gr.os.inv.col.total", "Total")}</th></tr></thead>
     <tbody>${rows.join("")}</tbody><tfoot><tr><td class="l">${tt("gr.os.inv.total", "Investment")}</td><td></td><td></td><td></td><td>${fmt(inv.firm)}</td></tr></tfoot></table>`;
@@ -12910,9 +13078,9 @@ function osSelfHtml(b, out, inv){
   const cards = stores.map((s, i) => {
     const v = vendors[s.key] || {};
     const rows = osShoppingLines(s.lines.map(k => out.lines[k])).map(l => { const [item, qty] = l;
-      return `<tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: qty, item: osItemName(item)})}</td><td class="w">${osShoppingTags(l)}</td><td>${fmt(qty * ((items[item] || {}).p || 0))}</td></tr>`; }).join("");
+      return `<tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: qty, item: osItemName(item)})}</td><td class="w">${osShoppingTags(l)}</td><td>${mcItemMoney(F,item,qty)}</td></tr>`; }).join("");
     return `<div class="os-store"><div class="os-sh"><span class="k">${osLetter(i)}</span><span><b>${spEsc(v.n || s.key)}</b><small>${spEsc(v.a || "")}${
-      v.h ? ` · ${spEsc(hoodName(v.h))}` : ""}</small></span><span class="t">${fmt(storeTotal(s))}</span></div>
+      v.h ? ` · ${spEsc(hoodName(v.h))}` : ""}</small></span><span class="t">${mcPriceMoney(F,s.lines.map(k=>out.lines[k]),storeTotal(s))}</span></div>
       <table><tbody>${rows}<tr class="del"><td class="l">${tt("gr.os.self.delivery", "Delivery")}</td><td class="w"></td><td>${fmt(fee)}</td></tr></tbody></table></div>`;
   }).join("");
   const unsold = out.lines.filter((l, k) => !stores.some(s => s.lines.includes(k)));
@@ -12922,8 +13090,8 @@ function osSelfHtml(b, out, inv){
     <table><tbody>${decor.floors ? `<tr><td class="l">${tt("gr.os.self.floors", "{n} floor tiles at {p}", {n: num(decor.floors), p: fmt(decor.floorPrice)})}</td><td class="w">${interior}</td><td>${fmt(decor.floors * decor.floorPrice)}</td></tr>` : ""}${
       decor.walls ? `<tr><td class="l">${tt("gr.os.self.wallslots", "{n} wall slots at {p}", {n: num(decor.walls), p: fmt(decor.wallPrice)})}</td><td class="w">${interior}</td><td>${fmt(decor.walls * decor.wallPrice)}</td></tr>` : ""}</tbody></table></div>` : "";
   const dep = `<div class="os-store"><div class="os-sh"><span class="k p">${osIcon("key")}</span><span><b>${tt("gr.os.inv.deposit", "Deposit")}</b><small>${
-    b.status === "mine" ? depositNote(b) : tt("gr.os.self.deposit.est", "estimated: about 60 days of rent, with the building's own fittings · refunded when the lease ends")}</small></span><span class="t">${fmt(inv.deposit)}</span></div></div>`;
-  const legend = stores.map((s, i) => `<div><i>${osLetter(i)}</i><span>${spEsc((vendors[s.key] || {}).n || s.key)}</span><b>${fmt(storeTotal(s))}</b></div>`).join("")
+    b.status === "mine" ? depositNote(b) : mcLeaseNote(b,tt("gr.os.self.deposit.est", "estimated: about 60 days of rent, with the building's own fittings · refunded when the lease ends"))}</small></span><span class="t">${mcLeaseMoney(b,inv.deposit)}</span></div></div>`;
+  const legend = stores.map((s, i) => `<div><i>${osLetter(i)}</i><span>${spEsc((vendors[s.key] || {}).n || s.key)}</span><b>${mcPriceMoney(F,s.lines.map(k=>out.lines[k]),storeTotal(s))}</b></div>`).join("")
     + `<div><i class="n">${tt("gr.os.map.new", "NEW")}</i><span>${spEsc(b.address)}</span><b></b></div>`;
   const note = unsold.length ? `<p class="quiet os-gap">${tt("gr.os.self.unsold", "No store the game's help names sells these: {items}.", {items: unsold.map(l => osItemName(l[0])).join(", ")})}</p>` : "";
   const pins = JSON.stringify([...stores.map((s, i) => [s.key, osLetter(i), "store"]), [b.key, tt("gr.os.map.new", "NEW"), "new"]]);
@@ -12966,7 +13134,7 @@ function osBreakHtml(plan){
   if(!b || !est) return `<p class="quiet os-gap">${tt("gr.os.be.nowhere", "Pick a location first.")}</p>`;
   const inv = est.inv;
   if(osIsHq(plan)) return planCompatibilityHtml(osFacts(), "officeProfit") + osHqRunningHtml(b);
-  if(est.none) return `<div class="os-none">
+  if(est.none) return mcCostsHtml(est.model?.modCosts || inv.modCosts, inv.modRequirements, inv.incomplete) + `<div class="os-none">
     <div><span class="os-lab">${tt("gr.os.inv.firm", "Installation firm")}</span><b>${fmt(inv.firm)}</b><small>${tt("gr.os.be.investment", "investment")}</small></div>
     <div><span class="os-lab">${tt("gr.os.inv.self", "Self-installation")}</span><b>${fmt(inv.self)}</b><small>${tt("gr.os.be.investment", "investment")}</small></div>
     <div><span class="os-lab">${tt("gr.os.strip.beLab", "Break even")}</span><b class="dim">${tt("gr.os.none.short", "No estimate")}</b><small>${est.none}</small></div></div>`;
@@ -12983,6 +13151,7 @@ function osBreakHtml(plan){
     row(tt("gr.os.be.wages", "Wages"), fmt(-m.wages)),
     row(tt("gr.os.be.rent", "Rent"), fmt(-m.rent)),
     row(tt("gr.os.be.marketing", "Marketing"), fmt(-m.marketing)),
+    m.modCosts && Number.isFinite(m.modCosts.dailyCents) ? row(tt("gr.mod.running", "Mod operating costs"), fmt(-m.modCosts.dailyCents / 100)) : "",
   ].join("");
   const lines = [
     `<p class="os-note">${tt("gr.os.be.mid", "About {w} a day if it is priced, stocked and staffed as planned.", {w: osMidMoney(p * OS_LOW, p * OS_HIGH)})}</p>`,
@@ -13004,7 +13173,7 @@ function osBreakHtml(plan){
         always: osOfficeStaffed(osCap(b), osCap(b), 1, 3)})
     : tt("gr.os.be.assume2", "Open 24/7, the type's whole range at the highest price every customer in {hood} accepts, satisfaction {sat}, the best marketing: {mix}. Sold {units} units to {n} customers a day. The first five days earn less while satisfaction and new staff settle, and the days to break even count that.",
       {hood: hoodName(b.hood), sat: osSatisfaction(plan.type), mix, units: num(Math.round(m.lines.reduce((s, l) => s + l.units, 0))), n: num(Math.round(m.customers))});
-  return `${b.status === "mine" ? `<p class="os-note">${tt("gr.os.be.depositBasis", "This forecast covers the setup still to pay for. After opening, the comparison includes the earlier rental deposit in both planned and actual investment.")}</p>` : ""}<div class="os-be">
+  return `${mcCostsHtml(m.modCosts)}${b.status === "mine" ? `<p class="os-note">${tt("gr.os.be.depositBasis", "This forecast covers the setup still to pay for. After opening, the comparison includes the earlier rental deposit in both planned and actual investment.")}</p>` : ""}<div class="os-be">
   <div class="os-card"><div class="os-big">${big(mode)}${big(other, true)}</div>${osChart(est, mode)}</div>
   <div class="os-card"><h3>${tt("gr.os.be.profit", "Expected profit a day")}</h3>
     <div class="os-sites">${detail}<div class="os-site avg"><span><b>${tt("gr.os.be.estimate", "The game's rules")}</b><small>${
@@ -13073,6 +13242,7 @@ const osNiceStep = v => { const e = Math.pow(10, Math.floor(Math.log10(Math.max(
 /* The financing panel: part of the investment borrowed, what that costs a
    day against the expected profit, and break even with and without it. */
 function osFinHtml(plan, est){
+  if(est.none || est.inv.incomplete?.length) return "";
   return planFinanceHtml("os", plan, est.inv[osMode(plan)], tt("gr.os.fin.off",
     "A bank loan pays part of the investment now and costs interest every day until it is repaid. The game books the loan to the company, not to the store."),
     (bank, amount) => osFinFacts(plan, est, bank, amount));
@@ -13094,7 +13264,7 @@ function osFinFacts(plan, est, bank, amount){
 }
 function osFinUpdate(amount){
   const plan = osPlan(), b = plan && osBuilding(plan.key), est = b && osEstimate(plan, b);
-  if(!plan || !est || !est.inv) return;
+  if(!plan || !est || !est.inv || est.none || est.inv.incomplete?.length) return;
   planFinanceUpdate("os", plan, est.inv[osMode(plan)], amount, (bank, n) => osFinFacts(plan, est, bank, n), osSave);
 }
 
@@ -13759,6 +13929,7 @@ function osRoiHtml(plan){
       pct == null ? "" : `<span class="os-meter" style="--w:${pct.toFixed(1)}%"><i></i></span>`)}${
     kpi(tt("gr.os.strip.beLab", "Break even"), be.v, be.sub, be.word ? " os-word" : "")}</div>`;
   const notes = [];
+  if(row.basis === "statement-profit") notes.push(tt("co.payback.statement", "Payback uses recorded statement profit; costs outside those statements are shown separately."));
   if(snap) notes.push(tt("gr.os.roi.depositBasis", "Investment and break-even comparisons include the rental deposit, including deposits paid before this plan."));
   if(live) notes.push(tt("gr.os.roi.live2", "This plan was made before its figures were kept, so the plan column has the investment only."));
   if(!whole) notes.push(row.rolled
@@ -13779,7 +13950,7 @@ function osRoiHtml(plan){
   }
   const links = osPaidBack(o) ? "" : `<div class="os-links">${osRoiSiteBtn(plan.key)}${osRoiResultsBtn()}${until}</div>`;
   return `${tiles}${whole ? osRoiChart(row, snap, planMode, inv, o, opened) : ""}${notes.map(t => `<p class="os-payback">${t}</p>`).join("")}${
-    osRoiTable(row, snap, planMode, o)}${state}${osRoiLoan(plan, snap, planMode)}${links}`;
+    osRoiTable(row, snap, planMode, o)}${mcAccountingHtml(row.modAccounting)}${state}${osRoiLoan(plan, snap, planMode)}${links}`;
 }
 /* Businesses › Results with the Payback column in sight, as search goes there. */
 function osToResults(){
@@ -14492,10 +14663,13 @@ const ofSized = (l, mode) => l.rate && (mode === "peak" ? l.peakDay : l.avgDay) 
 /* By the recipe's name, or the one the city trades it under (rawtomato is
    tomato in every warehouse: the factory view's aliases). */
 /* Explicit payload inputs; arithmetic and vendor grouping live in the model. */
+let ofCoreCache = null;
 function ofCore(){
-  return OpenFactoryModel.create({facts: ofFacts(), recipes: RECIPE_BY,
-    aliases: ((D.supply || {}).factories || {}).aliases || {},
-    sources: (D.plan || {}).sources || {}, hours: HOURS});
+  const facts=ofFacts(), aliases=D.supply?.factories?.aliases, sources=D.plan?.sources;
+  const key=[D,facts,RECIPE_BY,aliases,sources,HOURS,D.meta?.day];
+  if(!ofCoreCache || key.some((v,i)=>v!==ofCoreCache.key[i]))
+    ofCoreCache={key,model:OpenFactoryModel.create({facts,recipes:RECIPE_BY,aliases:aliases || {},sources:sources || {},hours:HOURS})};
+  return ofCoreCache.model;
 }
 const ofProd = slug => ofCore().product(slug);
 const ofDiscount = () => ofCore().discount();
@@ -14540,7 +14714,7 @@ function ofDepotChoice(plan, building, owned){
 function ofInvestment(plan, {counts = ofCounts(), target = planTarget} = {}){
   const owned = !!target && target !== "new", building = ofBuilding(owned ? target : plan && plan.key);
   return ofCore().investment({counts, building, owned,
-    current: owned ? ofNow(target) : {}, depot: ofDepotChoice(plan, building, owned)});
+    current: owned ? ofNow(target) : {}, depot: ofDepotChoice(plan, building, owned), wantsDepot:ofWantsDepot(plan,owned)});
 }
 /* A planner input or a fresh save changed: adopt the calculated depot and
    investment explicitly before persisting. Reading or drawing costs is pure. */
@@ -14567,7 +14741,7 @@ const ofHq = plan => ofCore().hq(ofCounts(), ofWantsDepot(plan));
 function ofRunning(plan, inv){
   const owned = ofIsOwned();
   return ofCore().running({counts: ofCounts(), owned, current: owned ? ofNow(planTarget) : {},
-    building: ofBuilding(plan && plan.key), wantsDepot: ofWantsDepot(plan)}, inv);
+    building: ofBuilding(owned ? planTarget : plan && plan.key), wantsDepot: ofWantsDepot(plan)}, inv);
 }
 const ofIngredientsUncontracted = () => ofCore().uncontracted(ofCounts());
 
@@ -14640,15 +14814,15 @@ function ofStripHtml(plan){
       {hood: hoodName(b.hood), layout: osLayout(b), m2: num(b.m2), rent: fmt(b.rent || 0)})}</small>`
     : `<b class="dim">${tt("gr.os.strip.nowhere", "Not picked yet")}</b><small>${tt("gr.of.strip.anysize", "a warehouse building, any size")}</small>`;
   const inv = ofInvestment(plan), mode = ofMode(plan);
-  const invest = inv ? `<b class="m">${fmt(inv[mode])}</b><small>${owned ? tt("gr.of.strip.newOnly", "new machines only · one-off")
+  const invest = inv ? `<b class="m">${fmt(inv[mode])}</b><small>${inv.incomplete?.length ? tt("gr.compat.equipment", "Partial estimate") : inv.modEducation?.requirements?.length ? tt("gr.of.inv.educationTotal", "Includes full course tuition; upfront cash is shown separately") : owned ? tt("gr.of.strip.newOnly", "new machines only · one-off")
       : mode === "self" ? tt("gr.of.strip.self", "Self-installation · one-off, upfront") : tt("gr.of.strip.firm", "Installation firm · one-off, upfront")}</small>`
     : `<b class="dim">–</b><small>${tt("gr.os.strip.afterWhere", "after the location")}</small>`;
   const run = ofRunning(plan, inv);
   const parts = !run ? "" : run.rent ? tt("gr.of.strip.run.rent", "raw {raw} · wages {wages} · rent {rent}", {raw: fmt(run.raw), wages: fmt(run.wages), rent: fmt(run.rent)})
     : tt("gr.of.strip.run", "raw {raw} · wages {wages}", {raw: fmt(run.raw), wages: fmt(run.wages)});
-  const running = !run ? `<b class="dim">${tt("gr.os.none.short", "No estimate")}</b>${planCompatibilityHtml(ofFacts(), "factoryRunning")}` : `<b class="m">${tt("gr.of.strip.week", "{w}/week", {w: fmt(run.total)})}</b><small>${parts}</small><small>${tt("gr.of.strip.notInv", "not in the investment")}</small>`;
+  const running = !run || run.total == null ? `<b class="dim">${tt("gr.os.none.short", "No estimate")}</b>${planCompatibilityHtml(ofFacts(), "factoryRunning")}` : `<b class="m">${tt("gr.of.strip.week", "{w}/week", {w: fmt(run.total)})}</b><small>${parts}</small><small>${tt("gr.of.strip.notInv", "not in the investment")}</small>`;
   return `<div class="os-pb ff-pb">${cell(tt("gr.of.strip.make", "Make"), make)}${cell(tt("gr.os.strip.whereLab", "Where"), where)}${
-    cell(tt("gr.os.strip.invest", "Investment"), invest + planCompatibilityHtml(ofFacts(), "factoryOpening"))}${cell(owned ? tt("gr.of.strip.runAdded", "Running costs added") : tt("gr.of.strip.runLab", "Running costs"), running, "ff-run")}</div>`;
+    cell(tt("gr.os.strip.invest", "Investment"), invest + planCompatibilityHtml(ofFacts(), "factoryOpening"))}${cell(owned ? tt("gr.of.strip.runAdded", "Running costs added") : tt("gr.of.strip.runLab", "Running costs"), running + mcCostsHtml(run?.modCosts, [], run?.incomplete, true), "ff-run")}</div>`;
 }
 
 /* Step 1, above the lines: what the shops buy that a factory can make, each
@@ -14668,13 +14842,13 @@ function ofStartHtml(plan){
   const kitPrice = st => (kits[st] || []).reduce((s, [item]) => s + ((items[item] || {}).p || 0), 0);
   const rows = lines.filter(l => l.rate && l.want > 0).map(l => {
     const k = Math.max(1, ofSized(l, "peak")), made = k * l.rate * HOURS * 7, x = {...l, m: k, made};
-    return {l, k, made, cost: kitPrice(l.station) * k, surplus: made - l.want, saves: ofSaves(x) / 7};
+    return {l, k, made, cost: kitPrice(l.station) * k, surplus: made - l.want, saves: ofSaves(x) == null ? null : ofSaves(x) / 7};
   }).sort((a, b) => b.saves - a.saves);
   if(!rows.length) return seg;
   const own = (D.plan.own || {})[planType] || {};
   const body = rows.map(r => `<tr><td class="l"><b>${spEsc(r.l.name)}</b><span class="sub">${spEsc(((D.plan.workstations || {})[r.l.station] || {}).name || r.l.station || "")} · ${
-      tt("gr.of.start.rate", "{n:,}/h each", {n: r.l.rate})}</span></td><td>${num(Math.round(r.l.want))}</td><td>${fmt(r.l.want * ofImportPrice(r.l.slug))}</td><td>${r.k}</td><td>${fmt(r.cost)}</td>
-      <td>${r.surplus > 0 ? chipHtml("ok", `+${num(Math.round(r.surplus))}`) : `<span class="quiet">${tt("gr.of.start.allUsed", "all used")}</span>`}</td><td>${fmt(r.saves)}</td>
+      tt("gr.of.start.rate", "{n:,}/h each", {n: r.l.rate})}</span></td><td>${num(Math.round(r.l.want))}</td><td>${ofImportPrice(r.l.slug) == null ? "—" : fmt(r.l.want * ofImportPrice(r.l.slug))}</td><td>${r.k}</td><td>${fmt(r.cost)}</td>
+      <td>${r.surplus > 0 ? chipHtml("ok", `+${num(Math.round(r.surplus))}`) : `<span class="quiet">${tt("gr.of.start.allUsed", "all used")}</span>`}</td><td>${r.saves == null ? "—" : fmt(r.saves)}</td>
       <td class="go"><button type="button" data-of-start="${attr(r.l.slug)}" data-of-k="${r.k}" aria-label="${attr(tt("gr.of.start.go", "Plan {name}", {name: r.l.name}))}">${icon("chev")}</button></td></tr>`).join("");
   return `<section class="os-card ff-start"><div class="ff-planhead"><h3>${tt("gr.of.start.title", "What your {type} shops buy that a factory can make", {type: spEsc(gnLower(osTypeName(planType)))})}</h3>
       <span class="os-dim">${tt("gr.of.start.shops", {one: "{n} shop", other: "{n} shops"}, {n: own.shops ?? own.sites ?? 0})}</span></div>
@@ -14789,12 +14963,12 @@ function ofInvestHtml(plan){
   const tool = `<div class="os-toolbar"><nav class="os-seg big" aria-label="${attr(tt("gr.os.inv.mode", "Interior"))}">
     <button type="button" class="${mode === "firm" ? "on" : ""}" data-of-mode="firm" aria-pressed="${mode === "firm"}">${tt("gr.os.inv.firm", "Installation firm")} <b>${fmt(inv.firm)}</b></button>
     <button type="button" class="${mode === "self" ? "on" : ""}" data-of-mode="self" aria-pressed="${mode === "self"}">${tt("gr.os.inv.self", "Self-installation")} <b>${fmt(inv.self)}</b></button></nav>
-    <div class="aside"><span>${owned ? tt("gr.of.inv.added", "Added") : F.compatibility?.factoryOpening?.length ? tt("gr.compat.equipment", "Partial estimate") : tt("gr.of.inv.ready", "Ready to produce")}</span><b>${owned ? tt("gr.os.inv.items", {one: "{n} item", other: "{n} items"}, {n: inv.items})
+    <div class="aside"><span>${owned ? tt("gr.of.inv.added", "Added") : (inv.incomplete?.length || F.compatibility?.factoryOpening?.length) ? tt("gr.compat.equipment", "Partial estimate") : tt("gr.of.inv.ready", "Ready to produce")}</span><b>${owned ? tt("gr.os.inv.items", {one: "{n} item", other: "{n} items"}, {n: inv.items})
       : tt("gr.of.inv.itemsTruck", {one: "{n} item · 1 truck", other: "{n} items · 1 truck"}, {n: inv.items})}</b>
     <span>${tt("gr.os.inv.itemsLab", "Items")}</span><b>${fmt(inv.furniture)}</b></div></div>`;
-  if(!inv.items && owned) return planCompatibilityHtml(F, "factoryOpening") + tool + `<p class="quiet os-gap">${tt("gr.of.inv.nothing", "Nothing to buy: the plan adds no machine and no shelf.")}</p>`;
+  if(!inv.items && owned) return planCompatibilityHtml(F, "factoryOpening") + mcCostsHtml(inv.modCosts, inv.modRequirements, inv.incomplete) + mcEducationHtml(inv.modEducation) + ofModInvestmentHtml(inv) + tool + `<p class="quiet os-gap">${tt("gr.of.inv.nothing", "Nothing to buy: the plan adds no machine and no shelf.")}</p>`;
   const body = mode === "self" ? ofSelfHtml(inv) : ofFirmHtml(inv);
-  return planCompatibilityHtml(F, "factoryOpening") + tool + body + (owned ? "" : ofFinHtml(plan, inv))
+  return planCompatibilityHtml(F, "factoryOpening") + mcCostsHtml(inv.modCosts, inv.modRequirements, inv.incomplete) + mcEducationHtml(inv.modEducation) + ofModInvestmentHtml(inv) + tool + body + (owned ? "" : ofFinHtml(plan, inv))
     + `<div class="ff-next"><button type="button" class="os-cta" data-of-step="until">${ofStepLabel("until")}${icon("go")}</button></div>`;
 }
 const ofWhy = (kind, inv) => kind === "shelf"
@@ -14809,8 +14983,8 @@ function ofSelfHtml(inv){
   const cards = inv.stores.map((s, i) => {
     const v = vendors[s.key] || {};
     const rows = s.lines.map(k => { const [item, qty, kind] = inv.out.lines[k];
-      return `<tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: qty, item: osItemName(item)})}</td><td class="w">${ofWhy(kind, inv)}</td><td>${fmt(qty * ((items[item] || {}).p || 0))}</td></tr>`; }).join("");
-    return `<div class="os-store"><div class="os-sh"><span class="k">${osLetter(i)}</span><span><b>${spEsc(v.n || s.key)}</b><small>${spEsc(v.a || "")}${v.h ? ` · ${spEsc(hoodName(v.h))}` : ""}</small></span><span class="t">${fmt(storeTotal(s))}</span></div>
+      return `<tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: qty, item: osItemName(item)})}</td><td class="w">${ofWhy(kind, inv)}</td><td>${mcItemMoney(F,item,qty)}</td></tr>`; }).join("");
+    return `<div class="os-store"><div class="os-sh"><span class="k">${osLetter(i)}</span><span><b>${spEsc(v.n || s.key)}</b><small>${spEsc(v.a || "")}${v.h ? ` · ${spEsc(hoodName(v.h))}` : ""}</small></span><span class="t">${mcPriceMoney(F,s.lines.map(k=>inv.out.lines[k]),storeTotal(s))}</span></div>
       <table><tbody>${rows}<tr class="del"><td class="l">${tt("gr.os.self.delivery", "Delivery")}</td><td class="w"></td><td>${fmt(fee)}</td></tr></tbody></table></div>`;
   }).join("");
   const truck = (F.vehicles || {}).truck || {}, van = (F.vehicles || {}).van || {};
@@ -14819,21 +14993,21 @@ function ofSelfHtml(inv){
     <table><tbody><tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: 1, item: spEsc(truck.name || "")})}</td><td class="w"><span class="os-tag req">${
       tt("gr.of.why.truck", "One vehicle to deliver")}</span> <span class="os-tag cap">${tt("gr.of.why.driver", "Driver at 95% skill")}</span></td><td>${fmt(inv.truck)}</td></tr></tbody></table></div>` : "";
   const dep = inv.deposit ? `<div class="os-store"><div class="os-sh"><span class="k p">${osIcon("key")}</span><span><b>${tt("gr.os.inv.deposit", "Deposit")}</b><small>${
-    tt("gr.of.self.deposit", "about 90 days of rent ({rent}/day) with the building's own fittings · refunded when the lease ends", {rent: fmt(inv.b.rent || 0)})}</small></span><span class="t">${fmt(inv.deposit)}</span></div></div>` : "";
+    mcLeaseNote(inv.b,tt("gr.of.self.deposit", "about 90 days of rent ({rent}/day) with the building's own fittings · refunded when the lease ends", {rent: fmt(inv.b.rent || 0)}))}</small></span><span class="t">${mcLeaseMoney(inv.b,inv.deposit)}</span></div></div>` : "";
   const depot = inv.depot ? `<div class="os-store"><div class="os-sh"><span class="k p">${spIcon("crate")}</span><span><b>${tt("gr.of.depot.title", "A depot")}</b><small>${
       ofDepotNote(inv.depot.b)}</small></span><span class="t">${fmt(inv.depot.total)}</span></div>
-    <table><tbody><tr><td class="l">${tt("gr.os.inv.deposit", "Deposit")}</td><td class="w"></td><td>${fmt(inv.depot.deposit)}</td></tr>
+    <table><tbody><tr><td class="l">${tt("gr.os.inv.deposit", "Deposit")}</td><td class="w"></td><td>${mcLeaseMoney(inv.depot.b,inv.depot.deposit)}</td></tr>
       <tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: inv.depot.shelves, item: osItemName((F.shelf || {}).item || "")})}</td><td class="w"><span class="os-tag req">${tt("gr.of.why.receive", "Receives deliveries")}</span></td><td>${fmt(inv.depot.racks)}</td></tr>
       <tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: 1, item: spEsc(van.name || "")})}</td><td class="w"><span class="os-tag req">${tt("gr.of.why.van", "One vehicle")}</span></td><td>${fmt(inv.depot.van)}</td></tr>
       <tr class="del"><td class="l">${tt("gr.os.self.delivery", "Delivery")}</td><td class="w"></td><td>${fmt(inv.depot.delivery)}</td></tr></tbody></table></div>` : "";
-  const nothing = owned ? `<div class="ff-callout">${osIcon("key")}<span>${tt("gr.of.inv.nothingElse", "<b>Nothing else to pay.</b> The lease, the deposit and the vehicles are there already; the installation firm would charge for the whole floor again ({fee}).",
+  const nothing = owned && !inv.modEducation?.requirements?.length && !inv.modCosts?.startupCents && !inv.incomplete?.length ? `<div class="ff-callout">${osIcon("key")}<span>${tt("gr.of.inv.nothingElse", "<b>Nothing else to pay.</b> The lease, the deposit and the vehicles are there already; the installation firm would charge for the whole floor again ({fee}).",
     {fee: fmt(inv.fee)})}</span></div>` : "";
-  const sub = owned ? tt("gr.of.inv.total.owned", {one: "one-off, upfront · the new machines and shelves · {n} delivery", other: "one-off, upfront · the new machines and shelves · {n} deliveries"}, {n: inv.stores.length})
+  const sub = inv.modEducation?.requirements?.length ? tt("gr.of.inv.educationTotal", "Includes full course tuition; upfront cash is shown separately") : owned ? tt("gr.of.inv.total.owned", {one: "one-off, upfront · the new machines and shelves · {n} delivery", other: "one-off, upfront · the new machines and shelves · {n} deliveries"}, {n: inv.stores.length})
     : tt("gr.of.inv.total.sub", {one: "one-off, upfront · {items} · {n} delivery · a truck · deposit", other: "one-off, upfront · {items} · {n} deliveries · a truck · deposit"},
       {n: inv.stores.length, items: tt("gr.os.inv.items", {one: "{n} item", other: "{n} items"}, {n: inv.items})});
   const pins = [...inv.stores.map((s, i) => [s.key, osLetter(i), "store"]), ...(inv.truck && truck.at ? [[truck.at, osLetter(inv.stores.length), "store"]] : []),
     [inv.b.key, owned ? tt("gr.of.map.yours", "F") : tt("gr.os.map.new", "NEW"), "new"], ...(inv.depot ? [[inv.depot.b.key, "D", "new"]] : [])];
-  const legend = inv.stores.map((s, i) => `<div><i>${osLetter(i)}</i><span>${spEsc(((F.vendors || {})[s.key] || {}).n || s.key)}</span><b>${fmt(storeTotal(s))}</b></div>`).join("")
+  const legend = inv.stores.map((s, i) => `<div><i>${osLetter(i)}</i><span>${spEsc(((F.vendors || {})[s.key] || {}).n || s.key)}</span><b>${mcPriceMoney(F,s.lines.map(k=>inv.out.lines[k]),storeTotal(s))}</b></div>`).join("")
     + (inv.truck ? `<div><i>${osLetter(inv.stores.length)}</i><span>${spEsc(truck.dealer || "")}</span><b>${fmt(inv.truck)}</b></div>` : "")
     + `<div><i class="n">${owned ? tt("gr.of.map.yours", "F") : tt("gr.os.map.new", "NEW")}</i><span>${spEsc(inv.b.address)}</span><b></b></div>`;
   return `<div class="os-self"><div>${cards}${dealer}${dep}${depot}${nothing}
@@ -14843,35 +15017,42 @@ function ofSelfHtml(inv){
 const ofAddress = key => { const v = ((ofFacts().vendors || {})[key]) || {}; const b = ofBuilding(key); return v.a || (b && b.address) || String(key || "").replace(/^ba:street_/, ""); };
 function ofFirmHtml(inv){
   const F = ofFacts(), items = F.items || {}, g = ofG(), owned = ofIsOwned();
-  const grp = (title, note, total) => `<tr class="grp"><td colspan="5">${title}${note ? `<span>${note}</span>` : ""}<b>${fmt(total)}</b></td></tr>`;
+  const grp = (title, note, total, lines = []) => `<tr class="grp"><td colspan="5">${title}${note ? `<span>${note}</span>` : ""}<b>${mcPriceMoney(F,lines,total)}</b></td></tr>`;
   const rows = [grp(tt("gr.os.inv.firm", "Installation firm"), tt("gr.of.firm.note", "the fee is per square metre of floor, whatever goes on it"), inv.fee),
     `<tr><td class="l">${tt("gr.os.inv.fee", "Installation fee")}<span class="sub">${tt("gr.os.inv.fee.sub", "{fee} × {m2} m²", {fee: num(g.installFee || 0), m2: num(inv.b.m2 || 0)})}</span></td><td class="w"></td><td></td><td></td><td>${fmt(inv.fee)}</td></tr>`,
-    grp(tt("gr.of.firm.production", "Production"), tt("gr.of.firm.production.note", "workstations and storage"), inv.furniture)];
+    grp(tt("gr.of.firm.production", "Production"), tt("gr.of.firm.production.note", "workstations and storage"), inv.furniture, inv.out.lines)];
   inv.out.lines.forEach(([item, qty, kind]) => { const each = (items[item] || {}).p || 0;
-    rows.push(`<tr><td class="l">${spEsc(osItemName(item))}</td><td class="w">${ofWhy(kind, inv)}</td><td>${qty}</td><td>${fmt(each)}</td><td>${fmt(each * qty)}</td></tr>`); });
+    rows.push(`<tr><td class="l">${spEsc(osItemName(item))}</td><td class="w">${ofWhy(kind, inv)}</td><td>${qty}</td><td>${mcItemMoney(F,item)}</td><td>${mcItemMoney(F,item,qty)}</td></tr>`); });
   const truck = (F.vehicles || {}).truck || {};
   if(inv.truck) rows.push(grp(tt("gr.of.firm.yours", "Bought by you either way"), tt("gr.of.firm.yours.note", "the firm places no vehicle"), inv.truck),
     `<tr><td class="l">${spEsc(truck.name || "")}<span class="sub">${spEsc(truck.dealer || "")} · ${spEsc(ofAddress(truck.at))}</span></td><td class="w"><span class="os-tag req">${
       tt("gr.of.why.truck", "One vehicle to deliver")}</span></td><td>1</td><td>${fmt(inv.truck)}</td><td>${fmt(inv.truck)}</td></tr>`);
   if(inv.deposit) rows.push(grp(tt("gr.os.inv.deposit", "Deposit"), tt("gr.os.inv.deposit.note", "refunded when the lease ends"), inv.deposit),
-    `<tr><td class="l">${tt("gr.of.firm.deposit", "About 90 days of rent")}<span class="sub">${tt("gr.of.firm.deposit.sub", "{rent}/day, with the building's own fittings", {rent: fmt(inv.b.rent || 0)})}</span></td><td class="w"></td><td></td><td></td><td>${fmt(inv.deposit)}</td></tr>`);
+    `<tr><td class="l">${inv.b.leaseBasis ? tt("gr.os.inv.deposit", "Deposit") : tt("gr.of.firm.deposit", "About 90 days of rent")}<span class="sub">${mcLeaseNote(inv.b,tt("gr.of.firm.deposit.sub", "{rent}/day, with the building's own fittings", {rent: fmt(inv.b.rent || 0)}))}</span></td><td class="w"></td><td></td><td></td><td>${mcLeaseMoney(inv.b,inv.deposit)}</td></tr>`);
   if(inv.depot) rows.push(grp(tt("gr.of.depot.title", "A depot"), ofDepotNote(inv.depot.b), inv.depot.total));
   const callout = !owned && inv.fee > inv.furniture ? `<div class="ff-callout">${spIcon("alert")}<span>${tt("gr.of.firm.callout", "<b>The fee alone is {fee}</b>, more than the machines: a factory floor is {m2} m². Self-installation saves {w} here.",
       {fee: fmt(inv.fee), m2: num(inv.b.m2 || 0), w: fmt(inv.firm - inv.self)})}</span></div>`
     : owned ? `<div class="ff-callout">${spIcon("alert")}<span>${tt("gr.of.firm.again", "<b>The firm prices the whole floor again</b>: {fee} for {m2} m², on top of the new machines.", {fee: fmt(inv.fee), m2: num(inv.b.m2 || 0)})}</span></div>` : "";
   return `${callout}<table class="os-inv"><thead><tr><th class="l">${tt("gr.os.inv.col.item", "Item")}</th><th class="l">${tt("gr.os.inv.col.why", "Why")}</th>
     <th>${tt("gr.os.inv.col.qty", "Qty")}</th><th>${tt("gr.os.inv.col.each", "Each")}</th><th>${tt("gr.os.inv.col.total", "Total")}</th></tr></thead>
-    <tbody>${rows.join("")}</tbody><tfoot><tr><td class="l">${tt("gr.os.inv.total", "Investment")}<span class="sub">${tt("gr.of.inv.oneOff", "one-off, upfront")}</span></td><td></td><td></td><td></td><td>${fmt(inv.firm)}</td></tr></tfoot></table>`;
+    <tbody>${rows.join("")}</tbody><tfoot><tr><td class="l">${tt("gr.os.inv.total", "Investment")}<span class="sub">${inv.modEducation?.requirements?.length ? tt("gr.of.inv.educationTotal", "Includes full course tuition; upfront cash is shown separately") : tt("gr.of.inv.oneOff", "one-off, upfront")}</span></td><td></td><td></td><td></td><td>${fmt(inv.firm)}</td></tr></tfoot></table>`;
 }
 /* The financing panel: part of the investment borrowed, what that costs a
    day while it runs and the interest over its term. No days to earn it back:
    that needs a profit, and a factory is a cost centre. */
+function ofModInvestmentHtml(inv){
+  if(!inv.modCosts) return "";
+  const hq=inv.hqPurchase;
+  return `<p class="quiet">${tt("gr.of.mod.purchaseBasis", "Self-installation assumes furniture delivery orders; the firm charges one installation bill. Estimates hold captured settings constant.")}</p>${hq?.seats ? `<p>${spEsc(tt("gr.of.mod.hqPurchase", "Additional HQ workstations: {n}; furniture and delivery: {cost}.", {n:hq.seats,cost:fmt(hq.total)}))}</p>` : ""}`;
+}
 function ofFinHtml(plan, inv){
-  const total = plan ? inv[ofMode(plan)] : 0;
+  if(inv.incomplete?.length) return "";
+  const total = plan ? ofCashUpfront(inv,ofMode(plan)) : 0;
   return planFinanceHtml("of", plan, total, tt("gr.of.fin.off",
     "A bank loan pays part of the investment now and costs interest every day until it is repaid. The game books the loan to the company, not to the factory."),
     (bank, amount) => ofFinFacts(total, bank, amount));
 }
+const ofCashUpfront = (inv,mode) => inv[mode === "self" ? "upfrontSelf" : "upfrontFirm"] ?? inv[mode];
 function ofFinFacts(total, bank, amount){
   const cell = planFinCell;
   return planFinFacts(total, bank, amount, loan => cell(tt("gr.of.fin.borrow", "Borrow"), fmt(amount), tt("gr.of.fin.of", "of {w}", {w: fmt(total)}))
@@ -14881,8 +15062,8 @@ function ofFinFacts(total, bank, amount){
 }
 function ofFinUpdate(amount){
   const plan = ofPlan(), inv = plan && ofInvestment(plan);
-  if(!plan || !inv) return;
-  const total = inv[ofMode(plan)];
+  if(!plan || !inv || inv.incomplete?.length) return;
+  const total = ofCashUpfront(inv,ofMode(plan));
   planFinanceUpdate("of", plan, total, amount, (bank, n) => ofFinFacts(total, bank, n), ofSave);
 }
 
@@ -15536,7 +15717,7 @@ const hrSvg = (name, cls) => `<svg${cls ? ` class="${cls}"` : ""} viewBox="0 0 2
 const hrName = slug => spEsc(gameName(slug) || String(slug || "").replace(/^ba:[a-z]+_/, ""));
 const hrRole = skill => gameName(skill) ? spEsc(gameName(skill)) : gwSkillName(skill);
 const hrNum = n => num(Number(n || 0));
-const hrWage = n => `$${num(Number(n || 0), {maximumFractionDigits: 2})}`;
+const hrWage = n => n == null || !Number.isFinite(Number(n)) ? tt("co.mod.wageNotQuoted", "Unavailable") : `$${num(Number(n), {maximumFractionDigits: 2})}`;
 const HR_DAYS = HOUR_ROWS;  // Monday first, as the game's week reads
 
 /* The filters: the company's, and a role's own where Change picks set one.
@@ -15611,7 +15792,7 @@ const hrLevel = (c, skill) => {
 };
 const hrPasses = (c, skill, f) => {
   const lv = hrLevel(c, skill);
-  return lv !== null && lv >= f.min && (f.max === null || Number(c.wage) <= f.max)
+  return !c.wageUnavailable && Number.isFinite(c.wage) && lv !== null && lv >= f.min && (f.max === null || Number(c.wage) <= f.max)
     && !(c.demands || []).some(d => f.ex.includes(d));
 };
 /* Most skilled in the role first, a tie to the lower wage, then the id. */
@@ -16544,7 +16725,7 @@ function hrRoleRow(m, r, lines){
     <td class="num opt">${hrNum(r.weeks.filter(x => x.w.band !== "short").length)}</td>
     <td class="${r.moved ? "num" : "dim"} opt">${r.moved ? hrNum(r.moved) : "–"}</td>
     <td class="${people.length ? "num" : r.short ? "warn" : "dim"}" data-l="${attr(tt("co.hire.col.hires", "New hires"))}">${hrNum(people.length)}${people.length ? `<small>${
-      tt("co.hire.role.avg", "{lv}% · {w}/h", {lv: Math.round(avg(c => hrLevel(c, r.skill))), w: hrWage(Math.round(avg(c => Number(c.wage) || 0)))})}</small>` : ""}</td>
+      tt("co.hire.role.avg", "{lv}% · {w}/h", {lv: Math.round(avg(c => hrLevel(c, r.skill))), w: hrWage(people.some(c=>c.wageUnavailable || !Number.isFinite(c.wage)) ? null : Math.round(avg(c => c.wage)))})}</small>` : ""}</td>
     <td class="${r.short ? "warn" : "dim"}" data-l="${attr(tt("co.hire.col.open", "Stays open"))}">${r.short ? hrNum(r.short) : "–"}${r.tooFew
       ? `<small class="hs-toofew">${tt("co.hire.role.toofew", "{h} h a week too few for a hire", {h: hrNum(r.tooFew)})}</small>` : ""}</td>
     <td class="${bill ? "num" : "dim"} opt">${bill ? `+${fmt(bill)}` : "–"}</td>${act}</tr>`;
@@ -16718,7 +16899,7 @@ function hrOrderHtml(m, t){
   const held = Q && Q.hold && Q.held ? `<p class="hs-note hs-held">${tt("co.hire.order.held", {one: "{n} week held for Quick hire ({role} at {site})", other: "{n} weeks held for Quick hire ({role} at {site})"},
     {n: Q.held, role: hrRole(Q.q.skill), site: spEsc(hrSiteName(Q.S))})}</p>` : "";
   return `<h3 class="nx-sr">${tt("co.hire.order.title", "When you hire")}</h3><ul class="hs-ol">${items}</ul>${held}
-    <div class="hs-sum"><span>${tt("co.hire.tile.wages", "Added wages")}</span><b>+${fmt(t.bill)}${tt("co.hire.perday", "/day")}</b></div>${btn}${under}`;
+    <div class="hs-sum"><span>${tt("co.hire.tile.wages", "Added wages")}</span><b>+${fmt(t.bill)}${tt("co.hire.perday", "/day")}</b></div>${mcOrdinaryWageNote()}${btn}${under}`;
 }
 
 /* The page, whole, or only the blocks named in `parts` (ids), which keeps a
@@ -16743,13 +16924,17 @@ function drawStaffPage(parts){
     return;
   }
   const m = hrModel(), t = hrTotals(m);
+  const blocked = [...(D.staffing || []), ...(D.officeStaffing || []), ...((D.factoryStaffing || {}).cap || [])]
+    .filter(r=>r.unavailable === "modCompatibility");
+  const notice = blocked.map(r=>`<p class="quiet">${spEsc(r.name || r.key)}: ${spEsc(mcStaffText(r))}</p>`).join("")
+    + ((D.candidates || []).some(c=>c.wageUnavailable) ? `<p class="quiet">${tt("co.mod.candidateUnknown", "Candidates with unverified wage quotes are excluded from hiring recommendations.")}</p>` : "");
   const html = {hsOpen: () => hrOpenHtml(m), hsOrder: () => hrOrderHtml(m, t), hsQuick: () => hrQuickHtml(m)};
   /* A redraw (a live refresh among them) puts the keyboard back where it was. */
   const had = document.activeElement, sheet = $("hsSheet");
   const keep = had && ((sec.contains(had) && sec) || (sheet && sheet.contains(had) && sheet)) ? hrKey(had) : null;
   if(parts && sec.querySelector("#hsOpen")) parts.forEach(id => { const el = sec.querySelector(`#${id}`); if(el) el.innerHTML = html[id](); });
   else sec.innerHTML = `<div class="hs-head"><h2>${tt("co.needs.hire.title", "Whom to hire")}</h2><div class="aside">${hrLinkState()}</div></div>
-    <div class="hs-split"><div class="hs-left" id="hsOpen">${html.hsOpen()}</div>
+    ${notice}<div class="hs-split"><div class="hs-left" id="hsOpen">${html.hsOpen()}</div>
       <div class="hs-right"><aside class="hs-order" id="hsOrder" aria-label="${attr(tt("co.hire.order.title", "When you hire"))}">${html.hsOrder()}</aside>
         <section class="hs-quick" id="hsQuick" aria-label="${attr(tt("co.hire.quick.title", "Quick hire"))}">${html.hsQuick()}</section></div></div>`;
   hrSheetPaint(m);
@@ -16829,7 +17014,7 @@ function hrCandRow(m, r, c){
     <td class="l"><input type="checkbox" class="hs-cb" data-hr-pick="${attr(c.id)}" data-hr-skill="${attr(r.skill)}"${picked ? " checked" : ""}${elsewhere ? " disabled" : ""} aria-label="${attr(c.name ? tt("co.hire.cand.pick", "Pick {name}", {name: c.name}) : tt("co.hire.cand.pick.anon", "Pick this candidate"))}"></td>
     <td class="nm"><b>${spEsc(c.name || "?")}</b>${why ? `<small class="hs-why warn">${why}</small>` : ""}</td>
     <td class="l"><span class="hs-sk" style="--w:${Math.max(0, Math.min(100, lv || 0))}%"><i></i></span>${Math.round(lv || 0)}%</td>
-    <td>${hrWage(c.wage)}</td><td class="to">${to}</td>
+    <td>${hrWage(c.wageUnavailable ? null : c.wage)}</td><td class="to">${to}</td>
     <td class="dem opt">${dem || `<span class="dim">–</span>`}</td>
     <td class="exp${soon ? " warn" : ""}">${hrExpires(c)}</td></tr>`;
 }
@@ -17158,7 +17343,7 @@ function hrQuickPlan(sites, cands, used){
   const hold = !!hrUi.quickHold;
   const out = {q, skills, sites: at, S, shop, ex, ready: !!(q.skill && S), hold, plan: false, matches: [], picks: [], short: 0, held: 0};
   if(!out.ready) return out;
-  out.matches = cands.filter(c => hrLevel(c, q.skill) !== null && hrLevel(c, q.skill) >= q.min
+  out.matches = cands.filter(c => !c.wageUnavailable && Number.isFinite(c.wage) && hrLevel(c, q.skill) !== null && hrLevel(c, q.skill) >= q.min
     && (f.max === null || Number(c.wage) <= f.max)
     && !(c.demands || []).some(d => ex.includes(d))).sort(hrRank(q.skill));
   /* The plan's weeks in this role here that nobody reassigned takes. */
@@ -17245,12 +17430,12 @@ function hrQuickHtml(m){
        that fit an open week (item 6 of the in-game test). */
     : Q.picks.some(p => !p.w) && Q.fitting !== null && Q.fitting !== undefined ? `<details class="hs-match" data-hq-list${q.open ? " open" : ""}><summary>${tt("co.hire.quick.fit",
         {one: "<b>{n}</b> fits an open week · <span class='warn'>{k} would join with no hours</span>", other: "<b>{n}</b> fit an open week · <span class='warn'>{k} would join with no hours</span>"},
-        {n, k: Q.picks.filter(p => !p.w).length})}${hrChev()}</summary><ul>${Q.picks.map(p => { const {c} = p; return `<li><span>${spEsc(c.name || "?")}${hrQuickNote(p, Q)}</span><span class="m">${Math.round(hrLevel(c, q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span></li>`; }).join("")}</ul></details>`
+        {n, k: Q.picks.filter(p => !p.w).length})}${hrChev()}</summary><ul>${Q.picks.map(p => { const {c} = p; return `<li><span>${spEsc(c.name || "?")}${hrQuickNote(p, Q)}</span><span class="m">${Math.round(hrLevel(c, q.skill))}%</span><span class="m">${hrWage(c.wageUnavailable ? null : c.wage)}/h</span></li>`; }).join("")}</ul></details>`
     : `<details class="hs-match" data-hq-list${q.open ? " open" : ""}><summary>${
         Q.short ? tt("co.hire.quick.short", {one: "<b>{n}</b> match · <span class='warn'>only {n} candidate matches</span>", other: "<b>{n}</b> match · <span class='warn'>only {n} candidates match</span>"}, {n})
         : k >= n ? tt("co.hire.quick.all", {one: "<b>{n}</b> match · picked", other: "<b>{n}</b> match · all {n} are picked"}, {n})
         : tt("co.hire.quick.best", {one: "<b>{m}</b> match · the best is picked", other: "<b>{m}</b> match · the best {n} are picked"}, {m: n, n: k})}${hrChev()}</summary>
-      <ul>${Q.picks.map(p => { const {c} = p; return `<li><span>${spEsc(c.name || "?")}${hrQuickNote(p, Q)}</span><span class="m">${Math.round(hrLevel(c, q.skill))}%</span><span class="m">${hrWage(c.wage)}/h</span></li>`; }).join("")}</ul></details>`;
+      <ul>${Q.picks.map(p => { const {c} = p; return `<li><span>${spEsc(c.name || "?")}${hrQuickNote(p, Q)}</span><span class="m">${Math.round(hrLevel(c, q.skill))}%</span><span class="m">${hrWage(c.wageUnavailable ? null : c.wage)}/h</span></li>`; }).join("")}</ul></details>`;
   const busy = !!hrUi.quickPending;
   const dis = !Q.ready || !k || off || busy;
   return `<div class="qh"><span class="hs-i">${hrSvg("hire")}</span><h3>${tt("co.hire.quick.title", "Quick hire")}</h3></div>
@@ -17542,15 +17727,15 @@ function hrReviewSites(req, phase, gone, status){
         HR_DAYS.map(d => `<span>${ttDay(d)[0]}</span>`).join("")}</span><span class="m">${tt("co.hire.p.week", "Week")}</span></div>${
       hires.map(h => { const g = gone.has(h.c.id);
         return person(struck(h.c, g), {t: g ? expired : (h.misfit || []).length ? tt("co.hire.p.newbreak", "new hire · hours break a demand") : tt("co.hire.p.new", "new hire")},
-          hrRole(h.skill), `${Math.round(hrLevel(h.c, h.skill))}%`, hrWage(h.c.wage), weekly ? h.w.slots : [], weekly ? `${h.w.hours || 0} h` : "–", g ? "gap" : ""); }).join("")}${
+          hrRole(h.skill), `${Math.round(hrLevel(h.c, h.skill))}%`, hrWage(h.c.wageUnavailable ? null : h.c.wage), weekly ? h.w.slots : [], weekly ? `${h.w.hours || 0} h` : "–", g ? "gap" : ""); }).join("")}${
       extra.map(h => { const g = gone.has(h.c.id);
         return person(struck(h.c, g), {t: g ? expired : h.nofit ? tt("co.hire.p.nohours.nofit", "new hire · no hours: no open week fits {demands}", {demands: h.nofit.map(hrName).join(", ")})
           : tt("co.hire.p.nohours", "new hire · no hours")}, hrRole(h.skill),
-          `${Math.round(hrLevel(h.c, h.skill))}%`, hrWage(h.c.wage), [], "–", g ? "gap" : ""); }).join("")}${
+          `${Math.round(hrLevel(h.c, h.skill))}%`, hrWage(h.c.wageUnavailable ? null : h.c.wage), [], "–", g ? "gap" : ""); }).join("")}${
       moves.map(x => person(spEsc(x.p.name || "?"), {t: x.fixed ? tt("co.hire.p.bench", "unassigned, in the plan")
           : x.from ? tt("co.hire.p.from", "reassigned from {site}", {site: spEsc(x.from.b ? shortName(x.from.b) : tt("co.hire.asite", "a site"))})
           : tt("co.hire.p.fromnone", "reassigned, unassigned before"), mv: true},
-        hrRole(x.skill), x.p.level !== undefined ? `${Math.round(x.p.level)}%` : "–", x.p.wage !== undefined ? hrWage(x.p.wage) : "–",
+        hrRole(x.skill), x.p.level !== undefined ? `${Math.round(x.p.level)}%` : "–", x.p.wage !== undefined ? hrWage(x.p.wageUnavailable ? null : x.p.wage) : "–",
         weekly ? hrBenchSlots(S, x) : [], weekly ? `${gwHours(hrBenchSlots(S, x))} h` : "–")).join("")}${
       gaps.map(x => person(tt("co.hire.p.nobody", "Nobody"), {t: x.w.band === "short" ? tt("co.hire.p.short", "too few hours for a hire")
           : (hrLast && hrGapWhyShort(hrLast.m, x)) || tt("co.hire.p.nomatch", "no {role} matches", {role: hrRole(x.w.skill)})}, hrRole(x.w.skill), "–", "–",
@@ -17854,7 +18039,7 @@ function hrReview(o = {}, hooks = {}){
       return `${hrModeHtml(hrLast.modes, mode)}${blocked}${gwTiles([[tt("co.hire.tile.hire", "Hire"), null, hrNum(c.hire)], [tt("co.hire.tile.move", "Reassign"), null, hrNum(c.move)],
           ...(mode === "hire" ? [] : [[tt("co.hire.tile.weeks", "Site schedules"), null, hrNum(c.weeks)]]),
           [tt("co.hire.tile.wages", "Added wages"), null, `+${fmt(bill)}<small class="hr-u">${tt("co.hire.perday", "/day")}</small>`]])}
-        <p class="gw-lead">${tt("co.hire.lead", "Who goes where. Open a site to see each person and the days they work.")}</p>
+        ${mcOrdinaryWageNote()}<p class="gw-lead">${tt("co.hire.lead", "Who goes where. Open a site to see each person and the days they work.")}</p>
         ${sites}${goneCall}${zero}${fewerCall}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", tt("sp.gw.left.head", "<b>No hours here after this</b>"))}<div class="gw-pills">${left.join("")}</div></div>` : ""}
         ${gapText ? gwCall("warn", "alert", `${gapText}.${gapWhy ? ` ${gapWhy}` : ""}`) : ""}${shortCall}${chain}
         ${(req.unreadableSites || []).map(S => gwCall("warn", "alert", tt("sp.evidence.unreadable", "{site}: the current schedule contains unreadable entries. Hires and assignments can proceed, but this office's schedule will stay unchanged; repair its entries in BizMan before applying staffing.", {site: spEsc(hrSiteName(S))}))).join("")}
@@ -18050,7 +18235,7 @@ function nxSchedStale(){
 function payrollWhy(){
   const off = (D.businesses || [])
     .map(b => [b, (b.wages || 0) - (b.staffCost || 0)])
-    .filter(([b, d]) => Math.abs(d) >= Math.max(100, (b.staffCost || 0) * .05))
+    .filter(([b, d]) => !b.wageUnavailable && !b.staffCostUnavailable && Math.abs(d) >= Math.max(100, (b.staffCost || 0) * .05))
     .sort((a, z) => Math.abs(z[1]) - Math.abs(a[1]));
   const sites = off.slice(0, 4).map(([b, d]) => `${b.name} (${d > 0 ? "+" : ""}${fmt(d)})`).join(", ");
   return tt("co.pay.why.rates", "At today's rates: each person's hourly wage times their assigned weekly hours, over seven days.")
@@ -18063,7 +18248,7 @@ function payrollWhy(){
    largest first: what explains the Payroll's two figures. */
 const payrollOff = () => (D.businesses || [])
   .map(b => [b, (b.wages || 0) - (b.staffCost || 0)])
-  .filter(([b, d]) => Math.abs(d) >= Math.max(100, (b.staffCost || 0) * .05))
+  .filter(([b, d]) => !b.wageUnavailable && !b.staffCostUnavailable && Math.abs(d) >= Math.max(100, (b.staffCost || 0) * .05))
   .sort((a, z) => Math.abs(z[1]) - Math.abs(a[1]));
 function drawPayroll(){
   const st = D.staff;
@@ -18076,12 +18261,12 @@ function drawPayroll(){
   const booked = D.kpi && (D.daily || []).length ? D.kpi.wageBill || 0 : null;
   /* Two wage figures that legitimately differ, each saying what it is, and
      the difference only where both are known. */
-  const diff = booked === null ? null : (st.dailyCost || 0) - booked;
+  const diff = booked === null || st.wageUnavailable ? null : (st.dailyCost || 0) - booked;
   /* The labels say what each tile is; the formulas are the heading's tip
      (payrollWhy()). Only a missing statement is said under its tile. */
   const tile = (lab, v, small, cls = "") => `<div class="pay-tile ${cls}"><span class="lab">${lab}</span><b>${v}</b>${small ? `<small>${small}</small>` : ""}</div>`;
   const tiles = `<div class="pay-tiles">${tile(tt("co.pay.tile.people", "People"), num(st.total), "")}${
-    tile(tt("co.pay.tile.rate", "At today's rates"), fmt(st.dailyCost || 0), "")}${
+    tile(tt("co.pay.tile.rate", "At today's rates"), st.wageUnavailable ? "—" : fmt(st.dailyCost || 0), st.wageUnavailable ? tt("co.mod.wageUnknown", "Current hourly wages could not be verified.") : "")}${
     booked === null ? tile(tt("co.pay.tile.booked", "Booked yesterday"), "—", tt("co.pay.tile.booked.none", "no statement yet"))
       : tile(tt("co.pay.tile.booked", "Booked yesterday"), fmt(booked), "")}${
     diff === null ? "" : tile(tt("co.pay.tile.diff", "Difference"), `${diff > 0 ? "+" : diff < 0 ? "−" : ""}${fmt(Math.abs(diff))}`, "", Math.abs(diff) >= 100 ? "warn" : "")}</div>`;
@@ -18095,10 +18280,10 @@ function drawPayroll(){
     aside: st.total ? chipHtml(st.avgSatisfaction >= 70 ? "ok tr" : "warn tr", `${st.avgSatisfaction}%`,
         tt("co.pay.avg.tip", "Average satisfaction across {n} staff", {n: st.total}))
       + trouble.map(([l, v, tip]) => chipHtml("warn tr", l(v), tip)).join("") : "",
-  }) + tiles + sites + (st.total ? `<details class="pay-roles"${rolesOpen ? " open" : ""}><summary>${tt("co.pay.roles", "Staff by role")}</summary><div class="roles">${st.roles.map(r => `<div class="role rv">
+  }) + tiles + mcOrdinaryWageNote(st) + sites + (st.total ? `<details class="pay-roles"${rolesOpen ? " open" : ""}><summary>${tt("co.pay.roles", "Staff by role")}</summary><div class="roles">${st.roles.map(r => `<div class="role rv">
       <span>${r.role}</span>
       <span class="tr"><i style="width:${(r.count / max * 100).toFixed(0)}%"></i></span>
-      <span class="c">${r.cost != null
+      <span class="c">${!r.wageUnavailable && r.cost != null
         ? `<span>${r.count}</span><b>${money(r.cost)}</b>`
         : r.count}</span></div>`).join("")}</div></details>` : `<p class="quiet">${tt("co.pay.empty", "No staff hired yet.")}</p>`);
 }
@@ -18601,6 +18786,7 @@ function reBuyCtl(re){
 }
 function reTaxPanel(re, lit){
   const t = re.tax;
+  if(t?.projectionIncomplete?.length) return `<div class="os-card mc-tax"><h3>${tt("re.mod.taxTitle", "Tax forecast incomplete")}</h3><p>${spEsc(tt("re.mod.recorded", "Recorded sales: {sales}; recorded deductions: {deductions}.", {sales: fmt(t.sales), deductions: fmt(t.deductions)}))}</p><ul>${[...new Set([...t.projectionIncomplete, ...(t.taxEffects || [])])].map(x => `<li>${spEsc(mcReason(x))}</li>`).join("")}</ul></div>`;
   if(t?.unavailable === "streetFood") return `<p class="quiet">${tt("re.tax.streetFood", "Tax estimates are unavailable until Street Food records can be read from a current save.")}</p>`;
   if(!t || !t.assessed || !(t.baseEnd > 0) || !(t.pick || []).length) return "";
   const picks = t.pick.map(k => re.buy.find(x => x.key === k)).filter(Boolean);
@@ -19033,10 +19219,14 @@ function modCatalogue(){
      limits: [tt("nav.mods.sf.limits.supply", "Commissary demand is not modelled, so supply recommendations for the sites that stock one are withheld."),
        tt("nav.mods.sf.limits.write", "A route reaches the game only when you review and set it with the game linked; there is no undo for it yet.")],
      go: "mods/street-food", goLabel: tt("nav.mods.sf.go", "Plan routes")},
+    {id: "hart", name: "HART Mod Pack",
+     reads: [tt("nav.mods.hart.reads", "Supported versioned reports describe effective rent, costs, bank rules and factory prerequisites."),
+       tt("nav.mods.hart.effective", "Selected settings and effective gameplay rules are kept separate.")],
+     limits: [tt("nav.mods.savedObservations", "Saved reports describe the captured state; current write authority is checked through the live game link."), tt("nav.mods.hart.limits", "Unavailable modules leave dependent estimates incomplete; legacy HART observations do not prove current HART Mod Pack rules.")]},
     {id: "rlo", ws: "3816536560",
-     reads: [tt("nav.mods.rlo.reads", "RLO reports its feature status, business identities, ordinary hourly wages and additional credit accounts."),
+     reads: [tt("nav.mods.rlo.reads", "RLO reports supported costs, prerequisites, accounting observations and management ownership alongside business and credit records."),
        tt("nav.mods.rlo.books", "Recorded profit comes from the game's financial statements; RLO wages and outstanding debt are not added to it again.")],
-     limits: [tt("nav.mods.rlo.limits.models", "Forecasts, staffing suggestions and game writes do not yet account for RLO rules or manager decisions."),
+     limits: [tt("nav.mods.savedObservations", "Saved reports describe the captured state; current write authority is checked through the live game link."), tt("nav.mods.rlo.support", "Supported versioned reports inform estimates; affected game writes check the current mod owner before review, apply and undo."),
        tt("nav.mods.rlo.limits.pay", "Ordinary hourly wages exclude overtime, sick pay and other fees."),
        tt("nav.mods.rlo.limits.credit", "Credit account balances exclude private lender debts and debts recorded by other RLO features.")]},
     {id: "seasons", ws: "3803289067",
@@ -19052,7 +19242,7 @@ function modCatalogue(){
   ].map(m => {
     /* The Workshop's title and author, and the summary shortened from its description. */
     const w = MOD_WORKSHOP.find(x => x.id === m.ws) || {};
-    return {...m, name: w.name || m.id, what: w.summary || "", url: modWorkshopUrl(m.ws),
+    return {...m, name: w.name || m.name || m.id, what: w.summary || "", url: m.ws ? modWorkshopUrl(m.ws) : null,
       by: w.author ? tt("nav.mods.by", "by {author}", {author: w.author}) : ""};
   });
 }
@@ -19068,8 +19258,9 @@ function modState(id){
       if(s.status === "stale") return {cls: "warn", text: tt("nav.mods.state.stale", "In this save, records stale")};
       return {cls: "warn", text: tt("nav.mods.state.unreadable", "In this save, records unreadable")};
     }
+    case "hart":
     case "rlo": {
-      const r = m.rlo;
+      const r = m[id];
       if(!r) return absent;
       if(r.status === "ready") return {cls: "ok", text: tt("nav.mods.rlo.state.ready", "In this save, reports available")};
       if(r.status === "partial") return {cls: "warn", text: tt("nav.mods.rlo.state.partial", "In this save, some reports unavailable")};
@@ -19150,6 +19341,7 @@ function mdRloFacts(){
   const labels = {features: tt("nav.mods.rlo.features", "Feature status"), businesses: tt("nav.mods.rlo.identity", "Business identities"),
     employment: tt("nav.mods.rlo.employment", "Ordinary hourly pay"), credit: tt("nav.mods.rlo.credit", "Additional credit"),
     accounting: tt("nav.mods.rlo.accounting", "Accounting source")};
+  for(const key of Object.keys(r.capabilities || {})) if(!(key in labels)) labels[key] = key;
   for(const [key, label] of Object.entries(labels)){
     const status = (r.capabilities || {})[key];
     if(status && status !== "ready") lines.push(status === "disabled"
@@ -19158,9 +19350,20 @@ function mdRloFacts(){
   }
   return lines;
 }
+function mdHartFacts(){
+  const r = hasData() && D.mods?.hart;
+  if(!r) return [];
+  const lines = [];
+  if(r.version) lines.push(tt("nav.mods.hart.version", "Report written by HART Mod Pack {v}.", {v: r.version}));
+  if(r.blockedByLegacy) lines.push(tt("nav.mods.hart.blocked", "A legacy HART mod blocks current HART Mod Pack gameplay."));
+  if(r.gameplayActive === false) lines.push(tt("nav.mods.hart.inactive", "HART Mod Pack gameplay was inactive at capture."));
+  for(const [name, status] of Object.entries(r.capabilities || {})) lines.push(tt("nav.mods.hart.module", "{module}: {status}.", {module: name,
+    status: status === "ready" ? tt("nav.mods.module.ready", "report available") : status === "disabled" ? tt("nav.mods.module.disabled", "switched off at capture") : tt("nav.mods.module.unavailable", "report unavailable")}));
+  return lines;
+}
 function modDetails(m){
   const list = l => `<ul class="md-list">${l.map(x => `<li>${spEsc(x)}</li>`).join("")}</ul>`;
-  return `<details class="md-det"><summary>${tt("nav.mods.details", "What Big Copilot reads")}</summary>${list(m.id === "rlo" ? [...m.reads, ...mdRloFacts()] : m.reads)}<h4>${
+  return `<details class="md-det"><summary>${tt("nav.mods.details", "What Big Copilot reads")}</summary>${list(m.id === "rlo" ? [...m.reads, ...mdRloFacts()] : m.id === "hart" ? [...m.reads, ...mdHartFacts()] : m.reads)}<h4>${
     tt("nav.mods.col.limits", "Not covered")}</h4>${list(m.limits)}</details>`;
 }
 function drawMods(){
@@ -19179,8 +19382,8 @@ function drawMods(){
   const rows = rest.map(m => {
     const s2 = modState(m.id);
     return `<li class="md-row" data-mod="${attr(m.id)}">${modArt(ws(m.ws))}<div><h3>${spEsc(m.name)}</h3><p class="md-what">${spEsc(m.what)}</p><p class="md-by">${
-      spEsc(m.by)} <a class="md-wsl" href="${attr(m.url)}" target="_blank" rel="noopener" aria-label="${attr(tt("nav.mods.workshopOf", "{name} on the Steam Workshop", {name: m.name}))}">${
-      tt("nav.mods.workshop", "Steam Workshop")}</a></p></div>${chipHtml(s2.cls, spEsc(s2.text))}${modDetails(m)}</li>`;
+      spEsc(m.by)} ${m.url ? `<a class="md-wsl" href="${attr(m.url)}" target="_blank" rel="noopener" aria-label="${attr(tt("nav.mods.workshopOf", "{name} on the Steam Workshop", {name: m.name}))}">${
+      tt("nav.mods.workshop", "Steam Workshop")}</a>` : ""}</p></div>${chipHtml(s2.cls, spEsc(s2.text))}${modDetails(m)}</li>`;
   }).join("");
   /* The supported mods above are not shown again. */
   const above = new Set(modCatalogue().map(m => m.ws).filter(Boolean));
@@ -20433,6 +20636,7 @@ function schedStatus(b){
   }
   const base = plans.get(b.key);
   if(!base) return tt("co.sched.none", "No plan yet");
+  if(base.unavailable === "modCompatibility") return mcStaffText(base);
   if(base.failed) return tt("co.sched.failed", "No plan: the planner could not read this shop");
   /* The plan the shop's own Staffing shows, full cover where it was picked. */
   const r = spRowLess(spShownRow(base));
@@ -26444,6 +26648,12 @@ function gwProblem(res){
       drift: true, sub: tt("nav.dlg.moved.sub", "Something was hired, set or sold in the game meanwhile. Refresh, and the board plans again from what the game holds."), refresh: true};
     /* A refusal the player fixes in the game (a BizMan screen closed, a
        locker placed) can be tried again from here; see gwFixable(). */
+    case "mod_owned":
+    case "ownership_unknown": return {wire: "no", say: say(res.error === "mod_owned"
+      ? tt("nav.dlg.modOwned", "A mod controls this change") : tt("nav.dlg.ownerUnknown", "Mod ownership could not be verified")),
+      text: unchanged, retry: true,
+      sub: [...(Array.isArray(body.reasons) ? body.reasons : []), ...(Array.isArray(body.effects) ? body.effects : [])]
+        .filter(x => typeof x === "string").map(x => spEsc(mcReason(x))).join(" ")};
     case "refused": return {wire: "no", say: say(tt("nav.dlg.say.refuses", "The game refuses this")),
       text: unchanged, retry: gwFixable(body)};
     case "cannot_write": { const [text, fix, icon] = cannot(body.reason);

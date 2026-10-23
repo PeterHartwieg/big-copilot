@@ -1,4 +1,4 @@
-"""RLO companion contract v1: observations, never a second economic simulation.
+"""RLO companion contract v1: validated observations and owner planning inputs.
 
 The same bounded reader runs in CPython and Pyodide. Capability failures stay
 local, ordinary game statements remain authoritative, and retained records are
@@ -7,6 +7,7 @@ never evidence that RLO is installed or currently running. See contracts/rlo/.
 from __future__ import annotations
 
 import ba_companion as companion
+import ba_rlo_planning
 from ba_companion import MAX_BYTES, MAX_ROWS, MAX_INT, STATES
 from ba_companion import integer as _int, text as _text, boolean as _bool, rows as _rows
 
@@ -57,7 +58,8 @@ def _validate(name, data):
 def read(save):
     """One parsed capture per Save, with independently usable capabilities."""
     return companion.read(save, provider="rlo", key=KEY, marker=MARKER,
-                          validators={name: lambda data, name=name: _validate(name, data) for name in CAPABILITIES},
+                          validators={**{name: lambda data, name=name: _validate(name, data) for name in CAPABILITIES},
+                                      **ba_rlo_planning.VALIDATORS},
                           required=CAPABILITIES, evidence=("reallife:",))
 
 

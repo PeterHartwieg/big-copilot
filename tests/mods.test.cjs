@@ -63,17 +63,17 @@ test('Browse mods keeps what the save carries apart from what the board supports
   b.drawMods();
   const html = element('secMods').innerHTML;
   const rows = [...html.matchAll(/data-mod="([^"]+)"/g)].map(m => m[1]);
-  assert.deepEqual(rows, ['streetFood', 'rlo', 'seasons', 'retailExpansion', 'economyExpansion'], 'Street Food leads the curated list');
+  assert.deepEqual(rows, ['streetFood', 'hart', 'rlo', 'seasons', 'retailExpansion', 'economyExpansion'], 'Street Food leads the curated list');
   assert.match(html, /class="md-feat" data-mod="streetFood"/);
   assert.match(html, /by Peter Hartwieg/);
   assert.match(html, /steamcommunity\.com\/sharedfiles\/filedetails\/\?id=3822355169/);
   assert.match(html, /data-md-go="mods\/street-food"/, 'its main action opens the planner');
   assert.match(html, /In this save, version 0\.10\.0/);
   assert.match(html, /In this save: Summer, day 3 of 14/);
-  assert.equal((html.match(/Not in this save/g) || []).length, 3, 'RLO, Retail and Economy Expansion are absent');
+  assert.equal((html.match(/Not in this save/g) || []).length, 4, 'HART, RLO, Retail and Economy Expansion are absent');
   // What the board reads and does not cover stays, folded into one closed disclosure per mod.
   const det = [...html.matchAll(/<details class="md-det"( open)?><summary>What Big Copilot reads<\/summary>([\s\S]*?)<\/details>/g)];
-  assert.equal(det.length, 5);
+  assert.equal(det.length, 6);
   assert.ok(det.every(d => !d[1]), 'the details start closed');
   assert.ok(det.every(d => /<h4>Not covered<\/h4>/.test(d[2])));
   assert.match(det[0][2], /Commissary demand is not modelled/);
@@ -387,7 +387,7 @@ test('RLO reports distinguish valid zero balances from missing capabilities and 
   assert.match(html, /exclude private lender debts and debts recorded by other RLO features/);
   assert.match(html, /Accounting source: unavailable/);
   assert.doesNotMatch(html, /<bad>/);
-  assert.match(html, /Forecasts, staffing suggestions and game writes do not yet account for RLO/);
+  assert.match(html, /affected game writes check the current mod owner/);
   setD(b, {meta: {}, businesses: [], mods: {rlo: {status: 'stale', capabilities: {}}}});
   b.drawMods();
   assert.doesNotMatch(element('secMods').innerHTML, /Reported credit account balance:|0 additional credit/);
