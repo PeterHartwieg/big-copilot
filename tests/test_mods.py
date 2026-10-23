@@ -309,3 +309,17 @@ class CapabilityTests(unittest.TestCase):
         self.assertEqual(after["openStore"]["compatibility"]["storeProfit"], ["equipmentUtilities", "marketingUnknown"])
         self.assertEqual(after["openFactory"]["compatibility"]["factoryOpening"], ["factoryDiplomas"])
         self.assertTrue(any(b.get("marketingPlan", {}).get("unavailable") for b in after["businesses"] if b.get("marketingPlan")))
+
+
+    def test_finance_combines_nonmotor_zeros_without_mutating_purchase_prices(self):
+        save = save_with()
+        motor = {"motor": 10000, "free_motor": 0}
+        non_motor = ["flatbed", "scooter", "handtruck"]
+        values, supported = mods.vehicle_prices(save, motor, non_motor)
+        self.assertTrue(supported)
+        self.assertEqual({name: values[name] for name in non_motor}, dict.fromkeys(non_motor, 0))
+        self.assertEqual(motor, {"motor": 10000, "free_motor": 0})
+        self.assertNotIn("unknown:vehicle", values)
+        save.facts = {"vehiclePrices": {"schemaVersion": 1, "model": mods.ba_facts.VEHICLE_MODEL,
+                                        "prices": {"scooter": 0}}}
+        self.assertEqual(mods.vehicle_prices(save, motor, non_motor), ({"scooter": 0}, True))

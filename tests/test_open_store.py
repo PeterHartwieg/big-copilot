@@ -567,7 +567,7 @@ class FinanceTests(unittest.TestCase):
     """_finance_facts(): the wealth and debts the banks weigh (LOANS.md)."""
     RULES = {"banks": {"VantanderBankSettings": {"r": 12, "y": 4, "x": 2000000},
                        "JensenCapitalSettings": {"r": 20, "y": 2, "x": 40000}},
-             "vehicles": {"ba:vehicletype_vordv150": 44000, "ba:vehicletype_handtruck": 0}}
+             "vehicles": {"ba:vehicletype_vordv150": 44000}, "nonMotorVehicles": ["ba:vehicletype_handtruck"]}
 
     def facts(self, **root):
         base = {"Money": 10000.0, "gameVariables": {"daysPerYear": 60, "bankInterestMultiplier": 0.7}}
@@ -610,8 +610,8 @@ class FinanceTests(unittest.TestCase):
         rules = ba_dashboard.load_store_rules()
         names = ["ba:vehicletype_flatbed", "ba:vehicletype_electricscooter", "ba:vehicletype_handtruck"]
         for name in names:
-            self.assertIn(name, rules["vehicles"])
-            self.assertEqual(rules["vehicles"][name], 0)
+            self.assertNotIn(name, rules["vehicles"])
+            self.assertIn(name, rules["nonMotorVehicles"])
         save = Save({"Money": 1000, "VehicleInstances": coll([{"vehicleTypeName": name} for name in names])}, {}, "synthetic")
         result = ba_dashboard._finance_facts(save, [], rules)
         self.assertEqual(result["wealth"], 1000)
@@ -627,12 +627,13 @@ class FinanceTests(unittest.TestCase):
         source = Path(HERE).parent.joinpath("make_store_rules.py").read_text(encoding="utf-8")
         function = next(node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef) and node.name == "_vehicles")
         assets = [{"vehicleTypeName": "motor", "maxFuel": 1, "price": 250000},
+                  {"vehicleTypeName": "freeMotor", "maxFuel": 1, "price": 0},
                   {"vehicleTypeName": "flatbed", "maxFuel": 0, "price": 1000},
                   {"vehicleTypeName": "scooter", "maxFuel": 0, "price": 2000},
                   {"vehicleTypeName": "handtruck", "price": 100}, {"maxFuel": 1, "price": 100}]
         namespace = {"_behaviours": lambda path: assets, "_bundle": lambda root, stem: "synthetic", "_price": lambda price: price}
         exec(compile(ast.Module(body=[function], type_ignores=[]), "make_store_rules.py", "exec"), namespace)
-        self.assertEqual(namespace["_vehicles"]("synthetic"), {"motor": 250000, "flatbed": 0, "scooter": 0, "handtruck": 0})
+        self.assertEqual(namespace["_vehicles"]("synthetic"), ({"motor": 250000, "freeMotor": 0}, ["flatbed", "handtruck", "scooter"]))
 
     def test_each_loan_is_owed_to_the_bank_at_its_address(self):
         vantander = {"streetName": "ba:street_secondavenue", "streetNumber": 6}
