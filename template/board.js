@@ -12522,6 +12522,7 @@ function mcRequirementsHtml(requirements){
       : r.status === "qualified" ? tt("gr.mod.qualified", "Qualification already verified.")
       : r.status === "held" ? (r.kind === "licence" ? tt("gr.mod.licenceHeld", "A current licence is already held; renewal charges are included when due.") : tt("gr.mod.held", "An existing record is held; no new fee is assumed."))
       : r.status === "required" ? tt("gr.mod.required", "Required before opening.")
+      : r.status === "ineligible" ? mcReason(r.reason || "education-ineligible")
       : tt("gr.mod.requirementUnknown", "This prerequisite could not be verified.");
     const cost = Number.isFinite(r.startupCents) ? tt("gr.mod.requirementCost", "Upfront: {amount}.", {amount: fmt(r.startupCents / 100)}) : "";
     return `<li><b>${spEsc(name)}</b> ${spEsc(state)} ${spEsc(cost)}${r.preparationDays ? " " + spEsc(tt("gr.mod.preparation", "Allow {n} days before opening.", {n: r.preparationDays})) : ""}</li>`;

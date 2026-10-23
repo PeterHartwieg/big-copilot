@@ -359,3 +359,37 @@ test('audited model, staffing and course refusal reasons have specific wording',
     assert.notEqual(b.mcReason(code),generic);
   }
 });
+
+test('factory card preserves known course refusals in each prerequisite row',()=>{
+  const {b}=fixture(),economy=require('../template/mod-economy-model.js');
+  vm.runInContext('D.openFactory={game:{},items:{},vendors:{},vehicles:{}};planTarget="new"',b);
+  for(const reason of ['not-offered','closed','already','passed','needs','full','nodistance','cash-insufficient','loan-full',null]){
+    const companion={hart:{modules:{factoryPurchases:{status:'ready',data:{gate:{effective:true},
+      courses:[{courseId:18,itemIds:['machine']}],heldRecords:{status:'ready',data:[]}}}}},
+      rlo:{modules:{education:{status:'ready',data:{courses:[{courseId:18,offered:true,prerequisitesMet:true,qualified:false,enrollment:null,
+        quotes:[{mode:0,loan:false,quoteStatus:'ineligible',reason}]}]}}}}};
+    const education=economy.create(companion).factoryRequirements([['machine',1]]);
+    assert.equal(education.requirements[0].status,'ineligible');
+    const inv={self:null,firm:null,upfrontSelf:null,upfrontFirm:null,b:{key:'A#1',address:'Test',deposit:0},out:{lines:[]},stores:[],items:1,
+      fee:0,furniture:100,deposit:0,truck:0,delivery:0,boxes:0,modEducation:education,modRequirements:education.requirements,incomplete:education.reasons};
+    b.ofInvestment=()=>inv;
+    const html=b.ofInvestHtml({mode:'self'}),row=html.match(/<li><b>Factory course 18<\/b>(.*?)<\/li>/)?.[1];
+    assert.ok(row,reason);assert.ok(row.includes(b.mcReason(reason || 'education-ineligible')),reason);
+    assert.doesNotMatch(html,/This prerequisite could not be verified/);
+  }
+});
+
+test('other prerequisite statuses distinguish held records, active studies, qualifications and unknown facts',()=>{
+  const {b}=fixture();
+  for(const [requirement,expected] of [
+    [{courseId:1,status:'in-progress'},/Already enrolled; no new enrollment fee/],
+    [{courseId:1,status:'qualified'},/Qualification already verified/],
+    [{courseId:1,status:'held'},/An existing record is held; no new fee is assumed/],
+    [{kind:'licence',licence:1,status:'held'},/current licence is already held/],
+    [{courseId:1,status:'required'},/Required before opening/],
+    [{kind:'internet',status:'required'},/Required before opening/],
+    [{courseId:1,status:'unknown'},/This prerequisite could not be verified/]]){
+    const html=b.mcRequirementsHtml([requirement]);assert.match(html,expected);
+    if(requirement.status!=='unknown')assert.doesNotMatch(html,/This prerequisite could not be verified/);
+  }
+});
