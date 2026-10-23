@@ -45,9 +45,14 @@ namespace BigCopilotLink
             w.EndObject();
             w.EndObject();
             EconomyFacts.Write(w);
+            NativeEconomyFacts.Write(w, game);
             var regs = new Dictionary<string, BuildingRegistration>();
             foreach (var reg in game.BuildingRegistrations)
                 if (reg != null) regs[Key(reg.StreetName, reg.StreetNumber)] = reg;
+            var owned = new HashSet<string>(StringComparer.Ordinal);
+            if (game.realEstate != null)
+                foreach (var estate in game.realEstate)
+                    if (estate != null && estate.address != null) owned.Add(Key(estate.address.streetName, estate.address.streetNumber));
             w.BeginArray("buildings");
             foreach (var b in Helpers.BuildingHelper.allBuildings)
             {
@@ -66,6 +71,7 @@ namespace BigCopilotLink
                 w.Prop("propertyArea", (double)b.totalSqm);
                 w.Prop("capacity", b.GetCustomerCapacity);
                 w.Prop("traffic", (double)b.trafficIndex);
+                NativeEconomyFacts.NewLease(w, b, type, owned.Contains(Key(b.StreetName, b.StreetNumber)));
                 BuildingRegistration reg;
                 if (regs.TryGetValue(Key(b.StreetName, b.StreetNumber), out reg))
                 {
@@ -73,6 +79,7 @@ namespace BigCopilotLink
                     // a mid-walk renovation/recalculation must retry publication.
                     w.Prop("effectiveCapacity", reg.customerCapacity);
                     w.Prop("rent", (double)reg.RentPerDay);
+                    w.Prop("signedDepositCents", Math.Round((double)reg.lastDeposit * 100, MidpointRounding.AwayFromZero));
                     if (reg.promotion != null)
                     {
                         w.Prop("marketingNow", reg.promotion.marketing);

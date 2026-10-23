@@ -285,10 +285,37 @@ class CapabilityTests(unittest.TestCase):
     def test_retained_state_means_unknown_not_active_and_fresh_absence_wins(self):
         save = save_with({"reallife:careers": "old retained state"})
         self.assertEqual(set(mods.capabilities(save)), set(mods.ECONOMY_CAPABILITIES))
-        self.assertEqual(mods.detect(save), {})
-        save.facts = self.with_economy([]).facts
-        self.assertEqual(mods.capabilities(save), {})
+        self.assertEqual(mods.detect(save)["rlo"]["status"], "legacy")
+        # Save instances are immutable captures: create a fresh one for newer
+        # runtime facts instead of mutating an already cached report.
+        absent = save_with({"reallife:careers": "old retained state"})
+        absent.facts = self.with_economy([]).facts
+        self.assertEqual(mods.capabilities(absent), {})
+        import ba_economy
+        self.assertIsNone(ba_economy.report(absent, "rlo"))
 
+
+    def test_public_report_delegates_to_scoped_models(self):
+        from unittest.mock import patch
+        import ba_economy
+        for provider_id, key in (("hart-mod-pack", "hart"), ("hard-mode-patch", "hart"), ("real-life-overhaul", "rlo")):
+            save = self.with_economy([{**self.provider(equipmentUtilities=True, officeIt=True,
+                factoryDiplomas=True, operatingCosts=True), "id": provider_id}])
+            with patch.object(ba_economy, "report", side_effect=lambda current, provider: {
+                    "status": "partial", "modules": {}} if provider == key else None):
+                self.assertEqual(mods.capabilities(save), {})
+
+    def test_known_hart_without_report_remains_conservative(self):
+        provider = {**self.provider(officeIt=True), "id": "hart-mod-pack"}
+        self.assertEqual(mods.capabilities(self.with_economy([provider])),
+                         {key: ["officeIt"] for key in mods.ECONOMY_RULES["officeIt"]})
+
+    def test_invalid_provider_observation_cannot_delegate(self):
+        from unittest.mock import patch
+        import ba_economy
+        provider = {**self.provider(), "id": "hart-mod-pack", "status": "unavailable"}
+        with patch.object(ba_economy, "report", return_value={"status": "ready", "modules": {}}):
+            self.assertEqual(set(mods.capabilities(self.with_economy([provider]))), set(mods.ECONOMY_CAPABILITIES))
 
     def test_hash_bound_capabilities_reach_planners_without_changing_recorded_finances(self):
         from tests.save_fixtures import data_company, data_names

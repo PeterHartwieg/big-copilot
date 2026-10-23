@@ -64,10 +64,11 @@ try:
 except ModuleNotFoundError as exc:
     # A worker from before ba_mods.py (a tab left open across a deploy) does not
     # fetch it; the board then reads every save as a vanilla one.
-    if exc.name not in ("ba_mods", "ba_street_food"):
+    if exc.name not in ("ba_mods", "ba_street_food", "ba_rlo"):
         raise
     ba_mods = None
 ba_street_food = ba_mods.ba_street_food if ba_mods else None
+ba_economy = ba_mods.ba_economy if ba_mods else None
 
 SAVE_ROOT = os.path.join(
     os.environ.get("USERPROFILE", ""),
@@ -1140,7 +1141,7 @@ def marketing_score(traffic, on_ids, sqm, type_slug, neighbourhood, rules=None) 
     return marketing, total
 
 
-def marketing_plan(traffic, was_ids, sqm, type_slug, neighbourhood, free_ids=None, rules=None) -> dict:
+def marketing_plan(traffic, was_ids, sqm, type_slug, neighbourhood, free_ids=None, rules=None, *, promotion_fn=None, cost_fn=None) -> dict:
     """The cheapest mix of campaigns for one site, from all 64.
 
     The cheapest mix that brings promotion to 100; when none can, the cheapest
@@ -1162,21 +1163,26 @@ def marketing_plan(traffic, was_ids, sqm, type_slug, neighbourhood, free_ids=Non
         if on - free != fixed:
             continue
         marketing, total = marketing_score(traffic, on, sqm, type_slug, neighbourhood, rules)
+        total = promotion_fn(total) if promotion_fn else total
         cost = sum(types[i][1] for i in on)
+        cost = cost_fn(cost) if cost_fn else cost
         mixes.append((on, cost, marketing, total, mask))
     full = [m for m in mixes if m[3] >= PROMOTION_CAP]
     if not full:
-        best = max(m[2] for m in mixes)
-        full = [m for m in mixes if m[2] >= best]
+        metric = 3 if promotion_fn else 2
+        best = max(m[metric] for m in mixes)
+        full = [m for m in mixes if m[metric] >= best]
     on, cost, marketing, total, _mask = min(full, key=lambda m: (m[1], len(m[0]), m[0] != was, m[4]))
     now_marketing, now_total = marketing_score(traffic, was, sqm, type_slug, neighbourhood, rules)
+    now_total = promotion_fn(now_total) if promotion_fn else now_total
+    cost_now = sum(types[i][1] for i in was)
     return {
         "on": sorted(on),
         "cost": cost,
         "marketing": marketing,
         "promotion": total,
         "target": "promotion" if total >= PROMOTION_CAP else "marketing",
-        "costNow": sum(types[i][1] for i in was),
+        "costNow": cost_fn(cost_now) if cost_fn else cost_now,
         "modelNow": [now_marketing, now_total],
     }
 
@@ -2093,6 +2099,7 @@ def _premises(save: Save, names: Names, market: dict, estate: dict | None = None
     best price, full, plus any rent the purchase ends, takes to repay the asking
     price (Real estate's rule, at `estate`'s rent multiplier; 1 without one).
     """
+    import ba_facts
     mult = estate["mult"]["value"] if estate else 1
     per_year = estate["perYear"] if estate else _days_per_year(save.deref(save.root.get("gameVariables")))
     rent_paid = _rent_paid(save)
@@ -2110,7 +2117,15 @@ def _premises(save: Save, names: Names, market: dict, estate: dict | None = None
         row = table.get(addr)
         if not row:
             continue
-        rent = _rent_estimate(row)
+        quote = ba_facts.lease_quote(row) if "newLease" in row else None
+        rent = (quote["rentCents"] / 100 if quote else None) if "newLease" in row else _rent_estimate(row)
+        deposit = (quote["depositCents"] / 100 if quote else None) if "newLease" in row else _deposit_estimate(row, rent)
+        if "newLease" not in row and ba_economy and ba_economy.report(save, "hart") is not None:
+            rent_module = ba_economy.module(save, "hart", "rent")
+            # A fitted historic quote is not the unpatched native baseline.
+            # It cannot safely be multiplied when leases predate today's rules.
+            if rent_module["status"] != "disabled" and not (rent_module["status"] == "ready" and rent_module["data"]["state"]["effective"] is False):
+                rent, deposit = None, None
         status = _premises_status(reg, row)
         kind = reg.get("businessTypeName")
         occupant = None
@@ -2144,7 +2159,9 @@ def _premises(save: Save, names: Names, market: dict, estate: dict | None = None
                 "traffic": row["x"],
                 "cap": _size_cap(row, caps),
                 "rent": rent,
-                "deposit": _deposit_estimate(row, rent),
+                "deposit": deposit,
+                **({"leaseBasis": quote["basis"] if quote else "unavailable"} if "newLease" in row else {}),
+                **({"signedDeposit": row["signedDepositCents"] / 100} if "signedDepositCents" in row else {}),
                 "takeoverPrice": _takeover_estimate(save, reg, row),
                 "status": status,
                 "occupant": occupant,
@@ -2562,18 +2579,25 @@ def _tax_period(save: Save) -> dict:
     food_rent = sum(v.get("commissaryRentCents", 0) for entry in food_days
                     if start <= entry["day"] <= tax_day for v in entry.get("byVehicle", [])) / 100
     recurring = once = 0.0
+    unclassified_mod_deductions = []
     for row in save.items(root.get("currentTaxPeriodDeductibleExpenses")):
         amount = abs((row or {}).get("amount") or 0)
+        label = (row or {}).get("key")
+        semantic = ba_economy.deduction(save, label) if ba_economy else None
         if ba_street_food and (row or {}).get("key") == ba_street_food.COMMISSARY_EXPENSE:
             # The shared label includes goods, fees and fines: scale paid rent only.
             rent = min(amount, food_rent)
             recurring += rent
             once += amount - rent
             food_rent -= rent
-        elif _recurring_deduction((row or {}).get("key")):
+        elif semantic == "recurring" or (semantic is None and _recurring_deduction(label)):
             recurring += amount
         else:
             once += amount
+            if (ba_economy and ba_economy.report(save, "rlo") is not None and amount
+                    and (semantic == "unknown" or (semantic is None
+                                                   and not str(label or "").startswith(TAX_ONCE_KEYS)))):
+                unclassified_mod_deductions.append(str(label or ""))
     # The summaries the period has had so far are its first day to yesterday,
     # the ones still to come today to the day before tax day; running costs
     # are booked each midnight, today's the period's (day - start + 1)th and
@@ -2597,6 +2621,18 @@ def _tax_period(save: Save) -> dict:
     }
     if street_food and street_food["status"] != "ready":
         result["unavailable"] = "streetFood"
+    if ba_economy and ba_economy.report(save, "rlo") is not None:
+        outside = ba_economy.data(save, "rlo", "outsideStatements")
+        reasons = (["unclassified-mod-deductions"] if unclassified_mod_deductions else [])
+        if outside is None and ba_economy.module(save, "rlo", "outsideStatements")["status"] != "disabled":
+            reasons.append("mod-tax-observations-unavailable")
+        elif outside is not None and outside["taxEffectsOutsideNativeForecast"]:
+            result["taxEffects"] = outside["taxEffectsOutsideNativeForecast"]
+            reasons.append("mod-tax-effects-outside-native-forecast")
+        if reasons:
+            result["projectionIncomplete"] = reasons
+        if unclassified_mod_deductions:
+            result["unclassifiedDeductions"] = sorted(set(unclassified_mod_deductions))
     return result
 
 
@@ -2711,7 +2747,7 @@ def _tax_shelter(save: Save, period: dict, candidates: list) -> dict:
     cash = save.root.get("Money") or 0
     base_now = max(0.0, period["sales"] + period["gambling"] - period["deductions"])
     base = max(0.0, period["salesEnd"] + period["gambling"] - period["deductionsEnd"])
-    assessed = not period.get("unavailable") and not period["fresh"] and period["salesEnd"] + period["gambling"] >= TAX_THRESHOLD
+    assessed = not period.get("unavailable") and not period.get("projectionIncomplete") and not period["fresh"] and period["salesEnd"] + period["gambling"] >= TAX_THRESHOLD
     target = int(max(0.0, min(cash, base))) if assessed else 0
     pick, spend = _tax_pick(candidates, target, int(target * TAX_PICK_SLACK)) if target else ([], 0)
     rate = period["rate"]
@@ -2729,6 +2765,9 @@ def _tax_shelter(save: Save, period: dict, candidates: list) -> dict:
     }
     if period.get("unavailable"):
         result["unavailable"] = period["unavailable"]
+    for field in ("projectionIncomplete", "taxEffects", "unclassifiedDeductions"):
+        if field in period:
+            result[field] = period[field]
     return result
 
 
@@ -3956,6 +3995,14 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         # The game's own switch that shuts a site's doors, which the
         # not-trading finding names as a reason of its own.
         row["closed"] = bool(b.get("temporarilyClosed"))
+        if ba_economy and ba_economy.report(save, "rlo") is not None:
+            accounting = ba_economy.outside(save, addr)
+            row["modAccounting"] = accounting if accounting is not None else {
+                "coverage": "unavailable", "knownOmittedCategories": [], "rows": [],
+                "statementAdjustment": "none", "balancesAreSeparate": True}
+            closure = ba_economy.closures(save, addr)
+            if closure:
+                row["modClosures"] = closure
         businesses.append(row)
     businesses.sort(key=lambda x: -x["profit"])
     sites_gone = _sites_gone(save, names, latest, {_address_of(b, strict=True) for b in buildings}, residential)
@@ -4343,6 +4390,13 @@ def _character(save: Save, instance: dict) -> dict:
     }
 
 
+def _wage_basis(save, complete=True):
+    """Ordinary hourly estimates exclude overtime, sickness and future absence."""
+    if not complete:
+        return {"wageUnavailable": True, "wageBasis": "native-base-only"}
+    return {"wageBasis": "ordinary-hourly"} if ba_economy and ba_economy.report(save, "rlo") is not None else {}
+
+
 def _staff(save: Save, names: Names):
     by_addr = collections.defaultdict(list)
     staff = []
@@ -4350,6 +4404,7 @@ def _staff(save: Save, names: Names):
         char = _character(save, e)
         skills = [{"name": s["skill"], "value": s["level"]} for s in char["skills"]]
         top = max(skills, key=lambda s: s["value"], default=None)
+        hourly, wage_complete = ba_economy.hourly(save, e.get("id"), e.get("hourlyWage", 0)) if ba_economy else (e.get("hourlyWage", 0), True)
         rec = {
             "id": e.get("id"),
             "name": char["name"] if char["name"] is not None else "?",
@@ -4359,7 +4414,8 @@ def _staff(save: Save, names: Names):
             # and a uniform is owed for whichever of them works the station.
             "skills": [s["name"] for s in skills],
             "level": round(top["value"], 0) if top else 0,
-            "wage": money(e.get("hourlyWage", 0)),
+            "wage": money(hourly),
+            **_wage_basis(save, wage_complete),
             "hours": e.get("assignedWeeklyHours", 0),
             "satisfaction": round(e.get("satisfaction", 0)),
             "hired": e.get("dayHired", 0),
@@ -4418,6 +4474,7 @@ def _candidates(save: Save) -> list:
         skills = _skill_rows(char)
         info = save.deref(c.get("candidateInfo")) or {}
         age = char["ageDays"]
+        hourly, wage_complete = ba_economy.candidate_hourly(save, c.get("hourlyWage") or 0) if ba_economy else (c.get("hourlyWage") or 0, True)
         rows.append({
             "id": c.get("id"),
             "name": char["name"],
@@ -4425,7 +4482,8 @@ def _candidates(save: Save) -> list:
             "skill": skills[0]["skill"] if skills else None,
             "level": skills[0]["level"] if skills else 0,
             "skills": skills,
-            "wage": money(c.get("hourlyWage") or 0),
+            "wage": money(hourly),
+            **_wage_basis(save, wage_complete),
             "demands": _in_order(
                 {d for d in save.items(c.get("demands")) if isinstance(d, str)}),
             "hoursLeft": info.get("hoursUntilExpiring"),
@@ -4897,6 +4955,9 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
     crew = staff_by_addr.get(addr, [])
     sat = save.deref(b.get("satisfaction")) or {}
     promo = save.deref(b.get("promotion")) or {}
+    reported_promotion = ba_economy.footfall(save).get(addr) if ba_economy else None
+    if reported_promotion and reported_promotion["status"] == "ready":
+        promo = {**promo, "total": reported_promotion["writtenPromotion"]}
     btype = b.get("businessTypeName", "")
     revenue = money(st.get("TotalSales", 0))
     profit = money(st.get("TotalProfit", 0))
@@ -4967,6 +5028,9 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
             "facility": sat.get("facility", 0),
         },
         "promotion": promo.get("total", 0),
+        **({"promotionUnavailable": True} if ba_economy and ba_economy.report(save, "rlo") is not None
+           and ba_economy.module(save, "rlo", "footfall")["status"] != "disabled"
+           and (not reported_promotion or reported_promotion["status"] != "ready") else {}),
         "traffic": promo.get("trafficIndex", 0),
         "marketingIndex": promo.get("marketing", 0),
         # The campaigns as the game holds them, and the cheapest mix for a shop
@@ -5006,6 +5070,8 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
         or any(dayno >= since and by_addr.get(addr, {}).get("TotalSales", 0) > 0 for dayno, by_addr in history),
         "staff": len(crew),
         "staffCost": sum(c["daily"] for c in crew),
+        **({"wageBasis": "ordinary-hourly"} if any(c.get("wageBasis") == "ordinary-hourly" for c in crew) else {}),
+        **({"wageUnavailable": True, "staffCostUnavailable": True} if any(c.get("wageUnavailable") for c in crew) else {}),
         "crew": _crew(crew),
         "people": _people(crew),
         "rhythm": rhythm,
@@ -5161,8 +5227,28 @@ def _marketing(save, b, building, status, neighbourhood, promo, agencies=None) -
     new_ok = {t for t, a in seller.items() if a in contact}
     free = entered | new_ok
     traffic = promo.get("trafficIndex", 0) or 0
-    best = marketing_plan(traffic, was, sqm, kind, neighbourhood, rules=rules)
-    plan = marketing_plan(traffic, was, sqm, kind, neighbourhood, free, rules)
+    adjustments = {}
+    if ba_economy and ba_economy.report(save, "rlo") is not None:
+        addr = _address_of(b)
+        module = ba_economy.module(save, "rlo", "footfall")
+        if module["status"] != "disabled":
+            current = ba_economy.footfall(save).get(addr)
+            if not current or current["status"] != "ready" or ba_economy.promotion(save, addr, 0) is None:
+                return campaigns, {"unavailable": True, "on": None, "needsSetup": False, "visit": [],
+                                   "costPlan": None, "costNow": None}
+            native_own = marketing_score(traffic, was, sqm, kind, neighbourhood, rules)[1]
+            if current["ownPromotion"] != native_own:
+                return campaigns, {"unavailable": True, "on": None, "needsSetup": False, "visit": [],
+                                   "costPlan": None, "costNow": None}
+            adjustments["promotion_fn"] = lambda own: ba_economy.promotion(save, addr, own)
+        price_module = ba_economy.module(save, "rlo", "prices")
+        if price_module["status"] not in ("disabled", "ready"):
+            return campaigns, {"unavailable": True, "on": None, "needsSetup": False, "visit": [],
+                               "costPlan": None, "costNow": None}
+        if price_module["status"] == "ready" and "ba:transaction_marketing" in price_module["data"]["livingTransactionTypes"]:
+            adjustments["cost_fn"] = lambda cost: ba_economy.city_amount(save, cost)
+    best = marketing_plan(traffic, was, sqm, kind, neighbourhood, rules=rules, **adjustments)
+    plan = marketing_plan(traffic, was, sqm, kind, neighbourhood, free, rules, **adjustments)
     unavailable = bool(unknown_campaign or building.get("factsUnavailable") or
         best["modelNow"] != [promo.get("marketing", 0), promo.get("total", 0)] or
         (rules and [r["name"] for r in rules["types"]] != [r[0] for r in MARKETING_TYPES]))
@@ -5211,6 +5297,10 @@ def _crew(crew: list) -> list:
         entry["count"] += 1
         entry["absent"] += 1 if person.get("absent") else 0
         entry["daily"] += person["daily"]
+        if person.get("wageUnavailable"):
+            entry["wageUnavailable"] = True
+        if person.get("wageBasis"):
+            entry["wageBasis"] = person["wageBasis"]
         entry["skill"] = max(entry["skill"], person["level"])
     for entry in roles.values():
         entry["daily"] = money(entry["daily"])
@@ -5236,6 +5326,8 @@ def _people(crew: list) -> list:
                 "role": person["role"],
                 "absent": bool(person["absent"]),
                 "daily": money(person["daily"]),
+                **({"wageBasis": person["wageBasis"]} if person.get("wageBasis") else {}),
+                **({"wageUnavailable": True} if person.get("wageUnavailable") else {}),
             }
         )
     return out
@@ -5431,6 +5523,8 @@ def _staff_summary(staff: list, businesses: list) -> dict:
     return {
         "total": len(staff),
         "dailyCost": sum(s["daily"] for s in staff),
+        **({"wageBasis": "ordinary-hourly"} if any(s.get("wageBasis") == "ordinary-hourly" for s in staff) else {}),
+        **({"wageUnavailable": True} if any(s.get("wageUnavailable") for s in staff) else {}),
         "avgSatisfaction": round(sum(s["satisfaction"] for s in staff) / len(staff), 1)
         if staff
         else 0,
@@ -5438,7 +5532,9 @@ def _staff_summary(staff: list, businesses: list) -> dict:
         "absent": sum(1 for s in staff if s["absent"]),
         "complaining": sum(1 for s in staff if s["complaining"]),
         "roles": sorted(
-            ({"role": r, "count": c, "cost": round(cost_by_role[r])} for r, c in by_role.items()),
+            ({"role": r, "count": c, "cost": round(cost_by_role[r]),
+              **({"wageUnavailable": True} if any(p.get("wageUnavailable") and p["role"] == r for p in staff) else {})}
+              for r, c in by_role.items()),
             key=lambda x: -x["count"],
         ),
         "sites": sorted(
@@ -10835,6 +10931,7 @@ def _service_wages(staff: list, status_of: dict) -> dict:
     that role looks up; a cleaner's wage prices no hour anywhere.
     """
     wages = collections.defaultdict(lambda: collections.defaultdict(float))
+    unknown = set()
     for person in staff:
         if not person["addr"]:
             continue
@@ -10844,8 +10941,13 @@ def _service_wages(staff: list, status_of: dict) -> dict:
             if not skill or skill == CLEANING_SKILL:
                 continue
             skill = None  # the office role's own key, as _hourly() builds it
+        if person.get("wageUnavailable"):
+            unknown.add((key, skill))
+            continue
         wages[key][skill] = max(wages[key].get(skill, 0.0), person["wage"])
-    return wages
+    # A known colleague's lower wage cannot establish this role's maximum.
+    return {key: {skill: wage for skill, wage in values.items() if (key, skill) not in unknown}
+            for key, values in wages.items()}
 
 
 def _cinema_capacity(save: Save, building: dict, names: Names | None) -> dict | None:
@@ -11537,6 +11639,8 @@ def _plan_people(save: Save, staff: list) -> dict:
             # all saved skills in the public staff row for uniform checks.
             "skills": {person["skill"]} if person["skill"] else set(),
             "wage": person["wage"] or 0.0,
+            **({"wageBasis": person["wageBasis"]} if person.get("wageBasis") else {}),
+            **({"wageUnavailable": True} if person.get("wageUnavailable") else {}),
             "addr": person["addr"],
             "demands": held,
             "band": next((r[1] for r in rules if r[0] == "hours"), None),
@@ -14454,7 +14558,7 @@ def _plan_world(save: Save, staff: list) -> dict:
         "people": people,
         "state": {pid: _fresh_state() for pid in people},
         "bench": [people[pid] for pid in _in_order(people)
-                  if not people[pid]["addr"] and not people[pid]["training"]],
+                  if not people[pid]["addr"] and not people[pid]["training"] and not people[pid].get("wageUnavailable")],
     }
 
 
@@ -14575,8 +14679,12 @@ def _staffing(
             "error": error,
         }
 
-    sites = []
+    sites, mod_blocked = [], []
     for business, building, grid in planned:
+        issues = _mod_staffing_issues(save, business, building, staff, grid["open"])
+        if issues:
+            mod_blocked.append(_mod_staffing_blocked(business, issues))
+            continue
         # A site is planned against its own copy of the week, and the copy is
         # only written back once the whole row is built. _plan_site() places
         # people well before it reads the current schedule or builds the lookup
@@ -14673,6 +14781,9 @@ def _staffing(
                     current=site["current"]["list"], keep=True,
                 )
             row = _finish_site(site, full, names, people, opened)
+            issues = ba_economy.staffing_issues(save, _address_of(site["building"]), ALL_DAY_OPEN) if ba_economy else []
+            if issues:
+                row["fullCover"] = _mod_staffing_blocked(business, issues)
         except Exception as exc:
             out[index] = failed(business, _plan_failed(exc, f"the full cover of {business['key']}"))
             continue
@@ -14689,7 +14800,24 @@ def _staffing(
         out[index] = row
     state.update(shared)
     world["bench"] = left
-    return out
+    return out + mod_blocked
+
+
+def _mod_staffing_issues(save, business, building, staff, opening=None):
+    if not ba_economy or ba_economy.report(save, "rlo") is None:
+        return []
+    addr = _address_of(building)
+    issues = ba_economy.staffing_issues(save, addr, opening)
+    if any(p.get("wageUnavailable") for p in staff if p.get("addr") == addr):
+        issues.append("ordinary-wage-unavailable")
+    if business.get("promotionUnavailable") and business.get("status") in ("retail", "office"):
+        issues.append("promotion-observation-unavailable")
+    return list(dict.fromkeys(issues))
+
+
+def _mod_staffing_blocked(business, issues):
+    return {"key": business["key"], "name": business["name"], "typeSlug": business["typeSlug"],
+            "failed": True, "unavailable": "modCompatibility", "modReasons": issues}
 
 
 def _opens_first(site: dict, business: dict) -> bool:
@@ -14885,6 +15013,11 @@ def _factory_staffing(save: Save, names, businesses: list, factories: dict, staf
                                   "unavailable": "streetFood"})
             continue
         building = buildings.get(business["key"])
+        issues = _mod_staffing_issues(save, business, building or {}, staff, ALL_DAY_OPEN)
+        if issues:
+            for mode in SIZING_MODES:
+                out[mode].append(_mod_staffing_blocked(business, issues))
+            continue
         pool = [p for p in _site_pool(people, business, world["bench"])
                 if _usable(p, FACTORY_SKILL, "serve")]
         workers = [
@@ -16155,7 +16288,9 @@ def _plan_fields(week: dict, table: dict, names, people: dict, cost: dict) -> di
         # reports the plan is cover alone, so the whole bill is not the thing
         # it is cheaper than: the serving shifts it does not touch stay, and
         # showing the two side by side would promise a saving nobody gets.
-        "cost": dict(cost, weekly=money(week["weekly"])),
+        "cost": dict(cost, weekly=money(week["weekly"]),
+                     **({"basis": "ordinary-hourly"} if any(p.get("wageBasis") == "ordinary-hourly"
+                                                            for p in people.values()) else {})),
         # Who the player has to add before the plan can be filled: bench people
         # to assign here and people to hire. See _add_people().
         "addPeople": add,
@@ -16609,6 +16744,10 @@ def _office_staffing(save: Save, names, businesses: list, grids: list, staff: li
     )
     out = []
     for business, building, grid in offices:
+        issues = _mod_staffing_issues(save, business, building, staff, grid["open"] if any(grid["open"]) else ALL_DAY_OPEN)
+        if issues:
+            out.append(_mod_staffing_blocked(business, issues))
+            continue
         skill = next(iter(ASSIGN_SKILLS.get(business["typeSlug"], ())), None)
         if not skill or not grid["stations"]:
             continue
@@ -16641,6 +16780,21 @@ def _unrepresentable(save: Save, building: dict) -> int:
     return bad
 
 
+def _mod_office_fallback_issue(save, building, need, skill):
+    """Measured hours already include mod clients; unread hours have no such proof."""
+    if not ba_economy or ba_economy.report(save, "rlo") is None:
+        return False
+    if not any(basis == "office" for day in need[skill]["basis"] for basis in day):
+        return False
+    status = ba_economy.module(save, "rlo", "interiors")["status"]
+    if status == "disabled":
+        return False
+    if status != "ready":
+        return True
+    site = ba_economy.index(save, "rlo", "interiors", "sites").get(_address_of(building))
+    return site is None or site.get("officeBoostThousandths") != 0
+
+
 def _office_site_plan(save, names, business, building, grid, skill, pool, people, bench,
                       state) -> tuple:
     """One office's row of _office_staffing(), and who it drew off the bench."""
@@ -16655,6 +16809,8 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
     run = _days_open(save, building)
     daily = _open_day_average(save, building, slots_open) if run >= DEMAND_RUN_DAYS else None
     need, demand_based = _office_need(grid, skill, runs, run, daily, _office_recent(save, building))
+    if _mod_office_fallback_issue(save, building, need, skill):
+        return _mod_staffing_blocked(business, ["office-unread-hours-with-mod-demand"]), []
     fake = {"roles": [{"skill": skill, "label": label}], "stations": stations}
     usable_bench = [p for p in bench if _usable(p, skill, "serve")]
     current = _current_roster(save, building, {s["id"]: s for s in stations})
@@ -17148,10 +17304,12 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             continue
         char = _character(save, e)
         addr = save.address(e.get("assignedAddress"))
+        hourly, wage_complete = ba_economy.hourly(save, e.get("id"), e.get("hourlyWage") or 0) if ba_economy else (e.get("hourlyWage") or 0, True)
         people[e.get("id")] = {
             "name": char["name"],
             "skills": _skill_rows(char),
-            "wage": money(e.get("hourlyWage") or 0),
+            "wage": money(hourly),
+            **_wage_basis(save, wage_complete),
             "site": site_key(addr) if addr else None,
             "hours": e.get("assignedWeeklyHours") or 0,
             "demands": _in_order(
@@ -19184,6 +19342,12 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
                     # The site was seen from its opening once, but the days
                     # between the kept trail and the record were lost.
                     row["rolled"] = True
+        if ba_economy and ba_economy.report(save, "rlo") is not None:
+            row["basis"] = "statement-profit"
+            accounting = ba_economy.outside(save, addr)
+            row["modAccounting"] = accounting if accounting is not None else {
+                "coverage": "unavailable", "knownOmittedCategories": [], "rows": [],
+                "statementAdjustment": "none", "balancesAreSeparate": True}
         sites[key] = row
     # A site given up since the last save leaves the memory with it.
     for key in [k for k in kept_sites if k not in sites]:
@@ -19231,6 +19395,15 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
                 day = chain_window_day(rates)
                 row[mode] = {"state": "window", "day": day} if day is not None else {"state": "window"}
         kept_chains[name] = memory
+        if ba_economy and ba_economy.report(save, "rlo") is not None:
+            row["basis"] = "statement-profit"
+            observations = [sites[k]["modAccounting"] for k in members]
+            row["modAccounting"] = {
+                "coverage": ("unavailable" if all(x["coverage"] == "unavailable" for x in observations)
+                             else "complete" if all(x["coverage"] == "complete" for x in observations) else "partial"),
+                "knownOmittedCategories": sorted({c for x in observations for c in x["knownOmittedCategories"]}),
+                "rows": [r for x in observations for r in x["rows"]],
+                "statementAdjustment": "none", "balancesAreSeparate": True}
         out_chains[chain["sites"][0]] = row
     for name in [n for n in kept_chains if n not in {str(c["name"]) for c in chains}]:
         del kept_chains[name]
@@ -19407,6 +19580,35 @@ def decor_route(elements: int, floor_slots: int, wall_slots: int, materials: dic
             "wall": wall[1] if wall and painted["wall"] else None,
             "floorPrice": floor[0] if floor else None, "wallPrice": wall[0] if wall else None,
             "cost": money(spend), "score": score}
+
+
+def _decor_routes(elements, floor_slots, wall_slots, materials):
+    """Every distinct reached score in one greedy walk, for owner decor targets."""
+    if not elements or not floor_slots and not wall_slots:
+        return {}
+    def cheapest(kind):
+        return min(((m["p"], key) for key, m in materials.items()
+                    if m.get("t") == kind and m.get("b") and (m.get("p") or 0) > 0), default=None)
+    floor, wall = cheapest(1), cheapest(2)
+    kinds = sorted([kind for kind in ((floor, floor_slots, "floor"), (wall, wall_slots, "wall")) if kind[0]],
+                   key=lambda kind: kind[0][0])
+    total = floor_slots + wall_slots
+    painted, spend, last, routes = {"floor": 0, "wall": 0}, 0.0, 0, {}
+    for (price, _key), room, kind in kinds:
+        for _ in range(room):
+            painted[kind] += 1
+            spend += price
+            score = math.floor((min(spend / elements, 100) + 100 * sum(painted.values()) / total) / 2)
+            if score > last:
+                routes[str(score)] = {"floors": painted["floor"], "walls": painted["wall"],
+                    "floor": floor[1] if floor and painted["floor"] else None,
+                    "wall": wall[1] if wall and painted["wall"] else None,
+                    "floorPrice": floor[0] if floor else None, "wallPrice": wall[0] if wall else None,
+                    "cost": money(spend), "score": score}
+                last = score
+            if score >= 100:
+                return routes
+    return routes
 
 
 def works_in(facts: dict, kind: str) -> bool:
@@ -20229,10 +20431,46 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
             "rate": terms.get("r") or 0, "years": terms.get("y") or 0, "max": terms.get("x") or 0,
             "term": per_year * (terms.get("y") or 0), "owed": money(owed.get(bank, 0)),
         })
+    finance_unavailable = None
+    if ba_economy:
+        import ba_facts
+        owner = ba_economy.data(save, "rlo", "bankTerms")
+        native = ba_facts.native_economy(getattr(save, "facts", None), "banks")
+        if owner is not None and (owner["additionalCreditIncluded"] or owner["principalIsExpense"]):
+            # The native loan model has neither the additional credit ledger
+            # nor a principal-as-expense projection. Keep recorded totals, but
+            # do not present its native-only eligibility as a complete quote.
+            banks = []
+            finance_unavailable = ("additional-credit-eligibility" if owner["additionalCreditIncluded"]
+                                   else "principal-expense-basis")
+        elif owner is not None:
+            banks = [{"id": row["bankId"], "name": BANK_PLACES.get(row["bankId"], (row["bankId"], None))[0], "key": site_key(ba_economy.address(row)),
+                      "rate": ba_facts.catalogue_amount(row["annualRatePercent"]), "interestMultiplier": 1,
+                      "years": row["termDays"] / per_year, "term": row["termDays"],
+                      "max": row["capCents"] / 100, "owed": row["nativeDebtAtBankCents"] / 100,
+                      "incomeShare": row["incomeTermShareThousandths"] / 1000,
+                      "floor": row["tutorialMinimumCents"] / 100,
+                      **({"unavailable": "secured-bank-eligibility"} if row["securedAccountRulesApply"]
+                         and row.get("securedCapTreatment") != "included-in-effective-cap" else {})}
+                     for row in owner["banks"]]
+        elif native is not None:
+            banks = [{"id": site_key(ba_economy.address(row)), "name": row["name"], "key": site_key(ba_economy.address(row)),
+                      "rate": row["annualRatePercent"], "interestMultiplier": ba_facts.catalogue_amount(row["interestMultiplier"]),
+                      "years": row["yearsToPayLoan"], "term": row["paybackDays"],
+                      "max": ba_facts.catalogue_amount(row["capAmount"]),
+                      "owed": money(owed.get(places.get(site_key(ba_economy.address(row))), 0)),
+                      **({"unavailable": "secured-bank-eligibility"} if row["securedAccountRules"] != "none" else {})}
+                     for row in native]
+        elif ((ba_economy.report(save, "rlo") is not None
+               and ba_economy.module(save, "rlo", "bankTerms")["status"] != "disabled")
+                or "nativeEconomy" in (getattr(save, "facts", None) or {})):
+            banks = []
+            finance_unavailable = "native-bank-terms"
     return {
         "cash": money(root.get("Money") or 0),
         "wealth": money((root.get("Money") or 0) + funds + vehicles + boats + property_) if complete_wealth else None,
         **({"unavailable": "vehiclePrices", "unknownVehicles": unknown_vehicles} if not complete_wealth else {}),
+        **({"unavailable": finance_unavailable} if finance_unavailable else {}),
         "floor": TUTORIAL_LOAN_FLOOR if tutorial else 0,
         "profit7": money(sum(last) / 7) if last else 0,
         "owed": money(sum(owed.values())),
@@ -20250,6 +20488,8 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     if not rules.get("types"):
         return {}
     prices = load_item_prices()
+    if ba_economy:
+        rules, prices = ba_economy.tables(save, rules, prices)
     catalogue = _OutfitCatalogue(rules, prices)
     root = save.root
     day = root["Day"]
@@ -20377,9 +20617,23 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     decor = {}
     materials = prices.get("materials") or {}
     targets = sorted({int(h.get("mi") or 0) for h in (rules.get("hoods") or {}).values()} - {0})
+    mod_interiors = ba_economy and ba_economy.data(save, "rlo", "interiors") is not None
     for layout in _in_order({layout for t in types.values() for layout in t["layouts"]}):
         # A layout nobody has read is costed as another version of its size.
         near = layout if layout in slots else next((k for k in sorted(slots) if k[:1] == layout[:1]), None)
+        if mod_interiors:
+            routes = _decor_routes(*slots[near], materials) if near else {}
+            # A native target lookup remains available to callers without a
+            # business type, even where one painted slot jumps over its score.
+            distinct = list(routes.values())
+            for target in targets:
+                first = next((route for route in distinct if route["score"] >= target), None)
+                if first:
+                    routes[str(target)] = first
+            if routes:
+                decor[layout] = {score: {**route, **({"like": near} if near != layout else {})}
+                                 for score, route in routes.items()}
+            continue
         for target in targets:
             route = decor_route(*slots[near], materials, target) if near else None
             if route:
@@ -20402,6 +20656,7 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     compatibility = ba_mods.capabilities(save) if ba_mods else {}
     return {
         **({"compatibility": compatibility} if compatibility else {}),
+        **({"modEconomy": ba_economy.planner(save)} if ba_economy and ba_economy.planner(save) else {}),
         "game": {
             "promo": round(_house_rule(gv, "baseCustomerPromotionMultiplier"), 4),
             "prices": round(mpm, 4),
@@ -20418,6 +20673,7 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
                        "weekend": list(OFFICE_WEEKEND)},
         },
         "types": types,
+        **({"priceUnavailable": missing_prices} if ba_economy and (missing_prices := ba_economy.price_unavailable(save, items_used | product_items)) else {}),
         "market": market,
         "hoods": hoods,
         "decor": decor,
@@ -20553,6 +20809,9 @@ def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, r
     if not products:
         return {}
     prices = load_item_prices()
+    if ba_economy:
+        rules, prices = ba_economy.tables(save, rules, prices)
+        products = rules.get("products") or {}
     root = save.root
     gv = save.deref(root.get("gameVariables")) or {}
     agents = sorted(((p.get("level") or 0, str(p.get("name") or "")) for p in staff
@@ -20578,9 +20837,10 @@ def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, r
         wanted.setdefault(rec["slug"], rec["item"])
         for ing in rec["ingredients"]:
             wanted.setdefault(ing["slug"], ing["item"])
-    facts = {}
+    facts, product_identities = {}, {}
     for slug in _in_order(wanted):
         base = known(slug, wanted[slug])
+        product_identities[slug] = base
         row = products.get(base) or {}
         facts[slug] = {"w": row.get("w") or 0, "i": round(index.get(base, 1.0), 4),
                        "bx": row.get("bx") or 0, "mo": row.get("mo") or 0}
@@ -20620,14 +20880,55 @@ def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, r
         sites[b["key"]] = {
             "kind": kind,
             "shelves": _placed_items(save, reg).get(PALLET_SHELF, 0),
+            **({"open": _open_hours(save, reg), "building": {**_building_row(reg, save),
+                    "key": b["key"], "hood": b["neighbourhood"], "m2": _building_row(reg, save).get("m")}} if ba_economy and ba_economy.planner(save) else {}),
             "imports": [[slug, contracts[b["key"]][slug]] for slug in _in_order(contracts[b["key"]])],
             "vehicles": vehicles,
             **({"days": _factory_days(save, reg)} if kind == "factory" else {}),
         }
     roles = collections.Counter(p.get("skill") for p in staff)
+    hq_support = {}
+    if ba_economy and ba_economy.planner(save):
+        headquarters = [b for b in businesses if b.get("typeSlug") == PLAN_HQ and b.get("key") in regs]
+        # A single actual HQ has a known site. Multiple HQs need an explicit
+        # placement choice before assigning incremental utilities to one.
+        if len(headquarters) == 1:
+            hq = headquarters[0]
+            hq_reg = regs[hq["key"]]
+            hq_support = {"site": {**_building_row(hq_reg, save), "key": hq["key"], "hood": hq["neighbourhood"], "m2": _building_row(hq_reg, save).get("m")},
+                          "open": _open_hours(save, hq_reg)}
+        catalogue = _OutfitCatalogue(rules, prices)
+        computers = [item for item in catalogue.flagged(WORK_COMPUTER_FLAG) if item in table]
+        computer = min(computers, key=lambda item: (table[item].get("p") or 0, item)) if computers else None
+        hq_support["workstationLines"] = ([[computer, 1]] + [[item, 1] for item in catalogue.for_type(PLAN_HQ).mounts(computer)]) if computer else []
+        if len(headquarters) == 1:
+            groups = _station_groups(save, hq_reg)
+            occupied = {shift.get("itemInstanceId") for day in save.items(hq_reg.get("scheduleDays"))
+                        for shift in save.items(day.get("workShifts")) if shift.get("employeeId")}
+            spares = 0
+            for item in _item_instances(save, hq_reg.get("itemInstances")):
+                slug, identity = item.get("itemName"), item.get("id")
+                if slug not in computers or identity in occupied:
+                    continue
+                mounts = furniture.get(slug, {}).get("m") or []
+                mounts = [mounts] if mounts and not isinstance(mounts[0], list) else mounts
+                if all(set(options).intersection(groups.get(identity, set())) for options in mounts):
+                    spares += 1
+            hq_support["spareWorkstations"] = spares
+            hq_support["spareWorkstationsBasis"] = "unassigned-complete-furniture-groups"
+        for item, _qty in hq_support["workstationLines"]:
+            used.add(item)
+            items[item] = {"p": float((table.get(item) or {}).get("p") or 0), "v": (furniture.get(item) or {}).get("v") or []}
+            sold_by.update(items[item]["v"])
     compatibility = ba_mods.capabilities(save) if ba_mods else {}
+    # Recipe names can be aliases for registered products. Validate the actual
+    # catalogue identity, then report any missing input under the planner's key.
+    missing_prices = set(ba_economy.price_unavailable(save, used | set(product_identities.values()))) if ba_economy else set()
+    missing_prices = sorted((missing_prices & used) | {
+        slug for slug, identity in product_identities.items() if identity in missing_prices})
     return {
         **({"compatibility": compatibility} if compatibility else {}),
+        **({"modEconomy": ba_economy.planner(save)} if ba_economy and ba_economy.planner(save) else {}),
         "game": {
             "prices": round(gv.get("marketPriceMultiplier") or 1.0, 4),
             "export": round(_house_rule(gv, "exportMultiplier"), 4),
@@ -20643,6 +20944,7 @@ def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, r
                    if skill in ("ba:skill_factoryworker", "ba:skill_deliverydriver",
                                 "ba:skill_purchasingagent", "ba:skill_logisticsmanager")},
         "products": facts,
+        **({"priceUnavailable": missing_prices} if missing_prices else {}),
         "kits": kits,
         "shelf": {"item": PALLET_SHELF, "p": items[PALLET_SHELF]["p"],
                   "cc": (furniture.get(PALLET_SHELF) or {}).get("cc") or PALLET_SHELF_BOXES},
@@ -20652,7 +20954,7 @@ def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, r
         "items": items,
         "vendors": {key: vendors[key] for key in _in_order(sold_by) if key in vendors},
         "sites": sites,
-        "hq": {"agents": roles.get("ba:skill_purchasingagent", 0), "contracts": len(partnerships),
+        "hq": {**hq_support, "agents": roles.get("ba:skill_purchasingagent", 0), "contracts": len(partnerships),
                "managers": roles.get("ba:skill_logisticsmanager", 0),
                "managed": len(sites)},
     }
@@ -23127,7 +23429,7 @@ def load_template() -> str:
         with open(os.path.join(folder, "board.html"), encoding="utf-8") as fh:
             page = fh.read()
         scripts = []
-        for name in ("open-store-model.js", "open-factory-model.js", "street-food-model.js", "board.js"):
+        for name in ("mod-economy-model.js", "mod-demand-model.js", "open-store-model.js", "open-factory-model.js", "street-food-model.js", "board.js"):
             with open(os.path.join(folder, name), encoding="utf-8") as fh:
                 scripts.append(fh.read())
         _template = splice_board_script(page, "\n".join(scripts))

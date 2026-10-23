@@ -27,7 +27,9 @@ const ROOT = path.join(__dirname, '..');
 const SECTION_META = execFileSync(selectPython(),
   ['-c', 'import json, ba_dashboard; print(json.dumps(ba_dashboard.section_metadata()))'],
   {cwd: ROOT, encoding: 'utf8'}).trim();
-const SOURCE = fs.readFileSync(path.join(ROOT, 'template', 'open-store-model.js'), 'utf8') + '\n'
+const SOURCE = fs.readFileSync(path.join(ROOT, 'template', 'mod-economy-model.js'), 'utf8') + '\n'
+  + fs.readFileSync(path.join(ROOT, 'template', 'mod-demand-model.js'), 'utf8') + '\n'
+  + fs.readFileSync(path.join(ROOT, 'template', 'open-store-model.js'), 'utf8') + '\n'
   + fs.readFileSync(path.join(ROOT, 'template', 'open-factory-model.js'), 'utf8') + '\n'
   + fs.readFileSync(path.join(ROOT, 'template', 'street-food-model.js'), 'utf8') + '\n'
   + fs.readFileSync(path.join(ROOT, 'template', 'board.js'), 'utf8').replace('/*__SECTION_META__*/{}',

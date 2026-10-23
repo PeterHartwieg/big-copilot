@@ -327,7 +327,7 @@ test('an office is planned by the office rules: fee-hours from its capacity, its
     D.openStore.types['ba:businesstype_lawfirm'] = t;
     D.openStore.market['ba:itemname_hourlylawyerfee'] = {p: 225, r: 1, d: 1, s: 1, opt: 3, cost: 0,
       hoods: {'ba:neighborhood_midtown': [0, 0, null]}};
-    return osModel('ba:businesstype_lawfirm', {hood: 'ba:neighborhood_midtown', cap: 50, m2: 660, layout: 'K1', traffic: 0}, {sat: 100});
+    return osModel('ba:businesstype_lawfirm', {hood: 'ba:neighborhood_midtown', cap: 50, m2: 660, layout: 'K1', traffic: 0, rent: 0}, {sat: 100});
   });
   // Every hour brings more clients than the 50 computers: the day shift bills
   // 50 an hour, the 3 around the clock bill the rest.

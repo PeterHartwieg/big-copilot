@@ -293,7 +293,7 @@ test('unsupported economy forecasts are withheld without removing known outfit c
     const m = model(facts);
     assert.equal(m.model('T', SHOP), null);
     assert.equal(m.ownRatio('T'), null);
-    assert.equal(m.investment({type: 'T'}, SHOP).firm, 120);
+    assert.equal(m.investment({type: 'T'}, {...SHOP,deposit:0}).firm, 120);
   }
   assert.notEqual(model({...RETAIL, compatibility: {officeProfit: ['officeIt']}}).model('T', SHOP), null);
   assert.equal(model(RETAIL).model('T', {...SHOP, marketingUnavailable: true}), null);
@@ -303,4 +303,234 @@ test('incomplete vehicle wealth cannot produce an authoritative loan limit or lo
   const m = model({...RETAIL, finance: {wealth: null, unavailable: 'vehiclePrices'}});
   assert.equal(m.loanLimit({max: 2e6, term: 240}), 0);
   assert.equal(m.loan(10000, {max: 2e6, term: 240}), null);
+});
+
+const off=()=>({status:'disabled'}), ready=data=>({status:'ready',data});
+function modFacts(){
+  const f=structuredClone(RETAIL);
+  f.types.T.layouts.C1={furniture:100,fee:20,lines:[['desk',1]]};f.items={desk:{p:100,v:['seller']}};
+  f.game.delivery=5;f.modEconomy={day:40,rlo:{modules:Object.fromEntries(['prices','company','utilities','requirements','interiors','footfall','closures'].map(k=>[k,off()]))}};
+  return f;
+}
+function companyRules(factor=1000){return {newHireWageFactorThousandths:factor,sites:[],
+  partStates:{staff:'disabled',cover:'disabled',marketing:'disabled',tax:'disabled',licences:'disabled'}};}
+function priceRules(factor=1200){return {costFactorThousandths:factor,takingsFactorThousandths:factor,adjustmentQuiet:1,
+  livingTransactionTypes:['ba:transaction_interiorinstallation','ba:transaction_interiordesigner','ba:transaction_marketing'],depositAdjustment:'none'};}
+
+test('known disabled mod rules preserve native profit; unknown module is scoped to its model',()=>{
+  const f=modFacts(), plain=model(RETAIL).model('T',SHOP,{sat:50,open:HOUR});
+  const result=model(f).model('T',SHOP,{sat:50,open:HOUR});
+  close(result.profit,plain.profit,'disabled profit');assert.equal(result.modCosts.dailyCents,0);
+  f.modEconomy.rlo.modules.utilities={status:'failed'};
+  assert.equal(model(f).model('T',SHOP,{sat:50,open:HOUR}),null);
+  assert.equal(model(f).investment({type:'T'},{...SHOP,deposit:10}).furniture,100);
+});
+
+test('registered prices are not scaled again; later native City settlement is applied once',()=>{
+  const f=modFacts();f.modEconomy.rlo.modules.prices=ready(priceRules());
+  f.modEconomy.rlo.modules.company=ready(companyRules(1100));
+  const owner=require('../template/mod-demand-model.js'), result=model(f).model('T',SHOP,{sat:50,open:HOUR});
+  const base=model(RETAIL).model('T',SHOP,{sat:50,open:HOUR});
+  close(result.cogs,base.cogs,'current import cost already contains current catalogue');
+  close(result.revenue,base.revenue+owner.cityAdjust(base.revenue*7,1200,1)/7,'native sales adjusted on its trading day');
+  close(result.wages,base.wages+owner.cityAdjust(base.wages*7,1200,1)/7,'native payroll adjusted once per day');
+  assert.notEqual(result.revenue,base.revenue+owner.cityAdjust(base.revenue,1200,1),'never round the weekly mean');
+  assert.ok(result.assumptions.includes('company-aggregate-allocation-and-carried-debt-excluded'));
+  assert.equal(result.rent,60);
+});
+
+test('firm installation and self delivery preserve their distinct native transaction boundaries',()=>{
+  const f=modFacts();f.modEconomy.rlo.modules.prices=ready(priceRules());
+  const inv=model(f).investment({type:'T'},{...SHOP,deposit:10});
+  assert.equal(inv.firm,154); // 120 + City24 + deposit10.
+  assert.equal(inv.self,115); // delivery105 unchanged + deposit10.
+  assert.equal(inv.incomplete,undefined);
+  f.modEconomy.rlo.modules.prices.data.depositAdjustment=null;
+  assert.ok(model(f).investment({type:'T'},{...SHOP,deposit:10}).incomplete.includes('deposit-adjustment-unavailable'));
+  assert.ok(!model(f).investment({type:'T'},{...SHOP,status:'mine',deposit:10}).incomplete);
+});
+
+test('missing prices only block affected products and never become free investment or rent',()=>{
+  const f=modFacts();f.priceUnavailable=['other'];
+  assert.ok(model(f).model('T',SHOP,{open:HOUR}));
+  f.priceUnavailable=['P'];assert.equal(model(f).model('T',SHOP,{open:HOUR}),null);
+  f.priceUnavailable=['desk'];assert.ok(model(f).investment({type:'T'},{...SHOP,deposit:10}).incomplete.includes('catalogue-price-unavailable'));
+  assert.ok(model(f).investment({type:'T'},{...SHOP,deposit:null}).incomplete.includes('lease-quote-unavailable'));
+  assert.equal(model(modFacts()).model('T',{...SHOP,rent:null}),null);
+});
+
+test('mod run-rate is subtracted once and a future unknown quote stops payback',()=>{
+  const core=model(modFacts());
+  const m={revenue:100,cogs:10,wages:10,rent:10,marketing:0,profit:60,
+    modCosts:{dailyCents:1000,dayCost:()=>1000}};
+  close(core.dayProfit(m,null,6),60,'single mod-cost subtraction');
+  m.modCosts.dayCost=()=>null;assert.equal(core.dayProfit(m,null,6),null);
+  assert.deepEqual(core.breakDay(100,k=>k<2?10:null),{status:'unavailable',reason:'future-cashflow-unavailable',offset:2});
+  assert.deepEqual(core.loanDays(100,k=>k<2?10:null,{days:1,interest:1,repay:1}),{status:'unavailable',reason:'future-cashflow-unavailable',offset:2});
+  assert.equal(core.ownRatio('T'),null);
+});
+
+test('observed owner promotion is applied once and missing site evidence is explicit',()=>{
+  const f=modFacts(),v=require('../contracts/rlo/planning-vectors.json');
+  f.modEconomy.rlo.modules.footfall=ready({terms:v.promotionTerms,priceTolerance:null,sites:[{
+    address:{street:'road',number:1},status:'ready',ownPromotion:20,writtenPromotion:50,
+    issuePercent:0,ambientPercent:10,interiorPercent:0,cityPercent:0,baseMultiplier:'0.5'}]});
+  const b={...SHOP,key:'road#1'},core=model(f);
+  const m=core.model('T',b,{existing:true,promoTotal:50,open:HOUR,sat:50});
+  const owner=require('../template/mod-demand-model.js');
+  assert.equal(m.promo,owner.promotion({terms:v.promotionTerms,own:20,issue:0,ambient:10,interior:0,baseMultiplier:'0.5'}));
+  f.modEconomy.rlo.modules.footfall.data.sites[0].status='unavailable';
+  const other=model(f);assert.equal(other.model('T',b,{existing:true,promoTotal:50,open:HOUR}),null);
+  assert.ok(other.diagnostics('T',b).includes('footfall-site-unavailable'));
+});
+
+
+test('daily demand rebuild does not restart a licence renewal commitment',()=>{
+  const core=model(modFacts());
+  const m={revenue:100,cogs:0,wages:0,rent:0,marketing:0,profit:100,
+    modCosts:{dailyCents:0,dayCost:k=>k===6?2500:0},
+    modAtDay:()=>({revenue:100,cogs:0,wages:0,rent:0,marketing:0,modCosts:{dayCost:()=>0}})};
+  assert.equal(core.dayProfit(m,null,6),75);
+  assert.equal(core.dayProfit(m,null,7),100);
+});
+
+
+test('City timeline settles the actual weekday after ramping native receipts',()=>{
+  const f=modFacts();f.modEconomy.rlo.modules.prices=ready(priceRules());
+  const core=model(f),m=core.model('T',SHOP,{sat:50,open:HOUR});
+  const owner=require('../template/mod-demand-model.js');
+  const native=m.nativeByDay[0],r=f.game.ramp[2]; // capture day40 Friday, offset2 Sunday
+  const expected=native.revenue*r+owner.cityAdjust(native.revenue*r,1200,1)-native.cogs*r
+    -native.wages-owner.cityAdjust(native.wages,1200,1)-60;
+  close(core.dayProfit(m,null,2),expected,'Sunday receipts and daily payroll');
+  close(core.dayProfit(m,null,0),-60,'closed Friday still pays rent');
+});
+
+function expansionFacts(){
+  const f=modFacts(),h=structuredClone(require('../contracts/hart/ready.json').modules.runningCosts.data);
+  const u=structuredClone(require('../contracts/rlo/utilities-vectors.json').sample.terms);
+  f.types.T.products.push(['Q',1]);f.market.Q=structuredClone(f.market.P);
+  f.types.T.expansionDisplays={P:[{capacity:20,lines:[['shelf',1]],extra:[]}]};
+  f.items.shelf={p:100,v:['seller']};f.built={'road#1':{sells:['Q']}};
+  h.equipment.effective=true;h.officeIt.effective=false;
+  h.items.push({itemId:'shelf',openWatts:100000,alwaysWatts:0,litresPerOpenHour:0,officeSeat:false});
+  h.currentSites=[{address:{street:'road',number:1},equipmentApplies:true,openWatts:0,alwaysWatts:0,litresPerOpenHour:0,officeSeats:0}];
+  f.modEconomy.hart={modules:{runningCosts:ready(h),retailDemand:off()}};
+  f.modEconomy.rlo.modules.utilities=ready({model:'rlo-utilities-v1',terms:u,typeKinds:[{typeId:'T',kind:2}],
+    accounts:['power','water'].map(service=>({address:{street:'road',number:1},service,state:'active'})),
+    unresolvedAccountServices:[],internetEnabled:false,internet:{needs:[],providers:[]}});
+  return f;
+}
+
+test('existing expansion charges only additional equipment above the owner billing cache',()=>{
+  const f=expansionFacts(),b={...SHOP,key:'road#1'},o={sat:50,open:HOUR,promoTotal:20};
+  const core=model(f),rows=core.expansions('T',b,o);assert.equal(rows.length,1);
+  const row=rows[0],cost=require('../template/mod-economy-model.js').create(f.modEconomy);
+  const before=cost.operating({typeId:'T',building:b,open:HOUR,existing:true});
+  const after=cost.operating({typeId:'T',building:b,open:HOUR,existing:true,existingExtraLines:[['shelf',1]]});
+  assert.ok(row.modOperatingDelta>0);
+  close(row.modOperatingDelta,(after.dailyCents-before.dailyCents)/100,'incremental HART utility costs');
+  close(row.net,row.margin-row.loss-row.modOperatingDelta,'only the added recurring amount');
+  assert.equal(row.modStartupDelta,0);
+  f.priceUnavailable=['shelf'];
+  const missing=model(f);assert.equal(missing.expansions('T',b,o),null);
+  assert.ok(missing.diagnostics('T',b).includes('expansion-equipment-price-unavailable'));
+});
+
+test('changed expansion cannot reuse current interior effects as a hypothetical projection',()=>{
+  const f=expansionFacts(),b={...SHOP,key:'road#1'},o={sat:50,open:HOUR,promoTotal:20};
+  const v=require('../contracts/rlo/planning-vectors.json');
+  f.modEconomy.rlo.modules.interiors=ready({terms:v.interiorTerms,districts:[],items:[],sites:[{
+    address:{street:'road',number:1},basketThousandths:0,officeBoostThousandths:0,footfallPercent:0,priceToleranceThousandths:0}]});
+  const core=model(f);assert.equal(core.expansions('T',b,o),null);
+  assert.ok(core.diagnostics('T',b).includes('expansion-interior-context-unavailable'));
+});
+
+
+test('negative closed days and renewal days do not end a profitable payback timeline',()=>{
+  const core=model(modFacts()),day=k=>k===16?-200:k%7===0?500:-10;
+  const expected=(()=>{let sum=0;for(let k=0;k<20000;k++){sum+=day(k);if(sum>=2000)return k+1;}})();
+  assert.ok(expected>16);assert.equal(core.breakDay(2000,day),expected);
+  assert.equal(core.loanDays(2000,day,{days:0,interest:0,repay:0}),expected);
+});
+
+test('steady captured demand is reused while anchored seasonal costs stay day-specific',()=>{
+  const core=model(modFacts()),m=core.model('T',SHOP,{open:HOUR,sat:50});
+  assert.equal(m.modAtDay(100),m.modAtDay(101));
+  assert.equal(m.modAtDay(100).modCosts,m.modCosts);
+});
+
+
+test('failed company campaign ownership gates current sites but not a new site',()=>{
+  const f=modFacts(), company=companyRules();company.partStates.marketing='failed';
+  f.modEconomy.rlo.modules.company=ready(company);
+  assert.equal(model(f).model('T',SHOP,{sat:50,open:HOUR,existing:true}),null);
+  assert.ok(model(f).model('T',SHOP,{sat:50,open:HOUR}));
+  company.partStates.marketing='disabled';
+  assert.ok(model(f).model('T',SHOP,{sat:50,open:HOUR,existing:true}));
+});
+
+
+test('companion horizons stay unavailable while legacy unmodded limits retain their result',()=>{
+  const core=model(modFacts()),expected={status:'unavailable',reason:'forecast-horizon-exceeded',offset:20000};
+  assert.deepEqual(core.breakDay(1e9,()=>0),expected);
+  assert.deepEqual(core.loanDays(1e9,()=>0,{days:0,interest:0,repay:0}),expected);
+  assert.equal(model(RETAIL).breakDay(1e9,()=>0),null);
+});
+
+test('expansion payback survives an identical cover renewal beyond the known full-site horizon',()=>{
+  const f=expansionFacts(),b={...SHOP,key:'road#1'},o={sat:50,open:HOUR,promoTotal:20};
+  f.items.shelf.p=10000;
+  const noCover=model(f).expansions('T',b,o)[0];
+  const company=companyRules();company.partStates.cover='ready';
+  company.sites=[{address:{street:'road',number:1},cover:[{active:true,fromDay:1,untilDay:48,dailyCents:100}],campaign:{active:false}}];
+  f.modEconomy.rlo.modules.company=ready(company);
+  const core=model(f),withCover=core.expansions('T',b,o)[0];
+  assert.equal(core.model('T',b,{...o,existing:true}).modCosts.dayCost(9),null);
+  assert.ok(Number.isFinite(withCover.payback) && withCover.payback>9);
+  assert.equal(withCover.payback,noCover.payback);
+});
+
+
+test('City wholesale inclusion adjusts the daily goods category once, including the opening ramp',()=>{
+  const f=modFacts(),prices=priceRules(1200);prices.livingExcludesWholesalePurchases=false;
+  f.modEconomy.rlo.modules.prices=ready(prices);
+  const core=model(f),m=core.model('T',SHOP,{sat:50,open:HOUR});
+  const native=m.nativeByDay[0],owner=require('../template/mod-demand-model.js');
+  close(m.cogs,(native.cogs+owner.cityAdjust(native.cogs,1200,1))/7,'whole trading day, not mean goods cost');
+  const ramp=f.game.ramp[2],expected=core.dayProfit(m,null,2);
+  prices.livingExcludesWholesalePurchases=true;
+  const excluded=model(f),other=excluded.model('T',SHOP,{sat:50,open:HOUR});
+  close(m.cogs-other.cogs,owner.cityAdjust(native.cogs,1200,1)/7,'one extra City step');
+  close(excluded.dayProfit(other,null,2)-expected,owner.cityAdjust(native.cogs*ramp,1200,1),'ramp before daily City goods settlement');
+});
+
+test('carried company debt must be modelled before a site forecast can be numeric',()=>{
+  const f=modFacts(),prices=priceRules();prices.carriedDebtInSiteForecast=true;
+  f.modEconomy.rlo.modules.prices=ready(prices);
+  const core=model(f);assert.equal(core.model('T',SHOP,{sat:50,open:HOUR}),null);
+  assert.ok(core.diagnostics('T',SHOP).includes('company-carried-debt-unavailable'));
+  prices.carriedDebtInSiteForecast=false;
+  assert.ok(model(f).model('T',SHOP,{sat:50,open:HOUR}));
+});
+
+test('unknown required deposit leaves store totals null while known outfit amounts remain visible',()=>{
+  const core=model(modFacts()),investment=core.investment({type:'T'},{...SHOP,deposit:null});
+  assert.equal(investment.deposit,null);assert.equal(investment.firm,null);assert.equal(investment.self,null);
+  assert.equal(investment.furniture,100);assert.ok(investment.incomplete.includes('lease-quote-unavailable'));
+  const held=core.investment({type:'T'},{...SHOP,status:'mine',deposit:null});
+  assert.equal(held.deposit,0);assert.ok(Number.isFinite(held.firm));
+});
+
+
+test('expansion initial stock is one purchase bill when City includes wholesale purchases',()=>{
+  const f=expansionFacts(),b={...SHOP,key:'road#1'},o={sat:50,open:HOUR,promoTotal:20};
+  const prices=priceRules(1200);prices.livingExcludesWholesalePurchases=true;
+  f.modEconomy.rlo.modules.prices=ready(prices);
+  const native=model(f).expansions('T',b,o)[0];
+  prices.livingExcludesWholesalePurchases=false;
+  const included=model(f).expansions('T',b,o)[0],owner=require('../template/mod-demand-model.js');
+  assert.equal(included.stock,owner.wholesaleDayCost(native.stock,prices));
+  close(included.investment-native.investment,included.stock-native.stock,'initial stock adjustment counted once');
+  assert.ok(included.assumptions.includes('initial-stock-single-purchase'));
 });

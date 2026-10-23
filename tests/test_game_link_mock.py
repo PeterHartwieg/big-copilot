@@ -1,4 +1,5 @@
 """The game-link mock speaks docs/game-link-api.md: the clients' tests lean on it."""
+import copy
 import json
 import os
 import sys
@@ -16,6 +17,63 @@ import ba_save  # noqa: E402
 from ba_dashboard import shift_print  # noqa: E402
 
 
+# Interpret only the frozen request schema's keywords, without a test dependency.
+# Every mock request emitted by this suite goes through this contract check.
+def _schema_matches(value, rule):
+    if "oneOf" in rule and sum(_schema_matches(value, r) for r in rule["oneOf"]) != 1:
+        return False
+    if "anyOf" in rule and not any(_schema_matches(value, r) for r in rule["anyOf"]):
+        return False
+    if "allOf" in rule and not all(_schema_matches(value, r) for r in rule["allOf"]):
+        return False
+    if "if" in rule and _schema_matches(value, rule["if"]) and not _schema_matches(value, rule.get("then", {})):
+        return False
+    if "const" in rule and (type(value) is not type(rule["const"]) or value != rule["const"]):
+        return False
+    if "enum" in rule and value not in rule["enum"]:
+        return False
+    types = {"object": dict, "array": list, "string": str, "integer": int, "boolean": bool, "null": type(None)}
+    if "type" in rule and type(value) is not types[rule["type"]]:
+        return False
+    if type(value) is int:
+        if value < rule.get("minimum", value) or value > rule.get("maximum", value):
+            return False
+    if isinstance(value, str):
+        if len(value) < rule.get("minLength", 0) or len(value) > rule.get("maxLength", len(value)):
+            return False
+    if isinstance(value, list):
+        if len(value) < rule.get("minItems", 0) or len(value) > rule.get("maxItems", len(value)):
+            return False
+        if "items" in rule and not all(_schema_matches(v, rule["items"]) for v in value):
+            return False
+    if isinstance(value, dict):
+        if not all(k in value for k in rule.get("required", [])):
+            return False
+        props = rule.get("properties", {})
+        if rule.get("additionalProperties") is False and any(k not in props for k in value):
+            return False
+        if not all(_schema_matches(value[k], r) for k, r in props.items() if k in value):
+            return False
+    return True
+
+
+def setUpModule():
+    with open(os.path.join(os.path.dirname(__file__), "..", "contracts", "rlo", "ownership-request.schema.json")) as fh:
+        schema = json.load(fh)
+    original = game_link_mock.Link._ownership
+
+    def checked(link, *args, **kwargs):
+        result = original(link, *args, **kwargs)
+        for query in link.ownership_queries:
+            if not _schema_matches(query, schema):
+                raise AssertionError(f"Ownership request violates frozen schema: {query}")
+        return result
+
+    contract_patch = patch.object(game_link_mock.Link, "_ownership", checked)
+    contract_patch.start()
+    unittest.addModuleCleanup(contract_patch.stop)
+
+
 def call(url, method="GET", headers=None, data=None):
     req = urllib.request.Request(url, method=method, headers=headers or {}, data=data)
     try:
@@ -23,6 +81,45 @@ def call(url, method="GET", headers=None, data=None):
             return res.status, dict(res.headers), res.read()
     except urllib.error.HTTPError as err:
         return err.code, dict(err.headers), err.read()
+
+
+def owner_policy(decision="allowed", **extra):
+    return {"providerPresent": True, "api": "v1", "response": {
+        "schemaVersion": 1, "decision": decision, "owner": "rlo", "task": "rota",
+        "reasons": ["manager-task"] if decision != "allowed" else [],
+        "effects": ["manager-rewrite"] if decision != "allowed" else []}, **extra}
+
+
+class MockWholesaleOwnership(unittest.TestCase):
+    def test_quote_apply_remove_undo_query_current_stock_owner(self):
+        from tests.test_wholesale_write import WholesaleWrite
+        fixture = WholesaleWrite()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        link = fixture.link
+        link.mod_ownership = owner_policy()
+        body = fixture.body()
+        quote = fixture.quote(body)
+        link.mod_ownership = owner_policy("conditional")
+        for dry in (True, False):
+            status, answer = link.write("wholesale", dict(body, dryRun=dry, quote=quote["quote"]))
+            self.assertEqual((status, answer["error"]), (409, "mod_owned"))
+        self.assertEqual(link.wholesale_contracts, [])
+        link.mod_ownership = owner_policy()
+        fixture.apply()
+        undo = link.undo["wholesale"]
+        held = copy.deepcopy(link.wholesale_contracts)
+        link.mod_ownership = owner_policy("refused")
+        for dry in (True, False):
+            status, answer = link.write("undo", {"kind": "wholesale", "dryRun": dry})
+            self.assertEqual((status, answer["error"]), (409, "mod_owned"))
+            self.assertEqual(link.wholesale_contracts, held)
+            self.assertIs(link.undo["wholesale"], undo)
+            target = link.ownership_queries[-1]["targets"][0]
+            self.assertEqual(target["action"], "remove")
+            self.assertEqual(target["itemIds"], [body["items"][0]["item"]])
+        link.mod_ownership = owner_policy()
+        self.assertEqual(link.write("undo", {"kind": "wholesale"})[0], 200)
 
 
 class MockContract(unittest.TestCase):
@@ -234,6 +331,21 @@ class LinkedMock(unittest.TestCase):
     def tearDown(self):
         self.server.stop()
         self.dir.cleanup()
+
+    def complete_owner_weeks(self):
+        """These ownership fixtures explicitly observe missing weekdays as closed."""
+        original = self.link._save
+
+        def full_week_save():
+            save = original()
+            for reg in save.items(save.root.get("BuildingRegistrations")):
+                days = save.items(reg.get("scheduleDays"))
+                present = {row.get("day", 0) % 7 for row in days}
+                reg["scheduleDays"] = {"$items": days + [{"day": d, "isOpen": False,
+                    "workShifts": [], "openingHourSlots": []} for d in range(7) if d not in present]}
+            return save
+
+        self.link._save = full_week_save
 
     def post(self, kind, body, token=TOKEN, origin=None):
         headers = {"Content-Type": "application/json"}
@@ -564,6 +676,99 @@ class MockWrites(LinkedMock):
         self.assertEqual([(r["i"], r["error"]) for r in answer["rows"]], [
             (0, "not_assigned"), (1, "no_station"), (2, "bad_hours"), (4, "overlap_person"), (5, "overlap_station")])
         self.assertFalse(answer["ok"])
+
+    def test_fresh_ownership_changes_between_review_apply_and_undo(self):
+        self.complete_owner_weeks()
+        body = {"address": GIFTS, "expect": GIFTS_PRINT, "openAllHours": True, "days": []}
+        self.link.mod_ownership = owner_policy()
+        self.assertTrue(self.post("schedule", dict(body, dryRun=True))[1]["ok"])
+        self.link.mod_ownership = owner_policy("conditional")
+        for dry in (True, False):
+            status, answer = self.post("schedule", dict(body, dryRun=dry))
+            self.assertEqual((status, answer["error"], answer["effects"]), (409, "mod_owned", ["manager-rewrite"]))
+        self.assertEqual((self.link.schedules, self.link.opened, self.link.applied, self.link.undo), ({}, {}, [], {}))
+        self.link.mod_ownership = owner_policy()
+        self.assertEqual(self.post("schedule", body)[0], 200)
+        undo = self.link.undo["schedule"]
+        held = copy.deepcopy((self.link.schedules, self.link.opened))
+        self.link.mod_ownership = owner_policy("refused")
+        for dry in (True, False):
+            self.assertEqual(self.post("undo", {"kind": "schedule", "dryRun": dry})[1]["error"], "mod_owned")
+            self.assertIs(self.link.undo["schedule"], undo)
+            self.assertEqual((self.link.schedules, self.link.opened), held)
+        self.link.mod_ownership = owner_policy()
+        self.assertEqual(self.post("undo", {"kind": "schedule"})[0], 200)
+        self.assertEqual([query["phase"] for query in self.link.ownership_queries],
+                         ["review", "review", "apply", "apply", "undo", "undo", "undo"])
+
+    def test_incomplete_week_refuses_before_owner_query(self):
+        self.link.mod_ownership = owner_policy()
+        body = {"address": GIFTS, "expect": GIFTS_PRINT, "days": []}
+        for dry in (True, False):
+            status, answer = self.post("schedule", dict(body, dryRun=dry))
+            self.assertEqual((status, answer["reasons"]), (409, ["ownership-week-incomplete"]))
+        self.assertEqual(self.link.ownership_queries, [])
+        self.assertEqual((self.link.schedules, self.link.undo), ({}, {}))
+
+    def test_old_owner_proof_is_current_and_running_false_is_not_disabled(self):
+        self.complete_owner_weeks()
+        report = {"schemaVersion": 1, "provider": "rlo", "modVersion": "test",
+                  "captured": {"character": self.link.character, "day": self.link.day, "hour": self.link.hour,
+                               "minute": int(self.link._save().root.get("Minute") or 0)},
+                  "modules": {"features": {"version": 1, "status": "ready", "data": [
+                      {"id": "managers", "enabled": False, "running": False},
+                      {"id": "company", "enabled": False, "running": False}]}}}
+        self.link.mod_ownership = {"providerPresent": True, "api": "legacy", "captureStatus": "fresh", "report": report}
+        body = {"address": GIFTS, "expect": GIFTS_PRINT, "days": [], "dryRun": True}
+        self.assertTrue(self.post("schedule", body)[1]["ok"])
+        report["modules"]["features"]["data"][0]["enabled"] = True
+        self.assertEqual(self.post("schedule", body)[1]["error"], "ownership_unknown")
+        report["modules"]["features"]["data"][0]["enabled"] = False
+        self.link.hour += 1
+        self.assertEqual(self.post("schedule", body)[1]["error"], "ownership_unknown")
+        self.link.hour -= 1
+        self.link.mod_ownership["captureStatus"] = "unavailable"
+        self.assertEqual(self.post("schedule", body)[1]["error"], "ownership_unknown")
+        self.assertEqual(self.link._ownership("rent", "apply", [GIFTS])[1]["error"], "ownership_unknown")
+        self.assertEqual(self.link.schedules, {})
+
+    def test_legacy_late_hours_require_current_company_disabled_proof(self):
+        self.complete_owner_weeks()
+        report = {"schemaVersion": 1, "provider": "rlo", "modVersion": "test",
+                  "captured": {"character": self.link.character, "day": self.link.day, "hour": self.link.hour,
+                               "minute": int(self.link._save().root.get("Minute") or 0)},
+                  "modules": {"features": {"version": 1, "status": "ready", "data": [
+                      {"id": "managers", "enabled": False}, {"id": "company", "enabled": True}]}}}
+        self.link.mod_ownership = {"providerPresent": True, "api": "legacy", "captureStatus": "fresh", "report": report}
+        body = {"address": GIFTS, "expect": GIFTS_PRINT, "days": [], "openAllHours": True}
+        for dry in (True, False):
+            status, answer = self.post("schedule", dict(body, dryRun=dry))
+            self.assertEqual((status, answer["error"], answer["reasons"]),
+                             (409, "ownership_unknown", ["legacy-late-opening-permit-unverified"]))
+        self.assertEqual((self.link.schedules, self.link.opened, self.link.undo), ({}, {}, {}))
+        week = [{"day": day, "isOpen": True, "hours": [{"from": 5, "to": 22}], "shifts": []} for day in range(7)]
+        target = dict(GIFTS, week=week)
+        for phase in ("review", "apply", "undo"):
+            self.assertIsNone(self.link._ownership("schedule", phase, [target]))
+        week[0]["hours"] = [{"from": 0, "to": 24}]
+        target.update(hiring=False, moving=False, scheduling=True)
+        for phase in ("review", "apply", "undo"):
+            self.assertEqual(self.link._ownership("hire", phase, [target])[1]["error"], "ownership_unknown")
+        target["scheduling"] = False
+        self.assertIsNone(self.link._ownership("hire", "apply", [target]))
+        report["modules"]["features"]["data"][1]["enabled"] = False
+        self.assertTrue(self.post("schedule", dict(body, dryRun=True))[1]["ok"])
+        report["modules"]["features"]["data"].pop()
+        self.assertEqual(self.post("schedule", dict(body, dryRun=True))[1]["error"], "ownership_unknown")
+
+    def test_malformed_owner_reply_refuses_and_unrelated_writes_remain_available(self):
+        self.complete_owner_weeks()
+        self.link.mod_ownership = owner_policy()
+        self.link.mod_ownership["response"].pop("effects")
+        self.assertEqual(self.post("schedule", {"address": GIFTS, "expect": GIFTS_PRINT, "days": []})[1]["error"], "ownership_unknown")
+        self.assertEqual(self.post("uniforms", {"sites": [], "dryRun": True})[0], 200)
+        self.assertEqual(self.post("imports", {"contracts": [], "dryRun": True})[0], 200)
+        self.assertEqual(self.link.applied, [])
 
     def test_schedule_apply_names_who_is_left_and_undoes(self):
         fixture_print = shift_print([(0, 0, 12, ANA, CLEAN, 0), (1, 8, 20, ANA, REGISTER, 1)])
@@ -1223,6 +1428,33 @@ class MockHireOneAction(LinkedMock):
         body.update(over)
         return body
 
+    def test_ownership_checks_every_source_destination_and_reschedule_atomically(self):
+        self.complete_owner_weeks()
+        for address in (GIFTS, CORNER, BARE):
+            with self.subTest(address=address):
+                self.link.mod_ownership = owner_policy(rules=[{"operation": "hire", "address": address,
+                                                               "response": owner_policy("conditional")["response"]}])
+                for dry in (True, False):
+                    status, answer = self.post("hire", self.call_body(dryRun=dry))
+                    self.assertEqual((status, answer["error"]), (409, "mod_owned"))
+                    query = self.link.ownership_queries[-1]
+                    targets = {(t["street"], t["number"]): t for t in query["targets"]}
+                    self.assertEqual(set(targets), {(a["street"], a["number"]) for a in (GIFTS, CORNER, BARE)})
+                    self.assertTrue(targets[(BARE["street"], BARE["number"])]["scheduling"])
+                self.assertEqual((self.link.hired, self.link.moved, self.link.schedules, self.link.undo), (set(), {}, {}, {}))
+        self.link.mod_ownership = owner_policy()
+        self.assertEqual(self.post("hire", self.call_body())[0], 200)
+        undo = self.link.undo["hire"]
+        held = copy.deepcopy((self.link.hired, self.link.moved, self.link.schedules, self.link.opened))
+        self.link.mod_ownership = owner_policy(rules=[{"address": CORNER, "response": owner_policy("refused")["response"]}])
+        for dry in (True, False):
+            status, answer = self.post("undo", {"kind": "hire", "dryRun": dry})
+            self.assertEqual((status, answer["error"]), (409, "mod_owned"))
+            self.assertIs(self.link.undo["hire"], undo)
+            self.assertEqual((self.link.hired, self.link.moved, self.link.schedules, self.link.opened), held)
+        self.link.mod_ownership = owner_policy()
+        self.assertEqual(self.post("undo", {"kind": "hire"})[0], 200)
+
     def prints(self):
         """Each site's print now, as the next write would compare it."""
         save = self.link._save()
@@ -1521,6 +1753,7 @@ class MockHireFirstEmployee(MockHireOneAction):
         self.assertEqual((status, [h["candidateId"] for h in undo["hired"]]), (200, [OSKAR]))
 
     # The inherited cases run with the bonus used only.
+    test_ownership_checks_every_source_destination_and_reschedule_atomically = None
     test_the_undo_takes_the_whole_call_back = None
     test_the_undo_refuses_when_the_game_has_moved_on = None
     test_a_later_hire_replaces_the_undo_and_one_that_changes_nothing_clears_it = None
@@ -1583,6 +1816,23 @@ class RentWrite(LinkedMock):
         status, _, raw = call(self.url + "/debug/config", "POST", {"Content-Type": "application/json"},
                               json.dumps(body).encode())
         self.assertEqual(status, 200, raw)
+
+    def test_rent_ownership_refusal_keeps_pending_values_and_undo(self):
+        self.link.mod_ownership = owner_policy("unknown")
+        for dry in (True, False):
+            self.assertEqual(self.rent(dry=dry)[1]["error"], "ownership_unknown")
+        self.assertEqual((self.link.rents, self.link.undo), ({}, {}))
+        self.link.mod_ownership = owner_policy()
+        self.assertEqual(self.rent(dry=False)[0], 200)
+        undo = self.link.undo["rent"]
+        held = copy.deepcopy(self.link.rents)
+        self.link.mod_ownership = owner_policy("conditional")
+        for dry in (True, False):
+            self.assertEqual(self.post("undo", {"kind": "rent", "dryRun": dry})[1]["error"], "mod_owned")
+            self.assertEqual(self.link.rents, held)
+            self.assertIs(self.link.undo["rent"], undo)
+        self.link.mod_ownership = owner_policy()
+        self.assertEqual(self.post("undo", {"kind": "rent"})[0], 200)
 
     def test_health_and_endpoints(self):
         health = json.loads(call(self.url + "/health")[2])

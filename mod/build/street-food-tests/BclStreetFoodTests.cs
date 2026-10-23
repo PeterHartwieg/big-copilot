@@ -25,7 +25,7 @@ public static class BclStreetFoodTests
 
     static void Exercise()
     {
-        var capture = typeof(StreetFoodSnapshot).GetMethod("Capture");
+        var capture = typeof(CompanionSnapshots).GetMethod("Capture");
         var reserved = typeof(StreetFoodSnapshot).GetMethod("Reserved");
         var gameType = capture.GetParameters()[0].ParameterType;
         var instance = FormatterServices.GetUninitializedObject(gameType);

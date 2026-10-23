@@ -53,6 +53,39 @@ namespace BigCopilotLink
 
         public void Value(string value) { StartItem(); WriteString(value); }
 
+        /// <summary>Canonical object keys for pure companion fingerprints and bounded wire trees.</summary>
+        internal void PropTree(string key, object value) { WriteKey(key); TreeValue(value); }
+
+        internal void Tree(object value)
+        {
+            StartItem();
+            TreeValue(value);
+        }
+
+        private void TreeValue(object value)
+        {
+            var obj = value as IDictionary<string, object>;
+            var list = value as System.Collections.IEnumerable;
+            if (obj != null)
+            {
+                Open('{');
+                var keys = new List<string>(obj.Keys);
+                keys.Sort(StringComparer.Ordinal);
+                foreach (var key in keys) { WriteKey(key); TreeValue(obj[key]); }
+                Close('}');
+            }
+            else if (value == null) _sb.Append("null");
+            else if (value is string) WriteString((string)value);
+            else if (value is bool) _sb.Append((bool)value ? "true" : "false");
+            else if (list != null)
+            {
+                Open('[');
+                foreach (var entry in list) { StartItem(); TreeValue(entry); }
+                Close(']');
+            }
+            else WriteNumber(Convert.ToDouble(value, CultureInfo.InvariantCulture));
+        }
+
         public override string ToString()
         {
             return _sb.ToString();

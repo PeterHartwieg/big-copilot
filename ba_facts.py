@@ -19,11 +19,92 @@ MAX_ROWS = 10000
 MARKETING_MODEL = "marketing-six-v1"
 VEHICLE_MODEL = "registered-vehicle-wealth-v1"
 ECONOMY_MODEL = "economy-capabilities-v1"
+NATIVE_ECONOMY_MODEL = "native-economy-v1"
 CAMPAIGNS = ("SmallInternet", "MediumInternet", "LargeInternet", "SmallBillboard", "MediumBillboard", "LargeBillboard")
 
 
 def number(value, minimum=0):
     return type(value) in (int, float) and math.isfinite(value) and minimum <= value <= 1e12
+
+
+def catalogue_amount(value):
+    """Invariant native float amount, before later transaction multipliers."""
+    if (not isinstance(value, str) or len(value) > 64 or
+            not re.fullmatch(r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?", value)):
+        raise ValueError("Invalid native catalogue amount")
+    amount = float(value)
+    if not number(amount):
+        raise ValueError("Invalid native catalogue amount")
+    return amount
+
+
+def _native_economy(block):
+    if (not isinstance(block, dict) or type(block.get("version")) is not int or block["version"] < 1
+            or not isinstance(block.get("model"), str) or not block["model"]):
+        raise ValueError("Invalid native economy metadata")
+    if block["version"] != 1 or block["model"] != NATIVE_ECONOMY_MODEL:
+        return
+    for name in ("itemPrices", "banks"):
+        module = block.get(name)
+        if not isinstance(module, dict) or module.get("status") not in ("ready", "unavailable"):
+            raise ValueError("Invalid native economy status")
+        if module["status"] != "ready":
+            if module.get("data") is not None:
+                raise ValueError("Unavailable native economy has data")
+            continue
+        rows = module.get("data")
+        if not isinstance(rows, list) or len(rows) > MAX_ROWS:
+            raise ValueError("Invalid native economy rows")
+        if name == "itemPrices" and (module.get("basis") != "registered-catalogue-before-transaction-multipliers"
+                or module.get("gameMarketMultiplierIncluded") is not False or module.get("importMultiplierIncluded") is not False):
+            raise ValueError("Unsupported native catalogue basis")
+        seen = set()
+        for row in rows:
+            if not isinstance(row, dict):
+                raise ValueError("Invalid native economy row")
+            if name == "itemPrices":
+                key = row.get("itemId")
+                if not isinstance(key, str) or not key:
+                    raise ValueError("Invalid native item identity")
+                for field in ("wholesaleAmount", "defaultMarketAmount"):
+                    catalogue_amount(row.get(field))
+            else:
+                address = row.get("address")
+                if (not isinstance(address, dict) or not isinstance(address.get("street"), str) or not address["street"]
+                        or type(address.get("number")) is not int or address["number"] < 0):
+                    raise ValueError("Invalid native bank address")
+                key = (address["street"], address["number"])
+                if not isinstance(row.get("name"), str) or not row["name"]:
+                    raise ValueError("Invalid native bank name")
+                for field in ("capAmount", "interestMultiplier"):
+                    catalogue_amount(row.get(field))
+                for field in ("annualRatePercent", "yearsToPayLoan", "paybackDays"):
+                    if type(row.get(field)) is not int or not 0 <= row[field] <= 2**31 - 1:
+                        raise ValueError("Invalid native bank terms")
+                if (row.get("eligibilityBasis") != "native-statements-and-wealth"
+                        or row.get("securedAccountRules") not in ("provider-owned", "none")):
+                    raise ValueError("Unsupported native bank eligibility")
+            if key in seen:
+                raise ValueError("Duplicate native economy identity")
+            seen.add(key)
+
+
+def native_economy(facts, name):
+    """None means unknown, including a present newer model; [] is known empty."""
+    block = (facts or {}).get("nativeEconomy") or {}
+    if block.get("version") == 1 and block.get("model") == NATIVE_ECONOMY_MODEL:
+        module = block.get(name) or {}
+        if module.get("status") == "ready":
+            return module["data"]
+    return None
+
+
+def lease_quote(row):
+    """The live new-lease quote is separate from an existing signed rent."""
+    quote = row.get("newLease") or {}
+    if quote.get("version") == 1 and quote.get("status") == "ready":
+        return quote["data"]
+    return None
 
 
 def validate(facts, raw=None, stamp=None, character=None):
@@ -69,6 +150,25 @@ def validate(facts, raw=None, stamp=None, character=None):
         for field in ("area", "propertyArea", "traffic"):
             if not number(row.get(field)):
                 raise ValueError("Invalid building " + field)
+        if "signedDepositCents" in row and (type(row["signedDepositCents"]) is not int or not 0 <= row["signedDepositCents"] <= 2**53 - 1):
+            raise ValueError("Invalid signed lease deposit")
+        if "newLease" in row:
+            quote = row["newLease"]
+            if not isinstance(quote, dict) or type(quote.get("version")) is not int or quote["version"] < 1:
+                raise ValueError("Invalid new lease quote version")
+            if quote["version"] == 1:
+                if quote.get("status") not in ("ready", "unavailable"):
+                    raise ValueError("Invalid new lease quote status")
+                value = quote.get("data")
+                if quote["status"] == "unavailable":
+                    if value is not None:
+                        raise ValueError("Unavailable new lease quote has data")
+                elif (not isinstance(value, dict)
+                      or (value.get("basis"), value.get("depositBasis")) not in (
+                          ("native-live-quote", "native-rent-times-deposit-days"), ("owned-no-lease", "owned-no-lease"))
+                      or (value.get("basis") == "owned-no-lease" and (value.get("rentCents") != 0 or value.get("depositCents") != 0))
+                      or any(type(value.get(k)) is not int or not 0 <= value[k] <= 2**53 - 1 for k in ("rentCents", "depositCents"))):
+                    raise ValueError("Invalid new lease quote")
         if "capacity" not in row or (row["capacity"] is not None and not number(row["capacity"], -1)):
             raise ValueError("Invalid building capacity")
         marketing = row.get("marketing")
@@ -161,6 +261,8 @@ def validate(facts, raw=None, stamp=None, character=None):
                         any(not isinstance(k, str) or not k or (v is not None and type(v) is not bool) for k, v in rules.items()) or
                         (provider.get("runningCostsAvailable") is not None and type(provider["runningCostsAvailable"]) is not bool)):
                     raise ValueError("Invalid economy provider observations")
+    if "nativeEconomy" in facts:
+        _native_economy(facts["nativeEconomy"])
     return facts
 
 
@@ -317,6 +419,9 @@ def resolve(save, baseline):
                        x=item["traffic"], layoutCapacity=item["capacity"] if item["capacity"] is not None and item["capacity"] >= 0 else None, propertyArea=item["propertyArea"],
                        factsSource="game", layoutKnown=(kind, size, item["version"]) in layouts)
             row.pop("factsUnavailable", None)
+            for field in ("newLease", "signedDepositCents"):
+                if field in item:
+                    row[field] = item[field]
             if item.get("marketing") is not None and types is not None:
                 row["marketingRules"] = {**item["marketing"], "types": types}
                 if item["capacity"] == 0:

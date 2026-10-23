@@ -80,6 +80,51 @@ class BuildingFacts(unittest.TestCase):
         plain = Save(self.root, {}, "plain.hsg")
         self.assertEqual(d.load_buildings(plain), baseline)
 
+    def test_live_lease_quote_is_distinct_from_signed_lease_and_unknown_stays_unknown(self):
+        row = self.facts["buildings"][0]
+        row["signedDepositCents"] = 123400
+        row["newLease"] = {"version": 1, "status": "ready", "data": {
+            "rentCents": 45600, "depositCents": 789000,
+            "basis": "native-live-quote", "depositBasis": "native-rent-times-deposit-days"}}
+        save = self.load()
+        resolved = d.load_buildings(save)[GIFTS]
+        self.assertEqual(f.lease_quote(resolved)["rentCents"], 45600)
+        result = d._premises(save, Names(data_names()), {})
+        building = next(b for b in result["buildings"] if b["key"] == d.site_key(GIFTS))
+        self.assertEqual((building["rent"], building["deposit"], building["signedDeposit"]), (456, 7890, 1234))
+        row["newLease"] = {"version": 2, "status": "ready", "data": {"different": True}}
+        save = self.load()
+        building = next(b for b in d._premises(save, Names(data_names()), {})["buildings"] if b["key"] == d.site_key(GIFTS))
+        self.assertIsNone(building["rent"])
+        self.assertIsNone(building["deposit"])
+
+    def test_owned_property_zero_lease_has_its_own_basis(self):
+        row = self.facts["buildings"][0]
+        quote = {"rentCents": 0, "depositCents": 0, "basis": "owned-no-lease", "depositBasis": "owned-no-lease"}
+        row["newLease"] = {"version": 1, "status": "ready", "data": quote}
+        save = self.load()
+        building = next(b for b in d._premises(save, Names(data_names()), {})["buildings"] if b["key"] == d.site_key(GIFTS))
+        self.assertEqual((building["rent"], building["deposit"], building["leaseBasis"]), (0, 0, "owned-no-lease"))
+        quote["rentCents"] = 1
+        with self.assertRaises(ValueError):
+            self.load()
+
+    def test_native_catalogue_keeps_fractional_cents_and_transaction_basis(self):
+        self.facts["nativeEconomy"] = {"version": 1, "model": f.NATIVE_ECONOMY_MODEL,
+            "itemPrices": {"status": "ready", "basis": "registered-catalogue-before-transaction-multipliers",
+                           "gameMarketMultiplierIncluded": False, "importMultiplierIncluded": False,
+                           "data": [{"itemId": "fraction", "wholesaleAmount": "0.012345679", "defaultMarketAmount": "1E-05"}]},
+            "banks": {"status": "ready", "data": []}}
+        save = self.load()
+        rows = f.native_economy(save.facts, "itemPrices")
+        self.assertEqual(f.catalogue_amount(rows[0]["wholesaleAmount"]), 0.012345679)
+        self.assertEqual(f.native_economy(save.facts, "banks"), [])
+        for value in ("NaN", "Infinity", "-1", "1_000", "1e99", "", 1.25, True):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                f.catalogue_amount(value)
+        self.facts["nativeEconomy"]["version"] = 2
+        self.assertIsNone(f.native_economy(self.load().facts, "itemPrices"))
+
     def test_mismatched_pairs_and_invalid_values_are_rejected(self):
         for field, value in (("saveSha256", "0" * 64), ("schemaVersion", 2), ("model", "new-formula"),
                              ("build", -1), ("marketingTypes", [])):

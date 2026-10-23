@@ -65,6 +65,10 @@ mockup/*/project/
 /web/py/ba_save.py
 /web/py/ba_facts.py
 /web/py/ba_mods.py
+/web/py/ba_rlo.py
+/web/py/ba_companion.py
+/web/py/ba_hart.py
+/web/py/ba_economy.py
 /web/py/ba_street_food.py
 /web/py/ba_street_food_rules.json
 /web/py/ba_street_food_stops.json
@@ -79,3 +83,5 @@ mockup/*/project/
 
 # Local SDK and release packages
 /build/
+
+web/py/ba_rlo_planning.py

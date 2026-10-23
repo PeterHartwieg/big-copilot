@@ -78,6 +78,37 @@ Before moving an unassigned employee, hire preflight calls the optional
 `IsCrewV1(GameInstance, string employeeId)`. Reserved crew or unavailable ownership
 is refused using the existing `changed` result. There is no writable fleet endpoint.
 
+## Companion save metadata
+
+RLO and current HART Mod Pack reports travel inside the existing `/save` bytes.
+The main-thread capture calls the optional pure APIs on the original live instance:
+
+| Provider API | Report key in `modData` | Link marker key |
+| --- | --- | --- |
+| `RealLifeOverhaul.Companion.CaptureV1(GameInstance)` | `reallife:companion` | `bigcopilot:rlo-snapshot.v1` |
+| `HARTModPack.Companion.CaptureV1(GameInstance)` | `hartmodpack:companion` | `bigcopilot:hart-snapshot.v1` |
+
+`CompanionSnapshots` creates one private root and one private `modData` dictionary,
+then composes both providers and Street Food into that copy. Each marker is either
+`{"status":"fresh","sha256":"<digest>"}` over the exact UTF-8 report string, or
+`{"status":"unavailable"}`. Missing, throwing, ambiguous, malformed or clock-mismatched
+providers remove their copied retained report. They never alter live `modData` or
+trigger save events, and one provider's failure leaves the others usable.
+
+Multiple instances from one assembly are not ambiguous; multiple distinct assembly
+objects exposing a provider are. Before publication Link captures again on the main
+thread and compares canonical provider identity, version and module data with the
+initial capture, excluding only `captured` timestamps. Changed modules or assemblies
+retry publication. The report's initial character/day/hour/whole minute must match
+the privately copied save clock, alongside the existing session and facts checks.
+
+Clients require matching character/clock identity and, for live or portable
+snapshots, a fresh marker and matching digest. Ordinary reports are captured facts,
+not proof that the provider remains installed: a same-clock report retained after
+removal may be indistinguishable. See [RLO reporting](rlo-companion.md) and
+[HART reporting](hart-companion.md). Capture grants no write permission; writes use
+the independent fresh ownership query below.
+
 ## Building facts (schema 2)
 
 `health.features` advertises `building-facts.v1`. Read `/save`, retain its
@@ -225,19 +256,58 @@ versions in sorted, comma-separated order. HMP rule booleans are its current **s
 `RunningCostsPatch.Available` flag. They do not prove an account is connected,
 that RLO bills that site, or that factory diploma readiness is satisfied. Unknown
 members produce null and `unavailable`; false means the option was observed off.
-RLO currently has no reviewed public effective-cost provider, so its loaded
-assembly produces `operatingCosts:null`, never a fabricated active flag or tariff.
+This legacy capability block leaves RLO `operatingCosts:null`; effective models
+come from its independently validated companion modules. Current `HARTModPack`
+assemblies have id `hart-mod-pack`, source `hartmodpack:companion`, and null rule
+observations in this block. Their requested/effective states belong to the runtime
+companion module. A blocked pack never establishes legacy behaviour.
 The private HMP diploma readiness method is not called because it can change state.
 
-An empty provider list establishes that neither assembly was loaded at capture.
+An empty provider list establishes that none of the three assemblies was loaded at capture.
 A missing economy block says nothing about installed or active providers. Retained
 save markers, including `hardmodepatch:factory_diplomas_held` and `reallife:careers`,
 are historical evidence only. Consumers must withhold affected forecasts or
 opening advice when costs or prerequisites are selected or unknown and their
-model is unsupported, while keeping observed accounting available. This contract
-currently communicates capability boundaries; it does not implement HMP/RLO
-utility tariffs, IT bills or diploma costs. Provider ids must be unique, rule
+model is unsupported, while keeping observed accounting available. Effective utility
+tariffs, IT bills and purchase requirements belong to their respective companion
+modules. Provider ids must be unique, rule
 values boolean/null, and unknown schema/model versions must not enable forecasts.
+
+### Native economy and new leases
+
+The optional `nativeEconomy` facts block has `version:1`, `model:"native-economy-v1"`,
+and independent `itemPrices` and `banks` blocks with `status:ready|unavailable`
+and `data` (an array when ready, null otherwise). A ready empty registry is known
+empty; unavailable must not fall back to vanilla values.
+
+`itemPrices` rows contain `itemId`, `wholesaleAmount` and `defaultMarketAmount`.
+Amounts are invariant round-trip decimal strings from the current registered
+`Item.wholesalePrice` field and `Item.DefaultMarketPrice` getter. They include
+catalogue edits already made by mods, but exclude later transaction multipliers.
+The block declares `basis:"registered-catalogue-before-transaction-multipliers"`,
+`gameMarketMultiplierIncluded:false` and `importMultiplierIncluded:false`.
+Consumers must apply the relevant game's import, market or contract factors once.
+
+`banks` rows contain `address:{street,number}`, `name`, `capAmount` (decimal string),
+`annualRatePercent` (native integer percent), `yearsToPayLoan`, `paybackDays`, and
+`interestMultiplier` (decimal string). These are the actual current BankSettings
+and game variables. `eligibilityBasis:"native-statements-and-wealth"` describes the
+native borrowing calculation; `securedAccountRules:"provider-owned"` when RLO is
+loaded means its separate eligibility proof is required. Missing proof is unknown;
+it never grants the native baseline. Without RLO this field is `"none"`.
+
+Every building additionally carries `newLease:{version:1,status,data}`. Ready data
+contains `rentCents`, `depositCents`, `basis:"native-live-quote"` and
+`depositBasis:"native-rent-times-deposit-days"`. Rent calls the actual native market
+quote (including installed postfixes); deposit follows the verified native
+`CalculateDeposit` body: `CeilToInt((float)dailyRent * daysToCalculateDeposit)`.
+Owned properties report zero for both amounts with both `basis` and
+`depositBasis` set to `"owned-no-lease"`; this is an ownership observation, not a
+market quote. This avoids cache-populating registration getters.
+Any later RLO rent/deposit settlement is separate and must come from its owner
+module. Existing `rent` remains the signed lease and `signedDepositCents` the
+registration's recorded deposit; neither is replaced by the new quote. All these
+facts participate in the existing before/after consistency fingerprint.
 
 ## Where the mod listens
 
@@ -445,9 +515,9 @@ approved it (see "Approving a browser" below).
   browser"); the page drops its token and asks the game again. Reads (`/health`, `/save`,
   `/refresh`) never need one.
 - **Dry run.** `"dryRun": true` in the body runs every check and answers the verdict and
-  the values the game would hold, applying nothing. A well-formed, paired dry run always
+  the values the game would hold, applying nothing. A well-formed, paired dry run normally
   answers `200`, with `"ok": false` and the per-row `error`s when the real write would be
-  refused. The page runs one when its confirm dialog opens.
+  refused. Ownership refusals below instead answer `409` in every phase. The page runs one when its confirm dialog opens.
 - **Apply** (`"dryRun": false` or absent) is all or nothing: every row passes or nothing
   is written.
 - **Compare-and-set.** Rows carry `expect`, the value the page read from the bytes. A
@@ -478,6 +548,8 @@ approved it (see "Approving a browser" below).
 | `403` | `{"error":"origin_not_allowed"}` | An `Origin` off the allowlist (mod 0.3.1 and later; a write got `401` before) |
 | `409` | `{"error":"changed","rows":[...]}` | An `expect` no longer holds; nothing written |
 | `409` | `{"error":"refused","rows":[...]}` | A rule refused a row (`rows[i].error`); nothing written |
+| `409` | `{"error":"mod_owned","owner","task","reasons":[],"effects":[]}` | A competing mod owns or may rewrite the change; nothing written |
+| `409` | `{"error":"ownership_unknown","owner","task","reasons":[],"effects":[]}` | Fresh ownership could not be established; nothing written |
 | `409` | `{"error":"cannot_write","reason":"saving"}` | An apply while the game is saving or `CanSave()` is false (a dry run skips this check); `reason` as for `/refresh` (`saving`, `placement`, `interior`, `casino`, `other`), and for `hire` also `myemployees` |
 | `413` | `{"error":"too_large"}` | Body over 256 KiB (a `hire` body: over 2 MiB) |
 | `503` | `{"error":"busy"}` or `{"error":"main_thread_unavailable"}` | Walk in flight past three seconds, or no city loaded |
@@ -485,6 +557,42 @@ approved it (see "Approving a browser" below).
 `rows` in a `409` has the same shape as in the dry run's `200`, so the page renders both
 the same way. An address on the wire is `{"street": "<StreetName>", "number": <StreetNumber>}`,
 the two fields of the building registration as the save holds them.
+
+#### Fresh mod ownership
+
+Schedule, hire/move/reschedule, wholesale and rent run the optional pure
+`RealLifeOverhaul.Companion.OwnershipV1(GameInstance, string requestJson)` on the
+main thread during each review, apply and undo, after native validation and before
+any mutation. Only a valid `decision:"allowed"` permits the operation. Conditional,
+refused and unknown responses refuse without a control-transfer prompt. Refusing
+an undo leaves its saved undo record available.
+
+The query is `{schemaVersion:1,operation,phase,targets}`. Each target has `street`
+and `number`; phases are `review`, `apply`, `undo`. Schedule targets contain the
+full proposed/restored `week` of seven `{day,isOpen,hours,shifts}` records.
+`hours` are `{from,to}` intervals and `shifts` have `from`, `to`, `employeeId`,
+`itemInstanceId` (nullable). Hire targets also declare `hiring`, `moving`,
+`scheduling`; every actual source, destination and independently scheduled site is
+checked, including source hours cleared by a move. Wholesale targets have
+`contractId`, `action:set|remove`, and the union of before/after `itemIds`, so a
+removed managed line cannot disappear from the check. Rent targets contain only the
+address, as required by `contracts/rlo/ownership-request.schema.json`. All targets pass before the
+first mutation; one refusal rejects the atomic request.
+
+A valid response is `{schemaVersion:1,decision,owner,task,reasons:[],effects:[]}`;
+reasons and effects are bounded strings. Null, duplicate keys, malformed fields,
+unknown versions, provider exceptions or ambiguous assemblies mean unknown.
+
+For older RLO with no ownership API, Link calls **fresh** `CaptureV1` in that same
+phase. Only a ready v1 `features` row with `id:"managers",enabled:false` permits
+schedule/hire/wholesale. Scheduling also requires a fresh disabled `company` row
+or a complete proposed week containing no open interval before 05:00 or after
+22:00; legacy captures cannot establish current permit validity. Incomplete
+weeks refuse before invoking either owner API. `enabled:true,running:false` is not permission: managers
+may start or recover. Rent requires a corresponding explicit disabled `estate`
+observation; an older report missing it refuses. No retained saved report grants
+permission. Imports, uniforms, marketing and Street Food routes retain their
+existing guards because this ownership contract declares no overlap.
 
 #### Approving a browser
 
@@ -1350,6 +1458,43 @@ unverified.
    Nothing on the wire changes.
 
 ## The mock
+
+For ownership regression tests, `POST /debug/config` accepts `modOwnership`.
+Null is the default (no simulated competing provider); this never reads installed
+mods or treats a retained report in the save as authority. A current synthetic API
+policy is:
+
+```json
+{
+  "modOwnership": {
+    "providerPresent": true,
+    "api": "v1",
+    "response": {"schemaVersion": 1, "decision": "allowed", "owner": "rlo", "task": "rota", "reasons": [], "effects": []},
+    "rules": [{"operation": "hire", "phase": "apply", "address": {"street": "ba:street_test", "number": 1},
+      "response": {"schemaVersion": 1, "decision": "conditional", "owner": "rlo", "task": "rota", "reasons": ["manager-task"], "effects": ["manager-rewrite"]}}]
+  }
+}
+```
+
+Every applicable rule must allow every touched target. Change the policy between
+review, apply and undo to exercise fresh decisions. An invalid response means
+`ownership_unknown`; a refusal occurs before the first mutation and retains undo.
+The bounded `Link.ownership_queries` trace is available to synthetic tests.
+The optional Python test callback `ownership_provider(query)` returns a current
+policy each time; no installed RLO entrypoint is invoked.
+
+`api:"legacy"` instead uses `captureStatus:"fresh"` plus `report` containing the
+complete synthetic RLO envelope. Its character/day/hour/whole minute must match
+the mock's current state and the ready v1 features data must prove
+`managers.enabled:false` (or `estate.enabled:false` for rent). Missing proof,
+stale clock, unavailable capture or `enabled:true,running:false` refuse. Scheduling
+also requires fresh `company.enabled:false` or a complete proposed week with no
+open interval before 05:00 or after 22:00; legacy reports cannot prove a current
+late-opening permit. The same rule applies to scheduling embedded in hiring and
+to undo. This
+explicit configured result simulates a fresh native capture; merely supplying an
+old report in `/save` never enables the policy. Reset clears the policy and trace.
+
 
 ```
 python tools/game_link_mock.py <save.hsg> [--port 8322] [--character ID] [--company NAME]

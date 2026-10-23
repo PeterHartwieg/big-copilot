@@ -27,6 +27,10 @@ import struct
 
 import ba_facts
 import ba_street_food
+import ba_rlo
+import ba_hart
+import ba_economy
+import ba_companion
 
 ECONOMY_KEY = "OcupancyCosts.State"
 SEASONS_KEY = "AlcwareSeasons.calendar.v1"
@@ -83,11 +87,7 @@ SEASON_FACTORS = {_ITEM + name: factors for factors, names in _FACTOR_ROWS.items
 
 def mod_data(save) -> dict:
     """modData as {key: value}; an empty dict where the save has none."""
-    out = {}
-    for pair in save.items(save.root.get("modData")):
-        if isinstance(pair, dict) and isinstance(pair.get("$k"), str):
-            out[pair["$k"]] = save.deref(pair.get("$v"))
-    return out
+    return ba_companion.mod_data(save)
 
 
 def calendar(value) -> dict | None:
@@ -190,6 +190,12 @@ def detect(save) -> dict:
         except (ValueError, struct.error, UnicodeError):
             renovated = None
         out["retailExpansion"] = {"renovated": renovated}
+    rlo = ba_rlo.metadata(save)
+    if rlo is not None:
+        out["rlo"] = rlo
+    hart = ba_hart.metadata(save)
+    if hart is not None:
+        out["hart"] = hart
     street_food = ba_street_food.metadata(save)
     if street_food is not None:
         out["streetFood"] = street_food
@@ -224,8 +230,14 @@ def capabilities(save) -> dict:
     An observed empty provider list proves the captured runtime had none.
     Unsupported optional models affect forecasts, not recorded accounting.
     """
+    import ba_economy
+
     facts = getattr(save, "facts", None) or {}
     out = {}
+
+    def scoped(provider):
+        current = ba_economy.report(save, provider)
+        return current is not None and current.get("status") in ("ready", "partial")
 
     def disable(keys, reason):
         for key in keys:
@@ -234,7 +246,9 @@ def capabilities(save) -> dict:
 
     economy = facts.get("economy")
     if economy is None:
-        if ECONOMY_SAVE_KEYS.intersection(mod_data(save)):
+        retained = ECONOMY_SAVE_KEYS.intersection(mod_data(save))
+        if (("reallife:careers" in retained and not scoped("rlo"))
+                or (retained - {"reallife:careers"} and not scoped("hart"))):
             disable(ECONOMY_CAPABILITIES, "economyUnknown")
     elif economy.get("schemaVersion") != 1 or economy.get("model") != ECONOMY_MODEL:
         disable(ECONOMY_CAPABILITIES, "economyUnknown")
@@ -244,10 +258,16 @@ def capabilities(save) -> dict:
                 disable(ECONOMY_CAPABILITIES, "economyUnknown")
                 continue
             rules = provider.get("rules", {})
-            if provider.get("id") not in ("hard-mode-patch", "real-life-overhaul"):
+            identity = provider.get("id")
+            if identity not in ("hard-mode-patch", "hart-mod-pack", "real-life-overhaul"):
                 disable(ECONOMY_CAPABILITIES, "economyUnknown")
                 continue
-            expected = ("equipmentUtilities", "officeIt", "factoryDiplomas") if provider["id"] == "hard-mode-patch" else ("operatingCosts",)
+            # A fresh public report delegates each affected surface to its owner
+            # modules. Missing or failed optional modules are handled there;
+            # they must not erase independent supported planning surfaces.
+            if scoped("rlo" if identity == "real-life-overhaul" else "hart"):
+                continue
+            expected = ("operatingCosts",) if identity == "real-life-overhaul" else ("equipmentUtilities", "officeIt", "factoryDiplomas")
             for rule, affected in ECONOMY_RULES.items():
                 if rule not in expected and rule not in rules:
                     continue

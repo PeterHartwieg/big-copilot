@@ -5,3 +5,5 @@ web/pyodide/** -text
 web/fonts/** -text
 # Payload snapshots are compared as text; keep them LF on every checkout.
 tests/fixtures/payload_snapshot/** text eol=lf
+# Companion fixtures and schema are shared byte for byte with their producers.
+contracts/rlo/*.json text eol=lf
