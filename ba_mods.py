@@ -248,10 +248,12 @@ def capabilities(save) -> dict:
                 disable(ECONOMY_CAPABILITIES, "economyUnknown")
                 continue
             expected = ("equipmentUtilities", "officeIt", "factoryDiplomas") if provider["id"] == "hard-mode-patch" else ("operatingCosts",)
-            for rule in expected:
+            for rule, affected in ECONOMY_RULES.items():
+                if rule not in expected and rule not in rules:
+                    continue
                 value = rules.get(rule)
                 if value is not False:
-                    disable(ECONOMY_RULES[rule], rule if value is True else "economyUnknown")
+                    disable(affected, rule if value is True else "economyUnknown")
             if any(rule not in ECONOMY_RULES and value is not False for rule, value in rules.items()):
                 disable(ECONOMY_CAPABILITIES, "economyUnknown")
     if not ba_facts.marketing_supported(facts):
