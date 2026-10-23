@@ -41,8 +41,12 @@ const TT_EN = Symbol("english text");
 const TT_ATTRS = [["data-tt-title", "title"], ["data-tt-aria-label", "aria-label"],
   ["data-tt-placeholder", "placeholder"], ["data-tt-tip", "data-tip"]];
 const TT_SELECTOR = "[data-tt]," + TT_ATTRS.map(([a]) => `[${a}]`).join(",");
-/* The longest the landing stays hidden while a table loads. */
+/* The longest the landing stays hidden while a table loads: short for the
+   ?ui= developer switch, longer for a language the reader chose and kept, so
+   a slow load does not flash English at them on every visit. A table that
+   never comes still shows the page, in English. */
 const TT_WAIT_MS = 400;
+const TT_WAIT_KEPT_MS = 2500;
 
 let ttLang = "en", ttTable = null, ttSeq = 0;
 const ttListeners = [];
@@ -301,19 +305,20 @@ async function setUiLang(lang){
 }
 /* At load: a table the page carries; else the ?ui=de developer switch, which
    is not remembered; else the UI language kept from the footer's picker.
-   While a table loads the page stays hidden, for at most TT_WAIT_MS, so it
-   does not paint in English first. */
+   While a table loads the page stays hidden, for at most TT_WAIT_MS (the
+   switch) or TT_WAIT_KEPT_MS (a kept choice), so it does not paint in English
+   first. */
 (function ttBoot(){
   if(typeof document === "undefined" || typeof location === "undefined") return;
-  let want = null;
+  let want = null, kept = false;
   try{ want = new URLSearchParams(location.search).get("ui"); }catch(e){}
   if(TT_EMBED && TT_EMBED.lang && TT_EMBED.table && want !== "en"){
     ttSetTable(TT_EMBED.lang, TT_EMBED.table);
     return;
   }
   if(!want && !TT_EMBED){
-    const kept = ttStoredLang();
-    if(kept) want = kept.ui;
+    const stored = ttStoredLang();
+    if(stored){ want = stored.ui; kept = true; }
   }
   if(!want || want === "en" || !ttKnown(want)) return;
   const html = document.documentElement;
@@ -324,6 +329,6 @@ async function setUiLang(lang){
     (document.head || html).appendChild(style);
   }catch(e){}
   const show = () => html.classList.remove("tt-wait");
-  const timer = setTimeout(show, TT_WAIT_MS);
+  const timer = setTimeout(show, kept ? TT_WAIT_KEPT_MS : TT_WAIT_MS);
   setUiLang(want).finally(() => { clearTimeout(timer); ttWhenDom(show); });
 })();

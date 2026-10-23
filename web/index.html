@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.LEDGER_BUILD = "590d3c978a";</script>
-<link rel="stylesheet" href="community.css?v=590d3c978a">
+<script>window.LEDGER_BUILD = "bdcb8daa25";</script>
+<link rel="stylesheet" href="community.css?v=bdcb8daa25">
 <title>Big Copilot</title>
 <script>
 /* The remembered theme, before anything paints. It has to be an inline, blocking
@@ -15,7 +15,7 @@
 try{ var t = localStorage.getItem("ba_dash_theme"); if(t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); }catch(e){}
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d100f'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2343c07a'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="fonts/fonts.css?v=590d3c978a">
+<link rel="stylesheet" href="fonts/fonts.css?v=bdcb8daa25">
 <style>
 /* The map artwork keeps its approved dark palette in either dashboard theme. */
 .map-shortcut{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-left:5px;padding:4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink-2);cursor:pointer;line-height:1;flex:none}
@@ -3202,8 +3202,12 @@ const TT_EN = Symbol("english text");
 const TT_ATTRS = [["data-tt-title", "title"], ["data-tt-aria-label", "aria-label"],
   ["data-tt-placeholder", "placeholder"], ["data-tt-tip", "data-tip"]];
 const TT_SELECTOR = "[data-tt]," + TT_ATTRS.map(([a]) => `[${a}]`).join(",");
-/* The longest the landing stays hidden while a table loads. */
+/* The longest the landing stays hidden while a table loads: short for the
+   ?ui= developer switch, longer for a language the reader chose and kept, so
+   a slow load does not flash English at them on every visit. A table that
+   never comes still shows the page, in English. */
 const TT_WAIT_MS = 400;
+const TT_WAIT_KEPT_MS = 2500;
 
 let ttLang = "en", ttTable = null, ttSeq = 0;
 const ttListeners = [];
@@ -3462,19 +3466,20 @@ async function setUiLang(lang){
 }
 /* At load: a table the page carries; else the ?ui=de developer switch, which
    is not remembered; else the UI language kept from the footer's picker.
-   While a table loads the page stays hidden, for at most TT_WAIT_MS, so it
-   does not paint in English first. */
+   While a table loads the page stays hidden, for at most TT_WAIT_MS (the
+   switch) or TT_WAIT_KEPT_MS (a kept choice), so it does not paint in English
+   first. */
 (function ttBoot(){
   if(typeof document === "undefined" || typeof location === "undefined") return;
-  let want = null;
+  let want = null, kept = false;
   try{ want = new URLSearchParams(location.search).get("ui"); }catch(e){}
   if(TT_EMBED && TT_EMBED.lang && TT_EMBED.table && want !== "en"){
     ttSetTable(TT_EMBED.lang, TT_EMBED.table);
     return;
   }
   if(!want && !TT_EMBED){
-    const kept = ttStoredLang();
-    if(kept) want = kept.ui;
+    const stored = ttStoredLang();
+    if(stored){ want = stored.ui; kept = true; }
   }
   if(!want || want === "en" || !ttKnown(want)) return;
   const html = document.documentElement;
@@ -3485,7 +3490,7 @@ async function setUiLang(lang){
     (document.head || html).appendChild(style);
   }catch(e){}
   const show = () => html.classList.remove("tt-wait");
-  const timer = setTimeout(show, TT_WAIT_MS);
+  const timer = setTimeout(show, kept ? TT_WAIT_KEPT_MS : TT_WAIT_MS);
   setUiLang(want).finally(() => { clearTimeout(timer); ttWhenDom(show); });
 })();
 
@@ -4189,7 +4194,7 @@ document.addEventListener('click', event => {
   <div class="map-dialog-head"><h2 id="locationMapTitle">Location map</h2><button type="button" id="closeLocationMap" class="ibtn" aria-label="Close map" data-tt-aria-label="nav.dlg.closemap" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button></div>
   <div id="cityMapOverlay"></div>
 </dialog>
-<script>window.LEDGER_RELEASE = {"version":"590d3c978a","latest":{"pr":0,"date":"2026-09-25","title":"Big Copilot in German","summary":"The footer's Game names setting is now Language. Pick Deutsch and the whole board reads in German: its own words, the game's names and the numbers (1.234 and 3,5). Deutsch – nur Spielnamen keeps the page in English with the game's German names, and the game's other languages still change only the names. If your browser prefers German, or you already chose German game names, the board asks once whether to switch."}};</script>
+<script>window.LEDGER_RELEASE = {"version":"bdcb8daa25","latest":{"pr":0,"date":"2026-09-25","title":"Big Copilot in German","summary":"The footer's Game names setting is now Language. Pick Deutsch and the whole board reads in German: its own words, the game's names and the numbers (1.234 and 3,5). Deutsch – nur Spielnamen keeps the page in English with the game's German names, and the game's other languages still change only the names. If your browser prefers German, or you already chose German game names, the board asks once whether to switch."}};</script>
 <script>/* Embedded in the browser shell so the loaded release is the baseline even
  * when the first version check happens after another deployment. */
 (() => {
@@ -4277,8 +4282,8 @@ document.addEventListener('click', event => {
   });
 })();
 </script>
-<script src="app.js?v=590d3c978a"></script>
-<script src="community.js?v=590d3c978a"></script>
+<script src="app.js?v=bdcb8daa25"></script>
+<script src="community.js?v=bdcb8daa25"></script>
 
 <script>
 
@@ -4813,15 +4818,23 @@ function gnOfferCard(key, label, question, yes, no, onYes){
    reader it is for may not read the English around it. A language with a UI
    table and no words here is asked in the UI's language. */
 const GN_UI_OFFER = {de: {ask: "Big Copilot auf Deutsch anzeigen?", yes: "Ja", no: "Nein danke"}};
+/* Whether the ?ui= developer switch set the UI language for this visit. */
+function gnUiSwitch(){
+  try{ return new URLSearchParams(location.search).has("ui"); }catch(e){ return false; }
+}
 /* Once, ever: a reader whose browser prefers a language Big Copilot's own
    words come in, or who kept that language's game names before, is asked
-   whether the whole page should follow it. Either answer is kept, and a
-   choice made in the footer counts as one. */
+   whether the whole page should follow it, whatever game names they kept.
+   Either answer is kept; a UI language chosen in the footer counts as one,
+   and a page already in another UI language (kept, or the ?ui= switch) is
+   not asked. */
 function gnUiOffer(){
   if(!gnPickers().length || gnOfferDone(GN_UI_OFFER_KEY) || document.querySelector(".gn-offer")) return null;
   const kept = gnStored();
-  const lang = kept ? (kept.ui === "en" ? kept.names : null) : gnBrowserLang(gnNavLangs());
-  if(!lang || !gnHasUi(lang) || gnUi() === lang) return null;
+  if((kept && kept.ui !== "en") || gnUiSwitch() || gnUi() !== "en") return null;
+  const browser = gnBrowserLang(gnNavLangs());
+  const lang = gnHasUi(browser) ? browser : kept && gnHasUi(kept.names) ? kept.names : null;
+  if(!lang) return null;
   const word = (gnLangs().find(([code]) => code === lang) || [])[1];
   if(!word) return null;
   const own = GN_UI_OFFER[lang], yes = () => gnChoose(`${lang}/${lang}`, false);
@@ -4849,18 +4862,23 @@ function gnOffer(){
     spEsc(tt("foot.offer.names", "Show game names in {lang}?", {lang: "\u0001"})).replace("\u0001", name),
     tt("foot.offer.yes", "Yes"), tt("foot.offer.no", "No thanks"), () => gnChoose(`en/${lang}`, false));
 }
-/* A choice ("ui/names"), from the footer or an offer: kept, the page
-   switched. One made in the footer answers both offers, so neither asks
-   again. */
-function gnChoose(value, picked = true){
+/* A choice ("ui/names"), from the footer or an offer: the page switched, and
+   kept once its tables are in, so a table that will not load is not tried
+   again on the next visit. Where only the UI's table failed, what is on
+   screen is kept. A choice made in the footer answers an offer on screen; a
+   UI language chosen there answers the UI offer for good. */
+async function gnChoose(value, picked = true){
   const [ui, names] = String(value).split("/");
-  gnRemember(ui, names);
   if(picked){
     document.querySelectorAll(".gn-offer").forEach(el => gnOfferClose(el, "picked"));
-    try{ localStorage.setItem(GN_UI_OFFER_KEY, "picked"); }catch(e){}
+    if(ui !== "en") try{ localStorage.setItem(GN_UI_OFFER_KEY, "picked"); }catch(e){}
   }
   gnPaint(value);
-  return setLanguage(ui, names);
+  const seq = gnLangSeq + 1;
+  const ok = await setLanguage(ui, names);
+  if(ok) gnRemember(ui, names);
+  else if(seq === gnLangSeq && gnLang === names) gnRemember(gnUi(), names);
+  return ok;
 }
 function wireGameNames(){
   gnPickers().forEach(p => {

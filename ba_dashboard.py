@@ -15418,15 +15418,23 @@ function gnOfferCard(key, label, question, yes, no, onYes){
    reader it is for may not read the English around it. A language with a UI
    table and no words here is asked in the UI's language. */
 const GN_UI_OFFER = {de: {ask: "Big Copilot auf Deutsch anzeigen?", yes: "Ja", no: "Nein danke"}};
+/* Whether the ?ui= developer switch set the UI language for this visit. */
+function gnUiSwitch(){
+  try{ return new URLSearchParams(location.search).has("ui"); }catch(e){ return false; }
+}
 /* Once, ever: a reader whose browser prefers a language Big Copilot's own
    words come in, or who kept that language's game names before, is asked
-   whether the whole page should follow it. Either answer is kept, and a
-   choice made in the footer counts as one. */
+   whether the whole page should follow it, whatever game names they kept.
+   Either answer is kept; a UI language chosen in the footer counts as one,
+   and a page already in another UI language (kept, or the ?ui= switch) is
+   not asked. */
 function gnUiOffer(){
   if(!gnPickers().length || gnOfferDone(GN_UI_OFFER_KEY) || document.querySelector(".gn-offer")) return null;
   const kept = gnStored();
-  const lang = kept ? (kept.ui === "en" ? kept.names : null) : gnBrowserLang(gnNavLangs());
-  if(!lang || !gnHasUi(lang) || gnUi() === lang) return null;
+  if((kept && kept.ui !== "en") || gnUiSwitch() || gnUi() !== "en") return null;
+  const browser = gnBrowserLang(gnNavLangs());
+  const lang = gnHasUi(browser) ? browser : kept && gnHasUi(kept.names) ? kept.names : null;
+  if(!lang) return null;
   const word = (gnLangs().find(([code]) => code === lang) || [])[1];
   if(!word) return null;
   const own = GN_UI_OFFER[lang], yes = () => gnChoose(`${lang}/${lang}`, false);
@@ -15454,18 +15462,23 @@ function gnOffer(){
     spEsc(tt("foot.offer.names", "Show game names in {lang}?", {lang: "\u0001"})).replace("\u0001", name),
     tt("foot.offer.yes", "Yes"), tt("foot.offer.no", "No thanks"), () => gnChoose(`en/${lang}`, false));
 }
-/* A choice ("ui/names"), from the footer or an offer: kept, the page
-   switched. One made in the footer answers both offers, so neither asks
-   again. */
-function gnChoose(value, picked = true){
+/* A choice ("ui/names"), from the footer or an offer: the page switched, and
+   kept once its tables are in, so a table that will not load is not tried
+   again on the next visit. Where only the UI's table failed, what is on
+   screen is kept. A choice made in the footer answers an offer on screen; a
+   UI language chosen there answers the UI offer for good. */
+async function gnChoose(value, picked = true){
   const [ui, names] = String(value).split("/");
-  gnRemember(ui, names);
   if(picked){
     document.querySelectorAll(".gn-offer").forEach(el => gnOfferClose(el, "picked"));
-    try{ localStorage.setItem(GN_UI_OFFER_KEY, "picked"); }catch(e){}
+    if(ui !== "en") try{ localStorage.setItem(GN_UI_OFFER_KEY, "picked"); }catch(e){}
   }
   gnPaint(value);
-  return setLanguage(ui, names);
+  const seq = gnLangSeq + 1;
+  const ok = await setLanguage(ui, names);
+  if(ok) gnRemember(ui, names);
+  else if(seq === gnLangSeq && gnLang === names) gnRemember(gnUi(), names);
+  return ok;
 }
 function wireGameNames(){
   gnPickers().forEach(p => {

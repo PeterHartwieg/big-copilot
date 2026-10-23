@@ -244,13 +244,14 @@ test('tApply() fills the markup from the table, and a switch back to English res
 });
 
 /* The boot, with a fake fetch and timers. */
-function boot(search, {table = {'nav.today': 'Heute'}, hang = false, source = SOURCE} = {}){
+function boot(search, {table = {'nav.today': 'Heute'}, hang = false, source = SOURCE, storage = {}} = {}){
   const fetched = [], timers = [];
   const today = element({'data-tt': 'nav.today'}, 'Today');
   const document = fakeDocument([today], 'loading');
   const changes = [];
   const it = load({source, extra: {
     __changes: changes, document, location: {search}, window: {LEDGER_BUILD: 'abc123'},
+    localStorage: {getItem: k => (k in storage ? storage[k] : null), setItem(k, v){ storage[k] = String(v); }},
     setTimeout: (fn, ms) => { timers.push([fn, ms]); return timers.length; }, clearTimeout: () => {},
     fetch: url => { fetched.push(url); return hang ? new Promise(() => {}) :
       Promise.resolve({ok: true, json: async () => table}); },
@@ -304,6 +305,29 @@ test('a table that does not come shows the page after 400 ms, in English', async
   b.timers[0][0]();
   assert.ok(!b.document.classes.has('tt-wait'));
   assert.equal(b.run('ttLang'), 'en');
+});
+
+test('a UI language kept from the picker waits longer before it shows English, and ?ui= does not', async () => {
+  const storage = {ba_dash_lang: JSON.stringify({ui: 'de', names: 'de'})};
+  const kept = boot('', {hang: true, storage});
+  assert.deepEqual(kept.fetched, ['i18n/de.json?v=abc123']);
+  assert.ok(kept.document.classes.has('tt-wait'));
+  assert.equal(kept.timers[0][1], 2500);
+  // A table that never comes still shows the page, in English.
+  kept.timers[0][0]();
+  assert.ok(!kept.document.classes.has('tt-wait'));
+  assert.equal(kept.run('ttLang'), 'en');
+  // The developer switch keeps its short wait, even over a kept choice.
+  assert.equal(boot('?ui=de', {hang: true, storage}).timers[0][1], 400);
+  // A kept names-only choice, or the old names key, asks for no table.
+  for(const only of [{ba_dash_lang: JSON.stringify({ui: 'en', names: 'de'})}, {ba_dash_names: 'de'}]){
+    const b = boot('', {storage: only});
+    assert.deepEqual([b.fetched, b.timers.length, b.document.classes.size], [[], 0, 0]);
+  }
+  // Loaded in time, the kept language is on screen.
+  const on = boot('', {storage});
+  await tick(); await tick();
+  assert.equal(on.run('ttLang'), 'de');
 });
 
 test('a page built with --lang carries its table and needs no fetch', async () => {

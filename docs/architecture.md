@@ -341,7 +341,8 @@ source notes are not labels and stay English.
   (`window.LEDGER_BUILD`, which `page_html()` now sets in the head for that reason). The
   switches, first that applies: a table the page carries (`--lang`); the developer flag
   `?ui=de`, which is not remembered; the UI language kept by the footer's picker
-  (`ttStoredLang()`). While it loads, `html.tt-wait` hides the page for at most 400 ms. A
+  (`ttStoredLang()`). While it loads, `html.tt-wait` hides the page for at most 400 ms under `?ui=`, and 2.5 s
+  for a kept choice (`TT_WAIT_KEPT_MS`), so a slow table does not flash English each visit. A
   table with no keys counts as English, numbers included.
   `document.documentElement.lang` follows the UI language, and so does `hyphens:auto`
   under the `:lang(de)` rules.
@@ -369,16 +370,19 @@ a language with a UI table is worded in that language, from its own table (`data
 "Français – game names only", the suffix in the UI's language (`foot.names.only`).
 `build_web.py` writes the landing's footer in `page_html()`, after `main()` has shipped
 the tables it reads.
-`gnChoose(value)` keeps `ba_dash_lang` = `{"ui", "names"}` (`ttRememberLang()`), then
-`setLanguage()` switches the names without a redraw and the UI language after, so the
-board is drawn once. `ttStoredLang()` reads an old `ba_dash_names` value as names only,
+`gnChoose(value)` calls `setLanguage()`, which switches the names without a redraw and
+the UI language after, so the board is drawn once; only then is `ba_dash_lang` =
+`{"ui", "names"}` kept (`ttRememberLang()`), so a table that failed is not tried on the
+next visit (a failed UI table keeps what is on screen). `ttStoredLang()` reads an old `ba_dash_names` value as names only,
 `{ui: "en", names}`, so nobody's page turns to another language unasked.
 
 Two one-time offers, whichever applies, never both: `gnUiOffer()` (`ba_dash_lang_offer`)
-for a reader whose browser prefers a language with a UI table, or who kept that
-language's names before, worded in the language it offers (`GN_UI_OFFER`: "Big Copilot
-auf Deutsch anzeigen?"); `gnOffer()` (`ba_dash_names_offer`) for a browser language with
-names only. Either answer is kept, and a choice in the footer answers both.
+for a reader whose browser prefers a language with a UI table, whatever names they kept,
+or who kept that language's names before, worded in the language it offers
+(`GN_UI_OFFER`: "Big Copilot auf Deutsch anzeigen?"); never on a page already in another
+UI language, kept or through `?ui=`. `gnOffer()` (`ba_dash_names_offer`) for a browser
+language with names only. Either answer is kept; a footer choice answers an offer on
+screen, and a UI language chosen there answers the UI offer for good.
 
 ### Python's sentences
 

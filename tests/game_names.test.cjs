@@ -388,12 +388,66 @@ test('German game names kept from before read as names only, and are offered the
 });
 
 test('a names choice in another language kept from before is migrated as it was, and asks nothing', async t => {
-  const {page, errors} = await site(t, {locale: 'de-DE', kept: {ba_dash_names: 'fr'}});
+  const {page, errors} = await site(t, {locale: 'fr-FR', kept: {ba_dash_names: 'fr'}});
   await page.waitForFunction(() => gnLang === 'fr');
   await page.waitForTimeout(200);
   assert.equal(await page.locator('.gn-offer').count(), 0);
   assert.deepEqual(await shown(page), {ui: 'en', names: 'fr', html: 'en', num: 'en-US'});
   assert.equal(await stored(page), null, 'read, not rewritten, until a choice is made');
+  assert.deepEqual(errors, []);
+});
+
+test('a German browser is offered the German page whatever game names it kept', async t => {
+  for(const kept of [{ba_dash_names: 'fr'}, {ba_dash_lang: JSON.stringify({ui: 'en', names: 'en'})},
+    {ba_dash_lang: JSON.stringify({ui: 'en', names: 'fr'}), ba_dash_names_offer: 'picked'}]){
+    const {page, errors} = await site(t, {locale: 'de-DE', kept});
+    const offer = page.locator('.gn-offer');
+    await offer.waitFor();
+    assert.equal((await offer.locator('p').textContent()).trim(), 'Big Copilot auf Deutsch anzeigen?', JSON.stringify(kept));
+    await offer.locator('.gn-yes').click();
+    await page.waitForFunction(() => ttLang === 'de' && gnLang === 'de');
+    assert.deepEqual(await stored(page), {ui: 'de', names: 'de'});
+    assert.deepEqual(errors, []);
+  }
+  // Game names picked in the footer do not answer it; the German page picked there does.
+  const {page, context} = await site(t, {locale: 'de-DE'});
+  await page.locator('.gn-offer .gn-no').waitFor();
+  await page.evaluate(() => localStorage.removeItem('ba_dash_lang_offer'));
+  await choose(page, 'en/fr');
+  await page.waitForFunction(() => gnLang === 'fr');
+  assert.equal(await page.evaluate(() => localStorage.getItem('ba_dash_lang_offer')), 'picked', 'the offer on screen was answered');
+  await page.evaluate(() => localStorage.removeItem('ba_dash_lang_offer'));
+  const again = await site(t, {context});
+  await again.page.locator('.gn-offer').waitFor();
+  await choose(again.page, 'de/de');
+  await again.page.waitForFunction(() => ttLang === 'de');
+  const third = await site(t, {context});
+  await third.page.waitForTimeout(200);
+  assert.equal(await third.page.locator('.gn-offer').count(), 0);
+});
+
+test('a choice is kept only once its tables are in', async t => {
+  const {page, errors, context} = await site(t, {kept: {ba_dash_lang: JSON.stringify({ui: 'en', names: 'fr'})}});
+  await page.waitForFunction(() => gnLang === 'fr');
+  // The UI table will not load: the names switch, the page stays English, and
+  // what is on screen is kept, not the German that failed.
+  await page.route('**/i18n/de.json*', route => route.fulfill({status: 404, body: ''}));
+  await choose(page, 'de/de');
+  await page.waitForFunction(() => gnLang === 'de');
+  await page.waitForTimeout(100);
+  assert.deepEqual(await shown(page), {ui: 'en', names: 'de', html: 'en', num: 'en-US'});
+  assert.deepEqual(await stored(page), {ui: 'en', names: 'de'});
+  assert.equal(await picker(page).getAttribute('data-value'), 'en/de');
+  // The names table will not load: nothing changes, and nothing is kept.
+  await page.route('**/names/fr.json*', route => route.fulfill({status: 404, body: ''}));
+  await page.evaluate(() => gnTables.delete('fr'));
+  await choose(page, 'en/fr');
+  await page.waitForFunction(() => document.querySelector('.sf-landing [data-gn-pick]').dataset.value === 'en/de');
+  assert.equal(await page.evaluate(() => gnLang), 'de');
+  assert.deepEqual(await stored(page), {ui: 'en', names: 'de'});
+  const again = await site(t, {context});
+  await again.page.waitForFunction(() => gnLang === 'de');
+  assert.equal(await again.page.evaluate(() => ttLang), 'en');
   assert.deepEqual(errors, []);
 });
 
@@ -458,8 +512,8 @@ test('Deutsch switches the words, the names, the numbers and <html lang>; names 
   assert.deepEqual(errors, []);
 });
 
-test('the ?ui=de switch still works, and is not kept', async t => {
-  const context = await browser.newContext({viewport: {width: 1280, height: 900}, locale: 'en-US', reducedMotion: 'reduce'});
+test('the ?ui=de switch still works, is not kept, and asks nothing', async t => {
+  const context = await browser.newContext({viewport: {width: 1280, height: 900}, locale: 'de-DE', reducedMotion: 'reduce'});
   t.after(() => context.close());
   const page = await context.newPage();
   await page.route('**/*', route => {
@@ -473,9 +527,13 @@ test('the ?ui=de switch still works, and is not kept', async t => {
   await page.waitForFunction(() => ttLang === 'de');
   assert.equal(await page.evaluate(() => document.documentElement.lang), 'de');
   assert.equal(await stored(page), null);
+  // A German browser on a page already German is not asked.
+  await page.waitForTimeout(200);
+  assert.equal(await page.locator('.gn-offer').count(), 0);
   await page.goto('http://names.test/');
   await page.waitForTimeout(200);
   assert.equal(await page.evaluate(() => ttLang), 'en');
+  assert.equal(await page.locator('.gn-offer').count(), 1);
 });
 
 test('the picker is a listbox button: every choice listed, the current one marked', async t => {
