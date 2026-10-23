@@ -155,6 +155,18 @@ class Extraction(unittest.TestCase):
         return d._marketing(_Save(), {"marketingCampaigns": campaigns}, building or self.building,
                             status, hood, promo or self.promo, agencies)
 
+    def test_unknown_runtime_catalogue_keeps_recorded_campaigns_and_never_optimizes(self):
+        save = _Save()
+        save.facts = {"marketingTypes": [{"id": 7, "name": "NewCampaign", "price": 900, "reach": 200}]}
+        with mock.patch.object(d, "marketing_plan", side_effect=AssertionError("unsupported arithmetic")):
+            rows, plan = d._marketing(save, {"marketingCampaigns": [_camp(7, True)]}, self.building,
+                                      "retail", LOWER, self.promo,
+                                      [{"key": "a", "types": ["NewCampaign"], "contact": True}])
+        self.assertEqual(rows[0]["type"], "NewCampaign")
+        self.assertTrue(plan["unavailable"])
+        self.assertIsNone(plan["on"])
+        self.assertFalse(plan["needsSetup"])
+
     def test_campaigns_and_the_plan(self):
         rows, plan = self.plan([_camp(SB, True), _camp(LB, True, "ba:street_secondavenue", 5), _camp(SI, False)])
         self.assertEqual(rows[1], {"type": "LargeBillboard", "agency": "ba:street_secondavenue#5", "enabled": True})

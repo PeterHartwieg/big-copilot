@@ -585,6 +585,26 @@ class FinanceTests(unittest.TestCase):
         self.assertEqual(f["profit7"], 500)
         self.assertEqual(f["floor"], 0)
 
+    def test_roadster_uses_reviewed_offline_price_and_unknown_vehicle_is_incomplete(self):
+        roadster = self.facts(Money=1000, VehicleInstances=coll([{"vehicleTypeName": "roadster:vehicletype_roadster"}]))
+        self.assertEqual(roadster["wealth"], 251000)
+        self.assertNotIn("unavailable", roadster)
+        unknown = self.facts(VehicleInstances=coll([{"vehicleTypeName": "new:vehicle"}]))
+        self.assertIsNone(unknown["wealth"])
+        self.assertEqual(unknown["unavailable"], "vehiclePrices")
+        self.assertEqual(unknown["unknownVehicles"], ["new:vehicle"])
+
+    def test_runtime_vehicle_catalogue_is_authoritative_including_unknown_models(self):
+        save = Save({"Money": 1000, "VehicleInstances": coll([{"vehicleTypeName": "roadster:vehicletype_roadster"}])}, {}, "synthetic")
+        block = {"schemaVersion": 1, "model": "registered-vehicle-prices-v1", "prices": {"roadster:vehicletype_roadster": 350000}}
+        save.facts = {"vehiclePrices": block}
+        self.assertEqual(ba_dashboard._finance_facts(save, [], self.RULES)["wealth"], 351000)
+        block["prices"] = {}
+        self.assertIsNone(ba_dashboard._finance_facts(save, [], self.RULES)["wealth"])
+        block["model"] = "future-v2"
+        block["prices"] = {"roadster:vehicletype_roadster": 1}
+        self.assertIsNone(ba_dashboard._finance_facts(save, [], self.RULES)["wealth"])
+
     def test_each_loan_is_owed_to_the_bank_at_its_address(self):
         vantander = {"streetName": "ba:street_secondavenue", "streetNumber": 6}
         jensen = {"streetName": "ba:street_fourthavenue", "streetNumber": 17}

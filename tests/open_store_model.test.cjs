@@ -282,3 +282,25 @@ test('the office default follows the shipped office facts', () => {
   assert.equal(other.officeStaffed(10, 50, 1, 8), 2);
   assert.equal(other.officeStaffed(10, 50, 6, 10), 10, 'Saturday is a weekday here');
 });
+
+
+test('unsupported economy forecasts are withheld without removing known outfit costs', () => {
+  for(const capability of ['storeProfit', 'officeProfit']){
+    const facts = structuredClone(RETAIL);
+    facts.types.T.model = capability === 'officeProfit' ? 'office' : 'retail';
+    facts.types.T.layouts.C1 = {furniture: 100, fee: 20, lines: []};
+    facts.compatibility = {[capability]: ['equipmentUtilities']};
+    const m = model(facts);
+    assert.equal(m.model('T', SHOP), null);
+    assert.equal(m.ownRatio('T'), null);
+    assert.equal(m.investment({type: 'T'}, SHOP).firm, 120);
+  }
+  assert.notEqual(model({...RETAIL, compatibility: {officeProfit: ['officeIt']}}).model('T', SHOP), null);
+  assert.equal(model(RETAIL).model('T', {...SHOP, marketingUnavailable: true}), null);
+});
+
+test('incomplete vehicle wealth cannot produce an authoritative loan limit or loan', () => {
+  const m = model({...RETAIL, finance: {wealth: null, unavailable: 'vehiclePrices'}});
+  assert.equal(m.loanLimit({max: 2e6, term: 240}), 0);
+  assert.equal(m.loan(10000, {max: 2e6, term: 240}), null);
+});

@@ -2138,6 +2138,7 @@ def _premises(save: Save, names: Names, market: dict, estate: dict | None = None
                 "m2": row["m"],
                 **({"factsSource": row["factsSource"]} if "factsSource" in row else {}),
                 **({"factsUnavailable": True} if row.get("factsUnavailable") else {}),
+                **({"marketingUnavailable": True} if row.get("marketingUnavailable") else {}),
                 **({"marketingRules": {k: row["marketingRules"][k] for k in ("reachMultiplier", "strength")}}
                    if row.get("marketingRules") else {}),
                 "traffic": row["x"],
@@ -2176,6 +2177,7 @@ def _premises(save: Save, names: Names, market: dict, estate: dict | None = None
                 "m2": row["m"],
                 **({"factsSource": row["factsSource"]} if "factsSource" in row else {}),
                 **({"factsUnavailable": True} if row.get("factsUnavailable") else {}),
+                **({"marketingUnavailable": True} if row.get("marketingUnavailable") else {}),
                 **({"marketingRules": {k: row["marketingRules"][k] for k in ("reachMultiplier", "strength")}}
                    if row.get("marketingRules") else {}),
                 "price": int(round(entry.get("buildingPrice") or 0)),
@@ -5124,16 +5126,22 @@ def _marketing(save, b, building, status, neighbourhood, promo, agencies=None) -
     """
     campaigns = []
     unknown_campaign = False
+    types = (getattr(save, "facts", None) or {}).get("marketingTypes")
+    campaign_names = {row["id"]: row["name"] for row in types} if types is not None else dict(enumerate(t[0] for t in MARKETING_TYPES))
     for c in save.items(b.get("marketingCampaigns")):
         kind = c.get("marketingTypeName")
-        if not isinstance(kind, int) or not 0 <= kind < len(MARKETING_TYPES):
+        if type(kind) is not int or kind not in campaign_names:
             unknown_campaign = True
             continue
-        campaigns.append({"type": MARKETING_TYPES[kind][0],
+        unknown_campaign |= campaign_names[kind] not in MARKETING_IDS
+        campaigns.append({"type": campaign_names[kind],
                           "agency": site_key(save.address(c.get("agencyAddress"))),
                           "enabled": bool(c.get("enabled"))})
     if status not in ("retail", "office") or not building:
         return campaigns, None
+    if unknown_campaign or building.get("marketingUnavailable") or (ba_mods and ba_mods.capabilities(save).get("marketing")):
+        return campaigns, {"unavailable": True, "on": None, "needsSetup": False, "visit": [],
+                           "costPlan": None, "costNow": None}
     sqm, kind = building.get("m"), building.get("t")
     rules = building.get("marketingRules")
     if not sqm or (not rules and (kind not in MARKETING_REACH or neighbourhood not in MARKETING_STRENGTH)):
@@ -20192,12 +20200,11 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
         funds += (fund.get("initialDeposit") or 0) + (fund.get("additionalInvestment") or 0) \
             - (fund.get("withdrawal") or 0) + (fund.get("interestPayment") or 0)
     property_ = sum((save.deref(e) or {}).get("purchasePrice") or 0 for e in save.items(root.get("realEstate")))
-    prices = rules.get("vehicles") or {}
-    street_food = ba_street_food.read(save) if ba_street_food else None
-    if street_food:
-        prices = {**prices, **street_food["prices"]}
-    vehicles = sum(prices.get((save.deref(v) or {}).get("vehicleTypeName"), 0)
-                   for v in save.items(root.get("VehicleInstances")))
+    prices, price_model = ba_mods.vehicle_prices(save, rules.get("vehicles") or {}) if ba_mods else (rules.get("vehicles") or {}, True)
+    owned_types = [(save.deref(v) or {}).get("vehicleTypeName") for v in save.items(root.get("VehicleInstances"))]
+    unknown_vehicles = sorted({str(kind or "unknown") for kind in owned_types if kind not in prices})
+    vehicles = sum(prices.get(kind, 0) for kind in owned_types)
+    complete_wealth = not unknown_vehicles and (price_model or not owned_types)
     boats = sum(BOAT_PRICES.get((save.deref(b) or {}).get("type"), 0) for b in save.items(root.get("playerBoats")))
     done = set(save.items(root.get("CompletedQuestEntries")))
     tutorial = bool(gv.get("tutorialEnabled")) and TUTORIAL_LOAN_OBJECTIVE not in done
@@ -20219,7 +20226,8 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
         })
     return {
         "cash": money(root.get("Money") or 0),
-        "wealth": money((root.get("Money") or 0) + funds + vehicles + boats + property_),
+        "wealth": money((root.get("Money") or 0) + funds + vehicles + boats + property_) if complete_wealth else None,
+        **({"unavailable": "vehiclePrices", "unknownVehicles": unknown_vehicles} if not complete_wealth else {}),
         "floor": TUTORIAL_LOAN_FLOOR if tutorial else 0,
         "profit7": money(sum(last) / 7) if last else 0,
         "owed": money(sum(owed.values())),
@@ -20386,7 +20394,9 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     table = prices.get("items") or {}
     vendors = rules.get("vendors") or {}
     used_vendors = {v for item in items_used for v in (furniture.get(item) or {}).get("v") or ()}
+    compatibility = ba_mods.capabilities(save) if ba_mods else {}
     return {
+        **({"compatibility": compatibility} if compatibility else {}),
         "game": {
             "promo": round(_house_rule(gv, "baseCustomerPromotionMultiplier"), 4),
             "prices": round(mpm, 4),
@@ -20610,7 +20620,9 @@ def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, r
             **({"days": _factory_days(save, reg)} if kind == "factory" else {}),
         }
     roles = collections.Counter(p.get("skill") for p in staff)
+    compatibility = ba_mods.capabilities(save) if ba_mods else {}
     return {
+        **({"compatibility": compatibility} if compatibility else {}),
         "game": {
             "prices": round(gv.get("marketPriceMultiplier") or 1.0, 4),
             "export": round(_house_rule(gv, "exportMultiplier"), 4),
@@ -23553,7 +23565,7 @@ class GameLink:
     while a city is loaded, so the watch loop reports it once and carries on.
     """
 
-    SCHEMA = 4  # the schema version this client speaks; see the contract
+    SCHEMA = 5  # the schema version this client speaks; see the contract
     TIMEOUT = 5
 
     def __init__(self, url: str, out_dir: str):
@@ -23627,7 +23639,7 @@ class GameLink:
             return None
         self.not_ready = 0
         version = health.get("schemaVersion")
-        if version not in (1, 2, 3, self.SCHEMA):
+        if version not in (1, 2, 3, 4, self.SCHEMA):
             raise LinkMismatch(
                 f"the Big Copilot Link mod speaks schema version {version}; this "
                 f"board needs version {self.SCHEMA}. Update the mod or the board"
@@ -23736,6 +23748,8 @@ class Board:
         self.day = None
         self.error = None
         self._stamp = ""
+        self._instance = os.urandom(8).hex()
+        self._generation = 0
         self._fingerprint = None
         self.character = None
         self.revision = 0  # bumps when the player names a line, so the page refetches
@@ -23824,10 +23838,8 @@ class Board:
             self.data = json.dumps(data, separators=(",", ":")).encode("utf-8")
             self.character = data["supply"].get("factories", {}).get("character")
             self.day = data["meta"]["day"]
-            if self.link is not None:
-                self._stamp = f"game-link@{mark}#{self.revision}"
-            else:
-                self._stamp = f"{os.path.basename(path)}@{mark[1]:.0f}#{self.revision}"
+            self._generation += 1
+            self._stamp = f"{self._instance}@{self._generation}#{self.revision}"
             self._publish_stamp()
 
         with open(self.out, "wb") as fh:

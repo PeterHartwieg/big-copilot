@@ -157,7 +157,8 @@ const OpenStoreModel = (() => {
     }
     function osModel(slug, b, o = {}){
       const F = osFacts(), t = osType(slug), g = F.game || {}, h = (F.hoods || {})[b.hood];
-      if(!t || !h || b.factsUnavailable) return null;
+      if(!t || !h || b.factsUnavailable || b.marketingUnavailable
+          || (F.compatibility?.[t.model === "office" ? "officeProfit" : "storeProfit"] || []).length) return null;
       if(o.existing === undefined){ const provides = osProvides(slug, b); if(provides) o = {...o, existing: provides}; }
       if(t.model === "office") return osOfficeModel(slug, t, b, h, o);
       if(t.model !== "retail") return null;
@@ -386,7 +387,7 @@ const OpenStoreModel = (() => {
        while its first-loan objective is open, less all it owes. */
     function osLoanLimit(bank){
       const f = osFacts().finance || {};
-      if(!bank) return 0;
+      if(!bank || f.unavailable) return 0;
       const room = Math.max(0, bank.max - (bank.owed || 0));
       const economy = Math.floor(Math.max(0, Math.max(f.floor || 0, f.wealth || 0, 0.25 * (f.profit7 || 0) * bank.term) - (f.owed || 0)));
       return Math.min(room, economy);
@@ -398,7 +399,7 @@ const OpenStoreModel = (() => {
     };
     function osLoan(amount, bank){
       const f = osFacts().finance || {};
-      if(!bank || amount < (f.minimum || 0)) return null;
+      if(!bank || f.unavailable || amount < (f.minimum || 0)) return null;
       const interest = Math.floor(amount * bank.rate * (f.multiplier || 0) / 100 / osYear() + 1e-6);
       const repay = Math.max(5, Math.floor(amount / (bank.term || 1)));
       const days = Math.ceil(amount / repay);
