@@ -279,6 +279,8 @@ class CapabilityTests(unittest.TestCase):
         self.assertEqual(mods.capabilities(self.with_economy([], schemaVersion=2)), unknown)
         self.assertEqual(mods.capabilities(self.with_economy([self.provider(officeIt=None)])),
                          {k: ["economyUnknown"] for k in mods.ECONOMY_RULES["officeIt"]})
+        self.assertEqual(mods.capabilities(self.with_economy([self.provider(operatingCosts=True)])),
+                         {k: ["operatingCosts"] for k in mods.ECONOMY_RULES["operatingCosts"]})
 
     def test_retained_state_means_unknown_not_active_and_fresh_absence_wins(self):
         save = save_with({"reallife:careers": "old retained state"})
