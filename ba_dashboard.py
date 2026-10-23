@@ -23363,7 +23363,7 @@ class StaleBuild(Exception):
 
 def browser_build(
     save_path: str, locale_path: str, history_path: str, names_path: str | None = None,
-    generation=None, live_source=False,
+    generation=None, live_source=False, facts_path: str | None = None,
 ) -> str:
     """One rebuild for the in-browser board: parse, the core, JSON.
 
@@ -23388,7 +23388,7 @@ def browser_build(
         locale.update(own)
     names = Names(locale)
     try:
-        save = load_save(save_path)
+        save = load_save(save_path, facts_path=facts_path) if facts_path else load_save(save_path)
     except Exception as exc:  # gzip, struct and format errors alike
         raise SaveShapeError(
             f"{os.path.basename(save_path)} is not a Big Ambitions save this board can "
