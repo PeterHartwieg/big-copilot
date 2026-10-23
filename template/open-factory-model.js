@@ -118,6 +118,7 @@ const OpenFactoryModel = ((storeModel) => {
       }
       const extra = truck + deposit + (depot ? depot.total : 0);
       return {b, out, stores, furniture, delivery, fee, truck, deposit, depot, boxes, shelves, placed,
+        ...(F.compatibility?.factoryOpening?.length ? {incomplete: [...F.compatibility.factoryOpening]} : {}),
         items: out.lines.reduce((n, l) => n + l[1], 0), adds,
         self: furniture + delivery + extra, firm: fee + furniture + extra};
     }
@@ -128,6 +129,7 @@ const OpenFactoryModel = ((storeModel) => {
       return {managers, agents};
     }
     function ofRunning({counts, owned = false, current = {}, building = null, wantsDepot = false}, inv){
+      if(facts.compatibility?.factoryRunning?.length) return null;
       const g = game, machines = Object.values(counts).reduce((n, m) => n + m, 0);
       if(owned){
         const now = Object.fromEntries(Object.keys(counts).map(slug => [slug, current[slug] || 0]));

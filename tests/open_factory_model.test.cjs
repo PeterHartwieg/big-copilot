@@ -195,3 +195,16 @@ test('a missing game value fails loudly instead of being guessed', () => {
   assert.throws(() => create({...rest, facts: copy}).investment({counts: {beer: 1}, building: {key: 'b', m2: 100}}),
     /openFactory\.shelf\.cc is missing/);
 });
+
+
+test('unsupported running costs leave material quantities and known equipment costs usable', () => {
+  const inputs = fixture();
+  inputs.facts.compatibility = {factoryRunning: ['equipmentUtilities'], factoryOpening: ['factoryDiplomas']};
+  const model = create(frozen(inputs));
+  const input = {counts: {beer: 2}, building: factory};
+  assert.equal(model.running(input, model.investment(input)), null);
+  assert.equal(model.running({...input, owned: true, current: {beer: 1}}, null), null);
+  assert.ok(model.rawCost(input.counts) > 0);
+  assert.equal(model.investment(input).self, 8000);
+  assert.deepEqual(model.investment(input).incomplete, ['factoryDiplomas']);
+});

@@ -1029,6 +1029,39 @@ the table does not know, from a newer game, is left out rather than guessed at.
 Satisfaction moves slowly, so a demand met today can still show in an unhappy employee for
 a while, and a new unmet one before their satisfaction falls.
 
+## Planner compatibility
+
+Planning distinguishes observed records from predictions. A fresh Game Link snapshot
+(or a portable snapshot exported from it) can declare which economy providers and
+settings were observed. Known disabled settings leave the baseline model available.
+Hard Mode Patch equipment utilities withhold store and office profit forecasts and
+factory running-cost totals; office IT withholds office profit and factory running-cost
+totals. Selected factory diplomas leave the equipment shopping list usable, but label
+its investment estimate incomplete and add an unverified opening requirement that
+cannot be ticked off from the ordinary checklist. Course fees and readiness are not
+estimated. Recorded company results and factory output remain available.
+
+Real Life Overhaul's effective options are not currently observable through this
+contract. Its loaded provider is therefore reported as unavailable: operating forecasts
+are withheld and factory opening costs and checks are labelled incomplete. This is a
+compatibility limit, not a claim that every possible option is active. Unrecognized
+provider/model versions receive the same conservative treatment. A save file with
+retained RLO careers or HMP diploma/scenario markers has unknown effective settings;
+only a fresh runtime provider list can establish that these providers are absent.
+A plain save without those markers retains the baseline model, which cannot prove the
+absence of mods that leave no saved state.
+
+Vehicle wealth uses the snapshot's registered effective vehicle-price catalogue when
+available. Plain saves use the shipped vehicle prices, supported Street Food prices,
+and Roadster's reviewed $250,000 asset price. An owned vehicle with no known price, or
+an unsupported price catalogue, leaves wealth and borrowing estimates unavailable;
+it never contributes a silent zero to a supposedly complete loan limit.
+
+A structurally valid but unsupported marketing catalogue leaves the board readable.
+Recorded promotion and campaigns remain visible, while the marketing optimizer,
+marketing writes and forecasts that depend on that model are unavailable. A refresh
+or supported dashboard update can restore those capabilities.
+
 ## Plan a factory
 
 **The number that has to be right is the weekly raw material.** Two facts set the shape

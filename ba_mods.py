@@ -194,3 +194,82 @@ def detect(save) -> dict:
     if street_food is not None:
         out["streetFood"] = street_food
     return out
+
+
+# --- Planner capabilities --------------------------------------------------
+# Runtime facts are hash-bound to the save by ba_facts. A provider's selected
+# flags establish possible missing rules, never their cost or readiness. Keep
+# these decisions here rather than scattering mod names through the planners.
+ECONOMY_MODEL = "economy-capabilities-v1"
+ECONOMY_CAPABILITIES = ("storeProfit", "officeProfit", "factoryRunning", "factoryOpening")
+ECONOMY_RULES = {
+    "equipmentUtilities": ("storeProfit", "officeProfit", "factoryRunning"),
+    "officeIt": ("officeProfit", "factoryRunning"),
+    "factoryDiplomas": ("factoryOpening",),
+    "operatingCosts": ("storeProfit", "officeProfit", "factoryRunning"),
+}
+# Presence says only that effective settings need checking. Retained state from
+# a removed mod must never be described as proof that the mod is active.
+# HMP Core/DiplomaHold.cs (CareersKey/HoldKey), Core/IndebtedStart.cs
+# and Core/HardcoreStart.cs, reviewed 23 Oct 2026.
+ECONOMY_SAVE_KEYS = frozenset({"reallife:careers", "hardmodepatch:factory_diplomas_held",
+                               "HardModePatch.IndebtedStart", "HardModePatch.HardcoreNoFunds"})
+
+
+def capabilities(save) -> dict:
+    """Unavailable model capabilities as {capability: [reason code, ...]}.
+
+    Missing runtime metadata retains baseline behavior for ordinary saves;
+    recognized retained economy state explicitly requires a fresh snapshot.
+    An observed empty provider list proves the captured runtime had none.
+    Unsupported optional models affect forecasts, not recorded accounting.
+    """
+    facts = getattr(save, "facts", None) or {}
+    out = {}
+
+    def disable(keys, reason):
+        for key in keys:
+            if reason not in out.setdefault(key, []):
+                out[key].append(reason)
+
+    economy = facts.get("economy")
+    if economy is None:
+        if ECONOMY_SAVE_KEYS.intersection(mod_data(save)):
+            disable(ECONOMY_CAPABILITIES, "economyUnknown")
+    elif economy.get("schemaVersion") != 1 or economy.get("model") != ECONOMY_MODEL:
+        disable(ECONOMY_CAPABILITIES, "economyUnknown")
+    else:
+        for provider in economy.get("providers", []):
+            if provider.get("status") != "observed":
+                disable(ECONOMY_CAPABILITIES, "economyUnknown")
+                continue
+            rules = provider.get("rules", {})
+            if provider.get("id") not in ("hard-mode-patch", "real-life-overhaul"):
+                disable(ECONOMY_CAPABILITIES, "economyUnknown")
+                continue
+            expected = ("equipmentUtilities", "officeIt", "factoryDiplomas") if provider["id"] == "hard-mode-patch" else ("operatingCosts",)
+            for rule in expected:
+                value = rules.get(rule)
+                if value is not False:
+                    disable(ECONOMY_RULES[rule], rule if value is True else "economyUnknown")
+            if any(rule not in ECONOMY_RULES and value is not False for rule, value in rules.items()):
+                disable(ECONOMY_CAPABILITIES, "economyUnknown")
+    if not ba_facts.marketing_supported(facts):
+        disable(("marketing", "storeProfit", "officeProfit"), "marketingUnknown")
+    return out
+
+
+def vehicle_prices(save, baseline) -> tuple[dict, bool]:
+    """Effective runtime prices, else reviewed offline defaults; unsupported
+    present models must not silently fall back to vanilla valuations."""
+    facts = getattr(save, "facts", None) or {}
+    runtime = ba_facts.vehicle_prices(facts)
+    if "vehiclePrices" in facts:
+        return (runtime or {}), runtime is not None
+    # Roadster's registered asset price, reviewed in ModAssets.cs on 23 Oct
+    # 2026. Runtime catalogues override this baseline (including changed prices).
+    prices = {"ba:vehicletype_handtruck": 0, **baseline, "roadster:vehicletype_roadster": 250000}
+    street_food = ba_street_food.read(save)
+    if street_food:
+        prices.update(street_food["prices"])
+    return prices, True

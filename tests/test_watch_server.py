@@ -113,7 +113,7 @@ class WatchServer(unittest.TestCase):
 
     def test_the_stamp_moves_when_the_save_is_rewritten(self):
         first = self.stamp()
-        self.assertEqual(first, "Link Co.hsg@1700000000#0")
+        self.assertRegex(first, r"^[0-9a-f]{16}@1#0$")
         self.assertEqual(self.day(), 34)
         ctype, page = self.get("/")
         self.assertTrue(ctype.startswith("text/html"))
@@ -123,9 +123,26 @@ class WatchServer(unittest.TestCase):
         # A newer save: other bytes and a later modification time.
         self.write_save(day=35, mtime=1_700_000_100)
         second = self.wait_for_stamp_other_than(first)
-        self.assertEqual(second, "Link Co.hsg@1700000100#0")
+        self.assertEqual(second, first.split("@")[0] + "@2#0")
         self.assertEqual(self.day(), 35)
         self.assertEqual(self.failures, [])
+
+    def test_subsecond_rebuild_and_new_instance_get_new_public_stamps(self):
+        self.stop.set()
+        self.poller.join()
+        self.write_save(day=35, mtime=1_700_000_000.1)
+        with self.lock:
+            self.board.refresh(settle=False)
+        first = self.stamp()
+        self.write_save(day=36, mtime=1_700_000_000.2)
+        with self.lock:
+            self.assertTrue(self.board.refresh(settle=False))
+            self.assertFalse(self.board.refresh(settle=False))
+        self.assertNotEqual(self.stamp(), first)
+        self.assertEqual(self.day(), 36)
+        restarted = ba_dashboard.Board(self.save, self.out)
+        self.assertTrue(restarted.refresh(settle=False))
+        self.assertNotEqual(json.loads(restarted.stamp)["stamp"], self.stamp())
 
     def test_naming_a_line_rebuilds_and_keeps_the_name(self):
         first = self.stamp()
@@ -135,7 +152,7 @@ class WatchServer(unittest.TestCase):
         with urllib.request.urlopen(request) as response:
             self.assertEqual(response.status, 204)
         # name_line() rebuilds before the 204, so the revision has moved already.
-        self.assertEqual(self.stamp(), first[: first.rindex("#")] + "#1")
+        self.assertEqual(self.stamp(), first.split("@")[0] + "@2#1")
         with open(os.path.join(self.tmp.name, "market_history.json"), encoding="utf-8") as fh:
             book = json.load(fh)["characters"]
         # The link company has no characterId, so its names file under "default".
