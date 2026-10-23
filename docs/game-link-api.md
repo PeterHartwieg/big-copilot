@@ -131,7 +131,10 @@ the ordinary save-only behavior.
 Portable `.bcsave` files contain UTF-8 JSON:
 `{"format":"big-copilot-save","version":1,"save":"<base64 gzip hsg>","facts":{...}}`.
 This is a dashboard export, not a file to load in the game. The browser's Download
-snapshot button, restore/cache and local watcher preserve the whole package.
+snapshot button, report attachment and local watcher preserve the whole package.
+During live processing the browser transfers compressed bytes and facts separately;
+it creates this Base64 wrapper only when exporting or attaching a report. Reconnecting
+fetches a fresh pair rather than restoring an unpaired cached save.
 There is no inferred pairing by filename or address. Ordinary `.hsg` remains supported.
 The facts document is bounded to 8 MiB and 10,000 buildings/agencies; malformed,
 duplicate, nonfinite or unsupported envelope metadata is rejected rather than silently dropped.

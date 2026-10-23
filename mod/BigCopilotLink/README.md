@@ -35,7 +35,7 @@ they do not claim to calculate those mods' complete running costs. Unknown marke
 catalogues leave read-only building facts available and refuse campaign writes.
 The SDK package build verifies compilation; native gameplay acceptance is separate.
 
-Build in the SDK and verify `/health` advertises schema 4 and `building-facts.v1`.
+Build in the SDK and verify `/health` advertises schema 5 and `building-facts.v1`.
 Peter's local regression check covers a normal city; the original reporter will
 test an Alcware-renovated shop. For the in-game test, compare area, customer capacity
 and campaign prediction with BizMan. Renovate while a refresh is running and verify
@@ -258,7 +258,7 @@ packager first; repository-only compilation does not replace that check.
    | ModId | `BigCopilotLink` |
    | DisplayName | `Big Copilot Link` |
    | Author | `Peter Hartwieg` |
-   | Version | `0.8.0` |
+   | Version | `0.8.1` |
    | Mod Assembly | drag `BigCopilotLink.asmdef` into the field |
    | Locales Folder | drag the `Locales` folder into the field; the option labels are keys in `Locales/en.json` |
 
@@ -299,7 +299,7 @@ Launch the game, enable **Big Copilot Link** in the Mods menu, load a save, then
 curl http://127.0.0.1:8322/health
 ```
 
-Expect `{"ok":true,"schemaVersion":4,"modVersion":"0.8.0","source":"game",…,"writes":["uniforms","imports","schedule","hire","marketing","rent","wholesale"],"features":["hire.reschedule","hire.undo","rent.undo","wholesale.undo","building-facts.v1"],"paired":false}` and a
+Expect `{"ok":true,"schemaVersion":5,"modVersion":"0.8.1","source":"game",…,"writes":["uniforms","imports","schedule","hire","marketing","rent","wholesale"],"features":["hire.reschedule","hire.undo","rent.undo","wholesale.undo","building-facts.v1"],"paired":false}` and a
 `[BigCopilotLink] serving the game to Big Copilot on http://127.0.0.1:8322/` line in
 the player log (`%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\Player.log`;
 on a Mac, `~/Library/Logs/Hovgaard Games/Big Ambitions/Player.log`), then, a few

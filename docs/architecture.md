@@ -1708,6 +1708,21 @@ The board's dependencies are the files `PY_CODE` (the Python modules) and `PY_DA
 against `CODE_FILES`/`DATA_FILES` in the worker, and `tests/worker_startup.test.cjs`
 reads its list from the same two tuples.
 
+Live link snapshots transfer compressed save bytes and the hash-bound facts document
+separately. The worker writes the pair to its virtual filesystem and passes
+`facts_path` to `browser_build()`; `.bcsave` Base64 wrapping is deferred until an
+export or report needs it. A source change clears the previous facts. Startup
+failures retain the immutable downloaded pair for a report, without rereading a
+possibly changed disk file.
+
+`ba_save.load_save()` bounds decompressed ES3 to 512 MiB by default, including
+concatenated gzip members, and still validates gzip integrity. Local callers may
+explicitly override this through `BA_MAX_SAVE_MIB` or `max_decompressed_bytes`.
+This is a refusal limit, not a promise that every browser can parse a save that
+large. Fixed-size decode chunks and memoryview string reads reduce temporary
+copies; `tests/save_memory_probe.py` and `tests/worker_snapshot.test.cjs` exercise
+repeated synthetic large loads and recovery through the actual bundled Pyodide.
+
 `ba_dashboard.py` ships as `strip_copy()` of the source: comments removed and docstrings
 emptied, every line where it was. The virtual filesystem is new on each page load, so
 Python compiles the module every time, and a third of the source is comments and
