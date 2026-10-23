@@ -169,10 +169,12 @@ are unchanged. Older clients ignore them, and older snapshots omit them. Both
 blocks participate in the same before/after capture and save-hash binding.
 
 `vehiclePrices` has shape
-`{"schemaVersion":1,"model":"registered-vehicle-prices-v1","prices":{"roadster:vehicletype_roadster":250000}}`.
+`{"schemaVersion":1,"model":"registered-vehicle-wealth-v1","prices":{"roadster:vehicletype_roadster":250000}}`.
 The catalogue is read from `VehicleTypeHelper.GetVehicleTypeNames()` and each
-registered `VehicleType.price`, including vanilla and mod entries. Values are
-finite, nonnegative and at most 10¹²; zero is a known free vehicle. Missing types
+registered `VehicleType.price` when `IsMotorVehicle` is true, otherwise zero,
+matching the game's bank-wealth calculation. It includes vanilla and mod entries;
+handtrucks, flatbeds and scooters remain known even when excluded from wealth.
+Values are finite, nonnegative and at most 10¹². Missing types
 are unknown, not worth zero. Consumers use this block only for its supported
 schema/model and must report incomplete valuation where an owned vehicle has no
 known price. An unsupported valid block cannot silently authorize vanilla price

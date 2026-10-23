@@ -39,12 +39,14 @@ namespace BigCopilotLink
             w.EndArray();
             w.BeginObject("vehiclePrices");
             w.Prop("schemaVersion", 1);
-            w.Prop("model", "registered-vehicle-prices-v1");
+            w.Prop("model", "registered-vehicle-wealth-v1");
             w.BeginObject("prices");
             foreach (var name in Vehicles.VehicleTypes.VehicleTypeHelper.GetVehicleTypeNames().OrderBy(x => x, StringComparer.Ordinal))
             {
                 var vehicle = Vehicles.VehicleTypes.VehicleTypeHelper.GetVehicleType(name);
-                double price = vehicle == null ? double.NaN : vehicle.price;
+                // Match PlayerHelper.GetTotalAssetsWorth: nonmotor vehicles
+                // are known, but do not count toward the bank's asset value.
+                double price = vehicle == null ? double.NaN : vehicle.IsMotorVehicle ? vehicle.price : 0;
                 if (string.IsNullOrEmpty(name) || double.IsNaN(price) || double.IsInfinity(price) || price < 0 || price > 1e12)
                     throw new InvalidOperationException("Invalid registered vehicle price");
                 w.Prop(name, price);

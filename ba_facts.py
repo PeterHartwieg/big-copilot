@@ -17,7 +17,7 @@ MODEL = "building-values-v1"
 MAX_FACTS = 8 * 1024 * 1024
 MAX_ROWS = 10000
 MARKETING_MODEL = "marketing-six-v1"
-VEHICLE_MODEL = "registered-vehicle-prices-v1"
+VEHICLE_MODEL = "registered-vehicle-wealth-v1"
 CAMPAIGNS = ("SmallInternet", "MediumInternet", "LargeInternet", "SmallBillboard", "MediumBillboard", "LargeBillboard")
 
 
@@ -170,7 +170,7 @@ def marketing_supported(facts):
 
 
 def vehicle_prices(facts):
-    """Validated effective prices, or None when this catalogue is unavailable."""
+    """Validated bank-wealth values, or None when this catalogue is unavailable."""
     block = (facts or {}).get("vehiclePrices")
     if block and block["schemaVersion"] == 1 and block["model"] == VEHICLE_MODEL:
         return dict(block["prices"])
