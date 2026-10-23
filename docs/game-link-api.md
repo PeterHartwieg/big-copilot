@@ -104,8 +104,11 @@ refresh has replaced it, or this JSON shape:
 }
 ```
 
-The example abbreviates the city and campaign list. A real `marketingTypes` has
-all six supported enum values, in id order 0–5. `area` is the simulation area from
+The example abbreviates the city and campaign list. `marketingTypes` includes every
+registered campaign (excluding the `None` sentinel), with unique nonnegative ids
+and names. The supported optimizer uses exactly six enum values, in id order 0–5.
+The optional `marketingModel` is `marketing-six-v1`; older snapshots omit it and
+use that same model. `area` is the simulation area from
 BuildingSizeData; `propertyArea` is the building's `totalSqm`, which renovations
 can preserve. `capacity` is the building maximum, distinct from the registration's
 equipment-limited `customerCapacity`. Zero is a real maximum; null or -1 is unknown.
@@ -129,7 +132,9 @@ This is a dashboard export, not a file to load in the game. The browser's Downlo
 snapshot button, restore/cache and local watcher preserve the whole package.
 There is no inferred pairing by filename or address. Ordinary `.hsg` remains supported.
 The facts document is bounded to 8 MiB and 10,000 buildings/agencies; malformed,
-duplicate, nonfinite or unsupported metadata is rejected rather than silently dropped.
+duplicate, nonfinite or unsupported envelope metadata is rejected rather than silently dropped.
+A structurally valid optional calculation catalogue can be unsupported without
+rejecting the save. Hash, stamp, character and build checks remain mandatory.
 
 Each `/write/marketing` site can add
 `"prediction":{"dailyCost":600,"marketing":53,"total":100}`.
@@ -141,9 +146,15 @@ a visibly different prediction before Apply; only schema 2 enforces the second c
 
 This model supports changed building values, the existing six campaigns' prices and
 reach, multipliers, and agency availability. It does not claim compatibility with an
-arbitrary replacement simulation algorithm or a new campaign enum. Those need a new
-model version. The dashboard withholds campaign planning if its current calculation
-disagrees with the promotion in the save. Unknown layout geometry has no floor plan.
+arbitrary replacement simulation algorithm or a new campaign enum. An unknown
+`marketingModel` or a valid changed campaign catalogue makes marketing calculations
+unavailable; unrelated building facts and recorded accounting remain usable.
+Campaigns still require valid unique identities, finite nonnegative prices/reach,
+and agency references to names in the catalogue. The dashboard also withholds
+campaign planning if its current calculation disagrees with the promotion in the
+save. The native write and mock refuse preview, apply and undo with `changed` when
+the live catalogue is unsupported, before indexing or changing campaigns. Unknown
+layout geometry has no floor plan.
 
 From mod 0.7.0 the facts also carry an optional `wholesalers` array:
 `[{"street":"ba:street_thirdavenue","number":4,"fee":100,"products":["ba:itemname_sodacan"]}]`.
@@ -151,6 +162,59 @@ Products come from the live registration's `GetListOfItemsForSale()` (including
 layout and seasonal rules), and the fee from `WholesaleStoreSettings`. The snapshot
 consistency fingerprint includes them. Older facts may omit the array; the board
 then keeps manual planning available but has no supplier product list for orders.
+
+From mod 0.8.1 two optional, independently versioned facts blocks are included.
+They are additive to `building-facts.v1`; the HTTP and portable envelope versions
+are unchanged. Older clients ignore them, and older snapshots omit them. Both
+blocks participate in the same before/after capture and save-hash binding.
+
+`vehiclePrices` has shape
+`{"schemaVersion":1,"model":"registered-vehicle-prices-v1","prices":{"roadster:vehicletype_roadster":250000}}`.
+The catalogue is read from `VehicleTypeHelper.GetVehicleTypeNames()` and each
+registered `VehicleType.price`, including vanilla and mod entries. Values are
+finite, nonnegative and at most 10¹²; zero is a known free vehicle. Missing types
+are unknown, not worth zero. Consumers use this block only for its supported
+schema/model and must report incomplete valuation where an owned vehicle has no
+known price. An unsupported valid block cannot silently authorize vanilla price
+fallback for its unknown economics. A missing block preserves older offline
+sources where their prices are known.
+
+`economy` has shape:
+
+```json
+{
+  "schemaVersion": 1,
+  "model": "economy-capabilities-v1",
+  "providers": [{
+    "id": "hard-mode-patch", "version": "0.5.0.0", "status": "observed",
+    "runningCostsAvailable": true,
+    "rules": {"equipmentUtilities": true, "officeIt": false, "factoryDiplomas": true}
+  }, {
+    "id": "real-life-overhaul", "version": "0.49.0.0", "status": "unavailable",
+    "rules": {"operatingCosts": null}
+  }]
+}
+```
+
+Provider versions identify the loaded assemblies; they do not promise supported
+arithmetic. HMP rule booleans are its current **selected options**, read from
+`HardModePatch.Core.Rules`, and `runningCostsAvailable` is its public
+`RunningCostsPatch.Available` flag. They do not prove an account is connected,
+that RLO bills that site, or that factory diploma readiness is satisfied. Unknown
+members produce null and `unavailable`; false means the option was observed off.
+RLO currently has no reviewed public effective-cost provider, so its loaded
+assembly produces `operatingCosts:null`, never a fabricated active flag or tariff.
+The private HMP diploma readiness method is not called because it can change state.
+
+An empty provider list establishes that neither assembly was loaded at capture.
+A missing economy block says nothing about installed or active providers. Retained
+save markers, including `hardmodepatch:factory_diplomas_held` and `reallife:careers`,
+are historical evidence only. Consumers must withhold affected forecasts or
+opening advice when costs or prerequisites are selected or unknown and their
+model is unsupported, while keeping observed accounting available. This contract
+currently communicates capability boundaries; it does not implement HMP/RLO
+utility tariffs, IT bills or diploma costs. Provider ids must be unique, rule
+values boolean/null, and unknown schema/model versions must not enable forecasts.
 
 ## Where the mod listens
 

@@ -16,6 +16,8 @@ import struct
 MODEL = "building-values-v1"
 MAX_FACTS = 8 * 1024 * 1024
 MAX_ROWS = 10000
+MARKETING_MODEL = "marketing-six-v1"
+VEHICLE_MODEL = "registered-vehicle-prices-v1"
 CAMPAIGNS = ("SmallInternet", "MediumInternet", "LargeInternet", "SmallBillboard", "MediumBillboard", "LargeBillboard")
 
 
@@ -73,16 +75,23 @@ def validate(facts, raw=None, stamp=None, character=None):
                 not all(number(marketing.get(k)) for k in ("reachMultiplier", "strength"))):
             raise ValueError("Invalid marketing multipliers")
     types = facts.get("marketingTypes")
-    # Six known switches are the current optimizer's supported model. Unknown
-    # enum additions require a model update, not silently dropping campaigns.
+    # Catalogue validity is independent of this client's calculation support.
+    campaign_names = set(CAMPAIGNS)
     if types is not None:
-        if not isinstance(types, list) or len(types) != 6:
-            raise ValueError("Unsupported marketing campaign catalogue")
-        for i, row in enumerate(types):
-            if not isinstance(row, dict) or type(row.get("id")) is not int or row["id"] != i or row.get("name") != CAMPAIGNS[i]:
+        if not isinstance(types, list) or not types or len(types) > MAX_ROWS:
+            raise ValueError("Invalid marketing campaign catalogue")
+        ids, campaign_names = set(), set()
+        for row in types:
+            if (not isinstance(row, dict) or type(row.get("id")) is not int or row["id"] < 0 or
+                    not isinstance(row.get("name"), str) or not row["name"] or
+                    row["id"] in ids or row["name"] in campaign_names):
                 raise ValueError("Invalid marketing campaign identity")
+            ids.add(row["id"])
+            campaign_names.add(row["name"])
             if not all(number(row.get(k)) for k in ("price", "reach")):
                 raise ValueError("Invalid marketing campaign values")
+    if "marketingModel" in facts and (not isinstance(facts["marketingModel"], str) or not facts["marketingModel"]):
+        raise ValueError("Invalid marketing calculation model")
     agencies = facts.get("agencies")
     if not isinstance(agencies, list) or len(agencies) > MAX_ROWS:
         raise ValueError("Invalid marketing agencies")
@@ -91,7 +100,8 @@ def validate(facts, raw=None, stamp=None, character=None):
         if (not isinstance(row, dict) or not isinstance(row.get("street"), str) or not row["street"] or
                 type(row.get("number")) is not int or row["number"] < 0 or
                 not isinstance(row.get("types"), list) or
-                any(t not in CAMPAIGNS for t in row["types"])):
+                any(not isinstance(t, str) or t not in campaign_names for t in row["types"]) or
+                len(set(row["types"])) != len(row["types"])):
             raise ValueError("Invalid marketing agency")
         key = row["street"], row["number"]
         if key in seen:
@@ -116,7 +126,55 @@ def validate(facts, raw=None, stamp=None, character=None):
         if not isinstance(products, list) or len(products) > MAX_ROWS or any(not isinstance(p, str) or not p for p in products) \
                 or len(set(products)) != len(products):
             raise ValueError("Invalid wholesale products")
+    vehicles = facts.get("vehiclePrices")
+    if vehicles is not None:
+        if (not isinstance(vehicles, dict) or type(vehicles.get("schemaVersion")) is not int or
+                vehicles["schemaVersion"] < 1 or not isinstance(vehicles.get("model"), str) or not vehicles["model"]):
+            raise ValueError("Invalid vehicle price catalogue metadata")
+        prices = vehicles.get("prices")
+        if (not isinstance(prices, dict) or len(prices) > MAX_ROWS or
+                any(not isinstance(k, str) or not k or not number(v) for k, v in prices.items())):
+            raise ValueError("Invalid vehicle price catalogue")
+    economy = facts.get("economy")
+    if economy is not None:
+        if (not isinstance(economy, dict) or type(economy.get("schemaVersion")) is not int or
+                economy["schemaVersion"] < 1 or not isinstance(economy.get("model"), str) or not economy["model"]):
+            raise ValueError("Invalid economy capability metadata")
+        providers = economy.get("providers")
+        if not isinstance(providers, list) or len(providers) > MAX_ROWS:
+            raise ValueError("Invalid economy providers")
+        seen = set()
+        for provider in providers:
+            if (not isinstance(provider, dict) or not isinstance(provider.get("id"), str) or not provider["id"] or
+                    provider["id"] in seen or not isinstance(provider.get("version"), str) or not provider["version"] or
+                    provider.get("status") not in ("observed", "unavailable")):
+                raise ValueError("Invalid economy provider identity")
+            seen.add(provider["id"])
+            rules = provider.get("rules")
+            if (not isinstance(rules, dict) or len(rules) > MAX_ROWS or
+                    any(not isinstance(k, str) or not k or (v is not None and type(v) is not bool) for k, v in rules.items()) or
+                    (provider.get("runningCostsAvailable") is not None and type(provider["runningCostsAvailable"]) is not bool)):
+                raise ValueError("Invalid economy provider observations")
     return facts
+
+
+def marketing_supported(facts):
+    """Calculation support after validate(); absent runtime facts use baseline rules."""
+    if not facts:
+        return True
+    types = facts.get("marketingTypes")
+    return (facts.get("marketingModel", MARKETING_MODEL) == MARKETING_MODEL and
+            isinstance(types, list) and len(types) == len(CAMPAIGNS) and
+            all(row["id"] == i and row["name"] == name
+                for i, (row, name) in enumerate(zip(types, CAMPAIGNS))))
+
+
+def vehicle_prices(facts):
+    """Validated effective prices, or None when this catalogue is unavailable."""
+    block = (facts or {}).get("vehiclePrices")
+    if block and block["schemaVersion"] == 1 and block["model"] == VEHICLE_MODEL:
+        return dict(block["prices"])
+    return None
 
 
 def pack(raw, facts):
@@ -239,7 +297,7 @@ def resolve(save, baseline):
     # it against the save's hash and load_save() matched its character.
     facts = getattr(save, "facts", None)
     if facts:
-        types = facts.get("marketingTypes")
+        types = facts.get("marketingTypes") if marketing_supported(facts) else None
         present = {(item["street"], item["number"]) for item in facts["buildings"]}
         for key, row in table.items():
             if key not in present:
@@ -258,5 +316,6 @@ def resolve(save, baseline):
                 if item["capacity"] == 0:
                     row["marketingRules"]["reachMultiplier"] = 0
             else:
-                row["factsUnavailable"] = True
+                row["marketingUnavailable"] = True
+                row.pop("marketingRules", None)
     return table

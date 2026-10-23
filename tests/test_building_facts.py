@@ -129,11 +129,11 @@ class BuildingFacts(unittest.TestCase):
             ("no strength", lambda x: building(x)["marketing"].pop("strength"), "marketing multipliers"),
             ("negative reach", lambda x: building(x)["marketing"].update(reachMultiplier=-1), "marketing multipliers"),
             ("catalogue not a list", lambda x: x.update(marketingTypes={}), "campaign catalogue"),
-            ("seven campaigns", lambda x: x["marketingTypes"].append(copy.deepcopy(campaign(x))), "campaign catalogue"),
+            ("duplicate campaign", lambda x: x["marketingTypes"].append(copy.deepcopy(campaign(x))), "campaign identity"),
             ("campaign not a dict", lambda x: x["marketingTypes"].__setitem__(0, "SmallInternet"), "campaign identity"),
             ("campaign id order", lambda x: campaign(x).update(id=1), "campaign identity"),
             ("campaign id bool", lambda x: campaign(x).update(id=False), "campaign identity"),
-            ("campaign renamed", lambda x: campaign(x).update(name="TinyInternet"), "campaign identity"),
+            ("campaign empty name", lambda x: campaign(x).update(name=""), "campaign identity"),
             ("campaign price", lambda x: campaign(x).update(price="10"), "campaign values"),
             ("campaign reach", lambda x: campaign(x).pop("reach"), "campaign values"),
             ("agencies missing", lambda x: x.pop("agencies"), "marketing agencies"),
@@ -165,6 +165,73 @@ class BuildingFacts(unittest.TestCase):
         building(ok).update(version=-1, capacity=None, marketing=None)
         ok["agencies"] = []
         f.validate(ok)
+
+    def test_unknown_marketing_catalogue_preserves_buildings_but_withholds_rules(self):
+        self.facts["marketingTypes"].append({"id": 7, "name": "Radio", "price": 123, "reach": 20})
+        self.facts["agencies"][0]["types"].append("Radio")
+        save = self.load()
+        self.assertFalse(f.marketing_supported(save.facts))
+        row = d.load_buildings(save)[GIFTS]
+        self.assertTrue(row["marketingUnavailable"])
+        self.assertNotIn("marketingRules", row)
+        self.assertNotIn("factsUnavailable", row)
+        self.assertEqual((row["m"], row["layoutCapacity"]), (225, 90))
+        self.assertEqual(save.facts["marketingTypes"][-1]["name"], "Radio")
+        with self.assertRaisesRegex(ValueError, "different save"):
+            f.validate(self.facts, b"other")
+        with self.assertRaisesRegex(ValueError, "different character"):
+            f.validate(self.facts, character="other")
+
+    def test_unknown_marketing_model_is_valid_but_never_supported(self):
+        self.facts["marketingModel"] = "future-v2"
+        save = self.load()
+        self.assertFalse(f.marketing_supported(save.facts))
+        self.assertTrue(d.load_buildings(save)[GIFTS]["marketingUnavailable"])
+        self.facts["marketingModel"] = f.MARKETING_MODEL
+        self.assertTrue(f.marketing_supported(self.facts))
+        self.facts["marketingTypes"] = list(reversed(self.facts["marketingTypes"]))
+        self.assertIs(f.validate(self.facts), self.facts)
+        self.assertFalse(f.marketing_supported(self.facts))
+
+    def test_registered_vehicle_prices_validate_and_round_trip(self):
+        block = {"schemaVersion": 1, "model": f.VEHICLE_MODEL,
+                 "prices": {"roadster:vehicletype_roadster": 250000, "test:free": 0}}
+        self.facts["vehiclePrices"] = block
+        self.assertEqual(f.vehicle_prices(self.load().facts), block["prices"])
+        prices = f.vehicle_prices(self.facts)
+        prices.clear()
+        self.assertTrue(block["prices"])
+        for value in (-1, True, None, float("nan"), "250000", 1e13):
+            bad = copy.deepcopy(self.facts)
+            bad["vehiclePrices"]["prices"]["test:bad"] = value
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                f.validate(bad)
+        for update in ({"schemaVersion": True}, {"schemaVersion": 0}, {"model": ""}, {"prices": []}, {"prices": {"": 1}}):
+            with self.subTest(update=update), self.assertRaises(ValueError):
+                f.validate(dict(self.facts, vehiclePrices=dict(block, **update)))
+        block["schemaVersion"] = 2
+        self.assertIsNone(f.vehicle_prices(self.load().facts))
+        del self.facts["vehiclePrices"]
+        self.assertIsNone(f.vehicle_prices(self.load().facts))
+
+    def test_economy_observations_preserve_unknown_and_disabled_states(self):
+        block = {"schemaVersion": 1, "model": "economy-capabilities-v1", "providers": [
+            {"id": "hard-mode-patch", "version": "1.0", "status": "observed", "runningCostsAvailable": True,
+             "rules": {"equipmentUtilities": True, "officeIt": False, "factoryDiplomas": None}},
+            {"id": "real-life-overhaul", "version": "1.0", "status": "unavailable", "rules": {"operatingCosts": None}}]}
+        self.facts["economy"] = block
+        self.assertEqual(self.load().facts["economy"], block)
+        for changes in ({"rules": {"officeIt": 0}}, {"runningCostsAvailable": "yes"}, {"status": "active"},
+                        {"id": ""}, {"version": None}):
+            bad = copy.deepcopy(self.facts)
+            bad["economy"]["providers"][0].update(changes)
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                f.validate(bad)
+        block["providers"].append(copy.deepcopy(block["providers"][0]))
+        with self.assertRaisesRegex(ValueError, "provider identity"):
+            f.validate(self.facts)
+        block["providers"] = []
+        self.assertEqual(self.load().facts["economy"]["providers"], [])
 
     def test_live_city_accepts_residential_version_sentinel(self):
         # Link captures the whole city, including homes without a numbered layout.

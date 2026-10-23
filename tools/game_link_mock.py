@@ -1014,8 +1014,10 @@ class Link:
         return None, None
 
     def _marketing(self, save, body, dry):
-        from ba_dashboard import MARKETING_REACH, load_buildings
-        names = [t[0] for t in self._marketing_types()]
+        from ba_dashboard import MARKETING_REACH, MARKETING_TYPES, load_buildings
+        from ba_facts import marketing_supported
+        supported = marketing_supported(self.facts)
+        names = [t[0] for t in self._marketing_types()] if supported else [t[0] for t in MARKETING_TYPES]
         sites = body.get("sites")
         if not isinstance(sites, list):
             raise BadRequest("sites must be a list")
@@ -1053,7 +1055,7 @@ class Link:
 
         rows, plans = [], []
         for address, on, was, prediction in parsed:
-            if other_save:
+            if other_save or not supported:
                 rows.append(self._marketing_blank(address, error="changed"))  # another company's building
                 continue
             reg = self._registration(save, address)
@@ -1147,12 +1149,14 @@ class Link:
         """Each switched flag back, where it still holds what the write left. It
         only flips existing entries, which the phone does any time: no agency
         check."""
+        from ba_facts import marketing_supported
+        supported = marketing_supported(self.facts)
         save = self._save()
         rows, restores, changed = [], [], False
         for site in record["sites"]:
             address = site["address"]
             reg = self._registration(save, address)
-            if reg is None:
+            if reg is None or not supported:
                 changed = True
                 rows.append(self._marketing_blank(address, site["business"], "changed"))
                 continue
