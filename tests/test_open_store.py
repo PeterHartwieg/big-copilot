@@ -16,6 +16,7 @@ import os
 import tempfile
 import unittest
 from unittest import mock
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -566,7 +567,7 @@ class FinanceTests(unittest.TestCase):
     """_finance_facts(): the wealth and debts the banks weigh (LOANS.md)."""
     RULES = {"banks": {"VantanderBankSettings": {"r": 12, "y": 4, "x": 2000000},
                        "JensenCapitalSettings": {"r": 20, "y": 2, "x": 40000}},
-             "vehicles": {"ba:vehicletype_vordv150": 44000}}
+             "vehicles": {"ba:vehicletype_vordv150": 44000}, "nonMotorVehicles": ["ba:vehicletype_handtruck"]}
 
     def facts(self, **root):
         base = {"Money": 10000.0, "gameVariables": {"daysPerYear": 60, "bankInterestMultiplier": 0.7}}
@@ -584,6 +585,55 @@ class FinanceTests(unittest.TestCase):
         # The last seven days' average profit: 200 to 800.
         self.assertEqual(f["profit7"], 500)
         self.assertEqual(f["floor"], 0)
+
+    def test_roadster_uses_reviewed_offline_price_and_unknown_vehicle_is_incomplete(self):
+        roadster = self.facts(Money=1000, VehicleInstances=coll([{"vehicleTypeName": "roadster:vehicletype_roadster"}]))
+        self.assertEqual(roadster["wealth"], 251000)
+        self.assertNotIn("unavailable", roadster)
+        unknown = self.facts(VehicleInstances=coll([{"vehicleTypeName": "new:vehicle"}]))
+        self.assertIsNone(unknown["wealth"])
+        self.assertEqual(unknown["unavailable"], "vehiclePrices")
+        self.assertEqual(unknown["unknownVehicles"], ["new:vehicle"])
+
+    def test_runtime_vehicle_catalogue_is_authoritative_including_unknown_models(self):
+        save = Save({"Money": 1000, "VehicleInstances": coll([{"vehicleTypeName": "roadster:vehicletype_roadster"}])}, {}, "synthetic")
+        block = {"schemaVersion": 1, "model": ba_dashboard.ba_mods.ba_facts.VEHICLE_MODEL, "prices": {"roadster:vehicletype_roadster": 350000}}
+        save.facts = {"vehiclePrices": block}
+        self.assertEqual(ba_dashboard._finance_facts(save, [], self.RULES)["wealth"], 351000)
+        block["prices"] = {}
+        self.assertIsNone(ba_dashboard._finance_facts(save, [], self.RULES)["wealth"])
+        block["model"] = "future-v2"
+        block["prices"] = {"roadster:vehicletype_roadster": 1}
+        self.assertIsNone(ba_dashboard._finance_facts(save, [], self.RULES)["wealth"])
+
+    def test_shipped_nonmotor_vehicles_are_known_zero_not_incomplete_wealth(self):
+        rules = ba_dashboard.load_store_rules()
+        names = ["ba:vehicletype_flatbed", "ba:vehicletype_electricscooter", "ba:vehicletype_handtruck"]
+        for name in names:
+            self.assertNotIn(name, rules["vehicles"])
+            self.assertIn(name, rules["nonMotorVehicles"])
+        save = Save({"Money": 1000, "VehicleInstances": coll([{"vehicleTypeName": name} for name in names])}, {}, "synthetic")
+        result = ba_dashboard._finance_facts(save, [], rules)
+        self.assertEqual(result["wealth"], 1000)
+        self.assertNotIn("unavailable", result)
+        save.root["VehicleInstances"]["$items"].append({"vehicleTypeName": "future:unknown_vehicle"})
+        incomplete = ba_dashboard._finance_facts(save, [], rules)
+        self.assertIsNone(incomplete["wealth"])
+        self.assertEqual(incomplete["unknownVehicles"], ["future:unknown_vehicle"])
+
+    def test_vehicle_generator_preserves_zero_wealth_names_regardless_of_purchase_price(self):
+        # Exercise the extractor without importing owner-only UnityPy into CI.
+        import ast
+        source = Path(HERE).parent.joinpath("make_store_rules.py").read_text(encoding="utf-8")
+        function = next(node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef) and node.name == "_vehicles")
+        assets = [{"vehicleTypeName": "motor", "maxFuel": 1, "price": 250000},
+                  {"vehicleTypeName": "freeMotor", "maxFuel": 1, "price": 0},
+                  {"vehicleTypeName": "flatbed", "maxFuel": 0, "price": 1000},
+                  {"vehicleTypeName": "scooter", "maxFuel": 0, "price": 2000},
+                  {"vehicleTypeName": "handtruck", "price": 100}, {"maxFuel": 1, "price": 100}]
+        namespace = {"_behaviours": lambda path: assets, "_bundle": lambda root, stem: "synthetic", "_price": lambda price: price}
+        exec(compile(ast.Module(body=[function], type_ignores=[]), "make_store_rules.py", "exec"), namespace)
+        self.assertEqual(namespace["_vehicles"]("synthetic"), ({"motor": 250000, "freeMotor": 0}, ["flatbed", "handtruck", "scooter"]))
 
     def test_each_loan_is_owed_to_the_bank_at_its_address(self):
         vantander = {"streetName": "ba:street_secondavenue", "streetNumber": 6}

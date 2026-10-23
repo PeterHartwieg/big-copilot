@@ -54,6 +54,14 @@ class MockContract(unittest.TestCase):
         self.assertTrue(health["stamp"])
         self.assertEqual(health["size"], os.path.getsize(self.path))
 
+    def test_current_mock_schema_and_legacy_advertising(self):
+        self.assertEqual(game_link_mock.SCHEMA_VERSION, 5)
+        for version in (1, 2, 3, 4, 5):
+            self.link.schema = version
+            status, _, body = call(self.url + "/health")
+            self.assertEqual(status, 200)
+            self.assertEqual(json.loads(body)["schemaVersion"], version)
+
     def test_save_serves_the_bytes_with_etag_and_304(self):
         status, headers, body = call(self.url + "/save")
         self.assertEqual(status, 200)
@@ -1861,6 +1869,25 @@ class MockMarketing(MarketingMock):
     """POST /write/marketing: the cheapest mix set through agencies that are phone
     contacts and open now, every site set up with their switches, and the enabled
     flags undone (docs/game-link-api.md)."""
+
+    def test_unsupported_runtime_catalogue_refuses_preview_apply_and_undo(self):
+        import copy
+        from ba_facts import CAMPAIGNS
+        _, applied = self.post("marketing", {"sites": [self.site()]})
+        self.assertTrue(applied["ok"])
+        campaigns, promotions = copy.deepcopy(self.link.campaigns), copy.deepcopy(self.link.promotions)
+        self.link.facts = {"marketingTypes": [{"id": i, "name": name, "price": 100, "reach": 20}
+                                             for i, name in enumerate(CAMPAIGNS)] +
+                            [{"id": 7, "name": "Radio", "price": 200, "reach": 30}]}
+        for dry in (True, False):
+            status, answer = self.post("marketing", {"dryRun": dry, "sites": [self.site()]})
+            self.assertEqual(status, 200 if dry else 409)
+            self.assertEqual(answer["rows"][0]["error"], "changed")
+            status, answer = self.link._undo_marketing(self.link.undo["marketing"], dry)
+            self.assertEqual(status, 200 if dry else 409)
+            self.assertFalse(answer["ok"])
+        self.assertEqual(self.link.campaigns, campaigns)
+        self.assertEqual(self.link.promotions, promotions)
 
     def test_prediction_is_checked_on_dry_run_and_again_on_apply(self):
         site = self.site()

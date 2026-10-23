@@ -174,6 +174,9 @@ namespace BigCopilotLink
 
         public static WriteAnswer Run(WriteService ws, Request req, bool dryRun)
         {
+            if (!BuildingFacts.MarketingSupported())
+                return Answer(req.Sites.ConvertAll(site => new Row { Address = site.Address, Error = "changed" }),
+                    dryRun, true, false, null);
             var game = SaveGameManager.Current;
             var otherSave =
                 (req.ExpectCharacter != null && !string.Equals(req.ExpectCharacter, game.characterId ?? "", StringComparison.Ordinal)) ||
@@ -250,6 +253,14 @@ namespace BigCopilotLink
 
         public static WriteAnswer Undo(WriteService ws, UndoState state, bool dryRun)
         {
+            if (!BuildingFacts.MarketingSupported())
+            {
+                var refused = new List<Row>();
+                foreach (var flip in state.Flips)
+                    if (!refused.Exists(row => row.Address.Is(flip.Site.Street, flip.Site.Number)))
+                        refused.Add(new Row { Address = flip.Site, Error = "changed" });
+                return Answer(refused, dryRun, true, true, null);
+            }
             var rows = new List<Row>();
             var changed = false;
             foreach (var flip in state.Flips)

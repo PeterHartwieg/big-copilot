@@ -7507,6 +7507,8 @@ function spExpansionTable(rows){
 function spExpansionBody(b, draft = null){
   if(!spExpansionState.open) return "";
   if(!odNeed("openStore")){ spExpansionDrawn.wait = true; return odWaitHtml("openStore"); }
+  const compatibility = osCompatibilityText(b.typeSlug);
+  if(compatibility) return spNone(compatibility);
   const rows = spExpansionRows(b);
   if(rows === null) return spNone(tt("sp.expand.unavailable", "This comparison needs a supported shop, known opening hours, promotion and satisfaction, and a game started with the current building-capacity rules."));
   if(!rows.length) return spNone(tt("sp.expand.complete", "This shop already offers every physical product in its business type’s range."));
@@ -12322,6 +12324,26 @@ const planRowHtml = (prefix, r) => `<div class="os-plan${r.cls}"><button type="b
       <button type="button" class="os-x" data-${prefix}-drop="${attr(r.id)}" aria-label="${attr(r.drop)}" data-tip="${
         attr(tt("gr.os.plans.dropTip", "Delete this plan"))}">×</button></div>`;
 const planListHtml = (title, rows) => `<div class="os-h"><h2>${title}</h2><span class="c">${rows.length}</span></div><div class="os-plans">${rows.join("")}</div>`;
+/* A small shared presentation boundary for unsupported runtime models.
+   Reasons are codes from ba_mods, never provider-supplied HTML or wording. */
+function planCompatibilityText(facts, capability){
+  const reasons = facts?.compatibility?.[capability] || [];
+  const words = {
+    equipmentUtilities: () => tt("gr.compat.utilities", "Equipment utility costs are not modelled, so operating profit and total running costs are unavailable."),
+    officeIt: () => tt("gr.compat.officeIt", "Office IT costs are not modelled, so affected profit and total running costs are unavailable."),
+    factoryDiplomas: () => tt("gr.compat.diplomas", "Factory course requirements and fees are unverified; the equipment estimate and opening checklist are incomplete."),
+    operatingCosts: () => tt("gr.compat.costs", "The runtime operating-cost rules are not supported, so profit and total running costs are unavailable."),
+    economyUnknown: () => tt("gr.compat.unknown", "Effective mod costs and opening requirements could not be verified; estimates and checklists may be incomplete."),
+    marketingUnknown: () => tt("gr.compat.marketing", "This marketing model is not supported, so promotion forecasts, profit estimates and marketing changes are unavailable."),
+  };
+  return [...new Set(reasons)].map(reason => (words[reason] || words.economyUnknown)()).join(" ");
+}
+function planCompatibilityHtml(facts, capability){
+  const text = planCompatibilityText(facts, capability);
+  return text ? `<p class="os-payback w" role="status">${spEsc(text)}</p>` : "";
+}
+const osCompatibilityText = slug => planCompatibilityText(osFacts(), osType(slug)?.model === "office" ? "officeProfit" : "storeProfit");
+
 /* The financing card: a switch, the lender, the amount as a field and a
    slider kept to what the bank lends and to the investment (`total`), and the
    figures, `facts(bank, amount)`. Half the investment until the reader picks
@@ -12329,6 +12351,7 @@ const planListHtml = (title, rows) => `<div class="os-h"><h2>${title}</h2><span 
 function planFinanceHtml(prefix, plan, total, offText, facts){
   const f = osFacts().finance || {}, banks = f.banks || [];
   if(!banks.length || !plan) return "";
+  if(f.unavailable) return `<div class="os-card os-fin"><h3>${tt("gr.os.fin.title", "Financing")}</h3><p class="quiet">${tt("gr.compat.vehicles", "Loan estimates are unavailable because some owned vehicle prices are unknown.")}</p></div>`;
   const fin = plan.finance || {}, on = !!fin.on;
   const head = `<div class="os-finhead"><h3>${osIcon("bank")}${tt("gr.os.fin.title", "Financing")}</h3>
     <label class="os-switch"><input type="checkbox" data-${prefix}-fin-on${on ? " checked" : ""}><span>${tt("gr.os.fin.on", "Borrow part of it")}</span></label></div>`;
@@ -12545,6 +12568,7 @@ const osTypeLower = slug => gnLower(osTypeName(slug));
 function osBestModel(slug, b){
   /* A new board (a refresh, another save) starts the cache afresh. */
   if(osBestFor !== D){ osBest = new Map(); osBestFor = D; }
+  if(osCompatibilityText(slug) || b.marketingUnavailable) return null;
   const id = `${slug}|${b.key}`;
   if(osBest.has(id)) return osBest.get(id);
   const camps = osFacts().campaigns || [];
@@ -12608,7 +12632,7 @@ function osStripHtml(plan){
   const est = b && inv ? osEstimate(plan, b) : null;
   if(osIsHq(plan)) return `<div class="os-pb">${cell(tt("gr.os.strip.open", "Open"), what)}${cell(tt("gr.os.strip.whereLab", "Where"), where)}${
     cell(tt("gr.os.strip.invest", "Investment"), invest)}${cell(tt("gr.os.hq.running", "Running cost"),
-      `<b class="m">${b && b.rent != null ? tt("gr.os.hq.rent", "{w}/week in rent", {w: fmt(b.rent * 7)}) : "–"}</b><small>${tt("gr.os.hq.wagesExtra", "Wages are extra and depend on whom you hire and their hours.")}</small>`)}</div>`;
+      `<b class="m">${b && b.rent != null ? tt("gr.os.hq.rent", "{w}/week in rent", {w: fmt(b.rent * 7)}) : "–"}</b><small>${tt("gr.os.hq.wagesExtra", "Wages are extra and depend on whom you hire and their hours.")}</small>${planCompatibilityHtml(osFacts(), "officeProfit")}`)}</div>`;
   const be = est && est.days ? `<b class="m">${osRange(est.days[mode])}</b><small>${tt("gr.os.strip.be2", "after opening · at {w}/day", {w: osMidMoney(est.profit * OS_LOW, est.profit * OS_HIGH)})}</small>`
     : est && est.none ? `<b class="dim">${tt("gr.os.none.short", "No estimate")}</b><small>${est.none}</small>`
     : `<b class="dim">–</b><small>${tt("gr.os.strip.afterInvest", "after the investment")}</small>`;
@@ -12635,6 +12659,8 @@ function osEstimate(plan, b){
   if(osIsHq(plan)) return {inv, none: tt("gr.os.hq.noIncome", "Headquarters has no sales income or break-even.")};
   if(t.model !== "retail" && t.model !== "office") return {inv, none: t.cat === "cinema" || t.cat === "theater"
     ? tt("gr.os.none.venue", "the game's rules for screens, seats and actors are not modelled") : tt("gr.os.none.type", "this type is not modelled")};
+  const compatibility = osCompatibilityText(plan.type);
+  if(compatibility) return {inv, none: compatibility};
   const m = osBestModel(plan.type, b);
   if(!m) return {inv, none: tt("gr.os.none.data", "the save lacks what the estimate needs")};
   const hyped = m.office ? [] : osHyped(plan.type, b.hood);
@@ -12934,7 +12960,7 @@ function osBreakHtml(plan){
   const b = osBuilding(plan.key), est = b && osEstimate(plan, b), mode = osMode(plan);
   if(!b || !est) return `<p class="quiet os-gap">${tt("gr.os.be.nowhere", "Pick a location first.")}</p>`;
   const inv = est.inv;
-  if(osIsHq(plan)) return osHqRunningHtml(b);
+  if(osIsHq(plan)) return planCompatibilityHtml(osFacts(), "officeProfit") + osHqRunningHtml(b);
   if(est.none) return `<div class="os-none">
     <div><span class="os-lab">${tt("gr.os.inv.firm", "Installation firm")}</span><b>${fmt(inv.firm)}</b><small>${tt("gr.os.be.investment", "investment")}</small></div>
     <div><span class="os-lab">${tt("gr.os.inv.self", "Self-installation")}</span><b>${fmt(inv.self)}</b><small>${tt("gr.os.be.investment", "investment")}</small></div>
@@ -14613,11 +14639,11 @@ function ofStripHtml(plan){
       : mode === "self" ? tt("gr.of.strip.self", "Self-installation · one-off, upfront") : tt("gr.of.strip.firm", "Installation firm · one-off, upfront")}</small>`
     : `<b class="dim">–</b><small>${tt("gr.os.strip.afterWhere", "after the location")}</small>`;
   const run = ofRunning(plan, inv);
-  const parts = run.rent ? tt("gr.of.strip.run.rent", "raw {raw} · wages {wages} · rent {rent}", {raw: fmt(run.raw), wages: fmt(run.wages), rent: fmt(run.rent)})
+  const parts = !run ? "" : run.rent ? tt("gr.of.strip.run.rent", "raw {raw} · wages {wages} · rent {rent}", {raw: fmt(run.raw), wages: fmt(run.wages), rent: fmt(run.rent)})
     : tt("gr.of.strip.run", "raw {raw} · wages {wages}", {raw: fmt(run.raw), wages: fmt(run.wages)});
-  const running = `<b class="m">${tt("gr.of.strip.week", "{w}/week", {w: fmt(run.total)})}</b><small>${parts}</small><small>${tt("gr.of.strip.notInv", "not in the investment")}</small>`;
+  const running = !run ? `<b class="dim">${tt("gr.os.none.short", "No estimate")}</b>${planCompatibilityHtml(ofFacts(), "factoryRunning")}` : `<b class="m">${tt("gr.of.strip.week", "{w}/week", {w: fmt(run.total)})}</b><small>${parts}</small><small>${tt("gr.of.strip.notInv", "not in the investment")}</small>`;
   return `<div class="os-pb ff-pb">${cell(tt("gr.of.strip.make", "Make"), make)}${cell(tt("gr.os.strip.whereLab", "Where"), where)}${
-    cell(tt("gr.os.strip.invest", "Investment"), invest)}${cell(owned ? tt("gr.of.strip.runAdded", "Running costs added") : tt("gr.of.strip.runLab", "Running costs"), running, "ff-run")}</div>`;
+    cell(tt("gr.os.strip.invest", "Investment"), invest + planCompatibilityHtml(ofFacts(), "factoryOpening"))}${cell(owned ? tt("gr.of.strip.runAdded", "Running costs added") : tt("gr.of.strip.runLab", "Running costs"), running, "ff-run")}</div>`;
 }
 
 /* Step 1, above the lines: what the shops buy that a factory can make, each
@@ -14718,7 +14744,7 @@ function ofPlansHtml(){
     return planRowHtml("of", {id: p.id, cls: "", title: spEsc(ofPlanName(p)), sub, stage: ofStepLabel(p.step), pct: Math.round((at + 1) / OF_STEPS.length * 100),
       value: p.inv != null ? fmt(p.inv) : `<span class="os-dim">–</span>`, drop: tt("gr.of.plans.drop", "Delete the plan {name}", {name: ofPlanName(p)})});
   });
-  return planListHtml(tt("gr.of.plans.title", "Your factory plans"), rows);
+  return planCompatibilityHtml(ofFacts(), "factoryOpening") + planListHtml(tt("gr.of.plans.title", "Your factory plans"), rows);
 }
 
 /* Step 2: Find a location in plan mode, on warehouse buildings: every size
@@ -14758,12 +14784,12 @@ function ofInvestHtml(plan){
   const tool = `<div class="os-toolbar"><nav class="os-seg big" aria-label="${attr(tt("gr.os.inv.mode", "Interior"))}">
     <button type="button" class="${mode === "firm" ? "on" : ""}" data-of-mode="firm" aria-pressed="${mode === "firm"}">${tt("gr.os.inv.firm", "Installation firm")} <b>${fmt(inv.firm)}</b></button>
     <button type="button" class="${mode === "self" ? "on" : ""}" data-of-mode="self" aria-pressed="${mode === "self"}">${tt("gr.os.inv.self", "Self-installation")} <b>${fmt(inv.self)}</b></button></nav>
-    <div class="aside"><span>${owned ? tt("gr.of.inv.added", "Added") : tt("gr.of.inv.ready", "Ready to produce")}</span><b>${owned ? tt("gr.os.inv.items", {one: "{n} item", other: "{n} items"}, {n: inv.items})
+    <div class="aside"><span>${owned ? tt("gr.of.inv.added", "Added") : F.compatibility?.factoryOpening?.length ? tt("gr.compat.equipment", "Partial estimate") : tt("gr.of.inv.ready", "Ready to produce")}</span><b>${owned ? tt("gr.os.inv.items", {one: "{n} item", other: "{n} items"}, {n: inv.items})
       : tt("gr.of.inv.itemsTruck", {one: "{n} item · 1 truck", other: "{n} items · 1 truck"}, {n: inv.items})}</b>
     <span>${tt("gr.os.inv.itemsLab", "Items")}</span><b>${fmt(inv.furniture)}</b></div></div>`;
-  if(!inv.items && owned) return tool + `<p class="quiet os-gap">${tt("gr.of.inv.nothing", "Nothing to buy: the plan adds no machine and no shelf.")}</p>`;
+  if(!inv.items && owned) return planCompatibilityHtml(F, "factoryOpening") + tool + `<p class="quiet os-gap">${tt("gr.of.inv.nothing", "Nothing to buy: the plan adds no machine and no shelf.")}</p>`;
   const body = mode === "self" ? ofSelfHtml(inv) : ofFirmHtml(inv);
-  return tool + body + (owned ? "" : ofFinHtml(plan, inv))
+  return planCompatibilityHtml(F, "factoryOpening") + tool + body + (owned ? "" : ofFinHtml(plan, inv))
     + `<div class="ff-next"><button type="button" class="os-cta" data-of-step="until">${ofStepLabel("until")}${icon("go")}</button></div>`;
 }
 const ofWhy = (kind, inv) => kind === "shelf"
@@ -15048,6 +15074,8 @@ function ofUntilRows(plan){
       served ? "" : osIngame(tt("gr.of.ck.depotRoute.ingame", "<b>BizMan › Logistics</b>: give a Logistics Manager the depot's plan to your shops."))));
   }
   if(!owned) goods.push(osCk("shirt", "skip", tt("gr.os.ck.uni", "Uniforms"), tt("gr.of.ck.uni", "Not needed: no customer comes into a factory")));
+  const requirements = planCompatibilityText(F, "factoryOpening");
+  if(requirements) people.push(osCk("people", "todo", tt("gr.compat.requirements", "Unverified opening requirements"), spEsc(requirements)));
   return [[tt("gr.of.ck.site", "The site"), site_], [tt("gr.of.ck.people", "People"), people], [tt("gr.of.ck.goods", "Goods in and out"), goods]];
 }
 function ofUntilHtml(plan){

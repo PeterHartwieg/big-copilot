@@ -2,7 +2,7 @@
 
     python tools/game_link_mock.py "<path to a .hsg>" [--port 8322]
 
-Speaks the contract in docs/game-link-api.md (schema 4, with schema 1–3 compatibility) so the web app and the
+Speaks the contract in docs/game-link-api.md (schema 5, with schema 1–4 compatibility) so the web app and the
 local watcher can be developed and tested without the game or Unity. POST
 /refresh and a change of the file's modification time both re-read the file
 and issue a new stamp, so pointing it at the game's own autosave folder gives a
@@ -99,7 +99,7 @@ import ba_save  # noqa: E402
 import ba_dashboard  # noqa: E402
 from ba_dashboard import ASSIGN_SKILLS, STATION_SKILLS, _uniform_gaps, money, schedule_entries, shift_print  # noqa: E402
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 DEFAULT_PORT = 8322
 REFRESH_WINDOW = 15  # the mod's window for its automatic refreshes; --throttle's retryAfter
 REQUEST_WINDOW = 3  # a POST /refresh waits this long since the last refresh, as the mod from 0.4.0
@@ -1014,8 +1014,10 @@ class Link:
         return None, None
 
     def _marketing(self, save, body, dry):
-        from ba_dashboard import MARKETING_REACH, load_buildings
-        names = [t[0] for t in self._marketing_types()]
+        from ba_dashboard import MARKETING_REACH, MARKETING_TYPES, load_buildings
+        from ba_facts import marketing_supported
+        supported = marketing_supported(self.facts)
+        names = [t[0] for t in self._marketing_types()] if supported else [t[0] for t in MARKETING_TYPES]
         sites = body.get("sites")
         if not isinstance(sites, list):
             raise BadRequest("sites must be a list")
@@ -1053,7 +1055,7 @@ class Link:
 
         rows, plans = [], []
         for address, on, was, prediction in parsed:
-            if other_save:
+            if other_save or not supported:
                 rows.append(self._marketing_blank(address, error="changed"))  # another company's building
                 continue
             reg = self._registration(save, address)
@@ -1147,12 +1149,14 @@ class Link:
         """Each switched flag back, where it still holds what the write left. It
         only flips existing entries, which the phone does any time: no agency
         check."""
+        from ba_facts import marketing_supported
+        supported = marketing_supported(self.facts)
         save = self._save()
         rows, restores, changed = [], [], False
         for site in record["sites"]:
             address = site["address"]
             reg = self._registration(save, address)
-            if reg is None:
+            if reg is None or not supported:
                 changed = True
                 rows.append(self._marketing_blank(address, site["business"], "changed"))
                 continue

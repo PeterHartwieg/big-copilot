@@ -49,6 +49,14 @@ class GameLinkAgainstMock(unittest.TestCase):
         self.assertEqual(self.game.character, "abc")
         self.assertEqual(self.game.company, "Mock Co")
 
+    def test_current_and_legacy_link_schema_versions_are_accepted(self):
+        self.assertEqual(self.game.SCHEMA, 5)
+        for version in (1, 2, 3, 4, 5):
+            with self.subTest(version=version):
+                self.mock.schema = version
+                self.game.stamp = ""
+                self.assertEqual(self.game.poll(), self.game.path)
+
     def test_second_poll_is_quiet(self):
         self.game.poll()
         self.assertIsNone(self.game.poll())
@@ -126,7 +134,7 @@ class GameLinkAgainstMock(unittest.TestCase):
             self.game.poll()
         self.assertIsInstance(caught.exception, ba_dashboard.LinkUnavailable, "the watch loop's outage")
         self.assertIn("version 99", str(caught.exception))
-        self.assertIn("needs version 4", str(caught.exception))
+        self.assertIn("needs version 5", str(caught.exception))
         self.mock.schema = 1
         self.assertEqual(self.game.poll(), self.game.path, "a mod put right is read as ever")
 
