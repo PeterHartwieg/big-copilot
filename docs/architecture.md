@@ -1879,13 +1879,37 @@ in [Game link API](game-link-api.md#building-facts-schema-2). Plain saves can re
 Alcware Retail Expansion RCR3/4/5 renovation records from `modData`; no mod binary
 is loaded or executed. Unsupported renovation formats suppress affected estimates.
 
-`ba_mods.py` reads the other mods' data the same way, from the save alone: which
+`ba_mods.py` reads mod records and paired runtime capability observations: which
 adapters a save needs (`detect()`, the `mods` payload key and the masthead's modded
 flag) and the Alcware Seasons calendar, whose per-product factors, copied from the
 mod's DLL with its version, rescale the sales ratio Open a store uses
 (`_store_market()`) and `check_profit_model.py` measures against. Each adapter
 switches on only when the save carries that mod's data; `tools/payload_diff.py` on
 vanilla saves shows no difference.
+
+`capabilities(save)` is the shared registry of unsupported calculations. Its
+capability names identify consumers (`storeProfit`, `officeProfit`,
+`factoryRunning`, `factoryOpening`, `marketing`); reason codes identify the
+missing or unsupported rule. Store and factory facts carry these restrictions
+to their pure models and UI. Recorded accounting remains separate from estimates.
+An adapter must not infer active settings from an assembly name or retained save
+record alone. A paired, observed empty provider list can establish that no listed
+provider was present; missing metadata cannot make the same claim.
+
+Link schema 5 adds optional, independently identified `economy` and `vehiclePrices`
+blocks inside facts schema 1. Economy observations currently identify unsupported
+HMP/RLO calculations; they do not implement those mods' economic models. Registered
+vehicle prices supply the finance model, with reviewed offline defaults only when
+no runtime catalogue is present. An unknown owned vehicle makes wealth and loan
+estimates unavailable instead of valuing it at zero. Older Link schemas remain
+readable. See the wire contract for the exact fields and supported models.
+
+When adding an adapter or changing a model, declare the affected capabilities in
+this registry, provide synthetic fixtures for enabled, disabled, unavailable and
+unknown-version inputs, and check both the pure model and its UI boundary. Keep
+provider details out of individual feature renderers. Include effective runtime
+facts in cache inputs; a changed rule must not reuse a previous planning result.
+Hash and identity validation remain mandatory even for unsupported models.
 
 `ba_street_food.py` validates Street Food schema 1 or 2 once per Save, without
 filesystem reads or executing mod code. It contributes `daily[].streetFood`,
@@ -1909,3 +1933,7 @@ revision in its demand context so a renovation cannot reuse the previous estimat
 match the supported model or the required facts are unavailable. No campaign write
 or agency-visit advice is offered. The saved promotion and equipment-limited
 capacity remain observations, independent of the model's building maximum.
+Valid but unsupported marketing catalogues set `marketingUnavailable` on resolved
+rows; they do not invalidate unrelated building facts. Both the consumer and the
+native write handler refuse unsupported campaign calculations. Malformed catalogues
+and mismatched save/facts pairs still fail validation.
