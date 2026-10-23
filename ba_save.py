@@ -60,8 +60,10 @@ Usage
 
 from __future__ import annotations
 
+import codecs
 import gc
 import gzip
+import io
 import json
 import os
 import re
@@ -69,6 +71,7 @@ import struct
 import sys
 import uuid
 import warnings
+import zlib
 import ba_facts
 
 # Tags that introduce a *named* property. The same tag + 1 introduces the same
@@ -102,6 +105,47 @@ _I64 = struct.Struct("<q").unpack_from
 _F32 = struct.Struct("<f").unpack_from
 _F64 = struct.Struct("<d").unpack_from
 STRING_CACHE_CHARS = 64  # keys and type names are short; prose is not worth caching
+# Uncompressed ES3 bytes, not the much smaller gzip file. A safety ceiling,
+# not a promise that every browser has enough memory for a tree of this size.
+MAX_DECOMPRESSED_BYTES = 512 * 1024 * 1024
+_DECOMPRESS_CHUNK = 1024 * 1024
+
+
+def _decompress(raw, limit):
+    """Bound every gzip read, including concatenated members, before parsing."""
+    if type(limit) is not int or limit < 1:
+        raise ValueError("max_decompressed_bytes must be a positive integer")
+    chunks, total = [], 0
+    try:
+        with gzip.GzipFile(fileobj=io.BytesIO(raw)) as stream:
+            while True:
+                chunk = stream.read(min(_DECOMPRESS_CHUNK, limit - total + 1))
+                if not chunk:
+                    # One final allocation avoids repeated reallocations of a
+                    # large bytearray (some allocators retain those on refresh).
+                    return b"".join(chunks)
+                total += len(chunk)
+                if total > limit:
+                    raise SaveFormatError(
+                        f"Save exceeds the {limit:,}-byte decompressed safety limit. "
+                        "Try a smaller save, or use the local reader with a higher "
+                        "BA_MAX_SAVE_MIB setting if your computer has enough memory.")
+                chunks.append(chunk)
+    except (OSError, EOFError, zlib.error) as exc:
+        raise SaveFormatError(f"Invalid or truncated gzip save: {exc}") from exc
+
+
+def _save_limit():
+    value = os.environ.get("BA_MAX_SAVE_MIB")
+    if value is None:
+        return MAX_DECOMPRESSED_BYTES
+    try:
+        mib = int(value)
+        if mib > 0:
+            return mib * 1024 * 1024
+    except ValueError:
+        pass
+    raise SaveFormatError("BA_MAX_SAVE_MIB must be a positive whole number of MiB")
 
 
 class _Reader:
@@ -163,7 +207,7 @@ class _Reader:
             raise SaveFormatError(self._where(f"string length {n} exceeds stream bounds"))
         self.p = end
         if n > STRING_CACHE_CHARS:
-            return d[start:end].decode("utf-16-le", "replace")
+            return codecs.decode(memoryview(d)[start:end], "utf-16-le", "replace")
         raw = d[start:end]
         s = self._strings.get(raw)
         if s is None:
@@ -285,7 +329,7 @@ class _Reader:
                     if n < 0 or end > len(d):
                         self.p = p
                         raise SaveFormatError(self._where(f"string length {n} exceeds stream bounds"))
-                    key = strings.get(d[p + 5 : end])
+                    key = strings.get(d[p + 5 : end]) if n <= STRING_CACHE_CHARS else None
                 if key is None:
                     self.p = p
                     key = self.string()
@@ -384,14 +428,30 @@ class Save:
         return (value["streetName"], value.get("streetNumber", 0))
 
 
-def load_save(path: str) -> Save:
+def load_save(path: str, *, facts_path: str | None = None,
+              max_decompressed_bytes: int | None = None) -> Save:
+    """Read hsg/bcsave, optionally with separately transported, hash-bound facts.
+
+    ``BA_MAX_SAVE_MIB`` overrides the 512 MiB default for a local reader. An
+    explicit byte limit takes precedence; the original save is never modified.
+    """
     with open(path, "rb") as fh:
         raw = fh.read()
     try:
         raw, facts = ba_facts.unpack(raw)
+        if facts_path is not None:
+            if facts is not None:
+                raise ValueError("Building facts were supplied twice")
+            with open(facts_path, "rb") as fh:
+                facts_bytes = fh.read(ba_facts.MAX_FACTS + 1)
+            if len(facts_bytes) > ba_facts.MAX_FACTS:
+                raise ValueError("Building facts are too large")
+            facts = ba_facts.validate(json.loads(facts_bytes), raw)
+            del facts_bytes
     except ValueError as exc:
         raise SaveFormatError(str(exc)) from exc
-    data = gzip.decompress(raw)
+    data = _decompress(raw, _save_limit() if max_decompressed_bytes is None else max_decompressed_bytes)
+    del raw
     r = _Reader(data)
     if not data or r.u8() != 0x02:
         raise SaveFormatError("not an Easy Save 3 stream")
