@@ -14784,7 +14784,7 @@ function ofInvestHtml(plan){
   const tool = `<div class="os-toolbar"><nav class="os-seg big" aria-label="${attr(tt("gr.os.inv.mode", "Interior"))}">
     <button type="button" class="${mode === "firm" ? "on" : ""}" data-of-mode="firm" aria-pressed="${mode === "firm"}">${tt("gr.os.inv.firm", "Installation firm")} <b>${fmt(inv.firm)}</b></button>
     <button type="button" class="${mode === "self" ? "on" : ""}" data-of-mode="self" aria-pressed="${mode === "self"}">${tt("gr.os.inv.self", "Self-installation")} <b>${fmt(inv.self)}</b></button></nav>
-    <div class="aside"><span>${owned ? tt("gr.of.inv.added", "Added") : F.compatibility?.factoryOpening?.length ? tt("gr.compat.equipment", "Equipment only") : tt("gr.of.inv.ready", "Ready to produce")}</span><b>${owned ? tt("gr.os.inv.items", {one: "{n} item", other: "{n} items"}, {n: inv.items})
+    <div class="aside"><span>${owned ? tt("gr.of.inv.added", "Added") : F.compatibility?.factoryOpening?.length ? tt("gr.compat.equipment", "Partial estimate") : tt("gr.of.inv.ready", "Ready to produce")}</span><b>${owned ? tt("gr.os.inv.items", {one: "{n} item", other: "{n} items"}, {n: inv.items})
       : tt("gr.of.inv.itemsTruck", {one: "{n} item · 1 truck", other: "{n} items · 1 truck"}, {n: inv.items})}</b>
     <span>${tt("gr.os.inv.itemsLab", "Items")}</span><b>${fmt(inv.furniture)}</b></div></div>`;
   if(!inv.items && owned) return planCompatibilityHtml(F, "factoryOpening") + tool + `<p class="quiet os-gap">${tt("gr.of.inv.nothing", "Nothing to buy: the plan adds no machine and no shelf.")}</p>`;
