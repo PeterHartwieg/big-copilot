@@ -5,7 +5,9 @@ two clients: the web app at bigcopilot.com (`web/app.js`) and the local watcher
 (`ba_dashboard.py --watch --game`). `tools/game_link_mock.py` serves the same contract
 from a save file on disk, so the clients can be developed and tested without the game.
 
-Schema version **4**. Current clients also accept versions 1, 2 and 3.
+Schema version **5**. Current clients also accept versions 1, 2, 3 and 4.
+Version 5 (mod 0.8.1) adds independent marketing capability validation, registered
+vehicle prices and conservative HMP/RLO economy observations in paired facts.
 Version 4 (mod 0.8.0) adds reviewed Street Food route writes (`streetFoodRoute`, capability `streetFood.routes`).
 Version 3 adds wholesale orders (`wholesale`, mod 0.7.0) and guarded same-day undo.
 Version 2 adds the paired building-facts snapshot and marketing prediction guard below.
@@ -164,8 +166,9 @@ consistency fingerprint includes them. Older facts may omit the array; the board
 then keeps manual planning available but has no supplier product list for orders.
 
 From mod 0.8.1 two optional, independently versioned facts blocks are included.
-They are additive to `building-facts.v1`; the HTTP and portable envelope versions
-are unchanged. Older clients ignore them, and older snapshots omit them. Both
+They are additive to `building-facts.v1`; its facts schema and the portable envelope
+version remain 1, while the HTTP contract is schema 5. Older snapshots omit these
+blocks. Clients predating schema 5 need an update before connecting to Link 0.8.1. Both
 blocks participate in the same before/after capture and save-hash binding.
 
 `vehiclePrices` has shape

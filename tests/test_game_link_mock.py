@@ -54,6 +54,14 @@ class MockContract(unittest.TestCase):
         self.assertTrue(health["stamp"])
         self.assertEqual(health["size"], os.path.getsize(self.path))
 
+    def test_current_mock_schema_and_legacy_advertising(self):
+        self.assertEqual(game_link_mock.SCHEMA_VERSION, 5)
+        for version in (1, 2, 3, 4, 5):
+            self.link.schema = version
+            status, _, body = call(self.url + "/health")
+            self.assertEqual(status, 200)
+            self.assertEqual(json.loads(body)["schemaVersion"], version)
+
     def test_save_serves_the_bytes_with_etag_and_304(self):
         status, headers, body = call(self.url + "/save")
         self.assertEqual(status, 200)
