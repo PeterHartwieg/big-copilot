@@ -17,9 +17,9 @@ the game** on bigcopilot.com. The rest of this file is for building it.
 
 The wire contract is [`docs/game-link-api.md`](../../docs/game-link-api.md). This
 folder is a drop-in mod for the official
-[Big Ambitions modding SDK](https://github.com/hovgaardgames/bigambitions); it does
-not build in this repo, only inside the SDK's Unity project through the in-editor
-Mod Builder.
+[Big Ambitions modding SDK](https://github.com/hovgaardgames/bigambitions). The
+repository's `mod/build/build-release.sh` builds it inside an isolated SDK Unity
+project; the in-editor Mod Builder is the interactive alternative.
 
 Schema 2 also serves `/facts?stamp=...`: runtime building area, layout, customer
 capacity, marketing rules and agencies, paired with the exact `/save` bytes by a
@@ -192,6 +192,30 @@ and quote/revision guards on apply. It restores the test's static
 state and does not read a player save. In-game refresh and hire checks remain necessary
 before release.
 
+## Source layout
+
+`Scripts/LinkMod.cs` owns mod startup/options and the shared logger.
+`LinkHttpServer.cs` handles HTTP admission/routing; `MainThreadDispatcher.cs` owns
+bounded main-thread work. `SaveService.cs`, `HealthState.cs` and `BuildingFacts.cs`
+own snapshots and their published metadata. `ApprovalService.cs` owns browser
+approval. `WriteService.cs` owns dispatch and per-city undo state; `WriteProtocol.cs`
+holds the shared `WriteAnswer` and `WireAddress` value types.
+
+Each write kind has its own adapter. The largest, `HireWrite`, remains one static
+type split into `HireWrite.cs` (parsing, checks and apply), `HireWrite.Undo.cs`
+(snapshot, guards and reversal) and `HireWrite.Responses.cs` (JSON responses).
+The partial files share private members without widening their visibility. Keep
+wire fields, serialization order and game-call order stable during cleanup.
+
+## Repository checks
+
+From the repository root, `npm ci` followed by `PYTHON=python3 npm run verify`
+runs the complete Python/Node suites, optimized hosted-page check, Worker dry run
+and web freshness check. Those checks exercise the clients and synthetic save
+fixtures; they do not compile the C# mod. Run the SDK build and queue validation
+below as well for C# changes. The Street Food companion harness above additionally
+requires that separate mod and its rules; it is not part of `npm run verify`.
+
 ## Queue validation in the SDK
 
 HTTP admission and main-thread work are bounded as described in
@@ -241,9 +265,9 @@ packager first; repository-only compilation does not replace that check.
    repo share the files:
    - macOS/Linux: `ln -s <repo>/mod/BigCopilotLink <sdk>/Assets/Mods/BigCopilotLink`
    - Windows (junction): `mklink /J <sdk>\Assets\Mods\BigCopilotLink <repo>\mod\BigCopilotLink`
-4. **Create the manifest**: in the Project window, right-click the mod folder → Create
-   → **Big Ambitions → Mod Manifest**. It is not in this repo because it is an editor
-   asset. Enter:
+4. **Check the committed manifest**: `ModManifest.asset` and its stable Unity GUID
+   are already in this repo. Use that asset rather than creating a second one.
+   Its fields are:
 
    | Field | Value |
    | --- | --- |
@@ -266,8 +290,8 @@ packager first; repository-only compilation does not replace that check.
    `Output/BigCopilotLink` and copy it to the game machine's `ModsLocal`.
 
    **Headless:** `mod/build/BclBatch.cs` and its asmdef, copied to
-   `<sdk>/Assets/Editor/BclBatch/`, do the import, the manifest, the validation and
-   build without installing, using the editor in batch mode:
+   `<sdk>/Assets/Editor/BclBatch/`, import the game references, load the committed
+   manifest, validate and build without installing, using the editor in batch mode:
 
    ```
    mod/build/build-release.sh
